@@ -110,7 +110,7 @@
             <thead><tr>
                 <th>Receita</th><th>Data da ordem</th>
                 <th class="num">Mandado</th><th class="num">Produzido</th>
-                <th class="num">Falta</th><th>Criou</th>
+                <th class="num">Falta</th><th>Criou</th><th></th>
             </tr></thead>
             <tbody>
             {% for it in dados.agendado %}
@@ -122,6 +122,7 @@
                 <td class="num">{{ it.produzido }}</td>
                 <td class="num falta-agendado">{{ it.falta }}</td>
                 <td>{{ it.criado_por or '—' }}</td>
+                <td>{{ dispensar_btn(it) }}</td>
             </tr>
             {% endfor %}
             </tbody>
@@ -130,5 +131,44 @@
         <div class="aud-empty">Nenhuma ordem agendada pendente.</div>
         {% endif %}
     </div>
+
+    {# ── DISPENSADAS (rastro) ─────────────────────────────────────────────── #}
+    {% if dados.dispensadas %}
+    <div class="aud-sec aud-sec-dispensada">
+        <div class="aud-head">
+            <h5 class="mb-0">✓ Dispensadas — você deu OK</h5>
+            <span class="aud-tot">{{ dados.dispensadas|length }} item(ns) — não contam
+                como a produzir; estoque não foi tocado</span>
+        </div>
+        <table class="aud-table">
+            <thead><tr>
+                <th>Receita</th><th>Data da ordem</th>
+                <th class="num">Mandado</th><th class="num">Produzido</th>
+                <th class="num">Furo</th><th>Dispensada por</th><th>Quando</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for it in dados.dispensadas %}
+            <tr class="aud-dispensada">
+                <td>{{ it.receita_nome }}</td>
+                <td>{{ it.data.strftime('%d/%m/%Y') }}</td>
+                <td class="num">{{ it.alvo }}</td>
+                <td class="num">{{ it.produzido }}</td>
+                <td class="num">{{ it.falta }}</td>
+                <td>{{ it.dispensada_por or '—' }}</td>
+                <td>{{ it.dispensada_em.strftime('%d/%m %H:%M') }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('industria_teste.reverter_dispensa_rota') }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="item_id" value="{{ it.item_id }}">
+                        <input type="hidden" name="dias" value="{{ dias }}">
+                        <button class="btn-undo" title="Voltar a mostrar como pendente">↺ desfazer</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
