@@ -206,7 +206,7 @@ def consumir(pedido, *, loja_id, usuario_id=None):
     # 1. Libera a reserva (mesma agregacao inteira de `reservar`, pra o ledger
     #    de `quantidade_reservada` fechar). Nao depende da baixa real abaixo.
     linhas, pulados = _agrega_por_linha(pedido, loja_id, lock=True)
-    for el, qtd, _nome in linhas:
+    for el, qtd, _nome, _qb in linhas:
         el.quantidade_reservada = max(0, (el.quantidade_reservada or 0) - qtd)
 
     # 2. Baixa real pelo MOTOR UNICO (mesma logica de Seru/lote): explode cesta,
@@ -244,7 +244,7 @@ def liberar(pedido, *, loja_id):
     # Mesma expansao da reserva (cesta -> componentes) — devolve exatamente o
     # que foi reservado, linha a linha.
     linhas, _ = _agrega_por_linha(pedido, loja_id, lock=True)
-    for el, qtd, _nome in linhas:
+    for el, qtd, _nome, _qb in linhas:
         el.quantidade_reservada = max(0, (el.quantidade_reservada or 0) - qtd)
     pedido.reserva_expira_em = None
     db.session.flush()
