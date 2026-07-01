@@ -23,7 +23,7 @@ from datetime import timedelta
 from sqlalchemy import func
 
 from app.extensions import db
-from app.utils import hoje
+from app.utils import agora, hoje
 
 
 def _falta(qtd_alvo, produzido):
@@ -58,9 +58,11 @@ def pendencias_por_receita():
 def listar_pendencias(dias_vencido=30):
     """Ordens de produção pendentes (falta > 0) das ENVIADAS, pra a auditoria.
 
-    Retorna {'vencido': [...], 'agendado': [...], 'vencidos_antigos': N,
-    'total_vencido': N, 'total_agendado': N}. Cada linha traz receita, data,
-    alvo, produzido, falta, dias (de atraso p/ vencido), criado_por, plano_id.
+    Retorna {'vencido': [...], 'agendado': [...], 'dispensadas': [...],
+    'vencidos_antigos': N, 'total_vencido': N, 'total_agendado': N}. Cada linha
+    traz receita, data, alvo, produzido, falta, dias, criado_por, item_id.
+    Itens DISPENSADOS (o admin deu OK) saem de vencido/agendado e vão pra
+    `dispensadas` (com quem/quando), pra ficar o rastro sem poluir o pendente.
     Vencido só até `dias_vencido` atrás (ordens mais antigas provavelmente foram
     abandonadas — conta em `vencidos_antigos` em vez de poluir a lista)."""
     from app.models import PlanejamentoItem, PlanejamentoProducao
@@ -72,7 +74,7 @@ def listar_pendencias(dias_vencido=30):
                       PlanejamentoProducao.data >= limite)
               .order_by(PlanejamentoProducao.data.asc())
               .all())
-    vencido, agendado = [], []
+    vencido, agendado, dispensadas = [], [], []
     for p in planos:
         autor = p.autor.nome if getattr(p, 'autor', None) else None
         for it in p.itens:
@@ -81,7 +83,7 @@ def listar_pendencias(dias_vencido=30):
                 continue
             rec = it.receita
             linha = {
-                'plano_id': p.id, 'data': p.data,
+                'item_id': it.id, 'plano_id': p.id, 'data': p.data,
                 'receita_id': it.receita_id,
                 'receita_nome': rec.nome if rec else '(receita removida)',
                 'alvo': int(it.qtd_alvo or 0),
@@ -90,23 +92,63 @@ def listar_pendencias(dias_vencido=30):
                 'criado_por': autor,
                 'dias': (hoje_d - p.data).days,
             }
-            (vencido if p.data < hoje_d else agendado).append(linha)
+            if it.dispensada_em is not None:          # admin deu OK -> rastro
+                quem = (it.dispensada_por.nome
+                        if getattr(it, 'dispensada_por', None) else None)
+                linha['dispensada_em'] = it.dispensada_em
+                linha['dispensada_por'] = quem
+                dispensadas.append(linha)
+            else:
+                (vencido if p.data < hoje_d else agendado).append(linha)
     vencido.sort(key=lambda x: x['data'], reverse=True)   # mais recente primeiro
     agendado.sort(key=lambda x: x['data'])                # mais próximo primeiro
+    dispensadas.sort(key=lambda x: x['dispensada_em'], reverse=True)
 
-    # Ordens vencidas mais ANTIGAS que a janela: só conta (não lista).
+    # Ordens vencidas mais ANTIGAS que a janela: só conta (não lista). Não conta
+    # as dispensadas (o admin já resolveu).
     antigos = (db.session.query(func.count(PlanejamentoItem.id))
                .join(PlanejamentoProducao,
                      PlanejamentoItem.planejamento_id == PlanejamentoProducao.id)
                .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False),
                        PlanejamentoProducao.data < limite,
+                       PlanejamentoItem.dispensada_em.is_(None),
                        (func.coalesce(PlanejamentoItem.qtd_alvo, 0)
                         - func.coalesce(PlanejamentoItem.produzido_qtd, 0)) > 0)
                .scalar()) or 0
     return {
-        'vencido': vencido, 'agendado': agendado,
+        'vencido': vencido, 'agendado': agendado, 'dispensadas': dispensadas,
         'total_vencido': sum(x['falta'] for x in vencido),
         'total_agendado': sum(x['falta'] for x in agendado),
         'vencidos_antigos': int(antigos),
         'dias_vencido': dias_vencido,
     }
+
+
+def dispensar_item(item_id, user_id):
+    """Fecha a pendência de UM item do plano: o admin verificou que não foi
+    produzido (ou a menos) e dá OK. Marca dispensada_em/por — NÃO credita estoque
+    nem mexe em produzido_qtd (o furo real fica preservado). Reversível.
+    Retorna {'ok': True, 'receita': nome} ou {'ok': False, 'erro': ...}."""
+    from app.models import PlanejamentoItem
+
+    item = db.session.get(PlanejamentoItem, int(item_id)) if item_id else None
+    if item is None:
+        return {'ok': False, 'erro': 'Item do plano não encontrado.'}
+    if item.dispensada_em is None:
+        item.dispensada_em = agora()
+        item.dispensada_por_id = user_id
+        db.session.commit()
+    return {'ok': True, 'receita': item.receita.nome if item.receita else '?'}
+
+
+def reverter_dispensa(item_id):
+    """Desfaz a dispensa (volta a mostrar como pendente). Retorna {'ok': bool}."""
+    from app.models import PlanejamentoItem
+
+    item = db.session.get(PlanejamentoItem, int(item_id)) if item_id else None
+    if item is None:
+        return {'ok': False, 'erro': 'Item do plano não encontrado.'}
+    item.dispensada_em = None
+    item.dispensada_por_id = None
+    db.session.commit()
+    return {'ok': True}
