@@ -533,6 +533,22 @@ seru_nome, qtd, faturamento `Numeric`) em `VendaSeruDiaria`:
 - NAO substitui `MovEstoqueLoja` (baixa de estoque) — e a fonte do RELATORIO/
   faturamento. A previsao Maneira 2 continua lendo `MovEstoqueLoja`.
 
+**Passo 2 (01/07/2026) — TODOS os relatorios leem do banco**:
+- `VendaSeruDiaLoja` (companheira): totais por (data, loja) — pedidos DISTINTOS
+  (somar n_pedidos por PRODUTO inflaria: 1 pedido/3 itens = 3x) + DOIS
+  faturamentos: `faturamento` = soma dos subtotais dos itens (base do relatorio,
+  subconta kit/box) e `faturamento_pedidos` = soma do TOTAL do pedido (inclui
+  kit/box, base do faturamento do bot). Os dois de proposito — nao unificar.
+- `agregar_flat` (relatorio consolidado), `agregar_por_loja_do_banco`,
+  `faturamento_por_loja` + `garantir_capturado` (captura dias faltantes + hoje,
+  best-effort). Consumidores repointados pro banco: reconciliacao
+  (`pdv_saude.reconciliar`), copilot `consultar_vendas_itens` +
+  `agregar_itens_consolidado`, `/api/bot/faturamento` (dinheiro — usa
+  `faturamento_pedidos`, sem regressao de kit/box), `/pdv/api/itens-vendidos`.
+- **AINDA ao vivo (nao repointado)**: `/pdv/api/vendas` ("Vendas PDV") — agrega
+  por metodo de pagamento + canal de venda, que o snapshot NAO guarda. Repointar
+  exigiria persistir esses breakdowns (tabela a mais). Deixado pra depois.
+
 ### Saude da API Seru — `/pdv/debug-seru` (owner)
 Testa auth + 1 request real e mostra o erro EXATO da API (nunca vaza segredo,
 so presenca/tamanho). Usar quando a busca/sync falhar pra saber se e a API ou o
