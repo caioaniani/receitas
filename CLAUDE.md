@@ -510,6 +510,33 @@ paginacao por dia em paralelo). `data_local()` converte UTC → BRT.
 - Rota `/pdv/itens-vendidos` + API `/pdv/api/itens-vendidos`
 - Service `app/services/vendas_itens.py` agrega por produto com match fuzzy local
 - Tool copilot `consultar_vendas_itens` (read, admin+gerente)
+- **Separado por loja + XLSX (01/07/2026)**: a tela mostra uma secao recolhivel
+  por loja + "Consolidado"; `agregar_itens_por_loja` + `gerar_xlsx_itens_por_loja`
+  (uma aba por loja + Consolidado). Rotas `/pdv/api/itens-vendidos-por-loja` e
+  `/pdv/itens-vendidos.xlsx`. `montar_linhas` centraliza a forma da linha.
+
+### Persistencia de vendas — `VendaSeruDiaria` (Passo 1, 01/07/2026)
+O relatorio re-consultava a API a CADA request; com ~600 pedidos/dia isso
+estourava em ranges largos (o "erro de rede" do Safari na tela). Agora
+`app/services/vendas_diarias.py` grava um snapshot por (data, loja_seru,
+seru_nome, qtd, faturamento `Numeric`) em `VendaSeruDiaria`:
+- `capturar_periodo(di, df)`: bate a API 1x e regrava o intervalo (idempotente —
+  apaga+insere; dia todo cancelado zera). `data` = createdAt BRT.
+- `agregar_por_loja_do_banco(di, df)`: le do BANCO na mesma forma do relatorio.
+- As rotas de itens-vendidos/XLSX leem do banco por padrao, capturando so os
+  dias faltantes + SEMPRE hoje, com fallback gracioso se a API cair. `?ao_vivo=1`
+  forca a API (sem persistir) — util pra comparar.
+- Cron (`seru_cron`): apos cada sync captura hoje+ontem (snapshot quente,
+  resiste a API fora na hora do relatorio). Best-effort, nunca derruba o sync.
+- Backfill owner em background: `POST /pdv/vendas-diarias/backfill` (botao
+  "Aquecer historico") pre-carrega o passado semana a semana.
+- NAO substitui `MovEstoqueLoja` (baixa de estoque) — e a fonte do RELATORIO/
+  faturamento. A previsao Maneira 2 continua lendo `MovEstoqueLoja`.
+
+### Saude da API Seru — `/pdv/debug-seru` (owner)
+Testa auth + 1 request real e mostra o erro EXATO da API (nunca vaza segredo,
+so presenca/tamanho). Usar quando a busca/sync falhar pra saber se e a API ou o
+navegador/webview. Botao "Debug Seru" no topo de `/pdv/itens-vendidos`.
 
 ### Fase 2 — Auto-baixa estoque
 Mapeamentos persistentes em 3 tabelas:
