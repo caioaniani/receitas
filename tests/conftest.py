@@ -43,26 +43,6 @@ def _app_session():
     application = create_app()
     application.config['TESTING'] = True
     application.config['WTF_CSRF_ENABLED'] = False
-    # Testes NAO disparam alertas reais (WhatsApp): a trava OFF impede o
-    # loja_alerta de submeter jobs assincronos no _POOL.
-    application.config['LOJA_ALERTA_TRAVA'] = '0'
-    # E, a prova de bala: torna o pool do loja_alerta SINCRONO nos testes. O pool
-    # real e um ThreadPoolExecutor; um job pendente escrevia no dict module-level
-    # `_ultimo_envio` de forma ASSINCRONA e VAZAVA pra um teste seguinte (dedup de
-    # 600s), quebrando test_loja_alerta em CI de forma nao-deterministica (passava
-    # isolado/local, falhava na suite pela ordem/timing). Rodando inline, o job
-    # termina DENTRO do teste que disparou — nunca sobra job pendente pra correr
-    # durante outro teste.
-    from app.services import loja_alerta as _la
-
-    class _PoolSincrono:
-        def submit(self, fn, *a, **k):
-            try:
-                fn(*a, **k)
-            except Exception:  # noqa: BLE001
-                pass
-            return None
-    _la._POOL = _PoolSincrono()
     with application.app_context():
         db.drop_all()
         db.create_all()
