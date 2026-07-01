@@ -36,7 +36,7 @@
 {% macro dispensar_btn(it) %}
 <form method="POST" action="{{ url_for('industria_teste.dispensar') }}"
       class="d-inline"
-      onsubmit="return confirm('Dar OK na pendência de {{ it.receita_nome|e }} (mandado {{ it.alvo }}, produzido {{ it.produzido }})? Ela para de aparecer como a produzir. NÃO credita estoque — o furo fica registrado.');">
+      onsubmit="return confirm('Dar OK na pendência de {{ it.receita_nome|e }} (mandado {{ it.alvo }}, produzido {{ it.produzido }})? Ela some da auditoria E do plano do padeiro (ele não vê nem produz esse item). NÃO credita estoque — o furo fica registrado. Dá pra desfazer.');">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="item_id" value="{{ it.item_id }}">
     <input type="hidden" name="dias" value="{{ dias }}">
