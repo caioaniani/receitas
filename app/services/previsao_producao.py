@@ -1076,16 +1076,19 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             .distinct().all()):
         if data_ent is not None:
             ja_tem[loja_id].add(data_ent.isoformat())
-    for loja_id, data_ent, rid_e, qtd_e in (db.session.query(
+    for loja_id, data_ent, rid_e, mid_e, qtd_e in (db.session.query(
             PedidoLoja.loja_id, PedidoLoja.data_entrega,
-            PedidoItem.receita_id, PedidoItem.quantidade)
+            PedidoItem.receita_id, PedidoItem.materia_prima_id,
+            PedidoItem.quantidade)
             .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoLoja.status != 'cancelado',
-                    PedidoItem.receita_id.isnot(None),
+                    db.or_(PedidoItem.receita_id.isnot(None),
+                           PedidoItem.materia_prima_id.isnot(None)),
                     PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= horizonte_fim).all()):
-        if data_ent is not None:
-            pedido_existente[loja_id][data_ent.isoformat()][rid_e] += int(qtd_e or 0)
+        tok = _token(rid_e, mid_e)
+        if data_ent is not None and tok is not None:
+            pedido_existente[loja_id][data_ent.isoformat()][tok] += int(qtd_e or 0)
 
     dias_out = [{'data': d.isoformat(),
                  'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
