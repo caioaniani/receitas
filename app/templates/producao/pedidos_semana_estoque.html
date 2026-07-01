@@ -107,6 +107,7 @@
                     {% for p in loja.produtos %}
                     <tr data-nome="{{ p.nome }}">
                         <td class="prod">{{ p.nome }}
+                            {% if p.eh_mp %}<span class="badge bg-secondary" title="Matéria-prima comprada (a indústria envia, não produz)">MP</span>{% endif %}
                             {% if p.lote and p.lote > 1 %}<span class="badge bg-light text-dark border" title="Caixa (lote de pedido)">cx {{ p.lote }}</span>{% endif %}
                         </td>
                         <td class="estoque">{{ p.estoque_atual }}</td>
@@ -115,7 +116,7 @@
                         <td class="{{ 'jatem' if dia.data in loja.ja_tem }}">
                             <input type="number" min="0"
                                    class="form-control form-control-sm pmed-cel"
-                                   name="qtd|{{ loja.loja_id }}|{{ dia.data }}|{{ p.receita_id }}"
+                                   name="qtd|{{ loja.loja_id }}|{{ dia.data }}|{{ p.item_key }}"
                                    value="{{ p.por_dia[loop.index0] }}"
                                    {% if dia.data in loja.ja_tem %}disabled title="já tem pedido neste dia"{% endif %}>
                         </td>
