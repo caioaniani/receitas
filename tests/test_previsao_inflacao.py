@@ -17,11 +17,9 @@ A3: a faixa de 2 datas ficava sem proteção a outlier (o cap só ligava com 3+)
 Um pico obvio (50x) estourava a previsão. Agora 2 pontos com salto obvio (> 5x)
 são capados; variação normal (2-3x) não.
 """
-from datetime import date
+from datetime import date, timedelta
 
-from app.services.previsao_producao import (
-    _media_recencia,
-)
+from app.services.previsao_producao import _media_recencia
 
 # ── A2: zeros implícitos ──────────────────────────────────────────────────
 _SABADOS = [date(2026, 5, 23), date(2026, 5, 30), date(2026, 6, 6),
@@ -65,3 +63,66 @@ def test_a3_variacao_normal_2pts_nao_e_capada():
     # 10 e 30 (3x): variação normal, NÃO capa -> média entre os dois.
     m = _media_recencia({date(2026, 6, 20): 10, date(2026, 6, 27): 30}, _HOJE)
     assert 18 < m < 30, m
+
+
+# ── A1: taxa residual (fim do double-count) ───────────────────────────────
+def test_a1_taxa_residual_zera_quando_todo_volume_tem_padrao_de_dow():
+    from app.services.previsao_producao import _taxa_residual
+    # 6 sábados com 100 -> o dow do sábado usa média própria; NADA sobra de
+    # residual (senão o volume do sábado seria contado 2x nos dias úteis).
+    qtd_dow = {5: {s: 100 for s in _SABADOS}}
+    assert _taxa_residual(qtd_dow, 600, 42) == 0.0
+
+
+def test_a1_taxa_residual_mantem_media_diaria_sem_padrao():
+    from app.services.previsao_producao import _taxa_residual
+    # item de giro baixo: 6 dows distintos com 1 ocorrência (3 cada). Nenhum dow
+    # tem média própria -> residual == soma_total/dias (média diária preservada).
+    qtd_dow = {dow: {date(2026, 6, 1) + timedelta(days=dow): 3} for dow in range(6)}
+    assert abs(_taxa_residual(qtd_dow, 18, 42) - 18 / 42) < 1e-9
+
+
+def test_a1_taxa_residual_so_o_residuo_no_item_misto():
+    from app.services.previsao_producao import _taxa_residual
+    # sábado com padrão (600) + 1 terça avulsa (5): só os 5 viram residual.
+    qtd_dow = {5: {s: 100 for s in _SABADOS}, 1: {date(2026, 6, 23): 5}}
+    assert abs(_taxa_residual(qtd_dow, 605, 42) - 5 / 42) < 1e-9
+
+
+def test_a1_previsto_dow_usa_residual_no_fallback():
+    from app.services.previsao_producao import _previsto_dow
+    # dow com >= 2 datas -> média (10); dow ralo/vazio -> a taxa residual (0,4).
+    com_dados = {date(2026, 6, 20): 10, date(2026, 6, 27): 10}
+    assert _previsto_dow(com_dados, _HOJE, 0.4) == 10
+    assert _previsto_dow({date(2026, 6, 27): 10}, _HOJE, 0.4) == 0.4  # 1 só -> residual
+    assert _previsto_dow(None, _HOJE, 0.4) == 0.4                     # vazio -> residual
+
+
+def test_a1_balanco_item_so_de_sabado_nao_infla(app):
+    """Integração: item que só vende sábado (100) NÃO ganha previsão em dia útil.
+    Antes o fallback espalhava ~14/dia em cada dia útil -> previsto 7d ~186."""
+    from app.extensions import db
+    from app.models import Loja, PedidoItem, PedidoLoja, Receita
+    from app.services.previsao_producao import balanco_industria
+    from app.utils import hoje
+
+    loja = Loja(nome='Loja Sáb', ativa=True)
+    r = Receita(nome='Pão de Sábado', categoria='X', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0)
+    db.session.add_all([loja, r])
+    db.session.commit()
+    d = hoje() - timedelta(days=1)
+    while d.weekday() != 5:                 # último sábado
+        d -= timedelta(days=1)
+    for _ in range(6):                      # 6 sábados, 100 cada; nada em dia útil
+        p = PedidoLoja(loja_id=loja.id, status='recebido', data_entrega=d,
+                       data_pedido=d)
+        db.session.add(p)
+        db.session.flush()
+        db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=100))
+        d -= timedelta(days=7)
+    db.session.commit()
+
+    bal = balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=False)
+    it = next(i for i in bal['itens'] if i['receita_id'] == r.id)
+    assert it['previsto'] == 100            # 1 sábado no horizonte, dias úteis 0
