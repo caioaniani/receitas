@@ -277,30 +277,18 @@ def painel_receita_grade(rid):
 @login_required
 @admin_required
 def pedidos_semana():
-    """Sugestao de pedidos da semana por loja/dia a partir do historico — a
-    inversao do fluxo: o sistema propoe, a loja nao precisa pedir. Preview
-    editavel; ao gerar cria PedidoLoja em rascunho ('pendente'). **Admin**."""
-    from app.services.previsao_producao import sugerir_pedidos_semana
-
+    """APOSENTADA (01/07/2026, decisao do dono): a tela de 'previsao automatica
+    por dia' saiu de uso — a de MEDIA SEMANAL virou a principal. A rota fica como
+    REDIRECT pra nao quebrar bookmarks/links antigos; o motor `sugerir_pedidos_
+    semana` continua vivo (a acuracia do forecast depende dele, ver
+    previsao_acuracia.py). NAO ressuscitar a tela sem ordem explicita."""
     try:
-        horizonte = int(request.args.get('horizonte', 7))
-    except ValueError:
-        horizonte = 7
-    horizonte = max(1, min(horizonte, 14))
-
-    try:
-        janela = int(request.args.get('janela', 6))
-    except ValueError:
-        janela = 6
-    janela = max(1, min(janela, 26))
-
-    inicio = _inicio_offset()
-    sugestao = sugerir_pedidos_semana(horizonte_dias=horizonte,
-                                      janela_semanas=janela,
-                                      inicio_offset_dias=inicio)
-    return render_template('producao/pedidos_semana.html',
-                           sugestao=sugestao, horizonte=horizonte,
-                           janela=janela, inicio=inicio)
+        horizonte = max(1, min(int(request.args.get('horizonte', 7)), 14))
+        janela = max(1, min(int(request.args.get('janela', 6)), 26))
+    except (TypeError, ValueError):
+        horizonte, janela = 7, 6
+    return redirect(url_for('producao.pedidos_semana_media', horizonte=horizonte,
+                            janela=janela, inicio=_inicio_offset()))
 
 
 @producao_bp.route('/pedidos-semana/media')
