@@ -419,9 +419,11 @@ def pedidos_semana_gerar():
         inicio = max(0, min(int(request.form.get('inicio', 0)), 14))
     except (TypeError, ValueError):
         horizonte, janela, inicio = 7, 6, 0
-    destino = {'media': 'producao.pedidos_semana_media',
-               'estoque': 'producao.pedidos_semana_estoque'}.get(
-                   request.form.get('origem'), 'producao.pedidos_semana')
+    # Default = média semanal (tela principal desde 01/07; a automática foi
+    # aposentada). origem só troca pra estoque quando veio de lá.
+    destino = ('producao.pedidos_semana_estoque'
+               if request.form.get('origem') == 'estoque'
+               else 'producao.pedidos_semana_media')
     return redirect(url_for(destino, horizonte=horizonte, janela=janela,
                             inicio=inicio))
 
