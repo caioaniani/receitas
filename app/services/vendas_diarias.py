@@ -18,6 +18,7 @@ from app.extensions import db
 from app.models import (
     SeruLojaMap,
     VendaMapa,
+    VendaSeruDiaBreakdown,
     VendaSeruDiaLoja,
     VendaSeruDiaria,
 )
@@ -68,10 +69,13 @@ def _loja_id_por_nome():
 
 
 def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
-    """Busca os pedidos do Seru e (re)grava `VendaSeruDiaria` do intervalo.
+    """Busca os pedidos do Seru e (re)grava o snapshot do intervalo:
+    `VendaSeruDiaria` (por produto), `VendaSeruDiaLoja` (totais/loja) e
+    `VendaSeruDiaBreakdown` (pagamento/canal/cancelados — eixos da tela
+    'Vendas PDV').
 
-    Idempotente: apaga TODAS as linhas de [data_inicial, data_final] e regrava a
-    partir da API (createdAt BRT no intervalo, cancelados fora). Retorna
+    Idempotente: apaga TODAS as linhas de [data_inicial, data_final] nas tres
+    tabelas e regrava a partir da API (createdAt BRT no intervalo). Retorna
     {'dias': n, 'linhas': n, 'pedidos': n}."""
     pedidos = seru.listar_pedidos_completo(
         data_inicial, data_final, expandir_dias_frente=expandir_dias_frente)
@@ -85,22 +89,39 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
     # cujos itens vem com preco 0) — base do faturamento do bot.
     por_dia_loja = defaultdict(lambda: {
         'peds': set(), 'fat': Decimal('0'), 'fat_ped': Decimal('0')})
+    # Breakdowns da tela 'Vendas PDV', por (data, company.name). Pagamento usa
+    # value|total|amount; canal usa o TOTAL do pedido; cancelados = contagem.
+    por_dia_pagto = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
+    por_dia_canal = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
+    por_dia_cancel = defaultdict(int)
     dias_vistos = set()
     n_pedidos = 0
     for p in pedidos:
-        if not isinstance(p, dict) or p.get('canceledAt'):
+        if not isinstance(p, dict):
             continue
         d = seru.data_local(p.get('createdAt'))
         if not d or not (data_inicial <= d <= data_final):
             continue
         ln = _nome_loja(p) or '(sem loja)'
-        pid = p.get('id') or p.get('orderNumber') or p.get('code')
         dias_vistos.add(d)
+        if p.get('canceledAt'):
+            por_dia_cancel[(d, ln)] += 1
+            continue
+        pid = p.get('id') or p.get('orderNumber') or p.get('code')
         n_pedidos += 1
         lj = por_dia_loja[(d, ln)]
-        lj['fat_ped'] += Decimal(str(p.get('total') or 0))   # total do pedido
+        total_ped = _dec(p.get('total'))
+        lj['fat_ped'] += total_ped                           # total do pedido
         if pid is not None:
             lj['peds'].add(pid)
+        for pay in (p.get('payments') or []):
+            if not isinstance(pay, dict):
+                continue
+            metodo = _str_chave(pay.get('method') or pay.get('type')) or '—'
+            por_dia_pagto[(d, ln)][metodo] += _dec(
+                pay.get('value') or pay.get('total') or pay.get('amount'))
+        canal = _str_chave(p.get('salesChannel')) or '—'
+        por_dia_canal[(d, ln)][canal] += total_ped
         for it in seru.extrair_itens(p):
             if it['cancelado']:
                 continue
@@ -117,12 +138,10 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
     loja_ids = _loja_id_por_nome()
     # Apaga o intervalo inteiro (nao so os dias com pedido): um dia que ficou
     # sem venda — ex: tudo cancelado — tem que zerar tambem.
-    VendaSeruDiaria.query.filter(
-        VendaSeruDiaria.data >= data_inicial,
-        VendaSeruDiaria.data <= data_final).delete(synchronize_session=False)
-    VendaSeruDiaLoja.query.filter(
-        VendaSeruDiaLoja.data >= data_inicial,
-        VendaSeruDiaLoja.data <= data_final).delete(synchronize_session=False)
+    for _modelo in (VendaSeruDiaria, VendaSeruDiaLoja, VendaSeruDiaBreakdown):
+        _modelo.query.filter(
+            _modelo.data >= data_inicial,
+            _modelo.data <= data_final).delete(synchronize_session=False)
     db.session.flush()
 
     linhas = 0
@@ -139,6 +158,20 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
             data=d, loja_seru=ln, loja_id=loja_ids.get(ln.strip().lower()),
             n_pedidos=len(lj['peds']), faturamento=lj['fat'],
             faturamento_pedidos=lj['fat_ped']))
+    for (d, ln), metodos in por_dia_pagto.items():
+        for metodo, val in metodos.items():
+            db.session.add(VendaSeruDiaBreakdown(
+                data=d, loja_seru=ln, dimensao='pagamento',
+                chave=metodo[:120], valor=val))
+    for (d, ln), canais in por_dia_canal.items():
+        for canal, val in canais.items():
+            db.session.add(VendaSeruDiaBreakdown(
+                data=d, loja_seru=ln, dimensao='canal',
+                chave=canal[:120], valor=val))
+    for (d, ln), qtd in por_dia_cancel.items():
+        db.session.add(VendaSeruDiaBreakdown(
+            data=d, loja_seru=ln, dimensao='cancelados',
+            chave='', valor=Decimal(qtd)))
     db.session.commit()
     return {'dias': len(dias_vistos), 'linhas': linhas, 'pedidos': n_pedidos}
 
