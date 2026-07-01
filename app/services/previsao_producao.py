@@ -1184,15 +1184,18 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
             for d_idx in range(n):
                 if cons[d_idx] > 0:
                     gross[max(0, d_idx - L)] += cons[d_idx]
-            gross = [int(ceil(g)) for g in gross]
+            # NAO arredonda por dia (era o D1): dar ceil em CADA dia inflava
+            # insumo de fracao baixa — "Massa para folhar" ~0,6/dia virava 1/dia
+            # (67% a mais). A fracao ACUMULA entre os dias; produz o inteiro do
+            # TOTAL (ceil da demanda liquida) distribuido, nao a soma dos ceils.
             livre = _estoque_livre(rid)
             running = livre
             residual = []
-            for g in gross:
+            for g in gross:                          # gross FRACIONARIO
                 cobre = min(running, g)
                 running -= cobre
                 residual.append(g - cobre)
-            extra = max(0, sum(gross) - livre)
+            extra = int(ceil(max(0.0, sum(gross) - livre)))
             pesos = residual if sum(residual) > 0 else gross
             add = _distribuir_inteiro(extra, pesos)
             rec = receitas.get(rid)
