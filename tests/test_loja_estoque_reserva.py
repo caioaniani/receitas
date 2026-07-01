@@ -403,12 +403,13 @@ def test_cesta_com_componente_zerado_vende_e_baixa_registra_falta(app):
         assert falta is not None                     # falta registrada, sem crash
 
 
-def test_item_avulso_ainda_bloqueia_mesmo_dividindo_linha_com_cesta(app):
-    """Anti-oversell preservado: quando o MESMO item e vendido AVULSO e tambem
-    entra como componente de cesta no mesmo pedido, a parcela AVULSA ainda barra
-    o checkout se nao ha saldo pra ela — so a parcela de cesta e best-effort."""
+def test_reserva_soma_avulso_e_cesta_na_mesma_linha_sem_bloquear(app):
+    """Item vendido AVULSO e tambem como componente de cesta no mesmo pedido
+    somam na mesma linha de estoque. O fisico nao bloqueia (regra do dono):
+    reserva a demanda cheia (2 avulso + 1 da cesta = 3), mesmo com 1 no fisico,
+    e disponivel clampa em 0."""
     from app.extensions import db
-    from app.models import Produto, ProdutoItem
+    from app.models import EstoqueLoja, Produto, ProdutoItem
     from app.services import loja_estoque_reserva
     with app.app_context():
         loja = _site_loja(db)
@@ -423,14 +424,16 @@ def test_item_avulso_ainda_bloqueia_mesmo_dividindo_linha_com_cesta(app):
                                    produto_componente_id=suco.id,
                                    item_nome='Suco de Uva', quantidade=1))
         db.session.commit()
-        # 2 sucos AVULSOS (precisa 2, so ha 1) + 1 cesta (componente pede +1).
+        # 2 sucos AVULSOS + 1 cesta (componente pede +1) = 3 na mesma linha.
         ped = _pedido(db, loja_retirada=loja, itens=[(suco, 2), (cesta, 1)])
 
         r = loja_estoque_reserva.reservar(ped, loja_id=loja.id)
-        assert r['ok'] is False                      # a parcela avulsa nao cabe
-        s = [x for x in r['sem_estoque'] if x['nome'] == 'Suco de Uva']
-        assert s and s[0]['pedido'] == 2             # so a demanda AVULSA (nao 3)
-        assert s[0]['disponivel'] == 1
+        assert r['ok'] is True                       # fisico nunca bloqueia
+        assert r['reservas'] == 1                    # tudo na mesma linha
+        el = EstoqueLoja.query.filter_by(
+            loja_id=loja.id, produto_id=suco.id).first()
+        assert el.quantidade_reservada == 3          # 2 avulso + 1 cesta
+        assert el.disponivel == 0                    # clampa (1 - 3 -> 0)
 
 
 def test_estoque_loja_disponivel_property():
