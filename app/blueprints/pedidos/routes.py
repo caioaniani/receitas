@@ -1840,6 +1840,41 @@ def estoque_loja_entrada_lote():
                            lojas=lojas, loja=loja, sel_loja=loja_id)
 
 
+@pedidos_bp.route('/estoque-loja/conferencia-lote', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def estoque_loja_conferencia_lote():
+    """Preview da CONFERÊNCIA em lote (balanço): cola a contagem 'nome: qtd' e
+    vê o ajuste (sistema → contado) antes de aplicar. SETA (não soma). Regra:
+    qtd em branco não mexe; qtd 0 zera. Apply em outra rota (idempotente)."""
+    from app.services import estoque_loja_lote as svc
+
+    loja_id = None
+    if request.method == 'POST':
+        try:
+            loja_id = int(request.form.get('loja_id') or 0) or None
+        except ValueError:
+            loja_id = None
+    else:
+        try:
+            loja_id = int(request.args.get('loja') or 0) or None
+        except ValueError:
+            loja_id = None
+
+    texto = request.form.get('texto', '') if request.method == 'POST' else ''
+    referencia = request.form.get('referencia', '').strip()
+    itens = []
+    if request.method == 'POST' and texto.strip() and loja_id:
+        parseados = svc.parsear_conferencia(texto)
+        itens = svc.resolver_conferencia(parseados, loja_id)
+
+    lojas = _lojas_operacionais()
+    loja = Loja.query.get(loja_id) if loja_id else None
+    return render_template('pedidos/estoque_loja_conferencia_lote.html',
+                           texto=texto, referencia=referencia, itens=itens,
+                           lojas=lojas, loja=loja, sel_loja=loja_id)
+
+
 @pedidos_bp.route('/estoque-loja/saude')
 @login_required
 @gerente_required
