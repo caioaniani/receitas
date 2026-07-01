@@ -43,6 +43,13 @@ def _app_session():
     application = create_app()
     application.config['TESTING'] = True
     application.config['WTF_CSRF_ENABLED'] = False
+    # Testes NAO disparam alertas reais (WhatsApp): a trava OFF impede o
+    # loja_alerta de submeter jobs assincronos no _POOL. Sem isso, esses jobs
+    # escreviam no dict module-level `_ultimo_envio` de forma assincrona e
+    # VAZAVAM entre testes (dedup de 600s), quebrando test_loja_alerta em CI de
+    # forma nao-deterministica (passava isolado, falhava na suite). Os testes de
+    # alerta mockam alertar_esgotado ou chamam os internos direto.
+    application.config['LOJA_ALERTA_TRAVA'] = '0'
     with application.app_context():
         db.drop_all()
         db.create_all()
