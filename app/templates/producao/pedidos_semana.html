@@ -4,10 +4,13 @@
 {% block content %}
 <style>
     .psem-loja { border: 1px solid #dee2e6; border-radius: .5rem; margin-bottom: 1rem; }
-    .psem-loja > h5 {
-        background: #f1f3f5; margin: 0; padding: .5rem .75rem;
-        border-radius: .5rem .5rem 0 0; font-size: 1rem;
+    .psem-loja-head {
+        background: #f1f3f5; padding: .4rem .75rem;
+        border-radius: .5rem .5rem 0 0;
+        display: flex; justify-content: space-between; align-items: center;
+        gap: .5rem; flex-wrap: wrap;
     }
+    .psem-loja-head h5 { margin: 0; font-size: 1rem; }
     .psem-dia { padding: .5rem .75rem; border-top: 1px solid #f0f0f0; }
     .psem-dia .dia-label { font-weight: 600; color: #0d3b66; }
     .psem-item {
