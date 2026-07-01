@@ -1702,6 +1702,7 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
             firme[data_ent][loja_id] += int(qtd or 0)
 
     datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)   # denom da media
+    residual_rate = _taxa_residual(por_data_agg, soma_total, dias_calendario_janela)
     dias = []
     total_previsto_frac = 0.0
     total_firme = 0
@@ -1718,9 +1719,12 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
             previsto = _media_recencia(
                 por_data, hoje_d, datas_possiveis=datas_possiveis_dow[dow])
             fonte = 'media_dow'
-        elif soma_total:
-            previsto = soma_total / dias_calendario_janela
+        elif residual_rate > 0:
+            previsto = residual_rate      # taxa residual (volume sem padrao de dow)
             fonte = 'media_diaria'
+        elif soma_total:
+            previsto = 0.0                # vende, mas so em dows com padrao proprio
+            fonte = 'sem_dow'
         else:
             previsto = 0.0
             fonte = 'sem_historico'
