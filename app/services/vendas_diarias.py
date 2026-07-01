@@ -14,7 +14,11 @@ from collections import defaultdict
 from decimal import Decimal
 
 from app.extensions import db
-from app.models import SeruLojaMap, VendaMapa, VendaSeruDiaria
+from app.models import (
+    SeruLojaMap,
+    VendaMapa,
+    VendaSeruDiaria,
+)
 from app.services import seru
 from app.services.vendas_itens import (
     _carregar_catalogo,
