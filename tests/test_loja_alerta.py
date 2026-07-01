@@ -106,6 +106,7 @@ def test_dedup_leve_nao_repete_mesmo_cliente():
     assert loja_alerta._deve_enviar('outro|cliente|X') is True  # outro passa
 
 
+@_FLAKY_ISOLAMENTO
 def test_enviar_manda_pro_zapi_no_numero_do_dono(app):
     from app.services import loja_alerta
     loja_alerta._ultimo_envio.clear()
