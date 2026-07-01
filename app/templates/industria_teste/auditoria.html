@@ -21,7 +21,28 @@
     .aud-nota { font-size: .82rem; color: #495057; background: #f0f7f2;
         border: 1px solid #cde9d8; border-radius: .3rem; padding: .5rem .7rem;
         margin-bottom: 1.2rem; }
+    .btn-ok { border: 1px solid #198754; background: #fff; color: #198754;
+        cursor: pointer; font-size: .76rem; border-radius: .25rem;
+        padding: .12rem .5rem; }
+    .btn-ok:hover { background: #198754; color: #fff; }
+    .btn-undo { border: 1px solid #adb5bd; background: #fff; color: #6c757d;
+        cursor: pointer; font-size: .74rem; border-radius: .25rem;
+        padding: .1rem .45rem; }
+    .btn-undo:hover { background: #f1f3f5; }
+    .aud-dispensada td { color: #6c757d; }
+    .aud-sec-dispensada h5 { color: #6c757d; }
 </style>
+
+{% macro dispensar_btn(it) %}
+<form method="POST" action="{{ url_for('industria_teste.dispensar') }}"
+      class="d-inline"
+      onsubmit="return confirm('Dar OK na pendência de {{ it.receita_nome|e }} (mandado {{ it.alvo }}, produzido {{ it.produzido }})? Ela para de aparecer como a produzir. NÃO credita estoque — o furo fica registrado.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="item_id" value="{{ it.item_id }}">
+    <input type="hidden" name="dias" value="{{ dias }}">
+    <button class="btn-ok" title="Verifiquei — dar OK e fechar esta pendência">✓ OK</button>
+</form>
+{% endmacro %}
 
 <div class="aud-wrap">
     <div class="d-flex align-items-baseline justify-content-between mb-2">
