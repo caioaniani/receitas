@@ -163,13 +163,63 @@
 
     function aplicarFiltroEAtualizar() {
         if (!ultimoResultado) return;
+        var r = ultimoResultado;
+        var view = (r.fonte === 'banco' || !r.pedidos) ? viewDoBanco(r) : viewAoVivo(r);
+        renderResumo(view);
+        renderLista(view);
+    }
+
+    // Modo BANCO (snapshot diário): sem pedidos crus; usa os agregados prontos e
+    // o `por_loja_detalhe` pra o filtro por loja.
+    function viewDoBanco(r) {
+        var view;
+        if (filtroLoja) {
+            var det = (r.por_loja_detalhe || {})[filtroLoja] || {
+                total: 0, n_pedidos: 0, cancelados: 0, por_pagamento: {}, por_canal: {}};
+            view = {
+                total_pedidos: (det.n_pedidos || 0) + (det.cancelados || 0),
+                cancelados: det.cancelados || 0,
+                total_valor: det.total || 0,
+                por_pagamento: det.por_pagamento || {},
+                por_canal: det.por_canal || {},
+                por_loja: {},
+                fonte: 'banco',
+                consulta_limitada: r.consulta_limitada,
+                fora_intervalo: r.fora_intervalo,
+            };
+            view.por_loja[filtroLoja] = det.total || 0;
+        } else {
+            view = {
+                total_pedidos: Number(r.total_pedidos) || 0,
+                cancelados: Number(r.cancelados) || 0,
+                total_valor: Number(r.total_valor) || 0,
+                por_pagamento: Object.assign({}, r.por_pagamento || {}),
+                por_canal: Object.assign({}, r.por_canal || {}),
+                por_loja: r.por_loja || {},
+                fonte: 'banco',
+                consulta_limitada: r.consulta_limitada,
+                fora_intervalo: r.fora_intervalo,
+            };
+            // Site: só no "Todas" (o site não é loja Seru).
+            var site = r.site || {};
+            if ((Number(site.total) || 0) > 0 || (Number(site.n_pedidos) || 0) > 0) {
+                view.total_valor += Number(site.total) || 0;
+                view.total_pedidos += Number(site.n_pedidos) || 0;
+                view.por_canal['Site'] = (view.por_canal['Site'] || 0) + (Number(site.total) || 0);
+                view.site_incluido = site;
+            }
+        }
+        return view;
+    }
+
+    // Modo AO VIVO (?ao_vivo=1): reagrega a partir dos pedidos crus da API.
+    function viewAoVivo(r) {
         // Filtra cada pedido pelo company.name == filtroLoja (se filtro ativo)
-        var filtrados = (ultimoResultado.pedidos || []).filter(function(p) {
+        var filtrados = (r.pedidos || []).filter(function(p) {
             if (!filtroLoja) return true;
             var c = (p.company && (p.company.name || p.company.legalName)) || '';
             return c === filtroLoja;
         });
-        // Reagregar localmente
         var total = 0, cancelados = 0;
         var por_pagamento = {}, por_canal = {}, por_loja = {};
         filtrados.forEach(function(p) {
@@ -187,26 +237,24 @@
         });
         var view = {
             total_pedidos: filtrados.length,
-            fora_intervalo: ultimoResultado.fora_intervalo,
+            fora_intervalo: r.fora_intervalo,
+            consulta_limitada: r.consulta_limitada,
             cancelados: cancelados,
             total_valor: total,
             por_pagamento: por_pagamento,
             por_canal: por_canal,
             por_loja: por_loja,
+            fonte: 'ao_vivo',
             pedidos: filtrados,
         };
-        // Site (loja própria / PedidoOnline): soma no total/pedidos/ticket e
-        // vira a linha "Site" do canal de venda. Só quando "Todas" — o site não
-        // é uma loja Seru, então filtrar por loja física o exclui.
-        var site = ultimoResultado.site || {};
+        var site = r.site || {};
         if (!filtroLoja && ((Number(site.total) || 0) > 0 || (Number(site.n_pedidos) || 0) > 0)) {
             view.total_valor += Number(site.total) || 0;
             view.total_pedidos += Number(site.n_pedidos) || 0;
             view.por_canal['Site'] = (view.por_canal['Site'] || 0) + (Number(site.total) || 0);
             view.site_incluido = site;
         }
-        renderResumo(view);
-        renderLista(view);
+        return view;
     }
 
     function renderResumo(d) {
