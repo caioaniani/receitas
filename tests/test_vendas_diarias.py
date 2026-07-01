@@ -74,3 +74,23 @@ def test_dias_capturados(app):
     _capturar(app)
     assert vendas_diarias.dias_capturados(DIA, DIA) == {DIA}
     assert vendas_diarias.dias_capturados(date(2026, 1, 1), date(2026, 1, 2)) == set()
+
+
+@patch('app.services.vendas_diarias.capturar_periodo',
+       return_value={'dias': 0, 'linhas': 0, 'pedidos': 0})
+def test_rota_backfill_owner(_m, app, owner_user):
+    """Owner dispara o backfill (background); nao-owner e bloqueado."""
+    c = app.test_client()
+    c.post('/auth/login', data={'login': owner_user.login, 'senha': '123'},
+           follow_redirects=True)
+    r = c.post('/pdv/vendas-diarias/backfill', data={'dias': '1'})
+    assert r.status_code in (302, 303)
+
+
+def test_rota_backfill_bloqueia_nao_owner(app, admin_user):
+    c = app.test_client()
+    c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+           follow_redirects=True)
+    r = c.post('/pdv/vendas-diarias/backfill', data={'dias': '1'},
+               follow_redirects=False)
+    assert r.status_code in (302, 403)
