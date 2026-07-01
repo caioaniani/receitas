@@ -153,25 +153,25 @@ def test_home_mostra_item_esgotado_com_selo(app):
     assert b'selo-esgotado' in r.data               # com selo
 
 
-def test_montar_itens_fail_open_gate_real_e_por_data(app):
-    """montar_itens (sem data) e fail-open: nao remove por estoque. A trava
-    real e por DATA de entrega (tem_estoque_para_dia). Item com plano 0 fica no
-    montar_itens mas e barrado no gate por-data do checkout."""
+def test_checkout_remove_item_esgotado_por_plano(app):
+    """montar_itens remove item ESGOTADO NO PLANO (plano 0 na janela toda) e
+    avisa. Item com plano fica; o EstoqueLoja fisico nao entra nessa decisao."""
     from app.extensions import db
-    from app.services import loja_catalogo, loja_checkout
-    from app.utils import hoje
+    from app.services import loja_checkout
     with app.app_context():
         loja = _site_loja(db)
+        com = _produto(db, 'Box com saldo')
         zero = _produto(db, 'Box esgotado')
+        _plano(com.id, 2)
         _plano(zero.id, 0)
-        itens, _avisos = loja_checkout.montar_itens([
+        itens, avisos = loja_checkout.montar_itens([
+            {'kind': 'produto', 'id': com.id, 'qtd': 1},
             {'kind': 'produto', 'id': zero.id, 'qtd': 1},
         ])
-        # Sem data, montar_itens NAO remove (fail-open)
-        assert [i['nome'] for i in itens] == ['Box esgotado']
-        # A trava real e por data: plano 0 -> nao vende naquele dia
-        assert loja_catalogo.tem_estoque_para_dia(
-            'produto', zero.id, hoje()) is False
+        nomes = [i['nome'] for i in itens]
+        assert 'Box com saldo' in nomes
+        assert 'Box esgotado' not in nomes      # esgotado no plano nao entra
+        assert any('esgotou' in a for a in avisos)
 
 
 def test_catalogo_set_estoque_grava_na_loja_do_site(app):
