@@ -118,3 +118,105 @@ def test_rota_backfill_bloqueia_nao_owner(app, admin_user):
     r = c.post('/pdv/vendas-diarias/backfill', data={'dias': '1'},
                follow_redirects=False)
     assert r.status_code in (302, 403)
+
+
+# ── Breakdowns da tela 'Vendas PDV' (pagamento/canal/cancelados) ──────────────
+
+def _pedido_full(pid, loja, itens, *, total, payments, canal,
+                 created='2026-06-15T13:00:00Z', canceled=None):
+    return {'id': pid, 'createdAt': created, 'canceledAt': canceled,
+            'company': {'name': loja}, 'total': total,
+            'payments': payments, 'salesChannel': canal,
+            'items': [{'name': n, 'quantity': q, 'total': t} for n, q, t in itens]}
+
+
+PEDIDOS_FULL = [
+    _pedido_full(1, 'Ribeiro do Vale', [('Cookie', 5, 50.0)],
+                 total=50.0, payments=[{'method': 'dinheiro', 'value': 50.0}],
+                 canal={'name': 'Balcão'}),
+    _pedido_full(2, 'Nebraska', [('Cookie', 3, 30.0)],
+                 total=30.0, payments=[{'method': 'pix', 'value': 30.0}],
+                 canal={'name': 'Balcão'}),
+    _pedido_full(3, 'Ribeiro do Vale', [('Cookie', 1, 10.0)],
+                 total=10.0, payments=[], canal=None,
+                 canceled='2026-06-15T20:00:00Z'),
+]
+
+
+def _capturar_full(app, pedidos=PEDIDOS_FULL):
+    with patch('app.services.seru.listar_pedidos_completo', return_value=pedidos):
+        return vendas_diarias.capturar_periodo(DIA, DIA)
+
+
+def test_captura_grava_breakdowns(app):
+    from app.models import VendaSeruDiaBreakdown
+    _capturar_full(app)
+    pag = {b.chave: float(b.valor) for b in
+           VendaSeruDiaBreakdown.query.filter_by(dimensao='pagamento').all()}
+    assert pag == {'dinheiro': 50.0, 'pix': 30.0}
+    # Canal = soma do TOTAL do pedido (2 nao-cancelados, ambos Balcão) = 80.
+    can = {}
+    for b in VendaSeruDiaBreakdown.query.filter_by(dimensao='canal').all():
+        can[b.chave] = can.get(b.chave, 0.0) + float(b.valor)
+    assert can == {'Balcão': 80.0}
+    # 1 pedido cancelado (Ribeiro).
+    canc = VendaSeruDiaBreakdown.query.filter_by(
+        dimensao='cancelados', loja_seru='Ribeiro do Vale').first()
+    assert canc is not None and int(canc.valor) == 1
+
+
+def test_captura_breakdown_idempotente(app):
+    from app.models import VendaSeruDiaBreakdown
+    _capturar_full(app)
+    n1 = VendaSeruDiaBreakdown.query.count()
+    _capturar_full(app)
+    assert VendaSeruDiaBreakdown.query.count() == n1   # nao duplica
+
+
+def test_vendas_pdv_do_banco(app):
+    _capturar_full(app)
+    d = vendas_diarias.vendas_pdv_do_banco(DIA, DIA, capturar=False)
+    assert d['fonte'] == 'banco'
+    assert d['total_valor'] == 80.0        # 50 + 30 (cancelado fora)
+    assert d['n_pedidos'] == 2
+    assert d['cancelados'] == 1
+    assert d['por_pagamento'] == {'dinheiro': 50.0, 'pix': 30.0}
+    assert d['por_canal'] == {'Balcão': 80.0}
+    assert d['por_loja'] == {'Ribeiro do Vale': 50.0, 'Nebraska': 30.0}
+    det = d['por_loja_detalhe']
+    assert det['Ribeiro do Vale']['total'] == 50.0
+    assert det['Ribeiro do Vale']['n_pedidos'] == 1
+    assert det['Ribeiro do Vale']['cancelados'] == 1
+    assert det['Ribeiro do Vale']['por_pagamento'] == {'dinheiro': 50.0}
+    assert det['Nebraska']['cancelados'] == 0
+
+
+def test_rota_api_vendas_le_do_banco(app, admin_user):
+    """A tela 'Vendas PDV' (default) le do snapshot: fonte=banco, sem pedidos
+    crus, com por_loja_detalhe pro filtro."""
+    _capturar_full(app)   # DIA e passado -> garantir_capturado nao rebate na API
+    c = app.test_client()
+    c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+           follow_redirects=True)
+    r = c.get('/pdv/api/vendas?inicio=2026-06-15&fim=2026-06-15')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['ok'] and j['fonte'] == 'banco'
+    assert j['total_valor'] == 80.0
+    assert j['cancelados'] == 1
+    assert j['pedidos'] is None
+    assert j['por_loja_detalhe']['Ribeiro do Vale']['total'] == 50.0
+
+
+def test_rota_api_vendas_ao_vivo_traz_pedidos(app, admin_user):
+    """?ao_vivo=1 volta a consultar a API e traz o detalhe pedido-a-pedido."""
+    c = app.test_client()
+    c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+           follow_redirects=True)
+    with patch('app.services.seru.listar_pedidos_completo',
+               return_value=PEDIDOS_FULL):
+        r = c.get('/pdv/api/vendas?inicio=2026-06-15&fim=2026-06-15&ao_vivo=1')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['ok'] and j['fonte'] == 'ao_vivo'
+    assert isinstance(j['pedidos'], list) and len(j['pedidos']) == 3
