@@ -1088,8 +1088,9 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                     pedido = 0
                 por_dia[i] = pedido
                 estoque = estoque + pedido - venda_d
-            if sum(por_dia) <= 0:
-                continue                          # nada a pedir -> nao polui a tela
+            # Mostra TODOS os produtos do "mundo" da loja (vende/estoca/pede),
+            # mesmo com sugestao 0 (decisao do dono: nada some da tela). So pula
+            # o que nem venda, nem estoque, nem pedido tem (ja filtrado acima).
             produtos.append({
                 'receita_id': rid, 'nome': rec.nome,
                 'media_semanal': round(venda_total * 7.0 / horizonte_dias, 1),
