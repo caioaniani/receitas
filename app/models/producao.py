@@ -46,10 +46,12 @@ class PlanejamentoItem(db.Model):
     produzido_qtd = db.Column(db.Integer, nullable=False, default=0,
                               server_default='0')
     # Dispensa de pendencia (auditoria): quando o admin verifica que a producao
-    # NAO aconteceu (ou aconteceu a menos) e da OK, marca aqui pra a falta parar
-    # de aparecer como pendente. NAO credita estoque nem mexe em produzido_qtd —
-    # so fecha a pendencia pra fins de auditoria/projecao. Reversivel (volta a
-    # NULL). Ver app/services/producao_pendente.py.
+    # NAO aconteceu (ou aconteceu a menos) e da OK, marca aqui. O item some de
+    # TUDO que conta producao pendente: overlay verde, auditoria, gantt e plano
+    # do padeiro — e produzir esse item fica BLOQUEADO (decisao do dono 01/07). So
+    # NAO mexe em estoque/produzido_qtd (o furo real fica preservado). Reversivel
+    # (volta a NULL, reabre em tudo). Ver app/services/producao_pendente.py e o
+    # filtro `dispensada_em is None` nos consumidores (gantt.py, padeiro/routes.py).
     dispensada_em = db.Column(db.DateTime, nullable=True)
     dispensada_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
                                   nullable=True)
