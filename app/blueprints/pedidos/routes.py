@@ -1746,6 +1746,28 @@ def estoque_loja():
                            sugestoes=sugestoes)
 
 
+@pedidos_bp.route('/estoque-loja/balanco-template.xlsx')
+@login_required
+@gerente_required
+def estoque_loja_balanco_template():
+    """Baixa a planilha de CONTAGEM em branco (todos os itens que a loja pede +
+    produtos ativos) pra alguem preencher a quantidade fisica. O 'caminho ao
+    contrario' do balanco: entrega a folha certa em vez de mapear uma preenchida.
+    Reimportar depois casa 100% porque os nomes saem exatos do catalogo."""
+    from app.services import estoque_loja_lote as svc
+    try:
+        blob = svc.gerar_xlsx_template_balanco()
+    except Exception:
+        current_app.logger.exception('template de balanco de loja falhou')
+        flash('Erro ao gerar a planilha de balanço.', 'danger')
+        return redirect(url_for('pedidos.estoque_loja'))
+    return send_file(
+        io.BytesIO(blob),
+        mimetype=('application/vnd.openxmlformats-officedocument'
+                  '.spreadsheetml.sheet'),
+        as_attachment=True, download_name='contagem_estoque_loja.xlsx')
+
+
 @pedidos_bp.route('/estoque-loja/diario')
 @login_required
 @gerente_required
