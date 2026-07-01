@@ -101,29 +101,13 @@
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <span class="fw-bold"><i class="bi bi-list-ol"></i> Produtos vendidos</span>
-            <input type="text" id="filtro-nome" class="form-control form-control-sm" placeholder="filtrar..." style="max-width:220px;">
-        </div>
-        <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
-                <thead class="thead-padaria" style="position:sticky;top:0;">
-                    <tr>
-                        <th>#</th>
-                        <th>Produto (Seru)</th>
-                        <th>Vinculo no sistema</th>
-                        <th class="text-end">Unidades</th>
-                        <th class="text-end">Faturamento</th>
-                        <th class="text-end">% fat.</th>
-                        <th class="text-end">Pedidos</th>
-                        <th style="width:110px;"></th>
-                    </tr>
-                </thead>
-                <tbody id="tbody-produtos"></tbody>
-            </table>
-        </div>
+    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+        <input type="text" id="filtro-nome" class="form-control form-control-sm" placeholder="filtrar produto..." style="max-width:220px;">
+        <a id="btn-export-xlsx" href="#" class="btn btn-sm btn-outline-success">
+            <i class="bi bi-file-earmark-excel"></i> Exportar XLSX (por loja)
+        </a>
     </div>
+    <div id="secoes-lojas"></div>
 </div>
 <!-- Modal de Vincular -->
 <div class="modal fade" id="modal-mapear" tabindex="-1">
