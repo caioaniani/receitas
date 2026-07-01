@@ -17,6 +17,7 @@ from app.extensions import db
 from app.models import (
     SeruLojaMap,
     VendaMapa,
+    VendaSeruDiaLoja,
     VendaSeruDiaria,
 )
 from app.services import seru
@@ -49,9 +50,12 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
     pedidos = seru.listar_pedidos_completo(
         data_inicial, data_final, expandir_dias_frente=expandir_dias_frente)
 
-    # (data, company.name) -> seru_nome -> acumulador
+    # (data, company.name) -> seru_nome -> acumulador (por PRODUTO)
     por_dia = defaultdict(lambda: defaultdict(lambda: {
         'qtd': Decimal('0'), 'fat': Decimal('0'), 'peds': set(), 'sku': None}))
+    # (data, company.name) -> totais da LOJA (pedidos DISTINTOS + faturamento).
+    # Somar n_pedidos por produto inflaria (1 pedido, 3 itens = 3x).
+    por_dia_loja = defaultdict(lambda: {'peds': set(), 'fat': Decimal('0')})
     dias_vistos = set()
     n_pedidos = 0
     for p in pedidos:
@@ -67,13 +71,18 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
         for it in seru.extrair_itens(p):
             if it['cancelado']:
                 continue
+            tot = Decimal(str(it['total']))
             e = por_dia[(d, ln)][it['nome']]
             e['qtd'] += Decimal(str(it['qtd']))
-            e['fat'] += Decimal(str(it['total']))
+            e['fat'] += tot
             if not e['sku']:
                 e['sku'] = it['sku']
             if pid is not None:
                 e['peds'].add(pid)
+            lj = por_dia_loja[(d, ln)]
+            lj['fat'] += tot
+            if pid is not None:
+                lj['peds'].add(pid)
 
     loja_ids = _loja_id_por_nome()
     # Apaga o intervalo inteiro (nao so os dias com pedido): um dia que ficou
@@ -81,6 +90,9 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
     VendaSeruDiaria.query.filter(
         VendaSeruDiaria.data >= data_inicial,
         VendaSeruDiaria.data <= data_final).delete(synchronize_session=False)
+    VendaSeruDiaLoja.query.filter(
+        VendaSeruDiaLoja.data >= data_inicial,
+        VendaSeruDiaLoja.data <= data_final).delete(synchronize_session=False)
     db.session.flush()
 
     linhas = 0
@@ -92,6 +104,10 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
                 sku=e['sku'], qtd=e['qtd'], faturamento=e['fat'],
                 n_pedidos=len(e['peds'])))
             linhas += 1
+    for (d, ln), lj in por_dia_loja.items():
+        db.session.add(VendaSeruDiaLoja(
+            data=d, loja_seru=ln, loja_id=loja_ids.get(ln.strip().lower()),
+            n_pedidos=len(lj['peds']), faturamento=lj['fat']))
     db.session.commit()
     return {'dias': len(dias_vistos), 'linhas': linhas, 'pedidos': n_pedidos}
 
