@@ -550,6 +550,57 @@ def test_breakdown_bom_rastreia_insumo(app):
     assert rc['breakdown_bom'] == []
 
 
+def test_insumo_mostra_estoque_real_batido(app):
+    """REGRESSÃO: a massa (insumo) já BATIDA que cobre a demanda deve mostrar o
+    estoque REAL na linha — não 'em estoque: 0'. Antes `_explodir_bom` criava a
+    linha com em_estoque=est_extra (=0 pra sub que está no balanço por ter
+    estoque), então a massa batida aparecia como 0 e parecia bug, apesar de a
+    produção 0 estar certa (o estoque cobre a demanda dos croissants)."""
+    from app.models import EstoqueProducao, ReceitaIngrediente
+    loja = _loja()
+    massa = _receita('Massa para folhar')
+    massa.dias_producao = 1
+    cro = _receita('Croissant Tradicional')
+    cro.rendimento_qtd = 50
+    db.session.add(ReceitaIngrediente(
+        receita_id=cro.id, tipo='receita', sub_receita_id=massa.id,
+        ingrediente_nome='Massa para folhar', porcentagem=1))
+    # massa JÁ BATIDA: 5 un cobrem as 2 que 100 croissants pedem
+    db.session.add(EstoqueProducao(receita_id=massa.id, quantidade=5))
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=3), cro, 100)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rm = _rec_out(crono, massa.id)
+    assert rm is not None and rm['insumo']
+    assert rm['em_estoque'] == 5                        # estoque REAL, não 0
+    assert rm['total'] == 0                             # 5 cobrem as 2 → nada a produzir
+    assert all(c['qtd'] == 0 for c in rm['por_dia'])
+    assert rm['breakdown_bom'][0]['qtd'] == 2           # o BOM continua puxando 2
+
+
+def test_insumo_sem_estoque_produz_e_mostra_zero(app):
+    """Contraprova: mesma massa SEM estoque batido → produz as 2 un e mostra
+    em_estoque 0 (aí o 0 é real)."""
+    from app.models import ReceitaIngrediente
+    loja = _loja()
+    massa = _receita('Massa para folhar')
+    massa.dias_producao = 1
+    cro = _receita('Croissant Tradicional')
+    cro.rendimento_qtd = 50
+    db.session.add(ReceitaIngrediente(
+        receita_id=cro.id, tipo='receita', sub_receita_id=massa.id,
+        ingrediente_nome='Massa para folhar', porcentagem=1))
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=3), cro, 100)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rm = _rec_out(crono, massa.id)
+    assert rm is not None
+    assert rm['em_estoque'] == 0                        # 0 real (nada batido)
+    assert rm['total'] == 2                             # precisa produzir as 2
+
+
 def test_projecao_expoe_previsto(app):
     """A projeção dia a dia expõe `previsto` (demanda do histórico pra a entrega
     daquele dia) — deixa ver quando a produção vem de pedido firme ou previsão."""
