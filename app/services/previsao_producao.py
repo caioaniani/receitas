@@ -1574,15 +1574,24 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         rr['breakdown'] = ([b for b in it['breakdown_comprometido'] if b['qtd'] > 0]
                            if it else [])
         rr.setdefault('breakdown_bom', [])   # so insumo tem; produto fica vazio
-        # Projecao dia a dia: estoque + producao programada - DEMANDA do dia
+        # Projecao dia a dia: estoque + producao PRONTA no dia - DEMANDA do dia
         # (firme datado OU previsto do dia, o maior) => saldo no fim do dia. 1o dia
         # negativo = "vai faltar". A demanda inclui o previsto desde 30/06; antes
         # so descontava o firme e a projecao dizia "nao falta" a toa.
+        # A producao entra no estoque quando fica PRONTA (dia de inicio + lead),
+        # nao no dia em que COMECA (era o C2): por_dia[i] e a producao INICIADA no
+        # dia i (mira a entrega i+lead), entao a que fica pronta no dia i comecou
+        # em i-lead. Creditar no dia de inicio mostrava o estoque L dias cedo
+        # demais e escondia falta no intervalo (a coluna "Producao" da projecao =
+        # recebimento pronto no dia, coerente com o saldo; o grid de cima e por
+        # dia de INICIO). Producao iniciada nos ultimos L dias fica pronta depois
+        # do horizonte -> nao entra na projecao (correto).
+        L = lead.get(rid, 0)
         running = int(rr['em_estoque'])
         projecao = []
         rr['dia_falta'] = None
         for i, d in enumerate(dias_prod):
-            prod_i = int(rr['por_dia'][i]['qtd'] or 0)
+            prod_i = int(rr['por_dia'][i - L]['qtd'] or 0) if i - L >= 0 else 0
             firme_i = int(firme[rid].get(d, 0))
             prev_i = int(round(_previsto_dia(rid, d)))   # previsto saindo no dia d
             saida_i = max(firme_i, prev_i)               # demanda do dia
