@@ -623,6 +623,30 @@ def test_rota_telaindustriateste(app, admin_user):
     assert 'cronograma' in resp.get_data(as_text=True).lower()
 
 
+def test_rota_telaindustriateste_renderiza_aviso_stale(app, admin_user):
+    """E3: a página renderiza o aviso de edição desatualizada (template válido
+    com override_stale)."""
+    from datetime import datetime
+
+    from app.models import CronogramaOverride
+    loja = _loja()
+    r = _receita()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 10)
+    # override antigo e divergente do cálculo -> stale.
+    ontem = hoje() - timedelta(days=2)
+    db.session.add(CronogramaOverride(
+        receita_id=r.id, data=hoje(), qtd=999,
+        criado_em=datetime(ontem.year, ontem.month, ontem.day, 12, 0)))
+    db.session.commit()
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.get('/telaindustriateste/')
+    assert resp.status_code == 200
+    assert 'pode estar desatualizada' in resp.get_data(as_text=True)
+
+
 def test_rota_renderiza_rastreabilidade_do_insumo(app, admin_user):
     """A tela renderiza o expandir do insumo com a origem (breakdown_bom) e a
     coluna Previsto — pro padeiro ver de onde sai a quantidade de massa."""
