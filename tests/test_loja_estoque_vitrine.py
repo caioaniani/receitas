@@ -1,10 +1,11 @@
-"""Estoque na vitrine: NADA some, esgotado aparece com selo (18/06/2026).
+"""Estoque na vitrine: NADA some, esgotado aparece com selo.
 
-Regra do dono: todo produto no site tem estoque preenchido; saldo 0 (ou sem
-linha de EstoqueLoja na loja do site) = ESGOTADO — aparece na vitrine com
-selo "Esgotado" e sem botão de comprar, mas NÃO some. Cestas incluídas.
-A emissão de NF e o catálogo interno (`produtos_publicados`) veem TUDO,
-porque a NF sai depois do pagamento, com o estoque já podendo estar zerado.
+Regra do dono ATUALIZADA (01/07/2026): a disponibilidade do site vem SO do
+PLANO-DO-DIA (loja_plano_dia), NUNCA do EstoqueLoja fisico. Item com plano 0
+no dia = ESGOTADO (selo + sem botão de comprar, mas NÃO some). Item SEM plano =
+vende livre (fail-open) — estoque fisico 0 ou sem linha NAO deixa mais
+esgotado. Cestas incluidas. A emissao de NF e o catalogo interno
+(`produtos_publicados`) veem TUDO.
 """
 
 
