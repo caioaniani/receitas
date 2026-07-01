@@ -569,14 +569,21 @@
                 <div class="border-top pt-2 mt-2" id="vinculos-transferir-box" style="display:none;">
                     <label class="form-label small fw-bold mb-1">
                         <i class="bi bi-arrow-right-circle"></i>
-                        Transferir TODOS os vínculos para outra receita
+                        Transferir TODOS os vínculos
                     </label>
                     <div class="small text-muted mb-1">
                         Pedidos, vendas, estoque (somado), cestas e mapeamentos passam a
-                        apontar pra receita escolhida — aí esta aqui fica livre pra excluir.
-                        Use pra juntar duplicatas.
+                        apontar pro destino escolhido — aí esta aqui fica livre pra excluir
+                        (ou arquivar). Pra <strong>outra receita</strong>: juntar duplicatas.
+                        Pra <strong>matéria-prima</strong>: quando esta "receita" na verdade é
+                        insumo comprado — o que não tiver como ir pra MP (ex: planos de
+                        produção) fica aqui como histórico; arquive depois.
                     </div>
                     <div class="d-flex gap-2">
+                        <select id="transferir-tipo" class="form-select form-select-sm" style="max-width:9.5rem;">
+                            <option value="receita" selected>Receita</option>
+                            <option value="mp">Matéria-prima</option>
+                        </select>
                         <input type="text" id="transferir-destino" class="form-control form-control-sm"
                                list="receita-list" placeholder="nome exato da receita destino"
                                autocomplete="off">
