@@ -331,6 +331,13 @@ def produzir_item_plano(item_id, unidades, user_id):
     item = PlanejamentoItem.query.get(item_id)
     if item is None:
         return {'ok': False, 'erro': 'Item do plano não encontrado.'}
+    # Item DISPENSADO pelo admin (auditoria: "OK, não vai produzir") não pode ser
+    # produzido — o admin fechou a pendência. Pra produzir, reverta a dispensa na
+    # tela de auditoria. (Sem isso, produzir creditava estoque de algo que o admin
+    # já tinha dado baixa na projeção.)
+    if item.dispensada_em is not None:
+        return {'ok': False, 'erro': 'Item dispensado pelo admin — reverta a '
+                'dispensa na auditoria pra poder produzir.'}
     rec = item.receita
     if rec is None:
         return {'ok': False, 'erro': 'Receita do item não encontrada.'}
