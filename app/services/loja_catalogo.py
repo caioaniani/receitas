@@ -132,17 +132,17 @@ def _estoque_site_map():
 _JANELA_DIAS_FUTUROS = 14
 
 
-def _saldo_para_dia(kind, item_id, data, *, mapa_loja=None,
-                    saldos_dia_cache=None):
-    """Saldo disponivel pra vender no site na data X.
+def _saldo_para_dia(kind, item_id, data, *, saldos_dia_cache=None):
+    """Saldo disponivel pra vender no site na data X — SO pelo plano-do-dia.
 
-    Ordem: (1) se ha plano cadastrado pra esse item naquela data → usa plano.
-    (2) senao → cai no EstoqueLoja (estoque fisico atual; comportamento de
-    antes da fase de plano por dia). Devolve None se NEM plano NEM mapa_loja
-    estao configurados (= fail-open na vitrine).
+    Regra do dono (01/07/2026): a disponibilidade do site vem UNICAMENTE do
+    plano-do-dia (loja_plano_dia), NUNCA do EstoqueLoja fisico. Se ha plano
+    cadastrado pra esse item naquela data → usa o saldo do plano (pode ser 0 =
+    esgotado). Se NAO ha plano → None = "sem controle" = fail-open: o item
+    vende livre; o plano serve so pra CAPAR/zerar itens especificos.
 
-    `mapa_loja` e `saldos_dia_cache` sao caches passados pelo caller pra
-    evitar re-querar o banco em loop (anotar_esgotado processa N itens)."""
+    `saldos_dia_cache` evita re-querar o plano em loop (anotar_esgotado
+    processa N itens)."""
     from app.services import loja_plano_dia
     if saldos_dia_cache is None:
         saldos_dia_cache = {}
@@ -151,9 +151,7 @@ def _saldo_para_dia(kind, item_id, data, *, mapa_loja=None,
     saldos = saldos_dia_cache[data]
     if (kind, item_id) in saldos:
         return saldos[(kind, item_id)]
-    if mapa_loja is None:
-        return None  # sem controle
-    return mapa_loja.get((kind, item_id), 0)
+    return None  # sem plano = sem controle (fail-open) — nao olha o fisico
 
 
 def _datas_janela_futura(inicio):
