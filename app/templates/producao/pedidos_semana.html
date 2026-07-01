@@ -82,6 +82,9 @@
 
 <form method="POST" action="{{ url_for('producao.pedidos_semana_gerar') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="horizonte" value="{{ horizonte }}">
+    <input type="hidden" name="janela" value="{{ janela }}">
+    <input type="hidden" name="inicio" value="{{ inicio }}">
 
     {% set ns = namespace(algum=false) %}
     {% for loja in sugestao.lojas %}
@@ -90,7 +93,18 @@
         {% if dias_relevantes or dias_jatem %}
         {% set ns.algum = true %}
         <div class="psem-loja">
-            <h5>{{ loja.loja_nome }}</h5>
+            <div class="psem-loja-head">
+                <h5>{{ loja.loja_nome }}</h5>
+                {% if dias_relevantes %}
+                <button type="submit" name="so_loja" value="{{ loja.loja_id }}"
+                        class="btn btn-sm btn-success"
+                        onclick="return confirm('Gerar os pedidos rascunho de {{ loja.loja_nome }}? Entram como pendente pra você revisar e confirmar.');">
+                    <i class="bi bi-plus-square"></i> Gerar só esta loja
+                </button>
+                {% else %}
+                <span class="psem-jatem"><i class="bi bi-check2-circle"></i> já tem pedido nos dias sugeridos</span>
+                {% endif %}
+            </div>
             {% for dia in loja.dias %}
                 {% if dia.itens or dia.ja_tem_pedido %}
                 <div class="psem-dia">
