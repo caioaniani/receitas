@@ -11,7 +11,9 @@ from app.utils import hoje
 
 def criar_pedidos_rascunho(pedidos, user_id):
     """Cria PedidoLoja em rascunho ('pendente') a partir de uma lista
-    [{loja_id, data_entrega(date), itens: [{receita_id, qtd}]}].
+    [{loja_id, data_entrega(date), itens: [{receita_id OU materia_prima_id,
+    qtd}]}]. Item de MP cobre insumo comprado que a loja pede e a industria
+    envia sem produzir (ex: pao de queijo congelado).
 
     Salvaguardas:
     - Pula (loja, data) que JA tem pedido nao-cancelado — anti-duplicacao,
@@ -26,7 +28,8 @@ def criar_pedidos_rascunho(pedidos, user_id):
         loja_id = ped.get('loja_id')
         data_ent = ped.get('data_entrega')
         itens = [it for it in (ped.get('itens') or [])
-                 if it.get('receita_id') and int(it.get('qtd') or 0) > 0]
+                 if (it.get('receita_id') or it.get('materia_prima_id'))
+                 and int(it.get('qtd') or 0) > 0]
         if not loja_id or not data_ent or not itens:
             continue
         # Anti-duplicacao: re-checa no banco (a tela ja sinaliza, mas pode
