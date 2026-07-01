@@ -327,3 +327,40 @@ def test_rota_gerar_cria_pedido(app, admin_user):
     assert p is not None
     assert p.status == 'pendente'
     assert p.itens[0].quantidade == 8
+
+
+def test_rota_gerar_so_uma_loja(app, admin_user):
+    """so_loja gera SÓ a loja escolhida, mesmo com qtd de outras no form (o dono
+    pediu enviar loja a loja, não todas de uma vez)."""
+    loja_a = _loja('Loja A')
+    loja_b = _loja('Loja B')
+    r = _receita()
+    d = (hoje() + timedelta(days=1)).isoformat()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.post('/producao/pedidos-semana/gerar', data={
+        'so_loja': str(loja_a.id),                       # botão "gerar só esta loja"
+        'qtd|%d|%s|%d' % (loja_a.id, d, r.id): '8',
+        'qtd|%d|%s|%d' % (loja_b.id, d, r.id): '5',      # loja B no form, mas ignorada
+    })
+    assert resp.status_code == 302
+    assert PedidoLoja.query.filter_by(loja_id=loja_a.id).count() == 1
+    assert PedidoLoja.query.filter_by(loja_id=loja_b.id).count() == 0   # B não entrou
+
+
+def test_rota_gerar_todas_sem_so_loja(app, admin_user):
+    """Sem so_loja (botão 'gerar todas') gera todas as lojas do form."""
+    loja_a = _loja('Loja A')
+    loja_b = _loja('Loja B')
+    r = _receita()
+    d = (hoje() + timedelta(days=1)).isoformat()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    client.post('/producao/pedidos-semana/gerar', data={
+        'qtd|%d|%s|%d' % (loja_a.id, d, r.id): '8',
+        'qtd|%d|%s|%d' % (loja_b.id, d, r.id): '5',
+    })
+    assert PedidoLoja.query.filter_by(loja_id=loja_a.id).count() == 1
+    assert PedidoLoja.query.filter_by(loja_id=loja_b.id).count() == 1
