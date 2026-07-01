@@ -209,3 +209,63 @@ def test_rota_dispensar_exige_admin(app):
     resp = c.post('/telaindustriateste/auditoria/dispensar',
                   data={'item_id': 1})
     assert resp.status_code in (301, 302, 403)
+
+
+# ── Model B: dispensado some de tudo (padeiro/gantt/produzir) ──────────────
+def test_produzir_item_dispensado_e_bloqueado(app, admin_user):
+    """Produzir um item DISPENSADO é barrado ANTES de tocar estoque/MP."""
+    from app.models import EstoqueProducao
+    from app.services.producao import produzir_item_plano
+    from app.services.producao_pendente import dispensar_item
+    r = _receita()
+    p = _ordem(r, hoje(), alvo=20)
+    dispensar_item(p.itens[0].id, admin_user.id)
+
+    res = produzir_item_plano(p.itens[0].id, 20, admin_user.id)
+    assert res['ok'] is False
+    assert 'dispensad' in res['erro'].lower()
+    assert EstoqueProducao.query.filter_by(receita_id=r.id).count() == 0   # sem crédito
+
+
+def test_gantt_nao_mostra_item_dispensado(app, admin_user):
+    """montar_gantt ignora item dispensado (não vira tarefa do padeiro)."""
+    from app.models import EtapaReceita
+    from app.services.gantt import montar_gantt
+    from app.services.producao_pendente import dispensar_item
+    r = _receita('Pão Longo')
+    db.session.add(EtapaReceita(receita_id=r.id, ordem=1, nome='Misturar',
+                                duracao_min=30, tipo='ativa'))
+    db.session.commit()
+    p = _ordem(r, hoje(), alvo=50)
+
+    g = montar_gantt(hoje())
+    assert g is not None and any(pr.get('receita_id') == r.id
+                                 for pr in g['produtos'])   # aparece antes
+    dispensar_item(p.itens[0].id, admin_user.id)
+    g2 = montar_gantt(hoje())
+    nomes = [pr.get('receita_id') for pr in (g2['produtos'] if g2 else [])]
+    assert r.id not in nomes                                # sumiu depois da dispensa
+
+
+def test_padeiro_plano_do_dia_esconde_dispensado(app, admin_user):
+    """O plano do dia do padeiro não lista item dispensado."""
+    from app.blueprints.padeiro.routes import _plano_do_dia
+    from app.services.producao_pendente import dispensar_item, reverter_dispensa
+    r = _receita('Focaccia')
+    p = _ordem(r, hoje(), alvo=30)
+
+    with app.test_request_context():
+        pd = _plano_do_dia(hoje())
+        assert any(it['receita_id'] == r.id for grp in pd['grupos']
+                   for it in grp['itens']) or any(
+            it['receita_id'] == r.id for it in pd['solos'])   # aparece antes
+        dispensar_item(p.itens[0].id, admin_user.id)
+        pd2 = _plano_do_dia(hoje())
+        ids = [it['receita_id'] for grp in pd2['grupos'] for it in grp['itens']]
+        ids += [it['receita_id'] for it in pd2['solos']]
+        assert r.id not in ids                                 # sumiu
+        reverter_dispensa(p.itens[0].id)
+        pd3 = _plano_do_dia(hoje())
+        ids3 = [it['receita_id'] for grp in pd3['grupos'] for it in grp['itens']]
+        ids3 += [it['receita_id'] for it in pd3['solos']]
+        assert r.id in ids3                                    # undo reabre
