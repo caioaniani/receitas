@@ -49,9 +49,17 @@ def aplicar_overrides(receitas_out, dias_prod):
 
     Aplicacao por celula (em vez de exigir o set completo somando o total) e o
     que permite a mao-dupla com a tela 'editar plano' do padeiro: editar um
-    unico dia la salva o override daquela celula e o grid passa a refletir."""
+    unico dia la salva o override daquela celula e o grid passa a refletir.
+
+    Anti-staleness (E3): o modelo por-celula NAO reverte sozinho quando a demanda
+    muda (era o comportamento antigo, que exigia cobrir todo o horizonte). Entao
+    aqui comparamos o total MANUAL com o que o calculo sugere AGORA; se divergem e
+    a edicao e de um dia anterior, marca rr['override_stale']=True + guarda o
+    sugerido e a data da edicao, pro grid avisar 'edicao pode estar desatualizada'
+    (a decisao de manter ou resetar fica com o usuario)."""
     from app.models import CronogramaOverride, Receita
     from app.services.producao import fornadas_amassadeira
+    from app.utils import hoje
     if not receitas_out:
         return
     rids = [rr['receita_id'] for rr in receitas_out]
@@ -61,15 +69,22 @@ def aplicar_overrides(receitas_out, dias_prod):
     if not ovs:
         return
     por_rid = defaultdict(dict)
+    edit_dia = {}                         # rid -> data (date) da edicao mais antiga
     for o in ovs:
         por_rid[o.receita_id][o.data] = o.qtd
+        criado = o.criado_em.date() if o.criado_em else None
+        if criado is not None:
+            atual = edit_dia.get(o.receita_id)
+            edit_dia[o.receita_id] = criado if atual is None else min(atual, criado)
     recs = {r.id: r for r in Receita.query.filter(Receita.id.in_(rids)).all()}
+    hoje_d = hoje()
     for rr in receitas_out:
         ov = por_rid.get(rr['receita_id'])
         if not ov:
             continue
         rec = recs.get(rr['receita_id'])
         rend = int(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1
+        sugerido_total = sum(c['qtd'] for c in rr['por_dia'])   # calc ANTES do override
         for c in rr['por_dia']:
             d = date.fromisoformat(c['data'])
             if d not in ov:
@@ -80,6 +95,13 @@ def aplicar_overrides(receitas_out, dias_prod):
                              if q > 0 else None)
         rr['total'] = sum(c['qtd'] for c in rr['por_dia'])
         rr['editado'] = True
+        # E3: edicao de um dia anterior que ja nao bate com o calculo atual.
+        dia_edit = edit_dia.get(rr['receita_id'])
+        if rr['total'] != sugerido_total and dia_edit is not None \
+                and dia_edit < hoje_d:
+            rr['override_stale'] = True
+            rr['override_sugerido'] = sugerido_total
+            rr['override_desde'] = dia_edit.isoformat()
 
 
 def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
