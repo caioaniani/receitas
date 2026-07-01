@@ -211,9 +211,13 @@
            class="sidebar-link {% if request.path == '/padeiro' or request.path.startswith('/padeiro/') %}active{% endif %}">
             <i class="bi bi-hammer"></i> Tela do padeiro
         </a>
+        <a href="{{ url_for('producao.pedidos_semana_media') }}"
+           class="sidebar-link {% if '/pedidos-semana' in request.path %}active{% endif %}">
+            <i class="bi bi-cart-plus"></i> Pedidos da semana
+        </a>
         {% endif %}
         <a href="{{ url_for('producao.lista') }}"
-           class="sidebar-link {% if request.path.startswith('/producao') and '/painel' not in request.path %}active{% endif %}">
+           class="sidebar-link {% if request.path.startswith('/producao') and '/painel' not in request.path and '/pedidos-semana' not in request.path %}active{% endif %}">
             Listas de compra
         </a>
         <a href="{{ url_for('pedidos.congelados') }}"
