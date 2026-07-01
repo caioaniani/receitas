@@ -469,7 +469,7 @@
         if (cell) salvar(cell);
     });
     document.addEventListener('click', function (ev) {
-        const btn = ev.target.closest('.btn-reset');
+        const btn = ev.target.closest('.btn-reset, .btn-reset-inline');
         if (btn) { resetar(btn.dataset.rid); return; }
         // Expandir/recolher o saldo da receita.
         const tog = ev.target.closest('.rec-toggle');
