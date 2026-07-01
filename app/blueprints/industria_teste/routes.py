@@ -52,12 +52,20 @@ def _equilibrar():
 def index():
     from app.models import PlanejamentoProducao
     from app.services.previsao_producao import cronograma_producao
+    from app.services.producao_pendente import pendencias_por_receita
 
     horizonte, janela = _horizonte_janela()
     inicio = _inicio_offset()
     equilibrar = _equilibrar()
     crono = cronograma_producao(horizonte_dias=horizonte, janela_semanas=janela,
                                 inicio_offset_dias=inicio, equilibrar=equilibrar)
+    # Overlay "verde": produção mandada e ainda não confirmada pelo padeiro.
+    # Projeção pura (não é estoque real) — soma por cima do em_estoque no grid.
+    pend = pendencias_por_receita()
+    for rr in crono['receitas']:
+        p = pend.get(rr['receita_id'])
+        rr['pend_agendado'] = p['agendado'] if p else 0
+        rr['pend_vencido'] = p['vencido'] if p else 0
     # Estado da ordem por dia (fluxo 2 passos): rascunho/aprovado x enviado.
     estados = {}
     for p in PlanejamentoProducao.query.filter_by(origem='cronograma').all():
@@ -66,6 +74,24 @@ def index():
     return render_template('industria_teste/teste.html', crono=crono,
                            horizonte=horizonte, janela=janela, inicio=inicio,
                            equilibrar=equilibrar, estados=estados)
+
+
+@industria_teste_bp.route('/auditoria')
+@login_required
+@admin_required
+def auditoria():
+    """Auditoria da produção mandada: ordens enviadas ao padeiro ainda NÃO
+    confirmadas. VENCIDAS (data passou, ninguém marcou produção) em destaque;
+    AGENDADAS (hoje/futuro) em tom mais leve. Não mexe em estoque — é leitura."""
+    from app.services.producao_pendente import listar_pendencias
+
+    try:
+        dias = max(1, min(int(request.values.get('dias', 30)), 365))
+    except (TypeError, ValueError):
+        dias = 30
+    dados = listar_pendencias(dias_vencido=dias)
+    return render_template('industria_teste/auditoria.html', dados=dados,
+                           dias=dias)
 
 
 @industria_teste_bp.route('/previsao/<int:receita_id>')
