@@ -157,12 +157,12 @@
 
     <div class="pmed-barra d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span class="text-muted small">
-            Ajuste as quantidades; dias com pedido existente são pulados.
-            Os pedidos entram como <strong>rascunho</strong> pra você revisar.
+            Gere <strong>loja a loja</strong> no botão de cada card, ou todas de uma vez aqui.
+            Dias com pedido existente são pulados; entram como <strong>rascunho</strong>.
         </span>
-        <button type="submit" class="btn btn-success"
-                onclick="return confirm('Gerar os pedidos rascunho com as quantidades atuais? Eles entram como pendente pra você revisar e confirmar.');">
-            <i class="bi bi-plus-square"></i> Gerar pedidos rascunho
+        <button type="submit" class="btn btn-outline-success"
+                onclick="return confirm('Gerar os pedidos rascunho de TODAS as lojas de uma vez? Eles entram como pendente pra você revisar e confirmar.');">
+            <i class="bi bi-plus-square"></i> Gerar TODAS as lojas
         </button>
     </div>
     {% else %}
