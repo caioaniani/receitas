@@ -29,6 +29,31 @@ from app.services.vendas_itens import (
 )
 
 
+def _str_chave(v):
+    """Normaliza qualquer valor pra string usavel como chave de breakdown
+    (dict/lista viram nome legivel) — MESMA logica do endpoint ao vivo
+    (`_api_vendas_impl._s`), pra o snapshot bater com a consulta direta."""
+    if v is None:
+        return ''
+    if isinstance(v, str):
+        return v
+    if isinstance(v, dict):
+        return str(v.get('name') or v.get('label') or v.get('tag')
+                   or v.get('code') or v.get('type') or '')
+    if isinstance(v, (list, tuple)):
+        return ', '.join(_str_chave(x) for x in v if x is not None)
+    return str(v)
+
+
+def _dec(v):
+    """Valor monetario da API -> Decimal, tolerante a None/lixo (nunca explode a
+    captura por um campo malformado)."""
+    try:
+        return Decimal(str(v)) if v is not None else Decimal('0')
+    except (TypeError, ValueError, ArithmeticError):
+        return Decimal('0')
+
+
 def _loja_id_por_nome():
     """{company.name(lower): loja_id} dos SeruLojaMap confirmados (pra carimbar
     o vinculo resolvido; leitura do relatorio agrupa por loja_seru de qualquer
