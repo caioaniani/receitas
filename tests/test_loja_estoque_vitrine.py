@@ -97,23 +97,27 @@ def test_anotar_esgotado_fail_open_sem_plano(app):
         assert all(i['esgotado'] is False for i in itens)
 
 
-def test_tem_estoque_site_fail_open(app):
-    """`tem_estoque_site` (sem data) agora e fail-open: sempre True. A trava
-    real e por DATA via `tem_estoque_para_dia` (plano-do-dia)."""
+def test_tem_estoque_site_olha_plano_na_janela(app):
+    """`tem_estoque_site` (sem data) olha o PLANO na janela de 14 dias, nao o
+    fisico. Fail-open: sem plano → True. So False no esgotado duro (plano 0 em
+    todos os dias). A trava fina por data e o `tem_estoque_para_dia`."""
     from app.extensions import db
     from app.services import loja_catalogo
     from app.utils import hoje
     with app.app_context():
         loja = _site_loja(db)
-        zero = _produto(db, 'Zerado')
-        _estoque(db, loja, zero, 0)
-        _plano(zero.id, 0)                          # esgotado no plano
-        # Sem data: fail-open (sempre True)
-        assert loja_catalogo.tem_estoque_site('produto', zero.id) is True
+        livre = _produto(db, 'Sem plano')           # fisico 0, sem plano
+        esg = _produto(db, 'Esgotado no plano')
+        _estoque(db, loja, livre, 0)
+        _plano(esg.id, 0)                           # plano 0 na janela toda
+        # Sem plano = fail-open (fisico 0 nao importa)
+        assert loja_catalogo.tem_estoque_site('produto', livre.id) is True
         assert loja_catalogo.tem_estoque_site('produto', 999999) is True
-        # A trava real (por data) respeita o plano 0:
+        # Plano 0 em toda a janela = esgotado duro
+        assert loja_catalogo.tem_estoque_site('produto', esg.id) is False
+        # E o gate por data confirma:
         assert loja_catalogo.tem_estoque_para_dia(
-            'produto', zero.id, hoje()) is False
+            'produto', esg.id, hoje()) is False
 
 
 def test_pagina_produto_mostra_esgotado_sem_404(app):
