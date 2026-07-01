@@ -59,50 +59,61 @@ def _plano(item_id, qtd, kind='produto', dias=14):
         kind, item_id, qtd, data_inicio=hoje(), dias=dias)
 
 
-def test_anotar_esgotado_marca_zero_e_sem_linha(app):
+def test_anotar_esgotado_usa_plano_nao_fisico(app):
+    """Disponibilidade vem SO do plano-do-dia. Item com plano 0 = esgotado;
+    item SEM plano = disponivel mesmo com EstoqueLoja fisico em 0 (fail-open)."""
     from app.extensions import db
     from app.services import loja_catalogo
     with app.app_context():
         loja = _site_loja(db)
-        com = _produto(db, 'Geleia com saldo')
-        zero = _produto(db, 'Geleia zerada')
-        _produto(db, 'Geleia sem linha')  # sem EstoqueLoja
+        com = _produto(db, 'Geleia com plano')
+        esg = _produto(db, 'Geleia plano zero')
+        livre = _produto(db, 'Geleia sem plano')   # fisico 0, sem plano
         _estoque(db, loja, com, 5)
-        _estoque(db, loja, zero, 0)
+        _estoque(db, loja, livre, 0)               # fisico 0 NAO esgota mais
+        _plano(com.id, 10)
+        _plano(esg.id, 0)
         itens = loja_catalogo.anotar_esgotado(
             loja_catalogo.produtos_publicados())
         por_nome = {i['nome']: i for i in itens}
         # NADA some — os 3 continuam na lista
-        assert {'Geleia com saldo', 'Geleia zerada',
-                'Geleia sem linha'} <= set(por_nome)
-        assert por_nome['Geleia com saldo']['esgotado'] is False
-        assert por_nome['Geleia zerada']['esgotado'] is True   # saldo 0
-        assert por_nome['Geleia sem linha']['esgotado'] is True  # sem linha
+        assert {'Geleia com plano', 'Geleia plano zero',
+                'Geleia sem plano'} <= set(por_nome)
+        assert por_nome['Geleia com plano']['esgotado'] is False
+        assert por_nome['Geleia plano zero']['esgotado'] is True    # plano 0
+        # fisico 0 + SEM plano = fail-open (disponivel, nao esgotado)
+        assert por_nome['Geleia sem plano']['esgotado'] is False
 
 
-def test_anotar_esgotado_fail_open_sem_loja_site(app):
-    """Sem loja do site configurada → ninguém esgotado (fail-open)."""
+def test_anotar_esgotado_fail_open_sem_plano(app):
+    """Sem plano cadastrado → ninguém esgotado (fail-open), mesmo sem loja do
+    site configurada."""
     from app.extensions import db
     from app.services import loja_catalogo
     with app.app_context():
-        _produto(db, 'Pao sem loja site')
+        _produto(db, 'Pao sem plano')
         itens = loja_catalogo.anotar_esgotado(
             loja_catalogo.produtos_publicados())
         assert all(i['esgotado'] is False for i in itens)
 
 
-def test_tem_estoque_site(app):
+def test_tem_estoque_site_fail_open(app):
+    """`tem_estoque_site` (sem data) agora e fail-open: sempre True. A trava
+    real e por DATA via `tem_estoque_para_dia` (plano-do-dia)."""
     from app.extensions import db
     from app.services import loja_catalogo
+    from app.utils import hoje
     with app.app_context():
         loja = _site_loja(db)
-        com = _produto(db, 'Com saldo')
         zero = _produto(db, 'Zerado')
-        _estoque(db, loja, com, 3)
         _estoque(db, loja, zero, 0)
-        assert loja_catalogo.tem_estoque_site('produto', com.id) is True
-        assert loja_catalogo.tem_estoque_site('produto', zero.id) is False
-        assert loja_catalogo.tem_estoque_site('produto', 999999) is False
+        _plano(zero.id, 0)                          # esgotado no plano
+        # Sem data: fail-open (sempre True)
+        assert loja_catalogo.tem_estoque_site('produto', zero.id) is True
+        assert loja_catalogo.tem_estoque_site('produto', 999999) is True
+        # A trava real (por data) respeita o plano 0:
+        assert loja_catalogo.tem_estoque_para_dia(
+            'produto', zero.id, hoje()) is False
 
 
 def test_pagina_produto_mostra_esgotado_sem_404(app):
