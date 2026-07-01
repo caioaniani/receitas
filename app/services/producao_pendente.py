@@ -141,6 +141,34 @@ def dispensar_item(item_id, user_id):
     return {'ok': True, 'receita': item.receita.nome if item.receita else '?'}
 
 
+def dispensar_itens(item_ids, user_id):
+    """Dispensa VÁRIOS itens de uma vez (checkboxes da auditoria). Mesma
+    semântica de `dispensar_item`: marca dispensada_em/por, NÃO credita estoque
+    nem mexe em produzido_qtd. Ignora ids inválidos e os já dispensados (não
+    reescreve quem/quando). Um único commit. Retorna {'ok': bool, 'n': quantos}."""
+    from app.models import PlanejamentoItem
+
+    ids = []
+    for x in (item_ids or []):
+        try:
+            ids.append(int(x))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return {'ok': False, 'erro': 'Nenhum item marcado.', 'n': 0}
+    itens = (PlanejamentoItem.query
+             .filter(PlanejamentoItem.id.in_(ids),
+                     PlanejamentoItem.dispensada_em.is_(None))
+             .all())
+    ts = agora()
+    for item in itens:
+        item.dispensada_em = ts
+        item.dispensada_por_id = user_id
+    if itens:
+        db.session.commit()
+    return {'ok': True, 'n': len(itens)}
+
+
 def reverter_dispensa(item_id):
     """Desfaz a dispensa (volta a mostrar como pendente). Retorna {'ok': bool}."""
     from app.models import PlanejamentoItem
