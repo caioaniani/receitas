@@ -45,8 +45,17 @@ class PlanejamentoItem(db.Model):
     qtd_alvo = db.Column(db.Integer)
     produzido_qtd = db.Column(db.Integer, nullable=False, default=0,
                               server_default='0')
+    # Dispensa de pendencia (auditoria): quando o admin verifica que a producao
+    # NAO aconteceu (ou aconteceu a menos) e da OK, marca aqui pra a falta parar
+    # de aparecer como pendente. NAO credita estoque nem mexe em produzido_qtd —
+    # so fecha a pendencia pra fins de auditoria/projecao. Reversivel (volta a
+    # NULL). Ver app/services/producao_pendente.py.
+    dispensada_em = db.Column(db.DateTime, nullable=True)
+    dispensada_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                                  nullable=True)
 
     receita = db.relationship('Receita')
+    dispensada_por = db.relationship('Usuario', foreign_keys=[dispensada_por_id])
 
     def __repr__(self):
         return f'<PlanejamentoItem receita={self.receita_id} x{self.multiplicador}>'
