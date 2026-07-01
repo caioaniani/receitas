@@ -568,3 +568,161 @@ def gerar_xlsx_template_balanco():
     wb.save(buf)
     buf.seek(0)
     return buf.getvalue()
+
+
+def parsear_linha_conferencia(linha):
+    """Parser da CONFERENCIA (balanço). Diferente do de entrada:
+    - aceita quantidade 0 (regra do dono: '0 = zerar o item');
+    - quantidade em branco/ausente NAO e erro — marca 'em_branco' (regra
+      'vazio = deixa como está', o item e PULADO, nao mexe);
+    - quantidade com unidade/letra (ex '100 g', '2 receitas') vira 'unidade'
+      explicito — NAO chuta numero (seria ajuste de estoque errado).
+    Separador ':', '=', TAB (colar do Excel) ou 2+ espacos."""
+    linha = (linha or '').strip()
+    if not linha or linha.startswith('#'):
+        return None
+    m = re.split(r'\s*[:=\t]\s*|\s{2,}', linha, maxsplit=1)
+    if len(m) == 2:
+        nome, qtd_raw = m[0].strip(), m[1].strip()
+    else:
+        m2 = re.match(r'^(.+?)\s+(\S+)\s*$', linha)
+        if not m2:
+            return {'linha': linha, 'nome': linha, 'erro': 'em_branco'}
+        nome, qtd_raw = m2.group(1).strip(), m2.group(2).strip()
+    if not nome:
+        return {'linha': linha, 'erro': 'sem_nome'}
+    if not qtd_raw:
+        return {'linha': linha, 'nome': nome, 'erro': 'em_branco'}
+    limpo = qtd_raw.replace('.', '').replace(',', '')
+    if not re.fullmatch(r'\d+', limpo):
+        motivo = 'unidade' if re.search(r'[a-zA-Z]', qtd_raw) else 'quantidade_invalida'
+        return {'linha': linha, 'nome': nome, 'erro': motivo}
+    return {'linha': linha, 'nome': nome, 'quantidade': int(limpo)}
+
+
+def parsear_conferencia(texto):
+    if not texto:
+        return []
+    out = []
+    for linha in texto.splitlines():
+        item = parsear_linha_conferencia(linha)
+        if item:
+            out.append(item)
+    return out
+
+
+def resolver_conferencia(linhas_parseadas, loja_id):
+    """Como resolver_lista, mas semantica de CONFERENCIA (SET): novo = contado,
+    diff = contado - atual. Mantem linhas com erro (em_branco/unidade) no
+    preview pra o usuario ver o que NAO vai mexer. Read-only."""
+    receitas, produtos, materias, orfaos, apelidos = _carregar_catalogo(loja_id)
+    enriq = []
+    for item in linhas_parseadas:
+        if item.get('erro'):
+            enriq.append(item)
+            continue
+        matches = _matches_para(item['nome'], receitas, produtos, materias,
+                                orfaos, apelidos)
+        resolvido = matches[0] if matches else None
+        atual, existe = 0, False
+        if resolvido and loja_id:
+            if resolvido['tipo'] == 'pendente':
+                ep = EstoqueLoja.query.get(resolvido['id'])
+            else:
+                ep = EstoqueLoja.query.filter_by(
+                    **_filtro_para_resolvido(loja_id, resolvido)).first()
+            if ep:
+                existe, atual = True, (ep.quantidade or 0)
+        contado = item['quantidade']
+        enriq.append({
+            **item, 'matches': matches, 'resolvido': resolvido,
+            'estoque_atual': atual, 'existe': existe,
+            'novo': contado, 'diff': contado - atual,     # SET, nao soma
+        })
+    return enriq
+
+
+def aplicar_conferencia(itens_resolvidos, loja_id, user, referencia=None):
+    """SETA cada item ao valor CONTADO (balanço). Registra ajuste_conferencia
+    com a diferenca (sistema -> real) — mesma semantica da conferencia da tela.
+
+    Regras do dono:
+    - qtd > 0  -> SETA (cria a linha se o item casou mas ainda nao tinha estoque);
+    - qtd == 0 -> ZERA o item (registra a baixa);
+    - em branco/ausente -> NAO mexe (o parser marca 'em_branco'; ignorado aqui);
+    - nome sem match com qtd>0 -> vira EstoqueLoja pendente pra vincular depois;
+    - nome sem match (ou item novo) com qtd==0 -> no-op (nada a zerar).
+    Item que NAO veio na lista fica intacto (nao iteramos sobre ele)."""
+    ref = (referencia or 'Conferência em lote').strip()
+    aplicados, ignorados = [], []
+    if not loja_id:
+        return {'aplicados': [], 'ignorados': [{'linha': '*', 'motivo': 'sem_loja'}]}
+
+    for item in itens_resolvidos:
+        if item.get('erro'):
+            ignorados.append({'linha': item.get('linha', '?'),
+                              'nome': item.get('nome'), 'motivo': item['erro']})
+            continue
+        try:
+            contado = int(item['quantidade'])
+        except (KeyError, TypeError, ValueError):
+            ignorados.append({'linha': item.get('linha', '?'),
+                              'motivo': 'quantidade_invalida'})
+            continue
+        if contado < 0:
+            ignorados.append({'linha': item.get('linha', '?'),
+                              'motivo': 'quantidade_invalida'})
+            continue
+
+        resolvido = item.get('resolvido')
+        if resolvido and resolvido.get('id'):
+            if resolvido['tipo'] == 'pendente':
+                ep = EstoqueLoja.query.get(resolvido['id'])
+            else:
+                filtro = _filtro_para_resolvido(loja_id, resolvido)
+                ep = EstoqueLoja.query.filter_by(**filtro).first()
+                if not ep:
+                    if contado == 0:
+                        ignorados.append({'linha': item.get('linha', '?'),
+                                          'nome': resolvido['nome'],
+                                          'motivo': 'zero_sem_estoque'})
+                        continue
+                    ep = EstoqueLoja(**filtro, quantidade=0)
+                    db.session.add(ep)
+                    db.session.flush()
+            nome_resultado = resolvido['nome']
+        else:
+            nome_digitado = (item.get('nome') or '').strip()
+            if not nome_digitado:
+                ignorados.append({'linha': item.get('linha', '?'), 'motivo': 'sem_nome'})
+                continue
+            if contado == 0:
+                ignorados.append({'linha': item.get('linha', '?'),
+                                  'nome': nome_digitado, 'motivo': 'zero_sem_estoque'})
+                continue
+            ep = EstoqueLoja.query.filter_by(
+                loja_id=loja_id, nome_pendente=nome_digitado,
+                receita_id=None, produto_id=None, materia_prima_id=None,
+            ).first()
+            if not ep:
+                ep = EstoqueLoja(loja_id=loja_id, nome_pendente=nome_digitado,
+                                 quantidade=0)
+                db.session.add(ep)
+                db.session.flush()
+            nome_resultado = nome_digitado
+
+        anterior = ep.quantidade or 0
+        diff = contado - anterior
+        if diff != 0:
+            ep.quantidade = contado
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=ep.id, tipo='ajuste_conferencia', quantidade=diff,
+                referencia=f'{ref}: sistema {anterior} → real {contado} (diff {diff:+d})',
+                usuario_id=getattr(user, 'id', None),
+            ))
+        aplicados.append({'nome': nome_resultado, 'anterior': anterior,
+                          'novo': contado, 'diff': diff})
+
+    if any(a['diff'] != 0 for a in aplicados):
+        db.session.commit()
+    return {'aplicados': aplicados, 'ignorados': ignorados}
