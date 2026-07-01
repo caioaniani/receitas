@@ -92,16 +92,9 @@ def _agrega_por_linha(pedido, loja_id, *, lock):
     """Soma a demanda de estoque do pedido POR LINHA de EstoqueLoja (cestas
     explodidas; itens/componentes repetidos somam na mesma linha). Trava as
     linhas (FOR UPDATE) quando `lock`. Componente de cesta sem linha existente
-    e ignorado (nao-rastreado).
-
-    Retorna ([(el, qtd, nome, qtd_bloqueia)], n_pulados). `qtd_bloqueia` e a
-    parcela da demanda vinda de item AVULSO (criar=True) — a unica que pode
-    barrar o checkout por falta de estoque. Demanda de COMPONENTE de cesta
-    (criar=False) soma em `qtd` (pra reservar/baixar) mas fica FORA de
-    `qtd_bloqueia`: cesta e best-effort, nao derruba a venda quando falta
-    componente (decisao do dono 01/07/2026)."""
+    e ignorado (nao-rastreado). Retorna ([(el, qtd, nome)], n_pulados)."""
     from app.models import EstoqueLoja
-    por_linha = {}      # el -> [qtd_total, nome, qtd_bloqueia]
+    por_linha = {}      # el -> [qtd, nome]
     ordem = []          # ordem estavel de aparicao
     pulados = 0
     for it in pedido.itens:
@@ -118,13 +111,10 @@ def _agrega_por_linha(pedido, loja_id, *, lock):
                 # SELECT FOR UPDATE serializa checkouts (no-op em SQLite).
                 db.session.refresh(el, with_for_update=True)
             if el not in por_linha:
-                por_linha[el] = [0, nome, 0]
+                por_linha[el] = [0, nome]
                 ordem.append(el)
             por_linha[el][0] += qtd
-            if criar:
-                por_linha[el][2] += qtd           # so item avulso bloqueia
-    return [(el, por_linha[el][0], por_linha[el][1], por_linha[el][2])
-            for el in ordem], pulados
+    return [(el, por_linha[el][0], por_linha[el][1]) for el in ordem], pulados
 
 
 def reservar(pedido, *, loja_id, ttl_min=TTL_RESERVA_MIN):
