@@ -591,13 +591,15 @@ def test_gerar_link_carrinho_ignora_invalido(app):
 
 
 def test_consultar_produtos_esgotado_disponivel_false(app):
-    """Estoque REAL: item publicado sem saldo na loja do site vem
-    disponivel=False (acabou o "bug do site")."""
+    """Disponibilidade do site = PLANO-DO-DIA (regra do dono 01/07/2026): item
+    com plano 0 na janela vem disponivel=False. O EstoqueLoja fisico nao entra
+    (item sem plano = fail-open, disponivel)."""
     from decimal import Decimal
 
     from app.extensions import db
     from app.models import AppConfig, EstoqueLoja, Loja, Produto
-    from app.services import bot_tools
+    from app.services import bot_tools, loja_plano_dia
+    from app.utils import hoje
     with app.app_context():
         loja = Loja(nome='Anesio', endereco='x', ativa=True)
         db.session.add(loja)
@@ -610,8 +612,11 @@ def test_consultar_produtos_esgotado_disponivel_false(app):
         db.session.add_all([com, sem])
         db.session.commit()
         db.session.add(EstoqueLoja(loja_id=loja.id, produto_id=com.id,
-                                   quantidade=5))  # só a Family Box tem saldo
+                                   quantidade=5))
         db.session.commit()
+        # Caixa Especial esgotada via plano 0; Family Box sem plano = fail-open.
+        loja_plano_dia.replicar_para_proximos_dias(
+            'produto', sem.id, 0, data_inicio=hoje(), dias=14)
         r = bot_tools.consultar_produtos('caixa especial')
     p = next(x for x in r['produtos'] if x['nome'] == 'Caixa Especial')
     assert p['disponivel'] is False
