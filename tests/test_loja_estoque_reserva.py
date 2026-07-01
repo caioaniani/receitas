@@ -323,9 +323,12 @@ def test_cesta_baixa_componentes_nao_a_cesta(app):
         assert len(movs) == 2 and {m.quantidade for m in movs} == {6}
 
 
-def test_cesta_bloqueia_se_componente_rastreado_sem_estoque(app):
-    """Se um componente RASTREADO nao tem saldo, a reserva da cesta e
-    rejeitada (nao da pra montar a cesta) — sem reservar nada."""
+def test_cesta_nao_bloqueia_por_componente_rastreado_sem_estoque(app):
+    """DECISAO DO DONO (01/07/2026): componente de cesta e best-effort — a
+    cesta VENDE mesmo com um componente rastreado sem saldo. Antes isso barrava
+    o checkout inteiro (incidente: cliente nao conseguia comprar a 'Sweet
+    Coffee' porque a base de MDF estava em 0). Item AVULSO segue protegido
+    (test abaixo)."""
     from app.extensions import db
     from app.models import EstoqueLoja
     from app.services import loja_estoque_reserva
@@ -342,13 +345,88 @@ def test_cesta_bloqueia_se_componente_rastreado_sem_estoque(app):
         ped = _pedido(db, loja_retirada=loja, itens=[(cesta, 1)])
 
         r = loja_estoque_reserva.reservar(ped, loja_id=loja.id)
-        assert r['ok'] is False
-        assert any(s['nome'] == 'Cookie Calebaut' for s in r['sem_estoque'])
-        # Nada reservado (nem o croissant que tinha saldo).
+        assert r['ok'] is True                       # NAO bloqueia mais
+        assert r['sem_estoque'] == []
+        assert r['reservas'] == 2
+        # Reserva best-effort: cada componente reserva a demanda cheia (o cookie
+        # fica com reservada > quantidade — disponivel clampa em 0, sem negativo).
         el_cro = EstoqueLoja.query.filter_by(
             loja_id=loja.id, receita_id=croissant.id).first()
-        assert el_cro.quantidade_reservada == 0
-        assert ped.reserva_expira_em is None
+        el_cok = EstoqueLoja.query.filter_by(
+            loja_id=loja.id, receita_id=cookie.id).first()
+        assert el_cro.quantidade_reservada == 2
+        assert el_cok.quantidade_reservada == 2
+        assert el_cok.disponivel == 0
+        assert ped.reserva_expira_em is not None
+
+
+def test_cesta_com_componente_zerado_vende_e_baixa_registra_falta(app):
+    """Incidente 01/07/2026 (Sweet Coffee): a cesta tinha componente com linha
+    de estoque em 0 (base de MDF). A reserva bloqueava o checkout. Agora vende;
+    a baixa real registra venda_site_sem_estoque pro componente faltante e nao
+    deixa o saldo negativo."""
+    from app.extensions import db
+    from app.models import EstoqueLoja, MovEstoqueLoja
+    from app.services import loja_estoque_reserva
+    from app.utils import agora
+    with app.app_context():
+        loja = _site_loja(db)
+        suco = _receita(db, 'Suco de Uva Villa Piva 300ml')
+        base = _receita(db, 'Base Quadrada MDF Pequena')
+        _estoque_rec(db, loja, suco, qtd=5)
+        _estoque_rec(db, loja, base, qtd=0)          # zerado, como no incidente
+        cesta = _cesta(db, 'Sweet Coffee', [
+            (suco, 'Suco de Uva Villa Piva 300ml', 1),
+            (base, 'Base Quadrada MDF Pequena', 1),
+        ])
+        ped = _pedido(db, loja_retirada=loja, itens=[(cesta, 1)])
+
+        r = loja_estoque_reserva.reservar(ped, loja_id=loja.id)
+        assert r['ok'] is True                       # <- destravado
+
+        ped.reserva_expira_em = agora() + timedelta(minutes=30)
+        db.session.commit()
+        loja_estoque_reserva.consumir(ped, loja_id=loja.id)
+
+        el_suco = EstoqueLoja.query.filter_by(
+            loja_id=loja.id, receita_id=suco.id).first()
+        el_base = EstoqueLoja.query.filter_by(
+            loja_id=loja.id, receita_id=base.id).first()
+        assert el_suco.quantidade == 4               # 5 - 1 baixou normal
+        assert el_base.quantidade == 0               # nao ficou negativo
+        falta = MovEstoqueLoja.query.filter_by(
+            estoque_loja_id=el_base.id,
+            tipo='venda_site_sem_estoque').first()
+        assert falta is not None                     # falta registrada, sem crash
+
+
+def test_item_avulso_ainda_bloqueia_mesmo_dividindo_linha_com_cesta(app):
+    """Anti-oversell preservado: quando o MESMO item e vendido AVULSO e tambem
+    entra como componente de cesta no mesmo pedido, a parcela AVULSA ainda barra
+    o checkout se nao ha saldo pra ela — so a parcela de cesta e best-effort."""
+    from app.extensions import db
+    from app.models import Produto, ProdutoItem
+    from app.services import loja_estoque_reserva
+    with app.app_context():
+        loja = _site_loja(db)
+        suco = _produto(db, 'Suco de Uva', preco=12)
+        _estoque(db, loja, suco, qtd=1)              # so 1 no fisico
+        cesta = Produto(nome='Cesta com Suco', categoria='Cestas',
+                        preco_site=80.0, imagem_dropbox_url='https://x/c.jpg',
+                        ativo=True)
+        db.session.add(cesta)
+        db.session.flush()
+        db.session.add(ProdutoItem(produto_id=cesta.id, tipo='produto',
+                                   produto_componente_id=suco.id, quantidade=1))
+        db.session.commit()
+        # 2 sucos AVULSOS (precisa 2, so ha 1) + 1 cesta (componente pede +1).
+        ped = _pedido(db, loja_retirada=loja, itens=[(suco, 2), (cesta, 1)])
+
+        r = loja_estoque_reserva.reservar(ped, loja_id=loja.id)
+        assert r['ok'] is False                      # a parcela avulsa nao cabe
+        s = [x for x in r['sem_estoque'] if x['nome'] == 'Suco de Uva']
+        assert s and s[0]['pedido'] == 2             # so a demanda AVULSA (nao 3)
+        assert s[0]['disponivel'] == 1
 
 
 def test_estoque_loja_disponivel_property():
