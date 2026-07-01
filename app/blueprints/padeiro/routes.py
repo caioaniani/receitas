@@ -255,6 +255,8 @@ def massa_base_mise(mb_id):
             rec = membros.get(it.receita_id)
             if rec is None:
                 continue
+            if it.dispensada_em is not None:
+                continue                  # dispensado: não entra na massa a preparar
             alvo = int(it.qtd_alvo or 0)
             rend = rendimento_massa_crua(rec)
             unidades[it.receita_id] = alvo
