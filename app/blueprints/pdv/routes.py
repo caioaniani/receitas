@@ -182,6 +182,73 @@ def api_itens_vendidos():
     return jsonify(ok=True, **data)
 
 
+@pdv_bp.route('/api/itens-vendidos-por-loja')
+@login_required
+@admin_required
+def api_itens_vendidos_por_loja():
+    """Itens vendidos SEPARADOS POR LOJA (secoes recolhiveis na tela)."""
+    from app.services import vendas_itens
+    from app.utils import hoje as _hoje_brt
+    inicio_str = request.args.get('inicio') or _hoje_brt().isoformat()
+    fim_str = request.args.get('fim') or inicio_str
+    try:
+        inicio = datetime.strptime(inicio_str, '%Y-%m-%d').date()
+        fim = datetime.strptime(fim_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify(ok=False, erro='datas invalidas (use YYYY-MM-DD)'), 400
+    if (fim - inicio).days > 92:
+        return jsonify(ok=False, erro='intervalo maximo de 92 dias'), 400
+    hoje = _hoje_brt()
+    dias_extra = min(max(0, (hoje - fim).days) if fim < hoje else 0, 7)
+    try:
+        data = vendas_itens.agregar_itens_por_loja(
+            inicio, fim, expandir_dias_frente=dias_extra)
+    except Exception as e:
+        current_app.logger.exception('itens-vendidos-por-loja falhou')
+        return jsonify(ok=False, erro=_erro_externo(e)), 502
+    return jsonify(ok=True, **data)
+
+
+@pdv_bp.route('/itens-vendidos.xlsx')
+@login_required
+@admin_required
+def itens_vendidos_xlsx():
+    """Exporta os itens vendidos em XLSX — uma aba por loja + Consolidado."""
+    import io
+
+    from flask import send_file
+
+    from app.services import vendas_itens
+    from app.utils import hoje as _hoje_brt
+    inicio_str = request.args.get('inicio') or _hoje_brt().isoformat()
+    fim_str = request.args.get('fim') or inicio_str
+    try:
+        inicio = datetime.strptime(inicio_str, '%Y-%m-%d').date()
+        fim = datetime.strptime(fim_str, '%Y-%m-%d').date()
+    except ValueError:
+        flash('Datas invalidas.', 'danger')
+        return redirect(url_for('pdv.itens_vendidos'))
+    if (fim - inicio).days > 92:
+        flash('Intervalo maximo de 92 dias pra exportar.', 'warning')
+        return redirect(url_for('pdv.itens_vendidos'))
+    hoje = _hoje_brt()
+    dias_extra = min(max(0, (hoje - fim).days) if fim < hoje else 0, 7)
+    try:
+        dados = vendas_itens.agregar_itens_por_loja(
+            inicio, fim, expandir_dias_frente=dias_extra)
+        blob = vendas_itens.gerar_xlsx_itens_por_loja(dados)
+    except Exception as e:
+        current_app.logger.exception('export xlsx itens-vendidos falhou')
+        flash('Erro ao exportar: %s' % _erro_externo(e), 'danger')
+        return redirect(url_for('pdv.itens_vendidos'))
+    nome = 'itens_vendidos_%s_a_%s.xlsx' % (inicio.isoformat(), fim.isoformat())
+    return send_file(
+        io.BytesIO(blob),
+        mimetype=('application/vnd.openxmlformats-officedocument'
+                  '.spreadsheetml.sheet'),
+        as_attachment=True, download_name=nome)
+
+
 @pdv_bp.route('/api/vendas')
 @login_required
 @admin_required

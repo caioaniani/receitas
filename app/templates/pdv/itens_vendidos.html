@@ -201,8 +201,9 @@ var __PRODUTOS = [
     var loading = document.getElementById('loading');
     var resultado = document.getElementById('resultado');
     var alerta = document.getElementById('alerta-erro');
-    var tbody = document.getElementById('tbody-produtos');
+    var secoes = document.getElementById('secoes-lojas');
     var filtroNome = document.getElementById('filtro-nome');
+    var btnExport = document.getElementById('btn-export-xlsx');
 
     function fmtBRL(v) {
         return Number(v || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -226,10 +227,9 @@ var __PRODUTOS = [
             resultado.classList.add('d-none');
         }
         loading.classList.remove('d-none');
-        var qs = new URLSearchParams({
-            inicio: inicio.value, fim: fim.value, loja: lojaSel.value
-        });
-        fetch('/pdv/api/itens-vendidos?' + qs, {credentials: 'same-origin'})
+        var qs = new URLSearchParams({ inicio: inicio.value, fim: fim.value });
+        if (btnExport) btnExport.href = '/pdv/itens-vendidos.xlsx?' + qs;
+        fetch('/pdv/api/itens-vendidos-por-loja?' + qs, {credentials: 'same-origin'})
             .then(function(r) { return r.json(); })
             .then(function(d) {
                 loading.classList.add('d-none');
@@ -254,12 +254,10 @@ var __PRODUTOS = [
                     lojaSel.appendChild(opt);
                 });
 
-                tbody.innerHTML = '';
-                (d.produtos || []).forEach(function(p, idx) {
-                    // Coluna 'Vinculo': mostra estado autoritativo (SeruProdutoMap)
-                    // + sugestao fuzzy se ainda nao mapeado.
-                    var vinculoHtml;
-                    var btnLabel, btnClass;
+                // Uma <details> por loja + Consolidado no topo (onde da pra
+                // mapear cada produto 1x). Mesma linha/botao de antes.
+                function renderRowHtml(p, idx) {
+                    var vinculoHtml, btnLabel, btnClass;
                     if (p.estado_map === 'mapeado' && p.mapeado_para) {
                         var tipoBadge = p.mapeado_para.tipo === 'receita'
                             ? '<span class="badge bg-primary" style="font-size:9px;">R</span>'
@@ -269,12 +267,10 @@ var __PRODUTOS = [
                             : '';
                         vinculoHtml = '<span class="badge bg-success" style="font-size:9px;margin-right:4px;">✓ mapeado</span>'
                             + tipoBadge + ' ' + esc(p.mapeado_para.nome) + fatorBadge;
-                        btnLabel = 'Editar';
-                        btnClass = 'btn-outline-secondary';
+                        btnLabel = 'Editar'; btnClass = 'btn-outline-secondary';
                     } else if (p.estado_map === 'ignorado') {
                         vinculoHtml = '<span class="badge bg-secondary" style="font-size:9px;">ignorado</span> <small class="text-muted">nao baixa estoque</small>';
-                        btnLabel = 'Editar';
-                        btnClass = 'btn-outline-secondary';
+                        btnLabel = 'Editar'; btnClass = 'btn-outline-secondary';
                     } else {
                         var sugestao = '';
                         if (p.match) {
@@ -282,8 +278,7 @@ var __PRODUTOS = [
                             sugestao = '<small class="text-muted d-block" style="font-size:10px;">sugestao: ' + esc(p.match.nome) + fuzzy + '</small>';
                         }
                         vinculoHtml = '<span class="badge bg-warning text-dark" style="font-size:9px;">sem vinculo</span>' + sugestao;
-                        btnLabel = '+ Vincular';
-                        btnClass = 'btn-primary';
+                        btnLabel = '+ Vincular'; btnClass = 'btn-primary';
                     }
                     var btn = '<button type="button" class="btn btn-sm ' + btnClass + ' btn-mapear" '
                         + 'data-nome="' + esc(p.nome) + '" '
@@ -294,11 +289,8 @@ var __PRODUTOS = [
                         + 'data-alvo-id="' + esc(p.mapeado_para ? p.mapeado_para.id : '') + '" '
                         + 'data-fator="' + esc(p.fator || 1) + '" '
                         + 'style="font-size:11px; white-space:nowrap;">' + btnLabel + '</button>';
-
                     var sku = p.sku ? '<small class="text-muted d-block" style="font-size:10px;">sku: ' + esc(p.sku) + '</small>' : '';
-                    var tr = document.createElement('tr');
-                    tr.dataset.nome = (p.nome || '').toLowerCase();
-                    tr.innerHTML =
+                    return '<tr data-nome="' + esc((p.nome || '').toLowerCase()) + '">' +
                         '<td class="text-muted">' + (idx + 1) + '</td>' +
                         '<td><div class="fw-semibold">' + esc(p.nome) + '</div>' + sku + '</td>' +
                         '<td>' + vinculoHtml + '</td>' +
@@ -306,12 +298,40 @@ var __PRODUTOS = [
                         '<td class="text-end">R$ ' + fmtBRL(p.faturamento) + '</td>' +
                         '<td class="text-end text-muted">' + (p.pct_faturamento || 0).toFixed(1) + '%</td>' +
                         '<td class="text-end text-muted">' + fmtInt(p.n_pedidos) + '</td>' +
-                        '<td>' + btn + '</td>';
-                    tbody.appendChild(tr);
-                });
-                if (!d.produtos || !d.produtos.length) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Nenhum item vendido no intervalo.</td></tr>';
+                        '<td>' + btn + '</td></tr>';
                 }
+                function tabelaHtml(produtos) {
+                    if (!produtos || !produtos.length) return '<div class="text-muted small px-3 py-2">Nenhum item.</div>';
+                    return '<div class="table-responsive"><table class="table table-sm table-hover mb-0">' +
+                        '<thead class="thead-padaria"><tr><th>#</th><th>Produto (Seru)</th>' +
+                        '<th>Vinculo no sistema</th><th class="text-end">Unidades</th>' +
+                        '<th class="text-end">Faturamento</th><th class="text-end">% fat.</th>' +
+                        '<th class="text-end">Pedidos</th><th style="width:110px;"></th></tr></thead>' +
+                        '<tbody>' + produtos.map(renderRowHtml).join('') + '</tbody></table></div>';
+                }
+                function addSecao(titulo, meta, produtos, aberta) {
+                    var det = document.createElement('details');
+                    det.className = 'card mb-2 secao-loja';
+                    det.dataset.loja = titulo;
+                    if (aberta) det.open = true;
+                    det.innerHTML = '<summary class="card-header bg-white fw-bold" style="cursor:pointer;">' +
+                        '<i class="bi bi-shop"></i> ' + esc(titulo) +
+                        ' <span class="text-muted small ms-2">R$ ' + fmtBRL(meta.faturamento) +
+                        ' · ' + fmtInt(meta.pedidos) + ' ped · ' + fmtInt(meta.itens) + ' un</span></summary>' +
+                        tabelaHtml(produtos);
+                    secoes.appendChild(det);
+                }
+                secoes.innerHTML = '';
+                addSecao('Consolidado (todas as lojas)',
+                    {faturamento: d.faturamento_total, pedidos: d.total_pedidos, itens: d.total_itens_vendidos},
+                    d.consolidado, true);
+                (d.lojas || []).forEach(function(lo) {
+                    addSecao(lo.loja, {faturamento: lo.faturamento, pedidos: lo.total_pedidos, itens: lo.total_itens}, lo.produtos, false);
+                });
+                if (!d.lojas || !d.lojas.length) {
+                    secoes.innerHTML = '<div class="text-center text-muted py-3">Nenhum item vendido no intervalo.</div>';
+                }
+                aplicarFiltros();
                 resultado.classList.remove('d-none');
                 if (savedScroll !== null) {
                     requestAnimationFrame(function() {
@@ -331,12 +351,24 @@ var __PRODUTOS = [
         buscar();
     });
 
-    filtroNome.addEventListener('input', function() {
-        var termo = this.value.toLowerCase().trim();
-        tbody.querySelectorAll('tr[data-nome]').forEach(function(tr) {
-            tr.style.display = (!termo || tr.dataset.nome.indexOf(termo) >= 0) ? '' : 'none';
+    filtroNome.addEventListener('input', aplicarFiltros);
+    lojaSel.addEventListener('change', aplicarFiltros);
+    function aplicarFiltros() {
+        var termo = (filtroNome.value || '').toLowerCase().trim();
+        var alvoLoja = lojaSel.value;
+        secoes.querySelectorAll('details.secao-loja').forEach(function(det) {
+            var isCons = det.dataset.loja.indexOf('Consolidado') === 0;
+            var lojaOk = !alvoLoja ? true : (det.dataset.loja === alvoLoja);
+            if (alvoLoja && isCons) lojaOk = false;   // filtrando 1 loja: some o consolidado
+            var algum = false;
+            det.querySelectorAll('tr[data-nome]').forEach(function(tr) {
+                var vis = !termo || tr.dataset.nome.indexOf(termo) >= 0;
+                tr.style.display = vis ? '' : 'none';
+                if (vis) algum = true;
+            });
+            det.style.display = (lojaOk && (!termo || algum)) ? '' : 'none';
         });
-    });
+    }
 
     // auto-busca no load
     buscar();
@@ -406,7 +438,7 @@ var __PRODUTOS = [
     mmTipo.addEventListener('change', function() { popularAlvo(this.value); });
 
     // delegação no tbody (botoes renderizados dinamicamente)
-    tbody.addEventListener('click', function(e) {
+    secoes.addEventListener('click', function(e) {
         var btn = e.target.closest('.btn-mapear');
         if (!btn) return;
         currentNome = btn.dataset.nome;
