@@ -122,6 +122,14 @@ def _run_sync(app):
                 from app.models import AppConfig
                 AppConfig.set('seru_ultimo_sync', _ult_run.isoformat())
                 db.session.commit()
+                # Snapshot persistente das vendas (VendaSeruDiaria) pro relatorio/
+                # XLSX lerem sem re-consultar a API — e resiste a API fora na hora
+                # do relatorio. Best-effort: nunca derruba o sync de estoque.
+                try:
+                    from app.services import vendas_diarias
+                    vendas_diarias.capturar_periodo(hoje - timedelta(days=1), hoje)
+                except Exception:
+                    logger.exception('captura vendas_diarias no cron falhou')
                 ativas = any(stats.get(k, 0) for k in (
                     'pedidos_novos', 'itens_baixados',
                     'pedidos_cancelados_estornados'))
