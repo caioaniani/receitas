@@ -341,6 +341,31 @@ def test_bom_explode_cadeia_multinivel(app):
     assert rm['total'] == 2                         # 100 trad × 1/50
 
 
+def test_bom_insumo_fracionario_nao_infla_por_dia(app):
+    """D1: insumo de fração baixa não infla por dar ceil em CADA dia. Croissant
+    (rend 5 -> 0,2 massa/un) produzido 2/dia em 4 dias = 0,4 massa/dia. A massa
+    total é ceil(4 × 0,4) = ceil(1,6) = 2, NÃO a soma dos ceils por dia
+    (ceil(0,4) × 4 = 4). A fração acumula entre os dias."""
+    from app.models import ReceitaIngrediente
+    loja = _loja()
+    massa = _receita('Massa para folhar')          # lead 0, fica no mesmo dia
+    cro = _receita('Croissant')
+    cro.rendimento_qtd = 5                          # 1/5 = 0,2 massa por croissant
+    db.session.add(ReceitaIngrediente(
+        receita_id=cro.id, tipo='receita', sub_receita_id=massa.id,
+        ingrediente_nome='Massa para folhar', porcentagem=1))
+    db.session.commit()
+    for dia in (1, 2, 3, 4):                        # 2 croissants em 4 dias distintos
+        _pedido(loja, 'pendente', hoje() + timedelta(days=dia), cro, 2)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rc = _rec_out(crono, cro.id)
+    rm = _rec_out(crono, massa.id)
+    assert rc is not None and rc['total'] == 8      # 2/dia × 4 dias
+    assert rm is not None
+    assert rm['total'] == 2                          # ceil(1,6), não 4 (soma de ceils)
+
+
 def test_cronograma_ordena_por_categoria(app):
     """Cronograma agrupa as receitas por categoria (não espalhado por demanda)."""
     loja = _loja()
