@@ -41,6 +41,34 @@ def test_backfill_copia_e_e_idempotente(app, loja):
     assert VendaMapa.query.count() == 2
 
 
+def test_backfill_nao_reverte_conciliacao_existente(app, loja):
+    """REGRESSAO: conciliacao feita na UI (VendaMapa) NAO pode ser revertida
+    pelo backfill do startup a partir do SeruProdutoMap congelado.
+
+    Bug do "volta pra ignorado em seguida": o produto estava ignorado no mapa
+    velho; o admin vincula na tela de itens-vendidos (grava so no VendaMapa);
+    no proximo deploy o backfill reaplicava o snapshot velho por cima."""
+    from app.models import VendaMapa
+    cookie = _receita('Cookie')
+    # Snapshot velho CONGELADO: OVOS AO PONTO estava 'ignorado'.
+    db.session.add(SeruProdutoMap(seru_nome='OVOS AO PONTO', ignorar=True,
+                                  fator_quantidade=1.0))
+    # Conciliacao feita na UI (api_mapear grava so no VendaMapa): vinculado.
+    db.session.add(VendaMapa(canal='seru', nome_externo='OVOS AO PONTO',
+                             receita_id=cookie.id, ignorar=False,
+                             fator_quantidade=1.0))
+    db.session.commit()
+
+    r = backfill_venda_mapa()
+    assert r['seru_novos'] == 0                      # ja existia: nao recria
+    vm = VendaMapa.query.filter_by(canal='seru',
+                                   nome_externo='OVOS AO PONTO').first()
+    assert vm.ignorar is False                       # conciliacao preservada
+    assert vm.receita_id == cookie.id
+    assert vm.estado == 'mapeado'                     # nao voltou pra 'ignorado'
+    assert VendaMapa.query.filter_by(canal='seru').count() == 1
+
+
 def test_backfill_recria_uso_de_loja_debito(app, loja):
     """LojaDebito (marcador 'loja usou o mapa') vira VendaMapaUso ligado ao
     VendaMapa de lote equivalente. Idempotente."""
