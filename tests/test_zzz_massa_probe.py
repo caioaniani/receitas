@@ -39,13 +39,16 @@ def test_probe_massa(app):
     ])
     db.session.commit()
 
-    d = hoje() + timedelta(days=2)
-    for r, q in ((cro, 500), (dan, 62)):              # firme
-        p = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=d,
-                       data_pedido=d)
-        db.session.add(p)
-        db.session.flush()
-        db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=q))
+    # firme croissant/danish ESPALHADO em vários dias -> massa fracionária/dia
+    for dia in range(1, 7):
+        for r, q in ((cro, 80), (dan, 10)):
+            d = hoje() + timedelta(days=dia)
+            p = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=d,
+                           data_pedido=d)
+            db.session.add(p)
+            db.session.flush()
+            db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id,
+                                      quantidade=q))
     db.session.commit()
 
     crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
