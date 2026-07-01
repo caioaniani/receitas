@@ -1607,6 +1607,14 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         rec = receitas.get(rid)
         rr['categoria'] = (rec.categoria or '').strip() if rec else ''
         it = bal_idx.get(rid)
+        # Estoque REAL da linha vem do balanco quando a receita esta la. Corrige o
+        # INSUMO: `_explodir_bom` cria a linha da sub-receita com
+        # `em_estoque=est_extra` (=0 pra sub que ESTA no balanco por ter estoque),
+        # entao a massa ja batida aparecia como "em estoque: 0" mesmo cobrindo a
+        # demanda dos croissants — a producao 0 estava certa, o numero exibido nao.
+        # No-op pra produto (ja vinha de it['em_estoque']).
+        if it is not None:
+            rr['em_estoque'] = int(it['em_estoque'])
         comp = int(it['comprometido']) if it else 0
         prev = int(it['previsto']) if it else 0
         est_ef = int(it['em_estoque_efetivo']) if it else int(rr['em_estoque'])
