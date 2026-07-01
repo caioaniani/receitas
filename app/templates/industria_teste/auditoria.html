@@ -62,8 +62,7 @@
                 <td class="num">{{ it.produzido }}</td>
                 <td class="num falta-vencido">{{ it.falta }}</td>
                 <td>{{ it.criado_por or '—' }}</td>
-                <td><a href="{{ url_for('industria_teste.index', inicio=0) }}"
-                       class="small">ver dia</a></td>
+                <td>{{ dispensar_btn(it) }}</td>
             </tr>
             {% endfor %}
             </tbody>
