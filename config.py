@@ -238,6 +238,12 @@ class Config:
     # APP_BASE_URL (admin/gestão) porque a loja vive em opao.online e o admin
     # em gestao.opaopadariaartesanal.com.br (18/06/2026).
     LOJA_BASE_URL = os.environ.get('LOJA_BASE_URL', 'https://opao.online')
+    # Alerta IMEDIATO ao dono (WhatsApp) quando um cliente e BARRADO no
+    # checkout por item esgotado no plano-do-dia — vira venda perdida em sinal
+    # acionavel + contato do cliente. '0' desliga. Numero: LOJA_ALERTA_NUMERO
+    # ou, na ausencia, ZAPI_NUMERO_DESTINO (mesmo padrao dos outros alertas).
+    LOJA_ALERTA_TRAVA = os.environ.get('LOJA_ALERTA_TRAVA', '1')
+    LOJA_ALERTA_NUMERO = os.environ.get('LOJA_ALERTA_NUMERO', '')
     # Hosts que servem SOMENTE a loja (admin/gestão viram 404 neles, raiz
     # redireciona pra /loja/). CSV. gestao.* NÃO entra aqui — continua full.
     LOJA_HOSTS = os.environ.get(
