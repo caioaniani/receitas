@@ -161,26 +161,45 @@ def _receita_amassadeira(nome, rend, peso_base, cap):
     return r
 
 
-def test_dribble_diario_rola_pro_proximo_dia(app):
-    """Anti-'produzir 1 pao': um dia com producao irrisoria (< fracao de UMA
-    fornada) NAO fica sozinho — rola pro proximo, consolidando no dia de
-    producao real. Total preservado."""
+def test_dribble_consolida_no_dia_anterior(app):
+    """C1: um dribble (< fração de UMA fornada) consolida PRA TRÁS, no dia de um
+    lote real ANTERIOR — produzido a tempo, nunca empurrado pra frente (que
+    atrasaria a entrega). Total preservado."""
     loja = _loja()
     # cap=5000, rend=50, massa_base=peso_base=5000 -> unid/fornada=50, minimo=10.
     r = _receita_amassadeira('Sourdough', rend=50, peso_base=5000, cap=5000)
-    # 1 un pra entregar hoje (dribble) + 60 pra hoje+3 (producao real).
+    # 60 pra hoje+1 (lote real) + 1 pra hoje+3 (dribble, entrega POSTERIOR).
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 60)
+    _pedido(loja, 'pendente', hoje() + timedelta(days=3), r, 1)
+
+    crono = cronograma_producao(horizonte_dias=7, janela_semanas=6)
+    rr = _rec_out(crono, r.id)
+    assert rr['total'] == 61                        # balanco: 61 a produzir
+    # o "1" do dia 3 puxou PRA TRAS, somando no lote do dia 1 (pronto a tempo).
+    assert rr['por_dia'][1]['qtd'] == 61
+    assert rr['por_dia'][3]['qtd'] == 0
+    minimo = 10                                     # 20% de 50 un/fornada
+    for c in rr['por_dia']:
+        assert not (0 < c['qtd'] < minimo), f"dribble nao consolidado: {c}"
+    assert sum(c['qtd'] for c in rr['por_dia']) == rr['total']
+
+
+def test_dribble_de_entrega_iminente_nao_e_empurrado(app):
+    """C1: um dribble pra entrega IMINENTE (hoje) NÃO é empurrado pra um lote
+    posterior — isso entregaria dias tarde. Sem dia anterior pra consolidar, ele
+    é produzido HOJE mesmo (batida pequena) pra cumprir o prazo."""
+    loja = _loja()
+    r = _receita_amassadeira('Sourdough', rend=50, peso_base=5000, cap=5000)
+    # 1 un pra entregar HOJE (dribble) + 60 pra hoje+3 (lote posterior).
     _pedido(loja, 'pendente', hoje(), r, 1)
     _pedido(loja, 'pendente', hoje() + timedelta(days=3), r, 60)
 
     crono = cronograma_producao(horizonte_dias=7, janela_semanas=6)
     rr = _rec_out(crono, r.id)
-    assert rr['total'] == 61                       # balanco: 61 a produzir
-    # o "1" do dia 0 nao fica sozinho — rolou e somou no dia da producao real
-    assert rr['por_dia'][0]['qtd'] == 0
-    assert rr['por_dia'][3]['qtd'] == 61
-    minimo = 10                                    # 20% de 50 un/fornada
-    for c in rr['por_dia']:
-        assert not (0 < c['qtd'] < minimo), f"dribble nao consolidado: {c}"
+    assert rr['total'] == 61
+    # o "1" de HOJE fica no dia 0 (produz no prazo), NAO rola pro dia 3.
+    assert rr['por_dia'][0]['qtd'] == 1
+    assert rr['por_dia'][3]['qtd'] == 60
     assert sum(c['qtd'] for c in rr['por_dia']) == rr['total']
 
 
