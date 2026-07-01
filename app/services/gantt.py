@@ -279,6 +279,8 @@ def montar_gantt(dia):
             rec = it.receita
             if rec is None or int(rec.dias_producao or 0) != L:
                 continue
+            if it.dispensada_em is not None:
+                continue                  # dispensado pelo admin: não finaliza
             falta = max(0, int(it.qtd_alvo or 0) - int(it.produzido_qtd or 0))
             if falta <= 0:
                 continue
