@@ -98,7 +98,8 @@
         return String(v);
     }
 
-    function buscar() {
+    function buscar(aoVivo) {
+        aoVivo = (aoVivo === true);   // listeners passam o Event; so `true` conta
         var inicio = document.getElementById('pdv-inicio').value;
         var fim = document.getElementById('pdv-fim').value;
         if (!inicio || !fim) return;
@@ -112,8 +113,10 @@
         document.getElementById('pdv-pagamentos-card').style.display = 'none';
         document.getElementById('pdv-canais-card').style.display = 'none';
 
-        fetch('/pdv/api/vendas?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim) + '&_=' + Date.now(),
-              {credentials: 'same-origin', cache: 'no-store'})
+        var url = '/pdv/api/vendas?inicio=' + encodeURIComponent(inicio) +
+            '&fim=' + encodeURIComponent(fim) +
+            (aoVivo ? '&ao_vivo=1' : '') + '&_=' + Date.now();
+        fetch(url, {credentials: 'same-origin', cache: 'no-store'})
             .then(function(r) {
                 return r.text().then(function(txt) {
                     try {
