@@ -23,7 +23,9 @@ def test_probe_massa(app):
     massa = _amass('Massa para folhar', rend=50)      # insumo
     massa.dias_producao = 1
     cro = _amass('Croissant Tradicional', rend=50)    # 1 massa -> 50 croissants
+    cro.dias_producao = 2
     dan = _amass('Danish de Calabresa', rend=31)      # 1 massa -> 31 danishes
+    dan.dias_producao = 1
     db.session.add_all([loja])
     db.session.flush()
     # cada final consome massa (sub-receita), porcentagem 1
