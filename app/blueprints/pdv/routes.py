@@ -182,12 +182,8 @@ def api_itens_vendidos():
     return jsonify(ok=True, **data)
 
 
-@pdv_bp.route('/api/itens-vendidos-por-loja')
-@login_required
-@admin_required
-def api_itens_vendidos_por_loja():
-    """Itens vendidos SEPARADOS POR LOJA (secoes recolhiveis na tela)."""
-    from app.services import vendas_itens
+def _parse_intervalo_itens():
+    """Le inicio/fim (YYYY-MM-DD) do querystring. Retorna (inicio, fim, erro)."""
     from app.utils import hoje as _hoje_brt
     inicio_str = request.args.get('inicio') or _hoje_brt().isoformat()
     fim_str = request.args.get('fim') or inicio_str
@@ -195,14 +191,59 @@ def api_itens_vendidos_por_loja():
         inicio = datetime.strptime(inicio_str, '%Y-%m-%d').date()
         fim = datetime.strptime(fim_str, '%Y-%m-%d').date()
     except ValueError:
-        return jsonify(ok=False, erro='datas invalidas (use YYYY-MM-DD)'), 400
+        return None, None, 'datas invalidas (use YYYY-MM-DD)'
     if (fim - inicio).days > 92:
-        return jsonify(ok=False, erro='intervalo maximo de 92 dias'), 400
+        return None, None, 'intervalo maximo de 92 dias'
+    if fim < inicio:
+        return None, None, 'fim antes do inicio'
+    return inicio, fim, None
+
+
+def _dados_itens_por_loja(inicio, fim, ao_vivo=False):
+    """Itens vendidos por loja. Por padrao le do BANCO (VendaSeruDiaria),
+    capturando os dias que faltam + SEMPRE hoje (as vendas de hoje crescem) e
+    caindo pro snapshot existente se a API falhar. ao_vivo=True forca a consulta
+    direta na API (nao persiste) — util pra comparar."""
+    from app.services import vendas_diarias, vendas_itens
+    from app.utils import hoje as _hoje_brt
     hoje = _hoje_brt()
-    dias_extra = min(max(0, (hoje - fim).days) if fim < hoje else 0, 7)
-    try:
-        data = vendas_itens.agregar_itens_por_loja(
+    if ao_vivo:
+        dias_extra = min(max(0, (hoje - fim).days) if fim < hoje else 0, 7)
+        return vendas_itens.agregar_itens_por_loja(
             inicio, fim, expandir_dias_frente=dias_extra)
+    # Captura o minimo: dias ainda nao no banco + hoje (sempre). Passado ja
+    # capturado nao rebate na API.
+    ja = vendas_diarias.dias_capturados(inicio, fim)
+    precisa = []
+    d = inicio
+    while d <= fim:
+        if d not in ja or d == hoje:
+            precisa.append(d)
+        d += timedelta(days=1)
+    if precisa:
+        cap_ini, cap_fim = min(precisa), max(precisa)
+        dias_extra = min(max(0, (hoje - cap_fim).days) if cap_fim < hoje else 0, 7)
+        try:
+            vendas_diarias.capturar_periodo(
+                cap_ini, cap_fim, expandir_dias_frente=dias_extra)
+        except Exception:
+            current_app.logger.exception(
+                'captura vendas_diarias falhou; lendo snapshot existente')
+    return vendas_diarias.agregar_por_loja_do_banco(inicio, fim)
+
+
+@pdv_bp.route('/api/itens-vendidos-por-loja')
+@login_required
+@admin_required
+def api_itens_vendidos_por_loja():
+    """Itens vendidos SEPARADOS POR LOJA (secoes recolhiveis na tela). Le do
+    banco por padrao (?ao_vivo=1 forca a API)."""
+    inicio, fim, erro = _parse_intervalo_itens()
+    if erro:
+        return jsonify(ok=False, erro=erro), 400
+    ao_vivo = bool(request.args.get('ao_vivo'))
+    try:
+        data = _dados_itens_por_loja(inicio, fim, ao_vivo=ao_vivo)
     except Exception as e:
         current_app.logger.exception('itens-vendidos-por-loja falhou')
         return jsonify(ok=False, erro=_erro_externo(e)), 502
@@ -219,23 +260,13 @@ def itens_vendidos_xlsx():
     from flask import send_file
 
     from app.services import vendas_itens
-    from app.utils import hoje as _hoje_brt
-    inicio_str = request.args.get('inicio') or _hoje_brt().isoformat()
-    fim_str = request.args.get('fim') or inicio_str
-    try:
-        inicio = datetime.strptime(inicio_str, '%Y-%m-%d').date()
-        fim = datetime.strptime(fim_str, '%Y-%m-%d').date()
-    except ValueError:
-        flash('Datas invalidas.', 'danger')
+    inicio, fim, erro = _parse_intervalo_itens()
+    if erro:
+        flash(erro, 'danger')
         return redirect(url_for('pdv.itens_vendidos'))
-    if (fim - inicio).days > 92:
-        flash('Intervalo maximo de 92 dias pra exportar.', 'warning')
-        return redirect(url_for('pdv.itens_vendidos'))
-    hoje = _hoje_brt()
-    dias_extra = min(max(0, (hoje - fim).days) if fim < hoje else 0, 7)
+    ao_vivo = bool(request.args.get('ao_vivo'))
     try:
-        dados = vendas_itens.agregar_itens_por_loja(
-            inicio, fim, expandir_dias_frente=dias_extra)
+        dados = _dados_itens_por_loja(inicio, fim, ao_vivo=ao_vivo)
         blob = vendas_itens.gerar_xlsx_itens_por_loja(dados)
     except Exception as e:
         current_app.logger.exception('export xlsx itens-vendidos falhou')
@@ -247,6 +278,58 @@ def itens_vendidos_xlsx():
         mimetype=('application/vnd.openxmlformats-officedocument'
                   '.spreadsheetml.sheet'),
         as_attachment=True, download_name=nome)
+
+
+@pdv_bp.route('/vendas-diarias/backfill', methods=['POST'])
+@login_required
+@owner_required
+def vendas_diarias_backfill():
+    """Pre-carrega o historico de vendas Seru no banco (VendaSeruDiaria), em
+    background, semana a semana. Owner-only. O relatorio ja captura sob demanda;
+    isto so aquece o passado de uma vez. Status em AppConfig."""
+    import threading
+    from datetime import timedelta as _td
+
+    from app.utils import hoje as _hoje_brt
+    try:
+        dias = max(1, min(int(request.form.get('dias') or 90), 366))
+    except ValueError:
+        dias = 90
+    app_obj = current_app._get_current_object()
+    hoje = _hoje_brt()
+    ini = hoje - _td(days=dias)
+
+    def _runner():
+        from app.extensions import db as _db
+        from app.models import AppConfig
+        from app.services import vendas_diarias
+        with app_obj.app_context():
+            try:
+                total = 0
+                d = ini
+                while d <= hoje:
+                    fim_sem = min(d + _td(days=6), hoje)
+                    r = vendas_diarias.capturar_periodo(d, fim_sem)
+                    total += r['linhas']
+                    AppConfig.set('vendas_diarias_backfill',
+                                  'progresso: ate %s (%d linhas)' % (fim_sem, total))
+                    _db.session.commit()
+                    d = fim_sem + _td(days=1)
+                AppConfig.set('vendas_diarias_backfill',
+                              'ok: %s..%s (%d linhas)' % (ini, hoje, total))
+                _db.session.commit()
+            except Exception as e:  # noqa: BLE001
+                app_obj.logger.exception('backfill vendas_diarias falhou')
+                try:
+                    AppConfig.set('vendas_diarias_backfill', 'erro: %s' % str(e)[:200])
+                    _db.session.commit()
+                except Exception:  # noqa: BLE001
+                    pass
+
+    threading.Thread(target=_runner, daemon=True).start()
+    flash('Backfill de vendas iniciado (%d dias) — roda em background; '
+          'recarregue em alguns minutos.' % dias, 'info')
+    return redirect(url_for('pdv.itens_vendidos'))
 
 
 @pdv_bp.route('/api/vendas')
