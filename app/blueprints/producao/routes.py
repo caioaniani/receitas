@@ -422,16 +422,20 @@ def pedidos_semana_gerar():
         flash('Nenhum pedido criado (sem itens, ou já tinha pedido nas datas).',
               'info')
 
-    # Preserva a visão (horizonte/janela/inicio) — na geração por loja você
-    # continua na mesma tela pra mandar a próxima.
+    # Preserva a visão (horizonte/janela/inicio) E a tela de origem — na geração
+    # por loja você continua na MESMA tela pra mandar a próxima (senão gerar na
+    # média/estoque te jogava na automática).
     try:
         horizonte = max(1, min(int(request.form.get('horizonte', 7)), 14))
         janela = max(1, min(int(request.form.get('janela', 6)), 26))
         inicio = max(0, min(int(request.form.get('inicio', 0)), 14))
     except (TypeError, ValueError):
         horizonte, janela, inicio = 7, 6, 0
-    return redirect(url_for('producao.pedidos_semana', horizonte=horizonte,
-                            janela=janela, inicio=inicio))
+    destino = {'media': 'producao.pedidos_semana_media',
+               'estoque': 'producao.pedidos_semana_estoque'}.get(
+                   request.form.get('origem'), 'producao.pedidos_semana')
+    return redirect(url_for(destino, horizonte=horizonte, janela=janela,
+                            inicio=inicio))
 
 
 @producao_bp.route('/painel/debug')
