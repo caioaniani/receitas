@@ -94,6 +94,47 @@ def auditoria():
                            dias=dias)
 
 
+@industria_teste_bp.route('/auditoria/dispensar', methods=['POST'])
+@login_required
+@admin_required
+def dispensar():
+    """Fecha a pendência de um item (o admin verificou e deu OK). Não credita
+    estoque — só para de mostrar como pendente."""
+    from app.services.producao_pendente import dispensar_item
+
+    try:
+        item_id = int(request.form.get('item_id'))
+    except (TypeError, ValueError):
+        flash('Item inválido.', 'warning')
+        return redirect(url_for('industria_teste.auditoria'))
+    res = dispensar_item(item_id, current_user.id)
+    if res['ok']:
+        flash('Pendência de %s dispensada (não conta mais como a produzir).'
+              % res.get('receita', 'produção'), 'success')
+    else:
+        flash(res.get('erro', 'Não deu pra dispensar.'), 'warning')
+    return redirect(url_for('industria_teste.auditoria',
+                            dias=request.form.get('dias') or 30))
+
+
+@industria_teste_bp.route('/auditoria/reverter', methods=['POST'])
+@login_required
+@admin_required
+def reverter_dispensa_rota():
+    """Desfaz uma dispensa (volta a mostrar a pendência)."""
+    from app.services.producao_pendente import reverter_dispensa
+
+    try:
+        item_id = int(request.form.get('item_id'))
+    except (TypeError, ValueError):
+        flash('Item inválido.', 'warning')
+        return redirect(url_for('industria_teste.auditoria'))
+    reverter_dispensa(item_id)
+    flash('Dispensa desfeita — voltou pra pendente.', 'info')
+    return redirect(url_for('industria_teste.auditoria',
+                            dias=request.form.get('dias') or 30))
+
+
 @industria_teste_bp.route('/previsao/<int:receita_id>')
 @login_required
 @admin_required
