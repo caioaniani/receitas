@@ -242,3 +242,23 @@ def test_rota_renderiza(app, admin_user):
     assert 'btn-dividir-todos' in body
     assert 'modalDividir' in body
     assert 'data-lote' in body
+    # geração POR LOJA (botão no card) + origem pra voltar pra esta tela
+    assert 'Gerar só esta loja' in body
+    assert 'name="so_loja" value="%d"' % loja.id in body
+    assert 'name="origem" value="media"' in body
+
+
+def test_gerar_origem_media_volta_pra_media(app, admin_user):
+    """Gerar da tela de média (origem=media) redireciona de volta pra média,
+    não pra automática."""
+    loja = _loja('Loja A')
+    r = _receita('Pão')
+    d = (hoje() + timedelta(days=1)).isoformat()
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.post('/producao/pedidos-semana/gerar', data={
+        'origem': 'media', 'so_loja': str(loja.id),
+        'qtd|%d|%s|%d' % (loja.id, d, r.id): '8'})
+    assert resp.status_code == 302
+    assert '/pedidos-semana/media' in resp.headers['Location']
