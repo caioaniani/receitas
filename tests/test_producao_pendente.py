@@ -229,12 +229,12 @@ def test_produzir_item_dispensado_e_bloqueado(app, admin_user):
 
 def test_gantt_nao_mostra_item_dispensado(app, admin_user):
     """montar_gantt ignora item dispensado (não vira tarefa do padeiro)."""
-    from app.models import EtapaReceita
+    from app.models import ReceitaEtapa
     from app.services.gantt import montar_gantt
     from app.services.producao_pendente import dispensar_item
     r = _receita('Pão Longo')
-    db.session.add(EtapaReceita(receita_id=r.id, ordem=1, nome='Misturar',
-                                duracao_min=30, tipo='ativa'))
+    db.session.add(ReceitaEtapa(receita_id=r.id, ordem=1, nome='Misturar',
+                                duracao_min=30, equipamento='amassadeira'))
     db.session.commit()
     p = _ordem(r, hoje(), alvo=50)
 
