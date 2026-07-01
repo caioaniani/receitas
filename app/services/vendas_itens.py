@@ -194,15 +194,27 @@ def _linhas_produtos(pedidos, receitas, produtos, maps):
                 continue
             nome = it['nome']
             e = agg.setdefault(nome, {'qtd': 0.0, 'faturamento': 0.0,
-                                      'pedidos': set(), 'sku': it['sku']})
+                                      '_peds': set(), 'sku': it['sku']})
             e['qtd'] += it['qtd']
             e['faturamento'] += it['total']
             if pid is not None:
-                e['pedidos'].add(pid)
+                e['_peds'].add(pid)
+    for e in agg.values():
+        e['n_pedidos'] = len(e.pop('_peds'))
+    return montar_linhas(agg, receitas, produtos, maps)
 
+
+def montar_linhas(agg, receitas, produtos, maps):
+    """Constroi as linhas do relatorio a partir de um agregado ja pronto.
+
+    `agg` = {nome: {'qtd', 'faturamento', 'n_pedidos', 'sku'}}. Fonte unica da
+    forma da linha (nome/sku/qtd/faturamento/n_pedidos/pct/match/estado_map/
+    mapeado_para/map_id/fator) — usada tanto pela agregacao AO VIVO (`_linhas_
+    produtos`, a partir dos pedidos da API) quanto pela leitura do BANCO
+    (`vendas_diarias`), pra as duas nunca divergirem. `maps` = {nome_externo:
+    VendaMapa}. Retorna (linhas ordenadas por faturamento, fat_total, itens)."""
     faturamento_total = sum(v['faturamento'] for v in agg.values())
     total_itens = sum(v['qtd'] for v in agg.values())
-
     linhas = []
     for nome, v in agg.items():
         match = _match_local(nome, receitas, produtos)
@@ -223,10 +235,10 @@ def _linhas_produtos(pedidos, receitas, produtos, maps):
             fator = 1.0
         linhas.append({
             'nome': nome,
-            'sku': v['sku'],
+            'sku': v.get('sku'),
             'qtd': round(v['qtd'], 2),
             'faturamento': round(v['faturamento'], 2),
-            'n_pedidos': len(v['pedidos']),
+            'n_pedidos': v.get('n_pedidos', 0),
             'pct_faturamento': round(100 * v['faturamento'] / faturamento_total, 1)
                 if faturamento_total else 0.0,
             'match': match,
