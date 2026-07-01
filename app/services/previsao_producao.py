@@ -921,6 +921,7 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
             produtos.append({
                 'receita_id': rid, 'nome': rec.nome,
                 'media_semanal': round(media_sem, 1),
+                'estoque_atual': estoque_atual[loja.id].get(rid, 0),
                 'por_dia': por_dia, 'total': sum(por_dia),
                 'lote': caixa,                       # caixa: arredonda ao dividir
                 'minimo': int(rec.minimo_pedido or 0),
