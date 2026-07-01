@@ -298,6 +298,8 @@ def agregar_itens_por_loja(data_inicial, data_final, expandir_dias_frente=0):
 
     cons_linhas, cons_fat, cons_itens = _linhas_produtos(
         todos, receitas, produtos, maps)
+    pendentes = sum(1 for p in cons_linhas
+                    if p['estado_map'] in ('pendente', 'sem_map'))
 
     return {
         'inicio': data_inicial.isoformat(),
@@ -305,6 +307,7 @@ def agregar_itens_por_loja(data_inicial, data_final, expandir_dias_frente=0):
         'total_pedidos': len(todos),
         'total_itens_vendidos': cons_itens,
         'faturamento_total': cons_fat,
+        'pendentes_count': pendentes,
         'lojas': lojas_out,
         'consolidado': cons_linhas,
         'lojas_no_intervalo': sorted(lojas_vistas),
