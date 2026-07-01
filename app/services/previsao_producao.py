@@ -356,15 +356,17 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)   # denom da media
 
     # 4. Previsao: pra cada dia da janela de entrega da receita (deslocada pelo
-    # lead), soma a media do dia-da-semana correspondente (com fallback pra
-    # media diaria simples). Receita sem historico fica com previsto 0
-    # (produzir vem so do comprometido).
+    # lead), soma a media do dia-da-semana correspondente (com fallback pra taxa
+    # RESIDUAL — volume sem padrao de dow, sem o double-count do A1). Receita sem
+    # historico fica com previsto 0 (produzir vem so do comprometido).
+    residual_rate = {rid: _taxa_residual(qtd_dow.get(rid, {}), soma_total.get(rid, 0),
+                                         dias_calendario_janela)
+                     for rid in receitas}
     previsto = defaultdict(float)
     for rid in receitas:
         if not datas_total.get(rid):
             continue
         rid_dow = qtd_dow.get(rid, {})
-        rid_soma_total = soma_total.get(rid, 0)
         L = lead.get(rid, 0)
         dias_rid = [inicio_d + timedelta(days=L + i)
                     for i in range(horizonte_dias)]
@@ -373,24 +375,17 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             if not _fornada_no_dia(rec_rid, d):
                 continue   # fornada especial fora de sex/sáb/dom: não projeta
             dow = d.weekday()
-            por_data = rid_dow.get(dow)
-            if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
-                previsto[rid] += _media_recencia(
-                    por_data, hoje_d, datas_possiveis=datas_possiveis_dow[dow])
-            else:
-                previsto[rid] += rid_soma_total / dias_calendario_janela
+            previsto[rid] += _previsto_dow(
+                rid_dow.get(dow), hoje_d, residual_rate[rid],
+                datas_possiveis=datas_possiveis_dow[dow])
 
     def _previsto_dia(rid, dia):
         if not _fornada_no_dia(receitas.get(rid), dia):
             return 0.0
         dow = dia.weekday()
-        por_data = qtd_dow.get(rid, {}).get(dow)
-        if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
-            return _media_recencia(
-                por_data, hoje_d, datas_possiveis=datas_possiveis_dow[dow])
-        if soma_total.get(rid):
-            return soma_total[rid] / dias_calendario_janela
-        return 0.0
+        return _previsto_dow(
+            qtd_dow.get(rid, {}).get(dow), hoje_d, residual_rate.get(rid, 0.0),
+            datas_possiveis=datas_possiveis_dow[dow])
 
     # 4b. Demanda IMINENTE: entregas entre HOJE e o inicio da janela de
     # producao de cada receita ([hoje, inicio+lead-1]). Elas CONSOMEM estoque
