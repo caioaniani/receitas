@@ -144,3 +144,68 @@ def test_rota_auditoria_exige_admin(app):
     c = app.test_client()
     resp = c.get('/telaindustriateste/auditoria')
     assert resp.status_code in (301, 302, 403)
+
+
+# ── dispensa (dar OK e fechar a pendência) ────────────────────────────────
+def test_dispensar_tira_da_pendencia(app, admin_user):
+    from app.services.producao_pendente import dispensar_item
+    r = _receita()
+    p = _ordem(r, hoje() - timedelta(days=1), alvo=50)          # vencido
+    item = p.itens[0]
+    assert pendencias_por_receita()[r.id]['vencido'] == 50
+
+    res = dispensar_item(item.id, admin_user.id)
+    assert res['ok'] is True
+    assert r.id not in pendencias_por_receita()                 # sumiu do overlay
+    dados = listar_pendencias()
+    assert dados['vencido'] == []                               # sumiu da auditoria
+    assert len(dados['dispensadas']) == 1                       # virou rastro
+    assert dados['dispensadas'][0]['dispensada_por'] == admin_user.nome
+
+
+def test_dispensar_nao_credita_estoque_nem_produzido(app, admin_user):
+    """A dispensa é só de auditoria: não toca produzido_qtd nem EstoqueProducao."""
+    from app.models import EstoqueProducao, PlanejamentoItem
+    from app.services.producao_pendente import dispensar_item
+    r = _receita()
+    p = _ordem(r, hoje() - timedelta(days=1), alvo=50, produzido=20)
+    dispensar_item(p.itens[0].id, admin_user.id)
+    it = db.session.get(PlanejamentoItem, p.itens[0].id)
+    assert it.produzido_qtd == 20                               # NÃO mexeu
+    assert it.dispensada_em is not None
+    assert EstoqueProducao.query.filter_by(receita_id=r.id).count() == 0
+
+
+def test_reverter_dispensa_volta_a_pendencia(app, admin_user):
+    from app.services.producao_pendente import dispensar_item, reverter_dispensa
+    r = _receita()
+    p = _ordem(r, hoje() - timedelta(days=1), alvo=50)
+    dispensar_item(p.itens[0].id, admin_user.id)
+    assert r.id not in pendencias_por_receita()
+
+    reverter_dispensa(p.itens[0].id)
+    assert pendencias_por_receita()[r.id]['vencido'] == 50      # voltou
+    assert listar_pendencias()['dispensadas'] == []
+
+
+def test_dispensar_item_inexistente(app, admin_user):
+    from app.services.producao_pendente import dispensar_item
+    res = dispensar_item(999999, admin_user.id)
+    assert res['ok'] is False
+
+
+def test_rota_dispensar(app, admin_user):
+    r = _receita()
+    p = _ordem(r, hoje() - timedelta(days=1), alvo=50)
+    c = _login(app, admin_user)
+    resp = c.post('/telaindustriateste/auditoria/dispensar',
+                  data={'item_id': p.itens[0].id, 'dias': 30})
+    assert resp.status_code in (302, 303)
+    assert r.id not in pendencias_por_receita()
+
+
+def test_rota_dispensar_exige_admin(app):
+    c = app.test_client()
+    resp = c.post('/telaindustriateste/auditoria/dispensar',
+                  data={'item_id': 1})
+    assert resp.status_code in (301, 302, 403)
