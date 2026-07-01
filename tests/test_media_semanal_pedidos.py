@@ -246,6 +246,9 @@ def test_rota_renderiza(app, admin_user):
     assert 'Gerar só esta loja' in body
     assert 'name="so_loja" value="%d"' % loja.id in body
     assert 'name="origem" value="media"' in body
+    # atalho direto no menu lateral (PRODUÇÃO → Pedidos da semana)
+    assert '/producao/pedidos-semana/media' in body
+    assert 'bi-cart-plus' in body
 
 
 def test_gerar_origem_media_volta_pra_media(app, admin_user):
