@@ -364,3 +364,79 @@ def faturamento_por_loja(data_inicial, data_final, capturar=True):
         n_ped += int(n or 0)
     total = round(sum(por_loja.values()), 2)
     return total, {k: round(v, 2) for k, v in por_loja.items()}, n_ped
+
+
+def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
+    """Agrega a tela 'Vendas PDV' (faturamento + pagamento + canal + loja +
+    cancelados) lendo do banco (`VendaSeruDiaLoja` + `VendaSeruDiaBreakdown`),
+    SEM tocar na API. Devolve os totais globais e um `por_loja_detalhe` pra o
+    filtro por loja da tela funcionar sem os pedidos crus.
+
+    O faturamento usa o TOTAL do pedido (`faturamento_pedidos`, inclui kit/box) —
+    mesma base do endpoint ao vivo. `n_pedidos` conta pedidos DISTINTOS nao
+    cancelados; `cancelados` e a contagem por loja."""
+    if capturar:
+        garantir_capturado(data_inicial, data_final)
+
+    # loja -> acumulador (total do pedido, pedidos distintos, breakdowns).
+    det = defaultdict(lambda: {
+        'total': 0.0, 'n_pedidos': 0, 'cancelados': 0,
+        'por_pagamento': defaultdict(float), 'por_canal': defaultdict(float)})
+
+    for ln, fat_ped, n in (db.session.query(
+            VendaSeruDiaLoja.loja_seru, VendaSeruDiaLoja.faturamento_pedidos,
+            VendaSeruDiaLoja.n_pedidos)
+            .filter(VendaSeruDiaLoja.data >= data_inicial,
+                    VendaSeruDiaLoja.data <= data_final).all()):
+        det[ln]['total'] += float(fat_ped or 0)
+        det[ln]['n_pedidos'] += int(n or 0)
+
+    for ln, dim, chave, val in (db.session.query(
+            VendaSeruDiaBreakdown.loja_seru, VendaSeruDiaBreakdown.dimensao,
+            VendaSeruDiaBreakdown.chave, VendaSeruDiaBreakdown.valor)
+            .filter(VendaSeruDiaBreakdown.data >= data_inicial,
+                    VendaSeruDiaBreakdown.data <= data_final).all()):
+        v = float(val or 0)
+        if dim == 'pagamento':
+            det[ln]['por_pagamento'][chave or '—'] += v
+        elif dim == 'canal':
+            det[ln]['por_canal'][chave or '—'] += v
+        elif dim == 'cancelados':
+            det[ln]['cancelados'] += int(v)
+
+    total = n_ped = cancelados = 0.0
+    n_ped = cancelados = 0
+    por_pagamento = defaultdict(float)
+    por_canal = defaultdict(float)
+    por_loja = {}
+    por_loja_detalhe = {}
+    for ln, d in det.items():
+        total += d['total']
+        n_ped += d['n_pedidos']
+        cancelados += d['cancelados']
+        por_loja[ln] = round(d['total'], 2)
+        for k, v in d['por_pagamento'].items():
+            por_pagamento[k] += v
+        for k, v in d['por_canal'].items():
+            por_canal[k] += v
+        por_loja_detalhe[ln] = {
+            'total': round(d['total'], 2),
+            'n_pedidos': d['n_pedidos'],
+            'cancelados': d['cancelados'],
+            'por_pagamento': {k: round(v, 2)
+                              for k, v in d['por_pagamento'].items()},
+            'por_canal': {k: round(v, 2) for k, v in d['por_canal'].items()},
+        }
+
+    return {
+        'inicio': data_inicial.isoformat(),
+        'fim': data_final.isoformat(),
+        'total_valor': round(total, 2),
+        'n_pedidos': n_ped,
+        'cancelados': cancelados,
+        'por_pagamento': {k: round(v, 2) for k, v in por_pagamento.items()},
+        'por_canal': {k: round(v, 2) for k, v in por_canal.items()},
+        'por_loja': por_loja,
+        'por_loja_detalhe': por_loja_detalhe,
+        'fonte': 'banco',
+    }
