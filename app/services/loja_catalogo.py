@@ -163,27 +163,24 @@ def _datas_janela_futura(inicio):
 def anotar_esgotado(itens):
     """Marca cada item com 3 flags pra a vitrine sinalizar disponibilidade:
 
-    - `esgotado_hoje`: sem saldo pra HOJE (plano de hoje se cadastrado;
-      EstoqueLoja como fallback).
-    - `tem_em_outros_dias`: tem saldo em algum dos proximos 14 dias (no
-      plano). Default True quando nao ha plano cadastrado pra nenhum dos
-      proximos 14 (cliente pode comprar pra outro dia usando o estoque
-      fisico — mesma logica de antes).
+    - `esgotado_hoje`: sem saldo pra HOJE no plano-do-dia (sem plano = livre).
+    - `tem_em_outros_dias`: tem saldo em algum dos proximos 14 dias no plano.
+      Default True quando nao ha plano cadastrado pra nenhum dos proximos 14
+      (fail-open: cliente pode comprar pra outro dia).
     - `esgotado`: a "esgotado dura" (sem saldo em nenhum dia). Pra o template
       mostrar a etiqueta vermelha.
 
-    Loja do site nao configurada E sem plano → todos com flags False
-    (fail-open). Devolve a mesma lista (anota in-place)."""
+    Disponibilidade vem SO do plano-do-dia (regra do dono 01/07/2026) — o
+    EstoqueLoja fisico NAO entra aqui. Sem plano → flags False (fail-open).
+    Devolve a mesma lista (anota in-place)."""
     from app.utils import hoje
-    mapa_loja = _estoque_site_map()
     dia_hoje = hoje()
     datas = _datas_janela_futura(dia_hoje)
     saldos_cache = {}
     for it in itens:
         kind, item_id = it['kind'], it['id']
         saldo_hoje = _saldo_para_dia(
-            kind, item_id, dia_hoje,
-            mapa_loja=mapa_loja, saldos_dia_cache=saldos_cache)
+            kind, item_id, dia_hoje, saldos_dia_cache=saldos_cache)
         if saldo_hoje is None:
             it['esgotado_hoje'] = False
             it['tem_em_outros_dias'] = True
@@ -195,11 +192,9 @@ def anotar_esgotado(itens):
         tem_outros = False
         for d in datas[1:]:
             s = _saldo_para_dia(
-                kind, item_id, d,
-                mapa_loja=mapa_loja, saldos_dia_cache=saldos_cache)
+                kind, item_id, d, saldos_dia_cache=saldos_cache)
             if s is None:
-                # Sem plano pra esse dia E sem EstoqueLoja: trata como sem
-                # controle → considera disponivel.
+                # Sem plano pra esse dia → sem controle → disponivel (fail-open).
                 tem_outros = True
                 break
             if s > 0:
