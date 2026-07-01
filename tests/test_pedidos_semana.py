@@ -308,7 +308,10 @@ def test_rota_get_renderiza(app, admin_user):
     _login(client, admin_user)
     resp = client.get('/producao/pedidos-semana?horizonte=7&janela=6')
     assert resp.status_code == 200
-    assert 'Loja Centro' in resp.get_data(as_text=True)
+    html = resp.get_data(as_text=True)
+    assert 'Loja Centro' in html
+    assert 'Gerar só esta loja' in html                  # botão por loja
+    assert 'name="so_loja" value="%d"' % loja.id in html
 
 
 def test_rota_gerar_cria_pedido(app, admin_user):
