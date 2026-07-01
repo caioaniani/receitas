@@ -148,10 +148,15 @@ def reservar(pedido, *, loja_id, ttl_min=TTL_RESERVA_MIN):
     # caem na mesma linha somam, pra a validacao olhar o total real.
     linhas, _ = _agrega_por_linha(pedido, loja_id, lock=True)
     sem_estoque = []
-    for el, qtd, nome in linhas:
+    for el, qtd, nome, qtd_bloqueia in linhas:
         disp = max(0, (el.quantidade or 0) - (el.quantidade_reservada or 0))
-        if disp < qtd:
-            sem_estoque.append({'nome': nome, 'pedido': qtd, 'disponivel': disp})
+        # So a demanda de item AVULSO (qtd_bloqueia) barra o checkout — e a
+        # protecao anti-oversell que justifica a reserva. Componente de cesta
+        # (qtd_bloqueia=0) e best-effort: reserva o que der e NAO derruba a
+        # venda (a baixa real ja tolera shortfall via venda_site_sem_estoque).
+        if qtd_bloqueia > 0 and disp < qtd_bloqueia:
+            sem_estoque.append({'nome': nome, 'pedido': qtd_bloqueia,
+                                'disponivel': disp})
 
     if sem_estoque:
         # NAO reserva nada — caller mostra os erros e o cliente ajusta. As
@@ -160,7 +165,7 @@ def reservar(pedido, *, loja_id, ttl_min=TTL_RESERVA_MIN):
                     getattr(pedido, 'codigo', '?'), len(sem_estoque))
         return {'ok': False, 'sem_estoque': sem_estoque, 'reservas': 0}
 
-    for el, qtd, _nome in linhas:
+    for el, qtd, _nome, _qb in linhas:
         el.quantidade_reservada = (el.quantidade_reservada or 0) + qtd
 
     pedido.reserva_expira_em = agora() + timedelta(minutes=ttl_min)
