@@ -6,7 +6,7 @@ Reusa o POST de pedidos_semana_gerar.
 from datetime import timedelta
 
 from app.extensions import db
-from app.models import Loja, PedidoItem, PedidoLoja, Receita
+from app.models import EstoqueLoja, Loja, PedidoItem, PedidoLoja, Receita
 from app.services.previsao_producao import media_semanal_pedidos
 from app.utils import hoje
 
@@ -35,6 +35,14 @@ def _pedido(loja, data_entrega, receita, qtd, status='recebido'):
                               quantidade=qtd))
     db.session.commit()
     return p
+
+
+def _estoque(loja, receita, q, qres=0):
+    e = EstoqueLoja(loja_id=loja.id, receita_id=receita.id,
+                    quantidade=q, quantidade_reservada=qres)
+    db.session.add(e)
+    db.session.commit()
+    return e
 
 
 def _prod(grade, loja_id, rid):
