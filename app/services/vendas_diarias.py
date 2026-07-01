@@ -11,6 +11,7 @@ Idempotente: capturar um intervalo apaga as linhas daquele intervalo e regrava
 projeto). `data` = createdAt em BRT.
 """
 from collections import defaultdict
+from datetime import timedelta
 from decimal import Decimal
 
 from app.extensions import db
@@ -192,3 +193,106 @@ def agregar_por_loja_do_banco(data_inicial, data_final):
         'lojas_no_intervalo': sorted(set(lojas_vistas) | set(ped_loja)),
         'fonte': 'banco',
     }
+
+
+def garantir_capturado(data_inicial, data_final):
+    """Garante snapshot do intervalo: captura da API os dias que faltam + SEMPRE
+    hoje (vendas de hoje crescem). Best-effort — se a API falhar, segue com o que
+    ja esta no banco. Passado ja capturado nao rebate na API."""
+    from app.utils import hoje as _hoje
+    hoje = _hoje()
+    ja = dias_capturados(data_inicial, data_final)
+    precisa = []
+    d = data_inicial
+    while d <= data_final:
+        if d not in ja or d == hoje:
+            precisa.append(d)
+        d += timedelta(days=1)
+    if not precisa:
+        return
+    cap_ini, cap_fim = min(precisa), max(precisa)
+    dias_extra = min(max(0, (hoje - cap_fim).days) if cap_fim < hoje else 0, 7)
+    try:
+        capturar_periodo(cap_ini, cap_fim, expandir_dias_frente=dias_extra)
+    except Exception:
+        from flask import current_app
+        current_app.logger.exception(
+            'garantir_capturado: captura falhou; usa snapshot existente')
+
+
+def agregar_flat(data_inicial, data_final, loja_seru=None, capturar=True):
+    """Relatorio FLAT (consolidado por produto) lido do banco — mesma forma de
+    `vendas_itens.agregar_itens`. Filtro opcional por loja_seru (company.name).
+    capturar=True garante os dias faltantes + hoje antes de ler."""
+    if capturar:
+        garantir_capturado(data_inicial, data_final)
+    receitas, produtos = _carregar_catalogo()
+    q = VendaSeruDiaria.query.filter(
+        VendaSeruDiaria.data >= data_inicial,
+        VendaSeruDiaria.data <= data_final)
+    if loja_seru:
+        q = q.filter(VendaSeruDiaria.loja_seru == loja_seru)
+    rows = q.all()
+
+    agg = defaultdict(lambda: {'qtd': 0.0, 'faturamento': 0.0,
+                               'n_pedidos': 0, 'sku': None})
+    lojas_vistas = set()
+    nomes = set()
+    for r in rows:
+        lojas_vistas.add(r.loja_seru)
+        nomes.add(r.seru_nome)
+        e = agg[r.seru_nome]
+        e['qtd'] += float(r.qtd or 0)
+        e['faturamento'] += float(r.faturamento or 0)
+        if not e['sku']:
+            e['sku'] = r.sku
+    # Todas as lojas do intervalo (pro dropdown), independente do filtro.
+    for (ln,) in (db.session.query(VendaSeruDiaria.loja_seru)
+                  .filter(VendaSeruDiaria.data >= data_inicial,
+                          VendaSeruDiaria.data <= data_final).distinct().all()):
+        lojas_vistas.add(ln)
+
+    maps = {}
+    if nomes:
+        maps = {m.nome_externo: m for m in VendaMapa.query.filter(
+            VendaMapa.canal == 'seru',
+            VendaMapa.nome_externo.in_(list(nomes))).all()}
+    linhas, fat, itens = montar_linhas(agg, receitas, produtos, maps)
+
+    ql = db.session.query(VendaSeruDiaLoja.n_pedidos).filter(
+        VendaSeruDiaLoja.data >= data_inicial,
+        VendaSeruDiaLoja.data <= data_final)
+    if loja_seru:
+        ql = ql.filter(VendaSeruDiaLoja.loja_seru == loja_seru)
+    total_pedidos = sum(int(n or 0) for (n,) in ql.all())
+
+    sem_match = sum(1 for p in linhas if not p['match'])
+    pendentes = sum(1 for p in linhas if p['estado_map'] in ('pendente', 'sem_map'))
+    return {
+        'inicio': data_inicial.isoformat(),
+        'fim': data_final.isoformat(),
+        'loja': loja_seru,
+        'total_pedidos': total_pedidos,
+        'total_itens_vendidos': itens,
+        'faturamento_total': fat,
+        'produtos': linhas,
+        'sem_match_count': sem_match,
+        'pendentes_count': pendentes,
+        'lojas_no_intervalo': sorted(lojas_vistas),
+        'fonte': 'banco',
+    }
+
+
+def faturamento_por_loja(data_inicial, data_final, capturar=True):
+    """Faturamento PDV (Seru) por loja no intervalo, lido do banco. Retorna
+    (total, {loja_seru: faturamento}). Fonte do endpoint de faturamento."""
+    if capturar:
+        garantir_capturado(data_inicial, data_final)
+    por_loja = defaultdict(float)
+    for ln, f in (db.session.query(
+            VendaSeruDiaLoja.loja_seru, VendaSeruDiaLoja.faturamento)
+            .filter(VendaSeruDiaLoja.data >= data_inicial,
+                    VendaSeruDiaLoja.data <= data_final).all()):
+        por_loja[ln] += float(f or 0)
+    total = round(sum(por_loja.values()), 2)
+    return total, {k: round(v, 2) for k, v in por_loja.items()}
