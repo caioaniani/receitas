@@ -187,3 +187,76 @@ def test_rota_limpar_edicoes(app, admin_user):
                   data={'horizonte': 7, 'janela': 6, 'inicio': 0})
     assert resp.status_code in (302, 303)
     assert CronogramaOverride.query.count() == 0
+
+
+# ── E3: aviso de edição manual desatualizada ──────────────────────────────────
+def _override_antigo(receita_id, data, qtd, dias_atras=2):
+    """Cria um override com criado_em no passado (simula edição de dias atrás)."""
+    from datetime import datetime
+
+    d = hoje() - timedelta(days=dias_atras)
+    o = CronogramaOverride(receita_id=receita_id, data=data, qtd=qtd,
+                           criado_em=datetime(d.year, d.month, d.day, 12, 0))
+    db.session.add(o)
+    db.session.commit()
+    return o
+
+
+def test_override_antigo_divergente_marca_stale(app):
+    """E3: edição de um dia anterior que já não bate com o cálculo atual é
+    marcada como possivelmente desatualizada, expondo o sugerido e a data."""
+    from datetime import date
+
+    loja = _loja()
+    r = _receita_amass()
+    _pedido(loja, r, 2, 30)                              # calculo sugere 30
+    base = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    sugerido = _row(base, r.id)['total']
+    alvo = date.fromisoformat(base['receitas'][0]['por_dia'][0]['data'])
+    ontem = (hoje() - timedelta(days=2)).isoformat()
+    _override_antigo(r.id, alvo, 99, dias_atras=2)       # fixou 99 num dia -> diverge
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _row(crono, r.id)
+    assert rr['editado'] is True
+    assert rr['override_stale'] is True
+    assert rr['override_sugerido'] == sugerido           # o que o cálculo diz agora
+    assert rr['override_desde'] == ontem                 # data da edição
+    assert rr['total'] != sugerido                       # o manual diverge
+
+
+def test_override_fresco_nao_marca_stale(app):
+    """E3: edição feita HOJE (mesmo divergindo) é intencional, não 'stale'."""
+    from datetime import date
+
+    loja = _loja()
+    r = _receita_amass()
+    _pedido(loja, r, 2, 30)
+    base = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    alvo = date.fromisoformat(base['receitas'][0]['por_dia'][0]['data'])
+    db.session.add(CronogramaOverride(receita_id=r.id, data=alvo, qtd=99))  # criado_em=hoje
+    db.session.commit()
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _row(crono, r.id)
+    assert rr['editado'] is True
+    assert rr.get('override_stale') is not True          # fresco -> sem aviso
+
+
+def test_override_antigo_alinhado_nao_marca_stale(app):
+    """E3: edição antiga que ainda BATE com o cálculo não é 'stale' (nada mudou)."""
+    from datetime import date
+
+    loja = _loja()
+    r = _receita_amass()
+    _pedido(loja, r, 2, 30)
+    base = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr0 = _row(base, r.id)
+    dia_sug = next(c for c in rr0['por_dia'] if c['qtd'] > 0)     # dia com a sugestão
+    _override_antigo(r.id, date.fromisoformat(dia_sug['data']), dia_sug['qtd'])
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _row(crono, r.id)
+    assert rr['editado'] is True
+    assert rr['total'] == rr0['total']                   # manual == sugerido
+    assert rr.get('override_stale') is not True          # alinhado -> sem aviso
