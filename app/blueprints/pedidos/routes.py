@@ -2413,6 +2413,46 @@ def estoque_loja_entrada_lote_aplicar():
     return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
 
 
+@pedidos_bp.route('/estoque-loja/conferencia-lote/aplicar', methods=['POST'])
+@login_required
+@admin_required
+def estoque_loja_conferencia_lote_aplicar():
+    """Aplica a conferência em lote: SETA cada item ao valor contado e registra
+    ajuste_conferencia com a diferença. Re-parseia do texto (idempotente)."""
+    from app.services import estoque_loja_lote as svc
+    try:
+        loja_id = int(request.form.get('loja_id') or 0)
+    except ValueError:
+        loja_id = 0
+    if not loja_id:
+        flash('Selecione uma loja.', 'warning')
+        return redirect(url_for('pedidos.estoque_loja_conferencia_lote'))
+
+    texto = request.form.get('texto', '')
+    referencia = request.form.get('referencia', '').strip() or None
+    if not texto.strip():
+        flash('Contagem vazia — nada pra conferir.', 'warning')
+        return redirect(url_for('pedidos.estoque_loja_conferencia_lote', loja=loja_id))
+
+    parseados = svc.parsear_conferencia(texto)
+    resolvidos = svc.resolver_conferencia(parseados, loja_id)
+    resultado = svc.aplicar_conferencia(resolvidos, loja_id, current_user,
+                                        referencia=referencia)
+    ajustes = [a for a in resultado['aplicados'] if a['diff'] != 0]
+    n_ajuste = len(ajustes)
+    n_igual = len(resultado['aplicados']) - n_ajuste
+    n_ign = len(resultado['ignorados'])
+    if n_ajuste:
+        flash(f'Conferência aplicada: {n_ajuste} ajuste(s) de estoque'
+              + (f', {n_igual} já batiam' if n_igual else '')
+              + (f', {n_ign} ignorados (em branco/unidade/sem match).' if n_ign else '.'),
+              'success')
+    else:
+        flash('Nenhum ajuste — o estoque já bate com a contagem.'
+              + (f' {n_ign} linha(s) ignorada(s).' if n_ign else ''), 'info')
+    return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+
+
 def _salvar_apelido_global(nome_digitado, alvo_tipo, alvo_id):
     """Cria/atualiza VendaMapa (apelido global, canal lote) ao vincular um pendente.
 
