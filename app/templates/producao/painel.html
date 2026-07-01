@@ -142,9 +142,9 @@
                         </button>
                     </form>
                     {% endif %}
-                    <a href="{{ url_for('producao.pedidos_semana', horizonte=horizonte, janela=janela, inicio=inicio) }}"
+                    <a href="{{ url_for('producao.pedidos_semana_media', horizonte=horizonte, janela=janela, inicio=inicio) }}"
                        class="btn btn-sm btn-light">
-                        <i class="bi bi-magic"></i> Gerar pedidos da semana
+                        <i class="bi bi-table"></i> Gerar pedidos da semana
                     </a>
                     <a href="{{ url_for('producao.previsao_acuracia') }}"
                        class="btn btn-sm btn-light" title="Vies e WAPE: o quanto a previsao acerta">
