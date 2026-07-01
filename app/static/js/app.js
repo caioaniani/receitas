@@ -418,26 +418,41 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             // Transferir TODOS os vinculos pra outra receita (fusao de duplicata)
+            // ou pra uma materia-prima (receita que na verdade e insumo comprado).
             var btnTransferir = document.getElementById('btn-transferir-vinculos');
+            var selTipoDestino = document.getElementById('transferir-tipo');
+            if (selTipoDestino) {
+                selTipoDestino.addEventListener('change', function () {
+                    var inp = document.getElementById('transferir-destino');
+                    var mp = selTipoDestino.value === 'mp';
+                    inp.setAttribute('list', mp ? 'mp-list' : 'receita-list');
+                    inp.placeholder = mp ? 'nome exato da matéria-prima destino'
+                                         : 'nome exato da receita destino';
+                });
+            }
             if (btnTransferir) {
                 btnTransferir.addEventListener('click', function () {
                     var destino = (document.getElementById('transferir-destino').value || '').trim();
+                    var tipo = selTipoDestino ? selTipoDestino.value : 'receita';
+                    var rotulo = tipo === 'mp' ? 'matéria-prima' : 'receita';
                     var fb = document.getElementById('transferir-feedback');
                     fb.className = 'small mt-1';
                     if (!destino) {
                         fb.classList.add('text-danger');
-                        fb.textContent = 'Digite o nome da receita destino.';
+                        fb.textContent = 'Digite o nome da ' + rotulo + ' destino.';
                         return;
                     }
                     if (!confirm('Transferir TODOS os vínculos de "' +
-                                 formExcluir.dataset.nome + '" para "' + destino +
-                                 '"?\n\nPedidos, vendas e estoque passam a contar na receita destino.')) {
+                                 formExcluir.dataset.nome + '" para a ' + rotulo + ' "' + destino +
+                                 '"?\n\nPedidos, vendas e estoque passam a contar no destino.' +
+                                 (tipo === 'mp' ? '\nO que não tiver como ir pra MP (ex: planos de produção) fica aqui — arquive depois.' : ''))) {
                         return;
                     }
                     btnTransferir.disabled = true;
                     fb.textContent = 'Transferindo...';
                     var fd = new FormData();
                     fd.append('destino', destino);
+                    fd.append('tipo_destino', tipo);
                     fd.append('csrf_token', CSRF_TOKEN);
                     fetch(btnTransferir.dataset.url, { method: 'POST', body: fd })
                         .then(function (r) { return r.json(); })
@@ -452,9 +467,14 @@ document.addEventListener('DOMContentLoaded', function () {
                             Object.keys(data.movidos || {}).forEach(function (k) {
                                 total += data.movidos[k];
                             });
+                            var ficou = 0;
+                            Object.keys(data.ficaram || {}).forEach(function (k) {
+                                ficou += data.ficaram[k];
+                            });
                             fb.classList.add('text-success');
                             fb.textContent = total + ' vínculo(s) transferido(s) para "' +
-                                data.destino + '".';
+                                data.destino + '".' +
+                                (ficou ? ' ' + ficou + ' vínculo(s) sem coluna de MP ficaram como histórico — use ARQUIVAR abaixo.' : '');
                             renderVinculos(data);
                         })
                         .catch(function () {
