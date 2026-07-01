@@ -89,7 +89,7 @@ def test_reconciliar_separa_pendentes_vendidos(app):
         db.session.add(MovEstoqueLoja(estoque_loja_id=el.id, tipo='venda_seru',
                                       quantidade=30, data=datetime(2026, 5, 5, 10, 0)))
         db.session.commit()
-        with patch('app.services.vendas_itens.agregar_itens', return_value=agg_fake):
+        with patch('app.services.vendas_diarias.agregar_flat', return_value=agg_fake):
             r = pdv_saude.reconciliar(date(2026, 5, 1), date(2026, 5, 7))
 
     assert 'erro' not in r
@@ -102,7 +102,7 @@ def test_reconciliar_separa_pendentes_vendidos(app):
 def test_reconciliar_api_falha_retorna_erro(app):
     from app.services import pdv_saude
     with app.app_context():
-        with patch('app.services.vendas_itens.agregar_itens',
+        with patch('app.services.vendas_diarias.agregar_flat',
                    side_effect=RuntimeError('seru fora')):
             r = pdv_saude.reconciliar(date(2026, 5, 1), date(2026, 5, 7))
     assert 'erro' in r
@@ -133,7 +133,7 @@ def test_rota_reconciliacao_renderiza(app, admin_user, catalogo):
              'mapeado_para': {'tipo': 'produto', 'id': 1, 'nome': 'Pao Frances'}},
         ],
     }
-    with patch('app.services.vendas_itens.agregar_itens', return_value=agg):
+    with patch('app.services.vendas_diarias.agregar_flat', return_value=agg):
         r = c.get('/pdv/reconciliacao')
     assert r.status_code == 200
     assert 'Reconciliação'.encode() in r.data

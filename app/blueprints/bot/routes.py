@@ -18,7 +18,6 @@ from flask import current_app, jsonify, request
 
 from app.blueprints.bot import bot_bp
 from app.extensions import csrf
-from app.services import seru
 from app.utils import hoje as hoje_brt
 
 
@@ -103,31 +102,15 @@ def faturamento():
     # Mesma logica do PDV (expansao ate 7 dias) — chamadas paralelizadas
     # cabem no timeout do n8n. Captura pedidos sincronizados com atraso pela
     # OPAO PADARIA (sync em batch nos dias seguintes).
-    BOT_MAX_DIAS_EXTRA = 7
-    dias_extra = min(max(0, (hoje - target).days), BOT_MAX_DIAS_EXTRA) if target < hoje else 0
+    # PDV/Seru: le do BANCO (VendaSeruDiaLoja), capturando o dia se faltar — nao
+    # depende da API a cada request. Usa o TOTAL do pedido (inclui kit/box), a
+    # mesma base de antes. Se a API estiver fora, cai pro ultimo snapshot.
     try:
-        pedidos = seru.listar_pedidos_completo(target, target, expandir_dias_frente=dias_extra)
+        from app.services import vendas_diarias
+        total_pdv, por_loja, qtd = vendas_diarias.faturamento_por_loja(target, target)
     except Exception as e:
         current_app.logger.exception('bot/faturamento: Seru falhou')
         return jsonify(ok=False, erro=f'falha ao buscar Seru: {type(e).__name__}'), 502
-
-    total_pdv = 0.0
-    por_loja = {}
-    qtd = 0
-    for p in pedidos:
-        if not isinstance(p, dict):
-            continue
-        if p.get('canceledAt'):
-            continue
-        # createdAt da Seru e UTC; convertemos pra BRT pra comparar com a data local
-        if seru.data_local(p.get('createdAt')) != target:
-            continue
-        valor = float(p.get('total') or 0)
-        total_pdv += valor
-        qtd += 1
-        comp = p.get('company') or {}
-        nome = (comp.get('name') if isinstance(comp, dict) else None) or '—'
-        por_loja[nome] = por_loja.get(nome, 0) + valor
 
     # Site (loja propria / PedidoOnline) — best-effort: se a fonte do site
     # cair, NAO derruba o endpoint; devolve so o PDV com um aviso. Faturamento

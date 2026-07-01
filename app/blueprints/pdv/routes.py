@@ -157,25 +157,22 @@ def itens_vendidos():
 @login_required
 @admin_required
 def api_itens_vendidos():
-    from app.services import vendas_itens
-    from app.utils import hoje as _hoje_brt
-    inicio_str = request.args.get('inicio') or _hoje_brt().isoformat()
-    fim_str = request.args.get('fim') or inicio_str
+    """Relatorio FLAT (consolidado por produto). Le do BANCO por padrao
+    (?ao_vivo=1 forca a API). loja= filtra por company.name do Seru."""
+    from app.services import vendas_diarias, vendas_itens
     loja = (request.args.get('loja') or '').strip() or None
+    inicio, fim, erro = _parse_intervalo_itens()
+    if erro:
+        return jsonify(ok=False, erro=erro), 400
     try:
-        inicio = datetime.strptime(inicio_str, '%Y-%m-%d').date()
-        fim = datetime.strptime(fim_str, '%Y-%m-%d').date()
-    except ValueError:
-        return jsonify(ok=False, erro='datas invalidas (use YYYY-MM-DD)'), 400
-    if (fim - inicio).days > 92:
-        return jsonify(ok=False, erro='intervalo maximo de 92 dias'), 400
-
-    hoje = _hoje_brt()
-    dias_ate_hoje = max(0, (hoje - fim).days) if fim < hoje else 0
-    dias_extra = min(dias_ate_hoje, 7)
-    try:
-        data = vendas_itens.agregar_itens(inicio, fim, loja_seru=loja,
-                                          expandir_dias_frente=dias_extra)
+        if request.args.get('ao_vivo'):
+            from app.utils import hoje as _hoje_brt
+            hoje = _hoje_brt()
+            dias_extra = min(max(0, (hoje - fim).days) if fim < hoje else 0, 7)
+            data = vendas_itens.agregar_itens(inicio, fim, loja_seru=loja,
+                                              expandir_dias_frente=dias_extra)
+        else:
+            data = vendas_diarias.agregar_flat(inicio, fim, loja_seru=loja)
     except Exception as e:
         current_app.logger.exception('itens-vendidos falhou')
         return jsonify(ok=False, erro=_erro_externo(e)), 502
@@ -205,30 +202,13 @@ def _dados_itens_por_loja(inicio, fim, ao_vivo=False):
     caindo pro snapshot existente se a API falhar. ao_vivo=True forca a consulta
     direta na API (nao persiste) — util pra comparar."""
     from app.services import vendas_diarias, vendas_itens
-    from app.utils import hoje as _hoje_brt
-    hoje = _hoje_brt()
     if ao_vivo:
+        from app.utils import hoje as _hoje_brt
+        hoje = _hoje_brt()
         dias_extra = min(max(0, (hoje - fim).days) if fim < hoje else 0, 7)
         return vendas_itens.agregar_itens_por_loja(
             inicio, fim, expandir_dias_frente=dias_extra)
-    # Captura o minimo: dias ainda nao no banco + hoje (sempre). Passado ja
-    # capturado nao rebate na API.
-    ja = vendas_diarias.dias_capturados(inicio, fim)
-    precisa = []
-    d = inicio
-    while d <= fim:
-        if d not in ja or d == hoje:
-            precisa.append(d)
-        d += timedelta(days=1)
-    if precisa:
-        cap_ini, cap_fim = min(precisa), max(precisa)
-        dias_extra = min(max(0, (hoje - cap_fim).days) if cap_fim < hoje else 0, 7)
-        try:
-            vendas_diarias.capturar_periodo(
-                cap_ini, cap_fim, expandir_dias_frente=dias_extra)
-        except Exception:
-            current_app.logger.exception(
-                'captura vendas_diarias falhou; lendo snapshot existente')
+    vendas_diarias.garantir_capturado(inicio, fim)
     return vendas_diarias.agregar_por_loja_do_banco(inicio, fim)
 
 
