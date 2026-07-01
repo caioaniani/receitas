@@ -150,6 +150,35 @@ def _datas_por_dow(hist_ini, hist_fim):
     return out
 
 
+def _taxa_residual(qtd_dow_receita, soma_total_receita, dias_janela):
+    """Taxa diaria do volume da receita que NAO tem padrao de dia-da-semana
+    confiavel — o que sobra depois de tirar os dows que ja usam a media propria.
+
+    Antes o fallback era `soma_total / dias_janela` cru (A1): pra um item com
+    padrao forte de dia (ex: so vende sabado), o volume do sabado entrava no
+    `soma_total`, era dividido pelos 42 dias e SOMADO em cada dia util — ou seja,
+    contado 2x (uma vez como media do sabado, outra diluido nos dias vazios). Um
+    item so-de-sabado de 100 previa ~186 na semana (86% inflado). Tirando do
+    numerador o volume dos dows com media (>= _MIN_OCORRENCIAS_DOW datas), os dias
+    sem padrao recebem so o RESIDUO real; item de giro baixo SEM nenhum dow
+    dominante (todos < 2) mantem a media diaria antiga (residuo == soma_total)."""
+    soma_mean = sum(sum(datas.values()) for datas in qtd_dow_receita.values()
+                    if len(datas) >= _MIN_OCORRENCIAS_DOW)
+    residual = max(0, soma_total_receita - soma_mean)
+    return residual / dias_janela if dias_janela else 0.0
+
+
+def _previsto_dow(por_data, hoje_d, residual_rate, datas_possiveis=None):
+    """Previsao de UM dia pelo historico do MESMO dia-da-semana. Com dados
+    suficientes naquele dow (>= _MIN_OCORRENCIAS_DOW datas) usa a media recencia-
+    ponderada do dow; senao usa a `residual_rate` (taxa do volume SEM padrao de
+    dow, ver `_taxa_residual`) — nao a media diaria crua, que misturava escalas e
+    inflava item com padrao de dia-da-semana (A1)."""
+    if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
+        return _media_recencia(por_data, hoje_d, datas_possiveis=datas_possiveis)
+    return residual_rate
+
+
 def _fornada_no_dia(rec, dia):
     """True se a receita PODE ser vendida/projetada nesse dia. Fornada especial
     (ex: Focaccia) só sex/sáb/dom -> False nos outros dias (não projeta demanda;
