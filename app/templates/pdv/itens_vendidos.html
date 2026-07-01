@@ -19,6 +19,15 @@
            title="Saude da API Seru: testa auth + 1 request e mostra o erro real">
             <i class="bi bi-heart-pulse"></i> Debug Seru
         </a>
+        <form method="POST" action="{{ url_for('pdv.vendas_diarias_backfill') }}" class="d-inline"
+              onsubmit="return confirm('Pre-carregar o histórico de vendas no banco (90 dias)? Roda em background — recarregue em alguns minutos.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="dias" value="90">
+            <button type="submit" class="btn btn-sm btn-outline-secondary"
+                    title="Aquece o histórico de vendas no nosso banco (background) — depois o relatório abre instantâneo, sem depender da API">
+                <i class="bi bi-database-down"></i> Aquecer histórico
+            </button>
+        </form>
         {% endif %}
         <button type="button" id="btn-sync" class="btn btn-sm btn-success" title="Processa vendas dos ultimos N dias e baixa estoque dos itens mapeados">
             <i class="bi bi-arrow-repeat"></i> Sincronizar (<select id="sync-dias" style="border:0;background:transparent;color:white;font-size:13px;" onclick="event.stopPropagation();"><option value="1">hoje</option><option value="3">3d</option><option value="7" selected>7d</option><option value="14">14d</option></select>)
