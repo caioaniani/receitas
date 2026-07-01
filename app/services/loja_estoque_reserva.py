@@ -118,14 +118,16 @@ def _agrega_por_linha(pedido, loja_id, *, lock):
 
 
 def reservar(pedido, *, loja_id, ttl_min=TTL_RESERVA_MIN):
-    """Reserva estoque pra TODOS os itens do pedido. Atomico: ou reserva
-    tudo, ou nao reserva nada e devolve a lista de itens sem estoque.
+    """Registra a reserva FISICA de estoque dos itens do pedido (razao contabil
+    + arma o timer de expiracao do Pix). NAO bloqueia a venda: a
+    disponibilidade do site e decidida SO pelo PLANO-DO-DIA (loja_plano_dia),
+    nunca pelo EstoqueLoja fisico (regra do dono 01/07/2026). O fisico e so
+    contabil — a baixa real no pagamento tolera shortfall
+    (venda_site_sem_estoque), igual Seru.
 
-    Retorna dict:
-      {'ok': bool, 'sem_estoque': [{'nome', 'pedido', 'disponivel'}], 'reservas': int}
-
-    NAO commita (deixa pro caller dentro da transacao do checkout).
-    """
+    Retorna {'ok': bool, 'sem_estoque': [], 'reservas': int}. Formato mantido
+    por compat com o caller (checkout); hoje 'ok' so e False se faltar a loja
+    de origem (misconfig). NAO commita (deixa pro caller)."""
     if not loja_id:
         logger.warning('reservar: sem loja_id (pedido %s)',
                        getattr(pedido, 'codigo', '?'))
@@ -133,29 +135,10 @@ def reservar(pedido, *, loja_id, ttl_min=TTL_RESERVA_MIN):
                 'erro': 'sem_loja'}
 
     # Agrega a demanda por LINHA (cesta explode nos componentes) e trava
-    # (FOR UPDATE). Valida ANTES de incrementar — falhar no fim deixaria
-    # linhas ja reservadas (vazamento). Itens repetidos / componentes que
-    # caem na mesma linha somam, pra a validacao olhar o total real.
+    # (FOR UPDATE). Itens repetidos / componentes que caem na mesma linha
+    # somam. NAO valida saldo: o fisico nao barra a venda, so registra.
     linhas, _ = _agrega_por_linha(pedido, loja_id, lock=True)
-    sem_estoque = []
-    for el, qtd, nome, qtd_bloqueia in linhas:
-        disp = max(0, (el.quantidade or 0) - (el.quantidade_reservada or 0))
-        # So a demanda de item AVULSO (qtd_bloqueia) barra o checkout — e a
-        # protecao anti-oversell que justifica a reserva. Componente de cesta
-        # (qtd_bloqueia=0) e best-effort: reserva o que der e NAO derruba a
-        # venda (a baixa real ja tolera shortfall via venda_site_sem_estoque).
-        if qtd_bloqueia > 0 and disp < qtd_bloqueia:
-            sem_estoque.append({'nome': nome, 'pedido': qtd_bloqueia,
-                                'disponivel': disp})
-
-    if sem_estoque:
-        # NAO reserva nada — caller mostra os erros e o cliente ajusta. As
-        # linhas travadas voltam ao normal no fim da transacao.
-        logger.info('reservar: pedido %s sem estoque em %d linha(s)',
-                    getattr(pedido, 'codigo', '?'), len(sem_estoque))
-        return {'ok': False, 'sem_estoque': sem_estoque, 'reservas': 0}
-
-    for el, qtd, _nome, _qb in linhas:
+    for el, qtd, _nome in linhas:
         el.quantidade_reservada = (el.quantidade_reservada or 0) + qtd
 
     pedido.reserva_expira_em = agora() + timedelta(minutes=ttl_min)
