@@ -365,10 +365,19 @@ def pedidos_semana_estoque():
 @admin_required
 def pedidos_semana_gerar():
     """Cria os pedidos rascunho a partir das quantidades (ajustadas) da tela.
-    Campos do form: 'qtd|<loja_id>|<data_iso>|<receita_id>' = quantidade."""
+    Campos do form: 'qtd|<loja_id>|<data_iso>|<receita_id>' = quantidade.
+
+    Botão "Gerar só esta loja" manda `so_loja=<loja_id>`: gera APENAS aquela loja
+    (o dono pediu enviar loja a loja, não tudo de uma vez). Sem `so_loja` = todas.
+    """
     from datetime import date
 
     from app.services.pedidos_semana import criar_pedidos_rascunho
+
+    try:
+        so_loja = int(request.form.get('so_loja') or 0) or None
+    except (TypeError, ValueError):
+        so_loja = None
 
     agrupado = {}   # (loja_id, data) -> list[{receita_id, qtd}]
     for chave, valor in request.form.items():
@@ -387,6 +396,8 @@ def pedidos_semana_gerar():
             continue
         if qtd <= 0:
             continue
+        if so_loja is not None and loja_id != so_loja:
+            continue                      # "só esta loja": ignora as outras
         agrupado.setdefault((loja_id, data_ent), []).append(
             {'receita_id': rid, 'qtd': qtd})
 
@@ -394,18 +405,33 @@ def pedidos_semana_gerar():
                for k, v in agrupado.items()]
     res = criar_pedidos_rascunho(pedidos, current_user.id)
 
+    if so_loja is not None:
+        from app.models import Loja
+        loja = db.session.get(Loja, so_loja)
+        alvo = ('de %s' % loja.nome) if loja else 'da loja'
+    else:
+        alvo = 'de todas as lojas'
     if res['criados']:
-        msg = (f"{res['criados']} pedido(s) rascunho criado(s) "
+        msg = (f"{res['criados']} pedido(s) rascunho {alvo} criado(s) "
                f"({res['itens']} itens). Revise e confirme em Pedidos.")
         if res['pulados_existentes']:
-            msg += (f" {res['pulados_existentes']} dia(s) pulado(s) — a loja "
-                    "já tinha pedido.")
+            msg += (f" {res['pulados_existentes']} dia(s) pulado(s) — já "
+                    "tinha pedido.")
         flash(msg, 'success')
     else:
-        flash('Nenhum pedido criado (sem itens, ou todas as lojas já tinham '
-              'pedido nas datas).', 'info')
+        flash('Nenhum pedido criado (sem itens, ou já tinha pedido nas datas).',
+              'info')
 
-    return redirect(url_for('producao.pedidos_semana'))
+    # Preserva a visão (horizonte/janela/inicio) — na geração por loja você
+    # continua na mesma tela pra mandar a próxima.
+    try:
+        horizonte = max(1, min(int(request.form.get('horizonte', 7)), 14))
+        janela = max(1, min(int(request.form.get('janela', 6)), 26))
+        inicio = max(0, min(int(request.form.get('inicio', 0)), 14))
+    except (TypeError, ValueError):
+        horizonte, janela, inicio = 7, 6, 0
+    return redirect(url_for('producao.pedidos_semana', horizonte=horizonte,
+                            janela=janela, inicio=inicio))
 
 
 @producao_bp.route('/painel/debug')
