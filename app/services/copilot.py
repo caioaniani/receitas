@@ -2738,9 +2738,10 @@ def _read_consultar_vendas_itens(params, user):
                 data = vendas_itens.vendas_vnda_loja(ini, fim)
                 fonte_label = 'e-commerce/site'
             else:
-                # Filtro por loja Seru — versao crua, so Seru
-                data = vendas_itens.agregar_itens(ini, fim, loja_seru=loja,
-                                                  expandir_dias_frente=dias_extra)
+                # Filtro por loja Seru — le do BANCO (VendaSeruDiaria), sem
+                # re-consultar a API.
+                from app.services import vendas_diarias
+                data = vendas_diarias.agregar_flat(ini, fim, loja_seru=loja)
                 fonte_label = 'PDV/Seru'
         else:
             # Sem filtro de loja → consolida Seru + site (loja propria) + VNDA
