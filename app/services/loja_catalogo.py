@@ -206,21 +206,19 @@ def anotar_esgotado(itens):
 
 
 def tem_estoque_site(kind, item_id):
-    """True se o item tem saldo > 0 na loja do site (ou se a loja do site não
-    está configurada → fail-open). Compat: continua existindo pra callers que
-    NAO precisam de data (ex: bot, integrações antigas). Pra a vitrine /
-    checkout use `tem_estoque_para_dia(kind, item_id, data)`."""
-    mapa = _estoque_site_map()
-    if mapa is None:
-        return True
-    return mapa.get((kind, item_id), 0) > 0
+    """Compat SEM data. A disponibilidade do site agora vem SO do plano-do-dia
+    por DATA DE ENTREGA (regra do dono 01/07/2026); um teste sem data nao pode
+    decidir esgotado (item esgotado hoje pode ter plano pra amanha). Fail-open:
+    sempre True. A trava real e o `tem_estoque_para_dia(kind, id, data)` no
+    checkout, com a data de entrega escolhida."""
+    return True
 
 
 def tem_estoque_para_dia(kind, item_id, data):
-    """True se da pra vender o item pra entregar na data X. Plano > EstoqueLoja.
-    Fail-open (sem plano + sem EstoqueLoja → True) — mesma regra do
-    `tem_estoque_site`."""
-    s = _saldo_para_dia(kind, item_id, data, mapa_loja=_estoque_site_map())
+    """True se da pra vender o item pra entregar na data X — SO pelo plano-do-
+    dia. Fail-open: sem plano cadastrado pra o item/data → True (vende livre);
+    com plano → saldo do plano > 0. O EstoqueLoja fisico NAO entra."""
+    s = _saldo_para_dia(kind, item_id, data)
     if s is None:
         return True
     return s > 0
