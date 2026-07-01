@@ -573,16 +573,11 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
     #    (demanda de loja desativada/Industria nao fica orfa — redistribui
     #    proporcional entre as operacionais de hoje).
     soma_op_total = sum(soma_loja_total.get(l.id, 0) for l in lojas_op)
+    residual_rate = _taxa_residual(qtd_dow, soma_total, dias_calendario_janela)
     estimado = defaultdict(lambda: defaultdict(float))  # loja_id -> data -> q
     for d in dias_futuros:
         dow = d.weekday()
-        por_data = qtd_dow.get(dow)
-        if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
-            previsto_dia = _media_recencia(por_data, hoje_d)
-        elif soma_total:
-            previsto_dia = soma_total / dias_calendario_janela
-        else:
-            previsto_dia = 0.0
+        previsto_dia = _previsto_dow(qtd_dow.get(dow), hoje_d, residual_rate)
         if previsto_dia <= 0:
             continue
         base_dow_op = sum(soma_loja_dow.get(l.id, {}).get(dow, 0)
