@@ -289,15 +289,20 @@ def agregar_flat(data_inicial, data_final, loja_seru=None, capturar=True):
 
 
 def faturamento_por_loja(data_inicial, data_final, capturar=True):
-    """Faturamento PDV (Seru) por loja no intervalo, lido do banco. Retorna
-    (total, {loja_seru: faturamento}). Fonte do endpoint de faturamento."""
+    """Faturamento PDV (Seru) por loja no intervalo, lido do banco. Usa o TOTAL
+    do pedido (`faturamento_pedidos`, inclui kit/box) — mesma base do endpoint de
+    faturamento; NAO o subtotal de itens (que subconta kit/box). Retorna
+    (total, {loja_seru: faturamento}, n_pedidos)."""
     if capturar:
         garantir_capturado(data_inicial, data_final)
     por_loja = defaultdict(float)
-    for ln, f in (db.session.query(
-            VendaSeruDiaLoja.loja_seru, VendaSeruDiaLoja.faturamento)
+    n_ped = 0
+    for ln, f, n in (db.session.query(
+            VendaSeruDiaLoja.loja_seru, VendaSeruDiaLoja.faturamento_pedidos,
+            VendaSeruDiaLoja.n_pedidos)
             .filter(VendaSeruDiaLoja.data >= data_inicial,
                     VendaSeruDiaLoja.data <= data_final).all()):
         por_loja[ln] += float(f or 0)
+        n_ped += int(n or 0)
     total = round(sum(por_loja.values()), 2)
-    return total, {k: round(v, 2) for k, v in por_loja.items()}
+    return total, {k: round(v, 2) for k, v in por_loja.items()}, n_ped
