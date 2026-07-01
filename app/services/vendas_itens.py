@@ -444,9 +444,11 @@ def agregar_itens_consolidado(data_inicial, data_final):
     Itens vendidos so no site sem correspondente Seru aparecem como linhas
     novas (fonte='site').
     """
-    from app.services import loja_online_vendas
+    from app.services import loja_online_vendas, vendas_diarias
 
-    seru_data = agregar_itens(data_inicial, data_final)
+    # Seru vem do BANCO (VendaSeruDiaria), capturando o que faltar — sem
+    # re-consultar a API. Import local evita ciclo (vendas_diarias importa daqui).
+    seru_data = vendas_diarias.agregar_flat(data_inicial, data_final)
     vendas_online = loja_online_vendas.vendas_por_produto(data_inicial, data_final)
 
     seru_por_chave = {}
