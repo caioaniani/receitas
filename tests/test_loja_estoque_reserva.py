@@ -417,7 +417,8 @@ def test_item_avulso_ainda_bloqueia_mesmo_dividindo_linha_com_cesta(app):
         db.session.add(cesta)
         db.session.flush()
         db.session.add(ProdutoItem(produto_id=cesta.id, tipo='produto',
-                                   produto_componente_id=suco.id, quantidade=1))
+                                   produto_componente_id=suco.id,
+                                   item_nome='Suco de Uva', quantidade=1))
         db.session.commit()
         # 2 sucos AVULSOS (precisa 2, so ha 1) + 1 cesta (componente pede +1).
         ped = _pedido(db, loja_retirada=loja, itens=[(suco, 2), (cesta, 1)])
