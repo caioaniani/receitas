@@ -331,6 +331,31 @@ class VendaSeruDiaLoja(db.Model):
     )
 
 
+class VendaSeruDiaBreakdown(db.Model):
+    """Breakdowns extras da venda Seru por (dia, loja): metodo de PAGAMENTO,
+    CANAL de venda e contagem de CANCELADOS — os eixos da tela 'Vendas PDV'.
+
+    Separado de VendaSeruDiaLoja porque sao 1:N (varios metodos/canais por
+    dia/loja) e pra nao inchar a tabela de totais. `dimensao`: 'pagamento' |
+    'canal' | 'cancelados'. Pra 'cancelados', `valor` e a CONTAGEM (nao dinheiro)
+    e `chave`=''. Idempotente por (data, loja_seru, dimensao, chave)."""
+    __tablename__ = 'venda_seru_dia_breakdown'
+
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, nullable=False, index=True)
+    loja_seru = db.Column(db.String(200), nullable=False, index=True)
+    dimensao = db.Column(db.String(20), nullable=False)
+    chave = db.Column(db.String(120), nullable=False, default='')
+    valor = db.Column(db.Numeric(14, 2), nullable=False, default=0)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+    __table_args__ = (
+        db.UniqueConstraint('data', 'loja_seru', 'dimensao', 'chave',
+                            name='uq_venda_seru_dia_breakdown'),
+        db.Index('ix_venda_seru_dia_breakdown_periodo', 'data', 'dimensao'),
+    )
+
+
 # ── Motor unico de baixa de venda (Seru + site + saida-lote) ──
 # Substitui o trio paralelo SeruProdutoMap/LojaProdutoMap (+VndaProdutoMap morto)
 # e os acumuladores SeruDebito/LojaDebito (+VndaDebito). Ver app/services/
