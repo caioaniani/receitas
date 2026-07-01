@@ -54,9 +54,12 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
     # (data, company.name) -> seru_nome -> acumulador (por PRODUTO)
     por_dia = defaultdict(lambda: defaultdict(lambda: {
         'qtd': Decimal('0'), 'fat': Decimal('0'), 'peds': set(), 'sku': None}))
-    # (data, company.name) -> totais da LOJA (pedidos DISTINTOS + faturamento).
-    # Somar n_pedidos por produto inflaria (1 pedido, 3 itens = 3x).
-    por_dia_loja = defaultdict(lambda: {'peds': set(), 'fat': Decimal('0')})
+    # (data, company.name) -> totais da LOJA. Somar n_pedidos por produto
+    # inflaria (1 pedido, 3 itens = 3x). `fat` = soma dos subtotais dos itens
+    # (base do relatorio); `fat_ped` = soma do TOTAL do pedido (inclui kit/box,
+    # cujos itens vem com preco 0) — base do faturamento do bot.
+    por_dia_loja = defaultdict(lambda: {
+        'peds': set(), 'fat': Decimal('0'), 'fat_ped': Decimal('0')})
     dias_vistos = set()
     n_pedidos = 0
     for p in pedidos:
@@ -69,6 +72,10 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
         pid = p.get('id') or p.get('orderNumber') or p.get('code')
         dias_vistos.add(d)
         n_pedidos += 1
+        lj = por_dia_loja[(d, ln)]
+        lj['fat_ped'] += Decimal(str(p.get('total') or 0))   # total do pedido
+        if pid is not None:
+            lj['peds'].add(pid)
         for it in seru.extrair_itens(p):
             if it['cancelado']:
                 continue
@@ -80,10 +87,7 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
                 e['sku'] = it['sku']
             if pid is not None:
                 e['peds'].add(pid)
-            lj = por_dia_loja[(d, ln)]
-            lj['fat'] += tot
-            if pid is not None:
-                lj['peds'].add(pid)
+            lj['fat'] += tot                                 # subtotais dos itens
 
     loja_ids = _loja_id_por_nome()
     # Apaga o intervalo inteiro (nao so os dias com pedido): um dia que ficou
