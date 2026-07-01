@@ -117,6 +117,24 @@ def dispensar():
                             dias=request.form.get('dias') or 30))
 
 
+@industria_teste_bp.route('/auditoria/dispensar-lote', methods=['POST'])
+@login_required
+@admin_required
+def dispensar_lote():
+    """Dispensa em lote os itens marcados (checkboxes da auditoria). Mesma
+    semântica do OK individual — só fecha a pendência, não credita estoque."""
+    from app.services.producao_pendente import dispensar_itens
+
+    res = dispensar_itens(request.form.getlist('ids'), current_user.id)
+    if res.get('n'):
+        flash('%d pendência(s) dispensada(s) (não contam mais como a produzir).'
+              % res['n'], 'success')
+    else:
+        flash(res.get('erro', 'Nenhuma pendência marcada.'), 'warning')
+    return redirect(url_for('industria_teste.auditoria',
+                            dias=request.form.get('dias') or 30))
+
+
 @industria_teste_bp.route('/auditoria/reverter', methods=['POST'])
 @login_required
 @admin_required
