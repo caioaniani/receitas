@@ -50,6 +50,15 @@ def _estoque(db, loja, produto, qtd):
     return el
 
 
+def _plano(item_id, qtd, kind='produto', dias=14):
+    """Seta o plano-do-dia (janela toda a partir de hoje) pro item — e o que
+    controla a disponibilidade no site agora. qtd=0 = esgotado no dia."""
+    from app.services import loja_plano_dia
+    from app.utils import hoje
+    loja_plano_dia.replicar_para_proximos_dias(
+        kind, item_id, qtd, data_inicio=hoje(), dias=dias)
+
+
 def test_anotar_esgotado_marca_zero_e_sem_linha(app):
     from app.extensions import db
     from app.services import loja_catalogo
