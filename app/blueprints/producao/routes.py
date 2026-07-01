@@ -367,19 +367,25 @@ def pedidos_semana_gerar():
     except (TypeError, ValueError):
         so_loja = None
 
-    agrupado = {}   # (loja_id, data) -> list[{receita_id, qtd}]
+    agrupado = {}   # (loja_id, data) -> list[{receita_id|materia_prima_id, qtd}]
     for chave, valor in request.form.items():
         if not chave.startswith('qtd|'):
             continue
         partes = chave.split('|')
         if len(partes) != 4:
             continue
-        _, loja_s, data_s, rid_s = partes
+        _, loja_s, data_s, item_s = partes
         try:
             loja_id = int(loja_s)
-            rid = int(rid_s)
             qtd = int(valor or 0)
             data_ent = date.fromisoformat(data_s)
+            # Item: int puro = receita (formato original); 'mp:<id>' =
+            # materia-prima (ex: pao de queijo congelado — a loja pede e a
+            # industria ENVIA sem produzir).
+            if item_s.startswith('mp:'):
+                item = {'materia_prima_id': int(item_s[3:])}
+            else:
+                item = {'receita_id': int(item_s)}
         except (TypeError, ValueError):
             continue
         if qtd <= 0:
@@ -387,7 +393,7 @@ def pedidos_semana_gerar():
         if so_loja is not None and loja_id != so_loja:
             continue                      # "só esta loja": ignora as outras
         agrupado.setdefault((loja_id, data_ent), []).append(
-            {'receita_id': rid, 'qtd': qtd})
+            {**item, 'qtd': qtd})
 
     pedidos = [{'loja_id': k[0], 'data_entrega': k[1], 'itens': v}
                for k, v in agrupado.items()]
