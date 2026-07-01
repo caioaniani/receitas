@@ -43,7 +43,8 @@ def pendencias_por_receita():
         PlanejamentoItem.qtd_alvo, PlanejamentoItem.produzido_qtd)
         .join(PlanejamentoItem,
               PlanejamentoItem.planejamento_id == PlanejamentoProducao.id)
-        .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False))
+        .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False),
+                PlanejamentoItem.dispensada_em.is_(None))   # dispensada some
         .all())
     for data, rid, alvo, produzido in rows:
         falta = _falta(alvo, produzido)
