@@ -98,8 +98,9 @@ def test_caixa_arredonda_pra_cima_e_excedente_cobre_proximos_dias(app):
     assert sum(p['por_dia']) >= 14 - 6        # tolera o estoque carregado
 
 
-def test_estoque_suficiente_nao_pede(app):
-    """Loja com estoque alto que cobre a venda da janela nao aparece (0 pedido)."""
+def test_estoque_suficiente_aparece_com_zero(app):
+    """Loja com estoque alto que cobre a venda APARECE com sugestao 0 (decisao do
+    dono: mostrar todos os produtos da loja, nada some da tela)."""
     loja = _loja()
     r = _receita('Pao')
     el = _estoque(loja, r, 1000)              # estoque enorme
@@ -109,7 +110,36 @@ def test_estoque_suficiente_nao_pede(app):
 
     grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                                       inicio_offset_dias=0)
-    assert _prod(grade, loja.id, r.id) is None   # nada a pedir
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None                      # aparece
+    assert sum(p['por_dia']) == 0            # mas sem sugerir nada (estoque cobre)
+
+
+def test_produto_que_a_loja_pede_aparece_mesmo_sem_venda(app):
+    """MOSTRAR TODOS: um produto que a loja PEDE da industria (historico de
+    pedidos) aparece com sugestao 0 mesmo sem venda rastreada nem estoque —
+    era o caso da Ribeiro (mapa Seru incompleto escondia o produto)."""
+    from app.models import PedidoItem, PedidoLoja
+    loja = _loja()
+    r = _receita('Pao Sem Venda Rastreada')
+    hoje_d = hoje()
+    # a loja pediu da industria nas ultimas semanas (mas nenhuma venda foi
+    # registrada no EstoqueLoja, e nao ha estoque)
+    for sem in (1, 2, 3):
+        p = PedidoLoja(loja_id=loja.id, status='recebido',
+                       data_entrega=hoje_d - timedelta(days=7 * sem),
+                       data_pedido=hoje_d - timedelta(days=7 * sem))
+        db.session.add(p)
+        db.session.flush()
+        db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=20))
+    db.session.commit()
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=0)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None                      # NAO some so por nao ter venda
+    assert p['estoque_atual'] == 0
+    assert sum(p['por_dia']) == 0            # sugestao 0 -> operador preenche
 
 
 def test_dia_travado_usa_entrega_real_no_carry(app):
