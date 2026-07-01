@@ -1,4 +1,12 @@
-"""Inflação da previsão — A2 (zeros implícitos) + A3 (outlier 2 pontos), 30/06.
+"""Inflação da previsão — A1 (double-count do fallback) + A2 (zeros implícitos)
++ A3 (outlier 2 pontos), 30/06.
+
+A1: o fallback da previsão era `soma_total / dias_janela` cru. Pra um item com
+padrão forte de dia (ex: só vende sábado), o volume do sábado entrava no
+soma_total, era dividido por 42 e somado em CADA dia útil — contado 2x (média do
+sábado + diluído nos dias vazios). Um item só-de-sábado de 100 previa ~186 na
+semana. Agora o fallback usa a taxa RESIDUAL (tira o volume dos dows com média
+própria); item sem padrão de dow (giro baixo) mantém a média diária.
 
 A2: a média por dia-da-semana era feita só sobre as datas COM pedido. Demanda
 intermitente (sábados alternados) saía superestimada. Agora o denominador conta
@@ -11,7 +19,9 @@ são capados; variação normal (2-3x) não.
 """
 from datetime import date
 
-from app.services.previsao_producao import _media_recencia
+from app.services.previsao_producao import (
+    _media_recencia,
+)
 
 # ── A2: zeros implícitos ──────────────────────────────────────────────────
 _SABADOS = [date(2026, 5, 23), date(2026, 5, 30), date(2026, 6, 6),
