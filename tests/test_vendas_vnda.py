@@ -52,7 +52,7 @@ def test_consolidado_soma_seru_e_site_sem_vnda(app):
         'faturamento_total': 200.0, 'produtos': [], 'sem_match_count': 0,
         'pendentes_count': 0, 'lojas_no_intervalo': ['Ribeiro do Vale'],
     }
-    with patch('app.services.vendas_itens.agregar_itens',
+    with patch('app.services.vendas_diarias.agregar_flat',
                return_value=seru_data), \
          patch('app.services.loja_online_vendas.vendas_por_produto',
                return_value={}), \
