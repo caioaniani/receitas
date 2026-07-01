@@ -821,6 +821,18 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                 .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
                 .order_by(Loja.nome).all())
 
+    # Estoque atual DISPONIVEL por (loja, receita) = fisico - reservado (a reserva
+    # segura pedido online aguardando pagamento). MESMA conta da tela venda+estoque
+    # — so pra MOSTRAR na coluna Estoque (nao entra no calculo da media, que e o
+    # sinal estavel de venda; o admin cruza os dois a olho).
+    from app.models import EstoqueLoja
+    estoque_atual = defaultdict(lambda: defaultdict(int))
+    for loja_id, rid, q, qres in (db.session.query(
+            EstoqueLoja.loja_id, EstoqueLoja.receita_id,
+            EstoqueLoja.quantidade, EstoqueLoja.quantidade_reservada)
+            .filter(EstoqueLoja.receita_id.isnot(None)).all()):
+        estoque_atual[loja_id][rid] += max(0, int(q or 0) - int(qres or 0))
+
     # Venda historica por (loja, receita, DOW): total pedido naquele dia-da-semana
     # na janela. Base da media POR DIA-DA-SEMANA (sabado != terca).
     soma_lrd = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
