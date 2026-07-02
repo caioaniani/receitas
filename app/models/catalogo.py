@@ -25,6 +25,11 @@ class MateriaPrima(db.Model):
     # industria e nao deve poluir a tela de pedido das lojas.
     sugerir_pedido_loja = db.Column(db.Boolean, nullable=False, default=False,
                                     server_default='0')
+    # Caixa/piso do pedido de loja (mesma semantica de Receita.lote_pedido/
+    # minimo_pedido): MP pedida em saco (ex: pao de queijo congelado) nao pode
+    # sair picada na sugestao. So vale pra MPs com sugerir_pedido_loja=True.
+    lote_pedido = db.Column(db.Integer, nullable=True)
+    minimo_pedido = db.Column(db.Integer, nullable=True)
     # Arquivada = FORA DE CIRCULACAO (ex: MP que na verdade era receita, apos
     # transferir os vinculos): some de autocompletes, matchers e pickers pra
     # ninguem conectar nada nela de novo. Historico 100% preservado (custeio
