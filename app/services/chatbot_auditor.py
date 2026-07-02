@@ -264,6 +264,11 @@ def _coletar_periodo(inicio, fim):
         'tools': _tools_de(v),
     } for v in alta]
 
+    # Histograma real por hora — o prompt sempre pediu "horario de pico"
+    # mas ate 02/07/2026 o Sonnet nao recebia timestamp nenhum (inventava
+    # ou omitia). Hora BRT do criado_em de cada evento de conversa real.
+    por_hora = Counter(v.criado_em.hour for v in veredictos if v.criado_em)
+
     return {
         'total_eventos': total,
         'conversas_unicas': conv_unicas,
@@ -279,6 +284,8 @@ def _coletar_periodo(inicio, fim):
         'top_motivos_vigia': motivos_vigia,
         'amostras_handoff': amostras_handoff,
         'casos_alta': casos_alta,
+        'por_hora': {f'{h:02d}h': n for h, n in sorted(por_hora.items())},
+        'funil_site': _funil_site(inicio, fim),
     }
 
 
