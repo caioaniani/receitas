@@ -78,18 +78,62 @@ def salvar():
     return redirect(url_for('materias_primas.banco'))
 
 
+def _vinculos_mp(mp):
+    """O que ainda referencia a MP (bloqueia exclusão). Retorna [(rótulo, n)].
+
+    A MP ganhou FKs por todo o sistema (estoque de loja, pedidos, cestas,
+    mapeamentos, financeiro...) — o delete cru estourava 500 com IntegrityError
+    quando havia QUALQUER histórico (só o uso em receitas era checado)."""
+    from app.models import (
+        Desperdicio,
+        EstoqueLoja,
+        MovimentacaoEstoque,
+        PedidoItem,
+        ProdutoItem,
+        VendaManualLoja,
+        VendaMapa,
+    )
+    grupos = [
+        ('pedido(s) de loja', PedidoItem),
+        ('linha(s) de estoque de loja', EstoqueLoja),
+        ('componente(s) de cesta/produto', ProdutoItem),
+        ('mapeamento(s) de PDV/loja', VendaMapa),
+        ('movimentação(ões) de estoque', MovimentacaoEstoque),
+        ('registro(s) de desperdício', Desperdicio),
+        ('venda(s) manual(is)', VendaManualLoja),
+    ]
+    return [(rotulo, n) for rotulo, modelo in grupos
+            if (n := modelo.query.filter_by(materia_prima_id=mp.id).count())]
+
+
 @materias_primas_bp.route('/excluir/<int:id>', methods=['POST'])
 @login_required
 @admin_required
 def excluir(id):
+    from sqlalchemy.exc import IntegrityError
     mp = MateriaPrima.query.get_or_404(id)
     uso = ReceitaIngrediente.query.filter_by(ingrediente_nome=mp.nome).first()
     if uso:
         flash(f'Não é possível excluir "{mp.nome}": usado em receitas.', 'danger')
-    else:
+        return redirect(url_for('materias_primas.banco'))
+    vinculos = _vinculos_mp(mp)
+    if vinculos:
+        detalhe = ', '.join(f'{n} {rotulo}' for rotulo, n in vinculos)
+        flash(f'Não é possível excluir "{mp.nome}": há {detalhe} apontando '
+              'pra ela. Histórico não se apaga — se o cadastro está errado ou '
+              'duplicado, corrija/renomeie a MP em vez de excluir.', 'danger')
+        return redirect(url_for('materias_primas.banco'))
+    nome = mp.nome
+    # Belt-and-braces: alguma FK fora da lista (financeiro, débitos de fração,
+    # alertas...) ainda pode segurar — aborta limpo em vez de 500.
+    try:
         db.session.delete(mp)
         db.session.commit()
-        flash(f'"{mp.nome}" excluído com sucesso!', 'success')
+        flash(f'"{nome}" excluído com sucesso!', 'success')
+    except IntegrityError:
+        db.session.rollback()
+        flash(f'Não é possível excluir "{nome}": há registros históricos '
+              '(financeiro/estoque) vinculados a ela.', 'danger')
     return redirect(url_for('materias_primas.banco'))
 
 
