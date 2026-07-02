@@ -445,7 +445,7 @@ def bot_webhook():
                         # que carrega as imagens).
                         if (seed and seed[-1].get('role') == 'user'
                                 and (seed[-1].get('content') or '').strip()
-                                == (content or '').strip()):
+                                in (conteudo or '').strip()):
                             seed = seed[:-1]
                         base = seed
                         if not base:
