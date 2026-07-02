@@ -284,5 +284,12 @@ function audBulk() {
         + 'do plano do padeiro. NÃO credita estoque — o furo fica registrado. '
         + 'Dá pra desfazer uma a uma.');
 }
+// Confirma o reagendamento (mesmos checkboxes, rota reagendar via formaction).
+function audReagendar() {
+    var n = document.querySelectorAll('#audform input.aud-check:checked').length;
+    if (!n) { return false; }
+    return confirm('Enviar ' + n + ' ordem(ns) pra a produção de HOJE? A falta '
+        + 'entra no /padeiro de hoje e as ordens saem desta lista.');
+}
 </script>
 {% endblock %}
