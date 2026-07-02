@@ -157,6 +157,48 @@ def _eh_handoff_preguicoso(v):
     return handoff_foi_preguicoso(_tools_de(v))
 
 
+def _funil_site(inicio, fim):
+    """Funil de vendas do SITE no periodo (PedidoOnline): criados, pagos,
+    cancelados e faturamento pago. Da ao auditor o elo que faltava entre
+    "conversa boa" e "venda fechada" (muita conversa + pouco pedido pago =
+    atrito em algum ponto). `pago_em` (nao status) marca pagamento — o
+    status continua transitando depois (enviado/entregue). Best-effort:
+    erro devolve None e o relatorio sai sem o funil."""
+    try:
+        from app.models import PedidoOnline
+        pedidos = (PedidoOnline.query
+                   .filter(PedidoOnline.criado_em >= inicio,
+                           PedidoOnline.criado_em < fim)
+                   .all())
+        pagos = [p for p in pedidos if p.pago_em is not None]
+        faturamento = sum((p.valor_total or 0) for p in pagos)
+        return {
+            'pedidos_criados': len(pedidos),
+            'pedidos_pagos': len(pagos),
+            'pedidos_cancelados': sum(
+                1 for p in pedidos if p.status == 'cancelado'),
+            'faturamento_pago': float(round(faturamento, 2)),
+        }
+    except Exception:  # noqa: BLE001
+        logger.exception('auditor: funil do site falhou')
+        return None
+
+
+# Chaves que entram no comparativo com o dia anterior (resumo das 19h).
+# So numeros agregados — as amostras/motivos de ontem nao interessam.
+_CHAVES_COMPARATIVO = ('conversas_unicas', 'handoffs', 'contencao_pct',
+                       'handoffs_preguicosos', 'gravidade_alta',
+                       'gravidade_media', 'funil_site')
+
+
+def _resumo_comparativo(dados):
+    """Versao enxuta dos dados de um periodo, pro Sonnet citar tendencia
+    (melhorou/piorou vs ontem) sem receber o relatorio inteiro de novo."""
+    if not dados:
+        return None
+    return {k: dados.get(k) for k in _CHAVES_COMPARATIVO}
+
+
 def _coletar_periodo(inicio, fim):
     """Le VigiaVeredito do periodo e devolve uma estrutura compacta pro
     Sonnet trabalhar. Tudo agregado pra caber no prompt."""
