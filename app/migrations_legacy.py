@@ -429,6 +429,26 @@ def _migrate_postgres(app):
         except Exception:
             pass
 
+        # mov_estoque_loja.desperdicio_id — liga a BAIXA de estoque ao registro
+        # de Desperdicio que a causou. Permite excluir um desperdicio duplicado
+        # estornando exatamente o que ele baixou (caso real 02/07/2026: lote
+        # re-enviado pelo bot duplicou 4 perdas na Nebraska). NULL = registro
+        # anterior a esta coluna (exclusao nao mexe em estoque nesses).
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'mov_estoque_loja'"
+        ))
+        cols_mel = {row[0] for row in result}
+        if cols_mel and 'desperdicio_id' not in cols_mel:
+            conn.execute(text(
+                'ALTER TABLE mov_estoque_loja ADD COLUMN desperdicio_id '
+                'INTEGER REFERENCES desperdicio(id) ON DELETE SET NULL'
+            ))
+            conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_mov_estoque_loja_desperdicio_id '
+                'ON mov_estoque_loja(desperdicio_id)'
+            ))
+
         # mov_estoque_producao.tipo: VARCHAR(20) era curto pra 'venda_b2b_sem_estoque' (21).
         # Estourava o INSERT quando uma venda B2B nao tinha estoque suficiente,
         # quebrando o POST de /b2b/vendas/nova com 500 (causa identificada via
