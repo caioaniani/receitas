@@ -871,6 +871,7 @@ def salvar(id):
         return v if v > 0 else None
     receita.lote_pedido = _int_opt('lote_pedido')
     receita.minimo_pedido = _int_opt('minimo_pedido')
+    receita.lote_producao = _int_opt('lote_producao')
 
     receita.imagem_url = request.form.get('imagem_url', '').strip() or None
 
