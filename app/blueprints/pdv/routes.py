@@ -831,6 +831,8 @@ def vincular_produto(map_id):
         mp.fator_quantidade = 1.0  # volta pra pristine — fator nao fica pegajoso
         flash(f'"{mp.nome_externo}" voltou pra pendente.', 'info')
     db.session.commit()
+    if acao == 'vincular':
+        _reprocesso_pos_mapeamento()   # recupera baixas passadas (7d)
     return redirect(url_for('pdv.mapeamentos'))
 
 
