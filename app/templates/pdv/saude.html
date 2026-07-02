@@ -12,6 +12,17 @@
         <a href="{{ url_for('pdv.reconciliacao') }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-clipboard-check"></i> Reconciliação
         </a>
+        {# Recupera baixas perdidas: pedidos com ZERO baixa (produto/loja sem
+           mapa na época) reprocessados com os mapeamentos ATUAIS (30 dias). #}
+        <form method="POST" action="{{ url_for('pdv.reprocessar_retroativo_rota') }}"
+              class="d-inline"
+              onsubmit="return confirm('Reprocessar os últimos 30 dias? Pedidos que ficaram SEM NENHUMA baixa (produto/loja sem mapa na época) serão baixados agora com os mapeamentos atuais. Pedidos parciais não são tocados.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="dias" value="30">
+            <button class="btn btn-sm btn-primary">
+                <i class="bi bi-arrow-counterclockwise"></i> Recuperar baixas (30d)
+            </button>
+        </form>
     </div>
 </div>
 
