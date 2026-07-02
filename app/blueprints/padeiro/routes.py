@@ -533,6 +533,40 @@ def gerar_qr(id):
                            qr=qr, url=url, qr_png=qr_png, voltar_data=data_str)
 
 
+@padeiro_bp.route('/retirada/<int:id>/qr', methods=['POST'])
+@login_required
+@padeiro_required
+def retirada_qr(id):
+    """Mostra o QR de RECEBIMENTO da retirada (motorista chegou com as sobras).
+
+    So faz sentido com a retirada em transporte (coleta na loja ja feita) —
+    antes disso o QR de recebimento nem valida no handshake."""
+    from app.models import RetiradaSobra
+    from app.services.handshake_qr import gerar_qr_retirada
+    from app.services.qrcode_svc import gerar_png_data_url
+
+    data_str = (request.form.get('data') or '').strip() or None
+    ret = RetiradaSobra.query.get_or_404(id)
+    if ret.status != 'em_transporte':
+        flash(f'Retirada #{ret.id} ainda não foi coletada na loja '
+              f'(status: {ret.status}).', 'warning')
+        return redirect(url_for('padeiro.index', data=data_str))
+    try:
+        qr = gerar_qr_retirada(ret, 'recebimento', current_user.id)
+        db.session.commit()
+        url = url_for('handshake.handshake_retirada', token=qr.token,
+                      _external=True)
+        qr_png = gerar_png_data_url(url)
+    except Exception:
+        db.session.rollback()
+        logger.exception('padeiro.retirada_qr falhou (retirada=%s)', id)
+        flash('Erro ao gerar o QR. O log foi registrado — avise o admin.',
+              'danger')
+        return redirect(url_for('padeiro.index', data=data_str))
+    return render_template('padeiro/qr_retirada.html', retirada=ret,
+                           url=url, qr_png=qr_png, voltar_data=data_str)
+
+
 @padeiro_bp.route('/juntar-repetidos', methods=['POST'])
 @login_required
 @padeiro_required
