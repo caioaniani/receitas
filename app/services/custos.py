@@ -37,6 +37,21 @@ def calcular_custos_receitas():
     pesos = {}
     fabricados = []
 
+    # Heranca de custo do RETORNO (decisao do dono, 02/07/2026 — "custo
+    # cheio"): receita que e DESTINO de `retorno_receita_id` e tem ficha
+    # VAZIA herda o custo (e o peso unitario) da receita de ORIGEM — assim o
+    # Croissant Almond, que consome "Croissant Tradicional — Retorno" como
+    # ingrediente, carrega o custo do croissant devolvido em vez de R$ 0.
+    # Ficha preenchida no retorno = override explicito (nao herda). Mais de
+    # uma origem pro mesmo destino: vale o custo MAIOR (nunca subavalia).
+    heranca_retorno = {}
+    por_id = {r.id: r for r in receitas}
+    for r in receitas:
+        if r.retorno_receita_id:
+            destino = por_id.get(r.retorno_receita_id)
+            if destino is not None and not destino.ingredientes:
+                heranca_retorno.setdefault(destino.nome, []).append(r.nome)
+
     remaining = list(receitas)
     for _ in range(MAX_PASSES):
         # Indices normalizados de custos/pesos ja resolvidos — pra casar
@@ -45,6 +60,26 @@ def calcular_custos_receitas():
         pesos_norm = {_norm(k): v for k, v in pesos.items()}
         still_remaining = []
         for r in remaining:
+            origens = heranca_retorno.get(r.nome)
+            if origens:
+                vals = []
+                for o in origens:
+                    c = custos.get(o)
+                    if c is None:
+                        c = custos_norm.get(_norm(o))
+                    if c is None:
+                        break                # origem ainda nao resolvida
+                    vals.append((c, pesos.get(o) or pesos_norm.get(_norm(o)) or 0))
+                if len(vals) < len(origens):
+                    still_remaining.append(r)
+                    continue
+                custo_un, peso_un = max(vals)
+                custos[r.nome] = custo_un
+                pesos[r.nome] = r.peso_unitario or peso_un
+                fabricados.append(_fabricado_dict(
+                    r, custo_un, int(r.rendimento_qtd or 1)))
+                continue
+
             resultado = _calcular_receita(r, custos, custos_norm,
                                            pesos, pesos_norm,
                                            mp_info, mp_info_norm)
