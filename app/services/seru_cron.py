@@ -570,7 +570,12 @@ def _run_followup_bot(app):
     """Job: follow-up automatico do bot (12/06/2026, pedido do dono).
     Cliente que sumiu apos mensagem NOSSA em conversa pending recebe um
     cutucao gentil do proprio bot (1x por conversa, janela 5-120min).
-    Guarda-corpos no servico (chatbot.followup_conversas_paradas)."""
+    Guarda-corpos no servico (chatbot.followup_conversas_paradas).
+
+    No MESMO ciclo roda a VASSOURA (02/07/2026): conversa pending cuja
+    ultima msg e do CLIENTE ha 10+ min = o bot ficou devendo resposta
+    (thread morta num deploy, crash pos-idempotencia) — reprocessa e
+    responde. Kill-switch proprio: CHATBOT_VASSOURA=0."""
     from app.services import chatbot, chatwoot
 
     with app.app_context():
@@ -578,6 +583,8 @@ def _run_followup_bot(app):
             return
         _com_lock(LOCK_KEY_FOLLOWUP, chatbot.followup_conversas_paradas,
                   'followup bot')
+        _com_lock(LOCK_KEY_FOLLOWUP, chatbot.varrer_pendentes_sem_resposta,
+                  'vassoura bot')
 
 
 def _run_liberar_reservas_expiradas(app):
