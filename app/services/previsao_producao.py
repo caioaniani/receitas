@@ -338,6 +338,27 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                .filter(EstoqueProducao.receita_id.isnot(None)).all()):
         em_estoque[ep.receita_id] += int(ep.quantidade or 0)
 
+    # 1b. Producao JA MANDADA e ainda nao confirmada (WIP), com inicio ANTES do
+    # horizonte ([hoje, inicio_d)): e suprimento a caminho — sem isso o balanco
+    # com offset=1 (painel) re-sugeria produzir amanha o que ja esta no forno
+    # HOJE. Com offset=0 (cronograma) o intervalo e VAZIO de proposito: o grid
+    # de hoje e a fonte do proprio plano (descontar o plano enviado zeraria o
+    # grid apos o envio). Pendencia VENCIDA (plano de dias anteriores) NAO
+    # conta — pode nunca ser produzida (a auditoria trata).
+    em_producao = defaultdict(int)
+    if inicio_d > hoje_d:
+        from app.models import PlanejamentoItem, PlanejamentoProducao
+        for rid_w, alvo_w, prod_w in (db.session.query(
+                PlanejamentoItem.receita_id, PlanejamentoItem.qtd_alvo,
+                PlanejamentoItem.produzido_qtd)
+                .join(PlanejamentoProducao,
+                      PlanejamentoItem.planejamento_id == PlanejamentoProducao.id)
+                .filter(PlanejamentoProducao.data >= hoje_d,
+                        PlanejamentoProducao.data < inicio_d,
+                        PlanejamentoProducao.enviado_ao_padeiro.isnot(False),
+                        PlanejamentoItem.dispensada_em.is_(None)).all()):
+            em_producao[rid_w] += max(0, int(alvo_w or 0) - int(prod_w or 0))
+
     # 2. Firme por (receita, dia de entrega) — pedidos ainda nao baixados, de
     # HOJE ate o fim da janela de producao+lead. Capturado POR DIA pra:
     #  (a) somar o Comprometido da janela PRODUCIVEL [inicio+lead, ...]; e
