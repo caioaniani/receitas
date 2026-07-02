@@ -158,41 +158,7 @@
         {% if current_user.pode_lojas() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Lojas</div>
-
-        <a href="{{ url_for('pedidos.lista') }}"
-           class="sidebar-link {% if request.path == '/pedidos/' or request.path == '/pedidos' %}active{% endif %}">
-            Pedidos
-        </a>
-        <a href="{{ url_for('pedidos.estoque_loja') }}"
-           class="sidebar-link {% if request.path == '/pedidos/estoque-loja' %}active{% endif %}">
-            Estoque Loja
-        </a>
-        <a href="{{ url_for('pedidos.estoque_loja_diario') }}"
-           class="sidebar-link {% if request.path == '/pedidos/estoque-loja/diario' %}active{% endif %}">
-            Movimento do Dia
-        </a>
-        <a href="{{ url_for('pedidos.estoque_loja_historico') }}"
-           class="sidebar-link {% if request.path == '/pedidos/estoque-loja/historico' %}active{% endif %}">
-            Histórico do estoque
-        </a>
-        <a href="{{ url_for('pedidos.desperdicio') }}"
-           class="sidebar-link {% if '/pedidos/desperdicio' in request.path %}active{% endif %}">
-            Desperdício
-        </a>
-        <a href="{{ url_for('lista_compras.index') }}"
-           class="sidebar-link {% if request.path == '/lista-compras' or request.path == '/lista-compras/' %}active{% endif %}">
-            Lista de Compras
-        </a>
-        {% if current_user.is_owner %}
-        <a href="{{ url_for('lista_compras.consolidada') }}"
-           class="sidebar-link ps-4 small {% if request.path == '/lista-compras/consolidada' %}active{% endif %}">
-            Consolidar compras
-        </a>
-        <a href="{{ url_for('lista_compras.catalogo') }}"
-           class="sidebar-link ps-4 small {% if request.path == '/lista-compras/catalogo' %}active{% endif %}">
-            Catálogo de compras
-        </a>
-        {% endif %}
+        {{ areanav.lojas('sidebar') }}
         {% endif %}
 
         {# ── 2. PRODUÇÃO (industria) ── #}
