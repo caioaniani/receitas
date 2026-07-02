@@ -493,7 +493,7 @@ def test_resumo_do_dia_inclui_comparativo_de_ontem(app):
     from app.extensions import db
     from app.models import VigiaVeredito
     from app.services import chatbot_auditor
-    from app.utils import agora, hoje
+    from app.utils import hoje
     contextos = []
 
     def _fake_sonnet(api_key, contexto, prompt_sistema=None):
@@ -515,7 +515,6 @@ def test_resumo_do_dia_inclui_comparativo_de_ontem(app):
         assert r['dados']['comparativo_dia_anterior']['handoffs'] == 1
         VigiaVeredito.query.delete()
         db.session.commit()
-        del agora  # noqa: F821 — só documenta que hoje/agora vêm de app.utils
 
 
 def test_resumo_do_dia_sem_ontem_nao_inventa_comparativo(app):
