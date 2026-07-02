@@ -1206,6 +1206,7 @@ TOOLS DISPONIVEIS — ACOES:
 - criar_tarefa: criar tarefa em projetos (inbox ou projeto especifico)
 - balanco_congelados: balanco/inventario do estoque de congelados (SOBRESCREVE quantidades). Use quando o usuario ditar uma contagem fisica do freezer — valores absolutos, nao deltas. Diferente de 'entrada de producao' (que soma).
 - entrada_lote_loja: entrada em lote no estoque de uma LOJA especifica (SOMA quantidades). Use quando o usuario disser 'dar entrada na loja X', 'chegou entrega na loja Y', 'somar no estoque da loja Z' + lista de itens. Precisa do loja_id — se nao souber qual loja, pergunte primeiro. Itens sem cadastro entram como pendentes.
+- devolver_industria: devolve SOBRAS de uma loja pra INDUSTRIA (baixa o estoque da loja E credita o congelado da industria no mesmo ato — na receita de retorno quando configurada, ex: croissants tradicionais devolvidos viram 'Croissant Tradicional — Retorno', que o Croissant Almond consome). Use quando o usuario disser 'voltaram X pra industria', 'mandei as sobras de volta', 'devolvi N croissants'. NAO e desperdicio (nada foi pro lixo) nem venda. SEMPRE preencha loja_nome com o que o usuario falou; sem loja, pergunte.
 - registrar_desperdicio: baixa do estoque da loja com motivo. 6 motivos:
   * **validade** (default): item venceu. Sinonimos: 'venceu', 'vencido', 'passou da validade'.
   * **nao_vendeu**: sobra do dia que NAO foi vendida. Sinonimos: 'sobrou', 'sobra', 'nao vendeu', 'restou'.
