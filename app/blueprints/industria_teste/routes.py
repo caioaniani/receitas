@@ -162,7 +162,7 @@ def reagendar():
     passa a ver em /padeiro). As ordens antigas saem da auditoria (movidas)."""
     from app.services.producao_pendente import reagendar_para_hoje
 
-    ids = request.form.getlist('item_ids')
+    ids = request.form.getlist('ids')   # mesmos checkboxes do dispensar em lote
     res = reagendar_para_hoje(ids, current_user.id)
     if res['movidos']:
         flash('%d ordem(ns) · %d un enviada(s) pra produção de HOJE — o padeiro '
