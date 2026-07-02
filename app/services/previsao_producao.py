@@ -1168,6 +1168,10 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 'media_semanal': round(venda_total * 7.0 / horizonte_dias, 1),
                 'estoque_atual': est0,
                 'por_dia': por_dia, 'total': sum(por_dia),
+                # O ja encomendado por dia (celula travada mostra isso).
+                'ja_pedido': [pedido_existente.get(loja.id, {})
+                              .get(d.isoformat(), {}).get(tok, 0)
+                              for d in dias_futuros],
                 'lote': caixa,
                 'minimo': minimo,
                 'abaixo_lote': False,
