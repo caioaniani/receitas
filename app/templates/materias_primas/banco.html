@@ -60,6 +60,16 @@
                                title="As lojas pedem esta MP da indústria (entra em Pedidos da semana)">
                     </td>
                     <td>
+                        <div class="d-flex gap-1">
+                            <input type="number" name="lote_pedido[]" value="{{ mp.lote_pedido or '' }}"
+                                   min="0" placeholder="cx" title="Caixa (lote de pedido)"
+                                   class="form-control form-control-sm input-blue text-end">
+                            <input type="number" name="minimo_pedido[]" value="{{ mp.minimo_pedido or '' }}"
+                                   min="0" placeholder="mín" title="Pedido mínimo"
+                                   class="form-control form-control-sm input-blue text-end">
+                        </div>
+                    </td>
+                    <td>
                         <input type="text" name="fornecedor[]" value="{{ mp.fornecedor or '' }}" class="form-control form-control-sm input-blue">
                     </td>
                     <td>
