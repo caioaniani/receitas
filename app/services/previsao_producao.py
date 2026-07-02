@@ -992,17 +992,20 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 .filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
                 .order_by(Loja.nome).all())
 
-    # A tela cobre receitas E materias-primas que a loja estoca/vende/pede
-    # (ex: pao de queijo congelado, comprado em saco e vendido via cones —
-    # a venda do cone baixa a linha MP da loja). Token unico por item:
-    # receita = o proprio id (int, compat com o gerar existente);
-    # MP = 'mp:<id>' (o gerar reconhece o prefixo).
+    # A tela cobre receitas E materias-primas MARCADAS pra pedido de loja
+    # (checkbox `sugerir_pedido_loja` no banco de MPs — ex: pao de queijo
+    # congelado, comprado em saco e vendido via cones; a venda do cone baixa a
+    # linha MP da loja). Opt-in de proposito: nem toda MP que passa por loja e
+    # pedida pra industria. Token unico por item: receita = o proprio id (int,
+    # compat com o gerar existente); MP = 'mp:<id>' (o gerar reconhece o prefixo).
+    from app.models import MateriaPrima
+    mps = {m.id: m for m in MateriaPrima.query
+           .filter(MateriaPrima.sugerir_pedido_loja.is_(True)).all()}
+
     def _token(rid, mid):
         if rid is not None:
             return rid if rid in receitas else None
-        return f'mp:{mid}' if mid is not None else None
-
-    mp_ids = set()
+        return f'mp:{mid}' if mid in mps else None
 
     # Venda por (loja, item, dow) na janela: MovEstoqueLoja x EstoqueLoja (a
     # linha diz loja+item); dow = dia-da-semana da venda.
@@ -1021,8 +1024,6 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
         tok = _token(rid, mid)
         if tok is not None and data_mov is not None:
             venda_dow[loja_id][tok][data_mov.weekday()] += int(qtd or 0)
-            if mid is not None:
-                mp_ids.add(mid)
 
     # Estoque DISPONIVEL da loja por (loja, item) = quantidade - reservado
     # (reservado segura pedido online aguardando pagamento). Usar o fisico
@@ -1038,8 +1039,6 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
         if tok is None:
             continue
         estoque_atual[loja_id][tok] += max(0, int(q or 0) - int(qres or 0))
-        if mid is not None:
-            mp_ids.add(mid)
 
     # Produtos que a loja PEDE da industria (historico de pedidos na janela).
     # A previsao por venda so "ve" o que teve baixa registrada; sem isto, um item
@@ -1060,8 +1059,6 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
         tok = _token(rid_p, mid_p)
         if tok is not None:
             pede_receitas[loja_id].add(tok)
-            if mid_p is not None:
-                mp_ids.add(mid_p)
 
     # Dias ja pedidos no horizonte (a tela trava; o gerar pula) + a QUANTIDADE ja
     # pedida por (loja, data, receita) — pra simulacao usar a entrega real do dia
@@ -1094,16 +1091,14 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                  'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
                  'dow': d.weekday()} for d in dias_futuros]
 
-    # Catalogo unificado da tela: receitas + MPs vistas em estoque/venda/pedido.
+    # Catalogo unificado da tela: receitas + MPs marcadas (checkbox).
     # Cada entrada: (token, nome, lote, minimo, fornada_especial, rid, mid).
-    from app.models import MateriaPrima
     catalogo = [(rid, rec.nome, int(rec.lote_pedido or 0),
                  int(rec.minimo_pedido or 0),
                  bool(getattr(rec, 'fornada_especial', False)), rid, None)
                 for rid, rec in receitas.items()]
-    if mp_ids:
-        for m in MateriaPrima.query.filter(MateriaPrima.id.in_(mp_ids)).all():
-            catalogo.append((f'mp:{m.id}', m.nome, 0, 0, False, None, m.id))
+    for mid, m in mps.items():
+        catalogo.append((f'mp:{mid}', m.nome, 0, 0, False, None, mid))
     catalogo.sort(key=lambda c: (c[1] or '').lower())
 
     lojas_out = []
