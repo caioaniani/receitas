@@ -2845,16 +2845,17 @@ def desperdicio():
             criado_por_id=current_user.id,
         )
         db.session.add(desp)
-        # Pra cestas, a baixa por componente ja foi feita no if acima.
-        # Aqui so registra a Mov "cabeca" pro item nao-cesta.
-        if not componentes_cesta and baixa > 0:
+        # Pra cestas, a baixa por componente ja foi feita no if acima; item
+        # reaproveitavel NAO gera movimento nenhum (nem falta — a decisao de
+        # nao baixar e da regra, nao falta de saldo).
+        if not reaproveita and not componentes_cesta and baixa > 0:
             db.session.add(MovEstoqueLoja(
                 estoque_loja_id=el.id, tipo='desperdicio', quantidade=baixa,
                 referencia=f'Desperdicio {motivo}'
                 + (f' — {observacao}' if observacao else ''),
                 usuario_id=current_user.id,
             ))
-        if not componentes_cesta and qtd > baixa:
+        if not reaproveita and not componentes_cesta and qtd > baixa:
             falta = qtd - baixa
             db.session.add(MovEstoqueLoja(
                 estoque_loja_id=el.id, tipo='desperdicio_sem_estoque',
@@ -2863,7 +2864,13 @@ def desperdicio():
                 usuario_id=current_user.id,
             ))
         db.session.commit()
-        flash(f'Desperdicio registrado: {qtd} un de {desp.nome_item}.', 'success')
+        if reaproveita:
+            flash(f'Desperdicio registrado: {qtd} un de {desp.nome_item} — '
+                  'item reaproveitavel: o estoque NAO foi baixado (vira '
+                  'retorno/outra receita).', 'info')
+        else:
+            flash(f'Desperdicio registrado: {qtd} un de {desp.nome_item}.',
+                  'success')
         return redirect(url_for('pedidos.desperdicio', loja=sel_loja))
 
     # GET: form + lista
