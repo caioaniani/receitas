@@ -3443,15 +3443,12 @@ def executar_registrar_desperdicio_lote(params, user):
     if not itens:
         return {'ok': False, 'erro': 'Lista de itens vazia'}
 
-    from app.constants import (
-        DESPERDICIO_MOTIVOS,
-        DESPERDICIO_MOTIVOS_REAPROVEITAVEIS,
+    # Fonte única das regras (compartilhada com a tela — 03/07/2026).
+    from app.services.desperdicio_core import (
+        normalizar_motivo,
+        reaproveita_sem_baixa,
     )
-    motivo = (params.get('motivo') or 'validade').strip().lower()
-    motivo = {'vencido': 'validade', 'estragado': 'estragou',
-              'queimado': 'queimou'}.get(motivo, motivo)
-    if motivo not in DESPERDICIO_MOTIVOS:
-        motivo = 'validade'
+    motivo = normalizar_motivo(params.get('motivo'))
     obs_lote = (params.get('observacao') or '').strip() or None
 
     aplicados = []
@@ -3483,17 +3480,8 @@ def executar_registrar_desperdicio_lote(params, user):
         obs_final = obs_item or obs_lote
 
         # REAPROVEITAVEL: se motivo='validade'/'nao_vendeu' E item marcado,
-        # registra desperdicio mas NAO baixa estoque.
-        reaproveita = False
-        if motivo in DESPERDICIO_MOTIVOS_REAPROVEITAVEIS:
-            if tipo_item == 'receita':
-                from app.models import Receita
-                _obj = Receita.query.get(item_id)
-                reaproveita = bool(_obj and _obj.reaproveitavel)
-            elif tipo_item == 'produto':
-                from app.models import Produto
-                _obj = Produto.query.get(item_id)
-                reaproveita = bool(_obj and _obj.reaproveitavel)
+        # registra desperdicio mas NAO baixa estoque (regra na fonte única).
+        reaproveita = reaproveita_sem_baixa(tipo_item, item_id, motivo)
 
         # CESTA: se for produto-cesta E nao reaproveita, baixa componentes
         componentes_cesta = []
