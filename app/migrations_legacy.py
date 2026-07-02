@@ -161,6 +161,10 @@ def _migrate_postgres(app):
             'sugerir_pedido_loja': 'ALTER TABLE receita ADD COLUMN sugerir_pedido_loja BOOLEAN NOT NULL DEFAULT TRUE',
             'lote_pedido': 'ALTER TABLE receita ADD COLUMN lote_pedido INTEGER',
             'minimo_pedido': 'ALTER TABLE receita ADD COLUMN minimo_pedido INTEGER',
+            # Lote SO da producao (placa de focaccia = 8 pedacos): cronograma
+            # produz em multiplos; pedido de loja segue livre. Vazio herda
+            # lote_pedido.
+            'lote_producao': 'ALTER TABLE receita ADD COLUMN lote_producao INTEGER',
             'fornada_especial': 'ALTER TABLE receita ADD COLUMN fornada_especial BOOLEAN NOT NULL DEFAULT FALSE',
             # Devolucao loja->industria (croissant almond): sobras devolvidas
             # desta receita CREDITAM a receita apontada (ex: Croissant
