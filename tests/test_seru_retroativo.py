@@ -110,8 +110,17 @@ def test_retroativo_recupera_pedido_sem_loja(app):
         reg = SeruPedidoProcessado.query.get('R2')
         assert reg is not None and reg.loja_id is None
 
-        # Admin cria/vincula a loja àquela company e mapeia o produto
-        loja = _loja_confirmada('PADARIA XYZ')
+        # Admin vincula a loja àquela company (o sync já criou o SeruLojaMap
+        # pendente — a tela ATUALIZA esse registro) e mapeia o produto
+        loja = Loja(nome='PADARIA XYZ', ativa=True)
+        db.session.add(loja)
+        db.session.flush()
+        lm = SeruLojaMap.query.filter_by(
+            seru_company_name='PADARIA XYZ').first()
+        assert lm is not None                          # sync criou pendente
+        lm.loja_id = loja.id
+        lm.confirmado_em = agora()
+        db.session.commit()
         r, el = _receita_com_estoque(loja)
         db.session.add(VendaMapa(canal='seru', nome_externo='PAO FRANCES',
                                  receita_id=r.id, confirmado_em=agora(),
