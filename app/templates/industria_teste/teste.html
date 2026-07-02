@@ -404,6 +404,51 @@
     const DATAS = {{ crono.dias|map(attribute='data')|list|tojson }};
     const URL_CELULA = "{{ url_for('industria_teste.celula') }}";
     const URL_RESET = "{{ url_for('industria_teste.celula_reset') }}";
+    const URL_TOKEN = "{{ url_for('auth.csrf_token_novo') }}";
+
+    // POST JSON resiliente: re-tenta 1x apos 1,5s se a rede caiu ou o servidor
+    // devolveu 502/503/504 (ex: deploy fazendo cutover no Railway — foi o que
+    // pintou celula vermelha em 02/07); se o token CSRF da aba expirou (>1h
+    // aberta), busca token novo em /auth/csrf-token e re-tenta o POST.
+    async function postJson(url, body) {
+        const req = () => fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': window.CSRF_TOKEN
+            },
+            body: JSON.stringify(body)
+        });
+        let resp = null;
+        try { resp = await req(); } catch (e) { resp = null; }
+        if (!resp || (resp.status >= 502 && resp.status <= 504)) {
+            await new Promise(function (r) { setTimeout(r, 1500); });
+            resp = await req();
+        }
+        let d = null;
+        try { d = await resp.json(); } catch (e) { d = null; }
+        if (d && d.erro === 'csrf_expirada') {
+            const t = await fetch(URL_TOKEN)
+                .then(function (r) { return r.json(); })
+                .catch(function () { return null; });
+            if (t && t.token) {
+                window.CSRF_TOKEN = t.token;
+                resp = await req();
+                try { d = await resp.json(); } catch (e) { d = null; }
+            }
+        }
+        return { resp: resp, d: d };
+    }
+
+    function msgErro(resp, d) {
+        if (d && d.erro === 'nao_encontrado')
+            return 'essa receita/dia não está mais no cronograma — recarregue a página (F5) e tente de novo.';
+        if (d && d.erro === 'csrf_expirada')
+            return 'sua sessão expirou — recarregue a página (F5) e entre de novo se ele pedir.';
+        if (!d)
+            return 'o servidor não respondeu direito (pode ser uma atualização do sistema no ar, ou sessão expirada) — aguarde uns segundos, recarregue a página (F5) e tente de novo.';
+        return d.erro || ('erro ' + (resp ? resp.status : 'de rede'));
+    }
 
     function setRow(rid, porDia) {
         porDia.forEach(function (c) {
