@@ -1058,3 +1058,57 @@ def test_lote_pedido_sem_lote_producao_mantem_arredondamento_antigo(app):
     crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
     rc = _rec_out(crono, r.id)
     assert rc['total'] == 100                    # comportamento preservado
+
+
+def test_editar_celula_com_pendencia_reagendada(app):
+    """Regressão do incidente de 02/07 ('não consigo editar a produção de
+    hoje'): receita com pendência REAGENDADA no plano de hoje (qtd_extra > 0,
+    fluxo da auditoria) tem que continuar editável no cronograma — a pendência
+    não pode tirar a receita/dia do recompute do editar_celula (404)."""
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+    from app.services.cronograma_edit import editar_celula
+
+    loja = _loja()
+    r = _receita('Sourdough 7 Grãos')
+    _pedido(loja, 'pendente', hoje() + timedelta(days=2), r, 50)
+    plano = PlanejamentoProducao(data=hoje(), nome='Plano hoje',
+                                 status='aprovado', origem='cronograma',
+                                 enviado_ao_padeiro=True)
+    db.session.add(plano)
+    db.session.flush()
+    db.session.add(PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
+                                    multiplicador=1, qtd_alvo=20,
+                                    produzido_qtd=0, qtd_extra=20))
+    db.session.commit()
+
+    res = editar_celula(r.id, hoje().isoformat(), 30, horizonte_dias=7,
+                        janela_semanas=6, inicio_offset_dias=0)
+    assert res is not None
+    assert res['por_dia'][0]['qtd'] == 30
+
+
+def test_rota_celula_com_pendencia_reagendada(app, admin_user):
+    """Mesma regressão pela rota: POST /telaindustriateste/celula com plano de
+    hoje carregando reagendados (qtd_extra) devolve 200 ok."""
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+
+    loja = _loja('Loja B')
+    r = _receita('Sourdough Integral')
+    _pedido(loja, 'pendente', hoje() + timedelta(days=2), r, 50)
+    plano = PlanejamentoProducao(data=hoje(), nome='Plano hoje',
+                                 status='aprovado', origem='cronograma',
+                                 enviado_ao_padeiro=True)
+    db.session.add(plano)
+    db.session.flush()
+    db.session.add(PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
+                                    multiplicador=1, qtd_alvo=20,
+                                    produzido_qtd=0, qtd_extra=20))
+    db.session.commit()
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'})
+    resp = client.post('/telaindustriateste/celula', json={
+        'receita_id': r.id, 'data': hoje().isoformat(), 'qtd': 30,
+        'horizonte': 7, 'janela': 6, 'inicio': 0, 'equilibrar': 0})
+    assert resp.status_code == 200
+    assert resp.get_json()['ok'] is True
