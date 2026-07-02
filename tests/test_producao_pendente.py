@@ -423,3 +423,19 @@ def test_produzido_no_dia_le_movimentos_de_ontem(app):
     assert res['itens'][0]['receita_id'] == r.id
     assert res['itens'][0]['receita_nome'] == 'Sourdough'
     assert res['itens'][0]['qtd'] == 8
+
+
+def test_auditoria_pagina_renderiza_com_reagendar_e_produzido(app, admin_user):
+    """Render de ponta a ponta (rota -> serviço -> template): a auditoria tem o
+    botão de reagendar (checkbox+form) e a seção 'Produzido ontem'."""
+    r = _receita('Foccacia')
+    _ordem(r, hoje() - timedelta(days=2), alvo=10, produzido=3)   # uma vencida
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    resp = c.get('/telaindustriateste/auditoria')
+    assert resp.status_code == 200
+    assert b'reagendar-form' in resp.data                        # enviar pra hoje
+    assert b'chk-venc' in resp.data                              # checkbox por linha
+    assert 'Produzido ontem'.encode() in resp.data               # seção nova
