@@ -38,6 +38,11 @@ TIPOS_NEUTRO = {
     'venda_seru_sem_estoque', 'venda_vnda_sem_estoque',
     'venda_site_sem_estoque', 'venda_loja_sem_estoque',
     'desperdicio_sem_estoque', 'devolucao_industria_sem_estoque',
+    # Falta registrada pela tela de estoque da loja (03/07/2026): lancou
+    # perda/sobra/descarte/ajuste maior que o saldo — o mov principal grava
+    # a baixa real e estes registram o excedente.
+    'perda_sem_estoque', 'sobra_sem_estoque', 'descarte_sem_estoque',
+    'ajuste_sem_estoque',
 }
 # ajuste_conferencia: a quantidade ja vem com sinal (+ subiu / - desceu).
 
