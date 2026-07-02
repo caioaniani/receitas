@@ -22,6 +22,15 @@
           border-left:8px solid var(--cinza); }
   .card.sep { border-left-color:var(--amarelo); }
   .card.b2b { border-left-color:#6f42c1; }
+  /* Retirada de sobras (loja → industria): RECEBIMENTO, nao separacao —
+     cor propria (ciano) pro padeiro bater o olho e saber que e entrada. */
+  .card.retirada { border-left-color:#0dcaf0; background:#f0fbff; }
+  .badge-ret { display:inline-block; background:#0dcaf0; color:#043b47;
+               font-size:13px; font-weight:800; padding:3px 10px;
+               border-radius:8px; vertical-align:middle; letter-spacing:.5px; }
+  .btn-receber { display:block; width:100%; border:none; border-radius:14px;
+                 padding:20px; font-size:22px; font-weight:800; cursor:pointer;
+                 background:#0dcaf0; color:#043b47; }
   .card .loja { font-size:24px; font-weight:800; margin:0 0 4px; }
   .card .meta { font-size:16px; color:#6c757d; margin-bottom:12px; }
   .card .itens { font-size:15px; color:#495057; margin:0 0 14px; line-height:1.6; }
