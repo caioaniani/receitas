@@ -325,6 +325,13 @@ def _migrate_postgres(app):
             conn.execute(text(
                 "ALTER TABLE materia_prima ADD COLUMN sugerir_pedido_loja "
                 "BOOLEAN NOT NULL DEFAULT FALSE"))
+        if cols_mp and 'arquivada_em' not in cols_mp:
+            # MP fora de circulacao (some de pickers/matchers, historico fica).
+            conn.execute(text(
+                "ALTER TABLE materia_prima ADD COLUMN arquivada_em TIMESTAMP"))
+            conn.execute(text(
+                "ALTER TABLE materia_prima ADD COLUMN arquivada_por_id INTEGER "
+                "REFERENCES usuario(id)"))
 
         # pedido_item.quantidade_recebida + materia_prima_id
         result = conn.execute(text(
