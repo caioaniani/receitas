@@ -107,3 +107,72 @@ def test_pedidos_semana_exige_token(app):
     app.config['CLAUDE_API_TOKEN'] = TOKEN
     resp = app.test_client().get('/api/claude/pedidos-semana')
     assert resp.status_code == 401
+
+
+def test_receita_ficha_completa(app):
+    """GET /api/claude/receita?nome= devolve cadastro + ingredientes +
+    mapeamentos + estoques da receita (match único)."""
+    from app.models import EstoqueLoja, EstoqueProducao, VendaMapa
+
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    r = Receita(nome='Geleia de Teste', categoria='Acompanhamentos',
+                rendimento_qtd=10, rendimento_unidade='potes',
+                peso_base=400.0, peso_unitario=40.0)
+    loja = Loja(nome='Loja B', ativa=True)
+    db.session.add_all([r, loja])
+    db.session.commit()
+    db.session.add_all([
+        EstoqueProducao(receita_id=r.id, quantidade=36),
+        EstoqueLoja(loja_id=loja.id, receita_id=r.id, quantidade=5),
+        VendaMapa(canal='seru', nome_externo='GELEIA MORANGO 40G',
+                  receita_id=r.id, fator_quantidade=1.0),
+    ])
+    db.session.commit()
+
+    resp = app.test_client().get(
+        '/api/claude/receita?nome=geleia de teste',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True
+    rec = d['receita']
+    assert rec['nome'] == 'Geleia de Teste'
+    assert rec['rendimento_qtd'] == 10
+    assert rec['rendimento_unidade'] == 'potes'
+    assert rec['peso_unitario'] == 40.0
+    assert rec['estoque_industria'] == [{'quantidade': 36,
+                                         'nome_pendente': None}]
+    assert rec['estoque_lojas'][0]['loja'] == 'Loja B'
+    assert rec['estoque_lojas'][0]['quantidade'] == 5
+    assert rec['mapeamentos_venda'][0]['nome_externo'] == 'GELEIA MORANGO 40G'
+    assert rec['mapeamentos_venda'][0]['fator_quantidade'] == 1.0
+
+
+def test_receita_multiplos_matches_devolve_candidatos(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    db.session.add_all([
+        Receita(nome='Geleia de Morango', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0),
+        Receita(nome='Geleia de Maça', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0),
+    ])
+    db.session.commit()
+    resp = app.test_client().get(
+        '/api/claude/receita?nome=geleia',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['multiplos'] is True
+    assert {c['nome'] for c in d['candidatos']} == {'Geleia de Morango',
+                                                    'Geleia de Maça'}
+
+
+def test_receita_nao_encontrada_404_e_sem_param_400(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    client = app.test_client()
+    h = {'Authorization': f'Bearer {TOKEN}'}
+    assert client.get('/api/claude/receita?nome=inexistente-xyz',
+                      headers=h).status_code == 404
+    assert client.get('/api/claude/receita', headers=h).status_code == 400
+    # E token continua obrigatório.
+    assert client.get('/api/claude/receita?nome=x').status_code == 401
