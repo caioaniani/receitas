@@ -129,6 +129,9 @@ class Config:
     # Token para integracao com bots externos (n8n / WhatsApp).
     # Gere com: python -c "import secrets; print(secrets.token_urlsafe(32))"
     BOT_API_TOKEN = os.environ.get('BOT_API_TOKEN', '')
+    # Token da API read-only do assistente (Claude Code) — /api/claude/*.
+    # Vazio = rotas desligadas (503). Gere com o mesmo comando acima.
+    CLAUDE_API_TOKEN = os.environ.get('CLAUDE_API_TOKEN', '')
     # Telefones autorizados a consultar o bot (CSV, so digitos opcional).
     # Ex: '5511999999999,5511888888888'. Se vazio, qualquer telefone passa.
     BOT_ALLOWED_PHONES = os.environ.get('BOT_ALLOWED_PHONES', '')
