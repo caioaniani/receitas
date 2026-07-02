@@ -674,7 +674,12 @@ def responder(historico, *, telefone_contato=None):
     tools_cache[-1] = {**tools_cache[-1], 'cache_control': {'type': 'ephemeral'}}
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
+        # timeout: sem ele o default do SDK (~10 min) segura a thread e o
+        # lock da conversa quando a conexao trava (cliente espera 10 min
+        # pelo fallback). max_retries=1: uma retentativa do SDK basta —
+        # quem manda e o fallback rapido pro humano.
+        client = anthropic.Anthropic(api_key=api_key,
+                                     timeout=API_TIMEOUT_S, max_retries=1)
     except Exception as exc:  # noqa: BLE001
         logger.exception('chatbot: erro criando client')
         return _resp_handoff(_FALLBACK, f'client: {exc}')
@@ -687,12 +692,24 @@ def responder(historico, *, telefone_contato=None):
     # consultar o catalogo — caso real 12/06/2026, conv #198: cliente
     # perguntou de cesta+entrega e o bot fez handoff com zero consulta).
     tools_usadas = []
+    # Enforcement anti-handoff-preguicoso: a 1ª tentativa de transferir SEM
+    # nenhuma consulta antes (e sem motivo de excecao) e RECUSADA em codigo
+    # uma unica vez — o modelo recebe um tool_result mandando consultar.
+    handoff_ja_bloqueado = False
+    # Retry unico quando a resposta trunca no max_tokens (senao link/preco
+    # cortado ia pro cliente).
+    max_tokens_atual = 1200
+    retry_truncado_usado = False
+    # Breakpoint de cache movel no fim das messages: as iteracoes do loop de
+    # tools releem o prefixo inteiro (historico + tool_results anteriores) do
+    # cache em vez de reprocessar tudo a cada ida-e-volta.
+    _cache_marcador_anterior = None
 
     for _ in range(MAX_ITERACOES):
         try:
             resp = client.messages.create(
                 model=MODELO,
-                max_tokens=1200,
+                max_tokens=max_tokens_atual,
                 system=[{'type': 'text',
                          'text': PROMPT + _CANARIO_INSTRUCAO,
                          'cache_control': {'type': 'ephemeral'}}],
@@ -706,6 +723,16 @@ def responder(historico, *, telefone_contato=None):
 
         from app.services import uso_ia
         uso_ia.registrar('bot_atendimento', MODELO, getattr(resp, 'usage', None))
+
+        # Truncou no teto de tokens: refaz UMA vez com folga em vez de mandar
+        # resposta cortada (link de carrinho/preco pela metade) ao cliente.
+        if (getattr(resp, 'stop_reason', None) == 'max_tokens'
+                and not retry_truncado_usado):
+            retry_truncado_usado = True
+            max_tokens_atual = 2400
+            logger.warning('chatbot: resposta truncada em max_tokens — '
+                           'refazendo com %d', max_tokens_atual)
+            continue
 
         tool_uses = [b for b in resp.content if getattr(b, 'type', None) == 'tool_use']
 
