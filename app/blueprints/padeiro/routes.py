@@ -94,7 +94,20 @@ def _dados_listas(dia, eh_hoje):
         qb = qb.filter(VendaB2B.data_entrega == dia)
     vendas = qb.order_by(VendaB2B.data_entrega).all()
 
-    a_separar = ([_card_loja(p) for p in pedidos if p.status in _A_SEPARAR]
+    # Retiradas de sobras (loja → industria): entram na MESMA fila, com
+    # destaque proprio — a industria vai RECEBER (nao separar). Hoje inclui
+    # atrasadas (retirada de ontem que o motorista ainda nao coletou).
+    from app.models import RetiradaSobra
+    qr_ = RetiradaSobra.query.filter(
+        RetiradaSobra.status.in_(('aguardando_coleta', 'em_transporte')))
+    if eh_hoje:
+        qr_ = qr_.filter(RetiradaSobra.data_retirada <= hj)
+    else:
+        qr_ = qr_.filter(RetiradaSobra.data_retirada == dia)
+    retiradas = qr_.order_by(RetiradaSobra.data_retirada).all()
+
+    a_separar = ([_card_retirada(r) for r in retiradas]
+                 + [_card_loja(p) for p in pedidos if p.status in _A_SEPARAR]
                  + [_card_b2b(v) for v in vendas if v.status_entrega == 'pendente'])
     aguardando = ([_card_loja(p) for p in pedidos if p.status == 'separado']
                   + [_card_b2b(v) for v in vendas if v.status_entrega == 'separado'])
