@@ -1867,7 +1867,12 @@ def _enriquecer_criar_retirada_sobras(tool_input, user):
 
 
 def _enriquecer_registrar_desperdicio_lote(tool_input, user):
-    """Resolve loja + cada item + estoque atual pra preview de lote."""
+    """Resolve loja + cada item + estoque atual pra preview de lote. Tambem
+    marca `ja_registrado_hoje` por item — o preview avisa quando o lote
+    parece duplicado (caso real 02/07/2026: o modelo re-enviou a lista
+    inteira pra acrescentar 1 item e 4 itens duplicaram como perda)."""
+
+    from app.constants import DESPERDICIO_MOTIVOS
     from app.models import EstoqueLoja
     from app.utils import resolver_loja_por_nome
 
@@ -1884,9 +1889,14 @@ def _enriquecer_registrar_desperdicio_lote(tool_input, user):
     loja_id = loja.id if loja else None
     loja_nome = loja.nome if loja else None
 
-    motivo = (out.get('motivo') or 'vencido').strip() or 'vencido'
-    if motivo not in ('vencido', 'estragado', 'queimado', 'caiu', 'outro'):
-        motivo = 'vencido'
+    # MESMA normalizacao do executor (executar_registrar_desperdicio_lote) —
+    # antes este preview usava o vocabulario antigo ('vencido', 'estragado')
+    # e 'nao_vendeu' virava 'vencido' silenciosamente no registro.
+    motivo = (out.get('motivo') or 'validade').strip().lower()
+    motivo = {'vencido': 'validade', 'estragado': 'estragou',
+              'queimado': 'queimou'}.get(motivo, motivo)
+    if motivo not in DESPERDICIO_MOTIVOS:
+        motivo = 'validade'
 
     itens_enriq = []
     for it in (out.get('itens') or []):
