@@ -78,9 +78,15 @@ class PrevisaoSnapshot(db.Model):
     pra medir vies e erro. Sem isso nao havia como saber se a previsao
     acerta — qualquer 'melhoria' era no escuro.
 
-    Uma linha por (data_alvo, loja, receita): grava-se a PRIMEIRA previsao
-    vista pra aquela data-alvo (tipicamente ~7 dias antes), pra medir sempre
-    no mesmo lead. `realizado` fica NULL ate a data passar e o cron casar.
+    Uma linha por (data_alvo, loja, receita, MOTOR): grava-se a PRIMEIRA
+    previsao vista pra aquela data-alvo, pra medir sempre no mesmo lead.
+    `realizado` fica NULL ate a data passar e o cron casar.
+
+    Fase 0 (02/07/2026): a acuracia media SO o motor aposentado
+    (sugerir_pedidos_semana). Agora cada snapshot registra de QUAL motor veio
+    ('pedido_semana' legado, 'media_pedido', 'venda_estoque') e o `lead_dias`
+    (antecedencia) — sem isso, erros de leads diferentes se misturavam na
+    mesma metrica e nao dava pra comparar motores.
     """
     __tablename__ = 'previsao_snapshot'
 
@@ -94,19 +100,26 @@ class PrevisaoSnapshot(db.Model):
     realizado = db.Column(db.Integer, nullable=True)
     casado_em = db.Column(db.DateTime, nullable=True)
     criado_em = db.Column(db.DateTime, default=agora, index=True)
+    # Motor que gerou o previsto: 'media_pedido' (1b) / 'venda_estoque' (1a) /
+    # 'pedido_semana' (legado, linhas antigas).
+    motor = db.Column(db.String(20), nullable=False, default='pedido_semana',
+                      server_default='pedido_semana')
+    # (data_alvo - hoje) no momento do snapshot — segmenta o erro por
+    # antecedencia (prever pra amanha e mais facil que pra daqui a 6 dias).
+    lead_dias = db.Column(db.Integer, nullable=True)
 
     loja = db.relationship('Loja')
     receita = db.relationship('Receita')
 
     __table_args__ = (
-        db.UniqueConstraint('data_alvo', 'loja_id', 'receita_id',
-                            name='uq_previsao_snapshot_alvo'),
+        db.UniqueConstraint('data_alvo', 'loja_id', 'receita_id', 'motor',
+                            name='uq_previsao_snapshot_alvo_motor'),
     )
 
     def __repr__(self):
         return (f'<PrevisaoSnapshot {self.data_alvo} loja={self.loja_id} '
-                f'rec={self.receita_id} prev={self.previsto} '
-                f'real={self.realizado}>')
+                f'rec={self.receita_id} motor={self.motor} '
+                f'prev={self.previsto} real={self.realizado}>')
 
 
 class CronogramaOverride(db.Model):
