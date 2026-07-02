@@ -1740,10 +1740,48 @@ def estoque_loja():
         from app.services import estoque_loja_lote as svc_lote
         pendentes = [it for it in itens if it.pendente]
         sugestoes = svc_lote.sugerir_para_pendentes(pendentes)
+
+    # Devoluções loja→indústria recentes (7 dias), agrupadas por token —
+    # admin pode estornar (as duas pontas) direto daqui.
+    devolucoes = []
+    if loja_id:
+        from collections import OrderedDict
+        from datetime import timedelta as _td
+
+        from app.services.devolucao import (
+            TIPO_BAIXA_LOJA,
+            TIPO_BAIXA_LOJA_ESTORNO,
+        )
+        from app.utils import agora as _agora
+        desde = _agora() - _td(days=7)
+        movs_dev = (MovEstoqueLoja.query
+                    .join(EstoqueLoja)
+                    .filter(EstoqueLoja.loja_id == loja_id,
+                            MovEstoqueLoja.tipo.in_(
+                                [TIPO_BAIXA_LOJA, TIPO_BAIXA_LOJA_ESTORNO]),
+                            MovEstoqueLoja.data >= desde)
+                    .order_by(MovEstoqueLoja.data.desc())
+                    .all())
+        grupos = OrderedDict()
+        estornados = set()
+        for m in movs_dev:
+            token = (m.referencia or '').rsplit(' ', 1)[-1]
+            if not token.startswith('dev-'):
+                continue
+            if m.tipo == TIPO_BAIXA_LOJA_ESTORNO:
+                estornados.add(token)
+                continue
+            g = grupos.setdefault(token, {'token': token, 'data': m.data,
+                                          'itens': []})
+            g['itens'].append({'nome': m.estoque.nome_item,
+                               'qtd': m.quantidade})
+        devolucoes = [dict(g, estornada=(g['token'] in estornados))
+                      for g in grupos.values()]
+
     return render_template('pedidos/estoque_loja.html', loja=loja, itens=itens,
                            lojas=lojas, sel_loja=loja_id,
                            receitas=receitas, produtos=produtos, materias=materias,
-                           sugestoes=sugestoes)
+                           sugestoes=sugestoes, devolucoes=devolucoes)
 
 
 @pedidos_bp.route('/estoque-loja/balanco-template.xlsx')
