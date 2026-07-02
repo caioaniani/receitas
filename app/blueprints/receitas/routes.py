@@ -53,14 +53,22 @@ def ficha(id):
     # Lista de usuarios pra dropdown "Atribuir" (admin so ve)
     from app.models import Usuario
     funcionarios = []
+    receitas_retorno = []
     if current_user.is_admin():
         funcionarios = (Usuario.query
                         .filter(Usuario.papel != 'admin')
                         .order_by(Usuario.nome)
                         .all())
+        # Dropdown "Receita de retorno" (devolucao loja->industria): qualquer
+        # receita ativa menos a propria.
+        receitas_retorno = (Receita.query
+                            .filter(Receita.arquivada_em.is_(None),
+                                    Receita.id != receita.id)
+                            .order_by(Receita.nome).all())
 
     return render_template('receitas/ficha.html', receita=receita, mp_dict=mp_dict,
                            funcionarios=funcionarios,
+                           receitas_retorno=receitas_retorno,
                            etapas_preparo=dividir_etapas_preparo(receita.modo_preparo),
                            receita_custos=resultado['custos'],
                            receita_pesos=resultado['pesos'])
