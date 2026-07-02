@@ -334,6 +334,164 @@ def sucesso(token):
     return render_template('handshake/sucesso.html', msg=msg, pedido=pedido)
 
 
+# ── Handshake da RETIRADA de sobras (loja → industria) ──────────────────────
+#
+# Esteira espelhada da entrega, em 2 tempos:
+#   coleta (na loja):        PIN de driver → em_transporte + BAIXA EstoqueLoja
+#   recebimento (industria): PIN de driver → recebida + CREDITA a receita de
+#                            retorno no EstoqueProducao
+# Movimentos levam token `ret-<id>` (mesma familia do fluxo manual).
+# Audit usa tipos curtos 'r_coleta'/'r_receb' (coluna tipo e VARCHAR(10)).
+
+def _audit_retirada(token, retirada, tipo, etapa, detalhe=None):
+    try:
+        ua = (request.headers.get('User-Agent') or '')[:300]
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr or '')[:45]
+        extra = f'retirada:{retirada.id} ' if retirada else ''
+        db.session.add(HandshakeAudit(
+            token=token, pedido_id=None, tipo=tipo, etapa=etapa,
+            detalhe=(extra + (detalhe or ''))[:500],
+            status_pedido=retirada.status if retirada else None,
+            ip=ip, user_agent=ua,
+        ))
+        db.session.commit()
+    except Exception:
+        logger.exception('handshake retirada audit falhou')
+        db.session.rollback()
+
+
+@handshake_bp.route('/qr-img/r/<token>.png')
+def qr_img_retirada(token):
+    """PNG do QR de retirada (embed no Slack / tela). Nao consome o token."""
+    import qrcode
+
+    from app.models import RetiradaQRCode
+    qr_row = RetiradaQRCode.query.filter_by(token=token).first()
+    if not qr_row:
+        abort(404)
+    url = url_for('handshake.handshake_retirada', token=token, _external=True)
+    img = qrcode.make(url)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png',
+                     download_name=f'qr-ret-{token[:8]}.png', max_age=0)
+
+
+_STATUS_ESPERADO_RETIRADA = {'coleta': 'aguardando_coleta',
+                             'recebimento': 'em_transporte'}
+
+
+@handshake_bp.route('/r/<token>', methods=['GET', 'POST'])
+def handshake_retirada(token):
+    from app.models import RetiradaQRCode
+    qr = RetiradaQRCode.query.filter_by(token=token).first()
+    if not qr:
+        _audit_retirada(token, None, None, 'scan_falha', 'token nao encontrado')
+        return render_template('handshake/erro.html',
+                               msg='Token nao encontrado. Pode ja ter sido usado ou estar errado.'), 404
+    tipo_audit = 'r_coleta' if qr.tipo == 'coleta' else 'r_receb'
+    if not qr.valido:
+        if (request.method == 'POST'
+                and qr.usado_em is not None
+                and qr.usado_em >= agora() - timedelta(minutes=_DOUBLE_SUBMIT_JANELA_MINUTOS)):
+            _audit_retirada(token, qr.retirada, tipo_audit,
+                            'double_submit_suprimido')
+            return redirect(url_for('handshake.sucesso_retirada', token=token),
+                            code=303)
+        motivo = 'expirado' if qr.expira_em <= agora() else 'ja usado'
+        _audit_retirada(token, qr.retirada, tipo_audit, 'scan_falha',
+                        f'qr {motivo}')
+        return render_template('handshake/erro.html',
+                               msg=f'Este QR Code esta {motivo}.'), 410
+
+    retirada = qr.retirada
+    esperado = _STATUS_ESPERADO_RETIRADA.get(qr.tipo)
+    if retirada.status != esperado:
+        _audit_retirada(token, retirada, tipo_audit, 'erro_status',
+                        f'esperava {esperado}, achou {retirada.status}')
+        return render_template('handshake/erro.html',
+                               msg=(f'Retirada #{retirada.id} nao esta mais '
+                                    f'aguardando esta etapa (status: '
+                                    f'{retirada.status}).')), 409
+
+    if request.method == 'GET':
+        _audit_retirada(token, retirada, tipo_audit, 'scan', 'pagina aberta')
+        return render_template('handshake/confirmar_retirada.html',
+                               qr=qr, retirada=retirada)
+
+    pin = (request.form.get('pin') or '').strip()
+    if not pin:
+        _audit_retirada(token, retirada, tipo_audit, 'pin_vazio')
+        flash('Digite o PIN.', 'danger')
+        return render_template('handshake/confirmar_retirada.html',
+                               qr=qr, retirada=retirada), 400
+    # As duas etapas validam PIN de DRIVER ativo (decisao do dono 02/07/2026:
+    # recebimento na industria tambem aceita qualquer PIN de motorista/producao).
+    drivers = Driver.query.filter_by(ativo=True).all()
+    driver = next((d for d in drivers if d.pin and d.pin == pin), None)
+    if not driver:
+        _audit_retirada(token, retirada, tipo_audit, 'pin_fail',
+                        f'PIN tentado: {pin[:4]}***')
+        flash('PIN invalido. Confirme com o gerente.', 'danger')
+        return render_template('handshake/confirmar_retirada.html',
+                               qr=qr, retirada=retirada), 401
+    _audit_retirada(token, retirada, tipo_audit, 'pin_ok',
+                    f'driver:{driver.nome}')
+
+    from app.services.devolucao import (
+        baixar_loja_retirada,
+        creditar_industria_retirada,
+    )
+    try:
+        if qr.tipo == 'coleta':
+            avisos = baixar_loja_retirada(retirada, usuario_id=None)
+            retirada.status = 'em_transporte'
+            retirada.driver_id = driver.id
+            retirada.coletada_em = agora()
+            # Ja deixa o QR do proximo passo pronto (recebimento na industria).
+            from app.services.handshake_qr import gerar_qr_retirada
+            gerar_qr_retirada(retirada, 'recebimento')
+            detalhe = '; '.join(avisos) if avisos else ''
+        else:
+            resumo = creditar_industria_retirada(retirada, usuario_id=None)
+            retirada.status = 'recebida'
+            retirada.recebida_em = agora()
+            detalhe = ', '.join(f"{r['qtd']}x {r['nome']}" for r in resumo)
+        qr.usado_em = agora()
+        qr.usado_por_descricao = f'driver:{driver.nome}'
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        _audit_retirada(token, retirada, tipo_audit, 'erro_executor',
+                        str(exc)[:400])
+        return render_template('handshake/erro.html',
+                               msg=f'Erro ao processar: {exc}'), 500
+    _audit_retirada(token, retirada, tipo_audit, 'sucesso',
+                    f'driver:{driver.nome} {detalhe}'[:400])
+    return redirect(url_for('handshake.sucesso_retirada', token=token),
+                    code=303)
+
+
+@handshake_bp.route('/r/<token>/sucesso')
+def sucesso_retirada(token):
+    """Tela pos-handshake da retirada (PRG, idempotente no refresh)."""
+    from app.models import RetiradaQRCode
+    qr = RetiradaQRCode.query.filter_by(token=token).first()
+    if not qr:
+        abort(404)
+    if qr.usado_em is None:
+        return redirect(url_for('handshake.handshake_retirada', token=token))
+    retirada = qr.retirada
+    proximo_qr = None
+    if qr.tipo == 'coleta':
+        proximo_qr = next(
+            (q for q in retirada.qrcodes
+             if q.tipo == 'recebimento' and q.valido), None)
+    return render_template('handshake/sucesso_retirada.html',
+                           qr=qr, retirada=retirada, proximo_qr=proximo_qr)
+
+
 def _handshake_entrega(qr, pedido, pin):
     """PIN da loja → muda status pra entregue."""
     from app.blueprints.pedidos.routes import _executar_recebimento_pedido
