@@ -231,10 +231,10 @@ def test_rota_estoque_renderiza(app, admin_user):
 
 
 # ── Matérias-primas na tela (pão de queijo comprado, vendido via cones) ─────
-def _mp(nome='Pão de Queijo (congelado)'):
+def _mp(nome='Pão de Queijo (congelado)', sugerir=True):
     from app.models import MateriaPrima
     m = MateriaPrima(nome=nome, unidade='un', custo_por_kg=0.4662,
-                     peso_unidade=18.0)
+                     peso_unidade=18.0, sugerir_pedido_loja=sugerir)
     db.session.add(m)
     db.session.commit()
     return m
@@ -296,8 +296,23 @@ def test_mp_estoque_cobre_nao_pede(app):
     assert p['total'] == 0                      # 500 cobre a semana
 
 
+def test_mp_sem_checkbox_nao_aparece_mesmo_com_venda(app):
+    """MP SEM o checkbox 'Loja pede' fica fora da tela mesmo com estoque e
+    venda — opt-in explícito (nem toda MP que passa por loja é pedida)."""
+    loja = _loja()
+    mp = _mp('Embalagem Cone', sugerir=False)      # sem checkbox
+    el = _estoque_mp(loja, mp, 50)
+    _venda(el, hoje() - timedelta(days=7), 10)
+    r = _receita('Pao')                             # pra loja existir na grade
+    el_r = _estoque(loja, r, 5)
+    _venda(el_r, hoje() - timedelta(days=7), 3)
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6)
+    assert _prod_mp(grade, loja.id, mp.id) is None
+
+
 def test_mp_sem_atividade_nao_aparece(app):
-    """MP sem estoque em loja, sem venda e sem pedido não polui a tela."""
+    """MP marcada mas sem estoque em loja, sem venda e sem pedido não polui
+    a tela (mesmo critério por loja das receitas)."""
     loja = _loja()
     r = _receita('Pao')
     el = _estoque(loja, r, 5)                   # só pra loja existir na grade
