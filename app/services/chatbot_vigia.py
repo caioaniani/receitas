@@ -1,9 +1,11 @@
 """Vigia do chatbot — IA supervisora que assiste cada conversa do bot e alerta
 o dono via WhatsApp (Z-API) quando detecta problema.
 
-Roda DEPOIS de o bot ter respondido (nao atrasa o cliente). Usa Claude Haiku
-4.5 (modelo barato e rapido, suficiente pra classificacao): ~$0.003 por
-avaliacao = ~R$9/mes pro volume atual.
+Roda DEPOIS de o bot ter respondido (nao atrasa o cliente). Modelo: Sonnet
+4.6 (subido de Haiku em 25/06/2026 na padronizacao do dono — input 3x mais
+caro; e o MAIOR volume de IA do sistema porque roda a cada resposta). Por
+isso ha um short-circuit deterministico: fechamento trivial do cliente
+("ok", "obrigada") nao gasta chamada de modelo (02/07/2026).
 
 Detecta principalmente:
 - Cliente irritado/frustrado/prestes a desistir
