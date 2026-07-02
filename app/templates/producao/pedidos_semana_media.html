@@ -30,6 +30,7 @@
     /* Pedido ainda editável (pendente/confirmado): célula azul HABILITADA —
        editar aqui atualiza o pedido existente ao Gerar. */
     .pmed td.jatem input.tem-pedido:not(:disabled) { background: #eef5ff; }
+    .pmed .btn-atualizar-dia { font-size: .68rem; padding: .05rem .35rem; text-transform: none; }
     .pmed .total-cel { font-weight: 700; }
     .pmed .total-cel.ok { color: #198754; }
     .pmed .total-cel.dif { color: #b02a37; }
@@ -119,7 +120,13 @@
                         <th class="prod">Produto</th>
                         <th title="Estoque atual disponível da loja (físico − reservado)">Estoque</th>
                         <th title="Média semanal (total na janela ÷ nº de semanas)">Média/sem</th>
-                        {% for dia in grade.dias %}<th>{{ dia.label }}</th>{% endfor %}
+                        {% for dia in grade.dias %}<th>{{ dia.label }}
+                            {% if dia.data in loja.editaveis %}
+                            <button type="submit" class="btn btn-sm btn-outline-primary btn-atualizar-dia d-block mx-auto mt-1"
+                                    name="so_dia" value="{{ loja.loja_id }}|{{ dia.data }}"
+                                    title="Atualiza SÓ o pedido deste dia desta loja com os valores da coluna (0 remove o item)"
+                                    onclick="return confirm('Atualizar o pedido de {{ loja.loja_nome|e }} em {{ dia.label }} com os valores da coluna?');">↻ atualizar</button>
+                            {% endif %}</th>{% endfor %}
                         <th>Total</th>
                         <th></th>
                     </tr>

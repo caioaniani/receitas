@@ -1155,15 +1155,17 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # pedida por (loja, data, receita) — pra simulacao usar a entrega real do dia
     # travado como carry, em vez da sugestao (que nao sera criada).
     ja_tem = defaultdict(set)
+    status_dia = defaultdict(lambda: defaultdict(list))
     pedido_existente = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    for loja_id, data_ent in (db.session.query(
-            PedidoLoja.loja_id, PedidoLoja.data_entrega)
+    for loja_id, data_ent, status_p in (db.session.query(
+            PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoLoja.status)
             .filter(PedidoLoja.status != 'cancelado',
                     PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= horizonte_fim)
-            .distinct().all()):
+            .all()):
         if data_ent is not None:
             ja_tem[loja_id].add(data_ent.isoformat())
+            status_dia[loja_id][data_ent.isoformat()].append(status_p)
     for loja_id, data_ent, rid_e, mid_e, qtd_e in (db.session.query(
             PedidoLoja.loja_id, PedidoLoja.data_entrega,
             PedidoItem.receita_id, PedidoItem.materia_prima_id,
@@ -1256,6 +1258,11 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 'loja_id': loja.id, 'loja_nome': loja.nome,
                 'produtos': produtos,
                 'ja_tem': sorted(ja_tem.get(loja.id, set())),
+                # Dias travados que a tela destrava pra edicao (1 pedido, ainda
+                # pendente/confirmado) — mesma regra da tela de media.
+                'editaveis': sorted(
+                    d for d, sts in status_dia.get(loja.id, {}).items()
+                    if len(sts) == 1 and sts[0] in STATUS_PEDIDO_EDITAVEIS),
             })
 
     return {

@@ -368,6 +368,17 @@ def pedidos_semana_gerar():
         so_loja = int(request.form.get('so_loja') or 0) or None
     except (TypeError, ValueError):
         so_loja = None
+    # Botao "atualizar" do cabecalho do dia: aplica SO aquele (loja, dia) —
+    # atualiza o pedido existente sem mexer no resto da grade.
+    so_dia = None
+    bruto = (request.form.get('so_dia') or '').strip()
+    if bruto and '|' in bruto:
+        loja_s, data_s = bruto.split('|', 1)
+        try:
+            from datetime import date as _date
+            so_dia = (int(loja_s), _date.fromisoformat(data_s))
+        except (TypeError, ValueError):
+            so_dia = None
 
     agrupado = {}   # (loja_id, data) -> list[{receita_id|materia_prima_id, qtd}]
     for chave, valor in request.form.items():
@@ -392,7 +403,9 @@ def pedidos_semana_gerar():
             continue
         if qtd < 0:
             continue                      # 0 passa: em dia editavel REMOVE o item
-        if so_loja is not None and loja_id != so_loja:
+        if so_dia is not None and (loja_id, data_ent) != so_dia:
+            continue                      # "atualizar este dia": ignora o resto
+        if so_dia is None and so_loja is not None and loja_id != so_loja:
             continue                      # "só esta loja": ignora as outras
         agrupado.setdefault((loja_id, data_ent), []).append(
             {**item, 'qtd': qtd})

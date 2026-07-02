@@ -216,3 +216,81 @@ def test_rota_media_renderiza_celula_editavel(app, admin_user):
                       '&inicio=0').get_data(as_text=True)
     assert 'ATUALIZAR o pedido' in body                # tooltip da célula editável
     assert 'value="88"' in body                        # valor do pedido na célula
+
+
+# ── botão "↻ atualizar" por dia (so_dia) + edição na tela venda+estoque ─────
+def test_so_dia_atualiza_apenas_aquele_dia(app, admin_user):
+    """O botão do cabeçalho manda a grade toda, mas só o (loja, dia) do botão
+    é aplicado — os outros dias/lojas ficam intactos."""
+    loja = _loja()
+    r = _receita()
+    d1 = hoje() + timedelta(days=1)
+    d2 = hoje() + timedelta(days=2)
+    p1 = _pedido(loja, d1, [(r, 100)])
+    p2 = _pedido(loja, d2, [(r, 200)])
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.post('/producao/pedidos-semana/gerar', data={
+        'origem': 'media',
+        'so_dia': '%d|%s' % (loja.id, d1.isoformat()),
+        'qtd|%d|%s|%d' % (loja.id, d1.isoformat(), r.id): '70',
+        'qtd|%d|%s|%d' % (loja.id, d2.isoformat(), r.id): '999',  # ignorado
+    })
+    assert resp.status_code == 302
+    assert PedidoItem.query.filter_by(pedido_id=p1.id).one().quantidade == 70
+    assert PedidoItem.query.filter_by(pedido_id=p2.id).one().quantidade == 200
+
+
+def test_estoque_expoe_editaveis_e_renderiza_botao(app, admin_user):
+    """A tela venda+estoque também destrava dia editável e mostra o botão
+    ↻ atualizar no cabeçalho do dia."""
+    from datetime import datetime, time
+
+    from app.models import EstoqueLoja, MovEstoqueLoja
+    from app.services.previsao_producao import sugerir_pedidos_por_venda
+    loja = _loja()
+    r = _receita()
+    el = EstoqueLoja(loja_id=loja.id, receita_id=r.id, quantidade=5)
+    db.session.add(el)
+    db.session.flush()
+    db.session.add(MovEstoqueLoja(
+        estoque_loja_id=el.id, tipo='venda_seru', quantidade=3,
+        data=datetime.combine(hoje() - timedelta(days=7), time(12, 0)),
+        referencia='t'))
+    db.session.commit()
+    d = hoje() + timedelta(days=1)
+    _pedido(loja, d, [(r, 44)], status='pendente')
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=0)
+    lj = next(e for e in grade['lojas'] if e['loja_id'] == loja.id)
+    assert d.isoformat() in lj['editaveis']
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    body = client.get('/producao/pedidos-semana/estoque?horizonte=7&janela=6'
+                      '&inicio=0').get_data(as_text=True)
+    assert 'btn-atualizar-dia' in body
+    assert 'so_dia' in body
+    assert 'value="44"' in body                       # pedido na célula azul
+
+
+def test_media_renderiza_botao_atualizar_dia(app, admin_user):
+    loja = _loja()
+    r = _receita()
+    hoje_d = hoje()
+    for sem in (1, 2):
+        _pedido(loja, hoje_d - timedelta(days=7 * sem), [(r, 50)],
+                status='recebido')
+    _pedido(loja, hoje_d + timedelta(days=1), [(r, 10)], status='pendente')
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    body = client.get('/producao/pedidos-semana/media?horizonte=7&janela=6'
+                      '&inicio=0').get_data(as_text=True)
+    assert 'btn-atualizar-dia' in body
+    assert '%d|%s' % (loja.id, (hoje_d + timedelta(days=1)).isoformat()) in body

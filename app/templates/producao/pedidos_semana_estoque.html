@@ -27,6 +27,8 @@
     .pmed td.jatem input { background: #f1f3f5; }
     /* Dia travado COM pedido: mostra o que FOI pedido (azul itálico), não sugestão. */
     .pmed td.jatem input.tem-pedido { color: #0d6efd; font-style: italic; font-weight: 600; }
+    .pmed td.jatem input.tem-pedido:not(:disabled) { background: #eef5ff; }
+    .pmed .btn-atualizar-dia { font-size: .68rem; padding: .05rem .35rem; text-transform: none; }
     .pmed .total-cel { font-weight: 700; }
     .pmed-barra { position: sticky; bottom: 0; background: #fff;
                   border-top: 1px solid #dee2e6; padding: .6rem .25rem; z-index: 4; }
@@ -101,7 +103,13 @@
                         <th class="prod">Produto</th>
                         <th title="Estoque atual da loja">Estoque</th>
                         <th title="Venda média semanal (por dia-da-semana, do histórico)">Venda/sem</th>
-                        {% for dia in grade.dias %}<th>{{ dia.label }}</th>{% endfor %}
+                        {% for dia in grade.dias %}<th>{{ dia.label }}
+                            {% if dia.data in loja.editaveis %}
+                            <button type="submit" class="btn btn-sm btn-outline-primary btn-atualizar-dia d-block mx-auto mt-1"
+                                    name="so_dia" value="{{ loja.loja_id }}|{{ dia.data }}"
+                                    title="Atualiza SÓ o pedido deste dia desta loja com os valores da coluna (0 remove o item)"
+                                    onclick="return confirm('Atualizar o pedido de {{ loja.loja_nome|e }} em {{ dia.label }} com os valores da coluna?');">↻ atualizar</button>
+                            {% endif %}</th>{% endfor %}
                         <th>Total</th>
                     </tr>
                 </thead>
@@ -116,13 +124,15 @@
                         <td class="venda">{{ p.media_semanal }}</td>
                         {% for dia in grade.dias %}
                         {% set travado = dia.data in loja.ja_tem %}
+                        {% set editavel = travado and dia.data in loja.editaveis %}
                         {% set pedido_dia = p.ja_pedido[loop.index0] if travado else 0 %}
                         <td class="{{ 'jatem' if travado }}">
                             <input type="number" min="0"
-                                   class="form-control form-control-sm pmed-cel{% if travado and pedido_dia %} tem-pedido{% endif %}"
+                                   class="form-control form-control-sm pmed-cel{% if travado %} tem-pedido{% endif %}"
                                    name="qtd|{{ loja.loja_id }}|{{ dia.data }}|{{ p.item_key }}"
                                    value="{{ pedido_dia if travado else p.por_dia[loop.index0] }}"
-                                   {% if travado %}disabled title="já tem pedido neste dia — mostrando o que FOI pedido ({{ pedido_dia }} un), não a sugestão"{% endif %}>
+                                   {% if travado and not editavel %}disabled title="já tem pedido neste dia (em separação/entrega, ou mais de um) — mostrando o que FOI pedido ({{ pedido_dia }} un); edite pela tela do pedido"{% endif %}
+                                   {% if editavel %}title="pedido JÁ FEITO neste dia ({{ pedido_dia }} un) — edite e use o ↻ atualizar da coluna (0 remove o item)"{% endif %}>
                         </td>
                         {% endfor %}
                         <td class="total-cel">0</td>
@@ -159,7 +169,7 @@
         function recalc() {
             var s = 0;
             row.querySelectorAll('.pmed-cel').forEach(function (inp) {
-                if (!inp.disabled) { s += parseInt(inp.value) || 0; }
+                if (!inp.disabled && !inp.classList.contains('tem-pedido')) { s += parseInt(inp.value) || 0; }
             });
             row.querySelector('.total-cel').textContent = s;
         }
