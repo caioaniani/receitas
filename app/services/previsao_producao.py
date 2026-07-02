@@ -884,12 +884,21 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
         produtos = []
         for rid, rec in sorted(receitas.items(), key=lambda kv: kv[1].nome):
             dows = soma_lrd.get(loja.id, {}).get(rid)
-            if not dows:
+            # Item com pedido JA FEITO no horizonte aparece mesmo sem sugestao
+            # (linha zerada + celulas azuis do ja-pedido) — sem isto o produto
+            # cuja unica atividade cai em dia travado sumia da grade e ninguem
+            # via o que ja estava encomendado (pedido do dono 02/07).
+            ja_ped_item = [ja_pedido.get(loja.id, {})
+                           .get(d.isoformat(), {}).get(rid, 0)
+                           for d in dias_futuros]
+            tem_pedido_horizonte = any(ja_ped_item)
+            if not dows and not tem_pedido_horizonte:
                 continue
             # media por dia-da-semana = total daquele dow / nº semanas. A soma
             # sobre a semana reconstroi a media semanal estavel; o split por dow
             # respeita o PADRAO da loja (em que dia ela costuma pedir).
-            media_por_dow = {dow: tot / janela_semanas for dow, tot in dows.items()}
+            media_por_dow = ({dow: tot / janela_semanas
+                              for dow, tot in dows.items()} if dows else {})
             media_sem = sum(media_por_dow.values())   # = total_janela / semanas
 
             fe = bool(getattr(rec, 'fornada_especial', False))
@@ -901,7 +910,7 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                 if not (fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL)
                 and d.isoformat() not in ja_tem_loja
             ]
-            if not idx_validos:
+            if not idx_validos and not tem_pedido_horizonte:
                 continue
             # Peso de cada dia livre = a media DAQUELE dia-da-semana. total_alocar
             # = soma das medias dos dias livres (so o que vai mesmo pra eles; nada
@@ -909,12 +918,14 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
             pesos = [media_por_dow.get(dias_futuros[i].weekday(), 0.0)
                      for i in idx_validos]
             total_alocar = int(round(sum(pesos)))
-            if total_alocar <= 0:
+            if total_alocar <= 0 and not tem_pedido_horizonte:
                 continue
             caixa = int(rec.lote_pedido or 0)
             por_dia = [0] * len(dias_futuros)
             abaixo_lote = False
-            if caixa > 1 and total_alocar >= caixa:
+            if total_alocar <= 0:
+                pass                                  # so o ja-pedido: linha zerada
+            elif caixa > 1 and total_alocar >= caixa:
                 # Fecha >= 1 caixa: distribui em CAIXAS inteiras, ponderadas pelo
                 # dia-da-semana (mais caixas no pico).
                 n_lotes = int(round(total_alocar / caixa))
