@@ -454,6 +454,26 @@
         </div>
     </div>
 
+    <!-- Receita de retorno (devolucao loja -> industria) -->
+    <div class="mb-3">
+        <label class="form-label small text-muted" for="retorno-receita">
+            <strong>Receita de retorno</strong> — sobras devolvidas pela loja viram…
+        </label>
+        <select name="retorno_receita_id" id="retorno-receita"
+                class="form-select form-select-sm" style="max-width:420px;">
+            <option value="">— a própria receita (padrão) —</option>
+            {% for r in receitas_retorno %}
+            <option value="{{ r.id }}" {% if receita.retorno_receita_id == r.id %}selected{% endif %}>{{ r.nome }}</option>
+            {% endfor %}
+        </select>
+        <div class="text-muted small mt-1">
+            Quando a loja <strong>devolve sobras à indústria</strong>, o crédito entra
+            nesta receita — separada do congelado cru que atende pedidos. Ex:
+            Croissant Tradicional → "Croissant Tradicional — Retorno" (que o
+            Croissant Almond consome como ingrediente). Vazio = credita a própria.
+        </div>
+    </div>
+
     <!-- Insumo/etapa: nao e pedido pela loja -->
     <div class="mb-3">
         <div class="form-check">
