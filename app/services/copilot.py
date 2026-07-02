@@ -4601,6 +4601,7 @@ _EXEC_HANDLERS = {
     'balanco_congelados': executar_balanco_congelados,
     'entrada_lote_loja': executar_entrada_lote_loja,
     'devolver_industria': executar_devolver_industria,
+    'criar_retirada_sobras': executar_criar_retirada_sobras,
     'registrar_desperdicio': executar_registrar_desperdicio,
     'registrar_desperdicio_lote': executar_registrar_desperdicio_lote,
     'criar_venda_b2b': executar_criar_venda_b2b,
