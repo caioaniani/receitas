@@ -121,20 +121,26 @@ def test_dia_travado_nao_recebe_parcela(app):
     assert sum(p['por_dia']) == 50             # nada perdido nem re-jogado
 
 
-def test_media_usa_total_da_janela(app):
-    """A media e o TOTAL na janela / nº de semanas — varias semanas com
-    quantidades diferentes."""
+def test_media_recencia_ponderada_com_zeros(app):
+    """Fase 1 (02/07/2026): a media e RECENCIA-ponderada (meia-vida 21d) com o
+    denominador contando as datas do dow DESDE a 1a ocorrencia — mesma
+    matematica do balanco. 3 semanas com 100/50/30: a mais recente pesa mais
+    (antes era total/janela uniforme = 30, que diluia o sinal)."""
     loja = _loja()
     r = _receita()
     hoje_d = hoje()
-    # 3 semanas: 100, 50, 30 -> total 180 / 6 semanas (janela) = 30/sem
     for sem, q in ((1, 100), (2, 50), (3, 30)):
         _pedido(loja, hoje_d - timedelta(days=7 * sem), r, q)
 
     grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=6)
     p = _prod(grade, loja.id, r.id)
-    assert p['media_semanal'] == 30.0
-    assert sum(p['por_dia']) == 30
+    # Mesma formula do motor: peso 0.5**(dias/21); denominador = as 3 datas
+    # do dow desde a 1a ocorrencia (nao ha gaps). Sem cap (100 < 2.5*mediana).
+    pesos = [0.5 ** (7 * sem / 21) for sem in (1, 2, 3)]
+    esperado = ((100 * pesos[0] + 50 * pesos[1] + 30 * pesos[2])
+                / sum(pesos))
+    assert p['media_semanal'] == round(esperado, 1)
+    assert sum(p['por_dia']) == int(round(esperado))
 
 
 def test_loja_sem_historico_nao_aparece(app):
