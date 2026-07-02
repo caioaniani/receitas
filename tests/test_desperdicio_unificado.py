@@ -143,7 +143,7 @@ def test_copilot_lote_conta_reaproveitados(app, admin_user):
     from app.services import copilot
     loja, r, el = _setup(reaproveitavel=True)
     out = copilot.executar_registrar_desperdicio_lote(
-        {'loja': loja.nome, 'motivo': 'nao_vendeu',
+        {'loja_nome': loja.nome, 'motivo': 'nao_vendeu',
          'itens': [{'nome': r.nome, 'quantidade': 3}]}, admin_user)
     assert out['ok'] is True
     assert out['reaproveitados_sem_baixa'] == 1
