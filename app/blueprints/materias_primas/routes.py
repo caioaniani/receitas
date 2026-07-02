@@ -26,6 +26,9 @@ def salvar():
     pesos_unidade = request.form.getlist('peso_unidade[]')
     fornecedores = request.form.getlist('fornecedor[]')
     observacoes_list = request.form.getlist('observacoes[]')
+    # Checkbox "Loja pede" (fora dos arrays: checkbox desmarcado nao e enviado,
+    # entao vai por VALOR = id da MP; ausente = desmarcado).
+    sugerir_loja_ids = set(request.form.getlist('sugerir_loja_ids'))
 
     def _parse_peso(idx, unidade):
         if unidade != 'un' or idx >= len(pesos_unidade):
