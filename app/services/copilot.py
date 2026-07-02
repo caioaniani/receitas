@@ -1578,6 +1578,8 @@ def _enriquecer_params(tool_name, tool_input, user):
         return _enriquecer_entrada_lote_loja(tool_input)
     if tool_name == 'devolver_industria':
         return _enriquecer_devolver_industria(tool_input, user)
+    if tool_name == 'criar_retirada_sobras':
+        return _enriquecer_criar_retirada_sobras(tool_input, user)
     if tool_name == 'registrar_desperdicio':
         return _enriquecer_registrar_desperdicio(tool_input, user)
     if tool_name == 'registrar_desperdicio_lote':
