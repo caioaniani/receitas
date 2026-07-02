@@ -83,15 +83,16 @@ def auditoria():
     """Auditoria da produção mandada: ordens enviadas ao padeiro ainda NÃO
     confirmadas. VENCIDAS (data passou, ninguém marcou produção) em destaque;
     AGENDADAS (hoje/futuro) em tom mais leve. Não mexe em estoque — é leitura."""
-    from app.services.producao_pendente import listar_pendencias
+    from app.services.producao_pendente import listar_pendencias, produzido_no_dia
 
     try:
         dias = max(1, min(int(request.values.get('dias', 30)), 365))
     except (TypeError, ValueError):
         dias = 30
     dados = listar_pendencias(dias_vencido=dias)
+    produzido_ontem = produzido_no_dia()   # confirmado ontem (fonte: movimentos)
     return render_template('industria_teste/auditoria.html', dados=dados,
-                           dias=dias)
+                           dias=dias, produzido_ontem=produzido_ontem)
 
 
 @industria_teste_bp.route('/auditoria/dispensar', methods=['POST'])
