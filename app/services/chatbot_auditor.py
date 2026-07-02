@@ -44,6 +44,9 @@ ruído, não tendência) e não fale em "100% dos handoffs" — use números
 absolutos ("2 conversas, 1 handoff") e tom neutro. 1 caso é 1 caso: descreva
 factualmente o que houve e a sugestão, sem extrapolar padrão.
 
+Horário de pico: só afirme com base no histograma `por_hora` dos dados —
+sem ele (ausente/vazio), não fale de pico.
+
 Seja DIRETO e CURTO. Linguagem coloquial brasileira, sem corporativês. NUNCA invente número.
 
 Responda APENAS com JSON neste formato:
