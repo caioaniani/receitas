@@ -46,6 +46,14 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
     SESSION_COOKIE_SECURE = DATABASE_URL.startswith('postgresql')
+    # Token CSRF vale a SESSAO inteira (default do Flask-WTF = 1h). A protecao
+    # CSRF vem do token ser secreto e amarrado a sessao (cookie HTTPONLY +
+    # SameSite=Lax acima), nao do TTL — e o uso real aqui e aba aberta o dia
+    # todo (cronograma, mapeamentos, painel): com o limite de 1h, TODO form
+    # HTML clicado depois disso morria em "400 The CSRF token has expired"
+    # (caso real 02/07/2026 no /telaindustriateste/enviar; antes ja tinha
+    # acontecido no autosave via fetch, que ganhou retry via /auth/csrf-token).
+    WTF_CSRF_TIME_LIMIT = None
     VNDA_API_TOKEN = os.environ.get('VNDA_API_TOKEN', '')
     # Token dedicado ao catalogo (/products). O VNDA_API_TOKEN pode nao ter o
     # escopo "Produtos" habilitado (so pedidos -> 403 no /products). Se setado,
