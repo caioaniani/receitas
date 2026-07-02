@@ -336,3 +336,56 @@ def reprocessar_pedido(pid, user=None):
         db.session.delete(reg)
         db.session.commit()
     # Caller pode chamar processar_pedidos com janela cobrindo o pedido.
+
+
+def reprocessar_retroativo(dias=7, user=None):
+    """RECUPERA baixas perdidas da janela [hoje-dias+1, hoje] (03/07/2026).
+
+    Pedidos processados com ZERO baixa (produto pendente na epoca, ou loja
+    nao reconhecida — inclusive os registrados com `loja_id=None`) tem o
+    registro apagado (junto com os movs `Seru #<id>` remanescentes, todos
+    `*_sem_estoque` por definicao de zero baixa) e a janela e reprocessada —
+    agora com os mapeamentos/lojas ATUAIS. Antes disso, mapear um produto so
+    valia dali pra frente: o passado ficava sem baixa pra sempre.
+
+    Pedidos PARCIAIS (alguma baixa) NAO sao tocados — reprocessar re-baixaria
+    os itens que ja sairam. Eles voltam so na contagem `parciais_na_janela`,
+    pro caller reportar como nao-recuperaveis automaticamente.
+
+    Retorna {'liberados', 'parciais_na_janela', 'stats' (do sync)}.
+    """
+    from datetime import datetime, time, timedelta
+
+    from sqlalchemy import or_
+
+    from app.models import MovEstoqueLoja
+    from app.utils import hoje
+
+    dias = max(1, min(int(dias or 7), 30))
+    fim = hoje()
+    inicio = fim - timedelta(days=dias - 1)
+    # processado_em e gravado em UTC; 00:00 BRT = 03:00 UTC.
+    inicio_utc = datetime.combine(inicio, time.min) + timedelta(hours=3)
+
+    base = SeruPedidoProcessado.query.filter(
+        SeruPedidoProcessado.processado_em >= inicio_utc,
+        SeruPedidoProcessado.estornado_em.is_(None),
+        SeruPedidoProcessado.cancelado_em.is_(None),
+    )
+    alvo_q = base.filter(SeruPedidoProcessado.n_itens_baixados == 0)
+    ids = [p.seru_pedido_id for p in alvo_q.all()]
+    if ids:
+        clauses = [MovEstoqueLoja.referencia.like(f'Seru #{i}%') for i in ids]
+        MovEstoqueLoja.query.filter(or_(*clauses)).delete(
+            synchronize_session=False)
+        alvo_q.delete(synchronize_session=False)
+        db.session.commit()
+
+    parciais = base.filter(
+        SeruPedidoProcessado.n_itens_baixados > 0,
+        SeruPedidoProcessado.n_itens_total
+        > SeruPedidoProcessado.n_itens_baixados).count()
+
+    stats = processar_pedidos(inicio, fim, user=user)
+    return {'liberados': len(ids), 'parciais_na_janela': int(parciais),
+            'stats': stats}
