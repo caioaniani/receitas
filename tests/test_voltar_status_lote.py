@@ -34,15 +34,24 @@ def _pedido(loja, admin_user, receita, status, qtd):
 
 def test_lote_estorna_estoque_sem_lost_update(app, cliente, loja, admin_user,
                                               catalogo):
-    """2 pedidos da MESMA receita em em_transporte -> ambos voltam pra separado
-    e o estoque producao recebe o estorno dos DOIS (7+5), sem perder um."""
+    """2 pedidos da MESMA receita ENVIADOS de verdade -> ambos voltam pra
+    separado e o estoque producao recebe o estorno dos DOIS (7+5), sem perder
+    um. (03/07/2026: o estorno agora espelha os MOVIMENTOS reais do envio —
+    pedido fabricado em em_transporte sem baixa não credita mais nada, então o
+    teste envia pelo caminho canônico.)"""
+    from app.blueprints.pedidos.routes import _executar_envio_pedido
     from app.extensions import db
     from app.models import EstoqueProducao, PedidoLoja
     receita = catalogo['receita']
-    db.session.add(EstoqueProducao(receita_id=receita.id, quantidade=0))
+    db.session.add(EstoqueProducao(receita_id=receita.id, quantidade=12))
     db.session.commit()
-    p1 = _pedido(loja, admin_user, receita, 'em_transporte', 7)
-    p2 = _pedido(loja, admin_user, receita, 'em_transporte', 5)
+    p1 = _pedido(loja, admin_user, receita, 'separado', 7)
+    p2 = _pedido(loja, admin_user, receita, 'separado', 5)
+    with app.test_request_context():
+        assert _executar_envio_pedido(p1, admin_user)[0] is True
+        assert _executar_envio_pedido(p2, admin_user)[0] is True
+    ep0 = EstoqueProducao.query.filter_by(receita_id=receita.id).first()
+    assert ep0.quantidade == 0                     # 12 - 7 - 5
 
     _login(cliente)
     r = cliente.post('/pedidos/voltar-status-lote',
