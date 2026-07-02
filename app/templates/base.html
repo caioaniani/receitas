@@ -172,49 +172,7 @@
         {% if current_user.pode_catalogo() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Catálogo</div>
-
-        <a href="{{ url_for('materias_primas.banco') }}"
-           class="sidebar-link {% if request.path == '/materias-primas/' or request.path == '/materias-primas' %}active{% endif %}">
-            Matérias-primas
-        </a>
-        <a href="{{ url_for('materias_primas.estoque') }}"
-           class="sidebar-link {% if '/materias-primas/estoque' in request.path %}active{% endif %}">
-            Estoque de matérias-primas
-        </a>
-        <a href="{{ url_for('fornecedores.lista') }}"
-           class="sidebar-link {% if request.path.startswith('/fornecedores') %}active{% endif %}">
-            Fornecedores
-        </a>
-        <a href="{{ url_for('produtos.lista') }}"
-           class="sidebar-link {% if request.path.startswith('/produtos') %}active{% endif %}">
-            Produtos / Cestas
-        </a>
-        <a href="{{ url_for('main.cardapio', tipo='atacado') }}"
-           class="sidebar-link {% if request.path == '/cardapio' %}active{% endif %}">
-            Cardápio PDF
-        </a>
-        <a href="{{ url_for('receitas.precos') }}"
-           class="sidebar-link {% if request.path == '/receitas/precos' %}active{% endif %}">
-            Editar preços em massa
-        </a>
-        <a href="{{ url_for('receitas.reaproveitavel') }}"
-           class="sidebar-link {% if request.path == '/receitas/reaproveitavel' %}active{% endif %}">
-            Marcar reaproveitáveis
-        </a>
-        <a href="{{ url_for('receitas.modos_preparo') }}"
-           class="sidebar-link {% if request.path.startswith('/receitas/modos-preparo') %}active{% endif %}">
-            Modo de preparo
-        </a>
-        <a href="{{ url_for('receitas.imagens_upload') }}"
-           class="sidebar-link {% if request.path.startswith('/receitas/imagens') %}active{% endif %}">
-            Subir imagens (zip)
-        </a>
-        {% if current_user.is_admin() %}
-        <a href="{{ url_for('main.todo') }}"
-           class="sidebar-link {% if request.path == '/todo' %}active{% endif %}">
-            Pendências do catálogo
-        </a>
-        {% endif %}
+        {{ areanav.catalogo('sidebar') }}
         {% endif %}
 
         {# ── 4. VENDAS & ENTREGAS ── #}
