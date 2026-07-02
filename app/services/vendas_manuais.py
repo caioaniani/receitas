@@ -184,6 +184,9 @@ def sugerir_pedido(loja_id, data_inicio=None, data_fim=None,
     por_fonte_item = defaultdict(lambda: defaultdict(int))  # {(tipo,id): {fonte: qtd}}
     # Inclui `venda_seru_estorno` pra subtrair pedidos cancelados — senao
     # a media diaria fica inflada por vendas grandes que foram estornadas.
+    # Subset SO-Seru DE PROPOSITO (nao trocar por VENDA_TIPOS_DEMANDA_LOJA):
+    # esta sugestao decompoe a venda POR FONTE ('seru' vs 'manual' — a venda
+    # manual entra pela tabela VendaManualLoja logo abaixo, nao pelo mov).
     SERU_TIPOS = ('venda_seru', 'venda_seru_sem_estoque', 'venda_seru_estorno')
     movs = (db.session.query(MovEstoqueLoja, EstoqueLoja)
             .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
