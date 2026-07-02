@@ -1,0 +1,166 @@
+{#
+  Links das funções de cada ÁREA — FONTE ÚNICA, usada por dois lugares:
+    • a sidebar (base.html)         → variant='sidebar'  (classe .sidebar-link + estado ativo)
+    • a página da área (area.html)  → variant='area'     (classe .area-link)
+
+  Importar SEMPRE com contexto (precisa de current_user):
+    {% import "_area_nav.html" as areanav with context %}
+
+  Ao adicionar/remover uma função de uma área, mexa SÓ aqui — os dois lugares
+  atualizam juntos. Os guardas de permissão por link são os mesmos da sidebar.
+#}
+
+{% macro _lnk(variant, url, label, active=false, sub=false, icon='', blank=false, title='') -%}
+{%- if variant == 'sidebar' -%}
+<a href="{{ url }}" class="sidebar-link{% if sub %} ps-4 small{% endif %}{% if active %} active{% endif %}"{% if blank %} target="_blank"{% endif %}{% if title %} title="{{ title }}"{% endif %}>{% if icon %}<i class="bi {{ icon }}"></i> {% endif %}{{ label }}</a>
+{%- else -%}
+<a href="{{ url }}" class="area-link{% if sub %} area-link-sub{% endif %}"{% if blank %} target="_blank"{% endif %}{% if title %} title="{{ title }}"{% endif %}><span class="area-link-ic"><i class="bi {{ icon or 'bi-arrow-right-short' }}"></i></span><span class="area-link-txt">{{ label }}</span></a>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro _sub(variant, label) -%}
+{%- if variant == 'sidebar' -%}
+<div class="px-3 pt-2 pb-1 text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">{{ label }}</div>
+{%- else -%}
+<div class="area-subhead">{{ label }}</div>
+{%- endif -%}
+{%- endmacro %}
+
+
+{% macro lojas(variant) %}
+{{ _lnk(variant, url_for('pedidos.lista'), 'Pedidos', request.path in ['/pedidos/', '/pedidos']) }}
+{{ _lnk(variant, url_for('pedidos.estoque_loja'), 'Estoque Loja', request.path == '/pedidos/estoque-loja') }}
+{{ _lnk(variant, url_for('pedidos.estoque_loja_diario'), 'Movimento do Dia', request.path == '/pedidos/estoque-loja/diario') }}
+{{ _lnk(variant, url_for('pedidos.estoque_loja_historico'), 'Histórico do estoque', request.path == '/pedidos/estoque-loja/historico') }}
+{{ _lnk(variant, url_for('pedidos.desperdicio'), 'Desperdício', '/pedidos/desperdicio' in request.path) }}
+{{ _lnk(variant, url_for('lista_compras.index'), 'Lista de Compras', request.path in ['/lista-compras', '/lista-compras/']) }}
+{% if current_user.is_dono() %}
+{{ _lnk(variant, url_for('lista_compras.consolidada'), 'Consolidar compras', request.path == '/lista-compras/consolidada', sub=true) }}
+{{ _lnk(variant, url_for('lista_compras.catalogo'), 'Catálogo de compras', request.path == '/lista-compras/catalogo', sub=true) }}
+{% endif %}
+{% endmacro %}
+
+
+{% macro producao(variant) %}
+{% if current_user.is_admin() %}
+{{ _lnk(variant, url_for('producao.painel'), 'Painel de produção', '/producao/painel' in request.path, icon='bi-clipboard-data') }}
+{{ _lnk(variant, url_for('industria_teste.index'), 'Cronograma', '/telaindustriateste' in request.path, icon='bi-calendar-week') }}
+{{ _lnk(variant, url_for('padeiro.index'), 'Tela do padeiro', request.path == '/padeiro' or request.path.startswith('/padeiro/'), icon='bi-hammer') }}
+{{ _lnk(variant, url_for('producao.pedidos_semana_media'), 'Pedidos da semana', '/pedidos-semana' in request.path, icon='bi-cart-plus') }}
+{% endif %}
+{{ _lnk(variant, url_for('producao.lista'), 'Listas de compra', request.path.startswith('/producao') and '/painel' not in request.path and '/pedidos-semana' not in request.path) }}
+{{ _lnk(variant, url_for('pedidos.congelados'), 'Congelados', '/pedidos/congelados' in request.path) }}
+{{ _lnk(variant, url_for('pedidos.separacao'), 'Pedidos a Separar', '/pedidos/separacao' in request.path) }}
+{% if current_user.is_admin() %}
+{{ _sub(variant, 'Configuração') }}
+{{ _lnk(variant, url_for('receitas.amassadeira'), 'Produção por categoria', request.path == '/receitas/amassadeira', icon='bi-gear-wide-connected') }}
+{{ _lnk(variant, url_for('receitas.massa_base_lista'), 'Massas base', request.path.startswith('/receitas/massa-base'), icon='bi-diagram-2') }}
+{% endif %}
+{% endmacro %}
+
+
+{% macro catalogo(variant) %}
+{{ _lnk(variant, url_for('materias_primas.banco'), 'Matérias-primas', request.path in ['/materias-primas/', '/materias-primas']) }}
+{{ _lnk(variant, url_for('materias_primas.estoque'), 'Estoque de matérias-primas', '/materias-primas/estoque' in request.path) }}
+{{ _lnk(variant, url_for('fornecedores.lista'), 'Fornecedores', request.path.startswith('/fornecedores')) }}
+{{ _lnk(variant, url_for('produtos.lista'), 'Produtos / Cestas', request.path.startswith('/produtos')) }}
+{{ _lnk(variant, url_for('main.cardapio', tipo='atacado'), 'Cardápio PDF', request.path == '/cardapio') }}
+{{ _lnk(variant, url_for('receitas.precos'), 'Editar preços em massa', request.path == '/receitas/precos') }}
+{{ _lnk(variant, url_for('receitas.reaproveitavel'), 'Marcar reaproveitáveis', request.path == '/receitas/reaproveitavel') }}
+{{ _lnk(variant, url_for('receitas.modos_preparo'), 'Modo de preparo', request.path.startswith('/receitas/modos-preparo')) }}
+{{ _lnk(variant, url_for('receitas.imagens_upload'), 'Subir imagens (zip)', request.path.startswith('/receitas/imagens')) }}
+{% if current_user.is_admin() %}
+{{ _lnk(variant, url_for('main.todo'), 'Pendências do catálogo', request.path == '/todo') }}
+{% endif %}
+{% endmacro %}
+
+
+{% macro vendas(variant) %}
+{% if current_user.pode_pdv() %}
+{{ _lnk(variant, url_for('pdv.index'), 'Vendas do Caixa (PDV)', request.path in ['/pdv/', '/pdv']) }}
+{{ _lnk(variant, url_for('pdv.itens_vendidos'), 'Itens Vendidos', '/pdv/itens-vendidos' in request.path, sub=true) }}
+{{ _lnk(variant, url_for('pdv.mapeamentos'), 'Vincular produtos do caixa', '/pdv/mapeamentos' in request.path, sub=true) }}
+{{ _lnk(variant, url_for('pdv.saude'), 'Saúde do sync de vendas', '/pdv/saude' in request.path, sub=true) }}
+{{ _lnk(variant, url_for('pdv.reconciliacao'), 'Conferência de vendas', '/pdv/reconciliacao' in request.path, sub=true) }}
+{% endif %}
+{% if current_user.is_admin() %}
+{{ _lnk(variant, url_for('b2b.dashboard'), 'Vendas B2B (Indústria)', request.path.startswith('/b2b') and '/orcamento' not in request.path) }}
+{{ _lnk(variant, url_for('b2b.orcamentos'), 'Orçamentos B2B', '/b2b/orcamento' in request.path) }}
+{{ _lnk(variant, url_for('entregas.painel'), '🔔 Painel do Dia', false, blank=true) }}
+{{ _lnk(variant, url_for('entregas.index'), 'Entregas do site', request.path.startswith('/entregas') and '/painel' not in request.path and '/drivers/bulk' not in request.path) }}
+{{ _lnk(variant, url_for('entregas.drivers_bulk'), 'Motoristas', request.path == '/entregas/drivers/bulk') }}
+{% endif %}
+{% if current_user.pode_lojas() %}
+{{ _lnk(variant, url_for('pedidos.relatorio'), 'Relatório de Pedidos', '/pedidos/relatorio' in request.path) }}
+{% endif %}
+{% endmacro %}
+
+
+{% macro financeiro(variant) %}
+{{ _lnk(variant, url_for('contas_pagar.lista'), 'Contas a Pagar', request.path in ['/contas-pagar/', '/contas-pagar']) }}
+{{ _lnk(variant, url_for('contas_pagar.canais'), 'Canais do Slack', request.path.startswith('/contas-pagar/canais'), sub=true, title='Qual canal do Slack pertence a qual loja') }}
+{{ _lnk(variant, url_for('contas_pagar.mapeamentos'), 'Vincular itens de NF', request.path.startswith('/contas-pagar/mapeamentos'), sub=true, title='Ligar cada item das notas fiscais à matéria-prima do estoque') }}
+{{ _lnk(variant, url_for('contas_pagar.variacoes'), 'Preços dos insumos', request.path.startswith('/contas-pagar/variacoes'), sub=true, title='Preço dos insumos subindo/caindo, nota a nota') }}
+{{ _lnk(variant, url_for('main.caixa'), 'Caixa Diário', request.path == '/caixa') }}
+{{ _lnk(variant, url_for('main.rentabilidade'), 'Rentabilidade', request.path == '/rentabilidade') }}
+{% endmacro %}
+
+
+{% macro rh(variant) %}
+{{ _lnk(variant, url_for('rh.dashboard'), 'Painel RH', request.path == '/rh/') }}
+{{ _lnk(variant, url_for('rh.funcionarios'), 'Funcionários', '/rh/funcionarios' in request.path) }}
+{% if current_user.is_dono() %}
+{{ _lnk(variant, url_for('rh.folha'), 'Folha de Pagamento', '/rh/folha' in request.path) }}
+{% endif %}
+{{ _lnk(variant, url_for('rh.lojas'), 'Cadastro de lojas', request.path == '/rh/lojas') }}
+{% if current_user.is_dono() %}
+{{ _lnk(variant, url_for('rh.cargos'), 'Cargos', request.path == '/rh/cargos') }}
+{% endif %}
+{{ _lnk(variant, url_for('rh.escala'), 'Escala Operacional', '/rh/escala' in request.path and '/mapa' not in request.path) }}
+{{ _lnk(variant, url_for('rh.mapa_index'), 'Mapa das Lojas', '/rh/mapa' in request.path) }}
+{{ _lnk(variant, url_for('rh.ponto'), 'Ponto', '/rh/ponto' in request.path) }}
+{{ _lnk(variant, url_for('rh.ferias'), 'Férias / Folgas', '/rh/ferias' in request.path) }}
+{% endmacro %}
+
+
+{% macro relatorios(variant) %}
+{{ _lnk(variant, url_for('relatorios.dashboards'), 'Dashboards', request.path == '/relatorios/dashboards') }}
+{{ _lnk(variant, url_for('relatorios.custos'), 'Custos', request.path == '/relatorios/custos') }}
+{{ _lnk(variant, url_for('relatorios.previsao'), 'Previsão de demanda', request.path.startswith('/relatorios/previsao')) }}
+{% endmacro %}
+
+
+{% macro administracao(variant) %}
+{{ _lnk(variant, url_for('auth.usuarios'), 'Usuários', request.path == '/auth/usuarios') }}
+{% if current_user.is_dono() %}
+{{ _lnk(variant, url_for('main.permissoes_editar'), 'Permissões por papel', request.path == '/admin/permissoes') }}
+{{ _lnk(variant, url_for('main.seo_descricoes'), 'Descrições SEO', request.path.startswith('/admin/seo')) }}
+{% endif %}
+{{ _lnk(variant, url_for('main.audit'), 'Histórico de alterações', request.path == '/audit', title='Quem mudou o quê e quando') }}
+{{ _lnk(variant, url_for('slack.install'), 'Slack Bot', request.path.startswith('/slack')) }}
+{{ _lnk(variant, url_for('notificacoes.index'), 'Notificações WhatsApp', request.path.startswith('/notificacoes')) }}
+{% endmacro %}
+
+
+{% macro fichas(variant) %}
+{{ _lnk(variant, url_for('receitas.padeiro_lista'), 'Modo Padeiro', request.path == '/receitas/padeiro') }}
+{% if current_user.is_admin() %}
+{{ _lnk(variant, url_for('auth.painel'), 'Fichas atribuídas', request.path == '/auth/painel', title='Fichas técnicas atribuídas a funcionários') }}
+{{ _lnk(variant, url_for('receitas.familias'), 'Famílias de receitas', request.path == '/receitas/familias') }}
+{% endif %}
+{% endmacro %}
+
+
+{# Dispatcher por slug — usado pela página da área. #}
+{% macro render(slug, variant) -%}
+{%- if slug == 'lojas' -%}{{ lojas(variant) }}
+{%- elif slug == 'producao' -%}{{ producao(variant) }}
+{%- elif slug == 'catalogo' -%}{{ catalogo(variant) }}
+{%- elif slug == 'vendas' -%}{{ vendas(variant) }}
+{%- elif slug == 'financeiro' -%}{{ financeiro(variant) }}
+{%- elif slug == 'rh' -%}{{ rh(variant) }}
+{%- elif slug == 'relatorios' -%}{{ relatorios(variant) }}
+{%- elif slug == 'administracao' -%}{{ administracao(variant) }}
+{%- elif slug == 'fichas' -%}{{ fichas(variant) }}
+{%- endif -%}
+{%- endmacro %}
