@@ -1069,26 +1069,30 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
     }
 
 
-# Tipos de MovEstoqueLoja que representam DEMANDA de venda da loja (gross): a
-# baixa real + o que faltou (stockout = demanda nao atendida). Estornos ficam de
-# fora (cancelamento raro; refinar depois). Base unica do motor de baixa.
-_DEMANDA_VENDA_TIPOS = (
-    'venda_seru', 'venda_seru_sem_estoque',
-    'venda_site', 'venda_site_sem_estoque',
-    'saida_lote', 'venda_loja_sem_estoque',
-)
-
-
 def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
-                              inicio_offset_dias=0):
+                              inicio_offset_dias=0, seguranca_pct=0):
     """Maneira 2 — previsao de pedido por VENDA + ESTOQUE (ponto de reposicao).
 
-    Pra cada (loja, receita): mede a venda media POR DIA-DA-SEMANA (movimentos de
-    baixa do EstoqueLoja) e simula o estoque dia a dia partindo do saldo ATUAL.
-    Quando o estoque projetado nao cobre a venda do dia, pede o deficit
-    ARREDONDADO PRA CIMA na caixa (lote) — o excedente vira estoque que cobre os
-    proximos dias, entao a caixa NAO super-pede item lento (pede 1 caixa a cada
-    N dias). Entrega diaria (v1): cada dia cobre a venda daquele dia.
+    Pra cada (loja, receita): mede o consumo medio POR DIA-DA-SEMANA e simula o
+    estoque dia a dia partindo do saldo ATUAL. Quando o estoque projetado nao
+    cobre o consumo do dia, pede o deficit ARREDONDADO PRA CIMA na caixa (lote)
+    — o excedente vira estoque que cobre os proximos dias, entao a caixa NAO
+    super-pede item lento (pede 1 caixa a cada N dias). Entrega diaria (v1):
+    cada dia cobre a venda daquele dia.
+
+    Fase 1 (02/07/2026) — o sinal de consumo ficou mais fiel e protegido:
+    - DEMANDA unificada (constants.VENDA_TIPOS_DEMANDA_LOJA): todos os canais
+      + venda MANUAL da tela de estoque; estornos subtraem com o sinal de
+      gravacao de cada canal (venda cancelada nao infla a media).
+    - MERMA ESTRUTURAL projetada como consumo (constants.MERMA_TIPOS_PROJECAO:
+      devolucao a industria + perda) — croissant devolvido toda semana pra
+      virar Almond consome estoque e era sub-pedido. Sobra/descarte ficam FORA
+      (excesso nao se repoe).
+    - Media por dow via `_media_recencia` (recencia + cap de pico isolado +
+      zeros desde a 1a ocorrencia) — antes era total/janela uniforme.
+    - `seguranca_pct`: estoque de seguranca opcional (N% da venda do dia vira
+      piso de fim de dia; 0 = repor exatamente a media, comportamento antigo).
+    - minimo_pedido da receita/MP aplicado como piso do pedido do dia.
 
     Mesma forma de retorno que `media_semanal_pedidos` (+ `estoque_atual` por
     produto), pro mesmo template/gerar.
@@ -1132,23 +1136,52 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             return rid if rid in receitas else None
         return f'mp:{mid}' if mid in mps else None
 
-    # Venda por (loja, item, dow) na janela: MovEstoqueLoja x EstoqueLoja (a
-    # linha diz loja+item); dow = dia-da-semana da venda.
-    venda_dow = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    for loja_id, rid, mid, data_mov, qtd in (db.session.query(
+    # Consumo por (loja, item, dow, DATA) na janela: MovEstoqueLoja x
+    # EstoqueLoja (a linha diz loja+item). Guardado POR DATA pra media
+    # recencia-ponderada com cap de pico. Duas series separadas:
+    # - venda (demanda unificada, estornos com sinal — clampada em 0 por data);
+    # - merma estrutural (devolucao a industria + perda) que tambem consome.
+    from app.constants import (
+        MERMA_TIPOS_PROJECAO,
+        VENDA_ESTORNO_SINAL_DEMANDA,
+        VENDA_TIPOS_DEMANDA_COM_ESTORNO,
+    )
+    venda_hist = defaultdict(lambda: defaultdict(
+        lambda: defaultdict(lambda: defaultdict(int))))
+    merma_hist = defaultdict(lambda: defaultdict(
+        lambda: defaultdict(lambda: defaultdict(int))))
+    tipos_consumo = VENDA_TIPOS_DEMANDA_COM_ESTORNO + MERMA_TIPOS_PROJECAO
+    for loja_id, rid, mid, tipo_mov, data_mov, qtd in (db.session.query(
             EstoqueLoja.loja_id, EstoqueLoja.receita_id,
-            EstoqueLoja.materia_prima_id,
+            EstoqueLoja.materia_prima_id, MovEstoqueLoja.tipo,
             MovEstoqueLoja.data, MovEstoqueLoja.quantidade)
             .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
             .filter(db.or_(EstoqueLoja.receita_id.isnot(None),
                            EstoqueLoja.materia_prima_id.isnot(None)),
-                    MovEstoqueLoja.tipo.in_(_DEMANDA_VENDA_TIPOS),
+                    MovEstoqueLoja.tipo.in_(tipos_consumo),
                     MovEstoqueLoja.data >= datetime.combine(hist_ini, time.min),
                     MovEstoqueLoja.data <= datetime.combine(hist_fim, time.max))
             .all()):
         tok = _token(rid, mid)
-        if tok is not None and data_mov is not None:
-            venda_dow[loja_id][tok][data_mov.weekday()] += int(qtd or 0)
+        if tok is None or data_mov is None:
+            continue
+        d_mov = data_mov.date()
+        if tipo_mov in MERMA_TIPOS_PROJECAO:
+            merma_hist[loja_id][tok][d_mov.weekday()][d_mov] += int(qtd or 0)
+        else:
+            sinal = VENDA_ESTORNO_SINAL_DEMANDA.get(tipo_mov, 1)
+            venda_hist[loja_id][tok][d_mov.weekday()][d_mov] += \
+                sinal * int(qtd or 0)
+    # Estorno de venda de outro dia pode deixar o liquido do dia negativo —
+    # demanda negativa nao existe; clampa por data em 0.
+    for por_tok in venda_hist.values():
+        for por_dow in por_tok.values():
+            for por_data in por_dow.values():
+                for d_mov, v in list(por_data.items()):
+                    if v < 0:
+                        por_data[d_mov] = 0
+    datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)
+    seguranca = max(0.0, min(float(seguranca_pct or 0), 100.0)) / 100.0
 
     # Estoque DISPONIVEL da loja por (loja, item) = quantidade - reservado
     # (reservado segura pedido online aguardando pagamento). Usar o fisico
@@ -1220,13 +1253,25 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
 
     # Catalogo unificado da tela: receitas + MPs marcadas (checkbox).
     # Cada entrada: (token, nome, lote, minimo, fornada_especial, rid, mid).
+    # MP tambem tem caixa/piso desde 02/07 (colunas lote_pedido/minimo_pedido
+    # em MateriaPrima — ex: pao de queijo comprado em saco nao sai picado).
     catalogo = [(rid, rec.nome, int(rec.lote_pedido or 0),
                  int(rec.minimo_pedido or 0),
                  bool(getattr(rec, 'fornada_especial', False)), rid, None)
                 for rid, rec in receitas.items()]
     for mid, m in mps.items():
-        catalogo.append((f'mp:{mid}', m.nome, 0, 0, False, None, mid))
+        catalogo.append((f'mp:{mid}', m.nome,
+                         int(getattr(m, 'lote_pedido', None) or 0),
+                         int(getattr(m, 'minimo_pedido', None) or 0),
+                         False, None, mid))
     catalogo.sort(key=lambda c: (c[1] or '').lower())
+
+    def _media_dow(por_dow, dow_i):
+        por_data = (por_dow or {}).get(dow_i)
+        if not por_data:
+            return 0.0
+        return _media_recencia(por_data, hoje_d,
+                               datas_possiveis=datas_possiveis_dow[dow_i])
 
     lojas_out = []
     for loja in lojas_op:
@@ -1234,7 +1279,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
         pede_loja = pede_receitas.get(loja.id, set())
         produtos = []
         for tok, nome_item, caixa, minimo, fe, rid, mid in catalogo:
-            dows = venda_dow.get(loja.id, {}).get(tok)
+            v_dows = venda_hist.get(loja.id, {}).get(tok)
+            m_dows = merma_hist.get(loja.id, {}).get(tok)
             est0 = estoque_atual.get(loja.id, {}).get(tok, 0)
             pede = tok in pede_loja
             # Pedido JA FEITO no horizonte tambem inclui o item (linha com as
@@ -1242,7 +1288,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             ja_ped_item = [pedido_existente.get(loja.id, {})
                            .get(d.isoformat(), {}).get(tok, 0)
                            for d in dias_futuros]
-            if not dows and est0 <= 0 and not pede and not any(ja_ped_item):
+            if not v_dows and not m_dows and est0 <= 0 and not pede \
+                    and not any(ja_ped_item):
                 continue                          # nao vende/estoca/pede, nada pedido
             estoque = est0
             por_dia = [0] * len(dias_futuros)
@@ -1250,8 +1297,10 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             for i, d in enumerate(dias_futuros):
                 if fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL:
                     continue                      # fornada especial: nao vende
-                venda_d = (dows.get(d.weekday(), 0) / janela_semanas) if dows else 0.0
-                venda_total += venda_d
+                venda_d = _media_dow(v_dows, d.weekday())
+                merma_d = _media_dow(m_dows, d.weekday())
+                consumo_d = venda_d + merma_d     # o que baixa o estoque no dia
+                venda_total += venda_d            # coluna Venda/sem = so venda
                 if d.isoformat() in ja_tem_loja:
                     # Dia travado: a tela nao deixa sugerir e o gerar pula. O
                     # estoque projetado recebe a ENTREGA JA PEDIDA (qtd real),
@@ -1261,16 +1310,24 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                     entrega = pedido_existente.get(loja.id, {}).get(
                         d.isoformat(), {}).get(tok, 0)
                     por_dia[i] = 0
-                    estoque = estoque + entrega - venda_d
+                    estoque = estoque + entrega - consumo_d
                     continue
-                deficit = venda_d - estoque
+                # Alvo do dia = consumo + estoque de seguranca opcional (sobra
+                # N% do consumo no fim do dia como colchao contra dia acima da
+                # media). seguranca=0 -> repoe exatamente a media (v1).
+                deficit = consumo_d * (1.0 + seguranca) - estoque
                 if deficit > 1e-9:
                     pedido = (int(ceil(deficit / caixa)) * caixa
                               if caixa > 1 else int(ceil(deficit)))
+                    # Piso do pedido (minimo_pedido): eleva e re-fecha na caixa.
+                    # O excedente vira carry — os dias seguintes pedem menos.
+                    if minimo > 0 and pedido < minimo:
+                        pedido = (int(ceil(minimo / caixa)) * caixa
+                                  if caixa > 1 else minimo)
                 else:
                     pedido = 0
                 por_dia[i] = pedido
-                estoque = estoque + pedido - venda_d
+                estoque = estoque + pedido - consumo_d
             # Mostra TODOS os produtos do "mundo" da loja (vende/estoca/pede),
             # mesmo com sugestao 0 (decisao do dono: nada some da tela). So pula
             # o que nem venda, nem estoque, nem pedido tem (ja filtrado acima).
