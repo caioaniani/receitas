@@ -211,3 +211,112 @@ class HandshakeAudit(db.Model):
     status_pedido = db.Column(db.String(20))  # status do pedido NA HORA da tentativa
     ip = db.Column(db.String(45))
     user_agent = db.Column(db.String(300))
+
+
+# ── Retirada de sobras (loja → industria) ──
+
+class RetiradaSobra(db.Model):
+    """Pedido de RETIRADA de sobras reaproveitaveis da loja pra industria
+    (ex: croissants tradicionais que viram Croissant Almond).
+
+    Nasce no lancamento de sobras pelo bot (o copilot pergunta "quantos voltam
+    pra virar almond?", exige FOTO da sobra e cria a retirada pro dia
+    seguinte). Modelo SEPARADO de PedidoLoja de proposito: retirada nao e
+    demanda — jamais entra em previsao/comprometido/medias por construcao.
+
+    Maquina de status (esteira espelhada da entrega, movida por QR):
+      aguardando_coleta → [QR coleta, PIN driver → BAIXA EstoqueLoja]
+      em_transporte     → [QR recebimento, PIN driver/producao → CREDITA
+                           EstoqueProducao na receita de retorno]
+      recebida          | cancelada (so antes da coleta)
+
+    Movimentos de estoque levam o token `ret-<id>` — mesma familia de tipos do
+    fluxo manual (`devolucao_industria`/`retorno_loja`), entao Movimento do
+    Dia/relatorios enxergam igual."""
+    __tablename__ = 'retirada_sobra'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False,
+                        index=True)
+    status = db.Column(db.String(20), nullable=False,
+                       default='aguardando_coleta', index=True)
+    data_retirada = db.Column(db.Date, nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    # Foto da sobra (obrigatoria na criacao) — comprovante da contagem.
+    foto_url = db.Column(db.String(500), nullable=False)
+    foto_storage_path = db.Column(db.String(500))
+    observacao = db.Column(db.Text)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver_entrega.id'),
+                          nullable=True, index=True)
+    coletada_em = db.Column(db.DateTime, nullable=True)
+    recebida_em = db.Column(db.DateTime, nullable=True)
+    cancelada_em = db.Column(db.DateTime, nullable=True)
+
+    loja = db.relationship('Loja')
+    criado_por = db.relationship('Usuario')
+    driver = db.relationship('Driver')
+    itens = db.relationship('RetiradaSobraItem', backref='retirada',
+                            cascade='all, delete-orphan')
+    qrcodes = db.relationship('RetiradaQRCode', back_populates='retirada',
+                              cascade='all, delete-orphan')
+
+    @property
+    def token_mov(self):
+        """Token que amarra os movimentos de estoque desta retirada."""
+        return f'ret-{self.id}'
+
+
+class RetiradaSobraItem(db.Model):
+    __tablename__ = 'retirada_sobra_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    retirada_id = db.Column(db.Integer, db.ForeignKey('retirada_sobra.id'),
+                            nullable=False, index=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'),
+                           nullable=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'),
+                           nullable=True)
+    quantidade = db.Column(db.Integer, nullable=False)
+    # Conferencia na industria (divergencia declarado x chegou). NULL = sem
+    # divergencia registrada (recebeu o declarado).
+    quantidade_recebida = db.Column(db.Integer, nullable=True)
+
+    receita = db.relationship('Receita')
+    produto = db.relationship('Produto')
+
+    @property
+    def nome_item(self):
+        if self.receita:
+            return self.receita.nome
+        if self.produto:
+            return self.produto.nome
+        return '?'
+
+
+class RetiradaQRCode(db.Model):
+    """QR de handshake da retirada — mesmo desenho do PedidoQRCode.
+
+    tipo='coleta': motorista escaneia NA LOJA + PIN do Driver →
+      em_transporte + baixa EstoqueLoja.
+    tipo='recebimento': escaneado NA INDUSTRIA + PIN de driver/producao →
+      recebida + credita EstoqueProducao (receita de retorno)."""
+    __tablename__ = 'retirada_qrcode'
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(40), unique=True, nullable=False, index=True)
+    retirada_id = db.Column(db.Integer, db.ForeignKey('retirada_sobra.id'),
+                            nullable=False, index=True)
+    tipo = db.Column(db.String(12), nullable=False)  # 'coleta' | 'recebimento'
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    expira_em = db.Column(db.DateTime, nullable=False)
+    usado_em = db.Column(db.DateTime, nullable=True)
+    usado_por_descricao = db.Column(db.String(100))
+
+    retirada = db.relationship('RetiradaSobra', back_populates='qrcodes')
+    criado_por = db.relationship('Usuario')
+
+    @property
+    def valido(self):
+        return self.usado_em is None and self.expira_em > agora()
