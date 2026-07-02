@@ -53,6 +53,11 @@
                                class="form-control form-control-sm input-blue text-end mp-peso-unidade"
                                {% if mp.unidade != 'un' %}readonly style="background:#eee;"{% endif %}>
                     </td>
+                    <td class="text-center align-middle">
+                        <input type="checkbox" class="form-check-input" name="sugerir_loja_ids"
+                               value="{{ mp.id }}" {% if mp.sugerir_pedido_loja %}checked{% endif %}
+                               title="As lojas pedem esta MP da indústria (entra em Pedidos da semana)">
+                    </td>
                     <td>
                         <input type="text" name="fornecedor[]" value="{{ mp.fornecedor or '' }}" class="form-control form-control-sm input-blue">
                     </td>
