@@ -210,6 +210,45 @@
     });
   })();
 </script>
+
+{% if devolucoes %}
+<div class="card mt-4" style="max-width:640px;">
+    <div class="card-header py-2">
+        <strong class="small"><i class="bi bi-arrow-return-left"></i>
+            Devoluções à indústria (últimos 7 dias)</strong>
+    </div>
+    <div class="card-body py-2">
+        <table class="table table-sm mb-0">
+            <tbody>
+            {% for d in devolucoes %}
+                <tr {% if d.estornada %}style="opacity:.5;"{% endif %}>
+                    <td class="small text-muted" style="white-space:nowrap;">
+                        {{ d.data.strftime('%d/%m %H:%M') }}</td>
+                    <td class="small">
+                        {% for it in d.itens %}{{ it.qtd }}× {{ it.nome }}{% if not loop.last %}, {% endif %}{% endfor %}
+                        <span class="text-muted">({{ d.token }})</span>
+                    </td>
+                    <td class="text-end">
+                        {% if d.estornada %}
+                        <span class="badge bg-secondary">Estornada</span>
+                        {% elif current_user.is_admin() %}
+                        <form method="POST" action="{{ url_for('pedidos.devolucao_estornar') }}"
+                              class="d-inline"
+                              onsubmit="return confirm('Estornar esta devolução? A loja é re-creditada e a indústria re-baixada.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="token" value="{{ d.token }}">
+                            <input type="hidden" name="loja_id" value="{{ loja.id }}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm py-0">Estornar</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 {% else %}
 <div class="alert alert-info">Nenhum item no estoque desta loja. O estoque e alimentado quando pedidos sao entregues.</div>
 {% endif %}
