@@ -1490,13 +1490,16 @@ def _migrate_sqlite(app):
             "  AND slot_mapa.nome = posicao.nome_posicao)"
         )
 
-    # Migração materia_prima.estoque_atual + peso_unidade
+    # Migração materia_prima.estoque_atual + peso_unidade + sugerir_pedido_loja
     cursor.execute("PRAGMA table_info(materia_prima)")
     cols_mp = [row[1] for row in cursor.fetchall()]
     if cols_mp and 'estoque_atual' not in cols_mp:
         cursor.execute("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0")
     if cols_mp and 'peso_unidade' not in cols_mp:
         cursor.execute("ALTER TABLE materia_prima ADD COLUMN peso_unidade REAL")
+    if cols_mp and 'sugerir_pedido_loja' not in cols_mp:
+        cursor.execute("ALTER TABLE materia_prima ADD COLUMN sugerir_pedido_loja "
+                       "BOOLEAN NOT NULL DEFAULT 0")
 
     # Migração pedido_item.quantidade_recebida + materia_prima_id
     cursor.execute("PRAGMA table_info(pedido_item)")
