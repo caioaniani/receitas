@@ -106,6 +106,107 @@ def _vinculos_mp(mp):
             if (n := modelo.query.filter_by(materia_prima_id=mp.id).count())]
 
 
+@materias_primas_bp.route('/<int:id>/transferir', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def transferir(id):
+    """Transfere pra uma RECEITA os vínculos de uma MP que na verdade é
+    PRODUZIDA (ex: 'Geleia Artesanal de Morango' cadastrada como MP) — o
+    espelho do transferir receita→MP da ficha de receitas.
+
+    Movem: pedidos de loja, vendas manuais, desperdício, estoque de loja
+    (funde com a linha da receita), cestas, mapeamentos e o uso como
+    ingrediente em fichas (tipo mp→receita, custo passa a seguir a ficha).
+    FICAM (sem equivalente em receita): movimentações de estoque de MP,
+    histórico/variação de preço e vínculos do financeiro — histórico não se
+    apaga; com eles zerados a exclusão libera."""
+    from sqlalchemy import func
+
+    from app.models import (
+        Desperdicio,
+        EstoqueLoja,
+        MovEstoqueLoja,
+        PedidoItem,
+        ProdutoItem,
+        Receita,
+        VendaManualLoja,
+        VendaMapa,
+    )
+    mp = MateriaPrima.query.get_or_404(id)
+
+    if request.method == 'GET':
+        return render_template('materias_primas/transferir.html', mp=mp,
+                               vinculos=_vinculos_mp(mp))
+
+    nome_destino = (request.form.get('destino') or '').strip()
+    destino = (Receita.query
+               .filter(func.lower(Receita.nome) == nome_destino.lower())
+               .first()) if nome_destino else None
+    if not destino:
+        flash(f'Receita "{nome_destino}" não encontrada — use o nome exato '
+              '(o campo autocompleta). Se a ficha ainda não existe, crie '
+              'primeiro em Receitas.', 'danger')
+        return redirect(url_for('materias_primas.transferir', id=mp.id))
+
+    movidos = {}
+
+    def _conta(chave, n):
+        if n:
+            movidos[chave] = movidos.get(chave, 0) + n
+
+    swap = {'materia_prima_id': None, 'receita_id': destino.id}
+    for chave, modelo in (('pedidos', PedidoItem),
+                          ('vendas_manuais', VendaManualLoja),
+                          ('desperdicio', Desperdicio)):
+        _conta(chave, modelo.query.filter_by(materia_prima_id=mp.id)
+               .update(dict(swap), synchronize_session=False))
+
+    _conta('cestas', ProdutoItem.query.filter_by(materia_prima_id=mp.id)
+           .update({**swap, 'tipo': 'receita', 'item_nome': destino.nome},
+                   synchronize_session=False))
+
+    # Ingrediente em fichas: tipo mp -> receita (o custo passa a seguir a
+    # FICHA da receita, não mais o custo/kg da MP).
+    _conta('ingrediente_em_fichas', ReceitaIngrediente.query
+           .filter(ReceitaIngrediente.tipo == 'mp',
+                   ReceitaIngrediente.ingrediente_nome == mp.nome)
+           .update({'tipo': 'receita', 'ingrediente_nome': destino.nome,
+                    'sub_receita_id': destino.id}, synchronize_session=False))
+
+    _conta('mapeamentos', VendaMapa.query.filter_by(materia_prima_id=mp.id)
+           .update(dict(swap), synchronize_session=False))
+
+    # Estoque de loja: funde com a linha da receita (mesma loja/estado);
+    # movimentações reapontadas ANTES de apagar a linha da origem.
+    for e in EstoqueLoja.query.filter_by(materia_prima_id=mp.id).all():
+        alvo = EstoqueLoja.query.filter_by(
+            receita_id=destino.id, loja_id=e.loja_id, estado=e.estado).first()
+        if alvo:
+            alvo.quantidade = (alvo.quantidade or 0) + (e.quantidade or 0)
+            MovEstoqueLoja.query.filter_by(estoque_loja_id=e.id).update(
+                {'estoque_loja_id': alvo.id}, synchronize_session=False)
+            db.session.delete(e)
+        else:
+            e.materia_prima_id = None
+            e.receita_id = destino.id
+        _conta('estoque_loja', 1)
+
+    db.session.commit()
+    ficaram = _vinculos_mp(mp)
+    detalhe = ', '.join(f'{n} {rotulo}' for chave, (rotulo, n) in
+                        zip(range(len(ficaram)), ficaram)) if ficaram else ''
+    total = sum(movidos.values())
+    msg = (f'{total} vínculo(s) transferido(s) de "{mp.nome}" pra receita '
+           f'"{destino.nome}".')
+    if ficaram:
+        msg += (f' Ficaram como histórico: {detalhe} — a MP não pode ser '
+                'excluída enquanto existirem.')
+    else:
+        msg += ' A MP ficou livre — dá pra excluir no banco de MPs.'
+    flash(msg, 'success' if not ficaram else 'warning')
+    return redirect(url_for('materias_primas.banco'))
+
+
 @materias_primas_bp.route('/excluir/<int:id>', methods=['POST'])
 @login_required
 @admin_required
