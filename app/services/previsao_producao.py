@@ -1296,6 +1296,12 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
                 out.append((sid, (ing.porcentagem or 0) / rend))
         return out
 
+    # Receitas de RETORNO (destino de retorno_receita_id): nao sao produziveis
+    # — so entram por devolucao de loja. Nunca geram producao nem cascata.
+    from app.models import Receita as _Receita
+    retorno_ids = {rid for (rid,) in db.session.query(_Receita.retorno_receita_id)
+                   .filter(_Receita.retorno_receita_id.isnot(None)).distinct()}
+
     # BOM transitivo a partir dos finais.
     bom = {}
     pilha = [rr['receita_id'] for rr in receitas_out]
@@ -1303,7 +1309,7 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
         rid = pilha.pop()
         if rid in bom:
             continue
-        bom[rid] = _subs(rid)
+        bom[rid] = [] if rid in retorno_ids else _subs(rid)
         for sid, _ in bom[rid]:
             if sid not in bom:
                 pilha.append(sid)
