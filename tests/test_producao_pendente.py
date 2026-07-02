@@ -436,6 +436,6 @@ def test_auditoria_pagina_renderiza_com_reagendar_e_produzido(app, admin_user):
         s['_fresh'] = True
     resp = c.get('/telaindustriateste/auditoria')
     assert resp.status_code == 200
-    assert b'reagendar-form' in resp.data                        # enviar pra hoje
-    assert b'chk-venc' in resp.data                              # checkbox por linha
+    assert b'aud-reagendar-btn' in resp.data                     # botão "produzir hoje"
+    assert b'auditoria/reagendar' in resp.data                   # formaction da rota
     assert 'Produzido ontem'.encode() in resp.data               # seção nova
