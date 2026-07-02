@@ -878,6 +878,7 @@ def vincular_loja(map_id):
         db.session.commit()
         flash(f'OK: "{lm.seru_company_name}" agora vinculada a {loja_obj.nome}. '
               f'Vendas dessa company vao baixar estoque dessa loja.', 'success')
+        _reprocesso_pos_mapeamento()   # recupera pedidos sem-loja da janela
         return redirect(url_for('pdv.mapeamentos'))
     if acao == 'ignorar':
         lm.ignorar = True
