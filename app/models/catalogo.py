@@ -19,6 +19,12 @@ class MateriaPrima(db.Model):
     peso_unidade = db.Column(db.Float, nullable=True)
     fornecedor = db.Column(db.String(100))
     observacoes = db.Column(db.String(200))
+    # MP que as LOJAS pedem da industria (ex: pao de queijo congelado, vendido
+    # via cones) — entra na tela de pedidos da semana por venda+estoque.
+    # Opt-in (checkbox no banco de MPs): a maioria das MPs e insumo so da
+    # industria e nao deve poluir a tela de pedido das lojas.
+    sugerir_pedido_loja = db.Column(db.Boolean, nullable=False, default=False,
+                                    server_default='0')
 
     def to_dict(self):
         return {
