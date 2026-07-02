@@ -70,6 +70,11 @@
                            title="Esta MP na verdade é uma RECEITA (produzida)? Transfira os vínculos pra receita — aí ela libera pra excluir.">
                             <i class="bi bi-arrow-right-circle"></i>
                         </a>
+                        <button type="button" class="btn btn-sm btn-outline-secondary btn-arq-mp"
+                                data-id="{{ mp.id }}" data-nome="{{ mp.nome }}"
+                                title="Arquivar: tira de circulação (autocompletes, matchers, telas) preservando o histórico. Pra MP com histórico inapagável que não deve mais ser usada.">
+                            <i class="bi bi-archive"></i>
+                        </button>
                         <button type="button" class="btn btn-sm btn-outline-danger btn-del-mp" data-id="{{ mp.id }}" title="Excluir">
                             <i class="bi bi-trash"></i>
                         </button>
