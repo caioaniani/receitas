@@ -200,51 +200,12 @@
         {% if current_user.is_admin() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Relatórios</div>
-
-        <a href="{{ url_for('relatorios.dashboards') }}"
-           class="sidebar-link {% if request.path == '/relatorios/dashboards' %}active{% endif %}">
-            Dashboards
-        </a>
-        <a href="{{ url_for('relatorios.custos') }}"
-           class="sidebar-link {% if request.path == '/relatorios/custos' %}active{% endif %}">
-            Custos
-        </a>
-        <a href="{{ url_for('relatorios.previsao') }}"
-           class="sidebar-link {% if request.path.startswith('/relatorios/previsao') %}active{% endif %}">
-            Previsão de demanda
-        </a>
+        {{ areanav.relatorios('sidebar') }}
 
         {# ── 8. ADMINISTRAÇÃO (admin) — usuários, permissões e integrações ── #}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Administração</div>
-
-        <a href="{{ url_for('auth.usuarios') }}"
-           class="sidebar-link {% if request.path == '/auth/usuarios' %}active{% endif %}">
-            Usuários
-        </a>
-        {% if current_user.is_owner %}
-        <a href="{{ url_for('main.permissoes_editar') }}"
-           class="sidebar-link {% if request.path == '/admin/permissoes' %}active{% endif %}">
-            Permissões por papel
-        </a>
-        <a href="{{ url_for('main.seo_descricoes') }}"
-           class="sidebar-link {% if request.path.startswith('/admin/seo') %}active{% endif %}">
-            Descrições SEO
-        </a>
-        {% endif %}
-        <a href="{{ url_for('main.audit') }}"
-           class="sidebar-link {% if request.path == '/audit' %}active{% endif %}"
-           title="Quem mudou o quê e quando">
-            Histórico de alterações
-        </a>
-        <a href="{{ url_for('slack.install') }}"
-           class="sidebar-link {% if request.path.startswith('/slack') %}active{% endif %}">
-            Slack Bot
-        </a>
-        <a href="{{ url_for('notificacoes.index') }}"
-           class="sidebar-link {% if request.path.startswith('/notificacoes') %}active{% endif %}">
-            Notificações WhatsApp
-        </a>
+        {{ areanav.administracao('sidebar') }}
         {% endif %}
 
         {% if not current_user.is_admin() %}
