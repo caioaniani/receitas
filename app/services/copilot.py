@@ -1918,6 +1918,7 @@ def _enriquecer_registrar_desperdicio_lote(tool_input, user):
             continue
         tipo_item, item_id, nome_ok = resolvido
         estoque_atual = None
+        ja_hoje = 0
         if loja_id:
             filtro = {'loja_id': loja_id}
             if tipo_item == 'receita':
@@ -1928,12 +1929,26 @@ def _enriquecer_registrar_desperdicio_lote(tool_input, user):
                 filtro['materia_prima_id'] = item_id
             el = EstoqueLoja.query.filter_by(**filtro).first()
             estoque_atual = el.quantidade if el else 0
+            # Quanto DESTE item ja foi registrado como desperdicio HOJE
+            # nesta loja — sinal de lote duplicado no preview.
+            from sqlalchemy import func as _func
+
+            from app.models import Desperdicio
+            fk_col = {'receita': Desperdicio.receita_id,
+                      'produto': Desperdicio.produto_id,
+                      'mp': Desperdicio.materia_prima_id}[tipo_item]
+            ja_hoje = int(db.session.query(
+                _func.coalesce(_func.sum(Desperdicio.quantidade), 0))
+                .filter(Desperdicio.loja_id == loja_id,
+                        Desperdicio.data == hoje(),
+                        fk_col == item_id).scalar() or 0)
         itens_enriq.append({
             'nome': nome,
             'quantidade': qtd,
             'observacao': (it.get('observacao') or '').strip() or None,
             'resolvido': {'tipo': tipo_item, 'id': item_id, 'nome': nome_ok},
             'estoque_atual': estoque_atual,
+            'ja_registrado_hoje': ja_hoje,
         })
 
     n_ok = sum(1 for i in itens_enriq if i.get('resolvido'))
