@@ -193,8 +193,7 @@ def transferir(id):
 
     db.session.commit()
     ficaram = _vinculos_mp(mp)
-    detalhe = ', '.join(f'{n} {rotulo}' for chave, (rotulo, n) in
-                        zip(range(len(ficaram)), ficaram)) if ficaram else ''
+    detalhe = ', '.join(f'{n} {rotulo}' for rotulo, n in ficaram)
     total = sum(movidos.values())
     msg = (f'{total} vínculo(s) transferido(s) de "{mp.nome}" pra receita '
            f'"{destino.nome}".')
