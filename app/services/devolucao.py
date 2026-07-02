@@ -50,7 +50,7 @@ def _destino_do_retorno(tipo, item_id):
     return None
 
 
-def devolver_industria(loja_id, itens, usuario_id):
+def devolver_industria(loja_id, itens, usuario_id, commit=True):
     """Devolve sobras da loja pra indústria — as DUAS pontas numa transação.
 
     itens: [{'tipo': 'receita'|'produto', 'id': int, 'qtd': int}]
@@ -60,7 +60,8 @@ def devolver_industria(loja_id, itens, usuario_id):
     INTEIRA no EstoqueProducao do destino de retorno (o que chegou na
     indústria chegou, mesmo que o saldo da loja estivesse subcontado).
 
-    Commita no fim. Retorna {'token', 'loja', 'itens': [...], 'avisos': [...]}.
+    `commit=False` deixa a transação pro chamador (rota que agrega outras
+    escritas no mesmo POST). Retorna {'token', 'loja', 'itens', 'avisos'}.
     Levanta ValueError pra entrada inválida (loja/item inexistente, qtd <= 0).
     """
     loja = Loja.query.get(loja_id)
