@@ -2,11 +2,19 @@
 (Fatia 2). O sistema propoe (previsao_producao.sugerir_pedidos_semana), o admin
 ajusta na tela e gera; a criacao real dos PedidoLoja acontece aqui, sempre como
 status 'pendente' (rascunho) — pra o admin revisar e confirmar depois.
+
+`aplicar_grade` estende o gerar: dia que JA tem pedido EDITAVEL (pendente/
+confirmado — mesma regra da rota /pedidos/<id>/editar) tem os itens
+ATUALIZADOS a partir da grade (a tela da media destrava essas celulas).
 """
 from app.extensions import db
 from app.models import PedidoItem, PedidoLoja
 from app.services.previsao_producao import invalidar_sugestao_cache
 from app.utils import hoje
+
+# Mesma regra da rota oficial de edicao (/pedidos/<id>/editar): depois de
+# separado o pedido ja esta no fluxo fisico — cancela e recria, nao edita.
+STATUS_EDITAVEIS = ('pendente', 'confirmado')
 
 
 def criar_pedidos_rascunho(pedidos, user_id):
