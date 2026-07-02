@@ -261,7 +261,7 @@ def novo():
         if not sel_loja or not Loja.query.filter_by(id=sel_loja, ativa=True).first():
             flash('Selecione uma loja valida.', 'warning')
             lojas = _lojas_operacionais()
-            receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+            receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
             produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
             materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
@@ -280,7 +280,7 @@ def novo():
         if data_entrega < data_min:
             flash(f'A data de entrega deve ser a partir de {data_min.strftime("%d/%m")}.', 'warning')
             lojas = _lojas_operacionais()
-            receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+            receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
             produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
             materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
@@ -368,7 +368,7 @@ def novo():
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
     lojas = _lojas_operacionais()
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
     return render_template('pedidos/novo.html', lojas=lojas,
@@ -465,7 +465,7 @@ def editar(id):
         flash('Pedido atualizado.', 'success')
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
     amanha = hoje_brt() + timedelta(days=1)
@@ -885,7 +885,7 @@ def conferencia_foto(foto_id):
 @admin_required
 def precos_loja(loja_id):
     loja = Loja.query.get_or_404(loja_id)
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
 
     if request.method == 'POST':
         for r in receitas:
@@ -1300,7 +1300,7 @@ def congelados():
         joinedload(EstoqueProducao.receita),
         joinedload(EstoqueProducao.produto),
     ).all()
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     from app.services import estoque_congelados as svc_cong
     pendentes = [it for it in itens if it.pendente]
@@ -1620,7 +1620,7 @@ def congelados_conferencia():
 
     com_rec = {it.receita_id for it in itens if it.receita_id}
     com_prod = {it.produto_id for it in itens if it.produto_id}
-    receitas_add = [r for r in Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas_add = [r for r in Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
                     if r.id not in com_rec]
     produtos_add = [p for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
                     if p.id not in com_prod]
@@ -1730,7 +1730,7 @@ def estoque_loja():
                       joinedload(EstoqueLoja.materia_prima))
              .all()) if loja_id else []
     lojas = _lojas_operacionais()
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all() \
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all() \
         if current_user.is_admin() else []
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all() \
         if current_user.is_admin() else []
@@ -2105,7 +2105,7 @@ def estoque_loja_mapeamentos():
         VendaMapa.confirmado_em.is_(None).desc(),
         VendaMapa.nome_externo,
     ).all()
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
     # Lojas que JA usaram cada mapeamento (VendaMapaUso e criado pra TODA saida
@@ -2874,7 +2874,7 @@ def desperdicio():
     lojas = _lojas_operacionais()
     loja = Loja.query.get(loja_filtro) if loja_filtro else None
 
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
 

@@ -90,3 +90,27 @@ def test_precos_post_nao_zera_arquivada(app, owner_user):
     with app.app_context():
         assert db.session.get(Receita, rid_a).preco_loja == 6.5
         assert db.session.get(Receita, rid_q).preco_loja == 10.0  # intacto
+
+
+def test_arquivada_fora_dos_seletores_de_mapeamento(app, admin_user):
+    """Furo achado pelo dono (02/07/2026): receita arquivada continuava
+    aparecendo como opcao de vinculo em /pdv/mapeamentos (e nos demais
+    pickers). Arquivada = fora de circulacao — nao pode receber vinculo novo.
+    Fix: Receita.ativas() em todos os seletores (espelho de MP.ativas())."""
+    from app.extensions import db
+    from app.models import Receita
+    from app.utils import agora
+    _receita(app, 'Croissant Vivo')
+    rid_q = _receita(app, 'Croissant Nutella Antigo')
+    with app.app_context():
+        db.session.get(Receita, rid_q).arquivada_em = agora()
+        db.session.commit()
+
+    c = app.test_client()
+    _login(c)
+    for url in ('/pdv/mapeamentos', '/pedidos/estoque-loja/mapeamentos'):
+        r = c.get(url)
+        assert r.status_code == 200, url
+        html = r.data.decode()
+        assert 'Croissant Vivo' in html, url
+        assert 'Croissant Nutella Antigo' not in html, url

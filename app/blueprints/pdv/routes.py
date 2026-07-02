@@ -144,7 +144,7 @@ def historico_sync():
 def itens_vendidos():
     """Tela de relatorio: itens vendidos por intervalo + loja Seru."""
     from app.services import seru_cron
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     cron_status = seru_cron.status()
     return render_template('pdv/itens_vendidos.html',
@@ -688,7 +688,7 @@ def reconciliacao():
     dados = pdv_saude.reconciliar(inicio, fim)
     # VNDA aposentado (site proprio agora) — sem aba/reconciliacao VNDA aqui.
     # Alvos pra vincular inline (mesma fonte do modal de itens-vendidos).
-    receitas = Receita.query.order_by(Receita.nome).all()
+    receitas = Receita.ativas().order_by(Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     return render_template('pdv/reconciliacao.html', d=dados,
                            inicio=inicio.isoformat(), fim=fim.isoformat(),
@@ -706,7 +706,7 @@ def mapeamentos():
         VendaMapa.nome_externo,
     ).all()
     lojas_map = SeruLojaMap.query.order_by(SeruLojaMap.seru_company_name).all()
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
     # Loja fisica de onde o SITE (loja propria/PedidoOnline) baixa estoque +
