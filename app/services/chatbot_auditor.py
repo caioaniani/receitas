@@ -384,14 +384,17 @@ def _montar_mensagem(rel, inicio, fim, *, titulo='Auditor do bot', dados=None):
 
 
 def auditar_periodo(inicio, fim, *, enviar=True, forcar_envio=False,
-                    prompt_sistema=None, titulo='Auditor do bot'):
+                    prompt_sistema=None, titulo='Auditor do bot',
+                    dados_extras=None):
     """Audita o periodo [inicio, fim). Retorna {'ok', 'rel', 'enviado',
     'mensagem'} ou {'pulou'}/{'erro'}. Best-effort.
 
     - `enviar`: se False, so retorna sem mexer em Z-API (preview).
     - `forcar_envio`: True envia MESMO dia tranquilo (modo resumo de fim de dia).
     - `prompt_sistema`: prompt customizado (padrao = PROMPT_AUDITOR pra
-      janelas curtas, PROMPT_AUDITOR_RESUMO pra fim de dia)."""
+      janelas curtas, PROMPT_AUDITOR_RESUMO pra fim de dia).
+    - `dados_extras`: dict mesclado nos dados agregados antes de ir pro
+      Sonnet (ex: `comparativo_dia_anterior` no resumo das 19h)."""
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
                or current_app.config.get('ANTHROPIC_API_KEY'))
     if not api_key:
@@ -400,6 +403,8 @@ def auditar_periodo(inicio, fim, *, enviar=True, forcar_envio=False,
     dados = _coletar_periodo(inicio, fim)
     if not dados:
         return {'pulou': 'sem dados no periodo', 'ok': True}
+    if dados_extras:
+        dados.update(dados_extras)
 
     contexto = (
         f'Periodo: {inicio.isoformat()} a {fim.isoformat()}\n\n'
