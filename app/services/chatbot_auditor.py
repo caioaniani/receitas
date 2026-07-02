@@ -258,9 +258,16 @@ def _chamar_sonnet(api_key, contexto, prompt_sistema=None):
     return json.loads(texto)
 
 
+# Abaixo disto, porcentagem de contencao e ruido (1/2 = "50%") — a linha do
+# topo mostra so os numeros absolutos. Pedido do dono (02/07/2026): o auditor
+# fazia alarde com amostra minuscula.
+_AMOSTRA_MINIMA_PCT = 10
+
+
 def _linha_contencao(dados):
     """Renderiza 'Contencao: 87,5% (28/32 conversas) | preguicoso: 2/4'.
-    Devolve string vazia se nao tem dados suficientes."""
+    Com amostra pequena (< _AMOSTRA_MINIMA_PCT conversas) troca a manchete de
+    porcentagem por numeros absolutos. Vazia se nao tem dados suficientes."""
     if not dados:
         return ''
     conv = dados.get('conversas_unicas') or 0
@@ -269,7 +276,11 @@ def _linha_contencao(dados):
     if not conv or pct is None:
         return ''
     sem_hand = conv - com_hand
-    base = f'*Contenção:* {pct}% ({sem_hand}/{conv} conversas)'
+    if conv < _AMOSTRA_MINIMA_PCT:
+        base = (f'*Conversas:* {conv} no período · {sem_hand} resolvida(s) '
+                f'pelo bot · {com_hand} com handoff')
+    else:
+        base = f'*Contenção:* {pct}% ({sem_hand}/{conv} conversas)'
     preg = dados.get('handoffs_preguicosos') or 0
     handoffs = dados.get('handoffs') or 0
     if handoffs:
