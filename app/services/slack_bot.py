@@ -418,6 +418,36 @@ def disparar_evento(evento):
     _executor.submit(_runner)
 
 
+def _apendar_contexto_retirada(acao, resultado):
+    """Registra na SlackConversa um turno assistant descrevendo a execucao e
+    as sobras reaproveitaveis aguardando decisao de retirada — o modelo le
+    isso quando o usuario responder ("10 voltam") e sabe chamar
+    criar_retirada_sobras. Mescla no ultimo turno assistant quando for o
+    caso (a API nao aceita dois assistant seguidos)."""
+    from app.services import slack_blocks
+    sugestoes = slack_blocks.retiradas_sugeridas_de(resultado)
+    if not sugestoes or not acao.slack_channel_id:
+        return
+    linhas = [f'[Acao {acao.tipo_acao} confirmada e executada com sucesso.]']
+    for s in sugestoes:
+        linhas.append(
+            f"[Sobra reaproveitavel registrada: {s.get('qtd_sobra')}x "
+            f"{s.get('item')} — pode voltar pra industria e virar "
+            f"{s.get('destino')}. Perguntei ao usuario quantos voltam; quando "
+            f"ele responder a quantidade e mandar a FOTO da sobra "
+            f"(obrigatoria), chame criar_retirada_sobras.]")
+    texto = '\n'.join(linhas)
+    sc = _conversa(acao.slack_user_id, acao.slack_channel_id)
+    hist = _historico_da_conversa(sc)
+    ultimo = hist[-1] if hist else None
+    if (isinstance(ultimo, dict) and ultimo.get('role') == 'assistant'
+            and isinstance(ultimo.get('content'), str)):
+        ultimo['content'] = (ultimo['content'] + '\n\n' + texto).strip()
+    else:
+        hist.append({'role': 'assistant', 'content': texto})
+    _salvar_historico(sc, hist)
+
+
 def processar_interacao_botao(action_id, token, slack_user_id, channel_id,
                                 message_ts):
     """Clique em Confirmar/Cancelar. Chamado async via /slack/interact."""
@@ -475,6 +505,24 @@ def processar_interacao_botao(action_id, token, slack_user_id, channel_id,
                                       text='erro')
             return
 
+        # CLAIM atomico do token ANTES de executar: dois cliques quase
+        # simultaneos (ou retry do Slack) passavam AMBOS pelo guard de
+        # `executado_em` la em cima (so era setado DEPOIS do executar) e a
+        # acao rodava DUAS vezes. O UPDATE condicional garante que um so
+        # clique executa; o perdedor ve 'ja processada'.
+        claimed = (SlackAcaoPendente.query
+                   .filter(SlackAcaoPendente.id == acao.id,
+                           SlackAcaoPendente.executado_em.is_(None),
+                           SlackAcaoPendente.cancelado_em.is_(None))
+                   .update({'executado_em': agora()},
+                           synchronize_session=False))
+        db.session.commit()
+        if not claimed:
+            slack_api.update_message(channel_id, message_ts,
+                                      blocks=slack_blocks.build_expirado(),
+                                      text='ja processada')
+            return
+
         try:
             params = json.loads(acao.params_json or '{}')
         except (ValueError, TypeError):
@@ -490,17 +538,29 @@ def processar_interacao_botao(action_id, token, slack_user_id, channel_id,
             resultado = {'ok': False, 'erro': str(exc)}
 
         ok = bool(resultado.get('ok'))
-        if ok:
-            acao.executado_em = agora()
-        else:
+        if not ok:
+            # Falha: semantica antiga (cancelado_em marca o erro). Limpa o
+            # claim pra ficar coerente, mas o guard continua fechado via
+            # cancelado_em — o botao NAO reabre.
+            acao.executado_em = None
             acao.cancelado_em = agora()
-        db.session.add(acao)
-        db.session.commit()
+            db.session.add(acao)
+            db.session.commit()
         db.session.info.pop('audit_user_id', None)
 
         slack_api.update_message(channel_id, message_ts,
                                   blocks=slack_blocks.build_resultado(resultado, ok=ok),
                                   text='feito' if ok else 'erro')
+
+        # Contexto pro proximo turno do copilot: o botao roda FORA do loop do
+        # Claude — sem este append, quando o usuario respondesse "10 voltam"
+        # o modelo nao sabia do que se tratava e a retirada de sobras nunca
+        # nascia (caso real 02/07/2026, Nebraska). Best-effort.
+        if ok:
+            try:
+                _apendar_contexto_retirada(acao, resultado)
+            except Exception:  # noqa: BLE001
+                logger.exception('slack_bot: append de contexto de retirada falhou')
 
 
 def disparar_interacao_botao(action_id, token, slack_user_id, channel_id,
