@@ -233,6 +233,49 @@ def invalidar_sugestao_cache():
     _CACHE.clear()
 
 
+def _caps_por_retorno(receitas, estoque_de):
+    """Politica "so de sobras" (dono, 02/07/2026): pai cuja ficha consome uma
+    receita de RETORNO (destino de `Receita.retorno_receita_id`, ex: Croissant
+    Almond consome "Croissant Tradicional — Retorno") tem a sugestao de
+    producao CAPADA ao que o estoque devolvido cobre. Retorno nao e produzivel
+    — nunca puxa massa/producao fresca pra cobrir o que faltar.
+
+    receitas: {rid: Receita}. estoque_de(rid) -> estoque disponivel da receita.
+    Retorna {rid_pai: {'cap', 'sub_id', 'sub_nome', 'disponivel'}} (cap = menor
+    cobertura entre as subs de retorno da ficha). Liga por FK
+    (`sub_receita_id`, backfillado por nome na migracao).
+
+    Limitacao conhecida: dois pais consumindo o MESMO retorno sao capados
+    independentemente (sem rateio) — hoje so o Almond consome retorno."""
+    from app.services.massa_base import rendimento_massa_crua
+
+    retorno_ids = {rid for (rid,) in db.session.query(Receita.retorno_receita_id)
+                   .filter(Receita.retorno_receita_id.isnot(None)).distinct()}
+    if not retorno_ids:
+        return {}, set()
+    caps = {}
+    for rid, rec in receitas.items():
+        rend = rendimento_massa_crua(rec)
+        if rend <= 0:
+            continue
+        for ing in rec.ingredientes:
+            if (ing.tipo or '') != 'receita' or not ing.sub_receita_id:
+                continue
+            sid = ing.sub_receita_id
+            ratio = (ing.porcentagem or 0) / rend
+            if sid not in retorno_ids or ratio <= 0:
+                continue
+            disponivel = int(estoque_de(sid) or 0)
+            cap = int(disponivel / ratio)
+            atual = caps.get(rid)
+            if atual is None or cap < atual['cap']:
+                sub = receitas.get(sid)
+                caps[rid] = {'cap': cap, 'sub_id': sid,
+                             'sub_nome': sub.nome if sub else '?',
+                             'disponivel': disponivel}
+    return caps, retorno_ids
+
+
 def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                       inicio_offset_dias=0):
     """Balanco de producao da industria por receita.
