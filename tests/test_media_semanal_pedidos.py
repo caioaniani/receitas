@@ -348,3 +348,30 @@ def test_rota_mostra_pedido_real_no_dia_travado(app, admin_user):
     assert 'value="77"' in body                         # o pedido real aparece
     assert 'tem-pedido' in body                         # com o estilo próprio
     assert 'FOI pedido' in body                         # tooltip explica
+
+
+def test_item_so_com_pedido_no_dia_travado_aparece(app):
+    """Produto cuja única atividade cai em dia travado NÃO some mais: aparece
+    zerado com o ja_pedido preenchido (pedido do dono 02/07). Cobre também o
+    item SEM histórico que já tem pedido futuro."""
+    loja = _loja()
+    r = _receita()
+    hoje_d = hoje()
+    # histórico só no dow de HOJE — e hoje está travado (pedido feito)
+    for sem in (1, 2):
+        _pedido(loja, hoje_d - timedelta(days=7 * sem), r, 50)
+    _pedido(loja, hoje_d, r, 999, status='pendente')
+    # item NOVO sem histórico nenhum, mas com pedido amanhã
+    r2 = _receita('Item Novo')
+    _pedido(loja, hoje_d + timedelta(days=1), r2, 33, status='pendente')
+
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=2,
+                                  inicio_offset_dias=0)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None                         # não some mais
+    assert p['ja_pedido'][0] == 999
+    assert sum(p['por_dia']) == 0                # sem sugestão (dias travados)
+    p2 = _prod(grade, loja.id, r2.id)
+    assert p2 is not None                        # sem histórico, mas pedido
+    assert p2['ja_pedido'][1] == 33
+    assert p2['media_semanal'] == 0

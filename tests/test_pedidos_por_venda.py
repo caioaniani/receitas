@@ -380,3 +380,29 @@ def test_dia_travado_expoe_o_que_foi_pedido(app):
     assert p is not None
     assert p['ja_pedido'][1] == 55                      # amanhã = dia 1
     assert p['por_dia'][1] == 0                         # travado: sem sugestão
+
+
+def test_item_so_com_pedido_no_horizonte_aparece(app):
+    """Item sem venda, sem estoque e sem pedido histórico, mas com pedido JÁ
+    FEITO no horizonte: entra na grade (linha com as células do ja_pedido)."""
+    from app.models import PedidoItem, PedidoLoja
+    loja = _loja()
+    r = _receita('Novo Sem Historia')
+    # outra receita com venda pra loja existir na grade de qualquer forma
+    r0 = _receita('Pao')
+    el0 = _estoque(loja, r0, 5)
+    _venda(el0, hoje() - timedelta(days=7), 3)
+    amanha = hoje() + timedelta(days=1)
+    ped = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=amanha,
+                     data_pedido=hoje())
+    db.session.add(ped)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=ped.id, receita_id=r.id, quantidade=44))
+    db.session.commit()
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=0)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['ja_pedido'][1] == 44
+    assert sum(p['por_dia']) == 0
