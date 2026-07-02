@@ -273,6 +273,75 @@ def test_desperdicio_sem_retorno_nao_sugere(app, admin_user):
     assert res.get('retirada_sugerida') is None
 
 
+# ── Tela do padeiro: card de recebimento ─────────────────────────────────────
+
+def _login(client, uid):
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(uid)
+        sess['_fresh'] = True
+
+
+def test_padeiro_mostra_retirada_aguardando(app, admin_user):
+    """Retirada do dia aparece na fila do padeiro com destaque de RECEBIMENTO
+    (aguardando coleta = sem botão de QR ainda)."""
+    from app.extensions import db
+    trad, _r, loja, _el, _d = _setup(db)
+    ret = _retirada(db, loja, trad, qtd=10)
+    ret.data_retirada = hoje()                       # retirada de HOJE
+    db.session.commit()
+    c = app.test_client()
+    _login(c, admin_user.id)
+    r = c.get('/padeiro')
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert 'RECEBIMENTO' in html
+    assert 'Retirada de sobras #%d' % ret.id in html
+    assert 'Aguardando o motorista coletar' in html
+    assert 'QR DE RECEBIMENTO' not in html           # ainda não coletada
+
+
+def test_padeiro_retirada_em_transporte_tem_botao_qr(app, admin_user):
+    from app.extensions import db
+    trad, _r, loja, _el, _d = _setup(db)
+    ret = _retirada(db, loja, trad, qtd=10)
+    ret.data_retirada = hoje()
+    ret.status = 'em_transporte'
+    db.session.commit()
+    c = app.test_client()
+    _login(c, admin_user.id)
+    r = c.get('/padeiro')
+    assert 'CHEGOU — QR DE RECEBIMENTO' in r.data.decode()
+
+
+def test_padeiro_rota_qr_recebimento(app, admin_user):
+    from app.extensions import db
+    trad, _r, loja, _el, _d = _setup(db)
+    ret = _retirada(db, loja, trad, qtd=10)
+    ret.status = 'em_transporte'
+    db.session.commit()
+    c = app.test_client()
+    _login(c, admin_user.id)
+    r = c.post(f'/padeiro/retirada/{ret.id}/qr', data={'data': ''})
+    assert r.status_code == 200
+    assert 'QR de recebimento' in r.data.decode()
+    qr = RetiradaQRCode.query.filter_by(retirada_id=ret.id,
+                                        tipo='recebimento').first()
+    assert qr is not None and qr.valido
+
+
+def test_padeiro_rota_qr_recusa_antes_da_coleta(app, admin_user):
+    from app.extensions import db
+    trad, _r, loja, _el, _d = _setup(db)
+    ret = _retirada(db, loja, trad)                  # aguardando_coleta
+    c = app.test_client()
+    _login(c, admin_user.id)
+    r = c.post(f'/padeiro/retirada/{ret.id}/qr', data={'data': ''},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)               # volta com aviso
+    assert RetiradaQRCode.query.filter_by(retirada_id=ret.id,
+                                          tipo='recebimento').count() == 0
+
+
 # ── Regressão: retirada não é demanda ────────────────────────────────────────
 
 def test_retirada_nao_entra_na_previsao(app):
