@@ -183,9 +183,11 @@ _HANDOFF_EXCECAO = re.compile(
 
 def _handoff_excecao(inp):
     """True se o input da tool transferir_para_humano traz um motivo de
-    excecao (nao exige consulta previa)."""
-    texto = ' '.join(str(inp.get(k) or '') for k in
-                     ('motivo', 'mensagem_cliente', 'resumo'))
+    excecao (nao exige consulta previa). Olha SO os campos de MOTIVO
+    ('motivo'/'resumo') — NUNCA 'mensagem_cliente': ela e a frase dita ao
+    cliente e quase sempre contem "um atendente vai continuar", o que
+    casaria a excecao 'atendente' e anularia o enforcement inteiro."""
+    texto = ' '.join(str(inp.get(k) or '') for k in ('motivo', 'resumo'))
     return bool(_HANDOFF_EXCECAO.search(texto))
 
 
