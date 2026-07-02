@@ -1672,5 +1672,51 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE planejamento_producao "
                        "ADD COLUMN enviado_ao_padeiro BOOLEAN DEFAULT 1")
 
+    # ── Acuracia por MOTOR (Fase 0, 02/07/2026): previsao_snapshot ganha
+    # motor/lead_dias e a unique passa a incluir o motor. SQLite nao dropa
+    # constraint de tabela -> reconstroi (tabela de telemetria, copia barata).
+    cursor.execute("PRAGMA table_info(previsao_snapshot)")
+    cols_ps = [row[1] for row in cursor.fetchall()]
+    if cols_ps and 'motor' not in cols_ps:
+        cursor.execute("""
+            CREATE TABLE previsao_snapshot_novo (
+                id INTEGER PRIMARY KEY,
+                data_alvo DATE NOT NULL,
+                loja_id INTEGER NOT NULL REFERENCES loja(id),
+                receita_id INTEGER NOT NULL REFERENCES receita(id),
+                previsto INTEGER NOT NULL DEFAULT 0,
+                realizado INTEGER,
+                casado_em TIMESTAMP,
+                criado_em TIMESTAMP,
+                motor VARCHAR(20) NOT NULL DEFAULT 'pedido_semana',
+                lead_dias INTEGER,
+                CONSTRAINT uq_previsao_snapshot_alvo_motor
+                    UNIQUE (data_alvo, loja_id, receita_id, motor)
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO previsao_snapshot_novo
+                (id, data_alvo, loja_id, receita_id, previsto, realizado,
+                 casado_em, criado_em)
+            SELECT id, data_alvo, loja_id, receita_id, previsto, realizado,
+                   casado_em, criado_em
+            FROM previsao_snapshot
+        """)
+        cursor.execute("DROP TABLE previsao_snapshot")
+        cursor.execute("ALTER TABLE previsao_snapshot_novo "
+                       "RENAME TO previsao_snapshot")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_previsao_snapshot_data_alvo "
+                       "ON previsao_snapshot(data_alvo)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_previsao_snapshot_criado_em "
+                       "ON previsao_snapshot(criado_em)")
+
+    # ── Caixa/piso de pedido pra MP (Fase 1, 02/07/2026) ──
+    cursor.execute("PRAGMA table_info(materia_prima)")
+    cols_mp2 = [row[1] for row in cursor.fetchall()]
+    if cols_mp2 and 'lote_pedido' not in cols_mp2:
+        cursor.execute("ALTER TABLE materia_prima ADD COLUMN lote_pedido INTEGER")
+    if cols_mp2 and 'minimo_pedido' not in cols_mp2:
+        cursor.execute("ALTER TABLE materia_prima ADD COLUMN minimo_pedido INTEGER")
+
     conn.commit()
     conn.close()
