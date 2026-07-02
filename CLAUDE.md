@@ -572,6 +572,28 @@ entregas:
 - Testes: `tests/test_retirada_sobras.py`. PENDENTE (nao bloqueia): mostrar
   retiradas do dia no Painel de Entregas e lista web com cancelamento.
 
+**Fixes do primeiro uso real (02/07/2026 a noite, Nebraska — testes em
+`tests/test_slack_retirada_e_duplicata.py`)**:
+- A `retirada_sugerida` que o executor devolve MORRIA no caminho: o
+  resultado pos-confirmacao virava so "✓ N desperdicio(s)" e o modelo nunca
+  ficava sabendo (o botao roda FORA do loop do Claude) — a pergunta "quantos
+  voltam?" nao acontecia e a retirada nao nascia. Agora: (1) o resultado no
+  Slack ganha secao ♻️ pedindo quantidade + foto; (2)
+  `slack_bot._apendar_contexto_retirada` grava o contexto na SlackConversa
+  (mesclado no ultimo turno assistant) pra o modelo saber chamar
+  `criar_retirada_sobras` quando o usuario responder.
+- Lote de desperdicio DUPLICADO: o modelo re-enviou a lista inteira pra
+  acrescentar 1 item (almond) e 4 itens duplicaram como perda. Defesas:
+  aviso "⚠ Ja registrado HOJE nesta loja" no preview
+  (`_enriquecer_registrar_desperdicio_lote` marca `ja_registrado_hoje` por
+  item) + regra na tool/prompt (re-envio so com o item que faltou).
+- CLAIM atomico no Confirmar (`processar_interacao_botao`): `executado_em`
+  so era setado DEPOIS do executar — dois cliques quase simultaneos
+  executavam a acao 2x. UPDATE condicional antes de executar; o perdedor ve
+  "ja processada". Falha na execucao limpa o claim e marca `cancelado_em`.
+- Vocabulario de motivo do preview do lote realinhado com o executor
+  ('nao_vendeu' era silenciosamente virado 'vencido' no preview).
+
 ## Impressao de pedidos de entrega (2026-06-12)
 
 **A impressao oficial e PDF gerado no servidor** (`app/services/pdf.py::
