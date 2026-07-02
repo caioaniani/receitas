@@ -36,7 +36,7 @@ from collections import defaultdict
 from datetime import timedelta
 from math import ceil
 
-from app.constants import STATUS_PEDIDO_NAO_BAIXADOS
+from app.constants import STATUS_PEDIDO_EDITAVEIS, STATUS_PEDIDO_NAO_BAIXADOS
 from app.extensions import db
 from app.models import EstoqueProducao, Loja, PedidoItem, PedidoLoja, Receita
 from app.utils import hoje
@@ -1016,6 +1016,12 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                 'loja_id': loja.id, 'loja_nome': loja.nome,
                 'produtos': produtos,
                 'ja_tem': sorted(ja_tem_loja),
+                # Dias travados que a tela DESTRAVA pra edicao: exatamente UM
+                # pedido, ainda editavel (dois pedidos no dia = ambiguo, e
+                # separado+ ja esta no fluxo fisico — so pela tela do pedido).
+                'editaveis': sorted(
+                    d for d, sts in status_dia.get(loja.id, {}).items()
+                    if len(sts) == 1 and sts[0] in STATUS_PEDIDO_EDITAVEIS),
             })
 
     return {
