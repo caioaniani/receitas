@@ -448,6 +448,9 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
 
     # 5. Monta itens — so receitas com algum sinal (estoque/comprometido/
     # previsto). Nao listar centenas de receitas zeradas.
+    # Cap "so de sobras": pai que consome receita de retorno nunca sugere
+    # producao alem do que o estoque devolvido cobre (ver _caps_por_retorno).
+    caps_retorno, _ = _caps_por_retorno(receitas, lambda sid: em_estoque.get(sid, 0))
     itens = []
     for rid, rec in receitas.items():
         est = em_estoque.get(rid, 0)
@@ -460,7 +463,13 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             continue
         demanda = max(comp, prev)
         produzir = max(0, demanda - est_efetivo)
+        lim = caps_retorno.get(rid)
+        if lim is not None and produzir > lim['cap']:
+            produzir = lim['cap']
         itens.append({
+            'limitado_por_retorno': (
+                lim if lim is not None and produzir == lim['cap']
+                and max(0, demanda - est_efetivo) >= lim['cap'] else None),
             'receita_id': rid,
             'nome': rec.nome,
             'em_estoque': est,
