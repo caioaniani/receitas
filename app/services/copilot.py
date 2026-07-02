@@ -3051,11 +3051,7 @@ def _read_consultar_vendas_itens(params, user):
 def executar_mudar_status_pedido(params, user):
     from app.models import (
         EstoqueLoja,
-        EstoqueProducao,
-        MateriaPrima,
         MovEstoqueLoja,
-        MovEstoqueProducao,
-        MovimentacaoEstoque,
         PedidoLoja,
     )
     pid = params.get('pedido_id')
@@ -3110,30 +3106,21 @@ def executar_mudar_status_pedido(params, user):
                          f'/pedidos/{pid}')}
 
     try:
-        # ENVIAR: baixa estoque da industria
+        # ENVIAR: baixa estoque da industria pelo MOTOR ÚNICO (03/07/2026) —
+        # mesma função da rota web/QR (get-or-create da linha + quantidade
+        # real + falta registrada). Antes era uma cópia inline que pulava
+        # item sem linha em silêncio.
         if novo == 'enviar':
-            for item in p.itens:
-                if item.materia_prima_id:
-                    mp = MateriaPrima.query.get(item.materia_prima_id)
-                    if mp:
-                        mp.estoque_atual = max(0, (mp.estoque_atual or 0) - item.quantidade)
-                        db.session.add(MovimentacaoEstoque(
-                            materia_prima_id=mp.id, tipo='saida',
-                            quantidade=item.quantidade,
-                            referencia=f'Pedido #{pid} → {p.loja.nome} (copilot)',
-                            usuario_id=user.id,
-                        ))
-                    continue
-                ep = EstoqueProducao.query.filter_by(
-                    receita_id=item.receita_id, produto_id=item.produto_id).first()
-                if ep:
-                    ep.quantidade = max(0, ep.quantidade - item.quantidade)
-                    db.session.add(MovEstoqueProducao(
-                        estoque_producao_id=ep.id, tipo='saida_pedido',
-                        quantidade=item.quantidade,
-                        referencia=f'Pedido #{pid} → {p.loja.nome} (copilot)',
-                        usuario_id=user.id,
-                    ))
+            from app.services.pedido_estoque import baixar_industria_pedido
+            baixar_industria_pedido(p, user.id, ref_extra='copilot')
+
+        # CANCELAR um pedido que JÁ SAIU (em_transporte): estorna a baixa da
+        # industria antes de cancelar — sem isso o estoque ficava baixado
+        # por um pedido que não existe mais (fix 03/07/2026; a rota web nem
+        # permite cancelar depois do envio).
+        if novo == 'cancelar' and p.status == 'em_transporte':
+            from app.services.pedido_estoque import estornar_industria_pedido
+            estornar_industria_pedido(p, user.id, motivo='cancelado via copilot')
 
         # RECEBER: soma no estoque da loja (qtd conforme pedido, sem divergencia)
         if novo == 'receber':
