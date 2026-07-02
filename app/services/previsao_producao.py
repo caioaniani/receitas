@@ -842,11 +842,18 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                           inicio_offset_dias=0):
     """Modo MANUAL: devolve a media de cada (loja, produto) por DIA-DA-SEMANA — o
     sinal ESTAVEL, respeitando o PADRAO da loja (sabado != terca) — distribuida
-    pelos dias LIVRES do horizonte, pro admin AJUSTAR na tela. media por dow =
-    total daquele dia-da-semana na janela / nº de semanas; a soma sobre a semana
-    reconstroi a media semanal. So distribui em dias que a loja ainda NAO pediu
-    (dia travado vem disabled na tela e nao seria enviado no POST — alocar nele
-    perderia a parcela em silencio). O gerar reusa o POST de pedidos_semana_gerar.
+    pelos dias LIVRES do horizonte, pro admin AJUSTAR na tela.
+
+    Media por dow (Fase 1, 02/07/2026): `_media_recencia` com cap de pico
+    isolado e denominador-com-zeros desde a 1a ocorrencia — a MESMA matematica
+    do balanco da industria (antes era total/janela uniforme, sem protecao:
+    pico avulso inflava a media por 6 semanas e item novo saia diluido). O
+    historico usa quantidade_recebida quando preenchida e EXCLUI rascunhos
+    gerados pela propria grade que nunca foram confirmados (anti auto-reforco).
+
+    So distribui em dias que a loja ainda NAO pediu (dia travado vem disabled
+    na tela e nao seria enviado no POST — alocar nele perderia a parcela em
+    silencio). O gerar reusa o POST de pedidos_semana_gerar.
 
     Retorna dict:
         dias: [{data, label, dow}]
