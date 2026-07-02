@@ -1,0 +1,60 @@
+{% extends 'handshake/_base_mobile.html' %}
+{% block title %}Retirada #{{ retirada.id }}{% endblock %}
+{% block content %}
+<div class="card card-soft p-3 mb-3">
+    <div class="h1-mini">
+        {% if qr.tipo == 'coleta' %}
+        <i class="bi bi-arrow-return-left"></i> Coleta de sobras na Loja
+        {% else %}
+        <i class="bi bi-box-arrow-in-down"></i> Recebimento na Indústria
+        {% endif %}
+    </div>
+    <div class="kv">
+        Retirada <strong>#{{ retirada.id }}</strong> · Loja <strong>{{ retirada.loja.nome }}</strong><br>
+        Data: <strong>{{ retirada.data_retirada.strftime('%d/%m/%Y') }}</strong>
+    </div>
+</div>
+
+<div class="card card-soft p-0 mb-3">
+    <ul class="list-group list-group-flush">
+        {% for it in retirada.itens %}
+        <li class="list-group-item">
+            <strong>{{ it.quantidade }}× {{ it.nome_item }}</strong>
+            {% if it.receita and it.receita.retorno_receita %}
+            <div class="text-muted small">vira: {{ it.receita.retorno_receita.nome }}</div>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+{% if retirada.foto_url %}
+<div class="card card-soft p-3 mb-3">
+    <div class="small text-muted mb-2"><i class="bi bi-camera"></i> Foto da sobra (lançada pela loja):</div>
+    <a href="{{ retirada.foto_url }}" target="_blank">
+        <img src="{{ retirada.foto_url }}" alt="foto da sobra"
+             style="max-width:100%; border-radius:.5rem;">
+    </a>
+</div>
+{% endif %}
+
+<div class="alert alert-info small mb-3">
+    {% if qr.tipo == 'coleta' %}
+    <i class="bi bi-info-circle"></i> Ao confirmar, os itens <strong>saem do estoque da loja</strong> e a retirada entra em transporte.
+    {% else %}
+    <i class="bi bi-info-circle"></i> Ao confirmar, os itens <strong>entram no estoque da indústria</strong> (receita de retorno).
+    {% endif %}
+</div>
+
+<form method="POST" action="">
+    <div class="card card-soft p-3 mb-3">
+        <label class="form-label fw-bold">PIN do motorista</label>
+        <input type="password" name="pin" class="form-control form-control-lg"
+               inputmode="numeric" autocomplete="one-time-code" required autofocus>
+    </div>
+    <button type="submit" class="btn btn-success btn-lg w-100">
+        <i class="bi bi-check-lg"></i>
+        {% if qr.tipo == 'coleta' %}Confirmar coleta{% else %}Confirmar recebimento{% endif %}
+    </button>
+</form>
+{% endblock %}
