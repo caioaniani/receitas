@@ -354,7 +354,7 @@ def _preview_registrar_desperdicio_lote(p, token):
     resumo = '\n'.join(_fmt(i) for i in itens[:25])
     if len(itens) > 25:
         resumo += f'\n_... +{len(itens) - 25} itens_'
-    return [
+    blocks = [
         _header('Registrar desperdicio em lote'),
         _fields([
             ('Loja', loja),
@@ -365,8 +365,24 @@ def _preview_registrar_desperdicio_lote(p, token):
             ('Observacao', p.get('observacao') or '—'),
         ]),
         _section(f'*Itens:*\n{resumo[:2500] or "(vazio)"}'),
-        _botoes(token, f'Registrar {n_ok} item(s)', 'Cancelar'),
     ]
+    # Itens que JA tem desperdicio registrado hoje nesta loja — aviso antes
+    # de confirmar (caso real 02/07/2026: lote re-enviado inteiro pra
+    # acrescentar 1 item duplicou 4 perdas).
+    dups = [i for i in itens
+            if i.get('resolvido') and (i.get('ja_registrado_hoje') or 0) > 0]
+    if dups:
+        linhas = '\n'.join(
+            f"- {i['ja_registrado_hoje']}x "
+            f"{(i.get('resolvido') or {}).get('nome') or i.get('nome')}"
+            for i in dups[:10])
+        blocks.append(_section(
+            ':warning: *Ja registrado HOJE nesta loja:*\n' + linhas +
+            '\n_Se este lote so completa um item que faltou, cancele e '
+            'registre apenas o item novo — confirmar de novo DUPLICA as '
+            'perdas._'))
+    blocks.append(_botoes(token, f'Registrar {n_ok} item(s)', 'Cancelar'))
+    return blocks
 
 
 def _preview_criar_venda_b2b(p, token):
