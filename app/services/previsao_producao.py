@@ -402,25 +402,35 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     # lead), soma a media do dia-da-semana correspondente (com fallback pra taxa
     # RESIDUAL — volume sem padrao de dow, sem o double-count do A1). Receita sem
     # historico fica com previsto 0 (produzir vem so do comprometido).
+    #
+    # DEMANDA POR DIA (Fase 2, 02/07/2026): alem do total `previsto`, soma-se
+    # Σ_dia max(firme_d, previsto_d). O max no AGREGADO (max(Σfirme, Σprev))
+    # subproduzia: dias ja pedidos ACIMA da media nao compensam dias ainda nao
+    # pedidos que virao NA media — a demanda real e o max dia a dia (a projecao
+    # do cronograma ja usava essa conta e podia acusar 'vai faltar' enquanto o
+    # total do balanco dizia que nao).
     residual_rate = {rid: _taxa_residual(qtd_dow.get(rid, {}), soma_total.get(rid, 0),
                                          dias_calendario_janela)
                      for rid in receitas}
     previsto = defaultdict(float)
+    demanda_soma = defaultdict(float)
     for rid in receitas:
-        if not datas_total.get(rid):
-            continue
         rid_dow = qtd_dow.get(rid, {})
+        tem_hist = bool(datas_total.get(rid))
         L = lead.get(rid, 0)
         dias_rid = [inicio_d + timedelta(days=L + i)
                     for i in range(horizonte_dias)]
         rec_rid = receitas.get(rid)
         for d in dias_rid:
-            if not _fornada_no_dia(rec_rid, d):
-                continue   # fornada especial fora de sex/sáb/dom: não projeta
-            dow = d.weekday()
-            previsto[rid] += _previsto_dow(
-                rid_dow.get(dow), hoje_d, residual_rate[rid],
-                datas_possiveis=datas_possiveis_dow[dow])
+            f_d = float(firme_dia[rid].get(d, 0))
+            p_d = 0.0
+            if tem_hist and _fornada_no_dia(rec_rid, d):
+                dow = d.weekday()
+                p_d = _previsto_dow(
+                    rid_dow.get(dow), hoje_d, residual_rate[rid],
+                    datas_possiveis=datas_possiveis_dow[dow])
+                previsto[rid] += p_d
+            demanda_soma[rid] += max(f_d, p_d)
 
     def _previsto_dia(rid, dia):
         if not _fornada_no_dia(receitas.get(rid), dia):
