@@ -250,7 +250,7 @@ def test_estoque_atual_disponivel(app):
     p = _prod(grade, loja.id, r.id)
     assert p is not None
     assert p['estoque_atual'] == 25
-    assert p['media_semanal'] == 23.3                # 140/6 arred.; estoque nao mexe
+    assert p['media_semanal'] == 70.0                # 2x70 no dow; estoque nao mexe
 
 
 def test_estoque_atual_zero_sem_linha(app):
