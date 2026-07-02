@@ -387,8 +387,9 @@ def editar(id):
     (qtd/estado/obs/adicionar/remover). NAO toca em loja_id (muda rota
     fisica, melhor cancelar+recriar) nem em status/driver_id. Itens vao
     via REPLACE total — DELETE + INSERT da lista nova."""
+    from app.constants import STATUS_PEDIDO_EDITAVEIS
     pedido = PedidoLoja.query.get_or_404(id)
-    if pedido.status not in ('pendente', 'confirmado'):
+    if pedido.status not in STATUS_PEDIDO_EDITAVEIS:
         flash(f'Pedido {pedido.status} nao pode ser editado. Cancele e recrie.', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
 

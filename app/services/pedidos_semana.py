@@ -7,14 +7,11 @@ status 'pendente' (rascunho) — pra o admin revisar e confirmar depois.
 confirmado — mesma regra da rota /pedidos/<id>/editar) tem os itens
 ATUALIZADOS a partir da grade (a tela da media destrava essas celulas).
 """
+from app.constants import STATUS_PEDIDO_EDITAVEIS as STATUS_EDITAVEIS
 from app.extensions import db
 from app.models import PedidoItem, PedidoLoja
 from app.services.previsao_producao import invalidar_sugestao_cache
 from app.utils import agora, hoje
-
-# Mesma regra da rota oficial de edicao (/pedidos/<id>/editar): depois de
-# separado o pedido ja esta no fluxo fisico — cancela e recria, nao edita.
-STATUS_EDITAVEIS = ('pendente', 'confirmado')
 
 
 def criar_pedidos_rascunho(pedidos, user_id):
