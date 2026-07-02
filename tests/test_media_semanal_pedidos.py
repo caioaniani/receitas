@@ -382,3 +382,61 @@ def test_item_so_com_pedido_no_dia_travado_aparece(app):
     assert p2 is not None                        # sem histórico, mas pedido
     assert p2['ja_pedido'][1] == 33
     assert p2['media_semanal'] == 0
+
+
+# ── auto-save (ajax=1): salva a coluna ao terminar de digitar ──────────────
+def test_gerar_ajax_atualiza_pedido_e_retorna_json(app, admin_user):
+    """POST com ajax=1 + so_dia atualiza o pedido existente e responde JSON
+    (sem redirect) — é o caminho do auto-save da tela da média."""
+    loja = _loja('Loja Ajax')
+    r = _receita('Pão Ajax')
+    d = hoje() + timedelta(days=2)
+    ped = _pedido(loja, d, r, 10, status='pendente')     # editável
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.post('/producao/pedidos-semana/gerar', data={
+        'origem': 'media', 'ajax': '1',
+        'so_dia': '%d|%s' % (loja.id, d.isoformat()),
+        'qtd|%d|%s|%d' % (loja.id, d.isoformat(), r.id): '25',
+    })
+    assert resp.status_code == 200                       # JSON, não 302
+    j = resp.get_json()
+    assert j['ok'] is True and j['mudou'] is True
+    it = PedidoItem.query.filter_by(pedido_id=ped.id, receita_id=r.id).first()
+    assert it.quantidade == 25                           # pedido atualizado
+
+
+def test_gerar_ajax_sem_mudanca_avisa(app, admin_user):
+    """Coluna igual ao pedido -> mudou=False (indicador '✓ sem mudança')."""
+    loja = _loja('Loja Igual')
+    r = _receita('Pão Igual')
+    d = hoje() + timedelta(days=2)
+    _pedido(loja, d, r, 10, status='pendente')
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.post('/producao/pedidos-semana/gerar', data={
+        'origem': 'media', 'ajax': '1',
+        'so_dia': '%d|%s' % (loja.id, d.isoformat()),
+        'qtd|%d|%s|%d' % (loja.id, d.isoformat(), r.id): '10',   # mesmo valor
+    })
+    assert resp.status_code == 200
+    j = resp.get_json()
+    assert j['ok'] is True and j['mudou'] is False
+
+
+def test_rota_media_tem_autosave_no_js(app, admin_user):
+    """A tela carrega o bloco de auto-save (debounce + fetch ajax=1)."""
+    loja = _loja('Loja JS')
+    r = _receita('Pão JS')
+    for sem in (1, 2):
+        _pedido(loja, hoje() - timedelta(days=7 * sem), r, 50)
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    body = client.get('/producao/pedidos-semana/media').get_data(as_text=True)
+    assert "fd.set('ajax', '1')" in body                 # fetch do auto-save
+    assert 'salvando' in body                            # indicador de status
