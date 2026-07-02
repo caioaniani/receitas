@@ -154,6 +154,26 @@ def reverter_dispensa_rota():
                             dias=request.form.get('dias') or 30))
 
 
+@industria_teste_bp.route('/auditoria/reagendar', methods=['POST'])
+@login_required
+@admin_required
+def reagendar():
+    """Manda a FALTA das ordens selecionadas pra a produção de HOJE (o padeiro
+    passa a ver em /padeiro). As ordens antigas saem da auditoria (movidas)."""
+    from app.services.producao_pendente import reagendar_para_hoje
+
+    ids = request.form.getlist('item_ids')
+    res = reagendar_para_hoje(ids, current_user.id)
+    if res['movidos']:
+        flash('%d ordem(ns) · %d un enviada(s) pra produção de HOJE — o padeiro '
+              'já vê em /padeiro.' % (res['movidos'], res['unidades']), 'success')
+    else:
+        flash('Nada pra reagendar (marque ordens com falta a produzir).',
+              'warning')
+    return redirect(url_for('industria_teste.auditoria',
+                            dias=request.form.get('dias') or 30))
+
+
 @industria_teste_bp.route('/previsao/<int:receita_id>')
 @login_required
 @admin_required
