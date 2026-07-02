@@ -76,6 +76,23 @@ Esta regra é obrigatória e se aplica a TODA conversa.
   vez que isso falha (eu menciono risco hipotético em vez de ir conferir o
   código real), é um problema concreto, não estilo.
 
+## API read-only do assistente (/api/claude/*) — acesso do Claude a prod
+
+Criada em 02/07/2026 a pedido do dono ("pois vá ter acesso"): o container de
+desenvolvimento NAO enxerga o Postgres do Railway, entao leituras de producao
+saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
+
+- **Auth**: `Authorization: Bearer <CLAUDE_API_TOKEN>` (env no Railway; vazio
+  = rotas desligadas com 503). Mesmo padrao do `BOT_API_TOKEN`.
+- **Rotas** (read-only estrito, nunca adicionar write aqui):
+  - `GET /api/claude/cronograma?horizonte=&janela=&inicio=` — JSON do
+    cronograma de producao (mesma conta da /telaindustriateste, com
+    pendencias e alertas de entrega em risco).
+- **Uso numa sessao**: o dono cola o token no chat (o container e efemero —
+  nada persiste entre sessoes); consultar com
+  `curl -s -H "Authorization: Bearer $TOK" https://gestao.opaopadariaartesanal.com.br/api/claude/cronograma`.
+- Testes: `tests/test_claude_api.py`.
+
 ## Branches & Deploy
 
 - **Branch de produção (Railway acompanha)**: `claude/continue-controller-conversation-aGS3F`
