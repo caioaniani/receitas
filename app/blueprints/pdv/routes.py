@@ -670,6 +670,37 @@ def saude():
     return render_template('pdv/saude.html', s=pdv_saude.resumo())
 
 
+@pdv_bp.route('/reprocessar-retroativo', methods=['POST'])
+@login_required
+@admin_required
+def reprocessar_retroativo_rota():
+    """Botao na Saude do PDV: recupera baixas perdidas da janela (pedidos com
+    ZERO baixa, inclusive sem-loja) reprocessando com os mapeamentos ATUAIS.
+    Parciais nao sao tocados (re-baixariam o que ja saiu)."""
+    from app.services import seru_sync
+    try:
+        dias = max(1, min(int(request.form.get('dias') or 30), 30))
+    except (TypeError, ValueError):
+        dias = 30
+    try:
+        res = seru_sync.reprocessar_retroativo(dias=dias, user=current_user)
+    except Exception as e:  # noqa: BLE001 — API Seru fora nao pode dar 500
+        current_app.logger.exception('reprocessar_retroativo falhou')
+        flash(f'Reprocesso falhou (API Seru?): {type(e).__name__}. '
+              'Tente de novo em alguns minutos.', 'danger')
+        return redirect(url_for('pdv.saude'))
+    st = res.get('stats') or {}
+    msg = (f"Retroativo ({dias}d): {res.get('liberados', 0)} pedido(s) sem "
+           f"baixa liberados; {st.get('itens_baixados', 0)} item(ns) "
+           f"baixado(s), {st.get('itens_pendentes_novos', 0)} ainda "
+           'pendentes de mapa.')
+    if res.get('parciais_na_janela'):
+        msg += (f" {res['parciais_na_janela']} pedido(s) parciais não são "
+                'recuperáveis automaticamente.')
+    flash(msg, 'success' if st.get('itens_baixados') else 'info')
+    return redirect(url_for('pdv.saude'))
+
+
 @pdv_bp.route('/reconciliacao')
 @login_required
 @admin_required
