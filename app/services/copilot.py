@@ -538,6 +538,42 @@ TOOL_DEVOLVER_INDUSTRIA = {
     },
 }
 
+TOOL_CRIAR_RETIRADA_SOBRAS = {
+    "name": "criar_retirada_sobras",
+    "description": (
+        "Cria um PEDIDO DE RETIRADA de sobras reaproveitaveis da loja pra "
+        "industria no dia seguinte (ex: croissants que vao virar Almond). "
+        "EXIGE FOTO da sobra anexada na mensagem — sem foto, nao cria. "
+        "Fluxo: apos registrar sobras, se algum item reaproveitavel tem "
+        "receita de retorno, PERGUNTE quantos voltam pra industria; com a "
+        "resposta, PECA A FOTO da sobra; quando a foto chegar, chame esta "
+        "tool. O motorista coleta no dia seguinte via QR code (esteira igual "
+        "as entregas: coleta baixa a loja, recebimento credita a industria). "
+        "NAO executa direto — preview pra aprovar."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "loja_id": {"type": ["integer", "null"], "description": "ID da loja."},
+            "loja_nome": {"type": ["string", "null"], "description": "Nome da loja (fuzzy). Use loja_id quando souber."},
+            "itens": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "nome": {"type": "string", "description": "Nome da receita (fuzzy match)."},
+                        "quantidade": {"type": "integer", "minimum": 1, "description": "Quantos voltam pra industria."},
+                    },
+                    "required": ["nome", "quantidade"],
+                },
+                "minItems": 1,
+            },
+            "observacao": {"type": ["string", "null"]},
+        },
+        "required": ["itens"],
+    },
+}
+
 TOOL_REGISTRAR_DESPERDICIO = {
     "name": "registrar_desperdicio",
     "description": "Registra sobra do dia descartada na loja (vencido/estragado/queimado/caiu). Baixa do estoque. NAO executa — preview.",
