@@ -179,58 +179,7 @@
         {% if current_user.pode_pdv() or current_user.is_admin() or current_user.pode_lojas() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Vendas & Entregas</div>
-
-        {% if current_user.pode_pdv() %}
-        <a href="{{ url_for('pdv.index') }}"
-           class="sidebar-link {% if request.path == '/pdv/' or request.path == '/pdv' %}active{% endif %}">
-            Vendas do Caixa (PDV)
-        </a>
-        <a href="{{ url_for('pdv.itens_vendidos') }}"
-           class="sidebar-link ps-4 small {% if '/pdv/itens-vendidos' in request.path %}active{% endif %}">
-            Itens Vendidos
-        </a>
-        <a href="{{ url_for('pdv.mapeamentos') }}"
-           class="sidebar-link ps-4 small {% if '/pdv/mapeamentos' in request.path %}active{% endif %}">
-            Vincular produtos do caixa
-        </a>
-        {# VNDA aposentado em 24/06/2026 — link removido. Rota /pdv/vnda/...
-           continua existindo (codigo morto) mas nao aparece mais no menu. #}
-        <a href="{{ url_for('pdv.saude') }}"
-           class="sidebar-link ps-4 small {% if '/pdv/saude' in request.path %}active{% endif %}">
-            Saúde do sync de vendas
-        </a>
-        <a href="{{ url_for('pdv.reconciliacao') }}"
-           class="sidebar-link ps-4 small {% if '/pdv/reconciliacao' in request.path %}active{% endif %}">
-            Conferência de vendas
-        </a>
-        {% endif %}
-        {% if current_user.is_admin() %}
-        <a href="{{ url_for('b2b.dashboard') }}"
-           class="sidebar-link {% if request.path.startswith('/b2b') and '/orcamento' not in request.path %}active{% endif %}">
-            Vendas B2B (Indústria)
-        </a>
-        <a href="{{ url_for('b2b.orcamentos') }}"
-           class="sidebar-link {% if '/b2b/orcamento' in request.path %}active{% endif %}">
-            Orçamentos B2B
-        </a>
-        <a href="{{ url_for('entregas.painel') }}" target="_blank" class="sidebar-link">
-            🔔 Painel do Dia
-        </a>
-        <a href="{{ url_for('entregas.index') }}"
-           class="sidebar-link {% if request.path.startswith('/entregas') and '/painel' not in request.path and '/drivers/bulk' not in request.path %}active{% endif %}">
-            Entregas do site
-        </a>
-        <a href="{{ url_for('entregas.drivers_bulk') }}"
-           class="sidebar-link {% if request.path == '/entregas/drivers/bulk' %}active{% endif %}">
-            Motoristas
-        </a>
-        {% endif %}
-        {% if current_user.pode_lojas() %}
-        <a href="{{ url_for('pedidos.relatorio') }}"
-           class="sidebar-link {% if '/pedidos/relatorio' in request.path %}active{% endif %}">
-            Relatório de Pedidos
-        </a>
-        {% endif %}
+        {{ areanav.vendas('sidebar') }}
         {% endif %}
 
         {# ── 5. FINANCEIRO (admin) ── #}
