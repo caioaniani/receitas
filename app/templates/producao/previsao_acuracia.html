@@ -9,23 +9,49 @@
       <label class="small text-muted mb-0">Período (dias):</label>
       <input type="number" name="dias" value="{{ dias }}" min="7" max="180"
              class="form-control form-control-sm" style="width:5rem">
+      {% if motor %}<input type="hidden" name="motor" value="{{ motor }}">{% endif %}
       <button class="btn btn-sm btn-outline-secondary">Ver</button>
     </form>
     <form method="POST" action="{{ url_for('producao.previsao_acuracia_rodar') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-sm btn-primary" title="Congela a previsão de hoje e casa o realizado das datas que já passaram">
+      <button class="btn btn-sm btn-primary" title="Congela a previsão de hoje (dos dois motores) e casa o realizado das datas que já passaram">
         Rodar agora
       </button>
     </form>
   </div>
 </div>
 
-<p class="text-muted small">
+<p class="text-muted small mb-2">
   Compara o que a previsão sugeriu com o que foi realmente entregue.
   <strong>Viés</strong> = previsto − realizado (positivo = superprevisão;
   negativo = subprevisão). <strong>WAPE</strong> = erro absoluto ÷ realizado
   (quanto menor, melhor). Só entram datas que já passaram e foram casadas.
 </p>
+
+{# Filtro por motor: cada tela de sugestão é um motor; comparar os dois diz
+   qual prevê melhor. Linhas antigas (motor aposentado) continuam acessíveis. #}
+<div class="mb-3 d-flex flex-wrap gap-1 align-items-center">
+  <span class="small text-muted me-1">Motor:</span>
+  <a class="btn btn-sm {{ 'btn-dark' if not motor else 'btn-outline-dark' }}"
+     href="{{ url_for('producao.previsao_acuracia', dias=dias) }}">Todos</a>
+  {% for m, label in motor_labels.items() %}
+  <a class="btn btn-sm {{ 'btn-dark' if motor == m else 'btn-outline-dark' }}"
+     href="{{ url_for('producao.previsao_acuracia', dias=dias, motor=m) }}">
+    {{ label }}
+    {% if resumo.motores.get(m) %}<span class="badge bg-secondary">{{ resumo.motores[m] }}</span>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+{% if resumo.circularidade_pct is not none %}
+<div class="alert alert-light border small py-2">
+  <strong>Circularidade:</strong> {{ resumo.circularidade_pct }}% dos pedidos
+  entregues no período ({{ resumo.pedidos_auto }} de {{ resumo.pedidos_entregues }})
+  nasceram da própria sugestão (rascunho gerado pela grade). Quando esse número
+  é alto, o "acerto" mede em parte o hábito de aprovar sem editar — não só a
+  demanda real. Editar as sugestões antes de gerar mantém a medição honesta.
+</div>
+{% endif %}
 
 {% set t = resumo.total %}
 {% if t.n %}
@@ -59,11 +85,14 @@
   </div>
 </div>
 
+{% macro tabela(titulo, linhas, col) %}
+{% if linhas %}
+<h6 class="mt-3 mb-1">{{ titulo }}</h6>
 <div class="table-responsive">
   <table class="table table-sm table-striped align-middle">
     <thead>
       <tr>
-        <th>Receita</th>
+        <th>{{ col }}</th>
         <th class="text-end">Previsto</th>
         <th class="text-end">Realizado</th>
         <th class="text-end">Viés</th>
@@ -73,7 +102,7 @@
       </tr>
     </thead>
     <tbody>
-      {% for r in resumo.por_receita %}
+      {% for r in linhas %}
       <tr>
         <td>{{ r.nome }}</td>
         <td class="text-end">{{ r.previsto }}</td>
@@ -89,13 +118,20 @@
     </tbody>
   </table>
 </div>
+{% endif %}
+{% endmacro %}
+
+{{ tabela('Por receita', resumo.por_receita, 'Receita') }}
+{{ tabela('Por loja (viés sistemático por loja não some no agregado)', resumo.por_loja, 'Loja') }}
+{{ tabela('Por antecedência (D-1 = previsto na véspera; D-6 = previsto 6 dias antes)', resumo.por_lead, 'Lead') }}
 {% else %}
 <div class="alert alert-info">
-  Ainda não há dados casados neste período. A medição começa a aparecer
-  depois que o cron diário congelar previsões e as datas previstas passarem
-  (a previsão é congelada ~na geração e casada quando a entrega acontece).
-  Você pode clicar em <strong>Rodar agora</strong> para congelar a previsão de
-  hoje; o realizado aparece nos próximos dias, conforme as entregas ocorrem.
+  Ainda não há dados casados neste período{% if motor %} para este motor{% endif %}.
+  A medição começa a aparecer depois que o cron diário congelar previsões e as
+  datas previstas passarem (a previsão é congelada ~na geração e casada quando
+  a entrega acontece). Você pode clicar em <strong>Rodar agora</strong> para
+  congelar a previsão de hoje; o realizado aparece nos próximos dias, conforme
+  as entregas ocorrem.
 </div>
 {% endif %}
 {% endblock %}
