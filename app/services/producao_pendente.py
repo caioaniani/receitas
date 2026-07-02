@@ -180,3 +180,118 @@ def reverter_dispensa(item_id):
     item.dispensada_por_id = None
     db.session.commit()
     return {'ok': True}
+
+
+def _rendimento(rec):
+    return float(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1.0
+
+
+def reagendar_para_hoje(item_ids, user_id):
+    """MOVE a falta de ordens pendentes/vencidas selecionadas pra a ordem de
+    produção de HOJE (a que o padeiro vê em /padeiro).
+
+    Pra cada item selecionado (falta = alvo − produzido > 0):
+    - a falta entra no plano `cronograma` de HOJE — soma numa receita que já
+      esteja lá, ou cria a linha; garante `enviado_ao_padeiro=True`.
+    - a ordem antiga SAI da auditoria (decisão do dono — "mover, não duplicar"):
+      se nada foi produzido nela, a linha é removida; se foi produzido em parte,
+      o alvo cai pro produzido (falta → 0), preservando o crédito real de estoque
+      (nunca abaixa alvo < produzido — mesma trava do produzir_item_plano).
+
+    NÃO credita estoque (isso só acontece quando o padeiro confirma). Retorna
+    {'movidos': N, 'unidades': N}."""
+    from math import ceil
+
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+
+    ids = [int(i) for i in (item_ids or []) if str(i).strip().isdigit()]
+    if not ids:
+        return {'movidos': 0, 'unidades': 0}
+
+    hoje_d = hoje()
+    plano_hoje = (PlanejamentoProducao.query
+                  .filter_by(data=hoje_d, origem='cronograma').first())
+    if plano_hoje is None:
+        plano_hoje = PlanejamentoProducao(
+            data=hoje_d, origem='cronograma', status='aprovado',
+            nome='Produção %s' % hoje_d.strftime('%d/%m'),
+            criado_por=user_id, enviado_ao_padeiro=True)
+        db.session.add(plano_hoje)
+        db.session.flush()
+    else:
+        plano_hoje.enviado_ao_padeiro = True   # garante que o padeiro veja
+
+    # itens ja no plano de hoje, por receita (pra somar em vez de duplicar)
+    por_receita = {it.receita_id: it for it in plano_hoje.itens}
+
+    movidos, unidades = 0, 0
+    for item_id in ids:
+        old = db.session.get(PlanejamentoItem, item_id)
+        if old is None or old.dispensada_em is not None:
+            continue
+        if old.planejamento_id == plano_hoje.id:   # ja e de hoje, ignora
+            continue
+        alvo = int(old.qtd_alvo or 0)
+        prod = int(old.produzido_qtd or 0)
+        falta = max(0, alvo - prod)
+        if falta <= 0:
+            continue
+
+        dest = por_receita.get(old.receita_id)
+        if dest is not None:
+            dest.qtd_alvo = int(dest.qtd_alvo or 0) + falta
+            dest.multiplicador = max(1, ceil(dest.qtd_alvo / _rendimento(dest.receita)))
+        else:
+            novo = PlanejamentoItem(
+                planejamento_id=plano_hoje.id, receita_id=old.receita_id,
+                qtd_alvo=falta, produzido_qtd=0,
+                multiplicador=max(1, ceil(falta / _rendimento(old.receita))))
+            db.session.add(novo)
+            por_receita[old.receita_id] = novo
+
+        # fecha a ordem antiga (sai da auditoria)
+        if prod <= 0:
+            db.session.delete(old)             # nada produzido -> some
+        else:
+            old.qtd_alvo = prod                # falta -> 0, preserva o crédito
+        movidos += 1
+        unidades += falta
+
+    db.session.commit()
+    return {'movidos': movidos, 'unidades': unidades}
+
+
+def produzido_no_dia(dia=None):
+    """O que o padeiro CONFIRMOU produzir num dia (default: ONTEM), lido dos
+    movimentos REAIS de entrada na indústria (`MovEstoqueProducao` tipo=
+    'producao') — a fonte datada da produção, não o `produzido_qtd` acumulado do
+    item. Agrupa por receita.
+
+    Retorna {'dia': date, 'itens': [{'receita_id', 'receita_nome', 'qtd'}],
+    'total': N}."""
+    from datetime import datetime, time
+
+    from app.models import EstoqueProducao, MovEstoqueProducao, Receita
+
+    dia = dia or (hoje() - timedelta(days=1))
+    ini = datetime.combine(dia, time.min)
+    fim = datetime.combine(dia, time.max)
+    rows = (db.session.query(EstoqueProducao.receita_id,
+                             func.sum(MovEstoqueProducao.quantidade))
+            .join(EstoqueProducao,
+                  MovEstoqueProducao.estoque_producao_id == EstoqueProducao.id)
+            .filter(MovEstoqueProducao.tipo == 'producao',
+                    MovEstoqueProducao.data >= ini,
+                    MovEstoqueProducao.data <= fim,
+                    EstoqueProducao.receita_id.isnot(None))
+            .group_by(EstoqueProducao.receita_id)
+            .all())
+    nomes = {}
+    if rows:
+        ids = [rid for rid, _ in rows]
+        nomes = {r.id: r.nome for r in
+                 Receita.query.filter(Receita.id.in_(ids)).all()}
+    itens = [{'receita_id': rid, 'receita_nome': nomes.get(rid, '(receita)'),
+              'qtd': int(q or 0)} for rid, q in rows if (q or 0) > 0]
+    itens.sort(key=lambda x: x['qtd'], reverse=True)
+    return {'dia': dia, 'itens': itens, 'total': sum(x['qtd'] for x in itens)}
