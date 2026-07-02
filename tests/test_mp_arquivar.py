@@ -115,12 +115,8 @@ def test_arquivada_fora_da_tela_de_pedidos_por_venda(app):
 
 def test_custeio_por_nome_continua_enxergando_arquivada(app):
     """Ficha antiga que usa a MP arquivada como ingrediente NÃO quebra: o mapa
-    de custos (leitura) continua incluindo a MP."""
+    de custos (leitura) continua incluindo a MP arquivada."""
     from app.services.custos import calcular_custos_receitas
     _mp('Essencia Antiga', arquivada=True)
     res = calcular_custos_receitas()
-    assert 'Essencia Antiga' in res.get('mp_info', res.get('mps', {})) or True
-    # a asserção robusta: o mapa interno usado pelo custeio inclui arquivadas
-    from app.models import MateriaPrima as MPM
-    nomes = {m.nome for m in MPM.query.all()}
-    assert 'Essencia Antiga' in nomes
+    assert 'Essencia Antiga' in res['mp_info']   # leitura NÃO filtra arquivada
