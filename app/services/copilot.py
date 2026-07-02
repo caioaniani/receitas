@@ -1852,6 +1852,17 @@ def _enriquecer_devolver_industria(tool_input, user):
     return out
 
 
+def _enriquecer_criar_retirada_sobras(tool_input, user):
+    """Resolve loja + itens + destino do retorno pro preview da retirada.
+    Reusa o enricher da devolucao (mesma forma de itens/destino)."""
+    out = _enriquecer_devolver_industria(tool_input, user)
+    from datetime import timedelta as _td
+
+    from app.utils import hoje
+    out['data_retirada'] = (hoje() + _td(days=1)).isoformat()
+    return out
+
+
 def _enriquecer_registrar_desperdicio_lote(tool_input, user):
     """Resolve loja + cada item + estoque atual pra preview de lote."""
     from app.models import EstoqueLoja
