@@ -306,3 +306,45 @@ def test_gerar_origem_media_volta_pra_media(app, admin_user):
         'qtd|%d|%s|%d' % (loja.id, d, r.id): '8'})
     assert resp.status_code == 302
     assert '/pedidos-semana/media' in resp.headers['Location']
+
+
+def test_dia_travado_expoe_o_que_foi_pedido(app):
+    """Dia com pedido existente: a grade expõe `ja_pedido` (o pedido REAL do
+    dia) pra célula travada mostrar o encomendado em vez de um 0 apagado."""
+    loja = _loja()
+    r = _receita()
+    hoje_d = hoje()
+    # historico em DOIS dows (hoje + amanha) — com so o dow travado o produto
+    # sai da grade (total_alocar=0), regra pre-existente da tela.
+    for sem in (1, 2):
+        _pedido(loja, hoje_d - timedelta(days=7 * sem), r, 50)        # dow hoje
+        _pedido(loja, hoje_d - timedelta(days=7 * sem - 1), r, 50)    # dow amanha
+    _pedido(loja, hoje_d, r, 999, status='pendente')    # já pedido HOJE
+
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=2,
+                                  inicio_offset_dias=0)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['ja_pedido'][0] == 999                     # o pedido real do dia
+    assert sum(p['ja_pedido'][1:]) == 0
+    assert p['por_dia'][0] == 0                         # travado: sem sugestão
+
+
+def test_rota_mostra_pedido_real_no_dia_travado(app, admin_user):
+    """A célula travada renderiza o valor JÁ PEDIDO (com estilo tem-pedido),
+    não a sugestão."""
+    loja = _loja('Loja Centro')
+    r = _receita('Pão Francês')
+    hoje_d = hoje()
+    for sem in (1, 2):
+        _pedido(loja, hoje_d - timedelta(days=7 * sem), r, 50)
+    _pedido(loja, hoje_d + timedelta(days=2), r, 77, status='pendente')
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.get('/producao/pedidos-semana/media?horizonte=7&janela=6&inicio=0')
+    body = resp.get_data(as_text=True)
+    assert 'value="77"' in body                         # o pedido real aparece
+    assert 'tem-pedido' in body                         # com o estilo próprio
+    assert 'FOI pedido' in body                         # tooltip explica
