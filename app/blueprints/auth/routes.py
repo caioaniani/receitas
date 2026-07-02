@@ -47,6 +47,19 @@ def logout():
     return redirect(url_for('auth.login'))
 
 
+@auth_bp.route('/csrf-token')
+@login_required
+def csrf_token_novo():
+    """Token CSRF novo pra autosave de aba antiga: o token embutido na pagina
+    expira em 1h (WTF_CSRF_TIME_LIMIT default do Flask-WTF), entao uma tela
+    deixada aberta (ex: cronograma da industria) falhava TODO save via fetch
+    com alert criptico. O front detecta o erro `csrf_expirada` (handler JSON em
+    app/__init__.py), busca token novo aqui e re-tenta o POST."""
+    from flask import jsonify
+    from flask_wtf.csrf import generate_csrf
+    return jsonify(ok=True, token=generate_csrf())
+
+
 @auth_bp.route('/minhas-fichas')
 @login_required
 def minhas_fichas():
