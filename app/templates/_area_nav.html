@@ -144,7 +144,10 @@
 
 {% macro fichas(variant) %}
 {{ _lnk(variant, url_for('receitas.padeiro_lista'), 'Modo Padeiro', request.path == '/receitas/padeiro') }}
-{% if current_user.is_admin() %}
+{# Fichas é a única seção da sidebar que renderiza pra usuário ANÔNIMO (fica
+   fora do bloco is_authenticated). AnonymousUser não tem .is_admin() — por isso
+   o is_authenticated precede o is_admin(), igual ao base.html original. #}
+{% if current_user.is_authenticated and current_user.is_admin() %}
 {{ _lnk(variant, url_for('auth.painel'), 'Fichas atribuídas', request.path == '/auth/painel', title='Fichas técnicas atribuídas a funcionários') }}
 {{ _lnk(variant, url_for('receitas.familias'), 'Famílias de receitas', request.path == '/receitas/familias') }}
 {% endif %}
