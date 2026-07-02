@@ -477,7 +477,8 @@ def test_reagendado_sobrevive_ao_reenviar_plano_de_hoje(app, admin_user):
 def test_reagendado_soma_com_alvo_do_grid_no_reenvio(app, admin_user):
     """Receita que TAMBÉM tem demanda no grid de hoje: re-enviar recalcula o
     grid e SOMA o extra (grid + reagendado), não sobrescreve."""
-    from app.models import Loja, PedidoItem as PI, PedidoLoja
+    from app.models import Loja, PedidoLoja
+    from app.models import PedidoItem as PI
     from app.services.producao import enviar_plano_do_dia
     from app.services.producao_pendente import reagendar_para_hoje
     r = _receita('Croissant')
