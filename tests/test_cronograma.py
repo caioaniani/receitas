@@ -988,3 +988,73 @@ def test_rota_excluir(app, admin_user):
     assert resp.status_code == 302
     assert PlanejamentoProducao.query.filter_by(
         data=d2, origem='cronograma').first() is None
+
+
+def test_lote_producao_arredonda_pra_cima_pedido_livre(app):
+    """Focaccia: placa de 8 pedaços. Lojas pedem LIVRE (11 pedaços); a produção
+    arredonda PRA CIMA (16 = 2 placas — nunca falta; a sobra fica na indústria).
+    lote_producao NÃO mexe no pedido de loja (só lote_pedido faz isso)."""
+    from datetime import timedelta as td
+    loja = _loja()
+    r = _receita('Focaccia Gorgonzola')
+    r.lote_producao = 8                          # placa; lote_pedido fica NULL
+    db.session.commit()
+    d3 = hoje() + td(days=3)
+    _pedido(loja, 'pendente', d3, r, 11)         # pedido livre: 11 pedaços
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rc = _rec_out(crono, r.id)
+    assert rc is not None
+    assert rc['total'] == 16                     # ceil(11/8) = 2 placas
+    assert all(q % 8 == 0 for q in
+               (c['qtd'] for c in rc['por_dia']))  # só placas inteiras
+
+
+def test_lote_producao_nao_forca_pedido_da_loja(app):
+    """A tela de pedidos por venda+estoque NÃO usa lote_producao — a sugestão
+    de pedido da loja sai livre (7), sem arredondar pra placa."""
+    from datetime import datetime as dt
+    from datetime import time as tm
+    from datetime import timedelta as td
+
+    from app.models import EstoqueLoja, MovEstoqueLoja
+    from app.services.previsao_producao import sugerir_pedidos_por_venda
+    loja = _loja()
+    r = _receita('Focaccia Gorgonzola')
+    r.lote_producao = 8
+    db.session.commit()
+    el = EstoqueLoja(loja_id=loja.id, receita_id=r.id, quantidade=0)
+    db.session.add(el)
+    db.session.flush()
+    alvo = hoje()
+    while alvo.weekday() != 0:
+        alvo += td(days=1)
+    for sem in range(1, 7):
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo='venda_seru', quantidade=7,
+            data=dt.combine(alvo - td(days=7 * sem), tm(12, 0)),
+            referencia='t'))
+    db.session.commit()
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=(alvo - hoje()).days)
+    lj = next(e for e in grade['lojas'] if e['loja_id'] == loja.id)
+    p = next(x for x in lj['produtos'] if x['receita_id'] == r.id)
+    assert p['lote'] == 0                        # sem caixa de PEDIDO
+    assert p['por_dia'][0] == 7                  # sugestão livre, não 8
+
+
+def test_lote_pedido_sem_lote_producao_mantem_arredondamento_antigo(app):
+    """Sem lote_producao, o fallback é o lote_pedido com o arredondamento
+    original (mais próximo — decisão 29/06): croissant cx 50, demanda 100
+    → produz 100 (2 caixas), não muda nada."""
+    from datetime import timedelta as td
+    loja = _loja()
+    r = _receita('Croissant Tradicional')
+    r.lote_pedido = 50
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + td(days=3), r, 100)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rc = _rec_out(crono, r.id)
+    assert rc['total'] == 100                    # comportamento preservado
