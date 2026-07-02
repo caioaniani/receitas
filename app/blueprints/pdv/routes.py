@@ -747,9 +747,6 @@ def config_site_loja():
     return redirect(url_for('pdv.mapeamentos'))
 
 
-@pdv_bp.route('/mapeamentos/produto/<int:map_id>', methods=['POST'])
-@login_required
-@admin_required
 def _reprocesso_pos_mapeamento():
     """Mapeou produto / confirmou loja → tenta recuperar as baixas PASSADAS
     (janela 7d) com os mapeamentos novos (03/07/2026). Antes, mapear só valia
@@ -774,6 +771,9 @@ def _reprocesso_pos_mapeamento():
               'warning')
 
 
+@pdv_bp.route('/mapeamentos/produto/<int:map_id>', methods=['POST'])
+@login_required
+@admin_required
 def vincular_produto(map_id):
     """Vincula/ignora/limpa um produto Seru."""
     from app.utils import parse_fator_composicao
