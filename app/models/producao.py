@@ -45,6 +45,14 @@ class PlanejamentoItem(db.Model):
     qtd_alvo = db.Column(db.Integer)
     produzido_qtd = db.Column(db.Integer, nullable=False, default=0,
                               server_default='0')
+    # Parcela EXTRA adicionada a mao — hoje, o reagendamento da auditoria
+    # ("Produzir HOJE os marcados") soma aqui. O re-aprovar/re-enviar do
+    # cronograma reconstroi os itens A PARTIR DO GRID e apagava o que nao
+    # estava nele: os paes reagendados sumiam da tela do padeiro (bug pego
+    # pelo dono 02/07). O sync agora SOMA qtd_extra ao alvo do grid e nunca
+    # remove item com extra > 0.
+    qtd_extra = db.Column(db.Integer, nullable=False, default=0,
+                          server_default='0')
     # Dispensa de pendencia (auditoria): quando o admin verifica que a producao
     # NAO aconteceu (ou aconteceu a menos) e da OK, marca aqui. O item some de
     # TUDO que conta producao pendente: overlay verde, auditoria, gantt e plano
