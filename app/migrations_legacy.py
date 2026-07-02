@@ -846,6 +846,27 @@ def _migrate_postgres(app):
     # do cronograma preserva/soma em vez de apagar.
     _try("ALTER TABLE planejamento_item ADD COLUMN qtd_extra INTEGER NOT NULL DEFAULT 0")
 
+    # ── Acuracia do forecast por MOTOR (Fase 0, 02/07/2026) ──
+    # A acuracia media so o motor aposentado (sugerir_pedidos_semana); agora
+    # cada snapshot diz de QUAL motor veio ('pedido_semana' legado,
+    # 'media_pedido', 'venda_estoque') e com QUE antecedencia (lead_dias).
+    # A unique antiga (data_alvo, loja, receita) impediria 2 motores no mesmo
+    # alvo — trocada por uma que inclui o motor.
+    _try("ALTER TABLE previsao_snapshot ADD COLUMN motor VARCHAR(20) "
+         "NOT NULL DEFAULT 'pedido_semana'")
+    _try("ALTER TABLE previsao_snapshot ADD COLUMN lead_dias INTEGER")
+    _try("ALTER TABLE previsao_snapshot DROP CONSTRAINT IF EXISTS "
+         "uq_previsao_snapshot_alvo")
+    _try("ALTER TABLE previsao_snapshot ADD CONSTRAINT "
+         "uq_previsao_snapshot_alvo_motor "
+         "UNIQUE (data_alvo, loja_id, receita_id, motor)")
+
+    # ── Caixa/piso de pedido pra MATERIA-PRIMA (Fase 1, 02/07/2026) ──
+    # MP pedida pela loja (ex: pao de queijo congelado em saco) precisa de
+    # lote/minimo como Receita tem — sem isso a sugestao sai picada, un a un.
+    _try("ALTER TABLE materia_prima ADD COLUMN lote_pedido INTEGER")
+    _try("ALTER TABLE materia_prima ADD COLUMN minimo_pedido INTEGER")
+
     _try("""
     CREATE TABLE IF NOT EXISTS entrega_foto (
         id SERIAL PRIMARY KEY,
