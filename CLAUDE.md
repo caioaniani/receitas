@@ -522,6 +522,34 @@ no fallback `venda` (perda virava "venda manual" no historico). Agora sao
 tipos reais (labels em `estoque_diario.py`). Testes:
 `tests/test_devolucao_industria.py`.
 
+**Retirada de sobras por QR (02/07/2026, fluxo principal)**: o dono quis a
+devolucao NASCENDO no lancamento de sobras. Esteira em 2 TEMPOS, espelho das
+entregas:
+- Modelos `RetiradaSobra`/`RetiradaSobraItem`/`RetiradaQRCode`
+  (`app/models/pedidos.py`) — SEPARADOS de PedidoLoja de proposito: retirada
+  nunca entra em previsao/comprometido/medias (teste de regressao trava).
+  Status: aguardando_coleta → em_transporte → recebida | cancelada.
+- Fluxo bot: `registrar_desperdicio(_lote)` devolve `retirada_sugerida`
+  quando o item e reaproveitavel + tem receita de retorno → o copilot
+  pergunta "quantos voltam pra virar almond?", PEDE A FOTO da sobra
+  (OBRIGATORIA — decisao do dono; sem imagem a tool recusa) e chama
+  `criar_retirada_sobras` (write, aprovacao; admin+gerente+funcionario).
+  Foto sobe pro Dropbox ANTES do registro. O slack_bot embute imagens nos
+  params (mesmo mecanismo do anexar_foto_pedido) e o resultado posta o QR
+  de coleta inline (`qr_texto` customiza a legenda em slack_blocks).
+- Handshake `/handshake/r/<token>` (QR TTL 48h — criado na vespera):
+  COLETA na loja (PIN de driver ativo) → em_transporte + BAIXA EstoqueLoja;
+  RECEBIMENTO na industria (PIN de driver tambem — decisao do dono) →
+  recebida + CREDITA a receita de retorno. PRG + double-submit + audit
+  (tipos curtos `r_coleta`/`r_receb` — coluna VARCHAR(10)). Movimentos com
+  token `ret-<id>`, MESMA familia do fluxo manual.
+- Service em 2 tempos: `devolucao.baixar_loja_retirada` /
+  `creditar_industria_retirada` (usa `quantidade_recebida` se a industria
+  conferiu com divergencia). A tela/tool `devolver_industria` (atomica)
+  segue como atalho manual pra excecoes.
+- Testes: `tests/test_retirada_sobras.py`. PENDENTE (nao bloqueia): mostrar
+  retiradas do dia no Painel de Entregas e lista web com cancelamento.
+
 ## Impressao de pedidos de entrega (2026-06-12)
 
 **A impressao oficial e PDF gerado no servidor** (`app/services/pdf.py::
