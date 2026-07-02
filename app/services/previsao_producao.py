@@ -900,16 +900,20 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
             continue
         soma_lrd[loja_id][rid][data_ent.weekday()] += int(qtd or 0)
 
-    # Dias que a loja JA tem pedido no horizonte (o gerar pula; a tela marca).
+    # Dias que a loja JA tem pedido no horizonte (a tela marca) + status: dia
+    # com UM pedido ainda EDITAVEL (pendente/confirmado) destrava na tela e o
+    # gerar ATUALIZA os itens em vez de pular (pedidos_semana.aplicar_grade).
     ja_tem = defaultdict(set)
-    for loja_id, data_ent in (db.session.query(
-            PedidoLoja.loja_id, PedidoLoja.data_entrega)
+    status_dia = defaultdict(lambda: defaultdict(list))
+    for loja_id, data_ent, status_p in (db.session.query(
+            PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoLoja.status)
             .filter(PedidoLoja.status != 'cancelado',
                     PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= horizonte_fim)
-            .distinct().all()):
+            .all()):
         if data_ent is not None:
             ja_tem[loja_id].add(data_ent.isoformat())
+            status_dia[loja_id][data_ent.isoformat()].append(status_p)
 
     # O QUE ja foi pedido por (loja, dia, receita) no horizonte — a celula
     # travada mostra esse numero (o pedido REAL do dia) em vez de um 0 apagado,
