@@ -115,6 +115,22 @@
         border: 1px solid #cde9d8; border-radius: .3rem; padding: .3rem .5rem;
         margin-top: .35rem; }
     .proj-box .pend-vencido { text-decoration: none; }
+    /* Alerta "pedido programado sem produto": banner + badge na linha +
+       celula do dia da entrega descoberta. */
+    .alerta-falta { background: #fff0f1; border: 1px solid #f1aeb5;
+        border-left: 4px solid #dc3545; border-radius: .35rem;
+        padding: .6rem .8rem; margin-bottom: .75rem; font-size: .85rem; }
+    .alerta-falta-tt { font-weight: 700; color: #b02a37; }
+    .alerta-falta-lista { margin: .35rem 0 .15rem; padding-left: 1.2rem; }
+    .alerta-falta-lista li { margin-bottom: .15rem; }
+    .alerta-falta-link { font-weight: 700; color: #b02a37; }
+    .alerta-falta-qtd { color: #dc3545; }
+    .alerta-falta-dica { font-size: .75rem; color: #842029; }
+    .tag-risco { background: #dc3545; color: #fff; padding: .05rem .4rem;
+        border-radius: .25rem; font-size: .66rem; font-weight: 700;
+        cursor: help; }
+    .crono td.cel-risco { background: #fde0e4; box-shadow: inset 0 0 0 1px #f1aeb5; }
+    .crono tr:hover td.cel-risco { background: #fbd2d8; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
