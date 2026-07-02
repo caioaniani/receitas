@@ -598,7 +598,10 @@ TOOL_REGISTRAR_DESPERDICIO_LOTE = {
         "de uma loja de uma vez. Use SEMPRE que o usuario passar uma LISTA "
         "de itens vencidos/descartados ('anota essas sobras: 2 croissants, "
         "3 pao frances, 1 nutella...'). Para 1 item so, use registrar_desperdicio. "
-        "Baixa do estoque da loja. NAO executa direto — retorna preview pra aprovar."
+        "Baixa do estoque da loja. NAO executa direto — retorna preview pra aprovar. "
+        "CRITICO: se um lote acabou de ser registrado e FALTOU um item, chame "
+        "de novo APENAS com o item que faltou — reenviar a lista inteira "
+        "DUPLICA as perdas dos itens ja registrados."
     ),
     "input_schema": {
         "type": "object",
