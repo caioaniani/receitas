@@ -75,7 +75,8 @@ def test_nao_exige_login_mas_exige_token(app):
 
 def test_pedidos_semana_modo_venda_e_media(app):
     """GET /api/claude/pedidos-semana devolve a grade dos dois motores."""
-    from datetime import datetime, time as _t
+    from datetime import datetime
+    from datetime import time as _t
 
     from app.models import EstoqueLoja, MovEstoqueLoja
 
