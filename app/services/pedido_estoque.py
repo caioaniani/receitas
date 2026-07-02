@@ -118,10 +118,13 @@ def estornar_industria_pedido(pedido, usuario_id, motivo='voltar status'):
         .filter(MovEstoqueProducao.tipo == 'saida_pedido',
                 MovEstoqueProducao.referencia.like(ref_like))
         .group_by(MovEstoqueProducao.estoque_producao_id).all())
+    # 'ajuste' entra por compat: era o tipo do estorno ANTES deste motor —
+    # sem ele, pedido estornado no código antigo e re-estornado aqui
+    # devolveria em dobro.
     estornos = dict(db.session.query(
         MovEstoqueProducao.estoque_producao_id,
         func.sum(MovEstoqueProducao.quantidade))
-        .filter(MovEstoqueProducao.tipo == 'estorno_saida_pedido',
+        .filter(MovEstoqueProducao.tipo.in_(('estorno_saida_pedido', 'ajuste')),
                 MovEstoqueProducao.referencia.like(f'Estorno pedido #{pedido.id} %'))
         .group_by(MovEstoqueProducao.estoque_producao_id).all())
     devolvidas = 0
