@@ -2768,17 +2768,31 @@ def desperdicio():
             data_desp = hoje_brt()
 
         observacao = (request.form.get('observacao') or '').strip() or None
-        motivo = (request.form.get('motivo') or 'vencido').strip() or 'vencido'
+        # Fonte única com o copilot (03/07/2026): motivo canônico ('vencido'
+        # legado vira 'validade') + regra do reaproveitável — antes a tela
+        # IGNORAVA a flag e o mesmo croissant baixava aqui e não no copilot.
+        from app.services.desperdicio_core import (
+            normalizar_motivo,
+            reaproveita_sem_baixa,
+        )
+        motivo = normalizar_motivo(request.form.get('motivo'))
+        reaproveita = reaproveita_sem_baixa(tipo_item, item_id, motivo)
 
         # CESTA: se for produto-cesta, baixa componentes em vez do produto
         componentes_cesta = []
-        if tipo_item == 'produto':
+        if tipo_item == 'produto' and not reaproveita:
             from app.models import Produto as _Produto
             from app.services.cestas import componentes_de_cesta
             produto = _Produto.query.get(item_id)
             componentes_cesta = componentes_de_cesta(produto)
 
-        if componentes_cesta:
+        if reaproveita:
+            # Registra o desperdício pra histórico mas NÃO baixa — o item
+            # vira outra coisa (croissant→almond). Igual ao copilot.
+            baixa = 0
+            observacao = ((observacao + ' ') if observacao else '') + \
+                '[reaproveitavel — nao baixou estoque]'
+        elif componentes_cesta:
             # Loja so estoca componentes — desconta cada um
             for col, comp_id, nome_comp, qtd_por_cesta in componentes_cesta:
                 qtd_baixar = int(round(qtd * qtd_por_cesta))
