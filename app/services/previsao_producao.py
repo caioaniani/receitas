@@ -1138,8 +1138,13 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             dows = venda_dow.get(loja.id, {}).get(tok)
             est0 = estoque_atual.get(loja.id, {}).get(tok, 0)
             pede = tok in pede_loja
-            if not dows and est0 <= 0 and not pede:
-                continue                          # nao vende, sem estoque, nem pede
+            # Pedido JA FEITO no horizonte tambem inclui o item (linha com as
+            # celulas azuis do ja-pedido) — mesma regra da tela de media.
+            ja_ped_item = [pedido_existente.get(loja.id, {})
+                           .get(d.isoformat(), {}).get(tok, 0)
+                           for d in dias_futuros]
+            if not dows and est0 <= 0 and not pede and not any(ja_ped_item):
+                continue                          # nao vende/estoca/pede, nada pedido
             estoque = est0
             por_dia = [0] * len(dias_futuros)
             venda_total = 0.0
