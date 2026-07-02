@@ -88,6 +88,11 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   - `GET /api/claude/cronograma?horizonte=&janela=&inicio=` — JSON do
     cronograma de producao (mesma conta da /telaindustriateste, com
     pendencias e alertas de entrega em risco).
+  - `GET /api/claude/pedidos-semana?modo=venda|media&...` — sugestao de
+    pedido loja→industria (mesma conta das telas Pedidos da semana).
+  - `GET /api/claude/receita?id=|nome=` — ficha completa de uma receita
+    (cadastro, ingredientes, VendaMapa, cestas, estoques industria+lojas).
+    Trecho de nome com >1 match devolve lista de candidatos.
 - **Uso numa sessao**: o dono cola o token no chat (o container e efemero —
   nada persiste entre sessoes); consultar com
   `curl -s -H "Authorization: Bearer $TOK" https://gestao.opaopadariaartesanal.com.br/api/claude/cronograma`.
