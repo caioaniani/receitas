@@ -875,21 +875,33 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
 
+        function postMpAcao(action) {
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = action;
+            var csrf = document.createElement('input');
+            csrf.type = 'hidden';
+            csrf.name = 'csrf_token';
+            csrf.value = CSRF_TOKEN;
+            form.appendChild(csrf);
+            document.body.appendChild(form);
+            form.submit();
+        }
+
         mpBody.addEventListener('click', function (e) {
             var btn = e.target.closest('.btn-del-mp');
             if (btn) {
-                var mpId = btn.dataset.id;
                 if (confirm('Excluir esta materia-prima?')) {
-                    var form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '/materias-primas/excluir/' + mpId;
-                    var csrf = document.createElement('input');
-                    csrf.type = 'hidden';
-                    csrf.name = 'csrf_token';
-                    csrf.value = CSRF_TOKEN;
-                    form.appendChild(csrf);
-                    document.body.appendChild(form);
-                    form.submit();
+                    postMpAcao('/materias-primas/excluir/' + btn.dataset.id);
+                }
+            }
+
+            var btnArq = e.target.closest('.btn-arq-mp');
+            if (btnArq) {
+                if (confirm('Arquivar "' + (btnArq.dataset.nome || 'esta MP') +
+                            '"? Ela sai de circulação (autocompletes, matchers, telas) ' +
+                            'e ninguém conecta mais nada nela. O histórico fica. Dá pra desarquivar.')) {
+                    postMpAcao('/materias-primas/arquivar/' + btnArq.dataset.id);
                 }
             }
 
