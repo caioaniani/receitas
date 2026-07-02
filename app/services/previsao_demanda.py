@@ -13,7 +13,10 @@ Roadmap se precisar evoluir:
 from collections import defaultdict
 from datetime import date, timedelta
 
-from app.constants import VENDA_TIPOS_LOJA
+from app.constants import (
+    VENDA_ESTORNO_SINAL_DEMANDA,
+    VENDA_TIPOS_DEMANDA_COM_ESTORNO,
+)
 
 
 def prever_demanda(loja_id, data_alvo, semanas_lookback=8):
@@ -35,18 +38,25 @@ def prever_demanda(loja_id, data_alvo, semanas_lookback=8):
     desde = data_alvo - timedelta(days=semanas_lookback * 7)
 
     # Pra cada (estoque_loja_id, dia_da_semana), acumula qtd vendida por dia.
-    # vendas_por_item_dia[(eloja_id, data)] = qtd
+    # vendas_por_item_dia[(eloja_id, data)] = qtd. Demanda unificada
+    # (02/07/2026): inclui venda manual/saida_lote e subtrai estornos com o
+    # sinal de gravacao de cada canal (Seru/lote gravam positivo, site
+    # negativo) — antes venda Seru cancelada contava demanda cheia.
     vendas_por_dia = defaultdict(int)
     movs = (db.session.query(MovEstoqueLoja)
             .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
             .filter(EstoqueLoja.loja_id == loja_id,
-                    MovEstoqueLoja.tipo.in_(VENDA_TIPOS_LOJA),
+                    MovEstoqueLoja.tipo.in_(VENDA_TIPOS_DEMANDA_COM_ESTORNO),
                     MovEstoqueLoja.data >= desde,
                     MovEstoqueLoja.data < data_alvo)
             .all())
     for m in movs:
         d = m.data.date() if hasattr(m.data, 'date') else m.data
-        vendas_por_dia[(m.estoque_loja_id, d)] += int(m.quantidade or 0)
+        sinal = VENDA_ESTORNO_SINAL_DEMANDA.get(m.tipo, 1)
+        vendas_por_dia[(m.estoque_loja_id, d)] += sinal * int(m.quantidade or 0)
+    # Estorno de venda de outro dia pode deixar o liquido do dia negativo —
+    # demanda negativa nao existe, clampa em 0.
+    vendas_por_dia = {k: max(0, v) for k, v in vendas_por_dia.items()}
 
     # Agora separa por (eloja_id, dow) e mantem so o dow_alvo.
     por_item_dow = defaultdict(list)
