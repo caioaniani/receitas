@@ -193,47 +193,7 @@
         {% if current_user.is_owner %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">RH</div>
-
-        <a href="{{ url_for('rh.dashboard') }}"
-           class="sidebar-link {% if request.path == '/rh/' %}active{% endif %}">
-            Painel RH
-        </a>
-        <a href="{{ url_for('rh.funcionarios') }}"
-           class="sidebar-link {% if '/rh/funcionarios' in request.path %}active{% endif %}">
-            Funcionários
-        </a>
-        {% if current_user.is_owner %}
-        <a href="{{ url_for('rh.folha') }}"
-           class="sidebar-link {% if '/rh/folha' in request.path %}active{% endif %}">
-            Folha de Pagamento
-        </a>
-        {% endif %}
-        <a href="{{ url_for('rh.lojas') }}"
-           class="sidebar-link {% if request.path == '/rh/lojas' %}active{% endif %}">
-            Cadastro de lojas
-        </a>
-        {% if current_user.is_owner %}
-        <a href="{{ url_for('rh.cargos') }}"
-           class="sidebar-link {% if request.path == '/rh/cargos' %}active{% endif %}">
-            Cargos
-        </a>
-        {% endif %}
-        <a href="{{ url_for('rh.escala') }}"
-           class="sidebar-link {% if '/rh/escala' in request.path and '/mapa' not in request.path %}active{% endif %}">
-            Escala Operacional
-        </a>
-        <a href="{{ url_for('rh.mapa_index') }}"
-           class="sidebar-link {% if '/rh/mapa' in request.path %}active{% endif %}">
-            Mapa das Lojas
-        </a>
-        <a href="{{ url_for('rh.ponto') }}"
-           class="sidebar-link {% if '/rh/ponto' in request.path %}active{% endif %}">
-            Ponto
-        </a>
-        <a href="{{ url_for('rh.ferias') }}"
-           class="sidebar-link {% if '/rh/ferias' in request.path %}active{% endif %}">
-            Férias / Folgas
-        </a>
+        {{ areanav.rh('sidebar') }}
         {% endif %}
 
         {# ── 7. RELATÓRIOS (admin) — números pra decidir ── #}
