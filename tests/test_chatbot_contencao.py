@@ -177,3 +177,20 @@ def test_mensagem_whatsapp_sem_dados_ainda_funciona(app):
                             dados=None)
     assert 'tudo ok' in msg
     assert 'Contenção' not in msg
+
+
+def test_mensagem_amostra_pequena_sem_porcentagem(app):
+    """Pedido do dono (02/07/2026): com < 10 conversas a % é ruído (1/2 = 50%)
+    e o auditor fazia alarde — a linha vira números absolutos, sem manchete
+    de porcentagem."""
+    from app.services.chatbot_auditor import _montar_mensagem
+    rel = {'destaque': '2 conversas, 1 handoff', 'resumo_curto': ''}
+    dados = {'conversas_unicas': 2, 'conversas_com_handoff': 1,
+             'contencao_pct': 50.0, 'handoffs': 1, 'handoffs_preguicosos': 1}
+    msg = _montar_mensagem(rel, datetime(2026, 7, 2), datetime(2026, 7, 3),
+                           dados=dados)
+    assert '50.0%' not in msg                       # sem manchete de %
+    assert 'Conversas:' in msg
+    assert '2 no período' in msg
+    assert '1 com handoff' in msg
+    assert 'preguiçoso: 1/1' in msg                 # o dado continua visível
