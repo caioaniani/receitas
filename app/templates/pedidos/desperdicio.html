@@ -62,11 +62,15 @@
 
             <div class="col-md-2">
                 <label class="form-label small mb-1">Motivo</label>
+                {# Motivos canônicos (mesmos do copilot — app/constants.py).
+                   'Venceu'/'Não vendeu' + item reaproveitável = registra SEM
+                   baixar estoque (regra do dono 02/07/2026). #}
                 <select name="motivo" class="form-select form-select-sm">
-                    <option value="vencido" selected>Vencido</option>
-                    <option value="estragado">Estragado</option>
-                    <option value="queimado">Queimado</option>
+                    <option value="validade" selected>Venceu</option>
+                    <option value="nao_vendeu">Não vendeu / sobra do dia</option>
+                    <option value="estragou">Estragou</option>
                     <option value="caiu">Caiu/derrubou</option>
+                    <option value="queimou">Queimou</option>
                     <option value="outro">Outro</option>
                 </select>
             </div>
