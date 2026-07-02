@@ -104,6 +104,8 @@ def salvar():
                 mp.fornecedor = fornecedores[i].strip() or None
                 mp.observacoes = observacoes_list[i].strip() or None
                 mp.sugerir_pedido_loja = str(mp_id) in sugerir_loja_ids
+                mp.lote_pedido = _parse_int_opt(lotes_pedido, i)
+                mp.minimo_pedido = _parse_int_opt(minimos_pedido, i)
         else:
             mp = MateriaPrima(
                 nome=nome,
@@ -112,6 +114,8 @@ def salvar():
                 peso_unidade=_parse_peso(i, unidades[i]),
                 fornecedor=fornecedores[i].strip() or None,
                 observacoes=observacoes_list[i].strip() or None,
+                lote_pedido=_parse_int_opt(lotes_pedido, i),
+                minimo_pedido=_parse_int_opt(minimos_pedido, i),
             )
             db.session.add(mp)
 
