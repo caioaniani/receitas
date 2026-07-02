@@ -162,6 +162,14 @@ def _migrate_postgres(app):
             'lote_pedido': 'ALTER TABLE receita ADD COLUMN lote_pedido INTEGER',
             'minimo_pedido': 'ALTER TABLE receita ADD COLUMN minimo_pedido INTEGER',
             'fornada_especial': 'ALTER TABLE receita ADD COLUMN fornada_especial BOOLEAN NOT NULL DEFAULT FALSE',
+            # Devolucao loja->industria (croissant almond): sobras devolvidas
+            # desta receita CREDITAM a receita apontada (ex: Croissant
+            # Tradicional -> "Croissant Tradicional — Retorno"). NULL = credita
+            # a propria. Retorno vira receita SEPARADA porque o estoque da
+            # industria e 1 linha por receita (uq_estoque_producao_receita) e o
+            # retornado (assado, de vespera) nao pode se misturar com o
+            # congelado cru que atende pedidos das lojas.
+            'retorno_receita_id': 'ALTER TABLE receita ADD COLUMN retorno_receita_id INTEGER REFERENCES receita(id)',
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
