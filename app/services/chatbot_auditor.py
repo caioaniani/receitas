@@ -291,7 +291,11 @@ def _coletar_periodo(inicio, fim):
 
 def _chamar_sonnet(api_key, contexto, prompt_sistema=None):
     import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
+    # timeout: roda em cron/rota best-effort — nunca vale segurar 10min.
+    # SEM cache_control de proposito: as execucoes ficam HORAS entre si
+    # (7/9/12/15/19h) e o cache ephemeral vive 5min — pagariamos o premio
+    # de escrita (1.25x) sem nunca ler de volta.
+    client = anthropic.Anthropic(api_key=api_key, timeout=60, max_retries=1)
     resp = client.messages.create(
         model=MODELO,
         max_tokens=MAX_TOKENS,
