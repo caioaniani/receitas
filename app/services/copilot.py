@@ -1536,6 +1536,8 @@ def _enriquecer_params(tool_name, tool_input, user):
         return _enriquecer_balanco_congelados(tool_input)
     if tool_name == 'entrada_lote_loja':
         return _enriquecer_entrada_lote_loja(tool_input)
+    if tool_name == 'devolver_industria':
+        return _enriquecer_devolver_industria(tool_input, user)
     if tool_name == 'registrar_desperdicio':
         return _enriquecer_registrar_desperdicio(tool_input, user)
     if tool_name == 'registrar_desperdicio_lote':
@@ -1732,6 +1734,82 @@ def _enriquecer_entrada_lote_loja(tool_input):
             'delta_total': delta_total,
         },
     }
+
+
+def _enriquecer_devolver_industria(tool_input, user):
+    """Resolve loja + itens + estoque atual + DESTINO do retorno pro preview.
+
+    O destino mostra pra onde o credito vai na industria (receita de retorno
+    configurada na ficha, ex: 'Croissant Tradicional — Retorno'; sem config,
+    a propria receita). MP nao tem estoque na industria — vira erro no item."""
+    from app.models import EstoqueLoja, Receita
+    from app.utils import resolver_loja_por_nome
+
+    out = dict(tool_input)
+    loja = None
+    try:
+        loja_id = int(out.get('loja_id') or 0) or None
+    except (TypeError, ValueError):
+        loja_id = None
+    if loja_id:
+        loja = Loja.query.get(loja_id)
+    if not loja:
+        loja = resolver_loja_por_nome(out.get('loja_nome'))
+    out['loja_id'] = loja.id if loja else None
+    out['loja_nome'] = loja.nome if loja else out.get('loja_nome')
+
+    itens_enriq = []
+    for it in (out.get('itens') or []):
+        nome = (it.get('nome') or '').strip()
+        try:
+            qtd = int(it.get('quantidade') or 0)
+        except (TypeError, ValueError):
+            qtd = 0
+        if not nome or qtd <= 0:
+            itens_enriq.append({'nome': nome or '?', 'quantidade': qtd,
+                                'erro': 'invalido'})
+            continue
+        resolvido = _resolver_item_qualquer(nome)
+        if not resolvido:
+            itens_enriq.append({'nome': nome, 'quantidade': qtd,
+                                'resolvido': None, 'estoque_atual': None})
+            continue
+        tipo_item, item_id, nome_ok = resolvido
+        if tipo_item == 'mp':
+            itens_enriq.append({'nome': nome, 'quantidade': qtd,
+                                'resolvido': {'tipo': tipo_item, 'id': item_id,
+                                              'nome': nome_ok},
+                                'erro': 'MP nao pode ser devolvida a industria'})
+            continue
+        estoque_atual = None
+        if out['loja_id']:
+            filtro = {'loja_id': out['loja_id'],
+                      'receita_id': item_id if tipo_item == 'receita' else None,
+                      'produto_id': item_id if tipo_item == 'produto' else None,
+                      'materia_prima_id': None}
+            el = EstoqueLoja.query.filter_by(**filtro).first()
+            estoque_atual = el.quantidade if el else 0
+        destino = nome_ok
+        if tipo_item == 'receita':
+            rec = Receita.query.get(item_id)
+            if rec and rec.retorno_receita_id and rec.retorno_receita:
+                destino = rec.retorno_receita.nome
+        itens_enriq.append({
+            'nome': nome, 'quantidade': qtd,
+            'resolvido': {'tipo': tipo_item, 'id': item_id, 'nome': nome_ok},
+            'estoque_atual': estoque_atual,
+            'destino_industria': destino,
+        })
+
+    n_ok = sum(1 for i in itens_enriq
+               if i.get('resolvido') and not i.get('erro'))
+    out['itens'] = itens_enriq
+    out['totais'] = {
+        'total_itens': len(itens_enriq),
+        'resolvidos': n_ok,
+        'nao_resolvidos': len(itens_enriq) - n_ok,
+    }
+    return out
 
 
 def _enriquecer_registrar_desperdicio_lote(tool_input, user):
