@@ -1607,9 +1607,19 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # do "Produzir" exato do balanco; e o custo de produzir em batidas
         # redondas. NAO usa o 'minimo' do pedido (piso e regra de PEDIDO da loja,
         # nao de producao). Sem lote -> distribuicao exata como antes.
-        lote = int(getattr(rec, 'lote_pedido', 0) or 0)
+        #
+        # lote_producao (decisao do dono 02/07, focaccia = placa de 8): lote SO
+        # da producao — o pedido de loja fica livre — e arredonda PRA CIMA
+        # (ceil): nunca produz menos que a demanda; a sobra da placa fica na
+        # industria e o balanco desconta no dia seguinte. Sem ele, herda
+        # lote_pedido com o arredondamento original (mais proximo, 29/06).
+        lote_prod = int(getattr(rec, 'lote_producao', 0) or 0)
+        lote = lote_prod or int(getattr(rec, 'lote_pedido', 0) or 0)
         if lote > 1 and produzir > 0:
-            n_lotes = int(round(produzir / lote)) or 1
+            if lote_prod:
+                n_lotes = int(ceil(produzir / lote))
+            else:
+                n_lotes = int(round(produzir / lote)) or 1
             liquido = [x * lote for x in _distribuir_inteiro(n_lotes, pesos)]
         else:
             liquido = _distribuir_inteiro(produzir, pesos)
