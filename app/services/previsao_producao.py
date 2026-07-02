@@ -1404,7 +1404,14 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
                 cobre = min(running, g)
                 running -= cobre
                 residual.append(g - cobre)
-            extra = int(ceil(max(0.0, sum(gross) - livre)))
+            # Retorno NAO e produzivel: com os pais capados, o consumo cabe no
+            # estoque (extra=0); este guard segura qualquer caminho que escape
+            # (ex: plano re-editado a mao) — a linha mostra o consumo, sem
+            # mandar o padeiro "produzir" devolucao.
+            if rid in retorno_ids:
+                extra = 0
+            else:
+                extra = int(ceil(max(0.0, sum(gross) - livre)))
             pesos = residual if sum(residual) > 0 else gross
             add = _distribuir_inteiro(extra, pesos)
             rec = receitas.get(rid)
