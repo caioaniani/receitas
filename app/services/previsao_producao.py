@@ -938,6 +938,10 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                 'media_semanal': round(media_sem, 1),
                 'estoque_atual': estoque_atual[loja.id].get(rid, 0),
                 'por_dia': por_dia, 'total': sum(por_dia),
+                # O ja encomendado por dia (celula travada mostra isso).
+                'ja_pedido': [ja_pedido.get(loja.id, {})
+                              .get(d.isoformat(), {}).get(rid, 0)
+                              for d in dias_futuros],
                 'lote': caixa,                       # caixa: arredonda ao dividir
                 'minimo': int(rec.minimo_pedido or 0),
                 'abaixo_lote': abaixo_lote,
