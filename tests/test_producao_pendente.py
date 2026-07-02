@@ -521,3 +521,24 @@ def test_reagendar_reabre_item_dispensado_de_hoje(app, admin_user):
     assert it.dispensada_em is None                     # reaberto
     assert it.qtd_alvo == 15                            # 10 + 5
     assert it.qtd_extra == 5
+
+
+def test_planejamento_item_e_auditado(app, admin_user):
+    """REGRESSÃO 02/07: as quantidades das ordens vivem no PlanejamentoItem —
+    sem auditoria neles, itens apagados eram irrecuperáveis. Delete/update
+    agora deixam rastro no AuditLog."""
+    from app.models import AuditLog
+    r = _receita('Pão Auditado')
+    p = _ordem(r, hoje(), alvo=40)
+    item = p.itens[0]
+    item.qtd_alvo = 55
+    db.session.commit()
+    logs = AuditLog.query.filter_by(tabela='planejamento_item',
+                                    registro_id=item.id).all()
+    assert any(log.acao == 'update' for log in logs)
+    iid = item.id
+    db.session.delete(item)
+    db.session.commit()
+    logs = AuditLog.query.filter_by(tabela='planejamento_item',
+                                    registro_id=iid).all()
+    assert any(log.acao == 'delete' for log in logs)

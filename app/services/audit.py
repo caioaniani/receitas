@@ -29,7 +29,10 @@ AUDITED_MODELS = {
     'pedido_loja', 'pedido_item', 'movimentacao_estoque',
     'estoque_loja', 'mov_estoque_loja',
     'estoque_producao', 'mov_estoque_producao',
-    'planejamento_producao',
+    # Ordens de producao: o PAI ja era auditado, mas as QUANTIDADES vivem nos
+    # itens (qtd_alvo/produzido/extra/dispensada) — sem audita-los, o incidente
+    # de 02/07 (reagendados apagados pelo re-sync) ficou irrecuperavel.
+    'planejamento_producao', 'planejamento_item',
     'fornecedor', 'historico_preco_mp',
     # Entregas
     'driver_entrega', 'atribuicao_entrega', 'lote_saida',
