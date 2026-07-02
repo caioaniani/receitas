@@ -261,6 +261,47 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
     return _processar_veredicto(veredicto, nome_contato, conv_id)
 
 
+_DEDUP_ALTA_HORAS = 2
+
+
+def _alerta_alta_recente(conv_id, horas=_DEDUP_ALTA_HORAS):
+    """True se esta conversa JA disparou WhatsApp ALTA dentro da janela —
+    evita metralhar o dono em turnos ruins consecutivos da mesma conversa.
+    Fail-open (erro na consulta = alerta sai): perder alerta e pior que
+    alertar duas vezes."""
+    if not conv_id:
+        return False
+    try:
+        from datetime import timedelta
+
+        from app.models import VigiaVeredito
+        from app.utils import agora
+        corte = agora() - timedelta(hours=horas)
+        return (VigiaVeredito.query
+                .filter(VigiaVeredito.conv_id == str(conv_id),
+                        VigiaVeredito.criado_em >= corte,
+                        VigiaVeredito.gravidade == 'alta',
+                        VigiaVeredito.alerta.is_(True),
+                        VigiaVeredito.enviado_whatsapp.is_(True))
+                .first()) is not None
+    except Exception:  # noqa: BLE001
+        logger.exception('vigia: dedup ALTA falhou (fail-open)')
+        return False
+
+
+def handoff_foi_preguicoso(tools_usadas):
+    """Regra UNICA de 'handoff preguicoso': transferiu sem ter chamado
+    NENHUMA tool de leitura antes no turno. Compartilhada entre o detector
+    do vigia e o agregador do auditor (antes cada um tinha a propria copia
+    e podiam divergir). `tools_usadas` None (bot antigo) = nao da pra saber
+    → False."""
+    if tools_usadas is None:
+        return False
+    leitura = [t for t in tools_usadas
+               if t not in ('transferir_para_humano', 'encerrar_conversa')]
+    return not leitura
+
+
 def _processar_veredicto(veredicto, nome_contato, conv_id):
     """Pos-processa um veredicto (vem do Haiku OU do detector deterministico):
     valida, decide se manda WhatsApp, dispara o envio. Centralizado pra os
@@ -275,6 +316,13 @@ def _processar_veredicto(veredicto, nome_contato, conv_id):
     # sem incomodar o dono em tempo real.
     if not veredicto.get('alerta') or veredicto.get('gravidade') != 'alta':
         return {'silencio': True, 'veredicto': veredicto}
+
+    # Dedup (02/07/2026): dois turnos ALTA seguidos da MESMA conversa
+    # mandavam dois WhatsApps. Ja alertou esta conv na janela → registra o
+    # veredito (banner do painel segue vivo) mas nao re-envia.
+    if _alerta_alta_recente(conv_id):
+        logger.info('vigia: WhatsApp ALTA suprimido (dedup) conv=%s', conv_id)
+        return {'silencio': 'dedup-alta', 'veredicto': veredicto}
 
     numero = _numero_destino()
     if not numero:
