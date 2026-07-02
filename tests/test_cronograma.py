@@ -1112,3 +1112,132 @@ def test_rota_celula_com_pendencia_reagendada(app, admin_user):
         'horizonte': 7, 'janela': 6, 'inicio': 0, 'equilibrar': 0})
     assert resp.status_code == 200
     assert resp.get_json()['ok'] is True
+
+
+# ── Alerta "pedido programado sem produto" (entregas_risco / alertas_falta) ──
+
+def test_alerta_entrega_firme_descoberta(app):
+    """Lead 2 + entrega firme AMANHÃ sem estoque: a produção só fica pronta em
+    hoje+2, então a entrega de amanhã não tem produto mesmo produzindo como
+    programado → entra em entregas_risco e no agregado alertas_falta."""
+    loja = _loja()
+    r = _receita()
+    r.dias_producao = 2
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 30)
+
+    crono = cronograma_producao(horizonte_dias=7)
+    rr = _rec_out(crono, r.id)
+    assert rr['entregas_risco'], 'entrega descoberta tinha que alertar'
+    e = rr['entregas_risco'][0]
+    assert e['data'] == (hoje() + timedelta(days=1)).isoformat()
+    assert e['firme'] == 30
+    assert e['faltam'] == 30
+    assert rr['risco_datas'] == [e['data']]
+    alerta = next((a for a in crono['alertas_falta']
+                   if a['receita_id'] == r.id), None)
+    assert alerta is not None
+    assert alerta['entregas'][0]['faltam'] == 30
+
+
+def test_alerta_nao_dispara_com_estoque_suficiente(app):
+    """Mesmo cenário com estoque cobrindo a entrega: sem alerta."""
+    loja = _loja()
+    r = _receita()
+    r.dias_producao = 2
+    db.session.add(EstoqueProducao(receita_id=r.id, quantidade=50))
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 30)
+
+    crono = cronograma_producao(horizonte_dias=7)
+    rr = _rec_out(crono, r.id)
+    assert rr['entregas_risco'] == []
+    assert all(a['receita_id'] != r.id for a in crono['alertas_falta'])
+
+
+def test_alerta_nao_dispara_quando_producao_chega_a_tempo(app):
+    """Entrega em hoje+2 com lead 2: produz hoje, fica pronta no dia da
+    entrega → coberta, sem alerta."""
+    loja = _loja()
+    r = _receita()
+    r.dias_producao = 2
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=2), r, 30)
+
+    crono = cronograma_producao(horizonte_dias=7)
+    rr = _rec_out(crono, r.id)
+    assert rr['por_dia'][0]['qtd'] == 30    # produz hoje
+    assert rr['entregas_risco'] == []
+
+
+def test_alerta_ignora_falta_so_de_previsao(app):
+    """Falta contra o PREVISTO (histórico) sem pedido firme não acende o
+    alerta — ele é sobre pedido real programado. A projeção detalhada da tela
+    continua mostrando a falta prevista (dia_falta)."""
+    loja = _loja()
+    r = _receita()
+    db.session.commit()
+    # Histórico forte no MESMO dia-da-semana de amanhã, nas últimas 3 semanas
+    # → previsto alto pra amanhã; nenhum pedido firme na janela.
+    alvo = hoje() + timedelta(days=1)
+    for semanas in range(1, 4):
+        _pedido(loja, 'entregue', alvo - timedelta(days=7 * semanas), r, 40)
+
+    crono = cronograma_producao(horizonte_dias=7)
+    rr = _rec_out(crono, r.id)
+    assert rr['previsto'] > 0               # a previsão existe...
+    assert rr['entregas_risco'] == []       # ...mas não é pedido firme
+    assert crono['alertas_falta'] == []
+
+
+def test_alerta_celula_editada_pra_baixo_descobre_entrega(app):
+    """Entrega coberta pelo cronograma, mas o admin EDITA a célula pra 0
+    (override): a entrega fica descoberta e o alerta acende — é o caso 'eu
+    mexi na grade e nem vi que furou a entrega'."""
+    from app.services.cronograma_edit import editar_celula
+
+    loja = _loja()
+    r = _receita()
+    r.dias_producao = 2
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=2), r, 30)
+
+    editar_celula(r.id, hoje().isoformat(), 0, horizonte_dias=7)
+    crono = cronograma_producao(horizonte_dias=7)
+    rr = _rec_out(crono, r.id)
+    assert rr['por_dia'][0]['qtd'] == 0     # override aplicado
+    assert rr['entregas_risco']
+    assert rr['entregas_risco'][0]['data'] == \
+        (hoje() + timedelta(days=2)).isoformat()
+
+
+def test_rota_renderiza_banner_entregas_risco(app, admin_user):
+    """A página mostra o banner com a receita e o realce da célula."""
+    loja = _loja()
+    r = _receita('Sourdough Nozes')
+    r.dias_producao = 2
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 30)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.get('/telaindustriateste/')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'Entregas em risco' in html
+    assert 'Sourdough Nozes' in html
+    assert 'cel-risco' in html
+
+
+def test_rota_sem_risco_nao_mostra_banner(app, admin_user):
+    loja = _loja()
+    r = _receita()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=3), r, 30)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.get('/telaindustriateste/')
+    assert resp.status_code == 200
+    assert 'Entregas em risco' not in resp.get_data(as_text=True)
