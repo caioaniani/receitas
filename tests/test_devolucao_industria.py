@@ -369,3 +369,63 @@ def test_cronograma_nao_manda_produzir_retorno(app):
     if ret is not None:                             # linha-insumo informativa
         assert ret['total'] == 0
         assert ret.get('retorno') is True
+
+
+# ── Custo: retorno herda o custo CHEIO da origem (decisão 02/07/2026) ────────
+
+def _trad_com_custo(db):
+    """Croissant Tradicional com ficha de MP (custo > 0) + receita de retorno
+    vazia configurada. Retorna (trad, retorno)."""
+    from app.models import MateriaPrima, ReceitaIngrediente
+    mp = MateriaPrima(nome='Farinha Croissant', unidade='g', custo_por_kg=10.0)
+    db.session.add(mp)
+    trad = _receita(db, 'Croissant Tradicional')
+    # 100% de farinha sobre peso_base 100 g a R$ 10/kg = R$ 1,00 a unidade.
+    db.session.add(ReceitaIngrediente(
+        receita_id=trad.id, tipo='mp', ingrediente_nome='Farinha Croissant',
+        porcentagem=100))
+    retorno = _receita(db, 'Croissant Tradicional — Retorno')
+    trad.retorno_receita_id = retorno.id
+    db.session.commit()
+    return trad, retorno
+
+
+def test_custo_retorno_herda_da_origem(app):
+    """Retorno com ficha VAZIA herda o custo do tradicional — o Almond que o
+    consome 1:1 carrega o custo do croissant devolvido (não R$ 0)."""
+    from app.extensions import db
+    from app.models import ReceitaIngrediente
+    from app.services.custos import calcular_custos_receitas
+
+    trad, retorno = _trad_com_custo(db)
+    almond = _receita(db, 'Croissant Almond')
+    db.session.add(ReceitaIngrediente(
+        receita_id=almond.id, tipo='receita', sub_receita_id=retorno.id,
+        ingrediente_nome=retorno.nome, porcentagem=1))
+    db.session.commit()
+
+    res = calcular_custos_receitas()
+    custo_trad = res['custos']['Croissant Tradicional']
+    assert custo_trad > 0
+    assert res['custos']['Croissant Tradicional — Retorno'] == custo_trad
+    assert res['custos']['Croissant Almond'] == custo_trad   # 1 retorno/un
+    assert 'Croissant Tradicional — Retorno' not in res['circulares']
+
+
+def test_custo_retorno_com_ficha_propria_nao_herda(app):
+    """Ficha preenchida no retorno = override explícito (não herda)."""
+    from app.extensions import db
+    from app.models import MateriaPrima, ReceitaIngrediente
+    from app.services.custos import calcular_custos_receitas
+
+    trad, retorno = _trad_com_custo(db)
+    mp2 = MateriaPrima(nome='Custo Manual', unidade='g', custo_por_kg=2.0)
+    db.session.add(mp2)
+    db.session.add(ReceitaIngrediente(
+        receita_id=retorno.id, tipo='mp', ingrediente_nome='Custo Manual',
+        porcentagem=100))
+    db.session.commit()
+
+    res = calcular_custos_receitas()
+    # 100 g a R$ 2/kg = R$ 0,20 — a ficha própria vale, não o R$ 1,00 herdado.
+    assert abs(res['custos']['Croissant Tradicional — Retorno'] - 0.20) < 1e-9
