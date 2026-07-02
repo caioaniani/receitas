@@ -392,11 +392,9 @@ def _e_handoff_preguicoso_em_compra(historico, resultado_bot):
     rb = resultado_bot or {}
     if rb.get('acao') != 'handoff':
         return False
-    tools = rb.get('tools_usadas')
-    if tools is None:
+    if rb.get('tools_usadas') is None:
         return False  # versao antiga do bot — sem sinal confiavel
-    nao_handoff = [t for t in tools if t and t != 'transferir_para_humano']
-    if nao_handoff:
+    if not handoff_foi_preguicoso(rb.get('tools_usadas')):
         return False  # bot tentou algo — handoff legitimo
 
     # Junta as ultimas msgs do cliente (texto, role=user)
