@@ -92,6 +92,14 @@ class HistoricoPrecoMP(db.Model):
 class Receita(db.Model):
     __tablename__ = 'receita'
 
+    @classmethod
+    def ativas(cls):
+        """Receitas em circulacao (nao arquivadas) — USE EM pickers/matchers/
+        seletores (tudo que CONECTA algo novo a uma receita: mapeamentos PDV/
+        lote, vincular inline, ajuste de estoque). Mesmo contrato de
+        MateriaPrima.ativas(). Leituras de historico usam cls.query direto."""
+        return cls.query.filter(cls.arquivada_em.is_(None))
+
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(150), nullable=False)
     categoria = db.Column(db.String(50))
