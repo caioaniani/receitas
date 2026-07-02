@@ -33,6 +33,11 @@ VENDA_TIPOS_TODOS = VENDA_TIPOS_LOJA + VENDA_TIPOS_PRODUCAO
 # Os dois precisam coexistir.
 STATUS_PEDIDO_FINALIZADOS = ('entregue', 'recebido', 'cancelado')
 
+# Status em que o pedido ainda pode ser EDITADO (itens/qtd/data): depois de
+# 'separado' ele ja esta no fluxo fisico — cancela e recria, nao edita.
+# Usado pela rota /pedidos/<id>/editar e pela grade de pedidos da semana.
+STATUS_PEDIDO_EDITAVEIS = ('pendente', 'confirmado')
+
 # Status cujo estoque da industria AINDA NAO foi baixado. A baixa do
 # EstoqueProducao acontece na transicao separado->em_transporte
 # (pedidos/routes.py::_executar_envio_pedido). Logo, pedido nestes status e
