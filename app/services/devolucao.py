@@ -119,7 +119,8 @@ def devolver_industria(loja_id, itens, usuario_id, commit=True):
                        'baixado_loja': r['baixado'],
                        'faltou_loja': r['faltou']})
 
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return {'token': token, 'loja': loja.nome, 'itens': resumo,
             'avisos': avisos}
 
