@@ -43,15 +43,21 @@ def test_area_owner_ve_todas(app, owner_user):
 
 
 def test_area_lista_funcoes_da_area(app, owner_user):
-    """A página da área traz os links reais daquela área."""
+    """A página da área traz os links reais daquela área — e só os dela."""
+    import re
     c = app.test_client()
     _login(c, owner_user.id)
     r = c.get('/area/lojas')
     assert r.status_code == 200
-    assert b'/pedidos/estoque-loja' in r.data       # função da área Lojas
-    assert 'Desperdício'.encode() in r.data
-    # E não vaza função de outra área.
-    assert b'/relatorios/dashboards' not in r.data
+    html = r.data.decode()
+    # Recorta só o bloco .area-links (a sidebar, em toda página, lista tudo).
+    m = re.search(r'class="area-links">(.*?)</div>\s*</div>', html, re.S)
+    assert m, 'bloco .area-links não encontrado'
+    bloco = m.group(1)
+    assert '/pedidos/estoque-loja' in bloco          # função da área Lojas
+    assert 'Desperdício' in bloco
+    # E não vaza função de outra área no bloco da área.
+    assert '/relatorios/dashboards' not in bloco
 
 
 def test_area_slug_inexistente_404(app, owner_user):
