@@ -133,25 +133,28 @@ def _eh_conversa_real(v):
 
 
 def _tools_de(v):
-    """Devolve a lista de tools persistida no veredito, [] se inexistente
-    ou JSON corrompido. Best-effort — nao quebra o auditor."""
+    """Devolve a lista de tools persistida no veredito. None = registro SEM
+    o dado (bot antigo / coluna vazia / JSON corrompido) — diferente de []
+    (o bot rodou e nao chamou tool nenhuma). Best-effort — nao quebra o
+    auditor."""
     raw = (v.tools_usadas or '').strip()
     if not raw:
-        return []
+        return None
     try:
         out = json.loads(raw)
-        return out if isinstance(out, list) else []
+        return out if isinstance(out, list) else None
     except (ValueError, TypeError):
-        return []
+        return None
 
 
 def _eh_handoff_preguicoso(v):
-    """Handoff sem ter chamado tool de busca/resolucao antes — so
-    transferir_para_humano ou nenhuma. Determine pelos dados persistidos
-    em vez de LLM-judge — barato e auditavel."""
-    tools = _tools_de(v)
-    nao_handoff = [t for t in tools if t and t != 'transferir_para_humano']
-    return not nao_handoff
+    """Delegado pra regra UNICA `chatbot_vigia.handoff_foi_preguicoso` —
+    antes cada modulo tinha a propria copia e elas divergiam (aqui
+    `encerrar_conversa` contava como "tentou algo"; no vigia nao). Registro
+    sem `tools_usadas` (None) NAO conta como preguicoso: sem dado, nao da
+    pra acusar."""
+    from app.services.chatbot_vigia import handoff_foi_preguicoso
+    return handoff_foi_preguicoso(_tools_de(v))
 
 
 def _coletar_periodo(inicio, fim):
