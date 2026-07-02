@@ -1,7 +1,8 @@
 import logging
 import os
 
-from flask import Flask, render_template, request
+from flask import Flask, jsonify, render_template, request
+from flask_wtf.csrf import CSRFError
 
 from app.extensions import csrf, db, limiter, login_manager, migrate
 from app.migrations_legacy import _migrate
@@ -563,6 +564,19 @@ def create_app(config_class=None):
         return response
 
     # ── Error handlers ──
+    @app.errorhandler(CSRFError)
+    def csrf_error(e):
+        # Autosaves via fetch (X-CSRFToken) mandam JSON: devolvemos JSON pra o
+        # front distinguir "token de seguranca expirou" (aba aberta alem do
+        # WTF_CSRF_TIME_LIMIT, 1h) de erro real — ele busca token novo em
+        # /auth/csrf-token e re-tenta em vez de falhar com alert criptico.
+        # Form HTML normal segue com a pagina 400 padrao (comportamento antigo).
+        if request.is_json:
+            return jsonify(ok=False, erro='csrf_expirada',
+                           msg='Sessão de segurança expirada — recarregue a '
+                               'página e tente de novo.'), 400
+        return e
+
     @app.errorhandler(403)
     def forbidden(e):
         return render_template('errors/403.html'), 403
