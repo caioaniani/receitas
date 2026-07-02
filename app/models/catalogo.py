@@ -25,6 +25,20 @@ class MateriaPrima(db.Model):
     # industria e nao deve poluir a tela de pedido das lojas.
     sugerir_pedido_loja = db.Column(db.Boolean, nullable=False, default=False,
                                     server_default='0')
+    # Arquivada = FORA DE CIRCULACAO (ex: MP que na verdade era receita, apos
+    # transferir os vinculos): some de autocompletes, matchers e pickers pra
+    # ninguem conectar nada nela de novo. Historico 100% preservado (custeio
+    # por nome e movimentacoes continuam legiveis). Reversivel no banco de MPs.
+    arquivada_em = db.Column(db.DateTime, nullable=True)
+    arquivada_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                                 nullable=True)
+
+    @classmethod
+    def ativas(cls):
+        """MPs em circulacao (nao arquivadas) — USE EM pickers/matchers/
+        autocompletes (tudo que CONECTA algo novo a uma MP). Leituras de
+        historico/custeio usam cls.query direto, sem filtro."""
+        return cls.query.filter(cls.arquivada_em.is_(None))
 
     def to_dict(self):
         return {
