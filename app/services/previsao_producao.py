@@ -859,6 +859,21 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
         if data_ent is not None:
             ja_tem[loja_id].add(data_ent.isoformat())
 
+    # O QUE ja foi pedido por (loja, dia, receita) no horizonte — a celula
+    # travada mostra esse numero (o pedido REAL do dia) em vez de um 0 apagado,
+    # pra quem olha a grade saber o que ja esta encomendado sem abrir o pedido.
+    ja_pedido = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    for loja_id, data_ent, rid_e, qtd_e in (db.session.query(
+            PedidoLoja.loja_id, PedidoLoja.data_entrega,
+            PedidoItem.receita_id, PedidoItem.quantidade)
+            .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+            .filter(PedidoLoja.status != 'cancelado',
+                    PedidoItem.receita_id.isnot(None),
+                    PedidoLoja.data_entrega >= inicio_d,
+                    PedidoLoja.data_entrega <= horizonte_fim).all()):
+        if data_ent is not None:
+            ja_pedido[loja_id][data_ent.isoformat()][rid_e] += int(qtd_e or 0)
+
     dias_out = [{'data': d.isoformat(),
                  'label': '%s %s' % (_DOW_PT[d.weekday()], d.strftime('%d/%m')),
                  'dow': d.weekday()} for d in dias_futuros]
