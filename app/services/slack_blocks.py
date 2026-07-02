@@ -472,6 +472,23 @@ def build_preview(tipo_acao, params, token, explicacao=None):
     return blocks
 
 
+def retiradas_sugeridas_de(resultado):
+    """Extrai as sugestoes de retirada de sobras de um resultado de execucao
+    (desperdicio unitario poe em `retirada_sugerida`; o lote poe dentro de
+    cada item de `aplicados`). Compartilhado entre o render dos blocks e o
+    append de contexto na conversa (slack_bot) — uma fonte so."""
+    if not isinstance(resultado, dict):
+        return []
+    sugestoes = []
+    direto = resultado.get('retirada_sugerida')
+    if isinstance(direto, dict):
+        sugestoes.append(direto)
+    for ap in (resultado.get('aplicados') or []):
+        if isinstance(ap, dict) and isinstance(ap.get('retirada_sugerida'), dict):
+            sugestoes.append(ap['retirada_sugerida'])
+    return sugestoes
+
+
 def build_resultado(resultado, ok=True):
     """Apos clique de botao, monta blocks pra chat.update."""
     if resultado is None:
@@ -540,6 +557,19 @@ def build_resultado(resultado, ok=True):
                     'style': 'primary',
                 }],
             })
+        # ♻️ Sobra reaproveitavel com receita de retorno: o executor sugere a
+        # retirada, mas quem decide quantidade (e manda a FOTO obrigatoria) e
+        # o usuario. Sem esta secao a sugestao morria aqui e o pedido de
+        # retirada nunca nascia (caso real 02/07/2026, Nebraska: 15 croissants
+        # registrados e nenhuma retirada criada).
+        for s in retiradas_sugeridas_de(resultado):
+            blocks.append(_section(
+                f"♻️ *{s.get('qtd_sobra')}x {s.get('item')}* podem voltar pra "
+                f"indústria (viram *{s.get('destino')}*).\n"
+                f"Quantos vão voltar? Responda aqui com a quantidade + a "
+                f"*foto da sobra* (obrigatória) que eu crio o pedido de "
+                f"retirada com QR pro motorista."))
+
         # Se gerou QR Code (ex: separou pedido → QR saida pro motorista;
         # retirada de sobras → QR de coleta), mostra a imagem inline pro
         # motorista escanear no celular. `qr_texto` customiza a legenda.
