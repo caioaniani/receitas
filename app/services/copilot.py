@@ -981,6 +981,9 @@ PAPEIS_POR_TOOL = {
     'entrada_lote_loja': {'admin'},
     # Devolucao de sobras loja -> industria (duas pontas) — quem opera loja
     'devolver_industria': {'admin', 'gerente'},
+    # Retirada de sobras (QR, dia seguinte) — mesmo publico do desperdicio:
+    # e a continuacao natural do lancamento de sobras da noite.
+    'criar_retirada_sobras': {'admin', 'gerente', 'funcionario'},
     # Consultas operacionais — admin + gerente
     'consultar_fornecedores': {'admin', 'gerente'},
     # RH — owner-only (espelha o RH web, restrito ao owner)
