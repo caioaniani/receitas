@@ -68,13 +68,17 @@ _INJECTION_PATTERNS = [
         r'hidden\s+rules?|'
         r'your\s+(prompt|instructions|configuration|rules)'
         r')\b'),
-    # Roleplay hijack: "voce é agora X", "you are now X", "act as", "aja como"
+    # Roleplay hijack: "voce é agora X", "you are now X", "act as", "aja como".
+    # "responda como" EXIGE continuacao de roleplay ("como se fosse", "como
+    # um/uma") — "responda como faço pra pagar?" e portugues comum de cliente
+    # e virava handoff silencioso (falso positivo real, 02/07/2026).
     re.compile(
         r'(?i)\b('
         r'you\s+are\s+now\b|'
         r'voc[eê]\s+(?:e|é|eh)\s+agora\b|'
         r'(act|behave|respond)\s+as\b|'
-        r'(aja|comporte-se|responda)\s+como\b|'
+        r'(aja|comporte-se)\s+como\b|'
+        r'responda\s+como\s+(se\s+(fosse|voc[eê])|um\b|uma\b)|'
         r'pretend\s+(to\s+be|you\s+are)\b'
         r')'),
     # "modo desenvolvedor", "developer mode", "DAN mode", "jailbreak"
