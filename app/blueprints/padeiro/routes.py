@@ -51,6 +51,22 @@ def _card_b2b(v):
                       for it in v.itens]}
 
 
+def _card_retirada(r):
+    """Retirada de sobras (loja → industria): aparece na fila do padeiro como
+    RECEBIMENTO — a industria vai receber esses itens de volta, nao separar."""
+    return {'tipo': 'retirada', 'id': r.id,
+            'titulo': r.loja.nome if r.loja else '—',
+            'data_entrega': r.data_retirada,
+            'status': r.status,
+            'foto_url': r.foto_url,
+            'itens': [{'id': it.id, 'qtd': it.quantidade,
+                       'nome': it.nome_item,
+                       'obs': ('vira ' + it.receita.retorno_receita.nome
+                               if it.receita and it.receita.retorno_receita
+                               else None)}
+                      for it in r.itens]}
+
+
 def _dados_listas(dia, eh_hoje):
     """Pedidos de loja + vendas B2B (com data de entrega) do dia, a separar e
     aguardando. Helper compartilhado entre a tela cheia (`index`) e o refresh
