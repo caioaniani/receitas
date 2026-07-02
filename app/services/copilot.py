@@ -4423,6 +4423,7 @@ _EXEC_HANDLERS = {
     'marcar_tarefa_feita': executar_marcar_tarefa_feita,
     'balanco_congelados': executar_balanco_congelados,
     'entrada_lote_loja': executar_entrada_lote_loja,
+    'devolver_industria': executar_devolver_industria,
     'registrar_desperdicio': executar_registrar_desperdicio,
     'registrar_desperdicio_lote': executar_registrar_desperdicio_lote,
     'criar_venda_b2b': executar_criar_venda_b2b,
