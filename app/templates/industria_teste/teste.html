@@ -563,6 +563,24 @@
     document.addEventListener('click', function (ev) {
         const btn = ev.target.closest('.btn-reset, .btn-reset-inline');
         if (btn) { resetar(btn.dataset.rid); return; }
+        // Link do banner de entregas em risco: abre o dia a dia da receita
+        // e rola ate a linha.
+        const alerta = ev.target.closest('.alerta-falta-link');
+        if (alerta) {
+            ev.preventDefault();
+            const rid = alerta.dataset.rid;
+            const det = document.querySelector(
+                'tr.detalhe-row[data-rid="' + rid + '"]');
+            if (det) det.hidden = false;
+            const tog2 = document.querySelector(
+                '.rec-toggle[data-rid="' + rid + '"]');
+            if (tog2) {
+                const chev = tog2.querySelector('.chev');
+                if (chev) chev.classList.add('aberto');
+                tog2.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return;
+        }
         // Expandir/recolher o saldo da receita.
         const tog = ev.target.closest('.rec-toggle');
         if (!tog) return;
