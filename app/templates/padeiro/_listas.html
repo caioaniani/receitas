@@ -17,6 +17,28 @@
 {% if a_separar %}
 <div class="grid">
   {% for c in a_separar %}
+  {% if c.tipo == 'retirada' %}
+  {# Retirada de sobras: a industria vai RECEBER (nao separar) — cor propria. #}
+  <div class="card retirada">
+    <p class="loja"><span class="badge-ret">↩ RECEBIMENTO</span> {{ c.titulo }}</p>
+    <p class="meta">Retirada de sobras #{{ c.id }}{% if c.data_entrega %} · {{ c.data_entrega.strftime('%d/%m') }}{% endif %}</p>
+    {{ lista_itens(c) }}
+    {% if c.foto_url %}
+    <p class="meta"><a href="{{ c.foto_url }}" target="_blank" style="color:#055160; font-weight:700;">📷 Ver foto da sobra</a></p>
+    {% endif %}
+    {% if c.status == 'em_transporte' %}
+    <form method="POST" action="{{ url_for('padeiro.retirada_qr', id=c.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="data" value="{{ dia.isoformat() }}">
+      <button class="btn btn-receber" type="submit">CHEGOU — QR DE RECEBIMENTO</button>
+    </form>
+    {% else %}
+    <p class="meta" style="font-weight:700; color:#055160;">
+      <i class="bi bi-truck"></i> Aguardando o motorista coletar na loja…
+    </p>
+    {% endif %}
+  </div>
+  {% else %}
   <div class="card{% if c.tipo == 'b2b' %} b2b{% endif %}" data-order="{{ c.tipo }}-{{ c.id }}">
     <p class="loja">{{ c.titulo }}</p>
     <p class="meta">{{ 'Venda B2B' if c.tipo == 'b2b' else 'Pedido' }} #{{ c.id }}{% if c.data_entrega %} · entrega {{ c.data_entrega.strftime('%d/%m') }}{% endif %} <span class="chk-count" data-chk-count></span></p>
@@ -27,6 +49,7 @@
       <button class="btn btn-sep" type="submit">SEPARAR</button>
     </form>
   </div>
+  {% endif %}
   {% endfor %}
 </div>
 {% else %}
