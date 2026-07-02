@@ -155,6 +155,12 @@ class Receita(db.Model):
     # croissant lote 50 + minimo 250 -> 250/300). NULL = sem padronizacao.
     lote_pedido = db.Column(db.Integer, nullable=True)
     minimo_pedido = db.Column(db.Integer, nullable=True)
+    # Lote SO da PRODUCAO (decisao do dono 02/07: focaccia = placa de 8
+    # pedacos; as lojas pedem pedacos livremente, mas a industria nao produz
+    # placa quebrada). O cronograma arredonda a producao pra multiplos disto;
+    # a sobra do arredondamento fica na industria e o balanco desconta no dia
+    # seguinte. VAZIO = herda lote_pedido (croissant cx 50 segue como antes).
+    lote_producao = db.Column(db.Integer, nullable=True)
     # Fornada especial: produto vendido SO sexta/sabado/domingo (ex: Focaccia
     # Gorgonzola). O forecast de pedido NAO sugere em dia de semana. Default
     # False = vende todo dia (comportamento normal).
