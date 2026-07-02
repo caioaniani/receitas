@@ -11,8 +11,39 @@ from app.models import AlertaEstoque, MateriaPrima, MovimentacaoEstoque, Receita
 @materias_primas_bp.route('/')
 @login_required
 def banco():
-    materias = MateriaPrima.query.order_by(MateriaPrima.id).all()
-    return render_template('materias_primas/banco.html', materias=materias)
+    materias = MateriaPrima.ativas().order_by(MateriaPrima.id).all()
+    arquivadas = (MateriaPrima.query
+                  .filter(MateriaPrima.arquivada_em.isnot(None))
+                  .order_by(MateriaPrima.nome).all())
+    return render_template('materias_primas/banco.html', materias=materias,
+                           arquivadas=arquivadas)
+
+
+@materias_primas_bp.route('/arquivar/<int:id>', methods=['POST'])
+@login_required
+@admin_required
+def arquivar(id):
+    """Arquiva/desarquiva MP. Arquivada = fora de circulação (autocompletes,
+    matchers, pickers, telas de pedido) — ninguém conecta nada nela de novo.
+    Histórico preservado; reversível aqui mesmo. É o destino da MP que virou
+    receita mas carrega histórico inapagável (movimentações/preço)."""
+    from app.utils import agora
+    mp = MateriaPrima.query.get_or_404(id)
+    if mp.arquivada_em:
+        mp.arquivada_em = None
+        mp.arquivada_por_id = None
+        db.session.commit()
+        flash(f'"{mp.nome}" desarquivada — voltou pra circulação.', 'success')
+    else:
+        mp.arquivada_em = agora()
+        mp.arquivada_por_id = current_user.id
+        # Fora de circulação também nas telas de pedido de loja.
+        mp.sugerir_pedido_loja = False
+        db.session.commit()
+        flash(f'"{mp.nome}" arquivada: some dos autocompletes, matchers e '
+              'telas — ninguém conecta mais nada nela. O histórico fica. '
+              'Dá pra desarquivar aqui no banco de MPs.', 'success')
+    return redirect(url_for('materias_primas.banco'))
 
 
 @materias_primas_bp.route('/salvar', methods=['POST'])
