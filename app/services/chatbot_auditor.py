@@ -474,14 +474,21 @@ def auditar_dia_resumo(dia=None, *, enviar=True):
     DIA INTEIRO em BRT. Usado pelo cron das 19h no modo hibrido.
 
     Diferente das janelas curtas: traz numeros + insights + problemas, e
-    nao depende do ponteiro `ultima_exec` (sempre olha o dia inteiro)."""
+    nao depende do ponteiro `ultima_exec` (sempre olha o dia inteiro).
+    Inclui `comparativo_dia_anterior` (mesmos numeros de ontem) pro Sonnet
+    citar tendencia real em vez de olhar o dia no vacuo."""
     from app.utils import hoje as _hoje
     base = dia or _hoje()
     inicio = datetime.combine(base, datetime.min.time())
     fim = inicio + timedelta(days=1)
+    comparativo = _resumo_comparativo(
+        _coletar_periodo(inicio - timedelta(days=1), inicio))
+    extras = ({'comparativo_dia_anterior': comparativo}
+              if comparativo else None)
     return auditar_periodo(inicio, fim, enviar=enviar, forcar_envio=True,
                            prompt_sistema=PROMPT_AUDITOR_RESUMO,
-                           titulo='Resumo do dia')
+                           titulo='Resumo do dia',
+                           dados_extras=extras)
 
 
 def auditar_janela_pendente(*, enviar=True):
