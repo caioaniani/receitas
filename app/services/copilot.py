@@ -3603,6 +3603,10 @@ def executar_registrar_desperdicio_lote(params, user):
         'ignorados': ignorados,
         'total_aplicados': len(aplicados),
         'total_ignorados': len(ignorados),
+        # Quantos registraram SEM baixar estoque (reaproveitaveis) — o Slack
+        # avisa em vez de confirmar igual a uma baixa real (03/07/2026).
+        'reaproveitados_sem_baixa': sum(
+            1 for a in aplicados if a.get('reaproveitavel')),
         'registro_tipo': 'desperdicio_lote',
         'registro_id': None,
         'url': f'/pedidos/desperdicio?loja={loja.id}',
