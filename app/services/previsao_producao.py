@@ -885,20 +885,37 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
             .filter(EstoqueLoja.receita_id.isnot(None)).all()):
         estoque_atual[loja_id][rid] += max(0, int(q or 0) - int(qres or 0))
 
-    # Venda historica por (loja, receita, DOW): total pedido naquele dia-da-semana
-    # na janela. Base da media POR DIA-DA-SEMANA (sabado != terca).
-    soma_lrd = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    for rid, loja_id, data_ent, qtd in (db.session.query(
+    # Historico por (loja, receita, DOW, DATA): base da media POR DIA-DA-SEMANA
+    # (sabado != terca), guardada POR DATA pra media recencia-ponderada com cap
+    # de pico isolado (mesma matematica do balanco — Fase 1, 02/07/2026).
+    # Tres protecoes no sinal:
+    # - usa quantidade_recebida quando preenchida (a divergencia conferida na
+    #   entrega e demanda mais real que o pedido digitado);
+    # - exclui RASCUNHO ABANDONADO: pedido gerado pela propria grade
+    #   (observacao 'Gerado do histórico...') que continua 'pendente' — sem
+    #   isso a media re-aprende o que a media criou (auto-reforco); confirmado
+    #   pelo humano (status muda), entra normal. Filtro NULL-safe: observacao
+    #   NULL nunca casa LIKE, entao a condicao e um OR explicito;
+    # - cancelados continuam fora.
+    hist_lrd = defaultdict(lambda: defaultdict(
+        lambda: defaultdict(lambda: defaultdict(int))))
+    for rid, loja_id, data_ent, qtd, qtd_rec in (db.session.query(
             PedidoItem.receita_id, PedidoLoja.loja_id,
-            PedidoLoja.data_entrega, PedidoItem.quantidade)
+            PedidoLoja.data_entrega, PedidoItem.quantidade,
+            PedidoItem.quantidade_recebida)
             .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoItem.receita_id.isnot(None),
                     PedidoLoja.status != 'cancelado',
+                    db.or_(PedidoLoja.status != 'pendente',
+                           PedidoLoja.observacao.is_(None),
+                           ~PedidoLoja.observacao.like('Gerado do histórico%')),
                     PedidoLoja.data_entrega >= hist_ini,
                     PedidoLoja.data_entrega <= hist_fim).all()):
         if data_ent is None or rid not in receitas:
             continue
-        soma_lrd[loja_id][rid][data_ent.weekday()] += int(qtd or 0)
+        q = int(qtd_rec) if qtd_rec is not None else int(qtd or 0)
+        hist_lrd[loja_id][rid][data_ent.weekday()][data_ent] += q
+    datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)
 
     # Dias que a loja JA tem pedido no horizonte (a tela marca) + status: dia
     # com UM pedido ainda EDITAVEL (pendente/confirmado) destrava na tela e o
@@ -939,7 +956,7 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
         ja_tem_loja = ja_tem.get(loja.id, set())
         produtos = []
         for rid, rec in sorted(receitas.items(), key=lambda kv: kv[1].nome):
-            dows = soma_lrd.get(loja.id, {}).get(rid)
+            dows = hist_lrd.get(loja.id, {}).get(rid)
             # Item com pedido JA FEITO no horizonte aparece mesmo sem sugestao
             # (linha zerada + celulas azuis do ja-pedido) — sem isto o produto
             # cuja unica atividade cai em dia travado sumia da grade e ninguem
@@ -950,12 +967,22 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
             tem_pedido_horizonte = any(ja_ped_item)
             if not dows and not tem_pedido_horizonte:
                 continue
-            # media por dia-da-semana = total daquele dow / nº semanas. A soma
-            # sobre a semana reconstroi a media semanal estavel; o split por dow
-            # respeita o PADRAO da loja (em que dia ela costuma pedir).
-            media_por_dow = ({dow: tot / janela_semanas
-                              for dow, tot in dows.items()} if dows else {})
-            media_sem = sum(media_por_dow.values())   # = total_janela / semanas
+            # Media POR DIA-DA-SEMANA com as protecoes do balanco (Fase 1):
+            # recencia (meia-vida 21d — tendencia aparece), cap de pico isolado
+            # (pedido gigante avulso nao vira sugestao recorrente) e denominador
+            # com os zeros DESDE a 1a ocorrencia (demanda que parou decai; item
+            # novo nao e diluido pelas semanas antes de existir). Sem gate de
+            # ocorrencias: 1 pedido avulso ja e diluido naturalmente pelos
+            # zeros do denominador.
+            media_por_dow = {}
+            if dows:
+                for dow, por_data in dows.items():
+                    m = _media_recencia(
+                        por_data, hoje_d,
+                        datas_possiveis=datas_possiveis_dow[dow])
+                    if m > 0:
+                        media_por_dow[dow] = m
+            media_sem = sum(media_por_dow.values())
 
             fe = bool(getattr(rec, 'fornada_especial', False))
             # Dias onde a sugestao PODE cair: fornada especial respeitada E dia
