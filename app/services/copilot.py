@@ -3566,6 +3566,74 @@ def executar_registrar_desperdicio_lote(params, user):
     }
 
 
+def executar_devolver_industria(params, user):
+    """Devolve sobras da loja pra industria — duas pontas via service
+    `devolucao.devolver_industria` (baixa a loja + credita o congelado na
+    receita de retorno). Itens sem match ou MP entram em `ignorados`."""
+    from app.services.devolucao import devolver_industria
+
+    loja = _resolver_loja_para_user(params.get('loja_id'),
+                                    params.get('loja_nome'), user)
+    if not loja:
+        nome_tentado = params.get('loja_nome') or params.get('loja_id')
+        if nome_tentado:
+            return {'ok': False, 'erro': f'Loja "{nome_tentado}" nao encontrada.'}
+        return {'ok': False, 'erro': 'Especifique a loja.'}
+
+    itens_svc = []
+    ignorados = []
+    for item in (params.get('itens') or []):
+        nome = (item.get('nome') or '').strip()
+        try:
+            qtd = int(item.get('quantidade') or 0)
+        except (TypeError, ValueError):
+            qtd = 0
+        if not nome or qtd <= 0:
+            ignorados.append({'nome': nome or '?', 'motivo': 'quantidade invalida'})
+            continue
+        resolvido = item.get('resolvido')
+        if not resolvido or not resolvido.get('id'):
+            re_resolve = _resolver_item_qualquer(nome)
+            if not re_resolve:
+                ignorados.append({'nome': nome,
+                                  'motivo': 'item nao encontrado no cadastro'})
+                continue
+            tipo_item, item_id, _nome_ok = re_resolve
+        else:
+            tipo_item = resolvido['tipo']
+            item_id = resolvido['id']
+        if tipo_item == 'mp':
+            ignorados.append({'nome': nome,
+                              'motivo': 'MP nao pode ser devolvida a industria'})
+            continue
+        itens_svc.append({'tipo': tipo_item, 'id': item_id, 'qtd': qtd})
+
+    if not itens_svc:
+        return {'ok': False,
+                'erro': f'Nenhum item devolvido. {len(ignorados)} ignorados.',
+                'ignorados': ignorados}
+
+    try:
+        r = devolver_industria(loja.id, itens_svc, user.id)
+    except ValueError as exc:
+        db.session.rollback()
+        return {'ok': False, 'erro': str(exc), 'ignorados': ignorados}
+
+    return {
+        'ok': True,
+        'loja': r['loja'],
+        'token': r['token'],
+        'itens': r['itens'],
+        'avisos': r['avisos'],
+        'ignorados': ignorados,
+        'total_devolvidos': len(r['itens']),
+        'total_ignorados': len(ignorados),
+        'registro_tipo': 'devolucao_industria',
+        'registro_id': None,
+        'url': f'/pedidos/estoque-loja?loja={loja.id}',
+    }
+
+
 def executar_criar_cliente_b2b(params, user):
     """Cadastra novo ClienteB2B. Idempotente por nome — se ja existir,
     retorna o existente sem erro."""
