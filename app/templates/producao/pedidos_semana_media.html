@@ -393,6 +393,71 @@
             modal.hide();
         });
     }
+
+    // --- Auto-save de dia COM pedido (editável): terminou de digitar, salva ---
+    // Só células `tem-pedido` habilitadas (o dia JÁ tem pedido rascunho/
+    // confirmado). Debounce por coluna (loja|data); envia o form via fetch com
+    // `so_dia` + `ajax=1` — o backend aplica SÓ aquela coluna (mesma lógica do
+    // botão ↻) e responde JSON. Dia SEM pedido nunca auto-salva (criar rascunho
+    // continua ação explícita nos botões Gerar). O botão ↻ vira indicador de
+    // status + fallback manual.
+    (function () {
+        var timers = {};   // "loja|data" -> timeout do debounce
+        var DEBOUNCE_MS = 900;
+
+        function botaoDe(chave) {
+            var btns = document.querySelectorAll('.btn-atualizar-dia');
+            for (var i = 0; i < btns.length; i++) {
+                if (btns[i].value === chave) { return btns[i]; }
+            }
+            return null;
+        }
+        function status(chave, texto, title) {
+            var b = botaoDe(chave);
+            if (!b) { return; }
+            b.textContent = texto;
+            b.title = title || '';
+        }
+        function salvar(chave, form) {
+            var fd = new FormData(form);
+            fd.set('so_dia', chave);
+            fd.set('ajax', '1');
+            status(chave, '💾 salvando…');
+            fetch(form.action, { method: 'POST', body: fd,
+                                 credentials: 'same-origin' })
+                .then(function (r) {
+                    if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                    return r.json();
+                })
+                .then(function (j) {
+                    status(chave, j.mudou ? '✓ salvo' : '✓ sem mudança', j.msg);
+                    setTimeout(function () {
+                        status(chave, '↻ atualizar',
+                               'Atualiza SÓ o pedido deste dia desta loja com os valores da coluna (0 remove o item)');
+                    }, 3000);
+                })
+                .catch(function () {
+                    // Falhou (rede/sessão): devolve o botão manual como fallback.
+                    status(chave, '⚠ erro — clique p/ salvar',
+                           'O salvamento automático falhou; clique pra atualizar manualmente.');
+                });
+        }
+        document.querySelectorAll('.pmed-cel.tem-pedido').forEach(function (inp) {
+            if (inp.disabled) { return; }             // travado não-editável
+            var partes = (inp.name || '').split('|'); // qtd|loja|data|item
+            if (partes.length !== 4) { return; }
+            var chave = partes[1] + '|' + partes[2];
+            var form = inp.form;
+            if (!form || !botaoDe(chave)) { return; } // sem botão = dia não editável
+            inp.addEventListener('input', function () {
+                clearTimeout(timers[chave]);
+                status(chave, '✎ digitando…');
+                timers[chave] = setTimeout(function () {
+                    salvar(chave, form);
+                }, DEBOUNCE_MS);
+            });
+        });
+    })();
 })();
 </script>
 {% endblock %}
