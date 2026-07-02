@@ -180,6 +180,24 @@
     reflete aqui. O estoque e a matéria-prima só mexem quando o padeiro produz.
 </div>
 
+{% if crono.alertas_falta %}
+<div class="alerta-falta">
+    <div class="alerta-falta-tt">🚨 Entregas em risco — tem pedido de loja programado <strong>sem produto</strong>
+        (mesmo produzindo como está no cronograma):</div>
+    <ul class="alerta-falta-lista">
+        {% for a in crono.alertas_falta %}
+        <li>
+            <a href="#" class="alerta-falta-link" data-rid="{{ a.receita_id }}">{{ a.nome }}</a> —
+            {% for e in a.entregas %}{{ e.label }}: pedido de <strong>{{ e.firme }}</strong>,
+            faltam <strong class="alerta-falta-qtd">{{ e.faltam }}</strong>{{ '; ' if not loop.last }}{% endfor %}
+        </li>
+        {% endfor %}
+    </ul>
+    <div class="alerta-falta-dica">Aumente a produção nas células dos dias anteriores à entrega
+        (contando o lead da receita), ou ajuste o pedido com a loja. Clique na receita pra ver o dia a dia.</div>
+</div>
+{% endif %}
+
 {% if not crono.receitas %}
 <p class="text-muted">Sem produção prevista no horizonte (sem pedidos/histórico, ou estoque cobre tudo).</p>
 {% else %}
