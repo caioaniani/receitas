@@ -504,6 +504,14 @@ def build_resultado(resultado, ok=True):
             loja_nome = resultado.get('loja') or ''
             sufixo = f' em {loja_nome}' if loja_nome else ''
             partes = [f"✓ {n} desperdicio(s) registrado(s){sufixo}."]
+            # Reaproveitavel: registrou mas NAO baixou estoque — avisa em vez
+            # de confirmar igual a uma baixa real (03/07/2026).
+            n_reap = resultado.get('reaproveitados_sem_baixa') or (
+                1 if resultado.get('reaproveitavel_sem_baixa') else 0)
+            if n_reap:
+                partes.append(
+                    f'⚠️ {n_reap} item(ns) reaproveitável(is): o estoque NÃO '
+                    'foi baixado (a sobra vira retorno/outra receita).')
             label_botao = 'Ver desperdícios'
         else:
             partes = ['Feito.']
