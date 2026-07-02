@@ -791,6 +791,74 @@ enviar" foi instabilidade DA META (~12h, erro generico "An unexpected error"
 08/06 — se mensageria falhar de novo, conferir "Acoes necessarias"/App
 Review/verificacao da empresa no painel Meta.
 
+## Bot de atendimento — hardening 02/07/2026 (4 pacotes)
+
+Pesquisa de melhorias no bot/vigia/auditor aprovada pelo dono virou 4
+pacotes, todos implementados. Testes: `tests/test_bot_melhorias_0702.py`.
+
+**P1 — Graves (cliente no vacuo)**:
+- Msg SO de audio/anexo nao suportado: resposta deterministica pedindo texto
+  (antes: return silencioso e a conversa ficava presa em `pending` pra
+  sempre — o followup nao dispara quando a ultima msg e do cliente). Grava
+  '[cliente enviou audio/anexo nao suportado]' no store.
+- Excecao no processamento: envia `chatbot.FALLBACK_TEXTO` ao cliente antes
+  de abrir a conversa (antes ia pra fila humana EM SILENCIO).
+- `anthropic.Anthropic(timeout=..., max_retries=1)` em TODAS as chamadas de
+  bot/vigia/auditor — o default do SDK (~10min) segurava thread + lock da
+  conversa quando a conexao travava.
+- Injection: "responda como" so casa roleplay ("como se fosse", "como um") —
+  "responda como faco pra pagar?" era falso positivo real que virava handoff.
+- **Vassoura** (`chatbot.varrer_pendentes_sem_resposta`, roda no cron do
+  followup): conversa `pending` com ultima msg do CLIENTE ha 10-720min =
+  bot ficou devendo (thread daemon morta em deploy; a idempotencia ja
+  committada impede o Chatwoot de reentregar o webhook). Responde e
+  destrava, 5/ciclo. Kill-switch `CHATBOT_VASSOURA=0`.
+
+**P2 — Handoff (caso Elaine)**:
+- Prompt: recusa de oferta != pedido de humano != fim de conversa — pergunta
+  "posso ajudar com mais alguma coisa?" e encerra; NAO transfere.
+- **Enforcement em codigo**: 1ª tentativa de transferir SEM nenhuma consulta
+  antes e sem motivo de excecao (alergia/reclamacao/humano/cartinha/estorno/
+  reembolso/cancelamento) e RECUSADA 1x via tool_result mandando consultar;
+  se o modelo insistir, o handoff sai (nunca loop). ARMADILHA:
+  `_handoff_excecao` olha SO `motivo`/`resumo` — NUNCA `mensagem_cliente`
+  (quase todo handoff diz "um atendente vai continuar" nela; olhar la
+  anulava o enforcement inteiro — pego por teste).
+- `stop_reason == 'max_tokens'`: refaz 1x com teto 2400 (antes link/preco
+  cortado ia pro cliente).
+- Followup: dedupe so conta `enviado_whatsapp=True` (envio que falhou nao
+  suprime a retentativa); cutucao enviado e mesclado no ultimo turno
+  assistant do store (a API nao aceita 2 assistant seguidos).
+
+**P3 — Custo** (o vigia roda em TODA resposta = maior volume de IA):
+- Short-circuit do vigia: fechamento trivial ("ok", "obrigada" —
+  `_e_fechamento`) sem handoff nao gasta modelo.
+- Cache: `PROMPT_VIGIA`/`PROMPT_ABANDONO` com `cache_control ephemeral`.
+  O auditor NAO tem cache DE PROPOSITO: execucoes com horas entre si
+  (7/9/12/15/19h) e TTL de 5min = pagaria o premio de escrita (1.25x) sem
+  nunca ler de volta.
+- **Debounce/coalescing de rajada** (`crm/routes`): cada webhook deposita a
+  msg em `_PENDENTES` e a thread dorme `CHATBOT_DEBOUNCE_S` (default 4s;
+  0 sob PYTEST_RUNNING); quem acorda drena TUDO e responde UMA vez —
+  cliente que quebra a frase em 3 baloes = 1 chamada Opus, nao 3.
+
+**P4 — Auditor v2 + vigia**:
+- Regra UNICA de "handoff preguicoso": `chatbot_vigia.handoff_foi_preguicoso`
+  (transferiu sem NENHUMA tool de leitura fora transferir/encerrar). O
+  detector de compra do vigia e o agregador do auditor delegam a ela.
+  `tools_usadas=None` (registro de bot antigo) = NAO acusa (sem dado).
+- Dedup de ALTA: 2ª ALTA da MESMA conversa dentro de 2h registra o veredito
+  (banner do painel segue) mas nao re-manda WhatsApp (`_alerta_alta_recente`;
+  so conta `enviado_whatsapp=True`; fail-open — erro na consulta deixa o
+  alerta sair).
+- Auditor recebe dados REAIS em vez de inventar: `por_hora` (histograma de
+  eventos — pico so com dado), `funil_site` (`PedidoOnline` criados/pagos/
+  cancelados + faturamento por `pago_em`, nao por status) e
+  `comparativo_dia_anterior` no resumo das 19h (tendencia vs ontem).
+- Tom (regra do dono): auditor e o BALANCO FRIO — sem 🚨/panico (alarme em
+  tempo real e papel do vigia); amostra < 10 conversas nao manchete
+  porcentagem, usa numeros absolutos.
+
 ## Contas a Pagar (NF/boleto via Slack → IA → Dropbox → banco)
 
 Feature de 2026-05-23. Funcionarios postam foto de NF/boleto em canais Slack de
