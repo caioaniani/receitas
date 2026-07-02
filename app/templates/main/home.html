@@ -84,72 +84,14 @@
 </div>
 
 <div class="menu-grid">
-    {% if current_user.pode_lojas() %}
-    <a href="{{ url_for('pedidos.lista') }}" class="menu-card" style="--cor:#ffc107;">
-        <span class="ic">🏪</span>
-        <span><span class="nm">Lojas</span><br>
-        <span class="desc">Pedidos, estoque e lista de compras das lojas</span></span>
+    {# Cards vêm de app/nav.py (fonte única: título/ícone/cor/permissão). Cada
+       card abre a página da área, que lista as funções via macro compartilhado. #}
+    {% for a in areas %}
+    <a href="{{ url_for('main.area', slug=a.slug) }}" class="menu-card" style="--cor:{{ a.cor }};">
+        <span class="ic">{{ a.icone }}</span>
+        <span><span class="nm">{{ a.titulo }}</span><br>
+        <span class="desc">{{ a.desc }}</span></span>
     </a>
-    {% endif %}
-
-    {% if current_user.pode_producao() %}
-    <a href="{{ url_for('producao.painel') }}" class="menu-card" style="--cor:#198754;">
-        <span class="ic">🥖</span>
-        <span><span class="nm">Produção</span><br>
-        <span class="desc">Painel, cronograma, fluxograma e massas base</span></span>
-    </a>
-    {% endif %}
-
-    {% if current_user.pode_catalogo() %}
-    <a href="{{ url_for('materias_primas.banco') }}" class="menu-card" style="--cor:#0d6efd;">
-        <span class="ic">📚</span>
-        <span><span class="nm">Catálogo</span><br>
-        <span class="desc">Matérias-primas, fornecedores, produtos e preços</span></span>
-    </a>
-    {% endif %}
-
-    {% if current_user.pode_pdv() or current_user.is_admin() or current_user.pode_lojas() %}
-    <a href="{{ url_for('pdv.index') if current_user.pode_pdv() else url_for('entregas.index') }}" class="menu-card" style="--cor:#6f42c1;">
-        <span class="ic">🛒</span>
-        <span><span class="nm">Vendas & Entregas</span><br>
-        <span class="desc">Caixa (PDV), B2B e entregas do site</span></span>
-    </a>
-    {% endif %}
-
-    {% if current_user.is_admin() %}
-    <a href="{{ url_for('contas_pagar.lista') }}" class="menu-card" style="--cor:#20c997;">
-        <span class="ic">💰</span>
-        <span><span class="nm">Financeiro</span><br>
-        <span class="desc">Contas a pagar, caixa diário e rentabilidade</span></span>
-    </a>
-    {% endif %}
-
-    {% if current_user.is_owner %}
-    <a href="{{ url_for('rh.dashboard') }}" class="menu-card" style="--cor:#d63384;">
-        <span class="ic">👥</span>
-        <span><span class="nm">RH</span><br>
-        <span class="desc">Funcionários, folha, escala, ponto e férias</span></span>
-    </a>
-    {% endif %}
-
-    {% if current_user.is_admin() %}
-    <a href="{{ url_for('relatorios.dashboards') }}" class="menu-card" style="--cor:#fd7e14;">
-        <span class="ic">📈</span>
-        <span><span class="nm">Relatórios</span><br>
-        <span class="desc">Dashboards, custos e previsão de demanda</span></span>
-    </a>
-
-    <a href="{{ url_for('auth.usuarios') }}" class="menu-card" style="--cor:#6c757d;">
-        <span class="ic">⚙️</span>
-        <span><span class="nm">Administração</span><br>
-        <span class="desc">Usuários, permissões e integrações</span></span>
-    </a>
-    {% endif %}
-
-    <a href="{{ url_for('receitas.padeiro_lista') }}" class="menu-card" style="--cor:#0dcaf0;">
-        <span class="ic">📖</span>
-        <span><span class="nm">Fichas Técnicas</span><br>
-        <span class="desc">Receitas e modo de preparo</span></span>
-    </a>
+    {% endfor %}
 </div>
 {% endblock %}
