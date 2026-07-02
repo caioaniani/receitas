@@ -212,7 +212,13 @@ def transferir(id):
 def excluir(id):
     from sqlalchemy.exc import IntegrityError
     mp = MateriaPrima.query.get_or_404(id)
-    uso = ReceitaIngrediente.query.filter_by(ingrediente_nome=mp.nome).first()
+    # So ingrediente de tipo MP bloqueia — uma RECEITA homonima usada como
+    # ingrediente (caso pos-transferencia MP->receita, mesmo nome) nao e uso
+    # desta MP.
+    uso = (ReceitaIngrediente.query
+           .filter(ReceitaIngrediente.ingrediente_nome == mp.nome,
+                   ReceitaIngrediente.tipo != 'receita')
+           .first())
     if uso:
         flash(f'Não é possível excluir "{mp.nome}": usado em receitas.', 'danger')
         return redirect(url_for('materias_primas.banco'))
