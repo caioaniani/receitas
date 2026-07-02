@@ -912,7 +912,7 @@ TOOLS = [
     # Estoque de congelados / loja
     TOOL_BALANCO_CONGELADOS, TOOL_ENTRADA_LOTE_LOJA,
     # Devolucao de sobras loja -> industria (duas pontas)
-    TOOL_DEVOLVER_INDUSTRIA,
+    TOOL_DEVOLVER_INDUSTRIA, TOOL_CRIAR_RETIRADA_SOBRAS,
     # Desperdicio (sobra do dia / vencido)
     TOOL_REGISTRAR_DESPERDICIO, TOOL_REGISTRAR_DESPERDICIO_LOTE,
     TOOL_CONSULTAR_DESPERDICIO,
