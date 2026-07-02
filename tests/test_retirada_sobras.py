@@ -217,6 +217,9 @@ def test_tool_cria_retirada_com_foto(app, admin_user, monkeypatch):
     monkeypatch.setattr(dropbox_storage, 'upload_publico', lambda *a, **k: {
         'url': 'https://dl.dropbox.com/x/sobra.jpg?raw=1',
         'storage_path': '/retiradas/x.jpg', 'tamanho': 10})
+    # Sem request context o url_for(_external) cai no fallback APP_BASE_URL
+    # (mesmo caminho do executor de pedidos rodando em thread).
+    monkeypatch.setenv('APP_BASE_URL', 'https://gestao.example.com')
     res = copilot.executar_criar_retirada_sobras({
         'loja_nome': 'ribeiro',
         'itens': [{'nome': 'Croissant Tradicional', 'quantidade': 10}],
