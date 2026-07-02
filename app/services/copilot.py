@@ -504,6 +504,40 @@ TOOL_ENTRADA_LOTE_LOJA = {
     },
 }
 
+TOOL_DEVOLVER_INDUSTRIA = {
+    "name": "devolver_industria",
+    "description": (
+        "Devolve sobras de uma loja pra INDUSTRIA (duas pontas: baixa o "
+        "estoque da loja E credita o congelado da industria no mesmo ato — "
+        "na receita de retorno quando configurada, ex: Croissant Tradicional "
+        "vira 'Croissant Tradicional — Retorno', que o Croissant Almond "
+        "consome). Use quando o usuario disser 'voltaram X pra industria', "
+        "'mandei as sobras de volta', 'devolvi N croissants'. NAO e "
+        "desperdicio (nada vai pro lixo) nem venda. NAO executa direto — "
+        "retorna preview pra aprovar."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "loja_id": {"type": ["integer", "null"], "description": "ID da loja que devolve."},
+            "loja_nome": {"type": ["string", "null"], "description": "Nome da loja (fuzzy match). Use loja_id quando souber."},
+            "itens": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "nome": {"type": "string", "description": "Nome da receita/produto devolvido. Aceita aproximacoes (fuzzy match)."},
+                        "quantidade": {"type": "integer", "minimum": 1, "description": "Quantidade devolvida."},
+                    },
+                    "required": ["nome", "quantidade"],
+                },
+                "minItems": 1,
+            },
+        },
+        "required": ["itens"],
+    },
+}
+
 TOOL_REGISTRAR_DESPERDICIO = {
     "name": "registrar_desperdicio",
     "description": "Registra sobra do dia descartada na loja (vencido/estragado/queimado/caiu). Baixa do estoque. NAO executa — preview.",
