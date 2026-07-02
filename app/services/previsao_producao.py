@@ -666,10 +666,18 @@ def grade_loja_dia(receita_id, horizonte_dias=7, janela_semanas=6,
     #    proporcional entre as operacionais de hoje).
     soma_op_total = sum(soma_loja_total.get(l.id, 0) for l in lojas_op)
     residual_rate = _taxa_residual(qtd_dow, soma_total, dias_calendario_janela)
+    datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)
     estimado = defaultdict(lambda: defaultdict(float))  # loja_id -> data -> q
     for d in dias_futuros:
+        # Paridade com o balanco (Fase 2, 02/07/2026): mesmo gate de fornada
+        # especial e mesmo denominador-com-zeros — o drill-down mostrava
+        # numeros MAIORES que a linha do balanco que ele detalha (ficou sem os
+        # fixes de 30/06).
+        if not _fornada_no_dia(rec, d):
+            continue
         dow = d.weekday()
-        previsto_dia = _previsto_dow(qtd_dow.get(dow), hoje_d, residual_rate)
+        previsto_dia = _previsto_dow(qtd_dow.get(dow), hoje_d, residual_rate,
+                                     datas_possiveis=datas_possiveis_dow[dow])
         if previsto_dia <= 0:
             continue
         base_dow_op = sum(soma_loja_dow.get(l.id, {}).get(dow, 0)
