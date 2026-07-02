@@ -60,6 +60,19 @@ def salvar():
     # Checkbox "Loja pede" (fora dos arrays: checkbox desmarcado nao e enviado,
     # entao vai por VALOR = id da MP; ausente = desmarcado).
     sugerir_loja_ids = set(request.form.getlist('sugerir_loja_ids'))
+    # Caixa/piso do pedido de loja (arrays alinhados com as linhas).
+    lotes_pedido = request.form.getlist('lote_pedido[]')
+    minimos_pedido = request.form.getlist('minimo_pedido[]')
+
+    def _parse_int_opt(lista, idx):
+        if idx >= len(lista):
+            return None
+        raw = (lista[idx] or '').strip()
+        try:
+            v = int(raw)
+            return v if v > 0 else None
+        except ValueError:
+            return None
 
     def _parse_peso(idx, unidade):
         if unidade != 'un' or idx >= len(pesos_unidade):
