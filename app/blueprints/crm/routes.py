@@ -459,6 +459,7 @@ def bot_webhook():
                         historico, telefone_contato=telefone_contato)
                     if resultado.get('texto'):
                         chatwoot.enviar_mensagem(conv_id, resultado['texto'])
+                        texto_enviado = True
                     # Persiste o turno (msg atual + resposta) pro proximo contexto
                     chatbot.salvar_historico(conv_id, historico,
                                              resultado.get('texto') or '')
