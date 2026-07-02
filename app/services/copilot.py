@@ -4188,6 +4188,9 @@ def executar_registrar_desperdicio(params, user):
            'loja': loja.nome, 'item': nome_item_ok,
            'quantidade': qtd, 'baixado_do_estoque': baixa,
            'motivo': motivo,
+           # Sinaliza pro canal (Slack) avisar que o estoque NAO baixou —
+           # antes a confirmacao era identica com ou sem baixa (03/07/2026).
+           'reaproveitavel_sem_baixa': bool(reaproveita),
            'registro_tipo': 'desperdicio', 'registro_id': desp.id,
            'url': f'/pedidos/desperdicio?loja={loja.id}'}
     # Reaproveitavel COM receita de retorno -> o copilot emenda "quantos
