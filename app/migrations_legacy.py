@@ -1518,6 +1518,10 @@ def _migrate_sqlite(app):
     if cols_mp and 'sugerir_pedido_loja' not in cols_mp:
         cursor.execute("ALTER TABLE materia_prima ADD COLUMN sugerir_pedido_loja "
                        "BOOLEAN NOT NULL DEFAULT 0")
+    if cols_mp and 'arquivada_em' not in cols_mp:
+        cursor.execute("ALTER TABLE materia_prima ADD COLUMN arquivada_em TIMESTAMP")
+        cursor.execute("ALTER TABLE materia_prima ADD COLUMN arquivada_por_id INTEGER "
+                       "REFERENCES usuario(id)")
 
     # Migração pedido_item.quantidade_recebida + materia_prima_id
     cursor.execute("PRAGMA table_info(pedido_item)")
