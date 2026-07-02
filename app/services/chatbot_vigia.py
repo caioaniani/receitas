@@ -156,11 +156,15 @@ def _formatar_historico(historico):
 
 def _chamar_modelo(api_key, contexto):
     import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
+    # timeout: vigia roda em thread best-effort — nunca vale segurar 10min.
+    client = anthropic.Anthropic(api_key=api_key, timeout=45, max_retries=1)
     resp = client.messages.create(
         model=MODELO,
         max_tokens=MAX_TOKENS,
-        system=PROMPT_VIGIA,
+        # cache_control: o PROMPT_VIGIA e estatico e o vigia e o maior volume
+        # de IA do sistema — cache read custa 0.1x do input.
+        system=[{'type': 'text', 'text': PROMPT_VIGIA,
+                 'cache_control': {'type': 'ephemeral'}}],
         messages=[{'role': 'user', 'content': contexto}],
     )
     from app.services import uso_ia
