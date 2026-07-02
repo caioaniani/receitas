@@ -59,6 +59,7 @@ def salvar():
                 mp.peso_unidade = _parse_peso(i, unidades[i])
                 mp.fornecedor = fornecedores[i].strip() or None
                 mp.observacoes = observacoes_list[i].strip() or None
+                mp.sugerir_pedido_loja = str(mp_id) in sugerir_loja_ids
         else:
             mp = MateriaPrima(
                 nome=nome,
