@@ -4,6 +4,8 @@
    a sidebar e o cabeçalho mobile pra a janela ficar limpa. Ativado por
    ?embed=1 na URL. #}
 {% set embed = request.args.get('embed') %}
+{# Links das áreas: fonte única, compartilhada com a página da área (area.html). #}
+{% import "_area_nav.html" as areanav with context %}
 <script>
 (function(){var t=localStorage.getItem('theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();
 </script>
