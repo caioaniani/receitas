@@ -358,10 +358,11 @@ def processar_evento_mensagem(evento):
         return
 
     # Write tool: cria SlackAcaoPendente + preview Block Kit.
-    # Se tem imagens E a tool e anexar_foto_pedido, embute as imagens nos
-    # params pra o executor ter acesso quando clicar Confirmar.
+    # Se tem imagens E a tool usa foto (anexar_foto_pedido / retirada de
+    # sobras, cuja foto e OBRIGATORIA), embute as imagens nos params pra o
+    # executor ter acesso quando clicar Confirmar.
     params_acao = dict(resp.get('params') or {})
-    if tipo == 'anexar_foto_pedido' and imagens:
+    if tipo in ('anexar_foto_pedido', 'criar_retirada_sobras') and imagens:
         params_acao['imagens'] = imagens
         params_acao['_n_imagens'] = len(imagens)
 
