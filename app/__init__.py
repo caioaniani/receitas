@@ -1,7 +1,7 @@
 import logging
 import os
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, flash, jsonify, redirect, render_template, request
 from flask_wtf.csrf import CSRFError
 
 from app.extensions import csrf, db, limiter, login_manager, migrate
@@ -318,7 +318,6 @@ def create_app(config_class=None):
         não age (testes usam test_client em HTTP por design)."""
         if app.config.get('TESTING') or os.environ.get('PYTEST_RUNNING'):
             return None
-        from flask import redirect
         host = (request.host or '').split(':')[0].lower()
         if host in ('localhost', '127.0.0.1', '0.0.0.0'):
             return None
@@ -354,7 +353,7 @@ def create_app(config_class=None):
         sistema responde inteiro como sempre.
 
         Decisão do dono 18/06/2026: opao.online é só o site público."""
-        from flask import abort, redirect
+        from flask import abort
         host = (request.host or '').split(':')[0].lower()
 
         # Cutover: domínio antigo (VNDA) → 302 pro site novo. Chave liga/desliga
@@ -566,16 +565,28 @@ def create_app(config_class=None):
     # ── Error handlers ──
     @app.errorhandler(CSRFError)
     def csrf_error(e):
+        # Com WTF_CSRF_TIME_LIMIT=None (config.py) o token nao vence mais por
+        # tempo — isto so dispara no residual: sessao trocada (re-login em
+        # outra aba), cookie apagado, ou POST cross-site de verdade. O POST
+        # NUNCA executou; aqui so muda o formato da falha.
         # Autosaves via fetch (X-CSRFToken) mandam JSON: devolvemos JSON pra o
-        # front distinguir "token de seguranca expirou" (aba aberta alem do
-        # WTF_CSRF_TIME_LIMIT, 1h) de erro real — ele busca token novo em
-        # /auth/csrf-token e re-tenta em vez de falhar com alert criptico.
-        # Form HTML normal segue com a pagina 400 padrao (comportamento antigo).
+        # front distinguir "token de seguranca invalido" de erro real — ele
+        # busca token novo em /auth/csrf-token e re-tenta em vez de falhar
+        # com alert criptico.
         if request.is_json:
             return jsonify(ok=False, erro='csrf_expirada',
                            msg='Sessão de segurança expirada — recarregue a '
                                'página e tente de novo.'), 400
-        return e
+        # Form HTML: volta pra tela de origem com aviso + token novo, no lugar
+        # da pagina "400 Bad Request" crua (caso real 02/07/2026 no
+        # /telaindustriateste/enviar). So redireciona pra referrer da MESMA
+        # origem — referrer externo (ataque cross-site) cai na home.
+        from urllib.parse import urlparse
+        ref = request.referrer or ''
+        destino = ref if urlparse(ref).netloc == request.host else '/'
+        flash('Sessão de segurança expirada — a página foi recarregada com um '
+              'código novo. Tente de novo.', 'warning')
+        return redirect(destino)
 
     @app.errorhandler(403)
     def forbidden(e):
