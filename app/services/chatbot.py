@@ -894,9 +894,13 @@ def _followup_ja_enviado(conv_id, horas=48):
     from app.utils import agora
     try:
         corte = agora() - timedelta(hours=horas)
+        # So conta followup ENVIADO com sucesso (enviado_whatsapp=True): um
+        # envio que falhou nao pode suprimir o cutucao pra sempre — a janela
+        # CHATBOT_FOLLOWUP_MAX_MIN limita naturalmente as retentativas.
         return (VigiaVeredito.query
                 .filter(VigiaVeredito.conv_id == str(conv_id),
                         VigiaVeredito.criado_em >= corte,
+                        VigiaVeredito.enviado_whatsapp.is_(True),
                         VigiaVeredito.mensagem_cliente.like('[FOLLOWUP%'))
                 .first()) is not None
     except Exception:  # noqa: BLE001
