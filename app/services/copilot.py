@@ -875,6 +875,8 @@ TOOLS = [
     TOOL_CONSULTAR_FOCO, TOOL_CONSULTAR_TAREFAS, TOOL_MARCAR_TAREFA_FEITA,
     # Estoque de congelados / loja
     TOOL_BALANCO_CONGELADOS, TOOL_ENTRADA_LOTE_LOJA,
+    # Devolucao de sobras loja -> industria (duas pontas)
+    TOOL_DEVOLVER_INDUSTRIA,
     # Desperdicio (sobra do dia / vencido)
     TOOL_REGISTRAR_DESPERDICIO, TOOL_REGISTRAR_DESPERDICIO_LOTE,
     TOOL_CONSULTAR_DESPERDICIO,
