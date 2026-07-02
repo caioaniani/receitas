@@ -96,6 +96,16 @@
                        placeholder="ex: 250">
             </div>
             <div class="col">
+                <label class="form-label small text-muted" title="Lote SÓ da PRODUÇÃO (ex: focaccia = placa de 8 pedaços). A indústria produz em múltiplos disto, arredondando PRA CIMA (nunca falta; a sobra da placa fica no estoque e cobre o dia seguinte). O pedido das lojas continua livre. Vazio = herda o lote de pedido.">
+                    Lote de produção
+                </label>
+                <input type="number" name="lote_producao"
+                       value="{{ receita.lote_producao if receita.lote_producao else '' }}"
+                       step="1" min="0"
+                       class="form-control form-control-sm input-blue"
+                       placeholder="ex: 8">
+            </div>
+            <div class="col">
                 <label class="form-label small text-muted">Preco Atacado (R$)</label>
                 <input type="number" name="preco_venda" value="{{ '%.2f' % receita.preco_venda if receita.preco_venda else '' }}"
                        step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-venda">
