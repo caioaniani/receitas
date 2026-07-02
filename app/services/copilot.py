@@ -3533,8 +3533,22 @@ def executar_registrar_desperdicio_lote(params, user):
         db.session.flush()
 
         if reaproveita:
-            aplicados.append({'nome': nome_ok, 'tipo': tipo_item,
-                              'quantidade': qtd, 'reaproveitavel': True})
+            ap = {'nome': nome_ok, 'tipo': tipo_item,
+                  'quantidade': qtd, 'reaproveitavel': True}
+            # Item reaproveitavel COM receita de retorno configurada -> o
+            # copilot deve emendar: "quantos voltam pra industria?" e criar
+            # a retirada (criar_retirada_sobras). Ver prompt da tool.
+            if tipo_item == 'receita':
+                from app.models import Receita as _R
+                _rec = _R.query.get(item_id)
+                if _rec is not None and _rec.retorno_receita_id:
+                    ap['retirada_sugerida'] = {
+                        'item': nome_ok,
+                        'qtd_sobra': qtd,
+                        'destino': (_rec.retorno_receita.nome
+                                    if _rec.retorno_receita else nome_ok),
+                    }
+            aplicados.append(ap)
             continue
 
         if componentes_cesta:
