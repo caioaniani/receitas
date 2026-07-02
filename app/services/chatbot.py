@@ -199,6 +199,14 @@ def _output_vazou_prompt(texto):
     return any(marcador in texto for marcador in _OUTPUT_VAZOU_MARCADORES)
 MAX_ITERACOES = 6  # teto de idas-e-voltas de ferramenta por mensagem
 _FALLBACK = 'Já te passo para um atendente pra te ajudar melhor.'
+# Alias publico: o webhook (crm/routes) manda este texto ao cliente quando o
+# processamento estoura em excecao — antes a conversa ia pra fila humana EM
+# SILENCIO (02/07/2026).
+FALLBACK_TEXTO = _FALLBACK
+# Timeout da chamada a Anthropic. Sem isso o default do SDK (~10 min) segura
+# a thread E o lock da conversa quando a conexao trava — o cliente espera 10
+# minutos pelo fallback. 60s cobre Opus com tools folgado.
+API_TIMEOUT_S = 60
 
 # Janela de atendimento humano (BRT). O bot CONTINUA respondendo fora dela
 # (consulta produtos, manda link, etc) — mas quando vai FAZER HANDOFF fora
