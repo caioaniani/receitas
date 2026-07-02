@@ -488,46 +488,34 @@
         const qtd = parseInt(inp.value, 10) || 0;
         cell.classList.remove('salvo');
         cell.classList.add('salvando');
+        let resp = null, d = null;
         try {
-            const resp = await fetch(URL_CELULA, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF_TOKEN
-                },
-                body: JSON.stringify(Object.assign(
-                    { receita_id: rid, data: cell.dataset.data, qtd: qtd },
-                    PARAMS))
-            });
-            const d = await resp.json();
-            if (!resp.ok || !d.ok) throw new Error(d.erro || 'falha');
+            const r = await postJson(URL_CELULA, Object.assign(
+                { receita_id: rid, data: cell.dataset.data, qtd: qtd },
+                PARAMS));
+            resp = r.resp; d = r.d;
+        } catch (e) { /* rede fora mesmo apos o retry */ }
+        cell.classList.remove('salvando');
+        if (resp && resp.ok && d && d.ok) {
             setRow(rid, d.por_dia);
-            cell.classList.remove('salvando');
             cell.classList.add('salvo');
+            inp.style.borderColor = '';   // limpa vermelho de falha anterior
             const tr = cell.closest('tr');
             if (tr) marcarEditado(tr, rid);
-        } catch (e) {
-            cell.classList.remove('salvando');
-            inp.style.borderColor = '#dc3545';
-            alert('Não consegui salvar a edição: ' + e.message);
+            return;
         }
+        inp.style.borderColor = '#dc3545';
+        alert('Não consegui salvar a edição: ' + msgErro(resp, d));
     }
 
     async function resetar(rid) {
+        let resp = null, d = null;
         try {
-            const resp = await fetch(URL_RESET, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF_TOKEN
-                },
-                body: JSON.stringify({ receita_id: rid, datas: DATAS })
-            });
-            if (!resp.ok) throw new Error('falha');
-            location.reload();
-        } catch (e) {
-            alert('Não consegui voltar à sugestão: ' + e.message);
-        }
+            const r = await postJson(URL_RESET, { receita_id: rid, datas: DATAS });
+            resp = r.resp; d = r.d;
+        } catch (e) { /* rede fora mesmo apos o retry */ }
+        if (resp && resp.ok && d && d.ok) { location.reload(); return; }
+        alert('Não consegui voltar à sugestão: ' + msgErro(resp, d));
     }
 
     document.addEventListener('change', function (ev) {
