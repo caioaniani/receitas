@@ -219,22 +219,7 @@
 
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Fichas Técnicas</div>
-
-        <a href="{{ url_for('receitas.padeiro_lista') }}"
-           class="sidebar-link {% if request.path == '/receitas/padeiro' %}active{% endif %}">
-            Modo Padeiro
-        </a>
-        {% if current_user.is_authenticated and current_user.is_admin() %}
-        <a href="{{ url_for('auth.painel') }}"
-           class="sidebar-link {% if request.path == '/auth/painel' %}active{% endif %}"
-           title="Fichas técnicas atribuídas a funcionários">
-            Fichas atribuídas
-        </a>
-        <a href="{{ url_for('receitas.familias') }}"
-           class="sidebar-link {% if request.path == '/receitas/familias' %}active{% endif %}">
-            Famílias de receitas
-        </a>
-        {% endif %}
+        {{ areanav.fichas('sidebar') }}
 
         <!-- Busca de receitas -->
         <div class="px-3 pb-2">
