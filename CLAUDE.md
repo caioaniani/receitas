@@ -506,6 +506,16 @@ receita Croissant Tradicional) mapeado no `/pdv/mapeamentos` — a venda Seru
 baixa o tradicional da loja pelo motor unico. Croissant Tradicional marcado
 `reaproveitavel` = sobra registrada nao baixa duas vezes.
 
+**Custo do retorno = CUSTO CHEIO da origem (decisao do dono 02/07/2026)**:
+receita destino de retorno com ficha VAZIA herda o custo (e o peso unitario)
+da receita de origem em `custos.calcular_custos_receitas` — o Almond carrega
+o custo do croissant devolvido, nao R$ 0. Ficha preenchida no retorno =
+override explicito (nao herda). Mais de uma origem pro mesmo destino: vale o
+custo MAIOR. Consequencia ACEITA: o mesmo custo aparece 2x no agregado (na
+producao do tradicional e dentro do Almond) — o dono preferiu margem
+comparavel entre produtos a custo marginal. NAO reverter pra custo zero sem
+perguntar.
+
 **Bug corrigido no caminho**: o form da tela de estoque manda tipos
 `sobra`/`perda` que NAO estavam em `TIPOS_VALIDOS` da rota registrar — caiam
 no fallback `venda` (perda virava "venda manual" no historico). Agora sao
