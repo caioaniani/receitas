@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from flask import (
     Response,
+    abort,
     current_app,
     jsonify,
     redirect,
@@ -13,6 +14,7 @@ from flask import (
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
+from app import nav
 from app.blueprints.main import main_bp
 from app.decorators import admin_required, owner_required
 from app.extensions import db
@@ -62,8 +64,23 @@ def index():
     if current_user.is_padeiro():
         return redirect(url_for('padeiro.index'))
     if current_user.is_admin():
-        return render_template('main/home.html')
+        return render_template('main/home.html',
+                               areas=nav.areas_visiveis(current_user))
     return render_template('main/inicio.html')
+
+
+@main_bp.route('/area/<slug>')
+@login_required
+def area(slug):
+    """Página de uma ÁREA do hub: lista as funções daquela área (os MESMOS
+    links da sidebar, via macro compartilhado `_area_nav.html`). Guarda pela
+    mesma permissão do card em `home.html`."""
+    meta = nav.area_por_slug(slug)
+    if not meta:
+        abort(404)
+    if not meta['pode'](current_user):
+        abort(403)
+    return render_template('main/area.html', area=meta)
 
 
 @main_bp.route('/dashboard')
