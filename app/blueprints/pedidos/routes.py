@@ -572,36 +572,21 @@ def _executar_envio_pedido(pedido, user, ref_extra=None):
     if pedido.status != 'separado':
         return False, f'Pedido precisa estar separado (atual: {pedido.status}).'
 
-    ref_base = f'Pedido #{pedido.id} → {pedido.loja.nome}'
-    if ref_extra:
-        ref_base += f' ({ref_extra})'
-
-    for item in pedido.itens:
-        if item.materia_prima_id:
-            mp = MateriaPrima.query.get(item.materia_prima_id)
-            if mp:
-                mp.estoque_atual = max(0, (mp.estoque_atual or 0) - item.quantidade)
-                db.session.add(MovimentacaoEstoque(
-                    materia_prima_id=mp.id, tipo='saida',
-                    quantidade=item.quantidade,
-                    referencia=ref_base,
-                    usuario_id=getattr(user, 'id', None),
-                ))
-            continue
-        ep = EstoqueProducao.query.filter_by(
-            receita_id=item.receita_id, produto_id=item.produto_id
-        ).first()
-        if ep:
-            ep.quantidade = max(0, ep.quantidade - item.quantidade)
-            db.session.add(MovEstoqueProducao(
-                estoque_producao_id=ep.id, tipo='saida_pedido',
-                quantidade=item.quantidade,
-                referencia=ref_base,
-                usuario_id=getattr(user, 'id', None),
-            ))
+    # Motor único de baixa (03/07/2026): get-or-create da linha + movimento
+    # com a quantidade REAL + falta registrada como saida_pedido_sem_estoque.
+    # Item sem linha de estoque NÃO é mais pulado em silêncio.
+    from app.services.pedido_estoque import baixar_industria_pedido
+    faltas = baixar_industria_pedido(
+        pedido, getattr(user, 'id', None), ref_extra=ref_extra)
 
     pedido.status = 'em_transporte'
     db.session.commit()
+    if faltas:
+        quais = '; '.join(f"{f['item']}: pedido {f['pedido']:g}, "
+                          f"baixado {f['baixado']:g}" for f in faltas)
+        return True, ('Pedido em transporte. ATENÇÃO — saiu com estoque '
+                      f'insuficiente na indústria ({quais}). A falta ficou '
+                      'registrada no histórico (saida_pedido_sem_estoque).')
     return True, 'Pedido em transporte. Estoque da industria baixado.'
 
 
