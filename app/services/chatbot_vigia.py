@@ -298,7 +298,7 @@ def handoff_foi_preguicoso(tools_usadas):
     if tools_usadas is None:
         return False
     leitura = [t for t in tools_usadas
-               if t not in ('transferir_para_humano', 'encerrar_conversa')]
+               if t and t not in ('transferir_para_humano', 'encerrar_conversa')]
     return not leitura
 
 
