@@ -172,6 +172,23 @@ def _quer_humano(texto):
     return any(p.search(t) for p in _HUMANO_PATTERNS)
 
 
+# Motivos que autorizam transferir SEM consultar nada antes (as mesmas
+# excecoes fechadas do prompt, secao "ANTES DE TRANSFERIR"): pedido explicito
+# de humano, alergia, reclamacao grave, cartinha. Usado pelo enforcement
+# anti-handoff-preguicoso no loop do `responder`.
+_HANDOFF_EXCECAO = re.compile(
+    r'(?i)\b(alerg|reclama|humano|atendente|pessoa|cartinha|'
+    r'estorno|reembolso|cancelamento)\w*')
+
+
+def _handoff_excecao(inp):
+    """True se o input da tool transferir_para_humano traz um motivo de
+    excecao (nao exige consulta previa)."""
+    texto = ' '.join(str(inp.get(k) or '') for k in
+                     ('motivo', 'mensagem_cliente', 'resumo'))
+    return bool(_HANDOFF_EXCECAO.search(texto))
+
+
 # Frases-padrao do system prompt que NUNCA deveriam aparecer literais na
 # resposta do bot (a nao ser que ele esteja regurgitando o prompt).
 _OUTPUT_VAZOU_MARCADORES = (
@@ -765,24 +782,56 @@ def responder(historico, *, telefone_contato=None):
             return {'acao': 'responder', 'texto': texto,
                     'tools_usadas': tools_usadas}
 
-        # Handoff tem prioridade — encerra o loop na hora.
-        for b in tool_uses:
-            if b.name == 'transferir_para_humano':
-                inp = b.input or {}
-                texto_base = ((inp.get('mensagem_cliente') or '').strip()
-                              or 'Já te passo para um atendente.')
-                return _resp_handoff(texto_base,
-                                     inp.get('motivo') or 'handoff',
-                                     tools_usadas=tools_usadas)
-            if b.name == 'encerrar_conversa':
-                tools_usadas.append('encerrar_conversa')
-                return _resp_encerrar('encerramento por agradecimento',
-                                       tools_usadas=tools_usadas)
+        # Enforcement anti-handoff-preguicoso (02/07/2026): se o modelo tenta
+        # transferir como 1ª acao do turno (nenhuma consulta antes) sem motivo
+        # de excecao, recusamos UMA vez em codigo — o tool_result manda ele
+        # consultar primeiro. Antes a defesa era so prompt + alerta post-hoc
+        # do vigia (o cliente ja tinha ido pra fila). Excecoes honradas na
+        # hora: pedido explicito de humano, alergia, reclamacao, cartinha.
+        handoffs = [b for b in tool_uses if b.name == 'transferir_para_humano']
+        tem_encerrar = any(b.name == 'encerrar_conversa' for b in tool_uses)
+        bloquear_handoff = (
+            bool(handoffs) and not tem_encerrar
+            and not tools_usadas and not handoff_ja_bloqueado
+            and not any(_handoff_excecao(b.input or {}) for b in handoffs))
+        if bloquear_handoff:
+            handoff_ja_bloqueado = True
+            logger.info('chatbot: handoff preguicoso RECUSADO 1x (motivo=%r)',
+                        ((handoffs[0].input or {}).get('motivo') or '')[:100])
+
+        if not bloquear_handoff:
+            # Handoff tem prioridade — encerra o loop na hora.
+            for b in tool_uses:
+                if b.name == 'transferir_para_humano':
+                    inp = b.input or {}
+                    texto_base = ((inp.get('mensagem_cliente') or '').strip()
+                                  or 'Já te passo para um atendente.')
+                    return _resp_handoff(texto_base,
+                                         inp.get('motivo') or 'handoff',
+                                         tools_usadas=tools_usadas)
+                if b.name == 'encerrar_conversa':
+                    tools_usadas.append('encerrar_conversa')
+                    return _resp_encerrar('encerramento por agradecimento',
+                                           tools_usadas=tools_usadas)
 
         # Executa as ferramentas e devolve os resultados pro Claude.
         messages.append({'role': 'assistant', 'content': resp.content})
         resultados = []
         for b in tool_uses:
+            if b.name == 'transferir_para_humano':
+                # So chega aqui bloqueado: devolve a recusa como tool_result.
+                resultados.append({
+                    'type': 'tool_result',
+                    'tool_use_id': b.id,
+                    'content': json.dumps({
+                        'erro': ('Transferência recusada: você ainda não '
+                                 'consultou nenhuma ferramenta neste turno. '
+                                 'Tente resolver primeiro (consultar_produtos, '
+                                 'consultar_pedido, calcular_frete...). Se '
+                                 'após consultar ainda não conseguir, aí sim '
+                                 'transfira.')}, ensure_ascii=False),
+                })
+                continue
             out = _executar_tool(b.name, b.input or {},
                                   telefone_contato=telefone_contato)
             tools_usadas.append(b.name)
@@ -794,6 +843,13 @@ def responder(historico, *, telefone_contato=None):
                 'content': json.dumps(out, ensure_ascii=False),
             })
         messages.append({'role': 'user', 'content': resultados})
+        # Move o breakpoint de cache pro fim (e tira o da iteracao anterior —
+        # maximo de 4 breakpoints por request: system + tools + este).
+        if resultados:
+            if _cache_marcador_anterior is not None:
+                _cache_marcador_anterior.pop('cache_control', None)
+            resultados[-1]['cache_control'] = {'type': 'ephemeral'}
+            _cache_marcador_anterior = resultados[-1]
 
     # Estourou o teto de iteracoes — passa pro humano por seguranca.
     return _resp_handoff(_FALLBACK, 'limite de passos',
