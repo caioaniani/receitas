@@ -894,6 +894,7 @@ def vincular_loja(map_id):
         lm.confirmado_por = current_user.id
         db.session.commit()
         flash(f'"{lm.seru_company_name}" confirmada.', 'success')
+        _reprocesso_pos_mapeamento()   # os retidos "aguardando loja" entram já
         return redirect(url_for('pdv.mapeamentos'))
     flash(f'Acao desconhecida: "{acao}".', 'warning')
     return redirect(url_for('pdv.mapeamentos'))
