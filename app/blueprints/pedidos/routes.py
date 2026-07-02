@@ -34,7 +34,6 @@ from app.models import (
     MateriaPrima,
     MovEstoqueLoja,
     MovEstoqueProducao,
-    MovimentacaoEstoque,
     PedidoItem,
     PedidoLoja,
     PedidoQRCode,
@@ -1039,30 +1038,11 @@ def _aplicar_voltar_status(pedido, usuario_id):
             item.quantidade_recebida = None
         novo_status = 'em_transporte'
     elif status_atual == 'em_transporte':
-        # Estorna baixa do estoque producao/MP
-        for item in pedido.itens:
-            if item.materia_prima_id:
-                mp = MateriaPrima.query.get(item.materia_prima_id)
-                if mp:
-                    mp.estoque_atual = (mp.estoque_atual or 0) + item.quantidade
-                    db.session.add(MovimentacaoEstoque(
-                        materia_prima_id=mp.id, tipo='entrada',
-                        quantidade=item.quantidade,
-                        referencia=f'Estorno pedido #{pedido.id} (voltar status)',
-                        usuario_id=usuario_id,
-                    ))
-                continue
-            ep = EstoqueProducao.query.filter_by(
-                receita_id=item.receita_id, produto_id=item.produto_id
-            ).first()
-            if ep:
-                ep.quantidade = (ep.quantidade or 0) + item.quantidade
-                db.session.add(MovEstoqueProducao(
-                    estoque_producao_id=ep.id, tipo='ajuste',
-                    quantidade=item.quantidade,
-                    referencia=f'Estorno pedido #{pedido.id} (voltar status)',
-                    usuario_id=usuario_id,
-                ))
+        # Estorna a baixa producao/MP pelo que os MOVIMENTOS dizem que saiu
+        # (nao a quantidade nominal do item) — baixa que saturou em 0 nao
+        # vira estoque fantasma no estorno (fix 03/07/2026).
+        from app.services.pedido_estoque import estornar_industria_pedido
+        estornar_industria_pedido(pedido, usuario_id, motivo='voltar status')
         novo_status = 'separado'
     elif status_atual == 'separado':
         novo_status = 'confirmado'
