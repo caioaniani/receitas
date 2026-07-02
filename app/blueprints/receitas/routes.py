@@ -829,6 +829,16 @@ def salvar(id):
     ep = (request.form.get('estado_padrao') or '').strip().lower()
     receita.estado_padrao = ep if ep in ('assado', 'backup') else None
     receita.reaproveitavel = bool(request.form.get('reaproveitavel'))
+    # Receita de retorno (devolucao loja->industria): sobras devolvidas creditam
+    # esta receita. Valida existencia e evita auto-referencia; vazio = NULL.
+    try:
+        ret_id = int(request.form.get('retorno_receita_id') or 0)
+    except (TypeError, ValueError):
+        ret_id = 0
+    if ret_id and ret_id != receita.id and Receita.query.get(ret_id):
+        receita.retorno_receita_id = ret_id
+    else:
+        receita.retorno_receita_id = None
     # Insumo/etapa de producao (ex: Creme de Amendoas) — a loja nao pede direto,
     # entao some da sugestao de pedido semanal. Checkbox guarda o INVERSO pra o
     # default (desmarcado) manter a receita pedivel.
