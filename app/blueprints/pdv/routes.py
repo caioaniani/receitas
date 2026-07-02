@@ -750,6 +750,30 @@ def config_site_loja():
 @pdv_bp.route('/mapeamentos/produto/<int:map_id>', methods=['POST'])
 @login_required
 @admin_required
+def _reprocesso_pos_mapeamento():
+    """Mapeou produto / confirmou loja → tenta recuperar as baixas PASSADAS
+    (janela 7d) com os mapeamentos novos (03/07/2026). Antes, mapear só valia
+    dali pra frente — as vendas antigas ficavam sem baixa pra sempre.
+    Best-effort: falha da API Seru NÃO desfaz o vínculo (só avisa)."""
+    from app.services import seru_sync
+    try:
+        res = seru_sync.reprocessar_retroativo(dias=7, user=current_user)
+        baixados = (res.get('stats') or {}).get('itens_baixados', 0)
+        if res.get('liberados') or baixados:
+            msg = (f"Retroativo (7 dias): {res.get('liberados', 0)} pedido(s) "
+                   f"sem baixa reprocessado(s); {baixados} item(ns) baixado(s) "
+                   'agora.')
+            if res.get('parciais_na_janela'):
+                msg += (f" {res['parciais_na_janela']} pedido(s) parciais na "
+                        'janela não são recuperáveis automaticamente.')
+            flash(msg, 'info')
+    except Exception:
+        current_app.logger.exception('reprocesso retroativo pos-mapeamento')
+        flash('Vínculo salvo, mas não consegui reprocessar o retroativo agora '
+              '(API Seru fora?). Rode depois pelo botão na Saúde do PDV.',
+              'warning')
+
+
 def vincular_produto(map_id):
     """Vincula/ignora/limpa um produto Seru."""
     from app.utils import parse_fator_composicao
