@@ -45,6 +45,7 @@ LOCK_KEY_VIGIA_CHATWOOT = 7739  # advisory lock pro vigia de infra do Chatwoot
 LOCK_KEY_FOLLOWUP = 7740  # advisory lock pro follow-up do bot (cliente sumiu)
 LOCK_KEY_RESERVA_EXPIRA = 7742  # advisory lock pro libera-reservas-expiradas da loja online
 LOCK_KEY_PREVISAO_ACURACIA = 7743  # advisory lock pro snapshot+match de acuracia do forecast
+LOCK_KEY_BAIXAS_PRESAS = 7744  # advisory lock pro alerta de baixas presas (separado/retirada)
 # Locks LIBERADOS mas RESERVADOS (nao reusar — evita conflito se algum
 # dos jobs for reativado no futuro):
 # - 7730 era do `zapi-digest-anomalias` (job 23:00 BRT, removido 14/06/2026).
@@ -391,6 +392,17 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Baixas presas (03/07/2026): pedido parado em 'separado' com entrega
+    # vencida (QR de saida nao escaneado = industria NAO baixou) e retirada
+    # de sobra presa em transporte (loja baixou, industria nao creditada).
+    # WhatsApp do dono com dedup de 6h. Desligar: ALERTA_BAIXAS_PRESAS=0.
+    if os.environ.get('ALERTA_BAIXAS_PRESAS', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_alerta_baixas_presas(app),
+            'interval', minutes=30, id='alerta-baixas-presas',
+            max_instances=1, coalesce=True,
+        )
+
     # Heartbeat invertido — 08:00 BRT (manha): canal Slack recebe um
     # 'sistema OK'. Detecta dependencia circular: se Z-API cair, ninguem
     # avisa o dono via WhatsApp; mas se a msg sumir do Slack, o dono
@@ -610,6 +622,19 @@ def _run_vigia_chatwoot(app):
     with app.app_context():
         _com_lock(LOCK_KEY_VIGIA_CHATWOOT, chatwoot.vigiar_infra,
                   'vigia infra chatwoot')
+
+
+def _run_alerta_baixas_presas(app):
+    """Job: baixas presas (03/07/2026) — pedido 'separado' com entrega
+    vencida (QR de saida nao lido = industria nao baixou) e retirada de
+    sobra presa em transporte (loja baixou, industria nao creditada).
+    Alerta o dono no WhatsApp; dedup de 6h dentro do servico."""
+    from app.services import alertas_operacionais
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_BAIXAS_PRESAS,
+                  alertas_operacionais.rodar_e_alertar,
+                  'alerta baixas presas')
 
 
 def _run_backup_diario(app):
