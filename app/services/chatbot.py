@@ -1003,6 +1003,20 @@ def followup_conversas_paradas():
                             minutos, texto, ok)
         if ok:
             enviadas += 1
+            # Persiste o cutucao no store local — sem isso o proximo turno do
+            # bot nao sabia que cutucou. Mescla no ultimo assistant (a API
+            # nao aceita dois turnos assistant seguidos).
+            try:
+                base = carregar_historico(conv_id)
+                if base and base[-1].get('role') == 'assistant':
+                    base[-1]['content'] = (
+                        (base[-1].get('content') or '') + '\n\n' + texto).strip()
+                else:
+                    base.append({'role': 'assistant', 'content': texto})
+                salvar_historico(conv_id, base, '')
+            except Exception:  # noqa: BLE001
+                logger.exception('followup: persistir no store falhou conv=%s',
+                                 conv_id)
             logger.info('followup enviado conv=%s (%smin)', conv_id, minutos)
         else:
             logger.warning('followup falhou conv=%s: %s', conv_id, envio)
