@@ -291,7 +291,7 @@ def test_padeiro_mostra_retirada_aguardando(app, admin_user):
     db.session.commit()
     c = app.test_client()
     _login(c, admin_user.id)
-    r = c.get('/padeiro')
+    r = c.get('/padeiro/')
     assert r.status_code == 200
     html = r.data.decode()
     assert 'RECEBIMENTO' in html
@@ -309,7 +309,7 @@ def test_padeiro_retirada_em_transporte_tem_botao_qr(app, admin_user):
     db.session.commit()
     c = app.test_client()
     _login(c, admin_user.id)
-    r = c.get('/padeiro')
+    r = c.get('/padeiro/')
     assert 'CHEGOU — QR DE RECEBIMENTO' in r.data.decode()
 
 
