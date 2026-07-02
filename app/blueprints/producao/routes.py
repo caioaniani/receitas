@@ -340,12 +340,21 @@ def pedidos_semana_estoque():
     janela = max(1, min(janela, 26))
 
     inicio = _inicio_offset()
+    # Estoque de seguranca opcional (% do consumo do dia que sobra no fim do
+    # dia como colchao). 0 = repor exatamente a media (comportamento v1).
+    try:
+        seguranca = int(request.args.get('seguranca', 0))
+    except ValueError:
+        seguranca = 0
+    seguranca = max(0, min(seguranca, 100))
     grade = sugerir_pedidos_por_venda(horizonte_dias=horizonte,
                                       janela_semanas=janela,
-                                      inicio_offset_dias=inicio)
+                                      inicio_offset_dias=inicio,
+                                      seguranca_pct=seguranca)
     return render_template('producao/pedidos_semana_estoque.html',
                            grade=grade, horizonte=horizonte,
-                           janela=janela, inicio=inicio)
+                           janela=janela, inicio=inicio,
+                           seguranca=seguranca)
 
 
 @producao_bp.route('/pedidos-semana/gerar', methods=['POST'])
