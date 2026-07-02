@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.producao import producao_bp
@@ -442,6 +442,18 @@ def pedidos_semana_gerar():
     if res['pulados_nao_editavel']:
         partes_msg.append(f"{res['pulados_nao_editavel']} dia(s) já em "
                           "separação/entrega — não editados")
+
+    # Auto-save da tela da média (ajax=1): mesma lógica, resposta JSON no
+    # lugar de flash+redirect — a tela salva a coluna enquanto o usuário
+    # digita, sem recarregar a página.
+    if request.form.get('ajax') == '1':
+        mudou = bool(res['criados'] or res['atualizados'])
+        if partes_msg:
+            msg = '. '.join(partes_msg) + '.'
+        else:
+            msg = 'Nada a atualizar (coluna igual ao pedido).'
+        return jsonify(ok=True, mudou=mudou, msg=msg, res=res)
+
     if partes_msg:
         flash('. '.join(partes_msg) + '. Revise e confirme em Pedidos.',
               'success' if (res['criados'] or res['atualizados']) else 'warning')
