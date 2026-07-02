@@ -194,31 +194,6 @@
         {% endif %}
     </div>
 
-    {# ── PRODUZIDO ONTEM ──────────────────────────────────────────────────── #}
-    <div class="aud-sec">
-        <div class="aud-head">
-            <h5 class="mb-0" style="color:#198754;">✓ Produzido ontem{% if produzido_ontem and produzido_ontem.dia %}
-                <span class="aud-tot">({{ produzido_ontem.dia.strftime('%d/%m') }})</span>{% endif %}</h5>
-            <span class="aud-tot">{{ produzido_ontem.total if produzido_ontem else 0 }}
-                un confirmada(s) pelo padeiro</span>
-        </div>
-        {% if produzido_ontem and produzido_ontem.itens %}
-        <table class="aud-table">
-            <thead><tr><th>Receita</th><th class="num">Produzido</th></tr></thead>
-            <tbody>
-            {% for it in produzido_ontem.itens %}
-            <tr class="aud-produzido">
-                <td>{{ it.receita_nome }}</td>
-                <td class="num falta-agendado">{{ it.qtd }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="aud-empty">Nada foi confirmado como produzido ontem.</div>
-        {% endif %}
-    </div>
-
     {# ── DISPENSADAS (rastro) ─────────────────────────────────────────────── #}
     {% if dados.dispensadas %}
     <div class="aud-sec aud-sec-dispensada">
