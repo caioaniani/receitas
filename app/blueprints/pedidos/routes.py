@@ -2600,12 +2600,28 @@ def estoque_loja_registrar():
                 'tipo': 'receita' if el.receita_id else 'produto',
                 'id': el.receita_id or el.produto_id, 'qtd': qtd})
             continue
-        el.quantidade = max(0, el.quantidade - qtd)
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id, tipo=tipo, quantidade=qtd,
-            referencia=f'{tipo.capitalize()} registrada',
-            usuario_id=current_user.id,
-        ))
+        # Integridade do ledger (03/07/2026): o movimento grava a quantidade
+        # REALMENTE baixada; o que passou do saldo vira mov *_sem_estoque
+        # (antes gravava a qtd cheia com o saldo travado em 0 — o histórico
+        # e o Movimento do dia ficavam inflados).
+        saldo = el.quantidade or 0
+        baixa = min(qtd, saldo)
+        falta = qtd - baixa
+        el.quantidade = saldo - baixa
+        if baixa > 0:
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo=tipo, quantidade=baixa,
+                referencia=f'{tipo.capitalize()} registrada',
+                usuario_id=current_user.id,
+            ))
+        if falta > 0:
+            tipo_falta = ('venda_loja_sem_estoque' if tipo == 'venda'
+                          else f'{tipo}_sem_estoque')
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo=tipo_falta, quantidade=falta,
+                referencia=f'{tipo.capitalize()} registrada (sem saldo)',
+                usuario_id=current_user.id,
+            ))
 
     if devolver:
         from app.services.devolucao import devolver_industria
