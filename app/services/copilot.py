@@ -4096,32 +4096,19 @@ def executar_registrar_desperdicio(params, user):
     if qtd <= 0:
         return {'ok': False, 'erro': 'Quantidade deve ser > 0.'}
 
-    from app.constants import (
-        DESPERDICIO_MOTIVOS,
-        DESPERDICIO_MOTIVOS_REAPROVEITAVEIS,
+    # Regras compartilhadas com a tela /pedidos/desperdicio (03/07/2026):
+    # motivo canônico + decisão de reaproveitável na MESMA fonte, pra os dois
+    # canais nunca divergirem de novo.
+    from app.services.desperdicio_core import (
+        normalizar_motivo,
+        reaproveita_sem_baixa,
     )
-    motivo = (params.get('motivo') or 'validade').strip().lower()
-    # Compat retroativa: 'vencido' (motivo antigo) eh sinonimo de 'validade'.
-    # 'estragado' (antigo) → 'estragou'. 'queimado' → 'queimou'.
-    motivo = {'vencido': 'validade', 'estragado': 'estragou',
-              'queimado': 'queimou'}.get(motivo, motivo)
-    if motivo not in DESPERDICIO_MOTIVOS:
-        motivo = 'validade'
+    motivo = normalizar_motivo(params.get('motivo'))
     observacao = (params.get('observacao') or '').strip() or None
 
-    # REAPROVEITAVEL: se motivo='validade' OU 'nao_vendeu' E item marcado
-    # como reaproveitavel, registra Desperdicio (pra historico) mas NAO
-    # baixa estoque — o item vai virar outra coisa.
-    reaproveita = False
-    if motivo in DESPERDICIO_MOTIVOS_REAPROVEITAVEIS:
-        if tipo_item == 'receita':
-            from app.models import Receita
-            obj = Receita.query.get(item_id)
-            reaproveita = bool(obj and obj.reaproveitavel)
-        elif tipo_item == 'produto':
-            from app.models import Produto
-            obj = Produto.query.get(item_id)
-            reaproveita = bool(obj and obj.reaproveitavel)
+    # REAPROVEITAVEL: registra Desperdicio (pra historico) mas NAO baixa
+    # estoque — o item vai virar outra coisa (croissant→almond).
+    reaproveita = reaproveita_sem_baixa(tipo_item, item_id, motivo)
 
     # CESTA: se for produto-cesta, baixa componentes
     componentes_cesta = []
