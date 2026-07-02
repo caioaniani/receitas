@@ -124,8 +124,10 @@ def excluir(id):
               'duplicado, corrija/renomeie a MP em vez de excluir.', 'danger')
         return redirect(url_for('materias_primas.banco'))
     nome = mp.nome
+    # Alerta de estoque mínimo é CONFIG (não histórico) — vai junto da MP.
+    AlertaEstoque.query.filter_by(materia_prima_id=mp.id).delete()
     # Belt-and-braces: alguma FK fora da lista (financeiro, débitos de fração,
-    # alertas...) ainda pode segurar — aborta limpo em vez de 500.
+    # histórico de preço...) ainda pode segurar — aborta limpo em vez de 500.
     try:
         db.session.delete(mp)
         db.session.commit()
