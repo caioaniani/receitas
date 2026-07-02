@@ -464,12 +464,12 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         demanda = max(comp, prev)
         produzir = max(0, demanda - est_efetivo)
         lim = caps_retorno.get(rid)
+        lim_aplicado = None
         if lim is not None and produzir > lim['cap']:
             produzir = lim['cap']
+            lim_aplicado = lim
         itens.append({
-            'limitado_por_retorno': (
-                lim if lim is not None and produzir == lim['cap']
-                and max(0, demanda - est_efetivo) >= lim['cap'] else None),
+            'limitado_por_retorno': lim_aplicado,
             'receita_id': rid,
             'nome': rec.nome,
             'em_estoque': est,
