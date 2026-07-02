@@ -782,3 +782,37 @@ dispara o mesmo `copilot_svc.interpretar` — single-workspace.
 
 Secoes (`sidebar-section-title`) sao **colapsaveis** — JS adiciona chevron + persiste
 estado em `localStorage` por nome. Implementacao em `app/static/js/app.js`.
+
+### Hub de areas + navegacao de fonte unica (02/07/2026)
+
+A tela inicial do admin (`main/home.html`, so `is_admin()`) mostra CARDS por
+area; clicar abre `/area/<slug>` (`main.area`), uma pagina que LISTA as funcoes
+daquela area. Antes cada card era link direto pra 1 rota.
+
+**Fonte unica dos links (NAO duplicar)**: os links de cada area vivem SO em
+`app/templates/_area_nav.html` (um macro por area: `lojas`, `producao`,
+`catalogo`, `vendas`, `financeiro`, `rh`, `relatorios`, `administracao`,
+`fichas`, + dispatcher `render(slug, variant)`). Dois consumidores:
+- **sidebar** (`base.html`): cada secao chama `{{ areanav.<area>('sidebar') }}`
+  (classe `sidebar-link` + estado ativo por `request.path`).
+- **pagina da area** (`main/area.html`): `{{ areanav.render(slug, 'area') }}`
+  (classe `area-link`).
+Ao adicionar/remover uma funcao, mexa SO no macro — os dois lugares atualizam
+juntos. Guardas de permissao por link sao os mesmos de antes.
+
+**Metadados da area** (titulo/icone/cor/descricao/permissao) ficam em
+`app/nav.py::AREAS` (fonte unica dos cards + do guarda da rota `/area/<slug>`).
+`areas_visiveis(user)` filtra por permissao; `area_por_slug(slug)` resolve a
+pagina. A rota espelha o guarda do card (403 sem permissao, 404 slug invalido).
+
+**Import com contexto**: quem usa o macro faz
+`{% import "_area_nav.html" as areanav with context %}` (precisa de
+`current_user`). **Armadilha**: a secao **Fichas** renderiza pra usuario
+ANONIMO (fica fora do bloco `is_authenticated` na sidebar — pagina 404 publica
+da loja). Por isso o macro `fichas` guarda `current_user.is_authenticated and
+current_user.is_admin()` (AnonymousUser NAO tem `.is_admin()`). Ha teste
+travando o render anonimo; as demais areas so rodam autenticadas.
+
+**Garantia de zero regressao**: a sidebar nova (macro) foi comparada link-a-link
+com a antiga em 47 paths (3619 links) — byte-identico. Testes em
+`tests/test_area_hub.py`.
