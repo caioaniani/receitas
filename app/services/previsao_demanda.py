@@ -1,9 +1,11 @@
 """Previsao de demanda diaria por item × loja.
 
 Versao MVP: media das ultimas 4 ocorrencias do mesmo dia-da-semana,
-baseado em MovEstoqueLoja com tipos de venda de loja (Seru + VNDA).
-Sem ARIMA/Prophet — pra 30 SKUs, media por dow ja captura sazonalidade
-semanal e e auditavel (admin entende como o numero saiu).
+baseado em MovEstoqueLoja com os tipos de DEMANDA unificados
+(VENDA_TIPOS_DEMANDA_LOJA — todos os canais + venda manual; estornos
+subtraem com o sinal de gravacao de cada canal). Sem ARIMA/Prophet — pra
+30 SKUs, media por dow ja captura sazonalidade semanal e e auditavel
+(admin entende como o numero saiu).
 
 Roadmap se precisar evoluir:
 - Suavizacao exponencial pra dar mais peso aos ultimos
