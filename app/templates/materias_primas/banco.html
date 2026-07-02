@@ -64,7 +64,12 @@
                     <td>
                         <input type="text" name="observacoes[]" value="{{ mp.observacoes or '' }}" class="form-control form-control-sm input-blue">
                     </td>
-                    <td class="text-center">
+                    <td class="text-center text-nowrap">
+                        <a href="{{ url_for('materias_primas.transferir', id=mp.id) }}"
+                           class="btn btn-sm btn-outline-warning"
+                           title="Esta MP na verdade é uma RECEITA (produzida)? Transfira os vínculos pra receita — aí ela libera pra excluir.">
+                            <i class="bi bi-arrow-right-circle"></i>
+                        </a>
                         <button type="button" class="btn btn-sm btn-outline-danger btn-del-mp" data-id="{{ mp.id }}" title="Excluir">
                             <i class="bi bi-trash"></i>
                         </button>
