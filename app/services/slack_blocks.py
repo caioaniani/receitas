@@ -155,11 +155,20 @@ def _preview_editar_pedido(p, token):
 
 def _preview_receber_mp(p, token):
     mp_nome = (p.get('mp_resolvida') or {}).get('nome') or p.get('mp_nome') or '?'
+    unidade = (p.get('mp_resolvida') or {}).get('unidade') or ''
+    # NF em kg convertida pra unidade do cadastro: mostra a conta inteira
+    # ("8 kg \u2248 444 un (18 g/un)") pra quem confirma VER a conversao.
+    if p.get('conversao_erro'):
+        qtd_txt = f":warning: {p['conversao_erro']}"
+    elif p.get('conversao_rotulo'):
+        qtd_txt = p['conversao_rotulo']
+    else:
+        qtd_txt = f"{p.get('quantidade')} {unidade}"
     blocks = [
         _header('Receber materia-prima'),
         _fields([
             ('MP', mp_nome),
-            ('Quantidade', f"{p.get('quantidade')} {(p.get('mp_resolvida') or {}).get('unidade') or ''}"),
+            ('Quantidade', qtd_txt),
             ('Preco total', f"R$ {p.get('preco_total')}" if p.get('preco_total') is not None else None),
             ('Fornecedor', p.get('fornecedor') or '—'),
             ('Referencia', p.get('referencia') or '—'),

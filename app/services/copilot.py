@@ -171,12 +171,13 @@ TOOL_RECEBER_MP = {
         "type": "object",
         "properties": {
             "mp_nome": {"type": "string", "description": "Nome EXATO da MP do catalogo."},
-            "quantidade": {"type": "number", "minimum": 0.01},
+            "quantidade": {"type": ["number", "null"], "minimum": 0.01, "description": "Quantidade NA UNIDADE DO CADASTRO da MP (un/g/ml). NAO passe kg aqui."},
+            "quantidade_kg": {"type": ["number", "null"], "minimum": 0.001, "description": "Peso TOTAL em kg, quando a NF vem em kg/sacos. MP em 'un' com peso por unidade: converte pra unidades (ex: 8 kg de bolinhas de 18g = 444 un). MP em g/ml: converte x1000. Use quantidade OU quantidade_kg, nunca os dois."},
             "preco_total": {"type": ["number", "null"], "description": "Valor total pago (R$). Calcula preco_unitario automaticamente."},
             "preco_unitario": {"type": ["number", "null"], "description": "Preco por unidade. Alternativa ao preco_total."},
             "referencia": {"type": ["string", "null"], "description": "Ex: 'NF 12345 - Fornecedor X'."},
         },
-        "required": ["mp_nome", "quantidade"],
+        "required": ["mp_nome"],
     },
 }
 
@@ -1159,7 +1160,7 @@ TOOLS DISPONIVEIS — ACOES:
 
   IMPORTANTE: nas respostas em texto pro usuario, use APENAS 'pedido feito' / 'enviado' / 'recebido'. NUNCA fale 'separado', 'em_transporte', 'confirmado'. Quando geramos QR de saida (apos novo_status='separar'), diga 'pedido enviado — motorista escaneia o QR abaixo'. Se usuario nao mencionar pedido_id, consulte com consultar_pedido por loja + data primeiro.
 - anexar_foto_pedido: anexa foto(s) de comprovante a um pedido (ex: foto da entrega, nota fiscal). Usa as imagens da mensagem do usuario no Slack. Se o usuario mandar foto e dizer "recebi pedido X", chame **as duas** tools em sequencia OU pergunte qual fazer primeiro.
-- receber_mp: registrar entrada de materia-prima (compra/fornecedor)
+- receber_mp: registrar entrada de materia-prima (compra/fornecedor). Se a NF/nota vier em KG ou SACOS e a MP for cadastrada em 'un' (com peso por unidade — ex: pao de queijo, bolinha de 18g), passe `quantidade_kg` com o peso total (saco de 2kg x4 = quantidade_kg 8) e o sistema converte pra unidades; o peso do saco costuma estar nas observacoes da MP. So use `quantidade` quando o numero ja esta na unidade do cadastro.
 - ajuste_estoque: quebra, perda, contagem fisica de MP
 - criar_fornecedor: cadastrar novo fornecedor
 - marcar_ponto: registrar ponto de funcionario (entrada, saida, almoco)
@@ -1484,7 +1485,14 @@ def _enriquecer_params(tool_name, tool_input, user):
     if tool_name in ('receber_mp', 'ajuste_estoque'):
         nome = (tool_input.get('mp_nome') or '').strip()
         matches = _resolver_mp(nome) if nome else []
-        return {**tool_input, 'mp_matches': matches, 'mp_resolvida': matches[0] if matches else None}
+        out = {**tool_input, 'mp_matches': matches,
+               'mp_resolvida': matches[0] if matches else None}
+        if tool_name == 'receber_mp':
+            qtd_final, rotulo, erro = _quantidade_recebimento_mp(out)
+            out['quantidade_convertida'] = qtd_final
+            out['conversao_rotulo'] = rotulo
+            out['conversao_erro'] = erro
+        return out
     if tool_name == 'balanco_congelados':
         return _enriquecer_balanco_congelados(tool_input)
     if tool_name == 'entrada_lote_loja':
@@ -1985,16 +1993,61 @@ def _resolver_item_pedido(nome):
     return out[:5]
 
 
+def _quantidade_recebimento_mp(params):
+    """Quantidade FINAL (na unidade do CADASTRO da MP) de um receber_mp.
+
+    Aceita `quantidade` (ja na unidade do cadastro) OU `quantidade_kg` (NF em
+    kg): MP em 'un' converte via peso_unidade (8 kg de bolinha de 18g = 444
+    un); MP em g/ml converte x1000. Retorna (quantidade, rotulo, erro) — o
+    rotulo ("8 kg ~ 444 un de 18g") vai pro preview e pra referencia do
+    movimento (auditoria). Ambiguidade (os dois campos) e ERRO: dinheiro e
+    estoque nao adivinham."""
+    resolvida = params.get('mp_resolvida') or {}
+    try:
+        qtd = float(params.get('quantidade') or 0)
+    except (TypeError, ValueError):
+        qtd = 0
+    try:
+        kg = float(params.get('quantidade_kg') or 0)
+    except (TypeError, ValueError):
+        kg = 0
+    if qtd > 0 and kg > 0:
+        return None, None, ('Informe quantidade OU quantidade_kg, nao os '
+                            'dois — nao sei qual vale.')
+    if qtd > 0:
+        return qtd, None, None
+    if kg <= 0:
+        return None, None, 'Quantidade invalida'
+    unidade = (resolvida.get('unidade') or '').lower()
+    if unidade in ('g', 'ml'):
+        return kg * 1000.0, f'{kg:g} kg = {kg * 1000.0:g} {unidade}', None
+    if unidade == 'un':
+        peso = float(resolvida.get('peso_unidade') or 0)
+        if peso <= 0:
+            return None, None, (f'"{resolvida.get("nome", "MP")}" e cadastrada '
+                                'em un mas SEM peso por unidade — cadastre o '
+                                'peso ou informe a quantidade em unidades.')
+        unidades = int(round(kg * 1000.0 / peso))
+        return float(unidades), f'{kg:g} kg \u2248 {unidades} un ({peso:g} g/un)', None
+    return None, None, (f'Nao sei converter kg pra unidade '
+                        f'"{unidade or "?"}" — informe a quantidade na '
+                        'unidade do cadastro.')
+
+
 def _resolver_mp(nome):
     from sqlalchemy import func
     matches = []
     m = MateriaPrima.query.filter(func.lower(MateriaPrima.nome) == nome.lower()).first()
     if m:
-        matches.append({'id': m.id, 'nome': m.nome, 'unidade': m.unidade, 'match': 'exato'})
+        matches.append({'id': m.id, 'nome': m.nome, 'unidade': m.unidade,
+                        'peso_unidade': m.peso_unidade,
+                        'observacoes': m.observacoes, 'match': 'exato'})
     if matches:
         return matches
     for m in MateriaPrima.query.filter(MateriaPrima.nome.ilike(f'%{nome}%')).limit(10).all():
-        matches.append({'id': m.id, 'nome': m.nome, 'unidade': m.unidade, 'match': 'fuzzy'})
+        matches.append({'id': m.id, 'nome': m.nome, 'unidade': m.unidade,
+                        'peso_unidade': m.peso_unidade,
+                        'observacoes': m.observacoes, 'match': 'fuzzy'})
     if matches:
         matches.sort(key=lambda x: _score_proximidade(nome, x['nome']))
         return matches[:5]
@@ -2006,7 +2059,8 @@ def _resolver_mp(nome):
     for idx, score, _ in _rapidfuzz_top(nome, nomes, score_cutoff=60, limit=5):
         m = mps[idx]
         matches.append({'id': m.id, 'nome': m.nome, 'unidade': m.unidade,
-                         'match': 'aproximado'})
+                        'peso_unidade': m.peso_unidade,
+                        'observacoes': m.observacoes, 'match': 'aproximado'})
     return matches
 
 
@@ -2494,21 +2548,36 @@ def executar_receber_mp(params, user):
     resolvida = params.get('mp_resolvida')
     if not resolvida or not resolvida.get('id'):
         return {'ok': False, 'erro': f'MP nao identificada: {params.get("mp_nome")}'}
-    quantidade = float(params.get('quantidade') or 0)
+    # Converte quantidade_kg -> unidade do cadastro (recalcula aqui, nao confia
+    # no param enriquecido — dinheiro/estoque).
+    quantidade, rotulo, erro = _quantidade_recebimento_mp(params)
+    if erro:
+        return {'ok': False, 'erro': erro}
+    quantidade = float(quantidade or 0)
     if quantidade <= 0:
         return {'ok': False, 'erro': 'Quantidade invalida'}
     preco_unitario = params.get('preco_unitario')
     preco_total = params.get('preco_total')
     if preco_total and not preco_unitario:
+        # Por unidade JA CONVERTIDA (ex: R$ 51,80 do saco / 111 un = por bolinha).
         preco_unitario = float(preco_total) / quantidade
+    referencia = (params.get('referencia') or '').strip() or None
+    if rotulo:
+        referencia = f'{referencia} [{rotulo}]' if referencia else f'[{rotulo}]'
     mov = MovimentacaoEstoque(
         materia_prima_id=resolvida['id'], tipo='entrada',
         quantidade=quantidade,
         preco_unitario=float(preco_unitario) if preco_unitario else None,
-        referencia=(params.get('referencia') or '').strip() or None,
+        referencia=referencia,
         usuario_id=user.id,
     )
     db.session.add(mov)
+    # Mantem o denormalizado em sincronia com o movimento — a saida de pedido
+    # pra loja baixa mp.estoque_atual; sem isto a entrada via bot nao aparecia
+    # no estoque operacional (as rotas manuais sempre atualizaram os dois).
+    mp_obj = MateriaPrima.query.get(resolvida['id'])
+    if mp_obj:
+        mp_obj.estoque_atual = (mp_obj.estoque_atual or 0) + quantidade
     db.session.commit()
     return {'ok': True, 'mov_id': mov.id, 'registro_tipo': 'movimentacao_estoque', 'registro_id': mov.id}
 
@@ -2530,6 +2599,13 @@ def executar_ajuste_estoque(params, user):
         usuario_id=user.id,
     )
     db.session.add(mov)
+    # Sincroniza o denormalizado (mesma razao do executar_receber_mp).
+    mp_obj = MateriaPrima.query.get(resolvida['id'])
+    if mp_obj:
+        if tipo == 'entrada':
+            mp_obj.estoque_atual = (mp_obj.estoque_atual or 0) + quantidade
+        else:
+            mp_obj.estoque_atual = max(0, (mp_obj.estoque_atual or 0) - quantidade)
     db.session.commit()
     return {'ok': True, 'mov_id': mov.id, 'registro_tipo': 'movimentacao_estoque', 'registro_id': mov.id}
 
