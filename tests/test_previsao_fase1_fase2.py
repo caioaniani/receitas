@@ -338,3 +338,62 @@ def test_wip_parcialmente_produzido_abate_so_o_que_falta(app):
                             usar_cache=False, inicio_offset_dias=1)
     it = next(i for i in bal['itens'] if i['receita_id'] == r.id)
     assert it['em_producao'] == 10           # só o que ainda falta produzir
+
+
+def test_mp_caixa_e_minimo_no_pedido(app):
+    """MP pedida pela loja com lote/minimo cadastrados: a sugestão fecha na
+    caixa e respeita o piso (antes MP saía picada, un a un)."""
+    from app.models import MateriaPrima
+
+    loja = _loja()
+    mp = MateriaPrima(nome='Pão de Queijo Congelado', unidade='un',
+                      custo_por_kg=0.5, sugerir_pedido_loja=True,
+                      lote_pedido=50, minimo_pedido=100)
+    db.session.add(mp)
+    db.session.commit()
+    el = EstoqueLoja(loja_id=loja.id, materia_prima_id=mp.id, quantidade=0)
+    db.session.add(el)
+    db.session.commit()
+    alvo = _prox_dow(0)
+    for sem in range(1, 4):
+        _mov(el, alvo - timedelta(days=7 * sem), 30, 'venda_seru')
+
+    grade = sugerir_pedidos_por_venda(
+        horizonte_dias=7, janela_semanas=6,
+        inicio_offset_dias=(alvo - hoje()).days)
+    loja_out = next(e for e in grade['lojas'] if e['loja_id'] == loja.id)
+    p = next(x for x in loja_out['produtos']
+             if x['materia_prima_id'] == mp.id)
+    assert p['lote'] == 50
+    assert p['minimo'] == 100
+    # déficit 30 -> caixa 50 -> piso 100 (múltiplo da caixa)
+    assert p['por_dia'][0] == 100
+
+
+def test_banco_mp_salva_lote_e_minimo(app, admin_user):
+    """O form do banco de MPs persiste lote_pedido/minimo_pedido."""
+    from app.models import MateriaPrima
+
+    mp = MateriaPrima(nome='Cone', unidade='un', custo_por_kg=1.0)
+    db.session.add(mp)
+    db.session.commit()
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'})
+    resp = client.post('/materias-primas/salvar', data={
+        'mp_id[]': [str(mp.id)],
+        'nome[]': ['Cone'],
+        'unidade[]': ['un'],
+        'custo_por_kg[]': ['1.00'],
+        'peso_unidade[]': [''],
+        'fornecedor[]': [''],
+        'observacoes[]': [''],
+        'lote_pedido[]': ['24'],
+        'minimo_pedido[]': ['48'],
+        'sugerir_loja_ids': [str(mp.id)],
+    })
+    assert resp.status_code in (200, 302)
+    db.session.refresh(mp)
+    assert mp.lote_pedido == 24
+    assert mp.minimo_pedido == 48
+    assert mp.sugerir_pedido_loja is True

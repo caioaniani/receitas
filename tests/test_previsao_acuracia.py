@@ -154,3 +154,105 @@ def test_painel_renderiza_e_rodar_cria_snapshot(app, admin_user):
     resp2 = client.post('/producao/previsao-acuracia/rodar')
     assert resp2.status_code == 302
     assert PrevisaoSnapshot.query.count() >= 1
+
+
+# ── Fase 0.2 (02/07/2026): motores vivos, lead, re-casamento, segmentos ───
+
+def test_snapshot_grava_motores_vivos_com_lead(app):
+    """registrar_snapshot congela os DOIS motores vivos (media_pedido e
+    venda_estoque) com motor e lead_dias preenchidos — a acuracia parou de
+    medir o motor aposentado."""
+    loja = _loja()
+    r = _receita()
+    hoje_d = hoje()
+    for semanas in (1, 2, 3):
+        _entrega(loja, r, hoje_d - timedelta(days=7 * semanas), 'recebido', 10)
+
+    novos = svc.registrar_snapshot(horizonte_dias=7, janela_semanas=6)
+    assert novos >= 1
+    motores = {m for (m,) in db.session.query(PrevisaoSnapshot.motor)
+               .distinct().all()}
+    assert 'media_pedido' in motores
+    assert 'pedido_semana' not in motores      # legado nao e mais gravado
+    snap = PrevisaoSnapshot.query.filter_by(motor='media_pedido').first()
+    assert snap.lead_dias is not None
+    assert snap.lead_dias == (snap.data_alvo - hoje_d).days
+
+
+def test_recasamento_corrige_entrega_marcada_tarde(app):
+    """Pedido marcado 'entregue' DEPOIS do cron: o snapshot casado como 0 e
+    RE-casado na janela de 48h (nao fica congelado errado pra sempre)."""
+    loja = _loja()
+    r = _receita()
+    ontem = hoje() - timedelta(days=1)
+    s = _snap(loja, r, ontem, previsto=10)
+    # 1o casamento: nada entregue ainda -> realizado 0
+    assert svc.casar_realizados() == 1
+    db.session.refresh(s)
+    assert s.realizado == 0
+    # a entrega e marcada DEPOIS (atraso de quem opera)
+    _entrega(loja, r, ontem, 'entregue', 8)
+    # 2a rodada re-casa (casado_em recente) e corrige
+    assert svc.casar_realizados() == 1
+    db.session.refresh(s)
+    assert s.realizado == 8
+
+
+def test_recasamento_nao_recarimba_sem_mudanca(app):
+    """Re-casamento sem mudanca de valor NAO re-carimba casado_em (senao a
+    janela de 48h deslizaria pra sempre)."""
+    loja = _loja()
+    r = _receita()
+    ontem = hoje() - timedelta(days=1)
+    _entrega(loja, r, ontem, 'entregue', 8)
+    s = _snap(loja, r, ontem, previsto=10)
+    assert svc.casar_realizados() == 1
+    db.session.refresh(s)
+    carimbo = s.casado_em
+    assert svc.casar_realizados() == 0        # nada mudou -> nada re-casado
+    db.session.refresh(s)
+    assert s.casado_em == carimbo
+
+
+def test_resumo_por_motor_loja_e_lead(app):
+    """O resumo filtra por motor e segmenta por loja e por lead."""
+    loja_a = _loja('Loja A')
+    loja_b = _loja('Loja B')
+    r = _receita()
+    ontem = hoje() - timedelta(days=1)
+    for loja_x, prev, real, lead in ((loja_a, 10, 8, 1), (loja_b, 20, 30, 5)):
+        s = PrevisaoSnapshot(data_alvo=ontem, loja_id=loja_x.id,
+                             receita_id=r.id, previsto=prev, realizado=real,
+                             motor='media_pedido', lead_dias=lead)
+        db.session.add(s)
+    s2 = PrevisaoSnapshot(data_alvo=ontem, loja_id=loja_a.id,
+                          receita_id=r.id, previsto=99, realizado=1,
+                          motor='venda_estoque', lead_dias=1)
+    db.session.add(s2)
+    db.session.commit()
+
+    res = svc.resumo_acuracia(dias=30, motor='media_pedido')
+    assert res['total']['previsto'] == 30      # so o motor filtrado
+    assert {x['nome'] for x in res['por_loja']} == {'Loja A', 'Loja B'}
+    assert {x['nome'] for x in res['por_lead']} == {'D-1', 'D-5'}
+    assert res['motores'].get('venda_estoque') == 1
+
+    res_todos = svc.resumo_acuracia(dias=30)
+    assert res_todos['total']['previsto'] == 129
+
+
+def test_circularidade_conta_pedidos_auto_gerados(app):
+    """% dos pedidos entregues que nasceram da propria sugestao (rascunho
+    auto-gerado) — quantifica o eco previsao->pedido->'realizado'."""
+    loja = _loja()
+    r = _receita()
+    ontem = hoje() - timedelta(days=1)
+    _entrega(loja, r, ontem, 'entregue', 10)
+    p2 = _entrega(loja, r, ontem, 'recebido', 10)
+    p2.observacao = 'Gerado do histórico (rascunho) — revisar e confirmar.'
+    db.session.commit()
+
+    res = svc.resumo_acuracia(dias=30)
+    assert res['pedidos_entregues'] == 2
+    assert res['pedidos_auto'] == 1
+    assert res['circularidade_pct'] == 50.0
