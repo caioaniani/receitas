@@ -176,3 +176,65 @@ def estornar_devolucao(token, usuario_id):
 
     db.session.commit()
     return {'token': token, 'avisos': avisos}
+
+
+# ── Retirada de sobras (esteira em 2 tempos, movida por QR) ──────────────────
+#
+# A retirada separa as duas pontas NO TEMPO: a baixa da loja acontece na
+# COLETA (motorista escaneou o QR na loja) e o crédito da indústria no
+# RECEBIMENTO (QR escaneado na indústria). Mesmos tipos de movimento do fluxo
+# manual (`devolucao_industria`/`retorno_loja`) com token `ret-<id>` — o
+# Movimento do Dia, relatórios e estorno enxergam a mesma família.
+
+def baixar_loja_retirada(retirada, usuario_id=None):
+    """PONTA 1 (coleta): baixa o EstoqueLoja dos itens da retirada — limitado
+    ao saldo; falta vira mov `devolucao_industria_sem_estoque` visível.
+    NÃO commita (o handshake controla a transação). Retorna avisos."""
+    avisos = []
+    for it in retirada.itens:
+        filtro = {'loja_id': retirada.loja_id,
+                  'receita_id': it.receita_id,
+                  'produto_id': it.produto_id,
+                  'materia_prima_id': None}
+        r = baixar_loja_por_prioridade(
+            filtro, int(it.quantidade or 0),
+            tipo_mov=TIPO_BAIXA_LOJA,
+            sem_estoque_tipo=TIPO_BAIXA_LOJA_SEM_ESTOQUE,
+            referencia=f'Retirada de sobras {retirada.token_mov}',
+            usuario_id=usuario_id)
+        if r['faltou']:
+            avisos.append(
+                f'{it.nome_item}: saldo da loja tinha só {r["baixado"]} de '
+                f'{it.quantidade} — baixei o que havia.')
+    return avisos
+
+
+def creditar_industria_retirada(retirada, usuario_id=None):
+    """PONTA 2 (recebimento): credita o EstoqueProducao no destino de retorno
+    de cada item (usa `quantidade_recebida` quando a indústria conferiu com
+    divergência; senão a declarada). NÃO commita. Retorna resumo por item."""
+    resumo = []
+    for it in retirada.itens:
+        qtd = int(it.quantidade_recebida
+                  if it.quantidade_recebida is not None else it.quantidade)
+        if qtd <= 0:
+            continue
+        tipo = 'receita' if it.receita_id else 'produto'
+        destino = _destino_do_retorno(tipo, it.receita_id or it.produto_id)
+        if destino is None:
+            resumo.append({'nome': it.nome_item, 'qtd': qtd,
+                           'erro': 'item sem cadastro'})
+            continue
+        col_destino, destino_id, nome_origem, nome_destino = destino
+        ep = obter_linha_producao(usuario_id=usuario_id,
+                                  **{col_destino: destino_id})
+        ep.quantidade = (ep.quantidade or 0) + qtd
+        db.session.add(MovEstoqueProducao(
+            estoque_producao_id=ep.id, tipo=TIPO_CREDITO_INDUSTRIA,
+            quantidade=qtd,
+            referencia=(f'Retorno de {retirada.loja.nome} '
+                        f'{retirada.token_mov}'),
+            usuario_id=usuario_id))
+        resumo.append({'nome': nome_origem, 'qtd': qtd,
+                       'destino': nome_destino})
+    return resumo
