@@ -359,12 +359,15 @@ def test_imprimir_post_aceita_csrf_token_valido(app, admin_user):
             f'(corpo: {r.data[:200]!r})'
         )
         assert b'via do cliente' in r.data
-        # Sem token = 400 (prova que CSRF estava de fato ativo)
+        # Sem token o POST NAO executa (prova que CSRF estava de fato ativo).
+        # Desde 02/07/2026 a falha de CSRF em form HTML vira redirect com
+        # flash (handler em app/__init__.py), nao mais a pagina 400 crua.
         r2 = c.post('/entregas/imprimir', data={
             'pedidos_json': json.dumps(_pedidos_fake()),
             'vias': 'cliente', 'data': '2026-06-11',
         })
-        assert r2.status_code == 400
+        assert r2.status_code == 302
+        assert b'via do cliente' not in r2.data
     finally:
         # Defensivo — conftest tambem restaura, mas explicito nao fere.
         app.config['WTF_CSRF_ENABLED'] = False
