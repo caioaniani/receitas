@@ -95,6 +95,33 @@
     </div>
 </form>
 
+{% if arquivadas %}
+<details class="mt-4">
+    <summary class="text-muted" style="cursor:pointer; font-size:13px;">
+        <i class="bi bi-archive"></i> Arquivadas ({{ arquivadas|length }}) —
+        fora de circulação; histórico preservado
+    </summary>
+    <table class="table table-sm mt-2" style="max-width:640px; font-size:13px;">
+        <tbody>
+        {% for mp in arquivadas %}
+        <tr class="text-muted">
+            <td class="text-center" style="width:50px;">{{ mp.id }}</td>
+            <td>{{ mp.nome }}</td>
+            <td style="width:110px;">{{ mp.arquivada_em.strftime('%d/%m/%Y') if mp.arquivada_em }}</td>
+            <td class="text-end" style="width:120px;">
+                <form method="POST" action="{{ url_for('materias_primas.arquivar', id=mp.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary"
+                            title="Voltar pra circulação">↺ desarquivar</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</details>
+{% endif %}
+
 <!-- Template para nova linha -->
 <template id="mp-row-template">
     <tr>
