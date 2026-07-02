@@ -485,14 +485,21 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     itens = []
     for rid, rec in receitas.items():
         est = em_estoque.get(rid, 0)
+        wip = em_producao.get(rid, 0)
         # Estoque efetivo = o que sobra DEPOIS das entregas iminentes (que
-        # ja vao consumir estoque antes da janela). E esse que cobre a janela.
-        est_efetivo = max(0, est - pre_demanda.get(rid, 0))
+        # ja vao consumir estoque antes da janela) + a producao ja MANDADA
+        # (WIP — pronta antes do inicio do horizonte; ver bloco 1b). As
+        # entregas iminentes nao podem ser servidas pelo WIP (ainda nao esta
+        # pronto), por isso o max() vem antes da soma.
+        est_efetivo = max(0, est - pre_demanda.get(rid, 0)) + wip
         comp = comprometido.get(rid, 0)
         prev = int(ceil(previsto.get(rid, 0)))
-        if est == 0 and comp == 0 and prev == 0:
+        if est == 0 and comp == 0 and prev == 0 and wip == 0:
             continue
-        demanda = max(comp, prev)
+        # Demanda = Σ_dia max(firme_d, previsto_d) — ver bloco 4. Nunca menor
+        # que max(comp, prev) (o agregado antigo); a diferenca e exatamente a
+        # subproducao dos dias mistos.
+        demanda = int(ceil(demanda_soma.get(rid, 0.0)))
         produzir = max(0, demanda - est_efetivo)
         lim = caps_retorno.get(rid)
         lim_aplicado = None
@@ -505,8 +512,10 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             'nome': rec.nome,
             'em_estoque': est,
             'em_estoque_efetivo': est_efetivo,
+            'em_producao': wip,
             'comprometido': comp,
             'previsto': prev,
+            'demanda': demanda,
             'produzir': produzir,
             'tem_historico': bool(datas_total.get(rid)),
             'dias_producao': lead.get(rid, 0),
