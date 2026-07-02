@@ -99,3 +99,54 @@ def cronograma():
         receitas=receitas,
         alertas_falta=crono.get('alertas_falta', []),
     )
+
+
+@claude_api_bp.route('/pedidos-semana')
+@_claude_auth_required
+def pedidos_semana():
+    """Sugestão de pedido loja→indústria em JSON — a MESMA conta das telas
+    'Pedidos da semana'. Read-only: NÃO cria pedido nenhum.
+
+    Params: ?modo=venda (default; venda+estoque, ponto de reposição) |
+    ?modo=media (média do histórico de pedidos); ?horizonte=7 (1-14),
+    ?janela=6 (1-26), ?inicio=1 (0-14; default amanhã, igual às telas),
+    ?seguranca=0 (0-100, só no modo venda).
+
+    Produtos sem sugestão e sem pedido já feito ficam fora do payload.
+    """
+    from app.services.previsao_producao import (
+        media_semanal_pedidos,
+        sugerir_pedidos_por_venda,
+    )
+
+    modo = request.args.get('modo', 'venda')
+    kw = dict(horizonte_dias=_int_arg('horizonte', 7, 1, 14),
+              janela_semanas=_int_arg('janela', 6, 1, 26),
+              inicio_offset_dias=_int_arg('inicio', 1, 0, 14))
+    if modo == 'media':
+        grade = media_semanal_pedidos(**kw)
+    else:
+        modo = 'venda'
+        grade = sugerir_pedidos_por_venda(
+            seguranca_pct=_int_arg('seguranca', 0, 0, 100), **kw)
+
+    lojas = []
+    for lj in grade['lojas']:
+        produtos = [p for p in lj['produtos']
+                    if sum(p['por_dia']) > 0 or any(p.get('ja_pedido') or [])]
+        lojas.append({
+            'loja_id': lj['loja_id'], 'loja_nome': lj['loja_nome'],
+            'ja_tem': lj.get('ja_tem', []),
+            'editaveis': lj.get('editaveis', []),
+            'produtos': produtos,
+        })
+    return jsonify(
+        ok=True,
+        modo=modo,
+        hoje=grade['hoje'],
+        inicio=grade['inicio'],
+        horizonte_dias=grade['horizonte_dias'],
+        janela_semanas=grade['janela_semanas'],
+        dias=grade['dias'],
+        lojas=lojas,
+    )
