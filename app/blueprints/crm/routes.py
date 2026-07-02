@@ -485,7 +485,15 @@ def bot_webhook():
                                     conv_id, resultado.get('motivo'))
                 except Exception:
                     logger.exception('crm bot processamento falhou conv=%s', conv_id)
-                    # Nunca deixa o cliente sem resposta: joga pro humano.
+                    # Nunca deixa o cliente sem resposta: AVISA o cliente e
+                    # joga pro humano. Antes (02/07/2026) so mudava o status —
+                    # a conversa ia pra fila humana EM SILENCIO e o cliente
+                    # ficava olhando pro nada ate alguem assumir.
+                    try:
+                        if not texto_enviado:
+                            chatwoot.enviar_mensagem(conv_id, chatbot.FALLBACK_TEXTO)
+                    except Exception:
+                        logger.exception('crm bot fallback msg falhou conv=%s', conv_id)
                     try:
                         chatwoot.definir_status(conv_id, 'open')
                     except Exception:
