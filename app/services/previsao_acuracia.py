@@ -215,11 +215,9 @@ def resumo_acuracia(dias=30, motor=None):
 
     tot_prev = sum(x['previsto'] for x in por_receita)
     tot_real = sum(x['realizado'] for x in por_receita)
-    tot_abs = sum(abs(x['previsto'] - x['realizado']) for x in por_receita)
-    # WAPE do total vem das LINHAS (soma dos |erro| por receita), nao do
-    # agregado re-calculado — igual a v1.
-    tot_abs = sum(
-        int(r[3] or 0) for r in rows_r) if rows_r else tot_abs
+    # WAPE do total = soma dos |erro| POR SNAPSHOT (coluna agregada das
+    # linhas), nao |Σprev - Σreal| (que cancelaria erros opostos) — igual v1.
+    tot_abs = sum(int(r[3] or 0) for r in rows_r)
     total = {
         'previsto': tot_prev, 'realizado': tot_real,
         'vies': tot_prev - tot_real,
