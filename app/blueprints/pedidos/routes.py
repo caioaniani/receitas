@@ -2207,12 +2207,18 @@ def estoque_loja_historico():
         loja_id = None
 
     tipos_disp = [
-        'entrada_pedido', 'entrada_manual', 'ajuste_negativo',
+        'entrada_pedido', 'entrada_manual', 'entrada_lote', 'ajuste_negativo',
         'saida_lote', 'venda_loja_sem_estoque',
         'venda_seru', 'venda_seru_estorno', 'venda_seru_sem_estoque',
         'venda_vnda', 'venda_vnda_estorno', 'venda_vnda_sem_estoque',
         'venda_site', 'venda_site_estorno', 'venda_site_sem_estoque',
         'desperdicio', 'desperdicio_sem_estoque', 'desperdicio_estorno',
+        # Movimentos da tela de estoque da loja (03/07/2026 — antes existiam
+        # na lista mas nao no filtro, dando sensacao de "nao registrou").
+        'venda', 'perda', 'sobra', 'descarte', 'devolucao', 'ajuste',
+        'ajuste_conferencia',
+        'perda_sem_estoque', 'sobra_sem_estoque', 'descarte_sem_estoque',
+        'ajuste_sem_estoque',
     ]
     tipo_filtro = request.args.get('tipo', '').strip()
 
