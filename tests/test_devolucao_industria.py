@@ -295,7 +295,7 @@ def test_balanco_capa_almond_ao_retorno_disponivel(app):
 
     from app.extensions import db
     from app.models import PedidoItem, PedidoLoja
-    from app.services.previsao_producao import balanco_industria, invalidar_cache
+    from app.services.previsao_producao import balanco_industria, invalidar_sugestao_cache
     almond, _retorno = _almond_com_retorno(db, retorno_qtd=15)
     loja = _loja(db)
     from app.utils import hoje
@@ -307,7 +307,7 @@ def test_balanco_capa_almond_ao_retorno_disponivel(app):
                               quantidade=40))
     db.session.commit()
 
-    invalidar_cache()
+    invalidar_sugestao_cache()
     bal = balanco_industria(usar_cache=False)
     item = next(i for i in bal['itens'] if i['receita_id'] == almond.id)
     assert item['comprometido'] == 40
@@ -321,7 +321,7 @@ def test_balanco_sem_cap_quando_retorno_cobre(app):
 
     from app.extensions import db
     from app.models import PedidoItem, PedidoLoja
-    from app.services.previsao_producao import balanco_industria, invalidar_cache
+    from app.services.previsao_producao import balanco_industria, invalidar_sugestao_cache
     almond, _retorno = _almond_com_retorno(db, retorno_qtd=50)
     loja = _loja(db)
     from app.utils import hoje
@@ -333,7 +333,7 @@ def test_balanco_sem_cap_quando_retorno_cobre(app):
                               quantidade=40))
     db.session.commit()
 
-    invalidar_cache()
+    invalidar_sugestao_cache()
     bal = balanco_industria(usar_cache=False)
     item = next(i for i in bal['itens'] if i['receita_id'] == almond.id)
     assert item['produzir'] == 40                   # sobras cobrem, sem cap
@@ -347,7 +347,7 @@ def test_cronograma_nao_manda_produzir_retorno(app):
 
     from app.extensions import db
     from app.models import PedidoItem, PedidoLoja
-    from app.services.previsao_producao import cronograma_producao, invalidar_cache
+    from app.services.previsao_producao import cronograma_producao, invalidar_sugestao_cache
     almond, retorno = _almond_com_retorno(db, retorno_qtd=15)
     loja = _loja(db)
     from app.utils import hoje
@@ -359,7 +359,7 @@ def test_cronograma_nao_manda_produzir_retorno(app):
                               quantidade=40))
     db.session.commit()
 
-    invalidar_cache()
+    invalidar_sugestao_cache()
     cron = cronograma_producao()
     linhas = {rr['receita_id']: rr for rr in cron['receitas']}
     alm = linhas.get(almond.id)
