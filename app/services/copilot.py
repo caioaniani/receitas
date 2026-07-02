@@ -3687,6 +3687,130 @@ def executar_devolver_industria(params, user):
     }
 
 
+def executar_criar_retirada_sobras(params, user):
+    """Cria a RetiradaSobra do dia seguinte + QR de coleta.
+
+    FOTO OBRIGATORIA (decisao do dono 02/07/2026): `params['imagens']` vem
+    embutida pelo slack_bot quando a mensagem que originou a acao tinha
+    imagem — sem ela, recusa com instrucao clara. A foto sobe pro Dropbox
+    (comprovante da contagem declarada)."""
+    import base64
+    from datetime import timedelta as _td
+
+    from app.models import RetiradaSobra, RetiradaSobraItem
+    from app.services.handshake_qr import gerar_qr_retirada
+    from app.utils import hoje
+
+    loja = _resolver_loja_para_user(params.get('loja_id'),
+                                    params.get('loja_nome'), user)
+    if not loja:
+        nome_tentado = params.get('loja_nome') or params.get('loja_id')
+        if nome_tentado:
+            return {'ok': False, 'erro': f'Loja "{nome_tentado}" nao encontrada.'}
+        return {'ok': False, 'erro': 'Especifique a loja.'}
+
+    imgs = params.get('imagens') or []
+    blob = None
+    mimetype = 'image/jpeg'
+    for img in imgs:
+        try:
+            blob = base64.b64decode(img.get('base64') or '')
+            mimetype = img.get('mimetype') or 'image/jpeg'
+            break
+        except Exception:  # noqa: BLE001
+            continue
+    if not blob:
+        return {'ok': False, 'erro': (
+            'A foto da sobra é obrigatória pra criar a retirada — anexe a '
+            'foto na MESMA mensagem em que pedir a retirada.')}
+
+    itens_ok = []
+    ignorados = []
+    for item in (params.get('itens') or []):
+        nome = (item.get('nome') or '').strip()
+        try:
+            qtd = int(item.get('quantidade') or 0)
+        except (TypeError, ValueError):
+            qtd = 0
+        if not nome or qtd <= 0:
+            ignorados.append({'nome': nome or '?', 'motivo': 'quantidade invalida'})
+            continue
+        resolvido = item.get('resolvido')
+        if not resolvido or not resolvido.get('id'):
+            re_resolve = _resolver_item_qualquer(nome)
+            if not re_resolve:
+                ignorados.append({'nome': nome,
+                                  'motivo': 'item nao encontrado no cadastro'})
+                continue
+            tipo_item, item_id, _n = re_resolve
+        else:
+            tipo_item, item_id = resolvido['tipo'], resolvido['id']
+        if tipo_item == 'mp':
+            ignorados.append({'nome': nome, 'motivo': 'MP nao vai pra retirada'})
+            continue
+        itens_ok.append((tipo_item, item_id, qtd))
+    if not itens_ok:
+        return {'ok': False,
+                'erro': f'Nenhum item válido. {len(ignorados)} ignorados.',
+                'ignorados': ignorados}
+
+    data_ret = hoje() + _td(days=1)
+    # Foto ANTES do registro (mesma ordem do Contas a Pagar: nao perde o
+    # comprovante se o resto falhar). Dropbox indisponivel = erro visivel.
+    from app.services.dropbox_storage import upload_publico
+    ext = 'png' if 'png' in mimetype else 'jpg'
+    up = upload_publico(
+        blob, f'/retiradas/{data_ret.isoformat()}-loja{loja.id}.{ext}')
+
+    try:
+        ret = RetiradaSobra(
+            loja_id=loja.id, data_retirada=data_ret,
+            criado_por_id=user.id, foto_url=up['url'],
+            foto_storage_path=up.get('storage_path'),
+            observacao=(params.get('observacao') or '').strip() or None)
+        db.session.add(ret)
+        db.session.flush()
+        for tipo_item, item_id, qtd in itens_ok:
+            db.session.add(RetiradaSobraItem(
+                retirada_id=ret.id,
+                receita_id=item_id if tipo_item == 'receita' else None,
+                produto_id=item_id if tipo_item == 'produto' else None,
+                quantidade=qtd))
+        qr = gerar_qr_retirada(ret, 'coleta', criado_por_id=user.id)
+        db.session.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        logger.exception('criar_retirada_sobras falhou')
+        return {'ok': False, 'erro': f'Erro ao criar a retirada: {exc}'}
+
+    resultado = {
+        'ok': True,
+        'retirada_id': ret.id,
+        'loja': loja.nome,
+        'data_retirada': data_ret.isoformat(),
+        'itens': [{'tipo': t, 'id': i, 'qtd': q} for t, i, q in itens_ok],
+        'ignorados': ignorados,
+        'registro_tipo': 'retirada_sobra',
+        'registro_id': ret.id,
+        'qr_texto': (f':qrcode: *Retirada #{ret.id} criada pra '
+                     f'{data_ret.strftime("%d/%m")}.* O motorista escaneia o '
+                     'QR abaixo na loja + digita o PIN dele — isso baixa o '
+                     'estoque da loja e inicia o transporte.'),
+    }
+    try:
+        from flask import url_for
+        resultado['qr_url'] = url_for('handshake.handshake_retirada',
+                                      token=qr.token, _external=True)
+        resultado['qr_png_url'] = url_for('handshake.qr_img_retirada',
+                                          token=qr.token, _external=True)
+    except RuntimeError:
+        base = os.environ.get('APP_BASE_URL', '').rstrip('/')
+        if base:
+            resultado['qr_url'] = f'{base}/handshake/r/{qr.token}'
+            resultado['qr_png_url'] = f'{base}/handshake/qr-img/r/{qr.token}.png'
+    return resultado
+
+
 def executar_criar_cliente_b2b(params, user):
     """Cadastra novo ClienteB2B. Idempotente por nome — se ja existir,
     retorna o existente sem erro."""
