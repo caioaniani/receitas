@@ -1415,6 +1415,14 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE conta_pagar_item_map ADD COLUMN "
                        "produto_id INTEGER REFERENCES produto(id)")
 
+    # mov_estoque_loja.desperdicio_id — mesma migracao do _migrate_postgres:
+    # liga a baixa ao Desperdicio pra exclusao com estorno exato.
+    cursor.execute("PRAGMA table_info(mov_estoque_loja)")
+    cols_mel = [row[1] for row in cursor.fetchall()]
+    if cols_mel and 'desperdicio_id' not in cols_mel:
+        cursor.execute("ALTER TABLE mov_estoque_loja ADD COLUMN "
+                       "desperdicio_id INTEGER REFERENCES desperdicio(id)")
+
     cursor.execute("PRAGMA table_info(vigia_veredito)")
     cols_vv = [row[1] for row in cursor.fetchall()]
     if cols_vv and 'tools_usadas' not in cols_vv:
