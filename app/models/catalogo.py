@@ -151,6 +151,15 @@ class Receita(db.Model):
     # vira Croissant Almond, Sourdough Tradicional vira chapa). Outros
     # motivos (estragou/caiu/queimou) ainda baixam normalmente.
     reaproveitavel = db.Column(db.Boolean, default=False, nullable=False)
+    # Devolucao loja->industria: sobras devolvidas DESTA receita creditam a
+    # receita apontada no estoque da industria (ex: Croissant Tradicional ->
+    # "Croissant Tradicional — Retorno"). NULL = credita a propria. O retorno
+    # e receita SEPARADA porque a industria mantem 1 linha por receita
+    # (uq_estoque_producao_receita) e o retornado (assado, de vespera) nao
+    # pode se misturar com o congelado cru que atende pedidos das lojas.
+    # ALTER em migrations_legacy (commit 1, 02/07/2026).
+    retorno_receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'),
+                                   nullable=True)
     # Arquivamento: receita com historico (pedidos/vendas/estoque) nunca e
     # excluida — arquivar tira ela das listas e seletores preservando tudo.
     # NULL = ativa. Colunas criadas via _migrate_postgres/_migrate_sqlite
@@ -158,6 +167,10 @@ class Receita(db.Model):
     arquivada_em = db.Column(db.DateTime, nullable=True)
     arquivada_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
                                  nullable=True)
+
+    # Self-FK: remote_side desambigua o lado "1" (a receita-destino).
+    retorno_receita = db.relationship('Receita', remote_side='Receita.id',
+                                      foreign_keys=[retorno_receita_id])
 
     ingredientes = db.relationship(
         'ReceitaIngrediente',
