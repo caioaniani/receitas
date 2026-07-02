@@ -629,6 +629,10 @@ def create_app(config_class=None):
     app.register_blueprint(pdv_bp, url_prefix='/pdv')
     from app.blueprints.bot import bot_bp
     app.register_blueprint(bot_bp)
+    # API read-only do assistente (Claude Code): leituras de producao via
+    # token CLAUDE_API_TOKEN. Sem a env, as rotas respondem 503.
+    from app.blueprints.claude_api import claude_api_bp
+    app.register_blueprint(claude_api_bp, url_prefix='/api/claude')
     # Copilot WEB desativado em 10/06/2026 — decisao do dono: usar so o
     # Slack bot (servico copilot.py) e o bot pessoal no WhatsApp (bot_bp).
     from app.blueprints.fornecedores import fornecedores_bp
