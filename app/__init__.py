@@ -208,7 +208,7 @@ def create_app(config_class=None):
 
         # ── MP data (cache 60s) ──
         def _carrega_mp_data():
-            mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+            mps = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
             mp_info = {mp.nome: {'custo_por_kg': mp.custo_por_kg, 'unidade': mp.unidade,
                                   'peso_unidade': mp.peso_unidade} for mp in mps}
             return {

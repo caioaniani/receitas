@@ -173,7 +173,7 @@ def sugerir_para_item(nome, unidade_nf=None):
     extras = []
     if tokens:
         clausulas = [MateriaPrima.nome.ilike(f'%{t}%') for t in tokens]
-        candidatos = MateriaPrima.query.filter(or_(*clausulas)).limit(20).all()
+        candidatos = MateriaPrima.ativas().filter(or_(*clausulas)).limit(20).all()
         ids_base = {x.get('id') for x in base}
         for mp in candidatos:
             if mp.id in ids_base:

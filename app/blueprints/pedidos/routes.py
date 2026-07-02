@@ -145,7 +145,7 @@ def buscar_itens():
             for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
             if _casa(p.nome)]
     out += [{'id': f'mp_{m.id}', 'nome': m.nome}
-            for m in MateriaPrima.query.order_by(MateriaPrima.nome).all() if _casa(m.nome)]
+            for m in MateriaPrima.ativas().order_by(MateriaPrima.nome).all() if _casa(m.nome)]
     return jsonify(itens=out[:50])
 
 
@@ -263,7 +263,7 @@ def novo():
             lojas = _lojas_operacionais()
             receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
             produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-            materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+            materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
                                    receitas=receitas, produtos=produtos,
                                    materias=materias, amanha=amanha,
@@ -282,7 +282,7 @@ def novo():
             lojas = _lojas_operacionais()
             receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
             produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-            materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+            materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
             return render_template('pedidos/novo.html', lojas=lojas,
                                    receitas=receitas, produtos=produtos,
                                    materias=materias, amanha=amanha,
@@ -370,7 +370,7 @@ def novo():
     lojas = _lojas_operacionais()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
     return render_template('pedidos/novo.html', lojas=lojas,
                            receitas=receitas, produtos=produtos,
                            materias=materias, amanha=amanha,
@@ -466,7 +466,7 @@ def editar(id):
 
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
     amanha = hoje_brt() + timedelta(days=1)
     data_min = hoje_brt() if current_user.is_admin() else amanha
     return render_template('pedidos/editar.html', pedido=pedido,
@@ -1733,7 +1733,7 @@ def estoque_loja():
         if current_user.is_admin() else []
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all() \
         if current_user.is_admin() else []
-    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all() \
+    materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all() \
         if current_user.is_admin() else []
     sugestoes = {}
     if current_user.is_admin() and itens:
@@ -2106,7 +2106,7 @@ def estoque_loja_mapeamentos():
     ).all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
     # Lojas que JA usaram cada mapeamento (VendaMapaUso e criado pra TODA saida
     # em lote aplicada — fator 1 ou fracionado). E o vinculo confiavel mapeamento
     # -> loja (o VendaMapa em si e global, sem loja). Pendente/nunca-usado fica
@@ -2221,7 +2221,7 @@ def nomes_duplicados():
     produtos = _grupos_nomes_duplicados(
         Produto.query.filter_by(ativo=True).order_by(Produto.nome).all())
     materias = _grupos_nomes_duplicados(
-        MateriaPrima.query.order_by(MateriaPrima.nome).all())
+        MateriaPrima.ativas().order_by(MateriaPrima.nome).all())
     return render_template('pedidos/nomes_duplicados.html',
                            receitas=receitas, produtos=produtos, materias=materias,
                            total=len(receitas) + len(produtos) + len(materias))
@@ -2875,7 +2875,7 @@ def desperdicio():
 
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
 
     # Historico: 30 dias
     desde = hoje_brt() - timedelta(days=30)

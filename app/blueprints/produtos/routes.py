@@ -176,7 +176,7 @@ def salvar_composicao(id):
             if p and p.id != produto.id:
                 produto_componente_id = p.id
         elif tipo == 'mp':
-            m = MateriaPrima.query.filter_by(nome=nome).first()
+            m = MateriaPrima.ativas().filter_by(nome=nome).first()
             materia_prima_id = m.id if m else None
 
         item = ProdutoItem(
@@ -295,7 +295,7 @@ def cestas_orfaos():
               .all())
     receitas = Receita.query.order_by(Receita.nome).all()
     produtos = Produto.query.filter(Produto.ativo.is_(True)).order_by(Produto.nome).all()
-    mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    mps = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
     return render_template('produtos/cestas_orfaos.html',
                             orfaos=orfaos, receitas=receitas,
                             produtos=produtos, mps=mps)

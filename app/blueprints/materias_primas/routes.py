@@ -259,8 +259,9 @@ def excluir(id):
         flash(f'Não é possível excluir "{mp.nome}": há {detalhe} apontando '
               'pra ela. Histórico não se apaga — se ela na verdade é uma '
               'RECEITA (produzida), use o botão → da linha pra transferir os '
-              'vínculos pra receita; se é cadastro errado/duplicado, corrija '
-              'ou renomeie.', 'danger')
+              'vínculos; o que sobrar de histórico, resolva com ARQUIVAR '
+              '(botão caixinha): ela sai de circulação e ninguém conecta '
+              'mais nada nela.', 'danger')
         return redirect(url_for('materias_primas.banco'))
     nome = mp.nome
     # Alerta de estoque mínimo é CONFIG (não histórico) — vai junto da MP.
@@ -274,7 +275,8 @@ def excluir(id):
     except IntegrityError:
         db.session.rollback()
         flash(f'Não é possível excluir "{nome}": há registros históricos '
-              '(financeiro/estoque) vinculados a ela.', 'danger')
+              '(financeiro/estoque) vinculados a ela. Use ARQUIVAR pra '
+              'tirá-la de circulação preservando o histórico.', 'danger')
     return redirect(url_for('materias_primas.banco'))
 
 
@@ -284,7 +286,7 @@ def excluir(id):
 @login_required
 @catalogo_required
 def estoque():
-    materias = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
     alertas = {a.materia_prima_id: a.estoque_minimo for a in AlertaEstoque.query.all()}
     return render_template('materias_primas/estoque.html', materias=materias, alertas=alertas)
 

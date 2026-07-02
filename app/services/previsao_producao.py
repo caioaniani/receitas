@@ -1080,7 +1080,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # compat com o gerar existente); MP = 'mp:<id>' (o gerar reconhece o prefixo).
     from app.models import MateriaPrima
     mps = {m.id: m for m in MateriaPrima.query
-           .filter(MateriaPrima.sugerir_pedido_loja.is_(True)).all()}
+           .filter(MateriaPrima.sugerir_pedido_loja.is_(True),
+                   MateriaPrima.arquivada_em.is_(None)).all()}
 
     def _token(rid, mid):
         if rid is not None:

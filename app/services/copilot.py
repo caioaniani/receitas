@@ -1047,7 +1047,7 @@ def _catalogo_texto():
         linhas.append(f"  - {r.nome}")
     linhas.append("")
     linhas.append("MATERIAS PRIMAS (use o nome exato):")
-    for m in MateriaPrima.query.order_by(MateriaPrima.nome).all():
+    for m in MateriaPrima.ativas().order_by(MateriaPrima.nome).all():
         unidade = m.unidade or '?'
         linhas.append(f"  - {m.nome} ({unidade})")
     linhas.append("")
@@ -2155,14 +2155,14 @@ def _quantidade_recebimento_mp(params):
 def _resolver_mp(nome):
     from sqlalchemy import func
     matches = []
-    m = MateriaPrima.query.filter(func.lower(MateriaPrima.nome) == nome.lower()).first()
+    m = MateriaPrima.ativas().filter(func.lower(MateriaPrima.nome) == nome.lower()).first()
     if m:
         matches.append({'id': m.id, 'nome': m.nome, 'unidade': m.unidade,
                         'peso_unidade': m.peso_unidade,
                         'observacoes': m.observacoes, 'match': 'exato'})
     if matches:
         return matches
-    for m in MateriaPrima.query.filter(MateriaPrima.nome.ilike(f'%{nome}%')).limit(10).all():
+    for m in MateriaPrima.ativas().filter(MateriaPrima.nome.ilike(f'%{nome}%')).limit(10).all():
         matches.append({'id': m.id, 'nome': m.nome, 'unidade': m.unidade,
                         'peso_unidade': m.peso_unidade,
                         'observacoes': m.observacoes, 'match': 'fuzzy'})
@@ -2170,7 +2170,7 @@ def _resolver_mp(nome):
         matches.sort(key=lambda x: _score_proximidade(nome, x['nome']))
         return matches[:5]
     # Fallback rapidfuzz pra MPs com nome muito diferente do digitado.
-    mps = MateriaPrima.query.all()
+    mps = MateriaPrima.ativas().all()
     if not mps:
         return []
     nomes = [m.nome for m in mps]
@@ -2418,7 +2418,7 @@ def _consultar_estoque_mp(item_nome, apenas_baixo):
         return {'texto': '**MPs em alerta:**\n' + '\n'.join(baixos)}
 
     # Sem filtro: lista top com saldo positivo (limita 30)
-    mps = MateriaPrima.query.order_by(MateriaPrima.nome).limit(80).all()
+    mps = MateriaPrima.ativas().order_by(MateriaPrima.nome).limit(80).all()
     if not mps:
         return {'texto': 'Nenhuma MP cadastrada.'}
     linhas = []
@@ -3856,7 +3856,7 @@ def _resolver_item_qualquer(nome):
     p = Produto.query.filter(func.lower(Produto.nome) == nome.lower()).first()
     if p:
         return ('produto', p.id, p.nome)
-    m = MateriaPrima.query.filter(func.lower(MateriaPrima.nome) == nome.lower()).first()
+    m = MateriaPrima.ativas().filter(func.lower(MateriaPrima.nome) == nome.lower()).first()
     if m:
         return ('mp', m.id, m.nome)
     # Fuzzy: coleta top 10 de cada e desempata por proximidade.
@@ -3866,7 +3866,7 @@ def _resolver_item_qualquer(nome):
         cands.append(('receita', r.id, r.nome))
     for p in Produto.query.filter(Produto.nome.ilike(f'%{nome}%')).limit(10).all():
         cands.append(('produto', p.id, p.nome))
-    for m in MateriaPrima.query.filter(MateriaPrima.nome.ilike(f'%{nome}%')).limit(10).all():
+    for m in MateriaPrima.ativas().filter(MateriaPrima.nome.ilike(f'%{nome}%')).limit(10).all():
         cands.append(('mp', m.id, m.nome))
     if cands:
         cands.sort(key=lambda c: _score_proximidade(nome, c[2]))

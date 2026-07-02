@@ -119,7 +119,7 @@ def _carregar_catalogo(loja_id):
     confirmados (VendaMapa canal='lote' mapeado)."""
     receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
     produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
-    materias = [(m.id, m.nome, _ascii(m.nome)) for m in MateriaPrima.query.all()]
+    materias = [(m.id, m.nome, _ascii(m.nome)) for m in MateriaPrima.ativas().all()]
     orfaos = []
     if loja_id:
         orfaos = [
@@ -220,7 +220,7 @@ def sugerir_para_pendentes(estoques_pendentes):
         return {}
     receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
     produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
-    materias = [(m.id, m.nome, _ascii(m.nome)) for m in MateriaPrima.query.all()]
+    materias = [(m.id, m.nome, _ascii(m.nome)) for m in MateriaPrima.ativas().all()]
     apelidos = _apelidos_confirmados()
     out = {}
     for ep in estoques_pendentes:
