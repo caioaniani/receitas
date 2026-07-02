@@ -532,12 +532,14 @@ def build_resultado(resultado, ok=True):
                     'style': 'primary',
                 }],
             })
-        # Se gerou QR Code (ex: separou pedido → QR saida pro motorista),
-        # mostra a imagem inline pro motorista escanear no celular.
+        # Se gerou QR Code (ex: separou pedido → QR saida pro motorista;
+        # retirada de sobras → QR de coleta), mostra a imagem inline pro
+        # motorista escanear no celular. `qr_texto` customiza a legenda.
         if resultado.get('qr_png_url'):
             blocks.append(_section(
-                ':qrcode: *Pedido enviado.* Motorista escaneia o QR abaixo + digita o PIN.\n'
-                f'<{resultado.get("qr_url", "")}|abrir pagina>'
+                (resultado.get('qr_texto')
+                 or ':qrcode: *Pedido enviado.* Motorista escaneia o QR abaixo + digita o PIN.')
+                + f'\n<{resultado.get("qr_url", "")}|abrir pagina>'
             ))
             blocks.append({
                 'type': 'image',
