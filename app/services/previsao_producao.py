@@ -1860,12 +1860,41 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                 'producao': prod_i, 'previsto': prev_i, 'saldo': running,
                 'falta': running < 0})
         rr['projecao'] = projecao
+        # Alerta "pedido programado sem produto" (dono, 02/07): projecao
+        # SO-FIRME — estoque + producao programada vs as entregas FIRMES
+        # datadas. Se o saldo firme fica negativo num dia COM entrega, aquela
+        # entrega nao tem produto nem produzindo como programado (lead tarde
+        # demais, celula editada pra baixo, estoque comido por entrega
+        # anterior). Separada da projecao da tela (que desconta max(firme,
+        # previsto)) de proposito: PREVISAO de historico nao pode acusar
+        # entrega em risco — o alerta e sobre pedido real. Como firme <=
+        # max(firme, previsto), todo alerta aqui tambem aparece como falta na
+        # projecao detalhada (subconjunto, nunca contradiz a tela).
+        running_f = int(rr['em_estoque'])
+        entregas_risco = []
+        for i, d in enumerate(dias_prod):
+            prod_i = int(rr['por_dia'][i - L]['qtd'] or 0) if i - L >= 0 else 0
+            firme_i = int(firme[rid].get(d, 0))
+            running_f += prod_i - firme_i
+            if running_f < 0 and firme_i > 0:
+                entregas_risco.append({
+                    'data': dias_out[i]['data'], 'label': dias_out[i]['label'],
+                    'firme': firme_i,
+                    'faltam': min(firme_i, -running_f)})
+        rr['entregas_risco'] = entregas_risco
+        rr['risco_datas'] = [e['data'] for e in entregas_risco]
 
     # Agrupa os produtos por CATEGORIA (depois por nome) — senao ficam espalhados
     # pela ordem de urgencia/demanda do balanco. Categoria vazia vai por ultimo.
     receitas_out.sort(key=lambda rr: (rr['categoria'] == '',
                                       rr['categoria'].lower(),
                                       (rr['nome'] or '').lower()))
+
+    # Agregado pro banner de alerta da tela: so receitas com alguma entrega
+    # firme descoberta no horizonte.
+    alertas_falta = [{'receita_id': rr['receita_id'], 'nome': rr['nome'],
+                      'entregas': rr['entregas_risco']}
+                     for rr in receitas_out if rr['entregas_risco']]
 
     return {
         'dias': dias_out,
@@ -1875,6 +1904,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         'inicio_offset_dias': inicio_offset_dias,
         'horizonte_dias': horizonte_dias,
         'janela_semanas': janela_semanas,
+        'alertas_falta': alertas_falta,
     }
 
 
