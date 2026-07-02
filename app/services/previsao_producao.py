@@ -1431,7 +1431,8 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
                             'fornadas': _forn(novo[i])} for i in range(n)]
                 rr = {'receita_id': rid, 'nome': rec.nome if rec else '(sub)',
                       'dias_producao': L, 'em_estoque': est_extra.get(rid, 0),
-                      'por_dia': por_dia, 'total': sum(novo), 'insumo': True}
+                      'por_dia': por_dia, 'total': sum(novo), 'insumo': True,
+                      'retorno': rid in retorno_ids}
                 receitas_out.append(rr)
                 linhas[rid] = rr
             else:                                  # vendida + insumo: acumula
