@@ -47,6 +47,46 @@ def _lock_para_conv(conv_id):
             _BOT_LOCKS[conv_id] = lock
         return lock
 
+
+# ── Debounce/coalescing de rajada (02/07/2026) ────────────────────────────
+# Cliente que quebra a frase em 3 balões gerava 3 chamadas Opus + 3 respostas.
+# Cada webhook agora DEPOSITA a mensagem no buffer da conversa e a thread
+# espera o debounce; quem acorda DRENA tudo que acumulou e responde UMA vez
+# (as threads das mensagens já drenadas acham o buffer vazio e saem).
+_PENDENTES: dict = {}            # conv_id -> [ {'content', 'imagens'} ]
+_PENDENTES_GUARD = _threading.Lock()
+
+
+def _debounce_segundos():
+    """Janela de coalescing. Em testes (PYTEST_RUNNING) default 0 pra não
+    dormir a suíte; override explícito via CHATBOT_DEBOUNCE_S vale sempre."""
+    import os
+    bruto = os.environ.get('CHATBOT_DEBOUNCE_S')
+    if bruto is None:
+        return 0.0 if os.environ.get('PYTEST_RUNNING') else 4.0
+    try:
+        return max(0.0, float(bruto))
+    except (TypeError, ValueError):
+        return 4.0
+
+
+def _depositar_pendente(conv_id, content, imagens):
+    with _PENDENTES_GUARD:
+        _PENDENTES.setdefault(conv_id, []).append(
+            {'content': content, 'imagens': imagens})
+
+
+def _drenar_pendentes(conv_id):
+    """Retira TODAS as mensagens acumuladas da conversa e devolve
+    (texto_combinado, imagens). Lista vazia = outra thread já drenou."""
+    with _PENDENTES_GUARD:
+        msgs = _PENDENTES.pop(conv_id, [])
+    if not msgs:
+        return None, []
+    textos = [m['content'] for m in msgs if (m['content'] or '').strip()]
+    imagens = [img for m in msgs for img in (m['imagens'] or [])]
+    return '\n'.join(textos), imagens
+
 # Chamado de iframe externo (Chatwoot) — sem token CSRF. Autenticidade vem
 # do CHATWOOT_CARD_TOKEN, não do cookie de sessão.
 csrf.exempt(crm_bp)
