@@ -220,8 +220,10 @@ def excluir(id):
     if vinculos:
         detalhe = ', '.join(f'{n} {rotulo}' for rotulo, n in vinculos)
         flash(f'Não é possível excluir "{mp.nome}": há {detalhe} apontando '
-              'pra ela. Histórico não se apaga — se o cadastro está errado ou '
-              'duplicado, corrija/renomeie a MP em vez de excluir.', 'danger')
+              'pra ela. Histórico não se apaga — se ela na verdade é uma '
+              'RECEITA (produzida), use o botão → da linha pra transferir os '
+              'vínculos pra receita; se é cadastro errado/duplicado, corrija '
+              'ou renomeie.', 'danger')
         return redirect(url_for('materias_primas.banco'))
     nome = mp.nome
     # Alerta de estoque mínimo é CONFIG (não histórico) — vai junto da MP.
