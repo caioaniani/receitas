@@ -1021,3 +1021,56 @@ def followup_conversas_paradas():
         else:
             logger.warning('followup falhou conv=%s: %s', conv_id, envio)
     return {'avaliadas': avaliadas, 'enviadas': enviadas}
+
+
+def varrer_pendentes_sem_resposta():
+    """VASSOURA (02/07/2026): responde conversas `pending` cuja ULTIMA
+    mensagem e do CLIENTE ha mais de CHATBOT_VASSOURA_MIN minutos — o bot
+    devia ter respondido e nao respondeu (thread daemon morta num deploy,
+    crash depois de marcar a idempotencia). O Chatwoot nunca reenvia o
+    webhook (idempotente), entao sem esta varredura o cliente fica no vacuo
+    pra sempre. Espelho do followup, com a condicao INVERSA (la a ultima msg
+    e NOSSA; aqui e do cliente). Kill-switch: CHATBOT_VASSOURA=0."""
+    from app.services import chatwoot
+
+    cfg = current_app.config
+    if str(cfg.get('CHATBOT_VASSOURA', '1')) == '0':
+        return {'pulou': 'desligado'}
+    min_sil = int(cfg.get('CHATBOT_VASSOURA_MIN', 10) or 10)
+    max_sil = int(cfg.get('CHATBOT_VASSOURA_MAX_MIN', 720) or 720)
+    max_ciclo = int(cfg.get('CHATBOT_VASSOURA_MAX_POR_CICLO', 5) or 5)
+
+    paradas = chatwoot.listar_conversas_paradas(min_minutos=min_sil)
+    varridas = respondidas = 0
+    for c in paradas:
+        if respondidas >= max_ciclo:
+            break
+        conv_id = c.get('id')
+        minutos = c.get('minutos_paradas', 0)
+        if not conv_id or minutos > max_sil:
+            continue
+        historico = chatwoot.buscar_historico(conv_id)
+        if not historico:
+            continue
+        # So quando a ULTIMA mensagem e do CLIENTE (o bot ficou devendo).
+        if historico[-1].get('role') != 'user':
+            continue
+        varridas += 1
+        try:
+            resultado = responder(historico)
+            texto = (resultado or {}).get('texto') or ''
+            if texto:
+                envio = chatwoot.enviar_mensagem(conv_id, texto)
+                if envio.get('ok'):
+                    respondidas += 1
+                    salvar_historico(conv_id, historico, texto)
+            acao = (resultado or {}).get('acao')
+            if acao == 'handoff':
+                chatwoot.definir_status(conv_id, 'open')
+            elif acao == 'encerrar':
+                chatwoot.definir_status(conv_id, 'resolved')
+            logger.warning('vassoura: conv=%s recuperada apos %smin sem '
+                           'resposta (acao=%s)', conv_id, minutos, acao)
+        except Exception:  # noqa: BLE001
+            logger.exception('vassoura: falhou conv=%s', conv_id)
+    return {'varridas': varridas, 'respondidas': respondidas}
