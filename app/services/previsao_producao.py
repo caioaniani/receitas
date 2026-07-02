@@ -1943,15 +1943,18 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         comp = int(it['comprometido']) if it else 0
         prev = int(it['previsto']) if it else 0
         est_ef = int(it['em_estoque_efetivo']) if it else int(rr['em_estoque'])
-        demanda = max(comp, prev)
+        # Demanda do balanco = Σ_dia max(firme_d, previsto_d) (Fase 2). Linha
+        # fora do balanco (insumo injetado) cai no agregado antigo.
+        demanda = int(it['demanda']) if it and it.get('demanda') is not None \
+            else max(comp, prev)
         rr['comprometido'] = comp
         rr['previsto'] = prev        # a PREVISAO (historico) que tambem puxa producao
-        rr['demanda'] = demanda      # firme OU previsto, o maior — o que o balanco usa
+        rr['demanda'] = demanda      # Σ_dia max(firme, previsto) — o que o balanco usa
         rr['em_estoque_efetivo'] = est_ef   # estoque que sobra apos entregas iminentes
-        # Saldo contra a DEMANDA (max comp, prev) e o estoque EFETIVO: bate com o
-        # "Produzir" da linha (-saldo == produzir quando negativo). Antes era
-        # estoque - comprometido (so firme), ignorando o previsto -> a caixa dizia
-        # "nao falta" enquanto a linha mandava produzir (bug pego pelo dono 30/06).
+        # Saldo contra a DEMANDA e o estoque EFETIVO: bate com o "Produzir" da
+        # linha (-saldo == produzir quando negativo). Antes era estoque -
+        # comprometido (so firme), ignorando o previsto -> a caixa dizia "nao
+        # falta" enquanto a linha mandava produzir (bug pego pelo dono 30/06).
         rr['saldo'] = est_ef - demanda
         rr['produzir'] = max(0, demanda - est_ef)
         rr['breakdown'] = ([b for b in it['breakdown_comprometido'] if b['qtd'] > 0]
