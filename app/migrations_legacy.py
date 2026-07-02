@@ -1348,6 +1348,9 @@ def _migrate_sqlite(app):
     if 'fornada_especial' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN "
                        "fornada_especial BOOLEAN NOT NULL DEFAULT 0")
+    if 'retorno_receita_id' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN "
+                       "retorno_receita_id INTEGER REFERENCES receita(id)")
 
     cursor.execute("PRAGMA table_info(conta_pagar_item_map)")
     cols_cpim = [row[1] for row in cursor.fetchall()]
