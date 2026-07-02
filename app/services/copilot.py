@@ -932,7 +932,7 @@ REQUER_APROVACAO = {
     'criar_pedido', 'editar_pedido', 'receber_mp', 'ajuste_estoque',
     'mudar_status_pedido', 'criar_fornecedor', 'marcar_ponto', 'criar_tarefa',
     'marcar_tarefa_feita', 'balanco_congelados', 'entrada_lote_loja',
-    'devolver_industria',
+    'devolver_industria', 'criar_retirada_sobras',
     'registrar_desperdicio', 'registrar_desperdicio_lote',
     'anexar_foto_pedido', 'receber_pedido',
     'criar_cliente_b2b', 'criar_venda_b2b',
