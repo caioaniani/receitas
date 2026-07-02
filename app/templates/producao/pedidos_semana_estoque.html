@@ -63,19 +63,26 @@
     <label class="small text-muted mb-0 ms-2">Histórico (sem):</label>
     <input type="number" name="janela" min="1" max="26" value="{{ janela }}"
            class="form-control form-control-sm" style="width:64px;">
+    <label class="small text-muted mb-0 ms-2"
+           title="Colchão de segurança: o pedido deixa N% do consumo do dia sobrando no fim do dia (protege contra dia acima da média). 0 = repõe exatamente a média.">Segurança (%):</label>
+    <input type="number" name="seguranca" min="0" max="100" value="{{ seguranca }}"
+           class="form-control form-control-sm" style="width:64px;">
     <button class="btn btn-sm btn-outline-secondary">Recalcular</button>
 </form>
 
 <div class="alert alert-light border small">
-    <strong>Ponto de reposição.</strong> Para cada produto, o sistema mede a
-    <strong>venda média por dia-da-semana</strong> da loja (baixas do estoque) e
+    <strong>Ponto de reposição.</strong> Para cada produto, o sistema mede o
+    <strong>consumo médio por dia-da-semana</strong> da loja — venda de todos os
+    canais (PDV, site, saída em lote e venda manual, com cancelamentos
+    descontados) mais a merma estrutural (devolução à indústria e perda) — com
+    <strong>peso maior no recente</strong> e proteção contra pico isolado, e
     simula o estoque dia a dia a partir do <strong>saldo atual</strong>. Quando o
-    estoque projetado não cobre a venda do dia, ele pede o que falta
-    <strong>arredondado pra cima na caixa</strong> — o excedente vira estoque que
-    cobre os próximos dias (por isso item lento recebe 1 caixa a cada N dias, sem
-    acumular). Entrega <strong>diária</strong> (v1). Só aparecem produtos que
-    <strong>precisam</strong> de pedido. Dias já pedidos ficam travados; o gerar
-    pula. Ajuste à vontade — entra como <strong>rascunho</strong>.
+    estoque projetado não cobre o consumo do dia, ele pede o que falta
+    <strong>arredondado pra cima na caixa</strong> (respeitando o mínimo do item)
+    — o excedente vira estoque que cobre os próximos dias (por isso item lento
+    recebe 1 caixa a cada N dias, sem acumular). Entrega <strong>diária</strong>
+    (v1). Dias já pedidos ficam travados; o gerar pula. Ajuste à vontade — entra
+    como <strong>rascunho</strong>.
 </div>
 
 <form method="POST" action="{{ url_for('producao.pedidos_semana_gerar') }}">
