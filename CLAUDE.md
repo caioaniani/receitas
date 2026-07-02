@@ -469,6 +469,49 @@ balanco/entrada-em-lote acha um item sem cadastro, cria linha com `nome_pendente
 `/pedidos/congelados` ou `/pedidos/estoque-loja` (cards amarelos no topo). `_carregar_catalogo`
 nos services inclui orfaos pra match — reaplicar o balanco com o mesmo nome reusa a linha.
 
+## Ciclo de sobras: devolucao loja→industria + Croissant Almond (02/07/2026)
+
+Caso de negocio (dono): croissants tradicionais que sobram nas lojas voltam
+pra industria pra virar Croissant Almond (recheio de amendoas); Nutella e
+Nutella c/ Morango sao recheados NA loja a partir da sobra que fica la.
+
+**Devolucao de duas pontas** (`app/services/devolucao.py`): baixa `EstoqueLoja`
+(mov `devolucao_industria`; falta vira `devolucao_industria_sem_estoque`, nunca
+negativa) E credita `EstoqueProducao` (mov `retorno_loja`) na MESMA transacao.
+Token `dev-<hex>` amarra as pontas; `estornar_devolucao(token)` reverte as duas
+(idempotente; industria ja consumida = estorno parcial com aviso). Entradas:
+tela `/pedidos/estoque-loja` (tipo "Devolver a industria" + card de devolucoes
+recentes com estorno admin) e tool copilot `devolver_industria` (write,
+admin+gerente, preview mostra o destino).
+
+**Receita de retorno** (`Receita.retorno_receita_id`, self-FK; select na ficha,
+admin): o credito da devolucao vai pra ELA (ex: Croissant Tradicional →
+"Croissant Tradicional — Retorno"), nao pra receita original — a industria
+mantem 1 linha por receita (`uq_estoque_producao_receita`) e o retornado
+(assado, de vespera) NAO pode se misturar com o congelado cru que atende
+pedidos. NULL = credita a propria. ALTER ja em `_migrate_postgres`/`_migrate_sqlite`.
+
+**Politica "so de sobras" (decisao do dono 02/07/2026)**: receita cuja ficha
+consome uma receita de RETORNO (ex: Almond consome 1:1 o "— Retorno") tem a
+sugestao de producao CAPADA ao que o estoque devolvido cobre —
+`previsao_producao._caps_por_retorno`, aplicado no balanco (`produzir` +
+campo `limitado_por_retorno`) e no cronograma (`_explodir_bom` corta dos
+ultimos dias + linha do retorno nunca sugere producao, `retorno: True`).
+Retorno NAO e produzivel: nunca cascateia pra massa/MP. Limitacao conhecida:
+dois pais consumindo o MESMO retorno nao rateiam (hoje so o Almond consome).
+NAO "consertar" o cap pra puxar massa fresca sem perguntar ao dono.
+
+**Nutella na loja (sem codigo)**: Produto-composicao "Croissant Nutella" (1x
+receita Croissant Tradicional) mapeado no `/pdv/mapeamentos` — a venda Seru
+baixa o tradicional da loja pelo motor unico. Croissant Tradicional marcado
+`reaproveitavel` = sobra registrada nao baixa duas vezes.
+
+**Bug corrigido no caminho**: o form da tela de estoque manda tipos
+`sobra`/`perda` que NAO estavam em `TIPOS_VALIDOS` da rota registrar — caiam
+no fallback `venda` (perda virava "venda manual" no historico). Agora sao
+tipos reais (labels em `estoque_diario.py`). Testes:
+`tests/test_devolucao_industria.py`.
+
 ## Impressao de pedidos de entrega (2026-06-12)
 
 **A impressao oficial e PDF gerado no servidor** (`app/services/pdf.py::
