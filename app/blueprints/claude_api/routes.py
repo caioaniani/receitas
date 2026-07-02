@@ -101,6 +101,112 @@ def cronograma():
     )
 
 
+@claude_api_bp.route('/receita')
+@_claude_auth_required
+def receita():
+    """Ficha completa de uma receita em JSON — cadastro (rendimento/pesos/
+    lotes/preços), ingredientes, mapeamentos de venda (VendaMapa), cestas
+    que a contêm (ProdutoItem) e estoques atuais (indústria + por loja).
+    Serve pra conferir cadastro sem acesso direto ao Postgres.
+
+    Params: ?id=<receita_id> OU ?nome=<trecho> (case-insensitive). Trecho
+    com mais de um match devolve só a lista de candidatos (id + nome) pra
+    refinar. Inclui arquivadas (cadastro e histórico continuam legíveis).
+    """
+    from sqlalchemy import func
+
+    from app.models import (
+        EstoqueLoja,
+        EstoqueProducao,
+        Produto,
+        ProdutoItem,
+        Receita,
+        VendaMapa,
+    )
+
+    rid = (request.args.get('id') or '').strip()
+    nome = (request.args.get('nome') or '').strip()
+    if rid:
+        try:
+            recs = [r for r in [Receita.query.get(int(rid))] if r]
+        except (TypeError, ValueError):
+            return jsonify(ok=False, erro='id invalido'), 400
+    elif nome:
+        recs = (Receita.query
+                .filter(func.lower(Receita.nome).contains(nome.lower()))
+                .order_by(Receita.nome).all())
+    else:
+        return jsonify(ok=False, erro='informe ?id= ou ?nome='), 400
+
+    if not recs:
+        return jsonify(ok=False, erro='receita nao encontrada'), 404
+    if len(recs) > 1:
+        return jsonify(ok=True, multiplos=True, candidatos=[
+            {'id': r.id, 'nome': r.nome,
+             'arquivada': r.arquivada_em is not None} for r in recs])
+
+    rec = recs[0]
+    est_industria = [
+        {'quantidade': int(ep.quantidade or 0),
+         'nome_pendente': ep.nome_pendente}
+        for ep in EstoqueProducao.query.filter_by(receita_id=rec.id).all()]
+    est_lojas = [
+        {'loja': el.loja.nome if el.loja else el.loja_id,
+         'estado': el.estado,
+         'quantidade': int(el.quantidade or 0),
+         'reservada': int(el.quantidade_reservada or 0)}
+        for el in EstoqueLoja.query.filter_by(receita_id=rec.id).all()]
+    mapas = [
+        {'canal': m.canal, 'nome_externo': m.nome_externo,
+         'fator_quantidade': m.fator_quantidade, 'ignorar': m.ignorar,
+         'confirmado': m.confirmado_em is not None}
+        for m in VendaMapa.query.filter_by(receita_id=rec.id).all()]
+    cestas = []
+    for pi in ProdutoItem.query.filter_by(receita_id=rec.id).all():
+        prod = Produto.query.get(pi.produto_id)
+        cestas.append({'produto_id': pi.produto_id,
+                       'produto': prod.nome if prod else pi.produto_id,
+                       'quantidade': pi.quantidade})
+
+    return jsonify(ok=True, receita={
+        'id': rec.id,
+        'nome': rec.nome,
+        'categoria': rec.categoria or '',
+        'familia': rec.familia,
+        'arquivada_em': (rec.arquivada_em.isoformat()
+                         if rec.arquivada_em else None),
+        'rendimento_qtd': rec.rendimento_qtd,
+        'rendimento_unidade': rec.rendimento_unidade,
+        'peso_base': rec.peso_base,
+        'peso_unitario': rec.peso_unitario,
+        'perda_percentual': rec.perda_percentual or 0,
+        'custo_embalagem': rec.custo_embalagem or 0,
+        'dias_producao': rec.dias_producao or 0,
+        'capacidade_amassadeira_g': rec.capacidade_amassadeira_g,
+        'estado_padrao': rec.estado_padrao,
+        'lote_pedido': rec.lote_pedido,
+        'minimo_pedido': rec.minimo_pedido,
+        'lote_producao': rec.lote_producao,
+        'fornada_especial': rec.fornada_especial,
+        'sugerir_pedido_loja': rec.sugerir_pedido_loja,
+        'reaproveitavel': rec.reaproveitavel,
+        'retorno_receita': ({'id': rec.retorno_receita.id,
+                             'nome': rec.retorno_receita.nome}
+                            if rec.retorno_receita else None),
+        'precos': {'venda': rec.preco_venda, 'loja': rec.preco_loja,
+                   'site': rec.preco_site, 'interno': rec.preco_interno},
+        'ingredientes': [
+            {'tipo': i.tipo or 'mp', 'nome': i.ingrediente_nome,
+             'porcentagem_ou_qtd': i.porcentagem, 'eh_base': i.eh_base,
+             'sub_receita_id': i.sub_receita_id, 'nota': i.nota or ''}
+            for i in rec.ingredientes],
+        'estoque_industria': est_industria,
+        'estoque_lojas': est_lojas,
+        'mapeamentos_venda': mapas,
+        'em_cestas': cestas,
+    })
+
+
 @claude_api_bp.route('/pedidos-semana')
 @_claude_auth_required
 def pedidos_semana():
