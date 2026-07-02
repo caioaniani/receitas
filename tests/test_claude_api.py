@@ -71,3 +71,38 @@ def test_nao_exige_login_mas_exige_token(app):
     app.config['CLAUDE_API_TOKEN'] = TOKEN
     resp = app.test_client().get('/api/claude/cronograma')
     assert resp.status_code == 401
+
+
+def test_pedidos_semana_modo_venda_e_media(app):
+    """GET /api/claude/pedidos-semana devolve a grade dos dois motores."""
+    from datetime import datetime, time as _t
+
+    from app.models import EstoqueLoja, MovEstoqueLoja
+
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    r = _seed('Croissant')
+    loja = Loja.query.filter_by(nome='Loja A').first()
+    el = EstoqueLoja(loja_id=loja.id, receita_id=r.id, quantidade=0)
+    db.session.add(el)
+    db.session.commit()
+    d = hoje() - timedelta(days=7)
+    db.session.add(MovEstoqueLoja(
+        estoque_loja_id=el.id, tipo='venda_seru', quantidade=10,
+        data=datetime.combine(d, _t(12, 0)), referencia='t'))
+    db.session.commit()
+
+    client = app.test_client()
+    for modo in ('venda', 'media'):
+        resp = client.get(f'/api/claude/pedidos-semana?modo={modo}&inicio=0',
+                          headers={'Authorization': f'Bearer {TOKEN}'})
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['ok'] is True
+        assert body['modo'] == modo
+        assert isinstance(body['lojas'], list)
+
+
+def test_pedidos_semana_exige_token(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    resp = app.test_client().get('/api/claude/pedidos-semana')
+    assert resp.status_code == 401
