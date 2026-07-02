@@ -113,12 +113,14 @@
                         <td class="estoque">{{ p.estoque_atual }}</td>
                         <td class="venda">{{ p.media_semanal }}</td>
                         {% for dia in grade.dias %}
-                        <td class="{{ 'jatem' if dia.data in loja.ja_tem }}">
+                        {% set travado = dia.data in loja.ja_tem %}
+                        {% set pedido_dia = p.ja_pedido[loop.index0] if travado else 0 %}
+                        <td class="{{ 'jatem' if travado }}">
                             <input type="number" min="0"
-                                   class="form-control form-control-sm pmed-cel"
+                                   class="form-control form-control-sm pmed-cel{% if travado and pedido_dia %} tem-pedido{% endif %}"
                                    name="qtd|{{ loja.loja_id }}|{{ dia.data }}|{{ p.item_key }}"
-                                   value="{{ p.por_dia[loop.index0] }}"
-                                   {% if dia.data in loja.ja_tem %}disabled title="já tem pedido neste dia"{% endif %}>
+                                   value="{{ pedido_dia if travado else p.por_dia[loop.index0] }}"
+                                   {% if travado %}disabled title="já tem pedido neste dia — mostrando o que FOI pedido ({{ pedido_dia }} un), não a sugestão"{% endif %}>
                         </td>
                         {% endfor %}
                         <td class="total-cel">0</td>
