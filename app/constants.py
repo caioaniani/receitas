@@ -7,7 +7,11 @@ deve importar daqui.
 
 # ─── Tipos de movimento de venda ──────────────────────────────────────
 
-# Vendas que baixam de EstoqueLoja (lojas fisicas / e-commerce com retirada)
+# Vendas que baixam de EstoqueLoja (lojas fisicas / e-commerce com retirada).
+# ATENCAO (02/07/2026): esta lista e a visao de RECONCILIACAO/vigia do ledger
+# (pdv_saude, anomalias, loja_pagamento) — NAO e a lista de DEMANDA das
+# previsoes. Previsao/reposicao usa VENDA_TIPOS_DEMANDA_LOJA abaixo (inclui
+# venda manual e saida_lote, e trata estorno com sinal).
 VENDA_TIPOS_LOJA = (
     'venda_seru', 'venda_seru_sem_estoque',
     'venda_vnda', 'venda_vnda_sem_estoque',
@@ -17,6 +21,51 @@ VENDA_TIPOS_LOJA = (
     # Estorno (cancelamento ou refund) usa `venda_site_estorno`.
     'venda_site', 'venda_site_sem_estoque', 'venda_site_estorno',
 )
+
+# ─── Demanda de venda da loja (previsoes / ponto de reposicao) ─────────
+#
+# Unificacao de 02/07/2026 (Fase 0 da revisao dos motores de previsao): eram
+# TRES listas divergentes (VENDA_TIPOS_LOJA aqui, _DEMANDA_VENDA_TIPOS em
+# previsao_producao.py e SERU_TIPOS em vendas_manuais.py) — cada previsao
+# enxergava um total de venda diferente pro mesmo dia/loja.
+#
+# Tipos que SOMAM demanda de consumo: a baixa real de cada canal + o registro
+# de falta (`*_sem_estoque` — a venda ACONTECEU no PDV com o ledger zerado;
+# conta como consumo, nao como "demanda extra"). Inclui a venda MANUAL da
+# tela de estoque (lojas sem PDV eram sub-contadas) e o legado VNDA (sai da
+# janela historica sozinho).
+VENDA_TIPOS_DEMANDA_LOJA = (
+    'venda_seru', 'venda_seru_sem_estoque',
+    'venda_site', 'venda_site_sem_estoque',
+    'saida_lote', 'venda_loja_sem_estoque',
+    'venda', 'venda_sem_estoque',
+    'venda_vnda', 'venda_vnda_sem_estoque',
+)
+
+# Estornos de venda e o SINAL com que a QUANTIDADE foi GRAVADA no ledger
+# (ver baixa_venda._SINAL_ESTORNO): Seru/lote gravam o estorno POSITIVO —
+# multiplicar por -1 subtrai da demanda; site (e o legado VNDA, mesma
+# convencao; nenhum writer de venda_vnda_estorno foi encontrado no historico
+# do repo) grava NEGATIVO — somar direto (sinal +1) ja subtrai. Sem isso,
+# venda Seru cancelada contava demanda cheia na media.
+VENDA_ESTORNO_SINAL_DEMANDA = {
+    'venda_seru_estorno': -1,
+    'saida_lote_estorno': -1,
+    'venda_site_estorno': 1,
+    'venda_vnda_estorno': 1,
+}
+
+# Filtro completo pra queries de demanda (vendas + estornos). Agregue com
+# `quantidade * VENDA_ESTORNO_SINAL_DEMANDA.get(tipo, 1)`.
+VENDA_TIPOS_DEMANDA_COM_ESTORNO = (
+    VENDA_TIPOS_DEMANDA_LOJA + tuple(VENDA_ESTORNO_SINAL_DEMANDA))
+
+# Mermas ESTRUTURAIS que a projecao de reposicao da loja trata como consumo
+# recorrente: devolucao a industria (ciclo de sobras desejado — croissant
+# tradicional devolvido pra virar Almond) e perda (quebra operacional). Sobra/
+# descarte/desperdicio ficam FORA de proposito: excesso nao se repoe — incluir
+# perpetuaria o proprio desperdicio na sugestao de pedido.
+MERMA_TIPOS_PROJECAO = ('devolucao_industria', 'perda')
 
 # Vendas que baixam de EstoqueProducao (industria / B2B)
 VENDA_TIPOS_PRODUCAO = (
