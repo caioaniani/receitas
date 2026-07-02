@@ -165,48 +165,7 @@
         {% if current_user.pode_producao() %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Produção</div>
-
-        {% if current_user.is_admin() %}
-        <a href="{{ url_for('producao.painel') }}"
-           class="sidebar-link {% if '/producao/painel' in request.path %}active{% endif %}">
-            <i class="bi bi-clipboard-data"></i> Painel de produção
-        </a>
-        <a href="{{ url_for('industria_teste.index') }}"
-           class="sidebar-link {% if '/telaindustriateste' in request.path %}active{% endif %}">
-            <i class="bi bi-calendar-week"></i> Cronograma
-        </a>
-        <a href="{{ url_for('padeiro.index') }}"
-           class="sidebar-link {% if request.path == '/padeiro' or request.path.startswith('/padeiro/') %}active{% endif %}">
-            <i class="bi bi-hammer"></i> Tela do padeiro
-        </a>
-        <a href="{{ url_for('producao.pedidos_semana_media') }}"
-           class="sidebar-link {% if '/pedidos-semana' in request.path %}active{% endif %}">
-            <i class="bi bi-cart-plus"></i> Pedidos da semana
-        </a>
-        {% endif %}
-        <a href="{{ url_for('producao.lista') }}"
-           class="sidebar-link {% if request.path.startswith('/producao') and '/painel' not in request.path and '/pedidos-semana' not in request.path %}active{% endif %}">
-            Listas de compra
-        </a>
-        <a href="{{ url_for('pedidos.congelados') }}"
-           class="sidebar-link {% if '/pedidos/congelados' in request.path %}active{% endif %}">
-            Congelados
-        </a>
-        <a href="{{ url_for('pedidos.separacao') }}"
-           class="sidebar-link {% if '/pedidos/separacao' in request.path %}active{% endif %}">
-            Pedidos a Separar
-        </a>
-        {% if current_user.is_admin() %}
-        <div class="px-3 pt-2 pb-1 text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">Configuração</div>
-        <a href="{{ url_for('receitas.amassadeira') }}"
-           class="sidebar-link {% if request.path == '/receitas/amassadeira' %}active{% endif %}">
-            <i class="bi bi-gear-wide-connected"></i> Produção por categoria
-        </a>
-        <a href="{{ url_for('receitas.massa_base_lista') }}"
-           class="sidebar-link {% if request.path.startswith('/receitas/massa-base') %}active{% endif %}">
-            <i class="bi bi-diagram-2"></i> Massas base
-        </a>
-        {% endif %}
+        {{ areanav.producao('sidebar') }}
         {% endif %}
 
         {# ── 3. CATÁLOGO ── #}
