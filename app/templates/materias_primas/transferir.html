@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Transferir vínculos — {{ mp.nome }}{% endblock %}
+
+{% block content %}
+<div style="max-width: 640px;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="page-title mb-0"><i class="bi bi-arrow-right-circle"></i> Transferir vínculos pra receita</h1>
+        <a href="{{ url_for('materias_primas.banco') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar ao banco de MPs
+        </a>
+    </div>
+
+    <div class="alert alert-warning" style="font-size:13px;">
+        <strong>"{{ mp.nome }}"</strong> está cadastrada como matéria-prima, mas
+        se ela é <strong>produzida</strong> (tem ficha), os vínculos devem morar
+        na <strong>receita</strong>. Pedidos, vendas, estoque de loja (somado),
+        cestas, mapeamentos e o uso como ingrediente passam a apontar pra
+        receita escolhida. O que não tem equivalente (movimentações de estoque
+        de MP, histórico de preço, financeiro) fica como histórico — sem eles,
+        a MP libera pra excluir.
+    </div>
+
+    {% if vinculos %}
+    <div class="card mb-3">
+        <div class="card-header bg-white fw-bold" style="font-size:13px;">O que aponta pra esta MP hoje</div>
+        <ul class="list-group list-group-flush" style="font-size:13px;">
+            {% for rotulo, n in vinculos %}
+            <li class="list-group-item d-flex justify-content-between">
+                <span>{{ rotulo }}</span><strong>{{ n }}</strong>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% else %}
+    <div class="alert alert-info" style="font-size:13px;">
+        Nenhum vínculo transferível — esta MP já pode ser excluída direto no banco de MPs.
+    </div>
+    {% endif %}
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-label" style="font-size:12px;">
+            Receita destino (nome exato — a ficha precisa existir; se não existe, crie antes em Receitas)
+        </label>
+        <div class="d-flex gap-2">
+            <input type="text" name="destino" class="form-control form-control-sm"
+                   list="receita-list" placeholder="ex: Geleia Artesanal de Morango"
+                   autocomplete="off" required>
+            <button type="submit" class="btn btn-warning btn-sm text-nowrap"
+                    onclick="return confirm('Transferir os vínculos de {{ mp.nome|e }} pra receita informada? Pedidos, vendas e estoque passam a contar na receita.');">
+                Transferir
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
