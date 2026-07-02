@@ -311,6 +311,12 @@ def _migrate_postgres(app):
             conn.execute(text("ALTER TABLE materia_prima ADD COLUMN estoque_atual REAL DEFAULT 0"))
         if cols_mp and 'peso_unidade' not in cols_mp:
             conn.execute(text("ALTER TABLE materia_prima ADD COLUMN peso_unidade REAL"))
+        if cols_mp and 'sugerir_pedido_loja' not in cols_mp:
+            # MP que as lojas pedem da industria (checkbox no banco de MPs) —
+            # entra na tela de pedidos da semana por venda+estoque.
+            conn.execute(text(
+                "ALTER TABLE materia_prima ADD COLUMN sugerir_pedido_loja "
+                "BOOLEAN NOT NULL DEFAULT FALSE"))
 
         # pedido_item.quantidade_recebida + materia_prima_id
         result = conn.execute(text(
