@@ -131,7 +131,7 @@ def test_copilot_single_marca_flag_no_resultado(app, admin_user):
     from app.services import copilot
     loja, r, el = _setup(reaproveitavel=True)
     out = copilot.executar_registrar_desperdicio(
-        {'loja': loja.nome, 'item': r.nome, 'quantidade': 2,
+        {'loja_nome': loja.nome, 'item_nome': r.nome, 'quantidade': 2,
          'motivo': 'validade'}, admin_user)
     assert out['ok'] is True
     assert out['reaproveitavel_sem_baixa'] is True
