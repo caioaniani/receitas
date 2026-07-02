@@ -373,20 +373,61 @@ def bot_webhook():
     # (mensagens consecutivas do cliente no WhatsApp = webhooks paralelos).
     _lock_conv = _lock_para_conv(conv_id)
 
+    # Imagens da mensagem ATUAL (vem do webhook, nao do historico).
+    anexos = payload.get('attachments') or []
+    imagens_atuais = [a.get('data_url') for a in anexos
+                      if a.get('file_type') == 'image' and a.get('data_url')]
+
+    # ÁUDIO/anexo nao suportado (02/07/2026): antes, msg so de audio caia num
+    # `return` silencioso — conversa PRESA em pending pra sempre (o follow-up
+    # nao dispara porque a ultima msg e do cliente). Agora responde
+    # deterministicamente pedindo texto, sem gastar Claude.
+    if not content and not imagens_atuais and anexos:
+        def _responder_sem_suporte():
+            with app.app_context():
+                from app.services import chatbot, chatwoot
+                with _lock_conv:
+                    try:
+                        texto = ('Ainda não consigo ouvir áudios ou abrir esse '
+                                 'tipo de arquivo por aqui. Pode me escrever? '
+                                 'Assim te respondo na hora.')
+                        chatwoot.enviar_mensagem(conv_id, texto)
+                        base = chatbot.carregar_historico(conv_id)
+                        chatbot.salvar_historico(
+                            conv_id,
+                            base + [{'role': 'user',
+                                     'content': '[cliente enviou áudio/anexo não suportado]'}],
+                            texto)
+                    except Exception:
+                        logger.exception('crm bot resposta a anexo nao suportado '
+                                         'falhou conv=%s', conv_id)
+        threading.Thread(target=_responder_sem_suporte, daemon=True).start()
+        return jsonify({'ok': True, 'acao': 'anexo-nao-suportado'})
+
+    if not content and not imagens_atuais:
+        return jsonify({'ok': True, 'ignorado': 'vazio'})
+
+    # Deposita no buffer de rajada; a thread que acordar primeiro do debounce
+    # drena TUDO e responde uma vez só.
+    _depositar_pendente(conv_id, content, imagens_atuais)
+
     def _processar():
         with app.app_context():
+            import time as _time
+
             from app.services import chatbot, chatwoot
+            espera = _debounce_segundos()
+            if espera > 0:
+                _time.sleep(espera)
             with _lock_conv:
                 resultado = None
                 historico = None
+                texto_enviado = False
                 try:
-                    # Imagens da mensagem ATUAL (vem do webhook, nao do historico)
-                    imagens = [a.get('data_url')
-                               for a in (payload.get('attachments') or [])
-                               if a.get('file_type') == 'image' and a.get('data_url')]
-                    if not content and not imagens:
-                        return
-                    msg_atual = {'role': 'user', 'content': content}
+                    conteudo, imagens = _drenar_pendentes(conv_id)
+                    if conteudo is None:
+                        return   # outra thread da rajada ja respondeu tudo
+                    msg_atual = {'role': 'user', 'content': conteudo}
                     if imagens:
                         msg_atual['imagens'] = imagens
 
