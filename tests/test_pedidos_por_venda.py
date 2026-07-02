@@ -356,3 +356,27 @@ def test_rota_estoque_renderiza_mp_com_badge(app, admin_user):
     assert 'Pão de Queijo (congelado)' in body
     assert 'mp:%d' % mp.id in body              # token no name do input
     assert '>MP</span>' in body                 # badge de matéria-prima
+
+
+def test_dia_travado_expoe_o_que_foi_pedido(app):
+    """Dia com pedido existente: `ja_pedido` traz o pedido REAL do dia — a
+    célula travada mostra o encomendado em vez de um 0 apagado."""
+    from app.models import PedidoItem, PedidoLoja
+    loja = _loja()
+    r = _receita('Pao')
+    el = _estoque(loja, r, 0)
+    _venda(el, hoje() - timedelta(days=7), 10)
+    amanha = hoje() + timedelta(days=1)
+    ped = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=amanha,
+                     data_pedido=hoje())
+    db.session.add(ped)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=ped.id, receita_id=r.id, quantidade=55))
+    db.session.commit()
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=0)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['ja_pedido'][1] == 55                      # amanhã = dia 1
+    assert p['por_dia'][1] == 0                         # travado: sem sugestão
