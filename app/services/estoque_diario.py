@@ -51,8 +51,12 @@ FONTE_LABEL = {
     'ajuste_negativo': 'Ajuste manual (saida)',
     'ajuste_conferencia': 'Conferencia (contagem)',
     'devolucao': 'Devolucao',
+    'devolucao_industria': 'Devolucao p/ industria',
+    'devolucao_industria_estorno': 'Estorno de devolucao',
     'descarte': 'Descarte',
     'desperdicio': 'Desperdicio',
+    'sobra': 'Sobra',
+    'perda': 'Perda',
     'saida_lote': 'Saida em lote',
     'saida_pedido': 'Saida p/ pedido',
 }
