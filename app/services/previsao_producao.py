@@ -1358,6 +1358,31 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
             return max(0, efetivo - demanda)
         return est_extra.get(rid, 0)
 
+    # Cap "so de sobras" ANTES da propagacao: pai que consome retorno produz no
+    # maximo o que o estoque devolvido cobre (corta dos ULTIMOS dias — os
+    # primeiros seguem a curva de demanda). O balanco ja capa o total; aqui o
+    # cap protege o plano re-editado/re-distribuido do cronograma tambem.
+    caps_ret, _rids = _caps_por_retorno(receitas, _estoque_livre)
+    for rid, lim in caps_ret.items():
+        rr = linhas.get(rid)
+        if rr is None:
+            continue
+        atual = prod.get(rid, [0] * n)
+        excesso = sum(atual) - lim['cap']
+        if excesso <= 0:
+            continue
+        for i in range(n - 1, -1, -1):
+            if excesso <= 0:
+                break
+            corte = min(atual[i], excesso)
+            atual[i] -= corte
+            excesso -= corte
+        prod[rid] = atual
+        for i, c in enumerate(rr['por_dia']):
+            c['qtd'] = atual[i]
+        rr['total'] = sum(atual)
+        rr['limitado_por_retorno'] = lim
+
     for rid in ordem:
         cons = consumo[rid]
         if sum(cons) > 0:                          # recebeu demanda de pais
