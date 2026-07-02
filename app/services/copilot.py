@@ -4222,12 +4222,24 @@ def executar_registrar_desperdicio(params, user):
             ))
 
     db.session.commit()
-    return {'ok': True, 'desperdicio_id': desp.id,
-            'loja': loja.nome, 'item': nome_item_ok,
-            'quantidade': qtd, 'baixado_do_estoque': baixa,
-            'motivo': motivo,
-            'registro_tipo': 'desperdicio', 'registro_id': desp.id,
-            'url': f'/pedidos/desperdicio?loja={loja.id}'}
+    out = {'ok': True, 'desperdicio_id': desp.id,
+           'loja': loja.nome, 'item': nome_item_ok,
+           'quantidade': qtd, 'baixado_do_estoque': baixa,
+           'motivo': motivo,
+           'registro_tipo': 'desperdicio', 'registro_id': desp.id,
+           'url': f'/pedidos/desperdicio?loja={loja.id}'}
+    # Reaproveitavel COM receita de retorno -> o copilot emenda "quantos
+    # voltam pra industria?" e cria a retirada (criar_retirada_sobras).
+    if reaproveita and tipo_item == 'receita':
+        from app.models import Receita as _R
+        _rec = _R.query.get(item_id)
+        if _rec is not None and _rec.retorno_receita_id:
+            out['retirada_sugerida'] = {
+                'item': nome_item_ok, 'qtd_sobra': qtd,
+                'destino': (_rec.retorno_receita.nome
+                            if _rec.retorno_receita else nome_item_ok),
+            }
+    return out
 
 
 def _read_consultar_catalogo_site(params, user):
