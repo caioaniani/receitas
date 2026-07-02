@@ -335,3 +335,91 @@ def test_padeiro_plano_do_dia_esconde_dispensado(app, admin_user):
         ids3 = [it['receita_id'] for grp in pd3['grupos'] for it in grp['itens']]
         ids3 += [it['receita_id'] for it in pd3['solos']]
         assert r.id in ids3                                    # undo reabre
+
+
+# ── reagendar_para_hoje (mandar a falta pra produção de HOJE) ──────────────
+def test_reagendar_move_falta_pra_hoje(app):
+    from app.services.producao_pendente import reagendar_para_hoje
+    r = _receita('Foccacia')
+    old = _ordem(r, hoje() - timedelta(days=2), alvo=10, produzido=3)  # falta 7
+    item = old.itens[0]
+
+    res = reagendar_para_hoje([item.id], user_id=None)
+    assert res == {'movidos': 1, 'unidades': 7}
+
+    plano_hoje = (PlanejamentoProducao.query
+                  .filter_by(data=hoje(), origem='cronograma').first())
+    assert plano_hoje is not None
+    assert plano_hoje.enviado_ao_padeiro is True          # padeiro vê em /padeiro
+    it_hoje = plano_hoje.itens[0]
+    assert it_hoje.receita_id == r.id
+    assert it_hoje.qtd_alvo == 7 and it_hoje.produzido_qtd == 0
+    # ordem antiga fechada: alvo cai pro produzido -> falta 0 (sai da auditoria)
+    db.session.refresh(item)
+    assert item.qtd_alvo == 3 and item.produzido_qtd == 3
+
+
+def test_reagendar_produzido_zero_remove_ordem_antiga(app):
+    from app.services.producao_pendente import reagendar_para_hoje
+    r = _receita('Pao Frances')
+    old = _ordem(r, hoje() - timedelta(days=1), alvo=8, produzido=0)   # nada feito
+    item_id = old.itens[0].id
+
+    reagendar_para_hoje([item_id], user_id=None)
+
+    assert db.session.get(PlanejamentoItem, item_id) is None           # removida
+    plano_hoje = (PlanejamentoProducao.query
+                  .filter_by(data=hoje(), origem='cronograma').first())
+    assert plano_hoje.itens[0].qtd_alvo == 8
+
+
+def test_reagendar_soma_em_receita_ja_no_plano_de_hoje(app):
+    from app.services.producao_pendente import reagendar_para_hoje
+    r = _receita('Brioche')
+    _ordem(r, hoje(), alvo=5)                              # ja tem 5 hoje
+    old = _ordem(r, hoje() - timedelta(days=1), alvo=10, produzido=3)  # falta 7
+    item_id = old.itens[0].id
+
+    reagendar_para_hoje([item_id], user_id=None)
+
+    plano_hoje = (PlanejamentoProducao.query
+                  .filter_by(data=hoje(), origem='cronograma').first())
+    itens_r = [it for it in plano_hoje.itens if it.receita_id == r.id]
+    assert len(itens_r) == 1                               # nao duplicou
+    assert itens_r[0].qtd_alvo == 12                       # 5 + 7
+
+
+# ── produzido_no_dia (o que o padeiro confirmou ontem) ─────────────────────
+def test_produzido_no_dia_le_movimentos_de_ontem(app):
+    from datetime import datetime, time
+
+    from app.models import EstoqueProducao, MovEstoqueProducao
+    from app.services.producao_pendente import produzido_no_dia
+    r = _receita('Sourdough')
+    ep = EstoqueProducao(receita_id=r.id, quantidade=0)
+    db.session.add(ep)
+    db.session.flush()
+    ontem = hoje() - timedelta(days=1)
+    db.session.add_all([
+        # produzido ONTEM (conta)
+        MovEstoqueProducao(estoque_producao_id=ep.id, tipo='producao',
+                           quantidade=8,
+                           data=datetime.combine(ontem, time(12, 0))),
+        # produzido HOJE (fora da janela de ontem)
+        MovEstoqueProducao(estoque_producao_id=ep.id, tipo='producao',
+                           quantidade=5,
+                           data=datetime.combine(hoje(), time(9, 0))),
+        # balanco de ontem (nao e 'producao' -> nao conta)
+        MovEstoqueProducao(estoque_producao_id=ep.id, tipo='balanco_entrada',
+                           quantidade=99,
+                           data=datetime.combine(ontem, time(10, 0))),
+    ])
+    db.session.commit()
+
+    res = produzido_no_dia()                               # default: ontem
+    assert res['dia'] == ontem
+    assert res['total'] == 8                               # so o 'producao' de ontem
+    assert len(res['itens']) == 1
+    assert res['itens'][0]['receita_id'] == r.id
+    assert res['itens'][0]['receita_nome'] == 'Sourdough'
+    assert res['itens'][0]['qtd'] == 8
