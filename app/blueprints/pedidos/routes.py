@@ -2557,7 +2557,10 @@ def estoque_loja_registrar():
     ids = request.form.getlist('estoque_id[]')
     qtds = request.form.getlist('qtd[]')
     tipos = request.form.getlist('tipo[]')
-    TIPOS_VALIDOS = {'venda', 'ajuste', 'devolucao', 'descarte'}
+    # 'sobra' e 'perda' sao o que o form envia desde sempre — antes NAO estavam
+    # na lista e caiam no fallback 'venda' (perda virava "venda manual" no
+    # historico). 'devolucao' = devolver a INDUSTRIA (duas pontas, abaixo).
+    TIPOS_VALIDOS = {'venda', 'ajuste', 'devolucao', 'descarte', 'sobra', 'perda'}
 
     # Pre-carrega EstoqueLoja em batch (evita N+1)
     eids_int = []
@@ -2569,6 +2572,7 @@ def estoque_loja_registrar():
     eids_validos = [e for e in eids_int if e is not None]
     els_map = {e.id: e for e in EstoqueLoja.query.filter(EstoqueLoja.id.in_(eids_validos)).all()} if eids_validos else {}
 
+    devolver = []   # linhas 'devolucao' → duas pontas via service, 1 token
     for i, eid_int in enumerate(eids_int):
         if eid_int is None:
             continue
@@ -2584,6 +2588,14 @@ def estoque_loja_registrar():
         tipo = tipos[i] if i < len(tipos) else 'venda'
         if tipo not in TIPOS_VALIDOS:
             tipo = 'venda'
+        if tipo == 'devolucao' and (el.receita_id or el.produto_id):
+            # Devolucao vai pra INDUSTRIA: baixa a loja E credita o congelado
+            # (service devolucao.py). MP nao tem estoque na industria — segue
+            # no caminho antigo (so baixa a loja).
+            devolver.append({
+                'tipo': 'receita' if el.receita_id else 'produto',
+                'id': el.receita_id or el.produto_id, 'qtd': qtd})
+            continue
         el.quantidade = max(0, el.quantidade - qtd)
         db.session.add(MovEstoqueLoja(
             estoque_loja_id=el.id, tipo=tipo, quantidade=qtd,
@@ -2591,9 +2603,37 @@ def estoque_loja_registrar():
             usuario_id=current_user.id,
         ))
 
+    if devolver:
+        from app.services.devolucao import devolver_industria
+        r = devolver_industria(loja_id, devolver, current_user.id, commit=False)
+        for aviso in r['avisos']:
+            flash(aviso, 'warning')
+        flash(f'Devolução {r["token"]}: {len(r["itens"])} item(ns) '
+              'creditado(s) na indústria.', 'info')
+
     db.session.commit()
     flash('Estoque atualizado.', 'success')
     return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+
+
+@pedidos_bp.route('/devolucao/estornar', methods=['POST'])
+@login_required
+@admin_required
+def devolucao_estornar():
+    """Estorna uma devolução loja→indústria pelo token (as duas pontas)."""
+    from app.services.devolucao import estornar_devolucao
+    token = (request.form.get('token') or '').strip()
+    loja_id = request.form.get('loja_id')
+    try:
+        r = estornar_devolucao(token, current_user.id)
+    except ValueError as e:
+        flash(str(e), 'warning')
+    else:
+        for aviso in r['avisos']:
+            flash(aviso, 'warning')
+        flash(f'Devolução {token} estornada (loja re-creditada, '
+              'indústria re-baixada).', 'success')
+    return redirect(url_for('pedidos.estoque_loja', loja=loja_id or None))
 
 
 @pedidos_bp.route('/estoque-loja/ajuste', methods=['POST'])
