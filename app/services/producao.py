@@ -44,17 +44,24 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
                 planejamento_id=plano.id, receita_id=rid,
                 multiplicador=max(1, ceil(qtd / rend)), qtd_alvo=qtd))
         else:
-            it.qtd_alvo = max(qtd, int(it.produzido_qtd or 0))
+            # A parcela EXTRA (reagendada da auditoria) SOMA ao alvo do grid —
+            # re-enviar o plano nao pode apagar o que o admin mandou a mao.
+            extra = int(it.qtd_extra or 0)
+            it.qtd_alvo = max(qtd + extra, int(it.produzido_qtd or 0))
             it.multiplicador = max(1, ceil(it.qtd_alvo / rend))
 
     # Receitas que sairam do cronograma: remove, EXCETO as que ja produziram
-    # (estoque/MP reais ja mexeram) — essas travam no produzido.
+    # (estoque/MP reais ja mexeram) ou que tem parcela EXTRA (reagendada) —
+    # essas travam no maior entre produzido e extra.
     for rid, it in existentes.items():
         if rid in alvo:
             continue
-        if int(it.produzido_qtd or 0) > 0:
-            it.qtd_alvo = int(it.produzido_qtd)
-            it.multiplicador = max(1, it.multiplicador or 1)
+        piso = max(int(it.produzido_qtd or 0), int(it.qtd_extra or 0))
+        if piso > 0:
+            it.qtd_alvo = piso
+            rec = receitas.get(rid)
+            rend = rendimento_massa_crua(rec) if rec else 1.0
+            it.multiplicador = max(1, ceil(it.qtd_alvo / rend))
         else:
             db.session.delete(it)
     return len(alvo)

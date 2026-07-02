@@ -439,3 +439,84 @@ def test_auditoria_pagina_renderiza_com_reagendar_e_produzido(app, admin_user):
     assert b'aud-reagendar-btn' in resp.data                     # botão "produzir hoje"
     assert b'auditoria/reagendar' in resp.data                   # formaction da rota
     assert 'Produzido ontem'.encode() in resp.data               # seção nova
+
+
+# ── REGRESSÃO 02/07: reagendado NÃO pode sumir quando o plano é re-enviado ──
+def test_reagendado_sobrevive_ao_reenviar_plano_de_hoje(app, admin_user):
+    """O caso do padeiro ("cadê os pães?"): admin reagenda as vencidas pra
+    HOJE, depois envia o plano do dia (fluxo normal) — o re-sync reconstruía
+    os itens do GRID e apagava os reagendados. Agora a parcela extra
+    (qtd_extra) sobrevive e o padeiro vê."""
+    from app.blueprints.padeiro.routes import _plano_do_dia
+    from app.services.producao import enviar_plano_do_dia
+    from app.services.producao_pendente import reagendar_para_hoje
+    r = _receita('Sourdough 7 Grãos')
+    old = _ordem(r, hoje() - timedelta(days=1), alvo=50, produzido=0)  # vencida
+
+    reagendar_para_hoje([old.itens[0].id], user_id=admin_user.id)
+    # fluxo normal do dia: (re)enviar o plano de hoje pro padeiro — o grid de
+    # hoje NÃO tem demanda desta receita (sem pedidos), então antes do fix o
+    # sync apagava o item reagendado aqui.
+    enviar_plano_do_dia(hoje(), user_id=admin_user.id)
+
+    plano_hoje = (PlanejamentoProducao.query
+                  .filter_by(data=hoje(), origem='cronograma').first())
+    assert plano_hoje is not None
+    itens = {it.receita_id: it for it in plano_hoje.itens}
+    assert r.id in itens                                # NÃO sumiu
+    assert itens[r.id].qtd_alvo == 50
+    assert itens[r.id].qtd_extra == 50
+    # e o padeiro VÊ na tela dele
+    with app.test_request_context():
+        pd = _plano_do_dia(hoje())
+    ids = [it['receita_id'] for grp in pd['grupos'] for it in grp['itens']]
+    ids += [it['receita_id'] for it in pd['solos']]
+    assert r.id in ids
+
+
+def test_reagendado_soma_com_alvo_do_grid_no_reenvio(app, admin_user):
+    """Receita que TAMBÉM tem demanda no grid de hoje: re-enviar recalcula o
+    grid e SOMA o extra (grid + reagendado), não sobrescreve."""
+    from app.models import Loja, PedidoItem as PI, PedidoLoja
+    from app.services.producao import enviar_plano_do_dia
+    from app.services.producao_pendente import reagendar_para_hoje
+    r = _receita('Croissant')
+    loja = Loja(nome='Centro', ativa=True)
+    db.session.add(loja)
+    db.session.flush()
+    # pedido firme pra HOJE -> o grid de hoje tem 30 desta receita
+    ped = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=hoje(),
+                     data_pedido=hoje())
+    db.session.add(ped)
+    db.session.flush()
+    db.session.add(PI(pedido_id=ped.id, receita_id=r.id, quantidade=30))
+    db.session.commit()
+    old = _ordem(r, hoje() - timedelta(days=1), alvo=20, produzido=0)  # falta 20
+
+    reagendar_para_hoje([old.itens[0].id], user_id=admin_user.id)
+    enviar_plano_do_dia(hoje(), user_id=admin_user.id)
+
+    plano_hoje = (PlanejamentoProducao.query
+                  .filter_by(data=hoje(), origem='cronograma').first())
+    it = next(x for x in plano_hoje.itens if x.receita_id == r.id)
+    assert it.qtd_extra == 20
+    assert it.qtd_alvo == 50                            # 30 do grid + 20 extra
+
+
+def test_reagendar_reabre_item_dispensado_de_hoje(app, admin_user):
+    """Se o plano de hoje já tinha a receita DISPENSADA (a tela do padeiro
+    esconde), reagendar pra ela REABRE o item — antes a falta somava num item
+    oculto e sumia do mesmo jeito."""
+    from app.services.producao_pendente import dispensar_item, reagendar_para_hoje
+    r = _receita('Baguette')
+    p_hoje = _ordem(r, hoje(), alvo=10, produzido=0)    # plano de HOJE
+    dispensar_item(p_hoje.itens[0].id, admin_user.id)   # dispensado (oculto)
+    old = _ordem(r, hoje() - timedelta(days=1), alvo=5, produzido=0)
+
+    reagendar_para_hoje([old.itens[0].id], user_id=admin_user.id)
+
+    it = p_hoje.itens[0]
+    db.session.refresh(it)
+    assert it.dispensada_em is None                     # reaberto
+    assert it.qtd_alvo == 15                            # 10 + 5
+    assert it.qtd_extra == 5

@@ -237,14 +237,25 @@ def reagendar_para_hoje(item_ids, user_id):
         if falta <= 0:
             continue
 
+        # A falta entra como parcela EXTRA (qtd_extra): o re-aprovar/re-enviar
+        # do cronograma reconstroi os itens do GRID e apagava o reagendado —
+        # os paes sumiam da tela do padeiro (bug 02/07). O sync soma o extra
+        # ao alvo do grid e nunca remove item com extra > 0.
         dest = por_receita.get(old.receita_id)
         if dest is not None:
+            if dest.dispensada_em is not None:
+                # Item de hoje estava DISPENSADO (a tela do padeiro esconde):
+                # mandar produzir de novo REABRE — somar num item oculto
+                # sumiria com a falta.
+                dest.dispensada_em = None
+                dest.dispensada_por_id = None
             dest.qtd_alvo = int(dest.qtd_alvo or 0) + falta
+            dest.qtd_extra = int(dest.qtd_extra or 0) + falta
             dest.multiplicador = max(1, ceil(dest.qtd_alvo / _rendimento(dest.receita)))
         else:
             novo = PlanejamentoItem(
                 planejamento_id=plano_hoje.id, receita_id=old.receita_id,
-                qtd_alvo=falta, produzido_qtd=0,
+                qtd_alvo=falta, produzido_qtd=0, qtd_extra=falta,
                 multiplicador=max(1, ceil(falta / _rendimento(old.receita))))
             db.session.add(novo)
             por_receita[old.receita_id] = novo

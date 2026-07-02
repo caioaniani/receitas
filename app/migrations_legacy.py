@@ -842,6 +842,9 @@ def _migrate_postgres(app):
     # (ou menos) e da OK -> para de mostrar como pendente, SEM creditar estoque.
     _try("ALTER TABLE planejamento_item ADD COLUMN dispensada_em TIMESTAMP")
     _try("ALTER TABLE planejamento_item ADD COLUMN dispensada_por_id INTEGER REFERENCES usuario(id)")
+    # Parcela extra adicionada a mao (reagendamento da auditoria) — o re-sync
+    # do cronograma preserva/soma em vez de apagar.
+    _try("ALTER TABLE planejamento_item ADD COLUMN qtd_extra INTEGER NOT NULL DEFAULT 0")
 
     _try("""
     CREATE TABLE IF NOT EXISTS entrega_foto (
@@ -1637,6 +1640,9 @@ def _migrate_sqlite(app):
     if cols_pi and 'dispensada_por_id' not in cols_pi:
         cursor.execute("ALTER TABLE planejamento_item ADD COLUMN "
                        "dispensada_por_id INTEGER REFERENCES usuario(id)")
+    if cols_pi and 'qtd_extra' not in cols_pi:
+        cursor.execute("ALTER TABLE planejamento_item ADD COLUMN "
+                       "qtd_extra INTEGER NOT NULL DEFAULT 0")
     cursor.execute("PRAGMA table_info(planejamento_producao)")
     cols_pp = [row[1] for row in cursor.fetchall()]
     if cols_pp and 'origem' not in cols_pp:
