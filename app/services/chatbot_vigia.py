@@ -600,11 +600,15 @@ NUNCA inclua texto fora do JSON."""
 def _chamar_modelo_abandono(api_key, contexto):
     """Igual ao _chamar_modelo, mas com PROMPT_ABANDONO."""
     import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
+    # timeout: roda em cron best-effort — nunca vale segurar 10min.
+    client = anthropic.Anthropic(api_key=api_key, timeout=45, max_retries=1)
     resp = client.messages.create(
         model=MODELO,
         max_tokens=MAX_TOKENS,
-        system=PROMPT_ABANDONO,
+        # cache_control: o cron avalia varias conversas paradas em sequencia
+        # na mesma janela de 5min — o PROMPT_ABANDONO estatico cacheia.
+        system=[{'type': 'text', 'text': PROMPT_ABANDONO,
+                 'cache_control': {'type': 'ephemeral'}}],
         messages=[{'role': 'user', 'content': contexto}],
     )
     from app.services import uso_ia
