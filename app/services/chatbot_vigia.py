@@ -213,6 +213,18 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
         }
         return _processar_veredicto(veredicto, nome_contato, conv_id)
 
+    # ── SHORT-CIRCUIT DE CUSTO (02/07/2026) ────────────────────────────
+    # "ok" / "obrigada" / "valeu" depois de o bot responder nao tem o que
+    # auditar — e o vigia e o MAIOR volume de IA do sistema (roda em TODA
+    # resposta, com Sonnet). Fechamento trivial nao gasta modelo. Handoff
+    # nunca cai aqui (sempre avalia).
+    ultima_cliente = next((m.get('content') or ''
+                           for m in reversed(historico or [])
+                           if (m or {}).get('role') == 'user'), '')
+    if rb.get('acao') != 'handoff' and _e_fechamento(ultima_cliente):
+        logger.info('vigia: short-circuit fechamento trivial conv=%s', conv_id)
+        return {'pulou': 'fechamento trivial'}
+
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
                or current_app.config.get('ANTHROPIC_API_KEY'))
     if not api_key:
