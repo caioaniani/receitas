@@ -261,6 +261,12 @@ function audCount() {
         btn.textContent = n ? ('✓ Dar OK nos ' + n + ' marcados')
                             : '✓ Dar OK nos marcados';
     }
+    var rbtn = document.getElementById('aud-reagendar-btn');
+    if (rbtn) {
+        rbtn.disabled = !n;
+        rbtn.textContent = n ? ('→ Produzir HOJE (' + n + ')')
+                             : '→ Produzir HOJE os marcados';
+    }
     document.querySelectorAll('#audform table').forEach(function (t) {
         var all = t.querySelector('input.aud-all');
         if (!all) return;
