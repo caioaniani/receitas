@@ -12,7 +12,10 @@
     <strong>Confira antes de aplicar.</strong> Preço <strong>{{ campo_label }}</strong>,
     reajuste base de <strong>R$ {{ '%.2f' % valor }}</strong>:
     item avulso sobe R$ {{ '%.2f' % valor }}; cesta/kit sobe
-    R$ {{ '%.2f' % valor }} <em>+ R$ {{ '%.2f' % valor }} × unidades dentro da cesta</em>.
+    R$ {{ '%.2f' % valor }} <em>+ R$ {{ '%.2f' % valor }} × unidades dentro da cesta</em>
+    (componente por unidade conta pela quantidade; porção em g/ml — frios,
+    recheios — conta como 1). Produto composto que é um item só (ex: croissant
+    recheado, porção de frios) sobe como <strong>avulso</strong>.
     {{ previa.total_itens }} item(ns) serão alterados;
     {{ previa.pulados_sem_preco }} sem preço cadastrado ficam intocados.
 </div>
