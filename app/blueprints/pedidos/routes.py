@@ -2914,31 +2914,49 @@ def desperdicio():
 @login_required
 @admin_required
 def desperdicio_excluir(id):
-    """Exclui registro de desperdicio e estorna o estoque baixado."""
+    """Exclui registro de desperdicio estornando EXATAMENTE o que ele baixou.
+
+    O estorno le os MovEstoqueLoja vinculados por `desperdicio_id` (cobre
+    baixa parcial, cesta com baixa por componente e reaproveitavel sem
+    baixa). Registro ANTIGO (anterior a coluna, sem movimento vinculado) e
+    excluido SEM mexer em estoque — creditar `desp.quantidade` as cegas
+    criava estoque fantasma: reaproveitavel nunca baixou, parcial baixou
+    menos, cesta baixou nos componentes (e nao no produto-cesta)."""
     desp = Desperdicio.query.get_or_404(id)
     loja_id = desp.loja_id
 
-    filtro = {'loja_id': desp.loja_id}
-    if desp.receita_id:
-        filtro['receita_id'] = desp.receita_id
-    elif desp.produto_id:
-        filtro['produto_id'] = desp.produto_id
-    elif desp.materia_prima_id:
-        filtro['materia_prima_id'] = desp.materia_prima_id
-
-    el = EstoqueLoja.query.filter_by(**filtro).first()
-    if el:
-        el.quantidade = (el.quantidade or 0) + desp.quantidade
-        db.session.add(MovEstoqueLoja(
-            estoque_loja_id=el.id, tipo='desperdicio_estorno',
-            quantidade=desp.quantidade,
-            referencia=f'Estorno desperdicio #{desp.id}',
-            usuario_id=current_user.id,
-        ))
+    movs = MovEstoqueLoja.query.filter_by(desperdicio_id=desp.id).all()
+    estornado = 0
+    for m in movs:
+        if m.tipo == 'desperdicio' and (m.quantidade or 0) > 0:
+            el = EstoqueLoja.query.get(m.estoque_loja_id)
+            if el:
+                el.quantidade = (el.quantidade or 0) + m.quantidade
+                db.session.add(MovEstoqueLoja(
+                    estoque_loja_id=el.id, tipo='desperdicio_estorno',
+                    quantidade=m.quantidade,
+                    referencia=f'Estorno desperdicio #{desp.id}',
+                    usuario_id=current_user.id,
+                ))
+                estornado += m.quantidade
+        # 'desperdicio_sem_estoque' nao baixou nada — nada a devolver.
+        # Solta o vinculo antes do delete (portavel: SQLite local nao aplica
+        # o ON DELETE SET NULL do Postgres).
+        m.desperdicio_id = None
 
     db.session.delete(desp)
     db.session.commit()
-    flash('Desperdicio excluido e estoque estornado.', 'success')
+    if estornado:
+        flash(f'Desperdicio excluido — {estornado} un devolvida(s) ao '
+              'estoque.', 'success')
+    elif movs:
+        flash('Desperdicio excluido — os movimentos vinculados nao tinham '
+              'baixa pra estornar.', 'info')
+    else:
+        flash('Desperdicio excluido. Registro antigo, sem movimento '
+              'vinculado — o estoque NAO foi alterado; se este registro '
+              'baixou estoque, faca a entrada manual correspondente.',
+              'warning')
     return redirect(url_for('pedidos.desperdicio', loja=loja_id))
 
 
