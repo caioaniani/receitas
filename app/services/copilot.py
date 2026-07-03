@@ -1694,8 +1694,29 @@ def _enriquecer_criar_venda_b2b(tool_input):
     }
 
 
+def _retirada_sugerida_preview(tipo_item, item_id, nome_ok, qtd, motivo):
+    """Sugestao de retirada calculada JA NO PREVIEW, nao so na execucao —
+    o combinado do dono (02/07/2026) e o bot perguntar "quantos voltam pra
+    industria?" NA HORA em que a sobra e falada, nao depois do botao.
+    Devolve o dict da sugestao ou None (item sem retorno configurado,
+    motivo nao-reaproveitavel, MP/produto)."""
+    from app.services.desperdicio_core import reaproveita_sem_baixa
+    if tipo_item != 'receita' or not item_id:
+        return None
+    if not reaproveita_sem_baixa('receita', item_id, motivo):
+        return None
+    rec = db.session.get(Receita, item_id)
+    if rec is None or not rec.retorno_receita_id:
+        return None
+    return {'item': nome_ok, 'qtd_sobra': qtd,
+            'destino': (rec.retorno_receita.nome
+                        if rec.retorno_receita else nome_ok)}
+
+
 def _enriquecer_registrar_desperdicio(tool_input, user):
-    """Resolve loja_nome + item_nome no banco antes do preview."""
+    """Resolve loja_nome + item_nome no banco antes do preview. Marca
+    `retiradas_sugeridas` quando a sobra pode voltar pra industria."""
+    from app.services.desperdicio_core import normalizar_motivo
     from app.utils import resolver_loja_por_nome
     out = dict(tool_input)
     loja = None
@@ -1710,6 +1731,19 @@ def _enriquecer_registrar_desperdicio(tool_input, user):
     if loja:
         out['loja_id'] = loja.id
         out['loja_nome'] = loja.nome
+
+    motivo = normalizar_motivo(out.get('motivo'))
+    resolvido = _resolver_item_qualquer((out.get('item_nome') or '').strip())
+    try:
+        qtd = int(out.get('quantidade') or 0)
+    except (TypeError, ValueError):
+        qtd = 0
+    if resolvido and qtd > 0:
+        tipo_item, item_id, nome_ok = resolvido
+        s = _retirada_sugerida_preview(tipo_item, item_id, nome_ok, qtd,
+                                       motivo)
+        if s:
+            out['retiradas_sugeridas'] = [s]
     return out
 
 
