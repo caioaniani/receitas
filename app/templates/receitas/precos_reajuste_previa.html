@@ -36,7 +36,9 @@
             {% for ln in previa.linhas %}
             <tr {% if ln.tipo == 'cesta' %}class="table-warning"{% endif %}>
                 <td>{{ ln.nome }}</td>
-                <td>{{ {'receita': 'Receita', 'produto': 'Produto', 'cesta': 'Cesta/Kit'}[ln.tipo] }}</td>
+                <td>{{ {'receita': 'Receita', 'produto': 'Produto',
+                        'cesta': 'Cesta/Kit',
+                        'composto': 'Composto (avulso)'}[ln.tipo] }}</td>
                 <td class="text-end">{{ ln.unidades|int if ln.unidades else '—' }}</td>
                 <td class="text-end">{{ ln.preco_atual | brl }}</td>
                 <td class="text-end text-success fw-bold">+ {{ ln.aumento | brl }}</td>
