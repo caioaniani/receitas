@@ -77,6 +77,7 @@ def cronograma():
             'dias_producao': rr.get('dias_producao', 0),
             'em_estoque': rr.get('em_estoque', 0),
             'em_estoque_efetivo': rr.get('em_estoque_efetivo', 0),
+            'consumo_janela': rr.get('consumo_janela'),
             'comprometido': rr.get('comprometido', 0),
             'previsto': rr.get('previsto', 0),
             'demanda': rr.get('demanda', 0),
