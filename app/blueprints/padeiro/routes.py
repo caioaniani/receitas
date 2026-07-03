@@ -189,6 +189,28 @@ def _plano_do_dia(dia):
             'total_falta': sum(i['falta'] for i in itens)}
 
 
+def _plano_em_aberto(dia):
+    """Plano de `dia` reduzido ao que ainda FALTA produzir. None se não há
+    plano, nada falta, ou o admin já dispensou tudo.
+
+    Persistência pós-meia-noite (pedido do dono, 03/07/2026): o padeiro
+    trabalha de madrugada — a ordem do dia D é executada na madrugada de D+1,
+    e na virada da meia-noite `hoje()` rola e a ordem SUMIA da tela. A visão
+    "hoje" agora mostra também a ordem de ontem em aberto, até ser produzida
+    ou o admin dispensá-la na auditoria."""
+    p = _plano_do_dia(dia)
+    if not p or not p.get('total_falta'):
+        return None
+    grupos = []
+    for g in p['grupos']:
+        abertos = [i for i in g['itens'] if i['falta'] > 0]
+        if abertos:
+            grupos.append(dict(g, itens=abertos))
+    p['grupos'] = grupos
+    p['solos'] = [i for i in p['solos'] if i['falta'] > 0]
+    return p
+
+
 @padeiro_bp.route('/')
 @login_required
 @padeiro_required
@@ -196,11 +218,14 @@ def index():
     hj = hoje()
     dia = _parse_dia(request.args.get('data')) or hj
     eh_hoje = (dia == hj)
+    ontem = hj - timedelta(days=1)
     return render_template(
         'padeiro/index.html', dia=dia, eh_hoje=eh_hoje,
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
         dia_seguinte=(dia + timedelta(days=1)).isoformat(),
         plano_dia=_plano_do_dia(dia),
+        plano_ontem=(_plano_em_aberto(ontem) if eh_hoje else None),
+        data_ontem=ontem,
         **_dados_listas(dia, eh_hoje))
 
 
