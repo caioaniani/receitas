@@ -278,8 +278,13 @@ class RetiradaSobraItem(db.Model):
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'),
                            nullable=True)
     quantidade = db.Column(db.Integer, nullable=False)
-    # Conferencia na industria (divergencia declarado x chegou). NULL = sem
-    # divergencia registrada (recebeu o declarado).
+    # Conferencia do MOTORISTA na coleta (loja declarou 15, sairam 12): a
+    # baixa da loja usa este valor e o recebimento parte dele. NULL =
+    # coletou o declarado. ALTER em migrations_legacy (deployado ANTES do
+    # modelo — procedimento de 2 commits, 03/07/2026).
+    quantidade_coletada = db.Column(db.Integer, nullable=True)
+    # Conferencia na industria (divergencia coletado x chegou). NULL = sem
+    # divergencia registrada (recebeu o coletado/declarado).
     quantidade_recebida = db.Column(db.Integer, nullable=True)
 
     receita = db.relationship('Receita')
