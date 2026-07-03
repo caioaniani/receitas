@@ -39,6 +39,33 @@
     A coluna <strong>Custo un.</strong> é só leitura (calculada da ficha técnica).
 </div>
 
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="POST" action="{{ url_for('receitas.precos_reajuste_previa') }}"
+              class="d-flex gap-2 align-items-center flex-wrap">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <span class="fw-bold small"><i class="bi bi-cash-coin"></i> Reajuste em massa (R$):</span>
+            <select name="campo" class="form-select form-select-sm" style="width:auto;">
+                <option value="preco_site" selected>Preço Site</option>
+                <option value="preco_loja">Preço Loja</option>
+                <option value="preco_interno">Preço Interno</option>
+                <option value="preco_atacado">Preço Atacado</option>
+            </select>
+            <div class="input-group input-group-sm" style="width:130px;">
+                <span class="input-group-text">+R$</span>
+                <input type="text" name="valor" value="2,00" class="form-control text-end"
+                       inputmode="decimal">
+            </div>
+            <button class="btn btn-sm btn-warning">
+                <i class="bi bi-eye"></i> Pré-visualizar
+            </button>
+            <span class="small text-muted">Avulso sobe o valor; cesta/kit sobe o valor
+                <em>+ valor × unidades dentro</em>; item sem esse preço não é mexido.
+                Nada muda sem você confirmar a prévia.</span>
+        </form>
+    </div>
+</div>
+
 <div class="d-flex gap-2 mb-3" id="precos-filtro-tipos">
     <a href="#receitas" class="btn btn-sm btn-outline-primary">Ir pra Receitas</a>
     {% if cestas %}<a href="#cestas" class="btn btn-sm btn-outline-warning">Ir pra Cestas</a>{% endif %}
