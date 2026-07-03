@@ -3820,6 +3820,14 @@ def executar_criar_retirada_sobras(params, user):
         if tipo_item == 'mp':
             ignorados.append({'nome': nome, 'motivo': 'MP nao vai pra retirada'})
             continue
+        # Receita com retorno configurado: a retirada carrega (e a coleta
+        # baixa) a receita de RETORNO — o registro da sobra ja converteu o
+        # estoque da loja pra ela (desperdicio_core.converter_sobra_para_
+        # retorno) e a industria credita o retorno no recebimento.
+        if tipo_item == 'receita':
+            _rec = db.session.get(Receita, item_id)
+            if _rec is not None and _rec.retorno_receita_id:
+                item_id = _rec.retorno_receita_id
         itens_ok.append((tipo_item, item_id, qtd))
     if not itens_ok:
         return {'ok': False,
