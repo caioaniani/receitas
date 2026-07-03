@@ -449,6 +449,21 @@ def _migrate_postgres(app):
                 'ON mov_estoque_loja(desperdicio_id)'
             ))
 
+        # retirada_sobra_item.quantidade_coletada — o motorista confere na
+        # COLETA quanto esta levando de fato (loja declarou 15, sairam 12).
+        # NULL = coletou o declarado. A baixa da loja usa o coletado; o
+        # recebimento na industria parte dele (decisao do dono 03/07/2026).
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'retirada_sobra_item'"
+        ))
+        cols_rsi = {row[0] for row in result}
+        if cols_rsi and 'quantidade_coletada' not in cols_rsi:
+            conn.execute(text(
+                'ALTER TABLE retirada_sobra_item ADD COLUMN '
+                'quantidade_coletada INTEGER'
+            ))
+
         # mov_estoque_producao.tipo: VARCHAR(20) era curto pra 'venda_b2b_sem_estoque' (21).
         # Estourava o INSERT quando uma venda B2B nao tinha estoque suficiente,
         # quebrando o POST de /b2b/vendas/nova com 500 (causa identificada via
