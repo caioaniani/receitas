@@ -273,6 +273,36 @@ def _resp_encerrar(motivo, tools_usadas=None):
     return out
 
 
+def _norm_msg(m):
+    return ' '.join(((m or {}).get('content') or '').split()).lower()
+
+
+def _e_loop_repetido(historico, minimo=3):
+    """True quando as ultimas `minimo` mensagens do CLIENTE sao identicas
+    (normalizadas) E o bot respondeu entre elas — assinatura de loop
+    bot-a-bot (03/07/2026: bot do gov.br ficou em ciclo com o nosso, 6
+    alertas ALTA sem cliente real, gastando Claude a cada turno).
+
+    Por que nao pega humano frustrado: rajada humana ("alo" "alo" "alo")
+    vira UMA mensagem no debounce do webhook; e humano que FOI respondido
+    reage variando o texto — 3 mensagens byte-identicas intercaladas com
+    respostas do bot e comportamento de maquina."""
+    users = []
+    assistants_entre = 0
+    for m in reversed(historico or []):
+        role = (m or {}).get('role')
+        if role == 'user':
+            users.append(_norm_msg(m))
+            if len(users) == minimo:
+                break
+        elif role == 'assistant' and users:
+            assistants_entre += 1
+    if len(users) < minimo or assistants_entre < minimo - 1:
+        return False
+    alvo = users[0]
+    return len(alvo) >= 2 and all(u == alvo for u in users)
+
+
 def _resp_handoff(texto, motivo, tools_usadas=None):
     """Constroi o dict de handoff aplicando o aviso de fora-horario no texto.
     Centraliza pra TODOS os caminhos de handoff (fallback de erro, tool,
