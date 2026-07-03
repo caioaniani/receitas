@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Reajuste em massa — prévia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-cash-coin"></i>
+        Reajuste em massa — prévia (nada foi alterado ainda)</h1>
+    <a href="{{ url_for('receitas.precos') }}" class="btn btn-sm btn-outline-secondary">Cancelar</a>
+</div>
+
+<div class="alert alert-warning">
+    <strong>Confira antes de aplicar.</strong> Preço <strong>{{ campo_label }}</strong>,
+    reajuste base de <strong>R$ {{ '%.2f' % valor }}</strong>:
+    item avulso sobe R$ {{ '%.2f' % valor }}; cesta/kit sobe
+    R$ {{ '%.2f' % valor }} <em>+ R$ {{ '%.2f' % valor }} × unidades dentro da cesta</em>.
+    {{ previa.total_itens }} item(ns) serão alterados;
+    {{ previa.pulados_sem_preco }} sem preço cadastrado ficam intocados.
+</div>
+
+<div class="table-responsive">
+    <table class="table table-sm table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Tipo</th>
+                <th class="text-end" title="Cestas: soma das quantidades dos produtos dentro">Unidades</th>
+                <th class="text-end">Preço atual</th>
+                <th class="text-end">Aumento</th>
+                <th class="text-end">Preço novo</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ln in previa.linhas %}
+            <tr {% if ln.tipo == 'cesta' %}class="table-warning"{% endif %}>
+                <td>{{ ln.nome }}</td>
+                <td>{{ {'receita': 'Receita', 'produto': 'Produto', 'cesta': 'Cesta/Kit'}[ln.tipo] }}</td>
+                <td class="text-end">{{ ln.unidades|int if ln.unidades else '—' }}</td>
+                <td class="text-end">{{ ln.preco_atual | brl }}</td>
+                <td class="text-end text-success fw-bold">+ {{ ln.aumento | brl }}</td>
+                <td class="text-end fw-bold">{{ ln.preco_novo | brl }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<form method="POST" action="{{ url_for('receitas.precos_reajuste_aplicar') }}"
+      class="d-flex gap-2 justify-content-end sticky-bottom bg-white py-3"
+      style="border-top:1px solid #dee2e6;"
+      onsubmit="return confirm('Aplicar o reajuste em {{ previa.total_itens }} item(ns)? Essa ação altera preços de venda.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="campo" value="{{ campo }}">
+    <input type="hidden" name="valor" value="{{ '%.2f' % valor }}">
+    <a href="{{ url_for('receitas.precos') }}" class="btn btn-outline-secondary">Cancelar</a>
+    <button type="submit" class="btn btn-success">
+        <i class="bi bi-check-lg"></i> Aplicar reajuste em {{ previa.total_itens }} item(ns)
+    </button>
+</form>
+{% endblock %}
