@@ -397,6 +397,7 @@ def _preview_registrar_desperdicio_lote(p, token):
             '\n_Se este lote so completa um item que faltou, cancele e '
             'registre apenas o item novo — confirmar de novo DUPLICA as '
             'perdas._'))
+    blocks.extend(_blocos_pergunta_retirada(p))
     blocks.append(_botoes(token, f'Registrar {n_ok} item(s)', 'Cancelar'))
     return blocks
 
