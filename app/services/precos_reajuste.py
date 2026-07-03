@@ -1,10 +1,16 @@
 """Reajuste de precos em MASSA, em REAIS (02/07/2026, pedido do dono).
 
-Regra (decisao do dono):
+Regra (decisao do dono, refinada em 02/07 apos a 1a previa contar GRAMAS
+como unidades — croissant de nutella com "100g de nutella" saia como 101
+unidades e +R$ 204):
 - item AVULSO (receita ou produto simples) com preco cadastrado: + valor;
-- CESTA/KIT: + valor FIXO + valor x unidades dentro da cesta (soma das
-  quantidades dos ProdutoItem) — ex: valor 2,00, cesta com 3 unidades =
-  + 2,00 + 6,00 = + 8,00;
+- CESTA/KIT de verdade: + valor FIXO + valor x unidades dentro, onde
+  componente vendido POR UNIDADE (receita/produto/MP 'un') conta pela
+  quantidade e componente em PESO/VOLUME (g/ml/kg/l — frios, recheios)
+  conta como 1 PORCAO por linha ("porcao = 1 produto", decisao do dono);
+- COMPOSTO DE ITEM UNICO (<= 1 unidade vendavel: croissant de nutella =
+  1 croissant + recheio; Mussarela 100g = so a porcao; Mel 40g): a
+  composicao e tecnica (baixa de estoque) — trata como AVULSO, + valor;
 - item SEM o preco cadastrado (NULL) fica INTOCADO — reajuste nunca inventa
   preco.
 
@@ -34,10 +40,23 @@ CAMPO_LABEL = {
     'preco_atacado': 'Atacado',
 }
 
+_UNIDADES_PESO_VOLUME = {'g', 'ml', 'kg', 'l'}
+
 
 def _unidades_cesta(produto):
-    """Total de UNIDADES dentro da cesta (soma das quantidades dos itens)."""
-    return sum(float(pi.quantidade or 0) for pi in produto.itens)
+    """(vendaveis, porcoes) dos componentes da cesta:
+    - vendaveis: soma das quantidades dos componentes vendidos por UNIDADE
+      (receita/produto/MP com unidade 'un') — 2 croissants = 2;
+    - porcoes: nº de linhas em PESO/VOLUME (100g de mussarela = 1 porcao,
+      nao 100). Orfao de MP sem unidade conhecida cai em porcao (1)."""
+    vendaveis = 0.0
+    porcoes = 0
+    for pi in produto.itens:
+        if pi.unidade_resolvida in _UNIDADES_PESO_VOLUME:
+            porcoes += 1
+        else:
+            vendaveis += float(pi.quantidade or 0)
+    return vendaveis, porcoes
 
 
 def previa_reajuste(campo, valor):
