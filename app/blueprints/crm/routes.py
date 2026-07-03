@@ -369,6 +369,25 @@ def bot_webhook():
         or ''
     )
 
+    # Numeros IGNORADOS (bots externos — caso gov.br 03/07/2026, loop que
+    # gerou 6 alertas ALTA sem cliente real): resolve em silencio, sem gastar
+    # Claude e sem encher a fila humana. CSV em CHATBOT_NUMEROS_IGNORADOS,
+    # comparado pela mesma chave canonica de telefone do resto do sistema.
+    ignorados_csv = (current_app.config.get('CHATBOT_NUMEROS_IGNORADOS') or '')
+    if telefone_contato and ignorados_csv.strip():
+        ignorados = {telefone_chave(t) for t in ignorados_csv.split(',')}
+        ignorados.discard('')
+        if telefone_contato in ignorados:
+            logger.info('crm/bot: numero na lista de ignorados conv=%s — '
+                        'resolve silencioso', conv_id)
+            try:
+                from app.services import chatwoot
+                chatwoot.definir_status(conv_id, 'resolved')
+            except Exception:  # noqa: BLE001
+                logger.exception('crm/bot: resolve de numero ignorado falhou '
+                                 'conv=%s', conv_id)
+            return jsonify({'ok': True, 'ignorado': 'numero-ignorado'})
+
     # Lock por conv_id: serializa threads que processam a MESMA conversa
     # (mensagens consecutivas do cliente no WhatsApp = webhooks paralelos).
     _lock_conv = _lock_para_conv(conv_id)
