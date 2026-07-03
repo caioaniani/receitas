@@ -141,14 +141,39 @@ def test_fluxo_rotas_previa_e_aplicar(app, owner_user):
     html = resp.get_data(as_text=True)
     assert 'nada foi alterado ainda' in html
     assert 'Sourdough' in html
+    assert f'aum|receita|{r.id}' in html         # coluna Aumento editável
     db.session.refresh(r)
     assert r.preco_site == 30.0                  # prévia não grava
 
-    resp = client.post('/receitas/precos/reajuste/aplicar',
-                       data={'campo': 'preco_site', 'valor': '2,00'})
+    resp = client.post('/receitas/precos/reajuste/aplicar', data={
+        'campo': 'preco_site', 'valor': '2,00',
+        f'aum|receita|{r.id}': '2,00'})
     assert resp.status_code == 302
     db.session.refresh(r)
     assert r.preco_site == 32.0
+
+
+def test_aplicar_usa_aumento_editado_na_previa(app, owner_user):
+    """Caso Granola 500g: a fórmula sugeriu +12 (5×100g é composição técnica,
+    não cesta) e o dono corrige para +2 na prévia — vale o valor editado.
+    Linha ZERADA não é alterada."""
+    granola = _cesta('Granola Artesanal 500g',
+                     [(_receita('Granola 100g', preco_site=19.0), 5)],
+                     preco_site=49.0)
+    outra = _receita('Sourdough', preco_site=30.0)
+    client = app.test_client()
+    client.post('/auth/login', data={'login': owner_user.login, 'senha': '123'})
+
+    resp = client.post('/receitas/precos/reajuste/aplicar', data={
+        'campo': 'preco_site', 'valor': '2,00',
+        f'aum|produto|{granola.id}': '2,00',     # editado: 12 -> 2
+        f'aum|receita|{outra.id}': '0',          # zerado: não mexe
+    })
+    assert resp.status_code == 302
+    db.session.refresh(granola)
+    db.session.refresh(outra)
+    assert granola.preco_site == 51.0            # 49 + 2 (editado)
+    assert outra.preco_site == 30.0              # zerado ficou intocado
 
 
 def test_reajuste_exige_owner(app, admin_user):
