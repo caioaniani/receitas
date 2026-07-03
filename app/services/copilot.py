@@ -4178,6 +4178,7 @@ def executar_registrar_desperdicio(params, user):
                 referencia=(f'Desperdicio {motivo} cesta [{produto_obj.nome}] '
                             f'{nome_comp} (copilot)'),
                 usuario_id=user.id,
+                desperdicio_id=desp.id,
             ))
         baixa = 0  # nao tem baixa "cabeca", ja foi nos componentes
     else:
