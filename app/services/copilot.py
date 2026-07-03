@@ -4286,6 +4286,9 @@ def executar_registrar_desperdicio(params, user):
            # Sinaliza pro canal (Slack) avisar que o estoque NAO baixou —
            # antes a confirmacao era identica com ou sem baixa (03/07/2026).
            'reaproveitavel_sem_baixa': bool(reaproveita),
+           # Conversao fresco -> receita de retorno no estoque da loja
+           # (None quando o item nao tem retorno configurado).
+           'convertido_retorno': conv,
            'registro_tipo': 'desperdicio', 'registro_id': desp.id,
            'url': f'/pedidos/desperdicio?loja={loja.id}'}
     # Reaproveitavel COM receita de retorno -> o copilot emenda "quantos
