@@ -1,8 +1,10 @@
 """Reajuste de preços em massa em REAIS (02/07/2026, decisão do dono):
-avulso +valor; cesta/kit +valor fixo + valor × unidades dentro; item sem o
-preço cadastrado fica intocado. Fluxo prévia → aplicar (owner)."""
+avulso +valor; cesta/kit de verdade +valor fixo + valor × unidades (unitário
+conta pela quantidade; porção em g/ml conta 1); composto de item único
+(croissant recheado, porção de frios) sobe como AVULSO; item sem o preço
+cadastrado fica intocado. Fluxo prévia → aplicar (owner)."""
 from app.extensions import db
-from app.models import Produto, ProdutoItem, Receita
+from app.models import MateriaPrima, Produto, ProdutoItem, Receita
 from app.services.precos_reajuste import aplicar_reajuste, previa_reajuste
 
 
@@ -14,8 +16,8 @@ def _receita(nome, **kw):
     return r
 
 
-def _cesta(nome, itens, **kw):
-    """itens = [(receita, qtd)]"""
+def _cesta(nome, itens, mps=(), **kw):
+    """itens = [(receita, qtd)]; mps = [(materia_prima, qtd)]."""
     p = Produto(nome=nome, categoria='Cestas', ativo=True, **kw)
     db.session.add(p)
     db.session.flush()
@@ -23,8 +25,19 @@ def _cesta(nome, itens, **kw):
         db.session.add(ProdutoItem(produto_id=p.id, tipo='receita',
                                    receita_id=rec.id, item_nome=rec.nome,
                                    quantidade=qtd))
+    for mp, qtd in mps:
+        db.session.add(ProdutoItem(produto_id=p.id, tipo='mp',
+                                   materia_prima_id=mp.id, item_nome=mp.nome,
+                                   quantidade=qtd))
     db.session.commit()
     return p
+
+
+def _mp(nome, unidade='g'):
+    mp = MateriaPrima(nome=nome, unidade=unidade, custo_por_kg=10.0)
+    db.session.add(mp)
+    db.session.commit()
+    return mp
 
 
 def test_previa_avulso_cesta_e_sem_preco(app):
@@ -43,13 +56,52 @@ def test_previa_avulso_cesta_e_sem_preco(app):
     assert por_nome['Sourdough']['preco_novo'] == 32.0
     assert 'Baguete' not in por_nome            # sem preço → fora da prévia
     assert previa['pulados_sem_preco'] >= 1
-    # cesta com 3 unidades: 2,00 fixo + 2,00×3 = 8,00
+    # cesta com 3 unidades vendáveis: 2,00 fixo + 2,00×3 = 8,00
     assert por_nome['Cesta Café']['tipo'] == 'cesta'
     assert por_nome['Cesta Café']['unidades'] == 3
     assert por_nome['Cesta Café']['aumento'] == 8.0
     assert por_nome['Cesta Café']['preco_novo'] == 108.0
     assert por_nome['Granola']['tipo'] == 'produto'
     assert por_nome['Granola']['aumento'] == 2.0
+    _ = cesta
+
+
+def test_porcao_em_gramas_conta_um_nao_a_gramagem(app):
+    """Bug pego pelo dono na 1ª prévia: 100g de nutella contava 100 unidades
+    (croissant de nutella saía +R$ 204). Porção em g/ml conta 1; e composto
+    com <= 1 unidade vendável sobe como AVULSO."""
+    r_croissant = _receita('Croissant Retorno', preco_site=10.0)
+    nutella = _mp('Nutella', unidade='g')
+    croissant_nutella = _cesta('Croissant de nutella', [(r_croissant, 1)],
+                               mps=[(nutella, 100)], preco_site=30.5)
+    # Bandeja de verdade: 3 pães + 2 porções de frios em gramas
+    mussarela = _mp('Mussarela', unidade='g')
+    bandeja = _cesta('Bandeja', [(r_croissant, 3)],
+                     mps=[(mussarela, 100), (nutella, 50)], preco_site=100.0)
+
+    previa = previa_reajuste('preco_site', 2.0)
+    por_nome = {ln['nome']: ln for ln in previa['linhas']}
+    # croissant recheado: 1 vendável + recheio → AVULSO +2 (não +204, não +4)
+    assert por_nome['Croissant de nutella']['tipo'] == 'composto'
+    assert por_nome['Croissant de nutella']['aumento'] == 2.0
+    # bandeja: 3 vendáveis + 2 porções = 5 → 2 + 2×5 = 12
+    assert por_nome['Bandeja']['tipo'] == 'cesta'
+    assert por_nome['Bandeja']['unidades'] == 5
+    assert por_nome['Bandeja']['aumento'] == 12.0
+    _ = croissant_nutella, bandeja
+
+
+def test_mp_em_unidades_conta_pela_quantidade(app):
+    """MP vendida por unidade (ex: pão de queijo congelado 'un') conta pela
+    quantidade, não como porção."""
+    r_pao = _receita('Pão Sourdough', preco_site=25.0)
+    pdq = _mp('Pão de Queijo Congelado', unidade='un')
+    cesta = _cesta('Kit Festa', [(r_pao, 2)], mps=[(pdq, 10)],
+                   preco_site=80.0)
+    previa = previa_reajuste('preco_site', 2.0)
+    ln = next(x for x in previa['linhas'] if x['nome'] == 'Kit Festa')
+    assert ln['unidades'] == 12                  # 2 pães + 10 pães de queijo
+    assert ln['aumento'] == 26.0                 # 2 + 2×12
     _ = cesta
 
 
