@@ -875,7 +875,18 @@ def salvar(id):
         if not atribuida:
             abort(403)
 
-    receita.nome = request.form.get('nome', receita.nome).strip()
+    nome_antigo = receita.nome
+    receita.nome = request.form.get('nome', receita.nome).strip() or nome_antigo
+    if receita.nome != nome_antigo:
+        # Rename: sincroniza os nomes-fallback que apontam pra esta receita.
+        # A FK (sub_receita_id / ProdutoItem.receita_id) e quem manda, mas o
+        # nome gravado desatualizado zerava custo de cesta/sub-receita em
+        # silencio (caso iogurte 03/07/2026) e, na tela da cesta, um Salvar
+        # com o nome velho no input orfanava o vinculo.
+        ReceitaIngrediente.query.filter_by(sub_receita_id=receita.id) \
+            .update({'ingrediente_nome': receita.nome})
+        ProdutoItem.query.filter_by(receita_id=receita.id) \
+            .update({'item_nome': receita.nome})
     receita.categoria = request.form.get('categoria', '').strip() or None
     fam = (request.form.get('familia') or '').strip().lower() or None
     if fam in ('viennoiserie', 'pao_sourdough', 'fornada_especial'):
