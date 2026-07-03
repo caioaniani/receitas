@@ -87,7 +87,7 @@ def calcular_custos_receitas():
 
             resultado = _calcular_receita(r, custos, custos_norm,
                                            pesos, pesos_norm,
-                                           mp_info, mp_info_norm)
+                                           mp_info, mp_info_norm, id2nome)
             if resultado is None:
                 still_remaining.append(r)
                 continue
