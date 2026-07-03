@@ -670,6 +670,20 @@ entregas:
   regredir pra "creditar desp.quantidade as cegas" — cria estoque fantasma
   nos 3 casos acima. Testes: `tests/test_desperdicio_excluir_estorno.py`.
 
+## Tela do padeiro — ordem persiste apos a meia-noite (03/07/2026)
+
+O padeiro trabalha de MADRUGADA: a ordem do dia D e executada na madrugada de
+D+1. Na virada da meia-noite `hoje()` rola e a ordem sumia da tela (buscava so
+o plano de `data == hoje`). A visao "hoje" do `/padeiro` agora mostra tambem a
+**ordem de ONTEM em aberto** (falta > 0, itens nao dispensados) num card ambar
+acima da producao do dia — `padeiro/routes.py::_plano_em_aberto` + macro
+`plano_card` no template (o `verBase(mbId, data)` escala a massa-base pela
+data do plano da secao, nao pelo dia da tela). O card some quando o padeiro
+produz tudo OU o admin dispensa na auditoria. So D-1 (nao lista vencidos
+antigos — esses sao papel da auditoria; lista-los duplicaria producao, pois o
+cronograma re-sugere demanda descoberta). Testes:
+`tests/test_padeiro_plano_ontem.py`.
+
 ## Impressao de pedidos de entrega (2026-06-12)
 
 **A impressao oficial e PDF gerado no servidor** (`app/services/pdf.py::
