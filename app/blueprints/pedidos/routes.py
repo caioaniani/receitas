@@ -2803,12 +2803,25 @@ def desperdicio():
         db.session.add(desp)
         db.session.flush()
 
+        conv = None
         if reaproveita:
-            # Registra o desperdício pra histórico mas NÃO baixa — o item
-            # vira outra coisa (croissant→almond). Igual ao copilot.
+            # Reaproveitável COM receita de retorno: converte no estoque da
+            # loja (baixa o fresco + credita o retorno — decisão do dono
+            # 03/07/2026). Sem retorno configurado: registro sem movimento,
+            # como antes.
             baixa = 0
-            desp.observacao = ((observacao + ' ') if observacao else '') + \
-                '[reaproveitavel — nao baixou estoque]'
+            if tipo_item == 'receita':
+                from app.services.desperdicio_core import (
+                    converter_sobra_para_retorno,
+                )
+                conv = converter_sobra_para_retorno(
+                    sel_loja, item_id, qtd, current_user.id, desp.id)
+            if conv:
+                desp.observacao = ((observacao + ' ') if observacao else '') \
+                    + f'[convertido em {conv["destino"]}]'
+            else:
+                desp.observacao = ((observacao + ' ') if observacao else '') \
+                    + '[reaproveitavel — nao baixou estoque]'
         elif componentes_cesta:
             # Loja so estoca componentes — desconta cada um
             for col, comp_id, nome_comp, qtd_por_cesta in componentes_cesta:
