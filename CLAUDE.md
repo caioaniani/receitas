@@ -542,6 +542,19 @@ recebimento na industria credita o retorno = a propria). Reaproveitavel SEM
 retorno configurado mantem o comportamento antigo (registro sem movimento).
 Testes: `tests/test_sobra_conversao_retorno.py`.
 
+**Massa para folhar em BOLAS + fracao acumulada (decisao do dono 03/07/2026)**:
+a massa e contada em BOLAS inteiras (1 bola = 1 batida = 3.580g; padeiro
+lanca "2", nao gramas). O consumo por lote e fracionario (batida de 50
+croissants = 1,26 bola; croissant padrao 90g de massa) — `round()` por lote
+sumia ~meia bola/dia. Agora `producao.consumir_subreceitas_prontas` faz
+floor(consumo + acumulado) e guarda a fracao em `ConsumoSubFracao` (tabela
+nova, 1 linha por sub-receita — mesmo padrao do SeruDebito). O MRP ja
+acumulava fracao entre dias (previsao_producao.py ~1553). Cadastro: ficha
+do croissant consome 1.257 bolas/batida (campo aceita fracao). Historico:
+o "+900" de 01/07 foi o padeiro lancando em outra escala — o expandir de
+/pedidos/congelados (5 creditos + 5 debitos por item) foi criado nesse
+debug. Testes: `tests/test_consumo_sub_fracao.py`.
+
 **Custo do retorno = CUSTO CHEIO da origem (decisao do dono 02/07/2026)**:
 receita destino de retorno com ficha VAZIA herda o custo (e o peso unitario)
 da receita de origem em `custos.calcular_custos_receitas` — o Almond carrega
