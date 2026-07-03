@@ -112,10 +112,17 @@ def test_traduzir_audit_update_suprime_ruido():
 
 def test_traduzir_audit_update_sem_mudanca():
     from app.services.historico_humano import traduzir_audit
+    # pedido_loja sem diff real aponta pros ITENS (03/07/2026): a edição de
+    # pedido sempre grava modificado_em/por (suprimidos), e a mudança real
+    # vive nas linhas de pedido_item.
     log = _log(acao='update', tabela='pedido_loja', registro_id=1)
     t = traduzir_audit(log, {'id': 1, 'observacao': 'a'}, {'id': 1, 'observacao': 'a'})
-    assert 'sem mudanças detectadas' in t['frase']
+    assert 'mudanças nos ITENS' in t['frase']
     assert t['mudancas'] == []
+    # Demais tabelas mantêm o aviso genérico.
+    log2 = _log(acao='update', tabela='fornecedor', registro_id=2)
+    t2 = traduzir_audit(log2, {'id': 2, 'nome': 'a'}, {'id': 2, 'nome': 'a'})
+    assert 'sem mudanças detectadas' in t2['frase']
 
 
 def test_traduzir_audit_sistema_quando_sem_usuario():
