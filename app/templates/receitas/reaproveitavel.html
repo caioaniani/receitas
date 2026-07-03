@@ -7,9 +7,12 @@
 </div>
 
 <div class="alert alert-info small mb-3">
-    Marque itens cujo desperdício com motivo <strong>“validade”</strong> NÃO deve baixar estoque —
-    o item vencido vira outra coisa (ex: croissant tradicional vencido vira croissant amande).
-    Outros motivos (estragou/caiu/queimou) baixam normalmente.
+    Marque itens cuja sobra/vencimento <strong>vira outra coisa</strong> em vez de perda.
+    Receita marcada e com <strong>receita de retorno</strong> configurada na ficha: a sobra
+    registrada <strong>converte na hora</strong> no estoque da loja (baixa o fresco, credita o
+    retorno — ex: croissant tradicional vira "Croissant Tradicional - Retorno"). Sem receita
+    de retorno, o desperdício com motivo “validade”/“não vendeu” só registra, sem baixar
+    estoque. Outros motivos (estragou/caiu/queimou) baixam normalmente.
 </div>
 
 <form method="POST" action="{{ url_for('receitas.reaproveitavel') }}">
