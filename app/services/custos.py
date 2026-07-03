@@ -185,9 +185,9 @@ def calcular_custos_produtos(receita_custos, mp_info):
             # nao calculamos, espera proxima passada.
             depende_pendente = False
             for item in (p.itens or []):
-                if item.tipo == 'produto' and item.item_nome not in custos:
+                if item.tipo == 'produto' and item.nome_resolvido not in custos:
                     # Tenta tambem normalizado
-                    if _norm(item.item_nome) not in {_norm(k) for k in custos}:
+                    if _norm(item.nome_resolvido) not in {_norm(k) for k in custos}:
                         depende_pendente = True
                         break
             if depende_pendente:
