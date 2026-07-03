@@ -368,38 +368,52 @@
     </div>
   {% endmacro %}
 
-  {% if plano_dia and (plano_dia.grupos or plano_dia.solos) %}
-  <div class="card prod-dia">
-    <div class="prod-dia-top">
+  {% macro plano_card(plano, data_plano, ontem=false) %}
+  <div class="card prod-dia {% if ontem %}prod-dia-ontem{% endif %}">
+    <div class="prod-dia-top {% if ontem %}prod-dia-top-ontem{% endif %}">
+      {% if ontem %}
+      <b>⏰ Ordem de ONTEM ({{ data_plano.strftime('%d/%m') }}) — ainda em aberto</b>
+      <span class="prod-dia-falta">faltam {{ plano.total_falta }} un</span>
+      {% else %}
       <b>🔨 Produção do dia</b>
-      {% if plano_dia.total_falta %}
-      <span class="prod-dia-falta">faltam {{ plano_dia.total_falta }} un</span>
+      {% if plano.total_falta %}
+      <span class="prod-dia-falta">faltam {{ plano.total_falta }} un</span>
       {% else %}
       <span class="prod-dia-pronto" style="color:#ffd166;">✓ tudo produzido</span>
       {% endif %}
+      {% endif %}
       <span style="margin-left:auto; display:flex; gap:8px;">
         {% if current_user.is_admin() %}
-        <a class="prod-dia-gantt" style="background:#6c757d; margin-left:0;" href="{{ url_for('padeiro.editar_plano', data=dia.isoformat()) }}">✏️ editar plano</a>
+        <a class="prod-dia-gantt" style="background:#6c757d; margin-left:0;" href="{{ url_for('padeiro.editar_plano', data=data_plano.isoformat()) }}">✏️ editar plano</a>
         {% endif %}
-        <a class="prod-dia-gantt" style="margin-left:0;" href="{{ url_for('padeiro.gantt', data=dia.isoformat()) }}">📊 fluxograma</a>
+        <a class="prod-dia-gantt" style="margin-left:0;" href="{{ url_for('padeiro.gantt', data=data_plano.isoformat()) }}">📊 fluxograma</a>
       </span>
     </div>
 
     {# pães que saem de uma massa-base comum: amasse a base e tire cada um #}
-    {% for g in plano_dia.grupos %}
+    {% for g in plano.grupos %}
     <div class="prod-dia-grupo">
       🥣 Massa base: {{ g.nome }}{% if g.base_massa_label %} — amasse <b>{{ g.base_massa_label }}</b>{% if g.fornadas %} <span class="prod-dia-grupo-sub">({{ g.fornadas }} fornada{{ 's' if g.fornadas != 1 }})</span>{% endif %}{% endif %}
-      <button type="button" class="prod-dia-base-btn" onclick="verBase({{ g.mb_id }})">📋 ver a base e as retiradas</button>
+      <button type="button" class="prod-dia-base-btn" onclick="verBase({{ g.mb_id }}, '{{ data_plano.isoformat() }}')">📋 ver a base e as retiradas</button>
     </div>
     {% for it in g.itens %}{{ prod_row(it, em_grupo=true) }}{% endfor %}
     {% endfor %}
 
     {# pães soltos (não saem de massa-base) #}
-    {% if plano_dia.solos %}
-    {% if plano_dia.grupos %}<div class="prod-dia-grupo">Outros pães</div>{% endif %}
-    {% for it in plano_dia.solos %}{{ prod_row(it) }}{% endfor %}
+    {% if plano.solos %}
+    {% if plano.grupos %}<div class="prod-dia-grupo">Outros pães</div>{% endif %}
+    {% for it in plano.solos %}{{ prod_row(it) }}{% endfor %}
     {% endif %}
   </div>
+  {% endmacro %}
+
+  {# Ordem de ontem em aberto: o padeiro trabalha de madrugada — na virada da
+     meia-noite a ordem que ele está executando NÃO some; persiste aqui até
+     ser produzida ou o admin dispensar na auditoria. Só o que ainda falta. #}
+  {% if plano_ontem %}{{ plano_card(plano_ontem, data_ontem, ontem=true) }}{% endif %}
+
+  {% if plano_dia and (plano_dia.grupos or plano_dia.solos) %}
+  {{ plano_card(plano_dia, dia) }}
   {% endif %}
 
   <div id="listas">
