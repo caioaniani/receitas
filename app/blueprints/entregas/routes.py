@@ -2043,7 +2043,9 @@ def api_produtos():
             prod_cadastrado = produtos_db.get(nome.lower())
             if prod_cadastrado and prod_cadastrado.itens:
                 for comp in prod_cadastrado.itens:
-                    cnome = (comp.item_nome or '').strip()
+                    # Nome via FK — item_nome pode ter grafia antiga
+                    # (rename do componente) e errava o lookup de MP.
+                    cnome = (comp.nome_resolvido or '').strip()
                     if not cnome:
                         continue
                     cqty_unitario = comp.quantidade or 1
