@@ -243,6 +243,16 @@ class MovEstoqueLoja(db.Model):
     data = db.Column(db.DateTime, default=agora, index=True)
     referencia = db.Column(db.String(200))
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    # Vinculo com o Desperdicio que causou este movimento (tipos
+    # 'desperdicio'/'desperdicio_sem_estoque'). Permite excluir um registro
+    # de desperdicio estornando EXATAMENTE o que ele baixou — sem o vinculo,
+    # estornar `quantidade` as cegas cria estoque fantasma (reaproveitavel
+    # nunca baixou, parcial baixou menos, cesta baixou nos componentes).
+    # NULL = movimento de outra origem OU anterior a coluna (ALTER em
+    # migrations_legacy, deployado 02/07/2026 antes deste modelo).
+    desperdicio_id = db.Column(
+        db.Integer, db.ForeignKey('desperdicio.id', ondelete='SET NULL'),
+        nullable=True, index=True)
 
 
 # ── Cartinha de Entrega (Vnda) ──
