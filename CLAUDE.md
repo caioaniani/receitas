@@ -606,6 +606,14 @@ entregas:
   voltar?" no proprio preview, e `slack_bot._pergunta_retirada_para_historico`
   grava a pergunta no turno assistant do historico — o modelo entende o
   "10" + foto que vier em seguida e chama `criar_retirada_sobras`.
+- **MODO RESTRITO precisa ver a tool de retirada**: o canal de sobras roda
+  com o bot de pedidos OFF (`SLACK_BOT_PEDIDOS_ATIVO=0` desde 28/06) e a
+  whitelist `_TOOLS_DESPERDICIO` NAO tinha `criar_retirada_sobras` — o bot
+  perguntava "quantos voltam?" e nao tinha como agir na resposta (usuario
+  mandou foto + quantidade e o bot "nao entendia"). A tool entrou na
+  whitelist + `_SYSTEM_DESPERDICIO` instrui o fluxo (retirada exige FOTO).
+  Ao mexer no ciclo de sobras, conferir se a tool nova esta na whitelist
+  do modo restrito.
 - Lote de desperdicio DUPLICADO: o modelo re-enviou a lista inteira pra
   acrescentar 1 item (almond) e 4 itens duplicaram como perda. Defesas:
   aviso "⚠ Ja registrado HOJE nesta loja" no preview
