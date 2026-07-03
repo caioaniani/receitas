@@ -2786,11 +2786,28 @@ def desperdicio():
             produto = _Produto.query.get(item_id)
             componentes_cesta = componentes_de_cesta(produto)
 
+        # Desperdicio criado ANTES dos movimentos: cada MovEstoqueLoja leva
+        # `desperdicio_id` — e o que permite excluir o registro estornando
+        # exatamente o que ele baixou (desperdicio_excluir).
+        desp = Desperdicio(
+            loja_id=sel_loja,
+            receita_id=item_id if tipo_item == 'receita' else None,
+            produto_id=item_id if tipo_item == 'produto' else None,
+            materia_prima_id=item_id if tipo_item == 'mp' else None,
+            quantidade=qtd,
+            data=data_desp,
+            motivo=motivo,
+            observacao=observacao,
+            criado_por_id=current_user.id,
+        )
+        db.session.add(desp)
+        db.session.flush()
+
         if reaproveita:
             # Registra o desperdício pra histórico mas NÃO baixa — o item
             # vira outra coisa (croissant→almond). Igual ao copilot.
             baixa = 0
-            observacao = ((observacao + ' ') if observacao else '') + \
+            desp.observacao = ((observacao + ' ') if observacao else '') + \
                 '[reaproveitavel — nao baixou estoque]'
         elif componentes_cesta:
             # Loja so estoca componentes — desconta cada um
@@ -2812,8 +2829,9 @@ def desperdicio():
                     quantidade=baixa_c,
                     referencia=f'Desperdicio cesta [{produto.nome}] {nome_comp}',
                     usuario_id=current_user.id,
+                    desperdicio_id=desp.id,
                 ))
-            # Registra Desperdicio "cabeca" apontando pra cesta (rastreabilidade)
+            # Desperdicio "cabeca" aponta pra cesta (rastreabilidade)
         else:
             filtro = {'loja_id': sel_loja}
             if tipo_item == 'receita':
@@ -2833,18 +2851,6 @@ def desperdicio():
             baixa = min(qtd, saldo)
             el.quantidade = saldo - baixa
 
-        desp = Desperdicio(
-            loja_id=sel_loja,
-            receita_id=item_id if tipo_item == 'receita' else None,
-            produto_id=item_id if tipo_item == 'produto' else None,
-            materia_prima_id=item_id if tipo_item == 'mp' else None,
-            quantidade=qtd,
-            data=data_desp,
-            motivo=motivo,
-            observacao=observacao,
-            criado_por_id=current_user.id,
-        )
-        db.session.add(desp)
         # Pra cestas, a baixa por componente ja foi feita no if acima; item
         # reaproveitavel NAO gera movimento nenhum (nem falta — a decisao de
         # nao baixar e da regra, nao falta de saldo).
@@ -2854,6 +2860,7 @@ def desperdicio():
                 referencia=f'Desperdicio {motivo}'
                 + (f' — {observacao}' if observacao else ''),
                 usuario_id=current_user.id,
+                desperdicio_id=desp.id,
             ))
         if not reaproveita and not componentes_cesta and qtd > baixa:
             falta = qtd - baixa
@@ -2862,6 +2869,7 @@ def desperdicio():
                 quantidade=falta,
                 referencia=f'Desperdicio {motivo} — registrado sem estoque ({falta})',
                 usuario_id=current_user.id,
+                desperdicio_id=desp.id,
             ))
         db.session.commit()
         if reaproveita:
