@@ -524,6 +524,14 @@ def bot_webhook():
                 # atendimento. Dentro do lock pra serializar com proximos turnos.
                 try:
                     from app.services import chatbot_vigia
+                    encerrou_por_loop = (
+                        resultado is not None
+                        and resultado.get('acao') == 'encerrar'
+                        and 'loop' in (resultado.get('motivo') or ''))
+                    if encerrou_por_loop:
+                        # Loop bot-a-bot silenciado: o vigia alertando aqui era
+                        # exatamente o ruido (6 ALTAs sem cliente real, 03/07).
+                        historico = None
                     if historico and chatbot_vigia.disponivel():
                         # Anexa a resposta do bot ao historico — sem isso, o vigia
                         # ve so a fala do cliente e nunca consegue julgar o que o
