@@ -138,7 +138,17 @@ def detalhe(id):
 def salvar_composicao(id):
     produto = Produto.query.get_or_404(id)
 
+    nome_antigo = produto.nome
     produto.nome = request.form.get('nome', '').strip() or produto.nome
+    if produto.nome != nome_antigo:
+        # Rename: sincroniza o nome-fallback nas cestas que usam ESTE produto
+        # como componente (a FK produto_componente_id e quem manda; o nome
+        # desatualizado zerava o custo do componente e, no Salvar da cesta-mae,
+        # orfanava o vinculo — mesmo padrao do rename de receita).
+        ProdutoItem.query.filter(
+            ProdutoItem.produto_componente_id == produto.id,
+            ProdutoItem.produto_id != produto.id,
+        ).update({'item_nome': produto.nome})
     produto.categoria = request.form.get('categoria', '').strip() or None
     produto.descricao = request.form.get('descricao', '').strip() or None
     produto.imagem_url = request.form.get('imagem_url', '').strip() or None
