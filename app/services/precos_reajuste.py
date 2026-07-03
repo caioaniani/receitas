@@ -113,6 +113,38 @@ def previa_reajuste(campo, valor):
             'total_itens': len(linhas)}
 
 
+def aplicar_aumentos(campo, aumentos):
+    """Aplica aumentos POR ITEM vindos da previa editavel:
+    `aumentos` = {('receita'|'produto', id): aumento_em_reais} — o dono pode
+    ter corrigido linhas na tela (ex: Granola 500g e composicao tecnica de
+    5x100g, nao cesta -> ele troca +12 por +2). Aumento <= 0 pula a linha;
+    item sem o preco cadastrado e pulado (nunca inventa preco). O COMMIT e do
+    chamador. Retorna quantos itens foram alterados."""
+    if campo not in CAMPOS_REAJUSTE:
+        raise ValueError(f'campo invalido: {campo}')
+    attr_receita, attr_produto = CAMPOS_REAJUSTE[campo]
+    alterados = 0
+    for (tipo, iid), aumento in aumentos.items():
+        try:
+            aumento = round(float(aumento), 2)
+        except (TypeError, ValueError):
+            continue
+        if aumento <= 0:
+            continue
+        if tipo == 'receita':
+            obj, attr = Receita.query.get(iid), attr_receita
+        else:
+            obj, attr = Produto.query.get(iid), attr_produto
+        if obj is None:
+            continue
+        atual = getattr(obj, attr)
+        if atual is None:
+            continue
+        setattr(obj, attr, round(float(atual) + aumento, 2))
+        alterados += 1
+    return alterados
+
+
 def aplicar_reajuste(campo, valor):
     """Aplica o reajuste (mesma conta da previa, recalculada do estado atual)
     e retorna a contagem de itens alterados. O COMMIT e do chamador — a rota
