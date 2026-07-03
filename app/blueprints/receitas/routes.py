@@ -460,6 +460,29 @@ def padeiro(id):
                            receita_pesos=resultado['pesos'])
 
 
+@receitas_bp.route('/precos.xlsx')
+@login_required
+@owner_required
+def precos_xlsx():
+    """Exporta a tabela de precos em XLSX: PRODUTO | CUSTO | PRECO LOJA |
+    PRECO SITE | PRECO INTERNO | ATACADO (+ tipo/categoria pra filtrar).
+    Mesmas fontes e filtros da tela /receitas/precos. **Owner**."""
+    import io
+
+    from flask import send_file
+
+    from app.services.precos_export import gerar_xlsx_precos
+    from app.utils import hoje
+
+    dados = gerar_xlsx_precos()
+    return send_file(
+        io.BytesIO(dados),
+        mimetype=('application/vnd.openxmlformats-officedocument'
+                  '.spreadsheetml.sheet'),
+        as_attachment=True,
+        download_name='precos_%s.xlsx' % hoje().isoformat())
+
+
 @receitas_bp.route('/precos', methods=['GET', 'POST'])
 @login_required
 @owner_required
