@@ -3603,6 +3603,7 @@ def executar_registrar_desperdicio_lote(params, user):
                 + (f' — {obs_final}' if obs_final else '')
                 + ' (copilot lote)',
                 usuario_id=user.id,
+                desperdicio_id=desp.id,
             ))
         if qtd > baixa:
             falta = qtd - baixa
@@ -3611,6 +3612,7 @@ def executar_registrar_desperdicio_lote(params, user):
                 quantidade=falta,
                 referencia=f'Desperdicio {motivo} — sem estoque ({falta}) (copilot lote)',
                 usuario_id=user.id,
+                desperdicio_id=desp.id,
             ))
 
         aplicados.append({
