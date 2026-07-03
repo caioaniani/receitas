@@ -54,8 +54,7 @@ def test_ordem_de_ontem_em_aberto_aparece_na_visao_de_hoje(app, admin_user, clie
         assert 'Brioche Madrugada' in html
         # botão Produzir do item de ontem presente (form aponta pro item)
         item = PlanejamentoItem.query.filter_by(receita_id=r.id).one()
-        assert f'/padeiro/plano/{item.id}/produzir' in html \
-            or 'produzir_plano' not in html  # rota via url_for — só sanidade
+        assert f'/padeiro/produzir-plano/{item.id}' in html
         assert 'faltam 40 un' in html
 
 
