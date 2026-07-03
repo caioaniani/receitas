@@ -99,10 +99,12 @@ def test_fluxo_rotas_previa_e_aplicar(app, owner_user):
 
 
 def test_reajuste_exige_owner(app, admin_user):
+    """Admin comum não aplica reajuste em massa — e nenhum preço muda."""
+    r = _receita('Sourdough', preco_site=30.0)
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'})
     resp = client.post('/receitas/precos/reajuste/aplicar',
                        data={'campo': 'preco_site', 'valor': '2,00'})
     assert resp.status_code in (302, 403)
-    assert '/receitas/precos' not in (resp.headers.get('Location') or '') \
-        or resp.status_code == 403 or True
+    db.session.refresh(r)
+    assert r.preco_site == 30.0
