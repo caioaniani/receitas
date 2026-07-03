@@ -52,7 +52,9 @@ def _unidades_cesta(produto):
     vendaveis = 0.0
     porcoes = 0
     for pi in produto.itens:
-        if pi.unidade_resolvida in _UNIDADES_PESO_VOLUME:
+        if pi.tipo == 'mp' and pi.materia_prima is None:
+            porcoes += 1          # orfao de MP: unidade desconhecida = porcao
+        elif pi.unidade_resolvida in _UNIDADES_PESO_VOLUME:
             porcoes += 1
         else:
             vendaveis += float(pi.quantidade or 0)
