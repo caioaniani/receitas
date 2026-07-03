@@ -4207,6 +4207,7 @@ def executar_registrar_desperdicio(params, user):
                 + (f' — {observacao}' if observacao else '')
                 + ' (copilot)',
                 usuario_id=user.id,
+                desperdicio_id=desp.id,
             ))
         if qtd > baixa:
             falta = qtd - baixa
@@ -4215,6 +4216,7 @@ def executar_registrar_desperdicio(params, user):
                 quantidade=falta,
                 referencia=f'Desperdicio {motivo} — registrado sem estoque ({falta}) (copilot)',
                 usuario_id=user.id,
+                desperdicio_id=desp.id,
             ))
 
     db.session.commit()
