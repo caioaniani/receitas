@@ -28,7 +28,17 @@ import io
 import logging
 from datetime import timedelta
 
-from flask import abort, flash, redirect, render_template, request, send_file, session, url_for
+from flask import (
+    abort,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
 
 from app.blueprints.handshake import handshake_bp
 from app.extensions import csrf, db
@@ -444,7 +454,26 @@ def handshake_retirada(token):
         creditar_industria_retirada,
     )
     try:
+        divergencias = []
         if qr.tipo == 'coleta':
+            # Conferencia do MOTORISTA: quanto esta levando DE FATO de cada
+            # item — aceita diferente do declarado (loja marcou 15, saem 12;
+            # decisao do dono 03/07/2026). Campo ausente/invalido = declarado.
+            for it in retirada.itens:
+                bruto = (request.form.get(f'qtd_{it.id}') or '').strip()
+                if not bruto:
+                    continue
+                try:
+                    coletada = max(0, int(bruto))
+                except (TypeError, ValueError):
+                    continue
+                if coletada != int(it.quantidade or 0):
+                    it.quantidade_coletada = coletada
+                    divergencias.append({
+                        'nome': it.nome_item,
+                        'declarado': int(it.quantidade or 0),
+                        'coletado': coletada,
+                    })
             avisos = baixar_loja_retirada(retirada, usuario_id=None)
             retirada.status = 'em_transporte'
             retirada.driver_id = driver.id
@@ -453,6 +482,11 @@ def handshake_retirada(token):
             from app.services.handshake_qr import gerar_qr_retirada
             gerar_qr_retirada(retirada, 'recebimento')
             detalhe = '; '.join(avisos) if avisos else ''
+            if divergencias:
+                _audit_retirada(
+                    token, retirada, tipo_audit, 'divergencia',
+                    '; '.join(f"{d['nome']}: {d['declarado']}->{d['coletado']}"
+                              for d in divergencias)[:400])
         else:
             resumo = creditar_industria_retirada(retirada, usuario_id=None)
             retirada.status = 'recebida'
@@ -469,8 +503,43 @@ def handshake_retirada(token):
                                msg=f'Erro ao processar: {exc}'), 500
     _audit_retirada(token, retirada, tipo_audit, 'sucesso',
                     f'driver:{driver.nome} {detalhe}'[:400])
+    # Divergencia de coleta avisa o canal de pedidos no Slack (best-effort,
+    # DEPOIS do commit — aviso nunca derruba o handshake).
+    if divergencias:
+        _avisar_divergencia_coleta(retirada, divergencias)
     return redirect(url_for('handshake.sucesso_retirada', token=token),
                     code=303)
+
+
+def _avisar_divergencia_coleta(retirada, divergencias):
+    """Posta no Slack (canal de pedidos) a divergência declarado x coletado.
+    Os itens que ficaram continuam no estoque de retorno da loja — as vendas
+    de Nutella baixam dali (por isso NAO ha entrada manual a fazer)."""
+    from app.services import slack as slack_api
+    canal = ((current_app.config.get('SLACK_CANAL_PEDIDOS') or '').strip()
+             or (current_app.config.get('SLACK_CANAL_COPILOT') or '').strip())
+    if not canal:
+        logger.warning('retirada #%s: divergencia de coleta sem canal Slack '
+                       'configurado (SLACK_CANAL_PEDIDOS)', retirada.id)
+        return
+    data_marcada = (retirada.criado_em.strftime('%d/%m')
+                    if retirada.criado_em else '?')
+    linhas = [f'⚠️ *Retirada #{retirada.id} — {retirada.loja.nome}*: '
+              'coleta com divergência.']
+    for d in divergencias:
+        linhas.append(
+            f"• {d['nome']}: a loja marcou em {data_marcada} que entregaria "
+            f"*{d['declarado']}*, porém foram coletados *{d['coletado']}*.")
+        resto = d['declarado'] - d['coletado']
+        if resto > 0:
+            linhas.append(
+                f'  Os {resto} que ficaram continuam no estoque de retorno '
+                'da loja — as vendas de Nutella baixam dali (nada a lançar).')
+    try:
+        slack_api.post_message(canal, text='\n'.join(linhas))
+    except Exception:  # noqa: BLE001
+        logger.exception('retirada #%s: aviso de divergencia no Slack falhou',
+                         retirada.id)
 
 
 @handshake_bp.route('/r/<token>/sucesso')
