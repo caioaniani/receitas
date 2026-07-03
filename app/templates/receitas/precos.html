@@ -14,6 +14,10 @@
         <span id="save-status" class="badge bg-success" style="font-size:13px;">
             <i class="bi bi-check-circle"></i> Salva automaticamente
         </span>
+        <a href="{{ url_for('receitas.precos_xlsx') }}" class="btn btn-sm btn-success"
+           title="Baixa a tabela completa (receitas, produtos e cestas) com custo e os 4 preços">
+            <i class="bi bi-file-earmark-spreadsheet"></i> Exportar XLSX
+        </a>
         <a href="{{ url_for('receitas.padeiro_lista') }}" class="btn btn-sm btn-outline-secondary">Voltar</a>
     </div>
 </div>
