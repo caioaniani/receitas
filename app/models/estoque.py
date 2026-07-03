@@ -102,6 +102,29 @@ class MovEstoqueProducao(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
 
+class ConsumoSubFracao(db.Model):
+    """Acumulador de FRACAO no consumo de sub-receita da industria.
+
+    O estoque do congelado e INTEIRO (bolas de massa, unidades), mas o
+    consumo por lote e fracionario — a batida de 50 croissants consome
+    1,26 bola de massa para folhar (90g/un, bola de 3.580g). Arredondar
+    por lote desandava o saldo (~meia bola somia/sobrava por dia); aqui a
+    fracao ACUMULA por sub-receita e baixa 1 inteiro quando fecha — mesmo
+    padrao do SeruDebito nas vendas fracionadas do PDV. Decisao do dono
+    03/07/2026 (caso Massa para folhar: padeiro conta em bolas inteiras).
+    1 linha por sub-receita; tabela nova criada por db.create_all.
+    """
+    __tablename__ = 'consumo_sub_fracao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'),
+                           nullable=False, unique=True, index=True)
+    fracao_pendente = db.Column(db.Float, nullable=False, default=0.0)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+    receita = db.relationship('Receita')
+
+
 # ── Pedidos de Loja ──
 
 class EstoqueLoja(db.Model):
