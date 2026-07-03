@@ -110,11 +110,15 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
     o override daquela celula), sem clamp — os outros dias seguem a sugestao
     calculada e overrides anteriores. O total da linha vira a SOMA das celulas,
     entao da pra produzir MAIS/menos que o sugerido e programar linha zerada.
-    Devolve {receita_id, por_dia:[{data,qtd,fornadas}], total}. None se a
-    receita/data nao esta no cronograma."""
-    from app.models import Receita
+
+    Depois de salvar, RECALCULA o cronograma com o override novo e devolve
+    tambem as linhas de INSUMO (`insumos`) — editar 10.000 pains reflete na
+    Massa para folhar NA HORA, sem F5 (cobranca do dono 03/07/2026: a tela
+    parecia nao calcular a massa; o MRP calculava, mas so no reload).
+
+    Devolve {receita_id, por_dia:[{data,qtd,fornadas}], total, insumos}.
+    None se a receita/data nao esta no cronograma (nada salvo)."""
     from app.services.previsao_producao import cronograma_producao
-    from app.services.producao import fornadas_amassadeira
     crono = cronograma_producao(horizonte_dias=horizonte_dias,
                                 janela_semanas=janela_semanas,
                                 inicio_offset_dias=inicio_offset_dias,
@@ -127,20 +131,26 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
     alvo = date.fromisoformat(data_iso)
     if alvo not in datas:
         return None
-    idx = datas.index(alvo)
     novo_qtd = max(0, int(qtd))                       # sem clamp no total: da pra subir
     _salvar_overrides(int(receita_id), [alvo], [novo_qtd])   # so a celula editada
 
-    qtds = [c['qtd'] for c in rr['por_dia']]
-    qtds[idx] = novo_qtd                              # os outros dias ficam como estao
-    rec = db.session.get(Receita, int(receita_id))
-    rend = int(rec.rendimento_qtd) if rec and rec.rendimento_qtd else 1
-    por_dia = [{'data': d.isoformat(), 'qtd': q,
-                'fornadas': (fornadas_amassadeira(rec, max(1, ceil(q / rend)))
-                             if q > 0 else None)}
-               for d, q in zip(datas, qtds)]
-    return {'receita_id': int(receita_id), 'por_dia': por_dia,
-            'total': sum(qtds)}
+    # Recalcula JA COM o override novo: a linha editada volta com a celula
+    # fixada (aplicar_overrides) e os INSUMOS com a demanda derivada dela.
+    crono2 = cronograma_producao(horizonte_dias=horizonte_dias,
+                                 janela_semanas=janela_semanas,
+                                 inicio_offset_dias=inicio_offset_dias,
+                                 equilibrar=equilibrar)
+    rr2 = next((x for x in crono2['receitas']
+                if x['receita_id'] == int(receita_id)), None)
+    if rr2 is None:                                   # defensivo — existia acima
+        return None
+    insumos = [{'receita_id': x['receita_id'], 'nome': x.get('nome'),
+                'por_dia': x.get('por_dia', []), 'total': x.get('total', 0),
+                'em_estoque': x.get('em_estoque', 0),
+                'consumo_janela': x.get('consumo_janela')}
+               for x in crono2['receitas'] if x.get('insumo')]
+    return {'receita_id': int(receita_id), 'por_dia': rr2['por_dia'],
+            'total': rr2['total'], 'insumos': insumos}
 
 
 def resetar_receita(receita_id, datas_iso):
