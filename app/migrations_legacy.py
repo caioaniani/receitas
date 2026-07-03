@@ -1438,6 +1438,14 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE mov_estoque_loja ADD COLUMN "
                        "desperdicio_id INTEGER REFERENCES desperdicio(id)")
 
+    # retirada_sobra_item.quantidade_coletada — conferencia do motorista na
+    # coleta (mesma migracao do _migrate_postgres).
+    cursor.execute("PRAGMA table_info(retirada_sobra_item)")
+    cols_rsi = [row[1] for row in cursor.fetchall()]
+    if cols_rsi and 'quantidade_coletada' not in cols_rsi:
+        cursor.execute("ALTER TABLE retirada_sobra_item ADD COLUMN "
+                       "quantidade_coletada INTEGER")
+
     cursor.execute("PRAGMA table_info(vigia_veredito)")
     cols_vv = [row[1] for row in cursor.fetchall()]
     if cols_vv and 'tools_usadas' not in cols_vv:
