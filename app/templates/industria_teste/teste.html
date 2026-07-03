@@ -534,6 +534,15 @@
         cell.classList.remove('salvando');
         if (resp && resp.ok && d && d.ok) {
             setRow(rid, d.por_dia);
+            // Insumos (massa, creme...) recalculados com a edicao — antes so
+            // atualizavam no F5 e parecia que o MRP nao derivava a massa.
+            (d.insumos || []).forEach(function (ins) {
+                setRow(ins.receita_id, ins.por_dia);
+                const lbl = document.querySelector(
+                    '.consumo-janela[data-rid="' + ins.receita_id + '"] strong');
+                if (lbl && ins.consumo_janela != null)
+                    lbl.textContent = ins.consumo_janela;
+            });
             cell.classList.add('salvo');
             inp.style.borderColor = '';   // limpa vermelho de falha anterior
             const tr = cell.closest('tr');
