@@ -9,56 +9,85 @@
 </div>
 
 <div class="alert alert-warning">
-    <strong>Confira antes de aplicar.</strong> Preço <strong>{{ campo_label }}</strong>,
-    reajuste base de <strong>R$ {{ '%.2f' % valor }}</strong>:
-    item avulso sobe R$ {{ '%.2f' % valor }}; cesta/kit sobe
-    R$ {{ '%.2f' % valor }} <em>+ R$ {{ '%.2f' % valor }} × unidades dentro da cesta</em>
-    (componente por unidade conta pela quantidade; porção em g/ml — frios,
-    recheios — conta como 1). Produto composto que é um item só (ex: croissant
-    recheado, porção de frios) sobe como <strong>avulso</strong>.
-    {{ previa.total_itens }} item(ns) serão alterados;
-    {{ previa.pulados_sem_preco }} sem preço cadastrado ficam intocados.
-</div>
-
-<div class="table-responsive">
-    <table class="table table-sm table-striped align-middle">
-        <thead>
-            <tr>
-                <th>Item</th>
-                <th>Tipo</th>
-                <th class="text-end" title="Cestas: soma das quantidades dos produtos dentro">Unidades</th>
-                <th class="text-end">Preço atual</th>
-                <th class="text-end">Aumento</th>
-                <th class="text-end">Preço novo</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for ln in previa.linhas %}
-            <tr {% if ln.tipo == 'cesta' %}class="table-warning"{% endif %}>
-                <td>{{ ln.nome }}</td>
-                <td>{{ {'receita': 'Receita', 'produto': 'Produto',
-                        'cesta': 'Cesta/Kit',
-                        'composto': 'Composto (avulso)'}[ln.tipo] }}</td>
-                <td class="text-end">{{ ln.unidades|int if ln.unidades else '—' }}</td>
-                <td class="text-end">{{ ln.preco_atual | brl }}</td>
-                <td class="text-end text-success fw-bold">+ {{ ln.aumento | brl }}</td>
-                <td class="text-end fw-bold">{{ ln.preco_novo | brl }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <strong>Confira e ajuste antes de aplicar.</strong> Preço
+    <strong>{{ campo_label }}</strong>, reajuste base de
+    <strong>R$ {{ '%.2f' % valor }}</strong>: item avulso sobe
+    R$ {{ '%.2f' % valor }}; cesta/kit sobe R$ {{ '%.2f' % valor }}
+    <em>+ R$ {{ '%.2f' % valor }} × unidades</em> (unitário conta pela
+    quantidade; porção em g/ml conta 1); composto de item único sobe como
+    avulso. <strong>A coluna Aumento é editável</strong> — corrija qualquer
+    linha (ex: composição técnica que não é cesta comercial) ou
+    <strong>zere para não mexer</strong> naquele item.
+    {{ previa.pulados_sem_preco }} item(ns) sem preço cadastrado ficam
+    intocados.
 </div>
 
 <form method="POST" action="{{ url_for('receitas.precos_reajuste_aplicar') }}"
-      class="d-flex gap-2 justify-content-end sticky-bottom bg-white py-3"
-      style="border-top:1px solid #dee2e6;"
-      onsubmit="return confirm('Aplicar o reajuste em {{ previa.total_itens }} item(ns)? Essa ação altera preços de venda.');">
+      onsubmit="return confirm('Aplicar o reajuste com os aumentos da tabela? Essa ação altera preços de venda.');">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="campo" value="{{ campo }}">
     <input type="hidden" name="valor" value="{{ '%.2f' % valor }}">
-    <a href="{{ url_for('receitas.precos') }}" class="btn btn-outline-secondary">Cancelar</a>
-    <button type="submit" class="btn btn-success">
-        <i class="bi bi-check-lg"></i> Aplicar reajuste em {{ previa.total_itens }} item(ns)
-    </button>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Tipo</th>
+                    <th class="text-end" title="Cestas: unidades vendáveis + porções (g/ml contam 1)">Unidades</th>
+                    <th class="text-end">Preço atual</th>
+                    <th class="text-end" style="width:130px;">Aumento (R$)</th>
+                    <th class="text-end">Preço novo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ln in previa.linhas %}
+                {% set tipo_form = 'receita' if ln.tipo == 'receita' else 'produto' %}
+                <tr {% if ln.tipo == 'cesta' %}class="table-warning"{% endif %}>
+                    <td>{{ ln.nome }}</td>
+                    <td>{{ {'receita': 'Receita', 'produto': 'Produto',
+                            'cesta': 'Cesta/Kit',
+                            'composto': 'Composto (avulso)'}[ln.tipo] }}</td>
+                    <td class="text-end">{{ ln.unidades|int if ln.unidades else '—' }}</td>
+                    <td class="text-end">{{ ln.preco_atual | brl }}</td>
+                    <td class="text-end">
+                        <input type="text" name="aum|{{ tipo_form }}|{{ ln.id }}"
+                               value="{{ '%.2f' % ln.aumento }}" inputmode="decimal"
+                               class="form-control form-control-sm text-end aum-input"
+                               data-atual="{{ ln.preco_atual }}">
+                    </td>
+                    <td class="text-end fw-bold preco-novo">{{ ln.preco_novo | brl }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex gap-2 justify-content-end sticky-bottom bg-white py-3"
+         style="border-top:1px solid #dee2e6;">
+        <a href="{{ url_for('receitas.precos') }}" class="btn btn-outline-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-success">
+            <i class="bi bi-check-lg"></i> Aplicar reajuste ({{ previa.total_itens }} item(ns))
+        </button>
+    </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Preço novo ao vivo enquanto o dono edita o aumento (o servidor recalcula
+// de verdade no aplicar; isto é só feedback visual).
+document.querySelectorAll('.aum-input').forEach(function (inp) {
+    inp.addEventListener('input', function () {
+        var atual = parseFloat(inp.dataset.atual) || 0;
+        var aum = parseFloat((inp.value || '0').replace(',', '.')) || 0;
+        var novo = atual + aum;
+        var cel = inp.closest('tr').querySelector('.preco-novo');
+        if (cel) {
+            cel.textContent = 'R$ ' + novo.toFixed(2).replace('.', ',');
+            cel.classList.toggle('text-muted', aum <= 0);
+        }
+    });
+});
+</script>
 {% endblock %}
