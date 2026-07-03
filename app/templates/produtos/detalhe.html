@@ -61,6 +61,13 @@
                    value="{{ '%.2f' % produto.preco_site if produto.preco_site else '' }}"
                    step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
         </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold" style="color:#8d6e63;"
+                   title="Preço de consumo interno/funcionário — o mesmo da tela Preços em massa">Preco Interno (R$)</label>
+            <input type="number" name="preco_interno" id="preco_interno"
+                   value="{{ '%.2f' % produto.preco_interno if produto.preco_interno else '' }}"
+                   step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
+        </div>
         <div class="col-md-12 mt-2 p-2 border rounded bg-light">
             <label class="form-label small fw-bold mb-1">
                 <i class="bi bi-image"></i> Imagem pro cardápio digital

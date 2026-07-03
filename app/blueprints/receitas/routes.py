@@ -818,6 +818,8 @@ def salvar(id):
     receita.preco_venda = parse_float_br(request.form.get('preco_venda', ''))
     receita.preco_loja = parse_float_br(request.form.get('preco_loja', ''))
     receita.preco_site = parse_float_br(request.form.get('preco_site', ''))
+    receita.preco_interno = parse_float_br(
+        request.form.get('preco_interno', ''))
     # Rendimento = unidades que UMA fornada rende (divisor de custo unitario e
     # base da producao via qtd_alvo/rendimento). Caso especial: receita MONTADA
     # (so MP g/un, sem % de padeiro) lancada por "Quantidade de Produtos" — ali

@@ -141,6 +141,8 @@ def salvar_composicao(id):
     produto.preco_atacado = parse_float_br(request.form.get('preco_atacado', ''))
     produto.preco_loja = parse_float_br(request.form.get('preco_loja', ''))
     produto.preco_site = parse_float_br(request.form.get('preco_site', ''))
+    produto.preco_interno = parse_float_br(
+        request.form.get('preco_interno', ''))
     produto.custo_direto = parse_float_br(request.form.get('custo_direto', ''))
     produto.custo_embalagem = parse_float_br(request.form.get('custo_embalagem', ''), default=0)
     produto.modo_preparo = request.form.get('modo_preparo', '').strip() or None

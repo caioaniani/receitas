@@ -121,6 +121,12 @@
                        step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-site">
             </div>
             <div class="col">
+                <label class="form-label small text-muted"
+                       title="Preço de consumo interno/funcionário — o mesmo da tela Preços em massa">Preco Interno (R$)</label>
+                <input type="number" name="preco_interno" value="{{ '%.2f' % receita.preco_interno if receita.preco_interno else '' }}"
+                       step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-interno">
+            </div>
+            <div class="col">
                 <label class="form-label small text-muted">Peso/Un (g)</label>
                 <input type="number" name="peso_unitario" value="{{ receita.peso_unitario | int if receita.peso_unitario else '' }}"
                        step="1" min="1" class="form-control form-control-sm input-blue" id="peso-unitario"
