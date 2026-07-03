@@ -90,14 +90,21 @@ def previa_reajuste(campo, valor):
         if atual is None:
             pulados += 1
             continue
-        unidades = _unidades_cesta(p)
-        if unidades > 0:                      # cesta/kit
+        vendaveis, porcoes = _unidades_cesta(p)
+        if not p.itens:                       # produto simples
+            tipo, unidades, aumento = 'produto', None, valor
+        elif vendaveis <= 1:
+            # Composto de item unico (croissant de nutella = 1 croissant +
+            # recheio; Mussarela 100g = so a porcao): composicao e tecnica,
+            # sobe como avulso (decisao do dono 02/07).
+            tipo, unidades, aumento = 'composto', None, valor
+        else:                                 # cesta/kit de verdade
+            unidades = vendaveis + porcoes
+            tipo = 'cesta'
             aumento = round(valor + valor * unidades, 2)
-        else:                                 # produto simples
-            aumento = valor
-        linhas.append({'tipo': 'cesta' if unidades > 0 else 'produto',
+        linhas.append({'tipo': tipo,
                        'id': p.id, 'nome': p.nome,
-                       'unidades': unidades if unidades > 0 else None,
+                       'unidades': unidades,
                        'preco_atual': round(float(atual), 2),
                        'aumento': aumento,
                        'preco_novo': round(float(atual) + aumento, 2)})
