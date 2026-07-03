@@ -86,22 +86,27 @@ def detalhe(id):
     produto_custos_n = {_norm(k): v for k, v in produto_custos.items()}
     mp_info_n = {_norm(k): v for k, v in mp_info.items()}
 
-    # Custo de cada item para exibir no template
+    # Custo de cada item para exibir no template. Nome via FK
+    # (nome_resolvido): `item_nome` pode ter ficado com grafia antiga apos
+    # rename do componente — alem de zerar o custo, o nome velho no input
+    # faria o Salvar re-resolver a FK errado e ORFANAR o item (a baixa de
+    # venda para em silencio). Caso real: iogurte, 03/07/2026.
     itens_data = []
     for item in produto.itens:
         info = {}
+        nome = item.nome_resolvido
         if item.tipo == 'receita':
-            custo_un = receita_custos.get(item.item_nome)
+            custo_un = receita_custos.get(nome)
             if custo_un is None:
-                custo_un = receita_custos_n.get(_norm(item.item_nome), 0)
+                custo_un = receita_custos_n.get(_norm(nome), 0)
             unidade = 'un'
         elif item.tipo == 'produto':
-            custo_un = produto_custos.get(item.item_nome)
+            custo_un = produto_custos.get(nome)
             if custo_un is None:
-                custo_un = produto_custos_n.get(_norm(item.item_nome), 0)
+                custo_un = produto_custos_n.get(_norm(nome), 0)
             unidade = 'un'
         else:
-            info = mp_info.get(item.item_nome) or mp_info_n.get(_norm(item.item_nome), {})
+            info = mp_info.get(nome) or mp_info_n.get(_norm(nome), {})
             custo_kg = info.get('custo_por_kg', 0)
             unidade = info.get('unidade', 'un')
             if unidade in ('g', 'ml'):
@@ -110,7 +115,7 @@ def detalhe(id):
                 custo_un = custo_kg
         itens_data.append({
             'tipo': item.tipo,
-            'item_nome': item.item_nome,
+            'item_nome': nome,
             'quantidade': item.quantidade,
             'custo_un': custo_un,
             'unidade': unidade,
