@@ -3578,18 +3578,25 @@ def executar_registrar_desperdicio_lote(params, user):
         if reaproveita:
             ap = {'nome': nome_ok, 'tipo': tipo_item,
                   'quantidade': qtd, 'reaproveitavel': True}
-            # Item reaproveitavel COM receita de retorno configurada -> o
-            # copilot deve emendar: "quantos voltam pra industria?" e criar
-            # a retirada (criar_retirada_sobras). Ver prompt da tool.
+            # Reaproveitavel COM receita de retorno: converte no estoque da
+            # loja (baixa o fresco + credita o retorno — decisao do dono
+            # 03/07/2026) e o copilot emenda "quantos voltam pra industria?"
+            # (criar_retirada_sobras coleta o RETORNO).
             if tipo_item == 'receita':
-                from app.models import Receita as _R
-                _rec = _R.query.get(item_id)
-                if _rec is not None and _rec.retorno_receita_id:
+                from app.services.desperdicio_core import (
+                    converter_sobra_para_retorno,
+                )
+                conv = converter_sobra_para_retorno(
+                    loja.id, item_id, qtd, user.id, desp.id)
+                if conv:
+                    ap['convertido_retorno'] = conv
+                    desp.observacao = (
+                        ((obs_final + ' ') if obs_final else '')
+                        + f'[convertido em {conv["destino"]}]')
                     ap['retirada_sugerida'] = {
                         'item': nome_ok,
                         'qtd_sobra': qtd,
-                        'destino': (_rec.retorno_receita.nome
-                                    if _rec.retorno_receita else nome_ok),
+                        'destino': conv['destino'],
                     }
             aplicados.append(ap)
             continue
