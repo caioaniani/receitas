@@ -684,6 +684,17 @@ def responder(historico, *, telefone_contato=None):
     # de gastar token do Claude. Se bate, vai direto pro humano (motivo
     # registrado pro audit). NUNCA dizer pro cliente o que detectamos —
     # so 'vou te conectar'.
+    # Loop bot-a-bot (03/07/2026, caso gov.br): mesma mensagem 3x com
+    # respostas nossas no meio -> encerra em silencio SEM gastar Claude.
+    # Cada mensagem nova do bot externo reabre pending e cai aqui de novo
+    # (barato: guard deterministico). Cliente real que mudar o texto volta
+    # a ser atendido normalmente.
+    if _e_loop_repetido(historico):
+        logger.warning('chatbot: loop de mensagem repetida detectado — '
+                       'encerrando sem responder')
+        return _resp_encerrar('loop de mensagens repetidas (bot externo?)',
+                              tools_usadas=[])
+
     ultima_user = next((m for m in reversed(historico or [])
                         if (m or {}).get('role') == 'user'), None)
     texto_user = (ultima_user or {}).get('content') or ''
