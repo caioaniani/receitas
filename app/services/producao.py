@@ -289,11 +289,19 @@ def mise_en_place(receita, unidades):
 
 def consumir_subreceitas_prontas(rec, unidades, user_id):
     """Baixa do congelado as SUB-RECEITAS prontas consumidas ao produzir `rec`
-    (ex: croissant almond consome croissant tradicional congelado). Liga por FK
-    (`sub_receita_id`); cai pro nome só se a FK não foi resolvida. porcentagem =
-    unidades da sub por batida; consumo = unidades x porcentagem / rendimento.
+    (ex: croissant almond consome croissant tradicional congelado; croissant
+    consome bolas de massa para folhar). Liga por FK (`sub_receita_id`); cai
+    pro nome só se a FK não foi resolvida. porcentagem = unidades da sub por
+    batida; consumo = unidades x porcentagem / rendimento.
+
+    FRAÇÃO ACUMULADA (decisão do dono 03/07/2026, caso massa para folhar):
+    o congelado é inteiro mas o consumo por lote é fracionário (batida de 50
+    croissants = 1,26 bola). O `round()` por lote sumia/sobrava ~meia bola
+    por dia; agora floor(consumo + acumulado) baixa inteiros e o resto fica
+    em `ConsumoSubFracao` pra próxima produção — exato no longo prazo.
+    Consumo inteiro exato (ex: almond 1:1) nunca cria fração.
     NÃO commita. Retorna [{sub_id, baixado, falta}]."""
-    from app.models import Receita
+    from app.models import ConsumoSubFracao, Receita
     from app.services.estoque_congelados import saida_producao
 
     rend = rendimento_massa_crua(rec)
@@ -309,11 +317,23 @@ def consumir_subreceitas_prontas(rec, unidades, user_id):
             sub_id = sub.id if sub else None
         if sub_id is None:
             continue            # órfão (sem cadastro): não dá pra baixar
-        qtd_sub = int(round(unidades * (ing.porcentagem or 0) / rend)) if rend else 0
+        consumo = (unidades * (ing.porcentagem or 0) / rend) if rend else 0.0
+        if consumo <= 0:
+            continue
+        frac = ConsumoSubFracao.query.filter_by(receita_id=sub_id).first()
+        if frac is None:
+            frac = ConsumoSubFracao(receita_id=sub_id, fracao_pendente=0.0)
+            db.session.add(frac)
+            db.session.flush()
+        total = consumo + (frac.fracao_pendente or 0.0)
+        qtd_sub = int(total)                     # floor (total sempre >= 0)
+        # round(6) segura ruído de float; nunca negativa.
+        frac.fracao_pendente = max(0.0, round(total - qtd_sub, 6))
         if qtd_sub > 0:
             res = saida_producao(
                 receita_id=sub_id, quantidade=qtd_sub, usuario_id=user_id,
-                referencia='Consumo p/ %s (%d un)' % (rec.nome, unidades))
+                referencia='Consumo p/ %s (%d un; acum %.2f)'
+                           % (rec.nome, unidades, frac.fracao_pendente))
             out.append({'sub_id': sub_id, **res})
     return out
 
