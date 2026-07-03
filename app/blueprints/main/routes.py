@@ -612,6 +612,24 @@ def audit():
     if registro_f:
         q = q.filter_by(registro_id=registro_f)
     logs = q.order_by(AuditLog.criado_em.desc()).limit(200).all()
+
+    # "Historico completo" de um PEDIDO (tabela=pedido_loja + registro_id):
+    # as mudancas de ITENS moram em linhas pedido_item com registro_id = id
+    # do ITEM — sem isto, editar itens aparecia so como "(sem mudancas
+    # detectadas)" no pedido (pedido do dono 03/07/2026). O pedido_id vive
+    # no JSON do snapshot, entao filtra em Python sobre uma janela recente.
+    if registro_f and tabela_f == 'pedido_loja':
+        candidatos = (AuditLog.query.filter_by(tabela='pedido_item')
+                      .order_by(AuditLog.criado_em.desc())
+                      .limit(1000).all())
+        alvo = str(registro_f)
+        extras = [l for l in candidatos
+                  if f'"pedido_id": {alvo},' in (l.depois or l.antes or '')
+                  or (l.depois or l.antes or '').rstrip('}').rstrip().endswith(
+                      f'"pedido_id": {alvo}')]
+        if extras:
+            logs = sorted(logs + extras, key=lambda x: x.criado_em,
+                          reverse=True)[:200]
     # Parse JSON dos campos antes/depois + tradução em linguagem natural.
     from app.services import historico_humano
     rows = []
