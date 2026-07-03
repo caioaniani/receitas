@@ -305,6 +305,30 @@ def mov_loja_label(tipo):
 def mov_producao_label(tipo):
     return TIPOS_MOV_PRODUCAO.get(tipo, tipo or '')
 
+
+# Direcao dos movimentos do estoque da INDUSTRIA (EstoqueProducao) no saldo.
+# Fonte unica pra qualquer tela que separe entradas de saidas (ex: expandir
+# por item em /pedidos/congelados). Levantado dos criadores de
+# MovEstoqueProducao em 03/07/2026:
+# - CREDITOS somam; o resto BAIXA;
+# - `*_sem_estoque` e 'consolidacao_estado' nao mexem em saldo (informativos);
+# - 'ajuste_conferencia' e ASSINADO (quantidade negativa = baixa).
+MOV_PRODUCAO_CREDITOS = {
+    'producao', 'entrada', 'entrada_nf', 'retorno_loja', 'balanco_entrada',
+    'estorno_saida_pedido', 'venda_b2b_estorno',
+}
+MOV_PRODUCAO_NEUTROS = {'consolidacao_estado'}
+
+
+def mov_producao_direcao(tipo, quantidade=None):
+    """'credito' | 'debito' | 'neutro' — efeito do movimento no saldo."""
+    t = (tipo or '')
+    if t in MOV_PRODUCAO_NEUTROS or t.endswith('_sem_estoque'):
+        return 'neutro'
+    if t == 'ajuste_conferencia':
+        return 'credito' if (quantidade or 0) >= 0 else 'debito'
+    return 'credito' if t in MOV_PRODUCAO_CREDITOS else 'debito'
+
 def mov_mp_label(tipo):
     return TIPOS_MOV_MP.get(tipo, tipo or '')
 
