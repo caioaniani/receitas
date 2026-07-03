@@ -593,6 +593,15 @@ entregas:
   "ja processada". Falha na execucao limpa o claim e marca `cancelado_em`.
 - Vocabulario de motivo do preview do lote realinhado com o executor
   ('nao_vendeu' era silenciosamente virado 'vencido' no preview).
+- **Exclusao de desperdicio com estorno EXATO (03/07/2026)**: cada
+  `MovEstoqueLoja` de desperdicio agora carrega `desperdicio_id` (ALTER em
+  `migrations_legacy`, deployado ANTES do modelo — procedimento de 2
+  commits). `POST /pedidos/desperdicio/<id>/excluir` (admin) estorna pelos
+  movimentos vinculados: baixa parcial devolve so o que saiu; cesta devolve
+  nos componentes; reaproveitavel (nunca baixou) nao credita nada; registro
+  ANTIGO sem vinculo e excluido SEM mexer em estoque, com aviso. NUNCA
+  regredir pra "creditar desp.quantidade as cegas" — cria estoque fantasma
+  nos 3 casos acima. Testes: `tests/test_desperdicio_excluir_estorno.py`.
 
 ## Impressao de pedidos de entrega (2026-06-12)
 
