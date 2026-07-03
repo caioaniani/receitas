@@ -182,6 +182,9 @@ CAMPOS_LABEL = {
 # do "diff humano" mas continuam no JSON cru pra quem quiser inspecionar.
 CAMPOS_SUPRIMIDOS = {
     'modificado_em',
+    # Contabilidade tecnica da edicao — o QUEM/QUANDO ja aparece no cabecalho
+    # da linha do audit; mostrar "modificado por: 1 → 14" e ruido (03/07/2026).
+    'modificado_por_id',
     'atualizado_em',
     'criado_em',
     'imagem_blob',
