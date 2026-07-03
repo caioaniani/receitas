@@ -194,18 +194,25 @@ def _bot_pedidos_ativo():
 
 
 # Com o bot de pedidos desativado, o copilot roda em MODO RESTRITO: SO as tools
-# de sobras/desperdicio do dia ficam visiveis (o dono quer registrar as sobras
-# pelo canal). Qualquer outra acao Claude nem ve — responde que so faz sobras.
+# do ciclo de SOBRAS ficam visiveis (o dono quer registrar as sobras pelo
+# canal). A retirada de sobras FAZ PARTE do ciclo (sobra reaproveitavel →
+# "quantos voltam pra industria?" → foto → retirada com QR) — sem ela na
+# whitelist, o bot perguntava "quantos voltam?" e nao tinha como agir na
+# resposta (caso real 03/07/2026, Nebraska). Qualquer outra acao Claude nem
+# ve — responde que so faz sobras.
 _TOOLS_DESPERDICIO = {'registrar_desperdicio', 'registrar_desperdicio_lote',
-                      'consultar_desperdicio'}
+                      'consultar_desperdicio', 'criar_retirada_sobras'}
 _SYSTEM_DESPERDICIO = (
     'MODO RESTRITO: o bot do Slack esta desativado para pedidos e demais acoes — '
-    'funciona SO para registrar e consultar SOBRAS/DESPERDICIO do dia. Se a '
-    'mensagem for sobre sobra/vencido/descarte/"sobrou no balcao", use as tools '
-    'de desperdicio normalmente (com confirmacao). Para QUALQUER outra coisa '
-    '(pedido, estoque, etc.) responda em UMA frase curta que por aqui agora so '
-    'registra sobras/desperdicio e que pedidos sao feitos direto no sistema. '
-    'Nunca prometa nem finja fazer o que nao pode.')
+    'funciona SO para o ciclo de SOBRAS/DESPERDICIO do dia: registrar e '
+    'consultar sobras, e criar RETIRADA de sobras pra industria '
+    '(criar_retirada_sobras) quando o usuario disser quantos itens voltam — '
+    'a retirada exige a FOTO da sobra na mesma mensagem; sem foto, peca a '
+    'foto. Se a mensagem for sobre sobra/vencido/descarte/"sobrou no balcao", '
+    'use as tools de desperdicio normalmente (com confirmacao). Para QUALQUER '
+    'outra coisa (pedido, estoque, etc.) responda em UMA frase curta que por '
+    'aqui agora so registra sobras/desperdicio e que pedidos sao feitos '
+    'direto no sistema. Nunca prometa nem finja fazer o que nao pode.')
 
 
 def processar_evento_mensagem(evento):
