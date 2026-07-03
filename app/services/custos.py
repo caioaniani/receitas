@@ -133,20 +133,26 @@ def calcular_custo_produto(produto, receita_custos, mp_info, produto_custos=None
     if produto.itens:
         custo = 0
         for item in produto.itens:
+            # Nome via FK (nome_resolvido) — `item_nome` pode ficar com a
+            # grafia ANTIGA apos rename do componente, e o lookup por nome
+            # zerava o custo em silencio (caso iogurte 03/07/2026: cesta
+            # apontava certo pela FK, mas o custo saia R$ 0 e a margem
+            # inflava). Orfao (FK NULL) cai no item_nome, como antes.
+            nome = item.nome_resolvido
             if item.tipo == 'receita':
-                custo += receita_custos.get(item.item_nome, 0) * item.quantidade
+                custo += receita_custos.get(nome, 0) * item.quantidade
             elif item.tipo == 'produto':
                 # Resolve via dict ja calculado (suporta cesta-de-cesta).
                 # Fallback: custo_direto do produto-componente.
                 if produto_custos is not None:
-                    custo_componente = produto_custos.get(item.item_nome, 0)
+                    custo_componente = produto_custos.get(nome, 0)
                 else:
                     custo_componente = 0
                     if item.produto_componente_id and item.produto_componente:
                         custo_componente = item.produto_componente.custo_direto or 0
                 custo += custo_componente * item.quantidade
             else:
-                info = mp_info.get(item.item_nome, {})
+                info = mp_info.get(nome, {})
                 custo_kg = info.get('custo_por_kg', 0)
                 if info.get('unidade') in ('g', 'ml'):
                     custo += (custo_kg / 1000) * item.quantidade
