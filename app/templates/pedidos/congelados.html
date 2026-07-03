@@ -261,5 +261,58 @@ function atualizarVincular(tipoSel) {
         sel.appendChild(opt);
     });
 }
+
+// Expandir por item: clique no nome abre abaixo os últimos 5 créditos e
+// 5 débitos da linha (GET /pedidos/congelados/movs/<id>, cacheado por linha).
+(function(){
+    function _li(m, cls, sinal){
+        var ref = m.referencia ? ' <span class="text-muted">— ' + _escC(m.referencia) + '</span>' : '';
+        var user = m.usuario ? ' <span class="text-muted">(' + _escC(m.usuario) + ')</span>' : '';
+        return '<li><span class="' + cls + '">' + sinal + m.quantidade + '</span> · '
+            + _escC(m.tipo) + ' · <span class="text-muted">' + _escC(m.data) + '</span>'
+            + ref + user + '</li>';
+    }
+    function _render(d, epid){
+        var cred = d.creditos.length
+            ? d.creditos.map(function(m){ return _li(m, 'mov-qtd-c', '+'); }).join('')
+            : '<li class="text-muted">nenhum crédito registrado</li>';
+        var deb = d.debitos.length
+            ? d.debitos.map(function(m){ return _li(m, 'mov-qtd-d', '−'); }).join('')
+            : '<li class="text-muted">nenhum débito registrado</li>';
+        return '<div class="row g-3 py-1">'
+            + '<div class="col-md-6"><h6 class="text-success">Últimos créditos</h6><ul>' + cred + '</ul></div>'
+            + '<div class="col-md-6"><h6 class="text-danger">Últimos débitos</h6><ul>' + deb + '</ul></div>'
+            + '</div>'
+            + '<div class="small"><a href="{{ url_for('pedidos.congelados_historico') }}?item=' + epid
+            + '">histórico completo →</a></div>';
+    }
+    document.addEventListener('click', function(e){
+        var cel = e.target.closest('.ep-toggle');
+        if (!cel) return;
+        var tr = cel.closest('tr');
+        var det = tr.nextElementSibling;
+        if (det && det.classList.contains('mov-det')) {
+            det.remove();
+            cel.classList.remove('aberto');
+            return;
+        }
+        cel.classList.add('aberto');
+        var epid = cel.getAttribute('data-epid');
+        var nCols = tr.children.length;
+        var novo = document.createElement('tr');
+        novo.className = 'mov-det';
+        novo.innerHTML = '<td colspan="' + nCols + '"><div class="text-muted small">Carregando…</div></td>';
+        tr.parentNode.insertBefore(novo, tr.nextSibling);
+        fetch('{{ url_for('pedidos.congelados') }}/movs/' + epid, {credentials: 'same-origin'})
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (!d.ok) throw new Error(d.erro || 'erro');
+                novo.firstChild.innerHTML = _render(d, epid);
+            })
+            .catch(function(){
+                novo.firstChild.innerHTML = '<span class="text-danger small">Não consegui carregar o histórico — recarregue a página e tente de novo.</span>';
+            });
+    });
+})();
 </script>
 {% endblock %}
