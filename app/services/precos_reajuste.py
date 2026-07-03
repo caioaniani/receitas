@@ -128,7 +128,9 @@ def aplicar_reajuste(campo, valor):
             setattr(r, attr_receita, ln['preco_novo'])
             alterados += 1
     for p in Produto.query.filter_by(ativo=True).all():
-        ln = por_chave.get(('cesta', p.id)) or por_chave.get(('produto', p.id))
+        ln = (por_chave.get(('cesta', p.id))
+              or por_chave.get(('composto', p.id))
+              or por_chave.get(('produto', p.id)))
         if ln is not None:
             setattr(p, attr_produto, ln['preco_novo'])
             alterados += 1
