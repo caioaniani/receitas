@@ -209,6 +209,89 @@ def test_enriquecer_lote_sem_registro_previo_nao_avisa(app, admin_user):
         assert 'Ja registrado HOJE' not in json.dumps(blocks, ensure_ascii=False)
 
 
+def _seed_reaproveitavel_com_retorno():
+    """Croissant reaproveitável apontando pra receita de retorno."""
+    from app.extensions import db
+    from app.models import Loja, Receita
+    loja = Loja(nome='Loja Retirada', ativa=True)
+    retorno = Receita(nome='Croissant Ret - Retorno', rendimento_qtd=1,
+                      rendimento_unidade='un', peso_base=100.0)
+    db.session.add_all([loja, retorno])
+    db.session.commit()
+    croissant = Receita(nome='Croissant Ret', rendimento_qtd=1,
+                        rendimento_unidade='un', peso_base=100.0,
+                        reaproveitavel=True, retorno_receita_id=retorno.id)
+    db.session.add(croissant)
+    db.session.commit()
+    return loja, croissant, retorno
+
+
+# ── pergunta da retirada NA HORA (preview) — combinado original do dono ────
+
+def test_enrich_lote_sugere_retirada_no_preview(app, admin_user):
+    """Combinado do dono: quando a sobra é falada, o bot JÁ pergunta
+    quantos voltam — a sugestão nasce no enrich do preview, não só na
+    execução pós-botão."""
+    from app.services.copilot import _enriquecer_registrar_desperdicio_lote
+    from app.services.slack_blocks import build_preview
+    with app.app_context():
+        loja, croissant, retorno = _seed_reaproveitavel_com_retorno()
+        out = _enriquecer_registrar_desperdicio_lote(
+            {'loja_nome': 'Loja Retirada', 'motivo': 'validade',
+             'itens': [{'nome': 'Croissant Ret', 'quantidade': 15}]},
+            admin_user)
+        assert out['retiradas_sugeridas'] == [{
+            'item': 'Croissant Ret', 'qtd_sobra': 15,
+            'destino': 'Croissant Ret - Retorno'}]
+        txt = json.dumps(build_preview('registrar_desperdicio_lote', out,
+                                       'tok-r'), ensure_ascii=False)
+        assert 'Quantos vão voltar?' in txt
+        assert 'foto da sobra' in txt
+
+
+def test_enrich_single_sugere_retirada_no_preview(app, admin_user):
+    from app.services.copilot import _enriquecer_registrar_desperdicio
+    from app.services.slack_blocks import build_preview
+    with app.app_context():
+        loja, croissant, retorno = _seed_reaproveitavel_com_retorno()
+        out = _enriquecer_registrar_desperdicio(
+            {'loja_nome': 'Loja Retirada', 'item_nome': 'Croissant Ret',
+             'quantidade': 8, 'motivo': 'nao_vendeu'}, admin_user)
+        assert out['retiradas_sugeridas'][0]['qtd_sobra'] == 8
+        txt = json.dumps(build_preview('registrar_desperdicio', out, 'tok-s'),
+                         ensure_ascii=False)
+        assert 'Quantos vão voltar?' in txt
+
+
+def test_enrich_nao_sugere_sem_retorno_ou_motivo_errado(app, admin_user):
+    from app.services.copilot import _enriquecer_registrar_desperdicio_lote
+    with app.app_context():
+        loja, croissant, retorno = _seed_reaproveitavel_com_retorno()
+        # Motivo não-reaproveitável (estragou) → sem sugestão.
+        out = _enriquecer_registrar_desperdicio_lote(
+            {'loja_nome': 'Loja Retirada', 'motivo': 'estragou',
+             'itens': [{'nome': 'Croissant Ret', 'quantidade': 5}]},
+            admin_user)
+        assert out['retiradas_sugeridas'] == []
+        # Receita sem retorno configurado → sem sugestão.
+        out2 = _enriquecer_registrar_desperdicio_lote(
+            {'loja_nome': 'Loja Retirada', 'motivo': 'validade',
+             'itens': [{'nome': 'Croissant Ret - Retorno', 'quantidade': 5}]},
+            admin_user)
+        assert out2['retiradas_sugeridas'] == []
+
+
+def test_pergunta_retirada_entra_no_historico(app):
+    from app.services.slack_bot import _pergunta_retirada_para_historico
+    txt = _pergunta_retirada_para_historico({
+        'retiradas_sugeridas': [{'item': 'Croissant Ret', 'qtd_sobra': 15,
+                                 'destino': 'Croissant Ret - Retorno'}]})
+    assert 'quantos voltam pra industria' in txt
+    assert 'criar_retirada_sobras' in txt
+    assert _pergunta_retirada_para_historico({}) == ''
+    assert _pergunta_retirada_para_historico(None) == ''
+
+
 def test_enriquecer_lote_preserva_motivo_nao_vendeu(app, admin_user):
     """O preview normalizava com vocabulário velho e 'nao_vendeu' virava
     'vencido' — divergindo do executor. Agora usa a MESMA normalização."""
