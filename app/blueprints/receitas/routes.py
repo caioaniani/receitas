@@ -526,12 +526,9 @@ def precos_reajuste_aplicar():
         return redirect(url_for('receitas.precos'))
     alterados = _aplicar(campo, valor)
     db.session.commit()
-    flash(f'Reajuste aplicado: {alterados} item(ns) com preço '
-          f'{CAMPO_LABEL[campo]} aumentado (base R$ {valor:.2f}; cestas '
-          f'+valor fixo + valor × unidades).'.replace('.', ',', 1)
-          if False else
-          f'Reajuste aplicado: {alterados} item(ns) com o preço '
-          f'{CAMPO_LABEL[campo]} reajustado.', 'success')
+    flash(f'Reajuste aplicado: {alterados} item(ns) com o preço '
+          f'{CAMPO_LABEL[campo]} reajustado (+R$ {valor:.2f} avulso; cestas '
+          f'+fixo +valor por unidade).', 'success')
     return redirect(url_for('receitas.precos'))
 
 
