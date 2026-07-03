@@ -483,6 +483,58 @@ def precos_xlsx():
         download_name='precos_%s.xlsx' % hoje().isoformat())
 
 
+@receitas_bp.route('/precos/reajuste/previa', methods=['POST'])
+@login_required
+@owner_required
+def precos_reajuste_previa():
+    """Passo 1 do reajuste em massa em REAIS: mostra a tabela atual → novo
+    item a item (avulso +valor; cesta +valor + valor×unidades; sem preço =
+    intocado) pro dono conferir ANTES de aplicar. **Owner**."""
+    from app.services.precos_reajuste import (
+        CAMPO_LABEL,
+        CAMPOS_REAJUSTE,
+        previa_reajuste,
+    )
+
+    campo = request.form.get('campo') or 'preco_site'
+    if campo not in CAMPOS_REAJUSTE:
+        flash('Campo de preço inválido.', 'warning')
+        return redirect(url_for('receitas.precos'))
+    valor = parse_float_br(request.form.get('valor', ''))
+    if not valor or valor <= 0:
+        flash('Informe o valor do reajuste em reais (ex: 2,00).', 'warning')
+        return redirect(url_for('receitas.precos'))
+    previa = previa_reajuste(campo, valor)
+    return render_template('receitas/precos_reajuste_previa.html',
+                           previa=previa, campo=campo, valor=valor,
+                           campo_label=CAMPO_LABEL[campo])
+
+
+@receitas_bp.route('/precos/reajuste/aplicar', methods=['POST'])
+@login_required
+@owner_required
+def precos_reajuste_aplicar():
+    """Passo 2: aplica o reajuste (recalculado do estado atual) e volta pra
+    tela de preços. **Owner**."""
+    from app.services.precos_reajuste import CAMPO_LABEL, CAMPOS_REAJUSTE
+    from app.services.precos_reajuste import aplicar_reajuste as _aplicar
+
+    campo = request.form.get('campo') or ''
+    valor = parse_float_br(request.form.get('valor', ''))
+    if campo not in CAMPOS_REAJUSTE or not valor or valor <= 0:
+        flash('Parâmetros do reajuste inválidos.', 'warning')
+        return redirect(url_for('receitas.precos'))
+    alterados = _aplicar(campo, valor)
+    db.session.commit()
+    flash(f'Reajuste aplicado: {alterados} item(ns) com preço '
+          f'{CAMPO_LABEL[campo]} aumentado (base R$ {valor:.2f}; cestas '
+          f'+valor fixo + valor × unidades).'.replace('.', ',', 1)
+          if False else
+          f'Reajuste aplicado: {alterados} item(ns) com o preço '
+          f'{CAMPO_LABEL[campo]} reajustado.', 'success')
+    return redirect(url_for('receitas.precos'))
+
+
 @receitas_bp.route('/precos', methods=['GET', 'POST'])
 @login_required
 @owner_required
