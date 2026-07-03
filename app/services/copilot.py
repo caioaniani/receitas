@@ -3573,6 +3573,7 @@ def executar_registrar_desperdicio_lote(params, user):
                     referencia=(f'Desperdicio {motivo} cesta '
                                 f'[{produto_obj.nome}] {nome_comp} (copilot lote)'),
                     usuario_id=user.id,
+                    desperdicio_id=desp.id,
                 ))
             aplicados.append({'nome': nome_ok, 'tipo': 'cesta', 'quantidade': qtd})
             continue  # ja registrou tudo
