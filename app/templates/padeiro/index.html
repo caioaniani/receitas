@@ -572,13 +572,15 @@
   // Massa-base: o que PÔR na amassadeira + a sequência de RETIRADAS (em pães).
   // É isto que o padeiro precisa — não a receita separada de cada pão (que não
   // existe: todos saem da mesma base).
-  function verBase(mbId) {
+  function verBase(mbId, data) {
     document.getElementById('mep-titulo').textContent = 'Carregando…';
     document.getElementById('mep-body').innerHTML =
       '<p style="padding:10px;color:#888;">Carregando massa base…</p>';
     document.getElementById('mep-backdrop').classList.add('aberto');
     document.getElementById('mep-modal').classList.add('aberto');
-    fetch('/padeiro/massa-base/' + mbId + '.json?data={{ dia.isoformat() }}')
+    // `data` = dia do PLANO da seção clicada (a ordem de ontem em aberto
+    // escala a base pelo plano de ontem, não pelo dia da tela).
+    fetch('/padeiro/massa-base/' + mbId + '.json?data=' + (data || '{{ dia.isoformat() }}'))
       .then(function (r) { return r.json(); })
       .then(function (d) {
         document.getElementById('mep-titulo').textContent = 'Massa base: ' + d.nome;
