@@ -20,8 +20,9 @@ def _cesta(nome, itens, **kw):
     db.session.add(p)
     db.session.flush()
     for rec, qtd in itens:
-        db.session.add(ProdutoItem(produto_id=p.id, receita_id=rec.id,
-                                   item_nome=rec.nome, quantidade=qtd))
+        db.session.add(ProdutoItem(produto_id=p.id, tipo='receita',
+                                   receita_id=rec.id, item_nome=rec.nome,
+                                   quantidade=qtd))
     db.session.commit()
     return p
 
