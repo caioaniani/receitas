@@ -139,7 +139,11 @@ def test_detalhe_cesta_mostra_nome_resolvido_e_custo(app, admin_user):
         html = c.get(f'/produtos/{p.id}').get_data(as_text=True)
         assert 'Iogurte Tela CFK' in html
         assert 'Tela CFK Nome Velho' not in html
-        assert 'R$ 4,00' in html      # custo total da cesta: 2×1,00 + 2,00
+        # custo/un do componente (R$ 1,00) e total da linha (2 × R$ 1,00).
+        # O rodapé "CUSTO TOTAL DA CESTA" soma só os itens no servidor (a
+        # embalagem entra via JS), então a prova do fix é a linha do item.
+        assert 'R$ 1,00' in html
+        assert 'R$ 2,00' in html
 
 
 def test_rename_receita_sincroniza_nomes_fallback(app, admin_user):
