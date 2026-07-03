@@ -523,10 +523,24 @@ Retorno NAO e produzivel: nunca cascateia pra massa/MP. Limitacao conhecida:
 dois pais consumindo o MESMO retorno nao rateiam (hoje so o Almond consome).
 NAO "consertar" o cap pra puxar massa fresca sem perguntar ao dono.
 
-**Nutella na loja (sem codigo)**: Produto-composicao "Croissant Nutella" (1x
-receita Croissant Tradicional) mapeado no `/pdv/mapeamentos` — a venda Seru
-baixa o tradicional da loja pelo motor unico. Croissant Tradicional marcado
-`reaproveitavel` = sobra registrada nao baixa duas vezes.
+**Nutella na loja**: os produtos "Croissant de nutella" (106) e "Croissant
+Nutella com morango" (107) sao compostos de 1x **"Croissant Tradicional -
+Retorno"** (conferido em prod 03/07/2026) — a venda baixa o RETORNO da loja
+pelo motor unico. Croissant Tradicional marcado `reaproveitavel`.
+
+**CONVERSAO da sobra no estoque da loja (decisao do dono 03/07/2026)**:
+registrar sobra reaproveitavel de receita COM `retorno_receita_id` converte
+o estoque DA LOJA na hora: baixa o fresco + credita a receita de retorno na
+mesma loja (`desperdicio_core.converter_sobra_para_retorno`; movs
+`sobra_retorno`/`sobra_retorno_entrada`/`sobra_retorno_sem_estoque`, todos
+com `desperdicio_id` — a exclusao do desperdicio desfaz o par, revertendo a
+entrada limitada ao saldo com aviso). Motivos: o fresco volta a refletir so
+o vendavel (sugestao de pedido), a venda de Nutella baixa do retorno (que
+antes ficava 0 pra sempre) e a retirada COLETA o retorno
+(`executar_criar_retirada_sobras` troca o item pra receita de retorno; o
+recebimento na industria credita o retorno = a propria). Reaproveitavel SEM
+retorno configurado mantem o comportamento antigo (registro sem movimento).
+Testes: `tests/test_sobra_conversao_retorno.py`.
 
 **Custo do retorno = CUSTO CHEIO da origem (decisao do dono 02/07/2026)**:
 receita destino de retorno com ficha VAZIA herda o custo (e o peso unitario)
