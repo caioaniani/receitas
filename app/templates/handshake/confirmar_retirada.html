@@ -19,14 +19,44 @@
     <ul class="list-group list-group-flush">
         {% for it in retirada.itens %}
         <li class="list-group-item">
-            <strong>{{ it.quantidade }}× {{ it.nome_item }}</strong>
+            {% if qr.tipo == 'coleta' %}
+            <div class="d-flex align-items-center justify-content-between gap-2">
+                <div>
+                    <strong>{{ it.nome_item }}</strong>
+                    <div class="text-muted small">a loja marcou: {{ it.quantidade }}</div>
+                    {% if it.receita and it.receita.retorno_receita %}
+                    <div class="text-muted small">vira: {{ it.receita.retorno_receita.nome }}</div>
+                    {% endif %}
+                </div>
+                <div class="text-end">
+                    <label class="form-label small text-muted mb-0" for="qtd-{{ it.id }}">levando</label>
+                    <input type="number" id="qtd-{{ it.id }}" name="qtd_{{ it.id }}"
+                           form="form-handshake-retirada"
+                           class="form-control form-control-lg text-center"
+                           style="width:6rem;" inputmode="numeric" min="0"
+                           value="{{ it.quantidade }}">
+                </div>
+            </div>
+            {% else %}
+            <strong>{{ it.quantidade_coletada if it.quantidade_coletada is not none else it.quantidade }}× {{ it.nome_item }}</strong>
+            {% if it.quantidade_coletada is not none and it.quantidade_coletada != it.quantidade %}
+            <span class="badge text-bg-warning">coletado ≠ marcado ({{ it.quantidade }})</span>
+            {% endif %}
             {% if it.receita and it.receita.retorno_receita %}
             <div class="text-muted small">vira: {{ it.receita.retorno_receita.nome }}</div>
+            {% endif %}
             {% endif %}
         </li>
         {% endfor %}
     </ul>
 </div>
+{% if qr.tipo == 'coleta' %}
+<div class="alert alert-warning small mb-3">
+    <i class="bi bi-pencil"></i> Confira o que está levando: se sair diferente
+    do que a loja marcou, ajuste o número acima — o sistema aceita e avisa a
+    equipe no Slack. O que ficar continua no estoque de retorno da loja.
+</div>
+{% endif %}
 
 {% if retirada.foto_url %}
 <div class="card card-soft p-3 mb-3">
