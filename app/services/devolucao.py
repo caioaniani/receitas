@@ -189,15 +189,22 @@ def estornar_devolucao(token, usuario_id):
 def baixar_loja_retirada(retirada, usuario_id=None):
     """PONTA 1 (coleta): baixa o EstoqueLoja dos itens da retirada — limitado
     ao saldo; falta vira mov `devolucao_industria_sem_estoque` visível.
+    Usa `quantidade_coletada` quando o motorista conferiu com divergência
+    (loja declarou 15, saíram 12 — os 3 que ficam continuam no estoque de
+    retorno da loja e as vendas de Nutella baixam dali); senão a declarada.
     NÃO commita (o handshake controla a transação). Retorna avisos."""
     avisos = []
     for it in retirada.itens:
+        qtd = int(it.quantidade_coletada
+                  if it.quantidade_coletada is not None else it.quantidade)
+        if qtd <= 0:
+            continue
         filtro = {'loja_id': retirada.loja_id,
                   'receita_id': it.receita_id,
                   'produto_id': it.produto_id,
                   'materia_prima_id': None}
         r = baixar_loja_por_prioridade(
-            filtro, int(it.quantidade or 0),
+            filtro, qtd,
             tipo_mov=TIPO_BAIXA_LOJA,
             sem_estoque_tipo=TIPO_BAIXA_LOJA_SEM_ESTOQUE,
             referencia=f'Retirada de sobras {retirada.token_mov}',
@@ -205,18 +212,23 @@ def baixar_loja_retirada(retirada, usuario_id=None):
         if r['faltou']:
             avisos.append(
                 f'{it.nome_item}: saldo da loja tinha só {r["baixado"]} de '
-                f'{it.quantidade} — baixei o que havia.')
+                f'{qtd} — baixei o que havia.')
     return avisos
 
 
 def creditar_industria_retirada(retirada, usuario_id=None):
     """PONTA 2 (recebimento): credita o EstoqueProducao no destino de retorno
-    de cada item (usa `quantidade_recebida` quando a indústria conferiu com
-    divergência; senão a declarada). NÃO commita. Retorna resumo por item."""
+    de cada item. Base: `quantidade_recebida` (indústria conferiu) >
+    `quantidade_coletada` (motorista conferiu na coleta) > declarada.
+    NÃO commita. Retorna resumo por item."""
     resumo = []
     for it in retirada.itens:
-        qtd = int(it.quantidade_recebida
-                  if it.quantidade_recebida is not None else it.quantidade)
+        if it.quantidade_recebida is not None:
+            qtd = int(it.quantidade_recebida)
+        elif it.quantidade_coletada is not None:
+            qtd = int(it.quantidade_coletada)
+        else:
+            qtd = int(it.quantidade)
         if qtd <= 0:
             continue
         tipo = 'receita' if it.receita_id else 'produto'
