@@ -1936,6 +1936,7 @@ def _enriquecer_registrar_desperdicio_lote(tool_input, user):
         motivo = 'validade'
 
     itens_enriq = []
+    retiradas_sugeridas = []
     for it in (out.get('itens') or []):
         nome = (it.get('nome') or '').strip()
         try:
@@ -1987,6 +1988,10 @@ def _enriquecer_registrar_desperdicio_lote(tool_input, user):
             'estoque_atual': estoque_atual,
             'ja_registrado_hoje': ja_hoje,
         })
+        s = _retirada_sugerida_preview(tipo_item, item_id, nome_ok, qtd,
+                                       motivo)
+        if s:
+            retiradas_sugeridas.append(s)
 
     n_ok = sum(1 for i in itens_enriq if i.get('resolvido'))
     n_nao = sum(1 for i in itens_enriq if not i.get('erro') and not i.get('resolvido'))
@@ -1998,6 +2003,7 @@ def _enriquecer_registrar_desperdicio_lote(tool_input, user):
         'motivo': motivo,
         'observacao': (out.get('observacao') or '').strip() or None,
         'itens': itens_enriq,
+        'retiradas_sugeridas': retiradas_sugeridas,
         'totais': {
             'total_itens': len(itens_enriq),
             'resolvidos': n_ok,
