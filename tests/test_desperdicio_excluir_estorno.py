@@ -65,7 +65,7 @@ def test_excluir_estorna_exatamente_o_baixado(app, admin_user):
         assert el.quantidade == 6
         desp = Desperdicio.query.filter_by(receita_id=r.id).first()
         resp = _excluir(c, desp.id, loja.id)
-        assert '4 un devolvida(s)' in resp.get_data(as_text=True)
+        assert '4 un movimentada(s)' in resp.get_data(as_text=True)
         db.session.refresh(el)
         assert el.quantidade == 10
         assert Desperdicio.query.filter_by(receita_id=r.id).count() == 0
