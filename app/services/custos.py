@@ -46,6 +46,11 @@ def calcular_custos_receitas():
     # uma origem pro mesmo destino: vale o custo MAIOR (nunca subavalia).
     heranca_retorno = {}
     por_id = {r.id: r for r in receitas}
+    # Nome REAL de cada receita por id — pra sub-receita resolver custo pela
+    # FK (`sub_receita_id`) mesmo quando `ingrediente_nome` ficou com grafia
+    # antiga apos rename (causa de custo zero silencioso — caso iogurte
+    # 03/07/2026, mesmo padrao do ProdutoItem em calcular_custo_produto).
+    id2nome = {rid: rec.nome for rid, rec in por_id.items()}
     for r in receitas:
         if r.retorno_receita_id:
             destino = por_id.get(r.retorno_receita_id)
