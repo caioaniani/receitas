@@ -514,21 +514,38 @@ def precos_reajuste_previa():
 @login_required
 @owner_required
 def precos_reajuste_aplicar():
-    """Passo 2: aplica o reajuste (recalculado do estado atual) e volta pra
-    tela de preços. **Owner**."""
+    """Passo 2: aplica os aumentos DA PRÉVIA (a coluna Aumento é editável —
+    o dono corrige exceções tipo 'Granola 500g é 5x100g técnica, não cesta'
+    antes de confirmar). Campos: 'aum|<receita|produto>|<id>' em R$; linha
+    zerada/apagada não é alterada. **Owner**."""
     from app.services.precos_reajuste import CAMPO_LABEL, CAMPOS_REAJUSTE
-    from app.services.precos_reajuste import aplicar_reajuste as _aplicar
+    from app.services.precos_reajuste import aplicar_aumentos as _aplicar
 
     campo = request.form.get('campo') or ''
-    valor = parse_float_br(request.form.get('valor', ''))
-    if campo not in CAMPOS_REAJUSTE or not valor or valor <= 0:
+    if campo not in CAMPOS_REAJUSTE:
         flash('Parâmetros do reajuste inválidos.', 'warning')
         return redirect(url_for('receitas.precos'))
-    alterados = _aplicar(campo, valor)
+    aumentos = {}
+    for key, bruto in request.form.items():
+        if not key.startswith('aum|'):
+            continue
+        try:
+            _, tipo, iid = key.split('|', 2)
+            iid = int(iid)
+        except (TypeError, ValueError):
+            continue
+        if tipo not in ('receita', 'produto'):
+            continue
+        aum = parse_float_br(bruto)
+        if aum and aum > 0:
+            aumentos[(tipo, iid)] = aum
+    if not aumentos:
+        flash('Nenhum aumento informado — nada foi alterado.', 'warning')
+        return redirect(url_for('receitas.precos'))
+    alterados = _aplicar(campo, aumentos)
     db.session.commit()
     flash(f'Reajuste aplicado: {alterados} item(ns) com o preço '
-          f'{CAMPO_LABEL[campo]} reajustado (+R$ {valor:.2f} avulso; cestas '
-          f'+fixo +valor por unidade).', 'success')
+          f'{CAMPO_LABEL[campo]} reajustado.', 'success')
     return redirect(url_for('receitas.precos'))
 
 
