@@ -238,13 +238,13 @@ def _custo_por_grama(info):
 
 
 def _calcular_receita(r, custos, custos_norm, pesos, pesos_norm,
-                       mp_info, mp_info_norm):
+                       mp_info, mp_info_norm, id2nome=None):
     """Calcula custo de uma receita. Retorna (custo_un, rendimento) ou None se dependência faltante.
 
-    Lookup de sub-receita e MP eh tolerante a case/espaco — divergencia
-    entre grafia da receita-pai (`ReceitaIngrediente.ingrediente_nome`) e
-    da receita-filha (`Receita.nome`) era causa silenciosa de custo zero
-    em cestas.
+    Sub-receita resolve pelo `sub_receita_id` (FK autoritativa) quando
+    presente — `ingrediente_nome` eh so fallback (pode ficar com grafia
+    antiga apos rename da receita-filha). Lookup por nome segue tolerante
+    a case/espaco pros registros orfaos (FK NULL).
 
     Sub-receita contribui pro custo E pro peso (qtd_direto) — antes nao
     contribuia pro peso, o que zerava o rendimento de receitas que misturam
