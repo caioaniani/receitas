@@ -25,6 +25,7 @@ from app.models import (
     MassaBaseItem,
     MateriaPrima,
     Produto,
+    ProdutoItem,
     Receita,
     ReceitaEtapa,
     ReceitaIngrediente,
@@ -1074,7 +1075,6 @@ def _vinculos_receita(receita):
         PedidoItem,
         PlanejamentoItem,
         PrecoLojaReceita,
-        ProdutoItem,
         VendaB2BItem,
         VendaManualLoja,
         VendaMapa,
@@ -1172,7 +1172,6 @@ def vinculos_resolver(id):
     from app.models import (
         Atribuicao,
         PrecoLojaReceita,
-        ProdutoItem,
         VendaMapa,
     )
     receita = Receita.query.get_or_404(id)
@@ -1219,7 +1218,6 @@ def _transferir_para_mp(origem, mp):
         PedidoItem,
         PlanejamentoItem,
         PrecoLojaReceita,
-        ProdutoItem,
         VendaB2BItem,
         VendaManualLoja,
         VendaMapa,
@@ -1318,7 +1316,6 @@ def vinculos_transferir(id):
         PedidoItem,
         PlanejamentoItem,
         PrecoLojaReceita,
-        ProdutoItem,
         VendaB2BItem,
         VendaManualLoja,
         VendaMapa,
