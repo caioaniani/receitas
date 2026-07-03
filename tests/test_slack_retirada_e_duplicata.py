@@ -281,6 +281,15 @@ def test_enrich_nao_sugere_sem_retorno_ou_motivo_errado(app, admin_user):
         assert out2['retiradas_sugeridas'] == []
 
 
+def test_modo_restrito_inclui_criar_retirada_sobras():
+    """O canal de sobras roda em MODO RESTRITO (bot de pedidos OFF desde
+    28/06) — sem a tool de retirada na whitelist o bot perguntava "quantos
+    voltam?" e não tinha como agir na resposta (caso real 03/07/2026:
+    usuário mandou foto + quantidade e o bot não entendeu)."""
+    from app.services.slack_bot import _TOOLS_DESPERDICIO
+    assert 'criar_retirada_sobras' in _TOOLS_DESPERDICIO
+
+
 def test_pergunta_retirada_entra_no_historico(app):
     from app.services.slack_bot import _pergunta_retirada_para_historico
     txt = _pergunta_retirada_para_historico({
