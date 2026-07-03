@@ -2999,8 +2999,8 @@ def desperdicio_excluir(id):
     for a in avisos:
         flash(f'Atencao: {a}.', 'warning')
     if estornado:
-        flash(f'Desperdicio excluido — {estornado} un devolvida(s) ao '
-              'estoque.', 'success')
+        flash(f'Desperdicio excluido — estoque estornado '
+              f'({estornado} un movimentada(s)).', 'success')
     elif movs or '[reaproveitavel' in (desp.observacao or ''):
         flash('Desperdicio excluido — este registro nao tinha baixado '
               'estoque, nada a estornar.', 'info')
