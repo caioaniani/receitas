@@ -316,6 +316,21 @@ def _preview_anexar_foto_pedido(p, token):
     ]
 
 
+def _blocos_pergunta_retirada(p):
+    """Pergunta de retirada JA NO PREVIEW — combinado do dono (02/07/2026):
+    na hora em que a sobra e falada, o bot pergunta quantos voltam pra
+    industria, nao depois do botao (o primeiro uso real morreu mudo)."""
+    blocos = []
+    for s in (p.get('retiradas_sugeridas') or []):
+        blocos.append(_section(
+            f"♻️ *{s.get('qtd_sobra')}x {s.get('item')}* podem voltar pra "
+            f"indústria pra virar *{s.get('destino')}*.\n"
+            f"*Quantos vão voltar?* Responda aqui com a quantidade + a "
+            f"*foto da sobra* (obrigatória) que eu registro a coleta de "
+            f"amanhã com QR."))
+    return blocos
+
+
 def _preview_registrar_desperdicio(p, token):
     return [
         _header('Registrar desperdicio'),
@@ -326,6 +341,7 @@ def _preview_registrar_desperdicio(p, token):
             ('Motivo', p.get('motivo') or 'vencido'),
             ('Observacao', p.get('observacao') or '—'),
         ]),
+        *_blocos_pergunta_retirada(p),
         _botoes(token, 'Registrar', 'Cancelar'),
     ]
 
