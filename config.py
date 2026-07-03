@@ -222,6 +222,12 @@ class Config:
     # Segredo na URL do webhook do bot (/crm/bot?k=...). Valida que o evento
     # veio do nosso Agent Bot. Gerar random longo. Vazio = webhook recusa tudo.
     CHATWOOT_BOT_SECRET = os.environ.get('CHATWOOT_BOT_SECRET', '')
+    # Numeros que o bot IGNORA (CSV): bots externos que entram em loop com o
+    # nosso (ex: gov.br +556132073332, 03/07/2026 — 6 alertas ALTA sem cliente
+    # real). Conversa desses numeros e resolvida em silencio, sem gastar
+    # Claude e sem encher a fila humana. Formato livre (a chave canonica de
+    # telefone normaliza +55/9o digito).
+    CHATBOT_NUMEROS_IGNORADOS = os.environ.get('CHATBOT_NUMEROS_IGNORADOS', '')
     # Token de USUARIO do agente "Painel" (Profile Settings -> Access Token).
     # Usado pra RESPONDER conversas pelo /entregas/painel-testes — mensagens
     # aparecem como esse agente, distinto do bot. Vazio = botao Enviar do

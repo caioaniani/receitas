@@ -183,7 +183,7 @@ def _base_loja():
 def _fmt_item_catalogo(it, base):
     """Item do `loja_catalogo` → dict enxuto pro bot. `disponivel` reflete o
     ESTOQUE REAL da loja do site agora (não mais o flag bugado do VNDA)."""
-    return {
+    d = {
         'nome': it['nome'],
         'kind': it['kind'],
         'id': it['id'],
@@ -193,6 +193,11 @@ def _fmt_item_catalogo(it, base):
         'categoria': it.get('categoria') or '',
         'url': base + it['href'],
     }
+    # Gramagem por unidade quando a ficha tem (auditoria 03/07: cliente
+    # perguntou o peso da Focaccia e o bot nao sabia -> handoff evitavel).
+    if it.get('peso_g'):
+        d['peso_g'] = it['peso_g']
+    return d
 
 
 def consultar_produtos(busca):

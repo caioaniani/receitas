@@ -41,6 +41,11 @@ def _serializar_receita(r):
         # /admin/seo/descricoes. Quando vazia, o template cai no fallback
         # generico "Nome — Categoria" no <meta description>/JSON-LD.
         'descricao': r.descricao_seo or '',
+        # Gramagem por unidade (cadastro tecnico da ficha). O BOT usa pra
+        # responder "quantas gramas tem?" sem depender da descricao editorial
+        # mencionar o peso (auditoria 03/07: Focaccia sem gramagem derrubou
+        # contencao). None = ficha sem peso unitario.
+        'peso_g': int(r.peso_unitario) if r.peso_unitario else None,
         'slug': _slugify(r.nome),
         'href': f'/loja/{_slugify(r.nome)}-r{r.id}',
     }
