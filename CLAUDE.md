@@ -593,9 +593,19 @@ entregas:
   (tipos curtos `r_coleta`/`r_receb` — coluna VARCHAR(10)). Movimentos com
   token `ret-<id>`, MESMA familia do fluxo manual.
 - Service em 2 tempos: `devolucao.baixar_loja_retirada` /
-  `creditar_industria_retirada` (usa `quantidade_recebida` se a industria
-  conferiu com divergencia). A tela/tool `devolver_industria` (atomica)
+  `creditar_industria_retirada`. A tela/tool `devolver_industria` (atomica)
   segue como atalho manual pra excecoes.
+- **Conferencia do motorista na COLETA (03/07/2026, pedido do dono)**: a
+  tela do QR de coleta tem a quantidade POR ITEM editavel (default =
+  declarado; aceita diferente, ex: loja marcou 15, saem 12).
+  `RetiradaSobraItem.quantidade_coletada` (ALTER em migrations_legacy,
+  procedimento 2 commits). Baixa da loja usa o COLETADO; recebimento na
+  industria parte dele (`quantidade_recebida` > `quantidade_coletada` >
+  declarada). Divergencia → post no `SLACK_CANAL_PEDIDOS` (fallback
+  `SLACK_CANAL_COPILOT`) explicando que os que ficaram continuam no estoque
+  de retorno da loja — as vendas de Nutella baixam dali, NUNCA dar entrada
+  manual (duplicaria: nutella vendida antes do aviso ja baixou o retorno).
+  Testes: `tests/test_retirada_coleta_divergencia.py`.
 - Testes: `tests/test_retirada_sobras.py`. PENDENTE (nao bloqueia): mostrar
   retiradas do dia no Painel de Entregas e lista web com cancelamento.
 
