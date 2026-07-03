@@ -246,6 +246,12 @@ def traduzir_audit(log, antes, depois):
     quem = (log.usuario.nome if log.usuario else None) or 'Sistema'
     rid = log.registro_id
 
+    # Itens de pedido têm frase própria: "João adicionou 50x Croissant ao
+    # pedido #322" diz tudo; o genérico dizia só "criou item do pedido #987"
+    # (id do ITEM, inútil pra humano). Pedido do dono 03/07/2026.
+    if log.tabela == 'pedido_item':
+        return _traduzir_pedido_item(log, antes, depois, quem)
+
     if log.acao == 'insert':
         ident = _identificador(depois) or (f'#{rid}' if rid else '')
         frase = f"{quem} criou {nome_reg} {ident}".strip()
@@ -260,11 +266,79 @@ def traduzir_audit(log, antes, depois):
     ident = _identificador(depois or antes) or (f'#{rid}' if rid else '')
     mudancas = _diff_campos(antes or {}, depois or {})
     if not mudancas:
-        frase = f"{quem} editou {nome_reg} {ident} (sem mudanças detectadas)"
+        if log.tabela == 'pedido_loja':
+            # A edição de pedido sempre grava modificado_em/por (suprimidos
+            # do diff); quando NADA mais mudou no cabeçalho, a mudança real
+            # está nos ITENS — que têm linhas próprias no audit.
+            frase = (f"{quem} editou {nome_reg} {ident} — mudanças nos "
+                     f"ITENS do pedido (veja as linhas \"item do pedido\")")
+        else:
+            frase = f"{quem} editou {nome_reg} {ident} (sem mudanças detectadas)"
     else:
         partes = [f"{m['campo']}: {m['antes']} → {m['depois']}" for m in mudancas[:3]]
         sufixo = f", +{len(mudancas) - 3} outras" if len(mudancas) > 3 else ''
         frase = f"{quem} editou {nome_reg} {ident} — {'; '.join(partes)}{sufixo}"
+    return {'frase': frase.strip(), 'mudancas': mudancas}
+
+
+# Campos de vínculo do item de pedido — não fazem sentido como "mudança"
+# (o nome do item já vai na frase).
+_CAMPOS_ITEM_VINCULO = {'pedido_id', 'receita_id', 'produto_id',
+                        'materia_prima_id', 'id'}
+
+
+def _nome_item_pedido(snap):
+    """Nome humano do item de um snapshot de pedido_item (lookup por FK)."""
+    if not isinstance(snap, dict):
+        return 'item'
+    try:
+        from app.extensions import db
+        if snap.get('receita_id'):
+            from app.models import Receita
+            obj = db.session.get(Receita, snap['receita_id'])
+        elif snap.get('produto_id'):
+            from app.models import Produto
+            obj = db.session.get(Produto, snap['produto_id'])
+        elif snap.get('materia_prima_id'):
+            from app.models import MateriaPrima
+            obj = db.session.get(MateriaPrima, snap['materia_prima_id'])
+        else:
+            obj = None
+        nome = obj.nome if obj is not None else 'item'
+    except Exception:  # noqa: BLE001
+        nome = 'item'
+    estado = (snap.get('estado') or '').strip()
+    return f'{nome} ({estado})' if estado else nome
+
+
+def _traduzir_pedido_item(log, antes, depois, quem):
+    """Frases humanas pros lançamentos de pedido_item."""
+    snap = depois or antes or {}
+    pid = snap.get('pedido_id')
+    no_pedido = f' — pedido #{pid}' if pid else ''
+    nome = _nome_item_pedido(snap)
+
+    if log.acao == 'insert':
+        qtd = snap.get('quantidade')
+        frase = f"{quem} adicionou {qtd}x {nome} ao pedido #{pid}" if pid \
+            else f"{quem} adicionou {qtd}x {nome}"
+        return {'frase': frase, 'mudancas': []}
+
+    if log.acao == 'delete':
+        qtd = (antes or {}).get('quantidade')
+        frase = f"{quem} removeu {qtd}x {nome} do pedido #{pid}" if pid \
+            else f"{quem} removeu {qtd}x {nome}"
+        return {'frase': frase, 'mudancas': []}
+
+    mudancas = [m for m in _diff_campos(antes or {}, depois or {})
+                if m['campo'] not in {campo_label(c)
+                                      for c in _CAMPOS_ITEM_VINCULO}]
+    if not mudancas:
+        frase = f"{quem} alterou {nome}{no_pedido} (sem mudanças detectadas)"
+    else:
+        partes = [f"{m['campo']}: {m['antes']} → {m['depois']}"
+                  for m in mudancas[:3]]
+        frase = f"{quem} alterou {nome}{no_pedido} — {'; '.join(partes)}"
     return {'frase': frase.strip(), 'mudancas': mudancas}
 
 
