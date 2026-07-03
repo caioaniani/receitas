@@ -2944,10 +2944,19 @@ def desperdicio_excluir(id):
     desp = Desperdicio.query.get_or_404(id)
     loja_id = desp.loja_id
 
+    from app.services.desperdicio_core import (
+        TIPO_CONVERSAO_ENTRADA,
+        TIPO_CONVERSAO_SAIDA,
+    )
+
     movs = MovEstoqueLoja.query.filter_by(desperdicio_id=desp.id).all()
     estornado = 0
+    avisos = []
     for m in movs:
-        if m.tipo == 'desperdicio' and (m.quantidade or 0) > 0:
+        if (m.tipo in ('desperdicio', TIPO_CONVERSAO_SAIDA)
+                and (m.quantidade or 0) > 0):
+            # Saida (baixa do desperdicio OU do fresco na conversao):
+            # devolve na mesma linha.
             el = EstoqueLoja.query.get(m.estoque_loja_id)
             if el:
                 el.quantidade = (el.quantidade or 0) + m.quantidade
@@ -2958,13 +2967,37 @@ def desperdicio_excluir(id):
                     usuario_id=current_user.id,
                 ))
                 estornado += m.quantidade
-        # 'desperdicio_sem_estoque' nao baixou nada — nada a devolver.
+        elif (m.tipo == TIPO_CONVERSAO_ENTRADA
+                and (m.quantidade or 0) > 0):
+            # Entrada no retorno: o reverso e BAIXAR — limitado ao saldo
+            # (parte pode ja ter sido coletada/vendida como Nutella).
+            el = EstoqueLoja.query.get(m.estoque_loja_id)
+            if el:
+                saldo = el.quantidade or 0
+                baixa = min(m.quantidade, saldo)
+                el.quantidade = saldo - baixa
+                if baixa > 0:
+                    db.session.add(MovEstoqueLoja(
+                        estoque_loja_id=el.id, tipo='desperdicio_estorno',
+                        quantidade=baixa,
+                        referencia=(f'Estorno desperdicio #{desp.id} — '
+                                    'reverte conversao de sobra'),
+                        usuario_id=current_user.id,
+                    ))
+                    estornado += baixa
+                if baixa < m.quantidade:
+                    avisos.append(
+                        f'retorno ja consumido: {m.quantidade - baixa} un '
+                        'nao puderam ser revertidas')
+        # '*_sem_estoque' nao mexeu em saldo — nada a devolver.
         # Solta o vinculo antes do delete (portavel: SQLite local nao aplica
         # o ON DELETE SET NULL do Postgres).
         m.desperdicio_id = None
 
     db.session.delete(desp)
     db.session.commit()
+    for a in avisos:
+        flash(f'Atencao: {a}.', 'warning')
     if estornado:
         flash(f'Desperdicio excluido — {estornado} un devolvida(s) ao '
               'estoque.', 'success')
