@@ -112,7 +112,7 @@ def test_produzir_item_de_ontem_credita_estoque(app, admin_user, cliente):
         r = _receita('Croissant Virada')
         _plano(hoje() - timedelta(days=1), r, alvo=30, produzido=0)
         item = PlanejamentoItem.query.filter_by(receita_id=r.id).one()
-        resp = cliente.post(f'/padeiro/plano/{item.id}/produzir',
+        resp = cliente.post(f'/padeiro/produzir-plano/{item.id}',
                             data={'unidades': '30'})
         assert resp.status_code in (302, 303)
         db.session.expire_all()
