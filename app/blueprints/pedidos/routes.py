@@ -1299,7 +1299,7 @@ def congelados_movs(estoque_id):
              MovEstoqueProducao.quantidade >= 0))
     cond_neutro = or_(
         MovEstoqueProducao.tipo.in_(sorted(hh.MOV_PRODUCAO_NEUTROS)),
-        MovEstoqueProducao.tipo.like('%\\_sem\\_estoque'))
+        MovEstoqueProducao.tipo.endswith('_sem_estoque', autoescape=True))
     creditos = base.filter(cond_credito).limit(5).all()
     debitos = base.filter(~cond_credito, ~cond_neutro).limit(5).all()
 
