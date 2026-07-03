@@ -4147,6 +4147,7 @@ def executar_registrar_desperdicio(params, user):
         criado_por_id=user.id,
     )
     db.session.add(desp)
+    db.session.flush()  # id pro vinculo dos movimentos (estorno exato)
 
     if reaproveita:
         # Item marcado como reaproveitavel + motivo=validade: registra
