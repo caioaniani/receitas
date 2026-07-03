@@ -2885,7 +2885,13 @@ def desperdicio():
                 desperdicio_id=desp.id,
             ))
         db.session.commit()
-        if reaproveita:
+        if reaproveita and conv:
+            aviso_falta = (f' (saldo do fresco estava subcontado em '
+                           f'{conv["faltou"]})' if conv['faltou'] else '')
+            flash(f'Desperdicio registrado: {qtd} un de {desp.nome_item} '
+                  f'convertida(s) em "{conv["destino"]}" no estoque da '
+                  f'loja{aviso_falta}.', 'info')
+        elif reaproveita:
             flash(f'Desperdicio registrado: {qtd} un de {desp.nome_item} — '
                   'item reaproveitavel: o estoque NAO foi baixado (vira '
                   'retorno/outra receita).', 'info')
