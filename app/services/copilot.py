@@ -4192,15 +4192,24 @@ def executar_registrar_desperdicio(params, user):
     db.session.add(desp)
     db.session.flush()  # id pro vinculo dos movimentos (estorno exato)
 
+    conv = None
     if reaproveita:
-        # Item marcado como reaproveitavel + motivo=validade: registra
-        # desperdicio pra historico mas NAO baixa estoque (item vai virar
-        # outra coisa). Anota na observacao do desperdicio pra rastreio.
-        if not (desp.observacao or '').strip():
-            desp.observacao = '[reaproveitavel — nao baixou estoque]'
-        else:
-            desp.observacao = desp.observacao + ' [reaproveitavel]'
+        # Reaproveitavel COM receita de retorno: converte no estoque da loja
+        # (baixa o fresco + credita o retorno — decisao do dono 03/07/2026).
+        # Sem retorno configurado: registro sem movimento, como antes.
         baixa = 0
+        if tipo_item == 'receita':
+            from app.services.desperdicio_core import (
+                converter_sobra_para_retorno,
+            )
+            conv = converter_sobra_para_retorno(
+                loja.id, item_id, qtd, user.id, desp.id)
+        sufixo = (f'[convertido em {conv["destino"]}]' if conv
+                  else '[reaproveitavel — nao baixou estoque]')
+        if not (desp.observacao or '').strip():
+            desp.observacao = sufixo
+        else:
+            desp.observacao = desp.observacao + ' ' + sufixo
     elif componentes_cesta:
         # Loja so estoca componentes; desconta cada um
         for col, comp_id, nome_comp, qtd_por_cesta in componentes_cesta:
