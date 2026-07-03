@@ -457,8 +457,12 @@
                 <strong>Reaproveitavel quando vence / nao vende</strong>
                 <div class="text-muted small">
                     Quando essa receita vencer ou sobrar do dia, ela <strong>vira outra coisa</strong>
-                    em vez de ir pro lixo. Ex: Croissant Tradicional vira Croissant Almond.
-                    Desperdicio com motivo "validade" ou "nao_vendeu" NAO baixa do estoque.
+                    em vez de ir pro lixo (nao conta como perda de estoque).
+                    Com a <strong>receita de retorno</strong> configurada abaixo, a sobra registrada
+                    <strong>converte na hora</strong> no estoque da loja: baixa desta receita e credita
+                    a de retorno (ex: Croissant Tradicional vira "Croissant Tradicional - Retorno",
+                    que a retirada coleta e a Nutella consome). Sem receita de retorno, o desperdicio
+                    com motivo "validade"/"nao_vendeu" so registra, sem mexer no estoque.
                 </div>
             </label>
         </div>
