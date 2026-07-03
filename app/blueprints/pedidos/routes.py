@@ -1275,6 +1275,53 @@ def congelados():
                            sugestoes=sugestoes)
 
 
+@pedidos_bp.route('/congelados/movs/<int:estoque_id>')
+@login_required
+@producao_required
+def congelados_movs(estoque_id):
+    """Ultimos 5 CREDITOS + 5 DEBITOS de uma linha do estoque da industria —
+    alimenta o expandir por item na tela /pedidos/congelados. Direcao vem da
+    fonte unica `historico_humano.mov_producao_direcao` (movimentos
+    informativos `*_sem_estoque`/consolidacao ficam fora das duas listas)."""
+    from sqlalchemy import and_, or_
+
+    from app.models import Usuario
+    from app.services import historico_humano as hh
+
+    ep = EstoqueProducao.query.get_or_404(estoque_id)
+    base = (MovEstoqueProducao.query
+            .filter_by(estoque_producao_id=ep.id)
+            .order_by(MovEstoqueProducao.data.desc(),
+                      MovEstoqueProducao.id.desc()))
+    cond_credito = or_(
+        MovEstoqueProducao.tipo.in_(sorted(hh.MOV_PRODUCAO_CREDITOS)),
+        and_(MovEstoqueProducao.tipo == 'ajuste_conferencia',
+             MovEstoqueProducao.quantidade >= 0))
+    cond_neutro = or_(
+        MovEstoqueProducao.tipo.in_(sorted(hh.MOV_PRODUCAO_NEUTROS)),
+        MovEstoqueProducao.tipo.like('%\\_sem\\_estoque'))
+    creditos = base.filter(cond_credito).limit(5).all()
+    debitos = base.filter(~cond_credito, ~cond_neutro).limit(5).all()
+
+    user_ids = {m.usuario_id for m in creditos + debitos if m.usuario_id}
+    users = ({u.id: u.nome for u in
+              Usuario.query.filter(Usuario.id.in_(user_ids)).all()}
+             if user_ids else {})
+
+    def _fmt(m):
+        return {
+            'data': m.data.strftime('%d/%m %H:%M') if m.data else '',
+            'tipo': hh.mov_producao_label(m.tipo),
+            'quantidade': abs(int(m.quantidade or 0)),
+            'referencia': m.referencia or '',
+            'usuario': users.get(m.usuario_id) or '',
+        }
+
+    return jsonify(ok=True, item=ep.nome_item,
+                   creditos=[_fmt(m) for m in creditos],
+                   debitos=[_fmt(m) for m in debitos])
+
+
 @pedidos_bp.route('/congelados/historico')
 @login_required
 @producao_required
