@@ -320,8 +320,14 @@ def processar_evento_mensagem(evento):
 
     # Atualiza historico
     historico.append({'role': 'user', 'content': text})
-    historico.append({'role': 'assistant',
-                       'content': resp.get('explicacao') or ''})
+    conteudo_assist = resp.get('explicacao') or ''
+    # Pergunta de retirada pendente (sobra reaproveitavel com receita de
+    # retorno, detectada no enrich do preview): entra no historico pra o
+    # modelo entender a resposta "10 voltam" + foto e chamar
+    # criar_retirada_sobras — combinado do dono: perguntar NA HORA em que
+    # a sobra e falada (o preview ja mostra a pergunta ao usuario).
+    conteudo_assist += _pergunta_retirada_para_historico(resp.get('params'))
+    historico.append({'role': 'assistant', 'content': conteudo_assist})
     try:
         _salvar_historico(sc, historico)
     except Exception:
@@ -416,6 +422,22 @@ def disparar_evento(evento):
                 logger.exception('slack_bot: erro processando evento')
 
     _executor.submit(_runner)
+
+
+def _pergunta_retirada_para_historico(params):
+    """Texto anexado ao turno assistant do historico quando o PREVIEW de
+    desperdicio detectou sobra reaproveitavel com receita de retorno — o
+    modelo precisa saber que a pergunta "quantos voltam?" esta em aberto
+    pra entender a resposta ("10" + foto) e chamar criar_retirada_sobras."""
+    linhas = []
+    for s in ((params or {}).get('retiradas_sugeridas') or []):
+        linhas.append(
+            f"\n[Perguntei ao usuario: dos {s.get('qtd_sobra')}x "
+            f"{s.get('item')} de sobra, quantos voltam pra industria pra "
+            f"virar {s.get('destino')}? Quando ele responder a quantidade e "
+            f"mandar a FOTO da sobra (obrigatoria), chame "
+            f"criar_retirada_sobras.]")
+    return ''.join(linhas)
 
 
 def _apendar_contexto_retirada(acao, resultado):
