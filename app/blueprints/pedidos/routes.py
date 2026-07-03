@@ -2949,9 +2949,9 @@ def desperdicio_excluir(id):
     if estornado:
         flash(f'Desperdicio excluido — {estornado} un devolvida(s) ao '
               'estoque.', 'success')
-    elif movs:
-        flash('Desperdicio excluido — os movimentos vinculados nao tinham '
-              'baixa pra estornar.', 'info')
+    elif movs or '[reaproveitavel' in (desp.observacao or ''):
+        flash('Desperdicio excluido — este registro nao tinha baixado '
+              'estoque, nada a estornar.', 'info')
     else:
         flash('Desperdicio excluido. Registro antigo, sem movimento '
               'vinculado — o estoque NAO foi alterado; se este registro '
