@@ -582,6 +582,16 @@ entregas:
   `slack_bot._apendar_contexto_retirada` grava o contexto na SlackConversa
   (mesclado no ultimo turno assistant) pra o modelo saber chamar
   `criar_retirada_sobras` quando o usuario responder.
+- **Pergunta NA HORA (03/07/2026, cobranca do dono)**: o combinado sempre
+  foi o bot perguntar "quantos voltam?" NO MOMENTO em que a sobra e falada,
+  nao depois do botao. O `interpretar` e um tiro so (o texto do modelo sai
+  ANTES do enrich), entao a pergunta nasce no PREVIEW:
+  `copilot._retirada_sugerida_preview` calcula a sugestao no enrich
+  (single + lote → `params['retiradas_sugeridas']`),
+  `slack_blocks._blocos_pergunta_retirada` mostra o ♻️ "Quantos vao
+  voltar?" no proprio preview, e `slack_bot._pergunta_retirada_para_historico`
+  grava a pergunta no turno assistant do historico — o modelo entende o
+  "10" + foto que vier em seguida e chama `criar_retirada_sobras`.
 - Lote de desperdicio DUPLICADO: o modelo re-enviou a lista inteira pra
   acrescentar 1 item (almond) e 4 itens duplicaram como perda. Defesas:
   aviso "⚠ Ja registrado HOJE nesta loja" no preview
