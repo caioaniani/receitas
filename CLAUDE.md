@@ -477,6 +477,18 @@ status; `?testar=1` manda evento de teste.
   com `consultar_pedido` esquecendo de filtrar `recebido`).
 - **Fuzzy de loja por nome**: use `resolver_loja_por_nome()` em `app/utils.py`,
   não reimplemente o padrão `func.lower() / ilike` em cada service.
+- **Componente de cesta/sub-receita: FK manda, nome e so fallback (03/07/2026)**:
+  `ProdutoItem.item_nome` e `ReceitaIngrediente.ingrediente_nome` podem ficar
+  com grafia ANTIGA apos rename — todo lookup (custo, agregacao) deve usar
+  `ProdutoItem.nome_resolvido` / resolver `sub_receita_id` primeiro. Caso real:
+  receita do iogurte renomeada → cestas 200/600ml custavam so a embalagem e a
+  margem inflava; pior, o nome velho no input da tela da cesta fazia o Salvar
+  re-resolver a FK errado e ORFANAR o vinculo (baixa de venda parava em
+  silencio). Fixado em `custos.py` (calcular_custo_produto,
+  calcular_custos_produtos, _calcular_receita com id2nome),
+  `produtos/routes.py::detalhe` (input mostra nome_resolvido) e rename de
+  receita/produto sincroniza os nomes-fallback gravados. Testes:
+  `tests/test_cesta_custo_fk.py`. NUNCA voltar a buscar custo por item_nome.
 - **Timezone (CRÍTICO)**: SEMPRE use `app.utils.hoje()` (retorna `date` em BRT)
   e `app.utils.agora()` (retorna `datetime` em BRT naive). NUNCA use
   `date.today()` ou `datetime.now()` direto — no Postgres-Railway eles
