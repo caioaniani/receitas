@@ -622,11 +622,19 @@ def audit():
         candidatos = (AuditLog.query.filter_by(tabela='pedido_item')
                       .order_by(AuditLog.criado_em.desc())
                       .limit(1000).all())
-        alvo = str(registro_f)
-        extras = [l for l in candidatos
-                  if f'"pedido_id": {alvo},' in (l.depois or l.antes or '')
-                  or (l.depois or l.antes or '').rstrip('}').rstrip().endswith(
-                      f'"pedido_id": {alvo}')]
+
+        def _do_pedido(log_item):
+            for bruto in (log_item.depois, log_item.antes):
+                if not bruto:
+                    continue
+                try:
+                    if _json.loads(bruto).get('pedido_id') == registro_f:
+                        return True
+                except (ValueError, TypeError):
+                    continue
+            return False
+
+        extras = [l for l in candidatos if _do_pedido(l)]
         if extras:
             logs = sorted(logs + extras, key=lambda x: x.criado_em,
                           reverse=True)[:200]
