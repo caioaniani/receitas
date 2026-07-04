@@ -670,6 +670,19 @@ entregas:
   regredir pra "creditar desp.quantidade as cegas" — cria estoque fantasma
   nos 3 casos acima. Testes: `tests/test_desperdicio_excluir_estorno.py`.
 
+## Cronograma — ordem ENVIADA nunca muda por caminho implicito (04/07/2026)
+
+Garantia do dono: depois do "enviar a producao", o que o padeiro ve so muda
+pelo "🔄 atualizar producao" explicito daquele dia. Mapa dos caminhos:
+- `limpar_todos_overrides` / `editar_celula` / `celula_reset` mexem SO em
+  `CronogramaOverride` (rascunho do grid) — nunca em `PlanejamentoProducao`.
+- `aprovar_plano_do_dia` num dia ja ENVIADO levanta `PlanoJaEnviadoError`
+  (recusa sem tocar o plano) — antes reconstruia os itens da ordem em
+  execucao se um POST/aba desatualizada chamasse aprovar (furo fechado).
+  Re-aprovar RASCUNHO continua permitido.
+- `enviar_plano_do_dia` e o UNICO que reconstroi ordem enviada (gesto
+  explicito, re-pressavel). Testes: `tests/test_cronograma_ordem_enviada.py`.
+
 ## Tela do padeiro — ordem persiste apos a meia-noite (03/07/2026)
 
 O padeiro trabalha de MADRUGADA: a ordem do dia D e executada na madrugada de
