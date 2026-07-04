@@ -325,13 +325,16 @@ def calculadora():
                 entradas, considerar_estoque=considerar_estoque,
                 explodir_retorno=explodir_retorno)
             # Exportar PDF: mesmo POST, botão formato=pdf (reusa o cálculo).
-            if request.form.get('formato') == 'pdf':
+            # 'pdf_sem_valores' = versão sem custos (circular com a equipe).
+            formato = request.form.get('formato')
+            if formato in ('pdf', 'pdf_sem_valores'):
                 from flask import Response
 
                 from app.services.pdf import gerar_calculadora_pdf
                 dados = gerar_calculadora_pdf(
                     resultado, resultado['itens_ok'],
-                    considerar_estoque=considerar_estoque)
+                    considerar_estoque=considerar_estoque,
+                    com_valores=(formato == 'pdf'))
                 return Response(
                     dados, mimetype='application/pdf',
                     headers={'Content-Disposition':
