@@ -269,3 +269,54 @@ def catalogo():
     return render_template('lista_compras/catalogo.html',
                            lojas=lojas, loja_atual=loja_atual,
                            itens_por_grupo=itens_por_grupo, sel_loja=sel_loja)
+
+
+# ── Calculadora de compras (03/07/2026) ────────────────────────────────
+# "Vou produzir X unidades disto — quanto comprar de mercadoria?"
+# Reusa o motor canônico de explosão da ficha (producao.py) via
+# calculadora_compras.calcular. Só leitura — não grava nada.
+
+@lista_compras_bp.route('/calculadora', methods=['GET', 'POST'])
+@login_required
+def calculadora():
+    from app.models import Produto, Receita
+    if not current_user.is_admin():
+        abort(403)
+
+    receitas = (Receita.query
+                .filter(Receita.arquivada_em.is_(None))
+                .order_by(Receita.nome).all())
+    produtos = (Produto.query
+                .filter(Produto.ativo.is_(True))
+                .order_by(Produto.nome).all())
+
+    resultado = None
+    entradas_render = []
+    if request.method == 'POST':
+        from app.services import calculadora_compras
+        itens_raw = request.form.getlist('item[]')
+        qtds_raw = request.form.getlist('qtd[]')
+        entradas = []
+        for i, token in enumerate(itens_raw):
+            token = (token or '').strip()
+            try:
+                qtd = int(qtds_raw[i]) if i < len(qtds_raw) else 0
+            except (TypeError, ValueError):
+                qtd = 0
+            if not token or qtd <= 0:
+                continue
+            if token.startswith('r_'):
+                entradas.append({'tipo': 'receita', 'id': int(token[2:]),
+                                 'qtd': qtd})
+            elif token.startswith('p_'):
+                entradas.append({'tipo': 'produto', 'id': int(token[2:]),
+                                 'qtd': qtd})
+            entradas_render.append({'token': token, 'qtd': qtd})
+        if entradas:
+            resultado = calculadora_compras.calcular(entradas)
+        else:
+            flash('Escolha ao menos um item com quantidade > 0.', 'warning')
+
+    return render_template('lista_compras/calculadora.html',
+                           receitas=receitas, produtos=produtos,
+                           resultado=resultado, entradas=entradas_render)
