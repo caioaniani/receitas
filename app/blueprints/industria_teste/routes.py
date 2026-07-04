@@ -202,7 +202,7 @@ def previsao(receita_id):
 def aprovar():
     """Aprova a coluna de um dia -> cria a ordem de produção (desce pro
     padeiro)."""
-    from app.services.producao import aprovar_plano_do_dia
+    from app.services.producao import PlanoJaEnviadoError, aprovar_plano_do_dia
 
     horizonte, janela = _horizonte_janela()
     inicio = _inicio_offset()
@@ -217,9 +217,22 @@ def aprovar():
 
     # IMPORTANTE: aprovar com o MESMO equilibrar da tela — senao o que desce pro
     # padeiro nao bate com o que voce viu/equilibrou.
-    plano = aprovar_plano_do_dia(data_alvo, current_user.id,
-                                 horizonte_dias=horizonte, janela_semanas=janela,
-                                 inicio_offset_dias=inicio, equilibrar=equilibrar)
+    try:
+        plano = aprovar_plano_do_dia(data_alvo, current_user.id,
+                                     horizonte_dias=horizonte,
+                                     janela_semanas=janela,
+                                     inicio_offset_dias=inicio,
+                                     equilibrar=equilibrar)
+    except PlanoJaEnviadoError:
+        # Garantia do dono (04/07/2026): ordem ENVIADA nunca muda por caminho
+        # implícito — só pelo "🔄 atualizar produção" explícito daquele dia.
+        flash('O dia %s já foi ENVIADO ao padeiro — "aprovar" não mexe em '
+              'ordem enviada. Pra aplicar o grid atual na produção, use '
+              '"🔄 atualizar produção" naquele dia.'
+              % data_alvo.strftime('%d/%m'), 'warning')
+        return redirect(url_for('industria_teste.index', horizonte=horizonte,
+                                janela=janela, inicio=inicio,
+                                equilibrar=1 if equilibrar else None))
     if plano:
         flash('Plano de %s aprovado (%d receita(s)). Revise/edite e clique em '
               '"enviar ao padeiro" quando estiver pronto.'
