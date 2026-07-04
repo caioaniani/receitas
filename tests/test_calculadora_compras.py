@@ -141,15 +141,20 @@ def test_sub_receita_de_retorno_nao_vira_compra(app):
     from app.services import calculadora_compras
     with app.app_context():
         _mp('Amendoas', custo=80.0, estoque=0.0)
-        base = _receita_simples('Croissant Trad Calc')   # ficha com Farinha
-        # 'base' é destino de retorno de alguém → marca como receita de retorno
-        origem = Receita(nome='Croissant Fresco Calc', categoria='Croissants',
-                         rendimento_qtd=10, rendimento_unidade='un',
-                         peso_base=1000.0, retorno_receita_id=base.id)
+        _mp('Farinha', custo=10.0, estoque=0.0)
+        # Como em produção: RETORNO tem ficha VAZIA; a ficha (Farinha) mora
+        # na receita de ORIGEM (fresca), que aponta retorno_receita_id.
+        base = Receita(nome='Croissant Trad Calc', categoria='Croissants',
+                       rendimento_qtd=10, rendimento_unidade='un',
+                       peso_base=1000.0)                 # retorno, ficha vazia
+        db.session.add(base)
+        db.session.flush()
+        origem = _receita_simples('Croissant Fresco Calc')  # ficha com Farinha
+        origem.retorno_receita_id = base.id
         almond = Receita(nome='Almond Calc', categoria='Croissants',
                          rendimento_qtd=10, rendimento_unidade='un',
                          peso_base=1000.0, peso_unitario=120.0)
-        db.session.add_all([origem, almond])
+        db.session.add(almond)
         db.session.flush()
         db.session.add_all([
             ReceitaIngrediente(receita_id=almond.id, tipo='receita',
