@@ -526,6 +526,9 @@ def ordem_compra_consolidada(itens):
         grupos.setdefault(forn, []).append({
             'nome': nome,
             'em_unidades': bool(d.get('em_unidades')),
+            # Quem usa esta MP e quanto (maior consumidor primeiro).
+            'origens': sorted((d.get('origens') or {}).items(),
+                              key=lambda kv: -kv[1]),
             'quantidade': d['quantidade'],
             'estoque_atual': d.get('estoque_atual', 0),
             'comprar': comprar_g,
