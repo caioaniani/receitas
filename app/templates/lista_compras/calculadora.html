@@ -112,10 +112,10 @@
             {% for it in f.itens %}
             <tr>
                 <td>{{ it.nome }}</td>
-                <td class="text-end">{{ kg(it.quantidade) }}</td>
-                {% if resultado.considerar_estoque %}<td class="text-end">{{ kg(it.estoque_atual) }}</td>{% endif %}
+                <td class="text-end">{{ kg(it.quantidade, it.em_unidades) }}</td>
+                {% if resultado.considerar_estoque %}<td class="text-end">{{ kg(it.estoque_atual, it.em_unidades) }}</td>{% endif %}
                 <td class="text-end {% if it.comprar > 0 %}fw-bold text-danger{% else %}text-success{% endif %}">
-                    {% if it.comprar > 0 %}{{ kg(it.comprar) }}{% else %}✓ tem{% endif %}
+                    {% if it.comprar > 0 %}{{ kg(it.comprar, it.em_unidades) }}{% else %}✓ tem{% endif %}
                 </td>
                 <td class="text-end">{% if it.comprar > 0 %}R$ {{ '%.2f'|format(it.custo_compra) }}{% else %}—{% endif %}</td>
             </tr>
