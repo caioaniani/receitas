@@ -55,16 +55,52 @@ def calcular(entradas, considerar_estoque=True):
     avisos = []
     detalhes = []           # rastro "como calculei" (neutro, não é aviso)
 
-    def _add_receita(receita, qtd, origem=None):
+    def _eh_retorno(sub_id):
+        """Receita de RETORNO (destino de sobra, ex: 'Croissant — Retorno'):
+        NUNCA vira compra — nasce das sobras devolvidas, não de mercadoria."""
+        return db.session.query(Receita.id).filter(
+            Receita.retorno_receita_id == sub_id).first() is not None
+
+    def _add_receita(receita, qtd, origem=None, _visitados=None):
+        _visitados = set(_visitados or ())
+        if receita.id in _visitados:
+            avisos.append(f'Ciclo de sub-receitas em "{receita.nome}" — '
+                          'explosão interrompida nesse ramo.')
+            return
+        _visitados.add(receita.id)
+        mult = _mult_para(receita, qtd)
         receita_itens.append({'receita_id': receita.id,
-                              'multiplicador': _mult_para(receita, qtd)})
+                              'multiplicador': mult})
         for ing in receita.ingredientes:
-            if (ing.tipo or '') == 'receita':
-                nome_sub = ing.ingrediente_nome or '(sub-receita)'
+            if (ing.tipo or '') != 'receita':
+                continue
+            nome_sub = ing.ingrediente_nome or '(sub-receita)'
+            sub = ing.sub_receita
+            # Sub-receita NORMAL (ex: Massa para folhar) EXPLODE em MP —
+            # a manteiga do folhado tem que aparecer na compra (03/07/2026,
+            # caso real: 300 croissants mostravam 105 g de manteiga-folhar
+            # porque a massa ficava só "consumida pronta"). RETORNO não
+            # explode (vem de sobra, não de compra); órfã (sem FK) só avisa.
+            if sub is None:
                 sub_receitas[nome_sub] = sub_receitas.get(nome_sub, 0) + qtd
+                avisos.append(f'"{receita.nome}": sub-receita "{nome_sub}" '
+                              'sem vínculo (órfã) — NÃO entrou na compra. '
+                              'Vincule na ficha.')
+                continue
+            if _eh_retorno(sub.id):
+                sub_receitas[nome_sub] = sub_receitas.get(nome_sub, 0) + qtd
+                continue
+            unidades_sub = (ing.porcentagem or 0) * mult
+            if unidades_sub <= 0:
+                continue
+            detalhes.append(f'{receita.nome}: sub-receita "{sub.nome}" '
+                            f'({unidades_sub:g} un) explodida em '
+                            'matéria-prima.')
+            _add_receita(sub, unidades_sub, _visitados=_visitados)
         if origem:
             detalhes.append(f'{origem}: componente "{receita.nome}" '
-                            f'({qtd} un) entrou na explosão de matéria-prima.')
+                            f'({qtd:g} un) entrou na explosão de '
+                            'matéria-prima.')
 
     for e in entradas:
         try:
