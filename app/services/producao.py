@@ -491,9 +491,14 @@ def ordem_compra_consolidada(itens):
     for nome, d in lista.items():
         forn = (d.get('fornecedor') or '').strip() or 'Sem fornecedor'
         comprar_g = d.get('deficit', 0) or 0
-        custo_compra = (comprar_g / 1000.0) * (d.get('custo_por_kg') or 0)
+        if d.get('em_unidades'):
+            # MP unitaria: custo_por_kg = custo POR UNIDADE (custos.py:292).
+            custo_compra = comprar_g * (d.get('custo_por_kg') or 0)
+        else:
+            custo_compra = (comprar_g / 1000.0) * (d.get('custo_por_kg') or 0)
         grupos.setdefault(forn, []).append({
             'nome': nome,
+            'em_unidades': bool(d.get('em_unidades')),
             'quantidade': d['quantidade'],
             'estoque_atual': d.get('estoque_atual', 0),
             'comprar': comprar_g,
