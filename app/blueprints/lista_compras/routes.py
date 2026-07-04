@@ -317,10 +317,12 @@ def calculadora():
                                  'qtd': qtd})
             entradas_render.append({'token': token, 'qtd': qtd})
         if entradas:
-            resultado = calculadora_compras.calcular(entradas)
+            resultado = calculadora_compras.calcular(
+                entradas, considerar_estoque=considerar_estoque)
         else:
             flash('Escolha ao menos um item com quantidade > 0.', 'warning')
 
     return render_template('lista_compras/calculadora.html',
                            receitas=receitas, produtos=produtos,
-                           resultado=resultado, entradas=entradas_render)
+                           resultado=resultado, entradas=entradas_render,
+                           considerar_estoque=considerar_estoque)
