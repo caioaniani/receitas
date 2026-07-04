@@ -35,11 +35,15 @@ def _mult_para(receita, qtd):
     return qtd / rend
 
 
-def calcular(entradas):
+def calcular(entradas, considerar_estoque=True):
     """`entradas`: [{'tipo': 'receita'|'produto', 'id': int, 'qtd': int}].
+    `considerar_estoque=False`: "a comprar" = necessário CHEIO (ignora o
+    estoque de MP — útil pra orçar um evento sem mexer no que está reservado
+    à operação do dia). Só re-rotula a saída do motor; a explosão é a mesma.
 
     Retorna {'compra': <ordem_compra_consolidada>, 'compras_diretas': [...],
-             'sub_receitas': [...], 'itens_ok': [...], 'avisos': [...]}.
+             'sub_receitas': [...], 'itens_ok': [...], 'avisos': [...],
+             'detalhes': [...] (rastro informativo — NÃO é problema)}.
     """
     from app.services.cestas import componentes_de_cesta
     from app.services.producao import ordem_compra_consolidada
@@ -49,6 +53,7 @@ def calcular(entradas):
     sub_receitas = {}       # nome -> unidades-base que a consomem (informativo)
     itens_ok = []
     avisos = []
+    detalhes = []           # rastro "como calculei" (neutro, não é aviso)
 
     def _add_receita(receita, qtd, origem=None):
         receita_itens.append({'receita_id': receita.id,
@@ -58,8 +63,8 @@ def calcular(entradas):
                 nome_sub = ing.ingrediente_nome or '(sub-receita)'
                 sub_receitas[nome_sub] = sub_receitas.get(nome_sub, 0) + qtd
         if origem:
-            avisos.append(f'{origem}: componente "{receita.nome}" ({qtd} un) '
-                          'entrou na explosão de matéria-prima.')
+            detalhes.append(f'{origem}: componente "{receita.nome}" '
+                            f'({qtd} un) entrou na explosão de matéria-prima.')
 
     for e in entradas:
         try:
