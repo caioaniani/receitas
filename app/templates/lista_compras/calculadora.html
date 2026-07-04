@@ -57,6 +57,15 @@
                     sem usar o que está reservado à operação)</span>
             </label>
         </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="explodir_retorno"
+                   value="1" id="chk-retorno" {% if explodir_retorno %}checked{% endif %}>
+            <label class="form-check-label small" for="chk-retorno">
+                Comprar insumos dos RETORNOS como produção fresca
+                <span class="text-muted">(desmarque quando for usar sobras
+                    devolvidas do estoque — senão a compra duplica)</span>
+            </label>
+        </div>
         <div class="d-flex gap-2 mt-2">
             <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-mais-linha">
                 <i class="bi bi-plus-lg"></i> Mais um item
