@@ -104,7 +104,7 @@
             <thead><tr>
                 <th>Matéria-prima</th>
                 <th class="text-end">Necessário</th>
-                <th class="text-end">Em estoque</th>
+                {% if resultado.considerar_estoque %}<th class="text-end">Em estoque</th>{% endif %}
                 <th class="text-end">A COMPRAR</th>
                 <th class="text-end">Custo da compra</th>
             </tr></thead>
@@ -113,7 +113,7 @@
             <tr>
                 <td>{{ it.nome }}</td>
                 <td class="text-end">{{ kg(it.quantidade) }}</td>
-                <td class="text-end">{{ kg(it.estoque_atual) }}</td>
+                {% if resultado.considerar_estoque %}<td class="text-end">{{ kg(it.estoque_atual) }}</td>{% endif %}
                 <td class="text-end {% if it.comprar > 0 %}fw-bold text-danger{% else %}text-success{% endif %}">
                     {% if it.comprar > 0 %}{{ kg(it.comprar) }}{% else %}✓ tem{% endif %}
                 </td>
