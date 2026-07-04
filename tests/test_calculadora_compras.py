@@ -254,3 +254,32 @@ def test_mp_un_conta_unidades_nao_porcentagem(app):
     assert round(item['quantidade']) == 30          # 10 batidas × 3 un
     assert round(item['comprar']) == 25             # 30 − 5 em estoque
     assert round(item['custo_compra'], 2) == 35.0   # 25 un × R$ 1,40/un
+
+
+def test_mp_un_fracionaria_compra_arredonda_pra_cima(app):
+    """Caso Pote de Mel (04/07): rendimento fracionário gera 145,63 potes —
+    a COMPRA de MP unitária arredonda pra CIMA (146), com custo dos inteiros."""
+    from app.services import calculadora_compras
+    with app.app_context():
+        pote = MateriaPrima(nome='Pote Mel Calc', unidade='un',
+                            custo_por_kg=3.0, estoque_atual=0,
+                            fornecedor='Apiario')
+        db.session.add(pote)
+        db.session.commit()
+        # rendimento cadastrado 1.03 un/batida → 150 un = 145,63 batidas
+        r = Receita(nome='Mel Calc', categoria='Conservas',
+                    rendimento_qtd=1.03, rendimento_unidade='un',
+                    peso_base=1000.0)
+        db.session.add(r)
+        db.session.flush()
+        db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp_un',
+                                          ingrediente_nome='Pote Mel Calc',
+                                          porcentagem=1))
+        db.session.commit()
+        res = calculadora_compras.calcular(
+            [{'tipo': 'receita', 'id': r.id, 'qtd': 150}])
+
+    item = res['compra']['fornecedores'][0]['itens'][0]
+    assert 145.0 < item['quantidade'] < 146.0       # necessário fracionário
+    assert item['comprar'] == 146                   # compra inteira (ceil)
+    assert round(item['custo_compra'], 2) == 438.0  # 146 × R$ 3
