@@ -534,11 +534,14 @@ def gerar_orcamento_pdf(orc):
     return bytes(pdf.output())
 
 
-def gerar_calculadora_pdf(resultado, itens_ok, considerar_estoque=True):
+def gerar_calculadora_pdf(resultado, itens_ok, considerar_estoque=True,
+                          com_valores=True):
     """PDF da calculadora de compras (layout 04/07/2026): faixas de secao,
     zebra nas linhas, numeros coloridos (a comprar em vermelho, 'tem' em
     verde). SEM detalhamento por receita (pedido do dono — o rateio fica na
-    tela). Retorna bytes. Cuidado latin-1: nada de em-dash/bullet."""
+    tela). `com_valores=False` (04/07): esconde custos/subtotais/total -
+    versao pra circular com a equipe sem expor preco. Retorna bytes.
+    Cuidado latin-1: nada de em-dash/bullet."""
     def _qtd(v, un):
         if un:
             s = f'{v:.1f}'.rstrip('0').rstrip('.')
@@ -573,15 +576,19 @@ def gerar_calculadora_pdf(resultado, itens_ok, considerar_estoque=True):
 
     compra = resultado.get('compra') or {}
     tem_estq = bool(considerar_estoque)
-    w_nome = 70 if tem_estq else 100
+    w_nome = (70 if tem_estq else 100) + (0 if com_valores else 30)
     for f in compra.get('fornecedores', []):
         # Faixa do fornecedor
         pdf.set_fill_color(*CINZA_FAIXA)
         pdf.set_text_color(255, 255, 255)
         pdf.set_font('Helvetica', 'B', 10)
-        pdf.cell(130, 7, _latin1(f'  {f["nome"]}'), fill=True)
-        pdf.cell(60, 7, _latin1(f'subtotal R$ {f["subtotal_compra"]:.2f}  '),
-                 fill=True, align='R', ln=1)
+        if com_valores:
+            pdf.cell(130, 7, _latin1(f'  {f["nome"]}'), fill=True)
+            pdf.cell(60, 7,
+                     _latin1(f'subtotal R$ {f["subtotal_compra"]:.2f}  '),
+                     fill=True, align='R', ln=1)
+        else:
+            pdf.cell(190, 7, _latin1(f'  {f["nome"]}'), fill=True, ln=1)
         # Cabecalho
         pdf.set_text_color(60, 60, 60)
         pdf.set_fill_color(*CINZA_HEAD)
@@ -590,8 +597,10 @@ def gerar_calculadora_pdf(resultado, itens_ok, considerar_estoque=True):
         pdf.cell(30, 6, _latin1('Necessario  '), fill=True, align='R')
         if tem_estq:
             pdf.cell(30, 6, _latin1('Em estoque  '), fill=True, align='R')
-        pdf.cell(30, 6, _latin1('A comprar  '), fill=True, align='R')
-        pdf.cell(30, 6, _latin1('Custo  '), fill=True, align='R', ln=1)
+        pdf.cell(30, 6, _latin1('A comprar  '), fill=True,
+                 align='R', ln=(0 if com_valores else 1))
+        if com_valores:
+            pdf.cell(30, 6, _latin1('Custo  '), fill=True, align='R', ln=1)
         # Linhas (zebra)
         for i, it in enumerate(f['itens']):
             un = it.get('em_unidades')
@@ -611,26 +620,34 @@ def gerar_calculadora_pdf(resultado, itens_ok, considerar_estoque=True):
                 pdf.set_text_color(*VERMELHO)
                 pdf.set_font('Helvetica', 'B', 8)
                 pdf.cell(30, 6, _latin1(f'{_qtd(comprar, un)}  '),
-                         fill=fill, align='R')
+                         fill=fill, align='R',
+                         ln=(0 if com_valores else 1))
                 pdf.set_font('Helvetica', '', 8)
                 pdf.set_text_color(0, 0, 0)
-                pdf.cell(30, 6, _latin1(f'R$ {it["custo_compra"]:.2f}  '),
-                         fill=fill, align='R', ln=1)
+                if com_valores:
+                    pdf.cell(30, 6,
+                             _latin1(f'R$ {it["custo_compra"]:.2f}  '),
+                             fill=fill, align='R', ln=1)
             else:
                 pdf.set_text_color(*VERDE)
-                pdf.cell(30, 6, _latin1('tem  '), fill=fill, align='R')
+                pdf.cell(30, 6, _latin1('tem  '), fill=fill, align='R',
+                         ln=(0 if com_valores else 1))
                 pdf.set_text_color(0, 0, 0)
-                pdf.cell(30, 6, '-  ', fill=fill, align='R', ln=1)
+                if com_valores:
+                    pdf.cell(30, 6, '-  ', fill=fill, align='R', ln=1)
         pdf.ln(3)
 
-    # Total em destaque
-    pdf.set_fill_color(*CINZA_FAIXA)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font('Helvetica', 'B', 11)
-    pdf.cell(190, 8, _latin1(
-        f'COMPRA ESTIMADA: R$ {compra.get("total_compra", 0):.2f}  '),
-        fill=True, align='R', ln=1)
-    pdf.set_text_color(0, 0, 0)
+    # Total em destaque (so na versao com valores)
+    if not com_valores:
+        pass
+    if com_valores:
+        pdf.set_fill_color(*CINZA_FAIXA)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font('Helvetica', 'B', 11)
+        pdf.cell(190, 8, _latin1(
+            f'COMPRA ESTIMADA: R$ {compra.get("total_compra", 0):.2f}  '),
+            fill=True, align='R', ln=1)
+        pdf.set_text_color(0, 0, 0)
 
     diretas = resultado.get('compras_diretas') or []
     if diretas:

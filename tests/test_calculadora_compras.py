@@ -385,3 +385,22 @@ def test_origens_por_mp_e_pdf(app, admin_user):
     assert pdf.status_code == 200
     assert pdf.mimetype == 'application/pdf'
     assert pdf.data[:5] == b'%PDF-'
+
+
+def test_pdf_sem_valores(app, admin_user):
+    """formato=pdf_sem_valores devolve PDF válido (versão sem custos)."""
+    with app.app_context():
+        _mp('Farinha', custo=10.0, estoque=0.0)
+        r = _receita_simples()
+        rid = r.id
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    pdf = c.post('/lista-compras/calculadora', data={
+        'item[]': [f'r_{rid}'], 'qtd[]': ['10'],
+        'formato': 'pdf_sem_valores',
+        'considerar_estoque': '1', 'explodir_retorno': '1'})
+    assert pdf.status_code == 200
+    assert pdf.mimetype == 'application/pdf'
+    assert pdf.data[:5] == b'%PDF-'
