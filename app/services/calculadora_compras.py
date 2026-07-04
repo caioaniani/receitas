@@ -102,6 +102,49 @@ def calcular(entradas, considerar_estoque=True):
                             f'({qtd:g} un) entrou na explosão de '
                             'matéria-prima.')
 
+    def _add_produto(p, qtd, origem=None, _vistos=None):
+        """Produto SEM composição = comprado pronto (Mini Manteigas).
+        Produto COM composição (Iogurte 600ml = receita + pote; Granola
+        500g) é MONTADO pela padaria → explode recursivamente (04/07/2026,
+        pedido do dono: 'o resto eu produzo, deveria explodir')."""
+        _vistos = set(_vistos or ())
+        if p.id in _vistos:
+            avisos.append(f'Ciclo de produtos em "{p.nome}" — parado.')
+            return
+        _vistos.add(p.id)
+        comps = componentes_de_cesta(p)
+        if not comps:
+            d = compras_diretas.setdefault(p.nome, {'qtd': 0,
+                                                    'tipo': 'produto'})
+            d['qtd'] += qtd
+            return
+        if origem:
+            detalhes.append(f'{origem}: "{p.nome}" ({qtd:g} un) é montado — '
+                            'explodido nos componentes.')
+        for col, cid, nome_comp, qtd_comp in comps:
+            total = qtd * float(qtd_comp or 1)
+            if total <= 0:
+                continue
+            if col == 'receita_id':
+                r = db.session.get(Receita, cid)
+                if r is None:
+                    avisos.append(f'Componente "{nome_comp}" de '
+                                  f'"{p.nome}" sem receita — pulado.')
+                    continue
+                _add_receita(r, total, origem=p.nome)
+            elif col == 'produto_id':
+                sub = db.session.get(Produto, cid)
+                if sub is None:
+                    avisos.append(f'Componente "{nome_comp}" de '
+                                  f'"{p.nome}" sem produto — pulado.')
+                    continue
+                _add_produto(sub, total, origem=p.nome, _vistos=_vistos)
+            else:
+                # MP componente (pote, embalagem): comprada como está.
+                d = compras_diretas.setdefault(nome_comp,
+                                               {'qtd': 0, 'tipo': 'mp'})
+                d['qtd'] += total
+
     for e in entradas:
         try:
             qtd = int(e.get('qtd') or 0)
@@ -123,31 +166,7 @@ def calcular(entradas, considerar_estoque=True):
                 avisos.append(f'Produto id={item_id} não encontrado — pulado.')
                 continue
             itens_ok.append({'nome': p.nome, 'qtd': qtd, 'tipo': 'produto'})
-            comps = componentes_de_cesta(p)
-            if not comps:
-                # Produto simples (geleia, bebida...): compra-se pronto.
-                d = compras_diretas.setdefault(
-                    p.nome, {'qtd': 0, 'tipo': 'produto'})
-                d['qtd'] += qtd
-                continue
-            for col, cid, nome_comp, qtd_comp in comps:
-                total = qtd * float(qtd_comp or 1)
-                if total <= 0:
-                    continue
-                if col == 'receita_id':
-                    r = db.session.get(Receita, cid)
-                    if r is None:
-                        avisos.append(f'Componente "{nome_comp}" da cesta '
-                                      f'"{p.nome}" sem receita — pulado.')
-                        continue
-                    _add_receita(r, int(round(total)), origem=p.nome)
-                else:
-                    # Componente produto/MP: comprado pronto, não fabricado.
-                    d = compras_diretas.setdefault(
-                        nome_comp,
-                        {'qtd': 0,
-                         'tipo': 'produto' if col == 'produto_id' else 'mp'})
-                    d['qtd'] += total
+            _add_produto(p, qtd)
 
     compra = (ordem_compra_consolidada(receita_itens)
               if receita_itens else
