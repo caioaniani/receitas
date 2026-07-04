@@ -586,12 +586,9 @@ def gerar_calculadora_pdf(resultado, itens_ok, considerar_estoque=True):
                                     if comprar > 0 else '-'), border=1,
                      align='R')
             pdf.ln()
-            # Detalhamento: quem usa esta MP (mesmo expandir da tela).
-            for rec_nome, rec_qtd in (it.get('origens') or []):
-                pdf.set_font('Helvetica', 'I', 7)
-                pdf.cell(8, 4, '', border=0)
-                pdf.cell(0, 4, _latin1(
-                    f'- {rec_nome}: {_qtd(rec_qtd, un)}'), ln=1)
+            # Sem detalhamento por receita no PDF (pedido do dono 04/07:
+            # a lista de compras impressa fica só com os totais; o rateio
+            # continua na TELA, no expandir da MP).
         pdf.ln(2)
     pdf.set_font('Helvetica', 'B', 10)
     pdf.cell(0, 6, _latin1(f"Compra estimada: R$ "
