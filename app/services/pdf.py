@@ -535,84 +535,128 @@ def gerar_orcamento_pdf(orc):
 
 
 def gerar_calculadora_pdf(resultado, itens_ok, considerar_estoque=True):
-    """PDF da calculadora de compras (04/07/2026): mesma informação da tela —
-    MP por fornecedor (com detalhamento por receita), comprar pronto e
-    sub-receitas fora da compra. Retorna bytes."""
+    """PDF da calculadora de compras (layout 04/07/2026): faixas de secao,
+    zebra nas linhas, numeros coloridos (a comprar em vermelho, 'tem' em
+    verde). SEM detalhamento por receita (pedido do dono — o rateio fica na
+    tela). Retorna bytes. Cuidado latin-1: nada de em-dash/bullet."""
     def _qtd(v, un):
         if un:
             s = f'{v:.1f}'.rstrip('0').rstrip('.')
             return f'{s} un'
         return f'{v / 1000:.2f} kg' if v >= 1000 else f'{v:.0f} g'
 
+    CINZA_FAIXA = (52, 58, 64)
+    CINZA_HEAD = (233, 236, 239)
+    ZEBRA = (248, 249, 250)
+    VERMELHO = (176, 42, 55)
+    VERDE = (25, 135, 84)
+
     pdf = PadariaPDF(orientation='P', unit='mm', format='A4')
-    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_page()
-    pdf.set_font('Helvetica', 'B', 13)
+
+    pdf.set_font('Helvetica', 'B', 14)
     pdf.cell(0, 8, _latin1('Calculadora de compras'), ln=1)
     pdf.set_font('Helvetica', '', 9)
-    pedidos_txt = '; '.join(f"{i['qtd']}x {i['nome']}" for i in itens_ok)
-    pdf.multi_cell(0, 5, _latin1(f'Itens: {pedidos_txt}'))
+    pdf.set_text_color(90, 90, 90)
+    pedidos_txt = ' + '.join(f"{i['qtd']}x {i['nome']}" for i in itens_ok)
+    pdf.multi_cell(0, 5, _latin1(f'Para produzir: {pedidos_txt}'))
     if not considerar_estoque:
-        pdf.set_font('Helvetica', 'I', 8)
-        pdf.cell(0, 5, _latin1('(compra CHEIA — sem descontar estoque)'), ln=1)
+        pdf.cell(0, 5, _latin1('Compra CHEIA - sem descontar o estoque '
+                               'atual de materia-prima'), ln=1)
+    pdf.set_text_color(0, 0, 0)
     pdf.ln(2)
 
     compra = resultado.get('compra') or {}
+    tem_estq = bool(considerar_estoque)
+    w_nome = 70 if tem_estq else 100
     for f in compra.get('fornecedores', []):
+        # Faixa do fornecedor
+        pdf.set_fill_color(*CINZA_FAIXA)
+        pdf.set_text_color(255, 255, 255)
         pdf.set_font('Helvetica', 'B', 10)
-        pdf.cell(0, 6, _latin1(f"{f['nome']} — subtotal R$ "
-                               f"{f['subtotal_compra']:.2f}"), ln=1)
+        pdf.cell(130, 7, _latin1(f'  {f["nome"]}'), fill=True)
+        pdf.cell(60, 7, _latin1(f'subtotal R$ {f["subtotal_compra"]:.2f}  '),
+                 fill=True, align='R', ln=1)
+        # Cabecalho
+        pdf.set_text_color(60, 60, 60)
+        pdf.set_fill_color(*CINZA_HEAD)
         pdf.set_font('Helvetica', 'B', 8)
-        larguras = ((60, 'Matéria-prima'), (30, 'Necessário'),
-                    (30, 'Em estoque'), (30, 'A comprar'), (30, 'Custo'))
-        for w, t in larguras:
-            if t == 'Em estoque' and not considerar_estoque:
-                continue
-            pdf.cell(w, 5, _latin1(t), border=1)
-        pdf.ln()
-        for it in f['itens']:
+        pdf.cell(w_nome, 6, _latin1('  Materia-prima'), fill=True)
+        pdf.cell(30, 6, _latin1('Necessario  '), fill=True, align='R')
+        if tem_estq:
+            pdf.cell(30, 6, _latin1('Em estoque  '), fill=True, align='R')
+        pdf.cell(30, 6, _latin1('A comprar  '), fill=True, align='R')
+        pdf.cell(30, 6, _latin1('Custo  '), fill=True, align='R', ln=1)
+        # Linhas (zebra)
+        for i, it in enumerate(f['itens']):
             un = it.get('em_unidades')
+            fill = i % 2 == 1
+            if fill:
+                pdf.set_fill_color(*ZEBRA)
             pdf.set_font('Helvetica', '', 8)
-            pdf.cell(60, 5, _latin1(it['nome'][:38]), border=1)
-            pdf.cell(30, 5, _latin1(_qtd(it['quantidade'], un)), border=1,
-                     align='R')
-            if considerar_estoque:
-                pdf.cell(30, 5, _latin1(_qtd(it['estoque_atual'], un)),
-                         border=1, align='R')
+            pdf.set_text_color(0, 0, 0)
+            pdf.cell(w_nome, 6, _latin1(f'  {it["nome"][:48]}'), fill=fill)
+            pdf.cell(30, 6, _latin1(f'{_qtd(it["quantidade"], un)}  '),
+                     fill=fill, align='R')
+            if tem_estq:
+                pdf.cell(30, 6, _latin1(f'{_qtd(it["estoque_atual"], un)}  '),
+                         fill=fill, align='R')
             comprar = it['comprar']
-            pdf.cell(30, 5, _latin1(_qtd(comprar, un) if comprar > 0
-                                    else 'tem'), border=1, align='R')
-            pdf.cell(30, 5, _latin1(f"R$ {it['custo_compra']:.2f}"
-                                    if comprar > 0 else '-'), border=1,
-                     align='R')
-            pdf.ln()
-            # Sem detalhamento por receita no PDF (pedido do dono 04/07:
-            # a lista de compras impressa fica só com os totais; o rateio
-            # continua na TELA, no expandir da MP).
-        pdf.ln(2)
-    pdf.set_font('Helvetica', 'B', 10)
-    pdf.cell(0, 6, _latin1(f"Compra estimada: R$ "
-                           f"{compra.get('total_compra', 0):.2f}"), ln=1)
+            if comprar > 0:
+                pdf.set_text_color(*VERMELHO)
+                pdf.set_font('Helvetica', 'B', 8)
+                pdf.cell(30, 6, _latin1(f'{_qtd(comprar, un)}  '),
+                         fill=fill, align='R')
+                pdf.set_font('Helvetica', '', 8)
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(30, 6, _latin1(f'R$ {it["custo_compra"]:.2f}  '),
+                         fill=fill, align='R', ln=1)
+            else:
+                pdf.set_text_color(*VERDE)
+                pdf.cell(30, 6, _latin1('tem  '), fill=fill, align='R')
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(30, 6, '-  ', fill=fill, align='R', ln=1)
+        pdf.ln(3)
+
+    # Total em destaque
+    pdf.set_fill_color(*CINZA_FAIXA)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font('Helvetica', 'B', 11)
+    pdf.cell(190, 8, _latin1(
+        f'COMPRA ESTIMADA: R$ {compra.get("total_compra", 0):.2f}  '),
+        fill=True, align='R', ln=1)
+    pdf.set_text_color(0, 0, 0)
 
     diretas = resultado.get('compras_diretas') or []
     if diretas:
-        pdf.ln(2)
+        pdf.ln(4)
+        pdf.set_fill_color(*CINZA_HEAD)
         pdf.set_font('Helvetica', 'B', 10)
-        pdf.cell(0, 6, _latin1('Comprar pronto'), ln=1)
-        pdf.set_font('Helvetica', '', 8)
-        for c in diretas:
-            pdf.cell(0, 5, _latin1(f"- {c['nome']}: {c['qtd']:g} un"), ln=1)
+        pdf.cell(190, 7, _latin1('  Comprar pronto (itens que a padaria '
+                                 'nao fabrica)'), fill=True, ln=1)
+        pdf.set_font('Helvetica', '', 9)
+        for i, c in enumerate(diretas):
+            fill = i % 2 == 1
+            if fill:
+                pdf.set_fill_color(*ZEBRA)
+            pdf.cell(130, 6, _latin1(f'  {c["nome"]}'), fill=fill)
+            pdf.set_font('Helvetica', 'B', 9)
+            pdf.cell(60, 6, _latin1(f'{c["qtd"]:g} un  '), fill=fill,
+                     align='R', ln=1)
+            pdf.set_font('Helvetica', '', 9)
 
     subs = resultado.get('sub_receitas') or []
     if subs:
-        pdf.ln(2)
-        pdf.set_font('Helvetica', 'B', 10)
-        pdf.cell(0, 6, _latin1('Sub-receitas fora da compra (retorno/órfã)'),
-                 ln=1)
-        pdf.set_font('Helvetica', '', 8)
+        pdf.ln(4)
+        pdf.set_font('Helvetica', 'I', 8)
+        pdf.set_text_color(110, 110, 110)
+        pdf.cell(0, 5, _latin1('Fora da compra (retorno de sobras / '
+                               'sub-receita orfa):'), ln=1)
         for s in subs:
-            pdf.cell(0, 5, _latin1(
-                f"- {s['nome']} (usada por {s['unidades_base']:g} un)"), ln=1)
+            pdf.cell(0, 4, _latin1(f'   - {s["nome"]} (usada por '
+                                   f'{s["unidades_base"]:g} un)'), ln=1)
+        pdf.set_text_color(0, 0, 0)
 
     out = pdf.output()
     return bytes(out)
