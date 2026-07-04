@@ -283,3 +283,51 @@ def test_mp_un_fracionaria_compra_arredonda_pra_cima(app):
     assert 145.0 < item['quantidade'] < 146.0       # necessário fracionário
     assert item['comprar'] == 146                   # compra inteira (ceil)
     assert round(item['custo_compra'], 2) == 438.0  # 146 × R$ 3
+
+
+def test_produto_composto_dentro_da_cesta_explode(app):
+    """Iogurte 600ml/Granola (04/07): componente-PRODUTO que TEM composição é
+    MONTADO pela padaria → explode (receita vira MP; pote vira compra direta).
+    Produto sem composição (Mini Manteigas) segue comprado pronto."""
+    from app.services import calculadora_compras
+    with app.app_context():
+        _mp('Leite', custo=8.0, estoque=0.0)
+        rec_iog = _receita_simples('Iogurte Base Calc', mp_nome='Leite')
+        pote = MateriaPrima(nome='Pote 600 Calc', unidade='un',
+                            custo_por_kg=2.0, estoque_atual=0)
+        db.session.add(pote)
+        iog600 = Produto(nome='Iogurte 600 Calc', categoria='Laticinios',
+                         preco_site=25, ativo=True)
+        manteiga = Produto(nome='Mini Manteiga Calc', categoria='Laticinios',
+                           preco_site=5, ativo=True)
+        cesta = Produto(nome='Cesta Pais Calc', categoria='Cestas',
+                        preco_site=200, ativo=True)
+        db.session.add_all([iog600, manteiga, cesta])
+        db.session.flush()
+        db.session.add_all([
+            # iogurte600 = 1 receita de iogurte + 1 pote (MP)
+            ProdutoItem(produto_id=iog600.id, tipo='receita',
+                        receita_id=rec_iog.id, item_nome=rec_iog.nome,
+                        quantidade=1),
+            ProdutoItem(produto_id=iog600.id, tipo='mp',
+                        materia_prima_id=pote.id, item_nome=pote.nome,
+                        quantidade=1),
+            # cesta = 1 iogurte600 + 1 mini manteiga
+            ProdutoItem(produto_id=cesta.id, tipo='produto',
+                        produto_componente_id=iog600.id,
+                        item_nome=iog600.nome, quantidade=1),
+            ProdutoItem(produto_id=cesta.id, tipo='produto',
+                        produto_componente_id=manteiga.id,
+                        item_nome=manteiga.nome, quantidade=1),
+        ])
+        db.session.commit()
+        res = calculadora_compras.calcular(
+            [{'tipo': 'produto', 'id': cesta.id, 'qtd': 10}])
+
+    nomes_mp = [i['nome'] for f in res['compra']['fornecedores']
+                for i in f['itens']]
+    assert 'Leite' in nomes_mp                       # receita do iogurte explodiu
+    diretas = {c['nome']: c['qtd'] for c in res['compras_diretas']}
+    assert diretas.get('Mini Manteiga Calc') == 10   # sem composição = pronto
+    assert diretas.get('Pote 600 Calc') == 10        # embalagem comprada
+    assert 'Iogurte 600 Calc' not in diretas         # foi explodido
