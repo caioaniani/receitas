@@ -221,3 +221,36 @@ def test_rota_exige_admin(app):
         s['_user_id'] = str(uid)
         s['_fresh'] = True
     assert c.get('/lista-compras/calculadora').status_code == 403
+
+
+def test_mp_un_conta_unidades_nao_porcentagem(app):
+    """mp_un (caso real 04/07: Baton/Manteiga p/ Folhar na ficha em UN):
+    porcentagem = UNIDADES por batida e custo_por_kg = custo POR UNIDADE
+    (custos.py:292). Antes caía no ramo de % → 1 un/batida virava 10 g."""
+    from app.services import calculadora_compras
+    with app.app_context():
+        baton = MateriaPrima(nome='Baton Calc', unidade='un',
+                             custo_por_kg=1.40, estoque_atual=5,
+                             fornecedor='Choc SA')
+        db.session.add(baton)
+        db.session.commit()
+        # Ficha SÓ com mp_un (sem massa em g) → rendimento cai no CADASTRADO
+        # (rendimento_qtd): 10 un por batida.
+        r = Receita(nome='Pain Calc', categoria='Viennoiserie',
+                    rendimento_qtd=10, rendimento_unidade='un',
+                    peso_base=1000.0)
+        db.session.add(r)
+        db.session.flush()
+        # 3 bâtons POR BATIDA (batida = 10 un: 1000 g / 100 g)
+        db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='mp_un',
+                                          ingrediente_nome='Baton Calc',
+                                          porcentagem=3))
+        db.session.commit()
+        res = calculadora_compras.calcular(
+            [{'tipo': 'receita', 'id': r.id, 'qtd': 100}])
+
+    item = res['compra']['fornecedores'][0]['itens'][0]
+    assert item['em_unidades'] is True
+    assert round(item['quantidade']) == 30          # 10 batidas × 3 un
+    assert round(item['comprar']) == 25             # 30 − 5 em estoque
+    assert round(item['custo_compra'], 2) == 35.0   # 25 un × R$ 1,40/un
