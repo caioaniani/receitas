@@ -296,6 +296,10 @@ def calculadora():
     # vale o que veio do form (checkbox desmarcado não envia a chave).
     considerar_estoque = (request.method != 'POST'
                           or request.form.get('considerar_estoque') == '1')
+    # Retornos explodem como produção FRESCA por padrão (pedido do dono
+    # 04/07). Desmarcar quando for usar sobras reais (senão compra em dobro).
+    explodir_retorno = (request.method != 'POST'
+                        or request.form.get('explodir_retorno') == '1')
     if request.method == 'POST':
         from app.services import calculadora_compras
         itens_raw = request.form.getlist('item[]')
