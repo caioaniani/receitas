@@ -34,6 +34,9 @@
 {{ _lnk(variant, url_for('pedidos.estoque_loja_historico'), 'Histórico do estoque', request.path == '/pedidos/estoque-loja/historico') }}
 {{ _lnk(variant, url_for('pedidos.desperdicio'), 'Desperdício', '/pedidos/desperdicio' in request.path) }}
 {{ _lnk(variant, url_for('lista_compras.index'), 'Lista de Compras', request.path in ['/lista-compras', '/lista-compras/']) }}
+{% if current_user.is_admin() %}
+{{ _lnk(variant, url_for('lista_compras.calculadora'), 'Calculadora de compras', request.path == '/lista-compras/calculadora', sub=true) }}
+{% endif %}
 {% if current_user.is_dono() %}
 {{ _lnk(variant, url_for('lista_compras.consolidada'), 'Consolidar compras', request.path == '/lista-compras/consolidada', sub=true) }}
 {{ _lnk(variant, url_for('lista_compras.catalogo'), 'Catálogo de compras', request.path == '/lista-compras/catalogo', sub=true) }}
