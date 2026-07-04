@@ -159,15 +159,25 @@ def test_sub_receita_de_retorno_nao_vira_compra(app):
                                ingrediente_nome='Amendoas', porcentagem=10),
         ])
         db.session.commit()
-        res = calculadora_compras.calcular(
-            [{'tipo': 'receita', 'id': almond.id, 'qtd': 10}])
+        res_off = calculadora_compras.calcular(
+            [{'tipo': 'receita', 'id': almond.id, 'qtd': 10}],
+            explodir_retorno=False)
+        res_on = calculadora_compras.calcular(
+            [{'tipo': 'receita', 'id': almond.id, 'qtd': 10}],
+            explodir_retorno=True)
 
-    nomes_mp = [i['nome'] for f in res['compra']['fornecedores']
+    # Desligado (usar sobras): retorno fora da compra
+    nomes_off = [i['nome'] for f in res_off['compra']['fornecedores']
+                 for i in f['itens']]
+    assert 'Amendoas' in nomes_off and 'Farinha' not in nomes_off
+    # Ligado (padrão, pedido do dono 04/07): explode pela receita de ORIGEM
+    # (fresca) — a Farinha dela entra na compra; a linha informativa fica.
+    nomes_on = [i['nome'] for f in res_on['compra']['fornecedores']
                 for i in f['itens']]
-    assert 'Amendoas' in nomes_mp                   # MP própria explode
-    assert 'Farinha' not in nomes_mp                # retorno NÃO vira compra
-    assert res['sub_receitas'] == [
-        {'nome': 'Croissant Trad Calc', 'unidades_base': 10}]
+    assert 'Amendoas' in nomes_on and 'Farinha' in nomes_on
+    for res in (res_off, res_on):
+        assert res['sub_receitas'] == [
+            {'nome': 'Croissant Trad Calc', 'unidades_base': 10}]
 
 
 def test_toggle_sem_estoque_compra_cheia(app):
