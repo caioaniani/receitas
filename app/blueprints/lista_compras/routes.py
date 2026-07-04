@@ -324,6 +324,18 @@ def calculadora():
             resultado = calculadora_compras.calcular(
                 entradas, considerar_estoque=considerar_estoque,
                 explodir_retorno=explodir_retorno)
+            # Exportar PDF: mesmo POST, botão formato=pdf (reusa o cálculo).
+            if request.form.get('formato') == 'pdf':
+                from flask import Response
+
+                from app.services.pdf import gerar_calculadora_pdf
+                dados = gerar_calculadora_pdf(
+                    resultado, resultado['itens_ok'],
+                    considerar_estoque=considerar_estoque)
+                return Response(
+                    dados, mimetype='application/pdf',
+                    headers={'Content-Disposition':
+                             'inline; filename=calculadora-compras.pdf'})
         else:
             flash('Escolha ao menos um item com quantidade > 0.', 'warning')
 
