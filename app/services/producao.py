@@ -492,7 +492,11 @@ def ordem_compra_consolidada(itens):
         forn = (d.get('fornecedor') or '').strip() or 'Sem fornecedor'
         comprar_g = d.get('deficit', 0) or 0
         if d.get('em_unidades'):
-            # MP unitaria: custo_por_kg = custo POR UNIDADE (custos.py:292).
+            # MP unitaria: compra so em INTEIROS (ninguem compra 0,6 pote) —
+            # deficit fracionario arredonda pra CIMA. custo_por_kg = custo
+            # POR UNIDADE (custos.py:292).
+            from math import ceil
+            comprar_g = ceil(comprar_g - 1e-9) if comprar_g > 0 else 0
             custo_compra = comprar_g * (d.get('custo_por_kg') or 0)
         else:
             custo_compra = (comprar_g / 1000.0) * (d.get('custo_por_kg') or 0)
