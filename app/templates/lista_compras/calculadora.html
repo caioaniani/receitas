@@ -72,10 +72,20 @@
     {% for a in resultado.avisos %}<div>• {{ a }}</div>{% endfor %}
 </div>
 {% endif %}
+{% if resultado.detalhes %}
+{# Rastro informativo do cálculo (NÃO é problema) — recolhido por padrão. #}
+<details class="mb-2 text-muted" style="font-size:12px;">
+    <summary>Como calculei ({{ resultado.detalhes|length }} passo(s))</summary>
+    {% for d in resultado.detalhes %}<div>• {{ d }}</div>{% endfor %}
+</details>
+{% endif %}
 
 {% if resultado.compra.fornecedores %}
 <div class="d-flex justify-content-between align-items-baseline mb-2">
-    <h5 class="mb-0">Matéria-prima a comprar</h5>
+    <h5 class="mb-0">Matéria-prima a comprar
+        {% if not resultado.considerar_estoque %}
+        <span class="badge bg-secondary" style="font-size:11px;">sem descontar estoque</span>
+        {% endif %}</h5>
     <span class="text-muted small">
         Compra estimada: <strong>R$ {{ '%.2f'|format(resultado.compra.total_compra) }}</strong>
         · custo total dos insumos: R$ {{ '%.2f'|format(resultado.compra.total_necessario) }}
