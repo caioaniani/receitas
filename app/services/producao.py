@@ -424,14 +424,22 @@ def consolidar_lista_compras(itens):
             if ing.tipo == 'receita':
                 continue
 
-            if ing.tipo == 'mp_direto':
-                gramas = (ing.porcentagem or 0) * multiplicador
-            else:
-                gramas = (ing.porcentagem or 0) / 100.0 * peso_base * multiplicador
-
             mp = mps.get(ing.ingrediente_nome)
             if not mp:
                 continue
+
+            # mp_un: porcentagem = UNIDADES por batida (espelha custos.py:292
+            # — 'MP cobrada por unidade'; o custo_por_kg dessas MPs guarda o
+            # custo POR UNIDADE). Antes caía no ramo de %, virando 1% do
+            # peso_base (bug pego pelo dono 04/07: 1 bloco de manteiga-folhar
+            # por batida contava 10 g em vez de 1 un).
+            em_unidades = (ing.tipo == 'mp_un')
+            if em_unidades:
+                qtd = (ing.porcentagem or 0) * multiplicador
+            elif ing.tipo == 'mp_direto':
+                qtd = (ing.porcentagem or 0) * multiplicador
+            else:
+                qtd = (ing.porcentagem or 0) / 100.0 * peso_base * multiplicador
 
             if ing.ingrediente_nome not in lista:
                 lista[ing.ingrediente_nome] = {
@@ -440,12 +448,23 @@ def consolidar_lista_compras(itens):
                     'custo_por_kg': mp.custo_por_kg,
                     'estoque_atual': mp.estoque_atual or 0,
                     'fornecedor': mp.fornecedor,
+                    'em_unidades': em_unidades,
                 }
-            lista[ing.ingrediente_nome]['quantidade'] += gramas
+            d = lista[ing.ingrediente_nome]
+            if em_unidades and not d['em_unidades'] and (mp.peso_unidade or 0):
+                # MESMA MP usada em % numa ficha e em un noutra: converte
+                # a parcela unitaria pra gramas pra somar coerente.
+                qtd = qtd * mp.peso_unidade
+                em_unidades = False
+            d['quantidade'] += qtd
 
     for nome, dados in lista.items():
-        qtd_kg = dados['quantidade'] / 1000.0
-        dados['custo_estimado'] = qtd_kg * dados['custo_por_kg']
+        if dados.get('em_unidades'):
+            # Unidades: custo = un × custo POR UNIDADE (sem /1000).
+            dados['custo_estimado'] = dados['quantidade'] * dados['custo_por_kg']
+        else:
+            qtd_kg = dados['quantidade'] / 1000.0
+            dados['custo_estimado'] = qtd_kg * dados['custo_por_kg']
         dados['deficit'] = max(0, dados['quantidade'] - dados['estoque_atual'])
 
     return lista
