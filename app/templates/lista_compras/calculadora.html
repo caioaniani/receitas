@@ -91,7 +91,6 @@
             </tr></thead>
             <tbody>
             {% for it in f.itens %}
-            {% macro kg(g) %}{% if g >= 1000 %}{{ '%.2f'|format(g/1000) }} kg{% else %}{{ '%.0f'|format(g) }} g{% endif %}{% endmacro %}
             <tr>
                 <td>{{ it.nome }}</td>
                 <td class="text-end">{{ kg(it.quantidade) }}</td>
