@@ -126,7 +126,19 @@
             <tbody>
             {% for it in f.itens %}
             <tr>
-                <td>{{ it.nome }}</td>
+                <td>
+                    {% if it.origens %}
+                    {# Clique expande: em quais receitas esta MP é usada e quanto. #}
+                    <details>
+                        <summary style="cursor:pointer;">{{ it.nome }}</summary>
+                        <div class="text-muted small mt-1">
+                            {% for rec_nome, rec_qtd in it.origens %}
+                            <div>• {{ rec_nome }}: {{ kg(rec_qtd, it.em_unidades) }}</div>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% else %}{{ it.nome }}{% endif %}
+                </td>
                 <td class="text-end">{{ kg(it.quantidade, it.em_unidades) }}</td>
                 {% if resultado.considerar_estoque %}<td class="text-end">{{ kg(it.estoque_atual, it.em_unidades) }}</td>{% endif %}
                 <td class="text-end {% if it.comprar > 0 %}fw-bold text-danger{% else %}text-success{% endif %}">
