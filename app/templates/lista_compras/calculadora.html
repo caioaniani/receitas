@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Calculadora de compras{% endblock %}
 
+{% macro kg(g) %}{% if g >= 1000 %}{{ '%.2f'|format(g/1000) }} kg{% else %}{{ '%.0f'|format(g) }} g{% endif %}{% endmacro %}
+
 {% block content %}
 <div class="page-header">
     <div>
