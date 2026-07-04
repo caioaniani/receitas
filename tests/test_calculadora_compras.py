@@ -348,3 +348,40 @@ def test_produto_composto_dentro_da_cesta_explode(app):
     assert diretas.get('Mini Manteiga Calc') == 10   # sem composição = pronto
     assert diretas.get('Pote 600 Calc') == 10        # embalagem comprada
     assert 'Iogurte 600 Calc' not in diretas         # foi explodido
+
+
+def test_origens_por_mp_e_pdf(app, admin_user):
+    """Expandir MP mostra quem usa (origens por receita) e o botão PDF
+    devolve um PDF de verdade com o mesmo cálculo (04/07/2026)."""
+    from app.services import calculadora_compras
+    with app.app_context():
+        _mp('Farinha', custo=10.0, estoque=0.0)
+        r1 = _receita_simples('Pao A Calc')
+        r2 = _receita_simples('Pao B Calc')
+        res = calculadora_compras.calcular([
+            {'tipo': 'receita', 'id': r1.id, 'qtd': 10},
+            {'tipo': 'receita', 'id': r2.id, 'qtd': 20},
+        ])
+        rid1 = r1.id
+    item = res['compra']['fornecedores'][0]['itens'][0]
+    origens = dict(item['origens'])
+    assert round(origens['Pao A Calc']) == 1000     # 1 batida × 1 kg
+    assert round(origens['Pao B Calc']) == 2000     # 2 batidas
+    assert item['origens'][0][0] == 'Pao B Calc'    # maior consumidor primeiro
+
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    # HTML tem o expandir
+    p = c.post('/lista-compras/calculadora', data={
+        'item[]': [f'r_{rid1}'], 'qtd[]': ['10'],
+        'considerar_estoque': '1', 'explodir_retorno': '1'})
+    assert b'<details>' in p.data and b'Pao A Calc' in p.data
+    # PDF de verdade
+    pdf = c.post('/lista-compras/calculadora', data={
+        'item[]': [f'r_{rid1}'], 'qtd[]': ['10'], 'formato': 'pdf',
+        'considerar_estoque': '1', 'explodir_retorno': '1'})
+    assert pdf.status_code == 200
+    assert pdf.mimetype == 'application/pdf'
+    assert pdf.data[:5] == b'%PDF-'

@@ -532,3 +532,90 @@ def gerar_orcamento_pdf(orc):
                      'PIX, envie o comprovante para fechar o pedido.'),
              new_x='LMARGIN', new_y='NEXT')
     return bytes(pdf.output())
+
+
+def gerar_calculadora_pdf(resultado, itens_ok, considerar_estoque=True):
+    """PDF da calculadora de compras (04/07/2026): mesma informação da tela —
+    MP por fornecedor (com detalhamento por receita), comprar pronto e
+    sub-receitas fora da compra. Retorna bytes."""
+    def _qtd(v, un):
+        if un:
+            s = f'{v:.1f}'.rstrip('0').rstrip('.')
+            return f'{s} un'
+        return f'{v / 1000:.2f} kg' if v >= 1000 else f'{v:.0f} g'
+
+    pdf = PadariaPDF(orientation='P', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+    pdf.set_font('Helvetica', 'B', 13)
+    pdf.cell(0, 8, _latin1('Calculadora de compras'), ln=1)
+    pdf.set_font('Helvetica', '', 9)
+    pedidos_txt = '; '.join(f"{i['qtd']}x {i['nome']}" for i in itens_ok)
+    pdf.multi_cell(0, 5, _latin1(f'Itens: {pedidos_txt}'))
+    if not considerar_estoque:
+        pdf.set_font('Helvetica', 'I', 8)
+        pdf.cell(0, 5, _latin1('(compra CHEIA — sem descontar estoque)'), ln=1)
+    pdf.ln(2)
+
+    compra = resultado.get('compra') or {}
+    for f in compra.get('fornecedores', []):
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.cell(0, 6, _latin1(f"{f['nome']} — subtotal R$ "
+                               f"{f['subtotal_compra']:.2f}"), ln=1)
+        pdf.set_font('Helvetica', 'B', 8)
+        larguras = ((60, 'Matéria-prima'), (30, 'Necessário'),
+                    (30, 'Em estoque'), (30, 'A comprar'), (30, 'Custo'))
+        for w, t in larguras:
+            if t == 'Em estoque' and not considerar_estoque:
+                continue
+            pdf.cell(w, 5, _latin1(t), border=1)
+        pdf.ln()
+        for it in f['itens']:
+            un = it.get('em_unidades')
+            pdf.set_font('Helvetica', '', 8)
+            pdf.cell(60, 5, _latin1(it['nome'][:38]), border=1)
+            pdf.cell(30, 5, _latin1(_qtd(it['quantidade'], un)), border=1,
+                     align='R')
+            if considerar_estoque:
+                pdf.cell(30, 5, _latin1(_qtd(it['estoque_atual'], un)),
+                         border=1, align='R')
+            comprar = it['comprar']
+            pdf.cell(30, 5, _latin1(_qtd(comprar, un) if comprar > 0
+                                    else 'tem'), border=1, align='R')
+            pdf.cell(30, 5, _latin1(f"R$ {it['custo_compra']:.2f}"
+                                    if comprar > 0 else '-'), border=1,
+                     align='R')
+            pdf.ln()
+            # Detalhamento: quem usa esta MP (mesmo expandir da tela).
+            for rec_nome, rec_qtd in (it.get('origens') or []):
+                pdf.set_font('Helvetica', 'I', 7)
+                pdf.cell(8, 4, '', border=0)
+                pdf.cell(0, 4, _latin1(
+                    f'- {rec_nome}: {_qtd(rec_qtd, un)}'), ln=1)
+        pdf.ln(2)
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.cell(0, 6, _latin1(f"Compra estimada: R$ "
+                           f"{compra.get('total_compra', 0):.2f}"), ln=1)
+
+    diretas = resultado.get('compras_diretas') or []
+    if diretas:
+        pdf.ln(2)
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.cell(0, 6, _latin1('Comprar pronto'), ln=1)
+        pdf.set_font('Helvetica', '', 8)
+        for c in diretas:
+            pdf.cell(0, 5, _latin1(f"- {c['nome']}: {c['qtd']:g} un"), ln=1)
+
+    subs = resultado.get('sub_receitas') or []
+    if subs:
+        pdf.ln(2)
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.cell(0, 6, _latin1('Sub-receitas fora da compra (retorno/órfã)'),
+                 ln=1)
+        pdf.set_font('Helvetica', '', 8)
+        for s in subs:
+            pdf.cell(0, 5, _latin1(
+                f"- {s['nome']} (usada por {s['unidades_base']:g} un)"), ln=1)
+
+    out = pdf.output()
+    return bytes(out)
