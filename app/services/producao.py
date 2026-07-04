@@ -477,6 +477,9 @@ def consolidar_lista_compras(itens):
                 qtd = qtd * mp.peso_unidade
                 em_unidades = False
             d['quantidade'] += qtd
+            # Rastro por receita (expandir na calculadora: "usado por quem").
+            org = d.setdefault('origens', {})
+            org[receita.nome] = org.get(receita.nome, 0) + qtd
 
     for nome, dados in lista.items():
         if dados.get('em_unidades'):
