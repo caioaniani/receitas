@@ -27,11 +27,20 @@ _REND_MIN = 1e-9
 
 
 def _mult_para(receita, qtd):
-    """Multiplicador de batidas pra `qtd` unidades da receita."""
+    """Multiplicador de batidas pra `qtd` unidades da receita.
+
+    PRIORIDADE = rendimento DECLARADO na ficha (`rendimento_qtd`, o campo
+    "Quantidade" que o dono mantém). O rendimento por massa crua (massa ÷
+    peso_unitario) fica de fallback: em produto COZIDO (geleia: 1.030 g viram
+    25 potes de 40 g) a massa ignora a perda de cozimento e dava 25,75/batida
+    → 150 potes viravam 145,6 e o morango vinha 3% a menos (caso real
+    04/07/2026). Pra COMPRA, vale o que a ficha declara que rende."""
     from app.services.massa_base import rendimento_massa_crua
-    rend = float(rendimento_massa_crua(receita) or 0)
+    rend = float(receita.rendimento_qtd or 0)
     if rend <= _REND_MIN:
-        rend = float(receita.rendimento_qtd or 1) or 1.0
+        rend = float(rendimento_massa_crua(receita) or 0)
+    if rend <= _REND_MIN:
+        rend = 1.0
     return qtd / rend
 
 
