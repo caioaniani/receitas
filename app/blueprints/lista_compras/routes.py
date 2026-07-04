@@ -330,4 +330,5 @@ def calculadora():
     return render_template('lista_compras/calculadora.html',
                            receitas=receitas, produtos=produtos,
                            resultado=resultado, entradas=entradas_render,
-                           considerar_estoque=considerar_estoque)
+                           considerar_estoque=considerar_estoque,
+                           explodir_retorno=explodir_retorno)
