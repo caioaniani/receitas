@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Calculadora de compras{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="bi bi-calculator"></i> Calculadora de compras</h1>
+        <p class="page-subtitle">Escolha o que vai produzir e a quantidade — a
+            calculadora explode a ficha técnica e mostra quanto comprar de
+            matéria-prima (já descontando o estoque atual).</p>
+    </div>
+</div>
+
+<form method="POST" class="card mb-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card-body">
+        <div id="calc-linhas">
+            {% set n_linhas = entradas|length if entradas else 3 %}
+            {% for i in range(n_linhas if n_linhas > 0 else 3) %}
+            {% set ent = entradas[i] if entradas and i < entradas|length else None %}
+            <div class="row g-2 mb-2 calc-linha">
+                <div class="col-8 col-md-6">
+                    <select name="item[]" class="form-select form-select-sm">
+                        <option value="">— escolher item —</option>
+                        <optgroup label="Receitas">
+                            {% for r in receitas %}
+                            <option value="r_{{ r.id }}"
+                                {% if ent and ent.token == 'r_' ~ r.id %}selected{% endif %}>{{ r.nome }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="Produtos (cestas/prontos)">
+                            {% for p in produtos %}
+                            <option value="p_{{ p.id }}"
+                                {% if ent and ent.token == 'p_' ~ p.id %}selected{% endif %}>{{ p.nome }}</option>
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="col-4 col-md-2">
+                    <input type="number" name="qtd[]" min="0" placeholder="qtd (un)"
+                           value="{{ ent.qtd if ent else '' }}"
+                           class="form-control form-control-sm">
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="d-flex gap-2 mt-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-mais-linha">
+                <i class="bi bi-plus-lg"></i> Mais um item
+            </button>
+            <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-calculator"></i> Calcular compras
+            </button>
+        </div>
+    </div>
+</form>
+
+{% if resultado %}
+{% if resultado.avisos %}
+<div class="alert alert-warning py-2" style="font-size:13px;">
+    {% for a in resultado.avisos %}<div>• {{ a }}</div>{% endfor %}
+</div>
+{% endif %}
+
+{% if resultado.compra.fornecedores %}
+<div class="d-flex justify-content-between align-items-baseline mb-2">
+    <h5 class="mb-0">Matéria-prima a comprar</h5>
+    <span class="text-muted small">
+        Compra estimada: <strong>R$ {{ '%.2f'|format(resultado.compra.total_compra) }}</strong>
+        · custo total dos insumos: R$ {{ '%.2f'|format(resultado.compra.total_necessario) }}
+    </span>
+</div>
+{% for f in resultado.compra.fornecedores %}
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between">
+        <strong>{{ f.nome }}</strong>
+        <span class="small text-muted">subtotal compra:
+            R$ {{ '%.2f'|format(f.subtotal_compra) }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div style="overflow-x:auto;">
+        <table class="table table-sm mb-0" style="font-variant-numeric: tabular-nums;">
+            <thead><tr>
+                <th>Matéria-prima</th>
+                <th class="text-end">Necessário</th>
+                <th class="text-end">Em estoque</th>
+                <th class="text-end">A COMPRAR</th>
+                <th class="text-end">Custo da compra</th>
+            </tr></thead>
+            <tbody>
+            {% for it in f.itens %}
+            {% macro kg(g) %}{% if g >= 1000 %}{{ '%.2f'|format(g/1000) }} kg{% else %}{{ '%.0f'|format(g) }} g{% endif %}{% endmacro %}
+            <tr>
+                <td>{{ it.nome }}</td>
+                <td class="text-end">{{ kg(it.quantidade) }}</td>
+                <td class="text-end">{{ kg(it.estoque_atual) }}</td>
+                <td class="text-end {% if it.comprar > 0 %}fw-bold text-danger{% else %}text-success{% endif %}">
+                    {% if it.comprar > 0 %}{{ kg(it.comprar) }}{% else %}✓ tem{% endif %}
+                </td>
+                <td class="text-end">{% if it.comprar > 0 %}R$ {{ '%.2f'|format(it.custo_compra) }}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if resultado.compras_diretas %}
+<div class="card mb-3">
+    <div class="card-header py-2"><strong>Comprar pronto</strong>
+        <span class="small text-muted">— itens que a padaria não fabrica
+            (produto/insumo comprado como está)</span></div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+            <thead><tr><th>Item</th><th class="text-end">Quantidade</th></tr></thead>
+            <tbody>
+            {% for c in resultado.compras_diretas %}
+            <tr><td>{{ c.nome }}</td>
+                <td class="text-end fw-bold">{{ '%g'|format(c.qtd) }} un</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if resultado.sub_receitas %}
+<div class="alert alert-info py-2" style="font-size:13px;">
+    <strong>Sub-receitas consumidas prontas</strong> (não viram compra de
+    matéria-prima aqui — a produção usa do estoque da indústria):
+    {% for s in resultado.sub_receitas %}
+        <div>• {{ s.nome }} (usada por {{ s.unidades_base }} un)</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not resultado.compra.fornecedores and not resultado.compras_diretas %}
+<div class="alert alert-secondary">Nenhuma matéria-prima encontrada pra esses
+    itens — confira se a ficha técnica tem ingredientes cadastrados.</div>
+{% endif %}
+{% endif %}
+
+<script>
+// "Mais um item": clona a primeira linha zerada.
+document.getElementById('btn-mais-linha').addEventListener('click', function () {
+    var wrap = document.getElementById('calc-linhas');
+    var linha = wrap.querySelector('.calc-linha').cloneNode(true);
+    linha.querySelector('select').value = '';
+    linha.querySelector('input').value = '';
+    wrap.appendChild(linha);
+});
+</script>
+{% endblock %}
