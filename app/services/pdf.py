@@ -560,8 +560,12 @@ def gerar_calculadora_pdf(resultado, itens_ok, considerar_estoque=True):
     pdf.set_font('Helvetica', '', 9)
     pdf.set_text_color(90, 90, 90)
     pedidos_txt = ' + '.join(f"{i['qtd']}x {i['nome']}" for i in itens_ok)
-    pdf.multi_cell(0, 5, _latin1(f'Para produzir: {pedidos_txt}'))
+    pdf.multi_cell(0, 5, _latin1(f'Para produzir: {pedidos_txt}'),
+                   new_x='LMARGIN', new_y='NEXT')
     if not considerar_estoque:
+        # set_x garante que a linha nasce na margem esquerda (sem isso o
+        # cursor pos-multi_cell podia deixa-la desgarrada a direita).
+        pdf.set_x(pdf.l_margin)
         pdf.cell(0, 5, _latin1('Compra CHEIA - sem descontar o estoque '
                                'atual de materia-prima'), ln=1)
     pdf.set_text_color(0, 0, 0)
