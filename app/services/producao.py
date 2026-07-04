@@ -81,13 +81,33 @@ def _obter_ou_criar_plano(data_alvo, user_id):
     return plano
 
 
+class PlanoJaEnviadoError(Exception):
+    """Aprovar recusado: o dia ja foi ENVIADO ao padeiro.
+
+    Garantia do dono (04/07/2026): ordem enviada NUNCA muda por caminho
+    implicito (aba desatualizada com "so aprovar", POST repetido, limpar
+    edicoes manuais). O UNICO caminho que altera uma ordem enviada e o
+    "atualizar producao" explicito (enviar_plano_do_dia)."""
+
+
 def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
                          inicio_offset_dias=0, equilibrar=False):
     """Aprova a coluna de UM dia do cronograma -> cria/atualiza o
     PlanejamentoProducao (origem='cronograma') desse dia como RASCUNHO
     (enviado_ao_padeiro=False), pronto pra revisar e enviar. Reconstroi os itens
     a partir do grid atual (com overrides), preservando o que ja foi produzido.
-    Retorna o plano (ou None se nada a produzir naquele dia)."""
+    Retorna o plano (ou None se nada a produzir naquele dia).
+
+    Dia ja ENVIADO -> PlanoJaEnviadoError, sem tocar no plano: re-aprovar
+    reconstruiria os itens da ordem que o padeiro ja esta executando. Pra
+    aplicar o grid num dia enviado, use enviar_plano_do_dia ("atualizar
+    producao"), que e o gesto explicito."""
+    from app.models import PlanejamentoProducao
+
+    existente = (PlanejamentoProducao.query
+                 .filter_by(data=data_alvo, origem='cronograma').first())
+    if existente is not None and existente.enviado_ao_padeiro is not False:
+        raise PlanoJaEnviadoError(data_alvo.isoformat())
     plano = _obter_ou_criar_plano(data_alvo, user_id)
     n = _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias,
                                   janela_semanas, inicio_offset_dias, equilibrar)
