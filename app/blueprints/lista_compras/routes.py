@@ -322,7 +322,8 @@ def calculadora():
             entradas_render.append({'token': token, 'qtd': qtd})
         if entradas:
             resultado = calculadora_compras.calcular(
-                entradas, considerar_estoque=considerar_estoque)
+                entradas, considerar_estoque=considerar_estoque,
+                explodir_retorno=explodir_retorno)
         else:
             flash('Escolha ao menos um item com quantidade > 0.', 'warning')
 
