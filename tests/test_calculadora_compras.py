@@ -112,6 +112,8 @@ def test_sub_receita_normal_explode_em_mp(app):
         massa = _receita_simples('Massa Folhar Calc', peso_base=1000.0,
                                  peso_unitario=500.0,
                                  mp_nome='Manteiga Folhar', pct=100.0)
+        massa.rendimento_qtd = 2      # DECLARADO: batida rende 2 bolas
+        db.session.commit()
         croiss = Receita(nome='Croissant Calc', categoria='Croissants',
                          rendimento_qtd=10, rendimento_unidade='un',
                          peso_base=1000.0, peso_unitario=100.0)
