@@ -81,7 +81,7 @@ def test_limpar_edicoes_nao_toca_ordem_enviada(app, admin_user):
         r, d2 = _cenario(qtd=50)
         # edita a célula do dia de produção (d2 - lead 0 = d2) pra 80
         res = editar_celula(r.id, d2.isoformat(), 80, horizonte_dias=7)
-        assert res.get('ok'), res
+        assert res.get('total') == 80, res
         plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
         alvo_enviado = {it.receita_id: it.qtd_alvo for it in plano.itens}
         assert alvo_enviado.get(r.id) == 80          # foi com a edição
