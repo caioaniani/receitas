@@ -44,7 +44,7 @@ def _mult_para(receita, qtd):
     return qtd / rend
 
 
-def calcular(entradas, considerar_estoque=True):
+def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
     """`entradas`: [{'tipo': 'receita'|'produto', 'id': int, 'qtd': int}].
     `considerar_estoque=False`: "a comprar" = necessário CHEIO (ignora o
     estoque de MP — útil pra orçar um evento sem mexer no que está reservado
@@ -98,6 +98,22 @@ def calcular(entradas, considerar_estoque=True):
                 continue
             if _eh_retorno(sub.id):
                 sub_receitas[nome_sub] = sub_receitas.get(nome_sub, 0) + qtd
+                if explodir_retorno:
+                    # Pedido do dono (04/07/2026): comprar os insumos como se
+                    # os retornos fossem produzidos FRESCOS — explode pela
+                    # receita de ORIGEM (a ficha do retorno e vazia por
+                    # design). ATENCAO: se houver sobras reais no estoque,
+                    # isso compra em dobro — por isso e toggle na tela.
+                    unidades_sub = (ing.porcentagem or 0) * mult
+                    origem_rec = Receita.query.filter_by(
+                        retorno_receita_id=sub.id).first()
+                    if origem_rec is not None and unidades_sub > 0:
+                        detalhes.append(
+                            f'{receita.nome}: retorno "{sub.nome}" '
+                            f'({unidades_sub:g} un) explodido como '
+                            f'"{origem_rec.nome}" FRESCO.')
+                        _add_receita(origem_rec, unidades_sub,
+                                     _visitados=_visitados)
                 continue
             unidades_sub = (ing.porcentagem or 0) * mult
             if unidades_sub <= 0:
