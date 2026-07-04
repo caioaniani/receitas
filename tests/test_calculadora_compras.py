@@ -101,17 +101,53 @@ def test_produto_simples_vira_compra_direta(app):
         {'nome': 'Geleia Calc', 'qtd': 4, 'tipo': 'produto'}]
 
 
-def test_sub_receita_nao_explode_e_avisa(app):
-    """Receita montada (consome sub-receita pronta): a sub NÃO vira compra de
-    MP — aparece na seção informativa (mesma semântica do produzir)."""
+def test_sub_receita_normal_explode_em_mp(app):
+    """Sub-receita NORMAL (ex: Massa para folhar) EXPLODE em MP — a manteiga
+    do folhado tem que aparecer na compra (caso real 03/07: 300 croissants
+    mostravam 105 g de manteiga-folhar porque a massa ficava 'pronta')."""
+    from app.services import calculadora_compras
+    with app.app_context():
+        _mp('Manteiga Folhar', custo=60.0, estoque=0.0)
+        # Massa: batida 1 kg, 100% manteiga-folhar, bola de 500 g → 2 bolas/batida
+        massa = _receita_simples('Massa Folhar Calc', peso_base=1000.0,
+                                 peso_unitario=500.0,
+                                 mp_nome='Manteiga Folhar', pct=100.0)
+        croiss = Receita(nome='Croissant Calc', categoria='Croissants',
+                         rendimento_qtd=10, rendimento_unidade='un',
+                         peso_base=1000.0, peso_unitario=100.0)
+        db.session.add(croiss)
+        db.session.flush()
+        # 2 bolas de massa POR BATIDA do croissant (batida = 10 un)
+        db.session.add(ReceitaIngrediente(receita_id=croiss.id, tipo='receita',
+                                          ingrediente_nome=massa.nome,
+                                          porcentagem=2,
+                                          sub_receita_id=massa.id))
+        db.session.commit()
+        res = calculadora_compras.calcular(
+            [{'tipo': 'receita', 'id': croiss.id, 'qtd': 20}])
+
+    # 20 croissants = 2 batidas → 4 bolas → 2 batidas de massa → 2 kg manteiga
+    item = res['compra']['fornecedores'][0]['itens'][0]
+    assert item['nome'] == 'Manteiga Folhar'
+    assert round(item['quantidade']) == 2000
+    assert res['sub_receitas'] == []               # explodiu, não ficou de fora
+
+
+def test_sub_receita_de_retorno_nao_vira_compra(app):
+    """Receita de RETORNO (destino de sobra, ex: Almond consome o retorno do
+    croissant): NÃO explode em MP — vem de sobra, não de compra."""
     from app.services import calculadora_compras
     with app.app_context():
         _mp('Amendoas', custo=80.0, estoque=0.0)
-        base = _receita_simples('Croissant Trad Calc')
+        base = _receita_simples('Croissant Trad Calc')   # ficha com Farinha
+        # 'base' é destino de retorno de alguém → marca como receita de retorno
+        origem = Receita(nome='Croissant Fresco Calc', categoria='Croissants',
+                         rendimento_qtd=10, rendimento_unidade='un',
+                         peso_base=1000.0, retorno_receita_id=base.id)
         almond = Receita(nome='Almond Calc', categoria='Croissants',
                          rendimento_qtd=10, rendimento_unidade='un',
                          peso_base=1000.0, peso_unitario=120.0)
-        db.session.add(almond)
+        db.session.add_all([origem, almond])
         db.session.flush()
         db.session.add_all([
             ReceitaIngrediente(receita_id=almond.id, tipo='receita',
@@ -127,9 +163,25 @@ def test_sub_receita_nao_explode_e_avisa(app):
     nomes_mp = [i['nome'] for f in res['compra']['fornecedores']
                 for i in f['itens']]
     assert 'Amendoas' in nomes_mp                   # MP própria explode
-    assert 'Farinha' not in nomes_mp                # a da sub NÃO (usa pronta)
+    assert 'Farinha' not in nomes_mp                # retorno NÃO vira compra
     assert res['sub_receitas'] == [
         {'nome': 'Croissant Trad Calc', 'unidades_base': 10}]
+
+
+def test_toggle_sem_estoque_compra_cheia(app):
+    """considerar_estoque=False: 'a comprar' = necessário CHEIO, ignorando o
+    estoque de MP."""
+    from app.services import calculadora_compras
+    with app.app_context():
+        _mp('Farinha', custo=10.0, estoque=500.0)
+        r = _receita_simples()
+        res = calculadora_compras.calcular(
+            [{'tipo': 'receita', 'id': r.id, 'qtd': 20}],
+            considerar_estoque=False)
+    item = res['compra']['fornecedores'][0]['itens'][0]
+    assert round(item['comprar']) == 2000           # cheio (não 1500)
+    assert round(item['custo_compra'], 2) == 20.0   # 2 kg × R$ 10
+    assert round(res['compra']['total_compra'], 2) == 20.0
 
 
 def test_rota_renderiza_e_calcula(app, admin_user):
