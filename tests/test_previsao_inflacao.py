@@ -125,4 +125,9 @@ def test_a1_balanco_item_so_de_sabado_nao_infla(app):
 
     bal = balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=False)
     it = next(i for i in bal['itens'] if i['receita_id'] == r.id)
-    assert it['previsto'] == 100            # 1 sábado no horizonte, dias úteis 0
+    # 1 sábado no horizonte = 100. Dias sem histórico carregam o RESIDUAL
+    # documentado acima (0.4/dia, até ~6 dias no horizonte) — quanto disso
+    # arredonda depende do dia-da-semana em que o teste RODA (== 100 passava
+    # na quinta e quebrava no sábado com 101). Tolera o residual sem perder
+    # o propósito: a regressão de inflação dava ~186.
+    assert 100 <= it['previsto'] <= 103
