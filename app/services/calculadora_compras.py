@@ -118,6 +118,16 @@ def calcular(entradas, considerar_estoque=True):
               {'fornecedores': [], 'total_compra': 0.0,
                'total_necessario': 0.0})
 
+    if not considerar_estoque:
+        # Ignora o estoque: comprar = necessário cheio; custo da compra =
+        # custo do necessário. Re-rotula a saída do motor (sem refazer conta).
+        for f in compra['fornecedores']:
+            for it in f['itens']:
+                it['comprar'] = it['quantidade']
+                it['custo_compra'] = it['custo_estimado']
+            f['subtotal_compra'] = sum(i['custo_compra'] for i in f['itens'])
+        compra['total_compra'] = compra['total_necessario']
+
     return {
         'compra': compra,
         'compras_diretas': [
@@ -128,4 +138,6 @@ def calcular(entradas, considerar_estoque=True):
             for n, q in sorted(sub_receitas.items())],
         'itens_ok': itens_ok,
         'avisos': avisos,
+        'detalhes': detalhes,
+        'considerar_estoque': considerar_estoque,
     }
