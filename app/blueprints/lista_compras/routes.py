@@ -292,6 +292,10 @@ def calculadora():
 
     resultado = None
     entradas_render = []
+    # Toggle "descontar o estoque de MP": ligado por padrão (GET). No POST
+    # vale o que veio do form (checkbox desmarcado não envia a chave).
+    considerar_estoque = (request.method != 'POST'
+                          or request.form.get('considerar_estoque') == '1')
     if request.method == 'POST':
         from app.services import calculadora_compras
         itens_raw = request.form.getlist('item[]')
