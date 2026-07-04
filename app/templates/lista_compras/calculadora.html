@@ -149,8 +149,8 @@
 
 {% if resultado.sub_receitas %}
 <div class="alert alert-info py-2" style="font-size:13px;">
-    <strong>Sub-receitas consumidas prontas</strong> (não viram compra de
-    matéria-prima aqui — a produção usa do estoque da indústria):
+    <strong>Sub-receitas que NÃO viram compra</strong> (receita de RETORNO —
+    vem de sobra devolvida, não de mercadoria — ou sub-receita órfã na ficha):
     {% for s in resultado.sub_receitas %}
         <div>• {{ s.nome }} (usada por {{ s.unidades_base }} un)</div>
     {% endfor %}
