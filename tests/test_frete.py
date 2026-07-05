@@ -142,3 +142,95 @@ def test_tool_registrada_no_chatbot():
         r = chatbot._executar_tool('consultar_frete',
                                    {'endereco_ou_cep': '04613-030'})
     assert r['ok'] is True and r['gratis'] is True
+
+
+# ── Sanidade de CEP no geocode (05/07/2026 — homônimos) ─────────────────
+
+def test_geocode_rejeita_homonimo_de_outro_distrito():
+    """Caso real "Rua Nova York": BrasilAPI sem coords; Nominatim devolve a
+    homônima do GRAJAÚ (postcode 04853) na frente da certa (04560). O check
+    do CEP pula a errada e fica com a do Brooklin."""
+    brasilapi = _resp(200, {'street': 'Rua Nova York',
+                            'neighborhood': 'Brooklin', 'city': 'São Paulo',
+                            'location': {'coordinates': {}}})
+    nominatim = _resp(200, [
+        {'lat': '-23.7720', 'lon': '-46.6795',
+         'display_name': 'Rua Nova York, Grajaú',
+         'address': {'postcode': '04853-080'}},
+        {'lat': '-23.6153', 'lon': '-46.6848',
+         'display_name': 'Rua Nova York, Brooklin Novo',
+         'address': {'postcode': '04560-000'}},
+    ])
+
+    def fake_get(url, **kw):
+        return brasilapi if 'brasilapi' in url else nominatim
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
+        r = frete.consultar_frete('Rua Nova York, Brooklin, São Paulo, '
+                                  '04560-000')
+    assert r['ok'] is True and r['fora_area'] is False
+    assert 'Brooklin' in r['endereco']
+    assert r['distancia_km'] < 5          # nunca os 19,3 km do Grajaú
+
+
+def test_geocode_rejeita_cidade_errada_e_cai_pro_texto():
+    """Caso real D Lucas (CEP 01050-000): o rótulo da BrasilAPI caía na
+    "Rua Martins Fontes" de ARUJÁ (44 km → bloqueado). Com o check, a
+    tentativa do rótulo morre e a do texto cru resolve o Centro (7,4 km)."""
+    brasilapi = _resp(200, {'street': 'Rua Martins Fontes',
+                            'neighborhood': 'Centro', 'city': 'São Paulo',
+                            'location': {'coordinates': {}}})
+    aruja = _resp(200, [{'lat': '-23.3965', 'lon': '-46.3210',
+                         'display_name': 'Rua Martins Fontes, Arujá',
+                         'address': {'postcode': '07402-000'}}])
+    centro = _resp(200, [{'lat': '-23.5492', 'lon': '-46.6445',
+                          'display_name': '01050-000, República, São Paulo',
+                          'address': {'postcode': '01050-000'}}])
+    chamadas = []
+
+    def fake_get(url, **kw):
+        if 'brasilapi' in url:
+            return brasilapi
+        chamadas.append(kw.get('params', {}).get('q', ''))
+        return aruja if len(chamadas) == 1 else centro
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
+        r = frete.consultar_frete('01050-000')
+    assert r['ok'] is True and r['fora_area'] is False
+    assert r['distancia_km'] < 10         # República, não Arujá (44 km)
+
+
+def test_geocode_sem_postcode_no_resultado_aceita():
+    """OSM sem postcode no candidato: o check é só contra divergência
+    POSITIVA — sem dado, aceita (comportamento antigo preservado)."""
+    brasilapi = _resp(200, {'street': 'Rua X', 'neighborhood': 'Brooklin',
+                            'city': 'São Paulo',
+                            'location': {'coordinates': {}}})
+    nominatim = _resp(200, [{'lat': '-23.5990', 'lon': '-46.6940',
+                             'display_name': 'Rua X, Brooklin',
+                             'address': {}}])
+
+    def fake_get(url, **kw):
+        return brasilapi if 'brasilapi' in url else nominatim
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
+        r = frete.consultar_frete('Rua X, 04568-010')
+    assert r['ok'] is True and r['gratis'] is True
+
+
+def test_geocode_todos_divergentes_vira_nao_encontrado():
+    """Nenhum candidato com CEP compatível: melhor falhar honesto ("não
+    consegui localizar") do que inventar frete de outra cidade."""
+    brasilapi = _resp(200, {'street': 'Rua Y', 'neighborhood': 'Centro',
+                            'city': 'São Paulo',
+                            'location': {'coordinates': {}}})
+    errado = _resp(200, [{'lat': '-23.39', 'lon': '-46.32',
+                          'display_name': 'Rua Y, Arujá',
+                          'address': {'postcode': '07402-000'}}])
+
+    def fake_get(url, **kw):
+        return brasilapi if 'brasilapi' in url else errado
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
+        r = frete.consultar_frete('Rua Y, 123, Centro, 01050-000')
+    assert r == {'ok': False, 'erro': 'nao_encontrado'}
