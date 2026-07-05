@@ -69,6 +69,13 @@ _CACHE_TTL = 60  # segundos
 # deixa mais "liso" (no limite vira media uniforme); diminuir reage mais rapido.
 _MEIA_VIDA_DIAS = 21
 
+# Guarda de ULP pro ceil de medias (05/07/2026): a media de recencia e uma
+# razao de somas de floats — quando o valor exato e um INTEIRO, o resultado
+# pode sair 1 ulp acima (7.000000000000001) e ceil() infla em +1 unidade (ou
+# +1 caixa inteira). Subtrair 1e-9 antes do ceil tira SO o ruido do ultimo
+# bit — nao e tolerancia de negocio (1e-9 << 1 unidade de pao).
+_EPS_ULP = 1e-9
+
 # Robustez a PICO ISOLADO (29/06/2026): um pedido pontual gigante (ex: evento)
 # nao pode dominar a previsao. Quando a MAIOR ocorrencia eh um pico isolado
 # (> _OUTLIER_FATOR x mediana E estritamente acima da 2a maior), ela eh capada
@@ -1363,10 +1370,18 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 # Alvo do dia = consumo + estoque de seguranca opcional (sobra
                 # N% do consumo no fim do dia como colchao contra dia acima da
                 # media). seguranca=0 -> repoe exatamente a media (v1).
+                #
+                # _EPS_ULP no ceil: a media de recencia e num/den de floats —
+                # quando o valor exato e INTEIRO (6 segundas de 7 un = 7.0),
+                # a soma pode sair 1 ulp ACIMA (7.000000000000001, varia com a
+                # ordem/dia) e o ceil inflava pra 8 (ou +1 CAIXA inteira no
+                # ramo com lote). Nao e tolerancia de negocio: 1e-9 << 1
+                # unidade; so tira o ruido do ultimo bit. Caso real 05/07 —
+                # media exibida 7,0 e sugestao 8; CI flakava no mesmo ponto.
                 deficit = consumo_d * (1.0 + seguranca) - estoque
                 if deficit > 1e-9:
-                    pedido = (int(ceil(deficit / caixa)) * caixa
-                              if caixa > 1 else int(ceil(deficit)))
+                    pedido = (int(ceil(deficit / caixa - _EPS_ULP)) * caixa
+                              if caixa > 1 else int(ceil(deficit - _EPS_ULP)))
                     # Piso do pedido (minimo_pedido): eleva e re-fecha na caixa.
                     # O excedente vira carry — os dias seguintes pedem menos.
                     if minimo > 0 and pedido < minimo:
