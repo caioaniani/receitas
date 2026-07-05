@@ -839,6 +839,27 @@ Desligar: env `SERU_AUTO_SYNC=0` (default `1`).
 - `/pdv/mapeamentos`: tabela completa de produtos + tabela de lojas. Form POST normal
   (scroll preservado via `sessionStorage`).
 
+## Frete do site — geocode com sanidade de CEP (05/07/2026)
+
+Incidente: a BrasilAPI PAROU de devolver coordenadas de alguns CEPs (mudanca
+do lado dela, zero deploy nosso) e o fallback por texto do `frete.py`
+aceitava rua HOMONIMA de outra cidade/bairro em silencio — "Rua Nova York"
+(Brooklin, 500m da padaria) caiu na homonima do Grajau (19,3km → R$95 no
+checkout) e o CEP 01050-000 (Centro, 7,4km) caiu na "Rua Martins Fontes" de
+ARUJA (44km → bloqueado como "fora da area"; caso D Lucas, venda quase
+perdida). Fix: `_geocodificar_texto` pede `addressdetails` ao Nominatim e
+DESCARTA candidato cujo postcode diverge do CEP do cliente (prefixo de 4
+digitos = mesmo distrito; ve ate 3 candidatos). Nenhum candidato compativel
+→ 'nao_encontrado' (checkout pede pra conferir o endereco) — NUNCA aceitar
+coordenada divergente so pra dar um numero. Testes: 4 casos em
+`tests/test_frete.py` (secao "Sanidade de CEP"). Sonda de diagnostico:
+`GET /api/claude/frete-debug?q=<endereco|cep>` (mostra cada etapa da cadeia
+com lat/lng/distancia — usar SEMPRE que suspeitar de frete errado).
+No mesmo incidente: `_EPS_ULP` no ceil da sugestao de pedido
+(`previsao_producao.py`) — media de recencia que da inteiro exato podia
+sair 1 ulp acima e o ceil inflava +1 unidade/caixa (CI flakava no
+test_lote_producao; media exibida 7,0 e sugestao 8).
+
 ## Copilot (servico) — canais: Slack + WhatsApp do dono. SEM interface web
 
 `app/services/copilot.py` orquestra tools com Claude Sonnet 4.6 (Anthropic API).
