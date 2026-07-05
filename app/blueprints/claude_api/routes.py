@@ -257,3 +257,45 @@ def pedidos_semana():
         dias=grade['dias'],
         lojas=lojas,
     )
+
+
+@claude_api_bp.route('/frete-debug')
+@_claude_auth_required
+def frete_debug():
+    """Diagnóstico da geocodificação do frete (read-only).
+
+    ?q=<endereço ou CEP> — roda CADA etapa da cadeia do `geocodificar`
+    separadamente (BrasilAPI pelo CEP, Nominatim pelo texto completo e pelo
+    simplificado) e devolve lat/lng/distância de cada uma + o resultado do
+    `consultar_frete` oficial. Criada em 05/07/2026 pra investigar frete
+    errado no checkout (Rua Nova York a "19,3 km"; CEP 01050-000 bloqueado
+    como fora da área — casos reais do dia). Não grava nada.
+    """
+    from app.services import frete as frete_svc
+
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        return jsonify(ok=False, erro='use ?q=<endereço ou CEP>'), 400
+
+    def _etapa(geo):
+        if not geo:
+            return None
+        lat, lng, rotulo = geo
+        if lat is None:
+            return {'rotulo': rotulo, 'coords': None}
+        return {'rotulo': rotulo, 'lat': lat, 'lng': lng,
+                'distancia_km': round(frete_svc.distancia_km(lat, lng), 2)}
+
+    cep = frete_svc._extrair_cep(q)
+    etapas = {
+        'cep_extraido': cep,
+        'brasilapi_cep': _etapa(frete_svc._geocodificar_cep(cep)) if cep else None,
+        'nominatim_texto': _etapa(frete_svc._geocodificar_texto(q)),
+    }
+    simples = frete_svc.simplificar_endereco(q)
+    etapas['simplificado'] = simples
+    if simples and simples.lower() != q.lower():
+        etapas['nominatim_simplificado'] = _etapa(
+            frete_svc._geocodificar_texto(simples))
+    return jsonify(ok=True, consulta=q, etapas=etapas,
+                   oficial=frete_svc.consultar_frete(q))
