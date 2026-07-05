@@ -165,14 +165,17 @@ def geocodificar(endereco_ou_cep):
         if geo and geo[0] is None:
             # BrasilAPI conhece o CEP mas nao tem coordenada: geocodifica o
             # endereço resolvido (rua + bairro + cidade), mais preciso que o
-            # texto cru do cliente.
-            geo = _geocodificar_texto(geo[2])
+            # texto cru do cliente. `cep_ref` barra rua homônima de outra
+            # cidade (caso Arujá, 05/07/2026).
+            geo = _geocodificar_texto(geo[2], cep_ref=cep)
     if not geo or geo[0] is None:
-        geo = _geocodificar_texto(texto)
+        geo = _geocodificar_texto(texto, cep_ref=cep)
     if not geo or geo[0] is None:
         simples = simplificar_endereco(texto)
         if simples and simples.lower() != texto.lower():
-            geo = _geocodificar_texto(simples)
+            # O simplificado perde o BAIRRO — sem o check do CEP ele achava
+            # a "Rua Nova York" do Grajaú em vez da do Brooklin (05/07/2026).
+            geo = _geocodificar_texto(simples, cep_ref=cep)
     if not geo or geo[0] is None:
         logger.warning('geocodificacao falhou em todas as tentativas: %r',
                        texto[:200])
