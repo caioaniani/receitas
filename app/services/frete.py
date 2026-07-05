@@ -81,23 +81,42 @@ def _geocodificar_cep(cep):
         return None
 
 
-def _geocodificar_texto(texto):
-    """Nominatim (OSM): endereço livre -> (lat, lng, rótulo) ou None."""
+def _geocodificar_texto(texto, cep_ref=None):
+    """Nominatim (OSM): endereço livre -> (lat, lng, rótulo) ou None.
+
+    `cep_ref` (sanidade — 05/07/2026): quando o CEP do cliente é conhecido,
+    REJEITA candidato cujo postcode não bate no prefixo de 4 dígitos (mesmo
+    distrito; rua no mesmo logradouro pode variar o 5º dígito). Rua homônima
+    em outra cidade/bairro era aceita em silêncio e virava frete errado —
+    casos reais do dia: "Rua Nova York" do Brooklin caiu na homônima do
+    Grajaú (19,3 km → R$ 95) e o rótulo do CEP 01050-000 (Centro) caiu na
+    "Rua Martins Fontes" de ARUJÁ (44 km → bloqueado como fora da área).
+    Sem postcode no resultado (OSM incompleto) aceita — o check é só contra
+    divergência POSITIVA. Vasculha até 3 candidatos, fica com o 1º que passa.
+    """
     consulta = texto.strip()
     if 'são paulo' not in consulta.lower() and 'sao paulo' not in consulta.lower():
         consulta += ', São Paulo, Brasil'
     try:
         r = requests.get('https://nominatim.openstreetmap.org/search',
-                         params={'q': consulta, 'format': 'json', 'limit': 1,
-                                 'countrycodes': 'br'},
+                         params={'q': consulta, 'format': 'json', 'limit': 3,
+                                 'addressdetails': 1, 'countrycodes': 'br'},
                          headers=_UA, timeout=_TIMEOUT)
         if r.status_code != 200:
             return None
-        hits = r.json()
-        if not hits:
-            return None
-        h = hits[0]
-        return float(h['lat']), float(h['lon']), h.get('display_name', consulta)
+        for h in r.json():
+            if cep_ref:
+                pc = re.sub(r'\D', '', (h.get('address') or {})
+                            .get('postcode') or '')
+                if pc and pc[:4] != cep_ref[:4]:
+                    logger.warning(
+                        'geocode descartado (CEP diverge): pedimos %s, '
+                        'candidato %s (%r)', cep_ref, pc,
+                        (h.get('display_name') or '')[:120])
+                    continue
+            return (float(h['lat']), float(h['lon']),
+                    h.get('display_name', consulta))
+        return None
     except (requests.RequestException, ValueError, KeyError):
         logger.warning('Nominatim falhou pra %r', texto)
         return None
