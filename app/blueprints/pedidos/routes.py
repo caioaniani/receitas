@@ -169,7 +169,7 @@ def buscar_itens():
             for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
             if _casa(p.nome)]
     out += [{'id': f'mp_{m.id}', 'nome': m.nome}
-            for m in MateriaPrima.ativas().order_by(MateriaPrima.nome).all() if _casa(m.nome)]
+            for m in _mps_pediveis().all() if _casa(m.nome)]
     return jsonify(itens=out[:50])
 
 
