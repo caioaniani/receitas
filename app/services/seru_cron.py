@@ -46,6 +46,7 @@ LOCK_KEY_FOLLOWUP = 7740  # advisory lock pro follow-up do bot (cliente sumiu)
 LOCK_KEY_RESERVA_EXPIRA = 7742  # advisory lock pro libera-reservas-expiradas da loja online
 LOCK_KEY_PREVISAO_ACURACIA = 7743  # advisory lock pro snapshot+match de acuracia do forecast
 LOCK_KEY_BAIXAS_PRESAS = 7744  # advisory lock pro alerta de baixas presas (separado/retirada)
+LOCK_KEY_SITE_VIGIA = 7745  # advisory lock pro vigia do site (canarios de frete/catalogo/agenda)
 # Locks LIBERADOS mas RESERVADOS (nao reusar — evita conflito se algum
 # dos jobs for reativado no futuro):
 # - 7730 era do `zapi-digest-anomalias` (job 23:00 BRT, removido 14/06/2026).
@@ -392,6 +393,17 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Vigia do SITE (05/07/2026, pedido do dono no dia do incidente do
+    # frete): canarios de frete/catalogo/agenda a cada 2h, alerta WhatsApp
+    # na transicao. 2h (nao 15min) por causa dos geocoders externos
+    # (Nominatim rate-limita). Desligar: SITE_VIGIA=0.
+    if os.environ.get('SITE_VIGIA', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_site_vigia(app),
+            'interval', hours=2, id='site-vigia',
+            max_instances=1, coalesce=True,
+        )
+
     # Baixas presas (03/07/2026): pedido parado em 'separado' com entrega
     # vencida (QR de saida nao escaneado = industria NAO baixou) e retirada
     # de sobra presa em transporte (loja baixou, industria nao creditada).
@@ -622,6 +634,17 @@ def _run_vigia_chatwoot(app):
     with app.app_context():
         _com_lock(LOCK_KEY_VIGIA_CHATWOOT, chatwoot.vigiar_infra,
                   'vigia infra chatwoot')
+
+
+def _run_site_vigia(app):
+    """Job: vigia do SITE (05/07/2026) — canarios de frete (geocode em rua
+    homonima virou R$95/bloqueio no incidente do dia), catalogo com produto
+    vendavel e agenda com data/janela. Alerta o dono no WhatsApp na
+    transicao saudavel→doente (anti-spam de 6h dentro do servico)."""
+    from app.services import site_vigia
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_SITE_VIGIA, site_vigia.vigiar, 'vigia site')
 
 
 def _run_alerta_baixas_presas(app):
