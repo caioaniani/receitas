@@ -1241,3 +1241,73 @@ def test_rota_sem_risco_nao_mostra_banner(app, admin_user):
     resp = client.get('/telaindustriateste/')
     assert resp.status_code == 200
     assert 'Entregas em risco' not in resp.get_data(as_text=True)
+
+
+# ── upgrade da tela (06/07/2026): resumo, filtros e totais por dia ──────────
+
+def test_rota_renderiza_resumo_filtros_e_totais(app, admin_user):
+    """A tela traz a faixa de resumo (KPIs), a toolbar de filtros, o rodapé
+    'Total do dia' e o explicador colapsável — sem perder o grid."""
+    loja = _loja()
+    r = _receita()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=2), r, 50)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.get('/telaindustriateste/')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'kpi-strip' in html
+    assert 'aguardando confirmação do padeiro' in html
+    assert 'ocultar zerados' in html
+    assert 'crono-busca' in html
+    assert 'Total do dia' in html
+    assert 'Como funciona esta tela' in html
+
+
+def test_rota_totais_do_dia_excluem_insumo(app, admin_user):
+    """O rodapé soma unidades de PRODUTO FINAL — a massa (insumo, em bolas)
+    fica fora da soma de unidades (senão bolas somavam com croissants)."""
+    from app.models import ReceitaIngrediente
+
+    loja = _loja()
+    massa = _receita('Massa para folhar')
+    cro = _receita('Croissant')
+    db.session.add(ReceitaIngrediente(
+        receita_id=cro.id, tipo='receita', sub_receita_id=massa.id,
+        ingrediente_nome=massa.nome, porcentagem=1))
+    db.session.commit()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=2), cro, 100)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    html = client.get('/telaindustriateste/').get_data(as_text=True)
+    # dia da produção do croissant: 100 un no rodapé (a massa não soma)
+    assert '<span class="tot-dia-un">100 un</span>' in html
+
+
+def test_rota_renderiza_badge_capado_ao_retorno(app, admin_user):
+    """Receita capada pela política 'só de sobras' mostra o badge ♻️ com o
+    porquê (antes o cap era invisível na tela — só no expandir)."""
+    from app.models import ReceitaIngrediente
+
+    retorno = _receita('Croissant Tradicional — Retorno')
+    trad = _receita('Croissant Tradicional')
+    trad.retorno_receita_id = retorno.id
+    almond = _receita('Croissant Almond')
+    db.session.add(ReceitaIngrediente(
+        receita_id=almond.id, tipo='receita', sub_receita_id=retorno.id,
+        ingrediente_nome=retorno.nome, porcentagem=1))
+    db.session.add(EstoqueProducao(receita_id=retorno.id, quantidade=15))
+    db.session.commit()
+    loja = _loja()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), almond, 40)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    html = client.get('/telaindustriateste/').get_data(as_text=True)
+    assert 'capado ao retorno' in html
+    assert 'Croissant Tradicional — Retorno' in html
