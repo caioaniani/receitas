@@ -1109,6 +1109,31 @@ dispara o mesmo `copilot_svc.interpretar` — single-workspace.
 
 **UI admin**: `/slack/install` lista vinculos + form pra criar novos (slack_user_id ↔ Usuario).
 
+## Varredura mobile (06/07/2026)
+
+Pedido do dono ("versao very mobile"); escolha dele: varredura responsiva
+geral priorizando lojas (pedidos/estoque), relatorios/PDV/financeiro e
+producao/cronograma. Validada com Playwright a 390px (login real, Bootstrap
+servido local — a CDN e bloqueada no sandbox e SEM ela a auditoria mente).
+
+- **BUG CRITICO ACHADO NO CAMINHO**: o `@media print` da linha ~1969 do
+  `style.css` NUNCA fechava (sobra da remocao do copilot web em 10/06) +
+  um `@media 480px` orfao — o navegador tratava as ultimas ~700 linhas do
+  CSS como regra de impressao (command palette e ajustes mobile antigos
+  nunca aplicaram). Corrigido. Se mexer em CSS grande, validar balanco de
+  chaves (o incidente passou 3 semanas invisivel).
+- **Globais** (valem pra TODA tela, atual e futura): `app.js` embrulha
+  tabela solta em `.mobile-table-scroll` (rola no lugar, nunca estica o
+  body — era o estouro de /pedidos, /pedidos/congelados, /pdv/itens-vendidos);
+  no mobile `.main-content .d-flex` quebra linha (barras de botoes/filtros);
+  `.nav-tabs` vira trilho horizontal rolavel; `.form-control/.form-select`
+  com 16px (iOS nao da zoom ao focar); celulas de tabela compactas.
+- **`.dica-recolhe`**: explicador longo recolhido no mobile com "toque para
+  ler tudo" (JS alterna `.aberta`). Aplicada no cronograma e nas duas telas
+  de pedidos da semana — usar em qualquer explicador grande novo.
+- O grid do cronograma ja tinha 1a coluna sticky + scroll proprio
+  (`.crono-wrap`) — o estouro era o form de filtros sem wrap.
+
 ## Sidebar
 
 Secoes (`sidebar-section-title`) sao **colapsaveis** — JS adiciona chevron + persiste
