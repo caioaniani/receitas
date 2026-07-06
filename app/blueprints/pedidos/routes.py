@@ -47,6 +47,31 @@ from app.utils import agora
 from app.utils import hoje as hoje_brt
 
 
+def _mps_pediveis():
+    """MPs que a loja PODE pedir da indústria — só as marcadas no checkbox
+    "sugerir pedido loja" do Banco de MPs (decisão do dono 07/07/2026: loja
+    pedia MP que não devia; a flag que já alimentava a sugestão semanal
+    virou TRAVA do pedido). Receitas e produtos seguem livres; MP é opt-in.
+    Vale pro typeahead, pros forms de novo/editar e pra validação do POST."""
+    return (MateriaPrima.ativas()
+            .filter(MateriaPrima.sugerir_pedido_loja.is_(True))
+            .order_by(MateriaPrima.nome))
+
+
+def _mps_nao_pediveis(itens_norm):
+    """Nomes das MPs em `itens_norm` que NÃO estão liberadas pra pedido de
+    loja. Lista vazia = tudo certo. Usada na validação server-side do POST
+    (o typeahead já filtra, mas POST direto/aba velha não pode furar)."""
+    mp_ids = [it['materia_prima_id'] for it in itens_norm
+              if it.get('materia_prima_id')]
+    if not mp_ids:
+        return []
+    bloqueadas = (MateriaPrima.query
+                  .filter(MateriaPrima.id.in_(mp_ids),
+                          MateriaPrima.sugerir_pedido_loja.is_(False)).all())
+    return [m.nome for m in bloqueadas]
+
+
 def _parse_item_id(value):
     """Decodifica 'r_5'/'p_5'/'mp_5'/'5' em ('receita'|'produto'|'mp', id).
     Legacy: int puro = receita."""
