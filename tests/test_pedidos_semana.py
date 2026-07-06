@@ -348,8 +348,10 @@ def test_rota_gerar_so_uma_loja(app, admin_user):
     assert PedidoLoja.query.filter_by(loja_id=loja_b.id).count() == 0   # B não entrou
 
 
-def test_rota_gerar_todas_sem_so_loja(app, admin_user):
-    """Sem so_loja (botão 'gerar todas') gera todas as lojas do form."""
+def test_rota_gerar_todas_exige_acao_explicita(app, admin_user):
+    """Gerar TODAS agora exige gerar_todas=1 (o botão manda). Antes o 'todas'
+    era o DEFAULT de qualquer POST — e quando o Safari descartava o so_loja
+    do botão (bug de confirm() no onclick), 'só esta loja' virava todas."""
     loja_a = _loja('Loja A')
     loja_b = _loja('Loja B')
     r = _receita()
@@ -358,8 +360,66 @@ def test_rota_gerar_todas_sem_so_loja(app, admin_user):
     client = app.test_client()
     _login(client, admin_user)
     client.post('/producao/pedidos-semana/gerar', data={
+        'gerar_todas': '1',
         'qtd|%d|%s|%d' % (loja_a.id, d, r.id): '8',
         'qtd|%d|%s|%d' % (loja_b.id, d, r.id): '5',
     })
     assert PedidoLoja.query.filter_by(loja_id=loja_a.id).count() == 1
     assert PedidoLoja.query.filter_by(loja_id=loja_b.id).count() == 1
+
+
+def test_rota_gerar_sem_acao_nao_gera_nada(app, admin_user):
+    """Regressão do bug de prod (06/07/2026): o Safari descarta o name/value
+    do submit button quando o clique passa por confirm() — o POST chegava sem
+    so_loja (só os hidden vazios) e a rota gerava TODAS as lojas. Sem ação
+    identificada, NADA pode ser gerado (fail-closed) e o usuário é avisado."""
+    loja_a = _loja('Loja A')
+    loja_b = _loja('Loja B')
+    r = _receita()
+    d = (hoje() + timedelta(days=1)).isoformat()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.post('/producao/pedidos-semana/gerar', data={
+        'so_loja': '', 'so_dia': '', 'gerar_todas': '',   # hiddens sem JS
+        'qtd|%d|%s|%d' % (loja_a.id, d, r.id): '8',
+        'qtd|%d|%s|%d' % (loja_b.id, d, r.id): '5',
+    }, follow_redirects=True)
+    assert PedidoLoja.query.count() == 0
+    assert 'Nenhum pedido foi gerado' in resp.get_data(as_text=True)
+
+
+def test_rota_gerar_so_loja_com_hidden_vazio_junto(app, admin_user):
+    """O form manda o hidden so_loja (vazio quando o JS não preencheu) E o
+    name/value do botão — vale o primeiro valor NÃO-vazio, em qualquer ordem."""
+    loja_a = _loja('Loja A')
+    loja_b = _loja('Loja B')
+    r = _receita()
+    d = (hoje() + timedelta(days=1)).isoformat()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    client.post('/producao/pedidos-semana/gerar', data={
+        'so_loja': ['', str(loja_a.id)],                 # hidden vazio + botão
+        'qtd|%d|%s|%d' % (loja_a.id, d, r.id): '8',
+        'qtd|%d|%s|%d' % (loja_b.id, d, r.id): '5',
+    })
+    assert PedidoLoja.query.filter_by(loja_id=loja_a.id).count() == 1
+    assert PedidoLoja.query.filter_by(loja_id=loja_b.id).count() == 0
+
+
+def test_rota_gerar_sem_acao_ajax_responde_400(app, admin_user):
+    """No caminho ajax (auto-save) a falta de ação vira JSON 400, não flash."""
+    loja = _loja('Loja A')
+    r = _receita()
+    d = (hoje() + timedelta(days=1)).isoformat()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    resp = client.post('/producao/pedidos-semana/gerar', data={
+        'ajax': '1',
+        'qtd|%d|%s|%d' % (loja.id, d, r.id): '8',
+    })
+    assert resp.status_code == 400
+    assert resp.get_json()['ok'] is False
+    assert PedidoLoja.query.count() == 0
