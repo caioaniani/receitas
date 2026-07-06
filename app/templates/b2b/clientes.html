@@ -131,4 +131,65 @@
     </div>
 </div>
 {% endfor %}
+
+<script>
+// Botão "Buscar" do CNPJ (igual ao Tiny): consulta a base pública da
+// Receita via /b2b/api/cnpj/<digitos> e preenche razão social, endereço
+// fiscal (NF-e), linha livre do boleto, e-mail e telefone.
+// Endereço fiscal é SOBRESCRITO (é o objetivo do botão); nome/e-mail/
+// telefone só preenchem se estiverem vazios (não apaga o que o humano digitou).
+document.querySelectorAll('.btn-buscar-cnpj').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+        const form = btn.closest('form');
+        const msg = form.querySelector('.cnpj-msg');
+        const digitos = (form.querySelector('[name=cnpj_cpf]').value || '').replace(/\D/g, '');
+        const avisar = function (texto, erro) {
+            msg.textContent = texto;
+            msg.classList.remove('d-none', 'text-danger', 'text-success');
+            msg.classList.add(erro ? 'text-danger' : 'text-success');
+        };
+        if (digitos.length !== 14) {
+            avisar('Informe um CNPJ com 14 dígitos (busca não vale pra CPF).', true);
+            return;
+        }
+        btn.disabled = true;
+        const rotulo = btn.innerHTML;
+        btn.innerHTML = 'Buscando…';
+        try {
+            const r = await fetch('{{ url_for("b2b.api_cnpj", cnpj="__C__") }}'.replace('__C__', digitos));
+            const d = await r.json();
+            if (!r.ok) { avisar(d.erro || 'Falha na consulta.', true); return; }
+            const set = function (nome, valor, soVazio) {
+                const el = form.querySelector('[name=' + nome + ']');
+                if (!el || !valor) return;
+                if (soVazio && el.value.trim()) return;
+                el.value = valor;
+            };
+            set('nome', d.razao_social, true);       // só o modal "novo" tem
+            set('email', d.email, true);
+            set('telefone', d.telefone, true);
+            set('endereco_logradouro', d.logradouro);
+            set('endereco_numero', d.numero);
+            set('endereco_complemento', d.complemento);
+            set('endereco_bairro', d.bairro);
+            set('endereco_cep', d.cep);
+            set('endereco_cidade', d.cidade);
+            set('endereco_uf', d.uf);
+            const linha = [d.logradouro, d.numero].filter(Boolean).join(', ')
+                + (d.bairro ? ' - ' + d.bairro : '')
+                + (d.cidade ? ' - ' + d.cidade : '') + (d.uf ? '/' + d.uf : '');
+            set('endereco', linha);
+            avisar(d.razao_social
+                   + (d.situacao && d.situacao.toUpperCase() !== 'ATIVA'
+                      ? ' — ATENÇÃO: situação ' + d.situacao : ' — dados preenchidos.'),
+                   d.situacao && d.situacao.toUpperCase() !== 'ATIVA');
+        } catch (e) {
+            avisar('Falha na consulta — tente de novo.', true);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = rotulo;
+        }
+    });
+});
+</script>
 {% endblock %}
