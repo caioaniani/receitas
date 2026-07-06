@@ -2378,3 +2378,52 @@ h6 { font-weight: 600; text-transform: lowercase; }
     box-shadow: var(--shadow-sm);
 }
 
+
+/* ═══ Varredura mobile (06/07/2026) — pedida pelo dono ═══
+   Tabela solta rola no próprio lugar (o app.js embrulha em
+   .mobile-table-scroll), barras de botões quebram linha, inputs com 16px
+   (iOS não dá zoom ao focar) e dicas longas recolhidas com toque. */
+.mobile-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767.98px) {
+    /* iOS dá zoom automático em input com fonte < 16px — mata o zoom. */
+    .form-control, .form-select { font-size: 16px; }
+
+    /* Abas nunca empilham: viram trilho horizontal rolável. */
+    .nav-tabs { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; }
+    .nav-tabs .nav-link { white-space: nowrap; }
+
+    /* Barra de botões/filtros (d-flex) quebra linha em vez de esticar o
+       body — causa real dos "vazamentos" em congelados/itens-vendidos. */
+    .main-content .d-flex { flex-wrap: wrap; }
+
+    /* Célula de tabela mais compacta no dedo. */
+    .table > :not(caption) > * > * { padding: 0.45rem 0.5rem; }
+
+    /* Dica explicativa longa: recolhida, expande no toque (JS alterna). */
+    .dica-recolhe {
+        max-height: 5.2em;
+        overflow: hidden;
+        position: relative;
+        cursor: pointer;
+    }
+    .dica-recolhe::after {
+        content: '… toque para ler tudo';
+        position: absolute;
+        right: 10px;
+        bottom: 2px;
+        font-weight: 600;
+        color: #0d6efd;
+        background: linear-gradient(90deg, transparent, #fcfcfd 35%);
+        padding-left: 30px;
+        font-size: 0.85em;
+    }
+    .dica-recolhe.aberta { max-height: none; }
+    .dica-recolhe.aberta::after { content: ''; }
+
+    /* Alvo de toque: botão pequeno dentro de tabela não fica minúsculo. */
+    .table .btn-sm { padding: 0.35rem 0.6rem; }
+}
