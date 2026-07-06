@@ -500,22 +500,7 @@ def pedidos_semana_gerar():
         flash('Nada a criar nem atualizar (grade igual aos pedidos existentes).',
               'info')
 
-    # Preserva a visão (horizonte/janela/inicio) E a tela de origem — na geração
-    # por loja você continua na MESMA tela pra mandar a próxima (senão gerar na
-    # média/estoque te jogava na automática).
-    try:
-        horizonte = max(1, min(int(request.form.get('horizonte', 7)), 14))
-        janela = max(1, min(int(request.form.get('janela', 6)), 26))
-        inicio = max(0, min(int(request.form.get('inicio', 0)), 14))
-    except (TypeError, ValueError):
-        horizonte, janela, inicio = 7, 6, 0
-    # Default = média semanal (tela principal desde 01/07; a automática foi
-    # aposentada). origem só troca pra estoque quando veio de lá.
-    destino = ('producao.pedidos_semana_estoque'
-               if request.form.get('origem') == 'estoque'
-               else 'producao.pedidos_semana_media')
-    return redirect(url_for(destino, horizonte=horizonte, janela=janela,
-                            inicio=inicio))
+    return _voltar()
 
 
 @producao_bp.route('/painel/debug')
