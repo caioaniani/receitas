@@ -27,6 +27,7 @@ from app.models import (
     Produto,
     Receita,
     VendaB2B,
+    VendaB2BItem,
     VendaB2BParcela,
 )
 from app.services import tiny_nf_b2b
@@ -125,6 +126,115 @@ def cliente_editar(cid):
     db.session.commit()
     flash(f'{c.nome} atualizado.', 'success')
     return redirect(url_for('b2b.clientes'))
+
+
+@b2b_bp.route('/clientes/<int:cid>/precos', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def cliente_precos(cid):
+    """Tabela de preço POR CLIENTE (o atacado cobra valores diferentes por
+    cliente). Preço específico VENCE o atacado padrão na venda; vazio =
+    remove a linha e o cliente volta pro padrão (com o desconto %)."""
+    from decimal import Decimal, InvalidOperation
+
+    cliente = ClienteB2B.query.get_or_404(cid)
+
+    if request.method == 'POST':
+        alterados = removidos = 0
+        for chave, valor in request.form.items():
+            if not chave.startswith('preco['):        # preco[receita:5]
+                continue
+            ref = chave[6:-1]
+            kind, _, sid = ref.partition(':')
+            if kind not in ('receita', 'produto') or not sid.isdigit():
+                continue
+            linha = PrecoClienteB2B.query.filter_by(
+                cliente_id=cid, kind=kind, item_id=int(sid)).first()
+            valor = (valor or '').strip().replace(',', '.')
+            if not valor:
+                if linha:
+                    db.session.delete(linha)
+                    removidos += 1
+                continue
+            try:
+                preco = Decimal(valor)
+            except InvalidOperation:
+                flash(f'Preço inválido em {ref} — ignorado.', 'warning')
+                continue
+            if preco <= 0:
+                flash(f'Preço deve ser maior que zero ({ref}) — ignorado.',
+                      'warning')
+                continue
+            if not linha:
+                linha = PrecoClienteB2B(cliente_id=cid, kind=kind,
+                                        item_id=int(sid))
+                db.session.add(linha)
+            if linha.preco != preco:
+                linha.preco = preco
+                linha.atualizado_por_id = current_user.id
+                alterados += 1
+        db.session.commit()
+        flash(f'Tabela de {cliente.nome}: {alterados} preço(s) salvos, '
+              f'{removidos} removido(s).', 'success')
+        return redirect(url_for('b2b.cliente_precos', cid=cid))
+
+    # Universo: catálogo de atacado + itens já vendidos a ESSE cliente +
+    # itens que já têm preço específico (não some da tela ao tirar o preço
+    # de atacado do cadastro).
+    especificos = {(pc.kind, pc.item_id): pc
+                   for pc in PrecoClienteB2B.query.filter_by(cliente_id=cid)}
+    ultimos = {}   # último preço praticado pra esse cliente (referência)
+    for it, venda in (db.session.query(VendaB2BItem, VendaB2B)
+                      .join(VendaB2B, VendaB2BItem.venda_id == VendaB2B.id)
+                      .filter(VendaB2B.cliente_id == cid,
+                              VendaB2B.status == 'ativa')
+                      .order_by(VendaB2B.data_venda.asc(), VendaB2B.id.asc())
+                      .all()):
+        kind = 'receita' if it.receita_id else 'produto'
+        ultimos[(kind, it.receita_id or it.produto_id)] = float(
+            it.preco_unitario or 0)
+
+    itens = []
+    vistos = set()
+
+    def _add(kind, obj, atacado):
+        chave = (kind, obj.id)
+        if chave in vistos:
+            return
+        vistos.add(chave)
+        esp = especificos.get(chave)
+        com_desc = None
+        if atacado and cliente.desconto_percentual:
+            com_desc = round(
+                atacado * (1 - cliente.desconto_percentual / 100.0), 2)
+        itens.append({
+            'ref': f'{kind}:{obj.id}', 'nome': obj.nome,
+            'categoria': getattr(obj, 'categoria', '') or '',
+            'atacado': atacado, 'com_desconto': com_desc,
+            'ultimo': ultimos.get(chave),
+            'preco': (float(esp.preco) if esp else None),
+        })
+
+    for r in Receita.query.filter(Receita.arquivada_em.is_(None),
+                                  Receita.preco_venda.isnot(None),
+                                  Receita.preco_venda > 0
+                                  ).order_by(Receita.nome).all():
+        _add('receita', r, r.preco_venda)
+    for p in Produto.query.filter(Produto.ativo.is_(True),
+                                  Produto.preco_atacado.isnot(None),
+                                  Produto.preco_atacado > 0
+                                  ).order_by(Produto.nome).all():
+        _add('produto', p, p.preco_atacado)
+    faltantes = ({k for k in ultimos} | {k for k in especificos}) - vistos
+    for kind, iid in sorted(faltantes):
+        obj = (Receita.query.get(iid) if kind == 'receita'
+               else Produto.query.get(iid))
+        if obj:
+            _add(kind, obj, (obj.preco_venda if kind == 'receita'
+                             else obj.preco_atacado) or None)
+
+    return render_template('b2b/cliente_precos.html', cliente=cliente,
+                           itens=itens)
 
 
 @b2b_bp.route('/api/cnpj/<cnpj>')
