@@ -1922,7 +1922,11 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             # uma. So adianta (dia > d) — nunca atrasa.
             for d in range(n):
                 while carga[d] < alvo:
-                    cands = sorted((it for it in itens_eq if it['dia'] > d),
+                    # Fornada especial nunca e adiantada pra dia fora de
+                    # qui/sex/sab (a nivelacao encheria uma segunda ociosa).
+                    cands = sorted((it for it in itens_eq if it['dia'] > d
+                                    and producao_permitida_no_dia(
+                                        it['rec'], dias_prod[d])),
                                    key=lambda it: -carga[it['dia']])
                     if not cands:
                         break
