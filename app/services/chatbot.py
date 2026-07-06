@@ -339,13 +339,18 @@ def carregar_historico(conv_id):
         return []
 
 
-def salvar_historico(conv_id, historico, resposta):
+def salvar_historico(conv_id, historico, resposta, *, handoff=False):
     """Persiste o turno no nosso banco: o historico efetivo (que JA inclui a
     msg atual do cliente) + a resposta do bot. So texto — imagens nao vao pro
     store (o `_build_messages` so usa imagem da ULTIMA msg, que sempre vem
-    fresca do webhook). Capa nas ultimas MAX_HIST_STORE."""
+    fresca do webhook). Capa nas ultimas MAX_HIST_STORE.
+
+    `handoff=True` marca a resposta com `handoff_em` (timestamp) — e o que o
+    `handoff_recente` le pra NAO transferir de novo a mesma conversa minutos
+    depois (caso Simone 06/07/2026: dois handoffs na mesma conversa)."""
     from app.extensions import db
     from app.models import ChatbotConversa
+    from app.utils import agora
     msgs = []
     for m in (historico or []):
         role = m.get('role')
@@ -355,9 +360,15 @@ def salvar_historico(conv_id, historico, resposta):
         if not c and m.get('imagens'):
             c = '[imagem enviada]'
         if c:
-            msgs.append({'role': role, 'content': c})
+            entrada = {'role': role, 'content': c}
+            if m.get('handoff_em'):        # preserva marcador de turnos velhos
+                entrada['handoff_em'] = m['handoff_em']
+            msgs.append(entrada)
     if resposta and resposta.strip():
-        msgs.append({'role': 'assistant', 'content': resposta.strip()})
+        entrada = {'role': 'assistant', 'content': resposta.strip()}
+        if handoff:
+            entrada['handoff_em'] = agora().isoformat()
+        msgs.append(entrada)
     msgs = msgs[-MAX_HIST_STORE:]
     try:
         conv = ChatbotConversa.query.filter_by(conv_id=str(conv_id)).first()
