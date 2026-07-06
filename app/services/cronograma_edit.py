@@ -151,7 +151,7 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
     crono2 = cronograma_producao(horizonte_dias=horizonte_dias,
                                  janela_semanas=janela_semanas,
                                  inicio_offset_dias=inicio_offset_dias,
-                                 equilibrar=equilibrar)
+                                 equilibrar=equilibrar, motor=motor)
     rr2 = next((x for x in crono2['receitas']
                 if x['receita_id'] == int(receita_id)), None)
     if rr2 is None:                                   # defensivo — existia acima
