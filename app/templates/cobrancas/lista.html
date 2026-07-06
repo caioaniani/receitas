@@ -57,7 +57,7 @@
     <div class="card-body p-0"><div style="overflow-x:auto;">
     <table class="table table-sm mb-0">
         <thead><tr><th></th><th>Pagador</th><th>Nosso nº</th><th>Venc.</th>
-            <th class="text-end">Valor</th><th>Status</th><th>CEP</th><th></th></tr></thead>
+            <th class="text-end">Valor</th><th>Status</th><th>Endereço / CEP</th><th></th></tr></thead>
         <tbody>
         {% for c in abertas %}
         <tr class="{% if c.vencida %}table-warning{% endif %}">
@@ -69,18 +69,34 @@
             <td>{{ c.vencimento.strftime('%d/%m/%Y') }}{% if c.vencida %} <span class="badge bg-warning text-dark">vencida</span>{% endif %}</td>
             <td class="text-end">R$ {{ '%.2f'|format(c.valor) }}</td>
             <td><span class="badge bg-{{ 'secondary' if c.status == 'pendente' else 'info' if c.status == 'remessa' else 'primary' }}">{{ c.status }}</span>
-                {% if c.pix_copia_cola %}<span class="badge bg-success" title="QR Pix recebido">PIX</span>{% endif %}</td>
+                {% if c.pix_copia_cola %}<span class="badge bg-success" title="QR Pix recebido">PIX</span>{% endif %}
+                {% if not (c.pagador_endereco or '').strip() %}<span class="badge bg-danger" title="O Sicredi rejeita boleto sem endereço do pagador">sem endereço</span>{% endif %}</td>
             <td>{% if c.status == 'pendente' %}
+                <input type="text" class="form-control form-control-sm mb-1" style="min-width:220px;"
+                       form="edit-{{ c.id }}" name="pagador_endereco"
+                       value="{{ c.pagador_endereco or '' }}" placeholder="Endereço (obrigatório)">
                 <input type="text" class="form-control form-control-sm" style="width:110px;"
                        form="edit-{{ c.id }}" name="pagador_cep"
                        value="{{ c.pagador_cep or '' }}" placeholder="CEP">
-                {% else %}{{ c.pagador_cep or '—' }}{% endif %}</td>
+                {% else %}<span class="small">{{ c.pagador_endereco or '—' }}<br>{{ c.pagador_cep or '—' }}</span>{% endif %}</td>
             <td class="text-end text-nowrap">
                 {% if c.status == 'pendente' %}
                 <button class="btn btn-sm btn-outline-secondary" form="edit-{{ c.id }}"
-                        title="Salvar CEP/edições">salvar</button>
+                        title="Salvar endereço/CEP/edições">salvar</button>
                 <button class="btn btn-sm btn-outline-danger" form="del-{{ c.id }}"
                         onclick="return confirm('Excluir esta cobrança pendente?');">×</button>
+                {% endif %}
+                {% if c.nosso_numero %}
+                <a class="btn btn-sm btn-outline-dark" target="_blank"
+                   href="{{ url_for('cobrancas.boleto_pdf', id=c.id) }}"
+                   title="Boleto em PDF (ficha de compensação)">
+                    <i class="bi bi-filetype-pdf"></i> boleto</a>
+                {% endif %}
+                {% if c.status == 'remessa' %}
+                <button class="btn btn-sm btn-outline-warning" form="vp-{{ c.id }}"
+                        title="O banco devolveu o arquivo? Volte pra pendente, corrija e gere NOVA remessa."
+                        onclick="return confirm('Voltar esta cobrança pra pendente pra corrigir e gerar NOVA remessa?');">
+                    voltar</button>
                 {% endif %}
             </td>
         </tr>
