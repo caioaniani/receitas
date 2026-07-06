@@ -88,7 +88,9 @@ def test_consultar_pedido_online_vem_com_valores_rotulados(app):
     with app.app_context():
         p = PedidoOnline(codigo='TESTELBL1', status='pago',
                          nome_cliente='Simone', telefone_cliente='11988887777',
-                         frete_valor=10, valor_total=148)
+                         email_cliente='simone@example.com',
+                         modo_entrega='agendada',
+                         subtotal=138, frete_valor=10, valor_total=148)
         db.session.add(p)
         db.session.flush()
         db.session.add(PedidoOnlineItem(pedido_id=p.id, nome='Sourdough Integral',
