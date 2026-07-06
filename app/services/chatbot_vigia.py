@@ -659,6 +659,14 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
     if not disponivel():
         return {'pulou': 'vigia desligado'}
 
+    # Conversa que e so marcacao de story do IG: nao ha cliente esperando
+    # nem venda em risco — nao gasta modelo nem alerta (dono, 06/07/2026).
+    ultima_user = next((m for m in reversed(historico or [])
+                        if m.get('role') == 'user'
+                        and (m.get('content') or '').strip()), None)
+    if ultima_user and _e_mencao_story(ultima_user.get('content')):
+        return {'pulou': 'mencao de story do Instagram'}
+
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
                or current_app.config.get('ANTHROPIC_API_KEY'))
     if not api_key:
