@@ -96,6 +96,10 @@
 <script>
 (function() {
     var PRECOS = {{ precos_map|tojson }};
+    // Tabela de preco POR CLIENTE: {cliente_id: {'receita:5': 9.5}}.
+    // Preco especifico VENCE o atacado padrao e NAO leva o desconto % em
+    // cima (o valor ja e final).
+    var PRECOS_CLIENTE = {{ precos_cliente_map|tojson }};
     var ESTOQUE = {{ estoque_map|tojson }};
     var SEED_ITENS = {{ itens_seed|tojson }};
     var SEED_PARCELAS = {{ parcelas_seed|tojson }};
