@@ -468,7 +468,7 @@
                     <span class="cel-forn">{% if c.fornadas is not none %}{{ c.fornadas }} fornada(s){% elif c.qtd %}un{% endif %}</span>
                 </td>
                 {% endfor %}
-                <td>
+                <td class="tot-col">
                     <strong>{{ r.total }}</strong>
                     {% if r.editado %}<span class="tag-edit" title="Editado manualmente">✏️</span>
                     {% if r.override_stale %}<span class="tag-stale" title="Edição de {{ r.override_desde }} pode estar desatualizada: o cálculo agora sugere {{ r.override_sugerido }} (você fixou {{ r.total }}). Revise ou resete.">⚠️</span>{% endif %}
