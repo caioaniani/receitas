@@ -194,15 +194,16 @@ def _aplicar_pares(pares, user_id=None, canal='site'):
             'total': len(pares)}
 
 
-def sincronizar_sugestoes(user_id=None):
-    """Busca o catálogo do Tiny (API) e mapeia por nome. Match exato confirma
-    automático; parecido vira sugestão. Devolve contadores ou {erro}."""
+def sincronizar_sugestoes(user_id=None, canal='site'):
+    """Busca o catálogo do Tiny (API) e mapeia por nome os itens do canal.
+    Match exato confirma automático; parecido vira sugestão. Devolve
+    contadores ou {erro}."""
     produtos_tiny = tiny.listar_produtos()
     if not produtos_tiny:
         return {'erro': 'Tiny não respondeu (token ausente ou rede). '
                 'Dica: você pode importar a planilha de produtos do Tiny.'}
     pares = [(p['nome'], p['sku']) for p in produtos_tiny if p.get('sku')]
-    res = _aplicar_pares(pares, user_id=user_id)
+    res = _aplicar_pares(pares, user_id=user_id, canal=canal)
     res['total_tiny'] = len(produtos_tiny)
     return res
 
