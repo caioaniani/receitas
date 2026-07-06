@@ -20,7 +20,15 @@ from sqlalchemy.orm import joinedload
 from app.blueprints.b2b import b2b_bp
 from app.decorators import admin_required, owner_required
 from app.extensions import db
-from app.models import ClienteB2B, EstoqueProducao, Produto, Receita, VendaB2B, VendaB2BParcela
+from app.models import (
+    ClienteB2B,
+    EstoqueProducao,
+    PrecoClienteB2B,
+    Produto,
+    Receita,
+    VendaB2B,
+    VendaB2BParcela,
+)
 from app.services import tiny_nf_b2b
 from app.services import vendas_b2b as svc
 from app.utils import hoje
@@ -163,6 +171,12 @@ def _catalogo_venda():
     for p in produtos:
         if p.preco_atacado:
             precos_map[f'produto:{p.id}'] = p.preco_atacado
+    # Preco ESPECIFICO por cliente (tabela PrecoClienteB2B) — vence o
+    # atacado padrao no form; o JS troca quando o cliente e selecionado.
+    precos_cliente_map = {}
+    for pc in PrecoClienteB2B.query.all():
+        (precos_cliente_map.setdefault(pc.cliente_id, {})
+         )[f'{pc.kind}:{pc.item_id}'] = float(pc.preco)
     # Estoque atual por item (pra UI mostrar saldo)
     estoque_map = {}
     for ep in EstoqueProducao.query.all():
