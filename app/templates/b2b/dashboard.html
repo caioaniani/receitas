@@ -10,6 +10,10 @@
         <a href="{{ url_for('b2b.vendas') }}" class="btn btn-outline-secondary btn-sm">Todas as vendas</a>
         <a href="{{ url_for('b2b.clientes') }}" class="btn btn-outline-secondary btn-sm">Clientes</a>
         <a href="{{ url_for('b2b.contas_receber') }}" class="btn btn-outline-warning btn-sm">Contas a receber</a>
+        {% if current_user.is_owner %}
+        <a href="{{ url_for('b2b.tiny_skus') }}" class="btn btn-outline-secondary btn-sm"
+           title="Mapeamento de SKU do cadastro B2B do Tiny (NF-e)">SKUs do Tiny</a>
+        {% endif %}
     </div>
 </div>
 
