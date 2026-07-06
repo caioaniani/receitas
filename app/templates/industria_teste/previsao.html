@@ -78,6 +78,7 @@
         <span class="prev-num">
             firme <span class="firme">{{ d.firme }}</span> ·
             previsto <span class="previsto">{{ ('%g'|format(d.previsto))|replace('.', ',') }}/dia</span>
+            {% if motor == 'maior' %}<span class="badge bg-light text-dark border" title="Fonte que venceu neste dia">{{ 'vendas' if d.origem == 'vendas' else 'pedidos' }}</span>{% endif %}
             {% if d.usado == 'firme' %}<span class="usado-tag firme-tag">usa firme</span>
             {% else %}<span class="usado-tag">usa previsto</span>{% endif %}
         </span>
