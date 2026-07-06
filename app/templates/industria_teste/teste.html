@@ -233,7 +233,49 @@
     </a>
 </div>
 
-<div class="alert alert-light border small">
+{% if crono.receitas %}
+{% set dia0 = crono.dias[0] %}
+{% set est0 = estados.get(dia0.data) %}
+<div class="kpi-strip">
+    <div class="kpi" title="Unidades de produto final programadas pro primeiro dia da janela (insumos como massa ficam fora da soma).">
+        <span class="kpi-num">{{ totais_dia[0].un }} un</span>
+        <span class="kpi-lbl">produzir {{ 'hoje' if dia0.data == crono.hoje else dia0.label }}{% if totais_dia[0].fornadas %} · {{ totais_dia[0].fornadas }} fornada(s){% endif %}</span>
+        {% if est0 and est0.enviado %}<span class="kpi-estado est-env">📤 enviado ao padeiro</span>
+        {% elif est0 %}<span class="kpi-estado est-apr">✓ aprovado (rascunho)</span>
+        {% else %}<span class="kpi-estado est-nada">ordem não enviada</span>{% endif %}
+    </div>
+    {% if resumo.risco_n %}
+    <a class="kpi kpi-alerta" href="#alerta-falta">
+        <span class="kpi-num">🚨 {{ resumo.risco_n }}</span>
+        <span class="kpi-lbl">receita(s) com entrega em risco</span>
+        <span class="kpi-sub">pedido programado sem produto — ver detalhes ↓</span>
+    </a>
+    {% else %}
+    <div class="kpi kpi-ok" title="Nenhum pedido de loja programado fica sem produto, produzindo como está no cronograma.">
+        <span class="kpi-num">✓</span>
+        <span class="kpi-lbl">nenhuma entrega em risco</span>
+    </div>
+    {% endif %}
+    <a class="kpi {{ 'kpi-alerta' if resumo.pend_vencido }}"
+       href="{{ url_for('industria_teste.auditoria') }}"
+       title="Produção mandada e ainda NÃO confirmada pelo padeiro (projeção — não é estoque real). Clique pra abrir a auditoria.">
+        <span class="kpi-num">{{ resumo.pend_agendado + resumo.pend_vencido }} un</span>
+        <span class="kpi-lbl">aguardando confirmação do padeiro</span>
+        <span class="kpi-sub">{% if resumo.pend_vencido %}⚠ {{ resumo.pend_vencido }} un vencida(s) — auditoria →{% else %}tudo no prazo · auditoria →{% endif %}</span>
+    </a>
+    {% if resumo.editados %}
+    <div class="kpi" title="Receitas cujo total foi fixado à mão (o ✏️ nas linhas). O ↺ limpar edições manuais volta tudo pro cálculo.">
+        <span class="kpi-num">✏️ {{ resumo.editados }}</span>
+        <span class="kpi-lbl">receita(s) com edição manual</span>
+        {% if resumo.stale_n %}<span class="kpi-sub">⚠️ {{ resumo.stale_n }} possivelmente desatualizada(s)</span>{% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<details class="como-funciona">
+    <summary>ℹ️ Como funciona esta tela</summary>
+    <p class="mb-1 mt-2">
     Painel da <strong>administração</strong>. A produção é distribuída
     <strong>por dia</strong> acompanhando as entregas (deslocada pelo lead da
     receita) — um pouco de cada, sem faltar nem sobrar; o estoque pronto cobre
@@ -245,7 +287,18 @@
     produção” num dia já enviado, pra empurrar suas edições). A tela
     <strong>“✏️ editar”</strong> do padeiro é mão dupla: o que você muda lá
     reflete aqui. O estoque e a matéria-prima só mexem quando o padeiro produz.
-</div>
+    </p>
+    <p class="mb-0">
+    Coluna amarela = <strong>hoje</strong> (o que a indústria produz agora).
+    Receitas com <span class="tag-lead">Nd</span> levam N dias pra ficar prontas,
+    então o dia de produção é antecipado em relação à entrega. O ✏️ marca linha
+    editada à mão (↺ volta à sugestão); <span class="tag-insumo">insumo</span> é
+    calculado a partir dos produtos finais (edite o produto, não o insumo);
+    <span class="tag-retorno">♻️ capado ao retorno</span> segue a política "só de
+    sobras" (produz até o estoque devolvido cobrir). No rodapé, o total de cada
+    dia — o dia mais carregado fica destacado.
+    </p>
+</details>
 
 {% if crono.alertas_falta %}
 <div class="alerta-falta">
