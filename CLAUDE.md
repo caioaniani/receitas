@@ -1089,6 +1089,44 @@ recebimento; o bot **so le** (nunca posta), a IA extrai os dados e cria uma
 - Env `SLACK_CANAIS_NF` = CSV dos IDs dos canais. `ANTHROPIC_API_KEY` e Dropbox
   ja configurados (reusados do copilot/entregas).
 
+## Cobrancas Sicredi (boleto hibrido via CNAB 400) — homologacao em curso
+
+Gestao de boletos das parcelas B2B direto no sistema (04-06/07/2026). Banco
+748 (Sicredi Vale do Piquiri); contatos: Luiz Henrique (homologacao),
+Marines F. Kisler (validacao dos arquivos).
+
+- **Tela**: `/cobrancas` (admin; link no macro `financeiro`). Fluxo: parcela
+  B2B -> "Gerar cobranca" (snapshot do pagador do ClienteB2B) -> completar
+  endereco+CEP -> marcar -> "Gerar remessa" (`REMnnnnn.CRM`) -> subir no
+  Sicredi -> upload do RETORNO da baixa (liquidacao quita a parcela B2B
+  junto) e traz o QR Pix (registro tipo 8).
+- **Services**: `app/services/sicredi_cnab.py` (remessa/retorno CNAB 400,
+  nosso numero AA+B+NNNNN+DV mod11, sequenciais nunca repetem) e
+  `app/services/sicredi_boleto.py` (fase 2: codigo de barras 44 pos, campo
+  livre §10.3, DV geral mod11 §10.5, fator de vencimento §10.7 com ciclo
+  novo pos-22/02/2025, linha digitavel mod10 §10.8.3, PDF com ITF "2 de 5
+  intercalado" 103x13mm a 0,5cm da margem + QR Pix quando
+  `pix_copia_cola` chegar). Manuais completos extraidos:
+  `scratchpad/cnab400.txt` do container (se sumir, pedir os PDFs ao dono).
+- **Fixtures OFICIAIS travadas em `tests/test_cobrancas_sicredi.py`**:
+  DV nosso numero (ag 0101/posto 19/benef 00207/21-1-03527 -> 5) e linha
+  digitavel do boleto-modelo do banco
+  `74891.12115 03527.501013 19002.071041 6 85810000018000` — o pipeline
+  inteiro (campo livre, DV geral, mod10) reproduz essa linha. NAO mexer nas
+  formulas sem os fixtures passarem.
+- **Config por env** (defaults no `_cfg()`): SICREDI_AGENCIA=0726,
+  SICREDI_POSTO=61, SICREDI_BENEFICIARIO=34325, SICREDI_CNPJ, SICREDI_BYTE=2,
+  SICREDI_BENEF_NOME (nome impresso no boleto — CONFIRMAR razao social).
+- **Homologacao (06/07/2026)**: 1a remessa DEVOLVIDA pelo banco com 1 ajuste:
+  `enderecoPagador` (275-314 do detalhe) e OBRIGATORIO e foi vazio. Fix:
+  `validar_para_remessa` agora recusa endereco vazio; tela edita endereco
+  inline; acao "voltar pra pendente" (status remessa/rejeitada -> pendente,
+  MANTEM nosso numero) permite corrigir e gerar NOVA remessa (novo
+  sequencial). Titulo REGISTRADO nao volta pra pendente (dessincronizaria
+  com o banco — precisa instrucao de baixa, ainda nao implementada).
+  Proximo passo do dono: corrigir endereco da cobranca de homologacao,
+  gerar remessa nova + boleto PDF e mandar pra Marines validar.
+
 ## Slack Bot (copilot via DM/@mention)
 
 Bot reutiliza 100% das tools do copilot. DM direta ou @mention em canal permitido
