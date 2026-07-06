@@ -826,6 +826,8 @@
         if (alerta) {
             ev.preventDefault();
             const rid = alerta.dataset.rid;
+            // Garante a linha visível: a busca poderia estar escondendo-a.
+            if (busca && busca.value) { busca.value = ''; aplicarFiltros(); }
             const det = document.querySelector(
                 'tr.detalhe-row[data-rid="' + rid + '"]');
             if (det) det.hidden = false;
