@@ -2420,6 +2420,7 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
             # Fracionario (1 casa): "em media 0,4/dia" e honesto; o total
             # (ceil) mostra o inteiro acionavel. usado compara com a fracao.
             'previsto': round(previsto, 1), 'fonte': fonte,
+            'origem': origem,     # fonte que venceu o dia (motor 'maior')
             'usado': 'firme' if firme_i >= previsto else 'previsto',
             'previsto_lojas': previsto_lojas, 'historico': historico,
         })
