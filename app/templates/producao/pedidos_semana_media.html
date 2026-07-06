@@ -90,12 +90,18 @@
     são de <strong>entrega</strong>.
 </div>
 
-<form method="POST" action="{{ url_for('producao.pedidos_semana_gerar') }}">
+<form method="POST" action="{{ url_for('producao.pedidos_semana_gerar') }}"
+      id="form-gerar-grade">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="origem" value="media">
     <input type="hidden" name="horizonte" value="{{ horizonte }}">
     <input type="hidden" name="janela" value="{{ janela }}">
     <input type="hidden" name="inicio" value="{{ inicio }}">
+    {# Ação explícita, preenchida pelo JS no clique (_gerar_acao_js.html) —
+       o name/value do botão clicado se perde no Safari quando há confirm(). #}
+    <input type="hidden" name="so_loja" value="">
+    <input type="hidden" name="so_dia" value="">
+    <input type="hidden" name="gerar_todas" value="">
 
     {% if grade.lojas %}
     {% for loja in grade.lojas %}
