@@ -802,6 +802,9 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
         # "Ok"/"obrigada"/"valeu" = encerramento, cliente nao espera resposta.
         if _e_fechamento(historico[-1].get('content')):
             continue
+        # Marcacao em story do IG nao e cliente esperando (dono, 06/07/2026).
+        if _e_mencao_story(historico[-1].get('content')):
+            continue
         avaliadas += 1
         ultima = (historico[-1].get('content') or '')[:120]
         nome = c.get('nome_contato') or '(sem nome)'
