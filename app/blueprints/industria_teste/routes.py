@@ -261,25 +261,21 @@ def aprovar():
     padeiro)."""
     from app.services.producao import PlanoJaEnviadoError, aprovar_plano_do_dia
 
-    horizonte, janela = _horizonte_janela()
-    inicio = _inicio_offset()
-    equilibrar = _equilibrar()
     try:
         data_alvo = date.fromisoformat(request.form.get('data', ''))
     except (TypeError, ValueError):
         flash('Data inválida.', 'warning')
-        return redirect(url_for('industria_teste.index', horizonte=horizonte,
-                                janela=janela, inicio=inicio,
-                                equilibrar=1 if equilibrar else None))
+        return redirect(url_for('industria_teste.index', **_params_visao()))
 
-    # IMPORTANTE: aprovar com o MESMO equilibrar da tela — senao o que desce pro
-    # padeiro nao bate com o que voce viu/equilibrou.
+    # IMPORTANTE: aprovar com o MESMO equilibrar/motor da tela — senao o que
+    # desce pro padeiro nao bate com o que voce viu/equilibrou.
     try:
         plano = aprovar_plano_do_dia(data_alvo, current_user.id,
-                                     horizonte_dias=horizonte,
-                                     janela_semanas=janela,
-                                     inicio_offset_dias=inicio,
-                                     equilibrar=equilibrar)
+                                     horizonte_dias=_horizonte_janela()[0],
+                                     janela_semanas=_horizonte_janela()[1],
+                                     inicio_offset_dias=_inicio_offset(),
+                                     equilibrar=_equilibrar(),
+                                     motor=_motor())
     except PlanoJaEnviadoError:
         # Garantia do dono (04/07/2026): ordem ENVIADA nunca muda por caminho
         # implícito — só pelo "🔄 atualizar produção" explícito daquele dia.
@@ -287,18 +283,14 @@ def aprovar():
               'ordem enviada. Pra aplicar o grid atual na produção, use '
               '"🔄 atualizar produção" naquele dia.'
               % data_alvo.strftime('%d/%m'), 'warning')
-        return redirect(url_for('industria_teste.index', horizonte=horizonte,
-                                janela=janela, inicio=inicio,
-                                equilibrar=1 if equilibrar else None))
+        return redirect(url_for('industria_teste.index', **_params_visao()))
     if plano:
         flash('Plano de %s aprovado (%d receita(s)). Revise/edite e clique em '
               '"enviar ao padeiro" quando estiver pronto.'
               % (data_alvo.strftime('%d/%m'), len(plano.itens)), 'success')
     else:
         flash('Nada a produzir em %s.' % data_alvo.strftime('%d/%m'), 'info')
-    return redirect(url_for('industria_teste.index', horizonte=horizonte,
-                            janela=janela, inicio=inicio,
-                            equilibrar=1 if equilibrar else None))
+    return redirect(url_for('industria_teste.index', **_params_visao()))
 
 
 @industria_teste_bp.route('/enviar', methods=['POST'])
