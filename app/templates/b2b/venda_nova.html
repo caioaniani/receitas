@@ -119,11 +119,16 @@
         return opt ? parseFloat(opt.dataset.desc || '0') : 0;
     }
 
+    function sugestaoPreco(ref) {
+        var doCliente = (PRECOS_CLIENTE[selCliente.value] || {})[ref];
+        if (doCliente !== undefined) return { preco: doCliente, desc: '' };
+        return { preco: PRECOS[ref] || 0, desc: getDescCliente() || '' };
+    }
+
     function aplicarItem(tr, ref) {
-        var preco = PRECOS[ref] || 0;
-        var desc = getDescCliente();
-        tr.querySelector('.preco').value = preco.toFixed(2);
-        tr.querySelector('.desc').value = desc || '';
+        var s = sugestaoPreco(ref);
+        tr.querySelector('.preco').value = Number(s.preco).toFixed(2);
+        tr.querySelector('.desc').value = s.desc;
         tr.querySelector('.estoque-cel').textContent = (ESTOQUE[ref] !== undefined) ? ESTOQUE[ref] : '—';
         atualizar(tr);
     }
