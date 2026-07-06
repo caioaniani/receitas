@@ -538,16 +538,23 @@
             </tr>
             {% endfor %}
         </tbody>
+        <tfoot>
+            <tr>
+                <td class="rec-col" title="Unidades de produto final (insumos como massa ficam fora da soma) + fornadas de todas as linhas. Sempre do plano inteiro, independente dos filtros.">Total do dia</td>
+                {% for t in totais_dia %}
+                <td class="{% if loop.index0 == pico_idx %}dia-pico{% endif %}{% if crono.dias[loop.index0].data == crono.hoje %} hoje-col{% endif %}"
+                    data-data="{{ crono.dias[loop.index0].data }}"
+                    {% if loop.index0 == pico_idx %}title="Dia mais carregado do horizonte — o 'equilibrar carga' tenta aliviar isto"{% endif %}>
+                    <span class="tot-dia-un">{{ t.un }} un</span>
+                    <span class="tot-dia-forn">{{ t.fornadas or 0 }} fornada(s)</span>
+                </td>
+                {% endfor %}
+                <td class="tot-col"></td>
+            </tr>
+        </tfoot>
     </table>
   </div>
 </div>
-<p class="text-muted small mt-2">
-    Coluna amarela = <strong>hoje</strong> (o que a indústria produz agora).
-    Receitas com <span class="tag-lead">Nd</span> levam N dias pra ficar prontas,
-    então o dia de produção é antecipado em relação à entrega.
-    <strong>Edite qualquer célula</strong> e os outros dias se reajustam sozinhos
-    mantendo o total da receita; o ✏️ marca o que você mexeu (↺ volta à sugestão).
-</p>
 {% endif %}
 
 <script>
