@@ -1288,6 +1288,44 @@ def test_rota_totais_do_dia_excluem_insumo(app, admin_user):
     assert '<span class="tot-dia-un">100 un</span>' in html
 
 
+def test_rota_header_do_dia_com_menu(app, admin_user):
+    """Cabeçalho do dia: ação primária visível (📤 enviar) + menu ⋯ com as
+    secundárias — antes eram 2-3 botões empilhados repetidos por coluna."""
+    loja = _loja()
+    r = _receita()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=2), r, 50)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    html = client.get('/telaindustriateste/').get_data(as_text=True)
+    assert 'btn-dia-menu' in html
+    assert '📤 enviar' in html                      # primária visível
+    assert 'só aprovar (rascunho pra revisar)' in html   # secundária no menu
+
+
+def test_rota_header_dia_enviado_menu_completo(app, admin_user):
+    """Dia ENVIADO: badge visível; atualizar/editar/excluir vivem no menu ⋯
+    (o 'atualizar produção' explícito continua existindo — garantia do dono)."""
+    from app.services.producao import aprovar_plano_do_dia, enviar_plano_do_dia
+
+    loja = _loja()
+    r = _receita()
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 30)
+    aprovar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+    enviar_plano_do_dia(d2)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    html = client.get('/telaindustriateste/').get_data(as_text=True)
+    assert '📤 enviado' in html
+    assert 'atualizar produção (aplica o grid)' in html
+    assert 'excluir ordem' in html
+    assert 'editar a ordem' in html
+
+
 def test_rota_renderiza_badge_capado_ao_retorno(app, admin_user):
     """Receita capada pela política 'só de sobras' mostra o badge ♻️ com o
     porquê (antes o cap era invisível na tela — só no expandir)."""
