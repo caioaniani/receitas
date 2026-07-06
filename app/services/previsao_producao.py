@@ -1859,14 +1859,30 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     residual_rate = {rid: _taxa_residual(qtd_dow.get(rid, {}), soma_total.get(rid, 0),
                                          dias_calendario_janela)
                      for rid in soma_total}
+    # Motor 'vendas'/'maior': curva diaria a partir da VENDA real — mesma
+    # fonte usada pelo balanco acima (os totais e a curva ficam coerentes).
+    qtd_dow_v, soma_v, residual_v = {}, {}, {}
+    if motor in ('vendas', 'maior'):
+        qtd_dow_v, soma_v, _datas_v = _hist_vendas_receita_por_dow(
+            hist_ini, hist_fim)
+        residual_v = {rid: _taxa_residual(qtd_dow_v.get(rid, {}),
+                                          soma_v.get(rid, 0),
+                                          dias_calendario_janela)
+                      for rid in soma_v}
 
     def _previsto_dia(rid, dia):
         if not _fornada_no_dia(receitas.get(rid), dia):
             return 0.0
         dow = dia.weekday()
-        return _previsto_dow(
+        p_ped = _previsto_dow(
             qtd_dow[rid].get(dow), hoje_d, residual_rate.get(rid, 0.0),
             datas_possiveis=datas_possiveis_dow[dow])
+        if motor == 'pedidos':
+            return p_ped
+        p_ven = _previsto_dow(
+            qtd_dow_v.get(rid, {}).get(dow), hoje_d, residual_v.get(rid, 0.0),
+            datas_possiveis=datas_possiveis_dow[dow])
+        return p_ven if motor == 'vendas' else max(p_ped, p_ven)
 
     dias_prod = [inicio_d + timedelta(days=i) for i in range(horizonte_dias)]
     dias_out = [{'data': d.isoformat(),
