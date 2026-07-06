@@ -325,9 +325,9 @@ def _blocos_pergunta_retirada(p):
         blocos.append(_section(
             f"♻️ *{s.get('qtd_sobra')}x {s.get('item')}* podem voltar pra "
             f"indústria pra virar *{s.get('destino')}*.\n"
-            f"*Quantos vão voltar?* Responda aqui com a quantidade + a "
-            f"*foto da sobra* (obrigatória) que eu registro a coleta de "
-            f"amanhã com QR."))
+            f"*Quantos vão voltar?* Me responda a quantidade e mande uma "
+            f"*foto da sobra* — pode ser em mensagens separadas, eu junto e "
+            f"crio o QR de coleta pro motorista."))
     return blocos
 
 
