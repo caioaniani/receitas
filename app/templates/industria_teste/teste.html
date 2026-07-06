@@ -459,9 +459,10 @@
                 {% for c in r.por_dia %}
                 <td class="cel {% if c.data == crono.hoje %}hoje-col{% endif %}{% if r.insumo %} cel-insumo{% endif %}{% if c.data in r.risco_datas %} cel-risco{% endif %}"
                     {% if c.data in r.risco_datas %}title="Entrega firme deste dia sem produto — aumente a produção dos dias anteriores (contando o lead)"{% endif %}
-                    data-rid="{{ r.receita_id }}" data-data="{{ c.data }}">
+                    data-rid="{{ r.receita_id }}" data-data="{{ c.data }}"
+                    data-fornadas="{{ c.fornadas if c.fornadas is not none else '' }}">
                     <input type="number" min="0" inputmode="numeric"
-                           class="cel-input" value="{{ c.qtd or 0 }}"
+                           class="cel-input{% if not c.qtd %} zerada{% endif %}" value="{{ c.qtd or 0 }}"
                            {% if r.insumo %}readonly tabindex="-1"
                            title="Calculado automaticamente a partir do produto final que consome este insumo. Pra mudar, edite a produção do PRODUTO (ex: o croissant), não o insumo."{% endif %}>
                     <span class="cel-forn">{% if c.fornadas is not none %}{{ c.fornadas }} fornada(s){% elif c.qtd %}un{% endif %}</span>
