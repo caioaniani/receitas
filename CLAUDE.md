@@ -1017,12 +1017,17 @@ pacotes, todos implementados. Testes: `tests/test_bot_melhorias_0702.py`.
 - Prompt: recusa de oferta != pedido de humano != fim de conversa — pergunta
   "posso ajudar com mais alguma coisa?" e encerra; NAO transfere.
 - **Enforcement em codigo**: 1ª tentativa de transferir SEM nenhuma consulta
-  antes e sem motivo de excecao (alergia/reclamacao/humano/cartinha/estorno/
+  antes e sem motivo de excecao (alergia/reclamacao/humano/estorno/
   reembolso/cancelamento) e RECUSADA 1x via tool_result mandando consultar;
   se o modelo insistir, o handoff sai (nunca loop). ARMADILHA:
   `_handoff_excecao` olha SO `motivo`/`resumo` — NUNCA `mensagem_cliente`
   (quase todo handoff diz "um atendente vai continuar" nela; olhar la
   anulava o enforcement inteiro — pego por teste).
+  **'cartinha' SAIU das excecoes em 06/07/2026** (auditor: 5/8 handoffs
+  preguicosos, 2 de cartinha/pos-compra): `consultar_pedido` agora devolve
+  o TEXTO da cartinha (so pro dono autorizado do pedido) + secao
+  "POS-COMPRA E CARTINHA" no prompt — o bot confirma sozinho; MUDAR a
+  cartinha continua indo pro humano.
 - `stop_reason == 'max_tokens'`: refaz 1x com teto 2400 (antes link/preco
   cortado ia pro cliente).
 - Followup: dedupe so conta `enviado_whatsapp=True` (envio que falhou nao
