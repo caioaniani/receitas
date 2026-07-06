@@ -41,12 +41,13 @@
 <div class="table-responsive">
   <table class="table table-sm bg-white align-middle">
     <thead class="thead-padaria">
-      <tr><th>Item do site</th><th>Categoria</th><th>SKU no Tiny</th><th style="width:160px"></th></tr>
+      <tr><th>Item</th><th>Categoria</th><th>SKU no Tiny</th><th style="width:160px"></th></tr>
     </thead>
     <tbody>
       {% for it in itens %}
       <tr>
         <td>{{ it.nome }}
+          {% if it.origem == 'b2b' %}<span class="badge bg-secondary" title="Item do atacado/B2B (não publicado no site)">B2B</span>{% endif %}
           {% if it.sku %}
           <br><span class="small text-muted">↳ Tiny: {{ it.tiny_nome or '(nome não guardado)' }}
             <code>{{ it.sku }}</code></span>{% endif %}
