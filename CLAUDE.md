@@ -978,6 +978,23 @@ Review/verificacao da empresa no painel Meta.
 Pesquisa de melhorias no bot/vigia/auditor aprovada pelo dono virou 4
 pacotes, todos implementados. Testes: `tests/test_bot_melhorias_0702.py`.
 
+**06/07/2026 (caso Simone, auditor)** — `tests/test_handoff_dedupe.py`:
+- **Dedupe de handoff**: conversa ja transferida ha < 90 min
+  (`HANDOFF_DEDUP_MIN`) nao ganha 2º "vou te passar pra equipe" — webhook e
+  vassoura trocam por `TEXTO_HANDOFF_REPETIDO` (status ainda vai pra 'open',
+  idempotente; acao vira 'handoff_repetido', sem 2º registro). Marcador
+  `handoff_em` gravado no store (`salvar_historico(..., handoff=True)`,
+  preservado na reconstrucao do JSON — sem isso o dedupe morre no turno
+  seguinte).
+- **Valores rotulados**: `consultar_pedido` (site) devolve `subtotal_itens`,
+  `frete` e `preco_unit` por item + instrucao `como_apresentar`; prompt exige
+  "itens R$X + frete R$Y = total R$Z". O alerta do vigia sobre "R$138 vs
+  R$148" era falso positivo de VALOR (4x34,50+10=148, conta exata — conferi
+  preco_site na API), mas a APRESENTACAO sem rotulo era real. O "pedido
+  exibido sem numero" e o bot lembrando o pedido DA PROPRIA cliente do
+  historico da conversa (exibicao de pedido e fail-closed por telefone/CPF
+  em `bot_tools._consultar_pedido_online`/`_autorizar_pedido`).
+
 **P1 — Graves (cliente no vacuo)**:
 - Msg SO de audio/anexo nao suportado: resposta deterministica pedindo texto
   (antes: return silencioso e a conversa ficava presa em `pending` pra
