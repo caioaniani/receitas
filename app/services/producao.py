@@ -7,23 +7,25 @@ from app.services.massa_base import rendimento_massa_crua
 
 
 def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
-                              inicio_offset_dias, equilibrar):
+                              inicio_offset_dias, equilibrar,
+                              motor='pedidos'):
     """(Re)constroi os itens de `plano` a partir do cronograma do dia (COM as
     edicoes manuais do grid aplicadas — overrides). Preserva o que ja foi
     produzido: nunca baixa qtd_alvo abaixo de produzido_qtd e NAO remove item
     que ja teve producao (trava no produzido). Nao commita. Retorna o nº de
     receitas-alvo com qtd>0 no dia.
 
-    `inicio_offset_dias`/horizonte/janela/equilibrar TEM que ser os mesmos do
-    cronograma exibido — senao as quantidades nao batem com o que esta na tela
-    (a distribuicao por dia muda com a janela)."""
+    `inicio_offset_dias`/horizonte/janela/equilibrar/motor TEM que ser os
+    mesmos do cronograma exibido — senao as quantidades nao batem com o que
+    esta na tela (a distribuicao por dia muda com a janela e com o motor de
+    previsao)."""
     from app.models import PlanejamentoItem
     from app.services.previsao_producao import cronograma_producao
 
     crono = cronograma_producao(horizonte_dias=horizonte_dias,
                                 janela_semanas=janela_semanas,
                                 inicio_offset_dias=inicio_offset_dias,
-                                equilibrar=equilibrar)
+                                equilibrar=equilibrar, motor=motor)
     iso = data_alvo.isoformat()
     alvo = {}  # receita_id -> unidades no dia
     for rec in crono['receitas']:
@@ -91,7 +93,8 @@ class PlanoJaEnviadoError(Exception):
 
 
 def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
-                         inicio_offset_dias=0, equilibrar=False):
+                         inicio_offset_dias=0, equilibrar=False,
+                         motor='pedidos'):
     """Aprova a coluna de UM dia do cronograma -> cria/atualiza o
     PlanejamentoProducao (origem='cronograma') desse dia como RASCUNHO
     (enviado_ao_padeiro=False), pronto pra revisar e enviar. Reconstroi os itens
@@ -110,7 +113,8 @@ def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
         raise PlanoJaEnviadoError(data_alvo.isoformat())
     plano = _obter_ou_criar_plano(data_alvo, user_id)
     n = _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias,
-                                  janela_semanas, inicio_offset_dias, equilibrar)
+                                  janela_semanas, inicio_offset_dias,
+                                  equilibrar, motor=motor)
     if n == 0 and not plano.itens:
         db.session.delete(plano)
         db.session.commit()
@@ -121,7 +125,7 @@ def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
 
 def enviar_plano_do_dia(data_alvo, user_id=None, horizonte_dias=7,
                         janela_semanas=6, inicio_offset_dias=0,
-                        equilibrar=False):
+                        equilibrar=False, motor='pedidos'):
     """Empurra o cronograma ATUAL do dia (com as edicoes do grid) pro padeiro:
     (re)constroi os itens a partir do grid e marca enviado_ao_padeiro=True.
 
@@ -138,7 +142,8 @@ def enviar_plano_do_dia(data_alvo, user_id=None, horizonte_dias=7,
     if novo:
         plano = _obter_ou_criar_plano(data_alvo, user_id)
     n = _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias,
-                                  janela_semanas, inicio_offset_dias, equilibrar)
+                                  janela_semanas, inicio_offset_dias,
+                                  equilibrar, motor=motor)
     if n == 0 and not plano.itens:
         if novo:
             db.session.delete(plano)
