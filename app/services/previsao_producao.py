@@ -1797,12 +1797,15 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
     janela_semanas = max(1, min(int(janela_semanas or 6), 26))
     inicio_offset_dias = max(0, min(int(inicio_offset_dias or 0), 14))
+    if motor not in MOTORES_PREVISAO_PRODUCAO:
+        motor = 'pedidos'
 
     # Fonte da verdade do TOTAL por receita: o balanco. O cronograma so
     # distribui esse "Produzir" pelos dias — garante que os totais batem.
     bal = balanco_industria(horizonte_dias=horizonte_dias,
                             janela_semanas=janela_semanas, usar_cache=False,
-                            inicio_offset_dias=inicio_offset_dias)
+                            inicio_offset_dias=inicio_offset_dias,
+                            motor=motor)
 
     hoje_d = hoje()
     inicio_d = hoje_d + timedelta(days=inicio_offset_dias)
