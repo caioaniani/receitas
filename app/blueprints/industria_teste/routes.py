@@ -370,12 +370,17 @@ def celula():
         qtd = int(p.get('qtd'))
     except (TypeError, ValueError):
         return jsonify(ok=False, erro='parametros'), 400
+    from app.services.previsao_producao import MOTORES_PREVISAO_PRODUCAO
+    motor = str(p.get('motor') or 'pedidos')
+    if motor not in MOTORES_PREVISAO_PRODUCAO:
+        motor = 'pedidos'
     res = editar_celula(
         receita_id, p.get('data') or '', qtd,
         horizonte_dias=_payload_int(p, 'horizonte', 7, 1, 14),
         janela_semanas=_payload_int(p, 'janela', 6, 1, 26),
         inicio_offset_dias=_payload_int(p, 'inicio', 1, 0, 14),
-        equilibrar=str(p.get('equilibrar', '')) in ('1', 'true', 'on', 'True'))
+        equilibrar=str(p.get('equilibrar', '')) in ('1', 'true', 'on', 'True'),
+        motor=motor)
     if res is None:
         return jsonify(ok=False, erro='nao_encontrado'), 404
     if res.get('erro'):
