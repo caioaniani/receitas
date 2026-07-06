@@ -685,6 +685,11 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
         'itens': [{'nome': i.nome, 'qtd': i.quantidade,
                    'preco_unit': float(i.preco_unitario or 0)}
                   for i in p.itens],
+        # So chega aqui AUTORIZADO (telefone/CPF do dono do pedido) — mostrar
+        # a cartinha pro proprio comprador e seguro e resolve a confirmacao
+        # pos-compra sem handoff (auditor 06/07/2026: 2 handoffs de cartinha
+        # que a tool ja respondia).
+        'cartinha': (p.cartinha or '').strip() or None,
         'como_apresentar': ('Ao citar valores, SEMPRE rotule: '
                             '"itens R$ X + frete R$ Y = total R$ Z". '
                             'Nunca mostre dois números sem dizer o que são.'),
