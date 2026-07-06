@@ -688,6 +688,7 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         'inicio': inicio_d.isoformat(),
         'horizonte_fim': horizonte_fim.isoformat(),
         'profundidade': profundidade,
+        'motor': motor,
         'total_produzir_itens': sum(1 for i in itens if i['produzir'] > 0),
     }
     _CACHE[cache_key] = {'t': time.time(), 'data': resultado}
