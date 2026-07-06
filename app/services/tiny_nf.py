@@ -177,7 +177,7 @@ def _aplicar_pares(pares, user_id=None, canal='site'):
             nome_tiny, sku = por_norma[achado[0]]
             confirmado = False
         if not m:
-            m = TinyProdutoMap(kind=it['kind'], item_id=it['id'])
+            m = TinyProdutoMap(canal=canal, kind=it['kind'], item_id=it['id'])
             db.session.add(m)
         m.tiny_sku = sku
         m.tiny_nome = nome_tiny
