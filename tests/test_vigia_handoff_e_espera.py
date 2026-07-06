@@ -186,3 +186,70 @@ def test_listar_conversas_paradas_aceita_status_open(app):
     sig = inspect.signature(chatwoot.listar_conversas_paradas)
     assert 'status' in sig.parameters
     assert sig.parameters['status'].default == 'pending'
+
+
+# ── Menção de story do IG não é cliente esperando (06/07/2026) ──────────
+
+def test_mencao_story_nao_dispara_espera_humano(app):
+    """Caso Camila (conversa 566): 'camilacasquel mentioned you in the
+    story:' disparou o alerta de cliente esperando atendente — mas menção
+    de story é marcação social, ninguém está esperando (decisão do dono)."""
+    from unittest.mock import patch
+
+    from app.services import chatbot_vigia
+    with app.app_context():
+        paradas = [{'id': 566, 'minutos_paradas': 14,
+                    'nome_contato': 'Camila'}]
+        historico = [{'role': 'user',
+                      'content': 'camilacasquel mentioned you in the story:'}]
+        with patch('app.services.chatbot_vigia._numero_destino',
+                   return_value='5511999999999'), \
+                patch('app.services.chatwoot.listar_conversas_paradas',
+                      return_value=paradas), \
+                patch('app.services.chatwoot.buscar_historico',
+                      return_value=historico), \
+                patch('app.services.zapi.enviar_texto') as tx:
+            chatbot_vigia.alertar_clientes_esperando_humano()
+        tx.assert_not_called()
+
+
+def test_mencao_story_nao_gasta_modelo_no_abandono(app):
+    from unittest.mock import patch
+
+    from app.services import chatbot_vigia
+    with app.app_context(), \
+            patch('app.services.chatbot_vigia.disponivel', return_value=True):
+        historico = [{'role': 'user',
+                      'content': 'fulana mentioned you in the story:'}]
+        r = chatbot_vigia.avaliar_abandono(historico, conv_id=566,
+                                           nome_contato='Camila',
+                                           minutos_sem_resposta=30)
+        assert r == {'pulou': 'mencao de story do Instagram'}
+
+
+def test_dm_real_do_instagram_continua_alertando(app):
+    """Cliente de verdade no IG DM (com texto normal) segue disparando o
+    alerta de espera — o skip é só pra menção de story."""
+    from unittest.mock import patch
+
+    from app.services import chatbot_vigia
+    with app.app_context():
+        app.config['CHATWOOT_URL'] = 'https://x.example'
+        app.config['CHATWOOT_ACCOUNT_ID'] = '1'
+        paradas = [{'id': 567, 'minutos_paradas': 14,
+                    'nome_contato': 'Cliente Real'}]
+        historico = [{'role': 'user',
+                      'content': 'oi, meu pedido chega que horas?'}]
+        with patch('app.services.chatbot_vigia._numero_destino',
+                   return_value='5511999999999'), \
+                patch('app.services.chatwoot.listar_conversas_paradas',
+                      return_value=paradas), \
+                patch('app.services.chatwoot.buscar_historico',
+                      return_value=historico), \
+                patch.object(chatbot_vigia, '_ja_avisado_espera_humano',
+                             return_value=False), \
+                patch('app.services.zapi.enviar_texto',
+                      return_value={'ok': True}) as tx:
+            chatbot_vigia.alertar_clientes_esperando_humano()
+        assert tx.called
+        assert 'esperando ATENDENTE' in tx.call_args[0][1]
