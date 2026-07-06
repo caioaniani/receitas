@@ -321,6 +321,19 @@
 {% if not crono.receitas %}
 <p class="text-muted">Sem produção prevista no horizonte (sem pedidos/histórico, ou estoque cobre tudo).</p>
 {% else %}
+<div class="crono-toolbar">
+    <input type="search" id="crono-busca" class="form-control form-control-sm"
+           placeholder="🔍 filtrar receita ou categoria…" autocomplete="off">
+    <label title="Esconde receitas sem nada a produzir no horizonte (linhas só de zeros). Linhas com entrega em risco ou produção vencida continuam visíveis.">
+        <input type="checkbox" id="crono-sem-zeros"> ocultar zerados ({{ resumo.zerados }})
+    </label>
+    {% if resumo.risco_n %}
+    <label title="Mostra só as receitas com entrega em risco">
+        <input type="checkbox" id="crono-so-risco"> só em risco
+    </label>
+    {% endif %}
+    <span class="filtro-oculto-aviso" id="crono-filtro-aviso" hidden></span>
+</div>
 <div class="crono-wrap">
   <div class="crono">
     <table>
