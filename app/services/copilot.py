@@ -543,13 +543,16 @@ TOOL_CRIAR_RETIRADA_SOBRAS = {
     "description": (
         "Cria um PEDIDO DE RETIRADA de sobras reaproveitaveis da loja pra "
         "industria no dia seguinte (ex: croissants que vao virar Almond). "
-        "EXIGE FOTO da sobra anexada na mensagem — sem foto, nao cria. "
-        "Fluxo: apos registrar sobras, se algum item reaproveitavel tem "
-        "receita de retorno, PERGUNTE quantos voltam pra industria; com a "
-        "resposta, PECA A FOTO da sobra; quando a foto chegar, chame esta "
-        "tool. O motorista coleta no dia seguinte via QR code (esteira igual "
-        "as entregas: coleta baixa a loja, recebimento credita a industria). "
-        "NAO executa direto — preview pra aprovar."
+        "EXIGE FOTO da sobra, mas foto e quantidade podem vir em MENSAGENS "
+        "SEPARADAS: o sistema anexa automaticamente a foto da mensagem atual "
+        "OU a ultima foto que o usuario mandou no canal (2h). Fluxo: apos "
+        "registrar sobras, se algum item reaproveitavel tem receita de "
+        "retorno, PERGUNTE quantos voltam pra industria; assim que souber a "
+        "quantidade, chame esta tool — NAO exija a foto de novo se o usuario "
+        "ja mandou alguma nesta conversa; so peca foto se nenhuma foi "
+        "enviada. O motorista coleta no dia seguinte via QR code (esteira "
+        "igual as entregas: coleta baixa a loja, recebimento credita a "
+        "industria). NAO executa direto — preview pra aprovar."
     ),
     "input_schema": {
         "type": "object",
