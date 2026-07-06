@@ -2404,6 +2404,10 @@ h6 { font-weight: 600; text-transform: lowercase; }
     /* Célula de tabela mais compacta no dedo. */
     .table > :not(caption) > * > * { padding: 0.45rem 0.5rem; }
 
+    /* Select dentro de barra de filtros não vira um toco na borda. */
+    .main-content .d-flex .form-select,
+    .main-content .d-flex select { min-width: 7rem; }
+
     /* Dica explicativa longa: recolhida, expande no toque (JS alterna). */
     .dica-recolhe {
         max-height: 5.2em;
