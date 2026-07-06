@@ -706,6 +706,7 @@
             inp.style.borderColor = '';   // limpa vermelho de falha anterior
             const tr = cell.closest('tr');
             if (tr) marcarEditado(tr, rid);
+            recalcTotais();
             return;
         }
         inp.style.borderColor = '#dc3545';
