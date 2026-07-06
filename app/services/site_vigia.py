@@ -81,25 +81,21 @@ def checar_frete():
 
 
 def checar_catalogo():
-    """Site tem produto vendável e a home da loja responde."""
-    from app.models import Produto
+    """A vitrine tem item vendável — usa a MESMA fonte da home da loja
+    (`produtos_publicados`, que também serializa: se a serialização quebrar,
+    o problema aparece aqui). Não bate na rota HTTP de propósito: o gate de
+    host da loja devolve 404 fora do domínio público (test_client do cron
+    não é opao.online)."""
+    from app.services import loja_catalogo
 
-    problemas = []
-    n = (Produto.query
-         .filter(Produto.ativo.is_(True), Produto.preco_site.isnot(None),
-                 Produto.preco_site > 0).count())
-    if n == 0:
-        problemas.append('catálogo do site vazio (nenhum produto ativo '
-                         'com preço de site)')
     try:
-        with current_app.test_client() as c:
-            resp = c.get('/loja/')
-            if resp.status_code != 200:
-                problemas.append(
-                    f'home da loja respondeu {resp.status_code}')
+        itens = loja_catalogo.produtos_publicados()
     except Exception as e:  # noqa: BLE001 — vigia nunca derruba o cron
-        problemas.append(f'home da loja quebrou ao renderizar: {e}')
-    return problemas
+        return [f'vitrine quebrou ao montar o catálogo: {e}']
+    if not itens:
+        return ['catálogo do site vazio (nenhum item ativo com preço de '
+                'site) — vitrine sem nada pra vender']
+    return []
 
 
 def checar_agenda():
