@@ -1828,5 +1828,41 @@ def _migrate_sqlite(app):
         if cols_cb2b and _c not in cols_cb2b:
             cursor.execute(f"ALTER TABLE cliente_b2b ADD COLUMN {_c} {_t}")
 
+    # ── SKU do Tiny por canal (06/07/2026) ──
+    # SQLite nao altera UNIQUE embutida — rebuild da tabela (mesmo padrao
+    # do previsao_snapshot acima): copia com canal='site' e troca a unique
+    # (kind, item_id) por (canal, kind, item_id).
+    cursor.execute("PRAGMA table_info(tiny_produto_map)")
+    cols_tiny = [row[1] for row in cursor.fetchall()]
+    if cols_tiny and 'canal' not in cols_tiny:
+        cursor.execute("""
+            CREATE TABLE tiny_produto_map_novo (
+                id INTEGER PRIMARY KEY,
+                canal VARCHAR(10) NOT NULL DEFAULT 'site',
+                kind VARCHAR(10) NOT NULL,
+                item_id INTEGER NOT NULL,
+                tiny_sku VARCHAR(100),
+                tiny_nome VARCHAR(300),
+                auto_match BOOLEAN,
+                confirmado_em TIMESTAMP,
+                confirmado_por INTEGER REFERENCES usuario(id),
+                criado_em TIMESTAMP,
+                atualizado_em TIMESTAMP,
+                CONSTRAINT uq_tiny_map_canal_item
+                    UNIQUE (canal, kind, item_id)
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO tiny_produto_map_novo
+                (id, canal, kind, item_id, tiny_sku, tiny_nome, auto_match,
+                 confirmado_em, confirmado_por, criado_em, atualizado_em)
+            SELECT id, 'site', kind, item_id, tiny_sku, tiny_nome, auto_match,
+                   confirmado_em, confirmado_por, criado_em, atualizado_em
+            FROM tiny_produto_map
+        """)
+        cursor.execute("DROP TABLE tiny_produto_map")
+        cursor.execute("ALTER TABLE tiny_produto_map_novo "
+                       "RENAME TO tiny_produto_map")
+
     conn.commit()
     conn.close()
