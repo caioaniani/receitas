@@ -201,6 +201,16 @@ def _fornada_no_dia(rec, dia):
                 and dia.weekday() not in _DIAS_FORNADA_ESPECIAL)
 
 
+def producao_permitida_no_dia(rec, dia):
+    """True se a receita PODE ser PRODUZIDA nesse dia. Fornada especial produz
+    só qui/sex/sáb (decisão do dono 06/07/2026): a venda de sex/sáb/dom sai da
+    véspera. Receita normal -> sempre True. Público de propósito: o
+    cronograma_edit usa pra recusar edição manual em dia bloqueado."""
+    return not (rec is not None
+                and getattr(rec, 'fornada_especial', False)
+                and dia.weekday() not in _DIAS_PRODUCAO_FORNADA)
+
+
 def _padronizar_qtd(qtd, lote, minimo):
     """Arredonda a sugestao pro LOTE de pedido da receita (pacote padrao) e
     aplica o piso. 'Nao pedir picado' (decisao do dono 29/06): a loja pede em
