@@ -128,7 +128,7 @@ def index():
     }
     return render_template('industria_teste/teste.html', crono=crono,
                            horizonte=horizonte, janela=janela, inicio=inicio,
-                           equilibrar=equilibrar, estados=estados,
+                           equilibrar=equilibrar, motor=motor, estados=estados,
                            totais_dia=totais_dia, pico_idx=pico_idx,
                            resumo=resumo)
 
