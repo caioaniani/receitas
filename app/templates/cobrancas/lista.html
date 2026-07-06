@@ -179,7 +179,11 @@
         {% for c in problemas %}<tr><td>{{ c.pagador_nome }}</td>
             <td>{{ c.nosso_numero_fmt }}</td>
             <td><span class="badge bg-danger">{{ c.status }}</span></td>
-            <td class="small text-muted">{{ c.motivo_retorno or '' }}</td></tr>
+            <td class="small text-muted">{{ c.motivo_retorno or '' }}</td>
+            <td class="text-end">{% if c.status == 'rejeitada' %}
+                <button class="btn btn-sm btn-outline-warning" form="vp-{{ c.id }}"
+                        onclick="return confirm('Voltar pra pendente pra corrigir e reenviar em nova remessa?');">
+                    corrigir e reenviar</button>{% endif %}</td></tr>
         {% endfor %}</tbody></table></div></div></div>
 </div>
 {% endif %}
