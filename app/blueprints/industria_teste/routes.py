@@ -370,6 +370,9 @@ def celula():
         equilibrar=str(p.get('equilibrar', '')) in ('1', 'true', 'on', 'True'))
     if res is None:
         return jsonify(ok=False, erro='nao_encontrado'), 404
+    if res.get('erro'):
+        # ex: dia_bloqueado (fornada especial produz só qui/sex/sáb)
+        return jsonify(ok=False, erro=res['erro'], msg=res.get('msg')), 422
     return jsonify(ok=True, **res)
 
 
