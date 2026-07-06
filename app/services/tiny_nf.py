@@ -53,16 +53,78 @@ def definir_sku(kind, item_id, sku, tiny_nome=None, user_id=None):
     return m
 
 
-def itens_para_mapear():
-    """Lista os itens publicados (preco_site>0) com o estado do mapeamento
-    Tiny. Devolve [{kind,id,nome,categoria,sku,estado,confirmado}]."""
-    mp = mapa_por_item()
+def _itens_b2b():
+    """Itens vendáveis no B2B: receitas com preço de atacado
+    (`Receita.preco_venda`), produtos com `preco_atacado`, e qualquer item
+    que já apareceu numa VendaB2B (venda avulsa de item sem preço de
+    atacado cadastrado). A NF do B2B usa o MESMO mapeamento de SKU do site
+    — sem essa lista, item vendido só no atacado nunca apareceria na tela
+    pra mapear e a emissão ficava travada sem saída na UI."""
+    from app.models import Produto, Receita, VendaB2BItem
+
+    receitas = (Receita.query
+                .filter(Receita.arquivada_em.is_(None),
+                        Receita.preco_venda.isnot(None),
+                        Receita.preco_venda > 0)
+                .order_by(Receita.nome.asc()).all())
+    produtos = (Produto.query
+                .filter(Produto.ativo.is_(True),
+                        Produto.preco_atacado.isnot(None),
+                        Produto.preco_atacado > 0)
+                .order_by(Produto.nome.asc()).all())
+    out = [{'kind': 'receita', 'id': r.id, 'nome': r.nome,
+            'categoria': r.categoria or ''} for r in receitas]
+    out += [{'kind': 'produto', 'id': p.id, 'nome': p.nome,
+             'categoria': p.categoria or ''} for p in produtos]
+    # Itens já vendidos em VendaB2B (mesmo sem preço de atacado cadastrado):
+    # se tem venda, pode precisar de NF — precisa aparecer pra mapear.
+    ja = {(it['kind'], it['id']) for it in out}
+    vendidos_r = {rid for (rid,) in VendaB2BItem.query
+                  .with_entities(VendaB2BItem.receita_id)
+                  .filter(VendaB2BItem.receita_id.isnot(None))
+                  .distinct().all()}
+    vendidos_p = {pid for (pid,) in VendaB2BItem.query
+                  .with_entities(VendaB2BItem.produto_id)
+                  .filter(VendaB2BItem.produto_id.isnot(None))
+                  .distinct().all()}
+    for r in Receita.query.filter(Receita.id.in_(vendidos_r)).all():
+        if ('receita', r.id) not in ja:
+            out.append({'kind': 'receita', 'id': r.id, 'nome': r.nome,
+                        'categoria': r.categoria or ''})
+    for p in Produto.query.filter(Produto.id.in_(vendidos_p)).all():
+        if ('produto', p.id) not in ja:
+            out.append({'kind': 'produto', 'id': p.id, 'nome': p.nome,
+                        'categoria': p.categoria or ''})
+    return out
+
+
+def itens_mapeaveis():
+    """Universo de itens que podem precisar de SKU do Tiny: publicados no
+    site + vendáveis no B2B (dedup por (kind, id); `origem` marca de onde
+    o item veio — item nos dois canais conta como 'site')."""
+    vistos = set()
     out = []
     for it in loja_catalogo.produtos_publicados():
+        vistos.add((it['kind'], it['id']))
+        out.append({'kind': it['kind'], 'id': it['id'], 'nome': it['nome'],
+                    'categoria': it.get('categoria') or '', 'origem': 'site'})
+    for it in _itens_b2b():
+        if (it['kind'], it['id']) not in vistos:
+            out.append({**it, 'origem': 'b2b'})
+    return out
+
+
+def itens_para_mapear():
+    """Lista os itens mapeáveis (site + B2B) com o estado do mapeamento
+    Tiny. Devolve [{kind,id,nome,categoria,origem,sku,estado,confirmado}]."""
+    mp = mapa_por_item()
+    out = []
+    for it in itens_mapeaveis():
         m = mp.get((it['kind'], it['id']))
         out.append({
             'kind': it['kind'], 'id': it['id'], 'nome': it['nome'],
             'categoria': it.get('categoria') or '',
+            'origem': it['origem'],
             'sku': (m.tiny_sku if m else None),
             'tiny_nome': (m.tiny_nome if m else None),
             'estado': (m.estado if m else 'pendente'),
