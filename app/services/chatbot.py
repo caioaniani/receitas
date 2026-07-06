@@ -174,10 +174,15 @@ def _quer_humano(texto):
 
 # Motivos que autorizam transferir SEM consultar nada antes (as mesmas
 # excecoes fechadas do prompt, secao "ANTES DE TRANSFERIR"): pedido explicito
-# de humano, alergia, reclamacao grave, cartinha. Usado pelo enforcement
+# de humano, alergia, reclamacao grave. Usado pelo enforcement
 # anti-handoff-preguicoso no loop do `responder`.
+# 'cartinha' SAIU da lista em 06/07/2026 (auditor: 5/8 handoffs preguicosos,
+# 2 deles de cartinha/pos-compra): o consultar_pedido agora devolve o texto
+# da cartinha — o bot consegue CONFIRMAR sozinho; transferir sem consultar
+# virou preguica, nao excecao. Mudanca de cartinha continua indo pro humano
+# (a recusa e 1x so; na insistencia o handoff sai).
 _HANDOFF_EXCECAO = re.compile(
-    r'(?i)\b(alerg|reclama|humano|atendente|pessoa|cartinha|'
+    r'(?i)\b(alerg|reclama|humano|atendente|pessoa|'
     r'estorno|reembolso|cancelamento)\w*')
 
 
