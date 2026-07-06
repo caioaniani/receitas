@@ -126,9 +126,9 @@ def emitir_nf(venda, user_id=None, recriar=False):
             return None, erro
         itens, faltando = _payload_itens(venda)
         if faltando:
-            return None, ('Itens sem SKU mapeado no Tiny: '
+            return None, ('Itens sem SKU B2B mapeado no Tiny: '
                           + ', '.join(faltando)
-                          + '. Mapeie em Loja Online → SKUs do Tiny.')
+                          + '. Mapeie em B2B → SKUs do Tiny (/b2b/tiny-skus).')
         if not itens:
             return None, 'Venda sem itens — nada pra emitir.'
         return _nota_payload(venda, itens), None
