@@ -255,3 +255,137 @@ def test_tela_gerar_da_parcela_e_download(app, admin_user):
         assert cob is not None
         assert cob.pagador_nome == 'Restaurante Bom Prato'
         assert (cob.vencimento - cob.emissao).days >= 7   # regra Sicredi
+
+
+def test_voltar_pendente_corrige_e_gera_nova_remessa(app, admin_user):
+    """Fluxo REAL da homologação devolvida: remessa 1 foi com dado errado →
+    voltar pra pendente → corrigir endereço → NOVA remessa (sequencial 2)
+    com o MESMO nosso número (o título nunca foi registrado)."""
+    from app.services.sicredi_cnab import gerar_remessa
+    with app.app_context():
+        cob = _cobranca()
+        rem1, erros = gerar_remessa([cob], user_id=admin_user.id)
+        assert erros == []
+        cid, nosso = cob.id, cob.nosso_numero
+    c = app.test_client()
+    _login(c, admin_user.id)
+    r = c.post(f'/cobrancas/{cid}/voltar-pendente', follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        cob = db.session.get(Cobranca, cid)
+        assert cob.status == 'pendente'
+        assert cob.remessa_id is None
+        assert cob.nosso_numero == nosso            # mantém o título
+    r2 = c.post(f'/cobrancas/{cid}/editar',
+                data={'pagador_endereco': 'Av. Nova Independencia 1050'},
+                follow_redirects=True)
+    assert r2.status_code == 200
+    r3 = c.post('/cobrancas/remessa', data={'ids': [str(cid)]},
+                follow_redirects=True)
+    assert r3.status_code == 200
+    with app.app_context():
+        cob = db.session.get(Cobranca, cid)
+        assert cob.status == 'remessa'
+        rem2 = cob.remessa
+        assert rem2.numero == 2                     # novo sequencial
+        det = rem2.conteudo.split('\r\n')[1]
+        assert det[47:56] == nosso                  # mesmo nosso número
+        assert det[274:314].strip() == 'AV. NOVA INDEPENDENCIA 1050'
+
+
+def test_voltar_pendente_recusa_registrada(app, admin_user):
+    """Título já REGISTRADO no banco não pode simplesmente voltar — seria
+    dessincronizar com o Sicredi (precisa de instrução de baixa)."""
+    from app.services.sicredi_cnab import gerar_remessa
+    with app.app_context():
+        cob = _cobranca()
+        gerar_remessa([cob], user_id=admin_user.id)
+        cob.status = 'registrada'
+        db.session.commit()
+        cid = cob.id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    c.post(f'/cobrancas/{cid}/voltar-pendente', follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(Cobranca, cid).status == 'registrada'
+
+
+# ── boleto (fase 2): código de barras + linha digitável + PDF ──────────────
+
+def test_mod11_campo_livre_exemplo_do_manual():
+    """§10.4 do manual: campo livre 1 1 072000031 0165 02 00623 1 0 soma
+    223 → DV 8."""
+    from app.services.sicredi_boleto import _mod11
+    assert _mod11('110720000310165020062310') == 8
+
+
+def test_campo_livre_do_boleto_modelo_oficial():
+    """Decodificado da linha digitável do boleto-modelo do banco: nosso nº
+    21/103527-5, ag 0101, posto 19, benef 00207."""
+    from app.services.sicredi_boleto import campo_livre
+    assert (campo_livre('211035275', '0101', '19', '00207')
+            == '1121103527501011900207104')
+
+
+def test_fator_vencimento_ciclos():
+    from datetime import date
+
+    from app.services.sicredi_boleto import fator_vencimento
+    assert fator_vencimento(date(2007, 12, 20)) == 3726   # exemplo §10.7
+    assert fator_vencimento(date(2025, 2, 21)) == 9999    # fim do ciclo 1
+    assert fator_vencimento(date(2025, 2, 22)) == 1000    # reinício FEBRABAN
+    assert fator_vencimento(date(2025, 2, 23)) == 1001
+
+
+def test_codigo_barras_e_linha_digitavel_do_boleto_modelo():
+    """Fixture OFICIAL (linha digitável impressa no boleto-modelo do manual
+    híbrido): 74891.12115 03527.501013 19002.071041 6 85810000018000."""
+    from datetime import date
+
+    from app.services.sicredi_boleto import (
+        linha_digitavel,
+        montar_codigo_barras,
+    )
+    cfg = {'agencia': '0101', 'posto': '19', 'beneficiario': '00207'}
+    cb = montar_codigo_barras('211035275', Decimal('180.00'),
+                              date(2021, 4, 5), cfg=cfg)     # fator 8581
+    assert len(cb) == 44
+    assert cb == '7489' + '6' + '8581' + '0000018000' + \
+        '1121103527501011900207104'
+    assert (linha_digitavel(cb)
+            == '74891.12115 03527.501013 19002.071041 6 85810000018000')
+
+
+def test_boleto_pdf_gera_com_e_sem_qr(app, admin_user):
+    from app.services.sicredi_boleto import gerar_boleto_pdf
+    from app.services.sicredi_cnab import gerar_remessa
+    with app.app_context():
+        cob = _cobranca()
+        gerar_remessa([cob], user_id=admin_user.id)
+        pdf = bytes(gerar_boleto_pdf(cob))
+        assert pdf.startswith(b'%PDF') and len(pdf) > 2000
+        # Com o QR do híbrido (chega no retorno tipo 8)
+        cob.pix_copia_cola = ('00020101021226870014br.gov.bcb.pix2565pix-qr'
+                              'code-h.sicredi.com.br/qr/v2/cobv/TESTE52040000'
+                              '5303986540518000')
+        db.session.commit()
+        pdf2 = bytes(gerar_boleto_pdf(cob))
+        assert pdf2.startswith(b'%PDF') and len(pdf2) > len(pdf)
+
+
+def test_rota_boleto_pdf(app, admin_user):
+    from app.services.sicredi_cnab import gerar_remessa
+    with app.app_context():
+        sem_nosso = _cobranca()
+        cob = _cobranca()
+        gerar_remessa([cob], user_id=admin_user.id)
+        cid, cid_sem = cob.id, sem_nosso.id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    r = c.get(f'/cobrancas/{cid}/boleto.pdf')
+    assert r.status_code == 200
+    assert r.mimetype == 'application/pdf'
+    assert r.data.startswith(b'%PDF')
+    # Sem nosso número ainda não há boleto — volta pra lista com aviso
+    r2 = c.get(f'/cobrancas/{cid_sem}/boleto.pdf')
+    assert r2.status_code == 302
