@@ -104,3 +104,38 @@ def test_consultar_pedido_online_vem_com_valores_rotulados(app):
         assert r['subtotal_itens'] == 138.0
         assert r['itens'][0]['preco_unit'] == 34.5
         assert 'rotule' in r['como_apresentar']
+
+
+# ── Auditor 06/07 (parte 2): cartinha sem handoff ───────────────────────
+
+def test_consultar_pedido_devolve_cartinha(app):
+    """Cliente autenticado (telefone bate) vê a própria cartinha — a
+    confirmação pós-compra que antes virava handoff (auditor 06/07)."""
+    from app.extensions import db
+    from app.models import PedidoOnline
+    from app.services import bot_tools
+    with app.app_context():
+        p = PedidoOnline(codigo='TESTECART1', status='pago',
+                         nome_cliente='Ana', telefone_cliente='11977776666',
+                         email_cliente='ana@example.com',
+                         modo_entrega='agendada',
+                         subtotal=100, frete_valor=0, valor_total=100,
+                         cartinha='Feliz aniversário, vó!')
+        db.session.add(p)
+        db.session.commit()
+        r = bot_tools.consultar_pedido('TESTECART1',
+                                       telefone_contato='11977776666')
+        assert r['cartinha'] == 'Feliz aniversário, vó!'
+
+
+def test_cartinha_nao_e_mais_excecao_de_handoff(app):
+    """'cartinha' saiu das exceções do enforcement (06/07): transferir por
+    cartinha SEM consultar nada leva a recusa 1x (a tool resolve). As
+    exceções humanas (alergia, reclamação, pedido de humano) continuam."""
+    from app.services.chatbot import _handoff_excecao
+    assert _handoff_excecao({'motivo': 'cliente quer conferir a cartinha'}) \
+        is False
+    assert _handoff_excecao({'motivo': 'cliente relata alergia'}) is True
+    assert _handoff_excecao({'motivo': 'cliente pediu atendente humano'}) \
+        is True
+    assert _handoff_excecao({'motivo': 'pedido de estorno'}) is True
