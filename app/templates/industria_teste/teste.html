@@ -616,13 +616,42 @@
         return d.erro || ('erro ' + (resp ? resp.status : 'de rede'));
     }
 
+    function marcarZerada(inp) {
+        inp.classList.toggle('zerada', !(parseInt(inp.value, 10) || 0));
+    }
+
+    // Totais do rodapé recalculados no navegador (a edição de célula mexe na
+    // linha inteira sem recarregar a página). Mesma conta do servidor:
+    // unidades sem insumo + fornadas de todas as linhas.
+    function recalcTotais() {
+        DATAS.forEach(function (data) {
+            let un = 0, forn = 0;
+            document.querySelectorAll('td.cel[data-data="' + data + '"]')
+                .forEach(function (cell) {
+                    const inp = cell.querySelector('.cel-input');
+                    const v = parseInt(inp && inp.value, 10) || 0;
+                    if (!cell.classList.contains('cel-insumo')) un += v;
+                    forn += parseFloat(cell.dataset.fornadas) || 0;
+                });
+            const td = document.querySelector(
+                'tfoot td[data-data="' + data + '"]');
+            if (!td) return;
+            const eUn = td.querySelector('.tot-dia-un');
+            const eForn = td.querySelector('.tot-dia-forn');
+            if (eUn) eUn.textContent = un + ' un';
+            if (eForn) eForn.textContent =
+                (Math.round(forn * 10) / 10) + ' fornada(s)';
+        });
+    }
+
     function setRow(rid, porDia) {
         porDia.forEach(function (c) {
             const cell = document.querySelector(
                 'td.cel[data-rid="' + rid + '"][data-data="' + c.data + '"]');
             if (!cell) return;
             const inp = cell.querySelector('.cel-input');
-            if (inp) inp.value = c.qtd;
+            if (inp) { inp.value = c.qtd; marcarZerada(inp); }
+            cell.dataset.fornadas = (c.fornadas != null) ? c.fornadas : '';
             const forn = cell.querySelector('.cel-forn');
             if (forn) {
                 forn.textContent = (c.fornadas != null)
