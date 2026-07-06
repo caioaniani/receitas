@@ -149,12 +149,15 @@ def boleto_pdf(id):
         flash('Essa cobrança ainda não tem nosso número — gere a remessa '
               'primeiro.', 'warning')
         return redirect(url_for('cobrancas.lista'))
-    from app.services.sicredi_boleto import gerar_boleto_pdf
+    from app.services.sicredi_boleto import (
+        gerar_boleto_pdf,
+        nome_arquivo_boleto,
+    )
     pdf = gerar_boleto_pdf(cob)
     return Response(
         bytes(pdf), mimetype='application/pdf',
         headers={'Content-Disposition':
-                 f'inline; filename=boleto_{cob.nosso_numero}.pdf'})
+                 f'inline; filename={nome_arquivo_boleto(cob)}'})
 
 
 @cobrancas_bp.route('/<int:id>/excluir', methods=['POST'])
