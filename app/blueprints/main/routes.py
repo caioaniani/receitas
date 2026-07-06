@@ -2146,6 +2146,20 @@ def debug_sentry():
     return jsonify(out), 200
 
 
+@main_bp.route('/admin/vigia-site')
+@owner_required
+def vigia_site():
+    """Vigia do SITE sob demanda (owner-only) — mesmos checks do cron de 2h
+    (canários de frete, catálogo, agenda). Criado em 05/07/2026 no incidente
+    do frete. `?alertar=1` roda o fluxo completo com anti-spam/WhatsApp;
+    sem parâmetro, só mostra o resultado (não mexe no estado do vigia)."""
+    from app.services import site_vigia
+
+    if request.args.get('alertar') == '1':
+        return jsonify(site_vigia.vigiar()), 200
+    return jsonify(site_vigia.rodar_checks()), 200
+
+
 @main_bp.route('/admin/debug-chatwoot')
 @owner_required
 def debug_chatwoot():
