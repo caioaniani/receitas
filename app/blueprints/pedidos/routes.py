@@ -521,7 +521,18 @@ def editar(id):
 
     receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    # Liberadas + as que JÁ estão no pedido (grandfather): sem a união, o
+    # <select> de um item antigo com MP hoje bloqueada perderia a opção
+    # selecionada e o REPLACE do POST derrubaria o item.
     materias = _mps_pediveis().all()
+    mp_ids_pedido = {it.materia_prima_id for it in pedido.itens
+                     if it.materia_prima_id}
+    faltantes = mp_ids_pedido - {m.id for m in materias}
+    if faltantes:
+        materias = sorted(
+            materias + MateriaPrima.query
+            .filter(MateriaPrima.id.in_(faltantes)).all(),
+            key=lambda m: (m.nome or '').lower())
     amanha = hoje_brt() + timedelta(days=1)
     data_min = hoje_brt() if current_user.is_admin() else amanha
     return render_template('pedidos/editar.html', pedido=pedido,
