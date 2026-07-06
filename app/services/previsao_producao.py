@@ -2260,6 +2260,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         'horizonte_dias': horizonte_dias,
         'janela_semanas': janela_semanas,
         'alertas_falta': alertas_falta,
+        'motor': motor,
     }
 
 
