@@ -30,7 +30,8 @@ def _venda(cliente, sku=None, desconto=0.0):
     db.session.add(p)
     db.session.flush()
     if sku:
-        tiny_nf.definir_sku('produto', p.id, sku)
+        # A NF do B2B usa o mapa do canal 'b2b' (outro cadastro no Tiny).
+        tiny_nf.definir_sku('produto', p.id, sku, canal='b2b')
     v = VendaB2B(cliente_id=cliente.id if cliente else None,
                  cliente_nome=None if cliente else 'Avulso',
                  valor_total=Decimal('100.00'))
