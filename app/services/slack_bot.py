@@ -526,8 +526,10 @@ def _apendar_contexto_retirada(acao, resultado):
             f"[Sobra reaproveitavel registrada: {s.get('qtd_sobra')}x "
             f"{s.get('item')} — pode voltar pra industria e virar "
             f"{s.get('destino')}. Perguntei ao usuario quantos voltam; quando "
-            f"ele responder a quantidade e mandar a FOTO da sobra "
-            f"(obrigatoria), chame criar_retirada_sobras.]")
+            f"ele responder a quantidade, chame criar_retirada_sobras — a "
+            f"foto da sobra pode vir em mensagem separada (o sistema anexa a "
+            f"ultima foto enviada no canal); so peca foto se NENHUMA foi "
+            f"mandada.]")
     texto = '\n'.join(linhas)
     sc = _conversa(acao.slack_user_id, acao.slack_channel_id)
     hist = _historico_da_conversa(sc)
