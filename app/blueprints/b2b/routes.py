@@ -424,6 +424,90 @@ def venda_emitir_nf(vid):
     return redirect(url_for('b2b.venda_detalhe', vid=vid))
 
 
+# ── Mapeamento de SKUs do Tiny — canal B2B ──
+# No Tiny o B2B é OUTRO cadastro/lista de preço: o mesmo item nosso pode
+# ter SKU diferente do site. Mesma UX da tela do site
+# (/admin/loja-online/tiny-skus), mas gravando com canal='b2b'.
+
+@b2b_bp.route('/tiny-skus')
+@owner_required
+def tiny_skus():
+    from app.services import tiny_nf
+    itens = tiny_nf.itens_para_mapear(canal='b2b')
+    pendentes = sum(1 for i in itens if i['estado'] != 'mapeado')
+    return render_template(
+        'tiny_skus.html', itens=itens, pendentes=pendentes,
+        total=len(itens),
+        titulo='SKUs do Tiny (NF-e) — B2B',
+        descricao='A lista cobre o catálogo de atacado (receitas com preço '
+                  'de atacado, produtos com preço de atacado e itens já '
+                  'vendidos em venda B2B). Use o export/planilha do '
+                  'CADASTRO B2B do Tiny — o site tem mapa próprio.',
+        url_definir=url_for('b2b.tiny_definir'),
+        url_sync=url_for('b2b.tiny_sync'),
+        url_importar=url_for('b2b.tiny_importar'),
+        vazio_msg='Nenhum item de atacado ainda (precisa de preço de '
+                  'atacado no cadastro ou de uma venda B2B).')
+
+
+@b2b_bp.route('/tiny-skus/sync', methods=['POST'])
+@owner_required
+def tiny_sync():
+    """Busca o catálogo do Tiny e sugere SKUs por nome pros itens B2B."""
+    from app.services import tiny_nf
+    res = tiny_nf.sincronizar_sugestoes(user_id=current_user.id, canal='b2b')
+    if res.get('erro'):
+        flash(f'Sincronização falhou: {res["erro"]}', 'danger')
+    else:
+        flash(f'{res.get("exatos", 0)} confirmados (nome idêntico) + '
+              f'{res.get("sugeridos", 0)} sugeridos pra conferir, '
+              f'{res.get("sem_match", 0)} sem correspondência '
+              f'({res.get("total_tiny", 0)} produtos no Tiny).', 'success')
+    return redirect(url_for('b2b.tiny_skus'))
+
+
+@b2b_bp.route('/tiny-skus/importar', methods=['POST'])
+@owner_required
+def tiny_importar():
+    """Importa o export de produtos B2B do Tiny (.xls/.csv) e mapeia SKUs
+    por nome. Nome idêntico confirma automático; parecido vira sugestão."""
+    from app.services import tiny_nf
+    f = request.files.get('planilha')
+    if not f or not f.filename:
+        flash('Selecione a planilha de produtos do Tiny (.xls ou .csv).',
+              'warning')
+        return redirect(url_for('b2b.tiny_skus'))
+    conteudo = f.read()
+    res = tiny_nf.importar_planilha(conteudo, f.filename,
+                                    user_id=current_user.id, canal='b2b')
+    if res.get('erro'):
+        flash(res['erro'], 'danger')
+    else:
+        flash(f'Planilha importada: {res.get("exatos", 0)} confirmados '
+              f'(nome idêntico) + {res.get("sugeridos", 0)} sugeridos pra '
+              f'conferir, {res.get("sem_match", 0)} sem correspondência '
+              f'({res.get("total", 0)} linhas).', 'success')
+    return redirect(url_for('b2b.tiny_skus'))
+
+
+@b2b_bp.route('/tiny-skus/definir', methods=['POST'])
+@owner_required
+def tiny_definir():
+    """Define/limpa o SKU B2B de um item (kind + item_id + sku)."""
+    from app.services import tiny_nf
+    kind = (request.form.get('kind') or '').strip()
+    try:
+        item_id = int(request.form.get('item_id'))
+    except (TypeError, ValueError):
+        flash('Item inválido.', 'warning')
+        return redirect(url_for('b2b.tiny_skus'))
+    sku = (request.form.get('sku') or '').strip()
+    tiny_nf.definir_sku(kind, item_id, sku, user_id=current_user.id,
+                        canal='b2b')
+    flash('SKU salvo.' if sku else 'SKU removido.', 'success')
+    return redirect(url_for('b2b.tiny_skus'))
+
+
 @b2b_bp.route('/vendas/<int:vid>/danfe')
 @login_required
 @admin_required
