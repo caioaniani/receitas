@@ -503,9 +503,10 @@ def _pergunta_retirada_para_historico(params):
         linhas.append(
             f"\n[Perguntei ao usuario: dos {s.get('qtd_sobra')}x "
             f"{s.get('item')} de sobra, quantos voltam pra industria pra "
-            f"virar {s.get('destino')}? Quando ele responder a quantidade e "
-            f"mandar a FOTO da sobra (obrigatoria), chame "
-            f"criar_retirada_sobras.]")
+            f"virar {s.get('destino')}? Quando ele responder a quantidade, "
+            f"chame criar_retirada_sobras — a foto da sobra pode vir em "
+            f"mensagem separada (o sistema anexa a ultima foto enviada no "
+            f"canal); so peca foto se NENHUMA foi mandada.]")
     return ''.join(linhas)
 
 
