@@ -294,6 +294,12 @@ def test_rota_renderiza(app, admin_user):
     assert 'Gerar só esta loja' in body
     assert 'name="so_loja" value="%d"' % loja.id in body
     assert 'name="origem" value="media"' in body
+    # ação explícita via hidden + confirm no listener (nunca onclick inline):
+    # o Safari descarta o name/value do botão quando o onclick tem confirm()
+    assert 'id="form-gerar-grade"' in body
+    assert 'name="gerar_todas"' in body
+    assert 'data-confirm=' in body
+    assert 'onclick="return confirm' not in body
     # atalho direto no menu lateral (PRODUÇÃO → Pedidos da semana)
     assert '/producao/pedidos-semana/media' in body
     assert 'bi-cart-plus' in body
