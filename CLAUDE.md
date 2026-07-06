@@ -860,6 +860,20 @@ No mesmo incidente: `_EPS_ULP` no ceil da sugestao de pedido
 sair 1 ulp acima e o ceil inflava +1 unidade/caixa (CI flakava no
 test_lote_producao; media exibida 7,0 e sugestao 8).
 
+**Vigia do SITE** (pedido do dono na sequencia — "scan diario pra ter
+certeza que tudo funciona"): `app/services/site_vigia.py`, cron 2/2h em
+`seru_cron` (lock 7745, kill-switch `SITE_VIGIA=0`). Canarios rodam as
+MESMAS funcoes do checkout: frete com faixas esperadas (padaria <=1,5km;
+Rua Nova York <=5km; 01050-000 dentro 3-13km; Campinas SEMPRE fora — pega
+o defeito inverso), vitrine com item vendavel (`produtos_publicados` — NAO
+bate na rota HTTP: o gate de host da loja da 404 fora do opao.online) e
+agenda com data+janela de entrega. Alerta WhatsApp do dono na transicao
+saudavel→doente, re-alerta 6h, aviso de normalizacao (mesmo padrao do vigia
+de infra, estado em AppConfig). Sob demanda: `GET /admin/vigia-site`
+(owner; `?alertar=1` roda o fluxo com WhatsApp). Testes:
+`tests/test_site_vigia.py`. Ao mudar faixa de frete/area de entrega,
+ATUALIZAR os canarios junto.
+
 ## Copilot (servico) — canais: Slack + WhatsApp do dono. SEM interface web
 
 `app/services/copilot.py` orquestra tools com Claude Sonnet 4.6 (Anthropic API).
