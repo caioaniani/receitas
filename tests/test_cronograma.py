@@ -293,6 +293,136 @@ def test_fornada_especial_produz_na_vespera(app):
     assert por_data.get(sexta.isoformat(), 0) == 0    # não na sexta
 
 
+# ── fornada especial: PRODUÇÃO só qui/sex/sáb (decisão do dono 06/07/2026) ──
+# A venda de sex/sáb/dom sai da véspera (qui→sex, sex→sáb, sáb→dom); o
+# cronograma nunca programa (nem deixa editar) produção em seg/ter/qua/dom.
+
+def _proximo_dow(base, dow):
+    return next(base + timedelta(days=i) for i in range(1, 15)
+                if (base + timedelta(days=i)).weekday() == dow)
+
+
+def test_fornada_especial_lead0_venda_domingo_produz_sabado(app):
+    """Venda de DOMINGO com lead 0 caía no próprio domingo — produção de
+    fornada especial vai pra véspera (sábado)."""
+    loja = _loja()
+    r = _receita('Focaccia')
+    r.fornada_especial = True                     # lead 0 (default)
+    db.session.commit()
+    hoje_d = hoje()
+    domingo = _proximo_dow(hoje_d, 6)
+    sabado = domingo - timedelta(days=1)
+    _pedido(loja, 'pendente', domingo, r, 40)
+
+    horizonte = (domingo - hoje_d).days + 1
+    crono = cronograma_producao(horizonte_dias=horizonte, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None
+    por_data = {c['data']: c['qtd'] for c in rr['por_dia']}
+    assert por_data.get(domingo.isoformat(), 0) == 0     # dom não produz
+    assert por_data.get(sabado.isoformat(), 0) >= 40     # sai da véspera
+
+
+def test_fornada_especial_nunca_produz_fora_qui_sex_sab(app):
+    """Nem pedido firme aberrante numa TERÇA faz o cronograma programar dia
+    útil: a produção só cai em qui/sex/sáb; sem dia permitido antes da
+    entrega, a linha não produz (a falta vira alerta de entrega em risco —
+    decisão humana, não do cronograma)."""
+    from datetime import date as _date
+
+    loja = _loja()
+    r = _receita('Focaccia')
+    r.fornada_especial = True
+    db.session.commit()
+    _pedido(loja, 'pendente', _proximo_dow(hoje(), 1), r, 30)   # terça
+
+    crono = cronograma_producao(horizonte_dias=14, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None
+    for c in rr['por_dia']:
+        if c['qtd']:
+            assert _date.fromisoformat(c['data']).weekday() in (3, 4, 5)
+
+
+def test_equilibrar_nao_adianta_fornada_especial_pra_dia_util(app):
+    """'Equilibrar carga' nivelava puxando receita pra dia ocioso — fornada
+    especial não pode ser adiantada pra seg/ter/qua/dom."""
+    from datetime import date as _date
+
+    loja = _loja()
+    r = _receita('Focaccia')
+    r.fornada_especial = True
+    db.session.commit()
+    _pedido(loja, 'pendente', _proximo_dow(hoje(), 4), r, 40)   # sexta
+
+    crono = cronograma_producao(horizonte_dias=14, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] > 0
+    for c in rr['por_dia']:
+        if c['qtd']:
+            assert _date.fromisoformat(c['data']).weekday() in (3, 4, 5)
+
+
+def test_editar_celula_recusa_dia_bloqueado(app):
+    """Editar célula de fornada especial num dia bloqueado é recusado ANTES de
+    salvar (defesa em profundidade — a tela já trava a célula)."""
+    from app.models import CronogramaOverride
+    from app.services.cronograma_edit import editar_celula
+
+    loja = _loja()
+    r = _receita('Focaccia')
+    r.fornada_especial = True
+    db.session.commit()
+    _pedido(loja, 'pendente', _proximo_dow(hoje(), 4), r, 40)   # na grade
+
+    segunda = _proximo_dow(hoje(), 0)
+    res = editar_celula(r.id, segunda.isoformat(), 25,
+                        horizonte_dias=14, inicio_offset_dias=0)
+    assert res['erro'] == 'dia_bloqueado'
+    assert CronogramaOverride.query.count() == 0     # nada salvo
+    # dia permitido continua editável
+    sexta = _proximo_dow(hoje(), 4)
+    res2 = editar_celula(r.id, sexta.isoformat(), 25,
+                         horizonte_dias=14, inicio_offset_dias=0)
+    assert res2 is not None and 'erro' not in res2
+
+
+def test_rota_celula_dia_bloqueado_422(app, admin_user):
+    loja = _loja()
+    r = _receita('Focaccia')
+    r.fornada_especial = True
+    db.session.commit()
+    _pedido(loja, 'pendente', _proximo_dow(hoje(), 4), r, 40)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'})
+    resp = client.post('/telaindustriateste/celula', json={
+        'receita_id': r.id, 'data': _proximo_dow(hoje(), 0).isoformat(),
+        'qtd': 25, 'horizonte': 14, 'janela': 6, 'inicio': 0, 'equilibrar': 0})
+    assert resp.status_code == 422
+    j = resp.get_json()
+    assert j['ok'] is False and j['erro'] == 'dia_bloqueado'
+
+
+def test_fornada_especial_celula_bloqueada_na_tela(app, admin_user):
+    """A tela marca as células de seg/ter/qua/dom da fornada especial
+    (hachura + readonly) e mostra o badge 'fim de semana'."""
+    loja = _loja()
+    r = _receita('Focaccia')
+    r.fornada_especial = True
+    db.session.commit()
+    _pedido(loja, 'pendente', _proximo_dow(hoje(), 4), r, 40)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    html = client.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
+    assert 'cel-bloq' in html            # horizonte de 7 dias sempre tem seg-qua
+    assert 'fim de semana' in html
+    assert 'produz só quinta/sexta/sábado' in html
+
+
 def test_bom_explode_sub_receita(app):
     """MRP: pedir croissant gera produção da MASSA PARA FOLHAR (sub-receita não
     vendida), produzida ANTES do croissant (lead), na quantidade certa."""
