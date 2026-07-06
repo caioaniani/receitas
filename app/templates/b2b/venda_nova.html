@@ -269,8 +269,14 @@
     document.getElementById('btn-add-item').addEventListener('click', function() { rowItem(); });
     document.getElementById('btn-add-parcela').addEventListener('click', function() { rowParcela(); });
     selCliente.addEventListener('change', function() {
+        // Preco agora e funcao de (item, cliente): trocar o cliente
+        // re-aplica a sugestao inteira (tabela do cliente OU atacado +
+        // desconto %) nas linhas que ja tem item selecionado. Linha sem
+        // item so recebe o desconto novo (comportamento antigo).
         var desc = getDescCliente();
         tbody.querySelectorAll('tr').forEach(tr => {
+            var ref = tr.querySelector('.item-ref');
+            if (ref && ref.value) { aplicarItem(tr, ref.value); return; }
             tr.querySelector('.desc').value = desc || '';
             atualizar(tr);
         });
