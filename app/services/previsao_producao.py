@@ -59,6 +59,16 @@ _DIAS_FORNADA_ESPECIAL = frozenset({4, 5, 6})
 # editar) producao de fornada especial fora desses dias. qui=3, sex=4, sab=5.
 _DIAS_PRODUCAO_FORNADA = frozenset({3, 4, 5})
 
+# Motores de previsao da demanda do CRONOGRAMA/balanco (pedido do dono
+# 06/07/2026 — "+1 opcao de previsao, baseada nas vendas"):
+# - 'pedidos': historico de PEDIDOS loja->industria (comportamento original);
+# - 'vendas':  VENDA real das lojas + merma estrutural (mesma demanda
+#              unificada da sugestao de pedido por venda, Fase 0.1/1);
+# - 'maior':   o MAIOR dos dois por dia (nao subproduz quando um dos sinais
+#              esta defasado — mesmo espirito do max(firme, previsto)).
+# O firme (pedidos ainda nao entregues) SEMPRE conta, em qualquer motor.
+MOTORES_PREVISAO_PRODUCAO = ('pedidos', 'vendas', 'maior')
+
 # Cronograma: um dia que produz MENOS que esta fracao de uma fornada (rend) rola
 # pro proximo dia, pra nao mandar o padeiro acender o forno por 1-2 unidades
 # ("pedido picado"). Como e fracao da fornada, receita cuja fornada rende pouco
