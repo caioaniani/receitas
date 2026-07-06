@@ -329,15 +329,11 @@ def excluir():
     se já houve produção — o estoque/MP reais já mexeram."""
     from app.services.producao import excluir_plano_do_dia
 
-    horizonte, janela = _horizonte_janela()
-    inicio = _inicio_offset()
-    eq = 1 if _equilibrar() else None
     try:
         data_alvo = date.fromisoformat(request.form.get('data', ''))
     except (TypeError, ValueError):
         flash('Data inválida.', 'warning')
-        return redirect(url_for('industria_teste.index', horizonte=horizonte,
-                                janela=janela, inicio=inicio, equilibrar=eq))
+        return redirect(url_for('industria_teste.index', **_params_visao()))
     res = excluir_plano_do_dia(data_alvo)
     if res['ok']:
         flash('Ordem de %s excluída.' % data_alvo.strftime('%d/%m'), 'success')
@@ -349,8 +345,7 @@ def excluir():
     else:
         flash('Não há ordem em %s pra excluir.'
               % data_alvo.strftime('%d/%m'), 'warning')
-    return redirect(url_for('industria_teste.index', horizonte=horizonte,
-                            janela=janela, inicio=inicio, equilibrar=eq))
+    return redirect(url_for('industria_teste.index', **_params_visao()))
 
 
 def _payload_int(payload, key, default, lo, hi):
