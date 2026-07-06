@@ -3766,9 +3766,11 @@ def executar_criar_retirada_sobras(params, user):
     """Cria a RetiradaSobra do dia seguinte + QR de coleta.
 
     FOTO OBRIGATORIA (decisao do dono 02/07/2026): `params['imagens']` vem
-    embutida pelo slack_bot quando a mensagem que originou a acao tinha
-    imagem — sem ela, recusa com instrucao clara. A foto sobe pro Dropbox
-    (comprovante da contagem declarada)."""
+    embutida pelo slack_bot — da mensagem atual OU, desde 06/07/2026, da
+    ultima foto que o usuario mandou no canal (fallback de 2h: no celular a
+    foto vem num balao e a quantidade no outro). Sem nenhuma, recusa com
+    instrucao clara. A foto sobe pro Dropbox (comprovante da contagem
+    declarada)."""
     import base64
     from datetime import timedelta as _td
 
