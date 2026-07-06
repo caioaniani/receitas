@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Cobranças (boletos Sicredi){% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="bi bi-upc-scan"></i> Cobranças</h1>
+        <p class="page-subtitle">Boletos híbridos Sicredi (CNAB 400): gere a
+            cobrança da parcela B2B, monte a remessa, suba o retorno — a
+            liquidação quita a parcela sozinha.</p>
+    </div>
+</div>
+
+{# ── Parcelas B2B sem cobrança ── #}
+{% if parcelas_sem %}
+<div class="card mb-3">
+    <div class="card-header py-2"><strong>Parcelas B2B em aberto sem
+        cobrança</strong> <span class="small text-muted">— clique pra gerar o
+        boleto</span></div>
+    <div class="card-body p-0"><div style="overflow-x:auto;">
+    <table class="table table-sm mb-0">
+        <thead><tr><th>Cliente</th><th>Venda</th><th>Parcela</th>
+            <th>Vencimento</th><th class="text-end">Valor</th><th></th></tr></thead>
+        <tbody>
+        {% for p in parcelas_sem %}
+        <tr>
+            <td>{{ p.venda.cliente.nome if p.venda.cliente else p.venda.cliente_nome }}</td>
+            <td>#{{ p.venda.id }}</td>
+            <td>{{ p.numero }}</td>
+            <td>{{ p.vencimento.strftime('%d/%m/%Y') }}</td>
+            <td class="text-end">R$ {{ '%.2f'|format(p.valor) }}</td>
+            <td class="text-end">
+                <form method="POST" action="{{ url_for('cobrancas.gerar_da_parcela', parcela_id=p.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-primary">Gerar cobrança</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div></div>
+</div>
+{% endif %}
+
+{# ── Em aberto (pendentes/na remessa/registradas) ── #}
+<form method="POST" action="{{ url_for('cobrancas.gerar_remessa_rota') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <strong>Em aberto</strong>
+        <button class="btn btn-sm btn-primary"
+                onclick="return confirm('Gerar o arquivo de remessa com as cobranças MARCADAS? O sequencial de remessa é consumido.');">
+            <i class="bi bi-file-earmark-arrow-down"></i> Gerar remessa das marcadas
+        </button>
+    </div>
+    <div class="card-body p-0"><div style="overflow-x:auto;">
+    <table class="table table-sm mb-0">
+        <thead><tr><th></th><th>Pagador</th><th>Nosso nº</th><th>Venc.</th>
+            <th class="text-end">Valor</th><th>Status</th><th>CEP</th><th></th></tr></thead>
+        <tbody>
+        {% for c in abertas %}
+        <tr class="{% if c.vencida %}table-warning{% endif %}">
+            <td>{% if c.status == 'pendente' %}
+                <input type="checkbox" name="ids" value="{{ c.id }}">{% endif %}</td>
+            <td>{{ c.pagador_nome }}<br>
+                <span class="small text-muted">{{ c.pagador_cnpj_cpf }} · {{ c.seu_numero }}</span></td>
+            <td>{{ c.nosso_numero_fmt or '—' }}</td>
+            <td>{{ c.vencimento.strftime('%d/%m/%Y') }}{% if c.vencida %} <span class="badge bg-warning text-dark">vencida</span>{% endif %}</td>
+            <td class="text-end">R$ {{ '%.2f'|format(c.valor) }}</td>
+            <td><span class="badge bg-{{ 'secondary' if c.status == 'pendente' else 'info' if c.status == 'remessa' else 'primary' }}">{{ c.status }}</span>
+                {% if c.pix_copia_cola %}<span class="badge bg-success" title="QR Pix recebido">PIX</span>{% endif %}</td>
+            <td>{% if c.status == 'pendente' %}
+                <input type="text" class="form-control form-control-sm" style="width:110px;"
+                       form="edit-{{ c.id }}" name="pagador_cep"
+                       value="{{ c.pagador_cep or '' }}" placeholder="CEP">
+                {% else %}{{ c.pagador_cep or '—' }}{% endif %}</td>
+            <td class="text-end text-nowrap">
+                {% if c.status == 'pendente' %}
+                <button class="btn btn-sm btn-outline-secondary" form="edit-{{ c.id }}"
+                        title="Salvar CEP/edições">salvar</button>
+                <button class="btn btn-sm btn-outline-danger" form="del-{{ c.id }}"
+                        onclick="return confirm('Excluir esta cobrança pendente?');">×</button>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        {% if not abertas %}<tr><td colspan="8" class="text-muted p-3">Nenhuma cobrança em aberto.</td></tr>{% endif %}
+        </tbody>
+    </table>
+    </div></div>
+</div>
+</form>
+{# Forms de edição/exclusão FORA do form da remessa (HTML não aninha). #}
+{% for c in abertas %}{% if c.status == 'pendente' %}
+<form id="edit-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.editar', id=c.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+<form id="del-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.excluir', id=c.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+{% endif %}{% endfor %}
+
+<div class="row g-3">
+    <div class="col-md-6">
+        {# ── Retorno ── #}
+        <div class="card mb-3">
+            <div class="card-header py-2"><strong>Processar retorno do banco</strong></div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('cobrancas.upload_retorno') }}"
+                      enctype="multipart/form-data" class="d-flex gap-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="file" name="arquivo" class="form-control form-control-sm" required>
+                    <button class="btn btn-sm btn-success text-nowrap">Processar</button>
+                </form>
+                <div class="small text-muted mt-2">Liquidações dão baixa na
+                    cobrança e quitam a parcela B2B; o registro tipo 8 traz o
+                    QR Pix do boleto híbrido.</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        {# ── Remessas geradas ── #}
+        <div class="card mb-3">
+            <div class="card-header py-2"><strong>Remessas geradas</strong></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                    {% for r in remessas %}
+                    <tr><td>{{ r.nome_arquivo }}</td>
+                        <td>{{ r.gerado_em.strftime('%d/%m %H:%M') }}</td>
+                        <td>{{ r.n_titulos }} título(s)</td>
+                        <td class="text-end"><a class="btn btn-sm btn-outline-dark"
+                            href="{{ url_for('cobrancas.download_remessa', id=r.id) }}">
+                            <i class="bi bi-download"></i> baixar</a></td></tr>
+                    {% endfor %}
+                    {% if not remessas %}<tr><td class="text-muted p-3">Nenhuma remessa ainda — a primeira é a da homologação.</td></tr>{% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if pagas or problemas %}
+<div class="row g-3">
+    <div class="col-md-6"><div class="card">
+        <div class="card-header py-2"><strong>Pagas</strong></div>
+        <div class="card-body p-0"><table class="table table-sm mb-0"><tbody>
+        {% for c in pagas %}<tr><td>{{ c.pagador_nome }}</td>
+            <td>{{ c.nosso_numero_fmt }}</td>
+            <td>{{ c.pago_em.strftime('%d/%m/%Y') if c.pago_em }}</td>
+            <td class="text-end text-success fw-bold">R$ {{ '%.2f'|format(c.valor_pago or c.valor) }}</td></tr>
+        {% endfor %}</tbody></table></div></div></div>
+    <div class="col-md-6"><div class="card">
+        <div class="card-header py-2"><strong>Rejeitadas / baixadas</strong></div>
+        <div class="card-body p-0"><table class="table table-sm mb-0"><tbody>
+        {% for c in problemas %}<tr><td>{{ c.pagador_nome }}</td>
+            <td>{{ c.nosso_numero_fmt }}</td>
+            <td><span class="badge bg-danger">{{ c.status }}</span></td>
+            <td class="small text-muted">{{ c.motivo_retorno or '' }}</td></tr>
+        {% endfor %}</tbody></table></div></div></div>
+</div>
+{% endif %}
+{% endblock %}

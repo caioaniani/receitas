@@ -256,3 +256,88 @@ class SlackCanalLojaMap(db.Model):
         if self.loja_id:
             return 'mapeado'
         return 'pendente'
+
+
+# ── Cobranças (contas a RECEBER — boleto híbrido Sicredi, 04/07/2026) ──────
+#
+# Fluxo: parcela de VendaB2B vira Cobranca -> entra num arquivo de REMESSA
+# CNAB400 (CobrancaRemessa) enviado ao Sicredi -> o RETORNO do banco confirma
+# o registro (ocorrência 02), traz o QR Pix do boleto híbrido (registro tipo
+# 8) e dá baixa nas liquidações (06/15/17), que também quitam a parcela.
+# Layouts: manuais Sicredi (CNAB400 + boleto híbrido) — ver
+# app/services/sicredi_cnab.py.
+
+class CobrancaRemessa(db.Model):
+    """Um arquivo .rem gerado (sequencial obrigatório pelo banco)."""
+    __tablename__ = 'cobranca_remessa'
+
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.Integer, nullable=False, unique=True)  # 1, 2, 3...
+    gerado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    gerado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    n_titulos = db.Column(db.Integer, nullable=False, default=0)
+    conteudo = db.Column(db.Text, nullable=False)   # pra re-baixar o arquivo
+
+    gerado_por = db.relationship('Usuario')
+
+    @property
+    def nome_arquivo(self):
+        return f'REM{self.numero:05d}.CRM'
+
+
+class Cobranca(db.Model):
+    """Um título de cobrança (boleto). Snapshot do pagador na criação —
+    editar o cliente depois não muda boleto já emitido."""
+    __tablename__ = 'cobranca'
+
+    id = db.Column(db.Integer, primary_key=True)
+    parcela_id = db.Column(db.Integer, db.ForeignKey('venda_b2b_parcela.id'),
+                           nullable=True, unique=True, index=True)
+    # Pagador (snapshot)
+    pagador_nome = db.Column(db.String(100), nullable=False)
+    pagador_cnpj_cpf = db.Column(db.String(20), nullable=False)
+    pagador_endereco = db.Column(db.String(250))
+    pagador_cep = db.Column(db.String(9))
+
+    valor = db.Column(db.Numeric(10, 2), nullable=False)
+    vencimento = db.Column(db.Date, nullable=False, index=True)
+    emissao = db.Column(db.Date, nullable=False)
+    seu_numero = db.Column(db.String(10), nullable=False)  # ref interna (NF/venda)
+    # Nosso número completo com DV, 9 dígitos: AA B NNNNN D (ex: 252000041).
+    nosso_numero = db.Column(db.String(9), unique=True, index=True)
+
+    # pendente -> remessa (no arquivo) -> registrada (ocorr. 02) ->
+    # paga (06/15/17) | baixada (09/10) | rejeitada (03)
+    status = db.Column(db.String(15), nullable=False, default='pendente',
+                       index=True)
+    remessa_id = db.Column(db.Integer, db.ForeignKey('cobranca_remessa.id'),
+                           index=True)
+    valor_pago = db.Column(db.Numeric(10, 2))
+    pago_em = db.Column(db.Date)
+    motivo_retorno = db.Column(db.String(60))   # motivo da rejeição/ocorrência
+
+    # QR Pix do boleto híbrido (chega no RETORNO, registro tipo 8)
+    pix_txid = db.Column(db.String(35))
+    pix_url = db.Column(db.String(120))
+    pix_copia_cola = db.Column(db.Text)
+
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    parcela = db.relationship('VendaB2BParcela', backref='cobranca')
+    remessa = db.relationship('CobrancaRemessa', backref='cobrancas')
+    criado_por = db.relationship('Usuario')
+
+    @property
+    def nosso_numero_fmt(self):
+        """25/200004-1 (formato humano do manual)."""
+        n = self.nosso_numero or ''
+        if len(n) != 9:
+            return n
+        return f'{n[:2]}/{n[2:8]}-{n[8]}'
+
+    @property
+    def vencida(self):
+        from app.utils import hoje
+        return (self.status in ('pendente', 'remessa', 'registrada')
+                and self.vencimento < hoje())
