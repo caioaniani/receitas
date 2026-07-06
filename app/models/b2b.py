@@ -40,6 +40,40 @@ class ClienteB2B(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     criado_em = db.Column(db.DateTime, default=agora)
 
+class PrecoClienteB2B(db.Model):
+    """Tabela de preco POR CLIENTE do atacado (06/07/2026).
+
+    O atacado cobra valores diferentes por cliente — um percentual unico
+    (ClienteB2B.desconto_percentual) nao cobre isso. Preco especifico aqui
+    VENCE o preco de atacado do cadastro (e o desconto percentual NAO se
+    aplica em cima — o valor ja e final). Sem linha = cai no atacado padrao
+    com o desconto do cliente (comportamento antigo, inalterado).
+
+    Chave (cliente, kind, item_id) — mesmo padrao kind/item do
+    TinyProdutoMap. Dinheiro: Numeric(10,2), sempre Decimal.
+    """
+    __tablename__ = 'preco_cliente_b2b'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente_b2b.id'),
+                           nullable=False, index=True)
+    kind = db.Column(db.String(10), nullable=False)  # 'receita' | 'produto'
+    item_id = db.Column(db.Integer, nullable=False)
+    preco = db.Column(db.Numeric(10, 2), nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+    atualizado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                                  nullable=True)
+
+    cliente = db.relationship('ClienteB2B',
+                              backref=db.backref('precos_especificos',
+                                                 cascade='all, delete-orphan'))
+
+    __table_args__ = (
+        db.UniqueConstraint('cliente_id', 'kind', 'item_id',
+                            name='uq_preco_cliente_b2b_item'),
+    )
+
+
 class VendaB2B(db.Model):
     """Venda B2B: cabecalho. Itens vinculados via VendaB2BItem,
     pagamento parcelado via VendaB2BParcela.
