@@ -93,7 +93,8 @@
 
         {% if d.fonte == 'media_dow' %}
         <div class="prev-fonte">Previsto = média recência-ponderada das
-            {{ d.dow_nome }}s do histórico (cada loja conta o que costuma pedir nesse dia):</div>
+            {{ d.dow_nome }}s do histórico de <strong>{{ 'venda' if d.origem == 'vendas' else 'pedidos' }}</strong>
+            (cada loja conta o que costuma {{ 'vender' if d.origem == 'vendas' else 'pedir' }} nesse dia):</div>
         <div class="prev-lojas">
             {% for l in d.previsto_lojas %}<span class="prev-loja">{{ l.loja_nome }}: <b>{{ l.media }}</b> <small>({{ l.n }} entrega{{ 's' if l.n != 1 else '' }})</small></span>
             {% else %}<span class="hist-vazio">— sem decomposição por loja —</span>{% endfor %}
