@@ -93,7 +93,8 @@ def test_consultar_pedido_online_vem_com_valores_rotulados(app):
                          subtotal=138, frete_valor=10, valor_total=148)
         db.session.add(p)
         db.session.flush()
-        db.session.add(PedidoOnlineItem(pedido_id=p.id, nome='Sourdough Integral',
+        db.session.add(PedidoOnlineItem(pedido_id=p.id, kind='receita',
+                                        nome='Sourdough Integral',
                                         quantidade=4, preco_unitario=34.50))
         db.session.commit()
         r = bot_tools.consultar_pedido('TESTELBL1',
