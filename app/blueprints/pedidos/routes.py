@@ -287,7 +287,7 @@ def novo():
             lojas = _lojas_operacionais()
             receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
             produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-            materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
+            materias = _mps_pediveis().all()
             return render_template('pedidos/novo.html', lojas=lojas,
                                    receitas=receitas, produtos=produtos,
                                    materias=materias, amanha=amanha,
@@ -306,7 +306,7 @@ def novo():
             lojas = _lojas_operacionais()
             receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
             produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-            materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
+            materias = _mps_pediveis().all()
             return render_template('pedidos/novo.html', lojas=lojas,
                                    receitas=receitas, produtos=produtos,
                                    materias=materias, amanha=amanha,
@@ -394,7 +394,7 @@ def novo():
     lojas = _lojas_operacionais()
     receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-    materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
+    materias = _mps_pediveis().all()
     return render_template('pedidos/novo.html', lojas=lojas,
                            receitas=receitas, produtos=produtos,
                            materias=materias, amanha=amanha,
@@ -428,6 +428,23 @@ def editar(id):
             data_entrega = pedido.data_entrega
         if data_entrega < data_min:
             flash(f'A data de entrega deve ser a partir de {data_min.strftime("%d/%m")}.', 'warning')
+            return redirect(url_for('pedidos.editar', id=id))
+
+        # MP NOVA só entra se liberada pra pedido de loja (checkbox no Banco
+        # de MPs). MP que JÁ estava no pedido continua válida — sem isso,
+        # desmarcar a flag travaria a edição de pedidos antigos legítimos.
+        mp_ids_antes = {it.materia_prima_id for it in pedido.itens
+                        if it.materia_prima_id}
+        candidatos = []
+        for v in request.form.getlist('item_id[]'):
+            t, iid = _parse_item_id(v)
+            if t == 'mp' and iid not in mp_ids_antes:
+                candidatos.append({'materia_prima_id': iid})
+        bloqueadas = _mps_nao_pediveis(candidatos)
+        if bloqueadas:
+            flash('Matéria(s)-prima(s) não liberada(s) pra pedido de loja: '
+                  + ', '.join(bloqueadas) + '. Um admin pode liberar no '
+                  'Banco de MPs (checkbox "sugerir pedido loja").', 'warning')
             return redirect(url_for('pedidos.editar', id=id))
 
         try:
@@ -491,7 +508,7 @@ def editar(id):
 
     receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-    materias = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
+    materias = _mps_pediveis().all()
     amanha = hoje_brt() + timedelta(days=1)
     data_min = hoje_brt() if current_user.is_admin() else amanha
     return render_template('pedidos/editar.html', pedido=pedido,
