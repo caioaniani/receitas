@@ -1346,4 +1346,32 @@ document.addEventListener('DOMContentLoaded', function () {
             form.classList.add('was-validated');
         });
     });
+
+    // ═══ MOBILE: TABELA LARGA ROLA NO PRÓPRIO LUGAR (06/07/2026) ═══
+    // Tabela fora de um container de rolagem estica o BODY inteiro no
+    // celular (a página anda de lado e o cabeçalho "vaza" — auditoria
+    // mobile achou isso em /pedidos, /pedidos/congelados e outras).
+    // Embrulha toda tabela solta num .mobile-table-scroll (overflow-x:
+    // auto). No desktop nada muda: o container só limita quando falta
+    // espaço. Telas com rolagem própria (.crono-wrap, .table-responsive)
+    // ficam de fora.
+    document.querySelectorAll('.main-content table').forEach(function (t) {
+        if (t.closest('.table-responsive, .mobile-table-scroll, .crono-wrap, .crono')) {
+            return;
+        }
+        var wrap = document.createElement('div');
+        wrap.className = 'mobile-table-scroll';
+        t.parentNode.insertBefore(wrap, t);
+        wrap.appendChild(t);
+    });
+
+    // ═══ MOBILE: DICA LONGA RECOLHIDA (toque pra expandir) ═══
+    // Blocos explicativos grandes (cronograma, pedidos da semana) comem a
+    // tela inteira do celular. Quem tiver a classe .dica-recolhe abre e
+    // fecha no toque (o CSS só recolhe em telas estreitas).
+    document.querySelectorAll('.dica-recolhe').forEach(function (d) {
+        d.addEventListener('click', function () {
+            d.classList.toggle('aberta');
+        });
+    });
 });
