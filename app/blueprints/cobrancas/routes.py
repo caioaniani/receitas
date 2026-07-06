@@ -84,7 +84,8 @@ def gerar_da_parcela(parcela_id):
         flash(f'Vencimento ajustado pra {venc.strftime("%d/%m/%Y")} — o '
               'Sicredi exige mínimo de 7 dias após a emissão.', 'warning')
     flash(f'Cobrança criada pra {cob.pagador_nome} '
-          f'(R$ {cob.valor}). Complete o CEP antes da remessa.', 'success')
+          f'(R$ {cob.valor}). Complete endereço e CEP antes da remessa — '
+          'o banco rejeita sem eles.', 'success')
     return redirect(url_for('cobrancas.lista'))
 
 
