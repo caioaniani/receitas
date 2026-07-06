@@ -428,6 +428,10 @@
             var fd = new FormData(form);
             fd.set('so_dia', chave);
             fd.set('ajax', '1');
+            // Auto-save é sempre "só este dia": limpa qualquer ação residual
+            // dos hidden (um clique de Gerar interrompido, por exemplo).
+            fd.set('so_loja', '');
+            fd.set('gerar_todas', '');
             status(chave, '💾 salvando…');
             fetch(form.action, { method: 'POST', body: fd,
                                  credentials: 'same-origin' })
