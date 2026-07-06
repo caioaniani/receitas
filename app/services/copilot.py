@@ -2215,11 +2215,23 @@ def _resolver_item_pedido(nome):
     cozido, saco de pao de queijo), entao tem que cobrir os 3.
 
     B2B e ajuste_estoque continuam usando `_resolver_produto` (so receita +
-    produto), porque MP nao se aplica naqueles fluxos."""
+    produto), porque MP nao se aplica naqueles fluxos.
+
+    So MPs LIBERADAS pra pedido de loja entram (checkbox "sugerir pedido
+    loja" no Banco de MPs — decisao do dono 07/07/2026: loja pedia MP que
+    nao devia). O receber_mp continua vendo todas via `_resolver_mp`."""
     matches = _resolver_produto(nome)
-    for m in _resolver_mp(nome):
-        matches.append({'tipo': 'mp', 'id': m['id'], 'nome': m['nome'],
-                         'match': m.get('match', 'fuzzy')})
+    mps = _resolver_mp(nome)
+    if mps:
+        liberadas = {mid for (mid,) in MateriaPrima.query
+                     .with_entities(MateriaPrima.id)
+                     .filter(MateriaPrima.id.in_([m['id'] for m in mps]),
+                             MateriaPrima.sugerir_pedido_loja.is_(True))
+                     .all()}
+        for m in mps:
+            if m['id'] in liberadas:
+                matches.append({'tipo': 'mp', 'id': m['id'], 'nome': m['nome'],
+                                'match': m.get('match', 'fuzzy')})
     if not matches:
         return matches
     # dedup por (tipo, id) preservando ordem; exato primeiro.
