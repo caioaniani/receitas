@@ -554,14 +554,28 @@ def build_resultado(resultado, ok=True):
             loja_nome = resultado.get('loja') or ''
             sufixo = f' em {loja_nome}' if loja_nome else ''
             partes = [f"✓ {n} desperdicio(s) registrado(s){sufixo}."]
-            # Reaproveitavel: registrou mas NAO baixou estoque — avisa em vez
-            # de confirmar igual a uma baixa real (03/07/2026).
+            # Reaproveitavel: diz EXATAMENTE o que houve com o estoque
+            # (06/07/2026 — o aviso generico "NAO foi baixado" confundia):
+            # com receita de retorno o estoque foi CONVERTIDO na hora
+            # (fresco -> retorno, na loja); sem retorno, nada baixou.
+            convs = [a['convertido_retorno']
+                     for a in (resultado.get('aplicados') or [])
+                     if a.get('convertido_retorno')]
+            if resultado.get('convertido_retorno'):
+                convs.append(resultado['convertido_retorno'])
+            for cv in convs[:5]:
+                partes.append(
+                    f"♻️ virou *{cv.get('destino')}* no estoque da loja "
+                    "(o fresco baixou; a sobra fica como retorno até a "
+                    "coleta — a venda dos recheados baixa dali).")
             n_reap = resultado.get('reaproveitados_sem_baixa') or (
                 1 if resultado.get('reaproveitavel_sem_baixa') else 0)
-            if n_reap:
+            n_sem_retorno = max(0, n_reap - len(convs))
+            if n_sem_retorno:
                 partes.append(
-                    f'⚠️ {n_reap} item(ns) reaproveitável(is): o estoque NÃO '
-                    'foi baixado (a sobra vira retorno/outra receita).')
+                    f'⚠️ {n_sem_retorno} item(ns) reaproveitável(is) sem '
+                    'receita de retorno: o estoque NÃO foi baixado '
+                    '(registro informativo).')
             label_botao = 'Ver desperdícios'
         else:
             partes = ['Feito.']
