@@ -1134,6 +1134,18 @@ servido local — a CDN e bloqueada no sandbox e SEM ela a auditoria mente).
 - O grid do cronograma ja tinha 1a coluna sticky + scroll proprio
   (`.crono-wrap`) — o estouro era o form de filtros sem wrap.
 
+**Varredura TOTAL (06/07/2026, "faz em todas as telas")**: as 146 rotas
+GET-HTML do sistema (extraidas do url_map + fichas parametrizadas) foram
+medidas a 390px — TODAS fecham sem estourar o body. Fixes alem dos globais:
+btn-group com wrap no mobile (b2b/orcamentos), grid dos dashboards com
+`minmax(min(440px,100%),1fr)`, barra do widget de atendimento do painel de
+entregas com wrap (container e filtros), header do /padeiro com wrap +
+`body{overflow-x:hidden}` (drawer fixo com transform cria scroll fantasma
+no Chrome mobile) e `.proj-tarefa` com wrap (linha de tarefa dos projetos).
+Ao criar TELA NOVA: validar a 390px antes de fechar (metodo: Playwright +
+login real + `scrollWidth > clientWidth` = estourou; no sandbox o Bootstrap
+precisa ser servido LOCAL porque a CDN e bloqueada).
+
 ## Sidebar
 
 Secoes (`sidebar-section-title`) sao **colapsaveis** — JS adiciona chevron + persiste
