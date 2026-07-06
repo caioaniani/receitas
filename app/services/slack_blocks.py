@@ -599,9 +599,9 @@ def build_resultado(resultado, ok=True):
             blocks.append(_section(
                 f"♻️ *{s.get('qtd_sobra')}x {s.get('item')}* podem voltar pra "
                 f"indústria (viram *{s.get('destino')}*).\n"
-                f"Quantos vão voltar? Responda aqui com a quantidade + a "
-                f"*foto da sobra* (obrigatória) que eu crio o pedido de "
-                f"retirada com QR pro motorista."))
+                f"*Quantos vão voltar?* Me responda a quantidade e mande uma "
+                f"*foto da sobra* — pode ser em mensagens separadas, eu junto "
+                f"e crio o pedido de retirada com QR pro motorista."))
 
         # Se gerou QR Code (ex: separou pedido → QR saida pro motorista;
         # retirada de sobras → QR de coleta), mostra a imagem inline pro
