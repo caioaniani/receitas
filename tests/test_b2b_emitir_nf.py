@@ -46,7 +46,7 @@ def _venda(cliente, sku=None, desconto=0.0):
 
 def test_emitir_nf_payload_pj_endereco_e_sku(app):
     """Payload leva tipo_pessoa J (CNPJ), endereço estruturado, SKU do
-    mapeamento compartilhado com o site e cabeçalho fiscal explícito."""
+    mapa B2B e cabeçalho fiscal explícito."""
     from app.services import tiny_nf_b2b
     with app.app_context():
         v = _venda(_cliente_completo(), sku='SKU-B2B')
