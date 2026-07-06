@@ -2686,6 +2686,23 @@ def executar_criar_pedido(params, user):
     if not itens_norm:
         return {'ok': False, 'erro': f'Nenhum item resolvido. Nao achei: {", ".join(nao_resolvidos)}'}
 
+    # MP so entra em pedido de loja se estiver liberada no Banco de MPs
+    # (checkbox "sugerir pedido loja" — decisao do dono 07/07/2026). O
+    # resolver ja filtra, mas preview antigo/params re-enviados nao podem
+    # furar a trava.
+    mp_ids = [it['materia_prima_id'] for it in itens_norm if it['materia_prima_id']]
+    if mp_ids:
+        bloqueadas = (MateriaPrima.query
+                      .filter(MateriaPrima.id.in_(mp_ids),
+                              MateriaPrima.sugerir_pedido_loja.is_(False))
+                      .all())
+        if bloqueadas:
+            nomes = ', '.join(m.nome for m in bloqueadas)
+            return {'ok': False, 'erro': (
+                f'Materia(s)-prima(s) nao liberada(s) pra pedido de loja: '
+                f'{nomes}. Um admin pode liberar no Banco de MPs '
+                f'(checkbox "sugerir pedido loja").')}
+
     # Ja existe pedido aberto da loja nessa data? Junta nele em vez de duplicar.
     from app.services.pedido_merge import mesclar_itens, pedido_aberto_para_merge
     alvo = pedido_aberto_para_merge(loja_id, data_entrega, 'confirmado')
