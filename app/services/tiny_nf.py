@@ -26,23 +26,29 @@ def _norm(s):
     return ' '.join(s.lower().split())
 
 
-def mapa_por_item():
-    """Dict {(kind, item_id): TinyProdutoMap} de tudo que já tem registro."""
-    return {(m.kind, m.item_id): m for m in TinyProdutoMap.query.all()}
+def mapa_por_item(canal='site'):
+    """Dict {(kind, item_id): TinyProdutoMap} do que já tem registro no
+    canal. O mapeamento é POR CANAL: no Tiny o B2B é outro cadastro/lista
+    de preço, então o mesmo item pode ter SKUs diferentes."""
+    return {(m.kind, m.item_id): m
+            for m in TinyProdutoMap.query.filter_by(canal=canal).all()}
 
 
-def sku_do_item(kind, item_id):
-    """SKU do Tiny pra um item nosso, ou None se não mapeado."""
-    m = TinyProdutoMap.query.filter_by(kind=kind, item_id=item_id).first()
+def sku_do_item(kind, item_id, canal='site'):
+    """SKU do Tiny pra um item nosso NO CANAL, ou None se não mapeado."""
+    m = TinyProdutoMap.query.filter_by(canal=canal, kind=kind,
+                                       item_id=item_id).first()
     return (m.tiny_sku or '').strip() if m and m.tiny_sku else None
 
 
-def definir_sku(kind, item_id, sku, tiny_nome=None, user_id=None):
-    """Upsert do SKU de um item. SKU vazio = volta a pendente."""
+def definir_sku(kind, item_id, sku, tiny_nome=None, user_id=None,
+                canal='site'):
+    """Upsert do SKU de um item no canal. SKU vazio = volta a pendente."""
     sku = (sku or '').strip()
-    m = TinyProdutoMap.query.filter_by(kind=kind, item_id=item_id).first()
+    m = TinyProdutoMap.query.filter_by(canal=canal, kind=kind,
+                                       item_id=item_id).first()
     if not m:
-        m = TinyProdutoMap(kind=kind, item_id=item_id)
+        m = TinyProdutoMap(canal=canal, kind=kind, item_id=item_id)
         db.session.add(m)
     m.tiny_sku = sku or None
     if tiny_nome is not None:
