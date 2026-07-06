@@ -176,3 +176,71 @@ def test_receita_nao_encontrada_404_e_sem_param_400(app):
     assert client.get('/api/claude/receita', headers=h).status_code == 400
     # E token continua obrigatório.
     assert client.get('/api/claude/receita?nome=x').status_code == 401
+
+
+# ── /loja-vendas-debug: a venda está baixando o estoque? (06/07/2026) ───────
+
+def _seed_vendas_debug():
+    """Loja mapeada+confirmada no Seru, snapshot de venda de 30 itens ontem
+    (20 de produto mapeado + 10 de pendente) e baixa de 20 no estoque."""
+    from datetime import datetime, time
+
+    from app.models import EstoqueLoja, MovEstoqueLoja, SeruLojaMap, VendaMapa, VendaSeruDiaria
+    from app.utils import agora
+    loja = Loja(nome='Ribeiro do Vale', ativa=True)
+    r = Receita(nome='Croissant RV', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0)
+    db.session.add_all([loja, r])
+    db.session.commit()
+    db.session.add(SeruLojaMap(seru_company_name='OPAO RIBEIRO',
+                               loja_id=loja.id, confirmado_em=agora()))
+    db.session.add(VendaMapa(canal='seru', nome_externo='CROISSANT',
+                             receita_id=r.id))
+    db.session.add(VendaMapa(canal='seru', nome_externo='CAFE ESPECIAL'))
+    ontem = hoje() - timedelta(days=1)
+    db.session.add_all([
+        VendaSeruDiaria(data=ontem, loja_seru='OPAO RIBEIRO', loja_id=loja.id,
+                        seru_nome='CROISSANT', qtd=20, faturamento=200),
+        VendaSeruDiaria(data=ontem, loja_seru='OPAO RIBEIRO', loja_id=loja.id,
+                        seru_nome='CAFE ESPECIAL', qtd=10, faturamento=80),
+    ])
+    el = EstoqueLoja(loja_id=loja.id, receita_id=r.id, quantidade=50)
+    db.session.add(el)
+    db.session.flush()
+    db.session.add(MovEstoqueLoja(
+        estoque_loja_id=el.id, tipo='venda_seru', quantidade=20,
+        data=datetime.combine(ontem, time(15, 0)), referencia='teste'))
+    db.session.commit()
+    return loja, ontem
+
+
+def test_loja_vendas_debug_cruza_reportado_com_baixado(app, monkeypatch):
+    from app.services import vendas_diarias
+    monkeypatch.setattr(vendas_diarias, 'garantir_capturado',
+                        lambda *a, **k: None)   # sem API no teste
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    loja, ontem = _seed_vendas_debug()
+    resp = app.test_client().get(
+        '/api/claude/loja-vendas-debug?loja=ribeiro&dias=3',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True
+    assert d['loja']['nome'] == 'Ribeiro do Vale'      # fuzzy resolveu
+    assert d['loja_confirmada_no_seru'] is True
+    dia = next(x for x in d['dias'] if x['data'] == ontem.isoformat())
+    assert dia['seru_reportado_itens'] == 30
+    assert dia['baixas_por_tipo'].get('venda_seru') == 20
+    # O gap é explicado pelo mapa: o CAFE (pendente) vendeu 10 e não baixa.
+    cafe = next(p for p in d['produtos'] if p['seru_nome'] == 'CAFE ESPECIAL')
+    assert cafe['estado_map'] == 'pendente'
+    assert d['itens_vendidos_sem_baixa_por_mapa'] == 10
+
+
+def test_loja_vendas_debug_loja_desconhecida_404(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    resp = app.test_client().get(
+        '/api/claude/loja-vendas-debug?loja=nao-existe-xyz',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 404
+    assert 'lojas' in resp.get_json()
