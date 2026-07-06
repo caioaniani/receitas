@@ -150,30 +150,29 @@ def test_idempotente_nao_reemite(app):
         emi.assert_not_called()
 
 
-def test_item_b2b_aparece_na_tela_de_mapeamento(app):
-    """Item vendável só no B2B (preço de atacado, SEM preco_site) e item já
-    vendido em VendaB2B aparecem em `itens_para_mapear` com origem 'b2b' —
-    sem isso não haveria como mapear o SKU e a NF do B2B ficava travada."""
-    from app.models import Receita
-    from app.services import tiny_nf
+def test_mapeamento_b2b_e_separado_do_site(app):
+    """O mapa é POR CANAL: o mesmo item pode ter SKU diferente no site e no
+    B2B (no Tiny são cadastros/listas de preço distintos), e o SKU do site
+    NÃO vale pra emissão B2B."""
+    from app.services import tiny_nf, tiny_nf_b2b
     with app.app_context():
-        # Receita de atacado, fora do site
-        r = Receita(nome='Pao de Atacado', categoria='Paes',
-                    rendimento_qtd=1, rendimento_unidade='un',
-                    peso_base=100.0, preco_venda=8.0)
-        db.session.add(r)
-        db.session.commit()
-        # Produto sem preço nenhum, mas com venda B2B registrada
-        v = _venda(_cliente_completo())          # cria Produto sem SKU
+        v = _venda(_cliente_completo())            # produto SEM SKU b2b
         prod_id = v.itens[0].produto_id
-        itens = tiny_nf.itens_para_mapear()
-        por_chave = {(i['kind'], i['id']): i for i in itens}
-        assert por_chave[('receita', r.id)]['origem'] == 'b2b'
-        assert por_chave[('produto', prod_id)]['origem'] == 'b2b'
+        tiny_nf.definir_sku('produto', prod_id, 'SKU-SITE')   # só no site
+        with patch('app.services.tiny.incluir_nota_fiscal') as inc:
+            res = tiny_nf_b2b.emitir_nf(v)
+        assert not res['ok'] and 'SKU B2B' in res['msg']
+        inc.assert_not_called()
+        # Mapeia no canal b2b com OUTRO SKU — os dois convivem.
+        tiny_nf.definir_sku('produto', prod_id, 'SKU-B2B', canal='b2b')
+        assert tiny_nf.sku_do_item('produto', prod_id) == 'SKU-SITE'
+        assert tiny_nf.sku_do_item('produto', prod_id, canal='b2b') == 'SKU-B2B'
 
 
-def test_sync_fuzzy_mapeia_item_b2b(app):
-    """O match por nome (planilha/API do Tiny) também cobre os itens B2B."""
+def test_itens_para_mapear_do_canal_b2b(app):
+    """A tela /b2b/tiny-skus lista o catálogo de atacado: receita com preço
+    de atacado (sem preco_site) e item já vendido em VendaB2B — e NÃO vaza
+    pra lista do site."""
     from app.models import Receita
     from app.services import tiny_nf
     with app.app_context():
@@ -182,9 +181,59 @@ def test_sync_fuzzy_mapeia_item_b2b(app):
                     peso_base=100.0, preco_venda=8.0)
         db.session.add(r)
         db.session.commit()
-        res = tiny_nf._aplicar_pares([('Pao de Atacado', 'SKU-ATAC')])
+        v = _venda(_cliente_completo())          # Produto sem preço, vendido
+        prod_id = v.itens[0].produto_id
+        chaves_b2b = {(i['kind'], i['id'])
+                      for i in tiny_nf.itens_para_mapear(canal='b2b')}
+        assert ('receita', r.id) in chaves_b2b
+        assert ('produto', prod_id) in chaves_b2b
+        chaves_site = {(i['kind'], i['id'])
+                       for i in tiny_nf.itens_para_mapear(canal='site')}
+        assert ('receita', r.id) not in chaves_site   # atacado não é vitrine
+
+
+def test_sync_fuzzy_mapeia_item_b2b_no_canal_b2b(app):
+    """O match por nome (planilha/API) do canal b2b grava no mapa b2b e não
+    toca no mapa do site."""
+    from app.models import Receita, TinyProdutoMap
+    from app.services import tiny_nf
+    with app.app_context():
+        r = Receita(nome='Pao de Atacado', categoria='Paes',
+                    rendimento_qtd=1, rendimento_unidade='un',
+                    peso_base=100.0, preco_venda=8.0)
+        db.session.add(r)
+        db.session.commit()
+        res = tiny_nf._aplicar_pares([('Pao de Atacado', 'SKU-ATAC')],
+                                     canal='b2b')
         assert res['exatos'] == 1
-        assert tiny_nf.sku_do_item('receita', r.id) == 'SKU-ATAC'
+        assert tiny_nf.sku_do_item('receita', r.id, canal='b2b') == 'SKU-ATAC'
+        assert tiny_nf.sku_do_item('receita', r.id) is None    # site intacto
+        assert TinyProdutoMap.query.filter_by(canal='site').count() == 0
+
+
+def test_rota_tela_tiny_skus_b2b(app, owner_user):
+    """GET /b2b/tiny-skus (dono) lista o item; POST definir grava canal b2b."""
+    from app.models import Receita
+    from app.services import tiny_nf
+    with app.app_context():
+        r = Receita(nome='Pao de Atacado', categoria='Paes',
+                    rendimento_qtd=1, rendimento_unidade='un',
+                    peso_base=100.0, preco_venda=8.0)
+        db.session.add(r)
+        db.session.commit()
+        rid = r.id
+    c = app.test_client()
+    _login(c, owner_user.id)
+    resp = c.get('/b2b/tiny-skus')
+    assert resp.status_code == 200
+    assert 'Pao de Atacado' in resp.get_data(as_text=True)
+    resp2 = c.post('/b2b/tiny-skus/definir',
+                   data={'kind': 'receita', 'item_id': rid, 'sku': 'SKU-9'},
+                   follow_redirects=True)
+    assert resp2.status_code == 200
+    with app.app_context():
+        assert tiny_nf.sku_do_item('receita', rid, canal='b2b') == 'SKU-9'
+        assert tiny_nf.sku_do_item('receita', rid) is None
 
 
 # ── rotas ──────────────────────────────────────────────────────────────────
