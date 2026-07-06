@@ -23,6 +23,9 @@
             <td class="text-end">{{ '%.0f'|format(c.desconto_percentual or 0) }}%</td>
             <td>
                 <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modal-cliente-{{ c.id }}">Editar</button>
+                <a href="{{ url_for('b2b.cliente_precos', cid=c.id) }}" class="btn btn-sm btn-outline-primary"
+                   title="Tabela de preços específica deste cliente (vence o atacado padrão)">
+                    <i class="bi bi-tags"></i> Preços</a>
             </td>
         </tr>
         {% else %}
