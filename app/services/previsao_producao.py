@@ -1866,8 +1866,14 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             minimo = ceil(unid_por_fornada * _MIN_FRACAO_FORNADA)
             for i in range(len(liquido) - 1, 0, -1):
                 if 0 < liquido[i] < minimo:
-                    liquido[i - 1] += liquido[i]
-                    liquido[i] = 0
+                    # Consolida no dia anterior PERMITIDO (fornada especial
+                    # nao pode receber dribble em qua/ter/seg); sem dia
+                    # anterior permitido, fica onde esta (i ja e permitido).
+                    j = next((k for k in range(i - 1, -1, -1)
+                              if permitido is None or permitido[k]), None)
+                    if j is not None:
+                        liquido[j] += liquido[i]
+                        liquido[i] = 0
         por_dia = []
         for i, p in enumerate(dias_prod):
             qtd = liquido[i]
