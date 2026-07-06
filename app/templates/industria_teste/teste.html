@@ -213,24 +213,26 @@
         </label>
         <button class="btn btn-sm btn-outline-secondary">ver</button>
     </form>
-    <form method="POST" action="{{ url_for('industria_teste.limpar_edicoes') }}"
-          class="mb-0"
-          onsubmit="return confirm('Apagar TODAS as edições manuais (rascunhos) do cronograma? Tudo volta pro cálculo automático. Não mexe em pedido enviado, estoque nem matéria-prima.');">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="horizonte" value="{{ horizonte }}">
-        <input type="hidden" name="janela" value="{{ janela }}">
-        <input type="hidden" name="inicio" value="{{ inicio }}">
-        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
-        <button class="btn btn-sm btn-outline-danger"
-                title="Volta todas as receitas pro cálculo automático (apaga os rascunhos de edição manual)">
-            ↺ limpar edições manuais
-        </button>
-    </form>
-    <a class="btn btn-sm btn-outline-primary mb-0"
-       href="{{ url_for('industria_teste.auditoria') }}"
-       title="Ordens de produção mandadas e ainda não confirmadas pelo padeiro">
-        🔎 auditoria de produção
-    </a>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <form method="POST" action="{{ url_for('industria_teste.limpar_edicoes') }}"
+              class="mb-0"
+              onsubmit="return confirm('Apagar TODAS as edições manuais (rascunhos) do cronograma? Tudo volta pro cálculo automático. Não mexe em pedido enviado, estoque nem matéria-prima.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="horizonte" value="{{ horizonte }}">
+            <input type="hidden" name="janela" value="{{ janela }}">
+            <input type="hidden" name="inicio" value="{{ inicio }}">
+            {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
+            <button class="btn btn-sm btn-outline-danger"
+                    title="Volta todas as receitas pro cálculo automático (apaga os rascunhos de edição manual)">
+                ↺ limpar edições manuais
+            </button>
+        </form>
+        <a class="btn btn-sm btn-outline-primary mb-0"
+           href="{{ url_for('industria_teste.auditoria') }}"
+           title="Ordens de produção mandadas e ainda não confirmadas pelo padeiro">
+            🔎 auditoria de produção
+        </a>
+    </div>
 </div>
 
 {% if crono.receitas %}
