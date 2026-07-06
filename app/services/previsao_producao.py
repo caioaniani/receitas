@@ -540,11 +540,25 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     residual_rate = {rid: _taxa_residual(qtd_dow.get(rid, {}), soma_total.get(rid, 0),
                                          dias_calendario_janela)
                      for rid in receitas}
+    # Motor 'vendas'/'maior': curva de VENDA real por (receita, dow, data) —
+    # mesma forma do historico de pedidos, entao a media por recencia e a
+    # taxa residual funcionam identicas.
+    qtd_dow_v, soma_v, datas_v, residual_v = {}, {}, {}, {}
+    if motor in ('vendas', 'maior'):
+        qtd_dow_v, soma_v, datas_v = _hist_vendas_receita_por_dow(
+            hist_ini, hist_fim)
+        residual_v = {rid: _taxa_residual(qtd_dow_v.get(rid, {}),
+                                          soma_v.get(rid, 0),
+                                          dias_calendario_janela)
+                      for rid in receitas}
+
     previsto = defaultdict(float)
     demanda_soma = defaultdict(float)
     for rid in receitas:
         rid_dow = qtd_dow.get(rid, {})
-        tem_hist = bool(datas_total.get(rid))
+        rid_dow_v = qtd_dow_v.get(rid, {}) if motor != 'pedidos' else {}
+        usa_p = motor in ('pedidos', 'maior') and bool(datas_total.get(rid))
+        usa_v = motor in ('vendas', 'maior') and bool(datas_v.get(rid))
         L = lead.get(rid, 0)
         dias_rid = [inicio_d + timedelta(days=L + i)
                     for i in range(horizonte_dias)]
@@ -552,11 +566,16 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         for d in dias_rid:
             f_d = float(firme_dia[rid].get(d, 0))
             p_d = 0.0
-            if tem_hist and _fornada_no_dia(rec_rid, d):
+            if (usa_p or usa_v) and _fornada_no_dia(rec_rid, d):
                 dow = d.weekday()
-                p_d = _previsto_dow(
+                p_ped = _previsto_dow(
                     rid_dow.get(dow), hoje_d, residual_rate[rid],
-                    datas_possiveis=datas_possiveis_dow[dow])
+                    datas_possiveis=datas_possiveis_dow[dow]) if usa_p else 0.0
+                p_ven = _previsto_dow(
+                    rid_dow_v.get(dow), hoje_d, residual_v.get(rid, 0.0),
+                    datas_possiveis=datas_possiveis_dow[dow]) if usa_v else 0.0
+                p_d = max(p_ped, p_ven) if motor == 'maior' else (
+                    p_ven if motor == 'vendas' else p_ped)
                 previsto[rid] += p_d
             demanda_soma[rid] += max(f_d, p_d)
 
@@ -564,9 +583,15 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         if not _fornada_no_dia(receitas.get(rid), dia):
             return 0.0
         dow = dia.weekday()
-        return _previsto_dow(
+        p_ped = _previsto_dow(
             qtd_dow.get(rid, {}).get(dow), hoje_d, residual_rate.get(rid, 0.0),
             datas_possiveis=datas_possiveis_dow[dow])
+        if motor == 'pedidos':
+            return p_ped
+        p_ven = _previsto_dow(
+            qtd_dow_v.get(rid, {}).get(dow), hoje_d, residual_v.get(rid, 0.0),
+            datas_possiveis=datas_possiveis_dow[dow])
+        return p_ven if motor == 'vendas' else max(p_ped, p_ven)
 
     # 4b. Demanda IMINENTE: entregas entre HOJE e o inicio da janela de
     # producao de cada receita ([hoje, inicio+lead-1]). Elas CONSOMEM estoque
