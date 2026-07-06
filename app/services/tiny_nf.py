@@ -498,12 +498,12 @@ def baixar_danfe_pdf(nota_id):
     return r.content
 
 
-def importar_planilha(conteudo, filename, user_id=None):
-    """Importa o export de produtos do Tiny e mapeia os SKUs por nome.
-    Devolve contadores ou {erro}."""
+def importar_planilha(conteudo, filename, user_id=None, canal='site'):
+    """Importa o export de produtos do Tiny e mapeia os SKUs por nome nos
+    itens do canal. Devolve contadores ou {erro}."""
     pares = _parse_planilha(conteudo, filename)
     if not pares:
         return {'erro': 'Não consegui ler a planilha. Use o export de '
                 'produtos do Tiny (.xls ou .csv) com as colunas "Descrição" '
                 'e "Código (SKU)".'}
-    return _aplicar_pares(pares, user_id=user_id)
+    return _aplicar_pares(pares, user_id=user_id, canal=canal)
