@@ -185,7 +185,8 @@ def _catalogo_venda():
         elif ep.produto_id:
             estoque_map[f'produto:{ep.produto_id}'] = ep.quantidade or 0
     return {'clientes': clientes, 'receitas': receitas, 'produtos': produtos,
-            'precos_map': precos_map, 'estoque_map': estoque_map}
+            'precos_map': precos_map, 'estoque_map': estoque_map,
+            'precos_cliente_map': precos_cliente_map}
 
 
 def _parse_venda_form():
