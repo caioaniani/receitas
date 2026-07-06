@@ -64,9 +64,9 @@ def _itens_b2b():
     """Itens vendáveis no B2B: receitas com preço de atacado
     (`Receita.preco_venda`), produtos com `preco_atacado`, e qualquer item
     que já apareceu numa VendaB2B (venda avulsa de item sem preço de
-    atacado cadastrado). A NF do B2B usa o MESMO mapeamento de SKU do site
-    — sem essa lista, item vendido só no atacado nunca apareceria na tela
-    pra mapear e a emissão ficava travada sem saída na UI."""
+    atacado cadastrado). É o universo da tela /b2b/tiny-skus — sem essa
+    lista, item vendido só no atacado nunca apareceria pra mapear e a
+    emissão de NF B2B ficava travada sem saída na UI."""
     from app.models import Produto, Receita, VendaB2BItem
 
     receitas = (Receita.query
