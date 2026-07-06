@@ -293,6 +293,151 @@ def test_fornada_especial_produz_na_vespera(app):
     assert por_data.get(sexta.isoformat(), 0) == 0    # não na sexta
 
 
+# ── motor de previsão: pedidos | vendas | maior (dono, 06/07/2026) ──────────
+# "+1 opção de previsão de produção, baseada nas vendas": o previsto pode vir
+# do histórico de PEDIDOS (original), da VENDA real das lojas (+ merma) ou do
+# MAIOR dos dois por dia. O firme conta sempre.
+
+def _vendas_no_dow(receita, loja, qtd, semanas=4, dow=None):
+    """Semeia vendas semanais no mesmo dia-da-semana (default: o dow de
+    hoje+2, pra previsão cair no horizonte)."""
+    from datetime import datetime as _dt
+    from datetime import time as _time
+
+    from app.models import EstoqueLoja, MovEstoqueLoja
+    el = EstoqueLoja.query.filter_by(loja_id=loja.id,
+                                     receita_id=receita.id).first()
+    if el is None:
+        el = EstoqueLoja(loja_id=loja.id, receita_id=receita.id, quantidade=0)
+        db.session.add(el)
+        db.session.commit()
+    alvo = hoje() + timedelta(days=2)
+    if dow is not None:
+        while alvo.weekday() != dow:
+            alvo += timedelta(days=1)
+    for sem in range(1, semanas + 1):
+        d = alvo - timedelta(days=7 * sem)
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo='venda_seru', quantidade=qtd,
+            data=_dt.combine(d, _time(12, 0)), referencia='teste-motor'))
+    db.session.commit()
+    return alvo
+
+
+def test_balanco_motor_vendas_preve_pela_venda(app):
+    """Receita que VENDE toda semana mas nunca teve pedido: o motor 'pedidos'
+    não vê nada; o motor 'vendas' prevê e manda produzir."""
+    from app.services.previsao_producao import balanco_industria
+
+    loja = _loja()
+    r = _receita('Croissant Venda')
+    _vendas_no_dow(r, loja, 40)
+
+    bal_p = balanco_industria(horizonte_dias=7, usar_cache=False,
+                              motor='pedidos')
+    item_p = next((i for i in bal_p['itens'] if i['receita_id'] == r.id), None)
+    assert item_p is None or item_p['previsto'] == 0
+
+    bal_v = balanco_industria(horizonte_dias=7, usar_cache=False,
+                              motor='vendas')
+    assert bal_v['motor'] == 'vendas'
+    item_v = next(i for i in bal_v['itens'] if i['receita_id'] == r.id)
+    assert item_v['previsto'] > 0
+    assert item_v['produzir'] > 0          # sem estoque, produz pra cobrir
+
+
+def test_cronograma_motor_vendas_produz_no_dia_da_venda(app):
+    """A curva diária segue a venda: vendeu sempre no dow X → produção cai no
+    dia cuja entrega é X (lead 0)."""
+    loja = _loja()
+    r = _receita('Pão Venda Dia')
+    alvo = _vendas_no_dow(r, loja, 30)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                motor='vendas')
+    assert crono['motor'] == 'vendas'
+    rr = _rec_out(crono, r.id)
+    assert rr is not None
+    por_data = {c['data']: c['qtd'] for c in rr['por_dia']}
+    assert por_data.get(alvo.isoformat(), 0) > 0
+
+
+def test_motor_maior_usa_o_maior_dos_dois(app):
+    """Pedidos de 20/semana e venda de 50/semana no MESMO dow → 'maior'
+    prevê pelo menos o previsto de vendas (nunca menos que qualquer motor)."""
+    from app.services.previsao_producao import balanco_industria
+
+    loja = _loja()
+    r = _receita('Pão Maior')
+    alvo = _vendas_no_dow(r, loja, 50)
+    for sem in (1, 2, 3, 4):
+        _pedido(loja, 'entregue', alvo - timedelta(days=7 * sem), r, 20)
+
+    def _prev(motor):
+        bal = balanco_industria(horizonte_dias=7, usar_cache=False,
+                                motor=motor)
+        it = next((i for i in bal['itens'] if i['receita_id'] == r.id), None)
+        return it['previsto'] if it else 0
+
+    prev_p, prev_v, prev_m = _prev('pedidos'), _prev('vendas'), _prev('maior')
+    assert prev_v > prev_p > 0
+    assert prev_m >= max(prev_p, prev_v)
+
+
+def test_decompor_motor_vendas_marca_origem(app):
+    from app.services.previsao_producao import decompor_previsao
+
+    loja = _loja()
+    r = _receita('Pão Decompor Venda')
+    _vendas_no_dow(r, loja, 25)
+    dec = decompor_previsao(r.id, horizonte_dias=7, inicio_offset_dias=0,
+                            motor='vendas')
+    assert dec['motor'] == 'vendas'
+    assert dec['total_previsto'] > 0
+    assert all(d['origem'] == 'vendas' for d in dec['dias'])
+
+
+def test_rota_cronograma_motor_vendas_renderiza(app, admin_user):
+    loja = _loja()
+    r = _receita('Croissant Motor UI')
+    _vendas_no_dow(r, loja, 40)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    html = client.get('/telaindustriateste/?motor=vendas').get_data(as_text=True)
+    assert 'previsão por VENDAS' in html          # badge do motor ativo
+    assert 'name="motor"' in html                 # select + hidden dos forms
+    assert 'Croissant Motor UI' in html
+
+
+def test_enviar_com_motor_vendas_usa_a_grade_de_vendas(app, admin_user):
+    """Enviar ao padeiro com motor=vendas cria a ordem a partir da grade de
+    VENDAS — receita sem pedido histórico entra no plano (no motor default
+    ela nem apareceria)."""
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+
+    loja = _loja()
+    r = _receita('Pão Enviar Venda')
+    alvo = _vendas_no_dow(r, loja, 35)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.post('/telaindustriateste/enviar',
+                       data={'data': alvo.isoformat(), 'horizonte': 7,
+                             'janela': 6, 'inicio': 0, 'motor': 'vendas'})
+    assert resp.status_code in (302, 303)
+    assert '/telaindustriateste/' in resp.headers['Location']
+    assert 'motor=vendas' in resp.headers['Location']   # visão preservada
+    plano = PlanejamentoProducao.query.filter_by(
+        data=alvo, origem='cronograma').first()
+    assert plano is not None and plano.enviado_ao_padeiro is True
+    item = PlanejamentoItem.query.filter_by(planejamento_id=plano.id,
+                                            receita_id=r.id).first()
+    assert item is not None and item.qtd_alvo > 0
+
+
 # ── fornada especial: PRODUÇÃO só qui/sex/sáb (decisão do dono 06/07/2026) ──
 # A venda de sex/sáb/dom sai da véspera (qui→sex, sex→sáb, sáb→dom); o
 # cronograma nunca programa (nem deixa editar) produção em seg/ter/qua/dom.
