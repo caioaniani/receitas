@@ -46,6 +46,29 @@ def _equilibrar():
     return request.values.get('equilibrar') in ('1', 'true', 'on')
 
 
+def _motor():
+    """Motor de previsao da demanda (pedido do dono 06/07/2026): 'pedidos'
+    (historico de pedidos das lojas — original/default), 'vendas' (venda real
+    das lojas + merma) ou 'maior' (o maior dos dois por dia)."""
+    from app.services.previsao_producao import MOTORES_PREVISAO_PRODUCAO
+    m = (request.values.get('motor') or 'pedidos').strip()
+    return m if m in MOTORES_PREVISAO_PRODUCAO else 'pedidos'
+
+
+def _params_visao(**extra):
+    """Query params que preservam a visao atual nos redirects (motor so
+    quando nao e o default, pra manter as URLs antigas limpas)."""
+    p = {'horizonte': _horizonte_janela()[0], 'janela': _horizonte_janela()[1],
+         'inicio': _inicio_offset()}
+    if _equilibrar():
+        p['equilibrar'] = 1
+    m = _motor()
+    if m != 'pedidos':
+        p['motor'] = m
+    p.update(extra)
+    return p
+
+
 @industria_teste_bp.route('/')
 @login_required
 @admin_required
