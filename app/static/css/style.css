@@ -1968,6 +1968,7 @@ h6 { font-weight: 600; text-transform: lowercase; }
 /* Print styles — mantém compatibilidade */
 @media print {
     .btn { box-shadow: none !important; }
+}
 
 /* ═══════════════════════════════════════════
    COPILOT — botão flutuante + painel lateral
@@ -1979,7 +1980,7 @@ h6 { font-weight: 600; text-transform: lowercase; }
 
 
 
-@media (max-width: 480px) {
+/* (bloco órfão removido em 06/07/2026 — sobra da remoção do copilot web que deixava TODO o CSS abaixo preso num @media print não fechado; ver commit) */
 /* ═══════════════════════════════════════════
    COMMAND PALETTE (Cmd/Ctrl+K)
    Notion-style modal de busca global
