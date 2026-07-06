@@ -750,6 +750,42 @@
         alert('Não consegui voltar à sugestão: ' + msgErro(resp, d));
     }
 
+    // --- Menu "⋯" das ações do dia (flutua fora do overflow do grid) ---
+    (function () {
+        const menus = {};
+        document.querySelectorAll('.dia-menu').forEach(function (m) {
+            menus[m.dataset.dia] = m;
+            document.body.appendChild(m);   // escapa do scroll/stacking da tabela
+        });
+        let aberto = null;
+        function fechar() {
+            if (aberto) { aberto.hidden = true; aberto = null; }
+        }
+        document.addEventListener('click', function (ev) {
+            const btn = ev.target.closest('.btn-dia-menu');
+            if (btn) {
+                const m = menus[btn.dataset.dia];
+                if (!m) return;
+                if (aberto === m) { fechar(); return; }
+                fechar();
+                m.hidden = false;
+                const r = btn.getBoundingClientRect();
+                const mw = m.offsetWidth || 220;
+                m.style.top = (r.bottom + 4) + 'px';
+                m.style.left = Math.max(
+                    8, Math.min(r.left, window.innerWidth - mw - 8)) + 'px';
+                aberto = m;
+                return;
+            }
+            if (aberto && !ev.target.closest('.dia-menu')) fechar();
+        });
+        document.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Escape') fechar();
+        });
+        window.addEventListener('scroll', fechar, true);
+        window.addEventListener('resize', fechar);
+    })();
+
     // --- Filtros do grid: busca, ocultar zerados (persistido), só em risco ---
     const busca = document.getElementById('crono-busca');
     const semZeros = document.getElementById('crono-sem-zeros');
