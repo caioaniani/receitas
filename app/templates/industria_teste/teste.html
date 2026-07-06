@@ -245,6 +245,7 @@
         <input type="hidden" name="janela" value="{{ janela }}">
         <input type="hidden" name="inicio" value="{{ inicio }}">
         {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
+        {% if motor != 'pedidos' %}<input type="hidden" name="motor" value="{{ motor }}">{% endif %}
 {%- endmacro %}
 
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
