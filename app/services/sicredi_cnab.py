@@ -181,6 +181,12 @@ def validar_para_remessa(cob):
     doc = ''.join(ch for ch in (cob.pagador_cnpj_cpf or '') if ch.isdigit())
     if len(doc) not in (11, 14):
         erros.append(f'#{cob.id} {cob.pagador_nome}: CPF/CNPJ inválido.')
+    # Relatório da homologação (06/07/2026): enderecoPagador (275-314 do
+    # detalhe) é OBRIGATÓRIO — o banco devolveu o arquivo por ele ir vazio.
+    if not _ascii(cob.pagador_endereco, 40).strip():
+        erros.append(f'#{cob.id} {cob.pagador_nome}: endereço do pagador '
+                     'obrigatório (o Sicredi rejeita sem ele) — edite a '
+                     'cobrança.')
     cep = ''.join(ch for ch in (cob.pagador_cep or '') if ch.isdigit())
     if len(cep) != 8:
         erros.append(f'#{cob.id} {cob.pagador_nome}: CEP obrigatório '
