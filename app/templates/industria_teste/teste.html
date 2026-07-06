@@ -397,90 +397,61 @@
             <tr>
                 <th class="rec-col">Receita</th>
                 {% for dia in crono.dias %}
+                {% set est = estados.get(dia.data) %}
                 <th class="{% if dia.data == crono.hoje %}hoje-col{% endif %}">
                     <div>{{ dia.label }}</div>
-                    {% set est = estados.get(dia.data) %}
-                    {% if not est %}
-                    {# sem ordem ainda: enviar direto pro padeiro (cria+envia o
-                       rascunho do grid) OU só aprovar (rascunho pra revisar). #}
-                    <div class="mt-1 d-flex gap-1 justify-content-center flex-wrap">
-                      <form method="POST" action="{{ url_for('industria_teste.enviar') }}" class="d-inline"
-                            onsubmit="return confirm('Enviar a produção de {{ dia.label }} pro padeiro? (cria a ordem com o que está no grid)');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="data" value="{{ dia.data }}">
-                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
-                        <input type="hidden" name="janela" value="{{ janela }}">
-                        <input type="hidden" name="inicio" value="{{ inicio }}">
-                        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
-                        <button class="btn btn-success btn-sm" style="font-size:.66rem;padding:.05rem .4rem;">📤 enviar à produção</button>
-                      </form>
-                      <form method="POST" action="{{ url_for('industria_teste.aprovar') }}" class="d-inline"
-                            onsubmit="return confirm('Aprovar o plano de {{ dia.label }} como rascunho? (revisa/edita e envia depois)');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="data" value="{{ dia.data }}">
-                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
-                        <input type="hidden" name="janela" value="{{ janela }}">
-                        <input type="hidden" name="inicio" value="{{ inicio }}">
-                        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
-                        <button class="btn btn-outline-success btn-sm" style="font-size:.62rem;padding:.05rem .35rem;">só aprovar</button>
-                      </form>
+                    <div class="dia-acoes">
+                        {% if not est %}
+                        {# sem ordem: a ação do dia a dia é ENVIAR (cria a
+                           ordem com o grid); "só aprovar" fica no menu. #}
+                        <form method="POST" action="{{ url_for('industria_teste.enviar') }}" class="d-inline"
+                              onsubmit="return confirm('Enviar a produção de {{ dia.label }} pro padeiro? (cria a ordem com o que está no grid)');">
+                            {{ campos_dia(dia.data) }}
+                            <button class="btn btn-success btn-sm btn-dia">📤 enviar</button>
+                        </form>
+                        {% elif not est.enviado %}
+                        <span class="badge bg-warning text-dark dia-badge">✓ rascunho</span>
+                        <form method="POST" action="{{ url_for('industria_teste.enviar') }}" class="d-inline"
+                              onsubmit="return confirm('Enviar a produção de {{ dia.label }} pro padeiro?');">
+                            {{ campos_dia(dia.data) }}
+                            <button class="btn btn-primary btn-sm btn-dia">📤 enviar</button>
+                        </form>
+                        {% else %}
+                        <span class="badge bg-success dia-badge">📤 enviado</span>
+                        {% endif %}
+                        <button type="button" class="btn-dia-menu" data-dia="{{ dia.data }}"
+                                title="Mais ações de {{ dia.label }}"
+                                aria-label="Mais ações de {{ dia.label }}">⋯</button>
                     </div>
-                    {% elif not est.enviado %}
-                    {# aprovado (rascunho) -> editar + enviar #}
-                    <div class="badge bg-warning text-dark mt-1" style="font-size:.62rem;">✓ aprovado (rascunho)</div>
-                    <div class="mt-1 d-flex gap-1 justify-content-center flex-wrap">
-                      <a class="btn btn-outline-secondary btn-sm" style="font-size:.62rem;padding:.05rem .35rem;"
-                         href="{{ url_for('padeiro.editar_plano', data=dia.data) }}">✏️ editar</a>
-                      <form method="POST" action="{{ url_for('industria_teste.enviar') }}" class="d-inline"
-                            onsubmit="return confirm('Enviar a produção de {{ dia.label }} pro padeiro?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="data" value="{{ dia.data }}">
-                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
-                        <input type="hidden" name="janela" value="{{ janela }}">
-                        <input type="hidden" name="inicio" value="{{ inicio }}">
-                        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
-                        <button class="btn btn-primary btn-sm" style="font-size:.62rem;padding:.05rem .35rem;">📤 enviar à produção</button>
-                      </form>
-                      <form method="POST" action="{{ url_for('industria_teste.excluir') }}" class="d-inline"
-                            onsubmit="return confirm('Excluir a ordem (rascunho) de {{ dia.label }}?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="data" value="{{ dia.data }}">
-                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
-                        <input type="hidden" name="janela" value="{{ janela }}">
-                        <input type="hidden" name="inicio" value="{{ inicio }}">
-                        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
-                        <button class="btn btn-outline-danger btn-sm" style="font-size:.62rem;padding:.05rem .35rem;">🗑️ excluir</button>
-                      </form>
+                    <div class="dia-menu" data-dia="{{ dia.data }}" hidden>
+                        <div class="dia-menu-tt">{{ dia.label }}</div>
+                        {% if not est %}
+                        <form method="POST" action="{{ url_for('industria_teste.aprovar') }}"
+                              onsubmit="return confirm('Aprovar o plano de {{ dia.label }} como rascunho? (revisa/edita e envia depois)');">
+                            {{ campos_dia(dia.data) }}
+                            <button>✓ só aprovar (rascunho pra revisar)</button>
+                        </form>
+                        {% elif not est.enviado %}
+                        <a href="{{ url_for('padeiro.editar_plano', data=dia.data) }}">✏️ editar a ordem</a>
+                        <form method="POST" action="{{ url_for('industria_teste.excluir') }}"
+                              onsubmit="return confirm('Excluir a ordem (rascunho) de {{ dia.label }}?');">
+                            {{ campos_dia(dia.data) }}
+                            <button class="menu-perigo">🗑️ excluir rascunho</button>
+                        </form>
+                        {% else %}
+                        <form method="POST" action="{{ url_for('industria_teste.enviar') }}"
+                              onsubmit="return confirm('Atualizar a produção de {{ dia.label }} no padeiro com o que está no grid agora?');">
+                            {{ campos_dia(dia.data) }}
+                            <button title="Reenvia o que está no grid agora (aplica suas edições na produção do padeiro)">🔄 atualizar produção (aplica o grid)</button>
+                        </form>
+                        <a href="{{ url_for('padeiro.editar_plano', data=dia.data) }}">✏️ editar a ordem</a>
+                        <form method="POST" action="{{ url_for('industria_teste.excluir') }}"
+                              onsubmit="return confirm('Excluir a ordem de {{ dia.label }}? O padeiro deixa de ver. (Bloqueado se já houve produção.)');">
+                            {{ campos_dia(dia.data) }}
+                            <button class="menu-perigo">🗑️ excluir ordem</button>
+                        </form>
+                        {% endif %}
                     </div>
-                    {% else %}
-                    {# enviado: padeiro já vê. Editar o grid + reenviar atualiza. #}
-                    <div class="badge bg-success mt-1" style="font-size:.62rem;">📤 enviado</div>
-                    <div class="mt-1 d-flex gap-1 justify-content-center flex-wrap">
-                      <form method="POST" action="{{ url_for('industria_teste.enviar') }}" class="d-inline"
-                            onsubmit="return confirm('Atualizar a produção de {{ dia.label }} no padeiro com o que está no grid agora?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="data" value="{{ dia.data }}">
-                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
-                        <input type="hidden" name="janela" value="{{ janela }}">
-                        <input type="hidden" name="inicio" value="{{ inicio }}">
-                        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
-                        <button class="btn btn-warning btn-sm" style="font-size:.62rem;padding:.05rem .35rem;"
-                                title="Reenvia o que está no grid agora (aplica suas edições na produção do padeiro)">🔄 atualizar produção</button>
-                      </form>
-                      <a class="btn btn-outline-secondary btn-sm" style="font-size:.62rem;padding:.05rem .35rem;"
-                         href="{{ url_for('padeiro.editar_plano', data=dia.data) }}">✏️ editar</a>
-                      <form method="POST" action="{{ url_for('industria_teste.excluir') }}" class="d-inline"
-                            onsubmit="return confirm('Excluir a ordem de {{ dia.label }}? O padeiro deixa de ver. (Bloqueado se já houve produção.)');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="data" value="{{ dia.data }}">
-                        <input type="hidden" name="horizonte" value="{{ horizonte }}">
-                        <input type="hidden" name="janela" value="{{ janela }}">
-                        <input type="hidden" name="inicio" value="{{ inicio }}">
-                        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
-                        <button class="btn btn-outline-danger btn-sm" style="font-size:.62rem;padding:.05rem .35rem;">🗑️ excluir</button>
-                      </form>
-                    </div>
-                    {% endif %}
                 </th>
                 {% endfor %}
                 <th class="tot-col">Total</th>
