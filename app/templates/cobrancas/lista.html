@@ -107,11 +107,18 @@
     </div></div>
 </div>
 </form>
-{# Forms de edição/exclusão FORA do form da remessa (HTML não aninha). #}
+{# Forms de edição/exclusão/voltar FORA do form da remessa (HTML não aninha). #}
 {% for c in abertas %}{% if c.status == 'pendente' %}
 <form id="edit-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.editar', id=c.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
 <form id="del-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.excluir', id=c.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+{% endif %}{% if c.status == 'remessa' %}
+<form id="vp-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.voltar_pendente', id=c.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+{% endif %}{% endfor %}
+{% for c in problemas %}{% if c.status == 'rejeitada' %}
+<form id="vp-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.voltar_pendente', id=c.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
 {% endif %}{% endfor %}
 
