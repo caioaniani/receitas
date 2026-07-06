@@ -142,22 +142,55 @@ def loja_vendas_debug():
     from app.services import vendas_diarias
     from app.utils import hoje, resolver_loja_por_nome
 
-    bruto = (request.args.get('loja') or '').strip()
-    loja = None
-    if bruto.isdigit():
-        loja = db.session.get(Loja, int(bruto))
-    if loja is None and bruto:
-        loja = resolver_loja_por_nome(bruto)
-    if loja is None:
-        return jsonify(ok=False, erro='loja nao encontrada (use ?loja=)',
-                       lojas=[x.nome for x in Loja.query
-                              .filter_by(ativa=True).order_by(Loja.nome)]), 404
     try:
         dias_n = max(1, min(int(request.args.get('dias', 7)), 30))
     except (TypeError, ValueError):
         dias_n = 7
     hoje_d = hoje()
     ini = hoje_d - timedelta(days=dias_n - 1)
+
+    bruto = (request.args.get('loja') or '').strip()
+    if not bruto:
+        # MODO GLOBAL: todos os company names que o Seru reportou na janela e
+        # pra qual Loja cada um está vinculado — revela company vendendo SEM
+        # vínculo (ou vinculado à loja errada), que a visão por loja não pega.
+        nomes_loja = {x.id: x.nome for x in Loja.query.all()}
+        mapas_all = {m.seru_company_name: m for m in SeruLojaMap.query.all()}
+        companies = []
+        for nome_c, qtd, n_dias in (db.session.query(
+                VendaSeruDiaria.loja_seru,
+                func.sum(VendaSeruDiaria.qtd),
+                func.count(func.distinct(VendaSeruDiaria.data)))
+                .filter(VendaSeruDiaria.data >= ini,
+                        VendaSeruDiaria.data <= hoje_d)
+                .group_by(VendaSeruDiaria.loja_seru)
+                .order_by(func.sum(VendaSeruDiaria.qtd).desc()).all()):
+            m = mapas_all.get(nome_c)
+            companies.append({
+                'seru_company': nome_c,
+                'itens_vendidos': int(qtd or 0),
+                'dias_com_venda': int(n_dias or 0),
+                'loja': nomes_loja.get(m.loja_id) if m and m.loja_id else None,
+                'confirmado': bool(m.confirmado_em) if m else False,
+                'ignorar': bool(m.ignorar) if m else False,
+                'sem_mapa': m is None,
+            })
+        return jsonify(ok=True, modo='global',
+                       janela={'inicio': ini.isoformat(),
+                               'fim': hoje_d.isoformat()},
+                       companies=companies,
+                       lojas=[x.nome for x in Loja.query
+                              .filter_by(ativa=True).order_by(Loja.nome)])
+
+    loja = None
+    if bruto.isdigit():
+        loja = db.session.get(Loja, int(bruto))
+    if loja is None:
+        loja = resolver_loja_por_nome(bruto)
+    if loja is None:
+        return jsonify(ok=False, erro='loja nao encontrada',
+                       lojas=[x.nome for x in Loja.query
+                              .filter_by(ativa=True).order_by(Loja.nome)]), 404
 
     # Snapshot das vendas Seru na janela (best-effort — API fora, usa o banco).
     captura_erro = None
