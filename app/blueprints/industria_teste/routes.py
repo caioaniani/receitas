@@ -392,14 +392,10 @@ def limpar_edicoes():
     sugestão calculada. Não toca em pedido enviado, estoque nem MP."""
     from app.services.cronograma_edit import limpar_todos_overrides
 
-    horizonte, janela = _horizonte_janela()
-    inicio = _inicio_offset()
-    eq = 1 if _equilibrar() else None
     n = limpar_todos_overrides()
     flash('%d edição(ões) manual(is) apagada(s) — cronograma voltou pro cálculo.'
           % n if n else 'Não havia edição manual pra limpar.', 'success')
-    return redirect(url_for('industria_teste.index', horizonte=horizonte,
-                            janela=janela, inicio=inicio, equilibrar=eq))
+    return redirect(url_for('industria_teste.index', **_params_visao()))
 
 
 @industria_teste_bp.route('/celula/reset', methods=['POST'])
