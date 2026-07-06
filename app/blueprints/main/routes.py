@@ -3777,11 +3777,20 @@ def loja_online_pedido_status(codigo):
 @owner_required
 def loja_online_tiny_skus():
     from app.services import tiny_nf
-    itens = tiny_nf.itens_para_mapear()
+    itens = tiny_nf.itens_para_mapear(canal='site')
     pendentes = sum(1 for i in itens if i['estado'] != 'mapeado')
-    return render_template('admin/loja_online_tiny.html',
-                           itens=itens, pendentes=pendentes,
-                           total=len(itens))
+    return render_template(
+        'tiny_skus.html', itens=itens, pendentes=pendentes,
+        total=len(itens),
+        titulo='SKUs do Tiny (NF-e) — Site',
+        descricao='A lista cobre os itens publicados no site (preço de '
+                  'site). O B2B tem mapa próprio em B2B → SKUs do Tiny — '
+                  'no Tiny é outro cadastro/lista de preço.',
+        url_definir=url_for('main.loja_online_tiny_definir'),
+        url_sync=url_for('main.loja_online_tiny_sync'),
+        url_importar=url_for('main.loja_online_tiny_importar'),
+        vazio_msg='Nenhum item publicado no site ainda (precisa ter preço '
+                  'de site).')
 
 
 @main_bp.route('/admin/loja-online/tiny-skus/sync', methods=['POST'])
