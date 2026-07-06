@@ -53,6 +53,12 @@ _MIN_OCORRENCIAS_DOW = 2
 # semana nao vira recorrencia).
 _DIAS_FORNADA_ESPECIAL = frozenset({4, 5, 6})
 
+# Fornada especial: a PRODUCAO acontece so qui/sex/sab (decisao do dono
+# 06/07/2026) — o assado fresco do fim de semana sai da vespera da venda
+# (qui->sex, sex->sab, sab->dom). O cronograma nunca programa (nem deixa
+# editar) producao de fornada especial fora desses dias. qui=3, sex=4, sab=5.
+_DIAS_PRODUCAO_FORNADA = frozenset({3, 4, 5})
+
 # Cronograma: um dia que produz MENOS que esta fracao de uma fornada (rend) rola
 # pro proximo dia, pra nao mandar o padeiro acender o forno por 1-2 unidades
 # ("pedido picado"). Como e fracao da fornada, receita cuja fornada rende pouco
