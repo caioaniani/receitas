@@ -139,9 +139,10 @@ _FUZZY_CUTOFF = 86  # score mínimo (rapidfuzz WRatio) pra sugerir um SKU
 
 def _aplicar_pares(pares, user_id=None):
     """Aplica uma lista de (nome_tiny, sku) ao mapeamento dos itens
-    publicados. Match EXATO (nome normalizado igual) → confirma automático;
-    match FUZZY (parecido) → sugestão pra revisar. Nunca toca no que já foi
-    confirmado por humano. Devolve {exatos, sugeridos, sem_match, total}."""
+    mapeáveis (site + B2B). Match EXATO (nome normalizado igual) → confirma
+    automático; match FUZZY (parecido) → sugestão pra revisar. Nunca toca no
+    que já foi confirmado por humano. Devolve {exatos, sugeridos, sem_match,
+    total}."""
     from rapidfuzz import fuzz, process
 
     # Index: nome_normalizado -> (nome_tiny, sku); e lista pro fuzzy.
@@ -157,7 +158,7 @@ def _aplicar_pares(pares, user_id=None):
 
     mp = mapa_por_item()
     exatos = sugeridos = sem_match = 0
-    for it in loja_catalogo.produtos_publicados():
+    for it in itens_mapeaveis():
         m = mp.get((it['kind'], it['id']))
         if m and m.confirmado_em:   # humano já confirmou — não mexe
             continue
