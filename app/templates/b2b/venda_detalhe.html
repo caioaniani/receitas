@@ -133,7 +133,8 @@
                         </button>
                     </form>
                     <p class="text-muted mt-2 mb-0">O Tiny aplica NCM/CFOP/CST do cadastro do produto
-                        (SKUs mapeados em Loja Online → SKUs do Tiny). O cliente precisa de CNPJ/CPF
+                        (<a href="{{ url_for('b2b.tiny_skus') }}">SKUs B2B do Tiny</a> — mapa próprio,
+                        separado do site). O cliente precisa de CNPJ/CPF
                         e endereço completo no cadastro.</p>
                     {% else %}
                     <span class="text-muted">A NF é emitida pelo dono.</span>
