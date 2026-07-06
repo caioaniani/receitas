@@ -2432,5 +2432,5 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
         'horizonte_dias': horizonte_dias, 'janela_semanas': janela_semanas,
         'hist_ini': hist_ini.isoformat(), 'hist_fim': hist_fim.isoformat(),
         'total_previsto': total_previsto, 'total_firme': total_firme,
-        'dias': dias,
+        'dias': dias, 'motor': motor,
     }
