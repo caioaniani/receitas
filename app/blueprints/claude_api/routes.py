@@ -54,16 +54,24 @@ def cronograma():
     pendências do padeiro e alertas de entrega em risco). Campos pesados de
     UI (projeção dia a dia, breakdowns) ficam de fora do payload.
 
-    Params: ?horizonte=7 (1-14), ?janela=6 (1-26), ?inicio=0 (0-14).
+    Params: ?horizonte=7 (1-14), ?janela=6 (1-26), ?inicio=0 (0-14),
+    ?motor=pedidos|vendas|maior (fonte da demanda prevista).
     """
-    from app.services.previsao_producao import cronograma_producao
+    from app.services.previsao_producao import (
+        MOTORES_PREVISAO_PRODUCAO,
+        cronograma_producao,
+    )
     from app.services.producao_pendente import pendencias_por_receita
 
+    motor = (request.args.get('motor') or 'pedidos').strip()
+    if motor not in MOTORES_PREVISAO_PRODUCAO:
+        motor = 'pedidos'
     crono = cronograma_producao(
         horizonte_dias=_int_arg('horizonte', 7, 1, 14),
         janela_semanas=_int_arg('janela', 6, 1, 26),
         inicio_offset_dias=_int_arg('inicio', 0, 0, 14),
-        equilibrar=request.args.get('equilibrar') in ('1', 'true'))
+        equilibrar=request.args.get('equilibrar') in ('1', 'true'),
+        motor=motor)
     pend = pendencias_por_receita()
 
     receitas = []
