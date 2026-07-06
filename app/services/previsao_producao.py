@@ -2265,16 +2265,22 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
 
 
 def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
-                      inicio_offset_dias=0):
+                      inicio_offset_dias=0, motor='pedidos'):
     """Decompoe o `previsto` de UMA receita pra responder 'de qual dia/loja vem
     esse numero?'. Pra cada dia do horizonte mostra a entrega-alvo (dia + lead),
     o pedido FIRME por loja e a PREVISAO do historico decomposta por loja —
-    as entregas recentes daquele dia-da-semana (data, loja, qtd) e a media
+    os registros recentes daquele dia-da-semana (data, loja, qtd) e a media
     recencia-ponderada de cada loja. Read-only, diagnostico. Usa EXATAMENTE a
-    mesma conta do cronograma (`_media_recencia`, dia-da-semana, fallback)."""
+    mesma conta do cronograma (`_media_recencia`, dia-da-semana, fallback).
+
+    `motor` segue o cronograma: 'pedidos' decompoe o historico de PEDIDOS;
+    'vendas' decompoe a VENDA real (+ merma); 'maior' calcula os dois e cada
+    dia mostra o que VENCEU (campo `origem`)."""
     horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
     janela_semanas = max(1, min(int(janela_semanas or 6), 26))
     inicio_offset_dias = max(0, min(int(inicio_offset_dias or 0), 14))
+    if motor not in MOTORES_PREVISAO_PRODUCAO:
+        motor = 'pedidos'
 
     rec = Receita.query.get(int(receita_id))
     if rec is None or rec.arquivada_em is not None:
@@ -2288,25 +2294,44 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
     L = int(rec.dias_producao or 0)
     nomes_loja = {l.id: l.nome for l in Loja.query.all()}
 
-    # Historico: entregas (nao-canceladas) da janela, por dia-da-semana, com
-    # loja e data — a materia-prima da previsao.
-    por_data_agg = defaultdict(lambda: defaultdict(int))      # dow -> data -> qtd
-    por_loja = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))  # dow->loja->data->qtd
-    soma_total = 0
-    for loja_id, data_ent, qtd in (db.session.query(
-            PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoItem.quantidade)
-            .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
-            .filter(PedidoItem.receita_id == rec.id,
-                    PedidoLoja.status != 'cancelado',
-                    PedidoLoja.data_entrega >= hist_ini,
-                    PedidoLoja.data_entrega <= hist_fim).all()):
-        if data_ent is None:
-            continue
-        q = int(qtd or 0)
-        dow = data_ent.weekday()
-        por_data_agg[dow][data_ent] += q
-        por_loja[dow][loja_id][data_ent] += q
-        soma_total += q
+    # Fontes do historico, na MESMA forma: agg = dow->data->qtd;
+    # loja = dow->loja->data->qtd. 'maior' carrega as duas.
+    def _fonte_pedidos():
+        por_data_agg = defaultdict(lambda: defaultdict(int))
+        por_loja = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+        soma = 0
+        for loja_id, data_ent, qtd in (db.session.query(
+                PedidoLoja.loja_id, PedidoLoja.data_entrega,
+                PedidoItem.quantidade)
+                .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+                .filter(PedidoItem.receita_id == rec.id,
+                        PedidoLoja.status != 'cancelado',
+                        PedidoLoja.data_entrega >= hist_ini,
+                        PedidoLoja.data_entrega <= hist_fim).all()):
+            if data_ent is None:
+                continue
+            q = int(qtd or 0)
+            dow = data_ent.weekday()
+            por_data_agg[dow][data_ent] += q
+            por_loja[dow][loja_id][data_ent] += q
+            soma += q
+        return {'agg': por_data_agg, 'loja': por_loja, 'soma': soma,
+                'residual': _taxa_residual(por_data_agg, soma,
+                                           dias_calendario_janela)}
+
+    def _fonte_vendas():
+        qtd_dow_v, soma_v, _datas_v, por_loja_v = _hist_vendas_receita_por_dow(
+            hist_ini, hist_fim, com_loja=True)
+        agg = qtd_dow_v.get(rec.id, {})
+        soma = soma_v.get(rec.id, 0)
+        return {'agg': agg, 'loja': por_loja_v.get(rec.id, {}), 'soma': soma,
+                'residual': _taxa_residual(agg, soma, dias_calendario_janela)}
+
+    fontes = {}
+    if motor in ('pedidos', 'maior'):
+        fontes['pedidos'] = _fonte_pedidos()
+    if motor in ('vendas', 'maior'):
+        fontes['vendas'] = _fonte_vendas()
 
     # Firme: pedidos atuais (ainda nao baixados) na janela de entrega.
     deliv_fim = inicio_d + timedelta(days=horizonte_dias - 1 + L)
@@ -2322,7 +2347,22 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
             firme[data_ent][loja_id] += int(qtd or 0)
 
     datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)   # denom da media
-    residual_rate = _taxa_residual(por_data_agg, soma_total, dias_calendario_janela)
+
+    def _calc_previsto(fonte, dow, entrega):
+        """MESMA conta do cronograma, sobre uma fonte (pedidos ou vendas)."""
+        por_data = fonte['agg'].get(dow) or {}
+        if not _fornada_no_dia(rec, entrega):
+            return 0.0, 'fora_fornada'
+        if por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
+            return _media_recencia(
+                por_data, hoje_d,
+                datas_possiveis=datas_possiveis_dow[dow]), 'media_dow'
+        if fonte['residual'] > 0:
+            return fonte['residual'], 'media_diaria'
+        if fonte['soma']:
+            return 0.0, 'sem_dow'
+        return 0.0, 'sem_historico'
+
     dias = []
     total_previsto_frac = 0.0
     total_firme = 0
@@ -2330,29 +2370,17 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
         prod_d = inicio_d + timedelta(days=i)
         entrega = prod_d + timedelta(days=L)
         dow = entrega.weekday()
-        # Previsto agregado: a MESMA conta do cronograma.
-        por_data = por_data_agg.get(dow) or {}
-        if not _fornada_no_dia(rec, entrega):
-            previsto = 0.0
-            fonte = 'fora_fornada'
-        elif por_data and len(por_data) >= _MIN_OCORRENCIAS_DOW:
-            previsto = _media_recencia(
-                por_data, hoje_d, datas_possiveis=datas_possiveis_dow[dow])
-            fonte = 'media_dow'
-        elif residual_rate > 0:
-            previsto = residual_rate      # taxa residual (volume sem padrao de dow)
-            fonte = 'media_diaria'
-        elif soma_total:
-            previsto = 0.0                # vende, mas so em dows com padrao proprio
-            fonte = 'sem_dow'
-        else:
-            previsto = 0.0
-            fonte = 'sem_historico'
+        # Um candidato por fonte; no 'maior' vale o que vencer no dia.
+        candidatos = [(_calc_previsto(f, dow, entrega), nome_m, f)
+                      for nome_m, f in fontes.items()]
+        (previsto, fonte), origem, f_vence = max(
+            candidatos, key=lambda c: c[0][0])
 
-        # Decomposicao por loja (media recencia-ponderada de cada loja no dow).
+        # Decomposicao por loja (media recencia-ponderada de cada loja no dow)
+        # — da fonte VENCEDORA do dia.
         previsto_lojas = []
         if fonte == 'media_dow':
-            for loja_id, datas in por_loja.get(dow, {}).items():
+            for loja_id, datas in f_vence['loja'].get(dow, {}).items():
                 m = _media_recencia(
                     datas, hoje_d, datas_possiveis=datas_possiveis_dow[dow])
                 if round(m) > 0:
@@ -2361,9 +2389,9 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
                                            'n': len(datas)})
             previsto_lojas.sort(key=lambda x: -x['media'])
 
-        # Entregas cruas do dow (as 12 mais recentes) — a prova do numero.
+        # Registros crus do dow (os 12 mais recentes) — a prova do numero.
         historico = []
-        for loja_id, datas in por_loja.get(dow, {}).items():
+        for loja_id, datas in f_vence['loja'].get(dow, {}).items():
             for data_h, q in datas.items():
                 historico.append({'data': data_h.isoformat(),
                                   'data_label': data_h.strftime('%d/%m'),
