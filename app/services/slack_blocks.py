@@ -516,6 +516,7 @@ _PREVIEW_BUILDERS = {
     'criar_cliente_b2b': _preview_criar_cliente_b2b,
     'anexar_foto_pedido': _preview_anexar_foto_pedido,
     'receber_pedido': _preview_receber_pedido,
+    'criar_retirada_sobras': _preview_criar_retirada_sobras,
 }
 
 # Chaves de params que NUNCA devem aparecer no preview generico (sao grandes/internas).
