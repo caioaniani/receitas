@@ -446,6 +446,43 @@ def _preview_criar_venda_b2b(p, token):
     ]
 
 
+def _preview_criar_retirada_sobras(p, token):
+    """Preview da retirada de sobras: itens → destino, data da coleta e QUAL
+    foto vai de comprovante — desta mensagem ou a última que o usuário mandou
+    no canal (06/07/2026: exigir foto+quantidade na MESMA mensagem só gerava
+    erro e reenvio; agora o sistema junta as duas)."""
+    itens = p.get('itens') or []
+
+    def _fmt(it):
+        nome = (it.get('resolvido') or {}).get('nome') or it.get('nome') or '?'
+        dest = it.get('destino') or nome
+        marker = '' if it.get('resolvido') else ' ⚠ sem match'
+        return f"- {it.get('quantidade')}x {nome} → vira *{dest}*{marker}"
+
+    itens_txt = '\n'.join(_fmt(i) for i in itens[:20]) or '(vazio)'
+    n_fotos = p.get('_n_imagens') or 0
+    if n_fotos and p.get('_foto_anterior'):
+        foto = f"✓ a que você mandou {p['_foto_anterior']}"
+    elif n_fotos:
+        foto = '✓ anexada nesta mensagem'
+    else:
+        foto = '✗ nenhuma — cancele e mande a foto da sobra'
+    return [
+        _header('Retirada de sobras → indústria'),
+        _fields([
+            ('Loja', p.get('loja_nome')
+             or (f"id={p.get('loja_id')}" if p.get('loja_id') else '?')),
+            ('Coleta (motorista)', p.get('data_retirada') or 'amanhã'),
+            ('Foto da sobra', foto),
+        ]),
+        _section(f'*Volta pra indústria:*\n{itens_txt[:2500]}'),
+        _section(':information_source: Confirmando, eu gero o QR de coleta '
+                 'pro motorista. O estoque da loja só baixa quando ele '
+                 'escanear o QR na coleta.'),
+        _botoes(token, 'Criar retirada', 'Cancelar'),
+    ]
+
+
 def _preview_criar_cliente_b2b(p, token):
     return [
         _header('Cadastrar cliente B2B'),
