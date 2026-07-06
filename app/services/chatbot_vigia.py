@@ -748,6 +748,18 @@ def _e_fechamento(texto):
     return bool(t) and len(t) <= 30 and bool(_FECHAMENTO_RE.match(t))
 
 
+def _e_mencao_story(texto):
+    """True pra marcação em story do Instagram (decisão do dono 06/07/2026:
+    'não precisa se preocupar com menções no Instagram'). O Chatwoot entrega
+    a menção como mensagem do cliente ('fulana mentioned you in the story:')
+    e o alerta de 'cliente esperando atendente' disparava — mas ninguém está
+    esperando nada: é marcação social, não atendimento."""
+    t = (texto or '').lower()
+    return ('mentioned you in the story' in t
+            or 'mencionou você no story' in t
+            or 'mencionou voce no story' in t)
+
+
 def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
                                        max_por_ciclo=5):
     """Detector C (12/06/2026, conv #198): cliente manda mensagem em
