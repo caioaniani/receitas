@@ -915,9 +915,14 @@ def responder(historico, *, telefone_contato=None):
                         'erro': ('Transferência recusada: você ainda não '
                                  'consultou nenhuma ferramenta neste turno. '
                                  'Tente resolver primeiro (consultar_produtos, '
-                                 'consultar_pedido, calcular_frete...). Se '
-                                 'após consultar ainda não conseguir, aí sim '
-                                 'transfira.')}, ensure_ascii=False),
+                                 'consultar_pedido, calcular_frete...). '
+                                 'Assunto é pedido/cartinha/confirmação de '
+                                 'compra? Chame consultar_pedido com o número '
+                                 '(peça o número ao cliente se precisar) — '
+                                 'ele devolve status, valores rotulados e o '
+                                 'texto da cartinha. Se após consultar ainda '
+                                 'não conseguir, aí sim transfira.')},
+                        ensure_ascii=False),
                 })
                 continue
             out = _executar_tool(b.name, b.input or {},
