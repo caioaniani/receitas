@@ -2011,6 +2011,14 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         rid = rr['receita_id']
         rec = receitas.get(rid)
         rr['categoria'] = (rec.categoria or '').strip() if rec else ''
+        # Fornada especial: marca as células de dia SEM produção permitida
+        # (seg-qua) pra tela travar a edição — vale também pras linhas
+        # injetadas depois da distribuição (zeradas/override).
+        if rec is not None and getattr(rec, 'fornada_especial', False):
+            rr['fornada_especial'] = True
+            for c, p in zip(rr['por_dia'], dias_prod):
+                if not producao_permitida_no_dia(rec, p):
+                    c['bloqueado'] = True
         it = bal_idx.get(rid)
         # Estoque REAL da linha vem do balanco quando a receita esta la. Corrige o
         # INSUMO: `_explodir_bom` cria a linha da sub-receita com
