@@ -36,6 +36,11 @@ def _normalizar(d):
     tel = _so_digitos(_s('ddd_telefone_1'))
     logradouro = ' '.join(x for x in (_s('descricao_tipo_de_logradouro'),
                                       _s('logradouro')) if x)
+    # minhareceita manda o CEP como NÚMERO — zero à esquerda some
+    # (01001000 vira 1001000). zfill devolve os 8 dígitos.
+    cep = _so_digitos(_s('cep'))
+    if cep:
+        cep = cep.zfill(8)
     return {
         'razao_social': _s('razao_social'),
         'nome_fantasia': _s('nome_fantasia'),
