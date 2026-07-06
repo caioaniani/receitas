@@ -116,6 +116,47 @@ def editar(id):
     return redirect(url_for('cobrancas.lista'))
 
 
+@cobrancas_bp.route('/<int:id>/voltar-pendente', methods=['POST'])
+@login_required
+def voltar_pendente(id):
+    """Cobrança que foi numa remessa mas o banco DEVOLVEU (homologação
+    reprovada, rejeição) volta pra pendente: corrige os dados e entra numa
+    NOVA remessa (novo sequencial). O nosso número é mantido — o título
+    nunca chegou a ser registrado."""
+    _admin_ou_403()
+    cob = Cobranca.query.get_or_404(id)
+    if cob.status not in ('remessa', 'rejeitada'):
+        flash('Só cobrança em remessa (ainda não registrada) ou rejeitada '
+              'pode voltar pra pendente.', 'warning')
+        return redirect(url_for('cobrancas.lista'))
+    cob.status = 'pendente'
+    cob.remessa_id = None
+    cob.motivo_retorno = None
+    db.session.commit()
+    flash(f'{cob.pagador_nome} voltou pra pendente — corrija os dados e '
+          'gere uma NOVA remessa.', 'success')
+    return redirect(url_for('cobrancas.lista'))
+
+
+@cobrancas_bp.route('/<int:id>/boleto.pdf')
+@login_required
+def boleto_pdf(id):
+    """Boleto (ficha de compensação + recibo do pagador) pra imprimir/enviar.
+    Disponível depois que a remessa atribui o nosso número."""
+    _admin_ou_403()
+    cob = Cobranca.query.get_or_404(id)
+    if not cob.nosso_numero:
+        flash('Essa cobrança ainda não tem nosso número — gere a remessa '
+              'primeiro.', 'warning')
+        return redirect(url_for('cobrancas.lista'))
+    from app.services.sicredi_boleto import gerar_boleto_pdf
+    pdf = gerar_boleto_pdf(cob)
+    return Response(
+        bytes(pdf), mimetype='application/pdf',
+        headers={'Content-Disposition':
+                 f'inline; filename=boleto_{cob.nosso_numero}.pdf'})
+
+
 @cobrancas_bp.route('/<int:id>/excluir', methods=['POST'])
 @login_required
 def excluir(id):
