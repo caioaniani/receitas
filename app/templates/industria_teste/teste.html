@@ -723,11 +723,99 @@
         alert('Não consegui voltar à sugestão: ' + msgErro(resp, d));
     }
 
+    // --- Filtros do grid: busca, ocultar zerados (persistido), só em risco ---
+    const busca = document.getElementById('crono-busca');
+    const semZeros = document.getElementById('crono-sem-zeros');
+    const soRisco = document.getElementById('crono-so-risco');
+    const avisoFiltro = document.getElementById('crono-filtro-aviso');
+
+    function aplicarFiltros() {
+        if (!busca) return;
+        const q = (busca.value || '').trim().toLowerCase();
+        let ocultas = 0;
+        document.querySelectorAll('tr.rec-row').forEach(function (tr) {
+            let vis = true;
+            if (q && (tr.dataset.nome || '').indexOf(q) === -1) vis = false;
+            // "ocultar zerados" nunca esconde risco nem produção vencida.
+            if (vis && semZeros && semZeros.checked && tr.dataset.zero === '1'
+                && tr.dataset.risco !== '1' && tr.dataset.pend !== '1') vis = false;
+            if (vis && soRisco && soRisco.checked
+                && tr.dataset.risco !== '1') vis = false;
+            tr.hidden = !vis;
+            if (!vis) {
+                ocultas++;
+                const det = document.querySelector(
+                    'tr.detalhe-row[data-rid="' + tr.dataset.rid + '"]');
+                if (det) det.hidden = true;
+                const chev = document.querySelector(
+                    '.chev[data-rid="' + tr.dataset.rid + '"]');
+                if (chev) chev.classList.remove('aberto');
+            }
+        });
+        // Categoria sem nenhuma receita visível some junto.
+        document.querySelectorAll('tr.cat-row').forEach(function (cat) {
+            let el = cat.nextElementSibling, tem = false;
+            while (el && !el.classList.contains('cat-row')) {
+                if (el.classList.contains('rec-row') && !el.hidden) {
+                    tem = true; break;
+                }
+                el = el.nextElementSibling;
+            }
+            cat.hidden = !tem;
+        });
+        if (avisoFiltro) {
+            avisoFiltro.hidden = !ocultas;
+            avisoFiltro.textContent = ocultas
+                ? (ocultas + ' receita(s) oculta(s) pelo filtro — o rodapé segue somando o plano inteiro.')
+                : '';
+        }
+        try {
+            localStorage.setItem('crono.semZeros',
+                (semZeros && semZeros.checked) ? '1' : '');
+        } catch (e) { /* storage indisponível: filtro só não persiste */ }
+    }
+    if (busca) {
+        busca.addEventListener('input', aplicarFiltros);
+        if (semZeros) {
+            try {
+                semZeros.checked = localStorage.getItem('crono.semZeros') === '1';
+            } catch (e) { /* idem */ }
+            semZeros.addEventListener('change', aplicarFiltros);
+        }
+        if (soRisco) soRisco.addEventListener('change', aplicarFiltros);
+        aplicarFiltros();
+    }
+
     document.addEventListener('change', function (ev) {
         const inp = ev.target.closest('.cel-input');
         if (!inp) return;
         const cell = inp.closest('.cel');
         if (cell) salvar(cell);
+    });
+    // Zeros apagadinhos acompanham a digitação (sem esperar salvar).
+    document.addEventListener('input', function (ev) {
+        const inp = ev.target.closest('.cel-input');
+        if (inp) marcarZerada(inp);
+    });
+    // Enter salva e pula pra MESMA coluna da próxima receita visível —
+    // edição em série de um dia inteiro sem tocar no mouse.
+    document.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Enter') return;
+        const inp = ev.target.closest('.cel-input');
+        if (!inp) return;
+        ev.preventDefault();
+        const cell = inp.closest('td.cel');
+        inp.blur();                    // dispara o change -> salvar
+        if (!cell) return;
+        const rows = Array.prototype.slice.call(
+            document.querySelectorAll('tr.rec-row:not([hidden])'));
+        const i = rows.indexOf(cell.closest('tr'));
+        for (let k = i + 1; k < rows.length; k++) {
+            const prox = rows[k].querySelector(
+                'td.cel[data-data="' + cell.dataset.data
+                + '"]:not(.cel-insumo) .cel-input');
+            if (prox) { prox.focus(); prox.select(); break; }
+        }
     });
     document.addEventListener('click', function (ev) {
         const btn = ev.target.closest('.btn-reset, .btn-reset-inline');
