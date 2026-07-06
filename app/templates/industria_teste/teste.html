@@ -890,7 +890,7 @@
         for (let k = i + 1; k < rows.length; k++) {
             const prox = rows[k].querySelector(
                 'td.cel[data-data="' + cell.dataset.data
-                + '"]:not(.cel-insumo) .cel-input');
+                + '"]:not(.cel-insumo):not(.cel-bloq) .cel-input');
             if (prox) { prox.focus(); prox.select(); break; }
         }
     });
