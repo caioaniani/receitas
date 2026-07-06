@@ -649,7 +649,10 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             'previsto': prev,
             'demanda': demanda,
             'produzir': produzir,
-            'tem_historico': bool(datas_total.get(rid)),
+            # Historico DO MOTOR ativo (pedidos, vendas, ou qualquer um).
+            'tem_historico': bool(
+                (motor in ('pedidos', 'maior') and datas_total.get(rid))
+                or (motor in ('vendas', 'maior') and datas_v.get(rid))),
             'dias_producao': lead.get(rid, 0),
             # Lista TODAS as lojas operacionais — mesmo com qtd=0. Visivel
             # confirma ao usuario que o motor enxergou cada loja. Ordem: qtd
