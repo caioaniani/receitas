@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Preços — {{ cliente.nome }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h1 class="page-title mb-0"><i class="bi bi-tags"></i> Tabela de preços — {{ cliente.nome }}</h1>
+        <p class="page-subtitle mb-0">Preço específico deste cliente <strong>vence</strong> o
+            atacado padrão na venda (e o desconto % não se aplica em cima — o valor já é final).
+            Vazio = volta pro padrão{% if cliente.desconto_percentual %} com {{ '%.0f'|format(cliente.desconto_percentual) }}% de desconto{% endif %}.</p>
+    </div>
+    <a href="{{ url_for('b2b.clientes') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+</div>
+
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <strong>Itens do atacado</strong>
+            <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-check-lg"></i> Salvar tabela</button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead><tr>
+                    <th>Item</th><th>Categoria</th>
+                    <th class="text-end">Atacado padrão</th>
+                    {% if cliente.desconto_percentual %}<th class="text-end">Com {{ '%.0f'|format(cliente.desconto_percentual) }}% desc.</th>{% endif %}
+                    <th class="text-end" title="Último preço praticado numa venda ativa deste cliente">Último vendido</th>
+                    <th style="width:150px">Preço deste cliente</th>
+                </tr></thead>
+                <tbody>
+                {% for it in itens %}
+                <tr>
+                    <td>{{ it.nome }}</td>
+                    <td class="small text-muted">{{ it.categoria }}</td>
+                    <td class="text-end">{% if it.atacado %}R$ {{ '%.2f'|format(it.atacado) }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                    {% if cliente.desconto_percentual %}
+                    <td class="text-end text-muted">{% if it.com_desconto %}R$ {{ '%.2f'|format(it.com_desconto) }}{% else %}—{% endif %}</td>
+                    {% endif %}
+                    <td class="text-end text-muted">{% if it.ultimo %}R$ {{ '%.2f'|format(it.ultimo) }}{% else %}—{% endif %}</td>
+                    <td>
+                        <input type="number" step="0.01" min="0" name="preco[{{ it.ref }}]"
+                               value="{{ '%.2f'|format(it.preco) if it.preco is not none else '' }}"
+                               class="form-control form-control-sm text-end {% if it.preco is not none %}border-success{% endif %}"
+                               placeholder="padrão">
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-muted p-3">Nenhum item de atacado ainda —
+                    preencha o preço de atacado nas fichas ou lance uma venda B2B.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer py-2 text-end">
+            <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-check-lg"></i> Salvar tabela</button>
+        </div>
+    </div>
+</form>
+{% endblock %}
