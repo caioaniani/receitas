@@ -387,7 +387,7 @@ def salvar_historico(conv_id, historico, resposta, *, handoff=False):
 HANDOFF_DEDUP_MIN = 90
 TEXTO_HANDOFF_REPETIDO = ('Já passei seu atendimento para a nossa equipe — '
                           'um atendente humano continua daqui a pouquinho, '
-                          'tá? Obrigado pela paciência! 🙏')
+                          'tá? Obrigado pela paciência!')
 
 
 def handoff_recente(conv_id, minutos=HANDOFF_DEDUP_MIN):
