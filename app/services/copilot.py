@@ -3796,8 +3796,9 @@ def executar_criar_retirada_sobras(params, user):
             continue
     if not blob:
         return {'ok': False, 'erro': (
-            'A foto da sobra é obrigatória pra criar a retirada — anexe a '
-            'foto na MESMA mensagem em que pedir a retirada.')}
+            'Não achei nenhuma foto da sobra — nem nesta mensagem, nem nas '
+            'últimas 2 horas do canal. Mande a foto aqui e repita quantos '
+            'voltam (pode ser em mensagens separadas que eu junto).')}
 
     itens_ok = []
     ignorados = []
