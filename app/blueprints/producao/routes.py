@@ -367,20 +367,48 @@ def pedidos_semana_gerar():
     Campos do form: 'qtd|<loja_id>|<data_iso>|<receita_id>' = quantidade.
 
     Botão "Gerar só esta loja" manda `so_loja=<loja_id>`: gera APENAS aquela loja
-    (o dono pediu enviar loja a loja, não tudo de uma vez). Sem `so_loja` = todas.
+    (o dono pediu enviar loja a loja, não tudo de uma vez). Gerar TODAS exige
+    `gerar_todas=1` EXPLÍCITO — POST sem nenhuma ação não gera nada (fail-closed):
+    o Safari descarta o name/value do submit button quando o clique passa por um
+    confirm(), e o "só esta loja" chegava sem so_loja e gerava todas (06/07/2026).
     """
     from datetime import date
 
     from app.services.pedidos_semana import aplicar_grade
 
+    def _primeiro_nao_vazio(nome):
+        # A ação vem em DOIS lugares com o mesmo nome: o hidden preenchido por
+        # JS no clique e o name/value do próprio botão — qualquer um dos dois
+        # pode faltar (Safari dropa o do botão; sem JS falta o hidden).
+        for v in request.form.getlist(nome):
+            v = (v or '').strip()
+            if v:
+                return v
+        return None
+
+    def _voltar():
+        # Preserva a visão (horizonte/janela/inicio) E a tela de origem — na
+        # geração por loja você continua na MESMA tela pra mandar a próxima.
+        try:
+            horizonte = max(1, min(int(request.form.get('horizonte', 7)), 14))
+            janela = max(1, min(int(request.form.get('janela', 6)), 26))
+            inicio = max(0, min(int(request.form.get('inicio', 0)), 14))
+        except (TypeError, ValueError):
+            horizonte, janela, inicio = 7, 6, 0
+        destino = ('producao.pedidos_semana_estoque'
+                   if request.form.get('origem') == 'estoque'
+                   else 'producao.pedidos_semana_media')
+        return redirect(url_for(destino, horizonte=horizonte, janela=janela,
+                                inicio=inicio))
+
     try:
-        so_loja = int(request.form.get('so_loja') or 0) or None
+        so_loja = int(_primeiro_nao_vazio('so_loja') or 0) or None
     except (TypeError, ValueError):
         so_loja = None
     # Botao "atualizar" do cabecalho do dia: aplica SO aquele (loja, dia) —
     # atualiza o pedido existente sem mexer no resto da grade.
     so_dia = None
-    bruto = (request.form.get('so_dia') or '').strip()
+    bruto = _primeiro_nao_vazio('so_dia') or ''
     if bruto and '|' in bruto:
         loja_s, data_s = bruto.split('|', 1)
         try:
@@ -388,6 +416,17 @@ def pedidos_semana_gerar():
             so_dia = (int(loja_s), _date.fromisoformat(data_s))
         except (TypeError, ValueError):
             so_dia = None
+    gerar_todas = _primeiro_nao_vazio('gerar_todas') is not None
+
+    if so_loja is None and so_dia is None and not gerar_todas:
+        # Nenhuma ação identificada: NUNCA cair no "gera todas" por omissão.
+        if request.form.get('ajax') == '1':
+            return jsonify(ok=False, mudou=False,
+                           msg='Ação não identificada — nada foi gerado.'), 400
+        flash('Nenhum pedido foi gerado: não deu pra identificar qual botão '
+              'foi clicado (proteção contra gerar TODAS as lojas sem querer). '
+              'Tente de novo pelo botão desejado.', 'warning')
+        return _voltar()
 
     agrupado = {}   # (loja_id, data) -> list[{receita_id|materia_prima_id, qtd}]
     for chave, valor in request.form.items():
