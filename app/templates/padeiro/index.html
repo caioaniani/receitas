@@ -10,7 +10,8 @@
   body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
          background:#f1f3f5; color:#212529; padding-bottom:50px; }
   header { background:#212529; color:#fff; padding:12px 20px; display:flex;
-           align-items:center; gap:16px; position:sticky; top:0; z-index:10; }
+           align-items:center; gap:16px; position:sticky; top:0; z-index:10;
+           flex-wrap:wrap; }
   header h1 { font-size:22px; margin:0; white-space:nowrap; }
   header .sair { color:#fff; text-decoration:none; font-size:16px; background:#495057;
                  padding:10px 16px; border-radius:10px; white-space:nowrap; }
@@ -58,6 +59,8 @@
   .flash.danger  { background:#f8d7da; color:#842029; }
   .flash.info    { background:#cff4fc; color:#055160; }
   form { margin:0; }
+  /* drawer fixo+transform cria scroll fantasma no Chrome mobile */
+  body { overflow-x:hidden; }
   .datenav { flex:1; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
   .dnav { text-align:center; text-decoration:none; background:#495057; color:#fff;
           font-weight:800; font-size:16px; padding:10px 18px; border-radius:12px; }

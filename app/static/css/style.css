@@ -2408,6 +2408,12 @@ h6 { font-weight: 600; text-transform: lowercase; }
     .main-content .d-flex .form-select,
     .main-content .d-flex select { min-width: 7rem; }
 
+    /* Grupo de botões largo quebra linha em vez de esticar o body. */
+    .main-content .btn-group { flex-wrap: wrap; }
+
+    /* Linha de tarefa (projetos): controles quebram pra 2ª linha. */
+    .proj-tarefa { flex-wrap: wrap; }
+
     /* Dica explicativa longa: recolhida, expande no toque (JS alterna). */
     .dica-recolhe {
         max-height: 5.2em;
