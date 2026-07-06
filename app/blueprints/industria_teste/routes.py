@@ -80,8 +80,10 @@ def index():
     horizonte, janela = _horizonte_janela()
     inicio = _inicio_offset()
     equilibrar = _equilibrar()
+    motor = _motor()
     crono = cronograma_producao(horizonte_dias=horizonte, janela_semanas=janela,
-                                inicio_offset_dias=inicio, equilibrar=equilibrar)
+                                inicio_offset_dias=inicio, equilibrar=equilibrar,
+                                motor=motor)
     # Overlay "verde": produção mandada e ainda não confirmada pelo padeiro.
     # Projeção pura (não é estoque real) — soma por cima do em_estoque no grid.
     pend = pendencias_por_receita()
