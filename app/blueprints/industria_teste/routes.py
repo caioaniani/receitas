@@ -243,14 +243,16 @@ def previsao(receita_id):
 
     horizonte, janela = _horizonte_janela()
     inicio = _inicio_offset()
+    motor = _motor()
     dec = decompor_previsao(receita_id, horizonte_dias=horizonte,
-                            janela_semanas=janela, inicio_offset_dias=inicio)
+                            janela_semanas=janela, inicio_offset_dias=inicio,
+                            motor=motor)
     if dec is None:
         flash('Receita não encontrada.', 'warning')
-        return redirect(url_for('industria_teste.index', horizonte=horizonte,
-                                janela=janela, inicio=inicio))
+        return redirect(url_for('industria_teste.index', **_params_visao()))
     return render_template('industria_teste/previsao.html', dec=dec,
-                           horizonte=horizonte, janela=janela, inicio=inicio)
+                           horizonte=horizonte, janela=janela, inicio=inicio,
+                           motor=motor)
 
 
 @industria_teste_bp.route('/aprovar', methods=['POST'])
