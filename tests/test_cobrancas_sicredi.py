@@ -120,6 +120,31 @@ def test_remessa_valida_cep_e_prazo(app, admin_user):
         assert rem2 is None and any('7 dias' in e for e in erros2)
 
 
+def test_remessa_exige_endereco_do_pagador(app, admin_user):
+    """Relatório da homologação (06/07/2026): enderecoPagador (275-314) é
+    obrigatório — o primeiro arquivo foi devolvido por ele ir em branco."""
+    from app.services.sicredi_cnab import gerar_remessa
+    with app.app_context():
+        cob = _cobranca()
+        cob.pagador_endereco = ''
+        db.session.commit()
+        rem, erros = gerar_remessa([cob], user_id=admin_user.id)
+        assert rem is None
+        assert any('endereço' in e for e in erros)
+        db.session.refresh(cob)
+        assert cob.status == 'pendente'             # nada foi gravado
+
+
+def test_remessa_grava_endereco_nas_posicoes_275_314(app, admin_user):
+    from app.services.sicredi_cnab import gerar_remessa
+    with app.app_context():
+        cob = _cobranca()
+        rem, erros = gerar_remessa([cob], user_id=admin_user.id)
+        assert erros == []
+        det = rem.conteudo.split('\r\n')[1]
+        assert det[274:314] == 'RUA DAS LARANJEIRAS 100'.ljust(40)
+
+
 def test_remessa_sequencial_incrementa(app, admin_user):
     from app.services.sicredi_cnab import gerar_remessa
     with app.app_context():
