@@ -13,7 +13,7 @@ Cancelamento estorna automaticamente.
 """
 from datetime import date
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -117,6 +117,20 @@ def cliente_editar(cid):
     db.session.commit()
     flash(f'{c.nome} atualizado.', 'success')
     return redirect(url_for('b2b.clientes'))
+
+
+@b2b_bp.route('/api/cnpj/<cnpj>')
+@login_required
+@admin_required
+def api_cnpj(cnpj):
+    """Consulta o CNPJ na base pública da Receita (BrasilAPI + fallback) e
+    devolve os dados normalizados pro botão "Buscar" do cadastro de cliente
+    preencher razão social/endereço/e-mail — igual ao Tiny."""
+    from app.services import cnpj as cnpj_svc
+    res = cnpj_svc.consultar(cnpj)
+    if res.get('erro'):
+        return jsonify(res), 404 if 'não encontrado' in res['erro'] else 400
+    return jsonify(res)
 
 
 # ── Vendas ──
