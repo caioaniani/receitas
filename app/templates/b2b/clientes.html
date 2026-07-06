@@ -41,7 +41,15 @@
                 <div class="modal-header"><h6 class="modal-title">Novo cliente B2B</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <div class="mb-2"><label class="form-label small">Nome *</label><input type="text" name="nome" class="form-control form-control-sm" required></div>
-                    <div class="mb-2"><label class="form-label small">CNPJ/CPF</label><input type="text" name="cnpj_cpf" class="form-control form-control-sm"></div>
+                    <div class="mb-2"><label class="form-label small">CNPJ/CPF</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" name="cnpj_cpf" class="form-control">
+                            <button type="button" class="btn btn-outline-primary btn-buscar-cnpj"
+                                    title="Buscar razão social e endereço na Receita Federal">
+                                <i class="bi bi-search"></i> Buscar</button>
+                        </div>
+                        <div class="form-text cnpj-msg d-none"></div>
+                    </div>
                     <div class="row g-2">
                         <div class="col-6"><label class="form-label small">Telefone</label><input type="text" name="telefone" class="form-control form-control-sm"></div>
                         <div class="col-6"><label class="form-label small">Contato</label><input type="text" name="contato" class="form-control form-control-sm"></div>
