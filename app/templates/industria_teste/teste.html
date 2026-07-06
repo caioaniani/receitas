@@ -615,7 +615,8 @@
         horizonte: {{ horizonte|tojson }},
         janela: {{ janela|tojson }},
         inicio: {{ inicio|tojson }},
-        equilibrar: {{ (1 if equilibrar else 0)|tojson }}
+        equilibrar: {{ (1 if equilibrar else 0)|tojson }},
+        motor: {{ motor|tojson }}
     };
     const DATAS = {{ crono.dias|map(attribute='data')|list|tojson }};
     const URL_CELULA = "{{ url_for('industria_teste.celula') }}";
