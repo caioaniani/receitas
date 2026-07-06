@@ -487,6 +487,7 @@
                         <span class="chev" data-rid="{{ r.receita_id }}">▸</span>{{ r.nome }}
                         {% if r.dias_producao %}<span class="tag-lead">{{ r.dias_producao }}d</span>{% endif %}
                         {% if r.insumo %}<span class="tag-insumo" title="Insumo de produção (sub-receita)">insumo</span>{% endif %}
+                        {% if r.fornada_especial %}<span class="tag-fds" title="Fornada especial: vende sex/sáb/dom e PRODUZ só qui/sex/sáb (a venda sai da véspera). Os dias hachurados não recebem produção.">fim de semana</span>{% endif %}
                         {% if r.limitado_por_retorno %}<span class="tag-retorno" title="Política 'só de sobras': a produção sugerida é capada ao estoque devolvido de {{ r.limitado_por_retorno.sub_nome }} ({{ r.limitado_por_retorno.disponivel }} disponível → produz até {{ r.limitado_por_retorno.cap }}).">♻️ capado ao retorno</span>{% endif %}
                         {% if r.entregas_risco %}<span class="tag-risco" title="Pedido de loja sem produto, mesmo produzindo como programado:{% for e in r.entregas_risco %}&#10;• {{ e.label }}: pedido de {{ e.firme }}, faltam {{ e.faltam }}{% endfor %}">🚨 falta {{ r.entregas_risco[0].label }}</span>{% endif %}
                     </div>
