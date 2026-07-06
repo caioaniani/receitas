@@ -301,6 +301,140 @@ def test_pergunta_retirada_entra_no_historico(app):
     assert _pergunta_retirada_para_historico(None) == ''
 
 
+# ── foto em mensagem anterior (06/07/2026, prints do dono) ─────────────────
+# Caso real: Kelvin mandou a FOTO num balão e "180" no outro — o bot recusava
+# exigindo tudo na MESMA mensagem e obrigava a reenviar a foto. Agora o
+# slack_bot busca a última foto do próprio usuário no canal (2h) e anexa.
+
+def test_foto_recente_do_canal_pega_ultima_do_usuario(app):
+    import base64
+    import time
+
+    from app.services.slack_bot import _foto_recente_do_canal
+    agora = time.time()
+    msgs = [
+        {'user': 'U123', 'ts': f'{agora - 60:.6f}',
+         'files': [{'mimetype': 'image/jpeg', 'url_private_download': 'u-nova'}]},
+        {'user': 'U999', 'ts': f'{agora - 30:.6f}',        # de OUTRO usuário
+         'files': [{'mimetype': 'image/jpeg', 'url_private_download': 'u-x'}]},
+        {'user': 'U123', 'ts': f'{agora - 600:.6f}',       # dele, mais velha
+         'files': [{'mimetype': 'image/jpeg', 'url_private_download': 'u-velha'}]},
+        {'user': 'U123', 'ts': f'{agora - 40:.6f}', 'text': 'só texto'},
+    ]
+    with app.app_context(), \
+         patch('app.services.slack.historico_canal',
+               return_value=(msgs, None)), \
+         patch('app.services.slack.baixar_arquivo',
+               return_value={'bytes': b'foto!', 'mimetype': 'image/jpeg'}) as bx:
+        fa = _foto_recente_do_canal('C1', 'U123')
+    assert fa is not None
+    # baixou a imagem mais NOVA do próprio usuário (não a do outro)
+    assert bx.call_args[0][0]['url_private_download'] == 'u-nova'
+    assert fa['imagem']['base64'] == base64.b64encode(b'foto!').decode()
+    assert fa['quando'].startswith('ha ')
+
+
+def test_foto_recente_sem_imagem_retorna_none(app):
+    from app.services.slack_bot import _foto_recente_do_canal
+    with app.app_context(), \
+         patch('app.services.slack.historico_canal',
+               return_value=([{'user': 'U123', 'ts': '1.0', 'text': 'oi'}],
+                             None)):
+        assert _foto_recente_do_canal('C1', 'U123') is None
+
+
+def test_mensagem_de_quantidade_usa_foto_de_mensagem_anterior(app, admin_user):
+    """Integração do caso dos prints: '180' sem anexo → o slack_bot embute a
+    última foto do canal nos params da ação pendente (nada de erro pedindo a
+    foto na MESMA mensagem)."""
+    import base64
+    import time
+
+    from app.models import SlackAcaoPendente
+    from app.services.slack_bot import processar_evento_mensagem
+    with app.app_context():
+        resp_tool = {'tipo': 'criar_retirada_sobras', 'requer_aprovacao': True,
+                     'params': {'loja_nome': 'Loja R',
+                                'itens': [{'nome': 'Croissant',
+                                           'quantidade': 180}]},
+                     'explicacao': 'Criando retirada'}
+        msgs = [{'user': 'U123', 'ts': f'{time.time() - 60:.6f}',
+                 'files': [{'mimetype': 'image/jpeg',
+                            'url_private_download': 'u'}]}]
+        with patch('app.services.slack_bot._resolver_usuario',
+                   return_value=admin_user), \
+             patch('app.services.copilot.interpretar',
+                   return_value=resp_tool), \
+             patch('app.services.slack.historico_canal',
+                   return_value=(msgs, None)), \
+             patch('app.services.slack.baixar_arquivo',
+                   return_value={'bytes': b'sobra', 'mimetype': 'image/jpeg'}), \
+             patch('app.services.slack.post_message',
+                   return_value={'ok': True, 'ts': '9'}):
+            processar_evento_mensagem({'user': 'U123', 'channel': 'D9',
+                                       'text': '180', 'channel_type': 'im'})
+        acao = SlackAcaoPendente.query.filter_by(
+            tipo_acao='criar_retirada_sobras').first()
+        assert acao is not None
+        params = json.loads(acao.params_json)
+        assert params['_n_imagens'] == 1
+        assert params['_foto_anterior']
+        assert params['imagens'][0]['base64'] == \
+            base64.b64encode(b'sobra').decode()
+
+
+def test_preview_retirada_mostra_origem_da_foto(app):
+    from app.services.slack_blocks import build_preview
+    base = {'loja_nome': 'Loja R', 'data_retirada': '2026-07-07',
+            'itens': [{'nome': 'Croissant', 'quantidade': 180,
+                       'resolvido': {'tipo': 'receita', 'id': 1,
+                                     'nome': 'Croissant'},
+                       'destino': 'Croissant - Retorno'}]}
+    com_atual = json.dumps(build_preview(
+        'criar_retirada_sobras', {**base, '_n_imagens': 1}, 't1'),
+        ensure_ascii=False)
+    assert 'anexada nesta mensagem' in com_atual
+    com_anterior = json.dumps(build_preview(
+        'criar_retirada_sobras',
+        {**base, '_n_imagens': 1, '_foto_anterior': 'ha 3 min'}, 't2'),
+        ensure_ascii=False)
+    assert 'ha 3 min' in com_anterior
+    sem_foto = json.dumps(build_preview('criar_retirada_sobras', base, 't3'),
+                          ensure_ascii=False)
+    assert 'cancele e mande a foto' in sem_foto
+    assert '180x Croissant' in sem_foto
+
+
+# ── resultado do desperdício diz o que houve com o estoque (06/07/2026) ────
+
+def test_resultado_diferencia_convertido_de_sem_retorno(app):
+    """Com receita de retorno o estoque foi CONVERTIDO (fresco → retorno) —
+    o aviso genérico 'NÃO foi baixado' confundia. Sem retorno, mantém o
+    aviso de que nada baixou."""
+    from app.services.slack_blocks import build_resultado
+    res = {'ok': True, 'loja': 'X', 'total_aplicados': 2,
+           'reaproveitados_sem_baixa': 2,
+           'aplicados': [
+               {'nome': 'Croissant', 'reaproveitavel': True,
+                'convertido_retorno': {'destino': 'Croissant - Retorno',
+                                       'baixado': 10, 'creditado': 10}},
+               {'nome': 'Bolo', 'reaproveitavel': True},
+           ]}
+    txt = json.dumps(build_resultado(res, ok=True), ensure_ascii=False)
+    assert 'virou' in txt and 'Croissant - Retorno' in txt
+    assert 'sem receita de retorno' in txt          # só o Bolo
+
+
+def test_resultado_single_convertido_nao_diz_nao_baixado(app):
+    from app.services.slack_blocks import build_resultado
+    res = {'ok': True, 'desperdicio_id': 5, 'loja': 'X',
+           'reaproveitavel_sem_baixa': True,
+           'convertido_retorno': {'destino': 'Croissant - Retorno'}}
+    txt = json.dumps(build_resultado(res, ok=True), ensure_ascii=False)
+    assert 'virou' in txt
+    assert 'NÃO foi baixado' not in txt
+
+
 def test_enriquecer_lote_preserva_motivo_nao_vendeu(app, admin_user):
     """O preview normalizava com vocabulário velho e 'nao_vendeu' virava
     'vencido' — divergindo do executor. Agora usa a MESMA normalização."""
