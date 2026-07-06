@@ -476,13 +476,27 @@ def bot_webhook():
 
                     resultado = chatbot.responder(
                         historico, telefone_contato=telefone_contato)
+                    # Handoff REPETIDO (auditor 06/07/2026, caso Simone): a
+                    # conversa ja foi transferida ha pouco — em vez de "vou te
+                    # passar pra equipe" de novo, avisa que a equipe ja esta
+                    # com o caso. Status ainda vai pra 'open' (idempotente,
+                    # garante a fila), mas sem 2º registro de handoff.
+                    if (resultado.get('acao') == 'handoff'
+                            and chatbot.handoff_recente(conv_id)):
+                        logger.info('crm bot handoff REPETIDO suavizado '
+                                    'conv=%s (motivo=%s)', conv_id,
+                                    resultado.get('motivo'))
+                        resultado = dict(
+                            resultado, acao='handoff_repetido',
+                            texto=chatbot.TEXTO_HANDOFF_REPETIDO)
                     if resultado.get('texto'):
                         chatwoot.enviar_mensagem(conv_id, resultado['texto'])
                         texto_enviado = True
                     # Persiste o turno (msg atual + resposta) pro proximo contexto
-                    chatbot.salvar_historico(conv_id, historico,
-                                             resultado.get('texto') or '')
-                    if resultado['acao'] == 'handoff':
+                    chatbot.salvar_historico(
+                        conv_id, historico, resultado.get('texto') or '',
+                        handoff=(resultado['acao'] == 'handoff'))
+                    if resultado['acao'] in ('handoff', 'handoff_repetido'):
                         res_status = chatwoot.definir_status(conv_id, 'open')
                         if res_status.get('ok'):
                             logger.info('crm bot handoff conv=%s motivo=%s',
