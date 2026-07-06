@@ -111,6 +111,159 @@ def cronograma():
     )
 
 
+@claude_api_bp.route('/loja-vendas-debug')
+@_claude_auth_required
+def loja_vendas_debug():
+    """Diagnóstico "a venda desta loja está baixando o estoque?" — criado
+    06/07/2026 (suspeita do dono sobre a Ribeiro do Vale). Cruza, POR DIA, o
+    que o Seru REPORTOU de venda na loja (VendaSeruDiaria, snapshot da API)
+    com o que BAIXOU no estoque dela (MovEstoqueLoja), e lista os produtos
+    vendidos na janela com o estado do mapeamento — pendente/ignorado/sem_map
+    NÃO baixam. Read-only estrito, como todo o blueprint.
+
+    Params: ?loja=<nome fuzzy|id>, ?dias=7 (1-30).
+    """
+    from datetime import datetime as _dt
+    from datetime import time as _time
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    from app.constants import VENDA_TIPOS_DEMANDA_COM_ESTORNO
+    from app.extensions import db
+    from app.models import (
+        EstoqueLoja,
+        Loja,
+        MovEstoqueLoja,
+        SeruLojaMap,
+        VendaMapa,
+        VendaSeruDiaria,
+    )
+    from app.services import vendas_diarias
+    from app.utils import hoje, resolver_loja_por_nome
+
+    bruto = (request.args.get('loja') or '').strip()
+    loja = None
+    if bruto.isdigit():
+        loja = db.session.get(Loja, int(bruto))
+    if loja is None and bruto:
+        loja = resolver_loja_por_nome(bruto)
+    if loja is None:
+        return jsonify(ok=False, erro='loja nao encontrada (use ?loja=)',
+                       lojas=[x.nome for x in Loja.query
+                              .filter_by(ativa=True).order_by(Loja.nome)]), 404
+    try:
+        dias_n = max(1, min(int(request.args.get('dias', 7)), 30))
+    except (TypeError, ValueError):
+        dias_n = 7
+    hoje_d = hoje()
+    ini = hoje_d - timedelta(days=dias_n - 1)
+
+    # Snapshot das vendas Seru na janela (best-effort — API fora, usa o banco).
+    captura_erro = None
+    try:
+        vendas_diarias.garantir_capturado(ini, hoje_d)
+    except Exception as e:  # noqa: BLE001 — diagnostico segue com o banco
+        captura_erro = f'{type(e).__name__}: {str(e)[:160]}'
+
+    # Vinculo Seru<->Loja: sem `confirmado_em`, o sync NAO baixa nada da loja.
+    mapas = SeruLojaMap.query.filter_by(loja_id=loja.id).all()
+    mapa_loja = [{'seru_company': m.seru_company_name,
+                  'confirmado_em': (m.confirmado_em.isoformat()
+                                    if m.confirmado_em else None),
+                  'ignorar': bool(m.ignorar),
+                  'auto_match': bool(m.auto_match)} for m in mapas]
+    nomes_seru = [m.seru_company_name for m in mapas]
+    loja_confirmada = any(m.confirmado_em and not m.ignorar for m in mapas)
+
+    conds = [VendaSeruDiaria.loja_id == loja.id]
+    if nomes_seru:
+        conds.append(VendaSeruDiaria.loja_seru.in_(nomes_seru))
+    filtro_loja = db.or_(*conds)
+
+    # Reportado pelo Seru, por dia.
+    reportado = {str(d): int(q or 0) for d, q in (
+        db.session.query(VendaSeruDiaria.data, func.sum(VendaSeruDiaria.qtd))
+        .filter(VendaSeruDiaria.data >= ini, VendaSeruDiaria.data <= hoje_d,
+                filtro_loja)
+        .group_by(VendaSeruDiaria.data).all())}
+
+    # Baixado no estoque DA LOJA, por dia e tipo (vendas + estornos de todos
+    # os canais — a pergunta é "baixou?", não só Seru).
+    baixas = {}
+    for d_mov, tipo, q in (
+            db.session.query(func.date(MovEstoqueLoja.data),
+                             MovEstoqueLoja.tipo,
+                             func.sum(MovEstoqueLoja.quantidade))
+            .join(EstoqueLoja,
+                  MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
+            .filter(EstoqueLoja.loja_id == loja.id,
+                    MovEstoqueLoja.tipo.in_(VENDA_TIPOS_DEMANDA_COM_ESTORNO),
+                    MovEstoqueLoja.data >= _dt.combine(ini, _time.min))
+            .group_by(func.date(MovEstoqueLoja.data), MovEstoqueLoja.tipo)
+            .all()):
+        baixas.setdefault(str(d_mov)[:10], {})[tipo] = int(q or 0)
+
+    dias_out = []
+    for i in range(dias_n):
+        d = ini + timedelta(days=i)
+        iso = d.isoformat()
+        b = baixas.get(iso, {})
+        dias_out.append({
+            'data': iso,
+            'seru_reportado_itens': reportado.get(iso, 0),
+            'baixas_por_tipo': b,
+            'baixado_total': sum(b.values()),
+        })
+
+    # Produtos vendidos na janela + estado do mapeamento (o que explica gap).
+    prod_rows = (db.session.query(VendaSeruDiaria.seru_nome,
+                                  func.sum(VendaSeruDiaria.qtd))
+                 .filter(VendaSeruDiaria.data >= ini,
+                         VendaSeruDiaria.data <= hoje_d, filtro_loja)
+                 .group_by(VendaSeruDiaria.seru_nome)
+                 .order_by(func.sum(VendaSeruDiaria.qtd).desc())
+                 .limit(60).all())
+    vmapas = {vm.nome_externo: vm for vm in (
+        VendaMapa.query.filter_by(canal='seru')
+        .filter(VendaMapa.nome_externo.in_([n for n, _ in prod_rows] or ['']))
+        .all())}
+    produtos = []
+    for nome_p, qtd in prod_rows:
+        vm = vmapas.get(nome_p)
+        if vm is None:
+            estado = 'sem_map'      # sync nunca viu — não baixa
+        elif vm.ignorar:
+            estado = 'ignorado'     # decisão explícita — não baixa
+        elif vm.receita_id or vm.produto_id or vm.materia_prima_id:
+            estado = 'mapeado'
+        else:
+            estado = 'pendente'     # fila de revisão — não baixa
+        produtos.append({
+            'seru_nome': nome_p,
+            'qtd_vendida': int(qtd or 0),
+            'estado_map': estado,
+            'receita_id': vm.receita_id if vm else None,
+            'produto_id': vm.produto_id if vm else None,
+            'fator': (float(vm.fator_quantidade)
+                      if vm and vm.fator_quantidade is not None else None),
+        })
+    nao_baixam = sum(p['qtd_vendida'] for p in produtos
+                     if p['estado_map'] != 'mapeado')
+
+    return jsonify(
+        ok=True,
+        loja={'id': loja.id, 'nome': loja.nome},
+        loja_confirmada_no_seru=loja_confirmada,
+        mapa_loja=mapa_loja,
+        janela={'inicio': ini.isoformat(), 'fim': hoje_d.isoformat()},
+        captura_erro=captura_erro,
+        dias=dias_out,
+        produtos=produtos,
+        itens_vendidos_sem_baixa_por_mapa=nao_baixam,
+    )
+
+
 @claude_api_bp.route('/receita')
 @_claude_auth_required
 def receita():
