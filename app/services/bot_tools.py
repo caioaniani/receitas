@@ -667,14 +667,27 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
     if not autorizado:
         return {'erro': 'autorizacao_necessaria',
                 'instrucao': _AUTORIZACAO_INSTRUCAO}
+    # Valores DETALHADOS e rotulados (auditor 06/07/2026): o bot mostrava
+    # "R$138" e "R$148" sem dizer o que era cada um e o cliente lia como
+    # contradição. Com subtotal/frete/preço unitário explícitos, o bot nunca
+    # precisa inferir número — só rotular: "itens + frete = total".
+    total = float(p.valor_total or 0)
+    frete = float(p.frete_valor or 0)
     return {
         'numero': p.codigo,
         'status': _STATUS_ONLINE_CLIENTE.get(p.status, p.status),
-        'total': float(p.valor_total or 0),
+        'total': total,
+        'frete': frete,
+        'subtotal_itens': round(total - frete, 2),
         'data_entrega': (p.data_entrega.strftime('%d/%m/%Y')
                          if p.data_entrega else None),
         'periodo': p.janela_entrega or None,
-        'itens': [{'nome': i.nome, 'qtd': i.quantidade} for i in p.itens],
+        'itens': [{'nome': i.nome, 'qtd': i.quantidade,
+                   'preco_unit': float(i.preco_unitario or 0)}
+                  for i in p.itens],
+        'como_apresentar': ('Ao citar valores, SEMPRE rotule: '
+                            '"itens R$ X + frete R$ Y = total R$ Z". '
+                            'Nunca mostre dois números sem dizer o que são.'),
     }
 
 
