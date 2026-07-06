@@ -303,26 +303,22 @@ def enviar():
     do grid só chega no padeiro quando se aperta isto)."""
     from app.services.producao import enviar_plano_do_dia
 
-    horizonte, janela = _horizonte_janela()
-    inicio = _inicio_offset()
-    equilibrar = _equilibrar()
-    eq = 1 if equilibrar else None
     try:
         data_alvo = date.fromisoformat(request.form.get('data', ''))
     except (TypeError, ValueError):
         flash('Data inválida.', 'warning')
-        return redirect(url_for('industria_teste.index', horizonte=horizonte,
-                                janela=janela, inicio=inicio, equilibrar=eq))
+        return redirect(url_for('industria_teste.index', **_params_visao()))
     plano = enviar_plano_do_dia(data_alvo, current_user.id,
-                                horizonte_dias=horizonte, janela_semanas=janela,
-                                inicio_offset_dias=inicio, equilibrar=equilibrar)
+                                horizonte_dias=_horizonte_janela()[0],
+                                janela_semanas=_horizonte_janela()[1],
+                                inicio_offset_dias=_inicio_offset(),
+                                equilibrar=_equilibrar(), motor=_motor())
     if plano:
         flash('Produção de %s enviada ao padeiro (%d receita(s)).'
               % (data_alvo.strftime('%d/%m'), len(plano.itens)), 'success')
     else:
         flash('Nada a produzir em %s.' % data_alvo.strftime('%d/%m'), 'info')
-    return redirect(url_for('industria_teste.index', horizonte=horizonte,
-                            janela=janela, inicio=inicio, equilibrar=eq))
+    return redirect(url_for('industria_teste.index', **_params_visao()))
 
 
 @industria_teste_bp.route('/excluir', methods=['POST'])
