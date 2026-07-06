@@ -149,6 +149,43 @@ def test_idempotente_nao_reemite(app):
         emi.assert_not_called()
 
 
+def test_item_b2b_aparece_na_tela_de_mapeamento(app):
+    """Item vendável só no B2B (preço de atacado, SEM preco_site) e item já
+    vendido em VendaB2B aparecem em `itens_para_mapear` com origem 'b2b' —
+    sem isso não haveria como mapear o SKU e a NF do B2B ficava travada."""
+    from app.models import Receita
+    from app.services import tiny_nf
+    with app.app_context():
+        # Receita de atacado, fora do site
+        r = Receita(nome='Pao de Atacado', categoria='Paes',
+                    rendimento_qtd=1, rendimento_unidade='un',
+                    peso_base=100.0, preco_venda=8.0)
+        db.session.add(r)
+        db.session.commit()
+        # Produto sem preço nenhum, mas com venda B2B registrada
+        v = _venda(_cliente_completo())          # cria Produto sem SKU
+        prod_id = v.itens[0].produto_id
+        itens = tiny_nf.itens_para_mapear()
+        por_chave = {(i['kind'], i['id']): i for i in itens}
+        assert por_chave[('receita', r.id)]['origem'] == 'b2b'
+        assert por_chave[('produto', prod_id)]['origem'] == 'b2b'
+
+
+def test_sync_fuzzy_mapeia_item_b2b(app):
+    """O match por nome (planilha/API do Tiny) também cobre os itens B2B."""
+    from app.models import Receita
+    from app.services import tiny_nf
+    with app.app_context():
+        r = Receita(nome='Pao de Atacado', categoria='Paes',
+                    rendimento_qtd=1, rendimento_unidade='un',
+                    peso_base=100.0, preco_venda=8.0)
+        db.session.add(r)
+        db.session.commit()
+        res = tiny_nf._aplicar_pares([('Pao de Atacado', 'SKU-ATAC')])
+        assert res['exatos'] == 1
+        assert tiny_nf.sku_do_item('receita', r.id) == 'SKU-ATAC'
+
+
 # ── rotas ──────────────────────────────────────────────────────────────────
 
 def _login(client, uid):
