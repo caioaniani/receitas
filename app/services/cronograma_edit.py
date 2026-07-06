@@ -105,7 +105,8 @@ def aplicar_overrides(receitas_out, dias_prod):
 
 
 def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
-                  janela_semanas=6, inicio_offset_dias=0, equilibrar=False):
+                  janela_semanas=6, inicio_offset_dias=0, equilibrar=False,
+                  motor='pedidos'):
     """Edita UMA celula (receita x dia): fixa a qtd manual SO naquele dia (salva
     o override daquela celula), sem clamp — os outros dias seguem a sugestao
     calculada e overrides anteriores. O total da linha vira a SOMA das celulas,
