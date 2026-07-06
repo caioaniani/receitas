@@ -380,6 +380,35 @@ def salvar_historico(conv_id, historico, resposta, *, handoff=False):
     except Exception:  # noqa: BLE001
         db.session.rollback()
         logger.exception('chatbot salvar_historico falhou conv=%s', conv_id)
+# Handoff repetido (auditor 06/07/2026, caso Simone): depois que a conversa
+# ja foi transferida, o bot NAO transfere de novo — responde que a equipe ja
+# esta com o caso. Janela em minutos; passado isso, um handoff novo e normal
+# (assunto novo, equipe ja atendeu no meio do caminho).
+HANDOFF_DEDUP_MIN = 90
+TEXTO_HANDOFF_REPETIDO = ('Já passei seu atendimento para a nossa equipe — '
+                          'um atendente humano continua daqui a pouquinho, '
+                          'tá? Obrigado pela paciência! 🙏')
+
+
+def handoff_recente(conv_id, minutos=HANDOFF_DEDUP_MIN):
+    """True se esta conversa ja teve handoff marcado no store dentro da
+    janela — o chamador troca a nova transferencia por
+    TEXTO_HANDOFF_REPETIDO (sem 2º registro de handoff nas metricas)."""
+    from datetime import datetime as _dt
+
+    from app.utils import agora
+    for m in reversed(carregar_historico(conv_id)):
+        ts = m.get('handoff_em')
+        if not ts:
+            continue
+        try:
+            delta = (agora() - _dt.fromisoformat(ts)).total_seconds()
+        except (ValueError, TypeError):
+            return False
+        return 0 <= delta <= minutos * 60
+    return False
+
+
 # Mensagem segura quando a consulta de catalogo falha: NUNCA responder preco
 # de memoria (risco de inventar valor — dinheiro). Passa pro humano.
 _FALLBACK_CATALOGO = ('Tive uma instabilidade pra consultar nosso catálogo '
