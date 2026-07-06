@@ -43,7 +43,9 @@
 <div class="prev-wrap">
 <div class="prev-head">
     <h1 class="page-title mb-0"><i class="bi bi-search"></i> De onde vem a previsão</h1>
-    <a href="{{ url_for('industria_teste.index', horizonte=horizonte, janela=janela, inicio=inicio) }}"
+    {% if motor == 'vendas' %}<span class="badge text-bg-primary">motor: VENDAS das lojas</span>
+    {% elif motor == 'maior' %}<span class="badge text-bg-primary">motor: maior (pedidos × vendas)</span>{% endif %}
+    <a href="{{ url_for('industria_teste.index', horizonte=horizonte, janela=janela, inicio=inicio, motor=(motor if motor != 'pedidos' else None)) }}"
        class="btn btn-sm btn-outline-secondary">← voltar ao cronograma</a>
 </div>
 
@@ -52,8 +54,13 @@
     {% if dec.receita.lead %}<span class="badge bg-light text-dark border">lead {{ dec.receita.lead }}d</span>{% endif %}
     — o número de produção do cronograma sai do <strong>maior</strong> entre o
     pedido <span style="color:#198754">firme</span> (loja já pediu) e o
-    <span style="color:#6f42c1">previsto</span> (média do histórico daquele
-    dia-da-semana). Abaixo, dia a dia, de onde cada número vem.
+    <span style="color:#6f42c1">previsto</span>
+    {% if motor == 'vendas' %}(média da <strong>venda real</strong> das lojas
+    naquele dia-da-semana, estornos descontados + merma estrutural)
+    {% elif motor == 'maior' %}(o <strong>maior</strong> entre a média de
+    pedidos e a de vendas daquele dia-da-semana — cada dia mostra qual venceu)
+    {% else %}(média do histórico de pedidos daquele dia-da-semana){% endif %}.
+    Abaixo, dia a dia, de onde cada número vem.
 </p>
 
 <div class="prev-sum">
