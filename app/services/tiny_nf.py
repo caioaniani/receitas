@@ -105,33 +105,28 @@ def _itens_b2b():
     return out
 
 
-def itens_mapeaveis():
-    """Universo de itens que podem precisar de SKU do Tiny: publicados no
-    site + vendáveis no B2B (dedup por (kind, id); `origem` marca de onde
-    o item veio — item nos dois canais conta como 'site')."""
-    vistos = set()
-    out = []
-    for it in loja_catalogo.produtos_publicados():
-        vistos.add((it['kind'], it['id']))
-        out.append({'kind': it['kind'], 'id': it['id'], 'nome': it['nome'],
-                    'categoria': it.get('categoria') or '', 'origem': 'site'})
-    for it in _itens_b2b():
-        if (it['kind'], it['id']) not in vistos:
-            out.append({**it, 'origem': 'b2b'})
-    return out
+def _itens_do_canal(canal):
+    """Universo de itens mapeáveis do canal: 'site' = publicados na vitrine
+    (preco_site > 0); 'b2b' = catálogo de atacado (ver `_itens_b2b`). Cada
+    canal tem a própria lista de preço/cadastro no Tiny — por isso telas e
+    mapas separados."""
+    if canal == 'b2b':
+        return _itens_b2b()
+    return [{'kind': it['kind'], 'id': it['id'], 'nome': it['nome'],
+             'categoria': it.get('categoria') or ''}
+            for it in loja_catalogo.produtos_publicados()]
 
 
-def itens_para_mapear():
-    """Lista os itens mapeáveis (site + B2B) com o estado do mapeamento
-    Tiny. Devolve [{kind,id,nome,categoria,origem,sku,estado,confirmado}]."""
-    mp = mapa_por_item()
+def itens_para_mapear(canal='site'):
+    """Lista os itens do canal com o estado do mapeamento Tiny.
+    Devolve [{kind,id,nome,categoria,sku,estado,confirmado}]."""
+    mp = mapa_por_item(canal)
     out = []
-    for it in itens_mapeaveis():
+    for it in _itens_do_canal(canal):
         m = mp.get((it['kind'], it['id']))
         out.append({
             'kind': it['kind'], 'id': it['id'], 'nome': it['nome'],
             'categoria': it.get('categoria') or '',
-            'origem': it['origem'],
             'sku': (m.tiny_sku if m else None),
             'tiny_nome': (m.tiny_nome if m else None),
             'estado': (m.estado if m else 'pendente'),
@@ -144,12 +139,11 @@ def itens_para_mapear():
 _FUZZY_CUTOFF = 86  # score mínimo (rapidfuzz WRatio) pra sugerir um SKU
 
 
-def _aplicar_pares(pares, user_id=None):
-    """Aplica uma lista de (nome_tiny, sku) ao mapeamento dos itens
-    mapeáveis (site + B2B). Match EXATO (nome normalizado igual) → confirma
-    automático; match FUZZY (parecido) → sugestão pra revisar. Nunca toca no
-    que já foi confirmado por humano. Devolve {exatos, sugeridos, sem_match,
-    total}."""
+def _aplicar_pares(pares, user_id=None, canal='site'):
+    """Aplica uma lista de (nome_tiny, sku) ao mapeamento dos itens DO
+    CANAL. Match EXATO (nome normalizado igual) → confirma automático;
+    match FUZZY (parecido) → sugestão pra revisar. Nunca toca no que já foi
+    confirmado por humano. Devolve {exatos, sugeridos, sem_match, total}."""
     from rapidfuzz import fuzz, process
 
     # Index: nome_normalizado -> (nome_tiny, sku); e lista pro fuzzy.
@@ -163,9 +157,9 @@ def _aplicar_pares(pares, user_id=None):
             por_norma[k] = (nome, sku)
     chaves = list(por_norma.keys())
 
-    mp = mapa_por_item()
+    mp = mapa_por_item(canal)
     exatos = sugeridos = sem_match = 0
-    for it in itens_mapeaveis():
+    for it in _itens_do_canal(canal):
         m = mp.get((it['kind'], it['id']))
         if m and m.confirmado_em:   # humano já confirmou — não mexe
             continue
