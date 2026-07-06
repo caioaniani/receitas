@@ -1375,6 +1375,18 @@ def _migrate_postgres(app):
                    ('endereco_uf', 'VARCHAR(2)')):
         _try(f"ALTER TABLE cliente_b2b ADD COLUMN IF NOT EXISTS {_c} {_t}")
 
+    # Mapeamento de SKU do Tiny POR CANAL (06/07/2026): no Tiny o B2B eh
+    # outro cadastro/lista de preco — o mesmo item nosso pode ter SKU
+    # diferente por canal ('site' | 'b2b'). Linhas existentes viram 'site'
+    # (era o unico canal). A unique (kind, item_id) vira
+    # (canal, kind, item_id).
+    _try("ALTER TABLE tiny_produto_map ADD COLUMN IF NOT EXISTS "
+         "canal VARCHAR(10) NOT NULL DEFAULT 'site'")
+    _try("ALTER TABLE tiny_produto_map DROP CONSTRAINT IF EXISTS "
+         "uq_tiny_map_item")
+    _try("CREATE UNIQUE INDEX IF NOT EXISTS uq_tiny_map_canal_item "
+         "ON tiny_produto_map(canal, kind, item_id)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
