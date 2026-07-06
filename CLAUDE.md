@@ -670,6 +670,21 @@ entregas:
   regredir pra "creditar desp.quantidade as cegas" — cria estoque fantasma
   nos 3 casos acima. Testes: `tests/test_desperdicio_excluir_estorno.py`.
 
+## Cronograma — motor de previsao selecionavel (06/07/2026)
+
+`/telaindustriateste` tem o seletor **"Prever por"** (pedido do dono: "+1
+opcao de previsao baseada nas vendas"): **pedidos** (historico de pedidos
+loja→industria — default/original), **vendas** (venda real das lojas +
+merma estrutural — MESMA demanda unificada da Fase 0.1, so receita_id) ou
+**maior** (max dos dois POR DIA). O firme conta SEMPRE, em qualquer motor.
+Param `motor=` atravessa `balanco_industria`/`cronograma_producao`/
+`editar_celula`/`aprovar_plano_do_dia`/`enviar_plano_do_dia`/
+`decompor_previsao` e a API do assistente (`/api/claude/cronograma?motor=`).
+Aprovar/enviar usa o motor DA TELA (mesma regra do equilibrar — senao a
+ordem nao bate com o grid visto). Cache do balanco tem motor na chave.
+Constante: `previsao_producao.MOTORES_PREVISAO_PRODUCAO`. Testes: secao
+"motor de previsao" em `tests/test_cronograma.py`.
+
 ## Cronograma — ordem ENVIADA nunca muda por caminho implicito (04/07/2026)
 
 Garantia do dono: depois do "enviar a producao", o que o padeiro ve so muda
