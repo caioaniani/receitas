@@ -1,9 +1,10 @@
-"""Mapeamento e (futuro) emissão de NF-e via Tiny pra loja online (Fase 5).
+"""Mapeamento e emissão de NF-e via Tiny (loja online + B2B).
 
-Esta primeira parte cobre só o MAPEAMENTO: ligar cada item publicado no
-site (Receita/Produto) ao SKU dele no Tiny. A emissão de NF usa esse mapa
-pra mandar o pedido pro Tiny por SKU (o Tiny aplica NCM/CFOP/CST do
-cadastro do produto — fiscal não mora aqui).
+MAPEAMENTO: ligar cada item vendável (Receita/Produto — publicado no site
+OU vendido no B2B) ao SKU dele no Tiny. A emissão de NF usa esse mapa pra
+mandar a nota pro Tiny por SKU (o Tiny aplica NCM/CFOP/CST do cadastro do
+produto — fiscal não mora aqui). O B2B (`tiny_nf_b2b`) reusa o mesmo mapa
+e o motor `emitir_nf_generico` daqui.
 
 Padrão espelha o mapeamento Seru/VNDA: auto-sugestão por nome (fuzzy) +
 confirmação humana no admin.
