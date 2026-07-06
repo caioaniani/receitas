@@ -71,9 +71,41 @@ def index():
     for p in PlanejamentoProducao.query.filter_by(origem='cronograma').all():
         estados[p.data.isoformat()] = {
             'enviado': p.enviado_ao_padeiro is not False, 'plano_id': p.id}
+
+    # Totais por dia (rodapé do grid): unidades de produto final (insumo fica
+    # de fora — massa em bolas somada com croissants inflaria o número) e
+    # fornadas de TODAS as linhas (carga real de trabalho). O dia mais
+    # carregado ganha destaque — é o que o "equilibrar carga" tenta aliviar.
+    totais_dia = []
+    for i, _dia in enumerate(crono['dias']):
+        un = forn = 0
+        for rr in crono['receitas']:
+            c = rr['por_dia'][i]
+            if not rr.get('insumo'):
+                un += c['qtd'] or 0
+            if c.get('fornadas'):
+                forn += c['fornadas']
+        totais_dia.append({'un': un, 'fornadas': forn})
+    pico_idx = None
+    if any(t['un'] or t['fornadas'] for t in totais_dia):
+        pico_idx = max(range(len(totais_dia)),
+                       key=lambda i: (totais_dia[i]['fornadas'],
+                                      totais_dia[i]['un']))
+
+    # Resumo pro topo da tela: o que importa antes de mergulhar no grid.
+    resumo = {
+        'risco_n': len(crono.get('alertas_falta') or []),
+        'pend_agendado': sum(r['pend_agendado'] for r in crono['receitas']),
+        'pend_vencido': sum(r['pend_vencido'] for r in crono['receitas']),
+        'editados': sum(1 for r in crono['receitas'] if r.get('editado')),
+        'stale_n': sum(1 for r in crono['receitas'] if r.get('override_stale')),
+        'zerados': sum(1 for r in crono['receitas'] if not r.get('total')),
+    }
     return render_template('industria_teste/teste.html', crono=crono,
                            horizonte=horizonte, janela=janela, inicio=inicio,
-                           equilibrar=equilibrar, estados=estados)
+                           equilibrar=equilibrar, estados=estados,
+                           totais_dia=totais_dia, pico_idx=pico_idx,
+                           resumo=resumo)
 
 
 @industria_teste_bp.route('/auditoria')
