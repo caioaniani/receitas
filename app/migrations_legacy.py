@@ -1350,6 +1350,31 @@ def _migrate_postgres(app):
             ON estoque_site_plano(data, kind, item_id)
     """)
 
+    # ── NF-e do B2B via Tiny (06/07/2026) ──
+    # Espelho dos campos do PedidoOnline: id da NF no Tiny + status +
+    # timestamp de emissao confirmada. ALTER no mesmo commit do modelo:
+    # _migrate roda no startup do gunicorn ANTES de aceitar request
+    # (padrao igual ao quantidade_reservada acima).
+    _try("ALTER TABLE venda_b2b ADD COLUMN IF NOT EXISTS "
+         "tiny_nota_fiscal_id VARCHAR(40)")
+    _try("ALTER TABLE venda_b2b ADD COLUMN IF NOT EXISTS "
+         "nf_status VARCHAR(40)")
+    _try("ALTER TABLE venda_b2b ADD COLUMN IF NOT EXISTS "
+         "nf_emitida_em TIMESTAMP")
+
+    # Endereco estruturado do cliente B2B (06/07/2026): a SEFAZ exige
+    # logradouro/numero/bairro/cidade/uf SEPARADOS na NF-e (mesma licao do
+    # pedido_online — "endereco/bairro/cidade em branco" rejeitava a nota).
+    # O campo livre `endereco` continua existindo como fallback humano.
+    for _c, _t in (('endereco_logradouro', 'VARCHAR(200)'),
+                   ('endereco_numero', 'VARCHAR(20)'),
+                   ('endereco_complemento', 'VARCHAR(100)'),
+                   ('endereco_bairro', 'VARCHAR(100)'),
+                   ('endereco_cep', 'VARCHAR(9)'),
+                   ('endereco_cidade', 'VARCHAR(100)'),
+                   ('endereco_uf', 'VARCHAR(2)')):
+        _try(f"ALTER TABLE cliente_b2b ADD COLUMN IF NOT EXISTS {_c} {_t}")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
@@ -1768,6 +1793,28 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE materia_prima ADD COLUMN lote_pedido INTEGER")
     if cols_mp2 and 'minimo_pedido' not in cols_mp2:
         cursor.execute("ALTER TABLE materia_prima ADD COLUMN minimo_pedido INTEGER")
+
+    # ── NF-e do B2B via Tiny + endereco estruturado do cliente (06/07/2026) ──
+    cursor.execute("PRAGMA table_info(venda_b2b)")
+    cols_vb2b = [row[1] for row in cursor.fetchall()]
+    if cols_vb2b and 'tiny_nota_fiscal_id' not in cols_vb2b:
+        cursor.execute("ALTER TABLE venda_b2b ADD COLUMN "
+                       "tiny_nota_fiscal_id VARCHAR(40)")
+    if cols_vb2b and 'nf_status' not in cols_vb2b:
+        cursor.execute("ALTER TABLE venda_b2b ADD COLUMN nf_status VARCHAR(40)")
+    if cols_vb2b and 'nf_emitida_em' not in cols_vb2b:
+        cursor.execute("ALTER TABLE venda_b2b ADD COLUMN nf_emitida_em TIMESTAMP")
+    cursor.execute("PRAGMA table_info(cliente_b2b)")
+    cols_cb2b = [row[1] for row in cursor.fetchall()]
+    for _c, _t in (('endereco_logradouro', 'VARCHAR(200)'),
+                   ('endereco_numero', 'VARCHAR(20)'),
+                   ('endereco_complemento', 'VARCHAR(100)'),
+                   ('endereco_bairro', 'VARCHAR(100)'),
+                   ('endereco_cep', 'VARCHAR(9)'),
+                   ('endereco_cidade', 'VARCHAR(100)'),
+                   ('endereco_uf', 'VARCHAR(2)')):
+        if cols_cb2b and _c not in cols_cb2b:
+            cursor.execute(f"ALTER TABLE cliente_b2b ADD COLUMN {_c} {_t}")
 
     conn.commit()
     conn.close()

@@ -160,6 +160,42 @@ def boleto_pdf(id):
                  f'inline; filename={nome_arquivo_boleto(cob)}'})
 
 
+@cobrancas_bp.route('/<int:id>/enviar-email', methods=['POST'])
+@login_required
+def enviar_email(id):
+    """Manda o boleto (PDF anexado + linha digitável + Pix se houver) pro
+    e-mail do cliente B2B da parcela. Aceita e-mail avulso no form pra
+    cobrança sem cliente cadastrado."""
+    _admin_ou_403()
+    cob = Cobranca.query.get_or_404(id)
+    if not cob.nosso_numero:
+        flash('Essa cobrança ainda não tem nosso número — gere a remessa '
+              'primeiro.', 'warning')
+        return redirect(url_for('cobrancas.lista'))
+    cliente = cob.parcela.venda.cliente if cob.parcela else None
+    destinatario = ((request.form.get('email') or '').strip()
+                    or (cliente.email if cliente else '') or '')
+    if not destinatario:
+        flash('Cliente sem e-mail cadastrado — complete o cadastro em '
+              'B2B → Clientes ou informe um e-mail.', 'warning')
+        return redirect(url_for('cobrancas.lista'))
+    from app.services import email as email_svc
+    from app.services.sicredi_boleto import (
+        codigo_barras_da_cobranca,
+        gerar_boleto_pdf,
+        linha_digitavel,
+    )
+    pdf = bytes(gerar_boleto_pdf(cob))
+    ld = linha_digitavel(codigo_barras_da_cobranca(cob))
+    res = email_svc.enviar_boleto_b2b(cob, destinatario, pdf,
+                                      linha_digitavel=ld)
+    if res.get('ok'):
+        flash(f'Boleto enviado pra {destinatario}.', 'success')
+    else:
+        flash(f'Falha ao enviar o e-mail: {res.get("erro")}', 'danger')
+    return redirect(url_for('cobrancas.lista'))
+
+
 @cobrancas_bp.route('/<int:id>/excluir', methods=['POST'])
 @login_required
 def excluir(id):

@@ -91,6 +91,11 @@
                    href="{{ url_for('cobrancas.boleto_pdf', id=c.id) }}"
                    title="Boleto em PDF (ficha de compensação)">
                     <i class="bi bi-filetype-pdf"></i> boleto</a>
+                {% set cli_email = c.parcela.venda.cliente.email if c.parcela and c.parcela.venda.cliente else '' %}
+                <button class="btn btn-sm btn-outline-success" form="mail-{{ c.id }}"
+                        title="Enviar boleto (PDF + linha digitável{{ ' + Pix' if c.pix_copia_cola }}) por e-mail"
+                        onclick="return confirm('Enviar o boleto pra {{ cli_email or 'o cliente (SEM e-mail cadastrado — complete em B2B → Clientes)' }}?');">
+                    <i class="bi bi-envelope"></i> e-mail</button>
                 {% endif %}
                 {% if c.status == 'remessa' %}
                 <button class="btn btn-sm btn-outline-warning" form="vp-{{ c.id }}"
@@ -108,7 +113,10 @@
 </div>
 </form>
 {# Forms de edição/exclusão/voltar FORA do form da remessa (HTML não aninha). #}
-{% for c in abertas %}{% if c.status == 'pendente' %}
+{% for c in abertas %}{% if c.nosso_numero %}
+<form id="mail-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.enviar_email', id=c.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+{% endif %}{% if c.status == 'pendente' %}
 <form id="edit-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.editar', id=c.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
 <form id="del-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.excluir', id=c.id) }}">

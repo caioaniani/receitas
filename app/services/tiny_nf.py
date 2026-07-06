@@ -305,8 +305,13 @@ def _sincronizar_situacao(pedido):
     return {'autorizada': autorizada, 'rejeitada': rejeitada, 'situacao': sigs}
 
 
-def emitir_nf(pedido, user_id=None, recriar=False):
-    """Emite NF pro pedido. Devolve {ok, msg, nota_fiscal_id?}.
+def emitir_nf_generico(alvo, montar_payload, recriar=False):
+    """Motor comum da emissão de NF via Tiny — usado pelo site (PedidoOnline)
+    e pelo B2B (VendaB2B, ver `tiny_nf_b2b`). `alvo` precisa ter os campos
+    `tiny_nota_fiscal_id` / `nf_status` / `nf_emitida_em`.
+
+    `montar_payload` é chamado só quando precisamos CRIAR a nota — devolve
+    (payload_dict, None) em sucesso ou (None, 'mensagem de erro').
 
     Fluxo (Plano B): nota.fiscal.incluir (cria a NF com natureza+série
     explícitas) → nota.fiscal.emitir (autoriza na SEFAZ) → obter (confirma
@@ -316,25 +321,24 @@ def emitir_nf(pedido, user_id=None, recriar=False):
     `recriar=True`: descarta a NF rascunho anterior (que a SEFAZ rejeitou) e
     cria uma nova do zero com o payload atual. Reemitir o MESMO rascunho não
     corrige dados — o rascunho ruim fica órfão no Tiny (apagável)."""
-    if pedido.nf_emitida_em and pedido.tiny_nota_fiscal_id and not recriar:
-        return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
+    if alvo.nf_emitida_em and alvo.tiny_nota_fiscal_id and not recriar:
+        return {'ok': True, 'nota_fiscal_id': alvo.tiny_nota_fiscal_id,
                 'msg': 'NF já emitida.'}
-    if pedido.status != 'pago':
-        return {'ok': False, 'msg': 'Pedido não está pago — não emite NF.'}
     if recriar:
-        pedido.tiny_pedido_id = None
-        pedido.tiny_nota_fiscal_id = None
-        pedido.nf_status = None
-        pedido.nf_emitida_em = None
+        if hasattr(alvo, 'tiny_pedido_id'):
+            alvo.tiny_pedido_id = None
+        alvo.tiny_nota_fiscal_id = None
+        alvo.nf_status = None
+        alvo.nf_emitida_em = None
         db.session.commit()
     # ANTES de tentar emitir de novo: se já temos NF, ver se ela já autorizou
     # em background (caso da 011428 — status_processamento='2' enganoso). Isso
     # também é o que o botão "Reenviar / verificar" precisa fazer pra
     # sincronizar sem duplicar.
-    if pedido.tiny_nota_fiscal_id:
-        sit = _sincronizar_situacao(pedido)
+    if alvo.tiny_nota_fiscal_id:
+        sit = _sincronizar_situacao(alvo)
         if sit and sit['autorizada']:
-            return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
+            return {'ok': True, 'nota_fiscal_id': alvo.tiny_nota_fiscal_id,
                     'msg': 'NF autorizada na SEFAZ.'}
         if sit and sit['rejeitada']:
             return {'ok': False,
@@ -342,37 +346,60 @@ def emitir_nf(pedido, user_id=None, recriar=False):
                            f'Use "Refazer do zero" para criar uma nova.'}
     # 1) Cria a NF (rascunho) com natureza + série explícitas, se ainda não
     #    temos uma. Resumível: se já criamos mas a emissão falhou, reusa o id.
-    if not pedido.tiny_nota_fiscal_id:
-        itens, faltando = _payload_itens(pedido)
-        if faltando:
-            return {'ok': False,
-                    'msg': 'Itens sem SKU mapeado no Tiny: '
-                           + ', '.join(faltando)}
-        incl = tiny.incluir_nota_fiscal(_nota_payload(pedido, itens))
+    if not alvo.tiny_nota_fiscal_id:
+        payload, erro = montar_payload()
+        if erro:
+            return {'ok': False, 'msg': erro}
+        incl = tiny.incluir_nota_fiscal(payload)
         if not incl.get('ok'):
             return {'ok': False,
                     'msg': f'Falha ao criar a NF no Tiny: {incl.get("erro")}'}
-        pedido.tiny_nota_fiscal_id = incl['id']
+        alvo.tiny_nota_fiscal_id = incl['id']
+        # VendaB2B tem `nf_numero` (numero da NF, campo humano) — aproveita o
+        # numero que o Tiny devolve. PedidoOnline nao tem o campo.
+        if (incl.get('numero') and hasattr(alvo, 'nf_numero')
+                and not alvo.nf_numero):
+            alvo.nf_numero = incl['numero']
         db.session.commit()
     # 2) Autoriza na SEFAZ.
-    emitir = tiny.emitir_nota_fiscal(pedido.tiny_nota_fiscal_id)
-    pedido.nf_status = emitir.get('status') or 'enviada'
+    emitir = tiny.emitir_nota_fiscal(alvo.tiny_nota_fiscal_id)
+    alvo.nf_status = emitir.get('status') or 'enviada'
     if emitir.get('ok'):
-        pedido.nf_emitida_em = agora()
+        alvo.nf_emitida_em = agora()
         db.session.commit()
-        return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
-                'msg': f'NF emitida (status: {pedido.nf_status}).'}
+        return {'ok': True, 'nota_fiscal_id': alvo.tiny_nota_fiscal_id,
+                'msg': f'NF emitida (status: {alvo.nf_status}).'}
     db.session.commit()
     # Emit retornou status ambíguo. Vai DIRETO no obter pra ver a verdade —
     # a NF pode ter autorizado em background mesmo o emitir retornando código
     # ambíguo (visto em prod com a 011428).
-    sit = _sincronizar_situacao(pedido)
+    sit = _sincronizar_situacao(alvo)
     if sit and sit['autorizada']:
-        return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
+        return {'ok': True, 'nota_fiscal_id': alvo.tiny_nota_fiscal_id,
                 'msg': 'NF autorizada na SEFAZ.'}
     return {'ok': False,
-            'msg': f'NF criada (id {pedido.tiny_nota_fiscal_id}) mas a emissão '
+            'msg': f'NF criada (id {alvo.tiny_nota_fiscal_id}) mas a emissão '
                    f'não foi confirmada: {emitir.get("erro")}'}
+
+
+def emitir_nf(pedido, user_id=None, recriar=False):
+    """Emite NF pro pedido da loja online. Devolve {ok, msg, nota_fiscal_id?}.
+    Guard próprio do site: só pedido pago emite. O fluxo em si está em
+    `emitir_nf_generico`."""
+    if pedido.nf_emitida_em and pedido.tiny_nota_fiscal_id and not recriar:
+        return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
+                'msg': 'NF já emitida.'}
+    if pedido.status != 'pago':
+        return {'ok': False, 'msg': 'Pedido não está pago — não emite NF.'}
+
+    def _montar():
+        itens, faltando = _payload_itens(pedido)
+        if faltando:
+            return None, ('Itens sem SKU mapeado no Tiny: '
+                          + ', '.join(faltando))
+        return _nota_payload(pedido, itens), None
+
+    return emitir_nf_generico(pedido, _montar, recriar=recriar)
 
 
 def link_danfe(pedido):
@@ -380,6 +407,30 @@ def link_danfe(pedido):
     if not pedido.tiny_nota_fiscal_id:
         return None
     return tiny.obter_link_nota_fiscal(pedido.tiny_nota_fiscal_id)
+
+
+def baixar_danfe_pdf(nota_id):
+    """Baixa o DANFE (PDF) da NF no Tiny e devolve os bytes, ou None.
+
+    O link do Tiny é temporário — pra ANEXAR o PDF num e-mail a gente
+    baixa na hora (link solto expiraria na caixa de entrada do cliente)."""
+    import requests
+    url = tiny.obter_link_nota_fiscal(nota_id)
+    if not url:
+        return None
+    try:
+        r = requests.get(url, timeout=20)
+    except requests.RequestException:
+        logger.warning('danfe download falhou (rede) nota=%s', nota_id)
+        return None
+    ctype = (r.headers.get('Content-Type') or '').lower()
+    # O Tiny serve o DANFE como application/pdf; qualquer outra coisa é
+    # página de erro/expiração — não anexar lixo no e-mail do cliente.
+    if r.status_code != 200 or 'pdf' not in ctype:
+        logger.warning('danfe download invalido nota=%s (HTTP %s, %s)',
+                       nota_id, r.status_code, ctype)
+        return None
+    return r.content
 
 
 def importar_planilha(conteudo, filename, user_id=None):

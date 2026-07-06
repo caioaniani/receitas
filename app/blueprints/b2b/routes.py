@@ -18,9 +18,10 @@ from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 from app.blueprints.b2b import b2b_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, owner_required
 from app.extensions import db
 from app.models import ClienteB2B, EstoqueProducao, Produto, Receita, VendaB2B, VendaB2BParcela
+from app.services import tiny_nf_b2b
 from app.services import vendas_b2b as svc
 from app.utils import hoje
 
@@ -79,10 +80,24 @@ def cliente_novo():
         desconto_percentual=float(request.form.get('desconto_percentual') or 0),
         observacao=(request.form.get('observacao') or '').strip() or None,
     )
+    _aplicar_endereco_estruturado(c)
     db.session.add(c)
     db.session.commit()
     flash(f'Cliente "{nome}" cadastrado.', 'success')
     return redirect(url_for('b2b.clientes'))
+
+
+def _aplicar_endereco_estruturado(c):
+    """Lê os campos de endereço estruturado (NF-e) do form pro cliente.
+    A SEFAZ exige logradouro/número/bairro/CEP/cidade/UF separados."""
+    c.endereco_logradouro = (request.form.get('endereco_logradouro') or '').strip() or None
+    c.endereco_numero = (request.form.get('endereco_numero') or '').strip() or None
+    c.endereco_complemento = (request.form.get('endereco_complemento') or '').strip() or None
+    c.endereco_bairro = (request.form.get('endereco_bairro') or '').strip() or None
+    c.endereco_cep = (request.form.get('endereco_cep') or '').strip() or None
+    c.endereco_cidade = (request.form.get('endereco_cidade') or '').strip() or None
+    c.endereco_uf = ((request.form.get('endereco_uf') or '').strip().upper()
+                     or None)
 
 
 @b2b_bp.route('/clientes/<int:cid>/editar', methods=['POST'])
@@ -98,6 +113,7 @@ def cliente_editar(cid):
     c.desconto_percentual = float(request.form.get('desconto_percentual') or 0)
     c.observacao = (request.form.get('observacao') or '').strip() or None
     c.ativo = bool(request.form.get('ativo'))
+    _aplicar_endereco_estruturado(c)
     db.session.commit()
     flash(f'{c.nome} atualizado.', 'success')
     return redirect(url_for('b2b.clientes'))
@@ -387,6 +403,73 @@ def venda_cancelar(vid):
     venda = VendaB2B.query.get_or_404(vid)
     svc.cancelar_venda(venda, user=current_user)
     flash(f'Venda #{vid} cancelada e estoque estornado.', 'warning')
+    return redirect(url_for('b2b.venda_detalhe', vid=vid))
+
+
+# ── NF-e via Tiny (06/07/2026) ──
+# Mesmo fluxo do site (loja online): botão manual, emissão pelo dono.
+# Enviar por e-mail (NF já emitida) pode ser feito por admin.
+
+@b2b_bp.route('/vendas/<int:vid>/emitir-nf', methods=['POST'])
+@owner_required
+def venda_emitir_nf(vid):
+    """Emite a NF da venda no Tiny. `recriar=1` descarta o rascunho
+    rejeitado e refaz do zero (mesma semântica do site)."""
+    venda = VendaB2B.query.get_or_404(vid)
+    recriar = request.form.get('recriar') in ('1', 'true', 'on')
+    res = tiny_nf_b2b.emitir_nf(venda, user_id=current_user.id,
+                                recriar=recriar)
+    flash(f'Venda #{vid}: {res["msg"]}',
+          'success' if res.get('ok') else 'danger')
+    return redirect(url_for('b2b.venda_detalhe', vid=vid))
+
+
+@b2b_bp.route('/vendas/<int:vid>/danfe')
+@login_required
+@admin_required
+def venda_danfe(vid):
+    """Redireciona pro DANFE (PDF) no Tiny. Link temporário — busca sob
+    demanda."""
+    venda = VendaB2B.query.get_or_404(vid)
+    url = tiny_nf_b2b.link_danfe(venda)
+    if not url:
+        flash(f'Venda #{vid}: não consegui obter o link do DANFE no Tiny '
+              '(a NF precisa estar autorizada).', 'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    return redirect(url)
+
+
+@b2b_bp.route('/vendas/<int:vid>/enviar-nf-email', methods=['POST'])
+@login_required
+@admin_required
+def venda_enviar_nf_email(vid):
+    """Manda a NF (DANFE em PDF, anexado) pro e-mail do cliente B2B.
+    O PDF é baixado do Tiny na hora — link solto expiraria na caixa
+    de entrada."""
+    from app.services import email as email_svc
+    from app.services import tiny_nf
+
+    venda = VendaB2B.query.get_or_404(vid)
+    if not venda.tiny_nota_fiscal_id or not venda.nf_emitida_em:
+        flash('A NF ainda não foi emitida — emita no Tiny antes de enviar.',
+              'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    destinatario = ((request.form.get('email') or '').strip()
+                    or (venda.cliente.email if venda.cliente else '') or '')
+    if not destinatario:
+        flash('Cliente sem e-mail cadastrado — informe um e-mail no '
+              'formulário ou complete o cadastro do cliente.', 'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    pdf = tiny_nf.baixar_danfe_pdf(venda.tiny_nota_fiscal_id)
+    if not pdf:
+        flash('Não consegui baixar o DANFE no Tiny (a NF precisa estar '
+              'autorizada). Tente de novo em instantes.', 'danger')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    res = email_svc.enviar_nf_b2b(venda, destinatario, pdf)
+    if res.get('ok'):
+        flash(f'NF enviada pra {destinatario}.', 'success')
+    else:
+        flash(f'Falha ao enviar o e-mail: {res.get("erro")}', 'danger')
     return redirect(url_for('b2b.venda_detalhe', vid=vid))
 
 

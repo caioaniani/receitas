@@ -24,6 +24,16 @@ class ClienteB2B(db.Model):
     telefone = db.Column(db.String(30))
     email = db.Column(db.String(120))
     endereco = db.Column(db.String(250))
+    # Endereco estruturado pra NF-e (06/07/2026): a SEFAZ exige logradouro/
+    # numero/bairro/cidade/uf SEPARADOS — mesma licao do PedidoOnline. O
+    # campo livre `endereco` acima segue como fallback humano (boleto/UI).
+    endereco_logradouro = db.Column(db.String(200))
+    endereco_numero = db.Column(db.String(20))
+    endereco_complemento = db.Column(db.String(100))
+    endereco_bairro = db.Column(db.String(100))
+    endereco_cep = db.Column(db.String(9))
+    endereco_cidade = db.Column(db.String(100))
+    endereco_uf = db.Column(db.String(2))
     contato = db.Column(db.String(100))  # nome da pessoa que compra
     desconto_percentual = db.Column(db.Float, default=0)  # % sobre preco atacado
     observacao = db.Column(db.Text)
@@ -56,6 +66,11 @@ class VendaB2B(db.Model):
     valor_total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     observacao = db.Column(db.Text)
     nf_numero = db.Column(db.String(50))  # numero da NF se houver
+    # NF-e via Tiny (06/07/2026) — mesmo trio do PedidoOnline: id da NF no
+    # Tiny, status da autorizacao SEFAZ e timestamp de emissao confirmada.
+    tiny_nota_fiscal_id = db.Column(db.String(40))
+    nf_status = db.Column(db.String(40))
+    nf_emitida_em = db.Column(db.DateTime, nullable=True)
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
     criado_em = db.Column(db.DateTime, default=agora)
     cancelado_em = db.Column(db.DateTime, nullable=True)

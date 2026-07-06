@@ -71,6 +71,78 @@
                 <div class="d-flex justify-content-between text-danger"><span>Em aberto:</span><strong>R$ {{ '%.2f'|format(venda.valor_aberto) }}</strong></div>
             </div>
         </div>
+
+        {# ── NF-e via Tiny — mesmo fluxo do site (emissão pelo dono) ── #}
+        <div class="card mt-3">
+            <div class="card-header py-2"><strong>Nota Fiscal (Tiny)</strong></div>
+            <div class="card-body small">
+                {% set email_cliente = venda.cliente.email if venda.cliente else '' %}
+                {% if venda.nf_emitida_em %}
+                    <div>NF: <code>{{ venda.tiny_nota_fiscal_id }}</code>
+                        {% if venda.nf_numero %} · nº <strong>{{ venda.nf_numero }}</strong>{% endif %}</div>
+                    {% if venda.nf_status %}<div>Status: <strong>{{ venda.nf_status }}</strong></div>{% endif %}
+                    <div class="text-muted">Emitida: {{ venda.nf_emitida_em.strftime('%d/%m/%Y %H:%M') }}</div>
+                    <a href="{{ url_for('b2b.venda_danfe', vid=venda.id) }}"
+                       class="btn btn-sm btn-outline-primary w-100 mt-2" target="_blank" rel="noopener">
+                        <i class="bi bi-filetype-pdf"></i> Ver DANFE (PDF)
+                    </a>
+                    <form method="POST" action="{{ url_for('b2b.venda_enviar_nf_email', vid=venda.id) }}" class="mt-2"
+                          onsubmit="return confirm('Enviar a NF (PDF) pra {{ email_cliente or 'o e-mail informado' }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="input-group input-group-sm">
+                            <input type="email" name="email" class="form-control" placeholder="{{ email_cliente or 'e-mail do cliente' }}"
+                                   value="{{ email_cliente }}" {% if not email_cliente %}required{% endif %}>
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-envelope"></i> Enviar NF por e-mail
+                            </button>
+                        </div>
+                    </form>
+                {% elif venda.tiny_nota_fiscal_id %}
+                    <div>NF: <code>{{ venda.tiny_nota_fiscal_id }}</code></div>
+                    {% if venda.nf_status %}<div class="text-danger">Status: <strong>{{ venda.nf_status }}</strong></div>{% endif %}
+                    <div class="alert alert-warning py-2 px-2 mt-2 mb-2">
+                        A autorização não foi confirmada. <strong>Reenviar</strong> consulta a SEFAZ
+                        e sincroniza <em>sem duplicar</em>. Só use <strong>Refazer do zero</strong>
+                        se a nota estiver realmente <em>rejeitada</em>.
+                    </div>
+                    {% if current_user.is_owner %}
+                    <form method="POST" action="{{ url_for('b2b.venda_emitir_nf', vid=venda.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="bi bi-arrow-clockwise"></i> Reenviar / verificar
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('b2b.venda_emitir_nf', vid=venda.id) }}" class="mt-2"
+                          onsubmit="return confirm('Refazer do ZERO? A NF atual é descartada e uma nova é criada. NÃO faça isso se a nota já pode ter autorizado — geraria duplicidade.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="recriar" value="1">
+                        <button type="submit" class="btn btn-sm btn-outline-warning w-100">
+                            <i class="bi bi-arrow-repeat"></i> Refazer do zero
+                        </button>
+                    </form>
+                    {% else %}
+                    <p class="text-muted small mb-0">A emissão/reenvio da NF é feita pelo dono.</p>
+                    {% endif %}
+                {% elif venda.status != 'cancelada' %}
+                    {% if current_user.is_owner %}
+                    <form method="POST" action="{{ url_for('b2b.venda_emitir_nf', vid=venda.id) }}"
+                          onsubmit="return confirm('Emitir NF desta venda no Tiny?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="bi bi-file-earmark-text"></i> Emitir NF no Tiny
+                        </button>
+                    </form>
+                    <p class="text-muted mt-2 mb-0">O Tiny aplica NCM/CFOP/CST do cadastro do produto
+                        (SKUs mapeados em Loja Online → SKUs do Tiny). O cliente precisa de CNPJ/CPF
+                        e endereço completo no cadastro.</p>
+                    {% else %}
+                    <span class="text-muted">A NF é emitida pelo dono.</span>
+                    {% endif %}
+                {% else %}
+                    <span class="text-muted">Venda cancelada — sem NF.</span>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
 
@@ -99,9 +171,11 @@
     <div class="card-header py-2"><strong>Parcelas</strong></div>
     <div class="table-responsive">
         <table class="table table-sm mb-0">
-            <thead><tr><th>#</th><th>Vencimento</th><th class="text-end">Valor</th><th class="text-end">Pago</th><th>Status</th><th>Forma</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Vencimento</th><th class="text-end">Valor</th><th class="text-end">Pago</th><th>Status</th><th>Forma</th><th>Boleto</th><th></th></tr></thead>
             <tbody>
             {% for p in venda.parcelas|sort(attribute='numero') %}
+            {# `p.cobranca` é lista (backref um-pra-muitos; parcela_id é unique, então no máximo 1) #}
+            {% set cob = p.cobranca[0] if p.cobranca else None %}
             <tr>
                 <td>{{ p.numero }}</td>
                 <td>{{ p.vencimento.strftime('%d/%m/%Y') }}</td>
@@ -114,6 +188,28 @@
                     {% else %}<span class="badge bg-info text-dark">aberto</span>{% endif %}
                 </td>
                 <td><small>{{ p.forma_pagamento or '' }}</small></td>
+                <td class="text-nowrap">
+                    {% if cob and cob.nosso_numero %}
+                    <a class="btn btn-sm btn-outline-dark" target="_blank"
+                       href="{{ url_for('cobrancas.boleto_pdf', id=cob.id) }}"
+                       title="Boleto em PDF"><i class="bi bi-filetype-pdf"></i></a>
+                    <form method="POST" action="{{ url_for('cobrancas.enviar_email', id=cob.id) }}" class="d-inline"
+                          onsubmit="return confirm('Enviar o boleto pra {{ venda.cliente.email if venda.cliente and venda.cliente.email else 'o cliente (sem e-mail cadastrado!)' }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-success" title="Enviar boleto por e-mail">
+                            <i class="bi bi-envelope"></i></button>
+                    </form>
+                    {% elif cob %}
+                    <a href="{{ url_for('cobrancas.lista') }}" class="badge bg-info text-dark text-decoration-none"
+                       title="Cobrança criada — gere a remessa em Cobranças pra ter o boleto">{{ cob.status }}</a>
+                    {% elif p.saldo > 0 and venda.status != 'cancelada' %}
+                    <form method="POST" action="{{ url_for('cobrancas.gerar_da_parcela', parcela_id=p.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-primary" title="Cria a cobrança do boleto Sicredi desta parcela">
+                            <i class="bi bi-upc-scan"></i> Gerar boleto</button>
+                    </form>
+                    {% endif %}
+                </td>
                 <td>
                     {% if p.saldo > 0 and venda.status != 'cancelada' %}
                     <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modal-pag-{{ p.id }}">Receber</button>

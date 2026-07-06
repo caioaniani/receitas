@@ -34,9 +34,13 @@ def disponivel():
     return bool((current_app.config.get('POSTMARK_SERVER_TOKEN') or '').strip())
 
 
-def enviar(destinatario, assunto, html, *, texto=None):
+def enviar(destinatario, assunto, html, *, texto=None, anexos=None):
     """Envia um email. Retorna {'ok': True, 'id': ...} ou
-    {'ok': False, 'erro': ...}. Best-effort — nunca propaga exceção."""
+    {'ok': False, 'erro': ...}. Best-effort — nunca propaga exceção.
+
+    `anexos`: lista de (nome_arquivo, bytes, content_type) — vira o campo
+    `Attachments` do Postmark (conteúdo em base64). Limite Postmark: 10MB
+    por mensagem; boleto/DANFE ficam na casa dos KB."""
     cfg = current_app.config
     token = (cfg.get('POSTMARK_SERVER_TOKEN') or '').strip()
     if not token:
@@ -62,6 +66,13 @@ def enviar(destinatario, assunto, html, *, texto=None):
         payload['ReplyTo'] = reply_to
     if texto:
         payload['TextBody'] = texto
+    if anexos:
+        import base64
+        payload['Attachments'] = [{
+            'Name': nome,
+            'Content': base64.b64encode(conteudo).decode('ascii'),
+            'ContentType': ctype,
+        } for nome, conteudo, ctype in anexos]
     try:
         r = requests.post(
             _POSTMARK_URL, json=payload,
@@ -566,6 +577,102 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
   <p style="color:#9a8d80;font-size:12px;margin-top:28px;">
     Email automático — não responda. Dúvidas? Fale com o gerente.</p>
 </div></body></html>"""
+
+
+def enviar_boleto_b2b(cobranca, destinatario, pdf_bytes, *,
+                      linha_digitavel=None):
+    """E-mail do boleto B2B pro cliente, com o PDF anexado.
+
+    `linha_digitavel` vem pronta do caller (sicredi_boleto) — evita o
+    email.py conhecer CNAB. Inclui o Pix copia-e-cola do boleto híbrido
+    quando o retorno do banco já trouxe (registro tipo 8)."""
+    venda = cobranca.parcela.venda if cobranca.parcela else None
+    ref = f'venda B2B #{venda.id}' if venda else cobranca.seu_numero
+    assunto = (f'Boleto O Pão — vencimento '
+               f'{cobranca.vencimento.strftime("%d/%m/%Y")}')
+    nome_pdf = f'boleto_{cobranca.nosso_numero}.pdf'
+    ld_html = (f'<p style="margin:10px 0 0;font-size:13px;color:#6b5f54;">'
+               f'Linha digitável:<br><code style="font-size:13px;">'
+               f'{linha_digitavel}</code></p>' if linha_digitavel else '')
+    pix_html = ''
+    if cobranca.pix_copia_cola:
+        pix_html = (
+            '<div style="background:#f5efe5;border-radius:12px;'
+            'padding:16px 20px;margin-top:14px;">'
+            '<p style="margin:0 0 6px;font-weight:600;">Pagar com Pix</p>'
+            '<p style="margin:0;font-size:12px;color:#6b5f54;'
+            'word-break:break-all;">Copia e cola:<br>'
+            f'<code>{cobranca.pix_copia_cola}</code></p></div>')
+    html = f"""\
+<!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
+font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
+<div style="max-width:540px;margin:0 auto;padding:32px 24px;">
+  <h1 style="font-size:22px;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
+  <p style="color:#6b5f54;margin:0 0 20px;">Olá! Segue o boleto da
+    {ref} em anexo. 📎</p>
+  <div style="background:#fff;border-radius:12px;padding:18px 20px;">
+    <table style="width:100%;font-size:15px;border-collapse:collapse;">
+      <tr><td style="padding:4px 0;color:#6b5f54;">Valor</td>
+          <td style="padding:4px 0;text-align:right;font-weight:700;">
+            {_fmt_brl(cobranca.valor)}</td></tr>
+      <tr><td style="padding:4px 0;color:#6b5f54;">Vencimento</td>
+          <td style="padding:4px 0;text-align:right;">
+            {cobranca.vencimento.strftime('%d/%m/%Y')}</td></tr>
+      <tr><td style="padding:4px 0;color:#6b5f54;">Nosso número</td>
+          <td style="padding:4px 0;text-align:right;">
+            {cobranca.nosso_numero_fmt}</td></tr>
+    </table>
+    {ld_html}
+  </div>
+  {pix_html}
+  <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
+    Dúvidas? Responda este e-mail ou fale com a gente.</p>
+</div></body></html>"""
+    linhas = [f'Segue o boleto da {ref} em anexo.',
+              '',
+              f'Valor: {_fmt_brl(cobranca.valor)}',
+              f'Vencimento: {cobranca.vencimento.strftime("%d/%m/%Y")}',
+              f'Nosso número: {cobranca.nosso_numero_fmt}']
+    if linha_digitavel:
+        linhas += ['', f'Linha digitável: {linha_digitavel}']
+    if cobranca.pix_copia_cola:
+        linhas += ['', f'Pix copia e cola: {cobranca.pix_copia_cola}']
+    return enviar(destinatario, assunto, html, texto='\n'.join(linhas),
+                  anexos=[(nome_pdf, pdf_bytes, 'application/pdf')])
+
+
+def enviar_nf_b2b(venda, destinatario, pdf_bytes):
+    """E-mail da NF-e (DANFE) da venda B2B pro cliente, com o PDF anexado.
+
+    O link do Tiny expira — por isso o PDF vai ANEXADO (baixado na hora
+    pelo caller via `tiny_nf.baixar_danfe_pdf`)."""
+    numero = venda.nf_numero or venda.tiny_nota_fiscal_id or ''
+    assunto = (f'Nota fiscal {numero} — O Pão Padaria Artesanal' if numero
+               else 'Nota fiscal — O Pão Padaria Artesanal')
+    nome_pdf = f'nfe_{numero or venda.id}.pdf'
+    num_html = (f'<p style="margin:0 0 6px;font-size:13px;color:#6b5f54;">'
+                f'Número: <code>{numero}</code></p>' if numero else '')
+    html = f"""\
+<!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
+font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
+<div style="max-width:540px;margin:0 auto;padding:32px 24px;">
+  <h1 style="font-size:22px;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
+  <p style="color:#6b5f54;margin:0 0 20px;">Segue a nota fiscal da sua
+    compra (venda #{venda.id}) em anexo. 🧾</p>
+  <div style="background:#fff;border-radius:12px;padding:18px 20px;">
+    <p style="margin:0 0 6px;font-weight:600;">Nota fiscal eletrônica</p>
+    {num_html}
+    <p style="margin:0;font-size:13px;color:#6b5f54;">Valor total:
+      <strong>{_fmt_brl(venda.valor_total)}</strong></p>
+  </div>
+  <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
+    Dúvidas? Responda este e-mail ou fale com a gente.</p>
+</div></body></html>"""
+    texto = (f'Segue a nota fiscal da venda #{venda.id} em anexo (PDF).\n\n'
+             + (f'Número: {numero}\n' if numero else '')
+             + f'Valor total: {_fmt_brl(venda.valor_total)}\n')
+    return enviar(destinatario, assunto, html, texto=texto,
+                  anexos=[(nome_pdf, pdf_bytes, 'application/pdf')])
 
 
 def _texto_boas_vindas(nome, login, senha, base, chatwoot):
