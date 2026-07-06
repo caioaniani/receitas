@@ -221,6 +221,74 @@ def producao_permitida_no_dia(rec, dia):
                 and dia.weekday() not in _DIAS_PRODUCAO_FORNADA)
 
 
+def _hist_vendas_receita_por_dow(hist_ini, hist_fim, com_loja=False):
+    """Histórico de VENDA por (receita, dow, data), somado em TODAS as lojas —
+    motor 'vendas' do cronograma (06/07/2026). Demanda unificada
+    (VENDA_TIPOS_DEMANDA_COM_ESTORNO, estornos com o sinal de gravação de
+    cada canal) + merma estrutural (MERMA_TIPOS_PROJECAO), líquido clampado
+    em 0 por (receita, data). MESMA fonte da sugestão de pedido por venda
+    (Fase 0.1/1), agregada no nível da indústria: só linhas com receita_id
+    (a indústria produz receitas; produto/MP ficam fora).
+
+    Retorna (qtd_dow, soma_total, datas_total[, por_loja]) na MESMA forma do
+    histórico de pedidos do balanço — média por recência, taxa residual e
+    Σ_dia max(firme, previsto) funcionam sem mudança. `com_loja=True` devolve
+    também dow->loja->data->qtd (pro drill-down 'de onde vem a previsão?')."""
+    from datetime import datetime as _dt
+    from datetime import time as _time
+
+    from app.constants import (
+        MERMA_TIPOS_PROJECAO,
+        VENDA_ESTORNO_SINAL_DEMANDA,
+        VENDA_TIPOS_DEMANDA_COM_ESTORNO,
+    )
+    from app.models import EstoqueLoja, MovEstoqueLoja
+
+    tipos = VENDA_TIPOS_DEMANDA_COM_ESTORNO + MERMA_TIPOS_PROJECAO
+    bruto = defaultdict(lambda: defaultdict(int))          # rid -> data -> qtd
+    bruto_loja = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    for rid, loja_id, tipo_mov, data_mov, qtd in (db.session.query(
+            EstoqueLoja.receita_id, EstoqueLoja.loja_id, MovEstoqueLoja.tipo,
+            MovEstoqueLoja.data, MovEstoqueLoja.quantidade)
+            .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
+            .filter(EstoqueLoja.receita_id.isnot(None),
+                    MovEstoqueLoja.tipo.in_(tipos),
+                    MovEstoqueLoja.data >= _dt.combine(hist_ini, _time.min),
+                    MovEstoqueLoja.data <= _dt.combine(hist_fim, _time.max))
+            .all()):
+        if data_mov is None:
+            continue
+        d_mov = data_mov.date()
+        if tipo_mov in MERMA_TIPOS_PROJECAO:
+            q = int(qtd or 0)
+        else:
+            q = VENDA_ESTORNO_SINAL_DEMANDA.get(tipo_mov, 1) * int(qtd or 0)
+        bruto[rid][d_mov] += q
+        if com_loja:
+            bruto_loja[rid][loja_id][d_mov] += q
+    qtd_dow = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    soma_total = defaultdict(int)
+    datas_total = defaultdict(set)
+    for rid, por_data in bruto.items():
+        for d_mov, v in por_data.items():
+            v = max(0, v)      # estorno de outro dia: demanda não é negativa
+            if v <= 0:
+                continue
+            qtd_dow[rid][d_mov.weekday()][d_mov] += v
+            soma_total[rid] += v
+            datas_total[rid].add(d_mov)
+    if not com_loja:
+        return qtd_dow, soma_total, datas_total
+    por_loja = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(int))))
+    for rid, lojas_d in bruto_loja.items():
+        for loja_id, por_data in lojas_d.items():
+            for d_mov, v in por_data.items():
+                if v > 0:
+                    por_loja[rid][d_mov.weekday()][loja_id][d_mov] += v
+    return qtd_dow, soma_total, datas_total, por_loja
+
+
 def _padronizar_qtd(qtd, lote, minimo):
     """Arredonda a sugestao pro LOTE de pedido da receita (pacote padrao) e
     aplica o piso. 'Nao pedir picado' (decisao do dono 29/06): a loja pede em
