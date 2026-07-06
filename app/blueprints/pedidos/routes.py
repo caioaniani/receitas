@@ -350,6 +350,19 @@ def novo():
             return render_template('pedidos/novo.html', lojas=lojas,
                                    amanha=amanha, data_min=data_min, loja_id=loja_id)
 
+        # MP só entra se liberada pra pedido de loja (checkbox no Banco de
+        # MPs — decisão do dono 07/07/2026). O typeahead já não oferece as
+        # bloqueadas; isto barra POST direto/aba desatualizada.
+        bloqueadas = _mps_nao_pediveis(itens_norm)
+        if bloqueadas:
+            flash('Matéria(s)-prima(s) não liberada(s) pra pedido de loja: '
+                  + ', '.join(bloqueadas) + '. Um admin pode liberar no '
+                  'Banco de MPs (checkbox "sugerir pedido loja").', 'warning')
+            lojas = _lojas_operacionais()
+            return render_template('pedidos/novo.html', lojas=lojas,
+                                   amanha=amanha, data_min=data_min,
+                                   loja_id=loja_id)
+
         try:
             from app.services.pedido_merge import (
                 mesclar_itens,
