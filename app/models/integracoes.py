@@ -154,16 +154,22 @@ class SeruProdutoMap(db.Model):
         return None
 
 class TinyProdutoMap(db.Model):
-    """Liga um item NOSSO (Receita/Produto vendido no site) ao SKU dele no
-    Tiny, pra emissao de NF (Fase 5). Direcao inversa do SeruProdutoMap:
-    aqui NOS mandamos pro Tiny, entao a chave eh o nosso item e o valor eh
-    o SKU.
+    """Liga um item NOSSO (Receita/Produto) ao SKU dele no Tiny, pra emissao
+    de NF (Fase 5). Direcao inversa do SeruProdutoMap: aqui NOS mandamos pro
+    Tiny, entao a chave eh o nosso item e o valor eh o SKU.
+
+    `canal` (06/07/2026): no Tiny o B2B eh OUTRO cadastro/lista de preco —
+    o mesmo item nosso pode apontar pra SKUs DIFERENTES por canal
+    ('site' | 'b2b'). Cada canal tem a propria tela de mapeamento
+    (/admin/loja-online/tiny-skus e /b2b/tiny-skus).
 
     O fiscal (NCM/CFOP/CST) NAO mora aqui — fica no cadastro do produto no
     Tiny; a emissao so referencia o SKU e o Tiny aplica os impostos."""
     __tablename__ = 'tiny_produto_map'
 
     id = db.Column(db.Integer, primary_key=True)
+    canal = db.Column(db.String(10), nullable=False, default='site',
+                      server_default='site')  # 'site' | 'b2b'
     kind = db.Column(db.String(10), nullable=False)   # 'receita' | 'produto'
     item_id = db.Column(db.Integer, nullable=False)
     tiny_sku = db.Column(db.String(100), nullable=True)
@@ -176,7 +182,8 @@ class TinyProdutoMap(db.Model):
     atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
 
     __table_args__ = (
-        db.UniqueConstraint('kind', 'item_id', name='uq_tiny_map_item'),
+        db.UniqueConstraint('canal', 'kind', 'item_id',
+                            name='uq_tiny_map_canal_item'),
     )
 
     @property
