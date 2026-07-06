@@ -382,6 +382,16 @@ def processar_evento_mensagem(evento):
     if tipo in ('anexar_foto_pedido', 'criar_retirada_sobras') and imagens:
         params_acao['imagens'] = imagens
         params_acao['_n_imagens'] = len(imagens)
+    elif tipo == 'criar_retirada_sobras':
+        # Sem foto NESTA mensagem: usa a ultima que o USUARIO mandou no
+        # canal (janela de 2h). Foto num balao e quantidade no outro e o
+        # jeito natural de responder no celular — exigir tudo na MESMA
+        # mensagem so gerava erro e reenvio (caso real 06/07/2026).
+        fa = _foto_recente_do_canal(channel, slack_user_id)
+        if fa:
+            params_acao['imagens'] = [fa['imagem']]
+            params_acao['_n_imagens'] = 1
+            params_acao['_foto_anterior'] = fa['quando']
 
     token = secrets.token_urlsafe(24)
     try:
@@ -433,6 +443,54 @@ def disparar_evento(evento):
                 logger.exception('slack_bot: erro processando evento')
 
     _executor.submit(_runner)
+
+
+def _foto_recente_do_canal(channel_id, slack_user_id, janela_min=120):
+    """Ultima imagem que o PROPRIO usuario mandou no canal nas ultimas
+    `janela_min` (default 2h). Fallback da retirada de sobras: no celular o
+    usuario manda a foto num balao e a quantidade no outro — exigir os dois
+    na MESMA mensagem so gerava erro e reenvio da foto (caso real
+    06/07/2026, prints do dono). Requer scope channels:history/im:history
+    (ja usados pela importacao de NF).
+
+    Devolve {'imagem': {'mimetype', 'base64'}, 'quando': 'ha N min'} ou None
+    (sem foto na janela, ou download falhou)."""
+    import base64
+    import time as _time
+
+    from app.services import slack as slack_api
+
+    oldest = _time.time() - janela_min * 60
+    try:
+        msgs, _cursor = slack_api.historico_canal(
+            channel_id, oldest=f'{oldest:.6f}', limit=50)
+    except Exception:
+        logger.exception('slack_bot: busca de foto recente falhou')
+        return None
+    melhor = None                      # (ts, file_info) da imagem mais nova
+    for m in msgs or []:
+        if m.get('user') != slack_user_id:
+            continue
+        imagens_msg = [f for f in (m.get('files') or [])
+                       if (f.get('mimetype') or '').startswith('image/')]
+        if not imagens_msg:
+            continue
+        try:
+            ts = float(m.get('ts') or 0)
+        except (TypeError, ValueError):
+            continue
+        if melhor is None or ts > melhor[0]:
+            melhor = (ts, imagens_msg[-1])
+    if melhor is None:
+        return None
+    arq = slack_api.baixar_arquivo(melhor[1])
+    if not arq:
+        return None
+    mins = max(0, int((_time.time() - melhor[0]) / 60))
+    quando = 'agora ha pouco' if mins < 1 else f'ha {mins} min'
+    return {'imagem': {'mimetype': arq.get('mimetype') or 'image/jpeg',
+                       'base64': base64.b64encode(arq['bytes']).decode('ascii')},
+            'quando': quando}
 
 
 def _pergunta_retirada_para_historico(params):
