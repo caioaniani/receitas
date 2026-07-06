@@ -1,0 +1,31 @@
+{# Ação explícita do form de gerar pedidos (media + venda/estoque).
+
+   O Safari descarta o name/value do submit button quando o clique passa por
+   um confirm() no onclick — o "Gerar só esta loja" chegava SEM so_loja e a
+   rota (que caía no default "todas") gerava TODAS as lojas (06/07/2026).
+   Defesa dupla: o confirm mora aqui no listener (nunca em onclick inline) e a
+   ação é gravada nos campos hidden ANTES do submit; a rota, por sua vez,
+   exige ação explícita (sem so_loja/so_dia/gerar_todas = não gera nada). #}
+<script>
+(function () {
+    var form = document.getElementById('form-gerar-grade');
+    if (!form) { return; }
+    function hidden(nome) {
+        return form.querySelector('input[type=hidden][name=' + nome + ']');
+    }
+    function marcar(loja, dia, todas) {
+        hidden('so_loja').value = loja;
+        hidden('so_dia').value = dia;
+        hidden('gerar_todas').value = todas;
+    }
+    form.querySelectorAll('button[type=submit]').forEach(function (btn) {
+        btn.addEventListener('click', function (ev) {
+            var msg = btn.dataset.confirm;
+            if (msg && !window.confirm(msg)) { ev.preventDefault(); return; }
+            if (btn.name === 'so_loja') { marcar(btn.value, '', ''); }
+            else if (btn.name === 'so_dia') { marcar('', btn.value, ''); }
+            else if (btn.name === 'gerar_todas') { marcar('', '', btn.value || '1'); }
+        });
+    });
+})();
+</script>
