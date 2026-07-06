@@ -269,6 +269,13 @@
         <label class="small text-muted mb-0 ms-2">Hist (sem):</label>
         <input type="number" name="janela" min="1" max="26" value="{{ janela }}"
                class="form-control form-control-sm" style="width:64px;">
+        <label class="small text-muted mb-0 ms-2">Prever por:</label>
+        <select name="motor" class="form-select form-select-sm" style="width:auto;"
+                title="Fonte da demanda prevista: o que as lojas PEDIRAM (histórico de pedidos — original), o que elas VENDERAM de verdade (+ merma estrutural), ou o MAIOR dos dois por dia (não subproduz quando um sinal está defasado). Pedidos firmes contam sempre, em qualquer opção.">
+            <option value="pedidos" {{ 'selected' if motor == 'pedidos' }}>Pedidos das lojas</option>
+            <option value="vendas" {{ 'selected' if motor == 'vendas' }}>Vendas das lojas</option>
+            <option value="maior" {{ 'selected' if motor == 'maior' }}>Maior dos dois</option>
+        </select>
         <label class="small text-muted mb-0 ms-2 d-flex align-items-center gap-1"
                title="Cada receita inteira num dia; nivela as fornadas por dia, adiantando receitas pra encher dias ociosos.">
             <input type="checkbox" name="equilibrar" value="1"
