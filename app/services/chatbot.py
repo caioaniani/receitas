@@ -1141,14 +1141,20 @@ def varrer_pendentes_sem_resposta():
         varridas += 1
         try:
             resultado = responder(historico)
+            acao = (resultado or {}).get('acao')
             texto = (resultado or {}).get('texto') or ''
+            # Mesmo dedupe do webhook: conversa ja transferida ha pouco nao
+            # ganha 2º "vou te passar pra equipe".
+            if acao == 'handoff' and handoff_recente(conv_id):
+                acao = 'handoff_repetido'
+                texto = TEXTO_HANDOFF_REPETIDO
             if texto:
                 envio = chatwoot.enviar_mensagem(conv_id, texto)
                 if envio.get('ok'):
                     respondidas += 1
-                    salvar_historico(conv_id, historico, texto)
-            acao = (resultado or {}).get('acao')
-            if acao == 'handoff':
+                    salvar_historico(conv_id, historico, texto,
+                                     handoff=(acao == 'handoff'))
+            if acao in ('handoff', 'handoff_repetido'):
                 chatwoot.definir_status(conv_id, 'open')
             elif acao == 'encerrar':
                 chatwoot.definir_status(conv_id, 'resolved')
