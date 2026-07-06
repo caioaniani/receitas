@@ -378,7 +378,7 @@ def _caps_por_retorno(receitas, estoque_de):
 
 
 def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
-                      inicio_offset_dias=0):
+                      inicio_offset_dias=0, motor='pedidos'):
     """Balanco de producao da industria por receita.
 
     Args:
@@ -388,11 +388,15 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         inicio_offset_dias: desloca o INICIO do horizonte futuro (0=hoje,
             1=amanha...). O painel usa 1 porque a producao de hoje ja esta
             decidida. O historico continua ancorado em hoje.
+        motor: fonte do PREVISTO (MOTORES_PREVISAO_PRODUCAO): 'pedidos'
+            (historico de pedidos — original), 'vendas' (venda real das
+            lojas + merma) ou 'maior' (max dos dois por dia). O firme conta
+            sempre, em qualquer motor.
 
     Retorna dict:
         itens: lista por receita, cada um com em_estoque, comprometido,
                previsto, produzir, tem_historico, breakdown_comprometido.
-        horizonte_dias, janela_semanas, hoje, horizonte_fim.
+        horizonte_dias, janela_semanas, hoje, horizonte_fim, motor.
         profundidade: {n_pedidos, n_datas, n_semanas_dados, janela_semanas,
                        desde} — pra UI mostrar a confianca da previsao.
         total_produzir_itens: quantas receitas precisam producao (produzir>0).
@@ -400,8 +404,10 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
     janela_semanas = max(1, min(int(janela_semanas or 6), 26))
     inicio_offset_dias = max(0, min(int(inicio_offset_dias or 0), 14))
+    if motor not in MOTORES_PREVISAO_PRODUCAO:
+        motor = 'pedidos'
 
-    cache_key = (horizonte_dias, janela_semanas, inicio_offset_dias)
+    cache_key = (horizonte_dias, janela_semanas, inicio_offset_dias, motor)
     if usar_cache:
         ent = _CACHE.get(cache_key)
         if ent and (time.time() - ent['t']) < _CACHE_TTL:
