@@ -413,11 +413,25 @@ def receber_pagamento(parcela, valor, forma_pagamento=None, observacao=None):
 
 
 def preco_sugerido(receita_id=None, produto_id=None, cliente=None):
-    """Retorna preco atacado do cadastro + desconto do cliente aplicado.
+    """Retorna o preco sugerido pro item na venda B2B.
 
-    Receita usa `preco_venda`, Produto usa `preco_atacado` (mesma logica
-    de /cardapio?tipo=atacado). Retorna float ou None se nao houver preco.
+    Prioridade (06/07/2026 — o atacado cobra valores diferentes por
+    cliente):
+    1. Preco ESPECIFICO do cliente (`PrecoClienteB2B`) — valor final,
+       sem desconto percentual em cima.
+    2. Preco atacado do cadastro (Receita.preco_venda / Produto.
+       preco_atacado) com o desconto percentual do cliente aplicado
+       (comportamento antigo, inalterado pra quem nao tem tabela).
+    Retorna float ou None se nao houver preco.
     """
+    from app.models import PrecoClienteB2B
+    if cliente and (receita_id or produto_id):
+        esp = PrecoClienteB2B.query.filter_by(
+            cliente_id=cliente.id,
+            kind='receita' if receita_id else 'produto',
+            item_id=receita_id or produto_id).first()
+        if esp:
+            return round(float(esp.preco), 2)
     preco = None
     if receita_id:
         r = Receita.query.get(receita_id)
