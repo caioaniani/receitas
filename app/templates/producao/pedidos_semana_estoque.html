@@ -176,6 +176,7 @@
 {% endblock %}
 
 {% block scripts %}
+{% include "producao/_gerar_acao_js.html" %}
 <script>
 (function () {
     document.querySelectorAll('.pmed tbody tr').forEach(function (row) {
