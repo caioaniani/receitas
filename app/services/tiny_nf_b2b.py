@@ -65,14 +65,17 @@ def _payload_cliente(venda):
 
 def _payload_itens(venda):
     """Cada item da venda -> {item: {codigo, descricao, ...}} via SKU do
-    TinyProdutoMap. Item sem SKU mapeado: ABORTA (não emite NF parcial).
+    TinyProdutoMap no canal 'b2b' (no Tiny o B2B é outro cadastro/lista de
+    preço — SKU pode diferir do site). Item sem SKU mapeado: ABORTA (não
+    emite NF parcial).
 
     O desconto por item é aplicado no valor_unitario (a NF sai com o preço
     efetivo) — Decimal na conta, float só na borda do JSON."""
     out, faltando = [], []
     for it in venda.itens:
         kind = 'receita' if it.receita_id else 'produto'
-        sku = tiny_nf.sku_do_item(kind, it.receita_id or it.produto_id)
+        sku = tiny_nf.sku_do_item(kind, it.receita_id or it.produto_id,
+                                  canal='b2b')
         if not sku:
             faltando.append(it.nome_item)
             continue
