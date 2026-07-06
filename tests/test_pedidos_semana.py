@@ -317,6 +317,7 @@ def test_rota_gerar_cria_pedido(app, admin_user):
     client = app.test_client()
     _login(client, admin_user)
     resp = client.post('/producao/pedidos-semana/gerar', data={
+        'gerar_todas': '1',
         'qtd|%d|%s|%d' % (loja.id, d, r.id): '8',
     })
     assert resp.status_code == 302
