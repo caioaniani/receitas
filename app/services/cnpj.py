@@ -50,7 +50,7 @@ def _normalizar(d):
         'numero': _s('numero'),
         'complemento': _s('complemento'),
         'bairro': _s('bairro'),
-        'cep': _so_digitos(_s('cep')),
+        'cep': cep,
         'cidade': _s('municipio'),
         'uf': _s('uf').upper(),
         'situacao': _s('descricao_situacao_cadastral'),
