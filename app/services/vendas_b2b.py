@@ -218,8 +218,21 @@ def _aplicar_itens(venda, itens, user=None):
 
 
 def _aplicar_parcelas(venda, parcelas):
-    """Cria as parcelas da venda. Sem parcelas = 1 parcela unica ao total."""
+    """Cria as parcelas da venda. Sem parcelas explicitas:
+
+    - cliente com FATURAMENTO MENSAL: NAO cria parcela nenhuma — a venda
+      fica na conta do mes e so vira recebivel quando o fechamento
+      (FaturaB2B) criar a parcela com o vencimento da fatura. Sem isso a
+      parcela unica automatica tirava a venda do universo do fechamento
+      e a feature nunca fechava conta nenhuma (achado da revisao
+      07/07/2026).
+    - demais clientes: 1 parcela unica ao total (comportamento original).
+
+    Parcela explicita SEMPRE vale (excecao negociada — a venda fica FORA
+    do fechamento mensal de proposito)."""
     if not parcelas:
+        if venda.cliente and venda.cliente.faturamento_mensal:
+            return
         db.session.add(VendaB2BParcela(
             venda_id=venda.id, numero=1,
             vencimento=venda.data_venda,
