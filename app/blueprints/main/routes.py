@@ -683,6 +683,7 @@ def caixa():
     lentas — use /pdv pra esse detalhe."""
     from sqlalchemy import func as sqlfunc
 
+
     data_str = request.args.get('data', hoje_brt().isoformat())
     try:
         data_alvo = datetime.strptime(data_str, '%Y-%m-%d').date()
