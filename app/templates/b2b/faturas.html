@@ -32,7 +32,7 @@
                     <input type="hidden" name="cliente_id" value="{{ a.cliente.id }}">
                     <input type="date" name="data_inicio" value="{{ a.primeira.isoformat() }}" class="form-control form-control-sm" style="width:145px" title="Início do período" required>
                     <input type="date" name="data_fim" value="{{ a.ultima.isoformat() }}" class="form-control form-control-sm" style="width:145px" title="Fim do período" required>
-                    <input type="date" name="vencimento" value="{{ (hoje + hoje.resolution * 0).isoformat() }}" class="form-control form-control-sm venc-input" style="width:145px" title="Vencimento do boleto" required>
+                    <input type="date" name="vencimento" value="{{ hoje.isoformat() }}" class="form-control form-control-sm venc-input" style="width:145px" title="Vencimento do boleto" required>
                     <button class="btn btn-sm btn-primary"><i class="bi bi-lock"></i> Fechar conta</button>
                 </form>
             </td>
