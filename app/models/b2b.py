@@ -271,6 +271,9 @@ class VendaB2BParcela(db.Model):
     forma_pagamento = db.Column(db.String(30))  # pix, dinheiro, boleto, transferencia
     observacao = db.Column(db.String(200))
 
+    fatura = db.relationship('FaturaB2B', backref='parcelas',
+                             foreign_keys=[fatura_id])
+
     @property
     def saldo(self):
         return (self.valor or 0) - (self.valor_pago or 0)
