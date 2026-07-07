@@ -18,8 +18,10 @@ def _setup_basico(app):
                           rendimento_qtd=1, rendimento_unidade='un',
                           peso_base=80.0)
         produto = Produto(nome='Cesta Especial', ativo=True)
+        # Liberada pro pedido de loja (trava de 07/07/2026 — sem o checkbox
+        # a MP nem resolve; a trava tem testes proprios em test_mp_pedivel.py)
         mp = MateriaPrima(nome='Mussarela de Búfala', unidade='kg',
-                          custo_por_kg=50.0)
+                          custo_por_kg=50.0, sugerir_pedido_loja=True)
         admin = Usuario(login='adm', nome='Admin', papel='admin', loja_id=None)
         admin.set_senha('x')
         db.session.add_all([loja, receita, produto, mp, admin])
