@@ -154,19 +154,33 @@ def _desenhar_itf(pdf, codigo, x, y, largura=103.0, altura=13.0):
         cx += w
 
 
-def _desenhar_qr(pdf, texto, x, y, tamanho=25.0):
+QR_LARGURA_MM = 35.99   # 3,599 cm — exigência da homologação (impressão
+QR_ALTURA_MM = 34.22    # Normal; e-mail do Sicredi 07/07/2026). O banco
+#                         confere as medidas na validação do PDF.
+
+
+def _desenhar_qr(pdf, texto, x, y, largura=QR_LARGURA_MM,
+                 altura=QR_ALTURA_MM):
+    """QR Pix do boleto híbrido nas dimensões EXATAS do manual.
+
+    A área exigida não é quadrada (35,99 × 34,22 mm) — desenhamos os
+    módulos levemente retangulares (~5%) pra cravar as DUAS medidas.
+    Distorção de 5% fica bem dentro da tolerância dos leitores, e a
+    homologação mede o retângulo com régua."""
     import qrcode
     qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M,
                        border=0)
     qr.add_data(texto)
     qr.make(fit=True)
     matriz = qr.get_matrix()
-    modulo = tamanho / len(matriz)
+    n = len(matriz)
+    mod_w = largura / n
+    mod_h = altura / n
     pdf.set_fill_color(0, 0, 0)
     for i, linha in enumerate(matriz):
         for j, cheio in enumerate(linha):
             if cheio:
-                pdf.rect(x + j * modulo, y + i * modulo, modulo, modulo, 'F')
+                pdf.rect(x + j * mod_w, y + i * mod_h, mod_w, mod_h, 'F')
 
 
 def _fmt_moeda(v):
