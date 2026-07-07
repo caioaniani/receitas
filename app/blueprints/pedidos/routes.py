@@ -2679,6 +2679,9 @@ def estoque_loja_registrar():
         flash('Selecione uma loja.', 'warning')
         return redirect(url_for('pedidos.estoque_loja'))
 
+    from app.services.estoque_helpers import serializar_loja
+    serializar_loja(loja_id)  # lock por loja antes dos UPDATE em EstoqueLoja
+
     ids = request.form.getlist('estoque_id[]')
     qtds = request.form.getlist('qtd[]')
     tipos = request.form.getlist('tipo[]')
