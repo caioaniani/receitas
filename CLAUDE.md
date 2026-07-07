@@ -698,6 +698,41 @@ ordem nao bate com o grid visto). Cache do balanco tem motor na chave.
 Constante: `previsao_producao.MOTORES_PREVISAO_PRODUCAO`. Testes: secao
 "motor de previsao" em `tests/test_cronograma.py`.
 
+## Pré-baixa de MP na ordem enviada (07/07/2026)
+
+Pedido do dono: ENVIAR a ordem ao padeiro dá uma PRÉ-BAIXA nas MPs; a
+confirmação do padeiro dá a baixa de fato. Implementação:
+
+- **Modelo `PreBaixaMP`** (`app/models/producao.py`): 1 linha por
+  (plano, MP) com a quantidade reservada. Linha 0 = marcador de REGIME;
+  plano sem NENHUMA linha = enviado antes da feature (não se pré-baixa
+  retroativo). Tabela nova via `db.create_all` (sem ALTER).
+- **Reconciliador idempotente** `producao.sincronizar_pre_baixa_mp(plano,
+  user_id, criar=False)`: alvo = explosão da FALTA (alvo − produzido dos
+  itens não dispensados) se `enviado_ao_padeiro`, vazio se rascunho.
+  Aplica só o DELTA como `MovimentacaoEstoque` ('saida' "Pré-baixa
+  produção dd/mm" / 'entrada' "Estorno pré-baixa produção dd/mm") +
+  `estoque_atual`. `criar=True` só nos gestos explícitos de envio
+  (`enviar_plano_do_dia` e `reagendar_para_hoje`). NUNCA mexer nas
+  quantidades de `PreBaixaMP` por fora do reconciliador.
+- **Explosão**: MESMO motor da baixa real e da calculadora de compras
+  (`consolidar_lista_compras`, com o fix mp_un/mp_direto de 04/07) e MESMO
+  rendimento do produzir (`rendimento_massa_crua`) — por isso a
+  confirmação troca pré-baixa por baixa real EXATO (estoque líquido não
+  muda no confirmar; era isso que o dono queria: reservar no envio).
+  Sub-receitas prontas (congelado) ficam FORA — a pré-baixa é só de MP.
+- **Caminhos ligados**: `enviar_plano_do_dia` (cria/ajusta delta; plano
+  que ficou vazio libera), `produzir_item_plano` (libera a fração
+  confirmada — a baixa real de sempre acontece igual),
+  `dispensar_item/itens` (libera a falta dispensada), `reverter_dispensa`
+  (re-reserva), `reagendar_para_hoje` (libera na origem, reserva no plano
+  de hoje), `excluir_plano_do_dia` (`estornar_pre_baixa_plano` devolve
+  tudo e apaga as linhas). Aprovar (rascunho) NÃO reserva.
+- Estorno de pré-baixa tem `preco_unitario=None` → vale R$ 0 nos
+  relatórios de compra (mesmo padrão dos estornos de pedido).
+- Testes: `tests/test_pre_baixa_mp.py` (10 casos, incl. idempotência do
+  re-envio, delta de edição de grid e ordem antiga fora do regime).
+
 ## Cronograma — ordem ENVIADA nunca muda por caminho implicito (04/07/2026)
 
 Garantia do dono: depois do "enviar a producao", o que o padeiro ve so muda
