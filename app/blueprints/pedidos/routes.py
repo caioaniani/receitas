@@ -1001,9 +1001,10 @@ def relatorio():
     por_item = defaultdict(lambda: {'quantidade': 0, 'recebido': 0, 'valor': 0.0})
 
     if loja_id:
+        from app.constants import STATUS_PEDIDO_ENTREGUES
         query = PedidoLoja.query.filter(
             PedidoLoja.loja_id == loja_id,
-            PedidoLoja.status == 'entregue',
+            PedidoLoja.status.in_(STATUS_PEDIDO_ENTREGUES),
             PedidoLoja.data_entrega >= de,
             PedidoLoja.data_entrega <= ate,
         ).order_by(PedidoLoja.data_entrega)
