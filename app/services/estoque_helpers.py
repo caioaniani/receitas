@@ -151,6 +151,7 @@ def baixar_loja_por_prioridade(filtro_base, inteiros, *,
     if inteiros <= 0:
         return {'baixado': 0, 'faltou': 0}
 
+    serializar_baixa_estoque()  # antes de qualquer FOR UPDATE (evita deadlock)
     el = obter_linha_loja(usuario_id=usuario_id, **filtro_base)
     # Trava a linha antes do read-modify-write: sem isso, dois canais baixando
     # a MESMA linha ao mesmo tempo (cron Seru + webhook do site, lote, etc.)
