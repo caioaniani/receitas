@@ -226,7 +226,10 @@ def transferir(id):
 
     # Estoque de loja: funde com a linha da receita (mesma loja/estado);
     # movimentações reapontadas ANTES de apagar a linha da origem.
-    for e in EstoqueLoja.query.filter_by(materia_prima_id=mp.id).all():
+    from app.services.estoque_helpers import serializar_lojas
+    _els_fusao = EstoqueLoja.query.filter_by(materia_prima_id=mp.id).all()
+    serializar_lojas({e.loja_id for e in _els_fusao})  # lock ascendente multi-loja
+    for e in _els_fusao:
         alvo = EstoqueLoja.query.filter_by(
             receita_id=destino.id, loja_id=e.loja_id, estado=e.estado).first()
         if alvo:
