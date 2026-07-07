@@ -194,6 +194,12 @@ def estornar_venda(canal, pedido_ref, referencia, *, usuario_id=None):
     tipo_baixa, _tipo_sem, tipo_est = _movs(canal)
     sinal = _sinal_estorno(canal)
 
+    # Serializa ANTES do 1o UPDATE em EstoqueLoja/DebitoEstoque: o estorno
+    # tambem trava linha, e roda na MESMA transacao multi-loja do Seru misturado
+    # com baixas — sem o lock aqui, reabre o deadlock (inclusive o ciclo
+    # "trava linha e depois pede 7748"). Mesmo advisory lock da baixa.
+    serializar_baixa_estoque()
+
     # Fase 1: inteiros, pela referencia (exceto baixas marcadas (fracao)).
     candidatos = MovEstoqueLoja.query.filter(
         MovEstoqueLoja.tipo == tipo_baixa,
