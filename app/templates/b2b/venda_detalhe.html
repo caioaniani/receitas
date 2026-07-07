@@ -34,6 +34,12 @@
                 <div class="mt-2">
                     Data: <strong>{{ venda.data_venda.strftime('%d/%m/%Y') }}</strong>
                     {% if venda.nf_numero %} · NF #{{ venda.nf_numero }}{% endif %}
+                    {% if venda.fatura_id %}
+                    · <a href="{{ url_for('b2b.fatura_detalhe', fid=venda.fatura_id) }}"
+                         class="badge bg-info text-dark text-decoration-none"
+                         title="Venda faturada no fechamento mensal — NF e boleto saem pela fatura">
+                        fatura {{ venda.fatura.codigo }}</a>
+                    {% endif %}
                 </div>
                 <div class="mt-2">
                     Entrega (padaria):
