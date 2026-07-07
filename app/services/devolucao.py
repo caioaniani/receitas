@@ -134,10 +134,17 @@ def estornar_devolucao(token, usuario_id):
     houver e reporta a diferença no aviso. Idempotente por token: segunda
     chamada levanta ValueError. Commita no fim."""
     like = f'%{token}'
-    ja = MovEstoqueLoja.query.filter(
+    # Idempotencia: checa o marcador de estorno nas DUAS pontas. Se a loja
+    # baixou 0 (so movs *_sem_estoque), o marcador da LOJA nunca nasce — sem
+    # a checagem da INDUSTRIA, uma 2a chamada re-baixaria o credito da
+    # industria de novo (estoque some 2x por uma devolucao).
+    ja_loja = MovEstoqueLoja.query.filter(
         MovEstoqueLoja.tipo == TIPO_BAIXA_LOJA_ESTORNO,
         MovEstoqueLoja.referencia.like(like + '%')).first()
-    if ja is not None:
+    ja_ind = MovEstoqueProducao.query.filter(
+        MovEstoqueProducao.tipo == TIPO_CREDITO_INDUSTRIA_ESTORNO,
+        MovEstoqueProducao.referencia.like(like + '%')).first()
+    if ja_loja is not None or ja_ind is not None:
         raise ValueError(f'Devolução {token} já estornada.')
 
     movs_loja = MovEstoqueLoja.query.filter(
