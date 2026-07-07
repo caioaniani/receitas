@@ -4230,6 +4230,9 @@ def executar_registrar_desperdicio(params, user):
             return {'ok': False, 'erro': f'Loja "{nome_tentado}" nao encontrada. Verifique o nome.'}
         return {'ok': False, 'erro': 'Especifique a loja (ex: Anesio, Nebraska, Ribeiro do Vale).'}
 
+    from app.services.estoque_helpers import serializar_loja
+    serializar_loja(loja.id)  # lock por loja antes da baixa do desperdicio
+
     nome_item = (params.get('item_nome') or '').strip()
     if not nome_item:
         return {'ok': False, 'erro': 'item_nome obrigatorio.'}
