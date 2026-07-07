@@ -367,6 +367,11 @@ def processar_conta(conta, user_id=None, aovivo=True):
 
     canal_map = resolver_canal_map(conta.origem_canal)
 
+    # Uma conta = um canal = uma loja (ou industria). Lock por loja antes das
+    # entradas de NF em EstoqueLoja (no-op quando eh_industria: loja_id None).
+    from app.services.estoque_helpers import serializar_loja
+    serializar_loja(getattr(canal_map, 'loja_id', None))
+
     for i, item in enumerate(itens):
         if not isinstance(item, dict):
             continue
