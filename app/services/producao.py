@@ -170,9 +170,140 @@ def excluir_plano_do_dia(data_alvo):
     produzido = sum(int(it.produzido_qtd or 0) for it in plano.itens)
     if produzido > 0:
         return {'ok': False, 'erro': 'ja_produzido', 'produzido': produzido}
+    estornar_pre_baixa_plano(plano)   # devolve a MP reservada antes de sumir
     db.session.delete(plano)   # cascade apaga os itens
     db.session.commit()
     return {'ok': True}
+
+
+# ── Pré-baixa de MP da ordem enviada (pedido do dono 07/07/2026) ─────────
+# Enviar o plano ao padeiro RESERVA a MP da falta (baixa provisória);
+# confirmar a produção converte em baixa real e libera a reserva. Tudo
+# passa pelo reconciliador idempotente abaixo — os caminhos que mudam a
+# falta (enviar, produzir, dispensar/reverter, reagendar, excluir) só o
+# chamam de novo.
+
+_PRE_BAIXA_EPS = 1e-6   # delta menor que isso = ruído de float, não gera mov
+
+
+def _explosao_mp_falta(plano):
+    """{mp_id: quantidade} de MP da FALTA do plano (alvo − produzido dos
+    itens não dispensados). MESMO motor de explosão da baixa real e da
+    calculadora de compras (`consolidar_lista_compras`, que trata mp_un/
+    mp_direto/percentual) e MESMO rendimento do produzir
+    (`rendimento_massa_crua`) — assim a pré-baixa casa exata com a baixa
+    real na confirmação."""
+    from app.models import PlanejamentoItem
+    itens = PlanejamentoItem.query.filter_by(planejamento_id=plano.id).all()
+    itens_motor = []
+    for it in itens:
+        if it.dispensada_em is not None:
+            continue
+        falta = max(0, int(it.qtd_alvo or 0) - int(it.produzido_qtd or 0))
+        if falta <= 0:
+            continue
+        rend = rendimento_massa_crua(it.receita)
+        if not rend or rend <= 0:
+            continue
+        itens_motor.append({'receita_id': it.receita_id,
+                            'multiplicador': falta / rend})
+    if not itens_motor:
+        return {}
+    lista = consolidar_lista_compras(itens_motor)
+    ids = {mp.nome: mp.id for mp in MateriaPrima.query.all()}
+    out = {}
+    for nome, dados in lista.items():
+        mp_id = ids.get(nome)
+        if mp_id and dados['quantidade'] > _PRE_BAIXA_EPS:
+            out[mp_id] = out.get(mp_id, 0.0) + dados['quantidade']
+    return out
+
+
+def sincronizar_pre_baixa_mp(plano, user_id=None, criar=False):
+    """Reconcilia a PRÉ-BAIXA de MP do plano com o estado atual.
+
+    Alvo da reconciliação = explosão da falta se `enviado_ao_padeiro`;
+    vazio se rascunho. Aplica só o DELTA contra as linhas `PreBaixaMP`,
+    como `MovimentacaoEstoque` 'saida' (referência "Pré-baixa produção…")
+    ou 'entrada' ("Estorno pré-baixa produção…") + ajuste do denormalizado
+    `estoque_atual`. Idempotente: rodar de novo sem mudança não gera
+    movimento.
+
+    `criar=False`: plano sem NENHUMA linha fica FORA do regime (ordem
+    enviada antes da feature — não se pré-baixa retroativo em cima de
+    ordem antiga). Só o enviar/reagendar (gestos explícitos) passam
+    `criar=True`. Linhas zeradas ficam como marcador de regime; só somem
+    com o plano (`estornar_pre_baixa_plano`). NÃO commita."""
+    from app.models import MovimentacaoEstoque, PreBaixaMP
+
+    db.session.flush()   # deletes/updates pendentes visíveis nas queries
+    linhas = {pb.materia_prima_id: pb for pb in
+              PreBaixaMP.query.filter_by(plano_id=plano.id).all()}
+    if not linhas and not criar:
+        return {'em_regime': False, 'movs': 0}
+
+    desejado = ({} if not plano.enviado_ao_padeiro
+                else _explosao_mp_falta(plano))
+    mp_ids = set(desejado) | set(linhas)
+    if not mp_ids:
+        return {'em_regime': bool(linhas), 'movs': 0}
+    rotulo = plano.data.strftime('%d/%m') if plano.data else '#%s' % plano.id
+    mps = {m.id: m for m in
+           MateriaPrima.query.filter(MateriaPrima.id.in_(mp_ids)).all()}
+    movs = 0
+    for mp_id in sorted(mp_ids):
+        mp = mps.get(mp_id)
+        if mp is None:
+            continue
+        alvo = float(desejado.get(mp_id, 0.0))
+        linha = linhas.get(mp_id)
+        atual = float(linha.quantidade or 0.0) if linha else 0.0
+        delta = alvo - atual
+        if abs(delta) <= _PRE_BAIXA_EPS:
+            continue
+        if delta > 0:
+            db.session.add(MovimentacaoEstoque(
+                materia_prima_id=mp_id, tipo='saida', quantidade=delta,
+                referencia='Pré-baixa produção %s' % rotulo,
+                usuario_id=user_id))
+            mp.estoque_atual = max(0, (mp.estoque_atual or 0) - delta)
+        else:
+            db.session.add(MovimentacaoEstoque(
+                materia_prima_id=mp_id, tipo='entrada', quantidade=-delta,
+                referencia='Estorno pré-baixa produção %s' % rotulo,
+                usuario_id=user_id))
+            mp.estoque_atual = (mp.estoque_atual or 0) - delta
+        if linha is None:
+            linha = PreBaixaMP(plano_id=plano.id, materia_prima_id=mp_id,
+                               quantidade=0.0)
+            db.session.add(linha)
+        linha.quantidade = alvo
+        movs += 1
+    return {'em_regime': True, 'movs': movs}
+
+
+def estornar_pre_baixa_plano(plano, user_id=None):
+    """Estorna TODA a pré-baixa pendente do plano e apaga as linhas — usado
+    quando a ordem é EXCLUÍDA (o marcador de regime vai junto). NÃO
+    commita. Retorna o nº de linhas removidas."""
+    from app.models import MovimentacaoEstoque, PreBaixaMP
+
+    linhas = PreBaixaMP.query.filter_by(plano_id=plano.id).all()
+    rotulo = plano.data.strftime('%d/%m') if plano.data else '#%s' % plano.id
+    for pb in linhas:
+        q = float(pb.quantidade or 0.0)
+        if q > _PRE_BAIXA_EPS:
+            db.session.add(MovimentacaoEstoque(
+                materia_prima_id=pb.materia_prima_id, tipo='entrada',
+                quantidade=q,
+                referencia='Estorno pré-baixa produção %s (ordem excluída)'
+                           % rotulo,
+                usuario_id=user_id))
+            mp = pb.materia_prima
+            if mp is not None:
+                mp.estoque_atual = (mp.estoque_atual or 0) + q
+        db.session.delete(pb)
+    return len(linhas)
 
 
 def massa_receita_base(receita):
