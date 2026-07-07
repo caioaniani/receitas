@@ -312,6 +312,8 @@
   var LALA_CANCELAR = "{{ url_for('entregas.api_lalamove_cancelar') }}";
   var LALA_ACELERAR = "{{ url_for('entregas.api_lalamove_acelerar') }}";
   var LALA_VEICULOS = {{ (lala_veiculos or []) | tojson }};
+  // Gasto Lalamove é admin/gerente (espelha @gerente_required no backend).
+  var PODE_LALAMOVE = {{ 'true' if (current_user.is_admin() or current_user.is_gerente()) else 'false' }};
   var VIGIA_RECONHECER = "{{ url_for('entregas.api_painel_vigia_reconhecer') }}";
   var VIGIA_HISTORICO = "{{ url_for('entregas.api_painel_vigia_historico') }}";
   var lalaSaldo = null;   // ultimo saldo da carteira (vem no api_painel)
