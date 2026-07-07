@@ -284,12 +284,14 @@ def processar_pedidos(data_inicial, data_final, user=None,
         # Resolve loja
         company = p.get('company') or {}
         cname = ''
+        cid = None
         if isinstance(company, dict):
             cname = (company.get('name') or '').strip()
+            cid = company.get('id')
         elif isinstance(company, str):
             cname = company.strip()
 
-        loja, loja_map = _resolver_loja(cname, lojas_ativas)
+        loja, loja_map = _resolver_loja(cname, lojas_ativas, cid)
         if not loja:
             # Sem loja mapeada — registra pedido como processado mas sem baixar
             stats['pedidos_sem_loja_mapeada'] += 1
