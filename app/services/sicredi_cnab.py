@@ -162,6 +162,12 @@ def _detalhe_titulo(cob, seq):
         (315, 319, _num(0, 5)), (320, 325, _num(0, 6)),
         (327, 334, _num(cep or 0, 8)),
         (335, 339, _num(0, 5)),
+        # 340-353: CNPJ/CPF do BENEFICIÁRIO FINAL (sacador avalista).
+        # Não usamos beneficiário final — e a homologação (07/07/2026,
+        # Luiz Henrique/Sicredi) devolveu o arquivo porque o campo ia em
+        # BRANCO: sem beneficiário final ele deve ir "00000000000000".
+        # O nome (354-394) segue em branco.
+        (340, 353, _num(0, 14)),
         (395, 400, _num(seq, 6)),
     ])
 
