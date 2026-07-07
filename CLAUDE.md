@@ -477,6 +477,19 @@ status; `?testar=1` manda evento de teste.
   com `consultar_pedido` esquecendo de filtrar `recebido`).
 - **Fuzzy de loja por nome**: use `resolver_loja_por_nome()` em `app/utils.py`,
   não reimplemente o padrão `func.lower() / ilike` em cada service.
+- **MP em pedido de loja é OPT-IN (07/07/2026)**: `MateriaPrima.
+  sugerir_pedido_loja` (checkbox "sugerir pedido loja" no Banco de MPs) virou
+  TRAVA do pedido loja→indústria — decisão do dono ("tenho itens que as lojas
+  estão pedindo que não deveriam poder"). Camadas: typeahead
+  (`pedidos/routes.py::buscar_itens` + `_mps_pediveis`), validação server-side
+  do POST novo/editar (`_mps_nao_pediveis`), resolver do copilot
+  (`_resolver_item_pedido`) e executores `executar_criar_pedido`/
+  `executar_editar_pedido` (defesa em profundidade — preview re-enviado não
+  fura). GRANDFATHER no editar: MP que JÁ está no pedido segue válida (web e
+  copilot via `mp_ids_extras`; o GET do editar une as MPs do pedido à lista
+  do select — sem isso o REPLACE derrubaria o item). Receitas e produtos
+  seguem livres; `receber_mp`/`ajuste_estoque` continuam vendo TODAS as MPs
+  (`_resolver_mp` intocado). Testes: `tests/test_mp_pedivel.py`.
 - **Componente de cesta/sub-receita: FK manda, nome e so fallback (03/07/2026)**:
   `ProdutoItem.item_nome` e `ReceitaIngrediente.ingrediente_nome` podem ficar
   com grafia ANTIGA apos rename — todo lookup (custo, agregacao) deve usar
