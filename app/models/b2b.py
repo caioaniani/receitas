@@ -162,6 +162,10 @@ class VendaB2B(db.Model):
     tiny_nota_fiscal_id = db.Column(db.String(40))
     nf_status = db.Column(db.String(40))
     nf_emitida_em = db.Column(db.DateTime, nullable=True)
+    # Fechamento mensal (07/07/2026): venda que entrou numa fatura. NULL =
+    # venda avulsa/cobrada na hora (padrao).
+    fatura_id = db.Column(db.Integer, db.ForeignKey('fatura_b2b.id'),
+                          nullable=True, index=True)
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
     criado_em = db.Column(db.DateTime, default=agora)
     cancelado_em = db.Column(db.DateTime, nullable=True)
