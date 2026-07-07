@@ -272,6 +272,7 @@ def reagendar_para_hoje(item_ids, user_id):
             por_receita[old.receita_id] = novo
 
         # fecha a ordem antiga (sai da auditoria)
+        planos_origem.add(old.planejamento)
         if prod <= 0:
             db.session.delete(old)             # nada produzido -> some
         else:
@@ -279,6 +280,15 @@ def reagendar_para_hoje(item_ids, user_id):
         movidos += 1
         unidades += falta
 
+    if movidos:
+        # A falta MUDOU de ordem: libera a reserva de MP nas ordens de origem
+        # e reserva na de hoje. criar=True porque o reagendamento é gesto
+        # explícito de envio (o plano de hoje pode nascer aqui, sem passar
+        # pelo enviar_plano_do_dia).
+        from app.services.producao import sincronizar_pre_baixa_mp
+        for p in planos_origem:
+            sincronizar_pre_baixa_mp(p, user_id)
+        sincronizar_pre_baixa_mp(plano_hoje, user_id, criar=True)
     db.session.commit()
     return {'movidos': movidos, 'unidades': unidades}
 
