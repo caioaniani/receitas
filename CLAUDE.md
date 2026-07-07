@@ -102,9 +102,9 @@ adicionam custo e latência.
    (re-delegando investigação a subagentes se necessário) e rode a revisão de
    novo. Itere só por bug, caso de borda ou violação das convenções deste
    arquivo — nunca por preferência de estilo.
-6. **Entregue.** Rode a suíte (`pytest`, ~73s) e exercite o fluxo afetado, e
-   resuma: o que mudou, o que a revisão apontou e o que foi corrigido ou
-   descartado (e por quê).
+6. **Entregue.** Rode a suíte (`python -m pytest`, ~73s) e exercite o fluxo
+   afetado, e resuma: o que mudou, o que a revisão apontou e o que foi
+   corrigido ou descartado (e por quê).
 
 ## API read-only do assistente (/api/claude/*) — acesso do Claude a prod
 
