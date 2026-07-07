@@ -147,9 +147,15 @@ def enviar_plano_do_dia(data_alvo, user_id=None, horizonte_dias=7,
     if n == 0 and not plano.itens:
         if novo:
             db.session.delete(plano)
+        else:
+            # Plano existente que ficou vazio: libera a MP reservada.
+            sincronizar_pre_baixa_mp(plano, user_id)
         db.session.commit()
         return None
     plano.enviado_ao_padeiro = True
+    # Enviar RESERVA a MP da falta (pré-baixa) — o gesto explícito inicia o
+    # regime (criar=True); re-enviar só ajusta o delta.
+    sincronizar_pre_baixa_mp(plano, user_id, criar=True)
     db.session.commit()
     return plano
 
