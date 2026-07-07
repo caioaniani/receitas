@@ -2637,6 +2637,8 @@ def estoque_loja_vincular():
     else:
         filtro['materia_prima_id'] = alvo_id
 
+    from app.services.estoque_helpers import serializar_loja
+    serializar_loja(loja_id)  # lock por loja antes de fundir o orfao
     existente = EstoqueLoja.query.filter_by(**filtro).first()
     nome_orfao = orfao.nome_pendente or '?'
     qtd_orfao = orfao.quantidade or 0
