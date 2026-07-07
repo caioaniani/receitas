@@ -16,7 +16,7 @@ from sqlalchemy.orm import joinedload
 
 from app import nav
 from app.blueprints.main import main_bp
-from app.decorators import admin_required, owner_required
+from app.decorators import admin_required, gerente_required, owner_required
 from app.extensions import db
 from app.models import (
     AlertaEstoque,
@@ -2189,6 +2189,7 @@ def debug_chatwoot():
 
 @main_bp.route('/admin/vnda/contatos')
 @login_required
+@gerente_required
 def vnda_contatos():
     """Endereco + contato + DATA DE ENTREGA de uma lista de codes VNDA.
 
@@ -3351,6 +3352,7 @@ def loja_online_dashboard():
 
 @main_bp.route('/admin/loja-online/pedidos')
 @login_required
+@gerente_required
 def loja_online_pedidos():
     """Lista os pedidos do site (mais recentes primeiro), com filtros por
     status e por data de entrega (?data=YYYY-MM-DD ou intervalo
@@ -3404,6 +3406,7 @@ def loja_online_pedidos():
 
 @main_bp.route('/admin/loja-online/buscar-pedidos')
 @login_required
+@gerente_required
 def loja_online_pedidos_buscar():
     """Busca incremental (AJAX) por nome, telefone, e-mail ou código.
     Respeita o filtro de data ATIVO (passado nos params) — sem isso a busca
@@ -3465,6 +3468,7 @@ def _detalhe_redirect(codigo):
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>')
 @login_required
+@gerente_required
 def loja_online_pedido_detalhe(codigo):
     from app.models import PedidoOnline
     from app.services import loja_checkout
@@ -3477,6 +3481,7 @@ def loja_online_pedido_detalhe(codigo):
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/editar', methods=['POST'])
 @login_required
+@gerente_required
 def loja_online_pedido_editar(codigo):
     """Edita os dados LOGÍSTICOS/CONTATO do pedido — o que a operação precisa
     corrigir depois do pedido feito: cartinha, data/janela, endereço, contato,
@@ -3558,6 +3563,7 @@ def loja_online_pedido_editar(codigo):
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/reenviar-emails',
                methods=['POST'])
 @login_required
+@gerente_required
 def loja_online_pedido_reenviar_emails(codigo):
     """Reenvia os e-mails relevantes pro status atual do pedido, pro
     email_cliente ATUAL (corrija o e-mail antes, se estava errado).
@@ -3625,6 +3631,7 @@ def loja_online_pedido_reenviar_emails(codigo):
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/imprimir.pdf')
 @login_required
+@gerente_required
 def loja_online_pedido_imprimir(codigo):
     """PDF de impressão do pedido — MESMO layout do /entregas (via cliente +
     via motoboy). Reusa o serializador e o gerador de PDF de entregas pra o
@@ -3651,6 +3658,7 @@ def loja_online_pedido_imprimir(codigo):
 @main_bp.route('/admin/loja-online/pedidos/imprimir-selecao.pdf',
                methods=['POST'])
 @login_required
+@gerente_required
 def loja_online_pedidos_imprimir_selecao():
     """PDF da SELEÇÃO da lista — N pedidos × 2 vias (cliente + motoboy).
     Reusa o gerador do `/entregas/`. Recebe `codigos` (multi-value do form).
@@ -3736,6 +3744,7 @@ _STATUS_AVANCO = ('em_preparo', 'a_caminho', 'entregue')
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/status', methods=['POST'])
 @login_required
+@gerente_required
 def loja_online_pedido_status(codigo):
     """Avança o status do pedido manualmente. Dispara e-mail transacional
     quando entra em `a_caminho`."""
@@ -3862,6 +3871,7 @@ def loja_online_emitir_nf(codigo):
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/danfe')
 @login_required
+@gerente_required
 def loja_online_danfe(codigo):
     """Redireciona pro DANFE (PDF) da NF no Tiny. Link temporário — busca sob
     demanda (não a cada abertura do pedido)."""
