@@ -1421,7 +1421,10 @@ def vinculos_transferir(id):
             e.receita_id = destino.id
         _conta('estoque_producao', 1)
 
-    for e in EstoqueLoja.query.filter_by(receita_id=origem.id).all():
+    from app.services.estoque_helpers import serializar_lojas
+    _els_vinc = EstoqueLoja.query.filter_by(receita_id=origem.id).all()
+    serializar_lojas({e.loja_id for e in _els_vinc})  # lock ascendente multi-loja
+    for e in _els_vinc:
         alvo = EstoqueLoja.query.filter_by(
             receita_id=destino.id, loja_id=e.loja_id, estado=e.estado).first()
         if alvo:
