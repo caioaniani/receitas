@@ -316,9 +316,21 @@ def seru_companies():
     except (TypeError, ValueError):
         dias_n = 2
     hoje_d = hoje()
+    # Janela HISTORICA opcional (?inicio=&fim=, max 7 dias): pra ler id/CNPJ
+    # de company que ja MORREU (ex: OPAO PADARIA, morto em ~21/06) — pedido
+    # do dono 07/07/2026, "puxando o faturamento da epoca a gente ve".
+    ini_d, fim_d = hoje_d - timedelta(days=dias_n - 1), hoje_d
+    di, df = request.args.get('inicio'), request.args.get('fim')
+    if di and df:
+        from datetime import date as _date
+        try:
+            ini_d, fim_d = _date.fromisoformat(di), _date.fromisoformat(df)
+        except ValueError:
+            return jsonify(ok=False, erro='inicio/fim invalidos (ISO)'), 400
+        if not (0 <= (fim_d - ini_d).days <= 7):
+            return jsonify(ok=False, erro='janela max de 7 dias'), 400
     try:
-        pedidos = seru.listar_pedidos_completo(
-            hoje_d - timedelta(days=dias_n - 1), hoje_d)
+        pedidos = seru.listar_pedidos_completo(ini_d, fim_d)
     except Exception as e:  # noqa: BLE001 — diagnóstico devolve o erro cru
         return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
 
@@ -358,7 +370,10 @@ def seru_companies():
                   'pedidos_por_dia': dict(por_dia.get(f'{cid}|{cname}', {}))}
                  for (cid, cname), n in sorted(agg.items(),
                                                key=lambda kv: -kv[1])]
-    return jsonify(ok=True, dias=dias_n, total_pedidos=len(pedidos or []),
+    return jsonify(ok=True, dias=dias_n,
+                   janela={'inicio': ini_d.isoformat(),
+                           'fim': fim_d.isoformat()},
+                   total_pedidos=len(pedidos or []),
                    companies=companies, exemplo_company=exemplo_company,
                    estrutura_pedido=estrutura)
 
