@@ -269,6 +269,7 @@ def test_seru_companies_agrupa_por_id_e_nome(app, monkeypatch):
     assert d['ok'] is True and d['total_pedidos'] == 3
     top = d['companies'][0]
     assert top == {'id': 77, 'name': 'O PAO RIBEIRO NOVO', 'n_pedidos': 2,
+                   'documents': [],
                    'pedidos_por_dia': {'2026-07-06': 1, '2026-07-07': 1}}
     assert d['exemplo_company'] == {'id': 77, 'name': 'O PAO RIBEIRO NOVO'}
 
