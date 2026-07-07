@@ -71,6 +71,47 @@ class PlanejamentoItem(db.Model):
         return f'<PlanejamentoItem receita={self.receita_id} x{self.multiplicador}>'
 
 
+class PreBaixaMP(db.Model):
+    """PRÉ-BAIXA de MP da ordem de produção ENVIADA (pedido do dono
+    07/07/2026): ao enviar o plano ao padeiro, a MP da FALTA (alvo −
+    produzido dos itens não dispensados) é baixada provisoriamente do
+    estoque; quando o padeiro confirma a produção, a parte confirmada vira
+    baixa REAL (`produzir_item_plano`) e a pré-baixa correspondente é
+    estornada na mesma transação.
+
+    Uma linha por (plano, MP) com a quantidade atualmente pré-baixada.
+    Linha com quantidade 0 é MARCADOR de regime: plano SEM nenhuma linha =
+    ordem enviada antes da feature (não se pré-baixa retroativo). Toda
+    mudança passa por `producao.sincronizar_pre_baixa_mp` (reconciliador
+    idempotente) — NUNCA escrever quantidade por fora dele."""
+    __tablename__ = 'pre_baixa_mp'
+
+    id = db.Column(db.Integer, primary_key=True)
+    plano_id = db.Column(db.Integer,
+                         db.ForeignKey('planejamento_producao.id'),
+                         nullable=False, index=True)
+    materia_prima_id = db.Column(db.Integer,
+                                 db.ForeignKey('materia_prima.id'),
+                                 nullable=False)
+    quantidade = db.Column(db.Float, nullable=False, default=0.0)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+    plano = db.relationship(
+        'PlanejamentoProducao',
+        backref=db.backref('pre_baixas', cascade='all, delete-orphan',
+                           lazy=True))
+    materia_prima = db.relationship('MateriaPrima')
+
+    __table_args__ = (
+        db.UniqueConstraint('plano_id', 'materia_prima_id',
+                            name='uq_pre_baixa_plano_mp'),
+    )
+
+    def __repr__(self):
+        return (f'<PreBaixaMP plano={self.plano_id} mp={self.materia_prima_id} '
+                f'qtd={self.quantidade}>')
+
+
 class PrevisaoSnapshot(db.Model):
     """Instrumentacao de acuracia do forecast (28/06/2026): congela o
     `previsto` do pedido semanal por (data de entrega, loja, receita) no
