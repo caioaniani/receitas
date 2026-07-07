@@ -94,6 +94,11 @@ def _agrega_por_linha(pedido, loja_id, *, lock):
     linhas (FOR UPDATE) quando `lock`. Componente de cesta sem linha existente
     e ignorado (nao-rastreado). Retorna ([(el, qtd, nome)], n_pulados)."""
     from app.models import EstoqueLoja
+    if lock:
+        # Serializa contra a baixa do Seru/lote (que trava linhas de varias
+        # lojas numa transacao unica) — antes de qualquer FOR UPDATE, evita
+        # deadlock. Mesmo advisory lock de estoque_helpers.
+        estoque_helpers.serializar_baixa_estoque()
     por_linha = {}      # el -> [qtd, nome]
     ordem = []          # ordem estavel de aparicao
     pulados = 0
