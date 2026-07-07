@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Fatura {{ fatura.codigo }}{% endblock %}
+{% block content %}
+{% set email_cliente = fatura.cliente.email or '' %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0">Fatura {{ fatura.codigo }} — {{ fatura.cliente.nome }}
+        {% if fatura.status == 'paga' %}<span class="badge bg-success">paga</span>
+        {% elif fatura.status == 'cancelada' %}<span class="badge bg-secondary">cancelada</span>
+        {% else %}<span class="badge bg-info text-dark">fechada</span>{% endif %}
+    </h1>
+    <div>
+        {% if fatura.status == 'fechada' %}
+        <form method="POST" action="{{ url_for('b2b.fatura_cancelar', fid=fatura.id) }}" class="d-inline"
+              onsubmit="return confirm('Cancelar a fatura? As vendas voltam pra conta aberta e as parcelas do fechamento são apagadas.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle"></i> Cancelar fatura</button>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('b2b.faturas') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header py-2"><strong>Fechamento</strong></div>
+            <div class="card-body small">
+                <div class="d-flex justify-content-between"><span>Período:</span><strong>{{ fatura.periodo_display }}</strong></div>
+                <div class="d-flex justify-content-between"><span>Vencimento:</span><strong>{{ fatura.vencimento.strftime('%d/%m/%Y') }}</strong></div>
+                <div class="d-flex justify-content-between"><span>Vendas no fechamento:</span><strong>{{ fatura.vendas|length }}</strong></div>
+                <div class="d-flex justify-content-between"><span>Valor total:</span><strong>R$ {{ '%.2f'|format(fatura.valor_total) }}</strong></div>
+                {% if fatura.pago_em %}<div class="d-flex justify-content-between text-success"><span>Pago em:</span><strong>{{ fatura.pago_em.strftime('%d/%m/%Y') }}</strong></div>{% endif %}
+            </div>
+        </div>
+
+        {# ── Boleto (Sicredi) ── #}
+        <div class="card mt-3">
+            <div class="card-header py-2"><strong>Boleto (Sicredi)</strong></div>
+            <div class="card-body small">
+                {% if cobranca %}
+                    <div>Status: <span class="badge bg-{{ 'success' if cobranca.status == 'paga' else 'info text-dark' }}">{{ cobranca.status }}</span>
+                        {% if cobranca.pix_copia_cola %}<span class="badge bg-success">PIX</span>{% endif %}</div>
+                    <div>Nosso número: <strong>{{ cobranca.nosso_numero_fmt or '— (gere a remessa em Cobranças)' }}</strong></div>
+                    {% if cobranca.nosso_numero %}
+                    <a class="btn btn-sm btn-outline-dark mt-2" target="_blank"
+                       href="{{ url_for('cobrancas.boleto_pdf', id=cobranca.id) }}">
+                        <i class="bi bi-filetype-pdf"></i> Boleto (PDF)</a>
+                    <form method="POST" action="{{ url_for('cobrancas.enviar_email', id=cobranca.id) }}" class="d-inline"
+                          onsubmit="return confirm('Enviar o boleto pra {{ email_cliente or 'o cliente (sem e-mail cadastrado!)' }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-success mt-2">
+                            <i class="bi bi-envelope"></i> Enviar boleto por e-mail</button>
+                    </form>
+                    {% else %}
+                    <div class="form-text">Vá em <a href="{{ url_for('cobrancas.lista') }}">Cobranças</a>,
+                        marque esta cobrança e gere a remessa — o boleto (PDF/e-mail) libera depois.</div>
+                    {% endif %}
+                {% elif fatura.status == 'fechada' %}
+                    <form method="POST" action="{{ url_for('cobrancas.gerar_da_fatura', fatura_id=fatura.id) }}"
+                          onsubmit="return confirm('Gerar a cobrança (boleto único) desta fatura?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-primary w-100"><i class="bi bi-upc-scan"></i> Gerar boleto da fatura</button>
+                    </form>
+                    <p class="text-muted mt-2 mb-0">Um boleto só, do total — a liquidação quita todas as vendas do fechamento de uma vez.</p>
+                {% else %}
+                    <span class="text-muted">—</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        {# ── NF-e consolidada via Tiny — mesmo padrão da venda ── #}
+        <div class="card">
+            <div class="card-header py-2"><strong>Nota Fiscal consolidada (Tiny)</strong></div>
+            <div class="card-body small">
+                {% if fatura.nf_emitida_em %}
+                    <div>NF: <code>{{ fatura.tiny_nota_fiscal_id }}</code>
+                        {% if fatura.nf_numero %} · nº <strong>{{ fatura.nf_numero }}</strong>{% endif %}</div>
+                    {% if fatura.nf_status %}<div>Status: <strong>{{ fatura.nf_status }}</strong></div>{% endif %}
+                    <div class="text-muted">Emitida: {{ fatura.nf_emitida_em.strftime('%d/%m/%Y %H:%M') }}</div>
+                    <a href="{{ url_for('b2b.fatura_danfe', fid=fatura.id) }}"
+                       class="btn btn-sm btn-outline-primary w-100 mt-2" target="_blank" rel="noopener">
+                        <i class="bi bi-filetype-pdf"></i> Ver DANFE (PDF)
+                    </a>
+                    <form method="POST" action="{{ url_for('b2b.fatura_enviar_nf_email', fid=fatura.id) }}" class="mt-2"
+                          onsubmit="return confirm('Enviar a NF (PDF) pra {{ email_cliente or 'o e-mail informado' }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="input-group input-group-sm">
+                            <input type="email" name="email" class="form-control" placeholder="{{ email_cliente or 'e-mail do cliente' }}"
+                                   value="{{ email_cliente }}" {% if not email_cliente %}required{% endif %}>
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-envelope"></i> Enviar NF por e-mail
+                            </button>
+                        </div>
+                    </form>
+                {% elif fatura.tiny_nota_fiscal_id %}
+                    <div>NF: <code>{{ fatura.tiny_nota_fiscal_id }}</code></div>
+                    {% if fatura.nf_status %}<div class="text-danger">Status: <strong>{{ fatura.nf_status }}</strong></div>{% endif %}
+                    <div class="alert alert-warning py-2 px-2 mt-2 mb-2">
+                        A autorização não foi confirmada. <strong>Reenviar</strong> consulta a SEFAZ
+                        e sincroniza <em>sem duplicar</em>. Só use <strong>Refazer do zero</strong>
+                        se a nota estiver realmente <em>rejeitada</em>.
+                    </div>
+                    {% if current_user.is_owner %}
+                    <form method="POST" action="{{ url_for('b2b.fatura_emitir_nf', fid=fatura.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="bi bi-arrow-clockwise"></i> Reenviar / verificar
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('b2b.fatura_emitir_nf', fid=fatura.id) }}" class="mt-2"
+                          onsubmit="return confirm('Refazer do ZERO? A NF atual é descartada e uma nova é criada. NÃO faça isso se a nota já pode ter autorizado — geraria duplicidade.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="recriar" value="1">
+                        <button type="submit" class="btn btn-sm btn-outline-warning w-100">
+                            <i class="bi bi-arrow-repeat"></i> Refazer do zero
+                        </button>
+                    </form>
+                    {% else %}
+                    <p class="text-muted small mb-0">A emissão/reenvio da NF é feita pelo dono.</p>
+                    {% endif %}
+                {% elif fatura.status == 'fechada' %}
+                    {% if current_user.is_owner %}
+                    <form method="POST" action="{{ url_for('b2b.fatura_emitir_nf', fid=fatura.id) }}"
+                          onsubmit="return confirm('Emitir a NF consolidada desta fatura no Tiny?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="bi bi-file-earmark-text"></i> Emitir NF consolidada no Tiny
+                        </button>
+                    </form>
+                    <p class="text-muted mt-2 mb-0">Itens de todas as vendas do período numa nota só,
+                        agrupados por item e preço (<a href="{{ url_for('b2b.tiny_skus') }}">SKUs B2B do Tiny</a>).</p>
+                    {% else %}
+                    <span class="text-muted">A NF é emitida pelo dono.</span>
+                    {% endif %}
+                {% else %}
+                    <span class="text-muted">Fatura cancelada — sem NF.</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Vendas do fechamento ── #}
+<div class="card mt-3">
+    <div class="card-header py-2"><strong>Vendas do fechamento</strong></div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead><tr><th>Venda</th><th>Data</th><th>Itens</th><th class="text-end">Valor</th><th></th></tr></thead>
+            <tbody>
+            {% for v in fatura.vendas|sort(attribute='data_venda') %}
+            <tr>
+                <td>#{{ v.id }}</td>
+                <td>{{ v.data_venda.strftime('%d/%m/%Y') }}</td>
+                <td class="small text-muted">{{ v.itens|map(attribute='nome_item')|join(', ')|truncate(90) }}</td>
+                <td class="text-end">R$ {{ '%.2f'|format(v.valor_total) }}</td>
+                <td class="text-end"><a href="{{ url_for('b2b.venda_detalhe', vid=v.id) }}" class="btn btn-sm btn-outline-secondary">Abrir</a></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
