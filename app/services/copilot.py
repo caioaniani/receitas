@@ -3255,6 +3255,8 @@ def executar_mudar_status_pedido(params, user):
 
         # RECEBER: soma no estoque da loja (qtd conforme pedido, sem divergencia)
         if novo == 'receber':
+            from app.services.estoque_helpers import serializar_loja
+            serializar_loja(p.loja_id)  # lock por loja antes dos UPDATE
             for item in p.itens:
                 qtd = item.quantidade
                 item.quantidade_recebida = qtd
