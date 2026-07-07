@@ -26,18 +26,22 @@ TIPOS_ENTRADA = {
     'entrada_pedido', 'entrada_lote', 'entrada_manual', 'balanco_entrada',
     'venda_seru_estorno', 'venda_vnda_estorno', 'venda_site_estorno',
     'desperdicio_estorno', 'devolucao_industria_estorno',
+    'sobra_retorno_entrada',  # credito do retorno na conversao de sobra
+    'saida_lote_estorno',     # estorno da baixa por lote (canal 'lote')
 }
 # Tipos que DIMINUEM o saldo.
 TIPOS_SAIDA = {
     'venda_seru', 'venda_vnda', 'venda_site', 'venda', 'ajuste',
     'ajuste_negativo', 'devolucao', 'descarte', 'desperdicio',
     'saida_lote', 'saida_pedido', 'sobra', 'perda', 'devolucao_industria',
+    'sobra_retorno',  # baixa do fresco na conversao de sobra->retorno
 }
 # Tipos que NAO mexem no saldo (so registram falta).
 TIPOS_NEUTRO = {
     'venda_seru_sem_estoque', 'venda_vnda_sem_estoque',
     'venda_site_sem_estoque', 'venda_loja_sem_estoque',
     'desperdicio_sem_estoque', 'devolucao_industria_sem_estoque',
+    'sobra_retorno_sem_estoque',  # falta na conversao de sobra->retorno
     # Falta registrada pela tela de estoque da loja (03/07/2026): lancou
     # perda/sobra/descarte/ajuste maior que o saldo — o mov principal grava
     # a baixa real e estes registram o excedente.
