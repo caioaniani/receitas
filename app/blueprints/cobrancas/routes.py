@@ -218,7 +218,8 @@ def enviar_email(id):
         flash('Essa cobrança ainda não tem nosso número — gere a remessa '
               'primeiro.', 'warning')
         return redirect(url_for('cobrancas.lista'))
-    cliente = cob.parcela.venda.cliente if cob.parcela else None
+    cliente = (cob.fatura.cliente if cob.fatura
+               else cob.parcela.venda.cliente if cob.parcela else None)
     destinatario = ((request.form.get('email') or '').strip()
                     or (cliente.email if cliente else '') or '')
     if not destinatario:
