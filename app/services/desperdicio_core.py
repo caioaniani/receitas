@@ -77,12 +77,12 @@ def converter_sobra_para_retorno(loja_id, receita_id, qtd, usuario_id,
     {'destino', 'destino_id', 'baixado', 'faltou', 'creditado'} ou None
     quando não há retorno configurado."""
     from app.models import EstoqueLoja, MovEstoqueLoja, Receita
-    from app.services.estoque_helpers import serializar_baixa_estoque
+    from app.services.estoque_helpers import serializar_loja
     rec = db.session.get(Receita, receita_id) if receita_id else None
     if rec is None or not rec.retorno_receita_id or qtd <= 0:
         return None
     destino = rec.retorno_receita
-    serializar_baixa_estoque()  # antes do UPDATE nas 2 linhas (mesmo deadlock)
+    serializar_loja(loja_id)  # antes do UPDATE nas 2 linhas (mesmo deadlock)
 
     def _linha(rid):
         el = EstoqueLoja.query.filter_by(loja_id=loja_id,
