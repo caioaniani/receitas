@@ -36,6 +36,10 @@ class ClienteB2B(db.Model):
     endereco_uf = db.Column(db.String(2))
     contato = db.Column(db.String(100))  # nome da pessoa que compra
     desconto_percentual = db.Column(db.Float, default=0)  # % sobre preco atacado
+    # Fechamento MENSAL (07/07/2026): cliente compra o mes inteiro (vendas
+    # sem parcela) e a conta fecha numa FaturaB2B — uma NF consolidada +
+    # um boleto do total. False = cada venda cobra na hora (padrao).
+    faturamento_mensal = db.Column(db.Boolean, default=False, nullable=False)
     observacao = db.Column(db.Text)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     criado_em = db.Column(db.DateTime, default=agora)
