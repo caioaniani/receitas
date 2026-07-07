@@ -33,6 +33,7 @@ from app.services.cestas import composicao_de_venda
 from app.services.estoque_helpers import (
     baixar_loja_por_prioridade,
     obter_linha_loja,
+    serializar_baixa_estoque,
 )
 from app.utils import agora
 
@@ -128,6 +129,12 @@ def aplicar_venda(loja_id, *, receita_id=None, produto_id=None,
                     and comp[0][1] == sold_id)
     total_baixado = total_faltou = 0
     houve_acumulo = False
+
+    # Serializa a baixa ANTES de travar DebitoEstoque (fracao) ou EstoqueLoja:
+    # sem isso, se o 1o componente vai pela fracao e o 2o pela baixa direta, a
+    # transacao travaria DebitoEstoque antes do advisory lock e reabriria a
+    # janela de deadlock. Pego aqui, cobre os dois caminhos do loop.
+    serializar_baixa_estoque()
 
     for col, item_id, nome_comp, qpu in comp:
         por_unidade = fator * float(qpu)
