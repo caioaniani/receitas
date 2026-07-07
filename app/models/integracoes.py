@@ -198,6 +198,12 @@ class SeruLojaMap(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     seru_company_name = db.Column(db.String(300), nullable=False, unique=True, index=True)
+    # Ancora ESTAVEL do vinculo: UUID da company na API do Seru. O nome vira
+    # so rotulo — renome no Seru atualiza `seru_company_name` sozinho no sync
+    # (incidente 06-07/07/2026: renomearam as lojas e o vinculo por nome
+    # quebrou em silencio). Backfill na primeira venda; ALTER em
+    # migrations_legacy (procedimento de 2 commits).
+    seru_company_id = db.Column(db.String(64), nullable=True, index=True)
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
     ignorar = db.Column(db.Boolean, default=False, nullable=False)
     auto_match = db.Column(db.Boolean, default=False)  # True se foi setado via fuzzy
