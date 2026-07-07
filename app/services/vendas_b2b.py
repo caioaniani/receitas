@@ -301,6 +301,12 @@ def editar_venda(venda, *, cliente_id=None, cliente_nome=None, data_venda=None,
     """
     if venda.status == 'cancelada':
         raise ValueError('venda cancelada — reabra antes de editar')
+    if venda.fatura_id:
+        # Editar apagaria/recriaria a parcela do fechamento SEM fatura_id e
+        # mudaria o total por fora da fatura/boleto/NF (revisao 07/07/2026).
+        raise ValueError(
+            f'venda faturada ({venda.fatura.codigo}) — cancele a fatura em '
+            'B2B → Faturas mensais antes de editar')
     if venda.valor_pago and venda.valor_pago > 0:
         raise ValueError('venda com pagamento registrado — itens nao podem ser editados')
     if not itens:
