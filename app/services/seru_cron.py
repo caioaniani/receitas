@@ -42,7 +42,10 @@ LOCK_KEY_VNDA_CARD = 7736  # advisory lock pro cache de pedidos do site (card CR
 LOCK_KEY_VIGIA_ABANDONO = 7737  # advisory lock pro detector de conversas abandonadas
 LOCK_KEY_AUDITOR = 7738  # advisory lock pro auditor diario do bot
 LOCK_KEY_VIGIA_CHATWOOT = 7739  # advisory lock pro vigia de infra do Chatwoot
-LOCK_KEY_FOLLOWUP = 7740  # advisory lock pro follow-up do bot (cliente sumiu)
+# 7747: era 7740, mas 7740 colidia com o lock da migracao de schema em
+# migrations_legacy._migrate_postgres (deploy escalonado podia PULAR a migracao
+# em silencio). Compartilhado com a vassoura do bot por design.
+LOCK_KEY_FOLLOWUP = 7747  # advisory lock pro follow-up do bot (cliente sumiu)
 LOCK_KEY_RESERVA_EXPIRA = 7742  # advisory lock pro libera-reservas-expiradas da loja online
 LOCK_KEY_PREVISAO_ACURACIA = 7743  # advisory lock pro snapshot+match de acuracia do forecast
 LOCK_KEY_BAIXAS_PRESAS = 7744  # advisory lock pro alerta de baixas presas (separado/retirada)
