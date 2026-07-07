@@ -156,10 +156,11 @@ def estornar_devolucao(token, usuario_id):
     if not movs_loja and not movs_ind:
         raise ValueError(f'Devolução {token} não encontrada.')
 
-    # Serializa antes de mexer nas linhas de EstoqueLoja (o loop abaixo faz
-    # UPDATE em varias linhas): mesma familia de deadlock da baixa/estorno.
-    from app.services.estoque_helpers import serializar_baixa_estoque
-    serializar_baixa_estoque()
+    # Serializa as lojas envolvidas (em ordem canonica) antes de mexer nas
+    # linhas de EstoqueLoja — o loop abaixo faz UPDATE em varias linhas; mesma
+    # familia de deadlock da baixa/estorno.
+    from app.services.estoque_helpers import serializar_lojas
+    serializar_lojas({mov.estoque.loja_id for mov in movs_loja})
 
     avisos = []
     for mov in movs_loja:
