@@ -2189,7 +2189,6 @@ def debug_chatwoot():
 
 @main_bp.route('/admin/vnda/contatos')
 @login_required
-@gerente_required
 def vnda_contatos():
     """Endereco + contato + DATA DE ENTREGA de uma lista de codes VNDA.
 
