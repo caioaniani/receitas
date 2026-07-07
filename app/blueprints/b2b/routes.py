@@ -122,6 +122,7 @@ def cliente_editar(cid):
     c.endereco = (request.form.get('endereco') or '').strip() or None
     c.contato = (request.form.get('contato') or '').strip() or None
     c.desconto_percentual = float(request.form.get('desconto_percentual') or 0)
+    c.faturamento_mensal = bool(request.form.get('faturamento_mensal'))
     c.observacao = (request.form.get('observacao') or '').strip() or None
     c.ativo = bool(request.form.get('ativo'))
     _aplicar_endereco_estruturado(c)
