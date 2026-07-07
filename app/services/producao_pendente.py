@@ -135,8 +135,12 @@ def dispensar_item(item_id, user_id):
     if item is None:
         return {'ok': False, 'erro': 'Item do plano não encontrado.'}
     if item.dispensada_em is None:
+        from app.services.producao import sincronizar_pre_baixa_mp
         item.dispensada_em = agora()
         item.dispensada_por_id = user_id
+        # A falta dispensada não vai mais ser produzida — libera a MP
+        # reservada pela pré-baixa (plano fora do regime = no-op).
+        sincronizar_pre_baixa_mp(item.planejamento, user_id)
         db.session.commit()
     return {'ok': True, 'receita': item.receita.nome if item.receita else '?'}
 
