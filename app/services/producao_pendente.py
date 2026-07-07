@@ -183,8 +183,11 @@ def reverter_dispensa(item_id):
     item = db.session.get(PlanejamentoItem, int(item_id)) if item_id else None
     if item is None:
         return {'ok': False, 'erro': 'Item do plano não encontrado.'}
+    from app.services.producao import sincronizar_pre_baixa_mp
     item.dispensada_em = None
     item.dispensada_por_id = None
+    # Falta reaberta volta a reservar MP (plano fora do regime = no-op).
+    sincronizar_pre_baixa_mp(item.planejamento)
     db.session.commit()
     return {'ok': True}
 
