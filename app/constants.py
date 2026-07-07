@@ -82,6 +82,11 @@ VENDA_TIPOS_TODOS = VENDA_TIPOS_LOJA + VENDA_TIPOS_PRODUCAO
 # Os dois precisam coexistir.
 STATUS_PEDIDO_FINALIZADOS = ('entregue', 'recebido', 'cancelado')
 
+# Pedido finalizado E vendido (chegou na loja) — 'entregue'/'recebido' sem o
+# 'cancelado'. Use em faturamento/contagem de entregues: filtrar so 'entregue'
+# subconta os pedidos fechados como 'recebido' (copilot). NAO duplicar a dupla.
+STATUS_PEDIDO_ENTREGUES = ('entregue', 'recebido')
+
 # Status em que o pedido ainda pode ser EDITADO (itens/qtd/data): depois de
 # 'separado' ele ja esta no fluxo fisico — cancela e recria, nao edita.
 # Usado pela rota /pedidos/<id>/editar e pela grade de pedidos da semana.
