@@ -59,11 +59,14 @@ def test_buscar_itens_produtos(app, admin_user):
 
 
 def test_buscar_itens_materias_primas(app, admin_user):
+    """MP so aparece no typeahead se LIBERADA pra pedido de loja (checkbox
+    "sugerir pedido loja" — trava de 07/07/2026, ver test_mp_pedivel.py)."""
     from app.extensions import db
     from app.models import MateriaPrima
 
     with app.app_context():
-        m = MateriaPrima(nome='Farinha Integral', unidade='kg', custo_por_kg=5.0)
+        m = MateriaPrima(nome='Farinha Integral', unidade='kg', custo_por_kg=5.0,
+                         sugerir_pedido_loja=True)
         db.session.add(m)
         db.session.commit()
         mid = m.id
