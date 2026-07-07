@@ -1888,6 +1888,28 @@ def _migrate_sqlite(app):
         if cols_cb2b and _c not in cols_cb2b:
             cursor.execute(f"ALTER TABLE cliente_b2b ADD COLUMN {_c} {_t}")
 
+    # ── Fechamento mensal B2B (07/07/2026) ──
+    cursor.execute("PRAGMA table_info(cliente_b2b)")
+    cols_cli2 = [row[1] for row in cursor.fetchall()]
+    if cols_cli2 and 'faturamento_mensal' not in cols_cli2:
+        cursor.execute("ALTER TABLE cliente_b2b ADD COLUMN "
+                       "faturamento_mensal BOOLEAN NOT NULL DEFAULT 0")
+    cursor.execute("PRAGMA table_info(venda_b2b)")
+    cols_vb = [row[1] for row in cursor.fetchall()]
+    if cols_vb and 'fatura_id' not in cols_vb:
+        cursor.execute("ALTER TABLE venda_b2b ADD COLUMN "
+                       "fatura_id INTEGER REFERENCES fatura_b2b(id)")
+    cursor.execute("PRAGMA table_info(venda_b2b_parcela)")
+    cols_vp = [row[1] for row in cursor.fetchall()]
+    if cols_vp and 'fatura_id' not in cols_vp:
+        cursor.execute("ALTER TABLE venda_b2b_parcela ADD COLUMN "
+                       "fatura_id INTEGER REFERENCES fatura_b2b(id)")
+    cursor.execute("PRAGMA table_info(cobranca)")
+    cols_cob = [row[1] for row in cursor.fetchall()]
+    if cols_cob and 'fatura_id' not in cols_cob:
+        cursor.execute("ALTER TABLE cobranca ADD COLUMN "
+                       "fatura_id INTEGER REFERENCES fatura_b2b(id)")
+
     # ── SKU do Tiny por canal (06/07/2026) ──
     # SQLite nao altera UNIQUE embutida — rebuild da tabela (mesmo padrao
     # do previsao_snapshot acima): copia com canal='site' e troca a unique
