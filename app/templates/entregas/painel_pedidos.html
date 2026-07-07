@@ -649,6 +649,10 @@
   var lalaCotacao = null;   // {entrega_id, valor, ...} da cotação corrente
 
   function lalamoveHTML(p) {
+    // Lalamove gasta dinheiro — só admin/gerente (bate com @gerente_required
+    // no backend). Esconde a caixa toda pra funcionário/padeiro/driver em vez
+    // de mostrar botão que devolve 403 mascarado de "sem conexão".
+    if (!PODE_LALAMOVE) return '';
     // Retirada não chama Lalamove (cliente busca na loja). Mostra um aviso
     // pra equipe e esconde TODA a UI de Lalamove pra esse pedido.
     if (p.retirada) {
