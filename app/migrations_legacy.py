@@ -1405,6 +1405,25 @@ def _migrate_postgres(app):
                    ('endereco_uf', 'VARCHAR(2)')):
         _try(f"ALTER TABLE cliente_b2b ADD COLUMN IF NOT EXISTS {_c} {_t}")
 
+    # Fechamento mensal B2B (07/07/2026): flag no cliente + vinculo das
+    # vendas/parcelas/cobrancas com a FaturaB2B. A tabela fatura_b2b em si
+    # sai do db.create_all, que roda ANTES destes ALTERs no startup
+    # (_setup_schema) — o REFERENCES ja encontra a tabela.
+    _try("ALTER TABLE cliente_b2b ADD COLUMN IF NOT EXISTS "
+         "faturamento_mensal BOOLEAN NOT NULL DEFAULT FALSE")
+    _try("ALTER TABLE venda_b2b ADD COLUMN IF NOT EXISTS "
+         "fatura_id INTEGER REFERENCES fatura_b2b(id)")
+    _try("CREATE INDEX IF NOT EXISTS ix_venda_b2b_fatura "
+         "ON venda_b2b(fatura_id)")
+    _try("ALTER TABLE venda_b2b_parcela ADD COLUMN IF NOT EXISTS "
+         "fatura_id INTEGER REFERENCES fatura_b2b(id)")
+    _try("CREATE INDEX IF NOT EXISTS ix_venda_b2b_parcela_fatura "
+         "ON venda_b2b_parcela(fatura_id)")
+    _try("ALTER TABLE cobranca ADD COLUMN IF NOT EXISTS "
+         "fatura_id INTEGER REFERENCES fatura_b2b(id)")
+    _try("CREATE UNIQUE INDEX IF NOT EXISTS uq_cobranca_fatura "
+         "ON cobranca(fatura_id) WHERE fatura_id IS NOT NULL")
+
     # Mapeamento de SKU do Tiny POR CANAL (06/07/2026): no Tiny o B2B eh
     # outro cadastro/lista de preco — o mesmo item nosso pode ter SKU
     # diferente por canal ('site' | 'b2b'). Linhas existentes viram 'site'
