@@ -89,6 +89,52 @@ def gerar_da_parcela(parcela_id):
     return redirect(url_for('cobrancas.lista'))
 
 
+@cobrancas_bp.route('/gerar-da-fatura/<int:fatura_id>', methods=['POST'])
+@login_required
+def gerar_da_fatura(fatura_id):
+    """Cria a cobrança (UM boleto) de uma fatura mensal B2B — o total do
+    fechamento. A liquidação quita a fatura e as parcelas juntas."""
+    _admin_ou_403()
+    from app.models import FaturaB2B
+    fat = FaturaB2B.query.get_or_404(fatura_id)
+    if fat.status != 'fechada':
+        flash(f'Fatura {fat.codigo} está "{fat.status}" — só fatura fechada '
+              'gera boleto.', 'warning')
+        return redirect(url_for('b2b.fatura_detalhe', fid=fatura_id))
+    if fat.cobrancas:
+        flash(f'A fatura {fat.codigo} já tem cobrança.', 'warning')
+        return redirect(url_for('b2b.fatura_detalhe', fid=fatura_id))
+    cli = fat.cliente
+    endereco = (cli.endereco or '').strip()
+    if not endereco and cli.endereco_logradouro:
+        endereco = ' '.join(x for x in (
+            cli.endereco_logradouro,
+            (f'{cli.endereco_numero}' if cli.endereco_numero else ''),
+            (f'- {cli.endereco_bairro}' if cli.endereco_bairro else '')) if x)
+    cep = ''.join(ch for ch in (cli.endereco_cep or '') if ch.isdigit())
+    emissao = hoje()
+    venc = max(fat.vencimento, emissao + timedelta(days=7))  # regra Sicredi
+    cob = Cobranca(
+        fatura_id=fat.id,
+        pagador_nome=cli.nome,
+        pagador_cnpj_cpf=cli.cnpj_cpf or '',
+        pagador_endereco=endereco,
+        pagador_cep=cep,
+        valor=fat.valor_total, vencimento=venc, emissao=emissao,
+        seu_numero=fat.codigo[:10],
+        criado_por_id=current_user.id,
+    )
+    db.session.add(cob)
+    db.session.commit()
+    if venc != fat.vencimento:
+        flash(f'Vencimento do boleto ajustado pra {venc.strftime("%d/%m/%Y")}'
+              ' — o Sicredi exige mínimo de 7 dias após a emissão.',
+              'warning')
+    flash(f'Cobrança da fatura {fat.codigo} criada (R$ {cob.valor}). '
+          'Marque-a e gere a remessa em Cobranças.', 'success')
+    return redirect(url_for('b2b.fatura_detalhe', fid=fatura_id))
+
+
 @cobrancas_bp.route('/<int:id>/editar', methods=['POST'])
 @login_required
 def editar(id):
