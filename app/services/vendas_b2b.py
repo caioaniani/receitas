@@ -392,9 +392,17 @@ def reverter_status_entrega(venda):
 
 
 def cancelar_venda(venda, user=None):
-    """Estorna estoque (por saldo) e marca venda como cancelada. Idempotente."""
+    """Estorna estoque (por saldo) e marca venda como cancelada. Idempotente.
+
+    Venda FATURADA nao cancela: a fatura/boleto/NF do fechamento ficariam
+    cobrando venda morta (revisao 07/07/2026) — cancele a fatura primeiro.
+    """
     if venda.status == 'cancelada':
         return venda
+    if venda.fatura_id:
+        raise ValueError(
+            f'venda faturada ({venda.fatura.codigo}) — cancele a fatura em '
+            'B2B → Faturas mensais antes de cancelar a venda')
     _estornar_estoque(venda, user=user, motivo='cancelada')
     venda.status = 'cancelada'
     venda.cancelado_em = agora()
