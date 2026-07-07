@@ -179,7 +179,8 @@ def _estornar_pedido(reg, lojas_ativas, user_id):
     """
     from app.services.baixa_venda import estornar_venda
     pid = str(reg.seru_pedido_id)
-    res = estornar_venda('seru', f'seru:{pid}', f'Seru #{pid}', usuario_id=user_id)
+    res = estornar_venda('seru', f'seru:{pid}', f'Seru #{pid}',
+                         usuario_id=user_id, loja_id=reg.loja_id)
     legado = _estornar_fracoes_legado(pid, user_id)
     if res['revertido_inteiros'] or res['revertido_fracoes'] or legado:
         reg.estornado_em = agora()
