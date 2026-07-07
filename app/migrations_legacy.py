@@ -80,6 +80,8 @@ def _migrate_estoque_trava(app):
     try:
         if is_pg:
             lock_conn = db.engine.connect()
+            # 7740 RESERVADO pra este lock de migracao de schema — nao reusar em
+            # job/cron (colisao faz o deploy PULAR a migracao em silencio).
             if not lock_conn.execute(text('SELECT pg_try_advisory_lock(7740)')).scalar():
                 lock_conn.close()
                 return  # outro worker esta aplicando — sai sem erro
