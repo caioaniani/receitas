@@ -23,14 +23,19 @@ def _so_digitos(s):
 
 
 def _payload_cliente(venda):
+    """Cliente da NF a partir da VENDA (delega pro cliente cadastrado)."""
+    if not venda.cliente:
+        return None, ('Venda avulsa (sem cliente B2B cadastrado) — cadastre '
+                      'o cliente com CNPJ/CPF e endereço pra emitir NF.')
+    return _payload_cliente_b2b(venda.cliente)
+
+
+def _payload_cliente_b2b(cli):
     """Cliente da NF a partir do ClienteB2B, COM endereço estruturado.
+    Usado pela venda avulsa E pela fatura mensal.
 
     Devolve (dict, None) ou (None, erro). B2B costuma ser PJ — o tipo de
     pessoa sai do tamanho do documento (14 dígitos = CNPJ = 'J')."""
-    cli = venda.cliente
-    if not cli:
-        return None, ('Venda avulsa (sem cliente B2B cadastrado) — cadastre '
-                      'o cliente com CNPJ/CPF e endereço pra emitir NF.')
     doc = _so_digitos(cli.cnpj_cpf)
     if len(doc) not in (11, 14):
         return None, (f'CNPJ/CPF do cliente "{cli.nome}" inválido ou ausente '
