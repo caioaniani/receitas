@@ -1507,6 +1507,14 @@ def _migrate_sqlite(app):
     cols_vv = [row[1] for row in cursor.fetchall()]
     if cols_vv and 'tools_usadas' not in cols_vv:
         cursor.execute("ALTER TABLE vigia_veredito ADD COLUMN tools_usadas TEXT")
+
+    # seru_loja_map.seru_company_id — mesma migracao do _migrate_postgres
+    # (ancora estavel do vinculo; renome no Seru so atualiza o rotulo).
+    cursor.execute("PRAGMA table_info(seru_loja_map)")
+    cols_slm = [row[1] for row in cursor.fetchall()]
+    if cols_slm and 'seru_company_id' not in cols_slm:
+        cursor.execute("ALTER TABLE seru_loja_map ADD COLUMN "
+                       "seru_company_id VARCHAR(64)")
     if cols_vv and 'reconhecido_em' not in cols_vv:
         cursor.execute("ALTER TABLE vigia_veredito ADD COLUMN reconhecido_em TIMESTAMP")
     if cols_vv and 'reconhecido_por_id' not in cols_vv:
