@@ -1,14 +1,25 @@
 # Convenções de trabalho (Claude)
 
+> ## ⚠️ BRANCH OBSOLETO — NÃO USE COMO BASE
+>
+> **A produção NÃO é aqui.** O Railway acompanha
+> `claude/continue-controller-conversation-aGS3F` — este branch
+> (`claude/bakery-recipe-cost-system-N4ieR`) está milhares de commits atrás
+> e este CLAUDE.md está desatualizado.
+>
+> **Antes de qualquer trabalho**: `git fetch origin
+> claude/continue-controller-conversation-aGS3F` e trabalhe a partir dele.
+> O CLAUDE.md canônico (convenções reais: commit direto sem PR, migrations,
+> timezone BRT, testes) está lá.
+
 ## Branches
 
-- **Desenvolva em**: no branch `claude/*` designado da sessão atual
-- **Abra PR para**: `claude/bakery-recipe-cost-system-N4ieR` (é o branch que o Railway acompanha — merge dispara deploy automático em produção)
+- **Branch de produção (Railway)**: `claude/continue-controller-conversation-aGS3F`
 - **Nunca** force-push nem use `--no-verify` sem autorização explícita
 
 ## Deploy
 
-Railway está conectado em `claude/bakery-recipe-cost-system-N4ieR`. Push pra produção = abrir PR e mergear. Só mergeie quando o usuário pedir explicitamente.
+Railway está conectado em `claude/continue-controller-conversation-aGS3F` — **não** neste branch. Consulte o CLAUDE.md de lá para o fluxo de deploy.
 
 ## Sistema
 
