@@ -52,6 +52,20 @@ def fechar_conta(cliente, data_inicio, data_fim, vencimento, user_id=None):
             f'fatura) entre {data_inicio.strftime("%d/%m")} e '
             f'{data_fim.strftime("%d/%m/%Y")}.')
 
+    # Trava as linhas contra duplo clique: dois POSTs simultâneos leriam o
+    # mesmo universo e fechariam a conta DUAS vezes (parcelas dobradas).
+    # FOR UPDATE serializa no Postgres (SQLite trava o arquivo inteiro);
+    # depois do lock, re-filtra — quem perdeu a corrida não vê mais nada.
+    ids = [v.id for v in vendas]
+    vendas = (VendaB2B.query.filter(VendaB2B.id.in_(ids))
+              .with_for_update().all())
+    vendas = [v for v in vendas
+              if v.fatura_id is None and v.status == 'ativa'
+              and not v.parcelas]
+    if not vendas:
+        raise ValueError('essas vendas acabaram de ser fechadas em outra '
+                         'aba/clique — confira a lista de faturas.')
+
     total = sum((Decimal(v.valor_total or 0) for v in vendas), Decimal('0'))
     fatura = FaturaB2B(cliente_id=cliente.id, data_inicio=data_inicio,
                        data_fim=data_fim, vencimento=vencimento,
