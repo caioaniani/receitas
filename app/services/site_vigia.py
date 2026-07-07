@@ -38,8 +38,13 @@ _KEY_ASSIN = 'site_vigia_ultima_assinatura'
 # não variação de metros. Casos 2 e 3 são os do incidente de 05/07/2026.
 _CANARIOS_FRETE = [
     # A própria padaria (Brooklin): tem que ser pertíssimo.
+    # 07/07/2026: o Nominatim parou de resolver o nº 455 (deriva de dados do
+    # OSM) e devolve o centroide da rua (~1,9 km) — checkout segue OK
+    # (fora_area=false, frete R$5 no pior caso na propria rua; conferido via
+    # /api/claude/frete-debug). Teto 1,5 -> 2,2: acomoda o centroide e ainda
+    # pega regressao real (homonimo em outro bairro passa de 5 km).
     ('Rua Ribeiro do Vale, 455, Brooklin, São Paulo, SP, 04568-010',
-     False, 0.0, 1.5),
+     False, 0.0, 2.2),
     # Vizinho da padaria — caiu na homônima do Grajaú (19,3 km) no incidente.
     ('Rua Nova York, Brooklin, São Paulo, SP, 04560-000',
      False, 0.0, 5.0),
