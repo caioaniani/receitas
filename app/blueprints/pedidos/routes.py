@@ -1082,6 +1082,8 @@ def _aplicar_voltar_status(pedido, usuario_id):
     """
     status_atual = pedido.status
     if status_atual in ('entregue', 'recebido'):
+        from app.services.estoque_helpers import serializar_loja
+        serializar_loja(pedido.loja_id)  # lock por loja antes do estorno
         # Estorna o que somou no estoque da loja
         for item in pedido.itens:
             qtd = item.quantidade_recebida or 0
