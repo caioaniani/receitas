@@ -24,12 +24,12 @@ Procure, nesta ordem de prioridade:
 4. **Regressões** — a mudança quebra algum fluxo existente? Se o diff toca
    código de aplicação, rode a suíte (`python -m pytest`, ~73s) e reporte o
    resultado.
-4. **Migração de schema fora do procedimento** — coluna nova ou alterada em
+5. **Migração de schema fora do procedimento** — coluna nova ou alterada em
    `app/models/*.py` sem o `ALTER TABLE` idempotente correspondente em
    `app/migrations_legacy.py` (`_migrate_postgres()`/`_migrate_sqlite()`), ou
    modelo e ALTER no mesmo commit (o procedimento canônico do CLAUDE.md exige
    2 commits: ALTER primeiro, modelo depois do deploy aplicar).
-5. **Convenções do projeto** — versão canônica em vez de atalho em área de
+6. **Convenções do projeto** — versão canônica em vez de atalho em área de
    risco (dinheiro, estoque, segurança); entrada numérica BR via
    `parse_float_br` (`app/utils.py`); constantes/lógica duplicada em vez de
    centralizada (`app/constants.py`, `app/utils.py`); credenciais hardcoded;
