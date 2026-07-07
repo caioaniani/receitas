@@ -105,20 +105,43 @@ def cancelar_fatura(fatura, user_id=None):
 
 
 def quitar_fatura(fatura, valor_pago=None, quando=None):
-    """Liquidação do boleto da fatura: quita TODAS as parcelas do
-    fechamento (cada uma pelo próprio valor) e marca a fatura paga.
-    Idempotente — parcela já paga não re-quita."""
+    """Liquidação do boleto da fatura: distribui o valor REALMENTE pago
+    pelas parcelas do fechamento (em ordem, até acabar o dinheiro) e marca
+    a fatura paga. Sem `valor_pago`, quita pelo valor cheio.
+
+    Dinheiro tem peso especial (CLAUDE.md): pagamento divergente do total
+    NÃO é silenciado — as parcelas registram o que entrou de fato (a
+    última pode ficar parcial) e a função devolve um AVISO (str) pro
+    caller mostrar; None quando bateu certinho.
+
+    NÃO commita — o caller (processar_retorno, que aplica o arquivo
+    inteiro numa transação) fecha. Idempotente: parcela já quitada não
+    re-quita nem consome o rateio."""
     quando = quando or agora()
-    for p in fatura.parcelas:
+    total_aberto = sum((Decimal(p.valor or 0) - Decimal(p.valor_pago or 0)
+                        for p in fatura.parcelas if not p.pago_em),
+                       Decimal('0'))
+    pago = (Decimal(str(valor_pago)) if valor_pago is not None
+            else total_aberto)
+    restante = pago
+    for p in sorted(fatura.parcelas, key=lambda x: x.id):
         if p.pago_em:
             continue
-        p.valor_pago = Decimal(p.valor or 0)
-        p.pago_em = quando
-        p.forma_pagamento = 'boleto'
+        falta = Decimal(p.valor or 0) - Decimal(p.valor_pago or 0)
+        aplicar = min(falta, max(restante, Decimal('0')))
+        if aplicar > 0:
+            p.valor_pago = Decimal(p.valor_pago or 0) + aplicar
+            restante -= aplicar
+            p.forma_pagamento = 'boleto'
+        if Decimal(p.valor_pago or 0) >= Decimal(p.valor or 0):
+            p.pago_em = quando
     fatura.status = 'paga'
     fatura.pago_em = quando
-    db.session.commit()
-    return fatura
+    if pago != total_aberto:
+        return (f'fatura {fatura.codigo}: banco liquidou R$ {pago} mas o '
+                f'saldo em aberto era R$ {total_aberto} — confira as '
+                'parcelas (rateio em ordem; diferença NÃO foi escondida).')
+    return None
 
 
 def itens_consolidados(fatura):
