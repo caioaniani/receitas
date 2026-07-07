@@ -26,7 +26,7 @@ from app.models import (
     VendaMapa,
     VendaMapaUso,
 )
-from app.services.estoque_helpers import obter_linha_loja
+from app.services.estoque_helpers import obter_linha_loja, serializar_lojas
 
 
 def _upsert_venda_mapa(canal, nome_externo, *, sku=None, receita_id=None,
@@ -166,6 +166,9 @@ def migrar_fracoes_para_debito_estoque(*, canais=('seru', 'lote'),
             fontes.append(d)
 
     inteiros_baixados = 0
+    # Trava as lojas em ordem ascendente antes do loop (obter_linha_loja pega o
+    # lock por loja; sem isso este laco multi-loja pegaria em ordem de dict).
+    serializar_lojas({k[0] for k in por_item})
     for (loja_id, col, item_id), total in por_item.items():
         filtro = {'receita_id': None, 'produto_id': None, 'materia_prima_id': None}
         filtro[col] = item_id
