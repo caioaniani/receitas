@@ -277,3 +277,103 @@ def test_rotas_fechar_detalhe_e_gerar_boleto(app, admin_user):
         # duplicado é recusado
     r3 = c.post(f'/cobrancas/gerar-da-fatura/{fid}', follow_redirects=True)
     assert 'já tem cobrança' in r3.get_data(as_text=True)
+
+
+# ── fixes da revisão (07/07/2026) ──────────────────────────────────────────
+
+def test_criar_venda_de_cliente_mensal_nao_cria_parcela(app):
+    """Achado nº 1 da revisão: `criar_venda` com parcelas=None criava a
+    parcela única automática e tirava a venda do universo do fechamento —
+    a feature nunca fechava conta nenhuma. Cliente mensal SEM parcelas
+    explícitas fica sem parcela; cliente normal mantém a única; parcela
+    explícita do mensal vale (exceção negociada, fora do fechamento)."""
+    from app.services.vendas_b2b import criar_venda
+    with app.app_context():
+        mensal = _cliente()
+        normal = ClienteB2B(nome='Avulso Ltda', ativo=True)
+        p = _produto()
+        db.session.add(normal)
+        db.session.commit()
+        item = [{'tipo': 'produto', 'id': p.id, 'quantidade': 2,
+                 'preco_unitario': 10.0}]
+        v1 = criar_venda(cliente_id=mensal.id, itens=item)
+        assert v1.parcelas == []                      # vai pra conta do mês
+        v2 = criar_venda(cliente_id=normal.id, itens=item)
+        assert len(v2.parcelas) == 1                  # comportamento antigo
+        v3 = criar_venda(cliente_id=mensal.id, itens=item,
+                         parcelas=[{'vencimento': hoje(), 'valor': 20.0}])
+        assert len(v3.parcelas) == 1                  # exceção negociada
+        # E o fechamento pega SÓ a venda sem parcela
+        fechaveis = faturas_b2b.vendas_para_fechar(
+            mensal.id, hoje() - timedelta(days=1), hoje())
+        assert [v.id for v in fechaveis] == [v1.id]
+
+
+def test_venda_faturada_nao_cancela_nem_edita(app):
+    """Achados nº 2 e 3: cancelar/editar venda dentro de fatura fechada
+    dessincronizava fatura/boleto/NF (cobrança de venda morta, parcela
+    órfã). Agora o service recusa — cancele a fatura primeiro."""
+    from app.services.vendas_b2b import cancelar_venda, editar_venda
+    with app.app_context():
+        cli = _cliente()
+        p = _produto()
+        ini, fim, venc = _periodo()
+        v = _venda(cli, p, fim - timedelta(days=1))
+        faturas_b2b.fechar_conta(cli, ini, fim, venc)
+        db.session.refresh(v)
+        try:
+            cancelar_venda(v)
+            raise AssertionError('cancelar deveria recusar venda faturada')
+        except ValueError as exc:
+            assert 'faturada' in str(exc)
+        try:
+            editar_venda(v, cliente_id=cli.id,
+                         itens=[{'tipo': 'produto', 'id': p.id,
+                                 'quantidade': 1, 'preco_unitario': 5.0}])
+            raise AssertionError('editar deveria recusar venda faturada')
+        except ValueError as exc:
+            assert 'faturada' in str(exc)
+        assert v.status == 'ativa'                    # nada mudou
+
+
+def test_parcela_de_fatura_nao_gera_boleto_individual(app, admin_user):
+    """Achado nº 4: as parcelas do fechamento apareciam como candidatas a
+    boleto individual em /cobrancas — cliente receberia o boleto do total
+    E os boletos das mesmas vendas (dupla cobrança)."""
+    with app.app_context():
+        cli = _cliente()
+        p = _produto()
+        ini, fim, venc = _periodo()
+        _venda(cli, p, fim - timedelta(days=1))
+        fat = faturas_b2b.fechar_conta(cli, ini, fim, venc)
+        pid = fat.parcelas[0].id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    corpo = c.get('/cobrancas/').get_data(as_text=True)
+    assert 'Restaurante Bom Prato' not in corpo       # fora da lista
+    r = c.post(f'/cobrancas/gerar-da-parcela/{pid}', follow_redirects=True)
+    assert 'fatura mensal' in r.get_data(as_text=True)
+    with app.app_context():
+        assert Cobranca.query.filter_by(parcela_id=pid).count() == 0
+
+
+def test_quitar_fatura_com_valor_divergente_avisa_e_rateia(app):
+    """Achado nº 5: pagamento menor que o total era silenciosamente
+    registrado como quitação cheia. Agora rateia o que ENTROU (última
+    parcela fica parcial) e devolve aviso."""
+    with app.app_context():
+        cli = _cliente()
+        p = _produto()
+        ini, fim, venc = _periodo()
+        _venda(cli, p, fim - timedelta(days=20))               # R$ 100
+        _venda(cli, p, fim - timedelta(days=5), qtd=5)         # R$ 50
+        fat = faturas_b2b.fechar_conta(cli, ini, fim, venc)
+        aviso = faturas_b2b.quitar_fatura(fat, valor_pago=Decimal('120'))
+        db.session.commit()
+        assert aviso and 'difere' in aviso or 'R$' in aviso
+        parcelas = sorted(fat.parcelas, key=lambda x: x.id)
+        assert parcelas[0].valor_pago == Decimal('100')        # quitada
+        assert parcelas[0].pago_em is not None
+        assert parcelas[1].valor_pago == Decimal('20')         # parcial
+        assert parcelas[1].pago_em is None                     # em aberto
+        assert fat.status == 'paga'
