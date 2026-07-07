@@ -505,8 +505,9 @@
 <script>
   function _mepG(g) {
     g = Number(g) || 0;
-    if (g >= 1000) return (g / 1000).toFixed(2).replace('.', ',') + ' kg';
-    return Math.round(g) + ' g';
+    // Padrao da casa (dono, 07/07/2026): TUDO em gramas — o padeiro pesa
+    // em g; misturar kg/g na mesma ficha ja causou erro de pesagem.
+    return Math.round(g).toLocaleString('pt-BR') + ' g';
   }
   function _mepEsc(s) {
     var d = document.createElement('div'); d.textContent = (s == null ? '' : s);
