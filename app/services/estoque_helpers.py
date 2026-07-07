@@ -29,7 +29,7 @@ def serializar_baixa_estoque():
     a respeitar) faz os caminhos ESPERAREM em vez de deadlockar. Reentrante:
     pegar 2x na mesma transacao e no-op. Libera sozinho no commit/rollback
     (variante `_xact_`). No-op fora de Postgres (SQLite dos testes)."""
-    if db.session.bind and db.session.bind.dialect.name == 'postgresql':
+    if db.engine.dialect.name == 'postgresql':
         db.session.execute(text('SELECT pg_advisory_xact_lock(:k)'),
                            {'k': _LOCK_BAIXA_ESTOQUE})
 
