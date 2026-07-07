@@ -13,25 +13,45 @@ from sqlalchemy import text
 from app.extensions import db
 from app.models import EstoqueLoja, MovEstoqueLoja
 
-# Chave do advisory lock de TRANSACAO que serializa a baixa de estoque de loja.
-# Livre (seru_cron usa ate 7747; 7748 nao aparece em mais lugar nenhum).
-_LOCK_BAIXA_ESTOQUE = 7748
+# Namespace do advisory lock de TRANSACAO por loja. A forma de DOIS inteiros
+# (pg_advisory_xact_lock(ns, loja_id)) tem espaco de chave SEPARADO da forma de
+# um bigint (pg_try_advisory_lock(7723...) do seru_cron) — zero colisao com
+# aqueles locks. `4732` e so um numero fixo de namespace ("estoque loja").
+_NS_ESTOQUE_LOJA = 4732
 
 
-def serializar_baixa_estoque():
-    """Serializa TODA baixa/trava de EstoqueLoja num advisory lock de transacao.
+def serializar_loja(loja_id):
+    """Serializa toda escrita de EstoqueLoja de UMA loja num advisory lock de
+    transacao, POR LOJA.
 
-    Por que existe: `processar_pedidos` (Seru) trava linhas de VARIAS lojas numa
-    transacao unica (1 commit no fim) e o checkout do site trava as suas — em
-    ordens diferentes. Sem serializar, dois desses caminhos tocando as MESMAS
-    linhas em ordem oposta DEADLOCKAM (o Postgres aborta um; o site levaria 500).
-    Este lock (pego ANTES de qualquer SELECT FOR UPDATE, uma chave so, sem ordem
-    a respeitar) faz os caminhos ESPERAREM em vez de deadlockar. Reentrante:
-    pegar 2x na mesma transacao e no-op. Libera sozinho no commit/rollback
-    (variante `_xact_`). No-op fora de Postgres (SQLite dos testes)."""
+    Por que existe: varios caminhos fazem read-modify-write em EstoqueLoja
+    (baixa de venda, recebimento, balanco, entrada em lote, NF, desperdicio...).
+    Se dois tocam as MESMAS linhas concorrentemente, uma baixa some (lost
+    update); se travam varias linhas em ordem oposta, DEADLOCKAM. Este lock,
+    pego ANTES de qualquer escrita/FOR UPDATE, faz os caminhos da MESMA loja
+    ESPERAREM em vez de corromper/deadlockar — e caminhos de LOJAS DIFERENTES
+    seguem em paralelo (um balanco longo da loja A nao trava a loja B).
+
+    Reentrante (pegar 2x a mesma loja na transacao e no-op). Libera sozinho no
+    commit/rollback (`_xact_`). No-op fora de Postgres (SQLite dos testes).
+    Caminho multi-loja numa transacao so: use `serializar_lojas` (ordem
+    canonica) pra nao deadlockar entre dois multi-loja."""
+    if loja_id is None:
+        return
     if db.engine.dialect.name == 'postgresql':
-        db.session.execute(text('SELECT pg_advisory_xact_lock(:k)'),
-                           {'k': _LOCK_BAIXA_ESTOQUE})
+        db.session.execute(
+            text('SELECT pg_advisory_xact_lock(:ns, :loja)'),
+            {'ns': _NS_ESTOQUE_LOJA, 'loja': int(loja_id)})
+
+
+def serializar_lojas(loja_ids):
+    """Trava VARIAS lojas numa transacao, sempre em ordem CRESCENTE de id.
+
+    Ordem canonica: dois caminhos multi-loja (ex: sync do Seru e aplicacao de
+    NF) que travem o mesmo conjunto de lojas em ordens diferentes deadlockariam
+    nos proprios advisory locks. Travar sempre ascendente elimina o ciclo."""
+    for lid in sorted({int(x) for x in loja_ids if x is not None}):
+        serializar_loja(lid)
 
 
 def obter_linha_loja(loja_id, *, receita_id=None, produto_id=None,
@@ -151,7 +171,7 @@ def baixar_loja_por_prioridade(filtro_base, inteiros, *,
     if inteiros <= 0:
         return {'baixado': 0, 'faltou': 0}
 
-    serializar_baixa_estoque()  # antes de qualquer FOR UPDATE (evita deadlock)
+    serializar_loja(filtro_base.get('loja_id'))  # antes do FOR UPDATE (deadlock)
     el = obter_linha_loja(usuario_id=usuario_id, **filtro_base)
     # Trava a linha antes do read-modify-write: sem isso, dois canais baixando
     # a MESMA linha ao mesmo tempo (cron Seru + webhook do site, lote, etc.)
