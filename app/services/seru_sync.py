@@ -72,7 +72,8 @@ def _fuzzy_loja(seru_company_name, lojas):
     return melhor if melhor_overlap >= 1 else None
 
 
-def _resolver_loja(seru_company_name, lojas_ativas, seru_company_id=None):
+def _resolver_loja(seru_company_name, lojas_ativas, seru_company_id=None,
+                   seru_company_document=None):
     """Devolve (loja, mapping). Resolucao POR ID primeiro (ancora estavel:
     renome no Seru so atualiza o rotulo — incidente 06-07/07/2026, Ribeiro
     ficou 2 semanas sem baixa), com fallback pro NOME; mapa antigo sem id
@@ -103,6 +104,9 @@ def _resolver_loja(seru_company_name, lojas_ativas, seru_company_id=None):
                    .filter_by(seru_company_name=seru_company_name).first())
         if mapping and seru_company_id and not mapping.seru_company_id:
             mapping.seru_company_id = str(seru_company_id)   # backfill
+    if mapping and seru_company_document \
+            and mapping.seru_company_document != str(seru_company_document):
+        mapping.seru_company_document = str(seru_company_document)  # CNPJ
     if mapping:
         if mapping.ignorar:
             return None, mapping
@@ -115,6 +119,8 @@ def _resolver_loja(seru_company_name, lojas_ativas, seru_company_id=None):
         seru_company_name=(seru_company_name
                            or f'company:{seru_company_id}'),
         seru_company_id=str(seru_company_id) if seru_company_id else None,
+        seru_company_document=(str(seru_company_document)
+                               if seru_company_document else None),
         loja_id=loja.id if loja else None,
         auto_match=bool(loja),
     )
@@ -288,10 +294,12 @@ def processar_pedidos(data_inicial, data_final, user=None,
         if isinstance(company, dict):
             cname = (company.get('name') or '').strip()
             cid = company.get('id')
+            cdoc = company.get('document')
         elif isinstance(company, str):
             cname = company.strip()
+            cdoc = None
 
-        loja, loja_map = _resolver_loja(cname, lojas_ativas, cid)
+        loja, loja_map = _resolver_loja(cname, lojas_ativas, cid, cdoc)
         if not loja:
             # Sem loja mapeada — registra pedido como processado mas sem baixar
             stats['pedidos_sem_loja_mapeada'] += 1

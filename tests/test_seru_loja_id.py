@@ -62,3 +62,14 @@ def test_company_nova_cria_pendente_com_id(app):
     loja, m = _resolver_loja('NOME DESCONHECIDO QQQ', [lj], 'uuid-novo')
     assert m.seru_company_id == 'uuid-novo'
     assert m.confirmado_em is None                   # pendente até confirmar
+
+
+def test_backfill_do_cnpj_e_formatacao(app):
+    lj = _loja('Loja CNPJ')
+    db.session.add(SeruLojaMap(seru_company_name='O PAO PADARIA',
+                               loja_id=lj.id, confirmado_em=agora()))
+    db.session.commit()
+    _, m = _resolver_loja('O PAO PADARIA', [lj], 'uuid-doc',
+                          '40646899000139')
+    assert m.seru_company_document == '40646899000139'
+    assert m.cnpj_fmt == '40.646.899/0001-39'

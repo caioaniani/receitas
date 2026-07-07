@@ -204,6 +204,10 @@ class SeruLojaMap(db.Model):
     # quebrou em silencio). Backfill na primeira venda; ALTER em
     # migrations_legacy (procedimento de 2 commits).
     seru_company_id = db.Column(db.String(64), nullable=True, index=True)
+    # CNPJ da company (pedido do dono 07/07/2026): e por ele que o humano
+    # reconhece a loja (matriz x filial) na hora de vincular. Backfill na
+    # primeira venda, junto com o id.
+    seru_company_document = db.Column(db.String(20), nullable=True)
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
     ignorar = db.Column(db.Boolean, default=False, nullable=False)
     auto_match = db.Column(db.Boolean, default=False)  # True se foi setado via fuzzy
@@ -211,6 +215,14 @@ class SeruLojaMap(db.Model):
     confirmado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
 
     loja = db.relationship('Loja')
+
+    @property
+    def cnpj_fmt(self):
+        d = ''.join(c for c in (self.seru_company_document or '')
+                    if c.isdigit())
+        if len(d) != 14:
+            return self.seru_company_document or None
+        return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
 
     @property
     def estado(self):

@@ -92,7 +92,7 @@
                 {% for lm in lojas_map %}
                 {% set linha_class = 'mapa-confirmado' if (lm.estado == 'mapeado' and lm.confirmado_em) else ('mapa-pendente' if (lm.estado == 'pendente' or (lm.estado == 'mapeado' and not lm.confirmado_em)) else 'mapa-ignorado' if lm.ignorar else '') %}
                 <tr class="{{ linha_class }}">
-                    <td class="fw-semibold">{{ lm.seru_company_name }}</td>
+                    <td class="fw-semibold">{{ lm.seru_company_name }}{% if lm.cnpj_fmt %}<br><small class="text-muted" title="CNPJ da company no Seru — use ele pra reconhecer a loja (o nome pode ser renomeado)">CNPJ {{ lm.cnpj_fmt }}</small>{% endif %}</td>
                     <td>
                         {% if lm.estado == 'mapeado' and lm.confirmado_em %}
                             <span class="badge bg-success"><i class="bi bi-check-circle"></i> CONFIRMADO</span>

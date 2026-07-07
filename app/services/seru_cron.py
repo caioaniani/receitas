@@ -47,6 +47,7 @@ LOCK_KEY_RESERVA_EXPIRA = 7742  # advisory lock pro libera-reservas-expiradas da
 LOCK_KEY_PREVISAO_ACURACIA = 7743  # advisory lock pro snapshot+match de acuracia do forecast
 LOCK_KEY_BAIXAS_PRESAS = 7744  # advisory lock pro alerta de baixas presas (separado/retirada)
 LOCK_KEY_SITE_VIGIA = 7745  # advisory lock pro vigia do site (canarios de frete/catalogo/agenda)
+LOCK_KEY_PDV_VIGIA = 7746  # advisory lock pro vigia do PDV (loja muda / company sem vinculo)
 # Locks LIBERADOS mas RESERVADOS (nao reusar — evita conflito se algum
 # dos jobs for reativado no futuro):
 # - 7730 era do `zapi-digest-anomalias` (job 23:00 BRT, removido 14/06/2026).
@@ -404,6 +405,18 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Vigia do PDV (07/07/2026, pedido do dono apos o incidente da Ribeiro:
+    # renome no Seru deixou a loja 2 SEMANAS sem baixar venda, em silencio).
+    # Canarios: sync parado, loja confirmada que vendia e ficou muda (36h),
+    # company vendendo sem vinculo confirmado. Alerta WhatsApp na transicao.
+    # Desligar: PDV_VIGIA=0.
+    if os.environ.get('PDV_VIGIA', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_pdv_vigia(app),
+            'interval', minutes=30, id='pdv-vigia',
+            max_instances=1, coalesce=True,
+        )
+
     # Baixas presas (03/07/2026): pedido parado em 'separado' com entrega
     # vencida (QR de saida nao escaneado = industria NAO baixou) e retirada
     # de sobra presa em transporte (loja baixou, industria nao creditada).
@@ -645,6 +658,15 @@ def _run_site_vigia(app):
 
     with app.app_context():
         _com_lock(LOCK_KEY_SITE_VIGIA, site_vigia.vigiar, 'vigia site')
+
+
+def _run_pdv_vigia(app):
+    """Job: vigia do PDV (07/07/2026) — a baixa de venda parou em alguma
+    loja? Alerta o dono no WhatsApp na transicao (anti-spam no servico)."""
+    from app.services import pdv_vigia
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_PDV_VIGIA, pdv_vigia.vigiar, 'vigia pdv')
 
 
 def _run_alerta_baixas_presas(app):
