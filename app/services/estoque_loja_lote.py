@@ -427,6 +427,9 @@ def aplicar_entrada_lote(itens_resolvidos, loja_id, user, referencia=None):
     if not loja_id:
         return {'aplicados': [], 'ignorados': [{'linha': '*', 'motivo': 'sem_loja'}]}
 
+    from app.services.estoque_helpers import serializar_loja
+    serializar_loja(loja_id)  # antes dos UPDATE em EstoqueLoja (lock por loja)
+
     for item in itens_resolvidos:
         if item.get('erro'):
             ignorados.append({'linha': item.get('linha', '?'), 'motivo': item['erro']})
