@@ -293,6 +293,11 @@ class Cobranca(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     parcela_id = db.Column(db.Integer, db.ForeignKey('venda_b2b_parcela.id'),
                            nullable=True, unique=True, index=True)
+    # Boleto de FATURA mensal (07/07/2026): cobre TODAS as parcelas do
+    # fechamento de uma vez (a liquidacao quita a fatura + parcelas).
+    # Mutuamente exclusivo com parcela_id na pratica (um boleto por fatura).
+    fatura_id = db.Column(db.Integer, db.ForeignKey('fatura_b2b.id'),
+                          nullable=True, unique=True, index=True)
     # Pagador (snapshot)
     pagador_nome = db.Column(db.String(100), nullable=False)
     pagador_cnpj_cpf = db.Column(db.String(20), nullable=False)
