@@ -1002,6 +1002,15 @@ confundir uma com a outra:
    incrementa `qtd_reservada` (`_reservar_no_plano_do_dia`, linha ~280) —
    camada independente da baixa fisica.
 
+**CONSEQUENCIA OPERACIONAL (o que o dono precisa saber na pratica)**: editar
+o estoque da loja — em `/pedidos/estoque-loja` OU no campo de estoque do
+`/admin/loja-online/catalogo` — **NAO muda o que o cliente ve/pode comprar no
+site**. A vitrine olha SO o plano-do-dia. Mexer no `EstoqueLoja` altera o
+ledger fisico (de onde a venda desconta) e o numero exibido no catalogo admin,
+mas a disponibilidade do front continua igual. Pra **esgotar ou liberar** um
+item no site naquele dia, o gesto e no **plano-do-dia**
+(`/admin/loja-online/plano-do-dia`, `qtd_planejada`), nunca no estoque da loja.
+
 **Resumindo**: venda do site = SEMPRE desconta `EstoqueLoja` fisico da loja
 de origem/retirada (visivel no catalogo e no estoque-loja) E a vitrine so
 mostra o que o plano-do-dia libera. Sao camadas separadas — nunca fundir,
