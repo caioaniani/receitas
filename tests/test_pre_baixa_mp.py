@@ -234,16 +234,26 @@ def test_reenviar_com_alvo_maior_ajusta_o_delta(app, admin_user):
 def test_reagendar_move_reserva_para_hoje(app, admin_user):
     """Reagendar a falta de uma ordem vencida pra HOJE: a ordem antiga
     devolve a reserva e a de hoje reserva (criar=True — pode nascer aqui)."""
-    from app.services.producao import enviar_plano_do_dia
+    from app.services.producao import sincronizar_pre_baixa_mp
     from app.services.producao_pendente import reagendar_para_hoje
     with app.app_context():
-        # entrega mais longe → produção agendada num dia FUTURO (≠ hoje),
-        # senão o reagendar pula ("já é de hoje").
-        mp, r, d2 = _cenario(dias_entrega=4)
-        assert d2 != hoje()
-        plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
-        alvo = _falta_total(plano)
-        item = plano.itens[0]
+        # Ordem vencida de ONTEM já no regime (enviada com pré-baixa). Montada
+        # à mão porque o cronograma agenda produção pra HOJE — e o reagendar
+        # pula item que já é do plano de hoje.
+        mp, r, _ = _cenario()
+        ontem = hoje() - timedelta(days=1)
+        plano = PlanejamentoProducao(data=ontem, origem='cronograma',
+                                     status='aprovado', criado_por=admin_user.id,
+                                     enviado_ao_padeiro=True)
+        db.session.add(plano)
+        db.session.flush()
+        item = PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
+                                multiplicador=4, qtd_alvo=40)
+        db.session.add(item)
+        sincronizar_pre_baixa_mp(plano, admin_user.id, criar=True)
+        db.session.commit()
+        alvo = 40
+        assert mp.estoque_atual == ESTOQUE_INICIAL - alvo * G_POR_UN
         res = reagendar_para_hoje([item.id], admin_user.id)
         assert res['movidos'] == 1
         plano_hoje = (PlanejamentoProducao.query
