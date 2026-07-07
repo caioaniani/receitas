@@ -88,6 +88,7 @@ def cliente_novo():
         endereco=(request.form.get('endereco') or '').strip() or None,
         contato=(request.form.get('contato') or '').strip() or None,
         desconto_percentual=float(request.form.get('desconto_percentual') or 0),
+        faturamento_mensal=bool(request.form.get('faturamento_mensal')),
         observacao=(request.form.get('observacao') or '').strip() or None,
     )
     _aplicar_endereco_estruturado(c)
