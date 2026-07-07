@@ -707,7 +707,11 @@ def venda_entrega(vid):
 @admin_required
 def venda_cancelar(vid):
     venda = VendaB2B.query.get_or_404(vid)
-    svc.cancelar_venda(venda, user=current_user)
+    try:
+        svc.cancelar_venda(venda, user=current_user)
+    except ValueError as exc:
+        flash(f'Não cancelei: {exc}', 'danger')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
     flash(f'Venda #{vid} cancelada e estoque estornado.', 'warning')
     return redirect(url_for('b2b.venda_detalhe', vid=vid))
 
