@@ -2209,7 +2209,7 @@ def _resolver_produto(nome):
     return matches
 
 
-def _resolver_item_pedido(nome):
+def _resolver_item_pedido(nome, mp_ids_extras=None):
     """Resolve nome em qualquer item que cabe num PedidoLoja: Receita,
     Produto OU MateriaPrima. Loja pede MPs tambem (queijo pra salada, lagarto
     cozido, saco de pao de queijo), entao tem que cobrir os 3.
@@ -2219,7 +2219,10 @@ def _resolver_item_pedido(nome):
 
     So MPs LIBERADAS pra pedido de loja entram (checkbox "sugerir pedido
     loja" no Banco de MPs — decisao do dono 07/07/2026: loja pedia MP que
-    nao devia). O receber_mp continua vendo todas via `_resolver_mp`."""
+    nao devia). O receber_mp continua vendo todas via `_resolver_mp`.
+    `mp_ids_extras`: ids liberados por excecao — o editar_pedido passa as
+    MPs que JA estao no pedido (grandfather: re-enviar a lista atual nao
+    pode derrubar um item antigo legitimo)."""
     matches = _resolver_produto(nome)
     mps = _resolver_mp(nome)
     if mps:
@@ -2228,6 +2231,8 @@ def _resolver_item_pedido(nome):
                      .filter(MateriaPrima.id.in_([m['id'] for m in mps]),
                              MateriaPrima.sugerir_pedido_loja.is_(True))
                      .all()}
+        if mp_ids_extras:
+            liberadas |= set(mp_ids_extras)
         for m in mps:
             if m['id'] in liberadas:
                 matches.append({'tipo': 'mp', 'id': m['id'], 'nome': m['nome'],
