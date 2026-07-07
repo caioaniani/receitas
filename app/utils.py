@@ -3,17 +3,32 @@ from datetime import UTC, date, datetime, timedelta, timezone
 
 
 def parse_float_br(value, default=None):
-    """Converte string com formato brasileiro (vírgula) para float.
+    """Converte string com formato brasileiro para float.
+
+    A vírgula é o separador decimal; o ponto é separador de milhar e só é
+    removido quando há vírgula na string (senão um '.' isolado é decimal,
+    ex.: '3.5'). Assim '1.234,56' -> 1234.56 sem quebrar '3,5' nem '3.5'.
+    Vazio/None -> `default`; valor presente porém inválido levanta ValueError
+    (nunca vira o default silenciosamente — dinheiro/estoque não podem virar
+    zero calado; quem chama traduz o erro em 400/flash se precisar).
 
     >>> parse_float_br('1.234,56')
     1234.56
+    >>> parse_float_br('3,5')
+    3.5
+    >>> parse_float_br('3.5')
+    3.5
     >>> parse_float_br('', default=0)
     0
     """
-    if not value:
+    if value is None:
         return default
-    cleaned = value.replace(',', '.').strip()
-    return float(cleaned) if cleaned else default
+    cleaned = str(value).strip()
+    if not cleaned:
+        return default
+    if ',' in cleaned:
+        cleaned = cleaned.replace('.', '').replace(',', '.')
+    return float(cleaned)
 
 
 def parse_fator_composicao(raw, default=1.0):
