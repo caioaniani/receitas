@@ -133,11 +133,16 @@ def gerar_da_fatura(fatura_id):
         criado_por_id=current_user.id,
     )
     db.session.add(cob)
-    db.session.commit()
     if venc != fat.vencimento:
-        flash(f'Vencimento do boleto ajustado pra {venc.strftime("%d/%m/%Y")}'
-              ' — o Sicredi exige mínimo de 7 dias após a emissão.',
-              'warning')
+        # Realinha fatura + parcelas do fechamento com o boleto — senão o
+        # contas a receber acusa "atrasado" antes de o boleto vencer.
+        fat.vencimento = venc
+        for p in fat.parcelas:
+            p.vencimento = venc
+        flash(f'Vencimento ajustado pra {venc.strftime("%d/%m/%Y")} (fatura '
+              'e parcelas juntas) — o Sicredi exige mínimo de 7 dias após '
+              'a emissão.', 'warning')
+    db.session.commit()
     flash(f'Cobrança da fatura {fat.codigo} criada (R$ {cob.valor}). '
           'Marque-a e gere a remessa em Cobranças.', 'success')
     return redirect(url_for('b2b.fatura_detalhe', fid=fatura_id))
