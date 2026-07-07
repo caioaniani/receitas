@@ -250,8 +250,10 @@ def _estornar_estoque(pedido):
     DebitoEstoqueMov. O mov `venda_site_estorno` mantem a quantidade NEGATIVA
     (convencao historica do site — ver `_SINAL_ESTORNO`)."""
     from app.services.baixa_venda import estornar_venda
+    loja = _loja_baixa(pedido)
     res = estornar_venda('site', f'site:{pedido.codigo}',
-                         f'Site #{pedido.codigo}')
+                         f'Site #{pedido.codigo}',
+                         loja_id=loja.id if loja else None)
     return res['revertido_inteiros'] + res['revertido_fracoes']
 
 
