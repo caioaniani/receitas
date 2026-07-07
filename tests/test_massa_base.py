@@ -371,11 +371,12 @@ def test_rota_add_e_ordem_e_calculo(app, admin_user):
         c.post('/receitas/massa-base/%d' % mb.id,
                data={'acao': 'add', 'receita_id': r.id}, follow_redirects=True)
     assert MassaBaseItem.query.filter_by(massa_base_id=mb.id).count() == 3
-    # o editor mostra o cálculo (base 5,76 kg, retira pão francês)
+    # o editor mostra o cálculo (base 5.760 g, retira pão francês) — peso
+    # SEMPRE em gramas na exibição (padrão da casa, dono 07/07/2026)
     resp = c.get('/receitas/massa-base/%d' % mb.id)
     html = resp.get_data(as_text=True)
     assert 'Tirar Pão Francês' in html
-    assert '5.76 kg' in html or '5,76 kg' in html
+    assert '5.760 g' in html
 
 
 def test_rota_remover_item(app, admin_user):
