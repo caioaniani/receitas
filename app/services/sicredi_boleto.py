@@ -345,8 +345,11 @@ def gerar_boleto_pdf(cob):
            alinhar='R', tam=9)
     y += 8
 
-    # Instruções (com QR Pix do híbrido, quando o retorno já o trouxe)
-    alt_instr = 28.0
+    # Instruções (com QR Pix do híbrido, quando o retorno já o trouxe).
+    # Com Pix a caixa cresce pra caber o QR nas medidas EXIGIDAS pela
+    # homologação (35,99 × 34,22 mm) + respiro — o orçamento vertical da
+    # ficha fecha com folga (~5,5 mm até o topo da barra).
+    alt_instr = 37.5 if cob.pix_copia_cola else 28.0
     pdf.rect(x, y, 144, alt_instr)
     pdf.set_xy(x + 0.8, y + 0.4)
     pdf.set_font('Helvetica', '', 5.2)
@@ -356,14 +359,15 @@ def gerar_boleto_pdf(cob):
     pdf.set_font('Helvetica', '', 8)
     instrucoes = [f'Referente a {cob.seu_numero}.']
     if cob.pix_copia_cola:
-        instrucoes.append('Boleto híbrido: pague pelo código de barras ou '
-                          'pelo QR Code Pix ao lado.')
+        instrucoes.append('Boleto híbrido: pague pelo código de')
+        instrucoes.append('barras ou pelo QR Code Pix ao lado.')
     for i, txt in enumerate(instrucoes):
         pdf.set_xy(x + 0.8, y + 3.6 + i * 4.2)
-        pdf.cell(115, 3.8, _latin1(txt))
+        pdf.cell(95, 3.8, _latin1(txt))
     if cob.pix_copia_cola:
-        _desenhar_qr(pdf, cob.pix_copia_cola, x + 117, y + 1.5,
-                     tamanho=alt_instr - 3)
+        _desenhar_qr(pdf, cob.pix_copia_cola,
+                     x + 144 - QR_LARGURA_MM - 1.2,
+                     y + (alt_instr - QR_ALTURA_MM) / 2)
     for i, (rot, val) in enumerate([('(-) Desconto / Abatimento', ''),
                                     ('(+) Mora / Multa', ''),
                                     ('(=) Valor cobrado', '')]):
