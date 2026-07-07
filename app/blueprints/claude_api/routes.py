@@ -297,6 +297,57 @@ def loja_vendas_debug():
     )
 
 
+@claude_api_bp.route('/seru-companies')
+@_claude_auth_required
+def seru_companies():
+    """Companies CRUS da API do Seru (id + name + volume), dos pedidos dos
+    últimos ?dias=2. Criado 07/07/2026 pra destrinchar o incidente do renome
+    das lojas no Seru (Ribeiro sem baixa desde ~22/06): mostra se a API
+    expõe `company.id` (âncora estável pra sobreviver a renome) e quantos
+    companies distintos existem HOJE. Read-only; bate na API ao vivo."""
+    from collections import defaultdict
+    from datetime import timedelta
+
+    from app.services import seru
+    from app.utils import hoje
+
+    try:
+        dias_n = max(1, min(int(request.args.get('dias', 2)), 7))
+    except (TypeError, ValueError):
+        dias_n = 2
+    hoje_d = hoje()
+    try:
+        pedidos = seru.listar_pedidos_completo(
+            hoje_d - timedelta(days=dias_n - 1), hoje_d)
+    except Exception as e:  # noqa: BLE001 — diagnóstico devolve o erro cru
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:300]}'), 502
+
+    agg = {}
+    exemplo_company = None
+    por_dia = defaultdict(lambda: defaultdict(int))
+    for p in pedidos or []:
+        c = p.get('company') or {}
+        if isinstance(c, dict):
+            cid = c.get('id')
+            cname = (c.get('name') or '').strip()
+            if exemplo_company is None and c:
+                exemplo_company = {k: c.get(k) for k in list(c.keys())[:12]}
+        else:
+            cid, cname = None, str(c).strip()
+        chave = (cid, cname)
+        agg.setdefault(chave, 0)
+        agg[chave] += 1
+        criado = (p.get('createdAt') or '')[:10]
+        if criado:
+            por_dia[f'{cid}|{cname}'][criado] += 1
+    companies = [{'id': cid, 'name': cname, 'n_pedidos': n,
+                  'pedidos_por_dia': dict(por_dia.get(f'{cid}|{cname}', {}))}
+                 for (cid, cname), n in sorted(agg.items(),
+                                               key=lambda kv: -kv[1])]
+    return jsonify(ok=True, dias=dias_n, total_pedidos=len(pedidos or []),
+                   companies=companies, exemplo_company=exemplo_company)
+
+
 @claude_api_bp.route('/receita')
 @_claude_auth_required
 def receita():
