@@ -131,6 +131,10 @@ def consolidar_estoque_duplicado(usuario_id=None):
             grupos[(el.loja_id, 'produto', el.produto_id)].append(el)
         elif el.materia_prima_id:
             grupos[(el.loja_id, 'mp', el.materia_prima_id)].append(el)
+    # Trava as lojas em ordem ascendente ANTES do loop: obter_linha_loja pega o
+    # lock por loja internamente, e sem isso este laço multi-loja pegaria em
+    # ordem de dict — podia deadlockar com o Seru (que trava ascendente).
+    serializar_lojas({g[0] for g in grupos})
     n_loja = 0
     for (loja_id, tipo, fk_id), linhas in grupos.items():
         if len(linhas) < 2:
