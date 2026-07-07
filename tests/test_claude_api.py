@@ -244,3 +244,44 @@ def test_loja_vendas_debug_loja_desconhecida_404(app):
         headers={'Authorization': f'Bearer {TOKEN}'})
     assert resp.status_code == 404
     assert 'lojas' in resp.get_json()
+
+
+def test_seru_companies_agrupa_por_id_e_nome(app, monkeypatch):
+    """Sonda ao vivo dos companies do Seru (incidente do renome 07/07/2026):
+    agrupa por (id, name) pra revelar renome — mesmo id, nome novo."""
+    from app.services import seru
+    pedidos = [
+        {'company': {'id': 77, 'name': 'O PAO RIBEIRO NOVO'},
+         'createdAt': '2026-07-06T10:00:00Z'},
+        {'company': {'id': 77, 'name': 'O PAO RIBEIRO NOVO'},
+         'createdAt': '2026-07-07T09:00:00Z'},
+        {'company': {'id': 55, 'name': 'O PAO PADARIA'},
+         'createdAt': '2026-07-07T08:00:00Z'},
+    ]
+    monkeypatch.setattr(seru, 'listar_pedidos_completo',
+                        lambda *a, **k: pedidos)
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    resp = app.test_client().get(
+        '/api/claude/seru-companies?dias=2',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True and d['total_pedidos'] == 3
+    top = d['companies'][0]
+    assert top == {'id': 77, 'name': 'O PAO RIBEIRO NOVO', 'n_pedidos': 2,
+                   'pedidos_por_dia': {'2026-07-06': 1, '2026-07-07': 1}}
+    assert d['exemplo_company'] == {'id': 77, 'name': 'O PAO RIBEIRO NOVO'}
+
+
+def test_seru_companies_api_fora_502(app, monkeypatch):
+    from app.services import seru
+
+    def _boom(*a, **k):
+        raise RuntimeError('sem rede')
+    monkeypatch.setattr(seru, 'listar_pedidos_completo', _boom)
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    resp = app.test_client().get(
+        '/api/claude/seru-companies',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 502
+    assert 'sem rede' in resp.get_json()['erro']
