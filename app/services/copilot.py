@@ -3576,6 +3576,9 @@ def executar_registrar_desperdicio_lote(params, user):
     if not itens:
         return {'ok': False, 'erro': 'Lista de itens vazia'}
 
+    from app.services.estoque_helpers import serializar_loja
+    serializar_loja(loja.id)  # lock por loja antes das baixas do lote
+
     # Fonte única das regras (compartilhada com a tela — 03/07/2026).
     from app.services.desperdicio_core import (
         normalizar_motivo,
