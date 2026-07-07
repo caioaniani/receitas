@@ -281,11 +281,13 @@ def processar_retorno(texto, user_id=None):
                                            int(linha[110:112]))
                     except ValueError:
                         cob.pago_em = hoje()
-                    _quitar_parcela(cob)
+                    aviso = _quitar_parcela(cob)
                     res['pagas'] += 1
                     res['detalhes'].append(
                         f'{cob.nosso_numero_fmt} {cob.pagador_nome}: '
                         f'PAGA R$ {cob.valor_pago}')
+                    if aviso:
+                        res['detalhes'].append(f'⚠ {aviso}')
             elif ocorr in OCORR_REGISTRADA:
                 if cob.status == 'remessa':
                     cob.status = 'registrada'
