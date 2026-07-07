@@ -46,7 +46,10 @@ def lista():
                 .filter(VendaB2BParcela.pago_em.is_(None))
                 .order_by(VendaB2BParcela.vencimento.asc())
                 .limit(200).all())
-    parcelas_sem = [p for p in parcelas if not p.cobranca]
+    # Parcela de FATURA mensal fica fora: o boleto dela é o da fatura
+    # (Cobranca.fatura_id) — listar aqui geraria boleto em dobro pro
+    # cliente (achado da revisão 07/07/2026).
+    parcelas_sem = [p for p in parcelas if not p.cobranca and not p.fatura_id]
     remessas = (CobrancaRemessa.query
                 .order_by(CobrancaRemessa.numero.desc()).limit(20).all())
     return render_template('cobrancas/lista.html',
