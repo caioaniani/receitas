@@ -118,7 +118,7 @@ STATUS_PEDIDO_ABAS = (
     ('pendentes', 'Pendentes/Confirmados', ('pendente', 'confirmado')),
     ('separados', 'Separados', ('separado',)),
     ('em_rota', 'Em rota', ('em_transporte',)),
-    ('entregues', 'Entregues', ('entregue', 'recebido')),
+    ('entregues', 'Entregues', STATUS_PEDIDO_ENTREGUES),
     ('cancelados', 'Cancelados', ('cancelado',)),
 )
 
