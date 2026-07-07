@@ -96,6 +96,12 @@
                         title="Enviar boleto (PDF + linha digitável{{ ' + Pix' if c.pix_copia_cola }}) por e-mail"
                         onclick="return confirm('Enviar o boleto pra {{ cli_email or 'o cliente (SEM e-mail cadastrado — complete em B2B → Clientes)' }}?');">
                     <i class="bi bi-envelope"></i> e-mail</button>
+                {% if current_user.is_owner %}
+                <button class="btn btn-sm btn-outline-secondary" form="pix-{{ c.id }}"
+                        title="Definir/limpar o Pix copia-e-cola manualmente (uso: HOMOLOGAÇÃO — o banco manda um mock por e-mail pra validar o QR do PDF; em produção o Pix vem sozinho no retorno)"
+                        onclick="var v=prompt('Pix copia e cola (homologação). Vazio remove:', '{{ (c.pix_copia_cola or '')|replace(\"'\", '') }}'); if (v === null) return false; document.getElementById('pixv-{{ c.id }}').value = v;">
+                    <i class="bi bi-qr-code"></i>{{ ' Pix ✓' if c.pix_copia_cola else ' Pix' }}</button>
+                {% endif %}
                 {% endif %}
                 {% if c.status == 'remessa' %}
                 <button class="btn btn-sm btn-outline-warning" form="vp-{{ c.id }}"
