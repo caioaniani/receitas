@@ -78,6 +78,59 @@ class PrecoClienteB2B(db.Model):
     )
 
 
+class FaturaB2B(db.Model):
+    """Fechamento MENSAL da conta de um cliente B2B (07/07/2026).
+
+    Cliente com `ClienteB2B.faturamento_mensal` compra o mes inteiro: cada
+    entrega e uma VendaB2B normal (baixa estoque na hora), SEM parcela. Na
+    virada do mes a conta e FECHADA: as vendas do periodo entram nesta
+    fatura, cada venda ganha UMA parcela com o vencimento da fatura (o
+    contas a receber continua por parcela, nada muda nos relatorios) e a
+    fatura emite UMA NF consolidada no Tiny + UM boleto Sicredi do total.
+
+    Status: fechada -> paga (liquidacao do boleto quita as parcelas juntas)
+    | cancelada (desfaz vinculos e apaga as parcelas criadas — so enquanto
+    nada foi pago nem NF emitida).
+    """
+    __tablename__ = 'fatura_b2b'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente_b2b.id'),
+                           nullable=False, index=True)
+    data_inicio = db.Column(db.Date, nullable=False)
+    data_fim = db.Column(db.Date, nullable=False)
+    vencimento = db.Column(db.Date, nullable=False, index=True)
+    status = db.Column(db.String(15), nullable=False, default='fechada',
+                       index=True)  # fechada | paga | cancelada
+    valor_total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    pago_em = db.Column(db.DateTime, nullable=True)
+    # NF-e via Tiny — mesmo trio da VendaB2B/PedidoOnline + numero humano.
+    nf_numero = db.Column(db.String(50))
+    tiny_nota_fiscal_id = db.Column(db.String(40))
+    nf_status = db.Column(db.String(40))
+    nf_emitida_em = db.Column(db.DateTime, nullable=True)
+    criado_em = db.Column(db.DateTime, default=agora)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    cancelada_em = db.Column(db.DateTime, nullable=True)
+    cancelada_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                                 nullable=True)
+
+    cliente = db.relationship('ClienteB2B')
+    vendas = db.relationship('VendaB2B', backref='fatura',
+                             foreign_keys='VendaB2B.fatura_id')
+    criado_por = db.relationship('Usuario', foreign_keys=[criado_por_id])
+
+    @property
+    def codigo(self):
+        """Referencia curta legivel (aparece no boleto como seu_numero)."""
+        return f'FAT{self.id:05d}'
+
+    @property
+    def periodo_display(self):
+        return (f'{self.data_inicio.strftime("%d/%m")} a '
+                f'{self.data_fim.strftime("%d/%m/%Y")}')
+
+
 class VendaB2B(db.Model):
     """Venda B2B: cabecalho. Itens vinculados via VendaB2BItem,
     pagamento parcelado via VendaB2BParcela.
