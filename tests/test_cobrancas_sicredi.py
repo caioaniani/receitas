@@ -477,3 +477,65 @@ def test_rota_definir_pix_admin_comum_403(app, admin_user):
         s['_fresh'] = True
     assert c.post(f'/cobrancas/{cid}/definir-pix',
                   data={'pix': 'x'}).status_code == 403
+
+
+# ── pós-homologação (07/07/2026): nomenclatura + zerar sequencial ──────────
+
+def test_nome_arquivo_remessa_padrao_do_banco(app, admin_user):
+    """Sicredi Internet exige CCCCCmdd.CRM (cedente + mês 1-9/O/N/D + dia);
+    2º arquivo do MESMO dia vira .RM2, 3º .RM3 (e-mail da homologação).
+    O REMnnnnn.CRM antigo era só do envio por e-mail."""
+    from app.services.sicredi_cnab import gerar_remessa
+    with app.app_context():
+        r1, _ = gerar_remessa([_cobranca()], user_id=admin_user.id)
+        r2, _ = gerar_remessa([_cobranca()], user_id=admin_user.id)
+        d = r1.gerado_em
+        mes = '123456789OND'[d.month - 1]
+        assert r1.nome_arquivo == f'34325{mes}{d.day:02d}.CRM'
+        assert r2.nome_arquivo == f'34325{mes}{d.day:02d}.RM2'
+
+
+def test_encerrar_homologacao_zera_sequencial(app, owner_user):
+    """A chave homologação → produção: remessas de teste somem (a próxima
+    sai com SEQUENCIAL 1, exigência do banco), as cobranças voltam pra
+    pendente MANTENDO o nosso número (a sequência de nosso número não
+    zera — não se reusa título)."""
+    from app.models import CobrancaRemessa
+    from app.services.sicredi_cnab import gerar_remessa
+    with app.app_context():
+        cob = _cobranca()
+        gerar_remessa([cob], user_id=owner_user.id)
+        cid, nosso = cob.id, cob.nosso_numero
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(owner_user.id)
+        s['_fresh'] = True
+    r = c.post('/cobrancas/homologacao/encerrar', follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        assert CobrancaRemessa.query.count() == 0
+        cob = db.session.get(Cobranca, cid)
+        assert cob.status == 'pendente' and cob.remessa_id is None
+        assert cob.nosso_numero == nosso            # nosso número mantido
+        rem, erros = gerar_remessa([cob], user_id=owner_user.id)
+        assert erros == []
+        assert rem.numero == 1                      # sequencial recomeçou
+        assert rem.conteudo.split('\r\n')[0][110:117] == '0000001'
+
+
+def test_encerrar_homologacao_recusa_com_titulo_registrado(app, owner_user):
+    from app.models import CobrancaRemessa
+    from app.services.sicredi_cnab import gerar_remessa
+    with app.app_context():
+        cob = _cobranca()
+        gerar_remessa([cob], user_id=owner_user.id)
+        cob.status = 'registrada'                   # já vive no banco
+        db.session.commit()
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(owner_user.id)
+        s['_fresh'] = True
+    r = c.post('/cobrancas/homologacao/encerrar', follow_redirects=True)
+    assert 'não é mais homologação' in r.get_data(as_text=True)
+    with app.app_context():
+        assert CobrancaRemessa.query.count() == 1   # nada apagado
