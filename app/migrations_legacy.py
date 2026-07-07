@@ -483,6 +483,14 @@ def _migrate_postgres(app):
                 'CREATE INDEX IF NOT EXISTS ix_seru_loja_map_company_id '
                 'ON seru_loja_map (seru_company_id)'
             ))
+        # seru_loja_map.seru_company_document — CNPJ da company (pedido do
+        # dono 07/07/2026: vincular loja pelo CNPJ, que ele reconhece —
+        # matriz x filial — em vez do nome, que o Seru renomeia).
+        if cols_slm and 'seru_company_document' not in cols_slm:
+            conn.execute(text(
+                'ALTER TABLE seru_loja_map ADD COLUMN '
+                'seru_company_document VARCHAR(20)'
+            ))
 
         # mov_estoque_producao.tipo: VARCHAR(20) era curto pra 'venda_b2b_sem_estoque' (21).
         # Estourava o INSERT quando uma venda B2B nao tinha estoque suficiente,
@@ -1515,6 +1523,9 @@ def _migrate_sqlite(app):
     if cols_slm and 'seru_company_id' not in cols_slm:
         cursor.execute("ALTER TABLE seru_loja_map ADD COLUMN "
                        "seru_company_id VARCHAR(64)")
+    if cols_slm and 'seru_company_document' not in cols_slm:
+        cursor.execute("ALTER TABLE seru_loja_map ADD COLUMN "
+                       "seru_company_document VARCHAR(20)")
     if cols_vv and 'reconhecido_em' not in cols_vv:
         cursor.execute("ALTER TABLE vigia_veredito ADD COLUMN reconhecido_em TIMESTAMP")
     if cols_vv and 'reconhecido_por_id' not in cols_vv:
