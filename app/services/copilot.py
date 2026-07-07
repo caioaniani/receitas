@@ -2781,6 +2781,27 @@ def executar_editar_pedido(params, user):
     itens_novos = params.get('itens')
     nao_resolvidos = []
     if itens_novos is not None:
+        # MP NOVA so entra se liberada no Banco de MPs (checkbox "sugerir
+        # pedido loja"); MP que JA estava no pedido segue valida
+        # (grandfather, igual a tela web). Checado ANTES do REPLACE.
+        mp_ids_antes = {it.materia_prima_id for it in pedido.itens
+                        if it.materia_prima_id}
+        mp_ids_novos = [it['resolvido']['id'] for it in itens_novos
+                        if it.get('resolvido')
+                        and it['resolvido'].get('tipo') == 'mp'
+                        and it['resolvido'].get('id')
+                        and it['resolvido']['id'] not in mp_ids_antes]
+        if mp_ids_novos:
+            bloqueadas = (MateriaPrima.query
+                          .filter(MateriaPrima.id.in_(mp_ids_novos),
+                                  MateriaPrima.sugerir_pedido_loja.is_(False))
+                          .all())
+            if bloqueadas:
+                nomes = ', '.join(m.nome for m in bloqueadas)
+                return {'ok': False, 'erro': (
+                    f'Materia(s)-prima(s) nao liberada(s) pra pedido de '
+                    f'loja: {nomes}. Um admin pode liberar no Banco de MPs '
+                    f'(checkbox "sugerir pedido loja").')}
         # REPLACE total
         PedidoItem.query.filter_by(pedido_id=pedido.id).delete()
         db.session.flush()
