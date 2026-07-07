@@ -570,7 +570,7 @@ def _handshake_entrega(qr, pedido, pin):
         _audit(qr.token, pedido, qr.tipo, 'erro_loja_sem_pin', f'loja:{loja.nome if loja else "?"}')
         return render_template('handshake/erro.html',
                                 msg=f'Loja {loja.nome if loja else "?"} sem PIN cadastrado. Admin precisa definir em /rh/lojas.'), 409
-    if pin != loja.pin:
+    if not (pin and hmac.compare_digest(str(pin), str(loja.pin))):
         _audit(qr.token, pedido, qr.tipo, 'pin_fail', f'loja:{loja.nome} pin_tentado:{pin[:2]}***')
         flash('PIN invalido. Confirme com o gerente da loja.', 'danger')
         from app.services.conferencia import faltam_fotos, fotos_presentes
