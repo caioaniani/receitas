@@ -96,8 +96,11 @@ def cancelar_fatura(fatura, user_id=None):
     if fatura.nf_emitida_em:
         raise ValueError('NF da fatura já emitida na SEFAZ — cancele a '
                          'nota no Tiny antes.')
+    # 'pendente' nunca foi ao banco (pode apagar); 'baixada' é título MORTO
+    # no banco (não bloqueia — fica pra histórico). O resto (remessa/
+    # registrada/paga/rejeitada) exige resolver no banco primeiro.
     cobrancas_vivas = [c for c in fatura.cobrancas
-                       if c.status not in ('pendente',)]
+                       if c.status not in ('pendente', 'baixada')]
     if cobrancas_vivas:
         raise ValueError('o boleto da fatura já foi ao banco — baixe o '
                          'título pelo retorno antes de cancelar.')
@@ -105,8 +108,9 @@ def cancelar_fatura(fatura, user_id=None):
     if pagas:
         raise ValueError('há parcela da fatura com pagamento registrado — '
                          'estorne antes.')
-    for cob in list(fatura.cobrancas):    # só pendentes chegam aqui
-        db.session.delete(cob)
+    for cob in list(fatura.cobrancas):
+        if cob.status == 'pendente':
+            db.session.delete(cob)
     for p in list(fatura.parcelas):
         db.session.delete(p)
     for v in list(fatura.vendas):
