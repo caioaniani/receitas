@@ -321,6 +321,44 @@ def download_remessa(id):
                  f'attachment; filename={rem.nome_arquivo}'})
 
 
+@cobrancas_bp.route('/homologacao/encerrar', methods=['POST'])
+@login_required
+def encerrar_homologacao():
+    """Vira a chave homologação → produção (dono): apaga as remessas de
+    TESTE pra o sequencial recomeçar em 1 — exigência do banco pro
+    primeiro arquivo real no Sicredi Internet (e-mail de 07/07/2026).
+
+    As cobranças que estavam nessas remessas voltam pra 'pendente'
+    (mantêm o nosso número — a sequência de nosso número NÃO zera, os
+    usados na homologação não se reusam). Recusa se alguma cobrança já
+    estiver registrada/paga — aí não é mais teste."""
+    if not current_user.is_owner:
+        abort(403)
+    from app.models import CobrancaRemessa
+    presas = (Cobranca.query
+              .filter(Cobranca.remessa_id.isnot(None),
+                      Cobranca.status.notin_(('remessa', 'rejeitada',
+                                              'baixada')))
+              .all())
+    if presas:
+        flash('Há cobrança registrada/paga vinculada a remessa — isso não '
+              'é mais homologação; não vou apagar histórico real.', 'danger')
+        return redirect(url_for('cobrancas.lista'))
+    n = 0
+    for cob in Cobranca.query.filter(Cobranca.remessa_id.isnot(None)).all():
+        cob.status = 'pendente'
+        cob.remessa_id = None
+        cob.motivo_retorno = None
+        n += 1
+    apagadas = CobrancaRemessa.query.delete()
+    db.session.commit()
+    flash(f'Homologação encerrada: {apagadas} remessa(s) de teste '
+          f'apagada(s), {n} cobrança(s) de volta pra pendente. A próxima '
+          'remessa sai com SEQUENCIAL 1 e nome no padrão do banco '
+          '(ex: 34325707.CRM).', 'success')
+    return redirect(url_for('cobrancas.lista'))
+
+
 @cobrancas_bp.route('/retorno', methods=['POST'])
 @login_required
 def upload_retorno():
