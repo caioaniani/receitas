@@ -86,7 +86,11 @@ def _payload_itens(venda):
             continue
         preco = Decimal(it.preco_unitario or 0)
         desc = Decimal(str(it.desconto_percentual or 0))
-        unitario = preco * (Decimal('1') - desc / Decimal('100'))
+        # Quantizado a 2 casas — mesma precisão do dinheiro cobrado
+        # (desconto com dízima não pode virar centavo fantasma na NF).
+        from decimal import ROUND_HALF_UP
+        unitario = (preco * (Decimal('1') - desc / Decimal('100'))
+                    ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         out.append({'item': {
             'codigo': sku,
             'descricao': it.nome_item[:120],
