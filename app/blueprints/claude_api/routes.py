@@ -325,11 +325,15 @@ def seru_companies():
     agg = {}
     exemplo_company = None
     por_dia = defaultdict(lambda: defaultdict(int))
+    docs = defaultdict(set)
+    estrutura = None
     for p in pedidos or []:
         c = p.get('company') or {}
         if isinstance(c, dict):
             cid = c.get('id')
             cname = (c.get('name') or '').strip()
+            if c.get('document'):
+                docs[cid].add(str(c['document']))
             if exemplo_company is None and c:
                 exemplo_company = {k: c.get(k) for k in list(c.keys())[:12]}
         else:
@@ -340,12 +344,23 @@ def seru_companies():
         criado = (p.get('createdAt') or '')[:10]
         if criado:
             por_dia[f'{cid}|{cname}'][criado] += 1
+        # Estrutura do PEDIDO (sem valores — nada de PII): chaves do topo +
+        # sub-chaves de objetos candidatos a discriminar a LOJA física caso
+        # duas lojas dividam o mesmo company.
+        if estrutura is None and request.args.get('estrutura'):
+            estrutura = {'chaves': sorted(p.keys())}
+            for k, v in p.items():
+                if isinstance(v, dict) and k not in ('customer', 'client',
+                                                     'buyer', 'address'):
+                    estrutura[f'sub:{k}'] = sorted(v.keys())
     companies = [{'id': cid, 'name': cname, 'n_pedidos': n,
+                  'documents': sorted(docs.get(cid, [])),
                   'pedidos_por_dia': dict(por_dia.get(f'{cid}|{cname}', {}))}
                  for (cid, cname), n in sorted(agg.items(),
                                                key=lambda kv: -kv[1])]
     return jsonify(ok=True, dias=dias_n, total_pedidos=len(pedidos or []),
-                   companies=companies, exemplo_company=exemplo_company)
+                   companies=companies, exemplo_company=exemplo_company,
+                   estrutura_pedido=estrutura)
 
 
 @claude_api_bp.route('/receita')
