@@ -559,6 +559,10 @@ def produzir_item_plano(item_id, unidades, user_id):
 
     # 3) avanca o produzido do item.
     item.produzido_qtd = int(item.produzido_qtd or 0) + unidades
+
+    # 4) a parte confirmada virou baixa REAL — o reconciliador libera a
+    #    pré-baixa correspondente (plano fora do regime = no-op).
+    sincronizar_pre_baixa_mp(item.planejamento, user_id)
     db.session.commit()
     return {'ok': True, 'produzido': item.produzido_qtd}
 
