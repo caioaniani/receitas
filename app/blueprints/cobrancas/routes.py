@@ -197,6 +197,27 @@ def voltar_pendente(id):
     return redirect(url_for('cobrancas.lista'))
 
 
+@cobrancas_bp.route('/<int:id>/definir-pix', methods=['POST'])
+@login_required
+def definir_pix(id):
+    """Define MANUALMENTE o Pix copia-e-cola de uma cobrança (dono).
+
+    Em PRODUÇÃO o Pix do boleto híbrido chega no arquivo de RETORNO
+    (registro tipo 8) e nunca precisa disso. Este caminho existe pra
+    HOMOLOGAÇÃO: o Sicredi manda um copia-e-cola de exemplo (mock) por
+    e-mail pra validar a montagem/medidas do QR no PDF (07/07/2026)."""
+    if not current_user.is_owner:
+        abort(403)
+    cob = Cobranca.query.get_or_404(id)
+    pix = (request.form.get('pix') or '').strip()
+    cob.pix_copia_cola = pix or None
+    db.session.commit()
+    flash(f'Pix copia-e-cola {"definido" if pix else "removido"} na '
+          f'cobrança de {cob.pagador_nome} — o QR aparece no PDF do '
+          'boleto.', 'success')
+    return redirect(url_for('cobrancas.lista'))
+
+
 @cobrancas_bp.route('/<int:id>/boleto.pdf')
 @login_required
 def boleto_pdf(id):
