@@ -2733,7 +2733,9 @@ def loja_online_catalogo_estoque(tipo, id):
     """Define o estoque ATUAL do item na loja do site — a MESMA EstoqueLoja
     que /pedidos/estoque-loja usa. JSON: {estoque: int}. SET absoluto: grava
     a diferença como MovEstoqueLoja pra manter o histórico consistente.
-    Owner-only (estoque tem peso especial)."""
+    Aberto a QUALQUER usuário logado (só `@login_required`) — decisão do dono:
+    problema de estoque do site precisa ser resolvido com urgência por quem
+    estiver na mão. O MovEstoqueLoja registra quem mexeu (trilha de auditoria)."""
     from app.extensions import db as _db
     from app.models import EstoqueLoja, MovEstoqueLoja
     from app.services.loja_pagamento import loja_origem_site
