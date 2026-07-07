@@ -282,7 +282,24 @@ class CobrancaRemessa(db.Model):
 
     @property
     def nome_arquivo(self):
-        return f'REM{self.numero:05d}.CRM'
+        """Nomenclatura EXIGIDA pelo Sicredi (e-mail da homologação,
+        07/07/2026): CCCCCmdd.CRM — código do cedente (5) + mês (1-9,
+        O=out, N=nov, D=dez) + dia (2). Vários arquivos no MESMO dia:
+        1º .CRM, 2º .RM2, 3º .RM3...
+
+        (O formato antigo REMnnnnn.CRM era só da homologação por e-mail;
+        no Sicredi Internet o nome errado é recusado.)"""
+        from app.services.sicredi_cnab import _cfg
+        cedente = _cfg()['beneficiario']
+        d = self.gerado_em
+        mes = '123456789OND'[d.month - 1]
+        # Ordinal do arquivo NO DIA (1º, 2º...) pela ordem do sequencial.
+        ordem = (CobrancaRemessa.query
+                 .filter(db.func.date(CobrancaRemessa.gerado_em) == d.date(),
+                         CobrancaRemessa.numero <= self.numero)
+                 .count())
+        ext = 'CRM' if ordem <= 1 else f'RM{ordem}'
+        return f'{cedente}{mes}{d.day:02d}.{ext}'
 
 
 class Cobranca(db.Model):
