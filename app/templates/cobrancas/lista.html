@@ -99,7 +99,7 @@
                 {% if current_user.is_owner %}
                 <button class="btn btn-sm btn-outline-secondary" form="pix-{{ c.id }}"
                         title="Definir/limpar o Pix copia-e-cola manualmente (uso: HOMOLOGAÇÃO — o banco manda um mock por e-mail pra validar o QR do PDF; em produção o Pix vem sozinho no retorno)"
-                        onclick="var v=prompt('Pix copia e cola (homologação). Vazio remove:', '{{ (c.pix_copia_cola or '')|replace(\"'\", '') }}'); if (v === null) return false; document.getElementById('pixv-{{ c.id }}').value = v;">
+                        onclick="var v = prompt('Pix copia e cola (homologação). Vazio remove:'); if (v === null) return false; document.getElementById('pixv-{{ c.id }}').value = v;">
                     <i class="bi bi-qr-code"></i>{{ ' Pix ✓' if c.pix_copia_cola else ' Pix' }}</button>
                 {% endif %}
                 {% endif %}
