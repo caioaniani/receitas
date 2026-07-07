@@ -683,6 +683,7 @@ def caixa():
     lentas — use /pdv pra esse detalhe."""
     from sqlalchemy import func as sqlfunc
 
+    from app.constants import STATUS_PEDIDO_ENTREGUES
 
     data_str = request.args.get('data', hoje_brt().isoformat())
     try:
@@ -703,7 +704,8 @@ def caixa():
         # Pedidos entre lojas — quantidade
         pedidos_loja = PedidoLoja.query.filter(PedidoLoja.data_entrega == d).all()
         n_ped_loja = len(pedidos_loja)
-        n_ped_loja_entregue = sum(1 for p in pedidos_loja if p.status == 'entregue')
+        n_ped_loja_entregue = sum(
+            1 for p in pedidos_loja if p.status in STATUS_PEDIDO_ENTREGUES)
 
         # Entregas atribuidas — quantidade + entregues
         atribs = AtribuicaoEntrega.query.filter(AtribuicaoEntrega.data_entrega == d).all()
