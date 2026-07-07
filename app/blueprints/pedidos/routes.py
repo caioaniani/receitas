@@ -1731,6 +1731,8 @@ def conferencia():
     loja = Loja.query.get(loja_id) if loja_id else None
 
     if request.method == 'POST' and loja:
+        from app.services.estoque_helpers import serializar_loja
+        serializar_loja(loja.id)  # lock por loja antes dos SET de conferencia
         # Form: campos 'real_<estoque_id>' com a quantidade contada
         ajustes = 0
         for key, val in request.form.items():
