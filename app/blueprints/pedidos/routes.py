@@ -3068,6 +3068,8 @@ def desperdicio_excluir(id):
         TIPO_CONVERSAO_ENTRADA,
         TIPO_CONVERSAO_SAIDA,
     )
+    from app.services.estoque_helpers import serializar_loja
+    serializar_loja(loja_id)  # lock por loja antes dos UPDATE do estorno
 
     movs = MovEstoqueLoja.query.filter_by(desperdicio_id=desp.id).all()
     estornado = 0
