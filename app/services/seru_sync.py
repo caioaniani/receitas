@@ -246,11 +246,15 @@ def processar_pedidos(data_inicial, data_final, user=None,
     # ordem canonica evita deadlock de advisory lock com caminhos single-loja
     # (checkout, balanco) e com o outro multi-loja (aplicacao de NF). Trava
     # inclusive lojas inativas — barato e a prova de pedido mapeado pra elas.
+    # Pego DEPOIS do fetch da API (abaixo): pegar antes reteria o lock durante
+    # o I/O de rede (potencialmente lento em backfill), bloqueando as lojas
+    # sem necessidade e podendo estourar idle_in_transaction_timeout.
     from app.services.estoque_helpers import serializar_lojas
-    serializar_lojas(r.id for r in Loja.query.with_entities(Loja.id).all())
 
     pedidos = seru.listar_pedidos_completo(
         data_inicial, data_final, expandir_dias_frente=expandir_dias_frente)
+
+    serializar_lojas(r.id for r in Loja.query.with_entities(Loja.id).all())
 
     stats = {
         'pedidos_novos': 0,
