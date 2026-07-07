@@ -17,9 +17,13 @@ Procure, nesta ordem de prioridade:
 1. **Bugs de correção** — lógica invertida, None não tratado, sessão/transação
    SQLAlchemy mal usada (commit faltando, objeto detached), condição de corrida.
 2. **Casos de borda** — pedido vazio, quantidade zero ou negativa, divisão por
-   zero em custo/rendimento, datas e fuso horário, estoque insuficiente.
-3. **Regressões** — a mudança quebra algum fluxo existente? Se o diff toca
-   código de aplicação, rode a suíte (`pytest`, ~73s) e reporte o resultado.
+   zero em custo/rendimento, estoque insuficiente.
+3. **Timezone (CRÍTICO)** — uso direto de `date.today()` ou `datetime.now()`
+   em vez de `app.utils.hoje()`/`agora()` (BRT). No Postgres do Railway, os
+   diretos retornam UTC e viram D+1 a partir das 21h BRT.
+4. **Regressões** — a mudança quebra algum fluxo existente? Se o diff toca
+   código de aplicação, rode a suíte (`python -m pytest`, ~73s) e reporte o
+   resultado.
 4. **Migração de schema fora do procedimento** — coluna nova ou alterada em
    `app/models/*.py` sem o `ALTER TABLE` idempotente correspondente em
    `app/migrations_legacy.py` (`_migrate_postgres()`/`_migrate_sqlite()`), ou
