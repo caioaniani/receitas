@@ -967,6 +967,54 @@ de infra, estado em AppConfig). Sob demanda: `GET /admin/vigia-site`
 `tests/test_site_vigia.py`. Ao mudar faixa de frete/area de entrega,
 ATUALIZAR os canarios junto.
 
+## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
+
+Escrito na pedra a pedido do dono ("ja tinha falado uma vez mas nao ficou
+escrito"). Toda venda do site tem DUAS pontas independentes, e nao pode
+confundir uma com a outra:
+
+1. **BAIXA FISICA — `EstoqueLoja` REAL.** Quando o webhook do Pagar.me
+   confirma o pedido PAGO (`loja_pagamento._marcar_pago`, linha ~279),
+   `_baixar_estoque` desconta o `EstoqueLoja.quantidade` DE VERDADE, pelo
+   MOTOR UNICO (`loja_estoque_reserva.consumir` → `baixa_venda.aplicar_venda`
+   canal `'site'`). A loja debitada vem de `_loja_baixa(pedido)`
+   (`loja_pagamento.py:67`): **entrega/express** baixa de `loja_origem_site()`
+   (`AppConfig.loja_site_estoque_id`, default "Loja Anesio Pinto Rosa");
+   **retirada** baixa da loja ESCOLHIDA pelo cliente (`loja_retirada_id`).
+   Essa e a MESMA linha `EstoqueLoja` mostrada/editada em
+   `/admin/loja-online/catalogo` (`loja_catalogo._estoque_site_map`, le
+   `loja_origem_site()`) e no seletor de `/pedidos/estoque-loja` — logo a
+   venda do site aparece refletida nas duas telas. Tolera shortfall (registra
+   `venda_site_sem_estoque`, nunca trava). NUNCA fazer a venda do site deixar
+   de descontar o `EstoqueLoja` fisico.
+
+2. **DISPONIBILIDADE NO FRONT — plano-do-dia, NUNCA o EstoqueLoja fisico.**
+   O que o cliente ve como "esgotado / pode comprar" vem UNICAMENTE do
+   plano-do-dia (`EstoqueSitePlano`, tela `/admin/loja-online/plano-do-dia`,
+   servico `loja_plano_dia.py`), por `(kind, item_id, data_de_entrega)`.
+   `loja_catalogo._saldo_para_dia` (linha ~141) decide so pelo plano;
+   `qtd_planejada` e setada MANUALMENTE pelo dono (default 99999 = sem
+   limite). Fail-open: sem plano cadastrado o item vende livre — o plano so
+   serve pra CAPAR/zerar itens especificos naquele dia. Isso e o "setup
+   diferente" que existe DE PROPOSITO: o site pode vender o que a loja ainda
+   nao produziu (planeja no futuro), entao a disponibilidade NAO pode olhar
+   o estoque fisico. No pagamento, alem da baixa fisica, o plano tambem
+   incrementa `qtd_reservada` (`_reservar_no_plano_do_dia`, linha ~280) —
+   camada independente da baixa fisica.
+
+**Resumindo**: venda do site = SEMPRE desconta `EstoqueLoja` fisico da loja
+de origem/retirada (visivel no catalogo e no estoque-loja) E a vitrine so
+mostra o que o plano-do-dia libera. Sao camadas separadas — nunca fundir,
+nunca a disponibilidade do front passar a depender do estoque fisico, nunca
+a venda do site parar de baixar o fisico. Cancelamento/reembolso espelha as
+duas (`_estornar_estoque` + `_devolver_ao_plano_do_dia`). Nuances aceitas:
+o catalogo exibe DISPONIVEL (`quantidade - reservada`) enquanto
+`/pedidos/estoque-loja` mostra o fisico (`quantidade`) — mesma linha, bases
+diferentes; e pedido de RETIRADA em loja != origem baixa a loja escolhida
+(reflete em `/pedidos/estoque-loja` da loja escolhida, nao no catalogo do
+site). Testes: `tests/test_loja_estoque_vitrine.py`,
+`tests/test_loja_estoque_reserva.py`, `tests/test_loja_online_vendas.py`.
+
 ## Copilot (servico) — canais: Slack + WhatsApp do dono. SEM interface web
 
 `app/services/copilot.py` orquestra tools com Claude Sonnet 4.6 (Anthropic API).
