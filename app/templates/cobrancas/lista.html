@@ -172,9 +172,24 @@
                             href="{{ url_for('cobrancas.download_remessa', id=r.id) }}">
                             <i class="bi bi-download"></i> baixar</a></td></tr>
                     {% endfor %}
-                    {% if not remessas %}<tr><td class="text-muted p-3">Nenhuma remessa ainda — a primeira é a da homologação.</td></tr>{% endif %}
+                    {% if not remessas %}<tr><td class="text-muted p-3">Nenhuma remessa ainda.</td></tr>{% endif %}
                     </tbody>
                 </table>
+            </div>
+            <div class="card-footer small text-muted py-2">
+                Suba no <strong>Sicredi Internet até as 18:00</strong> (Brasília) —
+                depois disso processa só no dia seguinte. O <strong>arquivo de
+                retorno</strong> fica disponível lá 1 dia útil após o processamento:
+                baixe e suba no card ao lado (registra os títulos, traz o QR Pix e
+                dá baixa nos pagos).
+                {% if current_user.is_owner and remessas %}
+                <form method="POST" action="{{ url_for('cobrancas.encerrar_homologacao') }}" class="d-inline"
+                      onsubmit="return confirm('Encerrar a HOMOLOGAÇÃO? As remessas de teste são apagadas (o sequencial volta pra 1, exigência do banco) e as cobranças delas voltam pra pendente. Só faça isso UMA vez, antes da primeira remessa real.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger mt-1">
+                        <i class="bi bi-arrow-counterclockwise"></i> Encerrar homologação (zerar sequencial)</button>
+                </form>
+                {% endif %}
             </div>
         </div>
     </div>
