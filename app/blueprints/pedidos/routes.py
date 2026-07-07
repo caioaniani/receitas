@@ -2794,6 +2794,9 @@ def estoque_loja_ajuste():
         flash('Loja, item, quantidade (>0) e motivo sao obrigatorios.', 'warning')
         return redirect(url_for('pedidos.estoque_loja', loja=loja_id or None))
 
+    from app.services.estoque_helpers import serializar_loja
+    serializar_loja(loja_id)  # lock por loja antes do UPDATE em EstoqueLoja
+
     filtro = {'loja_id': loja_id}
     if tipo == 'receita':
         filtro['receita_id'] = item_id
