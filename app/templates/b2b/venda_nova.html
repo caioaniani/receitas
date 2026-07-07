@@ -273,11 +273,21 @@
 
     document.getElementById('btn-add-item').addEventListener('click', function() { rowItem(); });
     document.getElementById('btn-add-parcela').addEventListener('click', function() { rowParcela(); });
+    function avisoMensal() {
+        // Cliente de fechamento mensal: parcelas ficam vazias (a conta
+        // fecha na fatura). So aviso — nao trava (excecao negociada a
+        // parte continua possivel, e ai a venda fica fora do fechamento).
+        var opt = selCliente.options[selCliente.selectedIndex];
+        var mensal = opt && opt.dataset.mensal === '1';
+        document.getElementById('aviso-mensal').classList.toggle('d-none', !mensal);
+    }
+
     selCliente.addEventListener('change', function() {
         // Preco agora e funcao de (item, cliente): trocar o cliente
         // re-aplica a sugestao inteira (tabela do cliente OU atacado +
         // desconto %) nas linhas que ja tem item selecionado. Linha sem
         // item so recebe o desconto novo (comportamento antigo).
+        avisoMensal();
         var desc = getDescCliente();
         tbody.querySelectorAll('tr').forEach(tr => {
             var ref = tr.querySelector('.item-ref');
@@ -286,6 +296,7 @@
             atualizar(tr);
         });
     });
+    avisoMensal();   // estado inicial (modo editar ja vem com cliente)
 
     if (SEED_ITENS.length) { SEED_ITENS.forEach(function(d) { rowItem(d); }); }
     else { rowItem(); }  // 1 linha inicial (modo criar)
