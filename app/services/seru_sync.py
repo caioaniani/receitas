@@ -411,7 +411,14 @@ def reprocessar_retroativo(dias=7, user=None):
     alvo_q = base.filter(SeruPedidoProcessado.n_itens_baixados == 0)
     ids = [p.seru_pedido_id for p in alvo_q.all()]
     if ids:
-        clauses = [MovEstoqueLoja.referencia.like(f'Seru #{i}%') for i in ids]
+        # Delimitador de ESPACO: sem ele, 'Seru #1%' casaria 'Seru #10',
+        # 'Seru #123'... e apagaria movs de OUTROS pedidos ao reprocessar o #1.
+        # Ref e 'Seru #<id>' exato ou 'Seru #<id> — sem estoque...' (com espaco).
+        clauses = []
+        for i in ids:
+            ref = f'Seru #{i}'
+            clauses.append(MovEstoqueLoja.referencia == ref)
+            clauses.append(MovEstoqueLoja.referencia.like(ref + ' %'))
         MovEstoqueLoja.query.filter(or_(*clauses)).delete(
             synchronize_session=False)
         alvo_q.delete(synchronize_session=False)
