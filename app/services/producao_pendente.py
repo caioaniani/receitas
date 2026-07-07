@@ -235,6 +235,7 @@ def reagendar_para_hoje(item_ids, user_id):
     por_receita = {it.receita_id: it for it in plano_hoje.itens}
 
     movidos, unidades = 0, 0
+    planos_origem = set()
     for item_id in ids:
         old = db.session.get(PlanejamentoItem, item_id)
         if old is None or old.dispensada_em is not None:
