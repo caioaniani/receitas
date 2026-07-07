@@ -191,6 +191,8 @@ def _estornar_fracoes_legado(pid, user_id):
     logica da fase 2 antiga (SeruDebitoMov -> SeruDebito). A migracao de fracoes
     marca `estornado_em` nos convertidos, entao nao ha dupla reversao com o
     motor novo. Retorna quantas fracoes reverteu."""
+    from app.services.estoque_helpers import serializar_baixa_estoque
+    serializar_baixa_estoque()  # antes do 1o UPDATE em EstoqueLoja (deadlock)
     fracoes = SeruDebitoMov.query.filter_by(
         seru_pedido_id=pid, estornado_em=None).all()
     revertido = 0
