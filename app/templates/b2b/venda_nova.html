@@ -69,6 +69,11 @@
 
     <div class="card mb-3">
         <div class="card-header py-2 d-flex justify-content-between"><strong>Parcelas</strong><button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-parcela"><i class="bi bi-plus"></i> Adicionar parcela</button></div>
+        <div class="alert alert-info py-2 px-3 mb-0 d-none" id="aviso-mensal">
+            Cliente com <strong>fechamento mensal</strong> — deixe as parcelas vazias:
+            a conta fecha na <a href="{{ url_for('b2b.faturas') }}">fatura do mês</a>
+            (1 NF consolidada + 1 boleto). Venda com parcela fica FORA do fechamento.
+        </div>
         <div class="table-responsive">
             <table class="table table-sm mb-0" id="tbl-parcelas">
                 <thead><tr><th style="width:160px;">Vencimento</th><th style="width:140px;">Valor</th><th>Forma</th><th></th></tr></thead>
