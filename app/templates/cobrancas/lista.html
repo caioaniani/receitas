@@ -122,6 +122,9 @@
 {% for c in abertas %}{% if c.nosso_numero %}
 <form id="mail-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.enviar_email', id=c.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+<form id="pix-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.definir_pix', id=c.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="pix" id="pixv-{{ c.id }}"></form>
 {% endif %}{% if c.status == 'pendente' %}
 <form id="edit-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.editar', id=c.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
