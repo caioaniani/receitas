@@ -464,6 +464,26 @@ def _migrate_postgres(app):
                 'quantidade_coletada INTEGER'
             ))
 
+        # seru_loja_map.seru_company_id — ancora ESTAVEL do vinculo Seru->Loja
+        # (UUID da company na API). Incidente 06-07/07/2026: renomearam as
+        # lojas no Seru e o vinculo por NOME quebrou em silencio (Ribeiro sem
+        # baixa; vendas caindo na Anesio). Com o id, renome so atualiza o
+        # rotulo. Procedimento de 2 commits: este ALTER sobe ANTES do modelo.
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'seru_loja_map'"
+        ))
+        cols_slm = {row[0] for row in result}
+        if cols_slm and 'seru_company_id' not in cols_slm:
+            conn.execute(text(
+                'ALTER TABLE seru_loja_map ADD COLUMN '
+                'seru_company_id VARCHAR(64)'
+            ))
+            conn.execute(text(
+                'CREATE INDEX IF NOT EXISTS ix_seru_loja_map_company_id '
+                'ON seru_loja_map (seru_company_id)'
+            ))
+
         # mov_estoque_producao.tipo: VARCHAR(20) era curto pra 'venda_b2b_sem_estoque' (21).
         # Estourava o INSERT quando uma venda B2B nao tinha estoque suficiente,
         # quebrando o POST de /b2b/vendas/nova com 500 (causa identificada via
