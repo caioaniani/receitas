@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Faturas mensais B2B{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h1 class="page-title mb-0"><i class="bi bi-receipt"></i> Faturas mensais (B2B)</h1>
+        <p class="page-subtitle mb-0">Cliente com fechamento mensal compra o mês inteiro;
+            aqui a conta fecha: uma fatura = 1 NF consolidada + 1 boleto do total.</p>
+    </div>
+    <a href="{{ url_for('b2b.dashboard') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+</div>
+
+{# ── Contas em aberto (clientes mensais com vendas sem fatura) ── #}
+<div class="card mb-3">
+    <div class="card-header py-2"><strong>Contas em aberto</strong>
+        <span class="small text-muted">— vendas sem parcela e sem fatura, prontas pra fechar</span></div>
+    <div class="card-body p-0"><div style="overflow-x:auto;">
+    <table class="table table-sm mb-0 align-middle">
+        <thead><tr><th>Cliente</th><th>Vendas</th><th>Período das vendas</th>
+            <th class="text-end">Total acumulado</th><th style="min-width:420px">Fechar conta</th></tr></thead>
+        <tbody>
+        {% for a in abertas %}
+        <tr>
+            <td><strong>{{ a.cliente.nome }}</strong></td>
+            <td>{{ a.n_vendas }}</td>
+            <td>{{ a.primeira.strftime('%d/%m') }} a {{ a.ultima.strftime('%d/%m/%Y') }}</td>
+            <td class="text-end fw-bold">R$ {{ '%.2f'|format(a.total) }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('b2b.fatura_fechar') }}" class="d-flex gap-1 flex-wrap align-items-center"
+                      onsubmit="return confirm('Fechar a conta de {{ a.cliente.nome }} no período informado?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="cliente_id" value="{{ a.cliente.id }}">
+                    <input type="date" name="data_inicio" value="{{ a.primeira.isoformat() }}" class="form-control form-control-sm" style="width:145px" title="Início do período" required>
+                    <input type="date" name="data_fim" value="{{ a.ultima.isoformat() }}" class="form-control form-control-sm" style="width:145px" title="Fim do período" required>
+                    <input type="date" name="vencimento" value="{{ (hoje + hoje.resolution * 0).isoformat() }}" class="form-control form-control-sm venc-input" style="width:145px" title="Vencimento do boleto" required>
+                    <button class="btn btn-sm btn-primary"><i class="bi bi-lock"></i> Fechar conta</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted p-3">Nenhuma conta em aberto —
+            marque "Fechamento mensal" no cadastro do cliente (B2B → Clientes) e
+            lance as vendas dele <strong>sem parcelas</strong>.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div></div>
+    <div class="card-footer small text-muted py-2">O vencimento do boleto precisa ser
+        no mínimo 7 dias após a emissão da remessa (regra do Sicredi) — sugerimos 10 dias.</div>
+</div>
+
+{# ── Faturas fechadas ── #}
+<div class="card">
+    <div class="card-header py-2"><strong>Faturas</strong></div>
+    <div class="card-body p-0"><div style="overflow-x:auto;">
+    <table class="table table-sm mb-0 align-middle">
+        <thead><tr><th>Fatura</th><th>Cliente</th><th>Período</th><th>Vencimento</th>
+            <th class="text-end">Valor</th><th>Status</th><th>NF</th><th>Boleto</th><th></th></tr></thead>
+        <tbody>
+        {% for f in faturas %}
+        <tr>
+            <td><strong>{{ f.codigo }}</strong></td>
+            <td>{{ f.cliente.nome }}</td>
+            <td>{{ f.periodo_display }}</td>
+            <td>{{ f.vencimento.strftime('%d/%m/%Y') }}</td>
+            <td class="text-end">R$ {{ '%.2f'|format(f.valor_total) }}</td>
+            <td>{% if f.status == 'paga' %}<span class="badge bg-success">paga</span>
+                {% elif f.status == 'cancelada' %}<span class="badge bg-secondary">cancelada</span>
+                {% else %}<span class="badge bg-info text-dark">fechada</span>{% endif %}</td>
+            <td>{% if f.nf_emitida_em %}<span class="badge bg-success">✓ {{ f.nf_numero or 'emitida' }}</span>
+                {% elif f.tiny_nota_fiscal_id %}<span class="badge bg-warning text-dark">pendente SEFAZ</span>
+                {% else %}<span class="text-muted small">—</span>{% endif %}</td>
+            <td>{% set cob = f.cobrancas[0] if f.cobrancas else None %}
+                {% if cob %}<span class="badge bg-{{ 'success' if cob.status == 'paga' else 'info text-dark' }}">{{ cob.status }}</span>
+                {% else %}<span class="text-muted small">—</span>{% endif %}</td>
+            <td class="text-end"><a href="{{ url_for('b2b.fatura_detalhe', fid=f.id) }}"
+                class="btn btn-sm btn-outline-primary">Abrir</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="text-muted p-3">Nenhuma fatura ainda.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div></div>
+</div>
+
+<script>
+// Vencimento sugerido: hoje + 10 dias (o Sicredi exige >= 7 apos a emissao).
+document.querySelectorAll('.venc-input').forEach(function (el) {
+    var d = new Date();
+    d.setDate(d.getDate() + 10);
+    el.value = d.toISOString().slice(0, 10);
+});
+</script>
+{% endblock %}
