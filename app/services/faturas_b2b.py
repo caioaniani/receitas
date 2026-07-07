@@ -149,14 +149,18 @@ def itens_consolidados(fatura):
     agrupa por (kind, item_id, preço unitário efetivo) somando quantidades
     — o mesmo pão vendido a preços diferentes no mês vira linhas separadas
     (a NF precisa refletir o que foi cobrado). Preço efetivo = unitário com
-    o desconto do item aplicado, em Decimal."""
+    o desconto do item aplicado, em Decimal, QUANTIZADO a 2 casas (mesma
+    precisão do dinheiro cobrado; sem isso a NF podia divergir do boleto
+    em centavos quando o desconto gera dízima)."""
+    from decimal import ROUND_HALF_UP
     grupos = {}
     for v in fatura.vendas:
         for it in v.itens:
             kind = 'receita' if it.receita_id else 'produto'
             preco = Decimal(it.preco_unitario or 0)
             desc = Decimal(str(it.desconto_percentual or 0))
-            unitario = preco * (Decimal('1') - desc / Decimal('100'))
+            unitario = (preco * (Decimal('1') - desc / Decimal('100'))
+                        ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             chave = (kind, it.receita_id or it.produto_id, unitario)
             g = grupos.setdefault(chave, {
                 'kind': kind, 'item_id': it.receita_id or it.produto_id,
