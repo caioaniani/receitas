@@ -97,12 +97,12 @@ def _payload_itens(venda):
     return out, faltando
 
 
-def _nota_payload(venda, itens):
+def _nota_payload(cliente, itens):
     """NF pro `nota.fiscal.incluir` com cabeçalho fiscal EXPLÍCITO — mesma
-    razão do site: o gerar-por-pedido não aplicava natureza/série."""
+    razão do site: o gerar-por-pedido não aplicava natureza/série.
+    `cliente` já vem como dict de `_payload_cliente_b2b`."""
     from flask import current_app
     cfg = current_app.config
-    cliente, _ = _payload_cliente(venda)
     return {
         'tipo': 'S',  # saída (venda)
         'natureza_operacao': cfg.get('NF_NATUREZA_OPERACAO',
