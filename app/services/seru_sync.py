@@ -241,6 +241,14 @@ def processar_pedidos(data_inicial, data_final, user=None,
     user_id = getattr(user, 'id', None) if user else None
     lojas_ativas = Loja.query.filter_by(ativa=True).all()
 
+    # Serializa TODAS as lojas (ordem crescente de id) no inicio desta transacao
+    # unica multi-loja: cobre as baixas e estornos internos por reentrancia, e a
+    # ordem canonica evita deadlock de advisory lock com caminhos single-loja
+    # (checkout, balanco) e com o outro multi-loja (aplicacao de NF). Trava
+    # inclusive lojas inativas — barato e a prova de pedido mapeado pra elas.
+    from app.services.estoque_helpers import serializar_lojas
+    serializar_lojas(r.id for r in Loja.query.with_entities(Loja.id).all())
+
     pedidos = seru.listar_pedidos_completo(
         data_inicial, data_final, expandir_dias_frente=expandir_dias_frente)
 
