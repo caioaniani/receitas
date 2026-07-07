@@ -258,6 +258,12 @@ class VendaB2BParcela(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     venda_id = db.Column(db.Integer, db.ForeignKey('venda_b2b.id'), nullable=False, index=True)
     numero = db.Column(db.Integer, nullable=False)  # 1, 2, 3...
+    # Parcela CRIADA por um fechamento mensal (FaturaB2B): a liquidacao do
+    # boleto da fatura quita todas as parcelas com este vinculo de uma vez,
+    # e o cancelamento da fatura as apaga (so as dela). NULL = parcela
+    # normal da venda.
+    fatura_id = db.Column(db.Integer, db.ForeignKey('fatura_b2b.id'),
+                          nullable=True, index=True)
     vencimento = db.Column(db.Date, nullable=False, index=True)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
     valor_pago = db.Column(db.Numeric(10, 2), default=0)
