@@ -24,6 +24,7 @@ estava entregue (correto) mas a UX assustava o funcionario. Camada 2:
 se o POST chega com qr.usado_em recente (<10min), tratamos como double-
 submit e redirecionamos pra tela de sucesso, em vez de erro.
 """
+import hmac
 import io
 import logging
 from datetime import timedelta
@@ -244,7 +245,7 @@ def _handshake_saida(qr, pedido, pin):
     """PIN do motorista → muda status pra em_transporte."""
     from app.blueprints.pedidos.routes import _executar_envio_pedido
     drivers = Driver.query.filter_by(ativo=True).all()
-    driver_match = next((d for d in drivers if d.pin and d.pin == pin), None)
+    driver_match = next((d for d in drivers if d.pin and pin and hmac.compare_digest(str(d.pin), str(pin))), None)
     if not driver_match:
         _audit(qr.token, pedido, qr.tipo, 'pin_fail', f'PIN tentado: {pin[:4]}***')
         flash('PIN invalido. Confirme com o gerente.', 'danger')
@@ -439,7 +440,7 @@ def handshake_retirada(token):
     # As duas etapas validam PIN de DRIVER ativo (decisao do dono 02/07/2026:
     # recebimento na industria tambem aceita qualquer PIN de motorista/producao).
     drivers = Driver.query.filter_by(ativo=True).all()
-    driver = next((d for d in drivers if d.pin and d.pin == pin), None)
+    driver = next((d for d in drivers if d.pin and pin and hmac.compare_digest(str(d.pin), str(pin))), None)
     if not driver:
         _audit_retirada(token, retirada, tipo_audit, 'pin_fail',
                         f'PIN tentado: {pin[:4]}***')
