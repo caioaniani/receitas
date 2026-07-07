@@ -67,6 +67,11 @@ def gerar_da_parcela(parcela_id):
     if p.cobranca:
         flash('Essa parcela já tem cobrança.', 'warning')
         return redirect(url_for('cobrancas.lista'))
+    if p.fatura_id:
+        flash('Parcela de fatura mensal — o boleto sai pela FATURA '
+              '(B2B → Faturas mensais), não por parcela; gerar aqui '
+              'cobraria o cliente em dobro.', 'warning')
+        return redirect(url_for('cobrancas.lista'))
     venda = p.venda
     cli = venda.cliente
     emissao = hoje()
