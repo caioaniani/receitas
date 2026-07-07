@@ -136,13 +136,53 @@ def emitir_nf(venda, user_id=None, recriar=False):
                           + '. Mapeie em B2B → SKUs do Tiny (/b2b/tiny-skus).')
         if not itens:
             return None, 'Venda sem itens — nada pra emitir.'
-        return _nota_payload(venda, itens), None
+        return _nota_payload(cliente, itens), None
 
     return tiny_nf.emitir_nf_generico(venda, _montar, recriar=recriar)
 
 
-def link_danfe(venda):
-    """URL pro DANFE em PDF (válida por tempo limitado no Tiny)."""
-    if not venda.tiny_nota_fiscal_id:
+def emitir_nf_fatura(fatura, user_id=None, recriar=False):
+    """Emite a NF CONSOLIDADA de uma fatura mensal (fechamento da conta):
+    itens de todas as vendas do período agrupados por (item, preço efetivo)
+    — ver `faturas_b2b.itens_consolidados`. Mesmo motor/idempotência da
+    venda avulsa; a FaturaB2B carrega os mesmos campos de NF."""
+    from app.services import faturas_b2b
+
+    if fatura.status == 'cancelada':
+        return {'ok': False, 'msg': 'Fatura cancelada — não emite NF.'}
+
+    def _montar():
+        cliente, erro = _payload_cliente_b2b(fatura.cliente)
+        if erro:
+            return None, erro
+        itens, faltando = [], []
+        for g in faturas_b2b.itens_consolidados(fatura):
+            sku = tiny_nf.sku_do_item(g['kind'], g['item_id'], canal='b2b')
+            if not sku:
+                if g['nome'] not in faltando:
+                    faltando.append(g['nome'])
+                continue
+            itens.append({'item': {
+                'codigo': sku,
+                'descricao': g['nome'][:120],
+                'unidade': 'UN',
+                'quantidade': float(g['quantidade']),
+                'valor_unitario': float(g['valor_unitario']),
+            }})
+        if faltando:
+            return None, ('Itens sem SKU B2B mapeado no Tiny: '
+                          + ', '.join(faltando)
+                          + '. Mapeie em B2B → SKUs do Tiny (/b2b/tiny-skus).')
+        if not itens:
+            return None, 'Fatura sem itens — nada pra emitir.'
+        return _nota_payload(cliente, itens), None
+
+    return tiny_nf.emitir_nf_generico(fatura, _montar, recriar=recriar)
+
+
+def link_danfe(venda_ou_fatura):
+    """URL pro DANFE em PDF (válida por tempo limitado no Tiny). Serve pra
+    VendaB2B e FaturaB2B — os dois têm `tiny_nota_fiscal_id`."""
+    if not venda_ou_fatura.tiny_nota_fiscal_id:
         return None
-    return tiny.obter_link_nota_fiscal(venda.tiny_nota_fiscal_id)
+    return tiny.obter_link_nota_fiscal(venda_ou_fatura.tiny_nota_fiscal_id)
