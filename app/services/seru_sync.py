@@ -72,13 +72,37 @@ def _fuzzy_loja(seru_company_name, lojas):
     return melhor if melhor_overlap >= 1 else None
 
 
-def _resolver_loja(seru_company_name, lojas_ativas):
-    """Devolve (loja, mapping). Se nao existia mapping, cria via fuzzy.
-    Se fuzzy nao acertou nada, cria mapping vazio (estado=pendente) e
-    devolve (None, mapping)."""
-    if not seru_company_name:
+def _resolver_loja(seru_company_name, lojas_ativas, seru_company_id=None):
+    """Devolve (loja, mapping). Resolucao POR ID primeiro (ancora estavel:
+    renome no Seru so atualiza o rotulo — incidente 06-07/07/2026, Ribeiro
+    ficou 2 semanas sem baixa), com fallback pro NOME; mapa antigo sem id
+    ganha o id na primeira venda (backfill). Se nao existia mapping, cria
+    via fuzzy; fuzzy sem acerto cria pendente e devolve (None, mapping)."""
+    if not seru_company_name and not seru_company_id:
         return None, None
-    mapping = SeruLojaMap.query.filter_by(seru_company_name=seru_company_name).first()
+    mapping = None
+    if seru_company_id:
+        mapping = (SeruLojaMap.query
+                   .filter_by(seru_company_id=str(seru_company_id)).first())
+        if (mapping and seru_company_name
+                and mapping.seru_company_name != seru_company_name):
+            # RENOME no Seru: traz a atualizacao junto. Se o nome novo ja
+            # pertence a OUTRO mapa (colisao, como no incidente), mantem o
+            # rotulo velho — a resolucao por id continua certa e o sync
+            # nunca quebra por unique constraint.
+            em_uso = (SeruLojaMap.query
+                      .filter(SeruLojaMap.seru_company_name == seru_company_name,
+                              SeruLojaMap.id != mapping.id).first())
+            if em_uso is None:
+                logger.info('seru: company %s renomeada de "%s" pra "%s"',
+                            seru_company_id, mapping.seru_company_name,
+                            seru_company_name)
+                mapping.seru_company_name = seru_company_name
+    if mapping is None and seru_company_name:
+        mapping = (SeruLojaMap.query
+                   .filter_by(seru_company_name=seru_company_name).first())
+        if mapping and seru_company_id and not mapping.seru_company_id:
+            mapping.seru_company_id = str(seru_company_id)   # backfill
     if mapping:
         if mapping.ignorar:
             return None, mapping
@@ -88,7 +112,9 @@ def _resolver_loja(seru_company_name, lojas_ativas):
     # primeira vez: tenta fuzzy
     loja = _fuzzy_loja(seru_company_name, lojas_ativas)
     mapping = SeruLojaMap(
-        seru_company_name=seru_company_name,
+        seru_company_name=(seru_company_name
+                           or f'company:{seru_company_id}'),
+        seru_company_id=str(seru_company_id) if seru_company_id else None,
         loja_id=loja.id if loja else None,
         auto_match=bool(loja),
     )
