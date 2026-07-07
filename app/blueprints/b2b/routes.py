@@ -585,6 +585,10 @@ def venda_editar(vid):
     if venda.status == 'cancelada':
         flash('Venda cancelada — reabra antes de editar.', 'warning')
         return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    if venda.fatura_id:
+        flash(f'Venda faturada ({venda.fatura.codigo}) — cancele a fatura '
+              'em B2B → Faturas mensais antes de editar.', 'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
     pago = bool(venda.valor_pago and venda.valor_pago > 0)
     itens_seed = [{
         'ref': (f'receita:{it.receita_id}' if it.receita_id
