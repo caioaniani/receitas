@@ -68,6 +68,11 @@ def obter_linha_loja(loja_id, *, receita_id=None, produto_id=None,
     if receita_id is None and produto_id is None and materia_prima_id is None:
         raise ValueError('obter_linha_loja exige receita_id, produto_id ou '
                          'materia_prima_id (nao consolida linhas pendentes).')
+    # get-or-create + consolidacao SEMPRE precede uma escrita de estoque desta
+    # loja — serializar aqui cobre por reentrancia todo caminho que resolve a
+    # linha por aqui (baixa, recebimento, desperdicio, ajuste...), sem depender
+    # de cada chamador lembrar. Reentrante; no-op em SQLite.
+    serializar_loja(loja_id)
     filtro = {'loja_id': loja_id, 'receita_id': receita_id,
               'produto_id': produto_id, 'materia_prima_id': materia_prima_id}
     linhas = EstoqueLoja.query.filter_by(**filtro).order_by(EstoqueLoja.id).all()
