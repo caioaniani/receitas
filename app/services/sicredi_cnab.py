@@ -319,16 +319,19 @@ def processar_retorno(texto, user_id=None):
 
 def _quitar_parcela(cob):
     """Liquidação do boleto quita o vínculo B2B (best-effort): parcela
-    avulsa OU a fatura mensal inteira (todas as parcelas do fechamento)."""
+    avulsa OU a fatura mensal inteira (rateio pelas parcelas do
+    fechamento). Devolve um aviso (str) quando o valor pago diverge do
+    esperado — o caller anexa nos detalhes do retorno."""
     from app.utils import agora
     if cob.fatura:
         from app.services import faturas_b2b
-        faturas_b2b.quitar_fatura(cob.fatura, valor_pago=cob.valor_pago,
-                                  quando=agora())
-        return
+        return faturas_b2b.quitar_fatura(cob.fatura,
+                                         valor_pago=cob.valor_pago,
+                                         quando=agora())
     p = cob.parcela
     if p is None or p.pago_em:
-        return
+        return None
     p.valor_pago = cob.valor_pago or cob.valor
     p.pago_em = agora()
     p.forma_pagamento = 'boleto'
+    return None
