@@ -68,6 +68,7 @@ FONTE_LABEL = {
     'perda': 'Perda',
     'saida_lote': 'Saida em lote',
     'saida_pedido': 'Saida p/ pedido',
+    'sobra_retorno': 'Sobra convertida em retorno',
 }
 
 
