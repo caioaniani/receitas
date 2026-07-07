@@ -144,6 +144,11 @@ def aplicar_venda(loja_id, *, receita_id=None, produto_id=None,
         else:
             # Fracionario -> acumula a fracao no item fisico.
             deb = _get_debito(loja_id, col, item_id)
+            # Trava a linha do acumulador antes do RMW: dois canais acumulando
+            # fracao do mesmo (loja, item) ao mesmo tempo leriam a mesma
+            # fracao_pendente e gravariam por cima — inteiro baixado a mais/menos
+            # e fracao descasada do DebitoEstoqueMov. No SQLite vira no-op.
+            db.session.refresh(deb, with_for_update=True)
             novo_total = (deb.fracao_pendente or 0.0) + contrib
             inteiros = int(novo_total + _TOL)
             deb.fracao_pendente = max(0.0, round(novo_total - inteiros, 6))
