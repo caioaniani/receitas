@@ -23,6 +23,7 @@ from app.extensions import db
 from app.models import (
     ClienteB2B,
     EstoqueProducao,
+    FaturaB2B,
     PrecoClienteB2B,
     Produto,
     Receita,
@@ -249,6 +250,160 @@ def api_cnpj(cnpj):
     if res.get('erro'):
         return jsonify(res), 404 if 'não encontrado' in res['erro'] else 400
     return jsonify(res)
+
+
+# ── Faturas mensais (fechamento da conta do cliente) ──
+# Cliente `faturamento_mensal` compra o mês inteiro (vendas sem parcela);
+# aqui a conta FECHA: fatura agrupa as vendas, emite UMA NF consolidada e
+# UM boleto do total. Serviço: app/services/faturas_b2b.py.
+
+@b2b_bp.route('/faturas')
+@login_required
+@admin_required
+def faturas():
+    from app.services import faturas_b2b as fat_svc
+    lista = (FaturaB2B.query
+             .options(joinedload(FaturaB2B.cliente))
+             .order_by(FaturaB2B.id.desc()).limit(100).all())
+    # Contas em aberto por cliente mensal: total das vendas ainda sem
+    # fatura/parcela (o que fecharia se a conta fosse fechada hoje).
+    hoje_ = hoje()
+    inicio_mes = hoje_.replace(day=1)
+    abertas = []
+    for cli in (ClienteB2B.query
+                .filter_by(ativo=True, faturamento_mensal=True)
+                .order_by(ClienteB2B.nome).all()):
+        vendas = fat_svc.vendas_para_fechar(cli.id, date(2000, 1, 1), hoje_)
+        if vendas:
+            from decimal import Decimal
+            total = sum((Decimal(v.valor_total or 0) for v in vendas),
+                        Decimal('0'))
+            abertas.append({'cliente': cli, 'n_vendas': len(vendas),
+                            'total': total,
+                            'primeira': min(v.data_venda for v in vendas),
+                            'ultima': max(v.data_venda for v in vendas)})
+    return render_template('b2b/faturas.html', faturas=lista,
+                           abertas=abertas, hoje=hoje_,
+                           inicio_mes=inicio_mes)
+
+
+@b2b_bp.route('/faturas/fechar', methods=['POST'])
+@login_required
+@admin_required
+def fatura_fechar():
+    from app.services import faturas_b2b as fat_svc
+    cliente = ClienteB2B.query.get_or_404(
+        request.form.get('cliente_id', type=int) or 0)
+    try:
+        data_inicio = date.fromisoformat(request.form.get('data_inicio') or '')
+        data_fim = date.fromisoformat(request.form.get('data_fim') or '')
+        vencimento = date.fromisoformat(request.form.get('vencimento') or '')
+    except ValueError:
+        flash('Datas inválidas — preencha início, fim e vencimento.',
+              'danger')
+        return redirect(url_for('b2b.faturas'))
+    try:
+        fatura = fat_svc.fechar_conta(cliente, data_inicio, data_fim,
+                                      vencimento, user_id=current_user.id)
+    except ValueError as exc:
+        db.session.rollback()
+        flash(f'Erro: {exc}', 'danger')
+        return redirect(url_for('b2b.faturas'))
+    flash(f'Conta fechada: fatura {fatura.codigo} de {cliente.nome} — '
+          f'{len(fatura.vendas)} venda(s), R$ {fatura.valor_total}. Agora '
+          'emita a NF e gere o boleto.', 'success')
+    return redirect(url_for('b2b.fatura_detalhe', fid=fatura.id))
+
+
+@b2b_bp.route('/faturas/<int:fid>')
+@login_required
+@admin_required
+def fatura_detalhe(fid):
+    fatura = (FaturaB2B.query
+              .options(joinedload(FaturaB2B.cliente),
+                       joinedload(FaturaB2B.vendas))
+              .get_or_404(fid))
+    cobranca = fatura.cobrancas[0] if fatura.cobrancas else None
+    return render_template('b2b/fatura_detalhe.html', fatura=fatura,
+                           cobranca=cobranca)
+
+
+@b2b_bp.route('/faturas/<int:fid>/cancelar', methods=['POST'])
+@login_required
+@admin_required
+def fatura_cancelar(fid):
+    from app.services import faturas_b2b as fat_svc
+    fatura = FaturaB2B.query.get_or_404(fid)
+    try:
+        fat_svc.cancelar_fatura(fatura, user_id=current_user.id)
+    except ValueError as exc:
+        flash(f'Não cancelei: {exc}', 'danger')
+        return redirect(url_for('b2b.fatura_detalhe', fid=fid))
+    flash(f'Fatura {fatura.codigo} cancelada — as vendas voltaram pra conta '
+          'aberta do cliente.', 'warning')
+    return redirect(url_for('b2b.faturas'))
+
+
+@b2b_bp.route('/faturas/<int:fid>/emitir-nf', methods=['POST'])
+@owner_required
+def fatura_emitir_nf(fid):
+    """NF consolidada da fatura no Tiny (mesma semântica da venda:
+    `recriar=1` descarta rascunho rejeitado e refaz)."""
+    fatura = FaturaB2B.query.get_or_404(fid)
+    recriar = request.form.get('recriar') in ('1', 'true', 'on')
+    res = tiny_nf_b2b.emitir_nf_fatura(fatura, user_id=current_user.id,
+                                       recriar=recriar)
+    flash(f'Fatura {fatura.codigo}: {res["msg"]}',
+          'success' if res.get('ok') else 'danger')
+    return redirect(url_for('b2b.fatura_detalhe', fid=fid))
+
+
+@b2b_bp.route('/faturas/<int:fid>/danfe')
+@login_required
+@admin_required
+def fatura_danfe(fid):
+    fatura = FaturaB2B.query.get_or_404(fid)
+    url = tiny_nf_b2b.link_danfe(fatura)
+    if not url:
+        flash(f'Fatura {fatura.codigo}: não consegui obter o link do DANFE '
+              'no Tiny (a NF precisa estar autorizada).', 'warning')
+        return redirect(url_for('b2b.fatura_detalhe', fid=fid))
+    return redirect(url)
+
+
+@b2b_bp.route('/faturas/<int:fid>/enviar-nf-email', methods=['POST'])
+@login_required
+@admin_required
+def fatura_enviar_nf_email(fid):
+    """Manda a NF consolidada (DANFE em PDF, anexado) pro e-mail do
+    cliente — mesmo caminho da venda avulsa."""
+    from app.services import email as email_svc
+    from app.services import tiny_nf
+
+    fatura = FaturaB2B.query.get_or_404(fid)
+    if not fatura.tiny_nota_fiscal_id or not fatura.nf_emitida_em:
+        flash('A NF da fatura ainda não foi emitida — emita no Tiny antes '
+              'de enviar.', 'warning')
+        return redirect(url_for('b2b.fatura_detalhe', fid=fid))
+    destinatario = ((request.form.get('email') or '').strip()
+                    or (fatura.cliente.email or ''))
+    if not destinatario:
+        flash('Cliente sem e-mail cadastrado — informe um e-mail no '
+              'formulário ou complete o cadastro do cliente.', 'warning')
+        return redirect(url_for('b2b.fatura_detalhe', fid=fid))
+    pdf = tiny_nf.baixar_danfe_pdf(fatura.tiny_nota_fiscal_id)
+    if not pdf:
+        flash('Não consegui baixar o DANFE no Tiny (a NF precisa estar '
+              'autorizada). Tente de novo em instantes.', 'danger')
+        return redirect(url_for('b2b.fatura_detalhe', fid=fid))
+    res = email_svc.enviar_nf_b2b(
+        fatura, destinatario, pdf,
+        rotulo=f'fatura {fatura.codigo} ({fatura.periodo_display})')
+    if res.get('ok'):
+        flash(f'NF enviada pra {destinatario}.', 'success')
+    else:
+        flash(f'Falha ao enviar o e-mail: {res.get("erro")}', 'danger')
+    return redirect(url_for('b2b.fatura_detalhe', fid=fid))
 
 
 # ── Vendas ──
