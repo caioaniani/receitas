@@ -13,7 +13,8 @@ Procure, nesta ordem de prioridade:
 1. **Bugs de correção** — lógica invertida, None/null não tratado, sessão/transação SQLAlchemy mal usada (commit faltando, objeto detached), condição de corrida.
 2. **Casos de borda** — pedido vazio, quantidade zero ou negativa, divisão por zero em custo/rendimento, datas e fuso horário, estoque insuficiente.
 3. **Regressões** — a mudança quebra algum fluxo existente (receitas, pedidos, PDV, estoque, RH, copilot)?
-4. **Violações das convenções** do CLAUDE.md do projeto.
+4. **Migração manual faltando** — coluna nova ou alterada em `app/models.py` sem a entrada `ALTER TABLE` idempotente correspondente no dicionário de migrações de `app/__init__.py` (não há Alembic; sem isso o Postgres de produção quebra no deploy).
+5. **Convenções do projeto** — datas devem usar UTC (`datetime.utcnow`); entrada numérica do usuário em formato BR deve passar por `parse_float_br`; lógica de negócio em `app/services/`, não nas rotas; credenciais só via env vars em `config.py`; demais convenções do CLAUDE.md.
 
 Regras do relatório:
 
