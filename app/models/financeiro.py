@@ -330,6 +330,7 @@ class Cobranca(db.Model):
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
     parcela = db.relationship('VendaB2BParcela', backref='cobranca')
+    fatura = db.relationship('FaturaB2B', backref='cobrancas')
     remessa = db.relationship('CobrancaRemessa', backref='cobrancas')
     criado_por = db.relationship('Usuario')
 
