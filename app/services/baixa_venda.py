@@ -30,7 +30,10 @@ nem reconciliacao.
 from app.extensions import db
 from app.models import DebitoEstoque, DebitoEstoqueMov, EstoqueLoja, MovEstoqueLoja
 from app.services.cestas import composicao_de_venda
-from app.services.estoque_helpers import baixar_loja_por_prioridade, obter_linha_loja
+from app.services.estoque_helpers import (
+    baixar_loja_por_prioridade,
+    obter_linha_loja,
+)
 from app.utils import agora
 
 _TOL = 1e-9
