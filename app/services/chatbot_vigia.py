@@ -199,7 +199,7 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
     # Quando bate, pula o Haiku (1) reage instantaneo, (2) evita o Haiku
     # subestimar como "media" e o alerta nao sair. O motivo customizado
     # diz exatamente o que aconteceu pra o dono agir.
-    if _e_handoff_preguicoso_em_compra(historico, rb):
+    if _e_handoff_preguicoso_em_compra(historico, rb, conv_id=conv_id):
         logger.warning('vigia: HANDOFF PREGUICOSO EM VENDA detectado '
                        'conv=%s (deterministico, pulou Haiku)', conv_id)
         veredicto = {
@@ -289,17 +289,43 @@ def _alerta_alta_recente(conv_id, horas=_DEDUP_ALTA_HORAS):
         return False
 
 
-def handoff_foi_preguicoso(tools_usadas):
+def handoff_foi_preguicoso(tools_usadas, conv_id=None):
     """Regra UNICA de 'handoff preguicoso': transferiu sem ter chamado
-    NENHUMA tool de leitura antes no turno. Compartilhada entre o detector
-    do vigia e o agregador do auditor (antes cada um tinha a propria copia
-    e podiam divergir). `tools_usadas` None (bot antigo) = nao da pra saber
-    → False."""
+    NENHUMA tool de leitura antes. Compartilhada entre o detector do vigia
+    e o agregador do auditor. `tools_usadas` None (bot antigo) = False.
+
+    07/07/2026 (achado do dono no resumo do auditor): a lista e POR TURNO —
+    bot que consultou o pedido num turno e transferiu no SEGUINTE saia como
+    "preguicoso" com lista vazia. Com `conv_id`, olhamos tambem as tools dos
+    turnos recentes (2h) da MESMA conversa antes de acusar."""
     if tools_usadas is None:
         return False
-    leitura = [t for t in tools_usadas
-               if t and t not in ('transferir_para_humano', 'encerrar_conversa')]
-    return not leitura
+
+    def _tem_leitura(lst):
+        return any(t for t in (lst or [])
+                   if t and t not in ('transferir_para_humano',
+                                      'encerrar_conversa'))
+
+    if _tem_leitura(tools_usadas):
+        return False
+    if conv_id:
+        import json as _json
+        from datetime import timedelta
+
+        from app.models import VigiaVeredito
+        from app.utils import agora
+        corte = agora() - timedelta(hours=2)
+        for v in (VigiaVeredito.query
+                  .filter(VigiaVeredito.conv_id == str(conv_id),
+                          VigiaVeredito.criado_em >= corte,
+                          VigiaVeredito.tools_usadas.isnot(None))
+                  .order_by(VigiaVeredito.criado_em.desc()).limit(10).all()):
+            try:
+                if _tem_leitura(_json.loads(v.tools_usadas)):
+                    return False       # trabalhou em turno anterior da conversa
+            except (TypeError, ValueError):
+                continue
+    return True
 
 
 def _processar_veredicto(veredicto, nome_contato, conv_id):
@@ -386,7 +412,7 @@ _SINAIS_RECLAMACAO = re.compile(
 )
 
 
-def _e_handoff_preguicoso_em_compra(historico, resultado_bot):
+def _e_handoff_preguicoso_em_compra(historico, resultado_bot, conv_id=None):
     """True se: bot fez handoff SEM tool de busca + cliente em compra ativa.
     Determinístico pra ser auditavel e nao depender do Haiku."""
     rb = resultado_bot or {}
@@ -394,7 +420,7 @@ def _e_handoff_preguicoso_em_compra(historico, resultado_bot):
         return False
     if rb.get('tools_usadas') is None:
         return False  # versao antiga do bot — sem sinal confiavel
-    if not handoff_foi_preguicoso(rb.get('tools_usadas')):
+    if not handoff_foi_preguicoso(rb.get('tools_usadas'), conv_id=conv_id):
         return False  # bot tentou algo — handoff legitimo
 
     # Junta as ultimas msgs do cliente (texto, role=user)

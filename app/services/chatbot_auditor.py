@@ -167,7 +167,7 @@ def _eh_handoff_preguicoso(v):
     sem `tools_usadas` (None) NAO conta como preguicoso: sem dado, nao da
     pra acusar."""
     from app.services.chatbot_vigia import handoff_foi_preguicoso
-    return handoff_foi_preguicoso(_tools_de(v))
+    return handoff_foi_preguicoso(_tools_de(v), conv_id=v.conv_id)
 
 
 def _funil_site(inicio, fim):

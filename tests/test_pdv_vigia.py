@@ -1,6 +1,6 @@
 """Vigia do PDV (07/07/2026): avisa quando a baixa de venda para de funcionar
 — o incidente da Ribeiro (renome no Seru) ficou 2 semanas invisível."""
-from datetime import datetime, time, timedelta
+from datetime import timedelta
 from unittest.mock import patch
 
 from app.extensions import db
@@ -19,7 +19,9 @@ def _loja_confirmada(nome, company):
     return lj
 
 
-def _baixa(loja, dias_atras, qtd=10):
+def _baixa(loja, horas_atras, qtd=10):
+    # Ancorado em agora() (nao em meio-dia de hoje): teste rodando de
+    # madrugada punha a baixa "recente" no FUTURO e flakava.
     r = Receita.query.first()
     if r is None:
         r = Receita(nome='Pao Vigia', rendimento_qtd=1,
@@ -33,8 +35,7 @@ def _baixa(loja, dias_atras, qtd=10):
         db.session.flush()
     db.session.add(MovEstoqueLoja(
         estoque_loja_id=el.id, tipo='venda_seru', quantidade=qtd,
-        data=datetime.combine(hoje() - timedelta(days=dias_atras),
-                              time(12, 0)),
+        data=agora() - timedelta(hours=horas_atras),
         referencia='vigia-teste'))
     db.session.commit()
 
@@ -46,8 +47,8 @@ def _sync_ok():
 
 def test_loja_que_vendia_e_ficou_muda_detecta(app):
     lj = _loja_confirmada('Loja Ribeiro do Vale', 'O PAO PADARIA')
-    for d in (4, 6, 9):
-        _baixa(lj, d)                       # vendia no histórico
+    for h in (100, 150, 220):
+        _baixa(lj, h)                       # vendia no histórico
     with _sync_ok():
         out = rodar_checks()                # nada nas últimas 36h
     assert not out['saudavel']
@@ -57,8 +58,8 @@ def test_loja_que_vendia_e_ficou_muda_detecta(app):
 
 def test_loja_vendendo_normal_e_saudavel(app):
     lj = _loja_confirmada('Loja Ativa', 'CIA ATIVA')
-    for d in (0, 2, 5):
-        _baixa(lj, d)                       # inclui baixa recente
+    for h in (1, 60, 120):
+        _baixa(lj, h)                       # inclui baixa recente
     with _sync_ok():
         out = rodar_checks()
     assert out['saudavel'] is True
@@ -80,15 +81,15 @@ def test_company_vendendo_sem_vinculo_confirmado_detecta(app):
 def test_vigiar_alerta_na_transicao_e_avisa_normalizacao(app):
     app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999998888'
     lj = _loja_confirmada('Loja Muda', 'CIA MUDA')
-    for d in (4, 6):
-        _baixa(lj, d)
+    for h in (100, 150):
+        _baixa(lj, h)
     with _sync_ok(), patch('app.services.zapi.enviar_texto') as tx:
         r1 = vigiar()                       # doente → alerta
         r2 = vigiar()                       # mesmo problema → suprimido (6h)
     assert r1['tipo'] == 'alerta' and r2['tipo'] == 'alerta_suprimido'
     assert tx.call_count == 1
     assert 'Vigia do PDV' in tx.call_args[0][1]
-    _baixa(lj, 0)                           # voltou a vender
+    _baixa(lj, 1)                           # voltou a vender
     with _sync_ok(), patch('app.services.zapi.enviar_texto') as tx2:
         r3 = vigiar()
     assert r3['tipo'] == 'recuperacao'
