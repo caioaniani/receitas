@@ -29,7 +29,12 @@ Procure, nesta ordem de prioridade:
    `app/migrations_legacy.py` (`_migrate_postgres()`/`_migrate_sqlite()`), ou
    modelo e ALTER no mesmo commit (o procedimento canônico do CLAUDE.md exige
    2 commits: ALTER primeiro, modelo depois do deploy aplicar).
-6. **Convenções do projeto** — versão canônica em vez de atalho em área de
+6. **Decisões do dono protegidas** — o diff altera comportamento que o
+   CLAUDE.md marca como decisão de negócio ("decisão do dono", "NÃO
+   corrigir/reverter sem perguntar")? Regra de negócio que parece estranha
+   não é bug: sinalize como achado de severidade crítica exigindo
+   confirmação do dono, nunca como "correção".
+7. **Convenções do projeto** — versão canônica em vez de atalho em área de
    risco (dinheiro, estoque, segurança); entrada numérica BR via
    `parse_float_br` (`app/utils.py`); constantes/lógica duplicada em vez de
    centralizada (`app/constants.py`, `app/utils.py`); credenciais hardcoded;
