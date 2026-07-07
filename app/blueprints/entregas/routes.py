@@ -6,7 +6,7 @@ from flask import abort, current_app, jsonify, redirect, render_template, reques
 from flask_login import current_user, login_required
 
 from app.blueprints.entregas import entregas_bp
-from app.decorators import entrega_access_required
+from app.decorators import entrega_access_required, gerente_required
 from app.extensions import db
 from app.models import (
     AtribuicaoEntrega,
@@ -557,6 +557,7 @@ def _lalamove_por_code(codes):
 
 @entregas_bp.route('/api/painel/lalamove/cotar', methods=['POST'])
 @login_required
+@gerente_required
 def api_lalamove_cotar():
     """Cota uma corrida pro endereço do pedido. JSON: {code, endereco,
     destinatario, telefone, veiculo: moto|carro}. Guarda a cotação
@@ -594,6 +595,7 @@ def api_lalamove_cotar():
 
 @entregas_bp.route('/api/painel/lalamove/chamar', methods=['POST'])
 @login_required
+@gerente_required
 def api_lalamove_chamar():
     """Confirma a corrida de uma cotação feita. JSON: {entrega_id}."""
     from app.services import lalamove as lala_svc
@@ -625,6 +627,7 @@ def api_lalamove_chamar():
 
 @entregas_bp.route('/api/painel/lalamove/cancelar', methods=['POST'])
 @login_required
+@gerente_required
 def api_lalamove_cancelar():
     """Cancela uma corrida já chamada. JSON: {entrega_id}."""
     from app.services import lalamove as lala_svc
@@ -645,6 +648,7 @@ def api_lalamove_cancelar():
 
 @entregas_bp.route('/api/painel/lalamove/acelerar', methods=['POST'])
 @login_required
+@gerente_required
 def api_lalamove_acelerar():
     """Adiciona/atualiza a gorjeta (priority fee) de uma corrida que ainda
     procura entregador, pra acelerar a alocacao. JSON: {entrega_id, valor}.
