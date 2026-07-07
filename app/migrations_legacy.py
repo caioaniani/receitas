@@ -1909,6 +1909,18 @@ def _migrate_sqlite(app):
     if cols_cob and 'fatura_id' not in cols_cob:
         cursor.execute("ALTER TABLE cobranca ADD COLUMN "
                        "fatura_id INTEGER REFERENCES fatura_b2b(id)")
+    # Índices iguais aos do Postgres (banco local antigo; create_all já
+    # cria em banco novo pelo modelo).
+    if cols_vb:
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_venda_b2b_fatura "
+                       "ON venda_b2b(fatura_id)")
+    if cols_vp:
+        cursor.execute("CREATE INDEX IF NOT EXISTS "
+                       "ix_venda_b2b_parcela_fatura "
+                       "ON venda_b2b_parcela(fatura_id)")
+    if cols_cob:
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_cobranca_fatura "
+                       "ON cobranca(fatura_id) WHERE fatura_id IS NOT NULL")
 
     # ── SKU do Tiny por canal (06/07/2026) ──
     # SQLite nao altera UNIQUE embutida — rebuild da tabela (mesmo padrao
