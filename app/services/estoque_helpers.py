@@ -8,8 +8,30 @@ recebimento operam sempre na linha unica do produto.
 `obter_linha_loja` centraliza o get-or-create dessa linha e consolida, de forma
 idempotente, eventuais linhas legadas duplicadas (uma por estado, ou copias).
 """
+from sqlalchemy import text
+
 from app.extensions import db
 from app.models import EstoqueLoja, MovEstoqueLoja
+
+# Chave do advisory lock de TRANSACAO que serializa a baixa de estoque de loja.
+# Livre (seru_cron usa ate 7747; 7748 nao aparece em mais lugar nenhum).
+_LOCK_BAIXA_ESTOQUE = 7748
+
+
+def serializar_baixa_estoque():
+    """Serializa TODA baixa/trava de EstoqueLoja num advisory lock de transacao.
+
+    Por que existe: `processar_pedidos` (Seru) trava linhas de VARIAS lojas numa
+    transacao unica (1 commit no fim) e o checkout do site trava as suas — em
+    ordens diferentes. Sem serializar, dois desses caminhos tocando as MESMAS
+    linhas em ordem oposta DEADLOCKAM (o Postgres aborta um; o site levaria 500).
+    Este lock (pego ANTES de qualquer SELECT FOR UPDATE, uma chave so, sem ordem
+    a respeitar) faz os caminhos ESPERAREM em vez de deadlockar. Reentrante:
+    pegar 2x na mesma transacao e no-op. Libera sozinho no commit/rollback
+    (variante `_xact_`). No-op fora de Postgres (SQLite dos testes)."""
+    if db.session.bind and db.session.bind.dialect.name == 'postgresql':
+        db.session.execute(text('SELECT pg_advisory_xact_lock(:k)'),
+                           {'k': _LOCK_BAIXA_ESTOQUE})
 
 
 def obter_linha_loja(loja_id, *, receita_id=None, produto_id=None,
