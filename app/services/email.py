@@ -646,15 +646,21 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
                   anexos=[(nome_pdf, pdf_bytes, 'application/pdf')])
 
 
-def enviar_nf_b2b(venda, destinatario, pdf_bytes):
-    """E-mail da NF-e (DANFE) da venda B2B pro cliente, com o PDF anexado.
+def enviar_nf_b2b(doc, destinatario, pdf_bytes, *, rotulo=None):
+    """E-mail da NF-e (DANFE) do B2B pro cliente, com o PDF anexado.
+
+    `doc` é VendaB2B ou FaturaB2B (os dois têm nf_numero /
+    tiny_nota_fiscal_id / valor_total). `rotulo` descreve a origem no
+    corpo (default: 'venda #N'); a fatura mensal passa 'fatura FATxxxxx
+    (período)'.
 
     O link do Tiny expira — por isso o PDF vai ANEXADO (baixado na hora
     pelo caller via `tiny_nf.baixar_danfe_pdf`)."""
-    numero = venda.nf_numero or venda.tiny_nota_fiscal_id or ''
+    rotulo = rotulo or f'venda #{doc.id}'
+    numero = doc.nf_numero or doc.tiny_nota_fiscal_id or ''
     assunto = (f'Nota fiscal {numero} — O Pão Padaria Artesanal' if numero
                else 'Nota fiscal — O Pão Padaria Artesanal')
-    nome_pdf = f'nfe_{numero or venda.id}.pdf'
+    nome_pdf = f'nfe_{numero or doc.id}.pdf'
     num_html = (f'<p style="margin:0 0 6px;font-size:13px;color:#6b5f54;">'
                 f'Número: <code>{numero}</code></p>' if numero else '')
     html = f"""\
@@ -663,19 +669,19 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
 <div style="max-width:540px;margin:0 auto;padding:32px 24px;">
   <h1 style="font-size:22px;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
   <p style="color:#6b5f54;margin:0 0 20px;">Segue a nota fiscal da sua
-    compra (venda #{venda.id}) em anexo. 🧾</p>
+    compra ({rotulo}) em anexo. 🧾</p>
   <div style="background:#fff;border-radius:12px;padding:18px 20px;">
     <p style="margin:0 0 6px;font-weight:600;">Nota fiscal eletrônica</p>
     {num_html}
     <p style="margin:0;font-size:13px;color:#6b5f54;">Valor total:
-      <strong>{_fmt_brl(venda.valor_total)}</strong></p>
+      <strong>{_fmt_brl(doc.valor_total)}</strong></p>
   </div>
   <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
     Dúvidas? Responda este e-mail ou fale com a gente.</p>
 </div></body></html>"""
-    texto = (f'Segue a nota fiscal da venda #{venda.id} em anexo (PDF).\n\n'
+    texto = (f'Segue a nota fiscal da {rotulo} em anexo (PDF).\n\n'
              + (f'Número: {numero}\n' if numero else '')
-             + f'Valor total: {_fmt_brl(venda.valor_total)}\n')
+             + f'Valor total: {_fmt_brl(doc.valor_total)}\n')
     return enviar(destinatario, assunto, html, texto=texto,
                   anexos=[(nome_pdf, pdf_bytes, 'application/pdf')])
 
