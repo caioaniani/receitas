@@ -12,7 +12,7 @@ produzir/dispensar nela não pré-baixa retroativo. Reconciliador idempotente:
 Ficha dos cenários: 1000 g de "Farinha Pre" (mp_direto) por batida,
 peso_unitario 100 g → rendimento massa crua = 10 un/batida → 1 un = 100 g.
 """
-from datetime import timedelta
+from datetime import date, timedelta
 
 from app.extensions import db
 from app.models import (
@@ -33,7 +33,7 @@ ESTOQUE_INICIAL = 10000.0
 G_POR_UN = 100.0
 
 
-def _cenario(qtd=50):
+def _cenario(qtd=50, dias_entrega=2):
     mp = MateriaPrima(nome='Farinha Pre', unidade='g', custo_por_kg=5.0,
                       estoque_atual=ESTOQUE_INICIAL)
     r = Receita(nome='Pao Pre Baixa', categoria='Paes', rendimento_qtd=10,
@@ -43,14 +43,27 @@ def _cenario(qtd=50):
     db.session.flush()
     db.session.add(ReceitaIngrediente(receita_id=r.id, ingrediente_nome=mp.nome,
                                       tipo='mp_direto', porcentagem=1000.0))
-    d2 = hoje() + timedelta(days=2)
-    p = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=d2,
-                   data_pedido=d2)
+    dd = hoje() + timedelta(days=dias_entrega)
+    p = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=dd,
+                   data_pedido=dd)
     db.session.add(p)
     db.session.flush()
     db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=qtd))
     db.session.commit()
-    return mp, r, d2
+    return mp, r, _dia_producao()
+
+
+def _dia_producao(horizonte=7):
+    """Dia em que o cronograma agendou a produção (receita com ficha é
+    antecipada em relação à entrega — o teste não deve fixar a regra de
+    antecedência, só seguir o grid)."""
+    from app.services.previsao_producao import cronograma_producao
+    crono = cronograma_producao(horizonte_dias=horizonte)
+    for rec in crono['receitas']:
+        for c in rec['por_dia']:
+            if c.get('qtd'):
+                return date.fromisoformat(c['data'])
+    raise AssertionError('cronograma sem produção agendada')
 
 
 def _falta_total(plano):
