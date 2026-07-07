@@ -25,7 +25,7 @@
                     <select name="cliente_id" class="form-select form-select-sm" id="sel-cliente">
                         <option value="">— avulso —</option>
                         {% for c in clientes %}
-                        <option value="{{ c.id }}" data-desc="{{ c.desconto_percentual or 0 }}"{% if editing and venda.cliente_id == c.id %} selected{% endif %}>{{ c.nome }}{% if c.desconto_percentual %} ({{ '%.0f'|format(c.desconto_percentual) }}% desc){% endif %}</option>
+                        <option value="{{ c.id }}" data-desc="{{ c.desconto_percentual or 0 }}" data-mensal="{{ 1 if c.faturamento_mensal else 0 }}"{% if editing and venda.cliente_id == c.id %} selected{% endif %}>{{ c.nome }}{% if c.desconto_percentual %} ({{ '%.0f'|format(c.desconto_percentual) }}% desc){% endif %}{% if c.faturamento_mensal %} · mensal{% endif %}</option>
                         {% endfor %}
                     </select>
                 </div>
