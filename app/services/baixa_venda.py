@@ -33,7 +33,7 @@ from app.services.cestas import composicao_de_venda
 from app.services.estoque_helpers import (
     baixar_loja_por_prioridade,
     obter_linha_loja,
-    serializar_baixa_estoque,
+    serializar_loja,
 )
 from app.utils import agora
 
@@ -130,11 +130,11 @@ def aplicar_venda(loja_id, *, receita_id=None, produto_id=None,
     total_baixado = total_faltou = 0
     houve_acumulo = False
 
-    # Serializa a baixa ANTES de travar DebitoEstoque (fracao) ou EstoqueLoja:
-    # sem isso, se o 1o componente vai pela fracao e o 2o pela baixa direta, a
-    # transacao travaria DebitoEstoque antes do advisory lock e reabriria a
-    # janela de deadlock. Pego aqui, cobre os dois caminhos do loop.
-    serializar_baixa_estoque()
+    # Serializa a baixa desta LOJA ANTES de travar DebitoEstoque (fracao) ou
+    # EstoqueLoja: sem isso, se o 1o componente vai pela fracao e o 2o pela
+    # baixa direta, a transacao travaria DebitoEstoque antes do advisory lock e
+    # reabriria a janela de deadlock. Pego aqui, cobre os dois caminhos do loop.
+    serializar_loja(loja_id)
 
     for col, item_id, nome_comp, qpu in comp:
         por_unidade = fator * float(qpu)
@@ -181,24 +181,27 @@ def aplicar_venda(loja_id, *, receita_id=None, produto_id=None,
             'acumulado': houve_acumulo, 'sem_alvo': False}
 
 
-def estornar_venda(canal, pedido_ref, referencia, *, usuario_id=None):
+def estornar_venda(canal, pedido_ref, referencia, *, usuario_id=None,
+                   loja_id=None):
     """Reverte uma venda ja baixada. Idempotencia das FRACOES via
     `DebitoEstoqueMov.estornado_em`; a fase 1 (inteiros) deve ser chamada uma
     vez (o chamador garante, como o `SeruPedidoProcessado.estornado_em`).
 
     Args iguais aos de `aplicar_venda`: `referencia` eh a MESMA base usada na
     baixa (ex: 'Seru #123'); `pedido_ref` a mesma chave (ex: 'seru:123').
+    `loja_id`: loja do estorno, pra serializar. Dentro do Seru
+    (`processar_pedidos`) ja vem coberto pela trava de todas as lojas ativas;
+    o caminho do site (loja_pagamento) passa a loja do pedido.
 
     Retorna {revertido_inteiros, revertido_fracoes}.
     """
     tipo_baixa, _tipo_sem, tipo_est = _movs(canal)
     sinal = _sinal_estorno(canal)
 
-    # Serializa ANTES do 1o UPDATE em EstoqueLoja/DebitoEstoque: o estorno
-    # tambem trava linha, e roda na MESMA transacao multi-loja do Seru misturado
-    # com baixas — sem o lock aqui, reabre o deadlock (inclusive o ciclo
-    # "trava linha e depois pede 7748"). Mesmo advisory lock da baixa.
-    serializar_baixa_estoque()
+    # Serializa a LOJA antes do 1o UPDATE em EstoqueLoja/DebitoEstoque: o estorno
+    # tambem trava linha e roda concorrente com baixas — sem o lock aqui reabre
+    # o deadlock. Reentrante quando ja coberto pelo Seru.
+    serializar_loja(loja_id)
 
     # Fase 1: inteiros, pela referencia (exceto baixas marcadas (fracao)).
     candidatos = MovEstoqueLoja.query.filter(
