@@ -10,7 +10,7 @@ O mapeamento de SKU é o MESMO da loja (`TinyProdutoMap`, tela
 nos dois canais.
 """
 import logging
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.services import tiny, tiny_nf
 from app.utils import agora
@@ -88,7 +88,6 @@ def _payload_itens(venda):
         desc = Decimal(str(it.desconto_percentual or 0))
         # Quantizado a 2 casas — mesma precisão do dinheiro cobrado
         # (desconto com dízima não pode virar centavo fantasma na NF).
-        from decimal import ROUND_HALF_UP
         unitario = (preco * (Decimal('1') - desc / Decimal('100'))
                     ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         out.append({'item': {
