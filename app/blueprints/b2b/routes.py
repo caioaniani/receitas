@@ -618,6 +618,12 @@ def venda_editar_post(vid):
     if venda.status == 'cancelada':
         flash('Venda cancelada — reabra antes de editar.', 'warning')
         return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    if venda.fatura_id:
+        # Inclui o caminho do editar_cabecalho: mudar cliente/valores de
+        # venda faturada dessincroniza fatura/boleto/NF.
+        flash(f'Venda faturada ({venda.fatura.codigo}) — cancele a fatura '
+              'em B2B → Faturas mensais antes de editar.', 'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
     campos, itens, parcelas = _parse_venda_form()
     if not campos['data_entrega']:
         flash('Informe a data de entrega ao padeiro.', 'warning')
