@@ -237,7 +237,10 @@ def test_reagendar_move_reserva_para_hoje(app, admin_user):
     from app.services.producao import enviar_plano_do_dia
     from app.services.producao_pendente import reagendar_para_hoje
     with app.app_context():
-        mp, r, d2 = _cenario()
+        # entrega mais longe → produção agendada num dia FUTURO (≠ hoje),
+        # senão o reagendar pula ("já é de hoje").
+        mp, r, d2 = _cenario(dias_entrega=4)
+        assert d2 != hoje()
         plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
         alvo = _falta_total(plano)
         item = plano.itens[0]
