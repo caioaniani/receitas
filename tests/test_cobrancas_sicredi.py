@@ -393,3 +393,87 @@ def test_rota_boleto_pdf(app, admin_user):
     # Sem nosso número ainda não há boleto — volta pra lista com aviso
     r2 = c.get(f'/cobrancas/{cid_sem}/boleto.pdf')
     assert r2.status_code == 302
+
+
+# ── QR Pix no PDF (homologação 07/07/2026) ─────────────────────────────────
+
+_PIX_MOCK = ('00020101021226910014br.gov.bcb.pix2569pix-qrcode.sicredi.com.'
+             'br/qr/v2/cobv/f07b5c44acfa4644ba7bc85f22501ed052040000530398'
+             '654040.105802BR5913XXXXXXXXXXXXX6008BRASILIA62070503***6304'
+             '6C42')
+
+
+def test_qr_pix_nas_dimensoes_exigidas_pela_homologacao():
+    """O Sicredi exige o QR da impressão Normal com 3,599 cm × 3,422 cm
+    (e-mail da homologação, 07/07/2026) — as medidas são conferidas na
+    validação do PDF. O desenho precisa cravar as DUAS."""
+    from app.services.sicredi_boleto import (
+        QR_ALTURA_MM,
+        QR_LARGURA_MM,
+        _desenhar_qr,
+    )
+
+    class _PdfStub:
+        def __init__(self):
+            self.rects = []
+
+        def set_fill_color(self, *a):
+            pass
+
+        def rect(self, x, y, w, h, style=None):
+            self.rects.append((x, y, w, h))
+
+    stub = _PdfStub()
+    _desenhar_qr(stub, _PIX_MOCK, x=0.0, y=0.0)
+    # Os finders do QR garantem módulo preenchido nas 4 bordas — a
+    # extensão desenhada é exatamente a área exigida.
+    assert abs(max(x + w for x, y, w, h in stub.rects) - QR_LARGURA_MM) < 1e-9
+    assert abs(max(y + h for x, y, w, h in stub.rects) - QR_ALTURA_MM) < 1e-9
+    assert min(x for x, *_ in stub.rects) == 0.0
+    assert QR_LARGURA_MM == 35.99 and QR_ALTURA_MM == 34.22
+
+
+def test_boleto_pdf_com_pix_gera_e_sem_pix_tambem(app):
+    from app.services.sicredi_boleto import gerar_boleto_pdf
+    with app.app_context():
+        cob = _cobranca()
+        cob.nosso_numero = '252000041'
+        pdf_sem = bytes(gerar_boleto_pdf(cob))
+        cob.pix_copia_cola = _PIX_MOCK
+        pdf_com = bytes(gerar_boleto_pdf(cob))
+    assert pdf_sem.startswith(b'%PDF')
+    assert pdf_com.startswith(b'%PDF')
+    assert len(pdf_com) > len(pdf_sem)      # QR desenhado (mais conteúdo)
+
+
+def test_rota_definir_pix_e_owner_only(app, owner_user):
+    with app.app_context():
+        cob = _cobranca()
+        cob.nosso_numero = '252000041'
+        db.session.commit()
+        cid = cob.id
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(owner_user.id)
+        s['_fresh'] = True
+    r = c.post(f'/cobrancas/{cid}/definir-pix', data={'pix': _PIX_MOCK},
+               follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        assert db.session.get(Cobranca, cid).pix_copia_cola == _PIX_MOCK
+    c.post(f'/cobrancas/{cid}/definir-pix', data={'pix': ''},
+           follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(Cobranca, cid).pix_copia_cola is None
+
+
+def test_rota_definir_pix_admin_comum_403(app, admin_user):
+    with app.app_context():
+        cob = _cobranca()
+        cid = cob.id
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    assert c.post(f'/cobrancas/{cid}/definir-pix',
+                  data={'pix': 'x'}).status_code == 403
