@@ -661,6 +661,11 @@ def aplicar_conferencia(itens_resolvidos, loja_id, user, referencia=None):
     if not loja_id:
         return {'aplicados': [], 'ignorados': [{'linha': '*', 'motivo': 'sem_loja'}]}
 
+    from app.services.estoque_helpers import serializar_loja
+    # SET absoluto (contado) — o pior caso de lost-update se rodar junto com uma
+    # baixa. Lock por loja antes do 1o UPDATE.
+    serializar_loja(loja_id)
+
     for item in itens_resolvidos:
         if item.get('erro'):
             ignorados.append({'linha': item.get('linha', '?'),
