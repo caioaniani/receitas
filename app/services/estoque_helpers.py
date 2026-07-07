@@ -130,6 +130,11 @@ def baixar_loja_por_prioridade(filtro_base, inteiros, *,
         return {'baixado': 0, 'faltou': 0}
 
     el = obter_linha_loja(usuario_id=usuario_id, **filtro_base)
+    # Trava a linha antes do read-modify-write: sem isso, dois canais baixando
+    # a MESMA linha ao mesmo tempo (cron Seru + webhook do site, lote, etc.)
+    # leem o mesmo saldo e um grava por cima do outro — uma baixa some. Mesmo
+    # padrao do fluxo do site (loja_estoque_reserva). No SQLite vira no-op.
+    db.session.refresh(el, with_for_update=True)
     atual = el.quantidade or 0
     baixa = min(inteiros, atual)
     el.quantidade = atual - baixa
