@@ -2754,6 +2754,10 @@ def loja_online_catalogo_estoque(tipo, id):
         return jsonify(ok=False, erro='quantidade inválida'), 400
     if novo < 0 or novo > 100000:
         return jsonify(ok=False, erro='quantidade fora da faixa (0 a 100000)'), 400
+    from app.services.estoque_helpers import serializar_loja
+    # SET absoluto le `atual` e grava `novo` — sem o lock, uma baixa concorrente
+    # (Seru/site) entre o read e o write seria sobrescrita. Lock por loja.
+    serializar_loja(loja.id)
     filtro = {'loja_id': loja.id,
               ('receita_id' if tipo == 'receita' else 'produto_id'): id}
     el = EstoqueLoja.query.filter_by(**filtro).first()
