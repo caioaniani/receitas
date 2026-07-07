@@ -169,6 +169,9 @@ def dispensar_itens(item_ids, user_id):
         item.dispensada_em = ts
         item.dispensada_por_id = user_id
     if itens:
+        from app.services.producao import sincronizar_pre_baixa_mp
+        for plano in {item.planejamento for item in itens}:
+            sincronizar_pre_baixa_mp(plano, user_id)
         db.session.commit()
     return {'ok': True, 'n': len(itens)}
 
