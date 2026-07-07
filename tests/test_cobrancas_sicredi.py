@@ -103,6 +103,10 @@ def test_gerar_remessa_estrutura_e_status(app, admin_user):
         assert det[220:234] == '11222333000144'     # CNPJ só dígitos
         assert 'RESTAURANTE BOM PRATO' in det[234:274]
         assert det[326:334] == '04568001'           # CEP
+        # 340-353: CNPJ/CPF do beneficiário final. Sem beneficiário final,
+        # o Sicredi exige ZEROS, não branco (crítica da homologação,
+        # 07/07/2026 — o arquivo foi devolvido por esse campo vazio).
+        assert det[339:353] == '0' * 14
         # Trailer (§8.8)
         assert trailer[0] == '9' and trailer[2:5] == '748'
         db.session.refresh(cob)
