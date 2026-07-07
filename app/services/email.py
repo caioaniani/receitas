@@ -586,8 +586,13 @@ def enviar_boleto_b2b(cobranca, destinatario, pdf_bytes, *,
     `linha_digitavel` vem pronta do caller (sicredi_boleto) — evita o
     email.py conhecer CNAB. Inclui o Pix copia-e-cola do boleto híbrido
     quando o retorno do banco já trouxe (registro tipo 8)."""
-    venda = cobranca.parcela.venda if cobranca.parcela else None
-    ref = f'venda B2B #{venda.id}' if venda else cobranca.seu_numero
+    if cobranca.fatura:
+        ref = (f'fatura {cobranca.fatura.codigo} '
+               f'({cobranca.fatura.periodo_display})')
+    elif cobranca.parcela:
+        ref = f'venda B2B #{cobranca.parcela.venda.id}'
+    else:
+        ref = cobranca.seu_numero
     assunto = (f'Boleto O Pão — vencimento '
                f'{cobranca.vencimento.strftime("%d/%m/%Y")}')
     nome_pdf = f'boleto_{cobranca.nosso_numero}.pdf'
