@@ -2862,6 +2862,9 @@ def desperdicio():
             flash('Selecione uma loja.', 'warning')
             return redirect(url_for('pedidos.desperdicio'))
 
+        from app.services.estoque_helpers import serializar_loja
+        serializar_loja(sel_loja)  # lock por loja antes da baixa do desperdicio
+
         raw = request.form.get('item_id', '')
         tipo_item, item_id = None, None
         try:
