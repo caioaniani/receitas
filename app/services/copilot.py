@@ -2099,13 +2099,18 @@ def _enriquecer_editar_pedido(tool_input):
     itens_input = tool_input.get('itens')
     itens_enriq = None
     if itens_input is not None:
+        # MPs que JA estao no pedido resolvem mesmo se hoje bloqueadas
+        # (grandfather — o REPLACE re-envia a lista inteira e nao pode
+        # derrubar item antigo legitimo).
+        mp_ids_pedido = ({it.materia_prima_id for it in pedido.itens
+                          if it.materia_prima_id} if pedido else set())
         itens_enriq = []
         for item in itens_input:
             nome = (item.get('nome') or '').strip()
             qtd = int(item.get('quantidade') or 0)
             if not nome or qtd <= 0:
                 continue
-            matches = _resolver_item_pedido(nome)
+            matches = _resolver_item_pedido(nome, mp_ids_extras=mp_ids_pedido)
             obs_item = (item.get('observacao') or '').strip() or None
             estado_item = (item.get('estado') or '').strip().lower() or None
             if estado_item not in (None, 'backup', 'assado'):
