@@ -36,26 +36,149 @@ from app.services import vendas_b2b as svc
 from app.utils import hoje
 
 # ── Dashboard ──
+# Reorganizado em ABAS (pedido do dono 07/07/2026): PEDIDOS (ciclo
+# orçamento → produção → entrega) separado de COBRANÇAS (financeiro,
+# com filtro por data). Esboço dele mapeado nas entidades existentes:
+#   Pendentes   = orçamentos rascunho/enviado (aguardando o cliente)
+#   Aprovados   = orçamentos aprovados (prontos pra virar venda)
+#   Em produção = vendas ativas ainda não entregues (fila do padeiro)
+#   Entregues   = vendas ativas com entrega concluída
+#   Arquivados  = orçamentos recusados + vendas canceladas
+#   Cobranças   = parcelas: pendentes / vencidas / pagas.
+
+def _dashboard_counts(hoje_, de, ate):
+    """Contadores das pills (as listas só carregam pra aba ativa)."""
+    from app.models import Orcamento
+    parc = (VendaB2BParcela.query.join(
+        VendaB2B, VendaB2BParcela.venda_id == VendaB2B.id)
+        .filter(VendaB2B.status == 'ativa'))
+    parc_aberta = parc.filter(VendaB2BParcela.pago_em.is_(None))
+    parc_paga = parc.filter(VendaB2BParcela.pago_em.isnot(None))
+    if de:
+        parc_aberta = parc_aberta.filter(VendaB2BParcela.vencimento >= de)
+        parc_paga = parc_paga.filter(
+            db.func.date(VendaB2BParcela.pago_em) >= de)
+    if ate:
+        parc_aberta = parc_aberta.filter(VendaB2BParcela.vencimento <= ate)
+        parc_paga = parc_paga.filter(
+            db.func.date(VendaB2BParcela.pago_em) <= ate)
+    return {
+        'pendentes': Orcamento.query.filter(
+            Orcamento.status.in_(('rascunho', 'enviado'))).count(),
+        'aprovados': Orcamento.query.filter_by(status='aprovado').count(),
+        'producao': VendaB2B.query.filter(
+            VendaB2B.status == 'ativa',
+            VendaB2B.status_entrega != 'entregue').count(),
+        'entregues': VendaB2B.query.filter_by(
+            status='ativa', status_entrega='entregue').count(),
+        'arquivados': (Orcamento.query.filter_by(status='recusado').count()
+                       + VendaB2B.query.filter_by(
+                           status='cancelada').count()),
+        'cob_pendentes': parc_aberta.filter(
+            VendaB2BParcela.vencimento >= hoje_).count(),
+        'cob_vencidos': parc_aberta.filter(
+            VendaB2BParcela.vencimento < hoje_).count(),
+        'cob_pagos': parc_paga.count(),
+    }
+
 
 @b2b_bp.route('/')
 @login_required
 @admin_required
 def dashboard():
-    vendas_recentes = (VendaB2B.query
-                       .options(joinedload(VendaB2B.cliente),
-                                joinedload(VendaB2B.parcelas))
-                       .order_by(VendaB2B.data_venda.desc(),
-                                 VendaB2B.id.desc())
-                       .limit(20).all())
-    abertas = (VendaB2BParcela.query
-               .join(VendaB2B)
-               .filter(VendaB2B.status == 'ativa',
-                       VendaB2BParcela.pago_em.is_(None))
-               .order_by(VendaB2BParcela.vencimento.asc())
-               .limit(30).all())
-    return render_template('b2b/dashboard.html',
-                           vendas_recentes=vendas_recentes,
-                           parcelas_abertas=abertas)
+    from app.models import Orcamento
+    from app.services import orcamentos as orc_svc
+
+    aba = request.args.get('aba') or 'pedidos'
+    if aba not in ('pedidos', 'cobrancas'):
+        aba = 'pedidos'
+    f = request.args.get('f') or ('pendentes' if aba == 'pedidos'
+                                  else 'cob_pendentes')
+    hoje_ = hoje()
+
+    # Filtro por data (só faz sentido nas cobranças): vencimento nas
+    # abertas/vencidas; data do PAGAMENTO nas pagas.
+    de = ate = None
+    try:
+        if request.args.get('de'):
+            de = date.fromisoformat(request.args['de'])
+        if request.args.get('ate'):
+            ate = date.fromisoformat(request.args['ate'])
+    except ValueError:
+        flash('Data do filtro inválida — ignorada.', 'warning')
+
+    counts = _dashboard_counts(hoje_, de, ate)
+
+    orcamentos = vendas = parcelas = vendas_canceladas = None
+    if aba == 'pedidos':
+        if f == 'pendentes':
+            orcamentos = (Orcamento.query
+                          .filter(Orcamento.status.in_(('rascunho',
+                                                        'enviado')))
+                          .order_by(Orcamento.criado_em.desc())
+                          .limit(200).all())
+        elif f == 'aprovados':
+            orcamentos = (Orcamento.query.filter_by(status='aprovado')
+                          .order_by(Orcamento.aprovado_em.desc())
+                          .limit(200).all())
+        elif f == 'entregues':
+            vendas = (VendaB2B.query
+                      .options(joinedload(VendaB2B.cliente))
+                      .filter_by(status='ativa', status_entrega='entregue')
+                      .order_by(VendaB2B.data_venda.desc(),
+                                VendaB2B.id.desc())
+                      .limit(200).all())
+        elif f == 'arquivados':
+            orcamentos = (Orcamento.query.filter_by(status='recusado')
+                          .order_by(Orcamento.criado_em.desc())
+                          .limit(100).all())
+            vendas_canceladas = (VendaB2B.query
+                                 .options(joinedload(VendaB2B.cliente))
+                                 .filter_by(status='cancelada')
+                                 .order_by(VendaB2B.id.desc())
+                                 .limit(100).all())
+        else:
+            f = 'producao'
+            vendas = (VendaB2B.query
+                      .options(joinedload(VendaB2B.cliente))
+                      .filter(VendaB2B.status == 'ativa',
+                              VendaB2B.status_entrega != 'entregue')
+                      .order_by(VendaB2B.data_entrega.asc().nullslast(),
+                                VendaB2B.data_venda.asc())
+                      .limit(200).all())
+    else:
+        q = (VendaB2BParcela.query
+             .join(VendaB2B, VendaB2BParcela.venda_id == VendaB2B.id)
+             .options(joinedload(VendaB2BParcela.venda)
+                      .joinedload(VendaB2B.cliente))
+             .filter(VendaB2B.status == 'ativa'))
+        if f == 'cob_pagos':
+            q = q.filter(VendaB2BParcela.pago_em.isnot(None))
+            if de:
+                q = q.filter(db.func.date(VendaB2BParcela.pago_em) >= de)
+            if ate:
+                q = q.filter(db.func.date(VendaB2BParcela.pago_em) <= ate)
+            q = q.order_by(VendaB2BParcela.pago_em.desc())
+        else:
+            if f != 'cob_vencidos':
+                f = 'cob_pendentes'
+            q = q.filter(VendaB2BParcela.pago_em.is_(None))
+            q = (q.filter(VendaB2BParcela.vencimento < hoje_)
+                 if f == 'cob_vencidos'
+                 else q.filter(VendaB2BParcela.vencimento >= hoje_))
+            if de:
+                q = q.filter(VendaB2BParcela.vencimento >= de)
+            if ate:
+                q = q.filter(VendaB2BParcela.vencimento <= ate)
+            q = q.order_by(VendaB2BParcela.vencimento.asc())
+        parcelas = q.limit(200).all()
+
+    return render_template('b2b/dashboard.html', aba=aba, f=f,
+                           counts=counts, orcamentos=orcamentos,
+                           vendas=vendas, parcelas=parcelas,
+                           vendas_canceladas=vendas_canceladas,
+                           de=de, ate=ate, hoje_=hoje_,
+                           STATUS_LABEL=orc_svc.STATUS_LABEL)
 
 
 # ── Clientes ──
