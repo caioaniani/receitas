@@ -299,6 +299,18 @@ def _aplicar_endereco_estruturado(c):
 @admin_required
 def cliente_editar(cid):
     c = ClienteB2B.query.get_or_404(cid)
+    nome = (request.form.get('nome') or '').strip()
+    if not nome:
+        flash('Nome obrigatorio.', 'danger')
+        return redirect(url_for('b2b.clientes'))
+    # nome e unique — barra colisao com OUTRO cliente (o proprio pode
+    # manter o nome). As vendas/faturas referenciam por FK (cliente_id),
+    # entao renomear nao mexe no historico.
+    if nome != c.nome and ClienteB2B.query.filter(
+            ClienteB2B.nome == nome, ClienteB2B.id != c.id).first():
+        flash(f'Ja existe outro cliente chamado "{nome}".', 'warning')
+        return redirect(url_for('b2b.clientes'))
+    c.nome = nome
     c.cnpj_cpf = (request.form.get('cnpj_cpf') or '').strip() or None
     c.telefone = (request.form.get('telefone') or '').strip() or None
     c.email = (request.form.get('email') or '').strip() or None
