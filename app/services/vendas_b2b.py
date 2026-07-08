@@ -373,11 +373,13 @@ def comprometido_b2b_pendente(excluir_venda_id=None):
             pend[('produto', vi.produto_id)] += qtd
             continue
         for col, comp_id, _nome, qtd_por in comps:
-            if col != 'receita_id':
+            if col == 'materia_prima_id':
                 continue
             q = int(round(qtd * qtd_por))
-            if q > 0:
-                pend[('receita', comp_id)] += q
+            if q <= 0:
+                continue
+            kind = 'receita' if col == 'receita_id' else 'produto'
+            pend[(kind, comp_id)] += q
     return dict(pend)
 
 
