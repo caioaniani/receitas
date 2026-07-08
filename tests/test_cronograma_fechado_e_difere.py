@@ -111,10 +111,11 @@ def test_reset_de_linha_pula_dia_fechado(app, admin_user):
 
 
 def test_rota_cadeado_toggla_e_exige_admin(app, admin_user):
-    """As requests do admin e do funcionário rodam em app_context SEPARADOS:
-    dentro de um mesmo `with app.app_context()` o Flask REUSA o contexto nas
-    requests do test client e o Flask-Login cacheia o usuário em g._login_user
-    — o admin da 1ª request vazaria pra request do funcionário (falso 200)."""
+    """ARMADILHA do app compartilhado: a fixture `app` mantém um app_context
+    empurrado o teste inteiro (conftest.py), as requests do test client REUSAM
+    esse contexto e o Flask-Login cacheia o usuário em g._login_user — o admin
+    da 1ª request vaza pra request do funcionário (falso 200/302). Antes da
+    request do 2º usuário, limpe o cache: delattr(g, '_login_user')."""
     from app.models import CronogramaDiaFechado, Usuario
     with app.app_context():
         _, d2 = _cenario()
