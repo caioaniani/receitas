@@ -121,7 +121,8 @@ def dashboard():
                           .order_by(Orcamento.criado_em.desc())
                           .limit(200).all())
         elif f == 'aprovados':
-            orcamentos = (Orcamento.query.filter_by(status='aprovado')
+            orcamentos = (Orcamento.query
+                          .filter_by(status='aprovado', venda_id=None)
                           .order_by(Orcamento.aprovado_em.desc())
                           .limit(200).all())
         elif f == 'entregues':
