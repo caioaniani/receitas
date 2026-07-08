@@ -223,20 +223,27 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
 def resetar_receita(receita_id, datas_iso):
     """Apaga os overrides de uma receita nas datas dadas (volta pra sugestao
     calculada). Dia com cadeado (🔒) e PULADO — o override dele fica.
-    Retorna quantos apagou."""
+    Retorna (apagados, preservados) — preservados = overrides da receita que
+    ficaram por estarem em dia fechado (a tela avisa)."""
     from app.models import CronogramaOverride
     fechados = dias_fechados()
-    datas = [d for d in (date.fromisoformat(x) for x in datas_iso)
-             if d not in fechados]
+    todas = [date.fromisoformat(x) for x in datas_iso]
+    datas = [d for d in todas if d not in fechados]
+    puladas = [d for d in todas if d in fechados]
+    preservados = 0
+    if puladas:
+        preservados = CronogramaOverride.query.filter(
+            CronogramaOverride.receita_id == int(receita_id),
+            CronogramaOverride.data.in_(puladas)).count()
     if not datas:
-        return 0
+        return 0, preservados
     q = CronogramaOverride.query.filter(
         CronogramaOverride.receita_id == int(receita_id),
         CronogramaOverride.data.in_(datas))
     n = q.count()
     q.delete(synchronize_session=False)
     db.session.commit()
-    return n
+    return n, preservados
 
 
 def limpar_todos_overrides():
