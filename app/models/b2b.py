@@ -397,11 +397,18 @@ class Orcamento(db.Model):
     enviado_em = db.Column(db.DateTime, nullable=True)
     aprovado_em = db.Column(db.DateTime, nullable=True)
     recusado_em = db.Column(db.DateTime, nullable=True)
+    # Aprovar VIRA venda (07/07/2026): a venda criada na aprovacao fica
+    # vinculada aqui — evita converter o mesmo orcamento 2x (duplicaria a
+    # fila do padeiro e a baixa na separacao). NULL = ainda nao converteu
+    # (rascunho/enviado/recusado, ou aprovado do regime antigo).
+    venda_id = db.Column(db.Integer, db.ForeignKey('venda_b2b.id'),
+                         nullable=True)
 
     cliente = db.relationship('ClienteB2B')
     itens = db.relationship('OrcamentoItem', backref='orcamento',
                             cascade='all, delete-orphan', order_by='OrcamentoItem.id')
     criado_por = db.relationship('Usuario', foreign_keys=[criado_por_id])
+    venda = db.relationship('VendaB2B', foreign_keys=[venda_id])
 
     @property
     def cliente_display(self):
