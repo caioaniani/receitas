@@ -261,6 +261,47 @@ def test_claim_atomico_na_separacao(app, admin_user, catalogo):
         assert ep.quantidade == 20              # o perdedor não baixou nada
 
 
+def test_claim_na_sincronizacao_evita_baixa_dupla(app, admin_user, catalogo):
+    """Limpar a data de entrega também baixa pelo claim: se outro request
+    já gravou o marcador, o perdedor não baixa em dobro."""
+    from sqlalchemy import update
+    with app.app_context():
+        ep = _estoque(catalogo)
+        v = _venda_fila(catalogo, admin_user)
+        db.session.execute(
+            update(VendaB2B).where(VendaB2B.id == v.id)
+            .values(estoque_baixado_em=agora())
+            .execution_options(synchronize_session=False))
+        v.data_entrega = None
+        svc.sincronizar_baixa_com_data(v, user=admin_user)
+        db.session.commit()
+        db.session.refresh(ep)
+        assert ep.quantidade == 20              # o perdedor não baixou
+
+
+def test_claim_no_reabrir_evita_baixa_dupla(app, admin_user, catalogo):
+    """Reabrir venda cancelada re-baixa pelo claim: dois reabrir
+    concorrentes não debitam o freezer duas vezes."""
+    from sqlalchemy import update
+    with app.app_context():
+        ep = _estoque(catalogo)
+        v = svc.criar_venda(
+            cliente_nome='Balcao', data_entrega=None,
+            itens=[{'tipo': 'receita', 'id': catalogo['receita'].id,
+                    'quantidade': 5, 'preco_unitario': 10.0}],
+            user=admin_user)
+        svc.cancelar_venda(v, user=admin_user)      # estorna → 20
+        db.session.execute(
+            update(VendaB2B).where(VendaB2B.id == v.id)
+            .values(estoque_baixado_em=agora())
+            .execution_options(synchronize_session=False))
+        assert v.estoque_baixado_em is None         # visão desatualizada
+        svc.reabrir_venda(v, user=admin_user)
+        db.session.refresh(ep)
+        assert v.status == 'ativa'
+        assert ep.quantidade == 20                  # o perdedor não re-baixou
+
+
 def test_comprometido_ignora_componente_nao_receita(app, admin_user, catalogo):
     """Componente de cesta que não é receita (MP/produto pronto) fica FORA
     do comprometido: a baixa real não debita a linha própria dele no
