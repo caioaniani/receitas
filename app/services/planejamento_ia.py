@@ -228,6 +228,7 @@ def sugerir_pedido_loja_ia(loja_id, *, horizonte_dias=7, janela_semanas=6,
             continue
         bruto = it.get('por_dia') or []
         por_dia = []
+        livres = []                          # indices dos dias sem pedido
         for i in range(n):
             try:
                 v = max(0, int(bruto[i]))
@@ -235,13 +236,21 @@ def sugerir_pedido_loja_ia(loja_id, *, horizonte_dias=7, janela_semanas=6,
                 v = base['por_dia'][i]
             if dias[i]['data'] in loja['ja_tem']:
                 v = base['ja_pedido'][i]     # travado: nao mexe
+            else:
+                livres.append(i)
             por_dia.append(v)
-        mudou = por_dia != base['por_dia']
+        # `mudou` so olha os dias LIVRES (travado sempre difere do motor,
+        # que os zera — comparar tudo marcaria falso positivo).
+        mudou = any(por_dia[i] != base['por_dia'][i] for i in livres)
         aviso = None
-        total_motor = sum(base['por_dia']) or 0
-        if total_motor and sum(por_dia) > 3 * total_motor:
-            aviso = (f'{base["nome"]}: proposta {sum(por_dia)} un e mais '
+        total_motor = sum(base['por_dia'][i] for i in livres)
+        total_ia = sum(por_dia[i] for i in livres)
+        if total_motor and total_ia > 3 * total_motor:
+            aviso = (f'{base["nome"]}: proposta {total_ia} un e mais '
                      f'de 3x a sugestao do motor ({total_motor}) — confira')
+        elif not total_motor and total_ia > 0:
+            aviso = (f'{base["nome"]}: o motor nao sugere nada e a IA '
+                     f'propoe {total_ia} un — confira')
         itens_ok.append({'receita_id': rid, 'nome': base['nome'],
                          'por_dia': por_dia,
                          'motivo': (it.get('motivo') or '').strip(),
