@@ -301,14 +301,15 @@ def salvar_lote(itens, campo_preco, user=None):
     criados, pulados, mps_criadas, avisos = [], [], [], []
     mps_novas = {}          # nome.lower() -> MateriaPrima (dedupe no lote)
     for it in itens:
-        nome = (it.get('nome') or '').strip()
+        nome = (it.get('nome') or '').strip()[:150]     # coluna String(150)
         if not nome:
             continue
         if _resolver_por_nome('produto', nome):
             pulados.append(nome)
             continue
         prod = Produto(nome=nome,
-                       categoria=(it.get('categoria') or '').strip() or None,
+                       categoria=((it.get('categoria') or '').strip()[:50]
+                                  or None),
                        ativo=True)
         try:
             preco = float(it.get('preco') or 0)
