@@ -64,9 +64,58 @@ def dashboard():
 @login_required
 @admin_required
 def clientes():
-    cs = ClienteB2B.query.order_by(ClienteB2B.ativo.desc(),
-                                    ClienteB2B.nome.asc()).all()
-    return render_template('b2b/clientes.html', clientes=cs)
+    """Lista os clientes ATIVOS por padrão; arquivados ficam atrás do
+    filtro `?arquivados=1` (pedido do dono 07/07/2026 — inativo na lista
+    principal só atrapalha)."""
+    arquivados = request.args.get('arquivados') == '1'
+    q = ClienteB2B.query.filter_by(ativo=not arquivados)
+    cs = q.order_by(ClienteB2B.nome.asc()).all()
+    n_arquivados = ClienteB2B.query.filter_by(ativo=False).count()
+    return render_template('b2b/clientes.html', clientes=cs,
+                           arquivados=arquivados,
+                           n_arquivados=n_arquivados)
+
+
+@b2b_bp.route('/clientes/<int:cid>/arquivar', methods=['POST'])
+@login_required
+@admin_required
+def cliente_arquivar(cid):
+    """Alterna ativo/arquivado. Arquivado some da lista, dos selects de
+    venda/orçamento e do fechamento mensal — o histórico fica intacto."""
+    c = ClienteB2B.query.get_or_404(cid)
+    c.ativo = not c.ativo
+    db.session.commit()
+    if c.ativo:
+        flash(f'{c.nome} reativado.', 'success')
+        return redirect(url_for('b2b.clientes'))
+    flash(f'{c.nome} arquivado — o histórico continua nas vendas/faturas.',
+          'success')
+    return redirect(url_for('b2b.clientes'))
+
+
+@b2b_bp.route('/clientes/<int:cid>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def cliente_excluir(cid):
+    """Exclui DEFINITIVAMENTE um cliente SEM histórico (cadastro de teste
+    ou duplicado). Com venda/orçamento/fatura no nome, recusa — arquive."""
+    from app.models import Orcamento
+    c = ClienteB2B.query.get_or_404(cid)
+    tem = []
+    if VendaB2B.query.filter_by(cliente_id=cid).count():
+        tem.append('vendas')
+    if FaturaB2B.query.filter_by(cliente_id=cid).count():
+        tem.append('faturas')
+    if Orcamento.query.filter_by(cliente_id=cid).count():
+        tem.append('orçamentos')
+    if tem:
+        flash(f'{c.nome} tem {", ".join(tem)} no histórico — não dá pra '
+              'excluir sem perder registro. Use "Arquivar".', 'warning')
+        return redirect(url_for('b2b.clientes'))
+    db.session.delete(c)        # tabela de preços some junto (cascade)
+    db.session.commit()
+    flash(f'{c.nome} excluído.', 'success')
+    return redirect(url_for('b2b.clientes'))
 
 
 @b2b_bp.route('/clientes/novo', methods=['POST'])
