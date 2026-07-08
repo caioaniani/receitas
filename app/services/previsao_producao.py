@@ -1484,6 +1484,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     for loja_id, data_ent, status_p in (db.session.query(
             PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoLoja.status)
             .filter(PedidoLoja.status != 'cancelado',
+                    _cond_sem_entrega_antecipada(hoje_d),
                     PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= horizonte_fim)
             .all()):
@@ -1496,6 +1497,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             PedidoItem.quantidade)
             .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoLoja.status != 'cancelado',
+                    _cond_sem_entrega_antecipada(hoje_d),
                     db.or_(PedidoItem.receita_id.isnot(None),
                            PedidoItem.materia_prima_id.isnot(None)),
                     PedidoLoja.data_entrega >= inicio_d,
