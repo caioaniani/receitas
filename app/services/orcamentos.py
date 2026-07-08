@@ -297,12 +297,25 @@ def _converter_em_venda(orc, usuario_id=None):
     entra na fila do padeiro SEM baixar estoque (a baixa e na separacao,
     regime 07/07/2026). Cliente mensal fica sem parcela (conta do mes);
     os demais ganham a parcela unica padrao."""
+    from app.models import VendaB2B
     from app.services import vendas_b2b
+
+    # REPARO de janela de crash: criar_venda commita internamente, e o
+    # vinculo orc.venda_id so persiste no commit seguinte. Se o worker
+    # morreu entre os dois, existe venda ativa com a observacao de origem
+    # e o orcamento sem vinculo — religa em vez de criar em dobro.
+    orfa = VendaB2B.query.filter_by(
+        status='ativa', observacao=f'Origem: orcamento {orc.codigo}').first()
+    if orfa:
+        orc.venda_id = orfa.id
+        return orfa
 
     itens = [{'tipo': 'receita' if it.receita_id else 'produto',
               'id': it.receita_id or it.produto_id,
               'quantidade': int(float(it.quantidade or 0)),
-              'preco_unitario': float(it.preco_unitario or 0),
+              # Numeric(10,2) do orcamento segue Decimal ate a venda
+              # (dinheiro nunca passa por float — CLAUDE.md).
+              'preco_unitario': it.preco_unitario or Decimal('0'),
               'desconto_percentual': 0,
               'observacao': it.observacao}
              for it in orc.itens]
