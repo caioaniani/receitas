@@ -320,6 +320,7 @@ def _converter_em_venda(orc, usuario_id=None):
         itens=itens,
         observacao=f'Origem: orcamento {orc.codigo}',
         user=None,
+        commit=False,
     )
     if usuario_id:
         venda.criado_por_id = usuario_id
