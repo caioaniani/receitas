@@ -108,8 +108,12 @@ def index():
     # _sync_itens_do_cronograma; item dispensado fica fora: dispensa é decisão
     # explícita, não atualização pendente).
     ordem_enviada, difere = {}, {}
+    dias_grid = {d['data'] for d in crono['dias']}
     for iso, p in planos_por_dia.items():
-        if p.enviado_ao_padeiro is False:
+        # So dias VISIVEIS no grid: plano de fora do horizonte (ex: ordem de
+        # ontem) nao tem coluna pra comparar — o loop "saiu do grid" marcaria
+        # diferenca falsa em tudo que ainda nao foi produzido.
+        if p.enviado_ao_padeiro is False or iso not in dias_grid:
             continue
         itens = {it.receita_id: it for it in p.itens
                  if it.dispensada_em is None}
