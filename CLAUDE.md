@@ -776,6 +776,39 @@ pelo "🔄 atualizar producao" explicito daquele dia. Mapa dos caminhos:
 - `enviar_plano_do_dia` e o UNICO que reconstroi ordem enviada (gesto
   explicito, re-pressavel). Testes: `tests/test_cronograma_ordem_enviada.py`.
 
+## Cronograma — ordem enviada de volta na tela + cadeado por dia (08/07/2026)
+
+Dois pedidos do dono, ambos no grid do /telaindustriateste:
+
+**1. Ordem ENVIADA visivel quando o grid diverge.** Antes, editar o grid num
+dia ja enviado ficava so como rascunho (`CronogramaOverride`) e a diferenca
+pro que o padeiro esta vendo era INVISIVEL ate alguem lembrar do "🔄 atualizar
+producao". Agora o `index` compara, por celula, `esperado = max(qtd_grid +
+qtd_extra, produzido)` com o `qtd_alvo` da ordem (a MESMA conta do
+`_sync_itens_do_cronograma` — por isso o re-envio zera exato a divergencia). A
+celula que difere mostra "📤 N" (o numero que o padeiro ve) e o cabecalho do
+dia ganha "⚠ difere do enviado" + aviso no KPI. So dias VISIVEIS no grid
+(`dias_grid`) entram na conta — plano de fora do horizonte (ordem de ontem)
+nao tem coluna e marcaria diferenca falsa. Item DISPENSADO fica fora dos dois
+lados: a dispensa e decisao explicita e o sync mantem `dispensada_em`, entao
+comparar geraria um "difere" que nenhum re-envio limpa.
+
+**2. Cadeado por dia (🔒).** Modelo `CronogramaDiaFechado` (tabela nova via
+`db.create_all`, sem ALTER). Dia fechado: `editar_celula` recusa
+(`{'erro':'dia_fechado'}`, rota `/celula` devolve 422), `limpar_todos_overrides`
+PRESERVA os overrides do dia (agora retorna `(apagados, preservados)` — TODOS
+os chamadores atualizados), `resetar_receita` PULA as datas fechadas (retorna
+`(apagados, preservados)`; o JS avisa quando preservou). Enviar/aprovar/excluir
+ordem CONTINUAM permitidos em dia fechado — o cadeado protege o RASCUNHO, nao a
+ordem ("fechei, agora envio"). Toggle `POST /dia/cadeado` (admin, CSRF via
+`campos_dia`). ARMADILHA fechada: a mao-dupla do `/padeiro/plano/editar`
+espelhava a ordem no `CronogramaOverride` sem checar o cadeado — agora pula o
+espelho em dia fechado (a ordem pode mudar, o rascunho protegido nao).
+`podar_dias_fechados_passados()` roda no GET (cadeado de dia que ja passou
+sumiria do grid mas blindaria overrides mortos do "limpar"). Toggle tem
+try/except IntegrityError (duplo-clique no unique de `data`). Testes:
+`tests/test_cronograma_fechado_e_difere.py`.
+
 ## Tela do padeiro — ordem persiste apos a meia-noite (03/07/2026)
 
 O padeiro trabalha de MADRUGADA: a ordem do dia D e executada na madrugada de
