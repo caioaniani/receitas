@@ -37,7 +37,7 @@
                     {% for c in CAMPOS_PRECO %}
                     <option value="{{ c }}" {% if c == campo_preco %}selected{% endif %}>
                         {{ {'preco_site': 'Preço site/varejo', 'preco_atacado': 'Preço atacado',
-                            'preco_loja': 'Preço loja'}[c] }}</option>
+                            'preco_loja': 'Preço loja'}.get(c, c) }}</option>
                     {% endfor %}
                 </select>
             </div>
