@@ -403,6 +403,11 @@ class Orcamento(db.Model):
     # (rascunho/enviado/recusado, ou aprovado do regime antigo).
     venda_id = db.Column(db.Integer, db.ForeignKey('venda_b2b.id'),
                          nullable=True)
+    # Rascunho arquivavel (08/07/2026, pedido do dono): rascunho que nao
+    # foi pra frente sai de Pendentes SEM virar 'recusado' (recusado =
+    # cliente disse nao). Mesmo idioma do Receita.arquivada_em; NULL =
+    # ativo. Arquivado nao transiciona de status ate desarquivar.
+    arquivado_em = db.Column(db.DateTime, nullable=True)
 
     cliente = db.relationship('ClienteB2B')
     itens = db.relationship('OrcamentoItem', backref='orcamento',
