@@ -185,6 +185,9 @@ def test_grid_mostra_ordem_enviada_quando_difere(app, admin_user):
         html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
         assert 'dia-badge dia-difere' in html            # badge do cabeçalho
         assert ('📤 %d' % enviado) in html               # o que o padeiro vê
+        # compactação (dono 08/07): dia que diverge mostra SÓ o badge âmbar —
+        # não empilha "📤 enviado" verde junto (era o que alargava a coluna).
+        assert '>📤 enviado<' not in html
 
 
 def test_atualizar_producao_zera_o_difere(app, admin_user):
