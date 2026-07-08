@@ -719,8 +719,40 @@ def _parse_venda_form():
 @login_required
 @admin_required
 def venda_nova():
+    """Form de nova venda. `?orcamento=<id>` pré-preenche cliente + itens
+    a partir de um orçamento APROVADO (o "→ Virar venda" da aba Aprovados).
+    Item de linha livre do orçamento (sem vínculo com o catálogo) não vira
+    item de venda — avisa e pula."""
+    from app.models import Orcamento
+    itens_seed, cliente_pre = [], None
+    orc_id = request.args.get('orcamento', type=int)
+    if orc_id:
+        orc = Orcamento.query.get_or_404(orc_id)
+        cliente_pre = orc.cliente_id
+        pulados = []
+        for it in orc.itens:
+            if not (it.receita_id or it.produto_id):
+                pulados.append(it.nome)
+                continue
+            itens_seed.append({
+                'ref': (f'receita:{it.receita_id}' if it.receita_id
+                        else f'produto:{it.produto_id}'),
+                'nome': it.nome,
+                'qtd': int(round(float(it.quantidade or 1))),
+                'estado': '',
+                'preco': float(it.preco_unitario or 0),
+                'desc': 0,
+                'obs': it.observacao or '',
+            })
+        flash(f'Itens e cliente vindos do orçamento {orc.codigo} — confira '
+              'preços e a data de entrega antes de salvar.', 'info')
+        if pulados:
+            flash('Itens de linha livre do orçamento não entram na venda '
+                  '(sem vínculo com o catálogo): ' + ', '.join(pulados),
+                  'warning')
     return render_template('b2b/venda_nova.html', venda=None,
-                           itens_seed=[], parcelas_seed=[], pago=False,
+                           itens_seed=itens_seed, parcelas_seed=[],
+                           pago=False, cliente_pre=cliente_pre,
                            hoje=hoje().isoformat(), **_catalogo_venda())
 
 
