@@ -556,6 +556,11 @@ def excluir_venda(venda, user=None):
     _estornar_estoque(venda, user=user, motivo='exclusao')
     for cob in cobrancas_pendentes:
         db.session.delete(cob)
+    # Orcamento convertido nesta venda volta pra fila de Aprovados (pode
+    # ser convertido de novo) — senao o vinculo aponta pro nada.
+    from app.models import Orcamento
+    for orc in Orcamento.query.filter_by(venda_id=venda.id).all():
+        orc.venda_id = None
     db.session.delete(venda)                # itens/parcelas via cascade
     db.session.commit()
 
