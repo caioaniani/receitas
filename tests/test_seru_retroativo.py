@@ -312,6 +312,29 @@ def test_lock_ocupado_nao_drena_e_cron_retoma(app):
         assert seru_sync.reprocesso_pendente() is False
 
 
+def test_drain_parcial_erros_de_commit_mantem_pendencia(app):
+    """`stats['erros']` (LISTA de mensagens — commit falhou, baixas
+    revertidas): pendencia fica de pe, status 'parcial' registrado, sem
+    TypeError (regressao da rodada 2 da revisao: int(lista))."""
+    from app.models import AppConfig
+    from app.services import seru_sync
+    with app.app_context():
+        parcial = {'liberados': 1, 'parciais_na_janela': 0,
+                   'stats': {'itens_baixados': 0,
+                             'erros': ['commit: OperationalError']}}
+        with patch('app.services.seru_sync.reprocessar_retroativo',
+                   return_value=parcial):
+            seru_sync.agendar_reprocesso_retroativo(dias=7)   # nao levanta
+        assert seru_sync.reprocesso_pendente() is True
+        ultimo = AppConfig.get(seru_sync.ULTIMO_REPROCESSO) or ''
+        assert ultimo.startswith('parcial') and '1 erro(s)' in ultimo
+        # Limpeza da pendencia pro proximo teste.
+        with patch('app.services.seru.listar_pedidos_completo',
+                   return_value=[]):
+            seru_sync.retomar_reprocesso_pendente(app)
+        assert seru_sync.reprocesso_pendente() is False
+
+
 def test_botao_manual_usa_lock_e_quita_pendencia(app, admin_user):
     """O botao da Saude roda sob o MESMO lock do drain: com o lock ocupado
     responde 'ocupado' (sem tocar a API); livre, roda e QUITA a pendencia
