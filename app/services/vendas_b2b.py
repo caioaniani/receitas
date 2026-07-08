@@ -242,22 +242,32 @@ def sincronizar_baixa_com_data(venda, user=None):
                           motivo='entrou na fila do padeiro')
 
 
-def comprometido_b2b_pendente():
+def comprometido_b2b_pendente(excluir_venda_id=None):
     """{(kind, item_id): qtd} do que as vendas B2B AGUARDANDO SEPARACAO
     ainda vao tirar do EstoqueProducao (cesta explodida em componentes —
     mesma explosao da baixa). Usado pra exibir o estoque DISPONIVEL
     (fisico − comprometido) nos forms/previews: sem isso, duas vendas
     podem ser aprovadas contra o mesmo saldo e a falta so aparece dias
-    depois, na separacao."""
+    depois, na separacao.
+
+    `excluir_venda_id`: no form de EDITAR uma venda pendente, a propria
+    venda nao deve descontar do disponivel exibido pra ela mesma.
+
+    Componente de cesta que NAO e receita (produto pronto/MP) fica FORA:
+    a baixa real (`_baixar_item`) nao debita a linha propria desses
+    componentes no EstoqueProducao, entao comprometer aqui mentiria no
+    disponivel — mesma limitacao declarada no bloco 2b do balanco
+    (previsao_producao)."""
     from app.services.cestas import componentes_de_cesta
 
     pend = defaultdict(int)
-    itens = (VendaB2BItem.query
-             .join(VendaB2B, VendaB2BItem.venda_id == VendaB2B.id)
-             .filter(VendaB2B.status == 'ativa',
-                     VendaB2B.estoque_baixado_em.is_(None))
-             .all())
-    for vi in itens:
+    q_itens = (VendaB2BItem.query
+               .join(VendaB2B, VendaB2BItem.venda_id == VendaB2B.id)
+               .filter(VendaB2B.status == 'ativa',
+                       VendaB2B.estoque_baixado_em.is_(None)))
+    if excluir_venda_id:
+        q_itens = q_itens.filter(VendaB2B.id != excluir_venda_id)
+    for vi in q_itens.all():
         qtd = int(vi.quantidade or 0)
         if qtd <= 0:
             continue
@@ -270,13 +280,11 @@ def comprometido_b2b_pendente():
             pend[('produto', vi.produto_id)] += qtd
             continue
         for col, comp_id, _nome, qtd_por in comps:
-            q = int(round(qtd * qtd_por))
-            if q <= 0:
+            if col != 'receita_id':
                 continue
-            if col == 'receita_id':
+            q = int(round(qtd * qtd_por))
+            if q > 0:
                 pend[('receita', comp_id)] += q
-            elif col == 'produto_id':
-                pend[('produto', comp_id)] += q
     return dict(pend)
 
 
