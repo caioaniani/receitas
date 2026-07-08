@@ -510,8 +510,10 @@ def celula_reset():
     datas = p.get('datas') or []
     if isinstance(datas, str):
         datas = [d for d in datas.split(',') if d]
-    resetar_receita(receita_id, datas)
-    return jsonify(ok=True)
+    apagados, preservados = resetar_receita(receita_id, datas)
+    # preservados > 0 = havia override em dia fechado (🔒) que ficou — o JS
+    # avisa antes do reload (senão o ✏️ que sobra parece bug).
+    return jsonify(ok=True, apagados=apagados, preservados=preservados)
 
 
 @industria_teste_bp.route('/ia-proposta', methods=['POST'])
