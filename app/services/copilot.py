@@ -658,13 +658,16 @@ TOOL_CRIAR_CLIENTE_B2B = {
 TOOL_CRIAR_VENDA_B2B = {
     "name": "criar_venda_b2b",
     "description": (
-        "Cria venda B2B (industria → cliente externo). Baixa do estoque "
-        "do FREEZER (EstoqueProducao), nao das lojas. Pode ser cliente "
-        "cadastrado (cliente_nome resolve por fuzzy match) ou avulso. "
-        "Se cliente nao existir, sugira `criar_cliente_b2b` antes OU "
-        "passe so cliente_nome (vira venda avulsa). NAO executa direto "
-        "— preview com itens, total, parcelas. Preco vem do cadastro "
-        "(Receita.preco_venda / Produto.preco_atacado) se nao especificado."
+        "Cria venda B2B (industria → cliente externo). Com data de "
+        "entrega, o pedido entra na fila do padeiro e o estoque do "
+        "FREEZER (EstoqueProducao) so baixa quando o padeiro SEPARAR "
+        "no /padeiro; venda imediata (sem data) baixa na hora. Pode ser "
+        "cliente cadastrado (cliente_nome resolve por fuzzy match) ou "
+        "avulso. Se cliente nao existir, sugira `criar_cliente_b2b` "
+        "antes OU passe so cliente_nome (vira venda avulsa). NAO executa "
+        "direto — preview com itens, total, parcelas. Preco vem do "
+        "cadastro (Receita.preco_venda / Produto.preco_atacado) se nao "
+        "especificado."
     ),
     "input_schema": {
         "type": "object",
