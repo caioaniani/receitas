@@ -176,22 +176,24 @@ def test_claim_atomico_na_aprovacao(app, catalogo):
         assert VendaB2B.query.count() == 0          # o perdedor não converteu
 
 
-def test_reparo_religa_venda_orfa(app, catalogo):
-    """Janela de crash entre o commit de criar_venda e o do vínculo: a
-    re-aprovação religa a venda órfã (pela observação de origem) em vez
-    de criar uma segunda demanda na fila do padeiro."""
+def test_falha_na_conversao_reverte_tudo_num_rollback(
+        app, catalogo, monkeypatch):
+    """Aprovação é um commit ÚNICO (claim + venda + vínculo): erro no meio
+    da conversão reverte tudo — o orçamento segue 'enviado' e nenhuma
+    venda fica órfã. 'Aprovado sem venda vinculada' não nasce de crash."""
     from app.services import vendas_b2b as vsvc
     with app.app_context():
         o = _orc(catalogo)
-        orfa = vsvc.criar_venda(
-            cliente_nome='Avulso Eventos', data_entrega=o.data_entrega,
-            itens=[{'tipo': 'receita', 'id': catalogo['receita'].id,
-                    'quantidade': 5, 'preco_unitario': 10.0}],
-            observacao=f'Origem: orcamento {o.codigo}', user=None)
+        oid = o.id
+
+        def _explode(**_kw):
+            raise ValueError('falha simulada')
+        monkeypatch.setattr(vsvc, 'criar_venda', _explode)
         ok, erro = orc_svc.marcar_status(o, 'aprovado')
-        assert ok, erro
-        assert o.venda_id == orfa.id
-        assert VendaB2B.query.count() == 1
+        assert not ok and 'falha simulada' in erro
+        o2 = db.session.get(Orcamento, oid)
+        assert o2.status == 'enviado' and o2.venda_id is None
+        assert VendaB2B.query.count() == 0
 
 
 def test_post_venda_criar_orcamento_convertido_nao_duplica(
