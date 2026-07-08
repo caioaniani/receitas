@@ -138,6 +138,93 @@ def test_nao_converte_duas_vezes(app, admin_user, catalogo):
         assert VendaB2B.query.count() == 1
 
 
+def test_aprovar_sem_cliente_recusa(app, catalogo):
+    with app.app_context():
+        o = _orc(catalogo)
+        o.cliente_nome = None                       # nem cadastrado nem avulso
+        db.session.commit()
+        ok, erro = orc_svc.marcar_status(o, 'aprovado')
+        assert not ok and 'cliente' in erro
+        assert o.status == 'enviado' and o.venda_id is None
+
+
+def test_aprovar_orcamento_avulso_cria_venda(app, catalogo):
+    """Cliente avulso (só nome, sem cadastro) aprova normalmente."""
+    with app.app_context():
+        o = _orc(catalogo)                          # cliente_nome='Avulso Eventos'
+        ok, erro = orc_svc.marcar_status(o, 'aprovado')
+        assert ok, erro
+        v = db.session.get(VendaB2B, o.venda_id)
+        assert v.cliente_id is None
+        assert v.cliente_nome == 'Avulso Eventos'
+
+
+def test_claim_atomico_na_aprovacao(app, catalogo):
+    """Dois POSTs de aprovar quase simultâneos: o UPDATE condicional do
+    status garante que só um converte. Simula o perdedor — outro request
+    já aprovou no banco, mas o objeto em memória ainda vê 'enviado'."""
+    from sqlalchemy import update
+    with app.app_context():
+        o = _orc(catalogo)
+        db.session.execute(
+            update(Orcamento).where(Orcamento.id == o.id)
+            .values(status='aprovado')
+            .execution_options(synchronize_session=False))
+        assert o.status == 'enviado'                # visão desatualizada
+        ok, erro = orc_svc.marcar_status(o, 'aprovado')
+        assert not ok and 'ja processado' in erro
+        assert VendaB2B.query.count() == 0          # o perdedor não converteu
+
+
+def test_reparo_religa_venda_orfa(app, catalogo):
+    """Janela de crash entre o commit de criar_venda e o do vínculo: a
+    re-aprovação religa a venda órfã (pela observação de origem) em vez
+    de criar uma segunda demanda na fila do padeiro."""
+    from app.services import vendas_b2b as vsvc
+    with app.app_context():
+        o = _orc(catalogo)
+        orfa = vsvc.criar_venda(
+            cliente_nome='Avulso Eventos', data_entrega=o.data_entrega,
+            itens=[{'tipo': 'receita', 'id': catalogo['receita'].id,
+                    'quantidade': 5, 'preco_unitario': 10.0}],
+            observacao=f'Origem: orcamento {o.codigo}', user=None)
+        ok, erro = orc_svc.marcar_status(o, 'aprovado')
+        assert ok, erro
+        assert o.venda_id == orfa.id
+        assert VendaB2B.query.count() == 1
+
+
+def test_post_venda_criar_orcamento_convertido_nao_duplica(
+        app, admin_user, catalogo):
+    """Form 'Virar venda' aberto numa aba enquanto o orçamento era
+    convertido por outro caminho: o POST não pode criar a 2ª venda."""
+    with app.app_context():
+        cli = ClienteB2B(nome='Restaurante Bom Prato', ativo=True)
+        db.session.add(cli)
+        db.session.commit()
+        o = _orc(catalogo, cliente=cli)
+        orc_svc.marcar_status(o, 'aprovado')
+        oid, vid = o.id, o.venda_id
+        rid = catalogo['receita'].id
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    r = c.post('/b2b/vendas/nova', data={
+        'orcamento_id': str(oid),
+        'cliente_nome': 'Restaurante Bom Prato',
+        'data_venda': hoje().isoformat(),
+        'data_entrega': (hoje() + timedelta(days=1)).isoformat(),
+        'item_ref[]': f'receita:{rid}',
+        'item_qtd[]': '5', 'item_preco[]': '10',
+        'item_desc[]': '', 'item_estado[]': '',
+    }, follow_redirects=True)
+    assert 'já virou a venda' in r.get_data(as_text=True)
+    with app.app_context():
+        assert VendaB2B.query.count() == 1
+        assert db.session.get(Orcamento, oid).venda_id == vid
+
+
 def test_excluir_venda_libera_orcamento(app, owner_user, catalogo):
     from app.services import vendas_b2b as svc
     with app.app_context():
