@@ -891,7 +891,9 @@ def venda_editar_post(vid):
 def venda_reabrir(vid):
     venda = VendaB2B.query.get_or_404(vid)
     svc.reabrir_venda(venda, user=current_user)
-    flash(f'Venda #{vid} reaberta — estoque baixado de novo.', 'success')
+    flash(f'Venda #{vid} reaberta.'
+          + (' Estoque baixado de novo.' if venda.estoque_baixado_em
+             else ' O estoque sai na separacao pelo padeiro.'), 'success')
     return redirect(url_for('b2b.venda_detalhe', vid=vid))
 
 
