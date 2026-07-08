@@ -107,15 +107,20 @@ def test_duplicar_nao_copia_site_nem_imagem(app, admin_user):
         assert copia.imagem_url is None
 
 
-def test_duplicar_exige_admin(app, funcionario_user):
+def test_duplicar_exige_admin(app):
     from app.extensions import db
+    from app.models import Usuario
 
     with app.app_context():
         p, _, _ = _produto_cafe(db)
         pid = p.id
+        func = Usuario(nome='func teste', login='func-dup', papel='funcionario')
+        func.set_senha('123')
+        db.session.add(func)
+        db.session.commit()
 
     client = app.test_client()
-    _login(client, funcionario_user)
+    _login(client, func)
     resp = client.post(f'/produtos/{pid}/duplicar', follow_redirects=False)
     assert resp.status_code in (302, 303, 403)
     with app.app_context():
