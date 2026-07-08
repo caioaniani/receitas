@@ -346,11 +346,11 @@ def comprometido_b2b_pendente(excluir_venda_id=None):
     `excluir_venda_id`: no form de EDITAR uma venda pendente, a propria
     venda nao deve descontar do disponivel exibido pra ela mesma.
 
-    Componente de cesta que NAO e receita (produto pronto/MP) fica FORA:
-    a baixa real (`_baixar_item`) nao debita a linha propria desses
-    componentes no EstoqueProducao, entao comprometer aqui mentiria no
-    disponivel — mesma limitacao declarada no bloco 2b do balanco
-    (previsao_producao)."""
+    Componente MP de cesta fica FORA: a baixa dele acontece no ledger de
+    MP (`_baixar_componente_mp`), nao numa linha de EstoqueProducao — e o
+    disponivel exibido (estoque_map) so cobre receitas/produtos.
+    Componentes receita e produto contam na PROPRIA linha, espelhando a
+    baixa real (`_baixar_item`)."""
     from app.services.cestas import componentes_de_cesta
 
     pend = defaultdict(int)
