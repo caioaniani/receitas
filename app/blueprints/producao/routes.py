@@ -865,3 +865,33 @@ def previsao_acuracia_rodar():
     flash(f'Acuracia atualizada: {novos} previsao(es) congelada(s), '
           f'{casados} casada(s) com o realizado.', 'success')
     return redirect(url_for('producao.previsao_acuracia'))
+
+
+@producao_bp.route('/pedidos-semana/ia', methods=['POST'])
+@login_required
+@admin_required
+def pedidos_semana_ia():
+    """Proposta da IA (Opus 4.8) para o pedido de UMA loja — preenche a
+    grade da tela /pedidos-semana/media via JS. NADA é criado aqui: o
+    pedido continua nascendo pelos botões Gerar de sempre."""
+    from app.services import planejamento_ia
+
+    p = request.get_json(silent=True) or request.form
+    try:
+        loja_id = int(p.get('loja_id'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='loja_id obrigatório'), 400
+
+    def _int(key, default, lo, hi):
+        try:
+            return max(lo, min(int(p.get(key, default)), hi))
+        except (TypeError, ValueError):
+            return default
+    out = planejamento_ia.sugerir_pedido_loja_ia(
+        loja_id,
+        horizonte_dias=_int('horizonte', 7, 1, 14),
+        janela_semanas=_int('janela', 6, 1, 26),
+        inicio_offset_dias=_int('inicio', 1, 0, 14))
+    if out.get('erro'):
+        return jsonify(ok=False, erro=out['erro']), 502
+    return jsonify(ok=True, **out)

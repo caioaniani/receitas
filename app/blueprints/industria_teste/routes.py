@@ -512,3 +512,73 @@ def celula_reset():
         datas = [d for d in datas.split(',') if d]
     resetar_receita(receita_id, datas)
     return jsonify(ok=True)
+
+
+@industria_teste_bp.route('/ia-proposta', methods=['POST'])
+@login_required
+@admin_required
+def ia_proposta():
+    """Análise do cronograma pela IA (Opus 4.8): devolve AJUSTES de célula
+    propostos com motivo + parecer. Read-only — aplicar é outro gesto."""
+    from app.services import planejamento_ia
+    from app.services.previsao_producao import MOTORES_PREVISAO_PRODUCAO
+
+    p = request.get_json(silent=True) or request.form
+    motor = str(p.get('motor') or 'pedidos')
+    if motor not in MOTORES_PREVISAO_PRODUCAO:
+        motor = 'pedidos'
+    out = planejamento_ia.analisar_producao_ia(
+        horizonte_dias=_payload_int(p, 'horizonte', 7, 1, 14),
+        janela_semanas=_payload_int(p, 'janela', 6, 1, 26),
+        inicio_offset_dias=_payload_int(p, 'inicio', 1, 0, 14),
+        equilibrar=str(p.get('equilibrar', '')) in ('1', 'true', 'on', 'True'),
+        motor=motor)
+    if out.get('erro'):
+        return jsonify(ok=False, erro=out['erro']), 502
+    return jsonify(ok=True, **out)
+
+
+@industria_teste_bp.route('/ia-aplicar', methods=['POST'])
+@login_required
+@admin_required
+def ia_aplicar():
+    """Aplica os ajustes MARCADOS da proposta da IA — cada um vira um
+    override de rascunho via editar_celula (mesmas guardas da edição
+    manual: fornada especial, receita fora do grid etc.). ENVIAR ao
+    padeiro continua gesto humano na tela."""
+    from app.services.cronograma_edit import editar_celula
+    from app.services.previsao_producao import MOTORES_PREVISAO_PRODUCAO
+
+    p = request.get_json(silent=True) or {}
+    motor = str(p.get('motor') or 'pedidos')
+    if motor not in MOTORES_PREVISAO_PRODUCAO:
+        motor = 'pedidos'
+    ajustes = p.get('ajustes') or []
+    if not isinstance(ajustes, list) or not ajustes:
+        return jsonify(ok=False, erro='nenhum ajuste marcado'), 400
+    aplicados, falhas = [], []
+    for a in ajustes[:200]:
+        try:
+            rid = int(a.get('receita_id'))
+            qtd = max(0, int(a.get('qtd')))
+            data = str(a.get('data') or '')
+        except (TypeError, ValueError, AttributeError):
+            falhas.append({'ajuste': a, 'erro': 'parametros'})
+            continue
+        res = editar_celula(
+            rid, data, qtd,
+            horizonte_dias=_payload_int(p, 'horizonte', 7, 1, 14),
+            janela_semanas=_payload_int(p, 'janela', 6, 1, 26),
+            inicio_offset_dias=_payload_int(p, 'inicio', 1, 0, 14),
+            equilibrar=str(p.get('equilibrar', '')) in ('1', 'true', 'on',
+                                                        'True'),
+            motor=motor)
+        if res is None:
+            falhas.append({'receita_id': rid, 'data': data,
+                           'erro': 'nao_encontrado'})
+        elif res.get('erro'):
+            falhas.append({'receita_id': rid, 'data': data,
+                           'erro': res['erro'], 'msg': res.get('msg')})
+        else:
+            aplicados.append({'receita_id': rid, 'data': data, 'qtd': qtd})
+    return jsonify(ok=True, aplicados=aplicados, falhas=falhas)
