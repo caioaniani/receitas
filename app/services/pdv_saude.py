@@ -97,6 +97,11 @@ def resumo():
     total_pendencias = (lojas_pendentes + produtos_pendentes_seru
                         + pedidos_sem_loja)
 
+    # Reprocesso retroativo pos-mapeamento (background, com coalescing).
+    from app.services import seru_sync
+    reprocesso_pendente = AppConfig.get(seru_sync.FLAG_REPROCESSO) == '1'
+    reprocesso_ultimo = AppConfig.get(seru_sync.ULTIMO_REPROCESSO)
+
     return {
         'seru_ultimo_run': seru_run,
         'seru_ativo': st_seru.get('ativo'),
@@ -106,6 +111,8 @@ def resumo():
         'produtos_pendentes_seru': produtos_pendentes_seru,
         'pedidos_sem_loja': pedidos_sem_loja,
         'total_pendencias': total_pendencias,
+        'reprocesso_pendente': reprocesso_pendente,
+        'reprocesso_ultimo': reprocesso_ultimo,
     }
 
 
