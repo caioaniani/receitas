@@ -786,7 +786,8 @@ def _reprocesso_pos_mapeamento():
     Best-effort: falha em agendar NÃO desfaz o vínculo (só avisa)."""
     from app.services import seru_sync
     try:
-        seru_sync.agendar_reprocesso_retroativo(dias=7)
+        seru_sync.agendar_reprocesso_retroativo(dias=7,
+                                                user_id=current_user.id)
         flash('Recuperando baixas dos últimos 7 dias em segundo plano — '
               'o resultado aparece na Saúde do PDV em alguns minutos.', 'info')
     except Exception:
