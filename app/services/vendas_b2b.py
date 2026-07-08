@@ -1,11 +1,19 @@
 """Vendas B2B da industria.
 
-Encapsula a logica de:
-- Criar venda (cabecalho + itens + parcelas) com baixa de EstoqueProducao
-- Editar venda ativa (estorna + recria itens + re-baixa)
-- Cancelar / reabrir venda (estorna / re-baixa estoque)
-- Reverter status de entrega (sem mexer em estoque)
-- Receber pagamento (atualiza parcela, calcula saldo)
+REGIME DA BAIXA (07/07/2026, decisao do dono): o estoque da industria so
+baixa quando o padeiro SEPARA o pedido na tela /padeiro — igual ao
+PedidoLoja, onde separar/enviar e que mexe no fisico. Regras:
+
+- Venda COM data_entrega (entra na fila do padeiro): criada SEM baixa;
+  a baixa acontece em `baixar_na_separacao` (rota padeiro.separar_b2b).
+- Venda IMEDIATA (sem data_entrega, nunca aparece no /padeiro): baixa na
+  criacao (senao nunca baixaria).
+- `VendaB2B.estoque_baixado_em` marca o estado (NULL = aguardando
+  separacao); as QUANTIDADES continuam no ledger MovEstoqueProducao.
+- Enquanto nao baixa, a venda e demanda COMPROMETIDA: entra no balanco/
+  cronograma (previsao_producao) e desconta do estoque DISPONIVEL exibido
+  nos forms/previews (`comprometido_b2b_pendente`).
+- Reverter separado→pendente ESTORNA a baixa (re-separar baixa de novo).
 
 Estoque sai do EstoqueProducao (industria/freezer). Quando falta saldo,
 registra MovEstoqueProducao tipo='venda_b2b_sem_estoque' (igual logica
