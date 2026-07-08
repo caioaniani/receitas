@@ -1024,6 +1024,40 @@ diferentes; e pedido de RETIRADA em loja != origem baixa a loja escolhida
 site). Testes: `tests/test_loja_estoque_vitrine.py`,
 `tests/test_loja_estoque_reserva.py`, `tests/test_loja_online_vendas.py`.
 
+## B2B — baixa na SEPARACAO + orcamento aprovado VIRA venda (regras do dono, 07/07/2026)
+
+Tres regras ditadas pelo dono, escritas na pedra:
+
+1. **"Estoque so pode ser baixado quando o pedido e separado pelo padeiro
+   na tela do /padeiro."** Venda B2B com `data_entrega` NAO baixa
+   `EstoqueProducao` na criacao — baixa quando o padeiro clica SEPARAR
+   (`padeiro/routes.py::separar_b2b` → `vendas_b2b.baixar_na_separacao`).
+   Marcador: `VendaB2B.estoque_baixado_em` (NULL = aguardando separacao).
+   Venda IMEDIATA (sem data de entrega, nunca passa pelo padeiro) continua
+   baixando na criacao. Reverter separado→pendente (`reverter_status_entrega`)
+   estorna; re-separar baixa de novo (idempotente pelo marcador). Editar/
+   sincronizar data segue o regime (`sincronizar_baixa_com_data`: pendente
+   que GANHA data estorna; que PERDE data baixa). Backfill one-shot em
+   `migrations_legacy` marcou as vendas antigas (que baixaram na criacao)
+   como ja-baixadas — sem isso o padeiro baixaria em DOBRO. NUNCA regredir
+   pra baixa na criacao nem baixar sem checar o marcador.
+2. **Demanda pendente e COMPROMETIDO, nao estoque**: vendas ativas ainda nao
+   baixadas entram no balanco da industria
+   (`previsao_producao.balanco_industria`, linha "Vendas B2B" no breakdown;
+   cesta explode via `componentes_de_cesta`) e o disponivel exibido nas telas
+   de venda/copilot = fisico − `vendas_b2b.comprometido_b2b_pendente()`.
+3. **Orcamento leve, aprovacao AMARRADA**: fazer orcamento aceita linha
+   livre e sem data; APROVAR exige tudo (`orcamentos.validar_para_aprovacao`:
+   data de entrega, todo item com FK do catalogo, quantidade inteira,
+   desconto/frete zerados — "embuta nos precos") e CRIA a VendaB2B na hora
+   (`_converter_em_venda`; `Orcamento.venda_id` vincula; cliente mensal sem
+   parcela, demais parcela unica). Aba "Aprovados" do dashboard = aprovados
+   com `venda_id IS NULL` (legado pre-regime).
+
+Testes: `tests/test_b2b_baixa_separacao.py`,
+`tests/test_orcamento_aprova_vira_venda.py`; regressao reescrita em
+`test_b2b.py`/`test_b2b_copilot.py`/`test_orcamentos.py`.
+
 ## Copilot (servico) — canais: Slack + WhatsApp do dono. SEM interface web
 
 `app/services/copilot.py` orquestra tools com Claude Sonnet 4.6 (Anthropic API).
