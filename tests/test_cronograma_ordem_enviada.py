@@ -86,7 +86,7 @@ def test_limpar_edicoes_nao_toca_ordem_enviada(app, admin_user):
         alvo_enviado = {it.receita_id: it.qtd_alvo for it in plano.itens}
         assert alvo_enviado.get(r.id) == 80          # foi com a edição
 
-        n = limpar_todos_overrides()
+        n, _preservados = limpar_todos_overrides()
         assert n >= 1
         db.session.expire_all()
         assert plano.enviado_ao_padeiro is True
