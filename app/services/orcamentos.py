@@ -250,12 +250,85 @@ def atualizar_orcamento(orc, form, itens_raw):
     return True, []
 
 
+def validar_para_aprovacao(orc):
+    """Aprovar e o gesto AMARRADO aos processos (decisao do dono
+    07/07/2026): fazer orcamento e leve, mas aprovar exige tudo que a
+    venda/producao precisa — porque aprovar VIRA venda na hora. Devolve
+    lista de erros (vazia = pode aprovar):
+
+    - data de entrega/retirada obrigatoria (entra na fila do padeiro);
+    - todo item vinculado ao catalogo (linha livre pode existir no papel,
+      mas nao passa da aprovacao — nao tem estoque nem SKU de NF);
+    - quantidade inteira (a venda conta unidades);
+    - desconto/frete em valor absoluto zerados — a venda nao tem esses
+      campos; embuta nos precos unitarios antes de aprovar.
+    """
+    erros = []
+    if not orc.data_entrega:
+        erros.append('informe a data de entrega/retirada (o pedido entra '
+                     'na fila do padeiro por ela)')
+    livres = [it.nome for it in orc.itens
+              if not (it.receita_id or it.produto_id)]
+    if livres:
+        erros.append('itens de linha livre precisam ser amarrados ao '
+                     'catalogo (ou removidos) antes de aprovar: '
+                     + ', '.join(livres))
+    fracionados = [it.nome for it in orc.itens
+                   if float(it.quantidade or 0) != int(float(it.quantidade or 0))]
+    if fracionados:
+        erros.append('quantidade fracionada nao vira venda — arredonde: '
+                     + ', '.join(fracionados))
+    if not orc.itens:
+        erros.append('orcamento sem itens')
+    if (orc.desconto_valor or 0) > 0:
+        erros.append('desconto em R$ nao existe na venda — embuta o '
+                     'desconto nos precos unitarios antes de aprovar')
+    if (orc.frete_valor or 0) > 0:
+        erros.append('frete nao existe na venda B2B — embuta no preco '
+                     'dos itens antes de aprovar')
+    return erros
+
+
+def _converter_em_venda(orc, usuario_id=None):
+    """Cria a VendaB2B a partir do orcamento aprovado e vincula
+    (orc.venda_id). A venda nasce com a data de entrega do orcamento →
+    entra na fila do padeiro SEM baixar estoque (a baixa e na separacao,
+    regime 07/07/2026). Cliente mensal fica sem parcela (conta do mes);
+    os demais ganham a parcela unica padrao."""
+    from app.services import vendas_b2b
+
+    itens = [{'tipo': 'receita' if it.receita_id else 'produto',
+              'id': it.receita_id or it.produto_id,
+              'quantidade': int(float(it.quantidade or 0)),
+              'preco_unitario': float(it.preco_unitario or 0),
+              'desconto_percentual': 0,
+              'observacao': it.observacao}
+             for it in orc.itens]
+    venda = vendas_b2b.criar_venda(
+        cliente_id=orc.cliente_id,
+        cliente_nome=None if orc.cliente_id else orc.cliente_nome,
+        data_entrega=orc.data_entrega,
+        itens=itens,
+        observacao=f'Origem: orcamento {orc.codigo}',
+        user=None,
+    )
+    if usuario_id:
+        venda.criado_por_id = usuario_id
+    orc.venda_id = venda.id
+    return venda
+
+
 def marcar_status(orc, novo, *, usuario_id=None):
     """Transicao de status. Permite:
       rascunho -> enviado
       enviado -> aprovado | recusado
       enviado -> rascunho (volta pra edicao)
       aprovado/recusado -> (final, nao volta)
+
+    APROVAR (07/07/2026): valida os dados obrigatorios (ver
+    `validar_para_aprovacao`) e CRIA a venda vinculada na hora — o pedido
+    entra na fila do padeiro pela data de entrega; o estoque so baixa na
+    separacao.
     """
     if novo not in STATUS_VALIDOS:
         return False, f'status invalido: {novo}'
@@ -267,11 +340,22 @@ def marcar_status(orc, novo, *, usuario_id=None):
     }
     if novo not in transicoes.get(orc.status, set()):
         return False, f'transicao {orc.status} -> {novo} nao permitida'
+    if novo == 'aprovado':
+        erros = validar_para_aprovacao(orc)
+        if erros:
+            return False, ('para aprovar (e virar venda): '
+                           + '; '.join(erros))
     orc.status = novo
     if novo == 'enviado':
         orc.enviado_em = agora()
     elif novo == 'aprovado':
         orc.aprovado_em = agora()
+        if not orc.venda_id:
+            try:
+                _converter_em_venda(orc, usuario_id=usuario_id)
+            except ValueError as exc:
+                db.session.rollback()
+                return False, f'aprovacao abortada: {exc}'
     elif novo == 'recusado':
         orc.recusado_em = agora()
     db.session.commit()
