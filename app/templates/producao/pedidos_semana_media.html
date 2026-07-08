@@ -108,7 +108,12 @@
     <div class="pmed-loja">
         <h5 class="d-flex justify-content-between align-items-center gap-2">
             <span>{{ loja.loja_nome }}</span>
-            <span class="d-flex gap-2">
+            <span class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-sm btn-outline-dark btn-ia-loja"
+                        data-loja="{{ loja.loja_id }}" data-loja-nome="{{ loja.loja_nome }}"
+                        title="A IA (Opus) revisa a sugestão com contexto (calendário, estoque, desperdício recente) e preenche a grade — você revisa e clica Gerar como sempre">
+                    <i class="bi bi-stars"></i> Sugerir por IA
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-primary btn-dividir-loja">
                     <i class="bi bi-distribute-horizontal"></i> Dividir todos desta loja
                 </button>
@@ -119,6 +124,8 @@
                 </button>
             </span>
         </h5>
+        <div class="ia-painel alert alert-light border small d-none mb-2"
+             data-loja-painel="{{ loja.loja_id }}"></div>
         <div class="pmed">
             <table>
                 <thead>
