@@ -302,23 +302,36 @@ def test_claim_no_reabrir_evita_baixa_dupla(app, admin_user, catalogo):
         assert ep.quantidade == 20                  # o perdedor não re-baixou
 
 
-def test_comprometido_ignora_componente_nao_receita(app, admin_user, catalogo):
-    """Componente de cesta que não é receita (MP/produto pronto) fica FORA
-    do comprometido: a baixa real não debita a linha própria dele no
-    EstoqueProducao — comprometer mentiria no disponível."""
+def _cesta_mista(catalogo, com_produto=False):
+    """Cesta com componente receita (x2) + MP (x1) e, opcional, produto (x1)."""
+    cesta = Produto(nome='Cesta Mista', ativo=True)
+    db.session.add(cesta)
+    db.session.flush()
+    itens = [
+        ProdutoItem(produto_id=cesta.id, tipo='receita',
+                    receita_id=catalogo['receita'].id,
+                    item_nome=catalogo['receita'].nome, quantidade=2),
+        ProdutoItem(produto_id=cesta.id, tipo='mp',
+                    materia_prima_id=catalogo['mp'].id,
+                    item_nome=catalogo['mp'].nome, quantidade=1),
+    ]
+    if com_produto:
+        itens.append(ProdutoItem(
+            produto_id=cesta.id, tipo='produto',
+            produto_componente_id=catalogo['produto'].id,
+            item_nome=catalogo['produto'].nome, quantidade=1))
+    db.session.add_all(itens)
+    db.session.commit()
+    return cesta
+
+
+def test_comprometido_conta_receita_e_produto_ignora_mp(
+        app, admin_user, catalogo):
+    """Comprometido espelha a baixa real: componentes receita e produto
+    contam na PRÓPRIA linha; MP fica fora (baixa no ledger de MP, que não
+    aparece no estoque_map)."""
     with app.app_context():
-        cesta = Produto(nome='Cesta Mista', ativo=True)
-        db.session.add(cesta)
-        db.session.flush()
-        db.session.add_all([
-            ProdutoItem(produto_id=cesta.id, tipo='receita',
-                        receita_id=catalogo['receita'].id,
-                        item_nome=catalogo['receita'].nome, quantidade=2),
-            ProdutoItem(produto_id=cesta.id, tipo='mp',
-                        materia_prima_id=catalogo['mp'].id,
-                        item_nome=catalogo['mp'].nome, quantidade=1),
-        ])
-        db.session.commit()
+        cesta = _cesta_mista(catalogo, com_produto=True)
         svc.criar_venda(
             cliente_nome='Zion Church',
             data_entrega=hoje() + timedelta(days=1),
@@ -326,7 +339,90 @@ def test_comprometido_ignora_componente_nao_receita(app, admin_user, catalogo):
                     'preco_unitario': 30.0}],
             user=admin_user)
         pend = svc.comprometido_b2b_pendente()
-        assert pend == {('receita', catalogo['receita'].id): 6}
+        assert pend == {('receita', catalogo['receita'].id): 6,
+                        ('produto', catalogo['produto'].id): 3}
+
+
+def test_baixa_cesta_componente_produto_linha_propria(
+        app, admin_user, catalogo):
+    """Componente PRODUTO de cesta baixa a própria linha do EstoqueProducao
+    (antes caía numa linha anônima all-NULL); o estorno devolve nela."""
+    with app.app_context():
+        ep_prod = EstoqueProducao(produto_id=catalogo['produto'].id,
+                                  quantidade=10)
+        db.session.add(ep_prod)
+        db.session.commit()
+        cesta = _cesta_mista(catalogo, com_produto=True)
+        v = svc.criar_venda(
+            cliente_nome='Zion Church',
+            data_entrega=hoje() + timedelta(days=1),
+            itens=[{'tipo': 'produto', 'id': cesta.id, 'quantidade': 3,
+                    'preco_unitario': 30.0}],
+            user=admin_user)
+        svc.baixar_na_separacao(v, user=admin_user)
+        db.session.commit()
+        db.session.refresh(ep_prod)
+        assert ep_prod.quantidade == 7          # 3 cestas × 1 produto
+        # Nenhuma linha anônima foi criada/debitada
+        anon = EstoqueProducao.query.filter_by(
+            receita_id=None, produto_id=None).all()
+        assert all((a.quantidade or 0) == 0 for a in anon)
+        v.status_entrega = 'separado'
+        db.session.commit()
+        svc.reverter_status_entrega(v, user=admin_user)
+        db.session.refresh(ep_prod)
+        assert ep_prod.quantidade == 10         # estorno na linha certa
+
+
+def test_baixa_cesta_componente_mp_ledger_e_estorno(app, admin_user, catalogo):
+    """Componente MP de cesta baixa MateriaPrima.estoque_atual com
+    MovimentacaoEstoque 'saida'; o estorno credita de volta com 'entrada'.
+    Falta parcial: o movimento registra só o que saiu (estorno exato)."""
+    from app.models import MovimentacaoEstoque
+    with app.app_context():
+        mp = catalogo['mp']
+        mp.estoque_atual = 10.0
+        db.session.commit()
+        cesta = _cesta_mista(catalogo)
+        v = svc.criar_venda(
+            cliente_nome='Zion Church',
+            data_entrega=hoje() + timedelta(days=1),
+            itens=[{'tipo': 'produto', 'id': cesta.id, 'quantidade': 3,
+                    'preco_unitario': 30.0}],
+            user=admin_user)
+        svc.baixar_na_separacao(v, user=admin_user)
+        db.session.commit()
+        db.session.refresh(mp)
+        assert mp.estoque_atual == 7.0          # 3 cestas × 1 MP
+        movs = MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.referencia.like(f'Venda B2B #{v.id} %')).all()
+        assert len(movs) == 1 and movs[0].tipo == 'saida'
+        assert movs[0].quantidade == 3.0
+        # Estorno devolve exato
+        v.status_entrega = 'separado'
+        db.session.commit()
+        svc.reverter_status_entrega(v, user=admin_user)
+        db.session.refresh(mp)
+        assert mp.estoque_atual == 10.0
+        # Falta parcial: só o que saiu entra no movimento
+        mp.estoque_atual = 2.0
+        db.session.commit()
+        assert svc.baixar_na_separacao(v, user=admin_user) is True
+        db.session.commit()
+        db.session.refresh(mp)
+        assert mp.estoque_atual == 0.0          # saiu 2 (pedia 3)
+        saida2 = MovimentacaoEstoque.query.filter(
+            MovimentacaoEstoque.tipo == 'saida',
+            MovimentacaoEstoque.referencia.like(f'Venda B2B #{v.id} %'),
+        ).order_by(MovimentacaoEstoque.id.desc()).first()
+        assert saida2.quantidade == 2.0
+        assert 'faltou 1' in saida2.referencia
+        # Estorno pós-falta devolve só os 2 que saíram
+        v.status_entrega = 'separado'
+        db.session.commit()
+        svc.reverter_status_entrega(v, user=admin_user)
+        db.session.refresh(mp)
+        assert mp.estoque_atual == 2.0
 
 
 def test_comprometido_exclui_propria_venda(app, admin_user, catalogo):
