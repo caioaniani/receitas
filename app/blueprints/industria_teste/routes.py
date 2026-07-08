@@ -566,20 +566,28 @@ def ia_aplicar():
     ajustes = p.get('ajustes') or []
     if not isinstance(ajustes, list) or not ajustes:
         return jsonify(ok=False, erro='nenhum ajuste marcado'), 400
+    # Cap defensivo: a IA propõe poucos ajustes; cada editar_celula
+    # recomputa o cronograma 2x (pesado), então limita o abuso via POST.
     aplicados, falhas = [], []
-    for a in ajustes[:200]:
+    for a in ajustes[:50]:
         try:
             rid = int(a.get('receita_id'))
             qtd = max(0, int(a.get('qtd')))
-            data = str(a.get('data') or '')
+            # valida a data AQUI: editar_celula faz date.fromisoformat sem
+            # try, então data ruim viraria 500 no meio do loop (com
+            # ajustes anteriores já commitados).
+            data = date.fromisoformat(str(a.get('data') or '')).isoformat()
         except (TypeError, ValueError, AttributeError):
-            falhas.append({'ajuste': a, 'erro': 'parametros'})
+            falhas.append({'receita_id': a.get('receita_id')
+                           if isinstance(a, dict) else None,
+                           'data': a.get('data') if isinstance(a, dict)
+                           else None, 'erro': 'parametros'})
             continue
         res = editar_celula(
             rid, data, qtd,
             horizonte_dias=_payload_int(p, 'horizonte', 7, 1, 14),
             janela_semanas=_payload_int(p, 'janela', 6, 1, 26),
-            inicio_offset_dias=_payload_int(p, 'inicio', 1, 0, 14),
+            inicio_offset_dias=_payload_int(p, 'inicio', 0, 0, 14),
             equilibrar=str(p.get('equilibrar', '')) in ('1', 'true', 'on',
                                                         'True'),
             motor=motor)
