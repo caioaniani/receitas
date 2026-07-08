@@ -426,21 +426,28 @@ def editar_plano():
         # Espelha a edição no rascunho do grid (CronogramaOverride) — mão dupla:
         # editar aqui passa a refletir no cronograma da indústria. Override = a
         # qtd_alvo absoluta deste dia; receita removida vira 0 (some do grid).
-        from app.models import CronogramaOverride
+        # Dia FECHADO com o cadeado (🔒): a ORDEM pode ser editada (gesto
+        # explícito, mesma família do enviar), mas o espelho no rascunho é
+        # PULADO — o cadeado protege exatamente os overrides do dia; a
+        # divergência ordem×grid fica visível no "⚠ difere do enviado".
+        from app.services.cronograma_edit import dias_fechados
         db.session.flush()
-        ov_exist = {o.receita_id: o for o in
-                    CronogramaOverride.query.filter_by(data=dia).all()}
-        atuais = {it.receita_id: int(it.qtd_alvo or 0) for it in plano.itens}
-        for rid, q in atuais.items():
-            o = ov_exist.get(rid)
-            if o is not None:
-                o.qtd = q
-            else:
-                db.session.add(CronogramaOverride(receita_id=rid, data=dia,
-                                                  qtd=q))
-        for rid, o in ov_exist.items():
-            if rid not in atuais:
-                o.qtd = 0
+        if dia not in dias_fechados():
+            from app.models import CronogramaOverride
+            ov_exist = {o.receita_id: o for o in
+                        CronogramaOverride.query.filter_by(data=dia).all()}
+            atuais = {it.receita_id: int(it.qtd_alvo or 0)
+                      for it in plano.itens}
+            for rid, q in atuais.items():
+                o = ov_exist.get(rid)
+                if o is not None:
+                    o.qtd = q
+                else:
+                    db.session.add(CronogramaOverride(receita_id=rid, data=dia,
+                                                      qtd=q))
+            for rid, o in ov_exist.items():
+                if rid not in atuais:
+                    o.qtd = 0
 
         db.session.commit()
         flash('Plano de produção de %s atualizado.' % dia.strftime('%d/%m'),
