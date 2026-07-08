@@ -18,6 +18,13 @@
         </div>
         <div class="d-flex gap-2">
             {{ ui.botao_voltar(url_for('produtos.lista')) }}
+            {% if current_user.is_admin() %}
+            {# form="form-duplicar": o botao fica aqui no header, mas submete o
+               form standalone la embaixo — HTML nao permite form aninhado. #}
+            <button type="submit" form="form-duplicar" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-copy"></i> Duplicar
+            </button>
+            {% endif %}
             <button type="submit" class="btn btn-primary btn-sm">
                 <i class="bi bi-check-lg"></i> Salvar
             </button>
