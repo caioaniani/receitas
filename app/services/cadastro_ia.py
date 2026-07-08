@@ -335,6 +335,7 @@ def salvar_lote(itens, campo_preco, user=None):
                 alvo = _resolver_por_nome(tipo, c_nome)
             if alvo is None and not c_nome:
                 continue        # sem vinculo E sem nome: nada a gravar
+            aviso_especifico = False
             if alvo is None and tipo == 'mp' and c.get('novo') and c_nome:
                 alvo = mps_novas.get(c_nome.lower())
                 # Homonima ARQUIVADA nao aparece no resolver (.ativas())
@@ -350,7 +351,7 @@ def salvar_lote(itens, campo_preco, user=None):
                             f'{nome}: MP "{c_nome}" já existe ARQUIVADA — '
                             'desarquive no Banco de MPs e vincule em '
                             'Produtos → cestas órfãos')
-                        alvo = None
+                        aviso_especifico = True
                     else:
                         alvo = MateriaPrima(
                             nome=c_nome,
@@ -362,7 +363,7 @@ def salvar_lote(itens, campo_preco, user=None):
                         mps_criadas.append(c_nome)
                         avisos.append(f'MP "{c_nome}" criada com custo 0 — '
                                       'defina o custo real no Banco de MPs')
-            if alvo is None:
+            if alvo is None and not aviso_especifico:
                 avisos.append(f'{nome}: componente "{c_nome}" sem vínculo '
                               '— resolva em Produtos → cestas órfãos')
             db.session.add(ProdutoItem(
