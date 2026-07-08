@@ -33,7 +33,9 @@ from sqlalchemy import update as sa_update
 from app.extensions import db
 from app.models import (
     EstoqueProducao,
+    MateriaPrima,
     MovEstoqueProducao,
+    MovimentacaoEstoque,
     Produto,
     Receita,
     VendaB2B,
@@ -66,6 +68,37 @@ def _get_or_create_estoque(receita_id=None, produto_id=None):
     return ep
 
 
+def _baixar_componente_mp(venda, produto_obj, mp_id, nome_comp, qtd_mp, user=None):
+    """Baixa o componente MP de uma cesta vendida no B2B.
+
+    MP da industria vive em `MateriaPrima.estoque_atual` + ledger
+    `MovimentacaoEstoque` (EstoqueProducao nao tem coluna de MP). Aceita
+    fracao (ex: 0.2 kg por cesta). O movimento 'saida' registra APENAS o
+    que saiu de fato (min contra o disponivel) — assim o estorno por saldo
+    devolve exato; a falta vai na referencia e num warning (o ledger de MP
+    nao tem tipo 'sem_estoque' como o MovEstoqueProducao)."""
+    if qtd_mp <= 0:
+        return
+    mp = MateriaPrima.query.get(mp_id)
+    if not mp:
+        return
+    disponivel = float(mp.estoque_atual or 0)
+    baixa = min(qtd_mp, disponivel)
+    falta = qtd_mp - baixa
+    ref = f'Venda B2B #{venda.id} [{produto_obj.nome} → cesta] {nome_comp}'
+    if falta > 0:
+        ref += f' — faltou {falta:g}'
+        logger.warning(
+            'Venda B2B #%s: componente MP %r da cesta %r sem saldo '
+            '(pedia %.3f, havia %.3f).', venda.id, nome_comp,
+            produto_obj.nome, qtd_mp, disponivel)
+    if baixa > 0:
+        db.session.add(MovimentacaoEstoque(
+            materia_prima_id=mp.id, tipo='saida', quantidade=baixa,
+            referencia=ref, usuario_id=getattr(user, 'id', None)))
+        mp.estoque_atual = disponivel - baixa
+
+
 def _baixar_item(venda, tipo, item_id, qtd, user=None):
     """Baixa EstoqueProducao para 1 item da venda.
 
@@ -83,12 +116,25 @@ def _baixar_item(venda, tipo, item_id, qtd, user=None):
 
     if componentes_cesta:
         for col, comp_id, nome_comp, qtd_por_cesta in componentes_cesta:
+            if col == 'materia_prima_id':
+                # Componente MP (item comprado pronto, ex: pote de geleia):
+                # o estoque de MP da industria vive em MateriaPrima.
+                # estoque_atual + ledger MovimentacaoEstoque (EstoqueProducao
+                # nem tem coluna de MP). Mesmo padrao da baixa da producao;
+                # o movimento registra so o que SAIU (o estorno devolve
+                # exato) e a falta fica na referencia + warning.
+                _baixar_componente_mp(venda, produto_obj, comp_id, nome_comp,
+                                      qtd * float(qtd_por_cesta or 0), user)
+                continue
             qtd_baixar = int(round(qtd * qtd_por_cesta))
             if qtd_baixar <= 0:
                 continue
+            # Componente baixa a PROPRIA linha (receita OU produto) — antes
+            # componente produto caia numa linha anonima all-NULL, que podia
+            # ate casar com linha orfa de nome_pendente (fix 08/07/2026).
             ep_c = _get_or_create_estoque(
                 receita_id=comp_id if col == 'receita_id' else None,
-                produto_id=None,  # so receita/mp na producao
+                produto_id=comp_id if col == 'produto_id' else None,
             )
             saldo_c = ep_c.quantidade or 0
             baixa_c = min(qtd_baixar, saldo_c)
