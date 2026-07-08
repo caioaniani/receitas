@@ -178,7 +178,8 @@ def index():
                            horizonte=horizonte, janela=janela, inicio=inicio,
                            equilibrar=equilibrar, motor=motor, estados=estados,
                            totais_dia=totais_dia, pico_idx=pico_idx,
-                           resumo=resumo)
+                           resumo=resumo, ordem_enviada=ordem_enviada,
+                           difere=difere, fechados=fechados)
 
 
 @industria_teste_bp.route('/auditoria')
