@@ -509,7 +509,8 @@ def reabrir_venda(venda, user=None):
     venda.cancelado_em = None
     venda.cancelado_por_id = None
     if venda.data_entrega is None or venda.status_entrega != 'pendente':
-        _baixar_venda(venda, user)
+        if _claim_baixa(venda):
+            _baixar_venda(venda, user)
     db.session.commit()
     return venda
 
