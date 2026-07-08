@@ -840,7 +840,8 @@ def venda_editar(vid):
     } for p in sorted(venda.parcelas, key=lambda x: x.numero)]
     return render_template('b2b/venda_nova.html', venda=venda,
                            itens_seed=itens_seed, parcelas_seed=parcelas_seed,
-                           pago=pago, hoje=hoje().isoformat(), **_catalogo_venda())
+                           pago=pago, hoje=hoje().isoformat(),
+                           **_catalogo_venda(excluir_venda_id=vid))
 
 
 @b2b_bp.route('/vendas/<int:vid>/editar', methods=['POST'])
