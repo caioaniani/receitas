@@ -257,6 +257,14 @@
     </div>
 </form>
 
+{% if current_user.is_admin() %}
+<!-- Form do Duplicar — FORA do form principal (HTML nao permite aninhamento);
+     o botao no header aponta pra ca via form="form-duplicar". -->
+<form id="form-duplicar" method="POST" action="{{ url_for('produtos.duplicar', id=produto.id) }}" class="d-none">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endif %}
+
 <!-- Forms de imagem do cardapio — FORA do form principal (HTML nao permite aninhamento) -->
 <div class="card mt-3 mb-3">
     <div class="card-header py-2"><strong><i class="bi bi-image"></i> Foto do cardápio digital</strong></div>
