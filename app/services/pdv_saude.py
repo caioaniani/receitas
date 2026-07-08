@@ -99,7 +99,7 @@ def resumo():
 
     # Reprocesso retroativo pos-mapeamento (background, com coalescing).
     from app.services import seru_sync
-    reprocesso_pendente = AppConfig.get(seru_sync.FLAG_REPROCESSO) == '1'
+    reprocesso_pendente = seru_sync.reprocesso_pendente()
     reprocesso_ultimo = AppConfig.get(seru_sync.ULTIMO_REPROCESSO)
 
     return {
