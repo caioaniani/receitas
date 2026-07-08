@@ -153,6 +153,8 @@ def _estornar_estoque(venda, user=None, motivo='cancelada'):
 
     Idempotente: depois de estornar o saldo zera, entao chamadas seguintes
     nao fazem nada. Cobre cesta, falta parcial e edicoes encadeadas.
+    Limpa o marcador de regime (`estoque_baixado_em`) — o estorno e sempre
+    TOTAL (por saldo), entao depois dele a venda volta a "nao baixada".
     """
     saldo = _saldo_baixado_por_ep(venda.id)
     for ep_id, qtd in saldo.items():
@@ -169,10 +171,74 @@ def _estornar_estoque(venda, user=None, motivo='cancelada'):
             referencia=f'Estorno venda B2B #{venda.id} ({motivo})',
             usuario_id=getattr(user, 'id', None),
         ))
+    venda.estoque_baixado_em = None
 
 
-def _aplicar_itens(venda, itens, user=None):
-    """Cria os VendaB2BItem + baixa estoque de cada item. Retorna total Decimal.
+def _baixar_venda(venda, user=None):
+    """Baixa o estoque de TODOS os itens da venda e marca o regime
+    (`estoque_baixado_em`). E o unico caminho de baixa — chamado na
+    criacao (venda IMEDIATA, sem data_entrega) ou na SEPARACAO pelo
+    padeiro (decisao do dono 07/07/2026)."""
+    for vi in venda.itens:
+        tipo = 'receita' if vi.receita_id else 'produto'
+        _baixar_item(venda, tipo, vi.receita_id or vi.produto_id,
+                     int(vi.quantidade or 0), user)
+    venda.estoque_baixado_em = agora()
+
+
+def baixar_na_separacao(venda, user=None):
+    """Baixa da SEPARACAO (tela /padeiro). Idempotente pelo marcador:
+    venda ja baixada (regime antigo — baixou na criacao — ou clique
+    duplo/re-separacao) nao baixa de novo. Devolve True se baixou agora.
+    NAO commita — a rota do padeiro fecha a transacao com o status."""
+    if venda.estoque_baixado_em:
+        return False
+    _baixar_venda(venda, user)
+    return True
+
+
+def comprometido_b2b_pendente():
+    """{(kind, item_id): qtd} do que as vendas B2B AGUARDANDO SEPARACAO
+    ainda vao tirar do EstoqueProducao (cesta explodida em componentes —
+    mesma explosao da baixa). Usado pra exibir o estoque DISPONIVEL
+    (fisico − comprometido) nos forms/previews: sem isso, duas vendas
+    podem ser aprovadas contra o mesmo saldo e a falta so aparece dias
+    depois, na separacao."""
+    from app.services.cestas import componentes_de_cesta
+
+    pend = defaultdict(int)
+    itens = (VendaB2BItem.query
+             .join(VendaB2B, VendaB2BItem.venda_id == VendaB2B.id)
+             .filter(VendaB2B.status == 'ativa',
+                     VendaB2B.estoque_baixado_em.is_(None))
+             .all())
+    for vi in itens:
+        qtd = int(vi.quantidade or 0)
+        if qtd <= 0:
+            continue
+        if vi.receita_id:
+            pend[('receita', vi.receita_id)] += qtd
+            continue
+        produto = Produto.query.get(vi.produto_id)
+        comps = componentes_de_cesta(produto) if produto else []
+        if not comps:
+            pend[('produto', vi.produto_id)] += qtd
+            continue
+        for col, comp_id, _nome, qtd_por in comps:
+            q = int(round(qtd * qtd_por))
+            if q <= 0:
+                continue
+            if col == 'receita_id':
+                pend[('receita', comp_id)] += q
+            elif col == 'produto_id':
+                pend[('produto', comp_id)] += q
+    return dict(pend)
+
+
+def _aplicar_itens(venda, itens, user=None, baixar=True):
+    """Cria os VendaB2BItem e, se `baixar`, baixa o estoque de cada item.
+    Retorna total Decimal. `baixar=False` no regime novo (venda com
+    data_entrega): a baixa fica pra separacao no /padeiro.
 
     Ignora linha com qtd<=0, tipo invalido ou sem id (mesma regra do form).
     """
