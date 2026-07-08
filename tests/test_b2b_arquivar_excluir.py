@@ -77,6 +77,79 @@ def test_arquivar_e_reativar_cliente(app, admin_user):
         assert db.session.get(ClienteB2B, cid).ativo is True
 
 
+def test_editar_cliente_muda_nome_e_preserva_historico(app, admin_user):
+    """Renomear o cliente na tela: o nome muda e as vendas (FK cliente_id)
+    seguem apontando pra ele — o histórico exibe o nome NOVO."""
+    from app.models import VendaB2B
+    with app.app_context():
+        cli = _cliente(nome='Vila Piva')
+        cid = cli.id
+        v = VendaB2B(cliente_id=cid, valor_total=0)
+        db.session.add(v)
+        db.session.commit()
+        vid = v.id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    r = c.post(f'/b2b/clientes/{cid}/editar',
+               data={'nome': 'Vila Piva Restaurante', 'ativo': 'on',
+                     'desconto_percentual': '0'},
+               follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        assert db.session.get(ClienteB2B, cid).nome == 'Vila Piva Restaurante'
+        # venda segue vinculada e exibe o nome novo (FK, não snapshot)
+        assert db.session.get(VendaB2B, vid).cliente_display \
+            == 'Vila Piva Restaurante'
+
+
+def test_editar_cliente_nome_vazio_recusa(app, admin_user):
+    with app.app_context():
+        cli = _cliente(nome='Bruno')
+        cid = cli.id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    c.post(f'/b2b/clientes/{cid}/editar',
+           data={'nome': '  ', 'ativo': 'on', 'desconto_percentual': '0'},
+           follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(ClienteB2B, cid).nome == 'Bruno'   # inalterado
+
+
+def test_editar_cliente_nome_duplicado_recusa(app, admin_user):
+    """Renomear pra um nome que JÁ é de outro cliente é barrado (unique)."""
+    with app.app_context():
+        _cliente(nome='Caio')
+        alvo = _cliente(nome='Izabela')
+        cid = alvo.id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    r = c.post(f'/b2b/clientes/{cid}/editar',
+               data={'nome': 'Caio', 'ativo': 'on',
+                     'desconto_percentual': '0'},
+               follow_redirects=True)
+    assert 'Ja existe outro cliente' in r.get_data(as_text=True)
+    with app.app_context():
+        assert db.session.get(ClienteB2B, cid).nome == 'Izabela'  # inalterado
+
+
+def test_editar_cliente_mesmo_nome_ok(app, admin_user):
+    """Salvar mantendo o mesmo nome (só mexeu noutro campo) não trava no
+    unique de si mesmo."""
+    with app.app_context():
+        cli = _cliente(nome='Entera')
+        cid = cli.id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    r = c.post(f'/b2b/clientes/{cid}/editar',
+               data={'nome': 'Entera', 'telefone': '1199998888',
+                     'ativo': 'on', 'desconto_percentual': '0'},
+               follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        cli = db.session.get(ClienteB2B, cid)
+        assert cli.nome == 'Entera' and cli.telefone == '1199998888'
+
+
 def test_excluir_cliente_sem_historico_apaga_com_precos(app, admin_user):
     with app.app_context():
         cli = _cliente()
