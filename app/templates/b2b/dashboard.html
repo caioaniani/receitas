@@ -62,8 +62,8 @@
             <td class="text-end">
                 <a href="{{ url_for('b2b.orcamento_detalhe', oid=o.id) }}" class="btn btn-sm btn-outline-primary">Abrir</a>
                 {% if f == 'aprovados' %}
-                <a href="{{ url_for('b2b.venda_nova') }}" class="btn btn-sm btn-outline-success"
-                   title="Lance a venda com os itens do orçamento — ela entra em produção">→ Virar venda</a>
+                <a href="{{ url_for('b2b.venda_nova', orcamento=o.id) }}" class="btn btn-sm btn-outline-success"
+                   title="Abre a venda já com cliente e itens do orçamento — ela entra em produção">→ Virar venda</a>
                 {% endif %}
             </td>
         </tr>
