@@ -259,3 +259,110 @@ def test_item_dispensado_nao_gera_difere_permanente(app, admin_user):
     _login(c, admin_user)
     html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
     assert 'difere do enviado' not in html
+
+
+# ── Desfazer edições — voltar à ordem enviada (dono, 08/07/2026) ─────────
+
+def test_reverter_traz_grid_de_volta_a_ordem_enviada(app, admin_user):
+    """Envia a ordem, edita o grid (difere), aperta desfazer → grid volta ao
+    qtd_alvo da ordem e o 'difere' some. Inverso do 'atualizar produção'."""
+    from app.services.cronograma_edit import (
+        editar_celula,
+        reverter_dia_para_ordem_enviada,
+    )
+    from app.services.producao import enviar_plano_do_dia
+    with app.app_context():
+        r, d2 = _cenario(nome='Pao Reverter', loja_nome='Loja Reverter')
+        plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+        enviado = {it.receita_id: it.qtd_alvo for it in plano.itens}[r.id]
+
+        editar_celula(r.id, d2.isoformat(), enviado + 40, horizonte_dias=7)
+        c = app.test_client()
+        _login(c, admin_user)
+        html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
+        assert 'dia-badge dia-difere' in html            # difere antes
+
+        res = reverter_dia_para_ordem_enviada(d2, horizonte_dias=7)
+        assert res['ok'] and res['n'] >= 1
+        # o override agora reproduz o alvo (sem extra) → difere some
+        from app.models import CronogramaOverride
+        ov = CronogramaOverride.query.filter_by(receita_id=r.id, data=d2).first()
+        assert ov is not None and ov.qtd == enviado
+        html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
+        assert 'dia-badge dia-difere' not in html         # difere sumiu
+        # a ORDEM (o que o padeiro vê) não mudou
+        db.session.expire_all()
+        assert {it.receita_id: it.qtd_alvo
+                for it in plano.itens}[r.id] == enviado
+
+
+def test_reverter_zera_receita_adicionada_depois(app, admin_user):
+    """Receita que o grid passou a mostrar mas não está na ordem é zerada."""
+    from app.services.cronograma_edit import (
+        editar_celula,
+        reverter_dia_para_ordem_enviada,
+    )
+    from app.services.producao import enviar_plano_do_dia
+    with app.app_context():
+        r, d2 = _cenario(nome='Pao Base R2', loja_nome='Loja R2')
+        # 2ª receita SEM pedido — entra no grid via edição manual depois
+        extra = Receita(nome='Extra R2', categoria='Paes', rendimento_qtd=1,
+                        rendimento_unidade='un', peso_base=1000.0)
+        db.session.add(extra)
+        db.session.commit()
+        enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+        # adiciona a extra ao grid (não estava na ordem)
+        editar_celula(extra.id, d2.isoformat(), 30, horizonte_dias=7)
+        extra_id = extra.id
+
+    with app.app_context():
+        res = reverter_dia_para_ordem_enviada(d2, horizonte_dias=7)
+        assert res['ok']
+        from app.models import CronogramaOverride
+        ov = CronogramaOverride.query.filter_by(
+            receita_id=extra_id, data=d2).first()
+        assert ov is not None and ov.qtd == 0        # zerada (não era da ordem)
+
+
+def test_reverter_recusa_dia_fechado(app, admin_user):
+    from app.services.cronograma_edit import (
+        alternar_dia_fechado,
+        reverter_dia_para_ordem_enviada,
+    )
+    from app.services.producao import enviar_plano_do_dia
+    with app.app_context():
+        r, d2 = _cenario(nome='Pao RF', loja_nome='Loja RF')
+        enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+        alternar_dia_fechado(d2, admin_user.id)
+        res = reverter_dia_para_ordem_enviada(d2, horizonte_dias=7)
+        assert res['ok'] is False and res['erro'] == 'dia_fechado'
+
+
+def test_reverter_sem_ordem_recusa(app, admin_user):
+    from app.services.cronograma_edit import reverter_dia_para_ordem_enviada
+    with app.app_context():
+        r, d2 = _cenario(nome='Pao SO', loja_nome='Loja SO')
+        # nunca enviado
+        res = reverter_dia_para_ordem_enviada(d2, horizonte_dias=7)
+        assert res['ok'] is False and res['erro'] == 'sem_ordem'
+
+
+def test_rota_reverter_ordem(app, admin_user):
+    from app.services.cronograma_edit import editar_celula
+    from app.services.producao import enviar_plano_do_dia
+    with app.app_context():
+        r, d2 = _cenario(nome='Pao Rota Rev', loja_nome='Loja Rota Rev')
+        plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+        enviado = {it.receita_id: it.qtd_alvo for it in plano.itens}[r.id]
+        editar_celula(r.id, d2.isoformat(), enviado + 40, horizonte_dias=7)
+
+    c = app.test_client()
+    _login(c, admin_user)
+    resp = c.post('/telaindustriateste/reverter-ordem',
+                  data={'data': d2.isoformat(), 'horizonte': 7, 'inicio': 0},
+                  follow_redirects=True)
+    assert resp.status_code == 200
+    with app.app_context():
+        from app.models import CronogramaOverride
+        ov = CronogramaOverride.query.filter_by(receita_id=r.id, data=d2).first()
+        assert ov is not None and ov.qtd == enviado
