@@ -207,13 +207,36 @@ def _saldo_baixado_por_ep(venda_id):
     return saldo
 
 
+def _saldo_mp_baixado(venda_id):
+    """{materia_prima_id: saldo ainda baixado} dos componentes MP de cesta
+    da venda = saidas − estornos no ledger MovimentacaoEstoque (mesma
+    disciplina do espaco apos o id no LIKE)."""
+    saldo = defaultdict(float)
+    saidas = MovimentacaoEstoque.query.filter(
+        MovimentacaoEstoque.tipo == 'saida',
+        MovimentacaoEstoque.referencia.like(f'Venda B2B #{venda_id} %'),
+    ).all()
+    for m in saidas:
+        saldo[m.materia_prima_id] += (m.quantidade or 0)
+    estornos = MovimentacaoEstoque.query.filter(
+        MovimentacaoEstoque.tipo == 'entrada',
+        MovimentacaoEstoque.referencia.like(f'Estorno venda B2B #{venda_id} %'),
+    ).all()
+    for m in estornos:
+        saldo[m.materia_prima_id] -= (m.quantidade or 0)
+    return saldo
+
+
 def _estornar_estoque(venda, user=None, motivo='cancelada'):
-    """Devolve ao EstoqueProducao o saldo ainda baixado pela venda.
+    """Devolve ao EstoqueProducao (e ao ledger de MP, no caso de componente
+    MP de cesta) o saldo ainda baixado pela venda.
 
     Idempotente: depois de estornar o saldo zera, entao chamadas seguintes
     nao fazem nada. Cobre cesta, falta parcial e edicoes encadeadas.
     Limpa o marcador de regime (`estoque_baixado_em`) — o estorno e sempre
     TOTAL (por saldo), entao depois dele a venda volta a "nao baixada".
+    Estorno de MP com preco_unitario=None — vale R$ 0 nos relatorios de
+    compra (mesmo padrao dos estornos de pedido).
     """
     saldo = _saldo_baixado_por_ep(venda.id)
     for ep_id, qtd in saldo.items():
@@ -227,6 +250,19 @@ def _estornar_estoque(venda, user=None, motivo='cancelada'):
             estoque_producao_id=ep.id,
             tipo='venda_b2b_estorno',
             quantidade=qtd,
+            referencia=f'Estorno venda B2B #{venda.id} ({motivo})',
+            usuario_id=getattr(user, 'id', None),
+        ))
+    for mp_id, qtd_mp in _saldo_mp_baixado(venda.id).items():
+        if qtd_mp <= 0:
+            continue
+        mp = MateriaPrima.query.get(mp_id)
+        if not mp:
+            continue
+        mp.estoque_atual = (mp.estoque_atual or 0) + qtd_mp
+        db.session.add(MovimentacaoEstoque(
+            materia_prima_id=mp.id, tipo='entrada', quantidade=qtd_mp,
+            preco_unitario=None,
             referencia=f'Estorno venda B2B #{venda.id} ({motivo})',
             usuario_id=getattr(user, 'id', None),
         ))
