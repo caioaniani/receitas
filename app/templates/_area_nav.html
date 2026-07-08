@@ -73,6 +73,7 @@
 {{ _lnk(variant, url_for('receitas.modos_preparo'), 'Modo de preparo', request.path.startswith('/receitas/modos-preparo')) }}
 {{ _lnk(variant, url_for('receitas.imagens_upload'), 'Subir imagens (zip)', request.path.startswith('/receitas/imagens')) }}
 {% if current_user.is_admin() %}
+{{ _lnk(variant, url_for('produtos.cadastro_ia'), 'Cadastro assistido (IA)', request.path.startswith('/produtos/cadastro-ia'), icon='bi-robot') }}
 {{ _lnk(variant, url_for('main.todo'), 'Pendências do catálogo', request.path == '/todo') }}
 {% endif %}
 {% endmacro %}
