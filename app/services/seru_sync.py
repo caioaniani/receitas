@@ -19,6 +19,7 @@ e registra MovEstoqueLoja(tipo='venda_seru_sem_estoque') com a falta.
 """
 import logging
 import re
+import threading
 import unicodedata
 
 from app.extensions import db
@@ -466,67 +467,82 @@ LOCK_KEY_REPROCESSO = 7749  # advisory lock — familia do seru_cron (7723-7748)
 _REPROCESSO_DIAS = 7
 
 # Fallback pra SQLite/dev (sem advisory lock): exclusao dentro do processo.
-_LOCK_LOCAL = None
+# No nivel do modulo (nao lazy) — init preguicoso tinha corrida de dupla
+# criacao entre threads.
+_LOCK_LOCAL = threading.Lock()
 
 
-def _lock_local():
-    global _LOCK_LOCAL
-    if _LOCK_LOCAL is None:
-        import threading
-        _LOCK_LOCAL = threading.Lock()
-    return _LOCK_LOCAL
+def reprocesso_pendente():
+    """True se ha pendencia agendada (flag = nonce; '0'/vazio = quitada)."""
+    from app.models import AppConfig
+    v = AppConfig.get(FLAG_REPROCESSO)
+    return bool(v) and v != '0'
 
 
-def agendar_reprocesso_retroativo(dias=_REPROCESSO_DIAS):
+def agendar_reprocesso_retroativo(dias=_REPROCESSO_DIAS, user_id=None):
     """Marca a pendencia e garante que UM drenador esteja rodando.
 
-    Coalescing: vinculos feitos enquanto o drenador roda re-setam a flag e
-    entram na proxima passada — nunca ha 2 reprocessos simultaneos (advisory
-    lock LOCK_KEY_REPROCESSO). Em teste (PYTEST_RUNNING) drena INLINE, pra
-    manter os testes deterministicos (mesmo padrao do debounce do CRM)."""
+    A flag guarda um NONCE (timestamp), nao '1': o drain so a quita com
+    compare-and-clear apos SUCESSO — thread morta no meio (deploy) deixa a
+    pendencia de pe, e o cron de 15min retoma (`retomar_reprocesso_pendente`).
+    Coalescing: vinculos durante a rodada gravam nonce novo e o
+    compare-and-clear falha → nova passada. Nunca ha 2 reprocessos
+    simultaneos (lock LOCK_KEY_REPROCESSO, compartilhado com o botao manual).
+    Em teste (PYTEST_RUNNING) drena INLINE (deterministico)."""
     import os
 
     from flask import current_app
 
     from app.models import AppConfig
-    AppConfig.set(FLAG_REPROCESSO, '1')
+    AppConfig.set(FLAG_REPROCESSO, agora().isoformat())
     db.session.commit()
     app_obj = current_app._get_current_object()
     if os.environ.get('PYTEST_RUNNING'):
-        _drain_reprocesso(app_obj, dias)
+        _drain_reprocesso(app_obj, dias, user_id)
         return
-    import threading
-    threading.Thread(target=_drain_reprocesso, args=(app_obj, dias),
+    threading.Thread(target=_drain_reprocesso, args=(app_obj, dias, user_id),
                      daemon=True).start()
 
 
-def _drain_reprocesso(app_obj, dias):
-    """Drena a pendencia sob lock global. Depois de soltar o lock, re-checa
-    a flag: um vinculo pode te-la setado na janela entre o ultimo check e o
-    unlock (o drenador dele desistiu ao ver o lock ocupado) — sem a
-    re-checagem essa pendencia ficaria orfa ate o proximo vinculo."""
+def retomar_reprocesso_pendente(app_obj):
+    """Chamado pelo cron do Seru (15min): retoma pendencia orfa — drenador
+    morto em deploy, erro de API na tentativa anterior, ou flag setada na
+    janela unlock/recheck de outro worker. No-op sem pendencia."""
     with app_obj.app_context():
-        while True:
-            rodou = _drain_com_lock(dias)
-            if rodou != 'ok':          # 'ocupado' (outro drena) ou 'erro'
-                return
-            from app.models import AppConfig
-            if AppConfig.get(FLAG_REPROCESSO) != '1':
-                return
+        if not reprocesso_pendente():
+            return
+    _drain_reprocesso(app_obj, _REPROCESSO_DIAS, None)
 
 
-def _drain_com_lock(dias):
-    """Tenta o lock e drena. Devolve 'ok' (drenou), 'ocupado' (outro worker
-    esta drenando) ou 'erro' (falha — pendencia devolvida pra flag)."""
+def _drain_reprocesso(app_obj, dias, user_id):
+    """Drena a pendencia sob lock global. Depois de soltar o lock, re-checa
+    a flag (vinculo na janela entre o ultimo check e o unlock teria o
+    drenador dele desistindo ao ver o lock ocupado). Nunca propaga excecao
+    — e o target de thread."""
+    try:
+        with app_obj.app_context():
+            while True:
+                rodou = _com_lock_reprocesso(lambda: _drain_flag(dias, user_id))
+                if rodou in ('ocupado', 'erro'):
+                    return
+                if not reprocesso_pendente():
+                    return
+    except Exception:  # noqa: BLE001 — target de thread: nunca propagar
+        logger.exception('drenador de reprocesso retroativo morreu')
+
+
+def _com_lock_reprocesso(fn):
+    """Roda fn() sob o lock global de reprocesso (advisory 7749; fallback
+    threading.Lock fora do Postgres). Devolve 'ocupado' se outro
+    worker/thread segura o lock; senao, o retorno de fn()."""
     from sqlalchemy import text
     if db.engine.dialect.name != 'postgresql':
-        lk = _lock_local()
-        if not lk.acquire(blocking=False):
+        if not _LOCK_LOCAL.acquire(blocking=False):
             return 'ocupado'
         try:
-            return _drain_flag(dias)
+            return fn()
         finally:
-            lk.release()
+            _LOCK_LOCAL.release()
     # Advisory lock de sessao: lock e unlock na MESMA conexao (licao do
     # _com_lock do seru_cron — unlock em conexao do pool deixa o lock preso).
     conn = db.engine.connect()
@@ -536,7 +552,7 @@ def _drain_com_lock(dias):
         if not got:
             return 'ocupado'
         try:
-            return _drain_flag(dias)
+            return fn()
         finally:
             try:
                 conn.execute(text('SELECT pg_advisory_unlock(:k)'),
@@ -547,27 +563,51 @@ def _drain_com_lock(dias):
         conn.close()
 
 
-def _drain_flag(dias):
-    """Loop: enquanto ha pendencia, limpa a flag ANTES de rodar (vinculo
-    durante a rodada re-seta e gera nova passada) e roda o reprocesso.
-    Erro (API Seru fora): devolve a pendencia pra flag — o proximo vinculo
-    (ou o botao manual da Saude) retenta — e para, sem loop infinito."""
+def _quitar_flag(v0):
+    """Compare-and-clear: quita a pendencia SO se o nonce nao mudou. Vinculo
+    durante a rodada grava nonce novo → o clear falha → nova passada."""
     from app.models import AppConfig
-    while AppConfig.get(FLAG_REPROCESSO) == '1':
-        AppConfig.set(FLAG_REPROCESSO, '0')
-        db.session.commit()
+    AppConfig.query.filter_by(key=FLAG_REPROCESSO, value=v0).update(
+        {'value': '0'}, synchronize_session=False)
+
+
+def _drain_flag(dias, user_id=None):
+    """Loop: enquanto ha pendencia, roda o reprocesso e quita a flag SO no
+    sucesso (compare-and-clear do nonce). Erro/parcial: a flag FICA de pe —
+    o cron de 15min (ou o proximo vinculo) retenta — e para aqui, sem loop
+    infinito. `user_id` preserva a autoria nos MovEstoqueLoja."""
+    from app.models import AppConfig, Usuario
+    usuario = Usuario.query.get(user_id) if user_id else None
+    while True:
+        v0 = AppConfig.get(FLAG_REPROCESSO)
+        if not v0 or v0 == '0':
+            return 'ok'
         try:
-            res = reprocessar_retroativo(dias=dias, user=None)
+            res = reprocessar_retroativo(dias=dias, user=usuario)
         except Exception as e:  # noqa: BLE001 — thread: nunca propagar
             logger.exception('reprocesso retroativo em background falhou')
-            db.session.rollback()
-            AppConfig.set(FLAG_REPROCESSO, '1')
-            AppConfig.set(ULTIMO_REPROCESSO,
-                          'erro em %s: %s' % (agora().strftime('%d/%m %H:%M'),
-                                              str(e)[:180]))
-            db.session.commit()
+            try:
+                db.session.rollback()
+                AppConfig.set(ULTIMO_REPROCESSO,
+                              'erro em %s: %s'
+                              % (agora().strftime('%d/%m %H:%M'),
+                                 str(e)[:180]))
+                db.session.commit()
+            except Exception:  # noqa: BLE001 — DB fora; o log acima ja registrou
+                pass
             return 'erro'
         st = res.get('stats') or {}
+        if st.get('erros'):
+            # Commit falhou dentro do processar_pedidos (baixas revertidas).
+            # NAO quita a pendencia nem grava 'ok' — o cron retenta.
+            AppConfig.set(ULTIMO_REPROCESSO,
+                          'parcial em %s: %d erro(s) no reprocesso — '
+                          'nova tentativa no proximo ciclo'
+                          % (agora().strftime('%d/%m %H:%M'),
+                             int(st.get('erros') or 0)))
+            db.session.commit()
+            return 'erro'
+        _quitar_flag(v0)
         AppConfig.set(ULTIMO_REPROCESSO,
                       'ok em %s: %d pedido(s) liberado(s), %d item(ns) '
                       'baixado(s), %d parciais fora'
@@ -576,4 +616,31 @@ def _drain_flag(dias):
                          st.get('itens_baixados', 0),
                          res.get('parciais_na_janela', 0)))
         db.session.commit()
-    return 'ok'
+
+
+def reprocessar_retroativo_manual(dias=30, user=None):
+    """Botao da Saude do PDV: roda sob o MESMO lock do drain — reprocesso
+    manual e background NUNCA simultaneos (o DELETE de movs de um apagaria
+    baixas recem-criadas pelo outro). Sucesso tambem quita a pendencia
+    agendada, se houver. Devolve ('ok', res) ou ('ocupado', None)."""
+    from app.models import AppConfig
+
+    def _run():
+        v0 = AppConfig.get(FLAG_REPROCESSO)
+        res = reprocessar_retroativo(dias=dias, user=user)
+        st = res.get('stats') or {}
+        if not st.get('erros') and v0 and v0 != '0':
+            _quitar_flag(v0)
+        AppConfig.set(ULTIMO_REPROCESSO,
+                      'ok manual em %s: %d pedido(s) liberado(s), '
+                      '%d item(ns) baixado(s)'
+                      % (agora().strftime('%d/%m %H:%M'),
+                         res.get('liberados', 0),
+                         st.get('itens_baixados', 0)))
+        db.session.commit()
+        return res
+
+    r = _com_lock_reprocesso(_run)
+    if r == 'ocupado':
+        return 'ocupado', None
+    return 'ok', r
