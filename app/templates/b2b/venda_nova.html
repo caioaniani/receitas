@@ -85,7 +85,8 @@
     </div>
 
     <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i>
-        {% if editing %}Salvar alterações{% else %}Criar venda + baixar estoque{% endif %}</button>
+        {% if editing %}Salvar alterações{% else %}Criar venda{% endif %}</button>
+    {% if not editing %}<div class="form-text">O pedido entra na fila do padeiro pela data de entrega — o estoque baixa quando ele SEPARAR no /padeiro.</div>{% endif %}
     <a href="{% if editing %}{{ url_for('b2b.venda_detalhe', vid=venda.id) }}{% else %}{{ url_for('b2b.dashboard') }}{% endif %}" class="btn btn-outline-secondary">Cancelar</a>
 </form>
 
