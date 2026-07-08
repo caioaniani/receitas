@@ -196,3 +196,27 @@ class CronogramaOverride(db.Model):
     def __repr__(self):
         return (f'<CronogramaOverride {self.data} rec={self.receita_id} '
                 f'qtd={self.qtd}>')
+
+
+class CronogramaDiaFechado(db.Model):
+    """Cadeado (🔒) de um DIA do grid do cronograma (pedido do dono
+    08/07/2026): dia fechado nao aceita edicao de celula por NENHUM caminho
+    (grid, mao-dupla do editar-plano) e as acoes em massa — "limpar edicoes
+    manuais" e o reset (↺) por linha — PULAM o dia, preservando o trabalho
+    manual dele. Reversivel: reabrir o cadeado volta tudo ao normal.
+
+    O cadeado protege as EDICOES do rascunho; os gestos explicitos de ordem
+    (enviar/atualizar producao, aprovar, excluir) continuam funcionando —
+    eles ja tem confirm() proprio e sao o proposito do dia fechado ("fechei,
+    agora envio").
+    """
+    __tablename__ = 'cronograma_dia_fechado'
+
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, nullable=False, unique=True, index=True)
+    criado_em = db.Column(db.DateTime, default=agora)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                              nullable=True)
+
+    def __repr__(self):
+        return f'<CronogramaDiaFechado {self.data}>'
