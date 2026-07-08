@@ -461,7 +461,21 @@
                         </form>
                         {% else %}
                         <span class="badge bg-success dia-badge">📤 enviado</span>
+                        {% if difere.get(dia.data) %}
+                        <span class="badge dia-badge dia-difere"
+                              title="O grid difere da ordem que o padeiro está vendo em {{ difere[dia.data]|length }} receita(s) — as células marcadas com 📤 mostram o número enviado. Use '🔄 atualizar produção' no menu ⋯ para aplicar o grid.">⚠ difere do enviado</span>
                         {% endif %}
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('industria_teste.dia_cadeado') }}" class="d-inline">
+                            {{ campos_dia(dia.data) }}
+                            {% if dia.data in fechados %}
+                            <button class="btn-cadeado fechado"
+                                    title="Dia FECHADO: edição de célula, 'limpar edições' e o reset (↺) não mexem nele. Clique para reabrir.">🔒</button>
+                            {% else %}
+                            <button class="btn-cadeado"
+                                    title="Fechar o dia com o cadeado: edições e ações em massa (limpar/reset) passam a PULAR este dia.">🔓</button>
+                            {% endif %}
+                        </form>
                         <button type="button" class="btn-dia-menu" data-dia="{{ dia.data }}"
                                 title="Mais ações de {{ dia.label }}"
                                 aria-label="Mais ações de {{ dia.label }}">⋯</button>
