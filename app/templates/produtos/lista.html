@@ -46,10 +46,18 @@
                 <td class="text-end">{% if f.preco_atacado > 0 %}{{ f.preco_atacado | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
                 <td class="text-end">{% if f.preco_loja > 0 %}{{ f.preco_loja | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
                 <td class="text-end">{% if f.preco_site > 0 %}{{ f.preco_site | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
-                <td class="text-center">
+                <td class="text-center text-nowrap">
                     <a href="{{ url_for('receitas.ficha', id=f.id) }}" class="btn btn-sm btn-outline-secondary" title="Editar ficha">
                         <i class="bi bi-pencil"></i>
                     </a>
+                    {% if current_user.is_admin() %}
+                    <form method="POST" action="{{ url_for('receitas.duplicar', id=f.id) }}" class="d-inline mb-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Duplicar receita">
+                            <i class="bi bi-copy"></i>
+                        </button>
+                    </form>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
