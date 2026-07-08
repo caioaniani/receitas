@@ -140,7 +140,7 @@ def test_resetar_volta_pra_sugestao(app):
     assert CronogramaOverride.query.filter_by(receita_id=r.id).count() > 0
 
     datas = [c['data'] for c in rr0['por_dia']]
-    n = resetar_receita(r.id, datas)
+    n, _preservados = resetar_receita(r.id, datas)
     assert n == 1                                  # so a celula editada tinha override
     assert CronogramaOverride.query.filter_by(receita_id=r.id).count() == 0
     crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
