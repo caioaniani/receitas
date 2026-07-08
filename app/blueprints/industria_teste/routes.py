@@ -538,7 +538,9 @@ def ia_proposta():
     out = planejamento_ia.analisar_producao_ia(
         horizonte_dias=_payload_int(p, 'horizonte', 7, 1, 14),
         janela_semanas=_payload_int(p, 'janela', 6, 1, 26),
-        inicio_offset_dias=_payload_int(p, 'inicio', 1, 0, 14),
+        # inicio default 0 = HOJE, mesma base da tela de produção
+        # (_inicio_offset); a 1ª coluna do grid é hoje.
+        inicio_offset_dias=_payload_int(p, 'inicio', 0, 0, 14),
         equilibrar=str(p.get('equilibrar', '')) in ('1', 'true', 'on', 'True'),
         motor=motor)
     if out.get('erro'):
