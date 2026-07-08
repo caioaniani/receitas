@@ -202,3 +202,57 @@ def test_atualizar_producao_zera_o_difere(app, admin_user):
         _login(c, admin_user)
         html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
         assert 'difere do enviado' not in html
+
+
+def test_mao_dupla_do_editar_plano_nao_grava_override_em_dia_fechado(
+        app, admin_user):
+    """Achado da revisão 08/07: o POST do /padeiro/plano/editar espelhava a
+    ordem no CronogramaOverride SEM checar o cadeado — editar a ordem num dia
+    fechado sobrescrevia o rascunho protegido. Editar a ORDEM segue permitido
+    (gesto explícito); o espelho no rascunho é que é pulado."""
+    from app.services.cronograma_edit import alternar_dia_fechado, editar_celula
+    from app.services.producao import enviar_plano_do_dia
+    with app.app_context():
+        r, d2 = _cenario(nome='Pao Mao Dupla', loja_nome='Loja Mao Dupla')
+        assert editar_celula(r.id, d2.isoformat(), 80,
+                             horizonte_dias=7).get('erro') is None
+        plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+        item = plano.itens[0]
+        alternar_dia_fechado(d2, admin_user.id)
+        item_id, rid = item.id, r.id
+
+    c = app.test_client()
+    _login(c, admin_user)
+    resp = c.post('/padeiro/plano/editar?data=%s' % d2.isoformat(),
+                  data={'data': d2.isoformat(), 'alvo_%d' % item_id: '30'},
+                  follow_redirects=False)
+    assert resp.status_code in (302, 303)
+
+    with app.app_context():
+        from app.models import CronogramaOverride, PlanejamentoItem
+        # a ORDEM mudou (gesto explícito, permitido)...
+        assert PlanejamentoItem.query.get(item_id).qtd_alvo == 30
+        # ...mas o override do dia fechado ficou intacto (80, não 30)
+        ov = CronogramaOverride.query.filter_by(
+            receita_id=r.id, data=d2).first()
+        assert ov is not None and ov.qtd == 80
+
+
+def test_item_dispensado_nao_gera_difere_permanente(app, admin_user):
+    """Achado da revisão 08/07: item DISPENSADO com demanda no grid gerava
+    '⚠ difere do enviado' que o '🔄 atualizar produção' nunca limpa (o sync
+    mantém dispensada_em). Dispensa é decisão explícita — fica fora da
+    comparação dos dois lados."""
+    from app.services.producao import enviar_plano_do_dia
+    from app.utils import agora
+    with app.app_context():
+        r, d2 = _cenario(nome='Pao Dispensado', loja_nome='Loja Dispensa')
+        plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+        item = plano.itens[0]
+        item.dispensada_em = agora()
+        db.session.commit()
+
+    c = app.test_client()
+    _login(c, admin_user)
+    html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
+    assert 'difere do enviado' not in html
