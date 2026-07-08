@@ -542,8 +542,11 @@
                     <div class="rec-est">em estoque: <span class="est-real" title="Estoque real na indústria (o padeiro confirmou a produção)">{{ r.em_estoque }}</span>{% if r.pend_agendado or r.pend_vencido %} <span class="pend-badge" title="Produção mandada e ainda NÃO confirmada pelo padeiro (projeção — não é estoque real){% if r.pend_agendado %}&#10;• {{ r.pend_agendado }} agendado (no prazo){% endif %}{% if r.pend_vencido %}&#10;• {{ r.pend_vencido }} vencido (era pra já ter produzido){% endif %}">+ {% if r.pend_agendado %}<span class="pend-agendado">{{ r.pend_agendado }}</span>{% endif %}{% if r.pend_agendado and r.pend_vencido %} + {% endif %}{% if r.pend_vencido %}<span class="pend-vencido">{{ r.pend_vencido }}⚠</span>{% endif %} a produzir = <strong>{{ r.em_estoque + r.pend_agendado + r.pend_vencido }}</strong> projetado</span>{% endif %}{% if not r.insumo and (r.previsto or r.comprometido) %} · <span title="Pedido firme das lojas na janela">firme {{ r.comprometido }}</span> · <span style="color:#6f42c1" title="Demanda prevista pelo histórico na janela — a base pra julgar se a produção está na média">previsto {{ r.previsto }}</span>{% endif %}{% if r.insumo %} · <span class="consumo-janela" data-rid="{{ r.receita_id }}" title="Consumo derivado dos produtos finais programados na janela (o MRP desconta o estoque antes de sugerir produção — consumo coberto pelo estoque mostra produzir 0)">consumo na janela: <strong>{{ r.consumo_janela if r.consumo_janela is not none else 0 }}</strong></span>{% endif %}</div>
                 </td>
                 {% for c in r.por_dia %}
-                <td class="cel {% if c.data == crono.hoje %}hoje-col{% endif %}{% if r.insumo %} cel-insumo{% endif %}{% if c.bloqueado %} cel-bloq{% endif %}{% if c.data in r.risco_datas %} cel-risco{% endif %}"
-                    {% if c.data in r.risco_datas %}title="Entrega firme deste dia sem produto — aumente a produção dos dias anteriores (contando o lead)"{% elif c.bloqueado %}title="Fornada especial produz só quinta/sexta/sábado — a venda de sex/sáb/dom sai da véspera."{% endif %}
+                {% set fechado = c.data in fechados %}
+                {% set env_dia = ordem_enviada.get(c.data) %}
+                {% set difere_cel = env_dia is not none and r.receita_id in difere.get(c.data, ()) %}
+                <td class="cel {% if c.data == crono.hoje %}hoje-col{% endif %}{% if r.insumo %} cel-insumo{% endif %}{% if c.bloqueado %} cel-bloq{% endif %}{% if fechado %} cel-fechada{% endif %}{% if c.data in r.risco_datas %} cel-risco{% endif %}"
+                    {% if c.data in r.risco_datas %}title="Entrega firme deste dia sem produto — aumente a produção dos dias anteriores (contando o lead)"{% elif c.bloqueado %}title="Fornada especial produz só quinta/sexta/sábado — a venda de sex/sáb/dom sai da véspera."{% elif fechado %}title="Dia fechado com o cadeado (🔒) — reabra no cabeçalho do dia para editar."{% endif %}
                     data-rid="{{ r.receita_id }}" data-data="{{ c.data }}"
                     data-fornadas="{{ c.fornadas if c.fornadas is not none else '' }}">
                     <input type="number" min="0" inputmode="numeric"
@@ -551,8 +554,13 @@
                            {% if r.insumo %}readonly tabindex="-1"
                            title="Calculado automaticamente a partir do produto final que consome este insumo. Pra mudar, edite a produção do PRODUTO (ex: o croissant), não o insumo."
                            {% elif c.bloqueado %}readonly tabindex="-1"
-                           title="Fornada especial produz só quinta/sexta/sábado — edite um desses dias."{% endif %}>
+                           title="Fornada especial produz só quinta/sexta/sábado — edite um desses dias."
+                           {% elif fechado %}readonly tabindex="-1"
+                           title="Dia fechado com o cadeado (🔒) — reabra no cabeçalho do dia para editar."{% endif %}>
                     <span class="cel-forn">{% if c.fornadas is not none %}{{ c.fornadas }} fornada(s){% elif c.qtd %}un{% endif %}</span>
+                    {% if difere_cel %}
+                    <span class="cel-enviado" title="O padeiro está vendo {{ env_dia.get(r.receita_id, 0) }} nesta receita/dia (ordem enviada). O grid mostra outro número — use '🔄 atualizar produção' no menu ⋯ do dia para aplicar o grid.">📤 {{ env_dia.get(r.receita_id, 0) }}</span>
+                    {% endif %}
                 </td>
                 {% endfor %}
                 <td class="tot-col">
