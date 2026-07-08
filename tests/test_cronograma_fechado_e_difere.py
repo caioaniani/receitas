@@ -234,7 +234,7 @@ def test_mao_dupla_do_editar_plano_nao_grava_override_em_dia_fechado(
         assert PlanejamentoItem.query.get(item_id).qtd_alvo == 30
         # ...mas o override do dia fechado ficou intacto (80, não 30)
         ov = CronogramaOverride.query.filter_by(
-            receita_id=r.id, data=d2).first()
+            receita_id=rid, data=d2).first()
         assert ov is not None and ov.qtd == 80
 
 
