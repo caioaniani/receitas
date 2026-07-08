@@ -1405,6 +1405,39 @@ area Catalogo), service `app/services/cadastro_ia.py`.
   + Bootstrap local via `npm pack bootstrap@5.3.3` — o registry npm
   passa pelo proxy; a CDN continua bloqueada).
 
+## Planejamento assistido por IA — pedidos + producao (08/07/2026)
+
+Pedido do dono ("criar uma IA para fazer pedido para as lojas e para a
+producao... colocar o opus 4.8"); escolha dele: botao NAS TELAS (nao
+Slack/cron), producao so propoe (ENVIAR segue humano). Service
+`app/services/planejamento_ia.py`; modelo **Opus 4.8** (excecao
+consciente a padronizacao Sonnet, decisao do dono; env
+`PLANEJAMENTO_IA_MODELO`). Custo em UsoIA ('pedido_loja_ia' /
+'producao_ia'). A IA SEMPRE propoe POR CIMA dos motores deterministicos
+— ela nao inventa a conta, ajusta com contexto (calendario/feriados que
+o modelo conhece — nao ha tabela de datas especiais) e justifica.
+
+- **Pedidos loja→industria**: botao "Sugerir por IA" por loja em
+  `/producao/pedidos-semana/media` (rota `POST /producao/pedidos-semana/
+  ia`). Contexto = grade da MEDIA + motor VENDA+ESTOQUE (contraprova) +
+  estoque + desperdicio 7d. O JS preenche a grade EDITAVEL (celula
+  amarela = mudou; celula travada/ja-pedido NUNCA e tocada — sanitizado
+  no server E pulado no JS) + painel com motivo por item e parecer.
+  NADA e criado: o pedido continua nascendo pelos botoes Gerar de sempre
+  (aplicar_grade → rascunho pendente).
+- **Producao**: botao "Analisar por IA" em `/telaindustriateste` (rotas
+  `POST /telaindustriateste/ia-proposta` e `/ia-aplicar`). Contexto =
+  cronograma + alertas de falta + pendencias do padeiro (agendado/
+  vencido) + fornadas por dia. Proposta = AJUSTES de celula (receita ×
+  data → qtd) com motivo; linha de RETORNO e de INSUMO ficam fora
+  (contexto e whitelist). Aplicar (checkbox por ajuste) grava via
+  `cronograma_edit.editar_celula` — override de RASCUNHO com todas as
+  guardas (dia bloqueado etc.). NUNCA chama aprovar/enviar plano —
+  enviar ao padeiro e gesto humano (regra do dono 04/07 preservada).
+- Sanitizacao espelhada nos dois lados: id/data fora do motor caem;
+  qtd inteira >= 0; proposta >3x o motor ganha aviso visivel.
+- Testes: `tests/test_planejamento_ia.py` (Anthropic sempre mockada).
+
 ## Varredura mobile (06/07/2026)
 
 Pedido do dono ("versao very mobile"); escolha dele: varredura responsiva
