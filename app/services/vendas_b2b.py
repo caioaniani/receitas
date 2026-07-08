@@ -382,15 +382,19 @@ def _aplicar_parcelas(venda, parcelas):
 
 def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
                 data_entrega=None, itens, parcelas=None, observacao=None,
-                nf_numero=None, user=None):
+                nf_numero=None, user=None, commit=True):
     """Cria venda B2B + itens + parcelas + baixa estoque.
 
     itens: lista de {tipo: 'receita'|'produto', id, quantidade,
                      preco_unitario, desconto_percentual, estado, observacao}
     parcelas: lista de {vencimento (date), valor, forma_pagamento (str)}
               ou None pra criar 1 parcela unica ao total
+    commit=False: so faz flush — o caller fecha a transacao. Usado pela
+              conversao de orcamento pra persistir venda + vinculo
+              (orc.venda_id) num commit UNICO (sem janela de crash em que
+              a venda existe mas o orcamento nao aponta pra ela).
 
-    Returns: VendaB2B persistida.
+    Returns: VendaB2B persistida (com id).
     """
     if not itens:
         raise ValueError('venda sem itens')
