@@ -8,6 +8,7 @@ confirmado — mesma regra da rota /pedidos/<id>/editar) tem os itens
 ATUALIZADOS a partir da grade (a tela da media destrava essas celulas).
 """
 from app.constants import STATUS_PEDIDO_EDITAVEIS as STATUS_EDITAVEIS
+from app.constants import STATUS_PEDIDO_ENTREGUES
 from app.extensions import db
 from app.models import PedidoItem, PedidoLoja
 from app.services.previsao_producao import invalidar_sugestao_cache
@@ -38,12 +39,17 @@ def criar_pedidos_rascunho(pedidos, user_id):
         if not loja_id or not data_ent or not itens:
             continue
         # Anti-duplicacao: re-checa no banco (a tela ja sinaliza, mas pode
-        # ter mudado entre o GET e o POST).
-        existe = (PedidoLoja.query
-                  .filter(PedidoLoja.loja_id == loja_id,
-                          PedidoLoja.data_entrega == data_ent,
-                          PedidoLoja.status != 'cancelado')
-                  .first())
+        # ter mudado entre o GET e o POST). Pedido finalizado ANTES da data
+        # (entrega antecipada/emergencia) nao conta como "o pedido do dia" —
+        # mesma regra da grade (previsao_producao._cond_sem_entrega_antecipada).
+        q_existe = (PedidoLoja.query
+                    .filter(PedidoLoja.loja_id == loja_id,
+                            PedidoLoja.data_entrega == data_ent,
+                            PedidoLoja.status != 'cancelado'))
+        if data_ent > hoje_d:
+            q_existe = q_existe.filter(
+                ~PedidoLoja.status.in_(STATUS_PEDIDO_ENTREGUES))
+        existe = q_existe.first()
         if existe:
             pulados += 1
             continue
