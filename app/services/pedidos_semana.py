@@ -167,6 +167,13 @@ def aplicar_grade(pedidos, user_id):
                               PedidoLoja.data_entrega == data_ent,
                               PedidoLoja.status != 'cancelado')
                       .all())
+        if data_ent > hoje_d:
+            # Entrega antecipada (finalizado antes da data, ex: pedido de
+            # emergencia da madrugada entregue no caminhao de hoje) nao e
+            # "o pedido do dia": nao bloqueia criar o pedido real nem e
+            # alvo de atualizacao. Caso Anesio 08/07/2026.
+            existentes = [p for p in existentes
+                          if p.status not in STATUS_PEDIDO_ENTREGUES]
         if not existentes:
             novos = [it for it in itens if int(it.get('qtd') or 0) > 0]
             if not novos:
