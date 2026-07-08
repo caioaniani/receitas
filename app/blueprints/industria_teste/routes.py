@@ -395,13 +395,42 @@ def celula():
 @login_required
 @admin_required
 def limpar_edicoes():
-    """Apaga TODAS as edições manuais (rascunhos) do cronograma — tudo volta pra
-    sugestão calculada. Não toca em pedido enviado, estoque nem MP."""
+    """Apaga as edições manuais (rascunhos) do cronograma — tudo volta pra
+    sugestão calculada, EXCETO dias fechados com o cadeado (🔒). Não toca em
+    pedido enviado, estoque nem MP."""
     from app.services.cronograma_edit import limpar_todos_overrides
 
-    n = limpar_todos_overrides()
-    flash('%d edição(ões) manual(is) apagada(s) — cronograma voltou pro cálculo.'
-          % n if n else 'Não havia edição manual pra limpar.', 'success')
+    n, preservados = limpar_todos_overrides()
+    msg = ('%d edição(ões) manual(is) apagada(s) — cronograma voltou pro '
+           'cálculo.' % n if n else 'Não havia edição manual pra limpar.')
+    if preservados:
+        msg += (' %d edição(ões) de dia(s) fechado(s) com o cadeado (🔒) '
+                'foram preservadas.' % preservados)
+    flash(msg, 'success')
+    return redirect(url_for('industria_teste.index', **_params_visao()))
+
+
+@industria_teste_bp.route('/dia/cadeado', methods=['POST'])
+@login_required
+@admin_required
+def dia_cadeado():
+    """Fecha/reabre o cadeado (🔒) de um dia do grid. Dia fechado: edição de
+    célula recusada e as ações em massa (limpar edições, reset por linha)
+    PULAM o dia. Enviar/atualizar produção continua permitido."""
+    from app.services.cronograma_edit import alternar_dia_fechado
+
+    try:
+        data_alvo = date.fromisoformat(request.form.get('data', ''))
+    except (TypeError, ValueError):
+        flash('Data inválida.', 'warning')
+        return redirect(url_for('industria_teste.index', **_params_visao()))
+    fechado = alternar_dia_fechado(data_alvo, current_user.id)
+    if fechado:
+        flash('Dia %s fechado (🔒): edições e ações em massa não mexem mais '
+              'nele até você reabrir.' % data_alvo.strftime('%d/%m'), 'success')
+    else:
+        flash('Dia %s reaberto (🔓): voltou a aceitar edições.'
+              % data_alvo.strftime('%d/%m'), 'success')
     return redirect(url_for('industria_teste.index', **_params_visao()))
 
 
