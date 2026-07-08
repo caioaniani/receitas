@@ -104,8 +104,8 @@ def test_reset_de_linha_pula_dia_fechado(app, admin_user):
         editar_celula(r.id, d3.isoformat(), 30, horizonte_dias=7)
         alternar_dia_fechado(d2, admin_user.id)
 
-        n = resetar_receita(r.id, [d2.isoformat(), d3.isoformat()])
-        assert n == 1                                    # só o d3
+        n, preservados = resetar_receita(r.id, [d2.isoformat(), d3.isoformat()])
+        assert n == 1 and preservados == 1               # só o d3; d2 ficou
         restantes = CronogramaOverride.query.all()
         assert len(restantes) == 1 and restantes[0].data == d2
 
