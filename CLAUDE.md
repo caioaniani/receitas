@@ -1376,6 +1376,35 @@ dispara o mesmo `copilot_svc.interpretar` — single-workspace.
 
 **UI admin**: `/slack/install` lista vinculos + form pra criar novos (slack_user_id ↔ Usuario).
 
+## Cadastro assistido por IA (08/07/2026)
+
+Pedido do dono: colar print/lista de itens novos (nome + preco) e a IA
+propor o cadastro de Produtos usando os PARECIDOS ja cadastrados como
+referencia de composicao (ex: "MISTO CRANBERRY" herda a estrutura do
+"MISTO" trocando o pao). Tela `/produtos/cadastro-ia` (admin; link na
+area Catalogo), service `app/services/cadastro_ia.py`.
+
+- **Fluxo**: upload de imagem (JPG/PNG/WebP <=8MB) OU texto colado →
+  `analisar()` manda catalogo atual (produtos+componentes, receitas, MPs;
+  caps com aviso, nunca truncar em silencio) + a lista pro Sonnet 4.6
+  (`CADASTRO_IA_MODELO` pra override; custo em UsoIA funcao=
+  'cadastro_ia') → tabela de REVISAO editavel (checkbox por item e por
+  componente, nome/preco/categoria/qtd) → `salvar_lote()` grava.
+- **A IA so propoe, o banco manda**: `_sanitizar_proposta` re-resolve
+  id inventado por nome exato; componente inexistente so vira NOVO se
+  for MP (criada com custo 0 + aviso "definir custo no Banco de MPs");
+  receita/produto novos NUNCA sao criados automaticamente — viram
+  `ProdutoItem` orfao (mesmo destino da tela de composicao, resolve em
+  `/produtos/cestas/orfaos`). Produto homonimo e PULADO no salvar.
+- **Preco**: seletor por lote (whitelist `CAMPOS_PRECO` = preco_site |
+  preco_atacado | preco_loja — decisao do dono: escolher na tela).
+  `item_nome` sempre espelha o nome do alvo (FK manda, nome e fallback).
+- NADA e salvo sem revisao humana: componente errado = baixa de estoque
+  errada no motor de vendas. Testes: `tests/test_cadastro_ia.py`
+  (Anthropic sempre mockada). Tela validada a 390px (metodo Playwright
+  + Bootstrap local via `npm pack bootstrap@5.3.3` — o registry npm
+  passa pelo proxy; a CDN continua bloqueada).
+
 ## Varredura mobile (06/07/2026)
 
 Pedido do dono ("versao very mobile"); escolha dele: varredura responsiva
