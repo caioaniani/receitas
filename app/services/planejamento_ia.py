@@ -104,11 +104,20 @@ def _chamar_opus(system, payload_texto, funcao):
     client = anthropic.Anthropic(api_key=api_key, timeout=120,
                                  max_retries=1)
     try:
+        from app.services import uso_ia
         response = client.messages.create(
             model=MODELO, max_tokens=4000, system=system,
             messages=[{'role': 'user', 'content': payload_texto}])
-        from app.services import uso_ia
         uso_ia.registrar(funcao, MODELO, getattr(response, 'usage', None))
+        if getattr(response, 'stop_reason', None) == 'max_tokens':
+            # Grid grande pode estourar a saida — refaz UMA vez com teto
+            # maior (padrao do retry de truncamento do chatbot, P2 02/07);
+            # sem isso o JSON cortado viraria "resposta invalida" eterno.
+            response = client.messages.create(
+                model=MODELO, max_tokens=8000, system=system,
+                messages=[{'role': 'user', 'content': payload_texto}])
+            uso_ia.registrar(funcao, MODELO,
+                             getattr(response, 'usage', None))
         bruto = ''.join(b.text for b in response.content
                         if getattr(b, 'type', '') == 'text')
         bruto = re.sub(r'^```(?:json)?\s*|\s*```$', '', bruto.strip(),
