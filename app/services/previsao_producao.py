@@ -1075,6 +1075,21 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     }
 
 
+def _cond_sem_entrega_antecipada(hoje_d):
+    """Condição SQL que EXCLUI pedido finalizado ANTES da data de entrega.
+
+    Caso real (Anesio, 08/07/2026): pedido de EMERGÊNCIA criado de madrugada
+    saiu no caminhão de HOJE, mas nasceu datado de amanhã (não-admin não pode
+    datar pro mesmo dia — pedidos/routes.py data_min) e foi marcado entregue
+    às 6h30. Esse pedido não muda mais e não pode ocupar o dia futuro — senão
+    a grade trava a coluna e o pedido REAL da data fica bloqueado. Entregue
+    NO dia (data_entrega <= hoje) continua contando: é a trava anti-pedido-
+    duplicado de sempre."""
+    from app.constants import STATUS_PEDIDO_ENTREGUES
+    return db.not_(db.and_(PedidoLoja.status.in_(STATUS_PEDIDO_ENTREGUES),
+                           PedidoLoja.data_entrega > hoje_d))
+
+
 def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                           inicio_offset_dias=0):
     """Modo MANUAL: devolve a media de cada (loja, produto) por DIA-DA-SEMANA — o
