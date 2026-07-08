@@ -129,8 +129,9 @@ def _chamar_opus(system, payload_texto, funcao):
         logger.warning('%s: resposta nao-JSON do modelo', funcao)
         return None, 'a IA devolveu resposta invalida — tente de novo'
     except Exception as exc:
+        # Detalhe cru (SDK/HTTP) so no log — a UI recebe algo generico.
         logger.warning('%s: falha na chamada: %s', funcao, exc)
-        return None, f'falha na IA: {exc}'
+        return None, 'a IA não respondeu — tente de novo em instantes'
 
 
 def _desperdicio_recente(loja_id, dias=7):
