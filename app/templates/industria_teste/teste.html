@@ -336,7 +336,14 @@
         <span class="kpi-num">{{ totais_dia[0].un }} un</span>
         <span class="kpi-lbl">produzir {{ 'hoje' if dia0.data == crono.hoje else dia0.label }}{% if totais_dia[0].fornadas %} · {{ totais_dia[0].fornadas }} fornada(s){% endif %}</span>
         {% if est0 and est0.enviado %}<span class="kpi-estado est-env">📤 enviado ao padeiro</span>
-        {% if difere.get(dia0.data) %}<span class="kpi-sub" style="color:#b26a00; font-weight:700;" title="As células com 📤 mostram o número que o padeiro está vendo. Use '🔄 atualizar produção' no menu ⋯ do dia para aplicar o grid.">⚠ o grid difere da ordem enviada ({{ difere[dia0.data]|length }} receita(s)) — atualização NÃO enviada</span>{% endif %}
+        {% if difere.get(dia0.data) %}<span class="kpi-sub" style="color:#b26a00; font-weight:700;" title="As células com 📤 mostram o número que o padeiro está vendo. Use '🔄 atualizar produção' no menu ⋯ do dia para aplicar o grid.">⚠ o grid difere da ordem enviada ({{ difere[dia0.data]|length }} receita(s)) — atualização NÃO enviada</span>
+        {% if dia0.data not in fechados %}
+        <form method="POST" action="{{ url_for('industria_teste.reverter_ordem') }}" class="mb-0 mt-1"
+              onsubmit="return confirm('Desfazer as edições do grid de {{ dia0.label }} e trazer de volta a produção como foi ENVIADA ao padeiro? (não muda o que o padeiro está vendo)');">
+            {{ campos_dia(dia0.data) }}
+            <button class="btn-reverter" title="Descarta suas edições e volta o grid ao que o padeiro está vendo (o inverso do 'atualizar produção')">↩️ desfazer edições — voltar à ordem enviada</button>
+        </form>
+        {% endif %}{% endif %}
         {% elif est0 %}<span class="kpi-estado est-apr">✓ aprovado (rascunho)</span>
         {% else %}<span class="kpi-estado est-nada">ordem não enviada</span>{% endif %}
     </div>
