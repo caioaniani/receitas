@@ -156,6 +156,12 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
     alvo = date.fromisoformat(data_iso)
     if alvo not in datas:
         return None
+    # Cadeado do dia (🔒, dono 08/07/2026): dia fechado nao aceita edicao por
+    # NENHUM caminho (grid, mao-dupla do editar-plano) ate reabrir.
+    if alvo in dias_fechados():
+        return {'erro': 'dia_fechado',
+                'msg': 'Este dia está fechado com o cadeado (🔒). Reabra o '
+                       'cadeado no cabeçalho do dia para editar.'}
     # Fornada especial: produção só qui/sex/sáb (decisão do dono 06/07/2026).
     # Recusa a edição em dia bloqueado ANTES de salvar — a tela já trava a
     # célula, mas o guard vale pra qualquer chamador (defesa em profundidade).
