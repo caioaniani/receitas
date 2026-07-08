@@ -305,7 +305,7 @@ def analisar_producao_ia(*, horizonte_dias=7, janela_semanas=6,
     # Sanitiza contra o cronograma REAL: receita/data existentes, qtd
     # inteira >= 0, e descarta ajuste igual ao valor atual.
     por_rid = {r['receita_id']: r for r in crono['receitas']
-               if not r.get('retorno')}
+               if not r.get('retorno') and not r.get('insumo')}
     ajustes_ok = []
     for a in (dados.get('ajustes') or []):
         try:
