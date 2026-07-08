@@ -378,9 +378,11 @@ def test_baixa_cesta_componente_mp_ledger_e_estorno(app, admin_user, catalogo):
     """Componente MP de cesta baixa MateriaPrima.estoque_atual com
     MovimentacaoEstoque 'saida'; o estorno credita de volta com 'entrada'.
     Falta parcial: o movimento registra só o que saiu (estorno exato)."""
-    from app.models import MovimentacaoEstoque
+    from app.models import MateriaPrima, MovimentacaoEstoque
     with app.app_context():
-        mp = catalogo['mp']
+        # Recarrega na sessão DESTE contexto: mutar o objeto da fixture
+        # (outra sessão) deixaria o UPDATE pendente lá e trava o SQLite.
+        mp = db.session.get(MateriaPrima, catalogo['mp'].id)
         mp.estoque_atual = 10.0
         db.session.commit()
         cesta = _cesta_mista(catalogo)
