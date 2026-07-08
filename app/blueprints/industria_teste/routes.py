@@ -93,9 +93,57 @@ def index():
         rr['pend_vencido'] = p['vencido'] if p else 0
     # Estado da ordem por dia (fluxo 2 passos): rascunho/aprovado x enviado.
     estados = {}
+    planos_por_dia = {}
     for p in PlanejamentoProducao.query.filter_by(origem='cronograma').all():
         estados[p.data.isoformat()] = {
             'enviado': p.enviado_ao_padeiro is not False, 'plano_id': p.id}
+        planos_por_dia[p.data.isoformat()] = p
+
+    # A ordem ENVIADA de volta na tela (pedido do dono 08/07/2026): o grid
+    # recalcula a sugestão e se descola do que o padeiro está vendo; sem isso
+    # a diferença fica invisível até alguém lembrar do "🔄 atualizar produção".
+    # ordem_enviada[data][rid] = qtd_alvo (o que o padeiro vê agora);
+    # difere[data] = set de rids cujo re-envio mudaria a ordem
+    # (expected = max(grid + extra, produzido) != qtd_alvo — a MESMA conta do
+    # _sync_itens_do_cronograma; item dispensado fica fora: dispensa é decisão
+    # explícita, não atualização pendente).
+    ordem_enviada, difere = {}, {}
+    for iso, p in planos_por_dia.items():
+        if p.enviado_ao_padeiro is False:
+            continue
+        itens = {it.receita_id: it for it in p.itens
+                 if it.dispensada_em is None}
+        ordem_enviada[iso] = {rid: int(it.qtd_alvo or 0)
+                              for rid, it in itens.items()}
+        dif = set()
+        vistos = set()
+        for rr in crono['receitas']:
+            rid = rr['receita_id']
+            c = next((c for c in rr['por_dia'] if c['data'] == iso), None)
+            if c is None:
+                continue
+            vistos.add(rid)
+            it = itens.get(rid)
+            extra = int(it.qtd_extra or 0) if it else 0
+            produzido = int(it.produzido_qtd or 0) if it else 0
+            esperado = max(int(c['qtd'] or 0) + extra, produzido)
+            enviado_qtd = int(it.qtd_alvo or 0) if it else 0
+            if esperado != enviado_qtd:
+                dif.add(rid)
+        # Item da ordem que saiu do grid (linha nem aparece mais): re-envio
+        # também mexeria nele (remove/trava no piso) — conta como diferença.
+        for rid, it in itens.items():
+            if rid in vistos:
+                continue
+            piso = max(int(it.produzido_qtd or 0), int(it.qtd_extra or 0))
+            if int(it.qtd_alvo or 0) != piso:
+                dif.add(rid)
+        if dif:
+            difere[iso] = dif
+
+    # Cadeado por dia (🔒): edição/limpar/reset não mexem em dia fechado.
+    from app.services.cronograma_edit import dias_fechados
+    fechados = {d.isoformat() for d in dias_fechados()}
 
     # Totais por dia (rodapé do grid): unidades de produto final (insumo fica
     # de fora — massa em bolas somada com croissants inflaria o número) e
