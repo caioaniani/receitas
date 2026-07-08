@@ -134,6 +134,9 @@ def test_rota_cadeado_toggla_e_exige_admin(app, admin_user):
     with app.app_context():
         assert CronogramaDiaFechado.query.filter_by(data=d2).count() == 0
 
+    from flask import g
+    if hasattr(g, '_login_user'):                        # limpa o cache do
+        delattr(g, '_login_user')                        # admin (ver docstring)
     c2 = app.test_client()
     with c2.session_transaction() as sess:
         sess['_user_id'] = str(func_id)
