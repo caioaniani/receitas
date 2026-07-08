@@ -154,7 +154,13 @@ def index():
             difere[iso] = dif
 
     # Cadeado por dia (🔒): edição/limpar/reset não mexem em dia fechado.
-    from app.services.cronograma_edit import dias_fechados
+    # Cadeado de dia que já passou é podado (o grid nunca mais o mostra;
+    # deixá-lo blindaria overrides mortos do "limpar edições" pra sempre).
+    from app.services.cronograma_edit import (
+        dias_fechados,
+        podar_dias_fechados_passados,
+    )
+    podar_dias_fechados_passados()
     fechados = {d.isoformat() for d in dias_fechados()}
 
     # Totais por dia (rodapé do grid): unidades de produto final (insumo fica
