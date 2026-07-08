@@ -176,7 +176,7 @@ def test_grid_mostra_ordem_enviada_quando_difere(app, admin_user):
         _login(c, admin_user)
         # sem edição: nada difere
         html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
-        assert 'difere do enviado' not in html
+        assert 'dia-badge dia-difere' not in html
 
         # edita o grid (rascunho) sem atualizar a produção
         res = editar_celula(r.id, d2.isoformat(), enviado + 25,
@@ -201,7 +201,7 @@ def test_atualizar_producao_zera_o_difere(app, admin_user):
         c = app.test_client()
         _login(c, admin_user)
         html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
-        assert 'difere do enviado' not in html
+        assert 'dia-badge dia-difere' not in html
 
 
 def test_mao_dupla_do_editar_plano_nao_grava_override_em_dia_fechado(
