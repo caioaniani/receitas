@@ -1054,9 +1054,32 @@ Tres regras ditadas pelo dono, escritas na pedra:
    parcela, demais parcela unica). Aba "Aprovados" do dashboard = aprovados
    com `venda_id IS NULL` (legado pre-regime).
 
+Endurecimento pos-revisao (08/07/2026): CLAIM atomico (UPDATE condicional,
+padrao do Confirmar do Slack) em TODOS os caminhos de baixa
+(`vendas_b2b._claim_baixa`: separar, sincronizar data, reabrir) e na
+aprovacao do orcamento; aprovacao persiste claim + venda + vinculo num
+commit UNICO (`criar_venda(commit=False)`).
+
+**Baixa de componente de cesta na PROPRIA linha (fix 08/07/2026)**:
+componente receita/produto debita a linha dele no `EstoqueProducao`
+(antes componente produto caia numa linha anonima all-NULL); componente
+MP debita `MateriaPrima.estoque_atual` + `MovimentacaoEstoque` 'saida'
+com referencia `Venda B2B #<id> ` (`_baixar_componente_mp`; movimento so
+do que SAIU — estorno via `_saldo_mp_baixado` devolve exato, entrada com
+`preco_unitario=None`). `comprometido_b2b_pendente` espelha (receita +
+produto contam; MP fora — nao aparece no estoque_map).
+
+**Rascunho arquivavel (08/07/2026)**: `Orcamento.arquivado_em` (idioma do
+`Receita.arquivada_em`; ALTER em `migrations_legacy` PG+SQLite). Arquivar
+= so rascunho (`orcamentos.arquivar/desarquivar`, rota toggle
+`/b2b/orcamentos/<id>/arquivar`); some de Pendentes, aparece na aba
+Arquivados com badge, nao transiciona status ate desarquivar. 'recusado'
+segue significando "cliente disse nao" — nao reusar pra rascunho morto.
+
 Testes: `tests/test_b2b_baixa_separacao.py`,
 `tests/test_orcamento_aprova_vira_venda.py`; regressao reescrita em
-`test_b2b.py`/`test_b2b_copilot.py`/`test_orcamentos.py`.
+`test_b2b.py`/`test_b2b_copilot.py`/`test_orcamentos.py` (arquivar
+incluso).
 
 ## Copilot (servico) — canais: Slack + WhatsApp do dono. SEM interface web
 
