@@ -24,6 +24,7 @@ ainda devido pela venda eh `Σ(venda_b2b) − Σ(venda_b2b_estorno)`. Isso
 torna cancelar/editar/reabrir corretos e idempotentes mesmo encadeados.
 """
 
+import logging
 from collections import defaultdict
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -40,6 +41,8 @@ from app.models import (
     VendaB2BParcela,
 )
 from app.utils import agora, hoje
+
+logger = logging.getLogger(__name__)
 
 
 def _get_or_create_estoque(receita_id=None, produto_id=None):
