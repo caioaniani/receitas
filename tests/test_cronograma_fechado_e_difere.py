@@ -1,0 +1,194 @@
+"""Cadeado por dia (🔒) + ordem enviada de volta na tela (dono, 08/07/2026).
+
+1. Dia FECHADO com o cadeado: edição de célula recusada (dia_fechado, 422 na
+   rota), "limpar edições manuais" preserva os overrides dele e o reset (↺)
+   por linha o pula. Reabrir volta tudo ao normal.
+2. Dia ENVIADO cujo grid difere da ordem: a tela mostra o número que o
+   padeiro está vendo (marcador 📤) e o aviso "difere do enviado" — enquanto
+   o "🔄 atualizar produção" não for clicado.
+"""
+from datetime import timedelta
+
+from app.extensions import db
+from app.models import CronogramaOverride, Loja, PedidoItem, PedidoLoja, Receita
+from app.utils import hoje
+
+
+def _cenario(nome='Pao Cadeado', loja_nome='Loja Cadeado', qtd=50):
+    r = Receita(nome=nome, categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=1000.0)
+    loja = Loja(nome=loja_nome, ativa=True)
+    db.session.add_all([r, loja])
+    db.session.flush()
+    d2 = hoje() + timedelta(days=2)
+    p = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=d2,
+                   data_pedido=d2)
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=qtd))
+    db.session.commit()
+    return r, d2
+
+
+def _login(client, user):
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(user.id)
+        sess['_fresh'] = True
+
+
+# ── Cadeado por dia ─────────────────────────────────────────────────────
+
+def test_dia_fechado_recusa_edicao_de_celula(app, admin_user):
+    from app.services.cronograma_edit import alternar_dia_fechado, editar_celula
+    with app.app_context():
+        r, d2 = _cenario()
+        assert alternar_dia_fechado(d2, admin_user.id) is True
+        res = editar_celula(r.id, d2.isoformat(), 80, horizonte_dias=7)
+        assert res.get('erro') == 'dia_fechado'
+        assert CronogramaOverride.query.count() == 0     # nada salvo
+
+        # reabrir volta a aceitar
+        assert alternar_dia_fechado(d2, admin_user.id) is False
+        res = editar_celula(r.id, d2.isoformat(), 80, horizonte_dias=7)
+        assert res.get('erro') is None
+        assert res['total'] == 80
+
+
+def test_rota_celula_dia_fechado_422(app, admin_user):
+    from app.services.cronograma_edit import alternar_dia_fechado
+    with app.app_context():
+        r, d2 = _cenario()
+        alternar_dia_fechado(d2, admin_user.id)
+        c = app.test_client()
+        _login(c, admin_user)
+        resp = c.post('/telaindustriateste/celula',
+                      json={'receita_id': r.id, 'data': d2.isoformat(),
+                            'qtd': 80, 'horizonte': 7, 'inicio': 0})
+        assert resp.status_code == 422
+        assert resp.get_json()['erro'] == 'dia_fechado'
+
+
+def test_limpar_edicoes_preserva_dia_fechado(app, admin_user):
+    from app.services.cronograma_edit import (
+        alternar_dia_fechado,
+        editar_celula,
+        limpar_todos_overrides,
+    )
+    with app.app_context():
+        r, d2 = _cenario()
+        d3 = d2 + timedelta(days=1)
+        # override em d2 (vai ser fechado) e em d3 (fica aberto)
+        assert editar_celula(r.id, d2.isoformat(), 80,
+                             horizonte_dias=7).get('erro') is None
+        assert editar_celula(r.id, d3.isoformat(), 30,
+                             horizonte_dias=7).get('erro') is None
+        alternar_dia_fechado(d2, admin_user.id)
+
+        apagados, preservados = limpar_todos_overrides()
+        assert apagados == 1 and preservados == 1
+        restantes = CronogramaOverride.query.all()
+        assert len(restantes) == 1
+        assert restantes[0].data == d2 and restantes[0].qtd == 80
+
+
+def test_reset_de_linha_pula_dia_fechado(app, admin_user):
+    from app.services.cronograma_edit import (
+        alternar_dia_fechado,
+        editar_celula,
+        resetar_receita,
+    )
+    with app.app_context():
+        r, d2 = _cenario()
+        d3 = d2 + timedelta(days=1)
+        editar_celula(r.id, d2.isoformat(), 80, horizonte_dias=7)
+        editar_celula(r.id, d3.isoformat(), 30, horizonte_dias=7)
+        alternar_dia_fechado(d2, admin_user.id)
+
+        n = resetar_receita(r.id, [d2.isoformat(), d3.isoformat()])
+        assert n == 1                                    # só o d3
+        restantes = CronogramaOverride.query.all()
+        assert len(restantes) == 1 and restantes[0].data == d2
+
+
+def test_rota_cadeado_toggla_e_exige_admin(app, admin_user):
+    from app.models import CronogramaDiaFechado, Usuario
+    with app.app_context():
+        _, d2 = _cenario()
+        func = Usuario(nome='func', login='func-cad', papel='funcionario')
+        func.set_senha('123')
+        db.session.add(func)
+        db.session.commit()
+        func_id = func.id
+
+        c = app.test_client()
+        _login(c, admin_user)
+        c.post('/telaindustriateste/dia/cadeado',
+               data={'data': d2.isoformat()})
+        assert CronogramaDiaFechado.query.filter_by(data=d2).count() == 1
+        c.post('/telaindustriateste/dia/cadeado',
+               data={'data': d2.isoformat()})
+        assert CronogramaDiaFechado.query.filter_by(data=d2).count() == 0
+
+        c2 = app.test_client()
+        with c2.session_transaction() as sess:
+            sess['_user_id'] = str(func_id)
+            sess['_fresh'] = True
+        c2.post('/telaindustriateste/dia/cadeado',
+                data={'data': d2.isoformat()})
+        assert CronogramaDiaFechado.query.filter_by(data=d2).count() == 0
+
+
+def test_enviar_continua_permitido_em_dia_fechado(app, admin_user):
+    """O cadeado protege o RASCUNHO; enviar/atualizar produção é o gesto
+    explícito e segue funcionando (fechei o dia → envio a ordem)."""
+    from app.services.cronograma_edit import alternar_dia_fechado
+    from app.services.producao import enviar_plano_do_dia
+    with app.app_context():
+        r, d2 = _cenario()
+        alternar_dia_fechado(d2, admin_user.id)
+        plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+        assert plano is not None and plano.enviado_ao_padeiro is True
+
+
+# ── Ordem enviada de volta na tela ──────────────────────────────────────
+
+def test_grid_mostra_ordem_enviada_quando_difere(app, admin_user):
+    """Envia a ordem, edita o grid SEM re-enviar → a tela mostra o marcador
+    📤 com o número do padeiro e o aviso 'difere do enviado'."""
+    from app.services.cronograma_edit import editar_celula
+    from app.services.producao import enviar_plano_do_dia
+    with app.app_context():
+        r, d2 = _cenario(nome='Pao Difere', loja_nome='Loja Difere')
+        plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+        enviado = {it.receita_id: it.qtd_alvo for it in plano.itens}[r.id]
+
+        c = app.test_client()
+        _login(c, admin_user)
+        # sem edição: nada difere
+        html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
+        assert 'difere do enviado' not in html
+
+        # edita o grid (rascunho) sem atualizar a produção
+        res = editar_celula(r.id, d2.isoformat(), enviado + 25,
+                            horizonte_dias=7)
+        assert res.get('erro') is None
+        html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
+        assert 'difere do enviado' in html
+        assert ('📤 %d' % enviado) in html               # o que o padeiro vê
+
+
+def test_atualizar_producao_zera_o_difere(app, admin_user):
+    from app.services.cronograma_edit import editar_celula
+    from app.services.producao import enviar_plano_do_dia
+    with app.app_context():
+        r, d2 = _cenario(nome='Pao Sync', loja_nome='Loja Sync')
+        plano = enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+        enviado = {it.receita_id: it.qtd_alvo for it in plano.itens}[r.id]
+        editar_celula(r.id, d2.isoformat(), enviado + 25, horizonte_dias=7)
+
+        # "🔄 atualizar produção" = re-enviar → grid e ordem batem de novo
+        enviar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
+        c = app.test_client()
+        _login(c, admin_user)
+        html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
+        assert 'difere do enviado' not in html
