@@ -575,3 +575,72 @@ def frete_debug():
             frete_svc._geocodificar_texto(simples))
     return jsonify(ok=True, consulta=q, etapas=etapas,
                    oficial=frete_svc.consultar_frete(q))
+
+
+@claude_api_bp.route('/pedidos-dia')
+@_claude_auth_required
+def pedidos_dia():
+    """Pedidos loja→indústria de UMA data de entrega (read-only) — TODOS os
+    status, inclusive cancelado (a lista de /pedidos fatia por aba e um pedido
+    em status inesperado 'some' da vista; esta sonda mostra tudo).
+
+    Criada em 08/07/2026 pra diagnosticar "cadê o pedido da Anesio pra
+    amanhã?" — a grade da média via um pedido não-editável que nenhuma aba
+    de /pedidos mostrava.
+
+    Params: ?data=YYYY-MM-DD (default amanhã, BRT) e ?loja=<trecho do nome>
+    (opcional; fuzzy via resolver_loja_por_nome).
+    """
+    from datetime import date, timedelta
+
+    from app.models import Loja, PedidoLoja, Usuario
+    from app.utils import hoje, resolver_loja_por_nome
+
+    data_s = (request.args.get('data') or '').strip()
+    if data_s:
+        try:
+            data_ent = date.fromisoformat(data_s)
+        except ValueError:
+            return jsonify(ok=False, erro='data invalida (YYYY-MM-DD)'), 400
+    else:
+        data_ent = hoje() + timedelta(days=1)
+
+    q = PedidoLoja.query.filter(PedidoLoja.data_entrega == data_ent)
+    loja_arg = (request.args.get('loja') or '').strip()
+    if loja_arg:
+        loja = resolver_loja_por_nome(loja_arg)
+        if loja is None:
+            return jsonify(ok=False, erro=f'loja nao encontrada: {loja_arg!r}'), 404
+        q = q.filter(PedidoLoja.loja_id == loja.id)
+
+    def _nome_usuario(uid):
+        if not uid:
+            return None
+        u = Usuario.query.get(uid)
+        return u.nome if u else f'#{uid}'
+
+    pedidos = []
+    for p in q.order_by(PedidoLoja.id).all():
+        loja_p = Loja.query.get(p.loja_id)
+        pedidos.append({
+            'id': p.id,
+            'loja': loja_p.nome if loja_p else f'#{p.loja_id}',
+            'status': p.status,
+            'data_pedido': p.data_pedido.isoformat() if p.data_pedido else None,
+            'criado_em': (p.criado_em.strftime('%Y-%m-%d %H:%M')
+                          if getattr(p, 'criado_em', None) else None),
+            'criado_por': _nome_usuario(getattr(p, 'criado_por', None)),
+            'modificado_em': (p.modificado_em.strftime('%Y-%m-%d %H:%M')
+                              if getattr(p, 'modificado_em', None) else None),
+            'modificado_por': _nome_usuario(
+                getattr(p, 'modificado_por_id', None)),
+            'observacao': p.observacao or '',
+            'itens': [{'nome': (it.receita.nome if it.receita_id and it.receita
+                                else it.materia_prima.nome
+                                if it.materia_prima_id and it.materia_prima
+                                else '?'),
+                       'qtd': it.quantidade}
+                      for it in p.itens],
+        })
+    return jsonify(ok=True, data=data_ent.isoformat(), total=len(pedidos),
+                   pedidos=pedidos)
