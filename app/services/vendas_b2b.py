@@ -411,6 +411,43 @@ def cancelar_venda(venda, user=None):
     return venda
 
 
+def excluir_venda(venda, user=None):
+    """Exclui a venda DEFINITIVAMENTE (limpeza de teste / lançamento
+    errado — pedido do dono 07/07/2026, virada pra produção). Só o dono
+    (rota owner_required).
+
+    Estorna o estoque ainda baixado (idempotente, por saldo — venda já
+    cancelada não devolve em dobro) e apaga itens/parcelas via cascade.
+    Os MovEstoqueProducao FICAM (referência por texto, sem FK) — a
+    história do estoque não se apaga.
+
+    Recusas (dinheiro tem peso especial):
+    - venda faturada: cancele a fatura antes;
+    - pagamento registrado (valor_pago > 0): registro financeiro não some;
+    - parcela com cobrança que já foi ao banco (pendente é apagada junto).
+    """
+    if venda.fatura_id:
+        raise ValueError(
+            f'venda faturada ({venda.fatura.codigo}) — cancele a fatura em '
+            'B2B → Faturas mensais antes de excluir')
+    if venda.valor_pago and venda.valor_pago > 0:
+        raise ValueError('venda com pagamento registrado — registro '
+                         'financeiro não se apaga')
+    cobrancas_pendentes = []
+    for p in venda.parcelas:
+        for cob in (p.cobranca or []):      # backref é lista
+            if cob.status != 'pendente':
+                raise ValueError(
+                    f'parcela {p.numero} tem boleto que já foi ao banco '
+                    f'(status {cob.status}) — resolva pelo retorno antes')
+            cobrancas_pendentes.append(cob)
+    _estornar_estoque(venda, user=user, motivo='exclusao')
+    for cob in cobrancas_pendentes:
+        db.session.delete(cob)
+    db.session.delete(venda)                # itens/parcelas via cascade
+    db.session.commit()
+
+
 def receber_pagamento(parcela, valor, forma_pagamento=None, observacao=None):
     """Soma valor ao valor_pago da parcela. Marca pago_em se quitar.
 
