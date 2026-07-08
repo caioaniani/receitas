@@ -63,6 +63,57 @@ def novo():
     return redirect(url_for('produtos.detalhe', id=produto.id))
 
 
+@produtos_bp.route('/<int:id>/duplicar', methods=['POST'])
+@login_required
+@admin_required
+def duplicar(id):
+    """Duplica um Produto (cesta/kit ou revenda) com a composicao inteira.
+
+    NAO copia de proposito:
+    - preco_site/ordem_site: publicacao na vitrine e preco_site > 0
+      (loja_catalogo.produtos_publicados) — a copia nao pode aparecer no
+      site antes de ser revisada;
+    - imagem_*: remover a imagem deleta o arquivo do Dropbox pelo
+      storage_path (main/routes.py::cardapio_img_remover) — copia
+      compartilhando o mesmo arquivo perderia a imagem dos DOIS.
+    """
+    original = Produto.query.get_or_404(id)
+    copia = Produto(
+        nome=f'Cópia de {original.nome}',
+        categoria=original.categoria,
+        descricao=original.descricao,
+        descricao_seo=original.descricao_seo,
+        preco_atacado=original.preco_atacado,
+        preco_loja=original.preco_loja,
+        preco_interno=original.preco_interno,
+        custo_direto=original.custo_direto,
+        custo_embalagem=original.custo_embalagem,
+        modo_preparo=original.modo_preparo,
+        observacao=original.observacao,
+        reaproveitavel=original.reaproveitavel,
+    )
+    db.session.add(copia)
+    db.session.flush()
+
+    # Componentes com FK (item_nome e so fallback humano-legivel — a baixa
+    # de estoque resolve SEMPRE pela FK).
+    for item in original.itens:
+        db.session.add(ProdutoItem(
+            produto_id=copia.id,
+            tipo=item.tipo,
+            receita_id=item.receita_id,
+            produto_componente_id=item.produto_componente_id,
+            materia_prima_id=item.materia_prima_id,
+            item_nome=item.item_nome,
+            quantidade=item.quantidade,
+        ))
+
+    db.session.commit()
+    flash(f'Produto duplicado: "{copia.nome}". Preço do site NÃO foi copiado '
+          '— defina quando quiser publicar a cópia na vitrine.', 'success')
+    return redirect(url_for('produtos.detalhe', id=copia.id))
+
+
 @produtos_bp.route('/<int:id>')
 @login_required
 def detalhe(id):
