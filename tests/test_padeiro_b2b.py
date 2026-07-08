@@ -1,7 +1,8 @@
 """B2B na tela do padeiro (Fase 1): vendas B2B com data de entrega aparecem
 junto dos pedidos de loja, com estado por item, e podem ser separadas. B2B sem
-data de entrega (venda imediata) nao entra na fila. Sem mexer em estoque (o B2B
-ja baixou do freezer na venda)."""
+data de entrega (venda imediata) nao entra na fila. REGIME 07/07/2026: o
+freezer baixa NA SEPARACAO (baixa/estorno cobertos em
+tests/test_b2b_baixa_separacao.py; aqui o foco e a UI/fila)."""
 from datetime import timedelta
 
 import pytest
