@@ -46,6 +46,10 @@
             <input type="hidden" name="status" value="rascunho">
             <button class="btn btn-sm btn-outline-warning">Voltar pra rascunho</button>
         </form>
+        {% elif orc.status == 'aprovado' and orc.venda_id %}
+        <a href="{{ url_for('b2b.venda_detalhe', vid=orc.venda_id) }}" class="btn btn-sm btn-success">
+            <i class="bi bi-check-circle"></i> Virou a venda #{{ orc.venda_id }}</a>
+        <span class="text-muted small">— na fila do padeiro pela data de entrega; o estoque baixa na separação.</span>
         {% elif orc.status == 'aprovado' %}
         <a href="{{ url_for('b2b.venda_nova', orcamento=orc.id) }}" class="btn btn-sm btn-success"
            title="Abre a venda já com cliente e itens deste orçamento — ela entra em produção">
