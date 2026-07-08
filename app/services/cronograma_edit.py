@@ -22,6 +22,30 @@ from math import ceil
 from app.extensions import db
 
 
+def dias_fechados():
+    """Set de `date` com cadeado (🔒) ativo no grid do cronograma."""
+    from app.models import CronogramaDiaFechado
+    return {f.data for f in CronogramaDiaFechado.query.all()}
+
+
+def alternar_dia_fechado(data_alvo, user_id=None):
+    """Fecha/reabre o cadeado de um dia. Retorna True se o dia FICOU fechado.
+
+    Dia fechado: edicao de celula recusada (qualquer caminho) e as acoes em
+    massa (limpar edicoes, reset por linha) PULAM o dia. Enviar/atualizar
+    producao continua permitido — o cadeado protege o rascunho, nao a ordem."""
+    from app.models import CronogramaDiaFechado
+    existente = CronogramaDiaFechado.query.filter_by(data=data_alvo).first()
+    if existente is not None:
+        db.session.delete(existente)
+        db.session.commit()
+        return False
+    db.session.add(CronogramaDiaFechado(data=data_alvo,
+                                        criado_por_id=user_id))
+    db.session.commit()
+    return True
+
+
 def _salvar_overrides(receita_id, datas, qtds):
     """Upsert CronogramaOverride pra cada (data, receita)."""
     from app.models import CronogramaOverride
