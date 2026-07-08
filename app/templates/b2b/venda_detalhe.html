@@ -14,7 +14,8 @@
             <button class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle"></i> Cancelar venda</button>
         </form>
         {% else %}
-        <form method="POST" action="{{ url_for('b2b.venda_reabrir', vid=venda.id) }}" class="d-inline" onsubmit="return confirm('Reabrir venda e baixar o estoque de novo?')">
+        <form method="POST" action="{{ url_for('b2b.venda_reabrir', vid=venda.id) }}" class="d-inline"
+              onsubmit="return confirm('Reabrir a venda? {{ 'O estoque baixa de novo agora.' if venda.data_entrega is none or venda.status_entrega != 'pendente' else 'Ela volta pra fila do padeiro — o estoque baixa na separação.' }}')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-outline-success btn-sm"><i class="bi bi-arrow-counterclockwise"></i> Reabrir venda</button>
         </form>
