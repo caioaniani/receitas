@@ -261,3 +261,54 @@ def test_frete_default_zero(app):
         orc, _ = svc.criar_orcamento({'cliente_nome': 'X'}, itens)
         assert orc.frete_valor == Decimal('0')
         assert orc.valor_total == Decimal('10.00')
+
+
+def test_arquivar_rascunho_sai_de_pendentes_e_volta(app):
+    """Rascunho arquivável (08/07/2026): some de Pendentes sem virar
+    'recusado', aparece na aba Arquivados, não muda status enquanto
+    arquivado, e desarquivar devolve pra Pendentes."""
+    from app.extensions import db
+    from app.services import orcamentos as svc
+    with app.app_context():
+        prod = _produto(db)
+        itens = [{'catalogo': f'produto:{prod.id}', 'qtd': '1',
+                  'preco_unitario': '10'}]
+        orc, _ = svc.criar_orcamento({'cliente_nome': 'Gaveta'}, itens)
+        codigo = orc.codigo
+
+        ok, erro = svc.arquivar(orc)
+        assert ok, erro
+        assert orc.status == 'rascunho' and orc.arquivado_em is not None
+        # Arquivado não transiciona de status
+        ok, erro = svc.marcar_status(orc, 'enviado')
+        assert not ok and 'arquivado' in erro
+        # Toggle na rota: telas refletem
+        c = _admin(app)
+        pend = c.get('/b2b/?aba=pedidos&f=pendentes').get_data(as_text=True)
+        assert codigo not in pend
+        arq = c.get('/b2b/?aba=pedidos&f=arquivados').get_data(as_text=True)
+        assert codigo in arq and 'rascunho arquivado' in arq
+        r = c.post(f'/b2b/orcamentos/{orc.id}/arquivar')
+        assert r.status_code == 302                    # desarquiva (toggle)
+        db.session.refresh(orc)
+        assert orc.arquivado_em is None
+        pend2 = c.get('/b2b/?aba=pedidos&f=pendentes').get_data(as_text=True)
+        assert codigo in pend2
+        ok, _ = svc.marcar_status(orc, 'enviado')      # fluxo volta ao normal
+        assert ok
+
+
+def test_arquivar_so_rascunho(app):
+    """Enviado/recusado não arquivam — seguem o fluxo de status."""
+    from app.extensions import db
+    from app.services import orcamentos as svc
+    with app.app_context():
+        prod = _produto(db)
+        itens = [{'catalogo': f'produto:{prod.id}', 'qtd': '1',
+                  'preco_unitario': '10'}]
+        orc, _ = svc.criar_orcamento({'cliente_nome': 'X'}, itens)
+        svc.marcar_status(orc, 'enviado')
+        ok, erro = svc.arquivar(orc)
+        assert not ok and 'rascunho' in erro
+        ok, erro = svc.desarquivar(orc)
+        assert not ok
