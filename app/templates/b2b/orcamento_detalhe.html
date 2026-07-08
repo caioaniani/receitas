@@ -46,6 +46,10 @@
             <input type="hidden" name="status" value="rascunho">
             <button class="btn btn-sm btn-outline-warning">Voltar pra rascunho</button>
         </form>
+        {% elif orc.status == 'aprovado' %}
+        <a href="{{ url_for('b2b.venda_nova', orcamento=orc.id) }}" class="btn btn-sm btn-success"
+           title="Abre a venda já com cliente e itens deste orçamento — ela entra em produção">
+            <i class="bi bi-arrow-right-circle"></i> Virar venda</a>
         {% else %}
         <span class="text-muted small">Orcamento finalizado ({{ STATUS_LABEL[orc.status] }}).</span>
         {% endif %}
