@@ -832,7 +832,13 @@
             const r = await postJson(URL_RESET, { receita_id: rid, datas: DATAS });
             resp = r.resp; d = r.d;
         } catch (e) { /* rede fora mesmo apos o retry */ }
-        if (resp && resp.ok && d && d.ok) { location.reload(); return; }
+        if (resp && resp.ok && d && d.ok) {
+            if (d.preservados) {
+                alert('Edição de ' + d.preservados + ' dia(s) fechado(s) com o '
+                      + 'cadeado (🔒) foi mantida — reabra o cadeado pra resetar também.');
+            }
+            location.reload(); return;
+        }
         alert('Não consegui voltar à sugestão: ' + msgErro(resp, d));
     }
 
