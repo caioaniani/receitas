@@ -278,17 +278,23 @@ def analisar_producao_ia(*, horizonte_dias=7, janela_semanas=6,
             'pendencia_agendada': pd.get('agendado') or 0,
             'pendencia_vencida': pd.get('vencido') or 0,
         })
-    totais = crono.get('totais_dia') or []
+    # Carga por dia (mesma conta do rodape da tela): fornadas de todas as
+    # linhas — e o que o "equilibrar" tenta nivelar.
+    fornadas_por_dia = []
+    for i, dia in enumerate(crono['dias']):
+        forn = 0
+        for rr in crono['receitas']:
+            c = rr['por_dia'][i]
+            if c.get('fornadas'):
+                forn += c['fornadas']
+        fornadas_por_dia.append({'data': dia['data'],
+                                 'fornadas': round(forn, 1)})
     payload = {
         'hoje': crono.get('hoje'),
         'dias': crono.get('dias'),
         'linhas': linhas_ctx,
         'alertas_falta': crono.get('alertas_falta') or [],
-        'fornadas_por_dia': [
-            {'data': crono['dias'][i]['data'],
-             'fornadas': (totais[i] or {}).get('fornadas')}
-            for i in range(min(len(totais), len(crono.get('dias') or [])))
-        ],
+        'fornadas_por_dia': fornadas_por_dia,
     }
     dados, erro = _chamar_opus(
         _SYSTEM_PRODUCAO, json.dumps(payload, ensure_ascii=False),
