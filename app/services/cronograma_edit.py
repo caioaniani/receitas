@@ -197,9 +197,14 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
 
 def resetar_receita(receita_id, datas_iso):
     """Apaga os overrides de uma receita nas datas dadas (volta pra sugestao
-    calculada). Retorna quantos apagou."""
+    calculada). Dia com cadeado (🔒) e PULADO — o override dele fica.
+    Retorna quantos apagou."""
     from app.models import CronogramaOverride
-    datas = [date.fromisoformat(d) for d in datas_iso]
+    fechados = dias_fechados()
+    datas = [d for d in (date.fromisoformat(x) for x in datas_iso)
+             if d not in fechados]
+    if not datas:
+        return 0
     q = CronogramaOverride.query.filter(
         CronogramaOverride.receita_id == int(receita_id),
         CronogramaOverride.data.in_(datas))
@@ -210,12 +215,21 @@ def resetar_receita(receita_id, datas_iso):
 
 
 def limpar_todos_overrides():
-    """Apaga TODAS as edicoes manuais (overrides) do cronograma — tudo volta pra
-    sugestao calculada. So mexe no rascunho (CronogramaOverride); NAO toca em
-    pedido enviado (PlanejamentoProducao), estoque nem MP. Retorna quantos
-    apagou."""
+    """Apaga as edicoes manuais (overrides) do cronograma — tudo volta pra
+    sugestao calculada, EXCETO dias com cadeado (🔒): os overrides deles sao
+    preservados. So mexe no rascunho (CronogramaOverride); NAO toca em pedido
+    enviado (PlanejamentoProducao), estoque nem MP.
+
+    Retorna (apagados, preservados)."""
     from app.models import CronogramaOverride
-    n = CronogramaOverride.query.count()
-    CronogramaOverride.query.delete(synchronize_session=False)
+    fechados = dias_fechados()
+    q = CronogramaOverride.query
+    preservados = 0
+    if fechados:
+        preservados = q.filter(
+            CronogramaOverride.data.in_(fechados)).count()
+        q = q.filter(~CronogramaOverride.data.in_(fechados))
+    n = q.count()
+    q.delete(synchronize_session=False)
     db.session.commit()
-    return n
+    return n, preservados
