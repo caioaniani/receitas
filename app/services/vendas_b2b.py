@@ -443,7 +443,10 @@ def editar_cabecalho(venda, *, cliente_id=None, cliente_nome=None,
 
 
 def reabrir_venda(venda, user=None):
-    """Venda cancelada volta a 'ativa' e re-baixa o estoque dos itens atuais.
+    """Venda cancelada volta a 'ativa'. Re-baixa o estoque APENAS se a
+    venda esta fora da fila do padeiro (imediata, sem data_entrega) ou se
+    ja tinha passado da separacao — venda pendente na fila volta SEM baixa
+    e o padeiro baixa ao separar (regime 07/07/2026).
 
     Idempotente: se a venda nao esta cancelada, nao faz nada.
     """
@@ -452,12 +455,8 @@ def reabrir_venda(venda, user=None):
     venda.status = 'ativa'
     venda.cancelado_em = None
     venda.cancelado_por_id = None
-    for vi in venda.itens:
-        tipo = 'receita' if vi.receita_id else 'produto'
-        item_id = vi.receita_id or vi.produto_id
-        if not item_id:
-            continue
-        _baixar_item(venda, tipo, item_id, vi.quantidade, user)
+    if venda.data_entrega is None or venda.status_entrega != 'pendente':
+        _baixar_venda(venda, user)
     db.session.commit()
     return venda
 
