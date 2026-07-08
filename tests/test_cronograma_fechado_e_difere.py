@@ -111,6 +111,10 @@ def test_reset_de_linha_pula_dia_fechado(app, admin_user):
 
 
 def test_rota_cadeado_toggla_e_exige_admin(app, admin_user):
+    """As requests do admin e do funcionário rodam em app_context SEPARADOS:
+    dentro de um mesmo `with app.app_context()` o Flask REUSA o contexto nas
+    requests do test client e o Flask-Login cacheia o usuário em g._login_user
+    — o admin da 1ª request vazaria pra request do funcionário (falso 200)."""
     from app.models import CronogramaDiaFechado, Usuario
     with app.app_context():
         _, d2 = _cenario()
@@ -120,21 +124,23 @@ def test_rota_cadeado_toggla_e_exige_admin(app, admin_user):
         db.session.commit()
         func_id = func.id
 
-        c = app.test_client()
-        _login(c, admin_user)
-        c.post('/telaindustriateste/dia/cadeado',
-               data={'data': d2.isoformat()})
+    c = app.test_client()
+    _login(c, admin_user)
+    c.post('/telaindustriateste/dia/cadeado', data={'data': d2.isoformat()})
+    with app.app_context():
         assert CronogramaDiaFechado.query.filter_by(data=d2).count() == 1
-        c.post('/telaindustriateste/dia/cadeado',
-               data={'data': d2.isoformat()})
+    c.post('/telaindustriateste/dia/cadeado', data={'data': d2.isoformat()})
+    with app.app_context():
         assert CronogramaDiaFechado.query.filter_by(data=d2).count() == 0
 
-        c2 = app.test_client()
-        with c2.session_transaction() as sess:
-            sess['_user_id'] = str(func_id)
-            sess['_fresh'] = True
-        c2.post('/telaindustriateste/dia/cadeado',
-                data={'data': d2.isoformat()})
+    c2 = app.test_client()
+    with c2.session_transaction() as sess:
+        sess['_user_id'] = str(func_id)
+        sess['_fresh'] = True
+    resp = c2.post('/telaindustriateste/dia/cadeado',
+                   data={'data': d2.isoformat()})
+    assert resp.status_code == 403
+    with app.app_context():
         assert CronogramaDiaFechado.query.filter_by(data=d2).count() == 0
 
 
