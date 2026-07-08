@@ -18,6 +18,14 @@
             <button class="btn btn-outline-success btn-sm"><i class="bi bi-arrow-counterclockwise"></i> Reabrir venda</button>
         </form>
         {% endif %}
+        {% if current_user.is_owner %}
+        <form method="POST" action="{{ url_for('b2b.venda_excluir', vid=venda.id) }}" class="d-inline"
+              onsubmit="return confirm('Excluir a venda #{{ venda.id }} DEFINITIVAMENTE? Some da lista e das contas a receber (estoque é estornado; movimentos ficam no histórico). Use só pra venda de TESTE ou lançada errada.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-danger btn-sm" title="Exclusão definitiva (dono) — venda de teste/errada">
+                <i class="bi bi-trash"></i> Excluir</button>
+        </form>
+        {% endif %}
         <a href="{{ url_for('b2b.dashboard') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
     </div>
 </div>
