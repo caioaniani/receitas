@@ -192,6 +192,125 @@ def test_rotas_analisar_e_salvar(app, admin_user, base_catalogo,
         assert prod.itens[0].receita_id == base_catalogo['pao'].id
 
 
+def _hidden_por_nome(html):
+    """Extrai os inputs hidden do HTML como um NAVEGADOR veria (o
+    HTMLParser decodifica as entidades do atributo, igual ao browser).
+    O bug crítico da revisão 08/07/2026 era exatamente aqui: tojson em
+    atributo com aspas DUPLAS truncava o JSON no primeiro '\"'."""
+    from html.parser import HTMLParser
+
+    campos = {}
+
+    class _P(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            if tag == 'input' and a.get('type') == 'hidden':
+                campos[a.get('name')] = a.get('value')
+    _P().feed(html)
+    return campos
+
+
+def test_roundtrip_html_navegador_salva_de_verdade(app, admin_user,
+                                                   base_catalogo,
+                                                   monkeypatch):
+    """Fluxo fiel ao navegador: o hidden it0_json é extraído do HTML
+    RENDERIZADO (não montado na mão) e postado de volta. Trava o bug do
+    tojson em atributo com aspas duplas (JSON truncado → nada salvava)."""
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-teste')
+    payload = {'itens': [
+        {'nome': 'Misto "Especial" Cranberry', 'preco': 30.0,
+         'categoria': 'Lanches', 'confianca': 'alta',
+         'observacao': 'aspas & <tags> no nome pra estressar o escape',
+         'componentes': [
+             {'tipo': 'receita', 'id': base_catalogo['pao'].id,
+              'nome': 'Pao de Forma', 'quantidade': 2, 'novo': False},
+         ]},
+    ]}
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    with patch('anthropic.Anthropic', return_value=_fake_client(payload)):
+        r1 = c.post('/produtos/cadastro-ia/analisar',
+                    data={'texto': 'x', 'campo_preco': 'preco_site'})
+    hidden = _hidden_por_nome(r1.get_data(as_text=True))
+    assert 'it0_json' in hidden
+    # O navegador devolve o atributo decodificado — tem que ser JSON válido
+    it = json.loads(hidden['it0_json'])
+    assert it['nome'] == 'Misto "Especial" Cranberry'
+    r2 = c.post('/produtos/cadastro-ia/salvar', data={
+        'campo_preco': 'preco_site', 'n_itens': '1',
+        'it0_incluir': '1', 'it0_json': hidden['it0_json'],
+        'it0_nome': it['nome'], 'it0_preco': '30,00',
+        'it0_categoria': 'Lanches', 'it0_c0_incluir': '1',
+        'it0_c0_qtd': '2',
+    })
+    assert r2.status_code == 302
+    with app.app_context():
+        prod = Produto.query.filter_by(
+            nome='Misto "Especial" Cranberry').one()
+        assert prod.itens[0].receita_id == base_catalogo['pao'].id
+
+
+def test_salvar_mp_homonima_arquivada_nao_explode(app, admin_user,
+                                                  base_catalogo):
+    """MP nova homônima de MP ARQUIVADA: não pode criar (unique do banco
+    estouraria com 500) — vira aviso + componente órfão."""
+    from app.utils import agora
+    with app.app_context():
+        db.session.add(MateriaPrima(nome='Cranberry desidratada',
+                                    unidade='kg', custo_por_kg=80,
+                                    arquivada_em=agora()))
+        db.session.commit()
+        itens = [{'nome': 'Misto Cranberry', 'preco': 30.0,
+                  'componentes': [
+                      {'tipo': 'mp', 'id': None,
+                       'nome': 'Cranberry desidratada',
+                       'quantidade': 1, 'novo': True, 'unidade': 'kg'}]}]
+        resumo = svc.salvar_lote(itens, 'preco_site', user=admin_user)
+        assert resumo['criados'] == ['Misto Cranberry']
+        assert resumo['mps_criadas'] == []
+        assert any('ARQUIVADA' in a for a in resumo['avisos'])
+        assert MateriaPrima.query.filter_by(
+            nome='Cranberry desidratada').count() == 1     # não duplicou
+        prod = Produto.query.filter_by(nome='Misto Cranberry').one()
+        assert prod.itens[0].materia_prima_id is None      # órfão
+
+
+def test_rota_salvar_preco_invalido_nao_da_500(app, admin_user,
+                                               base_catalogo):
+    """Preço digitado inválido ("abc") mantém o proposto e avisa — nunca
+    derruba a revisão com 500."""
+    it_json = json.dumps({'nome': 'Pao Novo', 'preco': 40.0,
+                          'componentes': []})
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    r = c.post('/produtos/cadastro-ia/salvar', data={
+        'campo_preco': 'preco_site', 'n_itens': '1',
+        'it0_incluir': '1', 'it0_json': it_json,
+        'it0_nome': 'Pao Novo', 'it0_preco': 'abc',
+    }, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        prod = Produto.query.filter_by(nome='Pao Novo').one()
+        assert prod.preco_site == 40.0                     # manteve proposto
+
+
+def test_rotas_exigem_admin(app, base_catalogo):
+    """Funcionário comum não acessa nenhuma das três rotas (403)."""
+    from app.models import Usuario
+    with app.app_context():
+        u = Usuario(nome='Func', login='func', papel='funcionario')
+        u.set_senha('12345678')
+        db.session.add(u)
+        db.session.commit()
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'func', 'senha': '12345678'})
+    assert c.get('/produtos/cadastro-ia').status_code == 403
+    assert c.post('/produtos/cadastro-ia/analisar',
+                  data={'texto': 'x'}).status_code == 403
+    assert c.post('/produtos/cadastro-ia/salvar',
+                  data={'n_itens': '0'}).status_code == 403
+
+
 def test_rota_salvar_sem_marcados(app, admin_user):
     c = app.test_client()
     c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
