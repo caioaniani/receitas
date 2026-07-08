@@ -40,7 +40,7 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small fw-bold">Entrega ao padeiro *</label>
-                    <input type="date" name="data_entrega" class="form-control form-control-sm" value="{% if editing %}{{ venda.data_entrega.isoformat() if venda.data_entrega else '' }}{% else %}{{ hoje }}{% endif %}" required>
+                    <input type="date" name="data_entrega" class="form-control form-control-sm" value="{% if editing %}{{ venda.data_entrega.isoformat() if venda.data_entrega else '' }}{% elif data_entrega_pre %}{{ data_entrega_pre }}{% else %}{{ hoje }}{% endif %}" required>
                     <div class="form-text" style="font-size:11px;">Dia que vai pra fila do padeiro produzir/separar.</div>
                 </div>
                 <div class="col-md-3">
