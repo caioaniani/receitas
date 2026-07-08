@@ -476,7 +476,7 @@
                         <span class="badge bg-success dia-badge">📤 enviado</span>
                         {% if difere.get(dia.data) %}
                         <span class="badge dia-badge dia-difere"
-                              title="O grid difere da ordem que o padeiro está vendo em {{ difere[dia.data]|length }} receita(s) — as células marcadas com 📤 mostram o número enviado. Use '🔄 atualizar produção' no menu ⋯ para aplicar o grid.">⚠ difere do enviado</span>
+                              title="O grid difere da ordem que o padeiro está vendo em {{ difere[dia.data]|length }} receita(s) — as células marcadas com 📤 mostram o número enviado (receita da ordem que saiu do grid também conta, mesmo sem célula). Use '🔄 atualizar produção' no menu ⋯ para aplicar o grid.">⚠ difere do enviado</span>
                         {% endif %}
                         {% endif %}
                         <form method="POST" action="{{ url_for('industria_teste.dia_cadeado') }}" class="d-inline">
