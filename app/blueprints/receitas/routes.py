@@ -1064,6 +1064,10 @@ def duplicar(id):
             porcentagem=ing.porcentagem,
             eh_base=ing.eh_base,
             nota=ing.nota,
+            # FK manda, nome e so fallback: sem copiar sub_receita_id a
+            # copia nascia orfa e dependia do match por nome (quebra apos
+            # rename da sub-receita).
+            sub_receita_id=ing.sub_receita_id,
         )
         db.session.add(novo_ing)
 
