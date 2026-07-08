@@ -75,7 +75,9 @@ def _dashboard_counts(hoje_, de, ate):
             VendaB2B.status_entrega != 'entregue').count(),
         'entregues': VendaB2B.query.filter_by(
             status='ativa', status_entrega='entregue').count(),
-        'arquivados': (Orcamento.query.filter_by(status='recusado').count()
+        'arquivados': (Orcamento.query.filter(db.or_(
+                           Orcamento.status == 'recusado',
+                           Orcamento.arquivado_em.isnot(None))).count()
                        + VendaB2B.query.filter_by(
                            status='cancelada').count()),
         'cob_pendentes': parc_aberta.filter(
