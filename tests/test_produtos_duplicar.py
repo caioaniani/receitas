@@ -110,6 +110,22 @@ def test_duplicar_nao_copia_site_nem_imagem(app, admin_user):
         assert copia.imagem_url is None
 
 
+def test_botao_duplicar_na_tela_do_produto(app, admin_user):
+    """O detalhe do produto tem o botao Duplicar apontando (via atributo
+    form=) pro form standalone fora do form principal."""
+    from app.extensions import db
+
+    with app.app_context():
+        p, _, _ = _produto_cafe(db)
+        pid = p.id
+
+    client = app.test_client()
+    _login(client, admin_user)
+    html = client.get(f'/produtos/{pid}').get_data(as_text=True)
+    assert 'form="form-duplicar"' in html
+    assert f'/produtos/{pid}/duplicar' in html
+
+
 def test_duplicar_exige_admin(app):
     from app.extensions import db
     from app.models import Usuario
