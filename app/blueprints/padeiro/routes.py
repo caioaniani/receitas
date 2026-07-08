@@ -484,16 +484,22 @@ def separar(id):
 @login_required
 @padeiro_required
 def separar_b2b(id):
-    """Marca uma venda B2B como separada (status_entrega). Nao mexe em estoque
-    — o B2B ja baixou do freezer na venda; aqui e so producao/separacao."""
+    """Marca uma venda B2B como separada e BAIXA o estoque da industria —
+    a separacao e o momento em que o pao sai do freezer de verdade
+    (decisao do dono 07/07/2026; antes a baixa era na criacao da venda).
+    Idempotente pelo marcador `estoque_baixado_em`: venda do regime antigo
+    (ja baixada na criacao) ou re-separacao nao baixa de novo."""
+    from app.services import vendas_b2b as vendas_svc
     data_str = (request.form.get('data') or '').strip() or None
     venda = VendaB2B.query.get_or_404(id)
     if venda.status == 'cancelada' or venda.status_entrega != 'pendente':
         flash(f'Venda B2B #{venda.id} nao esta aguardando separacao.', 'warning')
         return redirect(url_for('padeiro.index', data=data_str))
+    baixou = vendas_svc.baixar_na_separacao(venda, user=current_user)
     venda.status_entrega = 'separado'
     db.session.commit()
-    flash(f'Venda B2B #{venda.id} separada.', 'success')
+    flash(f'Venda B2B #{venda.id} separada'
+          + (' — estoque baixado.' if baixou else '.'), 'success')
     return redirect(url_for('padeiro.index', data=data_str))
 
 
