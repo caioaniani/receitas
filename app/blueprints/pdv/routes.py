@@ -696,6 +696,13 @@ def reprocessar_retroativo_rota():
               'info')
         return redirect(url_for('pdv.saude'))
     st = res.get('stats') or {}
+    if st.get('erros'):
+        # Commit falhou no meio: as baixas da rodada foram REVERTIDAS —
+        # nao anunciar numeros que nao estao no banco.
+        flash(f"Reprocesso parcial: {len(st['erros'])} erro(s) de commit — "
+              'as baixas desta rodada foram revertidas. Tente novamente em '
+              'alguns minutos.', 'warning')
+        return redirect(url_for('pdv.saude'))
     msg = (f"Retroativo ({dias}d): {res.get('liberados', 0)} pedido(s) sem "
            f"baixa liberados; {st.get('itens_baixados', 0)} item(ns) "
            f"baixado(s), {st.get('itens_pendentes_novos', 0)} ainda "
