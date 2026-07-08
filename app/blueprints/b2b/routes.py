@@ -761,6 +761,10 @@ def venda_nova():
     return render_template('b2b/venda_nova.html', venda=None,
                            itens_seed=itens_seed, parcelas_seed=[],
                            pago=False, cliente_pre=cliente_pre,
+                           orcamento_id=orc_id,
+                           data_entrega_pre=(orc.data_entrega.isoformat()
+                                             if orc_id and orc.data_entrega
+                                             else ''),
                            hoje=hoje().isoformat(), **_catalogo_venda())
 
 
@@ -782,6 +786,15 @@ def venda_criar():
         db.session.rollback()
         flash(f'Erro: {exc}', 'danger')
         return redirect(url_for('b2b.venda_nova'))
+
+    # Venda criada a partir de um orçamento (seed manual): grava o vínculo
+    # pra ele sair da fila de Aprovados e não ser convertido de novo.
+    orc_id = request.form.get('orcamento_id', type=int)
+    if orc_id:
+        orc = Orcamento.query.get(orc_id)
+        if orc and not orc.venda_id:
+            orc.venda_id = venda.id
+            db.session.commit()
 
     flash(f'Venda B2B #{venda.id} criada — R$ {venda.valor_total:.2f}.', 'success')
     return redirect(url_for('b2b.venda_detalhe', vid=venda.id))
