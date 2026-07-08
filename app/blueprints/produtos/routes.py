@@ -519,9 +519,22 @@ def cadastro_ia_salvar():
         flash('Campo de preço inválido.', 'danger')
         return redirect(url_for('produtos.cadastro_ia'))
     try:
-        n = int(request.form.get('n_itens') or 0)
+        n = min(int(request.form.get('n_itens') or 0), 500)
     except ValueError:
         n = 0
+
+    def _num(bruto, padrao):
+        """parse_float_br levanta ValueError em valor presente porém
+        inválido ("abc") — aqui mantém o valor da proposta e avisa, em
+        vez de derrubar a revisão inteira com 500."""
+        try:
+            v = parse_float_br(bruto)
+        except ValueError:
+            flash(f'Valor "{bruto}" inválido — mantive o proposto.',
+                  'warning')
+            return padrao
+        return padrao if v is None else v
+
     itens = []
     for i in range(n):
         if not request.form.get(f'it{i}_incluir'):
@@ -529,18 +542,21 @@ def cadastro_ia_salvar():
         try:
             it = _json.loads(request.form.get(f'it{i}_json') or '{}')
         except ValueError:
+            # item MARCADO com dados corrompidos: nunca sumir em silêncio
+            flash(f'Item {i + 1} ignorado: dados corrompidos — rode a '
+                  'análise de novo.', 'danger')
             continue
         it['nome'] = (request.form.get(f'it{i}_nome') or
                       it.get('nome') or '').strip()
-        it['preco'] = parse_float_br(request.form.get(f'it{i}_preco')) or 0
+        it['preco'] = _num(request.form.get(f'it{i}_preco'),
+                           it.get('preco') or 0)
         it['categoria'] = (request.form.get(f'it{i}_categoria') or '').strip()
         comps = []
         for j, c in enumerate(it.get('componentes') or []):
             if not request.form.get(f'it{i}_c{j}_incluir'):
                 continue
-            qtd = parse_float_br(request.form.get(f'it{i}_c{j}_qtd'))
-            if qtd is not None:
-                c['quantidade'] = qtd
+            c['quantidade'] = _num(request.form.get(f'it{i}_c{j}_qtd'),
+                                   c.get('quantidade') or 1)
             comps.append(c)
         it['componentes'] = comps
         itens.append(it)
