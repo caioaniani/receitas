@@ -151,11 +151,21 @@ def _resolver_por_nome(tipo, nome):
 
 
 def _get_por_id(tipo, item_id):
+    """Busca por id RESPEITANDO o contrato de "conectar algo novo": MP/
+    receita arquivada e produto inativo NAO valem como alvo (mesma regra
+    do resolver por nome, que usa .ativas())."""
     modelo = {'receita': Receita, 'produto': Produto,
               'mp': MateriaPrima}.get(tipo)
     if not modelo or not item_id:
         return None
-    return db.session.get(modelo, item_id)
+    alvo = db.session.get(modelo, item_id)
+    if alvo is None:
+        return None
+    if tipo == 'produto' and not alvo.ativo:
+        return None
+    if tipo in ('receita', 'mp') and getattr(alvo, 'arquivada_em', None):
+        return None
+    return alvo
 
 
 def _sanitizar_proposta(dados):
