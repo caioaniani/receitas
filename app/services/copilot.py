@@ -1663,14 +1663,20 @@ def _enriquecer_criar_venda_b2b(tool_input):
         subtotal = qtd * preco_unit * (1 - desc / 100.0)
         total += subtotal
 
-        # Saldo no freezer pra UI mostrar
+        # Saldo DISPONIVEL no freezer pra UI mostrar: fisico menos o
+        # comprometido com vendas B2B ainda nao separadas (a baixa e na
+        # separacao, 07/07/2026) — sem o desconto, duas vendas podiam ser
+        # aprovadas contra o mesmo saldo.
         estoque_atual = None
         if resolvido:
+            from app.services.vendas_b2b import comprometido_b2b_pendente
             ep = EstoqueProducao.query.filter_by(
                 receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
                 produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
             ).first()
-            estoque_atual = ep.quantidade if ep else 0
+            pend = comprometido_b2b_pendente().get(
+                (resolvido['tipo'], resolvido['id']), 0)
+            estoque_atual = (ep.quantidade if ep else 0) - pend
 
         itens_enriq.append({
             'nome_original': nome_in,
