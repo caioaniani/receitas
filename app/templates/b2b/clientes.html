@@ -123,6 +123,7 @@
             <div class="modal-content">
                 <div class="modal-header"><h6 class="modal-title">Editar {{ c.nome }}</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
+                    <div class="mb-2"><label class="form-label small">Nome *</label><input type="text" name="nome" class="form-control form-control-sm" value="{{ c.nome }}" required></div>
                     <div class="mb-2"><label class="form-label small">CNPJ/CPF</label>
                         <div class="input-group input-group-sm">
                             <input type="text" name="cnpj_cpf" class="form-control" value="{{ c.cnpj_cpf or '' }}">
