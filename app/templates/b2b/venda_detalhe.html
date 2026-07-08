@@ -54,6 +54,13 @@
                 <div class="mt-2">
                     Entrega (padaria):
                     <strong>{{ venda.data_entrega.strftime('%d/%m/%Y') if venda.data_entrega else '— (não entra na fila do padeiro)' }}</strong>
+                    {% if venda.status != 'cancelada' %}
+                    {% if venda.estoque_baixado_em %}
+                    <span class="badge bg-success" title="Baixado em {{ venda.estoque_baixado_em.strftime('%d/%m %H:%M') }}">estoque baixado</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark" title="A baixa acontece quando o padeiro separar no /padeiro">estoque baixa na separação</span>
+                    {% endif %}
+                    {% endif %}
                     {% if venda.data_entrega %}
                     <span class="badge bg-secondary">{{ venda.status_entrega }}</span>
                     {% if venda.status != 'cancelada' and venda.status_entrega != 'pendente' %}
