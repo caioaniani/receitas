@@ -328,6 +328,30 @@ def _converter_em_venda(orc, usuario_id=None):
     return venda
 
 
+def arquivar(orc):
+    """Arquiva um RASCUNHO que nao foi pra frente (pedido do dono
+    08/07/2026): sai de Pendentes sem virar 'recusado' — recusado significa
+    que o cliente disse nao; rascunho arquivado so morreu na gaveta.
+    Devolve (ok, erro)."""
+    if orc.status != 'rascunho':
+        return False, ('so rascunho se arquiva — enviado/aprovado/recusado '
+                       'seguem o fluxo de status')
+    if orc.arquivado_em:
+        return False, 'orcamento ja arquivado'
+    orc.arquivado_em = agora()
+    db.session.commit()
+    return True, None
+
+
+def desarquivar(orc):
+    """Volta o rascunho arquivado pra lista de Pendentes."""
+    if not orc.arquivado_em:
+        return False, 'orcamento nao esta arquivado'
+    orc.arquivado_em = None
+    db.session.commit()
+    return True, None
+
+
 def marcar_status(orc, novo, *, usuario_id=None):
     """Transicao de status. Permite:
       rascunho -> enviado
