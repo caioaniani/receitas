@@ -286,3 +286,53 @@ def test_seru_companies_api_fora_502(app, monkeypatch):
         headers={'Authorization': f'Bearer {TOKEN}'})
     assert resp.status_code == 502
     assert 'sem rede' in resp.get_json()['erro']
+
+
+def test_pedidos_dia_lista_todos_os_status(app):
+    """A sonda /pedidos-dia mostra TODOS os status da data (inclusive os que
+    somem das abas de /pedidos — caso real 08/07: pedido 'entregue' com
+    data_entrega futura)."""
+    from datetime import timedelta
+
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    amanha = hoje() + timedelta(days=1)
+    loja_a = Loja(nome='Loja Anesio X', ativa=True)
+    loja_b = Loja(nome='Loja Nebraska X', ativa=True)
+    r = Receita(nome='Cinnamon Roll X', categoria='Doces', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0)
+    db.session.add_all([loja_a, loja_b, r])
+    db.session.commit()
+    p1 = PedidoLoja(loja_id=loja_a.id, status='entregue',
+                    data_entrega=amanha, data_pedido=hoje())
+    p2 = PedidoLoja(loja_id=loja_b.id, status='confirmado',
+                    data_entrega=amanha, data_pedido=hoje())
+    p3 = PedidoLoja(loja_id=loja_a.id, status='cancelado',
+                    data_entrega=amanha, data_pedido=hoje())
+    db.session.add_all([p1, p2, p3])
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=p1.id, receita_id=r.id, quantidade=35))
+    db.session.commit()
+
+    client = app.test_client()
+    d = client.get(f'/api/claude/pedidos-dia?data={amanha.isoformat()}',
+                   headers={'Authorization': f'Bearer {TOKEN}'}).get_json()
+    assert d['ok'] is True and d['total'] == 3
+    por_status = {p['status'] for p in d['pedidos']}
+    assert por_status == {'entregue', 'confirmado', 'cancelado'}
+    entregue = next(p for p in d['pedidos'] if p['status'] == 'entregue')
+    assert entregue['loja'] == 'Loja Anesio X'
+    assert entregue['itens'] == [{'nome': 'Cinnamon Roll X', 'qtd': 35}]
+
+    # filtro por loja (fuzzy) + data invalida
+    d2 = client.get(
+        f'/api/claude/pedidos-dia?data={amanha.isoformat()}&loja=nebraska x',
+        headers={'Authorization': f'Bearer {TOKEN}'}).get_json()
+    assert d2['total'] == 1 and d2['pedidos'][0]['status'] == 'confirmado'
+    resp = client.get('/api/claude/pedidos-dia?data=xx',
+                      headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 400
+
+
+def test_pedidos_dia_exige_token(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    assert app.test_client().get('/api/claude/pedidos-dia').status_code == 401
