@@ -1631,6 +1631,7 @@ def _enriquecer_criar_venda_b2b(tool_input):
     # Itens
     itens_enriq = []
     total = 0.0
+    pend_b2b = None   # comprometido B2B pendente — carregado 1x, no 1º uso
     for it in (out.get('itens') or []):
         nome_in = (it.get('nome') or '').strip()
         # "Croissant backup" -> resolve "Croissant" + estado=backup. Estado
@@ -1669,13 +1670,14 @@ def _enriquecer_criar_venda_b2b(tool_input):
         # aprovadas contra o mesmo saldo.
         estoque_atual = None
         if resolvido:
-            from app.services.vendas_b2b import comprometido_b2b_pendente
+            if pend_b2b is None:
+                from app.services.vendas_b2b import comprometido_b2b_pendente
+                pend_b2b = comprometido_b2b_pendente()
             ep = EstoqueProducao.query.filter_by(
                 receita_id=resolvido['id'] if resolvido['tipo'] == 'receita' else None,
                 produto_id=resolvido['id'] if resolvido['tipo'] == 'produto' else None,
             ).first()
-            pend = comprometido_b2b_pendente().get(
-                (resolvido['tipo'], resolvido['id']), 0)
+            pend = pend_b2b.get((resolvido['tipo'], resolvido['id']), 0)
             estoque_atual = (ep.quantidade if ep else 0) - pend
 
         itens_enriq.append({
