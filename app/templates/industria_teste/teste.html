@@ -330,6 +330,7 @@
         <span class="kpi-num">{{ totais_dia[0].un }} un</span>
         <span class="kpi-lbl">produzir {{ 'hoje' if dia0.data == crono.hoje else dia0.label }}{% if totais_dia[0].fornadas %} · {{ totais_dia[0].fornadas }} fornada(s){% endif %}</span>
         {% if est0 and est0.enviado %}<span class="kpi-estado est-env">📤 enviado ao padeiro</span>
+        {% if difere.get(dia0.data) %}<span class="kpi-sub" style="color:#b26a00; font-weight:700;" title="As células com 📤 mostram o número que o padeiro está vendo. Use '🔄 atualizar produção' no menu ⋯ do dia para aplicar o grid.">⚠ o grid difere da ordem enviada ({{ difere[dia0.data]|length }} receita(s)) — atualização NÃO enviada</span>{% endif %}
         {% elif est0 %}<span class="kpi-estado est-apr">✓ aprovado (rascunho)</span>
         {% else %}<span class="kpi-estado est-nada">ordem não enviada</span>{% endif %}
     </div>
