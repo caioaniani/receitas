@@ -279,7 +279,8 @@ def _aplicar_itens(venda, itens, user=None, baixar=True):
         )
         db.session.add(vi)
         total += vi.valor_total
-        _baixar_item(venda, tipo, item_id, qtd, user)
+        if baixar:
+            _baixar_item(venda, tipo, item_id, qtd, user)
     return total
 
 
