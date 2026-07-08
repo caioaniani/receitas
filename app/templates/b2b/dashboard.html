@@ -3,13 +3,14 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h1 class="page-title mb-0"><i class="bi bi-building"></i> Vendas B2B (Indústria)</h1>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('b2b.orcamento_novo') }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-file-earmark-plus"></i> Novo orçamento</a>
         <a href="{{ url_for('b2b.venda_nova') }}" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-circle"></i> Nova venda
         </a>
         <a href="{{ url_for('b2b.vendas') }}" class="btn btn-outline-secondary btn-sm">Todas as vendas</a>
         <a href="{{ url_for('b2b.clientes') }}" class="btn btn-outline-secondary btn-sm">Clientes</a>
-        <a href="{{ url_for('b2b.contas_receber') }}" class="btn btn-outline-warning btn-sm">Contas a receber</a>
         <a href="{{ url_for('b2b.faturas') }}" class="btn btn-outline-info btn-sm"
            title="Fechamento mensal: 1 NF consolidada + 1 boleto por cliente">Faturas mensais</a>
         {% if current_user.is_owner %}
@@ -19,51 +20,197 @@
     </div>
 </div>
 
+{# ── Abas principais: PEDIDOS (ciclo) × COBRANÇAS (financeiro) ── #}
+<ul class="nav nav-tabs mb-2">
+    <li class="nav-item"><a class="nav-link {{ 'active' if aba == 'pedidos' }}"
+        href="{{ url_for('b2b.dashboard', aba='pedidos') }}"><i class="bi bi-box-seam"></i> Pedidos</a></li>
+    <li class="nav-item"><a class="nav-link {{ 'active' if aba == 'cobrancas' }}"
+        href="{{ url_for('b2b.dashboard', aba='cobrancas') }}"><i class="bi bi-cash-coin"></i> Cobranças
+        {% if counts.cob_vencidos %}<span class="badge bg-danger">{{ counts.cob_vencidos }}</span>{% endif %}</a></li>
+</ul>
+
+{% if aba == 'pedidos' %}
+{# ── Sub-abas do ciclo do pedido ── #}
+{% set pills = [('pendentes', 'Pendentes (orçamentos)', 'warning'),
+                ('aprovados', 'Aprovados', 'info'),
+                ('producao', 'Em produção', 'primary'),
+                ('entregues', 'Entregues', 'success'),
+                ('arquivados', 'Arquivados', 'secondary')] %}
+<div class="d-flex gap-2 mb-3 flex-wrap">
+    {% for chave, rotulo, cor in pills %}
+    <a href="{{ url_for('b2b.dashboard', aba='pedidos', f=chave) }}"
+       class="btn btn-sm {{ 'btn-' + cor if f == chave else 'btn-outline-' + cor }}">
+        {{ rotulo }} <span class="badge bg-light text-dark">{{ counts[chave] }}</span></a>
+    {% endfor %}
+</div>
+
+{% if orcamentos is not none and f in ('pendentes', 'aprovados') %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover bg-white">
+        <thead><tr><th>Orçamento</th><th>Data</th><th>Cliente</th><th>Válido até</th>
+            <th class="text-end">Total</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        {% for o in orcamentos %}
+        <tr>
+            <td><a href="{{ url_for('b2b.orcamento_detalhe', oid=o.id) }}">{{ o.codigo }}</a></td>
+            <td>{{ o.data.strftime('%d/%m/%Y') }}</td>
+            <td>{{ o.cliente_display }}</td>
+            <td>{{ o.valido_ate.strftime('%d/%m/%Y') }}
+                {% if o.venceu %}<span class="badge bg-danger">vencido</span>{% endif %}</td>
+            <td class="text-end">R$ {{ '%.2f'|format(o.valor_total) }}</td>
+            <td><span class="badge bg-{{ 'success' if o.status == 'aprovado' else 'warning text-dark' }}">{{ STATUS_LABEL.get(o.status, o.status) }}</span></td>
+            <td class="text-end">
+                <a href="{{ url_for('b2b.orcamento_detalhe', oid=o.id) }}" class="btn btn-sm btn-outline-primary">Abrir</a>
+                {% if f == 'aprovados' %}
+                <a href="{{ url_for('b2b.venda_nova') }}" class="btn btn-sm btn-outline-success"
+                   title="Lance a venda com os itens do orçamento — ela entra em produção">→ Virar venda</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-muted text-center small p-3">
+            {{ 'Nenhum orçamento aguardando aprovação.' if f == 'pendentes' else 'Nenhum orçamento aprovado esperando virar venda.' }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% elif vendas is not none %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover bg-white">
+        <thead><tr><th>#</th><th>Venda</th><th>Entrega</th><th>Cliente</th>
+            <th class="text-end">Valor</th><th>Pagamento</th><th>Produção</th><th></th></tr></thead>
+        <tbody>
+        {% for v in vendas %}
+        <tr>
+            <td><a href="{{ url_for('b2b.venda_detalhe', vid=v.id) }}">#{{ v.id }}</a></td>
+            <td>{{ v.data_venda.strftime('%d/%m') }}</td>
+            <td>{{ v.data_entrega.strftime('%d/%m') if v.data_entrega else '—' }}</td>
+            <td>{{ v.cliente_display }}
+                {% if v.fatura_id %}<span class="badge bg-info text-dark" title="Na fatura mensal">{{ v.fatura.codigo }}</span>{% endif %}</td>
+            <td class="text-end">R$ {{ '%.2f'|format(v.valor_total) }}</td>
+            <td>{% if v.valor_aberto > 0 %}<span class="badge bg-warning text-dark">aberta</span>
+                {% else %}<span class="badge bg-success">quitada</span>{% endif %}</td>
+            <td><span class="badge bg-{{ 'success' if v.status_entrega == 'entregue' else 'secondary' }}">{{ v.status_entrega }}</span></td>
+            <td class="text-end"><a href="{{ url_for('b2b.venda_detalhe', vid=v.id) }}" class="btn btn-sm btn-outline-primary">Abrir</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-muted text-center small p-3">
+            {{ 'Nada em produção.' if f == 'producao' else 'Nenhuma venda entregue ainda.' }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if f == 'producao' %}
+<p class="text-muted small">Vendas ativas ainda não entregues (com data de entrega, entram na
+    fila do padeiro). O status avança na tela de entregas/padeiro; "→ entregue" move pra aba Entregues.</p>
+{% endif %}
+
+{% elif f == 'arquivados' %}
 <div class="row g-3">
-    <div class="col-lg-7">
-        <h6 class="text-muted">Vendas recentes</h6>
+    <div class="col-lg-6">
+        <h6 class="text-muted">Orçamentos recusados</h6>
         <div class="table-responsive">
-            <table class="table table-sm table-hover bg-white">
-                <thead><tr><th>#</th><th>Data</th><th>Cliente</th><th class="text-end">Valor</th><th class="text-end">Pago</th><th>Status</th></tr></thead>
+            <table class="table table-sm bg-white">
+                <thead><tr><th>Orçamento</th><th>Data</th><th>Cliente</th><th class="text-end">Total</th></tr></thead>
                 <tbody>
-                {% for v in vendas_recentes %}
-                <tr>
-                    <td><a href="{{ url_for('b2b.venda_detalhe', vid=v.id) }}">#{{ v.id }}</a></td>
-                    <td>{{ v.data_venda.strftime('%d/%m') }}</td>
-                    <td>{{ v.cliente_display }}</td>
-                    <td class="text-end">R$ {{ '%.2f'|format(v.valor_total) }}</td>
-                    <td class="text-end">R$ {{ '%.2f'|format(v.valor_pago) }}</td>
-                    <td>
-                        {% if v.status == 'cancelada' %}<span class="badge bg-secondary">cancelada</span>
-                        {% elif v.valor_aberto > 0 %}<span class="badge bg-warning text-dark">aberta</span>
-                        {% else %}<span class="badge bg-success">quitada</span>{% endif %}
-                    </td>
-                </tr>
+                {% for o in orcamentos %}
+                <tr><td><a href="{{ url_for('b2b.orcamento_detalhe', oid=o.id) }}">{{ o.codigo }}</a></td>
+                    <td>{{ o.data.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ o.cliente_display }}</td>
+                    <td class="text-end">R$ {{ '%.2f'|format(o.valor_total) }}</td></tr>
                 {% else %}
-                <tr><td colspan="6" class="text-muted text-center small">Sem vendas registradas.</td></tr>
+                <tr><td colspan="4" class="text-muted small p-2">Nenhum orçamento recusado.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
-    <div class="col-lg-5">
-        <h6 class="text-muted">Próximos vencimentos</h6>
+    <div class="col-lg-6">
+        <h6 class="text-muted">Vendas canceladas</h6>
         <div class="table-responsive">
-            <table class="table table-sm table-hover bg-white">
-                <thead><tr><th>Venc.</th><th>Cliente</th><th class="text-end">Saldo</th></tr></thead>
+            <table class="table table-sm bg-white">
+                <thead><tr><th>#</th><th>Data</th><th>Cliente</th><th class="text-end">Valor</th></tr></thead>
                 <tbody>
-                {% for p in parcelas_abertas %}
-                <tr>
-                    <td>{{ p.vencimento.strftime('%d/%m') }}</td>
-                    <td><a href="{{ url_for('b2b.venda_detalhe', vid=p.venda_id) }}">{{ p.venda.cliente_display }}</a></td>
-                    <td class="text-end">R$ {{ '%.2f'|format(p.saldo) }}</td>
-                </tr>
+                {% for v in vendas_canceladas %}
+                <tr><td><a href="{{ url_for('b2b.venda_detalhe', vid=v.id) }}">#{{ v.id }}</a></td>
+                    <td>{{ v.data_venda.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ v.cliente_display }}</td>
+                    <td class="text-end">R$ {{ '%.2f'|format(v.valor_total) }}</td></tr>
                 {% else %}
-                <tr><td colspan="3" class="text-muted text-center small">Nada em aberto.</td></tr>
+                <tr><td colspan="4" class="text-muted small p-2">Nenhuma venda cancelada.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 </div>
+{% endif %}
+
+{% else %}
+{# ── Cobranças: pendentes / vencidas / pagas + filtro por data ── #}
+{% set cpills = [('cob_pendentes', 'Pendentes de pagamento', 'warning'),
+                 ('cob_vencidos', 'Vencidos', 'danger'),
+                 ('cob_pagos', 'Pagos', 'success')] %}
+<div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
+    {% for chave, rotulo, cor in cpills %}
+    <a href="{{ url_for('b2b.dashboard', aba='cobrancas', f=chave, de=de.isoformat() if de else None, ate=ate.isoformat() if ate else None) }}"
+       class="btn btn-sm {{ 'btn-' + cor if f == chave else 'btn-outline-' + cor }}">
+        {{ rotulo }} <span class="badge bg-light text-dark">{{ counts[chave] }}</span></a>
+    {% endfor %}
+    <form method="GET" class="d-flex gap-1 align-items-center ms-auto">
+        <input type="hidden" name="aba" value="cobrancas">
+        <input type="hidden" name="f" value="{{ f }}">
+        <input type="date" name="de" value="{{ de.isoformat() if de else '' }}" class="form-control form-control-sm" style="width:150px" title="De">
+        <input type="date" name="ate" value="{{ ate.isoformat() if ate else '' }}" class="form-control form-control-sm" style="width:150px" title="Até">
+        <button class="btn btn-sm btn-outline-secondary">Filtrar</button>
+        {% if de or ate %}<a href="{{ url_for('b2b.dashboard', aba='cobrancas', f=f) }}" class="btn btn-sm btn-outline-secondary" title="Limpar filtro">×</a>{% endif %}
+    </form>
+</div>
+<p class="text-muted small mb-2">O filtro de data vale sobre o <strong>vencimento</strong>
+    (pendentes/vencidos) e sobre a <strong>data do pagamento</strong> (pagos).</p>
+
+<div class="table-responsive">
+    <table class="table table-sm table-hover bg-white">
+        <thead><tr><th>Venc.</th><th>Cliente</th><th>Origem</th>
+            <th class="text-end">Valor</th><th class="text-end">Pago</th>
+            <th class="text-end">Saldo</th><th>Status</th><th>Boleto</th><th></th></tr></thead>
+        <tbody>
+        {% for p in parcelas %}
+        {% set cob = p.cobranca[0] if p.cobranca else None %}
+        <tr>
+            <td>{{ p.vencimento.strftime('%d/%m/%Y') }}</td>
+            <td>{{ p.venda.cliente_display }}</td>
+            <td><a href="{{ url_for('b2b.venda_detalhe', vid=p.venda_id) }}">venda #{{ p.venda_id }}</a>
+                {% if p.fatura_id %}<a href="{{ url_for('b2b.fatura_detalhe', fid=p.fatura_id) }}"
+                    class="badge bg-info text-dark text-decoration-none">{{ p.fatura.codigo }}</a>{% endif %}</td>
+            <td class="text-end">R$ {{ '%.2f'|format(p.valor) }}</td>
+            <td class="text-end">R$ {{ '%.2f'|format(p.valor_pago or 0) }}</td>
+            <td class="text-end fw-bold">R$ {{ '%.2f'|format(p.saldo) }}</td>
+            <td>
+                {% if p.status == 'pago' %}<span class="badge bg-success">pago{{ ' em ' + p.pago_em.strftime('%d/%m') if p.pago_em }}</span>
+                {% elif p.status == 'parcial' %}<span class="badge bg-warning text-dark">parcial</span>
+                {% elif p.status == 'atrasado' %}<span class="badge bg-danger">vencido</span>
+                {% else %}<span class="badge bg-info text-dark">aberto</span>{% endif %}
+            </td>
+            <td>
+                {% if p.fatura_id %}
+                    {% set fcob = p.fatura.cobrancas[0] if p.fatura and p.fatura.cobrancas else None %}
+                    {% if fcob %}<span class="badge bg-secondary" title="Boleto da fatura">{{ fcob.status }}</span>
+                    {% else %}<span class="text-muted small">pela fatura</span>{% endif %}
+                {% elif cob %}<span class="badge bg-secondary">{{ cob.status }}</span>
+                {% else %}<span class="text-muted small">—</span>{% endif %}
+            </td>
+            <td class="text-end"><a href="{{ url_for('b2b.venda_detalhe', vid=p.venda_id) }}" class="btn btn-sm btn-outline-primary">Abrir</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="text-muted text-center small p-3">
+            {% if f == 'cob_vencidos' %}Nada vencido — em dia. 🎉
+            {% elif f == 'cob_pagos' %}Nenhum pagamento no período.
+            {% else %}Nada pendente de pagamento.{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
 {% endblock %}
