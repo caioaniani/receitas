@@ -1002,4 +1002,109 @@
     });
 })();
 </script>
+<script>
+(function () {
+    // ── Analisar por IA (Opus): propõe ajustes de célula com motivo; o
+    // humano marca e aplica (vira override de rascunho, mesma guarda da
+    // edição manual). ENVIAR ao padeiro continua gesto manual na tela.
+    const URL_PROPOSTA = "{{ url_for('industria_teste.ia_proposta') }}";
+    const URL_APLICAR = "{{ url_for('industria_teste.ia_aplicar') }}";
+    const IA_PARAMS = {
+        horizonte: {{ horizonte|tojson }},
+        janela: {{ janela|tojson }},
+        inicio: {{ inicio|tojson }},
+        equilibrar: {{ (1 if equilibrar else 0)|tojson }},
+        motor: {{ motor|tojson }}
+    };
+    const btn = document.getElementById('btn-ia-crono');
+    const painel = document.getElementById('ia-crono-painel');
+    if (!btn || !painel) return;
+
+    function esc(t) {
+        const d = document.createElement('div');
+        d.textContent = t == null ? '' : String(t);
+        return d.innerHTML;
+    }
+    async function post(url, body) {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json',
+                      'X-CSRFToken': window.CSRF_TOKEN},
+            body: JSON.stringify(body)
+        });
+        try { return await resp.json(); } catch (e) { return null; }
+    }
+
+    btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        const rotulo = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> analisando…';
+        painel.classList.remove('d-none');
+        painel.innerHTML = 'A IA está analisando o cronograma (leva ~30-90s)…';
+        const d = await post(URL_PROPOSTA, IA_PARAMS);
+        btn.disabled = false;
+        btn.innerHTML = rotulo;
+        if (!d || !d.ok) {
+            painel.innerHTML = 'Falhou: ' + esc(d && d.erro || 'sem resposta do servidor');
+            return;
+        }
+        const ajustes = d.ajustes || [];
+        let linhas = ajustes.map(function (a, i) {
+            return '<tr>'
+                + '<td><input type="checkbox" class="form-check-input ia-aj" checked '
+                + 'data-i="' + i + '"></td>'
+                + '<td>' + esc(a.nome) + '</td>'
+                + '<td>' + esc(a.data) + '</td>'
+                + '<td class="text-end">' + esc(a.atual) + ' → <strong>'
+                + esc(a.qtd) + '</strong></td>'
+                + '<td>' + esc(a.motivo) + '</td></tr>';
+        }).join('');
+        painel.innerHTML =
+            '<div class="d-flex justify-content-between">'
+            + '<strong><i class="bi bi-stars"></i> Proposta da IA'
+            + (d.modelo_usado ? ' <span class="text-muted fw-normal">(' + esc(d.modelo_usado) + ')</span>' : '')
+            + '</strong>'
+            + '<button type="button" class="btn-close btn-sm" id="ia-fechar"></button></div>'
+            + (d.parecer ? '<div class="mt-1">' + esc(d.parecer) + '</div>' : '')
+            + (ajustes.length
+               ? '<div class="table-responsive mt-2"><table class="table table-sm mb-1">'
+                 + '<thead><tr><th></th><th>Receita</th><th>Dia</th>'
+                 + '<th class="text-end">Ajuste</th><th>Motivo</th></tr></thead>'
+                 + '<tbody>' + linhas + '</tbody></table></div>'
+                 + '<button type="button" id="ia-aplicar" class="btn btn-sm btn-success">'
+                 + 'Aplicar marcados (vira rascunho — enviar continua manual)</button>'
+               : '<div class="text-muted mt-1">Nenhum ajuste proposto — o cronograma está redondo pra IA.</div>');
+        document.getElementById('ia-fechar').addEventListener('click', function () {
+            painel.classList.add('d-none');
+        });
+        const aplicarBtn = document.getElementById('ia-aplicar');
+        if (!aplicarBtn) return;
+        aplicarBtn.addEventListener('click', async function () {
+            const marcados = Array.from(
+                painel.querySelectorAll('.ia-aj:checked'))
+                .map(function (cb) { return ajustes[parseInt(cb.dataset.i)]; });
+            if (!marcados.length) return;
+            aplicarBtn.disabled = true;
+            aplicarBtn.textContent = 'aplicando…';
+            const r = await post(URL_APLICAR,
+                                 Object.assign({ajustes: marcados}, IA_PARAMS));
+            if (!r || !r.ok) {
+                aplicarBtn.disabled = false;
+                aplicarBtn.textContent = 'Aplicar marcados';
+                alert('Falhou: ' + (r && r.erro || 'sem resposta'));
+                return;
+            }
+            let msg = r.aplicados.length + ' ajuste(s) aplicado(s) como rascunho.';
+            if (r.falhas && r.falhas.length) {
+                msg += '\n' + r.falhas.length + ' falhou(aram): '
+                    + r.falhas.map(function (f) {
+                        return (f.msg || f.erro || '?');
+                    }).join('; ');
+            }
+            alert(msg);
+            location.reload();
+        });
+    });
+})();
+</script>
 {% endblock %}
