@@ -64,7 +64,8 @@ def _dashboard_counts(hoje_, de, ate):
             db.func.date(VendaB2BParcela.pago_em) <= ate)
     return {
         'pendentes': Orcamento.query.filter(
-            Orcamento.status.in_(('rascunho', 'enviado'))).count(),
+            Orcamento.status.in_(('rascunho', 'enviado')),
+            Orcamento.arquivado_em.is_(None)).count(),
         # Aprovado agora VIRA venda na hora (07/07/2026) — aqui ficam so
         # os aprovados AINDA sem venda (legado/excecao).
         'aprovados': Orcamento.query.filter_by(
