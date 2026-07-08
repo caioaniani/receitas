@@ -65,7 +65,10 @@ def _dashboard_counts(hoje_, de, ate):
     return {
         'pendentes': Orcamento.query.filter(
             Orcamento.status.in_(('rascunho', 'enviado'))).count(),
-        'aprovados': Orcamento.query.filter_by(status='aprovado').count(),
+        # Aprovado agora VIRA venda na hora (07/07/2026) — aqui ficam so
+        # os aprovados AINDA sem venda (legado/excecao).
+        'aprovados': Orcamento.query.filter_by(
+            status='aprovado', venda_id=None).count(),
         'producao': VendaB2B.query.filter(
             VendaB2B.status == 'ativa',
             VendaB2B.status_entrega != 'entregue').count(),
