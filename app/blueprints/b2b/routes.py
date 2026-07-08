@@ -732,6 +732,10 @@ def venda_nova():
     orc_id = request.args.get('orcamento', type=int)
     if orc_id:
         orc = Orcamento.query.get_or_404(orc_id)
+        if orc.venda_id:
+            flash(f'O orçamento {orc.codigo} já virou a venda '
+                  f'#{orc.venda_id} — não converta duas vezes.', 'warning')
+            return redirect(url_for('b2b.venda_detalhe', vid=orc.venda_id))
         cliente_pre = orc.cliente_id
         pulados = []
         for it in orc.itens:
