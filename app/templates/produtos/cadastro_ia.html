@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Cadastro assistido (IA){% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-robot"></i> Cadastro assistido por IA</h1>
+    <a href="{{ url_for('produtos.lista') }}" class="btn btn-outline-secondary btn-sm">Voltar aos produtos</a>
+</div>
+
+<div class="alert alert-info dica-recolhe small">
+    Cole um print de cardápio/planilha (ou o texto) com <strong>nome e preço</strong> dos
+    itens novos. A IA lê a lista, procura os produtos <em>parecidos</em> já cadastrados e
+    propõe o cadastro com os componentes inferidos (ex: um "MISTO CRANBERRY" herda a
+    estrutura do "MISTO", trocando o pão). <strong>Nada é salvo sem a sua revisão</strong>:
+    confira nome, preço e principalmente os componentes — componente errado significa
+    baixa de estoque errada nas vendas. Componente que não existe vira proposta de MP
+    nova (com custo 0 — defina depois no Banco de MPs); componente sem vínculo cai em
+    Produtos → cestas órfãos.
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('produtos.cadastro_ia_analisar') }}"
+              enctype="multipart/form-data" class="row g-2 align-items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-md-4">
+                <label class="form-label small mb-1">Print da lista (JPG/PNG/WebP, até 8 MB)</label>
+                <input type="file" name="imagem" accept="image/*" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small mb-1">…ou cole o texto (nome e preço por linha)</label>
+                <textarea name="texto" rows="2" class="form-control form-control-sm"
+                          placeholder="MISTO CRANBERRY  R$ 30,00&#10;PAO DE FORMA CRANBERRY  R$ 40,00"></textarea>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Preço lido vai para</label>
+                <select name="campo_preco" class="form-select form-select-sm">
+                    {% for c in CAMPOS_PRECO %}
+                    <option value="{{ c }}" {% if c == campo_preco %}selected{% endif %}>
+                        {{ {'preco_site': 'Preço site/varejo', 'preco_atacado': 'Preço atacado',
+                            'preco_loja': 'Preço loja'}[c] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary btn-sm w-100"><i class="bi bi-stars"></i> Analisar com IA</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if itens %}
+<form method="POST" action="{{ url_for('produtos.cadastro_ia_salvar') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="n_itens" value="{{ itens|length }}">
+    <input type="hidden" name="campo_preco" value="{{ campo_preco }}">
+    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+        <h5 class="mb-0">Proposta da IA — revise antes de salvar
+            {% if modelo_usado %}<span class="badge bg-light text-muted fw-normal">{{ modelo_usado }}</span>{% endif %}
+        </h5>
+        <button class="btn btn-success btn-sm"
+                onclick="return confirm('Criar os produtos marcados?')">
+            <i class="bi bi-check-lg"></i> Salvar marcados</button>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle bg-white">
+            <thead class="table-light">
+                <tr><th></th><th>Produto</th><th style="width:110px">Preço (R$)</th>
+                    <th style="width:150px">Categoria</th><th>Componentes propostos</th></tr>
+            </thead>
+            <tbody>
+            {% for it in itens %}
+            {% set i = loop.index0 %}
+            <tr class="{% if it.ja_existe_id %}table-secondary{% elif it.confianca == 'baixa' %}table-warning{% endif %}">
+                <td>
+                    <input type="hidden" name="it{{ i }}_json" value="{{ it|tojson }}">
+                    <input type="checkbox" name="it{{ i }}_incluir" value="1"
+                           class="form-check-input"
+                           {% if not it.ja_existe_id %}checked{% endif %}>
+                </td>
+                <td>
+                    <input type="text" name="it{{ i }}_nome" value="{{ it.nome }}"
+                           class="form-control form-control-sm">
+                    <div class="small mt-1">
+                        {% if it.ja_existe_id %}<span class="badge bg-secondary">já existe — desmarcado</span>{% endif %}
+                        {% if it.baseado_em %}<span class="badge bg-info text-dark">base: {{ it.baseado_em }}</span>{% endif %}
+                        {% if it.confianca == 'baixa' %}<span class="badge bg-warning text-dark">confiança baixa</span>{% endif %}
+                        {% if it.observacao %}<span class="text-muted">{{ it.observacao }}</span>{% endif %}
+                    </div>
+                </td>
+                <td><input type="text" name="it{{ i }}_preco"
+                           value="{{ '%.2f'|format(it.preco or 0) }}"
+                           class="form-control form-control-sm text-end"></td>
+                <td><input type="text" name="it{{ i }}_categoria"
+                           value="{{ it.categoria or '' }}"
+                           class="form-control form-control-sm"></td>
+                <td>
+                    {% for c in it.componentes %}
+                    {% set j = loop.index0 %}
+                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                        <input type="checkbox" name="it{{ i }}_c{{ j }}_incluir" value="1"
+                               class="form-check-input" checked>
+                        <span class="badge bg-{{ {'receita':'primary','produto':'success','mp':'dark'}[c.tipo] }}">{{ c.tipo }}</span>
+                        <span class="small">{{ c.nome }}</span>
+                        {% if c.novo %}<span class="badge bg-warning text-dark">MP nova</span>{% endif %}
+                        {% if c.orfao %}<span class="badge bg-danger">sem vínculo</span>{% endif %}
+                        <input type="text" name="it{{ i }}_c{{ j }}_qtd"
+                               value="{{ '%g'|format(c.quantidade or 1) }}"
+                               class="form-control form-control-sm text-end" style="width:70px"
+                               title="Quantidade por unidade vendida">
+                    </div>
+                    {% else %}
+                    <span class="text-muted small">sem componentes (produto simples)</span>
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <button class="btn btn-success"
+            onclick="return confirm('Criar os produtos marcados?')">
+        <i class="bi bi-check-lg"></i> Salvar marcados</button>
+</form>
+{% endif %}
+{% endblock %}
