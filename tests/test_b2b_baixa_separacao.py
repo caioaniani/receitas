@@ -242,6 +242,87 @@ def test_estorno_total_limpa_marcador(app, admin_user, catalogo):
         assert v.estoque_baixado_em is None
 
 
+def test_claim_atomico_na_separacao(app, admin_user, catalogo):
+    """Dois SEPARAR quase simultâneos: o UPDATE condicional do marcador
+    garante que só um baixa. Simula o perdedor — outro request já gravou
+    o marcador, mas o objeto em memória ainda o vê NULL."""
+    from sqlalchemy import update
+    with app.app_context():
+        ep = _estoque(catalogo)
+        v = _venda_fila(catalogo, admin_user)
+        db.session.execute(
+            update(VendaB2B).where(VendaB2B.id == v.id)
+            .values(estoque_baixado_em=agora())
+            .execution_options(synchronize_session=False))
+        assert v.estoque_baixado_em is None     # visão desatualizada
+        assert svc.baixar_na_separacao(v, user=admin_user) is False
+        db.session.commit()
+        db.session.refresh(ep)
+        assert ep.quantidade == 20              # o perdedor não baixou nada
+
+
+def test_comprometido_ignora_componente_nao_receita(app, admin_user, catalogo):
+    """Componente de cesta que não é receita (MP/produto pronto) fica FORA
+    do comprometido: a baixa real não debita a linha própria dele no
+    EstoqueProducao — comprometer mentiria no disponível."""
+    with app.app_context():
+        cesta = Produto(nome='Cesta Mista', ativo=True)
+        db.session.add(cesta)
+        db.session.flush()
+        db.session.add_all([
+            ProdutoItem(produto_id=cesta.id, tipo='receita',
+                        receita_id=catalogo['receita'].id,
+                        item_nome=catalogo['receita'].nome, quantidade=2),
+            ProdutoItem(produto_id=cesta.id, tipo='mp',
+                        materia_prima_id=catalogo['mp'].id,
+                        item_nome=catalogo['mp'].nome, quantidade=1),
+        ])
+        db.session.commit()
+        svc.criar_venda(
+            cliente_nome='Zion Church',
+            data_entrega=hoje() + timedelta(days=1),
+            itens=[{'tipo': 'produto', 'id': cesta.id, 'quantidade': 3,
+                    'preco_unitario': 30.0}],
+            user=admin_user)
+        pend = svc.comprometido_b2b_pendente()
+        assert pend == {('receita', catalogo['receita'].id): 6}
+
+
+def test_comprometido_exclui_propria_venda(app, admin_user, catalogo):
+    """No form de EDITAR, o comprometido da própria venda não desconta do
+    disponível exibido pra ela mesma."""
+    with app.app_context():
+        rid = catalogo['receita'].id
+        v = _venda_fila(catalogo, admin_user, qtd=5)
+        assert svc.comprometido_b2b_pendente()[('receita', rid)] == 5
+        pend = svc.comprometido_b2b_pendente(excluir_venda_id=v.id)
+        assert ('receita', rid) not in pend
+
+
+def test_rota_venda_entrega_sincroniza_baixa(app, admin_user, catalogo):
+    """POST /b2b/vendas/<id>/entrega via HTTP: venda imediata (baixada)
+    que ganha data estorna; o estoque volta a sair só na separação."""
+    with app.app_context():
+        ep = _estoque(catalogo)
+        v = svc.criar_venda(
+            cliente_nome='Balcao', data_entrega=None,
+            itens=[{'tipo': 'receita', 'id': catalogo['receita'].id,
+                    'quantidade': 5, 'preco_unitario': 10.0}],
+            user=admin_user)
+        vid, epid = v.id, ep.id
+        assert ep.quantidade == 15
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    amanha = (hoje() + timedelta(days=1)).isoformat()
+    r = c.post(f'/b2b/vendas/{vid}/entrega', data={'data_entrega': amanha})
+    assert r.status_code == 302
+    with app.app_context():
+        v = db.session.get(VendaB2B, vid)
+        assert v.data_entrega is not None
+        assert v.estoque_baixado_em is None
+        assert db.session.get(EstoqueProducao, epid).quantidade == 20
+
+
 def test_venda_pendente_sem_marcador_apos_backfill_simulado(app):
     """Sanidade do marcador: venda criada direto no modelo (como as dos
     testes antigos) nasce sem marcador — a separação baixará."""
