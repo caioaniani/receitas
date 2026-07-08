@@ -137,7 +137,10 @@ def dashboard():
                                 VendaB2B.id.desc())
                       .limit(200).all())
         elif f == 'arquivados':
-            orcamentos = (Orcamento.query.filter_by(status='recusado')
+            orcamentos = (Orcamento.query
+                          .filter(db.or_(
+                              Orcamento.status == 'recusado',
+                              Orcamento.arquivado_em.isnot(None)))
                           .order_by(Orcamento.criado_em.desc())
                           .limit(100).all())
             vendas_canceladas = (VendaB2B.query
