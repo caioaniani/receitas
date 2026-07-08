@@ -27,6 +27,8 @@ torna cancelar/editar/reabrir corretos e idempotentes mesmo encadeados.
 from collections import defaultdict
 from decimal import ROUND_HALF_UP, Decimal
 
+from sqlalchemy import update as sa_update
+
 from app.extensions import db
 from app.models import (
     EstoqueProducao,
@@ -198,8 +200,23 @@ def baixar_na_separacao(venda, user=None):
     """Baixa da SEPARACAO (tela /padeiro). Idempotente pelo marcador:
     venda ja baixada (regime antigo — baixou na criacao — ou clique
     duplo/re-separacao) nao baixa de novo. Devolve True se baixou agora.
-    NAO commita — a rota do padeiro fecha a transacao com o status."""
+    NAO commita — a rota do padeiro fecha a transacao com o status.
+
+    O marcador e reivindicado por UPDATE condicional (CLAIM, mesmo padrao
+    do Confirmar do Slack): dois SEPARAR quase simultaneos leriam ambos
+    o marcador NULL e baixariam em DOBRO — com o claim, o segundo request
+    fica com rowcount 0 e desiste."""
     if venda.estoque_baixado_em:
+        return False
+    claimed = db.session.execute(
+        sa_update(VendaB2B)
+        .where(VendaB2B.id == venda.id,
+               VendaB2B.estoque_baixado_em.is_(None))
+        .values(estoque_baixado_em=agora())
+        .execution_options(synchronize_session=False)
+    ).rowcount
+    if not claimed:
+        db.session.expire(venda, ['estoque_baixado_em'])
         return False
     _baixar_venda(venda, user)
     return True
