@@ -422,7 +422,10 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
         venda.estoque_baixado_em = agora()
     venda.valor_total = total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     _aplicar_parcelas(venda, parcelas)
-    db.session.commit()
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()
     return venda
 
 
