@@ -705,10 +705,15 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             # Lista TODAS as lojas operacionais — mesmo com qtd=0. Visivel
             # confirma ao usuario que o motor enxergou cada loja. Ordem: qtd
             # desc, depois alfabetico (lojas_op ja vem ordenado por nome).
+            # Vendas B2B aguardando separacao entram como linha propria —
+            # sem ela o total do comprometido nao bate com o detalhamento.
             'breakdown_comprometido': sorted(
                 [{'loja_id': l.id, 'loja_nome': l.nome,
                   'qtd': comprometido_loja.get(rid, {}).get(l.id, 0)}
-                 for l in lojas_op],
+                 for l in lojas_op]
+                + ([{'loja_id': None, 'loja_nome': 'Vendas B2B',
+                     'qtd': comprometido_b2b[rid]}]
+                   if comprometido_b2b.get(rid) else []),
                 key=lambda b: (-b['qtd'], b['loja_nome']),
             ),
         })
