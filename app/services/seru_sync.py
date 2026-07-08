@@ -630,14 +630,23 @@ def reprocessar_retroativo_manual(dias=30, user=None):
         v0 = AppConfig.get(FLAG_REPROCESSO)
         res = reprocessar_retroativo(dias=dias, user=user)
         st = res.get('stats') or {}
-        if not st.get('erros') and v0 and v0 != '0':
-            _quitar_flag(v0)
-        AppConfig.set(ULTIMO_REPROCESSO,
-                      'ok manual em %s: %d pedido(s) liberado(s), '
-                      '%d item(ns) baixado(s)'
-                      % (agora().strftime('%d/%m %H:%M'),
-                         res.get('liberados', 0),
-                         st.get('itens_baixados', 0)))
+        if st.get('erros'):
+            # Commit falhou (baixas revertidas): NAO quita pendencia nem
+            # grava 'ok' — o caller reporta e o operador re-tenta.
+            AppConfig.set(ULTIMO_REPROCESSO,
+                          'parcial manual em %s: %d erro(s) — baixas da '
+                          'rodada revertidas'
+                          % (agora().strftime('%d/%m %H:%M'),
+                             len(st.get('erros') or [])))
+        else:
+            if v0 and v0 != '0':
+                _quitar_flag(v0)
+            AppConfig.set(ULTIMO_REPROCESSO,
+                          'ok manual em %s: %d pedido(s) liberado(s), '
+                          '%d item(ns) baixado(s)'
+                          % (agora().strftime('%d/%m %H:%M'),
+                             res.get('liberados', 0),
+                             st.get('itens_baixados', 0)))
         db.session.commit()
         return res
 
