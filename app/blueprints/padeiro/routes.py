@@ -508,8 +508,8 @@ def separar_b2b(id):
 @padeiro_required
 def entregar_b2b(id):
     """Marca uma venda B2B separada como entregue (sai da fila do padeiro).
-    Despacho simples, sem QR/motorista (isso e a Fase 2). Nao mexe em estoque —
-    o B2B ja baixou do freezer na venda."""
+    Despacho simples, sem QR/motorista (isso e a Fase 2). Nao mexe em
+    estoque — a baixa ja aconteceu na SEPARACAO (regime 07/07/2026)."""
     data_str = (request.form.get('data') or '').strip() or None
     venda = VendaB2B.query.get_or_404(id)
     if venda.status == 'cancelada' or venda.status_entrega != 'separado':
