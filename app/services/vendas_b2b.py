@@ -243,7 +243,8 @@ def sincronizar_baixa_com_data(venda, user=None):
     if venda.status != 'ativa' or venda.status_entrega != 'pendente':
         return
     if venda.data_entrega is None and not venda.estoque_baixado_em:
-        _baixar_venda(venda, user)
+        if _claim_baixa(venda):
+            _baixar_venda(venda, user)
     elif venda.data_entrega is not None and venda.estoque_baixado_em:
         _estornar_estoque(venda, user=user,
                           motivo='entrou na fila do padeiro')
