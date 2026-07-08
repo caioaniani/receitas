@@ -261,8 +261,11 @@ def analisar_producao_ia(*, horizonte_dias=7, janela_semanas=6,
     pend = pendencias_por_receita()
     linhas_ctx = []
     for r in crono['receitas']:
-        if r.get('retorno'):
-            continue                    # so de sobras: IA nao propoe
+        # Fora da proposta: linha de retorno (so de sobras devolvidas) e
+        # INSUMO (massa etc. — o MRP deriva dos finais; ajustar insumo a
+        # mao brigaria com a explosao).
+        if r.get('retorno') or r.get('insumo'):
+            continue
         pd = pend.get(r['receita_id']) or {}
         linhas_ctx.append({
             'receita_id': r['receita_id'],
