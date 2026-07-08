@@ -683,11 +683,17 @@ def reprocessar_retroativo_rota():
     except (TypeError, ValueError):
         dias = 30
     try:
-        res = seru_sync.reprocessar_retroativo(dias=dias, user=current_user)
+        status, res = seru_sync.reprocessar_retroativo_manual(
+            dias=dias, user=current_user)
     except Exception as e:  # noqa: BLE001 — API Seru fora nao pode dar 500
         current_app.logger.exception('reprocessar_retroativo falhou')
         flash(f'Reprocesso falhou (API Seru?): {type(e).__name__}. '
               'Tente de novo em alguns minutos.', 'danger')
+        return redirect(url_for('pdv.saude'))
+    if status == 'ocupado':
+        flash('Já existe um reprocesso rodando (disparado por um vínculo '
+              'recente). Aguarde alguns minutos e confira o resultado aqui.',
+              'info')
         return redirect(url_for('pdv.saude'))
     st = res.get('stats') or {}
     msg = (f"Retroativo ({dias}d): {res.get('liberados', 0)} pedido(s) sem "
