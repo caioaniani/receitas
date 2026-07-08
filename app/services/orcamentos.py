@@ -360,6 +360,22 @@ def marcar_status(orc, novo, *, usuario_id=None):
         if erros:
             return False, ('para aprovar (e virar venda): '
                            + '; '.join(erros))
+        # CLAIM atomico (mesmo padrao do Confirmar do Slack): dois POSTs
+        # de aprovar quase simultaneos leriam ambos status='enviado' e
+        # converteriam DUAS vezes (duas vendas na fila do padeiro). O
+        # UPDATE condicional garante que so um vence; o perdedor ve
+        # rowcount 0.
+        from sqlalchemy import update as sa_update
+        claimed = db.session.execute(
+            sa_update(Orcamento)
+            .where(Orcamento.id == orc.id, Orcamento.status == 'enviado')
+            .values(status='aprovado', aprovado_em=agora())
+            .execution_options(synchronize_session=False)
+        ).rowcount
+        if not claimed:
+            db.session.rollback()
+            return False, ('orcamento ja processado por outra acao — '
+                           'recarregue a pagina')
     orc.status = novo
     if novo == 'enviado':
         orc.enviado_em = agora()
