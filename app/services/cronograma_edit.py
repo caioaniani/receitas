@@ -34,6 +34,8 @@ def alternar_dia_fechado(data_alvo, user_id=None):
     Dia fechado: edicao de celula recusada (qualquer caminho) e as acoes em
     massa (limpar edicoes, reset por linha) PULAM o dia. Enviar/atualizar
     producao continua permitido — o cadeado protege o rascunho, nao a ordem."""
+    from sqlalchemy.exc import IntegrityError
+
     from app.models import CronogramaDiaFechado
     existente = CronogramaDiaFechado.query.filter_by(data=data_alvo).first()
     if existente is not None:
@@ -42,8 +44,27 @@ def alternar_dia_fechado(data_alvo, user_id=None):
         return False
     db.session.add(CronogramaDiaFechado(data=data_alvo,
                                         criado_por_id=user_id))
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Duplo clique quase simultaneo: o outro POST inseriu primeiro
+        # (unique de `data` segura) — o dia ja esta fechado, mesmo resultado.
+        db.session.rollback()
     return True
+
+
+def podar_dias_fechados_passados():
+    """Apaga cadeados de dias que ja PASSARAM (o grid nunca mais os mostra;
+    deixa-los blindaria overrides mortos do "limpar edicoes" pra sempre).
+    Chamada barata no GET da tela. Retorna quantos apagou."""
+    from app.models import CronogramaDiaFechado
+    from app.utils import hoje
+    q = CronogramaDiaFechado.query.filter(CronogramaDiaFechado.data < hoje())
+    n = q.count()
+    if n:
+        q.delete(synchronize_session=False)
+        db.session.commit()
+    return n
 
 
 def _salvar_overrides(receita_id, datas, qtds):
