@@ -136,6 +136,13 @@ def _run_sync(app):
                     vendas_diarias.capturar_periodo(hoje - timedelta(days=1), hoje)
                 except Exception:
                     logger.exception('captura vendas_diarias no cron falhou')
+                # Retoma reprocesso retroativo orfao (drenador morto em
+                # deploy / erro de API na tentativa anterior). No-op sem
+                # pendencia. Best-effort: nunca derruba o sync.
+                try:
+                    seru_sync.retomar_reprocesso_pendente(app)
+                except Exception:
+                    logger.exception('retomada de reprocesso pendente falhou')
                 ativas = any(stats.get(k, 0) for k in (
                     'pedidos_novos', 'itens_baixados',
                     'pedidos_cancelados_estornados'))
