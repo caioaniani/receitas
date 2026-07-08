@@ -265,3 +265,69 @@ def limpar_todos_overrides():
     q.delete(synchronize_session=False)
     db.session.commit()
     return n, preservados
+
+
+def reverter_dia_para_ordem_enviada(data_alvo, horizonte_dias=7,
+                                    janela_semanas=6, inicio_offset_dias=0,
+                                    equilibrar=False, motor='pedidos'):
+    """Desfaz as edicoes do grid de UM dia e traz de volta o que foi ENVIADO
+    ao padeiro (pedido do dono 08/07/2026). E o INVERSO do "🔄 atualizar
+    producao": em vez de empurrar o grid pra ordem, grava overrides que
+    reproduzem o `qtd_alvo` de cada item da ordem (e zera as receitas que o
+    grid mostra mas a ordem nao tem). NAO toca no `PlanejamentoProducao` — so
+    no rascunho (`CronogramaOverride`). Dia fechado (🔒) recusa. Retorna
+    {'ok', 'erro'?, 'n'?}.
+
+    O override gravado e `qtd_alvo - qtd_extra`: o sync do envio SOMA a parcela
+    extra (reagendada da auditoria) ao alvo, entao o grid que reproduz o alvo e
+    o alvo menos o extra (o difere volta a bater exato — mesma conta do
+    `_sync_itens_do_cronograma` na direcao contraria)."""
+    from app.models import CronogramaOverride, PlanejamentoProducao
+    if data_alvo in dias_fechados():
+        return {'ok': False, 'erro': 'dia_fechado'}
+    plano = (PlanejamentoProducao.query
+             .filter_by(data=data_alvo, origem='cronograma').first())
+    if plano is None or plano.enviado_ao_padeiro is False:
+        return {'ok': False, 'erro': 'sem_ordem'}
+
+    # qtd de grid que reproduz o qtd_alvo de cada item da ordem (nao dispensado).
+    ordem = {}
+    for it in plano.itens:
+        if it.dispensada_em is not None:
+            continue
+        extra = int(it.qtd_extra or 0)
+        ordem[it.receita_id] = max(0, int(it.qtd_alvo or 0) - extra)
+
+    # Receitas que o grid mostra HOJE (>0) mas NAO estao na ordem (adicionadas
+    # depois do envio, ou sugestao nova) — zera pra sumirem, como na ordem.
+    from app.services.previsao_producao import cronograma_producao
+    crono = cronograma_producao(horizonte_dias=horizonte_dias,
+                                janela_semanas=janela_semanas,
+                                inicio_offset_dias=inicio_offset_dias,
+                                equilibrar=equilibrar, motor=motor)
+    iso = data_alvo.isoformat()
+    alvo = dict(ordem)
+    for rr in crono['receitas']:
+        if rr.get('insumo'):
+            continue
+        rid = rr['receita_id']
+        if rid in alvo:
+            continue
+        cel = next((c for c in rr['por_dia'] if c['data'] == iso), None)
+        if cel and int(cel['qtd'] or 0) > 0:
+            alvo[rid] = 0
+
+    if not alvo:
+        return {'ok': True, 'n': 0}
+    existentes = {o.receita_id: o for o in CronogramaOverride.query.filter(
+        CronogramaOverride.data == data_alvo,
+        CronogramaOverride.receita_id.in_(list(alvo))).all()}
+    for rid, q in alvo.items():
+        o = existentes.get(rid)
+        if o is not None:
+            o.qtd = int(q)
+        else:
+            db.session.add(CronogramaOverride(
+                receita_id=rid, data=data_alvo, qtd=int(q)))
+    db.session.commit()
+    return {'ok': True, 'n': len(ordem)}
