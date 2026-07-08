@@ -135,6 +135,19 @@
         border-radius: .25rem; font-size: .66rem; font-weight: 600; cursor: help; }
     .tag-fds { background: #e7f1ff; color: #144a8f; padding: .05rem .4rem;
         border-radius: .25rem; font-size: .66rem; font-weight: 600; cursor: help; }
+    /* Dia FECHADO com cadeado (🔒): edicao/limpar/reset nao mexem nele. */
+    .crono td.cel-fechada { background: #eef4fb;
+        box-shadow: inset 0 0 0 1px #cfe0f1; }
+    .crono td.cel-fechada .cel-input { color: #6c7a89; cursor: not-allowed;
+        font-weight: 500; }
+    .btn-cadeado { border: none; background: none; cursor: pointer;
+        font-size: .8rem; line-height: 1; padding: 0 .1rem; opacity: .55; }
+    .btn-cadeado:hover { opacity: 1; }
+    .btn-cadeado.fechado { opacity: 1; }
+    /* Ordem ENVIADA de volta na tela: o que o padeiro ve quando difere. */
+    .cel-enviado { display: block; font-size: .62rem; color: #b26a00;
+        line-height: 1.1; cursor: help; font-weight: 700; }
+    .dia-difere { background: #ffc107; color: #212529; cursor: help; }
     /* Fornada especial: dia sem producao permitida (produz so qui/sex/sab). */
     .crono td.cel-bloq { background: repeating-linear-gradient(45deg,
         #f4f5f7 0 6px, #eceef1 6px 12px); }
