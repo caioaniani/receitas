@@ -357,7 +357,12 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
     db.session.add(venda)
     db.session.flush()
 
-    total = _aplicar_itens(venda, itens, user)
+    # Regime da baixa: venda com data_entrega vai pra fila do padeiro e so
+    # baixa na SEPARACAO; venda imediata (sem data) baixa aqui mesmo.
+    baixar_agora = data_entrega is None
+    total = _aplicar_itens(venda, itens, user, baixar=baixar_agora)
+    if baixar_agora:
+        venda.estoque_baixado_em = agora()
     venda.valor_total = total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     _aplicar_parcelas(venda, parcelas)
     db.session.commit()
