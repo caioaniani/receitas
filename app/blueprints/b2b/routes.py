@@ -765,6 +765,23 @@ def venda_cancelar(vid):
     return redirect(url_for('b2b.venda_detalhe', vid=vid))
 
 
+@b2b_bp.route('/vendas/<int:vid>/excluir', methods=['POST'])
+@owner_required
+def venda_excluir(vid):
+    """Exclusão DEFINITIVA (dono) — limpeza de venda de teste/errada.
+    O service estorna o estoque e recusa venda faturada/paga/com boleto
+    no banco."""
+    venda = VendaB2B.query.get_or_404(vid)
+    try:
+        svc.excluir_venda(venda, user=current_user)
+    except ValueError as exc:
+        flash(f'Não excluí: {exc}', 'danger')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    flash(f'Venda #{vid} excluída definitivamente (estoque estornado; '
+          'os movimentos ficam no histórico).', 'warning')
+    return redirect(url_for('b2b.dashboard'))
+
+
 # ── NF-e via Tiny (06/07/2026) ──
 # Mesmo fluxo do site (loja online): botão manual, emissão pelo dono.
 # Enviar por e-mail (NF já emitida) pode ser feito por admin.
