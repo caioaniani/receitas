@@ -706,6 +706,8 @@
     function msgErro(resp, d) {
         if (d && d.erro === 'dia_bloqueado')
             return d.msg || 'fornada especial produz só quinta/sexta/sábado.';
+        if (d && d.erro === 'dia_fechado')
+            return d.msg || 'dia fechado com o cadeado (🔒) — reabra no cabeçalho do dia.';
         if (d && d.erro === 'nao_encontrado')
             return 'essa receita/dia não está mais no cronograma — recarregue a página (F5) e tente de novo.';
         if (d && d.erro === 'csrf_expirada')
