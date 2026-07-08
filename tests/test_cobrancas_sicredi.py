@@ -479,7 +479,7 @@ def test_rota_definir_pix_admin_comum_403(app, admin_user):
                   data={'pix': 'x'}).status_code == 403
 
 
-# ── pós-homologação (07/07/2026): nomenclatura + zerar sequencial ──────────
+# ── pós-homologação (07/07/2026): nomenclatura do arquivo de remessa ───────
 
 def test_nome_arquivo_remessa_padrao_do_banco(app, admin_user):
     """Sicredi Internet exige CCCCCmdd.CRM (cedente + mês 1-9/O/N/D + dia);
