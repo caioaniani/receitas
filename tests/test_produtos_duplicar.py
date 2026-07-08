@@ -20,7 +20,9 @@ def _produto_cafe(db):
     """Produto composto estilo 'Café Expresso': MP fracionária + 0.2 receita."""
     from app.models import MateriaPrima, Produto, ProdutoItem, Receita
 
-    cookie = Receita(nome='Cookie Calebaut Dup', categoria='Doces')
+    cookie = Receita(nome='Cookie Calebaut Dup', categoria='Doces',
+                     rendimento_qtd=1, rendimento_unidade='un',
+                     peso_base=100.0)
     graos = MateriaPrima(nome='Grãos de Café Dup', unidade='kg',
                          custo_por_kg=60.0)
     db.session.add_all([cookie, graos])
