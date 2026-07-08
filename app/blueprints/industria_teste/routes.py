@@ -477,6 +477,38 @@ def limpar_edicoes():
     return redirect(url_for('industria_teste.index', **_params_visao()))
 
 
+@industria_teste_bp.route('/reverter-ordem', methods=['POST'])
+@login_required
+@admin_required
+def reverter_ordem():
+    """Desfaz as edições do grid de um dia e traz de volta o que foi ENVIADO
+    ao padeiro (inverso do "🔄 atualizar produção"). Não toca na ordem em si —
+    só no rascunho do grid (overrides)."""
+    from app.services.cronograma_edit import reverter_dia_para_ordem_enviada
+
+    try:
+        data_alvo = date.fromisoformat(request.form.get('data', ''))
+    except (TypeError, ValueError):
+        flash('Data inválida.', 'warning')
+        return redirect(url_for('industria_teste.index', **_params_visao()))
+    res = reverter_dia_para_ordem_enviada(
+        data_alvo, horizonte_dias=_horizonte_janela()[0],
+        janela_semanas=_horizonte_janela()[1],
+        inicio_offset_dias=_inicio_offset(), equilibrar=_equilibrar(),
+        motor=_motor())
+    if res['ok']:
+        flash('Grid de %s desfeito — voltou à ordem que o padeiro está vendo '
+              '(%d receita(s)).' % (data_alvo.strftime('%d/%m'), res['n']),
+              'success')
+    elif res.get('erro') == 'dia_fechado':
+        flash('Dia %s está fechado (🔒) — reabra o cadeado para desfazer.'
+              % data_alvo.strftime('%d/%m'), 'warning')
+    else:
+        flash('Não há ordem enviada em %s para reverter.'
+              % data_alvo.strftime('%d/%m'), 'warning')
+    return redirect(url_for('industria_teste.index', **_params_visao()))
+
+
 @industria_teste_bp.route('/dia/cadeado', methods=['POST'])
 @login_required
 @admin_required
