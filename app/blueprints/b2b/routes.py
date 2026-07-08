@@ -620,13 +620,19 @@ def _catalogo_venda():
     for pc in PrecoClienteB2B.query.all():
         (precos_cliente_map.setdefault(pc.cliente_id, {})
          )[f'{pc.kind}:{pc.item_id}'] = float(pc.preco)
-    # Estoque atual por item (pra UI mostrar saldo)
+    # Estoque DISPONIVEL por item = fisico − comprometido com vendas B2B
+    # ainda nao separadas (a baixa e na separacao, 07/07/2026). Mostrar o
+    # fisico cru deixava duas vendas serem aprovadas contra o mesmo saldo.
+    pendente = svc.comprometido_b2b_pendente()
     estoque_map = {}
     for ep in EstoqueProducao.query.all():
         if ep.receita_id:
-            estoque_map[f'receita:{ep.receita_id}'] = ep.quantidade or 0
+            chave, ref = ('receita', ep.receita_id), f'receita:{ep.receita_id}'
         elif ep.produto_id:
-            estoque_map[f'produto:{ep.produto_id}'] = ep.quantidade or 0
+            chave, ref = ('produto', ep.produto_id), f'produto:{ep.produto_id}'
+        else:
+            continue
+        estoque_map[ref] = (ep.quantidade or 0) - pendente.get(chave, 0)
     return {'clientes': clientes, 'receitas': receitas, 'produtos': produtos,
             'precos_map': precos_map, 'estoque_map': estoque_map,
             'precos_cliente_map': precos_cliente_map}
