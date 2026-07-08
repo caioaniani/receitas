@@ -183,7 +183,7 @@ def test_grid_mostra_ordem_enviada_quando_difere(app, admin_user):
                             horizonte_dias=7)
         assert res.get('erro') is None
         html = c.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
-        assert 'difere do enviado' in html
+        assert 'dia-badge dia-difere' in html            # badge do cabeçalho
         assert ('📤 %d' % enviado) in html               # o que o padeiro vê
 
 
