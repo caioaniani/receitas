@@ -625,7 +625,7 @@ def _catalogo_venda(excluir_venda_id=None):
     # Estoque DISPONIVEL por item = fisico − comprometido com vendas B2B
     # ainda nao separadas (a baixa e na separacao, 07/07/2026). Mostrar o
     # fisico cru deixava duas vendas serem aprovadas contra o mesmo saldo.
-    pendente = svc.comprometido_b2b_pendente()
+    pendente = svc.comprometido_b2b_pendente(excluir_venda_id=excluir_venda_id)
     estoque_map = {}
     for ep in EstoqueProducao.query.all():
         if ep.receita_id:
