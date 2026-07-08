@@ -249,23 +249,95 @@ def test_agendar_drena_e_recupera(app):
         assert ultimo.startswith('ok') and '1 item(ns) baixado(s)' in ultimo
 
 
-def test_agendar_erro_api_devolve_pendencia(app):
-    """API Seru fora durante o drain: pendencia VOLTA pra flag (proximo
-    vinculo retenta), erro registrado, nada propaga pro caller."""
+def test_agendar_erro_api_mantem_pendencia(app):
+    """API Seru fora durante o drain: pendencia FICA de pe (cron/proximo
+    vinculo retentam), erro registrado, nada propaga pro caller."""
     from app.models import AppConfig
     from app.services import seru_sync
     with app.app_context():
         with patch('app.services.seru.listar_pedidos_completo',
                    side_effect=RuntimeError('Seru fora')):
             seru_sync.agendar_reprocesso_retroativo(dias=7)   # nao levanta
-        assert AppConfig.get(seru_sync.FLAG_REPROCESSO) == '1'
+        assert seru_sync.reprocesso_pendente() is True
         assert (AppConfig.get(seru_sync.ULTIMO_REPROCESSO) or '').startswith('erro')
-        # Limpeza: drena a pendencia com a API "de volta" pra nao vazar
-        # estado pro proximo teste.
+        # Retomada do cron com a API "de volta" quita a pendencia.
         with patch('app.services.seru.listar_pedidos_completo',
                    return_value=[]):
+            seru_sync.retomar_reprocesso_pendente(app)
+        assert seru_sync.reprocesso_pendente() is False
+
+
+def test_coalescing_vinculo_durante_rodada_gera_nova_passada(app):
+    """Vinculo no MEIO da rodada grava nonce novo → compare-and-clear falha
+    → o drain roda de novo (coalescing). Simulado: o mock da API re-seta a
+    flag na 1a chamada."""
+    from app.extensions import db as _db
+    from app.models import AppConfig
+    from app.services import seru_sync
+    with app.app_context():
+        chamadas = []
+
+        def _api(*a, **k):
+            chamadas.append(1)
+            if len(chamadas) == 1:   # "vinculo" concorrente durante a rodada
+                AppConfig.set(seru_sync.FLAG_REPROCESSO, 'nonce-novo')
+                _db.session.commit()
+            return []
+
+        with patch('app.services.seru.listar_pedidos_completo',
+                   side_effect=_api):
             seru_sync.agendar_reprocesso_retroativo(dias=7)
-        assert AppConfig.get(seru_sync.FLAG_REPROCESSO) == '0'
+        assert len(chamadas) == 2                    # rodou a 2a passada
+        assert seru_sync.reprocesso_pendente() is False
+
+
+def test_lock_ocupado_nao_drena_e_cron_retoma(app):
+    """Drenador concorrente segurando o lock: agendar marca a pendencia e
+    desiste ('ocupado') sem rodar a API; a retomada do cron drena depois."""
+    from app.services import seru_sync
+    with app.app_context():
+        api = patch('app.services.seru.listar_pedidos_completo',
+                    return_value=[])
+        seru_sync._LOCK_LOCAL.acquire()
+        try:
+            with api as m:
+                seru_sync.agendar_reprocesso_retroativo(dias=7)
+            assert m.call_count == 0                 # nao rodou (lock ocupado)
+            assert seru_sync.reprocesso_pendente() is True
+        finally:
+            seru_sync._LOCK_LOCAL.release()
+        with patch('app.services.seru.listar_pedidos_completo',
+                   return_value=[]):
+            seru_sync.retomar_reprocesso_pendente(app)
+        assert seru_sync.reprocesso_pendente() is False
+
+
+def test_botao_manual_usa_lock_e_quita_pendencia(app, admin_user):
+    """O botao da Saude roda sob o MESMO lock do drain: com o lock ocupado
+    responde 'ocupado' (sem tocar a API); livre, roda e QUITA a pendencia
+    agendada."""
+    from app.extensions import db as _db
+    from app.models import AppConfig
+    from app.services import seru_sync
+    with app.app_context():
+        AppConfig.set(seru_sync.FLAG_REPROCESSO, 'nonce-pendente')
+        _db.session.commit()
+        seru_sync._LOCK_LOCAL.acquire()
+        try:
+            with patch('app.services.seru.listar_pedidos_completo',
+                       return_value=[]) as m:
+                status, res = seru_sync.reprocessar_retroativo_manual(
+                    dias=30, user=admin_user)
+            assert status == 'ocupado' and res is None and m.call_count == 0
+        finally:
+            seru_sync._LOCK_LOCAL.release()
+        with patch('app.services.seru.listar_pedidos_completo',
+                   return_value=[]):
+            status, res = seru_sync.reprocessar_retroativo_manual(
+                dias=30, user=admin_user)
+        assert status == 'ok' and res is not None
+        assert seru_sync.reprocesso_pendente() is False
+        assert 'ok manual' in (AppConfig.get(seru_sync.ULTIMO_REPROCESSO) or '')
 
 
 def test_vincular_produto_agenda_em_background(app, admin_user):
