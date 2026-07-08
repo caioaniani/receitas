@@ -423,3 +423,81 @@ def test_rota_gerar_sem_acao_ajax_responde_400(app, admin_user):
     assert resp.status_code == 400
     assert resp.get_json()['ok'] is False
     assert PedidoLoja.query.count() == 0
+
+
+# ── Entrega antecipada (finalizado antes da data) não trava o dia ──────
+#
+# Caso real Anesio 08/07/2026: pedido de EMERGÊNCIA criado de madrugada saiu
+# no caminhão de hoje, mas nasceu datado de amanhã (não-admin não data pro
+# mesmo dia) e foi marcado 'entregue' às 6h30. A grade travava amanhã e o
+# dono não conseguia fazer o pedido REAL da data.
+
+def test_entrega_antecipada_nao_trava_dia_na_grade_media(app):
+    from app.services.previsao_producao import media_semanal_pedidos
+    loja = _loja('Loja Anesio T')
+    r = _receita('Cinnamon T')
+    amanha = hoje() + timedelta(days=1)
+    # histórico no MESMO dia-da-semana de amanhã (senão a média de amanhã é 0,
+    # o produto sai da grade e a loja some)
+    for semanas in (1, 2, 3):
+        _pedido(loja, 'recebido', amanha - timedelta(days=7 * semanas), r, 10)
+    # pedido de emergência: data futura, JÁ entregue
+    _pedido(loja, 'entregue', amanha, r, 35)
+
+    sug = media_semanal_pedidos(horizonte_dias=2, janela_semanas=6,
+                                inicio_offset_dias=1)
+    lj = _loja_out(sug, loja.id)
+    assert amanha.isoformat() not in lj['ja_tem']       # dia LIVRE
+    assert amanha.isoformat() not in lj['editaveis']
+
+
+def test_entregue_no_proprio_dia_continua_travando(app):
+    """Não regride: pedido entregue NO dia (data <= hoje) segue ocupando o
+    dia — é a trava anti-duplicação de sempre."""
+    from app.services.previsao_producao import media_semanal_pedidos
+    loja = _loja('Loja B T')
+    r = _receita('Croissant T')
+    hoje_d = hoje()
+    for semanas in (1, 2, 3):
+        _pedido(loja, 'recebido', hoje_d - timedelta(days=7 * semanas), r, 10)
+    _pedido(loja, 'entregue', hoje_d, r, 20)            # entregue HOJE, de hoje
+
+    sug = media_semanal_pedidos(horizonte_dias=2, janela_semanas=6,
+                                inicio_offset_dias=0)
+    lj = _loja_out(sug, loja.id)
+    assert hoje_d.isoformat() in lj['ja_tem']           # continua travado
+    assert hoje_d.isoformat() not in lj['editaveis']
+
+
+def test_gerar_cria_pedido_real_apesar_do_antecipado(app):
+    """aplicar_grade cria o pedido do dia mesmo com o antecipado lá."""
+    from app.services.pedidos_semana import aplicar_grade
+    loja = _loja('Loja C T')
+    r = _receita('Sourdough T')
+    amanha = hoje() + timedelta(days=1)
+    _pedido(loja, 'entregue', amanha, r, 35)            # emergência já entregue
+
+    res = aplicar_grade([{'loja_id': loja.id, 'data_entrega': amanha,
+                          'itens': [{'receita_id': r.id, 'qtd': 12}]}],
+                        user_id=None)
+    assert res['criados'] == 1
+    novos = (PedidoLoja.query
+             .filter_by(loja_id=loja.id, data_entrega=amanha,
+                        status='pendente').all())
+    assert len(novos) == 1
+    assert novos[0].itens[0].quantidade == 12
+
+
+def test_grade_venda_estoque_tambem_ignora_antecipado(app):
+    from app.services.previsao_producao import sugerir_pedidos_por_venda
+    loja = _loja('Loja D T')
+    r = _receita('Brioche T')
+    amanha = hoje() + timedelta(days=1)
+    _pedido(loja, 'entregue', amanha, r, 35)
+
+    sug = sugerir_pedidos_por_venda(horizonte_dias=2, janela_semanas=6,
+                                    inicio_offset_dias=1)
+    lj = _loja_out(sug, loja.id)
+    # loja pode nem aparecer (sem venda/estoque) — se aparecer, dia livre
+    if lj is not None:
+        assert amanha.isoformat() not in lj['ja_tem']
