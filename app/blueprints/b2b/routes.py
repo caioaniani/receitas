@@ -893,16 +893,27 @@ def venda_detalhe(vid):
 @admin_required
 def venda_entrega(vid):
     """Define/limpa a data de entrega de uma venda B2B (entra/sai da fila do
-    padeiro). Vazio = volta a ser venda imediata (nao aparece no padeiro)."""
+    padeiro). Vazio = volta a ser venda imediata (nao aparece no padeiro).
+    O regime da baixa acompanha: virou imediata sem ter baixado → baixa
+    agora; entrou na fila antes de separar → estorna (a separacao baixa)."""
     venda = VendaB2B.query.get_or_404(vid)
     data_str = (request.form.get('data_entrega') or '').strip()
+    tinha_baixado = bool(venda.estoque_baixado_em)
     try:
         venda.data_entrega = date.fromisoformat(data_str) if data_str else None
     except ValueError:
         flash('Data invalida.', 'warning')
         return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    svc.sincronizar_baixa_com_data(venda, user=current_user)
     db.session.commit()
-    flash('Data de entrega atualizada.', 'success')
+    if bool(venda.estoque_baixado_em) != tinha_baixado:
+        flash('Data de entrega atualizada — '
+              + ('estoque baixado agora (venda imediata, fora da fila '
+                 'do padeiro).' if venda.estoque_baixado_em
+                 else 'baixa estornada; o estoque sai na separacao pelo '
+                      'padeiro.'), 'success')
+    else:
+        flash('Data de entrega atualizada.', 'success')
     return redirect(url_for('b2b.venda_detalhe', vid=vid))
 
 
