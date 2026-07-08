@@ -264,6 +264,8 @@ def validar_para_aprovacao(orc):
       campos; embuta nos precos unitarios antes de aprovar.
     """
     erros = []
+    if not (orc.cliente_id or (orc.cliente_nome or '').strip()):
+        erros.append('cliente obrigatorio (cadastrado ou avulso)')
     if not orc.data_entrega:
         erros.append('informe a data de entrega/retirada (o pedido entra '
                      'na fila do padeiro por ela)')
