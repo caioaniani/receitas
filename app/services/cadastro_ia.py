@@ -192,11 +192,15 @@ def _sanitizar_proposta(dados):
                 qtd = float(c.get('quantidade') or 1)
             except (TypeError, ValueError):
                 qtd = 1.0
+            from app.utils import normalizar_busca
             c_nome = (c.get('nome') or '').strip()
             alvo = _get_por_id(tipo, c.get('id'))
-            if alvo is None or (c_nome and alvo.nome.strip().lower()
-                                != c_nome.lower()):
-                alvo = _resolver_por_nome(tipo, c_nome)
+            # id so vale se o nome bate (normalizado: acento/caixa nao
+            # derrubam um match legitimo) — divergencia real re-resolve
+            # por nome; o banco manda, a IA so propoe.
+            if alvo is None or (c_nome and normalizar_busca(alvo.nome)
+                                != normalizar_busca(c_nome)):
+                alvo = _resolver_por_nome(tipo, c_nome) or alvo
             # 'novo' so vale pra MP: receita/produto novos NAO sao criados
             # automaticamente (receita e ficha de producao) — viram orfaos.
             novo = bool(c.get('novo')) and alvo is None and tipo == 'mp'
