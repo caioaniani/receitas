@@ -1966,6 +1966,10 @@ def _migrate_sqlite(app):
     if cols_orc and 'venda_id' not in cols_orc:
         cursor.execute("ALTER TABLE orcamento ADD COLUMN "
                        "venda_id INTEGER REFERENCES venda_b2b(id)")
+    if cols_orc and 'arquivado_em' not in cols_orc:
+        # Rascunho arquivavel (08/07/2026) — espelha o ALTER do Postgres.
+        cursor.execute("ALTER TABLE orcamento ADD COLUMN "
+                       "arquivado_em TIMESTAMP")
 
     # ── SKU do Tiny por canal (06/07/2026) ──
     # SQLite nao altera UNIQUE embutida — rebuild da tabela (mesmo padrao
