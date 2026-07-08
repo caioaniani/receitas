@@ -121,9 +121,12 @@ def test_duplicar_exige_admin(app):
         func.set_senha('123')
         db.session.add(func)
         db.session.commit()
+        func_id = func.id
 
     client = app.test_client()
-    _login(client, func)
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(func_id)
+        sess['_fresh'] = True
     resp = client.post(f'/produtos/{pid}/duplicar', follow_redirects=False)
     assert resp.status_code in (302, 303, 403)
     with app.app_context():
