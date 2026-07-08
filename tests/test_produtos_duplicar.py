@@ -21,7 +21,8 @@ def _produto_cafe(db):
     from app.models import MateriaPrima, Produto, ProdutoItem, Receita
 
     cookie = Receita(nome='Cookie Calebaut Dup', categoria='Doces')
-    graos = MateriaPrima(nome='Grãos de Café Dup', unidade='kg')
+    graos = MateriaPrima(nome='Grãos de Café Dup', unidade='kg',
+                         custo_por_kg=60.0)
     db.session.add_all([cookie, graos])
     db.session.flush()
 
