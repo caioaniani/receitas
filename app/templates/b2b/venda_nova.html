@@ -15,6 +15,7 @@
 {% endif %}
 
 <form method="POST" action="{% if editing %}{{ url_for('b2b.venda_editar_post', vid=venda.id) }}{% else %}{{ url_for('b2b.venda_criar') }}{% endif %}" id="form-venda">
+    {% if not editing and orcamento_id %}<input type="hidden" name="orcamento_id" value="{{ orcamento_id }}">{% endif %}
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <div class="card mb-3">
