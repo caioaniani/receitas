@@ -338,7 +338,11 @@ def marcar_status(orc, novo, *, usuario_id=None):
     APROVAR (07/07/2026): valida os dados obrigatorios (ver
     `validar_para_aprovacao`) e CRIA a venda vinculada na hora — o pedido
     entra na fila do padeiro pela data de entrega; o estoque so baixa na
-    separacao.
+    separacao. Claim, venda e vinculo persistem num commit UNICO.
+
+    ATENCAO (contrato): nos caminhos de falha da aprovacao (claim perdido
+    ou erro na conversao) ha `db.session.rollback()` — nao chame com
+    mudancas pendentes de outra coisa na sessao.
     """
     if novo not in STATUS_VALIDOS:
         return False, f'status invalido: {novo}'
