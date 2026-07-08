@@ -114,18 +114,20 @@
 {% elif f == 'arquivados' %}
 <div class="row g-3">
     <div class="col-lg-6">
-        <h6 class="text-muted">Orçamentos recusados</h6>
+        <h6 class="text-muted">Orçamentos recusados e rascunhos arquivados</h6>
         <div class="table-responsive">
             <table class="table table-sm bg-white">
-                <thead><tr><th>Orçamento</th><th>Data</th><th>Cliente</th><th class="text-end">Total</th></tr></thead>
+                <thead><tr><th>Orçamento</th><th>Data</th><th>Cliente</th><th></th><th class="text-end">Total</th></tr></thead>
                 <tbody>
                 {% for o in orcamentos %}
                 <tr><td><a href="{{ url_for('b2b.orcamento_detalhe', oid=o.id) }}">{{ o.codigo }}</a></td>
                     <td>{{ o.data.strftime('%d/%m/%Y') }}</td>
                     <td>{{ o.cliente_display }}</td>
+                    <td>{% if o.arquivado_em %}<span class="badge bg-dark">rascunho arquivado</span>
+                        {% else %}<span class="badge bg-secondary">recusado</span>{% endif %}</td>
                     <td class="text-end">R$ {{ '%.2f'|format(o.valor_total) }}</td></tr>
                 {% else %}
-                <tr><td colspan="4" class="text-muted small p-2">Nenhum orçamento recusado.</td></tr>
+                <tr><td colspan="5" class="text-muted small p-2">Nenhum orçamento recusado ou arquivado.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
