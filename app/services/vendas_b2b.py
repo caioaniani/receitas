@@ -205,6 +205,26 @@ def baixar_na_separacao(venda, user=None):
     return True
 
 
+def sincronizar_baixa_com_data(venda, user=None):
+    """Mantem o regime da baixa coerente quando a DATA DE ENTREGA muda:
+
+    - limpou a data (virou venda IMEDIATA, sai da fila do padeiro) e ainda
+      nao baixou → baixa agora (senao nunca baixaria);
+    - ganhou data (entrou na fila) antes de separar e ja tinha baixado
+      (era imediata) → estorna; o pao segue no freezer ate a separacao,
+      que baixa de novo.
+
+    So age em venda ativa ainda 'pendente'. NAO commita — o caller fecha.
+    """
+    if venda.status != 'ativa' or venda.status_entrega != 'pendente':
+        return
+    if venda.data_entrega is None and not venda.estoque_baixado_em:
+        _baixar_venda(venda, user)
+    elif venda.data_entrega is not None and venda.estoque_baixado_em:
+        _estornar_estoque(venda, user=user,
+                          motivo='entrou na fila do padeiro')
+
+
 def comprometido_b2b_pendente():
     """{(kind, item_id): qtd} do que as vendas B2B AGUARDANDO SEPARACAO
     ainda vao tirar do EstoqueProducao (cesta explodida em componentes —
