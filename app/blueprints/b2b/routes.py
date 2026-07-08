@@ -879,7 +879,9 @@ def venda_editar_post(vid):
         db.session.rollback()
         flash(f'Erro: {exc}', 'danger')
         return redirect(url_for('b2b.venda_editar', vid=vid))
-    flash(f'Venda #{vid} atualizada — estoque reajustado.', 'success')
+    flash(f'Venda #{vid} atualizada.'
+          + (' Estoque reajustado.' if venda.estoque_baixado_em
+             else ' O estoque sai na separacao pelo padeiro.'), 'success')
     return redirect(url_for('b2b.venda_detalhe', vid=vid))
 
 
