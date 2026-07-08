@@ -120,7 +120,8 @@ def dashboard():
         if f == 'pendentes':
             orcamentos = (Orcamento.query
                           .filter(Orcamento.status.in_(('rascunho',
-                                                        'enviado')))
+                                                        'enviado')),
+                                  Orcamento.arquivado_em.is_(None))
                           .order_by(Orcamento.criado_em.desc())
                           .limit(200).all())
         elif f == 'aprovados':
