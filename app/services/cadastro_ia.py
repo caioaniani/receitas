@@ -200,7 +200,7 @@ def _sanitizar_proposta(dados):
             # por nome; o banco manda, a IA so propoe.
             if alvo is None or (c_nome and normalizar_busca(alvo.nome)
                                 != normalizar_busca(c_nome)):
-                alvo = _resolver_por_nome(tipo, c_nome) or alvo
+                alvo = _resolver_por_nome(tipo, c_nome)
             # 'novo' so vale pra MP: receita/produto novos NAO sao criados
             # automaticamente (receita e ficha de producao) — viram orfaos.
             novo = bool(c.get('novo')) and alvo is None and tipo == 'mp'
