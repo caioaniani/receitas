@@ -196,18 +196,13 @@ def _baixar_venda(venda, user=None):
     venda.estoque_baixado_em = agora()
 
 
-def baixar_na_separacao(venda, user=None):
-    """Baixa da SEPARACAO (tela /padeiro). Idempotente pelo marcador:
-    venda ja baixada (regime antigo — baixou na criacao — ou clique
-    duplo/re-separacao) nao baixa de novo. Devolve True se baixou agora.
-    NAO commita — a rota do padeiro fecha a transacao com o status.
-
-    O marcador e reivindicado por UPDATE condicional (CLAIM, mesmo padrao
-    do Confirmar do Slack): dois SEPARAR quase simultaneos leriam ambos
-    o marcador NULL e baixariam em DOBRO — com o claim, o segundo request
-    fica com rowcount 0 e desiste."""
-    if venda.estoque_baixado_em:
-        return False
+def _claim_baixa(venda):
+    """Reivindica o direito de baixar a venda por UPDATE condicional no
+    marcador (`WHERE estoque_baixado_em IS NULL`) — CLAIM, mesmo padrao do
+    Confirmar do Slack. Dois requests concorrentes no mesmo caminho de
+    baixa (SEPARAR 2x, POSTs simultaneos na data de entrega, reabrir 2x)
+    leriam ambos o marcador NULL e baixariam em DOBRO; com o claim so um
+    vence (rowcount 1). NAO commita — o caller fecha a transacao."""
     claimed = db.session.execute(
         sa_update(VendaB2B)
         .where(VendaB2B.id == venda.id,
@@ -217,6 +212,18 @@ def baixar_na_separacao(venda, user=None):
     ).rowcount
     if not claimed:
         db.session.expire(venda, ['estoque_baixado_em'])
+        return False
+    return True
+
+
+def baixar_na_separacao(venda, user=None):
+    """Baixa da SEPARACAO (tela /padeiro). Idempotente pelo marcador:
+    venda ja baixada (regime antigo — baixou na criacao — ou clique
+    duplo/re-separacao) nao baixa de novo. Devolve True se baixou agora.
+    NAO commita — a rota do padeiro fecha a transacao com o status."""
+    if venda.estoque_baixado_em:
+        return False
+    if not _claim_baixa(venda):
         return False
     _baixar_venda(venda, user)
     return True
