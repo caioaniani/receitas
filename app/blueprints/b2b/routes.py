@@ -871,8 +871,11 @@ def venda_reabrir(vid):
 @admin_required
 def venda_status_voltar(vid):
     venda = VendaB2B.query.get_or_404(vid)
-    svc.reverter_status_entrega(venda)
-    flash(f'Status de entrega revertido para "{venda.status_entrega}".', 'info')
+    svc.reverter_status_entrega(venda, user=current_user)
+    flash(f'Status de entrega revertido para "{venda.status_entrega}".'
+          + ('' if venda.estoque_baixado_em or venda.data_entrega is None
+             else ' Baixa estornada — o estoque sai de novo na separacao.'),
+          'info')
     return redirect(url_for('b2b.venda_detalhe', vid=vid))
 
 
