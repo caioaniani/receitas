@@ -1312,6 +1312,25 @@ def orcamento_status(oid):
     return redirect(url_for('b2b.orcamento_detalhe', oid=orc.id))
 
 
+@b2b_bp.route('/orcamentos/<int:oid>/arquivar', methods=['POST'])
+@login_required
+@admin_required
+def orcamento_arquivar(oid):
+    """Arquiva/desarquiva um RASCUNHO (toggle). Rascunho que não foi pra
+    frente sai de Pendentes sem virar 'recusado' (recusado = cliente disse
+    não). Pedido do dono 08/07/2026."""
+    orc = Orcamento.query.get_or_404(oid)
+    if orc.arquivado_em:
+        ok, erro = orc_svc.desarquivar(orc)
+        msg = f'Orçamento {orc.codigo} desarquivado — voltou pra Pendentes.'
+    else:
+        ok, erro = orc_svc.arquivar(orc)
+        msg = (f'Orçamento {orc.codigo} arquivado — some de Pendentes; '
+               'desarquive quando quiser retomar.')
+    flash(msg if ok else f'Erro: {erro}', 'success' if ok else 'danger')
+    return redirect(url_for('b2b.orcamento_detalhe', oid=orc.id))
+
+
 @b2b_bp.route('/orcamentos/<int:oid>/pdf')
 @login_required
 @admin_required
