@@ -166,6 +166,14 @@ class VendaB2B(db.Model):
     # venda avulsa/cobrada na hora (padrao).
     fatura_id = db.Column(db.Integer, db.ForeignKey('fatura_b2b.id'),
                           nullable=True, index=True)
+    # Regime da baixa (07/07/2026, decisao do dono): o estoque da industria
+    # so baixa quando o padeiro SEPARA o pedido no /padeiro. NULL = ainda
+    # nao baixou (aguardando separacao); preenchido = ja baixou (na
+    # separacao — ou na criacao, para venda IMEDIATA sem data_entrega, que
+    # nunca entra na fila do padeiro). O estorno total limpa o marcador.
+    # A quantidade continua vindo do ledger MovEstoqueProducao (por saldo);
+    # esta coluna e o ESTADO do regime, nao a fonte das quantidades.
+    estoque_baixado_em = db.Column(db.DateTime, nullable=True)
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
     criado_em = db.Column(db.DateTime, default=agora)
     cancelado_em = db.Column(db.DateTime, nullable=True)
