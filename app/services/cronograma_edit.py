@@ -164,6 +164,17 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
 
     Devolve {receita_id, por_dia:[{data,qtd,fornadas}], total, insumos}.
     None se a receita/data nao esta no cronograma (nada salvo)."""
+    try:
+        alvo = date.fromisoformat(data_iso)
+    except (TypeError, ValueError):
+        return None
+    # Cadeado do dia (🔒, dono 08/07/2026): dia fechado nao aceita edicao por
+    # NENHUM caminho (grid, mao-dupla do editar-plano) ate reabrir. O check e
+    # barato e vem ANTES do calculo completo do cronograma.
+    if alvo in dias_fechados():
+        return {'erro': 'dia_fechado',
+                'msg': 'Este dia está fechado com o cadeado (🔒). Reabra o '
+                       'cadeado no cabeçalho do dia para editar.'}
     from app.services.previsao_producao import cronograma_producao
     crono = cronograma_producao(horizonte_dias=horizonte_dias,
                                 janela_semanas=janela_semanas,
@@ -174,15 +185,8 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
     if rr is None:
         return None
     datas = [date.fromisoformat(c['data']) for c in rr['por_dia']]
-    alvo = date.fromisoformat(data_iso)
     if alvo not in datas:
         return None
-    # Cadeado do dia (🔒, dono 08/07/2026): dia fechado nao aceita edicao por
-    # NENHUM caminho (grid, mao-dupla do editar-plano) ate reabrir.
-    if alvo in dias_fechados():
-        return {'erro': 'dia_fechado',
-                'msg': 'Este dia está fechado com o cadeado (🔒). Reabra o '
-                       'cadeado no cabeçalho do dia para editar.'}
     # Fornada especial: produção só qui/sex/sáb (decisão do dono 06/07/2026).
     # Recusa a edição em dia bloqueado ANTES de salvar — a tela já trava a
     # célula, mas o guard vale pra qualquer chamador (defesa em profundidade).
