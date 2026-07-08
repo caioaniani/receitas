@@ -524,6 +524,13 @@
                             {{ campos_dia(dia.data) }}
                             <button title="Reenvia o que está no grid agora (aplica suas edições na produção do padeiro)">🔄 atualizar produção (aplica o grid)</button>
                         </form>
+                        {% if difere.get(dia.data) and dia.data not in fechados %}
+                        <form method="POST" action="{{ url_for('industria_teste.reverter_ordem') }}"
+                              onsubmit="return confirm('Desfazer as edições do grid de {{ dia.label }} e trazer de volta a produção como foi ENVIADA ao padeiro?');">
+                            {{ campos_dia(dia.data) }}
+                            <button title="Descarta suas edições e volta o grid ao que o padeiro está vendo">↩️ desfazer edições (voltar à ordem)</button>
+                        </form>
+                        {% endif %}
                         <a href="{{ url_for('padeiro.editar_plano', data=dia.data) }}">✏️ editar a ordem</a>
                         <form method="POST" action="{{ url_for('industria_teste.excluir') }}"
                               onsubmit="return confirm('Excluir a ordem de {{ dia.label }}? O padeiro deixa de ver. (Bloqueado se já houve produção.)');">
