@@ -117,12 +117,20 @@ def index():
             continue
         itens = {it.receita_id: it for it in p.itens
                  if it.dispensada_em is None}
+        # Dispensado fica fora da comparação DOS DOIS lados: a dispensa é
+        # decisão explícita, e o "🔄 atualizar produção" NÃO a desfaz (o sync
+        # mantém dispensada_em) — comparar geraria um "difere" que nenhum
+        # re-envio limpa.
+        dispensados = {it.receita_id for it in p.itens
+                       if it.dispensada_em is not None}
         ordem_enviada[iso] = {rid: int(it.qtd_alvo or 0)
                               for rid, it in itens.items()}
         dif = set()
         vistos = set()
         for rr in crono['receitas']:
             rid = rr['receita_id']
+            if rid in dispensados:
+                continue
             c = next((c for c in rr['por_dia'] if c['data'] == iso), None)
             if c is None:
                 continue
