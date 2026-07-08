@@ -296,19 +296,13 @@ def _converter_em_venda(orc, usuario_id=None):
     (orc.venda_id). A venda nasce com a data de entrega do orcamento →
     entra na fila do padeiro SEM baixar estoque (a baixa e na separacao,
     regime 07/07/2026). Cliente mensal fica sem parcela (conta do mes);
-    os demais ganham a parcela unica padrao."""
-    from app.models import VendaB2B
-    from app.services import vendas_b2b
+    os demais ganham a parcela unica padrao.
 
-    # REPARO de janela de crash: criar_venda commita internamente, e o
-    # vinculo orc.venda_id so persiste no commit seguinte. Se o worker
-    # morreu entre os dois, existe venda ativa com a observacao de origem
-    # e o orcamento sem vinculo — religa em vez de criar em dobro.
-    orfa = VendaB2B.query.filter_by(
-        status='ativa', observacao=f'Origem: orcamento {orc.codigo}').first()
-    if orfa:
-        orc.venda_id = orfa.id
-        return orfa
+    NAO commita (criar_venda com commit=False): status aprovado (claim),
+    venda e vinculo persistem num commit UNICO no caller — nao existe
+    janela de crash em que a venda exista orfa sem o orcamento apontar
+    pra ela."""
+    from app.services import vendas_b2b
 
     itens = [{'tipo': 'receita' if it.receita_id else 'produto',
               'id': it.receita_id or it.produto_id,
