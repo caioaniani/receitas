@@ -409,7 +409,14 @@ def editar_venda(venda, *, cliente_id=None, cliente_nome=None, data_venda=None,
     venda.observacao = (observacao or '').strip() or None
     venda.nf_numero = (nf_numero or '').strip() or None
 
-    total = _aplicar_itens(venda, itens, user)
+    # Re-baixa so o que ja devia estar baixado: venda imediata (sem data)
+    # ou que ja passou da separacao. Venda pendente na fila segue sem
+    # baixa — o estorno acima foi no-op (saldo 0) e a separacao baixa.
+    baixar = (venda.data_entrega is None
+              or venda.status_entrega != 'pendente')
+    total = _aplicar_itens(venda, itens, user, baixar=baixar)
+    if baixar:
+        venda.estoque_baixado_em = agora()
     venda.valor_total = total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     _aplicar_parcelas(venda, parcelas)
     db.session.commit()
