@@ -25,11 +25,23 @@
 <div class="card mb-3">
     <div class="card-body d-flex flex-wrap gap-2 align-items-center">
         <span class="text-muted small me-2">Acoes:</span>
-        {% if orc.status == 'rascunho' %}
+        {% if orc.arquivado_em %}
+        <form method="POST" action="{{ url_for('b2b.orcamento_arquivar', oid=orc.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-dark"><i class="bi bi-arrow-counterclockwise"></i> Desarquivar</button>
+        </form>
+        <span class="text-muted small">Arquivado — desarquive para voltar a mexer no status.</span>
+        {% elif orc.status == 'rascunho' %}
         <form method="POST" action="{{ url_for('b2b.orcamento_status', oid=orc.id) }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="status" value="enviado">
             <button class="btn btn-sm btn-info"><i class="bi bi-send"></i> Marcar como enviado</button>
+        </form>
+        <form method="POST" action="{{ url_for('b2b.orcamento_arquivar', oid=orc.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-dark"
+                    title="Sai de Pendentes sem virar recusado — dá pra desarquivar depois">
+                <i class="bi bi-archive"></i> Arquivar</button>
         </form>
         {% elif orc.status == 'enviado' %}
         <form method="POST" action="{{ url_for('b2b.orcamento_status', oid=orc.id) }}" class="d-inline">
