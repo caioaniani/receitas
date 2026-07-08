@@ -81,6 +81,8 @@ Proponha AJUSTES pontuais: (receita, data, quantidade nova) com motivo de
 - Alerta de falta = prioridade maxima (antecipar/aumentar producao).
 - Pendencia VENCIDA do padeiro = demanda que talvez precise reforco hoje.
 - Dia com pico de fornadas estourado = redistribuir para dias vizinhos.
+- `dias_fechados` estao TRANCADOS pelo gestor — nao proponha ajuste
+  neles (seriam recusados).
 - Linha com retorno=true e feita SO de sobras devolvidas — NUNCA
   proponha producao para ela.
 - Termine com um parecer geral curto (riscos e o porque dos ajustes).
