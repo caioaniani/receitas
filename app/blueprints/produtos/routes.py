@@ -440,3 +440,122 @@ def excluir_orfao(id):
     db.session.commit()
     flash(f'Componente "{nome}" removido da cesta.', 'success')
     return redirect(url_for('produtos.cestas_orfaos'))
+
+
+# ── Cadastro assistido por IA (08/07/2026, pedido do dono) ──────────────
+# Cola um print/lista (imagem ou texto), a IA propõe produtos com
+# componentes inferidos dos parecidos já cadastrados, o humano REVISA na
+# tabela e só então salva. Ver app/services/cadastro_ia.py.
+
+_CADASTRO_IA_MIMETYPES = {'image/jpeg', 'image/png', 'image/webp',
+                          'image/gif'}
+
+
+@produtos_bp.route('/cadastro-ia')
+@login_required
+@admin_required
+def cadastro_ia():
+    from app.services import cadastro_ia as svc_ia
+    return render_template('produtos/cadastro_ia.html', itens=None,
+                           campo_preco='preco_site',
+                           CAMPOS_PRECO=svc_ia.CAMPOS_PRECO)
+
+
+@produtos_bp.route('/cadastro-ia/analisar', methods=['POST'])
+@login_required
+@admin_required
+def cadastro_ia_analisar():
+    from app.services import cadastro_ia as svc_ia
+    campo_preco = request.form.get('campo_preco') or 'preco_site'
+    if campo_preco not in svc_ia.CAMPOS_PRECO:
+        campo_preco = 'preco_site'
+    texto = (request.form.get('texto') or '').strip()
+    arquivo = request.files.get('imagem')
+    file_bytes = mimetype = None
+    if arquivo and arquivo.filename:
+        if arquivo.mimetype not in _CADASTRO_IA_MIMETYPES:
+            flash('Formato não suportado — mande JPG/PNG/WebP ou cole o '
+                  'texto.', 'warning')
+            return redirect(url_for('produtos.cadastro_ia'))
+        file_bytes = arquivo.read()
+        if len(file_bytes) > 8 * 1024 * 1024:
+            flash('Imagem acima de 8 MB — reduza e tente de novo.',
+                  'warning')
+            return redirect(url_for('produtos.cadastro_ia'))
+        mimetype = arquivo.mimetype
+    if not file_bytes and not texto:
+        flash('Mande uma imagem ou cole o texto da lista.', 'warning')
+        return redirect(url_for('produtos.cadastro_ia'))
+
+    out = svc_ia.analisar(file_bytes=file_bytes, mimetype=mimetype,
+                          texto=texto or None)
+    if out.get('erro'):
+        flash(f'Análise falhou: {out["erro"]}', 'danger')
+        return redirect(url_for('produtos.cadastro_ia'))
+    for aviso in out.get('avisos') or []:
+        flash(aviso, 'warning')
+    return render_template('produtos/cadastro_ia.html',
+                           itens=out['itens'], campo_preco=campo_preco,
+                           CAMPOS_PRECO=svc_ia.CAMPOS_PRECO,
+                           modelo_usado=out.get('modelo_usado'))
+
+
+@produtos_bp.route('/cadastro-ia/salvar', methods=['POST'])
+@login_required
+@admin_required
+def cadastro_ia_salvar():
+    """Grava o que o humano marcou na revisão. Cada linha volta com o JSON
+    da proposta (hidden) + overrides editáveis (nome/preço/categoria,
+    checkbox por item e por componente, quantidade)."""
+    import json as _json
+
+    from flask_login import current_user
+
+    from app.services import cadastro_ia as svc_ia
+    campo_preco = request.form.get('campo_preco') or 'preco_site'
+    if campo_preco not in svc_ia.CAMPOS_PRECO:
+        flash('Campo de preço inválido.', 'danger')
+        return redirect(url_for('produtos.cadastro_ia'))
+    try:
+        n = int(request.form.get('n_itens') or 0)
+    except ValueError:
+        n = 0
+    itens = []
+    for i in range(n):
+        if not request.form.get(f'it{i}_incluir'):
+            continue
+        try:
+            it = _json.loads(request.form.get(f'it{i}_json') or '{}')
+        except ValueError:
+            continue
+        it['nome'] = (request.form.get(f'it{i}_nome') or
+                      it.get('nome') or '').strip()
+        it['preco'] = parse_float_br(request.form.get(f'it{i}_preco')) or 0
+        it['categoria'] = (request.form.get(f'it{i}_categoria') or '').strip()
+        comps = []
+        for j, c in enumerate(it.get('componentes') or []):
+            if not request.form.get(f'it{i}_c{j}_incluir'):
+                continue
+            qtd = parse_float_br(request.form.get(f'it{i}_c{j}_qtd'))
+            if qtd is not None:
+                c['quantidade'] = qtd
+            comps.append(c)
+        it['componentes'] = comps
+        itens.append(it)
+    if not itens:
+        flash('Nenhum item marcado para cadastrar.', 'warning')
+        return redirect(url_for('produtos.cadastro_ia'))
+
+    resumo = svc_ia.salvar_lote(itens, campo_preco, user=current_user)
+    if resumo['criados']:
+        flash(f'{len(resumo["criados"])} produto(s) criado(s): '
+              + ', '.join(resumo['criados']), 'success')
+    if resumo['mps_criadas']:
+        flash(f'{len(resumo["mps_criadas"])} MP(s) nova(s): '
+              + ', '.join(resumo['mps_criadas']), 'info')
+    if resumo['pulados']:
+        flash('Já existiam (pulados): ' + ', '.join(resumo['pulados']),
+              'warning')
+    for aviso in resumo['avisos']:
+        flash(aviso, 'warning')
+    return redirect(url_for('produtos.lista'))
