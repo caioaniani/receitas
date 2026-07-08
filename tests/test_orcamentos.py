@@ -94,9 +94,17 @@ def test_transicao_status(app):
         # rascunho -> enviado OK
         ok, _ = svc.marcar_status(orc, 'enviado')
         assert ok and orc.status == 'enviado' and orc.enviado_em
-        # enviado -> aprovado OK
+        # enviado -> aprovado SEM data de entrega = recusado (regime 07/07/2026)
+        ok, msg = svc.marcar_status(orc, 'aprovado')
+        assert ok is False and 'entrega' in msg.lower()
+        assert orc.status == 'enviado'
+        # com data de entrega, aprova e vira venda
+        from app.utils import hoje
+        orc.data_entrega = hoje()
+        db.session.commit()
         ok, _ = svc.marcar_status(orc, 'aprovado')
         assert ok and orc.status == 'aprovado' and orc.aprovado_em
+        assert orc.venda_id is not None
         # aprovado -> qualquer = final
         ok, _ = svc.marcar_status(orc, 'recusado')
         assert ok is False
