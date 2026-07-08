@@ -494,6 +494,54 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             comprometido[rid] += q
             comprometido_loja[rid][loja_id] += q
 
+    # 2b. Vendas B2B AGUARDANDO SEPARACAO (estoque_baixado_em NULL): desde
+    # 07/07/2026 a baixa do B2B acontece na separacao pelo padeiro, entao a
+    # venda pendente e demanda COMPROMETIDA — sem este bloco o balanco acha
+    # o freezer livre e subproduz (a demanda so "aparecia" porque a baixa
+    # imediata reduzia em_estoque). Cesta explode em componentes-RECEITA
+    # (mesma explosao da baixa; componente produto/MP fica fora — o balanco
+    # e por receita). Quando a venda baixa (separacao), ela SAI daqui e
+    # passa a reduzir em_estoque — nunca conta 2x. Alimenta firme_dia
+    # (demanda iminente) e comprometido, igual ao PedidoLoja.
+    from app.models import Produto, VendaB2B, VendaB2BItem
+    from app.services.cestas import componentes_de_cesta
+    b2b_rows = (db.session.query(VendaB2BItem, VendaB2B.data_entrega)
+                .join(VendaB2B, VendaB2BItem.venda_id == VendaB2B.id)
+                .filter(VendaB2B.status == 'ativa',
+                        VendaB2B.estoque_baixado_em.is_(None),
+                        VendaB2B.data_entrega.isnot(None),
+                        VendaB2B.data_entrega >= hoje_d,
+                        VendaB2B.data_entrega <= comp_fim)
+                .all())
+    comprometido_b2b = defaultdict(int)
+    _cache_cesta = {}
+
+    def _contrib_b2b(rid, data_ent, q):
+        firme_dia[rid][data_ent] += q
+        L = lead.get(rid, 0)
+        if (inicio_d + timedelta(days=L) <= data_ent
+                <= inicio_d + timedelta(days=L + horizonte_dias - 1)):
+            comprometido[rid] += q
+            comprometido_b2b[rid] += q
+
+    for vi, data_ent in b2b_rows:
+        qtd = int(vi.quantidade or 0)
+        if qtd <= 0:
+            continue
+        if vi.receita_id:
+            if vi.receita_id in receitas:
+                _contrib_b2b(vi.receita_id, data_ent, qtd)
+            continue
+        if vi.produto_id not in _cache_cesta:
+            _cache_cesta[vi.produto_id] = componentes_de_cesta(
+                Produto.query.get(vi.produto_id))
+        for col, comp_id, _nome, qtd_por in _cache_cesta[vi.produto_id]:
+            if col != 'receita_id' or comp_id not in receitas:
+                continue
+            q = int(round(qtd * qtd_por))
+            if q > 0:
+                _contrib_b2b(comp_id, data_ent, q)
+
     # 3. Historico pra previsao por dia-da-semana. Conta DATAS distintas (nao
     # linhas) pra a media: varias lojas no mesmo dia somam, mas a media e por
     # dia-calendario observado. Exclui cancelados (nao foram demanda real).
