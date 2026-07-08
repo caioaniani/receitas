@@ -163,6 +163,79 @@ def test_producao_ia_sanitiza_e_descarta_igual(app, monkeypatch):
     assert out['parecer'] == 'reforço pré-feriado'
 
 
+def test_producao_ia_avisa_linha_zerada(app, monkeypatch):
+    """Produto que o motor de média não sugere (linha zerada) mas a IA
+    propõe quantidade ganha aviso — não passa despercebido."""
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-teste')
+    with app.app_context():
+        loja = _loja()
+        r = _receita()
+        # histórico raso: cria linha na grade porém com média baixa/zerada
+        # em vários dias — garante ao menos um item na grade da loja.
+        _historico_semanal(loja, r, qtd=0)
+        _pedido(loja, hoje() - timedelta(days=7), r, 0)
+        payload = {'itens': [
+            {'receita_id': r.id, 'por_dia': [30, 30, 30, 30, 30, 30, 30],
+             'motivo': 'evento na loja'},
+        ], 'parecer': ''}
+        with patch('anthropic.Anthropic',
+                   return_value=_fake_client(payload)):
+            out = svc.sugerir_pedido_loja_ia(loja.id, horizonte_dias=7)
+    if out.get('itens'):
+        it = out['itens'][0]
+        assert it['aviso'] is not None
+
+
+def test_pedido_loja_ia_erro_generico(app, monkeypatch):
+    """Falha da API vira mensagem amigável (sem vazar detalhe do SDK)."""
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-teste')
+    with app.app_context():
+        loja = _loja()
+        r = _receita()
+        _historico_semanal(loja, r, qtd=10)
+        client = MagicMock()
+        client.messages.create.side_effect = RuntimeError(
+            'segredo-interno-do-sdk')
+        with patch('anthropic.Anthropic', return_value=client):
+            out = svc.sugerir_pedido_loja_ia(loja.id)
+    assert 'erro' in out
+    assert 'segredo-interno' not in out['erro']
+
+
+def test_rota_ia_aplicar_data_malformada_nao_da_500(app, admin_user):
+    """Ajuste com data inválida entra em falhas — nunca 500 no meio do
+    loop deixando ajustes anteriores commitados sem relatório."""
+    from app.models import CronogramaOverride
+    with app.app_context():
+        loja = _loja()
+        r = _receita('Baguete')
+        alvo = hoje() + timedelta(days=3)
+        _pedido(loja, alvo, r, 40, status='pendente')
+        from app.services.previsao_producao import cronograma_producao
+        crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+        linha = next(x for x in crono['receitas'] if x['receita_id'] == r.id)
+        cel = next(c for c in linha['por_dia'] if c['qtd'])
+        rid, data_ok, qtd_nova = r.id, cel['data'], cel['qtd'] + 8
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    resp = c.post('/telaindustriateste/ia-aplicar', json={
+        'horizonte': 7, 'janela': 6, 'inicio': 0,
+        'ajustes': [
+            {'receita_id': rid, 'data': '2026-99-99', 'qtd': 5},   # ruim
+            {'receita_id': rid, 'data': data_ok, 'qtd': qtd_nova},  # ok
+        ],
+    })
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True
+    assert len(d['aplicados']) == 1 and len(d['falhas']) == 1
+    assert d['falhas'][0]['erro'] == 'parametros'
+    with app.app_context():
+        assert any(o.qtd == qtd_nova
+                   for o in CronogramaOverride.query.filter_by(
+                       receita_id=rid).all())
+
+
 def test_rota_ia_aplicar_vira_override_rascunho(app, admin_user):
     """Aplicar os ajustes grava CronogramaOverride (rascunho) via
     editar_celula — e NUNCA aprova/envia plano (gesto humano)."""
