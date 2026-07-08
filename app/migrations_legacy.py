@@ -1944,6 +1944,23 @@ def _migrate_sqlite(app):
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_cobranca_fatura "
                        "ON cobranca(fatura_id) WHERE fatura_id IS NOT NULL")
 
+    # ── Baixa do B2B na separacao + vinculo orcamento→venda (07/07/2026) ──
+    cursor.execute("PRAGMA table_info(venda_b2b)")
+    cols_vb3 = [row[1] for row in cursor.fetchall()]
+    if cols_vb3 and 'estoque_baixado_em' not in cols_vb3:
+        cursor.execute("ALTER TABLE venda_b2b ADD COLUMN "
+                       "estoque_baixado_em TIMESTAMP")
+        # Backfill one-shot: venda ativa existente baixou na criacao.
+        cursor.execute("UPDATE venda_b2b SET estoque_baixado_em = "
+                       "COALESCE(criado_em, CURRENT_TIMESTAMP) "
+                       "WHERE estoque_baixado_em IS NULL "
+                       "AND status = 'ativa'")
+    cursor.execute("PRAGMA table_info(orcamento)")
+    cols_orc = [row[1] for row in cursor.fetchall()]
+    if cols_orc and 'venda_id' not in cols_orc:
+        cursor.execute("ALTER TABLE orcamento ADD COLUMN "
+                       "venda_id INTEGER REFERENCES venda_b2b(id)")
+
     # ── SKU do Tiny por canal (06/07/2026) ──
     # SQLite nao altera UNIQUE embutida — rebuild da tabela (mesmo padrao
     # do previsao_snapshot acima): copia com canal='site' e troca a unique
