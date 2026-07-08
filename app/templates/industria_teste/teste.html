@@ -473,10 +473,13 @@
                             <button class="btn btn-primary btn-sm btn-dia">📤 enviar</button>
                         </form>
                         {% else %}
-                        <span class="badge bg-success dia-badge">📤 enviado</span>
+                        {# Diverge → só o badge âmbar (já implica 'enviado');
+                           não empilha os dois, que alargava a coluna. #}
                         {% if difere.get(dia.data) %}
                         <span class="badge dia-badge dia-difere"
-                              title="O grid difere da ordem que o padeiro está vendo em {{ difere[dia.data]|length }} receita(s) — as células marcadas com 📤 mostram o número enviado (receita da ordem que saiu do grid também conta, mesmo sem célula). Use '🔄 atualizar produção' no menu ⋯ para aplicar o grid.">⚠ difere do enviado</span>
+                              title="Este dia foi enviado ao padeiro, mas o grid difere da ordem em {{ difere[dia.data]|length }} receita(s) — as células marcadas com 📤 mostram o número enviado (receita da ordem que saiu do grid também conta, mesmo sem célula). Use '🔄 atualizar produção' no menu ⋯ para aplicar o grid.">⚠ difere {{ difere[dia.data]|length }}</span>
+                        {% else %}
+                        <span class="badge bg-success dia-badge">📤 enviado</span>
                         {% endif %}
                         {% endif %}
                         <form method="POST" action="{{ url_for('industria_teste.dia_cadeado') }}" class="d-inline">
