@@ -309,12 +309,15 @@ def analisar_producao_ia(*, horizonte_dias=7, janela_semanas=6,
                 forn += c['fornadas']
         fornadas_por_dia.append({'data': dia['data'],
                                  'fornadas': round(forn, 1)})
+    from app.services.cronograma_edit import dias_fechados
     payload = {
         'hoje': crono.get('hoje'),
         'dias': crono.get('dias'),
         'linhas': linhas_ctx,
         'alertas_falta': crono.get('alertas_falta') or [],
         'fornadas_por_dia': fornadas_por_dia,
+        'dias_fechados': sorted(d.isoformat() if hasattr(d, 'isoformat')
+                                else str(d) for d in dias_fechados()),
     }
     dados, erro = _chamar_opus(
         _SYSTEM_PRODUCAO, json.dumps(payload, ensure_ascii=False),
