@@ -329,23 +329,39 @@ def salvar_lote(itens, campo_preco, user=None):
                 qtd = 1.0
             if qtd <= 0:
                 continue
-            c_nome = (c.get('nome') or '').strip()
+            c_nome = (c.get('nome') or '').strip()[:100]
             alvo = _get_por_id(tipo, c.get('id'))
             if alvo is None:
                 alvo = _resolver_por_nome(tipo, c_nome)
+            if alvo is None and not c_nome:
+                continue        # sem vinculo E sem nome: nada a gravar
             if alvo is None and tipo == 'mp' and c.get('novo') and c_nome:
                 alvo = mps_novas.get(c_nome.lower())
+                # Homonima ARQUIVADA nao aparece no resolver (.ativas())
+                # mas a unique de MateriaPrima.nome pega no commit —
+                # checa TODAS antes de criar (senao 500 e o lote inteiro
+                # se perde; achado da revisao 08/07/2026).
                 if alvo is None:
-                    alvo = MateriaPrima(
-                        nome=c_nome,
-                        unidade=(c.get('unidade') or 'un'),
-                        custo_por_kg=0)
-                    db.session.add(alvo)
-                    db.session.flush()
-                    mps_novas[c_nome.lower()] = alvo
-                    mps_criadas.append(c_nome)
-                    avisos.append(f'MP "{c_nome}" criada com custo 0 — '
-                                  'defina o custo real no Banco de MPs')
+                    arquivada = MateriaPrima.query.filter(
+                        db.func.lower(MateriaPrima.nome)
+                        == c_nome.lower()).first()
+                    if arquivada is not None:
+                        avisos.append(
+                            f'{nome}: MP "{c_nome}" já existe ARQUIVADA — '
+                            'desarquive no Banco de MPs e vincule em '
+                            'Produtos → cestas órfãos')
+                        alvo = None
+                    else:
+                        alvo = MateriaPrima(
+                            nome=c_nome,
+                            unidade=(c.get('unidade') or 'un')[:10],
+                            custo_por_kg=0)
+                        db.session.add(alvo)
+                        db.session.flush()
+                        mps_novas[c_nome.lower()] = alvo
+                        mps_criadas.append(c_nome)
+                        avisos.append(f'MP "{c_nome}" criada com custo 0 — '
+                                      'defina o custo real no Banco de MPs')
             if alvo is None:
                 avisos.append(f'{nome}: componente "{c_nome}" sem vínculo '
                               '— resolva em Produtos → cestas órfãos')
