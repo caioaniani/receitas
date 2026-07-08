@@ -116,10 +116,18 @@
                 <td class="text-end">{% if c.preco_atacado > 0 %}{{ c.preco_atacado | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
                 <td class="text-end">{% if c.preco_loja > 0 %}{{ c.preco_loja | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
                 <td class="text-end">{% if c.preco_site > 0 %}{{ c.preco_site | brl }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
-                <td class="text-center">
+                <td class="text-center text-nowrap">
                     <a href="{{ url_for('produtos.detalhe', id=c.id) }}" class="btn btn-sm btn-outline-primary" title="Editar">
                         <i class="bi bi-pencil"></i>
                     </a>
+                    {% if current_user.is_admin() %}
+                    <form method="POST" action="{{ url_for('produtos.duplicar', id=c.id) }}" class="d-inline mb-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Duplicar produto">
+                            <i class="bi bi-copy"></i>
+                        </button>
+                    </form>
+                    {% endif %}
                     <button type="button" class="btn btn-sm btn-outline-danger btn-del-prod" data-id="{{ c.id }}" title="Excluir">
                         <i class="bi bi-trash"></i>
                     </button>
