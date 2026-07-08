@@ -1184,6 +1184,7 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
     for loja_id, data_ent, status_p in (db.session.query(
             PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoLoja.status)
             .filter(PedidoLoja.status != 'cancelado',
+                    _cond_sem_entrega_antecipada(hoje_d),
                     PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= horizonte_fim)
             .all()):
@@ -1194,12 +1195,16 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
     # O QUE ja foi pedido por (loja, dia, receita) no horizonte — a celula
     # travada mostra esse numero (o pedido REAL do dia) em vez de um 0 apagado,
     # pra quem olha a grade saber o que ja esta encomendado sem abrir o pedido.
+    # Mesmo filtro de entrega antecipada do ja_tem: sem ele, a quantidade do
+    # pedido ja-entregue vazaria pra celula EDITAVEL de um pedido vivo do
+    # mesmo dia e o gerar inflaria o pedido real.
     ja_pedido = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     for loja_id, data_ent, rid_e, qtd_e in (db.session.query(
             PedidoLoja.loja_id, PedidoLoja.data_entrega,
             PedidoItem.receita_id, PedidoItem.quantidade)
             .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoLoja.status != 'cancelado',
+                    _cond_sem_entrega_antecipada(hoje_d),
                     PedidoItem.receita_id.isnot(None),
                     PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= horizonte_fim).all()):
