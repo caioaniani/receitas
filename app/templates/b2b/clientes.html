@@ -31,15 +31,30 @@
             <td>{{ c.contato or '—' }}</td>
             <td>{{ c.telefone or '—' }}</td>
             <td class="text-end">{{ '%.0f'|format(c.desconto_percentual or 0) }}%</td>
-            <td>
+            <td class="text-nowrap">
                 <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modal-cliente-{{ c.id }}">Editar</button>
                 <a href="{{ url_for('b2b.cliente_precos', cid=c.id) }}" class="btn btn-sm btn-outline-primary"
                    title="Tabela de preços específica deste cliente (vence o atacado padrão)">
                     <i class="bi bi-tags"></i> Preços</a>
+                <form method="POST" action="{{ url_for('b2b.cliente_arquivar', cid=c.id) }}" class="d-inline"
+                      {% if c.ativo %}onsubmit="return confirm('Arquivar {{ c.nome }}? Ele some da lista e dos selects de venda; o histórico fica.');"{% endif %}>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-{{ 'success' if not c.ativo else 'warning' }}"
+                            title="{{ 'Reativar' if not c.ativo else 'Arquivar (some da lista; histórico fica)' }}">
+                        <i class="bi bi-{{ 'arrow-counterclockwise' if not c.ativo else 'archive' }}"></i>
+                        {{ 'Reativar' if not c.ativo else 'Arquivar' }}</button>
+                </form>
+                <form method="POST" action="{{ url_for('b2b.cliente_excluir', cid=c.id) }}" class="d-inline"
+                      onsubmit="return confirm('Excluir {{ c.nome }} DEFINITIVAMENTE? Só funciona se ele não tiver venda/fatura/orçamento no histórico.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger" title="Excluir de vez (só cliente sem histórico — teste/duplicado)">
+                        <i class="bi bi-trash"></i></button>
+                </form>
             </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="text-muted text-center small">Nenhum cliente cadastrado.</td></tr>
+        <tr><td colspan="5" class="text-muted text-center small">
+            {{ 'Nenhum cliente arquivado.' if arquivados else 'Nenhum cliente cadastrado.' }}</td></tr>
         {% endfor %}
         </tbody>
     </table>
