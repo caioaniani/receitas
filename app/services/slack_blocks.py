@@ -441,7 +441,8 @@ def _preview_criar_venda_b2b(p, token):
             ('Total', f"R$ {p.get('total') or 0:.2f}"),
             ('Observacao', p.get('observacao') or '—'),
         ]),
-        _section(f'*Itens (baixa do freezer):*\n{itens_txt[:2500]}{parc_txt[:1000]}'),
+        _section('*Itens (o freezer baixa na SEPARAÇÃO pelo padeiro):*\n'
+                 f'{itens_txt[:2500]}{parc_txt[:1000]}'),
         _botoes(token, 'Criar venda', 'Cancelar'),
     ]
 
