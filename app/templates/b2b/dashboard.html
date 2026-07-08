@@ -69,11 +69,16 @@
         </tr>
         {% else %}
         <tr><td colspan="7" class="text-muted text-center small p-3">
-            {{ 'Nenhum orçamento aguardando aprovação.' if f == 'pendentes' else 'Nenhum orçamento aprovado esperando virar venda.' }}</td></tr>
+            {{ 'Nenhum orçamento aguardando aprovação.' if f == 'pendentes' else 'Nenhum orçamento esperando virar venda — desde 07/07 APROVAR já cria a venda na hora (esta aba só mostra aprovados antigos ainda sem venda).' }}</td></tr>
         {% endfor %}
         </tbody>
     </table>
 </div>
+{% if f == 'aprovados' %}
+<p class="text-muted small">Aprovar um orçamento agora <strong>cria a venda automaticamente</strong>
+    (com a data de entrega do orçamento) — ela aparece em "Em produção" e o estoque baixa quando o
+    padeiro separar no /padeiro.</p>
+{% endif %}
 
 {% elif vendas is not none %}
 <div class="table-responsive">
