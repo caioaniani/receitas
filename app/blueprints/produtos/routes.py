@@ -478,8 +478,10 @@ def cadastro_ia_analisar():
                   'texto.', 'warning')
             return redirect(url_for('produtos.cadastro_ia'))
         file_bytes = arquivo.read()
-        if len(file_bytes) > 8 * 1024 * 1024:
-            flash('Imagem acima de 8 MB — reduza e tente de novo.',
+        # 5 MB: limite por imagem da API Anthropic (o base64 ainda infla
+        # ~33%) — acima disso a falha viraria erro cru do SDK.
+        if len(file_bytes) > 5 * 1024 * 1024:
+            flash('Imagem acima de 5 MB — reduza e tente de novo.',
                   'warning')
             return redirect(url_for('produtos.cadastro_ia'))
         mimetype = arquivo.mimetype
