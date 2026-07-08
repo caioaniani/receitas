@@ -71,7 +71,7 @@ def _dados_listas(dia, eh_hoje):
     """Pedidos de loja + vendas B2B (com data de entrega) do dia, a separar e
     aguardando. Helper compartilhado entre a tela cheia (`index`) e o refresh
     parcial (`listas_html`). Loja baixa estoque da loja no recebimento; o B2B
-    ja baixou do freezer na venda — aqui e so producao/separacao (sem estoque)."""
+    baixa o freezer AO SEPARAR (regime 07/07/2026 — ver separar_b2b)."""
     hj = hoje()
     q = PedidoLoja.query.filter(
         PedidoLoja.status.in_(('pendente', 'confirmado', 'separado')))
