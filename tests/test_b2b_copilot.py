@@ -49,11 +49,14 @@ def test_enricher_cliente_nao_cadastrado_avulso(app, admin_user, catalogo):
     assert out['itens'][0]['preco_unitario'] == 8.0
 
 
-def test_executor_cria_venda_e_baixa_freezer(app, admin_user, catalogo):
-    """Executor end-to-end: cria VendaB2B, baixa EstoqueProducao."""
+def test_executor_cria_venda_sem_baixar_freezer(app, admin_user, catalogo):
+    """Executor end-to-end: cria VendaB2B com data de entrega — REGIME
+    07/07/2026: entra na fila do padeiro SEM baixar o freezer (a baixa e
+    na separacao). O padeiro separando baixa a quantidade exata."""
     from app.extensions import db
     from app.models import EstoqueProducao, VendaB2B
     from app.services import copilot
+    from app.services import vendas_b2b as svc
 
     ep = EstoqueProducao(receita_id=catalogo['receita'].id, quantidade=20)
     db.session.add(ep)
@@ -73,7 +76,12 @@ def test_executor_cria_venda_e_baixa_freezer(app, admin_user, catalogo):
     venda = VendaB2B.query.get(resultado['venda_id'])
     assert venda.valor_total == 20.0
     db.session.refresh(ep)
-    assert ep.quantidade == 16
+    assert ep.quantidade == 20                  # nada baixou ainda
+    assert venda.estoque_baixado_em is None
+    svc.baixar_na_separacao(venda, user=admin_user)
+    db.session.commit()
+    db.session.refresh(ep)
+    assert ep.quantidade == 16                  # baixa na separacao
 
 
 def test_executor_criar_cliente_b2b_idempotente(app, admin_user):
