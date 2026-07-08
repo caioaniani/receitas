@@ -1424,6 +1424,28 @@ def _migrate_postgres(app):
     _try("CREATE UNIQUE INDEX IF NOT EXISTS uq_cobranca_fatura "
          "ON cobranca(fatura_id) WHERE fatura_id IS NOT NULL")
 
+    # Baixa do B2B na SEPARACAO (07/07/2026, decisao do dono): o estoque
+    # da industria so baixa quando o padeiro separa o pedido no /padeiro.
+    # `estoque_baixado_em` marca o regime da venda: NULL = aguardando
+    # separacao; preenchido = ja baixou (na separacao, ou na criacao para
+    # venda imediata sem data_entrega). BACKFILL one-shot: toda venda ATIVA
+    # existente baixou na criacao (regime antigo) — sem o backfill, a
+    # separacao pos-deploy baixaria EM DOBRO. Cancelada fica NULL (estorno
+    # ja devolveu tudo; reabrir cai no regime novo).
+    _cols_vb2b_antes = _cols('venda_b2b')
+    _try("ALTER TABLE venda_b2b ADD COLUMN IF NOT EXISTS "
+         "estoque_baixado_em TIMESTAMP")
+    if _cols_vb2b_antes and 'estoque_baixado_em' not in _cols_vb2b_antes:
+        _try("UPDATE venda_b2b SET estoque_baixado_em = "
+             "COALESCE(criado_em, NOW()) "
+             "WHERE estoque_baixado_em IS NULL AND status = 'ativa'")
+
+    # Aprovar orcamento vira venda (07/07/2026): vinculo persistido evita
+    # converter o mesmo orcamento duas vezes (duplicaria fila do padeiro
+    # e, na separacao, a baixa).
+    _try("ALTER TABLE orcamento ADD COLUMN IF NOT EXISTS "
+         "venda_id INTEGER REFERENCES venda_b2b(id)")
+
     # Mapeamento de SKU do Tiny POR CANAL (06/07/2026): no Tiny o B2B eh
     # outro cadastro/lista de preco — o mesmo item nosso pode ter SKU
     # diferente por canal ('site' | 'b2b'). Linhas existentes viram 'site'
