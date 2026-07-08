@@ -600,8 +600,10 @@ def vendas():
                            status_filtro=status)
 
 
-def _catalogo_venda():
-    """Catalogo + precos + estoque compartilhados pelos forms de nova/editar venda."""
+def _catalogo_venda(excluir_venda_id=None):
+    """Catalogo + precos + estoque compartilhados pelos forms de nova/editar
+    venda. `excluir_venda_id` (form de editar): o comprometido da propria
+    venda nao desconta do disponivel exibido pra ela mesma."""
     clientes = ClienteB2B.query.filter_by(ativo=True).order_by(ClienteB2B.nome).all()
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
