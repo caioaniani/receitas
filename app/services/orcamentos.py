@@ -370,6 +370,8 @@ def marcar_status(orc, novo, *, usuario_id=None):
     """
     if novo not in STATUS_VALIDOS:
         return False, f'status invalido: {novo}'
+    if orc.arquivado_em:
+        return False, 'orcamento arquivado — desarquive antes de mudar o status'
     transicoes = {
         'rascunho': {'enviado'},
         'enviado': {'aprovado', 'recusado', 'rascunho'},
