@@ -464,15 +464,21 @@ def reabrir_venda(venda, user=None):
 _STATUS_ENTREGA_ORDEM = ['pendente', 'separado', 'em_transporte', 'entregue']
 
 
-def reverter_status_entrega(venda):
+def reverter_status_entrega(venda, user=None):
     """Volta um passo no status de entrega (entregue→separado→pendente).
 
-    Nao mexe em estoque — o estoque B2B sai na criacao, nao na mudanca de
-    status de entrega. Idempotente em 'pendente'.
+    Voltar de separado→pendente ESTORNA a baixa da separacao (regime
+    07/07/2026): o pao volta pro freezer no sistema como voltou no fisico,
+    e a proxima separacao baixa de novo (idempotente pelo marcador).
+    Idempotente em 'pendente'.
     """
     cur = venda.status_entrega or 'pendente'
     if cur in _STATUS_ENTREGA_ORDEM and _STATUS_ENTREGA_ORDEM.index(cur) > 0:
-        venda.status_entrega = _STATUS_ENTREGA_ORDEM[_STATUS_ENTREGA_ORDEM.index(cur) - 1]
+        novo = _STATUS_ENTREGA_ORDEM[_STATUS_ENTREGA_ORDEM.index(cur) - 1]
+        if (novo == 'pendente' and venda.data_entrega is not None
+                and venda.estoque_baixado_em):
+            _estornar_estoque(venda, user=user, motivo='volta pra separar')
+        venda.status_entrega = novo
         db.session.commit()
     return venda
 
