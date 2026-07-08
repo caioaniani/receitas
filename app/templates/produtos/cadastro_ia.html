@@ -72,7 +72,10 @@
             {% set i = loop.index0 %}
             <tr class="{% if it.ja_existe_id %}table-secondary{% elif it.confianca == 'baixa' %}table-warning{% endif %}">
                 <td>
-                    <input type="hidden" name="it{{ i }}_json" value="{{ it|tojson }}">
+                    {# tojson NAO escapa aspas duplas — o atributo TEM que
+                       usar aspas simples, senao o JSON chega truncado do
+                       navegador (bug pego na revisao 08/07/2026) #}
+                    <input type="hidden" name="it{{ i }}_json" value='{{ it|tojson }}'>
                     <input type="checkbox" name="it{{ i }}_incluir" value="1"
                            class="form-check-input"
                            {% if not it.ja_existe_id %}checked{% endif %}>
