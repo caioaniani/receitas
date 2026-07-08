@@ -302,7 +302,7 @@
     <div class="d-flex gap-2 align-items-center flex-wrap">
         <form method="POST" action="{{ url_for('industria_teste.limpar_edicoes') }}"
               class="mb-0"
-              onsubmit="return confirm('Apagar TODAS as edições manuais (rascunhos) do cronograma? Tudo volta pro cálculo automático. Não mexe em pedido enviado, estoque nem matéria-prima.');">
+              onsubmit="return confirm('Apagar as edições manuais (rascunhos) do cronograma? Tudo volta pro cálculo automático — EXCETO dias fechados com o cadeado (🔒), que são preservados. Não mexe em pedido enviado, estoque nem matéria-prima.');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="horizonte" value="{{ horizonte }}">
             <input type="hidden" name="janela" value="{{ janela }}">
