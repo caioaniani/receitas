@@ -781,6 +781,15 @@ def venda_nova():
 @admin_required
 def venda_criar():
     campos, itens, parcelas = _parse_venda_form()
+    # Guard ANTES de criar (o GET de venda_nova tem o mesmo, mas o form
+    # pode ter ficado aberto numa aba enquanto o orçamento era convertido
+    # por outro caminho — sem isso a demanda entraria em DOBRO na fila).
+    orc_id = request.form.get('orcamento_id', type=int)
+    orc = Orcamento.query.get(orc_id) if orc_id else None
+    if orc and orc.venda_id:
+        flash(f'O orçamento {orc.codigo} já virou a venda #{orc.venda_id} '
+              '— nada foi criado.', 'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=orc.venda_id))
     if not campos['data_entrega']:
         flash('Informe a data de entrega ao padeiro.', 'warning')
         return redirect(url_for('b2b.venda_nova'))
@@ -797,12 +806,9 @@ def venda_criar():
 
     # Venda criada a partir de um orçamento (seed manual): grava o vínculo
     # pra ele sair da fila de Aprovados e não ser convertido de novo.
-    orc_id = request.form.get('orcamento_id', type=int)
-    if orc_id:
-        orc = Orcamento.query.get(orc_id)
-        if orc and not orc.venda_id:
-            orc.venda_id = venda.id
-            db.session.commit()
+    if orc and not orc.venda_id:
+        orc.venda_id = venda.id
+        db.session.commit()
 
     flash(f'Venda B2B #{venda.id} criada — R$ {venda.valor_total:.2f}.', 'success')
     return redirect(url_for('b2b.venda_detalhe', vid=venda.id))
