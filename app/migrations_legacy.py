@@ -1446,6 +1446,12 @@ def _migrate_postgres(app):
     _try("ALTER TABLE orcamento ADD COLUMN IF NOT EXISTS "
          "venda_id INTEGER REFERENCES venda_b2b(id)")
 
+    # Rascunho arquivavel (08/07/2026, pedido do dono): rascunho que nao
+    # foi pra frente sai de Pendentes sem virar 'recusado' (que significa
+    # cliente disse nao). Mesmo idioma do Receita.arquivada_em.
+    _try("ALTER TABLE orcamento ADD COLUMN IF NOT EXISTS "
+         "arquivado_em TIMESTAMP")
+
     # Mapeamento de SKU do Tiny POR CANAL (06/07/2026): no Tiny o B2B eh
     # outro cadastro/lista de preco — o mesmo item nosso pode ter SKU
     # diferente por canal ('site' | 'b2b'). Linhas existentes viram 'site'
