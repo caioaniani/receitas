@@ -600,11 +600,12 @@ def _drain_flag(dias, user_id=None):
         if st.get('erros'):
             # Commit falhou dentro do processar_pedidos (baixas revertidas).
             # NAO quita a pendencia nem grava 'ok' — o cron retenta.
+            # `erros` e LISTA de mensagens (seru_sync ~l.270), nao contador.
             AppConfig.set(ULTIMO_REPROCESSO,
                           'parcial em %s: %d erro(s) no reprocesso — '
                           'nova tentativa no proximo ciclo'
                           % (agora().strftime('%d/%m %H:%M'),
-                             int(st.get('erros') or 0)))
+                             len(st.get('erros') or [])))
             db.session.commit()
             return 'erro'
         _quitar_flag(v0)
