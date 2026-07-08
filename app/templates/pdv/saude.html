@@ -51,6 +51,12 @@
                     {% else %}<span class="text-muted">sem registro</span>{% endif %}
                     <br>Itens baixados hoje: <strong>{{ s.seru_baixados_hoje }}</strong>
                     <br>Scheduler: {{ 'ativo' if s.seru_ativo else 'inativo' }}
+                    <br>Reprocesso pós-mapeamento:
+                    {% if s.reprocesso_pendente %}
+                    <span class="badge bg-warning text-dark">na fila / rodando</span>
+                    {% endif %}
+                    {% if s.reprocesso_ultimo %}<code>{{ s.reprocesso_ultimo }}</code>
+                    {% elif not s.reprocesso_pendente %}<span class="text-muted">nenhum ainda</span>{% endif %}
                 </p>
             </div>
         </div>
