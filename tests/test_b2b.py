@@ -369,7 +369,10 @@ def test_venda_editar_get_renderiza_form(app, admin_user, catalogo):
 
 
 def test_venda_editar_post_altera_estoque_e_obs(app, admin_user, catalogo):
-    """POST de edicao reduz qtd, ajusta estoque e salva nova observacao."""
+    """POST de edicao reduz qtd e salva nova observacao. REGIME 07/07/2026:
+    a edicao da data de entrega ao form move a venda pra FILA DO PADEIRO —
+    o estoque baixado na criacao (venda imediata) e devolvido e so sai de
+    novo quando o padeiro separar."""
     from app.extensions import db
     from app.models import EstoqueProducao, VendaB2B
     from app.services import vendas_b2b as svc
@@ -384,7 +387,8 @@ def test_venda_editar_post_altera_estoque_e_obs(app, admin_user, catalogo):
         user=admin_user,
     )
     db.session.refresh(ep)
-    assert ep.quantidade == 15
+    assert ep.quantidade == 15                  # imediata: baixou na criacao
+    assert venda.estoque_baixado_em is not None
     c = app.test_client()
     c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
     r = c.post(f'/b2b/vendas/{venda.id}/editar', data={
@@ -404,6 +408,12 @@ def test_venda_editar_post_altera_estoque_e_obs(app, admin_user, catalogo):
     assert len(v.itens) == 1
     assert v.itens[0].quantidade == 2
     assert v.itens[0].observacao == 'bem fatiado'
+    # Entrou na fila do padeiro: estorno total, baixa fica pra separacao.
+    assert db.session.get(EstoqueProducao, ep.id).quantidade == 20
+    assert v.estoque_baixado_em is None
+    # Padeiro separa -> baixa a qtd NOVA (2).
+    svc.baixar_na_separacao(v, user=admin_user)
+    db.session.commit()
     assert db.session.get(EstoqueProducao, ep.id).quantidade == 18
 
 
