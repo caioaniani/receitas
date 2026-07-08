@@ -73,11 +73,11 @@ def test_abas_pedidos_separam_por_estagio(app, admin_user):
     aprov = c.get('/b2b/?aba=pedidos&f=aprovados').get_data(as_text=True)
     assert 'ORC-2026-0002' in aprov and 'Virar venda' in aprov
     prod = c.get('/b2b/?aba=pedidos&f=producao').get_data(as_text=True)
-    assert '#1' in prod and 'entregue' not in prod.split('Entregues')[0].split('badge bg-success')[0]
+    assert '/b2b/vendas/1' in prod and '/b2b/vendas/2' not in prod
     entr = c.get('/b2b/?aba=pedidos&f=entregues').get_data(as_text=True)
-    assert '#2' in entr
+    assert '/b2b/vendas/2' in entr and '/b2b/vendas/1' not in entr
     arq = c.get('/b2b/?aba=pedidos&f=arquivados').get_data(as_text=True)
-    assert 'ORC-2026-0003' in arq and '#3' in arq
+    assert 'ORC-2026-0003' in arq and '/b2b/vendas/3' in arq
 
 
 def test_abas_cobrancas_pendente_vencido_pago(app, admin_user):
