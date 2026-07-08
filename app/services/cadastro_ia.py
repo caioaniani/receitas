@@ -187,7 +187,9 @@ def _sanitizar_proposta(dados):
             if alvo is None or (c_nome and alvo.nome.strip().lower()
                                 != c_nome.lower()):
                 alvo = _resolver_por_nome(tipo, c_nome)
-            novo = bool(c.get('novo')) and alvo is None
+            # 'novo' so vale pra MP: receita/produto novos NAO sao criados
+            # automaticamente (receita e ficha de producao) — viram orfaos.
+            novo = bool(c.get('novo')) and alvo is None and tipo == 'mp'
             comps.append({
                 'tipo': tipo,
                 'id': alvo.id if alvo else None,
@@ -195,9 +197,9 @@ def _sanitizar_proposta(dados):
                 'quantidade': qtd,
                 'novo': novo,
                 'unidade': (c.get('unidade') or 'un') if novo else None,
-                # sem match, sem 'novo' MP: vira orfao no salvar (mesmo
+                # sem match e sem MP nova: vira orfao no salvar (mesmo
                 # destino da tela de composicao — resolve em /cestas/orfaos)
-                'orfao': alvo is None and not (novo and tipo == 'mp'),
+                'orfao': alvo is None and not novo,
             })
         itens_ok.append({
             'nome': nome,
