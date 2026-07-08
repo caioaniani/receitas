@@ -8,6 +8,7 @@
             {{ STATUS_LABEL[orc.status] }}
         </span>
         {% if orc.venceu %}<span class="badge bg-danger align-middle">vencido</span>{% endif %}
+        {% if orc.arquivado_em %}<span class="badge bg-dark align-middle">arquivado</span>{% endif %}
     </h1>
     <div class="d-flex gap-2">
         <a href="{{ url_for('b2b.orcamento_pdf', oid=orc.id) }}" target="_blank"
