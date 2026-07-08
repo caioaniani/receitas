@@ -214,3 +214,85 @@ def test_rota_botao_saude(app, admin_user):
     assert '2 pedido(s) sem' in body
     assert '3 item(ns)' in body
     assert 'parciais' in body
+
+
+# ── Reprocesso pos-mapeamento em BACKGROUND (08/07/2026) ────────────────
+# O vincular travava a tela por minutos: 7 dias de API Seru sincronos no
+# request. Agora agenda (flag AppConfig) e drena com coalescing; sob
+# PYTEST_RUNNING o drain roda inline (deterministico).
+
+def test_agendar_drena_e_recupera(app):
+    """agendar → drain inline recupera a baixa igual ao reprocesso sincrono,
+    limpa a flag e registra o resultado em AppConfig."""
+    from app.models import AppConfig
+    from app.services import seru_sync
+    with app.app_context():
+        loja = _loja_confirmada()
+        r, el = _receita_com_estoque(loja)
+        ped = _pedido('BG1', loja.nome, [('PAO NOVO', 4)])
+        _sync([ped])                                   # produto vira pendente
+        assert EstoqueLoja.query.get(el.id).quantidade == 10
+
+        vm = VendaMapa.query.filter_by(canal='seru',
+                                       nome_externo='PAO NOVO').first()
+        vm.receita_id = r.id
+        vm.confirmado_em = agora()
+        db.session.commit()
+
+        with patch('app.services.seru.listar_pedidos_completo',
+                   return_value=[ped]):
+            seru_sync.agendar_reprocesso_retroativo(dias=7)
+
+        assert EstoqueLoja.query.get(el.id).quantidade == 6    # baixou 4
+        assert AppConfig.get(seru_sync.FLAG_REPROCESSO) == '0'
+        ultimo = AppConfig.get(seru_sync.ULTIMO_REPROCESSO) or ''
+        assert ultimo.startswith('ok') and '1 item(ns) baixado(s)' in ultimo
+
+
+def test_agendar_erro_api_devolve_pendencia(app):
+    """API Seru fora durante o drain: pendencia VOLTA pra flag (proximo
+    vinculo retenta), erro registrado, nada propaga pro caller."""
+    from app.models import AppConfig
+    from app.services import seru_sync
+    with app.app_context():
+        with patch('app.services.seru.listar_pedidos_completo',
+                   side_effect=RuntimeError('Seru fora')):
+            seru_sync.agendar_reprocesso_retroativo(dias=7)   # nao levanta
+        assert AppConfig.get(seru_sync.FLAG_REPROCESSO) == '1'
+        assert (AppConfig.get(seru_sync.ULTIMO_REPROCESSO) or '').startswith('erro')
+        # Limpeza: drena a pendencia com a API "de volta" pra nao vazar
+        # estado pro proximo teste.
+        with patch('app.services.seru.listar_pedidos_completo',
+                   return_value=[]):
+            seru_sync.agendar_reprocesso_retroativo(dias=7)
+        assert AppConfig.get(seru_sync.FLAG_REPROCESSO) == '0'
+
+
+def test_vincular_produto_agenda_em_background(app, admin_user):
+    """POST do vincular responde com aviso de segundo plano (nao mais o
+    resultado sincrono) e o vinculo e salvo."""
+    with app.app_context():
+        loja = _loja_confirmada()
+        r, _el = _receita_com_estoque(loja)
+        ped = _pedido('BG2', loja.nome, [('PAO NOVO', 2)])
+        _sync([ped])
+        vm = VendaMapa.query.filter_by(canal='seru',
+                                       nome_externo='PAO NOVO').first()
+        vm_id, r_id = vm.id, r.id
+
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    with patch('app.services.seru.listar_pedidos_completo',
+               return_value=[]):
+        resp = c.post(f'/pdv/mapeamentos/produto/{vm_id}',
+                      data={'acao': 'vincular', 'alvo_tipo': 'receita',
+                            'alvo_id': str(r_id)},
+                      follow_redirects=True)
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert 'segundo plano' in body
+    with app.app_context():
+        vm2 = VendaMapa.query.get(vm_id)
+        assert vm2.receita_id == r_id and vm2.confirmado_em is not None
