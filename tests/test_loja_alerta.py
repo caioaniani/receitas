@@ -161,7 +161,7 @@ def test_alerta_endereco_dispara_quando_geocode_falha(app):
 
 def test_alerta_endereco_dispara_impreciso_mesmo_com_venda_ok(app):
     """Frete resolveu só pelo centroide do CEP (venda passa, mas valor pode
-    estar errado): alerta o dono com impreciso=True."""
+    estar errado): alerta o dono com motivo='impreciso'."""
     from app.services import loja_checkout
     with app.app_context():
         with patch('app.services.loja_checkout.frete_svc.consultar_frete',
@@ -174,28 +174,57 @@ def test_alerta_endereco_dispara_impreciso_mesmo_com_venda_ok(app):
                 'agendada', 'Rua Guararapes, São Paulo, 04561-000',
                 contato='Alane · 119')
     assert erro is None                                # venda NÃO travou
-    assert m.called and m.call_args.kwargs.get('impreciso') is True
+    assert m.called and m.call_args.kwargs.get('motivo') == 'impreciso'
 
 
 def test_texto_endereco_impreciso_difere_do_erro():
     from app.services import loja_alerta
-    err = loja_alerta._texto_endereco_falho('Rua X', '01000-000', None, False)
-    imp = loja_alerta._texto_endereco_falho('Rua X', '01000-000', None, True)
+    err = loja_alerta._texto_endereco_falho('Rua X', '01000-000', None,
+                                             'nao_encontrado')
+    imp = loja_alerta._texto_endereco_falho('Rua X', '01000-000', None,
+                                             'impreciso')
     assert 'ERRO DE ENDEREÇO' in err and 'não localizou' in err
     assert 'IMPRECISO' in imp and 'CONSEGUE comprar' in imp
 
 
-def test_alerta_endereco_nao_dispara_fora_area(app):
-    """Fora da área é resposta legítima (não é 'erro de endereço') — não alerta."""
+def test_texto_endereco_por_motivo_fora_area_e_lalamove():
+    from app.services import loja_alerta
+    fa = loja_alerta._texto_endereco_falho('Rua X', '01000-000', None,
+                                            'fora_area')
+    lal = loja_alerta._texto_endereco_falho('Rua X', None, None, 'lalamove')
+    assert 'FORA DA ÁREA' in fa
+    assert 'LALAMOVE' in lal
+
+
+def test_alerta_endereco_nao_dispara_fora_area_longe(app):
+    """Fora da área BEM longe (Campinas, 40 km): sensor registra, mas NÃO manda
+    WhatsApp (só perto da borda dispara)."""
     from app.services import loja_checkout
     with app.app_context():
         with patch('app.services.loja_checkout.frete_svc.consultar_frete',
                    return_value={'ok': True, 'fora_area': True,
                                  'distancia_km': 40, 'endereco': 'X',
                                  'aviso': 'fora'}), \
-             patch('app.services.loja_alerta.alertar_endereco_falho') as m:
+             patch('app.services.loja_alerta.alertar_endereco_falho') as m, \
+             patch('app.services.frete_sensor.registrar') as s:
             loja_checkout._frete_para('agendada', 'Rua Y, 1, Campinas, 13000-000')
-    assert not m.called
+    assert not m.called                                # longe demais: sem WhatsApp
+    assert s.called and s.call_args.args[1] == 'fora_area'   # mas entra no painel
+
+
+def test_alerta_endereco_dispara_fora_area_perto_da_borda(app):
+    """Fora da área mas PERTO da borda (27 km, dentro dos 25+5): manda WhatsApp
+    com motivo='fora_area' (quase comprou)."""
+    from app.services import loja_checkout
+    with app.app_context():
+        with patch('app.services.loja_checkout.frete_svc.consultar_frete',
+                   return_value={'ok': True, 'fora_area': True,
+                                 'distancia_km': 27.0, 'endereco': 'X',
+                                 'aviso': 'fora'}), \
+             patch('app.services.loja_alerta.alertar_endereco_falho') as m:
+            loja_checkout._frete_para('agendada', 'Rua Z, 1, Guarulhos, 07000-000',
+                                      contato='Cliente · 11')
+    assert m.called and m.call_args.kwargs.get('motivo') == 'fora_area'
 
 
 def test_desligado_por_env_nao_agenda_endereco(app):
