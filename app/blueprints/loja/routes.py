@@ -909,6 +909,11 @@ def api_frete():
         # mostra `data.erro` cru pro cliente (checkout.js). Mesma fonte que o
         # POST do checkout usa (loja_checkout._frete_para).
         res = dict(res, erro=frete_svc.mensagem_erro(codigo))
+    elif res.get('impreciso'):
+        # Cotou só pelo centroide do CEP — a venda passa, mas o frete pode
+        # estar errado: alerta o dono pra conferir (decisão do dono 09/07).
+        from app.services import loja_alerta
+        loja_alerta.alertar_endereco_falho(endereco or geo, cep, impreciso=True)
     return jsonify(res)
 
 
