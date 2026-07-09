@@ -52,6 +52,10 @@ CENTRO_LNG = -46.693661
 KM_GRATIS = 1.0          # até aqui, frete grátis
 VALOR_POR_KM = 5.0       # cada km adicional (anel de 1 km) soma R$5
 RAIO_MAX_KM = 25.0       # além disso, fora da área de entrega do site
+# Fora-da-área: o painel registra TODOS, mas o WhatsApp do dono só dispara pra
+# quem ficou PERTO da borda (até aqui além do limite = "quase comprou", vale
+# chamar). Muito além = cliente de outra cidade, não é venda perdida real.
+MARGEM_ALERTA_FORA_KM = 5.0
 
 _TIMEOUT = 8
 # Nominatim exige User-Agent identificável (politica de uso do OSM).
