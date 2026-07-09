@@ -116,7 +116,7 @@ def _geocodificar_cep(cep):
         return None
 
 
-def _geocodificar_texto(texto, ref=None, cep_ref=None):
+def _geocodificar_texto(texto, ref=None, cep_ref=None, postcode_estrito=False):
     """Nominatim (OSM): endereço livre -> (lat, lng, rótulo) ou None.
 
     Sanidade contra homônimo (05/07/2026; revisto 09/07/2026), dois sinais
