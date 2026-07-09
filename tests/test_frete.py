@@ -282,6 +282,16 @@ def test_geocode_resgata_pelo_cep_quando_endereco_cai_no_homonimo():
     assert r['ok'] is True and r['fora_area'] is False
     assert r['valor'] == 20.0                     # centroide ~4,6 km
     assert r['distancia_km'] < 6                   # Brooklin, não a Lapa (8,7)
+    assert r['impreciso'] is True                  # resolveu só pelo CEP
+
+
+def test_endereco_preciso_nao_marca_impreciso():
+    """Endereço que resolve por texto (não pelo centroide) NÃO é impreciso."""
+    nominatim = _resp(200, [{'lat': '-23.61', 'lon': '-46.70',
+                             'display_name': 'Av. Teste, Brooklin'}])
+    with patch('app.services.frete.requests.get', return_value=nominatim):
+        r = frete.consultar_frete('Avenida Teste 100, Brooklin')
+    assert r['ok'] is True and r.get('impreciso') is False
 
 
 def test_geocode_sem_postcode_no_resultado_aceita():
