@@ -111,7 +111,7 @@ def test_geocodificar_cai_pro_endereco_simplificado():
     completo = 'Rua Funchal, 418, apto 72, Vila Olímpia, São Paulo, SP'
     chamadas = []
 
-    def fake_texto(q, cep_ref=None):
+    def fake_texto(q, ref=None, cep_ref=None):
         chamadas.append(q)
         if q == 'Rua Funchal, 418, São Paulo':
             return (-23.594, -46.689, 'Rua Funchal 418')
