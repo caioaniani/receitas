@@ -372,5 +372,5 @@ def consultar_frete(endereco_ou_cep):
                          'confirmar com a equipe'}
     return {'ok': True, 'fora_area': False, 'valor': valor,
             'gratis': valor == 0.0, 'distancia_km': round(km, 1),
-            'endereco': rotulo, 'impreciso': impreciso,
+            'endereco': rotulo, 'impreciso': impreciso, 'fonte': fonte,
             'aviso': 'valor estimado — o definitivo é o do checkout do site'}
