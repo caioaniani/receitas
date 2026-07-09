@@ -348,6 +348,36 @@ def test_google_teto_diario_para_de_chamar(app):
     assert r3['fonte'] == 'gratis'
 
 
+def test_geocode_preciso_rejeita_approximate_e_aceita_rooftop(app):
+    """O Google APPROXIMATE (centroide de cidade) NÃO vale como preciso — vira
+    None pra cair na cadeia grátis; ROOFTOP vale."""
+    from app.services import google_maps
+    with app.app_context():
+        app.config['GOOGLE_MAPS_API_KEY'] = 'k'
+        aprox = _resp(200, {'status': 'OK', 'results': [{'geometry': {
+            'location': {'lat': -23.5, 'lng': -46.6},
+            'location_type': 'APPROXIMATE'}}]})
+        with patch('app.services.google_maps.requests.get', return_value=aprox):
+            assert google_maps.geocode_preciso('Rua Vaga, São Paulo') is None
+        roof = _resp(200, {'status': 'OK', 'results': [{'geometry': {
+            'location': {'lat': -23.6, 'lng': -46.69},
+            'location_type': 'ROOFTOP'}}]})
+        with patch('app.services.google_maps.requests.get', return_value=roof):
+            assert google_maps.geocode_preciso(
+                'Rua Certa, 100, São Paulo') == (-23.6, -46.69)
+
+
+def test_geocode_partial_match_do_google_nao_vale(app):
+    from app.services import google_maps
+    with app.app_context():
+        app.config['GOOGLE_MAPS_API_KEY'] = 'k'
+        parcial = _resp(200, {'status': 'OK', 'results': [{'partial_match': True,
+            'geometry': {'location': {'lat': -23.6, 'lng': -46.69},
+                         'location_type': 'ROOFTOP'}}]})
+        with patch('app.services.google_maps.requests.get', return_value=parcial):
+            assert google_maps.geocode_preciso('Rua Meio Certa, SP') is None
+
+
 def test_geocode_sem_postcode_no_resultado_aceita():
     """OSM sem postcode no candidato: o check é só contra divergência
     POSITIVA — sem dado, aceita (comportamento antigo preservado)."""
