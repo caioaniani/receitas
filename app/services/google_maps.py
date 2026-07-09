@@ -135,10 +135,13 @@ def geocode_preciso(endereco):
             params={'address': endereco, 'key': key,
                     'components': 'country:BR', 'language': 'pt-BR'},
             timeout=10)
-        if r.status_code != 200 or (r.json() or {}).get('status') != 'OK':
+        if r.status_code != 200:
             return None
-        res0 = (r.json().get('results') or [None])[0]
-        if not res0:
+        data = r.json()
+        if not isinstance(data, dict) or data.get('status') != 'OK':
+            return None
+        res0 = (data.get('results') or [None])[0]
+        if not isinstance(res0, dict):
             return None
         geom = res0.get('geometry') or {}
         loc = geom.get('location') or {}
