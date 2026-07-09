@@ -556,7 +556,7 @@ def frete_debug():
     def _etapa(geo):
         if not geo:
             return None
-        lat, lng, rotulo = geo
+        lat, lng, rotulo = geo[:3]   # _geocodificar_cep devolve 4 (com ref)
         if lat is None:
             return {'rotulo': rotulo, 'coords': None}
         return {'rotulo': rotulo, 'lat': lat, 'lng': lng,
