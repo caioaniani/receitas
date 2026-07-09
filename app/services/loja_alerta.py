@@ -72,6 +72,13 @@ def _deve_enviar(chave):
     """Dedup leve, thread-safe. True se pode enviar (e marca o envio)."""
     agora = time.monotonic()
     with _lock:
+        # Poda entradas expiradas quando o dict cresce — evita crescer sem
+        # limite sob fluxo de chaves distintas (ex: alerta de endereco vindo
+        # do endpoint publico /loja/api/frete).
+        if len(_ultimo_envio) > 256:
+            for k in [k for k, t in _ultimo_envio.items()
+                      if agora - t >= _DEDUP_SEGUNDOS]:
+                del _ultimo_envio[k]
         ult = _ultimo_envio.get(chave, 0.0)
         if agora - ult < _DEDUP_SEGUNDOS:
             return False
