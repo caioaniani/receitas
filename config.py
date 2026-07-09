@@ -106,6 +106,8 @@ class Config:
     RETENCAO_CONVERSAS_DIAS = int(os.environ.get('RETENCAO_CONVERSAS_DIAS', '180') or '180')
     RETENCAO_EVENTOS_DIAS = int(os.environ.get('RETENCAO_EVENTOS_DIAS', '7') or '7')
     RETENCAO_BACKUPS_DIAS = int(os.environ.get('RETENCAO_BACKUPS_DIAS', '90') or '90')
+    # Sensor do frete (PII: endereço/contato do cliente) — poda por LGPD.
+    RETENCAO_FRETE_SENSOR_DIAS = int(os.environ.get('RETENCAO_FRETE_SENSOR_DIAS', '90') or '90')
     # Coordenadas da loja matriz — origem das rotas de entrega
     ROTA_ORIGEM_LAT = os.environ.get('ROTA_ORIGEM_LAT', '')
     ROTA_ORIGEM_LNG = os.environ.get('ROTA_ORIGEM_LNG', '')
