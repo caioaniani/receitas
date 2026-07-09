@@ -179,3 +179,32 @@ def test_desligado_por_env_nao_agenda_endereco(app):
         with patch.object(loja_alerta._POOL, 'submit') as mock_submit:
             loja_alerta.alertar_endereco_falho('Rua X', '00000-000')
     assert not mock_submit.called
+
+
+def test_cep_e_chave_unifica_preview_e_checkout():
+    """Preview (endereço sem CEP + cep separado) e checkout (CEP concatenado no
+    endereço, cep=None) da MESMA venda perdida caem na mesma chave de dedup —
+    o dono não recebe alerta dobrado."""
+    from app.services import loja_alerta
+    cep1, k1 = loja_alerta._cep_e_chave(
+        'Rua Guararapes, 225, Brooklin, São Paulo', '04561-000')
+    cep2, k2 = loja_alerta._cep_e_chave(
+        'Rua Guararapes, 225, Brooklin, São Paulo, 04561-000', None)
+    assert k1 == k2
+    assert cep1 == '04561-000' and cep2 == '04561-000'
+
+
+@_FLAKY_ISOLAMENTO
+def test_teto_hora_de_alerta_endereco_bloqueia_flood(app):
+    """Endereços DISTINTOS furam o dedup por-string; o teto/hora global barra o
+    flood do endpoint público (não inunda o WhatsApp do dono)."""
+    from app.services import loja_alerta
+    loja_alerta._ultimo_envio.clear()
+    loja_alerta._endfalho_ts.clear()
+    with app.app_context():
+        app.config['LOJA_ALERTA_TRAVA'] = '1'
+        with patch.object(loja_alerta._POOL, 'submit') as mock_submit:
+            for i in range(loja_alerta._ENDFALHO_MAX_HORA + 5):
+                loja_alerta.alertar_endereco_falho(f'Rua {i}, São Paulo',
+                                                   f'0000{i:04d}')
+    assert mock_submit.call_count == loja_alerta._ENDFALHO_MAX_HORA
