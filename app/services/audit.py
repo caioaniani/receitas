@@ -40,6 +40,9 @@ AUDITED_MODELS = {
     'funcionario', 'cargo', 'loja', 'folha_pagamento',
     # Sistema
     'usuario', 'materia_prima', 'receita', 'produto',
+    # Loja online: correcao de pedido pago (reducao de qtd) mexe em dinheiro —
+    # a mudanca de quantidade/valor precisa de trilha (08/07/2026).
+    'pedido_online', 'pedido_online_item',
 }
 
 
