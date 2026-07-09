@@ -101,6 +101,7 @@ def resumo(dias=7):
         'total': len(eventos),
         'barrado': por_desfecho.get('barrado', 0),
         'impreciso': por_desfecho.get('impreciso', 0),
+        'fora_area': por_desfecho.get('fora_area', 0),
         'resolvido_google': por_desfecho.get('resolvido_google', 0),
         'lalamove_falhou': por_desfecho.get('lalamove_falhou', 0),
         'google_chamadas_hoje': google_hoje,
