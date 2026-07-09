@@ -302,7 +302,7 @@ def test_google_primeiro_quando_ativo(app):
     with app.app_context():
         app.config['GOOGLE_MAPS_API_KEY'] = 'k'
         app.config['FRETE_GOOGLE'] = '1'
-        with patch('app.services.google_maps.geocode',
+        with patch('app.services.google_maps.geocode_preciso',
                    return_value=(-23.60, -46.69)) as g, \
              patch('app.services.frete.requests.get') as reqs:
             r = frete.consultar_frete('Rua Qualquer, 100, São Paulo, 01000-000')
@@ -316,7 +316,7 @@ def test_google_desligado_por_env_cai_na_cadeia_gratis(app):
         app.config['FRETE_GOOGLE'] = '0'
         nominatim = _resp(200, [{'lat': '-23.61', 'lon': '-46.70',
                                  'display_name': 'X'}])
-        with patch('app.services.google_maps.geocode') as g, \
+        with patch('app.services.google_maps.geocode_preciso') as g, \
              patch('app.services.frete.requests.get', return_value=nominatim):
             r = frete.consultar_frete('Avenida Teste 100, Brooklin')
     assert not g.called                            # kill-switch respeitado
@@ -338,7 +338,7 @@ def test_google_teto_diario_para_de_chamar(app):
             return _resp(200, [{'lat': '-23.61', 'lon': '-46.70',
                                 'display_name': 'X'}])
 
-        with patch('app.services.google_maps.geocode',
+        with patch('app.services.google_maps.geocode_preciso',
                    return_value=(-23.60, -46.69)) as g, \
              patch('app.services.frete.requests.get', side_effect=fake_get):
             frete.consultar_frete('Rua A, 1, São Paulo, 01000-000')
