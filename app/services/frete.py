@@ -253,13 +253,17 @@ def _google_geocode(texto):
         chave = google_maps._normalizar_chave(texto)
         if chave:
             cache = GeocodeCache.query.filter_by(chave=chave).first()
-            if cache and cache.lat is not None \
-                    and (cache.fonte or '').startswith('google'):
-                return cache.lat, cache.lng      # hit: sem custo, sem teto
+            if cache and cache.lat is not None:
+                if cache.fonte == 'google':
+                    return cache.lat, cache.lng   # hit PRECISO: sem custo/teto
+                if cache.fonte == 'google_aprox':
+                    return None                   # hit aproximado: cai na grátis
         if not _google_sob_teto():
             logger.warning('frete: teto diário de geocode Google atingido')
             return None
-        return google_maps.geocode(texto)         # remoto + cacheia sucesso
+        # geocode_preciso: só devolve quando o Google achou o ENDEREÇO (não o
+        # centroide da cidade) — senão None e cai na cadeia grátis (com guards).
+        return google_maps.geocode_preciso(texto)
     except Exception:  # noqa: BLE001 — geocode nunca pode quebrar o frete
         logger.exception('frete: geocode Google falhou pra %r', texto[:80])
         return None
