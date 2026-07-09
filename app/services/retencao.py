@@ -45,6 +45,7 @@ def executar_limpeza(dry_run=False):
     from app.extensions import db
     from app.models import (
         ChatbotConversa,
+        FreteSensor,
         SlackEventoProcessado,
         VigiaVeredito,
         ZapiBotEventoProcessado,
@@ -68,6 +69,10 @@ def executar_limpeza(dry_run=False):
          SlackEventoProcessado.processado_em, cfg['RETENCAO_EVENTOS_DIAS']),
         ('zapi_bot_evento_processado', ZapiBotEventoProcessado,
          ZapiBotEventoProcessado.processado_em, cfg['RETENCAO_EVENTOS_DIAS']),
+        # Sensor do frete: guarda PII (endereço/contato do cliente) — poda por
+        # LGPD (09/07/2026). É log operacional, não venda.
+        ('frete_sensor', FreteSensor, FreteSensor.criado_em,
+         cfg['RETENCAO_FRETE_SENSOR_DIAS']),
     ]
 
     for nome, modelo, coluna, dias in alvos_db:
