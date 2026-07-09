@@ -335,14 +335,24 @@ def reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
     NF autorizada — a mensagem AVISA que precisa correcao manual no Tiny.
 
     Retorna (ok, mensagem). Minimo 1 por item (pra zerar/cancelar, usar o
-    'Reembolsar e cancelar'). Se o refund falhar, ABORTA sem tocar estoque/BD."""
+    'Reembolsar e cancelar'). Se o refund falhar, ABORTA sem tocar estoque/BD.
+
+    CONCORRENCIA (dinheiro, peso especial): LOCK pessimista no pedido antes de
+    tudo — sem ele, duplo submit / dois workers gunicorn liam qtd=2, ambos
+    passavam a guarda e davam DOIS refunds parciais + estorno/rebaixa em dobro.
+    Mesmo padrao do `_marcar_pago` (webhooks concorrentes). Sob a trava, a qtd e
+    RELIDA: o 2o request ve a qtd ja reduzida e a guarda o barra. SQLite: no-op.
+    (Retry sequencial APOS falha de commit segue o mesmo risco do
+    `reembolsar_pedido` — refund feito e nao persistido; commit aqui e simples.)"""
     from decimal import Decimal
 
+    db.session.refresh(pedido, with_for_update=True)
     if pedido.status != 'pago':
         return False, 'Só dá pra reduzir item de um pedido PAGO.'
     item = next((it for it in pedido.itens if it.id == item_id), None)
     if item is None:
         return False, 'Item não encontrado neste pedido.'
+    db.session.refresh(item)          # relê a qtd sob a trava (concorrente pode ter mudado)
     try:
         nova = int(nova_qtd)
     except (TypeError, ValueError):
