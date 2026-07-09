@@ -399,7 +399,10 @@ def criar_pedido(form, itens_raw, *, base=None):
         geo = endereco_txt
         if endereco_cep and endereco_cep not in geo:
             geo = f'{endereco_txt}, {endereco_cep}' if endereco_txt else endereco_cep
-        valor, dist, end_norm, erro_frete = _frete_para(modo, geo, base=base)
+        _contato = ' · '.join(p for p in (
+            f'{nome_dado} {sobrenome_dado}'.strip(), telefone, email) if p)
+        valor, dist, end_norm, erro_frete = _frete_para(
+            modo, geo, base=base, contato=_contato)
         if erro_frete:
             erros.append(erro_frete)
         else:
