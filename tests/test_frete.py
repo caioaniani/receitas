@@ -253,6 +253,37 @@ def test_geocodificar_texto_cidade_e_sinal_forte_sobre_postcode():
     assert geo is not None and abs(geo[0] - (-23.6261)) < 1e-3   # CEP torto ignorado
 
 
+def test_geocode_resgata_pelo_cep_quando_endereco_cai_no_homonimo():
+    """Caso real (09/07/2026) Rua Guararapes, Brooklin, CEP 04561-000: a
+    BrasilAPI conhece o CEP mas sem coords; "Rua Guararapes" é HOMÔNIMA
+    (Brooklin × Lapa) e as tentativas por texto caem na da Lapa (postcode
+    05079), corretamente rejeitada. O último recurso — geocodificar SÓ o CEP —
+    resgata a venda com o centroide do distrito, em vez de 'nao_encontrado'."""
+    brasilapi = _resp(200, {'street': 'Rua Guararapes',
+                            'neighborhood': 'Brooklin Paulista',
+                            'city': 'São Paulo',
+                            'location': {'coordinates': {}}})
+    lapa = _resp(200, [{'lat': '-23.5232', 'lon': '-46.7160',
+                        'display_name': 'Rua Guararapes, Lapa',
+                        'address': {'postcode': '05079-200'}}])   # sem city
+    centroide = _resp(200, [{'lat': '-23.5724', 'lon': '-46.6585',
+                             'display_name': '04561-000, Jardim Paulista',
+                             'address': {'postcode': '04561-000'}}])
+
+    def fake_get(url, **kw):
+        if 'brasilapi' in url:
+            return brasilapi
+        q = (kw.get('params') or {}).get('q', '')
+        return centroide if q.strip().startswith('04561-000') else lapa
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
+        r = frete.consultar_frete('Rua Guararapes, 225, Brooklin Paulista, '
+                                  'São Paulo, SP, 04561-000')
+    assert r['ok'] is True and r['fora_area'] is False
+    assert r['valor'] == 20.0                     # centroide ~4,6 km
+    assert r['distancia_km'] < 6                   # Brooklin, não a Lapa (8,7)
+
+
 def test_geocode_sem_postcode_no_resultado_aceita():
     """OSM sem postcode no candidato: o check é só contra divergência
     POSITIVA — sem dado, aceita (comportamento antigo preservado)."""
