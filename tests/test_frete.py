@@ -230,28 +230,27 @@ def test_geocode_aceita_cidade_certa_mesmo_com_cep_torto_no_osm():
     assert 10 < r['distancia_km'] < 15           # ~12 km, dentro dos 25
 
 
-def test_geocode_rejeita_cidade_errada_com_cep_torto():
-    """O outro lado da moeda: se a cidade do candidato DIVERGE da resolvida,
-    rejeita mesmo que o postcode do OSM 'bata' — a cidade é o sinal forte
-    (não reabre o Arujá por causa de um CEP coincidente)."""
-    brasilapi = _resp(200, {'street': 'Rua Qualquer', 'neighborhood': 'Centro',
-                            'city': 'São Paulo',
-                            'location': {'coordinates': {}}})
-    # Candidato em Arujá, mas com um postcode cujo prefixo coincide com o CEP
-    # pedido (01xxx) — só o check de cidade o barra.
-    nominatim = _resp(200, [{
-        'lat': '-23.3965', 'lon': '-46.3210',
-        'display_name': 'Rua Qualquer, Arujá',
-        'address': {'city': 'Arujá', 'state': 'São Paulo',
-                    'postcode': '01050-999'}}])
+def test_geocodificar_texto_cidade_e_sinal_forte_sobre_postcode():
+    """Unidade do check de sanidade — a cidade manda sobre o postcode:
+    - cidade divergente + postcode 'batendo' -> REJEITA (não reabre Arujá);
+    - cidade batendo + postcode divergente -> ACEITA (conserta São Caetano)."""
+    aruja = _resp(200, [{'lat': '-23.3965', 'lon': '-46.3210',
+                         'display_name': 'Rua Qualquer, Arujá',
+                         'address': {'city': 'Arujá', 'postcode': '01050-111'}}])
+    with patch('app.services.frete.requests.get', return_value=aruja):
+        geo = frete._geocodificar_texto(
+            'Rua Qualquer', ref={'cidade': 'São Paulo'}, cep_ref='01050000')
+    assert geo is None                     # cidade Arujá != São Paulo
 
-    def fake_get(url, **kw):
-        return brasilapi if 'brasilapi' in url else nominatim
-
-    with patch('app.services.frete.requests.get', side_effect=fake_get):
-        r = frete.consultar_frete('Rua Qualquer, Centro, São Paulo, 01050-000')
-    # Arujá barrado pela cidade -> nenhuma tentativa resolve -> nao_encontrado.
-    assert r == {'ok': False, 'erro': 'nao_encontrado'}
+    ok = _resp(200, [{'lat': '-23.6261', 'lon': '-46.5776',
+                      'display_name': 'Alameda Porcelana, São Caetano do Sul',
+                      'address': {'city': 'São Caetano do Sul',
+                                  'postcode': '08671-035'}}])
+    with patch('app.services.frete.requests.get', return_value=ok):
+        geo = frete._geocodificar_texto(
+            'Alameda Porcelana', ref={'cidade': 'São Caetano do Sul'},
+            cep_ref='09531150')
+    assert geo is not None and abs(geo[0] - (-23.6261)) < 1e-3   # CEP torto ignorado
 
 
 def test_geocode_sem_postcode_no_resultado_aceita():
