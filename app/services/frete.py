@@ -202,22 +202,85 @@ def simplificar_endereco(texto):
     return f'{base}, São Paulo'
 
 
-def _geocodificar_impl(endereco_ou_cep):
-    """Núcleo do geocode. Devolve `(geo, impreciso)`:
-    - `geo` = (lat, lng, rotulo) ou None;
-    - `impreciso` = True quando SÓ o CEP resolveu (centroide do distrito, o
-      último recurso) — sinaliza pro caller que o frete é um chute grosseiro.
+# ── Google Maps como fonte PRECISA (opt-in, com teto e kill-switch) ─────────
+#
+# Contexto (09/07/2026): a cadeia grátis (BrasilAPI+Nominatim) erra homônimo e
+# não tem coordenada de muitos CEPs — barra venda e, PIOR, manda a Lalamove pro
+# lugar errado. O Google (já usado no sistema pra rotas de entrega) é preciso a
+# nível de porta. Mas o /api/frete é PÚBLICO: por isso o Google entra com
+# TETO DIÁRIO (custo/abuso não pode disparar) + kill-switch + cache permanente
+# (paga 1x por endereço) + FALLBACK pra cadeia grátis se faltar/cair.
 
-    Cadeia (endereços de e-commerce vêm com complemento/bairro que derrubam
-    geocoder): 0. "lat,lng" colado; 1. BrasilAPI pelo CEP; 2. texto completo;
-    3. simplificado (rua+número+cidade); 4. rua+cidade (postcode estrito);
-    5. só o CEP (centroide — IMPRECISO)."""
+def _google_frete_ativo():
+    from flask import current_app
+    return str(current_app.config.get('FRETE_GOOGLE', '1')).strip().lower() \
+        not in ('0', 'false', 'no', '')
+
+
+def _google_sob_teto():
+    """Reserva 1 slot do teto DIÁRIO de chamadas REMOTAS ao Google (cost cap).
+    Best-effort via AppConfig (sobrevive a deploy). Devolve True se cabe."""
+    from flask import current_app
+
+    from app.extensions import db
+    from app.models import AppConfig
+    from app.utils import hoje
+    try:
+        teto = int(current_app.config.get('FRETE_GOOGLE_MAX_DIA') or 500)
+    except (TypeError, ValueError):
+        teto = 500
+    hoje_iso = hoje().isoformat()
+    dia, _, n = (AppConfig.get('frete_google_dia') or '').partition('|')
+    n = int(n) if n.isdigit() and dia == hoje_iso else 0
+    if n >= teto:
+        return False
+    AppConfig.set('frete_google_dia', f'{hoje_iso}|{n + 1}')
+    db.session.commit()
+    return True
+
+
+def _google_geocode(texto):
+    """Google (cacheado) pro frete. (lat, lng) ou None. Cache HIT não consome
+    o teto (custo zero); só a chamada REMOTA conta. Nunca levanta."""
+    if not texto or not _google_frete_ativo():
+        return None
+    try:
+        from app.models import GeocodeCache
+        from app.services import google_maps
+        chave = google_maps._normalizar_chave(texto)
+        if chave:
+            cache = GeocodeCache.query.filter_by(chave=chave).first()
+            if cache and cache.lat is not None \
+                    and (cache.fonte or '').startswith('google'):
+                return cache.lat, cache.lng      # hit: sem custo, sem teto
+        if not _google_sob_teto():
+            logger.warning('frete: teto diário de geocode Google atingido')
+            return None
+        return google_maps.geocode(texto)         # remoto + cacheia sucesso
+    except Exception:  # noqa: BLE001 — geocode nunca pode quebrar o frete
+        logger.exception('frete: geocode Google falhou pra %r', texto[:80])
+        return None
+
+
+def _geocodificar_impl(endereco_ou_cep):
+    """Núcleo do geocode. Devolve `(geo, impreciso, fonte)`:
+    - `geo` = (lat, lng, rotulo) ou None;
+    - `impreciso` = True quando SÓ o CEP resolveu (centroide do distrito);
+    - `fonte` in {'latlng','google','gratis','cep_centroide'} — pro sensor.
+
+    Ordem: 0. "lat,lng" colado; 1. GOOGLE (preciso, se ativo); depois a cadeia
+    grátis como fallback: 2. BrasilAPI; 3. texto; 4. simplificado; 5. rua+cidade
+    (postcode estrito); 6. só o CEP (centroide — IMPRECISO)."""
     texto = (endereco_ou_cep or '').strip()
     if not texto:
-        return None, False
+        return None, False, None
     m = re.match(r'^(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$', texto)
     if m:
-        return (float(m.group(1)), float(m.group(2)), texto), False
+        return (float(m.group(1)), float(m.group(2)), texto), False, 'latlng'
+    # Google primeiro (preciso a nível de porta; conserta homônimo e Lalamove).
+    g = _google_geocode(texto)
+    if g:
+        return (g[0], g[1], texto), False, 'google'
     geo = None
     ref = None
     cep = _extrair_cep(texto)
@@ -226,7 +289,7 @@ def _geocodificar_impl(endereco_ou_cep):
         if cep_geo:
             ref = cep_geo[3]                     # {'cidade','bairro'} do Correios
             if cep_geo[0] is not None:
-                return cep_geo[:3], False        # BrasilAPI já tinha coordenada
+                return cep_geo[:3], False, 'gratis'   # BrasilAPI tinha coord
             # BrasilAPI conhece o CEP mas nao tem coordenada: geocodifica o
             # endereço resolvido (rua + bairro + cidade), mais preciso que o
             # texto cru. Valida por CIDADE (barra Arujá) — o rótulo carrega o
@@ -265,18 +328,18 @@ def _geocodificar_impl(endereco_ou_cep):
         # Marca IMPRECISO pro caller alertar o dono (decisão do dono 09/07).
         geo = _geocodificar_texto(_formatar_cep(cep), cep_ref=cep)
         if geo and geo[0] is not None:
-            return geo, True
+            return geo, True, 'cep_centroide'
     if not geo or geo[0] is None:
         logger.warning('geocodificacao falhou em todas as tentativas: %r',
                        texto[:200])
-        return None, False
-    return geo, False
+        return None, False, None
+    return geo, False, 'gratis'
 
 
 def geocodificar(endereco_ou_cep):
     """(lat, lng, rotulo) pra um CEP ou endereço livre, ou None. Wrapper
-    compatível (sem o flag de imprecisão) — usado pelo bot e pela Lalamove."""
-    geo, _impreciso = _geocodificar_impl(endereco_ou_cep)
+    compatível — usado pelo bot e pela Lalamove (que ganham o Google junto)."""
+    geo, _impreciso, _fonte = _geocodificar_impl(endereco_ou_cep)
     return geo
 
 
