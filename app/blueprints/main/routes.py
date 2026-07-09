@@ -3745,6 +3745,29 @@ def loja_online_pedido_cancelar(codigo):
     return _detalhe_redirect(codigo)
 
 
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/reduzir-item', methods=['POST'])
+@owner_required
+def loja_online_pedido_reduzir_item(codigo):
+    """Reduz a quantidade de UM item de um pedido PAGO (cliente comprou 2 e era
+    1). Owner-only: mexe em DINHEIRO (refund parcial) + estoque + plano. NF fica
+    manual (Tiny só emite). Ver `loja_pagamento.reduzir_item_pedido_pago`."""
+    from flask import flash
+
+    from app.models import PedidoOnline
+    from app.services import loja_pagamento
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    try:
+        item_id = int(request.form.get('item_id') or 0)
+        nova_qtd = int(request.form.get('nova_qtd') or 0)
+    except (TypeError, ValueError):
+        flash('Parâmetros inválidos.', 'warning')
+        return _detalhe_redirect(codigo)
+    ok, msg = loja_pagamento.reduzir_item_pedido_pago(
+        p, item_id, nova_qtd, usuario_id=current_user.id)
+    flash(f'{p.codigo}: {msg}', 'success' if ok else 'danger')
+    return _detalhe_redirect(codigo)
+
+
 # Transições válidas de status pra UI (admin). 'cancelado' tem rota própria
 # (cancelar) porque envolve reembolso/estorno; aqui só os avanços manuais.
 _STATUS_AVANCO = ('em_preparo', 'a_caminho', 'entregue')
