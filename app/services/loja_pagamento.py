@@ -44,6 +44,13 @@ logger = logging.getLogger(__name__)
 # Anesio Pinto Rosa`) — mantém a paridade quando virarmos a chave.
 _LOJA_SITE_NOME_DEFAULT = 'Loja Anesio Pinto Rosa'
 
+# Mensagem CLARA pro cliente quando o cartão é recusado (o motivo técnico do
+# emissor fica em `PagamentoOnline.erro`, pro admin). Antes vazava "gateway
+# 200:" pro cliente (08/07/2026).
+_MSG_CARTAO_RECUSADO = (
+    'Seu cartão foi recusado pelo banco emissor. Tente outro cartão, confira '
+    'os dados, ou pague por Pix. Se continuar, fale com o seu banco.')
+
 # Travas
 assert 'venda_site' in VENDA_TIPOS_LOJA
 assert 'venda_site_sem_estoque' in VENDA_TIPOS_LOJA
@@ -130,10 +137,15 @@ def iniciar_cartao(pedido, card_token, parcelas=1, billing=None):
     res = pagarme.criar_pedido_cartao(pedido, card_token, parcelas=parcelas,
                                       billing=billing)
     if not res.get('ok'):
+        # DUAS audiências: o ADMIN vê o motivo técnico real (do Pagar.me /
+        # emissor, ex: "Transação não autorizada... (código 1000)"); o CLIENTE
+        # vê uma mensagem CLARA e acionável — sem jargão tipo "gateway 200:".
         pag.status = 'falhou'
         pag.erro = res.get('erro') or 'falha desconhecida'
+        pag.pagarme_order_id = res.get('order_id')
+        pag.pagarme_charge_id = res.get('charge_id')
         db.session.commit()
-        return None, [res.get('erro') or 'Pagamento recusado pelo cartão.']
+        return None, [_MSG_CARTAO_RECUSADO]
 
     pag.pagarme_order_id = res.get('order_id')
     pag.pagarme_charge_id = res.get('charge_id')
@@ -142,9 +154,9 @@ def iniciar_cartao(pedido, card_token, parcelas=1, billing=None):
     # métodos — evita race com o webhook).
     if (res.get('status') or '').lower() in ('failed', 'refused', 'canceled'):
         pag.status = 'falhou'
-        pag.erro = f'cartão recusado ({res.get("status")})'
+        pag.erro = res.get('erro') or f'cartão recusado ({res.get("status")})'
         db.session.commit()
-        return None, ['Pagamento recusado pelo cartão.']
+        return None, [_MSG_CARTAO_RECUSADO]
     db.session.commit()
     return pag, []
 
