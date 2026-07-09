@@ -527,13 +527,38 @@ def _marcar_estornado(pedido, pagamento):
     return True
 
 
+def _cobranca_ja_estornada_no_gateway(pagamento):
+    """True se o Pagar.me CONFIRMA que a cobrança não está mais paga (cancelada/
+    reembolsada). Usado quando `cancelar_charge` recusa com "This charge can not
+    be canceled" (HTTP 412) — normalmente porque o dono já estornou no PAINEL do
+    Pagar.me. Nesse caso o dinheiro já voltou e faz sentido sincronizar o estorno
+    LOCAL (estoque/plano/status) em vez de travar.
+
+    Fail-CLOSED (dinheiro, peso especial): qualquer dúvida — sem order_id,
+    gateway fora, ou ainda 'paid' — retorna False, pra NUNCA creditar estoque
+    com o dinheiro ainda preso no cartão do cliente."""
+    if not pagamento or not pagamento.pagarme_order_id:
+        return False
+    consulta = pagarme.consultar_order(pagamento.pagarme_order_id)
+    if not consulta.get('ok') or consulta.get('pago'):
+        return False
+    return consulta.get('charge_status') in (
+        'canceled', 'cancelled', 'refunded', 'voided', 'chargedback')
+
+
 def reembolsar_pedido(pedido):
     """Reembolso manual (admin). Cancela/estorna a cobrança no Pagar.me e,
     se já estava pago, devolve o estoque. Devolve (ok, mensagem).
 
     Idempotente o suficiente: se o pedido já está cancelado, no-op. O
     webhook 'charge.refunded' do Pagar.me também chega depois — como
-    _marcar_estornado checa status, não duplica."""
+    _marcar_estornado checa status, não duplica.
+
+    Cobrança JÁ estornada no gateway (o dono cancelou no painel do Pagar.me e a
+    cobrança não aceita novo cancelamento — HTTP 412): em vez de travar, CONFIRMA
+    no gateway que o dinheiro voltou e SINCRONIZA o estorno local (caso real
+    08/07/2026, pedido 6537F0EB). Só sincroniza com a confirmação do gateway —
+    se ele ainda mostrar a cobrança ativa, o erro sobe."""
     if pedido.status == 'cancelado':
         return True, 'Pedido já estava cancelado.'
     # Acha a cobrança paga (ou a última com charge_id) pra estornar no gateway.
@@ -541,12 +566,26 @@ def reembolsar_pedido(pedido):
     charge_id = (pago.pagarme_charge_id if pago else None) or next(
         (p.pagarme_charge_id for p in pedido.pagamentos
          if p.pagarme_charge_id), None)
+    ja_estornado = False
     if charge_id:
         res = pagarme.cancelar_charge(charge_id)
         if not res.get('ok'):
-            return False, f'Pagar.me recusou o estorno: {res.get("erro")}'
+            if not _cobranca_ja_estornada_no_gateway(pago):
+                return False, (
+                    f'Pagar.me recusou o estorno: {res.get("erro")}. Se você '
+                    f'JÁ cancelou/reembolsou no painel do Pagar.me, aguarde uns '
+                    f'segundos e clique de novo — o sistema sincroniza o '
+                    f'cancelamento aqui quando o gateway confirmar o estorno.')
+            ja_estornado = True
+            logger.warning('reembolsar_pedido %s: cobrança já estornada no '
+                           'gateway (%s) — sincronizando estorno local só aqui',
+                           pedido.codigo, res.get('erro'))
     _marcar_estornado(pedido, pago)
     db.session.commit()
+    if ja_estornado:
+        return True, ('A cobrança já estava estornada no Pagar.me — sincronizei '
+                      'o cancelamento aqui (estoque e plano devolvidos). Confira '
+                      'a NF no Tiny se já foi emitida.')
     return True, 'Pedido reembolsado e estornado.'
 
 
