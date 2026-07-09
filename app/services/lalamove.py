@@ -177,6 +177,11 @@ def cotar(endereco_destino, tipo_veiculo):
     from app.services import frete
     destino = frete.geocodificar(endereco_destino)
     if not destino:
+        # Sensor: sem coordenada não dá pra cotar/despachar a corrida — o dono
+        # precisa saber (motoboy não sai). Best-effort.
+        from app.services import frete_sensor
+        frete_sensor.registrar('lalamove', 'lalamove_falhou',
+                               endereco=endereco_destino)
         return {'ok': False, 'erro': 'não encontrei o endereço de entrega no '
                                      'mapa — confira/edite o endereço'}
     olat, olng, oend = origem
