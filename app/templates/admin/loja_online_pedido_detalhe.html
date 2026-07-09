@@ -34,6 +34,16 @@
   </div>
 </div>
 
+{% if estoque_reduzido and p.tiny_nota_fiscal_id %}
+<div class="alert alert-warning py-2 mb-3">
+  <strong>⚠️ Quantidade corrigida após a NF.</strong> Este pedido teve item(ns)
+  reduzido(s) depois que a NF <code>{{ p.tiny_nota_fiscal_id }}</code> foi
+  emitida. O sistema NÃO cancela NF autorizada — <strong>corrija a NF
+  manualmente no Tiny</strong> (cancelar e reemitir com a quantidade certa, ou
+  emitir NF de devolução).
+</div>
+{% endif %}
+
 <div class="row g-3">
   <div class="col-md-7">
     <div class="card mb-3">
