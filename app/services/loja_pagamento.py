@@ -248,12 +248,17 @@ def _estornar_estoque(pedido):
     """Reverte a baixa do site pelo MOTOR UNICO (`baixa_venda.estornar_venda`):
     inteiros pela referencia (cesta inclusa, via prefixo), fracoes pelo
     DebitoEstoqueMov. O mov `venda_site_estorno` mantem a quantidade NEGATIVA
-    (convencao historica do site — ver `_SINAL_ESTORNO`)."""
+    (convencao historica do site — ver `_SINAL_ESTORNO`).
+
+    Reverte a VERSAO ATUAL da baixa (`_versao_estoque_atual`): pedido que teve
+    a quantidade reduzida (`reduzir_item_pedido_pago`) foi rebaixado sob uma
+    versao nova; o cancelamento total credita SO essa ultima baixa (as versoes
+    anteriores ja foram estornadas na reducao). Pedido nunca reduzido = v0 =
+    referencia original ('Site #<codigo>'), comportamento identico ao de antes."""
     from app.services.baixa_venda import estornar_venda
     loja = _loja_baixa(pedido)
-    res = estornar_venda('site', f'site:{pedido.codigo}',
-                         f'Site #{pedido.codigo}',
-                         loja_id=loja.id if loja else None)
+    ref, pref = _ref_estoque(pedido.codigo, _versao_estoque_atual(pedido))
+    res = estornar_venda('site', pref, ref, loja_id=loja.id if loja else None)
     return res['revertido_inteiros'] + res['revertido_fracoes']
 
 
