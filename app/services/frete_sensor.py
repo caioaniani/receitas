@@ -42,7 +42,8 @@ CUSTO_GOOGLE_USD = 0.005
 
 # Desfechos que valem registrar (os que indicam risco/uso). Sucesso normal da
 # cadeia grátis NÃO entra (seria ruído).
-DESFECHOS = ('barrado', 'impreciso', 'resolvido_google', 'lalamove_falhou')
+DESFECHOS = ('barrado', 'impreciso', 'fora_area', 'resolvido_google',
+             'lalamove_falhou')
 
 
 def _ativo():
