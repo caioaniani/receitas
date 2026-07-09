@@ -107,6 +107,57 @@ def geocode(endereco):
     return None
 
 
+def geocode_preciso(endereco):
+    """Como geocode(), mas devolve (lat, lng) SÓ quando o Google achou o
+    ENDEREÇO de fato — `location_type` ROOFTOP/RANGE_INTERPOLATED/
+    GEOMETRIC_CENTER e NÃO `partial_match`. Centroide de cidade (APPROXIMATE)
+    ou match parcial → None, pra o frete cair na cadeia grátis (que tem os
+    guards de homônimo) em vez de cobrar frete de um ponto aproximado como se
+    fosse preciso (09/07/2026). Reusa o mesmo cache do geocode(): fonte
+    'google' = preciso; 'google_aprox' = aproximado (não re-bate a API)."""
+    if not endereco:
+        return None
+    chave = _normalizar_chave(endereco)
+    if not chave:
+        return None
+    cache = GeocodeCache.query.filter_by(chave=chave).first()
+    if cache and cache.lat is not None:
+        if cache.fonte == 'google':
+            return cache.lat, cache.lng          # hit preciso
+        if cache.fonte == 'google_aprox':
+            return None                          # hit aproximado (sem re-bater)
+    key = _api_key()
+    if not key:
+        return None
+    try:
+        r = requests.get(
+            'https://maps.googleapis.com/maps/api/geocode/json',
+            params={'address': endereco, 'key': key,
+                    'components': 'country:BR', 'language': 'pt-BR'},
+            timeout=10)
+        if r.status_code != 200 or (r.json() or {}).get('status') != 'OK':
+            return None
+        res0 = (r.json().get('results') or [None])[0]
+        if not res0:
+            return None
+        geom = res0.get('geometry') or {}
+        loc = geom.get('location') or {}
+        preciso = geom.get('location_type') in (
+            'ROOFTOP', 'RANGE_INTERPOLATED', 'GEOMETRIC_CENTER') \
+            and not res0.get('partial_match')
+        coords = (float(loc['lat']), float(loc['lng']))
+        if not cache:
+            cache = GeocodeCache(chave=chave)
+            db.session.add(cache)
+        cache.lat, cache.lng = coords
+        cache.fonte = 'google' if preciso else 'google_aprox'
+        db.session.commit()
+        return coords if preciso else None
+    except (requests.RequestException, ValueError, KeyError, TypeError) as e:
+        logger.warning('geocode_preciso erro pra %r: %s', endereco[:80], e)
+        return None
+
+
 def geocode_em_lote(enderecos, max_workers=8):
     """Geocoda lista de enderecos em paralelo. Retorna dict {endereco: (lat, lng) | None}.
     Usa cache. Persiste no banco em batch (commits parciais)."""
