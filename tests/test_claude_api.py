@@ -336,3 +336,48 @@ def test_pedidos_dia_lista_todos_os_status(app):
 def test_pedidos_dia_exige_token(app):
     app.config['CLAUDE_API_TOKEN'] = TOKEN
     assert app.test_client().get('/api/claude/pedidos-dia').status_code == 401
+
+
+def test_frete_debug_roda_etapas_sem_500(app, monkeypatch):
+    """A sonda /frete-debug desempacota o retorno das etapas do geocode. Trava
+    o 500 de 09/07/2026: `_geocodificar_cep` passou a devolver 4 tuplas (com a
+    ref de cidade) e o `_etapa` desempacotava 3 → ValueError → 500 em prod."""
+    import requests
+
+    from app.services import frete as frete_svc
+
+    class _Resp:
+        status_code = 200
+
+        def __init__(self, payload):
+            self._p = payload
+
+        def json(self):
+            return self._p
+
+    # BrasilAPI resolve o CEP mas SEM coordenada (caminho da 4-tupla no _etapa);
+    # Nominatim devolve o nó certo. Nenhuma chamada real de rede.
+    def fake_get(url, **kw):
+        if 'brasilapi' in url:
+            return _Resp({'street': 'Alameda Porcelana',
+                          'neighborhood': 'Cerâmica',
+                          'city': 'São Caetano do Sul',
+                          'location': {'coordinates': {}}})
+        return _Resp([{'lat': '-23.6261', 'lon': '-46.5776',
+                       'display_name': 'Alameda Porcelana, São Caetano do Sul',
+                       'address': {'city': 'São Caetano do Sul',
+                                   'postcode': '08671-035'}}])
+
+    monkeypatch.setattr(requests, 'get', fake_get)
+    monkeypatch.setattr(frete_svc.requests, 'get', fake_get)
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    resp = app.test_client().get(
+        '/api/claude/frete-debug?q=Alameda Porcelana, São Caetano do Sul, 09531-150',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True
+    # a etapa da BrasilAPI (4-tupla) foi montada sem estourar
+    assert d['etapas']['brasilapi_cep']['coords'] is None
+    # e o oficial cotou (cidade bate, ignora o CEP torto do OSM)
+    assert d['oficial']['ok'] is True and d['oficial']['fora_area'] is False
