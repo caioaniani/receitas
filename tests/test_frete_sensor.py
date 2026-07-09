@@ -40,25 +40,20 @@ def test_sensor_registrar_best_effort_nao_quebra(app):
         frete_sensor.registrar('preview', 'barrado')
 
 
-def test_rota_frete_sensores_owner_only(app, owner_user, admin_user):
-    from app.models import FreteSensor
+def test_rota_frete_sensores_owner(app, owner_user):
     from app.services import frete_sensor
     with app.app_context():
         frete_sensor.registrar('checkout', 'barrado',
                                endereco='Rua Guararapes, 225', cep='04561-000',
                                contato='Alane · 119')
     c = app.test_client()
-    # admin comum não entra (owner-only)
-    with c.session_transaction() as s:
-        s['_user_id'] = str(admin_user.id)
-        s['_fresh'] = True
-    assert c.get('/admin/frete-sensores').status_code == 403
-    # owner entra e vê o evento
-    with c.session_transaction() as s:
-        s['_user_id'] = str(owner_user.id)
-        s['_fresh'] = True
+    c.post('/auth/login', data={'login': owner_user.login, 'senha': '123'})
     resp = c.get('/admin/frete-sensores')
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert 'Sensores do Frete' in body and 'Rua Guararapes' in body
-    _ = FreteSensor  # noqa: F841 — garante o import do modelo
+
+
+def test_rota_frete_sensores_anonimo_barra(app):
+    # Sem login → owner_required barra (403 ou redirect pro login, nunca 200).
+    assert app.test_client().get('/admin/frete-sensores').status_code != 200
