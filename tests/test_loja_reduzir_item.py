@@ -169,6 +169,80 @@ def test_devolve_ao_plano_do_dia(app):
         assert plano.qtd_reservada == reservado_antes - 1   # devolveu 1
 
 
+def test_cesta_fracionaria_nao_deixa_fracao_fantasma(app):
+    """Revisão 08/07: cesta com componente FRACIONÁRIO cria uma versão de
+    baixa só-fracionária (sem mov inteiro). `_versao_estoque_atual` tem que
+    detectá-la pelo DebitoEstoqueMov, senão o cancelamento total usa a versão
+    errada e deixa fração pendente pra sempre."""
+    from app.extensions import db
+    from app.models import (
+        DebitoEstoque,
+        EstoqueLoja,
+        PagamentoOnline,
+        ProdutoItem,
+        Receita,
+    )
+    from app.services import loja_estoque_reserva, loja_pagamento
+    with app.app_context():
+        loja = _site_loja(db)
+        # receita componente + linha de estoque (pra baixa "ver" a linha)
+        rec = Receita(nome='Recheio', categoria='Cremes', rendimento_qtd=1,
+                      rendimento_unidade='un', peso_base=100.0)
+        cesta = _produto(db, nome='Kit Fracionado', preco=50.0)
+        db.session.add(rec)
+        db.session.flush()
+        db.session.add(ProdutoItem(produto_id=cesta.id, tipo='receita',
+                                   receita_id=rec.id, item_nome=rec.nome,
+                                   quantidade=0.2))    # 0.2 por cesta
+        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=rec.id,
+                                   quantidade=10))
+        db.session.commit()
+
+        # pedido pago de 2 cestas -> 2×0.2 = 0.4 fração (nenhum inteiro)
+        from decimal import Decimal
+
+        from app.models import Cliente, PedidoOnline, PedidoOnlineItem
+        cli = Cliente(nome='F', email='frac@x.com')
+        db.session.add(cli)
+        db.session.commit()
+        p = PedidoOnline(codigo='FRAC0001', cliente_id=cli.id, nome_cliente='F',
+                         email_cliente=cli.email, modo_entrega='retirada',
+                         loja_retirada_id=loja.id, status='pago',
+                         subtotal=Decimal('0'), frete_valor=Decimal('0'),
+                         valor_total=Decimal('0'))
+        db.session.add(p)
+        db.session.flush()
+        p.itens.append(PedidoOnlineItem(
+            kind='produto', produto_id=cesta.id, nome=cesta.nome,
+            preco_unitario=Decimal('50'), quantidade=2, subtotal=Decimal('100')))
+        p.recalcular_total()
+        db.session.commit()
+        loja_estoque_reserva.consumir(p, loja_id=loja.id)
+        db.session.add(PagamentoOnline(pedido_id=p.id, metodo='cartao',
+                                       valor=p.valor_total, status='pago',
+                                       pagarme_charge_id='ch_frac'))
+        db.session.commit()
+
+        deb = DebitoEstoque.query.filter_by(loja_id=loja.id,
+                                            receita_id=rec.id).first()
+        assert abs((deb.fracao_pendente or 0) - 0.4) < 1e-6
+
+        # reduz 2->1: sobra 0.2 pendente, sob a versão nova (só-fração)
+        with patch('app.services.pagarme.cancelar_charge',
+                   return_value={'ok': True}):
+            loja_pagamento.reduzir_item_pedido_pago(p, p.itens[0].id, 1)
+        db.session.refresh(deb)
+        assert abs((deb.fracao_pendente or 0) - 0.2) < 1e-6
+        assert loja_pagamento._versao_estoque_atual(p) == 1   # detecta a fração
+
+        # cancela tudo: a versão atual (1) tem que reverter a fração -> ZERO
+        with patch('app.services.pagarme.cancelar_charge',
+                   return_value={'ok': True}):
+            loja_pagamento.reembolsar_pedido(p)
+        db.session.refresh(deb)
+        assert abs(deb.fracao_pendente or 0) < 1e-6           # sem fantasma
+
+
 # ── Guardas ────────────────────────────────────────────────────────────
 
 def test_guarda_refund_falha_nao_mexe_em_nada(app):
