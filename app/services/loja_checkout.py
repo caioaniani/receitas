@@ -257,7 +257,7 @@ def _montar_endereco(form):
     return ', '.join(p for p in partes if p)
 
 
-def _frete_para(modo, endereco, base=None):
+def _frete_para(modo, endereco, base=None, contato=None):
     """Calcula o frete no servidor (autoritativo). Devolve
     (valor:Decimal, distancia_km, endereco_norm, erro|None)."""
     if modo == 'retirada':
@@ -266,6 +266,11 @@ def _frete_para(modo, endereco, base=None):
         return None, None, None, 'Informe o endereço de entrega.'
     r = frete_svc.consultar_frete(endereco)
     if not r.get('ok'):
+        if r.get('erro') == 'nao_encontrado':
+            # Cliente prestes a comprar e barrado por endereço não localizado:
+            # alerta o dono COM o contato pra chamar e fechar a venda.
+            from app.services import loja_alerta
+            loja_alerta.alertar_endereco_falho(endereco, contato=contato)
         return None, None, None, frete_svc.mensagem_erro(r.get('erro'))
     if r.get('fora_area'):
         return None, r.get('distancia_km'), r.get('endereco'), \
