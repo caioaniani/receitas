@@ -897,7 +897,13 @@ def api_frete():
         geo = f'{endereco}, {cep}' if endereco else cep
     if not geo:
         return jsonify(ok=False, erro='Informe o endereço ou o CEP.'), 400
-    return jsonify(frete_svc.consultar_frete(geo))
+    res = frete_svc.consultar_frete(geo)
+    if not res.get('ok'):
+        # Traduz o código de máquina ('nao_encontrado') pra mensagem — o JS
+        # mostra `data.erro` cru pro cliente (checkout.js). Mesma fonte que o
+        # POST do checkout usa (loja_checkout._frete_para).
+        res = dict(res, erro=frete_svc.mensagem_erro(res.get('erro')))
+    return jsonify(res)
 
 
 @loja_bp.route('/pedido/<codigo>/nf')
