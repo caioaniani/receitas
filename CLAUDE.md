@@ -1051,11 +1051,16 @@ em `loja_alerta.py`: `nao_encontrado`/`impreciso`/`fora_area`/`lalamove` — cha
 de dedup inclui o motivo). Duas lacunas fechadas: (1) **Lalamove** que nao acha
 o destino manda WhatsApp na hora (`motivo='lalamove'`) alem do sensor —
 motoboy nao sai, o dono precisa saber; (2) **fora da area** registra no painel
-SEMPRE (`fora_area`), mas so pinga WhatsApp quando ficou PERTO da borda —
+SEMPRE (`fora_area`), e pinga WhatsApp quando ficou PERTO da borda —
 `distancia_km <= RAIO_MAX_KM + MARGEM_ALERTA_FORA_KM` (25+5=30km; "quase
-comprou"). Muito longe (outra cidade) = so painel, sem inundar o WhatsApp.
-Ordem dos ramos importa: `fora_area` e checado ANTES de `impreciso` (o dict do
-fora_area tambem carrega `impreciso=True` — sem a ordem, dispararia os dois).
+comprou") — OU quando o km e INCERTO (`impreciso=True`, coordenada do centroide
+do CEP: o endereco real pode estar DENTRO da area, entao alerta mesmo alem dos
+30km — decisao do dono pos-revisao). Longe E preciso (outra cidade, fonte
+google/gratis exata) = so painel, sem inundar o WhatsApp. O alerta `lalamove` e
+ISENTO do teto/hora (pedido pago, caminho interno — nao pode ser suprimido por
+ruido do endpoint publico). Ordem dos ramos importa: `fora_area` e checado
+ANTES de `impreciso` (o dict do fora_area tambem carrega `impreciso=True` — sem
+a ordem, dispararia os dois).
 
 **`consultar_frete` agora devolve `fonte` e `impreciso`**; `api_frete` e
 `_frete_para` alertam+sensoreiam nos casos de risco. NUNCA remover o Google do
