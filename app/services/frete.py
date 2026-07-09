@@ -241,10 +241,13 @@ def _google_sob_teto():
 
 def _google_geocode(texto):
     """Google (cacheado) pro frete. (lat, lng) ou None. Cache HIT não consome
-    o teto (custo zero); só a chamada REMOTA conta. Nunca levanta."""
-    if not texto or not _google_frete_ativo():
+    o teto (custo zero); só a chamada REMOTA conta. Nunca levanta — fora de app
+    context (thread do bot) ou sem chave, retorna None e cai na cadeia grátis."""
+    if not texto:
         return None
     try:
+        if not _google_frete_ativo():
+            return None
         from app.models import GeocodeCache
         from app.services import google_maps
         chave = google_maps._normalizar_chave(texto)
