@@ -252,10 +252,15 @@ def geocodificar(endereco_ou_cep):
         rua = texto.split(',')[0].strip()
         cidade = (ref or {}).get('cidade') or 'São Paulo'
         if rua:
-            geo = _geocodificar_texto(f'{rua}, {cidade}', cep_ref=cep)
+            # postcode ESTRITO: só aceita se o OSM confirmar o distrito (match
+            # positivo de CEP) — senão é seguro cair no CEP-só abaixo, em vez
+            # de arriscar o homônimo da mesma cidade.
+            geo = _geocodificar_texto(f'{rua}, {cidade}', cep_ref=cep,
+                                      postcode_estrito=True)
     if (not geo or geo[0] is None) and cep:
         # ÚLTIMO RECURSO: geocodifica só o CEP (centroide do distrito). Menos
-        # preciso (pode superestimar o frete), mas RESGATA a venda quando a
+        # preciso — pode super OU subestimar o frete e, na borda de um CEP
+        # grande, inverter o "fora da área" — mas RESGATA a venda quando a
         # BrasilAPI não tem coordenada e nenhuma variante do endereço resolve.
         geo = _geocodificar_texto(_formatar_cep(cep), cep_ref=cep)
     if not geo or geo[0] is None:
