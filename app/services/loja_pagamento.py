@@ -257,6 +257,145 @@ def _estornar_estoque(pedido):
     return res['revertido_inteiros'] + res['revertido_fracoes']
 
 
+def _versao_estoque_atual(pedido):
+    """Versao atual da baixa de estoque do pedido, derivada das REFERENCIAS dos
+    movimentos `venda_site` (sem coluna nova). A reducao de quantidade de um
+    pedido pago (`reduzir_item_pedido_pago`) rebaixa sob 'Site #<codigo>#v<N>';
+    a versao atual e o maior N presente (0 = baixa original, nunca reduzida).
+
+    Assim o estorno (cancelamento total futuro) reverte SO a ultima baixa, sem
+    creditar em dobro as versoes ja estornadas — reaproveitando o motor unico
+    (`baixa_venda.estornar_venda`) por referencia, sem tocar no ledger antigo."""
+    import re
+
+    from app.models import MovEstoqueLoja
+    prefixo = f'Site #{pedido.codigo}#v'
+    movs = (db.session.query(MovEstoqueLoja.referencia)
+            .filter(MovEstoqueLoja.tipo == 'venda_site',
+                    MovEstoqueLoja.referencia.like(f'Site #{pedido.codigo}%'))
+            .all())
+    maxv = 0
+    for (ref,) in movs:
+        if ref and ref.startswith(prefixo):
+            m = re.match(r'(\d+)', ref[len(prefixo):])
+            if m:
+                maxv = max(maxv, int(m.group(1)))
+    return maxv
+
+
+def _ref_estoque(codigo, versao):
+    """(referencia, pedido_ref) da baixa de estoque numa versao. v0 = formato
+    ORIGINAL (retrocompativel com pedidos ja baixados antes desta feature)."""
+    if versao <= 0:
+        return f'Site #{codigo}', f'site:{codigo}'
+    return f'Site #{codigo}#v{versao}', f'site:{codigo}#v{versao}'
+
+
+def _rebaixar_pedido(pedido, loja_id, referencia, pedido_ref, usuario_id=None):
+    """Baixa TODOS os itens do pedido nas quantidades ATUAIS sob a referencia
+    dada, pelo motor unico (explode cesta, acumula fracao). Espelha o passo 2
+    de `loja_estoque_reserva.consumir`, mas com referencia versionada e SEM a
+    guarda de idempotencia (o chamador — reducao — controla) nem reserva
+    (o pago ja consumiu a reserva fisica)."""
+    from app.services.baixa_venda import aplicar_venda
+    total = {'baixado': 0, 'faltou': 0}
+    for it in pedido.itens:
+        if not (it.receita_id or it.produto_id):
+            continue
+        if int(it.quantidade or 0) <= 0:
+            continue
+        res = aplicar_venda(
+            loja_id, receita_id=it.receita_id, produto_id=it.produto_id,
+            qtd=it.quantidade, canal='site', referencia=referencia,
+            pedido_ref=pedido_ref, usuario_id=usuario_id,
+            nome_venda=it.nome, pular_sem_linha=True)
+        total['baixado'] += res['baixado']
+        total['faltou'] += res['faltou']
+    return total
+
+
+def reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
+    """Correcao OWNER-ONLY: reduz a quantidade de UM item de um pedido PAGO
+    (cliente comprou 2 e era 1). Faz, na ordem (dinheiro primeiro):
+
+    1. REFUND PARCIAL no Pagar.me = unidades removidas x preco unitario (o
+       frete NAO e devolvido — a entrega ainda acontece; decisao do dono).
+    2. ESTOQUE: estorna a baixa da VERSAO atual (credito integral) e rebaixa a
+       quantidade nova sob a proxima versao — reaproveita o motor unico e deixa
+       um cancelamento total futuro reverter so a ultima baixa.
+    3. PLANO-DO-DIA: devolve as unidades removidas (disponibilidade do site).
+    4. Item.quantidade / subtotal / total do pedido recalculados.
+
+    NF: o Tiny aqui SO emite (nao ha API de cancelar/devolver NF). NAO mexe na
+    NF autorizada — a mensagem AVISA que precisa correcao manual no Tiny.
+
+    Retorna (ok, mensagem). Minimo 1 por item (pra zerar/cancelar, usar o
+    'Reembolsar e cancelar'). Se o refund falhar, ABORTA sem tocar estoque/BD."""
+    from decimal import Decimal
+
+    if pedido.status != 'pago':
+        return False, 'Só dá pra reduzir item de um pedido PAGO.'
+    item = next((it for it in pedido.itens if it.id == item_id), None)
+    if item is None:
+        return False, 'Item não encontrado neste pedido.'
+    try:
+        nova = int(nova_qtd)
+    except (TypeError, ValueError):
+        return False, 'Quantidade inválida.'
+    atual = int(item.quantidade or 0)
+    if not (1 <= nova < atual):
+        return False, (f'A nova quantidade tem que ficar entre 1 e {atual - 1} '
+                       f'(hoje são {atual}). Pra remover o item ou cancelar '
+                       f'tudo, use "Reembolsar e cancelar".')
+    delta = atual - nova
+    delta_valor = Decimal(str(item.preco_unitario or 0)) * delta
+
+    # 1) DINHEIRO primeiro: refund parcial. Falhou -> aborta, nada mexeu.
+    pago = next((p for p in pedido.pagamentos if p.status == 'pago'), None)
+    charge_id = pago.pagarme_charge_id if pago else None
+    if not charge_id:
+        return False, 'Pedido sem cobrança paga no Pagar.me — não dá pra estornar.'
+    res = pagarme.cancelar_charge(charge_id, valor_decimal=delta_valor)
+    if not res.get('ok'):
+        return False, f'Pagar.me recusou o estorno parcial: {res.get("erro")}'
+
+    # 2) ESTOQUE: estorna a versao atual, aplica a qtd nova, rebaixa sob a proxima.
+    loja = _loja_baixa(pedido)
+    if loja:
+        from app.services.baixa_venda import estornar_venda
+        versao = _versao_estoque_atual(pedido)
+        ref_atual, pref_atual = _ref_estoque(pedido.codigo, versao)
+        estornar_venda('site', pref_atual, ref_atual,
+                       usuario_id=usuario_id, loja_id=loja.id)
+    item.quantidade = nova
+    item.subtotal = Decimal(str(item.preco_unitario or 0)) * nova
+    pedido.recalcular_total()
+    if loja:
+        ref_nova, pref_nova = _ref_estoque(pedido.codigo, versao + 1)
+        _rebaixar_pedido(pedido, loja.id, ref_nova, pref_nova, usuario_id)
+
+    # 3) PLANO-DO-DIA: devolve as unidades removidas (disponibilidade do site).
+    if pedido.data_entrega:
+        from app.services import loja_plano_dia
+        if item.receita_id:
+            loja_plano_dia.devolver('receita', item.receita_id,
+                                    pedido.data_entrega, delta)
+        elif item.produto_id:
+            loja_plano_dia.devolver('produto', item.produto_id,
+                                    pedido.data_entrega, delta)
+
+    db.session.commit()
+    logger.info('reduzir_item_pedido_pago: pedido %s item %s %d->%d, '
+                'refund R$ %.2f', pedido.codigo, item_id, atual, nova,
+                delta_valor)
+    aviso_nf = (' A NF já foi emitida — CORRIJA MANUALMENTE no Tiny (o '
+                'sistema não cancela NF autorizada).'
+                if pedido.tiny_nota_fiscal_id else '')
+    return True, (f'"{item.nome}" reduzido de {atual} para {nova}. Estornei '
+                  f'R$ {delta_valor:.2f} no cartão e devolvi {delta} ao '
+                  f'estoque e ao plano do dia.{aviso_nf}')
+
+
 def _marcar_pago(pedido, pagamento):
     """Idempotente em si: se já está pago, no-op. Aplica baixa de estoque
     e seta `pago_em`/status.
