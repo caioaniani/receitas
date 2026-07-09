@@ -9,12 +9,32 @@ checkout) e best-effort (qualquer erro é engolido, nunca quebra a venda).
 Kill-switch: `FRETE_SENSOR=0`.
 """
 import logging
+import threading
+import time
 
 from sqlalchemy.orm import Session
 
 from app.extensions import db
 
 logger = logging.getLogger(__name__)
+
+# Dedup leve (o /api/frete é PÚBLICO): o MESMO (origem+desfecho+endereço) não
+# grava 2x numa janela curta — barra bot/duplo-clique inflando a tabela.
+_DEDUP_SEG = 600
+_ultimo = {}
+_lock = threading.Lock()
+
+
+def _pode_gravar(chave):
+    agora = time.monotonic()
+    with _lock:
+        if len(_ultimo) > 512:
+            for k in [k for k, t in _ultimo.items() if agora - t >= _DEDUP_SEG]:
+                del _ultimo[k]
+        if agora - _ultimo.get(chave, 0.0) < _DEDUP_SEG:
+            return False
+        _ultimo[chave] = agora
+        return True
 
 # Custo aproximado de 1 chamada REMOTA ao Google Geocoding (USD) — só pra
 # estimar o gasto no painel. Atualizar se a Google mudar a tabela.
