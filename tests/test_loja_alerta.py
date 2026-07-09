@@ -212,6 +212,22 @@ def test_alerta_endereco_nao_dispara_fora_area_longe(app):
     assert s.called and s.call_args.args[1] == 'fora_area'   # mas entra no painel
 
 
+def test_fora_area_impreciso_longe_ainda_alerta(app):
+    """fora_area + impreciso a 40 km: o km veio do centroide do CEP (incerto —
+    o endereço real pode estar dentro da área), então o WhatsApp SAI mesmo além
+    dos 30 km (decisão do dono 09/07 pós-revisão)."""
+    from app.services import loja_checkout
+    with app.app_context():
+        with patch('app.services.loja_checkout.frete_svc.consultar_frete',
+                   return_value={'ok': True, 'fora_area': True,
+                                 'impreciso': True, 'distancia_km': 40.0,
+                                 'endereco': 'X', 'aviso': 'fora'}), \
+             patch('app.services.loja_alerta.alertar_endereco_falho') as m:
+            loja_checkout._frete_para('agendada', 'Rua W, 1, 09000-000',
+                                      contato='C · 11')
+    assert m.called and m.call_args.kwargs.get('motivo') == 'fora_area'
+
+
 def test_alerta_endereco_dispara_fora_area_perto_da_borda(app):
     """Fora da área mas PERTO da borda (27 km, dentro dos 25+5): manda WhatsApp
     com motivo='fora_area' (quase comprou)."""
