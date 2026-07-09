@@ -58,6 +58,9 @@ def registrar(origem, desfecho, *, endereco=None, cep=None, fonte=None,
     try:
         if not _ativo() or desfecho not in DESFECHOS:
             return
+        ident = ' '.join((endereco or '').lower().split())[:120]
+        if not _pode_gravar(f'{origem}|{desfecho}|{ident}'):
+            return
         from app.models import FreteSensor
         with Session(db.engine) as s:
             s.add(FreteSensor(
