@@ -159,6 +159,32 @@ def test_alerta_endereco_dispara_quando_geocode_falha(app):
     assert kw.get('contato') == 'Fulano · 11999'
 
 
+def test_alerta_endereco_dispara_impreciso_mesmo_com_venda_ok(app):
+    """Frete resolveu só pelo centroide do CEP (venda passa, mas valor pode
+    estar errado): alerta o dono com impreciso=True."""
+    from app.services import loja_checkout
+    with app.app_context():
+        with patch('app.services.loja_checkout.frete_svc.consultar_frete',
+                   return_value={'ok': True, 'fora_area': False, 'valor': 20.0,
+                                 'gratis': False, 'distancia_km': 4.6,
+                                 'endereco': 'X', 'impreciso': True,
+                                 'aviso': 'estimado'}), \
+             patch('app.services.loja_alerta.alertar_endereco_falho') as m:
+            v, _d, _e, erro = loja_checkout._frete_para(
+                'agendada', 'Rua Guararapes, São Paulo, 04561-000',
+                contato='Alane · 119')
+    assert erro is None                                # venda NÃO travou
+    assert m.called and m.call_args.kwargs.get('impreciso') is True
+
+
+def test_texto_endereco_impreciso_difere_do_erro():
+    from app.services import loja_alerta
+    err = loja_alerta._texto_endereco_falho('Rua X', '01000-000', None, False)
+    imp = loja_alerta._texto_endereco_falho('Rua X', '01000-000', None, True)
+    assert 'ERRO DE ENDEREÇO' in err and 'não localizou' in err
+    assert 'IMPRECISO' in imp and 'CONSEGUE comprar' in imp
+
+
 def test_alerta_endereco_nao_dispara_fora_area(app):
     """Fora da área é resposta legítima (não é 'erro de endereço') — não alerta."""
     from app.services import loja_checkout
