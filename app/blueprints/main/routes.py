@@ -3474,12 +3474,17 @@ def _detalhe_redirect(codigo):
 @gerente_required
 def loja_online_pedido_detalhe(codigo):
     from app.models import PedidoOnline
-    from app.services import loja_checkout
+    from app.services import loja_checkout, loja_pagamento
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    # Pedido corrigido após a NF (quantidade reduzida): versão de estoque > 0.
+    # A tela avisa que a NF pode estar desatualizada (o Tiny não cancela por
+    # aqui — correção é manual).
+    estoque_reduzido = loja_pagamento._versao_estoque_atual(p) > 0
     return render_template('admin/loja_online_pedido_detalhe.html',
                            p=p, labels=_STATUS_PEDIDO_ONLINE_LABEL,
                            lojas=loja_checkout.lojas_retirada(),
-                           modos=_MODOS_ENTREGA)
+                           modos=_MODOS_ENTREGA,
+                           estoque_reduzido=estoque_reduzido)
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/editar', methods=['POST'])
