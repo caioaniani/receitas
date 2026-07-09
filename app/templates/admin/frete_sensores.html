@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Sensores do Frete{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-broadcast-pin"></i> Sensores do Frete</h1>
+    <form method="GET" class="d-flex align-items-center gap-2">
+        <label class="small text-muted mb-0">Período</label>
+        <select name="dias" class="form-select form-select-sm" style="width:auto"
+                onchange="this.form.submit()">
+            {% for d in [1, 7, 30, 90] %}
+            <option value="{{ d }}" {{ 'selected' if r.dias == d }}>{{ d }} dia(s)</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+<div class="alert alert-info small">
+    <i class="bi bi-info-circle"></i>
+    Cada linha é um endereço que <strong>pode ter custado uma venda</strong>: ou o
+    site não localizou (venda travou), ou cotou o frete pelo <strong>centroide do
+    CEP</strong> (valor impreciso), ou a Lalamove não conseguiu o endereço pra
+    despachar. Sucesso normal não aparece aqui.
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="card h-100"><div class="card-body text-center py-3">
+            <div class="display-6 mb-0 text-danger">{{ r.barrado }}</div>
+            <div class="small text-muted">Venda BARRADA<br>(não localizou)</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100"><div class="card-body text-center py-3">
+            <div class="display-6 mb-0 text-warning">{{ r.impreciso }}</div>
+            <div class="small text-muted">Frete IMPRECISO<br>(centroide do CEP)</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100"><div class="card-body text-center py-3">
+            <div class="display-6 mb-0 text-danger">{{ r.lalamove_falhou }}</div>
+            <div class="small text-muted">Lalamove<br>sem endereço</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100"><div class="card-body text-center py-3">
+            <div class="h4 mb-0">{{ r.google_chamadas_hoje }}</div>
+            <div class="small text-muted">Google hoje<br>
+                ≈ US$ {{ '%.2f'|format(r.google_custo_hoje_usd) }}</div>
+        </div></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header py-2"><strong>Eventos ({{ r.total }} nos últimos {{ r.dias }} dia(s))</strong></div>
+    <div class="card-body p-0">
+        <div class="mobile-table-scroll">
+            <table class="table table-sm table-hover mb-0" style="font-size:13px">
+                <thead><tr>
+                    <th>Quando</th><th>Origem</th><th>Desfecho</th>
+                    <th>Endereço</th><th>CEP</th><th class="text-end">km</th>
+                    <th class="text-end">R$</th><th>Contato</th>
+                </tr></thead>
+                <tbody>
+                {% for e in r.eventos %}
+                    <tr>
+                        <td class="text-nowrap"><code>{{ e.criado_em|brt('%d/%m %H:%M') }}</code></td>
+                        <td>{{ e.origem }}</td>
+                        <td>
+                            {% if e.desfecho == 'barrado' %}<span class="badge bg-danger">barrada</span>
+                            {% elif e.desfecho == 'impreciso' %}<span class="badge bg-warning text-dark">imprecisa</span>
+                            {% elif e.desfecho == 'lalamove_falhou' %}<span class="badge bg-danger">lalamove</span>
+                            {% else %}<span class="badge bg-success">google</span>{% endif %}
+                            {% if e.fonte %}<span class="text-muted small">{{ e.fonte }}</span>{% endif %}
+                        </td>
+                        <td>{{ e.endereco }}</td>
+                        <td>{{ e.cep or '—' }}</td>
+                        <td class="text-end">{{ '%.1f'|format(e.km) if e.km is not none else '—' }}</td>
+                        <td class="text-end">{{ '%.2f'|format(e.valor) if e.valor is not none else '—' }}</td>
+                        <td class="small">{{ e.contato or '—' }}</td>
+                    </tr>
+                {% endfor %}
+                {% if not r.eventos %}
+                    <tr><td colspan="8" class="text-muted p-3">Nenhum evento no período — nenhuma venda barrada por endereço. 🎉</td></tr>
+                {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
