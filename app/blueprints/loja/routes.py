@@ -912,12 +912,15 @@ def api_frete():
         # POST do checkout usa (loja_checkout._frete_para).
         res = dict(res, erro=frete_svc.mensagem_erro(codigo))
     elif res.get('fora_area'):
-        # Além do raio = venda barrada. Painel registra TODOS; WhatsApp só pra
-        # quem ficou perto da borda (decisão do dono 09/07 — "quase comprou").
+        # Além do raio = venda barrada. Painel registra TODOS; WhatsApp pra
+        # quem ficou perto da borda (decisão do dono 09/07 — "quase comprou")
+        # OU quando o km é INCERTO (impreciso = veio do centroide do CEP, pode
+        # estar dentro da área na verdade — decisão do dono 09/07 pós-revisão).
         km = res.get('distancia_km')
         frete_sensor.registrar('preview', 'fora_area', endereco=endereco or geo,
                                cep=cep, fonte=res.get('fonte'), km=km)
-        if km is not None and km <= frete_svc.RAIO_MAX_KM + frete_svc.MARGEM_ALERTA_FORA_KM:
+        perto = km is not None and km <= frete_svc.RAIO_MAX_KM + frete_svc.MARGEM_ALERTA_FORA_KM
+        if perto or res.get('impreciso'):
             loja_alerta.alertar_endereco_falho(endereco or geo, cep,
                                                motivo='fora_area')
     elif res.get('impreciso'):
