@@ -265,19 +265,29 @@ def _frete_para(modo, endereco, base=None, contato=None):
     if not endereco:
         return None, None, None, 'Informe o endereço de entrega.'
     r = frete_svc.consultar_frete(endereco)
+    from app.services import frete_sensor, loja_alerta
     if not r.get('ok'):
         if r.get('erro') == 'nao_encontrado':
             # Cliente prestes a comprar e barrado por endereço não localizado:
-            # alerta o dono COM o contato pra chamar e fechar a venda.
-            from app.services import loja_alerta
+            # alerta o dono COM o contato pra chamar e fechar a venda + sensor.
             loja_alerta.alertar_endereco_falho(endereco, contato=contato)
+            frete_sensor.registrar('checkout', 'barrado', endereco=endereco,
+                                   contato=contato)
         return None, None, None, frete_svc.mensagem_erro(r.get('erro'))
     if r.get('impreciso'):
         # Cotou só pelo centroide do CEP: a venda passa, mas o frete pode
         # estar errado — alerta o dono COM o contato pra conferir/ajustar.
-        from app.services import loja_alerta
         loja_alerta.alertar_endereco_falho(endereco, contato=contato,
                                            impreciso=True)
+        frete_sensor.registrar('checkout', 'impreciso', endereco=endereco,
+                               contato=contato, fonte=r.get('fonte'),
+                               km=r.get('distancia_km'), valor=r.get('valor'))
+    elif r.get('fonte') == 'google':
+        # Google resolveu um pedido REAL (baixo volume no checkout) — registra
+        # pro dono ver o Google enabling vendas.
+        frete_sensor.registrar('checkout', 'resolvido_google', endereco=endereco,
+                               contato=contato, fonte='google',
+                               km=r.get('distancia_km'), valor=r.get('valor'))
     if r.get('fora_area'):
         return None, r.get('distancia_km'), r.get('endereco'), \
             ('Esse endereço está fora da nossa área de entrega '
