@@ -161,7 +161,16 @@ def _geocodificar_texto(texto, ref=None, cep_ref=None, postcode_estrito=False):
             elif cep_pref:
                 # Sem cidade no candidato: cai no guard de postcode.
                 pc = re.sub(r'\D', '', addr.get('postcode') or '')
-                if pc and pc[:4] != cep_pref:
+                if postcode_estrito:
+                    # Exige match POSITIVO: sem postcode batendo, NÃO aceita.
+                    # Usado na tentativa "rua+cidade" (homônimo da MESMA cidade,
+                    # ex: Guararapes Brooklin×Lapa) — sem isso, candidato sem
+                    # postcode passava e cobrava frete errado.
+                    if not (pc and pc[:4] == cep_pref):
+                        logger.warning('geocode descartado (sem CEP p/ confirmar '
+                                       'distrito): pedimos %s (%r)', cep_pref, nome)
+                        continue
+                elif pc and pc[:4] != cep_pref:
                     logger.warning('geocode descartado (CEP diverge): pedimos '
                                    '%s, candidato %s (%r)', cep_pref, pc, nome)
                     continue
