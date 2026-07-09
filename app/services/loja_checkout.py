@@ -274,11 +274,23 @@ def _frete_para(modo, endereco, base=None, contato=None):
             frete_sensor.registrar('checkout', 'barrado', endereco=endereco,
                                    contato=contato)
         return None, None, None, frete_svc.mensagem_erro(r.get('erro'))
+    if r.get('fora_area'):
+        # Além do raio = venda barrada. Painel registra TODOS; WhatsApp só pra
+        # quem ficou perto da borda (decisão do dono 09/07 — "quase comprou").
+        km = r.get('distancia_km')
+        frete_sensor.registrar('checkout', 'fora_area', endereco=endereco,
+                               contato=contato, fonte=r.get('fonte'), km=km)
+        if km is not None and km <= frete_svc.RAIO_MAX_KM + frete_svc.MARGEM_ALERTA_FORA_KM:
+            loja_alerta.alertar_endereco_falho(endereco, contato=contato,
+                                               motivo='fora_area')
+        return None, km, r.get('endereco'), \
+            ('Esse endereço está fora da nossa área de entrega '
+             f'(até {int(frete_svc.RAIO_MAX_KM)} km).')
     if r.get('impreciso'):
         # Cotou só pelo centroide do CEP: a venda passa, mas o frete pode
         # estar errado — alerta o dono COM o contato pra conferir/ajustar.
         loja_alerta.alertar_endereco_falho(endereco, contato=contato,
-                                           impreciso=True)
+                                           motivo='impreciso')
         frete_sensor.registrar('checkout', 'impreciso', endereco=endereco,
                                contato=contato, fonte=r.get('fonte'),
                                km=r.get('distancia_km'), valor=r.get('valor'))
@@ -288,10 +300,6 @@ def _frete_para(modo, endereco, base=None, contato=None):
         frete_sensor.registrar('checkout', 'resolvido_google', endereco=endereco,
                                contato=contato, fonte='google',
                                km=r.get('distancia_km'), valor=r.get('valor'))
-    if r.get('fora_area'):
-        return None, r.get('distancia_km'), r.get('endereco'), \
-            ('Esse endereço está fora da nossa área de entrega '
-             f'(até {int(frete_svc.RAIO_MAX_KM)} km).')
     valor = Decimal(str(r.get('valor') or 0))
     # Express: o valor dos anéis é só uma ESTIMATIVA — a equipe confirma o
     # custo real (Lalamove faixa X ou entregador próprio) no painel.
