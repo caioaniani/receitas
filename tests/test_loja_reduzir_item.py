@@ -289,5 +289,5 @@ def test_banner_corrigir_nf_aparece_apos_reducao(app):
 
     c = _login(app, owner=True)
     html = c.get(f'/admin/loja-online/pedidos/{codigo}').get_data(as_text=True)
-    assert 'corrija a NF' in html.lower() or 'corrigir' in html.lower()
+    assert 'quantidade corrigida após a nf' in html.lower()
     assert '909295776' in html
