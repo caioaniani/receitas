@@ -911,10 +911,19 @@ def api_frete():
         # mostra `data.erro` cru pro cliente (checkout.js). Mesma fonte que o
         # POST do checkout usa (loja_checkout._frete_para).
         res = dict(res, erro=frete_svc.mensagem_erro(codigo))
+    elif res.get('fora_area'):
+        # Além do raio = venda barrada. Painel registra TODOS; WhatsApp só pra
+        # quem ficou perto da borda (decisão do dono 09/07 — "quase comprou").
+        km = res.get('distancia_km')
+        frete_sensor.registrar('preview', 'fora_area', endereco=endereco or geo,
+                               cep=cep, fonte=res.get('fonte'), km=km)
+        if km is not None and km <= frete_svc.RAIO_MAX_KM + frete_svc.MARGEM_ALERTA_FORA_KM:
+            loja_alerta.alertar_endereco_falho(endereco or geo, cep,
+                                               motivo='fora_area')
     elif res.get('impreciso'):
         # Cotou só pelo centroide do CEP — a venda passa, mas o frete pode
         # estar errado: alerta o dono pra conferir (decisão do dono 09/07).
-        loja_alerta.alertar_endereco_falho(endereco or geo, cep, impreciso=True)
+        loja_alerta.alertar_endereco_falho(endereco or geo, cep, motivo='impreciso')
         frete_sensor.registrar('preview', 'impreciso', endereco=endereco or geo,
                                cep=cep, fonte=res.get('fonte'),
                                km=res.get('distancia_km'), valor=res.get('valor'))
