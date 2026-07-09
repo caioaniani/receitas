@@ -19,6 +19,7 @@ Config: `LOJA_ALERTA_TRAVA=0` desliga; destino `LOJA_ALERTA_NUMERO` ou
 `ZAPI_NUMERO_DESTINO`.
 """
 import logging
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -118,6 +119,45 @@ def alertar_esgotado(nome, telefone, email, itens, data_entrega):
         logger.exception('loja_alerta: falha ao agendar alerta')
 
 
+# Teto/hora GLOBAL de alertas de endereço — o gatilho é o endpoint PÚBLICO
+# /loja/api/frete (rate-limit por IP só), então um scanner com endereços
+# distintos furaria o dedup por-string. Bounde o total pra não inundar o
+# WhatsApp do dono. In-memory por worker (best-effort).
+_ENDFALHO_MAX_HORA = 12
+_endfalho_ts = []
+
+
+def _endfalho_sob_teto():
+    """True se ainda cabe alertar de endereço nesta hora (poda a janela)."""
+    agora = time.monotonic()
+    with _lock:
+        while _endfalho_ts and agora - _endfalho_ts[0] > 3600:
+            _endfalho_ts.pop(0)
+        if len(_endfalho_ts) >= _ENDFALHO_MAX_HORA:
+            return False
+        _endfalho_ts.append(agora)
+        return True
+
+
+_CEP_RE = re.compile(r'(\d{5})[\s.-]?(\d{3})')
+
+
+def _cep_e_chave(endereco, cep):
+    """CEP normalizado (do param OU extraído do endereço) + chave de dedup
+    CANÔNICA. Preview (api_frete) e checkout mandam o endereço diferente (CEP
+    separado num, concatenado no outro) — normalizar une a MESMA venda perdida
+    numa só chave, sem alerta dobrado."""
+    cep_d = re.sub(r'\D', '', cep or '')
+    end = endereco or ''
+    if not cep_d:
+        m = _CEP_RE.search(end)
+        if m:
+            cep_d = m.group(1) + m.group(2)
+    cep_fmt = f'{cep_d[:5]}-{cep_d[5:]}' if len(cep_d) == 8 else (cep or None)
+    base = ' '.join(_CEP_RE.sub('', end).lower().split()).strip(' ,')
+    return cep_fmt, f'endfalho|{base}|{cep_d}'
+
+
 def _texto_endereco_falho(endereco, cep, contato):
     """Mensagem do alerta de endereço não localizado (pura — testável)."""
     end = (endereco or '').strip() or 'endereço não informado'
@@ -132,18 +172,37 @@ def _texto_endereco_falho(endereco, cep, contato):
     return '\n'.join(linhas)
 
 
+def _enviar_direto(app, texto):
+    """Worker: envia o texto (dedup/teto já checados no agendamento)."""
+    try:
+        with app.app_context():
+            numero = _numero_destino()
+            if not numero:
+                logger.info('loja_alerta: sem numero de destino, pulando')
+                return
+            from app.services import zapi
+            zapi.enviar_texto(numero, texto)
+    except Exception:  # noqa: BLE001
+        logger.exception('loja_alerta: falha ao enviar alerta de endereco')
+
+
 def alertar_endereco_falho(endereco, cep=None, contato=None):
     """Dispara (async) o alerta ao dono quando o geocode do frete FALHA
     (`nao_encontrado`) — venda potencialmente perdida por endereço não
     localizado (decisão do dono 09/07/2026: "isso pode barrar vendas").
-    Best-effort; dedup leve pela string do endereço (anti-duplo-clique)."""
+    Best-effort; dedup por (endereço+CEP) canônico + teto/hora anti-flood."""
     try:
         if not _ativo():
             return
+        cep_fmt, chave = _cep_e_chave(endereco, cep)
+        if not _deve_enviar(chave):          # mesma venda perdida recente
+            return
+        if not _endfalho_sob_teto():         # teto/hora (endpoint público)
+            logger.warning('loja_alerta: teto/hora de alerta de endereco '
+                           'atingido — %r suprimido', (endereco or '')[:80])
+            return
         app = current_app._get_current_object()
-        texto = _texto_endereco_falho(endereco, cep, contato)
-        ident = ' '.join((endereco or '').lower().split())
-        chave = f'endfalho|{ident}'
-        _POOL.submit(_enviar, app, texto, chave)
+        texto = _texto_endereco_falho(endereco, cep_fmt, contato)
+        _POOL.submit(_enviar_direto, app, texto)
     except Exception:  # noqa: BLE001
         logger.exception('loja_alerta: falha ao agendar alerta de endereco')
