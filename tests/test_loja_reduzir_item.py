@@ -365,3 +365,89 @@ def test_banner_corrigir_nf_aparece_apos_reducao(app):
     html = c.get(f'/admin/loja-online/pedidos/{codigo}').get_data(as_text=True)
     assert 'quantidade corrigida após a nf' in html.lower()
     assert '909295776' in html
+
+
+# ── Cancelar quando a cobrança JÁ foi estornada no Pagar.me (412) ───────
+
+def test_cancelar_sincroniza_quando_cobranca_ja_estornada_no_gateway(app):
+    """Caso real 6537F0EB: dono cancelou no painel do Pagar.me, aí clicou
+    'Reembolsar e cancelar' aqui -> 412 'This charge can not be canceled'.
+    Se o gateway CONFIRMA que a cobrança não está mais paga, sincroniza o
+    cancelamento local (estoque/plano) em vez de travar."""
+    from app.extensions import db
+    from app.models import PagamentoOnline
+    from app.services import loja_pagamento
+    with app.app_context():
+        loja = _site_loja(db)
+        prod = _produto(db)
+        _estoque(db, loja, prod, 10)
+        p = _pedido_pago(db, loja, prod, 2)
+        # dá um order_id ao pagamento (pra consultar_order)
+        pg = PagamentoOnline.query.filter_by(pedido_id=p.id).first()
+        pg.pagarme_order_id = 'or_teste'
+        db.session.commit()
+        assert _saldo(db, loja, prod) == 8
+
+        with patch('app.services.pagarme.cancelar_charge',
+                   return_value={'ok': False, 'erro': 'HTTP 412: This charge '
+                                 'can not be canceled.'}), \
+             patch('app.services.pagarme.consultar_order',
+                   return_value={'ok': True, 'pago': False,
+                                 'charge_status': 'canceled'}):
+            ok, msg = loja_pagamento.reembolsar_pedido(p)
+        assert ok is True
+        assert 'já estava estornada' in msg
+        db.session.refresh(p)
+        assert p.status == 'cancelado'
+        assert _saldo(db, loja, prod) == 10          # estoque devolvido
+
+
+def test_cancelar_412_mas_cobranca_ainda_paga_no_gateway_trava(app):
+    """Fail-closed: se o gateway ainda mostra a cobrança PAGA, o 412 não
+    sincroniza nada — não credita estoque com o dinheiro preso."""
+    from app.extensions import db
+    from app.models import PagamentoOnline
+    from app.services import loja_pagamento
+    with app.app_context():
+        loja = _site_loja(db)
+        prod = _produto(db)
+        _estoque(db, loja, prod, 10)
+        p = _pedido_pago(db, loja, prod, 2)
+        pg = PagamentoOnline.query.filter_by(pedido_id=p.id).first()
+        pg.pagarme_order_id = 'or_teste'
+        db.session.commit()
+
+        with patch('app.services.pagarme.cancelar_charge',
+                   return_value={'ok': False, 'erro': 'HTTP 412: xxx'}), \
+             patch('app.services.pagarme.consultar_order',
+                   return_value={'ok': True, 'pago': True,
+                                 'charge_status': 'paid'}):
+            ok, msg = loja_pagamento.reembolsar_pedido(p)
+        assert ok is False and 'recusou o estorno' in msg
+        db.session.refresh(p)
+        assert p.status == 'pago'                     # nada mudou
+        assert _saldo(db, loja, prod) == 8
+
+
+def test_cancelar_412_gateway_fora_trava(app):
+    """Fail-closed: gateway inacessível (consultar_order falha) não sincroniza."""
+    from app.extensions import db
+    from app.models import PagamentoOnline
+    from app.services import loja_pagamento
+    with app.app_context():
+        loja = _site_loja(db)
+        prod = _produto(db)
+        _estoque(db, loja, prod, 10)
+        p = _pedido_pago(db, loja, prod, 2)
+        pg = PagamentoOnline.query.filter_by(pedido_id=p.id).first()
+        pg.pagarme_order_id = 'or_teste'
+        db.session.commit()
+
+        with patch('app.services.pagarme.cancelar_charge',
+                   return_value={'ok': False, 'erro': 'HTTP 412'}), \
+             patch('app.services.pagarme.consultar_order',
+                   return_value={'ok': False, 'erro': 'timeout'}):
+            ok, _ = loja_pagamento.reembolsar_pedido(p)
+        assert ok is False
+        db.session.refresh(p)
+        assert p.status == 'pago'
