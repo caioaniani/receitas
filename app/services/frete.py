@@ -202,22 +202,22 @@ def simplificar_endereco(texto):
     return f'{base}, São Paulo'
 
 
-def geocodificar(endereco_ou_cep):
-    """(lat, lng, rotulo) pra um CEP ou endereço livre, ou None.
+def _geocodificar_impl(endereco_ou_cep):
+    """Núcleo do geocode. Devolve `(geo, impreciso)`:
+    - `geo` = (lat, lng, rotulo) ou None;
+    - `impreciso` = True quando SÓ o CEP resolveu (centroide do distrito, o
+      último recurso) — sinaliza pro caller que o frete é um chute grosseiro.
 
-    Cadeia de tentativas (endereços reais de e-commerce vêm com complemento
-    e bairro que derrubam geocoder):
-      0. "lat,lng" colado direto (válvula de escape do atendente);
-      1. CEP via BrasilAPI (com fallback do endereço resolvido no Nominatim);
-      2. texto completo no Nominatim;
-      3. texto SIMPLIFICADO (rua + número + cidade) no Nominatim.
-    Usado pelo frete do bot e pela Lalamove (origem/destino das corridas)."""
+    Cadeia (endereços de e-commerce vêm com complemento/bairro que derrubam
+    geocoder): 0. "lat,lng" colado; 1. BrasilAPI pelo CEP; 2. texto completo;
+    3. simplificado (rua+número+cidade); 4. rua+cidade (postcode estrito);
+    5. só o CEP (centroide — IMPRECISO)."""
     texto = (endereco_ou_cep or '').strip()
     if not texto:
-        return None
+        return None, False
     m = re.match(r'^(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$', texto)
     if m:
-        return float(m.group(1)), float(m.group(2)), texto
+        return (float(m.group(1)), float(m.group(2)), texto), False
     geo = None
     ref = None
     cep = _extrair_cep(texto)
@@ -226,7 +226,7 @@ def geocodificar(endereco_ou_cep):
         if cep_geo:
             ref = cep_geo[3]                     # {'cidade','bairro'} do Correios
             if cep_geo[0] is not None:
-                return cep_geo[:3]               # BrasilAPI já tinha coordenada
+                return cep_geo[:3], False        # BrasilAPI já tinha coordenada
             # BrasilAPI conhece o CEP mas nao tem coordenada: geocodifica o
             # endereço resolvido (rua + bairro + cidade), mais preciso que o
             # texto cru. Valida por CIDADE (barra Arujá) — o rótulo carrega o
@@ -262,11 +262,21 @@ def geocodificar(endereco_ou_cep):
         # preciso — pode super OU subestimar o frete e, na borda de um CEP
         # grande, inverter o "fora da área" — mas RESGATA a venda quando a
         # BrasilAPI não tem coordenada e nenhuma variante do endereço resolve.
+        # Marca IMPRECISO pro caller alertar o dono (decisão do dono 09/07).
         geo = _geocodificar_texto(_formatar_cep(cep), cep_ref=cep)
+        if geo and geo[0] is not None:
+            return geo, True
     if not geo or geo[0] is None:
         logger.warning('geocodificacao falhou em todas as tentativas: %r',
                        texto[:200])
-        return None
+        return None, False
+    return geo, False
+
+
+def geocodificar(endereco_ou_cep):
+    """(lat, lng, rotulo) pra um CEP ou endereço livre, ou None. Wrapper
+    compatível (sem o flag de imprecisão) — usado pelo bot e pela Lalamove."""
+    geo, _impreciso = _geocodificar_impl(endereco_ou_cep)
     return geo
 
 
