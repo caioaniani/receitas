@@ -200,6 +200,60 @@ def test_geocode_rejeita_cidade_errada_e_cai_pro_texto():
     assert r['distancia_km'] < 10         # República, não Arujá (44 km)
 
 
+def test_geocode_aceita_cidade_certa_mesmo_com_cep_torto_no_osm():
+    """Caso real (09/07/2026) Alameda Porcelana, São Caetano do Sul (CEP
+    09531-150): BrasilAPI sem coords; o Nominatim acha o nó CERTO (12 km,
+    dentro da área), mas o OSM etiquetou ele com um CEP de OUTRO distrito
+    (08671). O check por PREFIXO DE CEP barrava a venda. Agora, como a cidade
+    do candidato bate com a resolvida pela BrasilAPI, aceita apesar do CEP
+    torto — e cota o frete."""
+    brasilapi = _resp(200, {'street': 'Alameda Porcelana',
+                            'neighborhood': 'Cerâmica',
+                            'city': 'São Caetano do Sul',
+                            'location': {'coordinates': {}}})
+    nominatim = _resp(200, [{
+        'lat': '-23.6261115', 'lon': '-46.5775682',
+        'display_name': 'Alameda Porcelana, Cerâmica, São Caetano do Sul, '
+                        'São Paulo, 08671-035, Brasil',
+        'address': {'road': 'Alameda Porcelana', 'suburb': 'Cerâmica',
+                    'city': 'São Caetano do Sul', 'state': 'São Paulo',
+                    'postcode': '08671-035'}}])
+
+    def fake_get(url, **kw):
+        return brasilapi if 'brasilapi' in url else nominatim
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
+        r = frete.consultar_frete('Alameda Porcelana, Cerâmica, '
+                                  'São Caetano do Sul, SP, 09531-150')
+    assert r['ok'] is True and r['fora_area'] is False
+    assert 'São Caetano do Sul' in r['endereco']
+    assert 10 < r['distancia_km'] < 15           # ~12 km, dentro dos 25
+
+
+def test_geocode_rejeita_cidade_errada_com_cep_torto():
+    """O outro lado da moeda: se a cidade do candidato DIVERGE da resolvida,
+    rejeita mesmo que o postcode do OSM 'bata' — a cidade é o sinal forte
+    (não reabre o Arujá por causa de um CEP coincidente)."""
+    brasilapi = _resp(200, {'street': 'Rua Qualquer', 'neighborhood': 'Centro',
+                            'city': 'São Paulo',
+                            'location': {'coordinates': {}}})
+    # Candidato em Arujá, mas com um postcode cujo prefixo coincide com o CEP
+    # pedido (01xxx) — só o check de cidade o barra.
+    nominatim = _resp(200, [{
+        'lat': '-23.3965', 'lon': '-46.3210',
+        'display_name': 'Rua Qualquer, Arujá',
+        'address': {'city': 'Arujá', 'state': 'São Paulo',
+                    'postcode': '01050-999'}}])
+
+    def fake_get(url, **kw):
+        return brasilapi if 'brasilapi' in url else nominatim
+
+    with patch('app.services.frete.requests.get', side_effect=fake_get):
+        r = frete.consultar_frete('Rua Qualquer, Centro, São Paulo, 01050-000')
+    # Arujá barrado pela cidade -> nenhuma tentativa resolve -> nao_encontrado.
+    assert r == {'ok': False, 'erro': 'nao_encontrado'}
+
+
 def test_geocode_sem_postcode_no_resultado_aceita():
     """OSM sem postcode no candidato: o check é só contra divergência
     POSITIVA — sem dado, aceita (comportamento antigo preservado)."""
