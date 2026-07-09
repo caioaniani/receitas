@@ -222,11 +222,18 @@ def _extrair_charge(order_json):
 
 
 def _erro_da_charge(charge):
-    """Quando a charge nasce/cai em status 'failed', cava o motivo na
-    estrutura aninhada pra propagar mensagem útil em vez de salvar QR vazio.
-    Fontes (em ordem): last_transaction.gateway_response.errors[*].message,
-    last_transaction.gateway_response.code, last_transaction.acquirer_message,
-    charge.status."""
+    """Quando a charge nasce/cai em status 'failed', cava o motivo REAL na
+    estrutura aninhada pra propagar mensagem útil (nunca "gateway 200:").
+
+    Ordem das fontes (da mais humana pra menos):
+    1. gateway_response.errors[*].message — erro estruturado do gateway.
+    2. acquirer_message + acquirer_return_code — motivo do EMISSOR do cartão
+       (ex: "Transação não autorizada... - Código 1000"). É o que o painel do
+       Pagar.me mostra; vem ANTES do gateway_response.code de propósito.
+    3. gateway_response.code SÓ quando NÃO for 2xx — o code é o HTTP da CHAMADA
+       ao adquirente (200 = a chamada funcionou, NÃO a autorização), então 2xx
+       virava "gateway 200:" inútil (caso real 08/07/2026).
+    4. Fallbacks (gateway_id / status)."""
     last = charge.get('last_transaction') or {}
     gw = last.get('gateway_response') or {}
     errs = gw.get('errors') or []
@@ -234,13 +241,21 @@ def _erro_da_charge(charge):
         msg = errs[0].get('message') or errs[0].get('code')
         if msg:
             return str(msg)
-    if gw.get('code'):
-        return f"gateway {gw.get('code')}: {gw.get('message') or ''}".strip()
-    if last.get('acquirer_message'):
-        return str(last.get('acquirer_message'))
+    acq_msg = last.get('acquirer_message')
+    acq_code = last.get('acquirer_return_code')
+    if acq_msg:
+        return f'{acq_msg} (código {acq_code})' if acq_code else str(acq_msg)
+    if acq_code:
+        return f'transação não autorizada pelo emissor (código {acq_code})'
+    code = str(gw.get('code') or '')
+    if code and not code.startswith('2'):   # 2xx = chamada OK, não é erro
+        return f"gateway {code}: {gw.get('message') or ''}".strip()
     if last.get('gateway_id'):
         return f"gateway_id {last.get('gateway_id')} (status {last.get('status')})"
-    return f"charge status={charge.get('status')}"
+    st = charge.get('status') or last.get('status')
+    if st in ('failed', 'not_authorized', 'refused', 'canceled'):
+        return 'pagamento não autorizado pelo cartão'
+    return f"charge status={st}"
 
 
 def criar_pedido_pix(pedido, expira_em_min=30):
