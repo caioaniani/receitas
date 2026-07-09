@@ -204,22 +204,29 @@ def geocodificar(endereco_ou_cep):
     if m:
         return float(m.group(1)), float(m.group(2)), texto
     geo = None
+    ref = None
     cep = _extrair_cep(texto)
     if cep:
-        geo = _geocodificar_cep(cep)
-        if geo and geo[0] is None:
+        cep_geo = _geocodificar_cep(cep)
+        if cep_geo:
+            ref = cep_geo[3]                     # {'cidade','bairro'} do Correios
+            if cep_geo[0] is not None:
+                return cep_geo[:3]               # BrasilAPI já tinha coordenada
             # BrasilAPI conhece o CEP mas nao tem coordenada: geocodifica o
             # endereço resolvido (rua + bairro + cidade), mais preciso que o
-            # texto cru do cliente. `cep_ref` barra rua homônima de outra
-            # cidade (caso Arujá, 05/07/2026).
-            geo = _geocodificar_texto(geo[2], cep_ref=cep)
+            # texto cru. Valida por CIDADE (barra Arujá) — o rótulo carrega o
+            # bairro, então o postcode frouxo do OSM não derruba (caso ABC).
+            geo = _geocodificar_texto(cep_geo[2], ref=ref, cep_ref=cep)
     if not geo or geo[0] is None:
-        geo = _geocodificar_texto(texto, cep_ref=cep)
+        geo = _geocodificar_texto(texto, ref=ref, cep_ref=cep)
     if not geo or geo[0] is None:
         simples = simplificar_endereco(texto)
         if simples and simples.lower() != texto.lower():
-            # O simplificado perde o BAIRRO — sem o check do CEP ele achava
-            # a "Rua Nova York" do Grajaú em vez da do Brooklin (05/07/2026).
+            # O simplificado perde o BAIRRO E a cidade real (vira "São Paulo"):
+            # aqui NÃO dá pra validar por cidade, então usa só o guard de
+            # postcode — é o que barra a "Rua Nova York" do Grajaú vs Brooklin
+            # (05/07/2026). Endereço de fora da capital que só resolve aqui é
+            # limitação conhecida do último fallback.
             geo = _geocodificar_texto(simples, cep_ref=cep)
     if not geo or geo[0] is None:
         logger.warning('geocodificacao falhou em todas as tentativas: %r',
