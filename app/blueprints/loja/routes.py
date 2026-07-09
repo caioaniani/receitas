@@ -898,13 +898,15 @@ def api_frete():
     if not geo:
         return jsonify(ok=False, erro='Informe o endereço ou o CEP.'), 400
     res = frete_svc.consultar_frete(geo)
+    from app.services import frete_sensor, loja_alerta
     if not res.get('ok'):
         codigo = res.get('erro')
         if codigo == 'nao_encontrado':
-            # Alerta o dono: endereço não localizado = venda que pode ter
-            # sido perdida no cálculo de frete (async, best-effort).
-            from app.services import loja_alerta
+            # Endereço não localizado = venda que pode ter sido perdida: alerta
+            # o dono (WhatsApp) + registra no sensor (async/best-effort).
             loja_alerta.alertar_endereco_falho(endereco or geo, cep)
+            frete_sensor.registrar('preview', 'barrado',
+                                   endereco=endereco or geo, cep=cep)
         # Traduz o código de máquina ('nao_encontrado') pra mensagem — o JS
         # mostra `data.erro` cru pro cliente (checkout.js). Mesma fonte que o
         # POST do checkout usa (loja_checkout._frete_para).
@@ -912,8 +914,10 @@ def api_frete():
     elif res.get('impreciso'):
         # Cotou só pelo centroide do CEP — a venda passa, mas o frete pode
         # estar errado: alerta o dono pra conferir (decisão do dono 09/07).
-        from app.services import loja_alerta
         loja_alerta.alertar_endereco_falho(endereco or geo, cep, impreciso=True)
+        frete_sensor.registrar('preview', 'impreciso', endereco=endereco or geo,
+                               cep=cep, fonte=res.get('fonte'),
+                               km=res.get('distancia_km'), valor=res.get('valor'))
     return jsonify(res)
 
 
