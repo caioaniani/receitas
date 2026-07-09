@@ -270,21 +270,44 @@ def _versao_estoque_atual(pedido):
 
     Assim o estorno (cancelamento total futuro) reverte SO a ultima baixa, sem
     creditar em dobro as versoes ja estornadas — reaproveitando o motor unico
-    (`baixa_venda.estornar_venda`) por referencia, sem tocar no ledger antigo."""
+    (`baixa_venda.estornar_venda`) por referencia, sem tocar no ledger antigo.
+
+    Olha os DOIS ledgers: os movimentos INTEIROS (`MovEstoqueLoja`, referencia
+    'Site #<codigo>#v<N>') E as FRACOES (`DebitoEstoqueMov`, pedido_ref
+    'site:<codigo>#v<N>'). Sem a fracao, uma cesta com componente fracionario
+    cujo rebaixa nao cruzou um inteiro criaria uma versao SO-fracionaria
+    invisivel — o cancelamento total usaria a versao errada e deixaria fracao
+    fantasma pra sempre (achado da revisao 08/07/2026).
+
+    `<codigo>` e sempre `secrets.token_hex(4).upper()` (8 hex, tamanho fixo) —
+    nunca contem espaco/`#v`/`%`/`_`, entao o `like` e o parse ancorado sao
+    seguros. Se o formato de `codigo` mudar, revisar este parse."""
     import re
 
-    from app.models import MovEstoqueLoja
-    prefixo = f'Site #{pedido.codigo}#v'
-    movs = (db.session.query(MovEstoqueLoja.referencia)
-            .filter(MovEstoqueLoja.tipo == 'venda_site',
-                    MovEstoqueLoja.referencia.like(f'Site #{pedido.codigo}%'))
-            .all())
+    from app.models import DebitoEstoqueMov, MovEstoqueLoja
     maxv = 0
-    for (ref,) in movs:
-        if ref and ref.startswith(prefixo):
-            m = re.match(r'(\d+)', ref[len(prefixo):])
+
+    def _scan(valor, prefixo):
+        nonlocal maxv
+        if valor and valor.startswith(prefixo):
+            m = re.match(r'(\d+)', valor[len(prefixo):])
             if m:
                 maxv = max(maxv, int(m.group(1)))
+
+    pref_int = f'Site #{pedido.codigo}#v'
+    for (ref,) in (db.session.query(MovEstoqueLoja.referencia)
+                   .filter(MovEstoqueLoja.tipo == 'venda_site',
+                           MovEstoqueLoja.referencia.like(
+                               f'Site #{pedido.codigo}%')).all()):
+        _scan(ref, pref_int)
+
+    pref_frac = f'site:{pedido.codigo}#v'
+    for (pref,) in (db.session.query(DebitoEstoqueMov.pedido_ref)
+                    .filter(DebitoEstoqueMov.canal == 'site',
+                            DebitoEstoqueMov.pedido_ref.like(
+                                f'site:{pedido.codigo}%')).all()):
+        _scan(pref, pref_frac)
+
     return maxv
 
 
