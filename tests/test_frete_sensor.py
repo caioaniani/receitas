@@ -59,34 +59,38 @@ def test_rota_frete_sensores_anonimo_barra(app):
     assert app.test_client().get('/admin/frete-sensores').status_code != 200
 
 
-def test_preview_fora_area_perto_da_borda_alerta_e_sensor(app):
+def test_preview_fora_area_perto_da_borda_alerta_e_sensor(app, admin_user):
     """/loja/api/frete: fora da área perto da borda (27 km) → sensor 'fora_area'
     sempre + WhatsApp (quase comprou)."""
     from unittest.mock import patch
+    c = app.test_client()
+    c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'})
     with patch('app.blueprints.loja.routes.frete_svc.consultar_frete',
                return_value={'ok': True, 'fora_area': True,
                              'distancia_km': 27.0, 'endereco': 'X',
                              'fonte': 'google', 'aviso': 'fora'}), \
          patch('app.services.frete_sensor.registrar') as s, \
          patch('app.services.loja_alerta.alertar_endereco_falho') as m:
-        resp = app.test_client().post('/loja/api/frete',
-                                      json={'endereco': 'Rua Z', 'cep': '07000-000'})
+        resp = c.post('/loja/api/frete',
+                      json={'endereco': 'Rua Z', 'cep': '07000-000'})
     assert resp.status_code == 200
     assert s.called and s.call_args.args[1] == 'fora_area'
     assert m.called and m.call_args.kwargs.get('motivo') == 'fora_area'
 
 
-def test_preview_fora_area_longe_so_sensor(app):
+def test_preview_fora_area_longe_so_sensor(app, admin_user):
     """/loja/api/frete: fora da área bem longe (40 km) → só sensor, sem WhatsApp."""
     from unittest.mock import patch
+    c = app.test_client()
+    c.post('/auth/login', data={'login': admin_user.login, 'senha': '123'})
     with patch('app.blueprints.loja.routes.frete_svc.consultar_frete',
                return_value={'ok': True, 'fora_area': True,
                              'distancia_km': 40.0, 'endereco': 'X',
                              'fonte': 'gratis', 'aviso': 'fora'}), \
          patch('app.services.frete_sensor.registrar') as s, \
          patch('app.services.loja_alerta.alertar_endereco_falho') as m:
-        resp = app.test_client().post('/loja/api/frete',
-                                      json={'endereco': 'Rua Y', 'cep': '13000-000'})
+        resp = c.post('/loja/api/frete',
+                      json={'endereco': 'Rua Y', 'cep': '13000-000'})
     assert resp.status_code == 200
     assert s.called and s.call_args.args[1] == 'fora_area'
     assert not m.called
