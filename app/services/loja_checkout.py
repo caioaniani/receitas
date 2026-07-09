@@ -272,6 +272,12 @@ def _frete_para(modo, endereco, base=None, contato=None):
             from app.services import loja_alerta
             loja_alerta.alertar_endereco_falho(endereco, contato=contato)
         return None, None, None, frete_svc.mensagem_erro(r.get('erro'))
+    if r.get('impreciso'):
+        # Cotou só pelo centroide do CEP: a venda passa, mas o frete pode
+        # estar errado — alerta o dono COM o contato pra conferir/ajustar.
+        from app.services import loja_alerta
+        loja_alerta.alertar_endereco_falho(endereco, contato=contato,
+                                           impreciso=True)
     if r.get('fora_area'):
         return None, r.get('distancia_km'), r.get('endereco'), \
             ('Esse endereço está fora da nossa área de entrega '
