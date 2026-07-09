@@ -16,11 +16,35 @@ Geocodificação (sem chave de API):
 """
 import logging
 import re
+import unicodedata
 from math import asin, ceil, cos, radians, sin, sqrt
 
 import requests
 
 logger = logging.getLogger(__name__)
+
+
+def _norm_cidade(s):
+    """minúsculo, sem acento, sem pontuação — pra comparar nome de cidade
+    entre a BrasilAPI (Correios) e o OSM sem tropeçar em acento/caixa."""
+    s = unicodedata.normalize('NFKD', (s or '')).encode('ascii', 'ignore').decode()
+    return ' '.join(re.sub(r'[^\w\s]', ' ', s).lower().split())
+
+
+# Códigos de erro do consultar_frete (máquina) -> mensagem pro cliente. Fonte
+# ÚNICA: o /loja/api/frete e o POST do checkout traduzem pelos mesmos textos
+# (antes o AJAX mostrava o código cru "nao_encontrado" pro cliente).
+_MENSAGENS_ERRO = {
+    'endereco_vazio': 'Informe o endereço ou o CEP.',
+    'nao_encontrado': 'Não consegui localizar esse endereço. '
+                      'Confira o endereço ou o CEP.',
+}
+
+
+def mensagem_erro(codigo):
+    """Mensagem amigável pro código de erro do consultar_frete."""
+    return _MENSAGENS_ERRO.get(
+        codigo, 'Não consegui calcular o frete. Tente de novo.')
 
 # Centro dos anéis (centroide do KML) = padaria do Brooklin.
 CENTRO_LAT = -23.598678
