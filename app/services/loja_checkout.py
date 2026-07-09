@@ -275,12 +275,15 @@ def _frete_para(modo, endereco, base=None, contato=None):
                                    contato=contato)
         return None, None, None, frete_svc.mensagem_erro(r.get('erro'))
     if r.get('fora_area'):
-        # Além do raio = venda barrada. Painel registra TODOS; WhatsApp só pra
-        # quem ficou perto da borda (decisão do dono 09/07 — "quase comprou").
+        # Além do raio = venda barrada. Painel registra TODOS; WhatsApp pra
+        # quem ficou perto da borda (decisão do dono 09/07 — "quase comprou")
+        # OU quando o km é INCERTO (impreciso = veio do centroide do CEP, pode
+        # estar dentro da área na verdade — decisão do dono 09/07 pós-revisão).
         km = r.get('distancia_km')
         frete_sensor.registrar('checkout', 'fora_area', endereco=endereco,
                                contato=contato, fonte=r.get('fonte'), km=km)
-        if km is not None and km <= frete_svc.RAIO_MAX_KM + frete_svc.MARGEM_ALERTA_FORA_KM:
+        perto = km is not None and km <= frete_svc.RAIO_MAX_KM + frete_svc.MARGEM_ALERTA_FORA_KM
+        if perto or r.get('impreciso'):
             loja_alerta.alertar_endereco_falho(endereco, contato=contato,
                                                motivo='fora_area')
         return None, km, r.get('endereco'), \
