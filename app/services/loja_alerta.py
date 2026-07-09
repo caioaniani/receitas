@@ -194,23 +194,25 @@ def _enviar_direto(app, texto):
         logger.exception('loja_alerta: falha ao enviar alerta de endereco')
 
 
-def alertar_endereco_falho(endereco, cep=None, contato=None):
-    """Dispara (async) o alerta ao dono quando o geocode do frete FALHA
-    (`nao_encontrado`) — venda potencialmente perdida por endereço não
-    localizado (decisão do dono 09/07/2026: "isso pode barrar vendas").
-    Best-effort; dedup por (endereço+CEP) canônico + teto/hora anti-flood."""
+def alertar_endereco_falho(endereco, cep=None, contato=None, impreciso=False):
+    """Dispara (async) o alerta ao dono sobre problema de endereço no frete
+    (decisão do dono 09/07/2026: "isso pode barrar vendas"). Dois casos:
+    `nao_encontrado` (venda travou) e `impreciso=True` (venda passou, mas o
+    frete saiu por centroide do CEP e pode estar errado). Best-effort; dedup
+    por (endereço+CEP) canônico + teto/hora anti-flood."""
     try:
         if not _ativo():
             return
         cep_fmt, chave = _cep_e_chave(endereco, cep)
-        if not _deve_enviar(chave):          # mesma venda perdida recente
+        chave = f'{chave}|{"imp" if impreciso else "err"}'
+        if not _deve_enviar(chave):          # mesmo alerta recente
             return
         if not _endfalho_sob_teto():         # teto/hora (endpoint público)
             logger.warning('loja_alerta: teto/hora de alerta de endereco '
                            'atingido — %r suprimido', (endereco or '')[:80])
             return
         app = current_app._get_current_object()
-        texto = _texto_endereco_falho(endereco, cep_fmt, contato)
+        texto = _texto_endereco_falho(endereco, cep_fmt, contato, impreciso)
         _POOL.submit(_enviar_direto, app, texto)
     except Exception:  # noqa: BLE001
         logger.exception('loja_alerta: falha ao agendar alerta de endereco')
