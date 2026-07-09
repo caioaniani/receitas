@@ -57,3 +57,25 @@ def test_rota_frete_sensores_owner(app, owner_user):
 def test_rota_frete_sensores_anonimo_barra(app):
     # Sem login → owner_required barra (403 ou redirect pro login, nunca 200).
     assert app.test_client().get('/admin/frete-sensores').status_code != 200
+
+
+def test_frete_sensor_entra_na_retencao(app):
+    """PII do cliente (endereço/contato) não fica pra sempre — poda por LGPD."""
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import FreteSensor
+    from app.services import retencao
+    from app.utils import agora
+    with app.app_context():
+        app.config['RETENCAO_FRETE_SENSOR_DIAS'] = 30
+        db.session.add_all([
+            FreteSensor(origem='preview', desfecho='barrado', endereco='Velho',
+                        criado_em=agora() - timedelta(days=60)),
+            FreteSensor(origem='preview', desfecho='barrado', endereco='Novo',
+                        criado_em=agora() - timedelta(days=5)),
+        ])
+        db.session.commit()
+        rel = retencao.executar_limpeza()
+        assert rel.get('frete_sensor') == 1              # o velho foi apagado
+        assert FreteSensor.query.count() == 1            # só o novo sobrou
