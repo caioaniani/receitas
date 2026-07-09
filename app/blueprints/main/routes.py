@@ -1047,6 +1047,18 @@ def debug_tiny():
     return jsonify(resultado), 200
 
 
+@main_bp.route('/admin/frete-sensores')
+@owner_required
+def frete_sensores():
+    """Sensor do geocode do frete (09/07/2026): mostra ao dono os endereços
+    que BARRARAM venda, os que cotaram IMPRECISO (centroide de CEP) e o uso/
+    custo do Google — pra saber se está perdendo venda por endereço."""
+    from app.services import frete_sensor
+    dias = request.args.get('dias', type=int) or 7
+    return render_template('admin/frete_sensores.html',
+                           r=frete_sensor.resumo(dias), dias=dias)
+
+
 @main_bp.route('/admin/debug-foto-pdf')
 @owner_required
 def debug_foto_pdf():
