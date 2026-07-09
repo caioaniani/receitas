@@ -90,6 +90,23 @@ def test_cotar_erro_da_api_vira_mensagem(app):
     assert 'ERR_INVALID_MARKET' in r['erro']
 
 
+def test_cotar_destino_sem_coordenada_alerta_dono_e_sensor(app):
+    """Geocode do destino falha: a corrida não sai — sensor no painel + WhatsApp
+    ao dono na hora (decisão do dono 09/07/2026)."""
+    from app.services import lalamove
+    _config(app)
+    with app.app_context(), \
+         patch('app.services.frete.geocodificar', return_value=None), \
+         patch('app.services.frete_sensor.registrar') as sensor, \
+         patch('app.services.loja_alerta.alertar_endereco_falho') as alerta:
+        lalamove._origem_cache = None
+        r = lalamove.cotar('Endereço fantasma sem mapa', 'moto')
+    assert r['ok'] is False
+    assert sensor.called and sensor.call_args.args[1] == 'lalamove_falhou'
+    assert alerta.called
+    assert alerta.call_args.kwargs.get('motivo') == 'lalamove'
+
+
 def test_fone_e164():
     from app.services.lalamove import _fone_e164
     assert _fone_e164('(11) 99999-0000') == '+5511999990000'
