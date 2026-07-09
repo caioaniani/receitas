@@ -158,17 +158,25 @@ def _cep_e_chave(endereco, cep):
     return cep_fmt, f'endfalho|{base}|{cep_d}'
 
 
-def _texto_endereco_falho(endereco, cep, contato):
-    """Mensagem do alerta de endereço não localizado (pura — testável)."""
+def _texto_endereco_falho(endereco, cep, contato, impreciso=False):
+    """Mensagem do alerta (pura — testável). `impreciso`: o frete resolveu só
+    pelo centroide do CEP (a venda NÃO travou, mas o valor pode estar errado)."""
     end = (endereco or '').strip() or 'endereço não informado'
-    linhas = ['📍 ERRO DE ENDEREÇO no site — cliente pode ter desistido da compra',
-              f'Endereço: {end}']
+    if impreciso:
+        cabeca = ('📍 FRETE IMPRECISO no site — cotado pelo CENTROIDE do CEP '
+                  '(o endereço exato não foi localizado)')
+        rodape = ('O cliente CONSEGUE comprar, mas o frete saiu por estimativa '
+                  'do CEP e pode estar bem errado. Confira e ajuste com ele.')
+    else:
+        cabeca = '📍 ERRO DE ENDEREÇO no site — cliente pode ter desistido da compra'
+        rodape = ('O site não localizou esse endereço no cálculo de frete. '
+                  'Confira se dá pra atender e chame o cliente pra fechar.')
+    linhas = [cabeca, f'Endereço: {end}']
     if (cep or '').strip():
         linhas.append(f'CEP: {cep.strip()}')
     if (contato or '').strip():
         linhas.append(f'Contato: {contato.strip()}')
-    linhas.append('O site não localizou esse endereço no cálculo de frete. '
-                  'Confira se dá pra atender e chame o cliente pra fechar.')
+    linhas.append(rodape)
     return '\n'.join(linhas)
 
 
