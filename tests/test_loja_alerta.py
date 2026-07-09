@@ -227,6 +227,44 @@ def test_alerta_endereco_dispara_fora_area_perto_da_borda(app):
     assert m.called and m.call_args.kwargs.get('motivo') == 'fora_area'
 
 
+def test_fora_area_e_impreciso_nao_dispara_alerta_impreciso(app):
+    """Um resultado fora_area TAMBÉM carrega impreciso=True (frete.py). Garante
+    que só o ramo fora_area age — o alerta 'impreciso' (venda passou) NUNCA sai
+    quando a venda na verdade travou por fora da área."""
+    from app.services import loja_checkout
+    with app.app_context():
+        with patch('app.services.loja_checkout.frete_svc.consultar_frete',
+                   return_value={'ok': True, 'fora_area': True,
+                                 'impreciso': True, 'distancia_km': 27.0,
+                                 'endereco': 'X', 'aviso': 'fora'}), \
+             patch('app.services.loja_alerta.alertar_endereco_falho') as m:
+            _v, _d, _e, erro = loja_checkout._frete_para(
+                'agendada', 'Rua Z, 1, Guarulhos, 07000-000', contato='C · 11')
+    assert erro                                        # venda travou
+    # Um único alerta, e é o de fora_area — nunca o de impreciso.
+    assert m.call_count == 1
+    assert m.call_args.kwargs.get('motivo') == 'fora_area'
+
+
+def test_lalamove_isento_do_teto_hora(app):
+    """O alerta da Lalamove (pedido pago, motoboy não saiu) NÃO é barrado pelo
+    teto/hora do endpoint público — só o dedup por string o segura."""
+    from app.services import loja_alerta
+    loja_alerta._ultimo_envio.clear()
+    loja_alerta._endfalho_ts.clear()
+    with app.app_context():
+        app.config['LOJA_ALERTA_TRAVA'] = '1'
+        # Esgota o teto/hora com alertas de endereço distintos.
+        with patch.object(loja_alerta._POOL, 'submit'):
+            for i in range(loja_alerta._ENDFALHO_MAX_HORA + 3):
+                loja_alerta.alertar_endereco_falho(f'Rua {i}, SP', f'0000{i:04d}')
+        # Mesmo com o teto estourado, o alerta da Lalamove passa.
+        with patch.object(loja_alerta._POOL, 'submit') as mock_submit:
+            loja_alerta.alertar_endereco_falho('Endereço da corrida',
+                                               motivo='lalamove')
+    assert mock_submit.called
+
+
 def test_desligado_por_env_nao_agenda_endereco(app):
     from app.services import loja_alerta
     with app.app_context():
