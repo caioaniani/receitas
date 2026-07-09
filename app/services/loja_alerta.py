@@ -109,3 +109,34 @@ def alertar_esgotado(nome, telefone, email, itens, data_entrega):
         _POOL.submit(_enviar, app, texto, chave)
     except Exception:  # noqa: BLE001
         logger.exception('loja_alerta: falha ao agendar alerta')
+
+
+def _texto_endereco_falho(endereco, cep, contato):
+    """Mensagem do alerta de endereço não localizado (pura — testável)."""
+    end = (endereco or '').strip() or 'endereço não informado'
+    linhas = ['📍 ERRO DE ENDEREÇO no site — cliente pode ter desistido da compra',
+              f'Endereço: {end}']
+    if (cep or '').strip():
+        linhas.append(f'CEP: {cep.strip()}')
+    if (contato or '').strip():
+        linhas.append(f'Contato: {contato.strip()}')
+    linhas.append('O site não localizou esse endereço no cálculo de frete. '
+                  'Confira se dá pra atender e chame o cliente pra fechar.')
+    return '\n'.join(linhas)
+
+
+def alertar_endereco_falho(endereco, cep=None, contato=None):
+    """Dispara (async) o alerta ao dono quando o geocode do frete FALHA
+    (`nao_encontrado`) — venda potencialmente perdida por endereço não
+    localizado (decisão do dono 09/07/2026: "isso pode barrar vendas").
+    Best-effort; dedup leve pela string do endereço (anti-duplo-clique)."""
+    try:
+        if not _ativo():
+            return
+        app = current_app._get_current_object()
+        texto = _texto_endereco_falho(endereco, cep, contato)
+        ident = ' '.join((endereco or '').lower().split())
+        chave = f'endfalho|{ident}'
+        _POOL.submit(_enviar, app, texto, chave)
+    except Exception:  # noqa: BLE001
+        logger.exception('loja_alerta: falha ao agendar alerta de endereco')
