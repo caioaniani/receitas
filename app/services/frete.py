@@ -85,7 +85,11 @@ def _extrair_cep(texto):
 
 
 def _geocodificar_cep(cep):
-    """BrasilAPI v2: CEP -> (lat, lng, rótulo) ou None (sem coords/erro)."""
+    """BrasilAPI v2: CEP -> (lat, lng, rótulo, ref) ou None (sem coords/erro).
+
+    `ref` = {'cidade', 'bairro'} resolvidos pelo Correios — sinal de sanidade
+    MAIS confiável que o postcode do OSM (que às vezes vem errado no nó certo).
+    Usado pra validar o candidato do Nominatim por cidade."""
     try:
         r = requests.get(f'https://brasilapi.com.br/api/cep/v2/{cep}',
                          timeout=_TIMEOUT)
@@ -94,12 +98,13 @@ def _geocodificar_cep(cep):
         d = r.json()
         coords = ((d.get('location') or {}).get('coordinates') or {})
         lat, lng = coords.get('latitude'), coords.get('longitude')
-        rotulo = ', '.join(x for x in (d.get('street'), d.get('neighborhood'),
-                                       d.get('city')) if x)
+        cidade, bairro = d.get('city'), d.get('neighborhood')
+        rotulo = ', '.join(x for x in (d.get('street'), bairro, cidade) if x)
+        ref = {'cidade': cidade, 'bairro': bairro}
         if lat and lng:
-            return float(lat), float(lng), rotulo or f'CEP {cep}'
-        # Sem coordenadas: devolve só o rótulo pro fallback geocodificar.
-        return (None, None, rotulo) if rotulo else None
+            return float(lat), float(lng), rotulo or f'CEP {cep}', ref
+        # Sem coordenadas: devolve rótulo + ref pro fallback geocodificar.
+        return (None, None, rotulo, ref) if rotulo else None
     except (requests.RequestException, ValueError):
         logger.warning('BrasilAPI falhou pro CEP %s', cep)
         return None
