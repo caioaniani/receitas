@@ -223,7 +223,12 @@ def alertar_endereco_falho(endereco, cep=None, contato=None,
         chave = f'{chave}|{motivo}'
         if not _deve_enviar(chave):          # mesmo alerta recente
             return
-        if not _endfalho_sob_teto():         # teto/hora (endpoint público)
+        # Teto/hora protege contra flood do endpoint PÚBLICO /loja/api/frete.
+        # O alerta da Lalamove NÃO vem daí — é pedido JÁ PAGO cujo motoboy não
+        # saiu (a falha operacional mais grave), disparado por caminho interno.
+        # Isentá-lo do teto evita que ruído do endpoint anônimo o suprima; o
+        # dedup por (endereço+motivo) ainda barra retry em loop.
+        if motivo != 'lalamove' and not _endfalho_sob_teto():
             logger.warning('loja_alerta: teto/hora de alerta de endereco '
                            'atingido — %r suprimido', (endereco or '')[:80])
             return
