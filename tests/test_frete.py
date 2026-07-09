@@ -294,6 +294,53 @@ def test_endereco_preciso_nao_marca_impreciso():
     assert r['ok'] is True and r.get('impreciso') is False
 
 
+# ── Google como fonte precisa (09/07/2026) ─────────────────────────────────
+
+def test_google_primeiro_quando_ativo(app):
+    """Google ativo + resolve → usa Google (fonte=google) e NEM toca a cadeia
+    grátis (nenhum requests.get de BrasilAPI/Nominatim)."""
+    with app.app_context():
+        app.config['GOOGLE_MAPS_API_KEY'] = 'k'
+        app.config['FRETE_GOOGLE'] = '1'
+        with patch('app.services.google_maps.geocode',
+                   return_value=(-23.60, -46.69)) as g, \
+             patch('app.services.frete.requests.get') as reqs:
+            r = frete.consultar_frete('Rua Qualquer, 100, São Paulo, 01000-000')
+    assert g.called and not reqs.called
+    assert r['ok'] and r['fonte'] == 'google' and r['impreciso'] is False
+
+
+def test_google_desligado_por_env_cai_na_cadeia_gratis(app):
+    with app.app_context():
+        app.config['GOOGLE_MAPS_API_KEY'] = 'k'
+        app.config['FRETE_GOOGLE'] = '0'
+        nominatim = _resp(200, [{'lat': '-23.61', 'lon': '-46.70',
+                                 'display_name': 'X'}])
+        with patch('app.services.google_maps.geocode') as g, \
+             patch('app.services.frete.requests.get', return_value=nominatim):
+            r = frete.consultar_frete('Avenida Teste 100, Brooklin')
+    assert not g.called                            # kill-switch respeitado
+    assert r['ok'] and r['fonte'] == 'gratis'
+
+
+def test_google_teto_diario_para_de_chamar(app):
+    """Teto diário: consumido o cap, para de bater no Google e cai na grátis."""
+    with app.app_context():
+        app.config['GOOGLE_MAPS_API_KEY'] = 'k'
+        app.config['FRETE_GOOGLE'] = '1'
+        app.config['FRETE_GOOGLE_MAX_DIA'] = 2
+        nominatim = _resp(200, [{'lat': '-23.61', 'lon': '-46.70',
+                                 'display_name': 'X'}])
+        with patch('app.services.google_maps.geocode',
+                   return_value=(-23.60, -46.69)) as g, \
+             patch('app.services.frete.requests.get', return_value=nominatim):
+            frete.consultar_frete('Rua A, 1, São Paulo, 01000-000')
+            frete.consultar_frete('Rua B, 2, São Paulo, 02000-000')
+            r3 = frete.consultar_frete('Rua C, 3, São Paulo, 03000-000')
+    assert g.call_count == 2                        # teto=2 → 3ª não bate
+    assert r3['fonte'] == 'gratis'
+
+
 def test_geocode_sem_postcode_no_resultado_aceita():
     """OSM sem postcode no candidato: o check é só contra divergência
     POSITIVA — sem dado, aceita (comportamento antigo preservado)."""
