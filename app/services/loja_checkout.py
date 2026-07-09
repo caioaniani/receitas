@@ -266,8 +266,7 @@ def _frete_para(modo, endereco, base=None):
         return None, None, None, 'Informe o endereço de entrega.'
     r = frete_svc.consultar_frete(endereco)
     if not r.get('ok'):
-        return None, None, None, 'Não consegui localizar esse endereço. '\
-            'Confira o endereço ou o CEP.'
+        return None, None, None, frete_svc.mensagem_erro(r.get('erro'))
     if r.get('fora_area'):
         return None, r.get('distancia_km'), r.get('endereco'), \
             ('Esse endereço está fora da nossa área de entrega '
