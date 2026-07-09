@@ -110,22 +110,28 @@ def _geocodificar_cep(cep):
         return None
 
 
-def _geocodificar_texto(texto, cep_ref=None):
+def _geocodificar_texto(texto, ref=None, cep_ref=None):
     """Nominatim (OSM): endereço livre -> (lat, lng, rótulo) ou None.
 
-    `cep_ref` (sanidade — 05/07/2026): quando o CEP do cliente é conhecido,
-    REJEITA candidato cujo postcode não bate no prefixo de 4 dígitos (mesmo
-    distrito; rua no mesmo logradouro pode variar o 5º dígito). Rua homônima
-    em outra cidade/bairro era aceita em silêncio e virava frete errado —
-    casos reais do dia: "Rua Nova York" do Brooklin caiu na homônima do
-    Grajaú (19,3 km → R$ 95) e o rótulo do CEP 01050-000 (Centro) caiu na
-    "Rua Martins Fontes" de ARUJÁ (44 km → bloqueado como fora da área).
-    Sem postcode no resultado (OSM incompleto) aceita — o check é só contra
-    divergência POSITIVA. Vasculha até 3 candidatos, fica com o 1º que passa.
+    Sanidade contra homônimo (05/07/2026; revisto 09/07/2026), dois sinais
+    por candidato, nesta ordem:
+      1. CIDADE — quando o candidato traz cidade no addressdetails E `ref`
+         tem a cidade resolvida pela BrasilAPI: REJEITA se divergir. É o
+         sinal FORTE. O postcode do OSM às vezes vem ERRADO no nó certo
+         (Alameda Porcelana, São Caetano do Sul / CEP 09531 vinha etiquetada
+         08671 no OSM) — rejeitar por ele barrava endereço válido do ABC.
+         Cidade batendo, aceita mesmo com postcode divergente.
+      2. POSTCODE (`cep_ref`) — fallback quando o candidato NÃO traz cidade:
+         rejeita se o prefixo de 4 dígitos diverge. Pega homônimo de outro
+         distrito quando o OSM não dá cidade ("Rua Nova York" Brooklin×Grajaú,
+         "Rua Martins Fontes" Centro×Arujá, 05/07/2026).
+    Só rejeita em divergência POSITIVA (sem o dado, aceita). Até 3 candidatos.
     """
     consulta = texto.strip()
     if 'são paulo' not in consulta.lower() and 'sao paulo' not in consulta.lower():
         consulta += ', São Paulo, Brasil'
+    ref_cidade = _norm_cidade((ref or {}).get('cidade'))
+    cep_pref = re.sub(r'\D', '', cep_ref or '')[:4]
     try:
         r = requests.get('https://nominatim.openstreetmap.org/search',
                          params={'q': consulta, 'format': 'json', 'limit': 3,
@@ -134,14 +140,24 @@ def _geocodificar_texto(texto, cep_ref=None):
         if r.status_code != 200:
             return None
         for h in r.json():
-            if cep_ref:
-                pc = re.sub(r'\D', '', (h.get('address') or {})
-                            .get('postcode') or '')
-                if pc and pc[:4] != cep_ref[:4]:
-                    logger.warning(
-                        'geocode descartado (CEP diverge): pedimos %s, '
-                        'candidato %s (%r)', cep_ref, pc,
-                        (h.get('display_name') or '')[:120])
+            addr = h.get('address') or {}
+            nome = (h.get('display_name') or '')[:120]
+            cand_cidade = _norm_cidade(
+                addr.get('city') or addr.get('town') or addr.get('municipality')
+                or addr.get('village') or addr.get('city_district'))
+            if ref_cidade and cand_cidade:
+                # Sinal forte: cidade. Ignora o postcode do OSM (frouxo).
+                if cand_cidade != ref_cidade:
+                    logger.warning('geocode descartado (cidade diverge): '
+                                   'pedimos %r, candidato %r (%r)',
+                                   ref_cidade, cand_cidade, nome)
+                    continue
+            elif cep_pref:
+                # Sem cidade no candidato: cai no guard de postcode.
+                pc = re.sub(r'\D', '', addr.get('postcode') or '')
+                if pc and pc[:4] != cep_pref:
+                    logger.warning('geocode descartado (CEP diverge): pedimos '
+                                   '%s, candidato %s (%r)', cep_pref, pc, nome)
                     continue
             return (float(h['lat']), float(h['lon']),
                     h.get('display_name', consulta))
