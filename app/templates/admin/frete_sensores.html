@@ -76,6 +76,7 @@
                         <td>
                             {% if e.desfecho == 'barrado' %}<span class="badge bg-danger">barrada</span>
                             {% elif e.desfecho == 'impreciso' %}<span class="badge bg-warning text-dark">imprecisa</span>
+                            {% elif e.desfecho == 'fora_area' %}<span class="badge bg-danger">fora da área</span>
                             {% elif e.desfecho == 'lalamove_falhou' %}<span class="badge bg-danger">lalamove</span>
                             {% else %}<span class="badge bg-success">google</span>{% endif %}
                             {% if e.fonte %}<span class="text-muted small">{{ e.fonte }}</span>{% endif %}
