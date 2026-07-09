@@ -1000,6 +1000,56 @@ de infra, estado em AppConfig). Sob demanda: `GET /admin/vigia-site`
 `tests/test_site_vigia.py`. Ao mudar faixa de frete/area de entrega,
 ATUALIZAR os canarios junto.
 
+### Geocode agora usa GOOGLE primeiro + sensor de venda barrada (09/07/2026)
+
+Contexto: a cadeia gratis (BrasilAPI+Nominatim) segue instavel — barrou vendas
+reais (caso Alane, "Rua Guararapes" homonima Brooklin×Lapa, CEP sem coordenada;
+caso Paulinha) e, PIOR, mandaria a Lalamove pro lugar errado (ela usa o MESMO
+`frete.geocodificar`). O Google (que ja existia no sistema pra rotas de
+entrega — `app/services/google_maps.py`, com `GeocodeCache`) e preciso a nivel
+de porta. Decisao do dono: usar o Google como fonte PRIMARIA do frete.
+
+**Por que o frete nasceu SEM Google (10/06)**: o `/api/frete` e PUBLICO
+(anonimo, por clique) e o Google COBRA por chamada — manter em fonte gratis
+blindava custo/abuso. O dono lembrava que "aconteceu algo" mas nao o que (git
+nao registrou — auto-commit gera "auto: update X"). Por isso o Google entrou
+COM tetos, nao solto.
+
+**Ordem em `frete._geocodificar_impl`** (devolve `(geo, impreciso, fonte)`):
+0. "lat,lng" colado; 1. **GOOGLE** (`_google_geocode`→`google_maps.geocode_preciso`);
+2-6. cadeia gratis como FALLBACK (BrasilAPI→texto→simplificado→rua+cidade→CEP
+centroide). `fonte` in {latlng, google, gratis, cep_centroide}.
+
+**Blindagens do Google** (o motivo provavel do incidente = custo):
+- Kill-switch `FRETE_GOOGLE=0`.
+- Teto DIARIO `FRETE_GOOGLE_MAX_DIA` (default 500) — `_google_sob_teto` conta so
+  chamadas REMOTAS (cache hit nao consome), via AppConfig `frete_google_dia`.
+  Cap SOFT (read-modify-write entre workers vaza um pouco), mas custo fica ~teto*
+  US$0,005/dia = ~US$2,50. Trava DURA de verdade = restringir a chave por IP no
+  Google Cloud (pendente do dono).
+- Cache permanente (paga 1x por endereco). `geocode_preciso` REJEITA
+  `location_type=APPROXIMATE`/`partial_match` (centroide de cidade) — cacheia
+  como `google_aprox` e cai na gratis, NUNCA cobra aproximado como preciso.
+- `_google_geocode` e todo try/except: fora de app-context (thread do bot) ou
+  sem chave → None → cadeia gratis. Sem regressao.
+
+**Sensor de venda barrada** (`FreteSensor` em `models/entregas.py`,
+`app/services/frete_sensor.py`): grava eventos que barram/erram venda —
+`barrado` (nao localizou), `impreciso` (cotou pelo centroide do CEP),
+`resolvido_google` (checkout), `lalamove_falhou`. Sessao ISOLADA
+(`Session(db.engine)` — nao contamina o checkout), best-effort, dedup leve
+(10min), kill-switch `FRETE_SENSOR=0`. Painel owner `/admin/frete-sensores`
+(link em Administracao) mostra contagens + uso/custo Google do dia + lista com
+endereco/contato. Alem do alerta WhatsApp ja existente
+(`loja_alerta.alertar_endereco_falho`, dedup + teto/hora). PII → RETENCAO
+(`RETENCAO_FRETE_SENSOR_DIAS`=90, LGPD). Testes: secao Google em
+`tests/test_frete.py`, `tests/test_frete_sensor.py`, `tests/test_loja_alerta.py`.
+
+**`consultar_frete` agora devolve `fonte` e `impreciso`**; `api_frete` e
+`_frete_para` alertam+sensoreiam nos casos de risco. NUNCA remover o Google do
+frete sem entender o custo (checar billing do Google Cloud) — e NUNCA deixar o
+Google cobrar resultado APPROXIMATE como preciso.
+
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
 Escrito na pedra a pedido do dono ("ja tinha falado uma vez mas nao ficou
