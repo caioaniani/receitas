@@ -57,6 +57,27 @@
               <td class="text-end text-muted small">R$ {{ '%.2f'|format(it.preco_unitario)|replace('.', ',') }} un</td>
               <td class="text-end fw-bold">R$ {{ '%.2f'|format(it.subtotal)|replace('.', ',') }}</td>
             </tr>
+            {# Correcao OWNER-ONLY: cliente comprou errado (2 e era 1). Reduz a
+               qtd, estorna a diferenca no cartao e devolve ao estoque/plano.
+               So em pedido PAGO e com qtd > 1 (minimo 1 por item). #}
+            {% if current_user.is_owner and p.status == 'pago' and it.quantidade > 1 %}
+            <tr class="table-warning">
+              <td colspan="3" class="py-1">
+                <form method="POST" action="{{ url_for('main.loja_online_pedido_reduzir_item', codigo=p.codigo) }}"
+                      class="d-flex align-items-center gap-2 flex-wrap mb-0"
+                      onsubmit="return confirm('Reduzir «{{ it.nome }}» de {{ it.quantidade }} un para a nova quantidade?\n\nIsso ESTORNA a diferença no cartão do cliente e devolve ao estoque. O frete continua cobrado. Se a NF já foi emitida, você terá que corrigi-la manualmente no Tiny.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  {{ embed_field() }}
+                  <input type="hidden" name="item_id" value="{{ it.id }}">
+                  <span class="small text-muted">Comprou errado? Reduzir para</span>
+                  <input type="number" name="nova_qtd" min="1" max="{{ it.quantidade - 1 }}"
+                         value="{{ it.quantidade - 1 }}" required
+                         class="form-control form-control-sm" style="width:5rem">
+                  <button class="btn btn-sm btn-outline-danger">↩️ reduzir + estornar a diferença</button>
+                </form>
+              </td>
+            </tr>
+            {% endif %}
             {% endfor %}
           </tbody>
           <tfoot class="table-light">
