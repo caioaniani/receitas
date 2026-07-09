@@ -129,3 +129,53 @@ def test_desligado_por_env_nao_agenda(app):
             loja_alerta.alertar_esgotado('X', '11', 'x@x.com', ['I'],
                                          date(2026, 7, 3))
     assert not mock_submit.called
+
+
+# ── Alerta de endereço não localizado (09/07/2026) ─────────────────────────
+
+def test_texto_endereco_falho_tem_endereco_cep_contato():
+    from app.services import loja_alerta
+    txt = loja_alerta._texto_endereco_falho(
+        'Rua Guararapes, 225, Brooklin, São Paulo', '04561-000',
+        'Alane · 11999998888')
+    assert 'Rua Guararapes' in txt and '04561-000' in txt
+    assert 'Alane' in txt
+    assert 'frete' in txt.lower()                     # explica o contexto
+
+
+def test_alerta_endereco_dispara_quando_geocode_falha(app):
+    from app.services import loja_checkout
+    with app.app_context():
+        with patch('app.services.loja_checkout.frete_svc.consultar_frete',
+                   return_value={'ok': False, 'erro': 'nao_encontrado'}), \
+             patch('app.services.loja_alerta.alertar_endereco_falho') as m:
+            _v, _d, _e, erro = loja_checkout._frete_para(
+                'agendada', 'Rua X, 1, São Paulo, 04561-000',
+                contato='Fulano · 11999')
+    assert erro                                        # cliente vê msg amigável
+    assert m.called
+    args, kw = m.call_args
+    assert args[0] == 'Rua X, 1, São Paulo, 04561-000'
+    assert kw.get('contato') == 'Fulano · 11999'
+
+
+def test_alerta_endereco_nao_dispara_fora_area(app):
+    """Fora da área é resposta legítima (não é 'erro de endereço') — não alerta."""
+    from app.services import loja_checkout
+    with app.app_context():
+        with patch('app.services.loja_checkout.frete_svc.consultar_frete',
+                   return_value={'ok': True, 'fora_area': True,
+                                 'distancia_km': 40, 'endereco': 'X',
+                                 'aviso': 'fora'}), \
+             patch('app.services.loja_alerta.alertar_endereco_falho') as m:
+            loja_checkout._frete_para('agendada', 'Rua Y, 1, Campinas, 13000-000')
+    assert not m.called
+
+
+def test_desligado_por_env_nao_agenda_endereco(app):
+    from app.services import loja_alerta
+    with app.app_context():
+        app.config['LOJA_ALERTA_TRAVA'] = '0'
+        with patch.object(loja_alerta._POOL, 'submit') as mock_submit:
+            loja_alerta.alertar_endereco_falho('Rua X', '00000-000')
+    assert not mock_submit.called
