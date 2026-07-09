@@ -329,11 +329,18 @@ def test_google_teto_diario_para_de_chamar(app):
         app.config['GOOGLE_MAPS_API_KEY'] = 'k'
         app.config['FRETE_GOOGLE'] = '1'
         app.config['FRETE_GOOGLE_MAX_DIA'] = 2
-        nominatim = _resp(200, [{'lat': '-23.61', 'lon': '-46.70',
-                                 'display_name': 'X'}])
+
+        def fake_get(url, **kw):
+            # BrasilAPI COM coordenada (fonte grátis resolve sem Nominatim).
+            if 'brasilapi' in url:
+                return _resp(200, {'city': 'São Paulo', 'location': {
+                    'coordinates': {'latitude': -23.60, 'longitude': -46.69}}})
+            return _resp(200, [{'lat': '-23.61', 'lon': '-46.70',
+                                'display_name': 'X'}])
+
         with patch('app.services.google_maps.geocode',
                    return_value=(-23.60, -46.69)) as g, \
-             patch('app.services.frete.requests.get', return_value=nominatim):
+             patch('app.services.frete.requests.get', side_effect=fake_get):
             frete.consultar_frete('Rua A, 1, São Paulo, 01000-000')
             frete.consultar_frete('Rua B, 2, São Paulo, 02000-000')
             r3 = frete.consultar_frete('Rua C, 3, São Paulo, 03000-000')
