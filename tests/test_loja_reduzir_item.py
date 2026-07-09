@@ -68,8 +68,11 @@ def _pedido_pago(db, loja, produto, qtd, *, codigo='AAAA0001', preco=435.0,
         subtotal=Decimal(str(preco)) * qtd))
     p.recalcular_total()
     db.session.commit()
-    # baixa o estoque como o webhook 'pago' faria
+    # baixa o estoque + reserva o plano-do-dia como o webhook 'pago' faria
     loja_estoque_reserva.consumir(p, loja_id=loja.id)
+    if data_entrega:
+        from app.services import loja_pagamento
+        loja_pagamento._reservar_no_plano_do_dia(p)
     db.session.add(PagamentoOnline(
         pedido_id=p.id, metodo='cartao', valor=p.valor_total, status='pago',
         pagarme_charge_id='ch_teste'))
