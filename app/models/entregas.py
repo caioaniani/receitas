@@ -71,6 +71,28 @@ class GeocodeCache(db.Model):
     fonte = db.Column(db.String(50))  # 'brasilapi', 'awesomeapi', 'nominatim', 'nominatim_cep_rejeitado', etc.
     criado_em = db.Column(db.DateTime, default=agora)
 
+
+class FreteSensor(db.Model):
+    """SENSOR de geocode do frete (09/07/2026): registra cada evento que PODE
+    barrar/errar uma venda no site — endereço não localizado (venda travou),
+    frete impreciso (cotou pelo centroide do CEP), ou Google resgatou. Serve
+    pro dono ver o padrão e saber se está perdendo venda. Só log (best-effort),
+    nunca afeta o checkout."""
+    __tablename__ = 'frete_sensor'
+
+    id = db.Column(db.Integer, primary_key=True)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
+    origem = db.Column(db.String(20))       # preview | checkout | lalamove
+    desfecho = db.Column(db.String(24), index=True)  # barrado | impreciso |
+    #                                        resolvido_google | lalamove_falhou
+    fonte = db.Column(db.String(20))        # google | gratis | cep_centroide
+    endereco = db.Column(db.String(300))
+    cep = db.Column(db.String(12))
+    km = db.Column(db.Float)
+    valor = db.Column(db.Float)
+    contato = db.Column(db.String(160))
+
+
 class Driver(db.Model):
     """Motorista/motoboy cadastrado. Pedidos sao atribuidos a um Driver."""
     __tablename__ = 'driver_entrega'
