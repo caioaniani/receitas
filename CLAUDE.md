@@ -1036,14 +1036,26 @@ centroide). `fonte` in {latlng, google, gratis, cep_centroide}.
 **Sensor de venda barrada** (`FreteSensor` em `models/entregas.py`,
 `app/services/frete_sensor.py`): grava eventos que barram/erram venda —
 `barrado` (nao localizou), `impreciso` (cotou pelo centroide do CEP),
-`resolvido_google` (checkout), `lalamove_falhou`. Sessao ISOLADA
-(`Session(db.engine)` — nao contamina o checkout), best-effort, dedup leve
-(10min), kill-switch `FRETE_SENSOR=0`. Painel owner `/admin/frete-sensores`
-(link em Administracao) mostra contagens + uso/custo Google do dia + lista com
-endereco/contato. Alem do alerta WhatsApp ja existente
-(`loja_alerta.alertar_endereco_falho`, dedup + teto/hora). PII → RETENCAO
-(`RETENCAO_FRETE_SENSOR_DIAS`=90, LGPD). Testes: secao Google em
+`fora_area` (alem do raio), `resolvido_google` (checkout), `lalamove_falhou`.
+Sessao ISOLADA (`Session(db.engine)` — nao contamina o checkout), best-effort,
+dedup leve (10min), kill-switch `FRETE_SENSOR=0`. Painel owner
+`/admin/frete-sensores` (link em Administracao) mostra contagens + uso/custo
+Google do dia + lista com endereco/contato. Alem do alerta WhatsApp ja
+existente (`loja_alerta.alertar_endereco_falho`, dedup + teto/hora). PII →
+RETENCAO (`RETENCAO_FRETE_SENSOR_DIAS`=90, LGPD). Testes: secao Google em
 `tests/test_frete.py`, `tests/test_frete_sensor.py`, `tests/test_loja_alerta.py`.
+
+**Cobertura de notificacao (09/07/2026, "vou saber se der erro no CEP?")**: o
+alerta ao dono migrou de `impreciso=bool` pra `motivo=str` (dict `_MSG_MOTIVO`
+em `loja_alerta.py`: `nao_encontrado`/`impreciso`/`fora_area`/`lalamove` — chave
+de dedup inclui o motivo). Duas lacunas fechadas: (1) **Lalamove** que nao acha
+o destino manda WhatsApp na hora (`motivo='lalamove'`) alem do sensor —
+motoboy nao sai, o dono precisa saber; (2) **fora da area** registra no painel
+SEMPRE (`fora_area`), mas so pinga WhatsApp quando ficou PERTO da borda —
+`distancia_km <= RAIO_MAX_KM + MARGEM_ALERTA_FORA_KM` (25+5=30km; "quase
+comprou"). Muito longe (outra cidade) = so painel, sem inundar o WhatsApp.
+Ordem dos ramos importa: `fora_area` e checado ANTES de `impreciso` (o dict do
+fora_area tambem carrega `impreciso=True` — sem a ordem, dispararia os dois).
 
 **`consultar_frete` agora devolve `fonte` e `impreciso`**; `api_frete` e
 `_frete_para` alertam+sensoreiam nos casos de risco. NUNCA remover o Google do
