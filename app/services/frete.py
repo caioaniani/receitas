@@ -84,6 +84,12 @@ def _extrair_cep(texto):
     return f'{m.group(1)}{m.group(2)}' if m else None
 
 
+def _formatar_cep(cep):
+    """'04561000' -> '04561-000' (forma que o Nominatim geocodifica melhor)."""
+    d = re.sub(r'\D', '', cep or '')
+    return f'{d[:5]}-{d[5:]}' if len(d) == 8 else (cep or '')
+
+
 def _geocodificar_cep(cep):
     """BrasilAPI v2: CEP -> (lat, lng, rótulo, ref) ou None (sem coords/erro).
 
@@ -228,6 +234,21 @@ def geocodificar(endereco_ou_cep):
             # (05/07/2026). Endereço de fora da capital que só resolve aqui é
             # limitação conhecida do último fallback.
             geo = _geocodificar_texto(simples, cep_ref=cep)
+    if (not geo or geo[0] is None) and cep:
+        # RUA + cidade (sem número/bairro/UF): a string cheia às vezes derruba
+        # o Nominatim e o simplificado-com-número cai no HOMÔNIMO (ex: "Rua
+        # Guararapes" existe no Brooklin E na Lapa). Sem cidade de referência
+        # aqui (homônimo é MESMA cidade), o guard de postcode barra o de outro
+        # distrito. Caso real 09/07/2026.
+        rua = texto.split(',')[0].strip()
+        cidade = (ref or {}).get('cidade') or 'São Paulo'
+        if rua:
+            geo = _geocodificar_texto(f'{rua}, {cidade}', cep_ref=cep)
+    if (not geo or geo[0] is None) and cep:
+        # ÚLTIMO RECURSO: geocodifica só o CEP (centroide do distrito). Menos
+        # preciso (pode superestimar o frete), mas RESGATA a venda quando a
+        # BrasilAPI não tem coordenada e nenhuma variante do endereço resolve.
+        geo = _geocodificar_texto(_formatar_cep(cep), cep_ref=cep)
     if not geo or geo[0] is None:
         logger.warning('geocodificacao falhou em todas as tentativas: %r',
                        texto[:200])
