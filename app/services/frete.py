@@ -355,7 +355,7 @@ def consultar_frete(endereco_ou_cep):
     """
     if not (endereco_ou_cep or '').strip():
         return {'ok': False, 'erro': 'endereco_vazio'}
-    geo, impreciso = _geocodificar_impl(endereco_ou_cep)
+    geo, impreciso, fonte = _geocodificar_impl(endereco_ou_cep)
     if not geo:
         return {'ok': False, 'erro': 'nao_encontrado'}
 
@@ -363,10 +363,11 @@ def consultar_frete(endereco_ou_cep):
     km = distancia_km(lat, lng)
     valor = valor_para_distancia(km)
     # `impreciso` = resolveu SÓ pelo centroide do CEP (frete é chute grosseiro).
-    # O caller (checkout) alerta o dono nesses casos — decisão do dono 09/07.
+    # `fonte` = de onde veio a coordenada (google/gratis/cep_centroide) — pro
+    # sensor. O caller (checkout) alerta o dono nos casos de risco (dono 09/07).
     if valor is None:
         return {'ok': True, 'fora_area': True, 'distancia_km': round(km, 1),
-                'endereco': rotulo, 'impreciso': impreciso,
+                'endereco': rotulo, 'impreciso': impreciso, 'fonte': fonte,
                 'aviso': f'fora do raio de {int(RAIO_MAX_KM)} km — '
                          'confirmar com a equipe'}
     return {'ok': True, 'fora_area': False, 'valor': valor,
