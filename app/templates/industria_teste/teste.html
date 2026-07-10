@@ -500,45 +500,52 @@
 {% endif %}
 
 <details class="como-funciona">
-    <summary>ℹ️ Como funciona esta tela</summary>
-    <p class="mb-1 mt-2">
-    Painel da <strong>administração</strong>. A produção é distribuída
-    <strong>por dia</strong> acompanhando as entregas (deslocada pelo lead da
-    receita) — um pouco de cada, sem faltar nem sobrar; o estoque pronto cobre
-    os dias mais próximos primeiro. Cada célula: <strong>unidades</strong> a
-    produzir e, abaixo, as <strong>fornadas</strong>. <strong>Edite qualquer
-    célula</strong> (os outros dias se reajustam mantendo o total da receita) —
-    isso fica salvo como <strong>rascunho</strong> e <strong>só vai pro padeiro
-    quando você clicar “📤 enviar à produção”</strong> (ou “🔄 atualizar
-    produção” num dia já enviado, pra empurrar suas edições). Num dia enviado,
-    <strong>as células que diferem da ordem mostram “📤 N”</strong> — o número
-    que o padeiro está vendo — e o cabeçalho ganha <strong>“⚠ difere do
-    enviado”</strong> enquanto a atualização não for enviada. O
-    <strong>cadeado 🔒</strong> no cabeçalho fecha o dia: edição de célula,
-    “↺ limpar edições” e o reset por linha <strong>pulam o dia fechado</strong>
-    (reabra com um clique pra voltar a mexer). A tela
-    <strong>“✏️ editar”</strong> do padeiro é mão dupla: o que você muda lá
-    reflete aqui. O estoque e a matéria-prima só mexem quando o padeiro produz.
-    </p>
-    <p class="mb-1">
-    <strong>Prever por</strong> escolhe a fonte da demanda: <strong>Pedidos das
-    lojas</strong> (o que elas costumam pedir — original), <strong>Vendas das
-    lojas</strong> (o que elas de fato venderam, com estornos descontados e
-    merma estrutural somada) ou <strong>Maior dos dois</strong> por dia (não
-    subproduz quando um dos sinais está defasado). Pedidos firmes contam
-    sempre; aprovar/enviar usa o motor que está na tela.
-    </p>
-    <p class="mb-0">
-    Coluna amarela = <strong>hoje</strong> (o que a indústria produz agora).
-    Receitas com <span class="tag-lead">Nd</span> levam N dias pra ficar prontas,
-    então o dia de produção é antecipado em relação à entrega. O ✏️ marca linha
-    editada à mão (↺ volta à sugestão); <span class="tag-insumo">insumo</span> é
-    calculado a partir dos produtos finais (edite o produto, não o insumo);
-    <span class="tag-retorno">♻️ capado ao retorno</span> segue a política "só de
-    sobras" (produz até o estoque devolvido cobrir);
-    <span class="tag-fds">fim de semana</span> (fornada especial) vende sex/sáb/dom
-    e produz <strong>só qui/sex/sáb</strong> — as células hachuradas não recebem
-    produção. No rodapé, o total de cada dia — o dia mais carregado fica destacado.
+    <summary>ℹ️ Como funciona esta tela (fluxo, legenda e glossário)</summary>
+    <h6>O fluxo, em 5 passos</h6>
+    <ol class="fluxo-passos">
+        <li><strong>O sistema calcula</strong> quanto produzir por dia, a partir
+            dos pedidos firmes das lojas + previsão do histórico, descontando o
+            estoque pronto. Você escolhe a fonte da previsão em
+            <strong>"Prever por"</strong>.</li>
+        <li><strong>Você revisa e edita</strong> qualquer célula do grid (os
+            outros dias se reajustam mantendo o total). Tudo fica como
+            <strong>rascunho</strong> — nada muda pro padeiro ainda.</li>
+        <li><strong>"📤 enviar"</strong> cria a ordem do dia e o padeiro passa a
+            vê-la em /padeiro. Editou o grid depois? Use
+            <strong>"🔄 atualizar produção"</strong> no menu ⋯ do dia.</li>
+        <li><strong>O padeiro produz e confirma</strong> — só aí o estoque e a
+            matéria-prima mexem de verdade. Até lá, o que foi mandado aparece
+            como projeção (o "+N a produzir" verde nas linhas).</li>
+        <li><strong>A auditoria fecha o ciclo</strong>: ordem que venceu sem
+            confirmação aparece lá — reagende pra hoje ou dispense.</li>
+    </ol>
+    <h6>Legenda do grid</h6>
+    <div class="leg-grid">
+        <span class="leg-item"><span class="leg-swatch" style="background:#fff8e1;border-color:#e0c46c;"></span> coluna de <strong>hoje</strong></span>
+        <span class="leg-item"><span class="leg-swatch" style="background:#fde0e4;border-color:#f1aeb5;"></span> entrega firme <strong>em risco</strong> nesse dia</span>
+        <span class="leg-item"><span class="leg-swatch" style="background:#f6f4fb;border-color:#e4def5;"></span> <span class="tag-insumo">insumo</span> — derivado dos produtos (edite o produto, não o insumo)</span>
+        <span class="leg-item"><span class="leg-swatch" style="background:repeating-linear-gradient(45deg,#f4f5f7 0 4px,#eceef1 4px 8px);"></span> dia bloqueado (<span class="tag-fds">fim de semana</span> produz só qui/sex/sáb)</span>
+        <span class="leg-item"><span class="leg-swatch" style="background:#eef4fb;border-color:#cfe0f1;"></span> dia <strong>fechado 🔒</strong> — edições e "limpar" pulam ele</span>
+        <span class="leg-item">📤 N = o número que o <strong>padeiro está vendo</strong> (quando o grid difere da ordem enviada)</span>
+        <span class="leg-item">✏️ = linha editada à mão (↺ volta ao cálculo) · <span class="tag-lead">Nd</span> = leva N dias pra ficar pronta (produção antecipada)</span>
+        <span class="leg-item"><span class="tag-retorno">♻️ capado ao retorno</span> = política "só de sobras": produz até o estoque devolvido cobrir</span>
+    </div>
+    <h6>Glossário dos números</h6>
+    <dl class="glossario mb-0">
+        <dt>firme</dt><dd>pedidos de loja já feitos pra janela — compromisso real, conta em qualquer motor de previsão.</dd>
+        <dt>previsto</dt><dd>demanda estimada pelo histórico (por dia da semana, com mais peso pro recente).</dd>
+        <dt>demanda</dt><dd>por dia, o maior entre firme e previsto — é pro maior que se produz.</dd>
+        <dt>em estoque</dt><dd>pronto na indústria (o padeiro já confirmou a produção).</dd>
+        <dt>estoque útil</dt><dd>o que sobra do estoque depois das entregas iminentes — o que de fato cobre a janela.</dd>
+        <dt>projetado</dt><dd>estoque real + produção mandada e ainda não confirmada (verde = no prazo, rosa = vencida).</dd>
+        <dt>fornadas</dt><dd>batidas de amassadeira necessárias pra quantidade da célula.</dd>
+    </dl>
+    <p class="mb-0 mt-2 text-muted" style="font-size:.76rem;">
+    A tela "✏️ editar" do padeiro é mão dupla: o que mudar lá reflete aqui.
+    Aprovar/enviar sempre usa o motor e a visão que estão na tela.
+    Dúvida sobre um número? Abra a linha (▸) e clique em
+    "De onde vem a previsão?". Pra saber se a previsão anda acertando, veja a
+    <a href="{{ url_for('producao.previsao_acuracia') }}">acurácia da previsão</a>.
     </p>
 </details>
 
