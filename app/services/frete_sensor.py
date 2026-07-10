@@ -31,7 +31,13 @@ def _pode_gravar(chave):
         if len(_ultimo) > 512:
             for k in [k for k, t in _ultimo.items() if agora - t >= _DEDUP_SEG]:
                 del _ultimo[k]
-        if agora - _ultimo.get(chave, 0.0) < _DEDUP_SEG:
+        # Chave NUNCA vista não é duplicata — testar presença explícita.
+        # (Sentinela 0.0 + `agora - 0.0 < janela` engolia TODO primeiro
+        # evento enquanto time.monotonic() < _DEDUP_SEG — nos ~10 min após
+        # cada restart de worker o sensor não gravava nada, justo depois de
+        # um deploy, quando é mais provável ter regressão de frete.)
+        ult = _ultimo.get(chave)
+        if ult is not None and agora - ult < _DEDUP_SEG:
             return False
         _ultimo[chave] = agora
         return True
