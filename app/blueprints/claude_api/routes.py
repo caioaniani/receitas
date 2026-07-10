@@ -644,3 +644,60 @@ def pedidos_dia():
         })
     return jsonify(ok=True, data=data_ent.isoformat(), total=len(pedidos),
                    pedidos=pedidos)
+
+
+@claude_api_bp.route('/tiny-danfe-debug')
+@_claude_auth_required
+def tiny_danfe_debug():
+    """SONDA read-only do DANFE no Tiny/Olist (10/07/2026): mostra a resposta
+    crua do link e, se o download não vier em PDF, a ESTRUTURA da página do
+    visualizador do Olist (candidatos de PDF + trecho do HTML) — pra eu saber
+    como extrair o PDF embutido. Uso: ?id=<id_da_nota_no_tiny>.
+
+    Não escreve nada — só lê o Tiny e a página pública do documento."""
+    import requests
+
+    from app.services import tiny, tiny_nf
+    nota_id = (request.args.get('id') or '').strip()
+    if not nota_id:
+        return jsonify(ok=False, erro='passe ?id=<id_da_nota>'), 400
+    out = {'ok': True, 'nota_id': nota_id, 'tiny_disponivel': tiny.disponivel()}
+    retorno = tiny._get('nota.fiscal.obter.link.php',
+                        params={'id': nota_id}, retornar_erro=True)
+    if isinstance(retorno, dict):
+        out['retorno_status'] = retorno.get('status')
+        out['campos_link'] = {k: retorno.get(k) for k in
+                              ('link_danfe', 'link_pdf', 'link_nfe', 'link')
+                              if retorno.get(k)}
+        out['erros'] = tiny._extrair_erros(retorno) or None
+    else:
+        out['motivo_falha'] = tiny._consumir_falha()
+    link, motivo = tiny.obter_link_nota_fiscal_com_motivo(nota_id)
+    out['link_resolvido'] = link
+    out['motivo'] = motivo
+    if link:
+        pdf, motivo_pdf = tiny_nf.baixar_danfe_pdf_com_motivo(nota_id)
+        out['pdf_ok'] = bool(pdf)
+        out['pdf_motivo'] = motivo_pdf
+        out['pdf_tamanho'] = len(pdf) if pdf else 0
+        if not pdf:
+            try:
+                r = requests.get(link, timeout=20,
+                                 headers={'User-Agent': tiny_nf._UA_NAVEGADOR})
+                out['pagina_status'] = r.status_code
+                out['pagina_url_final'] = r.url
+                out['pagina_ctype'] = r.headers.get('Content-Type')
+                texto = r.text or ''
+                out['pdf_candidatos'] = tiny_nf._candidatos_pdf_na_pagina(
+                    texto, r.url)
+                # Todos os href/src/iframe/embed (não só .pdf) + trecho do
+                # HTML: se o PDF vier por um link sem 'pdf' no nome, aparece
+                # aqui pra eu enxergar o padrão.
+                import re
+                out['todos_src_href'] = re.findall(
+                    r"""(?:href|src|data-src|content)\s*=\s*["']([^"']+)["']""",
+                    texto, re.I)[:40]
+                out['html_inicio'] = texto[:2500]
+            except requests.RequestException as exc:
+                out['pagina_erro'] = str(exc)
+    return jsonify(out)

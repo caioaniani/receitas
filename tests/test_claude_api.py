@@ -381,3 +381,35 @@ def test_frete_debug_roda_etapas_sem_500(app, monkeypatch):
     assert d['etapas']['brasilapi_cep']['coords'] is None
     # e o oficial cotou (cidade bate, ignora o CEP torto do OSM)
     assert d['oficial']['ok'] is True and d['oficial']['fora_area'] is False
+
+
+def test_tiny_danfe_debug_exige_token(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    c = app.test_client()
+    assert c.get('/api/claude/tiny-danfe-debug?id=909').status_code == 401
+
+
+def test_tiny_danfe_debug_mostra_estrutura(app):
+    """Com token, a sonda devolve os campos de link e (quando o PDF falha)
+    os candidatos de PDF da página do Olist. Tiny/HTTP mockados."""
+    from unittest.mock import patch
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    app.config['TINY_API_TOKEN'] = 'tok'
+
+    class _R:
+        status_code = 200
+        headers = {'Content-Type': 'text/html; charset=utf-8'}
+        url = 'https://erp.olist.com/doc.view?id=x'
+        text = '<iframe src="/nfe/danfe_1.pdf"></iframe>'
+    c = app.test_client()
+    with patch('app.services.tiny._get',
+               return_value={'status': 'OK',
+                             'link_nfe': 'https://erp.olist.com/doc.view?id=x'}), \
+         patch('requests.get', return_value=_R()):
+        r = c.get('/api/claude/tiny-danfe-debug?id=909358497',
+                  headers={'Authorization': f'Bearer {TOKEN}'})
+    j = r.get_json()
+    assert j['ok'] is True
+    assert j['pdf_ok'] is False
+    assert j['campos_link']['link_nfe'].endswith('id=x')
+    assert 'https://erp.olist.com/nfe/danfe_1.pdf' in j['pdf_candidatos']
