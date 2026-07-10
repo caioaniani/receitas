@@ -124,35 +124,52 @@ def test_candidatos_pdf_na_pagina_resolve_relativo():
                      'https://cdn.olist.com/x.pdf']
 
 
-def test_baixar_segue_html_ate_o_pdf_embutido(app):
-    """Download vem HTML (visualizador Olist) → segue o link e pega o PDF."""
-    html = '<embed src="https://cdn.olist.com/danfe.pdf">'
-
-    def _fake_get(url, **kw):
-        if url.endswith('.pdf'):
-            return _Resp(content=b'%PDF-real', ctype='application/pdf')
-        return _Resp(ctype='text/html; charset=utf-8', text=html,
-                     url='https://erp.olist.com/doc.view?id=x')
-    with app.app_context():
-        app.config['TINY_API_TOKEN'] = 'tok'
-        with patch('app.services.tiny.obter_link_nota_fiscal_com_motivo',
-                   return_value=('https://erp.olist.com/doc.view?id=x', None)), \
-             patch('requests.get', side_effect=_fake_get):
-            pdf, motivo = tiny_nf.baixar_danfe_pdf_com_motivo('909')
-    assert pdf == b'%PDF-real' and motivo is None
-
-
-def test_baixar_html_sem_pdf_embutido_da_motivo(app):
-    """Visualizador sem PDF estático (carrega por JS) → motivo claro."""
-    html = '<html><body><div id="viewer"></div></body></html>'
+def test_baixar_html_do_olist_converte_em_pdf(app):
+    """Download vem HTML (visualizador Olist, que renderiza o DANFE) → o
+    weasyprint converte o HTML em PDF."""
+    html = '<html><body>DANFE 011629</body></html>'
     with app.app_context():
         app.config['TINY_API_TOKEN'] = 'tok'
         with patch('app.services.tiny.obter_link_nota_fiscal_com_motivo',
                    return_value=('https://erp.olist.com/doc.view?id=x', None)), \
              patch('requests.get',
-                   return_value=_Resp(ctype='text/html', text=html)):
+                   return_value=_Resp(ctype='text/html; charset=utf-8',
+                                      text=html)), \
+             patch('app.services.tiny_nf._html_para_pdf',
+                   return_value=b'%PDF-convertido') as conv:
             pdf, motivo = tiny_nf.baixar_danfe_pdf_com_motivo('909')
-    assert pdf is None and 'visualizador do Olist' in motivo
+    assert pdf == b'%PDF-convertido' and motivo is None
+    args, _ = conv.call_args
+    assert args[0] == html                          # HTML do Olist
+    assert args[1] == 'https://erp.olist.com/doc.view?id=x'   # base_url
+
+
+def test_baixar_html_conversao_falha_da_motivo(app):
+    """Se a conversão HTML→PDF falhar (weasyprint indisponível/erro) →
+    motivo claro, sem derrubar nada."""
+    html = '<html><body>DANFE</body></html>'
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+        with patch('app.services.tiny.obter_link_nota_fiscal_com_motivo',
+                   return_value=('https://erp.olist.com/doc.view?id=x', None)), \
+             patch('requests.get',
+                   return_value=_Resp(ctype='text/html', text=html)), \
+             patch('app.services.tiny_nf._html_para_pdf', return_value=None):
+            pdf, motivo = tiny_nf.baixar_danfe_pdf_com_motivo('909')
+    assert pdf is None and 'conversão pra PDF falhou' in motivo
+
+
+def test_html_para_pdf_render_real():
+    """Sanidade do conversor com weasyprint de verdade (o PDF sai com o
+    magic %PDF)."""
+    pytest = __import__('pytest')
+    try:
+        import weasyprint  # noqa: F401
+    except Exception:
+        pytest.skip('weasyprint não instalado neste ambiente')
+    pdf = tiny_nf._html_para_pdf('<html><body>DANFE 011629</body></html>',
+                                 'https://erp.olist.com/doc.view?id=x')
+    assert pdf and pdf[:5] == b'%PDF-'
 
 
 def _venda_com_nf(email='fin@united.com'):
