@@ -830,6 +830,25 @@
 </div>
 {% endif %}
 
+{# Modal "MP do dia": explosão de matéria-prima da produção do dia vs estoque. #}
+<div class="modal fade" id="mp-dia-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">🧾 Matéria-prima — <span id="mp-dia-label"></span></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body" id="mp-dia-corpo">
+        <div class="text-muted">carregando…</div>
+      </div>
+      <div class="modal-footer py-1">
+        <span class="text-muted small me-auto">Mesma conta da baixa real (a confirmação do padeiro vai baixar exatamente isto). Só MP — sub-receitas prontas (congelado) saem do estoque da indústria.</span>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('producao.calculadora') if 'producao.calculadora' in url_map_endpoints else '#' }}" id="mp-dia-compras" hidden>🛒 calculadora de compras</a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
     // Edicao manual das celulas: edita um dia -> servidor redistribui mantendo
