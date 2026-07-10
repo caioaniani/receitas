@@ -559,11 +559,13 @@ def fatura_emitir_nf(fid):
 @login_required
 @admin_required
 def fatura_danfe(fid):
+    from app.services import tiny
     fatura = FaturaB2B.query.get_or_404(fid)
-    url = tiny_nf_b2b.link_danfe(fatura)
+    url, motivo = tiny.obter_link_nota_fiscal_com_motivo(
+        fatura.tiny_nota_fiscal_id)
     if not url:
-        flash(f'Fatura {fatura.codigo}: não consegui obter o link do DANFE '
-              'no Tiny (a NF precisa estar autorizada).', 'warning')
+        flash(f'Fatura {fatura.codigo}: não consegui obter o DANFE no '
+              f'Tiny — {motivo}.', 'warning')
         return redirect(url_for('b2b.fatura_detalhe', fid=fid))
     return redirect(url)
 
