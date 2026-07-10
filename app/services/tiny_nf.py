@@ -526,6 +526,22 @@ def _pdf_de_pagina_html(html, base_url):
     return None, None
 
 
+def _html_para_pdf(html, base_url):
+    """Converte o HTML do DANFE (visualizador do Olist) em PDF com o
+    weasyprint. Import LAZY + try/except: se a lib/infra faltar, devolve
+    None e o caller degrada pro aviso — nunca derruba o app."""
+    try:
+        from weasyprint import HTML
+    except Exception as exc:  # noqa: BLE001 — ImportError ou erro de lib nativa
+        logger.warning('danfe: weasyprint indisponivel (%s)', exc)
+        return None
+    try:
+        return HTML(string=html, base_url=base_url).write_pdf()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('danfe: falha ao converter HTML->PDF: %s', exc)
+        return None
+
+
 def baixar_danfe_pdf_com_motivo(nota_id):
     """Como `baixar_danfe_pdf`, mas devolve `(bytes, motivo)` — o motivo
     carrega a causa REAL (erro do Tiny, link vazio, ou download não-PDF)
@@ -546,18 +562,19 @@ def baixar_danfe_pdf_com_motivo(nota_id):
     ctype = (r.headers.get('Content-Type') or '').lower()
     if r.status_code == 200 and 'pdf' in ctype:
         return r.content, None
-    # Veio HTML (visualizador do Olist) — tenta achar o PDF embutido nela.
+    # Veio HTML: hoje o link do Tiny é o visualizador do Olist, que
+    # RENDERIZA o DANFE em HTML+CSS (não há PDF nativo — confirmado). Então
+    # convertemos o HTML em PDF do nosso lado com o weasyprint (base_url =
+    # a URL do doc.view, pra a CSS/imagens externas do Olist resolverem).
     if r.status_code == 200 and 'html' in ctype:
-        pdf, achou_url = _pdf_de_pagina_html(r.text, r.url)
+        pdf = _html_para_pdf(r.text, r.url)
         if pdf:
-            logger.info('danfe: PDF extraido da pagina do Olist nota=%s (%s)',
-                        nota_id, achou_url)
+            logger.info('danfe: HTML do Olist convertido em PDF nota=%s '
+                        '(%d bytes)', nota_id, len(pdf))
             return pdf, None
-        logger.warning('danfe: pagina do Olist sem PDF embutido nota=%s',
-                       nota_id)
         return None, ('o link do Tiny abriu o visualizador do Olist (HTML) '
-                      'e não achei o PDF embutido — use "Ver DANFE" e baixe '
-                      'pelo navegador, ou avise pra eu ajustar')
+                      'e a conversão pra PDF falhou — use "Ver DANFE" e '
+                      'baixe pelo navegador enquanto eu verifico')
     logger.warning('danfe download invalido nota=%s (HTTP %s, %s)',
                    nota_id, r.status_code, ctype)
     return None, (f'o link do Tiny não devolveu um PDF (HTTP '
