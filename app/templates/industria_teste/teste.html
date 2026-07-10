@@ -790,6 +790,15 @@
                         <button type="button" class="btn-reset-inline" data-rid="{{ r.receita_id }}">Resetar pra sugestão</button>
                     </div>
                     {% endif %}
+                    {% if r.insumo_sem_vespera %}
+                    <div class="vespera-box">⚠ <strong>Sem véspera:</strong> a produção
+                        {% for d in r.insumo_sem_vespera.dias %}de {{ d[8:] }}/{{ d[5:7] }}{{ ', ' if not loop.last }}{% endfor %}
+                        consome <strong>{{ r.insumo_sem_vespera.faltam }}</strong> deste insumo além do estoque pronto
+                        ({{ r.insumo_sem_vespera.coberto }} coberto) — e produzir agora não resolve: ele leva
+                        <strong>{{ r.insumo_sem_vespera.lead }}d</strong> pra ficar pronto. Se existe {{ r.nome }} na
+                        geladeira fora do sistema, acerte o estoque; senão, reveja a produção que o consome.
+                        <em>O grid não agenda produção que não chegaria a tempo.</em></div>
+                    {% endif %}
                     {% if r.breakdown_bom %}
                     <div class="bom-box">
                         <span class="bom-tt">↳ Insumo puxado pela produção de:</span>
