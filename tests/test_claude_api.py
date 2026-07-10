@@ -401,6 +401,7 @@ def test_tiny_danfe_debug_mostra_estrutura(app):
         headers = {'Content-Type': 'text/html; charset=utf-8'}
         url = 'https://erp.olist.com/doc.view?id=x'
         text = '<iframe src="/nfe/danfe_1.pdf"></iframe>'
+        content = b'<html>danfe</html>'
     c = app.test_client()
     with patch('app.services.tiny._get',
                return_value={'status': 'OK',
