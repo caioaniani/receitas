@@ -223,3 +223,89 @@ def test_index_sem_pendencias_sem_painel(app, admin_user):
     client = _login_admin(app, admin_user)
     html = client.get('/telaindustriateste/').get_data(as_text=True)
     assert 'id="proximos-passos"' not in html
+
+
+# ── Regra da véspera (dono, 10/07/2026): consumo de insumo DENTRO do lead
+# não agenda produção inútil — massa feita hoje só vira croissant amanhã. ──
+
+def _cenario_bom_vespera(qtd=100, dias_entrega=0, estoque_massa=0):
+    """Croissant (lead 0, 1 bola por 50 un) consome 'Massa Vesp' (lead 1d).
+    Entrega em hoje+dias_entrega → croissant produzido nesse dia."""
+    from app.models import EstoqueProducao, ReceitaIngrediente
+    loja = Loja(nome='Loja Vesp', ativa=True)
+    massa = Receita(nome='Massa Vesp', categoria='Paes', rendimento_qtd=1,
+                    rendimento_unidade='un', peso_base=1000.0,
+                    dias_producao=1)
+    cro = Receita(nome='Croissant Vesp', categoria='Folhados',
+                  rendimento_qtd=50, rendimento_unidade='un',
+                  peso_base=1000.0)
+    db.session.add_all([loja, massa, cro])
+    db.session.flush()
+    db.session.add(ReceitaIngrediente(
+        receita_id=cro.id, tipo='receita', sub_receita_id=massa.id,
+        ingrediente_nome='Massa Vesp', porcentagem=1))
+    if estoque_massa:
+        db.session.add(EstoqueProducao(receita_id=massa.id,
+                                       quantidade=estoque_massa))
+    dd = hoje() + timedelta(days=dias_entrega)
+    p = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=dd,
+                   data_pedido=dd)
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=p.id, receita_id=cro.id,
+                              quantidade=qtd))
+    db.session.commit()
+    return massa, cro
+
+
+def test_vespera_consumo_hoje_nao_agenda_massa_hoje(app):
+    """Croissant produzido HOJE consome massa cuja véspera já passou: o grid
+    NÃO agenda bolas pra hoje (não serviriam) — vira aviso insumo_sem_vespera
+    com a falta e o dia do consumo."""
+    from app.services.previsao_producao import cronograma_producao
+    massa, cro = _cenario_bom_vespera(qtd=100, dias_entrega=0)
+    crono = cronograma_producao(horizonte_dias=7)
+    rc = next(x for x in crono['receitas'] if x['receita_id'] == cro.id)
+    rm = next(x for x in crono['receitas'] if x['receita_id'] == massa.id)
+    assert rc['por_dia'][0]['qtd'] == 100          # croissant hoje
+    assert rm['total'] == 0                        # nenhuma bola agendada
+    assert rm['consumo_janela'] == 2.0             # 100 × 1/50
+    sv = rm['insumo_sem_vespera']
+    assert sv['faltam'] == 2.0
+    assert sv['lead'] == 1
+    assert sv['dias'] == [hoje().isoformat()]
+
+
+def test_vespera_estoque_pronto_cobre_sem_aviso(app):
+    """Com massa da véspera em estoque, o consumo de hoje é coberto — sem
+    aviso e sem produção."""
+    from app.services.previsao_producao import cronograma_producao
+    massa, _cro = _cenario_bom_vespera(qtd=100, dias_entrega=0,
+                                       estoque_massa=5)
+    crono = cronograma_producao(horizonte_dias=7)
+    rm = next(x for x in crono['receitas'] if x['receita_id'] == massa.id)
+    assert rm['total'] == 0
+    assert 'insumo_sem_vespera' not in rm
+
+
+def test_vespera_consumo_futuro_agenda_na_vespera(app):
+    """Consumo com véspera DENTRO do grid segue normal: croissant de hoje+3
+    puxa a massa pra hoje+2, sem aviso (regressão do comportamento bom)."""
+    from app.services.previsao_producao import cronograma_producao
+    massa, cro = _cenario_bom_vespera(qtd=100, dias_entrega=3)
+    crono = cronograma_producao(horizonte_dias=7)
+    rc = next(x for x in crono['receitas'] if x['receita_id'] == cro.id)
+    rm = next(x for x in crono['receitas'] if x['receita_id'] == massa.id)
+    dia_cro = next(i for i, c in enumerate(rc['por_dia']) if c['qtd'] > 0)
+    dia_massa = next(i for i, c in enumerate(rm['por_dia']) if c['qtd'] > 0)
+    assert rm['total'] == 2
+    assert dia_massa == dia_cro - 1                # produzida na véspera
+    assert 'insumo_sem_vespera' not in rm
+
+
+def test_vespera_rota_renderiza_aviso(app, admin_user):
+    """A tela mostra a tag '⚠ sem véspera' quando o aviso existe."""
+    _cenario_bom_vespera(qtd=100, dias_entrega=0)
+    client = _login_admin(app, admin_user)
+    html = client.get('/telaindustriateste/').get_data(as_text=True)
+    assert 'sem véspera' in html
