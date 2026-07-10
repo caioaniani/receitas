@@ -67,6 +67,20 @@ def test_link_com_motivo_link_vazio(app):
     assert link is None and 'devolveu o link' in motivo
 
 
+def test_link_com_motivo_http_timeout_propaga_causa(app):
+    """Quando o `_get` esgota (timeout/HTTP 5xx) e devolve None, a causa
+    real vem do thread-local — é o caminho que motivou a mudança."""
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+
+        def _falha(*a, **k):
+            tiny._registrar_falha('timeout (12s) (apos 3 tentativas)')
+            return None
+        with patch('app.services.tiny._get', side_effect=_falha):
+            link, motivo = tiny.obter_link_nota_fiscal_com_motivo('909')
+    assert link is None and 'timeout' in motivo
+
+
 def test_link_com_motivo_sem_token(app):
     with app.app_context():
         app.config['TINY_API_TOKEN'] = ''
