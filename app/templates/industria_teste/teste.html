@@ -1245,11 +1245,9 @@
         }
         function aplicarOrdem() {
             const modo = sel.value;
+            tbody.dataset.ordem = modo;   // o aplicarFiltros lê isto
             if (modo === 'categoria') {
                 ordemOriginal.forEach(function (tr) { tbody.appendChild(tr); });
-                tbody.querySelectorAll('tr.cat-row').forEach(function (c) {
-                    c.hidden = false;
-                });
             } else {
                 const rows = Array.prototype.slice.call(
                     tbody.querySelectorAll('tr.rec-row'));
