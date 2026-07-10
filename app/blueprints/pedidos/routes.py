@@ -300,13 +300,9 @@ def novo():
         if data_entrega < data_min:
             flash(f'A data de entrega deve ser a partir de {data_min.strftime("%d/%m")}.', 'warning')
             lojas = _lojas_operacionais()
-            receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
-            produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-            materias = _mps_pediveis().all()
             return render_template('pedidos/novo.html', lojas=lojas,
-                                   receitas=receitas, produtos=produtos,
-                                   materias=materias, amanha=amanha,
-                                   data_min=data_min, loja_id=loja_id)
+                                   amanha=amanha, data_min=data_min,
+                                   loja_id=loja_id)
 
         # Monta a lista de itens normalizada antes de decidir merge vs novo.
         ids = request.form.getlist('item_id[]')
