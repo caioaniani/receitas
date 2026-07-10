@@ -1194,6 +1194,174 @@
 </script>
 <script>
 (function () {
+    // ── Trilha de dias: clique no chip rola o grid até a coluna e pisca. ──
+    document.addEventListener('click', function (ev) {
+        const chip = ev.target.closest('.dia-chip');
+        if (!chip) return;
+        const data = chip.dataset.data;
+        const th = document.querySelector(
+            '.crono thead th .dia-menu-tt') ? null : null;
+        // Coluna alvo: o th do dia (mesma posição da célula do rodapé).
+        const alvoTd = document.querySelector(
+            'tfoot td[data-data="' + data + '"]');
+        const wrap = document.querySelector('.crono-wrap');
+        if (!alvoTd || !wrap) return;
+        const recCol = document.querySelector('.crono thead th.rec-col');
+        const fixa = recCol ? recCol.offsetWidth : 0;
+        wrap.scrollTo({
+            left: Math.max(0, alvoTd.offsetLeft - fixa - 8),
+            behavior: 'smooth'
+        });
+        wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.querySelectorAll(
+            'td[data-data="' + data + '"], th.col-flash').forEach(function (c) {
+            c.classList.remove('col-flash');
+            void c.offsetWidth;   // reinicia a animação
+            c.classList.add('col-flash');
+        });
+    });
+
+    // ── Ordenação do grid (persistida): reordena os pares de linhas
+    // (receita + detalhe); fora de "por categoria" os cabeçalhos de
+    // categoria somem. Os filtros continuam valendo por cima. ──
+    const sel = document.getElementById('crono-ordem');
+    const tbody = document.querySelector('.crono table tbody');
+    if (sel && tbody) {
+        // Ordem original memorizada pra restaurar "por categoria".
+        const ordemOriginal = Array.prototype.slice.call(tbody.children);
+        function par(tr) {
+            const det = tbody.querySelector(
+                'tr.detalhe-row[data-rid="' + tr.dataset.rid + '"]');
+            return det ? [tr, det] : [tr];
+        }
+        function aplicarOrdem() {
+            const modo = sel.value;
+            if (modo === 'categoria') {
+                ordemOriginal.forEach(function (tr) { tbody.appendChild(tr); });
+                tbody.querySelectorAll('tr.cat-row').forEach(function (c) {
+                    c.hidden = false;
+                });
+            } else {
+                const rows = Array.prototype.slice.call(
+                    tbody.querySelectorAll('tr.rec-row'));
+                rows.sort(function (a, b) {
+                    if (modo === 'producao')
+                        return (parseInt(b.dataset.total, 10) || 0)
+                             - (parseInt(a.dataset.total, 10) || 0);
+                    if (modo === 'atencao') {
+                        const ka = (a.dataset.risco === '1' ? 2 : 0)
+                                 + (a.dataset.pend === '1' ? 1 : 0);
+                        const kb = (b.dataset.risco === '1' ? 2 : 0)
+                                 + (b.dataset.pend === '1' ? 1 : 0);
+                        if (kb !== ka) return kb - ka;
+                        return (parseInt(b.dataset.total, 10) || 0)
+                             - (parseInt(a.dataset.total, 10) || 0);
+                    }
+                    return (a.dataset.nomerec || '')
+                        .localeCompare(b.dataset.nomerec || '', 'pt');
+                });
+                tbody.querySelectorAll('tr.cat-row').forEach(function (c) {
+                    c.hidden = true;
+                });
+                rows.forEach(function (tr) {
+                    par(tr).forEach(function (t) { tbody.appendChild(t); });
+                });
+            }
+            try { localStorage.setItem('crono.ordem', modo); }
+            catch (e) { /* storage indisponível: ordem só não persiste */ }
+        }
+        try {
+            const salvo = localStorage.getItem('crono.ordem');
+            if (salvo && sel.querySelector('option[value="' + salvo + '"]')) {
+                sel.value = salvo;
+                if (salvo !== 'categoria') aplicarOrdem();
+            }
+        } catch (e) { /* idem */ }
+        sel.addEventListener('change', aplicarOrdem);
+    }
+
+    // ── Modal "MP do dia": fetch da explosão de matéria-prima do dia. ──
+    const URL_MPDIA = "{{ url_for('industria_teste.mp_dia') }}";
+    const MP_PARAMS = new URLSearchParams({
+        horizonte: {{ horizonte|tojson }},
+        janela: {{ janela|tojson }},
+        inicio: {{ inicio|tojson }},
+        {% if equilibrar %}equilibrar: 1,{% endif %}
+        motor: {{ motor|tojson }}
+    });
+    const modalEl = document.getElementById('mp-dia-modal');
+    function fmtQtd(v, un) {
+        if (un === 'un') return v + ' un';
+        if (v >= 1000) return (Math.round(v / 100) / 10) + ' kg';
+        return Math.round(v) + ' g';
+    }
+    function esc(t) {
+        const d = document.createElement('div');
+        d.textContent = t == null ? '' : String(t);
+        return d.innerHTML;
+    }
+    document.addEventListener('click', async function (ev) {
+        const btn = ev.target.closest('.mp-dia-btn');
+        if (!btn || !modalEl) return;
+        const corpo = document.getElementById('mp-dia-corpo');
+        document.getElementById('mp-dia-label').textContent =
+            btn.dataset.label || btn.dataset.dia;
+        corpo.innerHTML = '<div class="text-muted">calculando a explosão da ficha…</div>';
+        const linkCompras = document.getElementById('mp-dia-compras');
+        if (linkCompras) linkCompras.hidden = true;
+        // Fecha o menu ⋯ (o clique veio de dentro dele) e abre o modal.
+        document.querySelectorAll('.dia-menu').forEach(function (m) {
+            m.hidden = true;
+        });
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        const p = new URLSearchParams(MP_PARAMS);
+        p.set('data', btn.dataset.dia);
+        let d = null;
+        try {
+            const resp = await fetch(URL_MPDIA + '?' + p.toString());
+            d = await resp.json();
+        } catch (e) { d = null; }
+        if (!d || !d.ok) {
+            corpo.innerHTML = '<div class="text-danger">Não deu pra calcular: '
+                + esc(d && d.erro || 'sem resposta do servidor') + '</div>';
+            return;
+        }
+        if (!d.itens.length) {
+            corpo.innerHTML = '<div class="text-muted">Nada a produzir neste dia'
+                + ' (ou as receitas do dia não têm ficha técnica com MP).</div>';
+            return;
+        }
+        let html = '';
+        if (d.faltam_n) {
+            html += '<div class="alert alert-danger py-2 mb-2" style="font-size:.85rem;">⚠️ <strong>'
+                + d.faltam_n + ' matéria(s)-prima(s) em falta</strong> pra produção deste dia'
+                + ' — compre/receba antes de enviar, ou reduza o grid.</div>';
+            if (linkCompras) linkCompras.hidden = false;
+        } else {
+            html += '<div class="alert alert-success py-2 mb-2" style="font-size:.85rem;">✓ O estoque de MP cobre a produção deste dia ('
+                + d.receitas_n + ' receita(s) no grid).</div>';
+        }
+        html += '<table class="table table-sm mp-tabela mb-0"><thead><tr>'
+            + '<th>Matéria-prima</th><th class="text-end">Necessário</th>'
+            + '<th class="text-end">Em estoque</th><th class="text-end">Falta</th>'
+            + '<th>Fornecedor</th></tr></thead><tbody>';
+        d.itens.forEach(function (it) {
+            html += '<tr class="' + (it.falta > 0 ? 'mp-falta' : '') + '">'
+                + '<td>' + esc(it.nome) + '</td>'
+                + '<td class="text-end">' + fmtQtd(it.necessario, it.unidade) + '</td>'
+                + '<td class="text-end">' + fmtQtd(it.estoque, it.unidade) + '</td>'
+                + '<td class="text-end">' + (it.falta > 0
+                    ? '<span class="mp-falta-qtd">' + fmtQtd(it.falta, it.unidade) + '</span>'
+                    : '<span class="mp-ok-qtd">—</span>') + '</td>'
+                + '<td>' + esc(it.fornecedor || '') + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        corpo.innerHTML = html;
+    });
+})();
+</script>
+<script>
+(function () {
     // ── Analisar por IA (Opus): propõe ajustes de célula com motivo; o
     // humano marca e aplica (vira override de rascunho, mesma guarda da
     // edição manual). ENVIAR ao padeiro continua gesto manual na tela.
