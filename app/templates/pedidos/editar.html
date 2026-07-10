@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "pedidos/_item_typeahead.html" as ta %}
 
 {% block title %}Editar Pedido #{{ pedido.id }}{% endblock %}
 
@@ -48,96 +49,19 @@
                 </tr>
             </thead>
             <tbody id="itens-body">
-                {# Linha modelo escondida — só pro JS pegar o template do <select> de produtos #}
-                <tr class="item-row d-none" id="row-template">
-                    <td>
-                        <select name="item_id[]" class="form-select form-select-sm item-sel">
-                            <option value="">Selecione...</option>
-                            {% set ns = namespace(cat_atual=None) %}
-                            {% for r in receitas %}
-                                {% if r.categoria != ns.cat_atual %}
-                                    {% if ns.cat_atual is not none %}</optgroup>{% endif %}
-                                    <optgroup label="Paes &mdash; {{ r.categoria or 'Outros' }}">
-                                    {% set ns.cat_atual = r.categoria %}
-                                {% endif %}
-                                <option value="r_{{ r.id }}">{{ r.nome }}</option>
-                            {% endfor %}
-                            {% if ns.cat_atual is not none %}</optgroup>{% endif %}
-                            {% if produtos %}
-                            <optgroup label="Produtos">
-                                {% for p in produtos %}
-                                <option value="p_{{ p.id }}">{{ p.nome }}</option>
-                                {% endfor %}
-                            </optgroup>
-                            {% endif %}
-                            {% if materias %}
-                            <optgroup label="Materias-primas">
-                                {% for mp in materias %}
-                                <option value="mp_{{ mp.id }}">{{ mp.nome }}{% if mp.unidade %} ({{ mp.unidade }}){% endif %}</option>
-                                {% endfor %}
-                            </optgroup>
-                            {% endif %}
-                        </select>
-                    </td>
-                    <td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>
-                    <td>
-                        <select name="item_estado[]" class="form-select form-select-sm">
-                            <option value="">Padrão</option>
-                            <option value="backup">Backup</option>
-                            <option value="assado">Assado</option>
-                        </select>
-                    </td>
-                    <td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>
-                    <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()"><i class="bi bi-x"></i></button>
-                    </td>
-                </tr>
+                {# Linha modelo (escondida) que o JS clona ao adicionar item #}
+                {{ ta.item_row(is_template=True) }}
 
-                {# Itens existentes do pedido #}
+                {# Itens existentes, pré-preenchidos. FK manda; nome é o rótulo
+                   visível (pode ser re-editado pela busca). #}
                 {% for it in pedido.itens %}
-                <tr class="item-row">
-                    <td>
-                        <select name="item_id[]" class="form-select form-select-sm item-sel" required>
-                            <option value="">Selecione...</option>
-                            {% set ns2 = namespace(cat_atual=None) %}
-                            {% for r in receitas %}
-                                {% if r.categoria != ns2.cat_atual %}
-                                    {% if ns2.cat_atual is not none %}</optgroup>{% endif %}
-                                    <optgroup label="Paes &mdash; {{ r.categoria or 'Outros' }}">
-                                    {% set ns2.cat_atual = r.categoria %}
-                                {% endif %}
-                                <option value="r_{{ r.id }}" {% if it.receita_id == r.id %}selected{% endif %}>{{ r.nome }}</option>
-                            {% endfor %}
-                            {% if ns2.cat_atual is not none %}</optgroup>{% endif %}
-                            {% if produtos %}
-                            <optgroup label="Produtos">
-                                {% for p in produtos %}
-                                <option value="p_{{ p.id }}" {% if it.produto_id == p.id %}selected{% endif %}>{{ p.nome }}</option>
-                                {% endfor %}
-                            </optgroup>
-                            {% endif %}
-                            {% if materias %}
-                            <optgroup label="Materias-primas">
-                                {% for mp in materias %}
-                                <option value="mp_{{ mp.id }}" {% if it.materia_prima_id == mp.id %}selected{% endif %}>{{ mp.nome }}{% if mp.unidade %} ({{ mp.unidade }}){% endif %}</option>
-                                {% endfor %}
-                            </optgroup>
-                            {% endif %}
-                        </select>
-                    </td>
-                    <td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="{{ it.quantidade }}"></td>
-                    <td>
-                        <select name="item_estado[]" class="form-select form-select-sm">
-                            <option value="" {% if not it.estado %}selected{% endif %}>Padrão</option>
-                            <option value="backup" {% if it.estado == 'backup' %}selected{% endif %}>Backup</option>
-                            <option value="assado" {% if it.estado == 'assado' %}selected{% endif %}>Assado</option>
-                        </select>
-                    </td>
-                    <td><input type="text" name="item_obs[]" class="form-control form-control-sm" value="{{ it.observacao or '' }}" placeholder=""></td>
-                    <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()"><i class="bi bi-x"></i></button>
-                    </td>
-                </tr>
+                    {% if it.receita_id %}
+                        {{ ta.item_row('r_' ~ it.receita_id, it.receita.nome if it.receita else '', it.quantidade, it.estado or '', it.observacao or '') }}
+                    {% elif it.produto_id %}
+                        {{ ta.item_row('p_' ~ it.produto_id, it.produto.nome if it.produto else '', it.quantidade, it.estado or '', it.observacao or '') }}
+                    {% elif it.materia_prima_id %}
+                        {{ ta.item_row('mp_' ~ it.materia_prima_id, it.materia_prima.nome if it.materia_prima else '', it.quantidade, it.estado or '', it.observacao or '') }}
+                    {% endif %}
                 {% endfor %}
             </tbody>
         </table>
@@ -156,23 +80,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-(function() {
-    var template = document.getElementById('row-template');
-    var itemOpts = template.querySelector('.item-sel').innerHTML;
-    var tbody = document.getElementById('itens-body');
-
-    document.getElementById('btn-add-item').addEventListener('click', function() {
-        var tr = document.createElement('tr');
-        tr.className = 'item-row';
-        tr.innerHTML =
-            '<td><select name="item_id[]" class="form-select form-select-sm item-sel" required>' + itemOpts + '</select></td>' +
-            '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
-            '<td><select name="item_estado[]" class="form-select form-select-sm"><option value="">Padrão</option><option value="backup">Backup</option><option value="assado">Assado</option></select></td>' +
-            '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
-            '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()"><i class="bi bi-x"></i></button></td>';
-        tbody.appendChild(tr);
-    });
-})();
-</script>
+{{ ta.typeahead_assets() }}
 {% endblock %}
