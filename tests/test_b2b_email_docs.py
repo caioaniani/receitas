@@ -135,8 +135,8 @@ def test_rota_enviar_nf_email_baixa_danfe_e_anexa(app, admin_user):
         vid = v.id
     c = app.test_client()
     _login(c, admin_user.id)
-    with patch('app.services.tiny_nf.baixar_danfe_pdf',
-               return_value=b'%PDF-danfe') as baixar, \
+    with patch('app.services.tiny_nf.baixar_danfe_pdf_com_motivo',
+               return_value=(b'%PDF-danfe', None)) as baixar, \
          patch('app.services.email.enviar',
                return_value={'ok': True, 'id': 'msg2'}) as env:
         r = c.post(f'/b2b/vendas/{vid}/enviar-nf-email',
