@@ -483,28 +483,85 @@ def baixar_danfe_pdf(nota_id):
     return pdf
 
 
+# User-Agent de navegador: o link do Tiny hoje aponta pro visualizador do
+# Olist (erp.olist.com/doc.view), que pode servir HTML pra bot e PDF pra
+# navegador — mandamos UA de browser pra pegar o PDF direto quando dá.
+_UA_NAVEGADOR = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                 'AppleWebKit/537.36 (KHTML, like Gecko) '
+                 'Chrome/124.0 Safari/537.36')
+
+
+def _candidatos_pdf_na_pagina(html, base_url):
+    """URLs de PDF citadas numa página HTML (o visualizador do Olist embute
+    o DANFE via <embed>/<iframe>/link). Resolve relativas e tira duplicatas,
+    mantendo a ordem de aparição."""
+    import re
+    from urllib.parse import urljoin
+    achados = re.findall(r"""(?:href|src|data)\s*=\s*["']([^"']+)["']""",
+                         html or '', re.I)
+    vistos, out = set(), []
+    for u in achados:
+        if 'pdf' not in u.lower():
+            continue
+        full = urljoin(base_url, u)
+        if full not in vistos:
+            vistos.add(full)
+            out.append(full)
+    return out
+
+
+def _pdf_de_pagina_html(html, base_url):
+    """Segue a página HTML do visualizador e baixa o 1º link que devolve um
+    PDF de verdade. Devolve (bytes, url) ou (None, None)."""
+    import requests
+    for u in _candidatos_pdf_na_pagina(html, base_url)[:5]:
+        try:
+            r = requests.get(u, timeout=20,
+                             headers={'User-Agent': _UA_NAVEGADOR})
+        except requests.RequestException:
+            continue
+        if (r.status_code == 200
+                and 'pdf' in (r.headers.get('Content-Type') or '').lower()):
+            return r.content, u
+    return None, None
+
+
 def baixar_danfe_pdf_com_motivo(nota_id):
     """Como `baixar_danfe_pdf`, mas devolve `(bytes, motivo)` — o motivo
     carrega a causa REAL (erro do Tiny, link vazio, ou download não-PDF)
-    pra tela mostrar em vez do genérico 'precisa estar autorizada'."""
+    pra tela mostrar em vez do genérico 'precisa estar autorizada'.
+
+    O link do Tiny hoje é o visualizador do Olist (HTML). Se o download não
+    vier em PDF, segue a página atrás do PDF embutido (embed/iframe)."""
     import requests
     url, motivo = tiny.obter_link_nota_fiscal_com_motivo(nota_id)
     if not url:
         return None, motivo
     try:
-        r = requests.get(url, timeout=20)
+        r = requests.get(url, timeout=20,
+                         headers={'User-Agent': _UA_NAVEGADOR})
     except requests.RequestException:
         logger.warning('danfe download falhou (rede) nota=%s', nota_id)
         return None, 'falha de rede ao baixar o PDF do Tiny'
     ctype = (r.headers.get('Content-Type') or '').lower()
-    # O Tiny serve o DANFE como application/pdf; qualquer outra coisa é
-    # página de erro/expiração — não anexar lixo no e-mail do cliente.
-    if r.status_code != 200 or 'pdf' not in ctype:
-        logger.warning('danfe download invalido nota=%s (HTTP %s, %s)',
-                       nota_id, r.status_code, ctype)
-        return None, (f'o link do Tiny não devolveu um PDF (HTTP '
-                      f'{r.status_code}, tipo {ctype or "?"})')
-    return r.content, None
+    if r.status_code == 200 and 'pdf' in ctype:
+        return r.content, None
+    # Veio HTML (visualizador do Olist) — tenta achar o PDF embutido nela.
+    if r.status_code == 200 and 'html' in ctype:
+        pdf, achou_url = _pdf_de_pagina_html(r.text, r.url)
+        if pdf:
+            logger.info('danfe: PDF extraido da pagina do Olist nota=%s (%s)',
+                        nota_id, achou_url)
+            return pdf, None
+        logger.warning('danfe: pagina do Olist sem PDF embutido nota=%s',
+                       nota_id)
+        return None, ('o link do Tiny abriu o visualizador do Olist (HTML) '
+                      'e não achei o PDF embutido — use "Ver DANFE" e baixe '
+                      'pelo navegador, ou avise pra eu ajustar')
+    logger.warning('danfe download invalido nota=%s (HTTP %s, %s)',
+                   nota_id, r.status_code, ctype)
+    return None, (f'o link do Tiny não devolveu um PDF (HTTP '
+                  f'{r.status_code}, tipo {ctype or "?"})')
 
 
 def importar_planilha(conteudo, filename, user_id=None, canal='site'):
