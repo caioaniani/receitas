@@ -1839,6 +1839,16 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
             # tela parecia "nao calculou nada" (caso real 03/07/2026: 10.000
             # pains = 333 bolas de massa, engolidas pelo estoque de 900).
             rr['consumo_janela'] = round(sum(cons), 1)
+            # Regra da vespera: consumo iminente (dentro do lead) que o
+            # estoque pronto NAO cobre — nao da mais tempo de produzir o
+            # insumo. Vira aviso visivel na linha; NUNCA producao no grid.
+            if sem_vespera > 0.01:
+                rr['insumo_sem_vespera'] = {
+                    'faltam': round(sem_vespera, 1),
+                    'coberto': round(cobre_lead, 1),
+                    'lead': L,
+                    'dias': [dias_prod[i].isoformat() for i in dentro_dias],
+                }
             # Rastreabilidade: de QUAIS produtos finais vem a demanda do insumo
             # (ex: Massa para folhar ← Croissant Tradicional N un). Pro expandir.
             origem = consumo_origem.get(rid, {})
