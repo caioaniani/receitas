@@ -590,10 +590,10 @@ def fatura_enviar_nf_email(fid):
         flash('Cliente sem e-mail cadastrado — informe um e-mail no '
               'formulário ou complete o cadastro do cliente.', 'warning')
         return redirect(url_for('b2b.fatura_detalhe', fid=fid))
-    pdf = tiny_nf.baixar_danfe_pdf(fatura.tiny_nota_fiscal_id)
+    pdf, motivo = tiny_nf.baixar_danfe_pdf_com_motivo(
+        fatura.tiny_nota_fiscal_id)
     if not pdf:
-        flash('Não consegui baixar o DANFE no Tiny (a NF precisa estar '
-              'autorizada). Tente de novo em instantes.', 'danger')
+        flash(f'Não consegui baixar o DANFE no Tiny — {motivo}.', 'danger')
         return redirect(url_for('b2b.fatura_detalhe', fid=fid))
     res = email_svc.enviar_nf_b2b(
         fatura, destinatario, pdf,
