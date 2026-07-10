@@ -581,6 +581,15 @@
         <input type="checkbox" id="crono-so-risco"> só em risco
     </label>
     {% endif %}
+    <label title="Ordem das linhas do grid. 'Por categoria' é a original; as outras ignoram as categorias e ordenam o grid inteiro.">
+        ordenar:
+        <select id="crono-ordem" class="form-select form-select-sm" style="width:auto;">
+            <option value="categoria">por categoria</option>
+            <option value="producao">maior produção primeiro</option>
+            <option value="atencao">risco & pendências primeiro</option>
+            <option value="nome">nome A–Z</option>
+        </select>
+    </label>
     <span class="filtro-oculto-aviso" id="crono-filtro-aviso" hidden></span>
 </div>
 <div class="crono-wrap">
