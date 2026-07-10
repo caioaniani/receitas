@@ -180,3 +180,96 @@ def test_rota_nf_email_danfe_indisponivel_nao_envia(app, admin_user):
                    follow_redirects=True)
     assert 'DANFE' in r.get_data(as_text=True)
     env.assert_not_called()
+
+
+def test_rota_enviar_nf_e_boleto_juntos(app, admin_user):
+    """POST /b2b/vendas/<id>/enviar-nf-boleto-email: um e-mail só com a NF
+    (DANFE) + o boleto anexados."""
+    from app.utils import agora
+    with app.app_context():
+        cli, v, p, cob = _cenario()
+        v.tiny_nota_fiscal_id = 'nf-9'
+        v.nf_numero = '11629'
+        v.nf_emitida_em = agora()
+        db.session.commit()
+        vid, nosso = v.id, cob.nosso_numero
+    c = app.test_client()
+    _login(c, admin_user.id)
+    with patch('app.services.tiny_nf.baixar_danfe_pdf_com_motivo',
+               return_value=(b'%PDF-nf', None)), \
+         patch('app.services.email.enviar',
+               return_value={'ok': True, 'id': 'm'}) as env:
+        r = c.post(f'/b2b/vendas/{vid}/enviar-nf-boleto-email',
+                   follow_redirects=True)
+    assert r.status_code == 200
+    env.assert_called_once()
+    _, kwargs = env.call_args
+    anexos = kwargs['anexos']
+    nomes = [a[0] for a in anexos]
+    assert 'nfe_11629.pdf' in nomes                       # NF anexada
+    assert f'boleto_{nosso}.pdf' in nomes                  # boleto anexado
+    # o boleto é PDF real do fpdf; a NF é o mock
+    tipos = {a[0]: a[2] for a in anexos}
+    assert all(t == 'application/pdf' for t in tipos.values())
+
+
+def test_rota_nf_boleto_sem_boleto_avisa(app, admin_user):
+    """Venda com NF mas SEM boleto gerado → avisa (não manda pela metade)."""
+    from app.utils import agora
+    with app.app_context():
+        cli = ClienteB2B(nome='X', email='x@y.com', ativo=True)
+        db.session.add(cli)
+        db.session.flush()
+        v = VendaB2B(cliente_id=cli.id, valor_total=Decimal('100'),
+                     tiny_nota_fiscal_id='nf-1', nf_numero='1',
+                     nf_emitida_em=agora())
+        db.session.add(v)
+        db.session.flush()
+        db.session.add(VendaB2BParcela(venda_id=v.id, numero=1,
+                                       vencimento=hoje() + timedelta(days=10),
+                                       valor=Decimal('100')))
+        db.session.commit()
+        vid = v.id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    with patch('app.services.email.enviar') as env:
+        r = c.post(f'/b2b/vendas/{vid}/enviar-nf-boleto-email',
+                   follow_redirects=True)
+    assert 'Nenhum boleto gerado' in r.get_data(as_text=True)
+    env.assert_not_called()
+
+
+def test_rota_nf_boleto_danfe_falha_nao_envia(app, admin_user):
+    from app.utils import agora
+    with app.app_context():
+        cli, v, p, cob = _cenario()
+        v.tiny_nota_fiscal_id = 'nf-9'
+        v.nf_emitida_em = agora()
+        db.session.commit()
+        vid = v.id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    with patch('app.services.tiny_nf.baixar_danfe_pdf_com_motivo',
+               return_value=(None, 'nota em processamento')), \
+         patch('app.services.email.enviar') as env:
+        r = c.post(f'/b2b/vendas/{vid}/enviar-nf-boleto-email',
+                   follow_redirects=True)
+    assert 'processamento' in r.get_data(as_text=True)
+    env.assert_not_called()
+
+
+def test_botao_nf_boleto_so_aparece_com_boleto(app, admin_user):
+    """O botão 'Enviar NF + Boleto juntos' só aparece quando há boleto."""
+    from app.utils import agora
+    with app.app_context():
+        cli, v, p, cob = _cenario()
+        v.tiny_nota_fiscal_id = 'nf-9'
+        v.nf_numero = '11629'
+        v.nf_emitida_em = agora()
+        db.session.commit()
+        vid = v.id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    corpo = c.get(f'/b2b/vendas/{vid}').get_data(as_text=True)
+    assert 'Enviar NF + Boleto juntos' in corpo
+    assert 'enviar-nf-boleto-email' in corpo
