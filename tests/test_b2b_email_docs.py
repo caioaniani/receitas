@@ -173,7 +173,8 @@ def test_rota_nf_email_danfe_indisponivel_nao_envia(app, admin_user):
         vid = v.id
     c = app.test_client()
     _login(c, admin_user.id)
-    with patch('app.services.tiny_nf.baixar_danfe_pdf', return_value=None), \
+    with patch('app.services.tiny_nf.baixar_danfe_pdf_com_motivo',
+               return_value=(None, 'nota em processamento')), \
          patch('app.services.email.enviar') as env:
         r = c.post(f'/b2b/vendas/{vid}/enviar-nf-email',
                    follow_redirects=True)
