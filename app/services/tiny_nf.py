@@ -510,22 +510,6 @@ def _candidatos_pdf_na_pagina(html, base_url):
     return out
 
 
-def _pdf_de_pagina_html(html, base_url):
-    """Segue a página HTML do visualizador e baixa o 1º link que devolve um
-    PDF de verdade. Devolve (bytes, url) ou (None, None)."""
-    import requests
-    for u in _candidatos_pdf_na_pagina(html, base_url)[:5]:
-        try:
-            r = requests.get(u, timeout=20,
-                             headers={'User-Agent': _UA_NAVEGADOR})
-        except requests.RequestException:
-            continue
-        if (r.status_code == 200
-                and 'pdf' in (r.headers.get('Content-Type') or '').lower()):
-            return r.content, u
-    return None, None
-
-
 def _html_para_pdf(html, base_url):
     """Converte o HTML do DANFE (visualizador do Olist) em PDF com o
     weasyprint. Import LAZY + try/except: se a lib/infra faltar, devolve
