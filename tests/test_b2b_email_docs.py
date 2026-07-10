@@ -273,3 +273,57 @@ def test_botao_nf_boleto_so_aparece_com_boleto(app, admin_user):
     corpo = c.get(f'/b2b/vendas/{vid}').get_data(as_text=True)
     assert 'Enviar NF + Boleto juntos' in corpo
     assert 'enviar-nf-boleto-email' in corpo
+
+
+def test_nf_boleto_multi_parcela_anexa_todos_e_pula_sem_nosso_numero(
+        app, admin_user):
+    """Venda com 2 parcelas: uma com boleto gerado (nosso número) e outra
+    com cobrança SEM nosso número (remessa não gerada). O e-mail leva a NF
+    + só o boleto pronto; a cobrança sem nosso número é pulada."""
+    from app.utils import agora
+    with app.app_context():
+        cli = ClienteB2B(nome='Multi', email='m@y.com', ativo=True,
+                         cnpj_cpf='11222333000144')
+        db.session.add(cli)
+        db.session.flush()
+        v = VendaB2B(cliente_id=cli.id, valor_total=Decimal('300'),
+                     tiny_nota_fiscal_id='nf-9', nf_numero='500',
+                     nf_emitida_em=agora())
+        db.session.add(v)
+        db.session.flush()
+        p1 = VendaB2BParcela(venda_id=v.id, numero=1,
+                             vencimento=hoje() + timedelta(days=10),
+                             valor=Decimal('150'))
+        p2 = VendaB2BParcela(venda_id=v.id, numero=2,
+                             vencimento=hoje() + timedelta(days=40),
+                             valor=Decimal('150'))
+        db.session.add_all([p1, p2])
+        db.session.flush()
+        # p1: boleto pronto (nosso número). p2: cobrança sem nosso número.
+        db.session.add(Cobranca(
+            parcela_id=p1.id, pagador_nome=cli.nome,
+            pagador_cnpj_cpf='11.222.333/0001-44',
+            pagador_endereco='Rua X 1', pagador_cep='04568001',
+            valor=Decimal('150'), vencimento=p1.vencimento, emissao=hoje(),
+            seu_numero='V1P1', nosso_numero='252000099', status='registrada'))
+        db.session.add(Cobranca(
+            parcela_id=p2.id, pagador_nome=cli.nome,
+            pagador_cnpj_cpf='11.222.333/0001-44',
+            pagador_endereco='Rua X 1', pagador_cep='04568001',
+            valor=Decimal('150'), vencimento=p2.vencimento, emissao=hoje(),
+            seu_numero='V1P2', nosso_numero=None, status='pendente'))
+        db.session.commit()
+        vid = v.id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    with patch('app.services.tiny_nf.baixar_danfe_pdf_com_motivo',
+               return_value=(b'%PDF-nf', None)), \
+         patch('app.services.email.enviar',
+               return_value={'ok': True}) as env:
+        c.post(f'/b2b/vendas/{vid}/enviar-nf-boleto-email',
+               follow_redirects=True)
+    _, kwargs = env.call_args
+    nomes = [a[0] for a in kwargs['anexos']]
+    assert 'nfe_500.pdf' in nomes
+    assert 'boleto_252000099.pdf' in nomes          # o pronto
+    assert len(kwargs['anexos']) == 2               # NF + 1 boleto (o outro pulado)
