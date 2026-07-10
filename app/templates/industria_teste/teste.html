@@ -1399,11 +1399,7 @@
     const painel = document.getElementById('ia-crono-painel');
     if (!btn || !painel) return;
 
-    function esc(t) {
-        const d = document.createElement('div');
-        d.textContent = t == null ? '' : String(t);
-        return d.innerHTML;
-    }
+    const esc = window.cronoEsc;   // definida no bloco do modal de MP
     async function post(url, body) {
         const resp = await fetch(url, {
             method: 'POST',
