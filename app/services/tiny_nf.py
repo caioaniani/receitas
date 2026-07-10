@@ -510,6 +510,21 @@ def _candidatos_pdf_na_pagina(html, base_url):
     return out
 
 
+def _url_fetcher_danfe(url, **kw):
+    """Busca os sub-recursos do DANFE (CSS/imagens do Olist) com UA de
+    NAVEGADOR — o Olist serve conteudo diferente pra bot, e sem a CSS o
+    PDF sairia sem layout. data:/file: (o codigo de barras vem em data:)
+    caem no fetcher padrao do weasyprint. Timeout curto: um recurso do
+    Olist pendurado nao pode segurar o e-mail."""
+    if url.startswith(('data:', 'file:')):
+        from weasyprint import default_url_fetcher
+        return default_url_fetcher(url, **kw)
+    import requests
+    r = requests.get(url, timeout=10, headers={'User-Agent': _UA_NAVEGADOR})
+    ct = (r.headers.get('Content-Type') or '').split(';')[0].strip() or None
+    return {'string': r.content, 'mime_type': ct, 'redirected_url': r.url}
+
+
 def _html_para_pdf(html, base_url):
     """Converte o HTML do DANFE (visualizador do Olist) em PDF com o
     weasyprint. Import LAZY + try/except: se a lib/infra faltar, devolve
@@ -520,7 +535,8 @@ def _html_para_pdf(html, base_url):
         logger.warning('danfe: weasyprint indisponivel (%s)', exc)
         return None
     try:
-        return HTML(string=html, base_url=base_url).write_pdf()
+        return HTML(string=html, base_url=base_url,
+                    url_fetcher=_url_fetcher_danfe).write_pdf()
     except Exception as exc:  # noqa: BLE001
         logger.warning('danfe: falha ao converter HTML->PDF: %s', exc)
         return None
