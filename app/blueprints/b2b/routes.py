@@ -1118,11 +1118,13 @@ def tiny_definir():
 def venda_danfe(vid):
     """Redireciona pro DANFE (PDF) no Tiny. Link temporário — busca sob
     demanda."""
+    from app.services import tiny
     venda = VendaB2B.query.get_or_404(vid)
-    url = tiny_nf_b2b.link_danfe(venda)
+    url, motivo = tiny.obter_link_nota_fiscal_com_motivo(
+        venda.tiny_nota_fiscal_id)
     if not url:
-        flash(f'Venda #{vid}: não consegui obter o link do DANFE no Tiny '
-              '(a NF precisa estar autorizada).', 'warning')
+        flash(f'Venda #{vid}: não consegui obter o DANFE no Tiny — '
+              f'{motivo}.', 'warning')
         return redirect(url_for('b2b.venda_detalhe', vid=vid))
     return redirect(url)
 
