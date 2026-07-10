@@ -6,8 +6,8 @@ Camadas cobertas:
 - typeahead do novo pedido (não oferece MP bloqueada);
 - POST /pedidos/novo (server-side, POST direto/aba velha não fura);
 - POST /pedidos/<id>/editar com GRANDFATHER (MP que JÁ estava no pedido
-  segue válida; MP nova bloqueada é recusada) + o GET do editar ainda
-  renderiza a MP antiga no select;
+  segue válida; MP nova bloqueada é recusada) + o GET do editar pré-preenche
+  a MP antiga no typeahead (hidden value=mp_<id>);
 - copilot: resolver não oferece bloqueada (mas aceita via mp_ids_extras no
   editar) e executores recusam mesmo com params re-enviados.
 
