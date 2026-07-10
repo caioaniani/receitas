@@ -696,3 +696,58 @@ def ordem_compra_consolidada(itens):
 
     return {'fornecedores': fornecedores, 'total_compra': total_compra,
             'total_necessario': total_necessario}
+
+
+def mp_necessaria_do_dia(data_alvo, horizonte_dias=7, janela_semanas=6,
+                         inicio_offset_dias=0, equilibrar=False,
+                         motor='pedidos'):
+    """Matéria-prima necessária pra produzir o GRID de um dia do cronograma
+    (com as edições/overrides aplicados), comparada com o estoque atual de MP.
+    Responde "tenho insumo pra essa produção?" ANTES de enviar ao padeiro.
+
+    MESMO motor de explosão da pré-baixa e da baixa real
+    (`consolidar_lista_compras` + `rendimento_massa_crua`, multiplicador
+    fracionário = qtd/rendimento) — os números batem com o que a confirmação
+    do padeiro vai baixar de verdade. Read-only: não mexe em estoque nem
+    cria movimento.
+
+    Retorna {'data': iso, 'receitas_n': n, 'itens': [{nome, necessario,
+    unidade ('un'|'g'), estoque, falta, fornecedor}], 'faltam_n': n} com os
+    itens em falta primeiro; None se a data está fora do grid."""
+    from app.services.previsao_producao import cronograma_producao
+
+    crono = cronograma_producao(horizonte_dias=horizonte_dias,
+                                janela_semanas=janela_semanas,
+                                inicio_offset_dias=inicio_offset_dias,
+                                equilibrar=equilibrar, motor=motor)
+    iso = data_alvo.isoformat()
+    if iso not in {d['data'] for d in crono['dias']}:
+        return None
+    receitas = {r.id: r for r in Receita.query.all()}
+    itens_motor = []
+    for rec in crono['receitas']:
+        qtd = next((c['qtd'] for c in rec['por_dia'] if c['data'] == iso), 0)
+        if not qtd or qtd <= 0:
+            continue
+        r = receitas.get(rec['receita_id'])
+        rend = rendimento_massa_crua(r) if r else 0
+        if not rend or rend <= 0:
+            continue
+        itens_motor.append({'receita_id': rec['receita_id'],
+                            'multiplicador': qtd / rend})
+    lista = consolidar_lista_compras(itens_motor) if itens_motor else {}
+    itens = []
+    for nome, d in lista.items():
+        necessario = d['quantidade'] or 0
+        estoque = d.get('estoque_atual') or 0
+        itens.append({
+            'nome': nome,
+            'necessario': round(necessario, 1),
+            'unidade': 'un' if d.get('em_unidades') else 'g',
+            'estoque': round(estoque, 1),
+            'falta': round(max(0, necessario - estoque), 1),
+            'fornecedor': (d.get('fornecedor') or '').strip(),
+        })
+    itens.sort(key=lambda x: (-x['falta'], x['nome'].lower()))
+    return {'data': iso, 'receitas_n': len(itens_motor), 'itens': itens,
+            'faltam_n': sum(1 for x in itens if x['falta'] > 0)}
