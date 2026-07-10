@@ -1165,6 +1165,60 @@ def venda_enviar_nf_email(vid):
     return redirect(url_for('b2b.venda_detalhe', vid=vid))
 
 
+@b2b_bp.route('/vendas/<int:vid>/enviar-nf-boleto-email', methods=['POST'])
+@login_required
+@admin_required
+def venda_enviar_nf_boleto_email(vid):
+    """Manda a NF (DANFE) + o(s) boleto(s) da venda num e-mail SÓ (pedido do
+    dono 10/07/2026). Exige NF emitida E ao menos um boleto gerado (cobrança
+    com nosso número); senão avisa o que falta em vez de mandar pela metade."""
+    from app.services import email as email_svc
+    from app.services import tiny_nf
+    from app.services.sicredi_boleto import (
+        codigo_barras_da_cobranca,
+        gerar_boleto_pdf,
+        linha_digitavel,
+    )
+
+    venda = VendaB2B.query.get_or_404(vid)
+    if not venda.tiny_nota_fiscal_id or not venda.nf_emitida_em:
+        flash('A NF ainda não foi emitida — emita no Tiny antes de enviar.',
+              'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    destinatario = ((request.form.get('email') or '').strip()
+                    or (venda.cliente.email if venda.cliente else '') or '')
+    if not destinatario:
+        flash('Cliente sem e-mail cadastrado — informe um e-mail no '
+              'formulário ou complete o cadastro do cliente.', 'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    # Boletos da venda: cada parcela pode ter uma cobrança (nosso número só
+    # existe depois da remessa gerada).
+    boletos = []
+    for p in venda.parcelas:
+        cob = p.cobranca[0] if p.cobranca else None
+        if cob and cob.nosso_numero:
+            ld = linha_digitavel(codigo_barras_da_cobranca(cob))
+            boletos.append({'cob': cob, 'pdf': bytes(gerar_boleto_pdf(cob)),
+                            'linha_digitavel': ld})
+    if not boletos:
+        flash('Nenhum boleto gerado ainda — gere o boleto da parcela (botão '
+              '"Gerar boleto") antes de enviar NF + boleto juntos.', 'warning')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    nf_pdf, motivo = tiny_nf.baixar_danfe_pdf_com_motivo(
+        venda.tiny_nota_fiscal_id)
+    if not nf_pdf:
+        flash(f'Não consegui baixar o DANFE no Tiny — {motivo}.', 'danger')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    res = email_svc.enviar_nf_e_boleto_b2b(venda, destinatario, nf_pdf,
+                                           boletos)
+    if res.get('ok'):
+        flash(f'NF + {len(boletos)} boleto(s) enviados pra {destinatario}.',
+              'success')
+    else:
+        flash(f'Falha ao enviar o e-mail: {res.get("erro")}', 'danger')
+    return redirect(url_for('b2b.venda_detalhe', vid=vid))
+
+
 @b2b_bp.route('/parcelas/<int:pid>/receber', methods=['POST'])
 @login_required
 @admin_required
