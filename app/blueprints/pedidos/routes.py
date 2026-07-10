@@ -285,13 +285,9 @@ def novo():
         if not sel_loja or not Loja.query.filter_by(id=sel_loja, ativa=True).first():
             flash('Selecione uma loja valida.', 'warning')
             lojas = _lojas_operacionais()
-            receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
-            produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-            materias = _mps_pediveis().all()
             return render_template('pedidos/novo.html', lojas=lojas,
-                                   receitas=receitas, produtos=produtos,
-                                   materias=materias, amanha=amanha,
-                                   data_min=data_min, loja_id=loja_id)
+                                   amanha=amanha, data_min=data_min,
+                                   loja_id=loja_id)
 
         data_str = request.form.get('data_entrega', '')
         obs = request.form.get('observacao', '').strip()
