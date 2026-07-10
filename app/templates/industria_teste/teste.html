@@ -1199,9 +1199,8 @@
         const chip = ev.target.closest('.dia-chip');
         if (!chip) return;
         const data = chip.dataset.data;
-        const th = document.querySelector(
-            '.crono thead th .dia-menu-tt') ? null : null;
-        // Coluna alvo: o th do dia (mesma posição da célula do rodapé).
+        // Coluna alvo: célula do rodapé do dia (tem data-data e offsetLeft
+        // da coluna inteira).
         const alvoTd = document.querySelector(
             'tfoot td[data-data="' + data + '"]');
         const wrap = document.querySelector('.crono-wrap');
