@@ -19,6 +19,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libpq5 \
         libjpeg62-turbo \
         libpng16-16 \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libharfbuzz0b \
+        libfontconfig1 \
+        fonts-dejavu-core \
     && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
        | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
