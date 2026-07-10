@@ -80,8 +80,13 @@ def _deve_enviar(chave):
             for k in [k for k, t in _ultimo_envio.items()
                       if agora - t >= _DEDUP_SEGUNDOS]:
                 del _ultimo_envio[k]
-        ult = _ultimo_envio.get(chave, 0.0)
-        if agora - ult < _DEDUP_SEGUNDOS:
+        # Chave NUNCA vista não é duplicata — testar presença explícita.
+        # (Sentinela 0.0 + `agora - 0.0 < janela` suprimia TODO primeiro
+        # alerta enquanto time.monotonic() < _DEDUP_SEGUNDOS, ou seja nos
+        # ~10 min após cada restart de worker: alerta de venda barrada
+        # sumia bem quando mais importa — logo após um deploy.)
+        ult = _ultimo_envio.get(chave)
+        if ult is not None and agora - ult < _DEDUP_SEGUNDOS:
             return False
         _ultimo_envio[chave] = agora
         return True
