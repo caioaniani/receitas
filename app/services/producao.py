@@ -711,9 +711,20 @@ def mp_necessaria_do_dia(data_alvo, horizonte_dias=7, janela_semanas=6,
     do padeiro vai baixar de verdade. Read-only: não mexe em estoque nem
     cria movimento.
 
+    Dia já ENVIADO no regime de pré-baixa: a reserva DESTE dia já saiu do
+    `estoque_atual` — sem creditá-la de volta, o insumo que está na
+    prateleira reservado pra esta mesma produção apareceria como "falta"
+    (falso alarme exatamente no fluxo "🔄 atualizar produção"). Reservas de
+    OUTROS dias continuam debitadas: estão comprometidas em outra ordem.
+
     Retorna {'data': iso, 'receitas_n': n, 'itens': [{nome, necessario,
-    unidade ('un'|'g'), estoque, falta, fornecedor}], 'faltam_n': n} com os
-    itens em falta primeiro; None se a data está fora do grid."""
+    unidade ('un'|'g'), estoque, falta, reservado, fornecedor}],
+    'faltam_n': n, 'reservado_total_n': n, 'sem_cadastro': [nomes]} com os
+    itens em falta primeiro; None se a data está fora do grid.
+    `sem_cadastro` lista ingrediente de ficha sem MP correspondente no Banco
+    de MPs — fica FORA da conta (mesma semântica da calculadora de compras),
+    e o aviso existe pra falta não passar em silêncio."""
+    from app.models import PlanejamentoProducao, PreBaixaMP
     from app.services.previsao_producao import cronograma_producao
 
     crono = cronograma_producao(horizonte_dias=horizonte_dias,
@@ -724,7 +735,10 @@ def mp_necessaria_do_dia(data_alvo, horizonte_dias=7, janela_semanas=6,
     if iso not in {d['data'] for d in crono['dias']}:
         return None
     receitas = {r.id: r for r in Receita.query.all()}
+    mps_nome = {mp.id: mp.nome for mp in MateriaPrima.query.all()}
+    nomes_mp = set(mps_nome.values())
     itens_motor = []
+    sem_cadastro = set()
     for rec in crono['receitas']:
         qtd = next((c['qtd'] for c in rec['por_dia'] if c['data'] == iso), 0)
         if not qtd or qtd <= 0:
@@ -735,19 +749,37 @@ def mp_necessaria_do_dia(data_alvo, horizonte_dias=7, janela_semanas=6,
             continue
         itens_motor.append({'receita_id': rec['receita_id'],
                             'multiplicador': qtd / rend})
+        for ing in r.ingredientes:
+            if ing.tipo != 'receita' and ing.ingrediente_nome not in nomes_mp:
+                sem_cadastro.add(ing.ingrediente_nome)
     lista = consolidar_lista_compras(itens_motor) if itens_motor else {}
+
+    # Reserva (pré-baixa) da ordem enviada DESTE dia, por nome de MP.
+    reserva = {}
+    plano = (PlanejamentoProducao.query
+             .filter_by(data=data_alvo, origem='cronograma').first())
+    if plano is not None:
+        for lin in PreBaixaMP.query.filter_by(plano_id=plano.id).all():
+            nome = mps_nome.get(lin.materia_prima_id)
+            if nome and (lin.quantidade or 0) > 0:
+                reserva[nome] = reserva.get(nome, 0.0) + float(lin.quantidade)
+
     itens = []
     for nome, d in lista.items():
         necessario = d['quantidade'] or 0
-        estoque = d.get('estoque_atual') or 0
+        reservado = reserva.get(nome, 0.0)
+        estoque = (d.get('estoque_atual') or 0) + reservado
         itens.append({
             'nome': nome,
             'necessario': round(necessario, 1),
             'unidade': 'un' if d.get('em_unidades') else 'g',
             'estoque': round(estoque, 1),
             'falta': round(max(0, necessario - estoque), 1),
+            'reservado': round(reservado, 1),
             'fornecedor': (d.get('fornecedor') or '').strip(),
         })
     itens.sort(key=lambda x: (-x['falta'], x['nome'].lower()))
     return {'data': iso, 'receitas_n': len(itens_motor), 'itens': itens,
-            'faltam_n': sum(1 for x in itens if x['falta'] > 0)}
+            'faltam_n': sum(1 for x in itens if x['falta'] > 0),
+            'reservado_total_n': sum(1 for x in itens if x['reservado'] > 0),
+            'sem_cadastro': sorted(sem_cadastro)}
