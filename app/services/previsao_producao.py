@@ -1763,18 +1763,36 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
         cons = consumo[rid]
         if sum(cons) > 0:                          # recebeu demanda de pais
             L = lead.get(rid, 0)
-            # producao do dia i serve o consumo em (i+L); consumo antes do
-            # horizonte cai no dia 0 (produzir o quanto antes).
+            # producao do dia i serve o consumo em (i+L). REGRA DA VESPERA
+            # (dono, 10/07/2026): consumo que cai DENTRO do lead do insumo
+            # (dias 0..L-1) nao tem vespera dentro do grid pra produzir —
+            # so estoque JA PRONTO cobre (massa feita hoje so vira croissant
+            # amanha). Antes esse consumo era jogado em "produzir hoje", o
+            # que agendava bola de massa inutil pro proprio dia (caso real:
+            # 300 croissants HOJE puxavam 6 bolas HOJE, que nao servem). O
+            # que o estoque nao cobrir vira AVISO (insumo_sem_vespera), nao
+            # producao.
             gross = [0.0] * n
+            dentro_lead = 0.0            # consumo sem vespera possivel
+            dentro_dias = []
             for d_idx in range(n):
                 if cons[d_idx] > 0:
-                    gross[max(0, d_idx - L)] += cons[d_idx]
+                    if d_idx < L:
+                        dentro_lead += cons[d_idx]
+                        dentro_dias.append(d_idx)
+                    else:
+                        gross[d_idx - L] += cons[d_idx]
             # NAO arredonda por dia (era o D1): dar ceil em CADA dia inflava
             # insumo de fracao baixa — "Massa para folhar" ~0,6/dia virava 1/dia
             # (67% a mais). A fracao ACUMULA entre os dias; produz o inteiro do
             # TOTAL (ceil da demanda liquida) distribuido, nao a soma dos ceils.
             livre = _estoque_livre(rid)
-            running = livre
+            # O estoque cobre PRIMEIRO o consumo sem vespera (e o mais
+            # iminente — ja esta acontecendo); o que sobrar cobre o resto.
+            cobre_lead = min(livre, dentro_lead)
+            sem_vespera = dentro_lead - cobre_lead
+            running = livre - cobre_lead
+            livre_rest = running
             residual = []
             for g in gross:                          # gross FRACIONARIO
                 cobre = min(running, g)
@@ -1787,7 +1805,7 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
             if rid in retorno_ids:
                 extra = 0
             else:
-                extra = int(ceil(max(0.0, sum(gross) - livre)))
+                extra = int(ceil(max(0.0, sum(gross) - livre_rest)))
             pesos = residual if sum(residual) > 0 else gross
             add = _distribuir_inteiro(extra, pesos)
             rec = receitas.get(rid)
