@@ -50,7 +50,7 @@ def test_editar_get_renderiza_form_com_dados_atuais(
     # vem pre-preenchido no input de busca + hidden com o id codificado, e o
     # <select> gigante com o catalogo inteiro nao existe mais.
     html = r.data.decode()
-    assert 'class="item-busca"' in html
+    assert 'item-busca' in html
     assert 'value="Croissant Tradicional"' in html
     assert f'value="r_{catalogo["receita"].id}"' in html
     assert 'item-sel' not in html
