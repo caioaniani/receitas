@@ -597,6 +597,21 @@ recebimento na industria credita o retorno = a propria). Reaproveitavel SEM
 retorno configurado mantem o comportamento antigo (registro sem movimento).
 Testes: `tests/test_sobra_conversao_retorno.py`.
 
+**Regra da VESPERA do insumo (decisao do dono 10/07/2026)**: consumo de
+insumo que cai DENTRO do lead dele (ex: croissants de HOJE consumindo massa
+de lead 1d — a vespera ja passou) so pode ser coberto por ESTOQUE pronto.
+O cronograma NAO agenda essa producao "o quanto antes" (bola de massa feita
+hoje nao vira croissant hoje — caso real 10/07: 300 croissants HOJE puxavam
+6 bolas HOJE, inuteis). O que o estoque nao cobre vira aviso visivel
+`insumo_sem_vespera` na linha do insumo do /telaindustriateste (tag
+"⚠ sem vespera" + box no expandir + celula ambar no dia do consumo) — o
+dono acerta o estoque (massa na geladeira fora do sistema) ou revisa a
+producao do pai. Implementacao: `previsao_producao._explodir_bom` (split
+dentro_lead/gross; o estoque cobre PRIMEIRO o consumo iminente). Consumo
+com vespera dentro do grid segue agendando em `dia_consumo - lead` como
+sempre. Testes: secao "Regra da vespera" em `tests/test_cronograma_ux.py`.
+NAO voltar ao "produzir o quanto antes" pra consumo dentro do lead.
+
 **Massa para folhar em BOLAS + fracao acumulada (decisao do dono 03/07/2026)**:
 a massa e contada em BOLAS inteiras (1 bola = 1 batida = 3.580g; padeiro
 lanca "2", nao gramas). O consumo por lote e fracionario (batida de 50
