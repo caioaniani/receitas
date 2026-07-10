@@ -686,6 +686,78 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
                   anexos=[(nome_pdf, pdf_bytes, 'application/pdf')])
 
 
+def enviar_nf_e_boleto_b2b(venda, destinatario, nf_pdf, boletos):
+    """Manda a NF (DANFE) + o(s) boleto(s) da venda B2B num e-mail SÓ, com
+    todos os PDFs anexados (pedido do dono 10/07/2026 — evita 2 e-mails).
+
+    `boletos` = lista de dicts {cob, pdf, linha_digitavel}. O corpo mostra a
+    NF (número/valor) e cada boleto (valor, vencimento, nosso número, linha
+    digitável e Pix quando houver)."""
+    numero = venda.nf_numero or venda.tiny_nota_fiscal_id or ''
+    assunto = (f'Nota fiscal {numero} + boleto — O Pão Padaria Artesanal'
+               if numero else 'Nota fiscal + boleto — O Pão Padaria Artesanal')
+    anexos = [(f'nfe_{numero or venda.id}.pdf', nf_pdf, 'application/pdf')]
+
+    blocos_html, linhas = [], [
+        f'Segue, em anexo, a nota fiscal da venda #{venda.id} '
+        + (f'(nº {numero}) ' if numero else '')
+        + f'e o(s) boleto(s). Valor total: {_fmt_brl(venda.valor_total)}.', '']
+    num_html = (f'<p style="margin:0 0 6px;font-size:13px;color:#6b5f54;">'
+                f'NF nº <code>{numero}</code></p>' if numero else '')
+    blocos_html.append(
+        '<div style="background:#fff;border-radius:12px;padding:18px 20px;'
+        'margin-bottom:12px;">'
+        '<p style="margin:0 0 6px;font-weight:600;">Nota fiscal eletrônica</p>'
+        f'{num_html}'
+        f'<p style="margin:0;font-size:13px;color:#6b5f54;">Valor total: '
+        f'<strong>{_fmt_brl(venda.valor_total)}</strong></p></div>')
+
+    for b in boletos:
+        cob, ld = b['cob'], b.get('linha_digitavel')
+        anexos.append((f'boleto_{cob.nosso_numero}.pdf', b['pdf'],
+                       'application/pdf'))
+        ld_html = (f'<p style="margin:8px 0 0;font-size:13px;color:#6b5f54;">'
+                   f'Linha digitável:<br><code>{ld}</code></p>' if ld else '')
+        pix_html = ''
+        if cob.pix_copia_cola:
+            pix_html = ('<p style="margin:8px 0 0;font-size:12px;'
+                        'color:#6b5f54;word-break:break-all;">Pix copia e '
+                        f'cola:<br><code>{cob.pix_copia_cola}</code></p>')
+        blocos_html.append(
+            '<div style="background:#fff;border-radius:12px;padding:18px 20px;'
+            'margin-bottom:12px;">'
+            '<p style="margin:0 0 6px;font-weight:600;">Boleto</p>'
+            '<table style="width:100%;font-size:14px;border-collapse:collapse;">'
+            f'<tr><td style="color:#6b5f54;">Valor</td><td style="text-align:'
+            f'right;font-weight:700;">{_fmt_brl(cob.valor)}</td></tr>'
+            f'<tr><td style="color:#6b5f54;">Vencimento</td><td style="'
+            f'text-align:right;">{cob.vencimento.strftime("%d/%m/%Y")}</td></tr>'
+            f'<tr><td style="color:#6b5f54;">Nosso número</td><td style="'
+            f'text-align:right;">{cob.nosso_numero_fmt}</td></tr></table>'
+            f'{ld_html}{pix_html}</div>')
+        linhas += ['', f'Boleto — valor {_fmt_brl(cob.valor)}, '
+                   f'vencimento {cob.vencimento.strftime("%d/%m/%Y")}, '
+                   f'nosso número {cob.nosso_numero_fmt}']
+        if ld:
+            linhas.append(f'Linha digitável: {ld}')
+        if cob.pix_copia_cola:
+            linhas.append(f'Pix copia e cola: {cob.pix_copia_cola}')
+
+    html = f"""\
+<!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
+font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
+<div style="max-width:540px;margin:0 auto;padding:32px 24px;">
+  <h1 style="font-size:22px;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
+  <p style="color:#6b5f54;margin:0 0 20px;">Olá! Segue a nota fiscal e o
+    boleto da sua compra em anexo. 🧾📎</p>
+  {''.join(blocos_html)}
+  <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
+    Dúvidas? Responda este e-mail ou fale com a gente.</p>
+</div></body></html>"""
+    return enviar(destinatario, assunto, html, texto='\n'.join(linhas),
+                  anexos=anexos)
+
+
 def _texto_boas_vindas(nome, login, senha, base, chatwoot):
     login_url = f'{base}/auth/login' if base else '(link do sistema)'
     return (
