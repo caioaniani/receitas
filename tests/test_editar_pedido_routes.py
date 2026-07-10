@@ -46,6 +46,14 @@ def test_editar_get_renderiza_form_com_dados_atuais(
     assert b'Editar Pedido' in r.data
     # Item atual (qtd=10) aparece pre-preenchido no value do input
     assert b'value="10"' in r.data
+    # A tela agora usa typeahead (busca-conforme-digita): o item existente
+    # vem pre-preenchido no input de busca + hidden com o id codificado, e o
+    # <select> gigante com o catalogo inteiro nao existe mais.
+    html = r.data.decode()
+    assert 'class="item-busca"' in html
+    assert 'value="Croissant Tradicional"' in html
+    assert f'value="r_{catalogo["receita"].id}"' in html
+    assert 'item-sel' not in html
 
 
 def test_editar_post_replace_itens_persiste(
