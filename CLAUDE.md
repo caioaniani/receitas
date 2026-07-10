@@ -824,6 +824,36 @@ sumiria do grid mas blindaria overrides mortos do "limpar"). Toggle tem
 try/except IntegrityError (duplo-clique no unique de `data`). Testes:
 `tests/test_cronograma_fechado_e_difere.py`.
 
+## Cronograma — UX de orientacao + MP do dia (10/07/2026)
+
+Pedido do dono ("me sinto perdido nela"), tudo em /telaindustriateste:
+
+- **Painel "📋 Proximos passos"**: lista `acoes` computada na rota `index`
+  (enviar hoje sem ordem / rascunho esquecido / grid difere / producao
+  vencida / entregas em risco / edicoes stale), cada item com o gesto ao
+  lado. Some quando nada e acionavel. So estados ACIONAVEIS viram item.
+- **Trilha de dias** (chips clicaveis): estado por dia (enviado/rascunho/
+  sem ordem/difere/🔒/🔥 pico) + total un/fornadas; clique rola o grid ate
+  a coluna e pisca (th tem `data-data`).
+- **Explicador** reescrito: fluxo em 5 passos + legenda visual + glossario.
+- **Ordenacao do grid** (JS client-side, localStorage `crono.ordem`):
+  categoria/maior producao/risco/nome. Fora de "categoria" os cat-rows
+  ficam ocultos; a ponte com os filtros e o evento `crono:refiltrar` +
+  `tbody.dataset.ordem` (sem isso o walk de categorias ressuscitava
+  cabecalho orfao — pego em revisao).
+- **"🧾 Materia-prima do dia"** (menu ⋯ de cada dia → modal): rota
+  `GET /telaindustriateste/mp-dia` → `producao.mp_necessaria_do_dia`
+  (read-only). Explode o GRID do dia (com overrides) na MESMA conta da
+  pre-baixa/baixa real (`consolidar_lista_compras` + multiplicador
+  fracionario qtd/`rendimento_massa_crua`) e compara com estoque de MP.
+  Dia ja ENVIADO: credita de volta a reserva de pre-baixa DESTE dia (sem
+  isso o insumo ja reservado aparecia como falta — falso alarme).
+  Ingrediente de ficha sem MP cadastrada vira aviso `sem_cadastro`
+  (nao some em silencio). Link pra acuracia da previsao no topo
+  (`producao.previsao_acuracia`).
+
+Testes: `tests/test_cronograma_ux.py`.
+
 ## Tela do padeiro — ordem persiste apos a meia-noite (03/07/2026)
 
 O padeiro trabalha de MADRUGADA: a ordem do dia D e executada na madrugada de
