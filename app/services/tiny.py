@@ -482,13 +482,48 @@ def obter_nota_fiscal(nota_id):
     return nf if isinstance(nf, dict) else None
 
 
+def _extrair_link_danfe(retorno):
+    """Pega a URL do DANFE (PDF) da resposta do Tiny. A v2 devolve o PDF em
+    `link_danfe` OU `link_nfe` (dependendo da conta/versao); algumas contas
+    so mandam `link` ou `link_nfe` (que as vezes e o link de CONSULTA, HTML —
+    por isso preferimos `link_danfe`/`link_pdf` quando existem)."""
+    if not isinstance(retorno, dict):
+        return None
+    for campo in ('link_danfe', 'link_pdf', 'link_nfe', 'link'):
+        v = (retorno.get(campo) or '').strip()
+        if v:
+            return v
+    return None
+
+
 def obter_link_nota_fiscal(nota_id):
     """Retorna URL temporaria do DANFE em PDF, ou None.
     A URL e publica mas com expiracao do lado do Tiny."""
+    link, _ = obter_link_nota_fiscal_com_motivo(nota_id)
+    return link
+
+
+def obter_link_nota_fiscal_com_motivo(nota_id):
+    """Como `obter_link_nota_fiscal`, mas devolve `(link, motivo)` — o motivo
+    e a causa REAL da falha (erro do Tiny, token ausente, link vazio) pra
+    tela nao mentir 'precisa estar autorizada' quando o problema e outro."""
     if not nota_id:
-        return None
-    retorno = _get('nota.fiscal.obter.link.php', params={'id': str(nota_id)})
-    if not retorno:
-        return None
-    link = (retorno.get('link_nfe') or retorno.get('link') or '').strip()
-    return link or None
+        return None, 'nota sem id do Tiny'
+    if not disponivel():
+        return None, 'TINY_API_TOKEN ausente'
+    # retornar_erro=True: em erro de status o Tiny devolve o retorno com a
+    # mensagem real (ex: "Nota fiscal ainda nao autorizada"); sem isso
+    # viraria None e perderiamos a causa.
+    retorno = _get('nota.fiscal.obter.link.php', params={'id': str(nota_id)},
+                   retornar_erro=True)
+    if not isinstance(retorno, dict):
+        # _get ja registrou a causa (HTTP/timeout/etc) no thread-local.
+        return None, (_consumir_falha() or 'sem resposta do Tiny')
+    status = (retorno.get('status') or '').lower()
+    if status not in ('ok', '1'):
+        return None, (_extrair_erros(retorno) or f'Tiny status={status!r}')
+    link = _extrair_link_danfe(retorno)
+    if not link:
+        return None, ('o Tiny nao devolveu o link do DANFE (nota autorizada, '
+                      'mas o PDF pode nao estar pronto — tente em instantes)')
+    return link, None
