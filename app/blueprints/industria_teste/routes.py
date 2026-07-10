@@ -192,12 +192,43 @@ def index():
         'stale_n': sum(1 for r in crono['receitas'] if r.get('override_stale')),
         'zerados': sum(1 for r in crono['receitas'] if not r.get('total')),
     }
+
+    # "Próximos passos": a lista do que está pedindo ação AGORA, com o gesto
+    # correspondente ao lado — o antídoto do "abri a tela e não sei por onde
+    # começar". Só estados acionáveis (o que está em dia não vira item).
+    labels = {d['data']: d['label'] for d in crono['dias']}
+    acoes = []
+    if crono['receitas']:
+        dia0 = crono['dias'][0]
+        est0 = estados.get(dia0['data'])
+        tem_producao0 = bool(totais_dia[0]['un'] or totais_dia[0]['fornadas'])
+        # Enviar hoje só quando a 1ª coluna é HOJE mesmo (inicio=0): o padeiro
+        # trabalha a ordem do dia — dia futuro se envia no dia.
+        if tem_producao0 and dia0['data'] == crono['hoje'] and not est0:
+            acoes.append({'tipo': 'enviar_hoje', 'data': dia0['data'],
+                          'label': dia0['label']})
+        # Rascunho aprovado e nunca enviado = gesto pela metade, em qualquer
+        # dia do grid (o admin criou de propósito; falta concluir).
+        for iso in sorted(estados):
+            if iso in labels and not estados[iso]['enviado']:
+                acoes.append({'tipo': 'rascunho', 'data': iso,
+                              'label': labels[iso]})
+    for iso in sorted(difere):
+        acoes.append({'tipo': 'difere', 'data': iso,
+                      'label': labels.get(iso, iso), 'n': len(difere[iso])})
+    if resumo['pend_vencido']:
+        acoes.append({'tipo': 'vencido', 'n': resumo['pend_vencido']})
+    if resumo['risco_n']:
+        acoes.append({'tipo': 'risco', 'n': resumo['risco_n']})
+    if resumo['stale_n']:
+        acoes.append({'tipo': 'stale', 'n': resumo['stale_n']})
+
     return render_template('industria_teste/teste.html', crono=crono,
                            horizonte=horizonte, janela=janela, inicio=inicio,
                            equilibrar=equilibrar, motor=motor, estados=estados,
                            totais_dia=totais_dia, pico_idx=pico_idx,
                            resumo=resumo, ordem_enviada=ordem_enviada,
-                           difere=difere, fechados=fechados)
+                           difere=difere, fechados=fechados, acoes=acoes)
 
 
 @industria_teste_bp.route('/auditoria')
