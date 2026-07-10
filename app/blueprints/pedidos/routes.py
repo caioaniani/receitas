@@ -397,13 +397,8 @@ def novo():
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
     lojas = _lojas_operacionais()
-    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
-    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-    materias = _mps_pediveis().all()
     return render_template('pedidos/novo.html', lojas=lojas,
-                           receitas=receitas, produtos=produtos,
-                           materias=materias, amanha=amanha,
-                           data_min=data_min, loja_id=loja_id)
+                           amanha=amanha, data_min=data_min, loja_id=loja_id)
 
 
 @pedidos_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
