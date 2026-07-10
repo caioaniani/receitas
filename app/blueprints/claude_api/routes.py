@@ -681,23 +681,42 @@ def tiny_danfe_debug():
         out['pdf_motivo'] = motivo_pdf
         out['pdf_tamanho'] = len(pdf) if pdf else 0
         if not pdf:
+            # O Olist renderiza o DANFE como HTML (doc.view). Testa variações
+            # candidatas pra descobrir se existe um PDF nativo (param/rota).
+            ua = {'User-Agent': tiny_nf._UA_NAVEGADOR}
+            base = link
+            sep = '&' if '?' in base else '?'
+            candidatos = [
+                base + sep + 'saida=pdf',
+                base + sep + 'formato=pdf',
+                base + sep + 'pdf=1',
+                base + sep + 'output=pdf',
+                base + sep + 'tipo=pdf',
+                base + sep + 'imprimir=1',
+                base.replace('/doc.view', '/doc.pdf'),
+                base.replace('doc.view?id=', 'nfe.danfe.pdf?id='),
+            ]
+            testes = []
+            for u in candidatos:
+                try:
+                    rr = requests.get(u, timeout=20, headers=ua)
+                    ct = (rr.headers.get('Content-Type') or '')
+                    testes.append({'url': u, 'status': rr.status_code,
+                                   'ctype': ct,
+                                   'eh_pdf': 'pdf' in ct.lower(),
+                                   'tam': len(rr.content or b'')})
+                except requests.RequestException as exc:
+                    testes.append({'url': u, 'erro': str(exc)})
+            out['candidatos_pdf_nativo'] = testes
+            # Accept: application/pdf na URL base (content negotiation).
             try:
-                r = requests.get(link, timeout=20,
-                                 headers={'User-Agent': tiny_nf._UA_NAVEGADOR})
-                out['pagina_status'] = r.status_code
-                out['pagina_url_final'] = r.url
-                out['pagina_ctype'] = r.headers.get('Content-Type')
-                texto = r.text or ''
-                out['pdf_candidatos'] = tiny_nf._candidatos_pdf_na_pagina(
-                    texto, r.url)
-                # Todos os href/src/iframe/embed (não só .pdf) + trecho do
-                # HTML: se o PDF vier por um link sem 'pdf' no nome, aparece
-                # aqui pra eu enxergar o padrão.
-                import re
-                out['todos_src_href'] = re.findall(
-                    r"""(?:href|src|data-src|content)\s*=\s*["']([^"']+)["']""",
-                    texto, re.I)[:40]
-                out['html_inicio'] = texto[:2500]
+                rr = requests.get(base, timeout=20,
+                                  headers={**ua, 'Accept': 'application/pdf'})
+                out['accept_pdf'] = {
+                    'status': rr.status_code,
+                    'ctype': rr.headers.get('Content-Type'),
+                    'eh_pdf': 'pdf' in (rr.headers.get('Content-Type')
+                                        or '').lower()}
             except requests.RequestException as exc:
-                out['pagina_erro'] = str(exc)
+                out['accept_pdf'] = {'erro': str(exc)}
     return jsonify(out)
