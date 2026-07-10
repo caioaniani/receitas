@@ -1267,13 +1267,13 @@
                     return (a.dataset.nomerec || '')
                         .localeCompare(b.dataset.nomerec || '', 'pt');
                 });
-                tbody.querySelectorAll('tr.cat-row').forEach(function (c) {
-                    c.hidden = true;
-                });
                 rows.forEach(function (tr) {
                     par(tr).forEach(function (t) { tbody.appendChild(t); });
                 });
             }
+            // Re-filtra na outra IIFE: recalcula visibilidade das linhas E
+            // dos cabeçalhos de categoria (que leem tbody.dataset.ordem).
+            document.dispatchEvent(new CustomEvent('crono:refiltrar'));
             try { localStorage.setItem('crono.ordem', modo); }
             catch (e) { /* storage indisponível: ordem só não persiste */ }
         }
