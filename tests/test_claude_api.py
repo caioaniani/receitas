@@ -413,4 +413,8 @@ def test_tiny_danfe_debug_mostra_estrutura(app):
     assert j['ok'] is True
     assert j['pdf_ok'] is False
     assert j['campos_link']['link_nfe'].endswith('id=x')
-    assert 'https://erp.olist.com/nfe/danfe_1.pdf' in j['pdf_candidatos']
+    # A sonda testou os candidatos de PDF nativo (nenhum é PDF neste mock).
+    assert isinstance(j['candidatos_pdf_nativo'], list)
+    assert j['candidatos_pdf_nativo']
+    assert all(t.get('eh_pdf') is False for t in j['candidatos_pdf_nativo'])
+    assert 'accept_pdf' in j
