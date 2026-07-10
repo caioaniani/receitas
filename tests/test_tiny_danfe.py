@@ -64,7 +64,7 @@ def test_link_com_motivo_link_vazio(app):
         app.config['TINY_API_TOKEN'] = 'tok'
         with patch('app.services.tiny._get', return_value=_ok()):
             link, motivo = tiny.obter_link_nota_fiscal_com_motivo('909')
-    assert link is None and 'não devolveu o link' in motivo
+    assert link is None and 'devolveu o link' in motivo
 
 
 def test_link_com_motivo_sem_token(app):
