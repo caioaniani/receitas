@@ -599,9 +599,9 @@ def mp_dia():
         data_alvo = date.fromisoformat(request.args.get('data', ''))
     except (TypeError, ValueError):
         return jsonify(ok=False, erro='data'), 400
+    horizonte, janela = _horizonte_janela()
     res = mp_necessaria_do_dia(
-        data_alvo, horizonte_dias=_horizonte_janela()[0],
-        janela_semanas=_horizonte_janela()[1],
+        data_alvo, horizonte_dias=horizonte, janela_semanas=janela,
         inicio_offset_dias=_inicio_offset(), equilibrar=_equilibrar(),
         motor=_motor())
     if res is None:
