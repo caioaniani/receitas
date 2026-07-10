@@ -108,6 +108,42 @@ def test_mp_do_dia_fora_do_grid(app):
     assert mp_necessaria_do_dia(hoje() + timedelta(days=30)) is None
 
 
+def test_mp_do_dia_credita_reserva_do_proprio_dia(app, admin_user):
+    """Dia já ENVIADO: a pré-baixa reservou a MP deste dia (debitou o
+    estoque_atual) — sem creditar a reserva de volta, o insumo que está na
+    prateleira reservado pra ESTA produção apareceria como falta (falso
+    alarme no fluxo '🔄 atualizar produção')."""
+    from app.services.producao import enviar_plano_do_dia
+    mp, r = _cenario_mp(qtd=50, estoque_mp=5000.0)   # exatamente o necessário
+    dia = _dia_com_producao(r.id)
+    plano = enviar_plano_do_dia(dia, admin_user.id)
+    assert plano is not None and plano.enviado_ao_padeiro
+    db.session.refresh(mp)
+    assert mp.estoque_atual == 0          # pré-baixa reservou tudo
+
+    res = mp_necessaria_do_dia(dia)
+    item = next(x for x in res['itens'] if x['nome'] == mp.nome)
+    assert item['reservado'] == 5000.0
+    assert item['estoque'] == 5000.0      # estoque físico + reserva deste dia
+    assert item['falta'] == 0             # sem falso alarme
+    assert res['faltam_n'] == 0
+    assert res['reservado_total_n'] == 1
+
+
+def test_mp_do_dia_aponta_ingrediente_sem_cadastro(app):
+    """Ingrediente de ficha sem MP correspondente fica fora da conta (mesma
+    semântica da calculadora), mas o modal AVISA — falta não passa em
+    silêncio."""
+    _mp, r = _cenario_mp()
+    db.session.add(ReceitaIngrediente(receita_id=r.id,
+                                      ingrediente_nome='Fermento Fantasma',
+                                      tipo='mp_direto', porcentagem=10.0))
+    db.session.commit()
+    dia = _dia_com_producao(r.id)
+    res = mp_necessaria_do_dia(dia)
+    assert res['sem_cadastro'] == ['Fermento Fantasma']
+
+
 # ── rota /telaindustriateste/mp-dia ────────────────────────────────────────
 
 def test_rota_mp_dia_json(app, admin_user):
