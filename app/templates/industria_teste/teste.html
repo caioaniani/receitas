@@ -1319,10 +1319,9 @@
         corpo.innerHTML = '<div class="text-muted">calculando a explosão da ficha…</div>';
         const linkCompras = document.getElementById('mp-dia-compras');
         if (linkCompras) linkCompras.hidden = true;
-        // Fecha o menu ⋯ (o clique veio de dentro dele) e abre o modal.
-        document.querySelectorAll('.dia-menu').forEach(function (m) {
-            m.hidden = true;
-        });
+        // Fecha o menu ⋯ pelo caminho oficial dele (Escape) — esconder na
+        // mão deixaria o estado interno `aberto` apontando pra menu morto.
+        document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}));
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
         const p = new URLSearchParams(MP_PARAMS);
         p.set('data', btn.dataset.dia);
