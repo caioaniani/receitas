@@ -403,9 +403,13 @@ def test_tiny_danfe_debug_mostra_estrutura(app):
         text = '<iframe src="/nfe/danfe_1.pdf"></iframe>'
         content = b'<html>danfe</html>'
     c = app.test_client()
+    # Simula a conversão HTML→PDF FALHANDO pra exercitar o branch de
+    # diagnóstico (candidatos de PDF nativo). No caminho feliz o weasyprint
+    # converte e pdf_ok=True — coberto em test_tiny_danfe.py.
     with patch('app.services.tiny._get',
                return_value={'status': 'OK',
                              'link_nfe': 'https://erp.olist.com/doc.view?id=x'}), \
+         patch('app.services.tiny_nf._html_para_pdf', return_value=None), \
          patch('requests.get', return_value=_R()):
         r = c.get('/api/claude/tiny-danfe-debug?id=909358497',
                   headers={'Authorization': f'Bearer {TOKEN}'})
