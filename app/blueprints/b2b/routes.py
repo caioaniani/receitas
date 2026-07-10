@@ -949,7 +949,12 @@ def venda_detalhe(vid):
                       joinedload(VendaB2B.itens),
                       joinedload(VendaB2B.parcelas))
              .get_or_404(vid))
-    return render_template('b2b/venda_detalhe.html', venda=venda)
+    # Tem boleto pronto (cobrança com nosso número) → habilita o botão
+    # "Enviar NF + Boleto juntos".
+    tem_boleto = any(p.cobranca and p.cobranca[0].nosso_numero
+                     for p in venda.parcelas)
+    return render_template('b2b/venda_detalhe.html', venda=venda,
+                           tem_boleto=tem_boleto)
 
 
 @b2b_bp.route('/vendas/<int:vid>/entrega', methods=['POST'])
