@@ -109,19 +109,20 @@
                        class="btn btn-sm btn-outline-primary w-100 mt-2" target="_blank" rel="noopener">
                         <i class="bi bi-filetype-pdf"></i> Ver DANFE (PDF)
                     </a>
-                    <form method="POST" action="{{ url_for('b2b.venda_enviar_nf_email', vid=venda.id) }}" class="mt-2"
-                          onsubmit="return confirm('Enviar a NF (PDF) pra {{ email_cliente or 'o e-mail informado' }}?');">
+                    <form method="POST" action="{{ url_for('b2b.venda_enviar_nf_email', vid=venda.id) }}" class="mt-2">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="input-group input-group-sm">
                             <input type="email" name="email" class="form-control" placeholder="{{ email_cliente or 'e-mail do cliente' }}"
                                    value="{{ email_cliente }}" {% if not email_cliente %}required{% endif %}>
-                            <button type="submit" class="btn btn-success">
+                            <button type="submit" class="btn btn-success"
+                                    onclick="return confirm('Enviar a NF (PDF) pra {{ email_cliente or 'o e-mail informado' }}?');">
                                 <i class="bi bi-envelope"></i> Enviar NF por e-mail
                             </button>
                         </div>
                         {% if tem_boleto %}
                         <button type="submit" class="btn btn-outline-success btn-sm w-100 mt-2"
                                 formaction="{{ url_for('b2b.venda_enviar_nf_boleto_email', vid=venda.id) }}"
+                                onclick="return confirm('Enviar a NF + o(s) boleto(s) num e-mail só pra {{ email_cliente or 'o e-mail informado' }}?');"
                                 title="Manda a NF (PDF) e o(s) boleto(s) da venda num e-mail só">
                             <i class="bi bi-envelope-paper"></i> Enviar NF + Boleto juntos
                         </button>
