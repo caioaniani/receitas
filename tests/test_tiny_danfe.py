@@ -146,7 +146,6 @@ def test_rota_ver_danfe_mostra_motivo_real(app, admin_user):
     _login(c, admin_user.id)
     with patch('app.services.tiny.obter_link_nota_fiscal_com_motivo',
                return_value=(None, 'nota em processamento no Tiny')):
-        r = c.post('/auth/login')  # noop keep session
         r = c.get(f'/b2b/vendas/{vid}/danfe', follow_redirects=True)
     assert 'processamento no Tiny' in r.get_data(as_text=True)
 
