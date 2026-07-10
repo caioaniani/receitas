@@ -695,6 +695,8 @@
             {% endif %}
             <tr class="rec-row" data-rid="{{ r.receita_id }}"
                 data-nome="{{ (r.nome ~ ' ' ~ (r.categoria or ''))|lower }}"
+                data-nomerec="{{ r.nome|lower }}"
+                data-total="{{ r.total or 0 }}"
                 data-zero="{{ 0 if r.total else 1 }}"
                 data-risco="{{ 1 if r.entregas_risco else 0 }}"
                 data-pend="{{ 1 if r.pend_vencido else 0 }}">
