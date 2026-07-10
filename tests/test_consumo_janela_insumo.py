@@ -50,13 +50,22 @@ def test_editar_celula_devolve_insumos_com_consumo(app, admin_user):
 
 
 def test_sem_estoque_a_massa_vira_producao(app, admin_user):
+    """Sem estoque, o consumo derivado vira produção da massa NA VÉSPERA.
+    Regra da véspera (dono, 10/07/2026): consumo de HOJE não agenda massa
+    pra hoje (não ficaria pronta a tempo — vira o aviso insumo_sem_vespera,
+    ver tests/test_cronograma_ux.py); por isso o pai aqui produz AMANHÃ e
+    as bolas caem HOJE."""
+    from datetime import timedelta
+
     from app.services.cronograma_edit import editar_celula
     with app.app_context():
         pai, massa = _setup(estoque_massa=0)
-        r = editar_celula(pai.id, hoje().isoformat(), 100)
+        amanha = hoje() + timedelta(days=1)
+        r = editar_celula(pai.id, amanha.isoformat(), 100)
         ins = next(i for i in r['insumos'] if i['receita_id'] == massa.id)
-        # ceil(2,514) = 3 bolas programadas.
+        # ceil(2,514) = 3 bolas programadas, na véspera do pai (hoje).
         assert sum(c['qtd'] for c in ins['por_dia']) == 3
+        assert ins['por_dia'][0]['qtd'] == 3
 
 
 def test_cronograma_marca_consumo_janela_na_linha(app, admin_user):
