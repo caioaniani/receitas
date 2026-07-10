@@ -17,3 +17,4 @@ sentry-sdk[flask]==2.18.0
 rapidfuzz==3.10.1
 qrcode[pil]==7.4.2
 xlrd==2.0.1
+weasyprint==69.0
