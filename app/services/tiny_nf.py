@@ -479,23 +479,32 @@ def baixar_danfe_pdf(nota_id):
 
     O link do Tiny é temporário — pra ANEXAR o PDF num e-mail a gente
     baixa na hora (link solto expiraria na caixa de entrada do cliente)."""
+    pdf, _ = baixar_danfe_pdf_com_motivo(nota_id)
+    return pdf
+
+
+def baixar_danfe_pdf_com_motivo(nota_id):
+    """Como `baixar_danfe_pdf`, mas devolve `(bytes, motivo)` — o motivo
+    carrega a causa REAL (erro do Tiny, link vazio, ou download não-PDF)
+    pra tela mostrar em vez do genérico 'precisa estar autorizada'."""
     import requests
-    url = tiny.obter_link_nota_fiscal(nota_id)
+    url, motivo = tiny.obter_link_nota_fiscal_com_motivo(nota_id)
     if not url:
-        return None
+        return None, motivo
     try:
         r = requests.get(url, timeout=20)
     except requests.RequestException:
         logger.warning('danfe download falhou (rede) nota=%s', nota_id)
-        return None
+        return None, 'falha de rede ao baixar o PDF do Tiny'
     ctype = (r.headers.get('Content-Type') or '').lower()
     # O Tiny serve o DANFE como application/pdf; qualquer outra coisa é
     # página de erro/expiração — não anexar lixo no e-mail do cliente.
     if r.status_code != 200 or 'pdf' not in ctype:
         logger.warning('danfe download invalido nota=%s (HTTP %s, %s)',
                        nota_id, r.status_code, ctype)
-        return None
-    return r.content
+        return None, (f'o link do Tiny não devolveu um PDF (HTTP '
+                      f'{r.status_code}, tipo {ctype or "?"})')
+    return r.content, None
 
 
 def importar_planilha(conteudo, filename, user_id=None, canal='site'):
