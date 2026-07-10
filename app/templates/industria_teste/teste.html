@@ -1350,6 +1350,14 @@
             html += '<div class="alert alert-success py-2 mb-2" style="font-size:.85rem;">✓ O estoque de MP cobre a produção deste dia ('
                 + d.receitas_n + ' receita(s) no grid).</div>';
         }
+        if (d.sem_cadastro && d.sem_cadastro.length) {
+            html += '<div class="alert alert-warning py-2 mb-2" style="font-size:.8rem;">⚠ Ingrediente(s) de ficha <strong>sem cadastro no Banco de MPs</strong> (ficam fora da conta): '
+                + d.sem_cadastro.map(esc).join(', ')
+                + '. Cadastre pra conta ficar completa.</div>';
+        }
+        if (d.reservado_total_n) {
+            html += '<div class="text-muted mb-2" style="font-size:.76rem;">ℹ️ Ordem deste dia já enviada: o "em estoque" inclui o que a pré-baixa <strong>já reservou pra esta produção</strong> (reservas de outros dias seguem descontadas).</div>';
+        }
         html += '<table class="table table-sm mp-tabela mb-0"><thead><tr>'
             + '<th>Matéria-prima</th><th class="text-end">Necessário</th>'
             + '<th class="text-end">Em estoque</th><th class="text-end">Falta</th>'
@@ -1358,7 +1366,11 @@
             html += '<tr class="' + (it.falta > 0 ? 'mp-falta' : '') + '">'
                 + '<td>' + esc(it.nome) + '</td>'
                 + '<td class="text-end">' + fmtQtd(it.necessario, it.unidade) + '</td>'
-                + '<td class="text-end">' + fmtQtd(it.estoque, it.unidade) + '</td>'
+                + '<td class="text-end">' + fmtQtd(it.estoque, it.unidade)
+                + (it.reservado > 0
+                    ? ' <span class="text-muted" title="Já reservado (pré-baixa) pra ordem enviada deste dia">('
+                      + fmtQtd(it.reservado, it.unidade) + ' res.)</span>'
+                    : '') + '</td>'
                 + '<td class="text-end">' + (it.falta > 0
                     ? '<span class="mp-falta-qtd">' + fmtQtd(it.falta, it.unidade) + '</span>'
                     : '<span class="mp-ok-qtd">—</span>') + '</td>'
