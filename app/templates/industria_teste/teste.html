@@ -1129,6 +1129,9 @@
             semZeros.addEventListener('change', aplicarFiltros);
         }
         if (soRisco) soRisco.addEventListener('change', aplicarFiltros);
+        // A IIFE da ordenação reordena as linhas e pede re-filtragem por
+        // aqui (escopos separados — o evento é a ponte).
+        document.addEventListener('crono:refiltrar', aplicarFiltros);
         aplicarFiltros();
     }
 
