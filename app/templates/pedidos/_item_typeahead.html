@@ -1,0 +1,173 @@
+{#
+  Typeahead de itens de pedido (busca-conforme-digita, match "contém").
+  Fonte única compartilhada por novo.html e editar.html — a linha do item e
+  o JS do dropdown vivem só aqui pra não divergirem (regra do CLAUDE.md).
+
+  Uso:
+    {% import "pedidos/_item_typeahead.html" as ta %}
+    ...
+    {{ ta.item_row(is_template=True) }}      {# linha modelo escondida p/ clonar #}
+    {{ ta.item_row() }}                        {# linha visível vazia (novo) #}
+    {{ ta.item_row('r_5', 'Sourdough', 3) }}   {# linha pré-preenchida (editar) #}
+    ...
+    {% block scripts %}{{ ta.typeahead_assets() }}{% endblock %}
+
+  O JS clona a linha #row-template ao adicionar item — por isso a linha
+  renderizada e a linha nova são byte-idênticas.
+#}
+
+{% macro item_row(item_id='', item_nome='', qtd=1, estado='', obs='', is_template=False) %}
+<tr class="item-row{% if is_template %} d-none{% endif %}"{% if is_template %} id="row-template"{% endif %}>
+    <td>
+        <input type="text" class="form-control form-control-sm item-busca"
+               placeholder="Digite o nome..." autocomplete="off" value="{{ item_nome }}">
+        <input type="hidden" name="item_id[]" class="item-id" value="{{ item_id }}">
+    </td>
+    <td>
+        <input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue"
+               min="1" value="{{ qtd }}">
+    </td>
+    <td>
+        <select name="item_estado[]" class="form-select form-select-sm">
+            <option value="" {% if not estado %}selected{% endif %}>Padrão</option>
+            <option value="backup" {% if estado == 'backup' %}selected{% endif %}>Backup</option>
+            <option value="assado" {% if estado == 'assado' %}selected{% endif %}>Assado</option>
+        </select>
+    </td>
+    <td>
+        <input type="text" name="item_obs[]" class="form-control form-control-sm"
+               value="{{ obs }}" placeholder="">
+    </td>
+    <td class="text-center">
+        <button type="button" class="btn btn-sm btn-outline-danger btn-remove-item"
+                onclick="this.closest('tr').remove()"><i class="bi bi-x"></i></button>
+    </td>
+</tr>
+{% endmacro %}
+
+{% macro typeahead_assets() %}
+<style>
+.item-results {
+    background: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    max-height: 300px;
+    overflow-y: auto;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    z-index: 3000;
+}
+.item-result-opt {
+    padding: 10px 12px;
+    cursor: pointer;
+    color: var(--text-main);
+    border-bottom: 1px solid var(--border-color);
+}
+.item-result-opt:hover {
+    background-color: var(--bg-card-hover);
+}
+.item-result-opt:last-child {
+    border-bottom: none;
+}
+</style>
+<script>
+(function () {
+    var tbody = document.getElementById('itens-body');
+    var template = document.getElementById('row-template');
+    var timer;
+    var activeInput = null;
+    var activeHidden = null;
+
+    // Dropdown único anexado ao <body>: flutua livre acima de tudo, sem
+    // clipping do .table-responsive nem de contexto de empilhamento.
+    var pop = document.createElement('div');
+    pop.className = 'item-results';
+    pop.style.display = 'none';
+    document.body.appendChild(pop);
+
+    function hidePop() {
+        pop.style.display = 'none';
+        activeInput = null;
+        activeHidden = null;
+    }
+
+    function positionPop(input) {
+        var rect = input.getBoundingClientRect();
+        pop.style.position = 'fixed';
+        pop.style.top = rect.bottom + 'px';
+        pop.style.left = rect.left + 'px';
+        pop.style.width = rect.width + 'px';
+    }
+
+    function renderPop(input, hidden, itens) {
+        if (!itens || itens.length === 0) { hidePop(); return; }
+        pop.innerHTML = '';
+        itens.forEach(function (item) {
+            var opt = document.createElement('div');
+            opt.className = 'item-result-opt';
+            opt.dataset.id = item.id;
+            opt.textContent = item.nome;  // textContent escapa o nome
+            pop.appendChild(opt);
+        });
+        activeInput = input;
+        activeHidden = hidden;
+        positionPop(input);
+        pop.style.display = 'block';
+    }
+
+    // Digitar: zera o id antigo (só volta a valer ao escolher) e busca.
+    tbody.addEventListener('input', function (e) {
+        if (!e.target.classList.contains('item-busca')) return;
+        var input = e.target;
+        var hidden = input.closest('td').querySelector('.item-id');
+        hidden.value = '';
+        var val = input.value.trim();
+        clearTimeout(timer);
+        if (val.length < 2) { hidePop(); return; }
+        timer = setTimeout(function () {
+            fetch('/pedidos/buscar-itens.json?q=' + encodeURIComponent(val))
+                .then(function (r) { return r.json(); })
+                .then(function (data) { renderPop(input, hidden, data.itens); })
+                .catch(hidePop);
+        }, 250);
+    });
+
+    // Escolher uma opção: preenche o texto visível + o hidden da linha ativa.
+    pop.addEventListener('click', function (e) {
+        var opt = e.target.closest('.item-result-opt');
+        if (!opt || !activeInput) return;
+        activeInput.value = opt.textContent;
+        activeHidden.value = opt.dataset.id;
+        hidePop();
+    });
+
+    // Clicar fora (nem no campo de busca, nem no dropdown) fecha.
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.item-busca') || pop.contains(e.target)) return;
+        hidePop();
+    });
+
+    // Rolagem/redimensionamento: reposiciona o dropdown aberto.
+    function reposition() {
+        if (pop.style.display === 'block' && activeInput) positionPop(activeInput);
+    }
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+
+    // Adicionar linha: clona a linha modelo (mesma marcação da renderizada) e
+    // limpa o que o clone herdou. A delegation no tbody já cobre a nova linha.
+    document.getElementById('btn-add-item').addEventListener('click', function () {
+        var tr = template.cloneNode(true);
+        tr.classList.remove('d-none');
+        tr.removeAttribute('id');
+        tr.querySelector('.item-busca').value = '';
+        tr.querySelector('.item-id').value = '';
+        tr.querySelector('input[name="item_qtd[]"]').value = '1';
+        tr.querySelector('input[name="item_obs[]"]').value = '';
+        tr.querySelector('select[name="item_estado[]"]').selectedIndex = 0;
+        tbody.appendChild(tr);
+        tr.querySelector('.item-busca').focus();
+    });
+})();
+</script>
+{% endmacro %}
