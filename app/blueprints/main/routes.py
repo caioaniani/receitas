@@ -1059,6 +1059,46 @@ def frete_sensores():
                            r=frete_sensor.resumo(dias), dias=dias)
 
 
+@main_bp.route('/admin/debug-tiny-nota')
+@owner_required
+def debug_tiny_nota():
+    """Owner-only: mostra a resposta CRUA do Tiny pro link do DANFE de uma
+    NF, pelo id da nota. Uso: /admin/debug-tiny-nota?id=909358497
+    (o id aparece em rosa no card 'Nota Fiscal (Tiny)' do detalhe da venda).
+
+    Serve pra saber por que o 'Ver DANFE'/'Enviar NF' falha mesmo com a NF
+    autorizada — mostra os campos de link que o Tiny devolveu e a causa
+    exata da falha (em vez do genérico 'precisa estar autorizada')."""
+    from app.services import tiny, tiny_nf
+    nota_id = (request.args.get('id') or '').strip()
+    out = {'nota_id': nota_id, 'tiny_disponivel': tiny.disponivel()}
+    if not nota_id:
+        out['uso'] = 'passe ?id=<id_da_nota_no_tiny>'
+        return jsonify(out), 400
+    retorno = tiny._get('nota.fiscal.obter.link.php',
+                        params={'id': nota_id}, retornar_erro=True)
+    if isinstance(retorno, dict):
+        out['retorno_status'] = retorno.get('status')
+        # Só as chaves de link (não vaza o resto) + erros, se houver.
+        out['campos_link'] = {k: retorno.get(k) for k in
+                              ('link_danfe', 'link_pdf', 'link_nfe', 'link')
+                              if retorno.get(k)}
+        out['erros'] = tiny._extrair_erros(retorno) or None
+    else:
+        out['retorno'] = None
+        out['motivo_falha'] = tiny._consumir_falha()
+    link, motivo = tiny.obter_link_nota_fiscal_com_motivo(nota_id)
+    out['link_resolvido'] = link
+    out['motivo'] = motivo
+    if link:
+        # Baixa e confere se é PDF de verdade (é onde o e-mail engasga).
+        _pdf, motivo_pdf = tiny_nf.baixar_danfe_pdf_com_motivo(nota_id)
+        out['pdf_ok'] = bool(_pdf)
+        out['pdf_motivo'] = motivo_pdf
+        out['pdf_tamanho'] = len(_pdf) if _pdf else 0
+    return jsonify(out), 200
+
+
 @main_bp.route('/admin/debug-foto-pdf')
 @owner_required
 def debug_foto_pdf():
