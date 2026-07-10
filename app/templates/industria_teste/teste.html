@@ -436,6 +436,67 @@
     </div>
     {% endif %}
 </div>
+
+{% if acoes %}
+<div class="passos-box" id="proximos-passos">
+    <div class="passos-tt">📋 Próximos passos — o que está pedindo ação agora</div>
+    {% for a in acoes %}
+    <div class="passo-item">
+        {% if a.tipo == 'enviar_hoje' %}
+        <span>A produção de <strong>hoje ({{ a.label }})</strong> ainda não foi enviada ao padeiro.</span>
+        <form method="POST" action="{{ url_for('industria_teste.enviar') }}"
+              onsubmit="return confirm('Enviar a produção de {{ a.label }} pro padeiro? (cria a ordem com o que está no grid)');">
+            {{ campos_dia(a.data) }}
+            <button class="btn btn-success btn-sm passo-acao">📤 enviar agora</button>
+        </form>
+        <span class="text-muted small">— revise/edite o grid antes, se quiser.</span>
+        {% elif a.tipo == 'rascunho' %}
+        <span><strong>{{ a.label }}</strong> está aprovado como <strong>rascunho</strong> — o padeiro ainda não vê.</span>
+        <form method="POST" action="{{ url_for('industria_teste.enviar') }}"
+              onsubmit="return confirm('Enviar a produção de {{ a.label }} pro padeiro?');">
+            {{ campos_dia(a.data) }}
+            <button class="btn btn-primary btn-sm passo-acao">📤 enviar ao padeiro</button>
+        </form>
+        {% elif a.tipo == 'difere' %}
+        <span>O grid de <strong>{{ a.label }}</strong> difere da ordem que o padeiro está vendo ({{ a.n }} receita(s) — células com 📤).</span>
+        <form method="POST" action="{{ url_for('industria_teste.enviar') }}"
+              onsubmit="return confirm('Atualizar a produção de {{ a.label }} no padeiro com o que está no grid agora?');">
+            {{ campos_dia(a.data) }}
+            <button class="btn btn-warning btn-sm passo-acao">🔄 atualizar produção</button>
+        </form>
+        <span class="text-muted small">— ou desfaça as edições no menu ⋯ do dia.</span>
+        {% elif a.tipo == 'vencido' %}
+        <span><strong>{{ a.n }} un</strong> de produção mandada <strong>venceram</strong> sem confirmação do padeiro.</span>
+        <a class="btn btn-outline-danger btn-sm passo-acao" href="{{ url_for('industria_teste.auditoria') }}">🔎 resolver na auditoria</a>
+        <span class="text-muted small">— reagende pra hoje ou dispense o que não vai mais produzir.</span>
+        {% elif a.tipo == 'risco' %}
+        <span><strong>{{ a.n }} receita(s)</strong> com <strong>entrega em risco</strong> (pedido de loja sem produto).</span>
+        <a class="btn btn-outline-danger btn-sm passo-acao" href="#alerta-falta">🚨 ver quais</a>
+        {% elif a.tipo == 'stale' %}
+        <span><strong>{{ a.n }} edição(ões) manual(is)</strong> podem estar desatualizadas (a demanda mudou desde que você fixou o número — ⚠️ nas linhas).</span>
+        <span class="text-muted small">Abra a linha (▸) pra comparar com a sugestão atual, ou use o ↺ pra voltar ao cálculo.</span>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="dias-strip" id="dias-strip" role="navigation" aria-label="Estado de cada dia do horizonte">
+    {% for dia in crono.dias %}
+    {% set est = estados.get(dia.data) %}
+    <button type="button" class="dia-chip {{ 'chip-hoje' if dia.data == crono.hoje }}"
+            data-data="{{ dia.data }}"
+            title="Clique pra ir até a coluna de {{ dia.label }}">
+        <span class="chip-dia">{{ dia.label }}{% if dia.data == crono.hoje %} · hoje{% endif %}{% if dia.data in fechados %} 🔒{% endif %}{% if loop.index0 == pico_idx %} <span class="chip-pico" title="Dia mais carregado do horizonte">🔥</span>{% endif %}</span>
+        <span class="chip-tot">{{ totais_dia[loop.index0].un }} un · {{ totais_dia[loop.index0].fornadas or 0 }} forn.</span><br>
+        {% if est and est.enviado %}
+            {% if difere.get(dia.data) %}<span class="chip-est est-dif">⚠ difere {{ difere[dia.data]|length }}</span>
+            {% else %}<span class="chip-est est-env">📤 enviado</span>{% endif %}
+        {% elif est %}<span class="chip-est est-apr">✓ rascunho</span>
+        {% else %}<span class="chip-est est-nada">sem ordem</span>{% endif %}
+    </button>
+    {% endfor %}
+</div>
 {% endif %}
 
 <details class="como-funciona">
