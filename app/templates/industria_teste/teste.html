@@ -1223,7 +1223,8 @@
         });
         wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
         document.querySelectorAll(
-            'td[data-data="' + data + '"], th.col-flash').forEach(function (c) {
+            'td[data-data="' + data + '"], th[data-data="' + data + '"]'
+        ).forEach(function (c) {
             c.classList.remove('col-flash');
             void c.offsetWidth;   // reinicia a animação
             c.classList.add('col-flash');
