@@ -585,6 +585,30 @@ def celula_reset():
     return jsonify(ok=True, apagados=apagados, preservados=preservados)
 
 
+@industria_teste_bp.route('/mp-dia')
+@login_required
+@admin_required
+def mp_dia():
+    """Matéria-prima necessária pra produção de UM dia do grid (com as
+    edições aplicadas) vs estoque atual de MP — "tenho insumo pra isso?"
+    antes de enviar. Read-only, JSON (modal da tela). Mesma explosão da
+    pré-baixa/baixa real (`producao.mp_necessaria_do_dia`)."""
+    from app.services.producao import mp_necessaria_do_dia
+
+    try:
+        data_alvo = date.fromisoformat(request.args.get('data', ''))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, erro='data'), 400
+    res = mp_necessaria_do_dia(
+        data_alvo, horizonte_dias=_horizonte_janela()[0],
+        janela_semanas=_horizonte_janela()[1],
+        inicio_offset_dias=_inicio_offset(), equilibrar=_equilibrar(),
+        motor=_motor())
+    if res is None:
+        return jsonify(ok=False, erro='fora_do_grid'), 404
+    return jsonify(ok=True, **res)
+
+
 @industria_teste_bp.route('/ia-proposta', methods=['POST'])
 @login_required
 @admin_required
