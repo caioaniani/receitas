@@ -183,6 +183,64 @@
         user-select: none; }
     .como-funciona[open] { background: #f8f9fa; border: 1px solid #e9ecef;
         border-radius: .4rem; padding: .5rem .75rem; }
+    .como-funciona h6 { font-size: .78rem; text-transform: uppercase;
+        letter-spacing: .03em; color: #6c757d; margin: .6rem 0 .25rem; }
+    .fluxo-passos { display: flex; flex-wrap: wrap; gap: .4rem; padding: 0;
+        margin: .25rem 0 .1rem; list-style: none; counter-reset: passo; }
+    .fluxo-passos li { counter-increment: passo; background: #fff;
+        border: 1px solid #dee2e6; border-radius: .4rem; padding: .35rem .55rem;
+        font-size: .78rem; max-width: 16rem; }
+    .fluxo-passos li::before { content: counter(passo); display: inline-block;
+        background: #0d3b66; color: #fff; border-radius: 50%; width: 1.15rem;
+        height: 1.15rem; text-align: center; line-height: 1.15rem;
+        font-weight: 700; font-size: .68rem; margin-right: .35rem; }
+    .leg-grid { display: flex; flex-wrap: wrap; gap: .35rem .7rem;
+        font-size: .76rem; }
+    .leg-item { display: inline-flex; align-items: center; gap: .3rem; }
+    .leg-swatch { display: inline-block; width: 1rem; height: 1rem;
+        border-radius: .2rem; border: 1px solid #d6dbe0; flex: none; }
+    .glossario dt { font-size: .74rem; font-weight: 700; color: #0d3b66;
+        float: left; clear: left; margin-right: .35rem; }
+    .glossario dd { font-size: .74rem; margin-bottom: .15rem; color: #495057; }
+    /* "Próximos passos": o que está pedindo ação agora, com o gesto ao lado. */
+    .passos-box { border: 1px solid #cfe2ff; border-left: 4px solid #0d6efd;
+        background: #f5f9ff; border-radius: .4rem; padding: .5rem .75rem;
+        margin-bottom: .75rem; }
+    .passos-tt { font-weight: 700; font-size: .82rem; color: #0d3b66;
+        margin-bottom: .25rem; }
+    .passo-item { display: flex; flex-wrap: wrap; align-items: center;
+        gap: .3rem .6rem; font-size: .82rem; padding: .22rem 0;
+        border-top: 1px dashed #d8e5f5; }
+    .passo-item:first-of-type { border-top: none; }
+    .passo-item form { margin: 0; }
+    .passo-acao { font-size: .72rem; padding: .1rem .5rem; line-height: 1.5; }
+    /* Trilha de dias: estado da semana de relance, clica e vai pra coluna. */
+    .dias-strip { display: flex; gap: .4rem; overflow-x: auto;
+        padding-bottom: .25rem; margin-bottom: .6rem; }
+    .dia-chip { flex: none; min-width: 7.2rem; border: 1px solid #e3e6ea;
+        border-radius: .45rem; background: #fff; padding: .3rem .55rem;
+        cursor: pointer; text-align: left; font-size: .72rem; color: #495057; }
+    .dia-chip:hover { border-color: #86b7fe; background: #f6faff; }
+    .dia-chip.chip-hoje { border-color: #b8860b; background: #fffbea; }
+    .dia-chip .chip-dia { font-weight: 700; color: #212529; font-size: .76rem;
+        display: flex; align-items: center; gap: .25rem; }
+    .dia-chip .chip-tot { font-variant-numeric: tabular-nums; color: #0d3b66;
+        font-weight: 600; }
+    .chip-est { display: inline-block; border-radius: .25rem; font-weight: 700;
+        font-size: .62rem; padding: .04rem .3rem; margin-top: .1rem; }
+    .chip-est.est-env { background: #d1e7dd; color: #0f5132; }
+    .chip-est.est-dif { background: #ffc107; color: #212529; }
+    .chip-est.est-apr { background: #fff3cd; color: #664d03; }
+    .chip-est.est-nada { background: #e9ecef; color: #6c757d; }
+    .chip-pico { color: #b26a00; font-weight: 700; }
+    @keyframes cel-flash { 0% { background: #cfe2ff; } 100% { background: transparent; } }
+    .crono td.col-flash, .crono th.col-flash { animation: cel-flash 1.6s ease-out; }
+    /* Modal "MP do dia": falta em destaque. */
+    .mp-tabela td, .mp-tabela th { font-size: .82rem; padding: .3rem .5rem;
+        font-variant-numeric: tabular-nums; }
+    .mp-tabela tr.mp-falta td { background: #fff0f1; }
+    .mp-tabela .mp-falta-qtd { color: #dc3545; font-weight: 700; }
+    .mp-tabela .mp-ok-qtd { color: #198754; }
     /* Toolbar de filtros do grid. */
     .crono-toolbar { display: flex; flex-wrap: wrap; align-items: center;
         gap: .75rem; margin-bottom: .5rem; font-size: .82rem; }
