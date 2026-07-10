@@ -3,14 +3,12 @@
   Fonte única compartilhada por novo.html e editar.html — a linha do item e
   o JS do dropdown vivem só aqui pra não divergirem (regra do CLAUDE.md).
 
-  Uso:
-    {% import "pedidos/_item_typeahead.html" as ta %}
-    ...
-    {{ ta.item_row(is_template=True) }}      {# linha modelo escondida p/ clonar #}
-    {{ ta.item_row() }}                        {# linha visível vazia (novo) #}
-    {{ ta.item_row('r_5', 'Sourdough', 3) }}   {# linha pré-preenchida (editar) #}
-    ...
-    {% block scripts %}{{ ta.typeahead_assets() }}{% endblock %}
+  Uso (importar como "ta" no topo do template):
+    import "pedidos/_item_typeahead.html" as ta
+    ta.item_row(is_template=True)   -> linha modelo escondida (o JS clona)
+    ta.item_row()                   -> linha visível vazia (novo)
+    ta.item_row('r_5','Sourdough',3)-> linha pré-preenchida (editar)
+    ta.typeahead_assets()           -> style + script, no bloco scripts
 
   O JS clona a linha #row-template ao adicionar item — por isso a linha
   renderizada e a linha nova são byte-idênticas.
