@@ -12,7 +12,7 @@ nos dois canais.
 import logging
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.services import tiny, tiny_nf
+from app.services import tiny_nf
 from app.utils import agora
 
 logger = logging.getLogger(__name__)
@@ -182,10 +182,6 @@ def emitir_nf_fatura(fatura, user_id=None, recriar=False):
 
     return tiny_nf.emitir_nf_generico(fatura, _montar, recriar=recriar)
 
-
-def link_danfe(venda_ou_fatura):
-    """URL pro DANFE em PDF (válida por tempo limitado no Tiny). Serve pra
-    VendaB2B e FaturaB2B — os dois têm `tiny_nota_fiscal_id`."""
-    if not venda_ou_fatura.tiny_nota_fiscal_id:
-        return None
-    return tiny.obter_link_nota_fiscal(venda_ou_fatura.tiny_nota_fiscal_id)
+# `link_danfe` foi removido (10/07/2026): as rotas B2B agora chamam
+# `tiny.obter_link_nota_fiscal_com_motivo` direto, pra mostrar a causa real
+# da falha em vez do genérico "precisa estar autorizada".
