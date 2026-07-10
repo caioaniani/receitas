@@ -68,7 +68,11 @@ def test_editar_mostra_produto_selecionado(app, admin_user, loja, catalogo, clie
     _login(cliente)
     r = cliente.get(f'/pedidos/{p.id}/editar')
     assert r.status_code == 200
-    assert ('p_%d" selected' % pid).encode() in r.data
+    # A tela usa typeahead: o produto vem pre-preenchido no input de busca
+    # (nome visivel) + hidden com o id codificado p_<id>.
+    html = r.data.decode()
+    assert 'value="Pao Frances"' in html
+    assert ('value="p_%d"' % pid) in html
 
 
 def test_admin_cria_pedido_loja_mesmo_dia(app, admin_user, loja, catalogo, cliente):
