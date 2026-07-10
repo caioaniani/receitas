@@ -1091,8 +1091,15 @@
                 if (chev) chev.classList.remove('aberto');
             }
         });
-        // Categoria sem nenhuma receita visível some junto.
+        // Categoria sem nenhuma receita visível some junto. Grid ordenado
+        // fora do modo "por categoria" (dataset.ordem da outra IIFE): os
+        // cabeçalhos ficam TODOS ocultos — o walk por irmãos ressuscitaria
+        // um cabeçalho órfão no topo da lista ordenada.
+        const tbodyOrd = document.querySelector('.crono table tbody');
+        const semCat = tbodyOrd && tbodyOrd.dataset.ordem
+            && tbodyOrd.dataset.ordem !== 'categoria';
         document.querySelectorAll('tr.cat-row').forEach(function (cat) {
+            if (semCat) { cat.hidden = true; return; }
             let el = cat.nextElementSibling, tem = false;
             while (el && !el.classList.contains('cat-row')) {
                 if (el.classList.contains('rec-row') && !el.hidden) {
