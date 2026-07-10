@@ -605,7 +605,7 @@
                 <th class="rec-col">Receita</th>
                 {% for dia in crono.dias %}
                 {% set est = estados.get(dia.data) %}
-                <th class="{% if dia.data == crono.hoje %}hoje-col{% endif %}">
+                <th class="{% if dia.data == crono.hoje %}hoje-col{% endif %}" data-data="{{ dia.data }}">
                     <div>{{ dia.label }}</div>
                     <div class="dia-acoes">
                         {% if not est %}
