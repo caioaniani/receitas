@@ -104,6 +104,57 @@ def test_baixar_danfe_nao_pdf_da_motivo(app):
     assert pdf is None and 'PDF' in motivo
 
 
+class _Resp:
+    def __init__(self, content=b'', ctype='application/pdf', status=200,
+                 url='https://erp.olist.com/doc.view?id=x', text=None):
+        self.content = content
+        self.status_code = status
+        self.headers = {'Content-Type': ctype}
+        self.url = url
+        self.text = text if text is not None else ''
+
+
+def test_candidatos_pdf_na_pagina_resolve_relativo():
+    html = ('<html><body><iframe src="/nfe/danfe_123.pdf"></iframe>'
+            '<a href="https://cdn.olist.com/x.pdf">baixar</a>'
+            '<img src="/logo.png"></body></html>')
+    cands = tiny_nf._candidatos_pdf_na_pagina(
+        html, 'https://erp.olist.com/doc.view?id=x')
+    assert cands == ['https://erp.olist.com/nfe/danfe_123.pdf',
+                     'https://cdn.olist.com/x.pdf']
+
+
+def test_baixar_segue_html_ate_o_pdf_embutido(app):
+    """Download vem HTML (visualizador Olist) → segue o link e pega o PDF."""
+    html = '<embed src="https://cdn.olist.com/danfe.pdf">'
+
+    def _fake_get(url, **kw):
+        if url.endswith('.pdf'):
+            return _Resp(content=b'%PDF-real', ctype='application/pdf')
+        return _Resp(ctype='text/html; charset=utf-8', text=html,
+                     url='https://erp.olist.com/doc.view?id=x')
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+        with patch('app.services.tiny.obter_link_nota_fiscal_com_motivo',
+                   return_value=('https://erp.olist.com/doc.view?id=x', None)), \
+             patch('requests.get', side_effect=_fake_get):
+            pdf, motivo = tiny_nf.baixar_danfe_pdf_com_motivo('909')
+    assert pdf == b'%PDF-real' and motivo is None
+
+
+def test_baixar_html_sem_pdf_embutido_da_motivo(app):
+    """Visualizador sem PDF estático (carrega por JS) → motivo claro."""
+    html = '<html><body><div id="viewer"></div></body></html>'
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+        with patch('app.services.tiny.obter_link_nota_fiscal_com_motivo',
+                   return_value=('https://erp.olist.com/doc.view?id=x', None)), \
+             patch('requests.get',
+                   return_value=_Resp(ctype='text/html', text=html)):
+            pdf, motivo = tiny_nf.baixar_danfe_pdf_com_motivo('909')
+    assert pdf is None and 'visualizador do Olist' in motivo
+
+
 def _venda_com_nf(email='fin@united.com'):
     cli = ClienteB2B(nome='United Coffee', email=email, ativo=True,
                      cnpj_cpf='44737537000104')
