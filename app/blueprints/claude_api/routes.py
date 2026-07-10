@@ -708,6 +708,12 @@ def tiny_danfe_debug():
                 except requests.RequestException as exc:
                     testes.append({'url': u, 'erro': str(exc)})
             out['candidatos_pdf_nativo'] = testes
+            # HTML completo do DANFE (pra eu testar conversao HTML->PDF).
+            try:
+                rr = requests.get(base, timeout=20, headers=ua)
+                out['html_completo'] = rr.text or ''
+            except requests.RequestException as exc:
+                out['html_completo_erro'] = str(exc)
             # Accept: application/pdf na URL base (content negotiation).
             try:
                 rr = requests.get(base, timeout=20,
