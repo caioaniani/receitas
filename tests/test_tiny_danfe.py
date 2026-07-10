@@ -88,18 +88,18 @@ def test_link_com_motivo_sem_token(app):
     assert link is None and 'TINY_API_TOKEN' in motivo
 
 
-def test_baixar_danfe_nao_pdf_da_motivo(app):
-    """O link resolve mas o download vem HTML (página de erro/expiração) —
+def test_baixar_danfe_conteudo_estranho_da_motivo(app):
+    """O link resolve mas o download não é PDF nem HTML (ex: JSON de erro) —
     o motivo diz que não veio PDF, em vez de sumir."""
-    class _Resp:
+    class _R:
         status_code = 200
-        headers = {'Content-Type': 'text/html'}
-        content = b'<html>erro</html>'
+        headers = {'Content-Type': 'application/json'}
+        content = b'{"erro":"x"}'
     with app.app_context():
         app.config['TINY_API_TOKEN'] = 'tok'
         with patch('app.services.tiny.obter_link_nota_fiscal_com_motivo',
                    return_value=('https://tiny/x', None)), \
-             patch('requests.get', return_value=_Resp()):
+             patch('requests.get', return_value=_R()):
             pdf, motivo = tiny_nf.baixar_danfe_pdf_com_motivo('909')
     assert pdf is None and 'PDF' in motivo
 
