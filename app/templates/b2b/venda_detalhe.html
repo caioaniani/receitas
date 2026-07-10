@@ -119,6 +119,13 @@
                                 <i class="bi bi-envelope"></i> Enviar NF por e-mail
                             </button>
                         </div>
+                        {% if tem_boleto %}
+                        <button type="submit" class="btn btn-outline-success btn-sm w-100 mt-2"
+                                formaction="{{ url_for('b2b.venda_enviar_nf_boleto_email', vid=venda.id) }}"
+                                title="Manda a NF (PDF) e o(s) boleto(s) da venda num e-mail só">
+                            <i class="bi bi-envelope-paper"></i> Enviar NF + Boleto juntos
+                        </button>
+                        {% endif %}
                     </form>
                 {% elif venda.tiny_nota_fiscal_id %}
                     <div>NF: <code>{{ venda.tiny_nota_fiscal_id }}</code></div>
