@@ -1199,12 +1199,17 @@ def venda_enviar_nf_boleto_email(vid):
     # Boletos da venda: cada parcela pode ter uma cobrança (nosso número só
     # existe depois da remessa gerada).
     boletos = []
-    for p in venda.parcelas:
-        cob = p.cobranca[0] if p.cobranca else None
-        if cob and cob.nosso_numero:
-            ld = linha_digitavel(codigo_barras_da_cobranca(cob))
-            boletos.append({'cob': cob, 'pdf': bytes(gerar_boleto_pdf(cob)),
-                            'linha_digitavel': ld})
+    try:
+        for p in venda.parcelas:
+            cob = p.cobranca[0] if p.cobranca else None
+            if cob and cob.nosso_numero:
+                ld = linha_digitavel(codigo_barras_da_cobranca(cob))
+                boletos.append({'cob': cob,
+                                'pdf': bytes(gerar_boleto_pdf(cob)),
+                                'linha_digitavel': ld})
+    except (ValueError, TypeError) as exc:
+        flash(f'Não consegui gerar o PDF do boleto: {exc}', 'danger')
+        return redirect(url_for('b2b.venda_detalhe', vid=vid))
     if not boletos:
         flash('Nenhum boleto gerado ainda — gere o boleto da parcela (botão '
               '"Gerar boleto") antes de enviar NF + boleto juntos.', 'warning')
