@@ -381,6 +381,11 @@
            title="Ordens de produção mandadas e ainda não confirmadas pelo padeiro">
             🔎 auditoria de produção
         </a>
+        <a class="btn btn-sm btn-outline-secondary mb-0"
+           href="{{ url_for('producao.previsao_acuracia') }}"
+           title="A previsão anda acertando? Viés e erro por receita, comparando o previsto com o realizado — ajuda a escolher o 'Prever por'.">
+            🎯 acurácia da previsão
+        </a>
         <button type="button" id="btn-ia-crono" class="btn btn-sm btn-outline-dark mb-0"
                 title="A IA (Opus) analisa o cronograma (faltas, pendências, calendário, carga) e propõe ajustes por célula — você marca o que aplicar; ENVIAR ao padeiro continua manual">
             <i class="bi bi-stars"></i> Analisar por IA
