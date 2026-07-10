@@ -644,6 +644,8 @@
                     </div>
                     <div class="dia-menu" data-dia="{{ dia.data }}" hidden>
                         <div class="dia-menu-tt">{{ dia.label }}</div>
+                        <button type="button" class="mp-dia-btn" data-dia="{{ dia.data }}" data-label="{{ dia.label }}"
+                                title="Explode a produção deste dia (como está no grid) em matéria-prima e compara com o estoque atual — 'tenho insumo pra isso?' antes de enviar">🧾 matéria-prima do dia</button>
                         {% if not est %}
                         <form method="POST" action="{{ url_for('industria_teste.aprovar') }}"
                               onsubmit="return confirm('Aprovar o plano de {{ dia.label }} como rascunho? (revisa/edita e envia depois)');">
