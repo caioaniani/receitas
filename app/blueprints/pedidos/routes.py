@@ -519,25 +519,15 @@ def editar(id):
         flash('Pedido atualizado.', 'success')
         return redirect(url_for('pedidos.detalhe', id=pedido.id))
 
-    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
-    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
-    # Liberadas + as que JÁ estão no pedido (grandfather): sem a união, o
-    # <select> de um item antigo com MP hoje bloqueada perderia a opção
-    # selecionada e o REPLACE do POST derrubaria o item.
-    materias = _mps_pediveis().all()
-    mp_ids_pedido = {it.materia_prima_id for it in pedido.itens
-                     if it.materia_prima_id}
-    faltantes = mp_ids_pedido - {m.id for m in materias}
-    if faltantes:
-        materias = sorted(
-            materias + MateriaPrima.query
-            .filter(MateriaPrima.id.in_(faltantes)).all(),
-            key=lambda m: (m.nome or '').lower())
+    # A tela usa typeahead (/pedidos/buscar-itens.json) em vez de <select> com
+    # o catálogo inteiro — os itens existentes já vêm pré-preenchidos pela FK,
+    # então não é preciso carregar receitas/produtos/MPs aqui. O grandfather de
+    # MP bloqueada segue vivo no POST (candidatos = só ids que NÃO estavam no
+    # pedido), preservando itens antigos legítimos.
     amanha = hoje_brt() + timedelta(days=1)
     data_min = hoje_brt() if current_user.is_admin() else amanha
     return render_template('pedidos/editar.html', pedido=pedido,
-                           receitas=receitas, produtos=produtos,
-                           materias=materias, amanha=amanha, data_min=data_min)
+                           amanha=amanha, data_min=data_min)
 
 
 @pedidos_bp.route('/<int:id>')
