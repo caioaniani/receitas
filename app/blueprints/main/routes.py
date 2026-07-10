@@ -1096,6 +1096,21 @@ def debug_tiny_nota():
         out['pdf_ok'] = bool(_pdf)
         out['pdf_motivo'] = motivo_pdf
         out['pdf_tamanho'] = len(_pdf) if _pdf else 0
+        # Se ainda falhou, mostra a estrutura da página do Olist (candidatos
+        # de PDF + trecho) pra eu saber como extrair o PDF embutido.
+        if not _pdf:
+            import requests
+            try:
+                r = requests.get(link, timeout=20,
+                                 headers={'User-Agent': tiny_nf._UA_NAVEGADOR})
+                out['pagina_status'] = r.status_code
+                out['pagina_ctype'] = r.headers.get('Content-Type')
+                if 'html' in (r.headers.get('Content-Type') or '').lower():
+                    out['pdf_candidatos'] = tiny_nf._candidatos_pdf_na_pagina(
+                        r.text, r.url)
+                    out['html_inicio'] = (r.text or '')[:800]
+            except requests.RequestException as exc:
+                out['pagina_erro'] = str(exc)
     return jsonify(out), 200
 
 
