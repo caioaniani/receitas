@@ -1301,13 +1301,15 @@
     function fmtQtd(v, un) {
         if (un === 'un') return v + ' un';
         if (v >= 1000) return (Math.round(v / 100) / 10) + ' kg';
+        if (v > 0 && v < 1) return '<1 g';   // fração de grama não vira "0 g"
         return Math.round(v) + ' g';
     }
-    function esc(t) {
+    // Compartilhada com o painel da IA (mesma página, escopos separados).
+    const esc = window.cronoEsc = function (t) {
         const d = document.createElement('div');
         d.textContent = t == null ? '' : String(t);
         return d.innerHTML;
-    }
+    };
     document.addEventListener('click', async function (ev) {
         const btn = ev.target.closest('.mp-dia-btn');
         if (!btn || !modalEl) return;
