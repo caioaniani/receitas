@@ -166,9 +166,10 @@ def test_editar_recusa_mp_bloqueada_nova(app, admin_user, loja):
 
 
 def test_editar_get_renderiza_mp_grandfathered(app, admin_user, loja):
-    """O select do item existente precisa da opção mp_<id> mesmo com a MP
-    bloqueada hoje — sem a união no render, o REPLACE do POST derrubaria o
-    item (select cairia em 'Selecione...')."""
+    """A linha do item existente vem pré-preenchida com o id codificado
+    mp_<id> mesmo com a MP bloqueada hoje — sem isso, o REPLACE do POST
+    derrubaria o item. Com o typeahead a linha carrega o hidden value=mp_<id>
+    (não depende mais de a opção existir num <select>)."""
     with app.app_context():
         blo = _mp('Grandfather no Select', False)
         ped = _pedido_com_mp(loja, admin_user, blo)
@@ -176,7 +177,8 @@ def test_editar_get_renderiza_mp_grandfathered(app, admin_user, loja):
     client = app.test_client()
     _login(client, admin_user)
     body = client.get(f'/pedidos/{ped_id}/editar').get_data(as_text=True)
-    assert f'mp_{blo_id}" selected' in body
+    assert f'value="mp_{blo_id}"' in body
+    assert 'value="Grandfather no Select"' in body
 
 
 # ── Copilot ──────────────────────────────────────────────────────────────
