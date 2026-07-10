@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "pedidos/_item_typeahead.html" as ta %}
 
 {% block title %}Novo Pedido{% endblock %}
 
@@ -45,31 +46,10 @@
                 </tr>
             </thead>
             <tbody id="itens-body">
-                <tr class="item-row">
-                    <td>
-                        <input type="text" class="form-control form-control-sm item-busca"
-                               placeholder="Digite o nome..." autocomplete="off">
-                        <input type="hidden" name="item_id[]" class="item-id">
-                    </td>
-                    <td>
-                        <input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1">
-                    </td>
-                    <td>
-                        <select name="item_estado[]" class="form-select form-select-sm">
-                            <option value="">Padrão</option>
-                            <option value="backup">Backup</option>
-                            <option value="assado">Assado</option>
-                        </select>
-                    </td>
-                    <td>
-                        <input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder="">
-                    </td>
-                    <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" onclick="this.closest('tr').remove()">
-                            <i class="bi bi-x"></i>
-                        </button>
-                    </td>
-                </tr>
+                {# Linha modelo (escondida) que o JS clona ao adicionar item #}
+                {{ ta.item_row(is_template=True) }}
+                {# Primeira linha visível, vazia #}
+                {{ ta.item_row() }}
             </tbody>
         </table>
     </div>
@@ -87,125 +67,5 @@
 {% endblock %}
 
 {% block scripts %}
-<style>
-.item-results {
-    background: var(--bg-card);
-    color: var(--text-main);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    max-height: 300px;
-    overflow-y: auto;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-    z-index: 3000;
-}
-.item-result-opt {
-    padding: 10px 12px;
-    cursor: pointer;
-    color: var(--text-main);
-    border-bottom: 1px solid var(--border-color);
-}
-.item-result-opt:hover {
-    background-color: var(--bg-card-hover);
-}
-.item-result-opt:last-child {
-    border-bottom: none;
-}
-</style>
-<script>
-(function () {
-    var tbody = document.getElementById('itens-body');
-    var timer;
-    var activeInput = null;
-    var activeHidden = null;
-
-    // Dropdown unico anexado ao <body>: flutua livre acima de tudo, sem
-    // clipping do .table-responsive nem de contexto de empilhamento.
-    var pop = document.createElement('div');
-    pop.className = 'item-results';
-    pop.style.display = 'none';
-    document.body.appendChild(pop);
-
-    function hidePop() {
-        pop.style.display = 'none';
-        activeInput = null;
-        activeHidden = null;
-    }
-
-    function positionPop(input) {
-        var rect = input.getBoundingClientRect();
-        pop.style.position = 'fixed';
-        pop.style.top = rect.bottom + 'px';
-        pop.style.left = rect.left + 'px';
-        pop.style.width = rect.width + 'px';
-    }
-
-    function renderPop(input, hidden, itens) {
-        if (!itens || itens.length === 0) { hidePop(); return; }
-        pop.innerHTML = '';
-        itens.forEach(function (item) {
-            var opt = document.createElement('div');
-            opt.className = 'item-result-opt';
-            opt.dataset.id = item.id;
-            opt.textContent = item.nome;  // textContent escapa o nome
-            pop.appendChild(opt);
-        });
-        activeInput = input;
-        activeHidden = hidden;
-        positionPop(input);
-        pop.style.display = 'block';
-    }
-
-    // Digitar: zera o id antigo (so volta a valer ao escolher) e busca.
-    tbody.addEventListener('input', function (e) {
-        if (!e.target.classList.contains('item-busca')) return;
-        var input = e.target;
-        var hidden = input.closest('td').querySelector('.item-id');
-        hidden.value = '';
-        var val = input.value.trim();
-        clearTimeout(timer);
-        if (val.length < 2) { hidePop(); return; }
-        timer = setTimeout(function () {
-            fetch('/pedidos/buscar-itens.json?q=' + encodeURIComponent(val))
-                .then(function (r) { return r.json(); })
-                .then(function (data) { renderPop(input, hidden, data.itens); })
-                .catch(hidePop);
-        }, 250);
-    });
-
-    // Escolher uma opcao: preenche o texto visivel + o hidden da linha ativa.
-    pop.addEventListener('click', function (e) {
-        var opt = e.target.closest('.item-result-opt');
-        if (!opt || !activeInput) return;
-        activeInput.value = opt.textContent;
-        activeHidden.value = opt.dataset.id;
-        hidePop();
-    });
-
-    // Clicar fora (nem no campo de busca, nem no dropdown) fecha.
-    document.addEventListener('click', function (e) {
-        if (e.target.closest('.item-busca') || pop.contains(e.target)) return;
-        hidePop();
-    });
-
-    // Rolagem/redimensionamento: reposiciona o dropdown aberto.
-    function reposition() {
-        if (pop.style.display === 'block' && activeInput) positionPop(activeInput);
-    }
-    window.addEventListener('scroll', reposition, true);
-    window.addEventListener('resize', reposition);
-
-    // Adicionar linha: a delegation no tbody ja cobre a nova linha.
-    document.getElementById('btn-add-item').addEventListener('click', function () {
-        var tr = document.createElement('tr');
-        tr.className = 'item-row';
-        tr.innerHTML =
-            '<td><input type="text" class="form-control form-control-sm item-busca" placeholder="Digite o nome..." autocomplete="off"><input type="hidden" name="item_id[]" class="item-id"></td>' +
-            '<td><input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue" min="1" value="1"></td>' +
-            '<td><select name="item_estado[]" class="form-select form-select-sm"><option value="">Padrão</option><option value="backup">Backup</option><option value="assado">Assado</option></select></td>' +
-            '<td><input type="text" name="item_obs[]" class="form-control form-control-sm" placeholder=""></td>' +
-            '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" onclick="this.closest(\'tr\').remove()"><i class="bi bi-x"></i></button></td>';
-        tbody.appendChild(tr);
-    });
-})();
-</script>
+{{ ta.typeahead_assets() }}
 {% endblock %}
