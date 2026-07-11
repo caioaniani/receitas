@@ -266,39 +266,27 @@ def cardapio_img(tipo, id):
 
     Fallback pra BLOB do banco se foto ainda nao foi migrada.
     """
-    import hashlib
 
-    from flask import abort, make_response
-    from flask import request as flask_request
+    from flask import abort
     from sqlalchemy.orm import load_only
 
     from app.models import Produto, Receita
     if tipo == 'receita':
         obj = (Receita.query.options(
-            load_only(Receita.imagem_blob, Receita.imagem_mimetype,
-                      Receita.imagem_dropbox_url)
+            load_only(Receita.imagem_dropbox_url)
         ).get(id))
     elif tipo == 'produto':
         obj = (Produto.query.options(
-            load_only(Produto.imagem_blob, Produto.imagem_mimetype,
-                      Produto.imagem_dropbox_url)
+            load_only(Produto.imagem_dropbox_url)
         ).get(id))
     else:
         abort(404)
     if not obj:
         abort(404)
+    # M6 Commit D: BLOB saiu — foto e so Dropbox (sem fallback).
     if obj.imagem_dropbox_url:
         return redirect(obj.imagem_dropbox_url, code=302)
-    if not obj.imagem_blob:
-        abort(404)
-    etag = hashlib.md5(obj.imagem_blob).hexdigest()[:16]
-    if flask_request.headers.get('If-None-Match') == etag:
-        return ('', 304)
-    resp = make_response(obj.imagem_blob)
-    resp.mimetype = obj.imagem_mimetype or 'image/jpeg'
-    resp.headers['Cache-Control'] = 'public, max-age=86400'
-    resp.headers['ETag'] = etag
-    return resp
+    abort(404)
 
 
 @main_bp.route('/cardapio-img/<tipo>/<int:id>/upload', methods=['POST'])
