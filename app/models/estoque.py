@@ -199,8 +199,8 @@ class FotoRecebimento(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_loja.id'), nullable=False)
-    # Storage: ver PedidoItemFoto pro padrao M6 (Dropbox preferido, BLOB legado).
-    imagem = db.Column(db.LargeBinary, nullable=True)  # legado, nullable apos M6
+    # Storage: Dropbox (M6). A coluna BLOB `imagem` saiu do modelo no
+    # Commit D (11/07/2026); o DROP fisico e guardado em migrations_legacy.
     imagem_url = db.Column(db.String(500))  # shared link Dropbox
     imagem_storage_path = db.Column(db.String(500))
     mimetype = db.Column(db.String(100))
