@@ -328,10 +328,14 @@ def pedidos_semana_media():
             contraprova[lj['loja_id']] = {
                 p['receita_id']: p['por_dia'] for p in lj['produtos']
                 if p.get('receita_id') and not p.get('eh_mp')}
+    from app.services.previsao_acuracia import acuracia_por_loja_receita
+    from app.services.previsao_producao import desperdicio_recente_por_item
     return render_template('producao/pedidos_semana_media.html',
                            grade=grade, horizonte=horizonte,
                            janela=janela, inicio=inicio,
-                           comparar=comparar, contraprova=contraprova)
+                           comparar=comparar, contraprova=contraprova,
+                           acuracia=acuracia_por_loja_receita('media_pedido'),
+                           desperdicio=desperdicio_recente_por_item())
 
 
 @producao_bp.route('/pedidos-semana/estoque')
