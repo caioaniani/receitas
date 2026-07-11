@@ -71,12 +71,12 @@ def _foto_bytes(foto):
                 return conteudo
             logger.warning(
                 'foto %s: shared link nao retornou imagem '
-                '(status=%s content_type=%s len=%s) — usando BLOB',
+                '(status=%s content_type=%s len=%s) — foto fica fora do PDF',
                 getattr(foto, 'id', '?'), r.status_code, ct, len(conteudo))
         except Exception:  # noqa: BLE001
             logger.exception('foto %s: erro no shared link pro PDF',
                              getattr(foto, 'id', '?'))
-    return foto.imagem  # BLOB legado (pode ser None apos M6)
+    return None  # sem fallback BLOB (M6 Commit D) — foto so no Dropbox
 
 
 def _fotos_conferencia(p, etapa=None):
