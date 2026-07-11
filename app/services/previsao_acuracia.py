@@ -265,9 +265,12 @@ def resumo_acuracia(dias=30, motor=None):
     """Agrega vies e WAPE dos snapshots JA casados com data_alvo nos ultimos
     `dias`, opcionalmente filtrado por `motor`. Vies = previsto - realizado
     (positivo = superprevisao). WAPE = soma|previsto-realizado| /
-    soma(realizado). Retorna dict com 'total', 'por_receita', 'por_loja',
-    'por_lead', 'motores' (n de snapshots casados por motor),
-    'circularidade_pct' e 'periodo_dias'."""
+    soma(realizado). Desde 11/07/2026 cada data tem 1 snapshot POR
+    ANTECEDENCIA — 'por_lead' compara D-1..D-6 da mesma data, e os demais
+    agregados ('total', 'por_receita', 'por_loja') contam cada data uma
+    vez por lead (media entre antecedencias). Retorna dict com 'total',
+    'por_receita', 'por_loja', 'por_lead', 'motores' (n de snapshots
+    casados por motor), 'circularidade_pct' e 'periodo_dias'."""
     corte = hoje() - timedelta(days=int(dias or 30))
     base = [PrevisaoSnapshot.realizado.isnot(None),
             PrevisaoSnapshot.data_alvo >= corte]
