@@ -96,7 +96,6 @@ def salvar_foto(pedido_item_id, etapa, file_storage,
                  .filter_by(pedido_item_id=pedido_item_id, etapa=etapa)
                  .first())
     if existente:
-        existente.imagem = None  # libera BLOB legado se tinha
         existente.imagem_url = info['url']
         existente.imagem_storage_path = info['storage_path']
         existente.mimetype = 'image/jpeg'  # comprimir_imagem sempre devolve JPEG
