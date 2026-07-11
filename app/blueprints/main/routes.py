@@ -3033,17 +3033,17 @@ def loja_online_catalogo_foto(tipo, id):
         return jsonify(ok=False, erro='arquivo vazio'), 400
     if len(data) > 25 * 1024 * 1024:
         return jsonify(ok=False, erro='imagem maior que 25MB'), 400
+    if not dropbox_storage.disponivel():
+        # M6 Commit D: sem fallback BLOB — Dropbox fora = erro visivel.
+        return jsonify(ok=False, erro='Dropbox indisponível — imagem não '
+                                      'salva; configure e tente de novo'), 503
     try:
         final = comprimir_imagem(data)
-        if dropbox_storage.disponivel():
-            path = f'/cardapio/{tipo}/{obj.id}.jpg'
-            info = dropbox_storage.upload_publico(
-                final, path, mode='overwrite', autorename=False)
-            obj.imagem_dropbox_url = info['url']
-            obj.imagem_storage_path = info['storage_path']
-            obj.imagem_blob = None
-        else:
-            obj.imagem_blob = final
+        path = f'/cardapio/{tipo}/{obj.id}.jpg'
+        info = dropbox_storage.upload_publico(
+            final, path, mode='overwrite', autorename=False)
+        obj.imagem_dropbox_url = info['url']
+        obj.imagem_storage_path = info['storage_path']
         obj.imagem_mimetype = 'image/jpeg'
     except Exception as exc:  # noqa: BLE001
         return jsonify(ok=False, erro=f'erro ao processar: {exc}'), 500
