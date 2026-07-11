@@ -1615,14 +1615,20 @@ consciente a padronizacao Sonnet, decisao do dono; env
 — ela nao inventa a conta, ajusta com contexto (calendario/feriados que
 o modelo conhece — nao ha tabela de datas especiais) e justifica.
 
-- **Pedidos loja→industria**: botao "Sugerir por IA" por loja em
-  `/producao/pedidos-semana/media` (rota `POST /producao/pedidos-semana/
-  ia`). Contexto = grade da MEDIA + motor VENDA+ESTOQUE (contraprova) +
-  estoque + desperdicio 7d. O JS preenche a grade EDITAVEL (celula
-  amarela = mudou; celula travada/ja-pedido NUNCA e tocada — sanitizado
-  no server E pulado no JS) + painel com motivo por item e parecer.
-  NADA e criado: o pedido continua nascendo pelos botoes Gerar de sempre
-  (aplicar_grade → rascunho pendente).
+- **Pedidos loja→industria**: botao "Sugerir por IA" por loja nas DUAS
+  telas de pedidos da semana (rota unica `POST /producao/pedidos-semana/
+  ia`, param `modo`): `/pedidos-semana/media` (modo='media', base =
+  grade da MEDIA, contraprova = venda+estoque) e `/pedidos-semana/
+  estoque` (modo='venda', 11/07/2026 a pedido do dono: base = motor
+  VENDA+ESTOQUE com o `seguranca` da tela, contraprova = media; itens
+  identificados por `item_key` porque a grade inclui MPs — 'mp:<id>').
+  Contexto = os dois motores + estoque + desperdicio 7d. O JS (fonte
+  unica `producao/_pedidos_ia_js.html`, `{% set ia_modo %}` antes do
+  include) preenche a grade EDITAVEL (celula amarela = mudou; celula
+  travada/ja-pedido NUNCA e tocada — sanitizado no server E pulado no
+  JS) + painel com motivo por item e parecer. NADA e criado: o pedido
+  continua nascendo pelos botoes Gerar de sempre (aplicar_grade →
+  rascunho pendente).
 - **Producao**: botao "Analisar por IA" em `/telaindustriateste` (rotas
   `POST /telaindustriateste/ia-proposta` e `/ia-aplicar`). Contexto =
   cronograma + alertas de falta + pendencias do padeiro (agendado/
