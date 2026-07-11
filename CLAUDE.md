@@ -496,6 +496,16 @@ Backup diario do Postgres pro Dropbox. Implementado em 22/05/2026.
 do repo pgdg porque o server Railway eh PG 18 e pg_dump precisa ser
 >= versao do server. Quando server upgradear, atualizar Dockerfile.
 
+**Marco persistente + dead-man's switch (11/07/2026)**: o "ultimo run" do
+backup ficava SO em memoria (`_ult_run_backup`) e zerava a cada deploy —
+backup parado em silencio era invisivel. Agora cada rodada grava
+`backup_ultimo_run_em`/`backup_ultimo_ok_em` (e `backup_chatwoot_*`) em
+AppConfig (`seru_cron._gravar_marco_backup`, best-effort) e
+`status_backup()` le de la. O heartbeat das 08:00 no Slack ganha linha
+`:warning:` quando o ultimo backup OK tem >28h
+(`seru_cron._aviso_backup_atrasado`; quieto com `BACKUP_AUTO=0`, fora de
+Postgres ou sem marco ainda).
+
 **Drill de restore** (2026-06-09): `GET /admin/backup/drill?iniciar=1`
 (owner) baixa o dump mais recente do Dropbox e valida o TOC com
 `pg_restore --list` (~1 min). `?iniciar=full` restaura num banco
