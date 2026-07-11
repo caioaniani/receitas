@@ -151,6 +151,7 @@
                         <th class="prod">Produto</th>
                         <th title="Estoque atual disponível da loja (físico − reservado)">Estoque</th>
                         <th title="Média semanal (total na janela ÷ nº de semanas)">Média/sem</th>
+                        <th title="Quanto deste item a loja descartou nos últimos 7 dias (desperdício + sobra) — desperdício alto = não inflar o pedido">Desp. 7d</th>
                         {% for dia in grade.dias %}<th>{{ dia.label }}
                             {% if dia.data in loja.editaveis %}
                             <button type="submit" class="btn btn-sm btn-outline-primary btn-atualizar-dia d-block mx-auto mt-1"
