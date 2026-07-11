@@ -160,9 +160,24 @@
                         <td class="prod">{{ p.nome }}
                             {% if p.eh_mp %}<span class="badge bg-secondary" title="Matéria-prima comprada (a indústria envia, não produz)">MP</span>{% endif %}
                             {% if p.lote and p.lote > 1 %}<span class="badge bg-light text-dark border" title="Caixa (lote de pedido)">cx {{ p.lote }}</span>{% endif %}
+                            {% if p.n_datas and p.n_datas < 5 %}<span class="badge bg-light text-dark border badge-ctx"
+                                title="A venda média deste item vem de só {{ p.n_datas }} data(s) com baixa na janela — número pouco confiável, confira antes de aceitar.">histórico raso ({{ p.n_datas }})</span>{% endif %}
+                            {% if p.receita_id %}
+                            {% set ac = acuracia.get((loja.loja_id, p.receita_id)) %}
+                            {% if ac %}
+                            {% set wape = ac.wape_pct %}
+                            <span class="badge badge-ctx {{ 'bg-danger' if wape is none or wape > 60 else ('bg-warning text-dark' if wape > 25 else 'bg-success') }}"
+                                  title="Acurácia deste motor para este item nesta loja (últimos 60 dias, {{ ac.n }} previsões): previu {{ ac.previsto }}, a loja levou {{ ac.realizado }}{% if ac.vies_pct is not none %}, viés {{ '%+.0f'|format(ac.vies_pct) }}%{% endif %}. WAPE = erro médio absoluto.">
+                                WAPE {{ wape if wape is not none else '—' }}{% if wape is not none %}%{% endif %}</span>
+                            {% endif %}
+                            {% endif %}
                         </td>
                         <td class="estoque">{{ p.estoque_atual }}</td>
                         <td class="venda">{{ p.media_semanal }}</td>
+                        {% set desp = desperdicio.get(loja.loja_id, {}).get(p.item_key, 0) %}
+                        <td class="desp{{ ' tem' if desp }}"
+                            {% if desp %}title="A loja descartou {{ desp }} un deste item nos últimos 7 dias — cuidado pra não repetir o excesso"{% endif %}>
+                            {{ desp if desp else '—' }}</td>
                         {% for dia in grade.dias %}
                         {% set travado = dia.data in loja.ja_tem %}
                         {% set editavel = travado and dia.data in loja.editaveis %}
