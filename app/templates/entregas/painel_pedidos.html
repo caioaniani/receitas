@@ -984,7 +984,7 @@
       .then(function (d) { if (meu === reqId) render(d.pedidos); })
       .catch(function () {
         if (meu === reqId) tbody.innerHTML =
-          '<tr><td colspan="5" class="ped-vazio">Erro ao carregar. Tente de novo.</td></tr>';
+          '<tr><td colspan="6" class="ped-vazio">Erro ao carregar. Tente de novo.</td></tr>';
       });
   }
 
