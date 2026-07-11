@@ -105,6 +105,52 @@ def test_papel_sem_permissao_403(app):
     assert c.post('/padeiro/lousa', data={'texto': 'x'}).status_code == 403
 
 
+def test_painel_no_index_ocupa_terco_da_tela_com_recado(app, admin_user):
+    """Com recado, a lousa aparece na própria tela do padeiro ocupando 1/3
+    da tela (height:33vh); sem recado, o painel some por completo."""
+    c = app.test_client()
+    _login_admin(c)
+    corpo = c.get('/padeiro/').get_data(as_text=True)
+    assert 'class="lousa-painel"' not in corpo      # lousa limpa: sem painel
+    assert 'height:33vh' in corpo                   # CSS pronto pra quando tiver
+    with app.app_context():
+        db.session.add(LousaRecado(texto='puxar massa da geladeira',
+                                   criado_por_id=admin_user.id))
+        db.session.commit()
+    corpo = c.get('/padeiro/').get_data(as_text=True)
+    assert 'class="lousa-painel"' in corpo
+    assert 'puxar massa da geladeira' in corpo
+
+
+def test_fragmento_lousa_para_polling_da_tv(app, admin_user):
+    """A TV recarrega o painel via GET /padeiro/lousa.html sem recarregar a
+    página (padrão listas_html): vazio sem recado, painel com recado."""
+    c = app.test_client()
+    _login_admin(c)
+    assert c.get('/padeiro/lousa.html').get_data(as_text=True).strip() == ''
+    with app.app_context():
+        db.session.add(LousaRecado(texto='forno 2 ligado',
+                                   criado_por_id=admin_user.id))
+        db.session.commit()
+    corpo = c.get('/padeiro/lousa.html').get_data(as_text=True)
+    assert 'lousa-painel' in corpo
+    assert 'forno 2 ligado' in corpo
+
+
+def test_apagar_do_painel_volta_pro_index(app, admin_user):
+    with app.app_context():
+        rec = LousaRecado(texto='x', criado_por_id=admin_user.id)
+        db.session.add(rec)
+        db.session.commit()
+        rid = rec.id
+    c = app.test_client()
+    _login_admin(c)
+    r = c.post(f'/padeiro/lousa/{rid}/apagar', data={'volta': 'index'})
+    assert r.headers['Location'].endswith('/padeiro/')
+    with app.app_context():
+        assert db.session.get(LousaRecado, rid).apagado_em is not None
+
+
 def test_recado_nao_vira_aviso_com_campainha(app, admin_user):
     """A lousa é SEPARADA do sistema de Aviso (ticker + campainha): escrever
     na lousa não pode disparar o alarme da TV."""
