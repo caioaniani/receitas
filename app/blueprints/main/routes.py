@@ -195,25 +195,20 @@ def rentabilidade():
 @login_required
 def cardapio():
     tipo = request.args.get('tipo', 'atacado')
-    # defer(imagem_blob) — listagem nao precisa do blob (pode ter 100KB+ cada).
-    # IDs com foto (blob OU Dropbox URL) vem em query separada.
+    # IDs com foto (Dropbox URL) vem em query separada. (BLOB saiu no M6
+    # Commit D — foto e so Dropbox.)
     from sqlalchemy.orm import defer
     receitas = Receita.query.options(
-        defer(Receita.imagem_blob),
         defer(Receita.imagem_mimetype),
     ).order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.options(
-        defer(Produto.imagem_blob),
         defer(Produto.imagem_mimetype),
     ).filter_by(ativo=True).order_by(Produto.categoria, Produto.nome).all()
 
-    from sqlalchemy import or_
     receitas_com_foto = {r[0] for r in db.session.query(Receita.id).filter(
-        or_(Receita.imagem_blob.isnot(None),
-            Receita.imagem_dropbox_url.isnot(None))).all()}
+        Receita.imagem_dropbox_url.isnot(None)).all()}
     produtos_com_foto = {p[0] for p in db.session.query(Produto.id).filter(
-        or_(Produto.imagem_blob.isnot(None),
-            Produto.imagem_dropbox_url.isnot(None))).all()}
+        Produto.imagem_dropbox_url.isnot(None)).all()}
 
     campo = {'atacado': 'preco_venda', 'loja': 'preco_loja', 'site': 'preco_site'}
     attr = campo.get(tipo, 'preco_venda')
