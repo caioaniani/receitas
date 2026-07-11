@@ -169,6 +169,83 @@ def _agrega(rows, chave_nome):
     return out
 
 
+def acuracia_por_loja_receita(motor, dias=60, min_n=5):
+    """Acuracia por (loja, receita) de UM motor — pro badge na propria grade
+    de pedidos (o operador ve o historico de acerto do item onde decide).
+    Retorna {(loja_id, receita_id): {vies_pct, wape_pct, n}}; pares com menos
+    de `min_n` snapshots casados ficam fora (amostra rasa so faria ruido)."""
+    corte = hoje() - timedelta(days=int(dias or 60))
+    rows = (db.session.query(
+                PrevisaoSnapshot.loja_id, PrevisaoSnapshot.receita_id,
+                func.sum(PrevisaoSnapshot.previsto),
+                func.sum(PrevisaoSnapshot.realizado),
+                func.sum(func.abs(PrevisaoSnapshot.previsto
+                                  - PrevisaoSnapshot.realizado)),
+                func.count(PrevisaoSnapshot.id))
+            .filter(PrevisaoSnapshot.realizado.isnot(None),
+                    PrevisaoSnapshot.data_alvo >= corte,
+                    PrevisaoSnapshot.motor == motor)
+            .group_by(PrevisaoSnapshot.loja_id, PrevisaoSnapshot.receita_id)
+            .all())
+
+    def _pct(num, den):
+        return round(100 * num / den, 1) if den else None
+
+    out = {}
+    for lid, rid, prev, real, abserr, n in rows:
+        if n < int(min_n or 0):
+            continue
+        prev, real, abserr = int(prev or 0), int(real or 0), int(abserr or 0)
+        out[(lid, rid)] = {
+            'previsto': prev, 'realizado': real,
+            'vies_pct': _pct(prev - real, real),
+            'wape_pct': _pct(abserr, real), 'n': n,
+        }
+    return out
+
+
+def comparativo_motores_por_loja(dias=30):
+    """Os DOIS motores lado a lado por loja (vies/WAPE/n) + qual tem menor
+    WAPE — responde "qual motor uso nesta loja?" sem alternar filtro. So
+    compara quando os dois tem dado; WAPE None (realizado 0) nao vence."""
+    corte = hoje() - timedelta(days=int(dias or 30))
+    rows = (db.session.query(
+                PrevisaoSnapshot.loja_id, PrevisaoSnapshot.motor,
+                func.sum(PrevisaoSnapshot.previsto),
+                func.sum(PrevisaoSnapshot.realizado),
+                func.sum(func.abs(PrevisaoSnapshot.previsto
+                                  - PrevisaoSnapshot.realizado)),
+                func.count(PrevisaoSnapshot.id))
+            .filter(PrevisaoSnapshot.realizado.isnot(None),
+                    PrevisaoSnapshot.data_alvo >= corte,
+                    PrevisaoSnapshot.motor.in_(MOTORES_VIVOS))
+            .group_by(PrevisaoSnapshot.loja_id, PrevisaoSnapshot.motor)
+            .all())
+
+    def _pct(num, den):
+        return round(100 * num / den, 1) if den else None
+
+    por_loja = {}
+    for lid, motor, prev, real, abserr, n in rows:
+        prev, real, abserr = int(prev or 0), int(real or 0), int(abserr or 0)
+        por_loja.setdefault(lid, {})[motor] = {
+            'previsto': prev, 'realizado': real, 'vies': prev - real,
+            'vies_pct': _pct(prev - real, real),
+            'wape_pct': _pct(abserr, real), 'n': n,
+        }
+    nomes_loja = dict(db.session.query(Loja.id, Loja.nome).all())
+    out = []
+    for lid, motores in sorted(por_loja.items(),
+                               key=lambda kv: nomes_loja.get(kv[0], '')):
+        wapes = {m: v['wape_pct'] for m, v in motores.items()
+                 if v.get('wape_pct') is not None}
+        melhor = min(wapes, key=wapes.get) if len(wapes) == 2 else None
+        out.append({'loja_id': lid,
+                    'nome': nomes_loja.get(lid, f'#{lid}'),
+                    'motores': motores, 'melhor': melhor})
+    return out
+
+
 def resumo_acuracia(dias=30, motor=None):
     """Agrega vies e WAPE dos snapshots JA casados com data_alvo nos ultimos
     `dias`, opcionalmente filtrado por `motor`. Vies = previsto - realizado
