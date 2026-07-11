@@ -906,7 +906,7 @@
 
   function render(pedidos) {
     if (!pedidos || !pedidos.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="ped-vazio">Nenhum pedido encontrado.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="ped-vazio">Nenhum pedido encontrado.</td></tr>';
       return;
     }
     tbody.innerHTML = pedidos.map(function (p) {
@@ -915,11 +915,63 @@
         '<td>' + esc(p.hora) + '</td>' +
         '<td>' + esc(p.destinatario) + '</td>' +
         '<td>' + esc(p.cliente) + '</td>' +
-        '<td class="ped-codigo">' + esc(p.codigo) + '</td></tr>';
+        '<td class="ped-codigo">' + esc(p.codigo) + '</td>' +
+        '<td><button type="button" class="ped-chamar" ' +
+          'data-code="' + esc(p.codigo) + '" data-nome="' + esc(p.cliente) + '" ' +
+          'title="Chamar cliente pelo WhatsApp">💬 Chamar</button></td></tr>';
     }).join('');
+    // Clique na LINHA abre o detalhe; clique no BOTÃO chama o cliente (o
+    // stopPropagation impede que o clique no botão também abra o detalhe).
     Array.prototype.forEach.call(tbody.querySelectorAll('.ped-row'), function (tr) {
       tr.addEventListener('click', function () { abrirPedido(tr.getAttribute('data-code')); });
     });
+    Array.prototype.forEach.call(tbody.querySelectorAll('.ped-chamar'), function (btn) {
+      btn.addEventListener('click', function (e) { e.stopPropagation(); chamarCliente(btn); });
+    });
+  }
+
+  // Botão "Chamar cliente pelo WhatsApp": dispara o template pro cliente e
+  // abre a conversa no painel de atendimento à direita (mesmo mecanismo do
+  // vigia — postMessage pro pai). Confirma antes (evita disparo por engano).
+  function chamarCliente(btn) {
+    var code = btn.getAttribute('data-code');
+    var nome = btn.getAttribute('data-nome') || 'o cliente';
+    if (!code || btn.disabled) return;
+    if (!window.confirm('Chamar ' + nome + ' pelo WhatsApp sobre o pedido ' + code + '?')) return;
+    var orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Chamando…';
+    fetch('/entregas/api/atendimento/chamar-cliente', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigo: code }),
+    })
+      .then(function (r) { return r.json().then(function (d) { return d; }); })
+      .then(function (d) {
+        d = d || {};
+        var abriu = false;
+        if (d.conversation_id) {
+          if (EMBED) {
+            try {
+              window.parent.postMessage({
+                tipo: 'vigia-abrir-conversa',
+                conv_id: d.conversation_id,
+                nome: d.nome || nome,
+              }, location.origin);
+            } catch (_) {}
+          }
+          fecharDrawer();
+          abriu = true;
+        }
+        if (!d.ok) {
+          window.alert('Atenção: ' + (d.erro || 'não consegui enviar a mensagem para o cliente.'));
+        }
+        if (!abriu) { btn.disabled = false; btn.innerHTML = orig; }
+      })
+      .catch(function () {
+        btn.disabled = false; btn.innerHTML = orig;
+        window.alert('Erro de rede ao chamar o cliente. Tente de novo.');
+      });
   }
 
   function carregar(q) {
