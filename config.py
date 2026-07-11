@@ -252,6 +252,14 @@ class Config:
     # Locale do template aprovado (o codigo de idioma DA META, ex: pt_BR).
     CHATWOOT_WHATSAPP_TEMPLATE_LANG = os.environ.get(
         'CHATWOOT_WHATSAPP_TEMPLATE_LANG', 'pt_BR')
+    # Corpo do template com {{1}}/{{2}} — SO pra exibicao na thread do
+    # Chatwoot (a Meta manda o template aprovado de verdade). Ajustar aqui se
+    # o texto aprovado na Meta for outro, senao a thread mostra um texto
+    # diferente do que o cliente recebeu.
+    CHATWOOT_WHATSAPP_TEMPLATE_CORPO = os.environ.get(
+        'CHATWOOT_WHATSAPP_TEMPLATE_CORPO',
+        'Olá {{1}}, aqui é da Opão. Ficamos com uma dúvida sobre o seu '
+        'pedido {{2}}. Pode nos responder por aqui?')
 
     # ── Email transacional (Postmark) — 17/06/2026 ────────────────────
     # Envio de senha/convite pra novos usuarios do gestao.*. Vazio =
