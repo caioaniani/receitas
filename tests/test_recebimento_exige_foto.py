@@ -37,15 +37,40 @@ def test_recebimento_sem_foto_e_recusado(app):
 
 
 def test_recebimento_com_foto_nova_entrega(app):
-    """Anexar foto no upload manual → entrega normalmente."""
+    """Anexar foto no upload manual → sobe pro Dropbox e entrega
+    normalmente (M6 Commit D: a foto vive no Dropbox, sem BLOB)."""
     from app.blueprints.pedidos.routes import _executar_recebimento_pedido
+    from app.models import FotoRecebimento
     p, _ = _pedido_em_transporte(app)
     fotos = [{'imagem': b'\xff\xd8\xff\xfake-jpeg', 'mimetype': 'image/jpeg'}]
-    with patch('app.services.dropbox_storage.disponivel', return_value=False), \
+    with patch('app.services.dropbox_storage.disponivel', return_value=True), \
+         patch('app.blueprints.pedidos.routes.comprimir_imagem',
+               create=True, side_effect=lambda b: b), \
+         patch('app.services.utils_nada', create=True), \
+         patch('app.utils.comprimir_imagem', side_effect=lambda b: b), \
+         patch('app.services.dropbox_storage.upload_publico',
+               return_value={'url': 'http://x/r.jpg',
+                             'storage_path': '/recebimento/x/r.jpg'}), \
          patch('app.services.pedidos_notificacao.notificar_pedido_recebido'):
         ok, _msg, _div = _executar_recebimento_pedido(p, user=None, fotos=fotos)
     assert ok is True
     assert p.status == 'entregue'
+    foto = FotoRecebimento.query.filter_by(pedido_id=p.id).first()
+    assert foto is not None and foto.imagem_url == 'http://x/r.jpg'
+
+
+def test_recebimento_com_dropbox_fora_recusa_sem_baixar(app):
+    """M6 Commit D: sem fallback BLOB — Dropbox indisponível recusa o
+    recebimento VISÍVEL, sem mexer em status nem estoque (antes gravava o
+    BLOB no Postgres em silêncio)."""
+    from app.blueprints.pedidos.routes import _executar_recebimento_pedido
+    p, _ = _pedido_em_transporte(app)
+    fotos = [{'imagem': b'\xff\xd8\xff\xfake-jpeg', 'mimetype': 'image/jpeg'}]
+    with patch('app.services.dropbox_storage.disponivel', return_value=False):
+        ok, msg, _div = _executar_recebimento_pedido(p, user=None, fotos=fotos)
+    assert ok is False
+    assert 'dropbox' in msg.lower()
+    assert p.status == 'em_transporte'   # nada mudou
 
 
 def test_caminho_qr_nao_quebra_com_foto_de_conferencia(app):
