@@ -1325,6 +1325,37 @@ enviar" foi instabilidade DA META (~12h, erro generico "An unexpected error"
 08/06 — se mensageria falhar de novo, conferir "Acoes necessarias"/App
 Review/verificacao da empresa no painel Meta.
 
+## Chamar cliente pelo WhatsApp (painel de entregas, 11/07/2026)
+
+Botão "💬 Chamar" em cada linha do modal "Pedidos do site" (drawer no
+`/entregas/painel`, iframe `painel_pedidos.html`). Clicar dispara o TEMPLATE
+aprovado pro cliente e abre a conversa no painel de atendimento à direita —
+reusa o mesmo `postMessage {tipo:'vigia-abrir-conversa', conv_id, nome}` que o
+vigia já usava pra abrir conversa (`painel.html:458` → `abrirThread`).
+
+- **Por que template**: fora da janela de 24h a Meta só deixa a EMPRESA
+  iniciar com template aprovado (utilidade). Pedido do site normalmente não
+  tem conversa aberta no WhatsApp, então precisa do template.
+- **Backend**: `POST /entregas/api/atendimento/chamar-cliente` (recebe
+  `codigo`, acha o `PedidoOnline`, usa telefone+nome). Orquestração em
+  `chatwoot.iniciar_conversa_whatsapp(telefone, nome, params=[nome, codigo])`:
+  acha/cria contato pelo telefone → REUSA conversa aberta na inbox do WhatsApp
+  (não gasta template) OU cria conversa nova + manda o template. Tudo com o
+  **token de USUÁRIO** (`CHATWOOT_API_TOKEN`; o de Agent Bot nem lista
+  conversa). Erro NÃO é silenciado (devolve o corpo cru da Meta pra depurar).
+- **Config (env)**: `CHATWOOT_WHATSAPP_INBOX_ID` (id da inbox do WhatsApp) +
+  `CHATWOOT_WHATSAPP_TEMPLATE` (nome do template aprovado, 2 vars: {{1}}=nome,
+  {{2}}=código) + `CHATWOOT_WHATSAPP_TEMPLATE_LANG` (default `pt_BR`). Faltando
+  qualquer um = botão devolve aviso, não quebra o painel. Diagnóstico owner:
+  `GET /entregas/api/atendimento/chatwoot-inboxes` lista as inboxes pra achar
+  o id.
+- **Pré-requisito humano**: criar+aprovar o template de utilidade na Meta
+  (não dá pra fazer por código). Payload do template em
+  `chatwoot.enviar_template` (`processed_params` posicional) — se a versão do
+  Chatwoot reclamar do formato, é aqui que ajusta.
+- Testes: `tests/test_chamar_cliente_whatsapp.py` (orquestração com requests
+  mockado + endpoint + guardas).
+
 ## Bot de atendimento — hardening 02/07/2026 (4 pacotes)
 
 Pesquisa de melhorias no bot/vigia/auditor aprovada pelo dono virou 4
