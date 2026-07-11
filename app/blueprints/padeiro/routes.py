@@ -904,6 +904,23 @@ def lousa():
     return render_template('padeiro/lousa.html', recados=recados)
 
 
+@padeiro_bp.route('/lousa.html')
+@login_required
+@padeiro_required
+def lousa_fragmento():
+    """Fragmento HTML do painel da lousa na tela do padeiro — a TV o
+    recarrega por polling (mesmo padrão de listas_html), então recado novo
+    de um colega aparece sem recarregar a página. Sem recado ativo o
+    fragmento sai vazio e o painel some (a lousa só ocupa 1/3 da tela
+    quando tem algo escrito — pedido do dono 11/07/2026)."""
+    from app.models import LousaRecado
+    recados = (LousaRecado.query
+               .filter(LousaRecado.apagado_em.is_(None))
+               .order_by(LousaRecado.criado_em.desc()).all())
+    return render_template('padeiro/_lousa_painel.html',
+                           recados_lousa=recados)
+
+
 @padeiro_bp.route('/lousa/<int:id>/apagar', methods=['POST'])
 @login_required
 @padeiro_required
@@ -917,4 +934,8 @@ def lousa_apagar(id):
         r.apagado_em = agora()
         r.apagado_por_id = current_user.id
         db.session.commit()
+    # Apagar feito do painel da TV volta pra tela do padeiro; da página da
+    # lousa, volta pra lousa.
+    if request.form.get('volta') == 'index':
+        return redirect(url_for('padeiro.index'))
     return redirect(url_for('padeiro.lousa'))
