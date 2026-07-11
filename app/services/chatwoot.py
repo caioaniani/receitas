@@ -884,6 +884,40 @@ def enviar_template(conversation_id, nome_template, params, language):
         return {'ok': False, 'erro': str(exc)}
 
 
+def debug_envio_whatsapp(telefone):
+    """Diagnóstico (owner): conversas de WhatsApp do cliente + erros de envio
+    que a Meta gravou em cada uma (content_attributes.external_error).
+    Responde "por que o template não chegou?" sem caçar conversation_id no
+    Chatwoot. Caso clássico: template criado/editado HOJE ainda fora da
+    lista sincronizada do Chatwoot (sync a cada ~3h) → 'Template not found'
+    ou envio sem parâmetros recusado pela Meta."""
+    if not disponivel():
+        return {'ok': False, 'erro': 'Chatwoot nao configurado'}
+    fone = _e164(telefone)
+    if not fone:
+        return {'ok': False, 'erro': f'Telefone invalido/sem DDD: {telefone!r}'}
+    contato = _buscar_contato(fone)
+    if not contato or not contato.get('id'):
+        return {'ok': False, 'erro': 'Contato nao encontrado no Chatwoot'}
+    inbox_id = _whatsapp_inbox_id()
+    try:
+        r = requests.get(f'{_base()}/contacts/{contato["id"]}/conversations',
+                         headers=_headers(), timeout=15)
+        data = r.json() if r.status_code in (200, 201) and r.text else {}
+    except Exception:  # noqa: BLE001
+        logger.exception('chatwoot debug_envio_whatsapp falhou')
+        data = {}
+    payload = (data.get('payload') if isinstance(data, dict) else None) or []
+    convs = [c for c in payload if isinstance(c, dict)
+             and (not inbox_id or str(c.get('inbox_id') or '') == str(inbox_id))]
+    convs.sort(key=lambda c: c.get('last_activity_at') or 0, reverse=True)
+    return {'ok': True, 'contact_id': contato.get('id'),
+            'conversas': [{'conversation_id': c.get('id'),
+                           'status': c.get('status'),
+                           'erros': erros_de_envio(c.get('id'))}
+                          for c in convs[:3]]}
+
+
 def iniciar_conversa_whatsapp(telefone, nome, params):
     """Abre (ou reusa) uma conversa de WhatsApp com o cliente e SEMPRE manda
     o template aprovado. `params` = valores posicionais do template (ex:
