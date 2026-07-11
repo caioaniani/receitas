@@ -880,4 +880,37 @@ def _run_heartbeat_slack(app):
         texto = (f':heartbeat: sistema OK · {agora_brt.strftime("%d/%m %H:%M")} BRT\n'
                  'se essa msg sumir do canal por mais de 24h, '
                  'a infra de alertas (Z-API/vigias) pode estar fora')
+        aviso = _aviso_backup_atrasado()
+        if aviso:
+            texto += '\n' + aviso
         slack.post_message(canal, text=texto)
+
+
+def _aviso_backup_atrasado(limite_horas=28):
+    """Linha de aviso pro heartbeat quando o ultimo backup OK esta velho
+    (dead-man's switch do backup, 11/07/2026): falha do job so logava
+    WARNING e ninguem via — o backup podia parar por semanas em silencio.
+    28h = job diario das 04:00 com folga pra atraso normal. Fica quieto
+    quando: BACKUP_AUTO=0 (desligado de proposito), fora de Postgres
+    (local) ou sem marco gravado ainda (feature nova, primeiro 04:00 do
+    deploy ainda nao rodou). Best-effort: erro aqui nunca derruba o
+    heartbeat (que existe pra detectar exatamente infra caida)."""
+    from app.extensions import db
+    from app.utils import agora as _agora
+    try:
+        if os.environ.get('BACKUP_AUTO', '1') == '0':
+            return None
+        if db.engine.dialect.name != 'postgresql':
+            return None
+        ultimo = _parse_marco_backup('backup_ultimo_ok_em')
+        if not ultimo:
+            return None
+        horas = (_agora() - ultimo).total_seconds() / 3600
+        if horas > limite_horas:
+            return (f':warning: ultimo backup OK ha {int(horas)}h '
+                    f'({ultimo.strftime("%d/%m %H:%M")}) — o job diario '
+                    'das 04:00 pode estar falhando; ver card Backup em '
+                    '/admin/debug-schema')
+    except Exception:  # noqa: BLE001 — aviso nunca derruba o heartbeat
+        logger.exception('aviso de backup atrasado falhou')
+    return None
