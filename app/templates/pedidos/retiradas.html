@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Retiradas de sobras{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-recycle"></i> Retiradas de sobras</h1>
+</div>
+
+<div class="alert alert-info dica-recolhe small">
+    Sobras reaproveitáveis voltando da loja pra indústria (ex.: croissant que vira
+    Almond). Fluxo: o motorista escaneia o <strong>QR de coleta na loja</strong>
+    (confere as quantidades, PIN) → em transporte → escaneia o QR de
+    <strong>recebimento na indústria</strong>. O QR de coleta vale 48h — se
+    expirou, o botão abaixo gera um novo na hora. Cancelar (só antes da coleta)
+    não mexe em estoque: o retorno segue no estoque da loja.
+</div>
+
+<h5>Abertas ({{ abertas|length }})</h5>
+<div class="table-responsive mb-4">
+    <table class="table table-sm align-middle bg-white">
+        <thead class="table-light">
+            <tr><th>#</th><th>Loja</th><th>Data</th><th>Itens</th>
+                <th>Status</th><th>Foto</th><th></th></tr>
+        </thead>
+        <tbody>
+        {% for r in abertas %}
+            <tr class="{% if r.status == 'aguardando_coleta' %}table-warning{% endif %}">
+                <td>{{ r.id }}</td>
+                <td>{{ r.loja.nome if r.loja else '—' }}</td>
+                <td>{{ r.data_retirada.strftime('%d/%m') }}</td>
+                <td class="small">{% for it in r.itens %}{{ it.quantidade }}× {{ it.nome_item }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                <td>
+                    {% if r.status == 'aguardando_coleta' %}
+                    <span class="badge bg-warning text-dark">aguardando coleta</span>
+                    {% else %}
+                    <span class="badge bg-info text-dark">em transporte</span>
+                    {% endif %}
+                </td>
+                <td>{% if r.foto_url %}<a href="{{ r.foto_url }}" target="_blank" rel="noopener" class="small">ver foto</a>{% endif %}</td>
+                <td class="text-end">
+                    {% if r.status == 'aguardando_coleta' %}
+                    <form method="POST" action="{{ url_for('pedidos.retirada_qr_coleta', id=r.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-primary"
+                                title="Mostra o QR pro motorista escanear na loja (gera um novo se o antigo expirou)">
+                            <i class="bi bi-qr-code"></i> QR de coleta</button>
+                    </form>
+                    {% if current_user.is_admin() %}
+                    <form method="POST" action="{{ url_for('pedidos.retirada_cancelar', id=r.id) }}" class="d-inline"
+                          onsubmit="return confirm('Cancelar a retirada #{{ r.id }}? Nada foi baixado — o retorno segue no estoque da loja.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger">Cancelar</button>
+                    </form>
+                    {% endif %}
+                    {% else %}
+                    <span class="text-muted small">recebimento pela tela do padeiro</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="7" class="text-muted small p-2">Nenhuma retirada aberta.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<h5>Finalizadas (últimas {{ finalizadas|length }})</h5>
+<div class="table-responsive">
+    <table class="table table-sm align-middle bg-white">
+        <thead class="table-light">
+            <tr><th>#</th><th>Loja</th><th>Data</th><th>Itens</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+        {% for r in finalizadas %}
+            <tr>
+                <td>{{ r.id }}</td>
+                <td>{{ r.loja.nome if r.loja else '—' }}</td>
+                <td>{{ r.data_retirada.strftime('%d/%m') }}</td>
+                <td class="small">{% for it in r.itens %}{{ it.quantidade }}× {{ it.nome_item }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                <td>
+                    {% if r.status == 'recebida' %}
+                    <span class="badge bg-success">recebida</span>
+                    {% else %}
+                    <span class="badge bg-secondary">cancelada</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="5" class="text-muted small p-2">Nenhuma retirada finalizada ainda.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
