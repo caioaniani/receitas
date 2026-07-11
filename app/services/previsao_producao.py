@@ -1561,6 +1561,17 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                     and not any(ja_ped_item):
                 continue                          # nao vende/estoca/pede, nada pedido
             estoque = est0
+            # Projeta o saldo ate o inicio da janela (offset > 0): consumo
+            # previsto + entregas ja pedidas, mesma semantica do dia travado
+            # dentro da janela. Nada e sugerido aqui (fora da grade).
+            for d in dias_pre_janela:
+                if fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL:
+                    continue
+                consumo_pre = (_media_dow(v_dows, d.weekday())
+                               + _media_dow(m_dows, d.weekday()))
+                entrega_pre = pedido_existente.get(loja.id, {}).get(
+                    d.isoformat(), {}).get(tok, 0)
+                estoque = estoque + entrega_pre - consumo_pre
             por_dia = [0] * len(dias_futuros)
             venda_total = 0.0
             for i, d in enumerate(dias_futuros):
