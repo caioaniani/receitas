@@ -446,3 +446,82 @@ def test_rota_media_tem_autosave_no_js(app, admin_user):
     body = client.get('/producao/pedidos-semana/media').get_data(as_text=True)
     assert "fd.set('ajax', '1')" in body                 # fetch do auto-save
     assert 'salvando' in body                            # indicador de status
+
+
+# ── minimo_pedido no motor de média (11/07/2026, aprovado pelo dono) ───────
+def _historico_todos_os_dias(loja, receita, qtd, semanas=6):
+    hoje_d = hoje()
+    for sem in range(1, semanas + 1):
+        for dow in range(7):
+            d = hoje_d - timedelta(days=7 * sem)
+            d = d - timedelta(days=d.weekday()) + timedelta(days=dow)
+            if d < hoje_d:
+                _pedido(loja, d, receita, qtd)
+
+
+def test_minimo_concentra_entregas_sem_mudar_o_total(app):
+    """Dia com sugestão abaixo do mínimo é FUNDIDO no dia de maior alocação:
+    o total da semana não muda, e nenhum dia fica entre 0 e o mínimo."""
+    loja = _loja()
+    r = _receita()
+    r.minimo_pedido = 10
+    db.session.commit()
+    _historico_todos_os_dias(loja, r, 4)        # média ~4/dia (< mínimo 10)
+
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
+                                  inicio_offset_dias=1)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    total = sum(p['por_dia'])
+    assert total >= 10                          # semana fecha o mínimo
+    assert all(v == 0 or v >= 10 for v in p['por_dia'])
+    assert p['abaixo_minimo'] is False
+    # o total continua o da média (fusão não infla): ~4*7 = 28 +- arred.
+    assert total <= 30
+
+
+def test_semana_abaixo_do_minimo_nao_forca_e_marca(app):
+    """Semana inteira abaixo do mínimo: mantém a demanda real (não infla)
+    e marca `abaixo_minimo` — mesma decisão do 'abaixo da caixa'."""
+    loja = _loja()
+    r = _receita()
+    r.minimo_pedido = 50
+    db.session.commit()
+    _historico_todos_os_dias(loja, r, 2)        # ~14/semana < mínimo 50
+
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
+                                  inicio_offset_dias=1)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert 0 < sum(p['por_dia']) < 50           # demanda real preservada
+    assert p['abaixo_minimo'] is True
+
+
+def test_minimo_respeita_caixa(app):
+    """Fusão preserva múltiplos de caixa (soma de múltiplos é múltiplo)."""
+    loja = _loja()
+    r = _receita()
+    r.minimo_pedido = 12
+    r.lote_pedido = 6
+    db.session.commit()
+    _historico_todos_os_dias(loja, r, 4)        # ~28/sem -> caixas de 6
+
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
+                                  inicio_offset_dias=1)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert all(v % 6 == 0 for v in p['por_dia'])
+    assert all(v == 0 or v >= 12 for v in p['por_dia'])
+
+
+def test_sem_minimo_comportamento_intacto(app):
+    """Receita sem minimo_pedido: distribuição idêntica à de antes."""
+    loja = _loja()
+    r = _receita()
+    _historico_todos_os_dias(loja, r, 4)
+    grade = media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
+                                  inicio_offset_dias=1)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['abaixo_minimo'] is False
+    assert sum(1 for v in p['por_dia'] if v > 0) >= 6   # segue diluído
