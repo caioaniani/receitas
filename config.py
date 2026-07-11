@@ -249,7 +249,7 @@ class Config:
     # codigo do pedido. Ajustar o mapeamento em chatwoot.iniciar_conversa_
     # whatsapp se o template tiver outra ordem.
     CHATWOOT_WHATSAPP_TEMPLATE = os.environ.get('CHATWOOT_WHATSAPP_TEMPLATE', '')
-    # Locale do template aprovado (o codigo de idioma DA MELA, ex: pt_BR).
+    # Locale do template aprovado (o codigo de idioma DA META, ex: pt_BR).
     CHATWOOT_WHATSAPP_TEMPLATE_LANG = os.environ.get(
         'CHATWOOT_WHATSAPP_TEMPLATE_LANG', 'pt_BR')
 
