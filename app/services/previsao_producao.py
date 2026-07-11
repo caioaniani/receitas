@@ -1317,6 +1317,33 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                 partes = _distribuir_inteiro(total_alocar, pesos)
                 for k, i in enumerate(idx_validos):
                     por_dia[i] = partes[k]
+            # Piso de pedido (minimo_pedido — 11/07/2026, aprovado pelo
+            # dono): este motor devolvia `minimo` so como metadado, ao
+            # contrario do venda+estoque, que impoe. Dia com sugestao
+            # ABAIXO do minimo tem a quantidade FUNDIDA no dia livre de
+            # maior alocacao — o TOTAL da semana nao muda (nao inflamos a
+            # media), as entregas se concentram em menos dias que fecham o
+            # piso. Semana inteira abaixo do minimo: NAO forcamos (mesma
+            # decisao do "abaixo da caixa") — badge pro admin decidir.
+            minimo = int(rec.minimo_pedido or 0)
+            abaixo_minimo = False
+            if minimo > 1 and sum(por_dia) > 0:
+                if sum(por_dia) < minimo:
+                    abaixo_minimo = True
+                else:
+                    while True:
+                        baixos = [i for i in idx_validos
+                                  if 0 < por_dia[i] < minimo]
+                        if not baixos:
+                            break
+                        i_baixo = min(baixos, key=lambda i: por_dia[i])
+                        outros = [j for j in idx_validos
+                                  if j != i_baixo and por_dia[j] > 0]
+                        if not outros:
+                            break                 # nunca: total >= minimo
+                        j_alvo = max(outros, key=lambda j: por_dia[j])
+                        por_dia[j_alvo] += por_dia[i_baixo]
+                        por_dia[i_baixo] = 0
             produtos.append({
                 'receita_id': rid, 'nome': rec.nome,
                 'media_semanal': round(media_sem, 1),
