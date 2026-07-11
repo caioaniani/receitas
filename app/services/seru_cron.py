@@ -726,9 +726,11 @@ def _run_backup_diario(app):
         global _ult_run_backup
         resultado = backup.executar_backup()
         _ult_run_backup = _agora()
+        _gravar_marco_backup('backup_ultimo_run_em')
         if not resultado['ok']:
             logger.warning('backup diario falhou: %s', resultado.get('motivo'))
             return
+        _gravar_marco_backup('backup_ultimo_ok_em')
         # Retencao SO roda apos backup OK: tudo que ela apaga do banco esta
         # no dump de hoje (recuperavel por RETENCAO_BACKUPS_DIAS=90 dias).
         # Backup falhou -> pula a limpeza, sem excecao.
@@ -765,8 +767,11 @@ def _run_backup_chatwoot(app):
         resultado = backup.executar_backup(
             db_url=chatwoot_url, prefixo='chatwoot', pasta='/backups-chatwoot')
         _ult_run_backup_chatwoot = _agora()
+        _gravar_marco_backup('backup_chatwoot_ultimo_run_em')
         if not resultado['ok']:
             logger.warning('backup chatwoot falhou: %s', resultado.get('motivo'))
+        else:
+            _gravar_marco_backup('backup_chatwoot_ultimo_ok_em')
 
     with app.app_context():
         if db.engine.dialect.name != 'postgresql':
@@ -794,11 +799,49 @@ def _run_vnda_card_sync(app):
         _com_lock(LOCK_KEY_VNDA_CARD, _fn, 'vnda card sync')
 
 
+def _gravar_marco_backup(chave):
+    """Persiste o carimbo do backup em AppConfig (11/07/2026): o
+    `_ult_run_backup` em memoria zera a cada deploy/restart — 'backup
+    parado em silencio' ficava invisivel ate alguem precisar do dump.
+    Best-effort: falha ao gravar o marco nunca derruba o job (o backup em
+    si ja foi feito)."""
+    from app.extensions import db
+    from app.models import AppConfig
+    from app.utils import agora as _agora
+    try:
+        AppConfig.set(chave, _agora().isoformat())
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception('falha ao gravar marco de backup %s', chave)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001 — rollback de conexao ja morta
+            pass
+
+
+def _parse_marco_backup(chave):
+    """Le um marco de backup do AppConfig (datetime BRT-naive ou None)."""
+    from datetime import datetime as _dt
+
+    from app.models import AppConfig
+    s = AppConfig.get(chave)
+    if not s:
+        return None
+    try:
+        return _dt.fromisoformat(s)
+    except ValueError:
+        return None
+
+
 def status_backup():
-    """Status do job backup pra UI."""
+    """Status do job backup pra UI. `ultimo_run`/`ultimo_ok` preferem o
+    marco persistido em AppConfig (sobrevive a deploy); fallback pro valor
+    em memoria de antes da persistencia."""
     return {
         'ativo': _scheduler is not None and _scheduler.running,
-        'ultimo_run': _ult_run_backup,
+        'ultimo_run': (_parse_marco_backup('backup_ultimo_run_em')
+                       or _ult_run_backup),
+        'ultimo_ok': _parse_marco_backup('backup_ultimo_ok_em'),
     }
 
 
