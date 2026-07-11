@@ -883,8 +883,6 @@ def foto(foto_id):
         abort(403)
     if f.imagem_url:
         return redirect(f.imagem_url, code=302)
-    if f.imagem:
-        return send_file(io.BytesIO(f.imagem), mimetype=f.mimetype or 'image/jpeg')
     abort(404)
 
 
@@ -893,7 +891,7 @@ def foto(foto_id):
 @gerente_required
 def conferencia_foto(foto_id):
     """Serve foto de conferencia por SKU (PedidoItemFoto) pro detalhe do
-    pedido. Gate por loja. Prioriza Dropbox; fallback BLOB legado."""
+    pedido. Gate por loja. So Dropbox (BLOB saiu no M6 Commit D)."""
     from app.models import PedidoItemFoto
     f = PedidoItemFoto.query.get_or_404(foto_id)
     loja_id = _loja_do_usuario()
@@ -902,8 +900,6 @@ def conferencia_foto(foto_id):
         abort(403)
     if f.imagem_url:
         return redirect(f.imagem_url, code=302)
-    if f.imagem:
-        return send_file(io.BytesIO(f.imagem), mimetype=f.mimetype or 'image/jpeg')
     abort(404)
 
 
