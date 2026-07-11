@@ -143,6 +143,7 @@
                         <th class="prod">Produto</th>
                         <th title="Estoque atual da loja">Estoque</th>
                         <th title="Venda média semanal (por dia-da-semana, do histórico)">Venda/sem</th>
+                        <th title="Quanto deste item a loja descartou nos últimos 7 dias (desperdício + sobra) — desperdício alto = não inflar o pedido">Desp. 7d</th>
                         {% for dia in grade.dias %}<th>{{ dia.label }}
                             {% if dia.data in loja.editaveis %}
                             <button type="submit" class="btn btn-sm btn-outline-primary btn-atualizar-dia d-block mx-auto mt-1"
