@@ -349,6 +349,32 @@ def test_rota_pedidos_semana_ia(app, admin_user, monkeypatch):
     assert len(d['dias']) == 7
 
 
+def test_rota_pedidos_semana_ia_modo_venda(app, admin_user, monkeypatch):
+    """Rota com modo='venda': proposta casada por item_key + a tela de
+    venda+estoque tem o botão Sugerir por IA."""
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-teste')
+    with app.app_context():
+        loja = _loja()
+        r = _receita()
+        _historico_semanal(loja, r, qtd=10)
+        loja_id, rid = loja.id, r.id
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    payload = {'itens': [{'item_key': str(rid), 'por_dia': [9] * 7,
+                          'motivo': 'ok'}], 'parecer': 'ajustado'}
+    with patch('anthropic.Anthropic', return_value=_fake_client(payload)):
+        resp = c.post('/producao/pedidos-semana/ia',
+                      json={'loja_id': loja_id, 'horizonte': 7,
+                            'janela': 6, 'inicio': 1, 'modo': 'venda',
+                            'seguranca': 20})
+    d = resp.get_json()
+    assert d['ok'] is True
+    assert d['itens'][0]['item_key'] == str(rid)
+    corpo = c.get('/producao/pedidos-semana/estoque').get_data(as_text=True)
+    assert 'btn-ia-loja' in corpo
+    assert "'venda'" in corpo or '"venda"' in corpo
+
+
 def test_rotas_ia_exigem_admin(app):
     from app.models import Usuario
     with app.app_context():
