@@ -119,8 +119,11 @@ class PrevisaoSnapshot(db.Model):
     pra medir vies e erro. Sem isso nao havia como saber se a previsao
     acerta — qualquer 'melhoria' era no escuro.
 
-    Uma linha por (data_alvo, loja, receita, MOTOR): grava-se a PRIMEIRA
-    previsao vista pra aquela data-alvo, pra medir sempre no mesmo lead.
+    Uma linha por (data_alvo, loja, receita, MOTOR, LEAD): o cron diario
+    congela a previsao de CADA antecedencia (D-6..D-0) da mesma data-alvo —
+    a tabela "por lead" da acuracia compara a MESMA data vista de leads
+    diferentes, nao leads diferentes vindos de datas diferentes (11/07/2026;
+    antes a unique de 4 colunas guardava so a primeira previsao vista).
     `realizado` fica NULL ate a data passar e o cron casar.
 
     Fase 0 (02/07/2026): a acuracia media SO o motor aposentado
