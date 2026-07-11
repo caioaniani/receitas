@@ -172,6 +172,8 @@
                         <td class="prod">{{ p.nome }}
                             {% if p.abaixo_lote %}<span class="badge bg-warning text-dark"
                                 title="A média da semana ({{ p.media_semanal }}) não fecha 1 caixa de {{ p.lote }}. Mostrando a demanda real — você decide pedir a caixa ou não.">abaixo da caixa de {{ p.lote }}</span>{% endif %}
+                            {% if p.abaixo_minimo %}<span class="badge bg-warning text-dark"
+                                title="A média da semana ({{ p.media_semanal }}) não fecha o mínimo de pedido de {{ p.minimo }}. Mostrando a demanda real — você decide fechar o mínimo ou não.">abaixo do mínimo de {{ p.minimo }}</span>{% endif %}
                             {{ pbadges.badges_item(p, acuracia.get((loja.loja_id, p.receita_id)), 'pedido') }}
                         </td>
                         <td class="estoque">{{ p.estoque_atual }}</td>
