@@ -103,12 +103,21 @@
     <div class="pmed-loja">
         <h5 class="d-flex justify-content-between align-items-center gap-2">
             <span>{{ loja.loja_nome }}</span>
-            <button type="submit" name="so_loja" value="{{ loja.loja_id }}"
-                    class="btn btn-sm btn-success"
-                    data-confirm="Gerar os pedidos rascunho de {{ loja.loja_nome }}? Entram como pendente pra você revisar e confirmar.">
-                <i class="bi bi-plus-square"></i> Gerar só esta loja
-            </button>
+            <span class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-sm btn-outline-dark btn-ia-loja"
+                        data-loja="{{ loja.loja_id }}" data-loja-nome="{{ loja.loja_nome }}"
+                        title="A IA (Opus) revisa a sugestão de venda+estoque com contexto (calendário, estoque, desperdício recente) e preenche a grade — você revisa e clica Gerar como sempre">
+                    <i class="bi bi-stars"></i> Sugerir por IA
+                </button>
+                <button type="submit" name="so_loja" value="{{ loja.loja_id }}"
+                        class="btn btn-sm btn-success"
+                        data-confirm="Gerar os pedidos rascunho de {{ loja.loja_nome }}? Entram como pendente pra você revisar e confirmar.">
+                    <i class="bi bi-plus-square"></i> Gerar só esta loja
+                </button>
+            </span>
         </h5>
+        <div class="ia-painel alert alert-light border small d-none mb-2"
+             data-loja-painel="{{ loja.loja_id }}"></div>
         <div class="pmed">
             <table>
                 <thead>
