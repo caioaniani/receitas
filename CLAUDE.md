@@ -501,10 +501,16 @@ backup ficava SO em memoria (`_ult_run_backup`) e zerava a cada deploy —
 backup parado em silencio era invisivel. Agora cada rodada grava
 `backup_ultimo_run_em`/`backup_ultimo_ok_em` (e `backup_chatwoot_*`) em
 AppConfig (`seru_cron._gravar_marco_backup`, best-effort) e
-`status_backup()` le de la. O heartbeat das 08:00 no Slack ganha linha
-`:warning:` quando o ultimo backup OK tem >28h
-(`seru_cron._aviso_backup_atrasado`; quieto com `BACKUP_AUTO=0`, fora de
-Postgres ou sem marco ainda).
+`status_backup()` le de la (defensivo — banco doente cai pro valor em
+memoria, a pagina de diagnostico nao pode dar 500). O heartbeat das 08:00
+no Slack ganha linha `:warning:` quando o ultimo backup OK tem >28h OU
+quando o job roda mas NUNCA registrou OK (run gravado + OK ausente =
+falhando desde sempre) — `seru_cron._aviso_backup_atrasado`, cobrindo
+sistema (gate `BACKUP_AUTO`) e Chatwoot (gates `BACKUP_CHATWOOT` +
+`CHATWOOT_DATABASE_URL`, espelho do agendamento). Quieto fora de Postgres
+ou sem marco nenhum. O card Backup do /admin/debug-schema mostra "Ultimo
+backup OK" separado do ultimo run (run recente + OK velho = job roda mas
+falha).
 
 **Drill de restore** (2026-06-09): `GET /admin/backup/drill?iniciar=1`
 (owner) baixa o dump mais recente do Dropbox e valida o TOC com
