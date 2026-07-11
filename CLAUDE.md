@@ -1107,6 +1107,21 @@ ruido do endpoint publico). Ordem dos ramos importa: `fora_area` e checado
 ANTES de `impreciso` (o dict do fora_area tambem carrega `impreciso=True` — sem
 a ordem, dispararia os dois).
 
+**COMPLEMENTO fora do geocode (11/07/2026, caso Mooca)**: o alerta pegou uma
+venda barrada real — "Rua Joao Antonio de Oliveira, 544, Ape 502 Positano,
+Mooca, CEP 03111-010" caiu em `nao_encontrado` embora o endereco fosse VALIDO e
+dentro da area (~10km, R$50). Causa: a string de geocode incluia o COMPLEMENTO
+("Ape 502 Positano"); nome de predio + "Ape 502" fazem o Google devolver
+`partial_match` (rejeitado pelo `geocode_preciso`) e derrubam o Nominatim — a
+cadeia inteira falha. O dono reproduziu SEM complemento e cotou na hora. Fix:
+`loja_checkout._montar_endereco(form, incluir_complemento=False)` gera a string
+PRA GEOCODE sem complemento (rua+numero+bairro+cidade+CEP); o snapshot de
+entrega (`endereco_entrega`) e o cliente-side `enderecoMontado()` (checkout.js)
+MANTEM o complemento pro motorista/registro. REGRA: complemento (apto/bloco/
+nome de predio) NUNCA entra na consulta de geocode — so ajuda o motoboy, so
+atrapalha o geocoder. Testes: `test_geocode_do_frete_nao_leva_complemento` em
+`tests/test_loja_checkout_v2.py`.
+
 **`consultar_frete` agora devolve `fonte` e `impreciso`**; `api_frete` e
 `_frete_para` alertam+sensoreiam nos casos de risco. NUNCA remover o Google do
 frete sem entender o custo (checar billing do Google Cloud) — e NUNCA deixar o
