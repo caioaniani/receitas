@@ -19,6 +19,13 @@ Fase 0 (02/07/2026) — a v1 media o motor ERRADO, de forma circular:
   — quando alta, o "acerto" mede menos a demanda e mais o habito de aprovar
   sem editar.
 
+Antecedencia de verdade (11/07/2026, procedimento de 2 commits): a unique
+passou a incluir `lead_dias` (commit 1 = ALTER em migrations_legacy, ja
+deployado) e o dedupe do registrar inclui o lead (commit 2, este) — o cron
+diario congela 1 snapshot POR ANTECEDENCIA (D-6..D-0) da mesma data-alvo.
+Antes, so a PRIMEIRA previsao vista era guardada e a tabela "por lead"
+comparava leads diferentes vindos de DATAS diferentes.
+
 Fluxo: `registrar_snapshot()` + `casar_realizados()` no cron diario 05:30;
 `resumo_acuracia()` alimenta /producao/previsao-acuracia.
 """
