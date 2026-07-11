@@ -1626,7 +1626,6 @@ def backup_debug_env():
             'id': r.id, 'nome': r.nome,
             'imagem_dropbox_url': r.imagem_dropbox_url,
             'imagem_storage_path': r.imagem_storage_path,
-            'tem_blob': r.imagem_blob is not None,
         }
     else:
         info['receita_amostra'] = '(nenhuma receita migrada)'
