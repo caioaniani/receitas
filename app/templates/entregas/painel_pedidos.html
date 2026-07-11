@@ -896,6 +896,11 @@
   var EMBED = new URLSearchParams(location.search).has('embed');
   var PED_LISTA = "{{ url_for('entregas.api_painel_pedidos_online') }}";
   var PED_DETALHE_TMPL = "{{ url_for('main.loja_online_pedido_detalhe', codigo='__CODE__') }}";
+  // Token CSRF próprio deste IIFE (o CSRF do painel vive noutro escopo).
+  // Rede de segurança: em `csrf_expirada` (sessão trocada/cookie apagado —
+  // o painel fica aberto o dia todo), busca token novo e re-tenta 1x.
+  var PED_CSRF = "{{ csrf_token() }}";
+  var PED_CSRF_URL = "{{ url_for('auth.csrf_token_novo') }}";
   var tbody = document.getElementById('ped-tbody');
   var busca = document.getElementById('ped-busca');
   var drawer = document.getElementById('ped-drawer');
