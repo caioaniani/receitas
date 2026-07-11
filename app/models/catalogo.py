@@ -125,7 +125,8 @@ class Receita(db.Model):
     preco_site = db.Column(db.Float)
     preco_interno = db.Column(db.Float)
     imagem_url = db.Column(db.String(400))  # URL externa de fallback (legado)
-    imagem_blob = db.Column(db.LargeBinary)  # legado: foto admin pre-M6
+    # imagem_blob (BYTEA) saiu do modelo no M6 Commit D (11/07/2026) — foto
+    # vive no Dropbox. O DROP fisico e guardado em migrations_legacy.
     imagem_dropbox_url = db.Column(db.String(500))  # shared link Dropbox (M6+)
     imagem_storage_path = db.Column(db.String(500))  # path Dropbox pra deletar
     imagem_mimetype = db.Column(db.String(50))
