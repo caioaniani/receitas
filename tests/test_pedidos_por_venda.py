@@ -264,6 +264,40 @@ def test_offset_credita_entrega_ja_pedida_antes_da_janela(app):
     assert sum(p['por_dia'][2:]) > 0            # a partir dali volta a pedir
 
 
+def test_offset_pedido_ja_entregue_hoje_nao_conta_em_dobro(app):
+    """Pedido ENTREGUE hoje já está dentro do estoque atual da loja
+    (entrada_pedido no recebimento) — a projeção pré-janela NÃO pode
+    creditá-lo de novo (achado de revisão 11/07/2026: o double-count
+    inflava o saldo e a janela de amanhã sub-pedia)."""
+    from app.models import PedidoItem, PedidoLoja
+    loja = _loja()
+    r = _receita('Pao')
+    hoje_d = hoje()
+    # estoque de HOJE = 10 (JÁ inclui a entrega recebida de manhã)
+    el = _estoque(loja, r, 10)
+    for sem in range(1, 7):
+        for dow in range(7):
+            d = hoje_d - timedelta(days=7 * sem)
+            d = d - timedelta(days=d.weekday()) + timedelta(days=dow)
+            if d < hoje_d:
+                _venda(el, d, 10)               # média 10/dia
+    ped = PedidoLoja(loja_id=loja.id, status='recebido',
+                     data_entrega=hoje_d, data_pedido=hoje_d)
+    db.session.add(ped)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=ped.id, receita_id=r.id,
+                              quantidade=50))
+    db.session.commit()
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=1)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    # saldo projetado pra amanhã ~ 10 - 10 = 0 -> amanhã PEDE. Com o
+    # double-count (10 + 50 - 10 = 50) amanhã sairia 0 e sub-pediria.
+    assert p['por_dia'][0] > 0
+
+
 def test_offset_venda_perdida_nao_vira_pedido(app):
     """Saldo projetado NEGATIVO antes da janela é venda perdida — clampa em 0
     por dia. A janela abre pedindo a venda do dia, não a perdida acumulada."""
