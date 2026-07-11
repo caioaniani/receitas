@@ -119,6 +119,63 @@ def test_pedido_loja_ia_nao_mexe_em_dia_travado(app, monkeypatch):
     assert it['por_dia'][0] == 12
 
 
+def test_pedido_loja_ia_modo_venda_usa_item_key(app, monkeypatch):
+    """Modo 'venda' (tela /pedidos-semana/estoque, 11/07/2026): a proposta
+    é casada por item_key contra a grade de VENDA+ESTOQUE — item fantasma
+    cai, por_dia é saneado igual ao modo média."""
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-teste')
+    with app.app_context():
+        loja = _loja()
+        r = _receita()
+        _historico_semanal(loja, r, qtd=10)
+        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=r.id,
+                                   quantidade=5))
+        db.session.commit()
+        payload = {'itens': [
+            {'item_key': str(r.id), 'por_dia': [7, -1, 'x', 7, 7, 7, 7],
+             'motivo': 'feriado na quinta'},
+            {'item_key': 'mp:99999', 'por_dia': [1] * 7,
+             'motivo': 'fantasma'},
+        ], 'parecer': 'semana de feriado'}
+        with patch('anthropic.Anthropic',
+                   return_value=_fake_client(payload)):
+            out = svc.sugerir_pedido_loja_ia(loja.id, horizonte_dias=7,
+                                             modo='venda')
+    assert 'erro' not in out
+    assert len(out['itens']) == 1                     # fantasma caiu
+    it = out['itens'][0]
+    assert it['item_key'] == str(r.id)
+    assert len(it['por_dia']) == 7
+    assert all(isinstance(v, int) and v >= 0 for v in it['por_dia'])
+    assert out['parecer'] == 'semana de feriado'
+
+
+def test_pedido_loja_ia_modo_venda_aceita_mp(app, monkeypatch):
+    """A grade de venda+estoque inclui MPs pedíveis (item_key 'mp:<id>') —
+    a proposta da IA para uma MP passa na sanitização."""
+    from app.models import MateriaPrima
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-teste')
+    with app.app_context():
+        loja = _loja()
+        mp = MateriaPrima(nome='Pao de queijo congelado', unidade='un',
+                          custo_por_kg=10.0, sugerir_pedido_loja=True)
+        db.session.add(mp)
+        db.session.flush()
+        db.session.add(EstoqueLoja(loja_id=loja.id,
+                                   materia_prima_id=mp.id, quantidade=3))
+        db.session.commit()
+        chave = f'mp:{mp.id}'
+        payload = {'itens': [
+            {'item_key': chave, 'por_dia': [4] * 7, 'motivo': 'reforço'},
+        ], 'parecer': ''}
+        with patch('anthropic.Anthropic',
+                   return_value=_fake_client(payload)):
+            out = svc.sugerir_pedido_loja_ia(loja.id, horizonte_dias=7,
+                                             modo='venda')
+    assert 'erro' not in out
+    assert any(it['item_key'] == chave for it in out['itens'])
+
+
 def test_pedido_loja_ia_loja_sem_grade(app, monkeypatch):
     monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-teste')
     with app.app_context():
