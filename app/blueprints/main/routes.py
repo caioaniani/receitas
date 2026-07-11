@@ -332,16 +332,18 @@ def cardapio_img_upload(tipo, id):
     try:
         final = comprimir_imagem(data)
         tamanho_kb = len(final) // 1024
-        if dropbox_storage.disponivel():
-            # Path deterministico — overwrite ao re-upload do mesmo item.
-            path = f'/cardapio/{tipo}/{obj.id}.jpg'
-            info = dropbox_storage.upload_publico(
-                final, path, mode='overwrite', autorename=False)
-            obj.imagem_dropbox_url = info['url']
-            obj.imagem_storage_path = info['storage_path']
-            obj.imagem_blob = None  # libera legado
-        else:
-            obj.imagem_blob = final
+        if not dropbox_storage.disponivel():
+            # M6 Commit D: sem fallback BLOB — Dropbox fora = erro VISIVEL
+            # (gravar no Postgres escondia a falha e re-enchia a coluna).
+            flash('Dropbox indisponível — a imagem NÃO foi salva. '
+                  'Configure o Dropbox e tente de novo.', 'danger')
+            return redirect(url_back)
+        # Path deterministico — overwrite ao re-upload do mesmo item.
+        path = f'/cardapio/{tipo}/{obj.id}.jpg'
+        info = dropbox_storage.upload_publico(
+            final, path, mode='overwrite', autorename=False)
+        obj.imagem_dropbox_url = info['url']
+        obj.imagem_storage_path = info['storage_path']
         obj.imagem_mimetype = 'image/jpeg'
     except Exception as e:  # noqa: BLE001
         flash(f'Erro processando imagem: {e}', 'danger')
