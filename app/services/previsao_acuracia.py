@@ -186,7 +186,11 @@ def acuracia_por_loja_receita(motor, dias=60, min_n=5):
     """Acuracia por (loja, receita) de UM motor — pro badge na propria grade
     de pedidos (o operador ve o historico de acerto do item onde decide).
     Retorna {(loja_id, receita_id): {vies_pct, wape_pct, n}}; pares com menos
-    de `min_n` snapshots casados ficam fora (amostra rasa so faria ruido)."""
+    de `min_n` DATAS-ALVO distintas casadas ficam fora (amostra rasa so
+    faria ruido). Distintas, nao snapshots (11/07/2026): com 1 snapshot por
+    antecedencia, um unico dia visto de 5 leads ja somaria n=5 e furaria a
+    guarda. O `n` devolvido segue sendo o total de snapshots (e o que pesa
+    nas somas de vies/WAPE)."""
     corte = hoje() - timedelta(days=int(dias or 60))
     rows = (db.session.query(
                 PrevisaoSnapshot.loja_id, PrevisaoSnapshot.receita_id,
@@ -194,7 +198,8 @@ def acuracia_por_loja_receita(motor, dias=60, min_n=5):
                 func.sum(PrevisaoSnapshot.realizado),
                 func.sum(func.abs(PrevisaoSnapshot.previsto
                                   - PrevisaoSnapshot.realizado)),
-                func.count(PrevisaoSnapshot.id))
+                func.count(PrevisaoSnapshot.id),
+                func.count(func.distinct(PrevisaoSnapshot.data_alvo)))
             .filter(PrevisaoSnapshot.realizado.isnot(None),
                     PrevisaoSnapshot.data_alvo >= corte,
                     PrevisaoSnapshot.motor == motor)
@@ -205,8 +210,8 @@ def acuracia_por_loja_receita(motor, dias=60, min_n=5):
         return round(100 * num / den, 1) if den else None
 
     out = {}
-    for lid, rid, prev, real, abserr, n in rows:
-        if n < int(min_n or 0):
+    for lid, rid, prev, real, abserr, n, n_datas in rows:
+        if n_datas < int(min_n or 0):
             continue
         prev, real, abserr = int(prev or 0), int(real or 0), int(abserr or 0)
         out[(lid, rid)] = {
