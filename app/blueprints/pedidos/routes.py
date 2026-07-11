@@ -791,6 +791,38 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
 
     divergencias = []
 
+    # M6 Commit D: fotos novas sobem pro Dropbox ANTES de mexer em estoque/
+    # status — upload falhou = recusa LIMPA (sessao intocada, sem baixa
+    # fantasma), mesmo padrao da retirada de sobras. Sem fallback BLOB.
+    fotos_up = []
+    if fotos:
+        import time as _time
+
+        from app.services import dropbox_storage
+        from app.utils import comprimir_imagem
+        if not dropbox_storage.disponivel():
+            return False, ('Dropbox indisponível — a foto não pôde ser '
+                           'salva e o pedido NÃO foi recebido. Tente de '
+                           'novo em instantes.'), []
+        for foto in fotos:
+            if not foto.get('imagem'):
+                continue
+            try:
+                comprimida = comprimir_imagem(foto['imagem'])
+                path = (f'/recebimento/{pedido.id}/'
+                        f'{int(_time.time() * 1000)}.jpg')
+                info = dropbox_storage.upload_publico(
+                    comprimida, path, mode='add', autorename=True)
+            except (ValueError, RuntimeError) as exc:
+                current_app.logger.exception(
+                    'foto_recebimento dropbox falhou')
+                return False, (f'Upload da foto falhou ({exc}) — o pedido '
+                               'NÃO foi recebido; tente de novo.'), []
+            fotos_up.append(info)
+        if not fotos_up:
+            return False, ('Nenhuma imagem válida no upload — o pedido NÃO '
+                           'foi recebido; anexe a foto de novo.'), []
+
     for item in pedido.itens:
         qtd_rec = recebidos_map.get(item.id, item.quantidade)
         item.quantidade_recebida = qtd_rec
