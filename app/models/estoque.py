@@ -229,11 +229,9 @@ class PedidoItemFoto(db.Model):
     pedido_item_id = db.Column(db.Integer, db.ForeignKey('pedido_item.id'),
                                 nullable=False, index=True)
     etapa = db.Column(db.String(10), nullable=False)  # 'saida' | 'entrega'
-    # Storage da imagem — duas opcoes:
-    # 1. Dropbox (preferido, novos uploads): imagem_url + imagem_storage_path.
-    # 2. BLOB legado (fotos pre-migracao M6): imagem.
-    # Serve route prioriza URL Dropbox quando preenchido.
-    imagem = db.Column(db.LargeBinary, nullable=True)  # legado, nullable apos M6
+    # Storage da imagem: Dropbox (imagem_url + imagem_storage_path). A coluna
+    # BLOB `imagem` saiu do modelo no M6 Commit D (11/07/2026); o DROP fisico
+    # e guardado em migrations_legacy.
     imagem_url = db.Column(db.String(500))  # shared link Dropbox
     imagem_storage_path = db.Column(db.String(500))  # path no Dropbox pra deletar
     mimetype = db.Column(db.String(100))
