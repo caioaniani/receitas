@@ -1,0 +1,27 @@
+{# Painel da lousa na tela do padeiro (11/07/2026, pedido do dono): se tiver
+   recado, a lousa ocupa 1/3 da tela; sem recado, some (fica só o botão do
+   cabeçalho). Recarregado por polling, no mesmo padrão de _listas.html. #}
+{% if recados_lousa %}
+<div class="lousa-painel">
+  <div class="lousa-painel-head">
+    <span>🖍 Lousa dos padeiros</span>
+    <a href="{{ url_for('padeiro.lousa') }}">✍️ escrever</a>
+  </div>
+  <div class="lousa-painel-corpo">
+    {% for r in recados_lousa %}
+    <div class="lousa-rec">
+      <div class="txt">{{ r.texto }}
+        <div class="quem">{{ r.criado_por.nome if r.criado_por else '—' }}
+          · {{ r.criado_em.strftime('%d/%m %H:%M') }}</div>
+      </div>
+      <form method="POST" action="{{ url_for('padeiro.lousa_apagar', id=r.id) }}"
+            onsubmit="return confirm('Apagar este recado da lousa?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="volta" value="index">
+        <button class="lousa-apagar" title="Apagar da lousa">🧽 apagar</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
