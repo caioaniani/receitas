@@ -1352,8 +1352,9 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                 # O ja encomendado por dia (celula travada mostra isso).
                 'ja_pedido': ja_ped_item,
                 'lote': caixa,                       # caixa: arredonda ao dividir
-                'minimo': int(rec.minimo_pedido or 0),
+                'minimo': minimo,
                 'abaixo_lote': abaixo_lote,
+                'abaixo_minimo': abaixo_minimo,
                 # Profundidade da amostra (datas com pedido na janela) — a
                 # tela marca "pouco histórico" quando a média vem de 1-2
                 # pontos, pro operador saber quanto confiar no número.
