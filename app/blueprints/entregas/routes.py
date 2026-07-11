@@ -360,6 +360,24 @@ def api_atendimento_chamar_cliente():
     }), (200 if res.get('ok') else 502)
 
 
+@entregas_bp.route('/api/atendimento/chamar-cliente/debug')
+@login_required
+def api_atendimento_chamar_cliente_debug():
+    """Diagnóstico OWNER do "Chamar cliente": conversas de WhatsApp do
+    cliente do pedido (?codigo=) + erros de envio que a Meta gravou em cada
+    mensagem — mostra na hora por que um template não chegou (ex: template
+    recém-criado ainda fora do sync do Chatwoot)."""
+    if not getattr(current_user, 'is_owner', False):
+        abort(403)
+    from app.models import PedidoOnline
+    from app.services import chatwoot as cw_svc
+    codigo = (request.args.get('codigo') or '').strip()
+    p = PedidoOnline.query.filter_by(codigo=codigo).first()
+    if p is None:
+        return jsonify({'ok': False, 'erro': 'pedido nao encontrado'}), 404
+    return jsonify(cw_svc.debug_envio_whatsapp(p.telefone_cliente))
+
+
 @entregas_bp.route('/api/atendimento/chatwoot-inboxes')
 @login_required
 def api_atendimento_chatwoot_inboxes():
