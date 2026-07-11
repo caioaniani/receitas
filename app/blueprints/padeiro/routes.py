@@ -215,17 +215,20 @@ def _plano_em_aberto(dia):
 @login_required
 @padeiro_required
 def index():
+    from app.models import LousaRecado
     hj = hoje()
     dia = _parse_dia(request.args.get('data')) or hj
     eh_hoje = (dia == hj)
     ontem = hj - timedelta(days=1)
+    n_lousa = LousaRecado.query.filter(
+        LousaRecado.apagado_em.is_(None)).count()
     return render_template(
         'padeiro/index.html', dia=dia, eh_hoje=eh_hoje,
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
         dia_seguinte=(dia + timedelta(days=1)).isoformat(),
         plano_dia=_plano_do_dia(dia),
         plano_ontem=(_plano_em_aberto(ontem) if eh_hoje else None),
-        data_ontem=ontem,
+        data_ontem=ontem, n_lousa=n_lousa,
         **_dados_listas(dia, eh_hoje))
 
 
