@@ -171,16 +171,25 @@ def vigiar():
     if est['estourado_desde'] is None:
         est['estourado_desde'] = agora_dt
     if dono and (mudou or venceu):
-        linhas = '\n'.join(f'• {f}: US$ {c:.2f}' for f, c in out['top'])
-        extra = ''
-        if out.get('sem_preco'):
-            extra = (f'\n(+{out["sem_preco"]} chamada(s) de modelo sem '
-                     'preço na tabela — gasto real pode ser maior.)')
-        zapi.enviar_texto(dono, ('🚨 Custo de IA — o gasto de HOJE já '
-                                 f'passou do teto: US$ '
-                                 f'{out["gasto_usd"]:.2f} de US$ '
-                                 f'{out["teto_usd"]:.2f}.\n\n'
-                                 f'Maiores funções hoje:\n{linhas}{extra}\n\n'
+        if out['gasto_usd'] is None:
+            # A propria consulta do gasto quebrou (rodar_checks devolve
+            # gasto None + problema descritivo). Sem este ramo, o f-string
+            # do gasto estourava TypeError e o cron engolia — o dono nunca
+            # saberia que o VIGIA esta cego.
+            cabeca = ('🚨 Custo de IA — o vigia não conseguiu medir o '
+                      'gasto:\n'
+                      + '\n'.join('• ' + p for p in out['problemas'][:5]))
+        else:
+            linhas = '\n'.join(f'• {f}: US$ {c:.2f}' for f, c in out['top'])
+            extra = ''
+            if out.get('sem_preco'):
+                extra = (f'\n(+{out["sem_preco"]} chamada(s) de modelo sem '
+                         'preço na tabela — gasto real pode ser maior.)')
+            cabeca = ('🚨 Custo de IA — o gasto de HOJE já passou do teto: '
+                      f'US$ {out["gasto_usd"]:.2f} de US$ '
+                      f'{out["teto_usd"]:.2f}.\n\n'
+                      f'Maiores funções hoje:\n{linhas}{extra}')
+        zapi.enviar_texto(dono, (f'{cabeca}\n\n'
                                  'Detalhe: /admin/uso-ia?dias=1 — se for '
                                  'loop/abuso, os kill-switches são os das '
                                  'funções (CHATBOT_*, SLACK_*); o teto é '
