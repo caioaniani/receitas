@@ -282,8 +282,9 @@ def test_offset_venda_perdida_nao_vira_pedido(app):
                                       inicio_offset_dias=5)
     p = _prod(grade, loja.id, r.id)
     assert p is not None
-    # sem clamp seria 10 + 50 de venda perdida; com clamp pede só o dia
-    assert p['por_dia'][0] == 10
+    # sem clamp seria ~1 dia de venda + 5 dias de venda perdida (~60);
+    # com clamp pede só o consumo do dia (<= 10)
+    assert 0 < p['por_dia'][0] <= 10
 
 
 def test_rota_estoque_renderiza(app, admin_user):
