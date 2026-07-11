@@ -1638,7 +1638,6 @@ def backup_debug_env():
             'id': p.id, 'nome': p.nome,
             'imagem_dropbox_url': p.imagem_dropbox_url,
             'imagem_storage_path': p.imagem_storage_path,
-            'tem_blob': p.imagem_blob is not None,
         }
     else:
         info['produto_amostra'] = '(nenhum produto migrado)'
