@@ -885,9 +885,16 @@ def enviar_template(conversation_id, nome_template, params, language):
 
 
 def iniciar_conversa_whatsapp(telefone, nome, params):
-    """Abre (ou reusa) uma conversa de WhatsApp com o cliente e, se for nova,
-    manda o template aprovado. `params` = valores posicionais do template
-    (ex: [nome, codigo_pedido]).
+    """Abre (ou reusa) uma conversa de WhatsApp com o cliente e SEMPRE manda
+    o template aprovado. `params` = valores posicionais do template (ex:
+    [nome, codigo_pedido]).
+
+    SEMPRE template, mesmo em conversa reusada (fix 11/07/2026): conversa
+    "aberta" no Chatwoot NAO significa janela de 24h aberta na Meta — a
+    conversa fica open/pending por dias, e um texto livre fora da janela
+    morre em silencio. O template garante a entrega em qualquer caso (dentro
+    da janela, utilidade nao custa nada; fora, custa centavos). Era o
+    combinado do dono: "o botao JA chama com a mensagem de template".
 
     Retorna {'ok': bool, 'conversation_id': int|None, 'nova': bool,
              'erro': str|None}. Nunca levanta — o painel trata o erro."""
@@ -908,37 +915,32 @@ def iniciar_conversa_whatsapp(telefone, nome, params):
                 'erro': 'Nao consegui achar/criar o contato no Chatwoot.'}
     contact_id = contato['id']
 
-    # Ja existe conversa aberta? Reusa (a janela pode estar aberta; o
-    # atendente fala direto, sem gastar template).
+    # Reusa conversa aberta (nao duplica thread); sem nenhuma, cria uma.
     conv_id = _conversa_aberta_do_contato(contact_id, inbox_id)
-    if conv_id:
-        return {'ok': True, 'conversation_id': conv_id, 'nova': False,
-                'erro': None}
-
-    # Sem conversa aberta: cria uma e manda o template.
-    source_id = _source_id_para_inbox(contato, inbox_id)
-    if not source_id:
-        # Contato existia mas sem vinculo com a inbox do WhatsApp — cria o
-        # vinculo recriando o contato na inbox (idempotente no Chatwoot).
-        recriado = _criar_contato(fone, nome, inbox_id)
-        source_id = _source_id_para_inbox(recriado or {}, inbox_id)
-    if not source_id:
-        return {'ok': False, 'conversation_id': None, 'nova': False,
-                'erro': 'Contato sem vinculo com a inbox do WhatsApp '
-                        '(source_id ausente).'}
-
-    conv_id = _criar_conversa(source_id, inbox_id, contact_id)
-    if not conv_id:
-        return {'ok': False, 'conversation_id': None, 'nova': False,
-                'erro': 'Nao consegui criar a conversa no Chatwoot.'}
+    nova = conv_id is None
+    if nova:
+        source_id = _source_id_para_inbox(contato, inbox_id)
+        if not source_id:
+            # Contato existia mas sem vinculo com a inbox do WhatsApp — cria
+            # o vinculo recriando o contato na inbox (idempotente).
+            recriado = _criar_contato(fone, nome, inbox_id)
+            source_id = _source_id_para_inbox(recriado or {}, inbox_id)
+        if not source_id:
+            return {'ok': False, 'conversation_id': None, 'nova': False,
+                    'erro': 'Contato sem vinculo com a inbox do WhatsApp '
+                            '(source_id ausente).'}
+        conv_id = _criar_conversa(source_id, inbox_id, contact_id)
+        if not conv_id:
+            return {'ok': False, 'conversation_id': None, 'nova': False,
+                    'erro': 'Nao consegui criar a conversa no Chatwoot.'}
 
     cfg = current_app.config
     res = enviar_template(
         conv_id, (cfg.get('CHATWOOT_WHATSAPP_TEMPLATE') or '').strip(),
         params, (cfg.get('CHATWOOT_WHATSAPP_TEMPLATE_LANG') or 'pt_BR').strip())
     if not res['ok']:
-        # A conversa foi criada, mas o template falhou. Devolve o conv_id
-        # (o atendente ve a conversa) + o erro cru pra corrigir o template.
-        return {'ok': False, 'conversation_id': conv_id, 'nova': True,
+        # A conversa existe, mas o template falhou. Devolve o conv_id (o
+        # atendente ve a conversa) + o erro cru pra corrigir o template.
+        return {'ok': False, 'conversation_id': conv_id, 'nova': nova,
                 'erro': res['erro']}
-    return {'ok': True, 'conversation_id': conv_id, 'nova': True, 'erro': None}
+    return {'ok': True, 'conversation_id': conv_id, 'nova': nova, 'erro': None}
