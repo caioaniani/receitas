@@ -1464,6 +1464,21 @@ def _migrate_postgres(app):
     _try("CREATE UNIQUE INDEX IF NOT EXISTS uq_tiny_map_canal_item "
          "ON tiny_produto_map(canal, kind, item_id)")
 
+    # ── Acuracia por ANTECEDENCIA de verdade (11/07/2026, aprovado dono) ──
+    # A unique (data_alvo, loja, receita, motor) guardava so a PRIMEIRA
+    # previsao vista pra cada data — a tabela "por lead" da acuracia
+    # comparava leads diferentes vindos de datas diferentes. A unique passa
+    # a incluir lead_dias: o cron congela 1 snapshot POR ANTECEDENCIA
+    # (D-6..D-0) da mesma data. Procedimento de 2 commits: este ALTER
+    # deploya ANTES do codigo que insere por lead — a unique velha
+    # rejeitaria os inserts novos.
+    _try("ALTER TABLE previsao_snapshot DROP CONSTRAINT IF EXISTS "
+         "uq_previsao_snapshot_alvo_motor")
+    _try("CREATE UNIQUE INDEX IF NOT EXISTS "
+         "uq_previsao_snapshot_alvo_motor_lead ON "
+         "previsao_snapshot(data_alvo, loja_id, receita_id, motor, "
+         "lead_dias)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
