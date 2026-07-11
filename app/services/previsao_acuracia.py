@@ -91,8 +91,9 @@ def _registrar_motor(motor, sug, hoje_d):
 
 def registrar_snapshot(horizonte_dias=7, janela_semanas=6):
     """Congela a previsao atual dos MOTORES VIVOS por (data_alvo, loja,
-    receita, motor). Idempotente: nao sobrescreve chave ja snapshotada.
-    Retorna o numero de snapshots novos criados."""
+    receita, motor, lead). Idempotente dentro do dia (mesma antecedencia
+    nao regrava); em dias seguintes a MESMA data ganha snapshot novo por
+    lead. Retorna o numero de snapshots novos criados."""
     from app.services.previsao_producao import (
         media_semanal_pedidos,
         sugerir_pedidos_por_venda,
