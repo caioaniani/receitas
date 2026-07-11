@@ -428,6 +428,17 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Vigia de CUSTO de IA (11/07/2026): o gasto do dia (UsoIA) passou do
+    # teto USO_IA_TETO_DIA_USD? Alerta WhatsApp na transicao (anti-spam de
+    # 6h no servico). O relatorio /admin/uso-ia e passivo — sem este job,
+    # um loop de bot dispararia custo em silencio. Desligar: USO_IA_VIGIA=0.
+    if os.environ.get('USO_IA_VIGIA', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_uso_ia_vigia(app),
+            'interval', hours=1, id='uso-ia-vigia',
+            max_instances=1, coalesce=True,
+        )
+
     # Baixas presas (03/07/2026): pedido parado em 'separado' com entrega
     # vencida (QR de saida nao escaneado = industria NAO baixou) e retirada
     # de sobra presa em transporte (loja baixou, industria nao creditada).
@@ -678,6 +689,17 @@ def _run_pdv_vigia(app):
 
     with app.app_context():
         _com_lock(LOCK_KEY_PDV_VIGIA, pdv_vigia.vigiar, 'vigia pdv')
+
+
+def _run_uso_ia_vigia(app):
+    """Job: vigia de custo de IA (11/07/2026) — gasto do dia em UsoIA
+    estourou o teto? Alerta o dono no WhatsApp na transicao (anti-spam de
+    6h no servico)."""
+    from app.services import uso_ia_vigia
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_USO_IA_VIGIA, uso_ia_vigia.vigiar,
+                  'vigia uso ia')
 
 
 def _run_alerta_baixas_presas(app):
