@@ -1084,7 +1084,8 @@ def desperdicio_recente_por_item(dias=7):
     from sqlalchemy import func
 
     from app.models import Desperdicio
-    corte = hoje() - timedelta(days=int(dias or 7))
+    # dias-1: "ultimos 7 dias" INCLUINDO hoje = hoje-6..hoje (nao 8 datas).
+    corte = hoje() - timedelta(days=max(0, int(dias or 7) - 1))
     rows = (db.session.query(Desperdicio.loja_id, Desperdicio.receita_id,
                              Desperdicio.materia_prima_id,
                              func.sum(Desperdicio.quantidade))
