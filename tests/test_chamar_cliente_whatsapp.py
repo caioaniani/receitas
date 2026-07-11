@@ -81,11 +81,18 @@ def test_inicia_conversa_nova_manda_template(app):
         assert tp['name'] == 'duvida_pedido'
         assert tp['language'] == 'pt_BR'
         assert tp['processed_params'] == {'1': 'Simone', '2': 'ABC123'}
+        # content renderizado (exibição na thread — sem ele o balão fica vazio
+        # em versões do Chatwoot; a Meta recebe o template aprovado)
+        assert 'Simone' in chamadas['template']['content']
+        assert 'ABC123' in chamadas['template']['content']
 
 
-# ── Orquestração: REUSA conversa aberta, NÃO gasta template ────────────────
+# ── Orquestração: REUSA conversa aberta e MANDA o template mesmo assim ─────
 
-def test_reusa_conversa_aberta_sem_template(app):
+def test_reusa_conversa_aberta_e_manda_template(app):
+    """Conversa 'aberta' no Chatwoot não significa janela de 24h aberta na
+    Meta (fix 11/07/2026: o skip do template em conversa reusada deixava o
+    cliente sem receber NADA). O template vai SEMPRE."""
     from app.services import chatwoot
     with app.app_context():
         _cfg_whatsapp(app)
@@ -104,7 +111,7 @@ def test_reusa_conversa_aberta_sem_template(app):
             return _resp(404, {})
 
         def fake_post(url, json=None, **kw):
-            posts.append(url)
+            posts.append((url, json))
             return _resp(200, {'id': 1})
 
         with patch.object(chatwoot.requests, 'get', side_effect=fake_get), \
@@ -115,7 +122,11 @@ def test_reusa_conversa_aberta_sem_template(app):
         assert res['ok'] is True
         assert res['conversation_id'] == 901
         assert res['nova'] is False
-        assert posts == []      # nada de criar conversa nem mandar template
+        # NÃO criou conversa nova, mas mandou o template na 901
+        assert len(posts) == 1
+        url, body = posts[0]
+        assert '/conversations/901/messages' in url
+        assert body['template_params']['name'] == 'duvida_pedido'
 
 
 # ── Guardas: desconfigurado e telefone inválido ───────────────────────────
