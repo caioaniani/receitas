@@ -872,8 +872,9 @@ def previsao_acuracia_rodar():
 @admin_required
 def pedidos_semana_ia():
     """Proposta da IA (Opus 4.8) para o pedido de UMA loja — preenche a
-    grade da tela /pedidos-semana/media via JS. NADA é criado aqui: o
-    pedido continua nascendo pelos botões Gerar de sempre."""
+    grade das telas /pedidos-semana/media (modo='media', default) e
+    /pedidos-semana/estoque (modo='venda') via JS. NADA é criado aqui:
+    o pedido continua nascendo pelos botões Gerar de sempre."""
     from app.services import planejamento_ia
 
     p = request.get_json(silent=True) or request.form
@@ -887,11 +888,14 @@ def pedidos_semana_ia():
             return max(lo, min(int(p.get(key, default)), hi))
         except (TypeError, ValueError):
             return default
+    modo = 'venda' if p.get('modo') == 'venda' else 'media'
     out = planejamento_ia.sugerir_pedido_loja_ia(
         loja_id,
         horizonte_dias=_int('horizonte', 7, 1, 14),
         janela_semanas=_int('janela', 6, 1, 26),
-        inicio_offset_dias=_int('inicio', 1, 0, 14))
+        inicio_offset_dias=_int('inicio', 1, 0, 14),
+        modo=modo,
+        seguranca_pct=_int('seguranca', 0, 0, 100))
     if out.get('erro'):
         return jsonify(ok=False, erro=out['erro']), 502
     return jsonify(ok=True, **out)
