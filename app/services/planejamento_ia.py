@@ -4,13 +4,17 @@ Duas frentes, SEMPRE por cima dos motores deterministicos (a IA nao
 inventa a conta — ela ajusta a sugestao com contexto e justifica):
 
 1. PEDIDO LOJA→INDUSTRIA (`sugerir_pedido_loja_ia`): botao "Sugerir por
-   IA" na tela /producao/pedidos-semana/media. Entrada = grade da MEDIA
-   (base da tela) + motor VENDA+ESTOQUE (contraprova) + estoque +
-   desperdicio recente + calendario (feriados/vesperas ficam a cargo do
-   modelo — nao existe tabela de datas especiais). Saida = quantidades
-   por dia POR PRODUTO com motivo, que o JS preenche na grade EDITAVEL.
-   Nada e criado aqui: o pedido continua nascendo pelos botoes "Gerar"
-   de sempre (aplicar_grade → rascunho pendente).
+   IA" nas DUAS telas de pedidos da semana — /pedidos-semana/media
+   (modo='media', base = grade da MEDIA, contraprova = VENDA+ESTOQUE)
+   e /pedidos-semana/estoque (modo='venda', 11/07/2026 a pedido do
+   dono: base = motor VENDA+ESTOQUE com o `seguranca_pct` da tela,
+   contraprova = MEDIA; itens identificados por `item_key` porque a
+   grade inclui MPs). Entrada = os dois motores + estoque + desperdicio
+   recente + calendario (feriados/vesperas ficam a cargo do modelo —
+   nao existe tabela de datas especiais). Saida = quantidades por dia
+   POR PRODUTO com motivo, que o JS preenche na grade EDITAVEL. Nada e
+   criado aqui: o pedido continua nascendo pelos botoes "Gerar" de
+   sempre (aplicar_grade → rascunho pendente).
 
 2. PRODUCAO (`analisar_producao_ia`): botao "Analisar por IA" na tela
    /telaindustriateste. Entrada = cronograma calculado + alertas de
