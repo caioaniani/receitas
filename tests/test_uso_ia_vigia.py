@@ -94,6 +94,21 @@ def test_vigiar_alerta_suprime_e_recupera(app, monkeypatch):
         assert AppConfig.get('uso_ia_vigia_estourado_desde') is None
 
 
+def test_vigiar_alerta_quando_a_propria_medicao_quebra(app):
+    """`rodar_checks` devolve gasto None quando a consulta explode — o
+    alerta tem que SAIR avisando que o vigia está cego (antes o f-string
+    do gasto estourava TypeError e o cron engolia em silêncio)."""
+    from app.services import uso_ia_vigia
+    with app.app_context():
+        app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999999999'
+        with patch('app.services.uso_ia_vigia.gasto_hoje',
+                   side_effect=RuntimeError('db fora')), \
+                patch('app.services.zapi.enviar_texto') as tx:
+            r = uso_ia_vigia.vigiar()
+        assert r['tipo'] == 'alerta' and r['enviado'] is True
+        assert 'não conseguiu medir' in tx.call_args[0][1]
+
+
 def test_rota_owner_roda_checks(app, owner_user):
     with app.app_context():
         c = app.test_client()
