@@ -88,7 +88,9 @@ def _current_user_id(session=None):
         if current_user and current_user.is_authenticated:
             return current_user.id
     except Exception:  # noqa: BLE001
-        pass
+        # Sem user o audit grava usuario_id=NULL — aceito, mas nao mudo:
+        # se isso acontecer sistematicamente, o log e a unica pista.
+        logger.debug('audit: current_user indisponivel', exc_info=True)
     return None
 
 

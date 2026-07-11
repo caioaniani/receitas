@@ -156,6 +156,8 @@ class PrevisaoSnapshot(db.Model):
     receita = db.relationship('Receita')
 
     __table_args__ = (
+        # Commit 2/2 da antecedencia (11/07/2026): o ALTER que trocou a
+        # unique em prod ja deployou (migrations_legacy, commit 1).
         db.UniqueConstraint('data_alvo', 'loja_id', 'receita_id', 'motor',
                             'lead_dias',
                             name='uq_previsao_snapshot_alvo_motor_lead'),
