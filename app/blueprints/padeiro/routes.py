@@ -220,15 +220,17 @@ def index():
     dia = _parse_dia(request.args.get('data')) or hj
     eh_hoje = (dia == hj)
     ontem = hj - timedelta(days=1)
-    n_lousa = LousaRecado.query.filter(
-        LousaRecado.apagado_em.is_(None)).count()
+    recados_lousa = (LousaRecado.query
+                     .filter(LousaRecado.apagado_em.is_(None))
+                     .order_by(LousaRecado.criado_em.desc()).all())
     return render_template(
         'padeiro/index.html', dia=dia, eh_hoje=eh_hoje,
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
         dia_seguinte=(dia + timedelta(days=1)).isoformat(),
         plano_dia=_plano_do_dia(dia),
         plano_ontem=(_plano_em_aberto(ontem) if eh_hoje else None),
-        data_ontem=ontem, n_lousa=n_lousa,
+        data_ontem=ontem, n_lousa=len(recados_lousa),
+        recados_lousa=recados_lousa,
         **_dados_listas(dia, eh_hoje))
 
 
