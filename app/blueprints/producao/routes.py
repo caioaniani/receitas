@@ -366,10 +366,23 @@ def pedidos_semana_estoque():
                                       janela_semanas=janela,
                                       inicio_offset_dias=inicio,
                                       seguranca_pct=seguranca)
+    # Contraprova opcional (?comparar=1): o numero do motor de MEDIA sob
+    # cada celula (MP nao tem contraprova — so existe nesta grade).
+    contraprova = {}
+    comparar = request.args.get('comparar') == '1'
+    if comparar:
+        from app.services.previsao_producao import media_semanal_pedidos
+        media = media_semanal_pedidos(horizonte_dias=horizonte,
+                                      janela_semanas=janela,
+                                      inicio_offset_dias=inicio)
+        for lj in media['lojas']:
+            contraprova[lj['loja_id']] = {
+                p['receita_id']: p['por_dia'] for p in lj['produtos']}
     return render_template('producao/pedidos_semana_estoque.html',
                            grade=grade, horizonte=horizonte,
                            janela=janela, inicio=inicio,
-                           seguranca=seguranca)
+                           seguranca=seguranca,
+                           comparar=comparar, contraprova=contraprova)
 
 
 @producao_bp.route('/pedidos-semana/gerar', methods=['POST'])
