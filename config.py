@@ -235,6 +235,23 @@ class Config:
     # aparecem como esse agente, distinto do bot. Vazio = botao Enviar do
     # painel recusa (chatwoot.painel_disponivel() = False).
     CHATWOOT_PAINEL_TOKEN = os.environ.get('CHATWOOT_PAINEL_TOKEN', '')
+    # WhatsApp: iniciar conversa com o cliente pelo painel de entregas
+    # (botao "Chamar cliente pelo WhatsApp" — 11/07/2026). Fora da janela de
+    # 24h a Meta so deixa a EMPRESA iniciar com TEMPLATE aprovado; por isso
+    # precisa do id da inbox do WhatsApp + o nome do template de utilidade
+    # aprovado. Vazio em qualquer um = botao desligado (rota devolve aviso,
+    # nunca quebra o painel). O id da inbox aparece na URL da inbox no
+    # Chatwoot (/app/accounts/<acc>/inbox/<id>) ou via
+    # GET /entregas/api/atendimento/chatwoot-inboxes (owner).
+    CHATWOOT_WHATSAPP_INBOX_ID = os.environ.get('CHATWOOT_WHATSAPP_INBOX_ID', '')
+    # Nome do template de utilidade aprovado na Meta (ex: 'duvida_pedido').
+    # Estrutura esperada: 2 variaveis, {{1}} = nome do cliente, {{2}} =
+    # codigo do pedido. Ajustar o mapeamento em chatwoot.iniciar_conversa_
+    # whatsapp se o template tiver outra ordem.
+    CHATWOOT_WHATSAPP_TEMPLATE = os.environ.get('CHATWOOT_WHATSAPP_TEMPLATE', '')
+    # Locale do template aprovado (o codigo de idioma DA MELA, ex: pt_BR).
+    CHATWOOT_WHATSAPP_TEMPLATE_LANG = os.environ.get(
+        'CHATWOOT_WHATSAPP_TEMPLATE_LANG', 'pt_BR')
 
     # ── Email transacional (Postmark) — 17/06/2026 ────────────────────
     # Envio de senha/convite pra novos usuarios do gestao.*. Vazio =
