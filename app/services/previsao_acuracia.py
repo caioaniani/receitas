@@ -50,13 +50,20 @@ MOTOR_LABEL = {
 def _registrar_motor(motor, sug, hoje_d):
     """Congela a sugestao de UM motor. Dias travados (ja pedidos) nao sao
     previsao e ficam de fora; MPs ficam de fora (snapshot e por receita);
-    previsto=0 de item exibido ENTRA (falso-negativo passa a ser medido)."""
+    previsto=0 de item exibido ENTRA (falso-negativo passa a ser medido).
+
+    Uma linha por (data_alvo, loja, receita, LEAD) — 11/07/2026, aprovado
+    pelo dono: o cron diario re-congela a MESMA data a cada antecedencia
+    (D-6, D-5, ... D-0), entao a tabela "por lead" compara antecedencias
+    da mesma data em vez de leads soltos de datas diferentes. Idempotente
+    DENTRO do dia (mesmo lead nao regrava)."""
     datas = [date.fromisoformat(d['data']) for d in sug['dias']]
     if not datas:
         return 0
     existentes = set(
         db.session.query(PrevisaoSnapshot.data_alvo, PrevisaoSnapshot.loja_id,
-                         PrevisaoSnapshot.receita_id)
+                         PrevisaoSnapshot.receita_id,
+                         PrevisaoSnapshot.lead_dias)
         .filter(PrevisaoSnapshot.data_alvo.in_(datas),
                 PrevisaoSnapshot.motor == motor).all())
     novos = 0
@@ -69,13 +76,14 @@ def _registrar_motor(motor, sug, hoje_d):
             for i, d in enumerate(datas):
                 if d.isoformat() in ja_tem:
                     continue                  # dia travado: nao e previsao
-                chave = (d, loja['loja_id'], rid)
+                lead = max(0, (d - hoje_d).days)
+                chave = (d, loja['loja_id'], rid, lead)
                 if chave in existentes:
                     continue
                 db.session.add(PrevisaoSnapshot(
                     data_alvo=d, loja_id=loja['loja_id'], receita_id=rid,
                     previsto=int(p['por_dia'][i]), motor=motor,
-                    lead_dias=max(0, (d - hoje_d).days)))
+                    lead_dias=lead))
                 existentes.add(chave)
                 novos += 1
     return novos
