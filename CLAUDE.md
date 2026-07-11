@@ -694,8 +694,14 @@ entregas:
   de retorno da loja — as vendas de Nutella baixam dali, NUNCA dar entrada
   manual (duplicaria: nutella vendida antes do aviso ja baixou o retorno).
   Testes: `tests/test_retirada_coleta_divergencia.py`.
-- Testes: `tests/test_retirada_sobras.py`. PENDENTE (nao bloqueia): mostrar
-  retiradas do dia no Painel de Entregas e lista web com cancelamento.
+- Testes: `tests/test_retirada_sobras.py`.
+- **Lista web + cancelamento: FEITOS em 10/07/2026** — `/pedidos/retiradas`
+  (`pedidos/routes.py::retiradas_sobras`) lista abertas + finalizadas,
+  regenera QR de coleta expirado (TTL 48h prendia retirada em
+  `aguardando_coleta` pra sempre) e cancela retirada nao-coletada
+  (`devolucao.cancelar_retirada`; em transporte nao cancela — a loja ja
+  baixou, finalize o recebimento). PENDENTE (nao bloqueia): mostrar
+  retiradas do dia no Painel de Entregas.
 
 **Fixes do primeiro uso real (02/07/2026 a noite, Nebraska — testes em
 `tests/test_slack_retirada_e_duplicata.py`)**:
