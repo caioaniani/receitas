@@ -129,6 +129,43 @@
 {% endif %}
 {% endmacro %}
 
+{% if comparativo %}
+<h6 class="mt-3 mb-1">Qual motor acerta mais em cada loja?</h6>
+<p class="text-muted small mb-1">Os dois motores lado a lado (WAPE menor =
+  previu melhor). Use isto pra decidir em qual grade confiar em cada loja.</p>
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead>
+      <tr>
+        <th>Loja</th>
+        {% for m in motores_vivos %}
+        <th class="text-end">{{ motor_labels[m] }} — WAPE %</th>
+        <th class="text-end">viés %</th>
+        <th class="text-end">n</th>
+        {% endfor %}
+        <th>Melhor</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for linha in comparativo %}
+      <tr>
+        <td>{{ linha.nome }}</td>
+        {% for m in motores_vivos %}
+        {% set v = linha.motores.get(m) %}
+        <td class="text-end {{ 'fw-bold text-success' if linha.melhor == m }}">
+          {{ v.wape_pct if v and v.wape_pct is not none else '—' }}</td>
+        <td class="text-end">{{ v.vies_pct if v and v.vies_pct is not none else '—' }}</td>
+        <td class="text-end text-muted">{{ v.n if v else '—' }}</td>
+        {% endfor %}
+        <td>{% if linha.melhor %}<span class="badge bg-success">{{ motor_labels[linha.melhor] }}</span>
+            {% else %}<span class="text-muted small">sem comparação</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {{ tabela('Por receita', resumo.por_receita, 'Receita') }}
 {{ tabela('Por loja (viés sistemático por loja não some no agregado)', resumo.por_loja, 'Loja') }}
 {{ tabela('Por antecedência (D-1 = previsto na véspera; D-6 = previsto 6 dias antes)', resumo.por_lead, 'Lead') }}
