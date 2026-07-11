@@ -119,9 +119,12 @@ class PrevisaoSnapshot(db.Model):
     pra medir vies e erro. Sem isso nao havia como saber se a previsao
     acerta — qualquer 'melhoria' era no escuro.
 
-    Uma linha por (data_alvo, loja, receita, MOTOR): grava-se a PRIMEIRA
-    previsao vista pra aquela data-alvo, pra medir sempre no mesmo lead.
-    `realizado` fica NULL ate a data passar e o cron casar.
+    Uma linha por (data_alvo, loja, receita, MOTOR, LEAD): o cron diario
+    congela a previsao de CADA antecedencia (D-6..D-0) da mesma data — a
+    tabela "por lead" da acuracia compara antecedencias de verdade
+    (11/07/2026, aprovado pelo dono; antes so a primeira previsao vista
+    era gravada e quase tudo caia no lead maximo). `realizado` fica NULL
+    ate a data passar e o cron casar.
 
     Fase 0 (02/07/2026): a acuracia media SO o motor aposentado
     (sugerir_pedidos_semana). Agora cada snapshot registra de QUAL motor veio
@@ -154,7 +157,8 @@ class PrevisaoSnapshot(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('data_alvo', 'loja_id', 'receita_id', 'motor',
-                            name='uq_previsao_snapshot_alvo_motor'),
+                            'lead_dias',
+                            name='uq_previsao_snapshot_alvo_motor_lead'),
     )
 
     def __repr__(self):
