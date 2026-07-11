@@ -239,7 +239,13 @@ def comparativo_motores_por_loja(dias=30):
                                key=lambda kv: nomes_loja.get(kv[0], '')):
         wapes = {m: v['wape_pct'] for m, v in motores.items()
                  if v.get('wape_pct') is not None}
-        melhor = min(wapes, key=wapes.get) if len(wapes) == 2 else None
+        melhor = None
+        if len(wapes) == len(MOTORES_VIVOS):
+            candidato = min(wapes, key=wapes.get)
+            # Empate nao elege ninguem (o min pegaria um arbitrario).
+            if sum(1 for w in wapes.values()
+                   if w == wapes[candidato]) == 1:
+                melhor = candidato
         out.append({'loja_id': lid,
                     'nome': nomes_loja.get(lid, f'#{lid}'),
                     'motores': motores, 'melhor': melhor})
