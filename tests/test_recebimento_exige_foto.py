@@ -44,9 +44,6 @@ def test_recebimento_com_foto_nova_entrega(app):
     p, _ = _pedido_em_transporte(app)
     fotos = [{'imagem': b'\xff\xd8\xff\xfake-jpeg', 'mimetype': 'image/jpeg'}]
     with patch('app.services.dropbox_storage.disponivel', return_value=True), \
-         patch('app.blueprints.pedidos.routes.comprimir_imagem',
-               create=True, side_effect=lambda b: b), \
-         patch('app.services.utils_nada', create=True), \
          patch('app.utils.comprimir_imagem', side_effect=lambda b: b), \
          patch('app.services.dropbox_storage.upload_publico',
                return_value={'url': 'http://x/r.jpg',
