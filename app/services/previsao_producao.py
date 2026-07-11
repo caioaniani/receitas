@@ -1523,7 +1523,15 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             status_dia[loja_id][data_ent.isoformat()].append(status_p)
     # As entregas ja pedidas entram desde HOJE (nao so da janela): com
     # "A partir de" no futuro, a simulacao pre-janela precisa creditar o que
-    # chega antes do inicio (ver dias_pre_janela abaixo).
+    # chega antes do inicio (ver dias_pre_janela abaixo). Na faixa PRE-janela
+    # so entra pedido AINDA NAO entregue: o que ja virou entregue/recebido ja
+    # esta dentro do estoque atual da loja (entrada_pedido no recebimento) —
+    # creditar de novo contaria em dobro e sub-pediria (achado de revisao
+    # 11/07/2026). Dentro da janela o comportamento segue identico (a celula
+    # travada mostra o pedido do dia, entregue ou nao).
+    from app.constants import STATUS_PEDIDO_FINALIZADOS
+    _status_entregues = tuple(s for s in STATUS_PEDIDO_FINALIZADOS
+                              if s != 'cancelado')
     for loja_id, data_ent, rid_e, mid_e, qtd_e in (db.session.query(
             PedidoLoja.loja_id, PedidoLoja.data_entrega,
             PedidoItem.receita_id, PedidoItem.materia_prima_id,
@@ -1534,7 +1542,10 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                     db.or_(PedidoItem.receita_id.isnot(None),
                            PedidoItem.materia_prima_id.isnot(None)),
                     PedidoLoja.data_entrega >= hoje_d,
-                    PedidoLoja.data_entrega <= horizonte_fim).all()):
+                    PedidoLoja.data_entrega <= horizonte_fim,
+                    db.or_(PedidoLoja.data_entrega >= inicio_d,
+                           PedidoLoja.status.notin_(_status_entregues)))
+            .all()):
         tok = _token(rid_e, mid_e)
         if data_ent is not None and tok is not None:
             pedido_existente[loja_id][data_ent.isoformat()][tok] += int(qtd_e or 0)
