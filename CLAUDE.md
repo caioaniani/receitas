@@ -1339,10 +1339,17 @@ vigia já usava pra abrir conversa (`painel.html:458` → `abrirThread`).
 - **Backend**: `POST /entregas/api/atendimento/chamar-cliente` (recebe
   `codigo`, acha o `PedidoOnline`, usa telefone+nome). Orquestração em
   `chatwoot.iniciar_conversa_whatsapp(telefone, nome, params=[nome, codigo])`:
-  acha/cria contato pelo telefone → REUSA conversa aberta na inbox do WhatsApp
-  (não gasta template) OU cria conversa nova + manda o template. Tudo com o
-  **token de USUÁRIO** (`CHATWOOT_API_TOKEN`; o de Agent Bot nem lista
-  conversa). Erro NÃO é silenciado (devolve o corpo cru da Meta pra depurar).
+  acha/cria contato pelo telefone → reusa conversa aberta na inbox do WhatsApp
+  (não duplica thread) ou cria uma nova → **SEMPRE manda o template** (fix
+  11/07: conversa "aberta" no Chatwoot ≠ janela de 24h aberta na Meta — o
+  skip em conversa reusada deixava o cliente sem receber NADA; utilidade
+  dentro da janela não custa, fora custa centavos). A mensagem vai com
+  `content` renderizado (CHATWOOT_WHATSAPP_TEMPLATE_CORPO, default = o texto
+  recomendado) — sem content, versões do Chatwoot mostram balão vazio na
+  thread. Tudo com o **token de USUÁRIO** (`CHATWOOT_API_TOKEN`; o de Agent
+  Bot nem lista conversa). Erro NÃO é silenciado (devolve o corpo cru da
+  Meta pra depurar). O fetch do botão manda `X-CSRFToken` + retry único via
+  `/auth/csrf-token` em `csrf_expirada` (padrão do autosave do cronograma).
 - **Config (env)**: `CHATWOOT_WHATSAPP_INBOX_ID` (id da inbox do WhatsApp) +
   `CHATWOOT_WHATSAPP_TEMPLATE` (nome do template aprovado, 2 vars: {{1}}=nome,
   {{2}}=código) + `CHATWOOT_WHATSAPP_TEMPLATE_LANG` (default `pt_BR`). Faltando
