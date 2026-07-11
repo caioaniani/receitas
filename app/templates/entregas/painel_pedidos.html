@@ -952,12 +952,31 @@
     var orig = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = 'Chamando…';
-    fetch('/entregas/api/atendimento/chamar-cliente', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codigo: code }),
-    })
-      .then(function (r) { return r.json().then(function (d) { return d; }); })
+
+    function req() {
+      return fetch('/entregas/api/atendimento/chamar-cliente', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': PED_CSRF },
+        body: JSON.stringify({ codigo: code }),
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; });
+      });
+    }
+
+    req()
+      .then(function (d) {
+        // csrf_expirada (sessão trocada/cookie apagado): token novo + 1 retry
+        // — mesmo padrão do autosave do cronograma (/auth/csrf-token).
+        if (d && d.erro === 'csrf_expirada') {
+          return fetch(PED_CSRF_URL, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (t) {
+              if (t && t.token) { PED_CSRF = t.token; return req(); }
+              return d;
+            });
+        }
+        return d;
+      })
       .then(function (d) {
         d = d || {};
         var abriu = false;
@@ -975,7 +994,11 @@
           abriu = true;
         }
         if (!d.ok) {
-          window.alert('Atenção: ' + (d.erro || 'não consegui enviar a mensagem para o cliente.'));
+          var msg = d.erro || 'não consegui enviar a mensagem para o cliente.';
+          if (d.erro === 'csrf_expirada') {
+            msg = 'sua sessão expirou — recarregue a página (F5) e tente de novo.';
+          }
+          window.alert('Atenção: ' + msg);
         }
         if (!abriu) { btn.disabled = false; btn.innerHTML = orig; }
       })
