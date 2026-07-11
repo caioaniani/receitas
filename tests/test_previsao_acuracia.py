@@ -256,3 +256,81 @@ def test_circularidade_conta_pedidos_auto_gerados(app):
     assert res['pedidos_entregues'] == 2
     assert res['pedidos_auto'] == 1
     assert res['circularidade_pct'] == 50.0
+
+
+# ── acuracia por (loja, receita) + comparativo motor×loja (11/07/2026) ─────
+def _snap_motor(loja, receita, data_alvo, previsto, realizado, motor,
+                lead=1):
+    s = PrevisaoSnapshot(data_alvo=data_alvo, loja_id=loja.id,
+                         receita_id=receita.id, previsto=previsto,
+                         realizado=realizado, motor=motor, lead_dias=lead)
+    db.session.add(s)
+    db.session.commit()
+    return s
+
+
+def test_acuracia_por_loja_receita_filtra_amostra_rasa(app):
+    """Badge da grade: agrega por (loja, receita) de UM motor; par com menos
+    de min_n snapshots casados fica fora (ruido)."""
+    loja = _loja()
+    r = _receita()
+    r2 = _receita('Baguete')
+    ontem = hoje() - timedelta(days=1)
+    for k in range(5):
+        _snap_motor(loja, r, ontem - timedelta(days=k), 12, 10,
+                    'media_pedido')
+    _snap_motor(loja, r2, ontem, 30, 10, 'media_pedido')   # so 1 amostra
+
+    mapa = svc.acuracia_por_loja_receita('media_pedido', dias=60, min_n=5)
+    assert (loja.id, r.id) in mapa
+    assert (loja.id, r2.id) not in mapa                     # amostra rasa
+    ac = mapa[(loja.id, r.id)]
+    assert ac['n'] == 5
+    assert ac['previsto'] == 60 and ac['realizado'] == 50
+    assert ac['vies_pct'] == 20.0                           # (60-50)/50
+    assert ac['wape_pct'] == 20.0                           # 10/50
+
+
+def test_acuracia_por_loja_receita_so_do_motor_pedido(app):
+    loja = _loja()
+    r = _receita()
+    ontem = hoje() - timedelta(days=1)
+    for k in range(5):
+        _snap_motor(loja, r, ontem - timedelta(days=k), 12, 10,
+                    'venda_estoque')
+    assert svc.acuracia_por_loja_receita('media_pedido') == {}
+
+
+def test_comparativo_motores_por_loja_aponta_melhor(app):
+    """Tabela 'qual motor acerta mais por loja': os dois lado a lado, melhor
+    = menor WAPE; loja com um motor so nao ganha veredito."""
+    loja = _loja()
+    loja_b = _loja('Loja B')
+    r = _receita()
+    ontem = hoje() - timedelta(days=1)
+    # Loja A: media erra pouco (WAPE 10%), venda erra muito (50%)
+    _snap_motor(loja, r, ontem, 11, 10, 'media_pedido')
+    _snap_motor(loja, r, ontem, 15, 10, 'venda_estoque')
+    # Loja B: so um motor tem dado
+    _snap_motor(loja_b, r, ontem, 20, 10, 'media_pedido')
+
+    comp = svc.comparativo_motores_por_loja(dias=30)
+    por_nome = {c['nome']: c for c in comp}
+    assert por_nome['Loja A']['melhor'] == 'media_pedido'
+    assert por_nome['Loja A']['motores']['media_pedido']['wape_pct'] == 10.0
+    assert por_nome['Loja A']['motores']['venda_estoque']['wape_pct'] == 50.0
+    assert por_nome['Loja B']['melhor'] is None
+
+
+def test_tela_acuracia_mostra_comparativo_e_links(app, admin_user):
+    loja = _loja()
+    r = _receita()
+    ontem = hoje() - timedelta(days=1)
+    _snap_motor(loja, r, ontem, 11, 10, 'media_pedido')
+    _snap_motor(loja, r, ontem, 15, 10, 'venda_estoque')
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
+    corpo = c.get('/producao/previsao-acuracia').get_data(as_text=True)
+    assert 'Qual motor acerta mais em cada loja?' in corpo
+    assert '/producao/pedidos-semana/media' in corpo        # link de volta
+    assert '/producao/pedidos-semana/estoque' in corpo
