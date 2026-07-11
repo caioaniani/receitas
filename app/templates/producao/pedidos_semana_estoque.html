@@ -86,6 +86,7 @@
            title="Colchão de segurança: o pedido deixa N% do consumo do dia sobrando no fim do dia (protege contra dia acima da média). 0 = repõe exatamente a média.">Segurança (%):</label>
     <input type="number" name="seguranca" min="0" max="100" value="{{ seguranca }}"
            class="form-control form-control-sm" style="width:64px;">
+    {% if comparar %}<input type="hidden" name="comparar" value="1">{% endif %}
     <button class="btn btn-sm btn-outline-secondary">Recalcular</button>
 </form>
 
