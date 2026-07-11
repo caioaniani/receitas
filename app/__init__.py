@@ -169,14 +169,13 @@ def create_app(config_class=None):
 
         # ── Receitas + categorias (cache 60s) ──
         def _carrega_receitas_globais():
-            # defer(imagem_blob/mimetype) — sidebar nao usa essas colunas e elas
-            # podem ter 100KB+ cada, estourando memoria do worker.
+            # defer(imagem_mimetype) — sidebar nao usa. (O defer do
+            # imagem_blob saiu com a coluna, M6 Commit D 11/07/2026.)
             from sqlalchemy.orm import defer
             # Arquivadas ficam fora da sidebar e dos datalists (selecao de
             # uso ativo) — historico/telas de registro nao passam por aqui.
             recs = Receita.query.options(
                 db.joinedload(Receita.ingredientes),
-                defer(Receita.imagem_blob),
                 defer(Receita.imagem_mimetype),
             ).filter(Receita.arquivada_em.is_(None)
                      ).order_by(Receita.categoria, Receita.nome).all()
