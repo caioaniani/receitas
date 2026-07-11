@@ -3396,3 +3396,86 @@ def sugerir_pedido_xlsx(loja_id):
     nome = f'sugestao_{loja.nome.lower().replace(" ", "_")}_{data_inicio}_{data_fim}.xlsx'
     return send_file(io.BytesIO(blob), as_attachment=True, download_name=nome,
                       mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+# ── Retiradas de sobras: lista web + QR de coleta + cancelamento ─────────
+# (10/07/2026 — retiradas cujo QR de coleta expirava em 48h ficavam presas
+# em `aguardando_coleta` pra sempre: sem tela pra regenerar o QR e sem
+# caminho de cancelar. Era o pendente documentado do ciclo de sobras.)
+
+@pedidos_bp.route('/retiradas')
+@login_required
+@gerente_required
+def retiradas_sobras():
+    """Lista as retiradas de sobras: abertas (aguardando coleta / em
+    transporte, qualquer data) + as últimas finalizadas. A loja usa esta
+    tela pra mostrar o QR de coleta ao motorista (regenerado se expirou)."""
+    from app.models import RetiradaSobra
+    abertas = (RetiradaSobra.query
+               .filter(RetiradaSobra.status.in_(('aguardando_coleta',
+                                                 'em_transporte')))
+               .order_by(RetiradaSobra.data_retirada,
+                         RetiradaSobra.id).all())
+    finalizadas = (RetiradaSobra.query
+                   .filter(RetiradaSobra.status.in_(('recebida',
+                                                     'cancelada')))
+                   .order_by(RetiradaSobra.id.desc())
+                   .limit(20).all())
+    return render_template('pedidos/retiradas.html', abertas=abertas,
+                           finalizadas=finalizadas)
+
+
+@pedidos_bp.route('/retiradas/<int:id>/qr-coleta', methods=['POST'])
+@login_required
+@gerente_required
+def retirada_qr_coleta(id):
+    """Mostra o QR de COLETA da retirada (o motorista escaneia NA LOJA).
+
+    `gerar_qr_retirada` reusa o QR ativo ou emite um novo — é o caminho de
+    destravar retirada cujo QR original (TTL 48h) expirou."""
+    from app.models import RetiradaSobra
+    from app.services.handshake_qr import gerar_qr_retirada
+    from app.services.qrcode_svc import gerar_png_data_url
+
+    ret = RetiradaSobra.query.get_or_404(id)
+    if ret.status != 'aguardando_coleta':
+        flash(f'Retirada #{ret.id} não está aguardando coleta '
+              f'(status: {ret.status}).', 'warning')
+        return redirect(url_for('pedidos.retiradas_sobras'))
+    try:
+        qr = gerar_qr_retirada(ret, 'coleta', current_user.id)
+        db.session.commit()
+        url = url_for('handshake.handshake_retirada', token=qr.token,
+                      _external=True)
+        qr_png = gerar_png_data_url(url)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('retirada_qr_coleta falhou (retirada=%s)', id)
+        flash('Erro ao gerar o QR. O log foi registrado — avise o admin.',
+              'danger')
+        return redirect(url_for('pedidos.retiradas_sobras'))
+    return render_template('pedidos/retirada_qr_coleta.html', retirada=ret,
+                           qr_png=qr_png, url=url)
+
+
+@pedidos_bp.route('/retiradas/<int:id>/cancelar', methods=['POST'])
+@login_required
+@admin_required
+def retirada_cancelar(id):
+    """Cancela retirada AINDA NÃO COLETADA (nada foi baixado — o retorno
+    segue no estoque da loja). Em transporte não cancela: a loja já baixou;
+    finalize o recebimento na indústria."""
+    from app.models import RetiradaSobra
+    from app.services.devolucao import cancelar_retirada
+
+    ret = RetiradaSobra.query.get_or_404(id)
+    try:
+        cancelar_retirada(ret, usuario_id=current_user.id)
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        flash(f'Não cancelei: {exc}', 'warning')
+        return redirect(url_for('pedidos.retiradas_sobras'))
+    flash(f'Retirada #{ret.id} cancelada — o retorno segue no estoque da '
+          'loja (as vendas de Nutella continuam baixando dali).', 'success')
+    return redirect(url_for('pedidos.retiradas_sobras'))
