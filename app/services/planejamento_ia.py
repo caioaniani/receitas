@@ -38,13 +38,17 @@ logger = logging.getLogger(__name__)
 
 MODELO = os.environ.get('PLANEJAMENTO_IA_MODELO', 'claude-opus-4-8')
 
-_SYSTEM_PEDIDO = """Voce e o planejador de reposicao de uma padaria
+# Template unico pros dois modos da tela de pedidos (media | venda+estoque):
+# muda qual motor e a BASE exibida na grade e o campo identificador que o
+# modelo deve ecoar ({id_campo}) — o resto das regras e identico.
+_SYSTEM_PEDIDO_TPL = """Voce e o planejador de reposicao de uma padaria
 artesanal em Sao Paulo. Uma LOJA pede produtos para a INDUSTRIA por dia.
 
 Recebera as datas do horizonte (com dia da semana) e, por produto:
-- por_dia_media: sugestao do motor de MEDIA historica (base da tela);
+- {id_campo}: identificador do produto — ECOE exatamente como recebeu;
+- por_dia_media: sugestao do motor de MEDIA historica{base_media};
 - por_dia_venda: sugestao do motor VENDA+ESTOQUE (ponto de reposicao,
-  simula o estoque dia a dia) — quando existir, e a contraprova;
+  simula o estoque dia a dia){base_venda} — quando existir;
 - estoque_atual da loja, media_semanal, lote (caixa), minimo;
 - dias_travados: dias que JA TEM pedido (com o que foi pedido) — NAO
   proponha mudanca neles, devolva o valor ja pedido;
@@ -56,15 +60,27 @@ Proponha a quantidade POR DIA de cada produto. Regras:
 - Desperdicio recente alto = nao inflar; falta recorrente = reforcar.
 - Respeite a caixa (lote) quando pedir compensa; produto abaixo de 1
   caixa e decisao de negocio — explique no motivo.
-- So liste produto em que voce DIVERGIU do motor de media OU tem algo a
+- So liste produto em que voce DIVERGIU do motor da tela OU tem algo a
   dizer; produto omitido = manter a sugestao da tela.
 - Motivo de 1 frase por produto listado; parecer geral curto no fim.
 
 Responda APENAS JSON valido (sem markdown):
-{"itens": [{"receita_id": 1, "por_dia": [0, 10, ...], "motivo": "..."}],
- "parecer": "..."}
+{{"itens": [{{"{id_campo}": {id_exemplo}, "por_dia": [0, 10, ...],
+             "motivo": "..."}}],
+ "parecer": "..."}}
 `por_dia` com exatamente o numero de dias do horizonte, inteiros >= 0,
 na ordem das datas."""
+
+_BASE_TELA = ' (a BASE exibida na tela — e dela que voce diverge)'
+_CONTRAPROVA = ', a contraprova'
+
+_SYSTEM_PEDIDO = _SYSTEM_PEDIDO_TPL.format(
+    id_campo='receita_id', id_exemplo='1',
+    base_media=_BASE_TELA, base_venda=_CONTRAPROVA)
+
+_SYSTEM_PEDIDO_VENDA = _SYSTEM_PEDIDO_TPL.format(
+    id_campo='item_key', id_exemplo='"123"',
+    base_media=_CONTRAPROVA, base_venda=_BASE_TELA)
 
 _SYSTEM_PRODUCAO = """Voce e o analista de PCP de uma padaria artesanal
 em Sao Paulo. A industria produz para as lojas e clientes B2B.
