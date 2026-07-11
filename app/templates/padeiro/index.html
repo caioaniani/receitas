@@ -370,6 +370,8 @@
     {% endfor %}
   {% endwith %}
 
+  <div id="lousa-slot">{% include 'padeiro/_lousa_painel.html' %}</div>
+
   {% macro prod_row(it, em_grupo=false) %}
     <div class="prod-dia-row {% if it.falta == 0 %}feito{% endif %}">
       {% if em_grupo %}
