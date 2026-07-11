@@ -1127,8 +1127,6 @@ def debug_foto_pdf():
         'imagem_url': f.imagem_url,
         'tem_storage_path': bool(f.imagem_storage_path),
         'storage_path': f.imagem_storage_path,
-        'tem_blob': bool(f.imagem),
-        'blob_len': len(f.imagem) if f.imagem else 0,
         'mimetype': f.mimetype,
         'dropbox_configurado': ds.disponivel(),
     }
