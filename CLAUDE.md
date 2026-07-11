@@ -278,7 +278,9 @@ Da auditoria 1, ainda pendentes:
 
 - **M6 — Mover BLOBs pro Dropbox** (parcial, 4 de 6 migrados em 22/05/2026):
   - ✅ Migrados pra Dropbox: `Receita.imagem_blob`, `Produto.imagem_blob`,
-    `FotoRecebimento.imagem`, `PedidoItemFoto.imagem`, `EntregaFoto.imagem`.
+    `FotoRecebimento.imagem`, `PedidoItemFoto.imagem`. (`EntregaFoto` ja
+    nasceu so-URL — sem coluna BLOB no modelo nem no schema
+    (`migrations_legacy.py::entrega_foto`); nada a dropar nela.)
   - ✗ Mantidos BLOB no Postgres por seguranca (PII):
     `Atestado.arquivo` (atestado medico), `Loja.planta_imagem`.
   - ⏳ **Pendente Commit D**: dropar as colunas BLOB ja-vazias dos 4
