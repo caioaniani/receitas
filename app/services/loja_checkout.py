@@ -243,13 +243,22 @@ def _cpf_valido(cpf):
     return True
 
 
-def _montar_endereco(form):
-    """Junta os campos estruturados em um texto de uma linha pra gravar
-    em PedidoOnline.endereco_entrega (snapshot da entrega)."""
+def _montar_endereco(form, incluir_complemento=True):
+    """Junta os campos estruturados em um texto de uma linha.
+
+    `incluir_complemento=True` (default): snapshot da entrega gravado em
+    `PedidoOnline.endereco_entrega` — o motorista PRECISA do apto/bloco.
+
+    `incluir_complemento=False`: string PRA GEOCODE. O complemento (apto,
+    bloco, nome do prédio) NÃO ajuda o geocoder e ATRAPALHA: nome de prédio
+    ('Positano') e 'Ape 502' fazem o Google devolver `partial_match`
+    (rejeitado como impreciso) e derrubam o Nominatim — barrando venda de
+    endereço VÁLIDO (caso Mooca, CEP 03111-010, 11/07/2026). Rua + número +
+    bairro + cidade + CEP é o que localiza."""
     partes = [
         (form.get('logradouro') or '').strip(),
         (form.get('numero') or '').strip(),
-        (form.get('complemento') or '').strip(),
+        (form.get('complemento') or '').strip() if incluir_complemento else '',
         (form.get('bairro') or '').strip(),
         (form.get('cidade') or '').strip(),
         (form.get('uf') or '').strip(),
