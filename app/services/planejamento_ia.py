@@ -172,33 +172,54 @@ def _desperdicio_recente(loja_id, dias=7):
 
 
 def sugerir_pedido_loja_ia(loja_id, *, horizonte_dias=7, janela_semanas=6,
-                           inicio_offset_dias=1):
+                           inicio_offset_dias=1, modo='media',
+                           seguranca_pct=0):
     """Proposta da IA para o pedido de UMA loja, no formato da grade da
-    tela /pedidos-semana/media. Devolve
-    {'itens': [{receita_id, por_dia, motivo, mudou, aviso}],
+    tela de pedidos da semana. `modo` escolhe a BASE (o motor da tela que
+    chamou): 'media' (/pedidos-semana/media, itens por `receita_id`) ou
+    'venda' (/pedidos-semana/estoque, itens por `item_key` — inclui MPs;
+    `seguranca_pct` e o colchao da tela). O outro motor entra como
+    contraprova no contexto. Devolve
+    {'itens': [{receita_id|item_key, por_dia, motivo, mudou, aviso}],
      'parecer', 'dias', 'modelo_usado'} ou {'erro': ...}. NAO grava nada."""
     from app.services.previsao_producao import (
         media_semanal_pedidos,
         sugerir_pedidos_por_venda,
     )
-    grade = media_semanal_pedidos(horizonte_dias=horizonte_dias,
+    media = media_semanal_pedidos(horizonte_dias=horizonte_dias,
                                   janela_semanas=janela_semanas,
                                   inicio_offset_dias=inicio_offset_dias)
+    venda = sugerir_pedidos_por_venda(horizonte_dias=horizonte_dias,
+                                      janela_semanas=janela_semanas,
+                                      inicio_offset_dias=inicio_offset_dias,
+                                      seguranca_pct=seguranca_pct)
+    if modo == 'venda':
+        grade, contra_grade = venda, media
+        id_campo, system = 'item_key', _SYSTEM_PEDIDO_VENDA
+    else:
+        modo = 'media'
+        grade, contra_grade = media, venda
+        id_campo, system = 'receita_id', _SYSTEM_PEDIDO
+
     loja = next((lj for lj in grade['lojas']
                  if lj['loja_id'] == int(loja_id)), None)
     if loja is None:
         return {'erro': 'loja sem sugestao na grade (sem historico?)'}
 
-    venda = sugerir_pedidos_por_venda(horizonte_dias=horizonte_dias,
-                                      janela_semanas=janela_semanas,
-                                      inicio_offset_dias=inicio_offset_dias)
-    venda_loja = next((lj for lj in venda['lojas']
-                       if lj['loja_id'] == int(loja_id)), None)
-    venda_por_rid = {}
-    if venda_loja:
-        venda_por_rid = {p['receita_id']: p['por_dia']
-                         for p in venda_loja['produtos']
-                         if p.get('receita_id') and not p.get('eh_mp')}
+    def _chave(p):
+        # 'media': linhas so de receita (int); 'venda': item_key str
+        # ('<receita_id>' ou 'mp:<id>').
+        return p['item_key'] if id_campo == 'item_key' else p['receita_id']
+
+    # Contraprova do OUTRO motor, casada por receita_id (MP so existe na
+    # grade de venda — fica sem contraprova, o que e verdade).
+    contra_loja = next((lj for lj in contra_grade['lojas']
+                        if lj['loja_id'] == int(loja_id)), None)
+    contra_por_rid = {}
+    if contra_loja:
+        contra_por_rid = {p['receita_id']: p['por_dia']
+                          for p in contra_loja['produtos']
+                          if p.get('receita_id') and not p.get('eh_mp')}
 
     dias = grade['dias']
     produtos_ctx = []
@@ -208,11 +229,12 @@ def sugerir_pedido_loja_ia(loja_id, *, horizonte_dias=7, janela_semanas=6,
             for i, d in enumerate(dias)
             if d['data'] in loja['ja_tem']
         ]
+        contra = contra_por_rid.get(p.get('receita_id'))
         produtos_ctx.append({
-            'receita_id': p['receita_id'],
+            id_campo: _chave(p),
             'nome': p['nome'],
-            'por_dia_media': p['por_dia'],
-            'por_dia_venda': venda_por_rid.get(p['receita_id']),
+            'por_dia_media': p['por_dia'] if modo == 'media' else contra,
+            'por_dia_venda': p['por_dia'] if modo == 'venda' else contra,
             'estoque_atual': p['estoque_atual'],
             'media_semanal': p['media_semanal'],
             'lote': p['lote'],
@@ -227,22 +249,25 @@ def sugerir_pedido_loja_ia(loja_id, *, horizonte_dias=7, janela_semanas=6,
         'desperdicio_7d': _desperdicio_recente(loja['loja_id']),
     }
     dados, erro = _chamar_opus(
-        _SYSTEM_PEDIDO, json.dumps(payload, ensure_ascii=False),
+        system, json.dumps(payload, ensure_ascii=False),
         'pedido_loja_ia')
     if erro:
         return {'erro': erro}
 
-    # Sanitiza contra a grade REAL: so receitas da loja, por_dia do
+    # Sanitiza contra a grade REAL: so itens da loja, por_dia do
     # tamanho certo (inteiros >= 0), dia travado devolve o ja pedido.
-    por_rid = {p['receita_id']: p for p in loja['produtos']}
+    por_chave = {_chave(p): p for p in loja['produtos']}
     n = len(dias)
     itens_ok = []
     for it in (dados.get('itens') or []):
-        try:
-            rid = int(it.get('receita_id'))
-        except (TypeError, ValueError):
-            continue
-        base = por_rid.get(rid)
+        if id_campo == 'item_key':
+            chave = str(it.get('item_key') or '')
+        else:
+            try:
+                chave = int(it.get('receita_id'))
+            except (TypeError, ValueError):
+                continue
+        base = por_chave.get(chave)
         if base is None:
             continue
         bruto = it.get('por_dia') or []
@@ -270,7 +295,7 @@ def sugerir_pedido_loja_ia(loja_id, *, horizonte_dias=7, janela_semanas=6,
         elif not total_motor and total_ia > 0:
             aviso = (f'{base["nome"]}: o motor nao sugere nada e a IA '
                      f'propoe {total_ia} un — confira')
-        itens_ok.append({'receita_id': rid, 'nome': base['nome'],
+        itens_ok.append({id_campo: chave, 'nome': base['nome'],
                          'por_dia': por_dia,
                          'motivo': (it.get('motivo') or '').strip(),
                          'mudou': mudou, 'aviso': aviso})
