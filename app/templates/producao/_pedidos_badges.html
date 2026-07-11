@@ -1,0 +1,23 @@
+{# Fonte ÚNICA dos badges de contexto (acurácia do motor / amostra rasa) e
+   da célula "Desp. 7d" das DUAS grades de pedidos da semana (média e
+   venda+estoque) — mesma razão do _pedidos_ia_js.html: markup copiado entre
+   as telas diverge em silêncio. `fonte_label` diz de onde vem a amostra do
+   motor da tela ('pedido' na média, 'baixa de venda' na venda+estoque). #}
+
+{% macro badges_item(p, ac, fonte_label) %}
+    {%- if p.n_datas < 5 and (p.n_datas or p.total) %}<span class="badge bg-light text-dark border badge-ctx"
+        title="{% if p.n_datas %}A sugestão deste item vem de só {{ p.n_datas }} data(s) com {{ fonte_label }} na janela — número pouco confiável, confira antes de aceitar.{% else %}Item sem {{ fonte_label }} na janela — sugestão sem base histórica.{% endif %}">
+        {%- if p.n_datas %}histórico raso ({{ p.n_datas }}){% else %}sem histórico{% endif %}</span>{% endif %}
+    {%- if ac %}
+    {%- set wape = ac.wape_pct %}
+    <span class="badge badge-ctx {{ 'bg-danger' if wape is none or wape > 60 else ('bg-warning text-dark' if wape > 25 else 'bg-success') }}"
+          title="Acurácia deste motor para este item nesta loja (últimos 60 dias, {{ ac.n }} previsões): previu {{ ac.previsto }}, a loja levou {{ ac.realizado }}{% if ac.vies_pct is not none %}, viés {{ '%+.0f'|format(ac.vies_pct) }}%{% endif %}. WAPE = erro médio absoluto.">
+        WAPE {{ wape if wape is not none else '—' }}{% if wape is not none %}%{% endif %}</span>
+    {%- endif %}
+{% endmacro %}
+
+{% macro celula_desp(desp) %}
+    <td class="desp{{ ' tem' if desp }}"
+        {% if desp %}title="A loja descartou {{ desp }} un deste item nos últimos 7 dias — cuidado pra não repetir o excesso"{% endif %}>
+        {{ desp if desp else '—' }}</td>
+{% endmacro %}
