@@ -153,6 +153,10 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   **espera o CI passar** antes de subir. Com o CI agora em ~1,5 min (ver abaixo),
   o deploy gira em ~3-5 min (CI + build Docker). Pra deploy rapido em emergencia:
   desligar "Wait for CI" no Railway temporariamente.
+- **Healthcheck (11/07/2026)**: `railway.json` tem `healthcheckPath:
+  "/health"` (rota em `app/__init__.py`) — o deploy novo so vira ativo
+  quando `/health` responde 200 (app que sobe mas trava no boot nao derruba
+  o deploy antigo). Antes o Railway so olhava crash de processo.
 
 - **CI rapido (refatorado 2026-06-09)**: a suite caiu de **~12 min pra ~73s**
   (~10x). O `tests/conftest.py` cria o app + schema UMA vez por sessao e reseta
