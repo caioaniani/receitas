@@ -325,6 +325,52 @@ def api_atendimento_status(cid):
     return jsonify(res), (200 if res.get('ok') else 502)
 
 
+@entregas_bp.route('/api/atendimento/chamar-cliente', methods=['POST'])
+@login_required
+def api_atendimento_chamar_cliente():
+    """Botao "Chamar cliente pelo WhatsApp" (modal Pedidos do site): acha o
+    PedidoOnline pelo codigo, abre (ou reusa) a conversa de WhatsApp com o
+    cliente e, se for nova, dispara o template aprovado. Devolve o
+    conversation_id pra o painel abrir a conversa na direita.
+
+    Fora da janela de 24h a Meta so deixa iniciar com TEMPLATE — por isso o
+    fluxo passa por chatwoot.iniciar_conversa_whatsapp. Erro NAO e silenciado:
+    devolve `ok=false` + o motivo (o atendente precisa saber se saiu ou nao)."""
+    from app.models import PedidoOnline
+    from app.services import chatwoot as cw_svc
+    data = request.get_json(silent=True) or {}
+    codigo = (data.get('codigo') or '').strip()
+    if not codigo:
+        return jsonify({'ok': False, 'erro': 'codigo do pedido ausente'}), 400
+    p = PedidoOnline.query.filter_by(codigo=codigo).first()
+    if p is None:
+        return jsonify({'ok': False, 'erro': 'pedido nao encontrado'}), 404
+    if not (p.telefone_cliente or '').strip():
+        return jsonify({'ok': False,
+                        'erro': 'Pedido sem telefone do cliente.'}), 400
+    nome = (p.nome_cliente or 'Cliente').strip()
+    res = cw_svc.iniciar_conversa_whatsapp(
+        p.telefone_cliente, nome, params=[nome, p.codigo])
+    return jsonify({
+        'ok': bool(res.get('ok')),
+        'conversation_id': res.get('conversation_id'),
+        'nova': bool(res.get('nova')),
+        'nome': nome,
+        'erro': res.get('erro'),
+    }), (200 if res.get('ok') else 502)
+
+
+@entregas_bp.route('/api/atendimento/chatwoot-inboxes')
+@login_required
+def api_atendimento_chatwoot_inboxes():
+    """Diagnostico OWNER: lista as inboxes do Chatwoot pra achar o id da inbox
+    do WhatsApp (setar em CHATWOOT_WHATSAPP_INBOX_ID)."""
+    if not getattr(current_user, 'is_owner', False):
+        abort(403)
+    from app.services import chatwoot as cw_svc
+    return jsonify({'inboxes': cw_svc.listar_inboxes()})
+
+
 @entregas_bp.route('/api/painel')
 @login_required
 def api_painel():
