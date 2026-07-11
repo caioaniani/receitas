@@ -1603,16 +1603,21 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 continue                          # nao vende/estoca/pede, nada pedido
             estoque = est0
             # Projeta o saldo ate o inicio da janela (offset > 0): consumo
-            # previsto + entregas ja pedidas, mesma semantica do dia travado
-            # dentro da janela. Nada e sugerido aqui (fora da grade). O saldo
-            # e clampado em 0 por dia: estoque projetado negativo e venda
+            # previsto + entregas AINDA NAO entregues que chegam antes do
+            # inicio. Nada e sugerido aqui (fora da grade). O saldo e
+            # clampado em 0 por dia: estoque projetado negativo e venda
             # PERDIDA (nao vira demanda acumulada) — sem o clamp, a janela
             # abriria pedindo a venda perdida de volta e SUPER-pediria.
+            # (Difere DE PROPOSITO do dia travado dentro da janela, que NAO
+            # clampa: la o deficit segue visivel na propria grade.)
             for d in dias_pre_janela:
+                # Fornada especial nao vende fora de sex/sab/dom, mas uma
+                # entrega agendada num dia comum ainda credita o saldo.
                 if fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL:
-                    continue
-                consumo_pre = (_media_dow(v_dows, d.weekday())
-                               + _media_dow(m_dows, d.weekday()))
+                    consumo_pre = 0.0
+                else:
+                    consumo_pre = (_media_dow(v_dows, d.weekday())
+                                   + _media_dow(m_dows, d.weekday()))
                 entrega_pre = pedido_existente.get(loja.id, {}).get(
                     d.isoformat(), {}).get(tok, 0)
                 estoque = max(0.0, estoque + entrega_pre - consumo_pre)
