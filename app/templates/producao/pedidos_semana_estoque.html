@@ -186,6 +186,8 @@
 
 {% block scripts %}
 {% include "producao/_gerar_acao_js.html" %}
+{% set ia_modo = 'venda' %}
+{% include "producao/_pedidos_ia_js.html" %}
 <script>
 (function () {
     document.querySelectorAll('.pmed tbody tr').forEach(function (row) {
