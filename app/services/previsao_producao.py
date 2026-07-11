@@ -2341,6 +2341,17 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                     'faltam': min(firme_i, -running_f)})
         rr['entregas_risco'] = entregas_risco
         rr['risco_datas'] = [e['data'] for e in entregas_risco]
+        # Edicao manual que NAO cobre entrega firme em risco vira aviso
+        # IMEDIATO (dono, 10/07/2026) — sem esperar o "edicao de dia
+        # anterior" do E3 (caso real: linha fixada em 600 com pedido de
+        # 1600 no sabado so ganhava o 🚨, nao o ⚠️ na edicao). So quando o
+        # calculo sugere OUTRO total — se o sugerido e igual ao fixado, o
+        # reset nao ajudaria e o aviso mentiria.
+        if (rr.get('editado') and entregas_risco
+                and not rr.get('override_stale')
+                and rr.get('override_sugerido') is not None
+                and rr.get('override_sugerido') != rr.get('total')):
+            rr['override_stale'] = True
 
     # Agrupa os produtos por CATEGORIA (depois por nome) — senao ficam espalhados
     # pela ordem de urgencia/demanda do balanco. Categoria vazia vai por ultimo.
