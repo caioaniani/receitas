@@ -1301,6 +1301,11 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                 'lote': caixa,                       # caixa: arredonda ao dividir
                 'minimo': int(rec.minimo_pedido or 0),
                 'abaixo_lote': abaixo_lote,
+                # Profundidade da amostra (datas com pedido na janela) — a
+                # tela marca "pouco histórico" quando a média vem de 1-2
+                # pontos, pro operador saber quanto confiar no número.
+                'n_datas': (sum(len(pd) for pd in dows.values())
+                            if dows else 0),
             })
         if produtos:
             lojas_out.append({
