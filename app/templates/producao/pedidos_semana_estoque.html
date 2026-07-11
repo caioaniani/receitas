@@ -52,7 +52,7 @@
            title="Mostra o número do motor de média sob cada célula — os dois motores lado a lado, sem mudar nenhuma conta">
             <i class="bi bi-arrow-left-right"></i> Comparar motores
         </a>
-        <a href="{{ url_for('producao.pedidos_semana_media', horizonte=horizonte, janela=janela, inicio=inicio) }}"
+        <a href="{{ url_for('producao.pedidos_semana_media', horizonte=horizonte, janela=janela, inicio=inicio, comparar=1 if comparar else none) }}"
            class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-table"></i> Modo média do pedido
         </a>
