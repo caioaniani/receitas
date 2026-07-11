@@ -21,8 +21,9 @@ def _uso(funcao='vigia', custo='0.50', modelo='claude-sonnet-4-6'):
     return u
 
 
-def test_saudavel_abaixo_do_teto(app):
+def test_saudavel_abaixo_do_teto(app, monkeypatch):
     from app.services import uso_ia_vigia
+    monkeypatch.delenv('USO_IA_TETO_DIA_USD', raising=False)
     with app.app_context():
         _uso(custo='0.10')
         out = uso_ia_vigia.rodar_checks()
