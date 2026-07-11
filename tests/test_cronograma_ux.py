@@ -309,3 +309,55 @@ def test_vespera_rota_renderiza_aviso(app, admin_user):
     client = _login_admin(app, admin_user)
     html = client.get('/telaindustriateste/').get_data(as_text=True)
     assert 'sem véspera' in html
+
+
+# ── Edição manual que não cobre entrega em risco = aviso IMEDIATO (dono,
+# 10/07/2026): sem esperar o "edição de dia anterior" do E3. Caso real:
+# linha fixada em 600 com pedido firme de 1600 no sábado. ──
+
+def _cenario_edicao(qtd_firme=100, dias_entrega=1):
+    loja = Loja(nome='Loja Edit', ativa=True)
+    r = Receita(nome='Pao Edit', categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=1000.0)
+    db.session.add_all([loja, r])
+    db.session.flush()
+    dd = hoje() + timedelta(days=dias_entrega)
+    p = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=dd,
+                   data_pedido=dd)
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id,
+                              quantidade=qtd_firme))
+    db.session.commit()
+    return r, dd
+
+
+def test_edicao_hoje_que_descobre_entrega_vira_stale_na_hora(app):
+    """Fixar a linha ABAIXO do pedido firme deixa a entrega em risco → o
+    ⚠️ liga na hora, mesmo com a edição sendo de hoje."""
+    from app.services.cronograma_edit import editar_celula
+    from app.services.previsao_producao import cronograma_producao
+    r, dd = _cenario_edicao(qtd_firme=100, dias_entrega=1)
+    res = editar_celula(r.id, dd.isoformat(), 10)   # fixa 10 pra firme 100
+    assert res and not res.get('erro')
+    crono = cronograma_producao(horizonte_dias=7)
+    rr = next(x for x in crono['receitas'] if x['receita_id'] == r.id)
+    assert rr['editado'] is True
+    assert rr['entregas_risco']                     # entrega descoberta
+    assert rr.get('override_stale') is True         # aviso imediato
+    assert rr['override_sugerido'] == 100
+
+
+def test_edicao_hoje_que_cobre_nao_ganha_stale(app):
+    """Edição de hoje que COBRE a demanda não ganha o aviso (o E3 de
+    'dia anterior' continua valendo pro caso sem risco)."""
+    from app.services.cronograma_edit import editar_celula
+    from app.services.previsao_producao import cronograma_producao
+    r, dd = _cenario_edicao(qtd_firme=100, dias_entrega=1)
+    res = editar_celula(r.id, dd.isoformat(), 150)  # fixa ACIMA do firme
+    assert res and not res.get('erro')
+    crono = cronograma_producao(horizonte_dias=7)
+    rr = next(x for x in crono['receitas'] if x['receita_id'] == r.id)
+    assert rr['editado'] is True
+    assert not rr['entregas_risco']
+    assert not rr.get('override_stale')
