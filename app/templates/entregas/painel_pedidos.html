@@ -888,6 +888,7 @@
 // um iframe da página admin do pedido em modo embed (mesma edição, fonte
 // única — sem reimplementar formulário de dinheiro/fiscal).
 (function () {
+  var EMBED = new URLSearchParams(location.search).has('embed');
   var PED_LISTA = "{{ url_for('entregas.api_painel_pedidos_online') }}";
   var PED_DETALHE_TMPL = "{{ url_for('main.loja_online_pedido_detalhe', codigo='__CODE__') }}";
   var tbody = document.getElementById('ped-tbody');
