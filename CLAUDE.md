@@ -793,6 +793,24 @@ ordem nao bate com o grid visto). Cache do balanco tem motor na chave.
 Constante: `previsao_producao.MOTORES_PREVISAO_PRODUCAO`. Testes: secao
 "motor de previsao" em `tests/test_cronograma.py`.
 
+## Acuracia do forecast — 1 snapshot POR ANTECEDENCIA (11/07/2026)
+
+`PrevisaoSnapshot` guarda 1 linha por (data_alvo, loja, receita, motor,
+**lead_dias**) — o cron das 05:30 congela a previsao de CADA antecedencia
+(D-6..D-0) da mesma data-alvo, entao a tabela "por lead" de
+/producao/previsao-acuracia compara a MESMA data vista de leads
+diferentes. Antes a unique de 4 colunas guardava so a PRIMEIRA previsao
+vista e o "por lead" comparava leads de DATAS diferentes. Procedimento de
+2 commits seguido: commit 1 = ALTER da unique
+(`uq_previsao_snapshot_alvo_motor_lead`, migrations_legacy PG+SQLite) +
+sonda `/api/claude/deploy`; commit 2 = modelo + dedupe por lead em
+`previsao_acuracia._registrar_motor`. Consequencia ACEITA: os agregados
+(total/por_receita/por_loja) passam a contar ate 7 observacoes por
+data-alvo (uma por lead) — o `n` cresce; o casamento com o realizado nao
+muda (agrega por loja/receita/data). Testes:
+`test_registrar_um_snapshot_por_antecedencia` em
+`tests/test_previsao_acuracia.py`.
+
 ## Pré-baixa de MP na ordem enviada (07/07/2026)
 
 Pedido do dono: ENVIAR a ordem ao padeiro dá uma PRÉ-BAIXA nas MPs; a
