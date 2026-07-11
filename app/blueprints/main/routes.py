@@ -415,7 +415,6 @@ def cardapio_img_remover(tipo, id):
     if obj.imagem_storage_path:
         from app.services import dropbox_storage
         dropbox_storage.deletar(obj.imagem_storage_path)
-    obj.imagem_blob = None
     obj.imagem_mimetype = None
     obj.imagem_url = None
     obj.imagem_dropbox_url = None
