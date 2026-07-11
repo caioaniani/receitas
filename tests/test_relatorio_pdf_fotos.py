@@ -86,18 +86,17 @@ def test_foto_bytes_sem_storage_path_usa_shared_link():
     api.assert_not_called()
 
 
-def test_foto_bytes_rejeita_html_de_preview_e_cai_no_fallback():
+def test_foto_bytes_rejeita_html_de_preview_e_devolve_none():
     """Dropbox respondeu HTML (status 200) no shared link. NAO pode passar
-    isso pro fpdf2 — cai no BLOB legado (aqui simulado como bytes)."""
+    isso pro fpdf2 — sem fallback BLOB (M6 Commit D), devolve None e a
+    foto fica fora do PDF."""
     html = b'<!DOCTYPE html><html><head>Dropbox preview</head></html>'
-    blob_legado = _jpeg_bytes()
     foto = SimpleNamespace(id=2, imagem_url='https://dropbox.com/x?dl=0',
-                           imagem_storage_path=None, imagem=blob_legado)
+                           imagem_storage_path=None)
     with patch('app.services.relatorio.requests.get',
                return_value=_resp(200, html, 'text/html; charset=utf-8')):
         out = relatorio._foto_bytes(foto)
-    assert out == blob_legado
-    assert out != html
+    assert out is None
 
 
 def test_foto_bytes_normaliza_url_pra_raw():
