@@ -399,6 +399,18 @@ contamina transacao de negocio nem quebra o fluxo). Relatorio owner-only em
 disso o gasto por funcao era irrecuperavel (nada registrava). Precos em
 `uso_ia._PRECOS` — atualizar quando a Anthropic mudar tabela.
 
+**Vigia de CUSTO de IA (11/07/2026)**: o relatorio acima e passivo — um
+loop de bot dispararia custo em silencio. Cron de 1h (`seru_cron`, lock
+7748, kill-switch `USO_IA_VIGIA=0`) compara o gasto de HOJE (desde 00:00
+BRT) com `USO_IA_TETO_DIA_USD` (default US$ 25/dia) e alerta o dono no
+WhatsApp na transicao abaixo→acima do teto, re-alerta 6h, aviso de
+normalizacao (padrao do vigia do site, estado em AppConfig). Servico
+`app/services/uso_ia_vigia.py`; sob demanda `GET /admin/vigia-uso-ia`
+(owner; `?alertar=1` roda com WhatsApp). Cuidado deliberado: a ASSINATURA
+do alerta e so o teto (gasto crescente na assinatura = spam de hora em
+hora). Chamada de modelo sem preco na tabela nao soma no gasto — o
+resultado expoe `sem_preco`. Testes: `tests/test_uso_ia_vigia.py`.
+
 **Regra "preferir RESPONDER a PERGUNTAR"** no system prompt (vale pra
 Sonnet e Opus, mas rende mais no Opus): inferir/escolher com o contexto
 em vez de pingar pergunta atras de pergunta. Excecao: WRITES de
