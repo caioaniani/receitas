@@ -258,6 +258,35 @@ def test_circularidade_conta_pedidos_auto_gerados(app):
     assert res['circularidade_pct'] == 50.0
 
 
+# ── Antecedencia de verdade (11/07/2026): 1 snapshot POR lead ─────────────
+def test_registrar_um_snapshot_por_antecedencia(app):
+    """O cron diario congela a previsao de CADA antecedencia (D-6..D-0) da
+    mesma data-alvo — antes a unique de 4 colunas guardava so a primeira
+    previsao vista e a tabela 'por lead' comparava leads de datas
+    diferentes. Re-rodar no mesmo dia (mesmo lead) segue idempotente."""
+    loja = _loja()
+    r = _receita()
+    alvo = hoje() + timedelta(days=1)
+    sug = {'dias': [{'data': alvo.isoformat()}],
+           'lojas': [{'loja_id': loja.id, 'ja_tem': [],
+                      'produtos': [{'receita_id': r.id, 'por_dia': [7]}]}]}
+    # D-2 e D-1 da mesma data-alvo: um snapshot novo POR lead
+    assert svc._registrar_motor('media_pedido', sug,
+                                alvo - timedelta(days=2)) == 1
+    assert svc._registrar_motor('media_pedido', sug,
+                                alvo - timedelta(days=1)) == 1
+    db.session.commit()
+    snaps = (PrevisaoSnapshot.query
+             .filter_by(data_alvo=alvo, loja_id=loja.id, receita_id=r.id,
+                        motor='media_pedido')
+             .order_by(PrevisaoSnapshot.lead_dias).all())
+    assert [s.lead_dias for s in snaps] == [1, 2]
+    assert all(s.previsto == 7 for s in snaps)
+    # mesmo dia = mesmo lead: nada novo
+    assert svc._registrar_motor('media_pedido', sug,
+                                alvo - timedelta(days=1)) == 0
+
+
 # ── acuracia por (loja, receita) + comparativo motor×loja (11/07/2026) ─────
 def _snap_motor(loja, receita, data_alvo, previsto, realizado, motor,
                 lead=1):
