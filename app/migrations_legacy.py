@@ -2022,5 +2022,58 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE tiny_produto_map_novo "
                        "RENAME TO tiny_produto_map")
 
+    # ── Acuracia por ANTECEDENCIA (11/07/2026, aprovado pelo dono) ──
+    # A unique (data_alvo, loja, receita, motor) passa a incluir lead_dias
+    # (1 snapshot por antecedencia da mesma data). SQLite nao altera UNIQUE
+    # embutida -> rebuild (mesmo padrao do rebuild de motor/lead acima).
+    # Detecta a unique VELHA de 4 colunas via PRAGMA (nao ha coluna nova
+    # pra usar de marcador).
+    unique_velha = False
+    cursor.execute("PRAGMA index_list(previsao_snapshot)")
+    for row in cursor.fetchall():
+        idx_nome, idx_unique = row[1], row[2]
+        if not idx_unique:
+            continue
+        cursor.execute("PRAGMA index_info('%s')" % idx_nome)
+        cols_idx = [r[2] for r in cursor.fetchall()]
+        if cols_idx == ['data_alvo', 'loja_id', 'receita_id', 'motor']:
+            unique_velha = True
+            break
+    if unique_velha:
+        cursor.execute("""
+            CREATE TABLE previsao_snapshot_novo (
+                id INTEGER PRIMARY KEY,
+                data_alvo DATE NOT NULL,
+                loja_id INTEGER NOT NULL REFERENCES loja(id),
+                receita_id INTEGER NOT NULL REFERENCES receita(id),
+                previsto INTEGER NOT NULL DEFAULT 0,
+                realizado INTEGER,
+                casado_em TIMESTAMP,
+                criado_em TIMESTAMP,
+                motor VARCHAR(20) NOT NULL DEFAULT 'pedido_semana',
+                lead_dias INTEGER,
+                CONSTRAINT uq_previsao_snapshot_alvo_motor_lead
+                    UNIQUE (data_alvo, loja_id, receita_id, motor,
+                            lead_dias)
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO previsao_snapshot_novo
+                (id, data_alvo, loja_id, receita_id, previsto, realizado,
+                 casado_em, criado_em, motor, lead_dias)
+            SELECT id, data_alvo, loja_id, receita_id, previsto, realizado,
+                   casado_em, criado_em, motor, lead_dias
+            FROM previsao_snapshot
+        """)
+        cursor.execute("DROP TABLE previsao_snapshot")
+        cursor.execute("ALTER TABLE previsao_snapshot_novo "
+                       "RENAME TO previsao_snapshot")
+        cursor.execute("CREATE INDEX IF NOT EXISTS "
+                       "ix_previsao_snapshot_data_alvo "
+                       "ON previsao_snapshot(data_alvo)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS "
+                       "ix_previsao_snapshot_criado_em "
+                       "ON previsao_snapshot(criado_em)")
+
     conn.commit()
     conn.close()
