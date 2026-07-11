@@ -373,9 +373,13 @@
       }
     });
 
-    // Monta o endereço estruturado em uma linha pra cotar o frete.
+    // Monta o endereço estruturado em uma linha pra cotar o frete. SEM o
+    // complemento de propósito: apto/bloco/nome de prédio ('Ape 502 Positano')
+    // não ajuda o geocoder e ATRAPALHA (Google devolve partial_match, Nominatim
+    // erra) — barrava venda de endereço válido (caso Mooca 11/07/2026). O
+    // servidor é autoritativo e também geocoda sem complemento (loja_checkout).
     function enderecoMontado() {
-      var ids = ['logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];
+      var ids = ['logradouro', 'numero', 'bairro', 'cidade', 'uf'];
       var partes = ids.map(function (k) {
         var el = document.getElementById(k);
         return el ? (el.value || '').trim() : '';
