@@ -90,6 +90,7 @@
     <label class="small text-muted mb-0 ms-2">Histórico (sem):</label>
     <input type="number" name="janela" min="1" max="26" value="{{ janela }}"
            class="form-control form-control-sm" style="width:64px;">
+    {% if comparar %}<input type="hidden" name="comparar" value="1">{% endif %}
     <button class="btn btn-sm btn-outline-secondary">Recalcular</button>
 </form>
 
