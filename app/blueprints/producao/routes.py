@@ -314,9 +314,24 @@ def pedidos_semana_media():
     grade = media_semanal_pedidos(horizonte_dias=horizonte,
                                   janela_semanas=janela,
                                   inicio_offset_dias=inicio)
+    # Contraprova opcional (?comparar=1): o numero do OUTRO motor
+    # (venda+estoque) aparece sob cada celula — nao muda a conta de nada,
+    # so poe os dois lado a lado pro operador decidir.
+    contraprova = {}
+    comparar = request.args.get('comparar') == '1'
+    if comparar:
+        from app.services.previsao_producao import sugerir_pedidos_por_venda
+        venda = sugerir_pedidos_por_venda(horizonte_dias=horizonte,
+                                          janela_semanas=janela,
+                                          inicio_offset_dias=inicio)
+        for lj in venda['lojas']:
+            contraprova[lj['loja_id']] = {
+                p['receita_id']: p['por_dia'] for p in lj['produtos']
+                if p.get('receita_id') and not p.get('eh_mp')}
     return render_template('producao/pedidos_semana_media.html',
                            grade=grade, horizonte=horizonte,
-                           janela=janela, inicio=inicio)
+                           janela=janela, inicio=inicio,
+                           comparar=comparar, contraprova=contraprova)
 
 
 @producao_bp.route('/pedidos-semana/estoque')
