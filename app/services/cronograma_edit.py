@@ -140,13 +140,17 @@ def aplicar_overrides(receitas_out, dias_prod):
                              if q > 0 else None)
         rr['total'] = sum(c['qtd'] for c in rr['por_dia'])
         rr['editado'] = True
-        # E3: edicao de um dia anterior que ja nao bate com o calculo atual.
         dia_edit = edit_dia.get(rr['receita_id'])
+        # Sugerido/desde ficam SEMPRE na linha editada: a promocao a stale
+        # por entrega-em-risco (cronograma_producao, decisao do dono
+        # 10/07/2026) precisa deles mesmo em edicao de hoje. O template so
+        # os mostra quando override_stale liga.
+        rr['override_sugerido'] = sugerido_total
+        rr['override_desde'] = (dia_edit or hoje_d).isoformat()
+        # E3: edicao de um dia anterior que ja nao bate com o calculo atual.
         if rr['total'] != sugerido_total and dia_edit is not None \
                 and dia_edit < hoje_d:
             rr['override_stale'] = True
-            rr['override_sugerido'] = sugerido_total
-            rr['override_desde'] = dia_edit.isoformat()
 
 
 def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
