@@ -22,6 +22,7 @@ from app.extensions import db
 from app.models import Loja, MovEstoqueLoja, MovEstoqueProducao, Produto, Receita
 from app.services.estoque_congelados import obter_linha_producao
 from app.services.estoque_helpers import baixar_loja_por_prioridade
+from app.utils import agora
 
 TIPO_BAIXA_LOJA = 'devolucao_industria'
 TIPO_BAIXA_LOJA_SEM_ESTOQUE = 'devolucao_industria_sem_estoque'
@@ -263,3 +264,22 @@ def creditar_industria_retirada(retirada, usuario_id=None):
         resumo.append({'nome': nome_origem, 'qtd': qtd,
                        'destino': nome_destino})
     return resumo
+
+
+def cancelar_retirada(retirada, usuario_id=None):
+    """Cancela uma retirada AINDA NÃO COLETADA (10/07/2026 — retiradas cujo
+    QR de coleta expirou ficavam presas em `aguardando_coleta` pra sempre,
+    sem caminho de baixa).
+
+    Só `aguardando_coleta` cancela: nada foi baixado ainda (a baixa da loja
+    acontece NA COLETA), então cancelar não mexe em estoque nenhum — o
+    retorno segue no estoque da loja e as vendas de Nutella baixam dali.
+    Retirada em transporte já baixou a loja: recusa (receba na indústria).
+    NÃO commita — o caller fecha a transação."""
+    if retirada.status != 'aguardando_coleta':
+        raise ValueError(
+            f'retirada #{retirada.id} está "{retirada.status}" — só se '
+            'cancela antes da coleta (em transporte, finalize o '
+            'recebimento na indústria)')
+    retirada.status = 'cancelada'
+    retirada.cancelada_em = agora()
