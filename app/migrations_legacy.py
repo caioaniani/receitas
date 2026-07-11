@@ -1524,8 +1524,6 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0")
     if 'imagem_url' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN imagem_url VARCHAR(400)")
-    if 'imagem_blob' not in colunas:
-        cursor.execute("ALTER TABLE receita ADD COLUMN imagem_blob BLOB")
     if 'imagem_mimetype' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN imagem_mimetype VARCHAR(50)")
     if 'arquivada_em' not in colunas:
