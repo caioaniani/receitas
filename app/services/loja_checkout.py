@@ -429,12 +429,13 @@ def criar_pedido(form, itens_raw, *, base=None):
         end_bairro = (form.get('bairro') or '').strip() or None
         end_cidade = cidade or None
         end_uf = ((form.get('uf') or '').strip().upper()[:2]) or None
-        endereco_txt = _montar_endereco(form)
-        # geocoding usa o endereco completo (mais preciso que CEP só); CEP
-        # entra concatenado pra desambiguar bairros homonimos.
-        geo = endereco_txt
+        endereco_txt = _montar_endereco(form)            # snapshot (c/ complemento)
+        # geocoding usa rua+numero+bairro+cidade (SEM complemento — ele derruba
+        # o geocoder) + CEP concatenado pra desambiguar bairros homonimos.
+        geo_txt = _montar_endereco(form, incluir_complemento=False)
+        geo = geo_txt
         if endereco_cep and endereco_cep not in geo:
-            geo = f'{endereco_txt}, {endereco_cep}' if endereco_txt else endereco_cep
+            geo = f'{geo_txt}, {endereco_cep}' if geo_txt else endereco_cep
         _contato = ' · '.join(p for p in (
             f'{nome_dado} {sobrenome_dado}'.strip(), telefone, email) if p)
         valor, dist, end_norm, erro_frete = _frete_para(
