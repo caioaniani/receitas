@@ -875,3 +875,44 @@ def producao_historico():
         'item': m.estoque.nome_item if m.estoque else '?',
         'qtd': m.quantidade,
     } for m in movs])
+
+
+# ── Lousa dos padeiros (11/07/2026, pedido do dono) ──────────────────────
+# Recados entre colegas de turno, escritos na própria tela do padeiro e
+# visíveis durante o dia — como giz numa lousa, fica até alguém apagar.
+# NÃO confundir com o Aviso (alarme escritório→produção com campainha).
+
+@padeiro_bp.route('/lousa', methods=['GET', 'POST'])
+@login_required
+@padeiro_required
+def lousa():
+    from app.models import LousaRecado
+    if request.method == 'POST':
+        texto = (request.form.get('texto') or '').strip()[:500]
+        if texto:
+            db.session.add(LousaRecado(texto=texto,
+                                       criado_por_id=current_user.id))
+            db.session.commit()
+        else:
+            flash('Escreva o recado antes de enviar.', 'warning')
+        return redirect(url_for('padeiro.lousa'))
+    recados = (LousaRecado.query
+               .filter(LousaRecado.apagado_em.is_(None))
+               .order_by(LousaRecado.criado_em.desc()).all())
+    return render_template('padeiro/lousa.html', recados=recados)
+
+
+@padeiro_bp.route('/lousa/<int:id>/apagar', methods=['POST'])
+@login_required
+@padeiro_required
+def lousa_apagar(id):
+    """Apaga um recado da lousa (soft delete — como passar o apagador).
+    Qualquer padeiro pode, igual numa lousa física; fica registrado quem."""
+    from app.models import LousaRecado
+    from app.utils import agora
+    r = LousaRecado.query.get_or_404(id)
+    if r.apagado_em is None:
+        r.apagado_em = agora()
+        r.apagado_por_id = current_user.id
+        db.session.commit()
+    return redirect(url_for('padeiro.lousa'))
