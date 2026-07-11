@@ -1229,10 +1229,9 @@ def _migrate_postgres(app):
     # Cardapio digital: URL externa de imagem em receita + produto
     _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(400)")
     _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(400)")
-    # BLOB upload (Rappi 403 forced this — admin sobe a foto direto)
-    _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS imagem_blob BYTEA")
+    # (Os ADDs de imagem_blob sairam no M6 Commit D 11/07/2026 — banco novo
+    # nao cria mais a coluna; o DROP guardado das existentes fica adiante.)
     _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS imagem_mimetype VARCHAR(50)")
-    _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_blob BYTEA")
     _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_mimetype VARCHAR(50)")
 
     # Fase 2 contas a pagar (2026-06-10): conferencia humana — separa o que
