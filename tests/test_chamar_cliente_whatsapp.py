@@ -220,12 +220,23 @@ def test_endpoint_falha_do_servico_vira_502(app, admin_user):
 
 
 def test_inboxes_owner_only(app, admin_user, owner_user):
-    client = app.test_client()
-    _login(client, admin_user)          # admin não-owner
-    assert client.get('/entregas/api/atendimento/chatwoot-inboxes').status_code == 403
-    _login(client, owner_user)
+    # Captura os ids como int ANTES de qualquer request (o commit de um
+    # request expira os objetos-fixture e .id sairia stale).
+    admin_id, owner_id = admin_user.id, owner_user.id
+
+    def _cli(uid):
+        c = app.test_client()
+        with c.session_transaction() as s:
+            s['_user_id'] = str(uid)
+            s['_fresh'] = True
+        return c
+
+    # owner PASSA
     with patch('app.services.chatwoot.listar_inboxes',
                return_value=[{'id': 7, 'nome': 'WhatsApp', 'canal': 'Channel::Whatsapp'}]):
-        r = client.get('/entregas/api/atendimento/chatwoot-inboxes')
+        r = _cli(owner_id).get('/entregas/api/atendimento/chatwoot-inboxes')
     assert r.status_code == 200
     assert r.get_json()['inboxes'][0]['id'] == 7
+    # admin não-owner é BARRADO
+    assert _cli(admin_id).get(
+        '/entregas/api/atendimento/chatwoot-inboxes').status_code == 403
