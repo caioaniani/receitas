@@ -977,7 +977,7 @@
 
   function carregar(q) {
     var meu = ++reqId;
-    tbody.innerHTML = '<tr><td colspan="5" class="ped-vazio">Carregando…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="ped-vazio">Carregando…</td></tr>';
     var url = PED_LISTA + (q ? ('?q=' + encodeURIComponent(q)) : '');
     fetch(url, { cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : { pedidos: [] }; })
