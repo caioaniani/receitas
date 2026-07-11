@@ -192,7 +192,7 @@
                             {% set cp = contraprova.get(loja.loja_id, {}).get(p.receita_id) %}
                             {% if cp is not none %}
                             <div class="cp{% if cp[loop.index0] != p.por_dia[loop.index0] %} difere{% endif %}"
-                                 title="Motor venda+estoque sugere {{ cp[loop.index0] }} neste dia (a grade mostra a média)">V {{ cp[loop.index0] }}</div>
+                                 title="Motor venda+estoque sugere {{ cp[loop.index0] }} neste dia (contraprova calculada com segurança 0%; a grade mostra a média)">V {{ cp[loop.index0] }}</div>
                             {% endif %}
                             {% endif %}
                         </td>
