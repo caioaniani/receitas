@@ -39,7 +39,7 @@ def _foto_bytes(foto):
     2. **HTTP no shared link** (legado/compat) — User-Agent de navegador,
        URL normalizada pra `raw=1`. Valida magic bytes / Content-Type pra
        rejeitar pagina HTML de preview do Dropbox.
-    3. **BLOB legado** (`foto.imagem`) — fotos pre-M6.
+    (A tentativa 3, BLOB legado, saiu no M6 Commit D — foto so no Dropbox.)
 
     Bug 24/06/2026: fix via User-Agent + raw=1 nao bastou em prod (motivo
     nao confirmado — pode ser link de preview que ignora raw, ou CDN com
