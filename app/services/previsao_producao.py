@@ -1075,6 +1075,31 @@ def sugerir_pedidos_semana(horizonte_dias=7, janela_semanas=6,
     }
 
 
+def desperdicio_recente_por_item(dias=7):
+    """{loja_id: {token: qtd}} do que as lojas descartaram nos ultimos N
+    dias — token no idioma das grades de pedido ('<receita_id>' /
+    'mp:<id>'). Desperdicio de PRODUTO (cesta) fica fora: a grade e de
+    receita/MP. So leitura pra coluna 'Desp. 7d' das telas de pedidos da
+    semana (o dado ja alimentava a IA; o operador humano nao via)."""
+    from sqlalchemy import func
+
+    from app.models import Desperdicio
+    corte = hoje() - timedelta(days=int(dias or 7))
+    rows = (db.session.query(Desperdicio.loja_id, Desperdicio.receita_id,
+                             Desperdicio.materia_prima_id,
+                             func.sum(Desperdicio.quantidade))
+            .filter(Desperdicio.data >= corte,
+                    db.or_(Desperdicio.receita_id.isnot(None),
+                           Desperdicio.materia_prima_id.isnot(None)))
+            .group_by(Desperdicio.loja_id, Desperdicio.receita_id,
+                      Desperdicio.materia_prima_id).all())
+    out = defaultdict(dict)
+    for lid, rid, mid, q in rows:
+        tok = str(rid) if rid is not None else f'mp:{mid}'
+        out[lid][tok] = out[lid].get(tok, 0) + int(q or 0)
+    return dict(out)
+
+
 def _cond_sem_entrega_antecipada(hoje_d):
     """Condição SQL que EXCLUI pedido finalizado ANTES da data de entrega.
 
