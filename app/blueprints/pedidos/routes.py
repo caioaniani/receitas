@@ -835,26 +835,28 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
     from app.services import dropbox_storage
     from app.utils import comprimir_imagem
     for foto in fotos:
-        url = None
-        storage_path = None
-        if dropbox_storage.disponivel() and foto.get('imagem'):
-            try:
-                comprimida = comprimir_imagem(foto['imagem'])
-                path = (f'/recebimento/{pedido.id}/'
-                        f'{int(_time.time() * 1000)}.jpg')
-                info = dropbox_storage.upload_publico(
-                    comprimida, path, mode='add', autorename=True)
-                url = info['url']
-                storage_path = info['storage_path']
-            except (ValueError, RuntimeError):
-                current_app.logger.exception(
-                    'foto_recebimento dropbox falhou — fallback BLOB')
+        # M6 Commit D: sem fallback BLOB — a foto SOBE pro Dropbox ou o
+        # recebimento falha VISIVEL (mesmo padrao da retirada de sobras;
+        # gravar no Postgres escondia a falha e re-enchia a coluna).
+        if not (dropbox_storage.disponivel() and foto.get('imagem')):
+            return (False, 'Dropbox indisponível — a foto não pôde ser '
+                           'salva. Tente receber de novo em instantes.',
+                    None)
+        try:
+            comprimida = comprimir_imagem(foto['imagem'])
+            path = (f'/recebimento/{pedido.id}/'
+                    f'{int(_time.time() * 1000)}.jpg')
+            info = dropbox_storage.upload_publico(
+                comprimida, path, mode='add', autorename=True)
+        except (ValueError, RuntimeError) as exc:
+            current_app.logger.exception('foto_recebimento dropbox falhou')
+            return (False, f'Upload da foto falhou ({exc}) — o pedido NÃO '
+                           'foi recebido; tente de novo.', None)
         db.session.add(FotoRecebimento(
             pedido_id=pedido.id,
-            imagem=None if url else foto['imagem'],
-            imagem_url=url,
-            imagem_storage_path=storage_path,
-            mimetype='image/jpeg' if url else foto.get('mimetype', 'image/jpeg'),
+            imagem_url=info['url'],
+            imagem_storage_path=info['storage_path'],
+            mimetype='image/jpeg',
             enviada_por=getattr(user, 'id', None),
         ))
 
