@@ -114,11 +114,11 @@ def test_foto_bytes_normaliza_url_pra_raw():
 
 
 def test_foto_bytes_erro_de_rede_nao_quebra():
-    """Timeout/erro no shared link: loga e cai no BLOB, sem propagar."""
-    blob_legado = _jpeg_bytes()
+    """Timeout/erro no shared link: loga e devolve None (foto fora do PDF),
+    sem propagar excecao."""
     foto = SimpleNamespace(id=4, imagem_url='https://dropbox.com/x?raw=1',
-                           imagem_storage_path=None, imagem=blob_legado)
+                           imagem_storage_path=None)
     with patch('app.services.relatorio.requests.get',
                side_effect=Exception('timeout')):
         out = relatorio._foto_bytes(foto)
-    assert out == blob_legado
+    assert out is None
