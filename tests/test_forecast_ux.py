@@ -116,6 +116,25 @@ def test_coluna_desperdicio_7d_nas_grades(app, admin_user):
         assert 'descartou 7 un' in corpo
 
 
+def test_desperdicio_de_mp_aparece_na_grade_de_estoque(app, admin_user):
+    """Item MP (token 'mp:<id>') também mostra o desperdício da semana."""
+    from app.models import MateriaPrima
+    loja = _loja()
+    mp = MateriaPrima(nome='Pão de Queijo Congelado', unidade='un',
+                      custo_por_kg=10.0, sugerir_pedido_loja=True)
+    db.session.add(mp)
+    db.session.flush()
+    db.session.add(EstoqueLoja(loja_id=loja.id, materia_prima_id=mp.id,
+                               quantidade=30))
+    db.session.add(Desperdicio(loja_id=loja.id, materia_prima_id=mp.id,
+                               quantidade=4, data=hoje()))
+    db.session.commit()
+    c = _login(app)
+    corpo = c.get('/producao/pedidos-semana/estoque').get_data(as_text=True)
+    assert 'Pão de Queijo Congelado' in corpo
+    assert 'descartou 4 un' in corpo
+
+
 def test_badge_acuracia_por_item_na_grade(app, admin_user):
     """Com >= 5 snapshots casados do motor da tela, a linha do produto ganha
     o badge WAPE com viés no tooltip."""
