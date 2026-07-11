@@ -41,9 +41,19 @@
     <h3 class="mb-0"><i class="bi bi-box-seam"></i> Pedidos da semana —
         <span class="text-muted">por venda + estoque</span></h3>
     <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('producao.pedidos_semana_estoque', horizonte=horizonte, janela=janela, inicio=inicio, seguranca=seguranca, comparar=0 if comparar else 1) }}"
+           class="btn btn-sm {{ 'btn-secondary' if comparar else 'btn-outline-secondary' }}"
+           title="Mostra o número do motor de média sob cada célula — os dois motores lado a lado, sem mudar nenhuma conta">
+            <i class="bi bi-arrow-left-right"></i> Comparar motores
+        </a>
         <a href="{{ url_for('producao.pedidos_semana_media', horizonte=horizonte, janela=janela, inicio=inicio) }}"
            class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-table"></i> Modo média do pedido
+        </a>
+        <a href="{{ url_for('producao.previsao_acuracia') }}"
+           class="btn btn-sm btn-outline-secondary"
+           title="Quanto cada motor acertou vs o realizado (viés e WAPE)">
+            <i class="bi bi-bullseye"></i> Acurácia
         </a>
         <a href="{{ url_for('producao.painel', horizonte=horizonte, janela=janela, inicio=inicio) }}"
            class="btn btn-sm btn-outline-secondary">
