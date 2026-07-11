@@ -686,3 +686,244 @@ def listar_conversas(status='open', limite=40):
         })
     out.sort(key=lambda d: d.get('ultima_em') or 0, reverse=True)
     return out[:limite]
+
+
+# ── Iniciar conversa no WhatsApp (botao "Chamar cliente", 11/07/2026) ──────
+# Fora da janela de 24h a Meta so deixa a EMPRESA iniciar com TEMPLATE
+# aprovado. Fluxo: acha/cria o contato pelo telefone -> reusa conversa aberta
+# na inbox do WhatsApp OU cria uma nova + manda o template. Tudo com o token
+# de USUARIO (CHATWOOT_API_TOKEN) — o de Agent Bot nem lista conversa (licao
+# de 12/06). Best-effort e defensivo: a API varia por versao do Chatwoot,
+# entao logamos o corpo cru no erro pra depurar rapido.
+
+def _whatsapp_inbox_id():
+    return (current_app.config.get('CHATWOOT_WHATSAPP_INBOX_ID') or '').strip()
+
+
+def whatsapp_disponivel():
+    """True se da pra iniciar conversa no WhatsApp: token de usuario + inbox
+    + template configurados."""
+    cfg = current_app.config
+    return bool(disponivel()
+                and _whatsapp_inbox_id()
+                and (cfg.get('CHATWOOT_WHATSAPP_TEMPLATE') or '').strip())
+
+
+def _e164(telefone):
+    """Telefone armazenado -> E.164 pro WhatsApp (+55DDDNUMERO). Retorna None
+    se nao der pra montar um numero confiavel (sem DDD)."""
+    from app.utils import normalizar_telefone
+    d = normalizar_telefone(telefone)
+    if not d:
+        return None
+    if not d.startswith('55'):
+        d = '55' + d
+    # 55 + DDD(2) + numero(8 ou 9) = 12 ou 13 digitos. Menos que isso = sem DDD.
+    if len(d) < 12:
+        return None
+    return '+' + d
+
+
+def listar_inboxes():
+    """Diagnostico: [{id, nome, canal}] das inboxes do Chatwoot — pra achar o
+    id da inbox do WhatsApp (CHATWOOT_WHATSAPP_INBOX_ID). Lista vazia em erro."""
+    if not disponivel():
+        return []
+    try:
+        r = requests.get(f'{_base()}/inboxes', headers=_headers(), timeout=15)
+        if r.status_code not in (200, 201):
+            logger.warning('chatwoot listar_inboxes %s: %s',
+                           r.status_code, (r.text or '')[:200])
+            return []
+        data = r.json() if r.text else {}
+    except Exception:  # noqa: BLE001
+        logger.exception('chatwoot listar_inboxes falhou')
+        return []
+    payload = data.get('payload') if isinstance(data, dict) else None
+    if not isinstance(payload, list):
+        payload = data if isinstance(data, list) else []
+    return [{'id': i.get('id'), 'nome': i.get('name'),
+             'canal': i.get('channel_type') or i.get('channel') or ''}
+            for i in payload if isinstance(i, dict)]
+
+
+def _source_id_para_inbox(contato, inbox_id):
+    """Extrai o source_id do contact_inbox da inbox alvo (chave que a criacao
+    de conversa exige). None se o contato ainda nao tem vinculo com a inbox."""
+    for ci in (contato.get('contact_inboxes') or []):
+        inbox = ci.get('inbox') or {}
+        if str(inbox.get('id') or ci.get('inbox_id') or '') == str(inbox_id):
+            return ci.get('source_id')
+    return None
+
+
+def _buscar_contato(telefone_e164):
+    """Acha um contato pelo telefone (search). Retorna o dict cru do contato
+    (com contact_inboxes) ou None."""
+    try:
+        r = requests.get(f'{_base()}/contacts/search',
+                         headers=_headers(), params={'q': telefone_e164},
+                         timeout=15)
+        if r.status_code not in (200, 201):
+            return None
+        data = r.json() if r.text else {}
+    except Exception:  # noqa: BLE001
+        logger.exception('chatwoot _buscar_contato falhou')
+        return None
+    payload = (data.get('payload') if isinstance(data, dict) else None) or []
+    from app.utils import telefone_chave
+    alvo = telefone_chave(telefone_e164)
+    for c in payload:
+        if isinstance(c, dict) and telefone_chave(c.get('phone_number')) == alvo:
+            return c
+    return payload[0] if payload and isinstance(payload[0], dict) else None
+
+
+def _criar_contato(telefone_e164, nome, inbox_id):
+    """Cria contato ja vinculado a inbox do WhatsApp. Retorna o dict do
+    contato (com contact_inboxes/source_id) ou None."""
+    body = {'inbox_id': int(inbox_id), 'name': (nome or 'Cliente').strip(),
+            'phone_number': telefone_e164}
+    try:
+        r = requests.post(f'{_base()}/contacts', json=body,
+                          headers=_headers(), timeout=15)
+        if r.status_code not in (200, 201):
+            logger.warning('chatwoot _criar_contato %s: %s',
+                           r.status_code, (r.text or '')[:300])
+            return None
+        data = r.json() if r.text else {}
+    except Exception:  # noqa: BLE001
+        logger.exception('chatwoot _criar_contato falhou')
+        return None
+    # Resposta varia: {payload: {contact: {...}}} ou {payload: {...}}.
+    payload = data.get('payload') if isinstance(data, dict) else None
+    if isinstance(payload, dict) and isinstance(payload.get('contact'), dict):
+        return payload['contact']
+    return payload if isinstance(payload, dict) else None
+
+
+def _conversa_aberta_do_contato(contact_id, inbox_id):
+    """conversation_id de uma conversa NAO resolvida do contato na inbox do
+    WhatsApp (reusa em vez de duplicar). None se nao houver."""
+    try:
+        r = requests.get(f'{_base()}/contacts/{contact_id}/conversations',
+                         headers=_headers(), timeout=15)
+        if r.status_code not in (200, 201):
+            return None
+        data = r.json() if r.text else {}
+    except Exception:  # noqa: BLE001
+        logger.exception('chatwoot _conversa_aberta_do_contato falhou')
+        return None
+    payload = (data.get('payload') if isinstance(data, dict) else None) or []
+    abertas = [c for c in payload if isinstance(c, dict)
+               and str(c.get('inbox_id') or '') == str(inbox_id)
+               and c.get('status') in ('open', 'pending')]
+    abertas.sort(key=lambda c: c.get('last_activity_at') or 0, reverse=True)
+    return abertas[0].get('id') if abertas else None
+
+
+def _criar_conversa(source_id, inbox_id, contact_id):
+    """Cria conversa na inbox do WhatsApp. Retorna conversation_id ou None."""
+    body = {'source_id': source_id, 'inbox_id': int(inbox_id),
+            'contact_id': int(contact_id)}
+    try:
+        r = requests.post(f'{_base()}/conversations', json=body,
+                          headers=_headers(), timeout=15)
+        if r.status_code not in (200, 201):
+            logger.warning('chatwoot _criar_conversa %s: %s',
+                           r.status_code, (r.text or '')[:300])
+            return None
+        data = r.json() if r.text else {}
+    except Exception:  # noqa: BLE001
+        logger.exception('chatwoot _criar_conversa falhou')
+        return None
+    return data.get('id') if isinstance(data, dict) else None
+
+
+def enviar_template(conversation_id, nome_template, params, language):
+    """Manda uma mensagem de TEMPLATE aprovado (unico jeito de iniciar fora da
+    janela de 24h). `params` = lista posicional (vira {{1}},{{2}}...). Retorna
+    {'ok': bool, 'erro': str|None}."""
+    params = [str(p) for p in (params or [])]
+    processed = {str(i + 1): v for i, v in enumerate(params)}
+    corpo = {
+        'message_type': 'outgoing',
+        'template_params': {
+            'name': nome_template,
+            'category': 'utility',
+            'language': language or 'pt_BR',
+            'processed_params': processed,
+        },
+    }
+    try:
+        r = requests.post(f'{_base()}/conversations/{conversation_id}/messages',
+                          json=corpo, headers=_headers(), timeout=15)
+        if r.status_code not in (200, 201):
+            erro = (r.text or '')[:300]
+            logger.warning('chatwoot enviar_template %s: %s',
+                           r.status_code, erro)
+            return {'ok': False, 'erro': f'HTTP {r.status_code}: {erro}'}
+        return {'ok': True, 'erro': None}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('chatwoot enviar_template falhou')
+        return {'ok': False, 'erro': str(exc)}
+
+
+def iniciar_conversa_whatsapp(telefone, nome, params):
+    """Abre (ou reusa) uma conversa de WhatsApp com o cliente e, se for nova,
+    manda o template aprovado. `params` = valores posicionais do template
+    (ex: [nome, codigo_pedido]).
+
+    Retorna {'ok': bool, 'conversation_id': int|None, 'nova': bool,
+             'erro': str|None}. Nunca levanta — o painel trata o erro."""
+    if not whatsapp_disponivel():
+        return {'ok': False, 'conversation_id': None, 'nova': False,
+                'erro': ('WhatsApp nao configurado (inbox/template). '
+                         'Defina CHATWOOT_WHATSAPP_INBOX_ID e '
+                         'CHATWOOT_WHATSAPP_TEMPLATE.')}
+    inbox_id = _whatsapp_inbox_id()
+    fone = _e164(telefone)
+    if not fone:
+        return {'ok': False, 'conversation_id': None, 'nova': False,
+                'erro': f'Telefone invalido/sem DDD: {telefone!r}'}
+
+    contato = _buscar_contato(fone) or _criar_contato(fone, nome, inbox_id)
+    if not contato or not contato.get('id'):
+        return {'ok': False, 'conversation_id': None, 'nova': False,
+                'erro': 'Nao consegui achar/criar o contato no Chatwoot.'}
+    contact_id = contato['id']
+
+    # Ja existe conversa aberta? Reusa (a janela pode estar aberta; o
+    # atendente fala direto, sem gastar template).
+    conv_id = _conversa_aberta_do_contato(contact_id, inbox_id)
+    if conv_id:
+        return {'ok': True, 'conversation_id': conv_id, 'nova': False,
+                'erro': None}
+
+    # Sem conversa aberta: cria uma e manda o template.
+    source_id = _source_id_para_inbox(contato, inbox_id)
+    if not source_id:
+        # Contato existia mas sem vinculo com a inbox do WhatsApp — cria o
+        # vinculo recriando o contato na inbox (idempotente no Chatwoot).
+        recriado = _criar_contato(fone, nome, inbox_id)
+        source_id = _source_id_para_inbox(recriado or {}, inbox_id)
+    if not source_id:
+        return {'ok': False, 'conversation_id': None, 'nova': False,
+                'erro': 'Contato sem vinculo com a inbox do WhatsApp '
+                        '(source_id ausente).'}
+
+    conv_id = _criar_conversa(source_id, inbox_id, contact_id)
+    if not conv_id:
+        return {'ok': False, 'conversation_id': None, 'nova': False,
+                'erro': 'Nao consegui criar a conversa no Chatwoot.'}
+
+    cfg = current_app.config
+    res = enviar_template(
+        conv_id, (cfg.get('CHATWOOT_WHATSAPP_TEMPLATE') or '').strip(),
+        params, (cfg.get('CHATWOOT_WHATSAPP_TEMPLATE_LANG') or 'pt_BR').strip())
+    if not res['ok']:
+        # A conversa foi criada, mas o template falhou. Devolve o conv_id
+        # (o atendente ve a conversa) + o erro cru pra corrigir o template.
+        return {'ok': False, 'conversation_id': conv_id, 'nova': True,
+                'erro': res['erro']}
+    return {'ok': True, 'conversation_id': conv_id, 'nova': True, 'erro': None}
