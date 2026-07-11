@@ -245,3 +245,24 @@ def test_inboxes_admin_barrado(app, admin_user):
     _login(client, admin_user)          # admin não-owner
     assert client.get(
         '/entregas/api/atendimento/chatwoot-inboxes').status_code == 403
+
+
+def test_debug_por_codigo_owner_only(app, owner_user):
+    with app.app_context():
+        _pedido_online('DBGCODE1')
+    client = app.test_client()
+    _login(client, owner_user)
+    with patch('app.services.chatwoot.debug_envio_whatsapp',
+               return_value={'ok': True, 'contact_id': 55, 'conversas': []}) as m:
+        r = client.get('/entregas/api/atendimento/chamar-cliente/debug'
+                       '?codigo=DBGCODE1')
+    assert r.status_code == 200
+    assert r.get_json()['contact_id'] == 55
+    assert m.call_args[0][0] == '11999998888'   # telefone do pedido
+
+
+def test_debug_admin_barrado(app, admin_user):
+    client = app.test_client()
+    _login(client, admin_user)
+    r = client.get('/entregas/api/atendimento/chamar-cliente/debug?codigo=X')
+    assert r.status_code == 403
