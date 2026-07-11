@@ -898,11 +898,15 @@ def _aviso_backup_atrasado(limite_horas=28):
     """Linha de aviso pro heartbeat quando o ultimo backup OK esta velho
     (dead-man's switch do backup, 11/07/2026): falha do job so logava
     WARNING e ninguem via — o backup podia parar por semanas em silencio.
-    28h = job diario das 04:00 com folga pra atraso normal. Fica quieto
-    quando: BACKUP_AUTO=0 (desligado de proposito), fora de Postgres
-    (local) ou sem marco gravado ainda (feature nova, primeiro 04:00 do
-    deploy ainda nao rodou). Best-effort: erro aqui nunca derruba o
-    heartbeat (que existe pra detectar exatamente infra caida)."""
+    28h = job diario das 04:00 com folga pra atraso normal. Cobre o backup
+    do sistema E o do Chatwoot (este so quando CHATWOOT_DATABASE_URL esta
+    configurada). Fica quieto quando: BACKUP_AUTO=0 (desligado de
+    proposito), fora de Postgres (local) ou sem marco gravado ainda
+    (feature nova, primeiro 04:00 do deploy ainda nao rodou). Best-effort:
+    erro aqui nunca derruba o heartbeat (que existe pra detectar
+    exatamente infra caida)."""
+    from flask import current_app
+
     from app.extensions import db
     from app.utils import agora as _agora
     try:
@@ -910,15 +914,25 @@ def _aviso_backup_atrasado(limite_horas=28):
             return None
         if db.engine.dialect.name != 'postgresql':
             return None
-        ultimo = _parse_marco_backup('backup_ultimo_ok_em')
-        if not ultimo:
-            return None
-        horas = (_agora() - ultimo).total_seconds() / 3600
-        if horas > limite_horas:
-            return (f':warning: ultimo backup OK ha {int(horas)}h '
+        agora_dt = _agora()
+        alvos = [('backup_ultimo_ok_em', 'backup do Postgres')]
+        if (current_app.config.get('CHATWOOT_DATABASE_URL') or '').strip():
+            alvos.append(('backup_chatwoot_ultimo_ok_em',
+                          'backup do Chatwoot'))
+        avisos = []
+        for chave, rotulo in alvos:
+            ultimo = _parse_marco_backup(chave)
+            if not ultimo:
+                continue
+            horas = (agora_dt - ultimo).total_seconds() / 3600
+            if horas > limite_horas:
+                avisos.append(
+                    f':warning: ultimo {rotulo} OK ha {int(horas)}h '
                     f'({ultimo.strftime("%d/%m %H:%M")}) — o job diario '
                     'das 04:00 pode estar falhando; ver card Backup em '
                     '/admin/debug-schema')
+        if avisos:
+            return '\n'.join(avisos)
     except Exception:  # noqa: BLE001 — aviso nunca derruba o heartbeat
         logger.exception('aviso de backup atrasado falhou')
     return None
