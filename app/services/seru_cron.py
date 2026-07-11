@@ -836,12 +836,20 @@ def _parse_marco_backup(chave):
 def status_backup():
     """Status do job backup pra UI. `ultimo_run`/`ultimo_ok` preferem o
     marco persistido em AppConfig (sobrevive a deploy); fallback pro valor
-    em memoria de antes da persistencia."""
+    em memoria de antes da persistencia. Defensivo: banco doente nao pode
+    derrubar a pagina de diagnostico (que se abre exatamente quando as
+    coisas quebram) — cai pro valor em memoria."""
+    try:
+        ultimo_run = (_parse_marco_backup('backup_ultimo_run_em')
+                      or _ult_run_backup)
+        ultimo_ok = _parse_marco_backup('backup_ultimo_ok_em')
+    except Exception:  # noqa: BLE001
+        logger.exception('status_backup: leitura do marco falhou')
+        ultimo_run, ultimo_ok = _ult_run_backup, None
     return {
         'ativo': _scheduler is not None and _scheduler.running,
-        'ultimo_run': (_parse_marco_backup('backup_ultimo_run_em')
-                       or _ult_run_backup),
-        'ultimo_ok': _parse_marco_backup('backup_ultimo_ok_em'),
+        'ultimo_run': ultimo_run,
+        'ultimo_ok': ultimo_ok,
     }
 
 
