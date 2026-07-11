@@ -787,7 +787,10 @@
                     {% if r.override_stale %}
                     <div class="override-stale">⚠️ Edição manual de {{ r.override_desde }} pode estar desatualizada:
                         você fixou <strong>{{ r.total }}</strong>, mas o cálculo agora sugere
-                        <strong>{{ r.override_sugerido }}</strong> (a demanda mudou desde a edição).
+                        <strong>{{ r.override_sugerido }}</strong>{% if r.entregas_risco %} —
+                        e há <strong>entrega firme descoberta</strong> ({{ r.entregas_risco[0].label }}:
+                        faltam {{ r.entregas_risco[0].faltam }}) que a sua edição não cobre{% else %}
+                        (a demanda mudou desde a edição){% endif %}.
                         <button type="button" class="btn-reset-inline" data-rid="{{ r.receita_id }}">Resetar pra sugestão</button>
                     </div>
                     {% endif %}
