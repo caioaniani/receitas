@@ -197,6 +197,41 @@ def test_agendada_consolida_endereco_estruturado(app):
         assert 'São Paulo' in e and 'SP' in e
 
 
+def test_geocode_do_frete_nao_leva_complemento(app):
+    """O complemento (apto/bloco/nome do prédio) DERRUBA o geocoder — caso
+    real Mooca 11/07/2026: 'Ape 502 Positano' fez a venda ser barrada por
+    endereço 'não localizado', embora o endereço fosse válido. A consulta de
+    frete deve ir SEM complemento; o snapshot de entrega o mantém (motorista)."""
+    from unittest.mock import MagicMock
+
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        data = loja_checkout.datas_disponiveis('agendada', base=base)[0].isoformat()
+        form = {'nome': 'Pamela', 'email': 'p@x.com',
+                'cpf': '52998224725', 'aceite_lgpd': '1',
+                'modo_entrega': 'agendada', 'cep': '03111-010',
+                'logradouro': 'Rua João Antônio de Oliveira', 'numero': '544',
+                'complemento': 'Ape 502 Positano', 'bairro': 'Mooca',
+                'cidade': 'São Paulo', 'uf': 'SP',
+                'data_entrega': data, 'janela_entrega': '12:00–13:00'}
+        espiao = MagicMock(return_value=FRETE_OK)
+        with patch('app.services.frete.consultar_frete', espiao):
+            pedido, erros = loja_checkout.criar_pedido(
+                form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert erros == []
+        geo_arg = espiao.call_args.args[0]
+        # geocode SEM o complemento (nem o nome do prédio)
+        assert 'Positano' not in geo_arg and 'Ape 502' not in geo_arg
+        # mas com o resto que localiza
+        assert 'Rua João Antônio de Oliveira' in geo_arg and '544' in geo_arg
+        assert 'Mooca' in geo_arg and '03111-010' in geo_arg
+        # snapshot de entrega PRESERVA o complemento (motorista precisa)
+        assert 'Ape 502 Positano' in pedido.endereco_entrega
+
+
 # ── Destinatário diferente do pagador ────────────────────────────────
 
 def test_presente_exige_nome_do_destinatario(app):
