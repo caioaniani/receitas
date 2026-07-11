@@ -202,6 +202,87 @@ def test_estoque_reservado_nao_conta_como_disponivel(app):
     assert p['por_dia'][0] == 10              # disponivel 0 -> pede a venda do dia
 
 
+def test_offset_projeta_consumo_ate_o_inicio_da_janela(app):
+    """BUG corrigido 11/07/2026: com "A partir de" no futuro, a simulação
+    partia do estoque de HOJE e ignorava o consumo até o início da janela —
+    estoque otimista, SUB-pedia. Agora o saldo é projetado dia a dia até o
+    início (consumo previsto + entregas já pedidas)."""
+    loja = _loja()
+    r = _receita('Pao')
+    el = _estoque(loja, r, 20)                  # cobre 2 dias de venda 10/dia
+    hoje_d = hoje()
+    for sem in range(1, 7):
+        for dow in range(7):
+            d = hoje_d - timedelta(days=7 * sem)
+            d = d - timedelta(days=d.weekday()) + timedelta(days=dow)
+            if d < hoje_d:
+                _venda(el, d, 10)               # média 10/dia em todo dow
+
+    # Janela começando DEPOIS de o estoque acabar (offset 3 > 20/10 dias):
+    # o 1º dia da janela precisa pedir a venda cheia do dia (10), não 0.
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=3)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    assert p['por_dia'][0] == 10
+
+
+def test_offset_credita_entrega_ja_pedida_antes_da_janela(app):
+    """A projeção pré-janela também CREDITA entregas já pedidas entre hoje e
+    o início — pedido chegando amanhã conta no saldo da janela de depois."""
+    from app.models import PedidoItem, PedidoLoja
+    loja = _loja()
+    r = _receita('Pao')
+    el = _estoque(loja, r, 20)
+    hoje_d = hoje()
+    for sem in range(1, 7):
+        for dow in range(7):
+            d = hoje_d - timedelta(days=7 * sem)
+            d = d - timedelta(days=d.weekday()) + timedelta(days=dow)
+            if d < hoje_d:
+                _venda(el, d, 10)
+    # entrega de 30 chegando AMANHÃ (antes do início da janela em +3)
+    ped = PedidoLoja(loja_id=loja.id, status='pendente',
+                     data_entrega=hoje_d + timedelta(days=1),
+                     data_pedido=hoje_d)
+    db.session.add(ped)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=ped.id, receita_id=r.id,
+                              quantidade=30))
+    db.session.commit()
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=3)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    # saldo projetado no início: 20 - 10 + 30 - 10 - 10 = 20 -> cobre 2 dias
+    assert p['por_dia'][0] == 0
+    assert p['por_dia'][1] == 0
+    assert p['por_dia'][2] == 10
+
+
+def test_offset_venda_perdida_nao_vira_pedido(app):
+    """Saldo projetado NEGATIVO antes da janela é venda perdida — clampa em 0
+    por dia. A janela abre pedindo a venda do dia, não a perdida acumulada."""
+    loja = _loja()
+    r = _receita('Pao')
+    el = _estoque(loja, r, 0)                   # já sem estoque hoje
+    hoje_d = hoje()
+    for sem in range(1, 7):
+        for dow in range(7):
+            d = hoje_d - timedelta(days=7 * sem)
+            d = d - timedelta(days=d.weekday()) + timedelta(days=dow)
+            if d < hoje_d:
+                _venda(el, d, 10)
+
+    grade = sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
+                                      inicio_offset_dias=5)
+    p = _prod(grade, loja.id, r.id)
+    assert p is not None
+    # sem clamp seria 10 + 50 de venda perdida; com clamp pede só o dia
+    assert p['por_dia'][0] == 10
+
+
 def test_rota_estoque_renderiza(app, admin_user):
     loja = _loja('Loja Centro')
     r = _receita('Pão Francês')
