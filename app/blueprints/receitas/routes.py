@@ -735,8 +735,9 @@ def imagens_upload():
     """Upload em massa de fotos de receita via .zip.
 
     Cada arquivo .jpg/.png/.webp no zip eh casado contra Receita.nome
-    (exato case-insensitive, fallback fuzzy via difflib). Casou -> popula
-    imagem_blob + imagem_mimetype. Nao casou -> aparece no relatorio.
+    (exato case-insensitive, fallback fuzzy via difflib). Casou -> sobe pro
+    Dropbox (imagem_dropbox_url; sem fallback BLOB desde o M6 Commit D —
+    Dropbox indisponivel vira erro no relatorio). Nao casou -> relatorio.
     """
     if request.method == 'GET':
         return render_template('receitas/imagens_upload.html')
