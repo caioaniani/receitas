@@ -7,7 +7,8 @@ Fix em 2 etapas:
    tirando o CDN publico do caminho critico.
 
 Os testes garantem a ordem: API autenticada PRIMEIRO; shared link como
-fallback; BLOB legado por ultimo.
+fallback. (O fallback BLOB legado saiu no M6 Commit D 11/07/2026 — falha
+nas duas fontes devolve None e a foto fica fora do PDF, sem quebrar.)
 """
 import io
 from types import SimpleNamespace
