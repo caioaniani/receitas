@@ -422,3 +422,17 @@ def test_tiny_danfe_debug_mostra_estrutura(app):
     assert j['candidatos_pdf_nativo']
     assert all(t.get('eh_pdf') is False for t in j['candidatos_pdf_nativo'])
     assert 'accept_pdf' in j
+
+
+def test_deploy_info_exige_token_e_responde(app, monkeypatch):
+    """Sonda /deploy: diz qual commit está no ar (procedimento de 2 commits
+    de schema — confirma o deploy do ALTER sem depender do dono)."""
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    client = app.test_client()
+    assert client.get('/api/claude/deploy').status_code == 401
+    monkeypatch.setenv('RAILWAY_GIT_COMMIT_SHA', 'abc123')
+    resp = client.get('/api/claude/deploy',
+                      headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True and d['commit'] == 'abc123'

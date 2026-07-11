@@ -729,3 +729,19 @@ def tiny_danfe_debug():
             except requests.RequestException as exc:
                 out['accept_pdf'] = {'erro': str(exc)}
     return jsonify(out)
+
+
+@claude_api_bp.route('/deploy')
+@_claude_auth_required
+def deploy_info():
+    """Qual commit esta NO AR (11/07/2026): o procedimento de 2 commits de
+    schema exige confirmar que o ALTER deployou antes de subir o modelo —
+    antes disso o assistente precisava pedir ao dono que conferisse o
+    Railway. O Railway injeta RAILWAY_GIT_COMMIT_SHA no build. Read-only."""
+    import os
+    return jsonify(
+        ok=True,
+        commit=os.environ.get('RAILWAY_GIT_COMMIT_SHA'),
+        branch=os.environ.get('RAILWAY_GIT_BRANCH'),
+        deployment_id=os.environ.get('RAILWAY_DEPLOYMENT_ID'),
+    )
