@@ -899,37 +899,49 @@ def _aviso_backup_atrasado(limite_horas=28):
     (dead-man's switch do backup, 11/07/2026): falha do job so logava
     WARNING e ninguem via — o backup podia parar por semanas em silencio.
     28h = job diario das 04:00 com folga pra atraso normal. Cobre o backup
-    do sistema E o do Chatwoot (este so quando CHATWOOT_DATABASE_URL esta
-    configurada). Fica quieto quando: BACKUP_AUTO=0 (desligado de
-    proposito), fora de Postgres (local) ou sem marco gravado ainda
-    (feature nova, primeiro 04:00 do deploy ainda nao rodou). Best-effort:
-    erro aqui nunca derruba o heartbeat (que existe pra detectar
-    exatamente infra caida)."""
+    do sistema (gate `BACKUP_AUTO`) e o do Chatwoot (gates proprios:
+    `BACKUP_CHATWOOT` + CHATWOOT_DATABASE_URL — espelham o agendamento).
+    Job que RODA mas NUNCA registrou OK tambem avisa (run gravado + OK
+    ausente = falhando desde sempre; sem isso o dead-man nasceria cego pro
+    backup ja-quebrado). Quieto fora de Postgres (local) ou sem marco
+    nenhum (primeiro 04:00 do deploy ainda nao rodou). Best-effort: erro
+    aqui nunca derruba o heartbeat."""
     from flask import current_app
 
     from app.extensions import db
     from app.utils import agora as _agora
     try:
-        if os.environ.get('BACKUP_AUTO', '1') == '0':
-            return None
         if db.engine.dialect.name != 'postgresql':
             return None
         agora_dt = _agora()
-        alvos = [('backup_ultimo_ok_em', 'backup do Postgres')]
-        if (current_app.config.get('CHATWOOT_DATABASE_URL') or '').strip():
+        alvos = []
+        if os.environ.get('BACKUP_AUTO', '1') != '0':
+            alvos.append(('backup_ultimo_ok_em', 'backup_ultimo_run_em',
+                          'backup do Postgres'))
+        if (os.environ.get('BACKUP_CHATWOOT', '1') != '0'
+                and (current_app.config.get('CHATWOOT_DATABASE_URL')
+                     or '').strip()):
             alvos.append(('backup_chatwoot_ultimo_ok_em',
+                          'backup_chatwoot_ultimo_run_em',
                           'backup do Chatwoot'))
         avisos = []
-        for chave, rotulo in alvos:
-            ultimo = _parse_marco_backup(chave)
-            if not ultimo:
+        for chave_ok, chave_run, rotulo in alvos:
+            ultimo_ok = _parse_marco_backup(chave_ok)
+            if ultimo_ok:
+                horas = (agora_dt - ultimo_ok).total_seconds() / 3600
+                if horas > limite_horas:
+                    avisos.append(
+                        f':warning: ultimo {rotulo} OK ha {int(horas)}h '
+                        f'({ultimo_ok.strftime("%d/%m %H:%M")}) — o job '
+                        'diario das 04:00 pode estar falhando; ver card '
+                        'Backup em /admin/debug-schema')
                 continue
-            horas = (agora_dt - ultimo).total_seconds() / 3600
-            if horas > limite_horas:
+            ultimo_run = _parse_marco_backup(chave_run)
+            if ultimo_run:
                 avisos.append(
-                    f':warning: ultimo {rotulo} OK ha {int(horas)}h '
-                    f'({ultimo.strftime("%d/%m %H:%M")}) — o job diario '
-                    'das 04:00 pode estar falhando; ver card Backup em '
+                    f':warning: {rotulo} roda mas NUNCA registrou OK '
+                    f'(ultimo run {ultimo_run.strftime("%d/%m %H:%M")}) — '
+                    'falhando desde o inicio do marco; ver card Backup em '
                     '/admin/debug-schema')
         if avisos:
             return '\n'.join(avisos)
