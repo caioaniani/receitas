@@ -97,6 +97,9 @@ def cronograma():
             'pend_vencido': p['vencido'] if p else 0,
             'entregas_risco': rr.get('entregas_risco', []),
             'limitado_por_retorno': bool(rr.get('limitado_por_retorno')),
+            # Regra da véspera (10/07/2026): consumo iminente de insumo sem
+            # estoque pronto — dict {faltam, coberto, lead, dias} ou None.
+            'insumo_sem_vespera': rr.get('insumo_sem_vespera'),
         })
     return jsonify(
         ok=True,
