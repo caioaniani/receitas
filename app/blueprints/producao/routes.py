@@ -874,7 +874,12 @@ def criar_plano_do_deficit():
 def previsao_acuracia():
     """Painel de acuracia do forecast: vies (super/subprevisao) e WAPE por
     receita, dos snapshots ja casados com o realizado. **Admin**."""
-    from app.services.previsao_acuracia import MOTOR_LABEL, resumo_acuracia
+    from app.services.previsao_acuracia import (
+        MOTOR_LABEL,
+        MOTORES_VIVOS,
+        comparativo_motores_por_loja,
+        resumo_acuracia,
+    )
     try:
         dias = int(request.args.get('dias', 30))
     except ValueError:
@@ -886,7 +891,9 @@ def previsao_acuracia():
     resumo = resumo_acuracia(dias=dias, motor=motor)
     return render_template('producao/previsao_acuracia.html',
                            resumo=resumo, dias=dias, motor=motor,
-                           motor_labels=MOTOR_LABEL)
+                           motor_labels=MOTOR_LABEL,
+                           motores_vivos=MOTORES_VIVOS,
+                           comparativo=comparativo_motores_por_loja(dias=dias))
 
 
 @producao_bp.route('/previsao-acuracia/rodar', methods=['POST'])
