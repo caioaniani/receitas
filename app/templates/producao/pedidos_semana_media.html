@@ -170,22 +170,11 @@
                         <td class="prod">{{ p.nome }}
                             {% if p.abaixo_lote %}<span class="badge bg-warning text-dark"
                                 title="A média da semana ({{ p.media_semanal }}) não fecha 1 caixa de {{ p.lote }}. Mostrando a demanda real — você decide pedir a caixa ou não.">abaixo da caixa de {{ p.lote }}</span>{% endif %}
-                            {% if p.n_datas and p.n_datas < 5 %}<span class="badge bg-light text-dark border badge-ctx"
-                                title="A média deste item vem de só {{ p.n_datas }} data(s) com pedido na janela — número pouco confiável, confira antes de aceitar.">histórico raso ({{ p.n_datas }})</span>{% endif %}
-                            {% set ac = acuracia.get((loja.loja_id, p.receita_id)) %}
-                            {% if ac %}
-                            {% set wape = ac.wape_pct %}
-                            <span class="badge badge-ctx {{ 'bg-danger' if wape is none or wape > 60 else ('bg-warning text-dark' if wape > 25 else 'bg-success') }}"
-                                  title="Acurácia deste motor para este item nesta loja (últimos 60 dias, {{ ac.n }} previsões): previu {{ ac.previsto }}, a loja levou {{ ac.realizado }}{% if ac.vies_pct is not none %}, viés {{ '%+.0f'|format(ac.vies_pct) }}%{% endif %}. WAPE = erro médio absoluto.">
-                                WAPE {{ wape if wape is not none else '—' }}{% if wape is not none %}%{% endif %}</span>
-                            {% endif %}
+                            {{ pbadges.badges_item(p, acuracia.get((loja.loja_id, p.receita_id)), 'pedido') }}
                         </td>
                         <td class="estoque">{{ p.estoque_atual }}</td>
                         <td class="media">{{ p.media_semanal }}</td>
-                        {% set desp = desperdicio.get(loja.loja_id, {}).get(p.receita_id|string, 0) %}
-                        <td class="desp{{ ' tem' if desp }}"
-                            {% if desp %}title="A loja descartou {{ desp }} un deste item nos últimos 7 dias — cuidado pra não repetir o excesso"{% endif %}>
-                            {{ desp if desp else '—' }}</td>
+                        {{ pbadges.celula_desp(desperdicio.get(loja.loja_id, {}).get(p.receita_id|string, 0)) }}
                         {% for dia in grade.dias %}
                         {% set travado = dia.data in loja.ja_tem %}
                         {% set editavel = travado and dia.data in loja.editaveis %}
