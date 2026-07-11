@@ -835,6 +835,24 @@
       }).catch(function () {});
   }
 
+  // Lousa dos padeiros: troca só o #lousa-slot, no mesmo espírito de
+  // atualizarListas — recado novo escrito por um colega aparece na TV sem
+  // recarregar a página (e a lousa some sozinha quando o último é apagado).
+  function atualizarLousa() {
+    if (document.hidden) return;
+    if (Date.now() - ultimoToque < 4000) return;
+    fetch('{{ url_for("padeiro.lousa_fragmento") }}')
+      .then(function (r) {
+        if (r.redirected || !r.ok) return null;  // sessao caiu/erro: nao injeta lixo
+        return r.text();
+      })
+      .then(function (html) {
+        if (html == null) return;
+        var alvo = document.getElementById('lousa-slot');
+        if (alvo) alvo.innerHTML = html;
+      }).catch(function () {});
+  }
+
   function fecharDrawers() {
     ['hist-drawer', 'hist-backdrop', 'cong-drawer', 'cong-backdrop',
      'prep-drawer', 'prep-backdrop',
