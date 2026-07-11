@@ -89,6 +89,14 @@ def rodar_checks():
         gasto, sem_preco, top = gasto_hoje()
     except Exception as e:  # noqa: BLE001 — vigia nunca derruba o cron
         logger.exception('vigia uso IA: consulta do gasto explodiu')
+        # Erro de BANCO envenena a sessao — sem rollback, o _carregar do
+        # vigiar() estoura na sequencia e o alerta "vigia cego" nunca sai
+        # (justo no cenario-alvo dele).
+        try:
+            from app.extensions import db
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
         return {'saudavel': False, 'gasto_usd': None,
                 'teto_usd': float(teto), 'sem_preco': None, 'top': [],
                 'problemas': [f'consulta do gasto de IA explodiu: {e}']}
