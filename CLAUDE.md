@@ -123,6 +123,22 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   - `GET /api/claude/receita?id=|nome=` — ficha completa de uma receita
     (cadastro, ingredientes, VendaMapa, cestas, estoques industria+lojas).
     Trecho de nome com >1 match devolve lista de candidatos.
+  - `GET /api/claude/pedidos-dia?data=` — pedidos loja→industria de UMA
+    data de entrega, TODOS os status (a lista /pedidos fatia por aba e
+    pedido em status inesperado "some"; esta sonda mostra tudo). 08/07.
+  - `GET /api/claude/loja-vendas-debug?...` — cruza POR DIA o que o Seru
+    reportou de venda (VendaSeruDiaria) com o que baixou no estoque da
+    loja (MovEstoqueLoja) + estado dos mapeamentos. Criada 06/07
+    (incidente Ribeiro do Vale sem baixa).
+  - `GET /api/claude/seru-companies?dias=` — companies CRUS da API Seru
+    (id+name+volume) pra diagnosticar renome de loja. 07/07.
+  - `GET /api/claude/frete-debug?q=<endereco|cep>` — cada etapa da cadeia
+    de geocode com lat/lng/distancia (ver secao Frete). 05/07.
+  - `GET /api/claude/tiny-danfe-debug?id=` — sonda do DANFE no Tiny/Olist
+    (resposta crua do link + estrutura do visualizador). 10/07.
+  - `GET /api/claude/deploy` — commit que esta NO AR
+    (RAILWAY_GIT_COMMIT_SHA) — confirma que o commit 1 (ALTER) deployou
+    antes de subir o commit 2 (modelo), sem pedir ao dono. 11/07.
 - **Uso numa sessao**: o dono cola o token no chat (o container e efemero —
   nada persiste entre sessoes); consultar com
   `curl -s -H "Authorization: Bearer $TOK" https://gestao.opaopadariaartesanal.com.br/api/claude/cronograma`.
