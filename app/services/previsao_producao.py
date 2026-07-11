@@ -1639,6 +1639,11 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 'lote': caixa,
                 'minimo': minimo,
                 'abaixo_lote': False,
+                # Profundidade da amostra de VENDA (datas com baixa na
+                # janela) — a tela marca "pouco histórico" quando a média
+                # vem de 1-2 pontos.
+                'n_datas': (sum(len(pd) for pd in v_dows.values())
+                            if v_dows else 0),
             })
         if produtos:
             lojas_out.append({
