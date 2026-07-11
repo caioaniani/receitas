@@ -334,3 +334,44 @@ def test_tela_acuracia_mostra_comparativo_e_links(app, admin_user):
     assert 'Qual motor acerta mais em cada loja?' in corpo
     assert '/producao/pedidos-semana/media' in corpo        # link de volta
     assert '/producao/pedidos-semana/estoque' in corpo
+
+
+# ── snapshot por ANTECEDENCIA (11/07/2026, aprovado pelo dono) ─────────────
+def test_snapshot_por_antecedencia_grava_um_por_lead(app):
+    """A MESMA data-alvo ganha um snapshot novo a cada antecedência (o cron
+    de amanhã re-congela D-1 depois do D-2 de hoje); o MESMO lead no mesmo
+    dia continua idempotente."""
+    loja = _loja()
+    r = _receita()
+    amanha = hoje() + timedelta(days=1)
+    sug = {'dias': [{'data': amanha.isoformat()}],
+           'lojas': [{'loja_id': loja.id, 'ja_tem': [],
+                      'produtos': [{'receita_id': r.id, 'por_dia': [10]}]}]}
+    n1 = svc._registrar_motor('media_pedido', sug, hoje())              # D-1
+    n2 = svc._registrar_motor('media_pedido', sug, hoje())              # repete
+    n3 = svc._registrar_motor('media_pedido', sug,
+                              hoje() - timedelta(days=2))               # D-3
+    db.session.commit()
+    assert (n1, n2, n3) == (1, 0, 1)
+    snaps = (PrevisaoSnapshot.query
+             .filter_by(receita_id=r.id, data_alvo=amanha).all())
+    assert sorted(s.lead_dias for s in snaps) == [1, 3]
+
+
+def test_por_lead_compara_antecedencias_da_mesma_data(app):
+    """Com snapshots de leads diferentes da MESMA data, o resumo 'por lead'
+    mostra uma linha por antecedência — antes só existia o primeiro lead."""
+    loja = _loja()
+    r = _receita()
+    ontem = hoje() - timedelta(days=1)
+    for lead, previsto in ((1, 11), (3, 15)):
+        db.session.add(PrevisaoSnapshot(
+            data_alvo=ontem, loja_id=loja.id, receita_id=r.id,
+            previsto=previsto, realizado=10, motor='media_pedido',
+            lead_dias=lead))
+    db.session.commit()
+    res = svc.resumo_acuracia(dias=30, motor='media_pedido')
+    por_lead = {x['nome']: x for x in res['por_lead']}
+    assert set(por_lead) == {'D-1', 'D-3'}
+    assert por_lead['D-1']['vies'] == 1
+    assert por_lead['D-3']['vies'] == 5
