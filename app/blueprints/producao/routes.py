@@ -382,11 +382,15 @@ def pedidos_semana_estoque():
         for lj in media['lojas']:
             contraprova[lj['loja_id']] = {
                 p['receita_id']: p['por_dia'] for p in lj['produtos']}
+    from app.services.previsao_acuracia import acuracia_por_loja_receita
+    from app.services.previsao_producao import desperdicio_recente_por_item
     return render_template('producao/pedidos_semana_estoque.html',
                            grade=grade, horizonte=horizonte,
                            janela=janela, inicio=inicio,
                            seguranca=seguranca,
-                           comparar=comparar, contraprova=contraprova)
+                           comparar=comparar, contraprova=contraprova,
+                           acuracia=acuracia_por_loja_receita('venda_estoque'),
+                           desperdicio=desperdicio_recente_por_item())
 
 
 @producao_bp.route('/pedidos-semana/gerar', methods=['POST'])
