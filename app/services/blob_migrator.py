@@ -87,10 +87,13 @@ def _drenar(tabela, blob_col, url_col, sql_lote, montar_path, set_extra,
                 detalhes.append(f'parou em max_batches={max_batches}')
                 break
 
+            # A janela cresce com os erros acumulados: as linhas falhadas
+            # continuam com URL NULL e voltariam no mesmo LIMIT — sem isso,
+            # erros >= batch_size saturavam a janela e as linhas ALEM dela
+            # nunca eram tentadas (early-stop silencioso).
             rows = db.session.execute(
-                text(sql_lote), {'n': batch_size}).mappings().all()
-            # Linhas que ja falharam nesta rodada voltariam no proximo lote
-            # (continuam com URL NULL) — sem este filtro o loop nunca anda.
+                text(sql_lote),
+                {'n': batch_size + len(vistos_com_erro)}).mappings().all()
             rows = [r for r in rows if r['id'] not in vistos_com_erro]
             if not rows:
                 break
