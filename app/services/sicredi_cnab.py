@@ -340,6 +340,16 @@ def processar_retorno(texto, user_id=None):
                 if cob.status not in ('paga', 'baixada'):
                     cob.status = 'baixada'
                     res['baixadas'] += 1
+            elif ocorr in OCORR_BAIXA_REJEITADA:
+                # Baixa recusada: o título segue registrado no banco.
+                if cob.status == 'baixa_solicitada':
+                    cob.status = 'registrada'
+                cob.motivo_retorno = (f'baixa rejeitada (ocorr {ocorr} '
+                                      f'motivo {linha[318:328].strip()})')
+                res['detalhes'].append(
+                    f'{cob.nosso_numero_fmt} {cob.pagador_nome}: '
+                    f'BAIXA REJEITADA — título segue registrado '
+                    f'({cob.motivo_retorno})')
             elif ocorr in OCORR_REJEITADA:
                 cob.status = 'rejeitada'
                 cob.motivo_retorno = (f'ocorr {ocorr} motivo '
