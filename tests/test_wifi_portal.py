@@ -22,6 +22,15 @@ def visivel(monkeypatch):
     monkeypatch.setenv('LOJA_VISIVEL', '1')
 
 
+@pytest.fixture(autouse=True)
+def _sem_dns(monkeypatch):
+    """A checagem de domínio de e-mail (MX/A) não pode bater em DNS real
+    nos testes — determinístico e offline. Casos negativos re-patcham."""
+    from app.services import wifi_portal
+    monkeypatch.setattr(wifi_portal, '_dominio_email_resolve',
+                        lambda dominio: True)
+
+
 def _form(**kw):
     base = {'nome': 'Maria Teste', 'email': 'maria@example.com',
             'telefone': '(11) 98888-7777', 'senha': 'segredo1',
