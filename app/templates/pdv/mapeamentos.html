@@ -272,7 +272,14 @@
                         {% else %}<span class="text-muted">—</span>{% endif %}
                     </td>
                     <td>
-                        <form method="POST" action="{{ url_for('pdv.vincular_produto', map_id=mp.id) }}" class="d-flex gap-1 flex-wrap">
+                        {# Linha compacta: o form completo estourava a largura e
+                           empilhava (linhas gigantes) — agora só aparece ao
+                           clicar Editar (um por vez). #}
+                        <button type="button" class="btn btn-sm btn-outline-primary btn-editar-mapa">
+                            <i class="bi bi-pencil"></i> Editar
+                        </button>
+                        <form method="POST" action="{{ url_for('pdv.vincular_produto', map_id=mp.id) }}"
+                              class="d-flex gap-1 flex-wrap mapa-form d-none mt-2">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <select name="alvo_tipo" class="form-select form-select-sm vinc-tipo" style="width:90px;"
                                     onchange="vincTipoChange(this)">
