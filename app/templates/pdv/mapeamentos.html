@@ -379,6 +379,11 @@ var __produtos = [
     {id: {{ p.id }}, nome: {{ p.nome|tojson }}},
     {% endfor %}
 ];
+var __mps = [
+    {% for m in mps %}
+    {id: {{ m.id }}, nome: {{ m.nome|tojson }}},
+    {% endfor %}
+];
 // Constroi o datalist + o mapa "texto -> {tipo,id}" de UMA fonte so, com chave
 // UNICA: se dois itens tem o MESMO rotulo (nome/categoria repetidos no banco —
 // nome nao e unico), sufixa com " #id" pra nunca resolver pro item errado
