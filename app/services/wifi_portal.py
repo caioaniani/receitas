@@ -402,6 +402,113 @@ def extrair_codigo(texto):
     return ('WIFI-' + m.group(1).upper()) if m else None
 
 
+# ── Vouchers (trava dura sem API — decisão do dono 12/07/2026) ──────────
+# O OC200 não fala com a Open API da nuvem (ver CLAUDE.md), então o portal
+# do controlador roda no modo VOUCHER: o dono gera o lote no Hotspot
+# Manager, exporta e sobe em /admin/wifi-vouchers; cada cadastro validado
+# consome UM voucher e o código vai na resposta do WhatsApp.
+
+_RE_VOUCHER_LINHA = re.compile(r'^[\d\s\-]{6,20}$')
+
+
+def importar_vouchers(texto, lote=None):
+    """Importa vouchers de um export do Hotspot Manager (CSV/TXT — uma
+    linha por voucher, aceita colunas extras). Idempotente: código já
+    existente é pulado. Retorna (importados, duplicados, ignorados)."""
+    from app.models import WifiVoucher
+    existentes = {v.codigo for v in WifiVoucher.query.with_entities(
+        WifiVoucher.codigo)}
+    importados = duplicados = ignorados = 0
+    vistos = set()
+    for linha in (texto or '').splitlines():
+        linha = linha.strip().lstrip('﻿')
+        if not linha:
+            continue
+        codigo = None
+        for campo in re.split(r'[,;\t]', linha):
+            campo = campo.strip().strip('"')
+            if _RE_VOUCHER_LINHA.match(campo):
+                digitos = re.sub(r'\D', '', campo)
+                if 6 <= len(digitos) <= 12:
+                    codigo = digitos
+                    break
+        if not codigo:
+            ignorados += 1          # cabeçalho/linha sem código
+            continue
+        if codigo in existentes or codigo in vistos:
+            duplicados += 1
+            continue
+        vistos.add(codigo)
+        db.session.add(WifiVoucher(codigo=codigo, lote=(lote or '')[:60]
+                                   or None))
+        importados += 1
+    db.session.commit()
+    return importados, duplicados, ignorados
+
+
+def vouchers_restantes():
+    from app.models import WifiVoucher
+    return WifiVoucher.query.filter(WifiVoucher.usado_em.is_(None)).count()
+
+
+def alocar_voucher(sessao):
+    """Consome UM voucher livre pra sessão (claim atômico — UPDATE
+    condicional, mesmo padrão do Confirmar do Slack). Retorna o código ou
+    None (estoque vazio/regime sem voucher — o fluxo segue sem ele)."""
+    from app.models import WifiVoucher
+    for _ in range(5):
+        candidato = (WifiVoucher.query
+                     .filter(WifiVoucher.usado_em.is_(None))
+                     .order_by(WifiVoucher.id)
+                     .first())
+        if candidato is None:
+            return None
+        n = (WifiVoucher.query
+             .filter(WifiVoucher.id == candidato.id,
+                     WifiVoucher.usado_em.is_(None))
+             .update({'usado_em': agora(), 'sessao_id': sessao.id},
+                     synchronize_session=False))
+        if n == 1:
+            return candidato.codigo
+    return None
+
+
+def _avisar_estoque_baixo():
+    """WhatsApp pro dono quando o estoque de vouchers fica baixo (dedup
+    24h em AppConfig). Best-effort: nunca quebra o fluxo do cliente."""
+    from flask import current_app
+    try:
+        restantes = vouchers_restantes()
+        minimo = int(current_app.config.get('WIFI_VOUCHER_AVISO_MIN') or 50)
+        if restantes > minimo:
+            return
+        from datetime import datetime
+
+        from app.models import AppConfig
+        marca = AppConfig.get('wifi_voucher_alerta_em')
+        if marca:
+            try:
+                if (agora() - datetime.fromisoformat(marca)) < \
+                        timedelta(hours=24):
+                    return
+            except ValueError:
+                pass
+        numero = (current_app.config.get('ZAPI_BOT_DONO_NUMERO')
+                  or '').strip()
+        if not numero:
+            return
+        from app.services import zapi
+        zapi.enviar_texto(numero, (
+            f'⚠️ Wi-Fi da loja: restam só {restantes} vouchers no '
+            'estoque. Gere um lote novo no Hotspot Manager do Omada e '
+            'suba em /admin/wifi-vouchers.'))
+        AppConfig.set('wifi_voucher_alerta_em', agora().isoformat())
+        db.session.commit()
+    except Exception:  # noqa: BLE001 — aviso é best-effort (docstring)
+        logger.exception('wifi_portal: falha no aviso de estoque baixo')
+        db.session.rollback()
+
+
 def processar_codigo_whatsapp(texto, telefone_remetente):
     """Chamado pelo webhook do Chatwoot quando a mensagem carrega um código
     WIFI-XXXXXX. `telefone_remetente` = número que ENVIOU (prova de posse).
