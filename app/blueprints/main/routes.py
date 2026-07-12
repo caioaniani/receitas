@@ -2269,6 +2269,49 @@ def debug_chatwoot():
     return jsonify(out), 200
 
 
+@main_bp.route('/admin/debug-omada')
+@owner_required
+def debug_omada():
+    """Diagnóstico da Open API do Omada (portal Wi-Fi — fase 2, 12/07/2026).
+
+    Sem parâmetro: mostra a presença das envs OMADA_* (nunca o valor) e
+    tenta obter o token OAuth na nuvem TP-Link. Com
+    ?autorizar_mac=<MAC do celular>: autoriza o aparelho por 60 min —
+    usar com um celular conectado no O_Pao_Clientes pra validar o
+    enforcement de ponta a ponta antes de ligar o portal pros clientes."""
+    from app.services import omada
+    envs = {}
+    for k in ('OMADA_API_URL', 'OMADA_CLIENT_ID', 'OMADA_CLIENT_SECRET',
+              'OMADA_OMADAC_ID', 'OMADA_SITE_ID'):
+        v = (current_app.config.get(k) or '').strip()
+        envs[k] = {'presente': bool(v), 'tamanho': len(v)}
+    out = {'envs': envs, 'configurado': omada.disponivel()}
+    if not out['configurado']:
+        out['conclusao'] = (
+            'Faltam envs OMADA_* no Railway — gerar as credenciais no '
+            'Omada (Settings → Platform Integration → Open API) e setar '
+            'as cinco variáveis.')
+        return jsonify(out), 200
+    try:
+        omada._token()
+        out['token'] = 'ok'
+    except Exception as exc:  # noqa: BLE001 — diagnóstico mostra o erro cru
+        out['token'] = f'FALHOU: {str(exc)[:300]}'
+        out['conclusao'] = (
+            'Credenciais/URL erradas ou controlador sem Cloud Access — '
+            'conferir OMADA_API_URL (endereço da interface mostrado na '
+            'tela do Open API) e o par client_id/client_secret.')
+        return jsonify(out), 200
+    mac = (request.args.get('autorizar_mac') or '').strip()
+    if mac:
+        out['autorizacao_teste'] = omada.autorizar_cliente(mac, minutos=60)
+    out.setdefault('conclusao', (
+        'Token OK — Open API acessível. Pra validar de ponta a ponta: '
+        'conectar um celular no O_Pao_Clientes e chamar '
+        '?autorizar_mac=<MAC dele>.'))
+    return jsonify(out), 200
+
+
 @main_bp.route('/admin/vnda/contatos')
 @login_required
 def vnda_contatos():
