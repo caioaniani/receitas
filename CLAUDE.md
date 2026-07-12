@@ -1378,6 +1378,66 @@ vigia já usava pra abrir conversa (`painel.html:458` → `abrirThread`).
 - Testes: `tests/test_chamar_cliente_whatsapp.py` (orquestração com requests
   mockado + endpoint + guardas).
 
+## Portal Wi-Fi cativo das lojas (12/07/2026, Ribeiro do Vale)
+
+Kit TP-Link Omada (EAP610 + OC200) na loja Ribeiro do Vale; SSID aberto
+`O_Pao_Clientes`. Pedido do dono: coletar e-mail válido + WhatsApp válido +
+senha criada pelo cliente + ANIVERSÁRIO, e o cliente sair LOGADO no site
+(conta criada na hora; "se já tiver conta, resolver a questão"). Fluxo
+desenhado pra contornar o mini-navegador do captive portal (CNA não
+compartilha cookies com o navegador real): o link de login one-time viaja
+pelo WHATSAPP e abre no navegador de verdade.
+
+- **Fluxo**: `GET /loja/wifi` (form standalone: nome, e-mail, WhatsApp,
+  senha, dia/mês obrigatórios + ano opcional, aceite LGPD) → `POST
+  /loja/wifi/cadastrar` cria `WifiPortalSessao` (código `WIFI-XXXXXX`,
+  senha já hasheada — texto puro nunca persiste) → tela
+  `/loja/wifi/validar/<token>` mostra botão wa.me com a mensagem pronta
+  ("Ativar Wi-Fi O Pão — código WIFI-XXXXXX") + polling em
+  `/loja/wifi/status/<token>` → cliente ENVIA a mensagem (validação de
+  posse do telefone pelo fluxo GRATUITO iniciado pelo cliente — sem custo
+  de template) → interceptor no webhook do Chatwoot responde com o link
+  `/loja/wifi/entrar/<login_token>` (one-time, 30 min) que loga a sessão
+  de cliente da loja (`loja_auth.login_cliente`) e manda pra `loja.home`.
+- **Interceptor** (`crm/routes.py::bot_webhook`): código Wi-Fi FURA o gate
+  de `pending` (funciona em conversa 'open'), resposta determinística SEM
+  Claude, e `definir_status('resolved')` SÓ se a conversa estava pending
+  (nunca fecha conversa de atendente). Regex `RE_CODIGO_WIFI` (alfabeto
+  sem 0/O/1/I).
+- **4 regras de conta** (`wifi_portal._resolver_conta`; posse provada = o
+  telefone que ENVIOU a mensagem): (a) tudo novo → cria conta + loga;
+  (b) e-mail existe + telefone bate → login SEM pedir a senha antiga
+  (aprovado pelo dono; a senha do form é IGNORADA — nunca sobrescrever);
+  (c) telefone pertence a OUTRA conta → loga nela (e-mail mascarado na
+  resposta); (d) e-mail existe + telefone diverge → NÃO loga: magic link
+  pro e-mail cadastrado (Postmark) e o link NUNCA vai no WhatsApp. Guest
+  (senha_hash NULL): upgrade se o telefone bate ou sem histórico
+  divergente; senão magic link (protege pedidos antigos). E-mail sem
+  prova NUNCA loga em conta alheia — não regredir.
+- **Aniversário no `Cliente`**: `aniversario_dia`/`aniversario_mes`/
+  `nascimento_ano` (ALTER em `migrations_legacy` deployado ANTES do
+  modelo — procedimento de 2 commits, sonda `/api/claude/deploy`).
+- **Enforcement Omada** (`app/services/omada.py`): Open API do OC200 via
+  nuvem (client_credentials + `extPortal/auth`, authType 4). Best-effort:
+  sem `OMADA_*` envs configuradas o cadastro funciona igual (só não
+  autoriza o rádio — fase de teste roda por link direto). Envs:
+  `OMADA_API_URL`, `OMADA_CLIENT_ID`, `OMADA_CLIENT_SECRET`,
+  `OMADA_OMADAC_ID`, `OMADA_SITE_ID`; resultado fica em
+  `wifi_autorizado_em`/`wifi_erro` na sessão.
+- **Env obrigatória pro fluxo**: `WIFI_PORTAL_WHATSAPP` (número do
+  WhatsApp do atendimento em dígitos com 55, ex `5511...`) — vazio, a
+  tela instrui envio manual em vez do botão wa.me.
+- **PII**: sessões >30 dias são podadas em `criar_sessao`; sessão expira
+  em 30 min; `aceite_lgpd_em` NOT NULL (checkbox obrigatório no form).
+- Testes: `tests/test_wifi_portal.py` (16 casos). ARMADILHA de teste: o
+  marker `loja_host` vai SÓ nos testes de rota `/loja/wifi` — no arquivo
+  inteiro ele derruba o `/crm/bot` (em host de loja só `/loja/*` responde).
+- **Pendente (fase 2, após o teste com cliente real)**: gerar credenciais
+  Open API no Omada (Settings → Platform Integration), setar as envs
+  `OMADA_*`, configurar External Portal Server + walled garden no
+  controlador apontando pra `/loja/wifi`, e validar
+  `omada.autorizar_cliente` com um aparelho real.
+
 ## Bot de atendimento — hardening 02/07/2026 (4 pacotes)
 
 Pesquisa de melhorias no bot/vigia/auditor aprovada pelo dono virou 4
