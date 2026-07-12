@@ -1499,6 +1499,18 @@ def _migrate_postgres(app):
     _try("ALTER TABLE pedido_item_foto ADD COLUMN IF NOT EXISTS "
          "imagem BYTEA")
 
+    # Aniversário do cliente do site (11/07/2026, portal Wi-Fi da Ribeiro
+    # do Vale): dia/mês pra campanha de aniversário, ano OPCIONAL (LGPD —
+    # minimização; o form só obriga dia/mês). Nullable: contas antigas não
+    # têm. Commit 1 do procedimento de 2 commits — o modelo Cliente só
+    # ganha as colunas depois deste ALTER estar aplicado em prod.
+    _try("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS "
+         "aniversario_dia INTEGER")
+    _try("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS "
+         "aniversario_mes INTEGER")
+    _try("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS "
+         "nascimento_ano INTEGER")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
