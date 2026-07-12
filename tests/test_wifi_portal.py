@@ -463,9 +463,11 @@ def test_aviso_estoque_baixo_com_dedup(app, monkeypatch):
 
 
 def test_rota_admin_vouchers_owner(app, owner_user):
+    # sem login não entra (client separado — sessão anônima não pode
+    # contaminar o client logado)
+    assert app.test_client().get('/admin/wifi-vouchers').status_code \
+        in (302, 401, 403)
     c = app.test_client()
-    # sem login não entra
-    assert c.get('/admin/wifi-vouchers').status_code in (302, 401, 403)
     _login_owner(c, owner_user)
     r = c.get('/admin/wifi-vouchers')
     assert r.status_code == 200
