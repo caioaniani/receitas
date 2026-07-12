@@ -1399,6 +1399,18 @@ pelo WHATSAPP e abre no navegador de verdade.
   de template) → interceptor no webhook do Chatwoot responde com o link
   `/loja/wifi/entrar/<login_token>` (one-time, 30 min) que loga a sessão
   de cliente da loja (`loja_auth.login_cliente`) e manda pra `loja.home`.
+- **Validação forte (12/07/2026, pedido do dono após o 1º teste)**: nome
+  exige DUAS palavras (nome + sobrenome); e-mail = formato estrito +
+  detector de typo de provedor (`_typo_de_provedor`, Damerau distância 1
+  de gmail/hotmail/uol etc. — pega gmial.com mesmo squatted) + domínio
+  existente via DNS (`_dominio_email_resolve`: MX com fallback A/AAAA,
+  dnspython no requirements; fail-open DELIBERADO em erro de INFRA de
+  DNS — instabilidade nunca barra cadastro no balcão, só NXDOMAIN/sem
+  registro reprova); WhatsApp = celular BR real (`_whatsapp_valido`: DDD
+  da lista ANATEL + nono dígito 9 + 8 dígitos, com/sem o 55). Nos testes
+  a fixture autouse `_sem_dns` patcha a checagem de domínio (offline e
+  determinístico) — a função REAL é capturada no import do arquivo ANTES
+  do patch (senão o teste de fail-open exercitaria o lambda da fixture).
 - **Interceptor** (`crm/routes.py::bot_webhook`): código Wi-Fi FURA o gate
   de `pending` (funciona em conversa 'open'), resposta determinística SEM
   Claude, e `definir_status('resolved')` SÓ se a conversa estava pending
