@@ -860,13 +860,23 @@ def vincular_produto(map_id):
         if tipo == 'receita' and alvo_id:
             mp.receita_id = alvo_id
             mp.produto_id = None
+            mp.materia_prima_id = None
             mp.ignorar = False
         elif tipo == 'produto' and alvo_id:
             mp.produto_id = alvo_id
             mp.receita_id = None
+            mp.materia_prima_id = None
+            mp.ignorar = False
+        elif tipo == 'mp' and alvo_id:
+            # MP como alvo (paridade com o canal lote — ex: pao de queijo
+            # congelado vendido via cone baixa a linha MP da loja).
+            mp.materia_prima_id = alvo_id
+            mp.receita_id = None
+            mp.produto_id = None
             mp.ignorar = False
         else:
-            flash('Selecione receita ou produto valido.', 'danger')
+            flash('Selecione receita, produto ou matéria-prima válida.',
+                  'danger')
             return redirect(url_for('pdv.mapeamentos'))
         mp.fator_quantidade = fator
         mp.confirmado_em = agora()
