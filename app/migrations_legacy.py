@@ -2118,5 +2118,13 @@ def _migrate_sqlite(app):
             cursor.execute("ALTER TABLE %s ADD COLUMN %s BLOB"
                            % (_tab, _col))
 
+    # Aniversário do cliente do site (11/07/2026, portal Wi-Fi): dia/mês
+    # pra campanha, ano opcional (LGPD). Espelho do ALTER do Postgres.
+    cursor.execute("PRAGMA table_info(cliente)")
+    cols_cli = [row[1] for row in cursor.fetchall()]
+    for _c in ('aniversario_dia', 'aniversario_mes', 'nascimento_ano'):
+        if cols_cli and _c not in cols_cli:
+            cursor.execute(f"ALTER TABLE cliente ADD COLUMN {_c} INTEGER")
+
     conn.commit()
     conn.close()
