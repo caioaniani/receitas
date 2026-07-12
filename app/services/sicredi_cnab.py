@@ -34,6 +34,11 @@ OCORR_REGISTRADA = {'02'}
 OCORR_LIQUIDACAO = {'06', '15', '17'}
 OCORR_BAIXA = {'09', '10'}
 OCORR_REJEITADA = {'03', '24'}
+# 27 = "Baixa rejeitada" (tabela 7.2 do manual): o PEDIDO de baixa (remessa
+# com instrução 02) foi recusado — o título segue VIVO no banco, então a
+# cobrança volta pra 'registrada' (nunca pra 'rejeitada', que significa
+# entrada recusada).
+OCORR_BAIXA_REJEITADA = {'27'}
 
 
 def _cfg():
