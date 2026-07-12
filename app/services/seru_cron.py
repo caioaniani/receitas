@@ -703,6 +703,17 @@ def _run_uso_ia_vigia(app):
                   'vigia uso ia')
 
 
+def _run_google_reviews(app):
+    """Job: sync de avaliacoes do Google (12/07/2026) — puxa reviews novas e
+    alerta o dono no WhatsApp (prioriza nota baixa). No-op gracioso enquanto
+    nao houver OAuth/aprovacao. Anti-flood do 1o sync no proprio servico."""
+    from app.services import google_reviews
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_GOOGLE_REVIEWS,
+                  google_reviews.sincronizar_e_alertar, 'google reviews')
+
+
 def _run_alerta_baixas_presas(app):
     """Job: baixas presas (03/07/2026) — pedido 'separado' com entrega
     vencida (QR de saida nao lido = industria nao baixou) e retirada de
