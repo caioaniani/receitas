@@ -183,7 +183,6 @@ def _podar_antigas():
 
 def validar_form(form):
     """Valida os campos do formulário. Retorna (dados, erros)."""
-    from app.services.loja_auth import email_valido
     from app.utils import normalizar_telefone
     erros = []
     nome = (form.get('nome') or '').strip()[:150]
@@ -191,12 +190,21 @@ def validar_form(form):
     telefone = (form.get('telefone') or '').strip()[:30]
     senha = form.get('senha') or ''
     aceite = bool(form.get('aceite_lgpd'))
-    if len(nome) < 2:
-        erros.append('Informe seu nome.')
-    if not email_valido(email):
+    if len(_NOME_PALAVRA_RE.findall(nome)) < 2:
+        erros.append('Informe nome e sobrenome.')
+    if not _EMAIL_RE.match(email):
         erros.append('E-mail inválido.')
-    if not telefone_chave(telefone):
-        erros.append('WhatsApp inválido — use DDD + número.')
+    else:
+        dominio = email.split('@')[-1]
+        sugestao = _typo_de_provedor(dominio)
+        if sugestao:
+            erros.append(f'Confira o e-mail — você quis dizer @{sugestao}?')
+        elif not _dominio_email_resolve(dominio):
+            erros.append('E-mail inválido — o domínio depois do @ não '
+                         'existe. Confira se digitou certo.')
+    if not _whatsapp_valido(telefone):
+        erros.append('WhatsApp inválido — informe o celular com DDD '
+                     '(ex.: 11 91234-5678).')
     if len(senha) < 6:
         erros.append('A senha precisa ter pelo menos 6 caracteres.')
     if not aceite:
