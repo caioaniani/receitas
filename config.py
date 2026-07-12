@@ -116,6 +116,14 @@ class Config:
     # Chave da API do Google Maps Platform (Geocoding + Directions)
     GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
 
+    # Avaliacoes do Google (Business Profile) — ver+responder+alerta (12/07/2026).
+    # OAuth do dono (business.manage). Vazio = integracao dormente (503/no-op).
+    # Precisa tambem de acesso APROVADO a Business Profile API no Google Cloud.
+    GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
+    GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', '')
+    # Numero do WhatsApp pra alerta de review nova (fallback ZAPI_BOT_DONO_NUMERO).
+    GOOGLE_REVIEWS_NUMERO = os.environ.get('GOOGLE_REVIEWS_NUMERO', '')
+
     # Seru (PDV) — credenciais OAuth2 client_credentials
     # Documentacao: https://integration.plataformaseru.com.br/v1/docs
     SERU_CLIENT_ID = os.environ.get('SERU_CLIENT_ID', '')
