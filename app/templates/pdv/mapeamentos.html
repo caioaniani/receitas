@@ -1,11 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}Mapeamentos Seru{% endblock %}
+{% block title %}Mapeamentos — vendas → estoque{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="page-title mb-0"><i class="bi bi-link-45deg"></i> Mapeamentos Seru</h1>
-    <div class="d-flex gap-2">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-link-45deg"></i> Mapeamentos — vendas → estoque</h1>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('produtos.cestas_orfaos') }}" class="btn btn-sm btn-outline-danger"
+           title="Componentes de cesta com vínculo quebrado — não baixam estoque até re-vincular">
+            <i class="bi bi-exclamation-triangle"></i> Órfãos de cesta
+        </a>
         <a href="{{ url_for('pdv.itens_vendidos') }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-bag-check"></i> Itens vendidos
         </a>
@@ -15,18 +19,28 @@
     </div>
 </div>
 
-<div class="alert alert-info" style="font-size:13px;">
+<div class="alert alert-info dica-recolhe" style="font-size:13px;">
     <i class="bi bi-info-circle"></i>
-    <strong>Como funciona:</strong> a sincronizacao da Seru so baixa estoque de
-    produtos <strong>mapeados</strong> a uma receita/produto, em lojas que voce
-    <strong>confirmou</strong> o mapeamento. Auto-fuzzy adivinha mas <em>nao
-    processa estoque</em> ate voce clicar OK ou Vincular.
+    <strong>Como funciona:</strong> esta tela mostra <strong>TODOS</strong> os
+    mapeamentos de venda → estoque: canal <span class="badge bg-primary">PDV</span>
+    (Seru — a sincronização baixa estoque do que estiver mapeado, em lojas
+    confirmadas) e canal <span class="badge bg-dark">Lote</span> (nomes digitados
+    na saída em lote). Cada nome pode apontar pra <strong>receita, produto
+    (cesta) ou matéria-prima</strong>, com fator opcional (ex: café → 0,2 do
+    Cookie). <strong>Pendente</strong> = vende e NÃO baixa; <strong>ignorado</strong>
+    = nunca processa (decisão explícita). A coluna <strong>Venda 14d</strong> mostra
+    o que está vendendo (PDV) — pendente com venda é diferença de estoque
+    acumulando. Problemas detectados pela auditoria aparecem em vermelho na
+    linha. O SITE não usa mapa (o pedido online já referencia o item direto);
+    dele só se configura a loja de origem, abaixo.
 </div>
 
 <style>
     .mapa-confirmado { background: rgba(52,199,89,0.06) !important; border-left: 3px solid #34c759; }
     .mapa-pendente   { background: rgba(255,149,0,0.10) !important; border-left: 3px solid #ff9500; }
     .mapa-ignorado   { background: rgba(0,0,0,0.04) !important; }
+    .prob-badge { font-size: 10px; display:block; width:fit-content; margin-top:2px; }
+    .filtro-estado .btn { font-size: 12px; }
 </style>
 
 <!-- ── Site (loja propria) → baixa de estoque ── -->
