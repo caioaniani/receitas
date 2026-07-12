@@ -25,7 +25,7 @@ Fontes (endpoints Google):
 - Reviews/reply (v4): mybusiness.googleapis.com/v4/{account}/{location}/reviews[/{id}/reply]
 """
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
 import requests
@@ -278,14 +278,13 @@ def _parse_dt(valor):
     horario de verao desde 2019). None se nao parsear."""
     if not valor:
         return None
+    from app.utils import para_brt
     try:
         dt = datetime.fromisoformat(valor.replace('Z', '+00:00'))
     except (ValueError, TypeError):
         return None
-    if dt.tzinfo is not None:
-        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
-    # Google devolve UTC; BRT = UTC-3 (sem horario de verao desde 2019).
-    return dt - timedelta(hours=3)
+    # Google devolve UTC (aware); para_brt centraliza a conversao pra BRT naive.
+    return para_brt(dt)
 
 
 # ── Sincronizacao de reviews ─────────────────────────────────────────
