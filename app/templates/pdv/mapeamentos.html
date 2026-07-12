@@ -240,7 +240,19 @@
                     <td class="fw-semibold">{{ mp.nome_externo }}
                         {% if mp.sku %}<br><small class="text-muted fw-normal">SKU {{ mp.sku }}</small>{% endif %}
                         {% for pr in (probs or []) %}
+                        {# Badge clicável (pedido do dono): abre direto onde se
+                           corrige — a ficha da receita ou o detalhe do produto. #}
+                        {% if mp.produto_id %}
+                        <a class="badge bg-danger prob-badge text-decoration-none"
+                           href="{{ url_for('produtos.detalhe', id=mp.produto_id) }}"
+                           title="Abrir o produto pra corrigir a composição">⚠ {{ pr }} — abrir produto</a>
+                        {% elif mp.receita_id %}
+                        <a class="badge bg-danger prob-badge text-decoration-none"
+                           href="{{ url_for('receitas.ficha', id=mp.receita_id) }}"
+                           title="Abrir a ficha da receita pra corrigir">⚠ {{ pr }} — abrir receita</a>
+                        {% else %}
                         <span class="badge bg-danger prob-badge">⚠ {{ pr }}</span>
+                        {% endif %}
                         {% endfor %}
                         <form method="POST" action="{{ url_for('pdv.vincular_produto', map_id=mp.id) }}"
                               class="d-flex gap-1 flex-wrap mapa-form d-none mt-2">
