@@ -440,6 +440,17 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Avaliacoes do Google (12/07/2026): sync de reviews + alerta WhatsApp de
+    # review nova (prioriza nota baixa). Intervalo de 1h (API externa, volume
+    # baixo). Dormente ate o OAuth+aprovacao do Google. Desligar:
+    # GOOGLE_REVIEWS_SYNC=0.
+    if os.environ.get('GOOGLE_REVIEWS_SYNC', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_google_reviews(app),
+            'interval', hours=1, id='google-reviews',
+            max_instances=1, coalesce=True,
+        )
+
     # Baixas presas (03/07/2026): pedido parado em 'separado' com entrega
     # vencida (QR de saida nao escaneado = industria NAO baixou) e retirada
     # de sobra presa em transporte (loja baixou, industria nao creditada).
