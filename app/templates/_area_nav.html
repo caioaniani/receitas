@@ -142,6 +142,7 @@
 {{ _lnk(variant, url_for('main.permissoes_editar'), 'Permissões por papel', request.path == '/admin/permissoes') }}
 {{ _lnk(variant, url_for('main.seo_descricoes'), 'Descrições SEO', request.path.startswith('/admin/seo')) }}
 {{ _lnk(variant, url_for('main.frete_sensores'), 'Sensores do frete', request.path == '/admin/frete-sensores', title='Endereços que barraram/erraram venda no site') }}
+{{ _lnk(variant, url_for('main.avaliacoes_google'), 'Avaliações Google', request.path.startswith('/admin/avaliacoes-google'), title='Ver e responder as avaliações do Google (Business Profile)') }}
 {% endif %}
 {{ _lnk(variant, url_for('main.audit'), 'Histórico de alterações', request.path == '/audit', title='Quem mudou o quê e quando') }}
 {{ _lnk(variant, url_for('slack.install'), 'Slack Bot', request.path.startswith('/slack')) }}
