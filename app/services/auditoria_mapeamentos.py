@@ -72,6 +72,17 @@ def _nome_alvo(m):
     return (None, None, None, False)
 
 
+def _componente_orfao(it):
+    """Predicado canonico de orfao POR TIPO (espelha cestas.
+    contar_produto_itens_orfaos e a tela /produtos/cestas/orfaos):
+    componente do tipo 'produto' vincula por produto_componente_id —
+    ignorar essa FK acusava componente saudavel como orfao (falso
+    positivo do Box Mimo, 12/07/2026)."""
+    return ((it.tipo == 'receita' and it.receita_id is None)
+            or (it.tipo == 'produto' and it.produto_componente_id is None)
+            or (it.tipo == 'mp' and it.materia_prima_id is None))
+
+
 def venda_seru_por_nome(dias=14):
     """Publico pra tela de mapeamentos: venda do periodo por nome externo."""
     dias = max(1, min(int(dias or 14), 60))
@@ -98,7 +109,7 @@ def problemas_por_mapa():
             cestas_vazias.add(pid)
             continue
         orfaos = [it.item_nome for it in itens
-                  if not it.receita_id and not it.materia_prima_id]
+                  if _componente_orfao(it)]
         if orfaos:
             cestas_orfas[pid] = orfaos
     for m in mapas:
@@ -230,7 +241,7 @@ def auditar(dias=14):
             cestas_vazias.append({'produto_id': pid, 'produto': nome_p})
             continue
         for it in itens:
-            if not it.receita_id and not it.materia_prima_id:
+            if _componente_orfao(it):
                 orfaos.append({'produto_id': pid, 'produto': nome_p,
                                'item_nome': it.item_nome})
     out['cestas_vazias'] = cestas_vazias

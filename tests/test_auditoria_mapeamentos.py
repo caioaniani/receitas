@@ -116,6 +116,33 @@ def test_cesta_vazia_e_componente_orfao(app):
     assert out['componentes_orfaos'][0]['item_nome'] == 'Nome Velho'
 
 
+def test_componente_tipo_produto_vinculado_nao_e_orfao(app):
+    """FALSO POSITIVO corrigido (Box Mimo, 12/07/2026): componente do tipo
+    'produto' vincula por produto_componente_id — com a FK setada NÃO é
+    órfão (o check antigo só olhava receita_id/materia_prima_id e acusava
+    componente-produto saudável)."""
+    from app.services.auditoria_mapeamentos import problemas_por_mapa
+    with app.app_context():
+        iogurte = Produto(nome='Iogurte Artesanal 200ml', preco_atacado=5)
+        cesta = Produto(nome='Box Mimo', preco_atacado=50)
+        db.session.add_all([iogurte, cesta])
+        db.session.flush()
+        db.session.add(ProdutoItem(produto_id=cesta.id, tipo='produto',
+                                   produto_componente_id=iogurte.id,
+                                   item_nome='Iogurte Artesanal 200ml',
+                                   quantidade=1))
+        vm = VendaMapa(canal='seru', nome_externo='BOX MIMO',
+                       produto_id=cesta.id)
+        db.session.add(vm)
+        db.session.commit()
+        out = auditar(dias=7)
+        probs = problemas_por_mapa()
+        vm_id = vm.id
+    assert out['componentes_orfaos'] == []
+    assert out['cestas_vazias'] == []
+    assert vm_id not in probs
+
+
 def test_sem_estoque_debito_travado_e_itens_nao_baixados(app):
     with app.app_context():
         loja = _loja()
