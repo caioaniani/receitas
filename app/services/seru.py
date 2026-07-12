@@ -77,8 +77,13 @@ def _obter_token(force_refresh=False):
     return _token_cache['access_token']
 
 
-def _get(path, params=None):
-    """GET autenticado. Renova token automaticamente em 401."""
+# Tentativas EXTRAS em falha de rede transitoria (SSL EOF, conexao
+# derrubada, timeout). So rede — erro HTTP (4xx/5xx) nao re-tenta.
+_RETRIES_REDE = 2
+
+
+def _get_uma_vez(path, params=None):
+    """GET autenticado (uma tentativa). Renova token automaticamente em 401."""
     token = _obter_token()
     r = requests.get(f'{BASE}{path}',
                      headers={'Authorization': f'Bearer {token}'},
@@ -92,6 +97,27 @@ def _get(path, params=None):
         logger.error('Seru %s %s: %s', path, r.status_code, r.text[:300])
         raise RuntimeError(f'Seru {path} {r.status_code}: {r.text[:200]}')
     return r.json()
+
+
+def _get(path, params=None):
+    """GET autenticado com retry de REDE: a API do Seru derruba conexoes
+    sob carga (Sentry 12/07/2026: SSLEOFError no handshake, pagina 3 do
+    fetch paralelo) e uma unica queda abortava a captura inteira do dia.
+    Ate 2 novas tentativas com backoff curto (0,5s / 1,5s) — GET e
+    idempotente. SSLError e subclasse de ConnectionError no requests."""
+    ultimo = None
+    for tentativa in range(_RETRIES_REDE + 1):
+        if tentativa:
+            time.sleep(0.5 * (3 ** (tentativa - 1)))
+        try:
+            return _get_uma_vez(path, params)
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout) as e:
+            ultimo = e
+            logger.warning('Seru %s: falha de rede (tentativa %d/%d): %s',
+                           path, tentativa + 1, _RETRIES_REDE + 1,
+                           str(e)[:200])
+    raise ultimo
 
 
 def _iso_dia(data, fim=False):
