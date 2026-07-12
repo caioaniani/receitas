@@ -584,6 +584,12 @@ def processar_codigo_whatsapp(texto, telefone_remetente):
             f'Wi-Fi liberado, {nome_curto}! ✅\n\n'
             'Sua conta no site da O Pão foi criada. Toque para entrar já '
             f'logado:\n{link}\n\nBom apetite! 🥐')
+    if voucher:
+        texto_resp += (
+            f'\n\n🔑 *Código do Wi-Fi: {voucher}*\n'
+            'Digite esse código na janelinha que abre ao conectar no '
+            'Wi-Fi da loja para liberar a internet.')
+        _avisar_estoque_baixo()
     # Aviso honesto se a config do WhatsApp/portal não autorizou o wifi
     # (rede aberta em pré-enforcement: o acesso já funciona de qualquer
     # jeito, então não confundimos o cliente com detalhe técnico).
