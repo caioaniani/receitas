@@ -497,20 +497,28 @@ def rascunho_resposta(review_pk):
 # ── Resumo pro painel ────────────────────────────────────────────────
 
 def resumo(nota=None, sem_resposta=False, limite=200):
-    """Dados do painel: KPIs + locations + lista de reviews (filtravel)."""
+    """Dados do painel: KPIs + locations + lista de reviews (filtravel).
+    KPIs via agregacao SQL (nao carrega o historico inteiro em memoria)."""
+    from sqlalchemy import case, func
+
     from app.models import GoogleReview, GoogleReviewLocation
     locations = GoogleReviewLocation.query.order_by(
         GoogleReviewLocation.apelido).all()
 
-    base = GoogleReview.query
-    todas = base.all()
-    total = len(todas)
-    com_nota = [r.nota for r in todas if r.nota]
-    media = round(sum(com_nota) / len(com_nota), 2) if com_nota else None
-    sem_resp = sum(1 for r in todas if not r.respondida)
-    por_nota = {n: sum(1 for r in todas if r.nota == n) for n in range(1, 6)}
+    total = db.session.query(func.count(GoogleReview.id)).scalar() or 0
+    media_raw = db.session.query(func.avg(GoogleReview.nota)).scalar()
+    media = round(float(media_raw), 2) if media_raw is not None else None
+    sem_resp = db.session.query(func.count(GoogleReview.id)).filter(
+        (GoogleReview.resposta_texto.is_(None))
+        | (GoogleReview.resposta_texto == '')).scalar() or 0
+    por_nota_rows = (db.session.query(GoogleReview.nota, func.count(GoogleReview.id))
+                     .group_by(GoogleReview.nota).all())
+    contagem = {n: c for n, c in por_nota_rows}
+    por_nota = {n: contagem.get(n, 0) for n in range(1, 6)}
+    # `case` importado so pra manter compat de leitura; nao usado diretamente.
+    del case
 
-    q = base
+    q = GoogleReview.query
     if nota:
         q = q.filter(GoogleReview.nota == nota)
     if sem_resposta:
