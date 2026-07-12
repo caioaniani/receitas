@@ -402,6 +402,79 @@ def test_debug_omada_com_envs_e_mac_de_teste(app, owner_user):
     assert aut.call_args[0][0] == 'AA:BB:CC:11:22:33'
 
 
+# ── Vouchers (trava dura sem API) ────────────────────────────────────────
+
+def test_importar_vouchers_formatos_e_dedup(app):
+    from app.services import wifi_portal
+    with app.app_context():
+        csv = ('Code,Note,Duration\n'
+            '"84729183",lote1,480\n'
+            '1927 3645,lote1,480\n'
+            '84729183,repetido,480\n'
+            'abc,linha-invalida,x\n')
+        imp, dup, ign = wifi_portal.importar_vouchers(csv, 'lote-teste')
+        assert (imp, dup, ign) == (2, 1, 2)   # header + inválida ignoradas
+        # segunda importação do mesmo arquivo: tudo duplicado
+        imp2, dup2, _ = wifi_portal.importar_vouchers(csv, 'lote-teste')
+        assert imp2 == 0 and dup2 == 3
+        assert wifi_portal.vouchers_restantes() == 2
+
+
+def test_voucher_vai_na_resposta_do_whatsapp(app):
+    from app.models import WifiVoucher
+    from app.services import wifi_portal
+    with app.app_context():
+        wifi_portal.importar_vouchers('84729183\n', 'lote')
+        s = _sessao()
+        res = wifi_portal.processar_codigo_whatsapp(s.codigo, '11988887777')
+        assert '84729183' in res['texto']
+        v = WifiVoucher.query.filter_by(codigo='84729183').one()
+        assert v.usado_em is not None and v.sessao_id == s.id
+        assert wifi_portal.vouchers_restantes() == 0
+
+
+def test_sem_voucher_fluxo_segue_sem_mencao(app):
+    """Estoque vazio (pré-enforcement): a resposta não fala de código."""
+    from app.services import wifi_portal
+    with app.app_context():
+        s = _sessao()
+        res = wifi_portal.processar_codigo_whatsapp(s.codigo, '11988887777')
+        assert res['sessao'].resultado == 'conta_criada'
+        assert 'Código do Wi-Fi' not in res['texto']
+
+
+def test_aviso_estoque_baixo_com_dedup(app, monkeypatch):
+    from app.services import wifi_portal
+    with app.app_context():
+        app.config['WIFI_VOUCHER_AVISO_MIN'] = 5
+        app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999990000'
+        wifi_portal.importar_vouchers('11112222\n', 'lote')
+        s = _sessao()
+        with patch('app.services.zapi.enviar_texto') as tx:
+            wifi_portal.processar_codigo_whatsapp(s.codigo, '11988887777')
+        assert tx.called
+        assert 'vouchers' in tx.call_args[0][1]
+        # dedup 24h: segunda validação não re-manda
+        wifi_portal.importar_vouchers('33334444\n', 'lote')
+        s2 = _sessao(email='outra@example.com', telefone='(11) 97777-6666')
+        with patch('app.services.zapi.enviar_texto') as tx2:
+            wifi_portal.processar_codigo_whatsapp(s2.codigo, '11977776666')
+        assert not tx2.called
+
+
+def test_rota_admin_vouchers_owner(app, owner_user):
+    c = app.test_client()
+    # sem login não entra
+    assert c.get('/admin/wifi-vouchers').status_code in (302, 401, 403)
+    _login_owner(c, owner_user)
+    r = c.get('/admin/wifi-vouchers')
+    assert r.status_code == 200
+    r2 = c.post('/admin/wifi-vouchers',
+                data={'vouchers': '55556666\n77778888', 'lote': 'manual'})
+    body = r2.get_data(as_text=True)
+    assert r2.status_code == 200 and 'Importados: <strong>2</strong>' in body
+
+
 def test_debug_omada_sem_site_id_lista_sites(app, owner_user):
     """As 4 envs do token bastam pra listar os sites — o id do site sai
     da própria resposta (é o jeito de descobrir o OMADA_SITE_ID)."""
