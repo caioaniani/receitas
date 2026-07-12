@@ -51,6 +51,7 @@ LOCK_KEY_PREVISAO_ACURACIA = 7743  # advisory lock pro snapshot+match de acuraci
 LOCK_KEY_BAIXAS_PRESAS = 7744  # advisory lock pro alerta de baixas presas (separado/retirada)
 LOCK_KEY_SITE_VIGIA = 7745  # advisory lock pro vigia do site (canarios de frete/catalogo/agenda)
 LOCK_KEY_PDV_VIGIA = 7746  # advisory lock pro vigia do PDV (loja muda / company sem vinculo)
+LOCK_KEY_USO_IA_VIGIA = 7748  # advisory lock pro vigia de custo de IA (teto diario)
 # Locks LIBERADOS mas RESERVADOS (nao reusar — evita conflito se algum
 # dos jobs for reativado no futuro):
 # - 7730 era do `zapi-digest-anomalias` (job 23:00 BRT, removido 14/06/2026).
@@ -427,6 +428,17 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Vigia de CUSTO de IA (11/07/2026): o gasto do dia (UsoIA) passou do
+    # teto USO_IA_TETO_DIA_USD? Alerta WhatsApp na transicao (anti-spam de
+    # 6h no servico). O relatorio /admin/uso-ia e passivo — sem este job,
+    # um loop de bot dispararia custo em silencio. Desligar: USO_IA_VIGIA=0.
+    if os.environ.get('USO_IA_VIGIA', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_uso_ia_vigia(app),
+            'interval', hours=1, id='uso-ia-vigia',
+            max_instances=1, coalesce=True,
+        )
+
     # Baixas presas (03/07/2026): pedido parado em 'separado' com entrega
     # vencida (QR de saida nao escaneado = industria NAO baixou) e retirada
     # de sobra presa em transporte (loja baixou, industria nao creditada).
@@ -679,6 +691,17 @@ def _run_pdv_vigia(app):
         _com_lock(LOCK_KEY_PDV_VIGIA, pdv_vigia.vigiar, 'vigia pdv')
 
 
+def _run_uso_ia_vigia(app):
+    """Job: vigia de custo de IA (11/07/2026) — gasto do dia em UsoIA
+    estourou o teto? Alerta o dono no WhatsApp na transicao (anti-spam de
+    6h no servico)."""
+    from app.services import uso_ia_vigia
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_USO_IA_VIGIA, uso_ia_vigia.vigiar,
+                  'vigia uso ia')
+
+
 def _run_alerta_baixas_presas(app):
     """Job: baixas presas (03/07/2026) — pedido 'separado' com entrega
     vencida (QR de saida nao lido = industria nao baixou) e retirada de
@@ -703,9 +726,11 @@ def _run_backup_diario(app):
         global _ult_run_backup
         resultado = backup.executar_backup()
         _ult_run_backup = _agora()
+        _gravar_marco_backup('backup_ultimo_run_em')
         if not resultado['ok']:
             logger.warning('backup diario falhou: %s', resultado.get('motivo'))
             return
+        _gravar_marco_backup('backup_ultimo_ok_em')
         # Retencao SO roda apos backup OK: tudo que ela apaga do banco esta
         # no dump de hoje (recuperavel por RETENCAO_BACKUPS_DIAS=90 dias).
         # Backup falhou -> pula a limpeza, sem excecao.
@@ -742,8 +767,11 @@ def _run_backup_chatwoot(app):
         resultado = backup.executar_backup(
             db_url=chatwoot_url, prefixo='chatwoot', pasta='/backups-chatwoot')
         _ult_run_backup_chatwoot = _agora()
+        _gravar_marco_backup('backup_chatwoot_ultimo_run_em')
         if not resultado['ok']:
             logger.warning('backup chatwoot falhou: %s', resultado.get('motivo'))
+        else:
+            _gravar_marco_backup('backup_chatwoot_ultimo_ok_em')
 
     with app.app_context():
         if db.engine.dialect.name != 'postgresql':
@@ -771,11 +799,57 @@ def _run_vnda_card_sync(app):
         _com_lock(LOCK_KEY_VNDA_CARD, _fn, 'vnda card sync')
 
 
+def _gravar_marco_backup(chave):
+    """Persiste o carimbo do backup em AppConfig (11/07/2026): o
+    `_ult_run_backup` em memoria zera a cada deploy/restart — 'backup
+    parado em silencio' ficava invisivel ate alguem precisar do dump.
+    Best-effort: falha ao gravar o marco nunca derruba o job (o backup em
+    si ja foi feito)."""
+    from app.extensions import db
+    from app.models import AppConfig
+    from app.utils import agora as _agora
+    try:
+        AppConfig.set(chave, _agora().isoformat())
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception('falha ao gravar marco de backup %s', chave)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001 — rollback de conexao ja morta
+            pass
+
+
+def _parse_marco_backup(chave):
+    """Le um marco de backup do AppConfig (datetime BRT-naive ou None)."""
+    from datetime import datetime as _dt
+
+    from app.models import AppConfig
+    s = AppConfig.get(chave)
+    if not s:
+        return None
+    try:
+        return _dt.fromisoformat(s)
+    except ValueError:
+        return None
+
+
 def status_backup():
-    """Status do job backup pra UI."""
+    """Status do job backup pra UI. `ultimo_run`/`ultimo_ok` preferem o
+    marco persistido em AppConfig (sobrevive a deploy); fallback pro valor
+    em memoria de antes da persistencia. Defensivo: banco doente nao pode
+    derrubar a pagina de diagnostico (que se abre exatamente quando as
+    coisas quebram) — cai pro valor em memoria."""
+    try:
+        ultimo_run = (_parse_marco_backup('backup_ultimo_run_em')
+                      or _ult_run_backup)
+        ultimo_ok = _parse_marco_backup('backup_ultimo_ok_em')
+    except Exception:  # noqa: BLE001
+        logger.exception('status_backup: leitura do marco falhou')
+        ultimo_run, ultimo_ok = _ult_run_backup, None
     return {
         'ativo': _scheduler is not None and _scheduler.running,
-        'ultimo_run': _ult_run_backup,
+        'ultimo_run': ultimo_run,
+        'ultimo_ok': ultimo_ok,
     }
 
 
@@ -814,4 +888,63 @@ def _run_heartbeat_slack(app):
         texto = (f':heartbeat: sistema OK · {agora_brt.strftime("%d/%m %H:%M")} BRT\n'
                  'se essa msg sumir do canal por mais de 24h, '
                  'a infra de alertas (Z-API/vigias) pode estar fora')
+        aviso = _aviso_backup_atrasado()
+        if aviso:
+            texto += '\n' + aviso
         slack.post_message(canal, text=texto)
+
+
+def _aviso_backup_atrasado(limite_horas=28):
+    """Linha de aviso pro heartbeat quando o ultimo backup OK esta velho
+    (dead-man's switch do backup, 11/07/2026): falha do job so logava
+    WARNING e ninguem via — o backup podia parar por semanas em silencio.
+    28h = job diario das 04:00 com folga pra atraso normal. Cobre o backup
+    do sistema (gate `BACKUP_AUTO`) e o do Chatwoot (gates proprios:
+    `BACKUP_CHATWOOT` + CHATWOOT_DATABASE_URL — espelham o agendamento).
+    Job que RODA mas NUNCA registrou OK tambem avisa (run gravado + OK
+    ausente = falhando desde sempre; sem isso o dead-man nasceria cego pro
+    backup ja-quebrado). Quieto fora de Postgres (local) ou sem marco
+    nenhum (primeiro 04:00 do deploy ainda nao rodou). Best-effort: erro
+    aqui nunca derruba o heartbeat."""
+    from flask import current_app
+
+    from app.extensions import db
+    from app.utils import agora as _agora
+    try:
+        if db.engine.dialect.name != 'postgresql':
+            return None
+        agora_dt = _agora()
+        alvos = []
+        if os.environ.get('BACKUP_AUTO', '1') != '0':
+            alvos.append(('backup_ultimo_ok_em', 'backup_ultimo_run_em',
+                          'backup do Postgres'))
+        if (os.environ.get('BACKUP_CHATWOOT', '1') != '0'
+                and (current_app.config.get('CHATWOOT_DATABASE_URL')
+                     or '').strip()):
+            alvos.append(('backup_chatwoot_ultimo_ok_em',
+                          'backup_chatwoot_ultimo_run_em',
+                          'backup do Chatwoot'))
+        avisos = []
+        for chave_ok, chave_run, rotulo in alvos:
+            ultimo_ok = _parse_marco_backup(chave_ok)
+            if ultimo_ok:
+                horas = (agora_dt - ultimo_ok).total_seconds() / 3600
+                if horas > limite_horas:
+                    avisos.append(
+                        f':warning: ultimo {rotulo} OK ha {int(horas)}h '
+                        f'({ultimo_ok.strftime("%d/%m %H:%M")}) — o job '
+                        'diario das 04:00 pode estar falhando; ver card '
+                        'Backup em /admin/debug-schema')
+                continue
+            ultimo_run = _parse_marco_backup(chave_run)
+            if ultimo_run:
+                avisos.append(
+                    f':warning: {rotulo} roda mas NUNCA registrou OK '
+                    f'(ultimo run {ultimo_run.strftime("%d/%m %H:%M")}) — '
+                    'falhando desde o inicio do marco; ver card Backup em '
+                    '/admin/debug-schema')
+        if avisos:
+            return '\n'.join(avisos)
+    except Exception:  # noqa: BLE001 — aviso nunca derruba o heartbeat
+        logger.exception('aviso de backup atrasado falhou')
+    return None

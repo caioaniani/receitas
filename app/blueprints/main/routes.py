@@ -2230,6 +2230,21 @@ def vigia_site():
     return jsonify(site_vigia.rodar_checks()), 200
 
 
+@main_bp.route('/admin/vigia-uso-ia')
+@owner_required
+def vigia_uso_ia():
+    """Vigia de CUSTO de IA sob demanda (owner-only) — mesmo check do cron
+    de 1h (gasto de hoje em UsoIA × teto USO_IA_TETO_DIA_USD). Criado em
+    11/07/2026: o /admin/uso-ia é passivo; este vigia é quem avisa.
+    `?alertar=1` roda o fluxo completo com anti-spam/WhatsApp; sem
+    parâmetro, só mostra o resultado (não mexe no estado do vigia)."""
+    from app.services import uso_ia_vigia
+
+    if request.args.get('alertar') == '1':
+        return jsonify(uso_ia_vigia.vigiar()), 200
+    return jsonify(uso_ia_vigia.rodar_checks()), 200
+
+
 @main_bp.route('/admin/debug-chatwoot')
 @owner_required
 def debug_chatwoot():

@@ -291,6 +291,24 @@ def test_acuracia_por_loja_receita_filtra_amostra_rasa(app):
     assert ac['wape_pct'] == 20.0                           # 10/50
 
 
+def test_min_n_conta_datas_distintas_nao_leads(app):
+    """Com 1 snapshot por antecedencia, um unico dia visto de 5 leads NAO
+    fura a guarda de amostra rasa (min_n conta datas-alvo distintas)."""
+    loja = _loja()
+    r = _receita()
+    ontem = hoje() - timedelta(days=1)
+    for lead in range(5):
+        _snap_motor(loja, r, ontem, 12, 10, 'media_pedido', lead=lead)
+    assert svc.acuracia_por_loja_receita('media_pedido', min_n=5) == {}
+    # 5 datas distintas (mesmo com 1 lead cada) continuam passando
+    for k in range(1, 5):
+        _snap_motor(loja, r, ontem - timedelta(days=k), 12, 10,
+                    'media_pedido')
+    mapa = svc.acuracia_por_loja_receita('media_pedido', min_n=5)
+    assert (loja.id, r.id) in mapa
+    assert mapa[(loja.id, r.id)]['n'] == 9      # n segue sendo snapshots
+
+
 def test_acuracia_por_loja_receita_so_do_motor_pedido(app):
     loja = _loja()
     r = _receita()

@@ -1499,6 +1499,51 @@ recebimento; o bot **so le** (nunca posta), a IA extrai os dados e cria uma
 - Env `SLACK_CANAIS_NF` = CSV dos IDs dos canais. `ANTHROPIC_API_KEY` e Dropbox
   ja configurados (reusados do copilot/entregas).
 
+## Incidente 12/07/2026 — revert em bloco + regras que ficaram
+
+Uma sessao paralela pushou ~100 commits que derrubaram producao: implementou
+o "M6 Commit D" (drop das colunas BLOB) SEM confirmar o deploy do commit 1,
+junto com upgrade em massa de requirements e healthcheck novo. Um container
+BOOTOU (migrations rodam no startup), dropou receita.imagem_blob,
+produto.imagem_blob, foto_recebimento.imagem e pedido_item_foto.imagem, e o
+deploy NUNCA foi promovido — o codigo antigo no ar selecionava as colunas
+dropadas e TODA tela com esses modelos virou 500. Restauracao: commit
+5934d137 (volta a arvore ao ultimo deploy saudavel + re-cria as 4 colunas
+vazias; sem perda de dados — a guarda do drop so rodava com coluna vazia).
+Salvage triado em seguida (vigia custo IA, dead-man backup, ajustes de
+acuracia, teste do QR de conferencia). REGRAS QUE FICARAM:
+
+- **Sicredi NAO se mexe sem ordem explicita do dono** (12/07/2026: "nos ja
+  fazemos os boletos da sicredi e ele estava mexendo nisso"). As mudancas
+  da sessao revertida em sicredi_cnab/cobrancas foram DESCARTADAS.
+- **Upgrade de dependencias so isolado e com ordem**: nunca junto de
+  mudanca de schema/feature (o upgrade em massa foi descartado).
+- **Sonda `GET /api/claude/deploy`** (Bearer CLAUDE_API_TOKEN) devolve o
+  commit no ar (RAILWAY_GIT_COMMIT_SHA) — o procedimento de 2 commits de
+  schema DEVE confirmar o deploy do commit 1 por ela antes do commit 2.
+- **M6 Commit D segue PENDENTE**: refazer só pelo procedimento canonico
+  (drenar BLOBs pelo card /admin/debug-schema ate 0 pendentes → commit 1 =
+  codigo para de ler/escrever BLOB, atomico, deploy confirmado →
+  commit 2 = DROP guardado). O mapa detalhado esta no parecer da triagem
+  (historico ate 6c89d5a0).
+- healthcheckPath no railway.json: NAO reaplicar sem decisao do dono — nao
+  previne a classe de incidente (migrations mutam schema antes da
+  promocao) e ha risco de 301 do redirect HTTPS congelar deploys.
+
+## Vigias novos (12/07/2026, resgatados da sessao revertida)
+
+- **Vigia de custo de IA** (`app/services/uso_ia_vigia.py`): cron 1h
+  (lock 7748, kill-switch `USO_IA_VIGIA=0`) soma o gasto de HOJE (00:00
+  BRT) em `UsoIA` e alerta o dono no WhatsApp quando passa do teto
+  `USO_IA_TETO_DIA_USD` (default US$ 25) — transicao + re-alerta 6h +
+  normalizacao, estado em AppConfig. Sob demanda: `GET /admin/vigia-uso-ia`
+  (owner; `?alertar=1` roda com WhatsApp). Testes: tests/test_uso_ia_vigia.py.
+- **Dead-man do backup** (`seru_cron`): marcos `backup_ultimo_run_em`/
+  `backup_ultimo_ok_em` (+ variantes chatwoot) persistidos em AppConfig; o
+  heartbeat Slack diario avisa se o ultimo OK tem >28h ou se o job roda mas
+  nunca deu OK. Card Backup do /admin/debug-schema mostra "Ultimo OK"
+  separado do ultimo run. Testes: tests/test_backup_deadman.py.
+
 ## Cobrancas Sicredi (boleto hibrido via CNAB 400) — homologacao em curso
 
 Gestao de boletos das parcelas B2B direto no sistema (04-06/07/2026). Banco

@@ -922,9 +922,12 @@ def _migrate_postgres(app):
     _try("ALTER TABLE previsao_snapshot ADD COLUMN lead_dias INTEGER")
     _try("ALTER TABLE previsao_snapshot DROP CONSTRAINT IF EXISTS "
          "uq_previsao_snapshot_alvo")
-    _try("ALTER TABLE previsao_snapshot ADD CONSTRAINT "
-         "uq_previsao_snapshot_alvo_motor "
-         "UNIQUE (data_alvo, loja_id, receita_id, motor)")
+    # (11/07/2026) O ADD CONSTRAINT da unique de 4 colunas
+    # (uq_previsao_snapshot_alvo_motor) que vivia aqui foi REMOVIDO: a
+    # canonica agora e a de 5 colunas com lead_dias (bloco "Acuracia por
+    # ANTECEDENCIA" adiante, que dropa a velha). Mante-lo recriava a velha
+    # em todo boot (pra dropar logo depois) e, com duplicatas por lead na
+    # tabela, falharia com warning a cada startup.
 
     # ── Caixa/piso de pedido pra MATERIA-PRIMA (Fase 1, 02/07/2026) ──
     # MP pedida pela loja (ex: pao de queijo congelado em saco) precisa de
