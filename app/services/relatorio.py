@@ -107,7 +107,7 @@ def _render_fotos(pdf, fotos, titulo='Fotos do recebimento', legendas=None,
     """Renderiza miniaturas das fotos em grade dentro do PDF.
 
     Quebra de pagina automatica quando o bloco nao cabe no restante.
-    Fotos podem estar no Dropbox (M6+) ou BLOB legado.
+    Fotos vivem no Dropbox (M6); sem bytes, a foto fica fora da grade.
 
     `legendas`: lista paralela a `fotos` (str por foto). Quando presente,
     escreve a legenda embaixo de cada miniatura — usado nas fotos de

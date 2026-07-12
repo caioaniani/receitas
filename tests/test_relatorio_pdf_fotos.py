@@ -48,8 +48,7 @@ def test_foto_bytes_usa_api_autenticada_primeiro():
     Nem chega a tocar no shared link."""
     jpeg = _jpeg_bytes()
     foto = SimpleNamespace(id=1, imagem_url='https://dropbox.com/x?raw=1',
-                           imagem_storage_path='/recebimento/1/abc.jpg',
-                           imagem=None)
+                           imagem_storage_path='/recebimento/1/abc.jpg')
     with patch('app.services.dropbox_storage.baixar', return_value=jpeg) as api, \
          patch('app.services.relatorio.requests.get') as http:
         out = relatorio._foto_bytes(foto)
@@ -62,8 +61,7 @@ def test_foto_bytes_cai_no_shared_link_se_api_autenticada_falhar():
     """API retornou None → cai no shared link com User-Agent + raw."""
     jpeg = _jpeg_bytes()
     foto = SimpleNamespace(id=10, imagem_url='https://dropbox.com/x?dl=0',
-                           imagem_storage_path='/recebimento/10/abc.jpg',
-                           imagem=None)
+                           imagem_storage_path='/recebimento/10/abc.jpg')
     with patch('app.services.dropbox_storage.baixar', return_value=None), \
          patch('app.services.relatorio.requests.get',
                return_value=_resp(200, jpeg, 'image/jpeg')) as m:
@@ -77,7 +75,7 @@ def test_foto_bytes_sem_storage_path_usa_shared_link():
     """Foto pre-storage_path (ainda assim com URL): so o shared link."""
     jpeg = _jpeg_bytes()
     foto = SimpleNamespace(id=2, imagem_url='https://dropbox.com/x?raw=1',
-                           imagem_storage_path=None, imagem=None)
+                           imagem_storage_path=None)
     with patch('app.services.dropbox_storage.baixar') as api, \
          patch('app.services.relatorio.requests.get',
                return_value=_resp(200, jpeg, 'image/jpeg')):
@@ -104,7 +102,7 @@ def test_foto_bytes_normaliza_url_pra_raw():
     jpeg = _jpeg_bytes()
     foto = SimpleNamespace(id=3,
                            imagem_url='https://www.dropbox.com/s/abc/f.jpg?dl=0',
-                           imagem_storage_path=None, imagem=None)
+                           imagem_storage_path=None)
     with patch('app.services.relatorio.requests.get',
                return_value=_resp(200, jpeg, 'image/jpeg')) as m:
         relatorio._foto_bytes(foto)

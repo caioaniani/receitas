@@ -1104,7 +1104,6 @@ def debug_foto_pdf():
     1. API autenticada (storage_path)
     2. Shared link com User-Agent + raw=1
     3. Shared link cru (como estava antes do fix)
-    4. BLOB legado
     """
     import requests as _req
 
