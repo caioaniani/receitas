@@ -55,9 +55,10 @@
     <input type="email" name="email" required autocomplete="email"
            value="{{ form.get('email', '') }}">
 
-    <label>WhatsApp (com DDD)</label>
+    <label>WhatsApp (celular com DDD)</label>
     <input type="tel" name="telefone" required autocomplete="tel"
-           placeholder="(11) 99999-9999" value="{{ form.get('telefone', '') }}">
+           inputmode="tel" placeholder="(11) 91234-5678"
+           value="{{ form.get('telefone', '') }}">
 
     <label>Crie uma senha <span class="aviso-opc">(para o site da
       padaria)</span></label>
