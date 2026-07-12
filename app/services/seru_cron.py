@@ -52,6 +52,7 @@ LOCK_KEY_BAIXAS_PRESAS = 7744  # advisory lock pro alerta de baixas presas (sepa
 LOCK_KEY_SITE_VIGIA = 7745  # advisory lock pro vigia do site (canarios de frete/catalogo/agenda)
 LOCK_KEY_PDV_VIGIA = 7746  # advisory lock pro vigia do PDV (loja muda / company sem vinculo)
 LOCK_KEY_USO_IA_VIGIA = 7748  # advisory lock pro vigia de custo de IA (teto diario)
+LOCK_KEY_GOOGLE_REVIEWS = 7749  # advisory lock pro sync de avaliacoes do Google
 # Locks LIBERADOS mas RESERVADOS (nao reusar — evita conflito se algum
 # dos jobs for reativado no futuro):
 # - 7730 era do `zapi-digest-anomalias` (job 23:00 BRT, removido 14/06/2026).
