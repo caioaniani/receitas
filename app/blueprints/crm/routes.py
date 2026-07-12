@@ -397,6 +397,33 @@ def bot_webhook():
                                  'conv=%s', conv_id)
             return jsonify({'ok': True, 'ignorado': 'numero-ignorado'})
 
+    # PORTAL WI-FI: mensagem com código WIFI-XXXXXX é validação de posse do
+    # número — resposta determinística (sem Claude) e fim. O telefone do
+    # REMETENTE é a prova; o service resolve a conta do site e devolve o
+    # link de login. Em conversa 'pending' resolvemos (não é atendimento);
+    # em 'open' só respondemos (não roubar a conversa do atendente).
+    if _eh_codigo_wifi:
+        from app.services import chatwoot as _cw
+        telefone_raw = (sender.get('phone_number')
+                        or sender_meta.get('phone_number')
+                        or telefone_contato or '')
+        try:
+            res_wifi = _wifi.processar_codigo_whatsapp(content, telefone_raw)
+        except Exception:  # noqa: BLE001
+            logger.exception('crm/bot: portal wifi falhou conv=%s', conv_id)
+            res_wifi = None
+        if res_wifi is not None:
+            try:
+                _cw.enviar_mensagem(conv_id, res_wifi['texto'])
+                if (conv.get('status') or '') == 'pending':
+                    _cw.definir_status(conv_id, 'resolved')
+            except Exception:  # noqa: BLE001
+                logger.exception('crm/bot: resposta wifi falhou conv=%s',
+                                 conv_id)
+            return jsonify({'ok': True, 'wifi_portal': True})
+        # Regex casou mas o service não tratou (erro interno): segue o
+        # fluxo normal do bot — melhor o bot responder algo do que nada.
+
     # Lock por conv_id: serializa threads que processam a MESMA conversa
     # (mensagens consecutivas do cliente no WhatsApp = webhooks paralelos).
     _lock_conv = _lock_para_conv(conv_id)
