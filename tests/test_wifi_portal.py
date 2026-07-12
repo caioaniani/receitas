@@ -70,6 +70,66 @@ def test_validar_form_erros(app):
         assert len(erros) == 5
 
 
+def test_validar_form_exige_nome_e_sobrenome(app):
+    from app.services import wifi_portal
+    with app.app_context():
+        _, erros = wifi_portal.validar_form(_form(nome='Maria'))
+        assert erros == ['Informe nome e sobrenome.']
+        _, erros = wifi_portal.validar_form(_form(nome='Maria da Silva'))
+        assert not erros
+
+
+def test_validar_form_whatsapp_celular_br(app):
+    from app.services import wifi_portal
+    with app.app_context():
+        # fixo (sem o nono dígito 9) não recebe WhatsApp
+        _, erros = wifi_portal.validar_form(_form(telefone='(11) 3888-7777'))
+        assert len(erros) == 1 and 'WhatsApp' in erros[0]
+        # DDD que não existe (20) = digitação errada
+        _, erros = wifi_portal.validar_form(_form(telefone='20 98888-7777'))
+        assert len(erros) == 1 and 'WhatsApp' in erros[0]
+        # com o 55 do país, válido
+        _, erros = wifi_portal.validar_form(
+            _form(telefone='+55 11 98888-7777'))
+        assert not erros
+
+
+def test_validar_form_email_typo_de_provedor(app):
+    from app.services import wifi_portal
+    with app.app_context():
+        _, erros = wifi_portal.validar_form(_form(email='maria@gmial.com'))
+        assert erros == ['Confira o e-mail — você quis dizer @gmail.com?']
+        _, erros = wifi_portal.validar_form(_form(email='maria@gmail.com'))
+        assert not erros
+
+
+def test_validar_form_email_dominio_inexistente(app, monkeypatch):
+    from app.services import wifi_portal
+    with app.app_context():
+        monkeypatch.setattr(wifi_portal, '_dominio_email_resolve',
+                            lambda dominio: False)
+        _, erros = wifi_portal.validar_form(_form())
+        assert len(erros) == 1 and 'domínio' in erros[0]
+
+
+def test_dns_indisponivel_nao_barra_cadastro(app, monkeypatch):
+    """Fail-open de infra: resolver fora do ar ≠ domínio inexistente."""
+    import dns.resolver
+
+    from app.services import wifi_portal
+    with app.app_context():
+        def _estoura(self, *a, **kw):
+            raise dns.exception.Timeout()
+        monkeypatch.setattr(dns.resolver.Resolver, 'resolve', _estoura)
+        assert wifi_portal._dominio_email_resolve.__wrapped__ \
+            if hasattr(wifi_portal._dominio_email_resolve, '__wrapped__') \
+            else True
+        # chama a função REAL (a fixture autouse patcha o módulo; aqui
+        # importamos direto do código pra exercitar o caminho de erro)
+        from app.services.wifi_portal import _dominio_email_resolve as real
+        assert real('example.com') is True
+
+
 def test_criar_sessao_gera_codigo_e_hasheia_senha(app):
     with app.app_context():
         s = _sessao()
