@@ -299,7 +299,16 @@ def bot_webhook():
         return jsonify({'ok': True, 'ignorado': 'ig-story-mention',
                         'motivo': ig_mention})
 
-    if (conv.get('status') or '') != 'pending':
+    # Código do PORTAL WI-FI (WIFI-XXXXXX) fura o gate de status: a
+    # validação de posse do número tem que funcionar mesmo se o cliente já
+    # tiver conversa 'open' com atendente (senão o código cai no colo do
+    # humano e o cadastro morre). O processamento fica adiante (depois do
+    # dedupe/telefone); aqui só deixamos passar.
+    from app.services import wifi_portal as _wifi
+    _eh_codigo_wifi = bool(_wifi.RE_CODIGO_WIFI.search(
+        (payload.get('content') or '')))
+
+    if (conv.get('status') or '') != 'pending' and not _eh_codigo_wifi:
         # Log com status real recebido — diagnostico de '"Olá" do cliente
         # nao acordou o bot' (incidente 12/06/2026, conv #198): mensagem
         # nova em conversa resolved/open passa por aqui em silencio.
