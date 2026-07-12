@@ -109,6 +109,12 @@
                         onclick="return confirm('Voltar esta cobrança pra pendente pra corrigir e gerar NOVA remessa?');">
                     voltar</button>
                 {% endif %}
+                {% if c.status == 'registrada' %}
+                <button class="btn btn-sm btn-outline-warning" form="bx-{{ c.id }}"
+                        title="Gera remessa de PEDIDO DE BAIXA (instrução 02) — envie o arquivo no Sicredi; a baixa confirma no retorno."
+                        onclick="return confirm('Pedir a BAIXA deste título no Sicredi? O boleto deixa de ser pagável depois que o banco confirmar.');">
+                    pedir baixa</button>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}
