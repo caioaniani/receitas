@@ -188,6 +188,7 @@ def test_login_token_one_time(app):
 
 # ── Rotas ────────────────────────────────────────────────────────────────
 
+@pytest.mark.loja_host
 def test_rota_portal_e_fluxo_web(app, visivel):
     with app.app_context():
         app.config['WIFI_PORTAL_WHATSAPP'] = '5511900001111'
