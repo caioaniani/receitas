@@ -143,7 +143,7 @@ def _detalhe_titulo(cob, seq, instrucao='01'):
         (75, 76, '00'), (77, 78, '00'),
         (83, 92, _num(0, 10)),          # desconto antecipação
         (93, 96, _num(0, 4)),           # multa %
-        (109, 110, '01'),               # instrução: cadastro de título
+        (109, 110, instrucao),          # instrução: 01 cadastro / 02 baixa
         (111, 120, _alfa(cob.seu_numero, 10)),
         (121, 126, cob.vencimento.strftime('%d%m%y')),
         (127, 139, _num(_centavos(cob.valor), 13)),
