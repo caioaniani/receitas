@@ -462,11 +462,16 @@ def test_aviso_estoque_baixo_com_dedup(app, monkeypatch):
         assert not tx2.called
 
 
-def test_rota_admin_vouchers_owner(app, owner_user):
-    # sem login não entra (client separado — sessão anônima não pode
-    # contaminar o client logado)
+def test_rota_admin_vouchers_exige_owner(app):
+    # Teste SEPARADO do caso logado: sob o app context do conftest, o `g`
+    # do Flask é compartilhado entre requests do MESMO teste, e a request
+    # anônima deixa `g._login_user` anônimo em cache — a logada seguinte
+    # herdaria e daria 403 falso.
     assert app.test_client().get('/admin/wifi-vouchers').status_code \
         in (302, 401, 403)
+
+
+def test_rota_admin_vouchers_owner(app, owner_user):
     c = app.test_client()
     _login_owner(c, owner_user)
     r = c.get('/admin/wifi-vouchers')
