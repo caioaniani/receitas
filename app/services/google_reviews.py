@@ -25,7 +25,7 @@ Fontes (endpoints Google):
 - Reviews/reply (v4): mybusiness.googleapis.com/v4/{account}/{location}/reviews[/{id}/reply]
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import requests
@@ -279,14 +279,13 @@ def _parse_dt(valor):
     if not valor:
         return None
     try:
-        s = valor.replace('Z', '+00:00')
-        dt = datetime.fromisoformat(s)
-        if dt.tzinfo is not None:
-            dt = dt.astimezone(tz=None).replace(tzinfo=None) \
-                if False else (dt - dt.utcoffset()).replace(tzinfo=None)
-        return dt - timedelta(hours=3)
+        dt = datetime.fromisoformat(valor.replace('Z', '+00:00'))
     except (ValueError, TypeError):
         return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    # Google devolve UTC; BRT = UTC-3 (sem horario de verao desde 2019).
+    return dt - timedelta(hours=3)
 
 
 # ── Sincronizacao de reviews ─────────────────────────────────────────
