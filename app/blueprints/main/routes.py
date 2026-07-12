@@ -1067,12 +1067,15 @@ def avaliacoes_google():
     """Painel de avaliacoes do Google: nota geral, lista, responder + vincular
     location->loja. Dormente ate o OAuth+aprovacao do Google (mostra o estado
     'nao conectado' com o botao de conectar)."""
+    from app.models import Loja
     from app.services import google_reviews
     nota = request.args.get('nota', type=int)
     sem_resposta = request.args.get('sem_resposta') == '1'
+    lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
     return render_template(
         'admin/avaliacoes_google.html',
-        r=google_reviews.resumo(nota=nota, sem_resposta=sem_resposta))
+        r=google_reviews.resumo(nota=nota, sem_resposta=sem_resposta),
+        lojas=lojas)
 
 
 @main_bp.route('/admin/avaliacoes-google/conectar')
