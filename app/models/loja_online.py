@@ -58,6 +58,12 @@ class Cliente(db.Model):
     # Consentimento LGPD: timestamp do aceite no checkout. NULL = sem aceite
     # registrado (pedidos antigos/migrados).
     aceite_lgpd_em = db.Column(db.DateTime, nullable=True)
+    # Aniversário (portal Wi-Fi 11/07/2026): dia/mês pra campanha; ANO
+    # opcional (LGPD — minimização). ALTER aplicado em prod (76b0a043)
+    # ANTES deste modelo — procedimento de 2 commits.
+    aniversario_dia = db.Column(db.Integer, nullable=True)
+    aniversario_mes = db.Column(db.Integer, nullable=True)
+    nascimento_ano = db.Column(db.Integer, nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     criado_em = db.Column(db.DateTime, default=agora)
 
