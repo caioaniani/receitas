@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}Avaliações Google{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-google"></i> Avaliações do Google</h1>
+    <div class="d-flex gap-2 flex-wrap">
+        {% if r.disponivel %}
+        <form method="POST" action="{{ url_for('main.avaliacoes_google_sincronizar') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat"></i> Sincronizar agora</button>
+        </form>
+        <form method="POST" action="{{ url_for('main.avaliacoes_google_desconectar') }}"
+              onsubmit="return confirm('Desconectar a conta Google?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-secondary">Desconectar</button>
+        </form>
+        {% else %}
+        <a class="btn btn-sm btn-primary" href="{{ url_for('main.avaliacoes_google_conectar') }}">
+            <i class="bi bi-box-arrow-in-right"></i> Conectar conta Google
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+{% if not r.conectado %}
+<div class="alert alert-warning">
+    <strong>Ainda não conectado.</strong> Para trazer as avaliações e responder,
+    é preciso: (1) ter <strong>acesso aprovado</strong> à Business Profile API no
+    Google Cloud, (2) configurar <code>GOOGLE_OAUTH_CLIENT_ID/SECRET</code> no
+    Railway e (3) clicar em <strong>Conectar conta Google</strong> acima e
+    autorizar com a conta que administra o perfil da padaria.
+</div>
+{% elif not r.disponivel %}
+<div class="alert alert-warning">
+    Conta conectada, mas a integração está desligada (<code>GOOGLE_REVIEWS=0</code>)
+    ou faltam credenciais. Verifique a config.
+</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="card h-100"><div class="card-body text-center py-3">
+            <div class="display-6 mb-0">{{ '%.2f'|format(r.media) if r.media is not none else '—' }}</div>
+            <div class="small text-muted">Nota média</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100"><div class="card-body text-center py-3">
+            <div class="display-6 mb-0">{{ r.total }}</div>
+            <div class="small text-muted">Total de avaliações</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100"><div class="card-body text-center py-3">
+            <div class="display-6 mb-0 text-warning">{{ r.sem_resposta }}</div>
+            <div class="small text-muted">Sem resposta</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card h-100"><div class="card-body text-center py-3">
+            <div class="small text-muted mb-1">Por nota</div>
+            {% for n in [5, 4, 3, 2, 1] %}
+            <div class="d-flex justify-content-between small">
+                <span>{{ n }}★</span><span class="text-muted">{{ r.por_nota[n] }}</span>
+            </div>
+            {% endfor %}
+        </div></div>
+    </div>
+</div>
+
+{% if r.locations %}
+<div class="card mb-3">
+    <div class="card-header py-2"><strong>Locais (Google → Loja)</strong></div>
+    <div class="card-body p-0">
+        <div class="mobile-table-scroll">
+            <table class="table table-sm mb-0" style="font-size:13px">
+                <thead><tr><th>Local no Google</th><th>Loja vinculada</th><th></th></tr></thead>
+                <tbody>
+                {% for loc in r.locations %}
+                <tr>
+                    <td>{{ loc.apelido or loc.location_name }}</td>
+                    <td colspan="2">
+                        <form method="POST" class="d-flex gap-2 align-items-center"
+                              action="{{ url_for('main.avaliacoes_google_vincular_loja', lid=loc.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="loja_id" class="form-select form-select-sm" style="width:auto">
+                                <option value="">— não vinculada —</option>
+                                {% for l in lojas %}
+                                <option value="{{ l.id }}" {{ 'selected' if loc.loja_id == l.id }}>{{ l.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            <button class="btn btn-sm btn-outline-secondary">Salvar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<form method="GET" class="d-flex gap-2 align-items-center mb-2 flex-wrap">
+    <label class="small text-muted mb-0">Filtrar:</label>
+    <select name="nota" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+        <option value="">Todas as notas</option>
+        {% for n in [5, 4, 3, 2, 1] %}
+        <option value="{{ n }}" {{ 'selected' if r.filtro_nota == n }}>{{ n }} estrela(s)</option>
+        {% endfor %}
+    </select>
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="sem_resposta" value="1"
+               id="sr" {{ 'checked' if r.filtro_sem_resposta }} onchange="this.form.submit()">
+        <label class="form-check-label small" for="sr">Só sem resposta</label>
+    </div>
+</form>
+
+<div class="card">
+    <div class="card-header py-2"><strong>Avaliações</strong></div>
+    <div class="card-body">
+        {% for rev in r.reviews %}
+        <div class="border-bottom pb-3 mb-3">
+            <div class="d-flex justify-content-between flex-wrap gap-1">
+                <div>
+                    <span class="text-warning">{{ '★' * (rev.nota or 0) }}{{ '☆' * (5 - (rev.nota or 0)) }}</span>
+                    <strong class="ms-1">{{ rev.autor or 'Anônimo' }}</strong>
+                    {% set loc = r.loc_map.get(rev.location_name) %}
+                    {% if loc %}<span class="badge bg-light text-dark ms-1">{{ loc.apelido or (loc.loja.nome if loc.loja) or 'local' }}</span>{% endif %}
+                </div>
+                <span class="small text-muted">{{ rev.criado_em_google|brt('%d/%m/%Y') if rev.criado_em_google else '' }}</span>
+            </div>
+            {% if rev.comentario %}<div class="mt-1">{{ rev.comentario }}</div>{% endif %}
+
+            {% if rev.respondida %}
+            <div class="mt-2 ps-3 border-start border-3 border-success">
+                <div class="small text-success fw-semibold">Sua resposta:</div>
+                <div class="small">{{ rev.resposta_texto }}</div>
+            </div>
+            {% else %}
+            <form method="POST" class="mt-2"
+                  action="{{ url_for('main.avaliacoes_google_responder', rid=rev.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <textarea name="resposta" id="resp-{{ rev.id }}" class="form-control form-control-sm mb-2"
+                          rows="2" placeholder="Escreva a resposta…"
+                          {{ 'disabled' if not r.disponivel }}></textarea>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-success" {{ 'disabled' if not r.disponivel }}>Responder no Google</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            onclick="rascunhoIA({{ rev.id }}, this)" {{ 'disabled' if not r.disponivel }}>
+                        <i class="bi bi-stars"></i> Sugerir com IA
+                    </button>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% if not r.reviews %}
+        <p class="text-muted mb-0">Nenhuma avaliação {{ 'com esse filtro' if (r.filtro_nota or r.filtro_sem_resposta) else 'sincronizada ainda' }}.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function rascunhoIA(id, btn) {
+    var ta = document.getElementById('resp-' + id);
+    var orig = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = 'Gerando…';
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    fetch('{{ url_for("main.avaliacoes_google") }}/' + id + '/rascunho', {
+        method: 'POST',
+        headers: {'X-CSRFToken': meta ? meta.getAttribute('content') : ''},
+    }).then(function (r) { return r.json(); }).then(function (d) {
+        btn.disabled = false; btn.innerHTML = orig;
+        if (d.ok && d.texto) { ta.value = d.texto; ta.focus(); }
+        else { alert(d.msg || 'Não consegui gerar o rascunho.'); }
+    }).catch(function () { btn.disabled = false; btn.innerHTML = orig; alert('Falha ao gerar.'); });
+}
+</script>
+{% endblock %}
