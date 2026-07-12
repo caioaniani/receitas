@@ -122,6 +122,31 @@ def test_sincronizar_e_alertar_segundo_sync_alerta_novas(app):
         assert 'Carla' in msg and 'Google' in msg
 
 
+def test_nao_prima_durante_403_e_nao_inunda_apos_aprovacao(app):
+    """Cenario dormente: OAuth feito mas Business Profile API ainda NAO aprovada
+    (_get devolve None em tudo, como no 403). O cron NAO pode marcar primed com
+    o banco vazio — senao o 1o import real depois da aprovacao alertaria o
+    historico inteiro."""
+    from app.models import AppConfig
+    from app.services import google_reviews as gr
+    with app.app_context():
+        _conectar(app)
+        # 1) Janela 403: API nao responde nada.
+        with patch.object(gr, '_get', return_value=None), \
+             patch.object(gr, '_alertar_novas') as alerta:
+            r0 = gr.sincronizar_e_alertar()
+        assert r0['alertou'] is False and not alerta.called
+        assert AppConfig.get(gr._KEY_PRIMED) != '1'        # NAO primou
+
+        # 2) Aprovacao chega: 1o import real (historico) — importa SEM alertar.
+        with patch.object(gr, '_get', side_effect=_fake_get_factory()), \
+             patch.object(gr, '_alertar_novas') as alerta2:
+            r1 = gr.sincronizar_e_alertar()
+        assert r1['novas'] == 2 and r1['alertou'] is False
+        assert not alerta2.called                          # historico nao inunda
+        assert AppConfig.get(gr._KEY_PRIMED) == '1'         # agora primou
+
+
 def test_texto_alerta_prioriza_nota_baixa(app):
     from app.models import GoogleReview
     from app.services import google_reviews as gr
