@@ -72,6 +72,54 @@ def _nome_alvo(m):
     return (None, None, None, False)
 
 
+def venda_seru_por_nome(dias=14):
+    """Publico pra tela de mapeamentos: venda do periodo por nome externo."""
+    dias = max(1, min(int(dias or 14), 60))
+    return _venda_por_nome(hoje() - timedelta(days=dias - 1))
+
+
+def problemas_por_mapa():
+    """{venda_mapa_id: [descricao, ...]} — os problemas da auditoria que
+    pertencem a UMA linha de mapa (alvo morto/arquivado, fator zero, cesta
+    vazia, componente orfao), pra tela de mapeamentos marcar linha a linha.
+    Nao inclui os agregados (sem_estoque, pedidos nao baixados)."""
+    out = {}
+
+    def _add(mid, msg):
+        out.setdefault(mid, []).append(msg)
+
+    mapas = VendaMapa.query.all()
+    prod_ids = {m.produto_id for m in mapas
+                if m.produto_id and not m.ignorar}
+    cestas_vazias, cestas_orfas = set(), {}
+    for pid in prod_ids:
+        itens = ProdutoItem.query.filter_by(produto_id=pid).all()
+        if not itens:
+            cestas_vazias.add(pid)
+            continue
+        orfaos = [it.item_nome for it in itens
+                  if not it.receita_id and not it.materia_prima_id]
+        if orfaos:
+            cestas_orfas[pid] = orfaos
+    for m in mapas:
+        if m.ignorar:
+            continue
+        tipo, _alvo_id, nome_alvo, arquivado = _nome_alvo(m)
+        if tipo and nome_alvo is None:
+            _add(m.id, 'alvo inexistente — baixa não acontece')
+        elif arquivado:
+            _add(m.id, f'{tipo} arquivada ({nome_alvo}) — baixa não acontece')
+        if tipo and (m.fator_quantidade or 0) <= 0:
+            _add(m.id, 'fator 0 — mapeado mas baixa NADA')
+        if m.produto_id in cestas_vazias:
+            _add(m.id, 'cesta SEM componentes — venda não move estoque')
+        if m.produto_id in cestas_orfas:
+            _add(m.id, 'componente(s) órfão(s): '
+                 + ', '.join(cestas_orfas[m.produto_id])
+                 + ' — não baixam (vincular em /produtos/cestas/orfaos)')
+    return out
+
+
 def auditar(dias=14):
     """Roda todas as verificacoes. Devolve dict serializavel (JSON)."""
     dias = max(1, min(int(dias or 14), 60))
