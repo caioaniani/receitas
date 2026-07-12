@@ -293,10 +293,17 @@
                     </td>
                     <td>
                         {% if mp.alvo_nome %}
-                            <small>{{ mp.alvo_nome }}
-                                {% if mp.receita_id %}<span class="badge bg-primary" style="font-size:9px;" title="receita">R</span>
-                                {% elif mp.produto_id %}<span class="badge bg-secondary" style="font-size:9px;" title="produto (cesta)">P</span>
-                                {% else %}<span class="badge bg-info text-dark" style="font-size:9px;" title="matéria-prima">M</span>{% endif %}
+                            <small>
+                                {% if mp.receita_id %}
+                                <a href="{{ url_for('receitas.ficha', id=mp.receita_id) }}"
+                                   title="Abrir a ficha da receita">{{ mp.alvo_nome }}</a>
+                                <span class="badge bg-primary" style="font-size:9px;" title="receita">R</span>
+                                {% elif mp.produto_id %}
+                                <a href="{{ url_for('produtos.detalhe', id=mp.produto_id) }}"
+                                   title="Abrir o produto (composição da cesta)">{{ mp.alvo_nome }}</a>
+                                <span class="badge bg-secondary" style="font-size:9px;" title="produto (cesta)">P</span>
+                                {% else %}{{ mp.alvo_nome }}
+                                <span class="badge bg-info text-dark" style="font-size:9px;" title="matéria-prima (edite no Banco de MPs)">M</span>{% endif %}
                                 {% if mp.fator_quantidade and mp.fator_quantidade != 1.0 %}
                                 <span class="badge bg-warning text-dark" style="font-size:9px;"
                                       title="1 venda = {{ '%g'|format(mp.fator_quantidade) }} unidade do alvo">×{{ '%g'|format(mp.fator_quantidade) }}</span>
