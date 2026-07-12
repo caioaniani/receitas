@@ -780,7 +780,9 @@ def mapeamentos():
                        if loja_site else 0)
     return render_template('pdv/mapeamentos.html',
                            produtos_map=produtos_map, lojas_map=lojas_map,
-                           receitas=receitas, produtos=produtos, lojas=lojas,
+                           receitas=receitas, produtos=produtos, mps=mps,
+                           lojas=lojas, venda_14d=venda_14d,
+                           problemas=problemas,
                            loja_site=loja_site,
                            loja_site_explicito=loja_site_explicito,
                            loja_site_itens=loja_site_itens)
