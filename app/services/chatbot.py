@@ -236,7 +236,7 @@ API_TIMEOUT_S = 60
 # (consulta produtos, manda link, etc) — mas quando vai FAZER HANDOFF fora
 # da janela, avisa que ninguem vai pegar agora e a equipe responde de manha.
 # Decisao do dono 14/06/2026.
-HORARIO_CHAT_INICIO = 6   # 06:00
+HORARIO_CHAT_INICIO = 7   # 07:00 (corrigido 12/07/2026 — era 6)
 HORARIO_CHAT_FIM = 20     # 20:00 (exclusivo: 19:59 ainda dentro)
 
 
@@ -247,21 +247,21 @@ def _fora_horario_chat():
 
 
 def _texto_handoff_com_horario(texto):
-    """Se estiver fora da janela de atendimento (06-20), prepend um aviso
+    """Se estiver fora da janela de atendimento (07-20), prepend um aviso
     explicito ao texto que o bot vai mandar pro cliente no handoff. Sem
     isso, o cliente fica esperando atendente as 23h sem saber que ninguem
     vai pegar agora.
 
-    Idempotente: se o LLM ja escreveu o aviso (mensagem ja contem '06:00'),
+    Idempotente: se o LLM ja escreveu o aviso (mensagem ja contem '07:00'),
     nao duplica."""
     if not _fora_horario_chat():
         return texto
     base = (texto or '').strip()
-    if '06:00' in base:
+    if '07:00' in base:
         return base
     aviso = ('Estamos fora do nosso horário de atendimento aqui no chat '
-             '(06:00 às 20:00). Vou registrar sua mensagem e nossa equipe '
-             'te responde a partir das 06:00 da manhã. ')
+             '(07:00 às 20:00). Vou registrar sua mensagem e nossa equipe '
+             'te responde a partir das 07:00 da manhã. ')
     return aviso + base
 
 

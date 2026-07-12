@@ -131,7 +131,7 @@ def test_handoff_fora_horario_prepend_aviso():
     with patch('app.services.chatbot._fora_horario_chat', return_value=True):
         out = chatbot._texto_handoff_com_horario(
             'Vou te passar para a Elô continuar o atendimento. 💛')
-    assert '06:00' in out
+    assert '07:00' in out
     assert '20:00' in out
     # Texto original preservado depois do aviso
     assert 'Vou te passar para a Elô' in out
@@ -146,16 +146,16 @@ def test_handoff_dentro_horario_nao_muda_texto():
 
 
 def test_handoff_fora_horario_idempotente():
-    """Se o LLM já escreveu o aviso (mensagem já contém '06:00'), NÃO
+    """Se o LLM já escreveu o aviso (mensagem já contém '07:00'), NÃO
     duplica — senão o cliente recebe a mesma frase 2x."""
     from app.services import chatbot
     msg_llm_ja_avisou = (
-        'Estamos fora do horário (06:00 às 20:00). Já anotei aqui '
+        'Estamos fora do horário (07:00 às 20:00). Já anotei aqui '
         'e respondemos pela manhã, tá? 🙂')
     with patch('app.services.chatbot._fora_horario_chat', return_value=True):
         out = chatbot._texto_handoff_com_horario(msg_llm_ja_avisou)
-    # NÃO duplicou: a frase aparece exatamente 1 vez (1 '06:00' só)
-    assert out.count('06:00') == 1
+    # NÃO duplicou: a frase aparece exatamente 1 vez (1 '07:00' só)
+    assert out.count('07:00') == 1
 
 
 def test_handoff_via_fallback_tambem_avisa_fora_horario(app):
@@ -168,7 +168,7 @@ def test_handoff_via_fallback_tambem_avisa_fora_horario(app):
             # Sem ANTHROPIC_API_KEY → cai no fallback de chave
             out = chatbot.responder([{'role': 'user', 'content': 'oi'}])
         assert out['acao'] == 'handoff'
-        assert '06:00' in out['texto']
+        assert '07:00' in out['texto']
 
 
 def test_bot_continua_respondendo_fora_horario(app):
@@ -196,13 +196,13 @@ def test_fora_horario_real_calcula_pela_hora_local(app):
         with patch('app.services.chatbot.agora' if False else 'app.utils.agora',
                    return_value=datetime(2026, 6, 14, 23, 45)):
             assert chatbot._fora_horario_chat() is True
-        # Caso 2: 05h59 → fora (limite inferior)
+        # Caso 2: 06h59 → fora (limite inferior — janela abre 07:00)
         with patch('app.utils.agora',
-                   return_value=datetime(2026, 6, 14, 5, 59)):
+                   return_value=datetime(2026, 6, 14, 6, 59)):
             assert chatbot._fora_horario_chat() is True
-        # Caso 3: 06h00 → dentro
+        # Caso 3: 07h00 → dentro
         with patch('app.utils.agora',
-                   return_value=datetime(2026, 6, 14, 6, 0)):
+                   return_value=datetime(2026, 6, 14, 7, 0)):
             assert chatbot._fora_horario_chat() is False
         # Caso 4: 19h59 → dentro (limite superior exclusivo)
         with patch('app.utils.agora',
