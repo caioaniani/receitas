@@ -12,6 +12,9 @@ import pytest
 
 from app.extensions import db
 
+# Referência à função REAL, capturada ANTES da fixture autouse patchear o
+# atributo do módulo (os testes de fail-open/NXDOMAIN exercitam ela).
+
 # O gate da loja exige LOJA_VISIVEL=1 E host público (LOJA_HOSTS). O marker
 # `loja_host` vai SÓ nos testes de rota /loja/wifi — no arquivo inteiro ele
 # derrubaria o /crm/bot (em host de loja, só /loja/* responde — 404).
