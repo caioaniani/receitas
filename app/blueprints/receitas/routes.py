@@ -809,7 +809,9 @@ def imagens_upload():
             r.imagem_dropbox_url = upload_info['url']
             r.imagem_storage_path = upload_info['storage_path']
             r.imagem_mimetype = 'image/jpeg'
-        except (ValueError, RuntimeError) as exc:
+        except Exception as exc:  # noqa: BLE001 — inclui RequestException
+            # (rede/timeout) que upload_publico deixa escapar; a falha vira
+            # linha do relatorio de nao-casados, nunca 500 no meio do zip.
             nao_casados.append((nome_base, f'upload Dropbox falhou: {exc}'))
             continue
         casados.append((nome_base, r))
