@@ -540,6 +540,10 @@ def processar_codigo_whatsapp(texto, telefone_remetente):
     # não pro WhatsApp — quem não tem a caixa de entrada não entra.
     sessao.login_token = secrets.token_urlsafe(32)
 
+    # Voucher do portal (trava dura sem API). Estoque vazio/regime sem
+    # voucher → None e o fluxo segue normal (pré-enforcement).
+    voucher = alocar_voucher(sessao)
+
     # Autoriza o aparelho no controlador (best-effort).
     try:
         from app.services import omada
