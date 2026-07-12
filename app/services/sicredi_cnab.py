@@ -252,6 +252,43 @@ def gerar_remessa(cobrancas, user_id=None):
     return rem, []
 
 
+def gerar_remessa_baixa(cobrancas, user_id=None):
+    """Remessa de PEDIDO DE BAIXA (instrução 02, posições 109-110 do manual
+    CNAB400 Sicredi) de títulos REGISTRADOS — o caminho que faltava pra
+    tirar do banco um título registrado (pendência documentada desde a
+    homologação; manuais re-enviados pelo dono em 12/07/2026).
+
+    Move as cobranças pra 'baixa_solicitada'; a confirmação vem no RETORNO
+    (ocorrência 10 = baixado conforme instruções → 'baixada'; 27 = baixa
+    rejeitada → volta pra 'registrada'). Mesmo layout de detalhe do
+    cadastro, só muda a instrução. Retorna (remessa, erros) — com erros,
+    NADA é gravado."""
+    alvo = [c for c in cobrancas if c.status == 'registrada']
+    if not alvo:
+        return None, ['Nenhuma cobrança REGISTRADA selecionada — só título '
+                      'que o banco confirmou (retorno de registro) pode '
+                      'pedir baixa.']
+
+    numero = (db.session.query(
+        db.func.coalesce(db.func.max(CobrancaRemessa.numero), 0))
+        .scalar()) + 1
+    linhas = [_header_remessa(numero, 1)]
+    for i, cob in enumerate(alvo, start=2):
+        linhas.append(_detalhe_titulo(cob, i, instrucao='02'))
+    linhas.append(_trailer_remessa(len(alvo) + 2))
+    conteudo = '\r\n'.join(linhas) + '\r\n'
+
+    rem = CobrancaRemessa(numero=numero, n_titulos=len(alvo),
+                          conteudo=conteudo, gerado_por_id=user_id)
+    db.session.add(rem)
+    db.session.flush()
+    for cob in alvo:
+        cob.status = 'baixa_solicitada'
+        cob.remessa_id = rem.id
+    db.session.commit()
+    return rem, []
+
+
 def _achar_cobranca(nosso15):
     """Retorno traz o nosso número em 15 posições 'sem edição' — casa pelos
     9 dígitos finais (zeros à esquerda fora)."""
