@@ -1446,6 +1446,27 @@ pelo WHATSAPP e abre no navegador de verdade.
 - Testes: `tests/test_wifi_portal.py` (16 casos). ARMADILHA de teste: o
   marker `loja_host` vai SÓ nos testes de rota `/loja/wifi` — no arquivo
   inteiro ele derruba o `/crm/bot` (em host de loja só `/loja/*` responde).
+- **TRAVA DURA POR VOUCHER (decisão do dono 12/07/2026, após a descoberta
+  abaixo)**: o portal do OC200 roda no modo **Voucher** (nativo, sem API):
+  a janelinha pede um código, e quem entrega o código é o NOSSO fluxo — o
+  dono gera o lote no **Hotspot Manager** do Omada (uso único, duração
+  longa ex. 90d), exporta e sobe em `/admin/wifi-vouchers` (owner; link na
+  área Administração); cada cadastro validado no WhatsApp consome UM
+  voucher (`wifi_portal.alocar_voucher`, claim atômico via UPDATE
+  condicional) e o código vai na resposta junto do link de login. Estoque
+  vazio = fluxo segue sem mencionar código (pré-enforcement). Estoque
+  abaixo de `WIFI_VOUCHER_AVISO_MIN` (default 50) → WhatsApp ao dono
+  (`_avisar_estoque_baixo`, dedup 24h em AppConfig). Modelo `WifiVoucher`
+  (db.create_all). Cliente recorrente sem voucher: refaz o cadastro →
+  regra (b) loga direto e ganha voucher novo.
+- **ARMADILHA de teste do conftest (descoberta 12/07/2026)**: o fixture
+  `app` mantém um app context PUSHADO o teste inteiro; requests do test
+  client REUSAM esse contexto (Flask só empilha outro se o app for
+  diferente), então `g` — incluindo o cache `g._login_user` do
+  Flask-Login — é COMPARTILHADO entre requests do MESMO teste. Request
+  anônima antes de request logada = a logada herda o anônimo em cache e
+  dá 403 falso. Por isso os testes de rota separam "exige login" e "caso
+  logado" em FUNÇÕES diferentes — manter assim.
 - **DESCOBERTA 12/07/2026 (fase 2 travada no OC200)**: o gateway de nuvem
   `*-omada-northbound.tplinkcloud.com` só conhece controladores
   CLOUD-BASED (CBC) — token com OC200 devolve `-7131 Controller ID not
