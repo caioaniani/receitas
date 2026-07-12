@@ -831,7 +831,9 @@ def _reprocesso_pos_mapeamento():
 @login_required
 @admin_required
 def vincular_produto(map_id):
-    """Vincula/ignora/limpa um produto Seru."""
+    """Vincula/ignora/limpa uma linha do VendaMapa (qualquer canal — a tela
+    unificada edita seru E lote pelo mesmo form; o reprocesso retroativo so
+    roda pro canal seru)."""
     from app.utils import parse_fator_composicao
     mp = VendaMapa.query.get_or_404(map_id)
     acao = request.form.get('acao')
