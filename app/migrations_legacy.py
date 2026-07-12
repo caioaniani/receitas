@@ -2109,5 +2109,32 @@ def _migrate_sqlite(app):
                        "ix_previsao_snapshot_criado_em "
                        "ON previsao_snapshot(criado_em)")
 
+    # ── M6 Commit D (2/2, 12/07/2026): DROP das colunas BLOB de imagem ──
+    # Espelho do bloco Postgres: so dropa quando nao resta linha com BLOB.
+    # SQLite >= 3.35 suporta DROP COLUMN direto (dev local usa Python 3.12
+    # com sqlite bem mais novo que isso).
+    for _tab, _col in (('receita', 'imagem_blob'),
+                       ('produto', 'imagem_blob'),
+                       ('foto_recebimento', 'imagem'),
+                       ('pedido_item_foto', 'imagem')):
+        try:
+            cursor.execute("PRAGMA table_info(%s)" % _tab)
+            cols_tab = {row[1] for row in cursor.fetchall()}
+            if _col not in cols_tab:
+                continue
+            cursor.execute(
+                "SELECT COUNT(*) FROM %s WHERE %s IS NOT NULL"
+                % (_tab, _col))
+            pendentes = cursor.fetchone()[0]
+            if pendentes:
+                logger.warning(
+                    'M6 Commit D (sqlite): %s.%s ainda tem %s linha(s) com '
+                    'BLOB — DROP adiado', _tab, _col, pendentes)
+                continue
+            cursor.execute("ALTER TABLE %s DROP COLUMN %s" % (_tab, _col))
+        except Exception as e:  # noqa: BLE001 — nunca aborta o startup
+            logger.warning('M6 Commit D (sqlite): drop de %s.%s falhou: %s',
+                           _tab, _col, e)
+
     conn.commit()
     conn.close()
