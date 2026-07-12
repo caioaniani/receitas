@@ -1143,8 +1143,13 @@ def avaliacoes_google_sincronizar():
     if not google_reviews.disponivel():
         flash('Conecte a conta Google antes de sincronizar.', 'warning')
         return redirect(url_for('main.avaliacoes_google'))
-    novas = google_reviews.sincronizar()
-    flash(f'Sincronizado. {len(novas)} avaliacao(oes) nova(s).', 'success')
+    try:
+        novas = google_reviews.sincronizar()
+        flash(f'Sincronizado. {len(novas)} avaliacao(oes) nova(s).', 'success')
+    except Exception:  # noqa: BLE001 — a tela nunca deve dar 500 no sync manual
+        current_app.logger.exception('sincronizacao manual de reviews falhou')
+        db.session.rollback()
+        flash('Falha ao sincronizar com o Google. Tente de novo.', 'danger')
     return redirect(url_for('main.avaliacoes_google'))
 
 
