@@ -466,13 +466,46 @@ document.querySelectorAll('form').forEach(function (f) {
     });
 });
 (function() {
+    // Filtro combinado: texto + estado (pendente/mapeado/ignorado/problema)
+    // + canal (seru/lote). Cada grupo de botões guarda sua seleção; a linha
+    // aparece se passar em TODOS os critérios ativos.
     var f = document.getElementById('filtro');
-    if (!f) return;
     var rows = document.querySelectorAll('#tabela-produtos tbody tr[data-nome]');
-    f.addEventListener('input', function() {
-        var t = this.value.toLowerCase().trim();
+    if (!rows.length) return;
+    var ativo = {estado: '', canal: '', texto: ''};
+
+    function aplicar() {
         rows.forEach(function(r) {
-            r.style.display = (!t || r.dataset.nome.indexOf(t) >= 0) ? '' : 'none';
+            var ok = true;
+            if (ativo.texto && r.dataset.nome.indexOf(ativo.texto) < 0) ok = false;
+            if (ok && ativo.canal && r.dataset.canal !== ativo.canal) ok = false;
+            if (ok && ativo.estado) {
+                if (ativo.estado === 'problema') {
+                    if (r.dataset.problema !== '1') ok = false;
+                } else if (r.dataset.estado !== ativo.estado) ok = false;
+            }
+            r.style.display = ok ? '' : 'none';
+        });
+    }
+    if (f) {
+        f.addEventListener('input', function() {
+            ativo.texto = this.value.toLowerCase().trim();
+            aplicar();
+        });
+    }
+    document.querySelectorAll('[data-filtro-grupo]').forEach(function(grupo) {
+        var chave = grupo.dataset.filtroGrupo;
+        grupo.querySelectorAll('[data-filtro]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                ativo[chave] = btn.dataset.filtro;
+                grupo.querySelectorAll('[data-filtro]').forEach(function(b) {
+                    var perigo = b.dataset.filtro === 'problema';
+                    b.className = 'btn btn-sm ' + (b === btn
+                        ? (perigo ? 'btn-danger' : 'btn-dark')
+                        : (perigo ? 'btn-outline-danger' : 'btn-outline-dark'));
+                });
+                aplicar();
+            });
         });
     });
 })();
