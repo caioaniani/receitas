@@ -34,11 +34,6 @@ OCORR_REGISTRADA = {'02'}
 OCORR_LIQUIDACAO = {'06', '15', '17'}
 OCORR_BAIXA = {'09', '10'}
 OCORR_REJEITADA = {'03', '24'}
-# 27 = "Baixa rejeitada" (tabela 7.2 do manual): o PEDIDO de baixa (remessa
-# com instrução 02) foi recusado — o título segue VIVO no banco, então a
-# cobrança volta pra 'registrada' (nunca pra 'rejeitada', que significa
-# entrada recusada).
-OCORR_BAIXA_REJEITADA = {'27'}
 
 
 def _cfg():
@@ -130,11 +125,9 @@ def _header_remessa(numero_remessa, seq):
     ])
 
 
-def _detalhe_titulo(cob, seq, instrucao='01'):
-    """Registro tipo 1 — boleto HÍBRIDO, impressão pelo beneficiário (B)
-    com postagem própria (N). `instrucao` (posições 109-110, manual CNAB400
-    Sicredi): '01' cadastro de título (default) / '02' PEDIDO DE BAIXA de
-    título já registrado — mesmo layout, só muda a instrução."""
+def _detalhe_titulo(cob, seq):
+    """Registro tipo 1 — cadastro de título (instrução 01), boleto HÍBRIDO,
+    impressão pelo beneficiário (B) com postagem própria (N)."""
     tipo_insc = '2' if len(''.join(
         ch for ch in cob.pagador_cnpj_cpf if ch.isdigit())) == 14 else '1'
     doc = ''.join(ch for ch in cob.pagador_cnpj_cpf if ch.isdigit())
@@ -148,7 +141,7 @@ def _detalhe_titulo(cob, seq, instrucao='01'):
         (75, 76, '00'), (77, 78, '00'),
         (83, 92, _num(0, 10)),          # desconto antecipação
         (93, 96, _num(0, 4)),           # multa %
-        (109, 110, instrucao),          # instrução: 01 cadastro / 02 baixa
+        (109, 110, '01'),               # instrução: cadastro de título
         (111, 120, _alfa(cob.seu_numero, 10)),
         (121, 126, cob.vencimento.strftime('%d%m%y')),
         (127, 139, _num(_centavos(cob.valor), 13)),
@@ -252,43 +245,6 @@ def gerar_remessa(cobrancas, user_id=None):
     return rem, []
 
 
-def gerar_remessa_baixa(cobrancas, user_id=None):
-    """Remessa de PEDIDO DE BAIXA (instrução 02, posições 109-110 do manual
-    CNAB400 Sicredi) de títulos REGISTRADOS — o caminho que faltava pra
-    tirar do banco um título registrado (pendência documentada desde a
-    homologação; manuais re-enviados pelo dono em 12/07/2026).
-
-    Move as cobranças pra 'baixa_solicitada'; a confirmação vem no RETORNO
-    (ocorrência 10 = baixado conforme instruções → 'baixada'; 27 = baixa
-    rejeitada → volta pra 'registrada'). Mesmo layout de detalhe do
-    cadastro, só muda a instrução. Retorna (remessa, erros) — com erros,
-    NADA é gravado."""
-    alvo = [c for c in cobrancas if c.status == 'registrada']
-    if not alvo:
-        return None, ['Nenhuma cobrança REGISTRADA selecionada — só título '
-                      'que o banco confirmou (retorno de registro) pode '
-                      'pedir baixa.']
-
-    numero = (db.session.query(
-        db.func.coalesce(db.func.max(CobrancaRemessa.numero), 0))
-        .scalar()) + 1
-    linhas = [_header_remessa(numero, 1)]
-    for i, cob in enumerate(alvo, start=2):
-        linhas.append(_detalhe_titulo(cob, i, instrucao='02'))
-    linhas.append(_trailer_remessa(len(alvo) + 2))
-    conteudo = '\r\n'.join(linhas) + '\r\n'
-
-    rem = CobrancaRemessa(numero=numero, n_titulos=len(alvo),
-                          conteudo=conteudo, gerado_por_id=user_id)
-    db.session.add(rem)
-    db.session.flush()
-    for cob in alvo:
-        cob.status = 'baixa_solicitada'
-        cob.remessa_id = rem.id
-    db.session.commit()
-    return rem, []
-
-
 def _achar_cobranca(nosso15):
     """Retorno traz o nosso número em 15 posições 'sem edição' — casa pelos
     9 dígitos finais (zeros à esquerda fora)."""
@@ -340,16 +296,6 @@ def processar_retorno(texto, user_id=None):
                 if cob.status not in ('paga', 'baixada'):
                     cob.status = 'baixada'
                     res['baixadas'] += 1
-            elif ocorr in OCORR_BAIXA_REJEITADA:
-                # Baixa recusada: o título segue registrado no banco.
-                if cob.status == 'baixa_solicitada':
-                    cob.status = 'registrada'
-                cob.motivo_retorno = (f'baixa rejeitada (ocorr {ocorr} '
-                                      f'motivo {linha[318:328].strip()})')
-                res['detalhes'].append(
-                    f'{cob.nosso_numero_fmt} {cob.pagador_nome}: '
-                    f'BAIXA REJEITADA — título segue registrado '
-                    f'({cob.motivo_retorno})')
             elif ocorr in OCORR_REJEITADA:
                 cob.status = 'rejeitada'
                 cob.motivo_retorno = (f'ocorr {ocorr} motivo '

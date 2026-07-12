@@ -88,8 +88,7 @@ def notificar_pedido_recebido(pedido):
             paths += [f.imagem_storage_path for f in (pedido.fotos or [])
                       if f.imagem_storage_path]
         except Exception:  # noqa: BLE001
-            logger.exception('contagem de fotos do pedido falhou pedido=%s',
-                             pedido.id)
+            pass
 
         n_fotos = len(paths)
         link_pasta = None

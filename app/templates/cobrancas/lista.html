@@ -68,7 +68,7 @@
             <td>{{ c.nosso_numero_fmt or '—' }}</td>
             <td>{{ c.vencimento.strftime('%d/%m/%Y') }}{% if c.vencida %} <span class="badge bg-warning text-dark">vencida</span>{% endif %}</td>
             <td class="text-end">R$ {{ '%.2f'|format(c.valor) }}</td>
-            <td><span class="badge bg-{{ 'secondary' if c.status == 'pendente' else 'info' if c.status == 'remessa' else 'warning text-dark' if c.status == 'baixa_solicitada' else 'primary' }}">{{ c.status }}</span>
+            <td><span class="badge bg-{{ 'secondary' if c.status == 'pendente' else 'info' if c.status == 'remessa' else 'primary' }}">{{ c.status }}</span>
                 {% if c.pix_copia_cola %}<span class="badge bg-success" title="QR Pix recebido">PIX</span>{% endif %}
                 {% if not (c.pagador_endereco or '').strip() %}<span class="badge bg-danger" title="O Sicredi rejeita boleto sem endereço do pagador">sem endereço</span>{% endif %}</td>
             <td>{% if c.status == 'pendente' %}
@@ -109,12 +109,6 @@
                         onclick="return confirm('Voltar esta cobrança pra pendente pra corrigir e gerar NOVA remessa?');">
                     voltar</button>
                 {% endif %}
-                {% if c.status == 'registrada' %}
-                <button class="btn btn-sm btn-outline-warning" form="bx-{{ c.id }}"
-                        title="Gera remessa de PEDIDO DE BAIXA (instrução 02) — envie o arquivo no Sicredi; a baixa confirma no retorno."
-                        onclick="return confirm('Pedir a BAIXA deste título no Sicredi? O boleto deixa de ser pagável depois que o banco confirmar.');">
-                    pedir baixa</button>
-                {% endif %}
             </td>
         </tr>
         {% endfor %}
@@ -138,9 +132,6 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
 {% endif %}{% if c.status == 'remessa' %}
 <form id="vp-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.voltar_pendente', id=c.id) }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
-{% endif %}{% if c.status == 'registrada' %}
-<form id="bx-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.solicitar_baixa', id=c.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
 {% endif %}{% endfor %}
 {% for c in problemas %}{% if c.status == 'rejeitada' %}

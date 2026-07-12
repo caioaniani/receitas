@@ -48,8 +48,9 @@ def salvar_foto(pedido_item_id, etapa, file_storage,
                 criado_por_id=None, criado_por_driver_id=None):
     """Salva foto pra um item, sobe pro Dropbox. Substitui foto anterior.
 
-    Imagem vai pro Dropbox (~150KB apos compressao PIL 700px JPEG); o banco
-    guarda url + storage_path. (A coluna BLOB `imagem` saiu no M6 Commit D.)
+    Pos-M6: imagem vai pro Dropbox (~150KB apos compressao PIL 700px JPEG).
+    Banco guarda url + storage_path. Coluna `imagem` BLOB so popula em
+    fotos legadas pre-migracao.
 
     Retorna (PedidoItemFoto, erro). Em erro, primeiro item eh None.
     """
@@ -95,6 +96,7 @@ def salvar_foto(pedido_item_id, etapa, file_storage,
                  .filter_by(pedido_item_id=pedido_item_id, etapa=etapa)
                  .first())
     if existente:
+        existente.imagem = None  # libera BLOB legado se tinha
         existente.imagem_url = info['url']
         existente.imagem_storage_path = info['storage_path']
         existente.mimetype = 'image/jpeg'  # comprimir_imagem sempre devolve JPEG
@@ -108,6 +110,7 @@ def salvar_foto(pedido_item_id, etapa, file_storage,
     foto = PedidoItemFoto(
         pedido_item_id=pedido_item_id,
         etapa=etapa,
+        imagem=None,
         imagem_url=info['url'],
         imagem_storage_path=info['storage_path'],
         mimetype='image/jpeg',

@@ -201,15 +201,7 @@
             {% if info.backup_status.ultimo_run %}
             <br>Ultima execucao: <code>{{ info.backup_status.ultimo_run|brt }}</code>
             {% else %}
-            <br><span class="text-muted">Sem execucao registrada.</span>
-            {% endif %}
-            {# ultimo OK separado do ultimo run (11/07/2026): run recente com
-               OK velho = o job roda mas o backup FALHA — exatamente o que o
-               aviso do heartbeat denuncia. #}
-            {% if info.backup_status.ultimo_ok %}
-            <br>Ultimo backup <strong>OK</strong>: <code>{{ info.backup_status.ultimo_ok|brt }}</code>
-            {% else %}
-            <br><span class="text-muted">Sem backup OK registrado (marco persistente comecou em 11/07/2026).</span>
+            <br><span class="text-muted">Sem execucao registrada nesta sessao do app.</span>
             {% endif %}
         </p>
         <form method="POST" action="{{ url_for('main.backup_run') }}" class="mb-0">

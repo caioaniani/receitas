@@ -440,9 +440,7 @@ def _e_handoff_preguicoso_em_compra(historico, resultado_bot, conv_id=None):
         if any(_quer_humano(m) for m in msgs_user):
             return False
     except Exception:  # noqa: BLE001
-        # Sem o check, "quero falar com atendente" vira falso positivo de
-        # handoff preguicoso — degradacao silenciosa merece aparecer no log.
-        logger.exception('check _quer_humano falhou (segue sem a excecao)')
+        pass
     return bool(_SINAIS_COMPRA.search(texto))
 
 

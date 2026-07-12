@@ -791,41 +791,6 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
 
     divergencias = []
 
-    # M6 Commit D: fotos novas sobem pro Dropbox ANTES de mexer em estoque/
-    # status — upload falhou = recusa LIMPA (sessao intocada, sem baixa
-    # fantasma), mesmo padrao da retirada de sobras. Sem fallback BLOB.
-    fotos_up = []
-    if fotos:
-        import time as _time
-
-        from app.services import dropbox_storage
-        from app.utils import comprimir_imagem
-        if not dropbox_storage.disponivel():
-            return False, ('Dropbox indisponível — a foto não pôde ser '
-                           'salva e o pedido NÃO foi recebido. Tente de '
-                           'novo em instantes.'), []
-        for foto in fotos:
-            if not foto.get('imagem'):
-                continue
-            try:
-                comprimida = comprimir_imagem(foto['imagem'])
-                path = (f'/recebimento/{pedido.id}/'
-                        f'{int(_time.time() * 1000)}.jpg')
-                info = dropbox_storage.upload_publico(
-                    comprimida, path, mode='add', autorename=True)
-            except Exception as exc:  # noqa: BLE001 — upload_publico deixa
-                # RequestException (rede/timeout) escapar alem de ValueError/
-                # RuntimeError; QUALQUER falha de upload recusa visivel (a
-                # fase roda antes das mutacoes, entao a recusa e limpa).
-                current_app.logger.exception(
-                    'foto_recebimento dropbox falhou')
-                return False, (f'Upload da foto falhou ({exc}) — o pedido '
-                               'NÃO foi recebido; tente de novo.'), []
-            fotos_up.append(info)
-        if not fotos_up:
-            return False, ('Nenhuma imagem válida no upload — o pedido NÃO '
-                           'foi recebido; anexe a foto de novo.'), []
-
     for item in pedido.itens:
         qtd_rec = recebidos_map.get(item.id, item.quantidade)
         item.quantidade_recebida = qtd_rec
@@ -865,12 +830,31 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
         nota = 'Divergencias no recebimento: ' + '; '.join(divergencias)
         pedido.observacao = (pedido.observacao + ' | ' if pedido.observacao else '') + nota
 
-    for info in fotos_up:
+    import time as _time
+
+    from app.services import dropbox_storage
+    from app.utils import comprimir_imagem
+    for foto in fotos:
+        url = None
+        storage_path = None
+        if dropbox_storage.disponivel() and foto.get('imagem'):
+            try:
+                comprimida = comprimir_imagem(foto['imagem'])
+                path = (f'/recebimento/{pedido.id}/'
+                        f'{int(_time.time() * 1000)}.jpg')
+                info = dropbox_storage.upload_publico(
+                    comprimida, path, mode='add', autorename=True)
+                url = info['url']
+                storage_path = info['storage_path']
+            except (ValueError, RuntimeError):
+                current_app.logger.exception(
+                    'foto_recebimento dropbox falhou — fallback BLOB')
         db.session.add(FotoRecebimento(
             pedido_id=pedido.id,
-            imagem_url=info['url'],
-            imagem_storage_path=info['storage_path'],
-            mimetype='image/jpeg',
+            imagem=None if url else foto['imagem'],
+            imagem_url=url,
+            imagem_storage_path=storage_path,
+            mimetype='image/jpeg' if url else foto.get('mimetype', 'image/jpeg'),
             enviada_por=getattr(user, 'id', None),
         ))
 
@@ -899,6 +883,8 @@ def foto(foto_id):
         abort(403)
     if f.imagem_url:
         return redirect(f.imagem_url, code=302)
+    if f.imagem:
+        return send_file(io.BytesIO(f.imagem), mimetype=f.mimetype or 'image/jpeg')
     abort(404)
 
 
@@ -907,7 +893,7 @@ def foto(foto_id):
 @gerente_required
 def conferencia_foto(foto_id):
     """Serve foto de conferencia por SKU (PedidoItemFoto) pro detalhe do
-    pedido. Gate por loja. So Dropbox (BLOB saiu no M6 Commit D)."""
+    pedido. Gate por loja. Prioriza Dropbox; fallback BLOB legado."""
     from app.models import PedidoItemFoto
     f = PedidoItemFoto.query.get_or_404(foto_id)
     loja_id = _loja_do_usuario()
@@ -916,6 +902,8 @@ def conferencia_foto(foto_id):
         abort(403)
     if f.imagem_url:
         return redirect(f.imagem_url, code=302)
+    if f.imagem:
+        return send_file(io.BytesIO(f.imagem), mimetype=f.mimetype or 'image/jpeg')
     abort(404)
 
 

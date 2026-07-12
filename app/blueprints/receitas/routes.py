@@ -735,9 +735,8 @@ def imagens_upload():
     """Upload em massa de fotos de receita via .zip.
 
     Cada arquivo .jpg/.png/.webp no zip eh casado contra Receita.nome
-    (exato case-insensitive, fallback fuzzy via difflib). Casou -> sobe pro
-    Dropbox (imagem_dropbox_url; sem fallback BLOB desde o M6 Commit D —
-    Dropbox indisponivel vira erro no relatorio). Nao casou -> relatorio.
+    (exato case-insensitive, fallback fuzzy via difflib). Casou -> popula
+    imagem_blob + imagem_mimetype. Nao casou -> aparece no relatorio.
     """
     if request.method == 'GET':
         return render_template('receitas/imagens_upload.html')
@@ -795,25 +794,23 @@ def imagens_upload():
             raw_bytes = f.read()
         from app.services import dropbox_storage
         from app.utils import comprimir_imagem
-        if not dropbox_storage.disponivel():
-            # M6 Commit D: sem fallback BLOB — Dropbox fora, o item vai pro
-            # relatorio de nao-casados em vez de encher o Postgres.
-            nao_casados.append((nome_base,
-                                'Dropbox indisponível — imagem não salva'))
-            continue
-        try:
-            comprimida = comprimir_imagem(raw_bytes)
-            path = f'/cardapio/receita/{r.id}.jpg'
-            upload_info = dropbox_storage.upload_publico(
-                comprimida, path, mode='overwrite', autorename=False)
-            r.imagem_dropbox_url = upload_info['url']
-            r.imagem_storage_path = upload_info['storage_path']
-            r.imagem_mimetype = 'image/jpeg'
-        except Exception as exc:  # noqa: BLE001 — inclui RequestException
-            # (rede/timeout) que upload_publico deixa escapar; a falha vira
-            # linha do relatorio de nao-casados, nunca 500 no meio do zip.
-            nao_casados.append((nome_base, f'upload Dropbox falhou: {exc}'))
-            continue
+        if dropbox_storage.disponivel():
+            try:
+                comprimida = comprimir_imagem(raw_bytes)
+                path = f'/cardapio/receita/{r.id}.jpg'
+                upload_info = dropbox_storage.upload_publico(
+                    comprimida, path, mode='overwrite', autorename=False)
+                r.imagem_dropbox_url = upload_info['url']
+                r.imagem_storage_path = upload_info['storage_path']
+                r.imagem_blob = None
+                r.imagem_mimetype = 'image/jpeg'
+            except (ValueError, RuntimeError):
+                # Fallback BLOB se Dropbox falhar
+                r.imagem_blob = raw_bytes
+                r.imagem_mimetype = EXT_OK[ext]
+        else:
+            r.imagem_blob = raw_bytes
+            r.imagem_mimetype = EXT_OK[ext]
         casados.append((nome_base, r))
         atualizadas += 1
 

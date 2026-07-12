@@ -403,7 +403,7 @@
         <label class="form-label small fw-bold mb-1">
             <i class="bi bi-image"></i> Imagem pro cardápio digital
         </label>
-        {% if receita.imagem_dropbox_url %}
+        {% if receita.imagem_blob or receita.imagem_dropbox_url %}
         <div class="mb-2">
             <img src="{{ url_for('main.cardapio_img', tipo='receita', id=receita.id) }}"
                  alt="" style="max-height:120px;border-radius:6px;border:1px solid #ddd;">
@@ -549,7 +549,7 @@
 <div class="card mt-3 mb-3">
     <div class="card-header py-2"><strong><i class="bi bi-image"></i> Foto do cardápio digital</strong></div>
     <div class="card-body">
-        {% set tem_foto = receita.imagem_dropbox_url %}
+        {% set tem_foto = receita.imagem_blob or receita.imagem_dropbox_url %}
         {% if tem_foto %}
         <div class="mb-2 d-flex align-items-start gap-2">
             <img src="{{ url_for('main.cardapio_img', tipo='receita', id=receita.id) }}"

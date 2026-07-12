@@ -195,20 +195,25 @@ def rentabilidade():
 @login_required
 def cardapio():
     tipo = request.args.get('tipo', 'atacado')
-    # IDs com foto (Dropbox URL) vem em query separada. (BLOB saiu no M6
-    # Commit D — foto e so Dropbox.)
+    # defer(imagem_blob) — listagem nao precisa do blob (pode ter 100KB+ cada).
+    # IDs com foto (blob OU Dropbox URL) vem em query separada.
     from sqlalchemy.orm import defer
     receitas = Receita.query.options(
+        defer(Receita.imagem_blob),
         defer(Receita.imagem_mimetype),
     ).order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.options(
+        defer(Produto.imagem_blob),
         defer(Produto.imagem_mimetype),
     ).filter_by(ativo=True).order_by(Produto.categoria, Produto.nome).all()
 
+    from sqlalchemy import or_
     receitas_com_foto = {r[0] for r in db.session.query(Receita.id).filter(
-        Receita.imagem_dropbox_url.isnot(None)).all()}
+        or_(Receita.imagem_blob.isnot(None),
+            Receita.imagem_dropbox_url.isnot(None))).all()}
     produtos_com_foto = {p[0] for p in db.session.query(Produto.id).filter(
-        Produto.imagem_dropbox_url.isnot(None)).all()}
+        or_(Produto.imagem_blob.isnot(None),
+            Produto.imagem_dropbox_url.isnot(None))).all()}
 
     campo = {'atacado': 'preco_venda', 'loja': 'preco_loja', 'site': 'preco_site'}
     attr = campo.get(tipo, 'preco_venda')
@@ -262,31 +267,43 @@ def cardapio():
 
 @main_bp.route('/cardapio-img/<tipo>/<int:id>')
 def cardapio_img(tipo, id):
-    """Serve imagem de receita/produto: redirect pro Dropbox (M6).
+    """Serve imagem de receita/produto. Prioriza Dropbox URL (M6+).
 
-    Sem fallback BLOB desde o Commit D (12/07/2026) — sem URL, 404.
+    Fallback pra BLOB do banco se foto ainda nao foi migrada.
     """
+    import hashlib
 
-    from flask import abort
+    from flask import abort, make_response
+    from flask import request as flask_request
     from sqlalchemy.orm import load_only
 
     from app.models import Produto, Receita
     if tipo == 'receita':
         obj = (Receita.query.options(
-            load_only(Receita.imagem_dropbox_url)
+            load_only(Receita.imagem_blob, Receita.imagem_mimetype,
+                      Receita.imagem_dropbox_url)
         ).get(id))
     elif tipo == 'produto':
         obj = (Produto.query.options(
-            load_only(Produto.imagem_dropbox_url)
+            load_only(Produto.imagem_blob, Produto.imagem_mimetype,
+                      Produto.imagem_dropbox_url)
         ).get(id))
     else:
         abort(404)
     if not obj:
         abort(404)
-    # M6 Commit D: BLOB saiu — foto e so Dropbox (sem fallback).
     if obj.imagem_dropbox_url:
         return redirect(obj.imagem_dropbox_url, code=302)
-    abort(404)
+    if not obj.imagem_blob:
+        abort(404)
+    etag = hashlib.md5(obj.imagem_blob).hexdigest()[:16]
+    if flask_request.headers.get('If-None-Match') == etag:
+        return ('', 304)
+    resp = make_response(obj.imagem_blob)
+    resp.mimetype = obj.imagem_mimetype or 'image/jpeg'
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    resp.headers['ETag'] = etag
+    return resp
 
 
 @main_bp.route('/cardapio-img/<tipo>/<int:id>/upload', methods=['POST'])
@@ -332,18 +349,16 @@ def cardapio_img_upload(tipo, id):
     try:
         final = comprimir_imagem(data)
         tamanho_kb = len(final) // 1024
-        if not dropbox_storage.disponivel():
-            # M6 Commit D: sem fallback BLOB — Dropbox fora = erro VISIVEL
-            # (gravar no Postgres escondia a falha e re-enchia a coluna).
-            flash('Dropbox indisponível — a imagem NÃO foi salva. '
-                  'Configure o Dropbox e tente de novo.', 'danger')
-            return redirect(url_back)
-        # Path deterministico — overwrite ao re-upload do mesmo item.
-        path = f'/cardapio/{tipo}/{obj.id}.jpg'
-        info = dropbox_storage.upload_publico(
-            final, path, mode='overwrite', autorename=False)
-        obj.imagem_dropbox_url = info['url']
-        obj.imagem_storage_path = info['storage_path']
+        if dropbox_storage.disponivel():
+            # Path deterministico — overwrite ao re-upload do mesmo item.
+            path = f'/cardapio/{tipo}/{obj.id}.jpg'
+            info = dropbox_storage.upload_publico(
+                final, path, mode='overwrite', autorename=False)
+            obj.imagem_dropbox_url = info['url']
+            obj.imagem_storage_path = info['storage_path']
+            obj.imagem_blob = None  # libera legado
+        else:
+            obj.imagem_blob = final
         obj.imagem_mimetype = 'image/jpeg'
     except Exception as e:  # noqa: BLE001
         flash(f'Erro processando imagem: {e}', 'danger')
@@ -366,20 +381,25 @@ def _norm(s):
 @login_required
 def cardapio_img_revisar():
     """Grid de revisao das fotos atribuidas. Admin ve thumbnail + nome,
-    identifica matches errados e remove com 1 clique. O thumbnail eh
-    servido pela rota /cardapio-img/<tipo>/<id> (redirect Dropbox)."""
+    identifica matches errados e remove com 1 clique. Defer blob pra nao
+    estourar RAM — o thumbnail eh servido pela rota /cardapio-img/<tipo>/<id>."""
     from flask import abort
+    from sqlalchemy import or_
     from sqlalchemy.orm import defer
     if not current_user.is_admin():
         abort(403)
     receitas_com_foto = (Receita.query
-                         .options(defer(Receita.imagem_mimetype))
-                         .filter(Receita.imagem_dropbox_url.isnot(None))
+                         .options(defer(Receita.imagem_blob),
+                                  defer(Receita.imagem_mimetype))
+                         .filter(or_(Receita.imagem_blob.isnot(None),
+                                     Receita.imagem_dropbox_url.isnot(None)))
                          .order_by(Receita.categoria, Receita.nome).all())
     produtos_com_foto = (Produto.query
-                         .options(defer(Produto.imagem_mimetype))
+                         .options(defer(Produto.imagem_blob),
+                                  defer(Produto.imagem_mimetype))
                          .filter(Produto.ativo.is_(True))
-                         .filter(Produto.imagem_dropbox_url.isnot(None))
+                         .filter(or_(Produto.imagem_blob.isnot(None),
+                                     Produto.imagem_dropbox_url.isnot(None)))
                          .order_by(Produto.categoria, Produto.nome).all())
     return render_template('main/cardapio_revisar.html',
                             receitas=receitas_com_foto,
@@ -410,6 +430,7 @@ def cardapio_img_remover(tipo, id):
     if obj.imagem_storage_path:
         from app.services import dropbox_storage
         dropbox_storage.deletar(obj.imagem_storage_path)
+    obj.imagem_blob = None
     obj.imagem_mimetype = None
     obj.imagem_url = None
     obj.imagem_dropbox_url = None
@@ -1104,6 +1125,7 @@ def debug_foto_pdf():
     1. API autenticada (storage_path)
     2. Shared link com User-Agent + raw=1
     3. Shared link cru (como estava antes do fix)
+    4. BLOB legado
     """
     import requests as _req
 
@@ -1126,6 +1148,8 @@ def debug_foto_pdf():
         'imagem_url': f.imagem_url,
         'tem_storage_path': bool(f.imagem_storage_path),
         'storage_path': f.imagem_storage_path,
+        'tem_blob': bool(f.imagem),
+        'blob_len': len(f.imagem) if f.imagem else 0,
         'mimetype': f.mimetype,
         'dropbox_configurado': ds.disponivel(),
     }
@@ -1625,6 +1649,7 @@ def backup_debug_env():
             'id': r.id, 'nome': r.nome,
             'imagem_dropbox_url': r.imagem_dropbox_url,
             'imagem_storage_path': r.imagem_storage_path,
+            'tem_blob': r.imagem_blob is not None,
         }
     else:
         info['receita_amostra'] = '(nenhuma receita migrada)'
@@ -1637,6 +1662,7 @@ def backup_debug_env():
             'id': p.id, 'nome': p.nome,
             'imagem_dropbox_url': p.imagem_dropbox_url,
             'imagem_storage_path': p.imagem_storage_path,
+            'tem_blob': p.imagem_blob is not None,
         }
     else:
         info['produto_amostra'] = '(nenhum produto migrado)'
@@ -2202,21 +2228,6 @@ def vigia_site():
     if request.args.get('alertar') == '1':
         return jsonify(site_vigia.vigiar()), 200
     return jsonify(site_vigia.rodar_checks()), 200
-
-
-@main_bp.route('/admin/vigia-uso-ia')
-@owner_required
-def vigia_uso_ia():
-    """Vigia de CUSTO de IA sob demanda (owner-only) — mesmo check do cron
-    de 1h (gasto de hoje em UsoIA × teto USO_IA_TETO_DIA_USD). Criado em
-    11/07/2026: o /admin/uso-ia é passivo; este vigia é quem avisa.
-    `?alertar=1` roda o fluxo completo com anti-spam/WhatsApp; sem
-    parâmetro, só mostra o resultado (não mexe no estado do vigia)."""
-    from app.services import uso_ia_vigia
-
-    if request.args.get('alertar') == '1':
-        return jsonify(uso_ia_vigia.vigiar()), 200
-    return jsonify(uso_ia_vigia.rodar_checks()), 200
 
 
 @main_bp.route('/admin/debug-chatwoot')
@@ -3032,17 +3043,17 @@ def loja_online_catalogo_foto(tipo, id):
         return jsonify(ok=False, erro='arquivo vazio'), 400
     if len(data) > 25 * 1024 * 1024:
         return jsonify(ok=False, erro='imagem maior que 25MB'), 400
-    if not dropbox_storage.disponivel():
-        # M6 Commit D: sem fallback BLOB — Dropbox fora = erro visivel.
-        return jsonify(ok=False, erro='Dropbox indisponível — imagem não '
-                                      'salva; configure e tente de novo'), 503
     try:
         final = comprimir_imagem(data)
-        path = f'/cardapio/{tipo}/{obj.id}.jpg'
-        info = dropbox_storage.upload_publico(
-            final, path, mode='overwrite', autorename=False)
-        obj.imagem_dropbox_url = info['url']
-        obj.imagem_storage_path = info['storage_path']
+        if dropbox_storage.disponivel():
+            path = f'/cardapio/{tipo}/{obj.id}.jpg'
+            info = dropbox_storage.upload_publico(
+                final, path, mode='overwrite', autorename=False)
+            obj.imagem_dropbox_url = info['url']
+            obj.imagem_storage_path = info['storage_path']
+            obj.imagem_blob = None
+        else:
+            obj.imagem_blob = final
         obj.imagem_mimetype = 'image/jpeg'
     except Exception as exc:  # noqa: BLE001
         return jsonify(ok=False, erro=f'erro ao processar: {exc}'), 500

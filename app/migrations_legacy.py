@@ -922,12 +922,9 @@ def _migrate_postgres(app):
     _try("ALTER TABLE previsao_snapshot ADD COLUMN lead_dias INTEGER")
     _try("ALTER TABLE previsao_snapshot DROP CONSTRAINT IF EXISTS "
          "uq_previsao_snapshot_alvo")
-    # (11/07/2026) O ADD CONSTRAINT da unique de 4 colunas
-    # (uq_previsao_snapshot_alvo_motor) que vivia aqui foi REMOVIDO: a
-    # canonica agora e a de 5 colunas com lead_dias (bloco "Acuracia por
-    # ANTECEDENCIA" adiante, que dropa a velha). Mante-lo recriava a velha
-    # em todo boot (pra dropar logo depois) e, com duplicatas por lead na
-    # tabela, falharia com warning a cada startup.
+    _try("ALTER TABLE previsao_snapshot ADD CONSTRAINT "
+         "uq_previsao_snapshot_alvo_motor "
+         "UNIQUE (data_alvo, loja_id, receita_id, motor)")
 
     # ── Caixa/piso de pedido pra MATERIA-PRIMA (Fase 1, 02/07/2026) ──
     # MP pedida pela loja (ex: pao de queijo congelado em saco) precisa de
@@ -1229,9 +1226,10 @@ def _migrate_postgres(app):
     # Cardapio digital: URL externa de imagem em receita + produto
     _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(400)")
     _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_url VARCHAR(400)")
-    # (Os ADDs de imagem_blob sairam no M6 Commit D 11/07/2026 — banco novo
-    # nao cria mais a coluna; o DROP guardado das existentes fica adiante.)
+    # BLOB upload (Rappi 403 forced this — admin sobe a foto direto)
+    _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS imagem_blob BYTEA")
     _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS imagem_mimetype VARCHAR(50)")
+    _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_blob BYTEA")
     _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_mimetype VARCHAR(50)")
 
     # Fase 2 contas a pagar (2026-06-10): conferencia humana — separa o que
@@ -1481,41 +1479,22 @@ def _migrate_postgres(app):
          "previsao_snapshot(data_alvo, loja_id, receita_id, motor, "
          "lead_dias)")
 
-    # ── M6 Commit D (2/2, 12/07/2026): DROP das colunas BLOB de imagem ──
-    # O codigo parou de ler/escrever no commit 1 (ja deployado). GUARDA de
-    # dados: so dropa quando NAO resta NENHUMA linha com BLOB — se restar,
-    # loga alto e mantem a coluna (drenar pelo card "Migracao BLOB" do
-    # /admin/debug-schema; o blob_migrator le por SQL cru justamente pra
-    # isso). Idempotente: coluna ja dropada = pulado pela sonda.
-    for _tab, _col in (('receita', 'imagem_blob'),
-                       ('produto', 'imagem_blob'),
-                       ('foto_recebimento', 'imagem'),
-                       ('pedido_item_foto', 'imagem')):
-        try:
-            with db.engine.connect() as c:
-                existe = c.execute(text(
-                    'SELECT 1 FROM information_schema.columns '
-                    'WHERE table_name = :t AND column_name = :c'),
-                    {'t': _tab, 'c': _col}).scalar()
-                if not existe:
-                    continue
-                pendentes = c.execute(text(
-                    f'SELECT COUNT(*) FROM {_tab} '
-                    f'WHERE {_col} IS NOT NULL')).scalar()
-                if pendentes:
-                    log.warning(
-                        'M6 Commit D: %s.%s ainda tem %s linha(s) com BLOB '
-                        '— DROP adiado; drenar pelo card "Migracao BLOB" '
-                        'do /admin/debug-schema', _tab, _col, pendentes)
-                    continue
-                c.execute(text(
-                    f'ALTER TABLE {_tab} DROP COLUMN IF EXISTS {_col}'))
-                c.commit()
-                log.info('M6 Commit D: %s.%s dropada (0 pendentes)',
-                         _tab, _col)
-        except Exception as e:  # noqa: BLE001 — nunca aborta o startup
-            log.warning('M6 Commit D: drop de %s.%s falhou: %s',
-                        _tab, _col, e)
+    # ── Restauracao do incidente "M6 Commit D" (12/07/2026) ──
+    # Outra sessao dropou as colunas BLOB (receita.imagem_blob,
+    # produto.imagem_blob, foto_recebimento.imagem, pedido_item_foto.imagem)
+    # num container que BOOTOU (migrations rodam no startup) mas NUNCA foi
+    # promovido (deploy falhou) — o codigo no ar continuou sendo o antigo,
+    # que seleciona essas colunas: todo SELECT nesses modelos virou 500.
+    # Re-criamos as colunas VAZIAS: a guarda do drop so dropava com 0
+    # linhas com BLOB, entao nao houve perda de dados. Se o Commit D for
+    # refeito, seguir o procedimento canonico de 2 commits confirmando o
+    # deploy do commit 1 pela sonda /api/claude/deploy.
+    _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS imagem_blob BYTEA")
+    _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS imagem_blob BYTEA")
+    _try("ALTER TABLE foto_recebimento ADD COLUMN IF NOT EXISTS "
+         "imagem BYTEA")
+    _try("ALTER TABLE pedido_item_foto ADD COLUMN IF NOT EXISTS "
+         "imagem BYTEA")
 
     # Backfill de tokens em drivers existentes (sem token)
     try:
@@ -1560,6 +1539,8 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0")
     if 'imagem_url' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN imagem_url VARCHAR(400)")
+    if 'imagem_blob' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN imagem_blob BLOB")
     if 'imagem_mimetype' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN imagem_mimetype VARCHAR(50)")
     if 'arquivada_em' not in colunas:
@@ -1674,6 +1655,8 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE produto ADD COLUMN preco_interno REAL")
     if cols_prod and 'imagem_url' not in cols_prod:
         cursor.execute("ALTER TABLE produto ADD COLUMN imagem_url VARCHAR(400)")
+    if cols_prod and 'imagem_blob' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN imagem_blob BLOB")
     if cols_prod and 'imagem_mimetype' not in cols_prod:
         cursor.execute("ALTER TABLE produto ADD COLUMN imagem_mimetype VARCHAR(50)")
     if cols_prod and 'modo_preparo' not in cols_prod:
@@ -2109,32 +2092,16 @@ def _migrate_sqlite(app):
                        "ix_previsao_snapshot_criado_em "
                        "ON previsao_snapshot(criado_em)")
 
-    # ── M6 Commit D (2/2, 12/07/2026): DROP das colunas BLOB de imagem ──
-    # Espelho do bloco Postgres: so dropa quando nao resta linha com BLOB.
-    # SQLite >= 3.35 suporta DROP COLUMN direto (dev local usa Python 3.12
-    # com sqlite bem mais novo que isso).
+    # ── Restauracao do incidente "M6 Commit D" (12/07/2026) ──
+    # Espelho do bloco Postgres: re-cria as colunas BLOB dropadas (vazias).
     for _tab, _col in (('receita', 'imagem_blob'),
                        ('produto', 'imagem_blob'),
                        ('foto_recebimento', 'imagem'),
                        ('pedido_item_foto', 'imagem')):
-        try:
-            cursor.execute("PRAGMA table_info(%s)" % _tab)
-            cols_tab = {row[1] for row in cursor.fetchall()}
-            if _col not in cols_tab:
-                continue
-            cursor.execute(
-                "SELECT COUNT(*) FROM %s WHERE %s IS NOT NULL"
-                % (_tab, _col))
-            pendentes = cursor.fetchone()[0]
-            if pendentes:
-                logger.warning(
-                    'M6 Commit D (sqlite): %s.%s ainda tem %s linha(s) com '
-                    'BLOB — DROP adiado', _tab, _col, pendentes)
-                continue
-            cursor.execute("ALTER TABLE %s DROP COLUMN %s" % (_tab, _col))
-        except Exception as e:  # noqa: BLE001 — nunca aborta o startup
-            logger.warning('M6 Commit D (sqlite): drop de %s.%s falhou: %s',
-                           _tab, _col, e)
+        cursor.execute("PRAGMA table_info(%s)" % _tab)
+        if _col not in [row[1] for row in cursor.fetchall()]:
+            cursor.execute("ALTER TABLE %s ADD COLUMN %s BLOB"
+                           % (_tab, _col))
 
     conn.commit()
     conn.close()

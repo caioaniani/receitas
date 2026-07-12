@@ -63,13 +63,8 @@ class Funcionario(db.Model):
         try:
             if self.cargo:
                 return self.cargo.salario_base or 0
-        except Exception:  # noqa: BLE001
-            # Dinheiro (folha): cair no salario legado por EXCECAO (nao por
-            # cargo ausente) nao pode ser mudo — o valor pago pode divergir.
-            import logging
-            logging.getLogger(__name__).warning(
-                'salario_efetivo: excecao ao ler cargo do funcionario %s — '
-                'usando salario legado', self.id, exc_info=True)
+        except Exception:
+            pass
         return self.salario_base or 0
 
     def total_vt(self):

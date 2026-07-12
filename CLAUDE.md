@@ -123,22 +123,6 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   - `GET /api/claude/receita?id=|nome=` — ficha completa de uma receita
     (cadastro, ingredientes, VendaMapa, cestas, estoques industria+lojas).
     Trecho de nome com >1 match devolve lista de candidatos.
-  - `GET /api/claude/pedidos-dia?data=` — pedidos loja→industria de UMA
-    data de entrega, TODOS os status (a lista /pedidos fatia por aba e
-    pedido em status inesperado "some"; esta sonda mostra tudo). 08/07.
-  - `GET /api/claude/loja-vendas-debug?...` — cruza POR DIA o que o Seru
-    reportou de venda (VendaSeruDiaria) com o que baixou no estoque da
-    loja (MovEstoqueLoja) + estado dos mapeamentos. Criada 06/07
-    (incidente Ribeiro do Vale sem baixa).
-  - `GET /api/claude/seru-companies?dias=` — companies CRUS da API Seru
-    (id+name+volume) pra diagnosticar renome de loja. 07/07.
-  - `GET /api/claude/frete-debug?q=<endereco|cep>` — cada etapa da cadeia
-    de geocode com lat/lng/distancia (ver secao Frete). 05/07.
-  - `GET /api/claude/tiny-danfe-debug?id=` — sonda do DANFE no Tiny/Olist
-    (resposta crua do link + estrutura do visualizador). 10/07.
-  - `GET /api/claude/deploy` — commit que esta NO AR
-    (RAILWAY_GIT_COMMIT_SHA) — confirma que o commit 1 (ALTER) deployou
-    antes de subir o commit 2 (modelo), sem pedir ao dono. 11/07.
 - **Uso numa sessao**: o dono cola o token no chat (o container e efemero —
   nada persiste entre sessoes); consultar com
   `curl -s -H "Authorization: Bearer $TOK" https://gestao.opaopadariaartesanal.com.br/api/claude/cronograma`.
@@ -153,10 +137,6 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   **espera o CI passar** antes de subir. Com o CI agora em ~1,5 min (ver abaixo),
   o deploy gira em ~3-5 min (CI + build Docker). Pra deploy rapido em emergencia:
   desligar "Wait for CI" no Railway temporariamente.
-- **Healthcheck (11/07/2026)**: `railway.json` tem `healthcheckPath:
-  "/health"` (rota em `app/__init__.py`) — o deploy novo so vira ativo
-  quando `/health` responde 200 (app que sobe mas trava no boot nao derruba
-  o deploy antigo). Antes o Railway so olhava crash de processo.
 
 - **CI rapido (refatorado 2026-06-09)**: a suite caiu de **~12 min pra ~73s**
   (~10x). O `tests/conftest.py` cria o app + schema UMA vez por sessao e reseta
@@ -280,36 +260,22 @@ Fechado 2026-05-22:
 
 Da auditoria 1, ainda pendentes:
 
-- ✓ **M6 — Mover BLOBs pro Dropbox** (FECHADO em 12/07/2026 com o
-  Commit D; migracao dos dados era de 22/05/2026):
-  - Migrados pra Dropbox: `Receita.imagem_blob`, `Produto.imagem_blob`,
-    `FotoRecebimento.imagem`, `PedidoItemFoto.imagem`. (`EntregaFoto` ja
-    nasceu so-URL — nunca teve coluna BLOB.)
+- **M6 — Mover BLOBs pro Dropbox** (parcial, 4 de 6 migrados em 22/05/2026):
+  - ✅ Migrados pra Dropbox: `Receita.imagem_blob`, `Produto.imagem_blob`,
+    `FotoRecebimento.imagem`, `PedidoItemFoto.imagem`, `EntregaFoto.imagem`.
   - ✗ Mantidos BLOB no Postgres por seguranca (PII):
     `Atestado.arquivo` (atestado medico), `Loja.planta_imagem`.
-  - **Commit D feito em 2 commits** (procedimento inverso do ADD: primeiro
-    o codigo para de tocar a coluna, depois o DROP): commit 1 tirou as
-    colunas dos MODELOS, os fallbacks BLOB das serve routes
-    (`cardapio_img`, `pedidos.foto`/`conferencia_foto`,
-    `handshake.foto_serve`, `_render_fotos` do PDF) e os FALLBACKS DE
-    ESCRITA; commit 2 = DROP fisico **guardado por contagem** em
-    `_migrate_postgres()`/`_migrate_sqlite()` — so dropa quando NAO resta
-    nenhuma linha com BLOB; se restar, loga WARNING e adia (drenar pelo
-    card e o drop acontece no boot seguinte). NUNCA trocar por drop cego.
-  - **DECISAO de comportamento (12/07/2026)**: Dropbox indisponivel/upload
-    falho agora e ERRO VISIVEL em todos os caminhos de foto (upload de
-    cardapio, import zip de receitas, recebimento manual de pedido, tool
-    `anexar_foto_pedido` do copilot) — antes caia em silencio pro BLOB no
-    Postgres e re-enchia a coluna. Mesmo padrao da retirada de sobras
-    (foto sobe ANTES do registro ou recusa). CONSEQUENCIA: Dropbox fora =
-    recebimento com foto nova falha ate voltar (as outras 2 provas de
-    foto continuam valendo). Testes:
-    `tests/test_recebimento_exige_foto.py`.
+  - ⏳ **Pendente Commit D**: dropar as colunas BLOB ja-vazias dos 4
+    modelos migrados. Hoje todas as linhas tem `imagem*=NULL` e
+    `imagem_url/imagem_dropbox_url` preenchido. Drop libera espaco
+    de disco. Padrao por modelo: `ALTER TABLE <t> DROP COLUMN IF EXISTS
+    <coluna>` em `_migrate_postgres()` + remover do modelo + remover
+    fallback BLOB nas serve routes (`cardapio_img`, `pedidos.foto`,
+    `handshake.foto_serve`) + atualizar `_render_fotos` no
+    `app/services/relatorio.py` (que ja prioriza URL).
   - Backfill rotas em `/admin/debug-schema` (card "Migracao BLOB").
-    Idempotentes. O `blob_migrator.py` foi reescrito em **SQL cru** (as
-    colunas nao existem mais no modelo; a tabela pode te-las ate o drop) —
-    coluna ja dropada = no-op com aviso.
-  - Helper compressao:
+    Idempotentes — podem ser re-rodadas a qualquer momento.
+  - Servico: `app/services/blob_migrator.py`. Helper compressao:
     `app.utils.comprimir_imagem(bytes, max_size=700, quality=82)`.
   - URL Dropbox usa `?raw=1` (CDN raw bytes), nao `?dl=0` (preview HTML).
     `dropbox_storage._converter_para_raw()` normaliza via `urllib.parse`.
@@ -415,18 +381,6 @@ contamina transacao de negocio nem quebra o fluxo). Relatorio owner-only em
 disso o gasto por funcao era irrecuperavel (nada registrava). Precos em
 `uso_ia._PRECOS` — atualizar quando a Anthropic mudar tabela.
 
-**Vigia de CUSTO de IA (11/07/2026)**: o relatorio acima e passivo — um
-loop de bot dispararia custo em silencio. Cron de 1h (`seru_cron`, lock
-7748, kill-switch `USO_IA_VIGIA=0`) compara o gasto de HOJE (desde 00:00
-BRT) com `USO_IA_TETO_DIA_USD` (default US$ 25/dia) e alerta o dono no
-WhatsApp na transicao abaixo→acima do teto, re-alerta 6h, aviso de
-normalizacao (padrao do vigia do site, estado em AppConfig). Servico
-`app/services/uso_ia_vigia.py`; sob demanda `GET /admin/vigia-uso-ia`
-(owner; `?alertar=1` roda com WhatsApp). Cuidado deliberado: a ASSINATURA
-do alerta e so o teto (gasto crescente na assinatura = spam de hora em
-hora). Chamada de modelo sem preco na tabela nao soma no gasto — o
-resultado expoe `sem_preco`. Testes: `tests/test_uso_ia_vigia.py`.
-
 **Regra "preferir RESPONDER a PERGUNTAR"** no system prompt (vale pra
 Sonnet e Opus, mas rende mais no Opus): inferir/escolher com o contexto
 em vez de pingar pergunta atras de pergunta. Excecao: WRITES de
@@ -507,22 +461,6 @@ Backup diario do Postgres pro Dropbox. Implementado em 22/05/2026.
 **Versao do pg_dump**: o Dockerfile instala `postgresql-client-18`
 do repo pgdg porque o server Railway eh PG 18 e pg_dump precisa ser
 >= versao do server. Quando server upgradear, atualizar Dockerfile.
-
-**Marco persistente + dead-man's switch (11/07/2026)**: o "ultimo run" do
-backup ficava SO em memoria (`_ult_run_backup`) e zerava a cada deploy —
-backup parado em silencio era invisivel. Agora cada rodada grava
-`backup_ultimo_run_em`/`backup_ultimo_ok_em` (e `backup_chatwoot_*`) em
-AppConfig (`seru_cron._gravar_marco_backup`, best-effort) e
-`status_backup()` le de la (defensivo — banco doente cai pro valor em
-memoria, a pagina de diagnostico nao pode dar 500). O heartbeat das 08:00
-no Slack ganha linha `:warning:` quando o ultimo backup OK tem >28h OU
-quando o job roda mas NUNCA registrou OK (run gravado + OK ausente =
-falhando desde sempre) — `seru_cron._aviso_backup_atrasado`, cobrindo
-sistema (gate `BACKUP_AUTO`) e Chatwoot (gates `BACKUP_CHATWOOT` +
-`CHATWOOT_DATABASE_URL`, espelho do agendamento). Quieto fora de Postgres
-ou sem marco nenhum. O card Backup do /admin/debug-schema mostra "Ultimo
-backup OK" separado do ultimo run (run recente + OK velho = job roda mas
-falha).
 
 **Drill de restore** (2026-06-09): `GET /admin/backup/drill?iniciar=1`
 (owner) baixa o dump mais recente do Dropbox e valida o TOC com
@@ -738,14 +676,8 @@ entregas:
   de retorno da loja — as vendas de Nutella baixam dali, NUNCA dar entrada
   manual (duplicaria: nutella vendida antes do aviso ja baixou o retorno).
   Testes: `tests/test_retirada_coleta_divergencia.py`.
-- Testes: `tests/test_retirada_sobras.py`.
-- **Lista web + cancelamento: FEITOS em 10/07/2026** — `/pedidos/retiradas`
-  (`pedidos/routes.py::retiradas_sobras`) lista abertas + finalizadas,
-  regenera QR de coleta expirado (TTL 48h prendia retirada em
-  `aguardando_coleta` pra sempre) e cancela retirada nao-coletada
-  (`devolucao.cancelar_retirada`; em transporte nao cancela — a loja ja
-  baixou, finalize o recebimento). PENDENTE (nao bloqueia): mostrar
-  retiradas do dia no Painel de Entregas.
+- Testes: `tests/test_retirada_sobras.py`. PENDENTE (nao bloqueia): mostrar
+  retiradas do dia no Painel de Entregas e lista web com cancelamento.
 
 **Fixes do primeiro uso real (02/07/2026 a noite, Nebraska — testes em
 `tests/test_slack_retirada_e_duplicata.py`)**:
@@ -810,24 +742,6 @@ Aprovar/enviar usa o motor DA TELA (mesma regra do equilibrar — senao a
 ordem nao bate com o grid visto). Cache do balanco tem motor na chave.
 Constante: `previsao_producao.MOTORES_PREVISAO_PRODUCAO`. Testes: secao
 "motor de previsao" em `tests/test_cronograma.py`.
-
-## Acuracia do forecast — 1 snapshot POR ANTECEDENCIA (11/07/2026)
-
-`PrevisaoSnapshot` guarda 1 linha por (data_alvo, loja, receita, motor,
-**lead_dias**) — o cron das 05:30 congela a previsao de CADA antecedencia
-(D-6..D-0) da mesma data-alvo, entao a tabela "por lead" de
-/producao/previsao-acuracia compara a MESMA data vista de leads
-diferentes. Antes a unique de 4 colunas guardava so a PRIMEIRA previsao
-vista e o "por lead" comparava leads de DATAS diferentes. Procedimento de
-2 commits seguido: commit 1 = ALTER da unique
-(`uq_previsao_snapshot_alvo_motor_lead`, migrations_legacy PG+SQLite) +
-sonda `/api/claude/deploy`; commit 2 = modelo + dedupe por lead em
-`previsao_acuracia._registrar_motor`. Consequencia ACEITA: os agregados
-(total/por_receita/por_loja) passam a contar ate 7 observacoes por
-data-alvo (uma por lead) — o `n` cresce; o casamento com o realizado nao
-muda (agrega por loja/receita/data). Testes:
-`test_registrar_um_snapshot_por_antecedencia` em
-`tests/test_previsao_acuracia.py`.
 
 ## Pré-baixa de MP na ordem enviada (07/07/2026)
 
@@ -1619,21 +1533,9 @@ Marines F. Kisler (validacao dos arquivos).
   inline; acao "voltar pra pendente" (status remessa/rejeitada -> pendente,
   MANTEM nosso numero) permite corrigir e gerar NOVA remessa (novo
   sequencial). Titulo REGISTRADO nao volta pra pendente (dessincronizaria
-  com o banco) — o caminho dele e o PEDIDO DE BAIXA abaixo.
+  com o banco — precisa instrucao de baixa, ainda nao implementada).
   Proximo passo do dono: corrigir endereco da cobranca de homologacao,
   gerar remessa nova + boleto PDF e mandar pra Marines validar.
-- **Pedido de BAIXA de titulo registrado (12/07/2026)** — manuais CNAB
-  re-enviados pelo dono (o extrato em scratchpad morre com o container;
-  pedir os PDFs de novo se sumir): botao "pedir baixa" na linha do titulo
-  `registrada` gera remessa com **instrucao 02** (posicoes 109-110, mesmo
-  layout do detalhe de cadastro — `gerar_remessa_baixa` em
-  `sicredi_cnab.py`) e move pra `baixa_solicitada` (aparece em "Em
-  aberto", badge ambar). O RETORNO fecha o ciclo: ocorrencia 10 (baixado
-  conforme instrucoes) → `baixada`; **27 (baixa rejeitada) → volta pra
-  `registrada`** com motivo visivel (nunca pra 'rejeitada', que significa
-  entrada recusada). Testes: secao "pedido de baixa" em
-  `tests/test_cobrancas_sicredi.py`. Homologar com o banco antes de usar
-  em producao de verdade (mesmo fluxo da Marines).
 
 ## Slack Bot (copilot via DM/@mention)
 

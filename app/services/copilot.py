@@ -4145,19 +4145,8 @@ def executar_anexar_foto_pedido(params, user):
     if not imgs:
         return {'ok': False, 'erro': 'Nenhuma imagem anexada na mensagem.'}
 
-    from app.services import dropbox_storage
-    from app.utils import comprimir_imagem
-
-    # M6 Commit D: foto vai pro Dropbox (sem coluna BLOB) — mesmo padrao da
-    # retirada de sobras (sobe ANTES do registro; Dropbox fora = recusa
-    # visivel, nunca grava no Postgres).
-    if not dropbox_storage.disponivel():
-        return {'ok': False, 'erro': 'Dropbox indisponível — não consegui '
-                                     'salvar a foto. Tente de novo em '
-                                     'instantes.'}
     salvas = 0
     try:
-        import time as _time
         for img in imgs:
             b64 = img.get('base64')
             if not b64:
@@ -4166,15 +4155,10 @@ def executar_anexar_foto_pedido(params, user):
                 blob = base64.b64decode(b64)
             except Exception:
                 continue
-            comprimida = comprimir_imagem(blob)
-            path = f'/recebimento/{p.id}/{int(_time.time() * 1000)}.jpg'
-            info = dropbox_storage.upload_publico(
-                comprimida, path, mode='add', autorename=True)
             db.session.add(FotoRecebimento(
                 pedido_id=p.id,
-                imagem_url=info['url'],
-                imagem_storage_path=info['storage_path'],
-                mimetype='image/jpeg',
+                imagem=blob,
+                mimetype=img.get('mimetype') or 'image/jpeg',
                 enviada_por=user.id,
             ))
             salvas += 1

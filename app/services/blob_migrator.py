@@ -4,13 +4,6 @@ Migra fotos legadas que ainda tem `imagem` blob mas nao tem `imagem_url`.
 Idempotente — re-rodar pula as ja migradas.
 
 Cada modelo expoe uma funcao `migrar_<modelo>()` que itera + processa.
-
-M6 Commit D (11/07/2026): as colunas BLOB sairam do MODELO SQLAlchemy —
-este servico passou a ler/zerar os BLOBs por **SQL cru**, porque a tabela
-ainda pode te-los ate o DROP guardado de `migrations_legacy` rodar (o DROP
-so acontece quando nao resta nenhuma linha com BLOB; enquanto restar, o
-dono drena por aqui, via card "Migracao BLOB" do /admin/debug-schema).
-Coluna ja dropada = no-op com aviso, nunca erro.
 """
 import logging
 
@@ -45,84 +38,69 @@ def _com_lock(callback):
             conn.commit()
 
 
-def _coluna_existe(tabela, coluna):
-    return bool(db.session.execute(
-        text('SELECT 1 FROM information_schema.columns '
-             'WHERE table_name = :t AND column_name = :c'),
-        {'t': tabela, 'c': coluna}).scalar())
+def migrar_pedido_item_foto(batch_size=20, max_batches=None):
+    """Migra PedidoItemFoto.imagem (BLOB) pra Dropbox.
 
+    Comprime cada foto (700x700 JPEG 82) antes de subir. Path determinístico
+    permite re-rodar sem duplicar arquivos.
 
-def _ja_dropada(tabela, coluna):
-    """Resultado padrao quando a coluna BLOB ja foi dropada (Commit D)."""
-    return {'ok': True, 'total': 0, 'migradas': 0, 'erros': 0,
-            'detalhes': [f'{tabela}.{coluna} ja foi dropada '
-                         '(M6 Commit D concluido) — nada a migrar']}
-
-
-def _drenar(tabela, blob_col, url_col, sql_lote, montar_path, set_extra,
-            batch_size=20, max_batches=None):
-    """Motor generico do dreno por SQL cru.
-
-    `sql_lote`: SELECT que devolve linhas com ao menos (id, blob) — colunas
-    extras ficam disponiveis pro `montar_path(row)`. `montar_path` devolve o
-    path Dropbox ou levanta ValueError com o motivo (ex: orfao).
-    `set_extra`: fragmento SQL adicional do UPDATE (ex: ", mimetype='image/jpeg'").
+    Retorna {'ok', 'total', 'migradas', 'erros', 'detalhes'}.
     """
-    def _job():
-        if not _coluna_existe(tabela, blob_col):
-            return _ja_dropada(tabela, blob_col)
+    from app.models import PedidoItemFoto
 
-        total_pendentes = db.session.execute(text(
-            f'SELECT COUNT(*) FROM {tabela} '
-            f'WHERE {url_col} IS NULL AND {blob_col} IS NOT NULL')).scalar()
+    def _job():
+        total_pendentes = (PedidoItemFoto.query
+                           .filter(PedidoItemFoto.imagem_url.is_(None))
+                           .filter(PedidoItemFoto.imagem.isnot(None))
+                           .count())
 
         migradas = 0
         erros = 0
         detalhes = []
         batches_feitas = 0
-        vistos_com_erro = set()
 
         while True:
             if max_batches and batches_feitas >= max_batches:
                 detalhes.append(f'parou em max_batches={max_batches}')
                 break
 
-            # A janela cresce com os erros acumulados: as linhas falhadas
-            # continuam com URL NULL e voltariam no mesmo LIMIT — sem isso,
-            # erros >= batch_size saturavam a janela e as linhas ALEM dela
-            # nunca eram tentadas (early-stop silencioso).
-            rows = db.session.execute(
-                text(sql_lote),
-                {'n': batch_size + len(vistos_com_erro)}).mappings().all()
-            rows = [r for r in rows if r['id'] not in vistos_com_erro]
-            if not rows:
+            fotos = (PedidoItemFoto.query
+                     .filter(PedidoItemFoto.imagem_url.is_(None))
+                     .filter(PedidoItemFoto.imagem.isnot(None))
+                     .order_by(PedidoItemFoto.id)
+                     .limit(batch_size)
+                     .all())
+            if not fotos:
                 break
 
-            for row in rows:
+            for foto in fotos:
                 try:
-                    path = montar_path(row)
-                    comprimida = comprimir_imagem(bytes(row[blob_col]))
+                    item = foto.pedido_item
+                    if not item:
+                        detalhes.append(f'foto #{foto.id}: pedido_item orfao')
+                        erros += 1
+                        continue
+
+                    comprimida = comprimir_imagem(foto.imagem)
+                    path = (f'/conferencia/{item.pedido_id}/'
+                            f'{foto.pedido_item_id}_{foto.etapa}.jpg')
                     info = dropbox_storage.upload_publico(
-                        comprimida, path, mode='overwrite', autorename=False)
-                    db.session.execute(text(
-                        f'UPDATE {tabela} SET {url_col} = :u, '
-                        f'imagem_storage_path = :p, {blob_col} = NULL'
-                        f'{set_extra} WHERE id = :id'),
-                        {'u': info['url'], 'p': info['storage_path'],
-                         'id': row['id']})
+                        comprimida, path,
+                        mode='overwrite', autorename=False)
+                    foto.imagem_url = info['url']
+                    foto.imagem_storage_path = info['storage_path']
+                    foto.imagem = None  # libera BLOB
+                    foto.mimetype = 'image/jpeg'
                     migradas += 1
                 except Exception as e:  # noqa: BLE001
-                    detalhes.append(
-                        f'{tabela} #{row["id"]}: {type(e).__name__}: {e}')
+                    detalhes.append(f'foto #{foto.id}: {type(e).__name__}: {e}')
                     erros += 1
-                    vistos_com_erro.add(row['id'])
-                    logger.exception('[blob_migrator] %s #%s falhou',
-                                     tabela, row['id'])
+                    logger.exception('[blob_migrator] foto #%s falhou', foto.id)
 
             db.session.commit()
             batches_feitas += 1
-            logger.info('[blob_migrator] %s batch %d: migradas %d / erros %d',
-                        tabela, batches_feitas, migradas, erros)
+            logger.info('[blob_migrator] batch %d: migradas %d / erros %d',
+                        batches_feitas, migradas, erros)
 
         return {
             'ok': True,
@@ -135,58 +113,146 @@ def _drenar(tabela, blob_col, url_col, sql_lote, montar_path, set_extra,
     return _com_lock(_job)
 
 
-def migrar_pedido_item_foto(batch_size=20, max_batches=None):
-    """Migra pedido_item_foto.imagem (BLOB) pra Dropbox.
+def _migrar_catalogo(modelo_cls, tipo, batch_size=20, max_batches=None):
+    """Migra Receita.imagem_blob ou Produto.imagem_blob pra Dropbox.
 
-    Comprime cada foto (700x700 JPEG 82) antes de subir. Path determinístico
-    permite re-rodar sem duplicar arquivos.
-
-    Retorna {'ok', 'total', 'migradas', 'erros', 'detalhes'}.
+    `modelo_cls`: classe SQLAlchemy (Receita ou Produto).
+    `tipo`: 'receita' ou 'produto' (vai no path Dropbox).
     """
-    def _path(row):
-        if row['pedido_id'] is None:
-            raise ValueError('pedido_item orfao')
-        return (f'/conferencia/{row["pedido_id"]}/'
-                f'{row["pedido_item_id"]}_{row["etapa"]}.jpg')
+    import time as _time
 
-    sql = ('SELECT f.id, f.imagem, f.pedido_item_id, f.etapa, pi.pedido_id '
-           'FROM pedido_item_foto f '
-           'LEFT JOIN pedido_item pi ON pi.id = f.pedido_item_id '
-           'WHERE f.imagem_url IS NULL AND f.imagem IS NOT NULL '
-           'ORDER BY f.id LIMIT :n')
-    return _drenar('pedido_item_foto', 'imagem', 'imagem_url', sql, _path,
-                   ", mimetype = 'image/jpeg'", batch_size, max_batches)
+    def _job():
+        total_pendentes = (modelo_cls.query
+                           .filter(modelo_cls.imagem_dropbox_url.is_(None))
+                           .filter(modelo_cls.imagem_blob.isnot(None))
+                           .count())
 
+        migradas = 0
+        erros = 0
+        detalhes = []
+        batches_feitas = 0
 
-def migrar_foto_recebimento(batch_size=20, max_batches=None):
-    """Migra foto_recebimento.imagem (BLOB) pra Dropbox."""
-    def _path(row):
-        # Path: <pedido_id>/<foto_id>.jpg (foto_id ja eh unico)
-        return f'/recebimento/{row["pedido_id"]}/{row["id"]}.jpg'
+        while True:
+            if max_batches and batches_feitas >= max_batches:
+                break
 
-    sql = ('SELECT id, imagem, pedido_id FROM foto_recebimento '
-           'WHERE imagem_url IS NULL AND imagem IS NOT NULL '
-           'ORDER BY id LIMIT :n')
-    return _drenar('foto_recebimento', 'imagem', 'imagem_url', sql, _path,
-                   ", mimetype = 'image/jpeg'", batch_size, max_batches)
+            objs = (modelo_cls.query
+                    .filter(modelo_cls.imagem_dropbox_url.is_(None))
+                    .filter(modelo_cls.imagem_blob.isnot(None))
+                    .order_by(modelo_cls.id)
+                    .limit(batch_size)
+                    .all())
+            if not objs:
+                break
 
+            for obj in objs:
+                try:
+                    # Foto de cardapio ja vem do upload comprimida (PIL 700px),
+                    # mas re-comprimir eh seguro e idempotente.
+                    comprimida = comprimir_imagem(obj.imagem_blob)
+                    path = f'/cardapio/{tipo}/{obj.id}.jpg'
+                    info = dropbox_storage.upload_publico(
+                        comprimida, path,
+                        mode='overwrite', autorename=False)
+                    obj.imagem_dropbox_url = info['url']
+                    obj.imagem_storage_path = info['storage_path']
+                    obj.imagem_blob = None
+                    obj.imagem_mimetype = 'image/jpeg'
+                    migradas += 1
+                except Exception as e:  # noqa: BLE001
+                    detalhes.append(f'{tipo} #{obj.id}: {type(e).__name__}: {e}')
+                    erros += 1
+                    logger.exception('[blob_migrator] %s #%s falhou', tipo, obj.id)
 
-def _migrar_catalogo(tabela, tipo, batch_size=20, max_batches=None):
-    """Migra receita.imagem_blob ou produto.imagem_blob pra Dropbox."""
-    def _path(row):
-        return f'/cardapio/{tipo}/{row["id"]}.jpg'
+            db.session.commit()
+            batches_feitas += 1
+            _time.sleep(0.1)
 
-    sql = (f'SELECT id, imagem_blob FROM {tabela} '
-           'WHERE imagem_dropbox_url IS NULL AND imagem_blob IS NOT NULL '
-           'ORDER BY id LIMIT :n')
-    return _drenar(tabela, 'imagem_blob', 'imagem_dropbox_url', sql, _path,
-                   ", imagem_mimetype = 'image/jpeg'", batch_size,
-                   max_batches)
+        return {
+            'ok': True,
+            'total': total_pendentes,
+            'migradas': migradas,
+            'erros': erros,
+            'detalhes': detalhes[:50],
+        }
+
+    return _com_lock(_job)
 
 
 def migrar_receita_imagem(batch_size=20, max_batches=None):
-    return _migrar_catalogo('receita', 'receita', batch_size, max_batches)
+    from app.models import Receita
+    return _migrar_catalogo(Receita, 'receita', batch_size, max_batches)
 
 
 def migrar_produto_imagem(batch_size=20, max_batches=None):
-    return _migrar_catalogo('produto', 'produto', batch_size, max_batches)
+    from app.models import Produto
+    return _migrar_catalogo(Produto, 'produto', batch_size, max_batches)
+
+
+def migrar_foto_recebimento(batch_size=20, max_batches=None):
+    """Migra FotoRecebimento.imagem (BLOB) pra Dropbox.
+
+    Mesma estrategia do PedidoItemFoto: comprime + sobe + popula URL.
+    """
+    import time as _time
+
+    from app.models import FotoRecebimento
+
+    def _job():
+        total_pendentes = (FotoRecebimento.query
+                           .filter(FotoRecebimento.imagem_url.is_(None))
+                           .filter(FotoRecebimento.imagem.isnot(None))
+                           .count())
+
+        migradas = 0
+        erros = 0
+        detalhes = []
+        batches_feitas = 0
+
+        while True:
+            if max_batches and batches_feitas >= max_batches:
+                detalhes.append(f'parou em max_batches={max_batches}')
+                break
+
+            fotos = (FotoRecebimento.query
+                     .filter(FotoRecebimento.imagem_url.is_(None))
+                     .filter(FotoRecebimento.imagem.isnot(None))
+                     .order_by(FotoRecebimento.id)
+                     .limit(batch_size)
+                     .all())
+            if not fotos:
+                break
+
+            for foto in fotos:
+                try:
+                    comprimida = comprimir_imagem(foto.imagem)
+                    # Path: <pedido_id>/<foto_id>.jpg (foto_id ja eh unico)
+                    path = (f'/recebimento/{foto.pedido_id}/'
+                            f'{foto.id}.jpg')
+                    info = dropbox_storage.upload_publico(
+                        comprimida, path,
+                        mode='overwrite', autorename=False)
+                    foto.imagem_url = info['url']
+                    foto.imagem_storage_path = info['storage_path']
+                    foto.imagem = None
+                    foto.mimetype = 'image/jpeg'
+                    migradas += 1
+                except Exception as e:  # noqa: BLE001
+                    detalhes.append(f'foto #{foto.id}: {type(e).__name__}: {e}')
+                    erros += 1
+                    logger.exception('[blob_migrator] foto_recebimento #%s falhou',
+                                     foto.id)
+
+            db.session.commit()
+            batches_feitas += 1
+            _time.sleep(0.1)  # rate limit Dropbox
+
+        return {
+            'ok': True,
+            'total': total_pendentes,
+            'migradas': migradas,
+            'erros': erros,
+            'detalhes': detalhes[:50],
+        }
+
+    return _com_lock(_job)

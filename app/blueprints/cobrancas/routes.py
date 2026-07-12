@@ -37,8 +37,7 @@ def lista():
                  .order_by(Cobranca.vencimento.asc(), Cobranca.id.asc())
                  .limit(500).all())
     abertas = [c for c in cobrancas
-               if c.status in ('pendente', 'remessa', 'registrada',
-                               'baixa_solicitada')]
+               if c.status in ('pendente', 'remessa', 'registrada')]
     pagas = [c for c in cobrancas if c.status == 'paga']
     problemas = [c for c in cobrancas
                  if c.status in ('rejeitada', 'baixada')]
@@ -195,29 +194,6 @@ def voltar_pendente(id):
     db.session.commit()
     flash(f'{cob.pagador_nome} voltou pra pendente — corrija os dados e '
           'gere uma NOVA remessa.', 'success')
-    return redirect(url_for('cobrancas.lista'))
-
-
-@cobrancas_bp.route('/<int:id>/solicitar-baixa', methods=['POST'])
-@login_required
-def solicitar_baixa(id):
-    """Pedido de BAIXA de título REGISTRADO (12/07/2026, manuais CNAB
-    re-enviados pelo dono): gera remessa com instrução 02 e move a cobrança
-    pra 'baixa_solicitada'. A confirmação vem no retorno (ocorrência 10 →
-    baixada; 27 → baixa rejeitada, volta pra registrada). É o caminho certo
-    pra tirar do banco um título registrado — 'voltar pra pendente' segue
-    proibido nesses (dessincronizaria com o Sicredi)."""
-    _admin_ou_403()
-    from app.services.sicredi_cnab import gerar_remessa_baixa
-    cob = Cobranca.query.get_or_404(id)
-    rem, erros = gerar_remessa_baixa([cob], user_id=current_user.id)
-    if erros:
-        for e in erros[:8]:
-            flash(e, 'danger')
-        return redirect(url_for('cobrancas.lista'))
-    flash(f'Remessa {rem.nome_arquivo} de PEDIDO DE BAIXA gerada — baixe o '
-          'arquivo e envie no Sicredi; a baixa confirma no retorno.',
-          'success')
     return redirect(url_for('cobrancas.lista'))
 
 

@@ -39,7 +39,7 @@ def _foto_bytes(foto):
     2. **HTTP no shared link** (legado/compat) — User-Agent de navegador,
        URL normalizada pra `raw=1`. Valida magic bytes / Content-Type pra
        rejeitar pagina HTML de preview do Dropbox.
-    (A tentativa 3, BLOB legado, saiu no M6 Commit D — foto so no Dropbox.)
+    3. **BLOB legado** (`foto.imagem`) — fotos pre-M6.
 
     Bug 24/06/2026: fix via User-Agent + raw=1 nao bastou em prod (motivo
     nao confirmado — pode ser link de preview que ignora raw, ou CDN com
@@ -71,12 +71,12 @@ def _foto_bytes(foto):
                 return conteudo
             logger.warning(
                 'foto %s: shared link nao retornou imagem '
-                '(status=%s content_type=%s len=%s) — foto fica fora do PDF',
+                '(status=%s content_type=%s len=%s) — usando BLOB',
                 getattr(foto, 'id', '?'), r.status_code, ct, len(conteudo))
         except Exception:  # noqa: BLE001
             logger.exception('foto %s: erro no shared link pro PDF',
                              getattr(foto, 'id', '?'))
-    return None  # sem fallback BLOB (M6 Commit D) — foto so no Dropbox
+    return foto.imagem  # BLOB legado (pode ser None apos M6)
 
 
 def _fotos_conferencia(p, etapa=None):
@@ -107,7 +107,7 @@ def _render_fotos(pdf, fotos, titulo='Fotos do recebimento', legendas=None,
     """Renderiza miniaturas das fotos em grade dentro do PDF.
 
     Quebra de pagina automatica quando o bloco nao cabe no restante.
-    Fotos vivem no Dropbox (M6); sem bytes, a foto fica fora da grade.
+    Fotos podem estar no Dropbox (M6+) ou BLOB legado.
 
     `legendas`: lista paralela a `fotos` (str por foto). Quando presente,
     escreve a legenda embaixo de cada miniatura — usado nas fotos de

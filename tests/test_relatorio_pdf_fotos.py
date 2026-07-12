@@ -7,8 +7,7 @@ Fix em 2 etapas:
    tirando o CDN publico do caminho critico.
 
 Os testes garantem a ordem: API autenticada PRIMEIRO; shared link como
-fallback. (O fallback BLOB legado saiu no M6 Commit D 11/07/2026 — falha
-nas duas fontes devolve None e a foto fica fora do PDF, sem quebrar.)
+fallback; BLOB legado por ultimo.
 """
 import io
 from types import SimpleNamespace
@@ -48,7 +47,8 @@ def test_foto_bytes_usa_api_autenticada_primeiro():
     Nem chega a tocar no shared link."""
     jpeg = _jpeg_bytes()
     foto = SimpleNamespace(id=1, imagem_url='https://dropbox.com/x?raw=1',
-                           imagem_storage_path='/recebimento/1/abc.jpg')
+                           imagem_storage_path='/recebimento/1/abc.jpg',
+                           imagem=None)
     with patch('app.services.dropbox_storage.baixar', return_value=jpeg) as api, \
          patch('app.services.relatorio.requests.get') as http:
         out = relatorio._foto_bytes(foto)
@@ -61,7 +61,8 @@ def test_foto_bytes_cai_no_shared_link_se_api_autenticada_falhar():
     """API retornou None → cai no shared link com User-Agent + raw."""
     jpeg = _jpeg_bytes()
     foto = SimpleNamespace(id=10, imagem_url='https://dropbox.com/x?dl=0',
-                           imagem_storage_path='/recebimento/10/abc.jpg')
+                           imagem_storage_path='/recebimento/10/abc.jpg',
+                           imagem=None)
     with patch('app.services.dropbox_storage.baixar', return_value=None), \
          patch('app.services.relatorio.requests.get',
                return_value=_resp(200, jpeg, 'image/jpeg')) as m:
@@ -75,7 +76,7 @@ def test_foto_bytes_sem_storage_path_usa_shared_link():
     """Foto pre-storage_path (ainda assim com URL): so o shared link."""
     jpeg = _jpeg_bytes()
     foto = SimpleNamespace(id=2, imagem_url='https://dropbox.com/x?raw=1',
-                           imagem_storage_path=None)
+                           imagem_storage_path=None, imagem=None)
     with patch('app.services.dropbox_storage.baixar') as api, \
          patch('app.services.relatorio.requests.get',
                return_value=_resp(200, jpeg, 'image/jpeg')):
@@ -84,17 +85,18 @@ def test_foto_bytes_sem_storage_path_usa_shared_link():
     api.assert_not_called()
 
 
-def test_foto_bytes_rejeita_html_de_preview_e_devolve_none():
+def test_foto_bytes_rejeita_html_de_preview_e_cai_no_fallback():
     """Dropbox respondeu HTML (status 200) no shared link. NAO pode passar
-    isso pro fpdf2 — sem fallback BLOB (M6 Commit D), devolve None e a
-    foto fica fora do PDF."""
+    isso pro fpdf2 — cai no BLOB legado (aqui simulado como bytes)."""
     html = b'<!DOCTYPE html><html><head>Dropbox preview</head></html>'
+    blob_legado = _jpeg_bytes()
     foto = SimpleNamespace(id=2, imagem_url='https://dropbox.com/x?dl=0',
-                           imagem_storage_path=None)
+                           imagem_storage_path=None, imagem=blob_legado)
     with patch('app.services.relatorio.requests.get',
                return_value=_resp(200, html, 'text/html; charset=utf-8')):
         out = relatorio._foto_bytes(foto)
-    assert out is None
+    assert out == blob_legado
+    assert out != html
 
 
 def test_foto_bytes_normaliza_url_pra_raw():
@@ -102,7 +104,7 @@ def test_foto_bytes_normaliza_url_pra_raw():
     jpeg = _jpeg_bytes()
     foto = SimpleNamespace(id=3,
                            imagem_url='https://www.dropbox.com/s/abc/f.jpg?dl=0',
-                           imagem_storage_path=None)
+                           imagem_storage_path=None, imagem=None)
     with patch('app.services.relatorio.requests.get',
                return_value=_resp(200, jpeg, 'image/jpeg')) as m:
         relatorio._foto_bytes(foto)
@@ -112,11 +114,11 @@ def test_foto_bytes_normaliza_url_pra_raw():
 
 
 def test_foto_bytes_erro_de_rede_nao_quebra():
-    """Timeout/erro no shared link: loga e devolve None (foto fora do PDF),
-    sem propagar excecao."""
+    """Timeout/erro no shared link: loga e cai no BLOB, sem propagar."""
+    blob_legado = _jpeg_bytes()
     foto = SimpleNamespace(id=4, imagem_url='https://dropbox.com/x?raw=1',
-                           imagem_storage_path=None)
+                           imagem_storage_path=None, imagem=blob_legado)
     with patch('app.services.relatorio.requests.get',
                side_effect=Exception('timeout')):
         out = relatorio._foto_bytes(foto)
-    assert out is None
+    assert out == blob_legado

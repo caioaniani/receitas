@@ -144,8 +144,7 @@ def foto_serve(token, foto_id):
     """Serve a imagem associada a um QR token ativo.
 
     Pos-M6: se a foto ja foi migrada pro Dropbox (imagem_url preenchido),
-    redireciona pro CDN do Dropbox. Sem fallback BLOB (M6 Commit D) —
-    sem URL, 404.
+    redireciona pro CDN do Dropbox. Senao serve BLOB legado do banco.
     """
 
     from app.models import PedidoItemFoto
@@ -157,6 +156,10 @@ def foto_serve(token, foto_id):
         abort(404)
     if foto.imagem_url:
         return redirect(foto.imagem_url, code=302)
+    if foto.imagem:
+        return send_file(io.BytesIO(foto.imagem),
+                          mimetype=foto.mimetype or 'image/jpeg',
+                          max_age=0)
     abort(404)
 
 

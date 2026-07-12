@@ -831,7 +831,6 @@ def api_carrinho_salvar():
 
 
 @loja_bp.route('/checkout', methods=['GET', 'POST'])
-@limiter.limit('10 per minute', methods=['POST'])
 def checkout():
     """Checkout do site. GET serve o formulário; POST cria o PedidoOnline.
 
