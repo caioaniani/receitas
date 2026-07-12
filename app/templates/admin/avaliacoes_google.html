@@ -168,10 +168,9 @@ function rascunhoIA(id, btn) {
     var ta = document.getElementById('resp-' + id);
     var orig = btn.innerHTML;
     btn.disabled = true; btn.innerHTML = 'Gerando…';
-    var meta = document.querySelector('meta[name="csrf-token"]');
     fetch('{{ url_for("main.avaliacoes_google") }}/' + id + '/rascunho', {
         method: 'POST',
-        headers: {'X-CSRFToken': meta ? meta.getAttribute('content') : ''},
+        headers: {'X-CSRFToken': '{{ csrf_token() }}'},
     }).then(function (r) { return r.json(); }).then(function (d) {
         btn.disabled = false; btn.innerHTML = orig;
         if (d.ok && d.texto) { ta.value = d.texto; ta.focus(); }
