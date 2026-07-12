@@ -398,6 +398,7 @@ var VINC_KEY_BY = {};   // 'tipo:id' -> rotulo do datalist
                    t: 'receita', id: r.id});
     });
     __produtos.forEach(function (p) { ents.push({base: p.nome + ' · produto', t: 'produto', id: p.id}); });
+    __mps.forEach(function (m) { ents.push({base: m.nome + ' · mat-prima', t: 'mp', id: m.id}); });
     var cont = {};
     ents.forEach(function (e) { cont[e.base] = (cont[e.base] || 0) + 1; });
     ents.forEach(function (e) {
