@@ -2286,11 +2286,15 @@ def debug_omada():
         v = (current_app.config.get(k) or '').strip()
         envs[k] = {'presente': bool(v), 'tamanho': len(v)}
     out = {'envs': envs, 'configurado': omada.disponivel()}
-    if not out['configurado']:
+    # As 4 envs do token bastam pra testar a nuvem e LISTAR os sites —
+    # o OMADA_SITE_ID pode ser copiado da própria resposta.
+    if not all(envs[k]['presente'] for k in
+               ('OMADA_API_URL', 'OMADA_CLIENT_ID', 'OMADA_CLIENT_SECRET',
+                'OMADA_OMADAC_ID')):
         out['conclusao'] = (
             'Faltam envs OMADA_* no Railway — gerar as credenciais no '
             'Omada (Settings → Platform Integration → Open API) e setar '
-            'as cinco variáveis.')
+            'ao menos URL, client_id, client_secret e omadac_id.')
         return jsonify(out), 200
     try:
         omada._token()
@@ -2301,6 +2305,15 @@ def debug_omada():
             'Credenciais/URL erradas ou controlador sem Cloud Access — '
             'conferir OMADA_API_URL (endereço da interface mostrado na '
             'tela do Open API) e o par client_id/client_secret.')
+        return jsonify(out), 200
+    try:
+        out['sites'] = omada.listar_sites()
+    except Exception as exc:  # noqa: BLE001 — diagnóstico mostra o erro cru
+        out['sites_erro'] = str(exc)[:300]
+    if not out['configurado']:
+        out['conclusao'] = (
+            'Token OK. Falta o OMADA_SITE_ID — copie o "id" do site '
+            'Ribeiro do Vale na lista `sites` desta resposta.')
         return jsonify(out), 200
     mac = (request.args.get('autorizar_mac') or '').strip()
     if mac:
