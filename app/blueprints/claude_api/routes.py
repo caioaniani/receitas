@@ -745,3 +745,19 @@ def deploy_info():
         branch=os.environ.get('RAILWAY_GIT_BRANCH'),
         deployment_id=os.environ.get('RAILWAY_DEPLOYMENT_ID'),
     )
+
+
+@claude_api_bp.route('/auditoria-mapeamentos')
+@_claude_auth_required
+def auditoria_mapeamentos():
+    """Auditoria read-only dos mapeamentos de venda→estoque (12/07/2026,
+    "tem dado diferenca nos estoques"): lojas sem vinculo, pendentes com
+    venda, alvos mortos, fatores, duplicatas, cestas vazias, movimentos
+    sem_estoque, debitos travados e pedidos com itens nao baixados.
+    `?dias=N` (default 14, max 60)."""
+    from app.services.auditoria_mapeamentos import auditar
+    try:
+        dias = int(request.args.get('dias', 14))
+    except (TypeError, ValueError):
+        dias = 14
+    return jsonify(ok=True, **auditar(dias=dias))

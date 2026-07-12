@@ -98,17 +98,13 @@ def test_alvo_morto_fator_zero_e_fracionario_informativo(app):
                for x in out['fatores_fracionarios_informativo'])
 
 
-def test_duplicata_cesta_vazia_e_componente_orfao(app):
+def test_cesta_vazia_e_componente_orfao(app):
     with app.app_context():
-        r = _receita()
-        db.session.add(VendaMapa(canal='seru', nome_externo='DUPLA',
-                                 receita_id=r.id))
-        db.session.add(VendaMapa(canal='seru', nome_externo='DUPLA'))
         p_vazio = Produto(nome='Cesta Vazia', preco_atacado=10)
         p_orfao = Produto(nome='Cesta Orfa', preco_atacado=10)
         db.session.add_all([p_vazio, p_orfao])
         db.session.flush()
-        db.session.add(ProdutoItem(produto_id=p_orfao.id,
+        db.session.add(ProdutoItem(produto_id=p_orfao.id, tipo='receita',
                                    item_nome='Nome Velho', quantidade=1))
         db.session.add(VendaMapa(canal='seru', nome_externo='CESTA V',
                                  produto_id=p_vazio.id))
@@ -116,8 +112,6 @@ def test_duplicata_cesta_vazia_e_componente_orfao(app):
                                  produto_id=p_orfao.id))
         db.session.commit()
         out = auditar(dias=7)
-    assert {'canal': 'seru', 'nome_externo': 'DUPLA',
-            'linhas': 2} in out['duplicatas']
     assert out['cestas_vazias'][0]['produto'] == 'Cesta Vazia'
     assert out['componentes_orfaos'][0]['item_nome'] == 'Nome Velho'
 

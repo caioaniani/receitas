@@ -11,7 +11,6 @@ geram diferenca entre o vendido (Seru/lote) e o baixado no EstoqueLoja:
 - mapa apontando pra alvo morto (receita/MP arquivada) — baixa nao acontece;
 - fator 0 (mapeado mas baixa nada) e fatores fracionarios (LISTA INFORMATIVA:
   o cafe->0.2 Cookie e REGRA DE NEGOCIO confirmada pelo dono, NAO e erro);
-- (canal, nome) duplicado no VendaMapa;
 - cesta mapeada sem componentes e componente de cesta orfao (FK nula) —
   a venda "baixa" mas nenhum estoque se move;
 - movimentos *_sem_estoque recentes (a baixa quis acontecer e o saldo ja
@@ -168,14 +167,7 @@ def auditar(dias=14):
     out['fatores_fracionarios_informativo'] = sorted(
         fracionarios, key=lambda x: -x['qtd_vendida_periodo'])[:40]
 
-    # 6) Duplicatas (canal, nome_externo) — o sync usa .first(): a segunda
-    #    linha e ruido e pode divergir da primeira.
-    dups = (db.session.query(VendaMapa.canal, VendaMapa.nome_externo,
-                             func.count(VendaMapa.id))
-            .group_by(VendaMapa.canal, VendaMapa.nome_externo)
-            .having(func.count(VendaMapa.id) > 1).all())
-    out['duplicatas'] = [{'canal': c, 'nome_externo': n, 'linhas': int(q)}
-                         for c, n, q in dups]
+    # (Duplicata de (canal, nome_externo) e impossivel: unique no schema.)
 
     # 7) Cesta mapeada sem componentes + componentes orfaos (FK nula):
     #    a venda processa mas NENHUM estoque se move (ou move parcial).
