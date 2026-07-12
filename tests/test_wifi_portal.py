@@ -13,8 +13,8 @@ import pytest
 from app.extensions import db
 
 # O gate da loja exige LOJA_VISIVEL=1 E host público (LOJA_HOSTS). O marker
-# `loja_host` (conftest) faz o localhost dos testes contar como host da loja.
-pytestmark = pytest.mark.loja_host
+# `loja_host` vai SÓ nos testes de rota /loja/wifi — no arquivo inteiro ele
+# derrubaria o /crm/bot (em host de loja, só /loja/* responde — 404).
 
 
 @pytest.fixture
