@@ -366,8 +366,8 @@ def _norm(s):
 @login_required
 def cardapio_img_revisar():
     """Grid de revisao das fotos atribuidas. Admin ve thumbnail + nome,
-    identifica matches errados e remove com 1 clique. Defer blob pra nao
-    estourar RAM — o thumbnail eh servido pela rota /cardapio-img/<tipo>/<id>."""
+    identifica matches errados e remove com 1 clique. O thumbnail eh
+    servido pela rota /cardapio-img/<tipo>/<id> (redirect Dropbox)."""
     from flask import abort
     from sqlalchemy.orm import defer
     if not current_user.is_admin():
