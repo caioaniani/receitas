@@ -1619,9 +1619,21 @@ Marines F. Kisler (validacao dos arquivos).
   inline; acao "voltar pra pendente" (status remessa/rejeitada -> pendente,
   MANTEM nosso numero) permite corrigir e gerar NOVA remessa (novo
   sequencial). Titulo REGISTRADO nao volta pra pendente (dessincronizaria
-  com o banco — precisa instrucao de baixa, ainda nao implementada).
+  com o banco) — o caminho dele e o PEDIDO DE BAIXA abaixo.
   Proximo passo do dono: corrigir endereco da cobranca de homologacao,
   gerar remessa nova + boleto PDF e mandar pra Marines validar.
+- **Pedido de BAIXA de titulo registrado (12/07/2026)** — manuais CNAB
+  re-enviados pelo dono (o extrato em scratchpad morre com o container;
+  pedir os PDFs de novo se sumir): botao "pedir baixa" na linha do titulo
+  `registrada` gera remessa com **instrucao 02** (posicoes 109-110, mesmo
+  layout do detalhe de cadastro — `gerar_remessa_baixa` em
+  `sicredi_cnab.py`) e move pra `baixa_solicitada` (aparece em "Em
+  aberto", badge ambar). O RETORNO fecha o ciclo: ocorrencia 10 (baixado
+  conforme instrucoes) → `baixada`; **27 (baixa rejeitada) → volta pra
+  `registrada`** com motivo visivel (nunca pra 'rejeitada', que significa
+  entrada recusada). Testes: secao "pedido de baixa" em
+  `tests/test_cobrancas_sicredi.py`. Homologar com o banco antes de usar
+  em producao de verdade (mesmo fluxo da Marines).
 
 ## Slack Bot (copilot via DM/@mention)
 
