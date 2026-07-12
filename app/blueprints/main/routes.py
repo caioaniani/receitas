@@ -2456,6 +2456,43 @@ def debug_omada():
     return jsonify(out), 200
 
 
+@main_bp.route('/admin/wifi-vouchers', methods=['GET', 'POST'])
+@owner_required
+def wifi_vouchers():
+    """Estoque de vouchers do portal Wi-Fi (trava dura sem API, 12/07/2026).
+
+    O OC200 não fala com a Open API da nuvem (ver CLAUDE.md), então o
+    portal do controlador roda no modo Voucher: o dono gera o lote no
+    Hotspot Manager do Omada, exporta e sobe aqui; o WhatsApp entrega um
+    código por cadastro validado (`wifi_portal.alocar_voucher`)."""
+    from app.models import WifiVoucher
+    from app.services import wifi_portal as wifi_svc
+    resultado = None
+    if request.method == 'POST':
+        texto = (request.form.get('vouchers') or '').strip()
+        lote = (request.form.get('lote') or '').strip()
+        arq = request.files.get('arquivo')
+        if arq and arq.filename:
+            texto = arq.read().decode('utf-8', errors='replace')
+            lote = lote or arq.filename
+        if texto.strip():
+            imp, dup, ign = wifi_svc.importar_vouchers(texto, lote)
+            resultado = {'importados': imp, 'duplicados': dup,
+                         'ignorados': ign}
+        else:
+            resultado = {'erro': 'Nenhum arquivo ou código enviado.'}
+    livres = wifi_svc.vouchers_restantes()
+    usados = WifiVoucher.query.filter(
+        WifiVoucher.usado_em.isnot(None)).count()
+    ultimos = (WifiVoucher.query
+               .filter(WifiVoucher.usado_em.isnot(None))
+               .order_by(WifiVoucher.usado_em.desc()).limit(10).all())
+    return render_template(
+        'main/wifi_vouchers.html', livres=livres, usados=usados,
+        ultimos=ultimos, resultado=resultado,
+        aviso_min=current_app.config.get('WIFI_VOUCHER_AVISO_MIN', 50))
+
+
 @main_bp.route('/admin/vnda/contatos')
 @login_required
 def vnda_contatos():
