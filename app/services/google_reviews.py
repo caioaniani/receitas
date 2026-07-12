@@ -195,6 +195,11 @@ def _token_acesso():
             return None
         d = r.json()
         estado['access_token'] = d.get('access_token')
+        # O Google normalmente NAO devolve refresh_token no refresh (mantemos o
+        # antigo); mas se um dia rotacionar, persistimos o novo pra nao ficar
+        # stale (achado da revisao 12/07/2026).
+        if d.get('refresh_token'):
+            estado['refresh_token'] = d['refresh_token']
         estado['expiry'] = (agora() + timedelta(
             seconds=int(d.get('expires_in') or 3600))).isoformat()
         _salvar_token_state(estado)
