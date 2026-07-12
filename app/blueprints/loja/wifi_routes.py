@@ -80,4 +80,4 @@ def wifi_entrar(token):
     if cliente is None or not cliente.ativo:
         return render_template('loja/wifi_link_invalido.html'), 410
     loja_auth.login_cliente(cliente)
-    return redirect(url_for('loja.index'))
+    return redirect(url_for('loja.home'))
