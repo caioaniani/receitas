@@ -46,6 +46,9 @@ def test_tela_mostra_os_dois_canais_e_venda_14d(app, admin_user):
     assert '>42<' in corpo                          # venda 14d
     assert 'Mat-prima</option>' in corpo            # alvo MP no select
     assert 'data-filtro="problema"' in corpo        # filtro de problemas
+    # linha compacta: form escondido atras do botao Editar
+    assert 'btn-editar-mapa' in corpo
+    assert 'mapa-form d-none' in corpo
 
 
 def test_tela_marca_problema_da_auditoria_na_linha(app, admin_user):
@@ -62,6 +65,9 @@ def test_tela_marca_problema_da_auditoria_na_linha(app, admin_user):
     corpo = c.get('/pdv/mapeamentos').get_data(as_text=True)
     assert 'data-problema="1"' in corpo
     assert 'arquivada' in corpo
+    # badge de problema e o alvo LINCAM pra ficha (corrigir rápido)
+    assert 'abrir receita' in corpo
+    assert '/receitas/' in corpo
 
 
 def test_vincular_mp_pelo_canal_seru(app, admin_user):
