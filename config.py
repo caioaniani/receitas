@@ -261,6 +261,21 @@ class Config:
         'Olá {{1}}, aqui é da Opão. Ficamos com uma dúvida sobre o seu '
         'pedido {{2}}. Pode nos responder por aqui?')
 
+    # ── Portal Wi-Fi das lojas (11/07/2026, Ribeiro do Vale) ──────────
+    # Numero do WhatsApp da padaria (so digitos, com 55) pro botao wa.me do
+    # portal — o cliente valida a posse do numero mandando o codigo
+    # WIFI-XXXXXX pra ca (mesmo numero do atendimento/Chatwoot). Vazio =
+    # portal mostra aviso de configuracao pendente.
+    WIFI_PORTAL_WHATSAPP = os.environ.get('WIFI_PORTAL_WHATSAPP', '')
+    # Open API do Omada (autorizar o aparelho no controlador via nuvem
+    # TP-Link). Vazios = autorizacao fica pendente (o cadastro/login
+    # funcionam; o enforcement do Wi-Fi e ligado depois).
+    OMADA_API_URL = os.environ.get('OMADA_API_URL', '')
+    OMADA_CLIENT_ID = os.environ.get('OMADA_CLIENT_ID', '')
+    OMADA_CLIENT_SECRET = os.environ.get('OMADA_CLIENT_SECRET', '')
+    OMADA_OMADAC_ID = os.environ.get('OMADA_OMADAC_ID', '')
+    OMADA_SITE_ID = os.environ.get('OMADA_SITE_ID', '')
+
     # ── Email transacional (Postmark) — 17/06/2026 ────────────────────
     # Envio de senha/convite pra novos usuarios do gestao.*. Vazio =
     # email desligado (cadastro mostra a senha na tela como fallback).
