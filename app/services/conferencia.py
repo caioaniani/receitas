@@ -109,7 +109,6 @@ def salvar_foto(pedido_item_id, etapa, file_storage,
     foto = PedidoItemFoto(
         pedido_item_id=pedido_item_id,
         etapa=etapa,
-        imagem=None,
         imagem_url=info['url'],
         imagem_storage_path=info['storage_path'],
         mimetype='image/jpeg',
