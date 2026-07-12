@@ -125,9 +125,11 @@ def _header_remessa(numero_remessa, seq):
     ])
 
 
-def _detalhe_titulo(cob, seq):
-    """Registro tipo 1 — cadastro de título (instrução 01), boleto HÍBRIDO,
-    impressão pelo beneficiário (B) com postagem própria (N)."""
+def _detalhe_titulo(cob, seq, instrucao='01'):
+    """Registro tipo 1 — boleto HÍBRIDO, impressão pelo beneficiário (B)
+    com postagem própria (N). `instrucao` (posições 109-110, manual CNAB400
+    Sicredi): '01' cadastro de título (default) / '02' PEDIDO DE BAIXA de
+    título já registrado — mesmo layout, só muda a instrução."""
     tipo_insc = '2' if len(''.join(
         ch for ch in cob.pagador_cnpj_cpf if ch.isdigit())) == 14 else '1'
     doc = ''.join(ch for ch in cob.pagador_cnpj_cpf if ch.isdigit())
