@@ -1435,7 +1435,9 @@ pelo WHATSAPP e abre no navegador de verdade.
   autoriza o rádio — fase de teste roda por link direto). Envs:
   `OMADA_API_URL`, `OMADA_CLIENT_ID`, `OMADA_CLIENT_SECRET`,
   `OMADA_OMADAC_ID`, `OMADA_SITE_ID`; resultado fica em
-  `wifi_autorizado_em`/`wifi_erro` na sessão.
+  `wifi_autorizado_em`/`wifi_erro` na sessão. Diagnóstico owner:
+  `GET /admin/debug-omada` (presença das envs + token;
+  `?autorizar_mac=<MAC>` autoriza um aparelho de teste por 60 min).
 - **Env obrigatória pro fluxo**: `WIFI_PORTAL_WHATSAPP` (número do
   WhatsApp do atendimento em dígitos com 55, ex `5511...`) — vazio, a
   tela instrui envio manual em vez do botão wa.me.
