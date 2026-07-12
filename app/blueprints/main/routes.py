@@ -262,9 +262,9 @@ def cardapio():
 
 @main_bp.route('/cardapio-img/<tipo>/<int:id>')
 def cardapio_img(tipo, id):
-    """Serve imagem de receita/produto. Prioriza Dropbox URL (M6+).
+    """Serve imagem de receita/produto: redirect pro Dropbox (M6).
 
-    Fallback pra BLOB do banco se foto ainda nao foi migrada.
+    Sem fallback BLOB desde o Commit D (12/07/2026) — sem URL, 404.
     """
 
     from flask import abort
