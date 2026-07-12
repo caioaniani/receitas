@@ -283,6 +283,11 @@ class Config:
     OMADA_CLIENT_SECRET = os.environ.get('OMADA_CLIENT_SECRET', '')
     OMADA_OMADAC_ID = os.environ.get('OMADA_OMADAC_ID', '')
     OMADA_SITE_ID = os.environ.get('OMADA_SITE_ID', '')
+    # Trava dura por VOUCHER (12/07/2026 — OC200 nao fala com a Open API
+    # da nuvem): abaixo deste estoque livre, avisa o dono no WhatsApp
+    # (dedup 24h) pra gerar lote novo no Hotspot Manager.
+    WIFI_VOUCHER_AVISO_MIN = int(
+        os.environ.get('WIFI_VOUCHER_AVISO_MIN', '50'))
 
     # ── Email transacional (Postmark) — 17/06/2026 ────────────────────
     # Envio de senha/convite pra novos usuarios do gestao.*. Vazio =
