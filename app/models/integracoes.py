@@ -869,3 +869,56 @@ class UsoIA(db.Model):
 
     def __repr__(self):
         return f'<UsoIA {self.funcao} {self.modelo} ${self.custo_usd}>'
+
+
+# ── Avaliacoes do Google (Business Profile) — 12/07/2026 ──
+# Pedido do dono: conectar os comentarios do Google no gestao (ver + responder
+# + alerta de review nova). 3 locations: Ribeiro do Vale (Brooklin), Anesio
+# Pinto Rosa (Itaim), Nebraska (1851 Coffee). Tabelas NOVAS via db.create_all
+# (sem ALTER). A integracao fica DORMENTE ate ter OAuth + acesso aprovado pelo
+# Google (mesmo padrao do Seru/Chatwoot). Servico: app/services/google_reviews.py
+
+class GoogleReviewLocation(db.Model):
+    """Uma location (estabelecimento) do Google Business Profile, descoberta
+    via API depois do OAuth. Mapeia pra uma Loja interna (nullable — o admin
+    vincula na tela, mesmo espirito do SeruLojaMap: auto-descoberta + confirma).
+    `location_name` = resourceName do Google ('accounts/123/locations/456')."""
+    __tablename__ = 'google_review_location'
+
+    id = db.Column(db.Integer, primary_key=True)
+    location_name = db.Column(db.String(200), nullable=False, unique=True, index=True)
+    apelido = db.Column(db.String(160))     # 'title' vindo da API (nome do local)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'))
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora)
+
+    loja = db.relationship('Loja')
+
+
+class GoogleReview(db.Model):
+    """Uma avaliacao do Google Business Profile. Idempotente por `review_id`
+    (o reviewId do Google) — re-sync atualiza a linha existente, nunca duplica.
+    `resposta_*` preenchidos quando respondemos (via API + espelho local)."""
+    __tablename__ = 'google_review'
+
+    id = db.Column(db.Integer, primary_key=True)
+    review_id = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    # resourceName da location a que a review pertence (liga a GoogleReviewLocation).
+    location_name = db.Column(db.String(200), index=True)
+    autor = db.Column(db.String(200))
+    autor_foto = db.Column(db.String(500))
+    nota = db.Column(db.Integer, index=True)          # 1..5 (convertido do enum)
+    comentario = db.Column(db.Text)
+    criado_em_google = db.Column(db.DateTime, index=True)
+    atualizado_em_google = db.Column(db.DateTime)
+    resposta_texto = db.Column(db.Text)
+    resposta_em = db.Column(db.DateTime)
+    respondida_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    sincronizado_em = db.Column(db.DateTime, default=agora)
+    criado_em = db.Column(db.DateTime, default=agora)
+
+    respondida_por = db.relationship('Usuario')
+
+    @property
+    def respondida(self):
+        return bool((self.resposta_texto or '').strip())
