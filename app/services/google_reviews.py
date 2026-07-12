@@ -499,7 +499,7 @@ def rascunho_resposta(review_pk):
 def resumo(nota=None, sem_resposta=False, limite=200):
     """Dados do painel: KPIs + locations + lista de reviews (filtravel).
     KPIs via agregacao SQL (nao carrega o historico inteiro em memoria)."""
-    from sqlalchemy import case, func
+    from sqlalchemy import func
 
     from app.models import GoogleReview, GoogleReviewLocation
     locations = GoogleReviewLocation.query.order_by(
@@ -515,8 +515,6 @@ def resumo(nota=None, sem_resposta=False, limite=200):
                      .group_by(GoogleReview.nota).all())
     contagem = {n: c for n, c in por_nota_rows}
     por_nota = {n: contagem.get(n, 0) for n in range(1, 6)}
-    # `case` importado so pra manter compat de leitura; nao usado diretamente.
-    del case
 
     q = GoogleReview.query
     if nota:
