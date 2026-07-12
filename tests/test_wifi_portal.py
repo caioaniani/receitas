@@ -14,6 +14,7 @@ from app.extensions import db
 
 # Referência à função REAL, capturada ANTES da fixture autouse patchear o
 # atributo do módulo (os testes de fail-open/NXDOMAIN exercitam ela).
+from app.services.wifi_portal import _dominio_email_resolve as _RESOLVE_REAL
 
 # O gate da loja exige LOJA_VISIVEL=1 E host público (LOJA_HOSTS). O marker
 # `loja_host` vai SÓ nos testes de rota /loja/wifi — no arquivo inteiro ele
@@ -115,22 +116,25 @@ def test_validar_form_email_dominio_inexistente(app, monkeypatch):
         assert len(erros) == 1 and 'domínio' in erros[0]
 
 
-def test_dns_indisponivel_nao_barra_cadastro(app, monkeypatch):
+def test_dns_indisponivel_nao_barra_cadastro(monkeypatch):
     """Fail-open de infra: resolver fora do ar ≠ domínio inexistente."""
+    import dns.exception
     import dns.resolver
 
-    from app.services import wifi_portal
-    with app.app_context():
-        def _estoura(self, *a, **kw):
-            raise dns.exception.Timeout()
-        monkeypatch.setattr(dns.resolver.Resolver, 'resolve', _estoura)
-        assert wifi_portal._dominio_email_resolve.__wrapped__ \
-            if hasattr(wifi_portal._dominio_email_resolve, '__wrapped__') \
-            else True
-        # chama a função REAL (a fixture autouse patcha o módulo; aqui
-        # importamos direto do código pra exercitar o caminho de erro)
-        from app.services.wifi_portal import _dominio_email_resolve as real
-        assert real('example.com') is True
+    def _estoura(self, *a, **kw):
+        raise dns.exception.Timeout()
+    monkeypatch.setattr(dns.resolver.Resolver, 'resolve', _estoura)
+    assert _RESOLVE_REAL('qualquer-dominio.com.br') is True
+
+
+def test_dns_nxdomain_reprova(monkeypatch):
+    """Domínio que NÃO existe (NXDOMAIN) reprova o e-mail."""
+    import dns.resolver
+
+    def _nx(self, *a, **kw):
+        raise dns.resolver.NXDOMAIN()
+    monkeypatch.setattr(dns.resolver.Resolver, 'resolve', _nx)
+    assert _RESOLVE_REAL('nao-existe-mesmo.com.br') is False
 
 
 def test_criar_sessao_gera_codigo_e_hasheia_senha(app):
