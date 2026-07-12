@@ -16,5 +16,7 @@ loja_bp = Blueprint(
     static_url_path='/static/loja',
 )
 
-from app.blueprints.loja import routes  # noqa: E402,F401
-from app.blueprints.loja import wifi_routes  # noqa: E402,F401
+from app.blueprints.loja import (
+    routes,  # noqa: E402,F401
+    wifi_routes,  # noqa: E402,F401
+)
