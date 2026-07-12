@@ -68,7 +68,7 @@
             <td>{{ c.nosso_numero_fmt or '—' }}</td>
             <td>{{ c.vencimento.strftime('%d/%m/%Y') }}{% if c.vencida %} <span class="badge bg-warning text-dark">vencida</span>{% endif %}</td>
             <td class="text-end">R$ {{ '%.2f'|format(c.valor) }}</td>
-            <td><span class="badge bg-{{ 'secondary' if c.status == 'pendente' else 'info' if c.status == 'remessa' else 'primary' }}">{{ c.status }}</span>
+            <td><span class="badge bg-{{ 'secondary' if c.status == 'pendente' else 'info' if c.status == 'remessa' else 'warning text-dark' if c.status == 'baixa_solicitada' else 'primary' }}">{{ c.status }}</span>
                 {% if c.pix_copia_cola %}<span class="badge bg-success" title="QR Pix recebido">PIX</span>{% endif %}
                 {% if not (c.pagador_endereco or '').strip() %}<span class="badge bg-danger" title="O Sicredi rejeita boleto sem endereço do pagador">sem endereço</span>{% endif %}</td>
             <td>{% if c.status == 'pendente' %}
