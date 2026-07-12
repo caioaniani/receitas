@@ -1481,6 +1481,42 @@ def _migrate_postgres(app):
          "previsao_snapshot(data_alvo, loja_id, receita_id, motor, "
          "lead_dias)")
 
+    # ── M6 Commit D (2/2, 12/07/2026): DROP das colunas BLOB de imagem ──
+    # O codigo parou de ler/escrever no commit 1 (ja deployado). GUARDA de
+    # dados: so dropa quando NAO resta NENHUMA linha com BLOB — se restar,
+    # loga alto e mantem a coluna (drenar pelo card "Migracao BLOB" do
+    # /admin/debug-schema; o blob_migrator le por SQL cru justamente pra
+    # isso). Idempotente: coluna ja dropada = pulado pela sonda.
+    for _tab, _col in (('receita', 'imagem_blob'),
+                       ('produto', 'imagem_blob'),
+                       ('foto_recebimento', 'imagem'),
+                       ('pedido_item_foto', 'imagem')):
+        try:
+            with db.engine.connect() as c:
+                existe = c.execute(text(
+                    'SELECT 1 FROM information_schema.columns '
+                    'WHERE table_name = :t AND column_name = :c'),
+                    {'t': _tab, 'c': _col}).scalar()
+                if not existe:
+                    continue
+                pendentes = c.execute(text(
+                    f'SELECT COUNT(*) FROM {_tab} '
+                    f'WHERE {_col} IS NOT NULL')).scalar()
+                if pendentes:
+                    log.warning(
+                        'M6 Commit D: %s.%s ainda tem %s linha(s) com BLOB '
+                        '— DROP adiado; drenar pelo card "Migracao BLOB" '
+                        'do /admin/debug-schema', _tab, _col, pendentes)
+                    continue
+                c.execute(text(
+                    f'ALTER TABLE {_tab} DROP COLUMN IF EXISTS {_col}'))
+                c.commit()
+                log.info('M6 Commit D: %s.%s dropada (0 pendentes)',
+                         _tab, _col)
+        except Exception as e:  # noqa: BLE001 — nunca aborta o startup
+            log.warning('M6 Commit D: drop de %s.%s falhou: %s',
+                        _tab, _col, e)
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
