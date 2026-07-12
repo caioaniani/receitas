@@ -813,16 +813,12 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
                         f'{int(_time.time() * 1000)}.jpg')
                 info = dropbox_storage.upload_publico(
                     comprimida, path, mode='add', autorename=True)
-            except (ValueError, RuntimeError) as exc:
-                # RequestException (rede) tambem cai aqui via o import local
-                # abaixo — upload_publico deixa timeout/conexao escaparem.
+            except Exception as exc:  # noqa: BLE001 — upload_publico deixa
+                # RequestException (rede/timeout) escapar alem de ValueError/
+                # RuntimeError; QUALQUER falha de upload recusa visivel (a
+                # fase roda antes das mutacoes, entao a recusa e limpa).
                 current_app.logger.exception(
                     'foto_recebimento dropbox falhou')
-                return False, (f'Upload da foto falhou ({exc}) — o pedido '
-                               'NÃO foi recebido; tente de novo.'), []
-            except Exception as exc:  # noqa: BLE001 — rede/timeout Dropbox
-                current_app.logger.exception(
-                    'foto_recebimento dropbox falhou (rede)')
                 return False, (f'Upload da foto falhou ({exc}) — o pedido '
                                'NÃO foi recebido; tente de novo.'), []
             fotos_up.append(info)
