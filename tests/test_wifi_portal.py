@@ -354,3 +354,46 @@ def test_webhook_sem_codigo_segue_fluxo_normal(app):
     r = c.post('/crm/bot?k=seg',
                json=_payload_webhook('oi, tudo bem?', status='open'))
     assert r.get_json().get('ignorado') == 'nao-pending'
+
+
+# ── Diagnóstico do Omada (fase 2) ────────────────────────────────────────
+
+def _login_owner(c, owner_user):
+    with c.session_transaction() as sess:
+        sess['_user_id'] = str(owner_user.id)
+        sess['_fresh'] = True
+
+
+def test_debug_omada_exige_owner(app):
+    c = app.test_client()
+    r = c.get('/admin/debug-omada')
+    assert r.status_code in (302, 401, 403)   # sem login não entra
+
+
+def test_debug_omada_sem_envs(app, owner_user):
+    c = app.test_client()
+    _login_owner(c, owner_user)
+    r = c.get('/admin/debug-omada')
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d['configurado'] is False
+    assert 'OMADA_CLIENT_ID' in d['envs']
+    assert not d['envs']['OMADA_CLIENT_ID']['presente']
+    assert 'OMADA_*' in d['conclusao']
+
+
+def test_debug_omada_com_envs_e_mac_de_teste(app, owner_user):
+    with app.app_context():
+        for k in ('OMADA_API_URL', 'OMADA_CLIENT_ID', 'OMADA_CLIENT_SECRET',
+                  'OMADA_OMADAC_ID', 'OMADA_SITE_ID'):
+            app.config[k] = 'x' * 8
+    c = app.test_client()
+    _login_owner(c, owner_user)
+    with patch('app.services.omada._token', return_value='tok'), \
+            patch('app.services.omada.autorizar_cliente',
+                  return_value={'ok': True, 'erro': None}) as aut:
+        r = c.get('/admin/debug-omada?autorizar_mac=AA:BB:CC:11:22:33')
+    d = r.get_json()
+    assert d['configurado'] is True and d['token'] == 'ok'
+    assert d['autorizacao_teste'] == {'ok': True, 'erro': None}
+    assert aut.call_args[0][0] == 'AA:BB:CC:11:22:33'
