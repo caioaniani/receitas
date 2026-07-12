@@ -353,13 +353,24 @@ def sincronizar_e_alertar():
     if not disponivel():
         return {'rodou': False, 'motivo': 'nao conectado'}
     novas = sincronizar()
-    from app.models import AppConfig
+    from app.models import AppConfig, GoogleReviewLocation
+    # "primed" so pode ser marcado quando a API REALMENTE respondeu — sinal:
+    # ao menos uma location descoberta. Sem isso, um run durante a janela de
+    # 403 (OAuth feito, mas acesso a Business Profile API ainda nao aprovado)
+    # marcaria primed com o banco VAZIO; ai o 1o import real, depois da
+    # aprovacao, dispararia UM WhatsApp com o historico INTEIRO — justo o que o
+    # primed existe pra evitar (achado da revisao 12/07/2026).
+    api_respondeu = GoogleReviewLocation.query.count() > 0
     primed = AppConfig.get(_KEY_PRIMED) == '1'
     if not primed:
-        AppConfig.set(_KEY_PRIMED, '1')
-        db.session.commit()
+        if api_respondeu:
+            AppConfig.set(_KEY_PRIMED, '1')
+            db.session.commit()
+            return {'rodou': True, 'novas': len(novas), 'alertou': False,
+                    'motivo': 'primeiro sync (historico importado sem alertar)'}
         return {'rodou': True, 'novas': len(novas), 'alertou': False,
-                'motivo': 'primeiro sync (historico importado sem alertar)'}
+                'motivo': 'API ainda nao respondeu — nao primado (aguardando '
+                          'aprovacao do Google?)'}
     enviou = _alertar_novas(novas) if novas else False
     return {'rodou': True, 'novas': len(novas), 'alertou': enviou}
 
