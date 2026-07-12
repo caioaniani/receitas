@@ -1446,11 +1446,22 @@ pelo WHATSAPP e abre no navegador de verdade.
 - Testes: `tests/test_wifi_portal.py` (16 casos). ARMADILHA de teste: o
   marker `loja_host` vai SÓ nos testes de rota `/loja/wifi` — no arquivo
   inteiro ele derruba o `/crm/bot` (em host de loja só `/loja/*` responde).
-- **Pendente (fase 2, após o teste com cliente real)**: gerar credenciais
-  Open API no Omada (Settings → Platform Integration), setar as envs
-  `OMADA_*`, configurar External Portal Server + walled garden no
-  controlador apontando pra `/loja/wifi`, e validar
-  `omada.autorizar_cliente` com um aparelho real.
+- **DESCOBERTA 12/07/2026 (fase 2 travada no OC200)**: o gateway de nuvem
+  `*-omada-northbound.tplinkcloud.com` só conhece controladores
+  CLOUD-BASED (CBC) — token com OC200 devolve `-7131 Controller ID not
+  exist` MESMO com credenciais/omadacId certos (omadacId é o parâmetro
+  `omadacId=` na URL do controlador, NÃO o deviceId). A Open API do OC200
+  é LOCAL ("Interface Access Address", ex. https://192.168.15.3:443),
+  inalcançável do Railway (LAN da loja/CGNAT Vivo); a TP-Link chegou a
+  anunciar REMOÇÃO da Open API do OC200 no v5.15 por hardware fraco
+  (fórum oficial; OC300 mantém). Caminhos possíveis: (a) portal nativo
+  click-through do próprio OC200 com Redirect URL pro /loja/wifi (sem
+  API, libera no "aceitar", cadastro vira redirect obrigatório mas não
+  trava); (b) migrar pro Cloud-Based Controller da TP-Link (licença
+  anual/dispositivo — o código atual funciona SEM MUDANÇA, é o gateway
+  que já integramos); (c) software controller em VPS público; (d)
+  port-forward pro OC200 (NÃO recomendado: expõe admin + CGNAT).
+  Decisão do dono pendente.
 
 ## Bot de atendimento — hardening 02/07/2026 (4 pacotes)
 
