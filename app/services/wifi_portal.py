@@ -54,6 +54,120 @@ def _gerar_codigo():
                              for _ in range(6))
 
 
+# ── Validação forte do formulário (pedido do dono, 12/07/2026: "precisa
+# colocar nome e sobrenome, e-mail valido e whatsapp valido") ────────────
+
+# Formato estrito de e-mail (o email_valido do loja_auth aceita 'a@b.c').
+_EMAIL_RE = re.compile(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$')
+
+# Palavra de nome: 2+ letras (aceita acento).
+_NOME_PALAVRA_RE = re.compile(r'[A-Za-zÀ-ÖØ-öø-ÿ]{2,}')
+
+# Provedores populares no Brasil — base do detector de typo (gmial.com,
+# hotmial.com etc.: domínios a 1 edição de um destes são quase sempre erro
+# de digitação, e muitos são squatted — o DNS resolve e não pega).
+_PROVEDORES_COMUNS = frozenset({
+    'gmail.com', 'hotmail.com', 'outlook.com', 'outlook.com.br',
+    'yahoo.com', 'yahoo.com.br', 'icloud.com', 'live.com', 'msn.com',
+    'uol.com.br', 'bol.com.br', 'terra.com.br', 'globo.com', 'ig.com.br',
+})
+
+# DDDs reais (ANATEL). '20', '23'… não existem — número com DDD inválido
+# é erro de digitação na certa.
+_DDDS_VALIDOS = frozenset({
+    '11', '12', '13', '14', '15', '16', '17', '18', '19',
+    '21', '22', '24', '27', '28',
+    '31', '32', '33', '34', '35', '37', '38',
+    '41', '42', '43', '44', '45', '46', '47', '48', '49',
+    '51', '53', '54', '55',
+    '61', '62', '63', '64', '65', '66', '67', '68', '69',
+    '71', '73', '74', '75', '77', '79',
+    '81', '82', '83', '84', '85', '86', '87', '88', '89',
+    '91', '92', '93', '94', '95', '96', '97', '98', '99',
+})
+
+
+def _distancia1(a, b):
+    """True se `a` e `b` diferem por UMA edição: troca, inserção, remoção
+    ou transposição adjacente (Damerau — pega gmial.com ↔ gmail.com)."""
+    if a == b:
+        return False
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la == lb:
+        difs = [i for i in range(la) if a[i] != b[i]]
+        if len(difs) == 1:
+            return True
+        return (len(difs) == 2 and difs[1] == difs[0] + 1
+                and a[difs[0]] == b[difs[1]] and a[difs[1]] == b[difs[0]])
+    if la > lb:
+        a, b, la = b, a, lb
+    i = 0
+    while i < la and a[i] == b[i]:
+        i += 1
+    return a[i:] == b[i + 1:]
+
+
+def _typo_de_provedor(dominio):
+    """Domínio a 1 edição de um provedor popular → devolve a sugestão
+    ('gmial.com' → 'gmail.com'). Domínio exato na lista → None (ok)."""
+    if dominio in _PROVEDORES_COMUNS:
+        return None
+    for prov in _PROVEDORES_COMUNS:
+        if _distancia1(dominio, prov):
+            return prov
+    return None
+
+
+def _dominio_email_resolve(dominio):
+    """True se o domínio existe pra receber e-mail: MX, com fallback A/AAAA
+    (RFC 5321 — sem MX a entrega cai no A). Fail-open DELIBERADO em erro de
+    INFRA de DNS (timeout, resolver fora): instabilidade de rede nunca pode
+    barrar cadastro no balcão — só NXDOMAIN/sem registro reprova."""
+    try:
+        import dns.resolver
+    except ImportError:
+        logger.warning('wifi_portal: dnspython ausente — e-mail sem '
+                       'checagem de domínio')
+        return True
+    try:
+        res = dns.resolver.Resolver()
+        res.lifetime = 3
+        try:
+            if res.resolve(dominio, 'MX'):
+                return True
+        except (dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+            pass
+        for tipo in ('A', 'AAAA'):
+            try:
+                if res.resolve(dominio, tipo):
+                    return True
+            except dns.resolver.NoAnswer:
+                continue
+        return False
+    except dns.resolver.NXDOMAIN:
+        return False
+    except Exception as e:  # noqa: BLE001 — fail-open de infra (docstring)
+        logger.warning('wifi_portal: DNS indisponível pra %s (%s) — '
+                       'aceitando sem checar', dominio, e)
+        return True
+
+
+def _whatsapp_valido(telefone):
+    """Celular brasileiro: DDD real + nono dígito 9 + 8 dígitos (11 no
+    total, com ou sem o 55 do país). Fixo não recebe WhatsApp."""
+    from app.utils import normalizar_telefone
+    d = normalizar_telefone(telefone)
+    if len(d) in (12, 13) and d.startswith('55'):
+        d = d[2:]
+    if len(d) != 11:
+        return False
+    if d[:2] not in _DDDS_VALIDOS or d[2] != '9':
+        return False
+    return len(set(d[2:])) > 1     # 9 9999-9999 etc. = fake
+
+
 def _podar_antigas():
     from app.models import WifiPortalSessao
     limite = agora() - timedelta(days=_PODA_DIAS)
