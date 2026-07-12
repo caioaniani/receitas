@@ -48,9 +48,8 @@ def salvar_foto(pedido_item_id, etapa, file_storage,
                 criado_por_id=None, criado_por_driver_id=None):
     """Salva foto pra um item, sobe pro Dropbox. Substitui foto anterior.
 
-    Pos-M6: imagem vai pro Dropbox (~150KB apos compressao PIL 700px JPEG).
-    Banco guarda url + storage_path. Coluna `imagem` BLOB so popula em
-    fotos legadas pre-migracao.
+    Imagem vai pro Dropbox (~150KB apos compressao PIL 700px JPEG); o banco
+    guarda url + storage_path. (A coluna BLOB `imagem` saiu no M6 Commit D.)
 
     Retorna (PedidoItemFoto, erro). Em erro, primeiro item eh None.
     """
