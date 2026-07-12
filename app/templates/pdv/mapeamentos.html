@@ -284,7 +284,7 @@
                                    autocomplete="off" placeholder="digite pra buscar…"
                                    list="vinc-alvo-list" style="max-width:240px;">
                             <input type="hidden" name="alvo_id" class="vinc-alvo-id"
-                                   value="{{ mp.receita_id or mp.produto_id or '' }}">
+                                   value="{{ mp.receita_id or mp.produto_id or mp.materia_prima_id or '' }}">
                             <input type="number" name="fator" class="form-control form-control-sm map-fator"
                                    step="0.01" min="0.01" value="{{ '%g'|format(mp.fator_quantidade or 1) }}"
                                    style="width:75px;" title="Fator: 1 venda = X unidades. Ex: 0.2 = 2 fatias de 10.">
