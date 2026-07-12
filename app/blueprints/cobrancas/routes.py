@@ -37,7 +37,8 @@ def lista():
                  .order_by(Cobranca.vencimento.asc(), Cobranca.id.asc())
                  .limit(500).all())
     abertas = [c for c in cobrancas
-               if c.status in ('pendente', 'remessa', 'registrada')]
+               if c.status in ('pendente', 'remessa', 'registrada',
+                               'baixa_solicitada')]
     pagas = [c for c in cobrancas if c.status == 'paga']
     problemas = [c for c in cobrancas
                  if c.status in ('rejeitada', 'baixada')]
