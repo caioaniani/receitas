@@ -390,10 +390,33 @@ def test_debug_omada_com_envs_e_mac_de_teste(app, owner_user):
     c = app.test_client()
     _login_owner(c, owner_user)
     with patch('app.services.omada._token', return_value='tok'), \
+            patch('app.services.omada.listar_sites',
+                  return_value=[{'id': 's1', 'nome': 'ribeiro do vale'}]), \
             patch('app.services.omada.autorizar_cliente',
                   return_value={'ok': True, 'erro': None}) as aut:
         r = c.get('/admin/debug-omada?autorizar_mac=AA:BB:CC:11:22:33')
     d = r.get_json()
     assert d['configurado'] is True and d['token'] == 'ok'
+    assert d['sites'] == [{'id': 's1', 'nome': 'ribeiro do vale'}]
     assert d['autorizacao_teste'] == {'ok': True, 'erro': None}
     assert aut.call_args[0][0] == 'AA:BB:CC:11:22:33'
+
+
+def test_debug_omada_sem_site_id_lista_sites(app, owner_user):
+    """As 4 envs do token bastam pra listar os sites — o id do site sai
+    da própria resposta (é o jeito de descobrir o OMADA_SITE_ID)."""
+    with app.app_context():
+        for k in ('OMADA_API_URL', 'OMADA_CLIENT_ID', 'OMADA_CLIENT_SECRET',
+                  'OMADA_OMADAC_ID'):
+            app.config[k] = 'x' * 8
+        app.config['OMADA_SITE_ID'] = ''
+    c = app.test_client()
+    _login_owner(c, owner_user)
+    with patch('app.services.omada._token', return_value='tok'), \
+            patch('app.services.omada.listar_sites',
+                  return_value=[{'id': 's1', 'nome': 'ribeiro do vale'}]):
+        r = c.get('/admin/debug-omada')
+    d = r.get_json()
+    assert d['configurado'] is False
+    assert d['sites'] == [{'id': 's1', 'nome': 'ribeiro do vale'}]
+    assert 'OMADA_SITE_ID' in d['conclusao']
