@@ -887,6 +887,7 @@ def vincular_produto(map_id):
         mp.ignorar = True
         mp.receita_id = None
         mp.produto_id = None
+        mp.materia_prima_id = None
         mp.confirmado_em = agora()
         mp.confirmado_por = current_user.id
         flash(f'"{mp.nome_externo}" ignorado — nao baixara estoque.', 'info')
@@ -894,12 +895,13 @@ def vincular_produto(map_id):
         mp.ignorar = False
         mp.receita_id = None
         mp.produto_id = None
+        mp.materia_prima_id = None
         mp.confirmado_em = None
         mp.confirmado_por = None
         mp.fator_quantidade = 1.0  # volta pra pristine — fator nao fica pegajoso
         flash(f'"{mp.nome_externo}" voltou pra pendente.', 'info')
     db.session.commit()
-    if acao == 'vincular':
+    if acao == 'vincular' and mp.canal == 'seru':
         _reprocesso_pos_mapeamento()   # recupera baixas passadas (7d)
     return redirect(url_for('pdv.mapeamentos'))
 
