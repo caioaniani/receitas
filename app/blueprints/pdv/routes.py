@@ -743,15 +743,31 @@ def reconciliacao():
 @login_required
 @admin_required
 def mapeamentos():
-    """Tela de mapeamento de produtos Seru e lojas Seru."""
-    produtos_map = VendaMapa.query.filter_by(canal='seru').order_by(
+    """Tela de mapeamento de TUDO (12/07/2026, pedido do dono): os DOIS
+    canais que usam mapa (seru = PDV, lote = saida em lote) numa tabela
+    unica, com estado, venda dos ultimos 14 dias, problemas da auditoria
+    linha a linha e edicao completa (receita/produto/MP + fator). O SITE
+    nao usa mapa (FK do PedidoOnlineItem) — so a config de loja de origem
+    abaixo. Lojas Seru seguem na secao propria."""
+    from app.services.auditoria_mapeamentos import (
+        problemas_por_mapa,
+        venda_seru_por_nome,
+    )
+    produtos_map = VendaMapa.query.filter(
+        VendaMapa.canal.in_(('seru', 'lote'))).order_by(
+        VendaMapa.canal,
         VendaMapa.ignorar.asc(),
         VendaMapa.confirmado_em.is_(None).desc(),  # pendentes no topo
         VendaMapa.nome_externo,
     ).all()
+    venda_14d = venda_seru_por_nome(dias=14)
+    problemas = problemas_por_mapa()
     lojas_map = SeruLojaMap.query.order_by(SeruLojaMap.seru_company_name).all()
     receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    from app.models import MateriaPrima
+    mps = (MateriaPrima.query.filter(MateriaPrima.arquivada_em.is_(None))
+           .order_by(MateriaPrima.nome).all())
     lojas = Loja.query.filter_by(ativa=True).order_by(Loja.nome).all()
     # Loja fisica de onde o SITE (loja propria/PedidoOnline) baixa estoque +
     # visibilidade (loja atual, se foi salva por ID ou caiu no padrao, e se ela
