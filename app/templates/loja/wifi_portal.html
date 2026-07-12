@@ -47,9 +47,9 @@
     <input type="hidden" name="{{ k }}" value="{{ v }}">
     {% endfor %}
 
-    <label>Nome</label>
+    <label>Nome e sobrenome</label>
     <input type="text" name="nome" required autocomplete="name"
-           value="{{ form.get('nome', '') }}">
+           placeholder="Maria da Silva" value="{{ form.get('nome', '') }}">
 
     <label>E-mail</label>
     <input type="email" name="email" required autocomplete="email"
