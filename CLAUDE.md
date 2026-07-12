@@ -280,24 +280,36 @@ Fechado 2026-05-22:
 
 Da auditoria 1, ainda pendentes:
 
-- **M6 — Mover BLOBs pro Dropbox** (parcial, 4 de 6 migrados em 22/05/2026):
-  - ✅ Migrados pra Dropbox: `Receita.imagem_blob`, `Produto.imagem_blob`,
+- ✓ **M6 — Mover BLOBs pro Dropbox** (FECHADO em 12/07/2026 com o
+  Commit D; migracao dos dados era de 22/05/2026):
+  - Migrados pra Dropbox: `Receita.imagem_blob`, `Produto.imagem_blob`,
     `FotoRecebimento.imagem`, `PedidoItemFoto.imagem`. (`EntregaFoto` ja
-    nasceu so-URL — sem coluna BLOB no modelo nem no schema
-    (`migrations_legacy.py::entrega_foto`); nada a dropar nela.)
+    nasceu so-URL — nunca teve coluna BLOB.)
   - ✗ Mantidos BLOB no Postgres por seguranca (PII):
     `Atestado.arquivo` (atestado medico), `Loja.planta_imagem`.
-  - ⏳ **Pendente Commit D**: dropar as colunas BLOB ja-vazias dos 4
-    modelos migrados. Hoje todas as linhas tem `imagem*=NULL` e
-    `imagem_url/imagem_dropbox_url` preenchido. Drop libera espaco
-    de disco. Padrao por modelo: `ALTER TABLE <t> DROP COLUMN IF EXISTS
-    <coluna>` em `_migrate_postgres()` + remover do modelo + remover
-    fallback BLOB nas serve routes (`cardapio_img`, `pedidos.foto`,
-    `handshake.foto_serve`) + atualizar `_render_fotos` no
-    `app/services/relatorio.py` (que ja prioriza URL).
+  - **Commit D feito em 2 commits** (procedimento inverso do ADD: primeiro
+    o codigo para de tocar a coluna, depois o DROP): commit 1 tirou as
+    colunas dos MODELOS, os fallbacks BLOB das serve routes
+    (`cardapio_img`, `pedidos.foto`/`conferencia_foto`,
+    `handshake.foto_serve`, `_render_fotos` do PDF) e os FALLBACKS DE
+    ESCRITA; commit 2 = DROP fisico **guardado por contagem** em
+    `_migrate_postgres()`/`_migrate_sqlite()` — so dropa quando NAO resta
+    nenhuma linha com BLOB; se restar, loga WARNING e adia (drenar pelo
+    card e o drop acontece no boot seguinte). NUNCA trocar por drop cego.
+  - **DECISAO de comportamento (12/07/2026)**: Dropbox indisponivel/upload
+    falho agora e ERRO VISIVEL em todos os caminhos de foto (upload de
+    cardapio, import zip de receitas, recebimento manual de pedido, tool
+    `anexar_foto_pedido` do copilot) — antes caia em silencio pro BLOB no
+    Postgres e re-enchia a coluna. Mesmo padrao da retirada de sobras
+    (foto sobe ANTES do registro ou recusa). CONSEQUENCIA: Dropbox fora =
+    recebimento com foto nova falha ate voltar (as outras 2 provas de
+    foto continuam valendo). Testes:
+    `tests/test_recebimento_exige_foto.py`.
   - Backfill rotas em `/admin/debug-schema` (card "Migracao BLOB").
-    Idempotentes — podem ser re-rodadas a qualquer momento.
-  - Servico: `app/services/blob_migrator.py`. Helper compressao:
+    Idempotentes. O `blob_migrator.py` foi reescrito em **SQL cru** (as
+    colunas nao existem mais no modelo; a tabela pode te-las ate o drop) —
+    coluna ja dropada = no-op com aviso.
+  - Helper compressao:
     `app.utils.comprimir_imagem(bytes, max_size=700, quality=82)`.
   - URL Dropbox usa `?raw=1` (CDN raw bytes), nao `?dl=0` (preview HTML).
     `dropbox_storage._converter_para_raw()` normaliza via `urllib.parse`.
