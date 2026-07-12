@@ -203,6 +203,7 @@ def test_rota_portal_e_fluxo_web(app, visivel):
     assert 'wa.me/5511900001111' in body   # botão do WhatsApp
 
 
+@pytest.mark.loja_host
 def test_rota_entrar_loga_cliente(app, visivel):
     from app.services import wifi_portal
     with app.app_context():
