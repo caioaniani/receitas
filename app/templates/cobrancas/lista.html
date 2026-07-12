@@ -139,6 +139,9 @@
 {% endif %}{% if c.status == 'remessa' %}
 <form id="vp-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.voltar_pendente', id=c.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+{% endif %}{% if c.status == 'registrada' %}
+<form id="bx-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.solicitar_baixa', id=c.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
 {% endif %}{% endfor %}
 {% for c in problemas %}{% if c.status == 'rejeitada' %}
 <form id="vp-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.voltar_pendente', id=c.id) }}">
