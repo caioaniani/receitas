@@ -63,6 +63,28 @@ def _token():
     return token
 
 
+def listar_sites():
+    """Lista (id, nome) dos sites do controlador — serve pra DESCOBRIR o
+    OMADA_SITE_ID na configuração (o id não aparece fácil na UI do Omada).
+    Só precisa das 4 envs do token (SITE_ID pode estar vazio). Levanta em
+    erro — uso exclusivo da rota de diagnóstico /admin/debug-omada."""
+    omadac = (current_app.config.get('OMADA_OMADAC_ID') or '').strip()
+    token = _token()
+    r = requests.get(
+        f'{_base()}/openapi/v1/{omadac}/sites',
+        params={'page': 1, 'pageSize': 100},
+        headers={'Authorization': f'AccessToken={token}'},
+        timeout=15)
+    data = r.json() if r.text else {}
+    cod = data.get('errorCode') if isinstance(data, dict) else None
+    if r.status_code != 200 or cod not in (0, None):
+        raise RuntimeError(f'listar sites falhou: HTTP {r.status_code} '
+                           f'{(r.text or "")[:200]}')
+    itens = ((data.get('result') or {}).get('data')) or []
+    return [{'id': s.get('siteId') or s.get('id'), 'nome': s.get('name')}
+            for s in itens]
+
+
 def autorizar_cliente(client_mac, ap_mac=None, ssid=None, minutos=1440):
     """Autoriza o MAC do cliente no hotspot do site por `minutos`.
 
