@@ -1059,6 +1059,129 @@ def frete_sensores():
                            r=frete_sensor.resumo(dias), dias=dias)
 
 
+# ── Avaliacoes do Google (Business Profile) — 12/07/2026 ──
+
+@main_bp.route('/admin/avaliacoes-google')
+@owner_required
+def avaliacoes_google():
+    """Painel de avaliacoes do Google: nota geral, lista, responder + vincular
+    location->loja. Dormente ate o OAuth+aprovacao do Google (mostra o estado
+    'nao conectado' com o botao de conectar)."""
+    from app.services import google_reviews
+    nota = request.args.get('nota', type=int)
+    sem_resposta = request.args.get('sem_resposta') == '1'
+    return render_template(
+        'admin/avaliacoes_google.html',
+        r=google_reviews.resumo(nota=nota, sem_resposta=sem_resposta))
+
+
+@main_bp.route('/admin/avaliacoes-google/conectar')
+@owner_required
+def avaliacoes_google_conectar():
+    """Inicia o OAuth: gera state anti-CSRF na sessao e manda pro Google."""
+    import secrets
+
+    from flask import flash, redirect, session, url_for
+
+    from app.services import google_reviews
+    estado = secrets.token_urlsafe(24)
+    session['google_oauth_state'] = estado
+    redirect_uri = url_for('main.avaliacoes_google_callback', _external=True)
+    url = google_reviews.url_autorizacao(redirect_uri, estado)
+    if not url:
+        flash('Configure GOOGLE_OAUTH_CLIENT_ID/SECRET no Railway primeiro.',
+              'danger')
+        return redirect(url_for('main.avaliacoes_google'))
+    return redirect(url)
+
+
+@main_bp.route('/admin/avaliacoes-google/callback')
+@owner_required
+def avaliacoes_google_callback():
+    """Callback do OAuth: valida o state e troca o code por tokens."""
+    from flask import flash, redirect, session, url_for
+
+    from app.services import google_reviews
+    if request.args.get('error'):
+        flash(f'Google recusou: {request.args.get("error")}', 'danger')
+        return redirect(url_for('main.avaliacoes_google'))
+    esperado = session.pop('google_oauth_state', None)
+    if not esperado or request.args.get('state') != esperado:
+        flash('Falha de seguranca na conexao (state invalido). Tente de novo.',
+              'danger')
+        return redirect(url_for('main.avaliacoes_google'))
+    code = request.args.get('code')
+    if not code:
+        flash('Google nao devolveu o codigo de autorizacao.', 'danger')
+        return redirect(url_for('main.avaliacoes_google'))
+    redirect_uri = url_for('main.avaliacoes_google_callback', _external=True)
+    ok, msg = google_reviews.trocar_codigo(code, redirect_uri)
+    flash(msg, 'success' if ok else 'danger')
+    return redirect(url_for('main.avaliacoes_google'))
+
+
+@main_bp.route('/admin/avaliacoes-google/desconectar', methods=['POST'])
+@owner_required
+def avaliacoes_google_desconectar():
+    from flask import flash, redirect, url_for
+
+    from app.services import google_reviews
+    google_reviews.desconectar()
+    flash('Conta Google desconectada.', 'info')
+    return redirect(url_for('main.avaliacoes_google'))
+
+
+@main_bp.route('/admin/avaliacoes-google/sincronizar', methods=['POST'])
+@owner_required
+def avaliacoes_google_sincronizar():
+    from flask import flash, redirect, url_for
+
+    from app.services import google_reviews
+    if not google_reviews.disponivel():
+        flash('Conecte a conta Google antes de sincronizar.', 'warning')
+        return redirect(url_for('main.avaliacoes_google'))
+    novas = google_reviews.sincronizar()
+    flash(f'Sincronizado. {len(novas)} avaliacao(oes) nova(s).', 'success')
+    return redirect(url_for('main.avaliacoes_google'))
+
+
+@main_bp.route('/admin/avaliacoes-google/<int:rid>/responder', methods=['POST'])
+@owner_required
+def avaliacoes_google_responder(rid):
+    from flask import flash, redirect, url_for
+
+    from app.services import google_reviews
+    texto = (request.form.get('resposta') or '').strip()
+    ok, msg = google_reviews.responder(rid, texto, user_id=current_user.id)
+    flash(msg, 'success' if ok else 'danger')
+    return redirect(url_for('main.avaliacoes_google'))
+
+
+@main_bp.route('/admin/avaliacoes-google/<int:rid>/rascunho', methods=['POST'])
+@owner_required
+def avaliacoes_google_rascunho(rid):
+    """Rascunho de resposta por IA (nao publica). Devolve JSON pro JS preencher
+    a caixa de resposta."""
+    from app.services import google_reviews
+    texto, msg = google_reviews.rascunho_resposta(rid)
+    return jsonify(ok=bool(texto), texto=texto or '', msg=msg)
+
+
+@main_bp.route('/admin/avaliacoes-google/location/<int:lid>/vincular',
+               methods=['POST'])
+@owner_required
+def avaliacoes_google_vincular_loja(lid):
+    from flask import flash, redirect, url_for
+
+    from app.models import GoogleReviewLocation
+    loc = GoogleReviewLocation.query.get_or_404(lid)
+    loja_id = request.form.get('loja_id', type=int)
+    loc.loja_id = loja_id or None
+    db.session.commit()
+    flash(f'Location "{loc.apelido or loc.location_name}" vinculada.', 'success')
+    return redirect(url_for('main.avaliacoes_google'))
+
+
 @main_bp.route('/admin/debug-tiny-nota')
 @owner_required
 def debug_tiny_nota():
