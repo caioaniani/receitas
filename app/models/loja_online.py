@@ -508,3 +508,72 @@ class EstoqueSitePlano(db.Model):
         return (f'<EstoqueSitePlano {self.kind}:{self.item_id} '
                 f'{self.data.isoformat() if self.data else "?"} '
                 f'plan={self.qtd_planejada} res={self.qtd_reservada}>')
+
+
+class WifiPortalSessao(db.Model):
+    """Sessão do PORTAL WI-FI da loja (11/07/2026, Ribeiro do Vale).
+
+    Cada cadastro no Wi-Fi de clientes vira uma linha: dados do formulário
+    (nome/e-mail/WhatsApp/senha já HASHEADA/aniversário/aceite LGPD) + os
+    parâmetros que o Omada manda no redirect do portal externo (MAC do
+    aparelho, MAC do AP, SSID). O cliente valida a posse do WhatsApp
+    mandando o código `WIFI-XXXXXX` pro número da padaria; o webhook do
+    Chatwoot reconhece o código, resolve a CONTA do site (4 regras em
+    `wifi_portal._resolver_conta` — decisão do dono 11/07) e devolve o link
+    de login one-time. Senha NUNCA em claro (hash scrypt na entrada).
+
+    Tabela nova via db.create_all (sem ALTER). Poda: sessões velhas são
+    varridas em `wifi_portal.criar_sessao` (>30 dias — PII, LGPD)."""
+    __tablename__ = 'wifi_portal_sessao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Token da sessão (URL de status) + código curto que o cliente manda
+    # no WhatsApp + token de login one-time (só depois de validado).
+    token = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    codigo = db.Column(db.String(12), nullable=False, index=True)
+    login_token = db.Column(db.String(80), nullable=True, index=True)
+    login_usado_em = db.Column(db.DateTime, nullable=True)
+
+    # Params do portal externo do Omada (redirect). Podem vir vazios no
+    # teste por link/QR (antes do enforcement no controlador).
+    client_mac = db.Column(db.String(20), nullable=True)
+    ap_mac = db.Column(db.String(20), nullable=True)
+    ssid = db.Column(db.String(50), nullable=True)
+    site_omada = db.Column(db.String(50), nullable=True)
+    redirect_url = db.Column(db.String(300), nullable=True)
+
+    # Dados do formulário.
+    nome = db.Column(db.String(150), nullable=False)
+    email = db.Column(db.String(200), nullable=False)
+    telefone = db.Column(db.String(30), nullable=False)     # o DIGITADO
+    telefone_validado = db.Column(db.String(30), nullable=True)  # o que ENVIOU
+    senha_hash = db.Column(db.String(256), nullable=False)
+    aniversario_dia = db.Column(db.Integer, nullable=True)
+    aniversario_mes = db.Column(db.Integer, nullable=True)
+    nascimento_ano = db.Column(db.Integer, nullable=True)
+    aceite_lgpd_em = db.Column(db.DateTime, nullable=False)
+
+    # Resolução da conta (preenchidos na validação do WhatsApp).
+    validado_em = db.Column(db.DateTime, nullable=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'),
+                           nullable=True)
+    # 'conta_criada' | 'login_direto' | 'login_conta_telefone' |
+    # 'magic_link_email' — ver wifi_portal._resolver_conta.
+    resultado = db.Column(db.String(30), nullable=True)
+
+    # Autorização do aparelho no controlador Omada (best-effort; fica
+    # pendente enquanto a Open API não estiver configurada).
+    wifi_autorizado_em = db.Column(db.DateTime, nullable=True)
+    wifi_erro = db.Column(db.String(200), nullable=True)
+
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    expira_em = db.Column(db.DateTime, nullable=False)
+
+    cliente = db.relationship('Cliente')
+
+    def pendente(self, agora_dt):
+        return self.validado_em is None and self.expira_em > agora_dt
+
+    def __repr__(self):
+        return (f'<WifiPortalSessao {self.codigo} {self.email} '
+                f'res={self.resultado}>')
