@@ -577,3 +577,31 @@ class WifiPortalSessao(db.Model):
     def __repr__(self):
         return (f'<WifiPortalSessao {self.codigo} {self.email} '
                 f'res={self.resultado}>')
+
+
+class WifiVoucher(db.Model):
+    """Estoque de vouchers do portal Wi-Fi (12/07/2026).
+
+    Trava dura SEM API no OC200: o portal do controlador fica no modo
+    Voucher; o dono gera o lote no Hotspot Manager do Omada, exporta e sobe
+    em /admin/wifi-vouchers. Cada cadastro VALIDADO no WhatsApp consome UM
+    voucher (claim atômico em `wifi_portal.alocar_voucher`) e o código vai
+    na resposta — sem cadastro, sem internet. Estoque baixo alerta o dono
+    (WhatsApp, dedup 24h). Tabela nova via db.create_all (sem ALTER)."""
+    __tablename__ = 'wifi_voucher'
+
+    id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(20), unique=True, nullable=False,
+                       index=True)
+    lote = db.Column(db.String(60), nullable=True)      # nome do arquivo/lote
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    usado_em = db.Column(db.DateTime, nullable=True, index=True)
+    sessao_id = db.Column(db.Integer,
+                          db.ForeignKey('wifi_portal_sessao.id'),
+                          nullable=True)
+
+    sessao = db.relationship('WifiPortalSessao')
+
+    def __repr__(self):
+        return (f'<WifiVoucher {self.codigo} '
+                f'{"usado" if self.usado_em else "livre"}>')
