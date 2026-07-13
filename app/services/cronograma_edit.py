@@ -111,6 +111,12 @@ def aplicar_overrides(receitas_out, dias_prod):
     ovs = (CronogramaOverride.query
            .filter(CronogramaOverride.data.in_(list(dias_prod)),
                    CronogramaOverride.receita_id.in_(rids)).all())
+    # Override legado de receita de RETORNO (criado antes do guard do
+    # editar_celula, 13/07/2026) e IGNORADO: retorno nao se produz — aplicar
+    # o valor re-poria fornada de devolucao no grid/plano.
+    retorno_ids = {r for (r,) in db.session.query(Receita.retorno_receita_id)
+                   .filter(Receita.retorno_receita_id.isnot(None)).distinct()}
+    ovs = [o for o in ovs if o.receita_id not in retorno_ids]
     if not ovs:
         return
     por_rid = defaultdict(dict)
