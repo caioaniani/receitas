@@ -578,6 +578,18 @@ Retorno NAO e produzivel: nunca cascateia pra massa/MP. Limitacao conhecida:
 dois pais consumindo o MESMO retorno nao rateiam (hoje so o Almond consome).
 NAO "consertar" o cap pra puxar massa fresca sem perguntar ao dono.
 
+**Retorno tambem nunca ganha PREVISTO/producao no motor de VENDAS (fix
+13/07/2026)**: a venda do Nutella baixa o retorno DA LOJA e a coleta de
+retirada gera movimento — a receita-retorno tinha historico de venda
+PROPRIO e no motor=vendas virava "previsto 164 → produzir 164" no grid
+(caso real; 45 un chegaram numa ordem enviada). Guardas em camadas:
+balanco zera previsto+produzir de retorno_ids (`balanco_industria`),
+`editar_celula` recusa (`receita_retorno`), `aplicar_overrides` ignora
+override legado, `_sync_itens_do_cronograma` pula a linha (re-enviar a
+ordem REMOVE item de retorno sem producao) e a tela trava a celula com a
+tag "♻️ retorno — nao se produz". Testes: secao "Retorno nunca produzivel"
+em `tests/test_cronograma_ux.py`.
+
 **Nutella na loja**: os produtos "Croissant de nutella" (106) e "Croissant
 Nutella com morango" (107) sao compostos de 1x **"Croissant Tradicional -
 Retorno"** (conferido em prod 03/07/2026) — a venda baixa o RETORNO da loja
