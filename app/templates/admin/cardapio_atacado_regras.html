@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Regras do atacado{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-pencil-square"></i> Regras do pedido — Atacado</h1>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.cardapio', tipo='atacado') }}">
+        Ver no cardápio
+    </a>
+</div>
+
+<div class="alert alert-info small">
+    Estes textos aparecem no topo do <strong>cardápio de atacado</strong> e saem na impressão/PDF.
+    Cada campo é opcional — <strong>deixe em branco o que não se aplica</strong> e ele some do cardápio.
+</div>
+
+<form method="POST" class="card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card-body">
+        {% for chave, label, exemplo in campos %}
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="f-{{ chave }}">{{ label }}</label>
+            <input type="text" class="form-control" id="f-{{ chave }}" name="{{ chave }}"
+                   value="{{ atuais[chave] }}" placeholder="{{ exemplo }}">
+        </div>
+        {% endfor %}
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.cardapio', tipo='atacado') }}">Cancelar</a>
+    </div>
+</form>
+{% endblock %}
