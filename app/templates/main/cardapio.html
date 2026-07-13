@@ -327,6 +327,11 @@ footer p { margin: 0; }
     <a href="{{ url_for('main.cardapio_img_revisar') }}" class="tipo-btn">
         <i class="bi bi-check2-square"></i> Revisar fotos
     </a>
+    {% if tipo == 'atacado' %}
+    <a href="{{ url_for('main.cardapio_atacado_regras') }}" class="tipo-btn">
+        <i class="bi bi-pencil-square"></i> Editar regras
+    </a>
+    {% endif %}
     {% endif %}
     <a href="javascript:window.print()" class="tipo-btn"><i class="bi bi-printer"></i> Imprimir</a>
 </div>
