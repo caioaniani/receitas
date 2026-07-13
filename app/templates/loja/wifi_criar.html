@@ -27,7 +27,7 @@
   .lgpd input { margin-top: 3px; transform: scale(1.3); }
   button { width: 100%; padding: 15px; font-size: 17px; font-weight: 700;
            color: #fff; background: #a4501f; border: 0; border-radius: 12px;
-           margin-top: 6px; }
+           margin-top: 6px; cursor: pointer; }
   .erros { background: #fdecec; border: 1px solid #f5b5b5; border-radius: 10px;
            padding: 10px 14px; margin: 12px 0; color: #8a2222; font-size: 14px; }
   .aviso-opc { color: #9a8a70; font-weight: 400; font-size: 12px; }
@@ -35,87 +35,116 @@
             padding: 24px 20px; margin-top: 20px; text-align: center; }
   .ok-box h2 { font-size: 20px; color: #1c7c3d; margin-bottom: 8px; }
   .ok-box p { color: #3a5a44; font-size: 15px; line-height: 1.5; }
+  #voltar { background: #1c7c3d; margin-top: 18px; }
 </style>
 </head>
 <body>
   <div class="marca">O Pão</div>
   <div class="sub">Padaria Artesanal</div>
 
-  {% if status == 'criada' %}
-  <div class="ok-box">
-    <h2>Conta criada! ✅</h2>
-    <p>Agora volte à tela do Wi-Fi e entre com o seu <b>e-mail e a senha</b>
-    que você acabou de criar. Bom apetite! 🥐</p>
+  <div id="tela-form">
+    <h1>Wi-Fi grátis — criar conta 🥐</h1>
+    <p class="dica">Cadastre-se uma vez. Depois é só entrar no Wi-Fi com o seu
+    e-mail e senha.</p>
+
+    <div class="erros" id="erros" style="display:none"></div>
+
+    <form id="f">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label>Nome e sobrenome</label>
+      <input type="text" name="nome" required autocomplete="name">
+
+      <label>E-mail</label>
+      <input type="email" name="email" required autocomplete="email">
+
+      <label>WhatsApp (celular com DDD)</label>
+      <input type="tel" name="telefone" required autocomplete="tel"
+             inputmode="tel" placeholder="(11) 91234-5678">
+
+      <label>Crie uma senha</label>
+      <input type="password" name="senha" required minlength="6"
+             autocomplete="new-password">
+
+      <label>Aniversário <span class="aviso-opc">(ano é opcional)</span></label>
+      <div class="row">
+        <div><select name="aniversario_dia" required>
+          <option value="">Dia</option>
+          {% for d in range(1, 32) %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select></div>
+        <div><select name="aniversario_mes" required>
+          <option value="">Mês</option>
+          {% for m in ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'] %}
+          <option value="{{ loop.index }}">{{ m }}</option>{% endfor %}
+        </select></div>
+        <div><select name="nascimento_ano">
+          <option value="">Ano</option>
+          {% for a in range(2012, 1929, -1) %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+        </select></div>
+      </div>
+
+      <div class="lgpd">
+        <input type="checkbox" name="aceite_lgpd" id="lgpd" value="1" required>
+        <label for="lgpd" style="margin:0; font-weight:400;">Aceito que a
+        O Pão Padaria Artesanal use meus dados para criar minha conta e me
+        enviar comunicações sobre produtos e novidades. Posso pedir a exclusão
+        a qualquer momento pelos nossos canais de atendimento.</label>
+      </div>
+
+      <button type="submit" id="btn">Criar conta</button>
+    </form>
   </div>
-  {% elif status == 'ja_existe' %}
-  <div class="ok-box">
-    <h2>Esse e-mail já tem cadastro 🙂</h2>
-    <p><b>Se for você:</b> volte à tela do Wi-Fi e entre com o seu e-mail e
-    senha.<br><br>
-    <b>Se não lembra a senha ou não tem:</b> volte e use <b>outro e-mail</b>
-    para criar a sua conta do Wi-Fi agora.</p>
+
+  <div class="ok-box" id="tela-ok" style="display:none">
+    <h2 id="ok-titulo"></h2>
+    <p id="ok-texto"></p>
+    <button id="voltar" type="button" onclick="history.back()">
+      Voltar para o login</button>
   </div>
-  {% else %}
-  <h1>Wi-Fi grátis — criar conta 🥐</h1>
-  <p class="dica">Cadastre-se uma vez. Depois é só entrar no Wi-Fi com o seu
-  e-mail e senha.</p>
 
-  {% if erros %}
-  <div class="erros">{% for e in erros %}• {{ e }}<br>{% endfor %}</div>
-  {% endif %}
+<script>
+  var f = document.getElementById('f'),
+      btn = document.getElementById('btn'),
+      errosEl = document.getElementById('erros');
 
-  <form method="post" action="{{ url_for('loja.wifi_criar') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <label>Nome e sobrenome</label>
-    <input type="text" name="nome" required autocomplete="name"
-           value="{{ form.get('nome', '') }}">
-
-    <label>E-mail</label>
-    <input type="email" name="email" required autocomplete="email"
-           value="{{ form.get('email', '') }}">
-
-    <label>WhatsApp (celular com DDD)</label>
-    <input type="tel" name="telefone" required autocomplete="tel"
-           inputmode="tel" placeholder="(11) 91234-5678"
-           value="{{ form.get('telefone', '') }}">
-
-    <label>Crie uma senha</label>
-    <input type="password" name="senha" required minlength="6"
-           autocomplete="new-password">
-
-    <label>Aniversário <span class="aviso-opc">(ano é opcional)</span></label>
-    <div class="row">
-      <div><select name="aniversario_dia" required>
-        <option value="">Dia</option>
-        {% for d in range(1, 32) %}
-        <option value="{{ d }}" {% if form.get('aniversario_dia') == d|string %}selected{% endif %}>{{ d }}</option>
-        {% endfor %}
-      </select></div>
-      <div><select name="aniversario_mes" required>
-        <option value="">Mês</option>
-        {% for m in ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'] %}
-        <option value="{{ loop.index }}" {% if form.get('aniversario_mes') == loop.index|string %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
-      </select></div>
-      <div><select name="nascimento_ano">
-        <option value="">Ano</option>
-        {% for a in range(2012, 1929, -1) %}
-        <option value="{{ a }}" {% if form.get('nascimento_ano') == a|string %}selected{% endif %}>{{ a }}</option>
-        {% endfor %}
-      </select></div>
-    </div>
-
-    <div class="lgpd">
-      <input type="checkbox" name="aceite_lgpd" id="lgpd" value="1" required>
-      <label for="lgpd" style="margin:0; font-weight:400;">Aceito que a
-      O Pão Padaria Artesanal use meus dados para criar minha conta e me
-      enviar comunicações sobre produtos e novidades. Posso pedir a exclusão
-      a qualquer momento pelos nossos canais de atendimento.</label>
-    </div>
-
-    <button type="submit">Criar conta</button>
-  </form>
-  {% endif %}
+  f.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    errosEl.style.display = 'none';
+    btn.disabled = true; btn.textContent = 'Criando…';
+    fetch('/loja/wifi/criar', { method: 'POST', body: new FormData(f) })
+      .then(function (r) { return r.json().then(function (d) {
+        return { status: r.status, d: d }; }); })
+      .then(function (res) {
+        btn.disabled = false; btn.textContent = 'Criar conta';
+        if (!res.d.ok) {
+          errosEl.innerHTML = (res.d.erros || ['Confira os dados.'])
+            .map(function (e) { return '• ' + e; }).join('<br>');
+          errosEl.style.display = 'block';
+          window.scrollTo(0, 0);
+          return;
+        }
+        var t = document.getElementById('ok-titulo'),
+            p = document.getElementById('ok-texto');
+        if (res.d.status === 'ja_existe') {
+          t.textContent = 'Esse e-mail já tem cadastro 🙂';
+          p.innerHTML = '<b>Se for você:</b> volte ao login e entre com o seu '
+            + 'e-mail e senha.<br><br><b>Se não lembra a senha ou não tem:</b> '
+            + 'use outro e-mail para criar sua conta.';
+        } else {
+          t.textContent = 'Conta criada! ✅';
+          p.innerHTML = 'Agora toque em <b>Voltar para o login</b> e entre com '
+            + 'o seu e-mail e a senha que você acabou de criar. 🥐';
+        }
+        document.getElementById('tela-form').style.display = 'none';
+        document.getElementById('tela-ok').style.display = 'block';
+        window.scrollTo(0, 0);
+      })
+      .catch(function () {
+        btn.disabled = false; btn.textContent = 'Criar conta';
+        errosEl.textContent = 'Falha de conexão. Tente de novo.';
+        errosEl.style.display = 'block';
+      });
+  });
+</script>
 </body>
 </html>
