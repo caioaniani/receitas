@@ -348,6 +348,101 @@ def test_edicao_hoje_que_descobre_entrega_vira_stale_na_hora(app):
     assert rr['override_sugerido'] == 100
 
 
+# ── Retorno nunca produzível (dono, 13/07/2026): no motor=vendas a
+# receita-retorno tem histórico de venda PRÓPRIO (a venda do Nutella baixa o
+# retorno da loja) e virava "previsto → produzir" no grid. Caso real:
+# Croissant Tradicional - Retorno com previsto 164 e 45 un numa ordem. ──
+
+def _cenario_retorno_com_vendas(estoque_industria=0):
+    """Tradicional (retorno_receita_id → ret) + vendas semanais na linha do
+    RETORNO da loja (como a venda do Nutella faz)."""
+    from datetime import datetime as _dt
+    from datetime import time as _time
+
+    from app.models import EstoqueLoja, EstoqueProducao, MovEstoqueLoja
+    loja = Loja(nome='Loja Ret', ativa=True)
+    ret = Receita(nome='Croissant Ret - Retorno', categoria='Viennoiserie',
+                  rendimento_qtd=1, rendimento_unidade='un', peso_base=1000.0)
+    db.session.add_all([loja, ret])
+    db.session.flush()
+    trad = Receita(nome='Croissant Ret', categoria='Viennoiserie',
+                   rendimento_qtd=50, rendimento_unidade='un',
+                   peso_base=1000.0, retorno_receita_id=ret.id)
+    db.session.add(trad)
+    db.session.flush()
+    el = EstoqueLoja(loja_id=loja.id, receita_id=ret.id, quantidade=100)
+    db.session.add(el)
+    if estoque_industria:
+        db.session.add(EstoqueProducao(receita_id=ret.id,
+                                       quantidade=estoque_industria))
+    db.session.flush()
+    alvo = hoje() + timedelta(days=2)
+    for sem in range(1, 5):
+        d = alvo - timedelta(days=7 * sem)
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo='venda_seru', quantidade=20,
+            data=_dt.combine(d, _time(12, 0)), referencia='teste-retorno'))
+    db.session.commit()
+    return ret, trad
+
+
+def test_retorno_nao_ganha_previsto_nem_producao_no_motor_vendas(app):
+    """Balanço motor=vendas: a receita-retorno com histórico de venda fica
+    com previsto 0 e produzir 0; o grid não agenda nenhuma célula dela."""
+    from app.services.previsao_producao import (
+        balanco_industria,
+        cronograma_producao,
+    )
+    ret, _trad = _cenario_retorno_com_vendas(estoque_industria=5)
+    bal = balanco_industria(motor='vendas', usar_cache=False)
+    item = next((i for i in bal['itens'] if i['receita_id'] == ret.id), None)
+    assert item is not None                    # estoque > 0 mantém visível
+    assert item['retorno'] is True
+    assert item['previsto'] == 0
+    assert item['produzir'] == 0
+
+    crono = cronograma_producao(horizonte_dias=7, motor='vendas')
+    rr = next((x for x in crono['receitas'] if x['receita_id'] == ret.id),
+              None)
+    if rr is not None:                         # linha injetada (vendável)
+        assert rr.get('retorno') is True
+        assert rr['total'] == 0
+
+
+def test_editar_celula_recusa_receita_retorno(app):
+    from app.services.cronograma_edit import editar_celula
+    ret, _trad = _cenario_retorno_com_vendas(estoque_industria=5)
+    res = editar_celula(ret.id, (hoje() + timedelta(days=1)).isoformat(), 10)
+    assert res is not None
+    assert res.get('erro') == 'receita_retorno'
+
+
+def test_override_legado_de_retorno_e_ignorado_e_nao_vai_pro_plano(app,
+                                                                   admin_user):
+    """Override criado ANTES do guard não re-põe produção de retorno no grid
+    nem na ordem enviada ao padeiro."""
+    from app.models import CronogramaOverride, PlanejamentoItem
+    from app.services.previsao_producao import cronograma_producao
+    from app.services.producao import enviar_plano_do_dia
+    ret, _trad = _cenario_retorno_com_vendas(estoque_industria=5)
+    amanha = hoje() + timedelta(days=1)
+    db.session.add(CronogramaOverride(receita_id=ret.id, data=amanha, qtd=10))
+    db.session.commit()
+
+    crono = cronograma_producao(horizonte_dias=7, motor='vendas')
+    rr = next((x for x in crono['receitas'] if x['receita_id'] == ret.id),
+              None)
+    if rr is not None:
+        assert rr['total'] == 0                # override ignorado
+
+    plano = enviar_plano_do_dia(amanha, admin_user.id, motor='vendas')
+    if plano is not None:
+        itens_ret = [it for it in PlanejamentoItem.query
+                     .filter_by(planejamento_id=plano.id).all()
+                     if it.receita_id == ret.id]
+        assert itens_ret == []                 # padeiro nunca vê retorno
+
+
 def test_edicao_hoje_que_cobre_nao_ganha_stale(app):
     """Edição de hoje que COBRE a demanda não ganha o aviso (o E3 de
     'dia anterior' continua valendo pro caso sem risco)."""
