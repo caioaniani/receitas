@@ -348,6 +348,17 @@ footer p { margin: 0; }
     <p class="section-label">Cardápio</p>
     <h2 class="section-title">Escolha sua categoria</h2>
 
+    {% if regras %}
+    <div class="regras-atacado">
+        <h3 class="regras-titulo">Regras do pedido — Atacado</h3>
+        <ul class="regras-lista">
+            {% for r in regras %}
+            <li><span class="regra-label">{{ r.label }}:</span> {{ r.valor }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
     {% if categorias %}
     <div class="pills-wrap">
         <div class="pills">
