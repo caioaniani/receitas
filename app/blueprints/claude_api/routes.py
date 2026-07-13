@@ -763,6 +763,83 @@ def auditoria_mapeamentos():
     return jsonify(ok=True, **auditar(dias=dias))
 
 
+@claude_api_bp.route('/custos')
+@_claude_auth_required
+def custos():
+    """Custos unitários do catálogo inteiro (13/07/2026, planilha "Custos
+    faltantes" do dono): receitas (custo calculado pela ficha), produtos/
+    cestas (composição ou custo_direto) e matérias-primas (custo cadastrado
+    + última entrada com preço). Read-only — serve pra responder "quanto
+    custa X?" sem acesso direto ao Postgres."""
+    from sqlalchemy import func
+
+    from app.extensions import db
+    from app.models import MateriaPrima, MovimentacaoEstoque, Produto, Receita
+    from app.services.custos import calcular_custos_produtos, calcular_custos_receitas
+
+    base = calcular_custos_receitas()
+    produto_custos = calcular_custos_produtos(base['custos'], base['mp_info'])
+
+    receitas = [
+        {'id': r.id, 'nome': r.nome,
+         'custo_unitario': round(base['custos'].get(r.nome, 0), 4),
+         'arquivada': r.arquivada_em is not None}
+        for r in Receita.query.order_by(Receita.nome).all()]
+
+    produtos = []
+    for p in Produto.query.order_by(Produto.nome).all():
+        produtos.append({
+            'id': p.id, 'nome': p.nome, 'ativo': bool(p.ativo),
+            'custo': (round(produto_custos[p.nome], 4)
+                      if p.nome in produto_custos else None),
+            'custo_direto': p.custo_direto,
+            'custo_embalagem': p.custo_embalagem or 0,
+            'n_itens': len(p.itens),
+            'precos': {'atacado': p.preco_atacado, 'loja': p.preco_loja,
+                       'site': p.preco_site, 'interno': p.preco_interno},
+        })
+
+    # Última ENTRADA com preço de cada MP — melhor proxy de "custo do
+    # fornecedor" quando o cadastro está zerado/desatualizado.
+    ult_ids = dict(
+        db.session.query(MovimentacaoEstoque.materia_prima_id,
+                         func.max(MovimentacaoEstoque.id))
+        .filter(MovimentacaoEstoque.tipo == 'entrada',
+                MovimentacaoEstoque.preco_unitario.isnot(None),
+                MovimentacaoEstoque.preco_unitario > 0)
+        .group_by(MovimentacaoEstoque.materia_prima_id).all())
+    ult_movs = {}
+    if ult_ids:
+        for mv in MovimentacaoEstoque.query.filter(
+                MovimentacaoEstoque.id.in_(list(ult_ids.values()))).all():
+            ult_movs[mv.materia_prima_id] = mv
+
+    mps = []
+    for mp in MateriaPrima.query.order_by(MateriaPrima.nome).all():
+        if mp.unidade == 'un':
+            custo_un = mp.custo_por_kg
+        elif mp.peso_unidade:
+            custo_un = (mp.custo_por_kg or 0) * mp.peso_unidade / 1000.0
+        else:
+            custo_un = None
+        mv = ult_movs.get(mp.id)
+        mps.append({
+            'id': mp.id, 'nome': mp.nome, 'unidade': mp.unidade,
+            'custo_por_kg': mp.custo_por_kg,
+            'peso_unidade': mp.peso_unidade,
+            'custo_unitario': round(custo_un, 4) if custo_un else None,
+            'fornecedor': mp.fornecedor,
+            'arquivada': mp.arquivada_em is not None,
+            'ultima_entrada': ({'data': mv.data.isoformat() if mv.data else None,
+                                'preco_unitario': mv.preco_unitario,
+                                'quantidade': mv.quantidade} if mv else None),
+        })
+
+    return jsonify(ok=True, receitas=receitas, produtos=produtos,
+                   materias_primas=mps,
+                   circulares=base['circulares'])
+
+
 @claude_api_bp.route('/seru-debug')
 @_claude_auth_required
 def seru_debug():
