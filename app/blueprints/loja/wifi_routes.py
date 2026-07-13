@@ -46,6 +46,26 @@ def wifi_cadastrar():
     return redirect(url_for('loja.wifi_validar', token=sessao.token))
 
 
+@loja_bp.route('/wifi/criar', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
+def wifi_criar():
+    """Cadastro LEVE pro modo RADIUS (13/07/2026). Página standalone, SEM o
+    layout do site (sem Google Analytics / Facebook Pixel — no captive
+    portal esses scripts externos ficam pendurados e travam a tela). O botão
+    "Criar conta" da página do portal (portal_omada.html) aponta pra cá.
+    Cria a conta direto; depois o cliente loga no Wi-Fi com e-mail+senha."""
+    if request.method == 'POST':
+        dados, erros = wifi_portal.validar_form(request.form)
+        if erros:
+            return render_template('loja/wifi_criar.html', erros=erros,
+                                   form=request.form, status=None), 400
+        status, _c = wifi_portal.criar_conta_direta(dados)
+        return render_template('loja/wifi_criar.html', erros=None,
+                               form={}, status=status)
+    return render_template('loja/wifi_criar.html', erros=None, form={},
+                           status=None)
+
+
 @loja_bp.route('/wifi/validar/<token>')
 def wifi_validar(token):
     from app.models import WifiPortalSessao
