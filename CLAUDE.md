@@ -1504,9 +1504,20 @@ pelo WHATSAPP e abre no navegador de verdade.
     Response Authenticator. Fail-closed (erro = Reject). `--selftest`
     valida a cripto sem rede. DOIS segredos distintos: `WIFI_RADIUS_SECRET`
     (OC200↔ponte) e `WIFI_API_TOKEN`=`WIFI_RADIUS_TOKEN` (ponte↔gestão).
-  - Cliente cria conta em `/loja/cadastrar` (já existe; email+senha) e loga
-    no wifi com ela. Config Omada: RADIUS Profile (IP do VPS:1812 + secret)
-    + portal auth = RADIUS + Pre-Auth Access liberando opao.online/WhatsApp.
+  - Cliente cria conta em `/loja/wifi/criar` (página LEVE standalone, sem o
+    `_base.html` — no captive portal os scripts externos de GA/FB Pixel
+    ficam pendurados e TRAVAM a janelinha; por isso a página do site normal
+    não serve). `wifi_portal.criar_conta_direta`: e-mail novo cria na hora;
+    e-mail que JÁ existe (conta OU convidado) → `ja_existe`, NÃO cria/reivindica
+    nada e NÃO manda e-mail. PRIVACIDADE (decisão do dono, caso "esposa
+    ciumenta digita o e-mail do marido e vê que ele comprou cesta pra
+    vizinha"): reivindicar conta de convidado por e-mail sozinho exporia o
+    histórico — só pelo site (/loja/cadastrar) com verificação no e-mail.
+    A página do portal (portal_omada.html) redireciona pra `opao.online`
+    (LANDING_URL) ao conectar, não pra página em branco. Pre-Auth Access
+    (walled garden) precisa liberar `opao.online`.
+    Config Omada: RADIUS Profile (IP do VPS:1812 + secret) + portal auth =
+    RADIUS (PAP) + Local Web Portal + Import Customized Page.
   - **Página customizada** `wifi_radius/portal_omada.html`: sobe no OC200
     (Portal → Design → Import Customized Page), roda LOCAL no controlador
     (sem cert), tem login email+senha + botão clicável "Criar conta" →
