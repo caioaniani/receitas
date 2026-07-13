@@ -138,13 +138,6 @@
     xhr.onerror = function(){ mostrarErro('Falha de conexão com o portal.'); };
     xhr.send(JSON.stringify(dados));
   });
-
-  // Passa os parâmetros adiante no link do cadastro (não atrapalha se sobrar).
-  (function(){
-    var a = document.getElementById('criar');
-    // mantém o link simples; o cadastro não precisa dos params do portal.
-    void a;
-  })();
 </script>
 </body>
 </html>
