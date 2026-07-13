@@ -696,7 +696,7 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         demanda = int(ceil(demanda_soma.get(rid, 0.0)))
         produzir = max(0, demanda - est_efetivo)
         # Retorno nunca sugere producao (nem por firme): so entra por
-        # devolucao. A linha segue vivel pra visibilidade do estoque.
+        # devolucao. A linha segue visivel pra visibilidade do estoque.
         if rid in retorno_ids:
             produzir = 0
         lim = caps_retorno.get(rid)
