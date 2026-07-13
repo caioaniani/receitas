@@ -132,9 +132,12 @@
       var r = {};
       try { r = JSON.parse(xhr.responseText || '{}'); } catch(e) {}
       if(xhr.status === 200 && r.errorCode === 0){
-        okEl.style.display = 'block'; btn.style.display = 'none';
-        // Manda pra loja da padaria (não pra página em branco/originUrl).
-        setTimeout(function(){ window.location.href = LANDING_URL; }, 1200);
+        // NÃO redireciona pro site pesado (opao.online): a janelinha do
+        // captive portal não carrega os scripts externos dele e fica branca.
+        // Mostra o sucesso aqui (página leve, local) — o cliente fecha e
+        // navega no navegador de verdade, onde a loja abre liso.
+        document.getElementById('f').style.display = 'none';
+        okEl.style.display = 'block';
       } else {
         // Mostra o motivo bruto — guia o ajuste de AUTH_URL/AUTH_TYPE.
         mostrarErro('Não consegui entrar. Confira e-mail e senha. '
