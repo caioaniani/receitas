@@ -25,6 +25,17 @@ logger = logging.getLogger(__name__)
 _A_SEPARAR = ('pendente', 'confirmado')
 
 
+def _eager_itens_receita():
+    """Eager load dos itens do plano + receita (N+1 do Sentry 13/07/2026:
+    a TV do padeiro consulta o plano a cada 15s e cada item disparava 1
+    SELECT de receita)."""
+    from sqlalchemy.orm import selectinload
+
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+    return (selectinload(PlanejamentoProducao.itens)
+            .selectinload(PlanejamentoItem.receita))
+
+
 def _parse_dia(valor):
     """Parse 'YYYY-MM-DD' -> date, ou None se invalido/vazio."""
     try:
@@ -72,8 +83,18 @@ def _dados_listas(dia, eh_hoje):
     aguardando. Helper compartilhado entre a tela cheia (`index`) e o refresh
     parcial (`listas_html`). Loja baixa estoque da loja no recebimento; o B2B
     baixa o freezer AO SEPARAR (regime 07/07/2026 — ver separar_b2b)."""
+    from sqlalchemy.orm import selectinload
+
+    from app.models import PedidoItem
     hj = hoje()
-    q = PedidoLoja.query.filter(
+    # Eager load (N+1 do Sentry 13/07/2026): a TV consulta isto a cada 15s
+    # e cada card disparava 1 SELECT de receita POR ITEM.
+    q = PedidoLoja.query.options(
+        selectinload(PedidoLoja.loja),
+        selectinload(PedidoLoja.itens).selectinload(PedidoItem.receita),
+        selectinload(PedidoLoja.itens).selectinload(
+            PedidoItem.materia_prima),
+    ).filter(
         PedidoLoja.status.in_(('pendente', 'confirmado', 'separado')))
     if eh_hoje:
         # Hoje inclui atrasados nao despachados (nada se perde).
@@ -84,7 +105,11 @@ def _dados_listas(dia, eh_hoje):
     pedidos = q.order_by(PedidoLoja.data_entrega).all()
 
     # B2B so entra na fila quando tem data de entrega (senao e venda imediata).
-    qb = VendaB2B.query.filter(
+    from app.models import VendaB2BItem
+    qb = VendaB2B.query.options(
+        selectinload(VendaB2B.itens).selectinload(VendaB2BItem.receita),
+        selectinload(VendaB2B.itens).selectinload(VendaB2BItem.produto),
+    ).filter(
         VendaB2B.status != 'cancelada',
         VendaB2B.status_entrega.in_(('pendente', 'separado')),
         VendaB2B.data_entrega.isnot(None))
@@ -97,8 +122,13 @@ def _dados_listas(dia, eh_hoje):
     # Retiradas de sobras (loja → industria): entram na MESMA fila, com
     # destaque proprio — a industria vai RECEBER (nao separar). Hoje inclui
     # atrasadas (retirada de ontem que o motorista ainda nao coletou).
-    from app.models import RetiradaSobra
-    qr_ = RetiradaSobra.query.filter(
+    from app.models import Receita, RetiradaSobra, RetiradaSobraItem
+    qr_ = RetiradaSobra.query.options(
+        selectinload(RetiradaSobra.loja),
+        selectinload(RetiradaSobra.itens)
+        .selectinload(RetiradaSobraItem.receita)
+        .selectinload(Receita.retorno_receita),
+    ).filter(
         RetiradaSobra.status.in_(('aguardando_coleta', 'em_transporte')))
     if eh_hoje:
         qr_ = qr_.filter(RetiradaSobra.data_retirada <= hj)
@@ -134,6 +164,7 @@ def _plano_do_dia(dia):
     from app.services.producao import fornadas_amassadeira
 
     plano = (PlanejamentoProducao.query
+             .options(_eager_itens_receita())
              .filter_by(data=dia, origem='cronograma')
              .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False))
              .first())
@@ -299,6 +330,7 @@ def massa_base_mise(mb_id):
     mb = MassaBase.query.get_or_404(mb_id)
     dia = _parse_dia(request.args.get('data')) or hoje()
     plano = (PlanejamentoProducao.query
+             .options(_eager_itens_receita())
              .filter_by(data=dia, origem='cronograma')
              .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False))
              .first())
@@ -379,6 +411,7 @@ def editar_plano():
     hj = hoje()
     dia = _parse_dia(request.args.get('data') or request.form.get('data')) or hj
     plano = (PlanejamentoProducao.query
+             .options(_eager_itens_receita())
              .filter_by(data=dia, origem='cronograma').first())
 
     def _rend(rec):
@@ -714,8 +747,12 @@ def preparar_json():
     # Item entra no pre-preparo quando `estado` explicito for assado/backup,
     # OU quando `estado` for NULL e a `Receita.estado_padrao` for assado/backup.
     _estados_pre = ('assado', 'backup')
+    from sqlalchemy.orm import selectinload
     itens = (PedidoItem.query.join(PedidoLoja)
              .outerjoin(Receita, Receita.id == PedidoItem.receita_id)
+             .options(selectinload(PedidoItem.receita),
+                      selectinload(PedidoItem.pedido)
+                      .selectinload(PedidoLoja.loja))
              .filter(PedidoLoja.data_entrega == alvo,
                      ~PedidoLoja.status.in_(STATUS_PEDIDO_FINALIZADOS),
                      or_(PedidoItem.estado.in_(_estados_pre),
@@ -729,6 +766,8 @@ def preparar_json():
     # B2B do dia seguinte com estado [ASSADO]/[BACKUP] entram no mesmo pre-preparo.
     itens_b2b = (VendaB2BItem.query.join(VendaB2B)
                  .outerjoin(Receita, Receita.id == VendaB2BItem.receita_id)
+                 .options(selectinload(VendaB2BItem.receita),
+                          selectinload(VendaB2BItem.venda))
                  .filter(VendaB2B.data_entrega == alvo,
                          VendaB2B.status != 'cancelada',
                          VendaB2B.status_entrega != 'entregue',

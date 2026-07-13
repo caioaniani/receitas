@@ -492,8 +492,11 @@ def api_painel_pedidos_online():
     recentes. Com `q`: busca por nome, telefone, e-mail ou código em TODOS os
     pedidos (mesma busca da tela admin /admin/loja-online/pedidos)."""
     from sqlalchemy import or_
+    from sqlalchemy.orm import selectinload
     q = (request.args.get('q') or '').strip()
-    qry = PedidoOnline.query
+    # Eager load dos itens (N+1 do Sentry 13/07/2026: o drawer lista 100
+    # pedidos e cada um disparava 1 SELECT de itens).
+    qry = PedidoOnline.query.options(selectinload(PedidoOnline.itens))
     if len(q) >= 2:
         termo = f'%{q}%'
         qry = qry.filter(or_(

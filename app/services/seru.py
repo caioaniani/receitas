@@ -77,9 +77,14 @@ def _obter_token(force_refresh=False):
     return _token_cache['access_token']
 
 
-# Tentativas EXTRAS em falha de rede transitoria (SSL EOF, conexao
-# derrubada, timeout). So rede — erro HTTP (4xx/5xx) nao re-tenta.
+# Tentativas EXTRAS em falha transitoria: rede (SSL EOF, conexao derrubada,
+# timeout) e gateway 5xx (502/503/504 — GET idempotente). Outros erros HTTP
+# (4xx, 500 de aplicacao) nao re-tentam.
 _RETRIES_REDE = 2
+
+
+class _Erro5xx(RuntimeError):
+    """502/503/504 do gateway do Seru — transitorio, re-tentavel."""
 
 
 def _get_uma_vez(path, params=None):
@@ -95,6 +100,10 @@ def _get_uma_vez(path, params=None):
                          params=params or {}, timeout=20)
     if r.status_code != 200:
         logger.error('Seru %s %s: %s', path, r.status_code, r.text[:300])
+        if r.status_code in (502, 503, 504):
+            # Gateway/indisponibilidade transitoria do lado deles (Sentry
+            # 13/07/2026: 502 no /orders) — re-tentavel como falha de rede.
+            raise _Erro5xx(f'Seru {path} {r.status_code}: {r.text[:200]}')
         raise RuntimeError(f'Seru {path} {r.status_code}: {r.text[:200]}')
     return r.json()
 
@@ -112,7 +121,7 @@ def _get(path, params=None):
         try:
             return _get_uma_vez(path, params)
         except (requests.exceptions.ConnectionError,
-                requests.exceptions.Timeout) as e:
+                requests.exceptions.Timeout, _Erro5xx) as e:
             ultimo = e
             logger.warning('Seru %s: falha de rede (tentativa %d/%d): %s',
                            path, tentativa + 1, _RETRIES_REDE + 1,
