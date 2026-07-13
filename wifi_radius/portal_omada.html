@@ -129,8 +129,8 @@
       try { r = JSON.parse(xhr.responseText || '{}'); } catch(e) {}
       if(xhr.status === 200 && r.errorCode === 0){
         okEl.style.display = 'block'; btn.style.display = 'none';
-        if(originUrl){ setTimeout(function(){
-          window.location.href = originUrl; }, 1200); }
+        // Manda pra loja da padaria (não pra página em branco/originUrl).
+        setTimeout(function(){ window.location.href = LANDING_URL; }, 1200);
       } else {
         // Mostra o motivo bruto — guia o ajuste de AUTH_URL/AUTH_TYPE.
         mostrarErro('Não consegui entrar. Confira e-mail e senha. '
