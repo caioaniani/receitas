@@ -45,11 +45,18 @@ def _sync_ok():
                  return_value={'seru_atrasado': False})
 
 
+def _vazao_ok(total=300):
+    """Mocka a API do Seru pro check 4 (vazao) — sem isso, o teste bateria
+    na rede de verdade (e o resultado dependeria da hora local)."""
+    return patch('app.services.seru.listar_pedidos',
+                 return_value={'data': [{'id': 'x'}], 'totalPages': total})
+
+
 def test_loja_que_vendia_e_ficou_muda_detecta(app):
     lj = _loja_confirmada('Loja Ribeiro do Vale', 'O PAO PADARIA')
     for h in (100, 150, 220):
         _baixa(lj, h)                       # vendia no histórico
-    with _sync_ok():
+    with _sync_ok(), _vazao_ok():
         out = rodar_checks()                # nada nas últimas 36h
     assert not out['saudavel']
     assert any('Ribeiro do Vale' in p and 'sem' in p.lower()
@@ -60,7 +67,7 @@ def test_loja_vendendo_normal_e_saudavel(app):
     lj = _loja_confirmada('Loja Ativa', 'CIA ATIVA')
     for h in (1, 60, 120):
         _baixa(lj, h)                       # inclui baixa recente
-    with _sync_ok():
+    with _sync_ok(), _vazao_ok():
         out = rodar_checks()
     assert out['saudavel'] is True
 
@@ -72,7 +79,7 @@ def test_company_vendendo_sem_vinculo_confirmado_detecta(app):
                                    seru_nome='CROISSANT', qtd=30,
                                    faturamento=100))
     db.session.commit()
-    with _sync_ok():
+    with _sync_ok(), _vazao_ok():
         out = rodar_checks()
     assert any('CIA NOVA SEM CONFIRMA' in p and 'NAO baixam' in p
                for p in out['problemas'])
@@ -83,14 +90,55 @@ def test_vigiar_alerta_na_transicao_e_avisa_normalizacao(app):
     lj = _loja_confirmada('Loja Muda', 'CIA MUDA')
     for h in (100, 150):
         _baixa(lj, h)
-    with _sync_ok(), patch('app.services.zapi.enviar_texto') as tx:
+    with _sync_ok(), _vazao_ok(), patch('app.services.zapi.enviar_texto') as tx:
         r1 = vigiar()                       # doente → alerta
         r2 = vigiar()                       # mesmo problema → suprimido (6h)
     assert r1['tipo'] == 'alerta' and r2['tipo'] == 'alerta_suprimido'
     assert tx.call_count == 1
     assert 'Vigia do PDV' in tx.call_args[0][1]
     _baixa(lj, 1)                           # voltou a vender
-    with _sync_ok(), patch('app.services.zapi.enviar_texto') as tx2:
+    with _sync_ok(), _vazao_ok(), patch('app.services.zapi.enviar_texto') as tx2:
         r3 = vigiar()
     assert r3['tipo'] == 'recuperacao'
     assert 'normalizou' in tx2.call_args[0][1]
+
+
+# ── Check 4: vazao na FONTE (13/07/2026, incidente das companies) ─────────
+def _hora(h, m=0):
+    from datetime import datetime
+    d = hoje()
+    return datetime(d.year, d.month, d.day, h, m)
+
+
+def test_vazao_abaixo_do_piso_detecta(app):
+    with _sync_ok(), _vazao_ok(total=1), \
+         patch('app.utils.agora', return_value=_hora(11, 30)):
+        out = rodar_checks()
+    assert not out['saudavel']
+    assert any('nao estao chegando na API do Seru' in p
+               for p in out['problemas'])
+
+
+def test_vazao_normal_e_saudavel(app):
+    with _sync_ok(), _vazao_ok(total=240), \
+         patch('app.utils.agora', return_value=_hora(14, 10)):
+        out = rodar_checks()
+    assert out['saudavel'] is True
+
+
+def test_vazao_fora_de_horario_fica_quieta(app):
+    """As 6h, 0 pedidos e normal — o piso so vale em horario de loja."""
+    with _sync_ok(), _vazao_ok(total=0), \
+         patch('app.utils.agora', return_value=_hora(6, 0)):
+        out = rodar_checks()
+    assert out['saudavel'] is True
+
+
+def test_api_fora_no_check_de_vazao_e_achado(app):
+    with _sync_ok(), \
+         patch('app.services.seru.listar_pedidos',
+               side_effect=RuntimeError('Seru auth 500')), \
+         patch('app.utils.agora', return_value=_hora(11, 0)):
+        out = rodar_checks()
+    assert not out['saudavel']
+    assert any('API do Seru fora' in p for p in out['problemas'])

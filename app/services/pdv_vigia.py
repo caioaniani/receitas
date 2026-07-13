@@ -29,6 +29,11 @@ _KEY_ULTIMO = 'pdv_vigia_ultimo_alerta_em'
 _KEY_ASSIN = 'pdv_vigia_ultima_assinatura'
 _REALERTA_MIN = 360           # re-alerta o mesmo problema a cada 6h
 _JANELA_MUDA_H = 36           # loja sem baixa ha 36h = muda
+
+# Check de vazao da API (13/07/2026): piso de pedidos ACUMULADOS do dia
+# por hora BRT (hora >= chave -> piso), avaliado so em horario de loja.
+_VAZAO_PISOS = ((17, 120), (14, 60), (11, 20), (9, 3))
+_VAZAO_HORA_INI, _VAZAO_HORA_FIM = 9, 21
 _HIST_DIAS = 14               # "vendia" = teve baixa nos 14 dias anteriores
 
 
@@ -109,6 +114,33 @@ def rodar_checks():
     except Exception as e:  # noqa: BLE001
         logger.exception('pdv_vigia: check company pendente explodiu')
         problemas.append(f'check de company pendente explodiu: {e}')
+
+    # 4. VAZAO na FONTE (13/07/2026, incidente das companies): a API do
+    #    Seru respondia mas enxergava 1 pedido no dia — as empresas tinham
+    #    saido da "Integracao SERU" no painel do Colibri e NADA subia. Os
+    #    checks 1-3 olham o NOSSO lado (baixas/sync) e so pegariam isso
+    #    36h depois (loja muda); este pergunta A API quantos pedidos o dia
+    #    tem (limit=1 -> totalPages == total) e compara com piso por hora.
+    #    Pisos conservadores (feriado fraco nao alarma; normal ~600/dia).
+    #    So avalia em horario de loja; API fora tambem e achado.
+    try:
+        hora = agora_dt.hour
+        if _VAZAO_HORA_INI <= hora < _VAZAO_HORA_FIM:
+            from app.services import seru
+            resp = seru.listar_pedidos(hoje(), hoje(), page=1, limit=1)
+            pedidos_hoje = int((resp or {}).get('totalPages') or 0)
+            piso = next((p for h, p in _VAZAO_PISOS if hora >= h), 0)
+            if pedidos_hoje < piso:
+                problemas.append(
+                    f'pedidos de HOJE nao estao chegando na API do Seru: '
+                    f'{pedidos_hoje} visivel(is) as '
+                    f'{agora_dt.strftime("%H:%M")} (esperado >= {piso}) — '
+                    'vendas das lojas nao estao subindo; conferir '
+                    'sincronizacao dos PDVs e as empresas do painel '
+                    '"Integracao SERU" do Colibri')
+    except Exception as e:  # noqa: BLE001 — API fora e achado, nao silencio
+        logger.exception('pdv_vigia: check de vazao da API explodiu')
+        problemas.append(f'API do Seru fora (check de vazao): {str(e)[:200]}')
 
     return {'saudavel': not problemas, 'problemas': problemas}
 
