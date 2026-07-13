@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-control" content="public">
+<title>Wi-Fi O Pão</title>
+<!--
+  Página de portal CUSTOMIZADA do Wi-Fi das lojas (13/07/2026).
+  Sobe no OC200 em: Authentication → Portal → Design → "Import Customized Page".
+  Roda LOCAL (servida pelo próprio controlador) — por isso o login vai pra
+  /portal/radius/auth na MESMA origem, sem problema de certificado/CORS.
+
+  Tela: e-mail + senha (conta do site, checada via RADIUS contra o gestão.opao)
+  + botão "Criar conta" que abre opao.online/loja/cadastrar (walled garden).
+
+  ⚙️ AJUSTES QUE PODEM SER NECESSÁRIOS NO TESTE NA LOJA (topo do <script>):
+     AUTH_TYPE e AUTH_URL. Se o login falhar, a tela mostra o errorCode/msg
+     bruto do controlador — é por ele que a gente acerta esses dois valores.
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+         sans-serif; background: #f2ead9; color: #3a2a18; min-height: 100vh;
+         display: flex; align-items: center; justify-content: center;
+         padding: 18px; }
+  .cartao { width: 100%; max-width: 360px; background: #fbf7f0;
+            border: 2px solid #d8c7a8; border-radius: 18px; padding: 26px 22px;
+            text-align: center; box-shadow: 0 6px 24px rgba(90,58,26,.12); }
+  .marca { font-family: Georgia, serif; font-style: italic; font-size: 30px;
+           font-weight: 700; color: #5a3a1a; }
+  .sub { font-size: 11px; letter-spacing: 3px; color: #a4501f;
+         text-transform: uppercase; margin: 2px 0 16px; }
+  h1 { font-size: 21px; margin-bottom: 4px; }
+  p.dica { font-size: 13px; color: #7a6a55; margin-bottom: 16px; }
+  label { display: block; text-align: left; font-size: 13px; font-weight: 600;
+          margin: 12px 0 4px; }
+  input { width: 100%; padding: 13px; font-size: 16px; border: 1px solid
+          #d8cbb8; border-radius: 10px; background: #fff; }
+  button { width: 100%; padding: 14px; font-size: 17px; font-weight: 700;
+           border: 0; border-radius: 12px; margin-top: 18px; cursor: pointer; }
+  .entrar { color: #fff; background: #a4501f; }
+  .criar { color: #a4501f; background: #fff; border: 2px solid #a4501f;
+           margin-top: 10px; text-decoration: none; display: block;
+           line-height: 1.4; }
+  .ou { font-size: 12px; color: #9a8a70; margin: 16px 0 0; }
+  .erro { display: none; background: #fdecec; border: 1px solid #f5b5b5;
+          border-radius: 10px; padding: 10px 12px; margin-top: 14px;
+          color: #8a2222; font-size: 13px; text-align: left; word-break: break-word; }
+  .ok { display: none; color: #1c7c3d; font-weight: 700; margin-top: 14px; }
+</style>
+</head>
+<body>
+  <div class="cartao">
+    <div class="marca">O Pão</div>
+    <div class="sub">Padaria Artesanal</div>
+    <h1>Wi-Fi grátis 🥐</h1>
+    <p class="dica">Entre com o e-mail e a senha da sua conta.</p>
+
+    <form id="f" onsubmit="return false;">
+      <label for="email">E-mail</label>
+      <input id="email" type="email" autocomplete="email"
+             placeholder="voce@email.com">
+      <label for="senha">Senha</label>
+      <input id="senha" type="password" autocomplete="current-password"
+             placeholder="sua senha">
+      <button class="entrar" id="btn" type="submit">Entrar e conectar</button>
+    </form>
+
+    <div class="ok" id="ok">Conectado! ✅ Aproveite.</div>
+    <div class="erro" id="erro"></div>
+
+    <p class="ou">Ainda não tem conta?</p>
+    <a class="criar" id="criar" href="https://opao.online/loja/cadastrar">
+      Criar conta em 1 minuto</a>
+  </div>
+
+<script>
+  // ── AJUSTES (mexer só aqui se o teste na loja pedir) ──────────────────
+  // Para RADIUS, o controlador usa a rota /portal/radius/auth e authType 2.
+  // Se o login falhar com "errorCode" != 0, a mensagem bruta aparece na
+  // tela — é por ela que a gente confirma/ajusta estes dois valores.
+  var AUTH_URL  = '/portal/radius/auth';
+  var AUTH_TYPE = 2;
+  // ──────────────────────────────────────────────────────────────────────
+
+  function q(k){
+    var m = new RegExp('[?&]' + k + '=([^&]*)').exec(window.location.search);
+    return m ? decodeURIComponent(m[1]) : undefined;
+  }
+  var clientMac = q('clientMac'), apMac = q('apMac'),
+      gatewayMac = q('gatewayMac'), ssidName = q('ssidName'),
+      radioId = q('radioId'), vid = q('vid'), originUrl = q('originUrl');
+
+  var erroEl = document.getElementById('erro'),
+      okEl = document.getElementById('ok'),
+      btn = document.getElementById('btn');
+
+  function mostrarErro(txt){
+    erroEl.textContent = txt; erroEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Entrar e conectar';
+  }
+
+  document.getElementById('f').addEventListener('submit', function(){
+    erroEl.style.display = 'none';
+    var email = document.getElementById('email').value.trim().toLowerCase();
+    var senha = document.getElementById('senha').value;
+    if(!email || !senha){ mostrarErro('Preencha e-mail e senha.'); return; }
+    btn.disabled = true; btn.textContent = 'Conectando…';
+
+    var dados = { authType: AUTH_TYPE, ssidName: ssidName,
+                  clientMac: clientMac, originUrl: originUrl,
+                  username: email, password: senha };
+    // apMac e gatewayMac não podem coexistir (wireless usa apMac).
+    if(apMac) dados.apMac = apMac; else if(gatewayMac) dados.gatewayMac = gatewayMac;
+    if(radioId !== undefined) dados.radioId = Number(radioId);
+    if(vid !== undefined) dados.vid = Number(vid);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', AUTH_URL, true);
+    xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');
+    xhr.timeout = 15000;
+    xhr.onreadystatechange = function(){
+      if(xhr.readyState !== 4) return;
+      var r = {};
+      try { r = JSON.parse(xhr.responseText || '{}'); } catch(e) {}
+      if(xhr.status === 200 && (r.errorCode === 0 || r.errorCode === undefined
+          && xhr.status === 200 && !r.msg)){
+        okEl.style.display = 'block'; btn.style.display = 'none';
+        if(originUrl){ setTimeout(function(){
+          window.location.href = originUrl; }, 1200); }
+      } else {
+        // Mostra o motivo bruto — guia o ajuste de AUTH_URL/AUTH_TYPE.
+        mostrarErro('Não consegui entrar. Confira e-mail e senha. '
+          + '(detalhe: ' + (r.msg || ('HTTP ' + xhr.status)) + ')');
+      }
+    };
+    xhr.ontimeout = function(){ mostrarErro('Demorou demais. Tente de novo.'); };
+    xhr.onerror = function(){ mostrarErro('Falha de conexão com o portal.'); };
+    xhr.send(JSON.stringify(dados));
+  });
+
+  // Passa os parâmetros adiante no link do cadastro (não atrapalha se sobrar).
+  (function(){
+    var a = document.getElementById('criar');
+    // mantém o link simples; o cadastro não precisa dos params do portal.
+    void a;
+  })();
+</script>
+</body>
+</html>
