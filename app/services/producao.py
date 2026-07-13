@@ -29,6 +29,12 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
     iso = data_alvo.isoformat()
     alvo = {}  # receita_id -> unidades no dia
     for rec in crono['receitas']:
+        # Receita de RETORNO nunca entra na ordem (dono, 13/07/2026): o
+        # padeiro não produz devolução. Defesa em profundidade — o balanço
+        # já zera a produção dela, mas um override legado re-injetaria a
+        # linha; item já existente sem produção some no loop de remoção.
+        if rec.get('retorno'):
+            continue
         for c in rec['por_dia']:
             if c['data'] == iso and c['qtd'] > 0:
                 alvo[rec['receita_id']] = c['qtd']
