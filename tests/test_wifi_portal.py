@@ -301,19 +301,26 @@ def test_wifi_criar_conta_nova(app, visivel):
             .check_senha('segredo1')   # senha ANTIGA intacta
 
 
-def test_wifi_criar_guest_vai_verificar(app, visivel):
+def test_wifi_criar_email_existente_nao_reivindica(app, visivel):
+    """Privacidade (caso 'esposa ciumenta'): e-mail que já existe — conta OU
+    convidado — NÃO é criado/reivindicado nem recebe e-mail. Nada do histórico
+    do dono do e-mail é exposto a um terceiro que só sabe o e-mail."""
     from app.models import Cliente
     from app.services import wifi_portal
     with app.app_context():
-        g = Cliente(nome='Guest', email='guest@example.com')  # sem senha
+        # convidado (sem senha) com histórico
+        g = Cliente(nome='Guest', email='guest@example.com', telefone='x')
         db.session.add(g)
         db.session.commit()
         dados, _ = wifi_portal.validar_form(_form(email='guest@example.com'))
         with patch('app.services.loja_auth.iniciar_verificacao_cadastro') \
                 as ver:
             status, c = wifi_portal.criar_conta_direta(dados)
-        assert status == 'verificar' and c is None
-        assert ver.called             # link de verificação, não claim direto
+        assert status == 'ja_existe' and c is None
+        assert not ver.called                 # NÃO manda e-mail
+        # o convidado continua SEM senha (não foi reivindicado)
+        assert not Cliente.query.filter_by(
+            email='guest@example.com').one().tem_conta
 
 
 @pytest.mark.loja_host
