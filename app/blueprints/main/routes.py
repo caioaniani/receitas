@@ -191,6 +191,56 @@ def rentabilidade():
     return render_template('main/rentabilidade.html', dados=dados)
 
 
+# Regras do pedido de ATACADO — texto livre editavel pelo dono (AppConfig),
+# mostrado no topo do /cardapio?tipo=atacado e impresso junto. Cada campo e
+# opcional: vazio nao aparece. Informativo (nao trava pedido — atacado entra por
+# orcamento/WhatsApp). Editar em /admin/cardapio-atacado/regras. (13/07/2026)
+_CARDAPIO_ATACADO_PREFIXO = 'cardapio_atacado_'
+CARDAPIO_ATACADO_CAMPOS = [
+    ('pedido_minimo', 'Pedido mínimo', 'Ex: R$ 300,00 por pedido'),
+    ('prazo', 'Prazo para pedidos', 'Ex: pedir até as 14h do dia anterior'),
+    ('pagamento', 'Pagamento', 'Ex: boleto 14 dias, pix à vista ou faturamento mensal'),
+    ('entrega', 'Entregas', 'Ex: terça a sábado, período da manhã'),
+    ('frete', 'Frete / área de entrega', 'Ex: frete grátis acima de R$ 500; atende zona sul'),
+    ('qtd_minima', 'Quantidade mínima por item', 'Ex: pão de queijo em caixa de 10'),
+    ('validade', 'Validade da tabela', 'Ex: preços sujeitos a alteração sem aviso'),
+    ('contato', 'Pedidos e contato', 'Ex: WhatsApp (11) 90000-0000 — falar com Fulano'),
+]
+
+
+def _regras_atacado():
+    """Lista [{label, valor}] das regras de atacado PREENCHIDAS, na ordem de
+    exibicao. Vazia = nenhum campo preenchido (bloco nao aparece)."""
+    from app.models import AppConfig
+    out = []
+    for chave, label, _ph in CARDAPIO_ATACADO_CAMPOS:
+        val = (AppConfig.get(_CARDAPIO_ATACADO_PREFIXO + chave) or '').strip()
+        if val:
+            out.append({'label': label, 'valor': val})
+    return out
+
+
+@main_bp.route('/admin/cardapio-atacado/regras', methods=['GET', 'POST'])
+@admin_required
+def cardapio_atacado_regras():
+    """Tela pro dono escrever/mudar as regras do pedido de atacado que saem no
+    cardápio. Texto livre por campo, salvo em AppConfig; vazio some do cardápio."""
+    from flask import flash, redirect, url_for
+
+    from app.models import AppConfig
+    if request.method == 'POST':
+        for chave, _label, _ph in CARDAPIO_ATACADO_CAMPOS:
+            AppConfig.set(_CARDAPIO_ATACADO_PREFIXO + chave,
+                          (request.form.get(chave) or '').strip())
+        db.session.commit()
+        flash('Regras do atacado salvas. Elas já aparecem no cardápio.', 'success')
+        return redirect(url_for('main.cardapio', tipo='atacado'))
+    atuais = {chave: (AppConfig.get(_CARDAPIO_ATACADO_PREFIXO + chave) or '')
+              for chave, _l, _p in CARDAPIO_ATACADO_CAMPOS}
+    return render_template('admin/cardapio_atacado_regras.html',
+                           campos=CARDAPIO_ATACADO_CAMPOS, atuais=atuais)
+
+
 @main_bp.route('/cardapio')
 @login_required
 def cardapio():
