@@ -204,3 +204,67 @@ def contar_pendencias():
     sem_loja = (SeruPedidoProcessado.query
                 .filter(SeruPedidoProcessado.loja_id.is_(None)).count())
     return lojas + prod_seru + sem_loja
+
+
+def debug_seru_status():
+    """Saude da integracao Seru (read-only): testa AUTH + 1 request real e
+    devolve o erro EXATO da API. Nunca vaza segredo (so presenca/tamanho).
+    Fonte unica do /pdv/debug-seru (owner) e do /api/claude/seru-debug
+    (sonda do assistente — criada 12/07/2026 quando a API do Seru caiu e o
+    container de dev nao alcanca o host deles)."""
+    import time as _time
+
+    from flask import current_app
+
+    from app.models import AppConfig
+    from app.services import seru
+    from app.utils import hoje
+
+    cid = (current_app.config.get('SERU_CLIENT_ID') or '').strip()
+    secret = (current_app.config.get('SERU_CLIENT_SECRET') or '').strip()
+    out = {
+        'config': {
+            'client_id_set': bool(cid), 'client_id_len': len(cid),
+            'client_secret_set': bool(secret),
+            'client_secret_len': len(secret),
+            'base_url': getattr(seru, 'BASE', None),
+        },
+        'ultimo_sync': AppConfig.get('seru_ultimo_sync'),
+        'auth': None,
+        'request': None,
+        'conclusao': None,
+    }
+
+    t0 = _time.time()
+    try:
+        token = seru._obter_token(force_refresh=True)
+        out['auth'] = {'ok': True, 'token_len': len(token or ''),
+                       'ms': int((_time.time() - t0) * 1000)}
+    except Exception as e:  # noqa: BLE001 — o erro cru E o diagnostico
+        out['auth'] = {'ok': False, 'erro': str(e)[:400],
+                       'ms': int((_time.time() - t0) * 1000)}
+        out['conclusao'] = ('FALHA NA AUTENTICACAO. Cheque SERU_CLIENT_ID/'
+                            'SERU_CLIENT_SECRET no Railway (ver auth.erro).')
+        return out
+
+    hoje_d = hoje()
+    t1 = _time.time()
+    try:
+        resp = seru.listar_pedidos(hoje_d, hoje_d, page=1, limit=1)
+        data = resp.get('data') if isinstance(resp, dict) else None
+        out['request'] = {
+            'ok': True, 'ms': int((_time.time() - t1) * 1000),
+            'total_pages': (resp or {}).get('totalPages'),
+            'n_no_page': len(data or []),
+            'dia_testado': hoje_d.isoformat(),
+        }
+        out['conclusao'] = ('API OK — auth e request funcionaram. Se a busca '
+                            'na tela falha, o problema esta no navegador/'
+                            'webview (sessao/JSON), NAO na API do Seru.')
+    except Exception as e:  # noqa: BLE001 — o erro cru E o diagnostico
+        out['request'] = {'ok': False, 'erro': str(e)[:400],
+                          'ms': int((_time.time() - t1) * 1000),
+                          'dia_testado': hoje_d.isoformat()}
+        out['conclusao'] = ('Auth OK, mas o request de pedidos FALHOU — este '
+                            'e o erro real da API (ver request.erro).')
+    return out

@@ -1083,60 +1083,9 @@ def vnda_diag_produtos():
 @login_required
 @owner_required
 def debug_seru():
-    """Saude da integracao Seru (owner-only): testa AUTH + 1 REQUEST real e mostra
-    o erro EXATO da API — pra diagnosticar quando a busca/sync falha ("aguardando
-    primeira execucao", erro de rede na tela). Nunca vaza segredo (so presenca +
-    tamanho). Somente leitura: nao muda nada, nao processa pedido."""
-    import time as _time
+    """Saude da integracao Seru (owner-only): delega pra
+    pdv_saude.debug_seru_status (fonte unica — a sonda do assistente
+    /api/claude/seru-debug usa a mesma funcao)."""
+    from app.services.pdv_saude import debug_seru_status
+    return jsonify(debug_seru_status())
 
-    from app.utils import hoje
-
-    cid = (current_app.config.get('SERU_CLIENT_ID') or '').strip()
-    secret = (current_app.config.get('SERU_CLIENT_SECRET') or '').strip()
-    out = {
-        'config': {
-            'client_id_set': bool(cid), 'client_id_len': len(cid),
-            'client_secret_set': bool(secret), 'client_secret_len': len(secret),
-            'base_url': getattr(seru, 'BASE', None),
-        },
-        'ultimo_sync': AppConfig.get('seru_ultimo_sync'),
-        'auth': None,
-        'request': None,
-        'conclusao': None,
-    }
-
-    # 1. Autenticacao (client_credentials)
-    t0 = _time.time()
-    try:
-        token = seru._obter_token(force_refresh=True)
-        out['auth'] = {'ok': True, 'token_len': len(token or ''),
-                       'ms': int((_time.time() - t0) * 1000)}
-    except Exception as e:  # noqa: BLE001
-        out['auth'] = {'ok': False, 'erro': str(e)[:400],
-                       'ms': int((_time.time() - t0) * 1000)}
-        out['conclusao'] = ('FALHA NA AUTENTICACAO. Cheque SERU_CLIENT_ID/'
-                            'SERU_CLIENT_SECRET no Railway (ver auth.erro).')
-        return jsonify(out)
-
-    # 2. Um request real: pedidos de HOJE, 1 item (sem processar nada)
-    hoje_d = hoje()
-    t1 = _time.time()
-    try:
-        resp = seru.listar_pedidos(hoje_d, hoje_d, page=1, limit=1)
-        data = resp.get('data') if isinstance(resp, dict) else None
-        out['request'] = {
-            'ok': True, 'ms': int((_time.time() - t1) * 1000),
-            'total_pages': (resp or {}).get('totalPages'),
-            'n_no_page': len(data or []),
-            'dia_testado': hoje_d.isoformat(),
-        }
-        out['conclusao'] = ('API OK — auth e request funcionaram. Se a busca na '
-                            'tela falha, o problema esta no navegador/webview '
-                            '(sessao/JSON), NAO na API do Seru.')
-    except Exception as e:  # noqa: BLE001
-        out['request'] = {'ok': False, 'erro': str(e)[:400],
-                          'ms': int((_time.time() - t1) * 1000),
-                          'dia_testado': hoje_d.isoformat()}
-        out['conclusao'] = ('Auth OK, mas o request de pedidos FALHOU — este e o '
-                            'erro real da API (ver request.erro).')
-    return jsonify(out)

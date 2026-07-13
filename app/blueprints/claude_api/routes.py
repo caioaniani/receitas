@@ -761,3 +761,14 @@ def auditoria_mapeamentos():
     except (TypeError, ValueError):
         dias = 14
     return jsonify(ok=True, **auditar(dias=dias))
+
+
+@claude_api_bp.route('/seru-debug')
+@_claude_auth_required
+def seru_debug():
+    """Sonda da API do Seru (12/07/2026, 'a API do Seru parou'): auth + 1
+    request real do ponto de vista de PRODUCAO, com o erro exato. O
+    container do assistente nao alcanca o host do Seru — esta e a unica
+    forma de ele diagnosticar. Read-only, sem segredos (so presenca)."""
+    from app.services.pdv_saude import debug_seru_status
+    return jsonify(ok=True, **debug_seru_status())

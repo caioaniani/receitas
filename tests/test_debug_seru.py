@@ -66,3 +66,21 @@ def test_debug_seru_bloqueia_nao_owner(app, admin_user):
     c = _login(app, admin_user)
     r = c.get('/pdv/debug-seru', follow_redirects=False)
     assert r.status_code in (302, 403)
+
+
+def test_sonda_seru_debug_na_api_do_assistente(app, monkeypatch):
+    """/api/claude/seru-debug: mesma função do /pdv/debug-seru (fonte
+    única), com Bearer — criada quando a API do Seru caiu e o container
+    do assistente não alcançava o host."""
+    from unittest.mock import patch
+    app.config['CLAUDE_API_TOKEN'] = 'tok-sonda'
+    c = app.test_client()
+    assert c.get('/api/claude/seru-debug').status_code == 401
+    with patch('app.services.seru._obter_token', return_value='t' * 20), \
+         patch('app.services.seru.listar_pedidos',
+               return_value={'data': [], 'totalPages': 1}):
+        resp = c.get('/api/claude/seru-debug',
+                     headers={'Authorization': 'Bearer tok-sonda'})
+    d = resp.get_json()
+    assert resp.status_code == 200 and d['ok'] is True
+    assert d['auth']['ok'] is True and d['request']['ok'] is True
