@@ -312,7 +312,9 @@ def cardapio():
             'imagem_url': img,
         })
 
-    return render_template('main/cardapio.html', categorias=categorias, tipo=tipo)
+    regras = _regras_atacado() if tipo == 'atacado' else []
+    return render_template('main/cardapio.html', categorias=categorias,
+                           tipo=tipo, regras=regras)
 
 
 @main_bp.route('/cardapio-img/<tipo>/<int:id>')
