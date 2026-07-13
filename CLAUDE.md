@@ -1507,6 +1507,15 @@ pelo WHATSAPP e abre no navegador de verdade.
   - Cliente cria conta em `/loja/cadastrar` (já existe; email+senha) e loga
     no wifi com ela. Config Omada: RADIUS Profile (IP do VPS:1812 + secret)
     + portal auth = RADIUS + Pre-Auth Access liberando opao.online/WhatsApp.
+  - **Página customizada** `wifi_radius/portal_omada.html`: sobe no OC200
+    (Portal → Design → Import Customized Page), roda LOCAL no controlador
+    (sem cert), tem login email+senha + botão clicável "Criar conta" →
+    opao.online/loja/cadastrar (resolve o "ninguém digita URL" do dono). O
+    login POSTa `/portal/radius/auth` (authType 2) MESMA origem. `AUTH_URL`/
+    `AUTH_TYPE` no topo do script são os pontos a ajustar no teste na loja
+    (a tela mostra o errorCode/msg bruto pra guiar). VPS (216.238.102.67)
+    criado no Vultr SP; `setup.sh` (scratchpad) instala a ponte com os 2
+    segredos.
   - Testes: `tests/test_wifi_radius.py` (endpoint + cripto da ponte).
 
 ## Bot de atendimento — hardening 02/07/2026 (4 pacotes)
