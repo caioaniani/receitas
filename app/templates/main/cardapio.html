@@ -370,6 +370,7 @@ footer p { margin: 0; }
 
     {% for cat, itens in categorias.items() %}
     <div id="cat-{{ loop.index0 }}" class="cat-section {% if loop.first %}active{% endif %}">
+        <h3 class="cat-heading">{{ cat }}</h3>
         {% set tem_foto = itens | selectattr('imagem_url') | list | length > 0 %}
         {% if tem_foto %}
         <div class="menu-grid">
