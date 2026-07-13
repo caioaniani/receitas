@@ -53,17 +53,32 @@ def wifi_criar():
     layout do site (sem Google Analytics / Facebook Pixel — no captive
     portal esses scripts externos ficam pendurados e travam a tela). O botão
     "Criar conta" da página do portal (portal_omada.html) aponta pra cá.
-    Cria a conta direto; depois o cliente loga no Wi-Fi com e-mail+senha."""
+    Cria a conta direto; depois o cliente loga no Wi-Fi com e-mail+senha.
+
+    O POST responde JSON e o sucesso é mostrado NA MESMA tela (sem navegar),
+    pra o botão "Voltar para o login" (history.back) cair de volta na
+    janelinha de login do portal, não no formulário vazio."""
     if request.method == 'POST':
         dados, erros = wifi_portal.validar_form(request.form)
         if erros:
-            return render_template('loja/wifi_criar.html', erros=erros,
-                                   form=request.form, status=None), 400
+            return jsonify(ok=False, erros=erros), 400
         status, _c = wifi_portal.criar_conta_direta(dados)
-        return render_template('loja/wifi_criar.html', erros=None,
-                               form={}, status=status)
-    return render_template('loja/wifi_criar.html', erros=None, form={},
-                           status=None)
+        return jsonify(ok=True, status=status)
+    return render_template('loja/wifi_criar.html')
+
+
+@loja_bp.route('/wifi/senha', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
+def wifi_senha():
+    """"Esqueci a senha" LEVE pro captive portal. Reaproveita
+    `loja_auth.iniciar_reset` (anti-enumeração: sempre a MESMA resposta,
+    exista ou não a conta). Manda o link de redefinição pro e-mail — que o
+    cliente abre quando tiver internet (4G ou em casa). POST responde JSON."""
+    if request.method == 'POST':
+        email = (request.form.get('email') or '').strip().lower()
+        loja_auth.iniciar_reset(email)   # best-effort, nunca revela existência
+        return jsonify(ok=True)
+    return render_template('loja/wifi_senha.html')
 
 
 @loja_bp.route('/wifi/validar/<token>')
