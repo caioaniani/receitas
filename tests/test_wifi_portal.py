@@ -329,12 +329,34 @@ def test_rota_wifi_criar_web(app, visivel):
     r = c.get('/loja/wifi/criar')
     assert r.status_code == 200 and 'criar conta' in r.get_data(
         as_text=True).lower()
+    # POST responde JSON (a tela é JS-driven, sem navegar)
     r2 = c.post('/loja/wifi/criar',
                 data=_form(email='web@example.com',
-                           telefone='(11) 98888-7777'),
-                follow_redirects=True)
-    assert r2.status_code == 200 and 'Conta criada' in r2.get_data(
-        as_text=True)
+                           telefone='(11) 98888-7777'))
+    assert r2.status_code == 200
+    assert r2.get_json() == {'ok': True, 'status': 'criada'}
+    # erros de validação → JSON 400 com a lista
+    r3 = c.post('/loja/wifi/criar', data=_form(email='invalido', senha='x'))
+    assert r3.status_code == 400 and r3.get_json()['ok'] is False
+    assert r3.get_json()['erros']
+
+
+@pytest.mark.loja_host
+def test_rota_wifi_senha(app, visivel):
+    from app.services import wifi_portal
+    with app.app_context():
+        dados, _ = wifi_portal.validar_form(_form(email='temsenha@example.com'))
+        wifi_portal.criar_conta_direta(dados)   # conta com senha
+    c = app.test_client()
+    assert c.get('/loja/wifi/senha').status_code == 200
+    with patch('app.services.loja_auth.iniciar_reset') as res:
+        r = c.post('/loja/wifi/senha', data={'email': 'temsenha@example.com'})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+    assert res.called
+    # anti-enumeração: e-mail inexistente responde IGUAL (ok:True)
+    with patch('app.services.loja_auth.iniciar_reset'):
+        r2 = c.post('/loja/wifi/senha', data={'email': 'ninguem@example.com'})
+    assert r2.status_code == 200 and r2.get_json()['ok'] is True
 
 
 @pytest.mark.loja_host
