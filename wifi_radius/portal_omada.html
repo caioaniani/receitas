@@ -124,8 +124,7 @@
       if(xhr.readyState !== 4) return;
       var r = {};
       try { r = JSON.parse(xhr.responseText || '{}'); } catch(e) {}
-      if(xhr.status === 200 && (r.errorCode === 0 || r.errorCode === undefined
-          && xhr.status === 200 && !r.msg)){
+      if(xhr.status === 200 && r.errorCode === 0){
         okEl.style.display = 'block'; btn.style.display = 'none';
         if(originUrl){ setTimeout(function(){
           window.location.href = originUrl; }, 1200); }
