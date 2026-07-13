@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Esqueci a senha — Wi-Fi O Pão</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+         sans-serif; background: #f2ead9; color: #3a2a18; padding: 18px;
+         max-width: 440px; margin: 0 auto; }
+  .marca { font-family: Georgia, serif; font-style: italic; font-size: 26px;
+           font-weight: 700; color: #5a3a1a; margin-top: 8px; }
+  .sub { font-size: 11px; letter-spacing: 3px; color: #a4501f;
+         text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 14px 0 4px; }
+  p.dica { color: #7a6a55; font-size: 14px; margin-bottom: 12px; line-height: 1.4; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
+  input { width: 100%; padding: 12px; font-size: 16px; border: 1px solid
+          #d8cbb8; border-radius: 10px; background: #fff; }
+  button { width: 100%; padding: 15px; font-size: 17px; font-weight: 700;
+           color: #fff; background: #a4501f; border: 0; border-radius: 12px;
+           margin-top: 14px; cursor: pointer; }
+  .ok-box { background: #e6f7ec; border: 1px solid #9fd8b4; border-radius: 14px;
+            padding: 24px 20px; margin-top: 20px; text-align: center; }
+  .ok-box h2 { font-size: 19px; color: #1c7c3d; margin-bottom: 8px; }
+  .ok-box p { color: #3a5a44; font-size: 14px; line-height: 1.5; }
+  #voltar { background: #1c7c3d; margin-top: 18px; }
+</style>
+</head>
+<body>
+  <div class="marca">O Pão</div>
+  <div class="sub">Padaria Artesanal</div>
+
+  <div id="tela-form">
+    <h1>Esqueci a senha</h1>
+    <p class="dica">Digite o seu e-mail. Enviaremos um link para redefinir a
+    senha. Você abre esse link no seu e-mail (com seus dados móveis, ou em
+    casa) e escolhe uma nova senha.</p>
+
+    <form id="f">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>E-mail da sua conta</label>
+      <input type="email" name="email" required autocomplete="email"
+             placeholder="voce@email.com">
+      <button type="submit" id="btn">Enviar link</button>
+    </form>
+  </div>
+
+  <div class="ok-box" id="tela-ok" style="display:none">
+    <h2>Link enviado 📧</h2>
+    <p>Se houver uma conta com esse e-mail, enviamos um link para redefinir a
+    senha. Abra a sua caixa de entrada (com dados móveis ou em casa) para
+    escolher uma nova senha.</p>
+    <button id="voltar" type="button" onclick="history.back()">
+      Voltar para o login</button>
+  </div>
+
+<script>
+  var f = document.getElementById('f'), btn = document.getElementById('btn');
+  f.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    fetch('/loja/wifi/senha', { method: 'POST', body: new FormData(f) })
+      .then(function () {
+        document.getElementById('tela-form').style.display = 'none';
+        document.getElementById('tela-ok').style.display = 'block';
+        window.scrollTo(0, 0);
+      })
+      .catch(function () {
+        btn.disabled = false; btn.textContent = 'Enviar link';
+      });
+  });
+</script>
+</body>
+</html>
