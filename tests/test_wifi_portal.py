@@ -280,6 +280,57 @@ def test_rota_portal_e_fluxo_web(app, visivel):
 
 
 @pytest.mark.loja_host
+@pytest.mark.loja_host
+def test_wifi_criar_conta_nova(app, visivel):
+    from app.models import Cliente
+    from app.services import wifi_portal
+    with app.app_context():
+        dados, erros = wifi_portal.validar_form(_form(
+            email='novo@example.com', telefone='(11) 98888-7777'))
+        assert not erros
+        status, c = wifi_portal.criar_conta_direta(dados)
+        assert status == 'criada'
+        assert c.tem_conta and c.check_senha('segredo1')
+        assert c.aniversario_dia == 15 and c.aniversario_mes == 3
+        # e-mail já com conta → 'ja_existe' (não sobrescreve senha)
+        dados2, _ = wifi_portal.validar_form(_form(
+            email='novo@example.com', senha='outrasenha9'))
+        status2, _c2 = wifi_portal.criar_conta_direta(dados2)
+        assert status2 == 'ja_existe'
+        assert Cliente.query.filter_by(email='novo@example.com').one() \
+            .check_senha('segredo1')   # senha ANTIGA intacta
+
+
+def test_wifi_criar_guest_vai_verificar(app, visivel):
+    from app.models import Cliente
+    from app.services import wifi_portal
+    with app.app_context():
+        g = Cliente(nome='Guest', email='guest@example.com')  # sem senha
+        db.session.add(g)
+        db.session.commit()
+        dados, _ = wifi_portal.validar_form(_form(email='guest@example.com'))
+        with patch('app.services.loja_auth.iniciar_verificacao_cadastro') \
+                as ver:
+            status, c = wifi_portal.criar_conta_direta(dados)
+        assert status == 'verificar' and c is None
+        assert ver.called             # link de verificação, não claim direto
+
+
+@pytest.mark.loja_host
+def test_rota_wifi_criar_web(app, visivel):
+    c = app.test_client()
+    r = c.get('/loja/wifi/criar')
+    assert r.status_code == 200 and 'criar conta' in r.get_data(
+        as_text=True).lower()
+    r2 = c.post('/loja/wifi/criar',
+                data=_form(email='web@example.com',
+                           telefone='(11) 98888-7777'),
+                follow_redirects=True)
+    assert r2.status_code == 200 and 'Conta criada' in r2.get_data(
+        as_text=True)
+
+
+@pytest.mark.loja_host
 def test_rota_entrar_loga_cliente(app, visivel):
     from app.services import wifi_portal
     with app.app_context():
