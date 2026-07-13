@@ -76,6 +76,11 @@ def test_loja_sem_vinculo_e_confirmacao(app):
                  for x in out['lojas_sem_vinculo']}
     assert 'NAO confirmado' in problemas['FILIAL NOVA']
     assert 'sem linha' in problemas['FILIAL FANTASMA']
+    # mapa completo lista TODAS as linhas (saudaveis ou nao)
+    completo = {x['company']: x for x in out['lojas_mapa_completo']}
+    assert completo['FILIAL NOVA']['loja'] == 'Loja A'
+    assert completo['FILIAL NOVA']['confirmado'] is False
+    assert completo['FILIAL NOVA']['qtd_vendida_periodo'] == 5.0
 
 
 def test_alvo_morto_fator_zero_e_fracionario_informativo(app):
