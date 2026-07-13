@@ -288,6 +288,11 @@ class Config:
     # (dedup 24h) pra gerar lote novo no Hotspot Manager.
     WIFI_VOUCHER_AVISO_MIN = int(
         os.environ.get('WIFI_VOUCHER_AVISO_MIN', '50'))
+    # Trava dura por LOGIN via RADIUS (13/07/2026): segredo compartilhado
+    # entre a ponte RADIUS (wifi_radius/bridge.py, roda num VPS) e o
+    # endpoint /api/wifi/radius-check. Vazio = endpoint responde 503
+    # (login por RADIUS desligado). NUNCA e o mesmo secret do RADIUS<->OC200.
+    WIFI_RADIUS_TOKEN = os.environ.get('WIFI_RADIUS_TOKEN', '')
 
     # ── Email transacional (Postmark) — 17/06/2026 ────────────────────
     # Envio de senha/convite pra novos usuarios do gestao.*. Vazio =
