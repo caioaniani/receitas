@@ -2366,8 +2366,15 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     # mais a PROJECAO dia a dia (saidas datadas + producao programada -> saldo do
     # dia; marca o 1o dia que fica negativo, "vai faltar").
     bal_idx = {it['receita_id']: it for it in bal['itens']}
+    # Marca linhas de RETORNO em qualquer caminho de injecao (balanco,
+    # override legado via extra_rids, insumo do _explodir_bom): a tela trava
+    # a celula e mostra a tag — retorno nao se produz (dono, 13/07/2026).
+    retorno_ids_cr = {r for (r,) in db.session.query(Receita.retorno_receita_id)
+                      .filter(Receita.retorno_receita_id.isnot(None)).distinct()}
     for rr in receitas_out:
         rid = rr['receita_id']
+        if rid in retorno_ids_cr:
+            rr['retorno'] = True
         rec = receitas.get(rid)
         rr['categoria'] = (rec.categoria or '').strip() if rec else ''
         # Fornada especial: marca as células de dia SEM produção permitida
