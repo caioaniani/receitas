@@ -221,6 +221,7 @@ def _regras_atacado():
 
 
 @main_bp.route('/admin/cardapio-atacado/regras', methods=['GET', 'POST'])
+@login_required
 @admin_required
 def cardapio_atacado_regras():
     """Tela pro dono escrever/mudar as regras do pedido de atacado que saem no
