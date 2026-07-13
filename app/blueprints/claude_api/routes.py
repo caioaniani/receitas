@@ -770,5 +770,17 @@ def seru_debug():
     request real do ponto de vista de PRODUCAO, com o erro exato. O
     container do assistente nao alcanca o host do Seru — esta e a unica
     forma de ele diagnosticar. Read-only, sem segredos (so presenca)."""
+    from datetime import date
+
     from app.services.pdv_saude import debug_seru_status
-    return jsonify(ok=True, **debug_seru_status())
+    dia = None
+    if request.args.get('dia'):
+        try:
+            dia = date.fromisoformat(request.args['dia'])
+        except ValueError:
+            return jsonify(ok=False, erro='dia invalido (YYYY-MM-DD)'), 400
+    try:
+        limit = int(request.args.get('limit', 1))
+    except ValueError:
+        limit = 1
+    return jsonify(ok=True, **debug_seru_status(dia=dia, limit=limit))

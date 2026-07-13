@@ -206,12 +206,17 @@ def contar_pendencias():
     return lojas + prod_seru + sem_loja
 
 
-def debug_seru_status():
+def debug_seru_status(dia=None, limit=1):
     """Saude da integracao Seru (read-only): testa AUTH + 1 request real e
     devolve o erro EXATO da API. Nunca vaza segredo (so presenca/tamanho).
     Fonte unica do /pdv/debug-seru (owner) e do /api/claude/seru-debug
     (sonda do assistente — criada 12/07/2026 quando a API do Seru caiu e o
-    container de dev nao alcanca o host deles)."""
+    container de dev nao alcanca o host deles).
+
+    `dia`/`limit` (13/07/2026, incidente 'so 1 pedido no dia'): testar dias
+    especificos com limit maior mostra QUANTOS pedidos a API enxerga
+    (totalPages/companies) — separa 'API fora' de 'API respondendo sem os
+    dados das lojas' (conta de integracao sem acesso as companies)."""
     import time as _time
 
     from flask import current_app
@@ -247,16 +252,21 @@ def debug_seru_status():
                             'SERU_CLIENT_SECRET no Railway (ver auth.erro).')
         return out
 
-    hoje_d = hoje()
+    dia_alvo = dia or hoje()
+    limit = max(1, min(int(limit or 1), 100))
     t1 = _time.time()
     try:
-        resp = seru.listar_pedidos(hoje_d, hoje_d, page=1, limit=1)
+        resp = seru.listar_pedidos(dia_alvo, dia_alvo, page=1, limit=limit)
         data = resp.get('data') if isinstance(resp, dict) else None
+        companies = sorted({((p.get('company') or {}).get('name') or '?')
+                            for p in (data or [])})
         out['request'] = {
             'ok': True, 'ms': int((_time.time() - t1) * 1000),
             'total_pages': (resp or {}).get('totalPages'),
             'n_no_page': len(data or []),
-            'dia_testado': hoje_d.isoformat(),
+            'limit': limit,
+            'companies_na_pagina': companies,
+            'dia_testado': dia_alvo.isoformat(),
         }
         out['conclusao'] = ('API OK — auth e request funcionaram. Se a busca '
                             'na tela falha, o problema esta no navegador/'
@@ -264,7 +274,7 @@ def debug_seru_status():
     except Exception as e:  # noqa: BLE001 — o erro cru E o diagnostico
         out['request'] = {'ok': False, 'erro': str(e)[:400],
                           'ms': int((_time.time() - t1) * 1000),
-                          'dia_testado': hoje_d.isoformat()}
+                          'dia_testado': dia_alvo.isoformat()}
         out['conclusao'] = ('Auth OK, mas o request de pedidos FALHOU — este '
                             'e o erro real da API (ver request.erro).')
     return out
