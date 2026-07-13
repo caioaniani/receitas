@@ -644,6 +644,13 @@ def create_app(config_class=None):
     # token CLAUDE_API_TOKEN. Sem a env, as rotas respondem 503.
     from app.blueprints.claude_api import claude_api_bp
     app.register_blueprint(claude_api_bp, url_prefix='/api/claude')
+    # API de autenticacao do Wi-Fi das lojas (RADIUS). A ponte RADIUS
+    # (wifi_radius/bridge.py, roda num VPS) chama POST /api/wifi/radius-check
+    # server-to-server com Bearer WIFI_RADIUS_TOKEN — CSRF isento como as
+    # demais APIs de token da casa. Sem a env, responde 503.
+    from app.blueprints.wifi_api import wifi_api_bp
+    csrf.exempt(wifi_api_bp)
+    app.register_blueprint(wifi_api_bp, url_prefix='/api/wifi')
     # Copilot WEB desativado em 10/06/2026 — decisao do dono: usar so o
     # Slack bot (servico copilot.py) e o bot pessoal no WhatsApp (bot_bp).
     from app.blueprints.fornecedores import fornecedores_bp
