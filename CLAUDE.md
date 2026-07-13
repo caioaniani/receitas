@@ -1483,6 +1483,31 @@ pelo WHATSAPP e abre no navegador de verdade.
   que já integramos); (c) software controller em VPS público; (d)
   port-forward pro OC200 (NÃO recomendado: expõe admin + CGNAT).
   Decisão do dono pendente.
+- **CAMINHO ESCOLHIDO (dono 13/07/2026): LOGIN via RADIUS.** O dono quis
+  trava dura por LOGIN ("cliente preenche os dados ou faz login pra acessar
+  o wifi"). O External Portal seamless esbarra no certificado do OC200 local
+  (o navegador do cliente teria que confiar no HTTPS auto-assinado do
+  controlador — integradores confirmam "instale um cert válido"; + risco de
+  DNS rebinding no roteador da Vivo). O RADIUS resolve SEM esse problema
+  porque é o OC200 que SAI perguntando (saída pela internet, CGNAT não
+  bloqueia). Arquitetura em 2 peças:
+  - **Endpoint `POST /api/wifi/radius-check`** (`app/blueprints/wifi_api/`,
+    CSRF isento, Bearer `WIFI_RADIUS_TOKEN`): valida e-mail+senha contra
+    `Cliente` (ativo + tem_conta + check_senha). Anti-enumeração (mesma
+    resposta pra senha errada e conta inexistente) + rate limit. Responde
+    503 sem a env. Roda no gestão.opao (host gestão, NÃO os hosts de loja —
+    `/api/wifi` não é `/loja/*`, então a ponte chama a URL do gestão).
+  - **Ponte RADIUS** (`wifi_radius/bridge.py` + README): script standalone
+    ZERO-dependência (só stdlib), roda num VPS (o Railway não expõe UDP).
+    Decripta o User-Password (PAP, RFC 2865), chama o endpoint, devolve
+    Access-Accept/Reject com Message-Authenticator (RFC 3579) +
+    Response Authenticator. Fail-closed (erro = Reject). `--selftest`
+    valida a cripto sem rede. DOIS segredos distintos: `WIFI_RADIUS_SECRET`
+    (OC200↔ponte) e `WIFI_API_TOKEN`=`WIFI_RADIUS_TOKEN` (ponte↔gestão).
+  - Cliente cria conta em `/loja/cadastrar` (já existe; email+senha) e loga
+    no wifi com ela. Config Omada: RADIUS Profile (IP do VPS:1812 + secret)
+    + portal auth = RADIUS + Pre-Auth Access liberando opao.online/WhatsApp.
+  - Testes: `tests/test_wifi_radius.py` (endpoint + cripto da ponte).
 
 ## Bot de atendimento — hardening 02/07/2026 (4 pacotes)
 
