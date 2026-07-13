@@ -735,13 +735,15 @@
                 {% set fechado = c.data in fechados %}
                 {% set env_dia = ordem_enviada.get(c.data) %}
                 {% set difere_cel = env_dia is not none and r.receita_id in difere.get(c.data, ()) %}
-                <td class="cel {% if c.data == crono.hoje %}hoje-col{% endif %}{% if r.insumo %} cel-insumo{% endif %}{% if c.bloqueado %} cel-bloq{% endif %}{% if fechado %} cel-fechada{% endif %}{% if c.data in r.risco_datas %} cel-risco{% endif %}{% if r.insumo_sem_vespera and c.data in r.insumo_sem_vespera.dias %} cel-vespera{% endif %}"
+                <td class="cel {% if c.data == crono.hoje %}hoje-col{% endif %}{% if r.insumo or r.retorno %} cel-insumo{% endif %}{% if c.bloqueado %} cel-bloq{% endif %}{% if fechado %} cel-fechada{% endif %}{% if c.data in r.risco_datas %} cel-risco{% endif %}{% if r.insumo_sem_vespera and c.data in r.insumo_sem_vespera.dias %} cel-vespera{% endif %}"
                     {% if c.data in r.risco_datas %}title="Entrega firme deste dia sem produto — aumente a produção dos dias anteriores (contando o lead)"{% elif c.bloqueado %}title="Fornada especial produz só quinta/sexta/sábado — a venda de sex/sáb/dom sai da véspera."{% elif fechado %}title="Dia fechado com o cadeado (🔒) — reabra no cabeçalho do dia para editar."{% endif %}
                     data-rid="{{ r.receita_id }}" data-data="{{ c.data }}"
                     data-fornadas="{{ c.fornadas if c.fornadas is not none else '' }}">
                     <input type="number" min="0" inputmode="numeric"
                            class="cel-input{% if not c.qtd %} zerada{% endif %}" value="{{ c.qtd or 0 }}"
-                           {% if r.insumo %}readonly tabindex="-1"
+                           {% if r.retorno %}readonly tabindex="-1"
+                           title="Receita de retorno não se produz — o estoque entra por devolução das lojas (sobras), não por fornada."
+                           {% elif r.insumo %}readonly tabindex="-1"
                            title="Calculado automaticamente a partir do produto final que consome este insumo. Pra mudar, edite a produção do PRODUTO (ex: o croissant), não o insumo."
                            {% elif c.bloqueado %}readonly tabindex="-1"
                            title="Fornada especial produz só quinta/sexta/sábado — edite um desses dias."
