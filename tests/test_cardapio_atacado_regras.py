@@ -68,5 +68,8 @@ def test_impressao_mostra_todas_categorias(app, admin_user):
     """O CSS de print revela todas as .cat-section (antes só a ativa saía)."""
     c = _login(app, admin_user)
     body = c.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    # Frouxo de propósito: trava o COMPORTAMENTO (print revela as categorias)
+    # sem acoplar ao espaçamento exato do CSS.
     assert '@media print' in body
-    assert '.cat-section { display: block !important' in body
+    import re
+    assert re.search(r'\.cat-section\s*\{[^}]*display:\s*block\s*!important', body)
