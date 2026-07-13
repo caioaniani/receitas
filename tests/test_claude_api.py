@@ -436,3 +436,61 @@ def test_deploy_info_exige_token_e_responde(app, monkeypatch):
     assert resp.status_code == 200
     d = resp.get_json()
     assert d['ok'] is True and d['commit'] == 'abc123'
+
+
+def test_custos_devolve_receitas_produtos_e_mps(app):
+    """Sonda /custos (13/07/2026, planilha "Custos faltantes"): custo
+    calculado de receita, custo de produto (composição/direto) e custo
+    unitário de MP com última entrada precificada."""
+    from datetime import datetime
+
+    from app.models import (
+        MateriaPrima,
+        MovimentacaoEstoque,
+        Produto,
+        ProdutoItem,
+        ReceitaIngrediente,
+    )
+
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    client = app.test_client()
+    assert client.get('/api/claude/custos').status_code == 401
+
+    mp = MateriaPrima(nome='Nutella Balde 3kg', unidade='un',
+                      custo_por_kg=120.0, fornecedor='Atacadao')
+    rec = Receita(nome='Croissant Teste', categoria='Paes',
+                  rendimento_qtd=10, rendimento_unidade='un',
+                  peso_base=1000.0)
+    db.session.add_all([mp, rec])
+    db.session.flush()
+    db.session.add(ReceitaIngrediente(receita_id=rec.id, tipo='mp_un',
+                                      ingrediente_nome=mp.nome,
+                                      porcentagem=2.0, eh_base=False))
+    prod = Produto(nome='Kit Teste', ativo=True, custo_embalagem=2.0)
+    db.session.add(prod)
+    db.session.flush()
+    db.session.add(ProdutoItem(produto_id=prod.id, tipo='mp',
+                               materia_prima_id=mp.id,
+                               item_nome=mp.nome, quantidade=1))
+    db.session.add(MovimentacaoEstoque(
+        materia_prima_id=mp.id, tipo='entrada', quantidade=3,
+        preco_unitario=118.5, data=datetime(2026, 7, 10, 9, 0)))
+    db.session.commit()
+
+    resp = client.get('/api/claude/custos',
+                      headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True
+
+    r = next(x for x in d['receitas'] if x['nome'] == 'Croissant Teste')
+    assert r['custo_unitario'] > 0
+
+    p = next(x for x in d['produtos'] if x['nome'] == 'Kit Teste')
+    assert p['n_itens'] == 1 and p['custo'] is not None
+    # 1 un de MP a R$120 + R$2 de embalagem
+    assert abs(p['custo'] - 122.0) < 0.01
+
+    m = next(x for x in d['materias_primas'] if x['nome'] == 'Nutella Balde 3kg')
+    assert m['custo_unitario'] == 120.0
+    assert m['ultima_entrada']['preco_unitario'] == 118.5
