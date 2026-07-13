@@ -695,12 +695,17 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         # subproducao dos dias mistos.
         demanda = int(ceil(demanda_soma.get(rid, 0.0)))
         produzir = max(0, demanda - est_efetivo)
+        # Retorno nunca sugere producao (nem por firme): so entra por
+        # devolucao. A linha segue vivel pra visibilidade do estoque.
+        if rid in retorno_ids:
+            produzir = 0
         lim = caps_retorno.get(rid)
         lim_aplicado = None
         if lim is not None and produzir > lim['cap']:
             produzir = lim['cap']
             lim_aplicado = lim
         itens.append({
+            'retorno': rid in retorno_ids,
             'limitado_por_retorno': lim_aplicado,
             'receita_id': rid,
             'nome': rec.nome,
