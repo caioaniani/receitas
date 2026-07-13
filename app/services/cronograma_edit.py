@@ -191,10 +191,22 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
     datas = [date.fromisoformat(c['data']) for c in rr['por_dia']]
     if alvo not in datas:
         return None
+    # Receita de RETORNO não se produz (dono, 13/07/2026): o estoque dela
+    # entra por devolução das lojas, nunca por fornada. Recusa a edição por
+    # QUALQUER caminho (grid, mão-dupla do editar-plano, IA-aplicar) — um
+    # override qtd>0 re-injetaria a linha e ela fluiria pro plano do padeiro.
+    from app.models import Receita
+    eh_retorno = (db.session.query(Receita.id)
+                  .filter(Receita.retorno_receita_id == int(receita_id))
+                  .first() is not None)
+    if eh_retorno:
+        return {'erro': 'receita_retorno',
+                'msg': 'Receita de retorno não se produz — o estoque dela '
+                       'entra por devolução das lojas (sobras que voltam), '
+                       'não por fornada.'}
     # Fornada especial: produção só qui/sex/sáb (decisão do dono 06/07/2026).
     # Recusa a edição em dia bloqueado ANTES de salvar — a tela já trava a
     # célula, mas o guard vale pra qualquer chamador (defesa em profundidade).
-    from app.models import Receita
     from app.services.previsao_producao import producao_permitida_no_dia
     rec = db.session.get(Receita, int(receita_id))
     if not producao_permitida_no_dia(rec, alvo):
