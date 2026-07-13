@@ -169,6 +169,23 @@ def auditar(dias=14):
     out['lojas_sem_vinculo'] = sorted(
         lojas_ruins, key=lambda x: -x['qtd_vendida_periodo'])
 
+    # Mapa COMPLETO de lojas (13/07/2026, incidente das companies no
+    # painel do Colibri): todas as linhas do SeruLojaMap, saudaveis ou
+    # nao — responde "qual company aponta pra qual loja e em que estado"
+    # sem depender de print da tela.
+    out['lojas_mapa_completo'] = [{
+        'company': s.seru_company_name,
+        'company_id': s.seru_company_id,
+        'cnpj': s.seru_company_document,
+        'loja': s.loja.nome if s.loja else None,
+        'confirmado': bool(s.confirmado_em),
+        'ignorada': bool(s.ignorar),
+        'auto_fuzzy': bool(s.auto_match),
+        'qtd_vendida_periodo': float(
+            vend_loja.get(s.seru_company_name, 0) or 0),
+    } for s in SeruLojaMap.query.order_by(
+        SeruLojaMap.seru_company_name).all()]
+
     # 2/3) Mapas do canal seru: pendentes/ignorados com venda no periodo.
     mapas = VendaMapa.query.filter_by(canal='seru').all()
     por_nome = {}
