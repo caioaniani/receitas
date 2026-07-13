@@ -229,6 +229,39 @@ def validar_form(form):
     return dados, erros
 
 
+def criar_conta_direta(dados):
+    """Cria (ou detecta) a conta do cliente direto do form do Wi-Fi — modo
+    RADIUS (13/07/2026), SEM a dança do WhatsApp: o cliente cadastra e depois
+    loga no Wi-Fi com e-mail+senha. `dados` = saída de validar_form.
+
+    Espelha a segurança do `/loja/cadastrar` contra sequestro de pedido feito
+    como guest. Retorna (status, cliente):
+      'criada'    → conta nova criada (já pode logar no Wi-Fi);
+      'ja_existe' → e-mail já tem conta com senha (é só entrar);
+      'verificar' → e-mail existe como guest → link de verificação no e-mail
+                    (o guest reclama a conta só pela caixa de entrada dele)."""
+    from app.models import Cliente
+    from app.utils import agora
+    email = dados['email']
+    c = Cliente.query.filter(db.func.lower(Cliente.email) == email).first()
+    if c and c.senha_hash:
+        return 'ja_existe', c
+    if c:
+        from app.services import loja_auth
+        loja_auth.iniciar_verificacao_cadastro(
+            c, dados['nome'], dados['telefone'], dados['senha'])
+        return 'verificar', None
+    c = Cliente(nome=dados['nome'], email=email, telefone=dados['telefone'],
+                aniversario_dia=dados['aniversario_dia'],
+                aniversario_mes=dados['aniversario_mes'],
+                nascimento_ano=dados['nascimento_ano'],
+                aceite_lgpd_em=agora())
+    c.set_senha(dados['senha'])
+    db.session.add(c)
+    db.session.commit()
+    return 'criada', c
+
+
 def criar_sessao(dados, params_omada=None):
     """Cria a sessão pendente do portal. `dados` = saída de validar_form.
     Retorna a sessão (commitada)."""
