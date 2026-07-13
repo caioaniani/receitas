@@ -600,13 +600,27 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                                           dias_calendario_janela)
                       for rid in receitas}
 
+    # Receitas de RETORNO (destino de retorno_receita_id) NAO sao produziveis
+    # — o estoque delas entra por devolucao das lojas, nunca por fornada. No
+    # motor=vendas elas ganhavam historico de venda PROPRIO (a venda do
+    # Croissant de Nutella baixa o retorno DA LOJA; a coleta de retirada
+    # tambem gera movimento) e viravam "previsto 164 → produzir 164" no grid
+    # (bug pego pelo dono 13/07/2026). A demanda de venda delas e servida
+    # pelo estoque de retorno DA LOJA (reposto pela conversao de sobras), nao
+    # pela industria — aqui previsto e produzir ficam SEMPRE zerados; o firme
+    # (pedido real, se existir) continua visivel na demanda.
+    retorno_ids = {r for (r,) in db.session.query(Receita.retorno_receita_id)
+                   .filter(Receita.retorno_receita_id.isnot(None)).distinct()}
+
     previsto = defaultdict(float)
     demanda_soma = defaultdict(float)
     for rid in receitas:
         rid_dow = qtd_dow.get(rid, {})
         rid_dow_v = qtd_dow_v.get(rid, {}) if motor != 'pedidos' else {}
-        usa_p = motor in ('pedidos', 'maior') and bool(datas_total.get(rid))
-        usa_v = motor in ('vendas', 'maior') and bool(datas_v.get(rid))
+        usa_p = (motor in ('pedidos', 'maior') and bool(datas_total.get(rid))
+                 and rid not in retorno_ids)
+        usa_v = (motor in ('vendas', 'maior') and bool(datas_v.get(rid))
+                 and rid not in retorno_ids)
         L = lead.get(rid, 0)
         dias_rid = [inicio_d + timedelta(days=L + i)
                     for i in range(horizonte_dias)]
