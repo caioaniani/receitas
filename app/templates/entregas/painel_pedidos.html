@@ -676,14 +676,16 @@
         (L.veiculo ? ' · ' + esc(L.veiculo) : '') + '</div>' +
         (L.priority_fee ? '<div class="lala-fee">⚡ Gorjeta ativa: R$ ' +
           esc(L.priority_fee) + '</div>' : '') +
-        (L.motorista ? '<div class="lala-mot">👤 ' + esc(L.motorista) +
-          (L.motorista_fone ? ' · ' + esc(L.motorista_fone) : '') +
-          (L.motorista_fone && !L.encerrada
-            ? ' <button type="button" class="lala-btn" data-lala="whats-mot"' +
-              ' data-id="' + L.id + '"' +
-              ' title="Conversar com o motoboy pelo WhatsApp (abre no painel' +
-              ' de atendimento)">💬 Chamar</button>'
-            : '') + '</div>' : '') +
+        (L.motorista || L.motorista_fone
+          ? '<div class="lala-mot">👤 ' + esc(L.motorista || 'Motoboy') +
+            (L.motorista_fone ? ' · ' + esc(L.motorista_fone) : '') +
+            (L.motorista_fone
+              ? ' <button type="button" class="lala-btn" data-lala="whats-mot"' +
+                ' data-id="' + L.id + '"' +
+                ' title="Conversar com o motoboy pelo WhatsApp (abre no painel' +
+                ' de atendimento)">💬 Chamar</button>'
+              : '') + '</div>'
+          : '') +
         (L.share_link ? '<div><a class="lala-link" target="_blank" href="' +
           esc(L.share_link) + '">📡 Acompanhar entrega</a></div>' : '');
       // Acelerar (priority fee): só enquanto procura entregador. Dá pra
