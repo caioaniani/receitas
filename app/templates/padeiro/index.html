@@ -232,6 +232,7 @@
     <a class="dnav" href="{{ url_for('padeiro.index', data=dia_anterior) }}">← Dia anterior</a>
     {% if not eh_hoje %}<a class="dnav hoje" href="{{ url_for('padeiro.index') }}">Hoje</a>{% endif %}
     <a class="dnav" href="{{ url_for('padeiro.index', data=dia_seguinte) }}">Dia seguinte →</a>
+    <a class="dnav" href="{{ url_for('padeiro.fichas') }}">🍞 Fichas de preparo</a>
     <a class="dnav" style="background:#8a5a2b;"
        href="{{ url_for('padeiro.lousa') }}">🖍 Lousa{% if n_lousa %} ({{ n_lousa }}){% endif %}</a>
   </div>
