@@ -28,6 +28,39 @@ logger = logging.getLogger(__name__)
 
 # Cache do access token curto (gerado a partir do refresh)
 _token_cache = {'value': None, 'expira_em': 0}
+
+# Tentativas EXTRAS em falha transitoria do Dropbox: rede (conexao caida,
+# timeout) e 5xx (Sentry 14/07/2026: create_shared_link 500 — a NF do Slack
+# ficava sem imagem pra sempre por um solucao momentaneo deles). Mesmo
+# padrao do cliente Seru (`seru._get`).
+_RETRIES_REDE = 2
+
+
+def _com_retry_rede(fn, rotulo):
+    """Executa `fn()` (que devolve um Response) re-tentando em
+    ConnectionError/Timeout/5xx com backoff curto (0,5s / 1,5s). Respostas
+    nao-5xx (incl. 4xx) voltam pro chamador tratar como antes."""
+    ultimo = None
+    for tentativa in range(_RETRIES_REDE + 1):
+        if tentativa:
+            time.sleep(0.5 * (3 ** (tentativa - 1)))
+        try:
+            r = fn()
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout) as e:
+            ultimo = e
+            logger.warning('Dropbox %s: falha de rede (tentativa %d/%d): %s',
+                           rotulo, tentativa + 1, _RETRIES_REDE + 1,
+                           str(e)[:200])
+            continue
+        if r.status_code >= 500:
+            ultimo = RuntimeError(f'{rotulo} falhou: {r.status_code}')
+            logger.warning('Dropbox %s: %s (tentativa %d/%d): %s',
+                           rotulo, r.status_code, tentativa + 1,
+                           _RETRIES_REDE + 1, r.text[:200])
+            continue
+        return r
+    raise ultimo
 _token_lock = threading.Lock()
 
 
