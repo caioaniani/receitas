@@ -172,10 +172,13 @@ def upload_publico(file_bytes, dropbox_path, *, mode='add', autorename=True):
             timeout=30,
         )
 
-    r = _do_upload()
+    # Retry só de rede/5xx: upload pode, no pior caso, deixar um arquivo
+    # duplicado `(1)` no Dropbox se o 500 tiver gravado — inofensivo (o
+    # chamador referencia o path que retornou 200). 4xx segue sem retry.
+    r = _com_retry_rede(_do_upload, 'upload')
     if r.status_code == 401:
         _invalidar_cache()
-        r = _do_upload()
+        r = _com_retry_rede(_do_upload, 'upload')
     if r.status_code != 200:
         logger.warning('Dropbox upload falhou: %s %s', r.status_code, r.text[:200])
         raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
@@ -375,10 +378,13 @@ def _upload_simples(file_bytes, dropbox_path):
             timeout=120,
         )
 
-    r = _do_upload()
+    # Retry só de rede/5xx: upload pode, no pior caso, deixar um arquivo
+    # duplicado `(1)` no Dropbox se o 500 tiver gravado — inofensivo (o
+    # chamador referencia o path que retornou 200). 4xx segue sem retry.
+    r = _com_retry_rede(_do_upload, 'upload')
     if r.status_code == 401:
         _invalidar_cache()
-        r = _do_upload()
+        r = _com_retry_rede(_do_upload, 'upload')
     if r.status_code != 200:
         logger.warning('Dropbox upload falhou: %s %s', r.status_code, r.text[:200])
         raise RuntimeError(f'Upload Dropbox falhou: {r.status_code}')
