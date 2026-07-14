@@ -240,6 +240,8 @@ def alertar_endereco_falho(endereco, cep=None, contato=None,
             return
         app = current_app._get_current_object()
         texto = _texto_endereco_falho(endereco, cep_fmt, contato, motivo)
-        _POOL.submit(_enviar_direto, app, texto)
+        # Lalamove = pedido JÁ PAGO cujo motoboy não saiu: isento do teto/hora
+        # global do Z-API (nunca pode ser segurado por flood do endpoint público).
+        _POOL.submit(_enviar_direto, app, texto, motivo == 'lalamove')
     except Exception:  # noqa: BLE001
         logger.exception('loja_alerta: falha ao agendar alerta de endereco')
