@@ -922,10 +922,13 @@ def debug_envio_whatsapp(telefone):
                           for c in convs[:3]]}
 
 
-def iniciar_conversa_whatsapp(telefone, nome, params):
+def iniciar_conversa_whatsapp(telefone, nome, params,
+                              template_nome=None, template_corpo=None):
     """Abre (ou reusa) uma conversa de WhatsApp com o cliente e SEMPRE manda
     o template aprovado. `params` = valores posicionais do template (ex:
-    [nome, codigo_pedido]).
+    [nome, codigo_pedido]). `template_nome`/`template_corpo` sobrepõem o
+    template padrão (ex.: template do motoboy Lalamove, 14/07/2026) —
+    None = CHATWOOT_WHATSAPP_TEMPLATE/_CORPO de sempre.
 
     SEMPRE template, mesmo em conversa reusada (fix 11/07/2026): conversa
     "aberta" no Chatwoot NAO significa janela de 24h aberta na Meta — a
