@@ -556,3 +556,119 @@ def test_janela_express_por_distancia():
         DISTANCIA_EXPRESS_2H_KM + 0.1) == JANELA_EXPRESS_LONGE
     assert janela_express_para_distancia(
         DISTANCIA_EXPRESS_2H_KM) == JANELA_EXPRESS_LONGE
+
+
+# ── CPF OU CNPJ no checkout (13/07/2026, pedido do dono) ──────────────
+
+def test_cnpj_valido_aceita_cnpj_real():
+    from app.services.loja_checkout import _cnpj_valido
+    assert _cnpj_valido('11222333000181') is True
+    assert _cnpj_valido('11.222.333/0001-81') is True  # com máscara
+    assert _cnpj_valido('06990590000123') is True
+
+
+def test_cnpj_valido_rejeita_invalido():
+    from app.services.loja_checkout import _cnpj_valido
+    assert _cnpj_valido('11111111111111') is False  # sequência igual
+    assert _cnpj_valido('11222333000182') is False  # DV errado
+    assert _cnpj_valido('123') is False
+    assert _cnpj_valido('') is False
+
+
+def test_cpf_cnpj_valido_combina_os_dois():
+    from app.services.loja_checkout import _cpf_cnpj_valido
+    assert _cpf_cnpj_valido('52998224725') is True        # CPF
+    assert _cpf_cnpj_valido('11.222.333/0001-81') is True  # CNPJ
+    assert _cpf_cnpj_valido('122223330001') is False       # 12 dígitos
+    assert _cpf_cnpj_valido('') is False
+
+
+def test_criar_pedido_aceita_cnpj_e_grava_digitos(app):
+    """Cliente PJ compra pelo site: CNPJ passa na validação e é gravado
+    só com dígitos no MESMO campo `Cliente.cpf` (String(14) — 14 dígitos
+    de CNPJ cabem exatos, sem migração)."""
+    from app.extensions import db
+    from app.models import Cliente
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
+        form = {'nome': 'Maria', 'sobrenome': 'Silva', 'email': 'pj@x.com',
+                'cpf': '11.222.333/0001-81', 'aceite_lgpd': '1',
+                'modo_entrega': 'retirada', 'loja_id': str(loja.id),
+                'data_entrega': data, 'janela_entrega': '08:00–09:00'}
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert erros == []
+        cli = Cliente.query.filter_by(email='pj@x.com').first()
+        assert cli.cpf == '11222333000181'
+
+
+def test_criar_pedido_rejeita_documento_invalido(app):
+    """12 dígitos (nem CPF nem CNPJ) e CNPJ com DV errado são recusados."""
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
+        for doc in ('122223330001', '11222333000182'):
+            form = {'nome': 'Maria', 'sobrenome': 'Silva', 'email': 'x@x.com',
+                    'cpf': doc, 'aceite_lgpd': '1',
+                    'modo_entrega': 'retirada', 'loja_id': str(loja.id),
+                    'data_entrega': data, 'janela_entrega': '08:00–09:00'}
+            pedido, erros = loja_checkout.criar_pedido(
+                form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+            assert pedido is None
+            assert any('cnpj' in e.lower() for e in erros)
+
+
+def test_payload_customer_cnpj_vira_company(app):
+    """Pagar.me exige type='company' + document_type='cnpj' pra PJ."""
+    from app.extensions import db
+    from app.models import Cliente, PedidoOnline
+    from app.services import pagarme
+    with app.app_context():
+        cli = Cliente(nome='Padoca LTDA', email='pj2@x.com',
+                      cpf='11222333000181')
+        db.session.add(cli)
+        db.session.flush()
+        ped = PedidoOnline(cliente_id=cli.id,
+                           nome_cliente='Padoca LTDA', email_cliente='pj2@x.com',
+                           telefone_cliente='11988887777',
+                           modo_entrega='retirada',
+                           valor_total=Decimal('20'))
+        db.session.add(ped)
+        db.session.commit()
+        payload = pagarme._payload_customer(ped)
+        assert payload['document'] == '11222333000181'
+        assert payload['document_type'] == 'cnpj'
+        assert payload['type'] == 'company'
+
+
+def test_nf_tiny_cnpj_vira_pessoa_juridica(app):
+    """NF do Tiny: CNPJ no cadastro → tipo_pessoa 'J' (CPF continua 'F')."""
+    from app.extensions import db
+    from app.models import Cliente, PedidoOnline
+    from app.services import tiny_nf
+    with app.app_context():
+        cli = Cliente(nome='Padoca LTDA', email='pj3@x.com',
+                      cpf='11222333000181')
+        db.session.add(cli)
+        db.session.flush()
+        ped = PedidoOnline(cliente_id=cli.id,
+                           nome_cliente='Padoca LTDA', email_cliente='pj3@x.com',
+                           telefone_cliente='11988887777',
+                           modo_entrega='retirada',
+                           valor_total=Decimal('20'))
+        db.session.add(ped)
+        db.session.commit()
+        payload = tiny_nf._payload_cliente(ped)
+        assert payload['tipo_pessoa'] == 'J'
+        assert payload['cpf_cnpj'] == '11222333000181'
+        cli.cpf = '52998224725'
+        db.session.commit()
+        assert tiny_nf._payload_cliente(ped)['tipo_pessoa'] == 'F'
