@@ -60,11 +60,11 @@
         <input type="tel" name="telefone" inputmode="tel"
                value="{{ form.get('telefone', '') }}">
       </label>
-      <label>CPF
+      <label>CPF ou CNPJ
         <input type="text" name="cpf" id="cpf" inputmode="numeric"
-               placeholder="000.000.000-00" maxlength="14"
+               placeholder="000.000.000-00" maxlength="18"
                required value="{{ form.get('cpf', '') }}">
-        <small class="text-muted">Necessário pra o pagamento Pix e a nota fiscal.</small>
+        <small class="text-muted">Necessário para o pagamento Pix e a nota fiscal. Empresa? Informe o CNPJ.</small>
       </label>
     </div>
 
