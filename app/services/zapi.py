@@ -7,6 +7,8 @@ Cadastro/setup: https://z-api.io/
 Env vars: ZAPI_INSTANCE_ID, ZAPI_TOKEN, ZAPI_CLIENT_TOKEN (opcional).
 """
 import logging
+import threading
+import time
 
 import requests
 from flask import current_app
@@ -14,6 +16,79 @@ from flask import current_app
 logger = logging.getLogger(__name__)
 
 BASE = 'https://api.z-api.io'
+
+# ── Teto GLOBAL de envio/hora (anti-spam do WhatsApp/Meta) ──────────────────
+# Ponto ÚNICO por onde TODO envio passa (alertas, vigias, digest, magic-link de
+# motorista). O WhatsApp restringe número que dispara automático em volume; um
+# vigia em loop ou bug podia inundar a linha e derrubá-la. Aqui um teto por hora
+# barra o flood. In-memory POR WORKER (cap efetivo = teto × nº de workers gunicorn
+# — aceitável, mesmo padrão dos tetos por-feature). Kill-switch: ZAPI_THROTTLE=0.
+#
+# GARANTIAS: (1) mensagem CRÍTICA (critico=True: Lalamove/pedido pago) NUNCA é
+# segurada; (2) o que passar do teto NÃO some em silêncio — vira UM digest ao dono
+# no próximo envio liberado (regra do dono: nada de alerta perdido calado).
+_JANELA_SEG = 3600.0
+_throttle_lock = threading.Lock()
+_env_ts = []            # monotonic() de cada envio real na janela
+_seg_previews = []      # amostra (bounded) das mensagens seguradas
+_seg_n = 0              # contagem REAL de seguradas desde o último digest
+
+
+def _teto_hora():
+    try:
+        return max(1, int(current_app.config.get('ZAPI_MAX_HORA', 30)))
+    except (TypeError, ValueError):
+        return 30
+
+
+def _throttle_ativo():
+    """Teto ligado? Default ON em prod, OFF sob TESTING (sem override explícito)
+    — o estado é global de módulo e vazaria entre os ~2500 testes que compartilham
+    o app. Os testes do teto setam ZAPI_THROTTLE='1' de propósito."""
+    cfg = current_app.config
+    v = cfg.get('ZAPI_THROTTLE')
+    if v is None:
+        return not cfg.get('TESTING')
+    return str(v).strip().lower() not in ('0', 'false', 'no', '')
+
+
+def _prune_locked(agora):
+    limite = agora - _JANELA_SEG
+    while _env_ts and _env_ts[0] < limite:
+        _env_ts.pop(0)
+
+
+def _montar_digest_locked():
+    """Resumo do que foi segurado + zera o buffer. Chamar sob _throttle_lock."""
+    global _seg_n
+    n, amostra = _seg_n, list(_seg_previews[-5:])
+    _seg_n = 0
+    _seg_previews.clear()
+    linhas = [f'⚠ {n} alerta(s) automático(s) foram SEGURADOS na última hora '
+              'pra proteger o número contra o anti-spam do WhatsApp.']
+    if amostra:
+        linhas.append('Amostra do que ficou retido:')
+        linhas += [f'• {p}' for p in amostra]
+    linhas.append('Se isso repetir, algum vigia pode estar em loop — confira os '
+                  'vigias e /admin/frete-sensores.')
+    return '\n'.join(linhas)
+
+
+def _throttle_decidir(mensagem, critico):
+    """Sob o lock: decide se pode enviar agora e se há digest de seguradas a
+    liberar antes. Retorna (pode_enviar, digest_ou_None). NÃO faz I/O."""
+    global _seg_n
+    agora = time.monotonic()
+    with _throttle_lock:
+        _prune_locked(agora)
+        if critico or len(_env_ts) < _teto_hora():
+            _env_ts.append(agora)
+            return True, (_montar_digest_locked() if _seg_n else None)
+        # Passou do teto e não é crítico: segura (vira digest depois).
+        _seg_n += 1
+        _seg_previews.append(' '.join(str(mensagem or '').split())[:60])
+        del _seg_previews[:-8]
+        return False, None
 
 
 def disponivel():
