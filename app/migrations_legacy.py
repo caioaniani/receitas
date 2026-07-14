@@ -1856,6 +1856,9 @@ def _migrate_sqlite(app):
     if cols_po and 'motivo_cancelamento' not in cols_po:
         cursor.execute("ALTER TABLE pedido_online ADD COLUMN "
                        "motivo_cancelamento VARCHAR(40)")
+    if cols_po and 'ga_client_id' not in cols_po:
+        cursor.execute("ALTER TABLE pedido_online ADD COLUMN "
+                       "ga_client_id VARCHAR(64)")
 
     # seru_produto_map.fator_quantidade
     cursor.execute("PRAGMA table_info(seru_produto_map)")
