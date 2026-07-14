@@ -18,9 +18,14 @@ from app.utils import hoje as hoje_brt
 @login_required
 @admin_required
 def custos():
+    from app.services import impostos
+
     resultado = calcular_custos_receitas()
     custos_map = resultado.get('custos', {})
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    # Margens LÍQUIDAS: impostos sobre venda descontados do preço
+    # (app/services/impostos.py — fonte única, dono 13/07/2026).
+    carga = impostos.carga_venda()
 
     dados = []
     for r in receitas:
@@ -29,9 +34,9 @@ def custos():
         preco_loja = r.preco_loja or 0
         preco_site = r.preco_site or 0
 
-        margem_atac = ((preco_atac - custo_unit) / preco_atac * 100) if preco_atac else 0
-        margem_loja = ((preco_loja - custo_unit) / preco_loja * 100) if preco_loja else 0
-        margem_site = ((preco_site - custo_unit) / preco_site * 100) if preco_site else 0
+        margem_atac = impostos.margem_liquida(preco_atac, custo_unit, carga) or 0
+        margem_loja = impostos.margem_liquida(preco_loja, custo_unit, carga) or 0
+        margem_site = impostos.margem_liquida(preco_site, custo_unit, carga) or 0
 
         dados.append({
             'nome': r.nome,
