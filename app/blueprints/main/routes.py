@@ -5,6 +5,7 @@ from flask import (
     Response,
     abort,
     current_app,
+    flash,
     jsonify,
     redirect,
     render_template,
@@ -193,7 +194,30 @@ def rentabilidade():
             'margem_site': margem_st,
         })
 
-    return render_template('main/rentabilidade.html', dados=dados)
+    return render_template('main/rentabilidade.html', dados=dados,
+                           impostos=impostos.aliquotas())
+
+
+@main_bp.route('/rentabilidade/impostos', methods=['POST'])
+@login_required
+@admin_required
+def rentabilidade_impostos():
+    """Atualiza as alíquotas de imposto sobre venda (PIS/COFINS/ICMS) usadas
+    nas margens líquidas de TODAS as telas (fonte única em
+    app/services/impostos.py). Só exibição/decisão — não mexe em preço."""
+    from app.services import impostos
+
+    try:
+        a = impostos.salvar_aliquotas(request.form.get('pis'),
+                                      request.form.get('cofins'),
+                                      request.form.get('icms'))
+        flash('Impostos sobre venda atualizados: PIS %.2f%% + COFINS %.2f%% '
+              '+ ICMS %.2f%% = %.2f%% — margens recalculadas.'
+              % (a['pis'], a['cofins'], a['icms'], a['total']), 'success')
+    except ValueError as e:
+        flash('Alíquota inválida (%s): use números entre 0 e 95.' % e,
+              'warning')
+    return redirect(url_for('main.rentabilidade'))
 
 
 # Regras do pedido de ATACADO — texto livre editavel pelo dono (AppConfig),
