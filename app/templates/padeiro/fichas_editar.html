@@ -113,13 +113,13 @@
   <div class="etapa">
     <div class="topo">
       <span class="num">•</span>
-      <input type="text" name="nome[]" required placeholder="Ex: Modelagem">
+      <input type="text" name="nome[]" required maxlength="80" placeholder="Ex: Modelagem">
       <input type="number" name="duracao[]" value="10" min="0" step="5" title="minutos">
       <select name="recurso[]">
         {% with rv = 'padeiro' %}{% include "_etapa_recurso_options.html" %}{% endwith %}
       </select>
     </div>
-    <textarea name="descricao[]" rows="2"
+    <textarea name="descricao[]" rows="2" maxlength="2000"
               placeholder="O que fazer nesta etapa?"></textarea>
     <div class="acoes">
       <button type="button" class="mv" data-dir="-1">▲ subir</button>
