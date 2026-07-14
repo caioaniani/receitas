@@ -148,9 +148,14 @@ def dashboard():
 @main_bp.route('/rentabilidade')
 @login_required
 def rentabilidade():
+    from app.services import impostos
+
     resultado = calcular_custos_receitas()
     custos_receita = resultado['custos']
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    # Impostos sobre venda (PIS/COFINS/ICMS, dono 13/07/2026): lucro/margem
+    # exibidos são LÍQUIDOS — preço × (1 − carga) − custo.
+    carga = impostos.carga_venda()
 
     dados = []
     for r in receitas:
@@ -159,16 +164,16 @@ def rentabilidade():
         custo_total = custo_un * rendimento
 
         preco_at = r.preco_venda or 0
-        lucro_at = preco_at - custo_un if preco_at > 0 else None
-        margem_at = (lucro_at / preco_at * 100) if (preco_at > 0 and lucro_at is not None) else None
+        lucro_at = impostos.lucro_liquido(preco_at, custo_un, carga)
+        margem_at = impostos.margem_liquida(preco_at, custo_un, carga)
 
         preco_lj = r.preco_loja or 0
-        lucro_lj = preco_lj - custo_un if preco_lj > 0 else None
-        margem_lj = (lucro_lj / preco_lj * 100) if (preco_lj > 0 and lucro_lj is not None) else None
+        lucro_lj = impostos.lucro_liquido(preco_lj, custo_un, carga)
+        margem_lj = impostos.margem_liquida(preco_lj, custo_un, carga)
 
         preco_st = r.preco_site or 0
-        lucro_st = preco_st - custo_un if preco_st > 0 else None
-        margem_st = (lucro_st / preco_st * 100) if (preco_st > 0 and lucro_st is not None) else None
+        lucro_st = impostos.lucro_liquido(preco_st, custo_un, carga)
+        margem_st = impostos.margem_liquida(preco_st, custo_un, carga)
 
         dados.append({
             'id': r.id,
