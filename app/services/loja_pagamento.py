@@ -662,6 +662,7 @@ def conciliar_pedido(codigo, aplicar=False):
                 'codigo': codigo, 'status_local': p.status}
     if mudou:
         _emitir_nf_e_enviar(p)  # após commit; isolado
+        _reportar_purchase(p)
     out['acao'] = 'MARCADO PAGO' if mudou else 'já estava pago (no-op)'
     out['status_local'] = p.status
     return out
