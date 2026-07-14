@@ -390,12 +390,17 @@ def api_atendimento_chamar_motorista():
                                 'telefone) — aguarde a Lalamove designar.'}), 400
     nome = (e.motorista_nome or 'Motoboy').strip()
     cfg = current_app.config
+    # Override ATOMICO (achado do revisor): so vale com NOME e CORPO
+    # preenchidos — meio-preenchido faria a thread do Chatwoot mostrar um
+    # texto diferente do que a Meta mandou ao motorista.
+    tpl_mot = (cfg.get('CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY') or '').strip()
+    corpo_mot = (cfg.get('CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY_CORPO')
+                 or '').strip()
+    if not (tpl_mot and corpo_mot):
+        tpl_mot = corpo_mot = None
     res = cw_svc.iniciar_conversa_whatsapp(
         e.motorista_telefone, nome, params=[nome, e.pedido_code],
-        template_nome=(cfg.get('CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY')
-                       or '').strip() or None,
-        template_corpo=(cfg.get('CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY_CORPO')
-                        or '').strip() or None)
+        template_nome=tpl_mot, template_corpo=corpo_mot)
     return jsonify({
         'ok': bool(res.get('ok')),
         'conversation_id': res.get('conversation_id'),
