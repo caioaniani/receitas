@@ -80,9 +80,11 @@
     <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Salvar etapas</button>
     {% if receita.categoria and n_categoria > 1 %}
     {# Aplica ESTAS etapas (as da tela) a todos os produtos da categoria.
-       Fica DENTRO do form principal pra enviar as linhas de etapa junto. #}
+       Fica DENTRO do form principal pra enviar as linhas de etapa junto.
+       Confirm em JS não-inline: categoria com apóstrofo quebrava o handler
+       e a substituição destrutiva saía SEM perguntar. #}
     <button type="submit" name="acao" value="aplicar_categoria" class="btn btn-outline-danger"
-            onclick="return confirm('Aplicar ESTAS etapas a TODOS os {{ n_categoria }} produto(s) da categoria «{{ receita.categoria }}»?\n\nIsso SUBSTITUI as etapas atuais de cada um e não dá pra desfazer.');">
+            id="btn-aplicar-cat" data-categoria="{{ receita.categoria }}" data-n="{{ n_categoria }}">
       <i class="bi bi-diagram-3"></i> Aplicar a toda a categoria «{{ receita.categoria }}» ({{ n_categoria }})
     </button>
     {% endif %}
