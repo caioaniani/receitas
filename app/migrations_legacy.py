@@ -181,6 +181,18 @@ def _migrate_postgres(app):
             if col not in colunas:
                 conn.execute(text(sql))
 
+        # receita_etapa.descricao — passo-a-passo do que fazer em cada etapa,
+        # preenchido pelo padeiro na ficha de preparo (14/07/2026). Alimenta o
+        # fluxograma junto com nome/duracao/equipamento. Commit 1 do procedimento
+        # de 2 commits: schema primeiro, modelo depois.
+        result = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'receita_etapa'"
+        ))
+        cols_re = {row[0] for row in result}
+        if cols_re and 'descricao' not in cols_re:
+            conn.execute(text("ALTER TABLE receita_etapa ADD COLUMN descricao TEXT"))
+
         # Lote de pedido padrao (UMA vez: so se NADA foi configurado ainda — uma
         # vez que o dono mexa em qualquer lote, nunca mais sobrescreve). A loja
         # pede em pacotes: pao frances 50, sourdough 20, croissant almond 15,
