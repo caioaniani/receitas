@@ -190,7 +190,7 @@ def _whitelist_grupos():
     return {g for g in permitidos if g}
 
 
-def enviar_texto(numero, mensagem):
+def enviar_texto(numero, mensagem, *, critico=False, _interno=False):
     """POST /send-text com texto simples. Retorna {'ok': bool, ...}.
 
     Aceita numero de telefone OU ID de grupo ('1203...-group'). Pra
@@ -201,6 +201,11 @@ def enviar_texto(numero, mensagem):
     SEGURANCA: rejeita envio pra destino fora do whitelist
     (`ZAPI_NUMEROS_PERMITIDOS` pra fones, `ZAPI_GRUPOS_PERMITIDOS` +
     destinos configurados pra grupos). Fail-closed.
+
+    `critico=True`: isenta do teto/hora global (Lalamove/pedido pago — nunca
+    segura). `_interno`: uso interno (flush do digest de seguradas) — não
+    reentra no teto. Msg segurada pelo teto retorna {'ok': False,
+    'segurado': True}.
     """
     cfg = current_app.config
     instance_id = (cfg.get('ZAPI_INSTANCE_ID') or '').strip()
