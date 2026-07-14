@@ -21,7 +21,8 @@ def _padeiro(login='padfch'):
 
 
 def _receita(nome='Baguete Ficha', categoria='Paes'):
-    r = Receita(nome=nome, categoria=categoria)
+    r = Receita(nome=nome, categoria=categoria, rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0)
     db.session.add(r)
     db.session.commit()
     return r
