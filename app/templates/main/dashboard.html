@@ -38,7 +38,7 @@
     <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center py-3">
-                <div class="small text-muted">Margem Geral</div>
+                <div class="small text-muted" title="Líquida: receita × (1 − impostos) − custo MP">Margem Geral líq.</div>
                 <div class="fw-bold fs-5 {{ 'text-success' if margem_geral >= 30 else 'text-warning' if margem_geral >= 15 else 'text-danger' }}">
                     {{ "%.0f"|format(margem_geral) }}%
                 </div>
