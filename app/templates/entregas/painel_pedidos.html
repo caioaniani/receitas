@@ -755,9 +755,16 @@
           }).then(function (r) {
             return r.json().catch(function () { return {}; });
           }).then(function (d) {
-            b.disabled = false;
-            b.textContent = '💬 Chamar';
             d = d || {};
+            // Sucesso: botão fica travado com "✓ Chamado" — clicar de novo
+            // re-enviaria o template real ao WhatsApp do motorista (achado
+            // do revisor). No painel sem embed é também o único feedback.
+            if (d.ok) {
+              b.textContent = '✓ Chamado';
+            } else {
+              b.disabled = false;
+              b.textContent = '💬 Chamar';
+            }
             if (d.conversation_id && EMBED) {
               try {
                 window.parent.postMessage({
