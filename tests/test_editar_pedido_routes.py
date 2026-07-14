@@ -85,6 +85,39 @@ def test_editar_post_replace_itens_persiste(
     assert itens[0].estado == 'backup'
 
 
+def test_editar_pedido_com_foto_de_conferencia_nao_quebra(
+        app, cliente, admin_user, loja, catalogo):
+    """Regressão (caso real #396): item com foto de conferência
+    (pedido_item_foto) travava o REPLACE do editar com FK violation — o bulk
+    `Query.delete()` pulava o cascade 'all, delete-orphan' das fotos. Agora o
+    delete é via ORM: a edição passa e a foto do item velho vai junto."""
+    from app.extensions import db
+    from app.models import PedidoItem, PedidoItemFoto
+    p = _pedido_pendente(loja, admin_user, catalogo)
+    item = PedidoItem.query.filter_by(pedido_id=p.id).first()
+    db.session.add(PedidoItemFoto(pedido_item_id=item.id, etapa='saida',
+                                  imagem_url='https://x/f.jpg'))
+    db.session.commit()
+    foto_id = PedidoItemFoto.query.filter_by(pedido_item_id=item.id).first().id
+    _login(cliente)
+
+    nova_data = (date.today() + timedelta(days=2)).strftime('%Y-%m-%d')
+    r = cliente.post(f'/pedidos/{p.id}/editar', data={
+        'data_entrega': nova_data,
+        'observacao': '',
+        'item_id[]': [f'r_{catalogo["receita"].id}'],
+        'item_qtd[]': ['7'],
+        'item_estado[]': [''],
+        'item_obs[]': [''],
+    })
+    assert r.status_code == 302
+    assert r.headers['Location'].endswith(f'/pedidos/{p.id}')
+    itens = PedidoItem.query.filter_by(pedido_id=p.id).all()
+    assert len(itens) == 1 and itens[0].quantidade == 7
+    # A foto do item substituído foi removida pelo cascade (não sobra órfã).
+    assert PedidoItemFoto.query.get(foto_id) is None
+
+
 def test_editar_get_bloqueado_se_status_separado(
         app, cliente, admin_user, loja, catalogo):
     """Pedido em 'separado' redireciona pra detalhe sem renderizar form."""
