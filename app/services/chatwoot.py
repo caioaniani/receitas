@@ -977,8 +977,10 @@ def iniciar_conversa_whatsapp(telefone, nome, params,
 
     cfg = current_app.config
     res = enviar_template(
-        conv_id, (cfg.get('CHATWOOT_WHATSAPP_TEMPLATE') or '').strip(),
-        params, (cfg.get('CHATWOOT_WHATSAPP_TEMPLATE_LANG') or 'pt_BR').strip())
+        conv_id,
+        (template_nome or cfg.get('CHATWOOT_WHATSAPP_TEMPLATE') or '').strip(),
+        params, (cfg.get('CHATWOOT_WHATSAPP_TEMPLATE_LANG') or 'pt_BR').strip(),
+        corpo_template=template_corpo)
     if not res['ok']:
         # A conversa existe, mas o template falhou. Devolve o conv_id (o
         # atendente ve a conversa) + o erro cru pra corrigir o template.
