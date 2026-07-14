@@ -1,0 +1,11 @@
+{# Opções do select "tipo de trabalho" de uma etapa de produção.
+   FONTE ÚNICA — usada pelo editor do admin (receitas/etapas.html) e pela
+   ficha do padeiro (padeiro/fichas_editar.html). Os values casam com
+   RECURSO_MAP em app/services/etapas_receita.py.
+   Uso: {% with rv = 'padeiro' %}{% include "_etapa_recurso_options.html" %}{% endwith %} #}
+<option value="padeiro" {% if rv == 'padeiro' %}selected{% endif %}>✋ Padeiro (mão de obra)</option>
+<option value="amassadeira" {% if rv == 'amassadeira' %}selected{% endif %}>🥣 Amassadeira (máquina)</option>
+<option value="forno" {% if rv == 'forno' %}selected{% endif %}>🔥 Forno (máquina)</option>
+<option value="camara_fria" {% if rv == 'camara_fria' %}selected{% endif %}>❄️ Câmara fria (fermentação)</option>
+<option value="congelar" {% if rv == 'congelar' %}selected{% endif %}>🧊 Congelar (freezer · passo final)</option>
+<option value="descanso" {% if rv == 'descanso' %}selected{% endif %}>⏳ Descanso / fermentação</option>
