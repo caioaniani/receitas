@@ -9,6 +9,8 @@ from datetime import datetime
 from decimal import Decimal
 from unittest.mock import patch
 
+import pytest
+
 from app.extensions import db
 from app.services import analytics_server
 
@@ -154,7 +156,8 @@ def test_webhook_pago_dispara_reporte(app):
         p.status = 'aguardando_pagamento'
         p.pago_em = None
         pag = PagamentoOnline(pedido_id=p.id, metodo='pix',
-                              status='pendente', pagarme_order_id='or_x9')
+                              valor=Decimal('50'), status='pendente',
+                              pagarme_order_id='or_x9')
         db.session.add(pag)
         db.session.commit()
         evento = {'id': 'evt-ana-1', 'type': 'order.paid',
@@ -171,31 +174,39 @@ def test_webhook_pago_dispara_reporte(app):
         rep2.assert_not_called()
 
 
+@pytest.mark.loja_host
 def test_checkout_captura_cookie_ga(app):
     """O POST do checkout grava o client_id do cookie _ga no pedido."""
-    from app.models import PedidoOnline
+    import json as _json
+
+    from app.models import PedidoOnline, Usuario
     from app.services import loja_checkout
+    from tests.test_loja_checkout import _loja, _produto_pub
+
+    # Cliente logado como admin (mesma receita do test_loja_checkout — o
+    # gate de host/visibilidade não é o assunto deste teste).
+    u = Usuario(nome='Admin', login='adm-ga', papel='admin')
+    u.set_senha('x' * 8)
+    db.session.add(u)
+    db.session.commit()
+    prod = _produto_pub(db, nome='Box GA')
+    loja = _loja(db)
     c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(u.id)
+        s['_fresh'] = True
     c.set_cookie('_ga', 'GA1.1.555444333.1720900000')
-    with app.app_context():
-        from tests.test_loja_checkout_v2 import _loja, _produto
-        prod = _produto(db)
-        loja = _loja(db)
-        base = datetime(2026, 6, 17, 10, 0)
-        data = loja_checkout.datas_disponiveis('retirada', base=base)[1]
-        prod_id, loja_id = prod.id, loja.id
-    with patch('app.blueprints.loja.routes._carrinho_sessao',
-               return_value=[{'kind': 'produto', 'id': prod_id, 'qtd': 1}]), \
-            patch('app.services.loja_checkout.agora',
-                  return_value=base):
-        r = c.post('/loja/checkout', data={
-            'nome': 'Maria', 'sobrenome': 'Silva', 'email': 'ga@x.com',
-            'cpf': '52998224725', 'aceite_lgpd': '1',
-            'modo_entrega': 'retirada', 'loja_id': str(loja_id),
-            'data_entrega': data.isoformat(),
-            'janela_entrega': '08:00–09:00'})
+    data = loja_checkout.datas_disponiveis('retirada')[-1].isoformat()
+    r = c.post('/loja/checkout', data={
+        'nome': 'Maria', 'sobrenome': 'Silva', 'email': 'ga@x.com',
+        'telefone': '11988887777', 'cpf': '52998224725',
+        'aceite_lgpd': '1', 'modo_entrega': 'retirada',
+        'loja_id': str(loja.id), 'data_entrega': data,
+        'janela_entrega': '08:00\u201309:00',
+        'itens_json': _json.dumps([{'kind': 'produto', 'id': prod.id,
+                                    'qtd': 1}]),
+    }, follow_redirects=False)
     assert r.status_code in (302, 303)
-    with app.app_context():
-        ped = PedidoOnline.query.filter_by(email_cliente='ga@x.com').first()
-        assert ped is not None
-        assert ped.ga_client_id == '555444333.1720900000'
+    ped = PedidoOnline.query.filter_by(email_cliente='ga@x.com').first()
+    assert ped is not None
+    assert ped.ga_client_id == '555444333.1720900000'
