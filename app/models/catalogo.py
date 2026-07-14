@@ -263,12 +263,15 @@ class ReceitaEtapa(db.Model):
     equipamento = db.Column(db.String(30))
     ativa = db.Column(db.Boolean, nullable=False, default=True,
                       server_default='1')
+    # O QUE fazer na etapa (passo a passo do padeiro — ficha /padeiro/fichas).
+    # ALTER em migrations_legacy deployado ANTES deste modelo (2 commits).
+    descricao = db.Column(db.Text)
 
     def to_dict(self):
         return {
             'id': self.id, 'ordem': self.ordem, 'nome': self.nome,
             'duracao_min': self.duracao_min, 'equipamento': self.equipamento,
-            'ativa': self.ativa,
+            'ativa': self.ativa, 'descricao': self.descricao,
         }
 
     def __repr__(self):
