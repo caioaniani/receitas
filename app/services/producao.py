@@ -442,6 +442,7 @@ def mise_en_place(receita, unidades):
         'duracao_min': e.duracao_min,
         'equipamento': e.equipamento,
         'ativa': e.ativa,
+        'descricao': e.descricao,
     } for e in receita.etapas]
 
     return {
