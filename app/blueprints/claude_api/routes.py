@@ -763,6 +763,80 @@ def auditoria_mapeamentos():
     return jsonify(ok=True, **auditar(dias=dias))
 
 
+@claude_api_bp.route('/site-metricas')
+@_claude_auth_required
+def site_metricas():
+    """Métricas do site/loja própria (13/07/2026, pergunta do dono sobre
+    alcance): funil de pedidos, faturamento por dia, ticket, clientes novos
+    vs recorrentes, top produtos, modos de entrega e sensores de frete.
+    O alcance de VISITAS (GA4/Meta Pixel) vive nos painéis do Google/Meta —
+    aqui devolvemos só se estão configurados. Read-only."""
+    from datetime import datetime, time, timedelta
+
+    from sqlalchemy import func
+
+    from app.extensions import db
+    from app.models import FreteSensor, PedidoOnline
+    from app.services import loja_online_vendas as lov
+    from app.utils import hoje
+
+    dias = max(1, min(request.args.get('dias', 30, type=int), 365))
+    fim = hoje()
+    ini = fim - timedelta(days=dias - 1)
+    ini_dt = datetime.combine(ini, time.min)
+    fim_dt = datetime.combine(fim + timedelta(days=1), time.min)
+
+    fat = lov.faturamento_por_dia(ini, fim)
+    clientes = lov.resumo_clientes(ini, fim)
+    prods = lov.produtos_vendidos(ini, fim)
+    ticket = round(fat['total'] / fat['n_pedidos'], 2) if fat['n_pedidos'] else 0.0
+
+    # Funil por CRIADO no período (pago_em marca conversão; status transita
+    # depois) — mesma conta do auditor (`chatbot_auditor._funil_site`).
+    criados = (PedidoOnline.query
+               .filter(PedidoOnline.criado_em >= ini_dt,
+                       PedidoOnline.criado_em < fim_dt).all())
+    pagos_criados = [p for p in criados if p.pago_em is not None]
+    funil = {
+        'criados': len(criados),
+        'pagos': len(pagos_criados),
+        'cancelados': sum(1 for p in criados if p.status == 'cancelado'),
+        'abandonados': sum(1 for p in criados if p.pago_em is None
+                           and p.status == 'aguardando_pagamento'),
+        'conversao_pct': (round(100.0 * len(pagos_criados) / len(criados), 1)
+                          if criados else None),
+    }
+
+    modos = dict(
+        db.session.query(PedidoOnline.modo_entrega, func.count())
+        .filter(PedidoOnline.pago_em >= ini_dt,
+                PedidoOnline.pago_em < fim_dt,
+                PedidoOnline.status != 'cancelado')
+        .group_by(PedidoOnline.modo_entrega).all())
+
+    sensores = dict(
+        db.session.query(FreteSensor.desfecho, func.count())
+        .filter(FreteSensor.criado_em >= ini_dt,
+                FreteSensor.criado_em < fim_dt)
+        .group_by(FreteSensor.desfecho).all())
+
+    return jsonify(
+        ok=True, dias=dias, inicio=ini.isoformat(), fim=fim.isoformat(),
+        faturamento={'total': fat['total'], 'n_pedidos': fat['n_pedidos'],
+                     'por_dia': {d.isoformat(): v
+                                 for d, v in sorted(fat['por_dia'].items())}},
+        ticket_medio=ticket,
+        clientes=clientes,
+        funil=funil,
+        modos_entrega=modos,
+        top_produtos=prods['produtos'][:15],
+        frete_sensores=sensores,
+        rastreio={'ga4_configurado': bool(current_app.config.get('GA4_ID')),
+                  'meta_pixel_configurado': bool(
+                      current_app.config.get('META_PIXEL_ID'))},
+    )
+
+
 @claude_api_bp.route('/custos')
 @_claude_auth_required
 def custos():
