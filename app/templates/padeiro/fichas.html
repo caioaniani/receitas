@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fichas de preparo</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:#f1f3f5; color:#212529; padding-bottom:50px; }
+  header { background:#212529; color:#fff; padding:12px 20px; display:flex;
+           align-items:center; gap:14px; position:sticky; top:0; z-index:10;
+           flex-wrap:wrap; }
+  header h1 { font-size:21px; margin:0; }
+  header a { color:#fff; text-decoration:none; font-size:15px; background:#495057;
+             padding:9px 14px; border-radius:9px; white-space:nowrap; }
+  .wrap { padding:16px; max-width:900px; margin:0 auto; }
+  .dica { background:#fff3cd; border:1px solid #ffe69c; border-radius:10px;
+          padding:10px 14px; font-size:15px; margin-bottom:14px; }
+  .flash { background:#d1e7dd; border:1px solid #a3cfbb; border-radius:10px;
+           padding:10px 14px; font-size:15px; margin-bottom:14px; }
+  h2.cat { font-size:16px; color:#6c757d; margin:18px 2px 8px; text-transform:uppercase;
+           letter-spacing:.4px; }
+  a.ficha { display:flex; align-items:center; gap:12px; background:#fff;
+            border-radius:12px; padding:14px 16px; margin-bottom:8px;
+            text-decoration:none; color:#212529; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  a.ficha:active { background:#e9ecef; }
+  .ficha .nome { font-size:18px; font-weight:600; flex:1; }
+  .badge { font-size:13px; padding:5px 10px; border-radius:999px; white-space:nowrap; }
+  .b-vazia { background:#f8d7da; color:#842029; }        /* sem etapas */
+  .b-parcial { background:#fff3cd; color:#664d03; }      /* etapas sem passo a passo */
+  .b-ok { background:#d1e7dd; color:#0f5132; }           /* etapas + descrições */
+</style>
+</head>
+<body>
+<header>
+  <h1>🍞 Fichas de preparo</h1>
+  <span style="flex:1;"></span>
+  <a href="{{ url_for('padeiro.index') }}">← voltar ao painel</a>
+</header>
+<div class="wrap">
+  {% with msgs = get_flashed_messages() %}
+    {% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+  <div class="dica">
+    Toque num pão e preencha as <b>etapas de preparo</b> (o que fazer, quanto
+    tempo leva e se é você, a máquina ou descanso). É isso que alimenta o
+    <b>📊 fluxograma</b> e o passo a passo do mise en place.
+  </div>
+
+  {% set ns = namespace(cat=None) %}
+  {% for l in linhas %}
+    {% if l.categoria != ns.cat %}
+      <h2 class="cat">{{ l.categoria }}</h2>
+      {% set ns.cat = l.categoria %}
+    {% endif %}
+    <a class="ficha" href="{{ url_for('padeiro.fichas_editar', id=l.id) }}">
+      <span class="nome">{{ l.nome }}</span>
+      {% if l.n_etapas == 0 %}
+        <span class="badge b-vazia">sem etapas — preencher</span>
+      {% elif l.com_descricao < l.n_etapas %}
+        <span class="badge b-parcial">{{ l.n_etapas }} etapa(s) · {{ l.com_descricao }} com passo a passo</span>
+      {% else %}
+        <span class="badge b-ok">✓ {{ l.n_etapas }} etapa(s) completas</span>
+      {% endif %}
+    </a>
+  {% endfor %}
+  {% if not linhas %}
+  <div class="dica">Nenhuma receita ativa cadastrada.</div>
+  {% endif %}
+</div>
+</body>
+</html>
