@@ -178,17 +178,21 @@ def api_vendas_por_dia():
 @login_required
 @admin_required
 def api_margem_categoria():
-    """Margem média por categoria de receita (preço atacado vs custo)."""
+    """Margem LÍQUIDA média por categoria de receita (preço atacado vs custo,
+    com impostos sobre venda descontados — app/services/impostos.py)."""
     from collections import defaultdict
+
+    from app.services import impostos
     resultado = calcular_custos_receitas()
     custos_map = resultado.get('custos', {})
     receitas = Receita.query.all()
+    carga = impostos.carga_venda()
     cats = defaultdict(list)
     for r in receitas:
         if not r.preco_venda or r.preco_venda <= 0:
             continue
         custo = custos_map.get(r.nome, 0)
-        margem = (r.preco_venda - custo) / r.preco_venda * 100
+        margem = impostos.margem_liquida(r.preco_venda, custo, carga)
         cat = r.categoria or 'Outros'
         cats[cat].append(margem)
     labels = sorted(cats.keys())
