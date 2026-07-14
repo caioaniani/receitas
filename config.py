@@ -365,3 +365,12 @@ class Config:
     GA4_ID = os.environ.get('GA4_ID', '')
     # Meta Pixel: Business Manager -> Events Manager -> ID de 15 digitos.
     META_PIXEL_ID = os.environ.get('META_PIXEL_ID', '')
+    # Purchase server-side (13/07/2026 — Pix pago no app do banco sem voltar
+    # a pagina nao disparava o purchase do navegador). Ver
+    # app/services/analytics_server.py. Sem os segredos = no-op logado.
+    # GA4 Admin -> Data Streams -> Measurement Protocol API secrets:
+    GA4_API_SECRET = os.environ.get('GA4_API_SECRET', '')
+    # Events Manager -> pixel -> Conversions API -> gerar token:
+    META_CAPI_TOKEN = os.environ.get('META_CAPI_TOKEN', '')
+    # Kill-switch do reporte server-side ('0' desliga):
+    ANALYTICS_SERVER = os.environ.get('ANALYTICS_SERVER', '1')
