@@ -161,6 +161,16 @@
     card.querySelector('input[name="nome[]"]').focus();
     card.scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
+
+  // Confirm do "padrão da categoria" fora do HTML (categoria com apóstrofo
+  // quebraria o onsubmit inline e a substituição sairia sem confirmação).
+  var fp = document.getElementById('form-padrao');
+  fp.addEventListener('submit', function (e) {
+    var msg = 'Substituir as etapas pelo padrão da categoria «' +
+      fp.dataset.categoria + '»?\n\nIsso também substitui o passo a passo ' +
+      'já escrito nesta ficha.';
+    if (!confirm(msg)) e.preventDefault();
+  });
 })();
 </script>
 </body>
