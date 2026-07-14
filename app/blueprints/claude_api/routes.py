@@ -833,7 +833,17 @@ def site_metricas():
         frete_sensores=sensores,
         rastreio={'ga4_configurado': bool(current_app.config.get('GA4_ID')),
                   'meta_pixel_configurado': bool(
-                      current_app.config.get('META_PIXEL_ID'))},
+                      current_app.config.get('META_PIXEL_ID')),
+                  # IDs públicos (saem no HTML de todo visitante) — servem
+                  # pra conferir se o painel GA4/Meta aberto é o MESMO
+                  # fluxo/pixel que o site usa. Segredos NUNCA aqui.
+                  'ga4_id': (current_app.config.get('GA4_ID') or '').strip(),
+                  'meta_pixel_id': (current_app.config.get('META_PIXEL_ID')
+                                    or '').strip(),
+                  'ga4_api_secret_configurado': bool(
+                      (current_app.config.get('GA4_API_SECRET') or '').strip()),
+                  'meta_capi_token_configurado': bool(
+                      (current_app.config.get('META_CAPI_TOKEN') or '').strip())},
     )
 
 
