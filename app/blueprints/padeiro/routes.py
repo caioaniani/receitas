@@ -978,3 +978,71 @@ def lousa_apagar(id):
     if request.form.get('volta') == 'index':
         return redirect(url_for('padeiro.index'))
     return redirect(url_for('padeiro.lousa'))
+
+
+# ── Fichas de preparo (etapas por receita, preenchidas pelo padeiro) ────────
+# Pedido do dono 14/07/2026: "ficha para meu padeiro preencher com as etapas
+# de preparo dos pães, assim consigo alimentar o fluxograma". Mesma fonte de
+# dados do editor do admin (/receitas/<id>/etapas) — parse/salvamento em
+# app/services/etapas_receita.py, edição direta (sem aprovação).
+
+@padeiro_bp.route('/fichas')
+@login_required
+@padeiro_required
+def fichas():
+    """Lista os pães (receitas ativas) com o estado da ficha de preparo:
+    quantas etapas cadastradas e quantas já têm o passo a passo escrito."""
+    from sqlalchemy.orm import selectinload
+
+    from app.models import Receita
+    receitas = (Receita.query
+                .options(selectinload(Receita.etapas))
+                .filter(Receita.arquivada_em.is_(None))
+                .order_by(Receita.categoria, Receita.nome).all())
+    linhas = []
+    for r in receitas:
+        n = len(r.etapas)
+        com_desc = sum(1 for e in r.etapas if (e.descricao or '').strip())
+        linhas.append({'id': r.id, 'nome': r.nome,
+                       'categoria': r.categoria or 'Sem categoria',
+                       'n_etapas': n, 'com_descricao': com_desc})
+    return render_template('padeiro/fichas.html', linhas=linhas)
+
+
+@padeiro_bp.route('/fichas/<int:id>', methods=['GET', 'POST'])
+@login_required
+@padeiro_required
+def fichas_editar(id):
+    """Ficha de preparo de UM pão: o padeiro preenche as etapas (nome,
+    duração, tipo de trabalho) e o passo a passo (descrição) de cada uma.
+    Salva direto — alimenta o fluxograma/Gantt e o mise en place."""
+    from app.constants import etapas_padrao_categoria
+    from app.models import Receita
+    from app.services import etapas_receita
+
+    receita = Receita.query.get_or_404(id)
+    if receita.arquivada_em is not None:
+        flash('Receita arquivada não recebe ficha de preparo.', 'warning')
+        return redirect(url_for('padeiro.fichas'))
+
+    if request.method == 'POST':
+        if request.form.get('acao') == 'padrao':
+            etapas_receita.set_etapas(
+                receita.id,
+                etapas_receita.de_tuplas(
+                    etapas_padrao_categoria(receita.categoria)))
+            db.session.commit()
+            flash('Etapas preenchidas com o padrão da categoria — ajuste os '
+                  'tempos e escreva o passo a passo.', 'info')
+            return redirect(url_for('padeiro.fichas_editar', id=receita.id))
+        etapas_form = etapas_receita.parse_etapas_form(request.form)
+        etapas_receita.set_etapas(receita.id, etapas_form)
+        db.session.commit()
+        flash(f'Ficha de "{receita.nome}" salva ({len(etapas_form)} etapa(s)).',
+              'success')
+        return redirect(url_for('padeiro.fichas'))
+
+    etapas_atuais = etapas_receita.listar(receita.id)
+    return render_template('padeiro/fichas_editar.html', receita=receita,
+                           etapas=etapas_atuais,
+                           recurso_de=etapas_receita.recurso_de_etapa)
