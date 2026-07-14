@@ -267,6 +267,9 @@ def amassadeira_etapas_padrao():
 # manter dois parsers divergiria. Os nomes locais viram aliases pra não mexer
 # em todos os call sites deste arquivo.
 from app.services.etapas_receita import (  # noqa: E402
+    de_tuplas as _etapas_de_tuplas,
+)
+from app.services.etapas_receita import (
     parse_etapas_form as _parse_etapas_form,
 )
 from app.services.etapas_receita import (
@@ -297,7 +300,8 @@ def etapas(id):
 
         if acao == 'padrao':
             # preenche SÓ esta receita com o padrão (pesquisado) da categoria.
-            _set_etapas(receita.id, etapas_padrao_categoria(receita.categoria))
+            _set_etapas(receita.id,
+                        _etapas_de_tuplas(etapas_padrao_categoria(receita.categoria)))
             db.session.commit()
             flash('Etapas preenchidas com o padrão da categoria. Ajuste e salve.',
                   'info')
