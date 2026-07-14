@@ -579,10 +579,14 @@
           d.processo.forEach(function (e) {
             var ic = _mepEquipIcon(e.equipamento, e.ativa);
             var eq = e.equipamento ? '<span class="st-eq">' + _mepEsc(e.equipamento) + '</span>' : '';
+            // Passo a passo da ficha de preparo (o QUE fazer na etapa).
+            var desc = e.descricao
+              ? '<div class="st-desc">' + _mepEsc(e.descricao) + '</div>' : '';
             h += '<li class="mep-step' + (e.ativa ? '' : ' passiva') + '">' +
                  '<span class="ic">' + ic + '</span>' +
                  '<span class="st-nm">' + _mepEsc(e.nome) + '</span>' + eq +
-                 '<span class="st-dur">' + _mepEsc(e.duracao) + '</span></li>';
+                 '<span class="st-dur">' + _mepEsc(e.duracao) + '</span>' +
+                 desc + '</li>';
           });
           h += '</ul>';
         } else if (d.etapas && d.etapas.length) {
