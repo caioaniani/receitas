@@ -820,7 +820,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (rUn) rUn.textContent = rendimento;
         if (rCustoUn) rCustoUn.textContent = rendimento > 0 ? formatBRL(custoUn) : '-';
 
-        // Rentabilidade — função auxiliar
+        // Rentabilidade — função auxiliar. Margem/lucro LÍQUIDOS: os impostos
+        // sobre venda (PIS/COFINS/ICMS — window.CARGA_IMPOSTOS, setada pelo
+        // template da ficha a partir de app/services/impostos.py) saem do
+        // preço antes do custo. Sem a global (outra tela), carga 0 = bruto.
+        var cargaImpostos = window.CARGA_IMPOSTOS || 0;
         function calcRent(preco, sufixo) {
             var el = document.getElementById('resumo-preco-' + sufixo);
             var elM = document.getElementById('resumo-margem-' + sufixo);
@@ -830,7 +834,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (el) el.textContent = preco > 0 ? formatBRL(preco) : '-';
 
             if (preco > 0 && custoUn > 0) {
-                var lucro = preco - custoUn;
+                var lucro = preco * (1 - cargaImpostos) - custoUn;
                 var marg = (lucro / preco) * 100;
                 var lucroT = lucro * rendimento;
 
