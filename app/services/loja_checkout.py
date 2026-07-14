@@ -388,10 +388,11 @@ def criar_pedido(form, itens_raw, *, base=None):
                      'sem números).')
     if not _email_valido(email):
         erros.append('Informe um email válido.')
-    # CPF é exigência do Pagar.me pra Pix e da NF-e (Fase 5) — pedir aqui
-    # já é mais barato que voltar pro cliente depois.
-    if not _cpf_valido(cpf):
-        erros.append('Informe um CPF válido (11 dígitos).')
+    # CPF/CNPJ é exigência do Pagar.me pra Pix e da NF-e (Fase 5) — pedir
+    # aqui já é mais barato que voltar pro cliente depois. CNPJ aceito
+    # desde 13/07/2026 (cliente PJ compra pelo site; NF sai no CNPJ).
+    if not _cpf_cnpj_valido(cpf):
+        erros.append('Informe um CPF ou CNPJ válido.')
     if not aceite:
         erros.append('É preciso aceitar os termos para concluir o pedido.')
     if modo not in ('agendada', 'retirada', 'express'):
