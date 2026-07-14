@@ -230,6 +230,11 @@ class PedidoOnline(db.Model):
     # em 30min — a reserva fica 35min, margem de 5min pro webhook chegar).
     # NULL = pedido nunca reservou (legado pre-cutover ou pedido cancelado).
     reserva_expira_em = db.Column(db.DateTime, nullable=True, index=True)
+    # client_id do GA4 (cookie `_ga`) capturado no POST do checkout — amarra
+    # o purchase server-side (analytics_server.py) à sessão real do cliente
+    # pro GA4 deduplicar com o evento do navegador. NULL = cliente sem GA
+    # (recusou cookies / bloqueador). ALTER já em prod (13/07/2026).
+    ga_client_id = db.Column(db.String(64), nullable=True)
 
     # NF-e (Fase 5, via Tiny). Setados quando o admin clica "Emitir NF"
     # — o Tiny aplica NCM/CFOP/CST do cadastro do produto.
