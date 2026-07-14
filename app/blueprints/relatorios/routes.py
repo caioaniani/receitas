@@ -57,23 +57,26 @@ def custos():
 @login_required
 @admin_required
 def custos_csv():
+    from app.services import impostos
+
     resultado = calcular_custos_receitas()
     custos_map = resultado.get('custos', {})
     receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    carga = impostos.carga_venda()
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Categoria', 'Receita', 'Custo Unit (R$)', 'Preço Atacado', 'Margem Atac %',
-                     'Preço Loja', 'Margem Loja %', 'Preço Site', 'Margem Site %'])
+    writer.writerow(['Categoria', 'Receita', 'Custo Unit (R$)', 'Preço Atacado', 'Margem Líq. Atac %',
+                     'Preço Loja', 'Margem Líq. Loja %', 'Preço Site', 'Margem Líq. Site %'])
 
     for r in receitas:
         custo = custos_map.get(r.nome, 0)
         pa = r.preco_venda or 0
         pl = r.preco_loja or 0
         ps = r.preco_site or 0
-        ma = ((pa - custo) / pa * 100) if pa else 0
-        ml = ((pl - custo) / pl * 100) if pl else 0
-        ms = ((ps - custo) / ps * 100) if ps else 0
+        ma = impostos.margem_liquida(pa, custo, carga) or 0
+        ml = impostos.margem_liquida(pl, custo, carga) or 0
+        ms = impostos.margem_liquida(ps, custo, carga) or 0
         writer.writerow([r.categoria or 'Outros', r.nome,
                          f'{custo:.2f}', f'{pa:.2f}', f'{ma:.1f}',
                          f'{pl:.2f}', f'{ml:.1f}', f'{ps:.2f}', f'{ms:.1f}'])
