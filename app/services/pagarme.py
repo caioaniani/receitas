@@ -162,10 +162,17 @@ def _payload_customer(pedido):
         'type': 'individual',
     }
     cli = getattr(pedido, 'cliente', None)
-    cpf = _so_digitos(getattr(cli, 'cpf', '') if cli else '')
-    if cpf:
-        payload['document'] = cpf
-        payload['document_type'] = 'cpf'
+    doc = _so_digitos(getattr(cli, 'cpf', '') if cli else '')
+    if doc:
+        # O campo `cpf` do Cliente guarda CPF (11 dígitos) OU CNPJ (14) —
+        # o checkout aceita os dois desde 13/07/2026. Pagar.me exige
+        # type='company' quando o documento é CNPJ.
+        payload['document'] = doc
+        if len(doc) == 14:
+            payload['document_type'] = 'cnpj'
+            payload['type'] = 'company'
+        else:
+            payload['document_type'] = 'cpf'
     fone = _telefone_br(pedido.telefone_cliente)
     if fone:
         ddd, num = fone
