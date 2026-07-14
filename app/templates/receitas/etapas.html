@@ -91,9 +91,10 @@
   </div>
 </form>
 
-{# Form isolado: preenche com o padrão da categoria (fora do form principal). #}
+{# Form isolado: preenche com o padrão da categoria (fora do form principal).
+   Confirm em JS não-inline (apóstrofo na categoria quebrava o onsubmit). #}
 <form method="POST" action="{{ url_for('receitas.etapas', id=receita.id) }}" class="mt-2"
-      onsubmit="return confirm('Substituir as etapas pelo padrão da categoria «{{ receita.categoria or 'sem categoria' }}»? (não salva automático — você ajusta e salva depois)');">
+      id="form-padrao-cat" data-categoria="{{ receita.categoria or 'sem categoria' }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="acao" value="padrao">
   <button type="submit" class="btn btn-outline-primary btn-sm">
