@@ -152,3 +152,81 @@ def test_upload_foto_delega_pra_upload_publico(app):
     assert '/42_' in path, 'path deve conter atribuicao_id'
     assert path.endswith('.jpg')
     assert r['url'] == 'https://x'
+
+
+# ── Retry de rede/5xx nas chamadas ao Dropbox (14/07/2026, Sentry 500) ────
+
+def _resp(status, body='{}'):
+    from unittest.mock import MagicMock
+    r = MagicMock()
+    r.status_code = status
+    r.text = body
+    r.json.return_value = {}
+    return r
+
+
+def test_com_retry_rede_5xx_depois_sucesso(monkeypatch):
+    """500 transitório (caso real: create_shared_link 500 deixava a NF do
+    Slack sem imagem) é re-tentado e a 2ª tentativa resolve."""
+    from app.services import dropbox_storage as ds
+    monkeypatch.setattr(ds.time, 'sleep', lambda s: None)
+    chamadas = []
+
+    def fn():
+        chamadas.append(1)
+        return _resp(500) if len(chamadas) == 1 else _resp(200)
+
+    r = ds._com_retry_rede(fn, 'teste')
+    assert r.status_code == 200
+    assert len(chamadas) == 2
+
+
+def test_com_retry_rede_esgota_e_levanta(monkeypatch):
+    from app.services import dropbox_storage as ds
+    monkeypatch.setattr(ds.time, 'sleep', lambda s: None)
+    chamadas = []
+
+    def fn():
+        chamadas.append(1)
+        return _resp(503)
+
+    try:
+        ds._com_retry_rede(fn, 'teste')
+        raise AssertionError('deveria ter levantado')
+    except RuntimeError as e:
+        assert '503' in str(e)
+    assert len(chamadas) == 3  # 1 + 2 retries
+
+
+def test_com_retry_rede_4xx_nao_retenta(monkeypatch):
+    """4xx (ex.: 409 link já existe) volta pro chamador SEM retry — o
+    tratamento de conflito do _criar_shared_link continua valendo."""
+    from app.services import dropbox_storage as ds
+    monkeypatch.setattr(ds.time, 'sleep', lambda s: None)
+    chamadas = []
+
+    def fn():
+        chamadas.append(1)
+        return _resp(409)
+
+    r = ds._com_retry_rede(fn, 'teste')
+    assert r.status_code == 409
+    assert len(chamadas) == 1
+
+
+def test_com_retry_rede_connection_error(monkeypatch):
+    import requests as _rq
+
+    from app.services import dropbox_storage as ds
+    monkeypatch.setattr(ds.time, 'sleep', lambda s: None)
+    chamadas = []
+
+    def fn():
+        chamadas.append(1)
+        if len(chamadas) == 1:
+            raise _rq.exceptions.ConnectionError('caiu')
+        return _resp(200)
+
+    r = ds._com_retry_rede(fn, 'teste')
+    assert r.status_code == 200
+    assert len(chamadas) == 2
