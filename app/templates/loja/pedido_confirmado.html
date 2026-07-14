@@ -121,9 +121,16 @@
 </script>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
 {% if ga_purchase %}
-{# GA4: evento purchase — fecha o funil. 1x por pedido (guarda no sessionStorage
-   pra não duplicar num refresh). #}
+{# GA4 + Meta Pixel: evento purchase — fecha o funil. 1x por pedido (guarda no
+   sessionStorage pra não duplicar num refresh).
+   PRECISA estar no block scripts: o block content renderiza ANTES do
+   carrinho.js (que define window.lojaGA) no _base.html — no content, a guarda
+   `!window.lojaGA` engolia o evento em silêncio e o GA4 mostrava purchase=0
+   com ~200 pedidos pagos (bug pego pelo funil do dono em 13/07/2026). #}
 <script type="application/json" id="ga-purchase">{{ ga_purchase | tojson }}</script>
 <script>
   (function () {
@@ -134,6 +141,11 @@
       var k = 'ga_purchase_' + p.transaction_id;
       if (sessionStorage.getItem(k)) return;
       window.lojaGA('purchase', p);
+      if (typeof window.fbq === 'function') {
+        window.fbq('track', 'Purchase',
+                   { value: p.value, currency: p.currency },
+                   { eventID: p.transaction_id });
+      }
       sessionStorage.setItem(k, '1');
     } catch (e) { /* analytics best-effort */ }
   })();
