@@ -92,10 +92,12 @@
     <div class="lbl">Duração em <b>minutos</b>. A ordem dos cards é a ordem do preparo.</div>
   </form>
 
-  {# Padrão da categoria — form separado (HTML não aninha forms) #}
+  {# Padrão da categoria — form separado (HTML não aninha forms). O confirm
+     fica em JS não-inline: nome de categoria com apóstrofo quebraria o
+     handler inline e o submit destrutivo passaria SEM perguntar. #}
   <form method="POST" action="{{ url_for('padeiro.fichas_editar', id=receita.id) }}"
-        style="margin-top:12px;"
-        onsubmit="return confirm('Substituir as etapas pelo padrão da categoria «{{ receita.categoria or 'sem categoria' }}»?');">
+        style="margin-top:12px;" id="form-padrao"
+        data-categoria="{{ receita.categoria or 'sem categoria' }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="acao" value="padrao">
     <button type="submit" class="btn btn-padrao">✨ Começar do padrão da categoria</button>
