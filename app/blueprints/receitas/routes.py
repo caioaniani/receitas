@@ -72,7 +72,16 @@ def ficha(id):
                            receitas_retorno=receitas_retorno,
                            etapas_preparo=dividir_etapas_preparo(receita.modo_preparo),
                            receita_custos=resultado['custos'],
-                           receita_pesos=resultado['pesos'])
+                           receita_pesos=resultado['pesos'],
+                           carga_impostos=_carga_impostos_venda())
+
+
+def _carga_impostos_venda():
+    """Fração do preço que vira imposto (PIS/COFINS/ICMS) — o resumo de
+    rentabilidade da ficha mostra margem LÍQUIDA (fonte única em
+    app/services/impostos.py)."""
+    from app.services import impostos
+    return impostos.carga_venda()
 
 
 @receitas_bp.route('/padeiro')
