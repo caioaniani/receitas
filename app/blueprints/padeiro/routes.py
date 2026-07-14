@@ -991,21 +991,30 @@ def lousa_apagar(id):
 @padeiro_required
 def fichas():
     """Lista os pães (receitas ativas) com o estado da ficha de preparo:
-    quantas etapas cadastradas e quantas já têm o passo a passo escrito."""
+    quantas etapas cadastradas e quantas já têm o passo a passo escrito.
+    Receitas de RETORNO ficam fora — retorno nunca se produz (regra do dono
+    13/07/2026), então não tem preparo a fichar."""
     from sqlalchemy.orm import selectinload
 
     from app.models import Receita
-    receitas = (Receita.query
+    receitas = (Receita.ativas()
                 .options(selectinload(Receita.etapas))
-                .filter(Receita.arquivada_em.is_(None))
-                .order_by(Receita.categoria, Receita.nome).all())
+                .all())
+    retorno_ids = {r.retorno_receita_id for r in receitas
+                   if r.retorno_receita_id}
     linhas = []
     for r in receitas:
+        if r.id in retorno_ids:
+            continue
         n = len(r.etapas)
         com_desc = sum(1 for e in r.etapas if (e.descricao or '').strip())
         linhas.append({'id': r.id, 'nome': r.nome,
-                       'categoria': r.categoria or 'Sem categoria',
+                       'categoria': (r.categoria or '').strip()
+                       or 'Sem categoria',
                        'n_etapas': n, 'com_descricao': com_desc})
+    # Ordena pelo LABEL da categoria (não pela coluna): '' e NULL colapsam num
+    # único cabeçalho "Sem categoria" (em SQL ordenariam em pontas opostas).
+    linhas.sort(key=lambda x: (x['categoria'].lower(), x['nome'].lower()))
     return render_template('padeiro/fichas.html', linhas=linhas)
 
 
