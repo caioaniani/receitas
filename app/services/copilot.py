@@ -2813,8 +2813,12 @@ def executar_editar_pedido(params, user):
                     f'Materia(s)-prima(s) nao liberada(s) pra pedido de '
                     f'loja: {nomes}. Um admin pode liberar no Banco de MPs '
                     f'(checkbox "sugerir pedido loja").')}
-        # REPLACE total
-        PedidoItem.query.filter_by(pedido_id=pedido.id).delete()
+        # REPLACE total. Deletar VIA ORM (não Query.delete em massa) pra
+        # disparar o cascade 'all, delete-orphan' das fotos de conferência
+        # (pedido_item_foto) — o bulk delete pula o cascade e bate na FK
+        # (sem ON DELETE CASCADE), quebrando editar pedido que já tem foto.
+        for _it in list(pedido.itens):
+            db.session.delete(_it)
         db.session.flush()
         salvos = 0
         for item in itens_novos:
