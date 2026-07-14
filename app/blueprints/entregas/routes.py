@@ -375,7 +375,10 @@ def api_atendimento_chamar_motorista():
     from app.models import LalamoveEntrega
     from app.services import chatwoot as cw_svc
     data = request.get_json(silent=True) or {}
-    entrega_id = data.get('entrega_id')
+    try:
+        entrega_id = int(data.get('entrega_id') or 0)
+    except (TypeError, ValueError):
+        entrega_id = 0
     if not entrega_id:
         return jsonify({'ok': False, 'erro': 'entrega_id ausente'}), 400
     e = db.session.get(LalamoveEntrega, entrega_id)
