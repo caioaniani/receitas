@@ -352,7 +352,13 @@
   .mep-proc { flex-direction:column; }
   .mep-step { display:flex; align-items:center; gap:12px; padding:11px 12px;
     border:1px solid #e6e6e6; border-left:5px solid var(--verde,#198754);
-    border-radius:10px; margin-bottom:8px; background:#fff; font-size:18px; }
+    border-radius:10px; margin-bottom:8px; background:#fff; font-size:18px;
+    flex-wrap:wrap; }
+  /* Passo a passo da ficha de preparo (/padeiro/fichas) — quebra pra linha
+     inteira abaixo do nome/duração da etapa. */
+  .mep-step .st-desc { flex-basis:100%; font-size:15px; font-weight:400;
+    font-style:normal; color:#495057; line-height:1.45; white-space:pre-line;
+    padding-left:42px; }
   .mep-step.passiva { border-left-color:#adb5bd; background:#f8f9fa;
     color:#6c757d; font-style:italic; }
   .mep-step .ic { font-size:22px; flex:none; width:30px; text-align:center; }
