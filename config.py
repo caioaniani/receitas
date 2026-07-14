@@ -268,6 +268,15 @@ class Config:
         'CHATWOOT_WHATSAPP_TEMPLATE_CORPO',
         'Olá {{1}}, aqui é da Opão. Ficamos com uma dúvida sobre o seu '
         'pedido {{2}}. Pode nos responder por aqui?')
+    # Template do MOTOBOY Lalamove (14/07/2026, botao "Chamar motoboy" no
+    # painel de entregas). OPCIONAIS: vazios = usa o template padrao acima
+    # ({{1}} = nome do motorista, {{2}} = codigo do pedido). Aprovar um
+    # template dedicado na Meta deixa o texto mais adequado ("sou da padaria
+    # O Pao, sobre a entrega X") — dai preencher os dois.
+    CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY = os.environ.get(
+        'CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY', '')
+    CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY_CORPO = os.environ.get(
+        'CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY_CORPO', '')
 
     # ── Portal Wi-Fi das lojas (11/07/2026, Ribeiro do Vale) ──────────
     # Numero do WhatsApp da padaria (so digitos, com 55) pro botao wa.me do
