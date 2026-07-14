@@ -2957,16 +2957,22 @@ def _read_consultar_margem(params, user):
         if not p:
             return {'texto': f'"{nome}" nao encontrado.'}
         return {'texto': f'**{p.nome}** (produto): atacado R$ {p.preco_atacado or 0:.2f}, loja R$ {p.preco_loja or 0:.2f}, site R$ {p.preco_site or 0:.2f}.'}
+    from app.services import impostos
     custo_un = custos.get(r.nome, 0)
     rendimento = calcular_rendimento(r)
-    def margem(p): return ((p - custo_un) / p * 100) if p and p > 0 else None
+    alq = impostos.aliquotas()
+    carga = alq['total'] / 100.0
     linhas = [f'**{r.nome}** (receita)']
     linhas.append(f'- Custo unitário: R$ {custo_un:.4f}')
     linhas.append(f'- Rendimento: {rendimento}')
+    linhas.append(f'- Impostos sobre venda: {alq["total"]:.2f}% '
+                  f'(PIS {alq["pis"]:.2f} + COFINS {alq["cofins"]:.2f} '
+                  f'+ ICMS {alq["icms"]:.2f}) — margens abaixo são líquidas')
     for label, preco in [('Atacado', r.preco_venda), ('Loja', r.preco_loja), ('Site', r.preco_site)]:
         if preco:
-            m = margem(preco)
-            linhas.append(f'- {label}: R$ {preco:.2f} (margem {m:.1f}%)' if m else f'- {label}: R$ {preco:.2f}')
+            m = impostos.margem_liquida(preco, custo_un, carga)
+            linhas.append(f'- {label}: R$ {preco:.2f} (margem líq. {m:.1f}%)'
+                          if m is not None else f'- {label}: R$ {preco:.2f}')
     return {'texto': '\n'.join(linhas)}
 
 
