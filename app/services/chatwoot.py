@@ -939,11 +939,19 @@ def iniciar_conversa_whatsapp(telefone, nome, params,
 
     Retorna {'ok': bool, 'conversation_id': int|None, 'nova': bool,
              'erro': str|None}. Nunca levanta — o painel trata o erro."""
-    if not whatsapp_disponivel():
+    # Gate fino (nao o whatsapp_disponivel() inteiro): template PADRAO so e
+    # exigido quando nao veio override — senao "so template do motoboy
+    # configurado" falharia com mensagem enganosa (achado do revisor).
+    if not (disponivel() and _whatsapp_inbox_id()):
         return {'ok': False, 'conversation_id': None, 'nova': False,
-                'erro': ('WhatsApp nao configurado (inbox/template). '
-                         'Defina CHATWOOT_WHATSAPP_INBOX_ID e '
-                         'CHATWOOT_WHATSAPP_TEMPLATE.')}
+                'erro': ('WhatsApp nao configurado (inbox). '
+                         'Defina CHATWOOT_WHATSAPP_INBOX_ID.')}
+    if not (template_nome
+            or (current_app.config.get('CHATWOOT_WHATSAPP_TEMPLATE')
+                or '').strip()):
+        return {'ok': False, 'conversation_id': None, 'nova': False,
+                'erro': ('Template do WhatsApp nao configurado. '
+                         'Defina CHATWOOT_WHATSAPP_TEMPLATE.')}
     inbox_id = _whatsapp_inbox_id()
     fone = _e164(telefone)
     if not fone:
