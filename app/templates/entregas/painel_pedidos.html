@@ -737,6 +737,47 @@
       b.addEventListener('click', function () {
         var act = b.getAttribute('data-lala');
         if (act === 'nova') { p.lalamove = null; abrirDetalhe(p); return; }
+        if (act === 'whats-mot') {
+          // Chat com o motoboy: a Lalamove não expõe o chat do app deles —
+          // a conversa nasce no NOSSO WhatsApp/Chatwoot e abre no painel da
+          // direita (postMessage, mesmo mecanismo do "Chamar cliente").
+          var motNome = (p.lalamove && p.lalamove.motorista) || 'o motoboy';
+          if (!confirm('Chamar ' + motNome + ' pelo WhatsApp sobre o pedido ' +
+                       p.code + '?')) return;
+          b.disabled = true;
+          b.textContent = 'Chamando…';
+          fetch(LALA_WHATS_MOT, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ entrega_id: +b.getAttribute('data-id') })
+          }).then(function (r) {
+            return r.json().catch(function () { return {}; });
+          }).then(function (d) {
+            b.disabled = false;
+            b.textContent = '💬 Chamar';
+            d = d || {};
+            if (d.conversation_id && EMBED) {
+              try {
+                window.parent.postMessage({
+                  tipo: 'vigia-abrir-conversa',
+                  conv_id: d.conversation_id,
+                  nome: d.nome || motNome,
+                }, location.origin);
+              } catch (_) {}
+            }
+            if (!d.ok) {
+              var msg = d.erro || 'não consegui chamar o motoboy';
+              if (d.erro === 'csrf_expirada') {
+                msg = 'sua sessão expirou — recarregue a página (F5) e tente de novo.';
+              }
+              lalaErro(msg);
+            }
+          }).catch(function () {
+            b.disabled = false; b.textContent = '💬 Chamar';
+            lalaErro('sem conexão');
+          });
+          return;
+        }
         if (act === 'cotar') {
           var veic = (document.getElementById('lala-veic') || {}).value || 'moto';
           var endInput = document.getElementById('lala-end');
