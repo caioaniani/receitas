@@ -1782,6 +1782,21 @@ dispara o mesmo `copilot_svc.interpretar` — single-workspace.
 
 **UI admin**: `/slack/install` lista vinculos + form pra criar novos (slack_user_id ↔ Usuario).
 
+## Impostos sobre venda nas margens (13/07/2026)
+
+Pedido do dono (da planilha dele): PIS 1,65% + COFINS 7,60% + ICMS 4,00% =
+13,25% sobre o preco de venda, descontados nas MARGENS exibidas. Fonte unica
+`app/services/impostos.py` — aliquotas em AppConfig (`imposto_pis_pct` etc.),
+editaveis no banner da /rentabilidade (POST /rentabilidade/impostos, admin).
+Todas as margens exibidas viram LIQUIDAS: /rentabilidade, /relatorios/custos
+(+CSV), dashboard (margem_geral), api margem-categoria, copilot
+`consultar_margem` e o resumo da ficha da receita (JS: o template seta
+`window.CARGA_IMPOSTOS` e o `calcRent` do app.js desconta). E calculo de
+EXIBICAO/decisao — nada mexe em preco, pedido ou transacao. Os helpers
+`margem_liquida`/`lucro_liquido` recebem `carga` EXPLICITA (quem itera
+centenas de receitas busca `carga_venda()` 1x — sem query em loop).
+Testes: `tests/test_impostos_margem.py`.
+
 ## Cadastro assistido por IA (08/07/2026)
 
 Pedido do dono: colar print/lista de itens novos (nome + preco) e a IA
