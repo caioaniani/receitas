@@ -262,50 +262,19 @@ def amassadeira_etapas_padrao():
 #  - camara_fria/descanso: fermentação/descanso passivo — não ocupa ninguém.
 #  - congelar: passo FINAL (freezer) — o produto fica pronto e congelado; não é
 #    fermentação (não vira marcador de câmara fria nem antecipa a produção).
-_RECURSO_MAP = {
-    'padeiro': (None, True),
-    'amassadeira': ('amassadeira', True),
-    'forno': ('forno', True),
-    'camara_fria': ('camara_fria', False),
-    'congelar': ('congelar', False),
-    'descanso': (None, False),
-}
-
-
-def _recurso_de_etapa(e):
-    """Valor do select 'tipo de trabalho' a partir da etapa salva."""
-    if e.equipamento in ('amassadeira', 'forno', 'camara_fria', 'congelar'):
-        return e.equipamento
-    return 'padeiro' if e.ativa else 'descanso'
-
-
-def _parse_etapas_form(form):
-    """Lê as linhas de etapa do form → lista de (nome, dur_min, equip, ativa),
-    pulando linhas sem nome. Reusado pelo salvar e pelo aplicar-à-categoria."""
-    out = []
-    nomes = form.getlist('nome[]')
-    duracoes = form.getlist('duracao[]')
-    recursos = form.getlist('recurso[]')
-    for nome, dur, recurso in zip(nomes, duracoes, recursos):
-        nome = (nome or '').strip()
-        if not nome:
-            continue            # linha vazia = ignora
-        try:
-            dur_min = max(0, min(int(dur or 0), 100000))
-        except (TypeError, ValueError):
-            dur_min = 0
-        equip, ativa = _RECURSO_MAP.get(recurso, (None, True))
-        out.append((nome, dur_min, equip, ativa))
-    return out
-
-
-def _set_etapas(receita_id, etapas):
-    """Substitui as etapas de uma receita pela lista (nome, dur, equip, ativa)."""
-    ReceitaEtapa.query.filter_by(receita_id=receita_id).delete()
-    for i, (nome, dur_min, equip, ativa) in enumerate(etapas):
-        db.session.add(ReceitaEtapa(receita_id=receita_id, ordem=i, nome=nome,
-                                    duracao_min=dur_min, equipamento=equip,
-                                    ativa=ativa))
+# Parse/salvamento de etapas centralizados em app/services/etapas_receita.py
+# (14/07/2026) — a ficha do padeiro (/padeiro/fichas) grava as MESMAS etapas;
+# manter dois parsers divergiria. Os nomes locais viram aliases pra não mexer
+# em todos os call sites deste arquivo.
+from app.services.etapas_receita import (  # noqa: E402
+    parse_etapas_form as _parse_etapas_form,
+)
+from app.services.etapas_receita import (
+    recurso_de_etapa as _recurso_de_etapa,
+)
+from app.services.etapas_receita import (
+    set_etapas as _set_etapas,
+)
 
 
 @receitas_bp.route('/<int:id>/etapas', methods=['GET', 'POST'])
