@@ -103,7 +103,11 @@ def dashboard():
 
     margem_geral = 0
     if receita_estimada > 0:
-        margem_geral = (receita_estimada - custo_mp_total) / receita_estimada * 100
+        # Margem LÍQUIDA: desconta os impostos sobre venda (PIS/COFINS/ICMS,
+        # app/services/impostos.py) da receita estimada antes do custo.
+        from app.services import impostos
+        margem_geral = ((receita_estimada * (1 - impostos.carga_venda())
+                         - custo_mp_total) / receita_estimada * 100)
 
     alertas_estoque = db.session.query(AlertaEstoque).join(MateriaPrima).filter(
         MateriaPrima.estoque_atual < AlertaEstoque.estoque_minimo
