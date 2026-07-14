@@ -12,6 +12,7 @@ import os
 
 from flask import (
     abort,
+    current_app,
     jsonify,
     redirect,
     render_template,
@@ -848,6 +849,18 @@ def checkout():
                 itens_raw = []
         pedido, erros = loja_checkout.criar_pedido(request.form, itens_raw)
         if not erros:
+            # client_id do GA4 (cookie `_ga`, primeira parte) — permite o
+            # purchase server-side deduplicar com o evento do navegador.
+            # Best-effort: sem cookie (consentimento negado) fica NULL.
+            try:
+                from app.extensions import db
+                from app.services.analytics_server import ga_client_id_do_cookie
+                cid = ga_client_id_do_cookie(request.cookies.get('_ga'))
+                if cid:
+                    pedido.ga_client_id = cid
+                    db.session.commit()
+            except Exception:  # noqa: BLE001 — analytics nunca trava o checkout
+                current_app.logger.exception('checkout: captura do _ga falhou')
             session.pop('carrinho', None)  # pedido criado → carrinho zerado
             return redirect(url_for('loja.pedido_pagamento',
                                     codigo=pedido.codigo))
