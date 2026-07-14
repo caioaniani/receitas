@@ -198,8 +198,9 @@ def _texto_endereco_falho(endereco, cep, contato, motivo='nao_encontrado'):
     return '\n'.join(linhas)
 
 
-def _enviar_direto(app, texto):
-    """Worker: envia o texto (dedup/teto já checados no agendamento)."""
+def _enviar_direto(app, texto, critico=False):
+    """Worker: envia o texto (dedup/teto já checados no agendamento).
+    `critico` isenta do teto/hora global do Z-API (Lalamove = pedido pago)."""
     try:
         with app.app_context():
             numero = _numero_destino()
@@ -207,7 +208,7 @@ def _enviar_direto(app, texto):
                 logger.info('loja_alerta: sem numero de destino, pulando')
                 return
             from app.services import zapi
-            zapi.enviar_texto(numero, texto)
+            zapi.enviar_texto(numero, texto, critico=critico)
     except Exception:  # noqa: BLE001
         logger.exception('loja_alerta: falha ao enviar alerta de endereco')
 
