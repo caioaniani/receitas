@@ -494,3 +494,48 @@ def test_custos_devolve_receitas_produtos_e_mps(app):
     m = next(x for x in d['materias_primas'] if x['nome'] == 'Nutella Balde 3kg')
     assert m['custo_unitario'] == 120.0
     assert m['ultima_entrada']['preco_unitario'] == 118.5
+
+
+def test_site_metricas_funil_e_faturamento(app):
+    """Sonda /site-metricas (13/07/2026): funil por criado_em, faturamento
+    por pago_em, ticket, clientes e flags de rastreio."""
+    from datetime import timedelta as _td
+
+    from app.models import Cliente, PedidoOnline
+    from app.utils import agora
+
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    client = app.test_client()
+    assert client.get('/api/claude/site-metricas').status_code == 401
+
+    cli = Cliente(nome='Maria', email='met@x.com')
+    db.session.add(cli)
+    db.session.flush()
+    agora_dt = agora()
+    pago = PedidoOnline(cliente_id=cli.id, nome_cliente='Maria',
+                        email_cliente='met@x.com', modo_entrega='retirada',
+                        status='pago', valor_total=50, subtotal=50,
+                        criado_em=agora_dt - _td(days=1),
+                        pago_em=agora_dt - _td(days=1))
+    aband = PedidoOnline(cliente_id=cli.id, nome_cliente='Maria',
+                         email_cliente='met@x.com', modo_entrega='entrega',
+                         status='aguardando_pagamento', valor_total=30,
+                         subtotal=30, criado_em=agora_dt - _td(days=1))
+    db.session.add_all([pago, aband])
+    db.session.commit()
+
+    resp = client.get('/api/claude/site-metricas?dias=7',
+                      headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True
+    assert d['funil']['criados'] == 2
+    assert d['funil']['pagos'] == 1
+    assert d['funil']['abandonados'] == 1
+    assert d['funil']['conversao_pct'] == 50.0
+    assert d['faturamento']['total'] == 50.0
+    assert d['faturamento']['n_pedidos'] == 1
+    assert d['ticket_medio'] == 50.0
+    assert d['clientes']['total'] == 1
+    assert d['modos_entrega'] == {'retirada': 1}
+    assert 'ga4_configurado' in d['rastreio']
