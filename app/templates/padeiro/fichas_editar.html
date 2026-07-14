@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ficha de preparo — {{ receita.nome }}</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:#f1f3f5; color:#212529; padding-bottom:90px; }
+  header { background:#212529; color:#fff; padding:12px 20px; display:flex;
+           align-items:center; gap:14px; position:sticky; top:0; z-index:10;
+           flex-wrap:wrap; }
+  header h1 { font-size:19px; margin:0; flex:1; min-width:200px; }
+  header a { color:#fff; text-decoration:none; font-size:15px; background:#495057;
+             padding:9px 14px; border-radius:9px; white-space:nowrap; }
+  .wrap { padding:16px; max-width:760px; margin:0 auto; }
+  .dica { background:#fff3cd; border:1px solid #ffe69c; border-radius:10px;
+          padding:10px 14px; font-size:15px; margin-bottom:14px; }
+  .flash { background:#d1e7dd; border:1px solid #a3cfbb; border-radius:10px;
+           padding:10px 14px; font-size:15px; margin-bottom:14px; }
+  .etapa { background:#fff; border-radius:12px; padding:12px 14px; margin-bottom:12px;
+           box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .etapa .topo { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .etapa .num { font-weight:700; color:#6c757d; width:26px; text-align:center; }
+  .etapa input[type=text] { flex:2; min-width:150px; font-size:17px; padding:10px;
+           border:1px solid #ced4da; border-radius:8px; }
+  .etapa input[type=number] { width:86px; font-size:17px; padding:10px;
+           border:1px solid #ced4da; border-radius:8px; }
+  .etapa select { flex:1.4; min-width:170px; font-size:16px; padding:10px;
+           border:1px solid #ced4da; border-radius:8px; background:#fff; }
+  .etapa textarea { width:100%; margin-top:8px; font-size:16px; padding:10px;
+           border:1px solid #ced4da; border-radius:8px; resize:vertical; }
+  .etapa .acoes { display:flex; gap:8px; margin-top:6px; }
+  .etapa button { border:none; border-radius:8px; padding:8px 12px; font-size:15px;
+           background:#e9ecef; cursor:pointer; }
+  .etapa button.rm { background:#f8d7da; color:#842029; }
+  .barra { position:fixed; bottom:0; left:0; right:0; background:#fff;
+           border-top:1px solid #dee2e6; padding:10px 16px; display:flex; gap:10px;
+           justify-content:center; flex-wrap:wrap; z-index:20; }
+  .btn { border:none; border-radius:10px; padding:14px 20px; font-size:17px;
+         cursor:pointer; }
+  .btn-add { background:#e7f1ff; color:#0d6efd; }
+  .btn-save { background:#198754; color:#fff; font-weight:700; }
+  .btn-padrao { background:#e9ecef; color:#212529; font-size:14px; padding:10px 14px; }
+  .lbl { font-size:13px; color:#6c757d; margin-top:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🍞 {{ receita.nome }}</h1>
+  <a href="{{ url_for('padeiro.fichas') }}">← todas as fichas</a>
+</header>
+<div class="wrap">
+  {% with msgs = get_flashed_messages() %}
+    {% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+  <div class="dica">
+    Preencha <b>na ordem do preparo</b>: o nome da etapa, quanto tempo leva,
+    quem trabalha (você, a máquina ou a massa descansando) e <b>o que fazer</b>
+    no passo a passo. Ao salvar, o 📊 fluxograma e o mise en place já usam a ficha.
+  </div>
+
+  <form method="POST" id="form-ficha"
+        action="{{ url_for('padeiro.fichas_editar', id=receita.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div id="etapas">
+      {% for e in etapas %}
+      <div class="etapa">
+        <div class="topo">
+          <span class="num">{{ loop.index }}.</span>
+          <input type="text" name="nome[]" value="{{ e.nome }}" required
+                 placeholder="Ex: Modelagem">
+          <input type="number" name="duracao[]" value="{{ e.duracao_min }}"
+                 min="0" step="5" title="minutos">
+          <select name="recurso[]">
+            {% with rv = recurso_de(e) %}{% include "_etapa_recurso_options.html" %}{% endwith %}
+          </select>
+        </div>
+        <textarea name="descricao[]" rows="2"
+                  placeholder="O que fazer nesta etapa? Ex: Divida em bolas de 90 g, modele apertando bem...">{{ e.descricao or '' }}</textarea>
+        <div class="acoes">
+          <button type="button" class="mv" data-dir="-1">▲ subir</button>
+          <button type="button" class="mv" data-dir="1">▼ descer</button>
+          <button type="button" class="rm">✕ remover</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="lbl">Duração em <b>minutos</b>. A ordem dos cards é a ordem do preparo.</div>
+  </form>
+
+  {# Padrão da categoria — form separado (HTML não aninha forms) #}
+  <form method="POST" action="{{ url_for('padeiro.fichas_editar', id=receita.id) }}"
+        style="margin-top:12px;"
+        onsubmit="return confirm('Substituir as etapas pelo padrão da categoria «{{ receita.categoria or 'sem categoria' }}»?');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="acao" value="padrao">
+    <button type="submit" class="btn btn-padrao">✨ Começar do padrão da categoria</button>
+  </form>
+</div>
+
+<div class="barra">
+  <button type="button" class="btn btn-add" id="btn-add">＋ Adicionar etapa</button>
+  <button type="submit" class="btn btn-save" form="form-ficha">💾 Salvar ficha</button>
+</div>
+
+<template id="tpl-etapa">
+  <div class="etapa">
+    <div class="topo">
+      <span class="num">•</span>
+      <input type="text" name="nome[]" required placeholder="Ex: Modelagem">
+      <input type="number" name="duracao[]" value="10" min="0" step="5" title="minutos">
+      <select name="recurso[]">
+        {% with rv = 'padeiro' %}{% include "_etapa_recurso_options.html" %}{% endwith %}
+      </select>
+    </div>
+    <textarea name="descricao[]" rows="2"
+              placeholder="O que fazer nesta etapa?"></textarea>
+    <div class="acoes">
+      <button type="button" class="mv" data-dir="-1">▲ subir</button>
+      <button type="button" class="mv" data-dir="1">▼ descer</button>
+      <button type="button" class="rm">✕ remover</button>
+    </div>
+  </div>
+</template>
+
+<script>
+(function () {
+  var box = document.getElementById('etapas');
+  var tpl = document.getElementById('tpl-etapa');
+
+  function renumerar() {
+    box.querySelectorAll('.etapa .num').forEach(function (n, i) {
+      n.textContent = (i + 1) + '.';
+    });
+  }
+  box.addEventListener('click', function (e) {
+    var card = e.target.closest('.etapa');
+    if (!card) return;
+    if (e.target.classList.contains('rm')) {
+      card.remove(); renumerar(); return;
+    }
+    if (e.target.classList.contains('mv')) {
+      var dir = parseInt(e.target.dataset.dir, 10);
+      if (dir < 0 && card.previousElementSibling) {
+        box.insertBefore(card, card.previousElementSibling);
+      } else if (dir > 0 && card.nextElementSibling) {
+        box.insertBefore(card.nextElementSibling, card);
+      }
+      renumerar();
+    }
+  });
+  document.getElementById('btn-add').addEventListener('click', function () {
+    var card = tpl.content.firstElementChild.cloneNode(true);
+    box.appendChild(card); renumerar();
+    card.querySelector('input[name="nome[]"]').focus();
+    card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
+})();
+</script>
+</body>
+</html>
