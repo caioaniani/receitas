@@ -249,15 +249,23 @@
       });
     }
 
-    // Máscara simples de CPF (XXX.XXX.XXX-XX)
+    // Máscara de CPF (XXX.XXX.XXX-XX) ou CNPJ (XX.XXX.XXX/XXXX-XX) — o
+    // campo aceita os dois; com 12+ dígitos a máscara vira CNPJ.
     var cpfEl = document.getElementById('cpf');
     if (cpfEl) {
       cpfEl.addEventListener('input', function () {
-        var d = (cpfEl.value || '').replace(/\D/g, '').slice(0, 11);
+        var d = (cpfEl.value || '').replace(/\D/g, '').slice(0, 14);
         var out = d;
-        if (d.length > 9) out = d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
-        else if (d.length > 6) out = d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6);
-        else if (d.length > 3) out = d.slice(0, 3) + '.' + d.slice(3);
+        if (d.length > 11) {
+          out = d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8, 12);
+          if (d.length > 12) out += '-' + d.slice(12);
+        } else if (d.length > 9) {
+          out = d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9);
+        } else if (d.length > 6) {
+          out = d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6);
+        } else if (d.length > 3) {
+          out = d.slice(0, 3) + '.' + d.slice(3);
+        }
         cpfEl.value = out;
       });
     }
