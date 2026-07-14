@@ -453,8 +453,13 @@ def editar(id):
             pedido.modificado_em = agora()
             pedido.modificado_por_id = current_user.id
 
-            # REPLACE total dos itens
-            PedidoItem.query.filter_by(pedido_id=pedido.id).delete()
+            # REPLACE total dos itens. Deletar VIA ORM (não Query.delete em
+            # massa) pra disparar o cascade 'all, delete-orphan' das fotos de
+            # conferência (pedido_item_foto). O bulk delete pulava o cascade e
+            # batia direto na FK (que não tem ON DELETE CASCADE), quebrando a
+            # edição de qualquer pedido que já tivesse foto de item.
+            for _it in list(pedido.itens):
+                db.session.delete(_it)
             db.session.flush()
 
             ids = request.form.getlist('item_id[]')
