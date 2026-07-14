@@ -50,9 +50,9 @@ def parse_etapas_form(form):
         nome = (nome or '').strip()
         if not nome:
             continue            # linha vazia = ignora
+        dur_raw = duracoes[i] if i < len(duracoes) else 0
         try:
-            dur_min = max(0, min(int(duracoes[i] if i < len(duracoes) else 0
-                                     or 0), 100000))
+            dur_min = max(0, min(int(dur_raw or 0), 100000))
         except (TypeError, ValueError):
             dur_min = 0
         recurso = recursos[i] if i < len(recursos) else ''
