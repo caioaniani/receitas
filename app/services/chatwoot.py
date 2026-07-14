@@ -840,21 +840,25 @@ def _criar_conversa(source_id, inbox_id, contact_id):
     return data.get('id') if isinstance(data, dict) else None
 
 
-def _render_corpo_template(params):
+def _render_corpo_template(params, corpo=None):
     """Texto do template com os {{N}} substituidos — vira o `content` da
     mensagem (o que aparece na THREAD; a Meta recebe o template aprovado).
     O proprio picker de template do Chatwoot manda content renderizado +
     template_params; sem content, versoes do Chatwoot mostram balao vazio.
     Corpo configuravel (CHATWOOT_WHATSAPP_TEMPLATE_CORPO) pra bater com o
-    texto aprovado na Meta se o dono mudar o modelo."""
-    corpo = (current_app.config.get('CHATWOOT_WHATSAPP_TEMPLATE_CORPO')
-             or '').strip()
+    texto aprovado na Meta se o dono mudar o modelo; `corpo` explicito
+    sobrepoe (ex.: template do motoboy)."""
+    if corpo is None:
+        corpo = (current_app.config.get('CHATWOOT_WHATSAPP_TEMPLATE_CORPO')
+                 or '')
+    corpo = corpo.strip()
     for i, v in enumerate(params or [], start=1):
         corpo = corpo.replace('{{%d}}' % i, str(v))
     return corpo
 
 
-def enviar_template(conversation_id, nome_template, params, language):
+def enviar_template(conversation_id, nome_template, params, language,
+                    corpo_template=None):
     """Manda uma mensagem de TEMPLATE aprovado (unico jeito de iniciar fora da
     janela de 24h). `params` = lista posicional (vira {{1}},{{2}}...). Retorna
     {'ok': bool, 'erro': str|None}."""
@@ -862,7 +866,7 @@ def enviar_template(conversation_id, nome_template, params, language):
     processed = {str(i + 1): v for i, v in enumerate(params)}
     corpo = {
         'message_type': 'outgoing',
-        'content': _render_corpo_template(params),
+        'content': _render_corpo_template(params, corpo=corpo_template),
         'template_params': {
             'name': nome_template,
             'category': 'utility',
