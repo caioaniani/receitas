@@ -243,6 +243,35 @@ def _cpf_valido(cpf):
     return True
 
 
+def _cnpj_valido(cnpj):
+    """Valida 14 dígitos + dígitos verificadores (mod 11 com os pesos da
+    Receita Federal). Rejeita sequências iguais ('11111111111111')."""
+    cnpj = _so_digitos(cnpj)
+    if len(cnpj) != 14 or len(set(cnpj)) == 1:
+        return False
+    pesos = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    for i in (12, 13):
+        soma = sum(int(cnpj[j]) * pesos[len(pesos) - i + j] for j in range(i))
+        dig = 11 - (soma % 11)
+        if dig >= 10:
+            dig = 0
+        if dig != int(cnpj[i]):
+            return False
+    return True
+
+
+def _cpf_cnpj_valido(doc):
+    """CPF (11 dígitos) ou CNPJ (14 dígitos) válido — o campo de documento
+    do checkout aceita os dois (pedido do dono, 13/07/2026: cliente PJ
+    compra pelo site e precisa da NF no CNPJ)."""
+    doc = _so_digitos(doc)
+    if len(doc) == 11:
+        return _cpf_valido(doc)
+    if len(doc) == 14:
+        return _cnpj_valido(doc)
+    return False
+
+
 def _montar_endereco(form, incluir_complemento=True):
     """Junta os campos estruturados em um texto de uma linha.
 
