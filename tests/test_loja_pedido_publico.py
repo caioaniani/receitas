@@ -85,3 +85,38 @@ def test_status_atual_aparece_no_template(app):
     r = c.get('/loja/pedido/STAT1')
     assert r.status_code == 200
     assert b'caminho' in r.data.lower()
+
+
+# ── purchase GA4/Pixel dispara DEPOIS do carrinho.js (13/07/2026) ─────────
+
+def test_purchase_ga4_renderiza_apos_carrinho_js(app):
+    """Regressão do funil GA4 com purchase=0: o script do evento estava no
+    block content, que renderiza ANTES do carrinho.js (quem define
+    window.lojaGA) — a guarda engolia o evento em silêncio. O disparo tem
+    que aparecer DEPOIS do <script src=...carrinho.js> no HTML."""
+    from app.extensions import db
+    c = app.test_client()
+    with app.app_context():
+        _pedido_simples(db, codigo='GAPUR1')
+    r = c.get('/loja/pedido/GAPUR1')
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert 'id="ga-purchase"' in html
+    assert '"transaction_id": "GAPUR1"' in html
+    assert html.index('carrinho.js') < html.index('id="ga-purchase"')
+    # Meta Pixel Purchase junto (dedupe pelo mesmo eventID).
+    assert "fbq('track', 'Purchase'" in html
+
+
+def test_purchase_nao_dispara_aguardando_pagamento(app):
+    """Pix pendente/cancelado não conta venda — o evento só sobe quando o
+    pagamento confirmou (a página recarrega ao virar 'pago')."""
+    from app.extensions import db
+    c = app.test_client()
+    with app.app_context():
+        _pedido_simples(db, codigo='GAPUR2', status='aguardando_pagamento')
+        _pedido_simples(db, codigo='GAPUR3', status='cancelado')
+    for cod in ('GAPUR2', 'GAPUR3'):
+        r = c.get(f'/loja/pedido/{cod}')
+        assert r.status_code == 200
+        assert b'id="ga-purchase"' not in r.data
