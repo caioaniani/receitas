@@ -72,14 +72,14 @@
         <div class="topo">
           <span class="num">{{ loop.index }}.</span>
           <input type="text" name="nome[]" value="{{ e.nome }}" required
-                 placeholder="Ex: Modelagem">
+                 maxlength="80" placeholder="Ex: Modelagem">
           <input type="number" name="duracao[]" value="{{ e.duracao_min }}"
                  min="0" step="5" title="minutos">
           <select name="recurso[]">
             {% with rv = recurso_de(e) %}{% include "_etapa_recurso_options.html" %}{% endwith %}
           </select>
         </div>
-        <textarea name="descricao[]" rows="2"
+        <textarea name="descricao[]" rows="2" maxlength="2000"
                   placeholder="O que fazer nesta etapa? Ex: Divida em bolas de 90 g, modele apertando bem...">{{ e.descricao or '' }}</textarea>
         <div class="acoes">
           <button type="button" class="mv" data-dir="-1">▲ subir</button>
