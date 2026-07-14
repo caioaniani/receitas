@@ -317,6 +317,7 @@
   var LALA_CHAMAR = "{{ url_for('entregas.api_lalamove_chamar') }}";
   var LALA_CANCELAR = "{{ url_for('entregas.api_lalamove_cancelar') }}";
   var LALA_ACELERAR = "{{ url_for('entregas.api_lalamove_acelerar') }}";
+  var LALA_WHATS_MOT = "{{ url_for('entregas.api_atendimento_chamar_motorista') }}";
   var LALA_VEICULOS = {{ (lala_veiculos or []) | tojson }};
   // Gasto Lalamove é admin/gerente (espelha @gerente_required no backend).
   var PODE_LALAMOVE = {{ 'true' if (current_user.is_admin() or current_user.is_gerente()) else 'false' }};
