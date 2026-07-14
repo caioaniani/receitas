@@ -360,6 +360,48 @@ def api_atendimento_chamar_cliente():
     }), (200 if res.get('ok') else 502)
 
 
+@entregas_bp.route('/api/atendimento/chamar-motorista', methods=['POST'])
+@login_required
+def api_atendimento_chamar_motorista():
+    """Botao "Chamar motoboy" no card Lalamove do painel (14/07/2026): abre
+    (ou reusa) a conversa de WhatsApp com o MOTORISTA da corrida e dispara o
+    template — o chat nativo da Lalamove nao tem API, entao a conversa vive
+    no nosso Chatwoot, no painel da direita (mesmo mecanismo do chamar-
+    cliente). Nome/telefone do motorista vem do webhook da Lalamove
+    (DRIVER_ASSIGNED → LalamoveEntrega.motorista_*).
+
+    Template: CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY quando aprovado na Meta;
+    vazio = cai no template padrao de cliente ({{1}}=nome, {{2}}=codigo)."""
+    from app.models import LalamoveEntrega
+    from app.services import chatwoot as cw_svc
+    data = request.get_json(silent=True) or {}
+    entrega_id = data.get('entrega_id')
+    if not entrega_id:
+        return jsonify({'ok': False, 'erro': 'entrega_id ausente'}), 400
+    e = db.session.get(LalamoveEntrega, entrega_id)
+    if e is None:
+        return jsonify({'ok': False, 'erro': 'corrida nao encontrada'}), 404
+    if not (e.motorista_telefone or '').strip():
+        return jsonify({'ok': False,
+                        'erro': 'Motorista ainda nao atribuido (sem '
+                                'telefone) — aguarde a Lalamove designar.'}), 400
+    nome = (e.motorista_nome or 'Motoboy').strip()
+    cfg = current_app.config
+    res = cw_svc.iniciar_conversa_whatsapp(
+        e.motorista_telefone, nome, params=[nome, e.pedido_code],
+        template_nome=(cfg.get('CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY')
+                       or '').strip() or None,
+        template_corpo=(cfg.get('CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY_CORPO')
+                        or '').strip() or None)
+    return jsonify({
+        'ok': bool(res.get('ok')),
+        'conversation_id': res.get('conversation_id'),
+        'nova': bool(res.get('nova')),
+        'nome': f'Motoboy {nome}'.strip(),
+        'erro': res.get('erro'),
+    }), (200 if res.get('ok') else 502)
+
+
 @entregas_bp.route('/api/atendimento/chamar-cliente/debug')
 @login_required
 def api_atendimento_chamar_cliente_debug():
