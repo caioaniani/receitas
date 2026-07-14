@@ -22,9 +22,13 @@
     {% for obj in lista %}
     <div class="col-md-3 col-sm-4 col-6">
         <div class="card h-100">
+            {# lazy + async: a galeria tem dezenas de fotos e cada uma redireciona
+               pro Dropbox. Carregar todas de uma vez estoura o limite de conexões
+               do navegador / faz o Dropbox estrangular a rajada → cards em branco.
+               `loading=lazy` só busca a foto quando ela entra na tela. #}
             <img src="{{ url_for('main.cardapio_img', tipo=tipo, id=obj.id) }}"
-                 alt="{{ obj.nome }}"
-                 style="width:100%; aspect-ratio:1; object-fit:cover;">
+                 alt="{{ obj.nome }}" loading="lazy" decoding="async"
+                 style="width:100%; aspect-ratio:1; object-fit:cover; background:#f0f0f0;">
             <div class="card-body p-2">
                 <div class="small fw-bold" style="font-size:12px;">{{ obj.nome }}</div>
                 {% if obj.categoria %}
