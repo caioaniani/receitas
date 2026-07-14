@@ -758,5 +758,8 @@
 <script>
 const RECEITA_CUSTOS = {{ receita_custos | tojson }};
 const RECEITA_PESOS = {{ receita_pesos | tojson }};
+// Impostos sobre venda (PIS/COFINS/ICMS): fração do preço descontada nas
+// margens do resumo (app/services/impostos.py — margem LÍQUIDA).
+window.CARGA_IMPOSTOS = {{ (carga_impostos or 0) | tojson }};
 </script>
 {% endblock %}
