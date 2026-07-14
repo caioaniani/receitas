@@ -153,6 +153,31 @@
     row.querySelector('input[name="nome[]"]').focus();
   });
 
+  // Confirms dos gestos DESTRUTIVOS em JS não-inline (categoria com
+  // apóstrofo quebrava o handler inline e a substituição saía sem
+  // perguntar). As mensagens avisam que o passo a passo escrito também é
+  // substituído — desde a ficha do padeiro, etapa carrega texto manual.
+  var btnAplicar = document.getElementById('btn-aplicar-cat');
+  if (btnAplicar) {
+    btnAplicar.addEventListener('click', function (e) {
+      var msg = 'Aplicar ESTAS etapas a TODOS os ' + btnAplicar.dataset.n +
+        ' produto(s) da categoria «' + btnAplicar.dataset.categoria + '»?' +
+        '\n\nIsso SUBSTITUI as etapas atuais de cada um — INCLUINDO o passo ' +
+        'a passo escrito pelo padeiro — e não dá pra desfazer.';
+      if (!confirm(msg)) e.preventDefault();
+    });
+  }
+  var formPadrao = document.getElementById('form-padrao-cat');
+  if (formPadrao) {
+    formPadrao.addEventListener('submit', function (e) {
+      var msg = 'Substituir as etapas pelo padrão da categoria «' +
+        formPadrao.dataset.categoria + '»? O passo a passo escrito nesta ' +
+        'ficha também é substituído. (não salva automático — você ajusta e ' +
+        'salva depois)';
+      if (!confirm(msg)) e.preventDefault();
+    });
+  }
+
   // ── Arrastar pra reordenar (mouse + toque). A ordem das linhas no submit
   //    define a ordem das etapas. ──
   var arrastando = null;
