@@ -1337,6 +1337,12 @@ def _migrate_postgres(app):
          "ON pedido_online(reserva_expira_em) "
          "WHERE reserva_expira_em IS NOT NULL")
 
+    # client_id do GA4 (cookie _ga) capturado no checkout (13/07/2026) —
+    # amarra o purchase server-side (Measurement Protocol) à sessão real do
+    # cliente. Procedimento de 2 commits: este ALTER deploya ANTES do modelo.
+    _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
+         "ga_client_id VARCHAR(64)")
+
     # Motivo do cancelamento (25/06/2026) — registra POR QUE um pedido do site
     # foi cancelado (pix_expirado / reembolso / cancelado_admin) em vez de
     # deduzir pelos timestamps. Coluna nullable; pedidos cancelados antes desta
