@@ -238,6 +238,30 @@ def enviar_texto(numero, mensagem, *, critico=False, _interno=False):
                           destino, len(permitidos))
             return {'ok': False, 'erro': f'numero {destino} fora do whitelist — recusado por seguranca'}
 
+    # Teto global anti-spam (depois do whitelist: destino recusado nao conta nem
+    # segura). `_interno` = flush do digest, sempre passa e conta na janela.
+    if _throttle_ativo():
+        if _interno:
+            with _throttle_lock:
+                agora = time.monotonic()
+                _prune_locked(agora)
+                _env_ts.append(agora)
+        else:
+            permitido, digest = _throttle_decidir(mensagem, critico)
+            if digest:
+                dono = (cfg.get('ZAPI_NUMERO_DESTINO')
+                        or cfg.get('ZAPI_BOT_DONO_NUMERO') or '').strip()
+                if dono:
+                    try:
+                        enviar_texto(dono, digest, critico=True, _interno=True)
+                    except Exception:  # noqa: BLE001
+                        logger.exception('zapi: falha ao enviar digest de seguradas')
+            if not permitido:
+                logger.warning('zapi: teto/hora (%s) atingido — mensagem segurada '
+                               '(vira digest ao dono)', _teto_hora())
+                return {'ok': False, 'segurado': True,
+                        'erro': 'teto/hora de envio atingido — mensagem segurada'}
+
     url = f'{BASE}/instances/{instance_id}/token/{token}/send-text'
     headers = {'Content-Type': 'application/json'}
     if client_token:
