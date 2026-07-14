@@ -156,3 +156,35 @@ def test_servico_usa_template_override_no_envio(app):
     msg = next(j for u, j in posts if u.endswith('/messages'))
     assert msg['template_params']['name'] == 'entrega_motoboy'
     assert msg['content'] == 'Oi Carlos, entrega PED42.'
+
+
+def test_override_meio_preenchido_cai_no_template_padrao(app, admin_user):
+    """Só o NOME do template do motoboy setado (sem corpo): o override é
+    ATÔMICO — cai no padrão pra thread do Chatwoot nunca mostrar um texto
+    diferente do que a Meta mandou (achado do revisor)."""
+    with app.app_context():
+        e = _corrida('PED46')
+        eid = e.id
+    app.config['CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY'] = 'entrega_motoboy'
+    app.config['CHATWOOT_WHATSAPP_TEMPLATE_MOTOBOY_CORPO'] = ''
+    client = app.test_client()
+    _login(client, admin_user)
+    with patch('app.services.chatwoot.iniciar_conversa_whatsapp',
+               return_value={'ok': True, 'conversation_id': 904,
+                             'nova': True, 'erro': None}) as m:
+        r = client.post('/entregas/api/atendimento/chamar-motorista',
+                        json={'entrega_id': eid})
+    assert r.status_code == 200
+    _, kwargs = m.call_args
+    assert kwargs['template_nome'] is None
+    assert kwargs['template_corpo'] is None
+
+
+def test_entrega_id_invalido_400_nao_500(app, admin_user):
+    """entrega_id não-numérico ('abc') vira 400 — sem coerção, o bind de
+    string contra PK Integer estoura 500 no Postgres."""
+    client = app.test_client()
+    _login(client, admin_user)
+    r = client.post('/entregas/api/atendimento/chamar-motorista',
+                    json={'entrega_id': 'abc'})
+    assert r.status_code == 400
