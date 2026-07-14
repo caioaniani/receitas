@@ -43,6 +43,22 @@ def test_lista_fichas_mostra_receita_e_estado(app):
     assert '1 etapa(s)' in body and '0 com passo a passo' in body
 
 
+def test_lista_nao_mostra_receita_de_retorno(app):
+    """Receita de RETORNO nunca se produz (regra do dono 13/07/2026) —
+    não tem preparo a fichar, então fica fora da lista de fichas."""
+    with app.app_context():
+        _padeiro('padl9')
+        origem = _receita('Croissant Ficha Origem')
+        retorno = _receita('Croissant Ficha — Retorno')
+        origem.retorno_receita_id = retorno.id
+        db.session.commit()
+    c = app.test_client()
+    _login(c, 'padl9', '12345678')
+    body = c.get('/padeiro/fichas').get_data(as_text=True)
+    assert 'Croissant Ficha Origem' in body
+    assert 'Croissant Ficha — Retorno' not in body
+
+
 def test_padeiro_salva_ficha_com_descricao(app):
     with app.app_context():
         _padeiro('padl2')
