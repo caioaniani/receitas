@@ -268,11 +268,13 @@ def _payload_cliente(pedido):
     pedido (entrega). Retirada nao coleta endereco -> campos vazios (NF de
     pedido de retirada exigiria coletar o endereco do cliente a parte)."""
     cli = getattr(pedido, 'cliente', None)
-    cpf = _so_digitos(getattr(cli, 'cpf', '') if cli else '')
+    doc = _so_digitos(getattr(cli, 'cpf', '') if cli else '')
     return {
         'nome': pedido.nome_cliente,
-        'tipo_pessoa': 'F',
-        'cpf_cnpj': cpf,
+        # O campo `cpf` do Cliente guarda CPF (11 dígitos) ou CNPJ (14) —
+        # checkout aceita os dois desde 13/07/2026. CNPJ = pessoa jurídica.
+        'tipo_pessoa': 'J' if len(doc) == 14 else 'F',
+        'cpf_cnpj': doc,
         'email': pedido.email_cliente,
         'fone': pedido.telefone_cliente or '',
         'endereco': pedido.endereco_logradouro or '',
