@@ -474,6 +474,18 @@ def _marcar_pago(pedido, pagamento):
     return True
 
 
+def _reportar_purchase(pedido):
+    """Purchase server-side pro GA4/Meta (thread, best-effort) — cobre o
+    cliente que paga o Pix no app do banco e nunca volta à página (o evento
+    do navegador não dispara). Chamado pelos callers DEPOIS do commit do
+    pago, mesmo padrão da NF."""
+    try:
+        from app.services import analytics_server
+        analytics_server.reportar_purchase_async(pedido.id)
+    except Exception:  # noqa: BLE001 — analytics nunca quebra pagamento
+        logger.exception('reporte de purchase falhou (pedido %s)', pedido.id)
+
+
 def _enviar_confirmacao(pedido):
     """E-mail de confirmação pro cliente (best-effort — nunca derruba o
     processamento do pagamento se o e-mail falhar)."""
@@ -689,6 +701,7 @@ def processar_webhook(evento):
             # do pagamento). Idempotente: reenvio do webhook não duplica.
             if mudou:
                 _emitir_nf_e_enviar(pedido)
+                _reportar_purchase(pedido)
             return {'ok': True, 'pago': True, 'mudou': mudou}
         if tipo in ('charge.refunded', 'order.canceled',
                     'charge.cancelled', 'charge.refunded.partial'):
