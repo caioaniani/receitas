@@ -206,8 +206,9 @@ def upload_foto(file_bytes, atribuicao_id, ext='jpg'):
 
 
 def _criar_shared_link(token, path):
-    """Tenta criar shared link. Se ja existir, busca o existente."""
-    r = requests.post(
+    """Tenta criar shared link. Se ja existir, busca o existente.
+    Idempotente (409 = ja existe -> busca), entao o retry de 5xx e seguro."""
+    r = _com_retry_rede(lambda: requests.post(
         'https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings',
         headers={
             'Authorization': f'Bearer {token}',
@@ -215,7 +216,7 @@ def _criar_shared_link(token, path):
         },
         json={'path': path, 'settings': {'requested_visibility': 'public'}},
         timeout=15,
-    )
+    ), 'create_shared_link')
     if r.status_code == 200:
         return _converter_para_raw(r.json().get('url') or '')
 
