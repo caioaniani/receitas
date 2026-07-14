@@ -5,6 +5,31 @@
 {% block content %}
 <h1 class="page-title mb-3"><i class="bi bi-graph-up"></i> Painel de Rentabilidade</h1>
 
+<div class="alert alert-light border d-flex flex-wrap align-items-center gap-2 py-2 mb-3">
+    <span class="small">
+        🧾 <strong>Impostos sobre venda descontados das margens</strong> (lucro e
+        margem abaixo são <strong>líquidos</strong>):
+        PIS {{ '%.2f' % impostos.pis }}% + COFINS {{ '%.2f' % impostos.cofins }}%
+        + ICMS {{ '%.2f' % impostos.icms }}% =
+        <strong>{{ '%.2f' % impostos.total }}%</strong> do preço.
+    </span>
+    <form method="POST" action="{{ url_for('main.rentabilidade_impostos') }}"
+          class="d-flex flex-wrap align-items-center gap-1 mb-0 ms-auto"
+          onsubmit="return confirm('Atualizar as alíquotas de imposto sobre venda? As margens de TODAS as telas (fichas, relatórios, copilot) passam a usar os novos valores.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="small text-muted mb-0">PIS %</label>
+        <input type="number" name="pis" value="{{ '%.2f' % impostos.pis }}" step="0.01" min="0" max="95"
+               class="form-control form-control-sm" style="width:5.5rem;">
+        <label class="small text-muted mb-0">COFINS %</label>
+        <input type="number" name="cofins" value="{{ '%.2f' % impostos.cofins }}" step="0.01" min="0" max="95"
+               class="form-control form-control-sm" style="width:5.5rem;">
+        <label class="small text-muted mb-0">ICMS %</label>
+        <input type="number" name="icms" value="{{ '%.2f' % impostos.icms }}" step="0.01" min="0" max="95"
+               class="form-control form-control-sm" style="width:5.5rem;">
+        <button class="btn btn-sm btn-outline-primary">salvar</button>
+    </form>
+</div>
+
 <div class="table-responsive">
     <table class="table table-sm table-bordered table-hover bg-white" id="tabela-rent">
         <thead class="thead-padaria">
