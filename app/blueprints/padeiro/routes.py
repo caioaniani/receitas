@@ -11,7 +11,7 @@ import logging
 from collections import Counter
 from datetime import datetime, timedelta
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.padeiro import padeiro_bp
@@ -1055,3 +1055,32 @@ def fichas_editar(id):
     return render_template('padeiro/fichas_editar.html', receita=receita,
                            etapas=etapas_atuais,
                            recurso_de=etapas_receita.recurso_de_etapa)
+
+
+# ── Spotify (widget 🎵 da tela do padeiro, 15/07/2026) ──────────────────────
+# O navegador só fala com ESTAS rotas; o servidor fala com o Spotify
+# (app/services/spotify.py). Modo controle remoto: a música toca no aparelho
+# de som da padaria, a tela comanda.
+
+@padeiro_bp.route('/spotify/estado')
+@login_required
+@padeiro_required
+def spotify_estado():
+    """Estado do player pro widget (o que toca, pausado, volume, aparelho).
+    ?playlists=1 inclui as playlists da conta (só quando o drawer abre)."""
+    from app.services import spotify
+    est = spotify.estado_player()
+    if request.args.get('playlists') == '1' and est.get('ok'):
+        est['playlists'] = spotify.listar_playlists()
+    return jsonify(est)
+
+
+@padeiro_bp.route('/spotify/acao', methods=['POST'])
+@login_required
+@padeiro_required
+def spotify_acao():
+    """Comando do widget: play/pause/next/previous/volume/playlist."""
+    from app.services import spotify
+    dados = request.get_json(silent=True) or {}
+    ok, erro = spotify.executar_acao(dados.get('acao'), dados.get('valor'))
+    return jsonify(ok=ok, erro=erro), (200 if ok else 422)
