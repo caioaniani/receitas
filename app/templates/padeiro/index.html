@@ -911,10 +911,138 @@
   function fecharDrawers() {
     ['hist-drawer', 'hist-backdrop', 'cong-drawer', 'cong-backdrop',
      'prep-drawer', 'prep-backdrop',
-     'prod-drawer', 'prod-backdrop'].forEach(function (id) {
+     'prod-drawer', 'prod-backdrop',
+     'spot-drawer', 'spot-backdrop'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.classList.remove('aberto');
     });
+  }
+
+  // ── Widget Spotify (🎵 Música) ─────────────────────────────────────────
+  var spotVolume = null;      // último volume conhecido (pros botões ±)
+  var spotTimer = null;
+
+  function spotAberto() {
+    return document.getElementById('spot-drawer').classList.contains('aberto');
+  }
+  function toggleSpot() {
+    var abrindo = !spotAberto();
+    fecharDrawers();
+    clearInterval(spotTimer);
+    if (abrindo) {
+      document.getElementById('spot-drawer').classList.add('aberto');
+      document.getElementById('spot-backdrop').classList.add('aberto');
+      spotCarregar(true);
+      // Atualiza o "tocando agora" enquanto o drawer está aberto.
+      spotTimer = setInterval(function () {
+        if (spotAberto()) spotCarregar(false);
+      }, 15000);
+    }
+  }
+
+  function spotRender(d) {
+    var body = document.getElementById('spot-body');
+    if (!d.ok && d.motivo === 'nao_configurado') {
+      body.innerHTML = '<div class="spot-msg">O Spotify ainda não foi ' +
+        'configurado. Peça ao administrador (tela /admin/spotify).</div>';
+      return;
+    }
+    if (!d.ok && d.motivo === 'nao_conectado') {
+      body.innerHTML = '<div class="spot-msg">A conta do Spotify da padaria ' +
+        'ainda não foi conectada. Peça ao administrador (/admin/spotify).</div>';
+      return;
+    }
+    if (!d.ok) {
+      body.innerHTML = '<div class="spot-msg">' + _mepEsc(d.mensagem ||
+        'Não deu pra falar com o Spotify agora.') + '</div>';
+      return;
+    }
+    var h = '';
+    if (d.sem_aparelho) {
+      h += '<div class="spot-msg">' + _mepEsc(d.mensagem) + '</div>';
+    } else {
+      spotVolume = (typeof d.volume === 'number') ? d.volume : spotVolume;
+      h += '<div class="spot-now">' +
+           (d.capa ? '<img src="' + _mepEsc(d.capa) + '" alt="">' : '') +
+           '<div><div class="t">' + _mepEsc(d.musica || '—') + '</div>' +
+           '<div class="a">' + _mepEsc(d.artista || '') + '</div>' +
+           (d.aparelho ? '<div class="d">tocando em: ' + _mepEsc(d.aparelho) +
+            '</div>' : '') + '</div></div>';
+      h += '<div class="spot-ctrl">' +
+           '<button onclick="spotAcao(\'previous\')" aria-label="Anterior">⏮</button>' +
+           (d.tocando
+             ? '<button class="play" onclick="spotAcao(\'pause\')" aria-label="Pausar">⏸</button>'
+             : '<button class="play" onclick="spotAcao(\'play\')" aria-label="Tocar">▶</button>') +
+           '<button onclick="spotAcao(\'next\')" aria-label="Próxima">⏭</button>' +
+           '</div>';
+      if (spotVolume !== null) {
+        h += '<div class="spot-vol">' +
+             '<button onclick="spotVol(-10)">🔉 −</button>' +
+             '<span id="spot-vol-num">' + spotVolume + '%</span>' +
+             '<button onclick="spotVol(10)">🔊 +</button></div>';
+      }
+    }
+    if (d.playlists && d.playlists.length) {
+      h += '<div class="spot-pl-title">Playlists</div>';
+      d.playlists.forEach(function (p) {
+        h += '<button class="spot-pl" data-uri="' + _mepEsc(p.uri) + '">' +
+             _mepEsc(p.nome) +
+             (p.total ? ' <small>(' + p.total + ' músicas)</small>' : '') +
+             '</button>';
+      });
+    }
+    h += '<div class="spot-erro" id="spot-erro"></div>';
+    body.innerHTML = h;
+    body.querySelectorAll('.spot-pl').forEach(function (b) {
+      b.addEventListener('click', function () {
+        spotAcao('playlist', b.dataset.uri);
+      });
+    });
+  }
+
+  function spotCarregar(comPlaylists) {
+    fetch('{{ url_for('padeiro.spotify_estado') }}' +
+          (comPlaylists ? '?playlists=1' : ''))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        // Poll de fundo não apaga a lista de playlists já renderizada.
+        if (!comPlaylists && spotUltimasPl) d.playlists = spotUltimasPl;
+        if (d.playlists) spotUltimasPl = d.playlists;
+        spotRender(d);
+      })
+      .catch(function () {
+        document.getElementById('spot-body').innerHTML =
+          '<div class="spot-msg">Sem ligação com o servidor.</div>';
+      });
+  }
+  var spotUltimasPl = null;
+
+  function spotVol(delta) {
+    if (spotVolume === null) return;
+    spotVolume = Math.max(0, Math.min(100, spotVolume + delta));
+    var n = document.getElementById('spot-vol-num');
+    if (n) n.textContent = spotVolume + '%';
+    spotAcao('volume', spotVolume);
+  }
+
+  function spotAcao(acao, valor) {
+    fetch('{{ url_for('padeiro.spotify_acao') }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ acao: acao, valor: valor })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var e = document.getElementById('spot-erro');
+        if (e) e.textContent = d.ok ? '' : (d.erro || 'não deu certo');
+        // Comando muda o estado — recarrega em seguida (o Spotify demora
+        // uns instantes pra refletir play/pause/pular).
+        setTimeout(function () { if (spotAberto()) spotCarregar(false); }, 900);
+      })
+      .catch(function () {
+        var e = document.getElementById('spot-erro');
+        if (e) e.textContent = 'sem ligação com o servidor';
+      });
   }
   // Auto-recupera a TV: se um painel/pop-up ficar aberto e ninguem tocar na tela
   // por 60s, fecha sozinho — os botoes da tela principal voltam a funcionar sem
