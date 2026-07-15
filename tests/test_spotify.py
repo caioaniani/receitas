@@ -49,6 +49,17 @@ def _login(c, login, senha='12345678'):
     return c.post('/auth/login', data={'login': login, 'senha': senha})
 
 
+def test_config_mapeia_as_envs_spotify():
+    """Regressão do bug do primeiro deploy: o Flask NÃO absorve env var
+    sozinho — cada uma precisa estar declarada no config.py. As SPOTIFY_*
+    ficaram de fora e o app nunca via as variáveis do Railway (badge
+    'faltando' mesmo com tudo certo lá)."""
+    from config import Config
+    for attr in ('SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET',
+                 'SPOTIFY_REDIRECT_URI'):
+        assert hasattr(Config, attr), f'config.py não mapeia {attr}'
+
+
 # ── Serviço ──────────────────────────────────────────────────────────────
 
 def test_estado_sem_config_e_sem_conexao(app):
