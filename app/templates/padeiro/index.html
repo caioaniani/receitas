@@ -1101,10 +1101,26 @@
       });
       spotPlayer.addListener('ready', function (e) {
         spotDeviceId = e.device_id;
+        spotLog('ready (device ' + String(e.device_id).slice(0, 8) + '…)');
         spotErroMsg('player pronto — toque em "▶ Começar a tocar nesta tela"');
         spotCarregar(false);            // re-renderiza o botão pro passo 2
       });
-      spotPlayer.addListener('not_ready', function () { spotDeviceId = null; });
+      spotPlayer.addListener('not_ready', function () {
+        spotDeviceId = null;
+        spotLog('not_ready — o player caiu/desconectou');
+      });
+      // Transições de estado: registra pausas NÃO pedidas pela tela — é a
+      // forma de ver o formato exato da morte aos ~5s (posição, faixa).
+      var spotUltimoPaused = null;
+      spotPlayer.addListener('player_state_changed', function (st) {
+        if (!st) { spotLog('state: NULL (player perdeu a sessão)'); return; }
+        if (st.paused !== spotUltimoPaused) {
+          spotUltimoPaused = st.paused;
+          var faixa = ((st.track_window || {}).current_track || {}).name || '?';
+          spotLog('state: ' + (st.paused ? 'PAUSOU' : 'tocando') +
+                  ' @' + Math.round((st.position || 0) / 1000) + 's — ' + faixa);
+        }
+      });
       spotPlayer.addListener('initialization_error', function (e) {
         spotSdkPedido = false;
         spotErroMsg('este navegador não consegue tocar aqui (sem suporte a ' +
