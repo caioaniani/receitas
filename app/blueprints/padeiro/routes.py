@@ -1079,8 +1079,29 @@ def spotify_estado():
 @login_required
 @padeiro_required
 def spotify_acao():
-    """Comando do widget: play/pause/next/previous/volume/playlist."""
+    """Comando do widget: play/pause/next/previous/volume/playlist/
+    transferir. `device_id` opcional mira a tela-player local."""
     from app.services import spotify
     dados = request.get_json(silent=True) or {}
-    ok, erro = spotify.executar_acao(dados.get('acao'), dados.get('valor'))
+    ok, erro = spotify.executar_acao(dados.get('acao'), dados.get('valor'),
+                                     device_id=dados.get('device_id'))
     return jsonify(ok=ok, erro=erro), (200 if ok else 422)
+
+
+@padeiro_bp.route('/spotify/token')
+@login_required
+@padeiro_required
+def spotify_token():
+    """Access token pro Web Playback SDK — a tela do padeiro TOCANDO a
+    música localmente (decisão do dono 15/07/2026: "quero que ele toque as
+    músicas, não reproduzir em outro dispositivo"). O SDK do Spotify exige o
+    token no navegador; esta rota o entrega SOMENTE a papel padeiro/produção/
+    admin logado (o token é da conta da padaria e expira em ~1h; o SDK pede
+    um novo aqui quando vence)."""
+    from app.services import spotify
+    if not spotify.configurado() or not spotify.conectado():
+        return jsonify(ok=False, motivo='nao_configurado'), 503
+    tok, resta = spotify.token_para_player()
+    if not tok:
+        return jsonify(ok=False, motivo='sem_token'), 503
+    return jsonify(ok=True, access_token=tok, expira_em_s=resta)
