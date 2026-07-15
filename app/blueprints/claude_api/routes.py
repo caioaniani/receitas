@@ -982,4 +982,14 @@ def spotify_debug():
     if spotify.configurado() and spotify.conectado():
         out['estado_player'] = spotify.estado_player()
         out['n_playlists'] = len(spotify.listar_playlists())
+    # Violações de CSP da tela do padeiro (report-uri): quando a música morre
+    # em ~10s, aqui aparece QUAL host de áudio a CSP bloqueou.
+    try:
+        import json as _json
+
+        from app.models import AppConfig
+        out['csp_reports'] = _json.loads(
+            AppConfig.get('padeiro_csp_reports') or '[]')
+    except Exception:  # noqa: BLE001
+        out['csp_reports'] = []
     return jsonify(out)
