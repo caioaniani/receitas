@@ -990,6 +990,10 @@ def spotify_debug():
         from app.models import AppConfig
         out['csp_reports'] = _json.loads(
             AppConfig.get('padeiro_csp_reports') or '[]')
+        # Telemetria do player da tela (erros do SDK + transições de estado).
+        out['spotify_log'] = _json.loads(
+            AppConfig.get('padeiro_spotify_log') or '[]')
     except Exception:  # noqa: BLE001
-        out['csp_reports'] = []
+        out['csp_reports'] = out.get('csp_reports') or []
+        out['spotify_log'] = []
     return jsonify(out)
