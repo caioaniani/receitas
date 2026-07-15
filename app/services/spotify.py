@@ -271,6 +271,38 @@ def estado_player():
     }
 
 
+def token_para_player():
+    """Access token pro Web Playback SDK da tela do padeiro (o player no
+    NAVEGADOR precisa do token — exigência do SDK do Spotify; a rota que o
+    entrega é protegida por papel). Retorna (token|None, segundos_restantes).
+    """
+    import time as _t
+    tok = _access_token()
+    if not tok:
+        return None, 0
+    try:
+        exp = int(float(AppConfig.get(_K_ACCESS_EXP) or '0'))
+    except ValueError:
+        exp = 0
+    return tok, max(0, exp - int(_t.time()))
+
+
+def transferir_para(device_id, tocar=True):
+    """Transfere a reprodução pro aparelho `device_id` (a tela do padeiro,
+    quando ela vira player). Retorna (ok, mensagem_erro|None)."""
+    did = (device_id or '').strip()
+    if not did:
+        return False, 'aparelho inválido'
+    status, corpo, erro = _req('PUT', '/me/player',
+                               json_body={'device_ids': [did],
+                                          'play': bool(tocar)})
+    if erro == 'nao_conectado':
+        return False, 'Spotify não conectado — peça ao administrador'
+    if status in (200, 202, 204):
+        return True, None
+    return False, _erro_humano(status, corpo)
+
+
 def listar_playlists(limite=30):
     """Playlists da conta conectada (nome + uri), pro seletor da tela."""
     status, corpo, _ = _req('GET', '/me/playlists',
