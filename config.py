@@ -380,7 +380,6 @@ class Config:
     # GA4 Admin -> Data Streams -> Measurement Protocol API secrets:
     GA4_API_SECRET = os.environ.get('GA4_API_SECRET', '')
     # Events Manager -> pixel -> Conversions API -> gerar token:
-    GA4_API_SECRET_DUMMY_ANCHOR = None  # (nada — âncora removível)
     META_CAPI_TOKEN = os.environ.get('META_CAPI_TOKEN', '')
     # Kill-switch do reporte server-side ('0' desliga):
     ANALYTICS_SERVER = os.environ.get('ANALYTICS_SERVER', '1')
