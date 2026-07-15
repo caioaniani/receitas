@@ -16,7 +16,7 @@ from flask_login import current_user, login_required
 
 from app.blueprints.padeiro import padeiro_bp
 from app.decorators import admin_required, padeiro_required
-from app.extensions import db
+from app.extensions import csrf, db
 from app.models import Driver, PedidoLoja, VendaB2B
 from app.utils import hoje
 
@@ -1108,6 +1108,7 @@ def spotify_token():
 
 
 @padeiro_bp.route('/csp-report', methods=['POST'])
+@csrf.exempt
 def csp_report():
     """Recebe os relatórios de violação de CSP da tela do padeiro (report-uri)
     e guarda os últimos 20 em AppConfig — a sonda /api/claude/spotify-debug
