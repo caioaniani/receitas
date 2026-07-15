@@ -1141,3 +1141,31 @@ def csp_report():
         db.session.rollback()
         logger.exception('csp-report do padeiro falhou (ignorado)')
     return ('', 204)
+
+
+@padeiro_bp.route('/spotify/log', methods=['POST'])
+@login_required
+@padeiro_required
+def spotify_log():
+    """Telemetria do player da tela (últimos 30 eventos em AppConfig, lidos
+    pela sonda /api/claude/spotify-debug). Motivo: o player morre na TV com
+    erro visível SÓ lá — mandar o texto pro servidor fecha o ciclo de
+    diagnóstico sem depender de foto da tela."""
+    import json as _json
+
+    from app.models import AppConfig
+    from app.utils import agora
+    try:
+        dados = request.get_json(silent=True) or {}
+        msg = str(dados.get('msg') or '')[:300]
+        if not msg:
+            return ('', 204)
+        atuais = _json.loads(AppConfig.get('padeiro_spotify_log') or '[]')
+        atuais.append({'em': agora().isoformat(timespec='seconds'),
+                       'msg': msg})
+        AppConfig.set('padeiro_spotify_log', _json.dumps(atuais[-30:]))
+        db.session.commit()
+    except Exception:  # noqa: BLE001 — telemetria nunca derruba nada
+        db.session.rollback()
+        logger.exception('spotify_log falhou (ignorado)')
+    return ('', 204)
