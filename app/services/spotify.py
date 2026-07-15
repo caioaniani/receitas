@@ -195,6 +195,9 @@ def _access_token(forcar_refresh=False):
         # O Spotify PODE rotacionar o refresh token — persistir quando vier.
         if dados.get('refresh_token'):
             AppConfig.set(_K_REFRESH, dados['refresh_token'])
+        # Escopos valem pro token atual (conexão antiga preenche aqui).
+        if dados.get('scope'):
+            AppConfig.set(_K_ESCOPOS, dados['scope'])
         db.session.commit()
         return tok or None
     except Exception:  # noqa: BLE001
