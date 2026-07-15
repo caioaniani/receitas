@@ -956,3 +956,30 @@ def seru_debug():
     except ValueError:
         limit = 1
     return jsonify(ok=True, **debug_seru_status(dia=dia, limit=limit))
+
+
+@claude_api_bp.route('/spotify-debug')
+@_claude_auth_required
+def spotify_debug():
+    """Diagnóstico read-only da integração Spotify (widget do padeiro):
+    presença das envs (NUNCA o valor), conexão da conta, redirect URI em uso
+    e um teste real do player — pro assistente achar em qual elo parou
+    (env → conexão → aparelho/Premium) sem depender de print do dono."""
+    from app.services import spotify
+    envs = {}
+    for k in ('SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET',
+              'SPOTIFY_REDIRECT_URI'):
+        v = (current_app.config.get(k) or '').strip()
+        envs[k] = {'presente': bool(v), 'tamanho': len(v)}
+    out = {
+        'ok': True,
+        'envs': envs,
+        'configurado': spotify.configurado(),
+        'conectado': spotify.conectado(),
+        'conta': spotify.conta_display(),
+        'redirect_uri_em_uso': spotify.redirect_uri(),
+    }
+    if spotify.configurado() and spotify.conectado():
+        out['estado_player'] = spotify.estado_player()
+        out['n_playlists'] = len(spotify.listar_playlists())
+    return jsonify(out)
