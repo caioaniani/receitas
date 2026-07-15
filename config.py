@@ -380,6 +380,17 @@ class Config:
     # GA4 Admin -> Data Streams -> Measurement Protocol API secrets:
     GA4_API_SECRET = os.environ.get('GA4_API_SECRET', '')
     # Events Manager -> pixel -> Conversions API -> gerar token:
+    GA4_API_SECRET_DUMMY_ANCHOR = None  # (nada — âncora removível)
     META_CAPI_TOKEN = os.environ.get('META_CAPI_TOKEN', '')
     # Kill-switch do reporte server-side ('0' desliga):
     ANALYTICS_SERVER = os.environ.get('ANALYTICS_SERVER', '1')
+
+    # ── Spotify (widget 🎵 da tela do padeiro, 15/07/2026) ──
+    # App criado pelo dono em developer.spotify.com; o servidor controla o
+    # aparelho de som via Spotify Connect (app/services/spotify.py). Flask
+    # NAO absorve env var sozinho — sem estas linhas o app nunca ve as
+    # variaveis do Railway (bug real do primeiro deploy da feature).
+    SPOTIFY_CLIENT_ID = os.environ.get('SPOTIFY_CLIENT_ID', '')
+    SPOTIFY_CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET', '')
+    # Opcional: fixa a redirect URI (sem ela, deriva da URL publica).
+    SPOTIFY_REDIRECT_URI = os.environ.get('SPOTIFY_REDIRECT_URI', '')
