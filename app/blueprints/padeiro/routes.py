@@ -1105,3 +1105,38 @@ def spotify_token():
     if not tok:
         return jsonify(ok=False, motivo='sem_token'), 503
     return jsonify(ok=True, access_token=tok, expira_em_s=resta)
+
+
+@padeiro_bp.route('/csp-report', methods=['POST'])
+def csp_report():
+    """Recebe os relatórios de violação de CSP da tela do padeiro (report-uri)
+    e guarda os últimos 20 em AppConfig — a sonda /api/claude/spotify-debug
+    os expõe. Motivo: o áudio do Spotify vem de CDNs variados; quando a CSP
+    bloqueia um host de áudio, a música morre em ~10s SEM erro visível — o
+    relatório diz exatamente QUAL host faltou liberar. Sem CSRF (o navegador
+    envia o report automaticamente, fora de qualquer form) e best-effort."""
+    import json as _json
+
+    from app.models import AppConfig
+    from app.utils import agora
+    try:
+        bruto = request.get_data(as_text=True) or ''
+        if len(bruto) > 10000:
+            return ('', 204)
+        rel = (_json.loads(bruto) or {}).get('csp-report') or {}
+        entrada = {
+            'em': agora().isoformat(timespec='seconds'),
+            'diretiva': (rel.get('violated-directive')
+                         or rel.get('effective-directive') or '')[:80],
+            'bloqueado': (rel.get('blocked-uri') or '')[:200],
+        }
+        if not entrada['bloqueado'] and not entrada['diretiva']:
+            return ('', 204)
+        atuais = _json.loads(AppConfig.get('padeiro_csp_reports') or '[]')
+        atuais.append(entrada)
+        AppConfig.set('padeiro_csp_reports', _json.dumps(atuais[-20:]))
+        db.session.commit()
+    except Exception:  # noqa: BLE001 — relatório nunca pode derrubar nada
+        db.session.rollback()
+        logger.exception('csp-report do padeiro falhou (ignorado)')
+    return ('', 204)
