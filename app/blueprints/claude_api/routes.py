@@ -763,6 +763,17 @@ def auditoria_mapeamentos():
     return jsonify(ok=True, **auditar(dias=dias))
 
 
+@claude_api_bp.route('/auditoria-baixa-pedidos')
+@_claude_auth_required
+def auditoria_baixa_pedidos():
+    """A saída do pedido loja→indústria baixou os congelados? (14/07/2026,
+    "está dando diferença no estoque"). Read-only — compara cada pedido que
+    saiu com os movimentos reais de MovEstoqueProducao. ?dias=N (default 14)."""
+    from app.services import auditoria_baixa_pedidos as svc
+    dias = max(1, min(request.args.get('dias', 14, type=int), 120))
+    return jsonify(ok=True, **svc.auditar(dias=dias))
+
+
 @claude_api_bp.route('/site-metricas')
 @_claude_auth_required
 def site_metricas():
