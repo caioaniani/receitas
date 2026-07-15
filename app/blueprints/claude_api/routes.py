@@ -978,6 +978,10 @@ def spotify_debug():
         'conectado': spotify.conectado(),
         'conta': spotify.conta_display(),
         'redirect_uri_em_uso': spotify.redirect_uri(),
+        # 'streaming' presente = pode tocar NA tela; ausente = precisa
+        # reconectar em /admin/spotify (autorização antiga não ganha escopo).
+        'escopos_concedidos': spotify.escopos_concedidos(),
+        'tem_streaming': 'streaming' in spotify.escopos_concedidos(),
     }
     if spotify.configurado() and spotify.conectado():
         out['estado_player'] = spotify.estado_player()
