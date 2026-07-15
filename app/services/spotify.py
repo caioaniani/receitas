@@ -67,13 +67,23 @@ def conta_display():
     return AppConfig.get(_K_CONTA) or ''
 
 
+_CALLBACK_PROD = ('https://gestao.opaopadariaartesanal.com.br'
+                  '/admin/spotify/callback')
+
+
 def redirect_uri():
     """URI de callback EXATA que precisa estar cadastrada no app do Spotify.
-    Env SPOTIFY_REDIRECT_URI manda; sem ela, deriva da URL pública."""
+    Env SPOTIFY_REDIRECT_URI manda; sem ela, deriva da URL do request atual;
+    fora de request (troca de token em job/teste) cai na URL pública de prod
+    — a URI enviada ao Spotify TEM que bater byte a byte com a cadastrada."""
     fixa = (current_app.config.get('SPOTIFY_REDIRECT_URI') or '').strip()
     if fixa:
         return fixa
-    return url_for('main.spotify_callback', _external=True, _scheme='https')
+    try:
+        return url_for('main.spotify_callback', _external=True,
+                       _scheme='https')
+    except RuntimeError:
+        return _CALLBACK_PROD
 
 
 def url_autorizacao(state):
