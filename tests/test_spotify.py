@@ -313,6 +313,24 @@ def test_endpoint_token_exige_papel(app, loja):
     assert c.get('/padeiro/spotify/token').status_code == 403
 
 
+def test_csp_report_guarda_violacao(app):
+    """O report-uri da tela do padeiro grava a violação (host de áudio
+    bloqueado) em AppConfig — é assim que se descobre qual CDN faltou
+    liberar quando a música morre em ~10s."""
+    import json
+    c = app.test_client()
+    r = c.post('/padeiro/csp-report',
+               data=json.dumps({'csp-report': {
+                   'violated-directive': 'media-src',
+                   'blocked-uri': 'https://audio-novo.cdnexotico.net/x'}}),
+               content_type='application/csp-report')
+    assert r.status_code == 204
+    with app.app_context():
+        salvos = json.loads(AppConfig.get('padeiro_csp_reports') or '[]')
+        assert salvos and salvos[-1]['diretiva'] == 'media-src'
+        assert 'cdnexotico' in salvos[-1]['bloqueado']
+
+
 def test_csp_do_padeiro_libera_spotify(app, admin_user):
     """A CSP da tela do padeiro precisa liberar o SDK (sdk.scdn.co) e o
     áudio (blob:/spotifycdn) — e SÓ nela; o resto do app segue estrito."""
