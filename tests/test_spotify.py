@@ -229,7 +229,7 @@ def test_endpoint_acao_devolve_erro_do_servico(app):
         r = c.post('/padeiro/spotify/acao', json={'acao': 'pause'})
     assert r.status_code == 422
     assert 'Premium' in r.get_json()['erro']
-    ex.assert_called_once_with('pause', None)
+    ex.assert_called_once_with('pause', None, device_id=None)
 
 
 def test_endpoint_acao_ok(app):
