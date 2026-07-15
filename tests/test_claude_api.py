@@ -539,3 +539,53 @@ def test_site_metricas_funil_e_faturamento(app):
     assert d['clientes']['total'] == 1
     assert d['modos_entrega'] == {'retirada': 1}
     assert 'ga4_configurado' in d['rastreio']
+
+
+def test_auditoria_baixa_pedidos_classifica(app):
+    """Sonda /auditoria-baixa-pedidos (14/07/2026): pedido enviado COM
+    movimento = ok; pedido enviado SEM movimento = sem_movimento; falta
+    registrada aparece no agregado por item."""
+    from app.models import EstoqueProducao, MovEstoqueProducao
+
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    client = app.test_client()
+    assert client.get('/api/claude/auditoria-baixa-pedidos').status_code == 401
+
+    r = _seed('Croissant Aud')          # pedido 40 un, pendente
+    loja = Loja.query.filter_by(nome='Loja A').first()
+    p1 = PedidoLoja.query.first()
+    p1.status = 'em_transporte'
+    ep = EstoqueProducao(receita_id=r.id, quantidade=0)
+    db.session.add(ep)
+    db.session.flush()
+    # Baixou 30 e registrou 10 de falta → com_falta (30+10 == 40).
+    db.session.add_all([
+        MovEstoqueProducao(estoque_producao_id=ep.id, tipo='saida_pedido',
+                           quantidade=30,
+                           referencia=f'Pedido #{p1.id} → Loja A'),
+        MovEstoqueProducao(estoque_producao_id=ep.id,
+                           tipo='saida_pedido_sem_estoque', quantidade=10,
+                           referencia=f'Pedido #{p1.id} → Loja A'),
+    ])
+    # Segundo pedido enviado SEM nenhum movimento (escapou da baixa).
+    p2 = PedidoLoja(loja_id=loja.id, status='entregue',
+                    data_entrega=hoje(), data_pedido=hoje())
+    db.session.add(p2)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=p2.id, receita_id=r.id,
+                              quantidade=5))
+    db.session.commit()
+
+    resp = client.get('/api/claude/auditoria-baixa-pedidos?dias=7',
+                      headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True
+    assert d['resumo']['pedidos_analisados'] == 2
+    assert d['resumo']['com_falta'] == 1
+    assert d['resumo']['sem_movimento'] == 1
+    probl = {x['pedido_id']: x for x in d['pedidos_problema']}
+    assert probl[p1.id]['classificacao'] == 'com_falta'
+    assert probl[p1.id]['baixado'] == 30
+    assert probl[p2.id]['classificacao'] == 'sem_movimento'
+    assert d['faltas_por_item'] == [{'item': 'Croissant Aud', 'faltou': 10}]
