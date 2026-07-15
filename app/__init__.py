@@ -431,6 +431,29 @@ def create_app(config_class=None):
             "img-src 'self' data: https://*.dropbox.com "
             "https://*.dropboxusercontent.com;"
         )
+        # Tela do padeiro: Web Playback SDK do Spotify (15/07/2026 — decisao
+        # do dono: a PROPRIA tela toca a musica, nao outro aparelho). O SDK
+        # exige script do sdk.scdn.co, WebSocket/HTTPS pros dominios do
+        # Spotify e audio via MSE (blob:). Capa do album vem do *.scdn.co.
+        # ESCOPADO ao /padeiro — o resto do app segue com a CSP estrita.
+        if request.path.startswith('/padeiro'):
+            response.headers['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "script-src 'self' https://cdn.jsdelivr.net "
+                "https://sdk.scdn.co 'unsafe-inline'; "
+                "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                "font-src 'self' https://cdn.jsdelivr.net; "
+                "connect-src 'self' https://*.spotify.com "
+                "wss://*.spotify.com https://*.scdn.co "
+                "https://*.spotifycdn.com; "
+                "media-src 'self' blob: https://*.spotifycdn.com "
+                "https://*.scdn.co; "
+                "worker-src 'self' blob:; "
+                "frame-src 'self' https://sdk.scdn.co; "
+                "img-src 'self' data: https://*.dropbox.com "
+                "https://*.dropboxusercontent.com https://*.scdn.co "
+                "https://*.spotifycdn.com;"
+            )
         # Popup do painel de entregas: o detalhe do pedido (?embed=1) e embutido
         # num iframe de MESMA ORIGEM (gestao.*). X-Frame-Options=DENY bloquearia
         # ate o same-origin — troca por SAMEORIGIN + frame-ancestors 'self'
