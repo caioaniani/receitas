@@ -148,6 +148,7 @@
 {{ _lnk(variant, url_for('main.audit'), 'Histórico de alterações', request.path == '/audit', title='Quem mudou o quê e quando') }}
 {{ _lnk(variant, url_for('slack.install'), 'Slack Bot', request.path.startswith('/slack')) }}
 {{ _lnk(variant, url_for('notificacoes.index'), 'Notificações WhatsApp', request.path.startswith('/notificacoes')) }}
+{{ _lnk(variant, url_for('main.spotify_admin'), 'Spotify (música do padeiro)', request.path.startswith('/admin/spotify'), title='Conectar a conta do Spotify que a tela do padeiro controla') }}
 {% endmacro %}
 
 
