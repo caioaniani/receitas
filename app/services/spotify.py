@@ -151,8 +151,14 @@ def trocar_codigo(code):
         return False, str(exc)
 
 
+def escopos_concedidos():
+    """Escopos que a conta conectada REALMENTE autorizou (string do Spotify).
+    Vazio em conexão antiga (antes de 15/07) — o refresh também atualiza."""
+    return (AppConfig.get(_K_ESCOPOS) or '').strip()
+
+
 def desconectar():
-    for k in (_K_REFRESH, _K_ACCESS, _K_ACCESS_EXP, _K_CONTA):
+    for k in (_K_REFRESH, _K_ACCESS, _K_ACCESS_EXP, _K_CONTA, _K_ESCOPOS):
         AppConfig.set(k, '')
     db.session.commit()
 
