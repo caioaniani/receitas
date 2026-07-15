@@ -1904,13 +1904,28 @@ precisa ser servido LOCAL porque a CDN e bloqueada).
 
 ## Spotify na tela do padeiro (15/07/2026)
 
-Widget "🎵 Música" no /padeiro: modo CONTROLE REMOTO (Spotify Connect) — a
-música toca no aparelho de som da padaria (qualquer aparelho com Spotify
-aberto na conta da casa) e a tela mostra o que toca + pausar/pular +
-playlists + volume. O SERVIDOR fala com a API (`app/services/spotify.py`);
-o navegador só bate em `/padeiro/spotify/estado|acao` (token nunca vai pro
-browser, CSP intocada). Exige conta PREMIUM (403 PREMIUM_REQUIRED e 404
-NO_ACTIVE_DEVICE viram mensagens claras no widget).
+Widget "🎵 Música" no /padeiro com DOIS modos:
+- **"🔊 Tocar nesta tela"** (decisão do dono 15/07: "quero que ele toque as
+  músicas") — Web Playback SDK: o navegador da tela vira um aparelho
+  Spotify ("Tela do Padeiro — O Pão") e o som sai POR ELA. Exige: escopo
+  `streaming` (conta conectada antes disso precisa RECONECTAR em
+  /admin/spotify), token entregue ao navegador via
+  `GET /padeiro/spotify/token` (protegido por papel — exceção consciente ao
+  "token nunca no browser": exigência do SDK), CSP do /padeiro afrouxada pro
+  Spotify (sdk.scdn.co + *.spotify.com + blob:, ESCOPADA ao path em
+  `app/__init__.py`) e navegador com DRM (Chrome/Edge/Firefox/Safari
+  desktop; iPad/iPhone NAO suportado pelo SDK). Primeiro toque no botao
+  carrega o SDK (gesto libera o áudio) e transfere a reprodução pra tela.
+- **Controle remoto** (Spotify Connect) — comandos miram o aparelho ativo
+  (ou a tela-player via `device_id` no POST de ação). O SERVIDOR fala com a
+  API (`app/services/spotify.py`); rotas `/padeiro/spotify/estado|acao`.
+
+Exige conta PREMIUM (403 PREMIUM_REQUIRED e 404 NO_ACTIVE_DEVICE viram
+mensagens claras no widget). Sonda de diagnóstico:
+`GET /api/claude/spotify-debug` (presença de envs, conexão, teste do player).
+ARMADILHA de config: env var nova SÓ chega no app se declarada em
+`config.py` (Flask não absorve environ sozinho — bug real no 1º deploy,
+travado por teste `test_config_mapeia_as_envs_spotify`).
 
 - **Conexão da conta**: `/admin/spotify` (admin; link na área Administração)
   — OAuth authorization code com state anti-CSRF na session; refresh token
