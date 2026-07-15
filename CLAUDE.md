@@ -1902,6 +1902,26 @@ Ao criar TELA NOVA: validar a 390px antes de fechar (metodo: Playwright +
 login real + `scrollWidth > clientWidth` = estourou; no sandbox o Bootstrap
 precisa ser servido LOCAL porque a CDN e bloqueada).
 
+## Spotify na tela do padeiro (15/07/2026)
+
+Widget "🎵 Música" no /padeiro: modo CONTROLE REMOTO (Spotify Connect) — a
+música toca no aparelho de som da padaria (qualquer aparelho com Spotify
+aberto na conta da casa) e a tela mostra o que toca + pausar/pular +
+playlists + volume. O SERVIDOR fala com a API (`app/services/spotify.py`);
+o navegador só bate em `/padeiro/spotify/estado|acao` (token nunca vai pro
+browser, CSP intocada). Exige conta PREMIUM (403 PREMIUM_REQUIRED e 404
+NO_ACTIVE_DEVICE viram mensagens claras no widget).
+
+- **Conexão da conta**: `/admin/spotify` (admin; link na área Administração)
+  — OAuth authorization code com state anti-CSRF na session; refresh token
+  em AppConfig (`spotify_refresh_token` etc., sobrevive a deploy). Access
+  token renovado sob demanda (rotação de refresh token persistida).
+- **Envs**: `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET` (app criado pelo
+  dono em developer.spotify.com; Redirect URI exata mostrada na tela) +
+  opcional `SPOTIFY_REDIRECT_URI`. Sem envs = widget avisa "não
+  configurado", nada quebra.
+- Testes: `tests/test_spotify.py` (API SEMPRE mockada, padrão Anthropic).
+
 ## Sidebar
 
 Secoes (`sidebar-section-title`) sao **colapsaveis** — JS adiciona chevron + persiste
