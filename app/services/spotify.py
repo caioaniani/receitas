@@ -41,6 +41,7 @@ _K_REFRESH = 'spotify_refresh_token'
 _K_ACCESS = 'spotify_access_token'
 _K_ACCESS_EXP = 'spotify_access_expira_em'   # epoch (str)
 _K_CONTA = 'spotify_conta_display'           # nome da conta conectada (UI)
+_K_ESCOPOS = 'spotify_escopos'               # escopos concedidos na conexão
 
 # Escopos: ler o player + controlar + listar playlists + STREAMING (tocar na
 # própria tela do padeiro via Web Playback SDK — exige 'streaming' +
@@ -128,6 +129,9 @@ def trocar_codigo(code):
         AppConfig.set(_K_ACCESS, dados.get('access_token') or '')
         AppConfig.set(_K_ACCESS_EXP,
                       str(int(time.time()) + int(dados.get('expires_in') or 0)))
+        # Escopos REALMENTE concedidos (a sonda confere se 'streaming' veio —
+        # autorização antiga não ganha escopo novo sozinha; caso real 15/07).
+        AppConfig.set(_K_ESCOPOS, dados.get('scope') or '')
         db.session.commit()
         # Nome da conta conectada (best-effort, só pra UI do admin).
         try:
