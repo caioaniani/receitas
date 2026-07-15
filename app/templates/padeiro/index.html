@@ -962,6 +962,14 @@
       return;
     }
     var h = '';
+    // "Tocar nesta tela": a própria tela vira o aparelho de som (Web
+    // Playback SDK). Some quando ELA já é o aparelho tocando.
+    var souEu = spotDeviceId && d.aparelho === SPOT_NOME_TELA;
+    if (souEu) {
+      h += '<button class="spot-aqui ativo" type="button">✓ O som está saindo desta tela</button>';
+    } else {
+      h += '<button class="spot-aqui" type="button" onclick="spotTocarAqui()">🔊 Tocar nesta tela</button>';
+    }
     if (d.sem_aparelho) {
       h += '<div class="spot-msg">' + _mepEsc(d.mensagem) + '</div>';
     } else {
