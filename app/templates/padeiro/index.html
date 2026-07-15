@@ -520,6 +520,18 @@
   </div>
   <div id="prep-lista"></div>
 </div>
+
+{# Widget Spotify: controla a música que toca no aparelho de som da padaria
+   (Spotify Connect). O navegador só fala com /padeiro/spotify/* — o servidor
+   fala com o Spotify. Conexão da conta: /admin/spotify. #}
+<div id="spot-backdrop" onclick="toggleSpot()"></div>
+<div id="spot-drawer">
+  <div class="hist-head">
+    <strong>🎵 Música</strong>
+    <button class="hist-x" onclick="toggleSpot()" aria-label="Fechar">×</button>
+  </div>
+  <div id="spot-body"><div class="spot-msg">Carregando…</div></div>
+</div>
 <button id="prod-toggle" onclick="toggleProd()">Produzir</button>
 <div id="prod-backdrop" onclick="toggleProd()"></div>
 <div id="prod-drawer">
