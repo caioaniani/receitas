@@ -4699,3 +4699,77 @@ def seo_descricoes_salvar():
     obj.descricao_seo = texto or None
     db.session.commit()
     return jsonify(ok=True, salvo=bool(texto), len=len(texto))
+
+
+# ── Spotify (música da tela do padeiro) — conexão da conta (15/07/2026) ─────
+
+@main_bp.route('/admin/spotify')
+@admin_required
+def spotify_admin():
+    """Status da integração Spotify + instruções de setup + botão Conectar.
+    A música é controlada pela tela do padeiro (/padeiro, widget 🎵); aqui o
+    administrador conecta a conta do Spotify da padaria UMA vez."""
+    from app.services import spotify
+    return render_template(
+        'admin/spotify.html',
+        configurado=spotify.configurado(),
+        conectado=spotify.conectado(),
+        conta=spotify.conta_display(),
+        redirect_uri=(spotify.redirect_uri() if spotify.configurado()
+                      else url_for('main.spotify_callback', _external=True)))
+
+
+@main_bp.route('/admin/spotify/conectar')
+@admin_required
+def spotify_conectar():
+    """Manda o admin pro consentimento do Spotify (state anti-CSRF na
+    session, conferido no callback)."""
+    import secrets
+
+    from flask import session
+
+    from app.services import spotify
+    if not spotify.configurado():
+        flash('Configure SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET no '
+              'Railway antes de conectar.', 'warning')
+        return redirect(url_for('main.spotify_admin'))
+    state = secrets.token_urlsafe(24)
+    session['spotify_oauth_state'] = state
+    return redirect(spotify.url_autorizacao(state))
+
+
+@main_bp.route('/admin/spotify/callback')
+@admin_required
+def spotify_callback():
+    """Volta do consentimento: valida o state e troca o código por tokens."""
+    from flask import session
+
+    from app.services import spotify
+    state = request.args.get('state') or ''
+    esperado = session.pop('spotify_oauth_state', None)
+    if not esperado or state != esperado:
+        flash('Retorno do Spotify inválido (state não confere) — tente '
+              'conectar de novo.', 'danger')
+        return redirect(url_for('main.spotify_admin'))
+    if request.args.get('error'):
+        flash(f'O Spotify recusou a autorização: {request.args["error"]}',
+              'danger')
+        return redirect(url_for('main.spotify_admin'))
+    code = request.args.get('code') or ''
+    ok, erro = spotify.trocar_codigo(code)
+    if ok:
+        flash('Spotify conectado! O widget 🎵 da tela do padeiro já '
+              'funciona.', 'success')
+    else:
+        flash(f'Falha ao conectar o Spotify: {erro}', 'danger')
+    return redirect(url_for('main.spotify_admin'))
+
+
+@main_bp.route('/admin/spotify/desconectar', methods=['POST'])
+@admin_required
+def spotify_desconectar():
+    """Apaga os tokens salvos (o app segue cadastrado no Spotify)."""
+    from app.services import spotify
+    spotify.desconectar()
+    flash('Spotify desconectado.', 'info')
+    return redirect(url_for('main.spotify_admin'))
