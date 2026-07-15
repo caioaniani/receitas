@@ -1050,6 +1050,19 @@
   function spotErroMsg(t) {
     var e = document.getElementById('spot-erro');
     if (e) e.textContent = t;
+    if (t) spotLog('erro: ' + t);
+  }
+
+  // Telemetria do player pro servidor (lida pela sonda do assistente) —
+  // o erro que aparece SÓ na TV vira diagnóstico remoto. Fire-and-forget.
+  function spotLog(msg) {
+    try {
+      fetch('{{ url_for('padeiro.spotify_log') }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ msg: String(msg).slice(0, 280) })
+      }).catch(function () {});
+    } catch (e) { /* nunca derruba o player */ }
   }
 
   function spotBuscarToken(cb) {
