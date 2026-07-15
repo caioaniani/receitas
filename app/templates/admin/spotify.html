@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Spotify — música do padeiro{% endblock %}
+
+{% block content %}
+<h1 class="page-title mb-3"><i class="bi bi-music-note-beamed"></i> Spotify — música da tela do padeiro</h1>
+
+<div class="alert alert-light border small mb-3">
+  A tela do padeiro (<code>/padeiro</code>) tem o widget <strong>🎵 Música</strong>:
+  mostra o que está tocando e controla (pausar, pular, playlist, volume) a música
+  que toca no <strong>aparelho de som da padaria</strong> — qualquer aparelho com o
+  Spotify aberto (celular, computador, caixa). O controle usa a conta conectada
+  abaixo e exige <strong>Spotify Premium</strong>.
+</div>
+
+<div class="card mb-3" style="max-width:720px;">
+  <div class="card-header py-2"><strong>Estado</strong></div>
+  <div class="card-body">
+    <ul class="mb-2">
+      <li>Credenciais do app (envs):
+        {% if configurado %}<span class="badge bg-success">configuradas</span>
+        {% else %}<span class="badge bg-danger">faltando</span>{% endif %}
+      </li>
+      <li>Conta conectada:
+        {% if conectado %}
+          <span class="badge bg-success">sim</span>
+          {% if conta %}<strong>{{ conta }}</strong>{% endif %}
+        {% else %}<span class="badge bg-secondary">não</span>{% endif %}
+      </li>
+    </ul>
+    {% if configurado and not conectado %}
+    <a class="btn btn-success" href="{{ url_for('main.spotify_conectar') }}">
+      <i class="bi bi-spotify"></i> Conectar conta do Spotify
+    </a>
+    {% elif conectado %}
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-success btn-sm" href="{{ url_for('main.spotify_conectar') }}">
+        Reconectar (trocar de conta)
+      </a>
+      <form method="POST" action="{{ url_for('main.spotify_desconectar') }}"
+            onsubmit="return confirm('Desconectar o Spotify? O widget do padeiro para de funcionar até reconectar.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-danger btn-sm">Desconectar</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card" style="max-width:720px;">
+  <div class="card-header py-2"><strong>Setup (uma vez)</strong></div>
+  <div class="card-body small">
+    <ol class="mb-2">
+      <li>Entre em <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>
+          com a conta do Spotify da padaria e clique <strong>Create app</strong>.</li>
+      <li>Em <strong>Redirect URIs</strong>, cadastre exatamente:<br>
+          <code>{{ redirect_uri }}</code></li>
+      <li>Em <strong>Which API/SDKs are you planning to use?</strong> marque <strong>Web API</strong>.</li>
+      <li>Copie o <strong>Client ID</strong> e o <strong>Client Secret</strong> do app criado e
+          cadastre no Railway as variáveis
+          <code>SPOTIFY_CLIENT_ID</code> e <code>SPOTIFY_CLIENT_SECRET</code>.</li>
+      <li>Depois do deploy, volte aqui e clique <strong>Conectar conta do Spotify</strong>.</li>
+    </ol>
+    <div class="text-muted">
+      O aparelho do som precisa estar com o Spotify aberto e logado na mesma conta
+      — o widget comanda esse aparelho à distância (Spotify Connect).
+    </div>
+  </div>
+</div>
+{% endblock %}
