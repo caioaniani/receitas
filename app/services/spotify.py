@@ -42,10 +42,14 @@ _K_ACCESS = 'spotify_access_token'
 _K_ACCESS_EXP = 'spotify_access_expira_em'   # epoch (str)
 _K_CONTA = 'spotify_conta_display'           # nome da conta conectada (UI)
 
-# Escopos: ler o player + controlar + listar playlists da conta.
+# Escopos: ler o player + controlar + listar playlists + STREAMING (tocar na
+# própria tela do padeiro via Web Playback SDK — exige 'streaming' +
+# user-read-email/private por regra do Spotify). Conta conectada ANTES do
+# escopo streaming precisa RECONECTAR em /admin/spotify pra tela virar som.
 SCOPES = ('user-read-playback-state user-modify-playback-state '
           'user-read-currently-playing playlist-read-private '
-          'playlist-read-collaborative')
+          'playlist-read-collaborative streaming user-read-email '
+          'user-read-private')
 
 
 def _cfg():
