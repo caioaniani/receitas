@@ -437,6 +437,12 @@ def create_app(config_class=None):
         # Spotify e audio via MSE (blob:). Capa do album vem do *.scdn.co.
         # ESCOPADO ao /padeiro — o resto do app segue com a CSP estrita.
         if request.path.startswith('/padeiro'):
+            # Dominios de AUDIO do Spotify variam por regiao/CDN (scdn.co,
+            # spotifycdn.com/.net, Akamai) — lista curta demais = a musica
+            # toca o 1º buffer (~10s) e MORRE com o estado "tocando" (caso
+            # real 15/07). O report-uri manda cada bloqueio pro nosso
+            # endpoint, visivel na sonda /api/claude/spotify-debug — se um
+            # host novo aparecer, o relatorio diz QUAL.
             response.headers['Content-Security-Policy'] = (
                 "default-src 'self'; "
                 "script-src 'self' https://cdn.jsdelivr.net "
@@ -445,14 +451,17 @@ def create_app(config_class=None):
                 "font-src 'self' https://cdn.jsdelivr.net; "
                 "connect-src 'self' https://*.spotify.com "
                 "wss://*.spotify.com https://*.scdn.co "
-                "https://*.spotifycdn.com; "
+                "https://*.spotifycdn.com https://*.spotifycdn.net "
+                "https://*.akamaized.net; "
                 "media-src 'self' blob: https://*.spotifycdn.com "
+                "https://*.spotifycdn.net https://*.akamaized.net "
                 "https://*.scdn.co; "
                 "worker-src 'self' blob:; "
                 "frame-src 'self' https://sdk.scdn.co; "
                 "img-src 'self' data: https://*.dropbox.com "
                 "https://*.dropboxusercontent.com https://*.scdn.co "
-                "https://*.spotifycdn.com;"
+                "https://*.spotifycdn.com; "
+                "report-uri /padeiro/csp-report;"
             )
         # Popup do painel de entregas: o detalhe do pedido (?embed=1) e embutido
         # num iframe de MESMA ORIGEM (gestao.*). X-Frame-Options=DENY bloquearia
