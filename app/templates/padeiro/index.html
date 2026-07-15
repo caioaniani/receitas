@@ -1064,8 +1064,17 @@
   }
 
   function spotTocarAqui() {
-    if (spotDeviceId) {                 // player já pronto: só transfere
+    // REGRA DE OURO do navegador: o desbloqueio do áudio (activateElement)
+    // só vale DENTRO do toque físico. Por isso: 1º toque carrega o SDK;
+    // quando pronto, o botão vira "▶ Começar a tocar" e o 2º toque
+    // desbloqueia o áudio AQUI e transfere a música pra tela. O mesmo
+    // toque serve de recuperação quando o estado diz "tocando" e a tela
+    // está muda (caso real 15/07: activateElement fora do gesto = mudo).
+    if (spotPlayer && spotDeviceId) {
+      if (spotPlayer.activateElement) spotPlayer.activateElement();
       spotAcao('transferir', spotDeviceId);
+      // resume cobre o caso "já é o aparelho, só estava mudo"
+      if (spotPlayer.resume) spotPlayer.resume();
       return;
     }
     if (spotSdkPedido) { spotErroMsg('preparando o player… toque de novo em instantes'); return; }
@@ -1075,12 +1084,12 @@
       spotPlayer = new Spotify.Player({
         name: SPOT_NOME_TELA,
         getOAuthToken: spotBuscarToken,
-        volume: 0.8
+        volume: 1.0
       });
       spotPlayer.addListener('ready', function (e) {
         spotDeviceId = e.device_id;
-        spotErroMsg('');
-        spotAcao('transferir', spotDeviceId);   // puxa a música pra cá
+        spotErroMsg('player pronto — toque em "▶ Começar a tocar nesta tela"');
+        spotCarregar(false);            // re-renderiza o botão pro passo 2
       });
       spotPlayer.addListener('not_ready', function () { spotDeviceId = null; });
       spotPlayer.addListener('initialization_error', function (e) {
@@ -1098,10 +1107,15 @@
         spotSdkPedido = false;
         spotErroMsg('a conta do Spotify precisa ser Premium.');
       });
-      // Desbloqueio de áudio em navegador móvel (precisa vir de um gesto —
-      // estamos dentro do clique). Método pode não existir em versões
-      // antigas do SDK, daí o guard.
-      if (spotPlayer.activateElement) spotPlayer.activateElement();
+      // Sem estes dois, o áudio travado ficava INVISÍVEL (estado "tocando"
+      // e tela muda, sem nenhuma mensagem) — caso real de 15/07.
+      spotPlayer.addListener('autoplay_failed', function () {
+        spotErroMsg('o navegador segurou o áudio — toque no botão verde de ' +
+                    'novo pra liberar o som.');
+      });
+      spotPlayer.addListener('playback_error', function (e) {
+        spotErroMsg('erro ao tocar: ' + ((e && e.message) || '?'));
+      });
       spotPlayer.connect();
     };
     var s = document.createElement('script');
