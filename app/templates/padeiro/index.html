@@ -1037,11 +1037,86 @@
     spotAcao('volume', spotVolume);
   }
 
+  // ── "Tocar nesta tela": Web Playback SDK — a tela vira o aparelho de som
+  //    (decisão do dono 15/07/2026). O SDK carrega SÓ no primeiro toque no
+  //    botão (gesto do usuário libera o áudio no navegador). ──
+  var SPOT_NOME_TELA = 'Tela do Padeiro — O Pão';
+  var spotPlayer = null, spotDeviceId = null, spotSdkPedido = false;
+
+  function spotErroMsg(t) {
+    var e = document.getElementById('spot-erro');
+    if (e) e.textContent = t;
+  }
+
+  function spotBuscarToken(cb) {
+    fetch('{{ url_for('padeiro.spotify_token') }}')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.ok) cb(d.access_token);
+        else spotErroMsg('sem autorização pra tocar aqui — reconecte o ' +
+                         'Spotify em /admin/spotify');
+      })
+      .catch(function () { spotErroMsg('sem ligação com o servidor'); });
+  }
+
+  function spotTocarAqui() {
+    if (spotDeviceId) {                 // player já pronto: só transfere
+      spotAcao('transferir', spotDeviceId);
+      return;
+    }
+    if (spotSdkPedido) { spotErroMsg('preparando o player… toque de novo em instantes'); return; }
+    spotSdkPedido = true;
+    spotErroMsg('preparando o player…');
+    window.onSpotifyWebPlaybackSDKReady = function () {
+      spotPlayer = new Spotify.Player({
+        name: SPOT_NOME_TELA,
+        getOAuthToken: spotBuscarToken,
+        volume: 0.8
+      });
+      spotPlayer.addListener('ready', function (e) {
+        spotDeviceId = e.device_id;
+        spotErroMsg('');
+        spotAcao('transferir', spotDeviceId);   // puxa a música pra cá
+      });
+      spotPlayer.addListener('not_ready', function () { spotDeviceId = null; });
+      spotPlayer.addListener('initialization_error', function (e) {
+        spotSdkPedido = false;
+        spotErroMsg('este navegador não consegue tocar aqui (sem suporte a ' +
+                    'DRM). Em iPad/iPhone o Spotify não permite; use ' +
+                    'Chrome/Edge num computador ou Android.');
+      });
+      spotPlayer.addListener('authentication_error', function () {
+        spotSdkPedido = false;
+        spotErroMsg('a autorização atual não cobre tocar na tela — ' +
+                    'reconecte o Spotify em /admin/spotify (1 clique).');
+      });
+      spotPlayer.addListener('account_error', function () {
+        spotSdkPedido = false;
+        spotErroMsg('a conta do Spotify precisa ser Premium.');
+      });
+      // Desbloqueio de áudio em navegador móvel (precisa vir de um gesto —
+      // estamos dentro do clique). Método pode não existir em versões
+      // antigas do SDK, daí o guard.
+      if (spotPlayer.activateElement) spotPlayer.activateElement();
+      spotPlayer.connect();
+    };
+    var s = document.createElement('script');
+    s.src = 'https://sdk.scdn.co/spotify-player.js';
+    s.onerror = function () {
+      spotSdkPedido = false;
+      spotErroMsg('não deu pra carregar o player do Spotify (rede/bloqueio).');
+    };
+    document.head.appendChild(s);
+  }
+
   function spotAcao(acao, valor) {
     fetch('{{ url_for('padeiro.spotify_acao') }}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body: JSON.stringify({ acao: acao, valor: valor })
+      // device_id: quando a tela é o player, os comandos miram NELA (sem
+      // isso, playlist/play iriam pro "aparelho ativo", que pode ser outro).
+      body: JSON.stringify({ acao: acao, valor: valor,
+                             device_id: spotDeviceId })
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {
