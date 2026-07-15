@@ -963,10 +963,14 @@
     }
     var h = '';
     // "Tocar nesta tela": a própria tela vira o aparelho de som (Web
-    // Playback SDK). Some quando ELA já é o aparelho tocando.
+    // Playback SDK). O onclick fica SEMPRE ligado — mesmo no estado ✓ —
+    // porque o toque é o GESTO que desbloqueia o áudio no navegador
+    // (recuperação pra quando o estado diz "tocando" mas o som ficou mudo).
     var souEu = spotDeviceId && d.aparelho === SPOT_NOME_TELA;
     if (souEu) {
-      h += '<button class="spot-aqui ativo" type="button">✓ O som está saindo desta tela</button>';
+      h += '<button class="spot-aqui ativo" type="button" onclick="spotTocarAqui()">✓ O som está saindo desta tela <small>(sem som? toque aqui)</small></button>';
+    } else if (spotDeviceId) {
+      h += '<button class="spot-aqui" type="button" onclick="spotTocarAqui()">▶ Começar a tocar nesta tela</button>';
     } else {
       h += '<button class="spot-aqui" type="button" onclick="spotTocarAqui()">🔊 Tocar nesta tela</button>';
     }
