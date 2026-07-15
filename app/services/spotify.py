@@ -314,32 +314,42 @@ def listar_playlists(limite=30):
             for p in corpo.get('items') or [] if p and p.get('uri')]
 
 
-def executar_acao(acao, valor=None):
+def executar_acao(acao, valor=None, device_id=None):
     """Executa um comando do widget. Retorna (ok, mensagem_erro|None).
-    Ações: play, pause, next, previous, volume (0-100), playlist (uri)."""
+    Ações: play, pause, next, previous, volume (0-100), playlist (uri),
+    transferir (valor = device_id do aparelho, ex.: a tela virando player).
+    `device_id` opcional mira o comando num aparelho específico (a tela do
+    padeiro tocando localmente) em vez do "aparelho ativo"."""
     if not configurado():
         return False, 'Spotify não configurado'
+    did = (device_id or '').strip() or None
+    params_dev = {'device_id': did} if did else None
     rotas = {
         'play': ('PUT', '/me/player/play', None),
         'pause': ('PUT', '/me/player/pause', None),
         'next': ('POST', '/me/player/next', None),
         'previous': ('POST', '/me/player/previous', None),
     }
+    if acao == 'transferir':
+        return transferir_para(valor)
     if acao in rotas:
         metodo, caminho, body = rotas[acao]
-        status, corpo, erro = _req(metodo, caminho, json_body=body)
+        status, corpo, erro = _req(metodo, caminho, params=params_dev,
+                                   json_body=body)
     elif acao == 'volume':
         try:
             vol = max(0, min(int(valor), 100))
         except (TypeError, ValueError):
             return False, 'volume inválido'
-        status, corpo, erro = _req('PUT', '/me/player/volume',
-                                   params={'volume_percent': vol})
+        params = {'volume_percent': vol}
+        if did:
+            params['device_id'] = did
+        status, corpo, erro = _req('PUT', '/me/player/volume', params=params)
     elif acao == 'playlist':
         uri = (valor or '').strip()
         if not uri.startswith('spotify:'):
             return False, 'playlist inválida'
-        status, corpo, erro = _req('PUT', '/me/player/play',
+        status, corpo, erro = _req('PUT', '/me/player/play', params=params_dev,
                                    json_body={'context_uri': uri})
     else:
         return False, 'ação desconhecida'
