@@ -583,3 +583,19 @@ def test_reenviar_com_csrf_ligado_funciona(app):
         assert r.status_code in (302, 303), r.status_code
     finally:
         app.config['WTF_CSRF_ENABLED'] = False
+
+
+def test_lista_mostra_motivo_do_cancelamento(app):
+    """Motivo do cancelamento na LISTA (16/07/2026 — Pix expirado parecia
+    cancelamento manual e gerava confusão com clientes)."""
+    from app.extensions import db
+    c = _owner(app)
+    p = _pedido(db, codigo='MOTIV1', status='cancelado')
+    p.motivo_cancelamento = 'pix_expirado'
+    db.session.commit()
+    html = c.get('/admin/loja-online/pedidos?status=cancelado').data.decode()
+    assert 'Pix não pago (reserva expirou)' in html
+    # Cancelado ANTIGO sem motivo gravado: infere pelos timestamps.
+    p2 = _pedido(db, codigo='MOTIV2', status='cancelado')
+    html = c.get('/admin/loja-online/pedidos?status=cancelado').data.decode()
+    assert 'Pix não pago (inferido)' in html
