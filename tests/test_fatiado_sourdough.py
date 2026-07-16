@@ -153,6 +153,34 @@ def test_sessao_separa_fatiado_de_inteiro(app):
 
 # ── Painel de entregas: o item leva fatiado pra cozinha ────────────────────
 
+def _slug(nome):
+    from app.services.loja_catalogo import _slugify
+    return _slugify(nome)
+
+
+def test_pagina_produto_sourdough_tem_checkbox(app, monkeypatch):
+    """Página de um sourdough mostra o checkbox 'fatiado'; um não-sourdough
+    (granola) não mostra."""
+    monkeypatch.delenv('LOJA_VISIVEL', raising=False)
+    sd = _sourdough('Sourdough Integral')
+    gr = _sourdough('Granola Artesanal', familia=None)
+    _loja_site()
+    c = app.test_client()
+    with c.session_transaction() as s:
+        from app.models import Usuario
+        u = Usuario(nome='A', login='a2', papel='admin')
+        u.set_senha('x' * 8)
+        db.session.add(u)
+        db.session.commit()
+        s['_user_id'] = str(u.id)
+        s['_fresh'] = True
+    html_sd = c.get(f'/loja/{_slug(sd.nome)}-r{sd.id}').get_data(as_text=True)
+    html_gr = c.get(f'/loja/{_slug(gr.nome)}-r{gr.id}').get_data(as_text=True)
+    assert 'quer-fatiado' in html_sd
+    assert 'Quero <strong>fatiado</strong>' in html_sd
+    assert 'quer-fatiado' not in html_gr
+
+
 def test_painel_serializa_fatiado(app):
     from app.blueprints.entregas.routes import _serializar_pedido_online
     from app.services import loja_checkout
