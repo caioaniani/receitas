@@ -121,11 +121,12 @@
       renderCardAdds();
     },
 
-    qtdDe: function (kind, id) {
+    qtdDe: function (kind, id, fatiado) {
       var itens = this.ler();
-      var k = this._chaveItem(kind, id);
+      var k = this._chaveItem(kind, id, fatiado);
       for (var i = 0; i < itens.length; i++) {
-        if (this._chaveItem(itens[i].kind, itens[i].id) === k) {
+        if (this._chaveItem(itens[i].kind, itens[i].id,
+                            itens[i].fatiado) === k) {
           return parseInt(itens[i].qtd, 10) || 0;
         }
       }
