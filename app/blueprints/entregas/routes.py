@@ -510,7 +510,9 @@ def api_painel():
             'retirada': bool(p.get('retirada')),
             'telefone': p.get('telefone') or '',
             'cartinha': p.get('cartinha') or '',
-            'itens': [{'nome': it.get('nome') or '', 'qtd': it.get('quantidade') or 1}
+            'itens': [{'nome': it.get('nome') or '',
+                       'qtd': it.get('quantidade') or 1,
+                       'fatiado': bool(it.get('fatiado'))}
                       for it in (p.get('itens') or [])],
             'status': status,            # novo|visto|pronto|entregue
             'novo': status == 'novo',    # mantido pra o alerta sonoro
