@@ -763,6 +763,45 @@ def auditoria_mapeamentos():
     return jsonify(ok=True, **auditar(dias=dias))
 
 
+@claude_api_bp.route('/pedidos-site')
+@_claude_auth_required
+def pedidos_site():
+    """Pedidos do SITE dos últimos N dias com a linha do tempo de status e
+    cobranças (15/07/2026, caso "cliente recebeu cancelamento de pedido que
+    não cancelei") — permite reconstruir QUEM foi cancelado, quando e por
+    quê. Read-only. Params: ?dias=3 (1-30), ?status=cancelado (opcional)."""
+    from datetime import datetime, time, timedelta
+
+    from app.models import PedidoOnline
+    from app.utils import hoje
+
+    dias = max(1, min(request.args.get('dias', 3, type=int), 30))
+    status_f = (request.args.get('status') or '').strip()
+    ini_dt = datetime.combine(hoje() - timedelta(days=dias - 1), time.min)
+    q = PedidoOnline.query.filter(PedidoOnline.criado_em >= ini_dt)
+    if status_f:
+        q = q.filter(PedidoOnline.status == status_f)
+    out = []
+    for p in q.order_by(PedidoOnline.criado_em.desc()).limit(200).all():
+        out.append({
+            'codigo': p.codigo, 'status': p.status,
+            'nome_cliente': p.nome_cliente,
+            'valor_total': float(p.valor_total or 0),
+            'modo_entrega': p.modo_entrega,
+            'criado_em': p.criado_em.isoformat() if p.criado_em else None,
+            'pago_em': p.pago_em.isoformat() if p.pago_em else None,
+            'cancelado_em': p.cancelado_em.isoformat()
+            if getattr(p, 'cancelado_em', None) else None,
+            'motivo_cancelamento': p.motivo_cancelamento,
+            'pagamentos': [{
+                'metodo': pg.metodo, 'status': pg.status,
+                'valor': float(pg.valor or 0),
+                'charge_id': pg.pagarme_charge_id,
+            } for pg in p.pagamentos],
+        })
+    return jsonify(ok=True, dias=dias, pedidos=out)
+
+
 @claude_api_bp.route('/auditoria-baixa-pedidos')
 @_claude_auth_required
 def auditoria_baixa_pedidos():
