@@ -93,20 +93,13 @@ def test_presente_so_com_cartinha_marca_e_presente(app):
     assert card['telefone_comprador'] == '11988887777'
 
 
-def test_checkout_deixa_claro_telefone_do_comprador(app):
+def test_checkout_deixa_claro_telefone_do_comprador(app, monkeypatch):
     """O formulário rotula o telefone principal como do COMPRADOR e avisa
-    sobre presente (a raiz do incidente)."""
-    from app.extensions import db
-    from app.models import AppConfig
-    # host da loja pra /loja/checkout responder
-    AppConfig.set('loja_host', 'opao.online')
-    db.session.commit()
-    c = app.test_client()
-    html = c.get('/checkout', base_url='http://opao.online').get_data(
-        as_text=True)
-    if 'Seu telefone' not in html:
-        # host gate pode variar em teste; ao menos garante o template certo
-        html = c.get('/checkout').get_data(as_text=True)
+    sobre presente (a raiz do incidente). Mesmo acesso dos testes de casca
+    do checkout (staff logado, sem LOJA_VISIVEL)."""
+    monkeypatch.delenv('LOJA_VISIVEL', raising=False)
+    c = _staff(app)
+    html = c.get('/loja/checkout').get_data(as_text=True)
     assert 'Seu telefone (WhatsApp)' in html
     assert 'não o de quem vai receber' in html
     assert 'Telefone de quem vai receber' in html
