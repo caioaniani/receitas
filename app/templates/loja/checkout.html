@@ -123,9 +123,13 @@
                  pattern="[^0-9]+" title="Apenas letras, sem números"
                  value="{{ form.get('nome_destinatario', '') }}" data-nome-field>
         </label>
-        <label>Telefone do destinatário (opcional)
+        <label>Telefone de quem vai receber (opcional)
           <input type="tel" name="telefone_destinatario" inputmode="tel"
+                 placeholder="Ex: (11) 97777-6666"
                  value="{{ form.get('telefone_destinatario', '') }}">
+          <small class="text-muted">Usamos só pro <strong>entregador</strong>
+            ligar na hora de entregar. Dúvidas sobre o pedido a gente resolve
+            com <strong>você</strong>, no seu número acima.</small>
         </label>
       </div>
 
