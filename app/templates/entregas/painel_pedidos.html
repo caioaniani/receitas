@@ -638,10 +638,27 @@
               '<button class="btn-entregue" data-act="entregue">📦 ENTREGUE</button>';
     }
 
+    // Telefone: num PRESENTE, separa "quem recebe" (entrega/motoboy) do
+    // COMPRADOR (dúvidas) — ligar pro destinatário estraga a surpresa. Fora
+    // de presente é um número só (comprador = quem recebe).
+    var telHTML = '';
+    if (p.e_presente) {
+      telHTML += '<div class="d-presente">🎁 Presente — <strong>não ligue pra quem recebe</strong>, estraga a surpresa. Dúvida? Fale com o comprador.</div>';
+      if (p.telefone && p.telefone !== p.telefone_comprador) {
+        telHTML += '<div class="d-tel">📞 Entrega (quem recebe): ' + esc(p.telefone) + '</div>';
+      }
+      if (p.telefone_comprador) {
+        telHTML += '<div class="d-tel d-tel-comprador">☎️ Comprador (dúvidas): ' + esc(p.telefone_comprador) + '</div>';
+      } else if (p.telefone) {
+        telHTML += '<div class="d-tel">📞 ' + esc(p.telefone) + '</div>';
+      }
+    } else if (p.telefone) {
+      telHTML += '<div class="d-tel">📞 ' + esc(p.telefone) + '</div>';
+    }
     document.getElementById('detalhe-box').innerHTML =
       '<div class="d-nome">' + esc(p.destinatario) + '</div>' +
       '<div class="d-end">📍 ' + esc(p.endereco || '—') + '</div>' +
-      (p.telefone ? '<div class="d-tel">📞 ' + esc(p.telefone) + '</div>' : '') +
+      telHTML +
       '<div><span class="d-janela ' + (p.expresso ? 'expr' : '') + '">' + esc(janela) + '</span></div>' +
       '<div class="cartinha-bloco ' + (temCart ? '' : 'vazia') + '">' +
         '<div class="lbl">💌 Cartinha (escrever à mão)</div>' +
