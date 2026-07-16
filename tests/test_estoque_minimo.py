@@ -333,3 +333,32 @@ def test_rota_estoque_loja_mostra_coluna_minimo(app, admin_user):
     assert 'name="minimo[]"' in body
     assert 'Salvar mínimos' in body
     assert 'value="30"' in body                 # o mínimo cadastrado pré-preenchido
+
+
+def test_rota_estoque_loja_separa_por_tipo(app, admin_user):
+    """A tabela agrupa por tipo de item: Receitas / Produtos / Matérias-primas.
+    Cada item cai só no seu grupo e a linha (estoque_id) aparece uma vez."""
+    from app.models import MateriaPrima, Produto
+    loja = _loja('Loja Grupos')
+    r = _receita('Pão Sourdough')
+    p = Produto(nome='Cesta Café', ativo=True)
+    mp = MateriaPrima(nome='Farinha T1', unidade='kg', custo_por_kg=5.0)
+    db.session.add_all([p, mp])
+    db.session.commit()
+    el_r = _estoque(loja, r, 5)
+    el_p = EstoqueLoja(loja_id=loja.id, produto_id=p.id, quantidade=3)
+    el_mp = EstoqueLoja(loja_id=loja.id, materia_prima_id=mp.id, quantidade=7)
+    db.session.add_all([el_p, el_mp])
+    db.session.commit()
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    resp = client.get('/pedidos/estoque-loja?loja=%d' % loja.id)
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    # os três cabeçalhos de grupo aparecem, na ordem receita > produto > MP
+    assert body.index('Receitas') < body.index('Produtos') < body.index('Matérias-primas')
+    # cada item aparece exatamente uma vez no form (uma linha, um estoque_id)
+    for el in (el_r, el_p, el_mp):
+        assert body.count('name="estoque_id[]" value="%d"' % el.id) == 1
