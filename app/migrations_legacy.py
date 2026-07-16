@@ -1902,6 +1902,9 @@ def _migrate_sqlite(app):
     cols_el = [row[1] for row in cursor.fetchall()]
     if cols_el and 'nome_pendente' not in cols_el:
         cursor.execute("ALTER TABLE estoque_loja ADD COLUMN nome_pendente VARCHAR(200)")
+    # estoque_loja.estoque_minimo — piso do pedido loja->industria por item.
+    if cols_el and 'estoque_minimo' not in cols_el:
+        cursor.execute("ALTER TABLE estoque_loja ADD COLUMN estoque_minimo INTEGER")
     # Reserva de estoque (21/06/2026 — race condition no cutover).
     if cols_el and 'quantidade_reservada' not in cols_el:
         cursor.execute("ALTER TABLE estoque_loja ADD COLUMN "
