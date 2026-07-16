@@ -395,6 +395,11 @@ def _migrate_postgres(app):
             conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN nome_pendente VARCHAR(200)"))
         if cols_el and 'estado' not in cols_el:
             conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN estado VARCHAR(20)"))
+        # Estoque minimo da LOJA por item (loja x receita/produto/MP): piso
+        # da sugestao de pedido loja->industria (motor venda+estoque em
+        # previsao_producao.sugerir_pedidos_por_venda). Vazio = sem piso.
+        if cols_el and 'estoque_minimo' not in cols_el:
+            conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN estoque_minimo INTEGER"))
 
         # Tabelas Seru (mapeamento + idempotencia). db.create_all() cria
         # automaticamente, este bloco e so safety pra ambientes que ja
