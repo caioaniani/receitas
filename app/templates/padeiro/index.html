@@ -1226,6 +1226,7 @@
       .then(function (r) { return r.json(); })
       .then(function (d) {
         prepItens = d.itens || [];
+        prepTotais = d.totais || [];
         prepAlvoIso = d.alvo_iso || '';
         prepAlertarUltimo = !!d.alertar;
         var pd = document.getElementById('prep-dia');
