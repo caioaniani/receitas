@@ -33,19 +33,23 @@
       this.atualizarBadge();
     },
 
-    _chaveItem: function (kind, id) {
-      return kind + ':' + id;
+    // Chave de identidade da LINHA. `fatiado` entra na chave: fatiado e
+    // inteiro do mesmo pão são linhas distintas (não somam qtd).
+    _chaveItem: function (kind, id, fatiado) {
+      return kind + ':' + id + ':' + (fatiado ? 'f' : '');
     },
 
     adicionar: function (item, qtd) {
       qtd = parseInt(qtd, 10) || 1;
       if (qtd < 1) qtd = 1;
+      var fatiado = !!item.fatiado;
       var antesQtd = this.contar();
       var itens = this.ler();
-      var k = this._chaveItem(item.kind, item.id);
+      var k = this._chaveItem(item.kind, item.id, fatiado);
       var achou = false;
       for (var i = 0; i < itens.length; i++) {
-        if (this._chaveItem(itens[i].kind, itens[i].id) === k) {
+        if (this._chaveItem(itens[i].kind, itens[i].id,
+                            itens[i].fatiado) === k) {
           itens[i].qtd += qtd;
           achou = true;
           break;
@@ -55,7 +59,7 @@
         itens.push({
           kind: item.kind, id: item.id, nome: item.nome,
           preco: Number(item.preco) || 0, imagem: item.imagem || '',
-          categoria: item.categoria || '', qtd: qtd,
+          categoria: item.categoria || '', qtd: qtd, fatiado: fatiado,
         });
       }
       this.salvar(itens);
