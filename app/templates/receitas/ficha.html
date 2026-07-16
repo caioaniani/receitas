@@ -113,6 +113,16 @@
                        placeholder="ex: 8">
             </div>
             <div class="col">
+                <label class="form-label small text-muted" title="Estoque mínimo da INDÚSTRIA (freezer) desta receita. A previsão de produção nunca sugere um alvo abaixo disto — mantém um colchão no congelador além da demanda prevista. Ex: mínimo 50 + demanda prevista 30 → produz até chegar a 50. Vazio = sem mínimo.">
+                    Estoque mínimo (indústria)
+                </label>
+                <input type="number" name="estoque_minimo_industria"
+                       value="{{ receita.estoque_minimo_industria if receita.estoque_minimo_industria else '' }}"
+                       step="1" min="0"
+                       class="form-control form-control-sm input-blue"
+                       placeholder="ex: 50">
+            </div>
+            <div class="col">
                 <label class="form-label small text-muted">Preco Atacado (R$)</label>
                 <input type="number" name="preco_venda" value="{{ '%.2f' % receita.preco_venda if receita.preco_venda else '' }}"
                        step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-venda">
