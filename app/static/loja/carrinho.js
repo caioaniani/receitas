@@ -410,6 +410,7 @@
           categoria: btn.getAttribute('data-categoria'),
           imagem: btn.getAttribute('data-imagem'),
           fatiado: fatiado,
+          fatiavel: !!btn.getAttribute('data-fatiavel'),
         }, qtd);
         // Feedback rápido
         var antes = btn.textContent;
