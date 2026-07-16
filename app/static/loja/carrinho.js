@@ -100,6 +100,40 @@
       this.mudarQtd(kind, id, 0, fatiado);
     },
 
+    // Liga/desliga "fatiado" de uma LINHA já no carrinho (checkbox da linha
+    // no drawer/carrinho/checkout). Fatiado muda a identidade da linha —
+    // então move a qtd pra o outro estado, SOMANDO se já existir uma linha
+    // igual do outro lado (ex: tinha 1 fatiado + 2 inteiro, marca o inteiro →
+    // vira 3 fatiado). Só age em item fatiável.
+    alternarFatiado: function (kind, id, deFatiado) {
+      var itens = this.ler();
+      var kDe = this._chaveItem(kind, id, deFatiado);
+      var origem = null;
+      var resto = [];
+      for (var i = 0; i < itens.length; i++) {
+        if (!origem && this._chaveItem(itens[i].kind, itens[i].id,
+                                       itens[i].fatiado) === kDe) {
+          origem = itens[i];
+        } else {
+          resto.push(itens[i]);
+        }
+      }
+      if (!origem || !origem.fatiavel) return;   // não-fatiável não alterna
+      var novoFat = !deFatiado;
+      var kPara = this._chaveItem(kind, id, novoFat);
+      var merged = false;
+      for (var j = 0; j < resto.length; j++) {
+        if (this._chaveItem(resto[j].kind, resto[j].id,
+                            resto[j].fatiado) === kPara) {
+          resto[j].qtd = Math.min(99, resto[j].qtd + origem.qtd);
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) { origem.fatiado = novoFat; resto.push(origem); }
+      this.salvar(resto);
+    },
+
     contar: function () {
       return this.ler().reduce(function (n, it) {
         return n + (parseInt(it.qtd, 10) || 0);
