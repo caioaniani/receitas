@@ -2821,6 +2821,55 @@ def estoque_loja_ajuste():
     return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
 
 
+@pedidos_bp.route('/estoque-loja/minimos', methods=['POST'])
+@login_required
+@gerente_required
+def estoque_loja_minimos():
+    """Salva o estoque MINIMO por item da loja (piso da sugestao de pedido
+    loja->industria, motor venda+estoque). E CONFIG, nao movimento: nao mexe
+    na quantidade nem gera MovEstoqueLoja — por isso nao precisa do lock de
+    serializacao (que existe pra proteger UPDATE de saldo)."""
+    loja_id = _loja_do_usuario()
+    if current_user.is_admin():
+        loja_id = int(request.form.get('loja_id') or 0)
+    if not loja_id:
+        flash('Selecione uma loja.', 'warning')
+        return redirect(url_for('pedidos.estoque_loja'))
+
+    ids = request.form.getlist('estoque_id[]')
+    minimos = request.form.getlist('minimo[]')
+    eids = []
+    for eid in ids:
+        try:
+            eids.append(int(eid))
+        except (TypeError, ValueError):
+            eids.append(None)
+    validos = [e for e in eids if e is not None]
+    els = {e.id: e for e in EstoqueLoja.query.filter(
+        EstoqueLoja.id.in_(validos)).all()} if validos else {}
+    alterados = 0
+    for i, eid in enumerate(eids):
+        el = els.get(eid)
+        if not el or el.loja_id != loja_id:      # so a loja do form
+            continue
+        raw = minimos[i] if i < len(minimos) else ''
+        try:
+            v = int(raw) if str(raw).strip() != '' else 0
+        except (TypeError, ValueError):
+            continue
+        novo = v if v > 0 else None              # 0/vazio -> sem piso (NULL)
+        if el.estoque_minimo != novo:
+            el.estoque_minimo = novo
+            alterados += 1
+    if alterados:
+        db.session.commit()
+        flash('Estoque minimo atualizado (%d %s).'
+              % (alterados, 'item' if alterados == 1 else 'itens'), 'success')
+    else:
+        flash('Nenhum estoque minimo alterado.', 'info')
+    return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
+
+
 # ── Desperdicio (sobra do dia / vencido) ──
 
 @pedidos_bp.route('/desperdicio', methods=['GET', 'POST'])
