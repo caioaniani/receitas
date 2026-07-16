@@ -160,21 +160,9 @@
     <input type="hidden" name="loja_id" value="{{ loja.id }}">
     {% endif %}
 
-    <div class="table-responsive">
-        <table class="table table-sm table-bordered table-hover bg-white">
-            <thead class="thead-padaria">
-                <tr>
-                    <th>Item</th>
-                    <th class="text-center" style="width:100px">Em Estoque</th>
-                    <th class="text-center" style="width:80px">Qtd</th>
-                    <th class="text-center" style="width:120px">Tipo</th>
-                    <th class="text-center" style="width:110px"
-                        title="Estoque mínimo desta loja pra este item (piso da sugestão de pedido). A previsão de pedido nunca cai abaixo disto — a loja mantém um colchão do item. Vazio = sem mínimo. Clique em 'Salvar mínimos' após editar.">
-                        Mínimo</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for el in vinculados %}
+    {# Uma linha da tabela de estoque (macro pra não duplicar entre os grupos
+       Receitas / Produtos / Matérias-primas). #}
+    {% macro linha_estoque(el) %}
                 <tr>
                     <td class="fw-semibold">{{ el.nome_item }}</td>
                     <td class="text-center fw-bold">{{ el.quantidade }}</td>
@@ -201,6 +189,38 @@
                                value="{{ el.estoque_minimo if el.estoque_minimo else '' }}">
                     </td>
                 </tr>
+    {% endmacro %}
+
+    {# Separa por TIPO de item (decisão do dono 16/07). Grupos exclusivos por
+       prioridade receita > produto > MP — item só entra num grupo mesmo se o
+       cadastro estivesse sujo (dois FKs), sem duplicar a linha no form. #}
+    {% set g_rec = vinculados | selectattr('receita_id') | list %}
+    {% set g_prod = vinculados | rejectattr('receita_id') | selectattr('produto_id') | list %}
+    {% set g_mp = vinculados | rejectattr('receita_id') | rejectattr('produto_id')
+                              | selectattr('materia_prima_id') | list %}
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered table-hover bg-white">
+            <thead class="thead-padaria">
+                <tr>
+                    <th>Item</th>
+                    <th class="text-center" style="width:100px">Em Estoque</th>
+                    <th class="text-center" style="width:80px">Qtd</th>
+                    <th class="text-center" style="width:120px">Tipo</th>
+                    <th class="text-center" style="width:110px"
+                        title="Estoque mínimo desta loja pra este item (piso da sugestão de pedido). A previsão de pedido nunca cai abaixo disto — a loja mantém um colchão do item. Vazio = sem mínimo. Clique em 'Salvar mínimos' após editar.">
+                        Mínimo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for titulo, grupo in [('Receitas', g_rec), ('Produtos', g_prod), ('Matérias-primas', g_mp)] if grupo %}
+                <tr class="table-group-divider">
+                    <td colspan="5" class="fw-bold small py-1 bg-light text-uppercase text-muted"
+                        style="letter-spacing:.03em">
+                        {{ titulo }} <span class="fw-normal">({{ grupo | length }})</span>
+                    </td>
+                </tr>
+                {% for el in grupo %}{{ linha_estoque(el) }}{% endfor %}
                 {% endfor %}
             </tbody>
         </table>
