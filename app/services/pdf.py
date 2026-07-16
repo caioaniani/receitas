@@ -238,8 +238,11 @@ def _folha_pedido(pdf, p, via, data_fmt):
     pdf.ln(4)
 
     # Destinatario
+    eh_presente = bool(p.get('e_presente'))
     pdf.set_font('Helvetica', 'B', 9)
-    pdf.cell(0, 5, _latin1('DESTINATÁRIO'), new_x='LMARGIN', new_y='NEXT')
+    pdf.cell(0, 5, _latin1('DESTINATÁRIO' + (' - PRESENTE' if eh_presente
+                                             else '')),
+             new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('Helvetica', 'B', 15)
     pdf.multi_cell(0, 7, _latin1(p.get('destinatario')
                                  or p.get('comprador') or '—'),
@@ -249,8 +252,18 @@ def _folha_pedido(pdf, p, via, data_fmt):
                    new_x='LMARGIN', new_y='NEXT')
     if p.get('telefone'):
         pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 7, _latin1(f'Tel: {p["telefone"]}'),
+        # Num presente, o telefone é o de ENTREGA (quem recebe) — rotula pra
+        # não confundir com o contato do comprador.
+        rot = 'Tel. entrega' if eh_presente else 'Tel'
+        pdf.cell(0, 7, _latin1(f'{rot}: {p["telefone"]}'),
                  new_x='LMARGIN', new_y='NEXT')
+    if eh_presente:
+        # Protege a surpresa: o entregador liga pra quem recebe (correto),
+        # mas não deve comentar que é um presente.
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.multi_cell(0, 6, _latin1('Presente - nao comentar o conteudo '
+                                     'com quem recebe.'),
+                       new_x='LMARGIN', new_y='NEXT')
 
     # "Enviado por" — logica em funcao pura (testavel sem parsear PDF) pra
     # cobrir o caso "presente chegou anonimo" (incidente 22/06/2026).
