@@ -115,6 +115,46 @@ def test_pedido_item_estado_explicito_sobrescreve_estado_padrao(
     assert j['itens'][0]['estado'] == 'backup'
 
 
+def test_preparar_totais_somam_todas_as_lojas(app, admin_user, loja, catalogo,
+                                              cliente):
+    """TOTAIS (pedido do dono 16/07/2026): além dos grupos por loja, o JSON
+    traz a soma por item+estado de TODAS as lojas — o padeiro produz o total
+    e depois separa. Estados diferentes NÃO se misturam."""
+    from app.extensions import db
+    from app.models import Loja, PedidoItem, PedidoLoja
+    from app.utils import hoje
+    loja_b = Loja(nome='Loja B Totais', ativa=True)
+    db.session.add(loja_b)
+    db.session.commit()
+    rid = catalogo['receita'].id
+    amanha = hoje() + timedelta(days=1)
+    pa = PedidoLoja(loja_id=loja.id, data_entrega=amanha, status='confirmado',
+                    criado_por=admin_user.id)
+    pb = PedidoLoja(loja_id=loja_b.id, data_entrega=amanha, status='confirmado',
+                    criado_por=admin_user.id)
+    db.session.add_all([pa, pb])
+    db.session.commit()
+    db.session.add_all([
+        PedidoItem(pedido_id=pa.id, receita_id=rid, quantidade=10,
+                   estado='backup'),
+        PedidoItem(pedido_id=pb.id, receita_id=rid, quantidade=15,
+                   estado='backup'),
+        PedidoItem(pedido_id=pb.id, receita_id=rid, quantidade=4,
+                   estado='assado'),
+    ])
+    db.session.commit()
+
+    _login(cliente)
+    j = cliente.get(f'/padeiro/preparar.json?data={hoje().isoformat()}').get_json()
+    # por loja continua: 3 linhas (A/backup, B/backup, B/assado)
+    assert len(j['itens']) == 3
+    # totais: 2 linhas (backup 10+15=25 somando as lojas; assado 4 separado)
+    tot = {(t['nome'], t['estado']): t['qtd'] for t in j['totais']}
+    nome = catalogo['receita'].nome
+    assert tot[(nome, 'backup')] == 25
+    assert tot[(nome, 'assado')] == 4
+
+
 def test_pedido_item_estado_efetivo_e_label(app, admin_user, loja, catalogo):
     """`estado_efetivo` cai pra Receita.estado_padrao + label vem com tag."""
     from app.extensions import db
