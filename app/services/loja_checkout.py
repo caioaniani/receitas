@@ -599,6 +599,7 @@ def criar_pedido(form, itens_raw, *, base=None):
             receita_id=it['receita_id'], produto_id=it['produto_id'],
             nome=it['nome'], preco_unitario=it['preco'],
             quantidade=it['qtd'], subtotal=it['subtotal'],
+            fatiado=it.get('fatiado') or None,   # None = inteiro (compat)
         ))
     pedido.recalcular_total()
     db.session.flush()
