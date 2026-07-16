@@ -209,13 +209,22 @@
     <button type="submit" class="btn btn-primary btn-sm" id="btn-registrar-estoque">
         <i class="bi bi-check-lg"></i> Registrar
     </button>
+    {# Config, não movimento: salva a coluna Mínimo pelo mesmo estoque_id[],
+       ignorando qtd[]/tipo[] (formaction troca só o destino do submit;
+       formnovalidate evita o required do movimento). #}
+    <button type="submit" class="btn btn-outline-secondary btn-sm" id="btn-salvar-minimos"
+            formaction="{{ url_for('pedidos.estoque_loja_minimos') }}" formnovalidate>
+        <i class="bi bi-shield-check"></i> Salvar mínimos
+    </button>
 </form>
 <script>
   // Feedback de salvamento + trava de duplo-clique (estoque = não pode baixar 2x).
+  // Só o submit do "Registrar" mostra o spinner de baixa; "Salvar mínimos" é config.
   (function () {
     var f = document.getElementById('form-estoque-loja');
     var b = document.getElementById('btn-registrar-estoque');
-    if (f && b) f.addEventListener('submit', function () {
+    if (f && b) f.addEventListener('submit', function (e) {
+      if (e.submitter && e.submitter.id !== 'btn-registrar-estoque') return;
       b.disabled = true;
       b.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Registrando…';
     });
