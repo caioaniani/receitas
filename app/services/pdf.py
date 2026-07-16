@@ -319,7 +319,8 @@ def _folha_pedido(pdf, p, via, data_fmt):
             qtd = int(it.get('quantidade') or 1)
         except (TypeError, ValueError):
             qtd = 1
-        nome = _latin1(it.get('nome') or '—')
+        nome = _latin1((it.get('nome') or '—')
+                       + (' (fatiado)' if it.get('fatiado') else ''))
         if not mostrar_valores:
             pdf.cell(24, 6, f'{qtd}x ', border='B', align='R')
             pdf.cell(0, 6, f'  {nome}'[:90], border='B',
