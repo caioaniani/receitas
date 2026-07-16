@@ -589,3 +589,34 @@ def test_auditoria_baixa_pedidos_classifica(app):
     assert probl[p1.id]['baixado'] == 30
     assert probl[p2.id]['classificacao'] == 'sem_movimento'
     assert d['faltas_por_item'] == [{'item': 'Croissant Aud', 'faltou': 10}]
+
+
+def test_pedidos_site_lista_cancelados(app):
+    """Sonda /pedidos-site (15/07/2026): linha do tempo de status/cobranças
+    pra investigar cancelamento no cliente errado."""
+    from decimal import Decimal
+
+    from app.models import PedidoOnline
+    from app.utils import agora
+
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    client = app.test_client()
+    assert client.get('/api/claude/pedidos-site').status_code == 401
+
+    p = PedidoOnline(codigo='CANC01', status='cancelado',
+                     nome_cliente='Maria', email_cliente='c@x.com',
+                     modo_entrega='retirada', valor_total=Decimal('30'),
+                     subtotal=Decimal('30'), criado_em=agora(),
+                     cancelado_em=agora(),
+                     motivo_cancelamento='cancelado_admin')
+    db.session.add(p)
+    db.session.commit()
+
+    resp = client.get('/api/claude/pedidos-site?dias=2&status=cancelado',
+                      headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True
+    ped = next(x for x in d['pedidos'] if x['codigo'] == 'CANC01')
+    assert ped['motivo_cancelamento'] == 'cancelado_admin'
+    assert ped['cancelado_em'] is not None
