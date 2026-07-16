@@ -1638,6 +1638,9 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE receita ADD COLUMN lote_pedido INTEGER")
     if 'minimo_pedido' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN minimo_pedido INTEGER")
+    if 'estoque_minimo_industria' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN "
+                       "estoque_minimo_industria INTEGER")
     if 'lote_producao' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN lote_producao INTEGER")
     if 'fornada_especial' not in colunas:
