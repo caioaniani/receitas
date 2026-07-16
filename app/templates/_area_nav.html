@@ -137,8 +137,10 @@
 
 
 {% macro administracao(variant) %}
+{{ _lnk(variant, url_for('main.manual_operacao'), 'Manual de operação', request.path == '/admin/manual', title='O que roda sozinho, o que é diário/semanal/mensal e de quem é cada gesto') }}
 {{ _lnk(variant, url_for('auth.usuarios'), 'Usuários', request.path == '/auth/usuarios') }}
 {% if current_user.is_dono() %}
+{{ _lnk(variant, url_for('main.briefing_dono_view'), 'Briefing diário', request.path == '/admin/briefing', title='O resumo que chega no seu WhatsApp às 07:00 — preview e envio manual') }}
 {{ _lnk(variant, url_for('main.permissoes_editar'), 'Permissões por papel', request.path == '/admin/permissoes') }}
 {{ _lnk(variant, url_for('main.seo_descricoes'), 'Descrições SEO', request.path.startswith('/admin/seo')) }}
 {{ _lnk(variant, url_for('main.frete_sensores'), 'Sensores do frete', request.path == '/admin/frete-sensores', title='Endereços que barraram/erraram venda no site') }}
