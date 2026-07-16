@@ -490,6 +490,10 @@
           Carrinho.mudarQtd(kind, id, e.target.value, fatiado);
           renderCarrinho();
         });
+      var chkFat = linha.querySelector('input[data-acao="fatiado"]');
+      if (chkFat) chkFat.addEventListener('change', function () {
+        Carrinho.alternarFatiado(kind, id, fatiado); renderCarrinho();
+      });
     });
   }
 
