@@ -169,8 +169,9 @@ def montar_itens(itens_raw):
     """Re-valida o carrinho contra o catálogo. NUNCA usa o preço do
     cliente — pega o preço publicado atual. Devolve (itens, avisos).
 
-    itens_raw: lista de {kind, id, qtd} (vindo do localStorage).
-    item de saída: {kind, id, receita_id, produto_id, nome, preco, qtd, subtotal}
+    itens_raw: lista de {kind, id, qtd, fatiado} (vindo do localStorage/sessão).
+    item de saída: {kind, id, receita_id, produto_id, nome, preco, qtd,
+                    subtotal, fatiado}
     """
     itens = []
     avisos = []
@@ -192,6 +193,11 @@ def montar_itens(itens_raw):
             avisos.append(f'"{cat["nome"]}" esgotou e foi removido do pedido.')
             continue
         preco = Decimal(str(cat['preco']))
+        # "Fatiado?" sanitizado no SERVIDOR: só vale quando o cliente pediu E
+        # o item de fato oferece a opção (sourdough, `cat['fatiavel']`) — não
+        # confia no navegador (um POST forjado com fatiado=true num item que
+        # não é sourdough é ignorado). NULL/False = inteiro.
+        fatiado = bool(raw.get('fatiado')) and bool(cat.get('fatiavel'))
         itens.append({
             'kind': kind,
             'id': item_id,
@@ -201,6 +207,7 @@ def montar_itens(itens_raw):
             'preco': preco,
             'qtd': qtd,
             'subtotal': preco * qtd,
+            'fatiado': fatiado,
         })
     return itens, avisos
 
