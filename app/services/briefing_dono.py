@@ -18,7 +18,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime, time, timedelta
 
-from sqlalchemy import func, or_
+from sqlalchemy import func
 
 from app.extensions import db
 from app.utils import hoje
@@ -341,9 +341,3 @@ def enviar_briefing():
     if not resultado.get('ok'):
         logger.warning('briefing: envio falhou: %s', resultado)
     return resultado
-
-
-# Reexporta o or_ pra manter o import agrupado caso pendencias() volte a
-# precisar (usado hoje só em queries futuras); evita F401 sem apagar o import.
-__all__ = ['pendencias', 'vendas_ontem', 'custo_ia_ontem', 'montar',
-           'montar_texto', 'enviar_briefing', 'or_']
