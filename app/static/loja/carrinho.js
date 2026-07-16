@@ -230,6 +230,9 @@
       preco: el.getAttribute('data-preco'),
       categoria: el.getAttribute('data-categoria') || '',
       imagem: el.getAttribute('data-imagem') || '',
+      // Sourdough: mesmo no quick-add da vitrine o item nasce "fatiável"
+      // (inteiro por padrão) pra o checkbox aparecer na linha do carrinho.
+      fatiavel: !!el.getAttribute('data-fatiavel'),
     };
   }
 
