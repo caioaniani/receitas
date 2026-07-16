@@ -423,27 +423,24 @@
     app.querySelectorAll('.carrinho-linha').forEach(function (linha) {
       var kind = linha.getAttribute('data-kind');
       var id = linha.getAttribute('data-id');
+      var fatiado = linha.getAttribute('data-fatiado') === '1';
       linha.querySelector('[data-acao="menos"]').addEventListener('click',
-        function () { ajustar(kind, id, -1); });
+        function () { ajustar(kind, id, -1, fatiado); });
       linha.querySelector('[data-acao="mais"]').addEventListener('click',
-        function () { ajustar(kind, id, +1); });
+        function () { ajustar(kind, id, +1, fatiado); });
       linha.querySelector('[data-acao="remover"]').addEventListener('click',
-        function () { Carrinho.remover(kind, id); renderCarrinho(); });
+        function () { Carrinho.remover(kind, id, fatiado); renderCarrinho(); });
       linha.querySelector('.qtd-in').addEventListener('change',
         function (e) {
-          Carrinho.mudarQtd(kind, id, e.target.value); renderCarrinho();
+          Carrinho.mudarQtd(kind, id, e.target.value, fatiado);
+          renderCarrinho();
         });
     });
   }
 
-  function ajustar(kind, id, delta) {
-    var itens = Carrinho.ler();
-    for (var i = 0; i < itens.length; i++) {
-      if (itens[i].kind === kind && String(itens[i].id) === String(id)) {
-        Carrinho.mudarQtd(kind, id, (parseInt(itens[i].qtd, 10) || 0) + delta);
-        break;
-      }
-    }
+  function ajustar(kind, id, delta, fatiado) {
+    var atual = Carrinho.qtdDe(kind, id, fatiado);
+    Carrinho.mudarQtd(kind, id, atual + delta, fatiado);
     renderCarrinho();
   }
 
