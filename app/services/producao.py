@@ -412,21 +412,30 @@ def mise_en_place(receita, unidades):
     mult = (unidades / rend) if rend > 0 else 0.0
     peso_base = receita.peso_base or 0
 
+    from app.services.massa_base import _sub_amassadeira
+
     ingredientes = []
     for ing in receita.ingredientes:
         tipo = ing.tipo or 'mp'
         pct = ing.porcentagem or 0
+        nome = ing.ingrediente_nome
         if tipo == 'mp_direto':
             qtd, unidade, mostra_pct = pct * mult, 'g', None
         elif tipo == 'mp_un':
             qtd, unidade, mostra_pct = pct * mult, 'un', None
+        elif _sub_amassadeira(ing):
+            # Sub-receita DE AMASSADEIRA (Levain (pé)): o padeiro pesa em
+            # GRAMAS (qtd em unidades de 1 g × peso_unitario), não "200 un".
+            nome = ing.sub_receita.nome
+            qtd = pct * (ing.sub_receita.peso_unitario or 0) * mult
+            unidade, mostra_pct = 'g', None
         elif tipo == 'receita':
             qtd, unidade, mostra_pct = pct * mult, 'un', None
         else:  # 'mp' percentual: farinha (100%), agua, sal, fermento...
             qtd = pct / 100.0 * peso_base * mult
             unidade, mostra_pct = 'g', pct
         ingredientes.append({
-            'nome': ing.ingrediente_nome,
+            'nome': nome,
             'qtd': round(qtd, 1),
             'unidade': unidade,
             'pct': mostra_pct,
