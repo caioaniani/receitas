@@ -44,8 +44,18 @@ def _loja_site():
 
 def test_fatiavel_por_familia(app):
     from app.services.loja_catalogo import receita_fatiavel
-    r = _sourdough('Pão Francês Fermentado', familia='pao_sourdough')
+    r = _sourdough('Sourdough Nozes e Azeitonas', familia='pao_sourdough')
     assert receita_fatiavel(r) is True
+
+
+def test_pao_frances_nao_fatiavel_mesmo_sendo_familia_sourdough(app):
+    """Pão Francês Fermentado é família sourdough mas é PÃOZINHO — não se
+    fatia (dono, 16/07/2026). Baguete idem."""
+    from app.services.loja_catalogo import receita_fatiavel
+    pf = _sourdough('Pão Francês Fermentado', familia='pao_sourdough')
+    bg = _sourdough('Baguette Francesa', familia='pao_sourdough')
+    assert receita_fatiavel(pf) is False
+    assert receita_fatiavel(bg) is False
 
 
 def test_fatiavel_por_nome_sem_familia(app):
