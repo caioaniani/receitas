@@ -65,8 +65,16 @@ def index():
     if current_user.is_padeiro():
         return redirect(url_for('padeiro.index'))
     if current_user.is_admin():
+        # Bloco "Precisa de você hoje": as MESMAS pendências do briefing
+        # diário do dono (fonte única em app/services/briefing_dono.py).
+        # Itens de tela owner-only só aparecem pro owner (mesmo gate do
+        # dashboard).
+        from app.services import briefing_dono
+        pend = briefing_dono.pendencias(
+            incluir_owner=bool(current_user.is_owner))
         return render_template('main/home.html',
-                               areas=nav.areas_visiveis(current_user))
+                               areas=nav.areas_visiveis(current_user),
+                               pendencias=pend)
     return render_template('main/inicio.html')
 
 
