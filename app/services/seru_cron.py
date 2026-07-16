@@ -463,6 +463,18 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Briefing diario do dono — 07:00 BRT (16/07/2026, "nao estou conseguindo
+    # pilotar o aviao"): UMA mensagem WhatsApp com vendas de ontem por loja,
+    # pendencias que exigem decisao dele e custo de IA. Mesma fonte do bloco
+    # "Precisa de voce hoje" da home (app/services/briefing_dono.py).
+    # Desligar: BRIEFING_DONO=0.
+    if os.environ.get('BRIEFING_DONO', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_briefing_dono(app),
+            'cron', hour=7, minute=0, id='briefing-dono',
+            max_instances=1, coalesce=True,
+        )
+
     # Heartbeat invertido — 08:00 BRT (manha): canal Slack recebe um
     # 'sistema OK'. Detecta dependencia circular: se Z-API cair, ninguem
     # avisa o dono via WhatsApp; mas se a msg sumir do Slack, o dono
@@ -724,6 +736,16 @@ def _run_google_reviews(app):
     with app.app_context():
         _com_lock(LOCK_KEY_GOOGLE_REVIEWS,
                   google_reviews.sincronizar_e_alertar, 'google reviews')
+
+
+def _run_briefing_dono(app):
+    """Job: briefing diario do dono (16/07/2026) — vendas de ontem, pendencias
+    de decisao e custo de IA, numa mensagem WhatsApp as 07:00 BRT."""
+    from app.services import briefing_dono
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_BRIEFING_DONO, briefing_dono.enviar_briefing,
+                  'briefing dono')
 
 
 def _run_alerta_baixas_presas(app):
