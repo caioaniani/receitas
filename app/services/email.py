@@ -200,7 +200,8 @@ def _entrega_linha(pedido):
 
 def _template_confirmacao(pedido, base):
     itens = ''.join(
-        f'<tr><td style="padding:4px 0;">{it.quantidade}× {it.nome}</td>'
+        f'<tr><td style="padding:4px 0;">{it.quantidade}× {it.nome}'
+        f'{" (fatiado)" if it.fatiado else ""}</td>'
         f'<td style="padding:4px 0;text-align:right;">{_fmt_brl(it.subtotal)}</td></tr>'
         for it in pedido.itens)
     onde, quando = _entrega_linha(pedido)
@@ -248,7 +249,8 @@ def _texto_confirmacao(pedido):
 
 def _template_pedido_recebido(pedido, base):
     itens = ''.join(
-        f'<tr><td style="padding:4px 0;">{it.quantidade}× {it.nome}</td>'
+        f'<tr><td style="padding:4px 0;">{it.quantidade}× {it.nome}'
+        f'{" (fatiado)" if it.fatiado else ""}</td>'
         f'<td style="padding:4px 0;text-align:right;">{_fmt_brl(it.subtotal)}</td></tr>'
         for it in pedido.itens)
     onde, quando = _entrega_linha(pedido)
