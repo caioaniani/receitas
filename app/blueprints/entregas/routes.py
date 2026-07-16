@@ -160,7 +160,8 @@ def _serializar_pedido_online(p):
         'itens': [
             {'nome': i.nome, 'quantidade': i.quantidade,
              'preco_unitario': float(i.preco_unitario or 0), 'sku': '',
-             'subtotal': float(i.subtotal or 0)}
+             'subtotal': float(i.subtotal or 0),
+             'fatiado': bool(i.fatiado)}   # sourdough pedido fatiado
             for i in p.itens
         ],
         'total': float(p.valor_total or 0),
