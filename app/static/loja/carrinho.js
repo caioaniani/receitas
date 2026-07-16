@@ -3,9 +3,12 @@
  * O carrinho vive 100% no navegador até o checkout (quando vira um
  * PedidoOnline no banco). Sem dependência de framework: vanilla JS.
  *
- * Item no carrinho: { kind, id, nome, preco, imagem, qtd }
- *   - kind: 'receita' | 'produto'  (junto com id, identifica o item)
+ * Item no carrinho: { kind, id, nome, preco, imagem, qtd, fatiado }
+ *   - kind: 'receita' | 'produto'  (junto com id e fatiado, identifica o item)
  *   - preco: número (BRL), preço unitário no momento em que foi adicionado
+ *   - fatiado: bool — só sourdough (16/07/2026). Preferência de corte, sem
+ *     custo. Fatiado e inteiro do MESMO pão são LINHAS SEPARADAS (a chave de
+ *     deduplicação inclui fatiado), então não somam qtd um no outro.
  */
 (function () {
   'use strict';
