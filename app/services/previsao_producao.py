@@ -1536,16 +1536,22 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # (reservado segura pedido online aguardando pagamento). Usar o fisico
     # contaria reserva como disponivel e sub-pediria.
     estoque_atual = defaultdict(lambda: defaultdict(int))
-    for loja_id, rid, mid, q, qres in (db.session.query(
+    # Estoque MINIMO por (loja, item): piso da sugestao — o alvo do dia nunca
+    # cai abaixo dele (mantem colchao do item na loja). Vem da MESMA linha.
+    minimo_loja = defaultdict(lambda: defaultdict(int))
+    for loja_id, rid, mid, q, qres, emin in (db.session.query(
             EstoqueLoja.loja_id, EstoqueLoja.receita_id,
             EstoqueLoja.materia_prima_id,
-            EstoqueLoja.quantidade, EstoqueLoja.quantidade_reservada)
+            EstoqueLoja.quantidade, EstoqueLoja.quantidade_reservada,
+            EstoqueLoja.estoque_minimo)
             .filter(db.or_(EstoqueLoja.receita_id.isnot(None),
                            EstoqueLoja.materia_prima_id.isnot(None))).all()):
         tok = _token(rid, mid)
         if tok is None:
             continue
         estoque_atual[loja_id][tok] += max(0, int(q or 0) - int(qres or 0))
+        if emin:
+            minimo_loja[loja_id][tok] = max(minimo_loja[loja_id][tok], int(emin))
 
     # Produtos que a loja PEDE da industria (historico de pedidos na janela).
     # A previsao por venda so "ve" o que teve baixa registrada; sem isto, um item
