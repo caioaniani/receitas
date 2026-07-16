@@ -1906,6 +1906,14 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE pedido_online ADD COLUMN "
                        "ga_client_id VARCHAR(64)")
 
+    # pedido_online_item.fatiado (16/07/2026): preferencia de corte do
+    # sourdough. So preferencia — nao mexe em preco/estoque.
+    cursor.execute("PRAGMA table_info(pedido_online_item)")
+    cols_poi = [row[1] for row in cursor.fetchall()]
+    if cols_poi and 'fatiado' not in cols_poi:
+        cursor.execute("ALTER TABLE pedido_online_item ADD COLUMN "
+                       "fatiado BOOLEAN")
+
     # seru_produto_map.fator_quantidade
     cursor.execute("PRAGMA table_info(seru_produto_map)")
     cols_spm = [row[1] for row in cursor.fetchall()]
