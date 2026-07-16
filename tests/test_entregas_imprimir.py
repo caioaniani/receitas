@@ -636,6 +636,48 @@ def test_pdf_do_lote_retorna_pdf_valido(app, admin_user):
     assert 'inline' in r.headers.get('Content-Disposition', '')
 
 
+def test_presente_marca_preview_e_gera_pdf(app, admin_user):
+    """Presente (dono 13/07/2026): o preview de impressão marca 🎁 PRESENTE,
+    rotula o telefone como de ENTREGA e avisa pra não comentar o conteúdo —
+    protege a surpresa também no papel que vai com o motoboy. O PDF oficial
+    gera sem erro com o campo e_presente."""
+    from datetime import date
+
+    from app.services import pdf as pdf_svc
+    presente = {
+        'code': 'GIFT99', 'destinatario': 'Beatriz Esposa',
+        'comprador': 'Ana Compradora', 'endereco': 'Rua X, 1',
+        'telefone': '11 97777-6666', 'telefone_comprador': '11 98888-7777',
+        'e_presente': True, 'periodo': '08:00-09:00',
+        'itens': [{'nome': 'Cesta', 'quantidade': 1}],
+    }
+    c = app.test_client()
+    _login(c)
+    r = _post_imprimir(c, [presente], vias='motorista', data='2026-07-13')
+    assert r.status_code == 200
+    body = r.data.decode('utf-8')
+    assert '🎁 PRESENTE' in body
+    assert 'Entrega' in body                      # telefone rotulado
+    assert 'não comentar o conteúdo' in body
+    # PDF oficial gera sem erro (não parseamos o texto — CI sem pypdf).
+    out = pdf_svc.gerar_pedidos_pdf([presente], ['motorista'],
+                                    date(2026, 7, 13))
+    assert out[:5] == b'%PDF-'
+
+
+def test_pedido_normal_nao_marca_presente_no_preview(app, admin_user):
+    """Pedido comum (sem e_presente) não ganha o marcador — só presente."""
+    normal = {
+        'code': 'NORM99', 'destinatario': 'Ana Compradora',
+        'endereco': 'Rua Y, 2', 'telefone': '11 98888-7777',
+        'periodo': '08:00-09:00', 'itens': [{'nome': 'Pão', 'quantidade': 3}],
+    }
+    c = app.test_client()
+    _login(c)
+    r = _post_imprimir(c, [normal], vias='motorista', data='2026-07-13')
+    assert '🎁 PRESENTE' not in r.data.decode('utf-8')
+
+
 def test_pdf_lote_expirado_devolve_pagina_diagnostico(app, admin_user):
     """PDF de lote inexistente nao pode ser PDF vazio mudo — devolve a
     pagina HTML com o bloco de diagnostico."""
