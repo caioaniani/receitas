@@ -24,8 +24,15 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <!-- Cabeçalho da ficha -->
+    {# Os campos numéricos (preços, lote, peso, perda…) eram ~14 col vazias
+       numa linha só, cada uma virava ~1/14 da largura e ficava ilegível
+       (2-3 dígitos). Largura mínima por campo → quebram em linhas legíveis. #}
+    <style>
+      .ficha-campos > .col { flex: 1 0 150px; }
+      @media (max-width: 575.98px) { .ficha-campos > .col { flex-basis: 45%; } }
+    </style>
     <div class="ficha-header mb-3">
-        <div class="row g-2 align-items-end">
+        <div class="row g-2 align-items-end ficha-campos">
             <div class="col-md-3">
                 <label class="form-label small text-muted">Nome do Produto</label>
                 <input type="text" name="nome" value="{{ receita.nome }}" class="form-control input-blue fw-bold">
