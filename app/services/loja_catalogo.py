@@ -29,20 +29,38 @@ def _slugify(texto):
     return s or 'item'
 
 
+# Pães da família sourdough que NÃO se fatiam (pãezinhos/baguetes — o cliente
+# rasga, não corta em fatias). Decisão do dono 16/07/2026: "pão francês não
+# pode ser fatiado". Casado por trecho do nome (minúsculo, sem acento).
+_NAO_FATIAVEL_NOME = ('frances', 'baguete', 'baguette')
+
+
+def _sem_acento(s):
+    import unicodedata
+    return ''.join(c for c in unicodedata.normalize('NFKD', s or '')
+                   if not unicodedata.combining(c))
+
+
 def receita_fatiavel(r):
-    """Oferece a opção 'fatiado?' no site? (16/07/2026) — só pão sourdough.
+    """Oferece a opção 'fatiado?' no site? (16/07/2026) — só pão sourdough
+    de FATIAR (pães de forma / boules grandes), nunca pãozinho.
 
     Critério: família `pao_sourdough` (a definição do domínio, `Receita.
     familia`) OU o nome contém 'sourdough' — porque alguns sourdoughs (os
     'Mini Sourdough') estão com `familia` NULL no cadastro e seriam perdidos
     por um teste estrito; o default NULL→sourdough pegaria granola/iogurte
     (que também são Receita) por engano, então NÃO usamos `familia_default`.
-    Se um sourdough novo não aparecer, basta marcar a família na ficha."""
+    EXCETO os pãezinhos de `_NAO_FATIAVEL_NOME` (pão francês, baguete): são
+    família sourdough mas não se fatiam. Se um sourdough novo não aparecer,
+    basta marcar a família na ficha."""
     if r is None:
+        return False
+    nome = _sem_acento((r.nome or '').lower())
+    if any(t in nome for t in _NAO_FATIAVEL_NOME):
         return False
     if (r.familia or '') == 'pao_sourdough':
         return True
-    return 'sourdough' in (r.nome or '').lower()
+    return 'sourdough' in nome
 
 
 def _serializar_receita(r):
