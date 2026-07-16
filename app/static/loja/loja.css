@@ -827,6 +827,14 @@ body.modal-instalar-aberto { overflow: hidden; }
   border-radius: 999px; padding: 1px 8px; margin: 2px 0;
   font-family: var(--fonte-corpo);
 }
+/* Checkbox "fatiado" interativo na LINHA do carrinho/drawer/checkout. */
+.linha-fatiado {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: #8a5200; margin: 3px 0;
+  font-family: var(--fonte-corpo); user-select: none;
+}
+.linha-fatiado input { width: 16px; height: 16px; cursor: pointer; margin: 0; }
+.checkout-itens-lista .linha-fatiado { display: block; margin-top: 3px; }
 .carrinho-preco-un {
   font-size: 13px; color: var(--texto-suave);
   font-family: var(--fonte-corpo);
