@@ -469,7 +469,8 @@
       }
       document.getElementById('itens_json').value = JSON.stringify(
         atual.map(function (it) {
-          return { kind: it.kind, id: it.id, qtd: it.qtd };
+          return { kind: it.kind, id: it.id, qtd: it.qtd,
+                   fatiado: !!it.fatiado };
         }));
       enviando = true;
       var btn = document.getElementById('btn-finalizar');
