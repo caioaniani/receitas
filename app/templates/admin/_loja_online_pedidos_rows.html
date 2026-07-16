@@ -31,6 +31,11 @@
   </td>
   <td class="text-end fw-bold">R$ {{ '%.2f'|format(p.valor_total)|replace('.', ',') }}</td>
   <td><span class="badge {{ badge.get(p.status, 'bg-secondary') }}">
-    {{ labels.get(p.status, p.status) }}</span></td>
+    {{ labels.get(p.status, p.status) }}</span>
+    {# Motivo do cancelamento na LISTA (pedido do dono 16/07/2026 — casos de
+       Pix expirado pareciam cancelamento manual e geravam confusão). #}
+    {% if p.status == 'cancelado' and p.motivo_cancelamento_label %}
+    <br><span class="small text-muted">{{ p.motivo_cancelamento_label }}</span>
+    {% endif %}</td>
 </tr>
 {% endfor %}
