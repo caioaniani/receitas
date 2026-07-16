@@ -456,7 +456,8 @@
         credentials: 'same-origin',
         body: JSON.stringify({
           itens: (itens || []).map(function (it) {
-            return { kind: it.kind, id: it.id, qtd: it.qtd };
+            return { kind: it.kind, id: it.id, qtd: it.qtd,
+                     fatiado: !!it.fatiado };
           }),
         }),
       }).catch(function () {});
