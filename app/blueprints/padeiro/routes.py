@@ -782,12 +782,22 @@ def preparar_json():
                'estado_label': ESTADO_LABEL.get(e, e.upper()), 'qtd': q}
               for (lj, n, e), q in agg.items()]
     linhas.sort(key=lambda x: (x['loja'], x['estado_label'], -x['qtd'], x['nome']))
+    # TOTAIS por item+estado (soma de todas as lojas + B2B): o padeiro
+    # pre-prepara o TOTAL e depois separa por loja — sem esta soma ele fazia
+    # a conta de cabeca somando os grupos (pedido do dono 16/07/2026).
+    tot = defaultdict(int)
+    for (_lj, n, e), q in agg.items():
+        tot[(n, e)] += q
+    totais = [{'nome': n, 'estado': e,
+               'estado_label': ESTADO_LABEL.get(e, e.upper()), 'qtd': q}
+              for (n, e), q in tot.items()]
+    totais.sort(key=lambda x: (x['estado_label'], -x['qtd'], x['nome']))
     # Alerta de pre-preparo: so a partir das 17h50 (BRT) e havendo itens.
     from app.utils import agora
     ag = agora()
     alertar = bool(linhas) and (ag.hour, ag.minute) >= (17, 50)
     return jsonify(dia=alvo.strftime('%d/%m'), alvo_iso=alvo.isoformat(),
-                   itens=linhas, alertar=alertar)
+                   itens=linhas, totais=totais, alertar=alertar)
 
 
 @padeiro_bp.route('/congelados.json')
