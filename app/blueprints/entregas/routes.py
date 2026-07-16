@@ -130,7 +130,18 @@ def _serializar_pedido_online(p):
         'code': p.codigo,
         'destinatario': (p.nome_destinatario or p.nome_cliente or 'Sem nome'),
         'comprador': p.nome_cliente or '',
+        # `telefone` = contato de ENTREGA (motoboy liga na porta): prefere o
+        # destinatario. Mantido pra Lalamove/impressão (não quebrar payloads).
         'telefone': (p.telefone_destinatario or p.telefone_cliente or ''),
+        # Contato do COMPRADOR pra tirar dúvida — NUNCA o de quem recebe (num
+        # presente, ligar pro destinatário estraga a surpresa). O botão
+        # "Chamar cliente" já usa este; aqui exponho pra o card mostrar
+        # separado de `telefone`.
+        'telefone_comprador': p.telefone_cliente or '',
+        # Presente = destinatário difere do comprador (nome/telefone próprios)
+        # OU tem cartinha. Sinaliza no card pra ninguém ligar pra quem recebe.
+        'e_presente': bool(p.nome_destinatario or p.telefone_destinatario
+                           or (p.cartinha or '').strip()),
         'endereco': _endereco_online(p),
         'data_entrega': p.data_entrega.isoformat() if p.data_entrega else None,
         'data_entrega_fmt': (p.data_entrega.strftime('%d/%m/%Y')
