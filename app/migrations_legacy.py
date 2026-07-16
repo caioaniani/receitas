@@ -163,6 +163,11 @@ def _migrate_postgres(app):
             'sugerir_pedido_loja': 'ALTER TABLE receita ADD COLUMN sugerir_pedido_loja BOOLEAN NOT NULL DEFAULT TRUE',
             'lote_pedido': 'ALTER TABLE receita ADD COLUMN lote_pedido INTEGER',
             'minimo_pedido': 'ALTER TABLE receita ADD COLUMN minimo_pedido INTEGER',
+            # Estoque minimo da INDUSTRIA (freezer) por receita: piso da
+            # previsao de producao — o alvo do dia nunca cai abaixo dele
+            # (previsao_producao.balanco_industria). Vazio = sem piso.
+            'estoque_minimo_industria': ('ALTER TABLE receita ADD COLUMN '
+                                         'estoque_minimo_industria INTEGER'),
             # Lote SO da producao (placa de focaccia = 8 pedacos): cronograma
             # produz em multiplos; pedido de loja segue livre. Vazio herda
             # lote_pedido.
