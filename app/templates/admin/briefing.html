@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}Briefing diário{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-sunrise"></i> Briefing diário</h1>
+    <a href="{{ url_for('main.briefing_dono_view', enviar=1) }}"
+       class="btn btn-success btn-sm"
+       onclick="return confirm('Enviar o briefing agora pro seu WhatsApp?');">
+        <i class="bi bi-whatsapp"></i> Enviar agora
+    </a>
+</div>
+
+<div class="alert alert-info small">
+    <i class="bi bi-info-circle"></i>
+    Esta é a mensagem que chega no seu WhatsApp <strong>todo dia às 07:00</strong>
+    (desligar: env <code>BRIEFING_DONO=0</code> no Railway). Vendas de ontem por
+    loja comparadas com a média do mesmo dia da semana, o que precisa de decisão
+    sua hoje, e o custo de IA de ontem.
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header py-2"><strong class="small">
+                <i class="bi bi-cash-coin"></i> Vendas de ontem ({{ dados.vendas.label }})
+            </strong></div>
+            <div class="card-body py-2">
+                <p class="mb-2">PDV: <strong>R$ {{ '%.0f' % dados.vendas.pdv_total }}</strong>
+                    · {{ dados.vendas.n_pedidos }} pedidos
+                    &nbsp;|&nbsp; Site: <strong>R$ {{ '%.0f' % dados.vendas.site_total }}</strong>
+                    · {{ dados.vendas.site_qtd }} pagos</p>
+                <table class="table table-sm mb-0">
+                    <tbody>
+                    {% for lj in dados.vendas.por_loja %}
+                        <tr>
+                            <td>{{ lj.loja }}</td>
+                            <td class="text-end">R$ {{ '%.0f' % lj.faturamento }}</td>
+                            <td class="text-end small {% if lj.delta_pct is not none and lj.delta_pct < -15 %}text-danger{% elif lj.delta_pct is not none and lj.delta_pct > 15 %}text-success{% else %}text-muted{% endif %}">
+                                {% if lj.delta_pct is not none %}
+                                    {{ '%+.0f%%' % lj.delta_pct }} vs média
+                                {% else %}sem histórico{% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td class="text-muted">Sem vendas registradas ontem
+                            (snapshot ainda não capturado?).</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <p class="small text-muted mb-0 mt-2">🤖 IA ontem:
+                    US$ {{ '%.2f' % dados.custo_ia }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header py-2"><strong class="small">
+                <i class="bi bi-list-check"></i> Precisa de você ({{ dados.pendencias | length }})
+            </strong></div>
+            <div class="card-body py-2">
+                {% if dados.pendencias %}
+                <ul class="list-unstyled mb-0">
+                    {% for it in dados.pendencias %}
+                    <li class="mb-1">
+                        <a href="{{ it.url }}">{{ it.rotulo }}</a>
+                        {% if it.qtd %}<span class="badge bg-warning text-dark">{{ it.qtd }}</span>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-success mb-0"><i class="bi bi-check-circle"></i>
+                    Nada pendente — tudo rodando.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3" style="max-width:640px;">
+    <div class="card-header py-2"><strong class="small">
+        <i class="bi bi-whatsapp"></i> Texto exato da mensagem
+    </strong></div>
+    <div class="card-body py-2">
+        <pre class="small mb-0" style="white-space:pre-wrap;">{{ texto }}</pre>
+    </div>
+</div>
+{% endblock %}
