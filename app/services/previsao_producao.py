@@ -1723,7 +1723,11 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 # ramo com lote). Nao e tolerancia de negocio: 1e-9 << 1
                 # unidade; so tira o ruido do ultimo bit. Caso real 05/07 —
                 # media exibida 7,0 e sugestao 8; CI flakava no mesmo ponto.
-                deficit = consumo_d * (1.0 + seguranca) - estoque
+                # Piso do estoque minimo da loja: o alvo do dia (consumo +
+                # seguranca) nunca cai abaixo do minimo cadastrado — a loja
+                # repoe ate o colchao mesmo em dia fraco de venda. minimo_est=0
+                # (sem cadastro) mantem o comportamento antigo exato.
+                deficit = max(consumo_d * (1.0 + seguranca), minimo_est) - estoque
                 if deficit > 1e-9:
                     pedido = (int(ceil(deficit / caixa - _EPS_ULP)) * caixa
                               if caixa > 1 else int(ceil(deficit - _EPS_ULP)))
