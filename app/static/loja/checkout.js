@@ -85,17 +85,42 @@
     }
 
     // ── Resumo do pedido ───────────────────────────────────────────────
-    var subtotal = 0;
-    var resumoHtml = '<ul class="checkout-itens-lista">';
-    itens.forEach(function (it) {
-      var sub = (Number(it.preco) || 0) * (parseInt(it.qtd, 10) || 0);
-      subtotal += sub;
-      resumoHtml += '<li><span>' + (parseInt(it.qtd, 10) || 0) + '× ' +
-        escapeHtml(it.nome) + (it.fatiado ? ' <em>(fatiado)</em>' : '') +
-        '</span><span>' + fmtBRL(sub) + '</span></li>';
+    // Fatiado é grátis e o toggle preserva a qtd total (merge de linhas),
+    // então o subtotal NÃO muda ao marcar/desmarcar — calculado uma vez.
+    var subtotal = itens.reduce(function (s, it) {
+      return s + (Number(it.preco) || 0) * (parseInt(it.qtd, 10) || 0);
+    }, 0);
+
+    function pintarResumo() {
+      var lista = Carrinho.ler();
+      var h = '<ul class="checkout-itens-lista">';
+      lista.forEach(function (it) {
+        var sub = (Number(it.preco) || 0) * (parseInt(it.qtd, 10) || 0);
+        // Sourdough: checkbox 'fatiado' na própria linha do checkout.
+        var fat = it.fatiavel
+          ? '<label class="linha-fatiado"><input type="checkbox"' +
+            ' data-acao="fatiado" data-kind="' + it.kind + '"' +
+            ' data-id="' + it.id + '" data-fatiado="' +
+            (it.fatiado ? '1' : '') + '"' + (it.fatiado ? ' checked' : '') +
+            '> 🔪 fatiado</label>'
+          : (it.fatiado ? ' <em>(fatiado)</em>' : '');
+        h += '<li><span>' + (parseInt(it.qtd, 10) || 0) + '× ' +
+          escapeHtml(it.nome) + fat + '</span><span>' + fmtBRL(sub) +
+          '</span></li>';
+      });
+      h += '</ul>';
+      $('#checkout-resumo').innerHTML = h;
+    }
+    pintarResumo();
+    var resumoEl = $('#checkout-resumo');
+    if (resumoEl) resumoEl.addEventListener('change', function (e) {
+      var chk = e.target.closest('input[data-acao="fatiado"]');
+      if (!chk) return;
+      Carrinho.alternarFatiado(chk.getAttribute('data-kind'),
+                               chk.getAttribute('data-id'),
+                               chk.getAttribute('data-fatiado') === '1');
+      pintarResumo();
     });
-    resumoHtml += '</ul>';
-    $('#checkout-resumo').innerHTML = resumoHtml;
 
     // Cartinha só aparece se houver uma CESTA no carrinho. Regra: categoria
     // contém "cesta" (pega 'Cestas' e 'Cestas Personalizadas'). Pães/itens
