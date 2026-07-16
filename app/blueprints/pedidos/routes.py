@@ -263,7 +263,7 @@ def lista():
                            filtro_loja=request.args.get('loja', ''),
                            motoristas=motoristas,
                            abas=STATUS_PEDIDO_ABAS, aba_atual=aba,
-                           contagens=contagens)
+                           contagens=contagens, cont_lojas=cont_lojas)
 
 
 @pedidos_bp.route('/novo', methods=['GET', 'POST'])
