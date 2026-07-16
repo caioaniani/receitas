@@ -176,10 +176,24 @@ def _migrate_postgres(app):
             # retornado (assado, de vespera) nao pode se misturar com o
             # congelado cru que atende pedidos das lojas.
             'retorno_receita_id': 'ALTER TABLE receita ADD COLUMN retorno_receita_id INTEGER REFERENCES receita(id)',
+            # Sub-receita que ENTRA NA AMASSADEIRA quando consumida por outra
+            # ficha (ex.: Levain (pé) nos sourdoughs) — a cascata da massa
+            # base conta/mostra em gramas, ao contrário das subs de montagem
+            # (Massa para folhar nos Danish). 15/07/2026.
+            'sub_na_amassadeira': ('ALTER TABLE receita ADD COLUMN '
+                                   'sub_na_amassadeira BOOLEAN NOT NULL '
+                                   'DEFAULT FALSE'),
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
                 conn.execute(text(sql))
+        # Backfill ÚNICO (só quando a coluna acabou de nascer, pra não
+        # sobrescrever um desmarque futuro do dono): o caso que motivou a
+        # flag — o Levain (pé) sumiu da tela do padeiro ao virar sub-receita.
+        if 'sub_na_amassadeira' not in colunas:
+            conn.execute(text(
+                "UPDATE receita SET sub_na_amassadeira = TRUE "
+                "WHERE nome = 'Levain (pé)'"))
 
         # receita_etapa.descricao — passo-a-passo do que fazer em cada etapa,
         # preenchido pelo padeiro na ficha de preparo (14/07/2026). Alimenta o
