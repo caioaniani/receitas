@@ -60,6 +60,7 @@
           kind: item.kind, id: item.id, nome: item.nome,
           preco: Number(item.preco) || 0, imagem: item.imagem || '',
           categoria: item.categoria || '', qtd: qtd, fatiado: fatiado,
+          fatiavel: !!item.fatiavel,   // mostra o checkbox na linha do carrinho
         });
       }
       this.salvar(itens);
