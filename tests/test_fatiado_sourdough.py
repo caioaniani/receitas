@@ -161,6 +161,27 @@ def test_sessao_separa_fatiado_de_inteiro(app):
     assert linhas[1]['fatiado'] is True and linhas[1]['qtd'] == 5  # 2+3 somam
 
 
+def test_carrinho_resolvido_expoe_fatiavel(app):
+    """O carrinho resolvido leva `fatiavel` (sourdough) — o front usa pra
+    mostrar o checkbox de fatiado na linha; pão francês vem fatiavel=False."""
+    from app.blueprints.loja.routes import (
+        _resolver_carrinho_sessao,
+        _set_carrinho_sessao,
+    )
+    sd = _sourdough('Sourdough Integral')
+    pf = _sourdough('Pão Francês Fermentado', familia='pao_sourdough',
+                    preco=3.5)
+    _loja_site()
+    with app.test_request_context():
+        _set_carrinho_sessao([
+            {'kind': 'receita', 'id': sd.id, 'qtd': 1, 'fatiado': False},
+            {'kind': 'receita', 'id': pf.id, 'qtd': 1, 'fatiado': False},
+        ])
+        resolvido = {it['id']: it for it in _resolver_carrinho_sessao()}
+    assert resolvido[sd.id]['fatiavel'] is True
+    assert resolvido[pf.id]['fatiavel'] is False
+
+
 # ── Painel de entregas: o item leva fatiado pra cozinha ────────────────────
 
 def _slug(nome):
