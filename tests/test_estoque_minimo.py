@@ -358,7 +358,12 @@ def test_rota_estoque_loja_separa_por_tipo(app, admin_user):
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     # os três cabeçalhos de grupo aparecem, na ordem receita > produto > MP
-    assert body.index('Receitas') < body.index('Produtos') < body.index('Matérias-primas')
+    # (assinatura própria do header pra não casar labels soltos na página)
+    sig_rec = 'Receitas <span class="fw-normal">'
+    sig_prod = 'Produtos <span class="fw-normal">'
+    sig_mp = 'Matérias-primas <span class="fw-normal">'
+    assert sig_rec in body and sig_prod in body and sig_mp in body
+    assert body.index(sig_rec) < body.index(sig_prod) < body.index(sig_mp)
     # cada item aparece exatamente uma vez no form (uma linha, um estoque_id)
     for el in (el_r, el_p, el_mp):
         assert body.count('name="estoque_id[]" value="%d"' % el.id) == 1
