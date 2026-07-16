@@ -820,6 +820,13 @@ body.modal-instalar-aberto { overflow: hidden; }
 .carrinho-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .carrinho-foto .card-foto-placeholder { font-size: 30px; }
 .carrinho-nome { font-size: 17px; font-family: var(--fonte-titulo); }
+/* Selo "fatiado" (sourdough) no carrinho e no drawer. */
+.fatiado-tag {
+  display: inline-block; font-size: 12px; font-weight: 700;
+  color: #8a5200; background: #fff4e6; border: 1px solid #f0c98a;
+  border-radius: 999px; padding: 1px 8px; margin: 2px 0;
+  font-family: var(--fonte-corpo);
+}
 .carrinho-preco-un {
   font-size: 13px; color: var(--texto-suave);
   font-family: var(--fonte-corpo);
