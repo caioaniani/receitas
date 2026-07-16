@@ -58,9 +58,15 @@
         <input type="email" name="email" required
                value="{{ form.get('email', '') }}">
       </label>
-      <label>Telefone (WhatsApp)
+      <label>Seu telefone (WhatsApp)
         <input type="tel" name="telefone" inputmode="tel"
+               autocomplete="tel"
+               placeholder="Ex: (11) 98888-7777"
                value="{{ form.get('telefone', '') }}">
+        <small class="text-muted">É por aqui que a gente fala com
+          <strong>você</strong> se tiver dúvida sobre o pedido.
+          <strong>É presente?</strong> Coloque o <strong>seu</strong> número —
+          não o de quem vai receber, pra não estragar a surpresa.</small>
       </label>
       <label>CPF ou CNPJ
         <input type="text" name="cpf" id="cpf" inputmode="numeric"
