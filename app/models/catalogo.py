@@ -168,6 +168,12 @@ class Receita(db.Model):
     # croissant lote 50 + minimo 250 -> 250/300). NULL = sem padronizacao.
     lote_pedido = db.Column(db.Integer, nullable=True)
     minimo_pedido = db.Column(db.Integer, nullable=True)
+    # Estoque MINIMO da INDUSTRIA (freezer) por receita: piso da previsao de
+    # producao — o alvo do dia nunca cai abaixo dele, mantendo um colchao no
+    # congelador alem da demanda prevista (decisao do dono 16/07/2026,
+    # "considerar o estoque minimo para previsao"). Vazio = sem piso. ALTER em
+    # migrations_legacy (commit 1, deployado e confirmado antes deste modelo).
+    estoque_minimo_industria = db.Column(db.Integer, nullable=True)
     # Lote SO da PRODUCAO (decisao do dono 02/07: focaccia = placa de 8
     # pedacos; as lojas pedem pedacos livremente, mas a industria nao produz
     # placa quebrada). O cronograma arredonda a producao pra multiplos disto;
