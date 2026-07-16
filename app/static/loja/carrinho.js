@@ -78,13 +78,14 @@
       }
     },
 
-    mudarQtd: function (kind, id, qtd) {
+    mudarQtd: function (kind, id, qtd, fatiado) {
       qtd = parseInt(qtd, 10) || 0;
       var itens = this.ler();
-      var k = this._chaveItem(kind, id);
+      var k = this._chaveItem(kind, id, fatiado);
       var out = [];
       for (var i = 0; i < itens.length; i++) {
-        if (this._chaveItem(itens[i].kind, itens[i].id) === k) {
+        if (this._chaveItem(itens[i].kind, itens[i].id,
+                            itens[i].fatiado) === k) {
           if (qtd > 0) { itens[i].qtd = qtd; out.push(itens[i]); }
           // qtd <= 0 remove (não adiciona ao out)
         } else {
@@ -94,8 +95,8 @@
       this.salvar(out);
     },
 
-    remover: function (kind, id) {
-      this.mudarQtd(kind, id, 0);
+    remover: function (kind, id, fatiado) {
+      this.mudarQtd(kind, id, 0, fatiado);
     },
 
     contar: function () {
