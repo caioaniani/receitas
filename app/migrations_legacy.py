@@ -1579,6 +1579,13 @@ def _migrate_sqlite(app):
     cols_re = [row[1] for row in cursor.fetchall()]
     if cols_re and 'descricao' not in cols_re:
         cursor.execute("ALTER TABLE receita_etapa ADD COLUMN descricao TEXT")
+    # receita.sub_na_amassadeira — sub-receita que entra na amassadeira
+    # (Levain (pé)); backfill único junto com a criação (15/07/2026).
+    if 'sub_na_amassadeira' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN sub_na_amassadeira "
+                       "BOOLEAN NOT NULL DEFAULT 0")
+        cursor.execute("UPDATE receita SET sub_na_amassadeira = 1 "
+                       "WHERE nome = 'Levain (pé)'")
     if 'perda_percentual' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0")
     if 'preco_loja' not in colunas:
