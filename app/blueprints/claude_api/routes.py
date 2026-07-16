@@ -747,6 +747,74 @@ def deploy_info():
     )
 
 
+@claude_api_bp.route('/projetos')
+@_claude_auth_required
+def projetos():
+    """Projetos e tarefas da tela /projetos em JSON (16/07/2026) — o dono
+    usa o quadro pra planejar ("traz o v2 aqui") e o assistente precisa ler
+    o conteúdo sem acesso ao Postgres. Read-only estrito.
+
+    Params: ?id=<projeto_id> OU ?nome=<trecho> (case-insensitive; mais de um
+    match devolve só a lista de candidatos) OU nada (resumo de todos, com
+    contagem de tarefas). Match único vem completo, com as tarefas na ordem
+    do quadro.
+    """
+    from sqlalchemy import func
+
+    from app.models import Projeto
+
+    def _resumo(p):
+        ativas = p.tarefas_ativas
+        return {
+            'id': p.id, 'nome': p.nome,
+            'area': p.area.nome if p.area else None,
+            'status': p.status, 'prioridade': p.prioridade,
+            'foco_12s': bool(p.foco_12s),
+            'tarefas_total': len(p.tarefas),
+            'tarefas_abertas': len(ativas),
+            'tem_atrasada': p.tem_atrasada,
+        }
+
+    def _completo(p):
+        out = _resumo(p)
+        out['observacao'] = p.observacao
+        out['criado_em'] = p.criado_em.isoformat() if p.criado_em else None
+        out['tarefas'] = [{
+            'id': t.id, 'nome': t.nome, 'status': t.status,
+            'tipo': t.tipo, 'esforco': t.esforco,
+            'prazo': t.prazo.isoformat() if t.prazo else None,
+            'atrasada': t.atrasada,
+            'recorrencia': t.recorrencia,
+            'responsavel': t.responsavel.nome if t.responsavel else None,
+            'observacao': t.observacao,
+            'feito_em': t.feito_em.isoformat() if t.feito_em else None,
+        } for t in p.tarefas]
+        return out
+
+    pid = (request.args.get('id') or '').strip()
+    nome = (request.args.get('nome') or '').strip()
+    if pid:
+        try:
+            projs = [p for p in [Projeto.query.get(int(pid))] if p]
+        except (TypeError, ValueError):
+            return jsonify(ok=False, erro='id invalido'), 400
+        if not projs:
+            return jsonify(ok=False, erro='projeto nao encontrado'), 404
+        return jsonify(ok=True, projeto=_completo(projs[0]))
+    if nome:
+        projs = (Projeto.query
+                 .filter(func.lower(Projeto.nome).contains(nome.lower()))
+                 .order_by(Projeto.nome).all())
+        if not projs:
+            return jsonify(ok=False, erro='nenhum projeto com esse nome'), 404
+        if len(projs) > 1:
+            return jsonify(ok=True, candidatos=[
+                {'id': p.id, 'nome': p.nome} for p in projs])
+        return jsonify(ok=True, projeto=_completo(projs[0]))
+    projs = Projeto.query.order_by(Projeto.criado_em.desc()).all()
+    return jsonify(ok=True, projetos=[_resumo(p) for p in projs])
+
+
 @claude_api_bp.route('/auditoria-mapeamentos')
 @_claude_auth_required
 def auditoria_mapeamentos():
