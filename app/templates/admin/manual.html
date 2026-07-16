@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+{% block title %}Manual de operação{% endblock %}
+{% block content %}
+<h1 class="page-title"><i class="bi bi-journal-check"></i> Manual de operação</h1>
+
+<div class="alert alert-info small">
+    <i class="bi bi-info-circle"></i>
+    Uma página só: o que o sistema faz <strong>sozinho</strong>, o que é gesto
+    <strong>diário</strong>, <strong>semanal</strong> e <strong>mensal</strong>,
+    e de quem é cada um. Regra combinada em 16/07/2026: toda função nova tem que
+    se registrar aqui — se ninguém opera, não se constrói.
+</div>
+
+{# ── Automático ─────────────────────────────────────────────────────── #}
+<div class="card mb-3">
+    <div class="card-header py-2 bg-success text-white"><strong class="small">
+        <i class="bi bi-robot"></i> RODA SOZINHO — você não precisa olhar
+    </strong></div>
+    <div class="card-body py-2 small">
+        <ul class="mb-1">
+            <li><strong>Sync do PDV Seru</strong> a cada 15 min (baixa estoque das lojas pelas vendas) + snapshot de vendas diárias.</li>
+            <li><strong>Backup do banco</strong> todo dia 04:00 → Dropbox, com retenção automática e dead-man (o heartbeat das 08:00 no Slack avisa se falhar).</li>
+            <li><strong>Baixa do site</strong>: pedido pago no Pagar.me desconta o estoque da loja de origem na hora.</li>
+            <li><strong>Vigias</strong> — te chamam no WhatsApp só quando algo quebra: infra do atendimento (15 min), site/frete (2h), custo de IA (1h), bot do atendimento (a cada resposta), PDV (30 min), baixas presas (30 min).</li>
+            <li><strong>Bot de atendimento</strong> responde clientes no Chatwoot; auditor manda balanço 5×/dia.</li>
+            <li><strong>Acurácia da previsão</strong>: snapshot diário 05:30 (alimenta os selos WAPE).</li>
+            <li><strong>Briefing diário</strong>: resumo no seu WhatsApp às 07:00 —
+                <a href="{{ url_for('main.briefing_dono_view') if current_user.is_dono() else '#' }}">preview aqui</a>.</li>
+        </ul>
+        <p class="text-muted mb-0">Se algum desses parar, é o vigia (ou o heartbeat do Slack) que avisa — não é papel seu ficar conferindo.</p>
+    </div>
+</div>
+
+{# ── Diário ─────────────────────────────────────────────────────────── #}
+<div class="card mb-3">
+    <div class="card-header py-2 bg-primary text-white"><strong class="small">
+        <i class="bi bi-calendar-day"></i> DIÁRIO
+    </strong></div>
+    <div class="card-body py-2 small">
+        <table class="table table-sm mb-1">
+            <thead><tr><th>Gesto</th><th>Quem</th><th>Onde</th></tr></thead>
+            <tbody>
+            <tr>
+                <td>Ler o <strong>briefing das 07:00</strong> e resolver o que está em "precisa de você" (a <a href="{{ url_for('main.index') }}">home</a> mostra a mesma lista)</td>
+                <td>Dono</td>
+                <td>WhatsApp / <a href="{{ url_for('main.index') }}">home</a></td>
+            </tr>
+            <tr>
+                <td>Conferir o <strong>cronograma</strong> e <strong>enviar a ordem do dia</strong> ao padeiro (painel "Próximos passos" diz o que falta)</td>
+                <td>Dono / produção</td>
+                <td><a href="/telaindustriateste/">Cronograma</a></td>
+            </tr>
+            <tr>
+                <td>Executar a ordem, confirmar produção, separar pedidos e B2B</td>
+                <td>Padeiro</td>
+                <td><a href="/padeiro/">TV do padeiro</a></td>
+            </tr>
+            <tr>
+                <td>Painel de entregas LIGADO (som) — pedidos do site, alertas do vigia, chamadas de cliente</td>
+                <td>Loja / expedição</td>
+                <td><a href="/entregas/painel">Painel de entregas</a></td>
+            </tr>
+            <tr>
+                <td>Registrar <strong>sobras/perdas</strong> do dia (a retirada de sobras nasce daí, com foto)</td>
+                <td>Gerente da loja</td>
+                <td>Slack (canal de sobras) ou <a href="/pedidos/estoque-loja">estoque da loja</a></td>
+            </tr>
+            <tr>
+                <td>Fotos de NF/boleto nos canais do Slack (vira Contas a Pagar sozinho)</td>
+                <td>Quem recebe</td>
+                <td>Slack → <a href="/contas-pagar/">Contas a pagar</a></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ── Semanal ────────────────────────────────────────────────────────── #}
+<div class="card mb-3">
+    <div class="card-header py-2 bg-warning"><strong class="small">
+        <i class="bi bi-calendar-week"></i> SEMANAL
+    </strong></div>
+    <div class="card-body py-2 small">
+        <table class="table table-sm mb-1">
+            <thead><tr><th>Gesto</th><th>Quem</th><th>Onde</th></tr></thead>
+            <tbody>
+            <tr>
+                <td>Gerar os <strong>pedidos da semana</strong> das lojas (média ou venda+estoque; o botão de IA sugere por cima)</td>
+                <td>Dono / gerentes</td>
+                <td><a href="/producao/pedidos-semana/estoque">venda+estoque</a> · <a href="/producao/pedidos-semana/media">média</a></td>
+            </tr>
+            <tr>
+                <td>Fechar <strong>orçamentos B2B</strong> parados (aprovar vira venda na hora)</td>
+                <td>Dono</td>
+                <td><a href="/b2b/orcamentos">Orçamentos</a></td>
+            </tr>
+            <tr>
+                <td>Limpar pendências de cadastro: <strong>mapeamentos do PDV</strong>, <strong>órfãos de cesta</strong>, itens sem vínculo no estoque</td>
+                <td>Dono / admin</td>
+                <td><a href="/pdv/mapeamentos">Mapeamentos</a> · <a href="/produtos/cestas/orfaos">Órfãos</a> · <a href="/pedidos/congelados">Congelados</a></td>
+            </tr>
+            <tr>
+                <td>Marcar <strong>contas pagas</strong> e conferir vencimentos da semana</td>
+                <td>Financeiro</td>
+                <td><a href="/contas-pagar/">Contas a pagar</a></td>
+            </tr>
+            <tr>
+                <td>Revisar <strong>estoques mínimos</strong> (ficha = freezer da indústria; coluna "Mínimo" = colchão por loja)</td>
+                <td>Dono / gerentes</td>
+                <td><a href="/pedidos/estoque-loja">Estoque das lojas</a></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ── Mensal / trimestral ────────────────────────────────────────────── #}
+<div class="card mb-3">
+    <div class="card-header py-2 bg-secondary text-white"><strong class="small">
+        <i class="bi bi-calendar-month"></i> MENSAL / TRIMESTRAL
+    </strong></div>
+    <div class="card-body py-2 small">
+        <ul class="mb-1">
+            <li><strong>Margens e custos</strong>: <a href="/rentabilidade">rentabilidade</a> (impostos já descontados) e <a href="/relatorios/custos">relatório de custos</a>. Reajustar preços quando a margem líquida apertar.</li>
+            <li><strong>Acurácia da previsão</strong>: <a href="/producao/previsao-acuracia">painel de acurácia</a> — itens com WAPE alto merecem olhar o mapeamento/histórico.</li>
+            <li><strong>Custo de IA</strong>: <a href="/admin/uso-ia">relatório por função</a> (o vigia grita se estourar o teto diário).</li>
+            <li><strong>Drill de restore do backup</strong> (1×/trimestre): <code>/admin/backup/drill?iniciar=1</code> valida que o dump abre.</li>
+            <li><strong>RH</strong>: folha, atestados e férias na área <a href="/area/rh">RH</a> (owner).</li>
+        </ul>
+    </div>
+</div>
+
+{# ── Por papel ──────────────────────────────────────────────────────── #}
+<div class="card mb-3" style="max-width:820px;">
+    <div class="card-header py-2"><strong class="small">
+        <i class="bi bi-people"></i> QUEM FAZ O QUÊ (resumo)
+    </strong></div>
+    <div class="card-body py-2 small">
+        <ul class="mb-0">
+            <li><strong>Dono</strong>: briefing → decisões pendentes; enviar/conferir ordem; orçamentos B2B; preços e mínimos.</li>
+            <li><strong>Padeiro</strong>: só a <a href="/padeiro/">TV do padeiro</a> — ordem, pré-preparo (com totais), separação, fichas de preparo.</li>
+            <li><strong>Gerente de loja</strong>: <a href="/pedidos/estoque-loja">estoque da loja</a> (balanço, sobras, mínimos) e pedidos da semana da loja dele.</li>
+            <li><strong>Atendentes</strong>: Chatwoot (o bot cuida do primeiro atendimento; handoff chega na fila).</li>
+            <li><strong>Motoristas</strong>: QR de entrega/coleta no celular — nada pra abrir no sistema.</li>
+        </ul>
+    </div>
+</div>
+
+<p class="small text-muted">Este manual é VIVO: função nova entra aqui na mesma
+mudança que a cria (quem opera, quando, onde aparece o lembrete). Última
+revisão: 16/07/2026.</p>
+{% endblock %}
