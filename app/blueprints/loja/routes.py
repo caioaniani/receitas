@@ -756,7 +756,10 @@ _CARRINHO_MAX_ITENS = 60  # teto pra caber no cookie de sessão (~4KB)
 
 
 def _carrinho_sessao():
-    """Lista normalizada [{kind,id,qtd}] do carrinho na sessão."""
+    """Lista normalizada [{kind,id,qtd,fatiado}] do carrinho na sessão.
+
+    `fatiado` (sourdough, 16/07/2026) é preservado — sem isso a preferência
+    de corte some antes do checkout (a sessão é a fonte de verdade)."""
     out = []
     for it in session.get('carrinho') or []:
         kind = str((it or {}).get('kind') or '').strip().lower()
@@ -767,13 +770,15 @@ def _carrinho_sessao():
             qtd = max(1, min(int(it.get('qtd') or 1), 99))
         except (TypeError, ValueError):
             continue
-        out.append({'kind': kind, 'id': iid, 'qtd': qtd})
+        out.append({'kind': kind, 'id': iid, 'qtd': qtd,
+                    'fatiado': bool(it.get('fatiado'))})
     return out
 
 
 def _set_carrinho_sessao(itens):
     """Grava o carrinho (substitui) na sessão — validado, com qtd de repetidos
-    somada e teto de itens. Devolve a lista normalizada."""
+    somada e teto de itens. Devolve a lista normalizada. `fatiado` entra na
+    chave de dedup: fatiado e inteiro do mesmo item são linhas separadas."""
     norm, idx = [], {}
     for it in itens or []:
         kind = str((it or {}).get('kind') or '').strip().lower()
@@ -784,21 +789,24 @@ def _set_carrinho_sessao(itens):
             qtd = max(1, min(int(it.get('qtd') or 1), 99))
         except (TypeError, ValueError):
             continue
-        chave = (kind, iid)
+        fatiado = bool(it.get('fatiado'))
+        chave = (kind, iid, fatiado)
         if chave in idx:
             norm[idx[chave]]['qtd'] = min(99, norm[idx[chave]]['qtd'] + qtd)
         elif len(norm) < _CARRINHO_MAX_ITENS:
             idx[chave] = len(norm)
-            norm.append({'kind': kind, 'id': iid, 'qtd': qtd})
+            norm.append({'kind': kind, 'id': iid, 'qtd': qtd,
+                         'fatiado': fatiado})
     session['carrinho'] = norm
     session.modified = True
     return norm
 
 
 def _resolver_carrinho_sessao():
-    """Resolve o carrinho da sessão → [{kind,id,nome,preco,imagem,categoria,qtd}]
-    pro carrinho.js renderizar. Dropa item inexistente/despublicado (sem display);
-    mantém esgotado (o checkout avisa). Best-effort: nunca quebra a página."""
+    """Resolve o carrinho da sessão →
+    [{kind,id,nome,preco,imagem,categoria,qtd,fatiado}] pro carrinho.js
+    renderizar. Dropa item inexistente/despublicado (sem display); mantém
+    esgotado (o checkout avisa). Best-effort: nunca quebra a página."""
     out = []
     try:
         for it in _carrinho_sessao():
@@ -809,6 +817,7 @@ def _resolver_carrinho_sessao():
                 'kind': it['kind'], 'id': it['id'], 'nome': item['nome'],
                 'preco': item['preco'], 'imagem': item.get('imagem') or '',
                 'categoria': item.get('categoria') or '', 'qtd': it['qtd'],
+                'fatiado': it['fatiado'],
             })
     except Exception:  # noqa: BLE001 — carrinho nunca derruba a loja
         return []
