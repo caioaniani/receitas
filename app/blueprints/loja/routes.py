@@ -818,6 +818,10 @@ def _resolver_carrinho_sessao():
                 'preco': item['preco'], 'imagem': item.get('imagem') or '',
                 'categoria': item.get('categoria') or '', 'qtd': it['qtd'],
                 'fatiado': it['fatiado'],
+                # `fatiavel` diz se o carrinho mostra o checkbox 'fatiado'
+                # na linha (só sourdough). Item não-fatiável não vira fatiado
+                # nem por toggle (o servidor re-sanitiza no checkout).
+                'fatiavel': bool(item.get('fatiavel')),
             })
     except Exception:  # noqa: BLE001 — carrinho nunca derruba a loja
         return []
