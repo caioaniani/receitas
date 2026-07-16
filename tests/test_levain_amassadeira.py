@@ -123,7 +123,7 @@ def test_ficha_salva_a_flag(app, admin_user):
         rid = r.id
     c = app.test_client()
     c.post('/auth/login', data={'login': 'admin', 'senha': '123'})
-    resp = c.post(f'/receitas/{rid}', data={
+    resp = c.post(f'/receitas/{rid}/salvar', data={
         'nome': 'Levain Flag UI', 'categoria': 'Paes',
         'rendimento_qtd': '2600', 'rendimento_unidade': 'un',
         'peso_base': '1000', 'sub_na_amassadeira': '1',
