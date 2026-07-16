@@ -1369,6 +1369,14 @@ def _migrate_postgres(app):
     _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
          "ga_client_id VARCHAR(64)")
 
+    # "Fatiado?" por item do site (16/07/2026): o cliente escolhe se o pão
+    # sourdough vem fatiado. So preferencia de corte — NAO mexe em preco nem
+    # estoque (mesmo SKU). PRIMEIRA coluna adicionada a pedido_online_item
+    # (tabela criada por db.create_all). Procedimento de 2 commits: este
+    # ALTER deploya ANTES do modelo. NULL = nao fatiado (pedidos antigos).
+    _try("ALTER TABLE pedido_online_item ADD COLUMN IF NOT EXISTS "
+         "fatiado BOOLEAN")
+
     # Motivo do cancelamento (25/06/2026) — registra POR QUE um pedido do site
     # foi cancelado (pix_expirado / reembolso / cancelado_admin) em vez de
     # deduzir pelos timestamps. Coluna nullable; pedidos cancelados antes desta
