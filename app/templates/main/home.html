@@ -83,6 +83,36 @@
     </div>
 </div>
 
+{# "Precisa de você hoje" — as MESMAS pendências do briefing diário
+   (app/services/briefing_dono.py, fonte única). Fora do .menu-grid de
+   propósito: lá dentro viraria um card de área. #}
+<div class="home-hero" style="margin-top:1rem;">
+    <div class="home-panel" style="padding:1.1rem 1.4rem;">
+        {% if pendencias %}
+        <h2 class="h6 mb-2">📋 Precisa de você hoje
+            <span class="badge bg-warning text-dark">{{ pendencias | length }}</span></h2>
+        <ul class="list-unstyled mb-0 small">
+            {% for it in pendencias %}
+            <li class="mb-1">
+                <a href="{{ it.url }}">{{ it.rotulo }}</a>
+                {% if it.qtd %}<span class="badge bg-light text-dark border">{{ it.qtd }}</span>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="small text-success mb-0">✅ Nada pendente — tudo rodando.</p>
+        {% endif %}
+        {% if current_user.is_dono() %}
+        <p class="small text-muted mb-0 mt-2">
+            <a href="{{ url_for('main.briefing_dono_view') }}">Briefing completo</a>
+            · <a href="{{ url_for('main.manual_operacao') }}">Manual de operação</a></p>
+        {% else %}
+        <p class="small text-muted mb-0 mt-2">
+            <a href="{{ url_for('main.manual_operacao') }}">Manual de operação</a></p>
+        {% endif %}
+    </div>
+</div>
+
 <div class="menu-grid">
     {# Cards vêm de app/nav.py (fonte única: título/ícone/cor/permissão). Cada
        card abre a página da área, que lista as funções via macro compartilhado. #}
