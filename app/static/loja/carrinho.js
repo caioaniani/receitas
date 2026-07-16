@@ -335,6 +335,10 @@
       btn.addEventListener('click', function () {
         var qtdInput = document.getElementById('qtd-add');
         var qtd = qtdInput ? qtdInput.value : 1;
+        // "Fatiado?" só existe pra sourdough (data-fatiavel no botão).
+        var chkFat = document.getElementById('quer-fatiado');
+        var fatiado = !!(btn.getAttribute('data-fatiavel') && chkFat
+                         && chkFat.checked);
         Carrinho.adicionar({
           kind: btn.getAttribute('data-kind'),
           id: btn.getAttribute('data-id'),
@@ -342,6 +346,7 @@
           preco: btn.getAttribute('data-preco'),
           categoria: btn.getAttribute('data-categoria'),
           imagem: btn.getAttribute('data-imagem'),
+          fatiado: fatiado,
         }, qtd);
         // Feedback rápido
         var antes = btn.textContent;
