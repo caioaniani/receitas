@@ -186,6 +186,18 @@
     return 'R$ ' + (Number(v) || 0).toFixed(2).replace('.', ',');
   }
 
+  // Controle "fatiado" da LINHA do carrinho: checkbox interativo p/ item
+  // fatiável (sourdough), selo estático p/ item antigo sem `fatiavel` no
+  // cache. O change é tratado em ligarDrawer/renderCarrinho.
+  function fatiadoControle(it) {
+    if (it.fatiavel) {
+      return '<label class="linha-fatiado">' +
+        '<input type="checkbox" data-acao="fatiado"' +
+        (it.fatiado ? ' checked' : '') + '> 🔪 fatiado</label>';
+    }
+    return it.fatiado ? '<div class="fatiado-tag">🔪 fatiado</div>' : '';
+  }
+
   // ── Cards na vitrine: botão "Adicionar" ↔ stepper (− N +) ───────────
   // Cada `.card-add[data-kind][data-id]…` é renderizado conforme a qtd no
   // carrinho. Clique em "Adicionar" → vira stepper. Stepper sincroniza o
