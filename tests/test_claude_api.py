@@ -620,3 +620,72 @@ def test_pedidos_site_lista_cancelados(app):
     ped = next(x for x in d['pedidos'] if x['codigo'] == 'CANC01')
     assert ped['motivo_cancelamento'] == 'cancelado_admin'
     assert ped['cancelado_em'] is not None
+
+
+# ── /projetos: o quadro da tela /projetos legível pro assistente ─────────
+
+def _seed_projeto(nome='Sistema v2'):
+    from app.models import Projeto, ProjetoArea, TarefaProjeto
+    area = ProjetoArea(nome='Empresa', tipo='empresa')
+    db.session.add(area)
+    db.session.flush()
+    p = Projeto(area_id=area.id, nome=nome, status='fazendo',
+                prioridade='alta', observacao='Plano da versão 2')
+    db.session.add(p)
+    db.session.flush()
+    db.session.add_all([
+        TarefaProjeto(projeto_id=p.id, nome='Nova vitrine', status='a_fazer',
+                      ordem=1),
+        TarefaProjeto(projeto_id=p.id, nome='Migrar app', status='feito',
+                      ordem=2),
+    ])
+    db.session.commit()
+    return p
+
+
+def test_projetos_busca_por_nome_devolve_completo(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    _seed_projeto()
+    c = app.test_client()
+    d = c.get('/api/claude/projetos?nome=v2',
+              headers={'Authorization': f'Bearer {TOKEN}'}).get_json()
+    assert d['ok'] is True
+    pj = d['projeto']
+    assert pj['nome'] == 'Sistema v2'
+    assert pj['area'] == 'Empresa'
+    assert pj['observacao'] == 'Plano da versão 2'
+    assert [t['nome'] for t in pj['tarefas']] == ['Nova vitrine', 'Migrar app']
+    assert pj['tarefas_abertas'] == 1
+
+
+def test_projetos_sem_nome_lista_resumo(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    _seed_projeto()
+    c = app.test_client()
+    d = c.get('/api/claude/projetos',
+              headers={'Authorization': f'Bearer {TOKEN}'}).get_json()
+    assert d['ok'] is True
+    assert d['projetos'][0]['nome'] == 'Sistema v2'
+    assert d['projetos'][0]['tarefas_total'] == 2
+
+
+def test_projetos_varios_matches_devolve_candidatos(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    _seed_projeto('Sistema v2')
+    from app.models import Projeto, ProjetoArea
+    area = ProjetoArea.query.first()
+    db.session.add(Projeto(area_id=area.id, nome='Site v2'))
+    db.session.commit()
+    c = app.test_client()
+    d = c.get('/api/claude/projetos?nome=v2',
+              headers={'Authorization': f'Bearer {TOKEN}'}).get_json()
+    assert d['ok'] is True
+    assert {x['nome'] for x in d['candidatos']} == {'Sistema v2', 'Site v2'}
+
+
+def test_projetos_nome_sem_match_404(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    c = app.test_client()
+    r = c.get('/api/claude/projetos?nome=inexistente',
+              headers={'Authorization': f'Bearer {TOKEN}'})
+    assert r.status_code == 404
