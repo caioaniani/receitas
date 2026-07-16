@@ -346,6 +346,16 @@
       else if (acao === 'menos') Carrinho.mudarQtd(kind, id, atual - 1, fatiado);
       renderDrawer();
     });
+    // Checkbox "fatiado" da linha (change, não click).
+    dr.addEventListener('change', function (e) {
+      var chk = e.target.closest('input[data-acao="fatiado"]');
+      if (!chk) return;
+      var linha = chk.closest('.cart-drawer-linha');
+      var fatiado = linha.getAttribute('data-fatiado') === '1';
+      Carrinho.alternarFatiado(linha.getAttribute('data-kind'),
+                               linha.getAttribute('data-id'), fatiado);
+      renderDrawer();
+    });
     // ESC fecha
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && dr.classList.contains('aberto')) {
