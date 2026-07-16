@@ -233,6 +233,15 @@ def lista():
     contagens = {slug: sum(cont_por_status.get(s, 0) for s in sts)
                  for slug, _, sts in STATUS_PEDIDO_ABAS}
 
+    # Contagem POR LOJA dentro da aba atual — badges da linha de abas de
+    # loja (pedido do dono 16/07/2026: "aba todas as lojas / ribeiro / etc"
+    # abaixo das abas de status). Sem o filtro de loja de propósito: mostra
+    # a distribuição pra guiar o clique.
+    cont_lojas = dict(
+        db.session.query(PedidoLoja.loja_id, func.count())
+        .filter(PedidoLoja.status.in_(status_da_aba))
+        .group_by(PedidoLoja.loja_id).all()) if not loja_id else {}
+
     query = PedidoLoja.query.options(
         joinedload(PedidoLoja.loja),
         selectinload(PedidoLoja.itens),
