@@ -304,6 +304,11 @@ class PedidoOnlineItem(db.Model):
     preco_unitario = db.Column(db.Numeric(10, 2), nullable=False)  # snapshot
     quantidade = db.Column(db.Integer, nullable=False, default=1)
     subtotal = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    # "Fatiado?" — preferencia de corte escolhida pelo cliente, so em pao
+    # sourdough (16/07/2026). NAO mexe em preco nem estoque (mesmo SKU, so
+    # cortado). NULL/False = inteiro; True = fatiado. Fatiado e inteiro do
+    # MESMO sourdough sao linhas separadas no carrinho/pedido.
+    fatiado = db.Column(db.Boolean, nullable=True)
 
     receita = db.relationship('Receita', foreign_keys=[receita_id])
     produto = db.relationship('Produto', foreign_keys=[produto_id])
