@@ -230,10 +230,13 @@
         var foto = it.imagem
           ? '<img src="' + it.imagem + '" alt="">'
           : '<div class="ph">🥐</div>';
+        var tagFat = it.fatiado
+          ? '<div class="fatiado-tag">🔪 fatiado</div>' : '';
         html +=
           '<div class="cart-drawer-linha" data-kind="' + it.kind +
-          '" data-id="' + it.id + '">' + foto +
-          '<div><div class="nome">' + escapeHtml(it.nome) + '</div>' +
+          '" data-id="' + it.id + '" data-fatiado="' +
+          (it.fatiado ? '1' : '') + '">' + foto +
+          '<div><div class="nome">' + escapeHtml(it.nome) + '</div>' + tagFat +
           '<div class="preco-un">' + fmtBRL(it.preco) + ' cada</div></div>' +
           '<div class="stepper">' +
           '<button type="button" data-acao="menos" aria-label="Diminuir">−</button>' +
