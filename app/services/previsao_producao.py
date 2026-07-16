@@ -726,6 +726,10 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             'previsto': prev,
             'demanda': demanda,
             'produzir': produzir,
+            # Piso do estoque minimo da industria: valor cadastrado (0 = sem
+            # piso) e flag de quando ele ELEVOU o produzir acima da demanda.
+            'estoque_minimo': minimo_ind,
+            'limitado_por_minimo': limitado_por_minimo,
             # Historico DO MOTOR ativo (pedidos, vendas, ou qualquer um).
             'tem_historico': bool(
                 (motor in ('pedidos', 'maior') and datas_total.get(rid))
