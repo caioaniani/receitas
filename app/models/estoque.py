@@ -150,6 +150,11 @@ class EstoqueLoja(db.Model):
     # ao mesmo tempo pra mesma receita: assado (vitrine) + backup (freezer
     # pra emergencia) + NULL (cru, raro).
     estado = db.Column(db.String(20), nullable=True)
+    # Estoque MINIMO desta loja pra este item: piso da sugestao de pedido
+    # loja->industria (motor venda+estoque em previsao_producao). O alvo do
+    # dia nunca cai abaixo dele — a loja mantem um colchao do item. Vazio =
+    # sem piso. ALTER em migrations_legacy (commit 1, 16/07/2026).
+    estoque_minimo = db.Column(db.Integer, nullable=True)
 
     loja = db.relationship('Loja')
     receita = db.relationship('Receita')
