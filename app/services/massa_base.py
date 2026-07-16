@@ -73,10 +73,15 @@ def rendimento_massa_crua(receita):
     que a ficha calcula da massa TOTAL, incluindo a sub-receita)."""
     if receita is None:
         return 1.0
-    # Produto com sub-receita = montado: a massa-crua dos % não representa a
-    # unidade. Usa o rendimento cadastrado (era o comportamento ANTES deste
-    # helper, e o correto pra Danish/Croissant).
+    # Produto com sub-receita DE MONTAGEM = montado: a massa-crua dos % não
+    # representa a unidade. Usa o rendimento cadastrado (era o comportamento
+    # ANTES deste helper, e o correto pra Danish/Croissant). Sub-receita DE
+    # AMASSADEIRA (Levain (pé)) NÃO conta como montagem: ela entra na massa
+    # em gramas via ingredientes_por_porcao, e o rendimento segue massa/peso
+    # — sem isso o sourdough caía no rendimento cadastrado (3) em vez da
+    # conta de massa (~4) e o MRP inflava ~25% (caso real 15/07).
     tem_subreceita = any((ing.tipo or '') == 'receita'
+                         and not _sub_amassadeira(ing)
                          for ing in receita.ingredientes)
     if not tem_subreceita:
         massa = sum(ingredientes_por_porcao(receita).values())
