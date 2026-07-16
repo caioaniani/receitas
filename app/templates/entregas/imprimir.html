@@ -184,10 +184,11 @@
       {% endif %}
     </div>
 
-    <div class="secao-tit">Destinatário</div>
+    <div class="secao-tit">Destinatário{% if p.e_presente %} 🎁 PRESENTE{% endif %}</div>
     <div class="destinatario">{{ p.destinatario or p.comprador or '—' }}</div>
     <div class="endereco">📍 {{ p.endereco or '—' }}</div>
-    {% if p.telefone %}<div class="telefone">📞 {{ p.telefone }}</div>{% endif %}
+    {% if p.telefone %}<div class="telefone">📞 {{ 'Entrega' if p.e_presente else 'Contato' }}: {{ p.telefone }}</div>{% endif %}
+    {% if p.e_presente %}<div class="telefone" style="font-weight:700;">🎁 Presente — não comentar o conteúdo com quem recebe.</div>{% endif %}
 
     {% if p.cartinha and not motorista %}
     <div class="cartinha">
