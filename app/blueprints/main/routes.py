@@ -2832,6 +2832,37 @@ def uso_ia_relatorio():
                            dias=dias)
 
 
+@main_bp.route('/admin/briefing')
+@owner_required
+def briefing_dono_view():
+    """Briefing diário do dono: preview na tela + envio manual (?enviar=1).
+
+    O cron manda o mesmo texto às 07:00 BRT (seru_cron, job briefing-dono).
+    Owner-only — é o cockpit pessoal do dono."""
+    from app.services import briefing_dono
+    dados = briefing_dono.montar()
+    texto = briefing_dono.montar_texto(dados)
+    if request.args.get('enviar') == '1':
+        r = briefing_dono.enviar_briefing()
+        if r.get('ok'):
+            flash('Briefing enviado pro seu WhatsApp.', 'success')
+        else:
+            flash('Envio falhou: %s' % r.get('erro', r), 'danger')
+        return redirect(url_for('main.briefing_dono_view'))
+    return render_template('admin/briefing.html', dados=dados, texto=texto)
+
+
+@main_bp.route('/admin/manual')
+@login_required
+@admin_required
+def manual_operacao():
+    """Manual de operação vivo (16/07/2026): o que roda sozinho, o que é
+    diário/semanal/mensal e de quem é cada gesto — numa página só, com link
+    direto em cada tela. Toda feature nova DEVE se registrar aqui (regra de
+    processo combinada com o dono)."""
+    return render_template('admin/manual.html')
+
+
 @main_bp.route('/admin/auditor/run', methods=['POST'])
 @owner_required
 def auditor_run():
