@@ -441,15 +441,14 @@
       var foto = it.imagem
         ? '<img src="' + it.imagem + '" alt="">'
         : '<div class="card-foto-placeholder">🥐</div>';
-      var tagFat = it.fatiado
-        ? '<div class="fatiado-tag">🔪 fatiado</div>' : '';
+      var fatCtrl = fatiadoControle(it);
       html +=
         '<div class="carrinho-linha" data-kind="' + it.kind +
         '" data-id="' + it.id + '" data-fatiado="' +
         (it.fatiado ? '1' : '') + '">' +
         '<div class="carrinho-foto">' + foto + '</div>' +
         '<div class="carrinho-desc">' +
-        '<div class="carrinho-nome">' + escapeHtml(it.nome) + '</div>' + tagFat +
+        '<div class="carrinho-nome">' + escapeHtml(it.nome) + '</div>' + fatCtrl +
         '<div class="carrinho-preco-un">' + fmtBRL(it.preco) + ' cada</div>' +
         '</div>' +
         '<div class="carrinho-qtd">' +
