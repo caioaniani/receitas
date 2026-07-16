@@ -694,16 +694,26 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         # que max(comp, prev) (o agregado antigo); a diferenca e exatamente a
         # subproducao dos dias mistos.
         demanda = int(ceil(demanda_soma.get(rid, 0.0)))
-        produzir = max(0, demanda - est_efetivo)
+        # Piso do estoque minimo da industria (freezer): o alvo do dia nunca
+        # cai abaixo do minimo cadastrado na ficha — mantem um colchao no
+        # congelador alem da demanda prevista (decisao do dono 16/07/2026).
+        # Aplicado ANTES das travas de retorno/cap: retorno nunca produz e o
+        # cap "so de sobras" ainda manda sobre o piso.
+        minimo_ind = int(rec.estoque_minimo_industria or 0)
+        alvo = max(demanda, minimo_ind)
+        produzir = max(0, alvo - est_efetivo)
+        limitado_por_minimo = minimo_ind > demanda and produzir > 0
         # Retorno nunca sugere producao (nem por firme): so entra por
         # devolucao. A linha segue visivel pra visibilidade do estoque.
         if rid in retorno_ids:
             produzir = 0
+            limitado_por_minimo = False
         lim = caps_retorno.get(rid)
         lim_aplicado = None
         if lim is not None and produzir > lim['cap']:
             produzir = lim['cap']
             lim_aplicado = lim
+            limitado_por_minimo = False   # cap de sobras manda sobre o piso
         itens.append({
             'retorno': rid in retorno_ids,
             'limitado_por_retorno': lim_aplicado,
