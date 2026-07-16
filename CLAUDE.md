@@ -1852,11 +1852,21 @@ So preferencia de corte — **NAO mexe em preco nem estoque** (mesmo SKU, so
 cortado); confirmado que baixa/reserva (`baixa_venda`, `loja_estoque_reserva`)
 so olham receita/produto/qtd.
 
-- **Quais**: so sourdough. `loja_catalogo.receita_fatiavel(r)` =
+- **Quais**: so sourdough de FATIAR. `loja_catalogo.receita_fatiavel(r)` =
   `familia == 'pao_sourdough'` OU nome contem 'sourdough' (os "Mini
   Sourdough" estao com `familia` NULL no cadastro — o nome resgata; NAO usar
   `familia_default()`, que assume NULL→sourdough e pegaria granola/iogurte,
-  que tambem sao Receita). Exposto como `fatiavel` em `_serializar_receita`.
+  que tambem sao Receita), EXCETO os paezinhos `_NAO_FATIAVEL_NOME`
+  (pao frances, baguete — sao familia sourdough mas nao se fatiam; decisao
+  do dono 16/07). Exposto como `fatiavel` em `_serializar_receita`.
+- **Marcar no CARRINHO/CHECKOUT tambem (16/07/2026)**: alem do checkbox na
+  pagina do produto, cada item fatiavel mostra um checkbox "🔪 fatiado" na
+  LINHA do drawer, da pagina do carrinho e do resumo do checkout
+  (`fatiadoControle` em carrinho.js + `pintarResumo` em checkout.js).
+  `Carrinho.alternarFatiado(kind,id,deFatiado)` move a qtd pro outro estado
+  SOMANDO se a linha destino ja existir. Requer `fatiavel` no item resolvido
+  (`_resolver_carrinho_sessao`), no `adicionar` (produto + card da vitrine
+  via `data-fatiavel` em home.html) — sem isso a linha nao mostra o checkbox.
 - **Coluna** `PedidoOnlineItem.fatiado` (Boolean nullable; NULL/False =
   inteiro). PRIMEIRA coluna adicionada a `pedido_online_item` — procedimento
   de 2 commits (ALTER em `migrations_legacy` PG+SQLite deployado ANTES do
