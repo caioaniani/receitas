@@ -688,18 +688,20 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         est_efetivo = max(0, est - pre_demanda.get(rid, 0)) + wip
         comp = comprometido.get(rid, 0)
         prev = int(ceil(previsto.get(rid, 0)))
-        if est == 0 and comp == 0 and prev == 0 and wip == 0:
+        # Piso do estoque minimo da industria (freezer): o alvo do dia nunca
+        # cai abaixo do minimo cadastrado na ficha — mantem um colchao no
+        # congelador alem da demanda prevista (decisao do dono 16/07/2026).
+        # Receita com minimo cadastrado NUNCA some da tela: precisa aparecer
+        # pra o piso valer mesmo sem estoque/demanda no momento.
+        minimo_ind = int(rec.estoque_minimo_industria or 0)
+        if est == 0 and comp == 0 and prev == 0 and wip == 0 and minimo_ind == 0:
             continue
         # Demanda = Σ_dia max(firme_d, previsto_d) — ver bloco 4. Nunca menor
         # que max(comp, prev) (o agregado antigo); a diferenca e exatamente a
         # subproducao dos dias mistos.
         demanda = int(ceil(demanda_soma.get(rid, 0.0)))
-        # Piso do estoque minimo da industria (freezer): o alvo do dia nunca
-        # cai abaixo do minimo cadastrado na ficha — mantem um colchao no
-        # congelador alem da demanda prevista (decisao do dono 16/07/2026).
         # Aplicado ANTES das travas de retorno/cap: retorno nunca produz e o
         # cap "so de sobras" ainda manda sobre o piso.
-        minimo_ind = int(rec.estoque_minimo_industria or 0)
         alvo = max(demanda, minimo_ind)
         produzir = max(0, alvo - est_efetivo)
         limitado_por_minimo = minimo_ind > demanda and produzir > 0
