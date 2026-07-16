@@ -914,6 +914,7 @@ def salvar(id):
     ep = (request.form.get('estado_padrao') or '').strip().lower()
     receita.estado_padrao = ep if ep in ('assado', 'backup') else None
     receita.reaproveitavel = bool(request.form.get('reaproveitavel'))
+    receita.sub_na_amassadeira = bool(request.form.get('sub_na_amassadeira'))
     # Receita de retorno (devolucao loja->industria): sobras devolvidas creditam
     # esta receita. Valida existencia e evita auto-referencia; vazio = NULL.
     try:
