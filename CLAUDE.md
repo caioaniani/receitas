@@ -1845,6 +1845,38 @@ EXIBICAO/decisao — nada mexe em preco, pedido ou transacao. Os helpers
 centenas de receitas busca `carga_venda()` 1x — sem query em loop).
 Testes: `tests/test_impostos_margem.py`.
 
+## Opção "fatiado?" nos sourdoughs no site (16/07/2026)
+
+Pedido do dono: o cliente escolhe, POR ITEM, se o pão sourdough vem fatiado.
+So preferencia de corte — **NAO mexe em preco nem estoque** (mesmo SKU, so
+cortado); confirmado que baixa/reserva (`baixa_venda`, `loja_estoque_reserva`)
+so olham receita/produto/qtd.
+
+- **Quais**: so sourdough. `loja_catalogo.receita_fatiavel(r)` =
+  `familia == 'pao_sourdough'` OU nome contem 'sourdough' (os "Mini
+  Sourdough" estao com `familia` NULL no cadastro — o nome resgata; NAO usar
+  `familia_default()`, que assume NULL→sourdough e pegaria granola/iogurte,
+  que tambem sao Receita). Exposto como `fatiavel` em `_serializar_receita`.
+- **Coluna** `PedidoOnlineItem.fatiado` (Boolean nullable; NULL/False =
+  inteiro). PRIMEIRA coluna adicionada a `pedido_online_item` — procedimento
+  de 2 commits (ALTER em `migrations_legacy` PG+SQLite deployado ANTES do
+  modelo, confirmado por `/api/claude/deploy`).
+- **Viagem da escolha** (a sessao e a fonte de verdade e so guardava
+  {kind,id,qtd}): `fatiado` entra na CHAVE DE DEDUP (fatiado e inteiro do
+  mesmo pao = linhas separadas, nao somam qtd) em `carrinho.js` (_chaveItem/
+  adicionar/mudarQtd/qtdDe + payload do sync + render com selo "🔪 fatiado"),
+  `loja/routes.py` (_carrinho_sessao/_set_carrinho_sessao/_resolver — sem
+  isso a flag some) e `checkout.js` (itens_json). Checkbox so no sourdough
+  (`produto.html`, `data-fatiavel`).
+- **Sanitizado no SERVIDOR** (`loja_checkout.montar_itens`): `fatiado` so
+  vale se o cliente pediu E `cat['fatiavel']` — POST forjado com fatiado=true
+  num nao-sourdough e ignorado.
+- **Exibicao pra cozinha/cliente**: selo no card do painel de entregas
+  (`painel_pedidos.html`), na impressao/PDF do entregador (`imprimir.html`,
+  `pdf.py`), no detalhe admin do pedido (`loja_online_pedido_detalhe.html`) e
+  "(fatiado)" no e-mail de confirmacao (`email.py`).
+- Testes: `tests/test_fatiado_sourdough.py`.
+
 ## Cadastro assistido por IA (08/07/2026)
 
 Pedido do dono: colar print/lista de itens novos (nome + preco) e a IA
