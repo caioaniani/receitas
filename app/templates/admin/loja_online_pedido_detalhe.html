@@ -53,7 +53,7 @@
           <tbody>
             {% for it in p.itens %}
             <tr>
-              <td>{{ it.quantidade }}× {{ it.nome }}</td>
+              <td>{{ it.quantidade }}× {{ it.nome }}{% if it.fatiado %} <span class="badge text-bg-warning">🔪 fatiado</span>{% endif %}</td>
               <td class="text-end text-muted small">R$ {{ '%.2f'|format(it.preco_unitario)|replace('.', ',') }} un</td>
               <td class="text-end fw-bold">R$ {{ '%.2f'|format(it.subtotal)|replace('.', ',') }}</td>
             </tr>
