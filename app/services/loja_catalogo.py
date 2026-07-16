@@ -29,12 +29,31 @@ def _slugify(texto):
     return s or 'item'
 
 
+def receita_fatiavel(r):
+    """Oferece a opção 'fatiado?' no site? (16/07/2026) — só pão sourdough.
+
+    Critério: família `pao_sourdough` (a definição do domínio, `Receita.
+    familia`) OU o nome contém 'sourdough' — porque alguns sourdoughs (os
+    'Mini Sourdough') estão com `familia` NULL no cadastro e seriam perdidos
+    por um teste estrito; o default NULL→sourdough pegaria granola/iogurte
+    (que também são Receita) por engano, então NÃO usamos `familia_default`.
+    Se um sourdough novo não aparecer, basta marcar a família na ficha."""
+    if r is None:
+        return False
+    if (r.familia or '') == 'pao_sourdough':
+        return True
+    return 'sourdough' in (r.nome or '').lower()
+
+
 def _serializar_receita(r):
     return {
         'id': r.id,
         'kind': 'receita',
         'nome': r.nome,
         'categoria': r.categoria or '',
+        # Sourdough → oferece "fatiado?" no site (só preferência de corte;
+        # não muda preço nem estoque). Front gateia o checkbox por aqui.
+        'fatiavel': receita_fatiavel(r),
         'preco': float(r.preco_site) if r.preco_site else None,
         'imagem': r.imagem_dropbox_url or r.imagem_url or '',
         # descricao_seo: editorial, gerada com IA e revisada pelo dono em
