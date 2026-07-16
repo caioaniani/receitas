@@ -225,7 +225,7 @@
         {% for it in (p.itens or []) %}
         <tr>
           <td class="qcol">{{ (it.quantidade or 1)|int }}×</td>
-          <td>{{ it.nome or '—' }}</td>
+          <td>{{ it.nome or '—' }}{% if it.fatiado %} <strong>🔪 (fatiado)</strong>{% endif %}</td>
           {% if mostrar_valores %}
           <td class="vcol">
             {# Forma REAL do VNDA (vnda.py::_normalizar_pedido): itens tem
