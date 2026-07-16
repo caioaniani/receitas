@@ -110,3 +110,36 @@ def test_conferencia_foto_redireciona_dropbox(app, admin_user, loja):
     r = c.get(f'/pedidos/conferencia-foto/{fid}', follow_redirects=False)
     assert r.status_code == 302
     assert 'dropbox.com' in r.headers['Location']
+
+
+def test_abas_de_loja_filtram_e_contam(app, admin_user, loja):
+    """Linha de abas por LOJA sob as abas de status (16/07/2026): 'todas as
+    lojas' + uma aba por loja com a contagem da aba atual; ?loja= filtra."""
+    from app.extensions import db
+    from app.models import Loja
+    with app.app_context():
+        outra = Loja(nome='Loja Nebraska T', ativa=True)
+        db.session.add(outra)
+        db.session.commit()
+        _pedido(db, loja, 'pendente')
+        _pedido(db, loja, 'pendente')
+        _pedido(db, outra, 'pendente')
+        db.session.commit()
+        loja_id, outra_id = loja.id, outra.id
+
+    c = app.test_client()
+    _login(c)
+
+    r = c.get('/pedidos/?aba=pendentes')
+    html = r.data.decode()
+    assert 'todas as lojas' in html
+    assert 'Loja Nebraska T' in html
+    assert f'loja={outra_id}' in html          # link da aba da loja
+
+    # Filtrando pela outra loja: só o pedido dela na tabela.
+    r2 = c.get(f'/pedidos/?aba=pendentes&loja={outra_id}')
+    html2 = r2.data.decode()
+    assert r2.status_code == 200
+    assert html2.count('Loja Nebraska T') >= 2  # aba ativa + linha do pedido
+    # O badge da aba de status reflete o filtro (1 pendente da Nebraska).
+    assert f'loja={loja_id}' in html2           # abas das outras lojas seguem
