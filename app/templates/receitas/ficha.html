@@ -457,6 +457,19 @@
     <!-- Reaproveitavel -->
     <div class="mb-3">
         <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="sub_na_amassadeira" id="sub-na-amassadeira"
+                   value="1" {% if receita.sub_na_amassadeira %}checked{% endif %}>
+            <label class="form-check-label" for="sub-na-amassadeira">
+                <strong>Entra na amassadeira quando usada como sub-receita</strong>
+                <div class="text-muted small">
+                    Marque em fermentos/massas que vão <strong>dentro da massa</strong> de outras
+                    receitas (ex.: Levain (pé) nos sourdoughs) — a massa base do padeiro passa a
+                    contar e mostrar as gramas. Desmarcado = sub-receita de montagem
+                    (ex.: Massa para folhar nos Danish), fora da amassadeira.
+                </div>
+            </label>
+        </div>
+        <div class="form-check">
             <input class="form-check-input" type="checkbox" name="reaproveitavel" id="reaproveitavel-receita"
                    value="1" {% if receita.reaproveitavel %}checked{% endif %}>
             <label class="form-check-label" for="reaproveitavel-receita">
