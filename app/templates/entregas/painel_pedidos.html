@@ -623,7 +623,9 @@
     abertoCode = p.code;
     var temCart = (p.cartinha || '').trim().length > 0;
     var itens = (p.itens || []).map(function (it) {
-      return '<div class="item"><b>' + (Number(it.qtd) || 1) + 'x</b> ' + esc(it.nome) + '</div>';
+      var fat = it.fatiado
+        ? ' <span class="item-fatiado">🔪 fatiado</span>' : '';
+      return '<div class="item"><b>' + (Number(it.qtd) || 1) + 'x</b> ' + esc(it.nome) + fat + '</div>';
     }).join('') || '<div class="item">—</div>';
     var janela = p.expresso ? '⚡ Expresso (1h)' : ('🕐 ' + (p.periodo || 'Sem horário'));
 
