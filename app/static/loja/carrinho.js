@@ -293,10 +293,11 @@
       var linha = btn.closest('.cart-drawer-linha');
       var kind = linha.getAttribute('data-kind');
       var id = linha.getAttribute('data-id');
-      var atual = Carrinho.qtdDe(kind, id);
+      var fatiado = linha.getAttribute('data-fatiado') === '1';
+      var atual = Carrinho.qtdDe(kind, id, fatiado);
       var acao = btn.getAttribute('data-acao');
-      if (acao === 'mais') Carrinho.mudarQtd(kind, id, atual + 1);
-      else if (acao === 'menos') Carrinho.mudarQtd(kind, id, atual - 1);
+      if (acao === 'mais') Carrinho.mudarQtd(kind, id, atual + 1, fatiado);
+      else if (acao === 'menos') Carrinho.mudarQtd(kind, id, atual - 1, fatiado);
       renderDrawer();
     });
     // ESC fecha
