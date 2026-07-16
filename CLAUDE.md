@@ -637,6 +637,20 @@ o "+900" de 01/07 foi o padeiro lancando em outra escala — o expandir de
 /pedidos/congelados (5 creditos + 5 debitos por item) foi criado nesse
 debug. Testes: `tests/test_consumo_sub_fracao.py`.
 
+**Sub-receita DE AMASSADEIRA vs DE MONTAGEM (15/07/2026)**: o dono converteu
+o Levain de MP pra sub-receita "Levain (pé)" nas fichas dos sourdoughs (pro
+cronograma agendar o levain na vespera — protecao pos-falta de levain) e a
+quantidade SUMIU da massa base da TV do padeiro: a cascata exclui
+sub-receitas de proposito (regra dos Danish, onde a sub e montagem). Flag
+`Receita.sub_na_amassadeira` (checkbox na ficha da PROPRIA sub; backfill
+unico marcou o Levain (pé)) diferencia: com a flag, a sub entra na massa
+branca em GRAMAS (qtd × peso_unitario) via
+`massa_base.ingredientes_por_porcao`, aparece na cascata/mise en place e o
+`rendimento_massa_crua` volta a ser massa/peso (sem a flag o sourdough caia
+no rendimento cadastrado 3 em vez de ~4 e o MRP inflava ~25%). Sub SEM a
+flag (Massa para folhar) segue fora da massa e com rendimento cadastrado —
+NAO mudar. Testes: `tests/test_levain_amassadeira.py`.
+
 **Custo do retorno = CUSTO CHEIO da origem (decisao do dono 02/07/2026)**:
 receita destino de retorno com ficha VAZIA herda o custo (e o peso unitario)
 da receita de origem em `custos.calcular_custos_receitas` — o Almond carrega
