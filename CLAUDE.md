@@ -1387,7 +1387,13 @@ UI, em duas camadas:
   (=telefone_cliente, duvidas) e `e_presente` (destinatario OU cartinha)
   alem de `telefone` (=entrega, motoboy). Num presente o card separa
   "📞 Entrega (quem recebe)" de "☎️ Comprador (duvidas)", poe badge
-  "🎁 PRESENTE" e o aviso "nao ligue pra quem recebe".
+  "🎁 PRESENTE" e o aviso "nao ligue pra quem recebe". O comprador e SEMPRE
+  rotulado — sem telefone dele, o card mostra "sem telefone informado" em vez
+  de repetir o numero de entrega cru (senao o operador ligava pra quem recebe
+  achando ser o comprador — pego em revisao). O PDF oficial (`pdf.py::
+  gerar_pedidos_pdf`, o papel que vai com o motoboy) marca "DESTINATARIO -
+  PRESENTE", rotula "Tel. entrega" e imprime "Presente - nao comentar o
+  conteudo com quem recebe" — protege a surpresa na entrega.
 
 **Operacao ja estava certa por baixo (NAO regredir)**: motoboy/Lalamove usa
 `telefone_destinatario` (porta), o botao "Chamar cliente" e Pagar.me/NF usam
