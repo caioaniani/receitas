@@ -184,6 +184,13 @@ class Receita(db.Model):
     # vira Croissant Almond, Sourdough Tradicional vira chapa). Outros
     # motivos (estragou/caiu/queimou) ainda baixam normalmente.
     reaproveitavel = db.Column(db.Boolean, default=False, nullable=False)
+    # Quando ESTA receita e consumida como SUB-RECEITA de outra ficha, ela
+    # entra NA AMASSADEIRA junto da massa branca (ex.: Levain (pé) nos
+    # sourdoughs) — a cascata da massa base conta/mostra em gramas
+    # (qtd × peso_unitario) e o rendimento volta a ser massa/peso. False =
+    # sub de MONTAGEM (Massa para folhar nos Danish), fora da amassadeira.
+    # ALTER + backfill em migrations_legacy (2 commits, 15/07/2026).
+    sub_na_amassadeira = db.Column(db.Boolean, default=False, nullable=False)
     # Devolucao loja->industria: sobras devolvidas DESTA receita creditam a
     # receita apontada no estoque da industria (ex: Croissant Tradicional ->
     # "Croissant Tradicional — Retorno"). NULL = credita a propria. O retorno
