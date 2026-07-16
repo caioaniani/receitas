@@ -1366,6 +1366,34 @@ enviar" foi instabilidade DA META (~12h, erro generico "An unexpected error"
 08/06 — se mensageria falhar de novo, conferir "Acoes necessarias"/App
 Review/verificacao da empresa no painel Meta.
 
+## Presente no site — telefone do COMPRADOR × de quem RECEBE (13/07/2026)
+
+Caso real (dono): cliente comprou cesta de presente e pos o telefone da
+ESPOSA (destinataria) no campo principal do checkout; a padaria ligou pra
+tirar duvida e ESTRAGOU A SURPRESA. O modelo `PedidoOnline` ja separava
+`telefone_cliente` (comprador/pagador, recebe contato comercial) de
+`telefone_destinatario` (quem recebe; NULL fora de presente) — o furo era de
+UI, em duas camadas:
+
+- **Checkout** (`app/templates/loja/checkout.html`): o campo `telefone` era
+  so "Telefone (WhatsApp)", unico do bloco do comprador sem dizer "de quem".
+  Agora "**Seu telefone (WhatsApp)**" + help ("a gente fala com VOCE; e
+  presente? poe o SEU numero, nao o de quem recebe"); o campo do destinatario
+  virou "Telefone de quem vai receber" + help ("so pro entregador ligar").
+- **Painel de entregas** (`entregas/routes.py::_serializar_pedido_online` +
+  `painel_pedidos.html` + `imprimir.html`): o card mostrava
+  `telefone_destinatario or telefone_cliente` como um "📞" generico — ler e
+  ligar caia em quem recebe. Agora serializa `telefone_comprador`
+  (=telefone_cliente, duvidas) e `e_presente` (destinatario OU cartinha)
+  alem de `telefone` (=entrega, motoboy). Num presente o card separa
+  "📞 Entrega (quem recebe)" de "☎️ Comprador (duvidas)", poe badge
+  "🎁 PRESENTE" e o aviso "nao ligue pra quem recebe".
+
+**Operacao ja estava certa por baixo (NAO regredir)**: motoboy/Lalamove usa
+`telefone_destinatario` (porta), o botao "Chamar cliente" e Pagar.me/NF usam
+`telefone_cliente` (comprador). Login/identidade e por E-MAIL, nao telefone —
+mudar o ROTULO do campo e seguro. Testes: `tests/test_pedido_presente_telefone.py`.
+
 ## Chamar cliente pelo WhatsApp (painel de entregas, 11/07/2026)
 
 Botão "💬 Chamar" em cada linha do modal "Pedidos do site" (drawer no
