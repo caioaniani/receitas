@@ -22,9 +22,19 @@ from math import ceil
 _TOL = 0.5
 
 
+def _sub_amassadeira(ing):
+    """True se o ingrediente é uma SUB-RECEITA marcada `sub_na_amassadeira`
+    (Levain (pé)): entra na massa branca em gramas (qtd × peso_unitario da
+    sub). Sub de MONTAGEM (Massa para folhar) segue fora."""
+    return ((ing.tipo or '') == 'receita' and ing.sub_receita is not None
+            and bool(getattr(ing.sub_receita, 'sub_na_amassadeira', False)))
+
+
 def ingredientes_por_porcao(receita):
     """{ingrediente_nome: gramas por porção-base} dos ingredientes que vão na
-    amassadeira. Mesma regra de `massa_receita_base`."""
+    amassadeira. Mesma regra de `massa_receita_base`, MAIS as sub-receitas
+    marcadas `sub_na_amassadeira` (caso real 15/07: o Levain virou sub-receita
+    e sumiu da cascata da TV do padeiro — massa branca sem o levain)."""
     peso = receita.peso_base or 0
     out = {}
     for ing in receita.ingredientes:
@@ -32,6 +42,13 @@ def ingredientes_por_porcao(receita):
         nome = ing.ingrediente_nome
         if tipo == 'mp_direto':
             out[nome] = out.get(nome, 0.0) + (ing.porcentagem or 0)
+        elif _sub_amassadeira(ing):
+            # FK manda no nome (regra do CLAUDE.md); qtd é em UNIDADES da sub
+            # (padrão das sub-receitas) × peso da unidade = gramas na massa.
+            nome_sub = ing.sub_receita.nome
+            g = (ing.porcentagem or 0) * (ing.sub_receita.peso_unitario or 0)
+            if g > 0:
+                out[nome_sub] = out.get(nome_sub, 0.0) + g
         elif tipo not in ('receita', 'mp_un'):
             out[nome] = out.get(nome, 0.0) + (ing.porcentagem or 0) / 100.0 * peso
     return out
