@@ -1254,6 +1254,15 @@
       grupos[it.loja].push(it);
     });
     var html = '';
+    // TOTAIS primeiro (soma de todas as lojas + B2B): é o número que o
+    // padeiro produz; os grupos por loja abaixo são a separação.
+    if (prepTotais.length) {
+      html += '<div class="prep-loja-grupo" style="background:#212529;color:#ffc107;">Σ TOTAIS (todas as lojas)</div>';
+      prepTotais.forEach(function (it) {
+        html += '<div class="prep-item" style="font-weight:700;"><span class="prep-q">' + it.qtd + '×</span> '
+          + esc(it.nome) + ' [' + esc(it.estado_label) + ']</div>';
+      });
+    }
     ordem.forEach(function (loja) {
       html += '<div class="prep-loja-grupo">' + esc(loja) + '</div>';
       grupos[loja].forEach(function (it) {
