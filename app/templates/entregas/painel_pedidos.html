@@ -647,10 +647,13 @@
       if (p.telefone && p.telefone !== p.telefone_comprador) {
         telHTML += '<div class="d-tel">📞 Entrega (quem recebe): ' + esc(p.telefone) + '</div>';
       }
+      // Comprador SEMPRE rotulado — nunca um número cru (evita o operador
+      // ligar pra quem recebe achando que é o comprador). Sem telefone do
+      // comprador, avisa explícito em vez de repetir o de entrega.
       if (p.telefone_comprador) {
         telHTML += '<div class="d-tel d-tel-comprador">☎️ Comprador (dúvidas): ' + esc(p.telefone_comprador) + '</div>';
-      } else if (p.telefone) {
-        telHTML += '<div class="d-tel">📞 ' + esc(p.telefone) + '</div>';
+      } else {
+        telHTML += '<div class="d-tel" style="color:#a61e00;">☎️ Comprador (dúvidas): sem telefone informado</div>';
       }
     } else if (p.telefone) {
       telHTML += '<div class="d-tel">📞 ' + esc(p.telefone) + '</div>';
