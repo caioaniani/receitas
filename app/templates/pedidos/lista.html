@@ -21,20 +21,8 @@
     </a>
 {% endcall %}
 
-{% if current_user.is_admin() %}
-<form method="GET" class="mb-3">
-    <input type="hidden" name="aba" value="{{ aba_atual }}">
-    <select name="loja" class="form-select form-select-sm chip-filter" style="max-width:260px; appearance:auto;" onchange="this.form.submit()">
-        <option value="">todas as lojas</option>
-        {% for l in lojas %}
-        <option value="{{ l.id }}" {% if filtro_loja == l.id|string %}selected{% endif %}>{{ l.nome }}</option>
-        {% endfor %}
-    </select>
-</form>
-{% endif %}
-
 <!-- Abas por status -->
-<ul class="nav nav-tabs mb-3" role="tablist">
+<ul class="nav nav-tabs mb-2" role="tablist">
     {% for slug, label, _ in abas %}
     <li class="nav-item">
         <a class="nav-link {% if slug == aba_atual %}active{% endif %}"
@@ -47,6 +35,29 @@
     </li>
     {% endfor %}
 </ul>
+
+{# Abas por LOJA (pedido do dono 16/07/2026) — substituem o antigo <select>.
+   Badges = contagem da loja NA ABA ATUAL (guiam o clique). Só pra quem não
+   está vinculado a uma loja (mesma regra do filtro na rota). #}
+{% if current_user.is_admin() and lojas %}
+<ul class="nav nav-pills mb-3 flex-wrap gap-1 small">
+    <li class="nav-item">
+        <a class="nav-link py-1 px-2 {% if not filtro_loja %}active{% endif %}"
+           href="{{ url_for('pedidos.lista', aba=aba_atual) }}">todas as lojas</a>
+    </li>
+    {% for l in lojas %}
+    <li class="nav-item">
+        <a class="nav-link py-1 px-2 {% if filtro_loja == l.id|string %}active{% endif %}"
+           href="{{ url_for('pedidos.lista', aba=aba_atual, loja=l.id) }}">
+            {{ l.nome }}
+            {% if cont_lojas.get(l.id) %}
+            <span class="badge rounded-pill {% if filtro_loja == l.id|string %}bg-light text-dark{% else %}bg-secondary{% endif %}">{{ cont_lojas[l.id] }}</span>
+            {% endif %}
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
 
 <!-- Bulk action bar -->
 <div id="pedidos-bulk-bar" class="d-none mb-3 p-2 d-flex flex-wrap gap-2 align-items-center"
