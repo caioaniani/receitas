@@ -958,6 +958,9 @@ def salvar(id):
     receita.lote_pedido = _int_opt('lote_pedido')
     receita.minimo_pedido = _int_opt('minimo_pedido')
     receita.lote_producao = _int_opt('lote_producao')
+    # Piso do estoque da industria (freezer): a previsao de producao nunca
+    # sugere um alvo menor que este. Vazio/0 -> NULL (sem piso).
+    receita.estoque_minimo_industria = _int_opt('estoque_minimo_industria')
 
     receita.imagem_url = request.form.get('imagem_url', '').strip() or None
 
