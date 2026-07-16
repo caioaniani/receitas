@@ -91,7 +91,8 @@
       var sub = (Number(it.preco) || 0) * (parseInt(it.qtd, 10) || 0);
       subtotal += sub;
       resumoHtml += '<li><span>' + (parseInt(it.qtd, 10) || 0) + '× ' +
-        escapeHtml(it.nome) + '</span><span>' + fmtBRL(sub) + '</span></li>';
+        escapeHtml(it.nome) + (it.fatiado ? ' <em>(fatiado)</em>' : '') +
+        '</span><span>' + fmtBRL(sub) + '</span></li>';
     });
     resumoHtml += '</ul>';
     $('#checkout-resumo').innerHTML = resumoHtml;
