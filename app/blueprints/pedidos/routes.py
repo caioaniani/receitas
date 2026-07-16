@@ -270,8 +270,10 @@ def novo():
         return redirect(url_for('pedidos.lista'))
 
     amanha = hoje_brt() + timedelta(days=1)
-    # Admin pode entregar no MESMO dia (hoje); demais papeis, so a partir de amanha.
-    data_min = hoje_brt() if current_user.is_admin() else amanha
+    # Entrega no MESMO dia liberada pra TODOS os papeis (decisao do dono
+    # 15/07/2026 — antes so admin; funcionario da loja precisava esperar
+    # amanha). Passado continua bloqueado. O default do form segue amanha.
+    data_min = hoje_brt()
 
     if request.method == 'POST':
         try:
@@ -418,8 +420,8 @@ def editar(id):
         return redirect(url_for('pedidos.detalhe', id=id))
 
     if request.method == 'POST':
-        amanha = hoje_brt() + timedelta(days=1)
-        data_min = hoje_brt() if current_user.is_admin() else amanha
+        # Mesmo dia liberado pra todos (15/07/2026); passado segue bloqueado.
+        data_min = hoje_brt()
         data_str = request.form.get('data_entrega', '')
         obs = request.form.get('observacao', '').strip()
         try:
@@ -517,7 +519,7 @@ def editar(id):
     # MP bloqueada segue vivo no POST (candidatos = só ids que NÃO estavam no
     # pedido), preservando itens antigos legítimos.
     amanha = hoje_brt() + timedelta(days=1)
-    data_min = hoje_brt() if current_user.is_admin() else amanha
+    data_min = hoje_brt()   # mesmo dia liberado pra todos (15/07/2026)
     return render_template('pedidos/editar.html', pedido=pedido,
                            amanha=amanha, data_min=data_min)
 
