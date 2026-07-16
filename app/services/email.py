@@ -236,8 +236,10 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
 
 def _texto_confirmacao(pedido):
     onde, quando = _entrega_linha(pedido)
-    linhas = '\n'.join(f'  {it.quantidade}x {it.nome} — {_fmt_brl(it.subtotal)}'
-                       for it in pedido.itens)
+    linhas = '\n'.join(
+        f'  {it.quantidade}x {it.nome}'
+        f'{" (fatiado)" if it.fatiado else ""} — {_fmt_brl(it.subtotal)}'
+        for it in pedido.itens)
     return (
         f'Pagamento confirmado! Pedido {pedido.codigo}.\n\n'
         f'{linhas}\n'
@@ -287,8 +289,10 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
 
 def _texto_pedido_recebido(pedido, base):
     onde, quando = _entrega_linha(pedido)
-    linhas = '\n'.join(f'  {it.quantidade}x {it.nome} — {_fmt_brl(it.subtotal)}'
-                       for it in pedido.itens)
+    linhas = '\n'.join(
+        f'  {it.quantidade}x {it.nome}'
+        f'{" (fatiado)" if it.fatiado else ""} — {_fmt_brl(it.subtotal)}'
+        for it in pedido.itens)
     link = f'{base}/loja/pedido/{pedido.codigo}/pagamento' if base else ''
     return (
         f'Recebemos seu pedido {pedido.codigo}! Aguardando pagamento.\n\n'
