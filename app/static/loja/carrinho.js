@@ -101,37 +101,30 @@
     },
 
     // Liga/desliga "fatiado" de uma LINHA já no carrinho (checkbox da linha
-    // no drawer/carrinho/checkout). Fatiado muda a identidade da linha —
-    // então move a qtd pra o outro estado, SOMANDO se já existir uma linha
-    // igual do outro lado (ex: tinha 1 fatiado + 2 inteiro, marca o inteiro →
-    // vira 3 fatiado). Só age em item fatiável.
+    // no drawer/carrinho/checkout). Fatiado muda a identidade da linha:
+    // - sem linha do outro estado → flip NO LUGAR (a linha não muda de
+    //   posição, senão ela "pula" ao marcar/desmarcar);
+    // - com linha do outro estado → SOMA nela e remove a origem (ex: tinha
+    //   1 fatiado + 2 inteiro, marca o inteiro → 3 fatiado). Só item fatiável.
     alternarFatiado: function (kind, id, deFatiado) {
       var itens = this.ler();
       var kDe = this._chaveItem(kind, id, deFatiado);
-      var origem = null;
-      var resto = [];
-      for (var i = 0; i < itens.length; i++) {
-        if (!origem && this._chaveItem(itens[i].kind, itens[i].id,
-                                       itens[i].fatiado) === kDe) {
-          origem = itens[i];
-        } else {
-          resto.push(itens[i]);
-        }
-      }
-      if (!origem || !origem.fatiavel) return;   // não-fatiável não alterna
       var novoFat = !deFatiado;
       var kPara = this._chaveItem(kind, id, novoFat);
-      var merged = false;
-      for (var j = 0; j < resto.length; j++) {
-        if (this._chaveItem(resto[j].kind, resto[j].id,
-                            resto[j].fatiado) === kPara) {
-          resto[j].qtd = Math.min(99, resto[j].qtd + origem.qtd);
-          merged = true;
-          break;
-        }
+      var iOrigem = -1, iDest = -1;
+      for (var i = 0; i < itens.length; i++) {
+        var k = this._chaveItem(itens[i].kind, itens[i].id, itens[i].fatiado);
+        if (iOrigem < 0 && k === kDe) iOrigem = i;
+        else if (iDest < 0 && k === kPara) iDest = i;
       }
-      if (!merged) { origem.fatiado = novoFat; resto.push(origem); }
-      this.salvar(resto);
+      if (iOrigem < 0 || !itens[iOrigem].fatiavel) return;
+      if (iDest >= 0) {
+        itens[iDest].qtd = Math.min(99, itens[iDest].qtd + itens[iOrigem].qtd);
+        itens.splice(iOrigem, 1);          // destino mantém a posição
+      } else {
+        itens[iOrigem].fatiado = novoFat;  // flip no lugar
+      }
+      this.salvar(itens);
     },
 
     contar: function () {
