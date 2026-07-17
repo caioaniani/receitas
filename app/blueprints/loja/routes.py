@@ -910,10 +910,15 @@ def api_cep(cep):
                            bairro=j.get('neighborhood') or '',
                            cidade=j.get('city') or '',
                            uf=j.get('state') or '')
-        # BrasilAPI respondeu "não existe" (agrega 3 provedores) — ainda
-        # tenta o ViaCEP (bases divergem), mas se ele também falhar por
-        # INFRA o veredito é 404, não 502.
-        brasilapi_404 = True
+        # SÓ o 404 é evidência de "CEP não existe" (BrasilAPI agrega 3
+        # provedores) — ainda tenta o ViaCEP (bases divergem), mas se ele
+        # também falhar por INFRA o veredito é 404, não 502. Qualquer OUTRO
+        # não-200 (429/5xx) é degradação de INFRA: cai no ViaCEP e, falhando
+        # os dois, vira 502 (fail-open no front) — pego em revisão: tratar
+        # 5xx como "não existe" reproduzia o fail-closed que o CEP-first
+        # veio eliminar.
+        if r.status_code == 404:
+            brasilapi_404 = True
     except Exception:  # noqa: BLE001
         pass
     try:
