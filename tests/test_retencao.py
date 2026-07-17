@@ -40,9 +40,20 @@ def _semear(db):
     ev_v = ZapiBotEventoProcessado(message_id='ev-velho',
                                    processado_em=agora() - timedelta(days=8))
     ev_n = ZapiBotEventoProcessado(message_id='ev-novo', processado_em=recente)
-    db.session.add_all([nf_v, nf_n, cv_v, cv_n, ev_v, ev_n])
+    # Ação pendente do Slack (17/07/2026): token expira em 10 min, mas as
+    # linhas ficavam pra sempre carregando foto base64 no params_json.
+    from app.models import SlackAcaoPendente
+    ac_v = SlackAcaoPendente(token='tok-velho', slack_user_id='U1',
+                             tipo_acao='criar_pedido', params_json='{}',
+                             usuario_id=1,
+                             criado_em=agora() - timedelta(days=8))
+    ac_n = SlackAcaoPendente(token='tok-novo', slack_user_id='U1',
+                             tipo_acao='criar_pedido', params_json='{}',
+                             usuario_id=1, criado_em=recente)
+    db.session.add_all([nf_v, nf_n, cv_v, cv_n, ev_v, ev_n, ac_v, ac_n])
     db.session.commit()
-    return {'nf_velho': nf_v.id, 'nf_novo': nf_n.id, 'conv_nova': cv_n.id}
+    return {'nf_velho': nf_v.id, 'nf_novo': nf_n.id, 'conv_nova': cv_n.id,
+            'acao_velha': ac_v.id, 'acao_nova': ac_n.id}
 
 
 def test_limpeza_apaga_velhos_preserva_novos(app):
