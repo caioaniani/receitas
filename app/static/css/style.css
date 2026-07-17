@@ -764,6 +764,38 @@ body {
 [data-theme="dark"] .proj-tarefa-status.feito   { background: #0f3a26; color: #7be0a7; border-color: #2a3a5c; }
 [data-theme="dark"] .proj-tarefa-status.cancelado { background: #3a3a3a; color: #bbbbbb; border-color: #2a3a5c; }
 
+/* v2 (Início): concluir em 1 clique */
+.proj-done {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    border: 1.5px solid #5a9a5e;
+    background: transparent;
+    color: #5a9a5e;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+    opacity: .55;
+}
+.proj-done:hover { opacity: 1; background: #d1e7dd; }
+[data-theme="dark"] .proj-done { border-color: #4a8a4e; color: #7be0a7; }
+[data-theme="dark"] .proj-done:hover { background: #0f3a26; }
+.proj-tarefa.proj-feita {
+    opacity: .45;
+    transition: opacity .4s;
+}
+.proj-tarefa.proj-feita .tarefa-nome-editavel { text-decoration: line-through; }
+.proj-agora-titulo {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight: 700;
+    margin: 8px 0 2px;
+}
+.proj-agora .proj-tarefa { padding-left: 4px; }
+
 .proj-kanban {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
