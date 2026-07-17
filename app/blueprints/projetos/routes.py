@@ -437,7 +437,7 @@ def projeto_detalhe(pid):
                            usuarios=_usuarios(),
                            projetos_alvo=_projetos_para_select(),
                            data_relativa=_data_relativa,
-                           view='dashboard')
+                           view='inicio')
 
 
 @projetos_bp.route('/kanban')
