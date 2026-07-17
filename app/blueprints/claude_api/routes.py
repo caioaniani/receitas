@@ -815,6 +815,50 @@ def projetos():
     return jsonify(ok=True, projetos=[_resumo(p) for p in projs])
 
 
+@claude_api_bp.route('/acuracia')
+@_claude_auth_required
+def acuracia_previsao():
+    """Acurácia da previsão, read-only (16/07/2026, mutirão de confiança):
+    o resumo do painel /producao/previsao-acuracia + o WAPE por (loja,
+    receita) dos motores vivos — o mesmo que abastece os selos das grades.
+    Permite ao assistente diagnosticar de fora os itens em que a previsão
+    erra (?dias=, ?motor=)."""
+    from app.extensions import db
+    from app.models import Loja, Receita
+    from app.services.previsao_acuracia import (
+        MOTOR_LABEL,
+        MOTORES_VIVOS,
+        acuracia_por_loja_receita,
+        resumo_acuracia,
+    )
+    dias = _int_arg('dias', 30, 7, 180)
+    motor = request.args.get('motor') or None
+    if motor not in MOTOR_LABEL:
+        motor = None
+    resumo = resumo_acuracia(dias=dias, motor=motor)
+
+    nomes_r = {r.id: r.nome for r in
+               db.session.query(Receita.id, Receita.nome).all()}
+    nomes_l = {lj.id: lj.nome for lj in
+               db.session.query(Loja.id, Loja.nome).all()}
+    por_item = {}
+    for m in MOTORES_VIVOS:
+        linhas = []
+        for (loja_id, receita_id), vals in \
+                acuracia_por_loja_receita(m, dias=60).items():
+            linhas.append({
+                'loja_id': loja_id, 'loja': nomes_l.get(loja_id),
+                'receita_id': receita_id,
+                'receita': nomes_r.get(receita_id),
+                **vals,
+            })
+        linhas.sort(key=lambda x: -(x.get('wape_pct') or 0))
+        por_item[m] = linhas
+    return jsonify(ok=True, dias=dias, motor=motor,
+                   motores=dict(MOTOR_LABEL), resumo=resumo,
+                   por_loja_receita=por_item)
+
+
 @claude_api_bp.route('/auditoria-mapeamentos')
 @_claude_auth_required
 def auditoria_mapeamentos():
