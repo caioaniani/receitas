@@ -352,6 +352,7 @@
             mostrarCorrigir(false);
           }
           retomarFrete();
+          reconferirCep(d);
         })
         .catch(function () {
           cepEmVoo = false;
@@ -359,6 +360,7 @@
           statusCep('Não consegui consultar o CEP — pode digitar o endereço.', 'erro');
           mostrarCorrigir(false);
           retomarFrete();
+          reconferirCep(d);
         });
     }
 
