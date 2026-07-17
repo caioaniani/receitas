@@ -19,17 +19,26 @@ import os
 
 import pytest
 
-# ── Paralelizacao (pytest-xdist) ──────────────────────────────────────────
-# Cada worker do xdist roda em processo separado. Pra eles nao brigarem pelo
-# MESMO arquivo SQLite (config.py:8 le DATABASE_URL no import), damos a cada
-# worker o seu proprio arquivo. Sem xdist (PYTEST_XDIST_WORKER ausente), nada
-# muda — comportamento de antes. Tem que rodar ANTES de qualquer `from app
-# import ...` (que importa config.py); por isso fica no topo do conftest.
+# ── Isolamento do banco POR PROCESSO de teste ─────────────────────────────
+# Sem DATABASE_URL setado, config.py cai no ~/.padaria/padaria.db FIXO. Dois
+# problemas reais quando isso vale pra todo processo pytest:
+#   1. Duas invocacoes pytest concorrentes (ou os workers do xdist) batem no
+#      MESMO arquivo. Como o reset entre testes eh DELETE de todas as linhas +
+#      recriacao do admin no startup, os processos apagam/recriam as linhas uns
+#      dos outros no meio dos testes do vizinho -> falhas NAO-DETERMINISTICAS e
+#      espalhadas (StaleDataError, UNIQUE usuario.login, linhas que "somem").
+#      So aparece com pytest concorrente; CI (1 processo) fica verde e escondia.
+#   2. A suite dropava/limpava o padaria.db LOCAL do desenvolvedor.
+# Fix: cada PROCESSO ganha seu proprio arquivo (worker do xdist quando ha, senao
+# o PID). Respeita DATABASE_URL setado de proposito (ex: rodar contra Postgres).
+# Tem que rodar ANTES de qualquer `from app import ...` (que importa config.py);
+# por isso fica no topo do conftest.
 _xdist_worker = os.environ.get('PYTEST_XDIST_WORKER')
-if _xdist_worker:
+if not os.environ.get('DATABASE_URL'):
     import tempfile
+    _db_slot = _xdist_worker or f'pid{os.getpid()}'
     os.environ['DATABASE_URL'] = (
-        f'sqlite:///{tempfile.gettempdir()}/padaria_test_{_xdist_worker}.db')
+        f'sqlite:///{tempfile.gettempdir()}/padaria_test_{_db_slot}.db')
 
 os.environ.setdefault('SECRET_KEY', 'test-secret')
 os.environ['PYTEST_RUNNING'] = '1'
