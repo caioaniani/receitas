@@ -175,7 +175,7 @@
         });
     }
 
-    // Busca textual em tarefas
+    // Busca textual em tarefas (e, no Início v2, tambem em projetos/areas)
     var busca = document.getElementById('busca-tarefa');
     if (busca) {
         busca.addEventListener('input', function () {
@@ -183,6 +183,31 @@
             document.querySelectorAll('.proj-tarefa').forEach(function(row) {
                 var nome = (row.dataset.nome || '');
                 row.style.display = (!termo || nome.indexOf(termo) !== -1) ? '' : 'none';
+            });
+            // Início v2: projeto cujo NOME casa mostra todas as tarefas;
+            // projeto sem tarefa visivel some; area sem projeto visivel some.
+            // So age nos cards com data-proj-nome (as outras views nao tem).
+            document.querySelectorAll('.proj-card[data-proj-nome]').forEach(function (card) {
+                if (!termo) { card.style.display = ''; return; }
+                if ((card.dataset.projNome || '').indexOf(termo) !== -1) {
+                    card.style.display = '';
+                    card.querySelectorAll('.proj-tarefa').forEach(function (r) { r.style.display = ''; });
+                    return;
+                }
+                var temVisivel = Array.prototype.some.call(
+                    card.querySelectorAll('.proj-tarefa'),
+                    function (r) { return r.style.display !== 'none'; }
+                );
+                card.style.display = temVisivel ? '' : 'none';
+            });
+            document.querySelectorAll('.proj-area-block').forEach(function (block) {
+                if (!block.querySelector('.proj-card[data-proj-nome]')) return;
+                if (!termo) { block.style.display = ''; return; }
+                var tem = Array.prototype.some.call(
+                    block.querySelectorAll('.proj-card[data-proj-nome]'),
+                    function (c) { return c.style.display !== 'none'; }
+                );
+                block.style.display = tem ? '' : 'none';
             });
         });
     }
