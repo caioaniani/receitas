@@ -364,7 +364,7 @@ def cards():
                                so_foco=so_foco, busca=busca,
                                hoje_today=hoje_d,
                                data_relativa=_data_relativa,
-                               view='dashboard')
+                               view='cards')
     except Exception as e:
         current_app.logger.error('Erro no dashboard de projetos: %s\n%s', e, traceback.format_exc())
         return (
