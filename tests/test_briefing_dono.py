@@ -137,6 +137,17 @@ def test_pendencia_vigia_doente(app):
     assert 'site_vigia_quebrado_desde' in chaves
 
 
+def test_vigia_doente_escondido_de_admin_comum(app):
+    """As telas dos vigias são owner-only — admin comum não ganha o item
+    (clicar daria 403; achado A2 da revisão)."""
+    from app.models import AppConfig
+    from app.services import briefing_dono
+    AppConfig.set('site_vigia_quebrado_desde', '2026-07-16T06:00:00')
+    db.session.commit()
+    chaves = {p['chave'] for p in briefing_dono.pendencias(incluir_owner=False)}
+    assert 'site_vigia_quebrado_desde' not in chaves
+
+
 def test_incluir_owner_false_esconde_itens_owner(app, catalogo):
     """Órfãos de cesta (tela owner) não aparecem pro admin comum."""
     from app.models import ProdutoItem
