@@ -233,6 +233,73 @@
         });
         recalc();
     });
+
+    // --- Auto-save de dia COM pedido (decisão do dono 17/07/2026: "sem eu ter
+    // que apertar atualizar") ---
+    // MESMA lógica da tela da média: só células `tem-pedido` (o dia JÁ tem
+    // pedido rascunho/confirmado) auto-salvam, com debounce por coluna
+    // (loja|data), via `so_dia`+`ajax=1` — o backend aplica SÓ aquela coluna
+    // (igual ao botão ↻). Dia SEM pedido NUNCA auto-salva: criar rascunho
+    // continua ação explícita nos botões Gerar (não comprometer a indústria
+    // sozinho). O botão ↻ vira indicador de status + fallback manual.
+    (function () {
+        var timers = {};
+        var DEBOUNCE_MS = 900;
+
+        function botaoDe(chave) {
+            var btns = document.querySelectorAll('.btn-atualizar-dia');
+            for (var i = 0; i < btns.length; i++) {
+                if (btns[i].value === chave) { return btns[i]; }
+            }
+            return null;
+        }
+        function status(chave, texto, title) {
+            var b = botaoDe(chave);
+            if (!b) { return; }
+            b.textContent = texto;
+            b.title = title || '';
+        }
+        function salvar(chave, form) {
+            var fd = new FormData(form);
+            fd.set('so_dia', chave);
+            fd.set('ajax', '1');
+            fd.set('so_loja', '');
+            fd.set('gerar_todas', '');
+            status(chave, '💾 salvando…');
+            fetch(form.action, { method: 'POST', body: fd,
+                                 credentials: 'same-origin' })
+                .then(function (r) {
+                    if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                    return r.json();
+                })
+                .then(function (j) {
+                    status(chave, j.mudou ? '✓ salvo' : '✓ sem mudança', j.msg);
+                    setTimeout(function () {
+                        status(chave, '↻ atualizar',
+                               'Atualiza SÓ o pedido deste dia desta loja com os valores da coluna (0 remove o item)');
+                    }, 3000);
+                })
+                .catch(function () {
+                    status(chave, '⚠ erro — clique p/ salvar',
+                           'O salvamento automático falhou; clique pra atualizar manualmente.');
+                });
+        }
+        document.querySelectorAll('.pmed-cel.tem-pedido').forEach(function (inp) {
+            if (inp.disabled) { return; }
+            var partes = (inp.name || '').split('|'); // qtd|loja|data|item
+            if (partes.length !== 4) { return; }
+            var chave = partes[1] + '|' + partes[2];
+            var form = inp.form;
+            if (!form || !botaoDe(chave)) { return; }
+            inp.addEventListener('input', function () {
+                clearTimeout(timers[chave]);
+                status(chave, '✎ digitando…');
+                timers[chave] = setTimeout(function () {
+                    salvar(chave, form);
+                }, DEBOUNCE_MS);
+            });
+        });
+    })();
 })();
 </script>
 {% endblock %}
