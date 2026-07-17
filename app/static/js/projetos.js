@@ -86,22 +86,27 @@
         if (!btn) return;
         var tid = btn.dataset.tarefaId;
         if (!tid) return;
-        var row = btn.closest('.proj-tarefa');
+        // A mesma tarefa pode ter DUAS linhas na home (seção Agora + quadro
+        // por área) — concluir numa precisa riscar/sumir as duas.
+        var rows = Array.prototype.slice.call(
+            document.querySelectorAll('.proj-tarefa[data-tarefa-id="' + tid + '"]'));
 
-        if (row) row.classList.add('proj-feita');
+        rows.forEach(function (r) { r.classList.add('proj-feita'); });
         btn.disabled = true;
 
         postEdicao('/projetos/tarefa/' + tid + '/editar', 'status', 'feito').then(function (r) {
             if (!r.ok) {
-                if (row) row.classList.remove('proj-feita');
+                rows.forEach(function (el) { el.classList.remove('proj-feita'); });
                 btn.disabled = false;
                 alert('Não foi possível concluir a tarefa. Recarregue.');
                 return;
             }
             // Some depois de um instante (deixa o risco visível como feedback)
-            if (row) setTimeout(function () { row.style.display = 'none'; }, 700);
+            setTimeout(function () {
+                rows.forEach(function (el) { el.style.display = 'none'; });
+            }, 700);
         }).catch(function () {
-            if (row) row.classList.remove('proj-feita');
+            rows.forEach(function (el) { el.classList.remove('proj-feita'); });
             btn.disabled = false;
         });
     });
