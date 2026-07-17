@@ -348,6 +348,66 @@ def test_google_teto_diario_para_de_chamar(app):
     assert r3['fonte'] == 'gratis'
 
 
+def test_google_retenta_com_logradouro_oficial_do_cep(app):
+    """Caso Mirelle (17/07/2026): cliente digitou "Rua Cândido de Azevedo
+    Marques" — o nome oficial é "Rua JOAQUIM Cândido de Azevedo Marques".
+    O Google falha no texto cru; a BrasilAPI conhece o CEP (sem coordenada)
+    e devolve o logradouro OFICIAL → re-tenta o Google com ele (+ número) e
+    resolve, em vez de morrer em nao_encontrado."""
+    brasilapi = _resp(200, {
+        'street': 'Rua Joaquim Cândido de Azevedo Marques',
+        'neighborhood': 'Vila Morumbi', 'city': 'São Paulo',
+        'location': {'coordinates': {}}})
+    urls = []
+
+    def fake_get(url, **kw):
+        urls.append(url)
+        return brasilapi
+
+    with app.app_context():
+        app.config['GOOGLE_MAPS_API_KEY'] = 'k'
+        app.config['FRETE_GOOGLE'] = '1'
+        with patch('app.services.google_maps.geocode_preciso',
+                   side_effect=[None, (-23.6097, -46.7110)]) as g, \
+             patch('app.services.frete.requests.get', side_effect=fake_get):
+            r = frete.consultar_frete(
+                'Rua Cândido de Azevedo Marques, 750, Morumbi, Sp, Sp, '
+                '05688-020')
+    assert r['ok'] is True and r['fora_area'] is False
+    assert r['fonte'] == 'google' and r['impreciso'] is False
+    assert g.call_count == 2
+    canonico = g.call_args_list[1][0][0]
+    assert 'Joaquim' in canonico and ', 750,' in canonico
+    assert '05688-020' in canonico
+    # Google resolveu ANTES da cadeia grátis: nenhum Nominatim na linha.
+    assert all('brasilapi' in u for u in urls)
+
+
+def test_cep_sem_logradouro_nao_retenta_google(app):
+    """Guard da retentativa: BrasilAPI sem 'street' (CEP geral) → NÃO chama o
+    Google de novo (bairro/cidade viram centroide, que o geocode_preciso
+    rejeitaria — seria chamada paga inútil); segue pra cadeia grátis."""
+    brasilapi = _resp(200, {
+        'street': None, 'neighborhood': 'Centro', 'city': 'São Paulo',
+        'location': {'coordinates': {}}})
+    nominatim = _resp(200, [{'lat': '-23.61', 'lon': '-46.70',
+                             'display_name': 'Centro, São Paulo',
+                             'address': {'city': 'São Paulo'}}])
+
+    def fake_get(url, **kw):
+        return brasilapi if 'brasilapi' in url else nominatim
+
+    with app.app_context():
+        app.config['GOOGLE_MAPS_API_KEY'] = 'k'
+        app.config['FRETE_GOOGLE'] = '1'
+        with patch('app.services.google_maps.geocode_preciso',
+                   return_value=None) as g, \
+             patch('app.services.frete.requests.get', side_effect=fake_get):
+            r = frete.consultar_frete('Rua Qualquer, 10, São Paulo, 01000-000')
+    assert g.call_count == 1                       # só o texto cru
+    assert r['ok'] is True and r['fonte'] == 'gratis'
+
+
 def test_geocode_preciso_rejeita_approximate_e_aceita_rooftop(app):
     """O Google APPROXIMATE (centroide de cidade) NÃO vale como preciso — vira
     None pra cair na cadeia grátis; ROOFTOP vale."""
