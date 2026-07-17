@@ -138,12 +138,15 @@ mais rapido que a capacidade de operar; quase tudo era "pull" (lembrar de
 abrir tela). Tres pecas, UMA fonte de dados
 (`app/services/briefing_dono.py`):
 
-- **Briefing diario no WhatsApp** (07:00 BRT, job `briefing-dono` no
-  `seru_cron`, lock 7750, kill-switch `BRIEFING_DONO=0`): vendas de ontem
-  por loja vs media do mesmo dia-da-semana (fonte `VendaSeruDiaLoja.
-  faturamento_pedidos` — inclui kit/box; site por `pago_em`), pendencias de
-  decisao e custo de IA de ontem. Preview + envio manual:
-  `GET /admin/briefing` (owner; `?enviar=1` dispara).
+- **Briefing do dono, SOB DEMANDA** (`GET /admin/briefing`, owner;
+  `?enviar=1` manda pro WhatsApp dele): vendas de ontem por loja vs media
+  do mesmo dia-da-semana (fonte `VendaSeruDiaLoja.faturamento_pedidos` —
+  inclui kit/box; site por `pago_em`; companies Seru AGRUPADOS pela Loja
+  vinculada — Bread & Brew + Filial Nebraska = UMA linha, dono 17/07),
+  pendencias de decisao e custo de IA de ontem.
+  **O envio automatico das 07:00 foi REMOVIDO em 17/07/2026 a pedido do
+  dono ("nao quero receber") — job `briefing-dono` apagado do seru_cron,
+  lock 7750 liberado-reservado. NAO reagendar sem ordem explicita.**
 - **Bloco "Precisa de voce hoje" na home do admin** (`main.index` →
   `home.html`): as MESMAS pendencias, com link por item. Itens de tela
   owner-only (orfaos de cesta, PDV) so aparecem pro owner.
