@@ -1205,6 +1205,49 @@ atrapalha o geocoder. Testes: `test_geocode_do_frete_nao_leva_complemento` em
 frete sem entender o custo (checar billing do Google Cloud) — e NUNCA deixar o
 Google cobrar resultado APPROXIMATE como preciso.
 
+**Checkout CEP-first + retentativa com logradouro OFICIAL (17/07/2026, caso
+Mirelle)**: venda barrada 2x — cliente digitou "Rua Cândido de Azevedo
+Marques" (o oficial tem "JOAQUIM" na frente; nenhum geocoder achava) e depois
+o CEP com os digitos INVERTIDOS (88650-020 em vez de 05688-020, CEP de SC).
+O autofill por CEP ja existia mas so disparava no blur, falhava em SILENCIO
+(404/erro = return sem aviso) e os campos ficavam livres. Duas camadas,
+decisao do dono ("bloquear o campo endereco"):
+- **Checkout CEP-first** (`checkout.js`): logradouro/bairro/cidade/UF ficam
+  READONLY (nunca disabled — disabled nao submete no POST) ate o CEP
+  resolver; lookup dispara no `input` ao completar 8 digitos (autofill de
+  navegador nem sempre da blur) + blur como rede; `#cep-status` acima do
+  grid mostra buscando/preenchido/erro. FAIL-OPEN obrigatorio: API de CEP
+  fora (502) ou CEP sem rua na base (CEP geral) DESTRAVA os campos — venda
+  NUNCA fica presa por infra. 404 (CEP nao existe) mantem travado com aviso
+  "confira o numero" + botao `#cep-corrigir` (saida de emergencia, tambem
+  apos preencher). GRANDFATHER: endereco ja preenchido no load (conta com
+  endereco salvo / re-render pos-erro do POST) NAO trava. Corrida com o
+  "Calcular frete": clique durante lookup em voo vira `freteAposCep=true` e
+  re-dispara sozinho ao terminar.
+- **`api_cep` com fallback ViaCEP** (`loja/routes.py`): BrasilAPI primeiro;
+  falhou por INFRA → ViaCEP. Contrato com o front: 404 = CEP NAO EXISTE
+  (mantem travado) ≠ 502 = infra fora (fail-open). Com CEP-first, a rota
+  fora do ar sem fallback viraria venda travada no site inteiro.
+- **Retentativa Google com o logradouro OFICIAL** (`frete.py::
+  _geocodificar_impl`): quando a BrasilAPI conhece o CEP mas sem coordenada,
+  re-tenta `_google_geocode` com "rua oficial + numero + bairro + cidade +
+  CEP" ANTES da cadeia Nominatim (`ref['rua']` novo em `_geocodificar_cep`).
+  Mesmo teto/cache/kill-switch do Google. Provado na sonda: o texto da
+  Mirelle falhava; com "Joaquim" resolvia (1,9km, R$5). Guard: CEP sem rua
+  nao re-tenta (bairro/cidade viram centroide que o geocode_preciso rejeita
+  — chamada paga inutil).
+- **Bug pre-existente achado na validacao**: o reset mobile do
+  `.endereco-grid` (@media 560px em `loja.css`) PERDIA por especificidade
+  pros `label:nth-child(...)` desktop (0-1-1 vs 0-2-1) — NUNCA aplicou
+  desde que foi escrito; o span desktop vazava, criava 3ª coluna implicita
+  e o campo CEP rendia com ~51px no celular. Fix: reset com
+  `label:nth-child(n)` (empata 0-2-1, vence por ordem). Ao criar override
+  mobile de regra que usa nth-child, conferir especificidade.
+Testes: `test_google_retenta_com_logradouro_oficial_do_cep` +
+`test_cep_sem_logradouro_nao_retenta_google` em `tests/test_frete.py`;
+4 casos de fallback/404/502 em `tests/test_loja_checkout_v2.py`. Validacao
+visual/funcional Playwright 390px (14 checks, incl. fail-open e corrigir).
+
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
 Escrito na pedra a pedido do dono ("ja tinha falado uma vez mas nao ficou
