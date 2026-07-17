@@ -165,6 +165,23 @@ def test_rota_retencao_dry_run_default(app):
     assert NFLog.query.count() == antes
 
 
+def test_rota_db_vacuum_sqlite_400_e_allowlist(app):
+    """/admin/db-vacuum: fora do Postgres responde 400 (nos testes é SQLite);
+    a allowlist recusa tabela de negócio mesmo em prod."""
+    c = _owner_logado(app)
+    resp = c.get('/admin/db-vacuum?tabela=slack_acao_pendente')
+    assert resp.status_code == 400
+    assert 'Postgres' in resp.get_json()['erro']
+
+
+def test_rota_db_vacuum_exige_owner(app, admin_user):
+    c = app.test_client()
+    with c.session_transaction() as sess:
+        sess['_user_id'] = str(admin_user.id)
+        sess['_fresh'] = True
+    assert c.get('/admin/db-vacuum').status_code == 403
+
+
 def test_rota_debug_sentry_sem_dsn_instrui(app):
     c = _owner_logado(app)
     with patch.dict('os.environ', {'SENTRY_DSN': ''}):
