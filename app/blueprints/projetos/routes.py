@@ -1073,9 +1073,24 @@ _RECORRENCIA_DIAS = {
 
 
 def _agendar_proxima(tarefa):
-    """Cria nova ocorrencia da tarefa recorrente, com prazo deslocado."""
+    """Cria nova ocorrencia da tarefa recorrente, com prazo deslocado.
+
+    Dedupe: se ja existe outra ocorrencia ABERTA da mesma tarefa (mesmo
+    projeto + nome + recorrencia), nao cria — sem isso, alternar
+    feito→a_fazer→feito duplicava a proxima ocorrencia a cada ciclo
+    (lixo real observado no quadro em prod).
+    """
     dias = _RECORRENCIA_DIAS.get(tarefa.recorrencia)
     if not dias:
+        return
+    ja_aberta = TarefaProjeto.query.filter(
+        TarefaProjeto.projeto_id == tarefa.projeto_id,
+        TarefaProjeto.nome == tarefa.nome,
+        TarefaProjeto.recorrencia == tarefa.recorrencia,
+        TarefaProjeto.id != tarefa.id,
+        ~TarefaProjeto.status.in_(['feito', 'cancelado']),
+    ).first()
+    if ja_aberta:
         return
     base = tarefa.prazo or hoje_brt()
     nova = TarefaProjeto(
