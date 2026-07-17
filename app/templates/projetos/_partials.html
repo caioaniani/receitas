@@ -23,10 +23,11 @@
 
 
 {% macro nav_views(view, inbox_count=0) %}
+{% set em_mais = view in ('dia', 'foco', 'relatorio', 'templates', 'cards', 'hier') %}
 <ul class="nav nav-pills proj-nav-tabs flex-wrap">
     <li class="nav-item">
-        <a href="{{ url_for('projetos.painel') }}" class="nav-link {% if view == 'dashboard' %}active{% endif %}">
-            <i class="bi bi-grid"></i> Dashboard
+        <a href="{{ url_for('projetos.painel') }}" class="nav-link {% if view == 'inicio' %}active{% endif %}">
+            <i class="bi bi-house-door"></i> Início
         </a>
     </li>
     <li class="nav-item">
@@ -41,18 +42,8 @@
         </a>
     </li>
     <li class="nav-item">
-        <a href="{{ url_for('projetos.dia') }}" class="nav-link {% if view == 'dia' %}active{% endif %}">
-            <i class="bi bi-calendar-day"></i> Dia
-        </a>
-    </li>
-    <li class="nav-item">
         <a href="{{ url_for('projetos.kanban') }}" class="nav-link {% if view == 'kanban' %}active{% endif %}">
             <i class="bi bi-kanban"></i> Kanban
-        </a>
-    </li>
-    <li class="nav-item">
-        <a href="{{ url_for('projetos.foco') }}" class="nav-link {% if view == 'foco' %}active{% endif %}">
-            <i class="bi bi-star-fill"></i> Foco
         </a>
     </li>
     <li class="nav-item">
@@ -60,15 +51,31 @@
             <i class="bi bi-calendar3"></i> Calendário
         </a>
     </li>
-    <li class="nav-item">
-        <a href="{{ url_for('projetos.relatorio') }}" class="nav-link {% if view == 'relatorio' %}active{% endif %}">
-            <i class="bi bi-graph-up"></i> Relatório
+    <li class="nav-item dropdown">
+        <a href="#" class="nav-link dropdown-toggle {% if em_mais %}active{% endif %}" data-bs-toggle="dropdown" role="button">
+            <i class="bi bi-three-dots"></i> Mais
         </a>
-    </li>
-    <li class="nav-item">
-        <a href="{{ url_for('projetos.templates_lista') }}" class="nav-link {% if view == 'templates' %}active{% endif %}">
-            <i class="bi bi-bookmark-star"></i> Templates
-        </a>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item {% if view == 'dia' %}active{% endif %}" href="{{ url_for('projetos.dia') }}">
+                <i class="bi bi-calendar-day"></i> Dia a dia
+            </a></li>
+            <li><a class="dropdown-item {% if view == 'foco' %}active{% endif %}" href="{{ url_for('projetos.foco') }}">
+                <i class="bi bi-star-fill"></i> Foco 12s
+            </a></li>
+            <li><a class="dropdown-item {% if view == 'relatorio' %}active{% endif %}" href="{{ url_for('projetos.relatorio') }}">
+                <i class="bi bi-graph-up"></i> Relatório
+            </a></li>
+            <li><a class="dropdown-item {% if view == 'templates' %}active{% endif %}" href="{{ url_for('projetos.templates_lista') }}">
+                <i class="bi bi-bookmark-star"></i> Templates
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item {% if view == 'cards' %}active{% endif %}" href="{{ url_for('projetos.cards') }}">
+                <i class="bi bi-grid"></i> Cards de projetos
+            </a></li>
+            <li><a class="dropdown-item {% if view == 'hier' %}active{% endif %}" href="{{ url_for('projetos.hierarquia') }}">
+                <i class="bi bi-list-ul"></i> Visão lista completa
+            </a></li>
+        </ul>
     </li>
 </ul>
 {% endmacro %}
