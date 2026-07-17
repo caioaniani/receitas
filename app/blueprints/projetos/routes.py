@@ -230,7 +230,6 @@ def painel():
                 c['p'].status != 'ativo',
                 c['p'].nome.lower(),
             ))
-            concluidos = sum(1 for p in area.projetos if p.status == 'concluido')
             if projs or concluidos:
                 quadro.append({'area': area, 'projetos': projs, 'concluidos': concluidos})
 
