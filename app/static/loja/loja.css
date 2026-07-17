@@ -1046,7 +1046,12 @@ body.modal-instalar-aberto { overflow: hidden; }
 .endereco-grid label.uf-col      { grid-column: 3 / span 1; }       /* UF */
 @media (max-width: 560px) {
   .endereco-grid { grid-template-columns: 1fr 1fr; }
-  .endereco-grid label,
+  /* :nth-child(n) casa TODO label só pra IGUALAR a especificidade (0-2-1)
+     das regras desktop acima — sem isso o reset PERDE pro `label:
+     nth-child(2) { grid-column: 2 / span 2 }`, o span vaza pro grid de 2
+     colunas, cria uma 3ª coluna implícita e o CEP fica com ~51px (bug
+     invisível desde a criação; achado na validação do CEP-first 17/07). */
+  .endereco-grid label:nth-child(n),
   .endereco-grid label.uf-col { grid-column: auto; }
 }
 #bloco-destinatario { margin-bottom: 14px; padding-left: 12px;
