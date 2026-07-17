@@ -3418,6 +3418,12 @@ def executar_criar_tarefa(params, user):
     proj_nome = (params.get('projeto_nome') or '').strip()
     if proj_nome:
         projeto = Projeto.query.filter(Projeto.nome.ilike(f'%{proj_nome}%')).first()
+    if projeto is None:
+        # projeto_id e NOT NULL: sem projeto (ou nome que nao casou),
+        # a tarefa cai na Inbox (projeto "Avulsas") — mesmo destino do
+        # quick-add da tela /projetos.
+        from app.blueprints.projetos.routes import _get_inbox_projeto
+        projeto = _get_inbox_projeto()
 
     prazo = None
     if params.get('data_prazo'):
@@ -3428,14 +3434,13 @@ def executar_criar_tarefa(params, user):
 
     t = TarefaProjeto(
         nome=titulo,
-        projeto_id=projeto.id if projeto else None,
-        data_prazo=prazo,
-        criado_por=user.id,
+        projeto_id=projeto.id,
+        prazo=prazo,
     )
     db.session.add(t)
     db.session.commit()
     return {'ok': True, 'tarefa_id': t.id, 'titulo': titulo,
-            'projeto': projeto.nome if projeto else 'Inbox',
+            'projeto': projeto.nome, 'prazo': prazo.isoformat() if prazo else None,
             'registro_tipo': 'tarefa_projeto', 'registro_id': t.id}
 
 
