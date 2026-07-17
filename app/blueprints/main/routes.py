@@ -2587,6 +2587,98 @@ def wifi_vouchers():
         aviso_min=current_app.config.get('WIFI_VOUCHER_AVISO_MIN', 50))
 
 
+_MESES_PT = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago',
+             'Set', 'Out', 'Nov', 'Dez']
+
+
+def _clientes_query(q, so_conta, aniv_mes):
+    """Query base da lista de clientes do varejo (Cliente). Compartilhada
+    entre a tela e o export XLSX pra os dois mostrarem exatamente o mesmo."""
+    from app.models import Cliente
+    query = Cliente.query
+    if q:
+        like = f'%{q.lower()}%'
+        query = query.filter(db.or_(
+            db.func.lower(Cliente.nome).like(like),
+            db.func.lower(Cliente.email).like(like),
+            Cliente.telefone.like(f'%{q}%')))
+    if so_conta:
+        query = query.filter(Cliente.senha_hash.isnot(None))
+    if aniv_mes:
+        query = query.filter(Cliente.aniversario_mes == aniv_mes)
+    return query.order_by(Cliente.criado_em.desc())
+
+
+@main_bp.route('/admin/clientes')
+@admin_required
+def clientes():
+    """Lista os clientes do VAREJO (Cliente) — cadastros do site e do portal
+    Wi-Fi das lojas (13/07/2026). PII/LGPD: admin+owner. Filtros: busca
+    (nome/email/telefone), só-com-conta e aniversariantes do mês. Export
+    XLSX pra campanhas."""
+    from app.models import Cliente
+    q = (request.args.get('q') or '').strip()
+    so_conta = request.args.get('conta') == '1'
+    aniv_mes = request.args.get('aniv_mes')
+    aniv_mes = int(aniv_mes) if (aniv_mes or '').isdigit() else None
+    try:
+        pagina = max(1, int(request.args.get('p', 1)))
+    except (TypeError, ValueError):
+        pagina = 1
+    por_pagina = 50
+    query = _clientes_query(q, so_conta, aniv_mes)
+    total = query.count()
+    linhas = (query.limit(por_pagina)
+              .offset((pagina - 1) * por_pagina).all())
+    total_geral = Cliente.query.count()
+    com_conta = Cliente.query.filter(Cliente.senha_hash.isnot(None)).count()
+    return render_template(
+        'main/clientes.html', linhas=linhas, total=total,
+        total_geral=total_geral, com_conta=com_conta, q=q,
+        so_conta=so_conta, aniv_mes=aniv_mes, pagina=pagina,
+        por_pagina=por_pagina, meses=_MESES_PT)
+
+
+@main_bp.route('/admin/clientes.xlsx')
+@admin_required
+def clientes_xlsx():
+    """Export da lista de clientes (mesmos filtros da tela) pra campanhas."""
+    import io
+
+    from flask import send_file
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    q = (request.args.get('q') or '').strip()
+    so_conta = request.args.get('conta') == '1'
+    aniv_mes = request.args.get('aniv_mes')
+    aniv_mes = int(aniv_mes) if (aniv_mes or '').isdigit() else None
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Clientes'
+    cabec = ['Nome', 'E-mail', 'WhatsApp', 'Aniversário', 'Tem conta',
+             'Cadastrado em']
+    ws.append(cabec)
+    for cel in ws[1]:
+        cel.font = Font(bold=True)
+    for c in _clientes_query(q, so_conta, aniv_mes).all():
+        aniv = (f'{c.aniversario_dia:02d}/{c.aniversario_mes:02d}'
+                if c.aniversario_dia and c.aniversario_mes else '')
+        if aniv and c.nascimento_ano:
+            aniv += f'/{c.nascimento_ano}'
+        ws.append([c.nome, c.email, c.telefone or '', aniv,
+                   'sim' if c.tem_conta else 'não',
+                   c.criado_em.strftime('%d/%m/%Y') if c.criado_em else ''])
+    for col, larg in zip('ABCDEF', (26, 30, 18, 14, 10, 14)):
+        ws.column_dimensions[col].width = larg
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf, mimetype=('application/vnd.openxmlformats-officedocument.'
+                       'spreadsheetml.sheet'),
+        as_attachment=True, download_name='clientes.xlsx')
+
+
 @main_bp.route('/admin/vnda/contatos')
 @login_required
 def vnda_contatos():
