@@ -355,6 +355,44 @@ def test_rota_estoque_renderiza(app, admin_user):
     assert 'onclick="return confirm' not in body
 
 
+def test_estoque_auto_salva_dia_com_pedido(app, admin_user):
+    """A tela venda+estoque auto-salva o dia que JÁ tem pedido (decisão do
+    dono 17/07/2026: 'sem eu ter que apertar atualizar'). Mesma engrenagem da
+    média: célula tem-pedido + botão ↻ como status + POST so_dia/ajax. Dia
+    sem pedido NÃO ganha auto-save (criar rascunho continua no Gerar)."""
+    from app.models import PedidoItem, PedidoLoja
+    loja = _loja('Loja Auto')
+    r = _receita('Pao')
+    el = _estoque(loja, r, 0)
+    hoje_d = hoje()
+    for sem in range(1, 7):
+        for dow in range(7):
+            d = hoje_d - timedelta(days=7 * sem)
+            d = d - timedelta(days=d.weekday()) + timedelta(days=dow)
+            if d < hoje_d:
+                _venda(el, d, 10)
+    amanha = hoje_d + timedelta(days=1)
+    ped = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=amanha,
+                     data_pedido=hoje_d)
+    db.session.add(ped)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=ped.id, receita_id=r.id, quantidade=20))
+    db.session.commit()
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    body = client.get('/producao/pedidos-semana/estoque?horizonte=7&janela=6'
+                      '&inicio=0').get_data(as_text=True)
+    assert 'btn-atualizar-dia' in body
+    assert 'tem-pedido' in body                 # célula do dia com pedido
+    # engrenagem do autosave (mesma da média): POST so_dia+ajax e status
+    assert "fd.set('so_dia'" in body
+    assert "fd.set('ajax', '1')" in body
+    assert 'salvando' in body
+    assert '%d|%s' % (loja.id, amanha.isoformat()) in body
+
+
 # ── Matérias-primas na tela (pão de queijo comprado, vendido via cones) ─────
 def _mp(nome='Pão de Queijo (congelado)', sugerir=True):
     from app.models import MateriaPrima
