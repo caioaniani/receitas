@@ -406,6 +406,27 @@ def test_api_cep_502_quando_tudo_fora(app, monkeypatch):
     assert r.status_code == 502
 
 
+def test_api_cep_5xx_da_brasilapi_nao_vira_404(app, monkeypatch):
+    """BrasilAPI 503 (degradação de INFRA, não 'CEP não existe') + ViaCEP
+    fora → 502, NUNCA 404 — achado de revisão: tratar qualquer não-200 como
+    'não existe' reproduzia o fail-closed que o CEP-first veio eliminar."""
+    monkeypatch.delenv('LOJA_VISIVEL', raising=False)
+    c = _admin(app)
+
+    class _R503:
+        status_code = 503
+        def json(self):
+            return {}
+
+    def fake_get(url, **kw):
+        if 'brasilapi' in url:
+            return _R503()
+        raise Exception('viacep fora')
+    with patch('requests.get', side_effect=fake_get):
+        r = c.get('/loja/api/cep/04077000')
+    assert r.status_code == 502
+
+
 # ── Pagamento Pagar.me: o payload customer agora envia CPF ───────────
 
 def test_payload_customer_envia_cpf_do_cliente(app):
