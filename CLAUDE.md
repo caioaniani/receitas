@@ -126,7 +126,42 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
 - **Uso numa sessao**: o dono cola o token no chat (o container e efemero —
   nada persiste entre sessoes); consultar com
   `curl -s -H "Authorization: Bearer $TOK" https://gestao.opaopadariaartesanal.com.br/api/claude/cronograma`.
+- `GET /api/claude/acuracia?dias=&motor=` (16/07/2026): resumo do painel de
+  acuracia + WAPE por (loja, receita) dos motores vivos — pro assistente
+  diagnosticar de fora onde a previsao erra.
 - Testes: `tests/test_claude_api.py`.
+
+## Cockpit do dono — briefing diario + home + manual (16/07/2026)
+
+Pedido do dono ("nao estou conseguindo pilotar o aviao"): o sistema cresceu
+mais rapido que a capacidade de operar; quase tudo era "pull" (lembrar de
+abrir tela). Tres pecas, UMA fonte de dados
+(`app/services/briefing_dono.py`):
+
+- **Briefing diario no WhatsApp** (07:00 BRT, job `briefing-dono` no
+  `seru_cron`, lock 7750, kill-switch `BRIEFING_DONO=0`): vendas de ontem
+  por loja vs media do mesmo dia-da-semana (fonte `VendaSeruDiaLoja.
+  faturamento_pedidos` — inclui kit/box; site por `pago_em`), pendencias de
+  decisao e custo de IA de ontem. Preview + envio manual:
+  `GET /admin/briefing` (owner; `?enviar=1` dispara).
+- **Bloco "Precisa de voce hoje" na home do admin** (`main.index` →
+  `home.html`): as MESMAS pendencias, com link por item. Itens de tela
+  owner-only (orfaos de cesta, PDV) so aparecem pro owner.
+- **Manual de operacao** (`GET /admin/manual`, admin): o que roda sozinho /
+  diario / semanal / mensal e de quem e cada gesto, com links.
+  **REGRA DE PROCESSO**: toda funcao nova se registra no manual NA MESMA
+  mudanca que a cria (quem opera, quando, onde aparece o lembrete) — se
+  ninguem opera, nao se constroi (devolver a pergunta ao dono em vez de
+  construir).
+
+Pendencias cobertas (queries baratas, EXISTS/COUNT): ordem de hoje
+(rascunho nao enviado / ausente — booleano `enviado_ao_padeiro`, nunca
+`status`), producao vencida (falta>0 nao dispensada), orcamentos B2B
+parados/aprovados-sem-venda, contas a pagar vencidas, estoque
+`nome_pendente` (industria+lojas), orfaos de cesta, mapeamentos PDV
+(`pdv_saude.contar_pendencias`), vigias doentes (chaves AppConfig
+`*_quebrado_desde`/`*_estourado_desde` + `alertas_pendentes_resumo`).
+Testes: `tests/test_briefing_dono.py`.
 
 ## Branches & Deploy
 
