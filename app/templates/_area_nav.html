@@ -147,6 +147,7 @@
 {{ _lnk(variant, url_for('main.avaliacoes_google'), 'Avaliações Google', request.path.startswith('/admin/avaliacoes-google'), title='Ver e responder as avaliações do Google (Business Profile)') }}
 {{ _lnk(variant, url_for('main.wifi_vouchers'), 'Vouchers do Wi-Fi', request.path == '/admin/wifi-vouchers', title='Estoque de códigos do portal Wi-Fi das lojas') }}
 {% endif %}
+{{ _lnk(variant, url_for('main.clientes'), 'Clientes', request.path == '/admin/clientes', title='Cadastros do varejo (site + portal Wi-Fi) — com export pra campanhas') }}
 {{ _lnk(variant, url_for('main.audit'), 'Histórico de alterações', request.path == '/audit', title='Quem mudou o quê e quando') }}
 {{ _lnk(variant, url_for('slack.install'), 'Slack Bot', request.path.startswith('/slack')) }}
 {{ _lnk(variant, url_for('notificacoes.index'), 'Notificações WhatsApp', request.path.startswith('/notificacoes')) }}
