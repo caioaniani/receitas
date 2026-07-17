@@ -110,7 +110,11 @@ def _geocodificar_cep(cep):
         lat, lng = coords.get('latitude'), coords.get('longitude')
         cidade, bairro = d.get('city'), d.get('neighborhood')
         rotulo = ', '.join(x for x in (d.get('street'), bairro, cidade) if x)
-        ref = {'cidade': cidade, 'bairro': bairro}
+        # 'rua' = logradouro OFICIAL dos Correios — usado pra re-tentar o
+        # Google com o nome certo quando o cliente digitou o nome errado
+        # (caso Mirelle 17/07/2026: "Rua Cândido de Azevedo Marques" sem o
+        # "Joaquim" → nenhum geocoder achava; o nome oficial resolve).
+        ref = {'cidade': cidade, 'bairro': bairro, 'rua': d.get('street')}
         if lat and lng:
             return float(lat), float(lng), rotulo or f'CEP {cep}', ref
         # Sem coordenadas: devolve rótulo + ref pro fallback geocodificar.
