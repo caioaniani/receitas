@@ -217,45 +217,71 @@ def _vigias_doentes():
 
 # ── Vendas de ontem ──────────────────────────────────────────────────────────
 
+def _resolver_loja_seru():
+    """company name do Seru → nome da LOJA vinculada (SeruLojaMap confirmado).
+
+    A MESMA loja física pode ter mais de um company no Seru (caso real
+    17/07/2026, dono: "Bread & Brew e O Pão Filial Nebraska são a mesma
+    loja") — agrupar pelo nome cru duplicaria a loja no briefing. Sem
+    vínculo confirmado, fica o nome cru.
+    """
+    from app.models import Loja, SeruLojaMap
+    nomes = {lj.id: lj.nome for lj in
+             db.session.query(Loja.id, Loja.nome).all()}
+    out = {}
+    for m in SeruLojaMap.query.all():
+        if m.loja_id and m.confirmado_em and m.loja_id in nomes:
+            out[m.seru_company_name] = nomes[m.loja_id]
+    return out
+
+
 def vendas_ontem():
     """Vendas de ONTEM: PDV por loja (vs média do mesmo dia-da-semana) + site.
 
     PDV lê o snapshot `VendaSeruDiaLoja` (faturamento_pedidos = total do
-    pedido, inclui kit/box — mesma base do /api/bot/faturamento). Site soma
-    `PedidoOnline.valor_total` dos PAGOS ontem (por pago_em, não criado_em).
+    pedido, inclui kit/box — mesma base do /api/bot/faturamento), AGRUPADO
+    pela Loja vinculada (dois companies da mesma loja somam numa linha).
+    Site soma `PedidoOnline.valor_total` dos PAGOS ontem (por pago_em).
     """
     from app.models import PedidoOnline, VendaSeruDiaLoja
     from app.services import vendas_diarias
 
     ontem = hoje() - timedelta(days=1)
-    total, por_loja, n_pedidos = vendas_diarias.faturamento_por_loja(
+    total, por_company, n_pedidos = vendas_diarias.faturamento_por_loja(
         ontem, ontem)
+    vinculo = _resolver_loja_seru()
 
-    # Média das últimas ocorrências do MESMO dia-da-semana, por loja, lida
-    # numa query só (janela de 8 semanas, filtra o dow em Python — weekday()
-    # no SQL diverge entre SQLite e Postgres).
+    # Média das últimas ocorrências do MESMO dia-da-semana, por LOJA (dois
+    # companies do mesmo dia somam antes da média), lida numa query só
+    # (janela de 8 semanas; o dow filtra em Python — weekday() no SQL
+    # diverge entre SQLite e Postgres).
     ini_hist = ontem - timedelta(days=7 * (_SEMANAS_MEDIA + 2))
-    hist = defaultdict(list)
+    por_dia = defaultdict(float)                 # (loja, data) -> fat
     for loja_seru, d, fat in (db.session.query(
             VendaSeruDiaLoja.loja_seru, VendaSeruDiaLoja.data,
             VendaSeruDiaLoja.faturamento_pedidos)
             .filter(VendaSeruDiaLoja.data >= ini_hist,
                     VendaSeruDiaLoja.data < ontem).all()):
         if d.weekday() == ontem.weekday():
-            hist[loja_seru].append((d, float(fat or 0)))
+            por_dia[(vinculo.get(loja_seru, loja_seru), d)] += float(fat or 0)
+    hist = defaultdict(list)
+    for (nome, d), fat in por_dia.items():
+        hist[nome].append((d, fat))
 
     # Loja com histórico e venda ZERO ontem NÃO some — é exatamente a
     # anomalia que o briefing existe pra mostrar (PDV fora o dia inteiro,
     # loja fechada...): entra com R$ 0 e queda de 100% vs a média.
-    fat_por_loja = dict(por_loja)
-    for loja_seru in hist:
-        fat_por_loja.setdefault(loja_seru, 0.0)
+    fat_por_loja = defaultdict(float)
+    for loja_seru, fat in por_company.items():
+        fat_por_loja[vinculo.get(loja_seru, loja_seru)] += fat
+    for nome in hist:
+        fat_por_loja.setdefault(nome, 0.0)
     lojas = []
-    for loja_seru, fat in sorted(fat_por_loja.items(), key=lambda kv: -kv[1]):
-        ocorr = sorted(hist.get(loja_seru, []), reverse=True)[:_SEMANAS_MEDIA]
+    for nome, fat in sorted(fat_por_loja.items(), key=lambda kv: -kv[1]):
+        ocorr = sorted(hist.get(nome, []), reverse=True)[:_SEMANAS_MEDIA]
         media = (sum(f for _, f in ocorr) / len(ocorr)) if ocorr else None
         delta = ((fat - media) / media * 100.0) if media else None
-        lojas.append({'loja': loja_seru, 'faturamento': fat, 'media': media,
+        lojas.append({'loja': nome, 'faturamento': fat, 'media': media,
                       'delta_pct': round(delta, 1) if delta is not None else None})
 
     ini = datetime.combine(ontem, time.min)
