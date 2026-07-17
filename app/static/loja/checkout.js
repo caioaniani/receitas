@@ -522,6 +522,14 @@
         var cepEl2 = document.getElementById('cep');
         var cep = cepEl2 ? (cepEl2.value || '').trim() : '';
         var out = document.getElementById('frete-resultado');
+        if (cepEmVoo) {
+          // Lookup do CEP em andamento: espera ele terminar (o endereço
+          // pode mudar) e re-dispara a cotação sozinho.
+          freteAposCep = true;
+          out.textContent = 'Buscando o endereço pelo CEP…';
+          out.className = 'frete-resultado';
+          return;
+        }
         if (!endereco && !cep) {
           out.textContent = 'Informe o endereço ou o CEP.';
           out.className = 'frete-resultado erro';
