@@ -853,7 +853,7 @@
         // ?  -> mostra ajuda de atalhos
         if (key === '?' || (e.shiftKey && key === '/')) {
             e.preventDefault();
-            alert('Atalhos:\n\ni  → adicionar tarefa rapida (Inbox)\n/  → busca\nn  → nova tarefa\n\ng h  → Hoje\ng i  → Inbox\ng p  → Painel\ng k  → Kanban\ng f  → Foco 12s\ng c  → Calendário\ng r  → Relatório\ng t  → Templates');
+            alert('Atalhos:\n\ni  → adicionar tarefa rapida (Inbox)\n/  → busca\nn  → nova tarefa\n\ng h  → Hoje\ng i  → Inbox\ng p  → Início\ng k  → Kanban\ng f  → Foco 12s\ng c  → Calendário\ng r  → Relatório\ng t  → Templates');
         }
     });
 })();
