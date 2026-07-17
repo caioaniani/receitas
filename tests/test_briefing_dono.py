@@ -173,10 +173,12 @@ def test_vendas_ontem_inclui_site_pago_por_pago_em(app):
     from app.services import briefing_dono
     ontem = hoje() - timedelta(days=1)
     db.session.add(PedidoOnline(
-        codigo='PO-1', nome_cliente='X', valor_total=Decimal('80'),
+        codigo='PO-1', nome_cliente='X', email_cliente='x@x.com',
+        valor_total=Decimal('80'),
         pago_em=datetime.combine(ontem, time(10, 0))))
     db.session.add(PedidoOnline(                      # criado ontem, NÃO pago
-        codigo='PO-2', nome_cliente='Y', valor_total=Decimal('999')))
+        codigo='PO-2', nome_cliente='Y', email_cliente='y@y.com',
+        valor_total=Decimal('999')))
     db.session.commit()
     with patch('app.services.vendas_diarias.garantir_capturado'):
         v = briefing_dono.vendas_ontem()
