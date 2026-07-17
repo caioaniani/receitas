@@ -2843,7 +2843,9 @@ def briefing_dono_view():
     dados = briefing_dono.montar()
     texto = briefing_dono.montar_texto(dados)
     if request.args.get('enviar') == '1':
-        r = briefing_dono.enviar_briefing()
+        # Reusa o texto já montado — montar() pode bater na API Seru
+        # (garantir_capturado) e remontar dobraria a espera do clique.
+        r = briefing_dono.enviar_briefing(texto)
         if r.get('ok'):
             flash('Briefing enviado pro seu WhatsApp.', 'success')
         else:
