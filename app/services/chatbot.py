@@ -308,6 +308,30 @@ def _e_loop_repetido(historico, minimo=3):
     return len(alvo) >= 2 and all(u == alvo for u in users)
 
 
+def _chamar_com_retry_sobrecarga(client, **kwargs):
+    """`messages.create` com UMA retentativa extra para falha PONTUAL da API
+    (429/500/529 — sobrecarga e rate limit respondem RÁPIDO, não são hang).
+
+    Caso real 16/07/2026 (auditor): um 529 isolado derrubou a conversa
+    direto em handoff sem o bot dizer nada — o retry do próprio SDK
+    (max_retries=1) foi consumido no mesmo pico. Aqui espera 2s e tenta a
+    chamada inteira de novo; falhando de novo, a exceção sobe e o fallback
+    pro humano continua valendo. Timeout/conexão travada NÃO re-tenta de
+    propósito (esticaria a espera do cliente — decisão do hardening P1)."""
+    import time as _t
+
+    import anthropic
+    try:
+        return client.messages.create(**kwargs)
+    except anthropic.APIStatusError as exc:
+        if getattr(exc, 'status_code', None) not in (429, 500, 529):
+            raise
+        logger.warning('chatbot: API %s (sobrecarga pontual) — retry único '
+                       'em 2s', exc.status_code)
+        _t.sleep(2)
+        return client.messages.create(**kwargs)
+
+
 def _resp_handoff(texto, motivo, tools_usadas=None):
     """Constroi o dict de handoff aplicando o aviso de fora-horario no texto.
     Centraliza pra TODOS os caminhos de handoff (fallback de erro, tool,
@@ -812,7 +836,8 @@ def responder(historico, *, telefone_contato=None):
 
     for _ in range(MAX_ITERACOES):
         try:
-            resp = client.messages.create(
+            resp = _chamar_com_retry_sobrecarga(
+                client,
                 model=MODELO,
                 max_tokens=max_tokens_atual,
                 system=[{'type': 'text',
