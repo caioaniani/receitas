@@ -102,7 +102,9 @@
     — o excedente vira estoque que cobre os próximos dias (por isso item lento
     recebe 1 caixa a cada N dias, sem acumular). Entrega <strong>diária</strong>
     (v1). Dias já pedidos ficam travados; o gerar pula. Ajuste à vontade — entra
-    como <strong>rascunho</strong>.
+    como <strong>rascunho</strong>. <strong>Dia que já tem pedido salva
+    sozinho</strong> assim que você para de digitar (o ↻ vira "salvo") — não
+    precisa apertar "atualizar". Dia sem pedido ainda é criado pelo botão Gerar.
 </div>
 
 <form method="POST" action="{{ url_for('producao.pedidos_semana_gerar') }}"
