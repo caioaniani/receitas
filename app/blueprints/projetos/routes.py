@@ -873,8 +873,13 @@ def tarefa_mover(tid):
     if novo_status not in STATUS_TAREFA:
         return jsonify(ok=False, erro='status invalido'), 400
     if t.status != novo_status:
+        antigo = t.status
         t.status = novo_status
         t.feito_em = agora() if novo_status == 'feito' else None
+        # Mesma regra dos outros caminhos de conclusao (editar/atualizar):
+        # arrastar pra "feito" no kanban tambem agenda a proxima recorrencia.
+        if novo_status == 'feito' and antigo != 'feito' and t.recorrencia:
+            _agendar_proxima(t)
 
     # Reordena: a lista vem como ids[]=[...] na ordem desejada na coluna de destino
     ids_ordem = request.form.getlist('ids[]')
