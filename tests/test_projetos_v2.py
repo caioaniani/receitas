@@ -224,3 +224,57 @@ def test_copilot_criar_tarefa_em_projeto_existente(app, owner_user):
     t = TarefaProjeto.query.get(res['tarefa_id'])
     assert t.projeto_id == p.id
     assert t.prazo is None
+
+
+def test_copilot_nao_dono_nao_alcanca_projeto_privado(app, admin_user, owner_user):
+    """Funcionário/gerente não pode criar tarefa em (nem descobrir nome de)
+    projeto de área privada do dono — o match cai na Inbox."""
+    from app.extensions import db
+    from app.models import Projeto, ProjetoArea
+    from app.services.copilot import executar_criar_tarefa
+
+    area = ProjetoArea(nome='Vida pessoal', tipo='vida')
+    db.session.add(area)
+    db.session.flush()
+    priv = Projeto(area_id=area.id, nome='Viagem em familia', status='ativo')
+    db.session.add(priv)
+    db.session.commit()
+
+    res = executar_criar_tarefa(
+        {'titulo': 'Reservar hotel', 'projeto_nome': 'viagem'}, admin_user)
+    assert res['ok'], res
+    assert res['projeto'] == 'Avulsas'  # não ecoa o projeto privado
+
+    # O dono alcança normalmente
+    res2 = executar_criar_tarefa(
+        {'titulo': 'Reservar hotel', 'projeto_nome': 'viagem'}, owner_user)
+    assert res2['projeto'] == 'Viagem em familia'
+
+
+def test_copilot_prazo_invalido_avisa(app, owner_user):
+    """data_prazo em formato errado não é engolida em silêncio."""
+    from app.services.copilot import executar_criar_tarefa
+    res = executar_criar_tarefa(
+        {'titulo': 'Tarefa com prazo torto', 'data_prazo': '17/07/2026'},
+        owner_user)
+    assert res['ok']
+    assert res['prazo'] is None
+    assert 'invalida' in res['aviso']
+
+
+def test_projeto_concluido_com_tarefa_aberta_fica_no_quadro(app, owner_user):
+    """Projeto 'concluido' que ainda tem tarefa aberta não some da home —
+    aparece com o badge de pendência (senão a tarefa ficava invisível)."""
+    from app.extensions import db
+    from app.models import TarefaProjeto
+    _, _, p_done, _ = _montar_quadro(app)
+    db.session.add(TarefaProjeto(projeto_id=p_done.id, nome='Sobrou esta v',
+                                 status='a_fazer'))
+    db.session.commit()
+
+    c = app.test_client()
+    _login(c, owner_user.id)
+    html = c.get('/projetos/').data.decode()
+    assert 'Projeto encerrado' in html
+    assert 'Sobrou esta v' in html
+    assert 'concluído c/ pendência' in html
