@@ -2,6 +2,10 @@
 
 Lista os cadastros do site + portal Wi-Fi, com busca, filtro de
 aniversariantes e export XLSX pra campanhas. PII: admin+owner.
+
+O fixture `app` já mantém um app-context ativo — NÃO abrir um
+`with app.app_context()` aninhado aqui (fechá-lo expira o `admin_user` e
+acessá-lo depois estoura ObjectDeletedError).
 """
 from app.extensions import db
 
@@ -17,9 +21,9 @@ def _cliente(nome, email, telefone=None, senha=None, dia=None, mes=None):
     return c
 
 
-def _login(c, user):
+def _login(c, user_id):
     with c.session_transaction() as s:
-        s['_user_id'] = str(user.id)
+        s['_user_id'] = str(user_id)
         s['_fresh'] = True
 
 
@@ -29,43 +33,38 @@ def test_exige_admin(app):
 
 
 def test_lista_e_busca(app, admin_user):
-    with app.app_context():
-        _cliente('Maria Silva', 'maria@example.com', '11988887777',
-                 senha='x', dia=15, mes=3)
-        _cliente('João Souza', 'joao@example.com', '11955554444')
+    uid = admin_user.id
+    _cliente('Maria Silva', 'maria@example.com', '11988887777',
+             senha='x', dia=15, mes=3)
+    _cliente('João Souza', 'joao@example.com', '11955554444')
     c = app.test_client()
-    _login(c, admin_user)
-    r = c.get('/admin/clientes')
-    body = r.get_data(as_text=True)
-    assert r.status_code == 200
+    _login(c, uid)
+    body = c.get('/admin/clientes').get_data(as_text=True)
     assert 'Maria Silva' in body and 'João Souza' in body
     # busca por nome filtra
-    r2 = c.get('/admin/clientes?q=maria')
-    b2 = r2.get_data(as_text=True)
+    b2 = c.get('/admin/clientes?q=maria').get_data(as_text=True)
     assert 'Maria Silva' in b2 and 'João Souza' not in b2
 
 
 def test_filtro_aniversariantes_e_so_conta(app, admin_user):
-    with app.app_context():
-        _cliente('Aniv Março', 'a@example.com', senha='x', dia=10, mes=3)
-        _cliente('Aniv Maio', 'b@example.com', dia=20, mes=5)
-        _cliente('Sem conta', 'c@example.com')
+    uid = admin_user.id
+    _cliente('Aniv Março', 'a@example.com', senha='x', dia=10, mes=3)
+    _cliente('Aniv Maio', 'b@example.com', dia=20, mes=5)
+    _cliente('Sem conta', 'c@example.com')
     c = app.test_client()
-    _login(c, admin_user)
-    # aniversariantes de março
+    _login(c, uid)
     r = c.get('/admin/clientes?aniv_mes=3').get_data(as_text=True)
     assert 'Aniv Março' in r and 'Aniv Maio' not in r
-    # só com conta (senha)
     r2 = c.get('/admin/clientes?conta=1').get_data(as_text=True)
     assert 'Aniv Março' in r2 and 'Sem conta' not in r2
 
 
 def test_export_xlsx(app, admin_user):
-    with app.app_context():
-        _cliente('Maria Silva', 'maria@example.com', '11988887777',
-                 senha='x', dia=15, mes=3)
+    uid = admin_user.id
+    _cliente('Maria Silva', 'maria@example.com', '11988887777',
+             senha='x', dia=15, mes=3)
     c = app.test_client()
-    _login(c, admin_user)
+    _login(c, uid)
     r = c.get('/admin/clientes.xlsx')
     assert r.status_code == 200
     assert 'spreadsheet' in r.headers['Content-Type']
