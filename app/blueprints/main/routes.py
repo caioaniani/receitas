@@ -2610,6 +2610,7 @@ def _clientes_query(q, so_conta, aniv_mes):
 
 
 @main_bp.route('/admin/clientes')
+@login_required
 @admin_required
 def clientes():
     """Lista os clientes do VAREJO (Cliente) — cadastros do site e do portal
