@@ -370,8 +370,15 @@
       // fica livre — o cliente pode só conferir e seguir; a dica "digite o
       // CEP primeiro" (conteúdo estático do #cep-status) não se aplica.
       var logEl = document.getElementById('logradouro');
-      if (!logEl || !(logEl.value || '').trim()) travarEndereco(true);
-      else statusCep('', '');
+      if (!logEl || !(logEl.value || '').trim()) {
+        travarEndereco(true);
+        // Re-render pós-erro do POST pode voltar com o CEP já digitado e o
+        // endereço vazio (borda da revisão): resolve o estado na hora —
+        // com <8 dígitos o buscarCep é no-op.
+        buscarCep();
+      } else {
+        statusCep('', '');
+      }
       // 'input' pega o CEP completo na hora (inclusive autofill do
       // navegador, que nem sempre dispara blur); blur fica de rede de
       // segurança e re-tenta depois de uma falha.
