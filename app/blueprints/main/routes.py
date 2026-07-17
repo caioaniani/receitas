@@ -4242,13 +4242,44 @@ def loja_online_pedidos_imprimir_selecao():
     return resp
 
 
+def _expedicao_com_pedido(p):
+    """Sinal de que a EXPEDIÇÃO já está com o pedido — cancelar/reembolsar
+    nesse estágio exige confirmação explícita (caso real 16/07/2026, pedido
+    16CF21D8: reembolso com a entrega armada; a cliente recebeu o aviso de
+    cancelamento e o time viu "cancelado × em entrega"). Sinais, do mais
+    forte pro mais fraco: status operacional avançado, corrida Lalamove
+    ativa, cozinha já marcou o card no Painel do Dia. Retorna a descrição
+    do sinal ou None."""
+    from app.models import LalamoveEntrega, PainelPedidoStatus
+    if p.status in ('em_preparo', 'a_caminho'):
+        return {'em_preparo': 'em preparo na cozinha',
+                'a_caminho': 'EM ROTA'}[p.status]
+    lal = (LalamoveEntrega.query
+           .filter(LalamoveEntrega.pedido_code == p.codigo,
+                   LalamoveEntrega.status.notin_(('cotacao', 'CANCELED')))
+           .first())
+    if lal:
+        return 'motoboy Lalamove chamado (%s)' % lal.status
+    pps = PainelPedidoStatus.query.filter_by(pedido_code=p.codigo).first()
+    if pps and pps.status in ('visto', 'pronto'):
+        return 'cozinha já marcou "%s" no Painel do Dia' % pps.status
+    return None
+
+
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/cancelar', methods=['POST'])
 @owner_required
 def loja_online_pedido_cancelar(codigo):
     """Cancela/reembolsa um pedido do site.
 
-    - Pago: dispara REEMBOLSO no Pagar.me + estorno de estoque
-      (loja_pagamento.reembolsar_pedido).
+    - Pago/em_preparo/a_caminho: dispara REEMBOLSO no Pagar.me
+      (loja_pagamento.reembolsar_pedido). Antes de 17/07/2026 os status
+      operacionais caíam no ramo "só marca cancelado" e o cliente ficava
+      SEM reembolso — pego na investigação do caso 16CF21D8.
+    - Expedição já com o pedido (em preparo/em rota/Lalamove/cozinha):
+      exige `confirmar_expedicao=1` no POST — sem ele, recusa com aviso
+      (decisão do dono 17/07/2026, opção "a"). O estoque só volta
+      automaticamente se o status ainda era 'pago' (regra existente do
+      _marcar_estornado — mercadoria que já saiu não re-entra sozinha).
     - Aguardando pagamento: só marca cancelado (nada foi cobrado/baixado).
     - Entregue/cancelado: bloqueia."""
     from flask import flash
@@ -4260,7 +4291,14 @@ def loja_online_pedido_cancelar(codigo):
     if p.status in ('entregue', 'cancelado'):
         flash(f'Pedido {p.codigo} nao pode ser cancelado (status '
               f'{p.status}).', 'warning')
-    elif p.status == 'pago':
+    elif p.status in ('pago', 'em_preparo', 'a_caminho'):
+        sinal = _expedicao_com_pedido(p)
+        if sinal and request.form.get('confirmar_expedicao') != '1':
+            flash(f'⚠ NÃO cancelado: a expedição já está com o pedido '
+                  f'{p.codigo} ({sinal}). Avise a expedição para SEGURAR a '
+                  f'entrega e confirme de novo no botão — cancelar aqui não '
+                  f'desarma a entrega sozinho.', 'warning')
+            return _detalhe_redirect(codigo)
         ok, msg = loja_pagamento.reembolsar_pedido(p)
         flash(f'{p.codigo}: {msg}', 'success' if ok else 'danger')
     else:
