@@ -24,8 +24,6 @@
             <li><strong>Vigias</strong> — te chamam no WhatsApp só quando algo quebra: infra do atendimento (15 min), site/frete (2h), custo de IA (1h), bot do atendimento (a cada resposta), PDV (30 min), baixas presas (30 min).</li>
             <li><strong>Bot de atendimento</strong> responde clientes no Chatwoot; auditor manda balanço 5×/dia.</li>
             <li><strong>Acurácia da previsão</strong>: snapshot diário 05:30 (alimenta os selos WAPE).</li>
-            <li><strong>Briefing diário</strong>: resumo no seu WhatsApp às 07:00 —
-                <a href="{{ url_for('main.briefing_dono_view') if current_user.is_dono() else '#' }}">preview aqui</a>.</li>
         </ul>
         <p class="text-muted mb-0">Se algum desses parar, é o vigia (ou o heartbeat do Slack) que avisa — não é papel seu ficar conferindo.</p>
     </div>
