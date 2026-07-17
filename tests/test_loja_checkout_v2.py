@@ -327,6 +327,85 @@ def test_api_cep_ok(app, monkeypatch):
     assert j['cidade'] == 'São Paulo'
 
 
+def test_api_cep_fallback_viacep(app, monkeypatch):
+    """BrasilAPI fora do ar → ViaCEP responde → 200. Com o checkout
+    CEP-first (campos travados até o CEP resolver), UMA API fora não pode
+    virar venda travada — a BrasilAPI já degradou em prod (05 e 09/07)."""
+    monkeypatch.delenv('LOJA_VISIVEL', raising=False)
+    c = _admin(app)
+
+    class _Via:
+        status_code = 200
+        def json(self):
+            return {'logradouro': 'Rua do ViaCEP', 'bairro': 'Centro',
+                    'localidade': 'São Paulo', 'uf': 'SP'}
+
+    def fake_get(url, **kw):
+        if 'brasilapi' in url:
+            raise Exception('timeout')
+        return _Via()
+    with patch('requests.get', side_effect=fake_get):
+        r = c.get('/loja/api/cep/04077000')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['ok'] is True and j['logradouro'] == 'Rua do ViaCEP'
+    assert j['cidade'] == 'São Paulo' and j['uf'] == 'SP'
+
+
+def test_api_cep_404_quando_cep_nao_existe(app, monkeypatch):
+    """BrasilAPI 404 + ViaCEP {'erro': true} → 404 (o front mantém os campos
+    travados e manda o cliente CONFERIR o CEP — caso Mirelle, dígitos
+    invertidos 88650-020)."""
+    monkeypatch.delenv('LOJA_VISIVEL', raising=False)
+    c = _admin(app)
+
+    class _R404:
+        status_code = 404
+        def json(self):
+            return {}
+
+    class _ViaErro:
+        status_code = 200
+        def json(self):
+            return {'erro': True}
+
+    def fake_get(url, **kw):
+        return _R404() if 'brasilapi' in url else _ViaErro()
+    with patch('requests.get', side_effect=fake_get):
+        r = c.get('/loja/api/cep/88650020')
+    assert r.status_code == 404
+
+
+def test_api_cep_404_brasilapi_com_viacep_fora(app, monkeypatch):
+    """BrasilAPI disse 'não existe' (agrega 3 provedores) e o ViaCEP caiu por
+    INFRA → veredito segue 404 (não 502): o cliente deve conferir o CEP."""
+    monkeypatch.delenv('LOJA_VISIVEL', raising=False)
+    c = _admin(app)
+
+    class _R404:
+        status_code = 404
+        def json(self):
+            return {}
+
+    def fake_get(url, **kw):
+        if 'brasilapi' in url:
+            return _R404()
+        raise Exception('viacep fora')
+    with patch('requests.get', side_effect=fake_get):
+        r = c.get('/loja/api/cep/88650020')
+    assert r.status_code == 404
+
+
+def test_api_cep_502_quando_tudo_fora(app, monkeypatch):
+    """As DUAS APIs fora por infra → 502 — o front destrava os campos pra
+    digitação manual (fail-open, venda nunca fica presa)."""
+    monkeypatch.delenv('LOJA_VISIVEL', raising=False)
+    c = _admin(app)
+    with patch('requests.get', side_effect=Exception('tudo fora')):
+        r = c.get('/loja/api/cep/04077000')
+    assert r.status_code == 502
+
+
 # ── Pagamento Pagar.me: o payload customer agora envia CPF ───────────
 
 def test_payload_customer_envia_cpf_do_cliente(app):
