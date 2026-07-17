@@ -243,35 +243,128 @@
       aplicarPresente();
     }
 
-    // CEP -> BrasilAPI: preenche logradouro/bairro/cidade/UF
+    // ── CEP-first (17/07/2026, caso Mirelle): o endereço NASCE do CEP ──
+    // Rua/bairro/cidade/UF ficam TRAVADOS (readonly — readonly submete;
+    // disabled não) até o CEP resolver, então o cliente não digita nome de
+    // rua errado ("Rua Cândido de Azevedo Marques" sem o "Joaquim" barrou
+    // venda real). FAIL-OPEN obrigatório: API de CEP fora do ar ou CEP sem
+    // rua cadastrada DESTRAVA os campos — venda nunca fica presa por infra.
     var cepEl = document.getElementById('cep');
     var ultimoCep = '';
-    if (cepEl) {
-      cepEl.addEventListener('blur', function () {
-        var d = (cepEl.value || '').replace(/\D/g, '');
-        if (d.length !== 8) return;
-        // máscara visual
-        cepEl.value = d.slice(0, 5) + '-' + d.slice(5);
-        if (d === ultimoCep) return;   // mesmo CEP, não re-busca
-        // CEP MUDOU: invalida o frete já calculado (força recalcular com o
-        // endereço novo) — sem isso o total ficava com o frete do CEP antigo.
-        freteAtual = null;
-        var outF = document.getElementById('frete-resultado');
-        if (outF) { outF.textContent = ''; outF.className = 'frete-resultado'; }
-        atualizarTotais();
-        fetch('/loja/api/cep/' + d).then(function (r) { return r.json(); })
-          .then(function (j) {
-            if (!j.ok) return;
+    var cepEmVoo = false;      // lookup em andamento (guarda o btn-frete)
+    var freteAposCep = false;  // clicou "Calcular frete" durante o lookup
+    var CAMPOS_CEP = ['logradouro', 'bairro', 'cidade', 'uf'];
+    var cepStatus = document.getElementById('cep-status');
+    var cepCorrigir = document.getElementById('cep-corrigir');
+
+    function travarEndereco(travar) {
+      CAMPOS_CEP.forEach(function (k) {
+        var el = document.getElementById(k);
+        if (!el) return;
+        el.readOnly = travar;
+        el.classList.toggle('campo-cep-travado', travar);
+      });
+    }
+    function statusCep(msg, tipo) {
+      if (!cepStatus) return;
+      cepStatus.textContent = msg || '';
+      cepStatus.hidden = !msg;
+      cepStatus.className = 'cep-status' + (tipo ? ' ' + tipo : '');
+    }
+    function mostrarCorrigir(mostrar) {
+      if (cepCorrigir) cepCorrigir.hidden = !mostrar;
+    }
+    function retomarFrete() {
+      if (!freteAposCep) return;
+      freteAposCep = false;
+      var b = document.getElementById('btn-frete');
+      if (b) b.click();
+    }
+
+    function buscarCep() {
+      var d = (cepEl.value || '').replace(/\D/g, '');
+      if (d.length !== 8) return;
+      // máscara visual
+      cepEl.value = d.slice(0, 5) + '-' + d.slice(5);
+      if (d === ultimoCep || cepEmVoo) return;   // mesmo CEP / já buscando
+      cepEmVoo = true;
+      // CEP MUDOU: invalida o frete já calculado (força recalcular com o
+      // endereço novo) — sem isso o total ficava com o frete do CEP antigo.
+      freteAtual = null;
+      var outF = document.getElementById('frete-resultado');
+      if (outF) { outF.textContent = ''; outF.className = 'frete-resultado'; }
+      atualizarTotais();
+      statusCep('Buscando o endereço pelo CEP…', '');
+      fetch('/loja/api/cep/' + d)
+        .then(function (r) {
+          return r.json().then(function (j) { return { st: r.status, j: j }; });
+        })
+        .then(function (resp) {
+          cepEmVoo = false;
+          var j = resp.j || {};
+          if (j.ok) {
             ultimoCep = d;
-            // SOBRESCREVE os campos do endereço (antes só preenchia se vazio,
-            // então trocar o CEP não atualizava o endereço já inserido).
-            ['logradouro', 'bairro', 'cidade', 'uf'].forEach(function (k) {
+            // SOBRESCREVE os campos (trocar o CEP atualiza o endereço).
+            CAMPOS_CEP.forEach(function (k) {
               var el = document.getElementById(k);
               if (el) el.value = j[k] || '';
             });
+            if ((j.logradouro || '').trim()) {
+              travarEndereco(true);
+              statusCep('Endereço preenchido pelo CEP — confira e informe o número.', 'ok');
+              mostrarCorrigir(true);
+            } else {
+              // CEP "geral" (cidade pequena, sem rua na base): destrava
+              // rua/bairro pra digitação — cidade/UF ficam do CEP.
+              travarEndereco(false);
+              statusCep('Esse CEP não tem rua cadastrada — digite a rua e o bairro.', '');
+              mostrarCorrigir(false);
+            }
             var num = document.getElementById('numero');
             if (num) num.focus();
-          }).catch(function () {});
+          } else if (resp.st === 404) {
+            // CEP NÃO EXISTE: o gesto certo é corrigir o CEP (a Mirelle
+            // digitou os dígitos invertidos). Campos seguem travados; a
+            // saída de emergência fica visível.
+            statusCep('CEP não encontrado — confira o número digitado.', 'erro');
+            mostrarCorrigir(true);
+          } else {
+            // INFRA fora (502/timeout): FAIL-OPEN — destrava tudo.
+            travarEndereco(false);
+            statusCep('Não consegui consultar o CEP — pode digitar o endereço.', 'erro');
+            mostrarCorrigir(false);
+          }
+          retomarFrete();
+        })
+        .catch(function () {
+          cepEmVoo = false;
+          travarEndereco(false);
+          statusCep('Não consegui consultar o CEP — pode digitar o endereço.', 'erro');
+          mostrarCorrigir(false);
+          retomarFrete();
+        });
+    }
+
+    if (cepEl) {
+      // Estado inicial: trava só quando o endereço está VAZIO. Endereço já
+      // preenchido (conta com endereço salvo / re-render pós-erro do POST)
+      // fica livre — o cliente pode só conferir e seguir.
+      var logEl = document.getElementById('logradouro');
+      if (!logEl || !(logEl.value || '').trim()) travarEndereco(true);
+      // 'input' pega o CEP completo na hora (inclusive autofill do
+      // navegador, que nem sempre dispara blur); blur fica de rede de
+      // segurança e re-tenta depois de uma falha.
+      cepEl.addEventListener('input', buscarCep);
+      cepEl.addEventListener('blur', buscarCep);
+    }
+    if (cepCorrigir) {
+      cepCorrigir.addEventListener('click', function () {
+        // Saída de emergência: base de CEP com dado errado/desatualizado.
+        travarEndereco(false);
+        mostrarCorrigir(false);
+        statusCep('', '');
+        var el = document.getElementById('logradouro');
+        if (el) el.focus();
       });
     }
 
