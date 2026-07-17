@@ -952,6 +952,23 @@ body.modal-instalar-aberto { overflow: hidden; }
 .frete-resultado.ok { color: #2f6b3d; font-weight: 600; }
 .frete-resultado.erro { color: #b3401f; }
 
+/* CEP-first (17/07/2026): endereço travado até o CEP resolver. readonly
+   (nunca disabled — disabled não SUBMETE o valor no POST). */
+.campo-cep-travado {
+  background: #f1f0ec; color: #6b6b66; cursor: not-allowed;
+}
+.cep-status {
+  font-family: var(--fonte-corpo); font-size: 13px;
+  margin: 6px 0 0; color: var(--texto-suave);
+}
+.cep-status.ok { color: #2f6b3d; }
+.cep-status.erro { color: #b3401f; font-weight: 600; }
+.cep-corrigir {
+  background: none; border: none; padding: 0; margin: 2px 0 0;
+  font-family: var(--fonte-corpo); font-size: 13px;
+  color: var(--texto-suave); text-decoration: underline; cursor: pointer;
+}
+
 .checkout-totais { gap: 8px; display: flex; flex-direction: column; }
 .linha-total {
   display: flex; justify-content: space-between;
