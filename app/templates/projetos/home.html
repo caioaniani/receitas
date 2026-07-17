@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% import "projetos/_partials.html" as ui %}
+
+{% block title %}Projetos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-kanban"></i> Projetos</h1>
+    {{ ui.botoes_acao() }}
+</div>
+
+{% if contadores.wip_estourado %}
+<div class="alert alert-danger d-flex justify-content-between align-items-center py-2 mb-3" style="font-size:13px;">
+    <div>
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <strong>WIP estourado:</strong> {{ contadores.fazendo }} tarefas em "Fazendo" — limite recomendado é {{ contadores.wip_limit }}.
+        Termine (✓) ou devolva pra "A fazer" antes de pegar coisa nova.
+    </div>
+    <a href="{{ url_for('projetos.kanban') }}" class="btn btn-sm btn-light">Ver no Kanban</a>
+</div>
+{% endif %}
+
+{{ ui.stats(contadores) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    {{ ui.nav_views(view, contadores.inbox) }}
+    <input type="text" id="busca-tarefa" class="form-control form-control-sm"
+           placeholder="Buscar tarefa ou projeto… (atalho: /)" style="max-width:240px;">
+</div>
+
+{{ ui.quick_add_input() }}
+
+{# ── Bloco AGORA: o que pede ação, em ordem de urgência ── #}
+{% set tem_agora = fazendo or atrasadas or de_hoje or prox7 %}
+<div class="card mb-4 proj-agora">
+    <div class="card-body py-2">
+        {% if not tem_agora %}
+        <div class="text-muted py-2"><i class="bi bi-check-circle text-success"></i>
+            Nada pendente com prazo — tudo em dia. Planeje no quadro abaixo.</div>
+        {% else %}
+
+        {% if fazendo %}
+        <h6 class="proj-agora-titulo" style="color:#3b6fd4;"><i class="bi bi-play-fill"></i> Fazendo agora ({{ fazendo|length }})</h6>
+        <div class="mb-2">
+            {% for t in fazendo %}{{ ui.tarefa_linha(t, data_relativa, mostrar_projeto=True) }}{% endfor %}
+        </div>
+        {% endif %}
+
+        {% if atrasadas %}
+        <h6 class="proj-agora-titulo text-danger"><i class="bi bi-exclamation-triangle-fill"></i> Atrasadas ({{ atrasadas|length }})</h6>
+        <div class="mb-2">
+            {% for t in atrasadas %}{{ ui.tarefa_linha(t, data_relativa, mostrar_projeto=True) }}{% endfor %}
+        </div>
+        {% endif %}
+
+        {% if de_hoje %}
+        <h6 class="proj-agora-titulo" style="color:#b8860b;"><i class="bi bi-sun"></i> Para hoje ({{ de_hoje|length }})</h6>
+        <div class="mb-2">
+            {% for t in de_hoje %}{{ ui.tarefa_linha(t, data_relativa, mostrar_projeto=True) }}{% endfor %}
+        </div>
+        {% endif %}
+
+        {% if prox7 %}
+        <h6 class="proj-agora-titulo text-muted"><i class="bi bi-calendar-week"></i> Próximos 7 dias ({{ prox7|length }})</h6>
+        <div>
+            {% for t in prox7 %}{{ ui.tarefa_linha(t, data_relativa, mostrar_projeto=True) }}{% endfor %}
+        </div>
+        {% endif %}
+
+        {% endif %}
+    </div>
+</div>
+
+{# ── Quadro por área: projetos abertos com as tarefas abertas aninhadas ── #}
+{% for bloco in quadro %}
+{% set area = bloco.area %}
+{% set _cor = area.cor or {'empresa':'#5b8def','igreja':'#c97f3f','vida':'#5a9a5e'}.get(area.tipo, '#888') %}
+<div class="proj-area-block mb-4" data-area-tipo="{{ area.tipo }}">
+    <div class="d-flex justify-content-between align-items-baseline mb-2 flex-wrap gap-2"
+         style="border-left:4px solid {{ _cor }};padding-left:8px;">
+        <h5 class="mb-0" style="color:{{ _cor }};">{{ area.nome }}</h5>
+        <span class="text-muted small">
+            {{ bloco.projetos|length }} projeto{{ 's' if bloco.projetos|length != 1 }} aberto{{ 's' if bloco.projetos|length != 1 }}
+            {% if bloco.concluidos %} · <a href="{{ url_for('projetos.cards', area=area.id, status='concluido') }}"
+                class="text-muted">{{ bloco.concluidos }} concluído{{ 's' if bloco.concluidos != 1 }}</a>{% endif %}
+        </span>
+    </div>
+
+    {% for c in bloco.projetos %}
+    {% set p = c.p %}
+    <div class="proj-card {% if p.foco_12s %}foco{% endif %}" data-projeto-id="{{ p.id }}" data-proj-nome="{{ p.nome|lower }}">
+        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <div class="d-flex align-items-center gap-1" style="flex:1;min-width:180px;">
+                <button type="button" class="btn btn-sm btn-link p-0 proj-toggle" data-projeto-id="{{ p.id }}" title="Recolher/expandir">
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-link p-0 proj-foco-toggle proj-foco-star {% if not p.foco_12s %}inactive{% endif %}"
+                        data-projeto-id="{{ p.id }}" title="Foco 12s">
+                    <i class="bi bi-{{ 'star-fill' if p.foco_12s else 'star' }}"></i>
+                </button>
+                <a href="{{ url_for('projetos.projeto_detalhe', pid=p.id) }}" class="fw-semibold text-decoration-none text-body">{{ p.nome }}</a>
+                {% if c.atrasadas %}<span class="status-badge status-divergencia" title="{{ c.atrasadas }} tarefa(s) atrasada(s)"><i class="bi bi-exclamation-triangle-fill"></i> {{ c.atrasadas }}</span>{% endif %}
+                {% if p.status == 'em_espera' %}<span class="badge bg-secondary" style="font-size:9px;">em espera</span>{% endif %}
+                {% if p.status == 'planejado' %}<span class="badge bg-light text-dark" style="font-size:9px;">planejado</span>{% endif %}
+                {% if p.responsavel %}<span class="badge bg-dark" style="font-size:9px;"><i class="bi bi-person"></i> {{ p.responsavel.nome.split()[0] }}</span>{% endif %}
+                <span class="text-muted small ms-1">{{ c.abertas|length }} aberta{{ 's' if c.abertas|length != 1 }}</span>
+            </div>
+            <div class="d-flex gap-1 align-items-center flex-wrap">
+                <select class="form-select form-select-sm proj-edit" data-projeto-id="{{ p.id }}" data-campo="status"
+                        style="width:110px;font-size:11px;" title="Status do projeto">
+                    {% for s in ('planejado','ativo','em_espera','concluido') %}
+                    <option value="{{ s }}" {% if p.status == s %}selected{% endif %}>{{ {'planejado':'Planejado','ativo':'Ativo','em_espera':'Em espera','concluido':'Concluído'}[s] }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-info btn-comentario" data-tipo="projeto" data-id="{{ p.id }}"
+                        data-nome="{{ p.nome }}" data-texto="{{ p.observacao or '' }}" title="Comentário / nota">
+                    <i class="bi bi-{{ 'chat-text-fill' if p.observacao else 'chat-text' }}"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary btn-add-tarefa" data-projeto-id="{{ p.id }}"
+                        data-projeto-nome="{{ p.nome }}" title="Nova tarefa completa">
+                    <i class="bi bi-plus-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="proj-tarefas-wrap mt-2" data-projeto-tarefas="{{ p.id }}">
+            {% for t in c.abertas %}{{ ui.tarefa_linha(t, data_relativa) }}{% endfor %}
+            <form method="POST" action="{{ url_for('projetos.tarefa_nova') }}" class="d-flex gap-1 mt-1">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="projeto_id" value="{{ p.id }}">
+                <input type="text" name="nome" class="form-control form-control-sm" placeholder="+ Adicionar tarefa…" style="font-size:12px;" required>
+                <button type="submit" class="btn btn-sm btn-primary" title="Adicionar"><i class="bi bi-plus"></i></button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+
+    {% if not bloco.projetos %}
+    <div class="text-muted small">Sem projetos abertos nesta área.</div>
+    {% endif %}
+</div>
+{% endfor %}
+
+{% if not quadro %}
+<div class="alert alert-info">
+    Nenhuma área/projeto ainda. Use o botão <strong>Novo</strong> acima para criar a primeira área e o primeiro projeto.
+</div>
+{% endif %}
+
+{{ ui.modal_nova_tarefa(usuarios) }}
+{{ ui.modal_novo_projeto(areas, usuarios) }}
+{{ ui.modal_nova_area(current_user) }}
+{{ ui.modal_novo_de_template(areas, templates_disponiveis, usuarios) }}
+{{ ui.modal_comentario() }}
+{{ ui.modal_editar_tarefa(usuarios, projetos_alvo) }}
+{{ ui.modal_weekly() }}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/projetos.js') }}?v={{ static_v['js/projetos.js'] }}"></script>
+{% endblock %}
