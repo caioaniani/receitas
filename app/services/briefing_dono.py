@@ -244,8 +244,14 @@ def vendas_ontem():
         if d.weekday() == ontem.weekday():
             hist[loja_seru].append((d, float(fat or 0)))
 
+    # Loja com histórico e venda ZERO ontem NÃO some — é exatamente a
+    # anomalia que o briefing existe pra mostrar (PDV fora o dia inteiro,
+    # loja fechada...): entra com R$ 0 e queda de 100% vs a média.
+    fat_por_loja = dict(por_loja)
+    for loja_seru in hist:
+        fat_por_loja.setdefault(loja_seru, 0.0)
     lojas = []
-    for loja_seru, fat in sorted(por_loja.items(), key=lambda kv: -kv[1]):
+    for loja_seru, fat in sorted(fat_por_loja.items(), key=lambda kv: -kv[1]):
         ocorr = sorted(hist.get(loja_seru, []), reverse=True)[:_SEMANAS_MEDIA]
         media = (sum(f for _, f in ocorr) / len(ocorr)) if ocorr else None
         delta = ((fat - media) / media * 100.0) if media else None
