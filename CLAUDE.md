@@ -1243,10 +1243,19 @@ decisao do dono ("bloquear o campo endereco"):
   e o campo CEP rendia com ~51px no celular. Fix: reset com
   `label:nth-child(n)` (empata 0-2-1, vence por ordem). Ao criar override
   mobile de regra que usa nth-child, conferir especificidade.
+Pos-revisao (fixados): so `status_code == 404` da BrasilAPI marca "CEP nao
+existe" — 429/5xx e INFRA e vira 502/fail-open se o ViaCEP tambem cair
+(teste `test_api_cep_5xx_da_brasilapi_nao_vira_404`); `reconferirCep` fecha
+a corrida "CEP corrigido durante lookup em voo" (a resposta velha nao pode
+deixar endereco de A com CEP B no campo); mascara so reatribui se mudou
+(cursor) e o foco so pula pro numero se ainda estiver no CEP. Trade-offs
+ACEITOS: trocar o CEP depois do "corrigir manualmente" re-busca e RE-TRAVA
+por cima do que foi digitado (CEP novo = endereco novo; o link reaparece);
+retentativa canonica pode gastar 2 slots do teto Google no pior caso.
 Testes: `test_google_retenta_com_logradouro_oficial_do_cep` +
 `test_cep_sem_logradouro_nao_retenta_google` em `tests/test_frete.py`;
-4 casos de fallback/404/502 em `tests/test_loja_checkout_v2.py`. Validacao
-visual/funcional Playwright 390px (14 checks, incl. fail-open e corrigir).
+5 casos de fallback/404/5xx/502 em `tests/test_loja_checkout_v2.py`.
+Validacao visual/funcional Playwright 390px (14 checks, incl. fail-open).
 
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
