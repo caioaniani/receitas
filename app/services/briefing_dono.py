@@ -82,6 +82,9 @@ def pendencias(incluir_owner=True):
                       'qtd': None, 'url': '/telaindustriateste/'})
 
     # 2. Produção vencida (ordem de dias anteriores com falta, não dispensada).
+    # Piso de 30 dias e SEM filtro de origem — espelha a conta canônica da
+    # auditoria (producao_pendente.listar_pendencias, dias_vencido=30): mais
+    # antigo que isso é abandono, e plano avulso/déficit também conta lá.
     falta = (func.coalesce(PlanejamentoItem.qtd_alvo, 0)
              - func.coalesce(PlanejamentoItem.produzido_qtd, 0))
     vencidas = db.session.query(
@@ -90,9 +93,9 @@ def pendencias(incluir_owner=True):
         PlanejamentoProducao,
         PlanejamentoItem.planejamento_id == PlanejamentoProducao.id,
     ).filter(
-        PlanejamentoProducao.origem == 'cronograma',
         PlanejamentoProducao.enviado_ao_padeiro.isnot(False),
         PlanejamentoProducao.data < hoje_d,
+        PlanejamentoProducao.data >= hoje_d - timedelta(days=30),
         PlanejamentoItem.dispensada_em.is_(None),
         falta > 0,
     ).scalar() or 0
