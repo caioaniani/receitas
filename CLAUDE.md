@@ -1626,6 +1626,11 @@ pelo WHATSAPP e abre no navegador de verdade.
     criado no Vultr SP; `setup.sh` (scratchpad) instala a ponte com os 2
     segredos.
   - Testes: `tests/test_wifi_radius.py` (endpoint + cripto da ponte).
+  - **Ver os dados coletados**: `/admin/clientes` (admin+owner, link na área
+    Administração) — lista os `Cliente` do varejo (site + portal Wi-Fi) com
+    busca, filtro de aniversariantes do mês e export XLSX pra campanhas.
+    Rota `main.clientes` + `main.clientes_xlsx`. Testes:
+    `tests/test_clientes_admin.py`.
 
 ## Bot de atendimento — hardening 02/07/2026 (4 pacotes)
 
