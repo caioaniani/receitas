@@ -65,10 +65,14 @@ def test_limpeza_apaga_velhos_preserva_novos(app):
         rel = retencao.executar_limpeza()
     assert rel['chatbot_conversa'] == 1
     assert rel['zapi_bot_evento_processado'] == 1
+    assert rel['slack_acao_pendente'] == 1
     # novos sobreviveram
     assert ChatbotConversa.query.get(ids['conv_nova']) is not None
     assert ZapiBotEventoProcessado.query.get('ev-novo') is not None
     assert ZapiBotEventoProcessado.query.get('ev-velho') is None
+    from app.models import SlackAcaoPendente
+    assert SlackAcaoPendente.query.get(ids['acao_nova']) is not None
+    assert SlackAcaoPendente.query.get(ids['acao_velha']) is None
 
 
 def test_nflog_nunca_e_apagado(app):
