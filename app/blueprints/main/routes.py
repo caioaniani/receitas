@@ -2337,6 +2337,48 @@ def retencao_admin():
     return jsonify(rel), 200
 
 
+@main_bp.route('/admin/db-vacuum')
+@owner_required
+def db_vacuum():
+    """VACUUM FULL numa tabela de LOG (17/07/2026, volume Railway a 75%).
+
+    A retenção (DELETE) devolve o espaço pra REUSO interno do Postgres, mas
+    só o VACUUM FULL devolve ao DISCO — o número que o Railway mede.
+    Allowlist FECHADA de tabelas de log (nunca negócio); trava a tabela por
+    alguns segundos, por isso é gesto manual do dono, não cron. Sem
+    ?executar=1 só mostra o tamanho atual (dry-run, padrão da retenção)."""
+    from sqlalchemy import text as _text
+    permitidas = ('slack_acao_pendente', 'audit_log', 'vigia_veredito',
+                  'chatbot_conversa')
+    if db.engine.dialect.name != 'postgresql':
+        return jsonify(ok=False, erro='so em Postgres (prod)'), 400
+    tabela = (request.args.get('tabela') or '').strip()
+    if tabela not in permitidas:
+        return jsonify(ok=False, permitidas=list(permitidas),
+                       erro='passe ?tabela= um dos alvos permitidos'), 400
+
+    def _tam(conn):
+        return conn.execute(
+            _text('SELECT pg_total_relation_size(CAST(:t AS regclass))'),
+            {'t': tabela}).scalar()
+    with db.engine.connect() as conn:
+        antes = _tam(conn)
+    if request.args.get('executar') != '1':
+        return jsonify(ok=True, tabela=tabela, dry_run=True,
+                       tamanho_mb=round(antes / 1048576, 1),
+                       dica='?executar=1 roda o VACUUM FULL '
+                            '(trava a tabela por alguns segundos)')
+    # VACUUM nao roda dentro de transacao — conexao AUTOCOMMIT dedicada.
+    # O nome da tabela vem da allowlist acima, nunca do usuario.
+    with db.engine.connect().execution_options(
+            isolation_level='AUTOCOMMIT') as conn:
+        conn.execute(_text(f'VACUUM FULL {tabela}'))
+        depois = _tam(conn)
+    return jsonify(ok=True, tabela=tabela,
+                   antes_mb=round(antes / 1048576, 1),
+                   depois_mb=round(depois / 1048576, 1))
+
+
 def _saldo_lalamove_json():
     from app.models import LalamoveSaldo
     s = db.session.get(LalamoveSaldo, 1)
