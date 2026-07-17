@@ -80,6 +80,32 @@
         });
     });
 
+    // ✓ Concluir direto (Início v2) — OPTIMISTIC: risca, some e agenda sync
+    document.body.addEventListener('click', function (e) {
+        var btn = e.target.closest('.proj-done');
+        if (!btn) return;
+        var tid = btn.dataset.tarefaId;
+        if (!tid) return;
+        var row = btn.closest('.proj-tarefa');
+
+        if (row) row.classList.add('proj-feita');
+        btn.disabled = true;
+
+        postEdicao('/projetos/tarefa/' + tid + '/editar', 'status', 'feito').then(function (r) {
+            if (!r.ok) {
+                if (row) row.classList.remove('proj-feita');
+                btn.disabled = false;
+                alert('Não foi possível concluir a tarefa. Recarregue.');
+                return;
+            }
+            // Some depois de um instante (deixa o risco visível como feedback)
+            if (row) setTimeout(function () { row.style.display = 'none'; }, 700);
+        }).catch(function () {
+            if (row) row.classList.remove('proj-feita');
+            btn.disabled = false;
+        });
+    });
+
     // Foco 12s star toggle — OPTIMISTIC
     document.body.addEventListener('click', function (e) {
         var btn = e.target.closest('.proj-foco-toggle');
