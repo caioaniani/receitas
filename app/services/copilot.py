@@ -3417,7 +3417,20 @@ def executar_criar_tarefa(params, user):
     projeto = None
     proj_nome = (params.get('projeto_nome') or '').strip()
     if proj_nome:
-        projeto = Projeto.query.filter(Projeto.nome.ilike(f'%{proj_nome}%')).first()
+        from app.models import ProjetoArea
+
+        # Áreas 'igreja'/'vida' são privadas do dono: funcionário/gerente no
+        # Slack não pode criar tarefa nelas nem descobrir o nome de projeto
+        # privado pelo eco do resultado (mesma regra das rotas web).
+        q = Projeto.query.join(ProjetoArea)
+        if not (callable(getattr(user, 'is_dono', None)) and user.is_dono()):
+            q = q.filter(ProjetoArea.tipo == 'empresa')
+        # Match exato (case-insensitive) primeiro; senão substring, preferindo
+        # o nome mais curto (evita "a" casar um projeto arbitrário).
+        projeto = q.filter(db.func.lower(Projeto.nome) == proj_nome.lower()).first()
+        if projeto is None:
+            projeto = (q.filter(Projeto.nome.ilike(f'%{proj_nome}%'))
+                       .order_by(db.func.length(Projeto.nome)).first())
     if projeto is None:
         # projeto_id e NOT NULL: sem projeto (ou nome que nao casou),
         # a tarefa cai na Inbox (projeto "Avulsas") — mesmo destino do
