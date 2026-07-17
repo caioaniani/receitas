@@ -179,6 +179,21 @@ def test_vendas_ontem_compara_com_media_do_dow(app):
     assert lj['delta_pct'] == 20.0
 
 
+def test_loja_com_historico_e_venda_zero_aparece(app):
+    """Loja que vende toda semana mas ZEROU ontem (PDV fora?) NÃO some do
+    briefing — entra com R$ 0 e queda de 100% (achado A8 da revisão)."""
+    from app.services import briefing_dono
+    ontem = hoje() - timedelta(days=1)
+    _venda_dia(ontem - timedelta(days=7), fat=1000)
+    _venda_dia(ontem - timedelta(days=14), fat=1000)
+    # ontem: NENHUMA linha pra Loja A
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        v = briefing_dono.vendas_ontem()
+    lj = next(x for x in v['por_loja'] if x['loja'] == 'Loja A')
+    assert lj['faturamento'] == 0.0
+    assert lj['delta_pct'] == -100.0
+
+
 def test_vendas_ontem_inclui_site_pago_por_pago_em(app):
     from app.models import PedidoOnline
     from app.services import briefing_dono
