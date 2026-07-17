@@ -4011,7 +4011,8 @@ def loja_online_pedido_detalhe(codigo):
                            p=p, labels=_STATUS_PEDIDO_ONLINE_LABEL,
                            lojas=loja_checkout.lojas_retirada(),
                            modos=_MODOS_ENTREGA,
-                           estoque_reduzido=estoque_reduzido)
+                           estoque_reduzido=estoque_reduzido,
+                           expedicao_sinal=_expedicao_com_pedido(p))
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/editar', methods=['POST'])
