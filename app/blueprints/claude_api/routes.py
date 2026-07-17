@@ -731,6 +731,51 @@ def tiny_danfe_debug():
     return jsonify(out)
 
 
+@claude_api_bp.route('/db-tamanho')
+@_claude_auth_required
+def db_tamanho():
+    """Tamanho do banco POR TABELA (17/07/2026, volume Railway a 75%):
+    heap/TOAST/índices + tuplas mortas, pra saber O QUE ocupa o disco antes
+    de decidir entre VACUUM FULL, retenção ou resize. Read-only estrito
+    (só catálogos pg_*). Suspeitos históricos: TOAST morto da migração de
+    BLOBs (M6) e tabelas de log/snapshot que crescem por dia."""
+    from sqlalchemy import text
+
+    from app.extensions import db
+    if db.engine.dialect.name != 'postgresql':
+        return jsonify(ok=False, erro='disponivel so em Postgres'), 400
+    total = db.session.execute(text(
+        'SELECT pg_database_size(current_database())')).scalar()
+    dead = {r[0]: int(r[1] or 0) for r in db.session.execute(text(
+        'SELECT relname, n_dead_tup FROM pg_stat_user_tables')).all()}
+    tabelas = []
+    for nome, tot, heap, toast, idx, linhas in db.session.execute(text("""
+            SELECT c.relname,
+                   pg_total_relation_size(c.oid),
+                   pg_relation_size(c.oid),
+                   COALESCE(pg_total_relation_size(c.reltoastrelid), 0),
+                   pg_indexes_size(c.oid),
+                   c.reltuples::bigint
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public' AND c.relkind = 'r'
+            ORDER BY pg_total_relation_size(c.oid) DESC
+            LIMIT 40
+    """)).all():
+        tabelas.append({
+            'tabela': nome,
+            'total_mb': round(tot / 1048576, 1),
+            'heap_mb': round(heap / 1048576, 1),
+            'toast_mb': round(toast / 1048576, 1),
+            'indices_mb': round(idx / 1048576, 1),
+            'linhas_estimadas': int(linhas or 0),
+            'tuplas_mortas': dead.get(nome, 0),
+        })
+    return jsonify(ok=True,
+                   banco_total_mb=round(total / 1048576, 1),
+                   tabelas=tabelas)
+
+
 @claude_api_bp.route('/deploy')
 @_claude_auth_required
 def deploy_info():
