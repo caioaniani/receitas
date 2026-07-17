@@ -280,16 +280,44 @@
 
     {# Reembolso/cancelamento mexe em dinheiro — só o dono (decisão 22/06/2026). #}
     {% if current_user.is_owner and p.status not in ('entregue', 'cancelado') %}
-    {% set eh_pago = p.status == 'pago' %}
+    {% set eh_pago = p.status in ('pago', 'em_preparo', 'a_caminho') %}
+    {# Expedição já com o pedido (em preparo/em rota/Lalamove/cozinha): o
+       servidor EXIGE confirmar_expedicao=1 — o confirm() abaixo preenche o
+       hidden só quando o dono confirma o aviso forte (caso 16CF21D8,
+       decisão do dono 17/07/2026). Hidden + listener, nunca name/value no
+       botão (armadilha do Safari). #}
     <form method="POST" action="{{ url_for('main.loja_online_pedido_cancelar', codigo=p.codigo) }}"
-          onsubmit="return confirm('{{ 'Reembolsar e cancelar? O valor volta pro cliente.' if eh_pago else 'Cancelar o pedido?' }}');">
+          id="form-cancelar-pedido" data-expedicao="{{ expedicao_sinal or '' }}"
+          data-eh-pago="{{ '1' if eh_pago else '' }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
+      <input type="hidden" name="confirmar_expedicao" value="">
       <button type="submit" class="btn btn-outline-danger btn-sm w-100">
         {{ 'Reembolsar e cancelar' if eh_pago else 'Cancelar pedido' }}
       </button>
     </form>
+    <script>
+      (function () {
+        var f = document.getElementById('form-cancelar-pedido');
+        if (!f) return;
+        f.addEventListener('submit', function (e) {
+          var sinal = f.dataset.expedicao;
+          var ok;
+          if (sinal) {
+            ok = confirm('⚠ A expedição JÁ está com este pedido (' + sinal +
+                         ').\nAvise a expedição para SEGURAR a entrega!\n\n' +
+                         'Cancelar/reembolsar mesmo assim?');
+            if (ok) f.querySelector('[name=confirmar_expedicao]').value = '1';
+          } else {
+            ok = confirm(f.dataset.ehPago
+              ? 'Reembolsar e cancelar? O valor volta pro cliente.'
+              : 'Cancelar o pedido?');
+          }
+          if (!ok) e.preventDefault();
+        });
+      })();
+    </script>
     {% if eh_pago %}
-    <p class="text-muted small mt-1 mb-0">Reembolsa no Pagar.me + devolve o estoque.</p>
+    <p class="text-muted small mt-1 mb-0">Reembolsa no Pagar.me{{ ' + devolve o estoque' if p.status == 'pago' else ' (estoque NÃO volta sozinho: mercadoria já saiu)' }}.</p>
     {% endif %}
     {% endif %}
   </div>
