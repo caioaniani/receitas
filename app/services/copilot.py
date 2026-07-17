@@ -3439,11 +3439,15 @@ def executar_criar_tarefa(params, user):
         projeto = _get_inbox_projeto()
 
     prazo = None
+    aviso = None
     if params.get('data_prazo'):
         try:
             prazo = datetime.strptime(params['data_prazo'], '%Y-%m-%d').date()
         except ValueError:
-            pass
+            # Não silenciar: a tarefa nasce, mas o chamador fica sabendo que
+            # o prazo pedido não foi entendido (formato esperado: AAAA-MM-DD).
+            aviso = (f'data_prazo "{params["data_prazo"]}" invalida '
+                     '(use AAAA-MM-DD) — tarefa criada SEM prazo')
 
     t = TarefaProjeto(
         nome=titulo,
@@ -3452,9 +3456,12 @@ def executar_criar_tarefa(params, user):
     )
     db.session.add(t)
     db.session.commit()
-    return {'ok': True, 'tarefa_id': t.id, 'titulo': titulo,
-            'projeto': projeto.nome, 'prazo': prazo.isoformat() if prazo else None,
-            'registro_tipo': 'tarefa_projeto', 'registro_id': t.id}
+    res = {'ok': True, 'tarefa_id': t.id, 'titulo': titulo,
+           'projeto': projeto.nome, 'prazo': prazo.isoformat() if prazo else None,
+           'registro_tipo': 'tarefa_projeto', 'registro_id': t.id}
+    if aviso:
+        res['aviso'] = aviso
+    return res
 
 
 # ───── Tools de Planejamento — READ ────────────────────────────────────
