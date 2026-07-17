@@ -252,6 +252,19 @@ def test_enviar_briefing_manda_pro_dono(app):
     assert tx.call_count == 1
     assert tx.call_args[0][0] == '5511999999999'
     assert 'Briefing O Pão' in tx.call_args[0][1]
+    # critico=True: 1 msg/dia que não pode virar digest na manhã de um
+    # incidente (achado A3 da revisão).
+    assert tx.call_args[1].get('critico') is True
+
+
+def test_enviar_briefing_nao_usa_numero_de_grupo_dos_vigias(app):
+    """O destino é SÓ ZAPI_BOT_DONO_NUMERO — o número dos vigias pode ser
+    um GRUPO da equipe e o briefing carrega faturamento (achado A1)."""
+    from app.services import briefing_dono
+    app.config['ZAPI_BOT_DONO_NUMERO'] = ''
+    app.config['CHATWOOT_VIGIA_INFRA_NUMERO'] = '123456-group'
+    r = briefing_dono.enviar_briefing('texto qualquer')
+    assert r['ok'] is False                      # não caiu no grupo
 
 
 def test_enviar_briefing_sem_numero(app):
