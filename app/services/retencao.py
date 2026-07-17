@@ -46,6 +46,7 @@ def executar_limpeza(dry_run=False):
     from app.models import (
         ChatbotConversa,
         FreteSensor,
+        SlackAcaoPendente,
         SlackEventoProcessado,
         VigiaVeredito,
         ZapiBotEventoProcessado,
@@ -69,6 +70,13 @@ def executar_limpeza(dry_run=False):
          SlackEventoProcessado.processado_em, cfg['RETENCAO_EVENTOS_DIAS']),
         ('zapi_bot_evento_processado', ZapiBotEventoProcessado,
          ZapiBotEventoProcessado.processado_em, cfg['RETENCAO_EVENTOS_DIAS']),
+        # Ações pendentes do Slack (17/07/2026, volume a 75%): o token expira
+        # em 10 MINUTOS, mas as linhas ficavam pra sempre — e o params_json
+        # carrega FOTO em base64 (441 linhas = 62 MB, 32% do banco; a foto
+        # real já está no Dropbox antes do registro). Mesma janela dos
+        # eventos Slack.
+        ('slack_acao_pendente', SlackAcaoPendente,
+         SlackAcaoPendente.criado_em, cfg['RETENCAO_EVENTOS_DIAS']),
         # Sensor do frete: guarda PII (endereço/contato do cliente) — poda por
         # LGPD (09/07/2026). É log operacional, não venda.
         ('frete_sensor', FreteSensor, FreteSensor.criado_em,
