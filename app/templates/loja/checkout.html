@@ -133,8 +133,11 @@
         </label>
       </div>
 
-      <p class="cep-status">Digite o <strong>CEP</strong> primeiro — a rua,
-        o bairro e a cidade vêm sozinhos.</p>
+      {# Dica estática que o JS troca pelos estados do lookup (buscando /
+         preenchido / não encontrado / API fora). Fica ACIMA do grid, colada
+         no campo CEP — no celular, mensagem depois do grid ficava longe. #}
+      <p id="cep-status" class="cep-status">Digite o <strong>CEP</strong>
+        primeiro — a rua, o bairro e a cidade vêm sozinhos.</p>
       <div class="endereco-grid">
         <label>CEP
           <input type="text" name="cep" id="cep" inputmode="numeric"
