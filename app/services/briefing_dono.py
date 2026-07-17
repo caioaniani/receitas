@@ -179,7 +179,9 @@ def pendencias(incluir_owner=True):
                           'rotulo': 'Mapeamentos do PDV pendentes',
                           'qtd': pdv, 'url': '/pdv/mapeamentos'})
 
-    itens.extend(_vigias_doentes())
+        # Vigias linkam telas owner-only — dentro do gate (achado A2 da
+        # revisão: admin comum clicava e levava 403).
+        itens.extend(_vigias_doentes())
     return itens
 
 
