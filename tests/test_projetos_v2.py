@@ -94,7 +94,10 @@ def test_tarefa_nao_duplica_entre_secoes_do_agora(app, owner_user):
     c = app.test_client()
     _login(c, owner_user.id)
     html = c.get('/projetos/').data.decode()
-    assert html.count('Fazendo vencida k') == 1
+    # Aparece na seção "Fazendo agora"; a seção "Atrasadas" nem renderiza
+    # (a única tarefa vencida está em fazendo, então não é re-listada lá).
+    assert 'Fazendo agora (1)' in html
+    assert 'Atrasadas (' not in html
 
 
 def test_rotas_antigas_continuam_vivas(app, owner_user):
