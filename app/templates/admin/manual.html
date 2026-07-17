@@ -39,9 +39,9 @@
             <thead><tr><th>Gesto</th><th>Quem</th><th>Onde</th></tr></thead>
             <tbody>
             <tr>
-                <td>Ler o <strong>briefing das 07:00</strong> e resolver o que está em "precisa de você" (a <a href="{{ url_for('main.index') }}">home</a> mostra a mesma lista)</td>
+                <td>Conferir o bloco <strong>"Precisa de você hoje"</strong> na home e resolver as pendências (o <a href="{{ url_for('main.briefing_dono_view') if current_user.is_dono() else url_for('main.index') }}">briefing sob demanda</a> traz o mesmo + vendas de ontem)</td>
                 <td>Dono</td>
-                <td>WhatsApp / <a href="{{ url_for('main.index') }}">home</a></td>
+                <td><a href="{{ url_for('main.index') }}">Home</a></td>
             </tr>
             <tr>
                 <td>Conferir o <strong>cronograma</strong> e <strong>enviar a ordem do dia</strong> ao padeiro (painel "Próximos passos" diz o que falta)</td>
