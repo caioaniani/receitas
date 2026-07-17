@@ -2641,6 +2641,7 @@ def clientes():
 
 
 @main_bp.route('/admin/clientes.xlsx')
+@login_required
 @admin_required
 def clientes_xlsx():
     """Export da lista de clientes (mesmos filtros da tela) pra campanhas."""
