@@ -313,10 +313,25 @@ def _geocodificar_impl(endereco_ou_cep):
             ref = cep_geo[3]                     # {'cidade','bairro'} do Correios
             if cep_geo[0] is not None:
                 return cep_geo[:3], False, 'gratis'   # BrasilAPI tinha coord
-            # BrasilAPI conhece o CEP mas nao tem coordenada: geocodifica o
-            # endereço resolvido (rua + bairro + cidade), mais preciso que o
-            # texto cru. Valida por CIDADE (barra Arujá) — o rótulo carrega o
-            # bairro, então o postcode frouxo do OSM não derruba (caso ABC).
+            # BrasilAPI conhece o CEP mas nao tem coordenada. ANTES da cadeia
+            # grátis, re-tenta o GOOGLE com o logradouro OFICIAL dos Correios:
+            # o passo 1 (texto cru) falha quando o cliente digitou o nome da
+            # rua errado/incompleto, mas o nome oficial resolve (caso Mirelle
+            # 17/07/2026: "Rua Cândido de Azevedo Marques" sem o "Joaquim" →
+            # nao_encontrado; com o oficial → Google 1,9km, R$5). Mesmo teto/
+            # cache/kill-switch do passo 1; falhou → cadeia grátis intocada.
+            if (ref or {}).get('rua'):
+                numero = _extrair_numero(texto)
+                canonico = ', '.join(x for x in (
+                    ref['rua'], numero, ref.get('bairro'), ref.get('cidade'),
+                    _formatar_cep(cep)) if x)
+                g2 = _google_geocode(canonico)
+                if g2:
+                    return (g2[0], g2[1], canonico), False, 'google'
+            # Cadeia grátis: geocodifica o endereço resolvido (rua + bairro +
+            # cidade), mais preciso que o texto cru. Valida por CIDADE (barra
+            # Arujá) — o rótulo carrega o bairro, então o postcode frouxo do
+            # OSM não derruba (caso ABC).
             geo = _geocodificar_texto(cep_geo[2], ref=ref, cep_ref=cep)
     if not geo or geo[0] is None:
         geo = _geocodificar_texto(texto, ref=ref, cep_ref=cep)
