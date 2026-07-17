@@ -463,17 +463,11 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
-    # Briefing diario do dono — 07:00 BRT (16/07/2026, "nao estou conseguindo
-    # pilotar o aviao"): UMA mensagem WhatsApp com vendas de ontem por loja,
-    # pendencias que exigem decisao dele e custo de IA. Mesma fonte do bloco
-    # "Precisa de voce hoje" da home (app/services/briefing_dono.py).
-    # Desligar: BRIEFING_DONO=0.
-    if os.environ.get('BRIEFING_DONO', '1') != '0':
-        _scheduler.add_job(
-            lambda app=app: _run_briefing_dono(app),
-            'cron', hour=7, minute=0, id='briefing-dono',
-            max_instances=1, coalesce=True,
-        )
+    # Briefing diario do dono: o envio automatico das 07:00 foi REMOVIDO em
+    # 17/07/2026 a pedido do dono ("nao quero receber") — menos de 1 dia
+    # depois de criado. O servico briefing_dono segue vivo alimentando o
+    # bloco "Precisa de voce hoje" da home e a pagina /admin/briefing
+    # (preview + envio manual). NAO reagendar sem ordem explicita.
 
     # Heartbeat invertido — 08:00 BRT (manha): canal Slack recebe um
     # 'sistema OK'. Detecta dependencia circular: se Z-API cair, ninguem
