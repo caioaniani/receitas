@@ -194,6 +194,8 @@ def _vigias_doentes():
          '/admin/debug-chatwoot'),
         ('site_vigia_quebrado_desde', 'Vigia do SITE acusando problema',
          '/admin/vigia-site'),
+        ('pdv_vigia_quebrado_desde', 'Vigia do PDV acusando problema',
+         '/pdv/mapeamentos'),
         ('uso_ia_vigia_estourado_desde', 'Custo de IA acima do teto diário',
          '/admin/uso-ia'),
     )
