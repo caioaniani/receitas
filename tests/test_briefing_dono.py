@@ -30,13 +30,19 @@ def _login(cliente, user):
 
 def _plano(data, enviado, itens=()):
     """PlanejamentoProducao origem=cronograma + itens (qtd_alvo, produzido)."""
-    from app.models import PlanejamentoItem, PlanejamentoProducao
+    from app.models import PlanejamentoItem, PlanejamentoProducao, Receita
     p = PlanejamentoProducao(data=data, origem='cronograma',
                              enviado_ao_padeiro=enviado)
     db.session.add(p)
     db.session.flush()
-    for qtd_alvo, produzido in itens:
+    for i, (qtd_alvo, produzido) in enumerate(itens):
+        r = Receita(nome=f'Pão Plano {p.id}-{i}', categoria='Paes',
+                    rendimento_qtd=1, rendimento_unidade='un',
+                    peso_base=100.0)
+        db.session.add(r)
+        db.session.flush()
         db.session.add(PlanejamentoItem(planejamento_id=p.id,
+                                        receita_id=r.id,
                                         qtd_alvo=qtd_alvo,
                                         produzido_qtd=produzido))
     db.session.commit()
