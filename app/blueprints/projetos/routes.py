@@ -208,13 +208,19 @@ def painel():
         quadro = []
         for area in areas_all:
             projs = []
+            concluidos = 0
             for p in area.projetos:
-                if p.status == 'concluido':
-                    continue
                 abertas_p = sorted(
                     (t for t in p.tarefas if t.status not in ('feito', 'cancelado')),
                     key=_sort_tarefa,
                 )
+                # Concluído SEM tarefa aberta sai do quadro (vira só o link
+                # "N concluídos"); concluído COM tarefa aberta fica visível —
+                # senão a tarefa sumia da home inteira (não entra no Agora se
+                # não tem prazo).
+                if p.status == 'concluido' and not abertas_p:
+                    concluidos += 1
+                    continue
                 n_atras = sum(1 for t in abertas_p if t.atrasada)
                 projs.append({'p': p, 'abertas': abertas_p, 'atrasadas': n_atras})
             # Ordena: foco primeiro, depois quem tem atrasada, depois ativos, nome.
