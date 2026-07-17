@@ -102,6 +102,7 @@
                 {% if c.atrasadas %}<span class="status-badge status-divergencia" title="{{ c.atrasadas }} tarefa(s) atrasada(s)"><i class="bi bi-exclamation-triangle-fill"></i> {{ c.atrasadas }}</span>{% endif %}
                 {% if p.status == 'em_espera' %}<span class="badge bg-secondary" style="font-size:9px;">em espera</span>{% endif %}
                 {% if p.status == 'planejado' %}<span class="badge bg-light text-dark" style="font-size:9px;">planejado</span>{% endif %}
+                {% if p.status == 'concluido' %}<span class="badge bg-warning text-dark" style="font-size:9px;" title="Projeto concluído com tarefa ainda aberta — conclua ou mova as tarefas">concluído c/ pendência</span>{% endif %}
                 {% if p.responsavel %}<span class="badge bg-dark" style="font-size:9px;"><i class="bi bi-person"></i> {{ p.responsavel.nome.split()[0] }}</span>{% endif %}
                 <span class="text-muted small ms-1">{{ c.abertas|length }} aberta{{ 's' if c.abertas|length != 1 }}</span>
             </div>
