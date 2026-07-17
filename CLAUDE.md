@@ -188,6 +188,20 @@ Testes: `tests/test_briefing_dono.py`.
   - **Config**: snapshot/restore por teste (mutacoes `app.config[X]=Y` nao vazam).
   - xdist ainda dormente (`PYTEST_XDIST_WORKER` da SQLite proprio por worker);
     com 73s sequencial nao foi preciso paralelizar.
+  - **Banco isolado POR PROCESSO (17/07/2026)**: o topo do `conftest.py` agora
+    da a CADA processo pytest seu proprio SQLite em `tempfile.gettempdir()`
+    (chave = worker do xdist, senao `pidNNNN`), respeitando `DATABASE_URL`
+    setado de proposito. Antes, sem xdist, TODO processo caia no
+    `~/.padaria/padaria.db` FIXO. **Armadilha que isso fecha**: rodar DOIS
+    pytest ao mesmo tempo (ex: full-suite em background + um arquivo em
+    foreground pra debugar) fazia os dois baterem no MESMO arquivo — o reset
+    por DELETE + recriacao do admin no startup de um apagava/duplicava as
+    linhas do outro NO MEIO dos testes, gerando falhas NAO-DETERMINISTICAS e
+    espalhadas (`StaleDataError`, `UNIQUE usuario.login`, linhas que "somem",
+    ja vi de 3 a ~379 falhas por corrida). So aparece com pytest concorrente;
+    CI (1 processo) fica verde e escondia. Efeito colateral bom: a suite nao
+    dropa/limpa mais o `padaria.db` LOCAL do dev. Se ver falha nao-repetivel na
+    suite, cheque `ps aux | grep pytest` ANTES de suspeitar do codigo.
 - **Workflow**: **SEMPRE commit direto no branch de producao**. Nao abrir PR — o auto-commit
   hook ja faz commit+push pro branch atual, e o usuario nao quer mergear nada manualmente.
   Se a mudanca for grande, ainda assim vai direto em prod (auto-commit acumula varios commits).
