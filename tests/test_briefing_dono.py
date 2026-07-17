@@ -179,6 +179,39 @@ def test_vendas_ontem_compara_com_media_do_dow(app):
     assert lj['delta_pct'] == 20.0
 
 
+def test_dois_companies_da_mesma_loja_somam_numa_linha(app):
+    """Caso real (dono, 17/07/2026): "Bread & Brew e O Pão Filial Nebraska
+    são a mesma loja" — dois company names do Seru vinculados à MESMA Loja
+    aparecem como UMA linha, com faturamento e média SOMADOS."""
+    from app.models import Loja, SeruLojaMap
+    from app.services import briefing_dono
+    from app.utils import agora
+    nebraska = Loja(nome='Loja Nebraska', ativa=True)
+    db.session.add(nebraska)
+    db.session.commit()
+    db.session.add_all([
+        SeruLojaMap(seru_company_name='BREAD & BREW', loja_id=nebraska.id,
+                    confirmado_em=agora()),
+        SeruLojaMap(seru_company_name='O PAO FILIAL - NEBRASKA',
+                    loja_id=nebraska.id, confirmado_em=agora()),
+    ])
+    db.session.commit()
+    ontem = hoje() - timedelta(days=1)
+    _venda_dia(ontem, loja_seru='BREAD & BREW', fat=300)
+    _venda_dia(ontem, loja_seru='O PAO FILIAL - NEBRASKA', fat=700)
+    _venda_dia(ontem - timedelta(days=7), loja_seru='BREAD & BREW', fat=200)
+    _venda_dia(ontem - timedelta(days=7),
+               loja_seru='O PAO FILIAL - NEBRASKA', fat=300)
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        v = briefing_dono.vendas_ontem()
+    nomes = [x['loja'] for x in v['por_loja']]
+    assert nomes.count('Loja Nebraska') == 1
+    assert 'BREAD & BREW' not in nomes
+    lj = next(x for x in v['por_loja'] if x['loja'] == 'Loja Nebraska')
+    assert lj['faturamento'] == 1000.0           # 300 + 700
+    assert lj['media'] == 500.0                  # (200+300) somados no dia
+
+
 def test_loja_com_historico_e_venda_zero_aparece(app):
     """Loja que vende toda semana mas ZEROU ontem (PDV fora?) NÃO some do
     briefing — entra com R$ 0 e queda de 100% (achado A8 da revisão)."""
