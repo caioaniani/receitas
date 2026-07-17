@@ -1883,6 +1883,38 @@ EXIBICAO/decisao — nada mexe em preco, pedido ou transacao. Os helpers
 centenas de receitas busca `carga_venda()` 1x — sem query em loop).
 Testes: `tests/test_impostos_margem.py`.
 
+## Projetos v2 — Início orientado a ação (17/07/2026)
+
+Pedido do dono ("traz v2 aqui /projetos/", escolha dele: "fazer a versão 2 da
+tela"). A home `/projetos/` (`painel()`) virou o **Início**: bloco **"Agora"**
+(Fazendo / Atrasadas / Para hoje / Próximos 7 dias — cada tarefa aparece UMA
+vez: fazendo tem seção própria e as demais são particionadas pelo prazo) +
+**quadro por área** com os projetos abertos e as tarefas abertas aninhadas
+(quick-add por projeto, status do projeto, estrela de foco, comentário). A
+home antiga de cards segue viva em **`/projetos/cards`** — NENHUMA rota foi
+perdida; a navegação encolheu pra 5 abas (Início/Hoje/Inbox/Kanban/Calendário)
++ dropdown "Mais" (Dia/Foco/Relatório/Templates/Cards/Visão lista) no macro
+`nav_views` de `projetos/_partials.html`.
+
+- **✓ concluir em 1 clique**: botão `.proj-done` na linha (`tarefa_linha` no
+  `_partials.html`; handler optimistic em `projetos.js` — risca, some e
+  sincroniza; erro reverte). O círculo de ciclo de status continua ao lado.
+- **Busca** (`#busca-tarefa`) na home filtra tarefa E projeto: projeto cujo
+  nome casa mostra todas as tarefas; card sem match some; área sem card some.
+  Só age em `.proj-card[data-proj-nome]` — as views antigas não têm o atributo
+  e ficam intocadas.
+- **Recorrência sem lixo**: `_agendar_proxima` agora tem DEDUPE (não cria
+  próxima ocorrência se já existe outra ABERTA com mesmo projeto+nome+
+  recorrência — alternar feito→a_fazer→feito duplicava a cada ciclo, lixo real
+  no quadro de prod) e `tarefa_mover` (drag do kanban) também dispara a
+  recorrência ao cair em feito (antes só o clique/modal disparava).
+- **Fix copilot `executar_criar_tarefa`** (`copilot.py`): a versão anterior
+  SEMPRE estourava (kwargs `data_prazo`/`criado_por` não existem no modelo e
+  `projeto_id=None` viola NOT NULL). Agora usa `prazo=` e, sem projeto que
+  case, cai na Inbox via `_get_inbox_projeto` (import lazy do blueprint).
+- Testes: `tests/test_projetos_v2.py` (Agora/quadro, partição sem duplicata,
+  rotas antigas vivas, 403 não-owner, recorrência 3 casos, copilot 2 casos).
+
 ## Opção "fatiado?" nos sourdoughs no site (16/07/2026)
 
 Pedido do dono: o cliente escolhe, POR ITEM, se o pão sourdough vem fatiado.
