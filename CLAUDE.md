@@ -1912,8 +1912,20 @@ perdida; a navegação encolheu pra 5 abas (Início/Hoje/Inbox/Kanban/Calendári
   SEMPRE estourava (kwargs `data_prazo`/`criado_por` não existem no modelo e
   `projeto_id=None` viola NOT NULL). Agora usa `prazo=` e, sem projeto que
   case, cai na Inbox via `_get_inbox_projeto` (import lazy do blueprint).
+  Endurecido pós-revisão: o match de `projeto_nome` FILTRA áreas privadas
+  (igreja/vida) pra quem não é dono (a tool é de funcionário/gerente também —
+  sem o filtro dava pra criar tarefa em, e descobrir nome de, projeto privado),
+  prefere match exato e depois o nome mais curto; `data_prazo` inválida devolve
+  `aviso` em vez de sumir em silêncio.
+- Pós-revisão também: projeto `concluido` COM tarefa aberta continua no quadro
+  (badge "concluído c/ pendência") — sem isso a tarefa ficava invisível na
+  home; e o ✓ risca TODAS as cópias da tarefa no DOM (Agora + quadro).
+- Trade-off ACEITO do dedupe: duas tarefas recorrentes distintas com o MESMO
+  nome no MESMO projeto — concluir uma não agenda a próxima enquanto a outra
+  estiver aberta (chave é projeto+nome+recorrência, não id de origem).
 - Testes: `tests/test_projetos_v2.py` (Agora/quadro, partição sem duplicata,
-  rotas antigas vivas, 403 não-owner, recorrência 3 casos, copilot 2 casos).
+  rotas antigas vivas, 403 não-owner, recorrência 3 casos, copilot 4 casos,
+  concluído com pendência).
 
 ## Opção "fatiado?" nos sourdoughs no site (16/07/2026)
 
