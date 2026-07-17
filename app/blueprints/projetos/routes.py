@@ -152,7 +152,110 @@ def _projetos_para_select():
 @login_required
 @owner_required
 def painel():
-    """Dashboard: cards de projetos agrupados por area, ordenados por urgencia."""
+    """Início (v2): bloco "Agora" (o que pede ação) + quadro por área com as
+    tarefas abertas aninhadas e editáveis. Responde "o que está pendente?" em
+    uma tela só; os cards antigos seguem em /projetos/cards."""
+    import traceback
+
+    from flask import current_app
+    try:
+        hoje_d = hoje_brt()
+
+        base = TarefaProjeto.query.join(Projeto).join(ProjetoArea).options(
+            joinedload(TarefaProjeto.projeto).joinedload(Projeto.area),
+            joinedload(TarefaProjeto.responsavel),
+        )
+        if not current_user.is_dono():
+            base = base.filter(ProjetoArea.tipo == 'empresa')
+        aberta = ~TarefaProjeto.status.in_(['feito', 'cancelado'])
+
+        # Cada tarefa aparece UMA vez no "Agora": fazendo tem seção própria;
+        # as demais (a_fazer) são particionadas pelo prazo.
+        fazendo = base.filter(TarefaProjeto.status == 'fazendo') \
+            .order_by(TarefaProjeto.prazo.is_(None), TarefaProjeto.prazo).all()
+        atrasadas = base.filter(
+            aberta,
+            TarefaProjeto.status != 'fazendo',
+            TarefaProjeto.prazo.isnot(None),
+            TarefaProjeto.prazo < hoje_d,
+        ).order_by(TarefaProjeto.prazo).all()
+        de_hoje = base.filter(
+            aberta,
+            TarefaProjeto.status != 'fazendo',
+            TarefaProjeto.prazo == hoje_d,
+        ).order_by(TarefaProjeto.ordem).all()
+        prox7 = base.filter(
+            aberta,
+            TarefaProjeto.status != 'fazendo',
+            TarefaProjeto.prazo > hoje_d,
+            TarefaProjeto.prazo <= hoje_d + timedelta(days=7),
+        ).order_by(TarefaProjeto.prazo).all()
+
+        # Quadro por área: projetos não-concluídos com as tarefas abertas.
+        qa = ProjetoArea.query.options(
+            selectinload(ProjetoArea.projetos).options(
+                joinedload(Projeto.responsavel),
+                selectinload(Projeto.tarefas).joinedload(TarefaProjeto.responsavel),
+            ),
+        ).filter_by(ativa=True)
+        if not current_user.is_dono():
+            qa = qa.filter(ProjetoArea.tipo == 'empresa')
+        areas_all = qa.order_by(ProjetoArea.ordem, ProjetoArea.nome).all()
+
+        def _sort_tarefa(t):
+            return (not t.atrasada, t.prazo is None, t.prazo or date.max, t.ordem or 0)
+
+        quadro = []
+        for area in areas_all:
+            projs = []
+            for p in area.projetos:
+                if p.status == 'concluido':
+                    continue
+                abertas_p = sorted(
+                    (t for t in p.tarefas if t.status not in ('feito', 'cancelado')),
+                    key=_sort_tarefa,
+                )
+                n_atras = sum(1 for t in abertas_p if t.atrasada)
+                projs.append({'p': p, 'abertas': abertas_p, 'atrasadas': n_atras})
+            # Ordena: foco primeiro, depois quem tem atrasada, depois ativos, nome.
+            projs.sort(key=lambda c: (
+                not c['p'].foco_12s,
+                c['atrasadas'] == 0,
+                c['p'].status != 'ativo',
+                c['p'].nome.lower(),
+            ))
+            concluidos = sum(1 for p in area.projetos if p.status == 'concluido')
+            if projs or concluidos:
+                quadro.append({'area': area, 'projetos': projs, 'concluidos': concluidos})
+
+        return render_template('projetos/home.html',
+                               fazendo=fazendo,
+                               atrasadas=atrasadas,
+                               de_hoje=de_hoje,
+                               prox7=prox7,
+                               quadro=quadro,
+                               contadores=_contadores(),
+                               data_relativa=_data_relativa,
+                               view='inicio',
+                               **_contexto_acao())
+    except Exception as e:
+        current_app.logger.error('Erro no início de projetos: %s\n%s', e, traceback.format_exc())
+        return (
+            '<h1>Erro na tela de Projetos</h1>'
+            f'<p><strong>{type(e).__name__}:</strong> {e}</p>'
+            f'<pre style="background:#f5f5f5;padding:12px;border-radius:6px;overflow:auto;">{traceback.format_exc()}</pre>'
+            '<p><a href="/projetos/_migrar">Forçar migração</a> · '
+            '<a href="/projetos/lista">Visão lista</a> · '
+            '<a href="/">Voltar</a></p>',
+            500
+        )
+
+
+@projetos_bp.route('/cards')
+@login_required
+@owner_required
+def cards():
+    """Cards de projetos agrupados por area, ordenados por urgencia (home antiga)."""
     import traceback
     from collections import defaultdict
 
