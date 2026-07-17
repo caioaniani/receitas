@@ -53,11 +53,12 @@ LOCK_KEY_SITE_VIGIA = 7745  # advisory lock pro vigia do site (canarios de frete
 LOCK_KEY_PDV_VIGIA = 7746  # advisory lock pro vigia do PDV (loja muda / company sem vinculo)
 LOCK_KEY_USO_IA_VIGIA = 7748  # advisory lock pro vigia de custo de IA (teto diario)
 LOCK_KEY_GOOGLE_REVIEWS = 7749  # advisory lock pro sync de avaliacoes do Google
-LOCK_KEY_BRIEFING_DONO = 7750  # advisory lock pro briefing diario do dono (WhatsApp 07:00)
 # Locks LIBERADOS mas RESERVADOS (nao reusar — evita conflito se algum
 # dos jobs for reativado no futuro):
 # - 7730 era do `zapi-digest-anomalias` (job 23:00 BRT, removido 14/06/2026).
 # - 7741 era do `zapi-digest-saude` (job 07:30 BRT, removido 14/06/2026).
+# - 7750 era do `briefing-dono` (job 07:00 BRT, removido 17/07/2026 a pedido
+#   do dono; o envio manual em /admin/briefing nao usa lock).
 
 
 def _com_lock(key, fn, label='job'):
@@ -732,14 +733,9 @@ def _run_google_reviews(app):
                   google_reviews.sincronizar_e_alertar, 'google reviews')
 
 
-def _run_briefing_dono(app):
-    """Job: briefing diario do dono (16/07/2026) — vendas de ontem, pendencias
-    de decisao e custo de IA, numa mensagem WhatsApp as 07:00 BRT."""
-    from app.services import briefing_dono
-
-    with app.app_context():
-        _com_lock(LOCK_KEY_BRIEFING_DONO, briefing_dono.enviar_briefing,
-                  'briefing dono')
+# O job `briefing-dono` (07:00 BRT) viveu de 16 a 17/07/2026 — removido a
+# pedido do dono ("nao quero receber"). O envio manual continua pela rota
+# /admin/briefing (owner), sem cron e sem lock.
 
 
 def _run_alerta_baixas_presas(app):
