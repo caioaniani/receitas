@@ -334,23 +334,25 @@ def montar_texto(dados=None):
     return '\n'.join(linhas)
 
 
-def enviar_briefing():
-    """Monta e envia o briefing pro WhatsApp do dono. Retorna dict de status.
+def enviar_briefing(texto=None):
+    """Monta (se preciso) e envia o briefing pro WhatsApp do dono.
 
-    Mesmo padrão de destino dos vigias: CHATWOOT_VIGIA_INFRA_NUMERO com
-    fallback ZAPI_BOT_DONO_NUMERO. Sem número configurado, loga e sai.
+    Destino: SÓ `ZAPI_BOT_DONO_NUMERO` — de propósito NÃO cai no número dos
+    vigias (`CHATWOOT_VIGIA_INFRA_NUMERO`), que pode ser um GRUPO da equipe:
+    o briefing carrega faturamento por loja e custo, é o cockpit PESSOAL.
+    `critico=True` porque é 1 msg/dia e a manhã de um incidente (teto do
+    Z-API cheio por alertas) é justamente quando ele mais importa — sem
+    isso viraria resumo de digest e o cron só tentaria de novo amanhã.
     """
     from flask import current_app
 
     from app.services import zapi
-    cfg = current_app.config
-    dono = ((cfg.get('CHATWOOT_VIGIA_INFRA_NUMERO') or '').strip()
-            or (cfg.get('ZAPI_BOT_DONO_NUMERO') or '').strip())
+    dono = (current_app.config.get('ZAPI_BOT_DONO_NUMERO') or '').strip()
     if not dono:
         logger.warning('briefing: sem numero do dono configurado')
         return {'ok': False, 'erro': 'sem numero do dono configurado'}
-    texto = montar_texto()
-    resultado = zapi.enviar_texto(dono, texto)
+    resultado = zapi.enviar_texto(dono, texto or montar_texto(),
+                                  critico=True)
     if not resultado.get('ok'):
         logger.warning('briefing: envio falhou: %s', resultado)
     return resultado
