@@ -336,7 +336,9 @@
               mostrarCorrigir(false);
             }
             var num = document.getElementById('numero');
-            if (num) num.focus();
+            // Só rouba o foco se o cliente ainda estiver no campo CEP —
+            // no meio de outra digitação seria sequestro de cursor.
+            if (num && document.activeElement === cepEl) num.focus();
           } else if (resp.st === 404) {
             // CEP NÃO EXISTE: o gesto certo é corrigir o CEP (a Mirelle
             // digitou os dígitos invertidos). Campos seguem travados; a
