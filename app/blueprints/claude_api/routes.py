@@ -820,9 +820,9 @@ def projetos():
 def acuracia_previsao():
     """Acurácia da previsão, read-only (16/07/2026, mutirão de confiança):
     o resumo do painel /producao/previsao-acuracia + o WAPE por (loja,
-    receita) dos motores vivos — o mesmo que abastece os selos das grades.
-    Permite ao assistente diagnosticar de fora os itens em que a previsão
-    erra (?dias=, ?motor=)."""
+    receita) dos motores vivos. `?dias=`/`?motor=` valem só pro RESUMO; o
+    bloco por_loja_receita é janela FIXA de 60 dias — a mesma dos selos
+    WAPE das grades, pra bater 1:1 com o que a tela mostra."""
     from app.extensions import db
     from app.models import Loja, Receita
     from app.services.previsao_acuracia import (
