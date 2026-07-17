@@ -281,11 +281,26 @@
       if (b) b.click();
     }
 
+    function reconferirCep(dBuscado) {
+      // Corrida (revisão 17/07): o cliente pode ter CORRIGIDO o CEP
+      // enquanto o lookup anterior estava em voo (input/blur retornam
+      // cedo por cepEmVoo) — a resposta velha preencheria o endereço do
+      // CEP antigo com o campo já mostrando o novo. Ao terminar QUALQUER
+      // lookup, reconfere o campo e re-busca se divergiu. `!== dBuscado`
+      // evita loop de retry do MESMO CEP que acabou de falhar.
+      var atual = (cepEl.value || '').replace(/\D/g, '');
+      if (atual.length === 8 && atual !== dBuscado && atual !== ultimoCep) {
+        buscarCep();
+      }
+    }
+
     function buscarCep() {
       var d = (cepEl.value || '').replace(/\D/g, '');
       if (d.length !== 8) return;
-      // máscara visual
-      cepEl.value = d.slice(0, 5) + '-' + d.slice(5);
+      // máscara visual — só reatribui se mudou (reatribuir joga o cursor
+      // pro fim, atrapalha edição no meio do campo).
+      var mascarado = d.slice(0, 5) + '-' + d.slice(5);
+      if (cepEl.value !== mascarado) cepEl.value = mascarado;
       if (d === ultimoCep || cepEmVoo) return;   // mesmo CEP / já buscando
       cepEmVoo = true;
       // CEP MUDOU: invalida o frete já calculado (força recalcular com o
