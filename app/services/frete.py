@@ -190,6 +190,19 @@ def _geocodificar_texto(texto, ref=None, cep_ref=None, postcode_estrito=False):
         return None
 
 
+def _extrair_numero(texto):
+    """Número da casa a partir do endereço em uma linha: a 1ª parte (após a
+    rua) que COMEÇA com dígitos. Ignora o CEP (removido antes) pra ele não
+    ser confundido com número. '' quando não achar."""
+    t = re.sub(r'\d{5}[\s.-]?\d{3}', '', texto or '')
+    partes = [p.strip() for p in t.split(',') if p.strip()]
+    for p in partes[1:3]:
+        m = re.match(r'^(\d+)\b', p)
+        if m:
+            return m.group(1)
+    return ''
+
+
 def simplificar_endereco(texto):
     """Reduz um endereço completo pra 'rua, numero, cidade' — complemento
     (apto/bloco), bairro, estado e CEP costumam DERRUBAR o Nominatim.
@@ -200,12 +213,7 @@ def simplificar_endereco(texto):
     if not partes:
         return None
     rua = partes[0]
-    numero = ''
-    for p in partes[1:3]:
-        m = re.match(r'^(\d+)\b', p)
-        if m:
-            numero = m.group(1)
-            break
+    numero = _extrair_numero(texto)
     base = f'{rua}, {numero}' if numero else rua
     return f'{base}, São Paulo'
 
