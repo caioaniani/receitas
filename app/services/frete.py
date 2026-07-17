@@ -97,9 +97,10 @@ def _formatar_cep(cep):
 def _geocodificar_cep(cep):
     """BrasilAPI v2: CEP -> (lat, lng, rótulo, ref) ou None (sem coords/erro).
 
-    `ref` = {'cidade', 'bairro'} resolvidos pelo Correios — sinal de sanidade
-    MAIS confiável que o postcode do OSM (que às vezes vem errado no nó certo).
-    Usado pra validar o candidato do Nominatim por cidade."""
+    `ref` = {'cidade', 'bairro', 'rua'} resolvidos pelo Correios — sinal de
+    sanidade MAIS confiável que o postcode do OSM (que às vezes vem errado no
+    nó certo). 'cidade' valida o candidato do Nominatim; 'rua' (logradouro
+    oficial) alimenta a retentativa do Google."""
     try:
         r = requests.get(f'https://brasilapi.com.br/api/cep/v2/{cep}',
                          timeout=_TIMEOUT)
