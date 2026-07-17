@@ -886,27 +886,53 @@ def checkout():
 @loja_bp.route('/api/cep/<cep>', methods=['GET'])
 @limiter.limit('30 per minute')
 def api_cep(cep):
-    """Lookup de CEP via BrasilAPI pra autocompletar logradouro/bairro/
-    cidade/UF no checkout. Faz cache simples no servidor não — devolve
-    a resposta como veio. Sem rate limit dedicado (o gate da loja já
-    barra anônimos enquanto LOJA_VISIVEL=0)."""
+    """Lookup de CEP pra autocompletar logradouro/bairro/cidade/UF no
+    checkout. BrasilAPI primeiro; se ELA falhar (fora do ar/timeout), cai
+    no ViaCEP — a BrasilAPI já degradou em produção mais de uma vez
+    (05/07 e 09/07/2026) e, com o checkout CEP-first (campos travados até
+    o CEP resolver), a rota fora do ar viraria venda travada.
+
+    Distinção que o front usa: 404 = CEP NÃO EXISTE (cliente confere o
+    número; campos seguem travados) × 502 = INFRA fora (front destrava os
+    campos pra digitação manual — fail-open, venda nunca fica presa)."""
     import requests
     cep_d = ''.join(c for c in (cep or '') if c.isdigit())
     if len(cep_d) != 8:
         return jsonify(ok=False, erro='CEP precisa ter 8 dígitos.'), 400
+    brasilapi_404 = False
     try:
         r = requests.get(
             f'https://brasilapi.com.br/api/cep/v2/{cep_d}', timeout=6)
+        if r.status_code == 200:
+            j = r.json() or {}
+            return jsonify(ok=True,
+                           logradouro=j.get('street') or '',
+                           bairro=j.get('neighborhood') or '',
+                           cidade=j.get('city') or '',
+                           uf=j.get('state') or '')
+        # BrasilAPI respondeu "não existe" (agrega 3 provedores) — ainda
+        # tenta o ViaCEP (bases divergem), mas se ele também falhar por
+        # INFRA o veredito é 404, não 502.
+        brasilapi_404 = True
     except Exception:  # noqa: BLE001
-        return jsonify(ok=False, erro='Não consegui consultar o CEP.'), 502
-    if r.status_code != 200:
+        pass
+    try:
+        r2 = requests.get(
+            f'https://viacep.com.br/ws/{cep_d}/json/', timeout=6)
+        if r2.status_code == 200:
+            j2 = r2.json() or {}
+            if j2.get('erro'):
+                return jsonify(ok=False, erro='CEP não encontrado.'), 404
+            return jsonify(ok=True,
+                           logradouro=j2.get('logradouro') or '',
+                           bairro=j2.get('bairro') or '',
+                           cidade=j2.get('localidade') or '',
+                           uf=j2.get('uf') or '')
+    except Exception:  # noqa: BLE001
+        pass
+    if brasilapi_404:
         return jsonify(ok=False, erro='CEP não encontrado.'), 404
-    j = r.json() or {}
-    return jsonify(ok=True,
-                   logradouro=j.get('street') or '',
-                   bairro=j.get('neighborhood') or '',
-                   cidade=j.get('city') or '',
-                   uf=j.get('state') or '')
+    return jsonify(ok=False, erro='Não consegui consultar o CEP.'), 502
 
 
 @loja_bp.route('/api/frete', methods=['POST'])
