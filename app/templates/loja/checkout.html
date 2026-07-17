@@ -137,7 +137,10 @@
         <label>CEP
           <input type="text" name="cep" id="cep" inputmode="numeric"
                  placeholder="00000-000" maxlength="9"
+                 autocomplete="postal-code"
                  value="{{ form.get('cep', '') }}">
+          <small class="text-muted">Digite o CEP primeiro — a rua, o bairro
+            e a cidade vêm sozinhos.</small>
         </label>
         <label>Logradouro (rua / avenida)
           <input type="text" name="logradouro" id="logradouro"
