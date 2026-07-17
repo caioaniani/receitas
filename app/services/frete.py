@@ -311,7 +311,7 @@ def _geocodificar_impl(endereco_ou_cep):
     if cep:
         cep_geo = _geocodificar_cep(cep)
         if cep_geo:
-            ref = cep_geo[3]                     # {'cidade','bairro'} do Correios
+            ref = cep_geo[3]             # {'cidade','bairro','rua'} do Correios
             if cep_geo[0] is not None:
                 return cep_geo[:3], False, 'gratis'   # BrasilAPI tinha coord
             # BrasilAPI conhece o CEP mas nao tem coordenada. ANTES da cadeia
