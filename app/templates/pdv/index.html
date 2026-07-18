@@ -190,6 +190,8 @@
             };
             view.por_loja[filtroLoja] = det.total || 0;
             if (det.sem_itens > 0) view.por_loja_sem_itens[filtroLoja] = det.sem_itens;
+            view.sem_itens_total = det.sem_itens || 0;
+            view.sem_itens_n = det.sem_itens_n || 0;
         } else {
             view = {
                 total_pedidos: Number(r.total_pedidos) || 0,
