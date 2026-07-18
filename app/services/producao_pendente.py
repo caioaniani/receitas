@@ -260,6 +260,10 @@ def reagendar_para_hoje(item_ids, user_id):
                 # sumiria com a falta.
                 dest.dispensada_em = None
                 dest.dispensada_por_id = None
+            # Mesma armadilha do marcador de falta ENCERRADA pelo padeiro
+            # (17/07/2026): reagendar É o gesto "devolver pra tela dele" —
+            # somar num item encerrado (oculto) engoliria a falta devolvida.
+            dest.falta_encerrada_em = None
             dest.qtd_alvo = int(dest.qtd_alvo or 0) + falta
             dest.qtd_extra = int(dest.qtd_extra or 0) + falta
             dest.multiplicador = max(1, ceil(dest.qtd_alvo / _rendimento(dest.receita)))
