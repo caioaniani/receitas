@@ -128,6 +128,7 @@ def cobrancas_sem_itens(data_inicial, data_final):
             nf_status = (nf.get('status') or '').lower() if nf else ''
             tem_nf = bool(nf) and nf_status not in (
                 'canceled', 'cancelled', 'denied', 'rejected', 'error')
+            canal = p.get('salesChannel')
             out.append({
                 'id': pid,
                 'codigo': p.get('code'),
@@ -138,6 +139,8 @@ def cobrancas_sem_itens(data_inicial, data_final):
                 'total': float(total),
                 'caixa': (p.get('cashier') or {}).get('code'),
                 'tem_nf': tem_nf,
+                'canal': (canal.get('name') if isinstance(canal, dict)
+                          else None) or '?',
             })
         except Exception:  # noqa: BLE001 — UM pedido torto não pode cegar
             # a varredura INTEIRA (e repetir a cegueira a cada ciclo
