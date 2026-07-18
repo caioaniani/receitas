@@ -1970,6 +1970,10 @@ def _migrate_sqlite(app):
     if cols_pi and 'qtd_extra' not in cols_pi:
         cursor.execute("ALTER TABLE planejamento_item ADD COLUMN "
                        "qtd_extra INTEGER NOT NULL DEFAULT 0")
+    # Falta encerrada pelo padeiro (17/07/2026) — ver _migrate_postgres.
+    if cols_pi and 'falta_encerrada_em' not in cols_pi:
+        cursor.execute("ALTER TABLE planejamento_item ADD COLUMN "
+                       "falta_encerrada_em TIMESTAMP")
     cursor.execute("PRAGMA table_info(planejamento_producao)")
     cols_pp = [row[1] for row in cursor.fetchall()]
     if cols_pp and 'origem' not in cols_pp:
