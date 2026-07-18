@@ -337,6 +337,16 @@
                 '<strong>fora</strong> do faturamento, dos pedidos e do ticket — ' +
                 'detalhe no rodapé do quadro "Por loja".</div>';
         }
+        // Delivery sem itens (99Food etc.): venda REAL — CONTA no
+        // faturamento; o aviso só lembra que não baixa estoque.
+        var delivV = Number(d.delivery_sem_itens_total) || 0;
+        if (delivV > 0) {
+            avisos += '<div class="alert alert-light border py-2 small mb-2">' +
+                '<i class="bi bi-bicycle"></i> Delivery sem itens detalhados ' +
+                '(99Food e afins): R$ ' + fmt(delivV) + ' — <strong>conta no ' +
+                'faturamento</strong>, mas não baixa estoque nem entra na ' +
+                'previsão.</div>';
+        }
         document.getElementById('pdv-msg').innerHTML = avisos;
         var pedidosValidos = d.total_pedidos - d.cancelados - semN;
         var faturamento = d.total_valor - semV;
