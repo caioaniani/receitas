@@ -2512,6 +2512,39 @@ def vigia_uso_ia():
     return jsonify(uso_ia_vigia.rodar_checks()), 200
 
 
+@main_bp.route('/admin/vigia-venda-sem-item')
+@owner_required
+def vigia_venda_sem_item():
+    """Vigia de venda SEM itens sob demanda (owner-only) — mesmo check do
+    ciclo de 15min do sync Seru (caso Nebraska 17/07/2026: 23 cobranças
+    "PDV Fácil" só-valor, R$ 7.028,50, todas sem NF). Sem parâmetro: DRY-RUN
+    — lista as cobranças de ontem+hoje e o estado de dedup, sem WhatsApp e
+    sem marcar nada. `?alertar=1` roda o fluxo completo (alerta as novas e
+    marca)."""
+    from datetime import timedelta as _td
+
+    from app.services import venda_sem_item_vigia
+    from app.utils import hoje as _hoje
+
+    if request.args.get('alertar') == '1':
+        return jsonify(venda_sem_item_vigia.vigiar()), 200
+    hoje_d = _hoje()
+    janela = [hoje_d - _td(days=1), hoje_d]
+    try:
+        cobrancas = venda_sem_item_vigia.cobrancas_sem_itens(
+            janela[0], janela[-1])
+    except Exception as e:  # noqa: BLE001 — dry-run mostra o erro cru
+        return jsonify(ok=False,
+                       erro=f'{type(e).__name__}: {str(e)[:200]}'), 502
+    estado = venda_sem_item_vigia._carregar_estado(janela)
+    ja = {i for ids in estado.values() for i in ids}
+    return jsonify(ok=True,
+                   cobrancas=cobrancas,
+                   ja_alertadas=sum(1 for c in cobrancas if c['id'] in ja),
+                   novas=sum(1 for c in cobrancas if c['id'] not in ja),
+                   piso_valor=float(venda_sem_item_vigia.min_valor()))
+
+
 @main_bp.route('/admin/debug-chatwoot')
 @owner_required
 def debug_chatwoot():
