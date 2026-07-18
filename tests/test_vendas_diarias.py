@@ -215,10 +215,15 @@ def test_captura_separa_cobranca_sem_itens(app):
     d = vendas_diarias.vendas_pdv_do_banco(DIA, DIA, capturar=False)
     assert d['por_loja_sem_itens'] == {'Nebraska': 1713.0}
     assert d['sem_itens_total'] == 1713.0
+    # CONTAGEM também (o resumo desconta pedidos e ticket — dono 18/07):
+    # 2 cobranças válidas (cancelada e zero-valor fora)
+    assert d['sem_itens_n'] == 2
+    assert d['por_loja_sem_itens_n'] == {'Nebraska': 2}
     # total cheio da loja segue incluindo tudo (semântica de sempre);
     # a SEPARAÇÃO é papel do front (linha = total - sem_itens)
     assert d['por_loja']['Nebraska'] == 1743.0            # 30 + 1135 + 578
     assert d['por_loja_detalhe']['Nebraska']['sem_itens'] == 1713.0
+    assert d['por_loja_detalhe']['Nebraska']['sem_itens_n'] == 2
 
 
 def test_snapshot_antigo_sem_dimensao_fica_zerado(app):
