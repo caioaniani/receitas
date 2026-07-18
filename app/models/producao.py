@@ -63,6 +63,15 @@ class PlanejamentoItem(db.Model):
     dispensada_em = db.Column(db.DateTime, nullable=True)
     dispensada_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
                                   nullable=True)
+    # Falta ENCERRADA pelo PADEIRO (17/07/2026, decisao do dono): ele produziu
+    # menos que o alvo e deu o item por feito — o item some SO das telas do
+    # padeiro (card do dia + ordem de ontem); a falta continua viva na
+    # auditoria, onde o admin decide: ✓ OK (dispensa) ou reagendar pra hoje
+    # (devolve pra tela do padeiro — o reagendar LIMPA este marcador).
+    # Diferente de dispensada_em: NAO bloqueia produzir, NAO sai da auditoria,
+    # NAO libera pre-baixa de MP. ALTER em migrations_legacy (commit 1,
+    # deployado e confirmado antes deste modelo).
+    falta_encerrada_em = db.Column(db.DateTime, nullable=True)
 
     receita = db.relationship('Receita')
     dispensada_por = db.relationship('Usuario', foreign_keys=[dispensada_por_id])
