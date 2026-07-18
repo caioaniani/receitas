@@ -184,16 +184,17 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
             db.session.add(VendaSeruDiaBreakdown(
                 data=d, loja_seru=ln, dimensao='canal',
                 chave=canal[:120], valor=val))
-    for (d, ln), si in por_dia_sem_itens.items():
-        # dimensao nova (18/07/2026): cobrancas SEM itens do dia — chave ''
-        # = VALOR total, chave 'n' = CONTAGEM de pedidos. So grava quando
-        # houver (linha ausente = zero).
+    for (d, ln, tag), si in por_dia_sem_itens.items():
+        # dimensao nova (18/07/2026): cobrancas SEM itens do dia, POR CANAL
+        # — chave '<tag>' = VALOR e '<tag>:n' = CONTAGEM. So grava quando
+        # houver (linha ausente = zero). Leitura tolera o formato antigo
+        # (chave ''/'n' agregado, gravado por poucas horas em 18/07).
         db.session.add(VendaSeruDiaBreakdown(
-            data=d, loja_seru=ln, dimensao='sem_itens', chave='',
+            data=d, loja_seru=ln, dimensao='sem_itens', chave=tag[:118],
             valor=si['v']))
         db.session.add(VendaSeruDiaBreakdown(
-            data=d, loja_seru=ln, dimensao='sem_itens', chave='n',
-            valor=Decimal(si['n'])))
+            data=d, loja_seru=ln, dimensao='sem_itens',
+            chave=f'{tag[:116]}:n', valor=Decimal(si['n'])))
     for (d, ln), qtd in por_dia_cancel.items():
         db.session.add(VendaSeruDiaBreakdown(
             data=d, loja_seru=ln, dimensao='cancelados',
