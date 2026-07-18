@@ -516,13 +516,19 @@ def consumir_subreceitas_prontas(rec, unidades, user_id):
     return out
 
 
-def produzir_item_plano(item_id, unidades, user_id):
+def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
     """OPCAO B: o padeiro produz `unidades` de um item do plano aprovado.
     Numa unica transacao: (1) credita o produto pronto na industria
     (entrada_producao), (2) DESCONTA a MP da ficha tecnica proporcional as
     unidades (consumo real, sem arredondar pra batida cheia) e (3) avanca o
     produzido_qtd do item. Retorna {'ok': True, 'produzido': N} ou
     {'ok': False, 'erro': ...}.
+
+    `encerrar=True` (17/07/2026, decisao do dono): o padeiro produziu MENOS
+    que o alvo e da o item por FEITO — marca `falta_encerrada_em`, o item
+    some das telas dele e a diferenca fica so na auditoria (admin decide:
+    OK/dispensar ou reagendar de volta). So marca se ainda restar falta;
+    estoque credita apenas o produzido de verdade.
     """
     from app.models import MovimentacaoEstoque, PlanejamentoItem
     from app.services.estoque_congelados import entrada_producao
