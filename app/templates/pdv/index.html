@@ -307,10 +307,27 @@
                 'Os quadros <em>forma de pagamento</em> e <em>por loja</em> são só do PDV.' +
                 '</div>';
         }
+        // Cobrança SEM produto (teste de impressora etc.) FORA do resumo —
+        // decisão do dono 18/07/2026: "contar somente o valor das vendas
+        // com itens". Desconta valor E contagem (senão o ticket médio
+        // distorce). Dias antigos sem a contagem no snapshot descontam só
+        // o valor (contagem 0).
+        var semV = Number(d.sem_itens_total) || 0;
+        var semN = Number(d.sem_itens_n) || 0;
+        if (semV > 0) {
+            avisos += '<div class="alert alert-warning py-2 small mb-2">' +
+                '<i class="bi bi-exclamation-triangle"></i> ' +
+                (semN > 0 ? semN + ' cobrança(s)' : 'Cobranças') +
+                ' <strong>sem produto</strong> (R$ ' + fmt(semV) + ') ficaram ' +
+                '<strong>fora</strong> do faturamento, dos pedidos e do ticket — ' +
+                'detalhe no rodapé do quadro "Por loja".</div>';
+        }
         document.getElementById('pdv-msg').innerHTML = avisos;
-        document.getElementById('pdv-r-pedidos').textContent = d.total_pedidos - d.cancelados;
-        document.getElementById('pdv-r-total').textContent = fmt(d.total_valor);
-        var ticket = d.total_pedidos - d.cancelados > 0 ? d.total_valor / (d.total_pedidos - d.cancelados) : 0;
+        var pedidosValidos = d.total_pedidos - d.cancelados - semN;
+        var faturamento = d.total_valor - semV;
+        document.getElementById('pdv-r-pedidos').textContent = pedidosValidos;
+        document.getElementById('pdv-r-total').textContent = fmt(faturamento);
+        var ticket = pedidosValidos > 0 ? faturamento / pedidosValidos : 0;
         document.getElementById('pdv-r-ticket').textContent = fmt(ticket);
         document.getElementById('pdv-r-cancelados').textContent = d.cancelados;
 
