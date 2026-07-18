@@ -147,6 +147,17 @@ def _run_sync(app):
                     seru_sync.retomar_reprocesso_pendente(app)
                 except Exception:
                     logger.exception('retomada de reprocesso pendente falhou')
+                # Vigia de venda SEM itens (18/07/2026, caso Nebraska: 23
+                # cobrancas "PDV Facil" so-valor, R$7.028,50, sem NF). Roda
+                # DENTRO do advisory lock do sync — execucao unica entre
+                # workers, sem alerta duplicado. Best-effort. Desligar:
+                # VENDA_SEM_ITEM_VIGIA=0.
+                try:
+                    if os.environ.get('VENDA_SEM_ITEM_VIGIA', '1') != '0':
+                        from app.services import venda_sem_item_vigia
+                        venda_sem_item_vigia.vigiar()
+                except Exception:
+                    logger.exception('vigia venda sem item falhou')
                 ativas = any(stats.get(k, 0) for k in (
                     'pedidos_novos', 'itens_baixados',
                     'pedidos_cancelados_estornados'))
