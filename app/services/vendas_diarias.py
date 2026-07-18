@@ -126,9 +126,11 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
                 pay.get('value') or pay.get('total') or pay.get('amount'))
         canal = _str_chave(p.get('salesChannel')) or '—'
         por_dia_canal[(d, ln)][canal] += total_ped
+        tem_item = False
         for it in seru.extrair_itens(p):
             if it['cancelado']:
                 continue
+            tem_item = True
             tot = Decimal(str(it['total']))
             e = por_dia[(d, ln)][it['nome']]
             e['qtd'] += Decimal(str(it['qtd']))
@@ -138,6 +140,8 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
             if pid is not None:
                 e['peds'].add(pid)
             lj['fat'] += tot                                 # subtotais dos itens
+        if not tem_item and total_ped > 0:
+            por_dia_sem_itens[(d, ln)] += total_ped
 
     loja_ids = _loja_id_por_nome()
     # Apaga o intervalo inteiro (nao so os dias com pedido): um dia que ficou
