@@ -370,11 +370,25 @@ def vendas_snapshot():
                         soma_itens += Decimal(str(it['total']))
                         n_itens += 1
                 total = float(p.get('total') or 0)
+                dh = seru.datahora_local(p.get('createdAt'))
+                # NF: `taxInvoice` da API — None = venda SEM nota emitida.
+                nf_raw = p.get('taxInvoice') or None
+                nf = None
+                if isinstance(nf_raw, dict):
+                    nf = {'status': nf_raw.get('status'),
+                          'numero': nf_raw.get('number'),
+                          'serie': nf_raw.get('serialNumber'),
+                          'emitida_em': nf_raw.get('receiptDate')
+                          or nf_raw.get('createdAt'),
+                          'url': nf_raw.get('url')}
+                pags = [(x.get('method') or x.get('type'))
+                        for x in (p.get('payments') or [])
+                        if isinstance(x, dict)]
                 pedidos_vivo.append({
                     'id': p.get('id') or p.get('orderNumber') or p.get('code'),
-                    'data': (seru.data_local(p.get('createdAt')) or
-                             '?').isoformat()
-                    if seru.data_local(p.get('createdAt')) else '?',
+                    'codigo': p.get('code'),
+                    'data': dh.date().isoformat() if dh else '?',
+                    'hora': dh.strftime('%H:%M:%S') if dh else '?',
                     'company': comp,
                     'total': total,
                     'soma_itens': float(soma_itens),
@@ -382,6 +396,11 @@ def vendas_snapshot():
                     'n_itens': n_itens,
                     'canal': p.get('salesChannel'),
                     'cancelado': bool(p.get('canceledAt')),
+                    'status': p.get('status'),
+                    'caixa': (p.get('cashier') or {}).get('code'),
+                    'nf': nf,
+                    'pagamentos': pags,
+                    'obs': p.get('note'),
                 })
             pedidos_vivo.sort(key=lambda x: -abs(x['diferenca']))
             pedidos_vivo = pedidos_vivo[:80]
