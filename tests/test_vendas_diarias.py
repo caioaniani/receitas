@@ -191,6 +191,7 @@ def test_vendas_pdv_do_banco(app):
     assert det['Nebraska']['cancelados'] == 0
     # sem cobrança só-valor no fixture: split zerado/ausente
     assert d['sem_itens_total'] == 0.0
+    assert d['sem_itens_n'] == 0
     assert d['por_loja_sem_itens'] == {}
 
 
