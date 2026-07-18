@@ -427,10 +427,14 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
             det[ln]['cancelados'] += int(v)
         elif dim == 'sem_itens':
             # Cobranca so-valor (18/07/2026): separada pro card mostrar a
-            # venda COM produto na linha e isso num rodape de investigacao.
-            # Dia capturado antes da dimensao existir nao tem a linha —
-            # fica 0 e o card mostra o total cheio (sem rodape), como era.
-            det[ln]['sem_itens'] += v
+            # venda COM produto na linha e isso num rodape de investigacao;
+            # o resumo desconta valor (chave '') e contagem (chave 'n').
+            # Dia capturado antes da dimensao existir nao tem as linhas —
+            # fica 0 e a tela mostra o total cheio, como era.
+            if chave == 'n':
+                det[ln]['sem_itens_n'] += int(v)
+            else:
+                det[ln]['sem_itens'] += v
 
     total = 0.0
     n_ped = cancelados = 0
