@@ -946,6 +946,10 @@ def _migrate_postgres(app):
     # Parcela extra adicionada a mao (reagendamento da auditoria) — o re-sync
     # do cronograma preserva/soma em vez de apagar.
     _try("ALTER TABLE planejamento_item ADD COLUMN qtd_extra INTEGER NOT NULL DEFAULT 0")
+    # Falta ENCERRADA pelo padeiro (17/07/2026): ele produziu menos que o
+    # alvo e deu o item por feito — some da tela dele; a diferenca fica so
+    # na auditoria (admin decide: OK/dispensar ou devolver pro padeiro).
+    _try("ALTER TABLE planejamento_item ADD COLUMN falta_encerrada_em TIMESTAMP")
 
     # ── Acuracia do forecast por MOTOR (Fase 0, 02/07/2026) ──
     # A acuracia media so o motor aposentado (sugerir_pedidos_semana); agora
