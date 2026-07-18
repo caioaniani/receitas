@@ -2537,11 +2537,13 @@ def vigia_venda_sem_item():
         return jsonify(ok=False,
                        erro=f'{type(e).__name__}: {str(e)[:200]}'), 502
     estado = venda_sem_item_vigia._carregar_estado(janela)
-    ja = {i for ids in estado.values() for i in ids}
+    ja = {i for ids in estado['ids'].values() for i in ids}
     return jsonify(ok=True,
                    cobrancas=cobrancas,
                    ja_alertadas=sum(1 for c in cobrancas if c['id'] in ja),
                    novas=sum(1 for c in cobrancas if c['id'] not in ja),
+                   ultimo_envio=estado.get('ultimo_envio'),
+                   envios_hoje=estado['envios'].get(hoje_d.isoformat(), 0),
                    piso_valor=float(venda_sem_item_vigia.min_valor()))
 
 
