@@ -1942,6 +1942,26 @@ estoque nem entram na previsao.
   descontam valor E contagem das cobrancas sem produto, com aviso amarelo
   dizendo o que ficou fora; dia antigo sem a chave 'n' desconta so o
   valor. Testes: secao sem_itens em `tests/test_vendas_diarias.py`.
+- **DELIVERY sem itens e OUTRA classe (dono 18/07, caso 99Food Anesio
+  R$81,38)**: pedido de canal de delivery (constante
+  `SEM_ITENS_CANAIS_DELIVERY` em `app/constants.py` — 99food/ifood/rappi)
+  chega SEM itens por natureza da integracao mas e venda REAL: CONTA no
+  faturamento/pedidos/ticket, aparece em aviso informativo proprio
+  ("conta no faturamento; nao baixa estoque") e em secao propria do
+  rodape (🛵). So avulsa (pdv-facil/desconhecido) fica fora do resumo e
+  alerta o vigia (`venda_sem_item_vigia.canais_ignorados`, env
+  `VENDA_SEM_ITEM_CANAIS_IGNORADOS` substitui a lista). A dimensao
+  `sem_itens` agora e POR CANAL (chave '<tag>' valor, '<tag>:n' contagem;
+  formato antigo ''/n cai no bucket avulsa). O alerta do vigia mostra o
+  CANAL de cada cobranca. **Cancelamento canonico**:
+  `seru.pedido_cancelado` (canceledAt OU status=='canceled' — caso real
+  18/07, cobranca cancelada sem canceledAt contava como venda) usado na
+  camada de RELATORIO/vigia; o `seru_sync` (estoque/estorno) segue keyed
+  em canceledAt DE PROPOSITO — mudar o gatilho de estorno e decisao
+  separada, PENDENTE de auditoria propria. PENDENTE tambem: dono quer
+  pedido 99Food com vinculo de produto e BAIXA DE ESTOQUE — investigacao
+  em curso (sonda `?detalhe=<id>` no vendas-snapshot pra ver se o
+  GET /orders/{id} da Seru traz os itens que a listagem omite).
 
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
