@@ -5,6 +5,7 @@ from flask import current_app, flash, jsonify, redirect, render_template, reques
 from flask_login import current_user, login_required
 
 from app.blueprints.pdv import pdv_bp
+from app.constants import SEM_ITENS_CANAIS_DELIVERY
 from app.decorators import admin_required, owner_required
 from app.extensions import db
 from app.models import (
@@ -490,17 +491,26 @@ def _api_vendas_impl():
             if not loja:
                 loja = '—'
             por_loja[loja] = por_loja.get(loja, 0) + _f(p.get('total'))
-            # Cobranca SEM itens (so valor, ex: teste de impressora que vira
-            # "venda") — MESMA regra da captura do snapshot (extrator
-            # canonico): nenhum item nao-cancelado. Rodape do card Por loja.
+            # Cobranca SEM itens (so valor) — MESMA regra da captura
+            # (extrator canonico): nenhum item nao-cancelado. DELIVERY
+            # (99food etc.) e venda real → bucket informativo (conta no
+            # faturamento); o resto (pdv-facil/avulsa) fica fora do resumo
+            # e vai pro rodape "investigar" (dono 18/07).
             tem_item = any(not it['cancelado'] for it in seru.extrair_itens(p))
             if not tem_item and _f(p.get('total')) > 0:
                 v = _f(p.get('total'))
-                sem_itens_total += v
-                sem_itens_n += 1
-                por_loja_sem_itens[loja] = por_loja_sem_itens.get(loja, 0) + v
-                por_loja_sem_itens_n[loja] = \
-                    por_loja_sem_itens_n.get(loja, 0) + 1
+                if seru.canal_tag(p) in SEM_ITENS_CANAIS_DELIVERY:
+                    delivery_sem_itens_total += v
+                    delivery_sem_itens_n += 1
+                    por_loja_delivery_sem_itens[loja] = \
+                        por_loja_delivery_sem_itens.get(loja, 0) + v
+                else:
+                    sem_itens_total += v
+                    sem_itens_n += 1
+                    por_loja_sem_itens[loja] = \
+                        por_loja_sem_itens.get(loja, 0) + v
+                    por_loja_sem_itens_n[loja] = \
+                        por_loja_sem_itens_n.get(loja, 0) + 1
     except Exception as e:
         import traceback
         current_app.logger.exception('Erro agregando vendas Seru')
