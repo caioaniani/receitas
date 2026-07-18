@@ -225,6 +225,7 @@
         });
         var total = 0, cancelados = 0;
         var por_pagamento = {}, por_canal = {}, por_loja = {};
+        var por_loja_sem_itens = {};
         filtrados.forEach(function(p) {
             if (p.canceledAt) { cancelados++; return; }
             total += Number(p.total) || 0;
@@ -237,6 +238,14 @@
             por_canal[canal] = (por_canal[canal] || 0) + (Number(p.total) || 0);
             var loja = s(p.company) || '—';
             por_loja[loja] = (por_loja[loja] || 0) + (Number(p.total) || 0);
+            // Cobrança SEM itens (só valor) → rodapé de investigação.
+            var temItem = (p.items || []).some(function(i) {
+                return i && !i.canceledAt;
+            });
+            if (!temItem && (Number(p.total) || 0) > 0) {
+                por_loja_sem_itens[loja] =
+                    (por_loja_sem_itens[loja] || 0) + (Number(p.total) || 0);
+            }
         });
         var view = {
             total_pedidos: filtrados.length,
@@ -247,6 +256,7 @@
             por_pagamento: por_pagamento,
             por_canal: por_canal,
             por_loja: por_loja,
+            por_loja_sem_itens: por_loja_sem_itens,
             fonte: 'ao_vivo',
             pedidos: filtrados,
         };
