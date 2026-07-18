@@ -321,6 +321,19 @@ def vendas_snapshot():
     from app.models import VendaSeruDiaLoja
     from app.utils import hoje
 
+    # ?detalhe=<pedido_id>: payload CRU de UM pedido (GET /orders/{id} da
+    # Seru) — criado 18/07/2026 pra descobrir se pedido de delivery (99Food)
+    # traz os itens no DETALHE mesmo vindo vazio na listagem (decide se da
+    # pra dar baixa de estoque nesses pedidos). Read-only.
+    detalhe_id = (request.args.get('detalhe') or '').strip()
+    if detalhe_id:
+        from app.services import seru
+        try:
+            return jsonify(ok=True, pedido=seru.detalhes_pedido(detalhe_id))
+        except Exception as e:  # noqa: BLE001 — sonda mostra o erro cru
+            return jsonify(ok=False,
+                           erro=f'{type(e).__name__}: {str(e)[:200]}'), 502
+
     dias_n = _int_arg('dias', 5, 1, 30)
     com_pedidos = bool(request.args.get('pedidos'))
     if com_pedidos:
