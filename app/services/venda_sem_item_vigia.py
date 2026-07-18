@@ -82,26 +82,45 @@ def cobrancas_sem_itens(data_inicial, data_final):
     piso = min_valor()
     out = []
     for p in seru.listar_pedidos_completo(data_inicial, data_final):
-        if not isinstance(p, dict) or p.get('canceledAt'):
-            continue
-        total = Decimal(str(p.get('total') or 0))
-        if total <= piso or total <= 0:
-            continue
-        if any(not it['cancelado'] for it in seru.extrair_itens(p)):
-            continue
-        dh = seru.datahora_local(p.get('createdAt'))
-        if not dh or not (data_inicial <= dh.date() <= data_final):
-            continue
-        out.append({
-            'id': str(p.get('id') or p.get('code') or ''),
-            'codigo': p.get('code'),
-            'data': dh.date().isoformat(),
-            'hora': dh.strftime('%H:%M'),
-            'company': ((p.get('company') or {}).get('name') or '(sem loja)'),
-            'total': float(total),
-            'caixa': (p.get('cashier') or {}).get('code'),
-            'tem_nf': bool(p.get('taxInvoice')),
-        })
+        try:
+            if not isinstance(p, dict) or p.get('canceledAt'):
+                continue
+            total = Decimal(str(p.get('total') or 0))
+            if total <= piso or total <= 0:
+                continue
+            if any(not it['cancelado'] for it in seru.extrair_itens(p)):
+                continue
+            dh = seru.datahora_local(p.get('createdAt'))
+            if not dh or not (data_inicial <= dh.date() <= data_final):
+                continue
+            pid = str(p.get('id') or p.get('code') or '')
+            if not pid:
+                # sem id nem code não dá pra deduplicar — loga em vez de
+                # sumir em silêncio (achado de revisão; API sempre manda id)
+                logger.warning('vigia venda sem item: pedido sem id/code '
+                               'ignorado (total R$ %s)', total)
+                continue
+            # NF cancelada/negada NÃO conta como "com NF" no alerta.
+            nf = p.get('taxInvoice') or {}
+            nf_status = (nf.get('status') or '').lower() if nf else ''
+            tem_nf = bool(nf) and nf_status not in (
+                'canceled', 'cancelled', 'denied', 'rejected', 'error')
+            out.append({
+                'id': pid,
+                'codigo': p.get('code'),
+                'data': dh.date().isoformat(),
+                'hora': dh.strftime('%H:%M'),
+                'company': ((p.get('company') or {}).get('name')
+                            or '(sem loja)'),
+                'total': float(total),
+                'caixa': (p.get('cashier') or {}).get('code'),
+                'tem_nf': tem_nf,
+            })
+        except Exception:  # noqa: BLE001 — UM pedido torto não pode cegar
+            # a varredura INTEIRA (e repetir a cegueira a cada ciclo
+            # enquanto ele estiver na janela) — achado de revisão.
+            logger.exception('vigia venda sem item: pedido malformado '
+                             'ignorado: %r', str(p)[:200])
     return out
 
 
