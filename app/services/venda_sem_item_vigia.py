@@ -37,7 +37,12 @@ Config (env):
 - `VENDA_SEM_ITEM_COOLDOWN_MIN` (default 60) — intervalo mínimo entre
   mensagens; 0 desliga o cooldown (volta a 1 msg por ciclo de 15min).
 - `VENDA_SEM_ITEM_MAX_MSGS_DIA` (default 6) — teto de mensagens por dia;
-  estourado, acumula até o dia virar.
+  estourado, acumula até o dia virar. ATENÇÃO: 0 = SEM teto (não "zero
+  mensagens" — pra silenciar use o kill-switch VENDA_SEM_ITEM_VIGIA=0).
+
+Limitação conhecida (aceita): a janela é [ontem, hoje] por `createdAt` —
+pedido criado ANTES de ontem que só hoje perde os itens (esvaziado) não
+entra na varredura.
 
 Sob demanda: `GET /admin/vigia-venda-sem-item` (owner; `?alertar=1` roda o
 fluxo com WhatsApp). Sonda externa: `/api/claude/vendas-snapshot?pedidos=1`.
