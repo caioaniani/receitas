@@ -1894,8 +1894,20 @@ estoque nem entram na previsao.
 - Sob demanda: `GET /admin/vigia-venda-sem-item` (owner; dry-run lista
   cobrancas+estado SEM WhatsApp; `?alertar=1` roda o fluxo). Sonda
   externa: `/api/claude/vendas-snapshot?pedidos=1`. Manual atualizado.
-- Testes: `tests/test_venda_sem_item_vigia.py` (11 casos; Seru e Z-API
+- Testes: `tests/test_venda_sem_item_vigia.py` (14 casos; Seru e Z-API
   sempre mockadas).
+- **Card "Por loja (PDV)" com rodape (18/07/2026, "rodape para eu
+  investigar")**: a captura grava a dimensao nova `sem_itens` no
+  `VendaSeruDiaBreakdown` (total das cobrancas so-valor por dia/company —
+  SEM mudanca de schema, a tabela foi feita pra eixos novos); a LINHA da
+  loja no card mostra so venda COM produto (`por_loja` continua o total
+  cheio por compat — o FRONT subtrai `por_loja_sem_itens`) e o rodape "⚠
+  Cobranças sem produto (nao somam acima — investigar)" so aparece quando
+  ha valor. Nos 3 modos (banco cheio, banco filtrado por loja, ao vivo).
+  Dia capturado ANTES da dimensao existir nao tem a linha → split 0 e o
+  card mostra o total cheio como era (recapturar via cron ontem+hoje ou
+  "Aquecer historico" povoa). Testes: secao sem_itens em
+  `tests/test_vendas_diarias.py`.
 
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
