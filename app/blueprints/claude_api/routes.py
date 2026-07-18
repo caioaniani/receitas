@@ -310,8 +310,11 @@ def vendas_snapshot():
     período ou linha errada. NÃO dispara captura (o estado cru é a
     evidência). Read-only estrito, como todo o blueprint.
 
-    Params: ?dias=5 (1-30, janela terminando hoje) e/ou ?loja= (substring
-    case-insensitive do company name).
+    Params: ?dias=5 (1-30, janela terminando hoje), ?loja= (substring
+    case-insensitive do company name) e ?pedidos=1 (adiciona a lista AO VIVO
+    dos pedidos da janela — id, total, soma dos itens, canal — pra achar
+    pedido com `total` divergente dos itens; janela capada em 3 dias
+    nesse modo pra não estourar a API).
     """
     from datetime import timedelta
 
@@ -319,6 +322,9 @@ def vendas_snapshot():
     from app.utils import hoje
 
     dias_n = _int_arg('dias', 5, 1, 30)
+    com_pedidos = bool(request.args.get('pedidos'))
+    if com_pedidos:
+        dias_n = min(dias_n, 3)
     hoje_d = hoje()
     ini = hoje_d - timedelta(days=dias_n - 1)
     filtro = (request.args.get('loja') or '').strip().lower()
