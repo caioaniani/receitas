@@ -76,6 +76,17 @@ def min_valor():
         return Decimal('0')
 
 
+def canais_ignorados():
+    """Tags de canal que NÃO alertam (delivery — chegam sem itens por
+    natureza). Default = SEM_ITENS_CANAIS_DELIVERY; env
+    `VENDA_SEM_ITEM_CANAIS_IGNORADOS` (CSV de tags) substitui."""
+    from app.constants import SEM_ITENS_CANAIS_DELIVERY
+    bruto = (os.environ.get('VENDA_SEM_ITEM_CANAIS_IGNORADOS') or '').strip()
+    if not bruto:
+        return set(SEM_ITENS_CANAIS_DELIVERY)
+    return {t.strip().lower() for t in bruto.split(',') if t.strip()}
+
+
 def cobrancas_sem_itens(data_inicial, data_final):
     """Cobranças com valor e ZERO itens na janela, direto da API do Seru.
 
@@ -85,10 +96,17 @@ def cobrancas_sem_itens(data_inicial, data_final):
     from app.services import seru
 
     piso = min_valor()
+    ignorados = canais_ignorados()
     out = []
     for p in seru.listar_pedidos_completo(data_inicial, data_final):
         try:
-            if not isinstance(p, dict) or p.get('canceledAt'):
+            # Cancelado por canceledAt OU status (helper canonico) — caso
+            # 18/07: cancelada sem canceledAt alertou como venda.
+            if not isinstance(p, dict) or seru.pedido_cancelado(p):
+                continue
+            # Canal de DELIVERY (99food etc.) chega sem itens por natureza
+            # da integracao — venda real, rotina, NAO alerta (dono 18/07).
+            if seru.canal_tag(p) in ignorados:
                 continue
             total = Decimal(str(p.get('total') or 0))
             if total <= piso or total <= 0:
