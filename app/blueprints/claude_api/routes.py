@@ -350,11 +350,49 @@ def vendas_snapshot():
         })
         por_loja_total[r.loja_seru] = round(
             por_loja_total.get(r.loja_seru, 0) + fat_ped, 2)
+    pedidos_vivo = None
+    if com_pedidos:
+        from decimal import Decimal
+
+        from app.services import seru
+        pedidos_vivo = []
+        try:
+            for p in seru.listar_pedidos_completo(ini, hoje_d):
+                if not isinstance(p, dict):
+                    continue
+                comp = ((p.get('company') or {}).get('name') or '(sem loja)')
+                if filtro and filtro not in comp.lower():
+                    continue
+                soma_itens = Decimal('0')
+                n_itens = 0
+                for it in seru.extrair_itens(p):
+                    if not it['cancelado']:
+                        soma_itens += Decimal(str(it['total']))
+                        n_itens += 1
+                total = float(p.get('total') or 0)
+                pedidos_vivo.append({
+                    'id': p.get('id') or p.get('orderNumber') or p.get('code'),
+                    'data': (seru.data_local(p.get('createdAt')) or
+                             '?').isoformat()
+                    if seru.data_local(p.get('createdAt')) else '?',
+                    'company': comp,
+                    'total': total,
+                    'soma_itens': float(soma_itens),
+                    'diferenca': round(total - float(soma_itens), 2),
+                    'n_itens': n_itens,
+                    'canal': p.get('salesChannel'),
+                    'cancelado': bool(p.get('canceledAt')),
+                })
+            pedidos_vivo.sort(key=lambda x: -abs(x['diferenca']))
+            pedidos_vivo = pedidos_vivo[:80]
+        except Exception as e:  # noqa: BLE001 — sonda segue com o snapshot
+            pedidos_vivo = [{'erro': f'{type(e).__name__}: {str(e)[:160]}'}]
     return jsonify(ok=True,
                    janela={'inicio': ini.isoformat(),
                            'fim': hoje_d.isoformat()},
                    linhas=linhas,
                    soma_por_loja_na_janela=por_loja_total,
+                   pedidos_ao_vivo=pedidos_vivo,
                    nota='faturamento_pedidos = o que o card "Por loja (PDV)" '
                         'soma no período selecionado na tela')
 
