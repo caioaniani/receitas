@@ -250,6 +250,30 @@ def detalhes_pedido(pedido_id):
     return _get(f'/orders/{pedido_id}')
 
 
+def pedido_cancelado(pedido):
+    """Pedido cancelado — por `canceledAt` OU por `status == 'canceled'`.
+
+    Caso real 18/07/2026 (Nebraska, cód 19797307): cobrança cancelada veio
+    com status 'canceled' mas canceledAt VAZIO — só olhar canceledAt a
+    contava como venda no snapshot/relatórios e no vigia de venda sem item.
+    Camada de RELATÓRIO/vigia usa este helper; o seru_sync (estoque) segue
+    keyed em canceledAt de propósito — mudar o gatilho de estorno é decisão
+    separada (estoque tem peso especial)."""
+    if not isinstance(pedido, dict):
+        return False
+    if pedido.get('canceledAt'):
+        return True
+    return str(pedido.get('status') or '').strip().lower() == 'canceled'
+
+
+def canal_tag(pedido):
+    """Tag do canal de venda ('pdv-facil', '99food', ...) ou ''."""
+    sc = pedido.get('salesChannel') if isinstance(pedido, dict) else None
+    if isinstance(sc, dict):
+        return str(sc.get('tag') or sc.get('code') or '').strip().lower()
+    return ''
+
+
 def extrair_itens(pedido):
     """Normaliza a lista de itens de um pedido Seru.
 
