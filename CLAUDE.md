@@ -1894,7 +1894,18 @@ estoque nem entram na previsao.
 - Sob demanda: `GET /admin/vigia-venda-sem-item` (owner; dry-run lista
   cobrancas+estado SEM WhatsApp; `?alertar=1` roda o fluxo). Sonda
   externa: `/api/claude/vendas-snapshot?pedidos=1`. Manual atualizado.
-- Testes: `tests/test_venda_sem_item_vigia.py` (14 casos; Seru e Z-API
+- **Pos-revisao (fixados)**: rollback no except da captura do cron (sem
+  ele, um `capturar_periodo` que falhasse no MEIO deixava DELETEs
+  pendentes que o commit seguinte da mesma sessao persistia — dias
+  sumiam dos relatorios por 15min); sessao envenenada nao cega o vigia
+  (rollback + erro visivel, padrao uso_ia_vigia); UM pedido com `total`
+  malformado nao mata a varredura (try/except por pedido); rota
+  `?alertar=1` pega o try-lock do sync (corrida rota×cron nao duplica
+  WhatsApp); dinheiro em formato pt-BR via `app.utils.fmt_brl` (novo,
+  centralizado); NF cancelada/negada conta como SEM NF; acumulado da
+  mensagem cobre a janela ontem+hoje inteira. Limitacao ACEITA: janela
+  por createdAt — pedido antigo esvaziado hoje nao entra.
+- Testes: `tests/test_venda_sem_item_vigia.py` (16 casos; Seru e Z-API
   sempre mockadas).
 - **Card "Por loja (PDV)" com rodape (18/07/2026, "rodape para eu
   investigar")**: a captura grava a dimensao nova `sem_itens` no
