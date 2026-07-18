@@ -425,21 +425,30 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
 
     total = 0.0
     n_ped = cancelados = 0
+    sem_itens_total = 0.0
     por_pagamento = defaultdict(float)
     por_canal = defaultdict(float)
     por_loja = {}
+    por_loja_sem_itens = {}
     por_loja_detalhe = {}
     for ln, d in det.items():
         total += d['total']
         n_ped += d['n_pedidos']
         cancelados += d['cancelados']
+        sem_itens_total += d['sem_itens']
+        # `por_loja` segue sendo o TOTAL cheio (fat_ped, semantica de
+        # sempre); o front subtrai `por_loja_sem_itens` pra exibir a venda
+        # COM produto na linha e o resto no rodape (decisao do dono 18/07).
         por_loja[ln] = round(d['total'], 2)
+        if d['sem_itens'] > 0:
+            por_loja_sem_itens[ln] = round(d['sem_itens'], 2)
         for k, v in d['por_pagamento'].items():
             por_pagamento[k] += v
         for k, v in d['por_canal'].items():
             por_canal[k] += v
         por_loja_detalhe[ln] = {
             'total': round(d['total'], 2),
+            'sem_itens': round(d['sem_itens'], 2),
             'n_pedidos': d['n_pedidos'],
             'cancelados': d['cancelados'],
             'por_pagamento': {k: round(v, 2)
@@ -451,11 +460,13 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
         'inicio': data_inicial.isoformat(),
         'fim': data_final.isoformat(),
         'total_valor': round(total, 2),
+        'sem_itens_total': round(sem_itens_total, 2),
         'n_pedidos': n_ped,
         'cancelados': cancelados,
         'por_pagamento': {k: round(v, 2) for k, v in por_pagamento.items()},
         'por_canal': {k: round(v, 2) for k, v in por_canal.items()},
         'por_loja': por_loja,
+        'por_loja_sem_itens': por_loja_sem_itens,
         'por_loja_detalhe': por_loja_detalhe,
         'fonte': 'banco',
     }
