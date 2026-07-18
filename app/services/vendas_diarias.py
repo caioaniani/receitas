@@ -176,6 +176,11 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
             db.session.add(VendaSeruDiaBreakdown(
                 data=d, loja_seru=ln, dimensao='canal',
                 chave=canal[:120], valor=val))
+    for (d, ln), val in por_dia_sem_itens.items():
+        # dimensao nova (18/07/2026): total das cobrancas SEM itens do dia.
+        # So grava quando > 0 (linha ausente = zero).
+        db.session.add(VendaSeruDiaBreakdown(
+            data=d, loja_seru=ln, dimensao='sem_itens', chave='', valor=val))
     for (d, ln), qtd in por_dia_cancel.items():
         db.session.add(VendaSeruDiaBreakdown(
             data=d, loja_seru=ln, dimensao='cancelados',
