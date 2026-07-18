@@ -1959,9 +1959,16 @@ estoque nem entram na previsao.
   camada de RELATORIO/vigia; o `seru_sync` (estoque/estorno) segue keyed
   em canceledAt DE PROPOSITO — mudar o gatilho de estorno e decisao
   separada, PENDENTE de auditoria propria. PENDENTE tambem: dono quer
-  pedido 99Food com vinculo de produto e BAIXA DE ESTOQUE — investigacao
-  em curso (sonda `?detalhe=<id>` no vendas-snapshot pra ver se o
-  GET /orders/{id} da Seru traz os itens que a listagem omite).
+  pedido 99Food com vinculo de produto e BAIXA DE ESTOQUE. DESCOBERTA
+  18/07 (sonda `?detalhe=<id>` no vendas-snapshot): o GET /orders/{id}
+  NAO traz os produtos (item so com taxInfo vazio), MAS o
+  `taxInvoice.xmlUrl` (S3 da Seru) entrega o XML da NFC-e com os
+  produtos REAIS (<det><prod><xProd>/qCom/vProd — provado no pedido
+  3377f6c3/NF 724: 6x Pao Frances + 1x Croissant Nutella Com Morango +
+  1x Brioche, nomes iguais aos do SeruProdutoMap). Caminho da feature:
+  pedido sem itens COM NF -> baixar XML -> extrair produtos -> motor de
+  baixa existente. NAO construido ainda — mexe no seru_sync (estoque),
+  aguarda GO do dono no desenho.
 
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
