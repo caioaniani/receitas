@@ -183,11 +183,13 @@
                 por_pagamento: det.por_pagamento || {},
                 por_canal: det.por_canal || {},
                 por_loja: {},
+                por_loja_sem_itens: {},
                 fonte: 'banco',
                 consulta_limitada: r.consulta_limitada,
                 fora_intervalo: r.fora_intervalo,
             };
             view.por_loja[filtroLoja] = det.total || 0;
+            if (det.sem_itens > 0) view.por_loja_sem_itens[filtroLoja] = det.sem_itens;
         } else {
             view = {
                 total_pedidos: Number(r.total_pedidos) || 0,
@@ -196,6 +198,7 @@
                 por_pagamento: Object.assign({}, r.por_pagamento || {}),
                 por_canal: Object.assign({}, r.por_canal || {}),
                 por_loja: r.por_loja || {},
+                por_loja_sem_itens: r.por_loja_sem_itens || {},
                 fonte: 'banco',
                 consulta_limitada: r.consulta_limitada,
                 fora_intervalo: r.fora_intervalo,
