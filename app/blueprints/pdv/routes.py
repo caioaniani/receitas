@@ -489,7 +489,10 @@ def _api_vendas_impl():
             if not tem_item and _f(p.get('total')) > 0:
                 v = _f(p.get('total'))
                 sem_itens_total += v
+                sem_itens_n += 1
                 por_loja_sem_itens[loja] = por_loja_sem_itens.get(loja, 0) + v
+                por_loja_sem_itens_n[loja] = \
+                    por_loja_sem_itens_n.get(loja, 0) + 1
     except Exception as e:
         import traceback
         current_app.logger.exception('Erro agregando vendas Seru')
