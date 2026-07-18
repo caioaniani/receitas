@@ -452,10 +452,12 @@ def _api_vendas_impl():
     try:
         total = 0.0
         sem_itens_total = 0.0
+        sem_itens_n = 0
         por_pagamento = {}
         por_canal = {}
         por_loja = {}
         por_loja_sem_itens = {}
+        por_loja_sem_itens_n = {}
         cancelados = 0
         for p in pedidos:
             if not isinstance(p, dict):
