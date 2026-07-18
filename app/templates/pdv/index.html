@@ -403,6 +403,15 @@
                 });
                 hl += '</div>';
             }
+            var delivLoja = Object.entries(d.por_loja_delivery_sem_itens || {}).sort(function(a, b) { return b[1] - a[1]; });
+            if (delivLoja.length > 0) {
+                hl += '<div class="border-top pt-1 mt-1 small text-muted">' +
+                    '🛵 Delivery sem itens (soma acima; não baixa estoque):';
+                delivLoja.forEach(function(e) {
+                    hl += '<br>' + escapeHtml(e[0]) + ': <strong>R$ ' + fmt(e[1]) + '</strong>';
+                });
+                hl += '</div>';
+            }
             document.getElementById('pdv-lojas').innerHTML = hl;
         } else {
             document.getElementById('pdv-lojas-card').style.display = 'none';
