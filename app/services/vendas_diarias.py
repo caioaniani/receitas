@@ -143,7 +143,8 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
                 e['peds'].add(pid)
             lj['fat'] += tot                                 # subtotais dos itens
         if not tem_item and total_ped > 0:
-            por_dia_sem_itens[(d, ln)] += total_ped
+            por_dia_sem_itens[(d, ln)]['v'] += total_ped
+            por_dia_sem_itens[(d, ln)]['n'] += 1
 
     loja_ids = _loja_id_por_nome()
     # Apaga o intervalo inteiro (nao so os dias com pedido): um dia que ficou
