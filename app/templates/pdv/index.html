@@ -255,17 +255,25 @@
         // então o filtro é só um recorte.
         var semSrv = r.por_loja_sem_itens || {};
         var semSrvN = r.por_loja_sem_itens_n || {};
-        var semTot = 0, semN = 0;
+        var delivSrv = r.por_loja_delivery_sem_itens || {};
+        var semTot = 0, semN = 0, delivTot = 0;
+        var por_loja_delivery_sem_itens = {};
         if (filtroLoja) {
             if (semSrv[filtroLoja] > 0) {
                 por_loja_sem_itens[filtroLoja] = semSrv[filtroLoja];
             }
+            if (delivSrv[filtroLoja] > 0) {
+                por_loja_delivery_sem_itens[filtroLoja] = delivSrv[filtroLoja];
+            }
             semTot = semSrv[filtroLoja] || 0;
             semN = semSrvN[filtroLoja] || 0;
+            delivTot = delivSrv[filtroLoja] || 0;
         } else {
             por_loja_sem_itens = Object.assign({}, semSrv);
+            por_loja_delivery_sem_itens = Object.assign({}, delivSrv);
             semTot = Number(r.sem_itens_total) || 0;
             semN = Number(r.sem_itens_n) || 0;
+            delivTot = Number(r.delivery_sem_itens_total) || 0;
         }
         var view = {
             total_pedidos: filtrados.length,
