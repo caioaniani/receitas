@@ -1909,16 +1909,20 @@ estoque nem entram na previsao.
   sempre mockadas).
 - **Card "Por loja (PDV)" com rodape (18/07/2026, "rodape para eu
   investigar")**: a captura grava a dimensao nova `sem_itens` no
-  `VendaSeruDiaBreakdown` (total das cobrancas so-valor por dia/company —
-  SEM mudanca de schema, a tabela foi feita pra eixos novos); a LINHA da
-  loja no card mostra so venda COM produto (`por_loja` continua o total
-  cheio por compat — o FRONT subtrai `por_loja_sem_itens`) e o rodape "⚠
-  Cobranças sem produto (nao somam acima — investigar)" so aparece quando
-  ha valor. Nos 3 modos (banco cheio, banco filtrado por loja, ao vivo).
-  Dia capturado ANTES da dimensao existir nao tem a linha → split 0 e o
-  card mostra o total cheio como era (recapturar via cron ontem+hoje ou
-  "Aquecer historico" povoa). Testes: secao sem_itens em
-  `tests/test_vendas_diarias.py`.
+  `VendaSeruDiaBreakdown` (chave '' = VALOR e chave 'n' = CONTAGEM das
+  cobrancas so-valor por dia/company — SEM mudanca de schema, a tabela foi
+  feita pra eixos novos); a LINHA da loja no card mostra so venda COM
+  produto (`por_loja` continua o total cheio por compat — o FRONT subtrai
+  `por_loja_sem_itens`) e o rodape "⚠ Cobranças sem produto (nao somam
+  acima — investigar)" so aparece quando ha valor. Nos 3 modos (banco
+  cheio, banco filtrado por loja, ao vivo). Dia capturado ANTES da
+  dimensao existir nao tem a linha → split 0 e o card mostra o total
+  cheio como era (recapturar via cron ontem+hoje ou "Aquecer historico"
+  povoa). **RESUMO tambem desconta (dono 18/07, "contar somente o valor
+  das vendas com itens")**: Faturamento/Pedidos/Ticket medio do /pdv/
+  descontam valor E contagem das cobrancas sem produto, com aviso amarelo
+  dizendo o que ficou fora; dia antigo sem a chave 'n' desconta so o
+  valor. Testes: secao sem_itens em `tests/test_vendas_diarias.py`.
 
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
