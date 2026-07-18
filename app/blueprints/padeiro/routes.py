@@ -388,8 +388,14 @@ def produzir_plano(item_id):
         unidades = int(request.form.get('unidades') or 0)
     except (TypeError, ValueError):
         unidades = 0
-    res = produzir_item_plano(item_id, unidades, current_user.id)
-    if res.get('ok'):
+    encerrar = request.form.get('encerrar') == '1'
+    res = produzir_item_plano(item_id, unidades, current_user.id,
+                              encerrar=encerrar)
+    if res.get('ok') and res.get('encerrado'):
+        flash('Produzido %d un — item encerrado; a diferença (%d un) foi '
+              'pra auditoria do admin.' % (unidades, res['falta_restante']),
+              'success')
+    elif res.get('ok'):
         flash('Produzido %d un — estoque creditado e MP descontada.'
               % unidades, 'success')
     else:
