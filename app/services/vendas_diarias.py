@@ -111,7 +111,10 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
             continue
         ln = _nome_loja(p) or '(sem loja)'
         dias_vistos.add(d)
-        if p.get('canceledAt'):
+        # Helper canonico: cancelado por canceledAt OU status=='canceled'
+        # (caso 18/07: cobranca cancelada veio SEM canceledAt e contava
+        # como venda no snapshot).
+        if seru.pedido_cancelado(p):
             por_dia_cancel[(d, ln)] += 1
             continue
         pid = p.get('id') or p.get('orderNumber') or p.get('code')
