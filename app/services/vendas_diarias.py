@@ -458,6 +458,8 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
         por_loja[ln] = round(d['total'], 2)
         if d['sem_itens'] > 0:
             por_loja_sem_itens[ln] = round(d['sem_itens'], 2)
+        if d['sem_itens_n'] > 0:
+            por_loja_sem_itens_n[ln] = d['sem_itens_n']
         for k, v in d['por_pagamento'].items():
             por_pagamento[k] += v
         for k, v in d['por_canal'].items():
