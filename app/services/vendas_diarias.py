@@ -95,9 +95,11 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
     por_dia_canal = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
     por_dia_cancel = defaultdict(int)
     # Cobranca SEM itens ("PDV Facil" so-valor — caso Nebraska 17/07/2026,
-    # teste de impressora que virou R$7.028,50 de "venda"): soma por
-    # (data, company) pro card "Por loja" separar em rodape.
-    por_dia_sem_itens = defaultdict(lambda: Decimal('0'))
+    # teste de impressora que virou R$7.028,50 de "venda"): valor E contagem
+    # por (data, company) — o card "Por loja" separa o valor em rodape e o
+    # RESUMO (faturamento/pedidos/ticket) desconta os dois (dono 18/07:
+    # "contar somente o valor das vendas com itens").
+    por_dia_sem_itens = defaultdict(lambda: {'v': Decimal('0'), 'n': 0})
     dias_vistos = set()
     n_pedidos = 0
     for p in pedidos:
