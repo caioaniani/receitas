@@ -2527,6 +2527,36 @@ def vigia_venda_sem_item():
     from app.utils import hoje as _hoje
 
     if request.args.get('alertar') == '1':
+        # Corrida com o ciclo do cron (achado de revisão): sem trava, os
+        # dois leriam o estado velho e mandariam a MESMA mensagem. Usa o
+        # try-lock do PRÓPRIO sync (que envolve o vigia no cron) — ocupado
+        # = ciclo rodando agora, o alerta manual seria redundante mesmo.
+        # SQLite (dev/teste, 1 processo) roda direto.
+        from sqlalchemy import text as _text
+
+        from app.extensions import db as _db
+        from app.services.seru_cron import LOCK_KEY as _LOCK_SYNC
+        uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+        if 'postgresql' in uri:
+            conn = _db.engine.connect()
+            try:
+                got = conn.execute(_text('SELECT pg_try_advisory_lock(:k)'),
+                                   {'k': _LOCK_SYNC}).scalar()
+                if not got:
+                    return jsonify(
+                        ok=False,
+                        erro='ciclo do sync Seru rodando agora (o vigia '
+                             'dele já cobre) — tente em ~1 min'), 409
+                try:
+                    return jsonify(venda_sem_item_vigia.vigiar()), 200
+                finally:
+                    try:
+                        conn.execute(_text('SELECT pg_advisory_unlock(:k)'),
+                                     {'k': _LOCK_SYNC})
+                    except Exception:  # noqa: BLE001
+                        pass
+            finally:
+                conn.close()
         return jsonify(venda_sem_item_vigia.vigiar()), 200
     hoje_d = _hoje()
     janela = [hoje_d - _td(days=1), hoje_d]
@@ -2536,7 +2566,7 @@ def vigia_venda_sem_item():
     except Exception as e:  # noqa: BLE001 — dry-run mostra o erro cru
         return jsonify(ok=False,
                        erro=f'{type(e).__name__}: {str(e)[:200]}'), 502
-    estado = venda_sem_item_vigia._carregar_estado(janela)
+    estado = venda_sem_item_vigia.estado_dedup(janela)
     ja = {i for ids in estado['ids'].values() for i in ids}
     return jsonify(ok=True,
                    cobrancas=cobrancas,
