@@ -105,16 +105,39 @@ def cobrancas_sem_itens(data_inicial, data_final):
     return out
 
 
+def _int_env(nome, default):
+    bruto = (os.environ.get(nome) or '').strip()
+    if not bruto:
+        return default
+    try:
+        v = int(bruto)
+        if v < 0:
+            raise ValueError(bruto)
+        return v
+    except ValueError:
+        logger.warning('%s inválido (%r) — usando %s', nome, bruto, default)
+        return default
+
+
 def _carregar_estado(janela_datas):
-    """Estado {data_iso: [ids ja alertados]}, podado pra janela vigente."""
+    """Estado {'ids': {data: [ids]}, 'ultimo_envio': iso|None,
+    'envios': {data: n}}, com ids/envios podados pra janela vigente.
+    Aceita o formato antigo ({data: [ids]} direto) por compat."""
     from app.models import AppConfig
     try:
         bruto = json.loads(AppConfig.get(_KEY_ESTADO) or '{}')
     except (ValueError, TypeError):
         bruto = {}
+    if bruto and 'ids' not in bruto:
+        # formato antigo: o dict inteiro era o mapa data -> [ids]
+        bruto = {'ids': bruto}
     validas = {d.isoformat() for d in janela_datas}
-    return {k: list(v) for k, v in bruto.items()
-            if k in validas and isinstance(v, list)}
+    ids = {k: list(v) for k, v in (bruto.get('ids') or {}).items()
+           if k in validas and isinstance(v, list)}
+    envios = {k: int(v) for k, v in (bruto.get('envios') or {}).items()
+              if k in validas and isinstance(v, int)}
+    return {'ids': ids, 'ultimo_envio': bruto.get('ultimo_envio'),
+            'envios': envios}
 
 
 def _gravar_estado(estado):
@@ -122,6 +145,25 @@ def _gravar_estado(estado):
     from app.models import AppConfig
     AppConfig.set(_KEY_ESTADO, json.dumps(estado))
     db.session.commit()
+
+
+def _pode_enviar(estado, agora_dt, hoje_iso):
+    """Anti-flood: cooldown entre mensagens + teto de mensagens/dia."""
+    cap = _int_env('VENDA_SEM_ITEM_MAX_MSGS_DIA', 6)
+    if cap and estado['envios'].get(hoje_iso, 0) >= cap:
+        return False, f'teto de {cap} msgs/dia atingido — acumulando'
+    cooldown = _int_env('VENDA_SEM_ITEM_COOLDOWN_MIN', 60)
+    ultimo = estado.get('ultimo_envio')
+    if cooldown and ultimo:
+        try:
+            from datetime import datetime as _dt
+            delta = (agora_dt - _dt.fromisoformat(ultimo)).total_seconds()
+            if delta < cooldown * 60:
+                falta = int((cooldown * 60 - delta) // 60) + 1
+                return False, f'cooldown ({falta}min restantes) — acumulando'
+        except (ValueError, TypeError):
+            pass
+    return True, None
 
 
 def _montar_mensagem(novas, todas):
