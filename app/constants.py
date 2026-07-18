@@ -298,3 +298,12 @@ ETAPAS_PADRAO_DEFAULT = [
 def etapas_padrao_categoria(categoria):
     """Etapas padrão da categoria (fallback no default genérico)."""
     return ETAPAS_PADRAO.get((categoria or '').strip(), ETAPAS_PADRAO_DEFAULT)
+
+
+# Canais Seru de DELIVERY cujos pedidos chegam SEM itens por natureza da
+# integracao (o app manda so o total). Decisao do dono 18/07/2026: sao venda
+# REAL — contam no faturamento do /pdv/ (rodape so informa que nao baixam
+# estoque) e NAO disparam o vigia de venda sem item (rotina, nao suspeita).
+# Cobranca sem item de canal FORA desta lista (PDV Facil, desconhecidos) e
+# a classe suspeita: fica fora do faturamento e alerta o dono.
+SEM_ITENS_CANAIS_DELIVERY = {'99food', 'ifood', 'rappi'}
