@@ -107,6 +107,18 @@ def hoje() -> date:
     return datetime.now(BRT).date()
 
 
+def fmt_brl(v, centavos=True):
+    """Dinheiro em pt-BR: 1135.5 -> 'R$ 1.135,50' (ou 'R$ 1.136' sem
+    centavos). Centralizado (18/07/2026) — mensagem de WhatsApp/alerta com
+    formato americano ('R$ 1,135.00') convidava leitura errada de valor."""
+    try:
+        n = float(v or 0)
+    except (TypeError, ValueError):
+        n = 0.0
+    s = f'{n:,.2f}' if centavos else f'{round(n):,.0f}'
+    return 'R$ ' + s.replace(',', '\x00').replace('.', ',').replace('\x00', '.')
+
+
 def hosts_loja():
     """Conjunto de hosts (lower, sem porta) que servem a LOJA pública —
     config `LOJA_HOSTS` (default 'opao.online,www.opao.online').
