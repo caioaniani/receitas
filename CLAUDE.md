@@ -1860,6 +1860,35 @@ acuracia, teste do QR de conferencia). REGRAS QUE FICARAM:
   previne a classe de incidente (migrations mutam schema antes da
   promocao) e ha risco de 301 do redirect HTTPS congelar deploys.
 
+## Vigia de venda SEM itens no PDV (18/07/2026)
+
+Pedido do dono ("preciso de um alerta imediato dessas vendas") no caso
+Nebraska 17/07: 23 cobrancas "PDV Facil" com valor e ZERO produtos
+(R$ 7.028,50, TODAS sem NF e sem forma de pagamento, um unico caixa,
+15h-19h49). O painel da Seru nao as mostra (relatorio deles e por
+produto/nota); aqui so aparecem no `faturamento_pedidos` — nao baixam
+estoque nem entram na previsao.
+
+- **Servico**: `app/services/venda_sem_item_vigia.py`. Roda a cada ciclo
+  do sync Seru (15min), DENTRO do advisory lock do `_run_sync` (execucao
+  unica entre workers — sem alerta duplicado). Janela ontem+hoje (mesma da
+  captura). Cobranca suspeita = nao cancelada, total > piso, zero itens
+  nao-cancelados.
+- **Dedup POR PEDIDO** em AppConfig (`venda_sem_item_alertados` = JSON
+  {data: [ids]}, podado pra janela): cada cobranca alerta UMA vez; varias
+  novas no ciclo = UMA mensagem WhatsApp (por company, com hora, valor,
+  NF tem/nao-tem e caixa, cap 8 linhas + "e mais N"). Envio falho NAO
+  marca os ids (retenta no proximo ciclo — perder alerta de possivel
+  fraude e pior que duplicar). Sem numero do dono configurado tambem nao
+  marca (quando configurar, alerta tudo).
+- **Env**: `VENDA_SEM_ITEM_VIGIA=0` (kill-switch),
+  `VENDA_SEM_ITEM_MIN_VALOR` (piso em R$ por cobranca, default 0).
+- Sob demanda: `GET /admin/vigia-venda-sem-item` (owner; dry-run lista
+  cobrancas+estado SEM WhatsApp; `?alertar=1` roda o fluxo). Sonda
+  externa: `/api/claude/vendas-snapshot?pedidos=1`. Manual atualizado.
+- Testes: `tests/test_venda_sem_item_vigia.py` (11 casos; Seru e Z-API
+  sempre mockadas).
+
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
 - **Vigia de custo de IA** (`app/services/uso_ia_vigia.py`): cron 1h
