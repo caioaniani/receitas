@@ -187,7 +187,8 @@ def _pode_enviar(estado, agora_dt, hoje_iso):
 
 def _montar_mensagem(novas, todas):
     """Uma mensagem por ciclo, agrupada por company. `todas` dá o contexto
-    do dia (total acumulado do padrão, não só as novas)."""
+    da JANELA ontem+hoje (acumulado do padrão, não só as novas)."""
+    from app.utils import fmt_brl
     por_comp = {}
     for c in novas:
         por_comp.setdefault(c['company'], []).append(c)
@@ -195,22 +196,23 @@ def _montar_mensagem(novas, todas):
     for comp, lst in sorted(por_comp.items()):
         lst.sort(key=lambda x: (x['data'], x['hora']), reverse=True)
         soma = sum(c['total'] for c in lst)
-        dia_lst = [c for c in todas if c['company'] == comp
-                   and c['data'] == lst[0]['data']]
-        dia_soma = sum(c['total'] for c in dia_lst)
+        # Acumulado na JANELA inteira (não só o dia mais recente — as novas
+        # podem abranger ontem E hoje no 1º run/retentativa).
+        jan_lst = [c for c in todas if c['company'] == comp]
+        jan_soma = sum(c['total'] for c in jan_lst)
         linhas = []
         for c in lst[:_MAX_LINHAS_MSG]:
             nf = 'com NF' if c['tem_nf'] else 'SEM NF'
             linhas.append(f'• {c["data"][8:10]}/{c["data"][5:7]} {c["hora"]} '
-                          f'— R$ {c["total"]:,.2f} — {nf} — caixa '
+                          f'— {fmt_brl(c["total"])} — {nf} — caixa '
                           f'{c["caixa"] or "?"} (cód {c["codigo"] or "?"})')
         if len(lst) > _MAX_LINHAS_MSG:
             linhas.append(f'• …e mais {len(lst) - _MAX_LINHAS_MSG}')
         blocos.append(
-            f'*{comp}*: {len(lst)} nova(s), R$ {soma:,.2f}\n'
+            f'*{comp}*: {len(lst)} nova(s), {fmt_brl(soma)}\n'
             + '\n'.join(linhas)
-            + f'\nAcumulado do dia nesse padrão: R$ {dia_soma:,.2f} '
-              f'({len(dia_lst)} cobrança(s)).')
+            + f'\nAcumulado ontem+hoje nesse padrão: {fmt_brl(jan_soma)} '
+              f'({len(jan_lst)} cobrança(s)).')
     corpo = '\n\n'.join(blocos)
     return ('🚨 *Cobrança SEM itens no PDV* — valor lançado sem nenhum '
             f'produto:\n\n{corpo}\n\n'
