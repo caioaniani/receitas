@@ -505,6 +505,8 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
         'total_valor': round(total, 2),
         'sem_itens_total': round(sem_itens_total, 2),
         'sem_itens_n': sem_itens_n,
+        'delivery_sem_itens_total': round(delivery_total, 2),
+        'delivery_sem_itens_n': delivery_n,
         'n_pedidos': n_ped,
         'cancelados': cancelados,
         'por_pagamento': {k: round(v, 2) for k, v in por_pagamento.items()},
@@ -512,6 +514,7 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
         'por_loja': por_loja,
         'por_loja_sem_itens': por_loja_sem_itens,
         'por_loja_sem_itens_n': por_loja_sem_itens_n,
+        'por_loja_delivery_sem_itens': por_loja_delivery,
         'por_loja_detalhe': por_loja_detalhe,
         'fonte': 'banco',
     }
