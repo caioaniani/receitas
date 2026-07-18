@@ -249,12 +249,18 @@
         // aqui em JS divergia (pego em revisão). O mapa já vem por loja,
         // então o filtro é só um recorte.
         var semSrv = r.por_loja_sem_itens || {};
+        var semSrvN = r.por_loja_sem_itens_n || {};
+        var semTot = 0, semN = 0;
         if (filtroLoja) {
             if (semSrv[filtroLoja] > 0) {
                 por_loja_sem_itens[filtroLoja] = semSrv[filtroLoja];
             }
+            semTot = semSrv[filtroLoja] || 0;
+            semN = semSrvN[filtroLoja] || 0;
         } else {
             por_loja_sem_itens = Object.assign({}, semSrv);
+            semTot = Number(r.sem_itens_total) || 0;
+            semN = Number(r.sem_itens_n) || 0;
         }
         var view = {
             total_pedidos: filtrados.length,
