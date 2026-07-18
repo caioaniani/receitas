@@ -250,7 +250,18 @@ def vigiar():
         logger.exception('vigia venda sem item: consulta da API falhou')
         return {'rodou': True, 'erro': f'{type(e).__name__}: {str(e)[:160]}'}
 
-    estado = _carregar_estado(janela)
+    try:
+        estado = _carregar_estado(janela)
+    except Exception as e:  # noqa: BLE001 — sessão envenenada por falha
+        # anterior do cron (PendingRollback) deixava o vigia CEGO em
+        # silêncio a cada ciclo — mesmo hardening do uso_ia_vigia.
+        logger.exception('vigia venda sem item: leitura do estado explodiu')
+        try:
+            from app.extensions import db
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return {'rodou': True, 'erro': f'estado: {type(e).__name__}'}
     ja = {i for ids in estado['ids'].values() for i in ids}
     novas = [c for c in todas if c['id'] and c['id'] not in ja]
     if not novas:
