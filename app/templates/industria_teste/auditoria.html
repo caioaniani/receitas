@@ -108,7 +108,9 @@
             <tr class="aud-vencido">
                 <td class="chk"><input type="checkbox" class="aud-check" name="ids"
                     value="{{ it.item_id }}" onchange="audCount()"></td>
-                <td>{{ it.receita_nome }}</td>
+                <td>{{ it.receita_nome }}
+                    {% if it.falta_encerrada %}<span class="badge bg-warning text-dark"
+                        title="O padeiro produziu menos e deu o item por encerrado — a tela dele não mostra mais. Decida: ✓ OK aceita a falta; reagendar pra hoje devolve pra tela dele.">encerrado pelo padeiro</span>{% endif %}</td>
                 <td>{{ it.data.strftime('%d/%m/%Y') }}</td>
                 <td class="aud-dias">{{ it.dias }} dia(s)</td>
                 <td class="num">{{ it.alvo }}</td>
