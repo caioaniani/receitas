@@ -284,6 +284,7 @@ def reagendar_para_hoje(item_ids, user_id):
             db.session.delete(old)             # nada produzido -> some
         else:
             old.qtd_alvo = prod                # falta -> 0, preserva o crédito
+            old.falta_encerrada_em = None      # falta foi embora, marcador junto
         movidos += 1
         unidades += falta
 
