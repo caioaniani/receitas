@@ -220,3 +220,30 @@ def test_nf_cancelada_conta_como_sem_nf(app):
     out, env = _rodar([ped])
     assert out['enviado'] is True
     assert 'SEM NF' in env.call_args[0][1]
+
+
+def test_delivery_99food_nao_alerta(app):
+    """Dono 18/07: pedido de delivery (99Food) chega sem itens por natureza
+    da integração — venda real, rotina, NÃO alerta."""
+    ped = _pedido('df1', 81.38)
+    ped['salesChannel'] = {'name': '99Food', 'tag': '99food'}
+    out, env = _rodar([ped, _pedido('av1', 44.00)])
+    assert out['novas'] == 1                       # só a avulsa
+    msg = env.call_args[0][1]
+    assert 'R$ 44,00' in msg and 'R$ 81,38' not in msg
+
+
+def test_cancelada_por_status_nao_alerta(app):
+    """Caso real 18/07 (cód 19797307): cancelada veio com status='canceled'
+    e canceledAt VAZIO — não pode alertar como venda."""
+    ped = _pedido('cs1', 45.00)
+    ped['status'] = 'canceled'
+    out, env = _rodar([ped])
+    assert out['novas'] == 0 and not env.called
+
+
+def test_canal_aparece_na_mensagem(app):
+    ped = _pedido('cn1', 64.00)
+    ped['salesChannel'] = {'name': 'PDV Fácil', 'tag': 'pdv-facil'}
+    _, env = _rodar([ped])
+    assert 'PDV Fácil' in env.call_args[0][1]

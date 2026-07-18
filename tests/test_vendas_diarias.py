@@ -267,3 +267,25 @@ def test_rota_api_vendas_ao_vivo_traz_pedidos(app, admin_user):
     j = r.get_json()
     assert j['ok'] and j['fonte'] == 'ao_vivo'
     assert isinstance(j['pedidos'], list) and len(j['pedidos']) == 3
+
+
+def test_captura_delivery_sem_itens_separado_e_cancelado_por_status(app):
+    """Dono 18/07: 99Food (delivery sem itens) é venda REAL — bucket
+    separado que CONTA no faturamento; cancelado por status (sem
+    canceledAt) sai de tudo."""
+    p99 = _pedido_full(20, 'Anesio', [], total=81.38, payments=[],
+                       canal={'name': '99Food', 'tag': '99food'})
+    avulsa = _pedido_full(21, 'Anesio', [], total=44.0, payments=[],
+                          canal={'name': 'PDV Fácil', 'tag': 'pdv-facil'})
+    canc = _pedido_full(22, 'Anesio', [('Pao', 1, 30.0)], total=30.0,
+                        payments=[], canal={'name': 'Balcão'})
+    canc['status'] = 'canceled'                    # sem canceledAt!
+    _capturar_full(app, PEDIDOS_FULL + [p99, avulsa, canc])
+    d = vendas_diarias.vendas_pdv_do_banco(DIA, DIA, capturar=False)
+    # avulsa fora do faturamento; delivery em bucket informativo
+    assert d['sem_itens_total'] == 44.0 and d['sem_itens_n'] == 1
+    assert d['delivery_sem_itens_total'] == 81.38
+    assert d['por_loja_delivery_sem_itens'] == {'Anesio': 81.38}
+    # cancelado por status não vira venda (nem os R$30 no total da loja)
+    assert d['por_loja']['Anesio'] == 125.38       # 81.38 + 44.00
+    assert d['por_loja_detalhe']['Anesio']['cancelados'] == 1
