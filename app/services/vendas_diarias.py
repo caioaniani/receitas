@@ -433,15 +433,24 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
         elif dim == 'cancelados':
             det[ln]['cancelados'] += int(v)
         elif dim == 'sem_itens':
-            # Cobranca so-valor (18/07/2026): separada pro card mostrar a
-            # venda COM produto na linha e isso num rodape de investigacao;
-            # o resumo desconta valor (chave '') e contagem (chave 'n').
-            # Dia capturado antes da dimensao existir nao tem as linhas —
-            # fica 0 e a tela mostra o total cheio, como era.
-            if chave == 'n':
-                det[ln]['sem_itens_n'] += int(v)
+            # Cobranca so-valor por CANAL (18/07/2026): chave '<tag>' =
+            # valor, '<tag>:n' = contagem. DELIVERY (99food etc.) e venda
+            # real → bucket informativo, conta no faturamento; o resto
+            # (pdv-facil/outro) fica FORA do resumo e no rodape
+            # "investigar". Compat: chave ''/'n' (formato agregado das
+            # primeiras horas) cai no bucket avulsa. Dia capturado antes
+            # da dimensao existir nao tem linhas — total cheio, como era.
+            from app.constants import SEM_ITENS_CANAIS_DELIVERY
+            eh_n = chave == 'n' or (chave or '').endswith(':n')
+            tag = ('' if chave in ('', 'n')
+                   else (chave[:-2] if (chave or '').endswith(':n')
+                         else chave))
+            delivery = tag in SEM_ITENS_CANAIS_DELIVERY
+            alvo = 'delivery_sem_itens' if delivery else 'sem_itens'
+            if eh_n:
+                det[ln][alvo + '_n'] += int(v)
             else:
-                det[ln]['sem_itens'] += v
+                det[ln][alvo] += v
 
     total = 0.0
     n_ped = cancelados = 0
