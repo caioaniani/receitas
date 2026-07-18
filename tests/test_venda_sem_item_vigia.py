@@ -51,6 +51,15 @@ def _rodar(pedidos, zapi_ok=True, dono='5511999999999'):
     return out, env
 
 
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _sem_cooldown(monkeypatch):
+    """Cooldown OFF por padrão nos testes (os de anti-flood religam)."""
+    monkeypatch.setenv('VENDA_SEM_ITEM_COOLDOWN_MIN', '0')
+
+
 def test_detecta_e_alerta_uma_vez(app):
     out, env = _rodar([_pedido('a1', 1135.00), _pedido('a2', 578.00),
                        _pedido('b1', 50.00, itens=1)])
