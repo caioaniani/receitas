@@ -582,11 +582,21 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
     # 3) avanca o produzido do item.
     item.produzido_qtd = int(item.produzido_qtd or 0) + unidades
 
+    # 3b) padeiro deu por encerrado com falta restante: marca — some das
+    #     telas dele, fica na auditoria. Completou o alvo? Nada a marcar.
+    falta_restante = max(0, int(item.qtd_alvo or 0) - item.produzido_qtd)
+    encerrado = False
+    if encerrar and falta_restante > 0:
+        from app.utils import agora
+        item.falta_encerrada_em = agora()
+        encerrado = True
+
     # 4) a parte confirmada virou baixa REAL — o reconciliador libera a
     #    pré-baixa correspondente (plano fora do regime = no-op).
     sincronizar_pre_baixa_mp(item.planejamento, user_id)
     db.session.commit()
-    return {'ok': True, 'produzido': item.produzido_qtd}
+    return {'ok': True, 'produzido': item.produzido_qtd,
+            'encerrado': encerrado, 'falta_restante': falta_restante}
 
 
 def consolidar_lista_compras(itens):
