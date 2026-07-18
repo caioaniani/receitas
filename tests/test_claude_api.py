@@ -689,3 +689,40 @@ def test_projetos_nome_sem_match_404(app):
     r = c.get('/api/claude/projetos?nome=inexistente',
               headers={'Authorization': f'Bearer {TOKEN}'})
     assert r.status_code == 404
+
+
+def test_vendas_snapshot_por_dia_e_filtro(app):
+    """Sonda do card 'Por loja (PDV)' (18/07/2026): expõe o
+    faturamento_pedidos POR DIA do snapshot, com filtro por company —
+    audita de fora se um número da tela é soma de período."""
+    from datetime import timedelta as _td
+
+    from app.models import VendaSeruDiaLoja
+    from app.utils import hoje as _hoje
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    h = _hoje()
+    db.session.add_all([
+        VendaSeruDiaLoja(data=h, loja_seru='NEBRASKA', n_pedidos=88,
+                         faturamento=3000, faturamento_pedidos=3327.07),
+        VendaSeruDiaLoja(data=h - _td(days=1), loja_seru='NEBRASKA',
+                         n_pedidos=90, faturamento=3100,
+                         faturamento_pedidos=3500.00),
+        VendaSeruDiaLoja(data=h, loja_seru='PADARIA', n_pedidos=160,
+                         faturamento=3000, faturamento_pedidos=3100.00),
+    ])
+    db.session.commit()
+    resp = app.test_client().get(
+        '/api/claude/vendas-snapshot?dias=3&loja=nebraska',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True
+    assert len(d['linhas']) == 2                       # PADARIA filtrada fora
+    assert {ln['faturamento_pedidos'] for ln in d['linhas']} == {3327.07, 3500.0}
+    assert d['soma_por_loja_na_janela'] == {'NEBRASKA': 6827.07}
+
+
+def test_vendas_snapshot_exige_token(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    assert app.test_client().get(
+        '/api/claude/vendas-snapshot').status_code == 401
