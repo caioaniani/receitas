@@ -308,8 +308,13 @@
         } else {
             document.getElementById('pdv-canais-card').style.display = 'none';
         }
-        // Por loja
-        var ljs = Object.entries(d.por_loja || {}).sort(function(a, b) { return b[1] - a[1]; });
+        // Por loja — a LINHA mostra só venda COM produto; cobrança "só
+        // valor" (sem item, ex: teste de impressora) vai pro RODAPÉ pra
+        // investigação (decisão do dono 18/07/2026, caso Nebraska).
+        var semItens = d.por_loja_sem_itens || {};
+        var ljs = Object.entries(d.por_loja || {}).map(function(e) {
+            return [e[0], e[1] - (semItens[e[0]] || 0)];
+        }).sort(function(a, b) { return b[1] - a[1]; });
         if (ljs.length > 0) {
             document.getElementById('pdv-lojas-card').style.display = '';
             var hl = '<table class="table table-sm mb-0"><tbody>';
@@ -317,6 +322,15 @@
                 hl += '<tr><td class="small">' + escapeHtml(e[0]) + '</td><td class="text-end small fw-bold">R$ ' + fmt(e[1]) + '</td></tr>';
             });
             hl += '</tbody></table>';
+            var semLst = Object.entries(semItens).sort(function(a, b) { return b[1] - a[1]; });
+            if (semLst.length > 0) {
+                hl += '<div class="border-top pt-1 mt-1 small text-muted">' +
+                    '⚠ Cobranças <strong>sem produto</strong> (não somam acima — investigar):';
+                semLst.forEach(function(e) {
+                    hl += '<br>' + escapeHtml(e[0]) + ': <strong>R$ ' + fmt(e[1]) + '</strong>';
+                });
+                hl += '</div>';
+            }
             document.getElementById('pdv-lojas').innerHTML = hl;
         } else {
             document.getElementById('pdv-lojas-card').style.display = 'none';
