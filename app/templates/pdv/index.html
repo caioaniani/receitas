@@ -192,6 +192,9 @@
             if (det.sem_itens > 0) view.por_loja_sem_itens[filtroLoja] = det.sem_itens;
             view.sem_itens_total = det.sem_itens || 0;
             view.sem_itens_n = det.sem_itens_n || 0;
+            view.delivery_sem_itens_total = det.delivery_sem_itens || 0;
+            view.por_loja_delivery_sem_itens = {};
+            if (det.delivery_sem_itens > 0) view.por_loja_delivery_sem_itens[filtroLoja] = det.delivery_sem_itens;
         } else {
             view = {
                 total_pedidos: Number(r.total_pedidos) || 0,
