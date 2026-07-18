@@ -140,6 +140,14 @@ def _run_sync(app):
                     vendas_diarias.capturar_periodo(hoje - timedelta(days=1), hoje)
                 except Exception:
                     logger.exception('captura vendas_diarias no cron falhou')
+                    # Sem rollback, os DELETEs pendentes de um snapshot que
+                    # falhou no meio seriam COMMITADOS pelo proximo commit da
+                    # mesma sessao (ex: o do vigia abaixo) — dias sumiriam
+                    # dos relatorios ate o proximo ciclo (achado de revisao).
+                    try:
+                        db.session.rollback()
+                    except Exception:  # noqa: BLE001
+                        pass
                 # Retoma reprocesso retroativo orfao (drenador morto em
                 # deploy / erro de API na tentativa anterior). No-op sem
                 # pendencia. Best-effort: nunca derruba o sync.
