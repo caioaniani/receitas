@@ -439,16 +439,19 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
     total = 0.0
     n_ped = cancelados = 0
     sem_itens_total = 0.0
+    sem_itens_n = 0
     por_pagamento = defaultdict(float)
     por_canal = defaultdict(float)
     por_loja = {}
     por_loja_sem_itens = {}
+    por_loja_sem_itens_n = {}
     por_loja_detalhe = {}
     for ln, d in det.items():
         total += d['total']
         n_ped += d['n_pedidos']
         cancelados += d['cancelados']
         sem_itens_total += d['sem_itens']
+        sem_itens_n += d['sem_itens_n']
         # `por_loja` segue sendo o TOTAL cheio (fat_ped, semantica de
         # sempre); o front subtrai `por_loja_sem_itens` pra exibir a venda
         # COM produto na linha e o resto no rodape (decisao do dono 18/07).
