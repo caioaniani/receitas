@@ -188,8 +188,11 @@ def _plano_do_dia(dia):
                 '_mult': it.multiplicador, '_mbi': membership.get(it.receita_id)}
 
     # Item dispensado pelo admin (auditoria) sai do plano do padeiro: ele não vê
-    # nem produz o que o admin já fechou.
-    itens = [_item(it) for it in plano.itens if it.dispensada_em is None]
+    # nem produz o que o admin já fechou. Item com falta ENCERRADA pelo próprio
+    # padeiro (produziu menos e deu por feito, 17/07/2026) idem — a diferença
+    # vive só na auditoria até o admin dar OK ou reagendar de volta.
+    itens = [_item(it) for it in plano.itens
+             if it.dispensada_em is None and it.falta_encerrada_em is None]
 
     # agrupa por massa-base; o resto vai pra "solos".
     por_grupo = {}
