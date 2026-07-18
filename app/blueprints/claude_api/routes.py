@@ -300,6 +300,59 @@ def loja_vendas_debug():
     )
 
 
+@claude_api_bp.route('/vendas-snapshot')
+@_claude_auth_required
+def vendas_snapshot():
+    """Faturamento POR DIA do snapshot `VendaSeruDiaLoja` — criado 18/07/2026
+    pro caso "card Por loja do /pdv/ mostra Nebraska R$10.355 mas foi
+    R$3.327": expõe exatamente o que o card soma (`faturamento_pedidos`) por
+    (dia, company), pra auditar de fora se um número da tela é soma de
+    período ou linha errada. NÃO dispara captura (o estado cru é a
+    evidência). Read-only estrito, como todo o blueprint.
+
+    Params: ?dias=5 (1-30, janela terminando hoje) e/ou ?loja= (substring
+    case-insensitive do company name).
+    """
+    from datetime import timedelta
+
+    from app.models import VendaSeruDiaLoja
+    from app.utils import hoje
+
+    dias_n = _int_arg('dias', 5, 1, 30)
+    hoje_d = hoje()
+    ini = hoje_d - timedelta(days=dias_n - 1)
+    filtro = (request.args.get('loja') or '').strip().lower()
+
+    linhas = []
+    por_loja_total = {}
+    q = (VendaSeruDiaLoja.query
+         .filter(VendaSeruDiaLoja.data >= ini,
+                 VendaSeruDiaLoja.data <= hoje_d)
+         .order_by(VendaSeruDiaLoja.data, VendaSeruDiaLoja.loja_seru))
+    for r in q.all():
+        if filtro and filtro not in (r.loja_seru or '').lower():
+            continue
+        fat_ped = float(r.faturamento_pedidos or 0)
+        linhas.append({
+            'data': r.data.isoformat(),
+            'loja_seru': r.loja_seru,
+            'n_pedidos': int(r.n_pedidos or 0),
+            'faturamento_itens': float(r.faturamento or 0),
+            'faturamento_pedidos': fat_ped,
+            'atualizado_em': (r.atualizado_em.isoformat()
+                              if r.atualizado_em else None),
+        })
+        por_loja_total[r.loja_seru] = round(
+            por_loja_total.get(r.loja_seru, 0) + fat_ped, 2)
+    return jsonify(ok=True,
+                   janela={'inicio': ini.isoformat(),
+                           'fim': hoje_d.isoformat()},
+                   linhas=linhas,
+                   soma_por_loja_na_janela=por_loja_total,
+                   nota='faturamento_pedidos = o que o card "Por loja (PDV)" '
+                        'soma no período selecionado na tela')
+
+
 @claude_api_bp.route('/seru-companies')
 @_claude_auth_required
 def seru_companies():
