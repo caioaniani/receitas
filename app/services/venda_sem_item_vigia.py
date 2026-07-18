@@ -235,7 +235,8 @@ def _montar_mensagem(novas, todas):
         for c in lst[:_MAX_LINHAS_MSG]:
             nf = 'com NF' if c['tem_nf'] else 'SEM NF'
             linhas.append(f'• {c["data"][8:10]}/{c["data"][5:7]} {c["hora"]} '
-                          f'— {fmt_brl(c["total"])} — {nf} — caixa '
+                          f'— {fmt_brl(c["total"])} — {nf} — '
+                          f'{c.get("canal") or "?"} — caixa '
                           f'{c["caixa"] or "?"} (cód {c["codigo"] or "?"})')
         if len(lst) > _MAX_LINHAS_MSG:
             linhas.append(f'• …e mais {len(lst) - _MAX_LINHAS_MSG}')
