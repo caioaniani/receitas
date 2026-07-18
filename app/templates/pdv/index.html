@@ -238,15 +238,20 @@
             por_canal[canal] = (por_canal[canal] || 0) + (Number(p.total) || 0);
             var loja = s(p.company) || '—';
             por_loja[loja] = (por_loja[loja] || 0) + (Number(p.total) || 0);
-            // Cobrança SEM itens (só valor) → rodapé de investigação.
-            var temItem = (p.items || []).some(function(i) {
-                return i && !i.canceledAt;
-            });
-            if (!temItem && (Number(p.total) || 0) > 0) {
-                por_loja_sem_itens[loja] =
-                    (por_loja_sem_itens[loja] || 0) + (Number(p.total) || 0);
-            }
         });
+        // Cobrança SEM itens (rodapé): usa o cálculo do SERVIDOR (extrator
+        // canônico seru.extrair_itens — items/orderItems/products, item
+        // cancelado por canceledAt/canceled/status). Reimplementar a regra
+        // aqui em JS divergia (pego em revisão). O mapa já vem por loja,
+        // então o filtro é só um recorte.
+        var semSrv = r.por_loja_sem_itens || {};
+        if (filtroLoja) {
+            if (semSrv[filtroLoja] > 0) {
+                por_loja_sem_itens[filtroLoja] = semSrv[filtroLoja];
+            }
+        } else {
+            por_loja_sem_itens = Object.assign({}, semSrv);
+        }
         var view = {
             total_pedidos: filtrados.length,
             fora_intervalo: r.fora_intervalo,
