@@ -143,6 +143,11 @@ def _int_env(nome, default):
         return default
 
 
+def estado_dedup(janela_datas):
+    """API pública do estado de dedup (rota admin/diagnóstico)."""
+    return _carregar_estado(janela_datas)
+
+
 def _carregar_estado(janela_datas):
     """Estado {'ids': {data: [ids]}, 'ultimo_envio': iso|None,
     'envios': {data: n}}, com ids/envios podados pra janela vigente.
