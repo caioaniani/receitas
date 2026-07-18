@@ -65,7 +65,7 @@ def test_detecta_e_alerta_uma_vez(app):
                        _pedido('b1', 50.00, itens=1)])
     assert out['enviado'] is True and out['novas'] == 2
     msg = env.call_args[0][1]
-    assert 'R$ 1,135.00' in msg and 'SEM NF' in msg and '678071' in msg
+    assert 'R$ 1.135,00' in msg and 'SEM NF' in msg and '678071' in msg
     assert 'NEBRASKA' in msg
     # 2ª rodada com os MESMOS pedidos: nada novo, sem WhatsApp
     out2, env2 = _rodar([_pedido('a1', 1135.00), _pedido('a2', 578.00)])
@@ -77,9 +77,9 @@ def test_nova_cobranca_alerta_so_o_delta(app):
     out, env = _rodar([_pedido('a1', 100.00), _pedido('a2', 200.00)])
     assert out['novas'] == 1
     msg = env.call_args[0][1]
-    assert 'R$ 200.00' in msg and '1 nova(s)' in msg
+    assert 'R$ 200,00' in msg and '1 nova(s)' in msg
     # acumulado do dia considera as duas
-    assert 'R$ 300.00' in msg
+    assert 'R$ 300,00' in msg
 
 
 def test_ignora_cancelada_com_itens_e_total_zero(app):
@@ -95,7 +95,7 @@ def test_piso_por_env(app, monkeypatch):
     monkeypatch.setenv('VENDA_SEM_ITEM_MIN_VALOR', '100')
     out, env = _rodar([_pedido('p1', 50.00), _pedido('p2', 150.00)])
     assert out['novas'] == 1
-    assert 'R$ 150.00' in env.call_args[0][1]
+    assert 'R$ 150,00' in env.call_args[0][1]
 
 
 def test_envio_falho_nao_marca_e_retenta(app):
@@ -155,7 +155,7 @@ def test_cooldown_acumula_sem_perder(app, monkeypatch):
     monkeypatch.setenv('VENDA_SEM_ITEM_COOLDOWN_MIN', '0')
     out3, env3 = _rodar([_pedido('c1', 100.00), _pedido('c2', 200.00)])
     assert out3['enviado'] is True and out3['novas'] == 1
-    assert 'R$ 200.00' in env3.call_args[0][1]
+    assert 'R$ 200,00' in env3.call_args[0][1]
 
 
 def test_teto_de_mensagens_por_dia(app, monkeypatch):
@@ -202,3 +202,21 @@ def test_rota_admin_dry_run_owner(app, owner_user):
     assert d['ok'] is True and d['novas'] == 1
     assert d['cobrancas'][0]['total'] == 250.00
     assert not env.called                      # dry-run nunca manda WhatsApp
+
+
+def test_pedido_malformado_nao_cega_a_varredura(app):
+    """Achado de revisão: UM pedido com total torto não pode matar a
+    varredura inteira (e repetir a cegueira a cada ciclo)."""
+    torto = {'id': 'z9', 'total': '1.135,00-lixo', 'createdAt': 'x',
+             'company': None, 'items': []}
+    out, env = _rodar([torto, _pedido('ok1', 90.00)])
+    assert out['enviado'] is True and out['novas'] == 1
+    assert 'R$ 90,00' in env.call_args[0][1]
+
+
+def test_nf_cancelada_conta_como_sem_nf(app):
+    ped = _pedido('nf1', 120.00)
+    ped['taxInvoice'] = {'status': 'canceled', 'number': '9'}
+    out, env = _rodar([ped])
+    assert out['enviado'] is True
+    assert 'SEM NF' in env.call_args[0][1]
