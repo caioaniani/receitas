@@ -449,9 +449,11 @@ def _api_vendas_impl():
 
     try:
         total = 0.0
+        sem_itens_total = 0.0
         por_pagamento = {}
         por_canal = {}
         por_loja = {}
+        por_loja_sem_itens = {}
         cancelados = 0
         for p in pedidos:
             if not isinstance(p, dict):
@@ -476,6 +478,16 @@ def _api_vendas_impl():
             if not loja:
                 loja = '—'
             por_loja[loja] = por_loja.get(loja, 0) + _f(p.get('total'))
+            # Cobranca SEM itens (so valor, ex: teste de impressora que vira
+            # "venda") — mesma regra da captura do snapshot: nenhum item
+            # nao-cancelado. Separada pro rodape do card "Por loja".
+            itens = p.get('items') or []
+            tem_item = any(isinstance(i, dict) and not i.get('canceledAt')
+                           for i in itens)
+            if not tem_item and _f(p.get('total')) > 0:
+                v = _f(p.get('total'))
+                sem_itens_total += v
+                por_loja_sem_itens[loja] = por_loja_sem_itens.get(loja, 0) + v
     except Exception as e:
         import traceback
         current_app.logger.exception('Erro agregando vendas Seru')
