@@ -201,6 +201,8 @@
                 por_canal: Object.assign({}, r.por_canal || {}),
                 por_loja: r.por_loja || {},
                 por_loja_sem_itens: r.por_loja_sem_itens || {},
+                sem_itens_total: Number(r.sem_itens_total) || 0,
+                sem_itens_n: Number(r.sem_itens_n) || 0,
                 fonte: 'banco',
                 consulta_limitada: r.consulta_limitada,
                 fora_intervalo: r.fora_intervalo,
