@@ -479,11 +479,9 @@ def _api_vendas_impl():
                 loja = '—'
             por_loja[loja] = por_loja.get(loja, 0) + _f(p.get('total'))
             # Cobranca SEM itens (so valor, ex: teste de impressora que vira
-            # "venda") — mesma regra da captura do snapshot: nenhum item
-            # nao-cancelado. Separada pro rodape do card "Por loja".
-            itens = p.get('items') or []
-            tem_item = any(isinstance(i, dict) and not i.get('canceledAt')
-                           for i in itens)
+            # "venda") — MESMA regra da captura do snapshot (extrator
+            # canonico): nenhum item nao-cancelado. Rodape do card Por loja.
+            tem_item = any(not it['cancelado'] for it in seru.extrair_itens(p))
             if not tem_item and _f(p.get('total')) > 0:
                 v = _f(p.get('total'))
                 sem_itens_total += v
