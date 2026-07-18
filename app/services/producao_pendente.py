@@ -91,6 +91,9 @@ def listar_pendencias(dias_vencido=30):
                 'falta': falta,
                 'criado_por': autor,
                 'dias': (hoje_d - p.data).days,
+                # Padeiro produziu menos e deu por feito (17/07/2026): a tela
+                # dele esconde; a auditoria mostra o selo pro admin decidir.
+                'falta_encerrada': it.falta_encerrada_em is not None,
             }
             if it.dispensada_em is not None:          # admin deu OK -> rastro
                 quem = (it.dispensada_por.nome
