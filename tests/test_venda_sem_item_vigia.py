@@ -123,12 +123,49 @@ def test_kill_switch(app, monkeypatch):
 
 def test_estado_poda_dias_fora_da_janela(app):
     velho = (hoje() - timedelta(days=5)).isoformat()
-    AppConfig.set(vigia._KEY_ESTADO, json.dumps({velho: ['antigo']}))
+    AppConfig.set(vigia._KEY_ESTADO, json.dumps({'ids': {velho: ['antigo']}}))
     db.session.commit()
     _rodar([_pedido('n1', 100.00)])
     estado = json.loads(AppConfig.get(vigia._KEY_ESTADO))
-    assert velho not in estado
-    assert 'n1' in estado[hoje().isoformat()]
+    assert velho not in estado['ids']
+    assert 'n1' in estado['ids'][hoje().isoformat()]
+
+
+def test_estado_formato_antigo_migra(app):
+    """Compat: estado no formato antigo ({data: [ids]} direto) segue
+    deduplicando — o vigia pode ter rodado em prod antes do anti-flood."""
+    h = hoje().isoformat()
+    AppConfig.set(vigia._KEY_ESTADO, json.dumps({h: ['a1']}))
+    db.session.commit()
+    out, env = _rodar([_pedido('a1', 100.00)])
+    assert out['novas'] == 0 and not env.called
+
+
+def test_cooldown_acumula_sem_perder(app, monkeypatch):
+    """Anti-flood (dono 18/07): 1ª alerta na hora; dentro do cooldown as
+    novas ACUMULAM (ids não marcados) e saem juntas quando a janela abre."""
+    monkeypatch.setenv('VENDA_SEM_ITEM_COOLDOWN_MIN', '60')
+    out1, env1 = _rodar([_pedido('c1', 100.00)])
+    assert out1['enviado'] is True and env1.called
+    # 2ª cobrança logo depois: suprimida, mas NÃO marcada
+    out2, env2 = _rodar([_pedido('c1', 100.00), _pedido('c2', 200.00)])
+    assert out2['enviado'] is False and 'cooldown' in out2['motivo']
+    assert not env2.called
+    # cooldown desligado (janela abriu): a acumulada sai agora
+    monkeypatch.setenv('VENDA_SEM_ITEM_COOLDOWN_MIN', '0')
+    out3, env3 = _rodar([_pedido('c1', 100.00), _pedido('c2', 200.00)])
+    assert out3['enviado'] is True and out3['novas'] == 1
+    assert 'R$ 200.00' in env3.call_args[0][1]
+
+
+def test_teto_de_mensagens_por_dia(app, monkeypatch):
+    monkeypatch.setenv('VENDA_SEM_ITEM_MAX_MSGS_DIA', '2')
+    _rodar([_pedido('m1', 10.00)])
+    _rodar([_pedido('m1', 10.00), _pedido('m2', 20.00)])
+    out3, env3 = _rodar([_pedido('m1', 10.00), _pedido('m2', 20.00),
+                         _pedido('m3', 30.00)])
+    assert out3['enviado'] is False and 'teto' in out3['motivo']
+    assert not env3.called
 
 
 def test_api_fora_nao_derruba(app):
