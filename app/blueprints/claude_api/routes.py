@@ -408,7 +408,7 @@ def vendas_snapshot():
                     'diferenca': round(total - float(soma_itens), 2),
                     'n_itens': n_itens,
                     'canal': p.get('salesChannel'),
-                    'cancelado': bool(p.get('canceledAt')),
+                    'cancelado': seru.pedido_cancelado(p),
                     'status': p.get('status'),
                     'caixa': (p.get('cashier') or {}).get('code'),
                     'nf': nf,
