@@ -756,6 +756,25 @@
 </script>
 <script>
   var CSRF = "{{ csrf_token() }}";
+  // Confirmação do Produzir (17/07/2026): lançamento PARCIAL pergunta se o
+  // item fica ENCERRADO (diferença vai pra auditoria e some desta tela) ou
+  // se continua aberto (fornadas em levas). 1º Cancelar aborta tudo;
+  // 2º Cancelar registra sem encerrar.
+  function prodConfirma(f, falta, nome) {
+    var q = parseInt(f.unidades.value, 10) || 0;
+    if (!confirm('Produzir ' + q + ' un de ' + nome +
+                 ' e dar baixa na matéria-prima?')) { return false; }
+    f.encerrar.value = '';
+    if (q > 0 && q < falta) {
+      f.encerrar.value = confirm(
+        'Você lançou ' + q + ' de ' + falta + ' un.\n\n' +
+        'Dar o item como ENCERRADO? A diferença (' + (falta - q) +
+        ' un) vai pra auditoria do admin e o item some da sua tela.\n\n' +
+        'OK = encerrar  ·  Cancelar = continuar produzindo depois'
+      ) ? '1' : '';
+    }
+    return true;
+  }
   var audioCtx = null, somAtivo = false, loopId = null, avisosAtivos = [];
   var ultimoToque = 0;
   function marcarToque() { ultimoToque = Date.now(); }
