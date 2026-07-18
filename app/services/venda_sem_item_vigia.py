@@ -20,10 +20,24 @@ Funcionamento (pedido do dono, 18/07/2026):
 - Se o envio falhar (Z-API fora), os ids NÃO são marcados — retenta no
   próximo ciclo. Perder alerta de possível fraude é pior que duplicar.
 
+ANTI-FLOOD (pedido do dono 18/07/2026 — "cuidado com os disparos no
+WhatsApp pra não bloquear a conta"): a PRIMEIRA cobrança nova alerta na
+hora; as seguintes ACUMULAM e saem juntas na próxima janela — no máximo 1
+mensagem por `VENDA_SEM_ITEM_COOLDOWN_MIN` (default 60min) e
+`VENDA_SEM_ITEM_MAX_MSGS_DIA` (default 6) mensagens/dia. Cobrança
+acumulada nunca se perde: ids só são marcados quando a mensagem SAI, então
+a próxima janela lista tudo que juntou. O envio NÃO usa `critico=True` de
+propósito — respeita também o teto/hora global do zapi (mensagem segurada
+volta ok=False e retenta, mesmo caminho do envio falho).
+
 Config (env):
 - `VENDA_SEM_ITEM_VIGIA=0` desliga o job no cron (kill-switch, padrão).
 - `VENDA_SEM_ITEM_MIN_VALOR` (default 0) — piso em R$ por cobrança; abaixo
   dele não alerta (ex: 100 pra ignorar cobrança avulsa pequena de balcão).
+- `VENDA_SEM_ITEM_COOLDOWN_MIN` (default 60) — intervalo mínimo entre
+  mensagens; 0 desliga o cooldown (volta a 1 msg por ciclo de 15min).
+- `VENDA_SEM_ITEM_MAX_MSGS_DIA` (default 6) — teto de mensagens por dia;
+  estourado, acumula até o dia virar.
 
 Sob demanda: `GET /admin/vigia-venda-sem-item` (owner; `?alertar=1` roda o
 fluxo com WhatsApp). Sonda externa: `/api/claude/vendas-snapshot?pedidos=1`.
