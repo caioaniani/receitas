@@ -1881,6 +1881,14 @@ estoque nem entram na previsao.
   marca os ids (retenta no proximo ciclo — perder alerta de possivel
   fraude e pior que duplicar). Sem numero do dono configurado tambem nao
   marca (quando configurar, alerta tudo).
+- **ANTI-FLOOD (dono 18/07: "cuidado pra nao bloquear a conta")**: 1a
+  cobranca alerta NA HORA; as seguintes acumulam (ids nao marcados) e saem
+  juntas na proxima janela — cooldown `VENDA_SEM_ITEM_COOLDOWN_MIN`
+  (default 60min; 0 = por ciclo) + teto `VENDA_SEM_ITEM_MAX_MSGS_DIA`
+  (default 6/dia). SEM `critico=True` de proposito — respeita tambem o
+  teto/hora global do zapi (segurada = ok False = retenta). Estado v2:
+  {'ids': {data: [ids]}, 'ultimo_envio', 'envios': {data: n}} (formato
+  antigo migra sozinho).
 - **Env**: `VENDA_SEM_ITEM_VIGIA=0` (kill-switch),
   `VENDA_SEM_ITEM_MIN_VALOR` (piso em R$ por cobranca, default 0).
 - Sob demanda: `GET /admin/vigia-venda-sem-item` (owner; dry-run lista
