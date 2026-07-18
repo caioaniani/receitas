@@ -432,9 +432,15 @@
         {%- else -%}✓ feito {{ it.produzido }} un{% endif %}
       </span>
       {% if it.falta > 0 %}
+      {# Lançamento PARCIAL (menos que a falta): 2º confirm pergunta se dá o
+         item por ENCERRADO — a diferença vai pra auditoria e some da tela
+         (decisão do dono 17/07/2026). Cancelar no 2º = só registra e o item
+         continua aqui (fornadas em levas). #}
       <form method="POST" action="{{ url_for('padeiro.produzir_plano', item_id=it.item_id) }}"
-            class="prod-dia-form" onsubmit="return confirm('Produzir {{ it.nome }} e dar baixa na matéria-prima?');">
+            class="prod-dia-form"
+            onsubmit="return prodConfirma(this, {{ it.falta }}, '{{ it.nome|e }}');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="encerrar" value="">
         <input type="number" name="unidades" min="1" value="{{ it.falta }}"
                class="prod-dia-qtd" id="qtd-{{ it.item_id }}">
         <button type="submit" class="prod-dia-btn">Produzir</button>
