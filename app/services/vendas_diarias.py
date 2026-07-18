@@ -393,7 +393,7 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
 
     # loja -> acumulador (total do pedido, pedidos distintos, breakdowns).
     det = defaultdict(lambda: {
-        'total': 0.0, 'n_pedidos': 0, 'cancelados': 0,
+        'total': 0.0, 'n_pedidos': 0, 'cancelados': 0, 'sem_itens': 0.0,
         'por_pagamento': defaultdict(float), 'por_canal': defaultdict(float)})
 
     for ln, fat_ped, n in (db.session.query(
