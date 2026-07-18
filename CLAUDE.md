@@ -956,6 +956,25 @@ antigos — esses sao papel da auditoria; lista-los duplicaria producao, pois o
 cronograma re-sugere demanda descoberta). Testes:
 `tests/test_padeiro_plano_ontem.py`.
 
+## Falta encerrada pelo padeiro (17/07/2026)
+
+Decisao do dono: o padeiro que produz MENOS que o alvo pode dar o item por
+FEITO — a tela dele para de cobrar; a diferenca vive SO na auditoria.
+
+- `PlanejamentoItem.falta_encerrada_em` (ALTER em migrations_legacy,
+  procedimento 2 commits). Diferente de `dispensada_em`: NAO bloqueia
+  produzir, NAO sai da auditoria, NAO libera pre-baixa de MP.
+- Fluxo: lancamento PARCIAL no /padeiro → 2º confirm ("encerrar? OK/
+  Cancelar continua em levas") → `produzir_item_plano(..., encerrar=True)`
+  marca se restar falta. Telas do padeiro filtram o marcador igual ao
+  dispensado (`_plano_do_dia`); estoque credita so o produzido.
+- Auditoria: selo "encerrado pelo padeiro" (vencidas+agendadas); admin
+  decide — ✓ OK = `dispensar_item` (existente) ou `reagendar_para_hoje` =
+  devolve a falta pra tela do padeiro. O reagendar LIMPA o marcador no
+  merge (mesma armadilha do dispensado reaberto — item oculto engoliria a
+  falta devolvida) e no item de origem.
+- Testes: `tests/test_padeiro_encerrar_falta.py` (8 casos).
+
 ## Impressao de pedidos de entrega (2026-06-12)
 
 **A impressao oficial e PDF gerado no servidor** (`app/services/pdf.py::
