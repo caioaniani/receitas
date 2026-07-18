@@ -189,6 +189,47 @@ def test_vendas_pdv_do_banco(app):
     assert det['Ribeiro do Vale']['cancelados'] == 1
     assert det['Ribeiro do Vale']['por_pagamento'] == {'dinheiro': 50.0}
     assert det['Nebraska']['cancelados'] == 0
+    # sem cobrança só-valor no fixture: split zerado/ausente
+    assert d['sem_itens_total'] == 0.0
+    assert d['por_loja_sem_itens'] == {}
+
+
+def test_captura_separa_cobranca_sem_itens(app):
+    """Caso Nebraska 17/07/2026 (teste de impressora no PDV Fácil): cobrança
+    com valor e ZERO itens vira dimensão 'sem_itens' no breakdown — o card
+    Por loja mostra a venda COM produto na linha e isso no rodapé."""
+    pedidos = PEDIDOS_FULL + [
+        _pedido_full(9, 'Nebraska', [], total=1135.0,
+                     payments=[], canal={'name': 'PDV Fácil'}),
+        _pedido_full(10, 'Nebraska', [], total=578.0,
+                     payments=[], canal={'name': 'PDV Fácil'}),
+        # cancelada e zero-valor NÃO entram no rodapé
+        _pedido_full(11, 'Nebraska', [], total=99.0, payments=[],
+                     canal={'name': 'PDV Fácil'},
+                     canceled='2026-06-15T20:00:00Z'),
+        _pedido_full(12, 'Nebraska', [], total=0.0, payments=[],
+                     canal={'name': 'PDV Fácil'}),
+    ]
+    _capturar_full(app, pedidos)
+    d = vendas_diarias.vendas_pdv_do_banco(DIA, DIA, capturar=False)
+    assert d['por_loja_sem_itens'] == {'Nebraska': 1713.0}
+    assert d['sem_itens_total'] == 1713.0
+    # total cheio da loja segue incluindo tudo (semântica de sempre);
+    # a SEPARAÇÃO é papel do front (linha = total - sem_itens)
+    assert d['por_loja']['Nebraska'] == 1743.0            # 30 + 1135 + 578
+    assert d['por_loja_detalhe']['Nebraska']['sem_itens'] == 1713.0
+
+
+def test_snapshot_antigo_sem_dimensao_fica_zerado(app):
+    """Dia capturado ANTES da dimensão existir (sem linha 'sem_itens' no
+    breakdown): split fica 0 e o card mostra o total cheio, como era."""
+    from app.extensions import db
+    from app.models import VendaSeruDiaBreakdown
+    _capturar_full(app)
+    VendaSeruDiaBreakdown.query.filter_by(dimensao='sem_itens').delete()
+    db.session.commit()
+    d = vendas_diarias.vendas_pdv_do_banco(DIA, DIA, capturar=False)
+    assert d['sem_itens_total'] == 0.0 and d['por_loja_sem_itens'] == {}
 
 
 def test_rota_api_vendas_le_do_banco(app, admin_user):
