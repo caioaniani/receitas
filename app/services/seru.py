@@ -40,6 +40,21 @@ def data_local(iso_utc):
         return None
 
 
+def datahora_local(iso_utc):
+    """Como `data_local`, mas devolve o datetime COMPLETO em BRT (naive) —
+    pra quando a HORA da venda importa (ex: auditoria de cobrança)."""
+    if not iso_utc:
+        return None
+    try:
+        s = iso_utc.replace('Z', '+00:00')
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.astimezone(BRT).replace(tzinfo=None)
+    except (ValueError, TypeError):
+        return None
+
+
 # Cache do token entre requests do mesmo worker. Se expira, renovamos.
 _token_cache = {'access_token': None, 'expires_at': 0}
 
