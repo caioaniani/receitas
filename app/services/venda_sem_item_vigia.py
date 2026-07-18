@@ -220,7 +220,7 @@ def vigiar():
         return {'rodou': True, 'erro': f'{type(e).__name__}: {str(e)[:160]}'}
 
     estado = _carregar_estado(janela)
-    ja = {i for ids in estado.values() for i in ids}
+    ja = {i for ids in estado['ids'].values() for i in ids}
     novas = [c for c in todas if c['id'] and c['id'] not in ja]
     if not novas:
         _gravar_estado(estado)          # persiste a poda de dias velhos
@@ -236,9 +236,22 @@ def vigiar():
         return {'rodou': True, 'novas': len(novas), 'enviado': False,
                 'motivo': 'sem numero do dono'}
 
+    from app.utils import agora as _agora
+    agora_dt = _agora()
+    hoje_iso = hoje_d.isoformat()
+    pode, motivo = _pode_enviar(estado, agora_dt, hoje_iso)
+    if not pode:
+        # Anti-flood: NÃO marca os ids — as novas acumulam e saem juntas
+        # na próxima janela (nada se perde).
+        return {'rodou': True, 'novas': len(novas), 'enviado': False,
+                'motivo': motivo}
+
     msg = _montar_mensagem(novas, todas)
     try:
-        r = zapi.enviar_texto(dono, msg, critico=True)
+        # SEM critico=True de propósito: respeita o teto/hora global do
+        # zapi (anti-flood do WhatsApp). Mensagem segurada volta ok=False
+        # e cai no retenta abaixo.
+        r = zapi.enviar_texto(dono, msg)
         ok = bool(r.get('ok')) if isinstance(r, dict) else False
     except Exception:  # noqa: BLE001
         logger.exception('vigia venda sem item: envio WhatsApp explodiu')
@@ -248,7 +261,9 @@ def vigiar():
         return {'rodou': True, 'novas': len(novas), 'enviado': False,
                 'motivo': 'envio falhou — retenta no proximo ciclo'}
     for c in novas:
-        estado.setdefault(c['data'], []).append(c['id'])
+        estado['ids'].setdefault(c['data'], []).append(c['id'])
+    estado['ultimo_envio'] = agora_dt.isoformat()
+    estado['envios'][hoje_iso] = estado['envios'].get(hoje_iso, 0) + 1
     _gravar_estado(estado)
     return {'rodou': True, 'novas': len(novas), 'enviado': True,
             'valor_novas': round(sum(c['total'] for c in novas), 2)}
