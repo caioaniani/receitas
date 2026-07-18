@@ -129,6 +129,16 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
 - `GET /api/claude/acuracia?dias=&motor=` (16/07/2026): resumo do painel de
   acuracia + WAPE por (loja, receita) dos motores vivos — pro assistente
   diagnosticar de fora onde a previsao erra.
+- `GET /api/claude/vendas-snapshot?dias=&loja=&pedidos=1` (18/07/2026):
+  faturamento POR DIA do snapshot `VendaSeruDiaLoja` (itens vs total dos
+  pedidos) + lista ao vivo dos pedidos com a diferenca total−itens. Criada
+  no caso "card Por loja do /pdv/ mostra Nebraska R$10.355 mas foi
+  R$3.327": NAO era bug — 23 cobrancas "PDV Facil" SEM itens (so valor,
+  R$7.028,50) entraram na company Nebraska em 17/07 (3 no dia 16, R$113 —
+  comportamento novo; suspeita: operacao Bread & Brew, que parou de vender
+  na propria company apos 15/07). `faturamento_pedidos` (card/bot) conta
+  essas cobrancas; `faturamento_itens` (relatorio de produtos) nao — e
+  venda sem item NAO baixa estoque nem entra na previsao de demanda.
 - Testes: `tests/test_claude_api.py`.
 
 ## Cockpit do dono — briefing diario + home + manual (16/07/2026)
