@@ -2526,7 +2526,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # entrega em risco — o alerta e sobre pedido real. Como firme <=
         # max(firme, previsto), todo alerta aqui tambem aparece como falta na
         # projecao detalhada (subconjunto, nunca contradiz a tela).
-        running_f = int(rr['em_estoque'])
+        running_f = est_ef if rr.get('estoque_nao_abate') else int(rr['em_estoque'])
         entregas_risco = []
         for i, d in enumerate(dias_prod):
             prod_i = int(rr['por_dia'][i - L]['qtd'] or 0) if i - L >= 0 else 0
