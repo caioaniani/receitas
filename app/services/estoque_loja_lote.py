@@ -117,8 +117,13 @@ def _carregar_catalogo(loja_id):
     """Catalogo de match: receitas + produtos + materias-primas + orfaos
     daquela loja (EstoqueLoja com nome_pendente) + apelidos globais
     confirmados (VendaMapa canal='lote' mapeado)."""
-    receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
-    produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
+    # So ATIVOS no matcher (varredura 19/07/2026): nome de receita arquivada
+    # no balanco casava com ela e criava linha de EstoqueLoja morta (fantasma
+    # — sugestao de pedido e vitrine filtram arquivadas). Agora vira
+    # nome_pendente pro admin decidir, mesmo destino de item sem cadastro.
+    receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.ativas().all()]
+    produtos = [(p.id, p.nome, _ascii(p.nome))
+                for p in Produto.query.filter(Produto.ativo.is_(True)).all()]
     materias = [(m.id, m.nome, _ascii(m.nome)) for m in MateriaPrima.ativas().all()]
     orfaos = []
     if loja_id:
