@@ -626,8 +626,20 @@ def _catalogo_venda(excluir_venda_id=None):
     venda. `excluir_venda_id` (form de editar): o comprometido da propria
     venda nao desconta do disponivel exibido pra ela mesma."""
     clientes = ClienteB2B.query.filter_by(ativo=True).order_by(ClienteB2B.nome).all()
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    # ativas(): receita arquivada nao entra em venda NOVA (varredura
+    # 19/07/2026 — Produto ao lado ja filtrava; a divergencia era o furo).
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    # GRANDFATHER no editar (mesma regra do MP pedivel de 07/07/2026): item
+    # que JA esta na venda em edicao continua no catalogo mesmo arquivado —
+    # sem isso o re-salvar do form derrubaria a linha existente.
+    if excluir_venda_id:
+        venda_atual = VendaB2B.query.get(excluir_venda_id)
+        for it in (venda_atual.itens if venda_atual else []):
+            if it.receita_id and it.receita and it.receita.arquivada_em:
+                receitas.append(it.receita)
+            if it.produto_id and it.produto and not it.produto.ativo:
+                produtos.append(it.produto)
     # Preco atacado vem do cadastro: Receita.preco_venda, Produto.preco_atacado
     # (mesma logica de /cardapio?tipo=atacado).
     precos_map = {}
