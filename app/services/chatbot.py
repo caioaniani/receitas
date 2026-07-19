@@ -484,6 +484,8 @@ def salvar_historico(conv_id, historico, resposta, *, handoff=False,
             entrada = {'role': role, 'content': c}
             if m.get('handoff_em'):        # preserva marcador de turnos velhos
                 entrada['handoff_em'] = m['handoff_em']
+            if m.get('herdada'):           # contexto de conversa anterior
+                entrada['herdada'] = True
             msgs.append(entrada)
     if resposta and resposta.strip():
         entrada = {'role': 'assistant', 'content': resposta.strip()}
