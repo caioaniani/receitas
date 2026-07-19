@@ -580,7 +580,8 @@ def bot_webhook():
                     # Persiste o turno (msg atual + resposta) pro proximo contexto
                     chatbot.salvar_historico(
                         conv_id, historico, resultado.get('texto') or '',
-                        handoff=(resultado['acao'] == 'handoff'))
+                        handoff=(resultado['acao'] == 'handoff'),
+                        contato_key=telefone_contato)
                     if resultado['acao'] in ('handoff', 'handoff_repetido'):
                         res_status = chatwoot.definir_status(conv_id, 'open')
                         if res_status.get('ok'):
