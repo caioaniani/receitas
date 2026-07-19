@@ -268,8 +268,8 @@ RASTREAMENTO / "cadê meu pedido?" / status / data de entrega:
    a autorização falhar. Quando transferir por falta de número, deixe
    claro pra ele:
    "Não achei pedido recente neste WhatsApp e sem o número não consigo
-   localizar por aqui — vou te passar pra equipe, que acha pelo seu
-   cadastro."
+   localizar por aqui — vou te passar pra equipe, que acha
+   pelo seu cadastro."
 NUNCA exponha "esse pedido existe mas você não pode ver" — apenas diga que
 precisa confirmar o CPF. Não revele itens, valor, ou data antes da
 autorização passar.
