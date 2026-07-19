@@ -3557,10 +3557,12 @@ def loja_online_categorias():
     from app.models import CategoriaSite, Produto, Receita
     # Coleta TODAS as categorias usadas no catálogo (Produto + Receita).
     cats_uso = set()
-    for r in Receita.query.with_entities(Receita.categoria).distinct():
+    for r in (Receita.ativas()
+              .with_entities(Receita.categoria).distinct()):
         if r[0]:
             cats_uso.add(r[0].strip())
-    for p in Produto.query.with_entities(Produto.categoria).distinct():
+    for p in (Produto.query.filter(Produto.ativo.is_(True))
+              .with_entities(Produto.categoria).distinct()):
         if p[0]:
             cats_uso.add(p[0].strip())
 
