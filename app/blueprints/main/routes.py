@@ -717,7 +717,7 @@ def importar():
 @login_required
 @admin_required
 def todo():
-    receitas = Receita.query.filter(
+    receitas = Receita.ativas().filter(
         Receita.observacao.isnot(None), Receita.observacao != ''
     ).order_by(Receita.nome).all()
     produtos = Produto.query.filter(
