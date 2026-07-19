@@ -1233,15 +1233,24 @@ def followup_conversas_paradas():
             enviadas += 1
             # Persiste o cutucao no store local — sem isso o proximo turno do
             # bot nao sabia que cutucou. Mescla no ultimo assistant (a API
-            # nao aceita dois turnos assistant seguidos).
+            # nao aceita dois turnos assistant seguidos). Locks do webhook
+            # em volta do read-modify-write (revisao 19/07/2026 — mesmo
+            # racional da vassoura).
             try:
-                base = carregar_historico(conv_id)
-                if base and base[-1].get('role') == 'assistant':
-                    base[-1]['content'] = (
-                        (base[-1].get('content') or '') + '\n\n' + texto).strip()
-                else:
-                    base.append({'role': 'assistant', 'content': texto})
-                salvar_historico(conv_id, base, '')
+                from app.blueprints.crm.routes import (
+                    _lock_conv_cross_worker,
+                    _lock_para_conv,
+                )
+                with _lock_para_conv(conv_id), \
+                        _lock_conv_cross_worker(conv_id):
+                    base = carregar_historico(conv_id)
+                    if base and base[-1].get('role') == 'assistant':
+                        base[-1]['content'] = (
+                            (base[-1].get('content') or '')
+                            + '\n\n' + texto).strip()
+                    else:
+                        base.append({'role': 'assistant', 'content': texto})
+                    salvar_historico(conv_id, base, '')
             except Exception:  # noqa: BLE001
                 logger.exception('followup: persistir no store falhou conv=%s',
                                  conv_id)
