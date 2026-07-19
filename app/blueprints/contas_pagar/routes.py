@@ -642,7 +642,8 @@ def mapeamentos():
             unid_nf = (exemplos.get(m.item_nome_norm) or {}).get('unidade')
             sugestoes[m.id] = sugerir_para_item(m.item_nome_exemplo,
                                                 unidade_nf=unid_nf)[:3]
-    mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    # ativas(): mesmo racional do detalhe da conta (varredura 19/07/2026).
+    mps = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
     from app.models import Produto
     produtos = (Produto.query.filter_by(ativo=True)
                 .order_by(Produto.nome).all())
