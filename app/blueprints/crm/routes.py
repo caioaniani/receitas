@@ -75,7 +75,10 @@ def _lock_conv_cross_worker(conv_id):
         yield
         return
     objid = _zlib.crc32(str(conv_id).encode()) & 0x7FFFFFFF
-    conn = eng.connect()
+    # AUTOCOMMIT: sem isso o SELECT do lock abre transacao que fica "idle in
+    # transaction" o turno inteiro (segura snapshot/vacuum). O advisory lock
+    # e de SESSAO — sobrevive fora de transacao.
+    conn = eng.connect().execution_options(isolation_level='AUTOCOMMIT')
     try:
         conn.execute(_text('SELECT pg_advisory_lock(:c, :o)'),
                      {'c': _LOCK_CLASS_CHATBOT, 'o': objid})
@@ -86,7 +89,13 @@ def _lock_conv_cross_worker(conv_id):
                 conn.execute(_text('SELECT pg_advisory_unlock(:c, :o)'),
                              {'c': _LOCK_CLASS_CHATBOT, 'o': objid})
             except Exception:  # noqa: BLE001
-                logger.exception('unlock advisory conv=%s falhou', conv_id)
+                # NUNCA devolver ao pool uma conexao que pode estar com o
+                # lock preso — outra request a pegaria e a conversa ficaria
+                # travada pra sempre. Invalidate descarta a conexao fisica
+                # (o Postgres solta o lock quando ela morre).
+                logger.exception('unlock advisory conv=%s falhou — '
+                                 'invalidando conexao', conv_id)
+                conn.invalidate()
     finally:
         conn.close()
 
