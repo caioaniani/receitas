@@ -295,6 +295,12 @@ def _e_loop_repetido(historico, minimo=3):
     users = []
     assistants_entre = 0
     for m in reversed(historico or []):
+        if (m or {}).get('herdada'):
+            # Contexto herdado de conversa ANTERIOR não conta pro loop:
+            # cliente que sempre abre com "oi" acumularia 3 users idênticos
+            # através da herança encadeada e seria engolido em silêncio
+            # (revisão 19/07/2026).
+            continue
         role = (m or {}).get('role')
         if role == 'user':
             users.append(_norm_msg(m))
