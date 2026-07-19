@@ -712,10 +712,17 @@ tivesse nao deveria considerar"). Decisoes do dono, todas na mesma conversa:
   A producao JA MANDADA (WIP do plano de hoje) SEGUE contando (senao a
   sugestao de amanha duplicaria a ordem em execucao) e cobre a vespera;
   fisico ignorado que nao cobre vespera vira aviso `insumo_sem_vespera`
-  (desejado: o dono confere a geladeira na mao). `em_estoque_efetivo`
-  exibido segue o real; tag "📦 estoque nao abate" na linha do grid. O
-  consumo REAL na producao continua debitando EstoqueProducao — flag e SO
-  de planejamento.
+  (desejado: o dono confere a geladeira na mao). Pos-revisao: na LINHA do
+  cronograma, saldo/produzir/projecao/entregas_risco tambem usam o numero
+  de planejamento (WIP) — fisico fantasma nao faz a caixa dizer "nao
+  falta" com a linha produzindo (classe do bug de 30/06) nem CALA o 🚨 de
+  entrega em risco; o real segue visivel em `em_estoque`. Tag "📦 estoque
+  nao abate" na linha do grid + campo nas sondas de receita e cronograma.
+  O consumo REAL na producao continua debitando EstoqueProducao — flag e
+  SO de planejamento. Consequencia ACEITA: a offset 0 (grid comecando
+  hoje) o WIP e vazio por desenho, entao a massa flagged mostra o aviso
+  "sem vespera" com frequencia — e o convite pra conferir a geladeira,
+  nao um bug.
 - Ficha do croissant tradicional: 86 g de massa/un = 50 x 86 / 3.580 =
   **1,2011 bola/batida** (estava 1.0 = 71,6 g; o 1,257 de 03/07 era 90 g).
   Backfill guardado em `porcentagem = 1.0` no mesmo commit 1.
