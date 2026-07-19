@@ -73,3 +73,26 @@ def test_impressao_mostra_todas_categorias(app, admin_user):
     assert '@media print' in body
     import re
     assert re.search(r'\.cat-section\s*\{[^}]*display:\s*block\s*!important', body)
+
+
+def test_receita_arquivada_fora_do_cardapio(app, admin_user):
+    """Caso real 19/07/2026: "Pão de queijo un" (arquivada em 01/07, preço
+    atacado R$ 0,50) aparecia no /cardapio?tipo=atacado — a query de
+    receitas não filtrava arquivada_em (os produtos já filtravam ativo)."""
+    from app.extensions import db
+    from app.models import Receita
+    from app.utils import agora
+    with app.app_context():
+        viva = Receita(nome='Sourdough Cardapio', categoria='Paes',
+                       rendimento_qtd=1, rendimento_unidade='un',
+                       peso_base=1000.0, preco_venda=25.0)
+        morta = Receita(nome='Pao de Queijo Morto', categoria='Outros',
+                        rendimento_qtd=1, rendimento_unidade='un',
+                        peso_base=100.0, preco_venda=0.5,
+                        arquivada_em=agora())
+        db.session.add_all([viva, morta])
+        db.session.commit()
+    c = _login(app, admin_user)
+    body = c.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert 'Sourdough Cardapio' in body
+    assert 'Pao de Queijo Morto' not in body
