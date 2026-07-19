@@ -1965,10 +1965,22 @@ estoque nem entram na previsao.
   `taxInvoice.xmlUrl` (S3 da Seru) entrega o XML da NFC-e com os
   produtos REAIS (<det><prod><xProd>/qCom/vProd — provado no pedido
   3377f6c3/NF 724: 6x Pao Frances + 1x Croissant Nutella Com Morango +
-  1x Brioche, nomes iguais aos do SeruProdutoMap). Caminho da feature:
-  pedido sem itens COM NF -> baixar XML -> extrair produtos -> motor de
-  baixa existente. NAO construido ainda — mexe no seru_sync (estoque),
-  aguarda GO do dono no desenho.
+  1x Brioche, nomes iguais aos do SeruProdutoMap). **CONSTRUIDO
+  19/07/2026 (GO do dono)**: `seru.itens_da_nf(pedido)` baixa o XML do
+  `taxInvoice.xmlUrl` (cap 3MB, parser ElementTree namespace-agnostico)
+  e devolve itens na MESMA forma de `extrair_itens`; o
+  `seru_sync.processar_pedidos` enriquece pedido NOVO sem itens antes da
+  baixa — mesmos mapeamentos/motor/idempotencia de sempre. Contratos:
+  sem NF nenhuma = [] (processado com 0 itens, status quo); NF
+  cancelada/negada = []; download/parse FALHOU = None -> pedido NAO
+  marca processado (`pedidos_aguardando_nf` no stats, retenta no
+  proximo ciclo — padrao do aguardando-loja). Item da NF sem mapa vira
+  pendente em /pdv/mapeamentos como qualquer venda. Pedido COM itens
+  nunca consulta a NF (zero custo extra). O relatorio de PRODUTOS
+  (captura vendas_diarias) segue SEM os itens do delivery (bucket 🛵) —
+  enriquecer a captura re-baixaria o XML a cada ciclo de 15min;
+  previsao motor=vendas JA enxerga (le MovEstoqueLoja, que a baixa
+  cria). Testes: `tests/test_seru_nf_itens.py` (6 casos).
 
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
