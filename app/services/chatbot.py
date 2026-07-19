@@ -447,7 +447,8 @@ def contexto_do_contato(contato_key, *, excluir_conv=None):
         msgs[-1] = dict(msgs[-1],
                         content=msgs[-1]['content'] + '\n\n' + marcador)
     else:
-        msgs.append({'role': 'assistant', 'content': marcador})
+        msgs.append({'role': 'assistant', 'content': marcador,
+                     'herdada': True})
     logger.info('chatbot: contexto cross-conversa herdado de conv=%s '
                 '(%d msgs)', conv.conv_id, len(msgs))
     return msgs
