@@ -344,8 +344,7 @@
             avisos += '<div class="alert alert-light border py-2 small mb-2">' +
                 '<i class="bi bi-bicycle"></i> Delivery sem itens detalhados ' +
                 '(99Food e afins): R$ ' + fmt(delivV) + ' — <strong>conta no ' +
-                'faturamento</strong>, mas não baixa estoque nem entra na ' +
-                'previsão.</div>';
+                'faturamento</strong>; o estoque baixa pela NF do pedido.</div>';
         }
         document.getElementById('pdv-msg').innerHTML = avisos;
         var pedidosValidos = d.total_pedidos - d.cancelados - semN;
