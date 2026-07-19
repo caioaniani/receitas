@@ -2493,7 +2493,9 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # dia de INICIO). Producao iniciada nos ultimos L dias fica pronta depois
         # do horizonte -> nao entra na projecao (correto).
         L = lead.get(rid, 0)
-        running = int(rr['em_estoque'])
+        # Flag "estoque nao abate": a projecao parte do numero de
+        # planejamento (WIP), nunca do fisico do ledger.
+        running = est_ef if rr.get('estoque_nao_abate') else int(rr['em_estoque'])
         projecao = []
         rr['dia_falta'] = None
         for i, d in enumerate(dias_prod):
