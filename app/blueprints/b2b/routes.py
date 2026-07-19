@@ -427,9 +427,18 @@ def cliente_precos(cid):
     for kind, iid in sorted(faltantes):
         obj = (Receita.query.get(iid) if kind == 'receita'
                else Produto.query.get(iid))
-        if obj:
-            _add(kind, obj, (obj.preco_venda if kind == 'receita'
-                             else obj.preco_atacado) or None)
+        # Item arquivado/desativado fica FORA da gestao de precos futuros
+        # (varredura 19/07/2026): aparecia misturado aos ativos sem badge e
+        # o POST aceitava salvar preco novo pra ele. O historico de preco
+        # segue no banco; a tela e do portfolio vivo.
+        if obj is None:
+            continue
+        if kind == 'receita' and obj.arquivada_em:
+            continue
+        if kind == 'produto' and not obj.ativo:
+            continue
+        _add(kind, obj, (obj.preco_venda if kind == 'receita'
+                         else obj.preco_atacado) or None)
 
     return render_template('b2b/cliente_precos.html', cliente=cliente,
                            itens=itens)
