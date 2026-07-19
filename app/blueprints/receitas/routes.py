@@ -915,6 +915,9 @@ def salvar(id):
     receita.estado_padrao = ep if ep in ('assado', 'backup') else None
     receita.reaproveitavel = bool(request.form.get('reaproveitavel'))
     receita.sub_na_amassadeira = bool(request.form.get('sub_na_amassadeira'))
+    # Estoque fisico nao abate a producao sugerida (balanco/cronograma) —
+    # so a producao ja mandada conta. Caso Massa para folhar (dono 19/07/2026).
+    receita.estoque_nao_abate = bool(request.form.get('estoque_nao_abate'))
     # Receita de retorno (devolucao loja->industria): sobras devolvidas creditam
     # esta receita. Valida existencia e evita auto-referencia; vazio = NULL.
     try:
