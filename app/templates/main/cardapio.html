@@ -362,7 +362,10 @@ footer p { margin: 0; }
     </a>
     {% endif %}
     {% endif %}
-    <a href="javascript:window.print()" class="tipo-btn"><i class="bi bi-printer"></i> Imprimir</a>
+    {# PDF do SERVIDOR (19/07/2026) — window.print() re-paginava o site de
+       qualquer jeito (cards cortados, URL no rodapé). NUNCA reintroduzir. #}
+    <a href="{{ url_for('main.cardapio_pdf_export', tipo=tipo) }}" class="tipo-btn"
+       target="_blank"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</a>
 </div>
 
 <section class="hero">
