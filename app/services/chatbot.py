@@ -949,8 +949,10 @@ def responder(historico, *, telefone_contato=None):
                                  'consultar_pedido, calcular_frete...). '
                                  'Assunto é pedido/cartinha/confirmação de '
                                  'compra? Chame consultar_pedido com o número '
-                                 '(peça o número ao cliente se precisar) — '
-                                 'ele devolve status, valores rotulados e o '
+                                 '— e se o cliente NÃO tiver o número, chame '
+                                 'com numero vazio (localiza os pedidos '
+                                 'recentes pelo telefone deste WhatsApp). '
+                                 'Ele devolve status, valores rotulados e o '
                                  'texto da cartinha. Se após consultar ainda '
                                  'não conseguir, aí sim transfira.')},
                         ensure_ascii=False),
