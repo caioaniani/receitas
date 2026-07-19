@@ -699,6 +699,29 @@ o "+900" de 01/07 foi o padeiro lancando em outra escala — o expandir de
 /pedidos/congelados (5 creditos + 5 debitos por item) foi criado nesse
 debug. Testes: `tests/test_consumo_sub_fracao.py`.
 
+**Flag "estoque nao abate" + ficha do croissant a 86 g (19/07/2026)**: caso
+real — a linha da Massa para folhar mostrava "em estoque: 2" (ledger, nao
+geladeira) e a sugestao de massa pros 300 pains de terca saia 5 em vez de 7
+("nao e so isso de massa que eu preciso... nao tenho 2 massas la e mesmo se
+tivesse nao deveria considerar"). Decisoes do dono, todas na mesma conversa:
+- `Receita.estoque_nao_abate` (checkbox na ficha; ALTER + backfill unico
+  marcando a Massa para folhar em `migrations_legacy`, procedimento de 2
+  commits): o estoque FISICO da receita nunca abate a producao sugerida —
+  balanco (`produzir = alvo - wip` em vez de `- est_efetivo`), MRP
+  (`_explodir_bom._estoque_livre` usa so `em_producao`) e o shaping por dia.
+  A producao JA MANDADA (WIP do plano de hoje) SEGUE contando (senao a
+  sugestao de amanha duplicaria a ordem em execucao) e cobre a vespera;
+  fisico ignorado que nao cobre vespera vira aviso `insumo_sem_vespera`
+  (desejado: o dono confere a geladeira na mao). `em_estoque_efetivo`
+  exibido segue o real; tag "📦 estoque nao abate" na linha do grid. O
+  consumo REAL na producao continua debitando EstoqueProducao — flag e SO
+  de planejamento.
+- Ficha do croissant tradicional: 86 g de massa/un = 50 x 86 / 3.580 =
+  **1,2011 bola/batida** (estava 1.0 = 71,6 g; o 1,257 de 03/07 era 90 g).
+  Backfill guardado em `porcentagem = 1.0` no mesmo commit 1.
+- Pain au Chocolat confirmado 1,0 bola/lote de 45 (~80 g/un) — nao mexer.
+Testes: `tests/test_estoque_nao_abate.py` (7 casos).
+
 **Sub-receita DE AMASSADEIRA vs DE MONTAGEM (15/07/2026)**: o dono converteu
 o Levain de MP pra sub-receita "Levain (pé)" nas fichas dos sourdoughs (pro
 cronograma agendar o levain na vespera — protecao pos-falta de levain) e a
