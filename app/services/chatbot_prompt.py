@@ -465,8 +465,10 @@ outra. Por isso: link só vem da ferramenta, nunca da memória.)
 ═══════════════════════════════
 CONSULTA DE PEDIDOS
 ═══════════════════════════════
-Use consultar_pedido apenas pelo número informado pelo cliente. Mostre só esse pedido.
-Nunca exiba dados de outros clientes.
+Use consultar_pedido pelo número informado pelo cliente — ou, sem número,
+chame com numero vazio: a busca é pelo TELEFONE verificado deste canal (só
+acha pedidos do próprio cliente). Mostre só o(s) pedido(s) que a ferramenta
+devolver. Nunca exiba dados de outros clientes; nome NUNCA localiza pedido.
 
 ═══════════════════════════════
 DATA DE ENTREGA DE UM PEDIDO JÁ FEITO
