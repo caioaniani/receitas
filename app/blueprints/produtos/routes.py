@@ -215,7 +215,15 @@ def salvar_composicao(id):
     produto.observacao = request.form.get('observacao', '').strip() or None
     produto.reaproveitavel = bool(request.form.get('reaproveitavel'))
 
-    # Recriar itens
+    # Recriar itens. Antes de apagar, guarda as FKs atuais por (tipo, nome):
+    # GRANDFATHER da linha existente (pos-revisao 19/07/2026) — componente
+    # cuja receita foi ARQUIVADA depois de vinculado nao pode virar orfao em
+    # silencio num salvar que mexeu em OUTRA linha (a baixa de venda dele
+    # pararia). Sem match ativo, a linha reusa a FK que ja tinha.
+    fks_atuais = {}
+    for it in ProdutoItem.query.filter_by(produto_id=produto.id).all():
+        fks_atuais[(it.tipo, (it.item_nome or '').strip())] = (
+            it.receita_id, it.produto_componente_id, it.materia_prima_id)
     ProdutoItem.query.filter_by(produto_id=produto.id).delete()
 
     tipos = request.form.getlist('item_tipo[]')
