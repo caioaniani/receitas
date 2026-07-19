@@ -168,7 +168,9 @@ def rentabilidade():
 
     resultado = calcular_custos_receitas()
     custos_receita = resultado['custos']
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    # ativas(): decisao de preco/margem e sobre o portfolio vivo (varredura
+    # 19/07/2026 — arquivadas apareciam misturadas sem marcacao).
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     # Impostos sobre venda (PIS/COFINS/ICMS, dono 13/07/2026): lucro/margem
     # exibidos são LÍQUIDOS — preço × (1 − carga) − custo.
     carga = impostos.carga_venda()
