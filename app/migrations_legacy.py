@@ -1391,6 +1391,18 @@ def _migrate_postgres(app):
     _try("ALTER TABLE pedido_online_item ADD COLUMN IF NOT EXISTS "
          "fatiado BOOLEAN")
 
+    # Memoria cross-conversa do bot de atendimento (19/07/2026, achado do
+    # auditor "bot reiniciando do zero"): chatbot_conversa era chaveada SO
+    # pelo conversation_id do Chatwoot — cliente que volta em conversa NOVA
+    # perdia todo o contexto. `contato_key` = telefone canonizado do contato;
+    # conversa nova busca o historico recente do MESMO contato. Procedimento
+    # de 2 commits: este ALTER deploya ANTES do modelo. NULL = conversa
+    # antiga sem telefone capturado (sem memoria retroativa).
+    _try("ALTER TABLE chatbot_conversa ADD COLUMN IF NOT EXISTS "
+         "contato_key VARCHAR(40)")
+    _try("CREATE INDEX IF NOT EXISTS ix_chatbot_conversa_contato_key "
+         "ON chatbot_conversa (contato_key)")
+
     # Motivo do cancelamento (25/06/2026) — registra POR QUE um pedido do site
     # foi cancelado (pix_expirado / reembolso / cancelado_admin) em vez de
     # deduzir pelos timestamps. Coluna nullable; pedidos cancelados antes desta
