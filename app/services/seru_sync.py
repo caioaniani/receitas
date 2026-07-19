@@ -315,8 +315,14 @@ def processar_pedidos(data_inicial, data_final, user=None,
                 stats['pedidos_cancelados_estornados'] += 1
             continue
 
-        # Pedido novo
-        if cancelado_at:
+        # Pedido novo. Cancelado por canceledAt OU por status=='canceled'
+        # (caso real 18/07/2026: cobranca cancelada veio com canceledAt
+        # VAZIO — sem este guard, um pedido assim COM NF autorizada
+        # baixaria estoque de venda cancelada e o estorno, keyed em
+        # canceledAt, nunca dispararia). O gatilho de ESTORNO de pedido ja
+        # processado segue keyed em canceledAt (decisao separada,
+        # documentada no CLAUDE.md).
+        if cancelado_at or seru.pedido_cancelado(p):
             # Ja cancelado — registra mas nao processa items
             db.session.add(SeruPedidoProcessado(
                 seru_pedido_id=pid,
