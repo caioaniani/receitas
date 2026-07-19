@@ -4236,8 +4236,12 @@ def _resolver_item_qualquer(nome):
                              Receita.arquivada_em.is_(None)).first()
     if r:
         return ('receita', r.id, r.nome)
-    p = Produto.query.filter(func.lower(Produto.nome) == nome.lower(),
-                             Produto.ativo.is_(True)).first()
+    # Produto SEM filtro de ativo DE PROPOSITO (pos-revisao 19/07/2026):
+    # este resolver serve desperdicio/devolucao/retirada — operacoes sobre
+    # estoque FISICO ja existente. Produto soft-deletado com saldo
+    # remanescente precisa continuar escoavel pelo bot (a criacao de pedido/
+    # venda nova usa _resolver_produto, esse sim filtrado).
+    p = Produto.query.filter(func.lower(Produto.nome) == nome.lower()).first()
     if p:
         return ('produto', p.id, p.nome)
     m = MateriaPrima.ativas().filter(func.lower(MateriaPrima.nome) == nome.lower()).first()
@@ -4248,8 +4252,7 @@ def _resolver_item_qualquer(nome):
     for r in (Receita.query.filter(Receita.nome.ilike(f'%{nome}%'),
                                    Receita.arquivada_em.is_(None)).limit(10).all()):
         cands.append(('receita', r.id, r.nome))
-    for p in (Produto.query.filter(Produto.nome.ilike(f'%{nome}%'),
-                                   Produto.ativo.is_(True)).limit(10).all()):
+    for p in Produto.query.filter(Produto.nome.ilike(f'%{nome}%')).limit(10).all():
         cands.append(('produto', p.id, p.nome))
     for m in MateriaPrima.ativas().filter(MateriaPrima.nome.ilike(f'%{nome}%')).limit(10).all():
         cands.append(('mp', m.id, m.nome))
