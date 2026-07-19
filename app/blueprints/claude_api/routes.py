@@ -1326,3 +1326,67 @@ def spotify_debug():
         out['csp_reports'] = out.get('csp_reports') or []
         out['spotify_log'] = []
     return jsonify(out)
+
+
+@claude_api_bp.route('/vigia-vereditos')
+@_claude_auth_required
+def vigia_vereditos():
+    """Vereditos do vigia do chatbot direto do BANCO (19/07/2026).
+
+    O /admin/vigia/diag é memória volátil (zera no deploy) e o relatório do
+    auditor não traz conv_id — sem esta sonda, investigar "bot perdeu
+    contexto 2x" de fora exigia query manual no Postgres.
+
+    Params: ?dias=1 (1-30), ?limite=200 (1-500), ?conv=<conv_id> (filtro),
+    ?conversa=<conv_id> devolve TAMBÉM o store da conversa
+    (ChatbotConversa.mensagens_json) pra ler o diálogo como o bot viu.
+    """
+    from datetime import timedelta
+
+    from app.models import ChatbotConversa, VigiaVeredito
+    from app.utils import agora
+
+    dias = _int_arg('dias', 1, 1, 30)
+    limite = _int_arg('limite', 200, 1, 500)
+    corte = agora() - timedelta(days=dias)
+    q = VigiaVeredito.query.filter(VigiaVeredito.criado_em >= corte)
+    conv_filtro = (request.args.get('conv') or '').strip()
+    if conv_filtro:
+        q = q.filter(VigiaVeredito.conv_id == conv_filtro)
+    linhas = (q.order_by(VigiaVeredito.criado_em.desc())
+              .limit(limite).all())
+    out = {
+        'ok': True,
+        'dias': dias,
+        'total': len(linhas),
+        'vereditos': [{
+            'id': v.id,
+            'criado_em': v.criado_em.isoformat() if v.criado_em else None,
+            'conv_id': v.conv_id,
+            'cliente': v.cliente,
+            'mensagem_cliente': (v.mensagem_cliente or '')[:300],
+            'bot_acao': v.bot_acao,
+            'bot_motivo': v.bot_motivo,
+            'alerta': bool(v.alerta),
+            'gravidade': v.gravidade,
+            'motivo_vigia': v.motivo_vigia,
+            'tools_usadas': v.tools_usadas,
+            'enviado_whatsapp': bool(v.enviado_whatsapp),
+        } for v in linhas],
+    }
+    conversa = (request.args.get('conversa') or '').strip()
+    if conversa:
+        import json as _json
+        c = ChatbotConversa.query.filter_by(conv_id=conversa).first()
+        try:
+            msgs = _json.loads(c.mensagens_json) if c else []
+        except (ValueError, TypeError):
+            msgs = []
+        out['conversa'] = {
+            'conv_id': conversa,
+            'existe_no_store': c is not None,
+            'ultima_msg_em': (c.ultima_msg_em.isoformat()
+                              if c and c.ultima_msg_em else None),
+            'mensagens': msgs,
+        }
+    return jsonify(out)
