@@ -2106,6 +2106,40 @@ fatiam janelas de N chars; ao editar secao coberta, rodar o arquivo de
 teste do prompt antes do push. Testes do pacote:
 `tests/test_bot_memoria_busca.py` (17 casos).
 
+## Arquivado NUNCA entra em fluxo ativo (varredura 19/07/2026)
+
+Caso gatilho: "Pao de queijo un" (Receita ARQUIVADA em 01/07, preco atacado
+R$ 0,50) aparecendo no /cardapio?tipo=atacado — a query de receitas do
+cardapio nao filtrava `arquivada_em` (dono: "como que o sistema coloca algo
+arquivado em paginas ativas?"). Varredura sistemica achou a MESMA classe em
+~20 pontos; todos corrigidos com os helpers canonicos ja existentes:
+`Receita.ativas()` (docstring manda usar em pickers/matchers/seletores),
+`Produto.ativo=True`, `MateriaPrima.ativas()`. Historico continua lendo
+`query` cru DE PROPOSITO (pedido antigo mostra o que foi vendido).
+
+Pontos corrigidos (alem do /cardapio, que tambem alimenta o PDF):
+typeahead do pedido loja→industria (`pedidos/buscar-itens.json`),
+`_catalogo_venda` do B2B (com GRANDFATHER no editar: item ja na venda segue
+visivel mesmo arquivado), copilot (`_resolver_produto` 3 ramos,
+`_resolver_item_qualquer`, `_catalogo_texto`, `consultar_margem` — produto
+soft-deletado era resolvivel pra pedido/venda NOVOS), matchers de estoque
+em lote (`estoque_loja_lote._carregar_catalogo` + `sugerir_para_pendentes`)
+e congelados (`estoque_congelados._carregar_catalogo`) — nome de arquivada
+agora vira `nome_pendente` em vez de ressuscitar linha morta, plano manual
+(/producao/novo), typeahead do padeiro (produzir), selects de vincular MP
+do contas-a-pagar (detalhe + mapeamentos), orfaos de cesta + resolucao por
+nome do salvar composicao (homonima arquivada nao amarra mais FK),
+dashboard (receita_estimada/margem_geral), /rentabilidade,
+/relatorios/custos (+CSV), margem por categoria, /relatorios/ingredientes,
+/todo, revisar fotos, categorias da vitrine, tabela de precos por cliente
+B2B (faltantes) e **aprovacao de orcamento B2B re-valida** item arquivado/
+inativo no gesto (aprovar cria VendaB2B na hora; item morto = erro claro).
+Testes: `tests/test_arquivadas_fora_de_fluxo_ativo.py` + regressao do
+cardapio em `tests/test_cardapio_atacado_regras.py`. REGRA: picker/matcher/
+resolver NOVO usa SEMPRE os helpers `ativas()`/`ativo=True` — e "excluir"
+de Produto com historico vira `ativo=False` (soft-delete), entao filtrar so
+Receita nunca basta.
+
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
 - **Vigia de custo de IA** (`app/services/uso_ia_vigia.py`): cron 1h
