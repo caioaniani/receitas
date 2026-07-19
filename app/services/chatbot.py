@@ -384,7 +384,14 @@ def contexto_do_contato(contato_key, *, excluir_conv=None):
     primeira vez nem confundir com o turno atual. [] se nao houver.
 
     O marcador respeita a alternancia user/assistant (mescla no ultimo
-    assistant ou entra como assistant novo)."""
+    assistant ou entra como assistant novo).
+
+    Toda mensagem herdada sai com `herdada: True` (persistida pelo
+    `salvar_historico`): o detector de loop (`_e_loop_repetido`) as ignora
+    (3 "oi" de saudacao em conversas DIFERENTES nao e assinatura de bot) e
+    a heranca nao ENCADEIA — msg ja herdada na conversa anterior fica fora
+    (senao cada conversa arrastava marcadores antigos no meio do contexto).
+    Ambos achados da revisao 19/07/2026."""
     from app.models import ChatbotConversa
     from app.utils import agora
     key = (contato_key or '').strip()
@@ -398,25 +405,37 @@ def contexto_do_contato(contato_key, *, excluir_conv=None):
              .filter(ChatbotConversa.ultima_msg_em >= corte))
         if excluir_conv is not None:
             q = q.filter(ChatbotConversa.conv_id != str(excluir_conv))
-        conv = q.order_by(ChatbotConversa.ultima_msg_em.desc()).first()
+        # Ate 3 candidatas: a mais recente pode ter store vazio/corrompido
+        # (fallback pra proxima em vez de desistir).
+        candidatas = (q.order_by(ChatbotConversa.ultima_msg_em.desc())
+                      .limit(3).all())
     except Exception:  # noqa: BLE001
         logger.exception('contexto_do_contato falhou key=%s', key)
         return []
-    if not conv:
-        return []
-    try:
-        msgs = json.loads(conv.mensagens_json or '[]')
-    except (ValueError, TypeError):
-        return []
-    if not isinstance(msgs, list):
-        return []
-    msgs = [{'role': m['role'], 'content': (m.get('content') or '').strip(),
-             **({'handoff_em': m['handoff_em']} if m.get('handoff_em') else {})}
-            for m in msgs
-            if isinstance(m, dict) and m.get('role') in ('user', 'assistant')
-            and (m.get('content') or '').strip()]
-    msgs = msgs[-CONTEXTO_CONTATO_MAX_MSGS:]
-    if not msgs:
+    conv = None
+    msgs = []
+    for cand in candidatas:
+        try:
+            brutas = json.loads(cand.mensagens_json or '[]')
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(brutas, list):
+            continue
+        msgs = [{'role': m['role'],
+                 'content': (m.get('content') or '').strip(),
+                 'herdada': True,
+                 **({'handoff_em': m['handoff_em']}
+                    if m.get('handoff_em') else {})}
+                for m in brutas
+                if isinstance(m, dict)
+                and m.get('role') in ('user', 'assistant')
+                and (m.get('content') or '').strip()
+                and not m.get('herdada')]
+        msgs = msgs[-CONTEXTO_CONTATO_MAX_MSGS:]
+        if msgs:
+            conv = cand
+            break
+    if not conv or not msgs:
         return []
     quando = (conv.ultima_msg_em.strftime('%d/%m %H:%M')
               if conv.ultima_msg_em else 'data desconhecida')
