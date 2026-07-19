@@ -76,9 +76,10 @@ def test_tela_troca_imprimir_por_exportar_pdf(app, admin_user, cliente):
 
 
 def test_item_sem_foto_e_com_foto_blob(app, admin_user, cliente):
-    """Item com BLOB entra no grid (bytes locais, sem rede); item sem foto
-    vira linha de texto; receita sem preço fica fora — o PDF gera pra
-    qualquer mistura."""
+    """Item com BLOB entra no grid (bytes locais, sem rede); na regra do
+    site, categoria com alguma foto vira grid com TODOS (sem foto =
+    placeholder); receita sem preço fica fora — o PDF gera pra qualquer
+    mistura."""
     _seed()
     _login(cliente, admin_user)
     resp = cliente.get('/cardapio.pdf?tipo=atacado')
