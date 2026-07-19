@@ -369,15 +369,17 @@ def processar_pedidos(data_inicial, data_final, user=None,
             # Pedido SEM itens (delivery 99Food / cobrança avulsa): a NFC-e
             # emitida traz os produtos REAIS — enriquece pra dar baixa
             # (pedido do dono 18/07/2026; nomes da NF = nomes do
-            # SeruProdutoMap, mesmo motor de mapeamento de sempre).
-            nf_itens = seru.itens_da_nf(p)
+            # SeruProdutoMap, mesmo motor de mapeamento de sempre). O XML
+            # foi pré-buscado FORA do lock (nf_cache); o fallback inline
+            # cobre pedido que escapou da pré-busca (defensivo, raro).
+            nf_itens = (nf_cache[pid] if pid in nf_cache
+                        else seru.itens_da_nf(p))
             if nf_itens is None:
                 # NF existe mas o download/parse falhou: NÃO marca como
                 # processado — retenta no próximo ciclo (padrão do
                 # "aguardando loja"). Sem NF nenhuma, nf_itens vem [] e o
                 # pedido segue o fluxo normal (processado com 0 itens).
-                stats['pedidos_aguardando_nf'] = \
-                    stats.get('pedidos_aguardando_nf', 0) + 1
+                stats['pedidos_aguardando_nf'] += 1
                 continue
             itens = nf_itens
         n_total = len(itens)
