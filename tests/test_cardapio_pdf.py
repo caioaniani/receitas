@@ -151,5 +151,6 @@ def test_rota_le_regras_do_appconfig(app, admin_user, cliente):
     _seed()
     AppConfig.set('cardapio_atacado_pedido_minimo', 'R$500,00')
     db.session.commit()
-    _, regras = _cardapio_categorias('atacado')
+    with app.test_request_context():             # url_for das fotos internas
+        _, regras = _cardapio_categorias('atacado')
     assert any(r['valor'] == 'R$500,00' for r in regras)
