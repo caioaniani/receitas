@@ -522,7 +522,7 @@ def cardapio_img_revisar():
     from sqlalchemy.orm import defer
     if not current_user.is_admin():
         abort(403)
-    receitas_com_foto = (Receita.query
+    receitas_com_foto = (Receita.ativas()
                          .options(defer(Receita.imagem_blob),
                                   defer(Receita.imagem_mimetype))
                          .filter(or_(Receita.imagem_blob.isnot(None),
