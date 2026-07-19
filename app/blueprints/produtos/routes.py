@@ -259,6 +259,13 @@ def salvar_composicao(id):
             m = MateriaPrima.ativas().filter_by(nome=nome).first()
             materia_prima_id = m.id if m else None
 
+        # Sem match ATIVO: reusa a FK que a linha ja tinha (grandfather) —
+        # so linha NOVA com nome de arquivada vira orfao de verdade.
+        if not (receita_id or produto_componente_id or materia_prima_id):
+            antigos = fks_atuais.get((tipo, nome))
+            if antigos:
+                receita_id, produto_componente_id, materia_prima_id = antigos
+
         item = ProdutoItem(
             produto_id=produto.id,
             tipo=tipo,
