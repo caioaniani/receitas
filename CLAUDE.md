@@ -795,7 +795,27 @@ entregas:
   manual (duplicaria: nutella vendida antes do aviso ja baixou o retorno).
   Testes: `tests/test_retirada_coleta_divergencia.py`.
 - Testes: `tests/test_retirada_sobras.py`. PENDENTE (nao bloqueia): mostrar
-  retiradas do dia no Painel de Entregas e lista web com cancelamento.
+  retiradas do dia no Painel de Entregas.
+- **Destrava de baixas presas (19/07/2026, caso retirada #16 Nebraska presa
+  em_transporte 12h+ — "o pessoal esta se perdendo")**: o unico caminho
+  em_transporte→recebida era o QR de recebimento (PIN de motorista) e o
+  alerta so repetia "escaneie o QR". Agora, na lista `/pedidos/retiradas`
+  (admin): **"Confirmar recebimento (manual)"** — mercadoria CHEGOU e
+  ninguem escaneou; `devolucao.receber_retirada_manual` credita a industria
+  com conferencia por item (PRIMEIRO caminho que escreve
+  `quantidade_recebida`; antes o form do QR so pedia PIN e o campo era
+  morto), mata QRs pendentes (scan atrasado leva 410, nunca credita 2x) —
+  e **"Cancelar (estorna coleta)"** — mercadoria NUNCA chegou/voltou pra
+  loja; `cancelar_retirada` agora aceita em_transporte estornando EXATO os
+  movimentos da coleta (mov `devolucao_industria_estorno`; divergencia
+  devolve o COLETADO; `*_sem_estoque` nao credita). Recebida segue sem
+  volta. Auditoria em HandshakeAudit (etapas `manual`/`cancel_estorno`).
+  O alerta de WhatsApp (`alertas_operacionais`, cron 30min, janela
+  `RETIRADA_PRESA_HORAS`=12) agora traz o LINK e o gesto de destrava
+  (APP_BASE_URL); "Precisa de voce hoje" ganhou as pendencias
+  `retiradas_presas`/`separados_presos` (mesma verificacao). Manual de
+  operacao documenta as duas pontas e a destrava. Testes:
+  `tests/test_retirada_receber_manual.py` (15 casos).
 
 **Fixes do primeiro uso real (02/07/2026 a noite, Nebraska — testes em
 `tests/test_slack_retirada_e_duplicata.py`)**:
