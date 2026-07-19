@@ -283,7 +283,11 @@ def itens_da_nf(pedido, timeout=12):
     if not xml_txt and not url:
         return []
     try:
-        if not xml_txt:
+        # Parse em BYTES quando baixado: o expat honra a declaração de
+        # encoding do XML (decode 'replace' corromperia acento de nome de
+        # produto e criaria mapeamento pendente duplicado).
+        xml_src = xml_txt.encode('utf-8') if xml_txt else None
+        if xml_src is None:
             r = requests.get(url, timeout=timeout)
             if r.status_code != 200:
                 logger.warning('itens_da_nf: xmlUrl devolveu HTTP %s '
@@ -293,7 +297,7 @@ def itens_da_nf(pedido, timeout=12):
                 logger.warning('itens_da_nf: XML anômalo (%s bytes) — '
                                'pedido %s', len(r.content), pedido.get('id'))
                 return None
-            xml_txt = r.content.decode('utf-8', 'replace')
+            xml_src = r.content
 
         def _local(tag):
             return tag.split('}')[-1]
