@@ -128,14 +128,28 @@ def test_download_de_foto_dropbox_entra_no_pdf(app, admin_user, cliente):
     assert rq2.call_count == 0
 
 
-def test_regras_do_atacado_entram_no_pdf(app, admin_user, cliente):
-    """Com regra preenchida o PDF gera com a caixa de regras (estrutural:
-    documento maior que o mesmo cardápio sem regras)."""
+def test_regras_do_atacado_entram_no_pdf(app):
+    """Com regra preenchida a capa ganha a caixa de regras — o documento fica
+    ESTRITAMENTE maior que o mesmo cardápio sem regras (comparar `!=` seria
+    vácuo: o fpdf2 embute data de criação e dois PDFs nunca são idênticos)."""
+    from app.services.cardapio_pdf import gerar_cardapio_pdf
+    cats = {'Pães': [{'nome': 'Sourdough', 'preco_venda': 20.0,
+                      'imagem_url': None, 'img_ref': None}]}
+    sem = gerar_cardapio_pdf('atacado', cats, [])
+    com = gerar_cardapio_pdf('atacado', cats, [
+        {'label': 'Pedido mínimo', 'valor': 'R$ 500,00'},
+        {'label': 'Prazo para pedidos', 'valor': 'Pedir 48 horas antes'},
+    ])
+    assert len(com) > len(sem) + 50
+
+
+def test_rota_le_regras_do_appconfig(app, admin_user, cliente):
+    """A rota do PDF usa a MESMA fonte de regras da tela (AppConfig via
+    _cardapio_categorias) — chave real, não hardcode."""
+    from app.blueprints.main.routes import _cardapio_categorias
     from app.models import AppConfig
     _seed()
-    _login(cliente, admin_user)
-    sem = cliente.get('/cardapio.pdf?tipo=atacado').data
     AppConfig.set('cardapio_atacado_pedido_minimo', 'R$500,00')
     db.session.commit()
-    com = cliente.get('/cardapio.pdf?tipo=atacado').data
-    assert com != sem
+    _, regras = _cardapio_categorias('atacado')
+    assert any(r['valor'] == 'R$500,00' for r in regras)
