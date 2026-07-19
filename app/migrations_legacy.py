@@ -1647,6 +1647,22 @@ def _migrate_sqlite(app):
                        "BOOLEAN NOT NULL DEFAULT 0")
         cursor.execute("UPDATE receita SET sub_na_amassadeira = 1 "
                        "WHERE nome = 'Levain (pé)'")
+    # receita.estoque_nao_abate — estoque físico não abate a produção
+    # sugerida (dono 19/07/2026, caso Massa para folhar); backfill único da
+    # flag + correção da ficha do croissant (86 g = 1,2011 bola/batida de
+    # 50, guard em 1.0) junto com a criação, espelho do bloco Postgres.
+    if 'estoque_nao_abate' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN estoque_nao_abate "
+                       "BOOLEAN NOT NULL DEFAULT 0")
+        cursor.execute("UPDATE receita SET estoque_nao_abate = 1 "
+                       "WHERE nome = 'Massa para folhar'")
+        cursor.execute(
+            "UPDATE receita_ingrediente SET porcentagem = 1.2011 "
+            "WHERE receita_id = (SELECT id FROM receita "
+            "                    WHERE nome = 'Croissant Tradicional') "
+            "  AND sub_receita_id = (SELECT id FROM receita "
+            "                        WHERE nome = 'Massa para folhar') "
+            "  AND porcentagem = 1.0")
     if 'perda_percentual' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0")
     if 'preco_loja' not in colunas:
