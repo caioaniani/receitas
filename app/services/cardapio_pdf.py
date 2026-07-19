@@ -224,12 +224,11 @@ def _titulo_categoria(pdf, nome, alt_primeira=_CARD_H):
     if pdf.get_y() + 14 + alt_primeira > 281:
         pdf.add_page()
     pdf.ln(2)
-    pdf.set_font('Times', 'B', 15)
-    pdf.set_text_color(25, 25, 25)
+    # .cat-heading do site: sans bold, cor fg, sem sublinhado.
+    pdf.set_font('Helvetica', 'B', 13.5)
+    pdf.set_text_color(*_C_FG)
     pdf.cell(0, 8, _latin1(nome), new_x='LMARGIN', new_y='NEXT')
-    pdf.set_draw_color(200, 190, 170)
-    pdf.line(_MARGEM, pdf.get_y(), _MARGEM + 30, pdf.get_y())
-    pdf.ln(3)
+    pdf.ln(2.5)
 
 
 def _card(pdf, x, y, item, foto):
