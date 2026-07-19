@@ -24,7 +24,10 @@ def _ascii(s):
 
 
 def _carregar_catalogo():
-    receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
+    # ativas(): a coluna "match no catalogo" orienta o Vincular dos
+    # mapeamentos Seru — sugerir receita arquivada induzia a criar VendaMapa
+    # pra ela (varredura 19/07/2026). Produto ja filtrava.
+    receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.ativas().all()]
     produtos = [(p.id, p.nome, _ascii(p.nome))
                 for p in Produto.query.filter_by(ativo=True).all()]
     return receitas, produtos
