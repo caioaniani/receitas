@@ -227,7 +227,8 @@ def sugerir_para_pendentes(estoques_pendentes):
     # que o dropdown (filtrado) nem oferece — o browser cairia no primeiro
     # da lista com o rotulo mentindo (pos-revisao 19/07/2026).
     receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.ativas().all()]
-    produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
+    produtos = [(p.id, p.nome, _ascii(p.nome))
+                for p in Produto.query.filter(Produto.ativo.is_(True)).all()]
     materias = [(m.id, m.nome, _ascii(m.nome)) for m in MateriaPrima.ativas().all()]
     apelidos = _apelidos_confirmados()
     out = {}
