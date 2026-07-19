@@ -242,6 +242,52 @@ def test_contexto_do_contato_ignora_propria_conversa_e_janela(app):
         assert chatbot.contexto_do_contato('', excluir_conv='x') == []
 
 
+def test_loop_detector_ignora_msgs_herdadas(app):
+    """Cliente que sempre abre com "oi" acumularia 3 users idênticos via
+    herança encadeada e seria engolido pelo detector de loop bot-a-bot
+    (revisão 19/07/2026): msgs herdadas ficam fora da conta."""
+    from app.services import chatbot
+    hist = [
+        {'role': 'user', 'content': 'oi', 'herdada': True},
+        {'role': 'assistant', 'content': 'Olá!', 'herdada': True},
+        {'role': 'user', 'content': 'oi', 'herdada': True},
+        {'role': 'assistant', 'content': 'Oi de novo!', 'herdada': True},
+        {'role': 'user', 'content': 'oi'},           # msg REAL da conversa
+    ]
+    assert chatbot._e_loop_repetido(hist) is False
+    # sem a marca (mesma conversa de verdade), o detector segue pegando
+    hist_puro = [dict(m) for m in hist]
+    for m in hist_puro:
+        m.pop('herdada', None)
+    assert chatbot._e_loop_repetido(hist_puro) is True
+
+
+def test_heranca_nao_encadeia_nem_perde_marca_no_store(app):
+    """Msg já herdada não re-herda (senão cada conversa arrastava marcadores
+    antigos); e o salvar preserva a marca `herdada` no JSON."""
+    from app.services import chatbot
+    with app.app_context():
+        # conv A: turno real
+        chatbot.salvar_historico('740', [
+            {'role': 'user', 'content': 'quero um bolo'}], 'Anotado!',
+            contato_key='1144443333')
+        # conv B herda A (marcas aplicadas) e ganha turno real próprio
+        ctx = chatbot.contexto_do_contato('1144443333', excluir_conv='741')
+        assert all(m.get('herdada') for m in ctx)
+        chatbot.salvar_historico(
+            '741', ctx + [{'role': 'user', 'content': 'e cookies?'}],
+            'Temos!', contato_key='1144443333')
+        # store de B preservou a marca
+        store_b = chatbot.carregar_historico('741')
+        assert store_b[0].get('herdada') is True
+        assert store_b[-2].get('herdada') is None    # 'e cookies?' é real
+        # conv C herda de B: SÓ as msgs reais de B (nada de A de novo)
+        ctx_c = chatbot.contexto_do_contato('1144443333', excluir_conv='742')
+        conteudos = [m['content'] for m in ctx_c]
+        assert not any('quero um bolo' in c for c in conteudos)
+        assert any('e cookies?' in c for c in conteudos)
+
+
 def test_salvar_historico_none_nao_apaga_contato_key(app):
     from app.models import ChatbotConversa
     from app.services import chatbot
