@@ -721,6 +721,7 @@ def todo():
         Receita.observacao.isnot(None), Receita.observacao != ''
     ).order_by(Receita.nome).all()
     produtos = Produto.query.filter(
+        Produto.ativo.is_(True),
         Produto.observacao.isnot(None), Produto.observacao != ''
     ).order_by(Produto.nome).all()
     return render_template('main/todo.html', receitas=receitas, produtos=produtos)
