@@ -737,8 +737,17 @@ def _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente):
     2-3       -> lista compacta pro bot perguntar qual e.
     0 / sem telefone no canal -> erro orientando a pedir o numero.
 
+    SO o telefone do COMPRADOR (telefone_cliente) localiza — o do
+    DESTINATARIO fica FORA da descoberta de proposito (achado da revisao
+    19/07/2026): presente-surpresa com o telefone de quem recebe no
+    cadastro seria DESCOBERTO pela propria pessoa ("tem pedido pra mim?"
+    revelaria itens e cartinha — mesma classe do caso 13/07 que estragou
+    surpresa). Destinatario que JA TEM o numero segue autorizado no fluxo
+    por numero (`_consultar_pedido_online`, inalterado).
+
     `telefone_chave` e Python-side (nao SQL) — filtramos em memoria a janela
-    recente, mesmo padrao do card CRM (`crm/routes._buscar_por_telefone`)."""
+    recente (streaming `yield_per`, para no cap), mesmo padrao do card CRM
+    (`crm/routes._buscar_por_telefone`)."""
     from datetime import timedelta
 
     from app.models import PedidoOnline
@@ -751,12 +760,12 @@ def _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente):
     achados = []
     q = (PedidoOnline.query
          .filter(PedidoOnline.criado_em >= corte)
-         .order_by(PedidoOnline.criado_em.desc()))
+         .order_by(PedidoOnline.criado_em.desc())
+         .yield_per(200))
     for p in q:
-        for t in (p.telefone_cliente, p.telefone_destinatario):
-            if t and telefone_chave(t) == tel:
-                achados.append(p)
-                break
+        t = p.telefone_cliente
+        if t and telefone_chave(t) == tel:
+            achados.append(p)
         if len(achados) >= _PEDIDOS_POR_TELEFONE_MAX:
             break
     if not achados:
