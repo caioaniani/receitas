@@ -232,27 +232,37 @@ def _titulo_categoria(pdf, nome, alt_primeira=_CARD_H):
 
 
 def _card(pdf, x, y, item, foto):
-    pdf.set_draw_color(228, 224, 216)
+    """.product-card do site: branco, borda #e8e3d7, cantos arredondados,
+    foto QUADRADA no topo (ou placeholder bege), nome fg + preço marrom."""
+    pdf.set_draw_color(*_C_BORDER)
     pdf.set_fill_color(255, 255, 255)
-    pdf.rect(x, y, _COL_W, _CARD_H, style='FD')
+    pdf.rect(x, y, _COL_W, _CARD_H, style='FD',
+             round_corners=True, corner_radius=_RAIO)
     if foto:
-        pdf.image(BytesIO(foto), x=x, y=y, w=_COL_W, h=_FOTO_H)
+        pdf.image(BytesIO(foto), x=x + 0.5, y=y + 0.5,
+                  w=_COL_W - 1, h=_FOTO_H - 1)
     else:
-        pdf.set_fill_color(246, 244, 240)
-        pdf.rect(x, y, _COL_W, _FOTO_H, style='F')
-    pdf.set_xy(x + 2, y + _FOTO_H + 1.5)
+        # .card-img.placeholder: bege com a marca discreta no centro.
+        pdf.set_fill_color(*_C_TAG)
+        pdf.rect(x + 0.5, y + 0.5, _COL_W - 1, _FOTO_H - 1, style='F',
+                 round_corners=True, corner_radius=_RAIO)
+        pdf.set_font('Times', 'I', 13)
+        pdf.set_text_color(*_C_SOFT)
+        pdf.set_xy(x, y + _FOTO_H / 2 - 3)
+        pdf.cell(_COL_W, 6, _latin1('O Pão'), align='C')
+    pdf.set_xy(x + 2.5, y + _FOTO_H + 1.5)
     pdf.set_font('Helvetica', 'B', 8.5)
-    pdf.set_text_color(30, 30, 30)
+    pdf.set_text_color(*_C_FG)
     nome = _latin1(item['nome'])
-    if pdf.get_string_width(nome) > _COL_W - 4:
-        while pdf.get_string_width(nome + '…') > _COL_W - 4 and len(nome) > 3:
+    if pdf.get_string_width(nome) > _COL_W - 5:
+        while pdf.get_string_width(nome + '...') > _COL_W - 5 and len(nome) > 3:
             nome = nome[:-1]
         nome += '...'
-    pdf.cell(_COL_W - 4, 4.5, nome)
-    pdf.set_xy(x + 2, y + _FOTO_H + 6.5)
+    pdf.cell(_COL_W - 5, 4.5, nome)
+    pdf.set_xy(x + 2.5, y + _FOTO_H + 6.5)
     pdf.set_font('Helvetica', 'B', 9.5)
-    pdf.set_text_color(146, 100, 33)
-    pdf.cell(_COL_W - 4, 5, _latin1(_moeda(item['preco_venda'])))
+    pdf.set_text_color(*_C_PRIMARY)
+    pdf.cell(_COL_W - 5, 5, _latin1(_moeda(item['preco_venda'])))
 
 
 def _grid_categoria(pdf, itens_foto):
