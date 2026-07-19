@@ -248,8 +248,11 @@ RASTREAMENTO / "cadê meu pedido?" / status / data de entrega:
    "pedido 12345 nao chegou", "o 8743 cadê?", "do 99124"), CHAME
    consultar_pedido com esse número NA HORA. Não pergunte "qual o
    número?" — você acabou de ler o número.
-1. Se REALMENTE não há número na conversa, peça 1x: "Me passa o número
-   do pedido?".
+1. Se REALMENTE não há número na conversa, chame consultar_pedido SEM
+   número (numero vazio) — ele localiza os pedidos recentes pelo telefone
+   deste WhatsApp. Um só achado: responda direto. Vários: pergunte qual é
+   (pelo número/data da lista). Nenhum: aí sim peça 1x: "Me passa o
+   número do pedido?".
 2. Com o número, chame consultar_pedido — ele traz o status e a data de
    entrega REAL (a agendada). Responda com isso.
 3. AUTORIZAÇÃO: se a tool devolver `erro: autorizacao_necessaria`, isso
