@@ -29,23 +29,36 @@ _CACHE_MAX = 400
 
 _TITULO_TIPO = {'atacado': 'Atacado', 'loja': 'Loja', 'site': 'Site'}
 
+# Paleta do SITE (main/cardapio.html :root) — o PDF segue o MESMO layout da
+# tela (pedido do dono 19/07/2026): fundo creme, card branco com borda,
+# preço marrom, caixas bege. Mudou lá, muda aqui.
+_C_BG = (250, 250, 247)        # --bg      #fafaf7
+_C_FG = (26, 20, 16)           # --fg      #1a1410
+_C_PRIMARY = (122, 78, 42)     # --primary #7a4e2a (preço)
+_C_BORDER = (232, 227, 215)    # --border  #e8e3d7
+_C_MUTED = (107, 93, 76)       # --muted   #6b5d4c
+_C_SOFT = (154, 139, 117)      # --soft    #9a8b75
+_C_TAG = (243, 238, 226)       # --tag-bg  #f3eee2 (regras/placeholder)
+
 # Grid: 3 colunas na área útil de 190mm (margens de 10).
 _MARGEM = 10
 _GAP = 4
 _COL_W = (190 - 2 * _GAP) / 3          # ~60.7mm
-_FOTO_H = 40
+_FOTO_H = _COL_W                       # foto QUADRADA, como no site (1:1)
 _CARD_H = _FOTO_H + 16                 # foto + nome + preço
+_RAIO = 2.5                            # cantos arredondados (site: 12px)
 
 
 def _processar_foto(bruto):
-    """Crop central 3:2 + resize 480px + JPEG (PIL). None se não decodar."""
+    """Crop central QUADRADO (1:1, como o card do site) + resize 480px +
+    JPEG (PIL). None se não decodar."""
     try:
         from PIL import Image, ImageOps
         img = Image.open(BytesIO(bruto))
         img = ImageOps.exif_transpose(img)
         if img.mode not in ('RGB', 'L'):
             img = img.convert('RGB')
-        img = ImageOps.fit(img, (480, 320))
+        img = ImageOps.fit(img, (480, 480))
         out = BytesIO()
         img.save(out, format='JPEG', quality=80)
         return out.getvalue()
