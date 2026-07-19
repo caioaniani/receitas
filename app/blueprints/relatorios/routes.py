@@ -22,7 +22,9 @@ def custos():
 
     resultado = calcular_custos_receitas()
     custos_map = resultado.get('custos', {})
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    # ativas(): relatorio de custo/margem e do portfolio vivo (varredura
+    # 19/07/2026 — arquivadas saiam misturadas sem marcacao, aqui e no CSV).
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     # Margens LÍQUIDAS: impostos sobre venda descontados do preço
     # (app/services/impostos.py — fonte única, dono 13/07/2026).
     carga = impostos.carga_venda()
