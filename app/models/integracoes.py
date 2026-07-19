@@ -776,11 +776,18 @@ class ChatbotConversa(db.Model):
     contexto deixa de depender da confiabilidade do Chatwoot.
 
     `mensagens_json`: lista [{role: 'user'|'assistant', content: str}], ja
-    capada nas ultimas N por `chatbot.salvar_historico`."""
+    capada nas ultimas N por `chatbot.salvar_historico`.
+
+    `contato_key` (19/07/2026, auditor "bot reiniciando do zero"): telefone
+    canonizado (`telefone_chave`) do contato do canal. Conversa NOVA do
+    Chatwoot busca por ela o historico recente do MESMO cliente
+    (`chatbot.contexto_do_contato`) — sem isso a memoria morria junto com o
+    conv_id. NULL = conversa antiga / canal sem telefone (IG, site)."""
     __tablename__ = 'chatbot_conversa'
 
     id = db.Column(db.Integer, primary_key=True)
     conv_id = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    contato_key = db.Column(db.String(40), index=True)
     mensagens_json = db.Column(db.Text, default='[]')
     ultima_msg_em = db.Column(db.DateTime, default=agora, onupdate=agora, index=True)
 
