@@ -227,18 +227,18 @@ def _card(pdf, x, y, item, foto):
 
 
 def _grid_categoria(pdf, itens_foto):
-    col = 0
-    for item in itens_foto:
-        if col == 0 and pdf.get_y() + _CARD_H > 281:
+    # LINHA a linha com y0 CONGELADO: os cells de texto do card movem o
+    # cursor do fpdf2 — usar get_y() por card fazia os 3 da linha descerem
+    # em cascata (pego na inspeção visual da 1ª amostra, 19/07/2026).
+    for i in range(0, len(itens_foto), 3):
+        linha = itens_foto[i:i + 3]
+        if pdf.get_y() + _CARD_H > 281:
             pdf.add_page()
-        x = _MARGEM + col * (_COL_W + _GAP)
-        _card(pdf, x, pdf.get_y(), item, _bytes_foto(item))
-        col += 1
-        if col == 3:
-            col = 0
-            pdf.set_y(pdf.get_y() + _CARD_H + _GAP)
-    if col:
-        pdf.set_y(pdf.get_y() + _CARD_H + _GAP)
+        y0 = pdf.get_y()
+        for col, item in enumerate(linha):
+            x = _MARGEM + col * (_COL_W + _GAP)
+            _card(pdf, x, y0, item, _bytes_foto(item))
+        pdf.set_y(y0 + _CARD_H + _GAP)
 
 
 def _linhas_sem_foto(pdf, itens):
