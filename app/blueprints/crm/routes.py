@@ -517,7 +517,7 @@ def bot_webhook():
             espera = _debounce_segundos()
             if espera > 0:
                 _time.sleep(espera)
-            with _lock_conv:
+            with _lock_conv, _lock_conv_cross_worker(conv_id):
                 resultado = None
                 historico = None
                 texto_enviado = False
