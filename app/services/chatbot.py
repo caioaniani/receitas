@@ -368,6 +368,72 @@ def carregar_historico(conv_id):
         return []
 
 
+# Memoria cross-conversa (19/07/2026, auditor "bot perdendo contexto e
+# reiniciando do zero"): o Chatwoot abre conversa NOVA (conv_id novo) pro
+# mesmo cliente e o store — chaveado por conv_id — nao via nada do que veio
+# antes. Janela/tamanho pensados pra dar CONTINUIDADE (o pedido em aberto, o
+# assunto de ontem), nao pra arrastar historico infinito.
+CONTEXTO_CONTATO_DIAS = 30
+CONTEXTO_CONTATO_MAX_MSGS = 12
+
+
+def contexto_do_contato(contato_key, *, excluir_conv=None):
+    """Ultimas mensagens da conversa mais recente do MESMO contato
+    (`contato_key` = telefone canonizado), com um marcador de fim dizendo ao
+    modelo que aquilo e conversa ANTERIOR — pra nao repetir saudacao de
+    primeira vez nem confundir com o turno atual. [] se nao houver.
+
+    O marcador respeita a alternancia user/assistant (mescla no ultimo
+    assistant ou entra como assistant novo)."""
+    from app.models import ChatbotConversa
+    from app.utils import agora
+    key = (contato_key or '').strip()
+    if not key:
+        return []
+    from datetime import timedelta
+    corte = agora() - timedelta(days=CONTEXTO_CONTATO_DIAS)
+    try:
+        q = (ChatbotConversa.query
+             .filter(ChatbotConversa.contato_key == key)
+             .filter(ChatbotConversa.ultima_msg_em >= corte))
+        if excluir_conv is not None:
+            q = q.filter(ChatbotConversa.conv_id != str(excluir_conv))
+        conv = q.order_by(ChatbotConversa.ultima_msg_em.desc()).first()
+    except Exception:  # noqa: BLE001
+        logger.exception('contexto_do_contato falhou key=%s', key)
+        return []
+    if not conv:
+        return []
+    try:
+        msgs = json.loads(conv.mensagens_json or '[]')
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(msgs, list):
+        return []
+    msgs = [{'role': m['role'], 'content': (m.get('content') or '').strip(),
+             **({'handoff_em': m['handoff_em']} if m.get('handoff_em') else {})}
+            for m in msgs
+            if isinstance(m, dict) and m.get('role') in ('user', 'assistant')
+            and (m.get('content') or '').strip()]
+    msgs = msgs[-CONTEXTO_CONTATO_MAX_MSGS:]
+    if not msgs:
+        return []
+    quando = (conv.ultima_msg_em.strftime('%d/%m %H:%M')
+              if conv.ultima_msg_em else 'data desconhecida')
+    marcador = (f'[nota interna: as mensagens acima são de uma conversa '
+                f'ANTERIOR deste mesmo cliente ({quando}). A conversa atual '
+                f'começa agora — use o contexto se ajudar e não se apresente '
+                f'como se fosse o primeiro contato.]')
+    if msgs[-1]['role'] == 'assistant':
+        msgs[-1] = dict(msgs[-1],
+                        content=msgs[-1]['content'] + '\n\n' + marcador)
+    else:
+        msgs.append({'role': 'assistant', 'content': marcador})
+    logger.info('chatbot: contexto cross-conversa herdado de conv=%s '
+                '(%d msgs)', conv.conv_id, len(msgs))
+    return msgs
+
+
 def salvar_historico(conv_id, historico, resposta, *, handoff=False,
                      contato_key=None):
     """Persiste o turno no nosso banco: o historico efetivo (que JA inclui a
