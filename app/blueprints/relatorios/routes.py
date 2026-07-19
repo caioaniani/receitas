@@ -100,6 +100,7 @@ def ingredientes():
             db.func.count(ReceitaIngrediente.id).label('uso_count')
         )
         .outerjoin(ReceitaIngrediente, MateriaPrima.nome == ReceitaIngrediente.ingrediente_nome)
+        .filter(MateriaPrima.arquivada_em.is_(None))
         .group_by(MateriaPrima.id)
         .order_by(MateriaPrima.custo_por_kg.desc())
         .all()
