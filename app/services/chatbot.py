@@ -1289,28 +1289,50 @@ def varrer_pendentes_sem_resposta():
         # diz O QUE FALTA responder. Antes a vassoura respondia e salvava a
         # versao da API por cima do store — perdia turnos e os marcadores
         # de handoff (achado da revisao 19/07/2026). Base = store; anexa
-        # as msgs finais do cliente que o store ainda nao tem.
+        # as msgs finais do cliente (texto E imagens) que o store nao tem.
         store = carregar_historico(conv_id)
         if store:
             pendentes = []
             for m in reversed(api_hist):
                 if m.get('role') != 'user':
                     break
-                pendentes.append((m.get('content') or '').strip())
+                pendentes.append(m)
             pendentes.reverse()
-            texto_pendente = '\n'.join(t for t in pendentes if t)
-            ja_no_store = (store[-1].get('role') == 'user'
-                           and (store[-1].get('content') or '').strip()
-                           == texto_pendente)
+            texto_pendente = '\n'.join(
+                t for t in ((m.get('content') or '').strip()
+                            for m in pendentes) if t)
+            imagens_pendentes = [img for m in pendentes
+                                 for img in (m.get('imagens') or [])]
+            ja_no_store = bool(
+                texto_pendente
+                and store[-1].get('role') == 'user'
+                and (store[-1].get('content') or '').strip()
+                == texto_pendente)
+            if not texto_pendente and not imagens_pendentes \
+                    and store[-1].get('role') != 'user':
+                # Nada utilizavel pendente e o store termina em resposta
+                # nossa: responder aqui seria re-responder contexto velho.
+                continue
             historico = list(store)
-            if texto_pendente and not ja_no_store:
-                historico.append({'role': 'user', 'content': texto_pendente})
+            if (texto_pendente or imagens_pendentes) and not ja_no_store:
+                msg = {'role': 'user', 'content': texto_pendente}
+                if imagens_pendentes:
+                    msg['imagens'] = imagens_pendentes
+                historico.append(msg)
         else:
             historico = api_hist
         telefone = telefone_chave(c.get('telefone') or '')
         varridas += 1
+        # Mesmos DOIS locks do webhook (thread + advisory cross-worker):
+        # a vassoura fazia read-modify-write no store sem serializar com um
+        # webhook em voo da mesma conversa (achado da revisao 19/07/2026).
+        from app.blueprints.crm.routes import (
+            _lock_conv_cross_worker,
+            _lock_para_conv,
+        )
         try:
-            resultado = responder(historico, telefone_contato=telefone)
+            with _lock_para_conv(conv_id), _lock_conv_cross_worker(conv_id):
+                resultado = responder(historico, telefone_contato=telefone)
             acao = (resultado or {}).get('acao')
             texto = (resultado or {}).get('texto') or ''
             # Mesmo dedupe do webhook: conversa ja transferida ha pouco nao
