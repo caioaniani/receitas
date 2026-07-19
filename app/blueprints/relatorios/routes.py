@@ -63,7 +63,7 @@ def custos_csv():
 
     resultado = calcular_custos_receitas()
     custos_map = resultado.get('custos', {})
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     carga = impostos.carga_venda()
 
     output = io.StringIO()
