@@ -98,9 +98,12 @@ def area(slug):
 def dashboard():
     resultado = calcular_custos_receitas()
     custos_map = resultado.get('custos', {})
-    receitas = Receita.query.all()
+    # ativas(): KPI do portfolio EM CIRCULACAO — receita arquivada com preco
+    # preenchido inflava receita_estimada/margem_geral (varredura 19/07/2026).
+    # O custo soma pelos MESMOS nomes ativos pra margem ficar coerente.
+    receitas = Receita.ativas().all()
 
-    custo_mp_total = sum(custos_map.values())
+    custo_mp_total = sum(custos_map.get(r.nome, 0) for r in receitas)
     receita_estimada = sum((r.preco_venda or 0) for r in receitas if r.preco_venda)
 
     # Eager load do cargo evita N+1 — `custo_total()` acessa `self.cargo.salario_base`.
