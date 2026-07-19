@@ -484,7 +484,7 @@ def bot_webhook():
         def _responder_sem_suporte():
             with app.app_context():
                 from app.services import chatbot, chatwoot
-                with _lock_conv:
+                with _lock_conv, _lock_conv_cross_worker(conv_id):
                     try:
                         texto = ('Ainda não consigo ouvir áudios ou abrir esse '
                                  'tipo de arquivo por aqui. Pode me escrever? '
