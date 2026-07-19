@@ -9,9 +9,14 @@
     Sobras reaproveitáveis voltando da loja pra indústria (ex.: croissant que vira
     Almond). Fluxo: o motorista escaneia o <strong>QR de coleta na loja</strong>
     (confere as quantidades, PIN) → em transporte → escaneia o QR de
-    <strong>recebimento na indústria</strong>. O QR de coleta vale 48h — se
-    expirou, o botão abaixo gera um novo na hora. Cancelar (só antes da coleta)
-    não mexe em estoque: o retorno segue no estoque da loja.
+    <strong>recebimento na indústria</strong> (tela do padeiro mostra o QR). Os QRs
+    valem 48h — os botões abaixo regeneram na hora. <strong>Retirada presa em
+    transporte</strong> (ninguém escaneou o recebimento): se a mercadoria
+    <em>chegou</em> na indústria, use <strong>Confirmar recebimento</strong>
+    (credita a indústria, com conferência); se <em>nunca chegou / voltou pra
+    loja</em>, use <strong>Cancelar</strong> (estorna a baixa da coleta).
+    Enquanto presa, o estoque fica errado — a loja já baixou e a indústria não
+    creditou.
 </div>
 
 <h5>Abertas ({{ abertas|length }})</h5>
