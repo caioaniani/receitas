@@ -204,7 +204,9 @@ def detalhe(id):
         itens_vinc.append({'indice': i, 'item': it, 'mapa': mp_map, 'sugestoes': sug,
                            'prefill': {'fator': f'{f:g}' if f else '',
                                        'unidade': u or ''}})
-    mps = MateriaPrima.query.order_by(MateriaPrima.nome).all()
+    # ativas(): item de NF nao pode ser vinculado a MP arquivada (varredura
+    # 19/07/2026 — a entrada da nota daria estoque em MP fora de circulacao).
+    mps = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
     from app.models import Produto
     produtos = (Produto.query.filter_by(ativo=True)
                 .order_by(Produto.nome).all())
