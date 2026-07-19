@@ -57,7 +57,32 @@
                     </form>
                     {% endif %}
                     {% else %}
-                    <span class="text-muted small">recebimento pela tela do padeiro</span>
+                    <span class="text-muted small d-block mb-1">recebimento: QR na tela do padeiro</span>
+                    {% if current_user.is_admin() %}
+                    <details class="text-start d-inline-block">
+                        <summary class="btn btn-sm btn-outline-success">Confirmar recebimento (manual)</summary>
+                        <form method="POST" action="{{ url_for('pedidos.retirada_receber_manual', id=r.id) }}"
+                              class="border rounded p-2 mt-1 bg-light"
+                              onsubmit="return confirm('Confirmar o recebimento da retirada #{{ r.id }} SEM o QR? A indústria será creditada com as quantidades abaixo.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="small text-muted mb-1">A mercadoria chegou na indústria e ninguém escaneou o QR. Confira as quantidades recebidas:</div>
+                            {% for it in r.itens %}
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <input type="number" name="qtd_{{ it.id }}" min="0" class="form-control form-control-sm" style="max-width:6rem"
+                                       value="{{ it.quantidade_coletada if it.quantidade_coletada is not none else it.quantidade }}">
+                                <span class="small">{{ it.nome_item }}{% if it.quantidade_coletada is not none %} <span class="text-muted">(coletado {{ it.quantidade_coletada }} de {{ it.quantidade }})</span>{% endif %}</span>
+                            </div>
+                            {% endfor %}
+                            <button class="btn btn-sm btn-success mt-1">Receber e creditar a indústria</button>
+                        </form>
+                    </details>
+                    <form method="POST" action="{{ url_for('pedidos.retirada_cancelar', id=r.id) }}" class="d-inline"
+                          onsubmit="return confirm('Cancelar a retirada #{{ r.id }} EM TRANSPORTE? A baixa da coleta será estornada — use só se a mercadoria NUNCA chegou na indústria (voltou pra loja).');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger"
+                                title="Estorna a baixa da coleta e cancela — só pra mercadoria que não chegou na indústria">Cancelar (estorna coleta)</button>
+                    </form>
+                    {% endif %}
                     {% endif %}
                 </td>
             </tr>
