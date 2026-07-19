@@ -190,9 +190,12 @@ def _moeda(v):
     return 'R$ ' + s
 
 
-def _titulo_categoria(pdf, nome):
+def _titulo_categoria(pdf, nome, alt_primeira=_CARD_H):
     # Categoria órfã no pé da página: quebra antes (nunca título solto).
-    if pdf.get_y() + 14 + _CARD_H > 281:
+    # `alt_primeira` = altura do 1º bloco da categoria — card de foto no
+    # grid, ou só ~10mm quando a seção é de linhas de texto (senão 3
+    # linhas ganhavam página própria à toa).
+    if pdf.get_y() + 14 + alt_primeira > 281:
         pdf.add_page()
     pdf.ln(2)
     pdf.set_font('Times', 'B', 15)
