@@ -250,6 +250,88 @@ def detalhes_pedido(pedido_id):
     return _get(f'/orders/{pedido_id}')
 
 
+_NF_XML_MAX_BYTES = 3_000_000
+_NF_STATUS_INVALIDOS = ('canceled', 'cancelled', 'denied', 'rejected', 'error')
+
+
+def itens_da_nf(pedido, timeout=12):
+    """Produtos REAIS de um pedido SEM itens, extraídos do XML da NFC-e.
+
+    Caso 99Food (18/07/2026): a integração de delivery manda o pedido ao
+    Seru só com o TOTAL — nem a listagem nem o GET /orders/{id} trazem os
+    produtos. Mas a NFC-e emitida (taxInvoice.xmlUrl, S3 da Seru) lista
+    tudo (<det><prod><xProd>/qCom/vProd), com os MESMOS nomes do
+    SeruProdutoMap — provado no pedido 3377f6c3/NF 724. O sync usa isto
+    pra dar baixa de estoque (pedido do dono).
+
+    Retorna:
+      []    — pedido sem NF utilizável (sem taxInvoice/URL, ou NF
+              cancelada/negada): nada a enriquecer, segue o fluxo normal;
+      list  — itens na MESMA forma de `extrair_itens`;
+      None  — NF existe mas o download/parse FALHOU: o chamador NÃO deve
+              marcar o pedido como processado (retenta no próximo ciclo).
+    """
+    import xml.etree.ElementTree as ET
+
+    ti = pedido.get('taxInvoice') if isinstance(pedido, dict) else None
+    if not isinstance(ti, dict):
+        return []
+    if str(ti.get('status') or '').lower() in _NF_STATUS_INVALIDOS:
+        return []
+    xml_txt = (ti.get('xml') or '').strip()
+    url = (ti.get('xmlUrl') or '').strip()
+    if not xml_txt and not url:
+        return []
+    try:
+        if not xml_txt:
+            r = requests.get(url, timeout=timeout)
+            if r.status_code != 200:
+                logger.warning('itens_da_nf: xmlUrl devolveu HTTP %s '
+                               '(pedido %s)', r.status_code, pedido.get('id'))
+                return None
+            if len(r.content) > _NF_XML_MAX_BYTES:
+                logger.warning('itens_da_nf: XML anômalo (%s bytes) — '
+                               'pedido %s', len(r.content), pedido.get('id'))
+                return None
+            xml_txt = r.content.decode('utf-8', 'replace')
+
+        def _local(tag):
+            return tag.split('}')[-1]
+
+        def _num(v):
+            try:
+                return float(str(v).replace(',', '.'))
+            except (TypeError, ValueError):
+                return 0.0
+
+        root = ET.fromstring(xml_txt)
+        itens = []
+        for det in root.iter():
+            if _local(det.tag) != 'det':
+                continue
+            prod = next((c for c in det if _local(c.tag) == 'prod'), None)
+            if prod is None:
+                continue
+            campos = {_local(c.tag): (c.text or '').strip() for c in prod}
+            nome = campos.get('xProd') or ''
+            if not nome:
+                continue
+            qtd = _num(campos.get('qCom')) or 1.0
+            itens.append({
+                'nome': nome,
+                'sku': campos.get('cProd') or None,
+                'qtd': qtd,
+                'preco_unit': _num(campos.get('vUnCom')),
+                'total': _num(campos.get('vProd')),
+                'cancelado': False,
+            })
+        return itens
+    except Exception:  # noqa: BLE001 — falha vira retentativa, nunca crash
+        logger.exception('itens_da_nf: download/parse falhou (pedido %s)',
+                         pedido.get('id') if isinstance(pedido, dict) else '?')
+        return None
+
+
 def pedido_cancelado(pedido):
     """Pedido cancelado — por `canceledAt` OU por `status == 'canceled'`.
 
