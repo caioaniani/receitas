@@ -191,6 +191,107 @@ def test_sonda_vereditos_exige_token(app):
     assert resp.status_code == 401
 
 
+def test_contexto_do_contato_herda_ultimas_msgs_com_marcador(app):
+    """Conversa nova do MESMO contato herda o fim da conversa anterior +
+    marcador de 'conversa anterior' (mesclado no último assistant pra manter
+    a alternância user/assistant)."""
+    from app.services import chatbot
+    with app.app_context():
+        chatbot.salvar_historico('700', [
+            {'role': 'user', 'content': 'fiz o pedido ABC123'},
+            {'role': 'assistant', 'content': 'Chega amanhã às 10h!'},
+        ], '', contato_key='1188887777')
+        ctx = chatbot.contexto_do_contato('1188887777', excluir_conv='701')
+        assert ctx[0] == {'role': 'user', 'content': 'fiz o pedido ABC123'}
+        assert ctx[-1]['role'] == 'assistant'
+        assert 'Chega amanhã às 10h!' in ctx[-1]['content']
+        assert 'conversa\nANTERIOR' in ctx[-1]['content'].replace(
+            'conversa ANTERIOR', 'conversa\nANTERIOR')
+        assert 'não se apresente' in ctx[-1]['content']
+
+
+def test_contexto_do_contato_ignora_propria_conversa_e_janela(app):
+    from datetime import timedelta
+
+    from app.models import ChatbotConversa
+    from app.services import chatbot
+    with app.app_context():
+        chatbot.salvar_historico('710', [
+            {'role': 'user', 'content': 'oi'}], 'Olá!',
+            contato_key='1177776666')
+        # a própria conversa não é "contexto anterior"
+        assert chatbot.contexto_do_contato(
+            '1177776666', excluir_conv='710') != []
+        assert chatbot.contexto_do_contato(
+            '1177776666', excluir_conv='710')[0]['content'] == 'oi'
+        # fora da janela de 30 dias: não herda
+        conv = ChatbotConversa.query.filter_by(conv_id='710').one()
+        conv.ultima_msg_em = agora() - timedelta(days=45)
+        db.session.commit()
+        assert chatbot.contexto_do_contato(
+            '1177776666', excluir_conv='711') == []
+        # sem chave: nada
+        assert chatbot.contexto_do_contato('', excluir_conv='x') == []
+
+
+def test_salvar_historico_none_nao_apaga_contato_key(app):
+    from app.models import ChatbotConversa
+    from app.services import chatbot
+    with app.app_context():
+        chatbot.salvar_historico('720', [
+            {'role': 'user', 'content': 'oi'}], 'Olá!',
+            contato_key='1166665555')
+        # turno seguinte sem telefone (ex: caminho sem sender) NÃO apaga
+        chatbot.salvar_historico('720', [
+            {'role': 'user', 'content': 'oi'},
+            {'role': 'assistant', 'content': 'Olá!'},
+            {'role': 'user', 'content': 'tem pão?'}], 'Temos!')
+        conv = ChatbotConversa.query.filter_by(conv_id='720').one()
+        assert conv.contato_key == '1166665555'
+
+
+def test_webhook_conversa_nova_herda_contexto_do_mesmo_contato(app):
+    """FIM A FIM do achado do auditor: cliente volta dias depois, Chatwoot
+    abre conversa NOVA — o bot recebe o contexto da anterior em vez de
+    recomeçar do zero."""
+    from app.services import chatbot
+    from tests.test_chatbot import _SyncThread
+    app.config['CHATWOOT_BOT_SECRET'] = 'seg'
+    with app.app_context():
+        chatbot.salvar_historico('730', [
+            {'role': 'user', 'content': 'comprei a cesta média ontem'},
+            {'role': 'assistant', 'content': 'Pedido confirmado pra sexta!'},
+        ], '', contato_key='1155554444')
+    payload = {
+        'event': 'message_created', 'message_type': 'incoming',
+        'id': 73001, 'content': 'oi, e meu pedido?',
+        'conversation': {'id': 731, 'status': 'pending',
+                          'meta': {'sender': {'name': 'Maria',
+                                              'phone_number': '+5511955554444'}}},
+        'sender': {'name': 'Maria', 'phone_number': '+5511955554444'},
+    }
+    with patch('threading.Thread', _SyncThread), \
+            patch('app.services.chatwoot.buscar_historico',
+                  return_value=[]), \
+            patch('app.services.chatbot.responder',
+                  return_value={'acao': 'responder',
+                                'texto': 'Chega sexta!'}) as resp, \
+            patch('app.services.chatwoot.enviar_mensagem',
+                  return_value={'ok': True}):
+        r = app.test_client().post('/crm/bot?k=seg', json=payload)
+    assert r.status_code == 200
+    hist = resp.call_args[0][0]
+    # herdou a conversa anterior + marcador + msg atual no fim
+    assert hist[0]['content'] == 'comprei a cesta média ontem'
+    assert 'conversa' in hist[1]['content'] and 'ANTERIOR' in hist[1]['content']
+    assert hist[-1] == {'role': 'user', 'content': 'oi, e meu pedido?'}
+    # e a conversa NOVA ficou indexada pelo contato
+    with app.app_context():
+        from app.models import ChatbotConversa
+        conv = ChatbotConversa.query.filter_by(conv_id='731').one()
+        assert conv.contato_key == '1155554444'
+
+
 def test_sonda_vereditos_lista_do_banco_e_traz_store(app):
     from app.models import VigiaVeredito
     from app.services import chatbot
