@@ -197,6 +197,13 @@ class Receita(db.Model):
     # sub de MONTAGEM (Massa para folhar nos Danish), fora da amassadeira.
     # ALTER + backfill em migrations_legacy (2 commits, 15/07/2026).
     sub_na_amassadeira = db.Column(db.Boolean, default=False, nullable=False)
+    # Estoque físico NÃO abate a produção sugerida (balanço + MRP do
+    # cronograma) — só a produção JÁ MANDADA (WIP do plano de hoje) conta.
+    # Decisão do dono 19/07/2026, caso Massa para folhar: o ledger dizia 2
+    # bolas inexistentes e a massa dos 300 pains saía subestimada. O consumo
+    # REAL na produção segue debitando EstoqueProducao normalmente (a flag é
+    # só de planejamento). ALTER + backfill em migrations_legacy (2 commits).
+    estoque_nao_abate = db.Column(db.Boolean, default=False, nullable=False)
     # Devolucao loja->industria: sobras devolvidas DESTA receita creditam a
     # receita apontada no estoque da industria (ex: Croissant Tradicional ->
     # "Croissant Tradicional — Retorno"). NULL = credita a propria. O retorno
