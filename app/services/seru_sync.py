@@ -287,6 +287,7 @@ def processar_pedidos(data_inicial, data_final, user=None,
         'itens_ignorados': 0,
         'itens_pendentes_novos': 0,
         'itens_sem_estoque': 0,
+        'pedidos_aguardando_nf': 0,
         'erros': [],
     }
 
