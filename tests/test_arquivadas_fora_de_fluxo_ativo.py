@@ -112,7 +112,8 @@ def test_aprovacao_orcamento_recusa_item_arquivado(app):
         cli = ClienteB2B(nome='Cliente Orc', ativo=True)
         db.session.add(cli)
         db.session.flush()
-        orc = Orcamento(cliente_id=cli.id, data_entrega=hoje())
+        orc = Orcamento(codigo='ORC-AR-1', cliente_id=cli.id,
+                        data_entrega=hoje())
         db.session.add(orc)
         db.session.flush()
         db.session.add(OrcamentoItem(orcamento_id=orc.id, receita_id=r.id,
