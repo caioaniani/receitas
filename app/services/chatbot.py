@@ -1158,6 +1158,7 @@ def varrer_pendentes_sem_resposta():
     pra sempre. Espelho do followup, com a condicao INVERSA (la a ultima msg
     e NOSSA; aqui e do cliente). Kill-switch: CHATBOT_VASSOURA=0."""
     from app.services import chatwoot
+    from app.utils import telefone_chave
 
     cfg = current_app.config
     if str(cfg.get('CHATBOT_VASSOURA', '1')) == '0':
@@ -1175,15 +1176,39 @@ def varrer_pendentes_sem_resposta():
         minutos = c.get('minutos_paradas', 0)
         if not conv_id or minutos > max_sil:
             continue
-        historico = chatwoot.buscar_historico(conv_id)
-        if not historico:
+        api_hist = chatwoot.buscar_historico(conv_id)
+        if not api_hist:
             continue
         # So quando a ULTIMA mensagem e do CLIENTE (o bot ficou devendo).
-        if historico[-1].get('role') != 'user':
+        if api_hist[-1].get('role') != 'user':
             continue
+        # O STORE local e a fonte confiavel de contexto (40 msgs +
+        # marcadores handoff_em); a API do Chatwoot (20 msgs, instavel) so
+        # diz O QUE FALTA responder. Antes a vassoura respondia e salvava a
+        # versao da API por cima do store — perdia turnos e os marcadores
+        # de handoff (achado da revisao 19/07/2026). Base = store; anexa
+        # as msgs finais do cliente que o store ainda nao tem.
+        store = carregar_historico(conv_id)
+        if store:
+            pendentes = []
+            for m in reversed(api_hist):
+                if m.get('role') != 'user':
+                    break
+                pendentes.append((m.get('content') or '').strip())
+            pendentes.reverse()
+            texto_pendente = '\n'.join(t for t in pendentes if t)
+            ja_no_store = (store[-1].get('role') == 'user'
+                           and (store[-1].get('content') or '').strip()
+                           == texto_pendente)
+            historico = list(store)
+            if texto_pendente and not ja_no_store:
+                historico.append({'role': 'user', 'content': texto_pendente})
+        else:
+            historico = api_hist
+        telefone = telefone_chave(c.get('telefone') or '')
         varridas += 1
         try:
-            resultado = responder(historico)
+            resultado = responder(historico, telefone_contato=telefone)
             acao = (resultado or {}).get('acao')
             texto = (resultado or {}).get('texto') or ''
             # Mesmo dedupe do webhook: conversa ja transferida ha pouco nao
