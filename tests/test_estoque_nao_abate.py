@@ -93,7 +93,7 @@ def test_flag_vespera_fisico_nao_cobre_vira_aviso(app):
     assert sv['faltam'] == 2.0                     # 100 × 1/50, físico fora
 
 
-def test_flag_wip_plano_de_hoje_conta(app, admin_user):
+def test_flag_wip_plano_de_hoje_conta(app):
     """A produção JÁ MANDADA ao padeiro (plano de hoje) segue descontando:
     croissant de amanhã com 2 bolas no plano de hoje → véspera coberta, sem
     aviso e sem produção nova (não duplica a ordem em execução)."""
