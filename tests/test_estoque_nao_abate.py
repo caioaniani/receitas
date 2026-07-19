@@ -161,6 +161,38 @@ def test_balanco_sem_flag_estoque_abate(app):
     assert it['estoque_nao_abate'] is False
 
 
+def test_cronograma_linha_vendida_coerente_com_a_flag(app):
+    """Receita VENDIDA com a flag: a linha do grid, o saldo do expandir e o
+    alerta de risco contam a MESMA história do balanço — o físico fantasma
+    não faz a caixa dizer "não falta" enquanto a linha produz (classe do bug
+    de 30/06), nem cala o 🚨 de entrega em risco."""
+    from app.services.previsao_producao import cronograma_producao
+    loja = Loja(nome='Loja NA Grid', ativa=True)
+    r = Receita(nome='Pao NA Grid', categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=1000.0,
+                estoque_nao_abate=True)
+    db.session.add_all([loja, r])
+    db.session.flush()
+    db.session.add(EstoqueProducao(receita_id=r.id, quantidade=10))
+    dd = hoje() + timedelta(days=2)
+    p = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=dd,
+                   data_pedido=dd)
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=8))
+    db.session.commit()
+    crono = cronograma_producao(horizonte_dias=7)
+    rr = next(x for x in crono['receitas'] if x['receita_id'] == r.id)
+    assert rr['total'] == 8                        # shaping distribui os 8
+    assert sum(c['qtd'] for c in rr['por_dia']) == 8
+    assert rr['produzir'] == 8                     # linha = balanço
+    assert rr['saldo'] == -8                       # caixa não diz "não falta"
+    assert rr['em_estoque'] == 10                  # o real segue visível
+    # Produção programada cobre a entrega → sem falso 🚨; mas o fantasma
+    # NÃO conta: zerando o grid, o risco aparece (fantasma não cala alerta).
+    assert rr['entregas_risco'] == []
+
+
 def test_ficha_salva_a_flag(app, admin_user):
     r = Receita(nome='Massa Flag UI', categoria='Paes', rendimento_qtd=1,
                 rendimento_unidade='un', peso_base=1000.0)
