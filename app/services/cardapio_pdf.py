@@ -151,11 +151,12 @@ class _CardapioPDF(FPDF):
 
 
 def _capa(pdf, titulo_tipo, regras):
-    """Banda preta da marca + (atacado) caixa de regras do pedido."""
-    pdf.set_fill_color(12, 12, 12)
+    """Hero escuro da marca (como o do site) + label de seção centrado +
+    (atacado) caixa de regras bege — espelho do main/cardapio.html."""
+    pdf.set_fill_color(*_C_FG)             # hero: o escuro da marca do site
     pdf.rect(0, 0, 210, 58, style='F')
     pdf.set_y(14)
-    pdf.set_text_color(200, 200, 200)
+    pdf.set_text_color(215, 210, 202)
     pdf.set_font('Helvetica', '', 9)
     pdf.set_char_spacing(1.6)
     pdf.cell(0, 5, _latin1('PADARIA ARTESANAL · ITAIM BIBI'),
@@ -165,42 +166,48 @@ def _capa(pdf, titulo_tipo, regras):
     pdf.set_font('Times', 'B', 30)
     pdf.cell(0, 14, _latin1('O Pão'), new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('Helvetica', '', 10)
-    pdf.set_text_color(190, 190, 190)
+    pdf.set_text_color(220, 216, 210)
     pdf.cell(0, 6, _latin1('Tempo. Fermento. Cuidado. '
                            'Pão de verdade, feito com fermentação natural.'),
              new_x='LMARGIN', new_y='NEXT')
-    pdf.set_y(64)
-    pdf.set_text_color(120, 110, 95)
-    pdf.set_font('Helvetica', 'B', 10)
-    pdf.set_char_spacing(1.2)
-    pdf.cell(0, 6, _latin1('CARDÁPIO · %s' % titulo_tipo.upper()),
-             new_x='LMARGIN', new_y='NEXT')
+    # Label de seção CENTRADO, como o "CARDÁPIO" da tela (section-label).
+    pdf.set_y(66)
+    pdf.set_text_color(*_C_SOFT)
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.set_char_spacing(2.2)
+    pdf.cell(0, 5, _latin1('CARDÁPIO · %s' % titulo_tipo.upper()),
+             align='C', new_x='LMARGIN', new_y='NEXT')
     pdf.set_char_spacing(0)
 
     if regras:
-        pdf.ln(2)
+        pdf.ln(3)
         y0 = pdf.get_y()
-        alt = 8 + 6 * len(regras)
-        pdf.set_fill_color(245, 240, 230)
-        pdf.set_draw_color(225, 218, 203)
-        pdf.rect(_MARGEM, y0, 190, alt, style='FD')
+        alt = 9 + 6 * len(regras)
+        pdf.set_fill_color(*_C_TAG)        # .regras-atacado do site
+        pdf.set_draw_color(*_C_BORDER)
+        pdf.rect(_MARGEM, y0, 190, alt, style='FD',
+                 round_corners=True, corner_radius=_RAIO)
         pdf.set_y(y0 + 4)
-        pdf.set_x(_MARGEM + 4)
+        pdf.set_x(_MARGEM + 5)
         pdf.set_font('Helvetica', 'B', 9)
-        pdf.set_text_color(110, 85, 40)
-        pdf.cell(0, 5, _latin1('REGRAS DO PEDIDO'),
+        pdf.set_text_color(*_C_PRIMARY)
+        pdf.set_char_spacing(0.8)
+        pdf.cell(0, 5, _latin1('REGRAS DO PEDIDO — %s'
+                               % titulo_tipo.upper()).replace('—', '-'),
                  new_x='LMARGIN', new_y='NEXT')
-        pdf.set_text_color(60, 60, 60)
+        pdf.set_char_spacing(0)
         for rg in regras:
-            pdf.set_x(_MARGEM + 4)
+            pdf.set_x(_MARGEM + 5)
             pdf.set_font('Helvetica', 'B', 9)
+            pdf.set_text_color(*_C_MUTED)
             pdf.cell(pdf.get_string_width(_latin1(rg['label'] + ': ')) + 1, 6,
                      _latin1(rg['label'] + ':'))
             pdf.set_font('Helvetica', '', 9)
+            pdf.set_text_color(*_C_FG)
             pdf.cell(0, 6, _latin1(rg['valor']), new_x='LMARGIN', new_y='NEXT')
-        pdf.set_y(y0 + alt + 4)
+        pdf.set_y(y0 + alt + 5)
     else:
-        pdf.ln(3)
+        pdf.ln(4)
 
 
 def _moeda(v):
