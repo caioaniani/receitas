@@ -59,18 +59,14 @@ def test_catalogo_venda_b2b_filtra_mas_grandfather_no_editar(app):
         db.session.add(venda)
         db.session.flush()
         db.session.add(VendaB2BItem(venda_id=venda.id, receita_id=morta.id,
-                                    nome=morta.nome, quantidade=1,
-                                    preco_unitario=10))
+                                    quantidade=1, preco_unitario=10))
         db.session.commit()
         # venda NOVA: arquivada fora
-        cat = _catalogo_venda()
-        nomes = [r.nome for r in cat['receitas']] \
-            if isinstance(cat, dict) else [r.nome for r in cat[1]]
+        nomes = [r.nome for r in _catalogo_venda()['receitas']]
         assert 'Pao Vivo B2B' in nomes and 'Pao Morto B2B' not in nomes
         # EDITAR a venda que já tem a arquivada: grandfather mantém
-        cat2 = _catalogo_venda(excluir_venda_id=venda.id)
-        nomes2 = [r.nome for r in cat2['receitas']] \
-            if isinstance(cat2, dict) else [r.nome for r in cat2[1]]
+        nomes2 = [r.nome
+                  for r in _catalogo_venda(excluir_venda_id=venda.id)['receitas']]
         assert 'Pao Morto B2B' in nomes2
 
 
