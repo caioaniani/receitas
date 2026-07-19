@@ -70,7 +70,17 @@ def verificar_baixas_presas():
     return {'separados': separados, 'retiradas': retiradas}
 
 
-def _montar_mensagem(d):
+def _montar_mensagem(d, base_url=None):
+    """Mensagem do WhatsApp. Todo item vem com o GESTO e o LINK que
+    resolvem (19/07/2026 — o alerta antigo só dizia "escaneie o QR": quem
+    lia no celular não tinha o QR na mão nem caminho de destrava; caso
+    retirada #16 Nebraska presa 12h+)."""
+    if base_url is None:
+        try:
+            base_url = current_app.config.get('APP_BASE_URL') or ''
+        except RuntimeError:
+            base_url = ''
+    base = (base_url or '').rstrip('/')
     partes = ['🚨 BAIXAS PRESAS — estoque errado até resolver']
     if d['separados']:
         partes.append(f"\n📦 {len(d['separados'])} pedido(s) parados em "
@@ -78,7 +88,8 @@ def _montar_mensagem(d):
                       'escaneado — indústria NÃO baixou):')
         for p in d['separados']:
             partes.append(f"  • #{p['id']} {p['loja']} (entrega {p['entrega']})")
-        partes.append('  → escanear o QR de saída, ou /pedidos (enviar).')
+        partes.append(f'  → escanear o QR de saída, ou enviar em '
+                      f'{base}/pedidos')
     if d['retiradas']:
         h = _retirada_presa_horas()
         partes.append(f"\n♻️ {len(d['retiradas'])} retirada(s) de sobra em "
@@ -87,7 +98,11 @@ def _montar_mensagem(d):
         for r in d['retiradas']:
             partes.append(f"  • retirada #{r['id']} {r['loja']} "
                           f"(coletada {r['coletada_em']})")
-        partes.append('  → escanear o QR de recebimento na indústria.')
+        partes.append('  → escanear o QR de recebimento na indústria (tela '
+                      'do padeiro), OU destravar sem QR em '
+                      f'{base}/pedidos/retiradas — "Confirmar recebimento" '
+                      'se a mercadoria chegou; "Cancelar (estorna coleta)" '
+                      'se nunca chegou.')
     return '\n'.join(partes)
 
 
