@@ -219,12 +219,17 @@ def _migrate_postgres(app):
             conn.execute(text(
                 "UPDATE receita SET estoque_nao_abate = TRUE "
                 "WHERE nome = 'Massa para folhar'"))
+            # ORDER BY id LIMIT 1: receita.nome NAO tem unique — um nome
+            # duplicado faria a subquery escalar estourar no Postgres e
+            # derrubar o boot (todos os ALTERs do bloco iriam junto).
             conn.execute(text(
                 "UPDATE receita_ingrediente SET porcentagem = 1.2011 "
                 "WHERE receita_id = (SELECT id FROM receita "
-                "                    WHERE nome = 'Croissant Tradicional') "
+                "                    WHERE nome = 'Croissant Tradicional' "
+                "                    ORDER BY id LIMIT 1) "
                 "  AND sub_receita_id = (SELECT id FROM receita "
-                "                        WHERE nome = 'Massa para folhar') "
+                "                        WHERE nome = 'Massa para folhar' "
+                "                        ORDER BY id LIMIT 1) "
                 "  AND porcentagem = 1.0"))
 
         # receita_etapa.descricao — passo-a-passo do que fazer em cada etapa,
