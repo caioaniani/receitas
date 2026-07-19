@@ -1946,6 +1946,18 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE pedido_online_item ADD COLUMN "
                        "fatiado BOOLEAN")
 
+    # chatbot_conversa.contato_key (19/07/2026): memoria cross-conversa do
+    # bot — telefone canonizado do contato pra conversa NOVA achar o
+    # historico recente do mesmo cliente. Espelha o ALTER do Postgres.
+    cursor.execute("PRAGMA table_info(chatbot_conversa)")
+    cols_cbc = [row[1] for row in cursor.fetchall()]
+    if cols_cbc and 'contato_key' not in cols_cbc:
+        cursor.execute("ALTER TABLE chatbot_conversa ADD COLUMN "
+                       "contato_key VARCHAR(40)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS "
+                       "ix_chatbot_conversa_contato_key "
+                       "ON chatbot_conversa (contato_key)")
+
     # seru_produto_map.fator_quantidade
     cursor.execute("PRAGMA table_info(seru_produto_map)")
     cols_spm = [row[1] for row in cursor.fetchall()]
