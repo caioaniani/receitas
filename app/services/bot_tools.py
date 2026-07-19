@@ -719,18 +719,85 @@ def _consultar_pedido_vnda(code, telefone_contato, cpf_cliente):
     }
 
 
-def consultar_pedido(numero, *, telefone_contato=None, cpf_cliente=None):
-    """Status + DATA DE ENTREGA de um pedido pelo número.
+# Busca por TELEFONE do canal quando o cliente nao sabe o numero (19/07/2026,
+# auditor: handoff por "pedido nao encontrado" sem o bot ter como procurar).
+# Fail-closed: SO o telefone verificado do canal (Chatwoot WhatsApp) localiza
+# — e a MESMA credencial que ja autoriza a exibicao do pedido. Nome NUNCA
+# busca (nao e prova de identidade; furaria o anti-enumeracao) e CPF segue
+# apenas como autorizacao de pedido ja localizado.
+_PEDIDOS_POR_TELEFONE_DIAS = 90
+_PEDIDOS_POR_TELEFONE_MAX = 3
 
-    Procura PRIMEIRO no NOSSO banco (PedidoOnline, opao.online); se o número
-    não for de lá, cai pro VNDA (site antigo, em paralelo na transição).
+
+def _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente):
+    """Localiza os PedidoOnline recentes do telefone do canal.
+
+    1 achado  -> devolve a ficha completa direto (mesma forma da consulta por
+                 numero — o bot responde na hora).
+    2-3       -> lista compacta pro bot perguntar qual e.
+    0 / sem telefone no canal -> erro orientando a pedir o numero.
+
+    `telefone_chave` e Python-side (nao SQL) — filtramos em memoria a janela
+    recente, mesmo padrao do card CRM (`crm/routes._buscar_por_telefone`)."""
+    from datetime import timedelta
+
+    from app.models import PedidoOnline
+    from app.utils import agora, telefone_chave
+    tel = telefone_chave(telefone_contato or '')
+    if not tel:
+        return {'erro': ('sem telefone verificado neste canal não dá pra '
+                          'localizar — peça o número do pedido ao cliente')}
+    corte = agora() - timedelta(days=_PEDIDOS_POR_TELEFONE_DIAS)
+    achados = []
+    q = (PedidoOnline.query
+         .filter(PedidoOnline.criado_em >= corte)
+         .order_by(PedidoOnline.criado_em.desc()))
+    for p in q:
+        for t in (p.telefone_cliente, p.telefone_destinatario):
+            if t and telefone_chave(t) == tel:
+                achados.append(p)
+                break
+        if len(achados) >= _PEDIDOS_POR_TELEFONE_MAX:
+            break
+    if not achados:
+        return {'erro': 'nenhum_pedido_para_este_telefone',
+                'instrucao': ('Nenhum pedido recente no telefone deste '
+                               'WhatsApp. Peça o número do pedido (pode ter '
+                               'sido feito com outro telefone). Se o cliente '
+                               'não tiver o número, transfira.')}
+    if len(achados) == 1:
+        # Telefone do canal bate = mesma autorizacao do fluxo por numero.
+        return _consultar_pedido_online(
+            achados[0].codigo, telefone_contato, cpf_cliente)
+    return {
+        'pedidos_recentes': [{
+            'numero': p.codigo,
+            'status': _STATUS_ONLINE_CLIENTE.get(p.status, p.status),
+            'feito_em': (p.criado_em.strftime('%d/%m/%Y')
+                         if p.criado_em else None),
+            'data_entrega': (p.data_entrega.strftime('%d/%m/%Y')
+                             if p.data_entrega else None),
+        } for p in achados],
+        'instrucao': ('Mais de um pedido recente neste telefone. Pergunte '
+                       'ao cliente qual é (pelo número ou pela data) e chame '
+                       'consultar_pedido com o número escolhido.'),
+    }
+
+
+def consultar_pedido(numero, *, telefone_contato=None, cpf_cliente=None):
+    """Status + DATA DE ENTREGA de um pedido pelo número — ou, SEM número,
+    pelos pedidos recentes do telefone do canal (fail-closed).
+
+    Com número: procura PRIMEIRO no NOSSO banco (PedidoOnline, opao.online);
+    se o número não for de lá, cai pro VNDA (site antigo, em paralelo na
+    transição).
 
     AUTORIZACAO (nos dois): exige que o solicitante seja o dono — match por
     telefone do canal (Chatwoot) OU CPF informado. Sem isso devolve
     autorizacao_necessaria (NAO expoe que o pedido existe)."""
     code = str(numero or '').strip()
     if not code:
-        return {'erro': 'informe o número do pedido'}
+        return _pedidos_recentes_por_telefone(telefone_contato, cpf_cliente)
     nativo = _consultar_pedido_online(code, telefone_contato, cpf_cliente)
     if nativo is not None:
         return nativo
