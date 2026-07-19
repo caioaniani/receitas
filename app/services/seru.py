@@ -308,7 +308,7 @@ def itens_da_nf(pedido, timeout=12):
             except (TypeError, ValueError):
                 return 0.0
 
-        root = ET.fromstring(xml_txt)
+        root = ET.fromstring(xml_src)
         itens = []
         for det in root.iter():
             if _local(det.tag) != 'det':
@@ -320,7 +320,12 @@ def itens_da_nf(pedido, timeout=12):
             nome = campos.get('xProd') or ''
             if not nome:
                 continue
-            qtd = _num(campos.get('qCom')) or 1.0
+            # qtd <= 0 (bonificação/ajuste na NF) NÃO baixa — mesmo
+            # contrato do extrair_itens (achado de revisão: `or 1.0`
+            # transformava qCom 0 em baixa de 1 unidade).
+            qtd = _num(campos.get('qCom'))
+            if qtd <= 0:
+                continue
             itens.append({
                 'nome': nome,
                 'sku': campos.get('cProd') or None,
