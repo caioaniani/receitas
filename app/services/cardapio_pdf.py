@@ -275,7 +275,8 @@ def gerar_cardapio_pdf(tipo, categorias, regras):
         com_foto = [i for i in itens
                     if i.get('img_ref') or i.get('imagem_url')]
         sem_foto = [i for i in itens if i not in com_foto]
-        _titulo_categoria(pdf, cat)
+        _titulo_categoria(pdf, cat,
+                          alt_primeira=_CARD_H if com_foto else 10)
         if com_foto:
             _grid_categoria(pdf, com_foto)
         if sem_foto:
