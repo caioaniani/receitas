@@ -2455,6 +2455,14 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         comp = int(it['comprometido']) if it else 0
         prev = int(it['previsto']) if it else 0
         est_ef = int(it['em_estoque_efetivo']) if it else int(rr['em_estoque'])
+        # Flag "estoque nao abate" (19/07/2026): saldo/produzir/projecao da
+        # linha usam o MESMO numero da conta do balanco (so a producao ja
+        # mandada, WIP) — manter o fisico aqui faria a caixa dizer "nao
+        # falta" com a linha produzindo (a classe de bug de 30/06) e
+        # deixaria estoque fantasma CALAR o alerta de entrega em risco.
+        # O fisico real segue visivel em rr['em_estoque'].
+        if rr.get('estoque_nao_abate'):
+            est_ef = int(it.get('em_producao', 0) or 0) if it else 0
         # Demanda do balanco = Σ_dia max(firme_d, previsto_d) (Fase 2). Linha
         # fora do balanco (insumo injetado) cai no agregado antigo.
         demanda = int(it['demanda']) if it and it.get('demanda') is not None \
