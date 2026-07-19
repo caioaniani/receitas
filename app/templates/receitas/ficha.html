@@ -486,6 +486,20 @@
                 </div>
             </label>
         </div>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" name="estoque_nao_abate" id="estoque-nao-abate"
+                   value="1" {% if receita.estoque_nao_abate %}checked{% endif %}>
+            <label class="form-check-label" for="estoque-nao-abate">
+                <strong>Estoque físico não abate a produção sugerida</strong>
+                <div class="text-muted small">
+                    O cronograma/balanço passa a sugerir a produção <strong>inteira</strong> do
+                    consumo, ignorando o estoque registrado desta receita (ex.: Massa para folhar,
+                    cujo saldo do sistema não reflete a geladeira). A produção já
+                    <strong>mandada ao padeiro</strong> hoje continua contando, e o consumo real
+                    segue baixando o estoque normalmente.
+                </div>
+            </label>
+        </div>
         <div class="form-check">
             <input class="form-check-input" type="checkbox" name="reaproveitavel" id="reaproveitavel-receita"
                    value="1" {% if receita.reaproveitavel %}checked{% endif %}>
