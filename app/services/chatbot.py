@@ -368,7 +368,8 @@ def carregar_historico(conv_id):
         return []
 
 
-def salvar_historico(conv_id, historico, resposta, *, handoff=False):
+def salvar_historico(conv_id, historico, resposta, *, handoff=False,
+                     contato_key=None):
     """Persiste o turno no nosso banco: o historico efetivo (que JA inclui a
     msg atual do cliente) + a resposta do bot. So texto — imagens nao vao pro
     store (o `_build_messages` so usa imagem da ULTIMA msg, que sempre vem
@@ -376,7 +377,12 @@ def salvar_historico(conv_id, historico, resposta, *, handoff=False):
 
     `handoff=True` marca a resposta com `handoff_em` (timestamp) — e o que o
     `handoff_recente` le pra NAO transferir de novo a mesma conversa minutos
-    depois (caso Simone 06/07/2026: dois handoffs na mesma conversa)."""
+    depois (caso Simone 06/07/2026: dois handoffs na mesma conversa).
+
+    `contato_key`: telefone canonizado do contato — indexa a conversa pro
+    lookup cross-conversa (`contexto_do_contato`). None NUNCA apaga uma
+    chave ja gravada (caminhos sem telefone, ex: followup/vassoura sem
+    sender, apenas nao atualizam)."""
     from app.extensions import db
     from app.models import ChatbotConversa
     from app.utils import agora
