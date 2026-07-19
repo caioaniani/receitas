@@ -703,7 +703,13 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         # Aplicado ANTES das travas de retorno/cap: retorno nunca produz e o
         # cap "so de sobras" ainda manda sobre o piso.
         alvo = max(demanda, minimo_ind)
-        produzir = max(0, alvo - est_efetivo)
+        # Flag "estoque nao abate" (dono 19/07/2026, caso Massa para folhar):
+        # o fisico do ledger nao e confiavel pra esta receita — so a producao
+        # JA MANDADA (WIP) abate o que falta produzir. O em_estoque_efetivo
+        # exibido segue sendo o real; muda so a conta do planejamento.
+        nao_abate = bool(getattr(rec, 'estoque_nao_abate', False))
+        est_planejamento = wip if nao_abate else est_efetivo
+        produzir = max(0, alvo - est_planejamento)
         limitado_por_minimo = minimo_ind > demanda and produzir > 0
         # Retorno nunca sugere producao (nem por firme): so entra por
         # devolucao. A linha segue visivel pra visibilidade do estoque.
