@@ -100,6 +100,9 @@ def cronograma():
             # Regra da véspera (10/07/2026): consumo iminente de insumo sem
             # estoque pronto — dict {faltam, coberto, lead, dias} ou None.
             'insumo_sem_vespera': rr.get('insumo_sem_vespera'),
+            # Flag da ficha (19/07/2026): estoque físico não abate a
+            # produção sugerida — só a produção já mandada conta.
+            'estoque_nao_abate': bool(rr.get('estoque_nao_abate')),
         })
     return jsonify(
         ok=True,
