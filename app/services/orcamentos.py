@@ -275,6 +275,19 @@ def validar_para_aprovacao(orc):
         erros.append('itens de linha livre precisam ser amarrados ao '
                      'catalogo (ou removidos) antes de aprovar: '
                      + ', '.join(livres))
+    # Item vinculado quando estava ATIVO pode ter sido arquivado/desativado
+    # antes da aprovacao — a aprovacao cria VendaB2B NA HORA e o balanco de
+    # producao (filtra arquivadas) nunca enxergaria o comprometido
+    # (varredura 19/07/2026). Re-checa no gesto que vira dinheiro.
+    mortos = []
+    for it in orc.itens:
+        if it.receita_id and it.receita and it.receita.arquivada_em:
+            mortos.append(it.nome or it.receita.nome)
+        elif it.produto_id and it.produto and not it.produto.ativo:
+            mortos.append(it.nome or it.produto.nome)
+    if mortos:
+        erros.append('item(ns) arquivado(s)/desativado(s) no catalogo — '
+                     'troque ou remova antes de aprovar: ' + ', '.join(mortos))
     fracionados = [it.nome for it in orc.itens
                    if float(it.quantidade or 0) != int(float(it.quantidade or 0))]
     if fracionados:
