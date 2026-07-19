@@ -280,20 +280,41 @@ def _grid_categoria(pdf, itens_foto):
         pdf.set_y(y0 + _CARD_H + _GAP)
 
 
-def _linhas_sem_foto(pdf, itens):
-    for item in itens:
-        if pdf.get_y() + 8 > 283:
+_LINHA_H = 10
+_LINHA_W = (190 - _GAP) / 2
+
+
+def _lista_categoria(pdf, itens):
+    """.list-grid do site (categoria SEM nenhuma foto): caixinhas brancas
+    arredondadas em 2 colunas, nome à esquerda + preço marrom à direita."""
+    for i in range(0, len(itens), 2):
+        linha = itens[i:i + 2]
+        if pdf.get_y() + _LINHA_H > 283:
             pdf.add_page()
-        y = pdf.get_y()
-        pdf.set_draw_color(235, 232, 226)
-        pdf.line(_MARGEM, y + 6.5, 200, y + 6.5)
-        pdf.set_font('Helvetica', '', 9.5)
-        pdf.set_text_color(40, 40, 40)
-        pdf.cell(150, 6.5, _latin1(item['nome']))
-        pdf.set_font('Helvetica', 'B', 9.5)
-        pdf.set_text_color(146, 100, 33)
-        pdf.cell(40, 6.5, _latin1(_moeda(item['preco_venda'])), align='R',
-                 new_x='LMARGIN', new_y='NEXT')
+        y0 = pdf.get_y()
+        for col, item in enumerate(linha):
+            x = _MARGEM + col * (_LINHA_W + _GAP)
+            pdf.set_draw_color(*_C_BORDER)
+            pdf.set_fill_color(255, 255, 255)
+            pdf.rect(x, y0, _LINHA_W, _LINHA_H, style='FD',
+                     round_corners=True, corner_radius=_RAIO)
+            preco = _latin1(_moeda(item['preco_venda']))
+            pdf.set_font('Helvetica', 'B', 9)
+            w_preco = pdf.get_string_width(preco) + 2
+            pdf.set_xy(x + 4, y0 + 2)
+            pdf.set_text_color(*_C_FG)
+            nome = _latin1(item['nome'])
+            max_nome = _LINHA_W - 8 - w_preco
+            if pdf.get_string_width(nome) > max_nome:
+                while (pdf.get_string_width(nome + '...') > max_nome
+                       and len(nome) > 3):
+                    nome = nome[:-1]
+                nome += '...'
+            pdf.cell(max_nome, 6, nome)
+            pdf.set_xy(x + _LINHA_W - w_preco - 4, y0 + 2)
+            pdf.set_text_color(*_C_PRIMARY)
+            pdf.cell(w_preco, 6, preco, align='R')
+        pdf.set_y(y0 + _LINHA_H + 2)
 
 
 def gerar_cardapio_pdf(tipo, categorias, regras):
@@ -307,15 +328,18 @@ def gerar_cardapio_pdf(tipo, categorias, regras):
     # Alfabética, com 'Outros' sempre por último (padrão de cardápio).
     for cat in sorted(categorias, key=lambda c: (c == 'Outros', c)):
         itens = categorias[cat]
-        com_foto = [i for i in itens
-                    if i.get('img_ref') or i.get('imagem_url')]
-        sem_foto = [i for i in itens if i not in com_foto]
+        # MESMA regra do site (main/cardapio.html `tem_foto`): categoria com
+        # ALGUMA foto vira grid de cards com TODOS os itens (sem foto =
+        # placeholder bege); categoria sem foto nenhuma vira as caixinhas
+        # nome/preço em 2 colunas.
+        tem_foto = any(i.get('img_ref') or i.get('imagem_url')
+                       for i in itens)
         _titulo_categoria(pdf, cat,
-                          alt_primeira=_CARD_H if com_foto else 10)
-        if com_foto:
-            _grid_categoria(pdf, com_foto)
-        if sem_foto:
-            _linhas_sem_foto(pdf, sem_foto)
+                          alt_primeira=_CARD_H if tem_foto else _LINHA_H)
+        if tem_foto:
+            _grid_categoria(pdf, itens)
+        else:
+            _lista_categoria(pdf, itens)
             pdf.ln(2)
 
     saida = pdf.output()
