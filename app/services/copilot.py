@@ -1087,7 +1087,10 @@ def _catalogo_texto():
 
     from app.models import Fornecedor, Funcionario
     linhas = ["PRODUTOS (use o nome exato):"]
-    for p in Produto.query.order_by(Produto.nome).all():
+    # ativo=True: produto desativado nao pode ser OFERECIDO como opcao pelo
+    # modelo (varredura 19/07/2026 — Receita/MP/Fornecedor ja filtravam).
+    for p in Produto.query.filter(Produto.ativo.is_(True)) \
+                          .order_by(Produto.nome).all():
         linhas.append(f"  - {p.nome}")
     linhas.append("")
     linhas.append("RECEITAS (use o nome exato):")
