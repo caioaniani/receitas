@@ -354,6 +354,18 @@ def cliente_precos(cid):
                     db.session.delete(linha)
                     removidos += 1
                 continue
+            # Guard server-side (pos-revisao 19/07/2026): aba velha/POST
+            # direto nao salva preco NOVO pra item arquivado/inativo —
+            # remover (ramo acima) continua permitido.
+            obj = (Receita.query.get(int(sid)) if kind == 'receita'
+                   else Produto.query.get(int(sid)))
+            morto = (obj is None
+                     or (kind == 'receita' and obj.arquivada_em)
+                     or (kind == 'produto' and not obj.ativo))
+            if morto:
+                flash(f'Item de {ref} está arquivado/inativo — preço '
+                      'ignorado.', 'warning')
+                continue
             try:
                 preco = Decimal(valor)
             except InvalidOperation:
