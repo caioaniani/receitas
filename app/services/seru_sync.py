@@ -338,6 +338,21 @@ def processar_pedidos(data_inicial, data_final, user=None,
             continue  # NAO marca como processado — retenta depois
 
         itens = seru.extrair_itens(p)
+        if not itens:
+            # Pedido SEM itens (delivery 99Food / cobrança avulsa): a NFC-e
+            # emitida traz os produtos REAIS — enriquece pra dar baixa
+            # (pedido do dono 18/07/2026; nomes da NF = nomes do
+            # SeruProdutoMap, mesmo motor de mapeamento de sempre).
+            nf_itens = seru.itens_da_nf(p)
+            if nf_itens is None:
+                # NF existe mas o download/parse falhou: NÃO marca como
+                # processado — retenta no próximo ciclo (padrão do
+                # "aguardando loja"). Sem NF nenhuma, nf_itens vem [] e o
+                # pedido segue o fluxo normal (processado com 0 itens).
+                stats['pedidos_aguardando_nf'] = \
+                    stats.get('pedidos_aguardando_nf', 0) + 1
+                continue
+            itens = nf_itens
         n_total = len(itens)
         n_baixados = 0
 
