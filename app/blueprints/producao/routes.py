@@ -79,7 +79,9 @@ def novo():
         flash('Plano de produção criado!', 'success')
         return redirect(url_for('producao.detalhe', id=plano.id))
 
-    receitas = Receita.query.order_by(Receita.categoria, Receita.nome).all()
+    # ativas(): plano manual novo nao pode nascer de receita arquivada
+    # (varredura 19/07/2026 — iria pra tela do padeiro e baixaria MP).
+    receitas = Receita.ativas().order_by(Receita.categoria, Receita.nome).all()
     return render_template('producao/novo.html', receitas=receitas, hoje=hoje_brt())
 
 
