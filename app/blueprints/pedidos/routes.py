@@ -163,8 +163,11 @@ def buscar_itens():
         return all(t in n for t in termos)
 
     out = []
+    # ativas(): receita arquivada nao pode entrar em pedido NOVO (varredura
+    # 19/07/2026 — o typeahead era o unico picker do arquivo sem o filtro).
     out += [{'id': f'r_{r.id}', 'nome': r.nome}
-            for r in Receita.query.order_by(Receita.nome).all() if _casa(r.nome)]
+            for r in Receita.ativas().order_by(Receita.nome).all()
+            if _casa(r.nome)]
     out += [{'id': f'p_{p.id}', 'nome': p.nome}
             for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
             if _casa(p.nome)]
