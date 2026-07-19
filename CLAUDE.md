@@ -2046,11 +2046,35 @@ como problemas estruturais (nao de disciplina do modelo); dono aprovou
   do auditor nao traz conv_id; sem isso, investigar achado do auditor de
   fora exigia query manual.
 
-Armadilha que custou um ciclo de CI: reescrever texto do prompt QUEBRANDO
-frase que teste trava ("pelo seu cadastro" caiu em quebra de linha) — os
-testes de prompt (`test_chatbot_faq_pilar_b.py`) fatiam janelas de N chars;
-ao editar secao coberta, rodar o arquivo de teste do prompt antes do push.
-Testes do pacote: `tests/test_bot_memoria_busca.py` (15 casos).
+**Pos-revisao (fixados)**: a busca por telefone localiza SO pelo telefone
+do COMPRADOR (`telefone_cliente`) — o do DESTINATARIO descobriria o
+PRESENTE-SURPRESA (itens + cartinha) perguntando "tem pedido pra mim?"
+(mesma classe do caso 13/07); destinatario COM o numero segue autorizado.
+Msgs herdadas carregam `herdada: True` (preservada pelo salvar): o
+detector de loop as ignora (3 "oi" em conversas diferentes nao e bot) e a
+heranca nao encadeia (msg herdada nao re-herda — sem marcador antigo no
+meio do contexto); fallback pra penultima conversa se a mais recente
+estiver vazia. Vassoura e followup agora seguram os MESMOS dois locks do
+webhook em volta do read-modify-write do store (a vassoura corria com
+webhook em voo) e a vassoura preserva IMAGENS pendentes + pula conversa
+sem conteudo utilizavel (nao re-responde contexto velho). Advisory lock em
+AUTOCOMMIT (sem "idle in transaction" no turno) e unlock falho INVALIDA a
+conexao (lock preso nunca volta pro pool — conversa travaria pra sempre).
+Identifier de canal IG (~17 digitos) nao vira pseudo-telefone (so 10-13
+digitos alimentam memoria/busca). TRADE-OFFS ACEITOS: dedupe de handoff
+vale CROSS-conversa via marcador herdado (mesmo cliente, equipe ja
+acionada — a fila continua garantida pelo status open); conexao dedicada
+do lock dobra o uso do pool por conversa ativa (~7 simultaneas por worker;
+estouro degrada pra FALLBACK+handoff, monitorar antes de mexer no pool);
+telefone reciclado/compartilhado herda contexto do titular anterior
+(mesma credencial ja aceita na autorizacao de pedido); sobreposicao
+PARCIAL de pendente da vassoura pode duplicar 1 texto no contexto (raro,
+so confunde o modelo). Armadilha que custou um ciclo de CI: reescrever
+texto do prompt QUEBRANDO frase que teste trava ("pelo seu cadastro" caiu
+em quebra de linha) — os testes de prompt (`test_chatbot_faq_pilar_b.py`)
+fatiam janelas de N chars; ao editar secao coberta, rodar o arquivo de
+teste do prompt antes do push. Testes do pacote:
+`tests/test_bot_memoria_busca.py` (17 casos).
 
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
