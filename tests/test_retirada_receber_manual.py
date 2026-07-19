@@ -130,6 +130,10 @@ def test_receber_manual_mata_qr_e_scan_atrasado_nao_duplica(app):
     receber_retirada_manual(ret, usuario_id=None)
     db.session.commit()
     assert qr.usado_em is not None
+    # Scan HORAS depois (fora da janela de double-submit do handshake, que
+    # suprime com 303 sem executar): QR usado leva 410.
+    qr.usado_em = agora() - timedelta(hours=1)
+    db.session.commit()
     c = app.test_client()
     resp = c.post('/handshake/r/tok-receb-tarde', data={'pin': '4321'})
     assert resp.status_code == 410
