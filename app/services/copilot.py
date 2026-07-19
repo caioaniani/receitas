@@ -2965,8 +2965,9 @@ def _read_consultar_margem(params, user):
     r = Receita.query.filter(Receita.nome.ilike(nome),
                              Receita.arquivada_em.is_(None)).first()
     if not r:
-        # Tenta produto
-        p = Produto.query.filter(Produto.nome.ilike(nome)).first()
+        # Tenta produto (ativo — margem de item morto so confunde)
+        p = Produto.query.filter(Produto.nome.ilike(nome),
+                                 Produto.ativo.is_(True)).first()
         if not p:
             return {'texto': f'"{nome}" nao encontrado.'}
         return {'texto': f'**{p.nome}** (produto): atacado R$ {p.preco_atacado or 0:.2f}, loja R$ {p.preco_loja or 0:.2f}, site R$ {p.preco_site or 0:.2f}.'}
