@@ -95,15 +95,21 @@ def test_pedido_antigo_fora_da_janela_nao_entra(app):
         assert r['erro'] == 'nenhum_pedido_para_este_telefone'
 
 
-def test_telefone_do_destinatario_tambem_localiza(app):
-    """Presente: quem recebe pode perguntar do pedido (mesma regra da
-    autorização por telefone já aceita no fluxo por número)."""
+def test_telefone_do_destinatario_NAO_descobre_pedido(app):
+    """PRESENTE-SURPRESA (revisão 19/07/2026): o telefone do destinatário
+    NÃO localiza — senão quem vai receber descobriria o presente (itens e
+    cartinha) perguntando "tem pedido pra mim?". Com o NÚMERO em mãos o
+    destinatário segue autorizado (fluxo por número, inalterado)."""
     from app.services import bot_tools
     with app.app_context():
         _pedido_online('TELBUSCA6', '11 93333-2222',
                        telefone_destinatario='11 92222-1111')
         r = bot_tools.consultar_pedido('', telefone_contato='11922221111')
-        assert r['numero'] == 'TELBUSCA6'
+        assert r['erro'] == 'nenhum_pedido_para_este_telefone'
+        # com o número, a autorização por telefone de destinatário continua
+        r2 = bot_tools.consultar_pedido('TELBUSCA6',
+                                        telefone_contato='11922221111')
+        assert r2['numero'] == 'TELBUSCA6'
 
 
 # ── Vassoura store-first (não sobrescreve o contexto local) ────────────────
