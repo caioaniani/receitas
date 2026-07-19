@@ -266,7 +266,8 @@ def gerar_cardapio_pdf(tipo, categorias, regras):
     pdf.add_page()
     _capa(pdf, titulo, regras if tipo == 'atacado' else [])
 
-    for cat in sorted(categorias):
+    # Alfabética, com 'Outros' sempre por último (padrão de cardápio).
+    for cat in sorted(categorias, key=lambda c: (c == 'Outros', c)):
         itens = categorias[cat]
         com_foto = [i for i in itens
                     if i.get('img_ref') or i.get('imagem_url')]
