@@ -219,11 +219,12 @@ def test_contexto_do_contato_ignora_propria_conversa_e_janela(app):
         chatbot.salvar_historico('710', [
             {'role': 'user', 'content': 'oi'}], 'Olá!',
             contato_key='1177776666')
-        # a própria conversa não é "contexto anterior"
+        # de OUTRA conversa, o contexto vem…
         assert chatbot.contexto_do_contato(
-            '1177776666', excluir_conv='710') != []
+            '1177776666', excluir_conv='711')[0]['content'] == 'oi'
+        # …mas a própria conversa não é "contexto anterior" (excluída)
         assert chatbot.contexto_do_contato(
-            '1177776666', excluir_conv='710')[0]['content'] == 'oi'
+            '1177776666', excluir_conv='710') == []
         # fora da janela de 30 dias: não herda
         conv = ChatbotConversa.query.filter_by(conv_id='710').one()
         conv.ultima_msg_em = agora() - timedelta(days=45)
