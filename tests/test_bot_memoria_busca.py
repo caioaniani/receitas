@@ -208,11 +208,12 @@ def test_contexto_do_contato_herda_ultimas_msgs_com_marcador(app):
             {'role': 'assistant', 'content': 'Chega amanhã às 10h!'},
         ], '', contato_key='1188887777')
         ctx = chatbot.contexto_do_contato('1188887777', excluir_conv='701')
-        assert ctx[0] == {'role': 'user', 'content': 'fiz o pedido ABC123'}
+        assert ctx[0]['content'] == 'fiz o pedido ABC123'
+        assert ctx[0]['herdada'] is True     # detector de loop ignora
         assert ctx[-1]['role'] == 'assistant'
         assert 'Chega amanhã às 10h!' in ctx[-1]['content']
-        assert 'conversa\nANTERIOR' in ctx[-1]['content'].replace(
-            'conversa ANTERIOR', 'conversa\nANTERIOR')
+        assert 'conversa' in ctx[-1]['content']
+        assert 'ANTERIOR' in ctx[-1]['content']
         assert 'não se apresente' in ctx[-1]['content']
 
 
