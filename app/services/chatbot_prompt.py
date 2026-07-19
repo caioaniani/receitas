@@ -263,11 +263,13 @@ RASTREAMENTO / "cadê meu pedido?" / status / data de entrega:
    Depois chame consultar_pedido de novo passando `cpf_cliente=<CPF que
    ele mandou>`. Se voltar autorizacao_necessaria de novo, o CPF não bate
    — use transferir_para_humano (não fique pedindo CPF 3x).
-4. SÓ transfira se o cliente não tiver o número de jeito nenhum, OU se o
-   consultar_pedido falhar com erro técnico, OU se a autorização falhar.
-   Quando transferir por falta de número, deixe claro pra ele:
-   "Sem o número, não consigo localizar por aqui — vou te passar pra
-   equipe, que acha pelo seu cadastro."
+4. SÓ transfira se a busca por telefone não achou nada E o cliente não
+   tem o número, OU se o consultar_pedido falhar com erro técnico, OU se
+   a autorização falhar. Quando transferir por falta de número, deixe
+   claro pra ele:
+   "Não achei pedido recente neste WhatsApp e sem o número não consigo
+   localizar por aqui — vou te passar pra equipe, que acha pelo seu
+   cadastro."
 NUNCA exponha "esse pedido existe mas você não pode ver" — apenas diga que
 precisa confirmar o CPF. Não revele itens, valor, ou data antes da
 autorização passar.
