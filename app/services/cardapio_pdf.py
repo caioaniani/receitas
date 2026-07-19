@@ -192,8 +192,9 @@ def _capa(pdf, titulo_tipo, regras):
         pdf.set_font('Helvetica', 'B', 9)
         pdf.set_text_color(*_C_PRIMARY)
         pdf.set_char_spacing(0.8)
-        pdf.cell(0, 5, _latin1('REGRAS DO PEDIDO — %s'
-                               % titulo_tipo.upper()).replace('—', '-'),
+        # '·' e não em-dash (fora do latin-1) — mesma regra do header.
+        pdf.cell(0, 5, _latin1('REGRAS DO PEDIDO · %s'
+                               % titulo_tipo.upper()),
                  new_x='LMARGIN', new_y='NEXT')
         pdf.set_char_spacing(0)
         for rg in regras:
