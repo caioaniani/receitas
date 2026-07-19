@@ -2431,6 +2431,10 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             rr['retorno'] = True
         rec = receitas.get(rid)
         rr['categoria'] = (rec.categoria or '').strip() if rec else ''
+        # Flag da ficha visivel na linha (tag na tela + sonda do assistente):
+        # cobre tambem a linha de insumo injetada pelo _explodir_bom.
+        if rec is not None and getattr(rec, 'estoque_nao_abate', False):
+            rr['estoque_nao_abate'] = True
         # Fornada especial: marca as células de dia SEM produção permitida
         # (seg-qua) pra tela travar a edição — vale também pras linhas
         # injetadas depois da distribuição (zeradas/override).
