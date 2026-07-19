@@ -187,7 +187,7 @@ def api_margem_categoria():
     from app.services import impostos
     resultado = calcular_custos_receitas()
     custos_map = resultado.get('custos', {})
-    receitas = Receita.query.all()
+    receitas = Receita.ativas().all()
     carga = impostos.carga_venda()
     cats = defaultdict(list)
     for r in receitas:
