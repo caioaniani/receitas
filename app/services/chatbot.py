@@ -1295,7 +1295,8 @@ def varrer_pendentes_sem_resposta():
                 if envio.get('ok'):
                     respondidas += 1
                     salvar_historico(conv_id, historico, texto,
-                                     handoff=(acao == 'handoff'))
+                                     handoff=(acao == 'handoff'),
+                                     contato_key=telefone or None)
             if acao in ('handoff', 'handoff_repetido'):
                 chatwoot.definir_status(conv_id, 'open')
             elif acao == 'encerrar':
