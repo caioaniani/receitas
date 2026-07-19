@@ -77,9 +77,11 @@ def test_copilot_nao_resolve_produto_inativo(app):
         _produto('Cesta Morta CP', ativo=False)
         vivos = copilot._resolver_produto('Cesta Viva CP')
         assert vivos and vivos[0]['nome'] == 'Cesta Viva CP'
-        assert copilot._resolver_produto('Cesta Morta CP') == []
-        # _resolver_item_qualquer idem
-        assert copilot._resolver_item_qualquer('Cesta Morta CP') is None
+        # A morta NUNCA aparece (o fuzzy pode sugerir a viva parecida — ok).
+        res = copilot._resolver_produto('Cesta Morta CP')
+        assert all(m['nome'] != 'Cesta Morta CP' for m in res)
+        alvo = copilot._resolver_item_qualquer('Cesta Morta CP')
+        assert alvo is None or alvo[2] != 'Cesta Morta CP'
 
 
 def test_matcher_estoque_lote_nao_casa_arquivada(app):
