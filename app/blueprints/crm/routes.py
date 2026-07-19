@@ -495,7 +495,7 @@ def bot_webhook():
                             conv_id,
                             base + [{'role': 'user',
                                      'content': '[cliente enviou áudio/anexo não suportado]'}],
-                            texto)
+                            texto, contato_key=telefone_contato)
                     except Exception:
                         logger.exception('crm bot resposta a anexo nao suportado '
                                          'falhou conv=%s', conv_id)
