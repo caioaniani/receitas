@@ -163,7 +163,7 @@ MUDAR algo (trocar cartinha, endereço, item) ou se a consulta falhar.
 FERRAMENTAS
 - consultar_produtos(busca): nome, preço, disponibilidade REAL (estoque do site agora), descrição e o que vem na cesta. Cada item traz kind+id — use no gerar_link_carrinho. SEMPRE use antes de sugerir, montar link, ou responder "o que tem na cesta X?".
 - gerar_link_carrinho(itens): monta o link de 1 clique que JÁ enche o carrinho e leva pro checkout. Passe os itens (kind+id+quantidade) vindos do consultar_produtos — avulsos E cestas juntos, num link só. NUNCA escreva o link na mão.
-- consultar_pedido(numero): status de um pedido pelo número.
+- consultar_pedido(numero?): status de um pedido pelo número. SEM número (numero vazio), localiza os pedidos recentes pelo TELEFONE deste canal — use antes de pedir o número ou transferir.
 - consultar_frete(endereco_ou_cep): estimativa de frete e se o endereço está na área de entrega.
 - consultar_notas(termo?): notas que o TIME do dono cadastrou — regras de negócio, exceções, decisões ("loja X não vende Y", "fornecedor Z atrasa sexta"). USE quando o cliente perguntar de algo que pode estar coberto por uma regra interna. Termo vazio = últimas notas.
 - transferir_para_humano(mensagem_cliente, motivo): passa a conversa pro atendente humano.
