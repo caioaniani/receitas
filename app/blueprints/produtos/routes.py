@@ -236,10 +236,14 @@ def salvar_composicao(id):
         produto_componente_id = None
         materia_prima_id = None
         if tipo == 'receita':
-            r = Receita.query.filter_by(nome=nome).first()
+            # ativas(): com homonima (arquivada + recriada) o .first() cru
+            # podia amarrar a FK na MORTA em silencio — mesma classe do caso
+            # iogurte de 03/07 (varredura 19/07/2026). Sem match ativo, vira
+            # orfao pro admin resolver.
+            r = Receita.ativas().filter_by(nome=nome).first()
             receita_id = r.id if r else None
         elif tipo == 'produto':
-            p = Produto.query.filter_by(nome=nome).first()
+            p = Produto.query.filter_by(nome=nome, ativo=True).first()
             # Nao deixa cesta apontar pra ela mesma (loop infinito).
             if p and p.id != produto.id:
                 produto_componente_id = p.id
