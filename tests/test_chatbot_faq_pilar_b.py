@@ -733,10 +733,15 @@ def test_secao_rastreamento_diz_pra_ler_numero_antes_de_pedir():
     from app.services.chatbot_prompt import PROMPT
     idx = PROMPT.find('RASTREAMENTO')
     assert idx >= 0
-    bloco = PROMPT[idx:idx + 1500]
+    # 2000: a seção cresceu em 19/07/2026 com o passo da busca por telefone
+    # (mesma janela do teste de frete acima).
+    bloco = PROMPT[idx:idx + 2000]
     assert 'ANTES DE PEDIR' in bloco
     # Exemplos do número EMBUTIDO na mensagem
     assert 'pedido 12345' in bloco or '12345' in bloco
+    # Sem número na conversa: primeiro a busca pelo telefone do canal
+    # (auditor 19/07/2026 — handoff sem tentar resolver), só depois pedir.
+    assert 'consultar_pedido SEM' in bloco
     # Ainda transfere quando cliente não tem número (caso real do #115)
     assert 'pelo seu cadastro' in bloco or 'pelo cadastro' in bloco
 
