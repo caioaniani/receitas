@@ -295,7 +295,8 @@ def _cardapio_categorias(tipo):
     receitas = Receita.query.options(
         defer(Receita.imagem_blob),
         defer(Receita.imagem_mimetype),
-    ).order_by(Receita.categoria, Receita.nome).all()
+    ).filter(Receita.arquivada_em.is_(None)) \
+     .order_by(Receita.categoria, Receita.nome).all()
     produtos = Produto.query.options(
         defer(Produto.imagem_blob),
         defer(Produto.imagem_mimetype),
