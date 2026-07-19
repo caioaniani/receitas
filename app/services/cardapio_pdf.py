@@ -114,7 +114,8 @@ class _CardapioPDF(FPDF):
             return                      # capa desenha o próprio cabeçalho
         self.set_font('Times', 'B', 11)
         self.set_text_color(30, 30, 30)
-        self.cell(95, 6, _latin1('O Pão — Padaria Artesanal'))
+        # '·' e não '—': em-dash está fora do latin-1 e virava '?'.
+        self.cell(95, 6, _latin1('O Pão · Padaria Artesanal'))
         self.set_font('Helvetica', '', 9)
         self.set_text_color(120, 120, 120)
         self.cell(85, 6, _latin1('Cardápio · %s' % self.titulo_tipo),
