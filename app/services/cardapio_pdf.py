@@ -6,9 +6,11 @@ URL/data no rodapé — fotos do dono, 19/07). Mesma regra da impressão de
 pedidos (CLAUDE.md): a saída oficial é PDF do servidor, com paginação
 controlada — um card NUNCA é cortado entre páginas.
 
-Layout (A4 retrato): capa com a banda preta da marca + regras do pedido
-(atacado) + categorias em grid de 3 colunas com foto/nome/preço; itens sem
-foto viram linhas "nome … preço" no fim da categoria. Fotos: bytes do BLOB
+Layout (A4 retrato) espelha o SITE (main/cardapio.html, pedido do dono
+19/07/2026): capa com o hero escuro da marca + regras do pedido (atacado) +
+MESMA regra da tela — categoria com ALGUMA foto vira grid de 3 colunas com
+TODOS os itens (sem foto = placeholder bege); categoria sem foto nenhuma
+vira caixinhas nome/preço em 2 colunas. Fotos: bytes do BLOB
 ou download da URL (Dropbox/externa) com timeout curto e cache em memória —
 foto que falhar vira card sem foto, nunca derruba a geração.
 """
