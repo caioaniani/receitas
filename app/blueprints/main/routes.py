@@ -283,10 +283,12 @@ def cardapio_atacado_regras():
                            campos=CARDAPIO_ATACADO_CAMPOS, atuais=atuais)
 
 
-@main_bp.route('/cardapio')
-@login_required
-def cardapio():
-    tipo = request.args.get('tipo', 'atacado')
+def _cardapio_categorias(tipo):
+    """Monta as categorias do cardápio — FONTE ÚNICA da tela E do PDF
+    (19/07/2026): divergência aqui = cardápio impresso diferente do site.
+    Cada item traz `imagem_url` (a tela usa) e `img_ref` ('receita'|'produto',
+    id) quando a foto vive no banco/Dropbox (o PDF resolve os bytes por ele).
+    Retorna (categorias, regras)."""
     # defer(imagem_blob) — listagem nao precisa do blob (pode ter 100KB+ cada).
     # IDs com foto (blob OU Dropbox URL) vem em query separada.
     from sqlalchemy.orm import defer
@@ -320,7 +322,8 @@ def cardapio():
         cat = r.categoria or 'Outros'
         if cat not in categorias:
             categorias[cat] = []
-        if r.id in receitas_com_foto:
+        com_foto = r.id in receitas_com_foto
+        if com_foto:
             img = url_for('main.cardapio_img', tipo='receita', id=r.id)
         else:
             img = r.imagem_url
@@ -330,6 +333,7 @@ def cardapio():
             'descricao': None,
             'preco_venda': preco,
             'imagem_url': img,
+            'img_ref': ('receita', r.id) if com_foto else None,
         })
 
     # Produtos cadastrados (cestas, kits, etc.)
@@ -342,7 +346,8 @@ def cardapio():
         cat = p.categoria or 'Outros'
         if cat not in categorias:
             categorias[cat] = []
-        if p.id in produtos_com_foto:
+        com_foto = p.id in produtos_com_foto
+        if com_foto:
             img = url_for('main.cardapio_img', tipo='produto', id=p.id)
         else:
             img = p.imagem_url
@@ -352,11 +357,40 @@ def cardapio():
             'descricao': p.descricao,
             'preco_venda': preco,
             'imagem_url': img,
+            'img_ref': ('produto', p.id) if com_foto else None,
         })
 
     regras = _regras_atacado() if tipo == 'atacado' else []
+    return categorias, regras
+
+
+@main_bp.route('/cardapio')
+@login_required
+def cardapio():
+    tipo = request.args.get('tipo', 'atacado')
+    categorias, regras = _cardapio_categorias(tipo)
     return render_template('main/cardapio.html', categorias=categorias,
                            tipo=tipo, regras=regras)
+
+
+@main_bp.route('/cardapio.pdf')
+@login_required
+def cardapio_pdf_export():
+    """Cardápio em PDF pronto pra ENVIAR ao cliente (19/07/2026): o botão
+    Imprimir usava window.print() e o navegador re-paginava o site de
+    qualquer jeito (cards cortados, URL no rodapé — fotos do dono). Mesma
+    regra da impressão de pedidos: PDF do servidor, paginação controlada."""
+    from app.services import cardapio_pdf as svc
+    tipo = request.args.get('tipo', 'atacado')
+    if tipo not in ('atacado', 'loja', 'site'):
+        tipo = 'atacado'
+    categorias, regras = _cardapio_categorias(tipo)
+    conteudo = svc.gerar_cardapio_pdf(tipo, categorias, regras)
+    resp = current_app.response_class(conteudo, mimetype='application/pdf')
+    resp.headers['Content-Disposition'] = (
+        'inline; filename="cardapio_%s.pdf"' % tipo)
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 @main_bp.route('/cardapio-img/<tipo>/<int:id>')
