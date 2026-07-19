@@ -2190,9 +2190,14 @@ def _separar_estado(nome):
 
 
 def _resolver_produto(nome):
+    # Produto.ativo=True em TODOS os ramos (varredura 19/07/2026): o soft-
+    # delete da UI (excluir com historico vira ativo=False) deixava o fuzzy
+    # resolver produto morto pra pedido/venda NOVOS — Receita e MP ja
+    # filtravam neste mesmo resolver.
     from sqlalchemy import func
     matches = []
-    p = Produto.query.filter(func.lower(Produto.nome) == nome.lower()).first()
+    p = Produto.query.filter(func.lower(Produto.nome) == nome.lower(),
+                             Produto.ativo.is_(True)).first()
     if p:
         matches.append({'tipo': 'produto', 'id': p.id, 'nome': p.nome, 'match': 'exato'})
     r = Receita.query.filter(func.lower(Receita.nome) == nome.lower(),
@@ -2201,7 +2206,8 @@ def _resolver_produto(nome):
         matches.append({'tipo': 'receita', 'id': r.id, 'nome': r.nome, 'match': 'exato'})
     if matches:
         return matches
-    for p in Produto.query.filter(Produto.nome.ilike(f'%{nome}%')).limit(10).all():
+    for p in (Produto.query.filter(Produto.nome.ilike(f'%{nome}%'),
+                                   Produto.ativo.is_(True)).limit(10).all()):
         matches.append({'tipo': 'produto', 'id': p.id, 'nome': p.nome, 'match': 'fuzzy'})
     for r in (Receita.query.filter(Receita.nome.ilike(f'%{nome}%'),
                                    Receita.arquivada_em.is_(None)).limit(10).all()):
@@ -2211,7 +2217,7 @@ def _resolver_produto(nome):
         return matches[:5]
     # Fallback rapidfuzz — quando nenhuma substring bate (ex: "PFR" vs
     # "Pao Frances Fermentado", "cro almnd" vs "Croissant Almond").
-    produtos = Produto.query.all()
+    produtos = Produto.query.filter(Produto.ativo.is_(True)).all()
     receitas = Receita.query.filter(Receita.arquivada_em.is_(None)).all()
     pool = [('produto', p.id, p.nome) for p in produtos] + \
            [('receita', r.id, r.nome) for r in receitas]
