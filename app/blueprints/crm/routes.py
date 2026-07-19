@@ -422,12 +422,20 @@ def bot_webhook():
     # fallback de CPF.
     sender = (payload.get('sender') or {})
     sender_meta = ((conv.get('meta') or {}).get('sender') or {})
-    telefone_contato = telefone_chave(
-        sender.get('phone_number')
-        or sender.get('identifier')
-        or sender_meta.get('phone_number')
-        or sender_meta.get('identifier')
-        or ''
+
+    def _tel_ok(bruto):
+        # So aceita o que tem CARA de telefone BR (10-13 digitos): o
+        # `identifier` de canal IG e um ID scoped de ~17 digitos e o
+        # telefone_chave pegaria os ultimos 10 — viraria pseudo-telefone
+        # alimentando memoria/busca por engano (revisao 19/07/2026).
+        d = ''.join(ch for ch in str(bruto or '') if ch.isdigit())
+        return telefone_chave(bruto) if 10 <= len(d) <= 13 else ''
+
+    telefone_contato = (
+        _tel_ok(sender.get('phone_number'))
+        or _tel_ok(sender.get('identifier'))
+        or _tel_ok(sender_meta.get('phone_number'))
+        or _tel_ok(sender_meta.get('identifier'))
     )
 
     # Numeros IGNORADOS (bots externos — caso gov.br 03/07/2026, loop que
