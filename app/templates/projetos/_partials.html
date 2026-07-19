@@ -137,6 +137,9 @@
 {# Atributo data-tarefa com todos os campos pra abrir o modal de edicao sem fetch #}
 {% macro tarefa_data_attr(t) %}
 data-tarefa-id="{{ t.id }}"
+{# projeto_id faltava aqui (bug 17/07/2026): sem ele o select do modal de
+   edição ficava no projeto ERRADO (primeiro da lista/última edição) e
+   SALVAR movia a tarefa de projeto sem querer. #}
 data-tarefa='{{ {
     "id": t.id, "nome": t.nome, "status": t.status,
     "tipo": t.tipo or "", "esforco": t.esforco or "",
@@ -144,9 +147,6 @@ data-tarefa='{{ {
     "recorrencia": t.recorrencia or "",
     "responsavel_id": t.responsavel_id or "",
     "observacao": t.observacao or "",
-    {# projeto_id faltava (bug 17/07/2026): sem ele o select do modal de
-       edição ficava no projeto ERRADO (primeiro da lista/última edição) e
-       SALVAR movia a tarefa de projeto sem querer. #}
     "projeto_id": t.projeto_id,
     "projeto_nome": t.projeto.nome
 }|tojson }}'
