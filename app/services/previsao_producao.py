@@ -2177,7 +2177,13 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # Estoque EFETIVO (apos as entregas iminentes) e o que cobre a janela —
         # mesmo numero que o balanco usou pra achar o "Produzir". Usar o estoque
         # bruto aqui front-loadaria estoque que ja vai embora antes da janela.
-        estoque_efetivo = int(it.get('em_estoque_efetivo', estoque))
+        # Flag "estoque nao abate": a curva usa o MESMO numero da conta do
+        # balanco (so WIP), senao os primeiros dias sairiam esvaziados por um
+        # fisico que o produzir ignorou.
+        if it.get('estoque_nao_abate'):
+            estoque_efetivo = int(it.get('em_producao', 0) or 0)
+        else:
+            estoque_efetivo = int(it.get('em_estoque_efetivo', estoque))
 
         # Curva de demanda diaria: producao do dia i mira a entrega (i + lead).
         # FRACIONARIO de proposito: o previsto eh fracao/dia (ex: 0,43). Arredondar
