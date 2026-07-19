@@ -91,8 +91,13 @@ def _carregar_catalogo():
     (VendaMapa canal='lote' mapeado pra receita/produto). Apelidos sao globais —
     o mesmo apelido vinculado em /pedidos/estoque-loja vale aqui."""
     from app.models import VendaMapa
-    receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
-    produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
+    # So ATIVOS no matcher (varredura 19/07/2026): balanco que citava receita
+    # arquivada criava/atualizava EstoqueProducao morto — que o
+    # balanco_industria (filtra arquivadas) nunca mais enxergava. Nome de
+    # arquivada agora vira nome_pendente, decisao explicita do admin.
+    receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.ativas().all()]
+    produtos = [(p.id, p.nome, _ascii(p.nome))
+                for p in Produto.query.filter(Produto.ativo.is_(True)).all()]
     orfaos = [
         (ep.id, ep.nome_pendente, _ascii(ep.nome_pendente))
         for ep in EstoqueProducao.query.filter(
