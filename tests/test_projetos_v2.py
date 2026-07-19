@@ -75,6 +75,29 @@ def test_inicio_mostra_agora_e_quadro(app, owner_user):
     assert 'proj-done' in html
 
 
+def test_data_tarefa_embute_projeto_id(app, owner_user):
+    """Bug 17/07/2026 (foto do dono): o JSON embutido na linha da tarefa não
+    trazia `projeto_id` — o modal de edição abria com o select no projeto
+    ERRADO (primeiro da lista/última edição) e SALVAR movia a tarefa de
+    projeto sem querer. O data-tarefa tem que carregar o projeto_id real."""
+    import json as _json
+    import re
+
+    _, p, _, tarefas = _montar_quadro(app)
+    c = app.test_client()
+    _login(c, owner_user.id)
+    html = c.get('/projetos/').data.decode()
+
+    # Acha o data-tarefa da 'Tarefa em andamento y' e valida o projeto_id
+    achou = False
+    for m in re.finditer(r"data-tarefa='([^']+)'", html):
+        d = _json.loads(m.group(1).replace('&#34;', '"'))
+        if d.get('nome') == 'Tarefa em andamento y':
+            assert d.get('projeto_id') == p.id
+            achou = True
+    assert achou, 'linha da tarefa não encontrada no HTML'
+
+
 def test_tarefa_nao_duplica_entre_secoes_do_agora(app, owner_user):
     """Tarefa FAZENDO com prazo vencido aparece só em 'Fazendo agora'
     (cada tarefa uma vez no Agora)."""
