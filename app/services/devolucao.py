@@ -266,20 +266,93 @@ def creditar_industria_retirada(retirada, usuario_id=None):
     return resumo
 
 
-def cancelar_retirada(retirada, usuario_id=None):
-    """Cancela uma retirada AINDA NÃO COLETADA (10/07/2026 — retiradas cujo
-    QR de coleta expirou ficavam presas em `aguardando_coleta` pra sempre,
-    sem caminho de baixa).
+def receber_retirada_manual(retirada, usuario_id, quantidades=None):
+    """Destrava ADMINISTRATIVA da ponta 2 (19/07/2026 — caso retirada #16
+    Nebraska presa `em_transporte` 12h+): a mercadoria chegou na indústria
+    mas ninguém escaneou o QR de recebimento (motorista foi embora, QR
+    expirado) — a loja já baixou e o crédito ficava preso PRA SEMPRE, com o
+    alerta de baixas presas só repetindo "escaneie o QR".
 
-    Só `aguardando_coleta` cancela: nada foi baixado ainda (a baixa da loja
-    acontece NA COLETA), então cancelar não mexe em estoque nenhum — o
-    retorno segue no estoque da loja e as vendas de Nutella baixam dali.
-    Retirada em transporte já baixou a loja: recusa (receba na indústria).
-    NÃO commita — o caller fecha a transação."""
-    if retirada.status != 'aguardando_coleta':
+    Mesmo efeito do handshake de recebimento: credita a indústria
+    (`creditar_industria_retirada`) e fecha a retirada. `quantidades`
+    ({item_id: qtd}) grava a conferência da indústria em
+    `quantidade_recebida` quando difere da base (coletada > declarada) —
+    era um campo que NENHUM caminho escrevia (o form do QR só pede PIN).
+    QRs de recebimento pendentes morrem junto: um scan atrasado do
+    motorista cai no guard de status, e o QR "usado" deixa o motivo óbvio.
+    Só `em_transporte`. NÃO commita — o caller fecha a transação."""
+    if retirada.status != 'em_transporte':
         raise ValueError(
-            f'retirada #{retirada.id} está "{retirada.status}" — só se '
-            'cancela antes da coleta (em transporte, finalize o '
-            'recebimento na indústria)')
+            f'retirada #{retirada.id} está "{retirada.status}" — o '
+            'recebimento manual só destrava retirada em transporte')
+    if quantidades:
+        for it in retirada.itens:
+            q = quantidades.get(it.id)
+            if q is None:
+                continue
+            q = int(q)
+            if q < 0:
+                raise ValueError('quantidade recebida não pode ser negativa')
+            base = int(it.quantidade_coletada
+                       if it.quantidade_coletada is not None
+                       else it.quantidade)
+            if q != base:
+                it.quantidade_recebida = q
+    resumo = creditar_industria_retirada(retirada, usuario_id=usuario_id)
+    retirada.status = 'recebida'
+    retirada.recebida_em = agora()
+    for qr in retirada.qrcodes:
+        if qr.tipo == 'recebimento' and qr.usado_em is None:
+            qr.usado_em = agora()
+            qr.usado_por_descricao = 'recebimento manual (web)'
+    return resumo
+
+
+def cancelar_retirada(retirada, usuario_id=None):
+    """Cancela uma retirada em aberto.
+
+    - `aguardando_coleta` (10/07/2026): nada foi baixado ainda (a baixa da
+      loja acontece NA COLETA) — só marca cancelada, estoque intocado; o
+      retorno segue no estoque da loja e as vendas de Nutella baixam dali.
+    - `em_transporte` (19/07/2026, pacote de destrava das baixas presas):
+      pra quando a mercadoria NUNCA chegou / voltou pra prateleira da loja.
+      Estorna EXATAMENTE os movimentos da coleta (re-credita o EstoqueLoja
+      pelo que foi de fato baixado — a parcela `*_sem_estoque` nunca saiu e
+      não credita nada) e cancela. Se a mercadoria CHEGOU na indústria, o
+      gesto certo é `receber_retirada_manual`, nunca este.
+    - `recebida` segue sem volta (indústria já creditada).
+
+    Idempotente pelo guard de status (cancelada recusa re-execução).
+    NÃO commita — o caller fecha a transação. Retorna lista de avisos."""
+    if retirada.status not in ('aguardando_coleta', 'em_transporte'):
+        raise ValueError(
+            f'retirada #{retirada.id} está "{retirada.status}" — '
+            'não há o que cancelar')
+    avisos = []
+    if retirada.status == 'em_transporte':
+        token = retirada.token_mov
+        movs = MovEstoqueLoja.query.filter(
+            MovEstoqueLoja.tipo == TIPO_BAIXA_LOJA,
+            MovEstoqueLoja.referencia.like(f'%{token}')).all()
+        # Serializa as lojas antes dos UPDATEs — mesma família de deadlock
+        # da baixa/estorno (aqui é 1 loja, mas o padrão fica uniforme).
+        from app.services.estoque_helpers import serializar_lojas
+        serializar_lojas({mov.estoque.loja_id for mov in movs})
+        for mov in movs:
+            el = mov.estoque
+            el.quantidade = (el.quantidade or 0) + mov.quantidade
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo=TIPO_BAIXA_LOJA_ESTORNO,
+                quantidade=mov.quantidade,
+                referencia=f'Cancelamento da retirada {token}',
+                usuario_id=usuario_id))
+            avisos.append(f'{el.nome_item}: {mov.quantidade} devolvido(s) '
+                          'ao estoque da loja')
+        # QRs pendentes morrem junto — scan atrasado cai no guard de status.
+        for qr in retirada.qrcodes:
+            if qr.usado_em is None:
+                qr.usado_em = agora()
+                qr.usado_por_descricao = 'retirada cancelada (web)'
     retirada.status = 'cancelada'
     retirada.cancelada_em = agora()
+    return avisos
