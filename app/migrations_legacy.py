@@ -188,6 +188,15 @@ def _migrate_postgres(app):
             'sub_na_amassadeira': ('ALTER TABLE receita ADD COLUMN '
                                    'sub_na_amassadeira BOOLEAN NOT NULL '
                                    'DEFAULT FALSE'),
+            # Estoque físico desta receita NÃO abate a produção sugerida
+            # (balanço + MRP do cronograma). Decisão do dono 19/07/2026,
+            # caso Massa para folhar: o ledger dizia 2 bolas que não
+            # existiam na geladeira e a sugestão de massa pros 300 pains
+            # saía menor. Produção JÁ MANDADA (plano de hoje) segue
+            # contando — só o estoque em EstoqueProducao é ignorado.
+            'estoque_nao_abate': ('ALTER TABLE receita ADD COLUMN '
+                                  'estoque_nao_abate BOOLEAN NOT NULL '
+                                  'DEFAULT FALSE'),
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
@@ -199,6 +208,24 @@ def _migrate_postgres(app):
             conn.execute(text(
                 "UPDATE receita SET sub_na_amassadeira = TRUE "
                 "WHERE nome = 'Levain (pé)'"))
+        # Backfill ÚNICO da flag nova (mesmo padrão do Levain): o dono pediu
+        # a política pra Massa para folhar. Junto, a correção de ficha que
+        # ele ditou na mesma conversa (19/07/2026): croissant tradicional
+        # leva 86 g de massa → 50 un × 86 g ÷ 3.580 g/bola = 1,2011 bola
+        # por batida (a ficha estava 1.0 = 71,6 g; o valor documentado de
+        # 03/07 era 1,257 = 90 g). Guard em porcentagem = 1.0: se o dono já
+        # tiver editado a ficha pra outro valor, não sobrescreve.
+        if 'estoque_nao_abate' not in colunas:
+            conn.execute(text(
+                "UPDATE receita SET estoque_nao_abate = TRUE "
+                "WHERE nome = 'Massa para folhar'"))
+            conn.execute(text(
+                "UPDATE receita_ingrediente SET porcentagem = 1.2011 "
+                "WHERE receita_id = (SELECT id FROM receita "
+                "                    WHERE nome = 'Croissant Tradicional') "
+                "  AND sub_receita_id = (SELECT id FROM receita "
+                "                        WHERE nome = 'Massa para folhar') "
+                "  AND porcentagem = 1.0"))
 
         # receita_etapa.descricao — passo-a-passo do que fazer em cada etapa,
         # preenchido pelo padeiro na ficha de preparo (14/07/2026). Alimenta o
