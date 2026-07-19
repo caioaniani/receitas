@@ -223,7 +223,9 @@ def sugerir_para_pendentes(estoques_pendentes):
     """
     if not estoques_pendentes:
         return {}
-    receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.query.all()]
+    # ativas(): sugerir vincular a arquivada pre-selecionaria opcao que o
+    # dropdown (filtrado) nem oferece.
+    receitas = [(r.id, r.nome, _ascii(r.nome)) for r in Receita.ativas().all()]
     produtos = [(p.id, p.nome, _ascii(p.nome)) for p in Produto.query.all()]
     materias = [(m.id, m.nome, _ascii(m.nome)) for m in MateriaPrima.ativas().all()]
     apelidos = _apelidos_confirmados()
