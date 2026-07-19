@@ -155,7 +155,7 @@ def _capa(pdf, titulo_tipo, regras):
     pdf.set_text_color(120, 110, 95)
     pdf.set_font('Helvetica', 'B', 10)
     pdf.set_char_spacing(1.2)
-    pdf.cell(0, 6, _latin1('CARDÁPIO — %s' % titulo_tipo.upper()),
+    pdf.cell(0, 6, _latin1('CARDÁPIO · %s' % titulo_tipo.upper()),
              new_x='LMARGIN', new_y='NEXT')
     pdf.set_char_spacing(0)
 
