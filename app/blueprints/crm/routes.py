@@ -33,6 +33,8 @@ logger = logging.getLogger(__name__)
 # processo gunicorn). Acumulam: aceitavel ate ~milhares de conversas/dia (~32B
 # por entry); se virar problema, troca por LRU.
 import threading as _threading
+import zlib as _zlib
+from contextlib import contextmanager as _contextmanager
 
 _BOT_LOCKS: dict = {}
 _BOT_LOCKS_GUARD = _threading.Lock()
@@ -46,6 +48,47 @@ def _lock_para_conv(conv_id):
             lock = _threading.Lock()
             _BOT_LOCKS[conv_id] = lock
         return lock
+
+
+# Advisory lock class do chatbot no registro do projeto (7723 sync, 7731
+# backup, 7738 auditor, 7739 vigia infra, 7745 site, 7748 uso_ia, 7749
+# reviews, 7752 reprocesso). Forma de 2 ints: (classe, hash da conversa).
+_LOCK_CLASS_CHATBOT = 7753
+
+
+@_contextmanager
+def _lock_conv_cross_worker(conv_id):
+    """Serializa o processamento da MESMA conversa ENTRE workers gunicorn.
+
+    O `_BOT_LOCKS` é memória de UM processo e prod roda `--workers 2`
+    (Procfile): mensagens consecutivas do cliente podiam cair em workers
+    diferentes e fazer read-modify-write concorrente no store — o último
+    `salvar_historico` vencia e um turno sumia do contexto (achado da
+    revisão 19/07/2026). Advisory lock BLOQUEANTE por conversa (o tempo de
+    espera é o do turno do outro worker; as chamadas de IA têm timeout).
+    SQLite (dev/teste, 1 processo) = no-op, o thread lock já cobre."""
+    from sqlalchemy import text as _text
+
+    from app.extensions import db as _db
+    eng = _db.engine
+    if eng.dialect.name != 'postgresql':
+        yield
+        return
+    objid = _zlib.crc32(str(conv_id).encode()) & 0x7FFFFFFF
+    conn = eng.connect()
+    try:
+        conn.execute(_text('SELECT pg_advisory_lock(:c, :o)'),
+                     {'c': _LOCK_CLASS_CHATBOT, 'o': objid})
+        try:
+            yield
+        finally:
+            try:
+                conn.execute(_text('SELECT pg_advisory_unlock(:c, :o)'),
+                             {'c': _LOCK_CLASS_CHATBOT, 'o': objid})
+            except Exception:  # noqa: BLE001
+                logger.exception('unlock advisory conv=%s falhou', conv_id)
+    finally:
+        conn.close()
 
 
 # ── Debounce/coalescing de rajada (02/07/2026) ────────────────────────────
