@@ -599,6 +599,7 @@ def receita():
         'fornada_especial': rec.fornada_especial,
         'sugerir_pedido_loja': rec.sugerir_pedido_loja,
         'reaproveitavel': rec.reaproveitavel,
+        'estoque_nao_abate': rec.estoque_nao_abate,
         'retorno_receita': ({'id': rec.retorno_receita.id,
                              'nome': rec.retorno_receita.nome}
                             if rec.retorno_receita else None),
