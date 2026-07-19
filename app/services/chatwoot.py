@@ -617,6 +617,11 @@ def listar_conversas_paradas(min_minutos=15, limite=50, status='pending'):
         paradas.append({
             'id': c.get('id'),
             'nome_contato': sender.get('name') or '',
+            # Telefone cru do contato (a vassoura canoniza) — sem ele o
+            # `responder` da vassoura rodava sem autorizacao de pedido e a
+            # busca por telefone nao funcionava nesse caminho (19/07/2026).
+            'telefone': (sender.get('phone_number')
+                         or sender.get('identifier') or ''),
             'minutos_paradas': int(minutos),
         })
     paradas.sort(key=lambda p: -p['minutos_paradas'])
