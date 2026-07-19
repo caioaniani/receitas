@@ -3526,24 +3526,94 @@ def retirada_qr_coleta(id):
                            qr_png=qr_png, url=url)
 
 
+def _audit_retirada_web(ret, tipo, etapa, detalhe):
+    """Audita gesto ADMINISTRATIVO da retirada no mesmo log dos handshakes
+    (HandshakeAudit tipos r_coleta/r_receb) — commit isolado, best-effort,
+    nunca derruba a ação."""
+    from app.models import HandshakeAudit
+    try:
+        db.session.add(HandshakeAudit(
+            token=ret.token_mov, tipo=tipo, etapa=etapa,
+            detalhe=f'retirada:{ret.id} {detalhe}'[:500],
+            status_pedido=ret.status))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('audit retirada web falhou (id=%s)', ret.id)
+
+
+@pedidos_bp.route('/retiradas/<int:id>/receber-manual', methods=['POST'])
+@login_required
+@admin_required
+def retirada_receber_manual(id):
+    """Destrava de baixa presa (19/07/2026): confirma o recebimento na
+    indústria SEM o QR — pra retirada em transporte cuja mercadoria chegou
+    mas ninguém escaneou (motorista foi embora, QR expirado). Aceita
+    conferência por item (`qtd_<item_id>`; vazio/inválido = usa a coletada,
+    mesmo contrato do form da coleta)."""
+    from app.models import RetiradaSobra
+    from app.services.devolucao import receber_retirada_manual
+
+    ret = RetiradaSobra.query.get_or_404(id)
+    quantidades = {}
+    for it in ret.itens:
+        bruto = (request.form.get(f'qtd_{it.id}') or '').strip()
+        if bruto:
+            try:
+                quantidades[it.id] = int(bruto)
+            except ValueError:
+                pass
+    try:
+        resumo = receber_retirada_manual(ret, current_user.id, quantidades)
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        flash(f'Não recebi: {exc}', 'warning')
+        return redirect(url_for('pedidos.retiradas_sobras'))
+    _audit_retirada_web(ret, 'r_receb', 'manual',
+                        f'recebimento manual por usuario {current_user.id}')
+    partes = [f"{r['qtd']}× {r.get('destino') or r['nome']}"
+              for r in resumo if 'erro' not in r]
+    erros = [r['nome'] for r in resumo if 'erro' in r]
+    msg = (f'Retirada #{ret.id} recebida manualmente — indústria creditada'
+           + (f" ({', '.join(partes)})" if partes else ' (nada a creditar)')
+           + '.')
+    if erros:
+        msg += f" Itens sem cadastro (não creditados): {', '.join(erros)}."
+    flash(msg, 'success' if not erros else 'warning')
+    return redirect(url_for('pedidos.retiradas_sobras'))
+
+
 @pedidos_bp.route('/retiradas/<int:id>/cancelar', methods=['POST'])
 @login_required
 @admin_required
 def retirada_cancelar(id):
-    """Cancela retirada AINDA NÃO COLETADA (nada foi baixado — o retorno
-    segue no estoque da loja). Em transporte não cancela: a loja já baixou;
-    finalize o recebimento na indústria."""
+    """Cancela retirada em aberto. Antes da coleta nada foi baixado (o
+    retorno segue no estoque da loja); em transporte (19/07/2026) estorna a
+    baixa da coleta — pra mercadoria que nunca chegou/voltou pra loja. Se
+    ela CHEGOU na indústria, o gesto é o recebimento manual."""
     from app.models import RetiradaSobra
     from app.services.devolucao import cancelar_retirada
 
     ret = RetiradaSobra.query.get_or_404(id)
+    estava_transporte = ret.status == 'em_transporte'
     try:
-        cancelar_retirada(ret, usuario_id=current_user.id)
+        avisos = cancelar_retirada(ret, usuario_id=current_user.id)
         db.session.commit()
     except ValueError as exc:
         db.session.rollback()
         flash(f'Não cancelei: {exc}', 'warning')
         return redirect(url_for('pedidos.retiradas_sobras'))
-    flash(f'Retirada #{ret.id} cancelada — o retorno segue no estoque da '
-          'loja (as vendas de Nutella continuam baixando dali).', 'success')
+    if estava_transporte:
+        _audit_retirada_web(ret, 'r_coleta', 'cancel_estorno',
+                            f'cancelada em transporte por usuario '
+                            f'{current_user.id}')
+        detalhe = ('; '.join(avisos) if avisos
+                   else 'a coleta não tinha baixado nada')
+        flash(f'Retirada #{ret.id} cancelada com estorno da coleta — '
+              f'{detalhe}.', 'success')
+    else:
+        flash(f'Retirada #{ret.id} cancelada — o retorno segue no estoque '
+              'da loja (as vendas de Nutella continuam baixando dali).',
+              'success')
     return redirect(url_for('pedidos.retiradas_sobras'))
