@@ -1890,10 +1890,19 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
         """Estoque da receita disponivel PRA OS PAIS (alem da demanda propria)."""
         it = bal_map.get(rid)
         if it is not None:
-            efetivo = int(it.get('em_estoque_efetivo', it.get('em_estoque', 0)) or 0)
+            if it.get('estoque_nao_abate'):
+                # Flag da ficha (dono 19/07/2026): o fisico nao entra na
+                # conta — so a producao JA MANDADA (plano de hoje, WIP)
+                # cobre consumo. Vale tambem pra cobertura da vespera.
+                efetivo = int(it.get('em_producao', 0) or 0)
+            else:
+                efetivo = int(it.get('em_estoque_efetivo', it.get('em_estoque', 0)) or 0)
             demanda = max(int(it.get('comprometido', 0) or 0),
                           int(it.get('previsto', 0) or 0))
             return max(0, efetivo - demanda)
+        rec_f = receitas.get(rid)
+        if rec_f is not None and getattr(rec_f, 'estoque_nao_abate', False):
+            return 0
         return est_extra.get(rid, 0)
 
     # Cap "so de sobras" ANTES da propagacao: pai que consome retorno produz no
