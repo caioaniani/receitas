@@ -169,3 +169,50 @@ def test_pedido_com_itens_nao_consulta_nf(app):
              patch('app.services.seru.requests.get') as rget:
             seru_sync.processar_pedidos(PEDIDO_DIA, PEDIDO_DIA, user=None)
         assert not rget.called
+
+
+def test_cancelado_por_status_novo_nao_baixa_pela_nf(app):
+    """Achado de revisão: pedido novo com status='canceled' e canceledAt
+    VAZIO + NF autorizada baixaria estoque de venda cancelada (e o estorno,
+    keyed em canceledAt, nunca dispararia). Guard no ramo de pedido novo."""
+    from app.models import EstoqueLoja, SeruPedidoProcessado
+    with app.app_context():
+        loja, receita, el = _setup(qtd_estoque=10)
+        eid = el.id
+        ped = _pedido_sem_itens('P5', 'Anesio')
+        ped['status'] = 'canceled'                    # canceledAt segue None
+        _sync([ped])
+        reg = SeruPedidoProcessado.query.get('P5')
+        assert reg is not None and reg.cancelado_em is not None
+        assert EstoqueLoja.query.get(eid).quantidade == 10
+
+
+def test_estorno_de_pedido_baixado_pela_nf(app):
+    """Pedido baixado via NF que é cancelado depois (canceledAt): o estorno
+    lê os movimentos gravados e devolve exato."""
+    from app.models import EstoqueLoja, MovEstoqueLoja
+    with app.app_context():
+        loja, receita, el = _setup(qtd_estoque=10)
+        eid = el.id
+        _sync([_pedido_sem_itens('P6', 'Anesio')])
+        assert EstoqueLoja.query.get(eid).quantidade == 4    # 10 - 6
+        # mesmo pedido reaparece cancelado → estorna
+        ped = _pedido_sem_itens('P6', 'Anesio')
+        ped['canceledAt'] = '2026-05-20T15:00:00Z'
+        _sync([ped])
+        assert EstoqueLoja.query.get(eid).quantidade == 10
+        est = MovEstoqueLoja.query.filter_by(
+            estoque_loja_id=eid, tipo='venda_seru_estorno').all()
+        assert len(est) == 1 and est[0].quantidade == 6
+
+
+def test_qcom_zero_na_nf_nao_baixa(app):
+    """qCom 0 (bonificação/ajuste) não vira baixa de 1 — mesmo contrato do
+    extrair_itens (achado de revisão)."""
+    from app.services import seru
+    xml = XML_NF.replace('<qCom>6.0000</qCom>', '<qCom>0.0000</qCom>')
+    ped = _pedido_sem_itens('P7', 'Anesio')
+    with patch('app.services.seru.requests.get',
+               return_value=_RespXML(xml)):
+        itens = seru.itens_da_nf(ped)
+    assert [i['nome'] for i in itens] == ['Produto Sem Mapa']
