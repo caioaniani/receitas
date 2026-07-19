@@ -507,7 +507,9 @@ def reprocessar_retroativo(dias=7, user=None):
 
 FLAG_REPROCESSO = 'pdv_reprocesso_pendente'
 ULTIMO_REPROCESSO = 'pdv_reprocesso_ultimo'
-LOCK_KEY_REPROCESSO = 7749  # advisory lock — familia do seru_cron (7723-7748)
+# 7752: era 7749, mas 7749 colidia com LOCK_KEY_GOOGLE_REVIEWS do seru_cron
+# (achado de revisao 19/07/2026 — reviews e reprocesso se excluiam sem saber).
+LOCK_KEY_REPROCESSO = 7752  # advisory lock — familia do seru_cron
 _REPROCESSO_DIAS = 7
 
 # Fallback pra SQLite/dev (sem advisory lock): exclusao dentro do processo.
