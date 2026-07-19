@@ -1980,7 +1980,24 @@ estoque nem entram na previsao.
   (captura vendas_diarias) segue SEM os itens do delivery (bucket 🛵) —
   enriquecer a captura re-baixaria o XML a cada ciclo de 15min;
   previsao motor=vendas JA enxerga (le MovEstoqueLoja, que a baixa
-  cria). Testes: `tests/test_seru_nf_itens.py` (6 casos).
+  cria). **Pos-revisao (fixados)**: XMLs pre-buscados em `nf_cache`
+  ANTES do `serializar_lojas` (I/O de rede nao segura os advisory
+  locks de todas as lojas); pedido NOVO cancelado por STATUS (sem
+  canceledAt) nao baixa pela NF (`seru.pedido_cancelado` no ramo de
+  pedido novo — sem o guard, baixava venda cancelada e o estorno,
+  keyed em canceledAt, nunca disparava); `qCom` 0 na NF e pulado
+  (bonificacao nao vira baixa de 1); parse do XML em BYTES (expat
+  respeita o encoding declarado — decode com 'replace' corrompia
+  acento); `LOCK_KEY_REPROCESSO` movido 7749→7752 (colidia com o lock
+  do GOOGLE_REVIEWS — reprocesso e reviews podiam se excluir
+  mutuamente em silencio). PENDENCIAS DOCUMENTADAS (nao bloqueiam,
+  decisao separada): estorno de pedido JA processado segue keyed so em
+  canceledAt (cancelamento por status depois de processado nao
+  estorna); qCom fracionario e arredondado no motor (pre-existente);
+  NF quebrada que envelhece pra fora da janela de sync some sem
+  alarme; o PRIMEIRO reprocesso retroativo apos o deploy baixa
+  pedidos de delivery ANTIGOS (ate 30d) de uma vez — rajada esperada,
+  avisar o dono. Testes: `tests/test_seru_nf_itens.py` (9 casos).
 
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
