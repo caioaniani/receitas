@@ -255,6 +255,26 @@ def processar_pedidos(data_inicial, data_final, user=None,
     pedidos = seru.listar_pedidos_completo(
         data_inicial, data_final, expandir_dias_frente=expandir_dias_frente)
 
+    # Pre-busca dos XMLs de NF dos pedidos SEM itens (99Food etc.) ANTES do
+    # serializar_lojas — MESMO motivo do fetch da API acima: I/O de rede
+    # segurando o lock de todas as lojas travaria checkout/balanco/
+    # desperdicio enquanto o S3 responde (achado de revisao 19/07).
+    # So pedido NOVO (nao processado), nao cancelado e dentro da janela.
+    nf_cache = {}
+    for p in pedidos:
+        if not isinstance(p, dict) or seru.pedido_cancelado(p):
+            continue
+        pid = str(p.get('id') or p.get('orderNumber')
+                  or p.get('code') or '').strip()
+        if not pid or seru.extrair_itens(p):
+            continue
+        d = seru.data_local(p.get('createdAt'))
+        if not d or not (data_inicial <= d <= data_final):
+            continue
+        if SeruPedidoProcessado.query.get(pid):
+            continue                      # ja processado: nunca re-baixa XML
+        nf_cache[pid] = seru.itens_da_nf(p)
+
     serializar_lojas(r.id for r in Loja.query.with_entities(Loja.id).all())
 
     stats = {
