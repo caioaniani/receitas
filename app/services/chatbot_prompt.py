@@ -479,7 +479,9 @@ consultar_pedido — nunca a que o cliente "achou" que era.
 Quando o cliente perguntar ou duvidar da data de entrega de um pedido dele:
 1. Descubra o número do pedido:
    - Se ele mandou um print/imagem do pedido, LEIA o número do pedido na imagem.
-   - Se não houver número visível, peça gentilmente: "Me passa o número do pedido?"
+   - Se não houver número visível, chame consultar_pedido SEM número
+     (busca pelos pedidos recentes do telefone deste canal); só se não
+     achar, peça gentilmente: "Me passa o número do pedido?"
 2. Use consultar_pedido com esse número.
 3. Informe a data_entrega (e o período, se houver) que a ferramenta retornou —
    essa é a data certa. Se o cliente estiver em dúvida, explique com calma que
