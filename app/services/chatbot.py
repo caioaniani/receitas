@@ -1284,69 +1284,74 @@ def varrer_pendentes_sem_resposta():
         # So quando a ULTIMA mensagem e do CLIENTE (o bot ficou devendo).
         if api_hist[-1].get('role') != 'user':
             continue
-        # O STORE local e a fonte confiavel de contexto (40 msgs +
-        # marcadores handoff_em); a API do Chatwoot (20 msgs, instavel) so
-        # diz O QUE FALTA responder. Antes a vassoura respondia e salvava a
-        # versao da API por cima do store — perdia turnos e os marcadores
-        # de handoff (achado da revisao 19/07/2026). Base = store; anexa
-        # as msgs finais do cliente (texto E imagens) que o store nao tem.
-        store = carregar_historico(conv_id)
-        if store:
-            pendentes = []
-            for m in reversed(api_hist):
-                if m.get('role') != 'user':
-                    break
-                pendentes.append(m)
-            pendentes.reverse()
-            texto_pendente = '\n'.join(
-                t for t in ((m.get('content') or '').strip()
-                            for m in pendentes) if t)
-            imagens_pendentes = [img for m in pendentes
-                                 for img in (m.get('imagens') or [])]
-            ja_no_store = bool(
-                texto_pendente
-                and store[-1].get('role') == 'user'
-                and (store[-1].get('content') or '').strip()
-                == texto_pendente)
-            if not texto_pendente and not imagens_pendentes \
-                    and store[-1].get('role') != 'user':
-                # Nada utilizavel pendente e o store termina em resposta
-                # nossa: responder aqui seria re-responder contexto velho.
-                continue
-            historico = list(store)
-            if (texto_pendente or imagens_pendentes) and not ja_no_store:
-                msg = {'role': 'user', 'content': texto_pendente}
-                if imagens_pendentes:
-                    msg['imagens'] = imagens_pendentes
-                historico.append(msg)
-        else:
-            historico = api_hist
         telefone = telefone_chave(c.get('telefone') or '')
         varridas += 1
-        # Mesmos DOIS locks do webhook (thread + advisory cross-worker):
-        # a vassoura fazia read-modify-write no store sem serializar com um
-        # webhook em voo da mesma conversa (achado da revisao 19/07/2026).
+        # Mesmos DOIS locks do webhook (thread + advisory cross-worker),
+        # cobrindo do carregar ao salvar: a vassoura fazia read-modify-write
+        # no store sem serializar com um webhook em voo da mesma conversa
+        # (achado da revisao 19/07/2026). Import tardio evita ciclo com o
+        # blueprint (que importa este service dentro das rotas).
         from app.blueprints.crm.routes import (
             _lock_conv_cross_worker,
             _lock_para_conv,
         )
         try:
             with _lock_para_conv(conv_id), _lock_conv_cross_worker(conv_id):
+                # O STORE local e a fonte confiavel de contexto (40 msgs +
+                # marcadores handoff_em); a API do Chatwoot (20 msgs,
+                # instavel) so diz O QUE FALTA responder. Antes a vassoura
+                # respondia e salvava a versao da API por cima do store —
+                # perdia turnos e marcadores (revisao 19/07/2026). Base =
+                # store; anexa as msgs finais do cliente (texto E imagens)
+                # que o store nao tem.
+                store = carregar_historico(conv_id)
+                if store:
+                    pendentes = []
+                    for m in reversed(api_hist):
+                        if m.get('role') != 'user':
+                            break
+                        pendentes.append(m)
+                    pendentes.reverse()
+                    texto_pendente = '\n'.join(
+                        t for t in ((m.get('content') or '').strip()
+                                    for m in pendentes) if t)
+                    imagens_pendentes = [img for m in pendentes
+                                         for img in (m.get('imagens') or [])]
+                    ja_no_store = bool(
+                        texto_pendente
+                        and store[-1].get('role') == 'user'
+                        and (store[-1].get('content') or '').strip()
+                        == texto_pendente)
+                    if not texto_pendente and not imagens_pendentes \
+                            and store[-1].get('role') != 'user':
+                        # Nada utilizavel pendente e o store termina em
+                        # resposta nossa: responder seria re-responder
+                        # contexto velho.
+                        continue
+                    historico = list(store)
+                    if (texto_pendente or imagens_pendentes) \
+                            and not ja_no_store:
+                        msg = {'role': 'user', 'content': texto_pendente}
+                        if imagens_pendentes:
+                            msg['imagens'] = imagens_pendentes
+                        historico.append(msg)
+                else:
+                    historico = api_hist
                 resultado = responder(historico, telefone_contato=telefone)
-            acao = (resultado or {}).get('acao')
-            texto = (resultado or {}).get('texto') or ''
-            # Mesmo dedupe do webhook: conversa ja transferida ha pouco nao
-            # ganha 2º "vou te passar pra equipe".
-            if acao == 'handoff' and handoff_recente(conv_id):
-                acao = 'handoff_repetido'
-                texto = TEXTO_HANDOFF_REPETIDO
-            if texto:
-                envio = chatwoot.enviar_mensagem(conv_id, texto)
-                if envio.get('ok'):
-                    respondidas += 1
-                    salvar_historico(conv_id, historico, texto,
-                                     handoff=(acao == 'handoff'),
-                                     contato_key=telefone or None)
+                acao = (resultado or {}).get('acao')
+                texto = (resultado or {}).get('texto') or ''
+                # Mesmo dedupe do webhook: conversa ja transferida ha pouco
+                # nao ganha 2º "vou te passar pra equipe".
+                if acao == 'handoff' and handoff_recente(conv_id):
+                    acao = 'handoff_repetido'
+                    texto = TEXTO_HANDOFF_REPETIDO
+                if texto:
+                    envio = chatwoot.enviar_mensagem(conv_id, texto)
+                    if envio.get('ok'):
+                        respondidas += 1
+                        salvar_historico(conv_id, historico, texto,
+                                         handoff=(acao == 'handoff'),
+                                         contato_key=telefone or None)
             if acao in ('handoff', 'handoff_repetido'):
                 chatwoot.definir_status(conv_id, 'open')
             elif acao == 'encerrar':
