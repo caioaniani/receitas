@@ -410,6 +410,8 @@ def salvar_historico(conv_id, historico, resposta, *, handoff=False,
         if not conv:
             conv = ChatbotConversa(conv_id=str(conv_id))
             db.session.add(conv)
+        if contato_key:
+            conv.contato_key = contato_key
         conv.mensagens_json = json.dumps(msgs, ensure_ascii=False)
         db.session.commit()
     except Exception:  # noqa: BLE001
