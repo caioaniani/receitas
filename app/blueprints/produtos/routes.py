@@ -365,7 +365,10 @@ def cestas_orfaos():
                   (ProdutoItem.tipo == 'mp') & (ProdutoItem.materia_prima_id.is_(None)),
               ))
               .all())
-    receitas = Receita.query.order_by(Receita.nome).all()
+    # ativas(): orfao de cesta VIVA nao pode ser vinculado a receita
+    # arquivada (varredura 19/07/2026 — a baixa de venda debitaria linha
+    # morta). Produto e MP ao lado ja filtravam.
+    receitas = Receita.ativas().order_by(Receita.nome).all()
     produtos = Produto.query.filter(Produto.ativo.is_(True)).order_by(Produto.nome).all()
     mps = MateriaPrima.ativas().order_by(MateriaPrima.nome).all()
     return render_template('produtos/cestas_orfaos.html',
