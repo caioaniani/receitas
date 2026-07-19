@@ -852,8 +852,11 @@ def buscar_receitas():
         n = normalizar_busca(nome)
         return all(t in n for t in termos)
 
+    # ativas(): padeiro nao registra producao de receita arquivada
+    # (varredura 19/07/2026 — criava linha morta de EstoqueProducao).
     out = [{'ref': 'receita:%d' % r.id, 'nome': r.nome}
-           for r in Receita.query.order_by(Receita.nome).all() if _casa(r.nome)]
+           for r in Receita.ativas().order_by(Receita.nome).all()
+           if _casa(r.nome)]
     out += [{'ref': 'produto:%d' % p.id, 'nome': p.nome}
             for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
             if _casa(p.nome)]
