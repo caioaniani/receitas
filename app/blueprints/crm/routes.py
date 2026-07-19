@@ -547,8 +547,14 @@ def bot_webhook():
                             seed = seed[:-1]
                         base = seed
                         if not base:
-                            current_app.logger.info(
-                                'crm/bot: conv %s sem historico previo — conversa nova', conv_id)
+                            # Conversa NOVA no Chatwoot: herda o contexto
+                            # recente do MESMO contato (auditor 19/07/2026:
+                            # cliente voltava e o bot recomeçava do zero).
+                            base = chatbot.contexto_do_contato(
+                                telefone_contato, excluir_conv=conv_id)
+                            if not base:
+                                current_app.logger.info(
+                                    'crm/bot: conv %s sem historico previo — conversa nova', conv_id)
                     historico = base + [msg_atual]
                     current_app.logger.info('crm/bot: conv %s historico=%d msgs',
                                             conv_id, len(historico))
