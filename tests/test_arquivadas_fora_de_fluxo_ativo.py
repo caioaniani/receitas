@@ -77,11 +77,16 @@ def test_copilot_nao_resolve_produto_inativo(app):
         _produto('Cesta Morta CP', ativo=False)
         vivos = copilot._resolver_produto('Cesta Viva CP')
         assert vivos and vivos[0]['nome'] == 'Cesta Viva CP'
-        # A morta NUNCA aparece (o fuzzy pode sugerir a viva parecida — ok).
+        # Pedido/venda NOVOS (_resolver_produto): a morta NUNCA aparece
+        # (o fuzzy pode sugerir a viva parecida — ok).
         res = copilot._resolver_produto('Cesta Morta CP')
         assert all(m['nome'] != 'Cesta Morta CP' for m in res)
+        # EXCEÇÃO DELIBERADA (pós-revisão 19/07/2026): desperdício/devolução/
+        # retirada operam sobre estoque FÍSICO — produto soft-deletado com
+        # saldo precisa continuar escoável, então _resolver_item_qualquer
+        # ENXERGA o inativo.
         alvo = copilot._resolver_item_qualquer('Cesta Morta CP')
-        assert alvo is None or alvo[2] != 'Cesta Morta CP'
+        assert alvo is not None and alvo[2] == 'Cesta Morta CP'
 
 
 def test_matcher_estoque_lote_nao_casa_arquivada(app):
@@ -136,3 +141,34 @@ def test_dashboard_e_relatorio_custos_sem_arquivadas(app, admin_user):
     assert 'Pao Vivo REL' in body and 'Pao Morto REL' not in body
     body2 = c.get('/rentabilidade').get_data(as_text=True)
     assert 'Pao Vivo REL' in body2 and 'Pao Morto REL' not in body2
+
+
+def test_salvar_cesta_preserva_fk_de_componente_arquivado(app, admin_user):
+    """Pós-revisão 19/07/2026: editar OUTRA linha da cesta não pode orfanar
+    em silêncio o componente cuja receita foi arquivada DEPOIS de vinculada
+    (a baixa de venda dele pararia). A linha existente reusa a FK antiga;
+    órfão de verdade só em linha NOVA."""
+    from app.models import Produto, ProdutoItem
+    with app.app_context():
+        r = _receita('Componente GF')
+        cesta = Produto(nome='Cesta GF', categoria='Cestas', ativo=True)
+        db.session.add(cesta)
+        db.session.flush()
+        db.session.add(ProdutoItem(produto_id=cesta.id, tipo='receita',
+                                   item_nome=r.nome, receita_id=r.id,
+                                   quantidade=2))
+        db.session.commit()
+        r.arquivada_em = agora()
+        db.session.commit()
+        cesta_id, r_id = cesta.id, r.id
+    c = _login(app, admin_user)
+    resp = c.post(f'/produtos/{cesta_id}/salvar', data={
+        'nome': 'Cesta GF', 'categoria': 'Cestas',
+        'item_tipo[]': ['receita'], 'item_nome[]': ['Componente GF'],
+        'quantidade[]': ['3'],
+    })
+    assert resp.status_code in (302, 200)
+    with app.app_context():
+        item = ProdutoItem.query.filter_by(produto_id=cesta_id).one()
+        assert item.receita_id == r_id       # FK preservada (grandfather)
+        assert item.quantidade == 3
