@@ -1999,6 +1999,59 @@ estoque nem entram na previsao.
   pedidos de delivery ANTIGOS (ate 30d) de uma vez — rajada esperada,
   avisar o dono. Testes: `tests/test_seru_nf_itens.py` (9 casos).
 
+## Bot de atendimento — memoria cross-conversa + busca por telefone (19/07/2026)
+
+Relatorio do auditor apontou "bot perdendo contexto e reiniciando do zero
+(2x)" + "handoff sem tentar resolver (1/1)". Investigacao confirmou os DOIS
+como problemas estruturais (nao de disciplina do modelo); dono aprovou
+("Po perder o contexto nao pode ne"). Pacote em 5 pecas:
+
+- **Memoria cross-conversa**: `chatbot_conversa.contato_key` (telefone
+  canonizado via `telefone_chave`; ALTER em `migrations_legacy` PG+SQLite
+  deployado ANTES do modelo — procedimento de 2 commits, sonda
+  /api/claude/deploy). Conversa NOVA do Chatwoot (store E seed vazios) herda
+  as ultimas `CONTEXTO_CONTATO_MAX_MSGS=12` msgs da conversa mais recente do
+  MESMO contato em `CONTEXTO_CONTATO_DIAS=30` (`chatbot.contexto_do_contato`),
+  com marcador "[conversa ANTERIOR deste cliente]" mesclado no ultimo
+  assistant (alternancia preservada). `salvar_historico(contato_key=...)`
+  indexa; None NUNCA apaga chave ja gravada. O contexto herdado e persistido
+  no store da conversa nova no 1º salvar (cap de 40 segura o tamanho);
+  marcador `handoff_em` herdado tambem vale pro dedupe (mesmo cliente,
+  equipe ja acionada — comportamento desejado).
+- **Busca de pedido pelo TELEFONE do canal**: `consultar_pedido` sem numero →
+  `bot_tools._pedidos_recentes_por_telefone` (janela 90d, cap 3, filtro
+  Python-side — mesmo padrao do card CRM). 1 achado = ficha completa direto;
+  2-3 = lista compacta (numero/status/datas, SEM cartinha/itens) pro bot
+  perguntar qual e. Fail-closed: SO o telefone verificado do canal localiza
+  (mesma credencial da autorizacao existente, cliente OU destinatario);
+  NOME nunca busca (sugestao do auditor rejeitada — nao e prova de
+  identidade). Prompt (rastreamento/pos-compra/consulta/data-entrega) e
+  texto do enforcement anti-preguicoso atualizados: sem numero → buscar por
+  telefone ANTES de pedir numero ou transferir.
+- **Vassoura store-first**: `varrer_pendentes_sem_resposta` usa o STORE como
+  base e anexa so as msgs finais do cliente vindas da API (antes SOBRESCREVIA
+  o store com o recorte de 20 msgs do Chatwoot — perdia turnos e marcadores
+  handoff_em). `listar_conversas_paradas` agora devolve `telefone` e a
+  vassoura passa `telefone_contato` (autorizacao de pedido funciona nesse
+  caminho).
+- **Lock por conversa CROSS-WORKER**: `crm/routes._lock_conv_cross_worker`
+  — `pg_advisory_lock(7753, crc32(conv_id))` bloqueante em volta do
+  processamento (o `_BOT_LOCKS` e memoria de UM processo; prod roda gunicorn
+  `--workers 2` e mensagens paralelas da mesma conversa faziam last-writer-
+  wins no store). No-op fora do Postgres (SQLite = 1 processo). Advisory
+  lock 7753 RESERVADO pro chatbot no registro do projeto.
+- **Sonda `GET /api/claude/vigia-vereditos`** (?dias=&limite=&conv=&conversa=):
+  vereditos do vigia direto do BANCO + store de uma conversa
+  (`?conversa=<id>`) — o /admin/vigia/diag e memoria volatil e o relatorio
+  do auditor nao traz conv_id; sem isso, investigar achado do auditor de
+  fora exigia query manual.
+
+Armadilha que custou um ciclo de CI: reescrever texto do prompt QUEBRANDO
+frase que teste trava ("pelo seu cadastro" caiu em quebra de linha) — os
+testes de prompt (`test_chatbot_faq_pilar_b.py`) fatiam janelas de N chars;
+ao editar secao coberta, rodar o arquivo de teste do prompt antes do push.
+Testes do pacote: `tests/test_bot_memoria_busca.py` (15 casos).
+
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
 - **Vigia de custo de IA** (`app/services/uso_ia_vigia.py`): cron 1h
