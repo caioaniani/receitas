@@ -2138,7 +2138,28 @@ Testes: `tests/test_arquivadas_fora_de_fluxo_ativo.py` + regressao do
 cardapio em `tests/test_cardapio_atacado_regras.py`. REGRA: picker/matcher/
 resolver NOVO usa SEMPRE os helpers `ativas()`/`ativo=True` — e "excluir"
 de Produto com historico vira `ativo=False` (soft-delete), entao filtrar so
-Receita nunca basta.
+Receita nunca basta. EXCECAO DELIBERADA: `copilot._resolver_item_qualquer`
+(desperdicio/devolucao/retirada) NAO filtra Produto — opera sobre estoque
+FISICO ja existente; produto soft-deletado com saldo precisa continuar
+escoavel pelo bot. `consultar_margem` tambem nao filtra (leitura — contrato
+do catalogo.py). **Pos-revisao (fixados)**: `sugerir_para_pendentes` agora
+filtra Produto tambem (sugestao de inativo pre-selecionava opcao que o
+dropdown filtrado nem oferecia — o browser caia no 1º alfabetico com o
+rotulo mentindo); salvar composicao de cesta tem GRANDFATHER por FK (linha
+existente cujo alvo foi arquivado REUSA a FK antiga em vez de orfanar em
+silencio — orfao de verdade so em linha NOVA); POST de precos por cliente
+B2B recusa preco novo pra item morto (remover segue ok); /todo filtra
+Produto.ativo. PENDENCIAS DOCUMENTADAS (decisao separada, nao bloqueiam):
+receita arquivada com SALDO fisico vivo nao tem caminho de escoamento no
+balanco (nome vira pendente e a linha antiga fica travada — contagem pode
+dobrar ate intervencao manual; avisar o dono se aparecer), preco especifico
+de item arquivado fica invisivel na tela de precos (segue no banco e
+ressurge ao desarquivar), POSTs de pedido/venda aceitam id cru sem
+re-validar arquivada (o typeahead filtrado cobre o fluxo real; e o que
+mantem o editar de pedido antigo com arquivada funcionando — se um dia
+validar, precisa de grandfather explicito como o das MPs), e homonimas
+(arquivada + recriada) disputam a chave por NOME no mapa de custos
+(`custos.py` — fraqueza pre-existente).
 
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
