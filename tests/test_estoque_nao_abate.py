@@ -188,9 +188,32 @@ def test_cronograma_linha_vendida_coerente_com_a_flag(app):
     assert rr['produzir'] == 8                     # linha = balanço
     assert rr['saldo'] == -8                       # caixa não diz "não falta"
     assert rr['em_estoque'] == 10                  # o real segue visível
-    # Produção programada cobre a entrega → sem falso 🚨; mas o fantasma
-    # NÃO conta: zerando o grid, o risco aparece (fantasma não cala alerta).
+    # Produção programada cobre a entrega → sem falso 🚨.
     assert rr['entregas_risco'] == []
+
+
+def test_flag_fantasma_nao_cala_alerta_de_risco(app):
+    """Entrega firme que a produção NÃO alcança (lead longo): sem a flag o
+    fantasma de 10 'cobriria' e o 🚨 ficava mudo; com a flag o alerta sai."""
+    from app.services.previsao_producao import cronograma_producao
+    loja = Loja(nome='Loja NA Risco', ativa=True)
+    r = Receita(nome='Pao NA Risco', categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=1000.0,
+                dias_producao=2, estoque_nao_abate=True)
+    db.session.add_all([loja, r])
+    db.session.flush()
+    db.session.add(EstoqueProducao(receita_id=r.id, quantidade=10))
+    dd = hoje() + timedelta(days=1)               # amanhã: lead 2 não alcança
+    p = PedidoLoja(loja_id=loja.id, status='pendente', data_entrega=dd,
+                   data_pedido=dd)
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=8))
+    db.session.commit()
+    crono = cronograma_producao(horizonte_dias=7)
+    rr = next(x for x in crono['receitas'] if x['receita_id'] == r.id)
+    assert rr['entregas_risco'], 'fantasma não pode calar o alerta'
+    assert rr['entregas_risco'][0]['faltam'] == 8
 
 
 def test_ficha_salva_a_flag(app, admin_user):
