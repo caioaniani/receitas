@@ -104,6 +104,24 @@ def pendencias(incluir_owner=True):
                       'rotulo': 'Produção vencida sem confirmação do padeiro',
                       'qtd': int(vencidas), 'url': '/telaindustriateste/'})
 
+    # 2b. Baixas presas (19/07/2026 — caso retirada #16 Nebraska): QR não
+    # escaneado deixa o estoque errado até alguém agir. Reusa a MESMA
+    # verificação do alerta de WhatsApp (queries baratas com limit).
+    from app.services.alertas_operacionais import verificar_baixas_presas
+    presas = verificar_baixas_presas()
+    if presas['retiradas']:
+        itens.append({'chave': 'retiradas_presas',
+                      'rotulo': ('Retiradas de sobra presas em transporte '
+                                 '(loja baixou; indústria não creditada)'),
+                      'qtd': len(presas['retiradas']),
+                      'url': '/pedidos/retiradas'})
+    if presas['separados']:
+        itens.append({'chave': 'separados_presos',
+                      'rotulo': ('Pedidos "separado" com entrega vencida '
+                                 '(QR de saída não escaneado)'),
+                      'qtd': len(presas['separados']),
+                      'url': '/pedidos'})
+
     # 3. Orçamentos B2B parados (rascunho/enviado ativos) + aprovados que
     # ainda não viraram venda (legado pré-regime).
     orc_parados = Orcamento.query.filter(
