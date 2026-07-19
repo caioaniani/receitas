@@ -123,26 +123,31 @@ class _CardapioPDF(FPDF):
         self.set_auto_page_break(True, margin=16)
 
     def header(self):
+        # Fundo creme da página inteira — o site é #fafaf7, não branco.
+        self.set_fill_color(*_C_BG)
+        self.rect(0, 0, 210, 297, style='F')
         if self.page_no() == 1:
             return                      # capa desenha o próprio cabeçalho
         self.set_font('Times', 'B', 11)
-        self.set_text_color(30, 30, 30)
+        self.set_text_color(*_C_FG)
         # '·' e não '—': em-dash está fora do latin-1 e virava '?'.
         self.cell(95, 6, _latin1('O Pão · Padaria Artesanal'))
         self.set_font('Helvetica', '', 9)
-        self.set_text_color(120, 120, 120)
+        self.set_text_color(*_C_SOFT)
         self.cell(85, 6, _latin1('Cardápio · %s' % self.titulo_tipo),
                   align='R', new_x='LMARGIN', new_y='NEXT')
-        self.set_draw_color(210, 205, 195)
+        self.set_draw_color(*_C_BORDER)
         self.line(_MARGEM, self.get_y() + 1, 200, self.get_y() + 1)
         self.ln(5)
 
     def footer(self):
+        # Rodapé do site: "© O Pão Padaria Artesanal · Itaim Bibi, São Paulo".
         self.set_y(-12)
-        self.set_font('Helvetica', 'I', 8)
-        self.set_text_color(150, 150, 150)
-        self.cell(95, 6, _latin1('O Pão · Itaim Bibi'))
-        self.cell(85, 6, _latin1('página %d' % self.page_no()), align='R')
+        self.set_font('Helvetica', '', 8)
+        self.set_text_color(*_C_SOFT)
+        self.cell(140, 6, _latin1('© O Pão Padaria Artesanal · '
+                                   'Itaim Bibi, São Paulo'))
+        self.cell(40, 6, _latin1('página %d' % self.page_no()), align='R')
 
 
 def _capa(pdf, titulo_tipo, regras):
