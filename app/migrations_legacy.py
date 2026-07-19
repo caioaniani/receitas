@@ -1664,9 +1664,11 @@ def _migrate_sqlite(app):
         cursor.execute(
             "UPDATE receita_ingrediente SET porcentagem = 1.2011 "
             "WHERE receita_id = (SELECT id FROM receita "
-            "                    WHERE nome = 'Croissant Tradicional') "
+            "                    WHERE nome = 'Croissant Tradicional' "
+            "                    ORDER BY id LIMIT 1) "
             "  AND sub_receita_id = (SELECT id FROM receita "
-            "                        WHERE nome = 'Massa para folhar') "
+            "                        WHERE nome = 'Massa para folhar' "
+            "                        ORDER BY id LIMIT 1) "
             "  AND porcentagem = 1.0")
     if 'perda_percentual' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0")
