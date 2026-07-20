@@ -135,7 +135,8 @@ def test_logo_upload_aparece_no_hero_e_pdf(app, admin_user):
     with app.app_context():
         assert AppConfig.get('cardapio_logo_data') in (None, '')
     body0 = c.get('/cardapio?tipo=atacado').get_data(as_text=True)
-    assert '<h1>O Pão</h1>' in body0 and 'hero-logo' not in body0
+    assert '<h1>O Pão</h1>' in body0
+    assert '<img class="hero-logo"' not in body0    # sem logo, sem <img>
 
     # upload (branco = silhueta)
     from io import BytesIO
