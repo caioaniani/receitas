@@ -73,7 +73,7 @@ def gerar_etiquetas_pdf(ativos, url_base):
         # baixo (achado de revisão) — a etiqueta identifica, a ficha detalha.
         nome = _latin1(ativo.nome)
         if len(nome) > 36:
-            nome = nome[:35] + '…'.encode('latin-1', 'replace').decode('latin-1')
+            nome = nome[:34] + '..'      # reticências U+2026 não é latin-1
         pdf.multi_cell(tw, 4.0, nome, align='L')
         y_nome_fim = pdf.get_y()
         pdf.set_xy(tx, min(y_nome_fim + 1.0, y0 + _ETQ_H - 12.0))
