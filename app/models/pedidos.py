@@ -36,6 +36,11 @@ class PedidoLoja(db.Model):
     nf_status = db.Column(db.String(40))
     nf_emitida_em = db.Column(db.DateTime, nullable=True)
     nf_numero = db.Column(db.String(50))
+    # Dispensa de NF POR PEDIDO (20/07/2026, dono): o scan do QR pula a
+    # emissao. Toggle ADMIN-only no detalhe (motorista/padeiro nao veem);
+    # a dispensa POR LOJA (Loja.nf_dispensada) tambem vale — qualquer uma
+    # das duas dispensa (ver tiny_nf_transf.nf_dispensada_para).
+    nf_dispensada = db.Column(db.Boolean, nullable=False, default=False)
 
     loja = db.relationship('Loja', backref='pedidos')
     criador = db.relationship('Usuario', foreign_keys=[criado_por])
