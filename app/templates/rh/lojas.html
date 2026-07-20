@@ -70,6 +70,72 @@
         </button>
     </div>
 </form>
+
+{# Dados FISCAIS por loja (20/07/2026): destinatária da NF-e de
+   transferência indústria→loja — SEFAZ exige CNPJ + endereço em campos
+   separados. Form independente por loja (a tabela de cima segue leve). #}
+<h2 class="page-title mt-4" style="font-size:1.1rem;">Dados fiscais
+    <span class="text-muted small">(NF de transferência indústria → loja)</span></h2>
+<p class="text-muted small">Sem CNPJ + endereço completo a NF de
+    transferência da loja NÃO é emitida no scan do QR de saída.</p>
+{% for l in lojas %}
+<div class="card mb-2">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <strong>{{ l.nome }}</strong>
+        {% if l.cnpj and l.endereco_logradouro and l.endereco_cep %}
+        <span class="badge bg-success">✓ pronta pra NF</span>
+        {% else %}
+        <span class="badge bg-warning text-dark">incompleta — NF não sai</span>
+        {% endif %}
+    </div>
+    <div class="card-body py-2">
+        <form method="POST" action="{{ url_for('rh.salvar_loja_fiscal', id=l.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">CNPJ</label>
+                    <input type="text" name="cnpj" value="{{ l.cnpj or '' }}" class="form-control form-control-sm" placeholder="00.000.000/0001-00">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">Inscrição Estadual</label>
+                    <input type="text" name="inscricao_estadual" value="{{ l.inscricao_estadual or '' }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small mb-0">Logradouro</label>
+                    <input type="text" name="endereco_logradouro" value="{{ l.endereco_logradouro or '' }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">Número</label>
+                    <input type="text" name="endereco_numero" value="{{ l.endereco_numero or '' }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">Complemento</label>
+                    <input type="text" name="endereco_complemento" value="{{ l.endereco_complemento or '' }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">Bairro</label>
+                    <input type="text" name="endereco_bairro" value="{{ l.endereco_bairro or '' }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">CEP</label>
+                    <input type="text" name="endereco_cep" value="{{ l.endereco_cep or '' }}" class="form-control form-control-sm" placeholder="00000-000">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">Cidade</label>
+                    <input type="text" name="endereco_cidade" value="{{ l.endereco_cidade or '' }}" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small mb-0">UF</label>
+                    <input type="text" name="endereco_uf" value="{{ l.endereco_uf or '' }}" class="form-control form-control-sm" maxlength="2" placeholder="SP">
+                </div>
+            </div>
+            <div class="text-end mt-2">
+                <button type="submit" class="btn btn-sm btn-outline-primary">Salvar dados fiscais</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
 {% endblock %}
 
 {% block scripts %}
