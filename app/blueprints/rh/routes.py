@@ -406,17 +406,25 @@ def salvar_loja_fiscal(id):
     separados no destinatário da NF-e. Form próprio (fora da tabela densa
     de lojas) pra não inflar a tela do RH."""
     loja = Loja.query.get_or_404(id)
-    loja.cnpj = (request.form.get('cnpj') or '').strip() or None
-    loja.inscricao_estadual = \
-        (request.form.get('inscricao_estadual') or '').strip() or None
-    for campo in ('endereco_logradouro', 'endereco_numero',
-                  'endereco_complemento', 'endereco_bairro', 'endereco_cep',
-                  'endereco_cidade'):
-        setattr(loja, campo, (request.form.get(campo) or '').strip() or None)
+    # Truncado no tamanho da coluna: texto colado maior que o campo virava
+    # DataError/500 no Postgres (achado B1 da revisão). Validação de
+    # conteúdo (CNPJ 14 dígitos etc.) fica na emissão + badge da tela.
+    _max = {'cnpj': 20, 'inscricao_estadual': 20, 'endereco_logradouro': 200,
+            'endereco_numero': 20, 'endereco_complemento': 100,
+            'endereco_bairro': 100, 'endereco_cep': 9, 'endereco_cidade': 100}
+    for campo, tam in _max.items():
+        setattr(loja, campo,
+                (request.form.get(campo) or '').strip()[:tam] or None)
     loja.endereco_uf = \
         (request.form.get('endereco_uf') or '').strip().upper()[:2] or None
     db.session.commit()
-    flash(f'Dados fiscais da loja "{loja.nome}" salvos.', 'success')
+    if loja.fiscal_completo:
+        flash(f'Dados fiscais da loja "{loja.nome}" salvos — pronta pra NF '
+              'de transferência.', 'success')
+    else:
+        flash(f'Dados fiscais da loja "{loja.nome}" salvos, mas ainda '
+              'INCOMPLETOS pra NF (CNPJ com 14 dígitos + endereço completo).',
+              'warning')
     return redirect(url_for('rh.lojas'))
 
 
