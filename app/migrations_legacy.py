@@ -2137,7 +2137,8 @@ def _migrate_sqlite(app):
     for _c, _t in (('tiny_nota_fiscal_id', 'VARCHAR(40)'),
                    ('nf_status', 'VARCHAR(40)'),
                    ('nf_emitida_em', 'TIMESTAMP'),
-                   ('nf_numero', 'VARCHAR(50)')):
+                   ('nf_numero', 'VARCHAR(50)'),
+                   ('nf_dispensada', 'BOOLEAN NOT NULL DEFAULT 0')):
         if cols_pl and _c not in cols_pl:
             cursor.execute(f"ALTER TABLE pedido_loja ADD COLUMN {_c} {_t}")
 
