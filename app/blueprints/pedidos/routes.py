@@ -3527,22 +3527,11 @@ def retirada_qr_coleta(id):
 
 
 def _audit_retirada_web(ret, tipo, etapa, detalhe):
-    """Audita gesto ADMINISTRATIVO da retirada no mesmo log dos handshakes
-    (HandshakeAudit tipos r_coleta/r_receb) — SESSÃO ISOLADA best-effort
-    (padrão uso_ia/frete_sensor): nunca commita escrita de negócio pendente
-    nem derruba a ação."""
-    from sqlalchemy.orm import Session
-
-    from app.models import HandshakeAudit
-    try:
-        with Session(db.engine) as s:
-            s.add(HandshakeAudit(
-                token=ret.token_mov, tipo=tipo, etapa=etapa,
-                detalhe=f'retirada:{ret.id} {detalhe}'[:500],
-                status_pedido=ret.status))
-            s.commit()
-    except Exception:
-        current_app.logger.exception('audit retirada web falhou (id=%s)', ret.id)
+    """Audita gesto administrativo da retirada — delega pro helper do
+    service (sessão isolada, best-effort), compartilhado com a tela do
+    padeiro."""
+    from app.services.devolucao import auditar_gesto_retirada
+    auditar_gesto_retirada(ret, tipo, etapa, detalhe)
 
 
 @pedidos_bp.route('/retiradas/<int:id>/receber-manual', methods=['POST'])
