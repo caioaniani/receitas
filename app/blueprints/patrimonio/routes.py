@@ -165,11 +165,17 @@ def novo():
         if not nome:
             flash('Informe o nome do ativo (ou cole a lista).', 'warning')
             return redirect(url_for('patrimonio.index'))
+        try:
+            valor = _parse_valor(request.form.get('valor_aquisicao'))
+        except ValueError:
+            flash('Valor de aquisição inválido (use 1.234,56) — cadastrei '
+                  'sem o valor; edite pra corrigir.', 'warning')
+            valor = None
         db.session.add(Ativo(
             nome=nome[:200], categoria=categoria, loja_id=loja_id,
             local_detalhe=local_det,
             numero_serie=(request.form.get('numero_serie') or '').strip() or None,
-            valor_aquisicao=_parse_valor(request.form.get('valor_aquisicao')),
+            valor_aquisicao=valor,
             adquirido_em=_parse_data(request.form.get('adquirido_em')),
             observacao=(request.form.get('observacao') or '').strip() or None,
             criado_por_id=current_user.id))
