@@ -26,10 +26,17 @@
                 <i class="bi bi-cash-coin"></i> Vendas de ontem ({{ dados.vendas.label }})
             </strong></div>
             <div class="card-body py-2">
-                <p class="mb-2">PDV: <strong>R$ {{ '%.0f' % dados.vendas.pdv_total }}</strong>
+                <p class="mb-1">PDV: <strong>R$ {{ '%.0f' % dados.vendas.pdv_total }}</strong>
                     · {{ dados.vendas.n_pedidos }} pedidos
+                    {% if dados.vendas.pdv_delta_pct is not none %}
+                    <span class="small {% if dados.vendas.pdv_delta_pct < -15 %}text-danger{% elif dados.vendas.pdv_delta_pct > 15 %}text-success{% else %}text-muted{% endif %}">
+                        ({{ '%+.0f%%' % dados.vendas.pdv_delta_pct }} vs média)
+                    </span>
+                    {% endif %}
                     &nbsp;|&nbsp; Site: <strong>R$ {{ '%.0f' % dados.vendas.site_total }}</strong>
                     · {{ dados.vendas.site_qtd }} pagos</p>
+                <p class="mb-2">Total (PDV + site):
+                    <strong>R$ {{ '%.0f' % dados.vendas.total_geral }}</strong></p>
                 <table class="table table-sm mb-0">
                     <tbody>
                     {% for lj in dados.vendas.por_loja %}
