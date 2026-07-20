@@ -1136,6 +1136,16 @@ def voltar_status(id):
             return redirect(url_for('pedidos.detalhe', id=id))
         db.session.commit()
         flash(f'Status revertido: {res[0]} → {res[1]}.', 'success')
+        if pedido.nf_emitida_em:
+            # A NF de transferência NÃO é desfeita aqui (não há cancelamento
+            # de NF pelo sistema). Se a carga mudar e sair de novo, a DANFE
+            # antiga não vale — refazer do zero no card de NF (e cancelar a
+            # antiga no Tiny). Achado A6 da revisão 20/07/2026.
+            flash('Atenção: este pedido JÁ TEM NF de transferência emitida '
+                  f'(nº {pedido.nf_numero or pedido.tiny_nota_fiscal_id}). '
+                  'Se os itens mudarem, refaça a NF do zero no card de NF '
+                  'e cancele a antiga no Tiny — senão a carga nova viaja '
+                  'com a nota velha.', 'warning')
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
         current_app.logger.exception('Falha ao voltar status pedido %s', id)
