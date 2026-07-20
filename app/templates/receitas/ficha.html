@@ -471,6 +471,21 @@
         </div>
     </template>
 
+    <!-- Descricao do cardapio de atacado -->
+    <div class="mb-3">
+        <label class="form-label small text-muted" for="descricao-atacado">
+            <strong>Descrição (cardápio atacado)</strong> — ingredientes + como é vendido
+        </label>
+        <textarea class="form-control form-control-sm" name="descricao_atacado"
+                  id="descricao-atacado" rows="2" maxlength="400"
+                  placeholder="Ex: Farinha francesa T65, água, sal e levain. Vendido congelado; rende 14 fatias."
+                  style="max-width:640px;">{{ receita.descricao_atacado or '' }}</textarea>
+        <div class="text-muted small mt-1">
+            Sai embaixo do nome no <a href="{{ url_for('main.cardapio', tipo='atacado') }}">cardápio de atacado</a>
+            (tela e PDF). Curto e sincero — ingredientes reais e o método de venda. Vazio = sem descrição.
+        </div>
+    </div>
+
     <!-- Reaproveitavel -->
     <div class="mb-3">
         <div class="form-check">
