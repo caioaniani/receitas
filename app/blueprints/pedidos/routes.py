@@ -1201,6 +1201,11 @@ def cancelar(id):
     pedido.status = 'cancelado'
     db.session.commit()
     flash('Pedido cancelado.', 'success')
+    if pedido.nf_emitida_em:
+        flash('Atenção: o pedido tinha NF de transferência emitida '
+              f'(nº {pedido.nf_numero or pedido.tiny_nota_fiscal_id}) — '
+              'cancele a nota no Tiny (o sistema não cancela NF sozinho).',
+              'warning')
     return redirect(url_for('pedidos.lista'))
 
 
