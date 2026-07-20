@@ -847,11 +847,19 @@ def venda_nova():
 @login_required
 @admin_required
 def venda_criar():
-    campos, itens, parcelas, frete_valor = _parse_venda_form()
     # Guard ANTES de criar (o GET de venda_nova tem o mesmo, mas o form
     # pode ter ficado aberto numa aba enquanto o orçamento era convertido
     # por outro caminho — sem isso a demanda entraria em DOBRO na fila).
     orc_id = request.form.get('orcamento_id', type=int)
+    # Erro re-abre o form JÁ com o seed do orçamento (sem o param, o
+    # retry perdia o vínculo e o guard anti-conversão-dupla).
+    url_form = (url_for('b2b.venda_nova', orcamento=orc_id) if orc_id
+                else url_for('b2b.venda_nova'))
+    try:
+        campos, itens, parcelas, frete_valor = _parse_venda_form()
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+        return redirect(url_form)
     orc = Orcamento.query.get(orc_id) if orc_id else None
     if orc and orc.venda_id:
         flash(f'O orçamento {orc.codigo} já virou a venda #{orc.venda_id} '
@@ -859,10 +867,10 @@ def venda_criar():
         return redirect(url_for('b2b.venda_detalhe', vid=orc.venda_id))
     if not campos['data_entrega']:
         flash('Informe a data de entrega ao padeiro.', 'warning')
-        return redirect(url_for('b2b.venda_nova'))
+        return redirect(url_form)
     if not itens:
         flash('Adicione pelo menos 1 item.', 'danger')
-        return redirect(url_for('b2b.venda_nova'))
+        return redirect(url_form)
     try:
         venda = svc.criar_venda(**campos, itens=itens,
                                 parcelas=parcelas or None,
@@ -870,7 +878,7 @@ def venda_criar():
     except ValueError as exc:
         db.session.rollback()
         flash(f'Erro: {exc}', 'danger')
-        return redirect(url_for('b2b.venda_nova'))
+        return redirect(url_form)
 
     # Venda criada a partir de um orçamento (seed manual): grava o vínculo
     # pra ele sair da fila de Aprovados e não ser convertido de novo.
