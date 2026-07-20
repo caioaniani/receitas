@@ -363,18 +363,38 @@ def cancelar_retirada(retirada, usuario_id=None):
       gesto certo é `receber_retirada_manual`, nunca este.
     - `recebida` segue sem volta (indústria já creditada).
 
-    Idempotente pelo guard de status (cancelada recusa re-execução).
-    NÃO commita — o caller fecha a transação. Retorna lista de avisos."""
-    if retirada.status not in ('aguardando_coleta', 'em_transporte'):
+    Idempotente pelo CLAIM atômico de status (UPDATE condicional — corrida
+    entre dois POSTs ou POST × scan de QR não estorna 2x; pós-revisão
+    19/07/2026). NÃO commita — o caller fecha a transação. Retorna avisos."""
+    status_antes = retirada.status
+    if status_antes not in ('aguardando_coleta', 'em_transporte'):
         raise ValueError(
             f'retirada #{retirada.id} está "{retirada.status}" — '
             'não há o que cancelar')
+    from app.models import RetiradaSobra
+    quando = agora()
+    claim = (RetiradaSobra.query
+             .filter(RetiradaSobra.id == retirada.id,
+                     RetiradaSobra.status == status_antes)
+             .update({'status': 'cancelada', 'cancelada_em': quando},
+                     synchronize_session=False))
+    if not claim:
+        raise ValueError(
+            f'retirada #{retirada.id} já foi processada por outra ação — '
+            'recarregue a lista')
     avisos = []
-    if retirada.status == 'em_transporte':
+    if status_antes == 'em_transporte':
         token = retirada.token_mov
-        movs = MovEstoqueLoja.query.filter(
-            MovEstoqueLoja.tipo == TIPO_BAIXA_LOJA,
-            MovEstoqueLoja.referencia.like(f'%{token}')).all()
+        # Estorno genérico já devolveu a coleta à loja? Então só cancela —
+        # re-creditar aqui dobraria o estoque da loja (achado de revisão).
+        if _coleta_ja_estornada(retirada):
+            avisos.append('a baixa da coleta já tinha sido estornada '
+                          'manualmente — nada a devolver')
+            movs = []
+        else:
+            movs = MovEstoqueLoja.query.filter(
+                MovEstoqueLoja.tipo == TIPO_BAIXA_LOJA,
+                MovEstoqueLoja.referencia.like(f'%{token}')).all()
         # Serializa as lojas antes dos UPDATEs — mesma família de deadlock
         # da baixa/estorno (aqui é 1 loja, mas o padrão fica uniforme).
         from app.services.estoque_helpers import serializar_lojas
@@ -392,8 +412,9 @@ def cancelar_retirada(retirada, usuario_id=None):
         # QRs pendentes morrem junto — scan atrasado cai no guard de status.
         for qr in retirada.qrcodes:
             if qr.usado_em is None:
-                qr.usado_em = agora()
+                qr.usado_em = quando
                 qr.usado_por_descricao = 'retirada cancelada (web)'
+    # Alinha o objeto em memória com o claim (pro caller/flash).
     retirada.status = 'cancelada'
-    retirada.cancelada_em = agora()
+    retirada.cancelada_em = quando
     return avisos
