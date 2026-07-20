@@ -50,7 +50,7 @@
                 <div class="col-md-3">
                     <label class="form-label small">🚚 Frete da entrega (R$)</label>
                     <input type="number" step="0.01" min="0" name="frete_valor" id="inp-frete" class="form-control form-control-sm"
-                           value="{% if editing and venda.frete_valor %}{{ '%.2f'|format(venda.frete_valor) }}{% else %}0{% endif %}">
+                           value="{% if editing and venda.frete_valor %}{{ '%.2f'|format(venda.frete_valor) }}{% elif frete_pre %}{{ '%.2f'|format(frete_pre) }}{% else %}0{% endif %}">
                     <div class="form-text" style="font-size:11px;">Soma no total (boleto) e vai no campo frete da NF do Tiny.</div>
                 </div>
                 <div class="col-md-6">
