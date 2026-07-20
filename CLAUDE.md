@@ -814,8 +814,19 @@ entregas:
   `RETIRADA_PRESA_HORAS`=12) agora traz o LINK e o gesto de destrava
   (APP_BASE_URL); "Precisa de voce hoje" ganhou as pendencias
   `retiradas_presas`/`separados_presos` (mesma verificacao). Manual de
-  operacao documenta as duas pontas e a destrava. Testes:
-  `tests/test_retirada_receber_manual.py` (15 casos).
+  operacao documenta as duas pontas e a destrava. POS-REVISAO (fixados):
+  TODA transicao de status da retirada (coleta QR, recebimento QR,
+  recebimento manual, cancelar) agora e CLAIM atomico por UPDATE
+  condicional — acao concorrente perde o claim e nao movimenta estoque 2x
+  (padrao do Confirmar do Slack); `_coleta_ja_estornada` (LIKE por SUFIXO
+  do token) impede o par "estorno generico ret-<id>" + cancelar/receber de
+  duplicar credito (receber recusa; cancelar so fecha com aviso); o check
+  de idempotencia do `estornar_devolucao` virou sufixo tambem (contains
+  fazia ret-1 casar ret-16 e recusar estorno legitimo); audit web em
+  sessao isolada. A regra antiga "cancelar so antes da coleta"
+  (test_retirada_lista_web) foi SUBSTITUIDA por decisao do dono — o teste
+  antigo foi atualizado. Testes: `tests/test_retirada_receber_manual.py`
+  (18 casos).
 
 **Fixes do primeiro uso real (02/07/2026 a noite, Nebraska — testes em
 `tests/test_slack_retirada_e_duplicata.py`)**:
