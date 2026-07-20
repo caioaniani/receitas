@@ -2412,9 +2412,14 @@ manda pros clientes; a impressao oficial e o PDF do servidor
     dias). CONTRATO: chave AUSENTE = default; gravada VAZIA = dono apagou
     de proposito, bloco some. Uma linha por metodo, "Rotulo: texto"
     (split no PRIMEIRO ':'; rotulo >60 chars = linha corrida). Textarea
-    na tela de regras do atacado; caixa propria bege na tela e na capa do
-    PDF (`_box_preparo`, altura medida com multi_cell dry_run em BOLD pra
-    nunca cortar; sem em-dash — latin-1). So tipo atacado.
+    na tela de regras do atacado; caixa propria bege (`_box_preparo`,
+    altura medida com multi_cell dry_run em BOLD pra nunca cortar; sem
+    em-dash — latin-1). So tipo atacado. **Regras + metodos ficam no
+    RODAPE, DEPOIS dos produtos** (dono 20/07: "colocar para o rodape e
+    trazer os produtos para cima") — na tela os blocos vem apos as
+    categorias e no PDF `_box_regras`/`_box_preparo` sao desenhadas no
+    FIM do documento (capa nao tem mais caixas; caixa que nao cabe vai
+    inteira pra pagina nova).
   - Testes: `tests/test_cardapio_descricoes.py` (13 casos).
 
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
