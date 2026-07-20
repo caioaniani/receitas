@@ -423,6 +423,13 @@ def pedido_danfe(token, pedido_id):
                                 msg='Faça login no painel do motorista antes '
                                     '(volte e digite o PIN).'), 401
     pedido = PedidoLoja.query.get_or_404(pedido_id)
+    # Posse: mesmo filtro da lista pedidos_loja — só o motorista que
+    # coletou (ou pedido legado sem driver) vê a DANFE dele; id é
+    # sequencial e a nota carrega CNPJ da loja + custos (achado B2).
+    if pedido.driver_id and pedido.driver_id != driver.id:
+        return render_template(
+            'handshake/erro.html',
+            msg='Este pedido está atribuído a outro motorista.'), 403
     if not pedido.tiny_nota_fiscal_id:
         return render_template(
             'handshake/erro.html',
