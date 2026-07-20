@@ -354,6 +354,34 @@ def sucesso(token):
     return render_template('handshake/sucesso.html', msg=msg, pedido=pedido)
 
 
+@handshake_bp.route('/<token>/danfe')
+def danfe(token):
+    """DANFE da NF de TRANSFERENCIA pro motorista (fiscalizacao na
+    estrada). Mesma guarda da tela de sucesso: so depois do handshake
+    consumido (a URL de sucesso e persistente — este link vive nela).
+    O link do Tiny e temporario, por isso resolve sob demanda."""
+    from app.services import tiny
+
+    qr = PedidoQRCode.query.filter_by(token=token).first()
+    if not qr:
+        abort(404)
+    if qr.usado_em is None:
+        return redirect(url_for('handshake.handshake', token=token))
+    pedido = qr.pedido
+    if not pedido.tiny_nota_fiscal_id:
+        return render_template(
+            'handshake/erro.html',
+            msg=('A NF de transferência deste pedido ainda não foi emitida '
+                 '— avise a produção (reemissão na lista de pedidos).')), 404
+    link, motivo = tiny.obter_link_nota_fiscal_com_motivo(
+        pedido.tiny_nota_fiscal_id)
+    if not link:
+        return render_template(
+            'handshake/erro.html',
+            msg=f'DANFE ainda não disponível: {motivo}'), 502
+    return redirect(link)
+
+
 # ── Handshake da RETIRADA de sobras (loja → industria) ──────────────────────
 #
 # Esteira espelhada da entrega, em 2 tempos:
