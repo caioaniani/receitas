@@ -353,7 +353,55 @@ def cardapio_atacado_regras():
     atuais = {chave: (AppConfig.get(_CARDAPIO_ATACADO_PREFIXO + chave) or '')
               for chave, _l, _p in CARDAPIO_ATACADO_CAMPOS}
     return render_template('admin/cardapio_atacado_regras.html',
-                           campos=CARDAPIO_ATACADO_CAMPOS, atuais=atuais)
+                           campos=CARDAPIO_ATACADO_CAMPOS, atuais=atuais,
+                           logo=_cardapio_logo())
+
+
+@main_bp.route('/admin/cardapio-atacado/logo', methods=['POST'])
+@login_required
+@admin_required
+def cardapio_logo_upload():
+    """Sobe o logotipo do cardapio (hero da tela + capa do PDF). Checkbox
+    'branco' (default) transforma a marca em silhueta branca pro fundo
+    escuro; desmarcado mantem a imagem fiel. Guarda data URI em AppConfig."""
+    from flask import flash, redirect, url_for
+
+    from app.models import AppConfig
+    back = redirect(url_for('main.cardapio_atacado_regras'))
+    f = request.files.get('logo_arquivo')
+    if not f or not f.filename:
+        flash('Selecione um arquivo de imagem.', 'danger')
+        return back
+    if not (f.mimetype or '').startswith('image/'):
+        flash('Arquivo não é imagem.', 'danger')
+        return back
+    data = f.read()
+    if len(data) > 25 * 1024 * 1024:
+        flash('Imagem muito grande (>25MB).', 'danger')
+        return back
+    branco = bool(request.form.get('branco'))
+    try:
+        uri = _processar_logo_cardapio(data, branco=branco)
+    except ValueError as e:
+        flash('Erro processando logo: %s' % e, 'danger')
+        return back
+    AppConfig.set(_CARDAPIO_LOGO_KEY, uri)
+    db.session.commit()
+    flash('Logotipo salvo. Já aparece no cardápio e no PDF.', 'success')
+    return back
+
+
+@main_bp.route('/admin/cardapio-atacado/logo/remover', methods=['POST'])
+@login_required
+@admin_required
+def cardapio_logo_remover():
+    from flask import flash, redirect, url_for
+
+    from app.models import AppConfig
+    AppConfig.set(_CARDAPIO_LOGO_KEY, '')
+    db.session.commit()
+    flash('Logotipo removido — o cardápio volta ao texto "O Pão".', 'info')
+    return redirect(url_for('main.cardapio_atacado_regras'))
 
 
 def _cardapio_categorias(tipo):
