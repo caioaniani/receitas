@@ -276,6 +276,56 @@ def _regras_atacado():
     return out
 
 
+# Metodos de preparo do cardapio de ATACADO (20/07/2026, ditado do dono):
+# como o cliente B2B prepara o que compra — backup (congelado cru), assado
+# congelado, sourdough 14 fatias, brioche fresco. Texto em AppConfig
+# `cardapio_atacado_preparo` (uma linha por metodo, "Rotulo: texto"),
+# editavel na tela de regras. CONTRATO: chave AUSENTE (None) = usa o
+# default abaixo; chave gravada VAZIA = dono apagou de proposito, bloco
+# some. Sem em-dash nos textos (fora do latin-1 do PDF — regra da casa).
+_CARDAPIO_PREPARO_KEY = 'cardapio_atacado_preparo'
+CARDAPIO_PREPARO_DEFAULT = (
+    'Viennoiserie no método backup (congelado cru): a massa vai fermentada '
+    'até o ponto de forno e é congelada crua. É só tirar do freezer, '
+    'esperar perder o gelo, pincelar com egg wash e assar. É o método que '
+    'garante a melhor qualidade no produto final; o croissant tradicional '
+    'e o pain au chocolat também funcionam assim.\n'
+    'Viennoiserie assada e congelada: opção mais prática; a qualidade fica '
+    'um pouco abaixo do método backup.\n'
+    'Pães sourdough: vendidos congelados. Cada pão rende 14 fatias, para '
+    'lanches e aperitivos.\n'
+    'Brioche: entregue fresco, com validade de 3 dias.'
+)
+
+
+def _preparo_atacado():
+    """Lista [{label, valor}] dos metodos de preparo do atacado. Cada linha
+    do texto vira um item; "Rotulo: resto" separa no PRIMEIRO ':' (rotulo
+    curto — ':' tardio e' texto corrido, sem rotulo)."""
+    from app.models import AppConfig
+    raw = AppConfig.get(_CARDAPIO_PREPARO_KEY)
+    if raw is None:
+        raw = CARDAPIO_PREPARO_DEFAULT
+    out = []
+    for linha in raw.splitlines():
+        linha = linha.strip()
+        if not linha:
+            continue
+        rotulo, sep, resto = linha.partition(':')
+        if sep and 0 < len(rotulo.strip()) <= 60 and resto.strip():
+            out.append({'label': rotulo.strip(), 'valor': resto.strip()})
+        else:
+            out.append({'label': None, 'valor': linha})
+    return out
+
+
+def _preparo_atacado_raw():
+    """Texto cru pro textarea da tela de regras (None = default vigente)."""
+    from app.models import AppConfig
+    raw = AppConfig.get(_CARDAPIO_PREPARO_KEY)
+    return CARDAPIO_PREPARO_DEFAULT if raw is None else raw
+
+
 # Logotipo do cardapio (13/07/2026 base; logo 20/07/2026): substitui o
 # wordmark "O Pao" no hero da tela e na capa do PDF. Guardado como data URI
 # (base64) em AppConfig — auto-contido (sobrevive deploy, sem dependencia de
