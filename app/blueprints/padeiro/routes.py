@@ -71,6 +71,9 @@ def _card_retirada(r):
             'status': r.status,
             'foto_url': r.foto_url,
             'itens': [{'id': it.id, 'qtd': it.quantidade,
+                       # Base da conferência do recebimento: o que o
+                       # motorista COLETOU (None = coletou o declarado).
+                       'qtd_coletada': it.quantidade_coletada,
                        'nome': it.nome_item,
                        'obs': ('vira ' + it.receita.retorno_receita.nome
                                if it.receita and it.receita.retorno_receita
