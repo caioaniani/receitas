@@ -34,6 +34,9 @@
 {{ _lnk(variant, url_for('pedidos.estoque_loja_historico'), 'Histórico do estoque', request.path == '/pedidos/estoque-loja/historico') }}
 {{ _lnk(variant, url_for('pedidos.desperdicio'), 'Desperdício', '/pedidos/desperdicio' in request.path) }}
 {{ _lnk(variant, url_for('pedidos.retiradas_sobras'), 'Retiradas de sobras', request.path.startswith('/pedidos/retiradas'), icon='bi-recycle') }}
+{% if current_user.is_dono() %}
+{{ _lnk(variant, url_for('pedidos.tiny_skus_transferencia'), 'SKUs NF de transferência', request.path.startswith('/pedidos/tiny-skus-transferencia'), sub=true) }}
+{% endif %}
 {{ _lnk(variant, url_for('lista_compras.index'), 'Lista de Compras', request.path in ['/lista-compras', '/lista-compras/']) }}
 {% if current_user.is_admin() %}
 {{ _lnk(variant, url_for('lista_compras.calculadora'), 'Calculadora de compras', request.path == '/lista-compras/calculadora', sub=true) }}
