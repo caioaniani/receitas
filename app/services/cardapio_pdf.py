@@ -244,6 +244,8 @@ def _capa(pdf, titulo_tipo, regras, logo_data=None, preparo=None):
         pdf.set_y(y0 + alt + 5)
     else:
         pdf.ln(4)
+    if preparo:
+        _box_preparo(pdf, preparo)
 
 
 def _moeda(v):
