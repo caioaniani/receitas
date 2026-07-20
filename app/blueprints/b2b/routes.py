@@ -248,6 +248,7 @@ def lead_catalogo_url():
         flash('O link do catálogo precisa começar com http(s)://', 'warning')
         return redirect(url_for('b2b.leads'))
     AppConfig.set('catalogo_b2b_url', url)
+    db.session.commit()  # AppConfig.set não commita
     flash('Link do catálogo salvo.' if url else 'Link do catálogo removido.',
           'success')
     return redirect(url_for('b2b.leads'))
