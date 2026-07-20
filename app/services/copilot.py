@@ -1696,6 +1696,10 @@ def _enriquecer_criar_venda_b2b(tool_input):
             'estoque_atual': estoque_atual,
         })
 
+    try:
+        frete = float(out.get('frete_valor') or 0)
+    except (TypeError, ValueError):
+        frete = 0.0
     return {
         'cliente_nome': out.get('cliente_nome'),
         'cliente_id': out.get('cliente_id'),
@@ -1708,7 +1712,9 @@ def _enriquecer_criar_venda_b2b(tool_input):
         'observacao': out.get('observacao'),
         'itens': itens_enriq,
         'parcelas': out.get('parcelas') or [],
-        'total': round(total, 2),
+        'frete_valor': round(frete, 2),
+        # total do preview = itens + frete (mesma conta da venda persistida)
+        'total': round(total + frete, 2),
     }
 
 
