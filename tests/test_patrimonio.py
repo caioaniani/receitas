@@ -224,6 +224,56 @@ def test_etiquetas_pdf_22_ativos_2_paginas(app):
     assert pdf.count(b'/Type /Page') >= 3
 
 
+def test_valor_round_trip_da_edicao_nao_multiplica(app, admin_user):
+    """Achado de revisão (crítico): o form de editar re-renderizava o
+    Decimal em formato en ('12345.67') e o parse antigo removia todo '.'
+    → cada salvamento multiplicava o valor por 100. O round-trip agora é
+    estável: renderiza pt-BR e o parse é o canônico da casa."""
+    a = _ativo('Forno Caro', valor_aquisicao=Decimal('12345.67'))
+    c = app.test_client()
+    _login(c, 'admin')
+    html = c.get('/patrimonio/').get_data(as_text=True)
+    assert '12345,67' in html                      # render pt-BR no form
+    # Salva o form como o browser mandaria (valor re-renderizado, sem mexer).
+    c.post(f'/patrimonio/{a.id}/editar', data={
+        'nome': 'Forno Caro', 'loja_id': 'ind', 'valor_aquisicao': '12345,67',
+    }, follow_redirects=True)
+    assert a.valor_aquisicao == Decimal('12345.67')   # NÃO virou 1.234.567
+    # Valor inválido mantém o gravado (não vira None calado).
+    c.post(f'/patrimonio/{a.id}/editar', data={
+        'nome': 'Forno Caro', 'loja_id': 'ind', 'valor_aquisicao': 'abc',
+    }, follow_redirects=True)
+    assert a.valor_aquisicao == Decimal('12345.67')
+
+
+def test_posts_de_gestao_exigem_admin(app):
+    """Funcionário confere, mas NÃO cadastra/edita/baixa/imprime."""
+    _funcionario()
+    a = _ativo('Protegido')
+    c = app.test_client()
+    _login(c, 'funcpat')
+    respostas = [
+        c.post('/patrimonio/novo', data={'nome': 'X'}),
+        c.post(f'/patrimonio/{a.id}/editar', data={'nome': 'Y'}),
+        c.post(f'/patrimonio/{a.id}/situacao', data={'situacao': 'baixado'}),
+        c.get('/patrimonio/etiquetas.pdf'),
+    ]
+    assert all(r.status_code in (302, 403) for r in respostas)
+    assert a.nome == 'Protegido' and a.situacao == 'em_uso'
+    assert Ativo.query.count() == 1
+
+
+def test_conferir_nao_expoe_valor_de_aquisicao(app):
+    """A página do QR é de qualquer funcionário — valor contábil não
+    aparece nela (privacidade; trava de regressão pedida em revisão)."""
+    _funcionario()
+    a = _ativo('Forno Sigiloso', valor_aquisicao=Decimal('98765.43'))
+    c = app.test_client()
+    _login(c, 'funcpat')
+    html = c.get(f'/patrimonio/{a.id}/conferir').get_data(as_text=True)
+    assert '98765' not in html and '98.765' not in html
+
+
 def test_area_nav_tem_link(app, admin_user):
     c = app.test_client()
     _login(c, 'admin')
