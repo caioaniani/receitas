@@ -336,6 +336,46 @@ def test_tela_retiradas_mostra_destrava_pro_admin(app, admin_user):
     assert 'estorna coleta' in body
 
 
+# ── Tela do padeiro: recebimento SEM QR (dono 20/07/2026) ────────────────────
+
+def test_padeiro_recebe_pela_tela(app, admin_user):
+    """"O padeiro deve concluir, porém ele só tem a tela do /padeiro":
+    o POST da tela credita a indústria com a conferência dele — sem QR."""
+    trad, retorno, loja, _el = _setup()
+    ret = _retirada_em_transporte(loja, trad, qtd=10)
+    it_id = ret.itens[0].id
+    c = app.test_client()
+    _login(c, 'admin')
+    resp = c.post(f'/padeiro/retirada/{ret.id}/receber',
+                  data={f'qtd_{it_id}': '9'}, follow_redirects=True)
+    assert resp.status_code == 200
+    assert ret.status == 'recebida'
+    assert _estoque_retorno(retorno) == 9
+    assert ret.itens[0].quantidade_recebida == 9
+    from app.models import HandshakeAudit
+    audit = HandshakeAudit.query.filter_by(tipo='r_receb',
+                                           etapa='manual').first()
+    assert audit is not None and 'tela do padeiro' in audit.detalhe
+
+
+def test_padeiro_receber_recusa_antes_da_coleta(app, admin_user):
+    trad, retorno, loja, _el = _setup()
+    ret = RetiradaSobra(loja_id=loja.id, data_retirada=hoje(),
+                        foto_url='https://x/f.jpg')
+    db.session.add(ret)
+    db.session.flush()
+    db.session.add(RetiradaSobraItem(retirada_id=ret.id, receita_id=trad.id,
+                                     quantidade=10))
+    db.session.commit()
+    c = app.test_client()
+    _login(c, 'admin')
+    resp = c.post(f'/padeiro/retirada/{ret.id}/receber', data={},
+                  follow_redirects=True)
+    assert resp.status_code == 200
+    assert ret.status == 'aguardando_coleta'       # nada mudou
+    assert _estoque_retorno(retorno) == 0
+
+
 # ── Alerta + pendência da home ───────────────────────────────────────────────
 
 def test_alerta_mensagem_tem_link_de_destrava(app):
