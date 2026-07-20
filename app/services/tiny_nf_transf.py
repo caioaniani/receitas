@@ -40,13 +40,32 @@ def _so_digitos(s):
     return ''.join(c for c in (s or '') if c.isdigit())
 
 
+def _sku_confirmado(kind, item_id, canal):
+    """SKU do canal SÓ se não for chute pendente do fuzzy: vale quando foi
+    salvo por humano (auto_match=False) ou confirmado (confirmado_em).
+    Documento FISCAL não sai com sugestão não conferida (achado A1 da
+    revisão 20/07/2026: o sync da tela cria auto_match pra TODO o universo
+    e um chute errado herdaria por cima do SKU confirmado do site —
+    NCM/CFOP errados na SEFAZ). Mesmo espírito do SeruLojaMap ("auto-fuzzy
+    não basta")."""
+    from app.models import TinyProdutoMap
+    m = TinyProdutoMap.query.filter_by(canal=canal, kind=kind,
+                                       item_id=item_id).first()
+    if not m or not (m.tiny_sku or '').strip():
+        return None
+    if m.auto_match and not m.confirmado_em:
+        return None                                # sugestão pendente
+    return m.tiny_sku.strip()
+
+
 def sku_transferencia(kind, item_id):
-    """SKU efetivo pra NF de transferência. MP existe SÓ no canal transf
-    (site/b2b nunca mapearam MP); receita/produto herdam site→b2b."""
+    """SKU efetivo pra NF de transferência (só CONFIRMADOS — ver
+    `_sku_confirmado`). MP existe SÓ no canal transf (site/b2b nunca
+    mapearam MP); receita/produto herdam site→b2b."""
     if kind == 'mp':
-        return tiny_nf.sku_do_item('mp', item_id, canal=CANAL)
+        return _sku_confirmado('mp', item_id, CANAL)
     for canal in _FALLBACK_CANAIS:
-        sku = tiny_nf.sku_do_item(kind, item_id, canal=canal)
+        sku = _sku_confirmado(kind, item_id, canal)
         if sku:
             return sku
     return None
