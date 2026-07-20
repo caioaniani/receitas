@@ -12,6 +12,19 @@
     {% endif %}
 </div>
 
+{% if pedido and pedido.tiny_nota_fiscal_id %}
+<a href="{{ url_for('handshake.danfe', token=request.view_args.token) }}"
+   class="btn btn-acao mt-3" target="_blank" rel="noopener"
+   style="background:#6c757d;border:0;color:#fff;">
+    <i class="bi bi-file-earmark-text"></i> DANFE — NF de transferência
+    {% if pedido.nf_numero %}nº {{ pedido.nf_numero }}{% endif %}
+</a>
+<p class="kv mt-1 text-center" style="color:#666;font-size:12px;">
+    Guarde esta página aberta: se a fiscalização parar o carro, a nota
+    fiscal da carga está neste botão.
+</p>
+{% endif %}
+
 {% if proximo_url %}
 <a href="{{ proximo_url }}" class="btn btn-primary btn-acao mt-3" style="background:#0d6efd;border:0;">
     <i class="bi bi-arrow-right-circle"></i> {{ proximo_label or 'Próximo passo' }}
