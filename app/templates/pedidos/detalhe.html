@@ -304,11 +304,23 @@
             <i class="bi bi-file-earmark-pdf"></i> Ver DANFE
         </a>
         {% elif pedido.tiny_nota_fiscal_id %}
-        <span class="badge bg-warning text-dark">criada, autorização pendente</span>
+        <span class="badge bg-warning text-dark">criada, autorização pendente{% if pedido.nf_status %} · {{ pedido.nf_status }}{% endif %}</span>
         <form method="POST" action="{{ url_for('pedidos.emitir_nf_transferencia', id=pedido.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-outline-primary">
                 <i class="bi bi-arrow-repeat"></i> Reenviar / verificar
+            </button>
+        </form>
+        {# NF REJEITADA pela SEFAZ (ex.: CNPJ errado, já corrigido no RH):
+           reenviar devolve sempre a mesma recusa — a saída é refazer do
+           zero (rascunho rejeitado fica órfão no Tiny; mesmo contrato do
+           B2B). Achado A2 da revisão. #}
+        <form method="POST" action="{{ url_for('pedidos.emitir_nf_transferencia', id=pedido.id) }}"
+              onsubmit="return confirm('Refazer a NF DO ZERO? Use só se ela foi REJEITADA (o rascunho antigo fica órfão no Tiny). NF autorizada refeita = nota duplicada na SEFAZ.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="recriar" value="1">
+            <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-arrow-counterclockwise"></i> Refazer do zero
             </button>
         </form>
         {% else %}
