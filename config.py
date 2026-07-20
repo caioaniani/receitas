@@ -80,6 +80,11 @@ class Config:
     # por env sem deploy.
     NF_NATUREZA_OPERACAO = os.environ.get(
         'NF_NATUREZA_OPERACAO', 'Venda de mercadorias')
+    # NF de transferencia industria→loja (20/07/2026): texto EXATO da
+    # natureza cadastrada no Tiny (informado pelo dono).
+    NF_NATUREZA_TRANSFERENCIA = os.environ.get(
+        'NF_NATUREZA_TRANSFERENCIA',
+        'TRANSFERÊNCIA DE PRODUÇÃO DO ESTABELECIMENTO')
     NF_SERIE = os.environ.get('NF_SERIE', '1')
     # Modalidade do frete pro Tiny (codigo de LETRA, nao numerico: a API e
     # PHP e trata "0" como vazio -> "deve ser informado"). Valores Tiny:
