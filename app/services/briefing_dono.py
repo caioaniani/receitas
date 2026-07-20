@@ -342,6 +342,50 @@ def vendas_ontem(capturar=True):
     }
 
 
+def vendas_hoje(capturar=False):
+    """Vendas de HOJE até agora (parciais): PDV do snapshot + site pago hoje.
+
+    O cron do Seru recaptura ontem+hoje a cada ~15 min, então o snapshot de
+    hoje fica no máximo esse tanto atrasado. Default `capturar=False` (modo
+    da home — nunca bate na API); sem delta vs média DE PROPÓSITO: comparar
+    um dia INCOMPLETO com a média de dias cheios só geraria um "-60%" falso
+    a manhã inteira.
+    """
+    from app.models import PedidoOnline
+
+    hoje_d = hoje()
+    total, por_company, n_pedidos = _faturamento_por_loja_seguro(
+        hoje_d, capturar=capturar)
+    vinculo = _resolver_loja_seru()
+    fat_por_loja = defaultdict(float)
+    for loja_seru, fat in por_company.items():
+        fat_por_loja[vinculo.get(loja_seru, loja_seru)] += fat
+    lojas = [{'loja': nome, 'faturamento': fat}
+             for nome, fat in sorted(fat_por_loja.items(), key=lambda kv: -kv[1])]
+
+    ini = datetime.combine(hoje_d, time.min)
+    site_rows = (db.session.query(
+        func.count(PedidoOnline.id),
+        func.coalesce(func.sum(PedidoOnline.valor_total), 0))
+        .filter(PedidoOnline.pago_em >= ini).one())
+    site_total = float(site_rows[1] or 0)
+    return {
+        'hoje': hoje_d,
+        'label': '%s %s' % (_DOW_PT[hoje_d.weekday()], hoje_d.strftime('%d/%m')),
+        'pdv_total': total,
+        'n_pedidos': n_pedidos,
+        'por_loja': lojas,
+        'site_qtd': int(site_rows[0] or 0),
+        'site_total': site_total,
+        'total_geral': round(total + site_total, 2),
+    }
+
+
+def _faturamento_por_loja_seguro(dia, capturar):
+    from app.services import vendas_diarias
+    return vendas_diarias.faturamento_por_loja(dia, dia, capturar=capturar)
+
+
 def custo_ia_ontem():
     """Gasto de IA de ONTEM (janela fechada de calendário BRT, em USD)."""
     from app.models import UsoIA
