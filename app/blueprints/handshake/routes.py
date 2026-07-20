@@ -450,13 +450,36 @@ def handshake_retirada(token):
     _audit_retirada(token, retirada, tipo_audit, 'pin_ok',
                     f'driver:{driver.nome}')
 
+    # CLAIM atomico da transicao de status (pos-revisao 19/07/2026, padrao
+    # do Confirmar do Slack): UPDATE condicional serializa dois scans quase
+    # simultaneos em workers distintos (e o scan × recebimento manual da
+    # web) — o perdedor casa 0 linhas e ve o aviso, em vez de baixar ou
+    # creditar o estoque 2x. O guard de _STATUS_ESPERADO_RETIRADA acima e
+    # so a checagem amigavel; a garantia e o claim.
+    from app.models import RetiradaSobra as _RS
     from app.services.devolucao import (
         baixar_loja_retirada,
         creditar_industria_retirada,
     )
     try:
         divergencias = []
+        quando = agora()
         if qr.tipo == 'coleta':
+            claim = (_RS.query
+                     .filter(_RS.id == retirada.id,
+                             _RS.status == 'aguardando_coleta')
+                     .update({'status': 'em_transporte',
+                              'driver_id': driver.id,
+                              'coletada_em': quando},
+                             synchronize_session=False))
+            if not claim:
+                db.session.rollback()
+                _audit_retirada(token, retirada, tipo_audit, 'erro_status',
+                                'claim perdido (acao concorrente)')
+                return render_template(
+                    'handshake/erro.html',
+                    msg='Esta retirada já foi processada por outra ação — '
+                        'confira a lista de retiradas.'), 409
             # Conferencia do MOTORISTA: quanto esta levando DE FATO de cada
             # item — aceita diferente do declarado (loja marcou 15, saem 12;
             # decisao do dono 03/07/2026). Campo ausente/invalido = declarado.
@@ -476,9 +499,11 @@ def handshake_retirada(token):
                         'coletado': coletada,
                     })
             avisos = baixar_loja_retirada(retirada, usuario_id=None)
+            # Alinha o objeto em memoria com o claim (synchronize_session=
+            # False deixa ele stale) — templates/audit leem daqui.
             retirada.status = 'em_transporte'
             retirada.driver_id = driver.id
-            retirada.coletada_em = agora()
+            retirada.coletada_em = quando
             # Ja deixa o QR do proximo passo pronto (recebimento na industria).
             from app.services.handshake_qr import gerar_qr_retirada
             gerar_qr_retirada(retirada, 'recebimento')
@@ -489,9 +514,22 @@ def handshake_retirada(token):
                     '; '.join(f"{d['nome']}: {d['declarado']}->{d['coletado']}"
                               for d in divergencias)[:400])
         else:
+            claim = (_RS.query
+                     .filter(_RS.id == retirada.id,
+                             _RS.status == 'em_transporte')
+                     .update({'status': 'recebida', 'recebida_em': quando},
+                             synchronize_session=False))
+            if not claim:
+                db.session.rollback()
+                _audit_retirada(token, retirada, tipo_audit, 'erro_status',
+                                'claim perdido (acao concorrente)')
+                return render_template(
+                    'handshake/erro.html',
+                    msg='Esta retirada já foi processada por outra ação — '
+                        'confira a lista de retiradas.'), 409
             resumo = creditar_industria_retirada(retirada, usuario_id=None)
             retirada.status = 'recebida'
-            retirada.recebida_em = agora()
+            retirada.recebida_em = quando
             detalhe = ', '.join(f"{r['qtd']}x {r['nome']}" for r in resumo)
         qr.usado_em = agora()
         qr.usado_por_descricao = f'driver:{driver.nome}'
