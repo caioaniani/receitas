@@ -161,9 +161,10 @@ def test_loop_do_bot_registra_lead(app):
                 patch('app.services.zapi.enviar_texto',
                       return_value={'ok': True}):
             M.return_value.messages.create.side_effect = [tool_use, texto]
-            out = chatbot.responder('quero revender os croissants de vocês',
-                                    historico=[],
-                                    telefone_contato='5511988887777')
+            out = chatbot.responder(
+                [{'role': 'user',
+                  'content': 'quero revender os croissants de vocês'}],
+                telefone_contato='5511988887777')
         assert out['acao'] == 'responder'
         assert 'equipe comercial' in out['texto']
         assert 'registrar_lead_b2b' in out['tools_usadas']
