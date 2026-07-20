@@ -105,13 +105,64 @@ def _itens_b2b():
     return out
 
 
+def _itens_transf():
+    """Universo do canal 'transf' (NF de transferência indústria→loja):
+    tudo que pode viajar num pedido de loja — receitas ativas, produtos
+    ativos, MPs pedíveis (sugerir_pedido_loja) e qualquer item que já
+    apareceu em PedidoItem (pedido antigo pode ter item hoje arquivado —
+    a reemissão da NF dele ainda precisa do SKU). kind de MP é 'mp'
+    (curto de propósito: a coluna kind é String(10))."""
+    from app.models import MateriaPrima, PedidoItem, Produto, Receita
+
+    out = [{'kind': 'receita', 'id': r.id, 'nome': r.nome,
+            'categoria': r.categoria or ''}
+           for r in Receita.ativas().order_by(Receita.nome.asc()).all()]
+    out += [{'kind': 'produto', 'id': p.id, 'nome': p.nome,
+             'categoria': p.categoria or ''}
+            for p in Produto.query.filter(Produto.ativo.is_(True))
+            .order_by(Produto.nome.asc()).all()]
+    out += [{'kind': 'mp', 'id': m.id, 'nome': m.nome,
+             'categoria': 'Matéria-prima'}
+            for m in MateriaPrima.ativas()
+            .filter(MateriaPrima.sugerir_pedido_loja.is_(True))
+            .order_by(MateriaPrima.nome.asc()).all()]
+    ja = {(it['kind'], it['id']) for it in out}
+    usados_r = {rid for (rid,) in PedidoItem.query
+                .with_entities(PedidoItem.receita_id)
+                .filter(PedidoItem.receita_id.isnot(None)).distinct().all()}
+    usados_p = {pid for (pid,) in PedidoItem.query
+                .with_entities(PedidoItem.produto_id)
+                .filter(PedidoItem.produto_id.isnot(None)).distinct().all()}
+    usados_m = {mid for (mid,) in PedidoItem.query
+                .with_entities(PedidoItem.materia_prima_id)
+                .filter(PedidoItem.materia_prima_id.isnot(None))
+                .distinct().all()}
+    from app.models import Receita as _R
+    for r in _R.query.filter(_R.id.in_(usados_r)).all():
+        if ('receita', r.id) not in ja:
+            out.append({'kind': 'receita', 'id': r.id, 'nome': r.nome,
+                        'categoria': r.categoria or ''})
+    for p in Produto.query.filter(Produto.id.in_(usados_p)).all():
+        if ('produto', p.id) not in ja:
+            out.append({'kind': 'produto', 'id': p.id, 'nome': p.nome,
+                        'categoria': p.categoria or ''})
+    for m in MateriaPrima.query.filter(MateriaPrima.id.in_(usados_m)).all():
+        if ('mp', m.id) not in ja:
+            out.append({'kind': 'mp', 'id': m.id, 'nome': m.nome,
+                        'categoria': 'Matéria-prima'})
+    return out
+
+
 def _itens_do_canal(canal):
     """Universo de itens mapeáveis do canal: 'site' = publicados na vitrine
-    (preco_site > 0); 'b2b' = catálogo de atacado (ver `_itens_b2b`). Cada
-    canal tem a própria lista de preço/cadastro no Tiny — por isso telas e
-    mapas separados."""
+    (preco_site > 0); 'b2b' = catálogo de atacado (ver `_itens_b2b`);
+    'transf' = tudo que viaja em pedido de loja (ver `_itens_transf`).
+    Cada canal tem a própria lista de preço/cadastro no Tiny — por isso
+    telas e mapas separados."""
     if canal == 'b2b':
         return _itens_b2b()
+    if canal == 'transf':
+        return _itens_transf()
     return [{'kind': it['kind'], 'id': it['id'], 'nome': it['nome'],
              'categoria': it.get('categoria') or ''}
             for it in loja_catalogo.produtos_publicados()]
