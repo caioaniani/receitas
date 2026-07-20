@@ -930,7 +930,7 @@ def venda_editar_post(vid):
         flash(f'Venda faturada ({venda.fatura.codigo}) — cancele a fatura '
               'em B2B → Faturas mensais antes de editar.', 'warning')
         return redirect(url_for('b2b.venda_detalhe', vid=vid))
-    campos, itens, parcelas = _parse_venda_form()
+    campos, itens, parcelas, frete_valor = _parse_venda_form()
     if not campos['data_entrega']:
         flash('Informe a data de entrega ao padeiro.', 'warning')
         return redirect(url_for('b2b.venda_editar', vid=vid))
