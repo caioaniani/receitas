@@ -120,6 +120,85 @@ def test_sku_transf_explicito_vence_o_herdado(app, loja, catalogo):
         'receita', catalogo['receita'].id) == 'SKU-TRANSF'
 
 
+def test_sugestao_fuzzy_nao_confirmada_nao_vale_na_nf(app, catalogo):
+    """Chute do sync (auto_match sem confirmado_em) NÃO entra em documento
+    fiscal — nem no canal transf (cai no herdado confirmado do site), nem
+    sozinho (vira pendente). Achado A1 da revisão."""
+    from app.extensions import db as _db
+    from app.models import TinyProdutoMap
+    from app.services import tiny_nf, tiny_nf_transf
+    rid = catalogo['receita'].id
+    # transf = sugestão fuzzy pendente; site = confirmado por humano
+    _db.session.add(TinyProdutoMap(canal='transf', kind='receita',
+                                   item_id=rid, tiny_sku='SKU-CHUTE',
+                                   auto_match=True))
+    _db.session.commit()
+    tiny_nf.definir_sku('receita', rid, 'SKU-SITE-OK', canal='site')
+    assert tiny_nf_transf.sku_transferencia('receita', rid) == 'SKU-SITE-OK'
+    # Sem herança confirmada: sugestão pendente sozinha = None (pendente)
+    m = TinyProdutoMap.query.filter_by(canal='site', kind='receita',
+                                       item_id=rid).one()
+    _db.session.delete(m)
+    _db.session.commit()
+    assert tiny_nf_transf.sku_transferencia('receita', rid) is None
+
+
+def test_produto_inativo_usa_custo_da_composicao(app, loja, catalogo):
+    """Pedido antigo com produto soft-deletado: o custo sai da composição
+    direta (calcular_custo_produto), não aborta com msg enganosa de
+    'corrija a ficha'. Achado A3 da revisão."""
+    from app.services import tiny_nf, tiny_nf_transf
+    _loja_fiscal(loja)
+    catalogo['produto'].ativo = False
+    catalogo['produto'].custo_direto = 4.4
+    p = PedidoLoja(loja_id=loja.id, status='entregue',
+                   data_entrega=date.today())
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoItem(pedido_id=p.id,
+                              produto_id=catalogo['produto'].id,
+                              quantidade=3))
+    db.session.commit()
+    tiny_nf.definir_sku('produto', catalogo['produto'].id, 'SKU-INATIVO',
+                        canal='transf')
+    with _patch_custos(), _patch_custos_produtos({}), \
+         patch('app.services.tiny.incluir_nota_fiscal',
+               return_value={'ok': True, 'id': 'nf-i'}) as inc, \
+         patch('app.services.tiny.emitir_nota_fiscal',
+               return_value={'ok': True, 'status': 'autorizada'}):
+        res = tiny_nf_transf.emitir_nf(p)
+    assert res['ok'], res
+    item = inc.call_args[0][0]['itens'][0]['item']
+    assert item['valor_unitario'] == 4.4           # custo_direto do inativo
+
+
+def test_badge_fiscal_completo_usa_regua_da_emissao(app, loja):
+    """Loja com CNPJ de 13 dígitos ou endereço pela metade NÃO é 'pronta
+    pra NF' (achado A5 — o badge mentia)."""
+    assert loja.fiscal_completo is False
+    _loja_fiscal(loja)
+    assert loja.fiscal_completo is True
+    loja.cnpj = '1122233300014'                    # 13 dígitos
+    db.session.commit()
+    assert loja.fiscal_completo is False
+
+
+def test_danfe_do_driver_exige_posse_do_pedido(app, loja, catalogo):
+    """Motorista A não abre a DANFE de pedido coletado pelo motorista B
+    (achado B2)."""
+    p, qr = _armar_saida(loja, catalogo, com_fiscal=False)
+    p.tiny_nota_fiscal_id = 'nf-posse'
+    outro = Driver(nome='Outro Moto', ativo=True, pin='8888',
+                   token='tok-outro-drv')
+    db.session.add(outro)
+    db.session.commit()
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess[f'driver_auth_{outro.id}'] = True
+    resp = client.get(f'/driver/{outro.token}/pedido/{p.id}/danfe')
+    assert resp.status_code == 403
+
+
 def test_loja_sem_cnpj_aborta_sem_chamar_tiny(app, loja, catalogo):
     from app.services import tiny_nf_transf
     p = _pedido(loja, catalogo)                    # loja SEM dados fiscais
