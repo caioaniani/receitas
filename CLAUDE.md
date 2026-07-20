@@ -2170,9 +2170,14 @@ existente cujo alvo foi arquivado REUSA a FK antiga em vez de orfanar em
 silencio — orfao de verdade so em linha NOVA); POST de precos por cliente
 B2B recusa preco novo pra item morto (remover segue ok); /todo filtra
 Produto.ativo. PENDENCIAS DOCUMENTADAS (decisao separada, nao bloqueiam):
-receita arquivada com SALDO fisico vivo nao tem caminho de escoamento no
-balanco (nome vira pendente e a linha antiga fica travada — contagem pode
-dobrar ate intervencao manual; avisar o dono se aparecer), preco especifico
+~~receita arquivada com SALDO fisico vivo sem caminho de escoamento~~ —
+RESOLVIDO 19/07/2026 (GO do dono "pode arquivar tudo" apos achado real:
+5 arquivadas com ~204 mil un de ledger morto, ex. Croissant Nutella
+99.971 na Anesio): rota owner `GET /admin/arquivadas-saldo` (dry-run;
+`?executar=1` zera) — quantidade → 0 + mov 'ajuste' rastreavel em
+EstoqueLoja/EstoqueProducao de receita arquivada OU produto inativo;
+linha com `quantidade_reservada` > 0 e PULADA com aviso (reserva de
+site). Mesmo padrao do /admin/retencao. Restam: preco especifico
 de item arquivado fica invisivel na tela de precos (segue no banco e
 ressurge ao desarquivar), POSTs de pedido/venda aceitam id cru sem
 re-validar arquivada (o typeahead filtrado cobre o fluxo real; e o que
