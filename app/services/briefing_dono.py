@@ -309,6 +309,16 @@ def vendas_ontem(capturar=True):
         lojas.append({'loja': nome, 'faturamento': fat, 'media': media,
                       'delta_pct': round(delta, 1) if delta is not None else None})
 
+    # Média do TOTAL PDV do mesmo dia-da-semana (soma das lojas POR DATA,
+    # depois média das últimas ocorrências) — dá o "ontem vs terça típica"
+    # do total, não só por loja.
+    total_por_data = defaultdict(float)
+    for (_, d), fat in por_dia.items():
+        total_por_data[d] += fat
+    ocorr_tot = sorted(total_por_data.items(), reverse=True)[:_SEMANAS_MEDIA]
+    pdv_media = (sum(f for _, f in ocorr_tot) / len(ocorr_tot)) if ocorr_tot else None
+    pdv_delta = ((total - pdv_media) / pdv_media * 100.0) if pdv_media else None
+
     ini = datetime.combine(ontem, time.min)
     fim = datetime.combine(hoje(), time.min)
     site_rows = (db.session.query(
@@ -316,14 +326,19 @@ def vendas_ontem(capturar=True):
         func.coalesce(func.sum(PedidoOnline.valor_total), 0))
         .filter(PedidoOnline.pago_em >= ini,
                 PedidoOnline.pago_em < fim).one())
+    site_total = float(site_rows[1] or 0)
     return {
         'ontem': ontem,
         'label': '%s %s' % (_DOW_PT[ontem.weekday()], ontem.strftime('%d/%m')),
         'pdv_total': total,
+        'pdv_media': pdv_media,
+        'pdv_delta_pct': round(pdv_delta, 1) if pdv_delta is not None else None,
         'n_pedidos': n_pedidos,
         'por_loja': lojas,
         'site_qtd': int(site_rows[0] or 0),
-        'site_total': float(site_rows[1] or 0),
+        'site_total': site_total,
+        'total_geral': round(total + site_total, 2),
+        'snapshot_ok': snapshot_ok,
     }
 
 
