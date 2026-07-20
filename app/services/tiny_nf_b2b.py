@@ -184,7 +184,12 @@ def emitir_nf_fatura(fatura, user_id=None, recriar=False):
                           + '. Mapeie em B2B → SKUs do Tiny (/b2b/tiny-skus).')
         if not itens:
             return None, 'Fatura sem itens — nada pra emitir.'
-        return _nota_payload(cliente, itens), None
+        # Frete consolidado = soma dos fretes das vendas do período: a
+        # fatura soma os valor_total (que já incluem frete), então itens
+        # + frete fecham exato o valor_total da fatura/boleto.
+        frete_total = sum((Decimal(v.frete_valor or 0)
+                           for v in fatura.vendas), Decimal('0'))
+        return _nota_payload(cliente, itens, frete_valor=frete_total), None
 
     return tiny_nf.emitir_nf_generico(fatura, _montar, recriar=recriar)
 
