@@ -48,6 +48,7 @@ _GAP = 4
 _COL_W = (190 - 2 * _GAP) / 3          # ~60.7mm
 _FOTO_H = _COL_W                       # foto QUADRADA, como no site (1:1)
 _CARD_H = _FOTO_H + 16                 # foto + nome + preço
+_CARD_H_DESC = _FOTO_H + 23            # + até 2 linhas de descrição (7pt)
 _RAIO = 2.5                            # cantos arredondados (site: 12px)
 
 
