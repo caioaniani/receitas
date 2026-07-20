@@ -2016,6 +2016,13 @@ def _migrate_sqlite(app):
                        "ix_chatbot_conversa_contato_key "
                        "ON chatbot_conversa (contato_key)")
 
+    # venda_b2b.frete_valor (20/07/2026) — ver _migrate_postgres.
+    cursor.execute("PRAGMA table_info(venda_b2b)")
+    cols_vb2b = [row[1] for row in cursor.fetchall()]
+    if cols_vb2b and 'frete_valor' not in cols_vb2b:
+        cursor.execute("ALTER TABLE venda_b2b ADD COLUMN "
+                       "frete_valor NUMERIC(10, 2) NOT NULL DEFAULT 0")
+
     # seru_produto_map.fator_quantidade
     cursor.execute("PRAGMA table_info(seru_produto_map)")
     cols_spm = [row[1] for row in cursor.fetchall()]
