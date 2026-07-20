@@ -83,6 +83,54 @@
     </div>
 </div>
 
+{# Vendas TOTAIS de ontem — SÓ pro dono (faturamento é o cockpit pessoal;
+   mesmo gate do /admin/briefing). Fonte única: briefing_dono.vendas_ontem
+   com capturar=False (lê só o snapshot; a home nunca bate na API Seru). #}
+{% if vendas %}
+<div class="home-hero" style="margin-top:1rem;">
+    <div class="home-panel" style="padding:1.1rem 1.4rem;">
+        <div class="d-flex justify-content-between align-items-baseline flex-wrap gap-2 mb-1">
+            <h2 class="h6 mb-0">💰 Vendas de ontem <span class="text-muted fw-normal">({{ vendas.label }})</span></h2>
+            <span style="font-size:1.35rem;font-weight:800;letter-spacing:-0.02em;">
+                R$ {{ '{:,.0f}'.format(vendas.total_geral).replace(',', '.') }}
+            </span>
+        </div>
+        <p class="small mb-2">
+            PDV: <strong>R$ {{ '{:,.0f}'.format(vendas.pdv_total).replace(',', '.') }}</strong>
+            · {{ vendas.n_pedidos }} pedidos
+            {% if vendas.pdv_delta_pct is not none %}
+            <span class="{% if vendas.pdv_delta_pct < -15 %}text-danger{% elif vendas.pdv_delta_pct > 15 %}text-success{% else %}text-muted{% endif %}">
+                ({{ '%+.0f%%' % vendas.pdv_delta_pct }} vs média de {{ vendas.label.split()[0] }})
+            </span>
+            {% endif %}
+            &nbsp;|&nbsp; Site: <strong>R$ {{ '{:,.0f}'.format(vendas.site_total).replace(',', '.') }}</strong>
+            · {{ vendas.site_qtd }} pagos
+        </p>
+        {% if not vendas.snapshot_ok %}
+        <p class="small text-warning mb-2">⚠ O snapshot de ontem ainda não foi
+            capturado do PDV — os números acima podem estar incompletos.
+            <a href="{{ url_for('main.briefing_dono_view') }}">Abrir o briefing</a>
+            força a captura.</p>
+        {% endif %}
+        {% if vendas.por_loja %}
+        <div class="small" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 16px;">
+            {% for lj in vendas.por_loja %}
+            <div class="d-flex justify-content-between gap-2">
+                <span class="text-truncate">{{ lj.loja }}</span>
+                <span class="text-nowrap">
+                    R$ {{ '{:,.0f}'.format(lj.faturamento).replace(',', '.') }}
+                    {% if lj.delta_pct is not none %}
+                    <span class="{% if lj.delta_pct < -15 %}text-danger{% elif lj.delta_pct > 15 %}text-success{% else %}text-muted{% endif %}">{{ '%+.0f%%' % lj.delta_pct }}</span>
+                    {% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {# "Precisa de você hoje" — as MESMAS pendências do briefing diário
    (app/services/briefing_dono.py, fonte única). Fora do .menu-grid de
    propósito: lá dentro viraria um card de área. #}
