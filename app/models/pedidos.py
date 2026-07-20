@@ -227,8 +227,13 @@ class RetiradaSobra(db.Model):
     Maquina de status (esteira espelhada da entrega, movida por QR):
       aguardando_coleta → [QR coleta, PIN driver → BAIXA EstoqueLoja]
       em_transporte     → [QR recebimento, PIN driver/producao → CREDITA
-                           EstoqueProducao na receita de retorno]
-      recebida          | cancelada (so antes da coleta)
+                           EstoqueProducao na receita de retorno] — ou
+                          destrava admin em /pedidos/retiradas
+                          (19/07/2026): recebimento manual (credita) ou
+                          cancelar (ESTORNA a baixa da coleta)
+      recebida          | cancelada (antes da coleta: sem mexer em estoque)
+    Transicoes por CLAIM atomico (UPDATE condicional) — acao concorrente
+    perde o claim e nao movimenta estoque 2x.
 
     Movimentos de estoque levam o token `ret-<id>` — mesma familia de tipos do
     fluxo manual (`devolucao_industria`/`retorno_loja`), entao Movimento do
