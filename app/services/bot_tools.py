@@ -813,12 +813,11 @@ def consultar_pedido(numero, *, telefone_contato=None, cpf_cliente=None):
     return _consultar_pedido_vnda(code, telefone_contato, cpf_cliente)
 
 
-# ── Lead B2B / atacado (16/07/2026, pedido do dono) ─────────────────────────
-# O bot captura contato de quem quer o cardápio de ATACADO (revenda,
-# cafeteria, restaurante, empresa) e o dono faz o contato comercial depois.
-# O catálogo em si é um LINK configurado pelo dono (AppConfig
-# 'catalogo_b2b_url', fallback env CATALOGO_B2B_URL) — o cardápio de atacado
-# do sistema exige login e NÃO deve virar rota pública.
+# ── Lead B2B / atacado (16/07/2026; fluxo revisto 20/07/2026) ──────────────
+# O bot captura contato de quem quer atacado (revenda, cafeteria,
+# restaurante), registra o lead, TRANSFERE a conversa pra equipe e o dono
+# recebe WhatsApp com o link da conversa. Decisão do dono 20/07/2026: o bot
+# NÃO envia catálogo/cardápio B2B — material e preços são só com a equipe.
 
 _RE_EMAIL_LEAD = None  # compilado sob demanda (regex simples de formato)
 
@@ -837,36 +836,10 @@ def _email_lead_valido(email):
     return bool(_RE_EMAIL_LEAD.match(email))
 
 
-def catalogo_b2b_url():
-    """Link do catálogo de atacado que o bot pode enviar. AppConfig manda
-    (editável na tela /b2b/leads sem deploy); env é o fallback."""
-    from flask import current_app
-
-    from app.models import AppConfig
-    url = (AppConfig.get('catalogo_b2b_url') or '').strip()
-    if not url:
-        url = (current_app.config.get('CATALOGO_B2B_URL') or '').strip()
-    return url or None
-
-
-def catalogo_b2b():
-    """Tool de LEITURA: devolve o link do catálogo B2B (se configurado).
-    Sem link cadastrado, o bot orienta que a equipe envia junto do contato —
-    nunca inventa URL (regra LINKS — SEMPRE DA FERRAMENTA)."""
-    url = catalogo_b2b_url()
-    if url:
-        return {'url': url,
-                'como_apresentar': 'Envie o link como texto simples.'}
-    return {'url': None,
-            'aviso': ('Catálogo ainda sem link cadastrado. Diga que a equipe '
-                      'comercial envia o catálogo junto do contato — e '
-                      'capture e-mail e WhatsApp se ainda não capturou.')}
-
-
 def registrar_lead_b2b(nome, email, telefone, empresa=None, interesse=None,
-                       catalogo_enviado=False, telefone_contato=None,
-                       conversa_id=None):
-    """Registra um lead de atacado/B2B e avisa o dono no WhatsApp na hora.
+                       telefone_contato=None, conversa_id=None):
+    """Registra um lead de atacado/B2B e avisa o dono no WhatsApp na hora
+    (com o LINK da conversa, pra ele acompanhar o atendente).
 
     Validações: e-mail com formato real; telefone celular BR com DDD (10-13
     dígitos, com ou sem o 55). `telefone_contato` (injetado pelo canal — o
@@ -923,23 +896,18 @@ def registrar_lead_b2b(nome, email, telefone, empresa=None, interesse=None,
         lead.empresa = (empresa or '').strip()[:200]
     if interesse:
         lead.interesse = (interesse or '').strip()[:2000]
-    if catalogo_enviado:
-        lead.catalogo_enviado = True
     if conversa_id:
         lead.conversa_id = conversa_id
     db.session.commit()
 
     _avisar_dono_lead_b2b(lead, atualizado)
 
-    out = {'ok': True,
-           'lead_id': lead.id,
-           'ja_registrado': atualizado,
-           'mensagem': ('Contato registrado — nossa equipe comercial vai '
-                        'falar com o cliente em breve.')}
-    url = catalogo_b2b_url()
-    if url:
-        out['catalogo_url'] = url
-    return out
+    return {'ok': True,
+            'lead_id': lead.id,
+            'ja_registrado': atualizado,
+            'proximo_passo': ('Contato registrado. Agora TRANSFIRA a '
+                              'conversa pra equipe (o atendente continua '
+                              'com o cliente).')}
 
 
 def _avisar_dono_lead_b2b(lead, atualizado):
@@ -960,6 +928,13 @@ def _avisar_dono_lead_b2b(lead, atualizado):
                   f'• E-mail: {lead.email}']
         if lead.interesse:
             partes.append(f'• Interesse: {lead.interesse[:300]}')
+        # Link direto da CONVERSA (decisão do dono 20/07/2026): o bot
+        # transfere pra equipe logo após registrar — o dono acompanha.
+        if lead.conversa_id:
+            from app.services.chatbot_vigia import link_chatwoot
+            cw = link_chatwoot(lead.conversa_id)
+            if cw:
+                partes.append(f'Conversa: {cw}')
         base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
         partes.append(f'Lista completa: {base}/b2b/leads' if base
                       else 'Lista completa: /b2b/leads')

@@ -213,7 +213,6 @@ _OUTPUT_VAZOU_MARCADORES = (
     'consultar_pedido',
     'consultar_produtos',
     'registrar_lead_b2b',
-    'catalogo_b2b',
 )
 
 
@@ -747,11 +746,11 @@ TOOLS = [
         'name': 'registrar_lead_b2b',
         'description': (
             'Registra o CONTATO de um cliente interessado em ATACADO/B2B '
-            '(revenda, cafeteria, restaurante, empresa, cardapio de atacado) '
-            'pra equipe comercial retornar. Use DEPOIS de coletar nome, '
-            'e-mail e WhatsApp na conversa. NAO transfira pra humano por '
-            'interesse B2B — registrar aqui JA resolve. Devolve tambem o '
-            'link do catalogo quando cadastrado.'),
+            '(revenda, cafeteria, restaurante, empresa, cardapio de '
+            'atacado). Use DEPOIS de coletar nome, e-mail e WhatsApp na '
+            'conversa — e LOGO EM SEGUIDA transfira pra equipe '
+            '(transferir_para_humano): o atendente continua o assunto '
+            'comercial. NUNCA envie catalogo nem precos de atacado.'),
         'input_schema': {
             'type': 'object',
             'properties': {
@@ -770,20 +769,9 @@ TOOLS = [
                               'description': 'Resumo curto do que o cliente '
                               'quer (ex: "croissants pra revenda na '
                               'cafeteria dela, ~50/semana")'},
-                'catalogo_enviado': {'type': 'boolean',
-                                     'description': 'true se voce ja enviou '
-                                     'o link do catalogo nesta conversa'},
             },
             'required': ['nome', 'email'],
         },
-    },
-    {
-        'name': 'catalogo_b2b',
-        'description': (
-            'Devolve o LINK do catalogo/cardapio de ATACADO pra enviar ao '
-            'cliente B2B que pedir. Sem link cadastrado, a resposta orienta '
-            'o que dizer. Nunca invente URL de catalogo.'),
-        'input_schema': {'type': 'object', 'properties': {}},
     },
     TOOL_HANDOFF,
     TOOL_ENCERRAR,
@@ -840,11 +828,8 @@ def _executar_tool(nome, inp, *, telefone_contato=None,
                 inp.get('telefone') or '',
                 empresa=inp.get('empresa'),
                 interesse=inp.get('interesse'),
-                catalogo_enviado=bool(inp.get('catalogo_enviado')),
                 telefone_contato=telefone_contato,
                 conversa_id=conversa_id)
-        if nome == 'catalogo_b2b':
-            return bot_tools.catalogo_b2b()
         return {'erro': f'ferramenta desconhecida: {nome}'}
     except Exception as exc:  # noqa: BLE001
         logger.exception('bot tool %s falhou', nome)

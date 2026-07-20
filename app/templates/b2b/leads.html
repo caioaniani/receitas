@@ -15,30 +15,17 @@
 </div>
 
 <p class="text-muted small mb-3">Contatos capturados pelo bot de atendimento
-quando alguém pede o cardápio de atacado/revenda. O bot avisa no WhatsApp na
-hora; aqui fica a lista para acompanhamento.</p>
+quando alguém pede atacado/revenda. O bot registra, transfere a conversa
+para a equipe e avisa no seu WhatsApp com o link; aqui fica a lista para
+acompanhamento.</p>
 
-<form method="POST" action="{{ url_for('b2b.lead_catalogo_url') }}"
-      class="d-flex flex-wrap gap-2 align-items-center mb-4 p-2"
-      style="background:var(--bg-chip); border-radius:var(--radius-md); border:1px solid var(--border-color);">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label class="small fw-semibold mb-0" for="catalogo-url">📎 Link do catálogo que o bot envia:</label>
-    <input type="url" class="form-control form-control-sm" style="max-width:420px"
-           id="catalogo-url" name="url" value="{{ catalogo_url }}"
-           placeholder="https://... (PDF no Dropbox, por exemplo)">
-    <button class="btn btn-primary btn-sm" type="submit">Salvar</button>
-    {% if catalogo_via_env %}
-    <span class="small text-muted">(vindo da env CATALOGO_B2B_URL — salvar aqui sobrepõe)</span>
-    {% elif not catalogo_url %}
-    <span class="small text-muted">sem link: o bot diz que a equipe envia o catálogo no contato</span>
-    {% endif %}
-</form>
+
 
 <div class="table-responsive">
     <table class="table table-sm table-hover bg-white align-middle">
         <thead><tr>
             <th>Quando</th><th>Nome / Empresa</th><th>Contato</th>
-            <th>Interesse</th><th>Catálogo</th><th></th>
+            <th>Interesse</th><th></th>
         </tr></thead>
         <tbody>
         {% for l in leads %}
@@ -60,7 +47,6 @@ hora; aqui fica a lista para acompanhamento.</p>
                 {% endif %}
             </td>
             <td class="small">{{ l.interesse or '—' }}</td>
-            <td class="small text-center">{{ '📎 enviado' if l.catalogo_enviado else '—' }}</td>
             <td class="text-end">
                 <form method="POST" action="{{ url_for('b2b.lead_contatado', lid=l.id) }}" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -75,7 +61,7 @@ hora; aqui fica a lista para acompanhamento.</p>
             </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="text-center text-muted py-4">
+        <tr><td colspan="5" class="text-center text-muted py-4">
             {{ 'Nenhum lead pendente — tudo contatado. 🎉' if pendentes else 'Nenhum lead ainda.' }}
         </td></tr>
         {% endfor %}

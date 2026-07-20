@@ -198,11 +198,11 @@ def dashboard():
 @login_required
 @admin_required
 def leads():
-    """Leads de atacado capturados pelo bot de atendimento (16/07/2026) —
-    o dono entra em contato e marca como contatado. O form no topo salva o
-    link do catálogo que o bot envia (AppConfig, sem deploy)."""
-    from app.models import AppConfig, LeadB2B
-    from app.services.bot_tools import catalogo_b2b_url
+    """Leads de atacado capturados pelo bot de atendimento (16/07/2026;
+    fluxo 20/07: o bot registra e TRANSFERE pro atendente — sem catálogo).
+    O dono acompanha aqui e marca como contatado."""
+    from app.models import LeadB2B
+    from app.services.chatbot_vigia import link_chatwoot
     pendentes = request.args.get('todos') != '1'
     q = LeadB2B.query
     if pendentes:
@@ -210,14 +210,10 @@ def leads():
     lds = q.order_by(LeadB2B.criado_em.desc()).limit(300).all()
     n_pendentes = LeadB2B.query.filter(
         LeadB2B.contatado_em.is_(None)).count()
-    from app.services.chatbot_vigia import link_chatwoot
     return render_template(
         'b2b/leads.html', leads=lds, pendentes=pendentes,
         n_pendentes=n_pendentes,
-        link_conversa_chatwoot=link_chatwoot,
-        catalogo_url=catalogo_b2b_url() or '',
-        catalogo_via_env=bool(not (AppConfig.get('catalogo_b2b_url')
-                                   or '').strip() and catalogo_b2b_url()))
+        link_conversa_chatwoot=link_chatwoot)
 
 
 @b2b_bp.route('/leads/<int:lid>/contatado', methods=['POST'])
@@ -235,24 +231,6 @@ def lead_contatado(lid):
         lead.contatado_em = agora()
         lead.contatado_por_id = current_user.id
     db.session.commit()
-    return redirect(url_for('b2b.leads'))
-
-
-@b2b_bp.route('/leads/catalogo-url', methods=['POST'])
-@login_required
-@admin_required
-def lead_catalogo_url():
-    """Salva o link do catálogo B2B que o bot envia (AppConfig — vazio
-    limpa e o bot volta a dizer que a equipe envia)."""
-    from app.models import AppConfig
-    url = (request.form.get('url') or '').strip()
-    if url and not url.startswith(('http://', 'https://')):
-        flash('O link do catálogo precisa começar com http(s)://', 'warning')
-        return redirect(url_for('b2b.leads'))
-    AppConfig.set('catalogo_b2b_url', url)
-    db.session.commit()  # AppConfig.set não commita
-    flash('Link do catálogo salvo.' if url else 'Link do catálogo removido.',
-          'success')
     return redirect(url_for('b2b.leads'))
 
 

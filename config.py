@@ -388,10 +388,6 @@ class Config:
     META_CAPI_TOKEN = os.environ.get('META_CAPI_TOKEN', '')
     # Kill-switch do reporte server-side ('0' desliga):
     ANALYTICS_SERVER = os.environ.get('ANALYTICS_SERVER', '1')
-    # Link do catalogo/cardapio de ATACADO que o bot pode enviar a lead B2B
-    # (16/07/2026). Fallback da AppConfig 'catalogo_b2b_url' (editavel na
-    # tela /b2b/leads sem deploy). Vazio = bot diz que a equipe envia.
-    CATALOGO_B2B_URL = os.environ.get('CATALOGO_B2B_URL', '')
 
     # ── Spotify (widget 🎵 da tela do padeiro, 15/07/2026) ──
     # App criado pelo dono em developer.spotify.com; o servidor controla o
