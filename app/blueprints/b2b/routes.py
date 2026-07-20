@@ -789,7 +789,7 @@ def _parse_venda_form():
         forma = (formas[i] if i < len(formas) else '') or None
         parcelas.append({'vencimento': venc, 'valor': valor,
                          'forma_pagamento': forma})
-    return campos, itens, parcelas
+    return campos, itens, parcelas, frete_valor
 
 
 @b2b_bp.route('/vendas/nova')
