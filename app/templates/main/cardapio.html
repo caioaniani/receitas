@@ -370,8 +370,12 @@ footer p { margin: 0; }
 
 <section class="hero">
     <div class="hero-content">
-        <span class="hero-tag">Padaria Artesanal · Itaim Bibi</span>
+        <span class="hero-tag">Padaria Artesanal · Brooklin</span>
+        {% if logo %}
+        <img class="hero-logo" src="{{ logo }}" alt="O Pão"/>
+        {% else %}
         <h1>O Pão</h1>
+        {% endif %}
         <p>Tempo. Fermento. Cuidado. Pão de verdade, feito com fermentação natural.</p>
     </div>
 </section>
