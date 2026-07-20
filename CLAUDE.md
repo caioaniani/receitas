@@ -160,17 +160,21 @@ abrir tela). Tres pecas, UMA fonte de dados
 - **Bloco "Precisa de voce hoje" na home do admin** (`main.index` →
   `home.html`): as MESMAS pendencias, com link por item. Itens de tela
   owner-only (orfaos de cesta, PDV) so aparecem pro owner.
-- **Vendas TOTAIS na home (17/07/2026, pedido do dono)**: painel "💰 Vendas
-  de ontem" na home, SO pro dono (faturamento = cockpit pessoal, mesmo gate
-  do /admin/briefing): total geral (PDV+site) em destaque, PDV com delta vs
-  media do MESMO dia-da-semana (media do TOTAL: soma das lojas POR DATA →
-  media das ultimas 6 ocorrencias — chaves novas `total_geral`/`pdv_media`/
-  `pdv_delta_pct`/`snapshot_ok` em `vendas_ontem()`), site e linhas por
-  loja compactas. REGRA: a home chama `vendas_ontem(capturar=False)` — le
-  SO o snapshot do banco e NUNCA bate na API Seru (o cron de 15min mantem
-  ontem quente); sem snapshot de ontem a home AVISA em vez de mostrar R$ 0
-  falso (`snapshot_ok`). O briefing/WhatsApp ganhou a linha "Total". Ha
-  teste travando o gc.assert_not_called() da home.
+- **Vendas TOTAIS na home (17/07/2026, pedido do dono)**: painel "💰 Vendas"
+  na home, SO pro dono (faturamento = cockpit pessoal, mesmo gate do
+  /admin/briefing), com DUAS secoes: **HOJE em destaque** (parciais —
+  `vendas_hoje()`, snapshot que o cron de 15min recaptura; SEM delta de
+  proposito: dia incompleto vs media de dia cheio daria "-60%" falso a
+  manha toda) e **Ontem** (total geral PDV+site, PDV com delta vs media do
+  MESMO dia-da-semana — media do TOTAL: soma das lojas POR DATA → media das
+  ultimas 6 ocorrencias — chaves `total_geral`/`pdv_media`/`pdv_delta_pct`/
+  `snapshot_ok` em `vendas_ontem()`), site e linhas por loja compactas.
+  REGRA: a home chama `vendas_hoje()`/`vendas_ontem(capturar=False)` — le
+  SO o snapshot do banco e NUNCA bate na API Seru; sem snapshot de ontem a
+  home AVISA em vez de mostrar R$ 0 falso (`snapshot_ok`). O briefing/
+  WhatsApp ganhou a linha "Total". Testes travam o gc.assert_not_called()
+  da home; NAO usar 'Vendas de ontem' como marcador de teste do painel (a
+  sidebar tem um title= com esse texto — falso positivo ja aconteceu).
 - **Manual de operacao** (`GET /admin/manual`, admin): o que roda sozinho /
   diario / semanal / mensal e de quem e cada gesto, com links.
   **REGRA DE PROCESSO**: toda funcao nova se registra no manual NA MESMA
