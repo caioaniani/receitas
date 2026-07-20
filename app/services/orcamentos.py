@@ -331,6 +331,9 @@ def _converter_em_venda(orc, usuario_id=None):
         cliente_nome=None if orc.cliente_id else orc.cliente_nome,
         data_entrega=orc.data_entrega,
         itens=itens,
+        # Frete do orcamento vira o frete da venda (Numeric segue Decimal)
+        # — o valor_total da venda fecha igual ao do orcamento.
+        frete_valor=orc.frete_valor or Decimal('0'),
         observacao=f'Origem: orcamento {orc.codigo}',
         user=None,
         commit=False,
