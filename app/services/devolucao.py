@@ -368,7 +368,7 @@ def receber_retirada_manual(retirada, usuario_id, quantidades=None,
     for qr in retirada.qrcodes:
         if qr.tipo == 'recebimento' and qr.usado_em is None:
             qr.usado_em = quando
-            qr.usado_por_descricao = 'recebimento manual (web)'
+            qr.usado_por_descricao = f'recebimento manual ({origem})'
     return resumo
 
 
