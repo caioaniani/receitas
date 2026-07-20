@@ -1443,6 +1443,31 @@ def _migrate_postgres(app):
     _try("ALTER TABLE venda_b2b ADD COLUMN IF NOT EXISTS "
          "frete_valor NUMERIC(10, 2) NOT NULL DEFAULT 0")
 
+    # NF de transferencia industria→loja (20/07/2026, pedido do dono):
+    # emitida no scan do QR de saida do pedido. A Loja vira DESTINATARIA
+    # de NF-e (SEFAZ exige CNPJ + endereco estruturado — mesma licao do
+    # ClienteB2B) e o PedidoLoja ganha o trio de NF do Tiny (mesmo contrato
+    # de VendaB2B/PedidoOnline). Procedimento de 2 commits: estes ALTERs
+    # deployam ANTES do modelo.
+    for _c, _t in (('cnpj', 'VARCHAR(20)'),
+                   ('inscricao_estadual', 'VARCHAR(20)'),
+                   ('endereco_logradouro', 'VARCHAR(200)'),
+                   ('endereco_numero', 'VARCHAR(20)'),
+                   ('endereco_complemento', 'VARCHAR(100)'),
+                   ('endereco_bairro', 'VARCHAR(100)'),
+                   ('endereco_cep', 'VARCHAR(9)'),
+                   ('endereco_cidade', 'VARCHAR(100)'),
+                   ('endereco_uf', 'VARCHAR(2)')):
+        _try(f"ALTER TABLE loja ADD COLUMN IF NOT EXISTS {_c} {_t}")
+    _try("ALTER TABLE pedido_loja ADD COLUMN IF NOT EXISTS "
+         "tiny_nota_fiscal_id VARCHAR(40)")
+    _try("ALTER TABLE pedido_loja ADD COLUMN IF NOT EXISTS "
+         "nf_status VARCHAR(40)")
+    _try("ALTER TABLE pedido_loja ADD COLUMN IF NOT EXISTS "
+         "nf_emitida_em TIMESTAMP")
+    _try("ALTER TABLE pedido_loja ADD COLUMN IF NOT EXISTS "
+         "nf_numero VARCHAR(50)")
+
     # Motivo do cancelamento (25/06/2026) — registra POR QUE um pedido do site
     # foi cancelado (pix_expirado / reembolso / cancelado_admin) em vez de
     # deduzir pelos timestamps. Coluna nullable; pedidos cancelados antes desta
