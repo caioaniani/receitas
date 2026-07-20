@@ -51,7 +51,7 @@ def test_aprovar_exige_data_de_entrega(app, catalogo):
         assert o.status == 'enviado' and o.venda_id is None
 
 
-def test_aprovar_recusa_linha_livre_qtd_fracionada_desconto_frete(
+def test_aprovar_recusa_linha_livre_qtd_fracionada_desconto(
         app, catalogo):
     with app.app_context():
         o = _orc(catalogo, livre=True, qtd=Decimal('2.5'),
@@ -60,7 +60,27 @@ def test_aprovar_recusa_linha_livre_qtd_fracionada_desconto_frete(
         assert not ok
         assert 'Servico de buffet' in erro          # linha livre nomeada
         assert 'fracionada' in erro
-        assert 'desconto' in erro and 'frete' in erro
+        assert 'desconto' in erro
+        # Frete NÃO é mais motivo de recusa (20/07/2026: campo na venda)
+        assert 'frete' not in erro
+
+
+def test_aprovar_com_frete_vira_venda_com_frete(app, catalogo):
+    """Orçamento com frete aprova e o frete viaja pro campo da venda:
+    valor_total da venda = itens + frete (parcela/boleto herdam)."""
+    with app.app_context():
+        cli = ClienteB2B(nome='Restaurante Frete Bom', ativo=True)
+        db.session.add(cli)
+        db.session.commit()
+        o = _orc(catalogo, cliente=cli, frete='15')
+        ok, erro = orc_svc.marcar_status(o, 'aprovado')
+        assert ok, erro
+        v = db.session.get(VendaB2B, o.venda_id)
+        assert v.frete_valor == Decimal('15.00')
+        # 5 un × R$ 10 + R$ 15 de frete
+        assert v.valor_total == Decimal('65.00')
+        assert len(v.parcelas) == 1
+        assert v.parcelas[0].valor == Decimal('65.00')
 
 
 def test_aprovar_valido_cria_venda_vinculada_sem_baixar_estoque(
