@@ -827,6 +827,18 @@ entregas:
   (test_retirada_lista_web) foi SUBSTITUIDA por decisao do dono — o teste
   antigo foi atualizado. Testes: `tests/test_retirada_receber_manual.py`
   (18 casos).
+- **Recebimento pela TELA do padeiro, SEM QR (dono 20/07/2026)**: "o
+  padeiro deve concluir, porem ele so tem a tela do /padeiro — nao tem
+  como escanear". O card da retirada em transporte na TV do padeiro agora
+  tem conferencia por item + botao "✅ RECEBI — DAR ENTRADA"
+  (`padeiro.retirada_receber` → `receber_retirada_manual(origem=
+  'padeiro')` — mesmo motor da destrava admin: claim atomico, grava
+  `quantidade_recebida`, guarda contra coleta estornada). O QR pro
+  motorista virou ALTERNATIVA ("QR pro motorista" no card); a decisao de
+  02/07 "PIN de driver no recebimento" foi SUBSTITUIDA por esta. Audit
+  compartilhado `devolucao.auditar_gesto_retirada` (sessao isolada). O
+  teste antigo do botao de QR foi atualizado pro contrato novo. Testes:
+  secao "Tela do padeiro" em `tests/test_retirada_receber_manual.py`.
 
 **Fixes do primeiro uso real (02/07/2026 a noite, Nebraska — testes em
 `tests/test_slack_retirada_e_duplicata.py`)**:
