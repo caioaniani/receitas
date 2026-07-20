@@ -418,7 +418,15 @@ def salvar_loja_fiscal(id):
                 (request.form.get(campo) or '').strip()[:tam] or None)
     loja.endereco_uf = \
         (request.form.get('endereco_uf') or '').strip().upper()[:2] or None
+    # Dispensa de NF POR LOJA (dono 20/07/2026): o scan do QR pula a
+    # emissao em TODOS os pedidos desta loja. Gesto fica AQUI (RH/admin)
+    # de proposito — motorista/padeiro nao tem essa opcao.
+    loja.nf_dispensada = request.form.get('nf_dispensada') == '1'
     db.session.commit()
+    if loja.nf_dispensada:
+        flash(f'Loja "{loja.nome}": NF de transferência DISPENSADA — o '
+              'scan do QR não emite nota pros pedidos dela.', 'warning')
+        return redirect(url_for('rh.lojas'))
     if loja.fiscal_completo:
         flash(f'Dados fiscais da loja "{loja.nome}" salvos — pronta pra NF '
               'de transferência.', 'success')
