@@ -27,10 +27,27 @@
     <p class="meta"><a href="{{ c.foto_url }}" target="_blank" style="color:#055160; font-weight:700;">📷 Ver foto da sobra</a></p>
     {% endif %}
     {% if c.status == 'em_transporte' %}
-    <form method="POST" action="{{ url_for('padeiro.retirada_qr', id=c.id) }}">
+    {# Recebimento PELA TELA (dono 20/07/2026): o padeiro confere as
+       quantidades e dá entrada direto — sem QR/celular. O QR do motorista
+       segue como alternativa. #}
+    <form method="POST" action="{{ url_for('padeiro.retirada_receber', id=c.id) }}"
+          onsubmit="return confirm('Confirmar o recebimento da retirada #{{ c.id }}? Os itens entram no estoque da indústria com as quantidades conferidas.');">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="data" value="{{ dia.isoformat() }}">
-      <button class="btn btn-receber" type="submit">CHEGOU — QR DE RECEBIMENTO</button>
+      <p class="meta" style="margin-bottom:4px;">Confira o que CHEGOU:</p>
+      {% for it in c.itens %}
+      <div class="ret-conf-row">
+        <input type="number" name="qtd_{{ it.id }}" min="0" inputmode="numeric"
+               value="{{ it.qtd_coletada if it.qtd_coletada is not none else it.qtd }}">
+        <span>{{ it.nome }}{% if it.qtd_coletada is not none and it.qtd_coletada != it.qtd %} <small>(loja marcou {{ it.qtd }}, saíram {{ it.qtd_coletada }})</small>{% endif %}</span>
+      </div>
+      {% endfor %}
+      <button class="btn btn-receber" type="submit">✅ RECEBI — DAR ENTRADA</button>
+    </form>
+    <form method="POST" action="{{ url_for('padeiro.retirada_qr', id=c.id) }}" style="margin-top:6px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="data" value="{{ dia.isoformat() }}">
+      <button class="btn btn-qr-alt" type="submit">QR pro motorista (alternativa)</button>
     </form>
     {% else %}
     <p class="meta" style="font-weight:700; color:#055160;">
