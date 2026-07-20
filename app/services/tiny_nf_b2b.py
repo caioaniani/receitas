@@ -100,10 +100,15 @@ def _payload_itens(venda):
     return out, faltando
 
 
-def _nota_payload(cliente, itens):
+def _nota_payload(cliente, itens, frete_valor=0):
     """NF pro `nota.fiscal.incluir` com cabeçalho fiscal EXPLÍCITO — mesma
     razão do site: o gerar-por-pedido não aplicava natureza/série.
-    `cliente` já vem como dict de `_payload_cliente_b2b`."""
+    `cliente` já vem como dict de `_payload_cliente_b2b`.
+
+    `frete_valor`: frete cobrado na venda (VendaB2B.frete_valor; na fatura
+    mensal, a SOMA dos fretes das vendas do período). O Tiny fecha o total
+    da nota = Σ itens + valor_frete — mesmo padrão da NF do site
+    (tiny_nf.py) — então NF e boleto saem no MESMO valor."""
     from flask import current_app
     cfg = current_app.config
     return {
@@ -114,9 +119,9 @@ def _nota_payload(cliente, itens):
         'data_emissao': agora().strftime('%d/%m/%Y'),
         'cliente': cliente,
         'itens': itens,
-        # B2B não tem frete cobrado na venda; modalidade obrigatória no Tiny
-        # (letra, não número — "0" vira vazio no PHP deles).
-        'valor_frete': 0.0,
+        # Modalidade obrigatória no Tiny (letra, não número — "0" vira
+        # vazio no PHP deles).
+        'valor_frete': float(frete_valor or 0),
         'frete_por_conta': str(cfg.get('NF_FRETE_POR_CONTA', 'R')),
     }
 
