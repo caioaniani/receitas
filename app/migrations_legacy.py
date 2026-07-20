@@ -1526,10 +1526,13 @@ def _migrate_postgres(app):
          "nf_emitida_em TIMESTAMP")
     _try("ALTER TABLE pedido_loja ADD COLUMN IF NOT EXISTS "
          "nf_numero VARCHAR(50)")
-    # Dispensa de NF por pedido (20/07/2026, pedido do dono): pedido que
-    # NAO precisa de NF de transferencia — o scan do QR pula a emissao e o
-    # card de NF mostra o estado. Default FALSE = todo pedido emite.
+    # Dispensa de NF (20/07/2026, pedido do dono): por PEDIDO e por LOJA
+    # ("checkbox tem que estar no /rh/lojas tambem") — o scan do QR pula a
+    # emissao quando qualquer um dos dois dispensa. Decisao e do ADMIN
+    # (motorista/padeiro nunca veem a opcao). Default FALSE = emite.
     _try("ALTER TABLE pedido_loja ADD COLUMN IF NOT EXISTS "
+         "nf_dispensada BOOLEAN NOT NULL DEFAULT FALSE")
+    _try("ALTER TABLE loja ADD COLUMN IF NOT EXISTS "
          "nf_dispensada BOOLEAN NOT NULL DEFAULT FALSE")
 
     # Motivo do cancelamento (25/06/2026) — registra POR QUE um pedido do site
