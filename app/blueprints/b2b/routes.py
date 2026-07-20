@@ -949,7 +949,8 @@ def venda_editar_post(vid):
         return redirect(url_for('b2b.venda_editar', vid=vid))
     try:
         svc.editar_venda(venda, **campos, itens=itens,
-                         parcelas=parcelas or None, user=current_user)
+                         parcelas=parcelas or None,
+                         frete_valor=frete_valor, user=current_user)
     except ValueError as exc:
         db.session.rollback()
         flash(f'Erro: {exc}', 'danger')
