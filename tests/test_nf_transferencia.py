@@ -216,22 +216,30 @@ def test_dispensa_por_loja_vale_pra_todos_os_pedidos(app, loja, catalogo):
     assert not res['ok'] and loja.nome in res['msg']
 
 
-def test_toggle_de_dispensa_e_admin_only(app, admin_user, loja, catalogo):
-    """A rota do toggle é admin; o gesto não existe pra motorista/padeiro
-    (decisão do dono 20/07/2026)."""
+# ARMADILHA do conftest: g._login_user é cacheado entre requests do MESMO
+# teste — por isso "padeiro recusado" e "admin consegue" são funções
+# SEPARADAS (mesma regra dos testes do wifi portal).
+
+def test_toggle_de_dispensa_recusa_padeiro(app, loja, catalogo):
+    """O gesto não existe pra motorista/padeiro (decisão do dono
+    20/07/2026) — papel operacional leva 403."""
     from app.models import Usuario
     p = _pedido(loja, catalogo, status='confirmado')
     func = Usuario(nome='Padeiro T', login='padeiro-nf', papel='padeiro')
     func.set_senha('x')
     db.session.add(func)
     db.session.commit()
-
     client = app.test_client()
     with client.session_transaction() as sess:
         sess['_user_id'] = str(func.id)
         sess['_fresh'] = True
     assert client.post(f'/pedidos/{p.id}/nf-dispensar').status_code == 403
 
+
+def test_toggle_de_dispensa_admin_liga_e_desliga(app, admin_user, loja,
+                                                 catalogo):
+    p = _pedido(loja, catalogo, status='confirmado')
+    client = app.test_client()
     with client.session_transaction() as sess:
         sess['_user_id'] = str(admin_user.id)
         sess['_fresh'] = True
@@ -245,10 +253,12 @@ def test_toggle_de_dispensa_e_admin_only(app, admin_user, loja, catalogo):
     assert p.nf_dispensada is False
 
 
-def test_rh_salva_dispensa_da_loja(app, admin_user, loja):
+def test_rh_salva_dispensa_da_loja(app, owner_user, loja):
+    """/rh é owner-only (before_request do blueprint) — o checkbox da
+    dispensa vive no card fiscal de lá."""
     client = app.test_client()
     with client.session_transaction() as sess:
-        sess['_user_id'] = str(admin_user.id)
+        sess['_user_id'] = str(owner_user.id)
         sess['_fresh'] = True
     r = client.post(f'/rh/lojas/{loja.id}/fiscal',
                     data={'cnpj': '11.222.333/0001-44',
