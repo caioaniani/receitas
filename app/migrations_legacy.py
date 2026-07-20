@@ -1465,18 +1465,21 @@ def _migrate_postgres(app):
     # cada boot, sobrescreveria edicao do dono feita na ficha): textos a
     # partir dos ingredientes REAIS das fichas (T65/T45, Callebaut) + os
     # metodos ditados (backup/assado congelado/14 fatias/fresco 3 dias).
-    result = conn.execute(text(
-        "SELECT column_name FROM information_schema.columns "
-        "WHERE table_name = 'receita' "
-        "AND column_name = 'descricao_atacado'"))
-    if result.first() is None:
-        conn.execute(text(
-            'ALTER TABLE receita ADD COLUMN descricao_atacado TEXT'))
-        for _nome, _desc in DESCRICOES_ATACADO_SEED:
-            conn.execute(text(
-                'UPDATE receita SET descricao_atacado = :d '
-                'WHERE nome = :n AND descricao_atacado IS NULL'),
-                {'d': _desc, 'n': _nome})
+    # ARMADILHA que crashou o 1º deploy (20/07): aqui embaixo o `conn` do
+    # bloco inicial ja esta FECHADO — usar _cols/_try/sub-conexao propria.
+    cols_receita2 = _cols('receita')
+    if cols_receita2 and 'descricao_atacado' not in cols_receita2:
+        _try('ALTER TABLE receita ADD COLUMN descricao_atacado TEXT')
+        try:
+            with db.engine.connect() as c:
+                for _nome, _desc in DESCRICOES_ATACADO_SEED:
+                    c.execute(text(
+                        'UPDATE receita SET descricao_atacado = :d '
+                        'WHERE nome = :n AND descricao_atacado IS NULL'),
+                        {'d': _desc, 'n': _nome})
+                c.commit()
+        except Exception as e:
+            log.warning('migrate skip (seed descricao_atacado): %s', e)
 
     # Memoria cross-conversa do bot de atendimento (19/07/2026, achado do
     # auditor "bot reiniciando do zero"): chatbot_conversa era chaveada SO
