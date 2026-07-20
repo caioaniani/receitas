@@ -249,7 +249,10 @@
             var desc = parseFloat(tr.querySelector('.desc').value) || 0;
             total += qtd * preco * (1 - desc / 100);
         });
-        document.getElementById('venda-total').textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
+        var frete = parseFloat((document.getElementById('inp-frete') || {}).value) || 0;
+        total += frete;
+        document.getElementById('venda-total').textContent = 'R$ ' + total.toFixed(2).replace('.', ',')
+            + (frete > 0 ? ' (inclui frete R$ ' + frete.toFixed(2).replace('.', ',') + ')' : '');
     }
 
     function rowParcela(data) {
