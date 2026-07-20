@@ -559,7 +559,26 @@ def editar_venda(venda, *, cliente_id=None, cliente_nome=None, data_venda=None,
         raise ValueError('cliente obrigatorio (cadastrado ou avulso)')
     frete = _normalizar_frete(frete_valor)
 
+    # Boleto Sicredi: apagar a parcela NULLifica o FK da Cobranca (achado
+    # da revisao 20/07/2026, reproduzido: boleto orfao segue vivo com o
+    # valor ANTIGO, a liquidacao nao acha a parcela e silencia, e a parcela
+    # nova vira candidata a um SEGUNDO boleto). Mesmo guard do
+    # excluir_venda: titulo que ja foi ao banco trava a edicao; pendente
+    # (nunca enviado) e apagado junto — o usuario gera outro no total novo.
+    cobrancas_pendentes = []
+    for p in venda.parcelas:
+        for cob in (p.cobranca or []):      # backref é lista
+            if cob.status != 'pendente':
+                raise ValueError(
+                    f'parcela {p.numero} tem boleto que já foi ao banco '
+                    f'(status {cob.status}) — o valor do título não pode '
+                    'mudar por baixo; trate pelo retorno/baixa antes de '
+                    'editar a venda')
+            cobrancas_pendentes.append(cob)
+
     _estornar_estoque(venda, user=user, motivo='edicao')
+    for cob in cobrancas_pendentes:
+        db.session.delete(cob)
     for vi in list(venda.itens):
         db.session.delete(vi)
     for p in list(venda.parcelas):
