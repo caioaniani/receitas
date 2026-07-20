@@ -286,6 +286,46 @@
     {% endif %}
 </div>
 
+{# ── NF de TRANSFERÊNCIA indústria→loja (20/07/2026) ──
+   Emitida sozinha no scan do QR de saída; aqui fica o estado + a
+   reemissão manual (Tiny fora do ar na hora do scan). #}
+{% if pedido.status in ('separado', 'em_transporte', 'entregue', 'recebido') %}
+<div class="card mt-3" style="max-width:560px;">
+    <div class="card-header py-2"><strong class="small">
+        <i class="bi bi-file-earmark-text"></i> NF de transferência (Tiny)
+    </strong></div>
+    <div class="card-body small d-flex align-items-center gap-2 flex-wrap">
+        {% if pedido.nf_emitida_em %}
+        <span class="badge bg-success">✓ emitida</span>
+        {% if pedido.nf_numero %}<span>nº <strong>{{ pedido.nf_numero }}</strong></span>{% endif %}
+        {% if pedido.nf_status %}<span class="text-muted">({{ pedido.nf_status }})</span>{% endif %}
+        <a href="{{ url_for('pedidos.danfe_transferencia', id=pedido.id) }}"
+           class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener">
+            <i class="bi bi-file-earmark-pdf"></i> Ver DANFE
+        </a>
+        {% elif pedido.tiny_nota_fiscal_id %}
+        <span class="badge bg-warning text-dark">criada, autorização pendente</span>
+        <form method="POST" action="{{ url_for('pedidos.emitir_nf_transferencia', id=pedido.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-arrow-repeat"></i> Reenviar / verificar
+            </button>
+        </form>
+        {% else %}
+        <span class="badge bg-secondary">não emitida</span>
+        <form method="POST" action="{{ url_for('pedidos.emitir_nf_transferencia', id=pedido.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-file-earmark-plus"></i> Emitir NF agora
+            </button>
+        </form>
+        <span class="text-muted">A emissão automática acontece no scan do
+            QR de saída — use aqui se ela falhou.</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {# Form receber-form ja foi auto-fechado acima (vazio, inputs via attribute). #}
 
 {% if pedido.fotos|length > 0 %}
