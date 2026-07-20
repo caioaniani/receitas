@@ -94,6 +94,7 @@
 {% if current_user.is_admin() %}
 {{ _lnk(variant, url_for('b2b.dashboard'), 'Vendas B2B (Indústria)', request.path.startswith('/b2b') and '/orcamento' not in request.path) }}
 {{ _lnk(variant, url_for('b2b.orcamentos'), 'Orçamentos B2B', '/b2b/orcamento' in request.path) }}
+{{ _lnk(variant, url_for('b2b.leads'), 'Leads B2B (bot)', '/b2b/leads' in request.path, sub=true) }}
 {{ _lnk(variant, url_for('entregas.painel'), '🔔 Painel do Dia', false, blank=true) }}
 {{ _lnk(variant, url_for('entregas.index'), 'Entregas do site', request.path.startswith('/entregas') and '/painel' not in request.path and '/drivers/bulk' not in request.path) }}
 {{ _lnk(variant, url_for('entregas.drivers_bulk'), 'Motoristas', request.path == '/entregas/drivers/bulk') }}
