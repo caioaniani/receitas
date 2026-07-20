@@ -2203,7 +2203,18 @@ SKU do canal 'transf' com FALLBACK site→b2b (`sku_transferencia`).
   (/handshake/<token>/danfe) bate no Tiny a cada GET sem rate limit
   (por desenho: pagina de sucesso persistente); card fiscal do RH lista
   tambem a loja "Industria" (ruido cosmetico).
-- Testes: `tests/test_nf_transferencia.py` (19 casos; Tiny sempre mockado).
+- **Dispensa de NF (20/07/2026, dono)**: `Loja.nf_dispensada` (checkbox no
+  card fiscal do /rh/lojas — "não posso dar essa opção pro motorista e o
+  padeiro") e `PedidoLoja.nf_dispensada` (toggle ADMIN-only no detalhe;
+  rota `pedidos.nf_dispensar`). Fonte única
+  `tiny_nf_transf.nf_dispensada_para` (pedido OU loja dispensa): o scan
+  pula a emissão SEM tentar o Tiny (audit `nf_disp`, zero espera) e a
+  emissão manual recusa até reativar. Dispensar com NF já emitida NÃO
+  cancela a nota (aviso; cancelamento é no Tiny). ALTERs pelo procedimento
+  de 2 commits (armadilha nova do vigia de deploy: o push-retry REBASEIA e
+  o sha local morre — confirmar por CONTEÚDO `git show <sha_no_ar>:arquivo`
+  quando a ancestralidade não casar).
+- Testes: `tests/test_nf_transferencia.py` (23 casos; Tiny sempre mockado).
 
 ## Bot de atendimento — memoria cross-conversa + busca por telefone (19/07/2026)
 
