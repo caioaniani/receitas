@@ -10,6 +10,7 @@ from flask import (
     abort,
     current_app,
     jsonify,
+    redirect,
     render_template,
     request,
     session,
@@ -406,3 +407,30 @@ def pedidos_loja(token):
                .all())
     return render_template('driver/pedidos_loja.html',
                             driver=driver, pedidos=pedidos, token=token)
+
+
+@driver_bp.route('/<token>/pedido/<int:pedido_id>/danfe')
+def pedido_danfe(token, pedido_id):
+    """DANFE da NF de TRANSFERENCIA do pedido (fiscalizacao na estrada).
+    Resolve o link temporario do Tiny sob demanda e redireciona."""
+    from app.services import tiny
+
+    driver = _driver_por_token(token)
+    if not driver:
+        abort(404)
+    if not _autenticado(driver):
+        return render_template('handshake/erro.html',
+                                msg='Faça login no painel do motorista antes '
+                                    '(volte e digite o PIN).'), 401
+    pedido = PedidoLoja.query.get_or_404(pedido_id)
+    if not pedido.tiny_nota_fiscal_id:
+        return render_template(
+            'handshake/erro.html',
+            msg=('A NF de transferência deste pedido ainda não foi emitida '
+                 '— avise a produção.')), 404
+    link, motivo = tiny.obter_link_nota_fiscal_com_motivo(
+        pedido.tiny_nota_fiscal_id)
+    if not link:
+        return render_template('handshake/erro.html',
+                                msg=f'DANFE ainda não disponível: {motivo}'), 502
+    return redirect(link)
