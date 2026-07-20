@@ -95,7 +95,10 @@ def _payload_cliente_loja(loja):
                       'exige campos separados): falta ' + ', '.join(faltam)
                       + '. Complete no cadastro de lojas (RH → Lojas).')
     out = {
-        'nome': loja.nome,
+        # Razao social LEGAL quando cadastrada (20/07/2026) — `loja.nome` e
+        # apelido interno ("Loja Ribeiro do Vale") e ia pro destinatario da
+        # NF; a SEFAZ espera o nome legal da filial. Fallback: nome.
+        'nome': (loja.razao_social or '').strip() or loja.nome,
         'tipo_pessoa': 'J',
         'cpf_cnpj': doc,
         'fone': (loja.telefone or '').strip(),
