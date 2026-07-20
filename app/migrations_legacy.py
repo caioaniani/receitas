@@ -20,6 +20,41 @@ from app.extensions import db
 
 logger = logging.getLogger(__name__)
 
+# Backfill UNICO de receita.descricao_atacado (20/07/2026, ditado do dono:
+# "descricao sincera de cada produto b2b, quanto menos e mais... fala dos
+# ingredientes"). Textos escritos a partir dos ingredientes REAIS das fichas
+# em prod (FarinhaT65/T45, Baton Callebaut etc.) + metodos ditados. Aplicado
+# SO quando a coluna e criada; depois disso a ficha da receita manda.
+DESCRICOES_ATACADO_SEED = [
+    ('Sourdough Tradicional',
+     'Farinha francesa T65, água, sal e levain. '
+     'Vendido congelado; rende 14 fatias.'),
+    ('Sourdough Integral',
+     'Farinha francesa T65 e farinha integral, água, sal e levain. '
+     'Vendido congelado; rende 14 fatias.'),
+    ('Sourdough 7 Grãos',
+     'Farinha francesa T65, mix de 7 grãos, água, sal e levain. '
+     'Vendido congelado; rende 14 fatias.'),
+    ('Sourdough Nozes e Azeitonas',
+     'Farinha francesa T65, nozes e azeitonas, água, sal e levain. '
+     'Vendido congelado; rende 14 fatias.'),
+    ('Brioche',
+     'Farinha francesa T45, manteiga, ovos e açúcar. '
+     'Entregue fresco; validade de 3 dias.'),
+    ('Croissant Tradicional',
+     'Farinha francesa e manteiga francesa. '
+     'Backup (congelado cru) ou assado e congelado.'),
+    ('Pain au Chocolat',
+     'Farinha francesa, manteiga francesa e chocolate belga Callebaut. '
+     'Backup (congelado cru) ou assado e congelado.'),
+    ('Cinnamon Roll',
+     'Massa folhada de farinha e manteiga francesas, '
+     'canela e creme de confeiteiro.'),
+    ('Croissant Almond',
+     'Croissant de farinha e manteiga francesas com creme de amêndoas '
+     'e amêndoas laminadas.'),
+]
+
 
 def _migrate(app):
     """Adiciona colunas novas sem perder dados existentes."""
@@ -1422,6 +1457,26 @@ def _migrate_postgres(app):
     # ALTER deploya ANTES do modelo. NULL = nao fatiado (pedidos antigos).
     _try("ALTER TABLE pedido_online_item ADD COLUMN IF NOT EXISTS "
          "fatiado BOOLEAN")
+
+    # Descricao do cardapio de ATACADO por receita (20/07/2026, ditado do
+    # dono: "descricao sincera de cada produto b2b, quanto menos e mais").
+    # Procedimento de 2 commits: este ALTER deploya ANTES do modelo.
+    # BACKFILL UNICO na criacao da coluna (nunca re-aplica — se rodasse a
+    # cada boot, sobrescreveria edicao do dono feita na ficha): textos a
+    # partir dos ingredientes REAIS das fichas (T65/T45, Callebaut) + os
+    # metodos ditados (backup/assado congelado/14 fatias/fresco 3 dias).
+    result = conn.execute(text(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = 'receita' "
+        "AND column_name = 'descricao_atacado'"))
+    if result.first() is None:
+        conn.execute(text(
+            'ALTER TABLE receita ADD COLUMN descricao_atacado TEXT'))
+        for _nome, _desc in DESCRICOES_ATACADO_SEED:
+            conn.execute(text(
+                'UPDATE receita SET descricao_atacado = :d '
+                'WHERE nome = :n AND descricao_atacado IS NULL'),
+                {'d': _desc, 'n': _nome})
 
     # Memoria cross-conversa do bot de atendimento (19/07/2026, achado do
     # auditor "bot reiniciando do zero"): chatbot_conversa era chaveada SO
