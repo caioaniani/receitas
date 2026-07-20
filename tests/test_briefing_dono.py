@@ -465,7 +465,8 @@ def test_home_admin_comum_nao_ve_vendas(app, admin_user, cliente):
     _venda_dia(ontem, loja_seru='Loja A', fat=800)
     _login(cliente, admin_user)
     body = cliente.get('/').get_data(as_text=True)
-    assert 'Vendas de ontem' not in body
+    assert 'Vendas de hoje' not in body
+    assert 'R$ 800' not in body
 
 
 def test_home_dono_sem_snapshot_avisa(app, owner_user, cliente):
