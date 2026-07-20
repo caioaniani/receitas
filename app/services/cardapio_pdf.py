@@ -340,12 +340,14 @@ def _titulo_categoria(pdf, nome, alt_primeira=_CARD_H):
     pdf.ln(2.5)
 
 
-def _card(pdf, x, y, item, foto):
+def _card(pdf, x, y, item, foto, card_h=_CARD_H):
     """.product-card do site: branco, borda #e8e3d7, cantos arredondados,
-    foto QUADRADA no topo (ou placeholder bege), nome fg + preço marrom."""
+    foto QUADRADA no topo (ou placeholder bege), nome fg + preço marrom.
+    `card_h=_CARD_H_DESC` quando a CATEGORIA tem descrições (altura uniforme
+    na fileira; item sem descrição só fica com o respiro)."""
     pdf.set_draw_color(*_C_BORDER)
     pdf.set_fill_color(255, 255, 255)
-    pdf.rect(x, y, _COL_W, _CARD_H, style='FD',
+    pdf.rect(x, y, _COL_W, card_h, style='FD',
              round_corners=True, corner_radius=_RAIO)
     if foto:
         pdf.image(BytesIO(foto), x=x + 0.5, y=y + 0.5,
