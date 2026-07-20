@@ -830,6 +830,17 @@ def _executar_tool(nome, inp, *, telefone_contato=None):
             return bot_tools.buscar_nota_fiscal(
                 inp.get('cpf') or '',
                 inp.get('numero_pedido') or inp.get('numero') or '')
+        if nome == 'registrar_lead_b2b':
+            return bot_tools.registrar_lead_b2b(
+                inp.get('nome') or '',
+                inp.get('email') or '',
+                inp.get('telefone') or '',
+                empresa=inp.get('empresa'),
+                interesse=inp.get('interesse'),
+                catalogo_enviado=bool(inp.get('catalogo_enviado')),
+                telefone_contato=telefone_contato)
+        if nome == 'catalogo_b2b':
+            return bot_tools.catalogo_b2b()
         return {'erro': f'ferramenta desconhecida: {nome}'}
     except Exception as exc:  # noqa: BLE001
         logger.exception('bot tool %s falhou', nome)
