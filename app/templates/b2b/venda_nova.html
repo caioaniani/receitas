@@ -288,6 +288,8 @@
 
     document.getElementById('btn-add-item').addEventListener('click', function() { rowItem(); });
     document.getElementById('btn-add-parcela').addEventListener('click', function() { rowParcela(); });
+    var inpFrete = document.getElementById('inp-frete');
+    if (inpFrete) inpFrete.addEventListener('input', recalcTotal);
     function avisoMensal() {
         // Cliente de fechamento mensal: parcelas ficam vazias (a conta
         // fecha na fatura). So aviso — nao trava (excecao negociada a
