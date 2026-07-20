@@ -92,6 +92,11 @@
         <form method="POST" action="{{ url_for('rh.salvar_loja_fiscal', id=l.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label small mb-0">Razão social (vai na NF)</label>
+                    <input type="text" name="razao_social" value="{{ l.razao_social or '' }}" class="form-control form-control-sm"
+                           placeholder="ex: O Pao Padaria Artesanal Filial X LTDA">
+                </div>
                 <div class="col-md-3">
                     <label class="form-label small mb-0">CNPJ</label>
                     <input type="text" name="cnpj" value="{{ l.cnpj or '' }}" class="form-control form-control-sm" placeholder="00.000.000/0001-00">
