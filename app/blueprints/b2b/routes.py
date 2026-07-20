@@ -838,6 +838,8 @@ def venda_nova():
                            data_entrega_pre=(orc.data_entrega.isoformat()
                                              if orc_id and orc.data_entrega
                                              else ''),
+                           frete_pre=(float(orc.frete_valor or 0)
+                                      if orc_id else 0),
                            hoje=hoje().isoformat(), **_catalogo_venda())
 
 
