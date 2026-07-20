@@ -756,6 +756,15 @@ def _parse_venda_form():
                       'preco_unitario': preco, 'desconto_percentual': desc,
                       'estado': est, 'observacao': obs})
 
+    # Frete da entrega (R$). FORA de `campos` de propósito: o caminho de
+    # venda PAGA usa editar_cabecalho(**campos), e frete muda o total — fica
+    # travado junto com itens/parcelas (só criar_venda/editar_venda recebem).
+    try:
+        frete_valor = float((request.form.get('frete_valor') or '0')
+                            .replace(',', '.'))
+    except ValueError:
+        frete_valor = 0
+
     # Parcelas: parcela_venc[], parcela_valor[], parcela_forma[]
     vencs = request.form.getlist('parcela_venc[]')
     valores = request.form.getlist('parcela_valor[]')
