@@ -467,15 +467,29 @@ def _aplicar_parcelas(venda, parcelas):
         ))
 
 
+def _normalizar_frete(frete_valor):
+    """Frete cobrado do cliente → Decimal(0.01). Negativo é erro (desconto
+    tem caminho proprio, por item); dinheiro nunca passa por float."""
+    frete = Decimal(str(frete_valor or 0)).quantize(
+        Decimal('0.01'), rounding=ROUND_HALF_UP)
+    if frete < 0:
+        raise ValueError('frete nao pode ser negativo')
+    return frete
+
+
 def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
                 data_entrega=None, itens, parcelas=None, observacao=None,
-                nf_numero=None, user=None, commit=True):
+                nf_numero=None, frete_valor=0, user=None, commit=True):
     """Cria venda B2B + itens + parcelas + baixa estoque.
 
     itens: lista de {tipo: 'receita'|'produto', id, quantidade,
                      preco_unitario, desconto_percentual, estado, observacao}
     parcelas: lista de {vencimento (date), valor, forma_pagamento (str)}
               ou None pra criar 1 parcela unica ao total
+    frete_valor: frete da entrega cobrado do cliente (R$). SOMA no
+              valor_total — parcela/boleto/fatura herdam; a NF do Tiny
+              recebe o valor no campo valor_frete (itens + frete fecham
+              o mesmo total nas duas pontas).
     commit=False: so faz flush — o caller fecha a transacao. Usado pela
               conversao de orcamento pra persistir venda + vinculo
               (orc.venda_id) num commit UNICO (sem janela de crash em que
@@ -487,6 +501,7 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
         raise ValueError('venda sem itens')
     if not cliente_id and not (cliente_nome or '').strip():
         raise ValueError('cliente obrigatorio (cadastrado ou avulso)')
+    frete = _normalizar_frete(frete_valor)
 
     venda = VendaB2B(
         data_venda=data_venda or hoje(),
@@ -497,6 +512,7 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
         nf_numero=(nf_numero or '').strip() or None,
         criado_por_id=getattr(user, 'id', None),
         valor_total=0,
+        frete_valor=frete,
     )
     db.session.add(venda)
     db.session.flush()
@@ -507,7 +523,8 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
     total = _aplicar_itens(venda, itens, user, baixar=baixar_agora)
     if baixar_agora:
         venda.estoque_baixado_em = agora()
-    venda.valor_total = total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    venda.valor_total = (total + frete).quantize(Decimal('0.01'),
+                                                 rounding=ROUND_HALF_UP)
     _aplicar_parcelas(venda, parcelas)
     if commit:
         db.session.commit()
