@@ -1467,6 +1467,33 @@ padrao do Confirmar do Slack) em TODOS os caminhos de baixa
 aprovacao do orcamento; aprovacao persiste claim + venda + vinculo num
 commit UNICO (`criar_venda(commit=False)`).
 
+**FRETE na venda B2B (20/07/2026, pedido do dono via Bruno)**:
+`VendaB2B.frete_valor` Numeric(10,2) NOT NULL DEFAULT 0 (procedimento de
+2 commits — ALTER confirmado por /api/claude/deploy antes do modelo).
+Regras:
+- Frete SOMA no `valor_total` (criar_venda/editar_venda via
+  `_normalizar_frete`; negativo = ValueError) → parcela unica, boleto
+  Sicredi e fatura mensal (que soma valor_total) herdam SOZINHOS.
+- NF do Tiny: `tiny_nf_b2b._nota_payload(frete_valor=...)` manda o valor
+  no campo `valor_frete` (mesmo padrao da NF do site — o Tiny fecha o
+  total da nota = Σ itens + valor_frete, entao NF e boleto saem no MESMO
+  valor). NF consolidada da fatura mensal manda a SOMA dos fretes das
+  vendas do periodo (fecha exato com fat.valor_total).
+- Form web: campo "Frete da entrega (R$)" no cabecalho de
+  `venda_nova.html` (parse FORA de `campos` em `_parse_venda_form` — o
+  caminho de venda PAGA usa editar_cabecalho(**campos) e frete fica
+  TRAVADO junto com itens/parcelas, JS tambem trava). Detalhe da venda
+  mostra Itens/Frete/Total quando frete > 0.
+- ORCAMENTO: `validar_para_aprovacao` NAO exige mais frete zerado (a
+  regra de 07/07 "embuta o frete" existia so porque a venda nao tinha o
+  campo); `_converter_em_venda` passa `orc.frete_valor` pra venda e o
+  "→ Virar venda" manual seeda o campo (`frete_pre`). DESCONTO em R$
+  continua exigindo embutir (esse segue sem campo na venda).
+- Copilot `criar_venda_b2b`: param opcional `frete_valor` (schema +
+  executor + enricher/preview do Slack mostram "inclui frete").
+Testes: `tests/test_b2b_frete.py` (10 casos) + regra nova em
+`test_orcamento_aprova_vira_venda.py`.
+
 **Baixa de componente de cesta na PROPRIA linha (fix 08/07/2026)**:
 componente receita/produto debita a linha dele no `EstoqueProducao`
 (antes componente produto caia numa linha anonima all-NULL); componente
