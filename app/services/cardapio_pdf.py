@@ -521,5 +521,13 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None):
             _lista_categoria(pdf, itens)
             pdf.ln(2)
 
+    # Regras + métodos no FIM (pedido do dono 20/07: "colocar para o rodapé
+    # e trazer os produtos para cima") — espelho da tela.
+    if tipo == 'atacado':
+        if regras:
+            _box_regras(pdf, regras, titulo)
+        if preparo:
+            _box_preparo(pdf, preparo)
+
     saida = pdf.output()
     return bytes(saida)
