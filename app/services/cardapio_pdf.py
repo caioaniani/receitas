@@ -346,13 +346,14 @@ def _lista_categoria(pdf, itens):
         pdf.set_y(y0 + _LINHA_H + 2)
 
 
-def gerar_cardapio_pdf(tipo, categorias, regras):
+def gerar_cardapio_pdf(tipo, categorias, regras, logo=None):
     """PDF pronto (bytes). `categorias`/`regras` na MESMA forma da tela
-    (main._cardapio_categorias — fonte única, nunca divergir da web)."""
+    (main._cardapio_categorias — fonte única, nunca divergir da web).
+    `logo`: data URI do logotipo (AppConfig) ou None (cai no texto "O Pão")."""
     titulo = _TITULO_TIPO.get(tipo, tipo.title())
     pdf = _CardapioPDF(titulo)
     pdf.add_page()
-    _capa(pdf, titulo, regras if tipo == 'atacado' else [])
+    _capa(pdf, titulo, regras if tipo == 'atacado' else [], logo_data=logo)
 
     # Alfabética, com 'Outros' sempre por último (padrão de cardápio).
     for cat in sorted(categorias, key=lambda c: (c == 'Outros', c)):
