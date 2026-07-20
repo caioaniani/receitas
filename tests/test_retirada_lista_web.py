@@ -163,19 +163,24 @@ def test_cancelar_antes_da_coleta_nao_mexe_estoque(app, admin_user):
         assert db.session.get(EstoqueLoja, elid).quantidade == 20
 
 
-def test_cancelar_em_transporte_recusa(app, admin_user):
+def test_cancelar_em_transporte_estorna_e_cancela(app, admin_user):
+    """Regra NOVA (19/07/2026): em transporte cancela COM estorno da coleta.
+    Aqui a retirada foi posta em transporte sem baixa nenhuma (sem
+    movimentos) — o cancelamento fecha sem tocar estoque; o estorno com
+    movimentos reais é coberto em test_retirada_receber_manual.py."""
     with app.app_context():
-        trad, retorno, loja, _ = _setup()
+        trad, retorno, loja, el = _setup()
         ret = _retirada(loja, retorno)
         ret.status = 'em_transporte'
         db.session.commit()
-        rid = ret.id
+        rid, el_id = ret.id, el.id
     c = app.test_client()
     _login(c)
     r = c.post(f'/pedidos/retiradas/{rid}/cancelar', follow_redirects=True)
-    assert 'Não cancelei' in r.get_data(as_text=True)
+    assert 'cancelada com estorno' in r.get_data(as_text=True)
     with app.app_context():
-        assert db.session.get(RetiradaSobra, rid).status == 'em_transporte'
+        assert db.session.get(RetiradaSobra, rid).status == 'cancelada'
+        assert db.session.get(EstoqueLoja, el_id).quantidade == 20
 
 
 def test_cancelar_exige_admin(app):
