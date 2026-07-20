@@ -66,6 +66,16 @@
                    value="{{ atuais[chave] }}" placeholder="{{ exemplo }}">
         </div>
         {% endfor %}
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="f-preparo">Métodos de preparo</label>
+            <textarea class="form-control" id="f-preparo" name="preparo" rows="6"
+                      placeholder="Uma linha por método, no formato Rótulo: texto">{{ preparo_raw }}</textarea>
+            <div class="form-text">
+                Aparece numa caixa própria no cardápio de atacado (tela e PDF), abaixo das regras.
+                <strong>Uma linha por método</strong>, no formato <code>Rótulo: texto</code>.
+                Apagar tudo esconde o bloco do cardápio.
+            </div>
+        </div>
     </div>
     <div class="card-footer d-flex gap-2">
         <button type="submit" class="btn btn-primary">Salvar</button>
