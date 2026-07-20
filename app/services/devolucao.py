@@ -139,12 +139,16 @@ def estornar_devolucao(token, usuario_id):
     # baixou 0 (so movs *_sem_estoque), o marcador da LOJA nunca nasce — sem
     # a checagem da INDUSTRIA, uma 2a chamada re-baixaria o credito da
     # industria de novo (estoque some 2x por uma devolucao).
+    # LIKE por SUFIXO (19/07/2026): toda referencia de estorno TERMINA no
+    # token ('Estorno da devolução <tok>' / 'Cancelamento da retirada
+    # <tok>'). O contains antigo (like+'%') fazia 'ret-1' casar o estorno
+    # de 'ret-16' e recusar um estorno legitimo como "ja estornada".
     ja_loja = MovEstoqueLoja.query.filter(
         MovEstoqueLoja.tipo == TIPO_BAIXA_LOJA_ESTORNO,
-        MovEstoqueLoja.referencia.like(like + '%')).first()
+        MovEstoqueLoja.referencia.like(like)).first()
     ja_ind = MovEstoqueProducao.query.filter(
         MovEstoqueProducao.tipo == TIPO_CREDITO_INDUSTRIA_ESTORNO,
-        MovEstoqueProducao.referencia.like(like + '%')).first()
+        MovEstoqueProducao.referencia.like(like)).first()
     if ja_loja is not None or ja_ind is not None:
         raise ValueError(f'Devolução {token} já estornada.')
 
