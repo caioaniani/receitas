@@ -28,6 +28,14 @@ class PedidoLoja(db.Model):
     modificado_em = db.Column(db.DateTime, nullable=True)
     modificado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
                                    nullable=True, index=True)
+    # NF-e de TRANSFERENCIA industria→loja via Tiny (20/07/2026) — mesmo
+    # trio/contrato de VendaB2B/PedidoOnline (tiny_nf.emitir_nf_generico).
+    # Emitida best-effort no scan do QR de saida; reemissao manual na
+    # lista de pedidos.
+    tiny_nota_fiscal_id = db.Column(db.String(40))
+    nf_status = db.Column(db.String(40))
+    nf_emitida_em = db.Column(db.DateTime, nullable=True)
+    nf_numero = db.Column(db.String(50))
 
     loja = db.relationship('Loja', backref='pedidos')
     criador = db.relationship('Usuario', foreign_keys=[criado_por])
