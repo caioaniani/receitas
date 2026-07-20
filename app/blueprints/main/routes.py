@@ -276,6 +276,64 @@ def _regras_atacado():
     return out
 
 
+# Logotipo do cardapio (13/07/2026 base; logo 20/07/2026): substitui o
+# wordmark "O Pao" no hero da tela e na capa do PDF. Guardado como data URI
+# (base64) em AppConfig — auto-contido (sobrevive deploy, sem dependencia de
+# host externo/CSP: o hero usa data: e o PDF decodifica os bytes). Vazio =
+# cai no texto "O Pao". Config em /admin/cardapio-atacado/regras.
+_CARDAPIO_LOGO_KEY = 'cardapio_logo_data'
+
+
+def _cardapio_logo():
+    from app.models import AppConfig
+    return (AppConfig.get(_CARDAPIO_LOGO_KEY) or '').strip() or None
+
+
+def _processar_logo_cardapio(data, *, branco=True):
+    """Processa o upload do logo pra data URI. `branco=True` (default, ideal
+    pro hero ESCURO): converte a marca preta/monocromatica numa SILHUETA
+    BRANCA sobre transparente (ink escuro -> branco opaco, fundo claro ->
+    transparente), casando com o "O Pao" branco de hoje. `branco=False`:
+    mantem a imagem fiel (PNG se tiver alpha, senao JPEG). Levanta ValueError
+    em imagem invalida (o chamador flasheia)."""
+    import base64
+    import io
+
+    from PIL import Image, ImageChops, ImageOps
+    if not data:
+        raise ValueError('Arquivo vazio')
+    try:
+        img = Image.open(io.BytesIO(data))
+        img = ImageOps.exif_transpose(img)
+        img = img.convert('RGBA')
+        img.thumbnail((900, 900), Image.LANCZOS)
+    except Exception as e:  # noqa: BLE001 — HEIC/formato ruim vira ValueError
+        raise ValueError('imagem invalida') from e
+
+    if branco:
+        r, g, b, a = img.split()
+        lum = Image.merge('RGB', (r, g, b)).convert('L')
+        ink = lum.point(lambda p: 255 - p)          # escuro = tinta
+        novo_alpha = ImageChops.multiply(ink, a)     # respeita transparencia
+        saida = Image.new('RGBA', img.size, (255, 255, 255, 0))
+        saida.putalpha(novo_alpha)
+        fmt, mime = 'PNG', 'image/png'
+    elif img.getchannel('A').getextrema()[0] < 255:
+        saida, fmt, mime = img, 'PNG', 'image/png'
+    else:
+        saida, fmt, mime = img.convert('RGB'), 'JPEG', 'image/jpeg'
+
+    buf = io.BytesIO()
+    if fmt == 'JPEG':
+        saida.save(buf, format='JPEG', quality=85, optimize=True)
+    else:
+        saida.save(buf, format='PNG', optimize=True)
+    raw = buf.getvalue()
+    if len(raw) > 1024 * 1024:                       # trava de sanidade
+        raise ValueError('logo processado ficou grande demais (>1MB)')
+    return 'data:%s;base64,%s' % (mime, base64.b64encode(raw).decode('ascii'))
+
+
 @main_bp.route('/admin/cardapio-atacado/regras', methods=['GET', 'POST'])
 @login_required
 @admin_required
