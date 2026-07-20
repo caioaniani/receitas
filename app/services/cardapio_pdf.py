@@ -492,8 +492,7 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None):
     titulo = _TITULO_TIPO.get(tipo, tipo.title())
     pdf = _CardapioPDF(titulo)
     pdf.add_page()
-    _capa(pdf, titulo, regras if tipo == 'atacado' else [], logo_data=logo,
-          preparo=preparo if tipo == 'atacado' else None)
+    _capa(pdf, titulo, logo_data=logo)
 
     # Alfabética, com 'Outros' sempre por último (padrão de cardápio).
     for cat in sorted(categorias, key=lambda c: (c == 'Outros', c)):
