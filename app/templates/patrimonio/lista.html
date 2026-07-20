@@ -125,10 +125,13 @@
                             <select class="form-select form-select-sm mb-1" name="loja_id">
                                 <option value="ind" {% if not a.loja_id %}selected{% endif %}>Indústria</option>
                                 {% for l in lojas %}<option value="{{ l.id }}" {% if a.loja_id == l.id %}selected{% endif %}>{{ l.nome }}</option>{% endfor %}
+                                {# Grandfather: loja DESATIVADA onde o ativo mora segue selecionável — sem isso o browser caía na 1ª opção e o salvar movia o ativo pra Indústria em silêncio (achado de revisão). #}
+                                {% if a.loja and not a.loja.ativa %}<option value="{{ a.loja.id }}" selected>{{ a.loja.nome }} (desativada)</option>{% endif %}
                             </select>
                             <input class="form-control form-control-sm mb-1" name="local_detalhe" value="{{ a.local_detalhe or '' }}" placeholder="Detalhe do local">
                             <input class="form-control form-control-sm mb-1" name="numero_serie" value="{{ a.numero_serie or '' }}" placeholder="Nº de série">
-                            <input class="form-control form-control-sm mb-1" name="valor_aquisicao" value="{{ a.valor_aquisicao or '' }}" placeholder="Valor R$">
+                            {# Valor re-renderizado em pt-BR (vírgula) — o Decimal cru ('12345.67') combinado com o parse antigo multiplicava por 100 a cada salvamento. #}
+                            <input class="form-control form-control-sm mb-1" name="valor_aquisicao" value="{{ ('%.2f'|format(a.valor_aquisicao))|replace('.', ',') if a.valor_aquisicao is not none else '' }}" placeholder="Valor R$ (1.234,56)">
                             <input type="date" class="form-control form-control-sm mb-1" name="adquirido_em" value="{{ a.adquirido_em.isoformat() if a.adquirido_em else '' }}">
                             <input class="form-control form-control-sm mb-1" name="observacao" value="{{ a.observacao or '' }}" placeholder="Observação">
                             <button class="btn btn-sm btn-primary">Salvar</button>
