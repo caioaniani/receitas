@@ -72,9 +72,16 @@ def index():
         from app.services import briefing_dono
         pend = briefing_dono.pendencias(
             incluir_owner=bool(current_user.is_owner))
+        # Vendas de ontem SÓ pro dono (faturamento é o cockpit pessoal —
+        # mesmo gate do /admin/briefing). capturar=False: a home carrega a
+        # toda hora e NUNCA deve bater na API Seru; o cron de 15 min mantém
+        # o snapshot de ontem quente.
+        vendas = (briefing_dono.vendas_ontem(capturar=False)
+                  if current_user.is_owner else None)
         return render_template('main/home.html',
                                areas=nav.areas_visiveis(current_user),
-                               pendencias=pend)
+                               pendencias=pend,
+                               vendas=vendas)
     return render_template('main/inicio.html')
 
 
