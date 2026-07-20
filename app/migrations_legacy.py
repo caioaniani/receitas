@@ -2133,7 +2133,8 @@ def _migrate_sqlite(app):
                    ('endereco_bairro', 'VARCHAR(100)'),
                    ('endereco_cep', 'VARCHAR(9)'),
                    ('endereco_cidade', 'VARCHAR(100)'),
-                   ('endereco_uf', 'VARCHAR(2)')):
+                   ('endereco_uf', 'VARCHAR(2)'),
+                   ('razao_social', 'VARCHAR(200)')):
         if cols_loja and _c not in cols_loja:
             cursor.execute(f"ALTER TABLE loja ADD COLUMN {_c} {_t}")
     cursor.execute("PRAGMA table_info(pedido_loja)")
