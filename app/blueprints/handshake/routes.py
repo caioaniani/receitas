@@ -187,7 +187,7 @@ def handshake(token):
         if (request.method == 'POST'
                 and qr.usado_em is not None
                 and qr.usado_em >= agora() - timedelta(minutes=_DOUBLE_SUBMIT_JANELA_MINUTOS)):
-            _audit(token, qr.pedido, qr.tipo, 'double_submit_suprimido',
+            _audit(token, qr.pedido, qr.tipo, 'dbl_submit_suprim',
                    f'usado_em={qr.usado_em.isoformat()}')
             return redirect(url_for('handshake.sucesso', token=token), code=303)
         motivo = 'expirado' if qr.expira_em <= agora() else 'ja usado'
@@ -444,7 +444,7 @@ def handshake_retirada(token):
                 and qr.usado_em is not None
                 and qr.usado_em >= agora() - timedelta(minutes=_DOUBLE_SUBMIT_JANELA_MINUTOS)):
             _audit_retirada(token, qr.retirada, tipo_audit,
-                            'double_submit_suprimido')
+                            'dbl_submit_suprim')
             return redirect(url_for('handshake.sucesso_retirada', token=token),
                             code=303)
         motivo = 'expirado' if qr.expira_em <= agora() else 'ja usado'

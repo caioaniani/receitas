@@ -270,7 +270,7 @@ def test_re_post_apos_uso_redireciona_pra_sucesso_em_vez_de_erro(
     assert el.quantidade == 3
     # Auditoria registra o supress
     audits = HandshakeAudit.query.filter_by(
-        token=qr.token, etapa='double_submit_suprimido').all()
+        token=qr.token, etapa='dbl_submit_suprim').all()
     assert len(audits) >= 1
 
 
