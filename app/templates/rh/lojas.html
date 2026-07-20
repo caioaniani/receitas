@@ -82,7 +82,7 @@
 <div class="card mb-2">
     <div class="card-header py-2 d-flex justify-content-between align-items-center">
         <strong>{{ l.nome }}</strong>
-        {% if l.cnpj and l.endereco_logradouro and l.endereco_cep %}
+        {% if l.fiscal_completo %}
         <span class="badge bg-success">✓ pronta pra NF</span>
         {% else %}
         <span class="badge bg-warning text-dark">incompleta — NF não sai</span>
