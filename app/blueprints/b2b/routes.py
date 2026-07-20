@@ -695,9 +695,11 @@ def _catalogo_venda(excluir_venda_id=None):
 
 
 def _parse_venda_form():
-    """Le o form de venda (nova/editar). Retorna (campos, itens, parcelas).
+    """Le o form de venda (nova/editar). Retorna (campos, itens, parcelas,
+    frete_valor).
 
-    `campos` casa com a assinatura de criar_venda/editar_venda/editar_cabecalho.
+    `campos` casa com a assinatura de criar_venda/editar_venda/editar_cabecalho;
+    `frete_valor` vai à parte porque editar_cabecalho NÃO aceita frete.
     """
     cliente_id = request.form.get('cliente_id', type=int) or None
     cliente_nome = (request.form.get('cliente_nome') or '').strip() or None
