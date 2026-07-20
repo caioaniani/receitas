@@ -4143,6 +4143,11 @@ def executar_criar_venda_b2b(params, user):
         })
 
     try:
+        frete_valor = float(params.get('frete_valor') or 0)
+    except (TypeError, ValueError):
+        frete_valor = 0
+
+    try:
         venda = svc.criar_venda(
             cliente_id=cliente_id,
             cliente_nome=cliente_nome if not cliente_id else None,
@@ -4152,6 +4157,7 @@ def executar_criar_venda_b2b(params, user):
             parcelas=parcelas_payload or None,
             observacao=(params.get('observacao') or '').strip() or None,
             nf_numero=(params.get('nf_numero') or '').strip() or None,
+            frete_valor=frete_valor,
             user=user,
         )
     except ValueError as exc:
@@ -4163,6 +4169,7 @@ def executar_criar_venda_b2b(params, user):
         'venda_id': venda.id,
         'cliente': venda.cliente_display,
         'valor_total': venda.valor_total,
+        'frete_valor': venda.frete_valor,
         'itens_salvos': len(venda.itens),
         'parcelas': len(venda.parcelas),
         'nao_resolvidos': nao_resolvidos,
