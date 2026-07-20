@@ -183,6 +183,86 @@ def test_badge_fiscal_completo_usa_regua_da_emissao(app, loja):
     assert loja.fiscal_completo is False
 
 
+def test_dispensa_por_pedido_pula_emissao_no_scan(app, loja, catalogo):
+    """Pedido dispensado: o scan confirma a coleta SEM tentar o Tiny
+    (audit nf_disp, zero espera) e a emissão manual recusa com aviso."""
+    from app.models import HandshakeAudit
+    from app.services import tiny_nf_transf
+    p, qr = _armar_saida(loja, catalogo)
+    p.nf_dispensada = True
+    db.session.commit()
+    client = app.test_client()
+    with patch('app.services.tiny.incluir_nota_fiscal') as inc:
+        resp = client.post(f'/handshake/{qr.token}', data={'pin': '7777'})
+    assert resp.status_code == 303
+    inc.assert_not_called()
+    db.session.refresh(p)
+    assert p.status == 'em_transporte'
+    assert p.tiny_nota_fiscal_id is None
+    assert HandshakeAudit.query.filter_by(token=qr.token,
+                                          etapa='nf_disp').count() == 1
+    # Emissão manual recusa enquanto dispensado
+    res = tiny_nf_transf.emitir_nf(p)
+    assert not res['ok'] and 'dispensada' in res['msg']
+
+
+def test_dispensa_por_loja_vale_pra_todos_os_pedidos(app, loja, catalogo):
+    from app.services import tiny_nf_transf
+    loja.nf_dispensada = True
+    _loja_fiscal(loja)                             # fiscal completo E dispensada
+    p = _pedido(loja, catalogo)
+    assert tiny_nf_transf.nf_dispensada_para(p) is True
+    res = tiny_nf_transf.emitir_nf(p)
+    assert not res['ok'] and loja.nome in res['msg']
+
+
+def test_toggle_de_dispensa_e_admin_only(app, admin_user, loja, catalogo):
+    """A rota do toggle é admin; o gesto não existe pra motorista/padeiro
+    (decisão do dono 20/07/2026)."""
+    from app.models import Usuario
+    p = _pedido(loja, catalogo, status='confirmado')
+    func = Usuario(nome='Padeiro T', login='padeiro-nf', papel='padeiro')
+    func.set_senha('x')
+    db.session.add(func)
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(func.id)
+        sess['_fresh'] = True
+    assert client.post(f'/pedidos/{p.id}/nf-dispensar').status_code == 403
+
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(admin_user.id)
+        sess['_fresh'] = True
+    r = client.post(f'/pedidos/{p.id}/nf-dispensar')
+    assert r.status_code == 302
+    db.session.refresh(p)
+    assert p.nf_dispensada is True
+    # Toggle de volta reativa
+    client.post(f'/pedidos/{p.id}/nf-dispensar')
+    db.session.refresh(p)
+    assert p.nf_dispensada is False
+
+
+def test_rh_salva_dispensa_da_loja(app, admin_user, loja):
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(admin_user.id)
+        sess['_fresh'] = True
+    r = client.post(f'/rh/lojas/{loja.id}/fiscal',
+                    data={'cnpj': '11.222.333/0001-44',
+                          'nf_dispensada': '1'})
+    assert r.status_code == 302
+    db.session.refresh(loja)
+    assert loja.nf_dispensada is True
+    # Sem o checkbox no POST = desmarca (form HTML não manda unchecked)
+    r = client.post(f'/rh/lojas/{loja.id}/fiscal',
+                    data={'cnpj': '11.222.333/0001-44'})
+    db.session.refresh(loja)
+    assert loja.nf_dispensada is False
+
+
 def test_danfe_do_driver_exige_posse_do_pedido(app, loja, catalogo):
     """Motorista A não abre a DANFE de pedido coletado pelo motorista B
     (achado B2)."""
