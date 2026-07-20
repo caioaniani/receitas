@@ -155,3 +155,36 @@ def test_rota_le_regras_do_appconfig(app, admin_user, cliente):
     with app.test_request_context():             # url_for das fotos internas
         _, regras = _cardapio_categorias('atacado')
     assert any(r['valor'] == 'R$500,00' for r in regras)
+
+
+def test_altura_categoria_grid_e_lista():
+    """Estimativa de altura: grid = ceil(n/3) fileiras de card alto;
+    lista = ceil(n/2) fileiras de caixinha baixa (feedback 20/07 — usada pra
+    manter a categoria inteira numa página)."""
+    from app.services.cardapio_pdf import (
+        _CARD_H,
+        _GAP,
+        _LINHA_H,
+        _altura_categoria,
+    )
+    seis = [{'nome': f'x{i}', 'preco_venda': 1} for i in range(6)]
+    # grid: 6 itens = 2 fileiras
+    assert abs(_altura_categoria(seis, True)
+               - (12.5 + 2 * (_CARD_H + _GAP))) < 0.01
+    # lista: 6 itens = 3 fileiras
+    assert abs(_altura_categoria(seis, False)
+               - (12.5 + 3 * (_LINHA_H + 2) + 2)) < 0.01
+
+
+def test_categoria_grande_gera_multipagina_sem_quebrar(app):
+    """Muitas categorias/itens: PDF válido multipágina (o keep-together
+    move categoria pra página limpa; nunca deve estourar)."""
+    from app.services.cardapio_pdf import gerar_cardapio_pdf
+    cats = {}
+    for c in ('Pães', 'Viennoiserie', 'Doces', 'Salgados'):
+        cats[c] = [{'nome': f'{c} {i}', 'preco_venda': 10.0 + i,
+                    'imagem_url': None, 'img_ref': None} for i in range(6)]
+    pdf = gerar_cardapio_pdf('atacado', cats, [])
+    assert pdf.startswith(b'%PDF')
+    # 4 categorias de 6 itens (placeholder, sem rede) → várias páginas
+    assert pdf.count(b'/Type /Page') >= 2
