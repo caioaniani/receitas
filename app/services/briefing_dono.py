@@ -386,6 +386,7 @@ def montar_texto(dados=None):
                                        comp))
     linhas.append('Site: %d pagos · %s' % (v['site_qtd'],
                                            _fmt_brl(v['site_total'])))
+    linhas.append('*Total: %s* (PDV + site)' % _fmt_brl(v['total_geral']))
     linhas.append('')
     pend = d['pendencias']
     if pend:
