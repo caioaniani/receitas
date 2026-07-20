@@ -397,6 +397,10 @@ def cardapio_atacado_regras():
         for chave, _label, _ph in CARDAPIO_ATACADO_CAMPOS:
             AppConfig.set(_CARDAPIO_ATACADO_PREFIXO + chave,
                           (request.form.get(chave) or '').strip())
+        # Metodos de preparo: gravar ate' vazio ('' = dono apagou, bloco
+        # some; so' a chave AUSENTE cai no default — ver _preparo_atacado).
+        AppConfig.set(_CARDAPIO_PREPARO_KEY,
+                      (request.form.get('preparo') or '').strip())
         db.session.commit()
         flash('Regras do atacado salvas. Elas já aparecem no cardápio.', 'success')
         return redirect(url_for('main.cardapio', tipo='atacado'))
@@ -404,6 +408,7 @@ def cardapio_atacado_regras():
               for chave, _l, _p in CARDAPIO_ATACADO_CAMPOS}
     return render_template('admin/cardapio_atacado_regras.html',
                            campos=CARDAPIO_ATACADO_CAMPOS, atuais=atuais,
+                           preparo_raw=_preparo_atacado_raw(),
                            logo=_cardapio_logo())
 
 
