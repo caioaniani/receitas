@@ -194,6 +194,65 @@ def dashboard():
 
 # ── Clientes ──
 
+@b2b_bp.route('/leads')
+@login_required
+@admin_required
+def leads():
+    """Leads de atacado capturados pelo bot de atendimento (16/07/2026) —
+    o dono entra em contato e marca como contatado. O form no topo salva o
+    link do catálogo que o bot envia (AppConfig, sem deploy)."""
+    from app.models import AppConfig, LeadB2B
+    from app.services.bot_tools import catalogo_b2b_url
+    pendentes = request.args.get('todos') != '1'
+    q = LeadB2B.query
+    if pendentes:
+        q = q.filter(LeadB2B.contatado_em.is_(None))
+    lds = q.order_by(LeadB2B.criado_em.desc()).limit(300).all()
+    n_pendentes = LeadB2B.query.filter(
+        LeadB2B.contatado_em.is_(None)).count()
+    return render_template(
+        'b2b/leads.html', leads=lds, pendentes=pendentes,
+        n_pendentes=n_pendentes,
+        catalogo_url=catalogo_b2b_url() or '',
+        catalogo_via_env=bool(not (AppConfig.get('catalogo_b2b_url')
+                                   or '').strip() and catalogo_b2b_url()))
+
+
+@b2b_bp.route('/leads/<int:lid>/contatado', methods=['POST'])
+@login_required
+@admin_required
+def lead_contatado(lid):
+    """Marca (ou desmarca, ?desfazer=1) o lead como contatado."""
+    from app.models import LeadB2B
+    from app.utils import agora
+    lead = LeadB2B.query.get_or_404(lid)
+    if request.form.get('desfazer') == '1':
+        lead.contatado_em = None
+        lead.contatado_por_id = None
+    else:
+        lead.contatado_em = agora()
+        lead.contatado_por_id = current_user.id
+    db.session.commit()
+    return redirect(url_for('b2b.leads'))
+
+
+@b2b_bp.route('/leads/catalogo-url', methods=['POST'])
+@login_required
+@admin_required
+def lead_catalogo_url():
+    """Salva o link do catálogo B2B que o bot envia (AppConfig — vazio
+    limpa e o bot volta a dizer que a equipe envia)."""
+    from app.models import AppConfig
+    url = (request.form.get('url') or '').strip()
+    if url and not url.startswith(('http://', 'https://')):
+        flash('O link do catálogo precisa começar com http(s)://', 'warning')
+        return redirect(url_for('b2b.leads'))
+    AppConfig.set('catalogo_b2b_url', url)
+    flash('Link do catálogo salvo.' if url else 'Link do catálogo removido.',
+          'success')
+    return redirect(url_for('b2b.leads'))
+
+
 @b2b_bp.route('/clientes')
 @login_required
 @admin_required
