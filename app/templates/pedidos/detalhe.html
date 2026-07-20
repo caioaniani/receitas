@@ -338,6 +338,7 @@
         </form>
         {% else %}
         <span class="badge bg-secondary">não emitida</span>
+        {% if pedido.status in ('separado', 'em_transporte', 'entregue', 'recebido') %}
         <form method="POST" action="{{ url_for('pedidos.emitir_nf_transferencia', id=pedido.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-primary">
@@ -346,6 +347,18 @@
         </form>
         <span class="text-muted">A emissão automática acontece no scan do
             QR de saída — use aqui se ela falhou.</span>
+        {% endif %}
+        {% if current_user.is_admin() %}
+        {# Dispensa é decisão de ADMIN (dono 20/07/2026) — motorista e
+           padeiro nunca veem este gesto. #}
+        <form method="POST" action="{{ url_for('pedidos.nf_dispensar', id=pedido.id) }}"
+              onsubmit="return confirm('Este pedido NÃO precisa de NF de transferência? O scan do QR vai pular a emissão.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                🚫 Não precisa de NF
+            </button>
+        </form>
+        {% endif %}
         {% endif %}
     </div>
 </div>
