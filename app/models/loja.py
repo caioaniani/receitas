@@ -35,6 +35,21 @@ class Loja(db.Model):
     endereco_cidade = db.Column(db.String(100))
     endereco_uf = db.Column(db.String(2))
 
+    @property
+    def fiscal_completo(self):
+        """MESMA régua da emissão da NF de transferência
+        (tiny_nf_transf._payload_cliente_loja): CNPJ com 14 dígitos +
+        endereço estruturado completo. O badge do RH usa isto — badge
+        verde com emissão recusando era exatamente o que ele existia
+        pra prevenir (achado A5 da revisão 20/07/2026)."""
+        doc = ''.join(c for c in (self.cnpj or '') if c.isdigit())
+        if len(doc) != 14:
+            return False
+        return all((v or '').strip() for v in (
+            self.endereco_logradouro, self.endereco_numero,
+            self.endereco_bairro, self.endereco_cep,
+            self.endereco_cidade, self.endereco_uf))
+
     def __repr__(self):
         return f'<Loja {self.nome}>'
 
