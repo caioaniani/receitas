@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Conferir {{ ativo.codigo }}{% endblock %}
+{% block content %}
+{# Página que o QR da etiqueta abre — desenhada pro CELULAR de qualquer
+   funcionário logado: um toque pra dizer "está aqui e ok". #}
+<div style="max-width:480px; margin:0 auto;">
+    <h1 class="page-title"><i class="bi bi-upc-scan"></i> {{ ativo.codigo }}</h1>
+    <div class="card mb-3">
+        <div class="card-body">
+            <h4 class="mb-1">{{ ativo.nome }}</h4>
+            <div class="text-muted">
+                {{ ativo.local_nome }}{% if ativo.local_detalhe %} · {{ ativo.local_detalhe }}{% endif %}
+                {% if ativo.categoria %} · {{ ativo.categoria }}{% endif %}
+            </div>
+            {% if ativo.numero_serie %}<div class="small text-muted">série {{ ativo.numero_serie }}</div>{% endif %}
+            {% if ativo.situacao == 'baixado' %}
+            <div class="alert alert-secondary small mt-2 mb-0">Este ativo está <strong>baixado</strong> no cadastro — avise o admin se ele ainda existe.</div>
+            {% elif ativo.situacao == 'manutencao' %}
+            <div class="alert alert-warning small mt-2 mb-0">Cadastrado como <strong>em manutenção</strong>.</div>
+            {% endif %}
+            {% if ultima %}
+            <div class="small mt-2">Última conferência: {{ ultima.momento.strftime('%d/%m/%Y %H:%M') }}
+                {% if ultima.estado == 'problema' %}<span class="badge bg-danger">problema</span>{% else %}<span class="badge bg-success">ok</span>{% endif %}
+                {% if ultima.usuario %}por {{ ultima.usuario.nome }}{% endif %}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-label small mb-0">Onde ele está agora?</label>
+        <select class="form-select form-select-lg mb-3" name="loja_id_visto">
+            <option value="ind" {% if not ativo.loja_id %}selected{% endif %}>Indústria</option>
+            {% for l in lojas %}<option value="{{ l.id }}" {% if ativo.loja_id == l.id %}selected{% endif %}>{{ l.nome }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-success btn-lg w-100 mb-3" name="estado" value="ok"
+                style="padding:18px; font-size:1.3rem; font-weight:700;">
+            ✅ Está aqui e funcionando</button>
+        <details>
+            <summary class="btn btn-outline-danger w-100">⚠ Tem algum problema…</summary>
+            <div class="border rounded p-2 mt-2 bg-white">
+                <textarea class="form-control mb-2" name="observacao" rows="2"
+                          placeholder="O que há de errado? (quebrado, fazendo barulho, porta solta…)"></textarea>
+                <button class="btn btn-danger w-100" name="estado" value="problema">Registrar problema</button>
+            </div>
+        </details>
+    </form>
+</div>
+{% endblock %}
