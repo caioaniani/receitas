@@ -68,15 +68,24 @@ def gerar_etiquetas_pdf(ativos, url_base):
         pdf.set_xy(tx, y0 + 10.0)
         pdf.set_font('Helvetica', 'B', 9)
         # align='L': o default justificado espalhava "Forno    turbo".
-        pdf.multi_cell(tw, 4.0, _latin1(ativo.nome)[:70], align='L')
+        # Truncagem em ~3 linhas (coluna de 27mm ≈ 12 chars/linha a 9pt):
+        # nome de 70 chars rendia 6 linhas e o local invadia a etiqueta de
+        # baixo (achado de revisão) — a etiqueta identifica, a ficha detalha.
+        nome = _latin1(ativo.nome)
+        if len(nome) > 36:
+            nome = nome[:35] + '…'.encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(tw, 4.0, nome, align='L')
         y_nome_fim = pdf.get_y()
-        pdf.set_xy(tx, min(y_nome_fim + 1.0, y0 + _ETQ_H - 9.0))
+        pdf.set_xy(tx, min(y_nome_fim + 1.0, y0 + _ETQ_H - 12.0))
         pdf.set_font('Helvetica', '', 7.5)
         pdf.set_text_color(90, 90, 90)
         local = ativo.local_nome
         if ativo.local_detalhe:
             local += f' · {ativo.local_detalhe}'
-        pdf.multi_cell(tw, 3.4, _latin1(local)[:60], align='L')
+        local = _latin1(local)
+        if len(local) > 42:
+            local = local[:41] + '.'
+        pdf.multi_cell(tw, 3.4, local, align='L')
         # Rodapé na LARGURA INTEIRA da etiqueta (embaixo do QR): na coluna
         # de texto ele estourava a moldura e invadia a etiqueta vizinha.
         pdf.set_xy(x0 + 2.0, y0 + _ETQ_H - 4.4)
