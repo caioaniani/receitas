@@ -492,7 +492,7 @@ def cardapio():
     tipo = request.args.get('tipo', 'atacado')
     categorias, regras = _cardapio_categorias(tipo)
     return render_template('main/cardapio.html', categorias=categorias,
-                           tipo=tipo, regras=regras)
+                           tipo=tipo, regras=regras, logo=_cardapio_logo())
 
 
 @main_bp.route('/cardapio.pdf')
