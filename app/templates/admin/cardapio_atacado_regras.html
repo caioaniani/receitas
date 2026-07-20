@@ -15,6 +15,47 @@
     Cada campo é opcional — <strong>deixe em branco o que não se aplica</strong> e ele some do cardápio.
 </div>
 
+<div class="card mb-3">
+    <div class="card-header fw-semibold">
+        <i class="bi bi-image"></i> Logotipo do cardápio
+    </div>
+    <div class="card-body">
+        <p class="small text-muted mb-3">
+            Aparece no topo do cardápio e na capa do PDF, no lugar do texto
+            <strong>“O Pão”</strong>. Sem logotipo, volta ao texto.
+        </p>
+        {% if logo %}
+        <div class="mb-3" style="background:#1a1410;border-radius:10px;padding:18px;text-align:center;">
+            <img src="{{ logo }}" alt="Logotipo atual" style="max-height:90px;max-width:100%;">
+            <div class="small mt-2" style="color:rgba(255,255,255,0.6);">prévia no fundo escuro do cardápio</div>
+        </div>
+        {% else %}
+        <div class="alert alert-secondary small mb-3">Nenhum logotipo — o cardápio mostra o texto “O Pão”.</div>
+        {% endif %}
+        <form method="POST" action="{{ url_for('main.cardapio_logo_upload') }}" enctype="multipart/form-data" class="mb-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-2">
+                <input type="file" class="form-control" name="logo_arquivo" accept="image/*" required>
+            </div>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="branco" id="logo-branco" value="1" checked>
+                <label class="form-check-label small" for="logo-branco">
+                    Deixar o logo <strong>branco</strong> (recomendado — o fundo do cardápio é escuro).
+                    Desmarque para manter as cores originais.
+                </label>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Enviar logotipo</button>
+        </form>
+        {% if logo %}
+        <form method="POST" action="{{ url_for('main.cardapio_logo_remover') }}"
+              onsubmit="return confirm('Remover o logotipo? O cardápio volta ao texto O Pão.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-danger btn-sm">Remover logotipo</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
 <form method="POST" class="card">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="card-body">
