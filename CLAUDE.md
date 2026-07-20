@@ -2136,6 +2136,47 @@ estoque nem entram na previsao.
   pedidos de delivery ANTIGOS (ate 30d) de uma vez — rajada esperada,
   avisar o dono. Testes: `tests/test_seru_nf_itens.py` (9 casos).
 
+## NF de TRANSFERENCIA industria→loja no scan do QR (20/07/2026)
+
+Pedido do dono: NF de transferencia emitida quando o motorista escaneia o
+QR de SAIDA do pedido de loja, com a DANFE atrelada ao pedido na tela dele
+(fiscalizacao na estrada). Decisoes do dono (20/07, via AskUserQuestion):
+valor dos itens = CUSTO calculado da ficha (`custos.py`; MP pelo custo do
+cadastro — 'un' = custo POR UNIDADE, mesma semantica de `_custo_por_grama`);
+MP ENTRA na NF (kind 'mp' no TinyProdutoMap — curto de proposito, coluna
+String(10)); natureza = env `NF_NATUREZA_TRANSFERENCIA` (default
+'TRANSFERÊNCIA DE PRODUÇÃO DO ESTABELECIMENTO', texto EXATO do Tiny);
+SKU do canal 'transf' com FALLBACK site→b2b (`sku_transferencia`).
+
+- **Schema (2 commits, sonda /api/claude/deploy)**: `Loja` ganhou
+  cnpj/inscricao_estadual/endereco estruturado (destinataria de NF-e —
+  mesma regua do ClienteB2B; cadastro em RH → Lojas, card "Dados fiscais"
+  com badge pronta/incompleta) e `PedidoLoja` o trio de NF do Tiny +
+  nf_numero (contrato de `emitir_nf_generico`).
+- **Servico**: `app/services/tiny_nf_transf.py`. `emitir_nf(pedido)` —
+  guards: status da separacao em diante, loja fiscal completa, todo item
+  com SKU (efetivo ou herdado) e custo > 0 (custo zero ABORTA: NF a R$ 0 e
+  mentira fiscal — corrigir a ficha). `emitir_apos_coleta` = BEST-EFFORT
+  pos-commit no `_handshake_saida` (padrao loja_pagamento): Tiny/SEFAZ
+  fora NUNCA trava a saida do caminhao; resultado vira audit `nf_ok`/
+  `nf_falha` e a reemissao manual fica no detalhe do pedido (card "NF de
+  transferencia" + Ver DANFE).
+- **DANFE pro motorista**: botao na tela de SUCESSO do handshake (pagina
+  persistente pos-scan — o motorista guarda aberta; rota
+  `/handshake/<token>/danfe` com a mesma guarda do sucesso) e no card do
+  pedido em `/driver/<token>/pedidos-loja` (rota `driver.pedido_danfe`,
+  exige PIN autenticado). Link do Tiny e temporario — resolvido sob
+  demanda via `obter_link_nota_fiscal_com_motivo`.
+- **SKUs**: tela `/pedidos/tiny-skus-transferencia` (owner; link na area
+  Lojas) — universo `_itens_transf` (receitas ativas + produtos ativos +
+  MPs pediveis + qualquer item ja usado em PedidoItem); linha sem SKU
+  proprio mostra badge "herda <sku>" quando o site/b2b cobrem. Sem SKU
+  nem heranca = pendente de verdade.
+- CFOP/NCM vem do cadastro do produto no Tiny via SKU + natureza — se o
+  CFOP de transferencia (5.152/6.152) sair errado, o ajuste e no Tiny,
+  nao aqui. Manual de operacao registrado (secao RODA SOZINHO).
+- Testes: `tests/test_nf_transferencia.py` (14 casos; Tiny sempre mockado).
+
 ## Bot de atendimento — memoria cross-conversa + busca por telefone (19/07/2026)
 
 Relatorio do auditor apontou "bot perdendo contexto e reiniciando do zero
