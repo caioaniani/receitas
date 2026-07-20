@@ -385,3 +385,42 @@ def test_produto_no_pedido_usa_custo_de_produto(app, loja, catalogo):
         assert tiny_nf_transf.emitir_nf(p)['ok']
     item = inc.call_args[0][0]['itens'][0]['item']
     assert item['valor_unitario'] == 7.25
+
+
+# ── Razão social da loja (20/07/2026, pedido do dono) ────────────────────
+
+def test_nf_usa_razao_social_quando_cadastrada(app, loja, catalogo):
+    """O `nome` da loja é apelido interno; a NF leva a razão social LEGAL
+    quando preenchida (fallback: nome — comportamento antigo intacto)."""
+    from app.services.tiny_nf_transf import _payload_cliente_loja
+    with app.app_context():
+        _loja_fiscal(loja)
+        # Sem razão social: fallback no nome interno (como era).
+        payload, erro = _payload_cliente_loja(loja)
+        assert erro is None
+        assert payload['nome'] == loja.nome
+        # Com razão social: ela prevalece.
+        loja.razao_social = 'O Pao Filial Brooklin LTDA'
+        db.session.commit()
+        payload, erro = _payload_cliente_loja(loja)
+        assert payload['nome'] == 'O Pao Filial Brooklin LTDA'
+
+
+def test_form_fiscal_salva_razao_social(app, owner_user, loja):
+    # owner_user, nao admin: o blueprint RH inteiro esta restrito ao dono
+    # por before_request temporario (rh/routes.py::_rh_restrito_ao_owner).
+    with app.app_context():
+        lid = loja.id
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(owner_user.id)
+        sess['_fresh'] = True
+    r = client.post(f'/rh/lojas/{lid}/fiscal', data={
+        'razao_social': '  O Pao Filial Brooklin LTDA  ',
+        'cnpj': '11.222.333/0001-44',
+    })
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        from app.models import Loja
+        lj = db.session.get(Loja, lid)
+        assert lj.razao_social == 'O Pao Filial Brooklin LTDA'
