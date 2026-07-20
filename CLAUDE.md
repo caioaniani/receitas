@@ -1491,7 +1491,29 @@ Regras:
   continua exigindo embutir (esse segue sem campo na venda).
 - Copilot `criar_venda_b2b`: param opcional `frete_valor` (schema +
   executor + enricher/preview do Slack mostram "inclui frete").
-Testes: `tests/test_b2b_frete.py` (10 casos) + regra nova em
+POS-REVISAO (fixados): `editar_venda` agora tem o MESMO guard do
+`excluir_venda` pra boleto — titulo que JA FOI AO BANCO recusa a edicao
+e cobranca PENDENTE e apagada junto das parcelas (antes o delete da
+parcela NULLificava o FK e o boleto orfao seguia vivo com o valor VELHO:
+liquidacao silenciava e a parcela nova virava candidata a um 2º boleto —
+reproduzido pela revisao; classe pre-existente, agravada pelo frete);
+frete do form parseia com `parse_float_br` (invalido = flash + nada
+criado, nunca R$ 0 calado) e inf/nan de POST forjado vira ValueError
+tratado; erro no POST de criar preserva `?orcamento=` no redirect;
+seed manual de orcamento com DESCONTO avisa que o desconto NAO entra
+(a venda sairia MAIOR); parcela de venda CANCELADA nao vira boleto
+(`gerar_da_parcela` recusa). PENDENCIAS DOCUMENTADAS (decisao separada):
+soma de parcelas EXPLICITAS segue sem validacao contra o total
+(pre-existente; com frete o descasamento fica mais provavel — validar
+quebraria a "excecao negociada"?); `frete_por_conta='R'` com
+valor_frete>0 e o mesmo padrao do site mas vale conferir com o contador
+(modalidade CIF vs frete destacado); orcamentos ANTIGOS (pre-20/07) que
+embutiram o frete nos precos E mantiveram frete_valor>0 cobrariam o
+frete 2x ao aprovar — conferir os enviados antes de aprovar; venda
+FATURADA ainda mostra "Emitir NF" (NF da venda + NF da fatura duplicaria
+itens e frete na SEFAZ — pre-existente); editar_venda(frete_valor=0)
+como default ZERA frete existente se um caller futuro omitir o param.
+Testes: `tests/test_b2b_frete.py` (14 casos) + regra nova em
 `test_orcamento_aprova_vira_venda.py`.
 
 **Baixa de componente de cesta na PROPRIA linha (fix 08/07/2026)**:
