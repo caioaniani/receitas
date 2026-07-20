@@ -24,6 +24,15 @@
             <li><strong>Vigias</strong> — te chamam no WhatsApp só quando algo quebra: infra do atendimento (15 min), site/frete (2h), custo de IA (1h), bot do atendimento (a cada resposta), PDV (30 min), baixas presas (30 min), <strong>cobrança sem itens no PDV</strong> (15 min — venda "só valor" sem produto/NF; cada cobrança alerta uma vez, com hora, valor e caixa).</li>
             <li><strong>Bot de atendimento</strong> responde clientes no Chatwoot; auditor manda balanço 5×/dia.</li>
             <li><strong>Acurácia da previsão</strong>: snapshot diário 05:30 (alimenta os selos WAPE).</li>
+            <li><strong>NF de transferência indústria→loja</strong>: sai
+                sozinha quando o motorista escaneia o QR de saída do pedido
+                (DANFE no celular dele, pra fiscalização). Se o Tiny estiver
+                fora na hora, a saída NÃO trava — a NF fica pendente e o
+                gesto é reemitir no detalhe do pedido. Pré-requisitos que
+                são SEUS: CNPJ+endereço fiscal de cada loja (RH → Lojas) e
+                SKUs mapeados (<a href="/pedidos/tiny-skus-transferencia">SKUs
+                NF de transferência</a> — herda do site/B2B; só exceções e
+                matérias-primas precisam de mapa próprio).</li>
         </ul>
         <p class="text-muted mb-0">Se algum desses parar, é o vigia (ou o heartbeat do Slack) que avisa — não é papel seu ficar conferindo.</p>
     </div>
