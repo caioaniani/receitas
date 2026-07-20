@@ -301,6 +301,9 @@ def test_padeiro_mostra_retirada_aguardando(app, admin_user):
 
 
 def test_padeiro_retirada_em_transporte_tem_botao_qr(app, admin_user):
+    """Em transporte: o gesto PRINCIPAL é receber pela tela (dono
+    20/07/2026 — o padeiro não tem como escanear); o QR do motorista fica
+    como alternativa."""
     from app.extensions import db
     trad, _r, loja, _el, _d = _setup(db)
     ret = _retirada(db, loja, trad, qtd=10)
@@ -309,8 +312,9 @@ def test_padeiro_retirada_em_transporte_tem_botao_qr(app, admin_user):
     db.session.commit()
     c = app.test_client()
     _login(c, admin_user.id)
-    r = c.get('/padeiro/')
-    assert 'CHEGOU — QR DE RECEBIMENTO' in r.data.decode()
+    html = c.get('/padeiro/').data.decode()
+    assert 'RECEBI — DAR ENTRADA' in html
+    assert 'QR pro motorista' in html
 
 
 def test_padeiro_rota_qr_recebimento(app, admin_user):
