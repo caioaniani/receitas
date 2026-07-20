@@ -289,13 +289,26 @@
 {# ── NF de TRANSFERÊNCIA indústria→loja (20/07/2026) ──
    Emitida sozinha no scan do QR de saída; aqui fica o estado + a
    reemissão manual (Tiny fora do ar na hora do scan). #}
-{% if pedido.status in ('separado', 'em_transporte', 'entregue', 'recebido') %}
+{% set nf_dispensada_efetiva = pedido.nf_dispensada or (pedido.loja and pedido.loja.nf_dispensada) %}
+{% if pedido.status in ('separado', 'em_transporte', 'entregue', 'recebido') or (current_user.is_admin() and pedido.status in ('pendente', 'confirmado')) %}
 <div class="card mt-3" style="max-width:560px;">
     <div class="card-header py-2"><strong class="small">
         <i class="bi bi-file-earmark-text"></i> NF de transferência (Tiny)
     </strong></div>
     <div class="card-body small d-flex align-items-center gap-2 flex-wrap">
-        {% if pedido.nf_emitida_em %}
+        {% if nf_dispensada_efetiva and not pedido.nf_emitida_em %}
+        <span class="badge bg-secondary">🚫 dispensada
+            {%- if not pedido.nf_dispensada %} (pela loja){% endif %}</span>
+        {% if pedido.nf_dispensada and current_user.is_admin() %}
+        <form method="POST" action="{{ url_for('pedidos.nf_dispensar', id=pedido.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary">Reativar NF</button>
+        </form>
+        {% elif not pedido.nf_dispensada %}
+        <span class="text-muted">A loja está marcada como "não precisa de NF"
+            (RH → Lojas).</span>
+        {% endif %}
+        {% elif pedido.nf_emitida_em %}
         <span class="badge bg-success">✓ emitida</span>
         {% if pedido.nf_numero %}<span>nº <strong>{{ pedido.nf_numero }}</strong></span>{% endif %}
         {% if pedido.nf_status %}<span class="text-muted">({{ pedido.nf_status }})</span>{% endif %}
