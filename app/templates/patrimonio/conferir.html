@@ -32,6 +32,8 @@
         <select class="form-select form-select-lg mb-3" name="loja_id_visto">
             <option value="ind" {% if not ativo.loja_id %}selected{% endif %}>Indústria</option>
             {% for l in lojas %}<option value="{{ l.id }}" {% if ativo.loja_id == l.id %}selected{% endif %}>{{ l.nome }}</option>{% endfor %}
+            {# Grandfather: loja desativada onde o ativo mora — sem isso o default caía em Indústria e gerava divergência falsa. #}
+            {% if ativo.loja and not ativo.loja.ativa %}<option value="{{ ativo.loja.id }}" selected>{{ ativo.loja.nome }} (desativada)</option>{% endif %}
         </select>
         <button class="btn btn-success btn-lg w-100 mb-3" name="estado" value="ok"
                 style="padding:18px; font-size:1.3rem; font-weight:700;">
