@@ -338,11 +338,13 @@ def receber_retirada_manual(retirada, usuario_id, quantidades=None):
             if q != base:
                 it.quantidade_recebida = q
     resumo = creditar_industria_retirada(retirada, usuario_id=usuario_id)
+    # O claim já gravou status/recebida_em no banco; alinha o objeto em
+    # memória (synchronize_session=False deixa ele stale) pro caller/flash.
     retirada.status = 'recebida'
-    retirada.recebida_em = agora()
+    retirada.recebida_em = quando
     for qr in retirada.qrcodes:
         if qr.tipo == 'recebimento' and qr.usado_em is None:
-            qr.usado_em = agora()
+            qr.usado_em = quando
             qr.usado_por_descricao = 'recebimento manual (web)'
     return resumo
 
