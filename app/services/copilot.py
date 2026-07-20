@@ -695,7 +695,7 @@ TOOL_CRIAR_VENDA_B2B = {
             },
             "parcelas": {
                 "type": ["array", "null"],
-                "description": "Parcelas. Null/vazio = 1 parcela unica no dia da venda pelo total.",
+                "description": "Parcelas. Null/vazio = 1 parcela unica no dia da venda pelo total. Se explicitas, a SOMA deve fechar o total da venda INCLUINDO o frete (itens + frete_valor) — nada valida por voce.",
                 "items": {
                     "type": "object",
                     "properties": {
