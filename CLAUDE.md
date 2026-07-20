@@ -2658,8 +2658,22 @@ conferencia — zero app, zero digitacao.
   mobile com "✅ Esta aqui e funcionando" e "⚠ Tem algum problema..."
   (+ select de onde ele esta). Validada a 390px (Playwright + Bootstrap
   local, metodo da casa).
-- Manual de operacao: item na secao MENSAL/TRIMESTRAL. Testes:
-  `tests/test_patrimonio.py` (15 casos).
+- Manual de operacao: item na secao MENSAL/TRIMESTRAL. POS-REVISAO
+  (fixados): parse de valor via `parse_float_br` CANONICO + form re-rende
+  em pt-BR — o parse local removia todo '.' e o round-trip da edicao
+  inline multiplicava o valor por 100 a cada salvamento (critico, dinheiro
+  silencioso); valor invalido MANTEM o gravado com flash (nunca None
+  calado); grandfather de loja DESATIVADA nos selects de editar/conferir
+  (sem ele o browser caia na 1ª opcao e o ativo "mudava" pra Industria em
+  silencio); etiqueta trunca nome (36) e local (42) — nome longo invadia
+  a etiqueta de baixo; `ativo` entrou em AUDITED_MODELS (baixa/valor com
+  trilha); filtros busca/situacao tambem valem no PDF; teste de paginacao
+  do PDF corrigido (>= 3 — a arvore /Pages casava o prefixo e >= 2 era
+  vacuo). LIMITACOES CONHECIDAS (baixa, nao bloqueiam):
+  `_ultimas_conferencias` carrega todas as conferencias dos ativos
+  listados (cresce com anos de inventario — otimizar quando doer) e
+  `reativar` limpa `baixado_em` (trilha fica no /audit). Testes:
+  `tests/test_patrimonio.py` (18 casos).
 
 ## Sidebar
 
