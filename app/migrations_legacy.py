@@ -2149,6 +2149,11 @@ def _migrate_sqlite(app):
                    ('nf_dispensada', 'BOOLEAN NOT NULL DEFAULT 0')):
         if cols_pl and _c not in cols_pl:
             cursor.execute(f"ALTER TABLE pedido_loja ADD COLUMN {_c} {_t}")
+    cursor.execute("PRAGMA table_info(loja)")
+    cols_loja2 = [row[1] for row in cursor.fetchall()]
+    if cols_loja2 and 'nf_dispensada' not in cols_loja2:
+        cursor.execute("ALTER TABLE loja ADD COLUMN "
+                       "nf_dispensada BOOLEAN NOT NULL DEFAULT 0")
 
     # seru_produto_map.fator_quantidade
     cursor.execute("PRAGMA table_info(seru_produto_map)")
