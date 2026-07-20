@@ -479,14 +479,16 @@ def _altura_categoria(itens, tem_foto):
     return titulo + fileiras * (lh + 2) + 2
 
 
-def gerar_cardapio_pdf(tipo, categorias, regras, logo=None):
+def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None):
     """PDF pronto (bytes). `categorias`/`regras` na MESMA forma da tela
     (main._cardapio_categorias — fonte única, nunca divergir da web).
-    `logo`: data URI do logotipo (AppConfig) ou None (cai no texto "O Pão")."""
+    `logo`: data URI do logotipo (AppConfig) ou None (cai no texto "O Pão").
+    `preparo`: lista [{label, valor}] dos métodos de preparo (só atacado)."""
     titulo = _TITULO_TIPO.get(tipo, tipo.title())
     pdf = _CardapioPDF(titulo)
     pdf.add_page()
-    _capa(pdf, titulo, regras if tipo == 'atacado' else [], logo_data=logo)
+    _capa(pdf, titulo, regras if tipo == 'atacado' else [], logo_data=logo,
+          preparo=preparo if tipo == 'atacado' else None)
 
     # Alfabética, com 'Outros' sempre por último (padrão de cardápio).
     for cat in sorted(categorias, key=lambda c: (c == 'Outros', c)):
