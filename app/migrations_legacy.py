@@ -1758,6 +1758,16 @@ def _migrate_sqlite(app):
             "                        WHERE nome = 'Massa para folhar' "
             "                        ORDER BY id LIMIT 1) "
             "  AND porcentagem = 1.0")
+    # receita.descricao_atacado — descrição sincera do cardápio atacado
+    # (dono 20/07/2026); backfill único junto com a criação, espelho do
+    # bloco Postgres (DESCRICOES_ATACADO_SEED).
+    if 'descricao_atacado' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN descricao_atacado TEXT")
+        for _nome, _desc in DESCRICOES_ATACADO_SEED:
+            cursor.execute(
+                "UPDATE receita SET descricao_atacado = ? "
+                "WHERE nome = ? AND descricao_atacado IS NULL",
+                (_desc, _nome))
     if 'perda_percentual' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0")
     if 'preco_loja' not in colunas:
