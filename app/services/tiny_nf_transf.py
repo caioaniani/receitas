@@ -147,8 +147,16 @@ def _payload_itens(pedido):
                 it.receita.nome if it.receita else it.nome_item, 0) or 0)
         elif it.produto_id:
             kind, iid = 'produto', it.produto_id
-            custo = float(produto_custos.get(
-                it.produto.nome if it.produto else it.nome_item, 0) or 0)
+            nome_prod = it.produto.nome if it.produto else it.nome_item
+            custo = float(produto_custos.get(nome_prod, 0) or 0)
+            if custo <= 0 and it.produto is not None:
+                # Produto INATIVO fica fora de calcular_custos_produtos
+                # (filtra ativo=True) mas pedido antigo/reemissão ainda
+                # precisa do valor (achado A3 da revisão) — calcula a
+                # composição dele diretamente.
+                custo = float(custos_svc.calcular_custo_produto(
+                    it.produto, receita_custos, res['mp_info'],
+                    produto_custos) or 0)
         elif it.materia_prima_id:
             kind, iid = 'mp', it.materia_prima_id
             custo = _custo_unitario_mp(it.materia_prima) \
