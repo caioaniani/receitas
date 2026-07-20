@@ -210,9 +210,24 @@ def _nota_payload(cliente, itens):
     }
 
 
+def nf_dispensada_para(pedido):
+    """Fonte ÚNICA da dispensa (20/07/2026, dono): o PEDIDO dispensado OU
+    a LOJA dispensada pulam a NF. A decisão é do ADMIN (toggle no detalhe
+    do pedido / checkbox no /rh/lojas) — motorista e padeiro só obedecem."""
+    if pedido.nf_dispensada:
+        return True
+    return bool(pedido.loja and pedido.loja.nf_dispensada)
+
+
 def emitir_nf(pedido, user_id=None, recriar=False):
     """Emite a NF de transferência do pedido. {ok, msg, nota_fiscal_id?}.
     Guards próprios; fluxo/idempotência no motor comum."""
+    if nf_dispensada_para(pedido):
+        origem = ('pedido' if pedido.nf_dispensada else
+                  f'loja {pedido.loja.nome}')
+        return {'ok': False,
+                'msg': (f'NF dispensada ({origem}) — reative a NF antes de '
+                        'emitir (detalhe do pedido / RH → Lojas).')}
     if pedido.status not in _STATUS_EMITIVEIS:
         return {'ok': False,
                 'msg': (f'Pedido em status "{pedido.status}" — a NF de '
