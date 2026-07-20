@@ -168,9 +168,10 @@ def _logo_bytes(logo_data):
         return None
 
 
-def _capa(pdf, titulo_tipo, regras, logo_data=None):
+def _capa(pdf, titulo_tipo, regras, logo_data=None, preparo=None):
     """Hero escuro da marca (como o do site) + label de seção centrado +
-    (atacado) caixa de regras bege — espelho do main/cardapio.html.
+    (atacado) caixa de regras bege + caixa "Métodos de preparo" — espelho
+    do main/cardapio.html.
 
     Com logo configurado (`cardapio_logo_data`), a imagem entra no lugar do
     wordmark "O Pão" na banda escura; sem logo, cai no texto Times."""
