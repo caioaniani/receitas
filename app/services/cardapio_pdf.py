@@ -250,6 +250,81 @@ def _moeda(v):
     return 'R$ ' + s
 
 
+def _quebrar_2_linhas(pdf, txt, largura):
+    """Quebra `txt` (já _latin1) em até 2 linhas que cabem em `largura`,
+    com '...' se sobrar texto. Usa a fonte ATUAL do pdf pra medir."""
+    palavras = txt.split()
+    linhas, atual = [], ''
+    for p in palavras:
+        cand = (atual + ' ' + p).strip()
+        if pdf.get_string_width(cand) <= largura:
+            atual = cand
+            continue
+        linhas.append(atual)
+        atual = p
+        if len(linhas) == 2:
+            break
+    if atual and len(linhas) < 2:
+        linhas.append(atual)
+    sobrou = len(' '.join(linhas)) < len(txt)
+    if sobrou and linhas:
+        ult = linhas[-1]
+        while pdf.get_string_width(ult + '...') > largura and len(ult) > 3:
+            ult = ult[:-1]
+        linhas[-1] = ult + '...'
+    return linhas
+
+
+def _box_preparo(pdf, metodos):
+    """Caixa "Métodos de preparo" da capa (atacado) — mesma cara bege da
+    caixa de regras, com texto LONGO que quebra linha (o backup tem ~3
+    linhas). Altura medida antes (dry_run) pra caixa fechar certinho."""
+    _LARG_TXT = 180
+    _LH = 4.6
+    pdf.set_font('Helvetica', 'B', 9)      # B mede mais largo: nunca corta
+    alt = 10
+    corpos = []
+    for m in metodos:
+        txt = _latin1((m['label'] + ': ' if m['label'] else '') + m['valor'])
+        alt += pdf.multi_cell(_LARG_TXT, _LH, txt,
+                              dry_run=True, output='HEIGHT') + 1.6
+        corpos.append(txt)
+    alt += 1.5
+    y0 = pdf.get_y()
+    if y0 + alt > _Y_LIMITE:               # capa cheia: caixa em página nova
+        pdf.add_page()
+        y0 = pdf.get_y()
+    pdf.set_fill_color(*_C_TAG)
+    pdf.set_draw_color(*_C_BORDER)
+    pdf.rect(_MARGEM, y0, 190, alt, style='FD',
+             round_corners=True, corner_radius=_RAIO)
+    pdf.set_y(y0 + 4)
+    pdf.set_x(_MARGEM + 5)
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.set_text_color(*_C_PRIMARY)
+    pdf.set_char_spacing(0.8)
+    pdf.cell(0, 5, _latin1('MÉTODOS DE PREPARO'),
+             new_x='LMARGIN', new_y='NEXT')
+    pdf.set_char_spacing(0)
+    pdf.ln(0.5)
+    lm_orig, rm_orig = pdf.l_margin, pdf.r_margin
+    pdf.set_left_margin(_MARGEM + 5)
+    pdf.set_right_margin(210 - (_MARGEM + 5) - _LARG_TXT)
+    for m in metodos:
+        pdf.set_x(_MARGEM + 5)
+        if m['label']:
+            pdf.set_font('Helvetica', 'B', 9)
+            pdf.set_text_color(*_C_MUTED)
+            pdf.write(_LH, _latin1(m['label'] + ': '))
+        pdf.set_font('Helvetica', '', 9)
+        pdf.set_text_color(*_C_FG)
+        pdf.write(_LH, _latin1(m['valor']))
+        pdf.ln(_LH + 1.6)
+    pdf.set_left_margin(lm_orig)
+    pdf.set_right_margin(rm_orig)
+    pdf.set_y(y0 + alt + 5)
+
+
 def _titulo_categoria(pdf, nome, alt_primeira=_CARD_H):
     # Categoria órfã no pé da página: quebra antes (nunca título solto).
     # `alt_primeira` = altura do 1º bloco da categoria — card de foto no
