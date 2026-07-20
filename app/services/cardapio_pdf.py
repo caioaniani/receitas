@@ -184,9 +184,12 @@ def _capa(pdf, titulo_tipo, regras, logo_data=None):
     logo = _logo_bytes(logo_data)
     if logo:
         try:
-            y_logo = pdf.get_y() + 1
-            pdf.image(BytesIO(logo), x=_MARGEM, y=y_logo, h=15)
-            pdf.set_y(y_logo + 16)
+            # h=26: o logo PREENCHE a faixa escura (era 15mm, pequeno demais
+            # — feedback do dono 20/07). Largura auto pela proporcao; wordmark
+            # a 26mm fica ~78mm, folgado nos 190mm uteis.
+            y_logo = pdf.get_y() + 2
+            pdf.image(BytesIO(logo), x=_MARGEM, y=y_logo, h=26)
+            pdf.set_y(y_logo + 28)
         except Exception:  # noqa: BLE001 — logo ruim nao derruba o PDF
             logger.warning('cardapio_pdf: logo nao embutiu', exc_info=True)
             logo = None
