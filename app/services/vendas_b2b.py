@@ -535,7 +535,7 @@ def criar_venda(*, cliente_id=None, cliente_nome=None, data_venda=None,
 
 def editar_venda(venda, *, cliente_id=None, cliente_nome=None, data_venda=None,
                  data_entrega=None, itens, parcelas=None, observacao=None,
-                 nf_numero=None, user=None):
+                 nf_numero=None, frete_valor=0, user=None):
     """Edita uma venda ATIVA por completo: estorna o estoque baixado, apaga
     itens/parcelas antigos, recria com os novos dados e re-baixa.
 
