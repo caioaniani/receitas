@@ -275,6 +275,10 @@
     function lockForm() {
         document.querySelectorAll('#tbl-itens input, #tbl-itens select, #tbl-parcelas input, #tbl-parcelas select')
             .forEach(function(el) { el.disabled = true; });
+        // Frete muda o total — trava junto com itens/parcelas (o servidor
+        // ignora frete no caminho de venda paga de qualquer forma).
+        var frete = document.getElementById('inp-frete');
+        if (frete) frete.disabled = true;
         ['btn-add-item', 'btn-add-parcela'].forEach(function(id) {
             var b = document.getElementById(id); if (b) b.style.display = 'none';
         });
