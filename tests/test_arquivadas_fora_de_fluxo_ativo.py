@@ -172,3 +172,65 @@ def test_salvar_cesta_preserva_fk_de_componente_arquivado(app, admin_user):
         item = ProdutoItem.query.filter_by(produto_id=cesta_id).one()
         assert item.receita_id == r_id       # FK preservada (grandfather)
         assert item.quantidade == 3
+
+
+def _login_owner(app, owner_user):
+    c = app.test_client()
+    c.post('/auth/login', data={'login': owner_user.login, 'senha': '123'})
+    return c
+
+
+def test_arquivadas_saldo_dry_run_e_executar(app, owner_user):
+    """/admin/arquivadas-saldo (owner): dry-run lista sem tocar; ?executar=1
+    zera com movimento 'ajuste' rastreável. Linha com reserva de site é
+    pulada; item VIVO nunca entra."""
+    from app.models import EstoqueLoja, Loja, MovEstoqueLoja
+    with app.app_context():
+        loja = Loja(nome='Loja Saldo', ativa=True)
+        db.session.add(loja)
+        db.session.flush()
+        morta = _receita('Pao Saldo Morto', arquivada=True)
+        viva = _receita('Pao Saldo Vivo')
+        reservada = _receita('Pao Saldo Reservado', arquivada=True)
+        db.session.add_all([
+            EstoqueLoja(loja_id=loja.id, receita_id=morta.id, quantidade=444),
+            EstoqueLoja(loja_id=loja.id, receita_id=viva.id, quantidade=10),
+            EstoqueLoja(loja_id=loja.id, receita_id=reservada.id,
+                        quantidade=7, quantidade_reservada=2),
+        ])
+        db.session.commit()
+        morta_id, viva_id, res_id = morta.id, viva.id, reservada.id
+        loja_id = loja.id
+    c = _login_owner(app, owner_user)
+    # DRY-RUN: lista a morta, pula a reservada, ignora a viva; nada muda.
+    d = c.get('/admin/arquivadas-saldo').get_json()
+    assert d['dry_run'] is True
+    itens = [li['item'] for li in d['linhas']]
+    assert 'Pao Saldo Morto' in itens and 'Pao Saldo Vivo' not in itens
+    assert any('Reservado' in p['item'] for p in d['pulados_com_reserva'])
+    with app.app_context():
+        el = EstoqueLoja.query.filter_by(loja_id=loja_id,
+                                         receita_id=morta_id).one()
+        assert el.quantidade == 444          # dry-run não tocou
+    # EXECUTAR: zera + movimento com a quantidade exata.
+    d2 = c.get('/admin/arquivadas-saldo?executar=1').get_json()
+    assert d2['dry_run'] is False and d2['zerados'] >= 1
+    with app.app_context():
+        el = EstoqueLoja.query.filter_by(loja_id=loja_id,
+                                         receita_id=morta_id).one()
+        assert el.quantidade == 0
+        mov = MovEstoqueLoja.query.filter_by(
+            estoque_loja_id=el.id, tipo='ajuste').one()
+        assert mov.quantidade == 444
+        assert 'arquivad' in (mov.referencia or '')
+        # viva intocada; reservada intocada (pulada)
+        assert EstoqueLoja.query.filter_by(
+            loja_id=loja_id, receita_id=viva_id).one().quantidade == 10
+        assert EstoqueLoja.query.filter_by(
+            loja_id=loja_id, receita_id=res_id).one().quantidade == 7
+
+
+def test_arquivadas_saldo_exige_owner(app, admin_user):
+    c = _login(app, admin_user)
+    resp = c.get('/admin/arquivadas-saldo')
+    assert resp.status_code == 403
