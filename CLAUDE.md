@@ -2175,7 +2175,35 @@ SKU do canal 'transf' com FALLBACK site→b2b (`sku_transferencia`).
 - CFOP/NCM vem do cadastro do produto no Tiny via SKU + natureza — se o
   CFOP de transferencia (5.152/6.152) sair errado, o ajuste e no Tiny,
   nao aqui. Manual de operacao registrado (secao RODA SOZINHO).
-- Testes: `tests/test_nf_transferencia.py` (14 casos; Tiny sempre mockado).
+- **POS-REVISAO (fixados)**: documento fiscal NUNCA usa SKU de sugestao
+  fuzzy nao confirmada — `_sku_confirmado` exige confirmado_em ou
+  salvo-por-humano em TODOS os canais do fallback (o sync da tela transf
+  cria auto_match pra todo o universo e um chute herdaria por cima do SKU
+  confirmado do site → NCM/CFOP errados na SEFAZ); produto INATIVO em
+  pedido antigo usa `calcular_custo_produto` direto (nao aborta com msg
+  enganosa); badge "pronta pra NF" do RH usa a MESMA regua da emissao
+  (`Loja.fiscal_completo`); NF REJEITADA tem saida na UI ("Refazer do
+  zero" com confirm no card do detalhe); voltar_status/cancelar com NF
+  emitida AVISAM que a nota nao e desfeita (cancelamento de NF e no Tiny,
+  nao ha caminho no sistema); salvar_loja_fiscal trunca no tamanho da
+  coluna (texto colado dava DataError/500); DANFE do painel do driver
+  exige POSSE do pedido (driver_id); etapa de audit
+  'double_submit_suprimido' (23 chars) estourava String(20) em Postgres e
+  o evento sumia — virou 'dbl_submit_suprim'.
+- **TRADE-OFFS ACEITOS / PENDENCIAS (decisao separada)**: a emissao no
+  scan e SINCRONA (Tiny pendurado = spinner de ate ~1min pro motorista no
+  pior caso; thread evitaria mas criaria corrida com o botao manual —
+  o motor de NF nao tem claim atomico, classe pre-existente do site/B2B);
+  `recriar=1` refaz NF ate autorizada (POST forjado — mesma semantica
+  documentada do B2B, "risco do gesto"); MP de unidade 'g'/'ml' na NF sai
+  com valor POR GRAMA (MPs pediveis hoje sao 'un'; se um dia pedirem MP
+  em gramas com quantidade=pacotes, a NF subvaloriza ~1000x — conferir);
+  homonimas disputam custo por NOME (fraqueza pre-existente do custos.py,
+  agora com consequencia fiscal); a rota publica da DANFE
+  (/handshake/<token>/danfe) bate no Tiny a cada GET sem rate limit
+  (por desenho: pagina de sucesso persistente); card fiscal do RH lista
+  tambem a loja "Industria" (ruido cosmetico).
+- Testes: `tests/test_nf_transferencia.py` (19 casos; Tiny sempre mockado).
 
 ## Bot de atendimento — memoria cross-conversa + busca por telefone (19/07/2026)
 
