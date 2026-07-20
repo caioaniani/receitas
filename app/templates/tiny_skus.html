@@ -77,6 +77,8 @@
             {% else %}
             <span class="badge bg-success">✓ mapeado</span>
             {% endif %}
+          {% elif it.sku_herdado %}
+            <span class="badge bg-secondary" title="Sem SKU próprio neste canal — a emissão usa o SKU herdado do site/B2B. Salve um SKU aqui só se for diferente.">herda <code class="text-white">{{ it.sku_herdado }}</code></span>
           {% else %}
             <span class="badge bg-warning text-dark">pendente</span>
           {% endif %}
