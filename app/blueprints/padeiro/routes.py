@@ -655,6 +655,55 @@ def retirada_qr(id):
                            url=url, qr_png=qr_png, voltar_data=data_str)
 
 
+@padeiro_bp.route('/retirada/<int:id>/receber', methods=['POST'])
+@login_required
+@padeiro_required
+def retirada_receber(id):
+    """Recebimento da retirada PELA TELA do padeiro, sem QR (decisão do
+    dono 20/07/2026: "o padeiro deve concluir, porém ele só tem a tela do
+    /padeiro — não tem como escanear"). Mesmo motor da destrava admin
+    (`receber_retirada_manual`: claim atômico, conferência por item,
+    guarda contra coleta já estornada); o QR do motorista segue como
+    caminho alternativo. Campo `qtd_<item_id>` vazio/inválido = usa a
+    quantidade coletada (mesmo contrato dos outros forms)."""
+    from app.models import RetiradaSobra
+    from app.services.devolucao import (
+        auditar_gesto_retirada,
+        receber_retirada_manual,
+    )
+
+    data_str = (request.form.get('data') or '').strip() or None
+    ret = RetiradaSobra.query.get_or_404(id)
+    quantidades = {}
+    for it in ret.itens:
+        bruto = (request.form.get(f'qtd_{it.id}') or '').strip()
+        if bruto:
+            try:
+                quantidades[it.id] = int(bruto)
+            except ValueError:
+                pass
+    try:
+        resumo = receber_retirada_manual(ret, current_user.id, quantidades,
+                                         origem='padeiro')
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        flash(f'Não recebi: {exc}', 'warning')
+        return redirect(url_for('padeiro.index', data=data_str))
+    auditar_gesto_retirada(ret, 'r_receb', 'manual',
+                           f'tela do padeiro, usuario {current_user.id}')
+    partes = [f"{r['qtd']}× {r.get('destino') or r['nome']}"
+              for r in resumo if 'erro' not in r]
+    erros = [r['nome'] for r in resumo if 'erro' in r]
+    msg = (f'Retirada #{ret.id} recebida — estoque da indústria creditado'
+           + (f" ({', '.join(partes)})" if partes else ' (nada a creditar)')
+           + '.')
+    if erros:
+        msg += f" Itens sem cadastro (avise o admin): {', '.join(erros)}."
+    flash(msg, 'success' if not erros else 'warning')
+    return redirect(url_for('padeiro.index', data=data_str))
+
+
 @padeiro_bp.route('/juntar-repetidos', methods=['POST'])
 @login_required
 @padeiro_required
