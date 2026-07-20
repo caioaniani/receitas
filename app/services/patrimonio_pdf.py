@@ -65,7 +65,8 @@ def gerar_etiquetas_pdf(ativos, url_base):
         pdf.cell(tw, 5.5, _latin1(ativo.codigo))
         pdf.set_xy(tx, y0 + 10.0)
         pdf.set_font('Helvetica', 'B', 9)
-        pdf.multi_cell(tw, 4.0, _latin1(ativo.nome)[:70])
+        # align='L': o default justificado espalhava "Forno    turbo".
+        pdf.multi_cell(tw, 4.0, _latin1(ativo.nome)[:70], align='L')
         y_nome_fim = pdf.get_y()
         pdf.set_xy(tx, min(y_nome_fim + 1.0, y0 + _ETQ_H - 9.0))
         pdf.set_font('Helvetica', '', 7.5)
@@ -73,11 +74,13 @@ def gerar_etiquetas_pdf(ativos, url_base):
         local = ativo.local_nome
         if ativo.local_detalhe:
             local += f' · {ativo.local_detalhe}'
-        pdf.multi_cell(tw, 3.4, _latin1(local)[:60])
-        pdf.set_xy(tx, y0 + _ETQ_H - 5.0)
+        pdf.multi_cell(tw, 3.4, _latin1(local)[:60], align='L')
+        # Rodapé na LARGURA INTEIRA da etiqueta (embaixo do QR): na coluna
+        # de texto ele estourava a moldura e invadia a etiqueta vizinha.
+        pdf.set_xy(x0 + 2.0, y0 + _ETQ_H - 4.4)
         pdf.set_font('Helvetica', '', 6.5)
         pdf.set_text_color(150, 150, 150)
-        pdf.cell(tw, 3.0, _latin1('aponte a camera pro QR pra conferir'))
+        pdf.cell(_ETQ_W - 4.0, 3.0, _latin1('aponte a camera pro QR pra conferir'))
 
     if not pdf.page_no():
         pdf.add_page()
