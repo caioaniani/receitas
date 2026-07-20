@@ -408,6 +408,17 @@ footer p { margin: 0; }
     </div>
     {% endif %}
 
+    {% if preparo %}
+    <div class="regras-atacado">
+        <h3 class="regras-titulo">Métodos de preparo</h3>
+        <ul class="regras-lista">
+            {% for p in preparo %}
+            <li>{% if p.label %}<span class="regra-label">{{ p.label }}:</span> {% endif %}{{ p.valor }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
     {% if categorias %}
     <div class="pills-wrap">
         <div class="pills">
