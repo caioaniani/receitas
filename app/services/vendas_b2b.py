@@ -469,9 +469,15 @@ def _aplicar_parcelas(venda, parcelas):
 
 def _normalizar_frete(frete_valor):
     """Frete cobrado do cliente → Decimal(0.01). Negativo é erro (desconto
-    tem caminho proprio, por item); dinheiro nunca passa por float."""
-    frete = Decimal(str(frete_valor or 0)).quantize(
-        Decimal('0.01'), rounding=ROUND_HALF_UP)
+    tem caminho proprio, por item); dinheiro nunca passa por float.
+    inf/nan (POST forjado passa pelo float() da rota) viram ValueError
+    tratado em vez de InvalidOperation/500."""
+    from decimal import InvalidOperation
+    try:
+        frete = Decimal(str(frete_valor or 0)).quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        raise ValueError(f'frete invalido: {frete_valor!r}') from None
     if frete < 0:
         raise ValueError('frete nao pode ser negativo')
     return frete
