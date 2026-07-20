@@ -210,9 +210,11 @@ def leads():
     lds = q.order_by(LeadB2B.criado_em.desc()).limit(300).all()
     n_pendentes = LeadB2B.query.filter(
         LeadB2B.contatado_em.is_(None)).count()
+    from app.services.chatbot_vigia import link_chatwoot
     return render_template(
         'b2b/leads.html', leads=lds, pendentes=pendentes,
         n_pendentes=n_pendentes,
+        link_conversa_chatwoot=link_chatwoot,
         catalogo_url=catalogo_b2b_url() or '',
         catalogo_via_env=bool(not (AppConfig.get('catalogo_b2b_url')
                                    or '').strip() and catalogo_b2b_url()))
