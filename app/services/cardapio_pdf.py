@@ -370,7 +370,19 @@ def _card(pdf, x, y, item, foto, card_h=_CARD_H):
             nome = nome[:-1]
         nome += '...'
     pdf.cell(_COL_W - 5, 4.5, nome)
-    pdf.set_xy(x + 2.5, y + _FOTO_H + 6.5)
+    if card_h > _CARD_H:
+        desc = item.get('descricao')
+        if desc:
+            pdf.set_font('Helvetica', '', 7)
+            pdf.set_text_color(*_C_MUTED)
+            for i, ln in enumerate(
+                    _quebrar_2_linhas(pdf, _latin1(desc), _COL_W - 5)):
+                pdf.set_xy(x + 2.5, y + _FOTO_H + 6.2 + i * 3.1)
+                pdf.cell(_COL_W - 5, 3.1, ln)
+        y_preco = y + _FOTO_H + 13.4
+    else:
+        y_preco = y + _FOTO_H + 6.5
+    pdf.set_xy(x + 2.5, y_preco)
     pdf.set_font('Helvetica', 'B', 9.5)
     pdf.set_text_color(*_C_PRIMARY)
     pdf.cell(_COL_W - 5, 5, _latin1(_moeda(item['preco_venda'])))
