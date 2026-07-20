@@ -397,6 +397,29 @@ def salvar_lojas():
     return redirect(url_for('rh.lojas'))
 
 
+@rh_bp.route('/lojas/<int:id>/fiscal', methods=['POST'])
+@login_required
+@rh_required
+def salvar_loja_fiscal(id):
+    """Dados FISCAIS da loja (NF de transferência indústria→loja,
+    20/07/2026): CNPJ + IE + endereço estruturado — a SEFAZ exige campos
+    separados no destinatário da NF-e. Form próprio (fora da tabela densa
+    de lojas) pra não inflar a tela do RH."""
+    loja = Loja.query.get_or_404(id)
+    loja.cnpj = (request.form.get('cnpj') or '').strip() or None
+    loja.inscricao_estadual = \
+        (request.form.get('inscricao_estadual') or '').strip() or None
+    for campo in ('endereco_logradouro', 'endereco_numero',
+                  'endereco_complemento', 'endereco_bairro', 'endereco_cep',
+                  'endereco_cidade'):
+        setattr(loja, campo, (request.form.get(campo) or '').strip() or None)
+    loja.endereco_uf = \
+        (request.form.get('endereco_uf') or '').strip().upper()[:2] or None
+    db.session.commit()
+    flash(f'Dados fiscais da loja "{loja.nome}" salvos.', 'success')
+    return redirect(url_for('rh.lojas'))
+
+
 @rh_bp.route('/lojas/excluir/<int:id>', methods=['POST'])
 @login_required
 @rh_required
