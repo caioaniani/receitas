@@ -1512,7 +1512,11 @@ def _migrate_postgres(app):
                    ('endereco_bairro', 'VARCHAR(100)'),
                    ('endereco_cep', 'VARCHAR(9)'),
                    ('endereco_cidade', 'VARCHAR(100)'),
-                   ('endereco_uf', 'VARCHAR(2)')):
+                   ('endereco_uf', 'VARCHAR(2)'),
+                   # Razao social legal (20/07/2026, pedido do dono: o nome
+                   # no sistema e apelido interno; a NF precisa do nome
+                   # legal da filial).
+                   ('razao_social', 'VARCHAR(200)')):
         _try(f"ALTER TABLE loja ADD COLUMN IF NOT EXISTS {_c} {_t}")
     _try("ALTER TABLE pedido_loja ADD COLUMN IF NOT EXISTS "
          "tiny_nota_fiscal_id VARCHAR(40)")
