@@ -34,6 +34,11 @@ class Loja(db.Model):
     endereco_cep = db.Column(db.String(9))
     endereco_cidade = db.Column(db.String(100))
     endereco_uf = db.Column(db.String(2))
+    # Razao social LEGAL da filial (20/07/2026, pedido do dono: "a razao
+    # social e diferente de como eu chamo ela no sistema"). `nome` segue
+    # sendo o apelido interno de toda a operacao; a NF de transferencia usa
+    # a razao social quando preenchida (fallback: nome). ALTER ja em prod.
+    razao_social = db.Column(db.String(200))
 
     @property
     def fiscal_completo(self):
