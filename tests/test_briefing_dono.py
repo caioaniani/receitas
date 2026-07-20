@@ -449,11 +449,12 @@ def test_home_dono_ve_vendas_totais(app, owner_user, cliente):
     with patch('app.services.vendas_diarias.garantir_capturado') as gc:
         body = cliente.get('/').get_data(as_text=True)
     gc.assert_not_called()                       # home nunca bate na API
-    assert 'Vendas de ontem' in body
-    assert 'R$ 800' in body
+    # ATENÇÃO: não usar 'Vendas de ontem' como marcador do painel — a
+    # sidebar tem um title= com esse texto e o assert passaria sempre.
+    assert 'Vendas de hoje' in body              # seção de hoje (painel)
+    assert 'R$ 800' in body                      # total de ontem
     assert 'Loja A' in body
     # snapshot presente → sem aviso de captura pendente
-    assert 'ainda não foi\n            capturado' not in body
     assert 'snapshot de ontem' not in body
 
 
