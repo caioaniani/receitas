@@ -21,6 +21,19 @@ class Loja(db.Model):
     # PIN 4-6 digitos usado pelo funcionario da loja pra confirmar
     # recebimento via QR Code (handshake driver → loja).
     pin = db.Column(db.String(8))
+    # Dados FISCAIS (20/07/2026): a loja e DESTINATARIA da NF-e de
+    # transferencia industria→loja (filial com CNPJ proprio). SEFAZ exige
+    # documento + endereco estruturado — mesma regua do ClienteB2B. O campo
+    # livre `endereco` acima segue como fallback humano (RH/escala).
+    cnpj = db.Column(db.String(20))
+    inscricao_estadual = db.Column(db.String(20))
+    endereco_logradouro = db.Column(db.String(200))
+    endereco_numero = db.Column(db.String(20))
+    endereco_complemento = db.Column(db.String(100))
+    endereco_bairro = db.Column(db.String(100))
+    endereco_cep = db.Column(db.String(9))
+    endereco_cidade = db.Column(db.String(100))
+    endereco_uf = db.Column(db.String(2))
 
     def __repr__(self):
         return f'<Loja {self.nome}>'
