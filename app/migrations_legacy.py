@@ -1435,6 +1435,14 @@ def _migrate_postgres(app):
     _try("CREATE INDEX IF NOT EXISTS ix_chatbot_conversa_contato_key "
          "ON chatbot_conversa (contato_key)")
 
+    # Frete na venda B2B (20/07/2026, pedido do dono via Bruno): valor do
+    # frete da entrega COBRADO do cliente — soma no valor_total (parcela/
+    # boleto herdam) e vai no campo valor_frete da NF do Tiny (mesmo padrao
+    # da NF do site). Procedimento de 2 commits: este ALTER deploya ANTES
+    # do modelo. Default 0 = vendas antigas sem frete, nada muda nelas.
+    _try("ALTER TABLE venda_b2b ADD COLUMN IF NOT EXISTS "
+         "frete_valor NUMERIC(10, 2) NOT NULL DEFAULT 0")
+
     # Motivo do cancelamento (25/06/2026) — registra POR QUE um pedido do site
     # foi cancelado (pix_expirado / reembolso / cancelado_admin) em vez de
     # deduzir pelos timestamps. Coluna nullable; pedidos cancelados antes desta
