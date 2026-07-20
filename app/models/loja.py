@@ -39,6 +39,10 @@ class Loja(db.Model):
     # sendo o apelido interno de toda a operacao; a NF de transferencia usa
     # a razao social quando preenchida (fallback: nome). ALTER ja em prod.
     razao_social = db.Column(db.String(200))
+    # Dispensa de NF de transferencia POR LOJA (20/07/2026, dono): loja
+    # marcada nunca emite NF no scan do QR. Decisao do ADMIN no /rh/lojas
+    # — motorista/padeiro nao veem a opcao.
+    nf_dispensada = db.Column(db.Boolean, nullable=False, default=False)
 
     @property
     def fiscal_completo(self):
