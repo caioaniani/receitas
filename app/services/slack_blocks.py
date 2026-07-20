@@ -431,6 +431,7 @@ def _preview_criar_venda_b2b(p, token):
             for p in parcelas[:10]
         )
 
+    frete = float(p.get('frete_valor') or 0)
     return [
         _header('Criar venda B2B'),
         _fields([
@@ -438,7 +439,8 @@ def _preview_criar_venda_b2b(p, token):
             ('Data', p.get('data_venda') or 'hoje'),
             ('Entrega (padaria)', p.get('data_entrega') or '⚠ informe'),
             ('NF', p.get('nf_numero') or '—'),
-            ('Total', f"R$ {p.get('total') or 0:.2f}"),
+            ('Total', f"R$ {p.get('total') or 0:.2f}"
+                      + (f' (inclui frete R$ {frete:.2f})' if frete else '')),
             ('Observacao', p.get('observacao') or '—'),
         ]),
         _section('*Itens (o freezer baixa na SEPARAÇÃO pelo padeiro):*\n'
