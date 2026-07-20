@@ -101,6 +101,19 @@ img { max-width: 100%; display: block; }
     max-width: 440px;
     line-height: 1.5;
 }
+/* Logotipo no lugar do wordmark "O Pão" (config em /admin/cardapio-atacado/
+   regras). Ocupa a mesma faixa vertical do <h1>; imagem branca/clara fica
+   perfeita no hero escuro. */
+.hero-logo {
+    max-height: 140px;
+    max-width: min(440px, 100%);
+    width: auto;
+    margin-bottom: 18px;
+    object-fit: contain;
+}
+@media (max-width: 640px) {
+    .hero-logo { max-height: 100px; margin-bottom: 12px; }
+}
 
 /* ── CARDÁPIO ── */
 .cardapio-section {
