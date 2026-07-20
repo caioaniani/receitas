@@ -293,6 +293,36 @@ def test_vendas_ontem_capturar_false_nao_chama_captura(app):
     gc.assert_not_called()
 
 
+def test_vendas_hoje_soma_pdv_e_site_de_hoje(app):
+    """vendas_hoje: snapshot do PDV de HOJE + site pago hoje, sem delta
+    (dia incompleto não se compara com média de dia cheio)."""
+    from app.models import PedidoOnline
+    from app.services import briefing_dono
+    from app.utils import agora
+    _venda_dia(hoje(), loja_seru='Loja A', fat=900, n=9)
+    _venda_dia(hoje() - timedelta(days=1), loja_seru='Loja A', fat=555)  # ontem, fora
+    db.session.add(PedidoOnline(
+        codigo='PO-H', nome_cliente='X', email_cliente='x@x.com',
+        modo_entrega='retirada', valor_total=Decimal('100'),
+        pago_em=agora()))
+    db.session.commit()
+    v = briefing_dono.vendas_hoje()
+    assert v['pdv_total'] == 900.0
+    assert v['n_pedidos'] == 9
+    assert v['site_total'] == 100.0
+    assert v['total_geral'] == 1000.0
+    assert v['por_loja'][0]['loja'] == 'Loja A'
+    assert 'delta_pct' not in v['por_loja'][0]
+
+
+def test_vendas_hoje_default_nao_chama_captura(app):
+    """O modo da home NUNCA bate na API Seru — default capturar=False."""
+    from app.services import briefing_dono
+    with patch('app.services.vendas_diarias.garantir_capturado') as gc:
+        briefing_dono.vendas_hoje()
+    gc.assert_not_called()
+
+
 def test_custo_ia_ontem_janela_fechada(app):
     from app.models import UsoIA
     from app.services import briefing_dono
