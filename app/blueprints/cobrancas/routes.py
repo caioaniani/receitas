@@ -72,6 +72,13 @@ def gerar_da_parcela(parcela_id):
               '(B2B → Faturas mensais), não por parcela; gerar aqui '
               'cobraria o cliente em dobro.', 'warning')
         return redirect(url_for('cobrancas.lista'))
+    # Venda cancelada não vira boleto (achado da revisão 20/07/2026:
+    # cancelar_venda mantém as parcelas como registro e elas continuavam
+    # "candidatas" — cobrar venda morta no Sicredi).
+    if p.venda and p.venda.status == 'cancelada':
+        flash(f'A venda #{p.venda.id} está CANCELADA — parcela não vira '
+              'boleto.', 'danger')
+        return redirect(url_for('cobrancas.lista'))
     venda = p.venda
     cli = venda.cliente
     emissao = hoje()
