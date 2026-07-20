@@ -827,6 +827,12 @@ def venda_nova():
             })
         flash(f'Itens e cliente vindos do orçamento {orc.codigo} — confira '
               'preços e a data de entrega antes de salvar.', 'info')
+        if (orc.desconto_valor or 0) > 0:
+            flash(f'O orçamento tem desconto de R$ '
+                  f'{orc.desconto_valor:.2f} que NÃO entra automaticamente '
+                  '— embuta nos preços unitários (a venda não tem campo de '
+                  'desconto em R$), senão a venda sai MAIOR que o '
+                  'orçamento.', 'warning')
         if pulados:
             flash('Itens de linha livre do orçamento não entram na venda '
                   '(sem vínculo com o catálogo): ' + ', '.join(pulados),
