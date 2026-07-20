@@ -352,10 +352,11 @@ def vendas_hoje(capturar=False):
     a manhã inteira.
     """
     from app.models import PedidoOnline
+    from app.services import vendas_diarias
 
     hoje_d = hoje()
-    total, por_company, n_pedidos = _faturamento_por_loja_seguro(
-        hoje_d, capturar=capturar)
+    total, por_company, n_pedidos = vendas_diarias.faturamento_por_loja(
+        hoje_d, hoje_d, capturar=capturar)
     vinculo = _resolver_loja_seru()
     fat_por_loja = defaultdict(float)
     for loja_seru, fat in por_company.items():
