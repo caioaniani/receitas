@@ -845,7 +845,7 @@ def venda_nova():
 @login_required
 @admin_required
 def venda_criar():
-    campos, itens, parcelas = _parse_venda_form()
+    campos, itens, parcelas, frete_valor = _parse_venda_form()
     # Guard ANTES de criar (o GET de venda_nova tem o mesmo, mas o form
     # pode ter ficado aberto numa aba enquanto o orçamento era convertido
     # por outro caminho — sem isso a demanda entraria em DOBRO na fila).
