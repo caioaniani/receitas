@@ -1047,6 +1047,7 @@ def duplicar(id):
         perda_percentual=original.perda_percentual,
         custo_embalagem=original.custo_embalagem,
         modo_preparo=original.modo_preparo,
+        descricao_atacado=original.descricao_atacado,
     )
     db.session.add(copia)
     db.session.flush()
