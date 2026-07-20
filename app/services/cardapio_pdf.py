@@ -152,21 +152,48 @@ class _CardapioPDF(FPDF):
         self.cell(40, 6, _latin1('página %d' % self.page_no()), align='R')
 
 
-def _capa(pdf, titulo_tipo, regras):
+def _logo_bytes(logo_data):
+    """Bytes da imagem do logo a partir do data URI (AppConfig
+    `cardapio_logo_data`). None se ausente/invalido — nunca levanta (o
+    cardapio nunca deixa de gerar por causa do logo)."""
+    if not logo_data or 'base64,' not in logo_data:
+        return None
+    try:
+        import base64
+        return base64.b64decode(logo_data.split('base64,', 1)[1])
+    except Exception:  # noqa: BLE001
+        logger.warning('cardapio_pdf: logo data URI invalido', exc_info=True)
+        return None
+
+
+def _capa(pdf, titulo_tipo, regras, logo_data=None):
     """Hero escuro da marca (como o do site) + label de seção centrado +
-    (atacado) caixa de regras bege — espelho do main/cardapio.html."""
+    (atacado) caixa de regras bege — espelho do main/cardapio.html.
+
+    Com logo configurado (`cardapio_logo_data`), a imagem entra no lugar do
+    wordmark "O Pão" na banda escura; sem logo, cai no texto Times."""
     pdf.set_fill_color(*_C_FG)             # hero: o escuro da marca do site
     pdf.rect(0, 0, 210, 58, style='F')
     pdf.set_y(14)
     pdf.set_text_color(215, 210, 202)
     pdf.set_font('Helvetica', '', 9)
     pdf.set_char_spacing(1.6)
-    pdf.cell(0, 5, _latin1('PADARIA ARTESANAL · ITAIM BIBI'),
+    pdf.cell(0, 5, _latin1('PADARIA ARTESANAL · BROOKLIN'),
              new_x='LMARGIN', new_y='NEXT')
     pdf.set_char_spacing(0)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font('Times', 'B', 30)
-    pdf.cell(0, 14, _latin1('O Pão'), new_x='LMARGIN', new_y='NEXT')
+    logo = _logo_bytes(logo_data)
+    if logo:
+        try:
+            y_logo = pdf.get_y() + 1
+            pdf.image(BytesIO(logo), x=_MARGEM, y=y_logo, h=15)
+            pdf.set_y(y_logo + 16)
+        except Exception:  # noqa: BLE001 — logo ruim nao derruba o PDF
+            logger.warning('cardapio_pdf: logo nao embutiu', exc_info=True)
+            logo = None
+    if not logo:
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font('Times', 'B', 30)
+        pdf.cell(0, 14, _latin1('O Pão'), new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('Helvetica', '', 10)
     pdf.set_text_color(220, 216, 210)
     pdf.cell(0, 6, _latin1('Tempo. Fermento. Cuidado. '
