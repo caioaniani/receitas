@@ -471,8 +471,20 @@ def test_home_dono_sem_snapshot_avisa(app, owner_user, cliente):
     """Sem snapshot de ontem, a home avisa em vez de fingir R$ 0."""
     _login(cliente, owner_user)
     body = cliente.get('/').get_data(as_text=True)
-    assert 'Vendas de ontem' in body
+    assert 'Ontem' in body
     assert 'snapshot de ontem' in body
+
+
+def test_home_dono_ve_vendas_de_hoje(app, owner_user, cliente):
+    """A home mostra HOJE (parcial) em destaque além de ontem."""
+    _venda_dia(hoje(), loja_seru='Loja A', fat=450)
+    _login(cliente, owner_user)
+    with patch('app.services.vendas_diarias.garantir_capturado') as gc:
+        body = cliente.get('/').get_data(as_text=True)
+    gc.assert_not_called()
+    assert 'Vendas de hoje' in body
+    assert 'R$ 450' in body
+    assert 'parciais, atualiza a cada ~15 min' in body
 
 
 # ── manual de operação ───────────────────────────────────────────────────────
