@@ -245,6 +245,54 @@ def test_vendas_ontem_inclui_site_pago_por_pago_em(app):
     assert v['site_total'] == 80.0
 
 
+def test_vendas_ontem_total_geral_e_media_do_total(app):
+    """total_geral = PDV + site; pdv_media compara o TOTAL de ontem com a
+    média do total (soma das lojas por data) do mesmo dia-da-semana."""
+    from app.models import PedidoOnline
+    from app.services import briefing_dono
+    ontem = hoje() - timedelta(days=1)
+    _venda_dia(ontem, loja_seru='Loja A', fat=700)
+    _venda_dia(ontem, loja_seru='Loja B', fat=500)          # total ontem 1200
+    for sem in (1, 2):                                       # média total 1000
+        _venda_dia(ontem - timedelta(days=7 * sem), loja_seru='Loja A', fat=600)
+        _venda_dia(ontem - timedelta(days=7 * sem), loja_seru='Loja B', fat=400)
+    db.session.add(PedidoOnline(
+        codigo='PO-T', nome_cliente='X', email_cliente='x@x.com',
+        modo_entrega='retirada', valor_total=Decimal('300'),
+        pago_em=datetime.combine(ontem, time(12, 0))))
+    db.session.commit()
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        v = briefing_dono.vendas_ontem()
+    assert v['pdv_total'] == 1200.0
+    assert v['site_total'] == 300.0
+    assert v['total_geral'] == 1500.0
+    assert v['pdv_media'] == 1000.0
+    assert v['pdv_delta_pct'] == 20.0
+
+
+def test_vendas_ontem_snapshot_ok_reflete_captura(app):
+    """snapshot_ok=True só quando VendaSeruDiaria tem o dia de ontem — a home
+    avisa em vez de mostrar um R$ 0 falso quando o snapshot não existe."""
+    from app.models import VendaSeruDiaria
+    from app.services import briefing_dono
+    ontem = hoje() - timedelta(days=1)
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        assert briefing_dono.vendas_ontem(capturar=False)['snapshot_ok'] is False
+        db.session.add(VendaSeruDiaria(data=ontem, loja_seru='Loja A',
+                                       seru_nome='Croissant', qtd=1,
+                                       faturamento=Decimal('10'), n_pedidos=1))
+        db.session.commit()
+        assert briefing_dono.vendas_ontem(capturar=False)['snapshot_ok'] is True
+
+
+def test_vendas_ontem_capturar_false_nao_chama_captura(app):
+    """O modo da home NUNCA pode bater na API Seru (garantir_capturado)."""
+    from app.services import briefing_dono
+    with patch('app.services.vendas_diarias.garantir_capturado') as gc:
+        briefing_dono.vendas_ontem(capturar=False)
+    gc.assert_not_called()
+
+
 def test_custo_ia_ontem_janela_fechada(app):
     from app.models import UsoIA
     from app.services import briefing_dono
