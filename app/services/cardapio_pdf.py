@@ -404,22 +404,27 @@ def _grid_categoria(pdf, itens_foto, card_h=_CARD_H):
 
 
 _LINHA_H = 10
+_LINHA_H_DESC = 17                      # nome + até 2 linhas de descrição
 _LINHA_W = (190 - _GAP) / 2
 
 
 def _lista_categoria(pdf, itens):
     """.list-grid do site (categoria SEM nenhuma foto): caixinhas brancas
-    arredondadas em 2 colunas, nome à esquerda + preço marrom à direita."""
+    arredondadas em 2 colunas, nome à esquerda + preço marrom à direita.
+    Categoria com alguma descrição: caixinha mais alta com o texto muted
+    embaixo (mesma altura pra fileira toda)."""
+    tem_desc = any(i.get('descricao') for i in itens)
+    lh = _LINHA_H_DESC if tem_desc else _LINHA_H
     for i in range(0, len(itens), 2):
         linha = itens[i:i + 2]
-        if pdf.get_y() + _LINHA_H > 283:
+        if pdf.get_y() + lh > 283:
             pdf.add_page()
         y0 = pdf.get_y()
         for col, item in enumerate(linha):
             x = _MARGEM + col * (_LINHA_W + _GAP)
             pdf.set_draw_color(*_C_BORDER)
             pdf.set_fill_color(255, 255, 255)
-            pdf.rect(x, y0, _LINHA_W, _LINHA_H, style='FD',
+            pdf.rect(x, y0, _LINHA_W, lh, style='FD',
                      round_corners=True, corner_radius=_RAIO)
             preco = _latin1(_moeda(item['preco_venda']))
             pdf.set_font('Helvetica', 'B', 9)
@@ -437,7 +442,14 @@ def _lista_categoria(pdf, itens):
             pdf.set_xy(x + _LINHA_W - w_preco - 4, y0 + 2)
             pdf.set_text_color(*_C_PRIMARY)
             pdf.cell(w_preco, 6, preco, align='R')
-        pdf.set_y(y0 + _LINHA_H + 2)
+            if tem_desc and item.get('descricao'):
+                pdf.set_font('Helvetica', '', 7)
+                pdf.set_text_color(*_C_MUTED)
+                for j, ln in enumerate(_quebrar_2_linhas(
+                        pdf, _latin1(item['descricao']), _LINHA_W - 8)):
+                    pdf.set_xy(x + 4, y0 + 8.2 + j * 3.1)
+                    pdf.cell(_LINHA_W - 8, 3.1, ln)
+        pdf.set_y(y0 + lh + 2)
 
 
 # Limite inferior da area de conteudo (auto_page_break margem 16 -> ~281) e
