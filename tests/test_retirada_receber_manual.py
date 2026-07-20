@@ -170,6 +170,79 @@ def test_cancelar_em_transporte_estorna_o_coletado_nao_o_declarado(app):
     assert el.quantidade == 20
 
 
+def test_estorno_generico_antes_nao_duplica_credito(app):
+    """Achado de revisão (A1): admin roda o estorno GENÉRICO por token
+    (ret-<id>) com a retirada ainda em transporte — a loja é re-creditada
+    mas o status fica órfão. Depois: cancelar NÃO re-credita de novo (só
+    fecha, com aviso) e receber manual RECUSA (creditaria a indústria com
+    a loja já devolvida — estoque nas duas pontas)."""
+    from app.services.devolucao import (
+        cancelar_retirada,
+        estornar_devolucao,
+        receber_retirada_manual,
+    )
+    trad, retorno, loja, el = _setup()
+    ret = _retirada_em_transporte(loja, trad, qtd=10)
+    assert el.quantidade == 10
+    estornar_devolucao(ret.token_mov, usuario_id=None)   # devolveu à loja
+    assert el.quantidade == 20
+    try:
+        receber_retirada_manual(ret, usuario_id=None)
+        raise AssertionError('deveria recusar — coleta já estornada')
+    except ValueError as exc:
+        assert 'estornada' in str(exc)
+    db.session.rollback()
+    avisos = cancelar_retirada(ret, usuario_id=None)
+    db.session.commit()
+    assert ret.status == 'cancelada'
+    assert el.quantidade == 20                     # NÃO duplicou o crédito
+    assert any('já tinha sido estornada' in a for a in avisos)
+    assert _estoque_retorno(retorno) == 0
+
+
+def test_cancelar_coleta_que_baixou_zero(app):
+    """Coleta sem saldo na loja (só movs *_sem_estoque): cancelar fecha sem
+    devolver nada — não há o que estornar."""
+    from app.services.devolucao import cancelar_retirada
+    trad, _retorno, loja, el = _setup(saldo_loja=0)
+    ret = _retirada_em_transporte(loja, trad, qtd=10)
+    assert el.quantidade == 0
+    avisos = cancelar_retirada(ret, usuario_id=None)
+    db.session.commit()
+    assert ret.status == 'cancelada'
+    assert el.quantidade == 0
+    assert not [a for a in avisos if 'devolvido' in a]
+
+
+def test_receber_manual_item_de_produto(app):
+    """Item de PRODUTO (não receita) credita o próprio produto no
+    EstoqueProducao — mesmo destino do handshake."""
+    from app.models import Produto
+    from app.services.devolucao import receber_retirada_manual
+    _trad, _retorno, loja, _el = _setup()
+    prod = Produto(nome='Cesta Retorno', categoria='Cestas', ativo=True)
+    db.session.add(prod)
+    db.session.flush()
+    db.session.add(EstoqueLoja(loja_id=loja.id, produto_id=prod.id,
+                               quantidade=5))
+    ret = RetiradaSobra(loja_id=loja.id, data_retirada=hoje(),
+                        foto_url='https://x/f.jpg')
+    db.session.add(ret)
+    db.session.flush()
+    db.session.add(RetiradaSobraItem(retirada_id=ret.id, produto_id=prod.id,
+                                     quantidade=3))
+    db.session.flush()
+    from app.services.devolucao import baixar_loja_retirada
+    baixar_loja_retirada(ret)
+    ret.status = 'em_transporte'
+    ret.coletada_em = agora() - timedelta(hours=13)
+    db.session.commit()
+    receber_retirada_manual(ret, usuario_id=None)
+    db.session.commit()
+    ep = EstoqueProducao.query.filter_by(produto_id=prod.id).first()
+    assert ep is not None and int(ep.quantidade) == 3
+
+
 def test_cancelar_recebida_recusa(app):
     from app.services.devolucao import cancelar_retirada
     trad, _retorno, loja, _el = _setup()
