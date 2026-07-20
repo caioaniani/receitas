@@ -12,7 +12,7 @@ Conferir NÃO altera o cadastro (nem local nem situação) — divergência de
 local vira aviso na lista; mover/baixar é gesto do admin.
 """
 from datetime import datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from flask import (
     current_app,
@@ -46,14 +46,17 @@ def _parse_loja_id(bruto):
 
 
 def _parse_valor(bruto):
-    """Dinheiro pt-BR ('1.234,56') → Decimal ou None."""
-    bruto = (bruto or '').strip()
-    if not bruto:
+    """Dinheiro → Decimal(2) via o parse CANÔNICO da casa (pt-BR e ponto
+    decimal simples; achado de revisão: o parse local removia todo '.' e
+    '12345.67' — o formato que o form de editar re-renderizava — virava
+    1.234.567,00 a cada salvamento, 100× por round-trip). Vazio → None;
+    inválido levanta ValueError — quem chama traduz em flash, NUNCA
+    silencia (dinheiro não vira None calado)."""
+    from app.utils import parse_float_br
+    v = parse_float_br(bruto)
+    if v is None:
         return None
-    try:
-        return Decimal(bruto.replace('.', '').replace(',', '.'))
-    except InvalidOperation:
-        return None
+    return Decimal(str(v)).quantize(Decimal('0.01'))
 
 
 def _parse_data(bruto):
