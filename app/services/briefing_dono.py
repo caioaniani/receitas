@@ -382,11 +382,6 @@ def vendas_hoje(capturar=False):
     }
 
 
-def _faturamento_por_loja_seguro(dia, capturar):
-    from app.services import vendas_diarias
-    return vendas_diarias.faturamento_por_loja(dia, dia, capturar=capturar)
-
-
 def custo_ia_ontem():
     """Gasto de IA de ONTEM (janela fechada de calendário BRT, em USD)."""
     from app.models import UsoIA
