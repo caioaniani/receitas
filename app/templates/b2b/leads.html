@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Leads B2B{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-briefcase"></i> Leads B2B (bot)
+        {% if n_pendentes %}<span class="badge bg-danger">{{ n_pendentes }} sem contato</span>{% endif %}
+    </h1>
+    <div>
+        {% if pendentes %}
+        <a href="{{ url_for('b2b.leads', todos=1) }}" class="btn btn-outline-secondary btn-sm">Ver todos</a>
+        {% else %}
+        <a href="{{ url_for('b2b.leads') }}" class="btn btn-outline-secondary btn-sm">← Só pendentes</a>
+        {% endif %}
+    </div>
+</div>
+
+<p class="text-muted small mb-3">Contatos capturados pelo bot de atendimento
+quando alguém pede o cardápio de atacado/revenda. O bot avisa no WhatsApp na
+hora; aqui fica a lista para acompanhamento.</p>
+
+<form method="POST" action="{{ url_for('b2b.lead_catalogo_url') }}"
+      class="d-flex flex-wrap gap-2 align-items-center mb-4 p-2"
+      style="background:var(--bg-chip); border-radius:var(--radius-md); border:1px solid var(--border-color);">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="small fw-semibold mb-0" for="catalogo-url">📎 Link do catálogo que o bot envia:</label>
+    <input type="url" class="form-control form-control-sm" style="max-width:420px"
+           id="catalogo-url" name="url" value="{{ catalogo_url }}"
+           placeholder="https://... (PDF no Dropbox, por exemplo)">
+    <button class="btn btn-primary btn-sm" type="submit">Salvar</button>
+    {% if catalogo_via_env %}
+    <span class="small text-muted">(vindo da env CATALOGO_B2B_URL — salvar aqui sobrepõe)</span>
+    {% elif not catalogo_url %}
+    <span class="small text-muted">sem link: o bot diz que a equipe envia o catálogo no contato</span>
+    {% endif %}
+</form>
+
+<div class="table-responsive">
+    <table class="table table-sm table-hover bg-white align-middle">
+        <thead><tr>
+            <th>Quando</th><th>Nome / Empresa</th><th>Contato</th>
+            <th>Interesse</th><th>Catálogo</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for l in leads %}
+        <tr {% if l.contatado_em %}class="text-muted"{% endif %}>
+            <td class="small">{{ l.criado_em.strftime('%d/%m %H:%M') if l.criado_em }}
+                {% if not l.contatado_em %}<span class="badge bg-danger">novo</span>{% endif %}</td>
+            <td><strong>{{ l.nome }}</strong>
+                {% if l.empresa %}<small class="text-muted d-block">{{ l.empresa }}</small>{% endif %}</td>
+            <td class="small">
+                <a href="https://wa.me/{{ l.telefone if l.telefone.startswith('55') else '55' ~ l.telefone }}"
+                   target="_blank">📱 {{ l.telefone }}</a><br>
+                ✉️ {{ l.email }}
+            </td>
+            <td class="small">{{ l.interesse or '—' }}</td>
+            <td class="small text-center">{{ '📎 enviado' if l.catalogo_enviado else '—' }}</td>
+            <td class="text-end">
+                <form method="POST" action="{{ url_for('b2b.lead_contatado', lid=l.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% if l.contatado_em %}
+                    <input type="hidden" name="desfazer" value="1">
+                    <button class="btn btn-outline-secondary btn-sm" title="Voltar para pendente">
+                        ✓ contatado {{ l.contatado_em.strftime('%d/%m') }}</button>
+                    {% else %}
+                    <button class="btn btn-success btn-sm">Marcar contatado</button>
+                    {% endif %}
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-4">
+            {{ 'Nenhum lead pendente — tudo contatado. 🎉' if pendentes else 'Nenhum lead ainda.' }}
+        </td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
