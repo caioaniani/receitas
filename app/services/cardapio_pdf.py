@@ -462,14 +462,18 @@ _PAG_UTIL = 250
 
 def _altura_categoria(itens, tem_foto):
     """Estimativa da altura (mm) da categoria: titulo + fileiras. Grid = 3
-    por fileira (card alto); lista = 2 por fileira (caixinha baixa)."""
+    por fileira (card alto); lista = 2 por fileira (caixinha baixa).
+    Categoria com alguma descrição usa a fileira mais alta correspondente."""
     import math
     titulo = 12.5
+    tem_desc = any(i.get('descricao') for i in itens)
     if tem_foto:
+        card_h = _CARD_H_DESC if tem_desc else _CARD_H
         fileiras = math.ceil(len(itens) / 3)
-        return titulo + fileiras * (_CARD_H + _GAP)
+        return titulo + fileiras * (card_h + _GAP)
+    lh = _LINHA_H_DESC if tem_desc else _LINHA_H
     fileiras = math.ceil(len(itens) / 2)
-    return titulo + fileiras * (_LINHA_H + 2) + 2
+    return titulo + fileiras * (lh + 2) + 2
 
 
 def gerar_cardapio_pdf(tipo, categorias, regras, logo=None):
