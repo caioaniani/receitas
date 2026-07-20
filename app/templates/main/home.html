@@ -83,8 +83,9 @@
     </div>
 </div>
 
-{# Vendas TOTAIS de ontem — SÓ pro dono (faturamento é o cockpit pessoal;
-   mesmo gate do /admin/briefing). Fonte única: briefing_dono.vendas_ontem
+{# Vendas TOTAIS — hoje (parciais, snapshot do cron de 15 min) + ontem.
+   SÓ pro dono (faturamento é o cockpit pessoal; mesmo gate do
+   /admin/briefing). Fonte única: briefing_dono.vendas_hoje/vendas_ontem
    com capturar=False (lê só o snapshot; a home nunca bate na API Seru). #}
 {% if vendas %}
 <div class="home-hero" style="margin-top:1rem;">
