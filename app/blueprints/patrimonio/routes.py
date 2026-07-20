@@ -109,8 +109,9 @@ def index():
         q = q.filter(Ativo.situacao == f_sit)
     if f_busca:
         q = q.filter(Ativo.nome.ilike(f'%{f_busca}%'))
-    ativos = q.order_by(Ativo.loja_id.nullsfirst(), Ativo.nome).all() \
-        if hasattr(Ativo.loja_id, 'nullsfirst') else q.order_by(Ativo.nome).all()
+    # Indústria (loja_id NULL) primeiro, depois lojas — nullsfirst() é o
+    # comportamento default do SQLite e explícito no Postgres.
+    ativos = q.order_by(Ativo.loja_id.asc().nullsfirst(), Ativo.nome).all()
 
     ultimas = _ultimas_conferencias([a.id for a in ativos])
     corte = datetime.combine(desde, datetime.min.time())
