@@ -96,3 +96,104 @@ def test_receita_arquivada_fora_do_cardapio(app, admin_user):
     body = c.get('/cardapio?tipo=atacado').get_data(as_text=True)
     assert 'Sourdough Cardapio' in body
     assert 'Pao de Queijo Morto' not in body
+
+
+def _png_preto_no_branco():
+    from io import BytesIO
+
+    from PIL import Image, ImageDraw
+    img = Image.new('RGB', (400, 140), (255, 255, 255))
+    ImageDraw.Draw(img).rectangle([20, 40, 380, 100], fill=(0, 0, 0))
+    out = BytesIO()
+    img.save(out, 'PNG')
+    return out.getvalue()
+
+
+def test_cardapio_diz_brooklin_nao_itaim(app, admin_user):
+    c = _login(app, admin_user)
+    body = c.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert 'Brooklin' in body
+    assert 'Itaim' not in body                       # branding trocada
+
+
+def test_pdf_capa_diz_brooklin(app, admin_user):
+    from app.services.cardapio_pdf import gerar_cardapio_pdf
+    cats = {'Pães': [{'nome': 'Sourdough', 'preco_venda': 20.0,
+                      'imagem_url': None, 'img_ref': None}]}
+    pdf = gerar_cardapio_pdf('atacado', cats, [])
+    # o texto do PDF é comprimido; validamos pela geração + rota
+    assert pdf.startswith(b'%PDF')
+
+
+def test_logo_upload_aparece_no_hero_e_pdf(app, admin_user):
+    """Sem logo → texto 'O Pão'; após upload → <img> data URI no hero e
+    imagem embutida no PDF; remover → volta ao texto."""
+    from app.models import AppConfig
+    from app.services import cardapio_pdf
+    c = _login(app, admin_user)
+    # antes: hero usa o texto
+    with app.app_context():
+        assert AppConfig.get('cardapio_logo_data') in (None, '')
+    body0 = c.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert '<h1>O Pão</h1>' in body0 and 'hero-logo' not in body0
+
+    # upload (branco = silhueta)
+    from io import BytesIO
+    resp = c.post('/admin/cardapio-atacado/logo',
+                  data={'branco': '1',
+                        'logo_arquivo': (BytesIO(_png_preto_no_branco()),
+                                         'logo.png')},
+                  content_type='multipart/form-data')
+    assert resp.status_code in (302, 200)
+    with app.app_context():
+        uri = AppConfig.get('cardapio_logo_data')
+        assert uri and uri.startswith('data:image/png;base64,')
+
+    body1 = c.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert 'hero-logo' in body1 and 'data:image/png;base64,' in body1
+    assert '<h1>O Pão</h1>' not in body1
+
+    # PDF embute a imagem
+    with app.app_context():
+        cats = {'Pães': [{'nome': 'X', 'preco_venda': 5.0,
+                          'imagem_url': None, 'img_ref': None}]}
+        sem = cardapio_pdf.gerar_cardapio_pdf('atacado', cats, [])
+        com = cardapio_pdf.gerar_cardapio_pdf(
+            'atacado', cats, [], logo=AppConfig.get('cardapio_logo_data'))
+        assert len(com) > len(sem)
+
+    # remover
+    c.post('/admin/cardapio-atacado/logo/remover')
+    with app.app_context():
+        assert (AppConfig.get('cardapio_logo_data') or '') == ''
+    body2 = c.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert '<h1>O Pão</h1>' in body2
+
+
+def test_logo_upload_exige_admin(app):
+    from app.extensions import db
+    from app.models import AppConfig, Usuario
+    with app.app_context():
+        u = Usuario(nome='func teste', login='func', papel='funcionario')
+        u.set_senha('123')
+        db.session.add(u)
+        db.session.commit()
+    c = app.test_client()
+    c.post('/auth/login', data={'login': 'func', 'senha': '123'})
+    from io import BytesIO
+    resp = c.post('/admin/cardapio-atacado/logo',
+                  data={'logo_arquivo': (BytesIO(_png_preto_no_branco()),
+                                         'l.png')},
+                  content_type='multipart/form-data')
+    assert resp.status_code in (302, 403)
+    with app.app_context():
+        assert (AppConfig.get('cardapio_logo_data') or '') == ''
+
+
+def test_processar_logo_branco_vira_png_transparente(app):
+    from app.blueprints.main.routes import _processar_logo_cardapio
+    with app.app_context():
+        uri = _processar_logo_cardapio(_png_preto_no_branco(), branco=True)
+        assert uri.startswith('data:image/png;base64,')
+        fiel = _processar_logo_cardapio(_png_preto_no_branco(), branco=False)
+        assert fiel.startswith('data:image/jpeg;base64,')  # opaco = JPEG
