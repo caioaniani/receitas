@@ -2378,6 +2378,104 @@ def retencao_admin():
     return jsonify(rel), 200
 
 
+@main_bp.route('/admin/arquivadas-saldo')
+@owner_required
+def arquivadas_saldo():
+    """Saldo fisico preso em item ARQUIVADO/INATIVO (owner-only, 19/07/2026).
+
+    Depois da varredura "arquivado fora de fluxo ativo", receita arquivada
+    com saldo vivo ficou sem caminho de escoamento (o balanco nao casa mais
+    com ela). Caso real na criacao: 5 receitas arquivadas somando ~204 mil
+    un de ledger morto (Croissant Nutella com 99.971 na Anesio etc.),
+    poluindo toda soma de estoque. Dono: "pode arquivar tudo".
+
+    Sem parametro = DRY-RUN (lista o que seria zerado). ?executar=1 zera:
+    quantidade -> 0 + movimento 'ajuste' com referencia rastreavel (o
+    historico da linha conta a historia; nada e apagado). Linha com
+    reserva de site (quantidade_reservada > 0) e PULADA com aviso —
+    zerar por baixo de reserva quebraria a consistencia do checkout.
+    """
+    from app.models import (
+        EstoqueLoja,
+        EstoqueProducao,
+        MovEstoqueLoja,
+        MovEstoqueProducao,
+        Produto,
+        Receita,
+    )
+
+    executar = request.args.get('executar') == '1'
+    ref = 'Zerar saldo de item arquivado (limpeza owner /admin/arquivadas-saldo)'
+    linhas, pulados = [], []
+    zerados = 0
+
+    def _morto(el):
+        if el.receita_id and el.receita and el.receita.arquivada_em:
+            return 'receita arquivada', el.receita.nome
+        if el.produto_id and el.produto and not el.produto.ativo:
+            return 'produto inativo', el.produto.nome
+        return None, None
+
+    for el in (EstoqueLoja.query
+               .filter(EstoqueLoja.quantidade != 0)
+               .outerjoin(Receita, EstoqueLoja.receita_id == Receita.id)
+               .outerjoin(Produto, EstoqueLoja.produto_id == Produto.id)
+               .filter(db.or_(Receita.arquivada_em.isnot(None),
+                              Produto.ativo.is_(False))).all()):
+        motivo, nome = _morto(el)
+        if not motivo:
+            continue
+        info = {'onde': f'loja: {el.loja.nome if el.loja else el.loja_id}',
+                'item': nome, 'motivo': motivo,
+                'quantidade': el.quantidade}
+        if (el.quantidade_reservada or 0) > 0:
+            info['aviso'] = ('PULADO — tem reserva de site '
+                             f'({el.quantidade_reservada})')
+            pulados.append(info)
+            continue
+        linhas.append(info)
+        if executar:
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='ajuste',
+                quantidade=el.quantidade, referencia=ref,
+                usuario_id=current_user.id))
+            el.quantidade = 0
+            zerados += 1
+
+    for ep in (EstoqueProducao.query
+               .filter(EstoqueProducao.quantidade != 0)
+               .outerjoin(Receita, EstoqueProducao.receita_id == Receita.id)
+               .outerjoin(Produto, EstoqueProducao.produto_id == Produto.id)
+               .filter(db.or_(Receita.arquivada_em.isnot(None),
+                              Produto.ativo.is_(False))).all()):
+        motivo, nome = _morto(ep)
+        if not motivo:
+            continue
+        linhas.append({'onde': 'industria', 'item': nome, 'motivo': motivo,
+                       'quantidade': ep.quantidade})
+        if executar:
+            db.session.add(MovEstoqueProducao(
+                estoque_producao_id=ep.id, tipo='ajuste',
+                quantidade=ep.quantidade, referencia=ref,
+                usuario_id=current_user.id))
+            ep.quantidade = 0
+            zerados += 1
+
+    if executar:
+        db.session.commit()
+    return jsonify({
+        'ok': True,
+        'dry_run': not executar,
+        'linhas': linhas,
+        'pulados_com_reserva': pulados,
+        'total_linhas': len(linhas),
+        'total_unidades': sum(li['quantidade'] for li in linhas),
+        'zerados': zerados,
+        'como_executar': (None if executar
+                          else 'repita com ?executar=1 pra zerar'),
+    }), 200
+
+
 @main_bp.route('/admin/db-vacuum')
 @owner_required
 def db_vacuum():
