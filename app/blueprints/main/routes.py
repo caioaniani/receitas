@@ -499,10 +499,13 @@ def _cardapio_categorias(tipo):
             img = url_for('main.cardapio_img', tipo='receita', id=r.id)
         else:
             img = r.imagem_url
+        # Descricao SO no atacado (ditado do dono 20/07/2026) — loja/site
+        # seguem como eram; produto continua com p.descricao propria.
+        desc = (r.descricao_atacado or '').strip() if tipo == 'atacado' else ''
         categorias[cat].append({
             'nome': r.nome,
             'peso_unitario': r.peso_unitario,
-            'descricao': None,
+            'descricao': desc or None,
             'preco_venda': preco,
             'imagem_url': img,
             'img_ref': ('receita', r.id) if com_foto else None,
