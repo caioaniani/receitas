@@ -251,13 +251,25 @@ def etiquetas_pdf():
     f_cat = (request.args.get('categoria') or '').strip()
     if f_cat:
         q = q.filter(Ativo.categoria == f_cat)
+    # Espelha os filtros restantes da lista (o botão promete "do filtro
+    # atual"): busca por nome e situação em_uso|manutencao.
+    f_busca = (request.args.get('busca') or '').strip()
+    if f_busca:
+        q = q.filter(Ativo.nome.ilike(f'%{f_busca}%'))
+    f_sit = (request.args.get('situacao') or '').strip()
+    if f_sit in ('em_uso', 'manutencao'):
+        q = q.filter(Ativo.situacao == f_sit)
     ids = (request.args.get('ids') or '').strip()
     if ids:
-        try:
-            q = q.filter(Ativo.id.in_([int(x) for x in ids.split(',')]))
-        except ValueError:
-            pass
-    ativos = q.order_by(Ativo.loja_id, Ativo.nome).all()
+        # Tolerante a token vazio/inválido ('1,2,' não imprime TUDO).
+        ids_ok = []
+        for x in ids.split(','):
+            x = x.strip()
+            if x.isdigit():
+                ids_ok.append(int(x))
+        if ids_ok:
+            q = q.filter(Ativo.id.in_(ids_ok))
+    ativos = q.order_by(Ativo.loja_id.asc().nullsfirst(), Ativo.nome).all()
     base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
     pdf = gerar_etiquetas_pdf(ativos, base)
     return (pdf, 200, {
