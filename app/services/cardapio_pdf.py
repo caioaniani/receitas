@@ -505,12 +505,14 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None):
         # _grid/_lista ja tratam). Efeito: pagina 1 vira a CAPA, cada
         # categoria comeca limpa — sem "Paes" partido no meio.
         alt = _altura_categoria(itens, tem_foto)
+        tem_desc = any(i.get('descricao') for i in itens)
+        card_h = _CARD_H_DESC if tem_desc else _CARD_H
         if alt > (_Y_LIMITE - pdf.get_y()) and alt <= _PAG_UTIL:
             pdf.add_page()
         _titulo_categoria(pdf, cat,
-                          alt_primeira=_CARD_H if tem_foto else _LINHA_H)
+                          alt_primeira=card_h if tem_foto else _LINHA_H)
         if tem_foto:
-            _grid_categoria(pdf, itens)
+            _grid_categoria(pdf, itens, card_h=card_h)
         else:
             _lista_categoria(pdf, itens)
             pdf.ln(2)
