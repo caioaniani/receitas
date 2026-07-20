@@ -54,7 +54,9 @@ def gerar_etiquetas_pdf(ativos, url_base):
         url = f'{url_base}/patrimonio/{ativo.id}/conferir'
         png = gerar_png_bytes(url, box_size=6, border=2)
         if png:
-            pdf.image(BytesIO(png), x=x0 + 2.0, y=y0 + (_ETQ_H - _QR_LADO) / 2,
+            # QR no topo (não centrado): sobra faixa limpa embaixo pro
+            # rodapé de largura inteira sem encostar na zona quieta do QR.
+            pdf.image(BytesIO(png), x=x0 + 2.0, y=y0 + 2.5,
                       w=_QR_LADO, h=_QR_LADO)
 
         tx = x0 + _QR_LADO + 4.5
