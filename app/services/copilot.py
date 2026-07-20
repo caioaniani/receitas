@@ -677,6 +677,7 @@ TOOL_CRIAR_VENDA_B2B = {
             "data_entrega": {"type": "string", "description": "YYYY-MM-DD. OBRIGATORIO: dia que a venda vai pra fila do padeiro produzir/separar. Pergunte se o usuario nao disser. NAO confundir com loja (B2B nao tem loja)."},
             "nf_numero": {"type": ["string", "null"]},
             "observacao": {"type": ["string", "null"]},
+            "frete_valor": {"type": ["number", "null"], "minimum": 0, "description": "Frete da entrega em R$ (soma no total; vai no boleto e no campo frete da NF). Null/0 = sem frete."},
             "itens": {
                 "type": "array",
                 "items": {
