@@ -151,7 +151,8 @@ def test_logo_upload_aparece_no_hero_e_pdf(app, admin_user):
         assert uri and uri.startswith('data:image/png;base64,')
 
     body1 = c.get('/cardapio?tipo=atacado').get_data(as_text=True)
-    assert 'hero-logo' in body1 and 'data:image/png;base64,' in body1
+    assert '<img class="hero-logo"' in body1
+    assert 'src="data:image/png;base64,' in body1
     assert '<h1>O Pão</h1>' not in body1
 
     # PDF embute a imagem
