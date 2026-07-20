@@ -226,6 +226,89 @@ def test_form_web_cria_venda_com_frete(app, admin_user):
     assert v.valor_total == Decimal('52.50')
 
 
+def test_editar_venda_com_boleto_no_banco_recusa(app):
+    """Boleto que já foi ao banco trava a edição (o valor do título não
+    pode mudar por baixo); boleto PENDENTE é apagado junto — sem Cobranca
+    órfã com valor velho (achado crítico da revisão 20/07/2026)."""
+    from app.models import Cobranca
+    p = _produto()
+    v = vendas_b2b.criar_venda(
+        cliente_nome='Avulso', data_entrega=hoje() + timedelta(days=1),
+        itens=[{'tipo': 'produto', 'id': p.id, 'quantidade': 10,
+                'preco_unitario': 10, 'desconto_percentual': 0}],
+        frete_valor=25)
+    cob = Cobranca(parcela_id=v.parcelas[0].id, pagador_nome='X',
+                   pagador_cnpj_cpf='', pagador_endereco='', pagador_cep='',
+                   valor=v.parcelas[0].valor, vencimento=v.data_venda,
+                   emissao=v.data_venda, seu_numero='T1', status='registrada')
+    db.session.add(cob)
+    db.session.commit()
+    itens = [{'tipo': 'produto', 'id': p.id, 'quantidade': 10,
+              'preco_unitario': 10, 'desconto_percentual': 0}]
+    with pytest.raises(ValueError, match='banco'):
+        vendas_b2b.editar_venda(v, cliente_nome='Avulso',
+                                data_entrega=v.data_entrega,
+                                itens=itens, frete_valor=40)
+    # Pendente: edição passa e a cobrança velha SOME (gera-se outra depois)
+    cob.status = 'pendente'
+    db.session.commit()
+    vendas_b2b.editar_venda(v, cliente_nome='Avulso',
+                            data_entrega=v.data_entrega,
+                            itens=itens, frete_valor=40)
+    assert Cobranca.query.count() == 0
+    assert v.parcelas[0].valor == Decimal('140.00')
+
+
+def test_frete_infinito_vira_erro_tratado(app):
+    """POST forjado com inf/nan não pode virar 500 (InvalidOperation)."""
+    p = _produto()
+    with pytest.raises(ValueError, match='invalido'):
+        vendas_b2b.criar_venda(
+            cliente_nome='Avulso', data_entrega=hoje() + timedelta(days=1),
+            itens=[{'tipo': 'produto', 'id': p.id, 'quantidade': 1,
+                    'preco_unitario': 10, 'desconto_percentual': 0}],
+            frete_valor=float('inf'))
+
+
+def test_form_web_frete_invalido_avisa_em_vez_de_zerar(app, admin_user):
+    """Frete ilegível no form NÃO vira R$ 0 calado — flash de erro e nada
+    é criado (convenção: dinheiro nunca zera em silêncio)."""
+    p = _produto()
+    c = app.test_client()
+    _login(c, admin_user.id)
+    antes = VendaB2B.query.count()
+    r = c.post('/b2b/vendas/nova', data={
+        'cliente_nome': 'Avulso Web',
+        'data_venda': hoje().isoformat(),
+        'data_entrega': (hoje() + timedelta(days=1)).isoformat(),
+        'frete_valor': 'abc',
+        'item_ref[]': [f'produto:{p.id}'],
+        'item_qtd[]': ['4'],
+        'item_preco[]': ['10'],
+        'item_desc[]': ['0'],
+        'item_estado[]': [''],
+        'item_obs[]': [''],
+    }, follow_redirects=True)
+    assert r.status_code == 200
+    assert VendaB2B.query.count() == antes          # nada criado
+
+
+def test_parcela_de_venda_cancelada_nao_vira_boleto(app, admin_user):
+    from app.models import Cobranca
+    p = _produto()
+    v = vendas_b2b.criar_venda(
+        cliente_nome='Avulso', data_entrega=hoje() + timedelta(days=1),
+        itens=[{'tipo': 'produto', 'id': p.id, 'quantidade': 10,
+                'preco_unitario': 10, 'desconto_percentual': 0}])
+    vendas_b2b.cancelar_venda(v)
+    c = app.test_client()
+    _login(c, admin_user.id)
+    r = c.post(f'/cobrancas/gerar-da-parcela/{v.parcelas[0].id}',
+               follow_redirects=True)
+    assert r.status_code == 200
+    assert Cobranca.query.count() == 0
+
+
 def test_copilot_criar_venda_b2b_com_frete(app, admin_user):
     from app.services.copilot import executar_criar_venda_b2b
     p = _produto()
