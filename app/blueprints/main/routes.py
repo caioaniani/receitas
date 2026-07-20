@@ -507,7 +507,8 @@ def cardapio_pdf_export():
     if tipo not in ('atacado', 'loja', 'site'):
         tipo = 'atacado'
     categorias, regras = _cardapio_categorias(tipo)
-    conteudo = svc.gerar_cardapio_pdf(tipo, categorias, regras)
+    conteudo = svc.gerar_cardapio_pdf(tipo, categorias, regras,
+                                      logo=_cardapio_logo())
     resp = current_app.response_class(conteudo, mimetype='application/pdf')
     resp.headers['Content-Disposition'] = (
         'inline; filename="cardapio_%s.pdf"' % tipo)
