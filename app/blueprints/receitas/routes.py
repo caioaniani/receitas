@@ -911,6 +911,12 @@ def salvar(id):
     else:
         receita.modo_preparo = request.form.get('modo_preparo', '').strip() or None
     receita.observacao = request.form.get('observacao', '').strip() or None
+    # Descricao do cardapio de atacado (dono 20/07/2026): texto curto e
+    # sincero (ingredientes + como e vendido). Vazio = sem descricao no
+    # cardapio. Forms antigos sem o campo nao apagam o gravado.
+    if 'descricao_atacado' in request.form:
+        receita.descricao_atacado = (
+            request.form.get('descricao_atacado', '').strip() or None)
     ep = (request.form.get('estado_padrao') or '').strip().lower()
     receita.estado_padrao = ep if ep in ('assado', 'backup') else None
     receita.reaproveitavel = bool(request.form.get('reaproveitavel'))
