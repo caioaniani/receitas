@@ -3649,6 +3649,28 @@ def emitir_nf_transferencia(id):
                     or url_for('pedidos.detalhe', id=pedido.id))
 
 
+@pedidos_bp.route('/<int:id>/nf-dispensar', methods=['POST'])
+@login_required
+@admin_required
+def nf_dispensar(id):
+    """Liga/desliga a dispensa de NF DESTE pedido. ADMIN-only de propósito
+    (decisão do dono 20/07/2026: 'não posso dar essa opção para o
+    motorista e o padeiro') — as telas operacionais só obedecem."""
+    pedido = PedidoLoja.query.get_or_404(id)
+    pedido.nf_dispensada = not pedido.nf_dispensada
+    db.session.commit()
+    if pedido.nf_dispensada:
+        aviso = 'NF de transferência DISPENSADA para este pedido.'
+        if pedido.nf_emitida_em:
+            aviso += (' Atenção: já existe NF emitida '
+                      f'(nº {pedido.nf_numero or pedido.tiny_nota_fiscal_id})'
+                      ' — a dispensa não cancela a nota (isso é no Tiny).')
+        flash(aviso, 'warning')
+    else:
+        flash('NF de transferência REATIVADA para este pedido.', 'success')
+    return redirect(url_for('pedidos.detalhe', id=pedido.id))
+
+
 @pedidos_bp.route('/<int:id>/danfe')
 @login_required
 @operacional_pedido_required
