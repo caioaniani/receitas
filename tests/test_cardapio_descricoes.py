@@ -177,6 +177,20 @@ def test_preparo_linha_sem_rotulo(app):
     assert metodos[0]['valor'].startswith('Retire do freezer')
 
 
+def test_regras_e_preparo_no_rodape_apos_produtos(app, admin_user, cliente):
+    """Pedido do dono 20/07: "colocar para o rodapé e trazer os produtos
+    para cima" — na tela, os blocos de regras/métodos vêm DEPOIS da lista
+    de produtos."""
+    from app.models import AppConfig
+    _receita('Brioche')
+    AppConfig.set('cardapio_atacado_pedido_minimo', 'R$ 500,00')
+    db.session.commit()
+    _login(cliente, admin_user)
+    body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert body.index('Brioche') < body.index('Regras do pedido')
+    assert body.index('Regras do pedido') < body.index('Métodos de preparo')
+
+
 def test_tela_atacado_mostra_preparo_e_loja_nao(app, admin_user, cliente):
     _receita('Brioche')
     _login(cliente, admin_user)
