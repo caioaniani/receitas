@@ -2337,6 +2337,13 @@ manda pros clientes; a impressao oficial e o PDF do servidor
   tipos (brand-wide), passado a `render_template`/`gerar_cardapio_pdf`.
   Testes: `tests/test_cardapio_atacado_regras.py`. NAO embutir imagem de
   logo colada no chat (nao ha bytes) — o dono sobe o arquivo pela tela.
+- **Diagramacao do PDF (feedback do dono 20/07)**: logo na capa a **26mm**
+  (era 15, pequeno); e cada categoria fica INTEIRA numa pagina —
+  `gerar_cardapio_pdf` estima a altura (`_altura_categoria`) e se a
+  categoria nao cabe no espaco restante mas cabe numa pagina limpa
+  (`_PAG_UTIL=250`), quebra ANTES do titulo. Efeito: pagina 1 vira a capa,
+  cada categoria comeca limpa (sem "Paes" partido no meio de duas paginas).
+  Categoria maior que uma pagina flui e quebra por fileira como antes.
 
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
