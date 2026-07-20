@@ -741,6 +741,48 @@ TOOLS = [
             },
         },
     },
+    {
+        'name': 'registrar_lead_b2b',
+        'description': (
+            'Registra o CONTATO de um cliente interessado em ATACADO/B2B '
+            '(revenda, cafeteria, restaurante, empresa, cardapio de atacado) '
+            'pra equipe comercial retornar. Use DEPOIS de coletar nome, '
+            'e-mail e WhatsApp na conversa. NAO transfira pra humano por '
+            'interesse B2B — registrar aqui JA resolve. Devolve tambem o '
+            'link do catalogo quando cadastrado.'),
+        'input_schema': {
+            'type': 'object',
+            'properties': {
+                'nome': {'type': 'string',
+                         'description': 'Nome de quem pediu'},
+                'email': {'type': 'string',
+                          'description': 'E-mail informado pelo cliente'},
+                'telefone': {'type': 'string',
+                             'description': 'WhatsApp com DDD. Se o cliente '
+                             'disser "esse numero mesmo", mande vazio — o '
+                             'sistema usa o numero da conversa.'},
+                'empresa': {'type': 'string',
+                            'description': 'Nome do estabelecimento/empresa '
+                            '(opcional)'},
+                'interesse': {'type': 'string',
+                              'description': 'Resumo curto do que o cliente '
+                              'quer (ex: "croissants pra revenda na '
+                              'cafeteria dela, ~50/semana")'},
+                'catalogo_enviado': {'type': 'boolean',
+                                     'description': 'true se voce ja enviou '
+                                     'o link do catalogo nesta conversa'},
+            },
+            'required': ['nome', 'email'],
+        },
+    },
+    {
+        'name': 'catalogo_b2b',
+        'description': (
+            'Devolve o LINK do catalogo/cardapio de ATACADO pra enviar ao '
+            'cliente B2B que pedir. Sem link cadastrado, a resposta orienta '
+            'o que dizer. Nunca invente URL de catalogo.'),
+        'input_schema': {'type': 'object', 'properties': {}},
+    },
     TOOL_HANDOFF,
     TOOL_ENCERRAR,
 ]
