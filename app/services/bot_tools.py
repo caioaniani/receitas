@@ -811,3 +811,139 @@ def consultar_pedido(numero, *, telefone_contato=None, cpf_cliente=None):
     if nativo is not None:
         return nativo
     return _consultar_pedido_vnda(code, telefone_contato, cpf_cliente)
+
+
+# ── Lead B2B / atacado (16/07/2026, pedido do dono) ─────────────────────────
+# O bot captura contato de quem quer o cardápio de ATACADO (revenda,
+# cafeteria, restaurante, empresa) e o dono faz o contato comercial depois.
+# O catálogo em si é um LINK configurado pelo dono (AppConfig
+# 'catalogo_b2b_url', fallback env CATALOGO_B2B_URL) — o cardápio de atacado
+# do sistema exige login e NÃO deve virar rota pública.
+
+_RE_EMAIL_LEAD = None  # compilado sob demanda (regex simples de formato)
+
+
+def _email_lead_valido(email):
+    import re
+    global _RE_EMAIL_LEAD
+    if _RE_EMAIL_LEAD is None:
+        _RE_EMAIL_LEAD = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$')
+    return bool(_RE_EMAIL_LEAD.match((email or '').strip()))
+
+
+def catalogo_b2b_url():
+    """Link do catálogo de atacado que o bot pode enviar. AppConfig manda
+    (editável na tela /b2b/leads sem deploy); env é o fallback."""
+    from flask import current_app
+
+    from app.models import AppConfig
+    url = (AppConfig.get('catalogo_b2b_url') or '').strip()
+    if not url:
+        url = (current_app.config.get('CATALOGO_B2B_URL') or '').strip()
+    return url or None
+
+
+def catalogo_b2b():
+    """Tool de LEITURA: devolve o link do catálogo B2B (se configurado).
+    Sem link cadastrado, o bot orienta que a equipe envia junto do contato —
+    nunca inventa URL (regra LINKS — SEMPRE DA FERRAMENTA)."""
+    url = catalogo_b2b_url()
+    if url:
+        return {'url': url,
+                'como_apresentar': 'Envie o link como texto simples.'}
+    return {'url': None,
+            'aviso': ('Catálogo ainda sem link cadastrado. Diga que a equipe '
+                      'comercial envia o catálogo junto do contato — e '
+                      'capture e-mail e WhatsApp se ainda não capturou.')}
+
+
+def registrar_lead_b2b(nome, email, telefone, empresa=None, interesse=None,
+                       catalogo_enviado=False, telefone_contato=None,
+                       conversa_id=None):
+    """Registra um lead de atacado/B2B e avisa o dono no WhatsApp na hora.
+
+    Validações: e-mail com formato real; telefone celular BR com DDD (10-13
+    dígitos, com ou sem o 55). `telefone_contato` (injetado pelo canal — o
+    WhatsApp de onde o cliente fala) serve de fallback quando o cliente diz
+    "esse número mesmo". Dedupe: mesmo e-mail OU telefone nas últimas 24h
+    ATUALIZA o lead em vez de duplicar (o cliente corrigir um dado no turno
+    seguinte não vira lead novo).
+    """
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import LeadB2B
+    from app.utils import agora, normalizar_telefone
+
+    nome = (nome or '').strip()
+    email = (email or '').strip().lower()
+    fone = normalizar_telefone(telefone)
+    if not fone and telefone_contato:
+        fone = normalizar_telefone(telefone_contato)
+    if len(nome) < 2:
+        return {'erro': 'Peça o nome do cliente antes de registrar.'}
+    if not _email_lead_valido(email):
+        return {'erro': ('E-mail com formato inválido — confirme com o '
+                         'cliente (ex: nome@dominio.com).')}
+    if not (10 <= len(fone) <= 13):
+        return {'erro': ('Telefone inválido — peça o WhatsApp com DDD '
+                         '(ex: 11 99999-8888).')}
+
+    corte = agora() - timedelta(hours=24)
+    lead = (LeadB2B.query
+            .filter(db.or_(LeadB2B.email == email, LeadB2B.telefone == fone),
+                    LeadB2B.criado_em >= corte)
+            .order_by(LeadB2B.criado_em.desc()).first())
+    atualizado = lead is not None
+    if lead is None:
+        lead = LeadB2B(nome=nome, email=email, telefone=fone)
+        db.session.add(lead)
+    lead.nome = nome or lead.nome
+    lead.email = email
+    lead.telefone = fone
+    if empresa:
+        lead.empresa = (empresa or '').strip()[:200]
+    if interesse:
+        lead.interesse = (interesse or '').strip()[:2000]
+    if catalogo_enviado:
+        lead.catalogo_enviado = True
+    if conversa_id:
+        lead.conversa_id = conversa_id
+    db.session.commit()
+
+    _avisar_dono_lead_b2b(lead, atualizado)
+
+    out = {'ok': True,
+           'lead_id': lead.id,
+           'ja_registrado': atualizado,
+           'mensagem': ('Contato registrado — nossa equipe comercial vai '
+                        'falar com o cliente em breve.')}
+    url = catalogo_b2b_url()
+    if url:
+        out['catalogo_url'] = url
+    return out
+
+
+def _avisar_dono_lead_b2b(lead, atualizado):
+    """WhatsApp pro dono a cada lead novo (best-effort — nunca quebra o
+    atendimento). Mesmo padrão do aviso de estoque do wifi_portal."""
+    from flask import current_app
+
+    from app.extensions import db
+    from app.services import zapi
+    try:
+        numero = (current_app.config.get('ZAPI_BOT_DONO_NUMERO') or '').strip()
+        if not numero:
+            return
+        rotulo = 'atualizado' if atualizado else 'NOVO'
+        partes = [f'🏢 Lead B2B {rotulo} pelo bot:',
+                  f'• {lead.nome}' + (f' ({lead.empresa})' if lead.empresa else ''),
+                  f'• WhatsApp: {lead.telefone}',
+                  f'• E-mail: {lead.email}']
+        if lead.interesse:
+            partes.append(f'• Interesse: {lead.interesse[:300]}')
+        partes.append('Lista completa: /b2b/leads')
+        zapi.enviar_texto(numero, '\n'.join(partes))
+    except Exception:  # noqa: BLE001
+        logger.exception('aviso de lead B2B falhou')
+        db.session.rollback()
