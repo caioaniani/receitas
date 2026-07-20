@@ -50,6 +50,12 @@ body { background:#f6f7fb; font-family:-apple-system, BlinkMacSystemFont, 'Segoe
         <a href="{{ url_for('driver.qr_entrega', token=token, pedido_id=p.id) }}" class="btn btn-success btn-acao">
             <i class="bi bi-qr-code"></i> Entregar agora
         </a>
+        {% if p.tiny_nota_fiscal_id %}
+        <a href="{{ url_for('driver.pedido_danfe', token=token, pedido_id=p.id) }}"
+           class="btn btn-outline-secondary btn-acao mt-2" target="_blank" rel="noopener">
+            <i class="bi bi-file-earmark-text"></i> DANFE — NF de transferência{% if p.nf_numero %} nº {{ p.nf_numero }}{% endif %}
+        </a>
+        {% endif %}
     </div>
     {% endfor %}
 </div>
