@@ -544,8 +544,10 @@ def _cardapio_categorias(tipo):
 def cardapio():
     tipo = request.args.get('tipo', 'atacado')
     categorias, regras = _cardapio_categorias(tipo)
+    preparo = _preparo_atacado() if tipo == 'atacado' else []
     return render_template('main/cardapio.html', categorias=categorias,
-                           tipo=tipo, regras=regras, logo=_cardapio_logo())
+                           tipo=tipo, regras=regras, preparo=preparo,
+                           logo=_cardapio_logo())
 
 
 @main_bp.route('/cardapio.pdf')
