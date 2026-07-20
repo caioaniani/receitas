@@ -270,6 +270,17 @@ def creditar_industria_retirada(retirada, usuario_id=None):
     return resumo
 
 
+def _coleta_ja_estornada(retirada):
+    """True se a baixa da coleta desta retirada já foi re-creditada à loja
+    (estorno genérico por token OU cancelamento anterior). LIKE por SUFIXO:
+    as referências de estorno terminam no token — 'ret-1' não casa
+    'ret-16'."""
+    like = f'%{retirada.token_mov}'
+    return MovEstoqueLoja.query.filter(
+        MovEstoqueLoja.tipo == TIPO_BAIXA_LOJA_ESTORNO,
+        MovEstoqueLoja.referencia.like(like)).first() is not None
+
+
 def receber_retirada_manual(retirada, usuario_id, quantidades=None):
     """Destrava ADMINISTRATIVA da ponta 2 (19/07/2026 — caso retirada #16
     Nebraska presa `em_transporte` 12h+): a mercadoria chegou na indústria
@@ -289,6 +300,30 @@ def receber_retirada_manual(retirada, usuario_id, quantidades=None):
         raise ValueError(
             f'retirada #{retirada.id} está "{retirada.status}" — o '
             'recebimento manual só destrava retirada em transporte')
+    # Se a baixa da coleta já foi estornada pelo estorno genérico
+    # (/pedidos/devolucao/estornar com o token ret-<id>), o estoque voltou
+    # pra LOJA — creditar a indústria agora criaria estoque nas duas
+    # pontas. O gesto certo passa a ser cancelar (pós-revisão 19/07/2026).
+    if _coleta_ja_estornada(retirada):
+        raise ValueError(
+            f'a baixa da coleta da retirada #{retirada.id} já foi '
+            'estornada manualmente — o estoque voltou pra loja; cancele a '
+            'retirada em vez de receber')
+    # CLAIM atômico (padrão do Confirmar do Slack / _claim_baixa B2B):
+    # UPDATE condicional segura a corrida entre dois POSTs (ou POST × scan
+    # do QR) em workers distintos — o perdedor casa 0 linhas e recusa, em
+    # vez de creditar a indústria 2x.
+    from app.models import RetiradaSobra
+    quando = agora()
+    claim = (RetiradaSobra.query
+             .filter(RetiradaSobra.id == retirada.id,
+                     RetiradaSobra.status == 'em_transporte')
+             .update({'status': 'recebida', 'recebida_em': quando},
+                     synchronize_session=False))
+    if not claim:
+        raise ValueError(
+            f'retirada #{retirada.id} já foi processada por outra ação — '
+            'recarregue a lista')
     if quantidades:
         for it in retirada.itens:
             q = quantidades.get(it.id)
