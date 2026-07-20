@@ -48,9 +48,16 @@ hora; aqui fica a lista para acompanhamento.</p>
             <td><strong>{{ l.nome }}</strong>
                 {% if l.empresa %}<small class="text-muted d-block">{{ l.empresa }}</small>{% endif %}</td>
             <td class="small">
-                <a href="https://wa.me/{{ l.telefone if l.telefone.startswith('55') else '55' ~ l.telefone }}"
+                {# 55 do país só por COMPRIMENTO: fone com DDD 55 (região de
+                   Santa Maria-RS) também começa com '55' (achado do revisor;
+                   mesma regra do telefone_chave em utils.py). #}
+                <a href="https://wa.me/{{ l.telefone if l.telefone|length >= 12 and l.telefone.startswith('55') else '55' ~ l.telefone }}"
                    target="_blank">📱 {{ l.telefone }}</a><br>
                 ✉️ {{ l.email }}
+                {% if l.conversa_id %}
+                {% set cw = link_conversa_chatwoot(l.conversa_id) %}
+                {% if cw %}<br><a href="{{ cw }}" target="_blank" class="small">💬 ver conversa</a>{% endif %}
+                {% endif %}
             </td>
             <td class="small">{{ l.interesse or '—' }}</td>
             <td class="small text-center">{{ '📎 enviado' if l.catalogo_enviado else '—' }}</td>
