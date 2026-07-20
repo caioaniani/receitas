@@ -294,8 +294,13 @@ def _handshake_saida(qr, pedido, pin):
     # a DANFE aparece na tela de sucesso/painel do motorista quando sair.
     from app.services import tiny_nf_transf
     res_nf = tiny_nf_transf.emitir_apos_coleta(pedido)
-    _audit(qr.token, pedido, qr.tipo,
-           'nf_ok' if res_nf.get('ok') else 'nf_falha',
+    if res_nf.get('dispensada'):
+        etapa_nf = 'nf_disp'
+    elif res_nf.get('ok'):
+        etapa_nf = 'nf_ok'
+    else:
+        etapa_nf = 'nf_falha'
+    _audit(qr.token, pedido, qr.tipo, etapa_nf,
            (res_nf.get('msg') or '')[:500])
     # Marca o motorista autenticado na session do navegador dele.
     # Sem isso, o proximo passo (/driver/<token>/pedido/<id>/qr-entrega)
