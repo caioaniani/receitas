@@ -1522,6 +1522,11 @@ def _migrate_postgres(app):
          "nf_emitida_em TIMESTAMP")
     _try("ALTER TABLE pedido_loja ADD COLUMN IF NOT EXISTS "
          "nf_numero VARCHAR(50)")
+    # Dispensa de NF por pedido (20/07/2026, pedido do dono): pedido que
+    # NAO precisa de NF de transferencia — o scan do QR pula a emissao e o
+    # card de NF mostra o estado. Default FALSE = todo pedido emite.
+    _try("ALTER TABLE pedido_loja ADD COLUMN IF NOT EXISTS "
+         "nf_dispensada BOOLEAN NOT NULL DEFAULT FALSE")
 
     # Motivo do cancelamento (25/06/2026) — registra POR QUE um pedido do site
     # foi cancelado (pix_expirado / reembolso / cancelado_admin) em vez de
