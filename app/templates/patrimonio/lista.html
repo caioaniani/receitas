@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Patrimônio{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-upc-scan"></i> Patrimônio</h1>
+    <a class="btn btn-outline-primary btn-sm"
+       href="{{ url_for('patrimonio.etiquetas_pdf', loja=f_loja or None, categoria=f_cat or None) }}"
+       target="_blank" title="Etiquetas QR (3×7 por A4) dos ativos do filtro atual — baixados ficam fora">
+        <i class="bi bi-qr-code"></i> Etiquetas PDF</a>
+</div>
+
+<div class="alert alert-info dica-recolhe small">
+    Inventário de <strong>móveis e equipamentos</strong> (indústria + lojas).
+    Fluxo: cadastre os ativos → imprima e cole as <strong>etiquetas QR</strong> →
+    qualquer funcionário aponta a câmera do celular pro QR e confirma
+    "está aqui" (ok ou com problema). A coluna <strong>última conferência</strong>
+    mostra o inventário andando; o contador vermelho é o que <strong>ninguém
+    achou</strong> desde a data do filtro. Conferir não muda o cadastro —
+    mover de local, manutenção e baixa são gestos seus aqui na lista.
+</div>
+
+{# ── Cadastro ─────────────────────────────────────────────────────────── #}
+<details class="mb-3">
+    <summary class="btn btn-success btn-sm">➕ Cadastrar ativos</summary>
+    <form method="POST" action="{{ url_for('patrimonio.novo') }}" class="border rounded p-3 mt-2 bg-white">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row g-2">
+            <div class="col-md-4"><label class="form-label small mb-0">Nome (1 ativo)</label>
+                <input class="form-control form-control-sm" name="nome" placeholder="Forno turbo Prática 10 esteiras"></div>
+            <div class="col-md-2"><label class="form-label small mb-0">Categoria</label>
+                <input class="form-control form-control-sm" name="categoria" list="cats" placeholder="Forno"></div>
+            <div class="col-md-2"><label class="form-label small mb-0">Local</label>
+                <select class="form-select form-select-sm" name="loja_id">
+                    <option value="ind">Indústria</option>
+                    {% for l in lojas %}<option value="{{ l.id }}">{{ l.nome }}</option>{% endfor %}
+                </select></div>
+            <div class="col-md-2"><label class="form-label small mb-0">Detalhe do local</label>
+                <input class="form-control form-control-sm" name="local_detalhe" placeholder="cozinha / salão"></div>
+            <div class="col-md-2"><label class="form-label small mb-0">Nº de série</label>
+                <input class="form-control form-control-sm" name="numero_serie"></div>
+            <div class="col-md-2"><label class="form-label small mb-0">Valor (R$)</label>
+                <input class="form-control form-control-sm" name="valor_aquisicao" placeholder="1.234,56"></div>
+            <div class="col-md-2"><label class="form-label small mb-0">Aquisição</label>
+                <input type="date" class="form-control form-control-sm" name="adquirido_em"></div>
+            <div class="col-md-8"><label class="form-label small mb-0">Observação</label>
+                <input class="form-control form-control-sm" name="observacao"></div>
+        </div>
+        <div class="mt-2">
+            <label class="form-label small mb-0">OU cole uma lista (um ativo por linha — categoria e local acima valem pra todos):</label>
+            <textarea class="form-control form-control-sm" name="nomes_lote" rows="4"
+                      placeholder="Mesa inox 1,90m&#10;Geladeira 4 portas&#10;Batedeira planetária 20L"></textarea>
+        </div>
+        <button class="btn btn-success btn-sm mt-2">Cadastrar</button>
+    </form>
+</details>
+<datalist id="cats">{% for c in categorias %}<option value="{{ c }}">{% endfor %}</datalist>
+
+{# ── Filtros + resumo do inventário ───────────────────────────────────── #}
+<form method="GET" class="d-flex flex-wrap gap-2 align-items-end mb-2">
+    <div><label class="form-label small mb-0">Local</label>
+        <select class="form-select form-select-sm" name="loja">
+            <option value="">Todos</option>
+            <option value="ind" {% if f_loja == 'ind' %}selected{% endif %}>Indústria</option>
+            {% for l in lojas %}<option value="{{ l.id }}" {% if f_loja == l.id|string %}selected{% endif %}>{{ l.nome }}</option>{% endfor %}
+        </select></div>
+    <div><label class="form-label small mb-0">Categoria</label>
+        <select class="form-select form-select-sm" name="categoria">
+            <option value="">Todas</option>
+            {% for c in categorias %}<option value="{{ c }}" {% if f_cat == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select></div>
+    <div><label class="form-label small mb-0">Situação</label>
+        <select class="form-select form-select-sm" name="situacao">
+            <option value="ativos" {% if f_sit == 'ativos' %}selected{% endif %}>Em uso + manutenção</option>
+            <option value="em_uso" {% if f_sit == 'em_uso' %}selected{% endif %}>Em uso</option>
+            <option value="manutencao" {% if f_sit == 'manutencao' %}selected{% endif %}>Manutenção</option>
+            <option value="baixado" {% if f_sit == 'baixado' %}selected{% endif %}>Baixados</option>
+        </select></div>
+    <div><label class="form-label small mb-0" title="Conferências a partir desta data contam como 'inventariado'">Inventário desde</label>
+        <input type="date" class="form-control form-control-sm" name="desde" value="{{ desde.isoformat() }}"></div>
+    <div><label class="form-label small mb-0">Buscar</label>
+        <input class="form-control form-control-sm" name="busca" value="{{ f_busca }}" placeholder="nome"></div>
+    <button class="btn btn-primary btn-sm">Filtrar</button>
+    <span class="ms-auto small">
+        <strong>{{ linhas|length }}</strong> ativo(s)
+        {% if nao_conferidos %}· <span class="badge bg-danger">{{ nao_conferidos }} sem conferência desde {{ desde.strftime('%d/%m') }}</span>
+        {% else %}· <span class="badge bg-success">inventário em dia desde {{ desde.strftime('%d/%m') }}</span>{% endif %}
+    </span>
+</form>
+
+<div class="table-responsive">
+    <table class="table table-sm align-middle bg-white">
+        <thead class="table-light">
+            <tr><th>Código</th><th>Ativo</th><th>Local</th><th>Situação</th>
+                <th>Última conferência</th><th class="text-end"></th></tr>
+        </thead>
+        <tbody>
+        {% for ln in linhas %}{% set a = ln.ativo %}
+            <tr class="{% if not ln.conferido and a.situacao != 'baixado' %}table-warning{% endif %}">
+                <td class="text-nowrap"><strong>{{ a.codigo }}</strong></td>
+                <td>{{ a.nome }}{% if a.categoria %} <span class="badge bg-light text-dark border">{{ a.categoria }}</span>{% endif %}
+                    {% if a.numero_serie %}<div class="small text-muted">série {{ a.numero_serie }}</div>{% endif %}</td>
+                <td class="small">{{ a.local_nome }}{% if a.local_detalhe %} · {{ a.local_detalhe }}{% endif %}
+                    {% if ln.local_divergente %}<div class="text-danger fw-bold" title="A última conferência viu este ativo em outro local — confira e ajuste o cadastro se ele mudou de casa.">⚠ visto em {{ ln.ultima.loja_vista.nome if ln.ultima.loja_vista else 'Indústria' }}</div>{% endif %}</td>
+                <td>{% if a.situacao == 'em_uso' %}<span class="badge bg-success">em uso</span>
+                    {% elif a.situacao == 'manutencao' %}<span class="badge bg-warning text-dark">manutenção</span>
+                    {% else %}<span class="badge bg-secondary">baixado</span>{% endif %}</td>
+                <td class="small">
+                    {% if ln.ultima %}
+                        {{ ln.ultima.momento.strftime('%d/%m %H:%M') }}
+                        {% if ln.ultima.estado == 'problema' %}<span class="badge bg-danger">problema</span>{% else %}<span class="badge bg-success">ok</span>{% endif %}
+                        {% if ln.ultima.usuario %}<span class="text-muted">por {{ ln.ultima.usuario.nome }}</span>{% endif %}
+                        {% if ln.ultima.observacao %}<div class="text-muted">{{ ln.ultima.observacao }}</div>{% endif %}
+                    {% else %}<span class="text-muted">nunca conferido</span>{% endif %}
+                </td>
+                <td class="text-end text-nowrap">
+                    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('patrimonio.conferir', id=a.id) }}"
+                       title="A mesma página que o QR da etiqueta abre">Conferir</a>
+                    <details class="d-inline-block text-start">
+                        <summary class="btn btn-sm btn-outline-secondary">Editar</summary>
+                        <form method="POST" action="{{ url_for('patrimonio.editar', id=a.id) }}"
+                              class="border rounded p-2 mt-1 bg-light" style="min-width:260px">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input class="form-control form-control-sm mb-1" name="nome" value="{{ a.nome }}">
+                            <input class="form-control form-control-sm mb-1" name="categoria" list="cats" value="{{ a.categoria or '' }}" placeholder="Categoria">
+                            <select class="form-select form-select-sm mb-1" name="loja_id">
+                                <option value="ind" {% if not a.loja_id %}selected{% endif %}>Indústria</option>
+                                {% for l in lojas %}<option value="{{ l.id }}" {% if a.loja_id == l.id %}selected{% endif %}>{{ l.nome }}</option>{% endfor %}
+                            </select>
+                            <input class="form-control form-control-sm mb-1" name="local_detalhe" value="{{ a.local_detalhe or '' }}" placeholder="Detalhe do local">
+                            <input class="form-control form-control-sm mb-1" name="numero_serie" value="{{ a.numero_serie or '' }}" placeholder="Nº de série">
+                            <input class="form-control form-control-sm mb-1" name="valor_aquisicao" value="{{ a.valor_aquisicao or '' }}" placeholder="Valor R$">
+                            <input type="date" class="form-control form-control-sm mb-1" name="adquirido_em" value="{{ a.adquirido_em.isoformat() if a.adquirido_em else '' }}">
+                            <input class="form-control form-control-sm mb-1" name="observacao" value="{{ a.observacao or '' }}" placeholder="Observação">
+                            <button class="btn btn-sm btn-primary">Salvar</button>
+                        </form>
+                    </details>
+                    <form method="POST" action="{{ url_for('patrimonio.situacao', id=a.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        {% if a.situacao == 'baixado' %}
+                        <input type="hidden" name="situacao" value="em_uso">
+                        <button class="btn btn-sm btn-outline-success" title="Volta pro inventário e pras etiquetas">Reativar</button>
+                        {% else %}
+                        {% if a.situacao == 'em_uso' %}
+                        <input type="hidden" name="situacao" value="manutencao">
+                        <button class="btn btn-sm btn-outline-warning" title="Marca em manutenção (segue no inventário)">Manut.</button>
+                        {% else %}
+                        <input type="hidden" name="situacao" value="em_uso">
+                        <button class="btn btn-sm btn-outline-success" title="Voltou da manutenção">Em uso</button>
+                        {% endif %}
+                        {% endif %}
+                    </form>
+                    {% if a.situacao != 'baixado' %}
+                    <form method="POST" action="{{ url_for('patrimonio.situacao', id=a.id) }}" class="d-inline"
+                          onsubmit="return confirm('Baixar o ativo {{ a.codigo }}? Ele sai das etiquetas e do inventário (o histórico fica).');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="situacao" value="baixado">
+                        <button class="btn btn-sm btn-outline-danger">Baixar</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="6" class="text-muted small p-3">Nenhum ativo ainda — cadastre acima (dá pra colar a lista inteira de uma vez) e imprima as etiquetas.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
