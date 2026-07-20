@@ -2048,6 +2048,29 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE venda_b2b ADD COLUMN "
                        "frete_valor NUMERIC(10, 2) NOT NULL DEFAULT 0")
 
+    # NF de transferencia industria→loja (20/07/2026) — ver _migrate_postgres.
+    cursor.execute("PRAGMA table_info(loja)")
+    cols_loja = [row[1] for row in cursor.fetchall()]
+    for _c, _t in (('cnpj', 'VARCHAR(20)'),
+                   ('inscricao_estadual', 'VARCHAR(20)'),
+                   ('endereco_logradouro', 'VARCHAR(200)'),
+                   ('endereco_numero', 'VARCHAR(20)'),
+                   ('endereco_complemento', 'VARCHAR(100)'),
+                   ('endereco_bairro', 'VARCHAR(100)'),
+                   ('endereco_cep', 'VARCHAR(9)'),
+                   ('endereco_cidade', 'VARCHAR(100)'),
+                   ('endereco_uf', 'VARCHAR(2)')):
+        if cols_loja and _c not in cols_loja:
+            cursor.execute(f"ALTER TABLE loja ADD COLUMN {_c} {_t}")
+    cursor.execute("PRAGMA table_info(pedido_loja)")
+    cols_pl = [row[1] for row in cursor.fetchall()]
+    for _c, _t in (('tiny_nota_fiscal_id', 'VARCHAR(40)'),
+                   ('nf_status', 'VARCHAR(40)'),
+                   ('nf_emitida_em', 'TIMESTAMP'),
+                   ('nf_numero', 'VARCHAR(50)')):
+        if cols_pl and _c not in cols_pl:
+            cursor.execute(f"ALTER TABLE pedido_loja ADD COLUMN {_c} {_t}")
+
     # seru_produto_map.fator_quantidade
     cursor.execute("PRAGMA table_info(seru_produto_map)")
     cols_spm = [row[1] for row in cursor.fetchall()]
