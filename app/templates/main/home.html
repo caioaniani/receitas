@@ -104,7 +104,7 @@
             </span>
             {% endif %}
             &nbsp;|&nbsp; Site: <strong>R$ {{ '{:,.0f}'.format(vendas.site_total).replace(',', '.') }}</strong>
-            · {{ vendas.site_qtd }} pagos
+            · {{ vendas.site_qtd }} pago{{ 's' if vendas.site_qtd != 1 }}
         </p>
         {% if not vendas.snapshot_ok %}
         <p class="small text-warning mb-2">⚠ O snapshot de ontem ainda não foi
