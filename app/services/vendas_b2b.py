@@ -557,6 +557,7 @@ def editar_venda(venda, *, cliente_id=None, cliente_nome=None, data_venda=None,
         raise ValueError('venda sem itens')
     if not cliente_id and not (cliente_nome or '').strip():
         raise ValueError('cliente obrigatorio (cadastrado ou avulso)')
+    frete = _normalizar_frete(frete_valor)
 
     _estornar_estoque(venda, user=user, motivo='edicao')
     for vi in list(venda.itens):
