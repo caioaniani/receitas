@@ -473,3 +473,36 @@ class OrcamentoItem(db.Model):
         self.subtotal = (Decimal(str(self.quantidade or 0))
                          * Decimal(str(self.preco_unitario or 0)))
         return self.subtotal
+
+
+class LeadB2B(db.Model):
+    """Lead de ATACADO/B2B capturado pelo bot de atendimento (16/07/2026,
+    pedido do dono: "treinar o bot para atender os clientes que vem querer o
+    cardapio B2B — capturar e-mail e telefone whatsapp para eu entrar em
+    contato"). Tabela NOVA — criada por db.create_all no startup, sem ALTER
+    legado (mesmo padrao do UsoIA). Vive em tabela propria de proposito: o
+    historico da conversa (ChatbotConversa) e apagado pela retencao em 180d;
+    o lead e dado comercial e fica.
+    """
+    __tablename__ = 'lead_b2b'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False)
+    empresa = db.Column(db.String(200))
+    email = db.Column(db.String(200), nullable=False, index=True)
+    # So digitos, com DDD (com ou sem o 55) — normalizado na captura.
+    telefone = db.Column(db.String(20), nullable=False, index=True)
+    # O que o cliente disse que quer (resumo do bot) — contexto pro contato.
+    interesse = db.Column(db.Text)
+    origem = db.Column(db.String(30), nullable=False, default='chatbot')
+    # Conversa do Chatwoot onde o lead nasceu (link direto na tela admin).
+    conversa_id = db.Column(db.Integer)
+    catalogo_enviado = db.Column(db.Boolean, nullable=False, default=False)
+    # NULL = ainda nao contatado (badge "novo" na tela; o dono marca).
+    contatado_em = db.Column(db.DateTime, nullable=True)
+    contatado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                                 nullable=True)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
+
+    def __repr__(self):
+        return f'<LeadB2B {self.email}>'
