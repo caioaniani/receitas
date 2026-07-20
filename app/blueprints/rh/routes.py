@@ -409,9 +409,10 @@ def salvar_loja_fiscal(id):
     # Truncado no tamanho da coluna: texto colado maior que o campo virava
     # DataError/500 no Postgres (achado B1 da revisão). Validação de
     # conteúdo (CNPJ 14 dígitos etc.) fica na emissão + badge da tela.
-    _max = {'cnpj': 20, 'inscricao_estadual': 20, 'endereco_logradouro': 200,
-            'endereco_numero': 20, 'endereco_complemento': 100,
-            'endereco_bairro': 100, 'endereco_cep': 9, 'endereco_cidade': 100}
+    _max = {'razao_social': 200, 'cnpj': 20, 'inscricao_estadual': 20,
+            'endereco_logradouro': 200, 'endereco_numero': 20,
+            'endereco_complemento': 100, 'endereco_bairro': 100,
+            'endereco_cep': 9, 'endereco_cidade': 100}
     for campo, tam in _max.items():
         setattr(loja, campo,
                 (request.form.get(campo) or '').strip()[:tam] or None)
