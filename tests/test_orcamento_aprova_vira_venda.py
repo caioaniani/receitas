@@ -1,9 +1,11 @@
 """Aprovar orçamento VIRA venda (07/07/2026, decisão do dono).
 
 Fazer orçamento é leve; APROVAR é amarrado aos processos: exige data de
-entrega, itens vinculados ao catálogo, quantidades inteiras e desconto/
-frete embutidos nos preços. Aprovação válida cria a VendaB2B vinculada
-(entra na fila do padeiro SEM baixar estoque — baixa é na separação).
+entrega, itens vinculados ao catálogo, quantidades inteiras e desconto
+embutido nos preços. FRETE passa direto desde 20/07/2026 (a venda ganhou
+o campo frete_valor — a regra "embuta o frete" existia só porque o campo
+não existia). Aprovação válida cria a VendaB2B vinculada (entra na fila
+do padeiro SEM baixar estoque — baixa é na separação).
 """
 from datetime import timedelta
 from decimal import Decimal
