@@ -2372,6 +2372,39 @@ manda pros clientes; a impressao oficial e o PDF do servidor
   (`_PAG_UTIL=250`), quebra ANTES do titulo. Efeito: pagina 1 vira a capa,
   cada categoria comeca limpa (sem "Paes" partido no meio de duas paginas).
   Categoria maior que uma pagina flui e quebra por fileira como antes.
+- **Descricoes do atacado + metodos de preparo (20/07/2026, ditado do
+  dono: "descricao sincera de cada produto b2b, quanto menos e mais...
+  fala dos ingredientes... Colocar tambem os metodos de preparo")**:
+  - `Receita.descricao_atacado` (Text; procedimento de 2 commits — o 1º
+    deploy do ALTER CRASHOU porque o bloco usava `conn.execute` num ponto
+    de `_migrate_postgres` onde o `conn` do bloco inicial ja esta FECHADO
+    (`ResourceClosedError` no boot; prod nao caiu, deploy anterior seguiu
+    servindo). REGRA: bloco novo abaixo do "Migracoes resilientes" usa
+    SEMPRE `_cols`/`_try`/sub-conexao propria, NUNCA o `conn` de cima.
+  - SEED UNICO na criacao da coluna (`migrations_legacy.
+    DESCRICOES_ATACADO_SEED`, 9 receitas B2B com ingredientes REAIS das
+    fichas: T65/T45, Callebaut...). Guard = criacao da coluna, nunca
+    re-aplica — edicao do dono na ficha manda. So `descricao_atacado IS
+    NULL` no seed (redundante com o guard, cinto+suspensorio).
+  - Editavel na FICHA da receita (textarea "Descricao (cardapio
+    atacado)"); o salvar so mexe se o campo veio no form (POST de
+    lote/legado nao apaga); duplicar copia. Aparece SO no
+    /cardapio?tipo=atacado — tela (`card-desc`/`list-item-desc` ja
+    existiam) e PDF (card `_CARD_H_DESC` / linha `_LINHA_H_DESC` quando a
+    categoria tem alguma descricao — `_altura_categoria` acompanha, senao
+    o keep-together mente; texto 7pt, 2 linhas com reticencias via
+    `_quebrar_2_linhas`). Sonda `/api/claude/receita` expoe o campo.
+  - **Metodos de preparo**: AppConfig `cardapio_atacado_preparo` com
+    DEFAULT no codigo (`main/routes.py::CARDAPIO_PREPARO_DEFAULT` — os 4
+    ditados: backup/congelado cru = melhor qualidade, assado e congelado
+    = mais pratico, sourdough congelado 14 fatias, brioche fresco 3
+    dias). CONTRATO: chave AUSENTE = default; gravada VAZIA = dono apagou
+    de proposito, bloco some. Uma linha por metodo, "Rotulo: texto"
+    (split no PRIMEIRO ':'; rotulo >60 chars = linha corrida). Textarea
+    na tela de regras do atacado; caixa propria bege na tela e na capa do
+    PDF (`_box_preparo`, altura medida com multi_cell dry_run em BOLD pra
+    nunca cortar; sem em-dash — latin-1). So tipo atacado.
+  - Testes: `tests/test_cardapio_descricoes.py` (13 casos).
 
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
