@@ -168,10 +168,10 @@ def _logo_bytes(logo_data):
         return None
 
 
-def _capa(pdf, titulo_tipo, regras, logo_data=None, preparo=None):
-    """Hero escuro da marca (como o do site) + label de seção centrado +
-    (atacado) caixa de regras bege + caixa "Métodos de preparo" — espelho
-    do main/cardapio.html.
+def _capa(pdf, titulo_tipo, logo_data=None):
+    """Hero escuro da marca (como o do site) + label de seção centrado —
+    espelho do main/cardapio.html. As caixas de regras/métodos vão no FIM
+    do documento (pedido do dono 20/07: produtos primeiro).
 
     Com logo configurado (`cardapio_logo_data`), a imagem entra no lugar do
     wordmark "O Pão" na banda escura; sem logo, cai no texto Times."""
@@ -214,38 +214,43 @@ def _capa(pdf, titulo_tipo, regras, logo_data=None, preparo=None):
              align='C', new_x='LMARGIN', new_y='NEXT')
     pdf.set_char_spacing(0)
 
-    if regras:
-        pdf.ln(3)
+    pdf.ln(4)
+
+
+def _box_regras(pdf, regras, titulo_tipo):
+    """Caixa bege de regras do pedido (.regras-atacado do site) — desenhada
+    no FIM do documento, depois das categorias. Não cabe na página = página
+    nova (a caixa nunca é cortada)."""
+    alt = 9 + 6 * len(regras)
+    pdf.ln(3)
+    y0 = pdf.get_y()
+    if y0 + alt > _Y_LIMITE:
+        pdf.add_page()
         y0 = pdf.get_y()
-        alt = 9 + 6 * len(regras)
-        pdf.set_fill_color(*_C_TAG)        # .regras-atacado do site
-        pdf.set_draw_color(*_C_BORDER)
-        pdf.rect(_MARGEM, y0, 190, alt, style='FD',
-                 round_corners=True, corner_radius=_RAIO)
-        pdf.set_y(y0 + 4)
+    pdf.set_fill_color(*_C_TAG)
+    pdf.set_draw_color(*_C_BORDER)
+    pdf.rect(_MARGEM, y0, 190, alt, style='FD',
+             round_corners=True, corner_radius=_RAIO)
+    pdf.set_y(y0 + 4)
+    pdf.set_x(_MARGEM + 5)
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.set_text_color(*_C_PRIMARY)
+    pdf.set_char_spacing(0.8)
+    # '·' e não em-dash (fora do latin-1) — mesma regra do header.
+    pdf.cell(0, 5, _latin1('REGRAS DO PEDIDO · %s'
+                           % titulo_tipo.upper()),
+             new_x='LMARGIN', new_y='NEXT')
+    pdf.set_char_spacing(0)
+    for rg in regras:
         pdf.set_x(_MARGEM + 5)
         pdf.set_font('Helvetica', 'B', 9)
-        pdf.set_text_color(*_C_PRIMARY)
-        pdf.set_char_spacing(0.8)
-        # '·' e não em-dash (fora do latin-1) — mesma regra do header.
-        pdf.cell(0, 5, _latin1('REGRAS DO PEDIDO · %s'
-                               % titulo_tipo.upper()),
-                 new_x='LMARGIN', new_y='NEXT')
-        pdf.set_char_spacing(0)
-        for rg in regras:
-            pdf.set_x(_MARGEM + 5)
-            pdf.set_font('Helvetica', 'B', 9)
-            pdf.set_text_color(*_C_MUTED)
-            pdf.cell(pdf.get_string_width(_latin1(rg['label'] + ': ')) + 1, 6,
-                     _latin1(rg['label'] + ':'))
-            pdf.set_font('Helvetica', '', 9)
-            pdf.set_text_color(*_C_FG)
-            pdf.cell(0, 6, _latin1(rg['valor']), new_x='LMARGIN', new_y='NEXT')
-        pdf.set_y(y0 + alt + 5)
-    else:
-        pdf.ln(4)
-    if preparo:
-        _box_preparo(pdf, preparo)
+        pdf.set_text_color(*_C_MUTED)
+        pdf.cell(pdf.get_string_width(_latin1(rg['label'] + ': ')) + 1, 6,
+                 _latin1(rg['label'] + ':'))
+        pdf.set_font('Helvetica', '', 9)
+        pdf.set_text_color(*_C_FG)
+        pdf.cell(0, 6, _latin1(rg['valor']), new_x='LMARGIN', new_y='NEXT')
+    pdf.set_y(y0 + alt + 2)
 
 
 def _moeda(v):
