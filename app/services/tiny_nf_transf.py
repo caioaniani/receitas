@@ -262,6 +262,11 @@ def emitir_apos_coleta(pedido):
     """
     from app.extensions import db
     try:
+        if nf_dispensada_para(pedido):
+            # Dispensa explícita: nem tenta, sem ruído de "falha" no audit
+            # (o scan fica instantâneo pro motorista).
+            return {'ok': True, 'dispensada': True,
+                    'msg': 'NF dispensada para este pedido/loja.'}
         res = emitir_nf(pedido)
         if not res.get('ok'):
             logger.warning('NF transferência pedido %s não emitida: %s',
