@@ -2603,6 +2603,40 @@ travado por teste `test_config_mapeia_as_envs_spotify`).
   configurado", nada quebra.
 - Testes: `tests/test_spotify.py` (API SEMPRE mockada, padrão Anthropic).
 
+## Patrimônio — inventário de móveis/equipamentos com etiquetas QR (20/07/2026)
+
+Pedido do dono ("preciso fazer o inventario da industria e das lojas...
+colar aqueles codigos de barras ou QR Code"; escolha dele no follow-up:
+**moveis e equipamentos**, modulo completo). QR escolhido sobre barras 1D:
+a camera de qualquer celular le e o QR carrega o LINK da pagina de
+conferencia — zero app, zero digitacao.
+
+- **Modelos** `Ativo` + `AtivoConferencia` (`app/models/patrimonio.py`,
+  tabelas novas via `db.create_all`, sem ALTER). Ativo: nome, categoria,
+  loja_id (NULL = industria), local_detalhe, nº serie, valor (Numeric —
+  regra B4), situacao em_uso|manutencao|baixado. Conferencia = "vi este
+  ativo" (quem, quando, ONDE viu, ok|problema + obs). `codigo` = A-NNNN.
+- **Tela `/patrimonio`** (admin; link na area Administracao): cadastro
+  1-a-1 OU lote (textarea um nome por linha), filtros, edicao inline,
+  manutencao/baixa/reativar (baixado nunca se apaga — sai das etiquetas e
+  do inventario), ultima conferencia por ativo e contador de **nao
+  conferidos desde `?desde=`** (default 30d) — o relatorio do inventario.
+  Aviso "⚠ visto em X" quando a ultima conferencia divergiu do cadastro
+  (conferir NUNCA muda cadastro; mover e gesto do admin).
+- **Etiquetas** `GET /patrimonio/etiquetas.pdf?loja=&categoria=&ids=`
+  (admin): PDF servidor (`app/services/patrimonio_pdf.py`, fpdf2), grade
+  3×7 de 63,5×38,1 mm (padrao Pimaco 21/folha; linhas-guia pra papel
+  comum). QR = `<APP_BASE_URL>/patrimonio/<id>/conferir`. Baixados fora.
+  `qrcode_svc.gerar_png_bytes` (novo) alimenta o PDF; o data_url antigo
+  virou wrapper dele.
+- **Conferencia `/patrimonio/<id>/conferir`** (QUALQUER funcionario
+  logado — inventario e de todo mundo; cadastro segue admin): pagina
+  mobile com "✅ Esta aqui e funcionando" e "⚠ Tem algum problema..."
+  (+ select de onde ele esta). Validada a 390px (Playwright + Bootstrap
+  local, metodo da casa).
+- Manual de operacao: item na secao MENSAL/TRIMESTRAL. Testes:
+  `tests/test_patrimonio.py` (15 casos).
+
 ## Sidebar
 
 Secoes (`sidebar-section-title`) sao **colapsaveis** — JS adiciona chevron + persiste
