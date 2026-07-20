@@ -6,8 +6,11 @@ travam o desbloqueio:
 - /pedidos/retiradas lista as abertas;
 - o botão QR de coleta REGENERA quando o antigo expirou (e o novo valida
   no handshake);
-- cancelar só antes da coleta, sem mexer em estoque;
-- em transporte não cancela (a loja já baixou).
+- cancelar antes da coleta não mexe em estoque;
+- em transporte, cancelar ESTORNA a baixa da coleta (regra mudou em
+  19/07/2026 — pacote de destrava das baixas presas; a recusa antiga
+  existia porque o cancelamento não estornava. O contrato novo completo
+  vive em tests/test_retirada_receber_manual.py).
 """
 from datetime import timedelta
 
