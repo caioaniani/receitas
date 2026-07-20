@@ -288,6 +288,15 @@ def _handshake_saida(qr, pedido, pin):
     pedido.driver_id = driver_match.id
     db.session.commit()
     _audit(qr.token, pedido, qr.tipo, 'sucesso', f'driver:{driver_match.nome}')
+    # NF de TRANSFERENCIA (20/07/2026): emitida DEPOIS do commit da coleta,
+    # best-effort — Tiny/SEFAZ fora do ar NUNCA segura o caminhao (padrao
+    # loja_pagamento._emitir_nf_e_enviar). O resultado vira so auditoria;
+    # a DANFE aparece na tela de sucesso/painel do motorista quando sair.
+    from app.services import tiny_nf_transf
+    res_nf = tiny_nf_transf.emitir_apos_coleta(pedido)
+    _audit(qr.token, pedido, qr.tipo,
+           'nf_ok' if res_nf.get('ok') else 'nf_falha',
+           (res_nf.get('msg') or '')[:500])
     # Marca o motorista autenticado na session do navegador dele.
     # Sem isso, o proximo passo (/driver/<token>/pedido/<id>/qr-entrega)
     # cairia em "Faça login no painel do motorista" — o PIN ja foi validado
