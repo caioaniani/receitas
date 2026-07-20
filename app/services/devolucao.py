@@ -281,7 +281,30 @@ def _coleta_ja_estornada(retirada):
         MovEstoqueLoja.referencia.like(like)).first() is not None
 
 
-def receber_retirada_manual(retirada, usuario_id, quantidades=None):
+def auditar_gesto_retirada(retirada, tipo, etapa, detalhe):
+    """Audita gesto de retirada SEM QR (tela do padeiro / destrava admin) no
+    mesmo log dos handshakes (HandshakeAudit, tipos r_coleta/r_receb) —
+    SESSÃO ISOLADA best-effort (padrão uso_ia/frete_sensor): nunca commita
+    escrita de negócio pendente nem derruba a ação."""
+    import logging
+
+    from sqlalchemy.orm import Session
+
+    from app.models import HandshakeAudit
+    try:
+        with Session(db.engine) as s:
+            s.add(HandshakeAudit(
+                token=retirada.token_mov, tipo=tipo, etapa=etapa,
+                detalhe=f'retirada:{retirada.id} {detalhe}'[:500],
+                status_pedido=retirada.status))
+            s.commit()
+    except Exception:
+        logging.getLogger(__name__).exception(
+            'audit gesto retirada falhou (id=%s)', retirada.id)
+
+
+def receber_retirada_manual(retirada, usuario_id, quantidades=None,
+                            origem='web'):
     """Destrava ADMINISTRATIVA da ponta 2 (19/07/2026 — caso retirada #16
     Nebraska presa `em_transporte` 12h+): a mercadoria chegou na indústria
     mas ninguém escaneou o QR de recebimento (motorista foi embora, QR
