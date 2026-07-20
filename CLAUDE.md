@@ -2273,6 +2273,30 @@ validar, precisa de grandfather explicito como o das MPs), e homonimas
 (arquivada + recriada) disputam a chave por NOME no mapa de custos
 (`custos.py` — fraqueza pre-existente).
 
+## Cardapio (/cardapio) — branding: bairro + logotipo (20/07/2026)
+
+Tela interna (`@login_required`) do cardapio de atacado/loja/site que o dono
+manda pros clientes; a impressao oficial e o PDF do servidor
+(`app/services/cardapio_pdf.py`, espelho do `main/cardapio.html`).
+
+- **Bairro = Brooklin** (era "Itaim Bibi"): so a BRANDING do cardapio
+  (meta desc + hero-tag + rodape em `cardapio.html`; capa + rodape no PDF).
+  NAO confundir com os enderecos REAIS de loja — Anesio Pinto Rosa = Itaim e
+  legitimo (chatbot_prompt, loja templates, google_reviews). So o cardapio
+  mudou de bairro.
+- **Logotipo configuravel** no lugar do wordmark "O Pao": AppConfig
+  `cardapio_logo_data` = **data URI** (base64) — auto-contido (sobrevive
+  deploy, sem host externo; hero usa `data:` que a CSP libera, PDF decodifica
+  os bytes). Vazio = cai no texto "O Pao". Upload em
+  `/admin/cardapio-atacado/regras` (admin): `_processar_logo_cardapio` com
+  checkbox **branco** (default) = converte a marca preta/monocromatica em
+  SILHUETA BRANCA sobre transparente (`ImageChops.multiply` de ink×alpha),
+  perfeita no hero ESCURO; desmarcado = imagem fiel (PNG com alpha ou JPEG).
+  Rotas `cardapio_logo_upload` / `cardapio_logo_remover`. O logo vale pros 3
+  tipos (brand-wide), passado a `render_template`/`gerar_cardapio_pdf`.
+  Testes: `tests/test_cardapio_atacado_regras.py`. NAO embutir imagem de
+  logo colada no chat (nao ha bytes) — o dono sobe o arquivo pela tela.
+
 ## Vigias novos (12/07/2026, resgatados da sessao revertida)
 
 - **Vigia de custo de IA** (`app/services/uso_ia_vigia.py`): cron 1h
