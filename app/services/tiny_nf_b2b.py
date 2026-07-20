@@ -144,7 +144,8 @@ def emitir_nf(venda, user_id=None, recriar=False):
                           + '. Mapeie em B2B → SKUs do Tiny (/b2b/tiny-skus).')
         if not itens:
             return None, 'Venda sem itens — nada pra emitir.'
-        return _nota_payload(cliente, itens), None
+        return _nota_payload(cliente, itens,
+                             frete_valor=venda.frete_valor or 0), None
 
     return tiny_nf.emitir_nf_generico(venda, _montar, recriar=recriar)
 
