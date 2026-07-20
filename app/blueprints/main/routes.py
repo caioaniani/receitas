@@ -78,10 +78,13 @@ def index():
         # o snapshot de ontem quente.
         vendas = (briefing_dono.vendas_ontem(capturar=False)
                   if current_user.is_owner else None)
+        vendas_hoje = (briefing_dono.vendas_hoje(capturar=False)
+                       if current_user.is_owner else None)
         return render_template('main/home.html',
                                areas=nav.areas_visiveis(current_user),
                                pendencias=pend,
-                               vendas=vendas)
+                               vendas=vendas,
+                               vendas_hoje=vendas_hoje)
     return render_template('main/inicio.html')
 
 
