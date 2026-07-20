@@ -582,7 +582,9 @@ def editar_venda(venda, *, cliente_id=None, cliente_nome=None, data_venda=None,
     total = _aplicar_itens(venda, itens, user, baixar=baixar)
     if baixar:
         venda.estoque_baixado_em = agora()
-    venda.valor_total = total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    venda.frete_valor = frete
+    venda.valor_total = (total + frete).quantize(Decimal('0.01'),
+                                                 rounding=ROUND_HALF_UP)
     _aplicar_parcelas(venda, parcelas)
     db.session.commit()
     return venda
