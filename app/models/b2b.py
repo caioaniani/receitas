@@ -155,6 +155,11 @@ class VendaB2B(db.Model):
     # Numeric(10, 2): precisao exata em centavos. Float dava erro de
     # arredondamento em soma de parcelas (R$33,33 × 3 != R$100,00).
     valor_total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    # Frete da entrega COBRADO do cliente (20/07/2026, pedido do dono via
+    # Bruno). SOMADO no valor_total (parcela/boleto/fatura herdam) e enviado
+    # no campo valor_frete da NF do Tiny — mesmo padrao da NF do site.
+    # 0 = sem frete (todas as vendas antigas).
+    frete_valor = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     observacao = db.Column(db.Text)
     nf_numero = db.Column(db.String(50))  # numero da NF se houver
     # NF-e via Tiny (06/07/2026) — mesmo trio do PedidoOnline: id da NF no
