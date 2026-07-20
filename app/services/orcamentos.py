@@ -260,8 +260,11 @@ def validar_para_aprovacao(orc):
     - todo item vinculado ao catalogo (linha livre pode existir no papel,
       mas nao passa da aprovacao — nao tem estoque nem SKU de NF);
     - quantidade inteira (a venda conta unidades);
-    - desconto/frete em valor absoluto zerados — a venda nao tem esses
-      campos; embuta nos precos unitarios antes de aprovar.
+    - desconto em valor absoluto zerado — a venda nao tem esse campo;
+      embuta nos precos unitarios antes de aprovar. FRETE passa direto
+      (20/07/2026): a venda ganhou o campo frete_valor (soma no total,
+      vai no boleto e no valor_frete da NF do Tiny) — a regra antiga
+      "embuta o frete" existia so porque o campo nao existia.
     """
     erros = []
     if not (orc.cliente_id or (orc.cliente_nome or '').strip()):
