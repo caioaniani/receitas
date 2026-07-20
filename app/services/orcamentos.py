@@ -301,9 +301,6 @@ def validar_para_aprovacao(orc):
     if (orc.desconto_valor or 0) > 0:
         erros.append('desconto em R$ nao existe na venda — embuta o '
                      'desconto nos precos unitarios antes de aprovar')
-    if (orc.frete_valor or 0) > 0:
-        erros.append('frete nao existe na venda B2B — embuta no preco '
-                     'dos itens antes de aprovar')
     return erros
 
 
