@@ -219,7 +219,9 @@ def test_etiquetas_pdf_22_ativos_2_paginas(app):
     for i in range(22):
         ativos.append(_ativo(f'Ativo {i:02d}'))
     pdf = gerar_etiquetas_pdf(ativos, 'https://x')
-    assert pdf.count(b'/Type /Page') >= 2
+    # A árvore /Type /Pages também casa o prefixo — 1 página = count 2,
+    # 2 páginas = count 3 (achado de revisão: >= 2 era vácuo).
+    assert pdf.count(b'/Type /Page') >= 3
 
 
 def test_area_nav_tem_link(app, admin_user):
