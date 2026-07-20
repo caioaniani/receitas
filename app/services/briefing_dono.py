@@ -253,20 +253,27 @@ def _resolver_loja_seru():
     return out
 
 
-def vendas_ontem():
+def vendas_ontem(capturar=True):
     """Vendas de ONTEM: PDV por loja (vs média do mesmo dia-da-semana) + site.
 
     PDV lê o snapshot `VendaSeruDiaLoja` (faturamento_pedidos = total do
     pedido, inclui kit/box — mesma base do /api/bot/faturamento), AGRUPADO
     pela Loja vinculada (dois companies da mesma loja somam numa linha).
     Site soma `PedidoOnline.valor_total` dos PAGOS ontem (por pago_em).
+
+    `capturar=False` lê SÓ o snapshot do banco, sem chance de bater na API
+    Seru — é o modo do bloco da home do admin (carrega a cada visita; o cron
+    de 15 min já mantém ontem+hoje capturados). O briefing/cron continua com
+    capturar=True. `snapshot_ok=False` no retorno = ontem sem snapshot (a
+    tela avisa em vez de mostrar um R$ 0 falso).
     """
     from app.models import PedidoOnline, VendaSeruDiaLoja
     from app.services import vendas_diarias
 
     ontem = hoje() - timedelta(days=1)
     total, por_company, n_pedidos = vendas_diarias.faturamento_por_loja(
-        ontem, ontem)
+        ontem, ontem, capturar=capturar)
+    snapshot_ok = ontem in vendas_diarias.dias_capturados(ontem, ontem)
     vinculo = _resolver_loja_seru()
 
     # Média das últimas ocorrências do MESMO dia-da-semana, por LOJA (dois
