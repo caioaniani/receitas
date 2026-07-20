@@ -212,6 +212,8 @@ _OUTPUT_VAZOU_MARCADORES = (
     'transferir_para_humano',
     'consultar_pedido',
     'consultar_produtos',
+    'registrar_lead_b2b',
+    'catalogo_b2b',
 )
 
 
@@ -793,7 +795,8 @@ def disponivel():
                 or current_app.config.get('ANTHROPIC_API_KEY'))
 
 
-def _executar_tool(nome, inp, *, telefone_contato=None):
+def _executar_tool(nome, inp, *, telefone_contato=None,
+                   conversa_id=None):
     """Executa a tool. `telefone_contato` (canonico, vindo do canal — ex:
     Chatwoot WhatsApp) eh injetado em tools que precisam autorizar dono
     de pedido. Nunca vem do LLM, sempre do contexto da conversa."""
@@ -838,7 +841,8 @@ def _executar_tool(nome, inp, *, telefone_contato=None):
                 empresa=inp.get('empresa'),
                 interesse=inp.get('interesse'),
                 catalogo_enviado=bool(inp.get('catalogo_enviado')),
-                telefone_contato=telefone_contato)
+                telefone_contato=telefone_contato,
+                conversa_id=conversa_id)
         if nome == 'catalogo_b2b':
             return bot_tools.catalogo_b2b()
         return {'erro': f'ferramenta desconhecida: {nome}'}
@@ -892,7 +896,8 @@ def _build_messages(historico):
     return messages
 
 
-def responder(historico, *, telefone_contato=None):
+def responder(historico, *, telefone_contato=None,
+              conversa_id=None):
     """Processa a conversa (com loop de ferramentas) e decide a resposta.
 
     `historico`: lista cronológica [{'role','content'}] terminando na última
@@ -1114,7 +1119,8 @@ def responder(historico, *, telefone_contato=None):
                 })
                 continue
             out = _executar_tool(b.name, b.input or {},
-                                  telefone_contato=telefone_contato)
+                                  telefone_contato=telefone_contato,
+                                  conversa_id=conversa_id)
             tools_usadas.append(b.name)
             if b.name == 'consultar_produtos':
                 produto_falhou = bool(isinstance(out, dict) and out.get('erro'))

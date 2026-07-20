@@ -212,3 +212,61 @@ def test_tela_salva_link_do_catalogo(app, admin_user):
     client.post('/b2b/leads/catalogo-url', data={'url': 'drop.exemplo/x'})
     with app.app_context():
         assert AppConfig.get('catalogo_b2b_url') == 'https://drop.exemplo/catalogo.pdf'
+
+
+# ── Fixes da revisão (16/07/2026) ────────────────────────────────────────
+
+def test_email_maiusculo_normaliza_e_gigante_recusa(app):
+    with app.app_context():
+        with patch('app.services.zapi.enviar_texto', return_value={'ok': True}):
+            r = bot_tools.registrar_lead_b2b('Ana', 'ANA@Cafeteria.COM',
+                                             '11988887777')
+        assert r['ok'] is True
+        assert LeadB2B.query.first().email == 'ana@cafeteria.com'
+        # E-mail acima do cap da coluna (200) é recusado, não estoura VARCHAR.
+        gigante = ('a' * 250) + '@x.com'
+        r2 = bot_tools.registrar_lead_b2b('Bia', gigante, '11977776666')
+        assert 'erro' in r2
+
+
+def test_nome_gigante_e_truncado_no_cap_da_coluna(app):
+    with app.app_context():
+        with patch('app.services.zapi.enviar_texto', return_value={'ok': True}):
+            r = bot_tools.registrar_lead_b2b('N' * 400, 'n@x.com',
+                                             '11988887777')
+        assert r['ok'] is True
+        assert len(LeadB2B.query.first().nome) == 150
+
+
+def test_dedupe_email_primeiro_nao_faz_merge_destrutivo(app):
+    """Email de A + telefone de B numa chamada só: atualiza A (identidade =
+    e-mail) e NUNCA sobrescreve o e-mail de B (achado do revisor)."""
+    with app.app_context():
+        with patch('app.services.zapi.enviar_texto', return_value={'ok': True}):
+            bot_tools.registrar_lead_b2b('Ana', 'a@x.com', '11911111111')
+            bot_tools.registrar_lead_b2b('Bia', 'b@y.com', '11922222222')
+            bot_tools.registrar_lead_b2b('Ana S', 'a@x.com', '11922222222')
+        assert LeadB2B.query.count() == 2
+        b = LeadB2B.query.filter_by(email='b@y.com').first()
+        assert b is not None and b.nome == 'Bia'  # B intacto
+        a = LeadB2B.query.filter_by(email='a@x.com').first()
+        assert a.nome == 'Ana S'                  # A atualizado
+
+
+def test_conversa_id_viaja_do_canal_ate_o_lead(app):
+    from app.services.chatbot import _executar_tool
+    with app.app_context():
+        with patch('app.services.zapi.enviar_texto', return_value={'ok': True}):
+            r = _executar_tool('registrar_lead_b2b',
+                               {'nome': 'Ana', 'email': 'c@x.com',
+                                'telefone': '11988887777'},
+                               telefone_contato='5511988887777',
+                               conversa_id=482)
+        assert r['ok'] is True
+        assert db.session.get(LeadB2B, r['lead_id']).conversa_id == 482
+
+
+def test_nomes_das_tools_no_filtro_de_vazamento():
+    from app.services.chatbot import _OUTPUT_VAZOU_MARCADORES
+    assert 'registrar_lead_b2b' in _OUTPUT_VAZOU_MARCADORES
+    assert 'catalogo_b2b' in _OUTPUT_VAZOU_MARCADORES

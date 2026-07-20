@@ -577,7 +577,8 @@ def bot_webhook():
                                             conv_id, len(historico))
 
                     resultado = chatbot.responder(
-                        historico, telefone_contato=telefone_contato)
+                        historico, telefone_contato=telefone_contato,
+                        conversa_id=conv_id)
                     # Handoff REPETIDO (auditor 06/07/2026, caso Simone): a
                     # conversa ja foi transferida ha pouco — em vez de "vou te
                     # passar pra equipe" de novo, avisa que a equipe ja esta

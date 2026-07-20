@@ -828,7 +828,13 @@ def _email_lead_valido(email):
     global _RE_EMAIL_LEAD
     if _RE_EMAIL_LEAD is None:
         _RE_EMAIL_LEAD = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$')
-    return bool(_RE_EMAIL_LEAD.match((email or '').strip()))
+    email = (email or '').strip()
+    # Limite da coluna (String(200)) — e-mail maior que isso e invalido de
+    # qualquer forma; sem o cap, o commit estourava VARCHAR no Postgres e
+    # deixava a sessao do webhook quebrada (achado do revisor).
+    if len(email) > 200:
+        return False
+    return bool(_RE_EMAIL_LEAD.match(email))
 
 
 def catalogo_b2b_url():
@@ -875,7 +881,7 @@ def registrar_lead_b2b(nome, email, telefone, empresa=None, interesse=None,
     from app.models import LeadB2B
     from app.utils import agora, normalizar_telefone
 
-    nome = (nome or '').strip()
+    nome = (nome or '').strip()[:150]   # cap da coluna String(150)
     email = (email or '').strip().lower()
     fone = normalizar_telefone(telefone)
     if not fone and telefone_contato:
@@ -885,15 +891,27 @@ def registrar_lead_b2b(nome, email, telefone, empresa=None, interesse=None,
     if not _email_lead_valido(email):
         return {'erro': ('E-mail com formato inválido — confirme com o '
                          'cliente (ex: nome@dominio.com).')}
+    # 10-13 digitos DE PROPOSITO (mais frouxo que o _whatsapp_valido do
+    # wifi_portal): lead B2B pode passar telefone FIXO comercial da empresa
+    # — barrar por "nao e celular" perderia o contato. O dono ve e decide.
     if not (10 <= len(fone) <= 13):
         return {'erro': ('Telefone inválido — peça o WhatsApp com DDD '
                          '(ex: 11 99999-8888).')}
 
     corte = agora() - timedelta(hours=24)
+    # Dedupe EMAIL-primeiro (revisor): o e-mail e a identidade do lead. So
+    # cai no match por telefone quando nenhum lead recente tem esse e-mail
+    # (caso legitimo: cliente corrigiu o e-mail no turno seguinte). Match
+    # "email OU telefone" num filtro so podia casar o lead ERRADO e
+    # sobrescrever o e-mail de outro contato.
     lead = (LeadB2B.query
-            .filter(db.or_(LeadB2B.email == email, LeadB2B.telefone == fone),
-                    LeadB2B.criado_em >= corte)
+            .filter(LeadB2B.email == email, LeadB2B.criado_em >= corte)
             .order_by(LeadB2B.criado_em.desc()).first())
+    if lead is None:
+        lead = (LeadB2B.query
+                .filter(LeadB2B.telefone == fone,
+                        LeadB2B.criado_em >= corte)
+                .order_by(LeadB2B.criado_em.desc()).first())
     atualizado = lead is not None
     if lead is None:
         lead = LeadB2B(nome=nome, email=email, telefone=fone)
@@ -942,7 +960,9 @@ def _avisar_dono_lead_b2b(lead, atualizado):
                   f'• E-mail: {lead.email}']
         if lead.interesse:
             partes.append(f'• Interesse: {lead.interesse[:300]}')
-        partes.append('Lista completa: /b2b/leads')
+        base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+        partes.append(f'Lista completa: {base}/b2b/leads' if base
+                      else 'Lista completa: /b2b/leads')
         zapi.enviar_texto(numero, '\n'.join(partes))
     except Exception:  # noqa: BLE001
         logger.exception('aviso de lead B2B falhou')
