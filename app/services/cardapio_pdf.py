@@ -143,12 +143,12 @@ class _CardapioPDF(FPDF):
         self.ln(5)
 
     def footer(self):
-        # Rodapé do site: "© O Pão Padaria Artesanal · Itaim Bibi, São Paulo".
+        # Rodapé do site: "© O Pão Padaria Artesanal · Brooklin, São Paulo".
         self.set_y(-12)
         self.set_font('Helvetica', '', 8)
         self.set_text_color(*_C_SOFT)
         self.cell(140, 6, _latin1('© O Pão Padaria Artesanal · '
-                                   'Itaim Bibi, São Paulo'))
+                                   'Brooklin, São Paulo'))
         self.cell(40, 6, _latin1('página %d' % self.page_no()), align='R')
 
 
