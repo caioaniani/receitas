@@ -113,6 +113,12 @@ class Receita(db.Model):
     # /admin/seo/descricoes a partir do nome + ingredientes; revisada pelo
     # dono antes de virar publica. NULL = fallback "Nome — Categoria".
     descricao_seo = db.Column(db.Text, nullable=True)
+    # Descricao SINCERA do cardapio de ATACADO (dono 20/07/2026: "quanto
+    # menos e mais" — ingredientes reais + como o produto e vendido).
+    # Editavel na ficha; seed unico das 9 receitas B2B na criacao da coluna
+    # (migrations_legacy.DESCRICOES_ATACADO_SEED). So o /cardapio?tipo=
+    # atacado (tela + PDF) le — loja/site seguem sem descricao de receita.
+    descricao_atacado = db.Column(db.Text, nullable=True)
     # Ordem manual na vitrine (menor = mais cedo). NULL = vai pro fim,
     # ordenado por nome dentro de cada categoria. Setado pela tela de
     # curadoria (campo "ordem" no card).
