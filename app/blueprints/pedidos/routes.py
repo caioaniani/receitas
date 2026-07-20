@@ -21,6 +21,7 @@ from app.decorators import (
     admin_required,
     gerente_required,
     operacional_pedido_required,
+    owner_required,
     pedidos_required,
     producao_required,
 )
@@ -3609,3 +3610,129 @@ def retirada_cancelar(id):
               'da loja (as vendas de Nutella continuam baixando dali).',
               'success')
     return redirect(url_for('pedidos.retiradas_sobras'))
+
+
+# ── NF de TRANSFERÊNCIA indústria→loja (20/07/2026) ─────────────────────────
+# Emitida best-effort no scan do QR de saída (handshake); aqui ficam a
+# reemissão manual (Tiny fora do ar na hora do scan) e o mapa de SKUs do
+# canal 'transf' (fallback site→b2b — a tela é só pra exceções e MPs).
+
+@pedidos_bp.route('/<int:id>/emitir-nf', methods=['POST'])
+@login_required
+@operacional_pedido_required
+def emitir_nf_transferencia(id):
+    """(Re)emite a NF de transferência do pedido. `recriar=1` refaz do
+    zero (mesma semântica do B2B — risco de duplicidade é do gesto)."""
+    from app.services import tiny_nf_transf
+    pedido = PedidoLoja.query.get_or_404(id)
+    recriar = request.form.get('recriar') == '1'
+    res = tiny_nf_transf.emitir_nf(pedido, user_id=current_user.id,
+                                   recriar=recriar)
+    flash(('NF de transferência: %s' % res.get('msg', 'ok')),
+          'success' if res.get('ok') else 'danger')
+    return redirect(request.referrer
+                    or url_for('pedidos.detalhe', id=pedido.id))
+
+
+@pedidos_bp.route('/<int:id>/danfe')
+@login_required
+@operacional_pedido_required
+def danfe_transferencia(id):
+    """DANFE da NF de transferência (link temporário do Tiny, resolvido
+    sob demanda — mesmo padrão do B2B)."""
+    from app.services import tiny
+    pedido = PedidoLoja.query.get_or_404(id)
+    if not pedido.tiny_nota_fiscal_id:
+        flash('Este pedido ainda não tem NF de transferência emitida.',
+              'warning')
+        return redirect(url_for('pedidos.detalhe', id=pedido.id))
+    link, motivo = tiny.obter_link_nota_fiscal_com_motivo(
+        pedido.tiny_nota_fiscal_id)
+    if not link:
+        flash(f'DANFE ainda não disponível: {motivo}', 'warning')
+        return redirect(url_for('pedidos.detalhe', id=pedido.id))
+    return redirect(link)
+
+
+@pedidos_bp.route('/tiny-skus-transferencia')
+@owner_required
+def tiny_skus_transferencia():
+    """Mapa de SKUs do canal 'transf'. A emissão HERDA o SKU do site→b2b
+    quando não há registro aqui — a tela mostra o herdado e serve pra
+    exceção e pra MP (que não existe nos outros canais)."""
+    from app.services import tiny_nf, tiny_nf_transf
+    itens = tiny_nf.itens_para_mapear(canal='transf')
+    for it in itens:
+        if not it['sku'] and it['kind'] in ('receita', 'produto'):
+            herdado = tiny_nf_transf.sku_transferencia(it['kind'], it['id'])
+            if herdado:
+                it['sku_herdado'] = herdado
+    pendentes = sum(1 for i in itens
+                    if i['estado'] != 'mapeado' and not i.get('sku_herdado'))
+    return render_template(
+        'tiny_skus.html', itens=itens, pendentes=pendentes,
+        total=len(itens),
+        titulo='SKUs do Tiny (NF-e) — Transferência indústria → loja',
+        descricao='A NF de transferência HERDA o SKU do site (e depois do '
+                  'B2B) quando não há SKU próprio aqui — mapeie só as '
+                  'exceções e as matérias-primas (que não existem nos '
+                  'outros canais).',
+        url_definir=url_for('pedidos.tiny_definir_transf'),
+        url_sync=url_for('pedidos.tiny_sync_transf'),
+        url_importar=url_for('pedidos.tiny_importar_transf'),
+        vazio_msg='Nenhum item pedível ainda.')
+
+
+@pedidos_bp.route('/tiny-skus-transferencia/definir', methods=['POST'])
+@owner_required
+def tiny_definir_transf():
+    from app.services import tiny_nf
+    kind = (request.form.get('kind') or '').strip()
+    try:
+        item_id = int(request.form.get('item_id'))
+    except (TypeError, ValueError):
+        flash('Item inválido.', 'warning')
+        return redirect(url_for('pedidos.tiny_skus_transferencia'))
+    sku = (request.form.get('sku') or '').strip()
+    tiny_nf.definir_sku(kind, item_id, sku, user_id=current_user.id,
+                        canal='transf')
+    flash('SKU salvo.' if sku else 'SKU removido.', 'success')
+    return redirect(url_for('pedidos.tiny_skus_transferencia'))
+
+
+@pedidos_bp.route('/tiny-skus-transferencia/sync', methods=['POST'])
+@owner_required
+def tiny_sync_transf():
+    from app.services import tiny_nf
+    res = tiny_nf.sincronizar_sugestoes(user_id=current_user.id,
+                                        canal='transf')
+    if res.get('erro'):
+        flash(f'Sincronização falhou: {res["erro"]}', 'danger')
+    else:
+        flash(f'{res.get("exatos", 0)} confirmados (nome idêntico) + '
+              f'{res.get("sugeridos", 0)} sugeridos pra conferir, '
+              f'{res.get("sem_match", 0)} sem correspondência '
+              f'({res.get("total_tiny", 0)} produtos no Tiny).', 'success')
+    return redirect(url_for('pedidos.tiny_skus_transferencia'))
+
+
+@pedidos_bp.route('/tiny-skus-transferencia/importar', methods=['POST'])
+@owner_required
+def tiny_importar_transf():
+    from app.services import tiny_nf
+    f = request.files.get('planilha')
+    if not f or not f.filename:
+        flash('Selecione a planilha de produtos do Tiny (.xls ou .csv).',
+              'warning')
+        return redirect(url_for('pedidos.tiny_skus_transferencia'))
+    conteudo = f.read()
+    res = tiny_nf.importar_planilha(conteudo, f.filename,
+                                    user_id=current_user.id, canal='transf')
+    if res.get('erro'):
+        flash(res['erro'], 'danger')
+    else:
+        flash(f'Planilha importada: {res.get("exatos", 0)} confirmados '
+              f'(nome idêntico) + {res.get("sugeridos", 0)} sugeridos pra '
+              f'conferir, {res.get("sem_match", 0)} sem correspondência '
+              f'({res.get("total", 0)} linhas).', 'success')
+    return redirect(url_for('pedidos.tiny_skus_transferencia'))
