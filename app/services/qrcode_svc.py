@@ -7,8 +7,8 @@ import base64
 import io
 
 
-def gerar_png_data_url(texto, box_size=8, border=2):
-    """Gera QR code PNG e retorna data URL pra usar em <img src=...>.
+def gerar_png_bytes(texto, box_size=8, border=2):
+    """Gera QR code e retorna os BYTES do PNG (pra embutir em PDF etc.).
 
     texto: o conteudo do QR (geralmente uma URL completa).
     box_size: tamanho de cada modulo em pixels (default 8 = ~250-300px total).
@@ -29,5 +29,13 @@ def gerar_png_data_url(texto, box_size=8, border=2):
     img = qr.make_image(fill_color='black', back_color='white')
     buf = io.BytesIO()
     img.save(buf, format='PNG')
-    b64 = base64.b64encode(buf.getvalue()).decode('ascii')
+    return buf.getvalue()
+
+
+def gerar_png_data_url(texto, box_size=8, border=2):
+    """Gera QR code PNG e retorna data URL pra usar em <img src=...>."""
+    png = gerar_png_bytes(texto, box_size=box_size, border=border)
+    if png is None:
+        return None
+    b64 = base64.b64encode(png).decode('ascii')
     return f'data:image/png;base64,{b64}'
