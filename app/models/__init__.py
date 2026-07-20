@@ -14,6 +14,7 @@ from app.models.loja import *  # noqa: F401, F403
 from app.models.loja_online import *  # noqa: F401, F403
 from app.models.notas import *  # noqa: F401, F403
 from app.models.notificacoes import *  # noqa: F401, F403
+from app.models.patrimonio import *  # noqa: F401, F403
 from app.models.pedidos import *  # noqa: F401, F403
 from app.models.producao import *  # noqa: F401, F403
 from app.models.projetos import *  # noqa: F401, F403
