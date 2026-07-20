@@ -198,7 +198,13 @@ def editar(id):
     a.loja_id = _parse_loja_id(request.form.get('loja_id'))
     a.local_detalhe = (request.form.get('local_detalhe') or '').strip() or None
     a.numero_serie = (request.form.get('numero_serie') or '').strip() or None
-    a.valor_aquisicao = _parse_valor(request.form.get('valor_aquisicao'))
+    # Valor inválido MANTÉM o gravado (achado de revisão: virar None calado
+    # apagava o valor num salvamento qualquer da edição inline).
+    try:
+        a.valor_aquisicao = _parse_valor(request.form.get('valor_aquisicao'))
+    except ValueError:
+        flash('Valor de aquisição inválido (use 1.234,56) — mantive o '
+              'anterior.', 'warning')
     a.adquirido_em = _parse_data(request.form.get('adquirido_em'))
     a.observacao = (request.form.get('observacao') or '').strip() or None
     db.session.commit()
