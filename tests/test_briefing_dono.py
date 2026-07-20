@@ -405,6 +405,46 @@ def test_home_tudo_ok_mostra_estado_verde(app, admin_user, cliente):
     assert 'Nada pendente' in body
 
 
+# ── home: vendas TOTAIS (só dono) ────────────────────────────────────────────
+
+def test_home_dono_ve_vendas_totais(app, owner_user, cliente):
+    from app.models import VendaSeruDiaria
+    ontem = hoje() - timedelta(days=1)
+    _venda_dia(ontem, loja_seru='Loja A', fat=800)
+    db.session.add(VendaSeruDiaria(data=ontem, loja_seru='Loja A',
+                                   seru_nome='Croissant', qtd=1,
+                                   faturamento=Decimal('800'), n_pedidos=10))
+    db.session.commit()
+    _login(cliente, owner_user)
+    with patch('app.services.vendas_diarias.garantir_capturado') as gc:
+        body = cliente.get('/').get_data(as_text=True)
+    gc.assert_not_called()                       # home nunca bate na API
+    assert 'Vendas de ontem' in body
+    assert 'R$ 800' in body
+    assert 'Loja A' in body
+    # snapshot presente → sem aviso de captura pendente
+    assert 'ainda não foi\n            capturado' not in body
+    assert 'snapshot de ontem' not in body
+
+
+def test_home_admin_comum_nao_ve_vendas(app, admin_user, cliente):
+    """Faturamento é o cockpit pessoal do dono — admin comum não vê o bloco
+    (mesmo gate do /admin/briefing)."""
+    ontem = hoje() - timedelta(days=1)
+    _venda_dia(ontem, loja_seru='Loja A', fat=800)
+    _login(cliente, admin_user)
+    body = cliente.get('/').get_data(as_text=True)
+    assert 'Vendas de ontem' not in body
+
+
+def test_home_dono_sem_snapshot_avisa(app, owner_user, cliente):
+    """Sem snapshot de ontem, a home avisa em vez de fingir R$ 0."""
+    _login(cliente, owner_user)
+    body = cliente.get('/').get_data(as_text=True)
+    assert 'Vendas de ontem' in body
+    assert 'snapshot de ontem' in body
+
+
 # ── manual de operação ───────────────────────────────────────────────────────
 
 def test_manual_renderiza_para_admin(app, admin_user, cliente):
