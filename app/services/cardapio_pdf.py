@@ -349,6 +349,26 @@ def _lista_categoria(pdf, itens):
         pdf.set_y(y0 + _LINHA_H + 2)
 
 
+# Limite inferior da area de conteudo (auto_page_break margem 16 -> ~281) e
+# altura util de uma pagina LIMPA (topo apos o header ~30mm). Usados pra
+# manter uma categoria INTEIRA numa pagina (feedback do dono 20/07: a
+# categoria "Paes" quebrava entre paginas).
+_Y_LIMITE = 281
+_PAG_UTIL = 250
+
+
+def _altura_categoria(itens, tem_foto):
+    """Estimativa da altura (mm) da categoria: titulo + fileiras. Grid = 3
+    por fileira (card alto); lista = 2 por fileira (caixinha baixa)."""
+    import math
+    titulo = 12.5
+    if tem_foto:
+        fileiras = math.ceil(len(itens) / 3)
+        return titulo + fileiras * (_CARD_H + _GAP)
+    fileiras = math.ceil(len(itens) / 2)
+    return titulo + fileiras * (_LINHA_H + 2) + 2
+
+
 def gerar_cardapio_pdf(tipo, categorias, regras, logo=None):
     """PDF pronto (bytes). `categorias`/`regras` na MESMA forma da tela
     (main._cardapio_categorias — fonte única, nunca divergir da web).
@@ -367,6 +387,14 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None):
         # nome/preço em 2 colunas.
         tem_foto = any(i.get('img_ref') or i.get('imagem_url')
                        for i in itens)
+        # MANTER A CATEGORIA INTEIRA NUMA PAGINA (20/07/2026): se nao cabe no
+        # espaco que sobrou mas cabe numa pagina limpa, comeca numa nova. Se
+        # for maior que uma pagina inteira, flui e quebra por fileira (o
+        # _grid/_lista ja tratam). Efeito: pagina 1 vira a CAPA, cada
+        # categoria comeca limpa — sem "Paes" partido no meio.
+        alt = _altura_categoria(itens, tem_foto)
+        if alt > (_Y_LIMITE - pdf.get_y()) and alt <= _PAG_UTIL:
+            pdf.add_page()
         _titulo_categoria(pdf, cat,
                           alt_primeira=_CARD_H if tem_foto else _LINHA_H)
         if tem_foto:
