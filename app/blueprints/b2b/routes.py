@@ -761,11 +761,11 @@ def _parse_venda_form():
     # Frete da entrega (R$). FORA de `campos` de propósito: o caminho de
     # venda PAGA usa editar_cabecalho(**campos), e frete muda o total — fica
     # travado junto com itens/parcelas (só criar_venda/editar_venda recebem).
-    try:
-        frete_valor = float((request.form.get('frete_valor') or '0')
-                            .replace(',', '.'))
-    except ValueError:
-        frete_valor = 0
+    # parse_float_br: '1.234,56' funciona e valor INVÁLIDO levanta
+    # ValueError (dinheiro não vira zero calado — convenção do projeto);
+    # os POSTs traduzem em flash + redirect.
+    from app.utils import parse_float_br
+    frete_valor = parse_float_br(request.form.get('frete_valor'), default=0)
 
     # Parcelas: parcela_venc[], parcela_valor[], parcela_forma[]
     vencs = request.form.getlist('parcela_venc[]')
