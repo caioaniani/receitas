@@ -17,6 +17,8 @@ mp_direto) — add-ins de montagem (sub-receita e mp_un) ficam de fora, igual
 """
 from math import ceil
 
+from app.utils import SUB_RECEITA_TIPOS, unidades_subreceita
+
 # Tolerância (g) pra tratar diferença como acréscimo real / detectar cadeia
 # inválida (evita ruído de arredondamento de %).
 _TOL = 0.5
@@ -26,7 +28,7 @@ def _sub_amassadeira(ing):
     """True se o ingrediente é uma SUB-RECEITA marcada `sub_na_amassadeira`
     (Levain (pé)): entra na massa branca em gramas (qtd × peso_unitario da
     sub). Sub de MONTAGEM (Massa para folhar) segue fora."""
-    return ((ing.tipo or '') == 'receita' and ing.sub_receita is not None
+    return ((ing.tipo or '') in SUB_RECEITA_TIPOS and ing.sub_receita is not None
             and bool(getattr(ing.sub_receita, 'sub_na_amassadeira', False)))
 
 
@@ -46,10 +48,11 @@ def ingredientes_por_porcao(receita):
             # FK manda no nome (regra do CLAUDE.md); qtd é em UNIDADES da sub
             # (padrão das sub-receitas) × peso da unidade = gramas na massa.
             nome_sub = ing.sub_receita.nome
-            g = (ing.porcentagem or 0) * (ing.sub_receita.peso_unitario or 0)
+            g = (unidades_subreceita(tipo, ing.porcentagem, peso)
+                 * (ing.sub_receita.peso_unitario or 0))
             if g > 0:
                 out[nome_sub] = out.get(nome_sub, 0.0) + g
-        elif tipo not in ('receita', 'mp_un'):
+        elif tipo not in SUB_RECEITA_TIPOS and tipo != 'mp_un':
             out[nome] = out.get(nome, 0.0) + (ing.porcentagem or 0) / 100.0 * peso
     return out
 
