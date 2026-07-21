@@ -6,6 +6,7 @@ from app.blueprints.materias_primas import materias_primas_bp
 from app.decorators import admin_required, catalogo_required
 from app.extensions import db
 from app.models import AlertaEstoque, MateriaPrima, MovimentacaoEstoque, ReceitaIngrediente
+from app.utils import SUB_RECEITA_TIPOS
 
 
 @materias_primas_bp.route('/')
@@ -264,11 +265,11 @@ def excluir(id):
     from sqlalchemy.exc import IntegrityError
     mp = MateriaPrima.query.get_or_404(id)
     # So ingrediente de tipo MP bloqueia — uma RECEITA homonima usada como
-    # ingrediente (caso pos-transferencia MP->receita, mesmo nome) nao e uso
-    # desta MP.
+    # ingrediente (sub-receita 'receita'/'sub_pct', caso pos-transferencia
+    # MP->receita, mesmo nome) nao e uso desta MP.
     uso = (ReceitaIngrediente.query
            .filter(ReceitaIngrediente.ingrediente_nome == mp.nome,
-                   ReceitaIngrediente.tipo != 'receita')
+                   ReceitaIngrediente.tipo.notin_(SUB_RECEITA_TIPOS))
            .first())
     if uso:
         flash(f'Não é possível excluir "{mp.nome}": usado em receitas.', 'danger')
