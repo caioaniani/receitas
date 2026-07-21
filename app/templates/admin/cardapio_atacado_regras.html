@@ -155,19 +155,21 @@
                 <div class="form-text">Categoria nova entra no fim, em ordem alfabética.</div>
             </div>
             <div class="col-md-6">
-                <label class="form-label fw-semibold small">Blocos do rodapé</label>
-                <ul class="list-group ordem-sortavel" data-input="inp-ordem-rodape">
-                    {% for b in rodape_ordem %}
+                <label class="form-label fw-semibold small">Seções da página</label>
+                <ul class="list-group ordem-sortavel" data-input="inp-ordem-secoes">
+                    {% for b in secoes_ordem %}
                     <li class="list-group-item d-flex align-items-center gap-2 py-1"
                         draggable="true" data-key="{{ b }}">
                         <span class="text-muted" style="cursor:grab;">⠿</span>
-                        <span class="flex-grow-1">{{ rodape_labels[b] }}</span>
+                        <span class="flex-grow-1">{{ secoes_labels[b] }}</span>
                         <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ordem-sobe" title="Subir">↑</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ordem-desce" title="Descer">↓</button>
                     </li>
                     {% endfor %}
                 </ul>
-                <input type="hidden" name="ordem_rodape" id="inp-ordem-rodape">
+                <input type="hidden" name="ordem_secoes" id="inp-ordem-secoes">
+                <div class="form-text">Arraste "Produtos" para escolher se a
+                    história/regras aparecem antes ou depois do cardápio.</div>
             </div>
         </div>
     </div>
