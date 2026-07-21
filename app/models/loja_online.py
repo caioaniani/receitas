@@ -236,6 +236,14 @@ class PedidoOnline(db.Model):
     # (recusou cookies / bloqueador). ALTER já em prod (13/07/2026).
     ga_client_id = db.Column(db.String(64), nullable=True)
 
+    # Divulgacao (21/07/2026, pedido do dono): pedido "como do site" mas SEM
+    # pagamento (brinde/PR). Aparece no painel de entregas com estrela ⭐ e
+    # baixa estoque de VERDADE (o pao sai pela porta), porem com movimento
+    # MARCADO (canal 'divulgacao' no baixa_venda) que fica FORA da previsao de
+    # venda. `pago_em` continua NULL (nunca foi pago) — ja sai das somas de
+    # faturamento do site (filtradas por pago_em). FALSE = pedido normal.
+    divulgacao = db.Column(db.Boolean, nullable=False, default=False)
+
     # NF-e (Fase 5, via Tiny). Setados quando o admin clica "Emitir NF"
     # — o Tiny aplica NCM/CFOP/CST do cadastro do produto.
     tiny_pedido_id = db.Column(db.String(40), nullable=True)
