@@ -104,6 +104,13 @@
             &nbsp;|&nbsp; Site: <strong>R$ {{ '{:,.0f}'.format(vendas_hoje.site_total).replace(',', '.') }}</strong>
             · {{ vendas_hoje.site_qtd }} pago{{ 's' if vendas_hoje.site_qtd != 1 }}
         </p>
+        {# Cancelamentos e descontos do dia (PDV Seru) — cockpit do dono. #}
+        <p class="small text-muted mb-2">
+            🚫 Cancelados:
+            <strong>{{ vendas_hoje.cancelados_n }}</strong>{% if vendas_hoje.cancelados_valor %} · R$ {{ '{:,.0f}'.format(vendas_hoje.cancelados_valor).replace(',', '.') }}{% endif %}
+            &nbsp;|&nbsp; 🏷️ Descontos:
+            <strong>R$ {{ '{:,.0f}'.format(vendas_hoje.desconto).replace(',', '.') }}</strong>
+        </p>
         {% if vendas_hoje.por_loja %}
         <div class="small mb-2" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 16px;">
             {% for lj in vendas_hoje.por_loja %}
