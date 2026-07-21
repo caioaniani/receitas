@@ -496,15 +496,21 @@ def emitir_nf_generico(alvo, montar_payload, recriar=False):
     alvo.nf_status = emitir.get('status') or 'enviada'
     if emitir.get('ok'):
         alvo.nf_emitida_em = agora()
+        _set_nf_erro(alvo, None)          # autorizou: limpa erro anterior
         db.session.commit()
         return {'ok': True, 'nota_fiscal_id': alvo.tiny_nota_fiscal_id,
                 'msg': f'NF emitida (status: {alvo.nf_status}).'}
+    # Guarda o motivo REAL da SEFAZ (ex.: "CST com benefício sem cBenef,
+    # cód 32") — antes ele só ia no flash e sumia; agora fica no card.
+    _set_nf_erro(alvo, emitir.get('erro'))
     db.session.commit()
     # Emit retornou status ambíguo. Vai DIRETO no obter pra ver a verdade —
     # a NF pode ter autorizado em background mesmo o emitir retornando código
     # ambíguo (visto em prod com a 011428).
     sit = _sincronizar_situacao(alvo)
     if sit and sit['autorizada']:
+        _set_nf_erro(alvo, None)          # autorizou em background
+        db.session.commit()
         return {'ok': True, 'nota_fiscal_id': alvo.tiny_nota_fiscal_id,
                 'msg': 'NF autorizada na SEFAZ.'}
     return {'ok': False,
