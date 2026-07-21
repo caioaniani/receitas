@@ -175,7 +175,7 @@
             <tbody>
             {% for c in resultado.compras_diretas %}
             <tr><td>{{ c.nome }}</td>
-                <td class="text-end fw-bold">{{ '%g'|format(c.qtd) }} un</td></tr>
+                <td class="text-end fw-bold">{{ qtd_unidade(c.qtd, c.unidade or 'un') }}</td></tr>
             {% endfor %}
             </tbody>
         </table>
