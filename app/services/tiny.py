@@ -73,23 +73,41 @@ def _registros(retorno):
     return out
 
 
+def _mensagens_erro(container):
+    """Normaliza o campo `erros` do Tiny numa lista de mensagens de texto.
+
+    A v2 é inconsistente (mesma armadilha do `_registros`): às vezes manda
+    `erros: [{'erro': 'msg'}]` (lista), às vezes `erros: {'erro': 'msg'}` ou
+    `erros: {'erro': ['m1','m2']}` (dict). Iterar um dict rende as CHAVES —
+    sem esta normalização, `for e in {'erro': 'msg'}` devolvia a string
+    literal 'erro' e a mensagem REAL da SEFAZ/Tiny era perdida (bug real:
+    'Falha ao criar a NF no Tiny: erro'). Agora o valor sob 'erro' (ou os
+    values do dict) é que vira mensagem."""
+    if not container:
+        return []
+    if isinstance(container, dict):
+        # {'erro': ...} → a(s) mensagem(ns) é(são) o VALOR, não a chave.
+        container = container.get('erro', list(container.values()))
+    if not isinstance(container, list):
+        container = [container]
+    msgs = []
+    for e in container:
+        if isinstance(e, dict):
+            msgs.append(str(e.get('erro') or e.get('descricao') or e))
+        elif e:
+            msgs.append(str(e))
+    return msgs
+
+
 def _extrair_erros(retorno):
     """Junta as mensagens de erro de um retorno do Tiny (vêm em formatos
     diferentes: retorno.erros[].erro, ou nos registros)."""
     msgs = []
     if not isinstance(retorno, dict):
         return ''
-    for e in (retorno.get('erros') or []):
-        if isinstance(e, dict):
-            msgs.append(str(e.get('erro') or e.get('descricao') or e))
-        else:
-            msgs.append(str(e))
+    msgs.extend(_mensagens_erro(retorno.get('erros')))
     for reg in _registros(retorno):
-        for e in (reg.get('erros') or []):
-            if isinstance(e, dict):
-                msgs.append(str(e.get('erro') or e))
-            else:
-                msgs.append(str(e))
+        msgs.extend(_mensagens_erro(reg.get('erros')))
     if retorno.get('codigo_erro'):
         msgs.append(f"cod {retorno['codigo_erro']}")
     return '; '.join(m for m in msgs if m)[:400]
