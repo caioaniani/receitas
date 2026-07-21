@@ -257,15 +257,14 @@ def test_aparece_no_painel_do_dia_com_flag(app):
     )
     from app.models import PedidoOnline
     from app.services import divulgacao as svc
-    from app.utils import hoje
     origem = _loja('Origem Site', origem=True)
     r = _receita()
     _estoque(origem, r, 10)
     p = svc.criar_divulgacao(
         itens=[{'kind': 'receita', 'id': r.id, 'qtd': 1}],
         modo_entrega='agendada', endereco=dict(_END_OK),
-        **_base_kw(data_entrega=hoje()))
-    pedidos = _pedidos_online_do_dia(hoje())
+        **_base_kw(data_entrega=_amanha()))
+    pedidos = _pedidos_online_do_dia(_amanha())
     assert any(x['code'] == p.codigo for x in pedidos)
     ser = _serializar_pedido_online(PedidoOnline.query.get(p.id))
     assert ser['divulgacao'] is True
