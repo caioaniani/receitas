@@ -64,7 +64,7 @@ def _movs(canal):
 # com +qtd; isto eh so como o mov fica gravado). Historico: Seru/lote gravam
 # positivo, o site sempre gravou NEGATIVO — preservado pra nao misturar
 # convencao no historico/relatorios. So afeta o numero exibido, nao o saldo.
-_SINAL_ESTORNO = {'site': -1}
+_SINAL_ESTORNO = {'site': -1, 'divulgacao': -1}
 
 
 def _sinal_estorno(canal):
