@@ -220,7 +220,7 @@ def _logo_bytes(logo_data):
         return None
 
 
-def _capa(pdf, titulo_tipo, logo_data=None):
+def _capa(pdf, titulo_tipo, logo_data=None, slogan=None):
     """Hero escuro da marca (como o do site) + label de seção centrado —
     espelho do main/cardapio.html. As caixas de regras/métodos vão no FIM
     do documento (pedido do dono 20/07: produtos primeiro).
