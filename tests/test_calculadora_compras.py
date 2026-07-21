@@ -212,6 +212,55 @@ def test_producao_nao_lista_sub_receita_de_massa(app):
     assert res['producao'][0]['qtd'] == 20       # top-level receita entra
 
 
+def test_retorno_fora_da_producao_e_demanda_somada(app):
+    """Retorno (destino de sobra) NÃO entra em 'Para produção' — vira DEMANDA
+    (vem de sobra, não se produz). Almond consome retorno 1:1 (sub-receita) e o
+    produto de Nutella consome retorno DIRETO; a demanda soma os dois
+    (290 + 150 = 440). Trava o caso real que confundia: '150 retorno' na
+    produção quando o Almond sozinho já puxa 290."""
+    from app.services import calculadora_compras
+    with app.app_context():
+        # Retorno (ficha vazia) + origem que aponta pra ele (=> _eh_retorno).
+        retorno = Receita(nome='Croissant Retorno Calc',
+                          categoria='Viennoiserie', rendimento_qtd=10,
+                          rendimento_unidade='un', peso_base=1000.0)
+        db.session.add(retorno)
+        db.session.flush()
+        db.session.add(Receita(nome='Croissant Fresco Calc',
+                               categoria='Viennoiserie', rendimento_qtd=10,
+                               rendimento_unidade='un', peso_base=1000.0,
+                               retorno_receita_id=retorno.id))
+        # Almond consome retorno 1:1 (10 por batida de 10 un).
+        almond = Receita(nome='Almond Calc', categoria='Viennoiserie',
+                         rendimento_qtd=10, rendimento_unidade='un',
+                         peso_base=1000.0)
+        db.session.add(almond)
+        db.session.flush()
+        db.session.add(ReceitaIngrediente(
+            receita_id=almond.id, tipo='receita',
+            ingrediente_nome=retorno.nome, porcentagem=10,
+            sub_receita_id=retorno.id))
+        # Produto de Nutella = 1x retorno (componente DIRETO).
+        nutella = Produto(nome='Croissant Nutella Calc',
+                          categoria='Viennoiserie', preco_site=12, ativo=True)
+        db.session.add(nutella)
+        db.session.flush()
+        db.session.add(ProdutoItem(
+            produto_id=nutella.id, tipo='receita', receita_id=retorno.id,
+            item_nome=retorno.nome, quantidade=1))
+        db.session.commit()
+        alm_id, nut_id = almond.id, nutella.id
+        res = calculadora_compras.calcular([
+            {'tipo': 'receita', 'id': alm_id, 'qtd': 290},
+            {'tipo': 'produto', 'id': nut_id, 'qtd': 150},
+        ], explodir_retorno=False)
+    prod = {p['nome']: p['qtd'] for p in res['producao']}
+    assert prod.get('Almond Calc') == 290            # o que consome, produz
+    assert 'Croissant Retorno Calc' not in prod      # retorno NÃO se produz
+    dem = {r['nome']: r['qtd'] for r in res['retorno_demanda']}
+    assert dem == {'Croissant Retorno Calc': 440.0}  # 290 almond + 150 nutella
+
+
 def test_sub_receita_normal_explode_em_mp(app):
     """Sub-receita NORMAL (ex: Massa para folhar) EXPLODE em MP — a manteiga
     do folhado tem que aparecer na compra (caso real 03/07: 300 croissants
