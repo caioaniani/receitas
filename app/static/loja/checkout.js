@@ -217,16 +217,31 @@
     function aplicarModo() {
       var modo = modoSelecionado();
       var ehEntrega = (modo === 'agendada' || modo === 'express');
+      var ehRetirada = (modo === 'retirada');
+      // O bloco de ENDEREÇO aparece nos DOIS casos (dono 20/07/2026): a
+      // retirada também precisa do endereço pra emitir a NF-e. Só as partes
+      // de entrega (quem recebe / calcular frete) somem na retirada.
       document.getElementById('bloco-entrega').style.display =
-        ehEntrega ? 'block' : 'none';
+        (ehEntrega || ehRetirada) ? 'block' : 'none';
+      var quem = document.getElementById('entrega-quem');
+      var freteBox = document.getElementById('entrega-frete');
+      var aviso = document.getElementById('retirada-nf-aviso');
+      var titulo = document.getElementById('entrega-titulo');
+      if (quem) quem.style.display = ehEntrega ? 'block' : 'none';
+      if (freteBox) freteBox.style.display = ehEntrega ? 'block' : 'none';
+      if (aviso) aviso.style.display = ehRetirada ? 'block' : 'none';
+      if (titulo) {
+        titulo.textContent = ehRetirada
+          ? 'Seu endereço (para a nota fiscal)' : 'Quem recebe e onde';
+      }
       document.getElementById('bloco-loja').style.display =
-        modo === 'retirada' ? 'block' : 'none';
+        ehRetirada ? 'block' : 'none';
       document.getElementById('bloco-data').style.display =
         (modo === 'express') ? 'none' : 'block';
       document.getElementById('bloco-express').style.display =
         (modo === 'express') ? 'block' : 'none';
       // Retirada não tem frete; express começa sem cotação.
-      if (modo === 'retirada') freteAtual = 0;
+      if (ehRetirada) freteAtual = 0;
       else freteAtual = null;
       popularJanelas(modo);
       atualizarTotais();
