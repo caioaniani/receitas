@@ -769,7 +769,9 @@ def _cardapio_categorias(tipo):
         })
 
     regras = _regras_atacado() if tipo == 'atacado' else []
-    return categorias, regras
+    # Ordem final das categorias (drag-and-drop do dono, 21/07/2026) — aqui
+    # na fonte única, então tela e PDFs saem SEMPRE na mesma ordem.
+    return _aplicar_ordem_categorias(categorias), regras
 
 
 @main_bp.route('/cardapio')
