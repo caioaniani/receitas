@@ -308,6 +308,29 @@ def test_incluir_nota_fiscal_erro_propaga_mensagem(app):
         assert res['ok'] is False and 'natureza' in res['erro']
 
 
+def test_incluir_nota_fiscal_erros_como_dict_propaga_mensagem(app):
+    """Regressão: o Tiny às vezes manda `erros` como DICT ({'erro': 'msg'})
+    em vez de lista. Iterar o dict rendia a CHAVE ('erro') e a mensagem real
+    sumia — o card mostrava 'Falha ao criar a NF no Tiny: erro'. Agora o
+    VALOR sob 'erro' é que volta."""
+    from app.services import tiny
+    with app.app_context():
+        app.config['TINY_API_TOKEN'] = 'tok'
+
+        class R:
+            status_code = 200
+
+            def json(self):
+                return {'retorno': {'status': 'Erro',
+                                    'erros': {'erro': 'CST com beneficio '
+                                              'fiscal sem cBenef'}}}
+        with patch('app.services.tiny.requests.post', return_value=R()):
+            res = tiny.incluir_nota_fiscal({'tipo': 'S'})
+        assert res['ok'] is False
+        assert res['erro'] != 'erro'
+        assert 'cBenef' in res['erro']
+
+
 # ── tiny.py: funções do Plano A (criar pedido + gerar NF do pedido) ────────
 # Mantidas como fallback enquanto o Plano B (nota.fiscal.incluir) não está
 # 100% confirmado em prod. Testam o cliente da API, não o orquestrador.
