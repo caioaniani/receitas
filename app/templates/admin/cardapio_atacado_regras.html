@@ -185,6 +185,9 @@
         ul.addEventListener('dragstart', function (e) {
             arrastando = e.target.closest('li');
             e.dataTransfer.effectAllowed = 'move';
+            // Firefox NÃO inicia o drag sem um setData no dragstart
+            // (achado do revisor) — Chrome/Safari toleram, ele não.
+            e.dataTransfer.setData('text/plain', '');
         });
         ul.addEventListener('dragover', function (e) {
             e.preventDefault();
