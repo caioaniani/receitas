@@ -707,7 +707,8 @@ def test_criar_pedido_aceita_cnpj_e_grava_digitos(app):
         form = {'nome': 'Maria', 'sobrenome': 'Silva', 'email': 'pj@x.com',
                 'cpf': '11.222.333/0001-81', 'aceite_lgpd': '1',
                 'modo_entrega': 'retirada', 'loja_id': str(loja.id),
-                'data_entrega': data, 'janela_entrega': '08:00–09:00'}
+                'data_entrega': data, 'janela_entrega': '08:00–09:00',
+                **_END_NF}
         pedido, erros = loja_checkout.criar_pedido(
             form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
         assert erros == []
