@@ -183,6 +183,44 @@ def test_campos_obrigatorios(app):
                              endereco=dict(_END_OK), **_base_kw())
 
 
+def test_data_hoje_ou_passado_recusada(app):
+    """Nunca no mesmo dia — a partir de amanhã (regra do dono 21/07)."""
+    from app.services import divulgacao as svc
+    from app.utils import hoje
+    _loja('Origem Site', origem=True)
+    r = _receita()
+    it = [{'kind': 'receita', 'id': r.id, 'qtd': 1}]
+    with pytest.raises(ValueError):
+        svc.criar_divulgacao(itens=it, modo_entrega='agendada',
+                             endereco=dict(_END_OK),
+                             **_base_kw(data_entrega=hoje()))
+
+
+def test_endpoint_janelas_retirada_e_agendada(app, owner_user, cliente):
+    """Janelas = MESMA regra do site (loja_checkout.janelas_disponiveis).
+    Retirada não tem distância; agendada com endereço geocodado usa o corte
+    por distância — o frete é mockado pra não bater na rede."""
+    from unittest.mock import patch
+
+    from app.utils import hoje
+    _login(cliente, owner_user)
+    d = (hoje().replace(day=hoje().day)).isoformat()
+    # retirada: janelas base (sem distância)
+    rj = cliente.get('/admin/loja-online/divulgacao/janelas'
+                     '?modo=retirada&data=' + d).get_json()
+    assert rj['ok'] and len(rj['janelas']) >= 1
+    assert rj['distancia_km'] is None
+    # agendada longe: corta a 1ª janela da manhã (08:00–09:00)
+    with patch('app.services.frete.consultar_frete',
+               return_value={'ok': True, 'distancia_km': 20.0,
+                             'fora_area': False}):
+        aj = cliente.get('/admin/loja-online/divulgacao/janelas'
+                         '?modo=agendada&data=' + d +
+                         '&logradouro=Rua+X&numero=1&cidade=SP').get_json()
+    assert aj['ok'] and '08:00–09:00' not in aj['janelas']
+    assert aj['distancia_km'] == 20.0
+
+
 def test_item_arquivado_recusado(app):
     from app.services import divulgacao as svc
     from app.utils import agora
