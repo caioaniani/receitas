@@ -224,8 +224,9 @@ def _capa(pdf, titulo_tipo, logo_data=None):
 
     Com logo configurado (`cardapio_logo_data`), a imagem entra no lugar do
     wordmark "O Pão" na banda escura; sem logo, cai no texto Times."""
+    g = pdf.geo
     pdf.set_fill_color(*_C_FG)             # hero: o escuro da marca do site
-    pdf.rect(0, 0, 210, 58, style='F')
+    pdf.rect(0, 0, g.page_w, 58, style='F')
     pdf.set_y(14)
     pdf.set_text_color(215, 210, 202)
     pdf.set_font('Helvetica', '', 9)
@@ -236,12 +237,12 @@ def _capa(pdf, titulo_tipo, logo_data=None):
     logo = _logo_bytes(logo_data)
     if logo:
         try:
-            # h=26: o logo PREENCHE a faixa escura (era 15mm, pequeno demais
-            # — feedback do dono 20/07). Largura auto pela proporcao; wordmark
-            # a 26mm fica ~78mm, folgado nos 190mm uteis.
+            # A4 h=26: o logo PREENCHE a faixa escura (era 15mm, pequeno
+            # demais — feedback do dono 20/07); wordmark a 26mm fica ~78mm,
+            # folgado nos 190mm uteis. Mobile h=18 (largura util 104mm).
             y_logo = pdf.get_y() + 2
-            pdf.image(BytesIO(logo), x=_MARGEM, y=y_logo, h=26)
-            pdf.set_y(y_logo + 28)
+            pdf.image(BytesIO(logo), x=g.margem, y=y_logo, h=g.logo_h)
+            pdf.set_y(y_logo + g.logo_h + 2)
         except Exception:  # noqa: BLE001 — logo ruim nao derruba o PDF
             logger.warning('cardapio_pdf: logo nao embutiu', exc_info=True)
             logo = None
@@ -251,9 +252,11 @@ def _capa(pdf, titulo_tipo, logo_data=None):
         pdf.cell(0, 14, _latin1('O Pão'), new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('Helvetica', '', 10)
     pdf.set_text_color(220, 216, 210)
-    pdf.cell(0, 6, _latin1('Tempo. Fermento. Cuidado. '
-                           'Pão de verdade, feito com fermentação natural.'),
-             new_x='LMARGIN', new_y='NEXT')
+    # multi_cell: no mobile a tagline não cabe numa linha (104mm úteis).
+    pdf.multi_cell(0, 5.5,
+                   _latin1('Tempo. Fermento. Cuidado. Pão de verdade, '
+                           'feito com fermentação natural.'),
+                   new_x='LMARGIN', new_y='NEXT')
     # Label de seção CENTRADO, como o "CARDÁPIO" da tela (section-label).
     pdf.set_y(66)
     pdf.set_text_color(*_C_SOFT)
