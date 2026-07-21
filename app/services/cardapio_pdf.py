@@ -488,6 +488,10 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
              new_x='LMARGIN', new_y='NEXT')
     pdf.set_char_spacing(0)
     pdf.ln(0.5)
+    if banner:
+        # Texto começa ABAIXO do banner (que ocupa de y0+9.5 até
+        # y0+9.5+altura; banner_h já inclui o respiro de 3mm).
+        pdf.set_y(y0 + 9.5 + banner_h)
     lm_orig, rm_orig = pdf.l_margin, pdf.r_margin
     pdf.set_left_margin(g.margem + 5)
     pdf.set_right_margin(g.page_w - (g.margem + 5) - larg_txt)
