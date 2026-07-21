@@ -45,6 +45,11 @@ def _pedido_pago(db, produto, qtd=1, sku=None):
     p = PedidoOnline(cliente_id=cli.id, nome_cliente='Maria',
                      email_cliente='m@x.com', telefone_cliente='11999999999',
                      modo_entrega='retirada', status='pago',
+                     # Endereço estruturado — retirada passou a coletar (dono
+                     # 20/07/2026); sem ele a emissão fail-close (guard).
+                     endereco_logradouro='Rua Teste', endereco_numero='100',
+                     endereco_bairro='Centro', endereco_cidade='São Paulo',
+                     endereco_uf='SP', endereco_cep='01001-000',
                      subtotal=Decimal(str(produto.preco_site)) * qtd,
                      frete_valor=Decimal('0'),
                      valor_total=Decimal(str(produto.preco_site)) * qtd)
