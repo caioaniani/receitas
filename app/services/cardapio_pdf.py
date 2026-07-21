@@ -409,6 +409,25 @@ def _box_preparo(pdf, metodos):
     pdf.set_y(y0 + alt + 5)
 
 
+def _foto_banner(foto_bytes):
+    """Corta a foto (3:4 retrato) num BANNER paisagem 3:2 pelo centro —
+    layout mobile do quem-somos (21/07/2026, dono: "Foto muito pequena";
+    a versão retrato a 55% da largura ficava mirrada e órfã do texto).
+    None se não decodar (o chamador cai no layout sem foto)."""
+    try:
+        from PIL import Image, ImageOps
+        img = Image.open(BytesIO(foto_bytes))
+        img = ImageOps.exif_transpose(img).convert('RGB')
+        img = ImageOps.fit(img, (900, 600))
+        out = BytesIO()
+        img.save(out, format='JPEG', quality=82)
+        return out.getvalue()
+    except Exception:  # noqa: BLE001
+        logger.warning('cardapio_pdf: banner quem-somos nao decodou',
+                       exc_info=True)
+        return None
+
+
 def _box_quem_somos(pdf, paragrafos, foto=None):
     """Caixa "Quem somos nós" (21/07/2026) — a história da casa no rodapé,
     ANTES das regras/métodos. Mesma cara bege das outras caixas; parágrafos
