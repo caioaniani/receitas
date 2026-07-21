@@ -552,6 +552,7 @@
     var nItens = (p.itens || []).reduce(function (s, it) { return s + (Number(it.qtd) || 1); }, 0);
     var cls = 'cartao ' + p.status + (p.retirada ? ' retir' : '');
     var nomeBadge = esc(p.destinatario) + (p.retirada ? ' <span class="badge-retir">RETIRADA</span>' : '')
+      + (p.divulgacao ? ' <span class="badge-divulg">⭐ DIVULGAÇÃO</span>' : '')
       + (p.e_presente ? ' <span class="badge-presente">🎁 PRESENTE</span>' : '');
     return '<div class="' + cls + '" data-code="' + esc(p.code) + '">' +
       '<div class="nome">' + nomeBadge + '</div>' +
