@@ -1126,23 +1126,33 @@ def responder(historico, *, telefone_contato=None,
         for b in tool_uses:
             if b.name == 'transferir_para_humano':
                 # So chega aqui bloqueado: devolve a recusa como tool_result.
+                # Se o cliente so se despediu/agradeceu, a saida certa e
+                # encerrar_conversa — nao "consultar" (nao ha o que consultar).
+                if cliente_fechou:
+                    erro_recusa = (
+                        'Transferência recusada: o cliente apenas se '
+                        'despediu/agradeceu ("obrigada"/"valeu"/"ok"). Isso '
+                        'NÃO é motivo de transferência. Se não há nada '
+                        'pendente, chame encerrar_conversa (sem enviar '
+                        'mensagem). Só transfira se ele fez um pedido '
+                        'concreto que exija um humano.')
+                else:
+                    erro_recusa = (
+                        'Transferência recusada: você ainda não consultou '
+                        'nenhuma ferramenta neste turno. Tente resolver '
+                        'primeiro (consultar_produtos, consultar_pedido, '
+                        'calcular_frete...). Assunto é pedido/cartinha/'
+                        'confirmação de compra? Chame consultar_pedido com o '
+                        'número — e se o cliente NÃO tiver o número, chame '
+                        'com numero vazio (localiza os pedidos recentes pelo '
+                        'telefone deste WhatsApp). Ele devolve status, valores '
+                        'rotulados e o texto da cartinha. Se após consultar '
+                        'ainda não conseguir, aí sim transfira.')
                 resultados.append({
                     'type': 'tool_result',
                     'tool_use_id': b.id,
-                    'content': json.dumps({
-                        'erro': ('Transferência recusada: você ainda não '
-                                 'consultou nenhuma ferramenta neste turno. '
-                                 'Tente resolver primeiro (consultar_produtos, '
-                                 'consultar_pedido, calcular_frete...). '
-                                 'Assunto é pedido/cartinha/confirmação de '
-                                 'compra? Chame consultar_pedido com o número '
-                                 '— e se o cliente NÃO tiver o número, chame '
-                                 'com numero vazio (localiza os pedidos '
-                                 'recentes pelo telefone deste WhatsApp). '
-                                 'Ele devolve status, valores rotulados e o '
-                                 'texto da cartinha. Se após consultar ainda '
-                                 'não conseguir, aí sim transfira.')},
-                        ensure_ascii=False),
+                    'content': json.dumps({'erro': erro_recusa},
+                                          ensure_ascii=False),
                 })
                 continue
             out = _executar_tool(b.name, b.input or {},
