@@ -326,6 +326,50 @@ def _preparo_atacado_raw():
     return CARDAPIO_PREPARO_DEFAULT if raw is None else raw
 
 
+# "Quem somos nós" do cardapio (21/07/2026, pedido do dono; texto escrito a
+# partir da historia da fundacao contada pela Camila): a historia da casa no
+# RODAPE do cardapio, antes das regras/metodos. E' texto de MARCA, entao vale
+# pros 3 tipos (atacado/loja/site), diferente das regras/preparo (so atacado).
+# AppConfig `cardapio_quem_somos`, um PARAGRAFO por linha, editavel na tela
+# de regras do atacado (mesma tela do logotipo — config de marca). CONTRATO
+# (igual ao preparo): chave AUSENTE = default abaixo; gravada VAZIA = dono
+# apagou de proposito, bloco some. Sem em-dash (fora do latin-1 do PDF).
+_CARDAPIO_QUEM_SOMOS_KEY = 'cardapio_quem_somos'
+CARDAPIO_QUEM_SOMOS_DEFAULT = (
+    'O Pão nasceu de uma história de família. Viemos de padarias '
+    'tradicionais de São Paulo e nos apaixonamos pela fermentação natural: '
+    'os primeiros pães saíram de um cantinho da padaria da família, com '
+    'farinha francesa e muita insistência.\n'
+    'Na pandemia, recomeçamos do zero, vendendo pães no nosso próprio '
+    'prédio. Nossa primeira cesta de presente se chamava Abraço em Forma '
+    'de Pão: como ninguém podia se abraçar, a gente mandava um abraço em '
+    'forma de pão.\n'
+    'O carinho dos clientes transformou aquele começo em produção '
+    'artesanal própria e lojas em São Paulo, com o mesmo cuidado do '
+    'primeiro dia.\n'
+    'Todo pão continua sendo feito como no início: fermentação natural, '
+    'farinhas francesas T65 e T45, chocolate belga Callebaut e, '
+    'principalmente, tempo. A massa descansa o quanto precisa.'
+)
+
+
+def _quem_somos():
+    """Paragrafos do "Quem somos nós" (um por linha nao-vazia).
+    [] = bloco escondido (dono apagou)."""
+    from app.models import AppConfig
+    raw = AppConfig.get(_CARDAPIO_QUEM_SOMOS_KEY)
+    if raw is None:
+        raw = CARDAPIO_QUEM_SOMOS_DEFAULT
+    return [ln.strip() for ln in raw.splitlines() if ln.strip()]
+
+
+def _quem_somos_raw():
+    """Texto cru pro textarea da tela de regras (None = default vigente)."""
+    from app.models import AppConfig
+    raw = AppConfig.get(_CARDAPIO_QUEM_SOMOS_KEY)
+    return CARDAPIO_QUEM_SOMOS_DEFAULT if raw is None else raw
+
+
 # Logotipo do cardapio (13/07/2026 base; logo 20/07/2026): substitui o
 # wordmark "O Pao" no hero da tela e na capa do PDF. Guardado como data URI
 # (base64) em AppConfig — auto-contido (sobrevive deploy, sem dependencia de
