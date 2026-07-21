@@ -479,8 +479,11 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
         pdf.set_text_color(*_C_FG)
         for p in paragrafos:
             pdf.set_x(g.margem)
-            pdf.multi_cell(g.util, 5.2, _latin1(p), new_x='LMARGIN',
-                           new_y='NEXT')
+            # align='L': alinhado à esquerda (mesmo do A4). Sem isso o
+            # multi_cell justifica (default) e a coluna estreita fica com
+            # espaços esticados entre palavras (dono 21/07).
+            pdf.multi_cell(g.util, 5.2, _latin1(p), align='L',
+                           new_x='LMARGIN', new_y='NEXT')
             pdf.ln(1.6)
         pdf.ln(3)
         return
