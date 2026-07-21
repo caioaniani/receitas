@@ -113,6 +113,29 @@ def test_tela_rodape_na_ordem_salva(app, admin_user, cliente):
     assert body.index('Regras do pedido') < body.index('Quem somos nós')
 
 
+def test_tela_default_blocos_antes_dos_produtos(app, admin_user, cliente):
+    """Default 21/07: sem ordem salva, a história vem ANTES dos produtos
+    ("o rodapé venha para cima" — substitui a regra de 20/07)."""
+    _receita('Bolo', 'Doces')
+    _login(cliente, admin_user)
+    body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert body.index('Quem somos nós') < body.index('cat-heading')
+
+
+def test_tela_produtos_arrastado_pro_topo(app, admin_user, cliente):
+    """'produtos' na frente da ordem salva → cardápio antes dos blocos
+    (volta ao layout de 20/07, agora por escolha arrastável)."""
+    from app.models import AppConfig
+    _receita('Bolo', 'Doces')
+    AppConfig.set('cardapio_ordem_rodape',
+                  json.dumps(['produtos', 'quem_somos', 'regras',
+                              'preparo']))
+    db.session.commit()
+    _login(cliente, admin_user)
+    body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert body.index('cat-heading') < body.index('Quem somos nós')
+
+
 # ── Tela de regras (edição) ────────────────────────────────────────────────
 
 def test_form_regras_mostra_listas_e_salva_ordem(app, admin_user, cliente):
