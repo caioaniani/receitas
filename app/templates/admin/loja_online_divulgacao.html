@@ -168,10 +168,58 @@
     boxEnd.style.display = retir ? 'none' : '';
     lojaSel.required = retir;
     endCampos.forEach(function (id) { document.getElementById(id).required = !retir; });
+    carregarJanelas();
   }
   document.querySelectorAll('input[name="modo_entrega"]').forEach(function (r) {
     r.addEventListener('change', syncModo);
   });
+
+  // ── Janela: MESMA regra do site (loja_checkout.janelas_disponiveis),
+  //    baseada no endereço (distância). Preenche o select dinamicamente. ──
+  var janSel = document.getElementById('janela_entrega');
+  var janStatus = document.getElementById('janela-status');
+  function carregarJanelas() {
+    var modo = document.querySelector('input[name="modo_entrega"]:checked').value;
+    var q = new URLSearchParams({
+      modo: modo,
+      data: document.getElementById('data_entrega').value || '',
+      cep: document.getElementById('endereco_cep').value || '',
+      logradouro: document.getElementById('endereco_logradouro').value || '',
+      numero: document.getElementById('endereco_numero').value || '',
+      bairro: document.getElementById('endereco_bairro').value || '',
+      cidade: document.getElementById('endereco_cidade').value || ''
+    });
+    janStatus.textContent = 'atualizando horários…';
+    janStatus.className = 'form-text text-muted';
+    fetch('/admin/loja-online/divulgacao/janelas?' + q.toString())
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var atual = janSel.value;
+        var jan = (j.janelas || []);
+        janSel.innerHTML = '<option value="">— escolha o horário —</option>' +
+          jan.map(function (h) {
+            return '<option value="' + h + '"' + (h === atual ? ' selected' : '') +
+              '>' + h + '</option>';
+          }).join('');
+        if (j.aviso) {
+          janStatus.textContent = j.aviso;
+          janStatus.className = 'form-text text-warning';
+        } else if (j.distancia_km != null) {
+          janStatus.textContent = 'a ' + j.distancia_km + ' km da loja';
+          janStatus.className = 'form-text text-muted';
+        } else {
+          janStatus.textContent = '';
+        }
+      }).catch(function () {
+        janStatus.textContent = 'não deu pra carregar os horários';
+        janStatus.className = 'form-text text-warning';
+      });
+  }
+  document.getElementById('data_entrega').addEventListener('change', carregarJanelas);
+  ['endereco_numero', 'endereco_logradouro', 'endereco_bairro', 'endereco_cidade']
+    .forEach(function (id) {
+      document.getElementById(id).addEventListener('blur', carregarJanelas);
+    });
 
   // ── CEP → autofill (reusa /loja/api/cep, mesmo do checkout) ────────────
   var cep = document.getElementById('endereco_cep');
