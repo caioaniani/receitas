@@ -712,6 +712,7 @@ def cardapio():
     return render_template('main/cardapio.html', categorias=categorias,
                            tipo=tipo, regras=regras, preparo=preparo,
                            quem_somos=_quem_somos(),
+                           quem_somos_foto=_quem_somos_foto_src(),
                            logo=_cardapio_logo())
 
 
