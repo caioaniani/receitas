@@ -3717,14 +3717,18 @@ def cancelados_descontos_detalhe():
     from datetime import date as _date
 
     from app.services import briefing_dono
+    hoje_d = hoje_brt()                              # 1x (sem TOCTOU na virada)
     dia_str = (request.args.get('dia') or '').strip()
-    try:
-        dia = _date.fromisoformat(dia_str) if dia_str else hoje_brt()
-    except ValueError:
-        dia = hoje_brt()
+    if not dia_str:
+        dia = hoje_d
+    else:
+        try:
+            dia = _date.fromisoformat(dia_str)
+        except ValueError:
+            return jsonify(ok=False, erro='Data inválida.'), 400
     # Só hoje ou ontem (o cockpit mostra esses dois; range aberto bateria na
     # API sem limite).
-    if dia not in (hoje_brt(), hoje_brt() - timedelta(days=1)):
+    if dia not in (hoje_d, hoje_d - timedelta(days=1)):
         return jsonify(ok=False, erro='Só hoje ou ontem.'), 400
     try:
         dados = briefing_dono.cancelados_descontos_detalhe(dia)
