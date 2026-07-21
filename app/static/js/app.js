@@ -677,17 +677,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
             var qtd, custoRs, custoKg;
 
-            if (tipo === 'receita') {
-                // Sub-receita: porcentagem = quantidade de unidades
+            if (tipo === 'receita' || tipo === 'sub_pct') {
+                // Sub-receita. 'receita': pct = quantidade de unidades.
+                // 'sub_pct': pct = % da base (igual MP %) → unidades = base×%/100.
                 var custoUnitReceita = (typeof RECEITA_CUSTOS !== 'undefined' && RECEITA_CUSTOS[nome]) || 0;
                 var pesoUnitReceita = (typeof RECEITA_PESOS !== 'undefined' && RECEITA_PESOS[nome]) || 0;
-                qtd = pct * pesoUnitReceita;  // peso total = unidades × peso unitário
-                custoRs = custoUnitReceita * pct;
+                var unidadesSub = (tipo === 'sub_pct') ? (pesoBase * pct / 100) : pct;
+                qtd = unidadesSub * pesoUnitReceita;  // peso total = unidades × peso unitário
+                custoRs = custoUnitReceita * unidadesSub;
 
                 var qtdExibir = qtd * fator;
                 var custoExibir = custoRs * fator;
 
-                qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 1) + 'g' : pct > 0 ? pct + ' un' : '-';
+                qtdCell.textContent = qtdExibir > 0 ? formatNum(qtdExibir, 1) + 'g' : unidadesSub > 0 ? formatNum(unidadesSub, 1) + ' un' : '-';
                 custoKgCell.textContent = custoUnitReceita > 0 ? formatBRL(custoUnitReceita) + '/un' : '-';
                 custoKgCell.className = custoUnitReceita > 0 ? 'custo-kg-calc valor-mp text-end' : 'custo-kg-calc text-end text-muted';
                 custoRsCell.textContent = custoExibir > 0 ? formatBRL(custoExibir) : '-';
