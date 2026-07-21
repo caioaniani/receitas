@@ -117,7 +117,7 @@
     <div class="card-header py-2 d-flex justify-content-between">
         <strong>{{ f.nome }}</strong>
         <span class="small text-muted">subtotal compra:
-            R$ {{ '%.2f'|format(f.subtotal_compra) }}</span>
+            R$ {{ '%.2f'|format(f.subtotal_compra)|replace('.', ',') }}</span>
     </div>
     <div class="card-body p-0">
         <div style="overflow-x:auto;">
