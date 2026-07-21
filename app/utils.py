@@ -161,6 +161,29 @@ def para_brt(dt):
     return dt.astimezone(BRT).replace(tzinfo=None)
 
 
+# Tipos de ingrediente de receita que são SUB-RECEITA (consomem outra receita).
+# 'receita' = quantidade absoluta de unidades; 'sub_pct' = % da base (como MP %).
+SUB_RECEITA_TIPOS = ('receita', 'sub_pct')
+
+
+def unidades_subreceita(tipo, porcentagem, peso_base):
+    """Unidades-BASE de uma SUB-RECEITA consumidas por 1 fornada-base do pai.
+
+    Fonte ÚNICA dos dois modos (13/07/2026) pra NENHUM motor (compra, baixa de
+    produção, custo, cronograma, pré-preparo) divergir:
+
+      - `receita`  → QUANTIDADE ABSOLUTA de unidades da sub: `porcentagem`.
+      - `sub_pct`  → % da base, IGUAL a MP %: `porcentagem/100 * peso_base`.
+
+    Cada motor multiplica o retorno pelo seu multiplicador/ratio próprio
+    (`unidades_pai / rendimento`). Tipo desconhecido cai no absoluto (compat —
+    receita antiga não muda de comportamento)."""
+    pct = porcentagem or 0
+    if tipo == 'sub_pct':
+        return pct / 100.0 * (peso_base or 0)
+    return pct
+
+
 def comprimir_imagem(file_bytes, *, max_size=700, quality=82):
     """Comprime imagem via PIL: resize proporcional + JPEG quality.
 
