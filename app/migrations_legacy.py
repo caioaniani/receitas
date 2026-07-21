@@ -1458,6 +1458,14 @@ def _migrate_postgres(app):
     _try("ALTER TABLE pedido_online_item ADD COLUMN IF NOT EXISTS "
          "fatiado BOOLEAN")
 
+    # Divulgacao (21/07/2026, pedido do dono): pedido "como do site" mas SEM
+    # pagamento (brinde/PR) — aparece no painel de entregas com estrela, baixa
+    # estoque marcado como divulgacao (fora de faturamento e da previsao de
+    # venda), nunca conta como receita. Procedimento de 2 commits: este ALTER
+    # deploya ANTES do modelo. FALSE = pedido normal (todas as linhas antigas).
+    _try("ALTER TABLE pedido_online ADD COLUMN IF NOT EXISTS "
+         "divulgacao BOOLEAN NOT NULL DEFAULT FALSE")
+
     # Descricao do cardapio de ATACADO por receita (20/07/2026, ditado do
     # dono: "descricao sincera de cada produto b2b, quanto menos e mais").
     # Procedimento de 2 commits: este ALTER deploya ANTES do modelo.
