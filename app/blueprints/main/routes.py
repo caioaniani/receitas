@@ -69,6 +69,10 @@ def robots_root():
 def index():
     if current_user.is_padeiro():
         return redirect(url_for('padeiro.index'))
+    # Marketing (21/07/2026): papel enxuto, so lanca divulgacao — vai direto
+    # pra tela dele (nao tem home de admin nem outras areas).
+    if current_user.is_marketing():
+        return redirect(url_for('main.loja_online_divulgacao'))
     if current_user.is_admin():
         # Bloco "Precisa de você hoje": as MESMAS pendências do briefing
         # diário do dono (fonte única em app/services/briefing_dono.py).
