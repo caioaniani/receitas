@@ -145,18 +145,20 @@ def test_form_regras_mostra_listas_e_salva_ordem(app, admin_user, cliente):
     _login(cliente, admin_user)
     body = cliente.get('/admin/cardapio-atacado/regras').get_data(as_text=True)
     assert 'name="ordem_categorias"' in body
-    assert 'name="ordem_rodape"' in body
+    assert 'name="ordem_secoes"' in body
     assert 'ordem-sortavel' in body
-    assert 'Blocos do rodapé' in body
+    assert 'Seções da página' in body
+    assert 'data-key="produtos"' in body
 
     cliente.post('/admin/cardapio-atacado/regras', data={
         'ordem_categorias': json.dumps(['Pães', 'Doces']),
-        'ordem_rodape': json.dumps(['regras', 'preparo', 'quem_somos']),
+        'ordem_secoes': json.dumps(['produtos', 'regras', 'preparo',
+                                    'quem_somos']),
     })
     assert json.loads(AppConfig.get('cardapio_ordem_categorias')) == \
         ['Pães', 'Doces']
     assert json.loads(AppConfig.get('cardapio_ordem_rodape')) == \
-        ['regras', 'preparo', 'quem_somos']
+        ['produtos', 'regras', 'preparo', 'quem_somos']
 
 
 def test_post_sem_campos_nao_apaga_ordem(app, admin_user, cliente):
