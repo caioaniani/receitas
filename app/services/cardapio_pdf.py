@@ -352,30 +352,31 @@ def _quebrar_2_linhas(pdf, txt, largura):
 
 
 def _box_preparo(pdf, metodos):
-    """Caixa "Métodos de preparo" da capa (atacado) — mesma cara bege da
-    caixa de regras, com texto LONGO que quebra linha (o backup tem ~3
-    linhas). Altura medida antes (dry_run) pra caixa fechar certinho."""
-    _LARG_TXT = 180
+    """Caixa "Métodos de preparo" (atacado) — mesma cara bege da caixa de
+    regras, com texto LONGO que quebra linha (o backup tem ~3 linhas).
+    Altura medida antes (dry_run) pra caixa fechar certinho."""
+    g = pdf.geo
+    larg_txt = g.util - 10
     _LH = 4.6
     pdf.set_font('Helvetica', 'B', 9)      # B mede mais largo: nunca corta
     alt = 10
     corpos = []
     for m in metodos:
         txt = _latin1((m['label'] + ': ' if m['label'] else '') + m['valor'])
-        alt += pdf.multi_cell(_LARG_TXT, _LH, txt,
+        alt += pdf.multi_cell(larg_txt, _LH, txt,
                               dry_run=True, output='HEIGHT') + 1.6
         corpos.append(txt)
     alt += 1.5
     y0 = pdf.get_y()
-    if y0 + alt > _Y_LIMITE:               # capa cheia: caixa em página nova
+    if y0 + alt > g.y_limite:              # não cabe: caixa em página nova
         pdf.add_page()
         y0 = pdf.get_y()
     pdf.set_fill_color(*_C_TAG)
     pdf.set_draw_color(*_C_BORDER)
-    pdf.rect(_MARGEM, y0, 190, alt, style='FD',
+    pdf.rect(g.margem, y0, g.util, alt, style='FD',
              round_corners=True, corner_radius=_RAIO)
     pdf.set_y(y0 + 4)
-    pdf.set_x(_MARGEM + 5)
+    pdf.set_x(g.margem + 5)
     pdf.set_font('Helvetica', 'B', 9)
     pdf.set_text_color(*_C_PRIMARY)
     pdf.set_char_spacing(0.8)
@@ -384,10 +385,10 @@ def _box_preparo(pdf, metodos):
     pdf.set_char_spacing(0)
     pdf.ln(0.5)
     lm_orig, rm_orig = pdf.l_margin, pdf.r_margin
-    pdf.set_left_margin(_MARGEM + 5)
-    pdf.set_right_margin(210 - (_MARGEM + 5) - _LARG_TXT)
+    pdf.set_left_margin(g.margem + 5)
+    pdf.set_right_margin(g.page_w - (g.margem + 5) - larg_txt)
     for m in metodos:
-        pdf.set_x(_MARGEM + 5)
+        pdf.set_x(g.margem + 5)
         if m['label']:
             pdf.set_font('Helvetica', 'B', 9)
             pdf.set_text_color(*_C_MUTED)
