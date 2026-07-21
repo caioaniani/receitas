@@ -283,11 +283,34 @@ def test_criar_pedido_retirada_sem_endereco_falha(app):
         data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
         form = _form(modo_entrega='retirada', loja_id=str(loja.id),
                      logradouro='', numero='', cidade='', cep='',
+                     bairro='', uf='',
                      data_entrega=data, janela_entrega='08:00–09:00')
         pedido, erros = loja_checkout.criar_pedido(
             form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
         assert pedido is None
         assert any('nota fiscal' in e.lower() for e in erros)
+
+
+def test_criar_pedido_retirada_exige_bairro_e_uf(app):
+    """bairro/UF também são obrigatórios na retirada (a SEFAZ exige e a NF
+    não tem editor pra corrigir depois — achado de revisão 20/07/2026).
+    No caminho feliz vêm do CEP; aqui simulo o fail-open (CEP sem bairro)."""
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto_pub(db, preco=20.0)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
+        form = _form(modo_entrega='retirada', loja_id=str(loja.id),
+                     logradouro='Rua X', numero='10', cidade='São Paulo',
+                     cep='04077-000', bairro='', uf='',   # faltam bairro/UF
+                     data_entrega=data, janela_entrega='08:00–09:00')
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert pedido is None
+        assert any('bairro' in e.lower() for e in erros)
+        assert any('uf' in e.lower() or 'estado' in e.lower() for e in erros)
 
 
 def test_criar_pedido_fora_de_area_falha(app):
