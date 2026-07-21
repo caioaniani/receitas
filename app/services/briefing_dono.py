@@ -273,6 +273,7 @@ def vendas_ontem(capturar=True):
     ontem = hoje() - timedelta(days=1)
     total, por_company, n_pedidos = vendas_diarias.faturamento_por_loja(
         ontem, ontem, capturar=capturar)
+    cd = vendas_diarias.cancelamentos_descontos_do_banco(ontem, ontem)
     snapshot_ok = ontem in vendas_diarias.dias_capturados(ontem, ontem)
     vinculo = _resolver_loja_seru()
 
