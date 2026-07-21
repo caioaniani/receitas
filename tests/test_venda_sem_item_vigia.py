@@ -211,10 +211,13 @@ def test_rota_admin_dry_run_owner(app, owner_user):
     with c.session_transaction() as s:
         s['_user_id'] = str(uid)
         s['_fresh'] = True
+    peds = [_pedido('r1', 250.00)]
     with patch('app.services.seru.listar_pedidos_completo',
-               return_value=[_pedido('r1', 250.00)]), \
+               return_value=peds), \
          patch('app.services.seru.extrair_itens',
                side_effect=_extrair_itens_fake), \
+         patch('app.services.seru.detalhes_pedido',
+               side_effect=_detalhe_fake(peds, None)), \
          patch('app.services.zapi.enviar_texto') as env:
         r = c.get('/admin/vigia-venda-sem-item')
     assert r.status_code == 200
