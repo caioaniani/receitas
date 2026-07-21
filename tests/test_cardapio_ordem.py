@@ -85,19 +85,23 @@ def test_ordem_secoes_default_custom_e_invalida(app):
 # ── Tela do cardápio ───────────────────────────────────────────────────────
 
 def test_tela_categorias_na_ordem_salva(app, admin_user, cliente):
+    # Nomes que NÃO ocorrem nos textos default dos blocos ('Pães' aparece
+    # no preparo, que agora renderiza ANTES dos produtos — falso positivo).
     from app.models import AppConfig
-    _receita('Bolo', 'Doces')
-    _receita('Sourdough', 'Pães')
-    AppConfig.set('cardapio_ordem_categorias', json.dumps(['Pães', 'Doces']))
+    _receita('Bolo', 'Tortas')
+    _receita('Suco', 'Bebidas')
+    AppConfig.set('cardapio_ordem_categorias',
+                  json.dumps(['Tortas', 'Bebidas']))
     db.session.commit()
     _login(cliente, admin_user)
     body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
-    assert body.index('Pães') < body.index('Doces')
+    assert body.index('Tortas') < body.index('Bebidas')
 
-    AppConfig.set('cardapio_ordem_categorias', json.dumps(['Doces', 'Pães']))
+    AppConfig.set('cardapio_ordem_categorias',
+                  json.dumps(['Bebidas', 'Tortas']))
     db.session.commit()
     body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
-    assert body.index('Doces') < body.index('Pães')
+    assert body.index('Bebidas') < body.index('Tortas')
 
 
 def test_tela_rodape_na_ordem_salva(app, admin_user, cliente):
