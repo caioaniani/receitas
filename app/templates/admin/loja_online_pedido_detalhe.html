@@ -160,7 +160,12 @@
         {% endif %}
         {% if p.modo_entrega == 'retirada' %}
           <strong>{{ p.loja_retirada.nome if p.loja_retirada else '—' }}</strong><br>
-          {{ p.loja_retirada.endereco if p.loja_retirada }}<br>
+          {# guard: Loja.endereco NULL renderizava o literal "None" #}
+          {% if p.loja_retirada and p.loja_retirada.endereco %}{{ p.loja_retirada.endereco }}<br>{% endif %}
+          {# Endereço do cliente (pra NF) — só existe em retirada recente #}
+          {% if p.endereco_logradouro %}
+          <span class="text-muted small">NF: {{ p.endereco_logradouro }}{% if p.endereco_numero %}, {{ p.endereco_numero }}{% endif %}{% if p.endereco_bairro %} — {{ p.endereco_bairro }}{% endif %}{% if p.endereco_cidade %}, {{ p.endereco_cidade }}{% endif %}{% if p.endereco_uf %}/{{ p.endereco_uf }}{% endif %}</span><br>
+          {% endif %}
         {% else %}
           {{ p.endereco_entrega or '—' }}<br>
           {% if p.distancia_km %}<span class="text-muted small">{{ '%.1f'|format(p.distancia_km)|replace('.', ',') }} km</span><br>{% endif %}
