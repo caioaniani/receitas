@@ -104,6 +104,28 @@
 </details>
 {% endif %}
 
+{% if resultado.producao %}
+<div class="card mb-3 border-primary">
+    <div class="card-header py-2"><strong>🥖 Para produção</strong>
+        <span class="small text-muted">— receitas a produzir (o que se passa
+            pro padeiro). Massas e sub-preparos saem no cronograma.</span></div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0" style="font-variant-numeric: tabular-nums;">
+            <thead><tr><th>Receita</th><th class="text-end">Produzir</th></tr></thead>
+            <tbody>
+            {% for p in resultado.producao %}
+            <tr>
+                <td>{{ p.nome }}{% if p.categoria %}
+                    <span class="text-muted small">· {{ p.categoria }}</span>{% endif %}</td>
+                <td class="text-end fw-bold">{{ qtd_unidade(p.qtd, 'un') }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 {% if resultado.compra.fornecedores %}
 <div class="d-flex justify-content-between align-items-baseline mb-2">
     <h5 class="mb-0">Matéria-prima a comprar
