@@ -35,11 +35,18 @@ def _login(cliente, user):
         sess['_fresh'] = True
 
 
-def _base_kw(**over):
-    """kwargs validos completos (todos os campos obrigatorios)."""
+def _amanha():
+    from datetime import timedelta
+
     from app.utils import hoje
+    return hoje() + timedelta(days=1)
+
+
+def _base_kw(**over):
+    """kwargs validos completos (todos os campos obrigatorios). Data = AMANHA
+    (nunca hoje — regra do dono 21/07)."""
     kw = dict(nome_destinatario='Padaria do Zé', telefone='11999990000',
-              data_entrega=hoje(), janela_entrega='8h-12h')
+              data_entrega=_amanha(), janela_entrega='08:00–09:00')
     kw.update(over)
     return kw
 
