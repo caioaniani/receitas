@@ -624,7 +624,7 @@ def consolidar_lista_compras(itens):
         peso_base = receita.peso_base or 1000
 
         for ing in receita.ingredientes:
-            if ing.tipo == 'receita':
+            if ing.tipo in SUB_RECEITA_TIPOS:
                 continue
 
             mp = mps.get(ing.ingrediente_nome)
