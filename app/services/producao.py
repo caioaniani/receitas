@@ -4,6 +4,7 @@ from app.extensions import db
 from app.models import MateriaPrima, Receita
 from app.services.custos import calcular_custos_receitas
 from app.services.massa_base import rendimento_massa_crua
+from app.utils import SUB_RECEITA_TIPOS, unidades_subreceita
 
 
 def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
@@ -427,10 +428,12 @@ def mise_en_place(receita, unidades):
             # Sub-receita DE AMASSADEIRA (Levain (pé)): o padeiro pesa em
             # GRAMAS (qtd em unidades de 1 g × peso_unitario), não "200 un".
             nome = ing.sub_receita.nome
-            qtd = pct * (ing.sub_receita.peso_unitario or 0) * mult
+            qtd = (unidades_subreceita(tipo, pct, peso_base)
+                   * (ing.sub_receita.peso_unitario or 0) * mult)
             unidade, mostra_pct = 'g', None
-        elif tipo == 'receita':
-            qtd, unidade, mostra_pct = pct * mult, 'un', None
+        elif tipo in SUB_RECEITA_TIPOS:
+            qtd = unidades_subreceita(tipo, pct, peso_base) * mult
+            unidade, mostra_pct = 'un', None
         else:  # 'mp' percentual: farinha (100%), agua, sal, fermento...
             qtd = pct / 100.0 * peso_base * mult
             unidade, mostra_pct = 'g', pct
@@ -485,7 +488,7 @@ def consumir_subreceitas_prontas(rec, unidades, user_id):
     rend = rendimento_massa_crua(rec)
     out = []
     for ing in (rec.ingredientes if rec else []):
-        if (ing.tipo or 'mp') != 'receita':
+        if (ing.tipo or 'mp') not in SUB_RECEITA_TIPOS:
             continue
         sub_id = ing.sub_receita_id
         if sub_id is None:
@@ -495,7 +498,9 @@ def consumir_subreceitas_prontas(rec, unidades, user_id):
             sub_id = sub.id if sub else None
         if sub_id is None:
             continue            # órfão (sem cadastro): não dá pra baixar
-        consumo = (unidades * (ing.porcentagem or 0) / rend) if rend else 0.0
+        consumo = ((unidades * unidades_subreceita(
+            ing.tipo, ing.porcentagem, rec.peso_base) / rend)
+            if rend else 0.0)
         if consumo <= 0:
             continue
         frac = ConsumoSubFracao.query.filter_by(receita_id=sub_id).first()
