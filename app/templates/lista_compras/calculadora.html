@@ -28,21 +28,14 @@
             {% set ent = entradas[i] if entradas and i < entradas|length else None %}
             <div class="row g-2 mb-2 calc-linha">
                 <div class="col-8 col-md-6">
-                    <select name="item[]" class="form-select form-select-sm">
-                        <option value="">— escolher item —</option>
-                        <optgroup label="Receitas">
-                            {% for r in receitas %}
-                            <option value="r_{{ r.id }}"
-                                {% if ent and ent.token == 'r_' ~ r.id %}selected{% endif %}>{{ r.nome }}</option>
-                            {% endfor %}
-                        </optgroup>
-                        <optgroup label="Produtos (cestas/prontos)">
-                            {% for p in produtos %}
-                            <option value="p_{{ p.id }}"
-                                {% if ent and ent.token == 'p_' ~ p.id %}selected{% endif %}>{{ p.nome }}</option>
-                            {% endfor %}
-                        </optgroup>
-                    </select>
+                    {# Digite pra filtrar (datalist) — mesmo padrão da ficha.
+                       O texto NÃO é enviado; o hidden .calc-token (item[]) leva
+                       o r_/p_<id> resolvido pelo JS quando o nome bate exato. #}
+                    <input type="text" class="form-control form-control-sm calc-busca"
+                           list="calc-itens" autocomplete="off"
+                           placeholder="digite pra buscar…" aria-label="Buscar item">
+                    <input type="hidden" name="item[]" class="calc-token"
+                           value="{{ ent.token if ent else '' }}">
                 </div>
                 <div class="col-4 col-md-2">
                     <input type="number" name="qtd[]" min="0" placeholder="qtd (un)"
