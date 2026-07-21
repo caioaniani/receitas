@@ -325,9 +325,10 @@ def massa_receita_base(receita):
     peso_base x sum_pct/100 (ingredientes em % do padeiro: farinha, agua, sal...)
     + qtd_direto (mp_direto em gramas).
 
-    Add-ins de montagem (sub-receita 'receita' e 'mp_un' tipo baton) NAO entram
-    — nao vao na amassadeira; sao agregados depois. Receitas de pao (as que
-    usam a amassadeira) sao 100% percentuais, entao a conta cobre o caso real.
+    Add-ins de montagem (sub-receita 'receita'/'sub_pct' e 'mp_un' tipo baton)
+    NAO entram — nao vao na amassadeira; sao agregados depois. Receitas de pao
+    (as que usam a amassadeira) sao 100% percentuais, entao a conta cobre o
+    caso real.
     """
     if not receita:
         return 0.0
@@ -337,7 +338,7 @@ def massa_receita_base(receita):
         tipo = ing.tipo or 'mp'
         if tipo == 'mp_direto':
             qtd_direto += ing.porcentagem or 0
-        elif tipo not in ('receita', 'mp_un'):
+        elif tipo not in SUB_RECEITA_TIPOS and tipo != 'mp_un':
             sum_pct += ing.porcentagem or 0
     return (receita.peso_base or 0) * sum_pct / 100 + qtd_direto
 
