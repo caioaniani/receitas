@@ -12,7 +12,8 @@ Funcionamento (pedido do dono, 18/07/2026):
   `_run_sync` — execução única entre workers, sem alerta duplicado).
 - Varre os pedidos de ONTEM+HOJE na API (mesma janela da captura do
   snapshot); cobrança suspeita = não cancelada, total > piso e ZERO itens
-  não-cancelados.
+  não-cancelados NA LISTAGEM — e re-conferida no DETALHE antes de alertar
+  (a listagem da Seru atrasa; ver `cobrancas_sem_itens`).
 - Dedup POR PEDIDO em AppConfig (`venda_sem_item_alertados` = JSON
   {data: [ids]}, podado pra janela): cada cobrança alerta UMA vez; um
   ciclo com várias novas vira UMA mensagem, agrupada por company, com
