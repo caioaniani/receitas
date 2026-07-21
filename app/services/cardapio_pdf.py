@@ -272,19 +272,30 @@ def _capa(pdf, titulo_tipo, logo_data=None):
 def _box_regras(pdf, regras, titulo_tipo):
     """Caixa bege de regras do pedido (.regras-atacado do site) — desenhada
     no FIM do documento, depois das categorias. Não cabe na página = página
-    nova (a caixa nunca é cortada)."""
-    alt = 9 + 6 * len(regras)
+    nova (a caixa nunca é cortada). Valor longo quebra linha (no mobile a
+    linha "Rótulo: valor" raramente cabe inteira nos ~94mm úteis)."""
+    g = pdf.geo
+    larg_txt = g.util - 10
+    _lh = 5.4
+    # Altura medida: rótulo em BOLD na frente do valor, quebrando junto.
+    pdf.set_font('Helvetica', 'B', 9)
+    alt = 9
+    for rg in regras:
+        alt += pdf.multi_cell(larg_txt, _lh,
+                              _latin1(rg['label'] + ': ' + rg['valor']),
+                              dry_run=True, output='HEIGHT') + 0.6
+    alt += 1.5
     pdf.ln(3)
     y0 = pdf.get_y()
-    if y0 + alt > _Y_LIMITE:
+    if y0 + alt > g.y_limite:
         pdf.add_page()
         y0 = pdf.get_y()
     pdf.set_fill_color(*_C_TAG)
     pdf.set_draw_color(*_C_BORDER)
-    pdf.rect(_MARGEM, y0, 190, alt, style='FD',
+    pdf.rect(g.margem, y0, g.util, alt, style='FD',
              round_corners=True, corner_radius=_RAIO)
     pdf.set_y(y0 + 4)
-    pdf.set_x(_MARGEM + 5)
+    pdf.set_x(g.margem + 5)
     pdf.set_font('Helvetica', 'B', 9)
     pdf.set_text_color(*_C_PRIMARY)
     pdf.set_char_spacing(0.8)
@@ -293,15 +304,20 @@ def _box_regras(pdf, regras, titulo_tipo):
                            % titulo_tipo.upper()),
              new_x='LMARGIN', new_y='NEXT')
     pdf.set_char_spacing(0)
+    lm_orig, rm_orig = pdf.l_margin, pdf.r_margin
+    pdf.set_left_margin(g.margem + 5)
+    pdf.set_right_margin(g.page_w - (g.margem + 5) - larg_txt)
     for rg in regras:
-        pdf.set_x(_MARGEM + 5)
+        pdf.set_x(g.margem + 5)
         pdf.set_font('Helvetica', 'B', 9)
         pdf.set_text_color(*_C_MUTED)
-        pdf.cell(pdf.get_string_width(_latin1(rg['label'] + ': ')) + 1, 6,
-                 _latin1(rg['label'] + ':'))
+        pdf.write(_lh, _latin1(rg['label'] + ': '))
         pdf.set_font('Helvetica', '', 9)
         pdf.set_text_color(*_C_FG)
-        pdf.cell(0, 6, _latin1(rg['valor']), new_x='LMARGIN', new_y='NEXT')
+        pdf.write(_lh, _latin1(rg['valor']))
+        pdf.ln(_lh + 0.6)
+    pdf.set_left_margin(lm_orig)
+    pdf.set_right_margin(rm_orig)
     pdf.set_y(y0 + alt + 2)
 
 
