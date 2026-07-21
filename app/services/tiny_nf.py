@@ -329,13 +329,36 @@ def _payload_cliente(pedido):
         'email': pedido.email_cliente,
         'fone': pedido.telefone_cliente or '',
         'endereco': pedido.endereco_logradouro or '',
-        'numero': pedido.endereco_numero or '',
+        # Número em branco também é rejeitado pela SEFAZ — 'SN' (sem número)
+        # é o valor canônico quando o endereço não tem número.
+        'numero': pedido.endereco_numero or 'SN',
         'complemento': pedido.endereco_complemento or '',
         'bairro': pedido.endereco_bairro or '',
         'cep': pedido.endereco_cep or '',
         'cidade': pedido.endereco_cidade or '',
         'uf': (pedido.endereco_uf or '').upper(),
     }
+
+
+def _endereco_destinatario_incompleto(pedido):
+    """Campos do endereço que a SEFAZ exige e estão faltando (logradouro,
+    bairro, cidade, UF, CEP; número tem fallback 'SN'). Retorna a lista de
+    rótulos faltando — vazia = endereço ok. Trava fail-closed da emissão do
+    site: sem esses campos a NF-e é rejeitada ('endereço/bairro/UF em
+    branco') — melhor recusar com mensagem clara do que rejeição críptica
+    (dono 20/07/2026, caso retirada sem endereço)."""
+    faltando = []
+    if not (pedido.endereco_logradouro or '').strip():
+        faltando.append('logradouro')
+    if not (pedido.endereco_bairro or '').strip():
+        faltando.append('bairro')
+    if not (pedido.endereco_cidade or '').strip():
+        faltando.append('cidade')
+    if not (pedido.endereco_uf or '').strip():
+        faltando.append('UF')
+    if not (pedido.endereco_cep or '').strip():
+        faltando.append('CEP')
+    return faltando
 
 
 def _payload_itens(pedido):
