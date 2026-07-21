@@ -20,7 +20,7 @@ estoque (`consumir_subreceitas_prontas`), então explodi-la em farinha
 mentiria sobre a compra. Elas entram em `sub_receitas` como aviso.
 """
 from app.extensions import db
-from app.models import Produto, Receita
+from app.models import MateriaPrima, Produto, Receita
 from app.utils import SUB_RECEITA_TIPOS, unidades_subreceita
 
 # Rendimento mínimo pra não dividir por zero em ficha incompleta.
@@ -169,9 +169,14 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
                     continue
                 _add_produto(sub, total, origem=p.nome, _vistos=_vistos)
             else:
-                # MP componente (pote, embalagem): comprada como está.
-                d = compras_diretas.setdefault(nome_comp,
-                                               {'qtd': 0, 'tipo': 'mp'})
+                # MP componente (pote, embalagem, RECHEIO): comprada como
+                # está, na unidade REAL da MP (g/ml/un). Antes tudo caía como
+                # 'un' e recheio em gramas (Nutella, mussarela, peito de peru)
+                # aparecia "15000 un" em vez de "15.000 g".
+                mp = db.session.get(MateriaPrima, cid)
+                unidade = (mp.unidade if mp else None) or 'un'
+                d = compras_diretas.setdefault(
+                    nome_comp, {'qtd': 0, 'tipo': 'mp', 'unidade': unidade})
                 d['qtd'] += total
 
     for e in entradas:
@@ -215,7 +220,8 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
     return {
         'compra': compra,
         'compras_diretas': [
-            {'nome': n, 'qtd': d['qtd'], 'tipo': d['tipo']}
+            {'nome': n, 'qtd': d['qtd'], 'tipo': d['tipo'],
+             'unidade': d.get('unidade', 'un')}
             for n, d in sorted(compras_diretas.items())],
         'sub_receitas': [
             {'nome': n, 'unidades_base': q}
