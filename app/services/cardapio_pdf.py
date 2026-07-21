@@ -619,19 +619,19 @@ _Y_LIMITE = 281
 _PAG_UTIL = 250
 
 
-def _altura_categoria(itens, tem_foto):
-    """Estimativa da altura (mm) da categoria: titulo + fileiras. Grid = 3
-    por fileira (card alto); lista = 2 por fileira (caixinha baixa).
-    Categoria com alguma descrição usa a fileira mais alta correspondente."""
+def _altura_categoria(itens, tem_foto, geo=_GEO_A4):
+    """Estimativa da altura (mm) da categoria: titulo + fileiras (grid de
+    cards ou lista de caixinhas, colunas conforme a geometria). Categoria
+    com alguma descrição usa a fileira mais alta correspondente."""
     import math
     titulo = 12.5
     tem_desc = any(i.get('descricao') for i in itens)
     if tem_foto:
-        card_h = _CARD_H_DESC if tem_desc else _CARD_H
-        fileiras = math.ceil(len(itens) / 3)
+        card_h = geo.card_h_desc if tem_desc else geo.card_h
+        fileiras = math.ceil(len(itens) / geo.cols_grid)
         return titulo + fileiras * (card_h + _GAP)
     lh = _LINHA_H_DESC if tem_desc else _LINHA_H
-    fileiras = math.ceil(len(itens) / 2)
+    fileiras = math.ceil(len(itens) / geo.cols_lista)
     return titulo + fileiras * (lh + 2) + 2
 
 
