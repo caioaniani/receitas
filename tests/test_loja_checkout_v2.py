@@ -145,7 +145,8 @@ def test_criar_pedido_grava_cpf_no_cliente(app):
         form = {'nome': 'Maria', 'email': 'm@x.com',
                 'cpf': '529.982.247-25', 'aceite_lgpd': '1',
                 'modo_entrega': 'retirada', 'loja_id': str(loja.id),
-                'data_entrega': data, 'janela_entrega': '08:00–09:00'}
+                'data_entrega': data, 'janela_entrega': '08:00–09:00',
+                **_END_NF}
         pedido, erros = loja_checkout.criar_pedido(
             form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
         assert erros == []
