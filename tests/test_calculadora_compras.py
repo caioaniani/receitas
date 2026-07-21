@@ -98,7 +98,51 @@ def test_produto_simples_vira_compra_direta(app):
             [{'tipo': 'produto', 'id': p.id, 'qtd': 4}])
     assert res['compra']['fornecedores'] == []
     assert res['compras_diretas'] == [
-        {'nome': 'Geleia Calc', 'qtd': 4, 'tipo': 'produto'}]
+        {'nome': 'Geleia Calc', 'qtd': 4, 'tipo': 'produto', 'unidade': 'un'}]
+
+
+def test_mp_componente_de_cesta_mantem_unidade_da_mp(app, admin_user):
+    """Recheio em GRAMAS numa cesta (Nutella, mussarela, peito de peru) aparece
+    em 'g', não 'un' (caso real 21/07: '15000 un' de Nutella no lugar de
+    '15.000 g'). Componente em 'un' (pote/embalagem) segue 'un'."""
+    from app.services import calculadora_compras
+    with app.app_context():
+        nutella = MateriaPrima(nome='Nutella Calc', unidade='g',
+                               custo_por_kg=40.0, estoque_atual=0)
+        pote = MateriaPrima(nome='Pote Calc', unidade='un',
+                            custo_por_kg=2.0, estoque_atual=0)
+        db.session.add_all([nutella, pote])
+        cesta = Produto(nome='Box Cafe Calc', categoria='Cestas',
+                        preco_site=100, ativo=True)
+        db.session.add(cesta)
+        db.session.flush()
+        db.session.add_all([
+            ProdutoItem(produto_id=cesta.id, tipo='mp',
+                        materia_prima_id=nutella.id, item_nome=nutella.nome,
+                        quantidade=100),      # 100 g por cesta
+            ProdutoItem(produto_id=cesta.id, tipo='mp',
+                        materia_prima_id=pote.id, item_nome=pote.nome,
+                        quantidade=1),        # 1 un por cesta
+        ])
+        db.session.commit()
+        cid = cesta.id
+        res = calculadora_compras.calcular(
+            [{'tipo': 'produto', 'id': cid, 'qtd': 150}])
+    diretas = {c['nome']: c for c in res['compras_diretas']}
+    assert diretas['Nutella Calc']['unidade'] == 'g'
+    assert diretas['Nutella Calc']['qtd'] == 15000        # 100 g × 150 cestas
+    assert diretas['Pote Calc']['unidade'] == 'un'
+    assert diretas['Pote Calc']['qtd'] == 150
+
+    # HTML: mostra "15.000 g" (milhar com ponto + g), nunca "15000 un".
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    body = c.post('/lista-compras/calculadora', data={
+        'item[]': [f'p_{cid}'], 'qtd[]': ['150']}).get_data(as_text=True)
+    assert '15.000 g' in body
+    assert '15000 un' not in body
 
 
 def test_sub_receita_normal_explode_em_mp(app):
