@@ -105,7 +105,8 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
                     # receita de ORIGEM (a ficha do retorno e vazia por
                     # design). ATENCAO: se houver sobras reais no estoque,
                     # isso compra em dobro — por isso e toggle na tela.
-                    unidades_sub = (ing.porcentagem or 0) * mult
+                    unidades_sub = unidades_subreceita(
+                        ing.tipo, ing.porcentagem, receita.peso_base) * mult
                     origem_rec = Receita.query.filter_by(
                         retorno_receita_id=sub.id).first()
                     if origem_rec is not None and unidades_sub > 0:
