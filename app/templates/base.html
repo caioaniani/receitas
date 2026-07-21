@@ -140,6 +140,12 @@
            class="sidebar-link {% if request.path.startswith('/admin/loja-online/pedidos') %}active{% endif %}">
             Pedidos do site
         </a>
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('main.loja_online_divulgacao') }}"
+           class="sidebar-link {% if request.path.startswith('/admin/loja-online/divulgacao') %}active{% endif %}">
+            ⭐ Lançar divulgação
+        </a>
+        {% endif %}
         {% if current_user.is_owner %}
         <a href="{{ url_for('main.loja_online_tiny_skus') }}"
            class="sidebar-link {% if request.path.startswith('/admin/loja-online/tiny') %}active{% endif %}">
