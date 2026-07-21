@@ -4610,16 +4610,21 @@ def loja_online_divulgacao():
             data_ent = _date.fromisoformat(data_str) if data_str else None
         except ValueError:
             data_ent = None
-        endereco = {
-            'linha': request.form.get('endereco_linha'),
-            'cep': request.form.get('endereco_cep'),
-            'logradouro': request.form.get('endereco_logradouro'),
-            'numero': request.form.get('endereco_numero'),
-            'complemento': request.form.get('endereco_complemento'),
-            'bairro': request.form.get('endereco_bairro'),
-            'cidade': request.form.get('endereco_cidade'),
-            'uf': request.form.get('endereco_uf'),
-        }
+        # Endereco: campos estruturados; a linha (snapshot do painel/motorista)
+        # e MONTADA deles — "logradouro, numero - bairro, cidade/uf".
+        _end = {k: (request.form.get('endereco_' + k) or '').strip()
+                for k in ('cep', 'logradouro', 'numero', 'complemento',
+                          'bairro', 'cidade', 'uf')}
+        _linha = _end['logradouro']
+        if _end['numero']:
+            _linha += ', ' + _end['numero']
+        if _end['complemento']:
+            _linha += ' (' + _end['complemento'] + ')'
+        if _end['bairro']:
+            _linha += ' - ' + _end['bairro']
+        if _end['cidade']:
+            _linha += ', ' + _end['cidade'] + ('/' + _end['uf'] if _end['uf'] else '')
+        endereco = dict(_end, linha=_linha.strip(' ,-'))
         try:
             pedido = div_svc.criar_divulgacao(
                 itens=itens, modo_entrega=modo,
