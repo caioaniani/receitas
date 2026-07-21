@@ -193,6 +193,11 @@ def test_vendas_pdv_do_banco(app):
     assert det['Ribeiro do Vale']['cancelados'] == 1
     assert det['Ribeiro do Vale']['por_pagamento'] == {'dinheiro': 50.0}
     assert det['Nebraska']['cancelados'] == 0
+    # valor do cancelado (chave 'v') = total do pedido cancelado (10.0);
+    # sem desconto no fixture.
+    assert d['cancelados_valor'] == 10.0
+    assert det['Ribeiro do Vale']['cancelados_valor'] == 10.0
+    assert d['desconto'] == 0.0
     # sem cobrança só-valor no fixture: split zerado/ausente
     assert d['sem_itens_total'] == 0.0
     assert d['sem_itens_n'] == 0
