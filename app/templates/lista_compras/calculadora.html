@@ -5,6 +5,9 @@
    lê como "145 mil" em pt-BR. Inteiro fica sem casa (146 un). #}
 {# Padrao da casa (07/07/2026): peso SEMPRE em gramas, milhar com ponto. #}
 {% macro kg(g, un=false) %}{% if un %}{{ ('%.1f'|format(g)).rstrip('0').rstrip('.').replace('.', ',') }} un{% else %}{{ '{:,}'.format(g|round|int)|replace(',', '.') }} g{% endif %}{% endmacro %}
+{# Comprar pronto: respeita a unidade REAL da MP (g/ml/un). 'un' com 1 casa
+   decimal; peso/volume em inteiro com milhar de ponto + a unidade da MP. #}
+{% macro qtd_unidade(v, unidade) %}{% if unidade == 'un' %}{{ ('%.1f'|format(v)).rstrip('0').rstrip('.').replace('.', ',') }} un{% else %}{{ '{:,}'.format(v|round|int)|replace(',', '.') }} {{ unidade }}{% endif %}{% endmacro %}
 
 {% block content %}
 <div class="page-header">
