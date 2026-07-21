@@ -143,7 +143,8 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
         comps = componentes_de_cesta(p)
         if not comps:
             d = compras_diretas.setdefault(p.nome, {'qtd': 0,
-                                                    'tipo': 'produto'})
+                                                    'tipo': 'produto',
+                                                    'unidade': 'un'})
             d['qtd'] += qtd
             return
         if origem:
