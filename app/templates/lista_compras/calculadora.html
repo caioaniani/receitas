@@ -245,6 +245,7 @@
 (function () {
     var wrap = document.getElementById('calc-linhas');
     var dl = document.getElementById('calc-itens');
+    var form = wrap.closest('form');
     // Mapas nome<->token a partir do datalist (chave em minúsculas p/ casar
     // sem depender de maiúsculas/acentos digitados diferente).
     var LABEL2TOKEN = {}, TOKEN2LABEL = {};
@@ -253,12 +254,19 @@
         TOKEN2LABEL[o.dataset.token] = o.value;
     });
 
+    // Marca em vermelho a busca com texto que NÃO resolve nenhum item — evita
+    // o furo do typeahead: digitar parcial e a linha ser pulada em silêncio.
+    function marcar(busca) {
+        var tok = busca.closest('.calc-linha').querySelector('.calc-token');
+        busca.classList.toggle('is-invalid', !!busca.value.trim() && !tok.value);
+    }
+
     // Digitar/escolher -> resolve o hidden item[] (vazio até bater exato).
     wrap.addEventListener('input', function (e) {
         if (!e.target.classList.contains('calc-busca')) return;
-        var linha = e.target.closest('.calc-linha');
-        var tok = linha.querySelector('.calc-token');
+        var tok = e.target.closest('.calc-linha').querySelector('.calc-token');
         tok.value = LABEL2TOKEN[e.target.value.trim().toLowerCase()] || '';
+        marcar(e.target);
     });
 
     // Pós-cálculo: linhas voltam com token — repõe o texto no campo de busca.
@@ -269,10 +277,28 @@
         }
     });
 
+    // Barra o cálculo se alguma linha tem texto sem item resolvido (senão a
+    // linha some caladamente e o resultado fica errado sem ninguém notar).
+    if (form) form.addEventListener('submit', function (e) {
+        var ruim = null;
+        Array.prototype.forEach.call(wrap.querySelectorAll('.calc-busca'), function (b) {
+            marcar(b);
+            var tok = b.closest('.calc-linha').querySelector('.calc-token');
+            if (!ruim && b.value.trim() && !tok.value) ruim = b;
+        });
+        if (ruim) {
+            e.preventDefault();
+            ruim.focus();
+            alert('Escolha um item da lista para "' + ruim.value.trim() +
+                  '" — digite e toque na sugestão que aparece.');
+        }
+    });
+
     // "Mais um item": clona a primeira linha, zerando busca + token + qtd.
     document.getElementById('btn-mais-linha').addEventListener('click', function () {
         var linha = wrap.querySelector('.calc-linha').cloneNode(true);
-        linha.querySelector('.calc-busca').value = '';
+        var b = linha.querySelector('.calc-busca');
+        b.value = ''; b.classList.remove('is-invalid');
         linha.querySelector('.calc-token').value = '';
         linha.querySelector('input[name="qtd[]"]').value = '';
         wrap.appendChild(linha);
