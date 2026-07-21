@@ -600,8 +600,19 @@ def cardapio_atacado_regras():
         return redirect(url_for('main.cardapio', tipo='atacado'))
     atuais = {chave: (AppConfig.get(_CARDAPIO_ATACADO_PREFIXO + chave) or '')
               for chave, _l, _p in CARDAPIO_ATACADO_CAMPOS}
+    # Categorias existentes (união dos 3 tipos), já na ordem vigente, pro
+    # drag-and-drop da ordem das seções.
+    cats_ordem = {}
+    for t in ('atacado', 'loja', 'site'):
+        cats_t, _ = _cardapio_categorias(t)
+        for c in cats_t:
+            cats_ordem.setdefault(c, True)
+    cats_ordem = list(_aplicar_ordem_categorias(cats_ordem))
     return render_template('admin/cardapio_atacado_regras.html',
                            campos=CARDAPIO_ATACADO_CAMPOS, atuais=atuais,
+                           cats_ordem=cats_ordem,
+                           rodape_ordem=_ordem_rodape(),
+                           rodape_labels=RODAPE_LABELS,
                            preparo_raw=_preparo_atacado_raw(),
                            quem_somos_raw=_quem_somos_raw(),
                            quem_somos_foto=_quem_somos_foto_src(),
