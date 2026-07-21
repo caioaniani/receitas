@@ -364,6 +364,7 @@ def vendas_hoje(capturar=False):
     hoje_d = hoje()
     total, por_company, n_pedidos = vendas_diarias.faturamento_por_loja(
         hoje_d, hoje_d, capturar=capturar)
+    cd = vendas_diarias.cancelamentos_descontos_do_banco(hoje_d, hoje_d)
     vinculo = _resolver_loja_seru()
     fat_por_loja = defaultdict(float)
     for loja_seru, fat in por_company.items():
