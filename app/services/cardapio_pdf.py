@@ -646,7 +646,7 @@ def _altura_categoria(itens, tem_foto, geo=_GEO_A4):
 
 def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
                        quem_somos=None, quem_somos_foto=None,
-                       formato='a4', ordem_rodape=None):
+                       formato='a4', ordem_secoes=None, slogan=None):
     """PDF pronto (bytes). `categorias`/`regras` na MESMA forma da tela
     (main._cardapio_categorias — fonte única, nunca divergir da web).
     `logo`: data URI do logotipo (AppConfig) ou None (cai no texto "O Pão").
@@ -656,17 +656,36 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
     da foto que acompanha a história (fachada da loja).
     `formato`: 'a4' (impressão/desktop) ou 'mobile' (página estreita 9:16
     pra mandar por WhatsApp — 21/07/2026, pedido do dono).
-    `ordem_rodape`: ordem dos blocos do fim ('quem_somos'/'regras'/
-    'preparo' — drag-and-drop do dono, 21/07/2026)."""
+    `ordem_secoes`: ordem das SEÇÕES da página ('quem_somos'/'regras'/
+    'preparo'/'produtos' — drag-and-drop do dono, 21/07/2026; o pedido
+    "o rodapé venha para cima" fez o default virar blocos ANTES dos
+    produtos, substituindo a regra de 20/07). `slogan`: linha da capa
+    (None = default; '' = some)."""
     titulo = _TITULO_TIPO.get(tipo, tipo.title())
     geo = _GEO_MOBILE if formato == 'mobile' else _GEO_A4
     pdf = _CardapioPDF(titulo, geo=geo)
     pdf.add_page()
-    _capa(pdf, titulo, logo_data=logo)
+    _capa(pdf, titulo, logo_data=logo, slogan=slogan)
 
-    # Ordem de INSERÇÃO do dict — a fonte única (_cardapio_categorias) já
-    # devolve na ordem final (drag-and-drop do dono; sem preferência =
-    # alfabética com 'Outros' por último, que era a regra daqui).
+    for secao in (ordem_secoes
+                  or ('quem_somos', 'regras', 'preparo', 'produtos')):
+        if secao == 'quem_somos' and quem_somos:
+            _box_quem_somos(pdf, quem_somos, foto=quem_somos_foto)
+        elif secao == 'regras' and tipo == 'atacado' and regras:
+            _box_regras(pdf, regras, titulo)
+        elif secao == 'preparo' and tipo == 'atacado' and preparo:
+            _box_preparo(pdf, preparo)
+        elif secao == 'produtos':
+            _secao_produtos(pdf, categorias, geo)
+
+    saida = pdf.output()
+    return bytes(saida)
+
+
+def _secao_produtos(pdf, categorias, geo):
+    """As categorias de produto, na ordem de INSERÇÃO do dict — a fonte
+    única (_cardapio_categorias) já devolve na ordem final (drag-and-drop
+    do dono; sem preferência = alfabética com 'Outros' por último)."""
     for cat in categorias:
         itens = categorias[cat]
         # MESMA regra do site (main/cardapio.html `tem_foto`): categoria com
@@ -678,8 +697,7 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
         # MANTER A CATEGORIA INTEIRA NUMA PAGINA (20/07/2026): se nao cabe no
         # espaco que sobrou mas cabe numa pagina limpa, comeca numa nova. Se
         # for maior que uma pagina inteira, flui e quebra por fileira (o
-        # _grid/_lista ja tratam). Efeito: pagina 1 vira a CAPA, cada
-        # categoria comeca limpa — sem "Paes" partido no meio.
+        # _grid/_lista ja tratam).
         alt = _altura_categoria(itens, tem_foto, geo=geo)
         tem_desc = any(i.get('descricao') for i in itens)
         card_h = geo.card_h_desc if tem_desc else geo.card_h
@@ -692,17 +710,6 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
         else:
             _lista_categoria(pdf, itens)
             pdf.ln(2)
-
-    # Quem somos + regras + métodos no FIM (pedido do dono 20/07: "colocar
-    # para o rodapé e trazer os produtos para cima") — espelho da tela, na
-    # ordem escolhida pelo dono (regras/preparo seguem só no atacado).
-    for bloco in (ordem_rodape or ('quem_somos', 'regras', 'preparo')):
-        if bloco == 'quem_somos' and quem_somos:
-            _box_quem_somos(pdf, quem_somos, foto=quem_somos_foto)
-        elif bloco == 'regras' and tipo == 'atacado' and regras:
-            _box_regras(pdf, regras, titulo)
-        elif bloco == 'preparo' and tipo == 'atacado' and preparo:
-            _box_preparo(pdf, preparo)
 
     saida = pdf.output()
     return bytes(saida)
