@@ -325,7 +325,10 @@ def vendas_ontem(capturar=True):
         func.count(PedidoOnline.id),
         func.coalesce(func.sum(PedidoOnline.valor_total), 0))
         .filter(PedidoOnline.pago_em >= ini,
-                PedidoOnline.pago_em < fim).one())
+                PedidoOnline.pago_em < fim,
+                # Divulgacao nunca conta como venda (pago_em ja e NULL nela —
+                # guard explicito pra documentar/blindar).
+                PedidoOnline.divulgacao.is_(False)).one())
     site_total = float(site_rows[1] or 0)
     return {
         'ontem': ontem,
