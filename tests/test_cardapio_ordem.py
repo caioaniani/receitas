@@ -223,6 +223,50 @@ def test_categoria_adormecida_continua_na_lista_de_ordenar(app, admin_user,
     assert 'data-key="Bebidas"' in body
 
 
+# ── Slogan editável (21/07/2026) ───────────────────────────────────────────
+
+def test_slogan_default_custom_e_vazio(app, admin_user, cliente):
+    from app.models import AppConfig
+    _receita('Bolo', 'Doces')
+    _login(cliente, admin_user)
+    body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert 'Tempo. Fermento. Cuidado.' in body
+
+    AppConfig.set('cardapio_slogan', 'Pão que abraça.')
+    db.session.commit()
+    body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert 'Pão que abraça.' in body
+    assert 'Tempo. Fermento. Cuidado.' not in body
+
+    AppConfig.set('cardapio_slogan', '')
+    db.session.commit()
+    body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert 'Tempo. Fermento. Cuidado.' not in body
+
+
+def test_form_regras_salva_slogan(app, admin_user, cliente):
+    from app.models import AppConfig
+    _login(cliente, admin_user)
+    body = cliente.get('/admin/cardapio-atacado/regras').get_data(as_text=True)
+    assert 'name="slogan"' in body
+    assert 'Tempo. Fermento. Cuidado.' in body   # input pré-preenchido
+    cliente.post('/admin/cardapio-atacado/regras',
+                 data={'slogan': '  Pão que abraça.  '})
+    assert AppConfig.get('cardapio_slogan') == 'Pão que abraça.'
+
+
+def test_pdf_capa_com_slogan_custom_e_sem(app):
+    from app.services.cardapio_pdf import gerar_cardapio_pdf
+    cats = {'Pães': [{'nome': 'Sourdough', 'preco_venda': 20.0,
+                      'descricao': None, 'imagem_url': None,
+                      'img_ref': None}]}
+    com = gerar_cardapio_pdf('atacado', cats, [], slogan='Pão que abraça.')
+    sem = gerar_cardapio_pdf('atacado', cats, [], slogan='')
+    default = gerar_cardapio_pdf('atacado', cats, [])
+    assert com.startswith(b'%PDF') and sem.startswith(b'%PDF')
+    assert len(default) > len(sem)         # default tem a linha, '' não
+
+
 # ── PDF ────────────────────────────────────────────────────────────────────
 
 def test_pdf_respeita_ordem(app):
