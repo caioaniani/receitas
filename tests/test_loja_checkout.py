@@ -375,6 +375,8 @@ def test_checkout_post_cria_pedido_e_redireciona(app, monkeypatch):
         'aceite_lgpd': '1', 'modo_entrega': 'retirada',
         'loja_id': str(loja.id), 'data_entrega': data,
         'janela_entrega': '08:00–09:00',
+        'cep': '04077-000', 'logradouro': 'Rua Y', 'numero': '20',
+        'bairro': 'Moema', 'cidade': 'São Paulo', 'uf': 'SP',
         'itens_json': _json.dumps([{'kind': 'produto', 'id': p.id, 'qtd': 2}]),
     }, follow_redirects=False)
     assert r.status_code == 302
