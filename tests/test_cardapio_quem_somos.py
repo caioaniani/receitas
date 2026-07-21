@@ -124,7 +124,7 @@ def test_pdf_cresce_com_quem_somos_em_todos_os_tipos(app):
     from app.services.cardapio_pdf import gerar_cardapio_pdf
     paragrafos = [ln for ln in CARDAPIO_QUEM_SOMOS_DEFAULT.splitlines()
                   if ln.strip()]
-    for tipo in ('atacado', 'loja'):
+    for tipo in ('atacado', 'loja', 'site'):
         sem = gerar_cardapio_pdf(tipo, _cats(), [], quem_somos=None)
         com = gerar_cardapio_pdf(tipo, _cats(), [], quem_somos=paragrafos)
         assert com.startswith(b'%PDF')
