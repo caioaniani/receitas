@@ -97,12 +97,15 @@
             <div class="col-md-4">
                 <label class="form-label fw-semibold" for="data_entrega">Data *</label>
                 <input type="date" class="form-control" id="data_entrega" name="data_entrega"
-                       value="{{ hoje }}" min="{{ hoje }}" required>
+                       value="{{ amanha }}" min="{{ amanha }}" required>
+                <div class="form-text">Nunca no mesmo dia — a partir de amanhã.</div>
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-semibold" for="janela_entrega">Janela / horário *</label>
-                <input type="text" class="form-control" id="janela_entrega" name="janela_entrega"
-                       required placeholder="Ex: 8h-12h">
+                <select class="form-select" id="janela_entrega" name="janela_entrega" required>
+                    <option value="">— preencha o endereço —</option>
+                </select>
+                <div id="janela-status" class="form-text"></div>
             </div>
         </div>
 
