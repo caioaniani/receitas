@@ -127,7 +127,8 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
                             f'({unidades_sub:g} un) explodido como '
                             f'"{origem_rec.nome}" FRESCO.')
                         _add_receita(origem_rec, unidades_sub,
-                                     _visitados=_visitados)
+                                     _visitados=_visitados,
+                                     registrar_producao=False)
                 continue
             unidades_sub = unidades_subreceita(
                 ing.tipo, ing.porcentagem, receita.peso_base) * mult
