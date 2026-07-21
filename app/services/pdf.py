@@ -681,7 +681,14 @@ def gerar_calculadora_pdf(resultado, itens_ok, considerar_estoque=True,
                 pdf.set_fill_color(*ZEBRA)
             pdf.cell(130, 6, _latin1(f'  {c["nome"]}'), fill=fill)
             pdf.set_font('Helvetica', 'B', 9)
-            pdf.cell(60, 6, _latin1(f'{c["qtd"]:g} un  '), fill=fill,
+            # Unidade REAL da MP (g/ml/un) — recheio em gramas (Nutella,
+            # mussarela) saía "15000 un" em vez de "15.000 g".
+            unidade = c.get('unidade') or 'un'
+            if unidade == 'un':
+                q_txt = f'{c["qtd"]:g} un'
+            else:
+                q_txt = f'{int(round(c["qtd"])):,}'.replace(',', '.') + f' {unidade}'
+            pdf.cell(60, 6, _latin1(f'{q_txt}  '), fill=fill,
                      align='R', ln=1)
             pdf.set_font('Helvetica', '', 9)
 
