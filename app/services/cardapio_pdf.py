@@ -562,7 +562,7 @@ def _grid_categoria(pdf, itens_foto, card_h=None):
 
 _LINHA_H = 10
 _LINHA_H_DESC = 17                      # nome + até 2 linhas de descrição
-_LINHA_W = (190 - _GAP) / 2
+_LINHA_W = (190 - _GAP) / 2   # legado A4 (geo.linha_w nas funções)
 
 
 def _lista_categoria(pdf, itens):
