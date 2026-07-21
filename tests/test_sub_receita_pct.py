@@ -118,7 +118,7 @@ def test_custo_equivale(app):
     with app.app_context():
         _monta('receita', 100, 'A')
         _monta('sub_pct', 10, 'B')
-        custos = calcular_custos_receitas()
+        custos = calcular_custos_receitas()['custos']
         c_abs = custos.get('PaoA')
         c_pct = custos.get('PaoB')
     assert c_abs and c_pct
