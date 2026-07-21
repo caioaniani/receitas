@@ -493,7 +493,7 @@ footer p { margin: 0; }
             {% endif %}
         </div>
     </div>
-    {% elif bloco == 'regras' and regras %}
+    {% elif secao == 'regras' and regras %}
     <div class="regras-atacado">
         <h3 class="regras-titulo">Regras do pedido — Atacado</h3>
         <ul class="regras-lista">
@@ -502,7 +502,7 @@ footer p { margin: 0; }
             {% endfor %}
         </ul>
     </div>
-    {% elif bloco == 'preparo' and preparo %}
+    {% elif secao == 'preparo' and preparo %}
     <div class="regras-atacado">
         <h3 class="regras-titulo">Métodos de preparo</h3>
         <ul class="regras-lista">
