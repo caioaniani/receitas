@@ -1374,6 +1374,33 @@ Testes: `test_google_retenta_com_logradouro_oficial_do_cep` +
 5 casos de fallback/404/5xx/502 em `tests/test_loja_checkout_v2.py`.
 Validacao visual/funcional Playwright 390px (14 checks, incl. fail-open).
 
+**RETIRADA tambem coleta endereco pra NF-e (20/07/2026, dono)**: pedido de
+retirada nascia SEM endereco estruturado (`loja_checkout` so montava a linha
+"Retirada: loja"; os `endereco_logradouro/numero/bairro/cidade/uf` ficavam
+NULL) — a NF-e do Tiny saia com o destinatario em branco e a SEFAZ rejeitava
+("endereco/bairro/UF em branco", caso pedido 5d51be2f). Agora o ramo
+`modo=='retirada'` do `criar_pedido` VALIDA e grava o endereco (mesmos
+campos/exigencia da entrega, NUMERO obrigatorio — decisao do dono), mas SEM
+recalcular frete nem geocodificar: o endereco serve SO pra nota, a retirada
+continua na loja e o frete fica R$0; a linha legivel `endereco_entrega`
+segue mostrando a loja pra operacao. No checkout, o bloco de endereco
+(compartilhado) passa a aparecer na retirada com titulo "Seu endereco (para
+a nota fiscal)" — o JS (`aplicarModo`) esconde so as partes de entrega
+(quem recebe / calcular frete) e mostra o aviso da NF. Defesa fiscal:
+`tiny_nf._endereco_destinatario_incompleto` fail-close a emissao do SITE
+(nao manda destinatario em branco pra SEFAZ — recusa com mensagem clara em
+vez de rejeicao criptica; guard so no caminho do site, B2B/transf tem
+fonte de endereco propria) e `numero` vazio vira 'SN'. Decisao do dono:
+pedidos JA PAGOS sem endereco (o 5d51be2f) NAO ganharam editor no admin —
+resolver no painel do Tiny. Fix cosmetico junto: `loja_online_pedido_
+detalhe.html` renderizava o literal "None" quando `Loja.endereco` era NULL
+(guard adicionado) + mostra o endereco da NF do cliente. Testes:
+`tests/test_loja_checkout*.py` (forms de retirada ganharam `_END_NF`;
+`test_criar_pedido_retirada_coleta_endereco_pra_nf` +
+`_sem_endereco_falha`), `tests/test_loja_emitir_nf.py`
+(`_bloqueia_sem_endereco`, `_numero_vazio_vira_SN`). Validacao Playwright
+390px (retirada mostra endereco+loja+aviso, entrega reverte, sem estouro).
+
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
 Escrito na pedra a pedido do dono ("ja tinha falado uma vez mas nao ficou
