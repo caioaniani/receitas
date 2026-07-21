@@ -997,7 +997,7 @@ def salvar(id):
         # resolve a FK pelo nome agora, pra a baixa de estoque ser confiável
         # (não depender só do backfill por nome).
         sub_id = None
-        if tipo in ('receita', 'sub_pct'):
+        if tipo in SUB_RECEITA_TIPOS:
             sub = Receita.query.filter(Receita.nome.ilike(nome)).first()
             sub_id = sub.id if sub else None
         ing = ReceitaIngrediente(
