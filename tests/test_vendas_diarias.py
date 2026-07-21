@@ -159,10 +159,14 @@ def test_captura_grava_breakdowns(app):
     for b in VendaSeruDiaBreakdown.query.filter_by(dimensao='canal').all():
         can[b.chave] = can.get(b.chave, 0.0) + float(b.valor)
     assert can == {'Balcão': 80.0}
-    # 1 pedido cancelado (Ribeiro).
-    canc = VendaSeruDiaBreakdown.query.filter_by(
-        dimensao='cancelados', loja_seru='Ribeiro do Vale').first()
-    assert canc is not None and int(canc.valor) == 1
+    # 1 pedido cancelado (Ribeiro): contagem (chave '') = 1, valor (chave 'v')
+    # = total do pedido cancelado (10.0).
+    canc_n = VendaSeruDiaBreakdown.query.filter_by(
+        dimensao='cancelados', loja_seru='Ribeiro do Vale', chave='').first()
+    assert canc_n is not None and int(canc_n.valor) == 1
+    canc_v = VendaSeruDiaBreakdown.query.filter_by(
+        dimensao='cancelados', loja_seru='Ribeiro do Vale', chave='v').first()
+    assert canc_v is not None and float(canc_v.valor) == 10.0
 
 
 def test_captura_breakdown_idempotente(app):
