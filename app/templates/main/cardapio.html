@@ -410,6 +410,12 @@ footer p { margin: 0; }
 </section>
 
 <section class="cardapio-section">
+    {# Seções na ordem do drag-and-drop de Editar regras (21/07/2026 —
+       'produtos' é uma seção como as outras; o pedido "o rodapé venha
+       para cima" fez o default virar blocos antes dos produtos,
+       substituindo a regra de 20/07 "produtos para cima"). #}
+    {% for secao in ordem_secoes %}
+    {% if secao == 'produtos' %}
     <p class="section-label">Cardápio</p>
     <h2 class="section-title">Escolha sua categoria</h2>
 
