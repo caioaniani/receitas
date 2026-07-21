@@ -84,6 +84,11 @@ def criar_divulgacao(*, itens, modo_entrega='agendada', loja_retirada_id=None,
         raise ValueError('informe o telefone')
     if data_entrega is None:
         raise ValueError('informe a data de entrega')
+    # Nunca no MESMO dia — divulgacao e planejada, entrega a partir de amanha
+    # (decisao do dono 21/07/2026).
+    from app.utils import hoje as _hoje
+    if data_entrega <= _hoje():
+        raise ValueError('a data tem que ser a partir de amanhã')
     if not (janela_entrega or '').strip():
         raise ValueError('informe a janela/horario')
     if modo_entrega == 'retirada':
