@@ -207,6 +207,17 @@ img { max-width: 100%; display: block; }
 .regra-label { font-weight: 600; color: var(--muted); }
 .quem-somos-p { font-size: 14px; color: var(--fg); line-height: 1.55; margin-bottom: 9px; }
 .quem-somos-p:last-child { margin-bottom: 0; }
+.quem-somos-wrap { display: flex; gap: 20px; align-items: flex-start; }
+.quem-somos-foto {
+    width: 240px; max-width: 38%;
+    flex-shrink: 0;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+    .quem-somos-wrap { flex-direction: column; }
+    .quem-somos-foto { width: 100%; max-width: 100%; }
+}
 
 /* Impressão: na tela só a categoria ativa aparece (via JS); no papel mostramos
    TODAS e escondemos a navegação por pills. Antes o "Imprimir" exportava só a
