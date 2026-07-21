@@ -281,12 +281,13 @@
                             <option value="mp" {{ 'selected' if (ing.tipo or 'mp') == 'mp' }}>MP (%)</option>
                             <option value="mp_direto" {{ 'selected' if ing.tipo == 'mp_direto' }}>MP (g)</option>
                             <option value="mp_un" {{ 'selected' if ing.tipo == 'mp_un' }}>MP (un)</option>
-                            <option value="receita" {{ 'selected' if ing.tipo == 'receita' }}>Receita</option>
+                            <option value="receita" {{ 'selected' if ing.tipo == 'receita' }}>Receita (un)</option>
+                            <option value="sub_pct" {{ 'selected' if ing.tipo == 'sub_pct' }}>Receita (%)</option>
                         </select>
                     </td>
                     <td>
                         <input type="text" name="ingrediente_nome[]" value="{{ ing.ingrediente_nome }}"
-                               list="{{ 'receita-list' if ing.tipo == 'receita' else 'mp-list' }}"
+                               list="{{ 'receita-list' if ing.tipo in ('receita', 'sub_pct') else 'mp-list' }}"
                                class="form-control form-control-sm input-blue nome-input"
                                autocomplete="off">
                         <input type="hidden" name="eh_base[]" value="{{ '1' if ing.eh_base else '0' }}">
