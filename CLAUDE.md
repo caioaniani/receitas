@@ -2203,6 +2203,17 @@ SKU do canal 'transf' com FALLBACK site→b2b (`sku_transferencia`).
   (/handshake/<token>/danfe) bate no Tiny a cada GET sem rate limit
   (por desenho: pagina de sucesso persistente); card fiscal do RH lista
   tambem a loja "Industria" (ruido cosmetico).
+- **Motivo da REJEICAO da SEFAZ persistido (20/07/2026)**: `PedidoLoja.
+  nf_erro` (TEXT, 2 commits). O motor `tiny_nf.emitir_nf_generico` grava o
+  erro do Tiny/SEFAZ (`emitir.get('erro')`, ex. "CST com beneficio sem
+  cBenef, cod 32") via helper `_set_nf_erro` (hasattr — genérico, site/B2B
+  seguem sem a coluna sem quebrar) e LIMPA no sucesso e no `recriar`. Antes
+  o motivo só ia no flash e sumia — o dono/contador ficava sem saber o que
+  corrigir no Tiny. O card de NF do detalhe mostra badge "✗ rejeitada pela
+  SEFAZ" + o texto do erro (o fiscal CST/CFOP/NCM/cBenef vem do cadastro do
+  produto no Tiny, NAO do nosso payload — só mandamos SKU+qtd+valor; ajuste
+  é no Tiny + contador, depois "Refazer do zero" reemite). Testes:
+  `test_rejeicao_sefaz_persiste_o_motivo`, `test_sucesso_limpa_erro_anterior`.
 - **Dispensa de NF (20/07/2026, dono)**: `Loja.nf_dispensada` (checkbox no
   card fiscal do /rh/lojas — "não posso dar essa opção pro motorista e o
   padeiro") e `PedidoLoja.nf_dispensada` (toggle ADMIN-only no detalhe;
