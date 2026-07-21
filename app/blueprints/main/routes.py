@@ -608,9 +608,11 @@ def cardapio_atacado_regras():
         # Quem somos nós: mesmo contrato (vazio = escondido de proposito).
         AppConfig.set(_CARDAPIO_QUEM_SOMOS_KEY,
                       (request.form.get('quem_somos') or '').strip())
-        # Slogan do hero: mesmo contrato (vazio = linha some).
+        # Slogan do hero: mesmo contrato (vazio = linha some). Cap 200 no
+        # servidor (o maxlength do input é só client-side; slogan gigante
+        # estouraria a faixa escura da capa do PDF).
         AppConfig.set(_CARDAPIO_SLOGAN_KEY,
-                      (request.form.get('slogan') or '').strip())
+                      (request.form.get('slogan') or '').strip()[:200])
         # Ordem das seções (drag-and-drop): só mexe se o campo veio no form
         # (POST antigo/teste sem o campo não apaga a ordem salva; '' =
         # navegador sem JS, hidden nunca preenchido — ignorar em silêncio,
