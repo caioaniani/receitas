@@ -476,12 +476,7 @@ footer p { margin: 0; }
     </div>
     {% endif %}
 
-    {# Quem somos + regras + métodos no RODAPÉ (pedido do dono 20/07:
-       "trazer os produtos para cima") — o cliente vê o cardápio primeiro.
-       Ordem dos blocos = drag-and-drop em Editar regras (21/07); vale
-       pros 3 tipos no quem_somos (marca); regras/preparo só atacado. #}
-    {% for bloco in ordem_rodape %}
-    {% if bloco == 'quem_somos' and quem_somos %}
+    {% elif secao == 'quem_somos' and quem_somos %}
     <div class="regras-atacado">
         <h3 class="regras-titulo">Quem somos nós</h3>
         <div class="quem-somos-wrap">
