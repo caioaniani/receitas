@@ -636,16 +636,20 @@ def _altura_categoria(itens, tem_foto, geo=_GEO_A4):
 
 
 def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
-                       quem_somos=None, quem_somos_foto=None):
+                       quem_somos=None, quem_somos_foto=None,
+                       formato='a4'):
     """PDF pronto (bytes). `categorias`/`regras` na MESMA forma da tela
     (main._cardapio_categorias — fonte única, nunca divergir da web).
     `logo`: data URI do logotipo (AppConfig) ou None (cai no texto "O Pão").
     `preparo`: lista [{label, valor}] dos métodos de preparo (só atacado).
     `quem_somos`: lista de parágrafos da história da casa (TODOS os tipos —
     texto de marca, diferente das regras/preparo); `quem_somos_foto`: bytes
-    da foto que acompanha a história (fachada da loja)."""
+    da foto que acompanha a história (fachada da loja).
+    `formato`: 'a4' (impressão/desktop) ou 'mobile' (página estreita 9:16
+    pra mandar por WhatsApp — 21/07/2026, pedido do dono)."""
     titulo = _TITULO_TIPO.get(tipo, tipo.title())
-    pdf = _CardapioPDF(titulo)
+    geo = _GEO_MOBILE if formato == 'mobile' else _GEO_A4
+    pdf = _CardapioPDF(titulo, geo=geo)
     pdf.add_page()
     _capa(pdf, titulo, logo_data=logo)
 
@@ -655,7 +659,7 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
         # MESMA regra do site (main/cardapio.html `tem_foto`): categoria com
         # ALGUMA foto vira grid de cards com TODOS os itens (sem foto =
         # placeholder bege); categoria sem foto nenhuma vira as caixinhas
-        # nome/preço em 2 colunas.
+        # nome/preço em colunas.
         tem_foto = any(i.get('img_ref') or i.get('imagem_url')
                        for i in itens)
         # MANTER A CATEGORIA INTEIRA NUMA PAGINA (20/07/2026): se nao cabe no
@@ -663,10 +667,10 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
         # for maior que uma pagina inteira, flui e quebra por fileira (o
         # _grid/_lista ja tratam). Efeito: pagina 1 vira a CAPA, cada
         # categoria comeca limpa — sem "Paes" partido no meio.
-        alt = _altura_categoria(itens, tem_foto)
+        alt = _altura_categoria(itens, tem_foto, geo=geo)
         tem_desc = any(i.get('descricao') for i in itens)
-        card_h = _CARD_H_DESC if tem_desc else _CARD_H
-        if alt > (_Y_LIMITE - pdf.get_y()) and alt <= _PAG_UTIL:
+        card_h = geo.card_h_desc if tem_desc else geo.card_h
+        if alt > (geo.y_limite - pdf.get_y()) and alt <= geo.pag_util:
             pdf.add_page()
         _titulo_categoria(pdf, cat,
                           alt_primeira=card_h if tem_foto else _LINHA_H)
