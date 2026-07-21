@@ -448,12 +448,44 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
     par_gap = 2.6 if a4 else 1.6
     _FOTO_W = 82 if a4 else 56              # 3:4 → altura = w*4/3
     _FOTO_H = _FOTO_W * 4 / 3
-    banner = None
-    banner_h = 0.0
-    if foto and not lado_a_lado:
-        banner = _foto_banner(foto)
-        if banner:
-            banner_h = (g.util - 10) * 2 / 3 + 3   # 3:2 + respiro
+    banner = _foto_banner(foto) if (foto and not lado_a_lado) else None
+    if banner:
+        # MOBILE: banner de largura cheia + heading + texto FLUINDO na
+        # página, SEM caixa bege rígida. A caixa alta com keep-together
+        # jogava o bloco inteiro pra página 2 e deixava a CAPA quase em
+        # branco (dono 21/07). Fluindo, o banner enche a página 1 logo
+        # abaixo da capa e o texto segue natural na página seguinte.
+        pdf.ln(2)
+        bw, bh = g.util, g.util * 2 / 3
+        # Não deixar o banner sozinho no pé (heading + 1 parágrafo junto).
+        if pdf.get_y() + bh + 22 > g.y_limite:
+            pdf.add_page()
+        try:
+            pdf.image(BytesIO(banner), x=g.margem, y=pdf.get_y(),
+                      w=bw, h=bh)
+            pdf.set_y(pdf.get_y() + bh + 4)
+        except Exception:  # noqa: BLE001 — foto ruim não derruba o PDF
+            logger.warning('cardapio_pdf: banner quem-somos nao embutiu',
+                           exc_info=True)
+        pdf.set_x(g.margem)
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.set_text_color(*_C_PRIMARY)
+        pdf.set_char_spacing(0.8)
+        pdf.cell(0, 6, _latin1('QUEM SOMOS NÓS'), new_x='LMARGIN',
+                 new_y='NEXT')
+        pdf.set_char_spacing(0)
+        pdf.ln(1)
+        pdf.set_font('Helvetica', '', 9.5)
+        pdf.set_text_color(*_C_FG)
+        for p in paragrafos:
+            pdf.set_x(g.margem)
+            pdf.multi_cell(g.util, 5.2, _latin1(p), new_x='LMARGIN',
+                           new_y='NEXT')
+            pdf.ln(1.6)
+        pdf.ln(3)
+        return
+
+    # A4 (foto grande à direita) ou mobile sem foto (só texto): caixa bege.
     larg_txt = g.util - 10 - (_FOTO_W + 3 if lado_a_lado else 0)
     pdf.set_font('Helvetica', '', fonte_sz)
     alt_txt = 0
@@ -461,8 +493,7 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
     for txt in corpos:
         alt_txt += pdf.multi_cell(larg_txt, _LH, txt,
                                   dry_run=True, output='HEIGHT') + par_gap
-    alt = 10 + banner_h \
-        + (max(alt_txt, _FOTO_H + 2) if lado_a_lado else alt_txt) + 1.5
+    alt = 10 + (max(alt_txt, _FOTO_H + 2) if lado_a_lado else alt_txt) + 1.5
     y0 = pdf.get_y()
     if y0 + alt > g.y_limite:              # não cabe: caixa em página nova
         pdf.add_page()
@@ -478,13 +509,6 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
         except Exception:  # noqa: BLE001 — foto ruim não derruba o PDF
             logger.warning('cardapio_pdf: foto quem-somos nao embutiu',
                            exc_info=True)
-    if banner:
-        try:
-            pdf.image(BytesIO(banner), x=g.margem + 5, y=y0 + 9.5,
-                      w=g.util - 10, h=(g.util - 10) * 2 / 3)
-        except Exception:  # noqa: BLE001 — foto ruim não derruba o PDF
-            logger.warning('cardapio_pdf: banner quem-somos nao embutiu',
-                           exc_info=True)
     pdf.set_y(y0 + 4)
     pdf.set_x(g.margem + 5)
     pdf.set_font('Helvetica', 'B', 9)
@@ -494,10 +518,6 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
              new_x='LMARGIN', new_y='NEXT')
     pdf.set_char_spacing(0)
     pdf.ln(0.5)
-    if banner:
-        # Texto começa ABAIXO do banner (que ocupa de y0+9.5 até
-        # y0+9.5+altura; banner_h já inclui o respiro de 3mm).
-        pdf.set_y(y0 + 9.5 + banner_h)
     lm_orig, rm_orig = pdf.l_margin, pdf.r_margin
     pdf.set_left_margin(g.margem + 5)
     pdf.set_right_margin(g.page_w - (g.margem + 5) - larg_txt)
