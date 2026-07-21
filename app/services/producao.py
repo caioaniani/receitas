@@ -788,7 +788,7 @@ def mp_necessaria_do_dia(data_alvo, horizonte_dias=7, janela_semanas=6,
         itens_motor.append({'receita_id': rec['receita_id'],
                             'multiplicador': qtd / rend})
         for ing in r.ingredientes:
-            if ing.tipo != 'receita' and ing.ingrediente_nome not in nomes_mp:
+            if ing.tipo not in SUB_RECEITA_TIPOS and ing.ingrediente_nome not in nomes_mp:
                 sem_cadastro.add(ing.ingrediente_nome)
     lista = consolidar_lista_compras(itens_motor) if itens_motor else {}
 
