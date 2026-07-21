@@ -1537,6 +1537,11 @@ def _migrate_postgres(app):
          "nf_dispensada BOOLEAN NOT NULL DEFAULT FALSE")
     _try("ALTER TABLE loja ADD COLUMN IF NOT EXISTS "
          "nf_dispensada BOOLEAN NOT NULL DEFAULT FALSE")
+    # Motivo da REJEICAO da SEFAZ persistido (20/07/2026): antes o texto
+    # ("CST com beneficio sem cBenef, cod 32") ia so no flash e sumia — o
+    # dono/contador ficava sem saber o que corrigir no Tiny. TEXT porque a
+    # mensagem da SEFAZ passa de 40 chars. Procedimento de 2 commits.
+    _try("ALTER TABLE pedido_loja ADD COLUMN IF NOT EXISTS nf_erro TEXT")
 
     # Motivo do cancelamento (25/06/2026) — registra POR QUE um pedido do site
     # foi cancelado (pix_expirado / reembolso / cancelado_admin) em vez de
