@@ -58,20 +58,28 @@ def test_ordem_categorias_salva_manda_e_nova_vai_pro_fim(app):
         ['Pães', 'Doces', 'Bebidas', 'Outros']
 
 
-def test_ordem_rodape_default_custom_e_invalida(app):
-    from app.blueprints.main.routes import _ordem_rodape
+def test_ordem_secoes_default_custom_e_invalida(app):
+    """Default 21/07 (dono: "o rodapé venha para cima"): blocos ANTES dos
+    produtos — SUBSTITUI a regra de 20/07 "produtos para cima". Seção fora
+    da lista salva (ex.: 'produtos' pra ordem salva antes de 21/07) entra
+    no fim, na ordem default."""
+    from app.blueprints.main.routes import _ordem_secoes
     from app.models import AppConfig
-    assert _ordem_rodape() == ['quem_somos', 'regras', 'preparo']
+    assert _ordem_secoes() == ['quem_somos', 'regras', 'preparo', 'produtos']
+
+    AppConfig.set('cardapio_ordem_rodape',
+                  json.dumps(['produtos', 'preparo', 'quem_somos']))
+    db.session.commit()
+    assert _ordem_secoes() == ['produtos', 'preparo', 'quem_somos', 'regras']
 
     AppConfig.set('cardapio_ordem_rodape',
                   json.dumps(['preparo', 'quem_somos']))
     db.session.commit()
-    # Bloco fora da lista salva entra no fim, na ordem default.
-    assert _ordem_rodape() == ['preparo', 'quem_somos', 'regras']
+    assert _ordem_secoes() == ['preparo', 'quem_somos', 'regras', 'produtos']
 
     AppConfig.set('cardapio_ordem_rodape', 'não é json')
     db.session.commit()
-    assert _ordem_rodape() == ['quem_somos', 'regras', 'preparo']
+    assert _ordem_secoes() == ['quem_somos', 'regras', 'preparo', 'produtos']
 
 
 # ── Tela do cardápio ───────────────────────────────────────────────────────
