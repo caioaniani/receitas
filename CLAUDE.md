@@ -1455,12 +1455,29 @@ MARCADO como divulgação (fora de faturamento e da previsão de venda) +
   `'divulgacao'` entra em `_STATUS_ONLINE_NO_PAINEL`/`_STATUS_ONLINE_PARA_PAINEL`;
   selo dourado ⭐ DIVULGAÇÃO no card (`painel_pedidos.html`) e "DIVULGAÇÃO
   (CORTESIA)" no PDF do motorista (`pdf.py`).
-- **Tela** `/admin/loja-online/divulgacao` (admin — é dar produto de graça):
-  destinatário, entrega OU retirada, data+janela, itens dinâmicos. Link na
-  sidebar (Loja Online). Detalhe do pedido mostra faixa ⭐ + botão "Cancelar
+- **Tela** `/admin/loja-online/divulgacao`: destinatário, entrega OU retirada,
+  data+janela, itens. Detalhe do pedido mostra faixa ⭐ + botão "Cancelar
   (devolve estoque)". Registrado no manual (QUANDO PRECISAR).
-- Testes: `tests/test_divulgacao.py` (15 casos). NUNCA fazer a divulgação
-  contar como venda nem usar o tipo `venda_site` (mataria a distinção).
+- **GATE = SÓ owner + papel `marketing`** (dono 21/07/2026: "só o owner e
+  marketing"). Papel novo `marketing` (`constants.PAPEIS_VALIDOS`; `Usuario.
+  is_marketing()`/`pode_divulgacao()` = dono OU marketing; decorator
+  `divulgacao_required`). Admin comum NÃO entra. `main.index` redireciona o
+  marketing direto pra tela de divulgação (papel enxuto, sem outras áreas); a
+  sidebar mostra só o link de divulgação pra ele (esconde catálogo/pedidos que
+  dariam 403). Marketing não acessa o detalhe do pedido (gerente_required) —
+  ao criar, volta pro form com flash de sucesso; admin/gerente vão pro detalhe.
+  Opção "Marketing" no `/auth/usuarios`.
+- **UX do form (dono 21/07)**: TODOS os campos obrigatórios (validação client
+  togglada por modo + server no `criar_divulgacao` — ValueError claro, nada
+  criado sem tudo). Itens por **typeahead** client-side (combobox filtra o
+  catálogo embutido por texto; hidden `item_alvo[]` só com item escolhido —
+  digitar limpa a seleção pra evitar lixo). **CEP autofill** reusa
+  `/loja/api/cep/<cep>` (alcançável do host gestão) preenchendo logradouro/
+  bairro/cidade/uf; a `endereco_entrega` (snapshot do painel/motorista) é
+  montada dos campos estruturados no route.
+- Testes: `tests/test_divulgacao.py` (18 casos, inclui gate por papel). NUNCA
+  fazer a divulgação contar como venda nem usar o tipo `venda_site` (mataria a
+  distinção), e NUNCA abrir o gate pra admin comum sem ordem do dono.
 
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
