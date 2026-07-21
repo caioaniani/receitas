@@ -268,7 +268,7 @@ def test_criar_pedido_retirada_coleta_endereco_pra_nf(app):
         assert pedido.endereco_cidade == 'São Paulo'
         assert pedido.endereco_uf == 'SP'
         # frete R$0 e a linha legível segue sendo a loja (operação)
-        assert pedido.valor_frete == Decimal('0.00')
+        assert pedido.frete_valor == Decimal('0.00')
         assert pedido.endereco_entrega.startswith('Retirada:')
 
 
