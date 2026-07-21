@@ -19,6 +19,7 @@ from app import nav
 from app.blueprints.main import main_bp
 from app.decorators import (
     admin_required,
+    divulgacao_required,
     gerente_required,
     owner_required,
 )
@@ -4568,12 +4569,12 @@ def _catalogo_divulgacao():
 
 @main_bp.route('/admin/loja-online/divulgacao', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@divulgacao_required
 def loja_online_divulgacao():
     """Lanca uma DIVULGACAO (brinde/PR): pedido "como do site" SEM pagamento,
     que aparece no painel de entregas com estrela ⭐. Baixa estoque de verdade
-    (marcado, fora de faturamento/previsao). So admin — e um gesto de dar
-    produto de graca."""
+    (marcado, fora de faturamento/previsao). SO o dono e o papel 'marketing'
+    (nunca admin comum) — e um gesto de dar produto de graca."""
     from datetime import date as _date
 
     from flask import flash, redirect, url_for
