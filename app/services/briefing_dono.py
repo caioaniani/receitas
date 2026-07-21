@@ -371,7 +371,8 @@ def vendas_hoje(capturar=False):
     site_rows = (db.session.query(
         func.count(PedidoOnline.id),
         func.coalesce(func.sum(PedidoOnline.valor_total), 0))
-        .filter(PedidoOnline.pago_em >= ini).one())
+        .filter(PedidoOnline.pago_em >= ini,
+                PedidoOnline.divulgacao.is_(False)).one())
     site_total = float(site_rows[1] or 0)
     return {
         'hoje': hoje_d,
