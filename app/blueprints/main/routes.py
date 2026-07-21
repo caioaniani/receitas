@@ -17,7 +17,11 @@ from sqlalchemy.orm import joinedload
 
 from app import nav
 from app.blueprints.main import main_bp
-from app.decorators import admin_required, gerente_required, owner_required
+from app.decorators import (
+    admin_required,
+    gerente_required,
+    owner_required,
+)
 from app.extensions import db
 from app.models import (
     AlertaEstoque,
