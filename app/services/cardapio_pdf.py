@@ -528,11 +528,14 @@ def _altura_categoria(itens, tem_foto):
     return titulo + fileiras * (lh + 2) + 2
 
 
-def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None):
+def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
+                       quem_somos=None):
     """PDF pronto (bytes). `categorias`/`regras` na MESMA forma da tela
     (main._cardapio_categorias — fonte única, nunca divergir da web).
     `logo`: data URI do logotipo (AppConfig) ou None (cai no texto "O Pão").
-    `preparo`: lista [{label, valor}] dos métodos de preparo (só atacado)."""
+    `preparo`: lista [{label, valor}] dos métodos de preparo (só atacado).
+    `quem_somos`: lista de parágrafos da história da casa (TODOS os tipos —
+    texto de marca, diferente das regras/preparo)."""
     titulo = _TITULO_TIPO.get(tipo, tipo.title())
     pdf = _CardapioPDF(titulo)
     pdf.add_page()
