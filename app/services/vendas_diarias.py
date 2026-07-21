@@ -71,8 +71,10 @@ def _loja_id_por_nome():
 def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
     """Busca os pedidos do Seru e (re)grava o snapshot do intervalo:
     `VendaSeruDiaria` (por produto), `VendaSeruDiaLoja` (totais/loja) e
-    `VendaSeruDiaBreakdown` (pagamento/canal/cancelados/sem_itens — eixos
-    da tela 'Vendas PDV').
+    `VendaSeruDiaBreakdown` (pagamento/canal/cancelados/sem_itens/desconto —
+    eixos da tela 'Vendas PDV' + cockpit da home). Cancelados guardam contagem
+    (chave '') E valor (chave 'v'); desconto = soma do `discount` das vendas
+    nao canceladas.
 
     Idempotente: apaga TODAS as linhas de [data_inicial, data_final] nas tres
     tabelas e regrava a partir da API (createdAt BRT no intervalo). Retorna
