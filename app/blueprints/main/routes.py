@@ -424,7 +424,10 @@ def _ordem_rodape():
     ordem = []
     if raw:
         try:
-            ordem = [b for b in json.loads(raw) if b in RODAPE_BLOCOS]
+            # dict.fromkeys = dedupe preservando ordem (valor gravado com
+            # repetido desenharia o bloco 2x na tela e no PDF).
+            ordem = list(dict.fromkeys(
+                b for b in json.loads(raw) if b in RODAPE_BLOCOS))
         except (ValueError, TypeError):
             current_app.logger.warning('cardapio: ordem_rodape inválida')
     return ordem + [b for b in RODAPE_BLOCOS if b not in ordem]
