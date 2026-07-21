@@ -570,6 +570,54 @@ def cardapio_logo_remover():
     return redirect(url_for('main.cardapio_atacado_regras'))
 
 
+@main_bp.route('/admin/cardapio-atacado/quem-somos-foto', methods=['POST'])
+@login_required
+@admin_required
+def cardapio_quem_somos_foto_upload():
+    """Troca a foto do "Quem somos nós" (tela + PDF). Grava data URI em
+    AppConfig por cima do default estático (a fachada da loja)."""
+    from flask import flash, redirect, url_for
+
+    from app.models import AppConfig
+    back = redirect(url_for('main.cardapio_atacado_regras'))
+    f = request.files.get('qs_foto_arquivo')
+    if not f or not f.filename:
+        flash('Selecione um arquivo de imagem.', 'danger')
+        return back
+    if not (f.mimetype or '').startswith('image/'):
+        flash('Arquivo não é imagem.', 'danger')
+        return back
+    data = f.read()
+    if len(data) > 25 * 1024 * 1024:
+        flash('Imagem muito grande (>25MB).', 'danger')
+        return back
+    try:
+        uri = _processar_foto_quem_somos(data)
+    except ValueError as e:
+        flash('Erro processando a foto: %s' % e, 'danger')
+        return back
+    AppConfig.set(_CARDAPIO_QS_FOTO_KEY, uri)
+    db.session.commit()
+    flash('Foto do "Quem somos nós" salva. Já aparece no cardápio e no PDF.',
+          'success')
+    return back
+
+
+@main_bp.route('/admin/cardapio-atacado/quem-somos-foto/remover',
+               methods=['POST'])
+@login_required
+@admin_required
+def cardapio_quem_somos_foto_remover():
+    from flask import flash, redirect, url_for
+
+    from app.models import AppConfig
+    AppConfig.set(_CARDAPIO_QS_FOTO_KEY, '')
+    db.session.commit()
+    flash('Foto personalizada removida — volta a foto padrão da fachada.',
+          'info')
+    return redirect(url_for('main.cardapio_atacado_regras'))
+
+
 def _cardapio_categorias(tipo):
     """Monta as categorias do cardápio — FONTE ÚNICA da tela E do PDF
     (19/07/2026): divergência aqui = cardápio impresso diferente do site.
