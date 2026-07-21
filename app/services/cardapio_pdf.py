@@ -173,6 +173,9 @@ class _CardapioPDF(FPDF):
         self.set_font('Times', 'B', 11)
         self.set_text_color(*_C_FG)
         # '·' e não '—': em-dash está fora do latin-1 e virava '?'.
+        # As células somam g.util: o texto right-aligned termina rente à
+        # margem direita, alinhado com a linha divisória abaixo (no A4
+        # pré-refactor terminava 10mm antes — mudança deliberada).
         self.cell(g.util - 38, 6, _latin1('O Pão · Padaria Artesanal'))
         self.set_font('Helvetica', '', 9)
         self.set_text_color(*_C_SOFT)
