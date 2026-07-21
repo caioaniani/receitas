@@ -736,15 +736,22 @@ def cardapio_pdf_export():
     tipo = request.args.get('tipo', 'atacado')
     if tipo not in ('atacado', 'loja', 'site'):
         tipo = 'atacado'
+    # formato=mobile (21/07/2026): página estreita 9:16 pra mandar por
+    # WhatsApp — o A4 aberto no celular fica com o texto minúsculo.
+    formato = request.args.get('formato', 'a4')
+    if formato not in ('a4', 'mobile'):
+        formato = 'a4'
     categorias, regras = _cardapio_categorias(tipo)
     preparo = _preparo_atacado() if tipo == 'atacado' else []
     conteudo = svc.gerar_cardapio_pdf(tipo, categorias, regras,
                                       logo=_cardapio_logo(), preparo=preparo,
                                       quem_somos=_quem_somos(),
-                                      quem_somos_foto=_quem_somos_foto_bytes())
+                                      quem_somos_foto=_quem_somos_foto_bytes(),
+                                      formato=formato)
     resp = current_app.response_class(conteudo, mimetype='application/pdf')
+    sufixo = '_mobile' if formato == 'mobile' else ''
     resp.headers['Content-Disposition'] = (
-        'inline; filename="cardapio_%s.pdf"' % tipo)
+        'inline; filename="cardapio_%s%s.pdf"' % (tipo, sufixo))
     resp.headers['Cache-Control'] = 'no-store'
     return resp
 
