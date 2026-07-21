@@ -323,6 +323,43 @@ def test_vendas_hoje_default_nao_chama_captura(app):
     gc.assert_not_called()
 
 
+def _breakdown(data, dim, chave, valor, loja_seru='Loja A'):
+    from app.models import VendaSeruDiaBreakdown
+    db.session.add(VendaSeruDiaBreakdown(
+        data=data, loja_seru=loja_seru, dimensao=dim, chave=chave,
+        valor=Decimal(str(valor))))
+    db.session.commit()
+
+
+def test_vendas_ontem_inclui_cancelamentos_e_descontos(app):
+    """Cockpit da home: cancelamentos (contagem+valor) e descontos de ontem,
+    lidos SÓ do snapshot (VendaSeruDiaBreakdown)."""
+    from app.services import briefing_dono
+    ontem = hoje() - timedelta(days=1)
+    _venda_dia(ontem, fat=1000)
+    _breakdown(ontem, 'cancelados', '', 2)      # 2 cancelamentos
+    _breakdown(ontem, 'cancelados', 'v', 85.0)  # R$ 85 cancelados
+    _breakdown(ontem, 'desconto', '', 12.5)     # R$ 12,50 de desconto
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        v = briefing_dono.vendas_ontem(capturar=False)
+    assert v['cancelados_n'] == 2
+    assert v['cancelados_valor'] == 85.0
+    assert v['desconto'] == 12.5
+
+
+def test_vendas_hoje_inclui_cancelamentos_e_descontos(app):
+    from app.services import briefing_dono
+    hoje_d = hoje()
+    _venda_dia(hoje_d, fat=900, n=9)
+    _breakdown(hoje_d, 'cancelados', '', 1)
+    _breakdown(hoje_d, 'cancelados', 'v', 40.0)
+    _breakdown(hoje_d, 'desconto', '', 7.0)
+    v = briefing_dono.vendas_hoje()
+    assert v['cancelados_n'] == 1
+    assert v['cancelados_valor'] == 40.0
+    assert v['desconto'] == 7.0
+
+
 def test_custo_ia_ontem_janela_fechada(app):
     from app.models import UsoIA
     from app.services import briefing_dono
