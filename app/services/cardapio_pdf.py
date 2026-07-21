@@ -406,36 +406,53 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
     """Caixa "Quem somos nós" (21/07/2026) — a história da casa no rodapé,
     ANTES das regras/métodos. Mesma cara bege das outras caixas; parágrafos
     longos quebram linha (altura medida com dry_run, caixa nunca corta).
-    `foto`: bytes JPEG 3:4 (a fachada da loja) desenhados à DIREITA do
-    texto; None = caixa só de texto (foto quebrada nunca derruba o PDF)."""
+    `foto`: bytes JPEG 3:4 (a fachada da loja). No A4 a foto vai à DIREITA
+    do texto; no MOBILE a página é estreita demais pra coluna dupla — a
+    foto sai ACIMA da caixa, centrada. None/foto quebrada = só texto (o
+    PDF nunca deixa de gerar)."""
+    g = pdf.geo
     _LH = 4.6
+    lado_a_lado = bool(foto) and g.util >= 150
     _FOTO_W = 56                            # 3:4 → ~74.7mm de altura
     _FOTO_H = _FOTO_W * 4 / 3
-    larg_txt = 180 - (_FOTO_W + 5 if foto else 0)
+    if foto and not lado_a_lado:
+        # Foto standalone centrada, ~55% da largura útil, antes da caixa.
+        fw = g.util * 0.55
+        fh = fw * 4 / 3
+        if pdf.get_y() + fh > g.y_limite:
+            pdf.add_page()
+        try:
+            pdf.image(BytesIO(foto), x=(g.page_w - fw) / 2,
+                      y=pdf.get_y(), w=fw, h=fh)
+            pdf.set_y(pdf.get_y() + fh + 3)
+        except Exception:  # noqa: BLE001 — foto ruim não derruba o PDF
+            logger.warning('cardapio_pdf: foto quem-somos nao embutiu',
+                           exc_info=True)
+    larg_txt = g.util - 10 - (_FOTO_W + 3 if lado_a_lado else 0)
     pdf.set_font('Helvetica', '', 9)
     alt_txt = 0
     corpos = [_latin1(p) for p in paragrafos]
     for txt in corpos:
         alt_txt += pdf.multi_cell(larg_txt, _LH, txt,
                                   dry_run=True, output='HEIGHT') + 1.6
-    alt = 10 + (max(alt_txt, _FOTO_H + 2) if foto else alt_txt) + 1.5
+    alt = 10 + (max(alt_txt, _FOTO_H + 2) if lado_a_lado else alt_txt) + 1.5
     y0 = pdf.get_y()
-    if y0 + alt > _Y_LIMITE:               # não cabe: caixa em página nova
+    if y0 + alt > g.y_limite:              # não cabe: caixa em página nova
         pdf.add_page()
         y0 = pdf.get_y()
     pdf.set_fill_color(*_C_TAG)
     pdf.set_draw_color(*_C_BORDER)
-    pdf.rect(_MARGEM, y0, 190, alt, style='FD',
+    pdf.rect(g.margem, y0, g.util, alt, style='FD',
              round_corners=True, corner_radius=_RAIO)
-    if foto:
+    if lado_a_lado:
         try:
-            pdf.image(BytesIO(foto), x=_MARGEM + 5 + larg_txt + 3,
+            pdf.image(BytesIO(foto), x=g.margem + 5 + larg_txt + 3,
                       y=y0 + 7, w=_FOTO_W, h=_FOTO_H)
         except Exception:  # noqa: BLE001 — foto ruim não derruba o PDF
             logger.warning('cardapio_pdf: foto quem-somos nao embutiu',
                            exc_info=True)
     pdf.set_y(y0 + 4)
-    pdf.set_x(_MARGEM + 5)
+    pdf.set_x(g.margem + 5)
     pdf.set_font('Helvetica', 'B', 9)
     pdf.set_text_color(*_C_PRIMARY)
     pdf.set_char_spacing(0.8)
@@ -444,12 +461,12 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
     pdf.set_char_spacing(0)
     pdf.ln(0.5)
     lm_orig, rm_orig = pdf.l_margin, pdf.r_margin
-    pdf.set_left_margin(_MARGEM + 5)
-    pdf.set_right_margin(210 - (_MARGEM + 5) - larg_txt)
+    pdf.set_left_margin(g.margem + 5)
+    pdf.set_right_margin(g.page_w - (g.margem + 5) - larg_txt)
     pdf.set_font('Helvetica', '', 9)
     pdf.set_text_color(*_C_FG)
     for txt in corpos:
-        pdf.set_x(_MARGEM + 5)
+        pdf.set_x(g.margem + 5)
         pdf.write(_LH, txt)
         pdf.ln(_LH + 1.6)
     pdf.set_left_margin(lm_orig)
