@@ -142,9 +142,51 @@ def test_post_ordem_invalida_nao_sobrescreve(app, admin_user, cliente):
     AppConfig.set('cardapio_ordem_rodape', json.dumps(['preparo']))
     db.session.commit()
     _login(cliente, admin_user)
-    cliente.post('/admin/cardapio-atacado/regras',
-                 data={'ordem_rodape': '{quebrado'})
+    for lixo in ('{quebrado', '"escalar"', '123'):
+        cliente.post('/admin/cardapio-atacado/regras',
+                     data={'ordem_rodape': lixo})
+        assert json.loads(AppConfig.get('cardapio_ordem_rodape')) == \
+            ['preparo'], lixo
+    # '' = navegador sem JS (hidden nunca preenchido): ignora em silêncio,
+    # sem flash de erro e sem apagar a ordem salva.
+    resp = cliente.post('/admin/cardapio-atacado/regras',
+                        data={'ordem_rodape': ''}, follow_redirects=True)
     assert json.loads(AppConfig.get('cardapio_ordem_rodape')) == ['preparo']
+    assert 'veio inválida' not in resp.get_data(as_text=True)
+
+
+def test_post_ordem_dedupe_e_valor_gravado_duplicado(app, admin_user,
+                                                     cliente):
+    """POST com repetido salva deduplicado; valor JÁ gravado com repetido
+    (set manual antigo) não desenha o bloco 2x."""
+    from app.blueprints.main.routes import _ordem_rodape
+    from app.models import AppConfig
+    _login(cliente, admin_user)
+    cliente.post('/admin/cardapio-atacado/regras', data={
+        'ordem_rodape': json.dumps(['preparo', 'preparo', 'regras',
+                                    'quem_somos'])})
+    assert json.loads(AppConfig.get('cardapio_ordem_rodape')) == \
+        ['preparo', 'regras', 'quem_somos']
+
+    AppConfig.set('cardapio_ordem_rodape',
+                  json.dumps(['preparo', 'preparo']))
+    db.session.commit()
+    assert _ordem_rodape() == ['preparo', 'quem_somos', 'regras']
+
+
+def test_categoria_adormecida_continua_na_lista_de_ordenar(app, admin_user,
+                                                           cliente):
+    """Categoria na ordem salva SEM item precificado hoje continua
+    aparecendo na lista arrastável — um save qualquer não apaga a posição
+    dela (achado do revisor)."""
+    from app.models import AppConfig
+    _receita('Bolo', 'Doces')
+    AppConfig.set('cardapio_ordem_categorias',
+                  json.dumps(['Bebidas', 'Doces']))
+    db.session.commit()
+    _login(cliente, admin_user)
+    body = cliente.get('/admin/cardapio-atacado/regras').get_data(as_text=True)
+    assert 'data-key="Bebidas"' in body
 
 
 # ── PDF ────────────────────────────────────────────────────────────────────
