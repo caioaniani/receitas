@@ -2113,6 +2113,11 @@ def _migrate_sqlite(app):
     if cols_po and 'ga_client_id' not in cols_po:
         cursor.execute("ALTER TABLE pedido_online ADD COLUMN "
                        "ga_client_id VARCHAR(64)")
+    # pedido_online.divulgacao (21/07/2026): pedido de brinde/PR sem
+    # pagamento — espelho do bloco Postgres.
+    if cols_po and 'divulgacao' not in cols_po:
+        cursor.execute("ALTER TABLE pedido_online ADD COLUMN "
+                       "divulgacao BOOLEAN NOT NULL DEFAULT 0")
 
     # pedido_online_item.fatiado (16/07/2026): preferencia de corte do
     # sourdough. So preferencia — nao mexe em preco/estoque.
