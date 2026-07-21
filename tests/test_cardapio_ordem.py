@@ -123,7 +123,9 @@ def test_tela_default_blocos_antes_dos_produtos(app, admin_user, cliente):
     _receita('Bolo', 'Doces')
     _login(cliente, admin_user)
     body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
-    assert body.index('Quem somos nós') < body.index('cat-heading')
+    # 'Escolha sua categoria' = título da seção de produtos ('cat-heading'
+    # colidiria com o CSS do <style>, que vem antes de tudo).
+    assert body.index('Quem somos nós') < body.index('Escolha sua categoria')
 
 
 def test_tela_produtos_arrastado_pro_topo(app, admin_user, cliente):
@@ -137,7 +139,7 @@ def test_tela_produtos_arrastado_pro_topo(app, admin_user, cliente):
     db.session.commit()
     _login(cliente, admin_user)
     body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
-    assert body.index('cat-heading') < body.index('Quem somos nós')
+    assert body.index('Escolha sua categoria') < body.index('Quem somos nós')
 
 
 # ── Tela de regras (edição) ────────────────────────────────────────────────
