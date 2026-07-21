@@ -200,6 +200,48 @@ def test_emitir_nf_bloqueia_sem_sku(app):
         inc.assert_not_called()
 
 
+def test_emitir_nf_bloqueia_sem_endereco(app):
+    """Endereço do destinatário faltando (pedido de retirada antigo, antes
+    do checkout coletar): NÃO manda em branco pra SEFAZ — recusa com
+    mensagem clara e não cria NF (dono 20/07/2026)."""
+    from app.extensions import db
+    from app.services import tiny_nf
+    with app.app_context():
+        produto = _produto(db)
+        p = _pedido_pago(db, produto, sku='S')
+        p.endereco_logradouro = None
+        p.endereco_bairro = None
+        p.endereco_cidade = None
+        p.endereco_uf = None
+        p.endereco_cep = None
+        db.session.commit()
+        with patch('app.services.tiny.incluir_nota_fiscal') as inc:
+            res = tiny_nf.emitir_nf(p)
+        assert res['ok'] is False
+        assert 'endereço' in res['msg'].lower()
+        assert 'logradouro' in res['msg'] and 'CEP' in res['msg']
+        inc.assert_not_called()
+        assert p.tiny_nota_fiscal_id is None
+
+
+def test_emitir_nf_numero_vazio_vira_SN(app):
+    """Número em branco também é rejeitado pela SEFAZ — vai como 'SN'."""
+    from app.extensions import db
+    from app.services import tiny_nf
+    with app.app_context():
+        produto = _produto(db)
+        p = _pedido_pago(db, produto, sku='SKU-SN')
+        p.endereco_numero = None            # sem número, resto ok
+        db.session.commit()
+        with patch('app.services.tiny.incluir_nota_fiscal',
+                   return_value={'ok': True, 'id': 'nf'}) as inc, \
+             patch('app.services.tiny.emitir_nota_fiscal',
+                   return_value={'ok': True, 'status': 'autorizada'}):
+            res = tiny_nf.emitir_nf(p)
+        assert res['ok'] is True
+        assert inc.call_args[0][0]['cliente']['numero'] == 'SN'
+
+
 def test_emitir_nf_bloqueia_se_nao_pago(app):
     from app.extensions import db
     from app.models import PedidoOnline
