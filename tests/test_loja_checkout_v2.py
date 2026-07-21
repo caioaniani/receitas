@@ -497,10 +497,10 @@ def test_checkout_render_tem_endereco_na_retirada(app, monkeypatch):
     monkeypatch.delenv('LOJA_VISIVEL', raising=False)
     from app.extensions import db
     with app.app_context():
-        p = _produto(db)
+        pid = _produto(db).id
     c = _admin(app)
     with c.session_transaction() as s:
-        s['carrinho'] = [{'kind': 'produto', 'id': p.id, 'qtd': 1}]
+        s['carrinho'] = [{'kind': 'produto', 'id': pid, 'qtd': 1}]
     html = c.get('/loja/checkout').get_data(as_text=True)
     assert 'id="entrega-titulo"' in html          # título que o JS troca
     assert 'id="retirada-nf-aviso"' in html       # aviso da NF na retirada
