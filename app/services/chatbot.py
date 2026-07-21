@@ -172,6 +172,31 @@ def _quer_humano(texto):
     return any(p.search(t) for p in _HUMANO_PATTERNS)
 
 
+# Caracteres que podem sobrar no fim de uma frase do bot sem mudar se ela e
+# uma PERGUNTA (espaco, pontuacao leve, emoji comum do bot). Usados pra ver se
+# a ultima frase do bot termina em "?" mesmo com um emoji/espaco no rabo.
+_RABO_NAO_PERGUNTA = ' \t\r\n!.,;:😊💛🙏🥰👍🥐❤️👏🙌😉🤗🌟✨😄🥖'
+
+
+def _ultima_assistant_texto(historico):
+    """Texto da ULTIMA fala do bot no historico (string vazia se nao houver)."""
+    for m in reversed(historico or []):
+        if (m or {}).get('role') == 'assistant':
+            c = m.get('content')
+            return c if isinstance(c, str) else ''
+    return ''
+
+
+def _bot_aguarda_resposta(historico):
+    """True se a ultima fala do bot terminou com uma PERGUNTA — sinal de que
+    ele esta esperando o cliente responder (CPF, "confirma o pedido?", escolha
+    entre opcoes). Nesse caso um "ok"/"sim"/"isso" do cliente pode ser um
+    'sim, quero' — e NAO um fechamento. Trava do short-circuit de fechamento:
+    so encerra em silencio quando o bot NAO deixou nada pendente."""
+    return _ultima_assistant_texto(historico).rstrip(
+        _RABO_NAO_PERGUNTA).endswith('?')
+
+
 # Motivos que autorizam transferir SEM consultar nada antes (as mesmas
 # excecoes fechadas do prompt, secao "ANTES DE TRANSFERIR"): pedido explicito
 # de humano, alergia, reclamacao grave. Usado pelo enforcement
