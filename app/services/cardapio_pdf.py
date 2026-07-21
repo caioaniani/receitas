@@ -433,10 +433,10 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
     ANTES das regras/métodos. Mesma cara bege das outras caixas; parágrafos
     longos quebram linha (altura medida com dry_run, caixa nunca corta).
     `foto`: bytes JPEG 3:4 (a fachada da loja). No A4 a foto vai à DIREITA
-    do texto; no MOBILE ela vira um BANNER paisagem de largura cheia
-    DENTRO da caixa, acima do texto (21/07/2026, dono: "Foto muito
-    pequena" — a versão retrato pequena ainda ficava órfã do texto).
-    None/foto quebrada = só texto (o PDF nunca deixa de gerar)."""
+    do texto, dentro da caixa bege. No MOBILE ela vira um BANNER paisagem
+    de largura cheia e o bloco FLUI na página (sem caixa) — a caixa alta
+    jogava tudo pra página 2 e deixava a capa em branco (dono 21/07).
+    None/foto quebrada = só texto na caixa (o PDF nunca deixa de gerar)."""
     g = pdf.geo
     a4 = g.util >= 150
     lado_a_lado = bool(foto) and a4
