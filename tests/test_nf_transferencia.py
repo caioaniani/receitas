@@ -206,6 +206,72 @@ def test_dispensa_por_pedido_pula_emissao_no_scan(app, loja, catalogo):
     assert not res['ok'] and 'dispensada' in res['msg']
 
 
+def test_rejeicao_sefaz_persiste_o_motivo(app, loja, catalogo):
+    """O motivo da recusa da SEFAZ (ex.: 'CST com benefício sem cBenef,
+    cód 32') fica gravado em nf_erro — antes só ia no flash e sumia."""
+    from app.services import tiny_nf, tiny_nf_transf
+    _loja_fiscal(loja)
+    p = _pedido(loja, catalogo)
+    tiny_nf.definir_sku('receita', catalogo['receita'].id, 'SKU-REJ',
+                        canal='transf')
+    motivo = ('Rejeição: CST com benefício fiscal e não informado o '
+              'código de benefício fiscal [nItem: 1]; cod 32')
+    with _patch_custos(), _patch_custos_produtos(), \
+         patch('app.services.tiny.incluir_nota_fiscal',
+               return_value={'ok': True, 'id': 'nf-rej'}), \
+         patch('app.services.tiny.emitir_nota_fiscal',
+               return_value={'ok': False, 'status': 'rejeitada',
+                             'erro': motivo}), \
+         patch('app.services.tiny.obter_nota_fiscal',
+               return_value={'situacao': 'rejeitada'}):
+        res = tiny_nf_transf.emitir_nf(p)
+    assert not res['ok']
+    db.session.refresh(p)
+    assert p.nf_erro == motivo                     # persistido
+    assert p.nf_emitida_em is None
+    assert 'rejeit' in (p.nf_status or '')
+    # Card do detalhe mostra o motivo
+    from app.models import Usuario
+    admin = Usuario.query.filter_by(papel='admin').first()
+    if admin is None:
+        admin = Usuario(nome='adm', login='adm-rej', papel='admin')
+        admin.set_senha('x')
+        db.session.add(admin)
+        db.session.commit()
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(admin.id)
+        sess['_fresh'] = True
+    body = client.get(f'/pedidos/{p.id}').get_data(as_text=True)
+    assert 'Motivo da recusa' in body
+    assert 'cod 32' in body
+    assert 'rejeitada pela SEFAZ' in body
+
+
+def test_sucesso_limpa_erro_anterior(app, loja, catalogo):
+    """Rejeição grava nf_erro; 'Refazer do zero' que autoriza limpa."""
+    from app.services import tiny_nf, tiny_nf_transf
+    _loja_fiscal(loja)
+    p = _pedido(loja, catalogo)
+    p.nf_erro = 'erro velho'
+    p.tiny_nota_fiscal_id = 'nf-antiga'
+    p.nf_status = 'rejeitada'
+    db.session.commit()
+    tiny_nf.definir_sku('receita', catalogo['receita'].id, 'SKU-OK',
+                        canal='transf')
+    with _patch_custos(), _patch_custos_produtos(), \
+         patch('app.services.tiny.incluir_nota_fiscal',
+               return_value={'ok': True, 'id': 'nf-nova', 'numero': '5'}), \
+         patch('app.services.tiny.emitir_nota_fiscal',
+               return_value={'ok': True, 'status': 'autorizada'}):
+        res = tiny_nf_transf.emitir_nf(p, recriar=True)
+    assert res['ok'], res
+    db.session.refresh(p)
+    assert p.nf_erro is None                       # limpo
+    assert p.nf_emitida_em is not None
+    assert p.tiny_nota_fiscal_id == 'nf-nova'
+
+
 def test_dispensa_por_loja_vale_pra_todos_os_pedidos(app, loja, catalogo):
     from app.services import tiny_nf_transf
     loja.nf_dispensada = True
