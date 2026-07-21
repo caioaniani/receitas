@@ -392,6 +392,8 @@ footer p { margin: 0; }
        qualquer jeito (cards cortados, URL no rodapé). NUNCA reintroduzir. #}
     <a href="{{ url_for('main.cardapio_pdf_export', tipo=tipo) }}" class="tipo-btn"
        target="_blank"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</a>
+    <a href="{{ url_for('main.cardapio_pdf_export', tipo=tipo, formato='mobile') }}" class="tipo-btn"
+       target="_blank" title="Página estreita, ideal pra mandar por WhatsApp"><i class="bi bi-phone"></i> PDF celular</a>
 </div>
 
 <section class="hero">
