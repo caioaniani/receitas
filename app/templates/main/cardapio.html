@@ -462,9 +462,17 @@ footer p { margin: 0; }
     {% if quem_somos %}
     <div class="regras-atacado">
         <h3 class="regras-titulo">Quem somos nós</h3>
-        {% for p in quem_somos %}
-        <p class="quem-somos-p">{{ p }}</p>
-        {% endfor %}
+        <div class="quem-somos-wrap">
+            <div>
+                {% for p in quem_somos %}
+                <p class="quem-somos-p">{{ p }}</p>
+                {% endfor %}
+            </div>
+            {% if quem_somos_foto %}
+            <img class="quem-somos-foto" src="{{ quem_somos_foto }}"
+                 alt="Nossa loja" loading="lazy"/>
+            {% endif %}
+        </div>
     </div>
     {% endif %}
 
