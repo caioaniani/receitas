@@ -177,13 +177,13 @@ def test_post_ordem_invalida_nao_sobrescreve(app, admin_user, cliente):
     _login(cliente, admin_user)
     for lixo in ('{quebrado', '"escalar"', '123'):
         cliente.post('/admin/cardapio-atacado/regras',
-                     data={'ordem_rodape': lixo})
+                     data={'ordem_secoes': lixo})
         assert json.loads(AppConfig.get('cardapio_ordem_rodape')) == \
             ['preparo'], lixo
     # '' = navegador sem JS (hidden nunca preenchido): ignora em silêncio,
     # sem flash de erro e sem apagar a ordem salva.
     resp = cliente.post('/admin/cardapio-atacado/regras',
-                        data={'ordem_rodape': ''}, follow_redirects=True)
+                        data={'ordem_secoes': ''}, follow_redirects=True)
     assert json.loads(AppConfig.get('cardapio_ordem_rodape')) == ['preparo']
     assert 'veio inválida' not in resp.get_data(as_text=True)
 
@@ -192,11 +192,11 @@ def test_post_ordem_dedupe_e_valor_gravado_duplicado(app, admin_user,
                                                      cliente):
     """POST com repetido salva deduplicado; valor JÁ gravado com repetido
     (set manual antigo) não desenha o bloco 2x."""
-    from app.blueprints.main.routes import _ordem_rodape
+    from app.blueprints.main.routes import _ordem_secoes
     from app.models import AppConfig
     _login(cliente, admin_user)
     cliente.post('/admin/cardapio-atacado/regras', data={
-        'ordem_rodape': json.dumps(['preparo', 'preparo', 'regras',
+        'ordem_secoes': json.dumps(['preparo', 'preparo', 'regras',
                                     'quem_somos'])})
     assert json.loads(AppConfig.get('cardapio_ordem_rodape')) == \
         ['preparo', 'regras', 'quem_somos']
@@ -204,7 +204,8 @@ def test_post_ordem_dedupe_e_valor_gravado_duplicado(app, admin_user,
     AppConfig.set('cardapio_ordem_rodape',
                   json.dumps(['preparo', 'preparo']))
     db.session.commit()
-    assert _ordem_rodape() == ['preparo', 'quem_somos', 'regras']
+    assert _ordem_secoes() == ['preparo', 'quem_somos', 'regras',
+                               'produtos']
 
 
 def test_categoria_adormecida_continua_na_lista_de_ordenar(app, admin_user,
