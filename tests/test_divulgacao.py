@@ -316,12 +316,13 @@ def test_rota_post_cria_completo(app, owner_user, cliente):
     origem = _loja('Origem Site', origem=True)
     r = _receita()
     _estoque(origem, r, 10)
+    from app.utils import hoje
     _login(cliente, owner_user)
     resp = cliente.post('/admin/loja-online/divulgacao', data={
         'modo_entrega': 'agendada',
         'nome_destinatario': 'Cliente PR',
         'telefone': '11999990000',
-        'data_entrega': '',
+        'data_entrega': hoje().isoformat(),
         'janela_entrega': '8h-12h',
         'endereco_cep': '01310-100',
         'endereco_logradouro': 'Av Paulista',
