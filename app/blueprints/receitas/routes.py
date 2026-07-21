@@ -31,7 +31,12 @@ from app.models import (
     ReceitaIngrediente,
 )
 from app.services.custos import calcular_custos_produtos, calcular_custos_receitas
-from app.utils import agora, dividir_etapas_preparo, parse_float_br
+from app.utils import (
+    SUB_RECEITA_TIPOS,
+    agora,
+    dividir_etapas_preparo,
+    parse_float_br,
+)
 
 
 @receitas_bp.route('/<int:id>')
@@ -1111,7 +1116,7 @@ def _vinculos_receita(receita):
             for i in itens_cesta])
 
     usos = (ReceitaIngrediente.query
-            .filter(ReceitaIngrediente.tipo == 'receita',
+            .filter(ReceitaIngrediente.tipo.in_(SUB_RECEITA_TIPOS),
                     ReceitaIngrediente.ingrediente_nome == receita.nome,
                     ReceitaIngrediente.receita_id != rid).all())
     _grupo('ingrediente_em_fichas', 'Usada como ingrediente em outras fichas',
@@ -1192,7 +1197,7 @@ def vinculos_resolver(id):
         ProdutoItem.query.filter_by(receita_id=receita.id).delete()
     elif chave == 'ingrediente_em_fichas':
         ReceitaIngrediente.query.filter(
-            ReceitaIngrediente.tipo == 'receita',
+            ReceitaIngrediente.tipo.in_(SUB_RECEITA_TIPOS),
             ReceitaIngrediente.ingrediente_nome == receita.nome,
             ReceitaIngrediente.receita_id != receita.id).delete()
     elif chave == 'mapeamentos':
@@ -1257,7 +1262,7 @@ def _transferir_para_mp(origem, mp):
     # Ingrediente em outras fichas: vira ingrediente de MP (por nome; o FK
     # sub_receita_id é limpo — MP resolve por nome no custeio da ficha).
     _conta('ingrediente_em_fichas', ReceitaIngrediente.query
-           .filter(ReceitaIngrediente.tipo == 'receita',
+           .filter(ReceitaIngrediente.tipo.in_(SUB_RECEITA_TIPOS),
                    db.or_(ReceitaIngrediente.ingrediente_nome == origem.nome,
                           ReceitaIngrediente.sub_receita_id == origem.id),
                    ReceitaIngrediente.receita_id != origem.id)
@@ -1384,7 +1389,7 @@ def vinculos_transferir(id):
     # (`sub_receita_id`, que o MRP/BOM usa e que bloqueia a exclusão; antes
     # só o nome era atualizado e o FK ficava preso na origem).
     _conta('ingrediente_em_fichas', ReceitaIngrediente.query
-           .filter(ReceitaIngrediente.tipo == 'receita',
+           .filter(ReceitaIngrediente.tipo.in_(SUB_RECEITA_TIPOS),
                    db.or_(ReceitaIngrediente.ingrediente_nome == origem.nome,
                           ReceitaIngrediente.sub_receita_id == origem.id),
                    ReceitaIngrediente.receita_id != origem.id)
