@@ -150,7 +150,7 @@
                 <td class="text-end {% if it.comprar > 0 %}fw-bold text-danger{% else %}text-success{% endif %}">
                     {% if it.comprar > 0 %}{{ kg(it.comprar, it.em_unidades) }}{% else %}✓ tem{% endif %}
                 </td>
-                <td class="text-end">{% if it.comprar > 0 %}R$ {{ '%.2f'|format(it.custo_compra) }}{% else %}—{% endif %}</td>
+                <td class="text-end">{% if it.comprar > 0 %}R$ {{ '%.2f'|format(it.custo_compra)|replace('.', ',') }}{% else %}—{% endif %}</td>
             </tr>
             {% endfor %}
             </tbody>
