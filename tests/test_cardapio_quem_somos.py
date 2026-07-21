@@ -74,17 +74,19 @@ def test_tela_mostra_nos_tres_tipos(app, admin_user, cliente):
         assert 'Abraço em Forma de Pão' in body, tipo
 
 
-def test_tela_rodape_historia_antes_das_regras(app, admin_user, cliente):
-    """Produtos primeiro (regra do dono 20/07); a história vem antes do
-    operacional (regras do pedido)."""
+def test_tela_historia_antes_das_regras_e_dos_produtos(app, admin_user,
+                                                       cliente):
+    """Default 21/07 (dono: "o rodapé venha para cima" — SUBSTITUI o
+    "produtos para cima" de 20/07): história → regras → produtos. A
+    posição é arrastável em Editar regras (tests/test_cardapio_ordem)."""
     from app.models import AppConfig
     _receita()
     AppConfig.set('cardapio_atacado_pedido_minimo', 'R$ 500,00')
     db.session.commit()
     _login(cliente, admin_user)
     body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
-    assert body.index('Brioche') < body.index('Quem somos nós')
     assert body.index('Quem somos nós') < body.index('Regras do pedido')
+    assert body.index('Regras do pedido') < body.index('Brioche')
 
 
 def test_tela_esconde_quando_vazio(app, admin_user, cliente):
