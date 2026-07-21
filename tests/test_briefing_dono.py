@@ -430,6 +430,102 @@ def test_rota_briefing_exige_owner(app, admin_user, cliente):
     assert cliente.get('/admin/briefing').status_code == 403
 
 
+# ── Drill-down: abrir cancelamentos/descontos (detalhe ao vivo) ───────────────
+
+def _pedido_cd(pid, code, loja, total, *, dia, hh='13', canceled=False,
+               desconto=0.0, subtotal=0.0, caixa=None, nf=False):
+    """Pedido cru do Seru pro detalhe ao vivo (createdAt UTC → BRT no dia)."""
+    p = {'id': pid, 'code': code, 'company': {'name': loja},
+         'createdAt': '%sT%s:00:00Z' % (dia.isoformat(), hh),
+         'canceledAt': ('%sT23:00:00Z' % dia.isoformat()) if canceled else None,
+         'total': total, 'subtotal': subtotal, 'discount': desconto,
+         'items': [] if canceled else [{'name': 'Pao', 'quantity': 1, 'total': total}]}
+    if caixa:
+        p['cashier'] = {'code': caixa}
+    if nf:
+        p['taxInvoice'] = {'status': 'authorized'}
+    return p
+
+
+def test_cancelados_descontos_detalhe(app):
+    from datetime import date
+
+    from app.services import briefing_dono
+    dia = date(2026, 6, 15)
+    pedidos = [
+        _pedido_cd(1, 'A1', 'Loja A', 50.0, dia=dia, hh='16',
+                   canceled=True, caixa='CX1', nf=True),
+        _pedido_cd(2, 'A2', 'Loja A', 40.0, dia=dia, hh='14',
+                   desconto=10.0, subtotal=50.0),
+        _pedido_cd(3, 'A3', 'Loja A', 30.0, dia=dia),        # normal, fora
+        _pedido_cd(4, 'A4', 'Loja A', 99.0, dia=date(2026, 6, 14),
+                   desconto=5.0, subtotal=104.0),            # outro dia, fora
+    ]
+    with patch('app.services.seru.listar_pedidos_completo', return_value=pedidos):
+        d = briefing_dono.cancelados_descontos_detalhe(dia)
+    assert len(d['cancelados']) == 1
+    assert d['cancelados'][0]['codigo'] == 'A1'
+    assert d['cancelados'][0]['valor'] == 50.0
+    assert d['cancelados'][0]['caixa'] == 'CX1'
+    assert d['cancelados'][0]['nf'] is True
+    assert d['cancelados_valor'] == 50.0
+    assert len(d['descontos']) == 1
+    assert d['descontos'][0]['codigo'] == 'A2'
+    assert d['descontos'][0]['desconto'] == 10.0
+    assert d['descontos'][0]['subtotal'] == 50.0
+    assert d['descontos'][0]['total'] == 40.0
+    assert d['desconto_total'] == 10.0
+
+
+def test_detalhe_desconto_de_cancelado_nao_conta(app):
+    """Desconto de um pedido CANCELADO não entra na lista de descontos."""
+    from datetime import date
+
+    from app.services import briefing_dono
+    dia = date(2026, 6, 15)
+    pedidos = [_pedido_cd(9, 'C9', 'Loja A', 20.0, dia=dia,
+                          canceled=True, desconto=7.0, subtotal=27.0)]
+    with patch('app.services.seru.listar_pedidos_completo', return_value=pedidos):
+        d = briefing_dono.cancelados_descontos_detalhe(dia)
+    assert len(d['cancelados']) == 1
+    assert d['descontos'] == [] and d['desconto_total'] == 0.0
+
+
+def test_rota_detalhe_owner_ve_json(app, owner_user, cliente):
+    from app.utils import hoje
+    _login(cliente, owner_user)
+    pedidos = [_pedido_cd(1, 'H1', 'Loja A', 50.0, dia=hoje(), hh='13',
+                          canceled=True, nf=False)]
+    with patch('app.services.seru.listar_pedidos_completo', return_value=pedidos):
+        r = cliente.get('/admin/vendas/cancelados-descontos?dia=' + hoje().isoformat())
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['ok'] and j['dia'] == hoje().isoformat()
+    assert len(j['cancelados']) == 1 and j['cancelados'][0]['codigo'] == 'H1'
+
+
+def test_rota_detalhe_nao_owner_403(app, admin_user, cliente):
+    _login(cliente, admin_user)
+    assert cliente.get('/admin/vendas/cancelados-descontos').status_code == 403
+
+
+def test_rota_detalhe_dia_fora_da_janela_400(app, owner_user, cliente):
+    """Só hoje/ontem — dia arbitrário não pode disparar consulta ampla à API."""
+    _login(cliente, owner_user)
+    r = cliente.get('/admin/vendas/cancelados-descontos?dia=2020-01-01')
+    assert r.status_code == 400
+
+
+def test_rota_detalhe_seru_fora_502(app, owner_user, cliente):
+    from app.utils import hoje
+    _login(cliente, owner_user)
+    with patch('app.services.seru.listar_pedidos_completo',
+               side_effect=RuntimeError('boom')):
+        r = cliente.get('/admin/vendas/cancelados-descontos?dia=' + hoje().isoformat())
+    assert r.status_code == 502
+    assert r.get_json()['ok'] is False
+
+
 def test_rota_briefing_owner_ve_preview(app, owner_user, cliente):
     _login(cliente, owner_user)
     with patch('app.services.vendas_diarias.garantir_capturado'):
