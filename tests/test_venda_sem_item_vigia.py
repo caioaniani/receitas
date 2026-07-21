@@ -270,3 +270,60 @@ def test_canal_aparece_na_mensagem(app):
     ped['salesChannel'] = {'name': 'PDV Fácil', 'tag': 'pdv-facil'}
     _, env = _rodar([ped])
     assert 'PDV Fácil' in env.call_args[0][1]
+
+
+# ── Re-verificação no detalhe (21/07/2026, caso R$155 O Pao Padaria) ─────────
+# A listagem da Seru ATRASA pra cobrança recém-criada (sem itens/NF na lista
+# mesmo já com NFC-e autorizada) — o vigia re-confere no detalhe antes de
+# acusar. Decisão do dono: só reverificar, sem carência.
+
+def test_lag_da_lista_nfce_no_detalhe_nao_alerta(app):
+    """Cobrança sem itens/NF na LISTA, mas com NFC-e AUTORIZADA no DETALHE
+    (o lag do caso R$155) — venda real, NÃO alerta."""
+    lista = _pedido('r155', 155.00)                 # lista: item-less, sem NF
+    detalhe = _pedido('r155', 155.00)
+    detalhe['taxInvoice'] = {'status': 'authorized', 'number': '30126'}
+    out, env = _rodar([lista], detalhes={'r155': detalhe})
+    assert out['novas'] == 0 and not env.called
+
+
+def test_lag_da_lista_itens_no_detalhe_nao_alerta(app):
+    """Sem itens na LISTA, mas COM itens não-cancelados no DETALHE — real."""
+    lista = _pedido('r2', 90.00)                    # lista: item-less
+    detalhe = _pedido('r2', 90.00, itens=1)         # detalhe: tem item
+    out, env = _rodar([lista], detalhes={'r2': detalhe})
+    assert out['novas'] == 0 and not env.called
+
+
+def test_fantasma_confirmado_pelo_detalhe_alerta(app):
+    """Sem itens e sem NF na LISTA E no DETALHE (fantasma real, tipo cód
+    19875201: itens todos cancelados, sem NF) — alerta normalmente."""
+    lista = _pedido('f1', 256.00)
+    # detalhe idêntico (default) = item-less, sem NF autorizada
+    out, env = _rodar([lista])
+    assert out['enviado'] is True and out['novas'] == 1
+    assert 'R$ 256,00' in env.call_args[0][1]
+
+
+def test_detalhe_indisponivel_adia_nao_marca(app):
+    """Detalhe indisponível (Seru fora): NÃO alerta nesse ciclo e NÃO marca
+    o id — retenta no próximo (perder um ciclo < falso alarme)."""
+    lista = _pedido('d1', 300.00)
+    out, env = _rodar([lista], detalhes={'d1': _SEM_DETALHE})
+    assert out['novas'] == 0 and not env.called
+    # id não marcado: quando o detalhe voltar (confirmando fantasma), alerta.
+    out2, env2 = _rodar([lista])                    # detalhe default (fantasma)
+    assert out2['enviado'] is True and out2['novas'] == 1
+
+
+def test_detalhe_nfce_autorizada_nao_marca_e_some(app):
+    """A venda real (NFC-e no detalhe) não é marcada como alertada — se
+    virar suspeita de novo por outro motivo, o dedup não a esconde."""
+    lista = _pedido('r3', 155.00)
+    det = _pedido('r3', 155.00)
+    det['taxInvoice'] = {'status': 'authorized', 'number': '1'}
+    out, _ = _rodar([lista], detalhes={'r3': det})
+    assert out.get('novas', 0) == 0
+    estado = vigia.estado_dedup([hoje() - timedelta(days=1), hoje()])
+    ids = {i for v in estado['ids'].values() for i in v}
+    assert 'r3' not in ids
