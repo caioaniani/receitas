@@ -438,9 +438,15 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
     pequena" — a versão retrato pequena ainda ficava órfã do texto).
     None/foto quebrada = só texto (o PDF nunca deixa de gerar)."""
     g = pdf.geo
-    _LH = 4.6
-    lado_a_lado = bool(foto) and g.util >= 150
-    _FOTO_W = 56                            # 3:4 → ~74.7mm de altura
+    a4 = g.util >= 150
+    lado_a_lado = bool(foto) and a4
+    # A4 (dono 21/07: "foto/história maiores" pra preencher a página 1):
+    # foto grande à direita, texto em fonte 10 e mais respiro. Mobile
+    # segue com o banner de largura cheia (fonte 9), intocado.
+    fonte_sz = 10 if a4 else 9
+    _LH = 5.6 if a4 else 4.6
+    par_gap = 2.6 if a4 else 1.6
+    _FOTO_W = 82 if a4 else 56              # 3:4 → altura = w*4/3
     _FOTO_H = _FOTO_W * 4 / 3
     banner = None
     banner_h = 0.0
@@ -449,12 +455,12 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
         if banner:
             banner_h = (g.util - 10) * 2 / 3 + 3   # 3:2 + respiro
     larg_txt = g.util - 10 - (_FOTO_W + 3 if lado_a_lado else 0)
-    pdf.set_font('Helvetica', '', 9)
+    pdf.set_font('Helvetica', '', fonte_sz)
     alt_txt = 0
     corpos = [_latin1(p) for p in paragrafos]
     for txt in corpos:
         alt_txt += pdf.multi_cell(larg_txt, _LH, txt,
-                                  dry_run=True, output='HEIGHT') + 1.6
+                                  dry_run=True, output='HEIGHT') + par_gap
     alt = 10 + banner_h \
         + (max(alt_txt, _FOTO_H + 2) if lado_a_lado else alt_txt) + 1.5
     y0 = pdf.get_y()
