@@ -257,6 +257,23 @@ def test_rota_post_cria(app, admin_user, cliente):
     assert _saldo(origem, r) == 8
 
 
+def test_rota_cancelar_devolve_estoque(app, admin_user, cliente):
+    from app.services import divulgacao as svc
+    origem = _loja('Origem Site', origem=True)
+    r = _receita()
+    _estoque(origem, r, 10)
+    p = svc.criar_divulgacao(
+        itens=[{'kind': 'receita', 'id': r.id, 'qtd': 3}],
+        modo_entrega='agendada', nome_destinatario='X')
+    assert _saldo(origem, r) == 7
+    _login(cliente, admin_user)
+    resp = cliente.post('/admin/loja-online/divulgacao/%s/cancelar' % p.codigo)
+    assert resp.status_code in (302, 303)
+    db.session.refresh(p)
+    assert p.status == 'cancelado'
+    assert _saldo(origem, r) == 10
+
+
 def test_rota_funcionario_403(app, cliente):
     from app.models import Usuario
     u = Usuario(nome='func', login='func', papel='funcionario')
