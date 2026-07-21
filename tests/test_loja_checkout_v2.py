@@ -489,6 +489,26 @@ def test_nome_com_cpf_e_recusado(app):
         assert any('nome' in e.lower() for e in erros)
 
 
+def test_checkout_render_tem_endereco_na_retirada(app, monkeypatch):
+    """A página do checkout renderiza a estrutura nova: o bloco de endereço
+    (compartilhado) + as partes só-de-entrega (quem recebe / calcular frete)
+    que o JS esconde na retirada + o aviso da NF. Garante que a
+    reestruturação do template não quebrou o render."""
+    monkeypatch.delenv('LOJA_VISIVEL', raising=False)
+    from app.extensions import db
+    with app.app_context():
+        p = _produto(db)
+    c = _admin(app)
+    with c.session_transaction() as s:
+        s['carrinho'] = [{'kind': 'produto', 'id': p.id, 'qtd': 1}]
+    html = c.get('/loja/checkout').get_data(as_text=True)
+    assert 'id="entrega-titulo"' in html          # título que o JS troca
+    assert 'id="retirada-nf-aviso"' in html       # aviso da NF na retirada
+    assert 'id="entrega-quem"' in html            # "quem recebe" (entrega)
+    assert 'id="entrega-frete"' in html           # "calcular frete" (entrega)
+    assert 'name="logradouro"' in html and 'name="numero"' in html
+
+
 def test_nome_e_sobrenome_concatenam(app):
     """Nome + sobrenome viram o nome completo do pedido."""
     from app.extensions import db
