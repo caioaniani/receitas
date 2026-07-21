@@ -528,6 +528,8 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
             'delivery_sem_itens': round(d['delivery_sem_itens'], 2),
             'n_pedidos': d['n_pedidos'],
             'cancelados': d['cancelados'],
+            'cancelados_valor': round(d['cancelados_valor'], 2),
+            'desconto': round(d['desconto'], 2),
             'por_pagamento': {k: round(v, 2)
                               for k, v in d['por_pagamento'].items()},
             'por_canal': {k: round(v, 2) for k, v in d['por_canal'].items()},
