@@ -370,6 +370,28 @@ def _quem_somos_raw():
     return CARDAPIO_QUEM_SOMOS_DEFAULT if raw is None else raw
 
 
+# Slogan do hero do cardapio (21/07/2026, pedido do dono: "Preciso alterar
+# esse slogan"): a linha embaixo do logo, na tela e na capa dos PDFs.
+# AppConfig `cardapio_slogan`; MESMO contrato do preparo/quem_somos: chave
+# AUSENTE = default abaixo; gravada VAZIA = dono apagou, linha some.
+_CARDAPIO_SLOGAN_KEY = 'cardapio_slogan'
+CARDAPIO_SLOGAN_DEFAULT = ('Tempo. Fermento. Cuidado. '
+                           'Pão de verdade, feito com fermentação natural.')
+
+
+def _slogan():
+    from app.models import AppConfig
+    raw = AppConfig.get(_CARDAPIO_SLOGAN_KEY)
+    return (CARDAPIO_SLOGAN_DEFAULT if raw is None else raw).strip()
+
+
+def _slogan_raw():
+    """Texto cru pro input da tela de regras (None = default vigente)."""
+    from app.models import AppConfig
+    raw = AppConfig.get(_CARDAPIO_SLOGAN_KEY)
+    return CARDAPIO_SLOGAN_DEFAULT if raw is None else raw
+
+
 # Ordem das seções do cardápio (21/07/2026, pedido do dono: "alterar as
 # sessões com um grab and drop em editar regras"). Duas listas arrastáveis
 # na tela de regras, salvas em AppConfig como JSON:
@@ -377,14 +399,19 @@ def _quem_somos_raw():
 #   tela E pros PDFs — a fonte única `_cardapio_categorias` devolve o dict
 #   já na ordem final). Categoria fora da lista (nova/renomeada) entra no
 #   FIM em ordem alfabética ('Outros' por último) — nunca some.
-# - `cardapio_ordem_rodape`: ordem dos blocos do rodapé (quem_somos /
-#   regras / preparo). Bloco ausente da lista entra no fim, ordem default.
+# - `cardapio_ordem_rodape` (nome histórico da chave): ordem das SEÇÕES da
+#   página — quem_somos / regras / preparo / produtos. Em 21/07/2026 o dono
+#   pediu "o rodapé venha para cima" com a posição tambem arrastavel, entao
+#   'produtos' virou item da lista (SUBSTITUI a decisão de 20/07 "produtos
+#   para cima": o DEFAULT agora é blocos antes dos produtos). Seção ausente
+#   da lista salva entra no fim, na ordem default.
 _CARDAPIO_ORDEM_CATS_KEY = 'cardapio_ordem_categorias'
-_CARDAPIO_ORDEM_RODAPE_KEY = 'cardapio_ordem_rodape'
-RODAPE_BLOCOS = ['quem_somos', 'regras', 'preparo']
-RODAPE_LABELS = {'quem_somos': 'Quem somos nós',
+_CARDAPIO_ORDEM_SECOES_KEY = 'cardapio_ordem_rodape'
+CARDAPIO_SECOES = ['quem_somos', 'regras', 'preparo', 'produtos']
+SECOES_LABELS = {'quem_somos': 'Quem somos nós',
                  'regras': 'Regras do pedido (atacado)',
-                 'preparo': 'Métodos de preparo (atacado)'}
+                 'preparo': 'Métodos de preparo (atacado)',
+                 'produtos': 'Produtos (categorias)'}
 
 
 def _ordem_categorias_salva():
@@ -415,22 +442,24 @@ def _aplicar_ordem_categorias(categorias):
     return {c: categorias[c] for c in sorted(categorias, key=chave)}
 
 
-def _ordem_rodape():
-    """Ordem dos blocos do rodapé (sempre os 3, blocos novos no fim)."""
+def _ordem_secoes():
+    """Ordem das seções da página (sempre todas; seção fora da lista salva
+    — ex.: 'produtos' pra quem salvou antes de 21/07 — entra no fim, na
+    ordem default)."""
     import json
 
     from app.models import AppConfig
-    raw = AppConfig.get(_CARDAPIO_ORDEM_RODAPE_KEY)
+    raw = AppConfig.get(_CARDAPIO_ORDEM_SECOES_KEY)
     ordem = []
     if raw:
         try:
             # dict.fromkeys = dedupe preservando ordem (valor gravado com
             # repetido desenharia o bloco 2x na tela e no PDF).
             ordem = list(dict.fromkeys(
-                b for b in json.loads(raw) if b in RODAPE_BLOCOS))
+                b for b in json.loads(raw) if b in CARDAPIO_SECOES))
         except (ValueError, TypeError):
-            current_app.logger.warning('cardapio: ordem_rodape inválida')
-    return ordem + [b for b in RODAPE_BLOCOS if b not in ordem]
+            current_app.logger.warning('cardapio: ordem_secoes inválida')
+    return ordem + [b for b in CARDAPIO_SECOES if b not in ordem]
 
 
 # Foto do "Quem somos nós" (21/07/2026, pedido do dono — mandou a foto da
@@ -588,8 +617,8 @@ def cardapio_atacado_regras():
         import json
         for campo, cfg_key in (('ordem_categorias',
                                 _CARDAPIO_ORDEM_CATS_KEY),
-                               ('ordem_rodape',
-                                _CARDAPIO_ORDEM_RODAPE_KEY)):
+                               ('ordem_secoes',
+                                _CARDAPIO_ORDEM_SECOES_KEY)):
             raw = request.form.get(campo)
             if not raw:
                 continue
@@ -625,8 +654,9 @@ def cardapio_atacado_regras():
     return render_template('admin/cardapio_atacado_regras.html',
                            campos=CARDAPIO_ATACADO_CAMPOS, atuais=atuais,
                            cats_ordem=cats_ordem,
-                           rodape_ordem=_ordem_rodape(),
-                           rodape_labels=RODAPE_LABELS,
+                           secoes_ordem=_ordem_secoes(),
+                           secoes_labels=SECOES_LABELS,
+                           slogan_raw=_slogan_raw(),
                            preparo_raw=_preparo_atacado_raw(),
                            quem_somos_raw=_quem_somos_raw(),
                            quem_somos_foto=_quem_somos_foto_src(),
@@ -828,7 +858,8 @@ def cardapio():
                            tipo=tipo, regras=regras, preparo=preparo,
                            quem_somos=_quem_somos(),
                            quem_somos_foto=_quem_somos_foto_src(),
-                           ordem_rodape=_ordem_rodape(),
+                           ordem_secoes=_ordem_secoes(),
+                           slogan=_slogan(),
                            logo=_cardapio_logo())
 
 
@@ -855,7 +886,8 @@ def cardapio_pdf_export():
                                       quem_somos=_quem_somos(),
                                       quem_somos_foto=_quem_somos_foto_bytes(),
                                       formato=formato,
-                                      ordem_rodape=_ordem_rodape())
+                                      ordem_secoes=_ordem_secoes(),
+                                      slogan=_slogan())
     resp = current_app.response_class(conteudo, mimetype='application/pdf')
     sufixo = '_mobile' if formato == 'mobile' else ''
     resp.headers['Content-Disposition'] = (
