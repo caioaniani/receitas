@@ -501,12 +501,12 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
     lm_orig, rm_orig = pdf.l_margin, pdf.r_margin
     pdf.set_left_margin(g.margem + 5)
     pdf.set_right_margin(g.page_w - (g.margem + 5) - larg_txt)
-    pdf.set_font('Helvetica', '', 9)
+    pdf.set_font('Helvetica', '', fonte_sz)
     pdf.set_text_color(*_C_FG)
     for txt in corpos:
         pdf.set_x(g.margem + 5)
         pdf.write(_LH, txt)
-        pdf.ln(_LH + 1.6)
+        pdf.ln(_LH + par_gap)
     pdf.set_left_margin(lm_orig)
     pdf.set_right_margin(rm_orig)
     pdf.set_y(y0 + alt + 5)
