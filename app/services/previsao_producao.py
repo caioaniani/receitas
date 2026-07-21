@@ -39,7 +39,7 @@ from math import ceil
 from app.constants import STATUS_PEDIDO_EDITAVEIS, STATUS_PEDIDO_NAO_BAIXADOS
 from app.extensions import db
 from app.models import EstoqueProducao, Loja, PedidoItem, PedidoLoja, Receita
-from app.utils import hoje
+from app.utils import SUB_RECEITA_TIPOS, hoje, unidades_subreceita
 
 # Minimo de ocorrencias de um mesmo dia-da-semana na janela pra confiar na
 # media daquele dia. Abaixo disso, cai no fallback (media diaria simples). Vale
@@ -360,10 +360,11 @@ def _caps_por_retorno(receitas, estoque_de):
         if rend <= 0:
             continue
         for ing in rec.ingredientes:
-            if (ing.tipo or '') != 'receita' or not ing.sub_receita_id:
+            if (ing.tipo or '') not in SUB_RECEITA_TIPOS or not ing.sub_receita_id:
                 continue
             sid = ing.sub_receita_id
-            ratio = (ing.porcentagem or 0) / rend
+            ratio = unidades_subreceita(
+                ing.tipo, ing.porcentagem, rec.peso_base) / rend
             if sid not in retorno_ids or ratio <= 0:
                 continue
             disponivel = int(estoque_de(sid) or 0)
@@ -1823,7 +1824,7 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
         rend = rendimento_massa_crua(rec)
         out = []
         for ing in rec.ingredientes:
-            if (ing.tipo or '') != 'receita':
+            if (ing.tipo or '') not in SUB_RECEITA_TIPOS:
                 continue
             sid = ing.sub_receita_id
             if sid is None:                       # fallback por nome exato
@@ -1831,7 +1832,8 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
                 sid = next((r.id for r in receitas.values()
                             if (r.nome or '').strip().lower() == alvo), None)
             if sid in receitas and rend > 0:
-                out.append((sid, (ing.porcentagem or 0) / rend))
+                out.append((sid, unidades_subreceita(
+                    ing.tipo, ing.porcentagem, rec.peso_base) / rend))
         return out
 
     # Receitas de RETORNO (destino de retorno_receita_id): nao sao produziveis
