@@ -144,14 +144,15 @@ class _CardapioPDF(FPDF):
         self.ln(5)
 
     def footer(self):
-        # Rodapé: "O Pão Padaria Artesanal · Brooklin, São Paulo" (o ©
-        # foi tirado a pedido do dono 20/07).
+        # Rodapé: nome + endereço (Rua Ribeiro do Vale, 455 — pedido do
+        # dono 21/07). O © foi tirado a pedido do dono 20/07.
         self.set_y(-12)
         self.set_font('Helvetica', '', 8)
         self.set_text_color(*_C_SOFT)
-        self.cell(140, 6, _latin1('O Pão Padaria Artesanal · '
+        self.cell(150, 6, _latin1('O Pão Padaria Artesanal · '
+                                   'Rua Ribeiro do Vale, 455 · '
                                    'Brooklin, São Paulo'))
-        self.cell(40, 6, _latin1('página %d' % self.page_no()), align='R')
+        self.cell(30, 6, _latin1('página %d' % self.page_no()), align='R')
 
 
 def _logo_bytes(logo_data):
