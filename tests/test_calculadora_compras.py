@@ -321,11 +321,15 @@ def test_rota_renderiza_e_calcula(app, admin_user):
     with c.session_transaction() as s:
         s['_user_id'] = str(admin_user.id)
         s['_fresh'] = True
-    # GET: form com o select
+    # GET: form com o typeahead (campo de busca + datalist), não mais <select>
     g = c.get('/lista-compras/calculadora')
     assert g.status_code == 200
     assert b'Calculadora de compras' in g.data
-    # POST: calcula e mostra A COMPRAR
+    assert b'calc-busca' in g.data              # campo de digitar
+    assert b'id="calc-itens"' in g.data         # datalist do catálogo
+    assert b'data-token="r_' in g.data          # receita como opção do datalist
+    assert b'Pao Calc' in g.data                # nome no datalist
+    # POST: calcula e mostra A COMPRAR (contrato item[]=token inalterado)
     p = c.post('/lista-compras/calculadora', data={
         'item[]': [f'r_{rid}'], 'qtd[]': ['20'],
     })
@@ -334,6 +338,8 @@ def test_rota_renderiza_e_calcula(app, admin_user):
     assert 'A COMPRAR' in body
     assert 'Farinha' in body
     assert 'Moinho X' in body
+    # Pós-cálculo: a linha volta com o token no hidden item[]
+    assert f'value="r_{rid}"' in body
 
 
 def test_rota_exige_admin(app):
