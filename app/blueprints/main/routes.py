@@ -3705,6 +3705,38 @@ def briefing_dono_view():
     return render_template('admin/briefing.html', dados=dados, texto=texto)
 
 
+@main_bp.route('/admin/vendas/cancelados-descontos')
+@owner_required
+def cancelados_descontos_detalhe():
+    """Drill-down do cockpit da home ("abrir" cancelamentos/descontos): lista
+    AO VIVO (bate na API Seru) os pedidos cancelados e os com desconto do dia.
+    Owner-only (mesmo gate do painel de vendas da home); JSON pro modal.
+
+    A home em si NUNCA bate na API — este endpoint só roda no CLIQUE explícito.
+    Seru fora do ar → 502 com aviso amigável (o modal mostra, nada quebra)."""
+    from datetime import date as _date
+
+    from app.services import briefing_dono
+    dia_str = (request.args.get('dia') or '').strip()
+    try:
+        dia = _date.fromisoformat(dia_str) if dia_str else hoje_brt()
+    except ValueError:
+        dia = hoje_brt()
+    # Só hoje ou ontem (o cockpit mostra esses dois; range aberto bateria na
+    # API sem limite).
+    if dia not in (hoje_brt(), hoje_brt() - timedelta(days=1)):
+        return jsonify(ok=False, erro='Só hoje ou ontem.'), 400
+    try:
+        dados = briefing_dono.cancelados_descontos_detalhe(dia)
+        return jsonify(ok=True, dia=dia.isoformat(), **dados)
+    except Exception as e:  # noqa: BLE001 — API externa; nunca quebrar o modal
+        current_app.logger.exception('detalhe cancelados/descontos')
+        return jsonify(
+            ok=False,
+            erro='Não consegui consultar o Seru agora (%s). Tente de novo.'
+                 % type(e).__name__), 502
+
+
 @main_bp.route('/admin/manual')
 @login_required
 @admin_required
