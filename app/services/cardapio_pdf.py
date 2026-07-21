@@ -42,7 +42,7 @@ _C_MUTED = (107, 93, 76)       # --muted   #6b5d4c
 _C_SOFT = (154, 139, 117)      # --soft    #9a8b75
 _C_TAG = (243, 238, 226)       # --tag-bg  #f3eee2 (regras/placeholder)
 
-# Grid: 3 colunas na área útil de 190mm (margens de 10).
+# Grid A4: 3 colunas na área útil de 190mm (margens de 10).
 _MARGEM = 10
 _GAP = 4
 _COL_W = (190 - 2 * _GAP) / 3          # ~60.7mm
@@ -50,6 +50,42 @@ _FOTO_H = _COL_W                       # foto QUADRADA, como no site (1:1)
 _CARD_H = _FOTO_H + 16                 # foto + nome + preço
 _CARD_H_DESC = _FOTO_H + 23            # + até 2 linhas de descrição (7pt)
 _RAIO = 2.5                            # cantos arredondados (site: 12px)
+
+
+class _Geo:
+    """Geometria da página — parametriza o MESMO gerador pros dois
+    formatos (21/07/2026, pedido do dono: "criar um PDF versão mobile").
+    A4 = impressão/desktop; MOBILE = página estreita em proporção de
+    celular (o cardápio vai por WhatsApp — no A4 aberto no telefone o
+    texto fica minúsculo; na página estreita, os MESMOS tamanhos de fonte
+    ficam grandes em relação à largura). Fontes/cores nunca mudam aqui —
+    só medidas."""
+
+    def __init__(self, page_w, page_h, margem, cols_grid, cols_lista,
+                 logo_h, rodape_paginas):
+        self.page_w, self.page_h = page_w, page_h
+        self.margem = margem
+        self.util = page_w - 2 * margem
+        self.cols_grid, self.cols_lista = cols_grid, cols_lista
+        self.col_w = (self.util - (cols_grid - 1) * _GAP) / cols_grid
+        self.foto_h = self.col_w              # foto quadrada (1:1)
+        self.card_h = self.foto_h + 16
+        self.card_h_desc = self.foto_h + 23
+        self.linha_w = (self.util - (cols_lista - 1) * _GAP) / cols_lista
+        self.logo_h = logo_h                  # altura do logo na capa
+        self.rodape_paginas = rodape_paginas  # "página N" no rodapé?
+        # Limite inferior (auto_page_break margem 16) e altura útil de uma
+        # página LIMPA (topo pós-header ~30mm) — keep-together de categoria.
+        self.y_limite = page_h - 16
+        self.pag_util = page_h - 47
+
+
+_GEO_A4 = _Geo(210, 297, _MARGEM, cols_grid=3, cols_lista=2,
+               logo_h=26, rodape_paginas=True)
+# 120x213mm ~ 9:16 (tela de celular). 2 colunas de card (como o site
+# mobile ≤640px), lista em coluna única, sem número de página.
+_GEO_MOBILE = _Geo(120, 213, 8, cols_grid=2, cols_lista=1,
+                   logo_h=18, rodape_paginas=False)
 
 
 def _processar_foto(bruto):
