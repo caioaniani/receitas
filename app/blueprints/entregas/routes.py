@@ -147,6 +147,8 @@ def _serializar_pedido_online(p):
         # OU tem cartinha. Sinaliza no card pra ninguém ligar pra quem recebe.
         'e_presente': bool(p.nome_destinatario or p.telefone_destinatario
                            or (p.cartinha or '').strip()),
+        # Divulgacao = brinde/PR sem pagamento (selo ⭐ no card + PDF).
+        'divulgacao': bool(getattr(p, 'divulgacao', False)),
         'endereco': _endereco_online(p),
         'data_entrega': p.data_entrega.isoformat() if p.data_entrega else None,
         'data_entrega_fmt': (p.data_entrega.strftime('%d/%m/%Y')
