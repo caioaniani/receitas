@@ -1405,6 +1405,46 @@ detalhe.html` renderizava o literal "None" quando `Loja.endereco` era NULL
 (`_bloqueia_sem_endereco`, `_numero_vazio_vira_SN`). Validacao Playwright
 390px (retirada mostra endereco+loja+aviso, entrega reverte, sem estouro).
 
+## Divulgação — pedido "como do site" SEM pagamento (21/07/2026)
+
+Pedido do dono: lançar um pedido igual ao do site (destinatário, entrega ou
+retirada, data, itens) mas SEM etapa de pagamento (brinde/PR), que aparece no
+`/entregas/painel` como um pedido normal marcado com ESTRELA ⭐. Decisões do
+dono (AskUserQuestion): **baixa o estoque físico** (o pão sai pela porta) mas
+MARCADO como divulgação (fora de faturamento e da previsão de venda) +
+**tela admin nova**.
+
+- **Schema (2 commits)**: `PedidoOnline.divulgacao BOOLEAN NOT NULL DEFAULT
+  FALSE` (ALTER em `migrations_legacy` deployado ANTES do modelo, sonda
+  `/api/claude/deploy`).
+- **Motor**: canal `'divulgacao'` novo em `baixa_venda._MOVS`/`_SINAL_ESTORNO`
+  com tipos PRÓPRIOS `venda_site_divulgacao*`. Como a previsão só soma
+  `tipo IN VENDA_TIPOS_DEMANDA_COM_ESTORNO` (`previsao_demanda.py`) e esses
+  tipos NÃO entram na whitelist, a divulgação sai da previsão de venda
+  automaticamente — e fica rastreável no ledger.
+- **Serviço** `app/services/divulgacao.py`: `criar_divulgacao(...)` cria o
+  `PedidoOnline` (status `'divulgacao'`, `pago_em=NULL`, `divulgacao=True`,
+  sem NF/cobrança/e-mail) e baixa o estoque pelo motor único (explode cesta/
+  fração igual à venda do site, tolera shortfall). Loja de baixa = MESMA regra
+  do site (`retirada` baixa da escolhida; entrega/express de
+  `loja_origem_site()`). `cancelar_divulgacao(pedido)` estorna o estoque e
+  marca `cancelado`.
+- **Faturamento**: o site conta por `pago_em` e a divulgação nasce com
+  `pago_em=NULL` → já sai naturalmente; guard explícito da flag
+  (`PedidoOnline.divulgacao.is_(False)`) em `briefing_dono.vendas_hoje/ontem`
+  e `chatbot_auditor._funil_site` (documenta/blinda; o funil também exclui do
+  `pedidos_criados`).
+- **Painel/PDF**: `_serializar_pedido_online` expõe `divulgacao`; status
+  `'divulgacao'` entra em `_STATUS_ONLINE_NO_PAINEL`/`_STATUS_ONLINE_PARA_PAINEL`;
+  selo dourado ⭐ DIVULGAÇÃO no card (`painel_pedidos.html`) e "DIVULGAÇÃO
+  (CORTESIA)" no PDF do motorista (`pdf.py`).
+- **Tela** `/admin/loja-online/divulgacao` (admin — é dar produto de graça):
+  destinatário, entrega OU retirada, data+janela, itens dinâmicos. Link na
+  sidebar (Loja Online). Detalhe do pedido mostra faixa ⭐ + botão "Cancelar
+  (devolve estoque)". Registrado no manual (QUANDO PRECISAR).
+- Testes: `tests/test_divulgacao.py` (15 casos). NUNCA fazer a divulgação
+  contar como venda nem usar o tipo `venda_site` (mataria a distinção).
+
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
 Escrito na pedra a pedido do dono ("ja tinha falado uma vez mas nao ficou
