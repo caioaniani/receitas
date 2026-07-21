@@ -98,6 +98,19 @@ def owner_required(f):
     return decorated
 
 
+def divulgacao_required(f):
+    """Lancar/gerenciar DIVULGACAO (brinde/PR): SO o dono e o papel 'marketing'
+    (decisao do dono 21/07/2026 — 'so o owner e marketing'). Admin comum NAO
+    entra. Fixo (nao editavel) — e o gesto de dar produto de graca."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not (getattr(current_user, 'pode_divulgacao', None)
+                and current_user.pode_divulgacao()):
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
 def entrega_access_required(f):
     """Permite acesso para admin ou funcionario vinculado a uma loja."""
     @wraps(f)
