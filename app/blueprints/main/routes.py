@@ -784,6 +784,7 @@ def cardapio():
                            tipo=tipo, regras=regras, preparo=preparo,
                            quem_somos=_quem_somos(),
                            quem_somos_foto=_quem_somos_foto_src(),
+                           ordem_rodape=_ordem_rodape(),
                            logo=_cardapio_logo())
 
 
