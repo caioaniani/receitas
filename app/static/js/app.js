@@ -204,7 +204,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (e.target.classList.contains('ing-tipo')) {
                 var row = e.target.closest('.ingrediente-row');
                 var nomeInput = row.querySelector('.nome-input');
-                nomeInput.setAttribute('list', e.target.value === 'receita' ? 'receita-list' : 'mp-list');
+                var ehSub = (e.target.value === 'receita' || e.target.value === 'sub_pct');
+                nomeInput.setAttribute('list', ehSub ? 'receita-list' : 'mp-list');
                 nomeInput.value = '';
                 recalcularTudo();
             }
