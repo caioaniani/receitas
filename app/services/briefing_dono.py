@@ -405,8 +405,9 @@ def cancelados_descontos_detalhe(dia):
     Cada pedido cancelado: hora, loja, valor (total), caixa, tem NF autorizada.
     Cada pedido com desconto (nao cancelado): hora, loja, subtotal, desconto,
     total. Loja resolvida pelo vinculo (mesma da home)."""
-    from app.services import seru, vendas_diarias
+    from app.services import seru
     from app.services.venda_sem_item_vigia import _nf_autorizada
+    from app.services.vendas_itens import _nome_loja
 
     pedidos = seru.listar_pedidos_completo(dia, dia)
     vinculo = _resolver_loja_seru()
@@ -416,7 +417,7 @@ def cancelados_descontos_detalhe(dia):
             continue
         if seru.data_local(p.get('createdAt')) != dia:
             continue
-        ln_raw = vendas_diarias._nome_loja(p) or '(sem loja)'
+        ln_raw = _nome_loja(p) or '(sem loja)'
         loja = vinculo.get(ln_raw, ln_raw)
         dh = seru.datahora_local(p.get('createdAt'))
         hora = dh.strftime('%H:%M') if dh else '?'
