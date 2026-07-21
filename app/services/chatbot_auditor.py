@@ -181,7 +181,9 @@ def _funil_site(inicio, fim):
         from app.models import PedidoOnline
         pedidos = (PedidoOnline.query
                    .filter(PedidoOnline.criado_em >= inicio,
-                           PedidoOnline.criado_em < fim)
+                           PedidoOnline.criado_em < fim,
+                           # Divulgacao (brinde/PR) nao e conversao de venda.
+                           PedidoOnline.divulgacao.is_(False))
                    .all())
         pagos = [p for p in pedidos if p.pago_em is not None]
         faturamento = sum((p.valor_total or 0) for p in pagos)
