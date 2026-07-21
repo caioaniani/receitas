@@ -276,7 +276,7 @@ def test_presente_salva_destinatario(app):
                 'data_entrega': data, 'janela_entrega': '08:00–09:00',
                 'e_presente': '1',
                 'nome_destinatario': 'Ana Pereira',
-                'telefone_destinatario': '11988887777'}
+                'telefone_destinatario': '11988887777', **_END_NF}
         pedido, erros = loja_checkout.criar_pedido(
             form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
         assert erros == []
