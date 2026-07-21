@@ -253,13 +253,16 @@ def _capa(pdf, titulo_tipo, logo_data=None, slogan=None):
         pdf.set_text_color(255, 255, 255)
         pdf.set_font('Times', 'B', 30)
         pdf.cell(0, 14, _latin1('O Pão'), new_x='LMARGIN', new_y='NEXT')
-    pdf.set_font('Helvetica', '', 10)
-    pdf.set_text_color(220, 216, 210)
-    # multi_cell: no mobile a tagline não cabe numa linha (104mm úteis).
-    pdf.multi_cell(0, 5.5,
-                   _latin1('Tempo. Fermento. Cuidado. Pão de verdade, '
-                           'feito com fermentação natural.'),
-                   new_x='LMARGIN', new_y='NEXT')
+    # Slogan editável (21/07/2026): None = default histórico; '' = dono
+    # apagou, linha some. multi_cell: no mobile não cabe numa linha.
+    if slogan is None:
+        slogan = ('Tempo. Fermento. Cuidado. Pão de verdade, '
+                  'feito com fermentação natural.')
+    if slogan:
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(220, 216, 210)
+        pdf.multi_cell(0, 5.5, _latin1(slogan),
+                       new_x='LMARGIN', new_y='NEXT')
     # Label de seção CENTRADO, como o "CARDÁPIO" da tela (section-label).
     pdf.set_y(66)
     pdf.set_text_color(*_C_SOFT)
