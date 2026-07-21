@@ -456,8 +456,18 @@ footer p { margin: 0; }
     </div>
     {% endif %}
 
-    {# Regras + métodos no RODAPÉ (pedido do dono 20/07: "trazer os
-       produtos para cima") — o cliente vê o cardápio primeiro. #}
+    {# Quem somos + regras + métodos no RODAPÉ (pedido do dono 20/07:
+       "trazer os produtos para cima") — o cliente vê o cardápio primeiro.
+       A história vem antes do operacional; vale pros 3 tipos (marca). #}
+    {% if quem_somos %}
+    <div class="regras-atacado">
+        <h3 class="regras-titulo">Quem somos nós</h3>
+        {% for p in quem_somos %}
+        <p class="quem-somos-p">{{ p }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     {% if regras %}
     <div class="regras-atacado">
         <h3 class="regras-titulo">Regras do pedido — Atacado</h3>
