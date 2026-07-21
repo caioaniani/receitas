@@ -367,6 +367,27 @@
         <span class="text-muted">A emissão automática acontece no scan do
             QR de saída — use aqui se ela falhou.</span>
         {% endif %}
+        {# Motivo persistido (nf_erro) TAMBÉM no estado "não emitida": quando o
+           `incluir` falha no Tiny (ex.: duplicidade) não temos id salvo, então
+           o card cai aqui e o alerta do estado 3 não renderiza. Sem isto o
+           motivo só existia no flash (some ao recarregar). #}
+        {% if pedido.nf_erro %}
+        {% set nf_duplicada = 'duplicid' in pedido.nf_erro|lower or 'já cadastr' in pedido.nf_erro|lower or 'ja cadastr' in pedido.nf_erro|lower %}
+        <div class="w-100 mt-1">
+            <div class="alert alert-danger py-2 px-3 mb-0 small" style="white-space:pre-wrap;">
+                <strong>Última falha ao emitir:</strong> {{ pedido.nf_erro }}
+                {% if nf_duplicada %}
+                <div class="text-muted mt-1">Já existe um rascunho/nota desta
+                    transferência no Tiny. Exclua a NF em rascunho/rejeitada no
+                    Tiny (Notas Fiscais) e clique em "Emitir NF agora".</div>
+                {% else %}
+                <div class="text-muted mt-1">O fiscal (CST/CFOP/NCM/benefício)
+                    vem do cadastro do produto/natureza no Tiny — corrija lá e
+                    emita de novo.</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
         {% if current_user.is_admin() %}
         {# Dispensa é decisão de ADMIN (dono 20/07/2026) — motorista e
            padeiro nunca veem este gesto. #}
