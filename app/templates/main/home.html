@@ -143,13 +143,15 @@
             &nbsp;|&nbsp; Site: <strong>R$ {{ '{:,.0f}'.format(vendas.site_total).replace(',', '.') }}</strong>
             · {{ vendas.site_qtd }} pago{{ 's' if vendas.site_qtd != 1 }}
         </p>
-        {# Cancelamentos e descontos de ontem (PDV Seru). #}
-        <p class="small text-muted mb-2">
+        {# Cancelamentos e descontos de ontem (PDV Seru). Clicável = detalhe ao vivo. #}
+        <button type="button" class="btn btn-link p-0 small text-muted text-decoration-none text-start d-block mb-2 abrir-cd"
+                data-dia="{{ vendas.ontem }}" data-rotulo="ontem ({{ vendas.label }})">
             🚫 Cancelados:
             <strong>{{ vendas.cancelados_n }}</strong>{% if vendas.cancelados_valor %} · R$ {{ '{:,.0f}'.format(vendas.cancelados_valor).replace(',', '.') }}{% endif %}
             &nbsp;|&nbsp; 🏷️ Descontos:
             <strong>R$ {{ '{:,.0f}'.format(vendas.desconto).replace(',', '.') }}</strong>
-        </p>
+            <span class="ms-1 text-primary">abrir&nbsp;›</span>
+        </button>
         {% if not vendas.snapshot_ok %}
         <p class="small text-warning mb-2">⚠ O snapshot de ontem ainda não foi
             capturado do PDV — os números acima podem estar incompletos.
