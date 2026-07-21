@@ -83,7 +83,7 @@ def rendimento_massa_crua(receita):
     # em gramas via ingredientes_por_porcao, e o rendimento segue massa/peso
     # — sem isso o sourdough caía no rendimento cadastrado (3) em vez da
     # conta de massa (~4) e o MRP inflava ~25% (caso real 15/07).
-    tem_subreceita = any((ing.tipo or '') == 'receita'
+    tem_subreceita = any((ing.tipo or '') in SUB_RECEITA_TIPOS
                          and not _sub_amassadeira(ing)
                          for ing in receita.ingredientes)
     if not tem_subreceita:
