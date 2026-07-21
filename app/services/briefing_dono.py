@@ -409,32 +409,46 @@ def cancelados_descontos_detalhe(dia):
     from app.services.venda_sem_item_vigia import _nf_autorizada
     from app.services.vendas_itens import _nome_loja
 
+    def _f(v):
+        """Valor da API -> float tolerante (nunca explode por um campo torto)."""
+        try:
+            return float(v) if v is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
     pedidos = seru.listar_pedidos_completo(dia, dia)
     vinculo = _resolver_loja_seru()
     cancelados, descontos = [], []
     for p in pedidos:
         if not isinstance(p, dict):
             continue
-        if seru.data_local(p.get('createdAt')) != dia:
-            continue
-        ln_raw = _nome_loja(p) or '(sem loja)'
-        loja = vinculo.get(ln_raw, ln_raw)
-        dh = seru.datahora_local(p.get('createdAt'))
-        hora = dh.strftime('%H:%M') if dh else '?'
-        total = float(p.get('total') or 0)
-        if seru.pedido_cancelado(p):
-            cancelados.append({
-                'codigo': p.get('code'), 'hora': hora, 'loja': loja,
-                'valor': round(total, 2),
-                'caixa': (p.get('cashier') or {}).get('code'),
-                'nf': _nf_autorizada(p)})
-            continue
-        desc = float(p.get('discount') or 0)
-        if desc > 0:
-            descontos.append({
-                'codigo': p.get('code'), 'hora': hora, 'loja': loja,
-                'subtotal': round(float(p.get('subtotal') or 0), 2),
-                'desconto': round(desc, 2), 'total': round(total, 2)})
+        # UM pedido torto (campo malformado) NAO pode derrubar o modal inteiro
+        # (mesma regra do venda_sem_item_vigia) — pula e loga, nunca 502 geral.
+        try:
+            if seru.data_local(p.get('createdAt')) != dia:
+                continue
+            ln_raw = _nome_loja(p) or '(sem loja)'
+            loja = vinculo.get(ln_raw, ln_raw)
+            dh = seru.datahora_local(p.get('createdAt'))
+            hora = dh.strftime('%H:%M') if dh else '?'
+            total = _f(p.get('total'))
+            cx = p.get('cashier')
+            caixa = cx.get('code') if isinstance(cx, dict) else None
+            if seru.pedido_cancelado(p):
+                cancelados.append({
+                    'codigo': p.get('code'), 'hora': hora, 'loja': loja,
+                    'valor': round(total, 2), 'caixa': caixa,
+                    'nf': _nf_autorizada(p)})
+                continue
+            desc = _f(p.get('discount'))
+            if desc > 0:
+                descontos.append({
+                    'codigo': p.get('code'), 'hora': hora, 'loja': loja,
+                    'subtotal': round(_f(p.get('subtotal')), 2),
+                    'desconto': round(desc, 2), 'total': round(total, 2)})
+        except Exception:  # noqa: BLE001 — pedido torto isolado, resto segue
+            logger.warning('cancelados_descontos_detalhe: pedido ignorado (%s)',
+                           p.get('id') or p.get('code'), exc_info=True)
     cancelados.sort(key=lambda x: x['hora'])
     descontos.sort(key=lambda x: -x['desconto'])
     return {
