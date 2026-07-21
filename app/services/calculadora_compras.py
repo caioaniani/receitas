@@ -123,24 +123,32 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
                 continue
             if _eh_retorno(sub.id):
                 sub_receitas[nome_sub] = sub_receitas.get(nome_sub, 0) + qtd
-                if explodir_retorno:
-                    # Pedido do dono (04/07/2026): comprar os insumos como se
-                    # os retornos fossem produzidos FRESCOS — explode pela
-                    # receita de ORIGEM (a ficha do retorno e vazia por
-                    # design). ATENCAO: se houver sobras reais no estoque,
-                    # isso compra em dobro — por isso e toggle na tela.
-                    unidades_sub = unidades_subreceita(
-                        ing.tipo, ing.porcentagem, receita.peso_base) * mult
-                    origem_rec = Receita.query.filter_by(
-                        retorno_receita_id=sub.id).first()
-                    if origem_rec is not None and unidades_sub > 0:
-                        detalhes.append(
-                            f'{receita.nome}: retorno "{sub.nome}" '
-                            f'({unidades_sub:g} un) explodido como '
-                            f'"{origem_rec.nome}" FRESCO.')
-                        _add_receita(origem_rec, unidades_sub,
-                                     _visitados=_visitados,
-                                     registrar_producao=False)
+                # Retorno consumido como sub-receita (ex: Almond 1:1): entra na
+                # DEMANDA de retorno (vem de sobra, não se produz). É a conta
+                # que faltava — o Almond não some da produção, mas o retorno
+                # que ele puxa aparece aqui, somado ao consumo direto (Nutella).
+                unidades_sub = unidades_subreceita(
+                    ing.tipo, ing.porcentagem, receita.peso_base) * mult
+                if unidades_sub > 0:
+                    d = retorno_demanda.setdefault(
+                        sub.id, {'nome': sub.nome, 'qtd': 0.0})
+                    d['qtd'] += unidades_sub
+                    if explodir_retorno:
+                        # Pedido do dono (04/07/2026): comprar os insumos como
+                        # se os retornos fossem produzidos FRESCOS — explode
+                        # pela receita de ORIGEM (ficha do retorno é vazia).
+                        # ATENCAO: se houver sobras reais no estoque, isso
+                        # compra em dobro — por isso é toggle na tela.
+                        origem_rec = Receita.query.filter_by(
+                            retorno_receita_id=sub.id).first()
+                        if origem_rec is not None:
+                            detalhes.append(
+                                f'{receita.nome}: retorno "{sub.nome}" '
+                                f'({unidades_sub:g} un) explodido como '
+                                f'"{origem_rec.nome}" FRESCO.')
+                            _add_receita(origem_rec, unidades_sub,
+                                         _visitados=_visitados,
+                                         registrar_producao=False)
                 continue
             unidades_sub = unidades_subreceita(
                 ing.tipo, ing.porcentagem, receita.peso_base) * mult
