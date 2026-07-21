@@ -668,8 +668,13 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
     pdf.add_page()
     _capa(pdf, titulo, logo_data=logo, slogan=slogan)
 
-    for secao in (ordem_secoes
-                  or ('quem_somos', 'regras', 'preparo', 'produtos')):
+    # Lista incompleta é COMPLETADA (mesma regra do _ordem_secoes da rota):
+    # caller futuro que passe só ['quem_somos'] não perde as categorias em
+    # silêncio — 'produtos' e os demais entram no fim, na ordem default.
+    secoes = list(ordem_secoes or ())
+    secoes += [s for s in ('quem_somos', 'regras', 'preparo', 'produtos')
+               if s not in secoes]
+    for secao in secoes:
         if secao == 'quem_somos' and quem_somos:
             _box_quem_somos(pdf, quem_somos, foto=quem_somos_foto)
         elif secao == 'regras' and tipo == 'atacado' and regras:
