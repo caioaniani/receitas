@@ -105,9 +105,14 @@ _STATUS_ONLINE_PARA_PAINEL = {
     'em_preparo': 'visto',
     'a_caminho': 'pronto',
     'entregue': 'entregue',
+    # Divulgacao (21/07/2026): brinde/PR sem pagamento — entra no painel como
+    # um pedido novo (a logistica e igual: separar, sair, entregar).
+    'divulgacao': 'novo',
 }
 # Quais PedidoOnline entram no painel (pago em diante; nunca aguardando/cancelado).
-_STATUS_ONLINE_NO_PAINEL = ('pago', 'em_preparo', 'a_caminho', 'entregue')
+# 'divulgacao' entra tambem (pedido de brinde sem pagamento).
+_STATUS_ONLINE_NO_PAINEL = ('pago', 'em_preparo', 'a_caminho', 'entregue',
+                            'divulgacao')
 
 
 def _endereco_online(p):
