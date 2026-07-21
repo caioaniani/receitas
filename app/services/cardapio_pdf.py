@@ -155,40 +155,52 @@ class _CardapioPDF(FPDF):
     """Header fino a partir da 2ª página; rodapé discreto SEM URL (a URL no
     rodapé era exatamente a feiura do print do navegador)."""
 
-    def __init__(self, titulo_tipo):
-        super().__init__(orientation='P', unit='mm', format='A4')
+    def __init__(self, titulo_tipo, geo=_GEO_A4):
+        super().__init__(orientation='P', unit='mm',
+                         format=(geo.page_w, geo.page_h))
         self.titulo_tipo = titulo_tipo
-        self.set_margins(_MARGEM, _MARGEM, _MARGEM)
+        self.geo = geo
+        self.set_margins(geo.margem, geo.margem, geo.margem)
         self.set_auto_page_break(True, margin=16)
 
     def header(self):
+        g = self.geo
         # Fundo creme da página inteira — o site é #fafaf7, não branco.
         self.set_fill_color(*_C_BG)
-        self.rect(0, 0, 210, 297, style='F')
+        self.rect(0, 0, g.page_w, g.page_h, style='F')
         if self.page_no() == 1:
             return                      # capa desenha o próprio cabeçalho
         self.set_font('Times', 'B', 11)
         self.set_text_color(*_C_FG)
         # '·' e não '—': em-dash está fora do latin-1 e virava '?'.
-        self.cell(95, 6, _latin1('O Pão · Padaria Artesanal'))
+        self.cell(g.util - 38, 6, _latin1('O Pão · Padaria Artesanal'))
         self.set_font('Helvetica', '', 9)
         self.set_text_color(*_C_SOFT)
-        self.cell(85, 6, _latin1('Cardápio · %s' % self.titulo_tipo),
+        self.cell(38, 6, _latin1('Cardápio · %s' % self.titulo_tipo),
                   align='R', new_x='LMARGIN', new_y='NEXT')
         self.set_draw_color(*_C_BORDER)
-        self.line(_MARGEM, self.get_y() + 1, 200, self.get_y() + 1)
+        self.line(g.margem, self.get_y() + 1, g.page_w - g.margem,
+                  self.get_y() + 1)
         self.ln(5)
 
     def footer(self):
         # Rodapé: nome + endereço (Rua Ribeiro do Vale, 455 — pedido do
-        # dono 21/07). O © foi tirado a pedido do dono 20/07.
+        # dono 21/07). O © foi tirado a pedido do dono 20/07. No mobile a
+        # página é estreita: linha única centrada menor, sem "página N".
+        g = self.geo
         self.set_y(-12)
-        self.set_font('Helvetica', '', 8)
         self.set_text_color(*_C_SOFT)
-        self.cell(150, 6, _latin1('O Pão Padaria Artesanal · '
-                                   'Rua Ribeiro do Vale, 455 · '
-                                   'Brooklin, São Paulo'))
-        self.cell(30, 6, _latin1('página %d' % self.page_no()), align='R')
+        endereco = _latin1('O Pão Padaria Artesanal · '
+                           'Rua Ribeiro do Vale, 455 · '
+                           'Brooklin, São Paulo')
+        if g.rodape_paginas:
+            self.set_font('Helvetica', '', 8)
+            self.cell(g.util - 30, 6, endereco)
+            self.cell(30, 6, _latin1('página %d' % self.page_no()),
+                      align='R')
+        else:
+            self.set_font('Helvetica', '', 6.5)
+            self.cell(g.util, 6, endereco, align='C')
 
 
 def _logo_bytes(logo_data):
