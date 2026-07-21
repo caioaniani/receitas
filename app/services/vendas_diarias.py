@@ -414,6 +414,39 @@ def faturamento_por_loja(data_inicial, data_final, capturar=True):
     return total, {k: round(v, 2) for k, v in por_loja.items()}, n_ped
 
 
+def cancelamentos_descontos_do_banco(data_inicial, data_final):
+    """Le do snapshot (`VendaSeruDiaBreakdown`) os CANCELAMENTOS (contagem +
+    valor) e o total de DESCONTOS do periodo, SEM tocar na API — fonte do
+    painel Vendas da home do admin (cancelamentos/descontos do dia).
+
+    Cancelados: dimensao 'cancelados', chave '' = contagem, chave 'v' = valor.
+    Descontos: dimensao 'desconto', chave '' = soma do `discount` das vendas
+    nao canceladas. Dia capturado ANTES dessas linhas existirem devolve 0 no
+    campo faltante (contagem de cancelados sempre existe; valor/desconto ficam
+    0 ate o cron recapturar) — nunca quebra, so subconta ate atualizar."""
+    cancel_n = 0
+    cancel_v = 0.0
+    desconto = 0.0
+    for dim, chave, val in (db.session.query(
+            VendaSeruDiaBreakdown.dimensao, VendaSeruDiaBreakdown.chave,
+            VendaSeruDiaBreakdown.valor)
+            .filter(VendaSeruDiaBreakdown.data >= data_inicial,
+                    VendaSeruDiaBreakdown.data <= data_final,
+                    VendaSeruDiaBreakdown.dimensao.in_(
+                        ('cancelados', 'desconto'))).all()):
+        v = float(val or 0)
+        if dim == 'cancelados':
+            if chave == 'v':
+                cancel_v += v
+            else:
+                cancel_n += int(v)
+        else:  # desconto
+            desconto += v
+    return {'cancelados_n': cancel_n,
+            'cancelados_valor': round(cancel_v, 2),
+            'desconto': round(desconto, 2)}
+
+
 def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
     """Agrega a tela 'Vendas PDV' (faturamento + pagamento + canal + loja +
     cancelados) lendo do banco (`VendaSeruDiaLoja` + `VendaSeruDiaBreakdown`),
