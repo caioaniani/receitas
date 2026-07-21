@@ -112,7 +112,10 @@ def _form_retirada(loja, base):
     return {'nome': 'Maria Silva', 'email': 'm@x.com',
             'cpf': '529.982.247-25', 'aceite_lgpd': '1',
             'modo_entrega': 'retirada', 'loja_id': str(loja.id),
-            'data_entrega': data, 'janela_entrega': '08:00–09:00'}
+            'data_entrega': data, 'janela_entrega': '08:00–09:00',
+            # Endereço pra NF-e — a retirada passou a exigir (20/07/2026).
+            'cep': '04077-000', 'logradouro': 'Rua X', 'numero': '10',
+            'bairro': 'Moema', 'cidade': 'São Paulo', 'uf': 'SP'}
 
 
 def test_criar_pedido_grava_fatiado(app):
