@@ -125,6 +125,27 @@
 </div>
 {% endif %}
 
+{% if resultado.retorno_demanda %}
+<div class="card mb-3 border-warning">
+    <div class="card-header py-2"><strong>♻️ Retorno necessário</strong>
+        <span class="small text-muted">— vem de SOBRA (Croissant Tradicional
+            devolvido das lojas), NÃO se produz. É o total consumido pelos
+            produtos acima (Almond + Nutella etc.) — some as sobras que você
+            tem antes de mandar produzir mais tradicional.</span></div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0" style="font-variant-numeric: tabular-nums;">
+            <thead><tr><th>Retorno</th><th class="text-end">Necessário</th></tr></thead>
+            <tbody>
+            {% for r in resultado.retorno_demanda %}
+            <tr><td>{{ r.nome }}</td>
+                <td class="text-end fw-bold">{{ qtd_unidade(r.qtd, 'un') }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 {% if resultado.compra.fornecedores %}
 <div class="d-flex justify-content-between align-items-baseline mb-2">
     <h5 class="mb-0">Matéria-prima a comprar
