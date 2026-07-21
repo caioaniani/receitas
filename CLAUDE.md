@@ -192,6 +192,21 @@ abrir tela). Tres pecas, UMA fonte de dados
   Testes: secao "Cancelamentos (valor) e descontos" em
   `tests/test_vendas_diarias.py` + `test_vendas_{hoje,ontem}_inclui_
   cancelamentos_e_descontos` em `tests/test_briefing_dono.py`.
+  **ABRIR o detalhe (drill-down AO VIVO, 21/07/2026, escolha do dono via
+  AskUserQuestion "pedidos individuais ao vivo")**: a linha virou BOTAO
+  (`.abrir-cd` em `home.html`) que abre um modal com o detalhe pedido-a-
+  pedido do dia — cancelados (hora, loja, valor, caixa, tem NFC-e) e
+  descontos (hora, loja, subtotal, desconto, total). EXCECAO CONTROLADA a
+  regra "home nunca bate na API": o detalhe pedido-a-pedido NAO existe no
+  snapshot (so agregados por dimensao), entao SO ESTE caminho — no CLIQUE
+  explicito, nunca no render da home — consulta o Seru. Servico
+  `briefing_dono.cancelados_descontos_detalhe(dia)` (read-only, usa
+  `_nf_autorizada` do vigia + `_resolver_loja_seru` pra loja; desconto so de
+  NAO-cancelado); rota `GET /admin/vendas/cancelados-descontos?dia=`
+  (`@owner_required`, restrita a hoje/ontem = 400 fora, Seru fora = 502
+  gracioso). Modal Bootstrap com `esc()` em TODO texto externo (loja/caixa/
+  codigo/erro vem da API) + `table-responsive`. Testes: secao "Drill-down"
+  em `tests/test_briefing_dono.py`.
 - **Manual de operacao** (`GET /admin/manual`, admin): o que roda sozinho /
   diario / semanal / mensal e de quem e cada gesto, com links.
   **REGRA DE PROCESSO**: toda funcao nova se registra no manual NA MESMA
