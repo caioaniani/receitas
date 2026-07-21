@@ -299,7 +299,8 @@ def test_sem_presente_nao_salva_destinatario(app):
                 'modo_entrega': 'retirada', 'loja_id': str(loja.id),
                 'data_entrega': data, 'janela_entrega': '08:00–09:00',
                 # sem e_presente
-                'nome_destinatario': 'Ana', 'telefone_destinatario': '11999'}
+                'nome_destinatario': 'Ana', 'telefone_destinatario': '11999',
+                **_END_NF}
         pedido, _erros = loja_checkout.criar_pedido(
             form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
         assert pedido.nome_destinatario is None
