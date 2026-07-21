@@ -370,6 +370,66 @@ def _quem_somos_raw():
     return CARDAPIO_QUEM_SOMOS_DEFAULT if raw is None else raw
 
 
+# Ordem das seções do cardápio (21/07/2026, pedido do dono: "alterar as
+# sessões com um grab and drop em editar regras"). Duas listas arrastáveis
+# na tela de regras, salvas em AppConfig como JSON:
+# - `cardapio_ordem_categorias`: ordem das categorias de produto (vale pra
+#   tela E pros PDFs — a fonte única `_cardapio_categorias` devolve o dict
+#   já na ordem final). Categoria fora da lista (nova/renomeada) entra no
+#   FIM em ordem alfabética ('Outros' por último) — nunca some.
+# - `cardapio_ordem_rodape`: ordem dos blocos do rodapé (quem_somos /
+#   regras / preparo). Bloco ausente da lista entra no fim, ordem default.
+_CARDAPIO_ORDEM_CATS_KEY = 'cardapio_ordem_categorias'
+_CARDAPIO_ORDEM_RODAPE_KEY = 'cardapio_ordem_rodape'
+RODAPE_BLOCOS = ['quem_somos', 'regras', 'preparo']
+RODAPE_LABELS = {'quem_somos': 'Quem somos nós',
+                 'regras': 'Regras do pedido (atacado)',
+                 'preparo': 'Métodos de preparo (atacado)'}
+
+
+def _ordem_categorias_salva():
+    """Lista de nomes de categoria na ordem escolhida pelo dono ([] = sem
+    preferência, fica a alfabética)."""
+    import json
+
+    from app.models import AppConfig
+    raw = AppConfig.get(_CARDAPIO_ORDEM_CATS_KEY)
+    if not raw:
+        return []
+    try:
+        return [str(c).strip() for c in json.loads(raw) if str(c).strip()]
+    except (ValueError, TypeError):
+        current_app.logger.warning('cardapio: ordem_categorias inválida')
+        return []
+
+
+def _aplicar_ordem_categorias(categorias):
+    """Reordena o dict de categorias: primeiro as da ordem salva, depois as
+    demais em alfabética com 'Outros' por último."""
+    ordem = _ordem_categorias_salva()
+
+    def chave(c):
+        if c in ordem:
+            return (0, ordem.index(c), '')
+        return (1, c == 'Outros', c)
+    return {c: categorias[c] for c in sorted(categorias, key=chave)}
+
+
+def _ordem_rodape():
+    """Ordem dos blocos do rodapé (sempre os 3, blocos novos no fim)."""
+    import json
+
+    from app.models import AppConfig
+    raw = AppConfig.get(_CARDAPIO_ORDEM_RODAPE_KEY)
+    ordem = []
+    if raw:
+        try:
+            ordem = [b for b in json.loads(raw) if b in RODAPE_BLOCOS]
+        except (ValueError, TypeError):
+            current_app.logger.warning('cardapio: ordem_rodape inválida')
+    return ordem + [b for b in RODAPE_BLOCOS if b not in ordem]
+
+
 # Foto do "Quem somos nós" (21/07/2026, pedido do dono — mandou a foto da
 # fachada da loja): entra ao lado do texto, na tela e no PDF. DEFAULT =
 # arquivo commitado em static/img/cardapio_quem_somos.jpg (a foto que o dono
