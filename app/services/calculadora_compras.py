@@ -52,9 +52,10 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
     à operação do dia). Só re-rotula a saída do motor; a explosão é a mesma.
 
     Retorna {'compra': <ordem_compra_consolidada>, 'producao': [...] (receitas
-             a produzir — o que se passa pro padeiro), 'compras_diretas': [...],
-             'sub_receitas': [...], 'itens_ok': [...], 'avisos': [...],
-             'detalhes': [...] (rastro informativo — NÃO é problema)}.
+             a produzir — o que se passa pro padeiro), 'retorno_demanda': [...]
+             (retorno consumido — vem de sobra, não se produz),
+             'compras_diretas': [...], 'sub_receitas': [...], 'itens_ok': [...],
+             'avisos': [...], 'detalhes': [...] (rastro informativo)}.
     """
     from app.services.cestas import componentes_de_cesta
     from app.services.producao import ordem_compra_consolidada
