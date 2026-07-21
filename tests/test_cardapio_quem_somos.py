@@ -129,3 +129,87 @@ def test_pdf_cresce_com_quem_somos_em_todos_os_tipos(app):
         com = gerar_cardapio_pdf(tipo, _cats(), [], quem_somos=paragrafos)
         assert com.startswith(b'%PDF')
         assert len(com) > len(sem) + 100, tipo
+
+
+# ── Foto do bloco (21/07/2026) ─────────────────────────────────────────────
+
+def test_foto_default_estatica_na_tela(app, admin_user, cliente):
+    """Sem AppConfig, a tela usa a foto commitada da fachada
+    (static/img/cardapio_quem_somos.jpg)."""
+    _receita()
+    _login(cliente, admin_user)
+    body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert 'img/cardapio_quem_somos.jpg' in body
+    assert 'quem-somos-foto' in body
+
+
+def test_foto_bytes_para_pdf_e_upload_override(app):
+    """`_quem_somos_foto_bytes` lê o estático (JPEG real) e o upload via
+    AppConfig (data URI) tem prioridade."""
+    import base64
+
+    from app.blueprints.main.routes import (
+        _quem_somos_foto_bytes,
+        _quem_somos_foto_src,
+    )
+    from app.models import AppConfig
+    with app.test_request_context():
+        b = _quem_somos_foto_bytes()
+        assert b and b[:2] == b'\xff\xd8'   # JPEG magic
+        fake = b'\xff\xd8meufake'
+        AppConfig.set('cardapio_quem_somos_foto',
+                      'data:image/jpeg;base64,'
+                      + base64.b64encode(fake).decode())
+        db.session.commit()
+        assert _quem_somos_foto_bytes() == fake
+        assert _quem_somos_foto_src().startswith('data:image/jpeg')
+        # Remover ('') volta ao estático
+        AppConfig.set('cardapio_quem_somos_foto', '')
+        db.session.commit()
+        assert _quem_somos_foto_bytes()[:2] == b'\xff\xd8'
+        assert 'cardapio_quem_somos.jpg' in _quem_somos_foto_src()
+
+
+def test_upload_foto_processa_e_remover_volta_ao_padrao(app, admin_user,
+                                                        cliente):
+    from io import BytesIO
+
+    from PIL import Image
+
+    from app.models import AppConfig
+    _login(cliente, admin_user)
+    buf = BytesIO()
+    Image.new('RGB', (600, 500), (200, 120, 60)).save(buf, format='PNG')
+    buf.seek(0)
+    resp = cliente.post('/admin/cardapio-atacado/quem-somos-foto',
+                        data={'qs_foto_arquivo': (buf, 'loja.png',
+                                                  'image/png')},
+                        content_type='multipart/form-data')
+    assert resp.status_code in (302, 303)
+    uri = AppConfig.get('cardapio_quem_somos_foto')
+    assert uri and uri.startswith('data:image/jpeg;base64,')
+
+    cliente.post('/admin/cardapio-atacado/quem-somos-foto/remover')
+    assert AppConfig.get('cardapio_quem_somos_foto') == ''
+
+
+def test_pdf_cresce_com_foto(app):
+    from app.blueprints.main.routes import _quem_somos_foto_bytes
+    from app.services.cardapio_pdf import gerar_cardapio_pdf
+    with app.test_request_context():
+        foto = _quem_somos_foto_bytes()
+    paragrafos = ['Nossa história.']
+    sem = gerar_cardapio_pdf('atacado', _cats(), [], quem_somos=paragrafos)
+    com = gerar_cardapio_pdf('atacado', _cats(), [], quem_somos=paragrafos,
+                             quem_somos_foto=foto)
+    assert com.startswith(b'%PDF')
+    assert len(com) > len(sem) + 10000     # a foto real tem ~190KB
+
+
+# ── Rodapé com endereço (21/07/2026) ───────────────────────────────────────
+
+def test_rodape_tela_tem_endereco(app, admin_user, cliente):
+    _receita()
+    _login(cliente, admin_user)
+    body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
+    assert 'Rua Ribeiro do Vale, 455' in body
