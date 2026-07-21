@@ -56,6 +56,41 @@
     </div>
 </div>
 
+<div class="card mb-3">
+    <div class="card-header fw-semibold">
+        <i class="bi bi-camera"></i> Foto do "Quem somos nós"
+    </div>
+    <div class="card-body">
+        <p class="small text-muted mb-3">
+            Aparece ao lado da história da casa, no rodapé do cardápio
+            (tela e PDF, nos três tipos). A foto é cortada em 3:4 (retrato).
+        </p>
+        <div class="mb-3 d-flex align-items-start gap-3 flex-wrap">
+            <img src="{{ quem_somos_foto }}" alt="Foto atual"
+                 style="max-height:180px;border-radius:10px;border:1px solid #ddd;">
+            <div class="small text-muted">
+                {% if quem_somos_foto_custom %}Foto personalizada (enviada por aqui).
+                {% else %}Foto padrão: a fachada da loja.{% endif %}
+            </div>
+        </div>
+        <form method="POST" action="{{ url_for('main.cardapio_quem_somos_foto_upload') }}"
+              enctype="multipart/form-data" class="mb-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-2">
+                <input type="file" class="form-control" name="qs_foto_arquivo" accept="image/*" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Enviar foto</button>
+        </form>
+        {% if quem_somos_foto_custom %}
+        <form method="POST" action="{{ url_for('main.cardapio_quem_somos_foto_remover') }}"
+              onsubmit="return confirm('Voltar para a foto padrão da fachada?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-danger btn-sm">Voltar à foto padrão</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
 <form method="POST" class="card">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="card-body">
