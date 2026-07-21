@@ -643,7 +643,7 @@ def _altura_categoria(itens, tem_foto, geo=_GEO_A4):
 
 def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
                        quem_somos=None, quem_somos_foto=None,
-                       formato='a4'):
+                       formato='a4', ordem_rodape=None):
     """PDF pronto (bytes). `categorias`/`regras` na MESMA forma da tela
     (main._cardapio_categorias — fonte única, nunca divergir da web).
     `logo`: data URI do logotipo (AppConfig) ou None (cai no texto "O Pão").
