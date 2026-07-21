@@ -45,6 +45,12 @@
             </div>
             {% endfor %}
         </div>
+        {# Catálogo compartilhado do typeahead: receitas + produtos.
+           Produto ganha sufixo pra distinguir de receita homônima. #}
+        <datalist id="calc-itens">
+            {% for r in receitas %}<option value="{{ r.nome }}" data-token="r_{{ r.id }}"></option>{% endfor %}
+            {% for p in produtos %}<option value="{{ p.nome }} · produto" data-token="p_{{ p.id }}"></option>{% endfor %}
+        </datalist>
         <div class="form-check mt-2">
             <input class="form-check-input" type="checkbox" name="considerar_estoque"
                    value="1" id="chk-estoque" {% if considerar_estoque %}checked{% endif %}>
