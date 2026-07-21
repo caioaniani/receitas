@@ -552,6 +552,16 @@ def emitir_nf(pedido, user_id=None, recriar=False):
         return {'ok': False, 'msg': 'Pedido não está pago — não emite NF.'}
 
     def _montar():
+        # Trava fail-closed: endereço do destinatário incompleto NÃO vai à
+        # SEFAZ em branco (retirada nascia sem endereço estruturado — dono
+        # 20/07/2026). O checkout de retirada agora coleta o endereço; esta
+        # guarda protege qualquer pedido antigo/edge que ainda esteja sem.
+        end_faltando = _endereco_destinatario_incompleto(pedido)
+        if end_faltando:
+            return None, ('Endereço do destinatário incompleto ('
+                          + ', '.join(end_faltando)
+                          + ') — a NF não foi enviada à SEFAZ. Complete o '
+                          'endereço do cliente e emita de novo.')
         itens, faltando = _payload_itens(pedido)
         if faltando:
             return None, ('Itens sem SKU mapeado no Tiny: '
