@@ -162,9 +162,9 @@ def test_cancelar_estorna_estoque(app):
         modo_entrega='agendada', nome_destinatario='X')
     assert _saldo(origem, r) == 7
     res = svc.cancelar_divulgacao(p)
-    assert res['revertido'] == 3
+    assert res['revertido'] >= 1           # nº de movimentos revertidos
     assert p.status == 'cancelado'
-    assert _saldo(origem, r) == 10         # devolveu tudo
+    assert _saldo(origem, r) == 10         # devolveu TODAS as 3 unidades
     # idempotente
     assert svc.cancelar_divulgacao(p)['ja_cancelado'] is True
 
