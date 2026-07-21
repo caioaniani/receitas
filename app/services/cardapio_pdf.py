@@ -474,11 +474,14 @@ def _box_quem_somos(pdf, paragrafos, foto=None):
     pdf.set_y(y0 + alt + 5)
 
 
-def _titulo_categoria(pdf, nome, alt_primeira=_CARD_H):
+def _titulo_categoria(pdf, nome, alt_primeira=None):
     # Categoria órfã no pé da página: quebra antes (nunca título solto).
     # `alt_primeira` = altura do 1º bloco da categoria — card de foto no
     # grid, ou só ~10mm quando a seção é de linhas de texto (senão 3
-    # linhas ganhavam página própria à toa).
+    # linhas ganhavam página própria à toa). Default = card da geometria
+    # ATUAL (constante A4 fixa quebraria página à toa no mobile).
+    if alt_primeira is None:
+        alt_primeira = pdf.geo.card_h
     if pdf.get_y() + 14 + alt_primeira > pdf.geo.y_limite:
         pdf.add_page()
     pdf.ln(2)
