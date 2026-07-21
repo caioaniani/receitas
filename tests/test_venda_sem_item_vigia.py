@@ -37,7 +37,25 @@ def _extrair_itens_fake(p):
             for i in (p.get('items') or [])]
 
 
-def _rodar(pedidos, zapi_ok=True, dono='5511999999999'):
+_SEM_DETALHE = object()   # sentinela: força detalhes_pedido a devolver None
+
+
+def _detalhe_fake(pedidos, detalhes):
+    """detalhes_pedido(id): por padrão o detalhe == o pedido da lista (a
+    Seru concorda nos dois). `detalhes` sobrescreve por id — pra simular o
+    LAG (lista sem itens/NF, detalhe com itens/NFC-e) ou a falha do detalhe
+    (`_SEM_DETALHE` -> None, o vigia adia)."""
+    por_id = {p.get('id'): p for p in pedidos}
+    if detalhes:
+        por_id.update(detalhes)
+
+    def _f(pid):
+        v = por_id.get(pid)
+        return None if v is _SEM_DETALHE else v
+    return _f
+
+
+def _rodar(pedidos, zapi_ok=True, dono='5511999999999', detalhes=None):
     from flask import current_app
     current_app.config['ZAPI_BOT_DONO_NUMERO'] = dono
     current_app.config['CHATWOOT_VIGIA_INFRA_NUMERO'] = ''
@@ -45,6 +63,8 @@ def _rodar(pedidos, zapi_ok=True, dono='5511999999999'):
                return_value=pedidos), \
          patch('app.services.seru.extrair_itens',
                side_effect=_extrair_itens_fake), \
+         patch('app.services.seru.detalhes_pedido',
+               side_effect=_detalhe_fake(pedidos, detalhes)), \
          patch('app.services.zapi.enviar_texto',
                return_value={'ok': zapi_ok}) as env:
         out = vigia.vigiar()
