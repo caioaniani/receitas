@@ -240,6 +240,7 @@
         cepStatus.textContent = 'endereço preenchido';
         cepStatus.className = 'form-text text-success';
         document.getElementById('endereco_numero').focus();
+        carregarJanelas();          // endereço mudou → recalcula horários
       } else {
         cepStatus.textContent = res.j.erro || 'confira o CEP';
         cepStatus.className = 'form-text text-warning';
