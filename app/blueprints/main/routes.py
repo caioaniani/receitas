@@ -456,6 +456,7 @@ def cardapio_atacado_regras():
     return render_template('admin/cardapio_atacado_regras.html',
                            campos=CARDAPIO_ATACADO_CAMPOS, atuais=atuais,
                            preparo_raw=_preparo_atacado_raw(),
+                           quem_somos_raw=_quem_somos_raw(),
                            logo=_cardapio_logo())
 
 
