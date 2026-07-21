@@ -333,19 +333,23 @@ def _box_preparo(pdf, metodos):
     pdf.set_y(y0 + alt + 5)
 
 
-def _box_quem_somos(pdf, paragrafos):
+def _box_quem_somos(pdf, paragrafos, foto=None):
     """Caixa "Quem somos nós" (21/07/2026) — a história da casa no rodapé,
     ANTES das regras/métodos. Mesma cara bege das outras caixas; parágrafos
-    longos quebram linha (altura medida com dry_run, caixa nunca corta)."""
-    _LARG_TXT = 180
+    longos quebram linha (altura medida com dry_run, caixa nunca corta).
+    `foto`: bytes JPEG 3:4 (a fachada da loja) desenhados à DIREITA do
+    texto; None = caixa só de texto (foto quebrada nunca derruba o PDF)."""
     _LH = 4.6
+    _FOTO_W = 56                            # 3:4 → ~74.7mm de altura
+    _FOTO_H = _FOTO_W * 4 / 3
+    larg_txt = 180 - (_FOTO_W + 5 if foto else 0)
     pdf.set_font('Helvetica', '', 9)
-    alt = 10
+    alt_txt = 0
     corpos = [_latin1(p) for p in paragrafos]
     for txt in corpos:
-        alt += pdf.multi_cell(_LARG_TXT, _LH, txt,
-                              dry_run=True, output='HEIGHT') + 1.6
-    alt += 1.5
+        alt_txt += pdf.multi_cell(larg_txt, _LH, txt,
+                                  dry_run=True, output='HEIGHT') + 1.6
+    alt = 10 + (max(alt_txt, _FOTO_H + 2) if foto else alt_txt) + 1.5
     y0 = pdf.get_y()
     if y0 + alt > _Y_LIMITE:               # não cabe: caixa em página nova
         pdf.add_page()
@@ -354,6 +358,13 @@ def _box_quem_somos(pdf, paragrafos):
     pdf.set_draw_color(*_C_BORDER)
     pdf.rect(_MARGEM, y0, 190, alt, style='FD',
              round_corners=True, corner_radius=_RAIO)
+    if foto:
+        try:
+            pdf.image(BytesIO(foto), x=_MARGEM + 5 + larg_txt + 3,
+                      y=y0 + 7, w=_FOTO_W, h=_FOTO_H)
+        except Exception:  # noqa: BLE001 — foto ruim não derruba o PDF
+            logger.warning('cardapio_pdf: foto quem-somos nao embutiu',
+                           exc_info=True)
     pdf.set_y(y0 + 4)
     pdf.set_x(_MARGEM + 5)
     pdf.set_font('Helvetica', 'B', 9)
@@ -365,7 +376,7 @@ def _box_quem_somos(pdf, paragrafos):
     pdf.ln(0.5)
     lm_orig, rm_orig = pdf.l_margin, pdf.r_margin
     pdf.set_left_margin(_MARGEM + 5)
-    pdf.set_right_margin(210 - (_MARGEM + 5) - _LARG_TXT)
+    pdf.set_right_margin(210 - (_MARGEM + 5) - larg_txt)
     pdf.set_font('Helvetica', '', 9)
     pdf.set_text_color(*_C_FG)
     for txt in corpos:
