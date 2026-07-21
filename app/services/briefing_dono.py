@@ -388,6 +388,9 @@ def vendas_hoje(capturar=False):
         'site_qtd': int(site_rows[0] or 0),
         'site_total': site_total,
         'total_geral': round(total + site_total, 2),
+        'cancelados_n': cd['cancelados_n'],
+        'cancelados_valor': cd['cancelados_valor'],
+        'desconto': cd['desconto'],
     }
 
 
