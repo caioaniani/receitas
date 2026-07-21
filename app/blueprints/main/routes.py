@@ -810,7 +810,8 @@ def cardapio_pdf_export():
                                       logo=_cardapio_logo(), preparo=preparo,
                                       quem_somos=_quem_somos(),
                                       quem_somos_foto=_quem_somos_foto_bytes(),
-                                      formato=formato)
+                                      formato=formato,
+                                      ordem_rodape=_ordem_rodape())
     resp = current_app.response_class(conteudo, mimetype='application/pdf')
     sufixo = '_mobile' if formato == 'mobile' else ''
     resp.headers['Content-Disposition'] = (
