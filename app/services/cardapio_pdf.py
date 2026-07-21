@@ -652,15 +652,19 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
     texto de marca, diferente das regras/preparo); `quem_somos_foto`: bytes
     da foto que acompanha a história (fachada da loja).
     `formato`: 'a4' (impressão/desktop) ou 'mobile' (página estreita 9:16
-    pra mandar por WhatsApp — 21/07/2026, pedido do dono)."""
+    pra mandar por WhatsApp — 21/07/2026, pedido do dono).
+    `ordem_rodape`: ordem dos blocos do fim ('quem_somos'/'regras'/
+    'preparo' — drag-and-drop do dono, 21/07/2026)."""
     titulo = _TITULO_TIPO.get(tipo, tipo.title())
     geo = _GEO_MOBILE if formato == 'mobile' else _GEO_A4
     pdf = _CardapioPDF(titulo, geo=geo)
     pdf.add_page()
     _capa(pdf, titulo, logo_data=logo)
 
-    # Alfabética, com 'Outros' sempre por último (padrão de cardápio).
-    for cat in sorted(categorias, key=lambda c: (c == 'Outros', c)):
+    # Ordem de INSERÇÃO do dict — a fonte única (_cardapio_categorias) já
+    # devolve na ordem final (drag-and-drop do dono; sem preferência =
+    # alfabética com 'Outros' por último, que era a regra daqui).
+    for cat in categorias:
         itens = categorias[cat]
         # MESMA regra do site (main/cardapio.html `tem_foto`): categoria com
         # ALGUMA foto vira grid de cards com TODOS os itens (sem foto =
