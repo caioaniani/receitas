@@ -453,7 +453,15 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
         elif dim == 'canal':
             det[ln]['por_canal'][chave or '—'] += v
         elif dim == 'cancelados':
-            det[ln]['cancelados'] += int(v)
+            # chave '' = contagem; chave 'v' = valor (total cancelado). Sem o
+            # split, o valor entraria como contagem (dinheiro virando número
+            # de pedidos) — daí a distinção explícita.
+            if chave == 'v':
+                det[ln]['cancelados_valor'] += v
+            else:
+                det[ln]['cancelados'] += int(v)
+        elif dim == 'desconto':
+            det[ln]['desconto'] += v
         elif dim == 'sem_itens':
             # Cobranca so-valor por CANAL (18/07/2026): chave '<tag>' =
             # valor, '<tag>:n' = contagem. DELIVERY (99food etc.) e venda
