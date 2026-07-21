@@ -423,6 +423,15 @@ def _sincronizar_situacao(pedido):
     return {'autorizada': autorizada, 'rejeitada': rejeitada, 'situacao': sigs}
 
 
+def _set_nf_erro(alvo, texto):
+    """Persiste (ou limpa) o MOTIVO da rejeição da SEFAZ no alvo, se ele
+    tiver a coluna `nf_erro` (hoje só PedidoLoja). Genérico via hasattr —
+    site/B2B seguem sem a coluna sem quebrar. TEXT truncado por segurança.
+    NÃO commita (o caller decide o momento do commit)."""
+    if hasattr(alvo, 'nf_erro'):
+        alvo.nf_erro = (str(texto)[:2000] if texto else None)
+
+
 def emitir_nf_generico(alvo, montar_payload, recriar=False):
     """Motor comum da emissão de NF via Tiny — usado pelo site (PedidoOnline)
     e pelo B2B (VendaB2B, ver `tiny_nf_b2b`). `alvo` precisa ter os campos
@@ -448,6 +457,7 @@ def emitir_nf_generico(alvo, montar_payload, recriar=False):
         alvo.tiny_nota_fiscal_id = None
         alvo.nf_status = None
         alvo.nf_emitida_em = None
+        _set_nf_erro(alvo, None)          # tentativa nova, sem erro velho
         db.session.commit()
     # ANTES de tentar emitir de novo: se já temos NF, ver se ela já autorizou
     # em background (caso da 011428 — status_processamento='2' enganoso). Isso
