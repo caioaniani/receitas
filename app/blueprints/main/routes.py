@@ -4647,9 +4647,9 @@ def loja_online_divulgacao():
 @main_bp.route('/admin/loja-online/divulgacao/<codigo>/cancelar',
                methods=['POST'])
 @login_required
-@admin_required
+@divulgacao_required
 def loja_online_divulgacao_cancelar(codigo):
-    """Cancela uma divulgacao devolvendo o estoque baixado (so admin)."""
+    """Cancela uma divulgacao devolvendo o estoque baixado (dono/marketing)."""
     from flask import flash, redirect, url_for
 
     from app.models import PedidoOnline
