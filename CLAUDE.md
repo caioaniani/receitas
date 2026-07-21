@@ -1998,6 +1998,26 @@ pelo WHATSAPP e abre no navegador de verdade.
 Pesquisa de melhorias no bot/vigia/auditor aprovada pelo dono virou 4
 pacotes, todos implementados. Testes: `tests/test_bot_melhorias_0702.py`.
 
+**21/07/2026 (caso Daiane Food Center, auditor)** — fechamento puro NUNCA
+vira handoff. A fornecedora agradeceu ("Muito Obrigada🙏") depois de o bot ja
+ter respondido e o bot respondeu "Já te passo para um atendente" — handoff
+preguicoso. A secao FECHAMENTO do prompt (decisao do dono 16/06: agradecimento
+puro = `encerrar_conversa` em SILENCIO) existia, mas o modelo a ignorou. Fix em
+DUAS camadas + reforco no prompt (`tests/test_chatbot_encerrar_e_ig_mention.py`,
+grupo "Fix 3"):
+- **Camada 1 (deterministica, ANTES do modelo)** em `chatbot.responder`: se
+  `_e_fechamento(msg)` (reusa o detector do vigia) e o bot NAO deixou pergunta
+  pendente (`_bot_aguarda_resposta` = ultima fala do bot termina em '?'),
+  encerra em silencio sem nem chamar o Claude. A trava do '?' evita encerrar
+  quando "ok/sim/isso" e resposta a "confirma o pedido?" (= "sim, quero").
+- **Camada 2 (enforcement)**: quando o bot fez pergunta (Camada 1 defere) e o
+  modelo mesmo assim tenta handoff preguicoso num fechamento, a recusa mandada
+  no tool_result orienta `encerrar_conversa` (nao "consulte antes" — nao ha o
+  que consultar num "obrigada"). O modelo encerra na volta seguinte.
+- **Prompt**: "🚫 obrigada/valeu/ok NAO e pedido de atendente. NUNCA chame
+  transferir_para_humano num fechamento — a ferramenta certa e
+  encerrar_conversa." Mantida a decisao do dono de SILENCIO (nao "De nada!").
+
 **06/07/2026 (caso Simone, auditor)** — `tests/test_handoff_dedupe.py`:
 - **Dedupe de handoff**: conversa ja transferida ha < 90 min
   (`HANDOFF_DEDUP_MIN`) nao ganha 2º "vou te passar pra equipe" — webhook e
