@@ -4542,6 +4542,7 @@ _STATUS_PEDIDO_ONLINE_LABEL = {
     'a_caminho': 'A caminho',
     'entregue': 'Entregue',
     'cancelado': 'Cancelado',
+    'divulgacao': '⭐ Divulgação',
 }
 
 
