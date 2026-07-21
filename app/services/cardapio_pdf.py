@@ -710,6 +710,3 @@ def _secao_produtos(pdf, categorias, geo):
         else:
             _lista_categoria(pdf, itens)
             pdf.ln(2)
-
-    saida = pdf.output()
-    return bytes(saida)
