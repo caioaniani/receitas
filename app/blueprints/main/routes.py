@@ -445,6 +445,9 @@ def cardapio_atacado_regras():
         # some; so' a chave AUSENTE cai no default — ver _preparo_atacado).
         AppConfig.set(_CARDAPIO_PREPARO_KEY,
                       (request.form.get('preparo') or '').strip())
+        # Quem somos nós: mesmo contrato (vazio = escondido de proposito).
+        AppConfig.set(_CARDAPIO_QUEM_SOMOS_KEY,
+                      (request.form.get('quem_somos') or '').strip())
         db.session.commit()
         flash('Regras do atacado salvas. Elas já aparecem no cardápio.', 'success')
         return redirect(url_for('main.cardapio', tipo='atacado'))
