@@ -521,6 +521,9 @@ def cardapio_atacado_regras():
                            preparo_raw=_preparo_atacado_raw(),
                            quem_somos_raw=_quem_somos_raw(),
                            quem_somos_foto=_quem_somos_foto_src(),
+                           quem_somos_foto_custom=bool(
+                               (AppConfig.get(_CARDAPIO_QS_FOTO_KEY)
+                                or '').strip()),
                            logo=_cardapio_logo())
 
 
