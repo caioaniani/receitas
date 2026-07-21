@@ -452,21 +452,32 @@ def criar_pedido(form, itens_raw, *, base=None):
         # de endereco na retirada tambem).
         logradouro = (form.get('logradouro') or '').strip()
         numero = (form.get('numero') or '').strip()
+        bairro = (form.get('bairro') or '').strip()
         cidade = (form.get('cidade') or '').strip()
+        uf = (form.get('uf') or '').strip().upper()[:2]
+        # Exige o CONJUNTO que a SEFAZ pede (bairro/UF inclusos): no caminho
+        # feliz vêm READONLY do CEP; exigir aqui fecha a armadilha do
+        # fail-open (CEP fora do ar / CEP sem rua) — sem isso o pedido pago
+        # ficava com a NF travada pra sempre (guard da emissão) e a retirada
+        # não tem editor de endereço no admin (achado de revisão 20/07/2026).
         if not endereco_cep:
             erros.append('Informe o CEP para a nota fiscal.')
         if not logradouro:
             erros.append('Informe o logradouro (rua/avenida) para a nota fiscal.')
         if not numero:
             erros.append('Informe o número do endereço para a nota fiscal.')
+        if not bairro:
+            erros.append('Informe o bairro para a nota fiscal.')
         if not cidade:
             erros.append('Informe a cidade para a nota fiscal.')
+        if not uf:
+            erros.append('Informe o estado (UF) para a nota fiscal.')
         end_logradouro = logradouro or None
         end_numero = numero or None
         end_complemento = (form.get('complemento') or '').strip() or None
-        end_bairro = (form.get('bairro') or '').strip() or None
+        end_bairro = bairro or None
         end_cidade = cidade or None
-        end_uf = ((form.get('uf') or '').strip().upper()[:2]) or None
+        end_uf = uf or None
     elif modo in ('agendada', 'express'):
         if modo == 'express' and not express_disponivel(base):
             erros.append('Express indisponível agora (fora do horário de '
