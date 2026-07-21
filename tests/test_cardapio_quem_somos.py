@@ -213,3 +213,60 @@ def test_rodape_tela_tem_endereco(app, admin_user, cliente):
     _login(cliente, admin_user)
     body = cliente.get('/cardapio?tipo=atacado').get_data(as_text=True)
     assert 'Rua Ribeiro do Vale, 455' in body
+
+
+# ── PDF formato mobile (21/07/2026) ────────────────────────────────────────
+
+def test_pdf_mobile_pagina_estreita(app):
+    """formato='mobile' gera página 120x213mm (MediaBox em pontos:
+    340.16 x 603.78); o A4 segue 210x297 (595.28 x 841.89)."""
+    from app.blueprints.main.routes import CARDAPIO_QUEM_SOMOS_DEFAULT
+    from app.services.cardapio_pdf import gerar_cardapio_pdf
+    paragrafos = [ln for ln in CARDAPIO_QUEM_SOMOS_DEFAULT.splitlines()
+                  if ln.strip()]
+    regras = [{'label': 'Pedido mínimo', 'valor': 'R$ 300,00'}]
+    preparo = [{'label': 'Backup', 'valor': 'descongelar e assar.'}]
+    mob = gerar_cardapio_pdf('atacado', _cats(), regras, preparo=preparo,
+                             quem_somos=paragrafos, formato='mobile')
+    a4 = gerar_cardapio_pdf('atacado', _cats(), regras, preparo=preparo,
+                            quem_somos=paragrafos)
+    assert mob.startswith(b'%PDF')
+    assert b'340.16 603.78' in mob
+    assert b'340.16 603.78' not in a4
+    assert b'595.28 841.89' in a4
+
+
+def test_pdf_mobile_com_foto_e_categorias_grandes(app):
+    """Mobile com foto do quem-somos + categoria grande (12 itens, força
+    quebra de página) gera sem exceção."""
+    from app.blueprints.main.routes import (
+        CARDAPIO_QUEM_SOMOS_DEFAULT,
+        _quem_somos_foto_bytes,
+    )
+    from app.services.cardapio_pdf import gerar_cardapio_pdf
+    with app.test_request_context():
+        foto = _quem_somos_foto_bytes()
+    paragrafos = [ln for ln in CARDAPIO_QUEM_SOMOS_DEFAULT.splitlines()
+                  if ln.strip()]
+    cats = {'Pães': [{'nome': f'Pão número {i}', 'preco_venda': 20.0,
+                      'descricao': 'Farinha T65 e levain.',
+                      'imagem_url': None, 'img_ref': None}
+                     for i in range(12)]}
+    pdf = gerar_cardapio_pdf('atacado', cats, [], quem_somos=paragrafos,
+                             quem_somos_foto=foto, formato='mobile')
+    assert pdf.startswith(b'%PDF')
+    assert len(pdf) > 100000               # a foto (~190KB) está embutida
+
+
+def test_rota_pdf_aceita_formato_mobile(app, admin_user, cliente):
+    _receita()
+    _login(cliente, admin_user)
+    resp = cliente.get('/cardapio.pdf?tipo=atacado&formato=mobile')
+    assert resp.status_code == 200
+    assert resp.mimetype == 'application/pdf'
+    assert 'mobile' in resp.headers['Content-Disposition']
+    assert b'340.16 603.78' in resp.data
+    # formato inválido cai no A4
+    resp2 = cliente.get('/cardapio.pdf?tipo=atacado&formato=xyz')
+    assert resp2.status_code == 200
+    assert b'595.28 841.89' in resp2.data
