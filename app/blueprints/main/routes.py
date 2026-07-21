@@ -600,6 +600,7 @@ def cardapio():
     preparo = _preparo_atacado() if tipo == 'atacado' else []
     return render_template('main/cardapio.html', categorias=categorias,
                            tipo=tipo, regras=regras, preparo=preparo,
+                           quem_somos=_quem_somos(),
                            logo=_cardapio_logo())
 
 
