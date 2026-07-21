@@ -21,7 +21,7 @@ mentiria sobre a compra. Elas entram em `sub_receitas` como aviso.
 """
 from app.extensions import db
 from app.models import Produto, Receita
-from app.utils import SUB_RECEITA_TIPOS
+from app.utils import SUB_RECEITA_TIPOS, unidades_subreceita
 
 # Rendimento mínimo pra não dividir por zero em ficha incompleta.
 _REND_MIN = 1e-9
@@ -116,7 +116,8 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
                         _add_receita(origem_rec, unidades_sub,
                                      _visitados=_visitados)
                 continue
-            unidades_sub = (ing.porcentagem or 0) * mult
+            unidades_sub = unidades_subreceita(
+                ing.tipo, ing.porcentagem, receita.peso_base) * mult
             if unidades_sub <= 0:
                 continue
             detalhes.append(f'{receita.nome}: sub-receita "{sub.nome}" '
