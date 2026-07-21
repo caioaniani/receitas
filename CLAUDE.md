@@ -1379,8 +1379,12 @@ retirada nascia SEM endereco estruturado (`loja_checkout` so montava a linha
 "Retirada: loja"; os `endereco_logradouro/numero/bairro/cidade/uf` ficavam
 NULL) — a NF-e do Tiny saia com o destinatario em branco e a SEFAZ rejeitava
 ("endereco/bairro/UF em branco", caso pedido 5d51be2f). Agora o ramo
-`modo=='retirada'` do `criar_pedido` VALIDA e grava o endereco (mesmos
-campos/exigencia da entrega, NUMERO obrigatorio — decisao do dono), mas SEM
+`modo=='retirada'` do `criar_pedido` VALIDA e grava o endereco (exige o
+CONJUNTO que a SEFAZ pede — cep/logradouro/numero/**bairro**/cidade/**uf**,
+NUMERO obrigatorio; MAIS que a entrega, que nao exige bairro/uf — no caminho
+feliz vem READONLY do CEP, e exigir fecha a armadilha do fail-open pq a
+retirada nao tem editor de endereco no admin e a NF travaria pra sempre no
+guard — achado de revisao), mas SEM
 recalcular frete nem geocodificar: o endereco serve SO pra nota, a retirada
 continua na loja e o frete fica R$0; a linha legivel `endereco_entrega`
 segue mostrando a loja pra operacao. No checkout, o bloco de endereco
