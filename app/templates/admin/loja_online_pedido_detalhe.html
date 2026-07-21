@@ -15,6 +15,22 @@
 } %}
 
 {% block content %}
+{% if p.divulgacao %}
+<div class="alert alert-warning d-flex justify-content-between align-items-center py-2 mb-3 flex-wrap gap-2">
+  <div>
+    <strong>⭐ Divulgação (cortesia).</strong> Pedido sem pagamento — baixou
+    o estoque da loja, mas <strong>não conta como venda</strong> (fora do
+    faturamento e da previsão). Aparece no painel de entregas com estrela.
+  </div>
+  {% if p.status != 'cancelado' and current_user.is_admin() %}
+  <form method="POST" action="{{ url_for('main.loja_online_divulgacao_cancelar', codigo=p.codigo) }}" class="mb-0"
+        onsubmit="return confirm('Cancelar a divulgação? O estoque baixado será devolvido à loja.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm btn-outline-danger">Cancelar (devolve estoque)</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
 {# `embed` = popup do painel de entregas (iframe). Esconde a navegação interna
    pra a janela ficar limpa; os forms levam o flag adiante pra o redirect
    pós-POST manter o modo (ver _detalhe_redirect em main/routes.py). #}
