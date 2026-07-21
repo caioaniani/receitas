@@ -961,6 +961,23 @@ def responder(historico, *, telefone_contato=None,
             'Claro! Já estou te passando pra um atendente. Só um instante.',
             'cliente pediu atendente', tools_usadas=[])
 
+    # Fechamento puro ("Muito Obrigada🙏", "valeu", "ok show") NUNCA é handoff.
+    # O modelo às vezes "passava pra um atendente" num simples agradecimento
+    # (caso Daiane Food Center, 21/07/2026 — fornecedora agradeceu e o bot
+    # transferiu): handoff preguiçoso que estranha o cliente e entope a fila.
+    # Determinístico ANTES do modelo: encerra em silêncio (decisão do dono
+    # 16/06/2026, seção FECHAMENTO do prompt). TRAVA: se o bot deixou uma
+    # PERGUNTA pendente, um "ok/sim/isso" pode ser "sim, quero" — aí NÃO
+    # encerra, deixa o modelo decidir com contexto. Fica depois do
+    # _quer_humano: "obrigada, mas me passa pra alguém" já virou handoff acima.
+    from app.services.chatbot_vigia import _e_fechamento
+    cliente_fechou = _e_fechamento(texto_user)
+    if cliente_fechou and not _bot_aguarda_resposta(historico):
+        logger.info('chatbot: fechamento puro -> encerra sem handoff msg=%r',
+                    texto_user[:80])
+        return _resp_encerrar('fechamento do cliente (sem handoff)',
+                              tools_usadas=[])
+
     api_key = (os.environ.get('ANTHROPIC_API_KEY')
                or current_app.config.get('ANTHROPIC_API_KEY'))
     if not api_key:
