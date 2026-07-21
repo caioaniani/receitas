@@ -137,7 +137,8 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
             detalhes.append(f'{receita.nome}: sub-receita "{sub.nome}" '
                             f'({unidades_sub:g} un) explodida em '
                             'matéria-prima.')
-            _add_receita(sub, unidades_sub, _visitados=_visitados)
+            _add_receita(sub, unidades_sub, _visitados=_visitados,
+                         registrar_producao=False)
         if origem:
             detalhes.append(f'{origem}: componente "{receita.nome}" '
                             f'({qtd:g} un) entrou na explosão de '
