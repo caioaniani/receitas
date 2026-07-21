@@ -1,20 +1,27 @@
 """Divulgacao — pedido "como do site" SEM pagamento (brinde/PR), 21/07/2026.
 
 Decisoes do dono (AskUserQuestion): BAIXA estoque fisico (marcado, fora de
-faturamento e previsao) + tela admin nova. Cobre:
+faturamento e previsao) + tela admin nova. Follow-up 21/07: papel 'marketing'
+(so owner+marketing lancam), todos os campos obrigatorios, CEP autofill.
+
+Cobre:
 - criar baixa EstoqueLoja da loja certa (entrega=origem_site, retirada=escolhida)
   com mov tipo PROPRIO (venda_site_divulgacao), fora da whitelist de demanda;
 - pedido nasce status='divulgacao', pago_em NULL, divulgacao=True;
 - NAO entra no faturamento do site (briefing) nem no funil do auditor;
 - aparece no painel de entregas do dia, serializado com divulgacao=True;
 - cancelar estorna o estoque;
-- rota admin cria/valida; funcionario recebe 403.
+- todos os campos obrigatorios (telefone/data/janela/endereco ou loja);
+- GATE: owner + marketing entram; admin comum e funcionario 403.
 """
 from datetime import timedelta
 
 import pytest
 
 from app.extensions import db
+
+_END_OK = {'cep': '01310-100', 'logradouro': 'Av Paulista', 'numero': '1000',
+           'bairro': 'Bela Vista', 'cidade': 'São Paulo', 'uf': 'SP'}
 
 
 @pytest.fixture
@@ -26,6 +33,15 @@ def _login(cliente, user):
     with cliente.session_transaction() as sess:
         sess['_user_id'] = str(user.id)
         sess['_fresh'] = True
+
+
+def _base_kw(**over):
+    """kwargs validos completos (todos os campos obrigatorios)."""
+    from app.utils import hoje
+    kw = dict(nome_destinatario='Padaria do Zé', telefone='11999990000',
+              data_entrega=hoje(), janela_entrega='8h-12h')
+    kw.update(over)
+    return kw
 
 
 def _loja(nome='Loja do Site', origem=False):
@@ -63,6 +79,25 @@ def _saldo(loja, receita):
     return el.quantidade if el else None
 
 
+def _marketing_user():
+    from app.models import Usuario
+    u = Usuario(nome='mkt', login='mkt', papel='marketing')
+    u.set_senha('x')
+    db.session.add(u)
+    db.session.commit()
+    return u
+
+
+# ── Papel marketing ────────────────────────────────────────────────────────
+
+def test_pode_divulgacao_so_owner_e_marketing(app, admin_user, owner_user):
+    mkt = _marketing_user()
+    assert mkt.is_marketing() is True
+    assert mkt.pode_divulgacao() is True
+    assert owner_user.pode_divulgacao() is True     # dono
+    assert admin_user.pode_divulgacao() is False    # admin comum NAO
+
+
 # ── Serviço: criação + baixa ───────────────────────────────────────────────
 
 def test_criar_entrega_baixa_da_loja_origem(app):
@@ -70,12 +105,9 @@ def test_criar_entrega_baixa_da_loja_origem(app):
     origem = _loja('Origem Site', origem=True)
     r = _receita()
     _estoque(origem, r, 10)
-    from app.utils import hoje
     p = svc.criar_divulgacao(
         itens=[{'kind': 'receita', 'id': r.id, 'qtd': 3}],
-        modo_entrega='agendada', nome_destinatario='Padaria do Zé',
-        data_entrega=hoje(), janela_entrega='8h-12h',
-        endereco={'linha': 'Rua A, 1', 'cep': '01000-000'})
+        modo_entrega='agendada', endereco=dict(_END_OK), **_base_kw())
     assert p.divulgacao is True
     assert p.status == 'divulgacao'
     assert p.pago_em is None
@@ -91,8 +123,7 @@ def test_criar_retirada_baixa_da_loja_escolhida(app):
     _estoque(escolhida, r, 10)
     p = svc.criar_divulgacao(
         itens=[{'kind': 'receita', 'id': r.id, 'qtd': 4}],
-        modo_entrega='retirada', loja_retirada_id=escolhida.id,
-        nome_destinatario='Influencer')
+        modo_entrega='retirada', loja_retirada_id=escolhida.id, **_base_kw())
     assert p.loja_retirada_id == escolhida.id
     assert _saldo(escolhida, r) == 6       # baixou da escolhida
     assert _saldo(origem, r) == 10         # origem intacta
@@ -107,7 +138,7 @@ def test_mov_tipo_proprio_fora_da_previsao(app):
     _estoque(origem, r, 10)
     svc.criar_divulgacao(
         itens=[{'kind': 'receita', 'id': r.id, 'qtd': 2}],
-        modo_entrega='agendada', nome_destinatario='X')
+        modo_entrega='agendada', endereco=dict(_END_OK), **_base_kw())
     el = EstoqueLoja.query.filter_by(loja_id=origem.id,
                                      receita_id=r.id).first()
     tipos = [m.tipo for m in MovEstoqueLoja.query.filter_by(
@@ -116,25 +147,33 @@ def test_mov_tipo_proprio_fora_da_previsao(app):
     assert 'venda_site_divulgacao' not in VENDA_TIPOS_DEMANDA_COM_ESTORNO
 
 
-def test_criar_sem_itens_ou_invalido_falha(app):
+def test_campos_obrigatorios(app):
     from app.services import divulgacao as svc
     _loja('Origem Site', origem=True)
+    r = _receita()
+    it = [{'kind': 'receita', 'id': r.id, 'qtd': 1}]
+    # sem telefone
+    with pytest.raises(ValueError):
+        svc.criar_divulgacao(itens=it, modo_entrega='agendada',
+                             endereco=dict(_END_OK),
+                             **_base_kw(telefone=''))
+    # sem janela
+    with pytest.raises(ValueError):
+        svc.criar_divulgacao(itens=it, modo_entrega='agendada',
+                             endereco=dict(_END_OK),
+                             **_base_kw(janela_entrega=''))
+    # entrega sem endereco completo (falta numero)
+    end = dict(_END_OK, numero='')
+    with pytest.raises(ValueError):
+        svc.criar_divulgacao(itens=it, modo_entrega='agendada',
+                             endereco=end, **_base_kw())
+    # retirada sem loja
+    with pytest.raises(ValueError):
+        svc.criar_divulgacao(itens=it, modo_entrega='retirada', **_base_kw())
+    # sem itens
     with pytest.raises(ValueError):
         svc.criar_divulgacao(itens=[], modo_entrega='agendada',
-                             nome_destinatario='X')
-    with pytest.raises(ValueError):
-        svc.criar_divulgacao(
-            itens=[{'kind': 'receita', 'id': 99999, 'qtd': 1}],
-            modo_entrega='agendada', nome_destinatario='X')
-
-
-def test_retirada_sem_loja_falha(app):
-    from app.services import divulgacao as svc
-    r = _receita()
-    with pytest.raises(ValueError):
-        svc.criar_divulgacao(
-            itens=[{'kind': 'receita', 'id': r.id, 'qtd': 1}],
-            modo_entrega='retirada', nome_destinatario='X')
+                             endereco=dict(_END_OK), **_base_kw())
 
 
 def test_item_arquivado_recusado(app):
@@ -147,7 +186,7 @@ def test_item_arquivado_recusado(app):
     with pytest.raises(ValueError):
         svc.criar_divulgacao(
             itens=[{'kind': 'receita', 'id': r.id, 'qtd': 1}],
-            modo_entrega='agendada', nome_destinatario='X')
+            modo_entrega='agendada', endereco=dict(_END_OK), **_base_kw())
 
 
 # ── Cancelamento estorna ───────────────────────────────────────────────────
@@ -159,13 +198,12 @@ def test_cancelar_estorna_estoque(app):
     _estoque(origem, r, 10)
     p = svc.criar_divulgacao(
         itens=[{'kind': 'receita', 'id': r.id, 'qtd': 3}],
-        modo_entrega='agendada', nome_destinatario='X')
+        modo_entrega='agendada', endereco=dict(_END_OK), **_base_kw())
     assert _saldo(origem, r) == 7
     res = svc.cancelar_divulgacao(p)
     assert res['revertido'] >= 1           # nº de movimentos revertidos
     assert p.status == 'cancelado'
     assert _saldo(origem, r) == 10         # devolveu TODAS as 3 unidades
-    # idempotente
     assert svc.cancelar_divulgacao(p)['ja_cancelado'] is True
 
 
@@ -179,7 +217,7 @@ def test_nao_entra_no_faturamento_do_site(app):
     _estoque(origem, r, 10)
     svc.criar_divulgacao(
         itens=[{'kind': 'receita', 'id': r.id, 'qtd': 2}],
-        modo_entrega='agendada', nome_destinatario='X')
+        modo_entrega='agendada', endereco=dict(_END_OK), **_base_kw())
     v = vendas_hoje(capturar=False)
     assert v['site_qtd'] == 0
     assert v['site_total'] == 0
@@ -196,7 +234,7 @@ def test_nao_entra_no_funil_do_auditor(app):
     _estoque(origem, r, 10)
     svc.criar_divulgacao(
         itens=[{'kind': 'receita', 'id': r.id, 'qtd': 1}],
-        modo_entrega='agendada', nome_destinatario='X')
+        modo_entrega='agendada', endereco=dict(_END_OK), **_base_kw())
     ini = datetime.combine(hoje(), time.min)
     fim = ini + timedelta(days=1)
     funil = _funil_site(ini, fim)
@@ -218,8 +256,8 @@ def test_aparece_no_painel_do_dia_com_flag(app):
     _estoque(origem, r, 10)
     p = svc.criar_divulgacao(
         itens=[{'kind': 'receita', 'id': r.id, 'qtd': 1}],
-        modo_entrega='agendada', nome_destinatario='Padaria do Zé',
-        data_entrega=hoje())
+        modo_entrega='agendada', endereco=dict(_END_OK),
+        **_base_kw(data_entrega=hoje()))
     pedidos = _pedidos_online_do_dia(hoje())
     assert any(x['code'] == p.codigo for x in pedidos)
     ser = _serializar_pedido_online(PedidoOnline.query.get(p.id))
@@ -227,51 +265,32 @@ def test_aparece_no_painel_do_dia_com_flag(app):
     assert ser['destinatario'] == 'Padaria do Zé'
 
 
-# ── Rota admin ─────────────────────────────────────────────────────────────
+# ── Rota admin + GATE ──────────────────────────────────────────────────────
 
-def test_rota_get_admin_ok(app, admin_user, cliente):
+def test_rota_get_owner_ok(app, owner_user, cliente):
     _loja('Origem Site', origem=True)
     _receita()
-    _login(cliente, admin_user)
+    _login(cliente, owner_user)
     resp = cliente.get('/admin/loja-online/divulgacao')
     assert resp.status_code == 200
-    assert 'Lançar divulgação' in resp.get_data(as_text=True)
+    body = resp.get_data(as_text=True)
+    assert 'Lançar divulgação' in body
+    assert 'combo-input' in body           # typeahead presente
+    assert '/loja/api/cep/' in body        # autofill de CEP presente
 
 
-def test_rota_post_cria(app, admin_user, cliente):
-    from app.models import PedidoOnline
-    origem = _loja('Origem Site', origem=True)
-    r = _receita()
-    _estoque(origem, r, 10)
+def test_rota_get_marketing_ok(app, cliente):
+    mkt = _marketing_user()
+    _loja('Origem Site', origem=True)
+    _receita()
+    _login(cliente, mkt)
+    assert cliente.get('/admin/loja-online/divulgacao').status_code == 200
+
+
+def test_rota_admin_comum_403(app, admin_user, cliente):
+    """Admin NAO-owner nao entra ('so owner e marketing')."""
     _login(cliente, admin_user)
-    resp = cliente.post('/admin/loja-online/divulgacao', data={
-        'modo_entrega': 'agendada',
-        'nome_destinatario': 'Cliente PR',
-        'item_alvo[]': f'receita:{r.id}',
-        'item_qtd[]': '2',
-        'data_entrega': '',
-    })
-    assert resp.status_code in (302, 303)
-    p = PedidoOnline.query.filter_by(divulgacao=True).first()
-    assert p is not None and p.status == 'divulgacao'
-    assert _saldo(origem, r) == 8
-
-
-def test_rota_cancelar_devolve_estoque(app, admin_user, cliente):
-    from app.services import divulgacao as svc
-    origem = _loja('Origem Site', origem=True)
-    r = _receita()
-    _estoque(origem, r, 10)
-    p = svc.criar_divulgacao(
-        itens=[{'kind': 'receita', 'id': r.id, 'qtd': 3}],
-        modo_entrega='agendada', nome_destinatario='X')
-    assert _saldo(origem, r) == 7
-    _login(cliente, admin_user)
-    resp = cliente.post('/admin/loja-online/divulgacao/%s/cancelar' % p.codigo)
-    assert resp.status_code in (302, 303)
-    db.session.refresh(p)
-    assert p.status == 'cancelado'
-    assert _saldo(origem, r) == 10
+    assert cliente.get('/admin/loja-online/divulgacao').status_code == 403
 
 
 def test_rota_funcionario_403(app, cliente):
@@ -281,5 +300,72 @@ def test_rota_funcionario_403(app, cliente):
     db.session.add(u)
     db.session.commit()
     _login(cliente, u)
-    resp = cliente.get('/admin/loja-online/divulgacao')
-    assert resp.status_code == 403
+    assert cliente.get('/admin/loja-online/divulgacao').status_code == 403
+
+
+def test_marketing_home_redireciona_pra_divulgacao(app, cliente):
+    mkt = _marketing_user()
+    _login(cliente, mkt)
+    resp = cliente.get('/')
+    assert resp.status_code == 302
+    assert '/admin/loja-online/divulgacao' in resp.headers['Location']
+
+
+def test_rota_post_cria_completo(app, owner_user, cliente):
+    from app.models import PedidoOnline
+    origem = _loja('Origem Site', origem=True)
+    r = _receita()
+    _estoque(origem, r, 10)
+    _login(cliente, owner_user)
+    resp = cliente.post('/admin/loja-online/divulgacao', data={
+        'modo_entrega': 'agendada',
+        'nome_destinatario': 'Cliente PR',
+        'telefone': '11999990000',
+        'data_entrega': '',
+        'janela_entrega': '8h-12h',
+        'endereco_cep': '01310-100',
+        'endereco_logradouro': 'Av Paulista',
+        'endereco_numero': '1000',
+        'endereco_bairro': 'Bela Vista',
+        'endereco_cidade': 'São Paulo',
+        'endereco_uf': 'SP',
+        'item_alvo[]': f'receita:{r.id}',
+        'item_qtd[]': '2',
+    })
+    assert resp.status_code in (302, 303)
+    p = PedidoOnline.query.filter_by(divulgacao=True).first()
+    assert p is not None and p.status == 'divulgacao'
+    assert 'Av Paulista' in (p.endereco_entrega or '')
+    assert _saldo(origem, r) == 8
+
+
+def test_rota_post_incompleto_nao_cria(app, owner_user, cliente):
+    origem = _loja('Origem Site', origem=True)
+    r = _receita()
+    _estoque(origem, r, 10)
+    _login(cliente, owner_user)
+    # falta telefone e endereço
+    cliente.post('/admin/loja-online/divulgacao', data={
+        'modo_entrega': 'agendada', 'nome_destinatario': 'X',
+        'item_alvo[]': f'receita:{r.id}', 'item_qtd[]': '1',
+    })
+    from app.models import PedidoOnline
+    assert PedidoOnline.query.filter_by(divulgacao=True).first() is None
+    assert _saldo(origem, r) == 10         # nada baixou
+
+
+def test_rota_cancelar_devolve_estoque(app, owner_user, cliente):
+    from app.services import divulgacao as svc
+    origem = _loja('Origem Site', origem=True)
+    r = _receita()
+    _estoque(origem, r, 10)
+    p = svc.criar_divulgacao(
+        itens=[{'kind': 'receita', 'id': r.id, 'qtd': 3}],
+        modo_entrega='agendada', endereco=dict(_END_OK), **_base_kw())
+    assert _saldo(origem, r) == 7
+    _login(cliente, owner_user)
+    resp = cliente.post('/admin/loja-online/divulgacao/%s/cancelar' % p.codigo)
+    assert resp.status_code in (302, 303)
+    db.session.refresh(p)
+    assert p.status == 'cancelado'
+    assert _saldo(origem, r) == 10
