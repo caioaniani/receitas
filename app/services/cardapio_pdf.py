@@ -479,7 +479,7 @@ def _titulo_categoria(pdf, nome, alt_primeira=_CARD_H):
     # `alt_primeira` = altura do 1º bloco da categoria — card de foto no
     # grid, ou só ~10mm quando a seção é de linhas de texto (senão 3
     # linhas ganhavam página própria à toa).
-    if pdf.get_y() + 14 + alt_primeira > 281:
+    if pdf.get_y() + 14 + alt_primeira > pdf.geo.y_limite:
         pdf.add_page()
     pdf.ln(2)
     # .cat-heading do site: sans bold, cor fg, sem sublinhado.
@@ -489,65 +489,73 @@ def _titulo_categoria(pdf, nome, alt_primeira=_CARD_H):
     pdf.ln(2.5)
 
 
-def _card(pdf, x, y, item, foto, card_h=_CARD_H):
+def _card(pdf, x, y, item, foto, card_h=None):
     """.product-card do site: branco, borda #e8e3d7, cantos arredondados,
     foto QUADRADA no topo (ou placeholder bege), nome fg + preço marrom.
-    `card_h=_CARD_H_DESC` quando a CATEGORIA tem descrições (altura uniforme
-    na fileira; item sem descrição só fica com o respiro)."""
+    `card_h=geo.card_h_desc` quando a CATEGORIA tem descrições (altura
+    uniforme na fileira; item sem descrição só fica com o respiro)."""
+    g = pdf.geo
+    if card_h is None:
+        card_h = g.card_h
     pdf.set_draw_color(*_C_BORDER)
     pdf.set_fill_color(255, 255, 255)
-    pdf.rect(x, y, _COL_W, card_h, style='FD',
+    pdf.rect(x, y, g.col_w, card_h, style='FD',
              round_corners=True, corner_radius=_RAIO)
     if foto:
         pdf.image(BytesIO(foto), x=x + 0.5, y=y + 0.5,
-                  w=_COL_W - 1, h=_FOTO_H - 1)
+                  w=g.col_w - 1, h=g.foto_h - 1)
     else:
         # .card-img.placeholder: bege com a marca discreta no centro.
         pdf.set_fill_color(*_C_TAG)
-        pdf.rect(x + 0.5, y + 0.5, _COL_W - 1, _FOTO_H - 1, style='F',
+        pdf.rect(x + 0.5, y + 0.5, g.col_w - 1, g.foto_h - 1, style='F',
                  round_corners=True, corner_radius=_RAIO)
         pdf.set_font('Times', 'I', 13)
         pdf.set_text_color(*_C_SOFT)
-        pdf.set_xy(x, y + _FOTO_H / 2 - 3)
-        pdf.cell(_COL_W, 6, _latin1('O Pão'), align='C')
-    pdf.set_xy(x + 2.5, y + _FOTO_H + 1.5)
+        pdf.set_xy(x, y + g.foto_h / 2 - 3)
+        pdf.cell(g.col_w, 6, _latin1('O Pão'), align='C')
+    pdf.set_xy(x + 2.5, y + g.foto_h + 1.5)
     pdf.set_font('Helvetica', 'B', 8.5)
     pdf.set_text_color(*_C_FG)
     nome = _latin1(item['nome'])
-    if pdf.get_string_width(nome) > _COL_W - 5:
-        while pdf.get_string_width(nome + '...') > _COL_W - 5 and len(nome) > 3:
+    if pdf.get_string_width(nome) > g.col_w - 5:
+        while (pdf.get_string_width(nome + '...') > g.col_w - 5
+               and len(nome) > 3):
             nome = nome[:-1]
         nome += '...'
-    pdf.cell(_COL_W - 5, 4.5, nome)
-    if card_h > _CARD_H:
+    pdf.cell(g.col_w - 5, 4.5, nome)
+    if card_h > g.card_h:
         desc = item.get('descricao')
         if desc:
             pdf.set_font('Helvetica', '', 7)
             pdf.set_text_color(*_C_MUTED)
             for i, ln in enumerate(
-                    _quebrar_2_linhas(pdf, _latin1(desc), _COL_W - 5)):
-                pdf.set_xy(x + 2.5, y + _FOTO_H + 6.2 + i * 3.1)
-                pdf.cell(_COL_W - 5, 3.1, ln)
-        y_preco = y + _FOTO_H + 13.4
+                    _quebrar_2_linhas(pdf, _latin1(desc), g.col_w - 5)):
+                pdf.set_xy(x + 2.5, y + g.foto_h + 6.2 + i * 3.1)
+                pdf.cell(g.col_w - 5, 3.1, ln)
+        y_preco = y + g.foto_h + 13.4
     else:
-        y_preco = y + _FOTO_H + 6.5
+        y_preco = y + g.foto_h + 6.5
     pdf.set_xy(x + 2.5, y_preco)
     pdf.set_font('Helvetica', 'B', 9.5)
     pdf.set_text_color(*_C_PRIMARY)
-    pdf.cell(_COL_W - 5, 5, _latin1(_moeda(item['preco_venda'])))
+    pdf.cell(g.col_w - 5, 5, _latin1(_moeda(item['preco_venda'])))
 
 
-def _grid_categoria(pdf, itens_foto, card_h=_CARD_H):
+def _grid_categoria(pdf, itens_foto, card_h=None):
     # LINHA a linha com y0 CONGELADO: os cells de texto do card movem o
-    # cursor do fpdf2 — usar get_y() por card fazia os 3 da linha descerem
+    # cursor do fpdf2 — usar get_y() por card fazia os da linha descerem
     # em cascata (pego na inspeção visual da 1ª amostra, 19/07/2026).
-    for i in range(0, len(itens_foto), 3):
-        linha = itens_foto[i:i + 3]
-        if pdf.get_y() + card_h > 281:
+    g = pdf.geo
+    if card_h is None:
+        card_h = g.card_h
+    ncols = g.cols_grid
+    for i in range(0, len(itens_foto), ncols):
+        linha = itens_foto[i:i + ncols]
+        if pdf.get_y() + card_h > g.y_limite:
             pdf.add_page()
         y0 = pdf.get_y()
         for col, item in enumerate(linha):
-            x = _MARGEM + col * (_COL_W + _GAP)
+            x = g.margem + col * (g.col_w + _GAP)
             _card(pdf, x, y0, item, _bytes_foto(item), card_h=card_h)
         pdf.set_y(y0 + card_h + _GAP)
 
