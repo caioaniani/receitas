@@ -988,10 +988,11 @@ def salvar(id):
         if not nome or not pct_str:
             continue
         tipo = tipos[i] if i < len(tipos) else 'mp'
-        # sub-receita (tipo='receita'): resolve a FK pelo nome agora, pra a baixa
-        # de estoque ser confiável (não depender só do backfill por nome).
+        # sub-receita ('receita' = quantidade absoluta; 'sub_pct' = % da base):
+        # resolve a FK pelo nome agora, pra a baixa de estoque ser confiável
+        # (não depender só do backfill por nome).
         sub_id = None
-        if tipo == 'receita':
+        if tipo in ('receita', 'sub_pct'):
             sub = Receita.query.filter(Receita.nome.ilike(nome)).first()
             sub_id = sub.id if sub else None
         ing = ReceitaIngrediente(
