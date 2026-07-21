@@ -524,8 +524,8 @@ def test_rota_detalhe_dia_malformado_400(app, owner_user, cliente):
 
 
 def test_detalhe_pedido_torto_nao_derruba_o_modal(app):
-    """UM pedido com campo malformado é pulado (logado), não derruba a lista
-    inteira — o resto do dia continua aparecendo."""
+    """Campo malformado (total não-numérico, cashier não-dict) é tolerado —
+    o cancelado aparece com valor 0 e o resto do dia continua; nunca 502."""
     from datetime import date
 
     from app.services import briefing_dono
@@ -537,9 +537,14 @@ def test_detalhe_pedido_torto_nao_derruba_o_modal(app):
     with patch('app.services.seru.listar_pedidos_completo',
                return_value=[torto, bom]):
         d = briefing_dono.cancelados_descontos_detalhe(dia)
-    # o pedido bom (desconto) aparece; o torto foi pulado sem 502
+    # o pedido bom (desconto) aparece intacto
     assert len(d['descontos']) == 1 and d['descontos'][0]['codigo'] == 'OK'
     assert d['desconto_total'] == 5.0
+    # o torto foi tolerado (valor 0, caixa None), não derrubou a consulta
+    assert len(d['cancelados']) == 1
+    assert d['cancelados'][0]['codigo'] == 'BAD'
+    assert d['cancelados'][0]['valor'] == 0.0
+    assert d['cancelados'][0]['caixa'] is None
 
 
 def test_rota_detalhe_seru_fora_502(app, owner_user, cliente):
