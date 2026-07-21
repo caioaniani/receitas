@@ -298,3 +298,77 @@ def test_captura_delivery_sem_itens_separado_e_cancelado_por_status(app):
     # cancelado por status não vira venda (nem os R$30 no total da loja)
     assert d['por_loja']['Anesio'] == 125.38       # 81.38 + 44.00
     assert d['por_loja_detalhe']['Anesio']['cancelados'] == 1
+
+
+# ── Cancelamentos (valor) e descontos do dia — cockpit da home ────────────────
+
+def _pedido_desc(pid, loja, total, discount, *, canceled=None):
+    """Pedido com `discount` (top-level da API Seru, R$)."""
+    return {'id': pid, 'createdAt': '2026-06-15T13:00:00Z',
+            'canceledAt': canceled, 'company': {'name': loja}, 'total': total,
+            'discount': discount, 'payments': [], 'salesChannel': None,
+            'items': [{'name': 'Pao', 'quantity': 1, 'total': total}]}
+
+
+PEDIDOS_DESC = [
+    _pedido_desc(1, 'Ribeiro do Vale', 50.0, 10.0),            # desconto conta
+    _pedido_desc(2, 'Nebraska', 30.0, 0.0),                    # sem desconto
+    _pedido_desc(3, 'Ribeiro do Vale', 10.0, 5.0,              # CANCELADO:
+                 canceled='2026-06-15T20:00:00Z'),             # desconto ignorado
+]
+
+
+def test_captura_grava_desconto_e_valor_cancelado(app):
+    from app.models import VendaSeruDiaBreakdown
+    with patch('app.services.seru.listar_pedidos_completo',
+               return_value=PEDIDOS_DESC):
+        vendas_diarias.capturar_periodo(DIA, DIA)
+    # desconto: só o pedido 1 (não cancelado) — 10.0 na Ribeiro; nada na Nebraska.
+    desc = {b.loja_seru: float(b.valor) for b in
+            VendaSeruDiaBreakdown.query.filter_by(dimensao='desconto').all()}
+    assert desc == {'Ribeiro do Vale': 10.0}
+    # cancelados: contagem 1 (chave '') + valor 10.0 (chave 'v', total do
+    # pedido 3), ambos na Ribeiro.
+    cn = VendaSeruDiaBreakdown.query.filter_by(
+        dimensao='cancelados', chave='', loja_seru='Ribeiro do Vale').first()
+    cv = VendaSeruDiaBreakdown.query.filter_by(
+        dimensao='cancelados', chave='v', loja_seru='Ribeiro do Vale').first()
+    assert int(cn.valor) == 1 and float(cv.valor) == 10.0
+
+
+def test_helper_cancelamentos_descontos_do_banco(app):
+    with patch('app.services.seru.listar_pedidos_completo',
+               return_value=PEDIDOS_DESC):
+        vendas_diarias.capturar_periodo(DIA, DIA)
+    cd = vendas_diarias.cancelamentos_descontos_do_banco(DIA, DIA)
+    assert cd == {'cancelados_n': 1, 'cancelados_valor': 10.0, 'desconto': 10.0}
+
+
+def test_desconto_reader_vendas_pdv_do_banco(app):
+    with patch('app.services.seru.listar_pedidos_completo',
+               return_value=PEDIDOS_DESC):
+        vendas_diarias.capturar_periodo(DIA, DIA)
+    d = vendas_diarias.vendas_pdv_do_banco(DIA, DIA, capturar=False)
+    assert d['desconto'] == 10.0
+    assert d['cancelados'] == 1 and d['cancelados_valor'] == 10.0
+    assert d['por_loja_detalhe']['Ribeiro do Vale']['desconto'] == 10.0
+
+
+def test_snapshot_antigo_sem_desconto_nem_valor_fica_zerado(app):
+    """Dia capturado ANTES das linhas 'desconto'/'cancelados v' existirem: o
+    helper devolve 0 no que falta (contagem de cancelados segue), sem quebrar —
+    e o valor do cancelado nunca é lido como contagem."""
+    from app.extensions import db
+    from app.models import VendaSeruDiaBreakdown
+    with patch('app.services.seru.listar_pedidos_completo',
+               return_value=PEDIDOS_DESC):
+        vendas_diarias.capturar_periodo(DIA, DIA)
+    # simula snapshot velho: remove a dimensão desconto e a chave 'v' do cancelado
+    VendaSeruDiaBreakdown.query.filter_by(dimensao='desconto').delete()
+    VendaSeruDiaBreakdown.query.filter_by(
+        dimensao='cancelados', chave='v').delete()
+    db.session.commit()
+    cd = vendas_diarias.cancelamentos_descontos_do_banco(DIA, DIA)
+    assert cd == {'cancelados_n': 1, 'cancelados_valor': 0.0, 'desconto': 0.0}
+    d = vendas_diarias.vendas_pdv_do_banco(DIA, DIA, capturar=False)
+    assert d['cancelados'] == 1 and d['cancelados_valor'] == 0.0
