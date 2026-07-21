@@ -394,6 +394,56 @@ def vendas_hoje(capturar=False):
     }
 
 
+def cancelados_descontos_detalhe(dia):
+    """Detalhe AO VIVO (bate na API Seru) dos pedidos CANCELADOS e dos com
+    DESCONTO de `dia` — o drill-down do cockpit da home ("abrir" cancelamentos/
+    descontos). Read-only, NAO persiste. Diferente do resto do briefing (que le
+    so o snapshot): a lista pedido-a-pedido nao existe no snapshot, entao ESTE
+    caminho — e SO ele, no clique explicito — consulta a API. Levanta a excecao
+    pra rota tratar (502) se o Seru cair.
+
+    Cada pedido cancelado: hora, loja, valor (total), caixa, tem NF autorizada.
+    Cada pedido com desconto (nao cancelado): hora, loja, subtotal, desconto,
+    total. Loja resolvida pelo vinculo (mesma da home)."""
+    from app.services import seru, vendas_diarias
+    from app.services.venda_sem_item_vigia import _nf_autorizada
+
+    pedidos = seru.listar_pedidos_completo(dia, dia)
+    vinculo = _resolver_loja_seru()
+    cancelados, descontos = [], []
+    for p in pedidos:
+        if not isinstance(p, dict):
+            continue
+        if seru.data_local(p.get('createdAt')) != dia:
+            continue
+        ln_raw = vendas_diarias._nome_loja(p) or '(sem loja)'
+        loja = vinculo.get(ln_raw, ln_raw)
+        dh = seru.datahora_local(p.get('createdAt'))
+        hora = dh.strftime('%H:%M') if dh else '?'
+        total = float(p.get('total') or 0)
+        if seru.pedido_cancelado(p):
+            cancelados.append({
+                'codigo': p.get('code'), 'hora': hora, 'loja': loja,
+                'valor': round(total, 2),
+                'caixa': (p.get('cashier') or {}).get('code'),
+                'nf': _nf_autorizada(p)})
+            continue
+        desc = float(p.get('discount') or 0)
+        if desc > 0:
+            descontos.append({
+                'codigo': p.get('code'), 'hora': hora, 'loja': loja,
+                'subtotal': round(float(p.get('subtotal') or 0), 2),
+                'desconto': round(desc, 2), 'total': round(total, 2)})
+    cancelados.sort(key=lambda x: x['hora'])
+    descontos.sort(key=lambda x: -x['desconto'])
+    return {
+        'cancelados': cancelados,
+        'descontos': descontos,
+        'cancelados_valor': round(sum(c['valor'] for c in cancelados), 2),
+        'desconto_total': round(sum(d['desconto'] for d in descontos), 2),
+    }
+
+
 def custo_ia_ontem():
     """Gasto de IA de ONTEM (janela fechada de calendário BRT, em USD)."""
     from app.models import UsoIA
