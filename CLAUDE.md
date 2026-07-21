@@ -1475,6 +1475,15 @@ MARCADO como divulgação (fora de faturamento e da previsão de venda) +
   `/loja/api/cep/<cep>` (alcançável do host gestão) preenchendo logradouro/
   bairro/cidade/uf; a `endereco_entrega` (snapshot do painel/motorista) é
   montada dos campos estruturados no route.
+- **Data ≥ AMANHÃ + janela pela regra do site (dono 21/07)**: nunca no mesmo
+  dia — `min`/`value` do date = amanhã e `criar_divulgacao` recusa
+  `data_entrega <= hoje()`. A janela virou **select dinâmico** preenchido pelo
+  endpoint `/admin/loja-online/divulgacao/janelas`, que replica a MESMA regra
+  do site (`loja_checkout.janelas_disponiveis`): agendada corta a 1ª janela da
+  manhã (08:00–09:00) quando o endereço está longe (distância do
+  `frete.consultar_frete`; fail-open se o geocode falhar → todas as janelas);
+  retirada sem distância. O modo **express foi removido** do form (é same-day,
+  conflita com "nunca no mesmo dia").
 - Testes: `tests/test_divulgacao.py` (18 casos, inclui gate por papel). NUNCA
   fazer a divulgação contar como venda nem usar o tipo `venda_site` (mataria a
   distinção), e NUNCA abrir o gate pra admin comum sem ordem do dono.
