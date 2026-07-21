@@ -259,6 +259,10 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
                 producao.items(),
                 key=lambda kv: ((kv[1]['categoria'] or '').lower(),
                                 kv[1]['nome'].lower()))],
+        'retorno_demanda': [
+            {'nome': d['nome'], 'qtd': d['qtd']}
+            for _id, d in sorted(retorno_demanda.items(),
+                                 key=lambda kv: kv[1]['nome'].lower())],
         'compras_diretas': [
             {'nome': n, 'qtd': d['qtd'], 'tipo': d['tipo'],
              'unidade': d.get('unidade', 'un')}
