@@ -374,7 +374,7 @@ def _box_quem_somos(pdf, paragrafos):
         pdf.ln(_LH + 1.6)
     pdf.set_left_margin(lm_orig)
     pdf.set_right_margin(rm_orig)
-    pdf.set_y(y0 + alt + 2)
+    pdf.set_y(y0 + alt + 5)
 
 
 def _titulo_categoria(pdf, nome, alt_primeira=_CARD_H):
