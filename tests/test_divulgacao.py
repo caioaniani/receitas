@@ -201,10 +201,8 @@ def test_endpoint_janelas_retirada_e_agendada(app, owner_user, cliente):
     Retirada não tem distância; agendada com endereço geocodado usa o corte
     por distância — o frete é mockado pra não bater na rede."""
     from unittest.mock import patch
-
-    from app.utils import hoje
     _login(cliente, owner_user)
-    d = (hoje().replace(day=hoje().day)).isoformat()
+    d = _amanha().isoformat()          # divulgação é sempre a partir de amanhã
     # retirada: janelas base (sem distância)
     rj = cliente.get('/admin/loja-online/divulgacao/janelas'
                      '?modo=retirada&data=' + d).get_json()
