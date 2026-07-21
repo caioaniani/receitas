@@ -33,7 +33,11 @@ def test_resp_encerrar_devolve_silencio():
 
 def test_responder_propaga_encerrar_quando_bot_chama_a_tool(app, monkeypatch):
     """Integracao: se o LLM retorna tool_use=encerrar_conversa, o `responder`
-    devolve {'acao': 'encerrar', 'texto': ''} — sem alucinar despedida."""
+    devolve {'acao': 'encerrar', 'texto': ''} — sem alucinar despedida.
+
+    O bot termina com uma PERGUNTA ('?') de propósito: assim o short-circuit
+    determinístico de fechamento (Layer 1) DEFERE ao modelo, e este teste
+    continua exercitando o caminho via-LLM da tool encerrar_conversa."""
     from app.services import chatbot
     monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-x')
 
@@ -51,7 +55,7 @@ def test_responder_propaga_encerrar_quando_bot_chama_a_tool(app, monkeypatch):
 
     with app.app_context():
         out = chatbot.responder([
-            {'role': 'assistant', 'content': 'Aqui está seu link: ...'},
+            {'role': 'assistant', 'content': 'Precisa de mais alguma coisa? 😊'},
             {'role': 'user', 'content': 'obrigada!'},
         ])
     assert out['acao'] == 'encerrar'
