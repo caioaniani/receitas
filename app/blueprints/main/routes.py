@@ -4546,6 +4546,99 @@ _STATUS_PEDIDO_ONLINE_LABEL = {
 }
 
 
+def _catalogo_divulgacao():
+    """Itens selecionaveis na tela de divulgacao: receitas ATIVAS + produtos
+    ATIVOS com nome (preco so referencia). Helpers canonicos — nunca arquivado.
+    Ordenado por nome; kind='receita'|'produto' pra o value do select."""
+    itens = []
+    for r in (Receita.ativas().order_by(Receita.nome).all()):
+        itens.append({'kind': 'receita', 'id': r.id, 'nome': r.nome,
+                      'preco': float(r.preco_site or 0)})
+    for p in (Produto.query.filter_by(ativo=True)
+              .order_by(Produto.nome).all()):
+        itens.append({'kind': 'produto', 'id': p.id, 'nome': p.nome,
+                      'preco': float(p.preco_site or 0)})
+    itens.sort(key=lambda i: i['nome'].lower())
+    return itens
+
+
+@main_bp.route('/admin/loja-online/divulgacao', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def loja_online_divulgacao():
+    """Lanca uma DIVULGACAO (brinde/PR): pedido "como do site" SEM pagamento,
+    que aparece no painel de entregas com estrela ⭐. Baixa estoque de verdade
+    (marcado, fora de faturamento/previsao). So admin — e um gesto de dar
+    produto de graca."""
+    from datetime import date as _date
+
+    from flask import flash, redirect, url_for
+
+    from app.models import Loja
+    from app.services import divulgacao as div_svc
+    # Lojas operacionais pra retirada (ativas, fora a Industria de RH).
+    lojas = [lo for lo in Loja.query.filter_by(ativa=True)
+             .order_by(Loja.nome).all() if lo.nome != 'Indústria']
+
+    if request.method == 'POST':
+        modo = (request.form.get('modo_entrega') or 'agendada').strip()
+        # Itens: pares kind:id[] + qtd[] (linhas dinamicas no form).
+        alvos = request.form.getlist('item_alvo[]')     # "receita:12"
+        qtds = request.form.getlist('item_qtd[]')
+        itens = []
+        for alvo, q in zip(alvos, qtds):
+            alvo = (alvo or '').strip()
+            if not alvo or ':' not in alvo:
+                continue
+            kind, _, sid = alvo.partition(':')
+            try:
+                itens.append({'kind': kind, 'id': int(sid),
+                              'qtd': int(q or 0)})
+            except (TypeError, ValueError):
+                continue
+        data_str = (request.form.get('data_entrega') or '').strip()
+        try:
+            data_ent = _date.fromisoformat(data_str) if data_str else None
+        except ValueError:
+            data_ent = None
+        endereco = {
+            'linha': request.form.get('endereco_linha'),
+            'cep': request.form.get('endereco_cep'),
+            'logradouro': request.form.get('endereco_logradouro'),
+            'numero': request.form.get('endereco_numero'),
+            'complemento': request.form.get('endereco_complemento'),
+            'bairro': request.form.get('endereco_bairro'),
+            'cidade': request.form.get('endereco_cidade'),
+            'uf': request.form.get('endereco_uf'),
+        }
+        try:
+            pedido = div_svc.criar_divulgacao(
+                itens=itens, modo_entrega=modo,
+                loja_retirada_id=(int(request.form['loja_retirada_id'])
+                                  if request.form.get('loja_retirada_id')
+                                  else None),
+                nome_destinatario=request.form.get('nome_destinatario'),
+                telefone=request.form.get('telefone'),
+                data_entrega=data_ent,
+                janela_entrega=request.form.get('janela_entrega'),
+                endereco=endereco,
+                cartinha=request.form.get('cartinha'),
+                usuario_id=current_user.id)
+        except ValueError as e:
+            flash('Não deu pra lançar a divulgação: %s' % e, 'danger')
+            return redirect(url_for('main.loja_online_divulgacao'))
+        flash('⭐ Divulgação %s lançada — já aparece no painel de entregas '
+              'do dia %s.' % (pedido.codigo,
+                              data_ent.strftime('%d/%m') if data_ent else '—'),
+              'success')
+        return redirect(url_for('main.loja_online_pedido_detalhe',
+                                codigo=pedido.codigo))
+
+    return render_template('admin/loja_online_divulgacao.html',
+                           catalogo=_catalogo_divulgacao(), lojas=lojas,
+                           hoje=hoje_brt().isoformat())
+
+
 @main_bp.route('/admin/loja-online/estoque-vitrine')
 @login_required
 def loja_online_estoque_vitrine():
