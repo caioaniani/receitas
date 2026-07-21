@@ -121,10 +121,94 @@
                 <strong>Um parágrafo por linha.</strong> Apagar tudo esconde o bloco.
             </div>
         </div>
+
+        <hr>
+        <h6 class="fw-semibold"><i class="bi bi-arrows-move"></i> Ordem das seções do cardápio</h6>
+        <p class="small text-muted mb-2">
+            Arraste para reordenar (ou use as setas). A ordem vale para a tela
+            e para os dois PDFs, nos três tipos. Salve para aplicar.
+        </p>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold small">Categorias de produtos</label>
+                <ul class="list-group ordem-sortavel" data-input="inp-ordem-categorias">
+                    {% for c in cats_ordem %}
+                    <li class="list-group-item d-flex align-items-center gap-2 py-1"
+                        draggable="true" data-key="{{ c }}">
+                        <span class="text-muted" style="cursor:grab;">⠿</span>
+                        <span class="flex-grow-1">{{ c }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ordem-sobe" title="Subir">↑</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ordem-desce" title="Descer">↓</button>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <input type="hidden" name="ordem_categorias" id="inp-ordem-categorias">
+                <div class="form-text">Categoria nova entra no fim, em ordem alfabética.</div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold small">Blocos do rodapé</label>
+                <ul class="list-group ordem-sortavel" data-input="inp-ordem-rodape">
+                    {% for b in rodape_ordem %}
+                    <li class="list-group-item d-flex align-items-center gap-2 py-1"
+                        draggable="true" data-key="{{ b }}">
+                        <span class="text-muted" style="cursor:grab;">⠿</span>
+                        <span class="flex-grow-1">{{ rodape_labels[b] }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ordem-sobe" title="Subir">↑</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ordem-desce" title="Descer">↓</button>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <input type="hidden" name="ordem_rodape" id="inp-ordem-rodape">
+            </div>
+        </div>
     </div>
     <div class="card-footer d-flex gap-2">
         <button type="submit" class="btn btn-primary">Salvar</button>
         <a class="btn btn-outline-secondary" href="{{ url_for('main.cardapio', tipo='atacado') }}">Cancelar</a>
     </div>
 </form>
+
+<script>
+(function () {
+    // Drag-and-drop das seções do cardápio (21/07/2026). HTML5 drag no
+    // desktop + setas ↑↓ (funcionam também no toque, onde o drag nativo
+    // não existe). O hidden é sincronizado a cada mudança E no load —
+    // POST sem JS nunca manda vazio por acidente (campo preenchido).
+    document.querySelectorAll('.ordem-sortavel').forEach(function (ul) {
+        var inp = document.getElementById(ul.dataset.input);
+        function sync() {
+            var chaves = Array.prototype.map.call(
+                ul.querySelectorAll('li'), function (li) { return li.dataset.key; });
+            inp.value = JSON.stringify(chaves);
+        }
+        var arrastando = null;
+        ul.addEventListener('dragstart', function (e) {
+            arrastando = e.target.closest('li');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        ul.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            var li = e.target.closest('li');
+            if (!li || !arrastando || li === arrastando) return;
+            var r = li.getBoundingClientRect();
+            var depois = (e.clientY - r.top) > r.height / 2;
+            ul.insertBefore(arrastando, depois ? li.nextSibling : li);
+        });
+        ul.addEventListener('drop', function (e) { e.preventDefault(); });
+        ul.addEventListener('dragend', function () { arrastando = null; sync(); });
+        ul.addEventListener('click', function (e) {
+            var btn = e.target.closest('.ordem-sobe, .ordem-desce');
+            if (!btn) return;
+            var li = btn.closest('li');
+            if (btn.classList.contains('ordem-sobe') && li.previousElementSibling) {
+                ul.insertBefore(li, li.previousElementSibling);
+            } else if (btn.classList.contains('ordem-desce') && li.nextElementSibling) {
+                ul.insertBefore(li.nextElementSibling, li);
+            }
+            sync();
+        });
+        sync();
+    });
+})();
+</script>
 {% endblock %}
