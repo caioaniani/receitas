@@ -333,6 +333,50 @@ def _box_preparo(pdf, metodos):
     pdf.set_y(y0 + alt + 5)
 
 
+def _box_quem_somos(pdf, paragrafos):
+    """Caixa "Quem somos nós" (21/07/2026) — a história da casa no rodapé,
+    ANTES das regras/métodos. Mesma cara bege das outras caixas; parágrafos
+    longos quebram linha (altura medida com dry_run, caixa nunca corta)."""
+    _LARG_TXT = 180
+    _LH = 4.6
+    pdf.set_font('Helvetica', '', 9)
+    alt = 10
+    corpos = [_latin1(p) for p in paragrafos]
+    for txt in corpos:
+        alt += pdf.multi_cell(_LARG_TXT, _LH, txt,
+                              dry_run=True, output='HEIGHT') + 1.6
+    alt += 1.5
+    y0 = pdf.get_y()
+    if y0 + alt > _Y_LIMITE:               # não cabe: caixa em página nova
+        pdf.add_page()
+        y0 = pdf.get_y()
+    pdf.set_fill_color(*_C_TAG)
+    pdf.set_draw_color(*_C_BORDER)
+    pdf.rect(_MARGEM, y0, 190, alt, style='FD',
+             round_corners=True, corner_radius=_RAIO)
+    pdf.set_y(y0 + 4)
+    pdf.set_x(_MARGEM + 5)
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.set_text_color(*_C_PRIMARY)
+    pdf.set_char_spacing(0.8)
+    pdf.cell(0, 5, _latin1('QUEM SOMOS NÓS'),
+             new_x='LMARGIN', new_y='NEXT')
+    pdf.set_char_spacing(0)
+    pdf.ln(0.5)
+    lm_orig, rm_orig = pdf.l_margin, pdf.r_margin
+    pdf.set_left_margin(_MARGEM + 5)
+    pdf.set_right_margin(210 - (_MARGEM + 5) - _LARG_TXT)
+    pdf.set_font('Helvetica', '', 9)
+    pdf.set_text_color(*_C_FG)
+    for txt in corpos:
+        pdf.set_x(_MARGEM + 5)
+        pdf.write(_LH, txt)
+        pdf.ln(_LH + 1.6)
+    pdf.set_left_margin(lm_orig)
+    pdf.set_right_margin(rm_orig)
+    pdf.set_y(y0 + alt + 2)
+
+
 def _titulo_categoria(pdf, nome, alt_primeira=_CARD_H):
     # Categoria órfã no pé da página: quebra antes (nunca título solto).
     # `alt_primeira` = altura do 1º bloco da categoria — card de foto no
