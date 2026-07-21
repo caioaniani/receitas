@@ -441,6 +441,32 @@ def criar_pedido(form, itens_raw, *, base=None):
                          if permitida else 'Retirada indisponível no momento.')
         else:
             endereco_entrega = f'Retirada: {loja.nome} — {loja.endereco or ""}'.strip()
+        # Endereco do cliente pra NOTA FISCAL (dono 20/07/2026): a retirada
+        # tambem precisa do endereco estruturado, senao a NF-e sai com o
+        # destinatario em branco e a SEFAZ rejeita (endereco/bairro/UF em
+        # branco). NAO recalcula frete nem geocodifica — o endereco serve SO
+        # pra nota; a retirada continua na loja e o frete fica R$0. Mesma
+        # exigencia de campos da entrega (numero obrigatorio, decisao do
+        # dono); a linha `endereco_entrega` acima segue mostrando a loja pra
+        # operacao. Reusa os MESMOS campos do form (o checkout mostra o bloco
+        # de endereco na retirada tambem).
+        logradouro = (form.get('logradouro') or '').strip()
+        numero = (form.get('numero') or '').strip()
+        cidade = (form.get('cidade') or '').strip()
+        if not endereco_cep:
+            erros.append('Informe o CEP para a nota fiscal.')
+        if not logradouro:
+            erros.append('Informe o logradouro (rua/avenida) para a nota fiscal.')
+        if not numero:
+            erros.append('Informe o número do endereço para a nota fiscal.')
+        if not cidade:
+            erros.append('Informe a cidade para a nota fiscal.')
+        end_logradouro = logradouro or None
+        end_numero = numero or None
+        end_complemento = (form.get('complemento') or '').strip() or None
+        end_bairro = (form.get('bairro') or '').strip() or None
+        end_cidade = cidade or None
+        end_uf = ((form.get('uf') or '').strip().upper()[:2]) or None
     elif modo in ('agendada', 'express'):
         if modo == 'express' and not express_disponivel(base):
             erros.append('Express indisponível agora (fora do horário de '
