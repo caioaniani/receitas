@@ -404,7 +404,8 @@ footer p { margin: 0; }
         {% else %}
         <h1>O Pão</h1>
         {% endif %}
-        <p>Tempo. Fermento. Cuidado. Pão de verdade, feito com fermentação natural.</p>
+        {# Slogan editável em Editar regras (21/07); vazio = linha some. #}
+        {% if slogan %}<p>{{ slogan }}</p>{% endif %}
     </div>
 </section>
 
