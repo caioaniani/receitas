@@ -4639,6 +4639,26 @@ def loja_online_divulgacao():
                            hoje=hoje_brt().isoformat())
 
 
+@main_bp.route('/admin/loja-online/divulgacao/<codigo>/cancelar',
+               methods=['POST'])
+@login_required
+@admin_required
+def loja_online_divulgacao_cancelar(codigo):
+    """Cancela uma divulgacao devolvendo o estoque baixado (so admin)."""
+    from flask import flash, redirect, url_for
+
+    from app.models import PedidoOnline
+    from app.services import divulgacao as div_svc
+    p = PedidoOnline.query.filter_by(codigo=codigo, divulgacao=True).first_or_404()
+    res = div_svc.cancelar_divulgacao(p, usuario_id=current_user.id)
+    if res.get('ja_cancelado'):
+        flash('Esta divulgação já estava cancelada.', 'info')
+    else:
+        flash('Divulgação %s cancelada — estoque devolvido à loja.' % codigo,
+              'success')
+    return redirect(url_for('main.loja_online_pedido_detalhe', codigo=codigo))
+
+
 @main_bp.route('/admin/loja-online/estoque-vitrine')
 @login_required
 def loja_online_estoque_vitrine():
