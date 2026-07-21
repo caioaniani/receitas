@@ -5,9 +5,11 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h1 class="page-title mb-0">⭐ Lançar divulgação</h1>
+    {% if current_user.is_admin() or current_user.is_gerente() %}
     <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.loja_online_pedidos', status='divulgacao') }}">
         Ver divulgações
     </a>
+    {% endif %}
 </div>
 
 <div class="alert alert-warning small">
@@ -15,9 +17,10 @@
     Ele aparece no <strong>painel de entregas</strong> com uma estrela ⭐ e
     <strong>baixa o estoque da loja</strong> (o produto sai de verdade), mas
     <strong>não conta como venda</strong> — fica fora do faturamento e da previsão.
+    <strong>Preencha todos os campos.</strong>
 </div>
 
-<form method="POST" class="card">
+<form method="POST" class="card" id="form-divulg" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="card-body">
         <div class="row g-3">
@@ -28,14 +31,14 @@
                        placeholder="Ex: Padaria do Zé / Influencer Fulana">
             </div>
             <div class="col-md-6">
-                <label class="form-label fw-semibold" for="telefone">Telefone (WhatsApp)</label>
+                <label class="form-label fw-semibold" for="telefone">Telefone (WhatsApp) *</label>
                 <input type="text" class="form-control" id="telefone" name="telefone"
-                       maxlength="30" placeholder="(11) 90000-0000">
+                       required maxlength="30" placeholder="(11) 90000-0000">
             </div>
         </div>
 
         <hr>
-        <div class="mb-2 fw-semibold">Entrega</div>
+        <div class="mb-2 fw-semibold">Entrega *</div>
         <div class="btn-group mb-3 flex-wrap" role="group">
             <input type="radio" class="btn-check" name="modo_entrega" id="m-agendada" value="agendada" checked>
             <label class="btn btn-outline-primary" for="m-agendada">🚚 Entrega agendada</label>
@@ -56,48 +59,58 @@
             <div class="form-text">O estoque é baixado desta loja.</div>
         </div>
 
-        <div id="box-endereco" class="row g-2 mb-3">
-            <div class="col-12">
-                <label class="form-label small text-muted" for="endereco_linha">Endereço completo (rua, número, bairro)</label>
-                <input type="text" class="form-control" id="endereco_linha" name="endereco_linha"
-                       placeholder="Rua Exemplo, 123 — Brooklin">
+        <div id="box-endereco" class="mb-3">
+            <div class="row g-2">
+                <div class="col-6 col-md-3">
+                    <label class="form-label small text-muted" for="endereco_cep">CEP *</label>
+                    <input type="text" class="form-control" id="endereco_cep" name="endereco_cep"
+                           maxlength="9" inputmode="numeric" placeholder="00000-000" autocomplete="off">
+                    <div id="cep-status" class="form-text"></div>
+                </div>
+                <div class="col-6 col-md-7">
+                    <label class="form-label small text-muted" for="endereco_logradouro">Rua / logradouro *</label>
+                    <input type="text" class="form-control" id="endereco_logradouro" name="endereco_logradouro">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted" for="endereco_numero">Número *</label>
+                    <input type="text" class="form-control" id="endereco_numero" name="endereco_numero">
+                </div>
+                <div class="col-6 col-md-4">
+                    <label class="form-label small text-muted" for="endereco_bairro">Bairro *</label>
+                    <input type="text" class="form-control" id="endereco_bairro" name="endereco_bairro">
+                </div>
+                <div class="col-8 col-md-5">
+                    <label class="form-label small text-muted" for="endereco_cidade">Cidade *</label>
+                    <input type="text" class="form-control" id="endereco_cidade" name="endereco_cidade">
+                </div>
+                <div class="col-4 col-md-1">
+                    <label class="form-label small text-muted" for="endereco_uf">UF *</label>
+                    <input type="text" class="form-control" id="endereco_uf" name="endereco_uf" maxlength="2">
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label small text-muted" for="endereco_complemento">Compl.</label>
+                    <input type="text" class="form-control" id="endereco_complemento" name="endereco_complemento"
+                           placeholder="apto/bloco">
+                </div>
             </div>
-            <div class="col-6 col-md-3">
-                <label class="form-label small text-muted" for="endereco_cep">CEP</label>
-                <input type="text" class="form-control" id="endereco_cep" name="endereco_cep" maxlength="9">
-            </div>
-            <div class="col-6 col-md-3">
-                <label class="form-label small text-muted" for="endereco_numero">Número</label>
-                <input type="text" class="form-control" id="endereco_numero" name="endereco_numero">
-            </div>
-            <div class="col-6 col-md-3">
-                <label class="form-label small text-muted" for="endereco_bairro">Bairro</label>
-                <input type="text" class="form-control" id="endereco_bairro" name="endereco_bairro">
-            </div>
-            <div class="col-6 col-md-3">
-                <label class="form-label small text-muted" for="endereco_cidade">Cidade</label>
-                <input type="text" class="form-control" id="endereco_cidade" name="endereco_cidade">
-            </div>
-            <input type="hidden" name="endereco_logradouro" id="endereco_logradouro">
-            <input type="hidden" name="endereco_complemento" id="endereco_complemento">
-            <input type="hidden" name="endereco_uf" id="endereco_uf">
         </div>
 
         <div class="row g-3 mb-3">
             <div class="col-md-4">
-                <label class="form-label fw-semibold" for="data_entrega">Data</label>
+                <label class="form-label fw-semibold" for="data_entrega">Data *</label>
                 <input type="date" class="form-control" id="data_entrega" name="data_entrega"
-                       value="{{ hoje }}" min="{{ hoje }}">
+                       value="{{ hoje }}" min="{{ hoje }}" required>
             </div>
             <div class="col-md-4">
-                <label class="form-label fw-semibold" for="janela_entrega">Janela / horário</label>
+                <label class="form-label fw-semibold" for="janela_entrega">Janela / horário *</label>
                 <input type="text" class="form-control" id="janela_entrega" name="janela_entrega"
-                       placeholder="Ex: 8h-12h">
+                       required placeholder="Ex: 8h-12h">
             </div>
         </div>
 
         <hr>
         <div class="mb-2 fw-semibold">Itens da divulgação *</div>
+        <div class="form-text mb-2">Comece a digitar o nome do produto — os itens que combinam aparecem.</div>
         <div id="itens-lista"></div>
         <button type="button" class="btn btn-sm btn-outline-primary" id="add-item">
             <i class="bi bi-plus-lg"></i> Adicionar item
@@ -108,22 +121,24 @@
             <textarea class="form-control" id="cartinha" name="cartinha" rows="2"
                       placeholder="Ex: cortesia de divulgação — cesta de degustação"></textarea>
         </div>
+        <div id="form-erro" class="alert alert-danger py-2 small" style="display:none;"></div>
     </div>
     <div class="card-footer d-flex gap-2">
         <button type="submit" class="btn btn-warning fw-semibold">⭐ Lançar divulgação</button>
-        <a class="btn btn-outline-secondary" href="{{ url_for('main.loja_online_pedidos') }}">Cancelar</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}">Cancelar</a>
     </div>
 </form>
 
 <template id="tpl-item">
-    <div class="row g-2 mb-2 align-items-end item-row">
+    <div class="row g-2 mb-2 align-items-start item-row">
         <div class="col-8">
-            <select class="form-select form-select-sm" name="item_alvo[]">
-                <option value="">— escolha o produto —</option>
-                {% for it in catalogo %}
-                <option value="{{ it.kind }}:{{ it.id }}">{{ it.nome }}</option>
-                {% endfor %}
-            </select>
+            <div class="combo position-relative">
+                <input type="text" class="form-control form-control-sm combo-input"
+                       placeholder="digite pra buscar…" autocomplete="off">
+                <input type="hidden" name="item_alvo[]" class="combo-val">
+                <div class="combo-menu list-group position-absolute w-100 shadow-sm"
+                     style="display:none; z-index:1050; max-height:240px; overflow-y:auto;"></div>
+            </div>
         </div>
         <div class="col-3">
             <input type="number" class="form-control form-control-sm" name="item_qtd[]"
@@ -137,21 +152,103 @@
 
 <script>
 (function () {
-  var modoRadios = document.querySelectorAll('input[name="modo_entrega"]');
+  var CATALOGO = {{ catalogo | tojson }};
+
+  // ── Entrega: alterna retirada × endereço ──────────────────────────────
   var boxRetir = document.getElementById('box-retirada');
   var boxEnd = document.getElementById('box-endereco');
+  var lojaSel = document.getElementById('loja_retirada_id');
+  var endCampos = ['endereco_cep', 'endereco_logradouro', 'endereco_numero',
+                   'endereco_bairro', 'endereco_cidade', 'endereco_uf'];
   function syncModo() {
     var v = document.querySelector('input[name="modo_entrega"]:checked').value;
-    boxRetir.style.display = (v === 'retirada') ? '' : 'none';
-    boxEnd.style.display = (v === 'retirada') ? 'none' : '';
+    var retir = (v === 'retirada');
+    boxRetir.style.display = retir ? '' : 'none';
+    boxEnd.style.display = retir ? 'none' : '';
+    lojaSel.required = retir;
+    endCampos.forEach(function (id) { document.getElementById(id).required = !retir; });
   }
-  modoRadios.forEach(function (r) { r.addEventListener('change', syncModo); });
-  syncModo();
+  document.querySelectorAll('input[name="modo_entrega"]').forEach(function (r) {
+    r.addEventListener('change', syncModo);
+  });
 
+  // ── CEP → autofill (reusa /loja/api/cep, mesmo do checkout) ────────────
+  var cep = document.getElementById('endereco_cep');
+  var cepStatus = document.getElementById('cep-status');
+  function buscarCep() {
+    var d = (cep.value || '').replace(/\D/g, '');
+    if (d.length !== 8) return;
+    cepStatus.textContent = 'buscando…';
+    cepStatus.className = 'form-text text-muted';
+    fetch('/loja/api/cep/' + d).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+    }).then(function (res) {
+      if (res.ok && res.j.ok) {
+        if (res.j.logradouro) document.getElementById('endereco_logradouro').value = res.j.logradouro;
+        if (res.j.bairro) document.getElementById('endereco_bairro').value = res.j.bairro;
+        if (res.j.cidade) document.getElementById('endereco_cidade').value = res.j.cidade;
+        if (res.j.uf) document.getElementById('endereco_uf').value = res.j.uf;
+        cepStatus.textContent = 'endereço preenchido';
+        cepStatus.className = 'form-text text-success';
+        document.getElementById('endereco_numero').focus();
+      } else {
+        cepStatus.textContent = res.j.erro || 'confira o CEP';
+        cepStatus.className = 'form-text text-warning';
+      }
+    }).catch(function () {
+      cepStatus.textContent = 'não deu pra consultar — preencha à mão';
+      cepStatus.className = 'form-text text-warning';
+    });
+  }
+  cep.addEventListener('input', function () {
+    var d = cep.value.replace(/\D/g, '').slice(0, 8);
+    cep.value = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
+    if (d.length === 8) buscarCep();
+  });
+  cep.addEventListener('blur', buscarCep);
+
+  // ── Itens: combobox typeahead sobre o catálogo embutido ───────────────
   var lista = document.getElementById('itens-lista');
   var tpl = document.getElementById('tpl-item');
+
+  function montarCombo(row) {
+    var input = row.querySelector('.combo-input');
+    var hidden = row.querySelector('.combo-val');
+    var menu = row.querySelector('.combo-menu');
+    function fechar() { menu.style.display = 'none'; }
+    function abrir(termo) {
+      termo = (termo || '').trim().toLowerCase();
+      var achados = CATALOGO.filter(function (it) {
+        return !termo || it.nome.toLowerCase().indexOf(termo) !== -1;
+      }).slice(0, 40);
+      if (!achados.length) { fechar(); return; }
+      menu.innerHTML = achados.map(function (it) {
+        var preco = it.preco ? ' <span class="text-muted small">R$ ' +
+          it.preco.toFixed(2).replace('.', ',') + '</span>' : '';
+        return '<button type="button" class="list-group-item list-group-item-action py-1 combo-opt" ' +
+          'data-val="' + it.kind + ':' + it.id + '" data-nome="' +
+          it.nome.replace(/"/g, '&quot;') + '">' + it.nome + preco + '</button>';
+      }).join('');
+      menu.style.display = '';
+    }
+    input.addEventListener('input', function () {
+      hidden.value = '';           // digitou = precisa RE-escolher (sem lixo)
+      abrir(input.value);
+    });
+    input.addEventListener('focus', function () { abrir(input.value); });
+    input.addEventListener('blur', function () { setTimeout(fechar, 150); });
+    menu.addEventListener('mousedown', function (e) {
+      var opt = e.target.closest('.combo-opt');
+      if (!opt) return;
+      e.preventDefault();
+      hidden.value = opt.getAttribute('data-val');
+      input.value = opt.getAttribute('data-nome');
+      fechar();
+    });
+  }
   function addItem() {
     lista.appendChild(tpl.content.cloneNode(true));
+    montarCombo(lista.lastElementChild);
   }
   document.getElementById('add-item').addEventListener('click', addItem);
   lista.addEventListener('click', function (e) {
@@ -160,6 +257,38 @@
       if (row) row.remove();
     }
   });
+
+  // ── Validação no submit (todos obrigatórios) ──────────────────────────
+  var form = document.getElementById('form-divulg');
+  var erroBox = document.getElementById('form-erro');
+  form.addEventListener('submit', function (e) {
+    var faltas = [];
+    if (!document.getElementById('nome_destinatario').value.trim()) faltas.push('nome');
+    if (!document.getElementById('telefone').value.trim()) faltas.push('telefone');
+    if (!document.getElementById('data_entrega').value) faltas.push('data');
+    if (!document.getElementById('janela_entrega').value.trim()) faltas.push('janela');
+    var retir = document.querySelector('input[name="modo_entrega"]:checked').value === 'retirada';
+    if (retir) {
+      if (!lojaSel.value) faltas.push('loja de retirada');
+    } else {
+      endCampos.forEach(function (id) {
+        if (!document.getElementById(id).value.trim()) {
+          faltas.push('endereço (' + id.replace('endereco_', '') + ')');
+        }
+      });
+    }
+    var temItem = Array.prototype.some.call(
+      lista.querySelectorAll('.combo-val'), function (h) { return h.value; });
+    if (!temItem) faltas.push('ao menos um item');
+    if (faltas.length) {
+      e.preventDefault();
+      erroBox.textContent = 'Faltou preencher: ' + faltas.join(', ') + '.';
+      erroBox.style.display = '';
+      erroBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  syncModo();
   addItem(); // começa com uma linha
 })();
 </script>
