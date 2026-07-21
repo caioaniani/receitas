@@ -257,26 +257,28 @@
   function linhasCancel(itens) {
     if (!itens.length) return '<p class="text-muted mb-0">Nenhum cancelamento.</p>';
     var r = itens.map(function (c) {
-      return '<tr><td>' + esc(c.hora) + '</td><td>' + esc(c.loja) +
+      return '<tr><td>' + esc(c.hora) + '</td><td class="text-muted">' +
+        esc(c.codigo || '—') + '</td><td>' + esc(c.loja) +
         '</td><td class="text-end">' + brl(c.valor) + '</td><td>' +
         esc(c.caixa || '—') + '</td><td>' +
         (c.nf ? '<span class="text-success">sim</span>'
               : '<span class="text-danger">não</span>') + '</td></tr>';
     }).join('');
     return '<div class="table-responsive"><table class="table table-sm mb-0">' +
-      '<thead><tr><th>Hora</th><th>Loja</th><th class="text-end">Valor</th>' +
+      '<thead><tr><th>Hora</th><th>Cód.</th><th>Loja</th><th class="text-end">Valor</th>' +
       '<th>Caixa</th><th>NF</th></tr></thead><tbody>' + r + '</tbody></table></div>';
   }
   function linhasDesc(itens) {
     if (!itens.length) return '<p class="text-muted mb-0">Nenhum desconto.</p>';
     var r = itens.map(function (d) {
-      return '<tr><td>' + esc(d.hora) + '</td><td>' + esc(d.loja) +
+      return '<tr><td>' + esc(d.hora) + '</td><td class="text-muted">' +
+        esc(d.codigo || '—') + '</td><td>' + esc(d.loja) +
         '</td><td class="text-end">' + brl(d.subtotal) +
         '</td><td class="text-end text-danger">− ' + brl(d.desconto) +
         '</td><td class="text-end">' + brl(d.total) + '</td></tr>';
     }).join('');
     return '<div class="table-responsive"><table class="table table-sm mb-0">' +
-      '<thead><tr><th>Hora</th><th>Loja</th><th class="text-end">Subtotal</th>' +
+      '<thead><tr><th>Hora</th><th>Cód.</th><th>Loja</th><th class="text-end">Subtotal</th>' +
       '<th class="text-end">Desconto</th><th class="text-end">Total</th></tr></thead>' +
       '<tbody>' + r + '</tbody></table></div>';
   }
