@@ -7,6 +7,11 @@ from unittest.mock import patch
 FRETE_OK = {'ok': True, 'valor': 15.0, 'gratis': False, 'fora_area': False,
             'distancia_km': 3.4, 'endereco': 'Rua X, Moema', 'aviso': ''}
 
+# Endereço estruturado que a retirada passou a exigir pra emitir a NF-e
+# (dono 20/07/2026). Spread nos forms de retirada que esperam sucesso.
+_END_NF = {'cep': '04077-000', 'logradouro': 'Rua X', 'numero': '10',
+           'bairro': 'Moema', 'cidade': 'São Paulo', 'uf': 'SP'}
+
 
 def _admin(app):
     from app.extensions import db
@@ -460,7 +465,9 @@ def _form_retirada(loja, base, **over):
     f = {'nome': 'Maria', 'sobrenome': 'Silva',
          'email': 'm@x.com', 'cpf': '52998224725', 'aceite_lgpd': '1',
          'modo_entrega': 'retirada', 'loja_id': str(loja.id),
-         'data_entrega': data, 'janela_entrega': '08:00–09:00'}
+         'data_entrega': data, 'janela_entrega': '08:00–09:00',
+         # Endereço pra NF-e — a retirada passou a exigir (dono 20/07/2026).
+         **_END_NF}
     f.update(over)
     return f
 
