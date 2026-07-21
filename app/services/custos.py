@@ -3,6 +3,7 @@
 from sqlalchemy.orm import selectinload
 
 from app.models import MateriaPrima, Receita
+from app.utils import SUB_RECEITA_TIPOS, unidades_subreceita
 
 MAX_PASSES = 5  # máximo de passadas para resolver sub-receitas
 
@@ -267,7 +268,7 @@ def _calcular_receita(r, custos, custos_norm, pesos, pesos_norm,
 
     for ing in r.ingredientes:
         tipo = ing.tipo or 'mp'
-        if tipo == 'receita':
+        if tipo in SUB_RECEITA_TIPOS:
             # FK primeiro; fallback pro nome gravado (orfao/legado).
             nome_sub = (id2nome or {}).get(ing.sub_receita_id) \
                 or ing.ingrediente_nome
@@ -277,13 +278,16 @@ def _calcular_receita(r, custos, custos_norm, pesos, pesos_norm,
                 sub_custo = custos_norm.get(_norm(nome_sub))
             if sub_custo is None:
                 return None  # dependência não resolvida ainda
-            custo_total += sub_custo * ing.porcentagem
+            # Unidades da sub por fornada-base: absoluto ('receita') ou % da
+            # base ('sub_pct'), via helper único — bate com a compra/baixa.
+            und_sub = unidades_subreceita(tipo, ing.porcentagem, r.peso_base)
+            custo_total += sub_custo * und_sub
             # Sub-receita contribui pro peso total (mesma logica do JS na
             # ficha): peso = unidades × peso_unitario_da_sub.
             sub_peso = pesos.get(nome_sub)
             if sub_peso is None:
                 sub_peso = pesos_norm.get(_norm(nome_sub), 0)
-            qtd_direto += ing.porcentagem * (sub_peso or 0)
+            qtd_direto += und_sub * (sub_peso or 0)
         elif tipo == 'mp_direto':
             qtd_g = ing.porcentagem
             info = _get_mp_info(ing.ingrediente_nome)
