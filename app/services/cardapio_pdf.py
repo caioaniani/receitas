@@ -691,14 +691,14 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
             pdf.ln(2)
 
     # Quem somos + regras + métodos no FIM (pedido do dono 20/07: "colocar
-    # para o rodapé e trazer os produtos para cima") — espelho da tela. A
-    # história vem primeiro (quem somos), depois o operacional (como pedir).
-    if quem_somos:
-        _box_quem_somos(pdf, quem_somos, foto=quem_somos_foto)
-    if tipo == 'atacado':
-        if regras:
+    # para o rodapé e trazer os produtos para cima") — espelho da tela, na
+    # ordem escolhida pelo dono (regras/preparo seguem só no atacado).
+    for bloco in (ordem_rodape or ('quem_somos', 'regras', 'preparo')):
+        if bloco == 'quem_somos' and quem_somos:
+            _box_quem_somos(pdf, quem_somos, foto=quem_somos_foto)
+        elif bloco == 'regras' and tipo == 'atacado' and regras:
             _box_regras(pdf, regras, titulo)
-        if preparo:
+        elif bloco == 'preparo' and tipo == 'atacado' and preparo:
             _box_preparo(pdf, preparo)
 
     saida = pdf.output()
