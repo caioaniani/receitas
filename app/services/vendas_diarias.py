@@ -207,9 +207,19 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
             data=d, loja_seru=ln, dimensao='sem_itens',
             chave=f'{tag[:116]}:n', valor=Decimal(si['n'])))
     for (d, ln), qtd in por_dia_cancel.items():
+        # chave '' = CONTAGEM (compat: leitura antiga lê '' como contagem);
+        # chave 'v' = VALOR (total dos pedidos cancelados). Dia capturado antes
+        # da chave 'v' existir tem só a contagem — valor 0 até recapturar.
         db.session.add(VendaSeruDiaBreakdown(
             data=d, loja_seru=ln, dimensao='cancelados',
             chave='', valor=Decimal(qtd)))
+        db.session.add(VendaSeruDiaBreakdown(
+            data=d, loja_seru=ln, dimensao='cancelados',
+            chave='v', valor=por_dia_cancel_v[(d, ln)]))
+    for (d, ln), val in por_dia_desconto.items():
+        db.session.add(VendaSeruDiaBreakdown(
+            data=d, loja_seru=ln, dimensao='desconto',
+            chave='', valor=val))
     db.session.commit()
     return {'dias': len(dias_vistos), 'linhas': linhas, 'pedidos': n_pedidos}
 
