@@ -480,8 +480,10 @@ footer p { margin: 0; }
                 {% endfor %}
             </div>
             {% if quem_somos_foto %}
+            {# width/height 3:4 reservam o espaço (sem layout shift no
+               lazy-load); o CSS manda no tamanho exibido. #}
             <img class="quem-somos-foto" src="{{ quem_somos_foto }}"
-                 alt="Nossa loja" loading="lazy"/>
+                 alt="Nossa loja" loading="lazy" width="900" height="1200"/>
             {% endif %}
         </div>
     </div>
