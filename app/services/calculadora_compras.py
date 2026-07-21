@@ -51,7 +51,8 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
     estoque de MP — útil pra orçar um evento sem mexer no que está reservado
     à operação do dia). Só re-rotula a saída do motor; a explosão é a mesma.
 
-    Retorna {'compra': <ordem_compra_consolidada>, 'compras_diretas': [...],
+    Retorna {'compra': <ordem_compra_consolidada>, 'producao': [...] (receitas
+             a produzir — o que se passa pro padeiro), 'compras_diretas': [...],
              'sub_receitas': [...], 'itens_ok': [...], 'avisos': [...],
              'detalhes': [...] (rastro informativo — NÃO é problema)}.
     """
