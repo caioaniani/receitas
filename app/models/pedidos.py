@@ -36,6 +36,11 @@ class PedidoLoja(db.Model):
     nf_status = db.Column(db.String(40))
     nf_emitida_em = db.Column(db.DateTime, nullable=True)
     nf_numero = db.Column(db.String(50))
+    # Motivo da REJEICAO da SEFAZ (20/07/2026): antes so ia no flash e
+    # sumia; agora fica no card pro dono/contador ver o que corrigir no
+    # Tiny (ex.: "CST com beneficio sem cBenef, cod 32"). TEXT (a msg da
+    # SEFAZ passa de 40 chars). Limpo no sucesso e no "Refazer do zero".
+    nf_erro = db.Column(db.Text)
     # Dispensa de NF POR PEDIDO (20/07/2026, dono): o scan do QR pula a
     # emissao. Toggle ADMIN-only no detalhe (motorista/padeiro nao veem);
     # a dispensa POR LOJA (Loja.nf_dispensada) tambem vale — qualquer uma
