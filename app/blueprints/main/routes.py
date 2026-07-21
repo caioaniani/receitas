@@ -4652,9 +4652,47 @@ def loja_online_divulgacao():
                                     codigo=pedido.codigo))
         return redirect(url_for('main.loja_online_divulgacao'))
 
+    amanha = (hoje_brt() + timedelta(days=1)).isoformat()
     return render_template('admin/loja_online_divulgacao.html',
                            catalogo=_catalogo_divulgacao(), lojas=lojas,
-                           hoje=hoje_brt().isoformat())
+                           amanha=amanha)
+
+
+@main_bp.route('/admin/loja-online/divulgacao/janelas')
+@login_required
+@divulgacao_required
+def loja_online_divulgacao_janelas():
+    """Janelas de horário válidas pra uma data/modo/endereço — MESMA regra do
+    site (`loja_checkout.janelas_disponiveis`): agendada corta a 1ª janela da
+    manhã quando o endereço está longe (distância do `consultar_frete`);
+    retirada não tem distância. Alimenta o select do form (JS)."""
+    from app.services import loja_checkout
+    modo = (request.args.get('modo') or 'agendada').strip()
+    data = (request.args.get('data') or '').strip() or None
+    dist = None
+    aviso = None
+    if modo == 'agendada':
+        partes = [request.args.get('logradouro'), request.args.get('numero'),
+                  request.args.get('bairro'), request.args.get('cidade')]
+        geo = ', '.join(p.strip() for p in partes if (p or '').strip())
+        cep = (request.args.get('cep') or '').strip()
+        if cep and cep not in geo:
+            geo = ('%s, %s' % (geo, cep)) if geo else cep
+        if geo:
+            try:
+                from app.services import frete
+                r = frete.consultar_frete(geo)
+                if r.get('ok'):
+                    dist = r.get('distancia_km')
+                    if r.get('fora_area'):
+                        aviso = ('endereço fora do raio de entrega do site '
+                                 '(%.1f km) — confira com a equipe'
+                                 % (dist or 0))
+            except Exception:  # noqa: BLE001 — fail-open: sem dist, todas as janelas
+                current_app.logger.warning('divulgacao janelas: frete falhou',
+                                           exc_info=True)
+    janelas = loja_checkout.janelas_disponiveis(modo, data, distancia_km=dist)
+    return jsonify(ok=True, janelas=janelas, distancia_km=dist, aviso=aviso)
 
 
 @main_bp.route('/admin/loja-online/divulgacao/<codigo>/cancelar',
