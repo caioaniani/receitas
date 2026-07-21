@@ -576,6 +576,25 @@ def cardapio_atacado_regras():
         # Quem somos nós: mesmo contrato (vazio = escondido de proposito).
         AppConfig.set(_CARDAPIO_QUEM_SOMOS_KEY,
                       (request.form.get('quem_somos') or '').strip())
+        # Ordem das seções (drag-and-drop): só mexe se o campo veio no form
+        # (POST antigo/teste sem o campo não apaga a ordem salva). JSON
+        # inválido = flash, nunca sobrescrever em silêncio.
+        import json
+        for campo, cfg_key in (('ordem_categorias',
+                                _CARDAPIO_ORDEM_CATS_KEY),
+                               ('ordem_rodape',
+                                _CARDAPIO_ORDEM_RODAPE_KEY)):
+            raw = request.form.get(campo)
+            if raw is None:
+                continue
+            try:
+                lst = json.loads(raw)
+                lst = [str(x).strip()[:80] for x in lst
+                       if str(x).strip()][:100]
+                AppConfig.set(cfg_key, json.dumps(lst, ensure_ascii=False))
+            except (ValueError, TypeError):
+                flash('Ordem das seções veio inválida e NÃO foi salva '
+                      '(campo %s).' % campo, 'warning')
         db.session.commit()
         flash('Regras do atacado salvas. Elas já aparecem no cardápio.', 'success')
         return redirect(url_for('main.cardapio', tipo='atacado'))
