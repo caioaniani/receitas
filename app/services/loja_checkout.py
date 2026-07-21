@@ -665,7 +665,9 @@ def criar_pedido(form, itens_raw, *, base=None):
             return None, erros
     db.session.commit()
     # Auto-salva o endereço estruturado do cliente logado pra ele reusar no
-    # próximo pedido. Só faz pra entrega (retirada não tem endereço).
+    # próximo pedido. Só pra ENTREGA: o endereço da retirada é coletado só
+    # pra NF (20/07/2026) e NÃO é destino de entrega — não sobrescreve o
+    # endereço principal de entrega do cliente.
     if (cliente.tem_conta if hasattr(cliente, 'tem_conta') else False) \
             and modo != 'retirada' and end_logradouro:
         _salvar_ou_atualizar_endereco_principal(
