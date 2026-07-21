@@ -248,6 +248,42 @@ def test_rejeicao_sefaz_persiste_o_motivo(app, loja, catalogo):
     assert 'rejeitada pela SEFAZ' in body
 
 
+def test_incluir_duplicidade_mostra_motivo_em_nao_emitida(app, loja, catalogo):
+    """incluir falha (duplicidade no Tiny) → sem id salvo, o card cai no
+    estado 'não emitida'. O motivo persistido (nf_erro) tem que aparecer
+    AQUI também (o alerta do estado 'rejeitada' não renderiza sem id), com a
+    dica de excluir o rascunho órfão no Tiny."""
+    from app.services import tiny_nf, tiny_nf_transf
+    _loja_fiscal(loja)
+    p = _pedido(loja, catalogo)
+    tiny_nf.definir_sku('receita', catalogo['receita'].id, 'SKU-DUP',
+                        canal='transf')
+    motivo = 'Registro em duplicidade - Nota fiscal já cadastrada'
+    with _patch_custos(), _patch_custos_produtos(), \
+         patch('app.services.tiny.incluir_nota_fiscal',
+               return_value={'ok': False, 'erro': motivo}):
+        res = tiny_nf_transf.emitir_nf(p)
+    assert not res['ok']
+    db.session.refresh(p)
+    assert p.tiny_nota_fiscal_id is None          # incluir falhou → sem id
+    assert p.nf_erro == motivo                     # persistido
+    from app.models import Usuario
+    admin = Usuario.query.filter_by(papel='admin').first()
+    if admin is None:
+        admin = Usuario(nome='adm', login='adm-dup', papel='admin')
+        admin.set_senha('x')
+        db.session.add(admin)
+        db.session.commit()
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(admin.id)
+        sess['_fresh'] = True
+    body = client.get(f'/pedidos/{p.id}').get_data(as_text=True)
+    assert 'não emitida' in body
+    assert 'duplicidade' in body
+    assert 'Exclua a NF' in body                   # dica de órfão no Tiny
+
+
 def test_sucesso_limpa_erro_anterior(app, loja, catalogo):
     """Rejeição grava nf_erro; 'Refazer do zero' que autoriza limpa."""
     from app.services import tiny_nf, tiny_nf_transf
