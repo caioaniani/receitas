@@ -484,6 +484,8 @@ def vendas_pdv_do_banco(data_inicial, data_final, capturar=True):
 
     total = 0.0
     n_ped = cancelados = 0
+    cancelados_valor = 0.0
+    desconto_total = 0.0
     sem_itens_total = 0.0
     sem_itens_n = 0
     delivery_total = 0.0
