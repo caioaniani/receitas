@@ -72,13 +72,24 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
         return db.session.query(Receita.id).filter(
             Receita.retorno_receita_id == sub_id).first() is not None
 
-    def _add_receita(receita, qtd, origem=None, _visitados=None):
+    def _add_receita(receita, qtd, origem=None, _visitados=None,
+                     registrar_producao=True):
         _visitados = set(_visitados or ())
         if receita.id in _visitados:
             avisos.append(f'Ciclo de sub-receitas em "{receita.nome}" — '
                           'explosão interrompida nesse ramo.')
             return
         _visitados.add(receita.id)
+        # "Para produção": unidades da receita a PRODUZIR (o que se passa pro
+        # padeiro). Só os itens DIRETOS — entrada top-level + componente de
+        # cesta/produto montado. A explosão de sub-receita/retorno é INSUMO,
+        # não ordem de produção (massa/levain/mix saem no cronograma), então
+        # entra com registrar_producao=False.
+        if registrar_producao:
+            d = producao.setdefault(receita.id, {'nome': receita.nome,
+                                                 'categoria': receita.categoria,
+                                                 'qtd': 0.0})
+            d['qtd'] += qtd
         mult = _mult_para(receita, qtd)
         receita_itens.append({'receita_id': receita.id,
                               'multiplicador': mult})
