@@ -108,8 +108,8 @@
         <span class="badge bg-secondary" style="font-size:11px;">sem descontar estoque</span>
         {% endif %}</h5>
     <span class="text-muted small">
-        Compra estimada: <strong>R$ {{ '%.2f'|format(resultado.compra.total_compra) }}</strong>
-        · custo total dos insumos: R$ {{ '%.2f'|format(resultado.compra.total_necessario) }}
+        Compra estimada: <strong>R$ {{ '%.2f'|format(resultado.compra.total_compra)|replace('.', ',') }}</strong>
+        · custo total dos insumos: R$ {{ '%.2f'|format(resultado.compra.total_necessario)|replace('.', ',') }}
     </span>
 </div>
 {% for f in resultado.compra.fornecedores %}
