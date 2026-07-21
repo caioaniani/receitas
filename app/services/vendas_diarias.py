@@ -121,12 +121,18 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
         # como venda no snapshot).
         if seru.pedido_cancelado(p):
             por_dia_cancel[(d, ln)] += 1
+            por_dia_cancel_v[(d, ln)] += _dec(p.get('total'))
             continue
         pid = p.get('id') or p.get('orderNumber') or p.get('code')
         n_pedidos += 1
         lj = por_dia_loja[(d, ln)]
         total_ped = _dec(p.get('total'))
         lj['fat_ped'] += total_ped                           # total do pedido
+        # `discount` = desconto do pedido em R$ (top-level da API Seru; a lista
+        # traz o mesmo objeto do detalhe). So conta em venda nao cancelada.
+        desc = _dec(p.get('discount'))
+        if desc > 0:
+            por_dia_desconto[(d, ln)] += desc
         if pid is not None:
             lj['peds'].add(pid)
         for pay in (p.get('payments') or []):
