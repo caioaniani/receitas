@@ -244,9 +244,10 @@ def test_criar_pedido_agendada_grava_endereco_estruturado(app):
         assert pedido.endereco_cep == '11010000'
 
 
-def test_criar_pedido_retirada_sem_endereco_estruturado(app):
-    """Retirada NÃO coleta endereço — os campos estruturados ficam NULL
-    (NF de retirada exigiria coletar o endereço do cliente à parte)."""
+def test_criar_pedido_retirada_coleta_endereco_pra_nf(app):
+    """Retirada AGORA coleta o endereço estruturado (dono 20/07/2026): sem
+    ele a NF-e sai com o destinatário em branco e a SEFAZ rejeita. A linha
+    legível `endereco_entrega` segue mostrando a loja de retirada."""
     from app.extensions import db
     from app.services import loja_checkout
     with app.app_context():
@@ -255,12 +256,38 @@ def test_criar_pedido_retirada_sem_endereco_estruturado(app):
         base = datetime(2026, 6, 17, 10, 0)
         data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
         form = _form(modo_entrega='retirada', loja_id=str(loja.id),
+                     logradouro='Avenida Brasil', numero='123',
+                     bairro='Centro', cidade='São Paulo', uf='SP',
+                     cep='01310-100',
                      data_entrega=data, janela_entrega='08:00–09:00')
         pedido, erros = loja_checkout.criar_pedido(
             form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
         assert erros == []
-        assert pedido.endereco_logradouro is None
-        assert pedido.endereco_cidade is None
+        assert pedido.endereco_logradouro == 'Avenida Brasil'
+        assert pedido.endereco_numero == '123'
+        assert pedido.endereco_cidade == 'São Paulo'
+        assert pedido.endereco_uf == 'SP'
+        # frete R$0 e a linha legível segue sendo a loja (operação)
+        assert pedido.valor_frete == Decimal('0.00')
+        assert pedido.endereco_entrega.startswith('Retirada:')
+
+
+def test_criar_pedido_retirada_sem_endereco_falha(app):
+    """Sem endereço, a retirada é recusada (senão a NF-e quebra na SEFAZ)."""
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto_pub(db, preco=20.0)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        data = loja_checkout.datas_disponiveis('retirada', base=base)[1].isoformat()
+        form = _form(modo_entrega='retirada', loja_id=str(loja.id),
+                     logradouro='', numero='', cidade='', cep='',
+                     data_entrega=data, janela_entrega='08:00–09:00')
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert pedido is None
+        assert any('nota fiscal' in e.lower() for e in erros)
 
 
 def test_criar_pedido_fora_de_area_falha(app):
