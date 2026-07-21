@@ -99,6 +99,128 @@ def test_crm_routes_resolve_conversa_quando_bot_encerra(app):
     status.assert_called_with(777, 'resolved')
 
 
+# ── Fix 3: fechamento puro NUNCA vira handoff (caso Daiane, 21/07/2026) ──
+
+def test_bot_aguarda_resposta_heuristica():
+    """Só é 'pergunta pendente' quando a última fala do bot termina em '?'
+    (ignorando emoji/espaço no rabo)."""
+    from app.services import chatbot
+    aguarda = chatbot._bot_aguarda_resposta
+    assert aguarda([{'role': 'assistant', 'content': 'Confirma o pedido? 💛'}])
+    assert aguarda([{'role': 'assistant', 'content': 'Qual seu CPF?'}])
+    assert not aguarda([{'role': 'assistant', 'content': 'Aqui está o link! 🥐'}])
+    assert not aguarda([{'role': 'assistant', 'content': 'Sucesso!'}])
+    assert not aguarda([])                       # sem fala do bot
+
+
+def test_fechamento_puro_encerra_SEM_chamar_llm(app, monkeypatch):
+    """Caso Daiane Food Center: o bot fechou com um statement ('Sucesso!') e a
+    cliente respondeu só 'Muito Obrigada🙏'. Tem que ENCERRAR em silêncio,
+    NUNCA transferir — e de forma determinística, sem nem gastar o Claude."""
+    from app.services import chatbot
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-x')
+
+    class ExplodeClient:
+        def __init__(self, **kw): pass
+
+        class messages:
+            @staticmethod
+            def create(**kw):
+                raise AssertionError('LLM NÃO deveria ser chamado num '
+                                     'fechamento puro')
+    monkeypatch.setattr('anthropic.Anthropic', ExplodeClient)
+
+    with app.app_context():
+        out = chatbot.responder([
+            {'role': 'assistant',
+             'content': 'Propostas comerciais vão pro contato@opao.online. '
+                        'Sucesso!'},
+            {'role': 'user', 'content': 'Muito Obrigada🙏'},
+        ])
+    assert out['acao'] == 'encerrar'
+    assert out['texto'] == ''                    # silêncio (decisão do dono)
+    assert out['tools_usadas'] == []
+
+
+def test_fechamento_com_pergunta_pendente_NAO_encerra(app, monkeypatch):
+    """Se o bot deixou uma PERGUNTA, um 'ok' do cliente pode ser 'sim, quero' —
+    o short-circuit NÃO dispara, o modelo decide com contexto."""
+    from types import SimpleNamespace
+
+    from app.services import chatbot
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-x')
+
+    txt = SimpleNamespace(type='text', text='Perfeito! Vou finalizar então.')
+    fake_resp = SimpleNamespace(content=[txt], stop_reason='end_turn')
+    chamou = {'n': 0}
+
+    class FakeClient:
+        def __init__(self, **kw): pass
+
+        class messages:
+            @staticmethod
+            def create(**kw):
+                chamou['n'] += 1
+                return fake_resp
+    monkeypatch.setattr('anthropic.Anthropic', FakeClient)
+
+    with app.app_context():
+        out = chatbot.responder([
+            {'role': 'assistant', 'content': 'Confirma o pedido de R$50? 💛'},
+            {'role': 'user', 'content': 'ok'},
+        ])
+    assert chamou['n'] == 1                       # o modelo FOI consultado
+    assert out['acao'] == 'responder'
+    assert out['acao'] != 'encerrar'
+
+
+def test_enforcement_em_fechamento_orienta_encerrar_nao_consultar(app, monkeypatch):
+    """Layer 2: quando o bot deixou pergunta (Layer 1 defere) e o modelo tenta
+    handoff preguiçoso num fechamento, a recusa manda ENCERRAR — não
+    'consultar' (não há o que consultar num 'obrigada'). Na 2ª volta o modelo
+    encerra."""
+    from types import SimpleNamespace
+
+    from app.services import chatbot
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-x')
+
+    handoff_blk = SimpleNamespace(type='tool_use', name='transferir_para_humano',
+                                  id='h1', input={'motivo': 'cliente encerrou',
+                                                  'mensagem_cliente': 'Já passo.'})
+    encerrar_blk = SimpleNamespace(type='tool_use', name='encerrar_conversa',
+                                   id='e1', input={})
+    respostas = [SimpleNamespace(content=[handoff_blk], stop_reason='tool_use'),
+                 SimpleNamespace(content=[encerrar_blk], stop_reason='tool_use')]
+    calls = []
+
+    class FakeClient:
+        def __init__(self, **kw): pass
+
+        class messages:
+            @staticmethod
+            def create(**kw):
+                calls.append(kw)
+                return respostas[len(calls) - 1]
+    monkeypatch.setattr('anthropic.Anthropic', FakeClient)
+
+    with app.app_context():
+        out = chatbot.responder([
+            {'role': 'assistant', 'content': 'Posso ajudar em algo mais? 😊'},
+            {'role': 'user', 'content': 'obrigada'},
+        ])
+    assert out['acao'] == 'encerrar'              # não virou handoff
+    # A recusa injetada na 2ª chamada orienta encerrar, não consultar.
+    recusa = str(calls[1]['messages'])
+    assert 'encerrar_conversa' in recusa
+    assert 'despediu' in recusa or 'agradeceu' in recusa
+
+
+def test_prompt_proibe_handoff_em_fechamento():
+    """O prompt precisa dizer explicitamente: agradecimento não é handoff."""
+    from app.services.chatbot_prompt import PROMPT
+    assert 'NUNCA chame' in PROMPT and 'transferir_para_humano num fechamento' in PROMPT
+
+
 def test_prompt_tem_secao_FECHAMENTO_e_3_condicoes():
     """O LLM precisa ver a regra no prompt — sem isso ele não chama a
     tool. Travamos as 3 condições EXPLICITAS pra evitar 'fechamento' em
