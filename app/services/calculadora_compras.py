@@ -87,11 +87,21 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
         # cesta/produto montado. A explosão de sub-receita/retorno é INSUMO,
         # não ordem de produção (massa/levain/mix saem no cronograma), então
         # entra com registrar_producao=False.
+        # RETORNO (destino de sobra) NUNCA se produz — vem de Croissant
+        # Tradicional devolvido das lojas. Como componente DIRETO (ex:
+        # Croissant de Nutella = 1x "— Retorno") vira DEMANDA de retorno, não
+        # linha de produção (igual ao cronograma, que nunca sugere produzir
+        # retorno). O que o consome (Almond, Nutella) segue na produção.
         if registrar_producao:
-            d = producao.setdefault(receita.id, {'nome': receita.nome,
-                                                 'categoria': receita.categoria,
-                                                 'qtd': 0.0})
-            d['qtd'] += qtd
+            if _eh_retorno(receita.id):
+                d = retorno_demanda.setdefault(
+                    receita.id, {'nome': receita.nome, 'qtd': 0.0})
+                d['qtd'] += qtd
+            else:
+                d = producao.setdefault(receita.id, {'nome': receita.nome,
+                                                     'categoria': receita.categoria,
+                                                     'qtd': 0.0})
+                d['qtd'] += qtd
         mult = _mult_para(receita, qtd)
         receita_itens.append({'receita_id': receita.id,
                               'multiplicador': mult})
