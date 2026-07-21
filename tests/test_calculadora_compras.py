@@ -145,6 +145,73 @@ def test_mp_componente_de_cesta_mantem_unidade_da_mp(app, admin_user):
     assert '15000 un' not in body
 
 
+def test_producao_lista_receitas_a_produzir(app, admin_user):
+    """Seção 'Para produção': cesta explode em RECEITAS a produzir (o que se
+    passa pro padeiro), não em MP. 150 cestas × 2 pães = 300 pães. Produto
+    comprado pronto NÃO é produção."""
+    from app.services import calculadora_compras
+    with app.app_context():
+        _mp('Farinha', custo=10.0, estoque=0.0)
+        r = _receita_simples('Pao Prod')
+        pronto = Produto(nome='Suco Pronto', categoria='Bebidas',
+                         preco_site=8, ativo=True)
+        cesta = Produto(nome='Cesta Prod', categoria='Cestas',
+                        preco_site=100, ativo=True)
+        db.session.add_all([pronto, cesta])
+        db.session.flush()
+        db.session.add_all([
+            ProdutoItem(produto_id=cesta.id, tipo='receita', receita_id=r.id,
+                        item_nome=r.nome, quantidade=2),
+            ProdutoItem(produto_id=cesta.id, tipo='produto',
+                        produto_componente_id=pronto.id,
+                        item_nome=pronto.nome, quantidade=1),
+        ])
+        db.session.commit()
+        cid = cesta.id
+        res = calculadora_compras.calcular(
+            [{'tipo': 'produto', 'id': cid, 'qtd': 150}])
+    prod = {p['nome']: p['qtd'] for p in res['producao']}
+    assert prod == {'Pao Prod': 300}             # 150 cestas × 2 pães
+    assert 'Suco Pronto' not in prod             # comprado pronto, não produção
+
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    body = c.post('/lista-compras/calculadora', data={
+        'item[]': [f'p_{cid}'], 'qtd[]': ['150']}).get_data(as_text=True)
+    assert 'Para produção' in body
+    assert 'Pao Prod' in body
+
+
+def test_producao_nao_lista_sub_receita_de_massa(app):
+    """Sub-receita (massa/mix consumido DENTRO da ficha) é INSUMO, não ordem de
+    produção — só a receita-pai entra em 'Para produção'; a massa fica de fora
+    (ela sai no cronograma)."""
+    from app.services import calculadora_compras
+    with app.app_context():
+        _mp('Manteiga Folhar', custo=60.0, estoque=0.0)
+        massa = _receita_simples('Massa Prod', peso_base=1000.0,
+                                 peso_unitario=500.0,
+                                 mp_nome='Manteiga Folhar', pct=100.0)
+        massa.rendimento_qtd = 2
+        db.session.commit()
+        croiss = Receita(nome='Croissant Prod', categoria='Croissants',
+                         rendimento_qtd=10, rendimento_unidade='un',
+                         peso_base=1000.0, peso_unitario=100.0)
+        db.session.add(croiss)
+        db.session.flush()
+        db.session.add(ReceitaIngrediente(receita_id=croiss.id, tipo='receita',
+                                          ingrediente_nome=massa.nome,
+                                          porcentagem=2, sub_receita_id=massa.id))
+        db.session.commit()
+        res = calculadora_compras.calcular(
+            [{'tipo': 'receita', 'id': croiss.id, 'qtd': 20}])
+    nomes = [p['nome'] for p in res['producao']]
+    assert nomes == ['Croissant Prod']           # a massa NÃO aparece
+    assert res['producao'][0]['qtd'] == 20       # top-level receita entra
+
+
 def test_sub_receita_normal_explode_em_mp(app):
     """Sub-receita NORMAL (ex: Massa para folhar) EXPLODE em MP — a manteiga
     do folhado tem que aparecer na compra (caso real 03/07: 300 croissants
