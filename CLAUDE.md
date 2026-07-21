@@ -2100,7 +2100,21 @@ estoque nem entram na previsao.
   do sync Seru (15min), DENTRO do advisory lock do `_run_sync` (execucao
   unica entre workers — sem alerta duplicado). Janela ontem+hoje (mesma da
   captura). Cobranca suspeita = nao cancelada, total > piso, zero itens
-  nao-cancelados.
+  nao-cancelados NA LISTAGEM.
+- **RE-VERIFICACAO no DETALHE (21/07/2026, caso R$155 O Pao Padaria)**: a
+  LISTAGEM da Seru (`listar_pedidos_completo`) ATRASA pra cobranca
+  recem-criada — ela aparece sem itens E sem NF na lista mesmo JA tendo
+  NFC-e autorizada (a R$155 foi criada 14:58, NFC-e as 15:06, e as 15:31 a
+  lista ainda a mostrava vazia -> FALSO POSITIVO: cupom fiscal com 7 itens
+  + cartao). Fix: a lista virou so PRE-FILTRO barato; toda suspeita e
+  re-conferida no `seru.detalhes_pedido` (GET /orders/{id}, fonte
+  autoritativa) antes de alertar — venda REAL se o detalhe tem item
+  nao-cancelado OU NFC-e `authorized` (`_nf_autorizada`). Detalhe
+  indisponivel = NAO alerta nesse ciclo (retenta; id nao entra no dedup).
+  Decisao do dono: SO reverificar, sem carencia — alerta segue imediato
+  pras cobrancas que o detalhe confirma fantasma (ex. cod 19875201: 13
+  itens TODOS cancelados, sem NF, pagamento vazio). Sonda usada no
+  diagnostico: `/api/claude/vendas-snapshot?detalhe=<id>`.
 - **Dedup POR PEDIDO** em AppConfig (`venda_sem_item_alertados` = JSON
   {data: [ids]}, podado pra janela): cada cobranca alerta UMA vez; varias
   novas no ciclo = UMA mensagem WhatsApp (por company, com hora, valor,
