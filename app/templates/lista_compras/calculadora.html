@@ -221,13 +221,41 @@
 {% endif %}
 
 <script>
-// "Mais um item": clona a primeira linha zerada.
-document.getElementById('btn-mais-linha').addEventListener('click', function () {
+(function () {
     var wrap = document.getElementById('calc-linhas');
-    var linha = wrap.querySelector('.calc-linha').cloneNode(true);
-    linha.querySelector('select').value = '';
-    linha.querySelector('input').value = '';
-    wrap.appendChild(linha);
-});
+    var dl = document.getElementById('calc-itens');
+    // Mapas nome<->token a partir do datalist (chave em minúsculas p/ casar
+    // sem depender de maiúsculas/acentos digitados diferente).
+    var LABEL2TOKEN = {}, TOKEN2LABEL = {};
+    Array.prototype.forEach.call(dl.options, function (o) {
+        LABEL2TOKEN[o.value.trim().toLowerCase()] = o.dataset.token;
+        TOKEN2LABEL[o.dataset.token] = o.value;
+    });
+
+    // Digitar/escolher -> resolve o hidden item[] (vazio até bater exato).
+    wrap.addEventListener('input', function (e) {
+        if (!e.target.classList.contains('calc-busca')) return;
+        var linha = e.target.closest('.calc-linha');
+        var tok = linha.querySelector('.calc-token');
+        tok.value = LABEL2TOKEN[e.target.value.trim().toLowerCase()] || '';
+    });
+
+    // Pós-cálculo: linhas voltam com token — repõe o texto no campo de busca.
+    Array.prototype.forEach.call(wrap.querySelectorAll('.calc-token'), function (tok) {
+        if (tok.value && TOKEN2LABEL[tok.value]) {
+            var b = tok.closest('.calc-linha').querySelector('.calc-busca');
+            if (b && !b.value) b.value = TOKEN2LABEL[tok.value];
+        }
+    });
+
+    // "Mais um item": clona a primeira linha, zerando busca + token + qtd.
+    document.getElementById('btn-mais-linha').addEventListener('click', function () {
+        var linha = wrap.querySelector('.calc-linha').cloneNode(true);
+        linha.querySelector('.calc-busca').value = '';
+        linha.querySelector('.calc-token').value = '';
+        linha.querySelector('input[name="qtd[]"]').value = '';
+        wrap.appendChild(linha);
+    });
+})();
 </script>
 {% endblock %}
