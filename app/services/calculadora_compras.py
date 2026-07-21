@@ -60,6 +60,7 @@ def calcular(entradas, considerar_estoque=True, explodir_retorno=True):
 
     receita_itens = []      # [{receita_id, multiplicador}] pro motor
     compras_diretas = {}    # nome -> {'qtd', 'tipo'}
+    producao = {}           # receita_id -> {nome, categoria, qtd} a PRODUZIR
     sub_receitas = {}       # nome -> unidades-base que a consomem (informativo)
     itens_ok = []
     avisos = []
