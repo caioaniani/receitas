@@ -76,11 +76,26 @@ def criar_divulgacao(*, itens, modo_entrega='agendada', loja_retirada_id=None,
 
     if modo_entrega not in MODOS_ENTREGA_DIVULGACAO:
         raise ValueError('modo de entrega invalido')
+    # Todos os campos sao OBRIGATORIOS (decisao do dono 21/07/2026).
     nome_destinatario = (nome_destinatario or '').strip()
     if not nome_destinatario:
-        raise ValueError('informe pra quem e a divulgacao')
-    if modo_entrega == 'retirada' and not loja_retirada_id:
-        raise ValueError('escolha a loja de retirada')
+        raise ValueError('informe o nome de quem recebe')
+    if not (telefone or '').strip():
+        raise ValueError('informe o telefone')
+    if data_entrega is None:
+        raise ValueError('informe a data de entrega')
+    if not (janela_entrega or '').strip():
+        raise ValueError('informe a janela/horario')
+    if modo_entrega == 'retirada':
+        if not loja_retirada_id:
+            raise ValueError('escolha a loja de retirada')
+    else:
+        e = endereco or {}
+        faltando = [c for c in ('cep', 'logradouro', 'numero', 'bairro',
+                                'cidade', 'uf')
+                    if not (e.get(c) or '').strip()]
+        if faltando:
+            raise ValueError('endereco incompleto (%s)' % ', '.join(faltando))
 
     # Resolve itens ANTES de criar o pedido (falha cedo, sem lixo no banco).
     linhas = []
