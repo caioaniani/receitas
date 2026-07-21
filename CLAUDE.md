@@ -175,6 +175,23 @@ abrir tela). Tres pecas, UMA fonte de dados
   WhatsApp ganhou a linha "Total". Testes travam o gc.assert_not_called()
   da home; NAO usar 'Vendas de ontem' como marcador de teste do painel (a
   sidebar tem um title= com esse texto — falso positivo ja aconteceu).
+  **Cancelamentos + descontos do dia (21/07/2026, pedido do dono)**: cada
+  painel (hoje/ontem) mostra "🚫 Cancelados: N · R$ X | 🏷️ Descontos: R$ Y"
+  do PDV Seru. Fonte SO-SNAPSHOT (`VendaSeruDiaBreakdown`, sem API): a
+  captura (`vendas_diarias.capturar_periodo`) agora guarda, alem da CONTAGEM
+  de cancelados (dimensao 'cancelados', chave ''), o VALOR (chave 'v', soma
+  do `total` dos cancelados) e o DESCONTO (dimensao 'desconto', chave '',
+  soma do `discount` top-level da API — R$, so das vendas NAO canceladas).
+  Helper `cancelamentos_descontos_do_banco(di, df)` le os dois eixos;
+  `vendas_hoje`/`vendas_ontem` expoem `cancelados_n`/`cancelados_valor`/
+  `desconto`. ARMADILHA fechada: o reader `vendas_pdv_do_banco` DISTINGUE
+  chave '' (contagem, `int`) de chave 'v' (valor) — sem isso o dinheiro do
+  cancelado entraria como numero de pedidos. Dia capturado antes das linhas
+  novas devolve 0 gracioso (contagem de cancelados sempre existiu). Sonda
+  `vendas-snapshot` ganhou `subtotal`/`desconto` em pedidos_ao_vivo.
+  Testes: secao "Cancelamentos (valor) e descontos" em
+  `tests/test_vendas_diarias.py` + `test_vendas_{hoje,ontem}_inclui_
+  cancelamentos_e_descontos` em `tests/test_briefing_dono.py`.
 - **Manual de operacao** (`GET /admin/manual`, admin): o que roda sozinho /
   diario / semanal / mensal e de quem e cada gesto, com links.
   **REGRA DE PROCESSO**: toda funcao nova se registra no manual NA MESMA
