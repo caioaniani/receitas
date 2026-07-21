@@ -227,7 +227,8 @@ def test_categoria_adormecida_continua_na_lista_de_ordenar(app, admin_user,
 
 def test_pdf_respeita_ordem(app):
     """PDF itera as categorias na ordem de INSERÇÃO do dict (a fonte única
-    já ordena) e aceita ordem_rodape custom sem quebrar."""
+    já ordena) e aceita ordem_secoes custom (com 'produtos' em qualquer
+    posição) sem quebrar."""
     from app.services.cardapio_pdf import gerar_cardapio_pdf
     cats = {'Pães': [{'nome': 'Sourdough', 'preco_venda': 20.0,
                       'descricao': None, 'imagem_url': None,
@@ -235,9 +236,12 @@ def test_pdf_respeita_ordem(app):
             'Doces': [{'nome': 'Bolo', 'preco_venda': 12.0,
                        'descricao': None, 'imagem_url': None,
                        'img_ref': None}]}
-    pdf = gerar_cardapio_pdf(
-        'atacado', cats, [{'label': 'Prazo', 'valor': 'até 14h'}],
-        quem_somos=['Nossa história.'],
-        preparo=[{'label': None, 'valor': 'assar.'}],
-        ordem_rodape=['preparo', 'regras', 'quem_somos'])
-    assert pdf.startswith(b'%PDF')
+    for ordem in (['preparo', 'produtos', 'regras', 'quem_somos'],
+                  ['produtos', 'quem_somos', 'regras', 'preparo'],
+                  None):
+        pdf = gerar_cardapio_pdf(
+            'atacado', cats, [{'label': 'Prazo', 'valor': 'até 14h'}],
+            quem_somos=['Nossa história.'],
+            preparo=[{'label': None, 'valor': 'assar.'}],
+            ordem_secoes=ordem)
+        assert pdf.startswith(b'%PDF')
