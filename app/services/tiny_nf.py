@@ -480,6 +480,8 @@ def emitir_nf_generico(alvo, montar_payload, recriar=False):
             return {'ok': False, 'msg': erro}
         incl = tiny.incluir_nota_fiscal(payload)
         if not incl.get('ok'):
+            _set_nf_erro(alvo, incl.get('erro'))
+            db.session.commit()
             return {'ok': False,
                     'msg': f'Falha ao criar a NF no Tiny: {incl.get("erro")}'}
         alvo.tiny_nota_fiscal_id = incl['id']
