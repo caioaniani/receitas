@@ -584,7 +584,7 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
     # para o rodapé e trazer os produtos para cima") — espelho da tela. A
     # história vem primeiro (quem somos), depois o operacional (como pedir).
     if quem_somos:
-        _box_quem_somos(pdf, quem_somos)
+        _box_quem_somos(pdf, quem_somos, foto=quem_somos_foto)
     if tipo == 'atacado':
         if regras:
             _box_regras(pdf, regras, titulo)
