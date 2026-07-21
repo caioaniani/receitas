@@ -4640,8 +4640,12 @@ def loja_online_divulgacao():
               'do dia %s.' % (pedido.codigo,
                               data_ent.strftime('%d/%m') if data_ent else '—'),
               'success')
-        return redirect(url_for('main.loja_online_pedido_detalhe',
-                                codigo=pedido.codigo))
+        # Marketing não acessa o detalhe do pedido (gerente_required) — volta
+        # pro form com o flash de sucesso. Admin/gerente vão pro detalhe.
+        if current_user.is_admin() or current_user.is_gerente():
+            return redirect(url_for('main.loja_online_pedido_detalhe',
+                                    codigo=pedido.codigo))
+        return redirect(url_for('main.loja_online_divulgacao'))
 
     return render_template('admin/loja_online_divulgacao.html',
                            catalogo=_catalogo_divulgacao(), lojas=lojas,
