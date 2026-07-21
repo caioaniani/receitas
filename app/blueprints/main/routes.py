@@ -606,13 +606,18 @@ def cardapio_atacado_regras():
         return redirect(url_for('main.cardapio', tipo='atacado'))
     atuais = {chave: (AppConfig.get(_CARDAPIO_ATACADO_PREFIXO + chave) or '')
               for chave, _l, _p in CARDAPIO_ATACADO_CAMPOS}
-    # Categorias existentes (união dos 3 tipos), já na ordem vigente, pro
-    # drag-and-drop da ordem das seções.
+    # Categorias existentes (união dos 3 tipos) + as da ordem SALVA que
+    # hoje não têm item precificado (achado do revisor: sem a união, um
+    # save qualquer regravaria a ordem só com as visíveis e a posição da
+    # categoria "adormecida" evaporava quando ela voltasse), já na ordem
+    # vigente, pro drag-and-drop da ordem das seções.
     cats_ordem = {}
     for t in ('atacado', 'loja', 'site'):
         cats_t, _ = _cardapio_categorias(t)
         for c in cats_t:
             cats_ordem.setdefault(c, True)
+    for c in _ordem_categorias_salva():
+        cats_ordem.setdefault(c, True)
     cats_ordem = list(_aplicar_ordem_categorias(cats_ordem))
     return render_template('admin/cardapio_atacado_regras.html',
                            campos=CARDAPIO_ATACADO_CAMPOS, atuais=atuais,
