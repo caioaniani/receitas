@@ -577,20 +577,26 @@ def cardapio_atacado_regras():
         AppConfig.set(_CARDAPIO_QUEM_SOMOS_KEY,
                       (request.form.get('quem_somos') or '').strip())
         # Ordem das seções (drag-and-drop): só mexe se o campo veio no form
-        # (POST antigo/teste sem o campo não apaga a ordem salva). JSON
-        # inválido = flash, nunca sobrescrever em silêncio.
+        # (POST antigo/teste sem o campo não apaga a ordem salva; '' =
+        # navegador sem JS, hidden nunca preenchido — ignorar em silêncio,
+        # senão todo save sem JS flasharia aviso falso). JSON inválido ou
+        # não-lista = flash, nunca sobrescrever em silêncio. Dedupe
+        # preservando ordem (lista com repetido desenharia o bloco 2x).
         import json
         for campo, cfg_key in (('ordem_categorias',
                                 _CARDAPIO_ORDEM_CATS_KEY),
                                ('ordem_rodape',
                                 _CARDAPIO_ORDEM_RODAPE_KEY)):
             raw = request.form.get(campo)
-            if raw is None:
+            if not raw:
                 continue
             try:
                 lst = json.loads(raw)
-                lst = [str(x).strip()[:80] for x in lst
-                       if str(x).strip()][:100]
+                if not isinstance(lst, list):
+                    raise ValueError('esperava lista')
+                lst = list(dict.fromkeys(
+                    str(x).strip()[:80] for x in lst if str(x).strip()
+                ))[:100]
                 AppConfig.set(cfg_key, json.dumps(lst, ensure_ascii=False))
             except (ValueError, TypeError):
                 flash('Ordem das seções veio inválida e NÃO foi salva '
