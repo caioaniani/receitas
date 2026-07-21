@@ -93,7 +93,12 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
     # value|total|amount; canal usa o TOTAL do pedido; cancelados = contagem.
     por_dia_pagto = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
     por_dia_canal = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
+    # Cancelados: contagem E valor (total do pedido cancelado) por (data, loja).
+    # Desconto: soma do `discount` (R$ do pedido, top-level da API Seru) das
+    # vendas NAO canceladas — o "quanto de desconto saiu no dia" do cockpit.
     por_dia_cancel = defaultdict(int)
+    por_dia_cancel_v = defaultdict(lambda: Decimal('0'))
+    por_dia_desconto = defaultdict(lambda: Decimal('0'))
     # Cobranca SEM itens ("PDV Facil" so-valor — caso Nebraska 17/07/2026,
     # teste de impressora que virou R$7.028,50 de "venda"): valor E contagem
     # por (data, company, TAG DO CANAL). Dono 18/07: canal de DELIVERY
