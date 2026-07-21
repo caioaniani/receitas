@@ -45,6 +45,14 @@ _MOVS = {
     'seru': ('venda_seru', 'venda_seru_sem_estoque', 'venda_seru_estorno'),
     'site': ('venda_site', 'venda_site_sem_estoque', 'venda_site_estorno'),
     'lote': ('saida_lote', 'venda_loja_sem_estoque', 'saida_lote_estorno'),
+    # Divulgacao (21/07/2026): brinde/PR pela tela admin — baixa estoque de
+    # verdade (o pao sai pela porta) mas com tipo PROPRIO, pra ficar rastreavel
+    # e FORA da previsao de venda (nao entra em VENDA_TIPOS_DEMANDA_*) e FORA de
+    # qualquer relatorio que filtra 'venda_site'. Faturamento ja fica de fora
+    # pelo lado do pedido (pago_em NULL + flag divulgacao). Mesma familia do
+    # site (sinal de estorno negativo).
+    'divulgacao': ('venda_site_divulgacao', 'venda_site_divulgacao_sem_estoque',
+                   'venda_site_divulgacao_estorno'),
 }
 
 
