@@ -54,6 +54,16 @@ class Usuario(UserMixin, db.Model):
     def is_rh(self):
         return self.papel == 'rh'
 
+    def is_marketing(self):
+        """Marketing (21/07/2026): papel enxuto criado pra LANCAR DIVULGACAO
+        (brinde/PR pela tela do site). So esse gesto — nenhuma outra area."""
+        return self.papel == 'marketing'
+
+    def pode_divulgacao(self):
+        """Quem lanca/gerencia divulgacao: SO o dono e o marketing (decisao do
+        dono 21/07/2026 — 'so o owner e marketing'). Admin comum NAO entra."""
+        return self.is_dono() or self.is_marketing()
+
     def pode_lojas(self):
         """Pedidos, Estoque Loja, Relatorio."""
         return self.is_admin() or self.is_gerente()
