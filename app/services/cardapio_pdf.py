@@ -567,21 +567,23 @@ _LINHA_W = (190 - _GAP) / 2
 
 def _lista_categoria(pdf, itens):
     """.list-grid do site (categoria SEM nenhuma foto): caixinhas brancas
-    arredondadas em 2 colunas, nome à esquerda + preço marrom à direita.
-    Categoria com alguma descrição: caixinha mais alta com o texto muted
-    embaixo (mesma altura pra fileira toda)."""
+    arredondadas, nome à esquerda + preço marrom à direita — 2 colunas no
+    A4, coluna única no mobile. Categoria com alguma descrição: caixinha
+    mais alta com o texto muted embaixo (mesma altura pra fileira toda)."""
+    g = pdf.geo
     tem_desc = any(i.get('descricao') for i in itens)
     lh = _LINHA_H_DESC if tem_desc else _LINHA_H
-    for i in range(0, len(itens), 2):
-        linha = itens[i:i + 2]
-        if pdf.get_y() + lh > 283:
+    ncols = g.cols_lista
+    for i in range(0, len(itens), ncols):
+        linha = itens[i:i + ncols]
+        if pdf.get_y() + lh > g.y_limite + 2:
             pdf.add_page()
         y0 = pdf.get_y()
         for col, item in enumerate(linha):
-            x = _MARGEM + col * (_LINHA_W + _GAP)
+            x = g.margem + col * (g.linha_w + _GAP)
             pdf.set_draw_color(*_C_BORDER)
             pdf.set_fill_color(255, 255, 255)
-            pdf.rect(x, y0, _LINHA_W, lh, style='FD',
+            pdf.rect(x, y0, g.linha_w, lh, style='FD',
                      round_corners=True, corner_radius=_RAIO)
             preco = _latin1(_moeda(item['preco_venda']))
             pdf.set_font('Helvetica', 'B', 9)
@@ -589,23 +591,23 @@ def _lista_categoria(pdf, itens):
             pdf.set_xy(x + 4, y0 + 2)
             pdf.set_text_color(*_C_FG)
             nome = _latin1(item['nome'])
-            max_nome = _LINHA_W - 8 - w_preco
+            max_nome = g.linha_w - 8 - w_preco
             if pdf.get_string_width(nome) > max_nome:
                 while (pdf.get_string_width(nome + '...') > max_nome
                        and len(nome) > 3):
                     nome = nome[:-1]
                 nome += '...'
             pdf.cell(max_nome, 6, nome)
-            pdf.set_xy(x + _LINHA_W - w_preco - 4, y0 + 2)
+            pdf.set_xy(x + g.linha_w - w_preco - 4, y0 + 2)
             pdf.set_text_color(*_C_PRIMARY)
             pdf.cell(w_preco, 6, preco, align='R')
             if tem_desc and item.get('descricao'):
                 pdf.set_font('Helvetica', '', 7)
                 pdf.set_text_color(*_C_MUTED)
                 for j, ln in enumerate(_quebrar_2_linhas(
-                        pdf, _latin1(item['descricao']), _LINHA_W - 8)):
+                        pdf, _latin1(item['descricao']), g.linha_w - 8)):
                     pdf.set_xy(x + 4, y0 + 8.2 + j * 3.1)
-                    pdf.cell(_LINHA_W - 8, 3.1, ln)
+                    pdf.cell(g.linha_w - 8, 3.1, ln)
         pdf.set_y(y0 + lh + 2)
 
 
