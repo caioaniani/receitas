@@ -731,7 +731,8 @@ def cardapio_pdf_export():
     preparo = _preparo_atacado() if tipo == 'atacado' else []
     conteudo = svc.gerar_cardapio_pdf(tipo, categorias, regras,
                                       logo=_cardapio_logo(), preparo=preparo,
-                                      quem_somos=_quem_somos())
+                                      quem_somos=_quem_somos(),
+                                      quem_somos_foto=_quem_somos_foto_bytes())
     resp = current_app.response_class(conteudo, mimetype='application/pdf')
     resp.headers['Content-Disposition'] = (
         'inline; filename="cardapio_%s.pdf"' % tipo)
