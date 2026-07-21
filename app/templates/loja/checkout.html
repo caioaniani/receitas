@@ -109,8 +109,15 @@
 
     <!-- ─── 3) Quem recebe + endereço (entrega/express) ──────── -->
     <div class="checkout-bloco" id="bloco-entrega">
-      <h2>Quem recebe e onde</h2>
+      <h2 id="entrega-titulo">Quem recebe e onde</h2>
 
+      {# Aviso só na retirada: o endereço é pra NF, não muda a retirada. #}
+      <p id="retirada-nf-aviso" class="small text-muted" style="display:none">
+        Precisamos do seu endereço só para emitir a <strong>nota fiscal</strong>.
+        A retirada continua na loja escolhida acima — sem frete.
+      </p>
+
+      <div id="entrega-quem">
       <label class="aceite mb-2">
         <input type="checkbox" name="e_presente" id="e_presente" value="1"
                {{ 'checked' if form.get('e_presente') }}>
