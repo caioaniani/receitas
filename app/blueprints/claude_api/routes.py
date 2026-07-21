@@ -407,6 +407,8 @@ def vendas_snapshot():
                     'hora': dh.strftime('%H:%M:%S') if dh else '?',
                     'company': comp,
                     'total': total,
+                    'subtotal': float(p.get('subtotal') or 0),
+                    'desconto': float(p.get('discount') or 0),
                     'soma_itens': float(soma_itens),
                     'diferenca': round(total - float(soma_itens), 2),
                     'n_itens': n_itens,
