@@ -3,9 +3,11 @@ dono: "alterar as sessões com um grab and drop em editar regras").
 
 Duas listas em AppConfig (JSON): `cardapio_ordem_categorias` (ordem das
 categorias — aplicada na fonte única `_cardapio_categorias`, então tela e
-PDFs saem iguais) e `cardapio_ordem_rodape` (ordem dos blocos quem_somos/
-regras/preparo). Sem preferência salva, tudo fica como era: categorias em
-alfabética com 'Outros' por último; rodapé quem_somos → regras → preparo.
+PDFs saem iguais) e `cardapio_ordem_rodape` (nome histórico; ordem das
+SEÇÕES da página — quem_somos/regras/preparo/produtos, com 'produtos'
+arrastável desde 21/07). Defaults: categorias em alfabética com 'Outros'
+por último; seções quem_somos → regras → preparo → produtos (blocos ANTES
+dos produtos — dono 21/07 "o rodapé venha para cima", substitui 20/07).
 """
 import json
 
