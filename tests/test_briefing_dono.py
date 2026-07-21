@@ -516,6 +516,32 @@ def test_rota_detalhe_dia_fora_da_janela_400(app, owner_user, cliente):
     assert r.status_code == 400
 
 
+def test_rota_detalhe_dia_malformado_400(app, owner_user, cliente):
+    """Data inválida → 400 explícito (não cai silenciosamente pra hoje)."""
+    _login(cliente, owner_user)
+    r = cliente.get('/admin/vendas/cancelados-descontos?dia=banana')
+    assert r.status_code == 400
+
+
+def test_detalhe_pedido_torto_nao_derruba_o_modal(app):
+    """UM pedido com campo malformado é pulado (logado), não derruba a lista
+    inteira — o resto do dia continua aparecendo."""
+    from datetime import date
+
+    from app.services import briefing_dono
+    dia = date(2026, 6, 15)
+    torto = _pedido_cd(7, 'BAD', 'Loja A', 0.0, dia=dia, canceled=True)
+    torto['total'] = 'R$ dez'                    # lixo não-numérico
+    torto['cashier'] = 'nao-e-dict'              # cashier não-dict
+    bom = _pedido_cd(8, 'OK', 'Loja A', 25.0, dia=dia, desconto=5.0, subtotal=30.0)
+    with patch('app.services.seru.listar_pedidos_completo',
+               return_value=[torto, bom]):
+        d = briefing_dono.cancelados_descontos_detalhe(dia)
+    # o pedido bom (desconto) aparece; o torto foi pulado sem 502
+    assert len(d['descontos']) == 1 and d['descontos'][0]['codigo'] == 'OK'
+    assert d['desconto_total'] == 5.0
+
+
 def test_rota_detalhe_seru_fora_502(app, owner_user, cliente):
     from app.utils import hoje
     _login(cliente, owner_user)
