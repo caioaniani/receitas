@@ -87,12 +87,34 @@ def canais_ignorados():
     return {t.strip().lower() for t in bruto.split(',') if t.strip()}
 
 
+def _nf_autorizada(pedido):
+    """True se o pedido tem NFC-e/NF-e AUTORIZADA (taxInvoice status
+    'authorized'). Venda com NFC-e autorizada NUNCA é o padrão "sem item":
+    a SEFAZ autorizou a nota COM produtos (o padrão Nebraska era 'sem NF')."""
+    ti = pedido.get('taxInvoice') if isinstance(pedido, dict) else None
+    if not isinstance(ti, dict):
+        return False
+    return (ti.get('status') or '').strip().lower() == 'authorized'
+
+
 def cobrancas_sem_itens(data_inicial, data_final):
     """Cobranças com valor e ZERO itens na janela, direto da API do Seru.
 
     Cada uma: {id, codigo, data, hora, company, total, caixa, tem_nf}.
     Canceladas e total <= piso ficam fora. Levanta exceção se a API cair —
-    o chamador decide (o vigiar() engole e reporta)."""
+    o chamador decide (o vigiar() engole e reporta).
+
+    RE-VERIFICAÇÃO no DETALHE (21/07/2026, caso R$155 O Pao Padaria): a
+    LISTAGEM da Seru ATRASA pra cobrança recém-criada — ela aparece sem
+    itens e sem NF na lista mesmo JÁ tendo NFC-e autorizada (a R$155 foi
+    criada 14:58, NFC-e às 15:06, e às 15:31 a lista ainda a mostrava
+    vazia → falso positivo de "venda sem item"). O `GET /orders/{id}`
+    (detalhe) é a fonte autoritativa e traz os itens + a taxInvoice de
+    verdade. Então: a listagem é só um PRÉ-FILTRO barato; toda suspeita
+    é re-conferida no detalhe antes de virar alerta. Detalhe indisponível
+    = NÃO alerta nesse ciclo (retenta no próximo; perder um ciclo é melhor
+    que falso alarme). Decisão do dono: só reverificar, sem carência —
+    alerta segue imediato pras cobranças que o detalhe confirma fantasma."""
     from app.services import seru
 
     piso = min_valor()
@@ -111,33 +133,61 @@ def cobrancas_sem_itens(data_inicial, data_final):
             total = Decimal(str(p.get('total') or 0))
             if total <= piso or total <= 0:
                 continue
+            # PRÉ-FILTRO barato pela listagem: item não-cancelado já na
+            # lista = venda real, nem paga a chamada do detalhe.
             if any(not it['cancelado'] for it in seru.extrair_itens(p)):
                 continue
             dh = seru.datahora_local(p.get('createdAt'))
             if not dh or not (data_inicial <= dh.date() <= data_final):
                 continue
             pid = str(p.get('id') or p.get('code') or '')
+            det_id = str(p.get('id') or '')
             if not pid:
                 # sem id nem code não dá pra deduplicar — loga em vez de
                 # sumir em silêncio (achado de revisão; API sempre manda id)
                 logger.warning('vigia venda sem item: pedido sem id/code '
                                'ignorado (total R$ %s)', total)
                 continue
-            # NF cancelada/negada NÃO conta como "com NF" no alerta.
-            nf = p.get('taxInvoice') or {}
-            nf_status = (nf.get('status') or '').lower() if nf else ''
+            # RE-VERIFICA no DETALHE (fonte autoritativa) antes de acusar.
+            det = None
+            if det_id:
+                try:
+                    det = seru.detalhes_pedido(det_id)
+                except Exception:  # noqa: BLE001 — detalhe fora não pode
+                    # virar alerta às cegas nem cegar a varredura toda.
+                    logger.exception('vigia venda sem item: detalhe de %s '
+                                     'falhou', det_id)
+                    det = None
+            if not isinstance(det, dict):
+                # Sem confirmação: NÃO alerta agora — retenta no próximo
+                # ciclo (id não vira alerta nem entra no dedup).
+                logger.info('vigia venda sem item: %s sem detalhe confiável '
+                            '— adiando pro próximo ciclo', pid)
+                continue
+            # Venda REAL se o DETALHE tem item não-cancelado OU NFC-e
+            # autorizada — o falso positivo do lag morre aqui.
+            if any(not it['cancelado'] for it in seru.extrair_itens(det)) \
+                    or _nf_autorizada(det):
+                continue
+            # Confirmado FANTASMA pelo detalhe: monta a linha com os dados
+            # do detalhe (mais atuais que a lista).
+            nf = det.get('taxInvoice') or {}
+            nf_status = ((nf.get('status') or '').lower()
+                         if isinstance(nf, dict) else '')
             tem_nf = bool(nf) and nf_status not in (
                 'canceled', 'cancelled', 'denied', 'rejected', 'error')
-            canal = p.get('salesChannel')
+            canal = det.get('salesChannel') or p.get('salesChannel')
+            comp = (det.get('company') or p.get('company') or {})
             out.append({
                 'id': pid,
-                'codigo': p.get('code'),
+                'codigo': det.get('code') or p.get('code'),
                 'data': dh.date().isoformat(),
                 'hora': dh.strftime('%H:%M'),
-                'company': ((p.get('company') or {}).get('name')
-                            or '(sem loja)'),
+                'company': (comp.get('name') if isinstance(comp, dict)
+                            else None) or '(sem loja)',
                 'total': float(total),
-                'caixa': (p.get('cashier') or {}).get('code'),
+                'caixa': (det.get('cashier') or p.get('cashier')
+                          or {}).get('code'),
                 'tem_nf': tem_nf,
                 'canal': (canal.get('name') if isinstance(canal, dict)
                           else None) or '?',
