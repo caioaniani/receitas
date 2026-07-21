@@ -389,18 +389,23 @@ def _quem_somos_foto_src():
 
 
 def _quem_somos_foto_bytes():
-    """Bytes da foto pro PDF (data URI decodado ou arquivo estático).
-    None em erro — o PDF sai sem foto, nunca deixa de gerar."""
+    """Bytes da foto pro PDF (data URI decodado; URI quebrado/ausente cai
+    no arquivo estático). None só se o estático também falhar — o PDF sai
+    sem foto, nunca deixa de gerar."""
     import base64
     import os
 
     from app.models import AppConfig
     custom = (AppConfig.get(_CARDAPIO_QS_FOTO_KEY) or '').strip()
-    try:
-        if custom and 'base64,' in custom:
+    if custom and 'base64,' in custom:
+        try:
             return base64.b64decode(custom.split('base64,', 1)[1])
-        caminho = os.path.join(current_app.static_folder, 'img',
-                               'cardapio_quem_somos.jpg')
+        except Exception:  # noqa: BLE001 — URI quebrado cai no estático
+            current_app.logger.warning('quem_somos: data URI inválido',
+                                       exc_info=True)
+    try:
+        caminho = os.path.join(current_app.static_folder,
+                               *_QS_FOTO_STATIC.split('/'))
         with open(caminho, 'rb') as f:
             return f.read()
     except Exception:  # noqa: BLE001 — foto ruim não derruba o cardápio
