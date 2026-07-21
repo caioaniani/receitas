@@ -617,6 +617,29 @@ def gerar_calculadora_pdf(resultado, itens_ok, considerar_estoque=True,
             pdf.set_font('Helvetica', '', 9)
         pdf.ln(3)
 
+    # Retorno necessario: vem de sobra (Croissant Tradicional devolvido), NAO
+    # se produz. Total consumido pelos produtos (Almond + Nutella etc.).
+    ret = resultado.get('retorno_demanda') or []
+    if ret:
+        pdf.set_fill_color(*CINZA_HEAD)
+        pdf.set_text_color(60, 60, 60)
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.cell(190, 7, _latin1('  Retorno necessario (vem de sobra - nao se '
+                                 'produz)'), fill=True, ln=1)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font('Helvetica', '', 9)
+        for i, r in enumerate(ret):
+            fill = i % 2 == 1
+            if fill:
+                pdf.set_fill_color(*ZEBRA)
+            q = r['qtd']
+            q_txt = f'{q:.1f}'.rstrip('0').rstrip('.') + ' un'
+            pdf.cell(150, 6, _latin1(f'  {r["nome"][:70]}'), fill=fill)
+            pdf.set_font('Helvetica', 'B', 9)
+            pdf.cell(40, 6, _latin1(f'{q_txt}  '), fill=fill, align='R', ln=1)
+            pdf.set_font('Helvetica', '', 9)
+        pdf.ln(3)
+
     compra = resultado.get('compra') or {}
     tem_estq = bool(considerar_estoque)
     w_nome = (70 if tem_estq else 100) + (0 if com_valores else 30)
