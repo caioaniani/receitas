@@ -22,7 +22,7 @@
     o estoque da loja, mas <strong>não conta como venda</strong> (fora do
     faturamento e da previsão). Aparece no painel de entregas com estrela.
   </div>
-  {% if p.status != 'cancelado' and current_user.is_admin() %}
+  {% if p.status != 'cancelado' and current_user.pode_divulgacao() %}
   <form method="POST" action="{{ url_for('main.loja_online_divulgacao_cancelar', codigo=p.codigo) }}" class="mb-0"
         onsubmit="return confirm('Cancelar a divulgação? O estoque baixado será devolvido à loja.');">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
