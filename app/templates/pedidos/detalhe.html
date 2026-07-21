@@ -317,7 +317,12 @@
             <i class="bi bi-file-earmark-pdf"></i> Ver DANFE
         </a>
         {% elif pedido.tiny_nota_fiscal_id %}
+        {% set nf_rejeitada = pedido.nf_status and ('rejeit' in pedido.nf_status|lower or 'denegad' in pedido.nf_status|lower) %}
+        {% if nf_rejeitada %}
+        <span class="badge bg-danger">✗ rejeitada pela SEFAZ{% if pedido.nf_status %} · {{ pedido.nf_status }}{% endif %}</span>
+        {% else %}
         <span class="badge bg-warning text-dark">criada, autorização pendente{% if pedido.nf_status %} · {{ pedido.nf_status }}{% endif %}</span>
+        {% endif %}
         <form method="POST" action="{{ url_for('pedidos.emitir_nf_transferencia', id=pedido.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-outline-primary">
@@ -336,6 +341,20 @@
                 <i class="bi bi-arrow-counterclockwise"></i> Refazer do zero
             </button>
         </form>
+        {# Motivo da rejeição da SEFAZ (persistido em nf_erro): o dono/
+           contador vê o que corrigir no Tiny mesmo depois do flash sumir.
+           Ex.: "CST com benefício sem cBenef, cód 32" → ajustar o cadastro
+           fiscal do produto/natureza no Tiny e depois "Refazer do zero". #}
+        {% if pedido.nf_erro %}
+        <div class="w-100 mt-1">
+            <div class="alert alert-danger py-2 px-3 mb-0 small" style="white-space:pre-wrap;">
+                <strong>Motivo da recusa (SEFAZ):</strong> {{ pedido.nf_erro }}
+                <div class="text-muted mt-1">O fiscal (CST/CFOP/NCM/benefício)
+                    vem do cadastro do produto no Tiny — corrija lá e clique
+                    "Refazer do zero".</div>
+            </div>
+        </div>
+        {% endif %}
         {% else %}
         <span class="badge bg-secondary">não emitida</span>
         {% if pedido.status in ('separado', 'em_transporte', 'entregue', 'recebido') %}
