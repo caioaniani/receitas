@@ -370,6 +370,69 @@ def _quem_somos_raw():
     return CARDAPIO_QUEM_SOMOS_DEFAULT if raw is None else raw
 
 
+# Foto do "Quem somos nós" (21/07/2026, pedido do dono — mandou a foto da
+# fachada da loja): entra ao lado do texto, na tela e no PDF. DEFAULT =
+# arquivo commitado em static/img/cardapio_quem_somos.jpg (a foto que o dono
+# escolheu — no ar sem gesto nenhum); upload na tela de regras grava data
+# URI em AppConfig por cima (mesmo padrão do logotipo — sobrevive a deploy,
+# auto-contido). "Remover" volta ao default; não há estado "sem foto" (se o
+# dono quiser o bloco sem foto um dia, é decisão nova).
+_CARDAPIO_QS_FOTO_KEY = 'cardapio_quem_somos_foto'
+_QS_FOTO_STATIC = 'img/cardapio_quem_somos.jpg'
+
+
+def _quem_somos_foto_src():
+    """src pra tag <img> da tela: data URI custom ou o arquivo estático."""
+    from app.models import AppConfig
+    custom = (AppConfig.get(_CARDAPIO_QS_FOTO_KEY) or '').strip()
+    return custom or url_for('static', filename=_QS_FOTO_STATIC)
+
+
+def _quem_somos_foto_bytes():
+    """Bytes da foto pro PDF (data URI decodado ou arquivo estático).
+    None em erro — o PDF sai sem foto, nunca deixa de gerar."""
+    import base64
+    import os
+
+    from app.models import AppConfig
+    custom = (AppConfig.get(_CARDAPIO_QS_FOTO_KEY) or '').strip()
+    try:
+        if custom and 'base64,' in custom:
+            return base64.b64decode(custom.split('base64,', 1)[1])
+        caminho = os.path.join(current_app.static_folder, 'img',
+                               'cardapio_quem_somos.jpg')
+        with open(caminho, 'rb') as f:
+            return f.read()
+    except Exception:  # noqa: BLE001 — foto ruim não derruba o cardápio
+        current_app.logger.warning('quem_somos: foto indisponível',
+                                   exc_info=True)
+        return None
+
+
+def _processar_foto_quem_somos(data):
+    """Upload → data URI JPEG 3:4 (900x1200, crop central) — mesma proporção
+    do default; o layout (tela e PDF) conta com ela. ValueError em imagem
+    inválida (o chamador flasheia)."""
+    import base64
+    import io
+
+    from PIL import Image, ImageOps
+    if not data:
+        raise ValueError('Arquivo vazio')
+    try:
+        img = Image.open(io.BytesIO(data))
+        img = ImageOps.exif_transpose(img).convert('RGB')
+        img = ImageOps.fit(img, (900, 1200))
+    except Exception as e:  # noqa: BLE001 — HEIC/formato ruim vira ValueError
+        raise ValueError('imagem inválida') from e
+    buf = io.BytesIO()
+    img.save(buf, format='JPEG', quality=82, optimize=True)
+    raw = buf.getvalue()
+    if len(raw) > 1024 * 1024:                       # trava de sanidade
+        raise ValueError('foto processada ficou grande demais (>1MB)')
+    return 'data:image/jpeg;base64,%s' % base64.b64encode(raw).decode('ascii')
+
+
 # Logotipo do cardapio (13/07/2026 base; logo 20/07/2026): substitui o
 # wordmark "O Pao" no hero da tela e na capa do PDF. Guardado como data URI
 # (base64) em AppConfig — auto-contido (sobrevive deploy, sem dependencia de
