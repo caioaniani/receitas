@@ -124,12 +124,14 @@ def elegiveis():
     if not ativos:
         return []
     ids = {t.id for t in ativos}
+    sem_quiz = {t.id for t in ativos if t.total_perguntas == 0}
     completos = {}     # usuario_id -> set(treinamento_id concluídos)
     pontos = {}        # usuario_id -> soma dos melhores pontos
     for c in (TreinamentoConclusao.query
               .filter(TreinamentoConclusao.treinamento_id.in_(ids)).all()):
         pontos[c.usuario_id] = pontos.get(c.usuario_id, 0) + (c.melhor_pontos or 0)
-        if c.assistido_em and c.aprovado_em:
+        # Completo = assistido E (aprovado OU treinamento sem quiz).
+        if c.assistido_em and (c.aprovado_em or c.treinamento_id in sem_quiz):
             completos.setdefault(c.usuario_id, set()).add(c.treinamento_id)
     out = []
     for uid, feitos in completos.items():
