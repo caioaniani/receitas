@@ -709,6 +709,8 @@ def create_app(config_class=None):
     app.register_blueprint(avisos_bp)
     from app.blueprints.notas import notas_bp
     app.register_blueprint(notas_bp)
+    from app.blueprints.treinamento import treinamento_bp
+    app.register_blueprint(treinamento_bp)
     from app.blueprints.crm import crm_bp
     app.register_blueprint(crm_bp)
 
