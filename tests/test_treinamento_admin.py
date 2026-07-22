@@ -142,6 +142,32 @@ def test_upload_e_servir_video_com_range(app, admin_user, tmp_path):
     assert r2.get_data() == b'2345'
 
 
+def test_upload_video_funciona_com_csrf_ligado(app, admin_user, tmp_path):
+    """Regressão (caso real 24/07: "não consegui subir vídeo"): com CSRF
+    LIGADO como em prod, o upload passa. A rota é isenta do CSRF automático
+    (que parsearia o multipart sob o teto de 25 MB e estouraria o vídeo) e
+    valida o token na mão DEPOIS de liberar o teto."""
+    import re
+    app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
+    app.config['WTF_CSRF_ENABLED'] = True
+    with app.app_context():
+        t = Treinamento(titulo='CsrfVid')
+        db.session.add(t)
+        db.session.commit()
+        tid = t.id
+    c = _admin(app, admin_user)
+    page = c.get(f'/treinamento/admin/{tid}').get_data(as_text=True)
+    m = re.search(r'name="csrf_token" value="([^"]+)"', page)
+    assert m, 'token CSRF presente no form'
+    r = c.post(f'/treinamento/admin/{tid}/video', data={
+        'csrf_token': m.group(1),
+        'video': (io.BytesIO(b'0123456789'), 'aula.mp4'),
+    }, content_type='multipart/form-data')
+    assert r.status_code == 302
+    with app.app_context():
+        assert db.session.get(Treinamento, tid).video_ref is not None
+
+
 def test_upload_rejeita_nao_video(app, admin_user, tmp_path):
     app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
     with app.app_context():
