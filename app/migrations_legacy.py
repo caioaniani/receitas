@@ -1725,6 +1725,17 @@ def _migrate_postgres(app):
     _try("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS "
          "nascimento_ano INTEGER")
 
+    # Portal do funcionário (24/07/2026): liga o cadastro de RH (Funcionario)
+    # à conta de login (Usuario) por e-mail — hoje são universos separados.
+    # Essa conta serve o módulo de TREINAMENTO agora e o holerite/avisos
+    # depois. ALTER vai NA FRENTE do modelo (procedimento de 2 commits —
+    # CLAUDE.md "Schema migrations"): commit 1 = este ALTER + deploy
+    # confirmado; commit 2 = coluna no modelo Funcionario.
+    _try("ALTER TABLE funcionario ADD COLUMN IF NOT EXISTS "
+         "usuario_id INTEGER REFERENCES usuario(id)")
+    _try("CREATE INDEX IF NOT EXISTS ix_funcionario_usuario "
+         "ON funcionario(usuario_id)")
+
     # Backfill de tokens em drivers existentes (sem token)
     try:
         import secrets
