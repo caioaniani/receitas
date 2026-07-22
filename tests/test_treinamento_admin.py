@@ -176,9 +176,9 @@ def test_upload_rejeita_nao_video(app, admin_user, tmp_path):
         db.session.commit()
         tid = t.id
     c = _admin(app, admin_user)
-    c.post(f'/treinamento/admin/{tid}/video', data={
-        'video': (io.BytesIO(b'x'), 'virus.exe'),
-    }, content_type='multipart/form-data')
+    r = c.post(f'/treinamento/admin/{tid}/video?nome=virus.exe',
+               data=b'x', content_type='video/mp4')
+    assert r.status_code == 400
     with app.app_context():
         assert db.session.get(Treinamento, tid).video_ref is None
 
