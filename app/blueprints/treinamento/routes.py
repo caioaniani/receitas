@@ -191,8 +191,7 @@ def admin_video_chunk(id):
             'upload treino %s: falha ao finalizar: %s', t.id, e)
         return (f'Falha ao finalizar no servidor ({type(e).__name__}: {e}).',
                 500)
-    if t.video_tipo == 'arquivo' and t.video_ref:
-        tv.remover_video(t.video_ref)
+    _limpar_video_anterior(t)   # apaga o anterior (arquivo self-host OU Stream)
     t.video_tipo = 'arquivo'
     t.video_ref = ref
     db.session.commit()
