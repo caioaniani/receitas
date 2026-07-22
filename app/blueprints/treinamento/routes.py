@@ -9,10 +9,13 @@
 O vídeo é servido com HTTP Range pela MESMA origem — nada de terceiro, o
 funcionário nunca sai do site. Regras em app/services/treinamento.py.
 """
+import re
+
 from flask import (
     abort,
     current_app,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -30,6 +33,7 @@ from app.models import (
     TreinamentoPergunta,
 )
 from app.services import treinamento as svc
+from app.services import treinamento_stream as ts
 from app.services import treinamento_video as tv
 from app.utils import agora
 
@@ -189,6 +193,66 @@ def admin_video_chunk(id):
     t.video_ref = ref
     db.session.commit()
     return ('', 204)
+
+
+# ── Vídeo via Cloudflare Stream (upload DIRETO do navegador) ─────────────
+def _limpar_video_anterior(t):
+    """Remove o vídeo antigo ao trocar: arquivo self-host apaga do volume;
+    vídeo do Stream apaga do Cloudflare. Best-effort (nunca trava a troca)."""
+    if t.video_tipo == 'arquivo' and t.video_ref:
+        tv.remover_video(t.video_ref)
+    elif t.video_tipo == 'stream' and t.video_ref:
+        ts.deletar(t.video_ref)
+
+
+@treinamento_bp.route('/admin/<int:id>/video/stream/upload-url', methods=['POST'])
+@login_required
+@admin_required
+def admin_video_stream_url(id):
+    """Devolve uma URL de upload DIRETO do Cloudflare (uso único). O navegador
+    sobe o arquivo NELA — o byte nunca passa pelo nosso servidor. O segredo
+    (token) fica só aqui no servidor; o browser recebe só a uploadURL."""
+    t = _ativos().filter_by(id=id).first_or_404()
+    if not ts.configurado():
+        return jsonify(ok=False, erro='Cloudflare Stream não configurado.'), 503
+    nome = (request.form.get('nome') or request.args.get('nome') or 'aula')
+    try:
+        dados = ts.criar_upload_direto(f'treino {t.id} — {nome}')
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 502
+    return jsonify(ok=True, uid=dados['uid'], uploadURL=dados['uploadURL'])
+
+
+@treinamento_bp.route('/admin/<int:id>/video/stream/salvar', methods=['POST'])
+@login_required
+@admin_required
+def admin_video_stream_salvar(id):
+    """Grava o UID do vídeo já enviado ao Cloudflare. Chamada pelo navegador
+    depois que o upload direto terminou."""
+    t = _ativos().filter_by(id=id).first_or_404()
+    uid = (request.form.get('uid') or '').strip()
+    # UID do Cloudflare é hex de 32 chars — valida pra não gravar lixo.
+    if not re.fullmatch(r'[0-9a-f]{32}', uid):
+        return jsonify(ok=False, erro='UID inválido.'), 400
+    if not ts.configurado():
+        return jsonify(ok=False, erro='Cloudflare Stream não configurado.'), 503
+    _limpar_video_anterior(t)
+    t.video_tipo = 'stream'
+    t.video_ref = uid
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@treinamento_bp.route('/admin/<int:id>/video/stream/status')
+@login_required
+@admin_required
+def admin_video_stream_status(id):
+    """Estado do processamento (o Cloudflare transcodifica após o upload).
+    A tela do admin usa pra mostrar 'processando… X%' e liberar o preview."""
+    t = _ativos().filter_by(id=id).first_or_404()
+    if t.video_tipo != 'stream' or not t.video_ref:
+        return jsonify(ok=False, erro='sem vídeo Stream'), 404
+    return jsonify(ok=True, **ts.status(t.video_ref))
 
 
 @treinamento_bp.route('/admin/<int:id>/pergunta', methods=['POST'])
