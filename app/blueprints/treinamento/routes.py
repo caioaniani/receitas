@@ -12,7 +12,11 @@ from flask_login import current_user, login_required
 from app.blueprints.treinamento import treinamento_bp
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import Treinamento, TreinamentoOpcao, TreinamentoPergunta
+from app.models import (
+    Treinamento,
+    TreinamentoOpcao,
+    TreinamentoPergunta,
+)
 from app.services import treinamento_video as tv
 from app.utils import agora
 
