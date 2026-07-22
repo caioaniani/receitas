@@ -131,13 +131,15 @@ def test_fluxo_completo_do_funcionario(app):
         u = _func_user()
         uid, tid = u.id, t.id
         certas = _respostas_certas(t)
+        # "assistido" agora vem do rastreio real de vídeo (testado à parte);
+        # aqui o foco é o quiz, então marco pelo serviço.
+        svc.marcar_assistido(t, u)
     c = app.test_client()
     with c.session_transaction() as s:
         s['_user_id'] = str(uid)
         s['_fresh'] = True
     assert c.get('/treinamento/').status_code == 200
     assert c.get(f'/treinamento/{tid}/assistir').status_code == 200
-    c.post(f'/treinamento/{tid}/assistido')
     data = {f'pergunta_{pid}': str(oid) for pid, oid in certas.items()}
     r = c.post(f'/treinamento/{tid}/quiz', data=data)
     assert r.status_code == 200 and 'Passou' in r.get_data(as_text=True)
