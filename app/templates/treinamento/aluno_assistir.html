@@ -34,17 +34,25 @@
 <div class="alert alert-secondary">Este treinamento ainda não tem vídeo.</div>
 {% endif %}
 
-{# Passo 1: marcar assistido (libera o quiz). Auto-marca ao terminar o vídeo. #}
+{# Passo 1: PROGRESSO REAL. O quiz só libera quando o servidor confirma que o
+   vídeo foi assistido de verdade (rastreado por baldes de tempo) — não há botão
+   de "já assisti", e pular pro fim não conta. #}
 {% if not assistido %}
-<form method="POST" action="{{ url_for('treinamento.assistido', id=t.id) }}"
-      id="form-assistido" class="my-3">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn-success">
-        <i class="bi bi-check-lg"></i> Assisti — liberar o quiz</button>
-    <span class="text-muted small ms-2">marque quando terminar o vídeo</span>
-</form>
+<div class="my-3" style="max-width:720px;">
+    <div class="d-flex justify-content-between small mb-1">
+        <span class="fw-bold">Seu progresso no vídeo</span>
+        <span id="prog-pct">{{ cobertura }}%</span>
+    </div>
+    <div class="progress" style="height:16px;">
+        <div id="prog-bar" class="progress-bar bg-success" role="progressbar"
+             style="width:{{ cobertura }}%;"></div>
+    </div>
+    <div class="small text-muted mt-1" id="prog-msg">
+        Assista o vídeo até o fim pra liberar o quiz — pular pro final não conta.
+    </div>
+</div>
 {% else %}
-<p class="my-3"><span class="badge bg-success">✓ assistido</span></p>
+<p class="my-3"><span class="badge bg-success">✓ vídeo assistido</span></p>
 {% endif %}
 
 {# Passo 2: quiz (só depois de assistido). #}
