@@ -106,14 +106,19 @@ def admin_video(id):
 def admin_add_pergunta(id):
     t = _ativos().filter_by(id=id).first_or_404()
     enunciado = (request.form.get('enunciado') or '').strip()
-    opcoes = [o.strip() for o in request.form.getlist('opcao[]') if o.strip()]
     try:
-        correta_idx = int(request.form.get('correta'))
+        correta_slot = int(request.form.get('correta'))
     except (TypeError, ValueError):
-        correta_idx = -1
-    if not enunciado or len(opcoes) < 2 or not (0 <= correta_idx < len(opcoes)):
+        correta_slot = -1
+    # A correta é o ÍNDICE DO SLOT (do radio), não da lista filtrada — se um
+    # slot ficar vazio, a marcação não pode "escorregar" pra outra opção.
+    # Guarda (texto, correta) por slot NÃO-vazio, correta = slot marcado.
+    pares = [(o.strip(), i == correta_slot)
+             for i, o in enumerate(request.form.getlist('opcao[]'))
+             if o.strip()]
+    if not enunciado or len(pares) < 2 or not any(c for _, c in pares):
         flash('A pergunta precisa de enunciado, ao menos 2 opções e a '
-              'correta marcada.', 'warning')
+              'correta marcada (num slot preenchido).', 'warning')
         return redirect(url_for('treinamento.admin_editar', id=t.id))
     ordem = (db.session.query(db.func.max(TreinamentoPergunta.ordem))
              .filter_by(treinamento_id=t.id).scalar() or 0) + 1
@@ -121,10 +126,9 @@ def admin_add_pergunta(id):
                             ordem=ordem)
     db.session.add(p)
     db.session.flush()
-    for i, texto in enumerate(opcoes):
+    for i, (texto, correta) in enumerate(pares):
         db.session.add(TreinamentoOpcao(
-            pergunta_id=p.id, texto=texto[:500],
-            correta=(i == correta_idx), ordem=i))
+            pergunta_id=p.id, texto=texto[:500], correta=correta, ordem=i))
     db.session.commit()
     flash('Pergunta adicionada.', 'success')
     return redirect(url_for('treinamento.admin_editar', id=t.id))
