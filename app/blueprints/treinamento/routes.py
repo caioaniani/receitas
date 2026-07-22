@@ -125,9 +125,9 @@ def admin_video(id):
         ref = tv.salvar_stream(request.stream, t.id, nome)
     except ValueError as e:
         return (str(e), 400)
-    # Troca o vídeo: apaga o arquivo antigo (se era self-host) e aponta o novo.
-    if t.video_tipo == 'arquivo' and t.video_ref:
-        tv.remover_video(t.video_ref)
+    # Troca o vídeo: apaga o anterior (arquivo self-host OU vídeo do Cloudflare)
+    # e aponta o novo.
+    _limpar_video_anterior(t)
     t.video_tipo = 'arquivo'
     t.video_ref = ref
     db.session.commit()
