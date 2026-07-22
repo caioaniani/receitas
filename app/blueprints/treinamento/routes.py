@@ -1,10 +1,13 @@
 """Módulo de treinamento gamificado (24/07/2026, pedido do dono).
 
-Esta fase = AUTORIA (admin): cria o treinamento, sobe o vídeo (self-host no
-volume /data) e monta o quiz com nota de corte. A fase do FUNCIONÁRIO
-(assistir + responder + pontuar + elegibilidade a sorteio/bônus) vem em
-seguida. O vídeo é servido com HTTP Range pela MESMA origem — nada de
-terceiro, o funcionário nunca sai do site.
+- ADMIN: cria o treinamento, sobe o vídeo (self-host no volume /data), monta
+  o quiz com nota de corte; gera o acesso dos funcionários (por e-mail) e vê
+  os elegíveis ao sorteio/bônus.
+- FUNCIONÁRIO: assiste (marca como assistido), responde o quiz, pontua.
+  Completar = assistir + passar; elegível = completou TODOS os ativos.
+
+O vídeo é servido com HTTP Range pela MESMA origem — nada de terceiro, o
+funcionário nunca sai do site. Regras em app/services/treinamento.py.
 """
 from flask import abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
