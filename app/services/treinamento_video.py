@@ -53,17 +53,18 @@ def caminho_video(ref):
     return os.path.join(media_dir(), base)
 
 
-def salvar_video(file_storage, treino_id):
-    """Grava o upload no volume, em BLOCOS. Retorna o nome do arquivo salvo (a
-    `video_ref` do Treinamento). ValueError se a extensão não for suportada."""
-    ext = _ext(file_storage.filename or '')
+def salvar_stream(stream, treino_id, nome_original):
+    """Grava um STREAM bruto (corpo da request, sem multipart) no volume, em
+    BLOCOS — sem carregar o vídeo na RAM. `nome_original` só dá a extensão.
+    Retorna a `video_ref`. ValueError se a extensão não for suportada. É o
+    caminho do upload por XHR (corpo cru), que evita o parse de formulário."""
+    ext = _ext(nome_original)
     if ext not in EXTENSOES_OK:
         raise ValueError(
             f'Formato de vídeo não suportado: {ext or "?"}. '
             'Use MP4, WebM ou MOV.')
     ref = f'treino-{int(treino_id)}-{secrets.token_hex(8)}{ext}'
     destino = os.path.join(media_dir(), ref)
-    stream = file_storage.stream
     with open(destino, 'wb') as out:
         while True:
             bloco = stream.read(_CHUNK)
@@ -71,6 +72,13 @@ def salvar_video(file_storage, treino_id):
                 break
             out.write(bloco)
     return ref
+
+
+def salvar_video(file_storage, treino_id):
+    """Grava um FileStorage (upload multipart) no volume. Delega pro
+    `salvar_stream` — mantido pra compatibilidade/testes."""
+    return salvar_stream(file_storage.stream, treino_id,
+                         file_storage.filename or '')
 
 
 def remover_video(ref):
