@@ -78,40 +78,68 @@
 
 <script>
 (function () {
+    // Upload por PEDAÇOS: fatia o vídeo e manda 4 MB por vez. Cada request é
+    // pequena e rápida — não esbarra no teto de 25 MB, no timeout do worker nem
+    // em limite de proxy (que davam "erro de rede" com o arquivo inteiro).
     var btn = document.getElementById('btn-upload-video');
     var inp = document.getElementById('video-file');
     var wrap = document.getElementById('up-wrap');
     var bar = document.getElementById('up-bar');
     var msg = document.getElementById('up-msg');
     if (!btn) return;
+    var CHUNK = 4 * 1024 * 1024;   // 4 MB por pedaço
+    var CSRF = '{{ csrf_token() }}';
+    var BASE = '{{ url_for("treinamento.admin_video_chunk", id=t.id) }}';
+
+    function tokenHex() {
+        var a = new Uint8Array(16);
+        (window.crypto || window.msCrypto).getRandomValues(a);
+        var s = '';
+        for (var k = 0; k < a.length; k++) s += (a[k] + 0x100).toString(16).slice(1);
+        return s;
+    }
+
+    function enviarPedaco(f, token, i, n) {
+        var inicio = i * CHUNK;
+        var pedaco = f.slice(inicio, Math.min(inicio + CHUNK, f.size));
+        var url = BASE + '?csrf=' + encodeURIComponent(CSRF)
+            + '&upload=' + token + '&i=' + i + '&n=' + n
+            + '&nome=' + encodeURIComponent(f.name);
+        return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', url);
+            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+            xhr.onload = function () {
+                if (xhr.status >= 200 && xhr.status < 400) { resolve(); }
+                else { reject(new Error(xhr.responseText || ('HTTP ' + xhr.status))); }
+            };
+            xhr.onerror = function () { reject(new Error('rede')); };
+            xhr.send(pedaco);
+        });
+    }
+
     btn.addEventListener('click', function () {
         var f = inp.files[0];
         if (!f) { alert('Escolha um arquivo de vídeo.'); return; }
-        var url = '{{ url_for("treinamento.admin_video", id=t.id) }}'
-            + '?csrf=' + encodeURIComponent('{{ csrf_token() }}')
-            + '&nome=' + encodeURIComponent(f.name);
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', url);
-        xhr.setRequestHeader('Content-Type', f.type || 'application/octet-stream');
-        wrap.style.display = ''; btn.disabled = true;
-        xhr.upload.onprogress = function (e) {
-            if (e.lengthComputable) {
-                var p = Math.round(100 * e.loaded / e.total);
+        var n = Math.max(1, Math.ceil(f.size / CHUNK));
+        var token = tokenHex();
+        wrap.style.display = ''; btn.disabled = true; inp.disabled = true;
+        msg.textContent = 'enviando…';
+        bar.style.width = '0%'; bar.textContent = '0%';
+        var i = 0;
+        (function proximo() {
+            enviarPedaco(f, token, i, n).then(function () {
+                i++;
+                var p = Math.round(100 * i / n);
                 bar.style.width = p + '%'; bar.textContent = p + '%';
-            }
-        };
-        xhr.onload = function () {
-            if (xhr.status >= 200 && xhr.status < 400) {
-                msg.textContent = 'pronto!'; location.reload();
-            } else {
-                btn.disabled = false;
-                msg.textContent = 'falhou: ' + (xhr.responseText || xhr.status);
-            }
-        };
-        xhr.onerror = function () {
-            btn.disabled = false; msg.textContent = 'erro de rede no upload.';
-        };
-        xhr.send(f);
+                if (i < n) { proximo(); }
+                else { msg.textContent = 'pronto!'; location.reload(); }
+            }).catch(function (err) {
+                btn.disabled = false; inp.disabled = false;
+                msg.textContent = 'falhou (' + (err.message || 'erro')
+                    + '). Tente de novo — o envio recomeça do início.';
+            });
+        })();
     });
 })();
 </script>
