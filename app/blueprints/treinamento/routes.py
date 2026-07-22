@@ -260,6 +260,13 @@ def admin_gerar_acesso(func_id):
               'warning')
     elif r['motivo'] == 'ja_tem':
         flash(f'{f.nome} já tem acesso.', 'info')
+    elif r['motivo'] == 'conta_de_outro_papel':
+        flash(f'O e-mail de {f.nome} já é de uma conta de admin/gerente — '
+              'não vinculei (seria a conta errada). Use outro e-mail no RH.',
+              'danger')
+    elif r['motivo'] == 'email_em_uso':
+        flash(f'O e-mail de {f.nome} já está vinculado a outro funcionário — '
+              'confira o cadastro.', 'danger')
     elif r['motivo'] == 'vinculado':
         flash(f'{f.nome} vinculado a uma conta existente.', 'success')
     elif r['motivo'] == 'criado':
