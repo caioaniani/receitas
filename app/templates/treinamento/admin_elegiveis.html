@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Elegíveis ao sorteio{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="bi bi-trophy"></i> Elegíveis ao sorteio/bônus</h1>
+        <p class="page-subtitle">Funcionários que completaram os
+            {{ n_ativos }} treinamento(s) ativo(s) — ordenados por pontos. O
+            sorteio e o bônus são decisão sua (o sistema não mexe em folha).
+            <a href="{{ url_for('treinamento.admin_lista') }}">&larr; Treinamentos</a></p>
+    </div>
+</div>
+
+{% if elegiveis %}
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0 align-middle">
+            <thead><tr>
+                <th style="width:40px;">#</th>
+                <th>Funcionário</th>
+                <th class="text-end">Pontos</th>
+            </tr></thead>
+            <tbody>
+            {% for e in elegiveis %}
+            <tr>
+                <td class="text-muted">{{ loop.index }}</td>
+                <td>{{ e.funcionario.nome if e.funcionario else e.usuario.nome }}</td>
+                <td class="text-end fw-bold">{{ e.pontos }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<p class="text-muted small mt-2">Sortear entre os elegíveis: escolha um da
+    lista (ou pondere pelos pontos, se quiser premiar quem mais estudou).</p>
+{% else %}
+<div class="alert alert-secondary">Ninguém completou todos os treinamentos
+    ativos ainda.</div>
+{% endif %}
+{% endblock %}
