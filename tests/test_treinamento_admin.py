@@ -166,6 +166,103 @@ def test_upload_video_funciona_com_csrf_ligado(app, admin_user, tmp_path):
         assert db.session.get(Treinamento, tid).video_ref is not None
 
 
+def test_upload_chunked_monta_e_serve(app, admin_user, tmp_path):
+    """Upload por PEDAÇOS (o caminho da tela): 2 pedaços viram 1 vídeo, servido
+    com HTTP Range. Cada request é pequena — não toca o teto de 25 MB."""
+    app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
+    with app.app_context():
+        t = Treinamento(titulo='Chunk')
+        db.session.add(t)
+        db.session.commit()
+        tid = t.id
+    c = _admin(app, admin_user)
+    tok = 'a' * 16
+    base = f'/treinamento/admin/{tid}/video/chunk?upload={tok}&nome=aula.mp4'
+    r0 = c.post(f'{base}&i=0&n=2', data=b'01234', content_type='video/mp4')
+    assert r0.status_code == 204
+    r1 = c.post(f'{base}&i=1&n=2', data=b'56789', content_type='video/mp4')
+    assert r1.status_code == 204
+    with app.app_context():
+        t = db.session.get(Treinamento, tid)
+        assert t.video_tipo == 'arquivo' and t.video_ref.endswith('.mp4')
+    r2 = c.get(f'/treinamento/video/{tid}', headers={'Range': 'bytes=2-5'})
+    assert r2.status_code == 206
+    assert r2.headers['Content-Range'] == 'bytes 2-5/10'
+    assert r2.get_data() == b'2345'
+
+
+def test_upload_chunked_rejeita_nao_video(app, admin_user, tmp_path):
+    """Extensão inválida é barrada JÁ no primeiro pedaço (falha cedo)."""
+    app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
+    with app.app_context():
+        t = Treinamento(titulo='ChunkBad')
+        db.session.add(t)
+        db.session.commit()
+        tid = t.id
+    c = _admin(app, admin_user)
+    r = c.post(f'/treinamento/admin/{tid}/video/chunk?upload={"b"*16}'
+               '&nome=virus.exe&i=0&n=1', data=b'x', content_type='video/mp4')
+    assert r.status_code == 400
+    with app.app_context():
+        assert db.session.get(Treinamento, tid).video_ref is None
+
+
+def test_upload_chunked_respeita_teto(app, admin_user, tmp_path):
+    """O teto acumulado corta o upload (e apaga o parcial) — sem depender de
+    limite global nem de proxy."""
+    app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
+    app.config['TREINAMENTO_MAX_VIDEO'] = 4   # 4 bytes
+    with app.app_context():
+        t = Treinamento(titulo='ChunkTeto')
+        db.session.add(t)
+        db.session.commit()
+        tid = t.id
+    c = _admin(app, admin_user)
+    r = c.post(f'/treinamento/admin/{tid}/video/chunk?upload={"c"*16}'
+               '&nome=aula.mp4&i=0&n=1', data=b'0123456789',
+               content_type='video/mp4')
+    assert r.status_code == 400
+    with app.app_context():
+        assert db.session.get(Treinamento, tid).video_ref is None
+
+
+def test_upload_chunked_token_invalido(app, admin_user, tmp_path):
+    """Token fora do alfabeto hex (traversal/barra) é recusado."""
+    app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
+    with app.app_context():
+        t = Treinamento(titulo='ChunkTok')
+        db.session.add(t)
+        db.session.commit()
+        tid = t.id
+    c = _admin(app, admin_user)
+    r = c.post(f'/treinamento/admin/{tid}/video/chunk?upload=../etc'
+               '&nome=aula.mp4&i=0&n=1', data=b'x', content_type='video/mp4')
+    assert r.status_code == 400
+
+
+def test_upload_chunked_com_csrf_ligado(app, admin_user, tmp_path):
+    """Com CSRF LIGADO (como em prod), o token vai na query e o upload por
+    pedaços passa."""
+    import re
+    app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
+    app.config['WTF_CSRF_ENABLED'] = True
+    with app.app_context():
+        t = Treinamento(titulo='ChunkCsrf')
+        db.session.add(t)
+        db.session.commit()
+        tid = t.id
+    c = _admin(app, admin_user)
+    page = c.get(f'/treinamento/admin/{tid}').get_data(as_text=True)
+    m = re.search(r'name="csrf_token" value="([^"]+)"', page)
+    assert m
+    r = c.post(f'/treinamento/admin/{tid}/video/chunk?csrf={m.group(1)}'
+               f'&upload={"d"*16}&nome=aula.mp4&i=0&n=1',
+               data=b'0123456789', content_type='video/mp4')
+    assert r.status_code == 204
+    with app.app_context():
+        assert db.session.get(Treinamento, tid).video_ref is not None
+
+
 def test_upload_rejeita_nao_video(app, admin_user, tmp_path):
     app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
     with app.app_context():
