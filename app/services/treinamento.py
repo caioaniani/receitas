@@ -75,7 +75,8 @@ def corrigir_e_registrar(treinamento, usuario, respostas):
         if correta is not None and escolhida == correta:
             acertos += 1
     percentual = round(100 * acertos / total) if total else 0
-    aprovado = total > 0 and percentual >= treinamento.nota_minima
+    # Compara SEM arredondar (69,5% não vira 70): acertos*100 >= nota*total.
+    aprovado = total > 0 and acertos * 100 >= treinamento.nota_minima * total
     pontos = acertos
 
     db.session.add(TreinamentoTentativa(
