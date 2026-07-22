@@ -77,11 +77,23 @@
 
 <script>
 // Ao TERMINAR o vídeo, marca como assistido automaticamente (conveniência —
-// o botão manual continua valendo pra quem prefere).
+// o botão manual continua valendo pra quem prefere). Funciona pros dois
+// players: <video> self-host e iframe do Cloudflare Stream (via SDK).
 (function () {
-    var v = document.getElementById('video-treino');
     var f = document.getElementById('form-assistido');
-    if (v && f) v.addEventListener('ended', function () { f.submit(); });
+    if (!f) return;   // já assistido: nada a fazer
+    var v = document.getElementById('video-treino');
+    if (v) { v.addEventListener('ended', function () { f.submit(); }); return; }
+    var frame = document.getElementById('video-treino-frame');
+    if (frame && window.Stream) {
+        try {
+            window.Stream(frame).addEventListener('ended', function () {
+                f.submit();
+            });
+        } catch (e) {
+            // SDK indisponível — o botão "Assisti" manual segue valendo.
+        }
+    }
 })();
 </script>
 {% endblock %}
