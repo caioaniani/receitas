@@ -351,9 +351,11 @@ def index():
 def assistir(id):
     t = _ativo_visivel(id)
     c = svc.conclusao_de(current_user.id, t.id)
-    return render_template('treinamento/aluno_assistir.html', t=t,
-                           assistido=bool(c and c.assistido_em),
-                           aprovado=bool(c and c.aprovado_em))
+    return render_template(
+        'treinamento/aluno_assistir.html', t=t,
+        assistido=bool(c and c.assistido_em),
+        aprovado=bool(c and c.aprovado_em),
+        embed=ts.embed_url(t.video_ref) if t.video_tipo == 'stream' else None)
 
 
 @treinamento_bp.route('/<int:id>/assistido', methods=['POST'])
