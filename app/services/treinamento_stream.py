@@ -151,7 +151,9 @@ def _normaliza_subdomain(v):
 
 def _cachear_subdomain(result):
     """Descobre o subdomínio de entrega pela URL de preview/thumbnail do vídeo
-    e cacheia em AppConfig — evita exigir a env CLOUDFLARE_STREAM_SUBDOMAIN."""
+    e cacheia em AppConfig — evita exigir a env CLOUDFLARE_STREAM_SUBDOMAIN.
+    A gravação vai em sessão ISOLADA (best-effort) pra nunca contaminar a
+    transação de negócio em curso (padrão uso_ia.registrar)."""
     if (current_app.config.get('CLOUDFLARE_STREAM_SUBDOMAIN') or '').strip():
         return
     if AppConfig.get(_KEY_SUBDOMAIN):
@@ -160,14 +162,28 @@ def _cachear_subdomain(result):
         m = re.search(r'https?://([a-z0-9-]+\.cloudflarestream\.com)/',
                       result.get(chave) or '')
         if m:
-            try:
-                AppConfig.set(_KEY_SUBDOMAIN, m.group(1))
-                from app.extensions import db
-                db.session.commit()
-            except SQLAlchemyError:
-                from app.extensions import db
-                db.session.rollback()
+            _gravar_subdomain(m.group(1))
             return
+
+
+def _gravar_subdomain(valor):
+    """Grava o subdomínio em sessão ISOLADA — não commita a sessão de negócio
+    (que pode ter writes pendentes no request que chamou status())."""
+    from sqlalchemy.orm import Session
+
+    from app.extensions import db
+    s = Session(bind=db.engine)
+    try:
+        row = s.query(AppConfig).filter_by(key=_KEY_SUBDOMAIN).first()
+        if row:
+            row.value = valor
+        else:
+            s.add(AppConfig(key=_KEY_SUBDOMAIN, value=valor))
+        s.commit()
+    except SQLAlchemyError:
+        s.rollback()
+    finally:
+        s.close()
 
 
 def _json(r):
