@@ -59,6 +59,9 @@
         <p class="text-muted small mt-1">Enviar outro vídeo substitui este. Se
             acabou de subir, o Cloudflare leva alguns minutos processando antes
             de tocar.</p>
+        {% elif t.video_tipo == 'stream' and t.video_ref %}
+        <p class="text-muted small">Vídeo enviado — o player aparece assim que o
+            Cloudflare terminar de preparar (recarregue em 1-2 min).</p>
         {% elif t.video_tipo == 'arquivo' and t.video_ref %}
         <video src="{{ url_for('treinamento.video', id=t.id) }}" controls
                preload="metadata"
