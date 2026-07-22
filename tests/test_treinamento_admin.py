@@ -1,7 +1,6 @@
 """Módulo de treinamento — AUTORIA (admin): criar treinamento, montar quiz,
 subir e servir vídeo. A fase do funcionário (assistir + responder) vem depois.
 """
-import io
 
 from app.extensions import db
 from app.models import Treinamento, TreinamentoPergunta, Usuario
@@ -78,9 +77,8 @@ def test_video_de_inativo_admin_pre_visualiza(app, admin_user, tmp_path):
         db.session.commit()
         tid = t.id
     ca = _admin(app, admin_user)
-    ca.post(f'/treinamento/admin/{tid}/video', data={
-        'video': (io.BytesIO(b'0123456789'), 'a.mp4'),
-    }, content_type='multipart/form-data')
+    ca.post(f'/treinamento/admin/{tid}/video?nome=a.mp4',
+            data=b'0123456789', content_type='video/mp4')
     assert ca.get(f'/treinamento/video/{tid}').status_code in (200, 206)
 
 
