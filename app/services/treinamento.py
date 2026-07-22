@@ -104,11 +104,14 @@ def progresso(usuario):
         c = conclusoes.get(t.id)
         assistido = bool(c and c.assistido_em)
         aprovado = bool(c and c.aprovado_em)
+        # Treinamento sem quiz (só vídeo) completa ao ASSISTIR — senão um
+        # ativo sem perguntas nunca "aprova" e travaria a elegibilidade toda.
+        sem_quiz = (t.total_perguntas == 0)
         out.append({
             'treinamento': t,
             'assistido': assistido,
             'aprovado': aprovado,
-            'completo': assistido and aprovado,
+            'completo': assistido and (aprovado or sem_quiz),
             'melhor_pontos': (c.melhor_pontos if c else 0),
         })
     return out
