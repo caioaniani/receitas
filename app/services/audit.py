@@ -47,6 +47,10 @@ AUDITED_MODELS = {
     # dinheiro-adjacentes e baixo volume — trilha barata. Conferencias
     # ficam fora (ja sao o proprio registro de evento).
     'ativo',
+    # Treinamento (24/07/2026): a CONFIGURACAO (treinamento + quiz) tem trilha
+    # — mudar nota de corte / opcao correta afeta quem passa (e o sorteio).
+    # Tentativas/conclusoes ficam FORA (alto volume, ja sao o proprio evento).
+    'treinamento', 'treinamento_pergunta', 'treinamento_opcao',
 }
 
 
