@@ -32,6 +32,19 @@ class Config:
     # comprime client-side antes do upload, mas se algo escapar o servidor
     # ainda aceita. comprimir_imagem (utils.py) reduz pra ~150KB no banco.
 
+    # Treinamento (self-host de vídeo, decisão do dono 24/07/2026): os vídeos
+    # ficam no VOLUME do Railway montado em /data (o app grava/serve de lá).
+    # Em dev/local (SQLite) cai numa pasta do ~/.padaria. Env
+    # TREINAMENTO_MEDIA_DIR sobrepõe (Flask só absorve env declarada aqui).
+    TREINAMENTO_MEDIA_DIR = os.environ.get(
+        'TREINAMENTO_MEDIA_DIR',
+        '/data/treinamento' if DATABASE_URL.startswith('postgresql')
+        else os.path.join(DB_DIR, 'treinamento'))
+    # Teto de upload SÓ da rota de vídeo (o global MAX_CONTENT_LENGTH segue
+    # 25 MB pras fotos). Default 1 GB — sobe via env se precisar de aula longa.
+    TREINAMENTO_MAX_VIDEO = int(
+        os.environ.get('TREINAMENTO_MAX_VIDEO_MB', '1024')) * 1024 * 1024
+
     # Cookies de sessao — defesa em profundidade contra roubo de sessao
     # (12 atendentes logados ao dia + admins; sessao roubada = acesso
     # total a pedidos/clientes/dinheiro). Auditado em 12/06/2026: zero
