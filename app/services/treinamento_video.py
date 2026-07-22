@@ -99,11 +99,17 @@ def _part_path(treino_id, token):
     return os.path.join(media_dir(), f'.part-{int(treino_id)}-{token}')
 
 
-def anexar_chunk(stream, treino_id, token, indice, nome_original, max_bytes):
-    """Anexa um PEDAÇO do vídeo ao temporário. `indice==0` começa do zero
-    (permite re-tentar do início); os demais anexam em ordem. Valida a
-    extensão já no primeiro pedaço (falha cedo, antes de subir centenas de MB)
-    e o teto ACUMULADO a cada pedaço."""
+def anexar_chunk(dados, treino_id, token, indice, nome_original, max_bytes):
+    """Anexa um PEDAÇO (bytes já lidos do corpo da request) ao temporário.
+    `indice==0` começa do zero (permite re-tentar do início); os demais anexam
+    em ordem. Valida a extensão já no primeiro pedaço (falha cedo, antes de
+    subir centenas de MB) e o teto ACUMULADO a cada pedaço.
+
+    Recebe BYTES (não stream) de propósito: a rota lê o corpo inteiro do pedaço
+    ANTES de tocar em disco, pra qualquer falha de escrita virar um HTTP legível
+    em vez de resetar a conexão (que o navegador mostraria como "erro de rede").
+    ValueError = culpa do cliente (extensão/teto); OSError sobe pra rota tratar
+    como falha de servidor."""
     if indice == 0:
         ext = _ext(nome_original)
         if ext not in EXTENSOES_OK:
@@ -113,11 +119,7 @@ def anexar_chunk(stream, treino_id, token, indice, nome_original, max_bytes):
     destino = _part_path(treino_id, token)
     modo = 'wb' if indice == 0 else 'ab'
     with open(destino, modo) as out:
-        while True:
-            bloco = stream.read(_CHUNK)
-            if not bloco:
-                break
-            out.write(bloco)
+        out.write(dados)
     if os.path.getsize(destino) > int(max_bytes):
         try:
             os.remove(destino)
