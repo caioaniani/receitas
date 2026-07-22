@@ -1397,3 +1397,55 @@ def vigia_vereditos():
             'mensagens': msgs,
         }
     return jsonify(out)
+
+
+@claude_api_bp.route('/treinamento-diag')
+@_claude_auth_required
+def treinamento_diag():
+    """Diagnóstico do armazenamento de vídeo de treinamento (por que o upload
+    falha): mostra a pasta configurada, se EXISTE e é GRAVÁVEL de fato (escreve
+    e apaga um arquivo de teste), o espaço livre e restos de upload por pedaços.
+    Read-only quanto ao negócio — só sonda o volume."""
+    import os
+    import shutil
+
+    d = current_app.config.get('TREINAMENTO_MEDIA_DIR')
+    out = {
+        'ok': True,
+        'media_dir': d,
+        'teto_video_mb': round(
+            (current_app.config.get('TREINAMENTO_MAX_VIDEO') or 0) / 1048576, 1),
+    }
+    try:
+        os.makedirs(d, exist_ok=True)
+        out['existe'] = os.path.isdir(d)
+    except OSError as e:
+        out['existe'] = False
+        out['erro_makedirs'] = f'{type(e).__name__}: {e}'
+        return jsonify(out)
+    # Teste real de escrita+leitura+remoção.
+    teste = os.path.join(d, '.diag-escrita')
+    try:
+        with open(teste, 'wb') as f:
+            f.write(b'x' * 1024)
+        out['gravavel'] = os.path.getsize(teste) == 1024
+        os.remove(teste)
+    except OSError as e:
+        out['gravavel'] = False
+        out['erro_escrita'] = f'{type(e).__name__}: {e}'
+    # Espaço livre no ponto de montagem.
+    try:
+        uso = shutil.disk_usage(d)
+        out['livre_gb'] = round(uso.free / 1073741824, 2)
+        out['total_gb'] = round(uso.total / 1073741824, 2)
+    except OSError as e:
+        out['erro_disco'] = f'{type(e).__name__}: {e}'
+    # Arquivos presentes (vídeos finais + parciais de upload).
+    try:
+        nomes = os.listdir(d)
+        out['n_arquivos'] = len(nomes)
+        out['parciais'] = [n for n in nomes if n.startswith('.part-')][:20]
+        out['videos'] = [n for n in nomes if n.startswith('treino-')][:20]
+    except OSError as e:
+        out['erro_listar'] = f'{type(e).__name__}: {e}'
+    return jsonify(out)
