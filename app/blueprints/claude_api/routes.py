@@ -1409,12 +1409,23 @@ def treinamento_diag():
     import os
     import shutil
 
+    from app.services import treinamento_stream as ts
     d = current_app.config.get('TREINAMENTO_MEDIA_DIR')
     out = {
         'ok': True,
         'media_dir': d,
         'teto_video_mb': round(
             (current_app.config.get('TREINAMENTO_MAX_VIDEO') or 0) / 1048576, 1),
+        # Status do Cloudflare Stream — SEM vazar segredo (só presença + o
+        # subdomínio de entrega, que é público).
+        'cloudflare': {
+            'account_id_set': bool(
+                (current_app.config.get('CLOUDFLARE_ACCOUNT_ID') or '').strip()),
+            'token_set': bool(
+                (current_app.config.get('CLOUDFLARE_STREAM_TOKEN') or '').strip()),
+            'configurado': ts.configurado(),
+            'subdomain': ts.subdomain(),
+        },
     }
     try:
         os.makedirs(d, exist_ok=True)
