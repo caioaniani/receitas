@@ -13,7 +13,7 @@
 
 {% if video_embed %}
 {# Cloudflare Stream: player embutido na NOSSA página (o funcionário não sai
-   do site). O SDK abaixo detecta o fim do vídeo pra auto-marcar assistido. #}
+   do site). O SDK é usado pelo rastreio de progresso mais abaixo. #}
 <div style="max-width:720px;">
     <div style="position:relative; padding-top:56.25%;">
         <iframe id="video-treino-frame" src="{{ video_embed }}"
