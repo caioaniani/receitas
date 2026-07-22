@@ -76,6 +76,17 @@ def test_servir_range_aberto_ate_o_fim(app, media):
         assert b''.join(r.response) == b'789'
 
 
+def test_servir_suffix_range_ultimos_bytes(app, media):
+    """bytes=-3 = os ÚLTIMOS 3 bytes (RFC 7233)."""
+    with app.app_context():
+        ref = tv.salvar_video(_fs(b'0123456789'), treino_id=1)
+    with app.test_request_context('/', headers={'Range': 'bytes=-3'}):
+        r = tv.resposta_range(ref)
+        assert r.status_code == 206
+        assert r.headers['Content-Range'] == 'bytes 7-9/10'
+        assert b''.join(r.response) == b'789'
+
+
 def test_servir_range_invalido_416(app, media):
     with app.app_context():
         ref = tv.salvar_video(_fs(b'0123456789'), treino_id=1)
