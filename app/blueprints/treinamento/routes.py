@@ -146,13 +146,23 @@ def admin_video_chunk(id):
         return ('Parâmetros de upload inválidos.', 400)
     if i < 0 or n < 1 or i >= n:
         return ('Parâmetros de upload inválidos.', 400)
+    # Lê o PEDAÇO INTEIRO (≤4 MB, cabe na memória) ANTES de tocar em disco: isso
+    # (1) consome todo o corpo da request — sem isso, um erro de escrita no meio
+    # faria o gunicorn resetar a conexão e o navegador mostraria "erro de rede"
+    # em vez da causa real; (2) deixa devolver falha de disco como HTTP legível.
+    dados = request.get_data(cache=False)
     if i == 0:
         tv.limpar_parciais()   # varre restos de uploads abandonados
     try:
-        tv.anexar_chunk(request.stream, t.id, token, i, nome,
+        tv.anexar_chunk(dados, t.id, token, i, nome,
                         current_app.config['TREINAMENTO_MAX_VIDEO'])
     except ValueError as e:
         return (str(e), 400)
+    except OSError as e:
+        current_app.logger.error(
+            'upload treino %s pedaço %s: falha ao gravar: %s', t.id, i, e)
+        return (f'Falha ao gravar no servidor ({type(e).__name__}: {e}). '
+                'É o volume de vídeos — avise o suporte.', 500)
     if i < n - 1:
         return ('', 204)                     # ainda faltam pedaços
     # Último pedaço: fecha o arquivo e aponta o treinamento pra ele.
@@ -160,6 +170,11 @@ def admin_video_chunk(id):
         ref = tv.finalizar_chunk(t.id, token, nome)
     except ValueError as e:
         return (str(e), 400)
+    except OSError as e:
+        current_app.logger.error(
+            'upload treino %s: falha ao finalizar: %s', t.id, e)
+        return (f'Falha ao finalizar no servidor ({type(e).__name__}: {e}).',
+                500)
     if t.video_tipo == 'arquivo' and t.video_ref:
         tv.remover_video(t.video_ref)
     t.video_tipo = 'arquivo'
