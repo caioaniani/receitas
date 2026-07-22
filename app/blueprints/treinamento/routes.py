@@ -9,7 +9,15 @@
 O vídeo é servido com HTTP Range pela MESMA origem — nada de terceiro, o
 funcionário nunca sai do site. Regras em app/services/treinamento.py.
 """
-from flask import abort, current_app, flash, redirect, render_template, request, url_for
+from flask import (
+    abort,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import current_user, login_required
 
 from app.blueprints.treinamento import treinamento_bp
