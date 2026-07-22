@@ -40,11 +40,22 @@ def test_criar_treinamento_nasce_rascunho(app, admin_user):
         assert t and t.ativo is False and t.nota_minima == 70
 
 
-def test_video_de_inativo_bloqueia_funcionario_libera_admin(app, admin_user, tmp_path):
+def test_video_de_inativo_bloqueia_funcionario(app, tmp_path):
+    # Só requests de FUNCIONÁRIO nesta função (a conftest cacheia _login_user
+    # por contexto de app — misturar admin+func no mesmo teste vaza a sessão).
     app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
+    from io import BytesIO
+
+    from werkzeug.datastructures import FileStorage
+
+    from app.services import treinamento_video as tv
     with app.app_context():
         t = Treinamento(titulo='Rasc', ativo=False)
         db.session.add(t)
+        db.session.commit()
+        ref = tv.salvar_video(
+            FileStorage(stream=BytesIO(b'0123456789'), filename='a.mp4'), t.id)
+        t.video_tipo, t.video_ref = 'arquivo', ref
         db.session.commit()
         tid = t.id
         u = Usuario(nome='F2', login='f2-inat', papel='funcionario')
@@ -52,18 +63,25 @@ def test_video_de_inativo_bloqueia_funcionario_libera_admin(app, admin_user, tmp
         db.session.add(u)
         db.session.commit()
         uid = u.id
-    ca = _admin(app, admin_user)
-    ca.post(f'/treinamento/admin/{tid}/video', data={
-        'video': (io.BytesIO(b'0123456789'), 'a.mp4'),
-    }, content_type='multipart/form-data')
-    # admin pré-visualiza rascunho
-    assert ca.get(f'/treinamento/video/{tid}').status_code in (200, 206)
-    # funcionário NÃO acessa vídeo de treinamento inativo
     cf = app.test_client()
     with cf.session_transaction() as s:
         s['_user_id'] = str(uid)
         s['_fresh'] = True
     assert cf.get(f'/treinamento/video/{tid}').status_code == 404
+
+
+def test_video_de_inativo_admin_pre_visualiza(app, admin_user, tmp_path):
+    app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
+    with app.app_context():
+        t = Treinamento(titulo='Rasc2', ativo=False)
+        db.session.add(t)
+        db.session.commit()
+        tid = t.id
+    ca = _admin(app, admin_user)
+    ca.post(f'/treinamento/admin/{tid}/video', data={
+        'video': (io.BytesIO(b'0123456789'), 'a.mp4'),
+    }, content_type='multipart/form-data')
+    assert ca.get(f'/treinamento/video/{tid}').status_code in (200, 206)
 
 
 def test_add_pergunta_correta_fica_no_slot_certo(app, admin_user):
