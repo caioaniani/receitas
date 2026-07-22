@@ -147,8 +147,11 @@ def test_fluxo_completo_do_funcionario(app):
 
 def test_gerar_acesso_cria_conta_e_vincula(app, admin_user, monkeypatch):
     enviados = {}
-    monkeypatch.setattr('app.services.email.enviar_boas_vindas',
-                        lambda *a, **k: enviados.setdefault('ok', True) or {'ok': True})
+
+    def _fake(*a, **k):
+        enviados['ok'] = True
+        return {'ok': True}
+    monkeypatch.setattr('app.services.email.enviar_boas_vindas', _fake)
     with app.app_context():
         f = Funcionario(nome='José', cpf='111.111.111-11', email='jose@opao.online')
         db.session.add(f)
