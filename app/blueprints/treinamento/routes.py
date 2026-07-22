@@ -90,38 +90,32 @@ def admin_salvar(id):
 @admin_required
 @csrf.exempt
 def admin_video(id):
-    # ISENTA do CSRF automático DE PROPÓSITO: a checagem de CSRF roda no
-    # before_request e PARSEIA o multipart pra ler o token — sob o teto global
-    # de 25 MB, o que fazia o vídeo estourar ANTES de a rota poder liberar o
-    # teto ("sessão expirada" no upload). Aqui a gente (1) libera o teto SÓ
-    # nesta rota e só então (2) valida o CSRF na mão, já com o corpo parseável.
+    """Upload de vídeo por XHR: o navegador manda o arquivo como CORPO BRUTO
+    (não multipart) com a barra de progresso, e o token do CSRF vai na QUERY
+    (?csrf=). Isso evita o parse de formulário — que, sob o teto de 25 MB do
+    resto do app, estourava o vídeo ("sessão expirada"). Responde com código
+    HTTP + texto curto; o front recarrega ou mostra o erro."""
     request.max_content_length = current_app.config['TREINAMENTO_MAX_VIDEO']
+    # CSRF na mão, a partir da QUERY (não há form pra ler o token).
     if current_app.config.get('WTF_CSRF_ENABLED', True):
         from flask_wtf.csrf import validate_csrf
         try:
-            validate_csrf(request.form.get('csrf_token'))
+            validate_csrf(request.args.get('csrf'))
         except Exception:  # noqa: BLE001 — token ausente/inválido
-            flash('Sessão de segurança expirada — recarregue a página e '
-                  'tente de novo.', 'warning')
-            return redirect(url_for('treinamento.admin_editar', id=id))
+            return ('Sessão de segurança expirada — recarregue a página.', 400)
     t = _ativos().filter_by(id=id).first_or_404()
-    arq = request.files.get('video')
-    if not arq or not arq.filename:
-        flash('Escolha um arquivo de vídeo.', 'warning')
-        return redirect(url_for('treinamento.admin_editar', id=t.id))
+    nome = request.args.get('nome', '')
     try:
-        ref = tv.salvar_video(arq, t.id)
+        ref = tv.salvar_stream(request.stream, t.id, nome)
     except ValueError as e:
-        flash(str(e), 'danger')
-        return redirect(url_for('treinamento.admin_editar', id=t.id))
+        return (str(e), 400)
     # Troca o vídeo: apaga o arquivo antigo (se era self-host) e aponta o novo.
     if t.video_tipo == 'arquivo' and t.video_ref:
         tv.remover_video(t.video_ref)
     t.video_tipo = 'arquivo'
     t.video_ref = ref
     db.session.commit()
-    flash('Vídeo enviado.', 'success')
-    return redirect(url_for('treinamento.admin_editar', id=t.id))
+    return ('', 204)
 
 
 @treinamento_bp.route('/admin/<int:id>/pergunta', methods=['POST'])
