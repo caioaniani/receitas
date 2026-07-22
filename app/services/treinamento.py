@@ -7,6 +7,8 @@ treinamentos ativos. Pontuação = acertos acumulados (melhor tentativa por
 treinamento). O sorteio/bônus em si é gesto manual do dono — nada de folha
 automática.
 """
+import json
+import math
 import secrets
 
 from sqlalchemy.exc import IntegrityError
@@ -15,9 +17,11 @@ from app.extensions import db
 from app.models import (
     Treinamento,
     TreinamentoConclusao,
+    TreinamentoProgresso,
     TreinamentoTentativa,
     Usuario,
 )
+from app.models.treinamento import BUCKET_PROGRESSO_SEG
 from app.utils import agora
 
 
@@ -61,6 +65,85 @@ def marcar_assistido(treinamento, usuario):
         c.atualizado_em = agora()
         db.session.commit()
     return c
+
+
+# ── Rastreio de "assistiu tudo?" (heartbeats do player) ─────────────────
+BUCKET_SEG = BUCKET_PROGRESSO_SEG
+LIMIAR_COBERTURA = 0.95   # cobrir >=95% dos baldes do vídeo
+LIMIAR_TEMPO = 0.4        # e gastar >=40% da duração em tempo real (anti-scrub)
+
+
+def progresso_de(usuario_id, treinamento_id):
+    """Leitura do progresso de vídeo (sem criar)."""
+    return TreinamentoProgresso.query.filter_by(
+        usuario_id=usuario_id, treinamento_id=treinamento_id).first()
+
+
+def _progresso(usuario_id, treinamento_id):
+    """Pega/cria a linha de progresso (mesma proteção de corrida do
+    _conclusao)."""
+    p = TreinamentoProgresso.query.filter_by(
+        usuario_id=usuario_id, treinamento_id=treinamento_id).first()
+    if p is not None:
+        return p
+    try:
+        with db.session.begin_nested():
+            p = TreinamentoProgresso(
+                usuario_id=usuario_id, treinamento_id=treinamento_id)
+            db.session.add(p)
+        return p
+    except IntegrityError:
+        return TreinamentoProgresso.query.filter_by(
+            usuario_id=usuario_id, treinamento_id=treinamento_id).first()
+
+
+def _duracao_video(treinamento, dur_cliente):
+    """Duração AUTORITATIVA: do Cloudflare pro vídeo Stream; senão a reportada
+    pelo player (arquivo self-host). 0 se indeterminada. Usar a do Cloudflare
+    fecha o buraco de um cliente forjar duração minúscula pra 'completar' fácil.
+    """
+    if treinamento.video_tipo == 'stream' and treinamento.video_ref:
+        try:
+            from app.services import treinamento_stream as ts
+            d = ts.status(treinamento.video_ref).get('duracao')
+            if d:
+                return int(d)
+        except Exception:  # noqa: BLE001 — best-effort; cai no valor do cliente
+            pass
+    try:
+        return int(float(dur_cliente))
+    except (TypeError, ValueError):
+        return 0
+
+
+def registrar_progresso(treinamento, usuario, posicao_seg, dur_cliente=None):
+    """Marca o BALDE da posição atual como assistido e devolve a cobertura.
+    COMPLETA (marca assistido) quando cobre >=95% dos baldes E o tempo real
+    decorrido é >=40% da duração — pular pro fim (cobre só 1 balde) ou varrer a
+    barra rápido NÃO completa. Idempotente depois de completo."""
+    ja = conclusao_de(usuario.id, treinamento.id)
+    if ja and ja.assistido_em:
+        return {'pct': 100, 'assistido': True}
+    p = _progresso(usuario.id, treinamento.id)
+    if not p.duracao_seg:
+        p.duracao_seg = _duracao_video(treinamento, dur_cliente)
+    dur = p.duracao_seg or 0
+    if dur <= 0:
+        db.session.commit()
+        return {'pct': 0, 'assistido': False}
+    total = max(1, math.ceil(dur / BUCKET_SEG))
+    baldes = p.baldes()
+    balde = min(max(0, int(posicao_seg // BUCKET_SEG)), total - 1)
+    baldes.add(balde)
+    p.baldes_json = json.dumps(sorted(baldes))
+    p.atualizado_em = agora()
+    cobertura = len(baldes) / total
+    decorrido = (agora() - p.iniciado_em).total_seconds()
+    completo = cobertura >= LIMIAR_COBERTURA and decorrido >= LIMIAR_TEMPO * dur
+    db.session.commit()
+    if completo:
+        marcar_assistido(treinamento, usuario)
+    return {'pct': min(100, round(cobertura * 100)), 'assistido': completo}
 
 
 def corrigir_e_registrar(treinamento, usuario, respostas):
