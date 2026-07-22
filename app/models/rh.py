@@ -54,9 +54,16 @@ class Funcionario(db.Model):
     periodo = db.Column(db.String(20))
     cadastro_pendente = db.Column(db.Boolean, default=False)
     data_nascimento = db.Column(db.Date)
+    # Portal do funcionário (24/07/2026): vínculo com a conta de login
+    # (Usuario) por e-mail. NULL = funcionário ainda sem acesso. O ALTER já
+    # está aplicado em prod (migrations_legacy, commit 1 confirmado pela sonda
+    # /api/claude/deploy) ANTES deste modelo — procedimento de 2 commits.
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
 
     lojas = db.relationship('Loja', secondary=funcionario_loja, backref='funcionarios')
     cargo = db.relationship('Cargo', backref='funcionarios')
+    usuario = db.relationship('Usuario', foreign_keys=[usuario_id],
+                              backref=db.backref('funcionario', uselist=False))
 
     def salario_efetivo(self):
         """Salario base vem do Cargo. Fallback para o campo legado se cargo nao setado."""
