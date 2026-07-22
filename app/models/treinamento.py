@@ -19,8 +19,15 @@ Fonte do vídeo é SWAPPABLE de propósito (`video_tipo`):
 - 'embed'   -> URL de player externo (fallback/escape hatch); `video_ref` = URL.
 Trocar de fonte é só mudar `video_tipo` — o resto do módulo não muda.
 """
+
+import json
+import math
+
 from app.extensions import db
 from app.utils import agora
+
+# Granularidade do rastreio de "assistiu?": 1 balde = 5 segundos de vídeo.
+BUCKET_PROGRESSO_SEG = 5
 
 __all__ = [
     'Treinamento',
@@ -28,6 +35,7 @@ __all__ = [
     'TreinamentoOpcao',
     'TreinamentoTentativa',
     'TreinamentoConclusao',
+    'TreinamentoProgresso',
 ]
 
 VIDEO_TIPOS = ('stream', 'arquivo', 'embed')
@@ -139,3 +147,51 @@ class TreinamentoConclusao(db.Model):
     @property
     def completo(self):
         return self.assistido_em is not None and self.aprovado_em is not None
+
+
+class TreinamentoProgresso(db.Model):
+    """Rastreio REAL de quanto o funcionário assistiu de cada vídeo, em BALDES
+    de BUCKET_PROGRESSO_SEG segundos cobertos DURANTE a reprodução (heartbeats
+    do player mandam a posição atual). É a fonte da verdade do "assistiu tudo?":
+    pular pro fim ou clicar num botão cobre só 1 balde — pra completar é preciso
+    a reprodução passar por ~todos os baldes. UMA linha por (usuário,
+    treinamento) — tabela NOVA, criada por db.create_all (sem ALTER)."""
+    __tablename__ = 'treinamento_progresso'
+    __table_args__ = (
+        db.UniqueConstraint('usuario_id', 'treinamento_id',
+                            name='uq_treino_progresso_usuario_treino'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(
+        db.Integer, db.ForeignKey('usuario.id'), nullable=False, index=True)
+    treinamento_id = db.Column(
+        db.Integer, db.ForeignKey('treinamento.id'), nullable=False, index=True)
+    duracao_seg = db.Column(db.Integer)     # duração do vídeo (autoritativa)
+    # Índices dos baldes cobertos, JSON (ex.: "[0,1,2,5]"). Compacto: vídeo de
+    # 10 min = 120 baldes.
+    baldes_json = db.Column(db.Text, default='[]', nullable=False)
+    iniciado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora, nullable=False)
+
+    usuario = db.relationship('Usuario')
+    treinamento = db.relationship('Treinamento')
+
+    def baldes(self):
+        try:
+            return set(json.loads(self.baldes_json or '[]'))
+        except (ValueError, TypeError):
+            return set()
+
+    @property
+    def total_baldes(self):
+        if not self.duracao_seg or self.duracao_seg <= 0:
+            return 0
+        return max(1, math.ceil(self.duracao_seg / BUCKET_PROGRESSO_SEG))
+
+    @property
+    def cobertura_pct(self):
+        total = self.total_baldes
+        if not total:
+            return 0
+        return min(100, round(100 * len(self.baldes()) / total))
