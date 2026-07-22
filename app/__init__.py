@@ -467,14 +467,22 @@ def create_app(config_class=None):
         # (default-src 'self' já cobriria media, mas o media-src explícito
         # garante o playback). Escopado à área — o resto segue com CSP estrita.
         if request.path.startswith('/treinamento'):
+            # Cloudflare Stream: o player é um iframe (frame-src), o SDK do
+            # player carrega de embed.cloudflarestream.com (script-src), e o
+            # upload DIRETO do navegador vai pro host de ingest do Cloudflare
+            # (connect-src). O byte não passa pelo nosso servidor.
             response.headers['Content-Security-Policy'] = (
                 "default-src 'self'; "
-                "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                "script-src 'self' https://cdn.jsdelivr.net "
+                "https://embed.cloudflarestream.com 'unsafe-inline'; "
                 "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
                 "font-src 'self' https://cdn.jsdelivr.net; "
                 "media-src 'self' blob:; "
+                "frame-src https://*.cloudflarestream.com; "
+                "connect-src 'self' https://upload.videodelivery.net "
+                "https://*.cloudflarestream.com; "
                 "img-src 'self' data: https://*.dropbox.com "
-                "https://*.dropboxusercontent.com;"
+                "https://*.dropboxusercontent.com https://*.cloudflarestream.com;"
             )
         # Popup do painel de entregas: o detalhe do pedido (?embed=1) e embutido
         # num iframe de MESMA ORIGEM (gestao.*). X-Frame-Options=DENY bloquearia
