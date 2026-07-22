@@ -199,6 +199,54 @@ def test_troca_de_stream_apaga_o_anterior_no_cloudflare(app, admin_user,
     assert apagados == [velho]   # o vídeo antigo do Cloudflare foi removido
 
 
+def test_salvar_descobre_subdomain_sem_env(app, admin_user, monkeypatch):
+    """Sem a env CLOUDFLARE_STREAM_SUBDOMAIN, o salvar consulta o vídeo e
+    DESCOBRE o subdomínio pela URL de preview — senão o player não montaria."""
+    app.config['CLOUDFLARE_ACCOUNT_ID'] = 'acct'
+    app.config['CLOUDFLARE_STREAM_TOKEN'] = 'tok'
+    app.config['CLOUDFLARE_STREAM_SUBDOMAIN'] = ''      # SEM a env opcional
+    monkeypatch.setattr(ts.requests, 'get', lambda url, **kw: FakeResp(200, {
+        'success': True, 'result': {
+            'readyToStream': False,
+            'preview': f'https://customer-zzz.cloudflarestream.com/{UID}/watch',
+            'status': {'pctComplete': '10'}}}))
+    with app.app_context():
+        t = Treinamento(titulo='Sub')
+        db.session.add(t)
+        db.session.commit()
+        tid = t.id
+    c = _admin(app, admin_user)
+    r = c.post(f'/treinamento/admin/{tid}/video/stream/salvar',
+               data={'uid': UID})
+    assert r.status_code == 200
+    with app.app_context():
+        from app.models.config import AppConfig
+        assert AppConfig.get('cloudflare_stream_subdomain') == \
+            'customer-zzz.cloudflarestream.com'
+        assert ts.embed_url(UID) == \
+            f'https://customer-zzz.cloudflarestream.com/{UID}/iframe'
+
+
+def test_swap_stream_para_arquivo_apaga_no_cloudflare(app, admin_user,
+                                                      tmp_path, monkeypatch):
+    """Trocar um vídeo do Stream por um self-host (rota legada) NÃO pode deixar
+    o vídeo antigo orfão no Cloudflare."""
+    app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
+    _config_stream(app)
+    apagados = []
+    monkeypatch.setattr(ts, 'deletar', lambda uid: apagados.append(uid))
+    velho = 'c' * 32
+    with app.app_context():
+        t = Treinamento(titulo='Swap', video_tipo='stream', video_ref=velho)
+        db.session.add(t)
+        db.session.commit()
+        tid = t.id
+    c = _admin(app, admin_user)
+    c.post(f'/treinamento/admin/{tid}/video?nome=a.mp4',
+           data=b'0123456789', content_type='video/mp4')
+    assert apagados == [velho]
+
+
 def test_aluno_ve_iframe_do_stream(app, tmp_path):
     """Funcionário vê o player embutido (iframe) — nunca sai do site."""
     _config_stream(app)
