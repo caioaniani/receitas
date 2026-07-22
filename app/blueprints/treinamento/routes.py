@@ -48,7 +48,10 @@ def admin_novo():
         flash('Dê um título ao treinamento.', 'warning')
         return redirect(url_for('treinamento.admin_lista'))
     ordem = (db.session.query(db.func.max(Treinamento.ordem)).scalar() or 0) + 1
-    t = Treinamento(titulo=titulo, criado_por_id=current_user.id, ordem=ordem)
+    # Nasce RASCUNHO (ativo=False): não aparece pro funcionário nem entra na
+    # elegibilidade até o admin subir vídeo/quiz e publicar (marcar "ativo").
+    t = Treinamento(titulo=titulo, criado_por_id=current_user.id, ordem=ordem,
+                    ativo=False)
     db.session.add(t)
     db.session.commit()
     return redirect(url_for('treinamento.admin_editar', id=t.id))
