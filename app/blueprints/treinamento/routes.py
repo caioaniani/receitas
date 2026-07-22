@@ -77,7 +77,8 @@ def admin_editar(id):
     return render_template(
         'treinamento/admin_editar.html', t=t,
         stream_ok=ts.configurado(),
-        embed=ts.embed_url(t.video_ref) if t.video_tipo == 'stream' else None)
+        video_embed=ts.embed_url(t.video_ref) if t.video_tipo == 'stream'
+        else None)
 
 
 @treinamento_bp.route('/admin/<int:id>/salvar', methods=['POST'])
@@ -355,7 +356,8 @@ def assistir(id):
         'treinamento/aluno_assistir.html', t=t,
         assistido=bool(c and c.assistido_em),
         aprovado=bool(c and c.aprovado_em),
-        embed=ts.embed_url(t.video_ref) if t.video_tipo == 'stream' else None)
+        video_embed=ts.embed_url(t.video_ref) if t.video_tipo == 'stream'
+        else None)
 
 
 @treinamento_bp.route('/<int:id>/assistido', methods=['POST'])
