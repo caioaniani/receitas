@@ -13,10 +13,12 @@ from app.blueprints.treinamento import treinamento_bp
 from app.decorators import admin_required
 from app.extensions import db
 from app.models import (
+    Funcionario,
     Treinamento,
     TreinamentoOpcao,
     TreinamentoPergunta,
 )
+from app.services import treinamento as svc
 from app.services import treinamento_video as tv
 from app.utils import agora
 
@@ -169,3 +171,101 @@ def video(id):
     if t.video_tipo != 'arquivo' or not t.video_ref:
         abort(404)
     return tv.resposta_range(t.video_ref)
+
+
+def _ativo_visivel(id):
+    return (_ativos().filter(Treinamento.ativo.is_(True))
+            .filter_by(id=id).first_or_404())
+
+
+# ── Funcionário: assistir + quiz ────────────────────────────────────────
+@treinamento_bp.route('/')
+@login_required
+def index():
+    prog = svc.progresso(current_user)
+    return render_template(
+        'treinamento/aluno_lista.html', prog=prog,
+        pontos=sum(p['melhor_pontos'] for p in prog),
+        completos=sum(1 for p in prog if p['completo']), total=len(prog))
+
+
+@treinamento_bp.route('/<int:id>/assistir')
+@login_required
+def assistir(id):
+    t = _ativo_visivel(id)
+    c = svc.conclusao_de(current_user.id, t.id)
+    return render_template('treinamento/aluno_assistir.html', t=t,
+                           assistido=bool(c and c.assistido_em),
+                           aprovado=bool(c and c.aprovado_em))
+
+
+@treinamento_bp.route('/<int:id>/assistido', methods=['POST'])
+@login_required
+def assistido(id):
+    t = _ativo_visivel(id)
+    svc.marcar_assistido(t, current_user)
+    return redirect(url_for('treinamento.assistir', id=t.id))
+
+
+@treinamento_bp.route('/<int:id>/quiz', methods=['POST'])
+@login_required
+def responder(id):
+    t = _ativo_visivel(id)
+    c = svc.conclusao_de(current_user.id, t.id)
+    if not (c and c.assistido_em):
+        flash('Assista o vídeo e marque como assistido antes do quiz.',
+              'warning')
+        return redirect(url_for('treinamento.assistir', id=t.id))
+    respostas = {}
+    for p in t.perguntas:
+        v = request.form.get(f'pergunta_{p.id}')
+        if v:
+            try:
+                respostas[p.id] = int(v)
+            except ValueError:
+                pass
+    res = svc.corrigir_e_registrar(t, current_user, respostas)
+    return render_template('treinamento/aluno_resultado.html', t=t, res=res)
+
+
+# ── Admin: acessos dos funcionários + elegíveis ─────────────────────────
+@treinamento_bp.route('/admin/acessos')
+@login_required
+@admin_required
+def admin_acessos():
+    funcs = (Funcionario.query.filter_by(ativo=True)
+             .order_by(Funcionario.nome).all())
+    return render_template('treinamento/admin_acessos.html', funcs=funcs)
+
+
+@treinamento_bp.route('/admin/acessos/<int:func_id>/gerar', methods=['POST'])
+@login_required
+@admin_required
+def admin_gerar_acesso(func_id):
+    f = Funcionario.query.get_or_404(func_id)
+    r = svc.gerar_acesso(f)
+    if r['motivo'] == 'sem_email':
+        flash(f'{f.nome}: cadastre o e-mail no RH antes de gerar o acesso.',
+              'warning')
+    elif r['motivo'] == 'ja_tem':
+        flash(f'{f.nome} já tem acesso.', 'info')
+    elif r['motivo'] == 'vinculado':
+        flash(f'{f.nome} vinculado a uma conta existente.', 'success')
+    elif r['motivo'] == 'criado':
+        if r.get('email_ok'):
+            flash(f'Acesso de {f.nome} criado — senha enviada por e-mail.',
+                  'success')
+        else:
+            flash(f'Acesso de {f.nome} criado, mas o e-mail falhou '
+                  f'({r.get("email_erro")}). Senha: {r.get("senha")} — '
+                  'passe manualmente.', 'warning')
+    return redirect(url_for('treinamento.admin_acessos'))
+
+
+@treinamento_bp.route('/admin/elegiveis')
+@login_required
+@admin_required
+def admin_elegiveis():
+    return render_template('treinamento/admin_elegiveis.html',
+                           elegiveis=svc.elegiveis(),
+                           n_ativos=len(svc.treinamentos_ativos()))
