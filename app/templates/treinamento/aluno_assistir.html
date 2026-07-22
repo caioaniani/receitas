@@ -11,7 +11,19 @@
 
 {% if t.descricao %}<p class="text-muted">{{ t.descricao }}</p>{% endif %}
 
-{% if t.video_ref %}
+{% if embed %}
+{# Cloudflare Stream: player embutido na NOSSA página (o funcionário não sai
+   do site). O SDK abaixo detecta o fim do vídeo pra auto-marcar assistido. #}
+<div style="max-width:720px;">
+    <div style="position:relative; padding-top:56.25%;">
+        <iframe id="video-treino-frame" src="{{ embed }}"
+                style="position:absolute; top:0; left:0; width:100%; height:100%; border:0; border-radius:8px;"
+                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                allowfullscreen title="{{ t.titulo }}"></iframe>
+    </div>
+</div>
+<script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
+{% elif t.video_tipo == 'arquivo' and t.video_ref %}
 <video id="video-treino" src="{{ url_for('treinamento.video', id=t.id) }}"
        controls preload="metadata"
        style="width:100%; max-width:720px; border-radius:8px; background:#000;"></video>
