@@ -463,6 +463,19 @@ def create_app(config_class=None):
                 "https://*.spotifycdn.com; "
                 "report-uri /padeiro/csp-report;"
             )
+        # Treinamento (24/07/2026): o <video> self-host toca da MESMA origem
+        # (default-src 'self' já cobriria media, mas o media-src explícito
+        # garante o playback). Escopado à área — o resto segue com CSP estrita.
+        if request.path.startswith('/treinamento'):
+            response.headers['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                "font-src 'self' https://cdn.jsdelivr.net; "
+                "media-src 'self' blob:; "
+                "img-src 'self' data: https://*.dropbox.com "
+                "https://*.dropboxusercontent.com;"
+            )
         # Popup do painel de entregas: o detalhe do pedido (?embed=1) e embutido
         # num iframe de MESMA ORIGEM (gestao.*). X-Frame-Options=DENY bloquearia
         # ate o same-origin — troca por SAMEORIGIN + frame-ancestors 'self'
