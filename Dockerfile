@@ -42,10 +42,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copia código depois (camada que muda mais)
 COPY . .
 
-# Cria usuário não-root para rodar a aplicação
+# Cria o usuário não-root que RODA a aplicação (workers do gunicorn caem pra
+# ele via --user). O container ARRANCA como root de propósito: só o passo de
+# boot precisa de root pra dar permissão no volume /data (o Railway monta
+# volumes como root, e sem isso o app não escreve os vídeos de treinamento —
+# PermissionError). Requisições nunca rodam como root: o master do gunicorn é
+# root só pra abrir o socket e preparar o volume; os WORKERS rodam como padaria.
 RUN useradd --create-home --shell /bin/bash padaria && \
     chown -R padaria:padaria /app
-USER padaria
 
 # Healthcheck para o docker compose saber se está vivo
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
