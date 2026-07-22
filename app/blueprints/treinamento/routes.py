@@ -174,6 +174,11 @@ def admin_excluir(id):
 @login_required
 def video(id):
     t = _ativos().filter_by(id=id).first_or_404()
+    # Só serve o vídeo de treinamento ATIVO (publicado). O admin pode ver
+    # rascunho pra pré-visualizar. Sem esse gate, funcionário adivinharia o id
+    # e baixaria treinamento não publicado (achado da revisão 24/07).
+    if not (t.ativo or current_user.is_admin()):
+        abort(404)
     if t.video_tipo != 'arquivo' or not t.video_ref:
         abort(404)
     return tv.resposta_range(t.video_ref)
