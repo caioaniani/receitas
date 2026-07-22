@@ -357,20 +357,31 @@ def index():
 def assistir(id):
     t = _ativo_visivel(id)
     c = svc.conclusao_de(current_user.id, t.id)
+    p = svc.progresso_de(current_user.id, t.id)
     return render_template(
         'treinamento/aluno_assistir.html', t=t,
         assistido=bool(c and c.assistido_em),
         aprovado=bool(c and c.aprovado_em),
+        cobertura=p.cobertura_pct if p else 0,
         video_embed=ts.embed_url(t.video_ref) if t.video_tipo == 'stream'
         else None)
 
 
-@treinamento_bp.route('/<int:id>/assistido', methods=['POST'])
+@treinamento_bp.route('/<int:id>/progresso', methods=['POST'])
 @login_required
-def assistido(id):
+def progresso_video(id):
+    """Heartbeat do player: recebe a POSIÇÃO ATUAL do vídeo (t=segundos) e a
+    duração (d=segundos, usada só como fallback do self-host). O servidor marca
+    o balde correspondente e devolve a cobertura; ao cobrir tudo, marca
+    assistido sozinho. É ISTO que faz o sistema SABER se assistiu — não o
+    clique num botão."""
     t = _ativo_visivel(id)
-    svc.marcar_assistido(t, current_user)
-    return redirect(url_for('treinamento.assistir', id=t.id))
+    try:
+        pos = float(request.form.get('t') or 0)
+    except (TypeError, ValueError):
+        pos = 0.0
+    r = svc.registrar_progresso(t, current_user, pos, request.form.get('d'))
+    return jsonify(ok=True, **r)
 
 
 @treinamento_bp.route('/<int:id>/quiz', methods=['POST'])
