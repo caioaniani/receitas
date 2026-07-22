@@ -244,6 +244,12 @@ def admin_video_stream_salvar(id):
     t.video_tipo = 'stream'
     t.video_ref = uid
     db.session.commit()
+    # Descobre/cacheia o subdomínio de entrega AGORA (consultando o vídeo) —
+    # sem isso o player não monta quando a env CLOUDFLARE_STREAM_SUBDOMAIN não
+    # está setada. É best-effort: status() trata os próprios erros e grava em
+    # sessão isolada; nunca levanta.
+    if not ts.subdomain():
+        ts.status(uid)
     return jsonify(ok=True)
 
 
