@@ -98,10 +98,15 @@ def resposta_range(ref):
     if range_h:
         m = _RANGE_RE.match(range_h.strip())
         if m:
-            if m.group(1):
-                inicio = int(m.group(1))
-            if m.group(2):
-                fim = int(m.group(2))
+            g1, g2 = m.group(1), m.group(2)
+            if not g1 and g2:
+                # suffix-range 'bytes=-N': os ÚLTIMOS N bytes (RFC 7233).
+                inicio = max(0, tamanho - int(g2))
+            else:
+                if g1:
+                    inicio = int(g1)
+                if g2:
+                    fim = int(g2)
             if inicio > fim or inicio >= tamanho:
                 r = Response(status=416)
                 r.headers['Content-Range'] = f'bytes */{tamanho}'
