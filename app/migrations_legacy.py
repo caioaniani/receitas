@@ -1859,6 +1859,14 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE conta_pagar_item_map ADD COLUMN "
                        "produto_id INTEGER REFERENCES produto(id)")
 
+    # funcionario.usuario_id — vínculo RH <-> conta de login (Portal do
+    # funcionário, 24/07/2026). Espelho do bloco Postgres.
+    cursor.execute("PRAGMA table_info(funcionario)")
+    cols_func = [row[1] for row in cursor.fetchall()]
+    if cols_func and 'usuario_id' not in cols_func:
+        cursor.execute("ALTER TABLE funcionario ADD COLUMN "
+                       "usuario_id INTEGER REFERENCES usuario(id)")
+
     # mov_estoque_loja.desperdicio_id — mesma migracao do _migrate_postgres:
     # liga a baixa ao Desperdicio pra exclusao com estorno exato.
     cursor.execute("PRAGMA table_info(mov_estoque_loja)")
