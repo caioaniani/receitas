@@ -9,6 +9,8 @@ automática.
 """
 import secrets
 
+from sqlalchemy.exc import IntegrityError
+
 from app.extensions import db
 from app.models import (
     Treinamento,
@@ -27,15 +29,23 @@ def treinamentos_ativos():
 
 
 def _conclusao(usuario_id, treinamento_id):
-    """Pega ou cria a linha de rollup (usuário, treinamento)."""
+    """Pega ou cria a linha de rollup (usuário, treinamento). O INSERT roda num
+    SAVEPOINT: numa corrida do mesmo usuário (duplo submit / assistido+quiz
+    quase juntos) o unique constraint barra a 2ª linha e a gente refaz a
+    leitura, sem 500 e sem perder a transação de fora (a tentativa)."""
     c = TreinamentoConclusao.query.filter_by(
         usuario_id=usuario_id, treinamento_id=treinamento_id).first()
-    if c is None:
-        c = TreinamentoConclusao(
-            usuario_id=usuario_id, treinamento_id=treinamento_id)
-        db.session.add(c)
-        db.session.flush()
-    return c
+    if c is not None:
+        return c
+    try:
+        with db.session.begin_nested():
+            c = TreinamentoConclusao(
+                usuario_id=usuario_id, treinamento_id=treinamento_id)
+            db.session.add(c)
+        return c
+    except IntegrityError:
+        return TreinamentoConclusao.query.filter_by(
+            usuario_id=usuario_id, treinamento_id=treinamento_id).first()
 
 
 def conclusao_de(usuario_id, treinamento_id):
