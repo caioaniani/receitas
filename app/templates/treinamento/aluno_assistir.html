@@ -86,25 +86,61 @@
 {% endif %}
 {% endif %}
 
+{% if not assistido %}
 <script>
-// Ao TERMINAR o vídeo, marca como assistido automaticamente (conveniência —
-// o botão manual continua valendo pra quem prefere). Funciona pros dois
-// players: <video> self-host e iframe do Cloudflare Stream (via SDK).
+// Heartbeat de PROGRESSO: a cada 5s de REPRODUÇÃO manda a posição atual pro
+// servidor, que marca o "balde" de tempo assistido daquele trecho. O quiz só
+// libera quando o servidor confirma que o vídeo foi assistido de verdade — não
+// dá pra burlar clicando num botão nem pulando pro fim (isso cobre 1 balde só).
+// Vale pros dois players: <video> self-host e iframe do Cloudflare (via SDK).
 (function () {
-    var f = document.getElementById('form-assistido');
-    if (!f) return;   // já assistido: nada a fazer
-    var v = document.getElementById('video-treino');
-    if (v) { v.addEventListener('ended', function () { f.submit(); }); return; }
-    var frame = document.getElementById('video-treino-frame');
-    if (frame && window.Stream) {
-        try {
-            window.Stream(frame).addEventListener('ended', function () {
-                f.submit();
-            });
-        } catch (e) {
-            // SDK indisponível — o botão "Assisti" manual segue valendo.
+    var URL_PROG = '{{ url_for("treinamento.progresso_video", id=t.id) }}';
+    var CSRF = '{{ csrf_token() }}';
+    var bar = document.getElementById('prog-bar');
+    var pct = document.getElementById('prog-pct');
+    var msg = document.getElementById('prog-msg');
+
+    function player() {
+        var v = document.getElementById('video-treino');
+        if (v) {
+            return { cur: function () { return v.currentTime; },
+                     dur: function () { return v.duration; },
+                     tocando: function () { return !v.paused && !v.ended; } };
         }
+        var frame = document.getElementById('video-treino-frame');
+        if (frame && window.Stream) {
+            var p = window.Stream(frame);
+            return { cur: function () { return p.currentTime; },
+                     dur: function () { return p.duration; },
+                     tocando: function () { return !p.paused; } };
+        }
+        return null;
     }
+    var pl = player();
+    if (!pl) return;
+
+    function bater() {
+        var cur, dur, tocando;
+        try { cur = pl.cur(); dur = pl.dur(); tocando = pl.tocando(); }
+        catch (e) { return; }
+        if (!tocando || !cur) return;
+        fetch(URL_PROG, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF,
+                       'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 't=' + encodeURIComponent(cur) + '&d=' + encodeURIComponent(dur || 0)
+        }).then(function (r) { return r.json(); }).then(function (j) {
+            if (!j || !j.ok) { return; }
+            if (bar) { bar.style.width = j.pct + '%'; }
+            if (pct) { pct.textContent = j.pct + '%'; }
+            if (j.assistido) {
+                if (msg) { msg.textContent = 'Concluído! Liberando o quiz…'; }
+                setTimeout(function () { location.reload(); }, 900);
+            }
+        }).catch(function () {});
+    }
+    setInterval(bater, 5000);
 })();
 </script>
+{% endif %}
 {% endblock %}
