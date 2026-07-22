@@ -155,10 +155,20 @@ def gerar_acesso(funcionario):
     if not email:
         return {'ok': False, 'motivo': 'sem_email'}
 
-    # Login = e-mail. Se já existir uma conta com esse login, só vincula.
+    # Login = e-mail. Se já existir uma conta com esse login, só vincula se for
+    # SEGURO: precisa ser papel 'funcionario' e não estar ligada a OUTRO
+    # funcionário — senão o e-mail coincidir com um admin/owner (ou com outra
+    # pessoa) faria o progresso/elegibilidade operar sobre a conta errada
+    # (achado da revisão 24/07). Nesses casos recusa com aviso.
     existente = Usuario.query.filter(
         db.func.lower(Usuario.login) == email.lower()).first()
     if existente:
+        if existente.papel != 'funcionario' or getattr(existente, 'is_owner', False):
+            return {'ok': False, 'motivo': 'conta_de_outro_papel',
+                    'usuario': existente}
+        outro = getattr(existente, 'funcionario', None)
+        if outro is not None and outro.id != funcionario.id:
+            return {'ok': False, 'motivo': 'email_em_uso'}
         funcionario.usuario_id = existente.id
         db.session.commit()
         return {'ok': True, 'motivo': 'vinculado', 'usuario': existente}
