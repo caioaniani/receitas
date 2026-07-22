@@ -29,13 +29,41 @@ def test_admin_exige_admin(app):
     assert c.get('/treinamento/admin').status_code == 403
 
 
-def test_criar_treinamento(app, admin_user):
+def test_criar_treinamento_nasce_rascunho(app, admin_user):
+    """Nasce ativo=False — não vaza pro funcionário nem trava elegibilidade
+    até o admin subir vídeo/quiz e publicar."""
     c = _admin(app, admin_user)
     r = c.post('/treinamento/admin/novo', data={'titulo': 'Higiene'})
     assert r.status_code == 302
     with app.app_context():
         t = Treinamento.query.filter_by(titulo='Higiene').first()
-        assert t and t.ativo and t.nota_minima == 70
+        assert t and t.ativo is False and t.nota_minima == 70
+
+
+def test_video_de_inativo_bloqueia_funcionario_libera_admin(app, admin_user, tmp_path):
+    app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
+    with app.app_context():
+        t = Treinamento(titulo='Rasc', ativo=False)
+        db.session.add(t)
+        db.session.commit()
+        tid = t.id
+        u = Usuario(nome='F2', login='f2-inat', papel='funcionario')
+        u.set_senha('x' * 8)
+        db.session.add(u)
+        db.session.commit()
+        uid = u.id
+    ca = _admin(app, admin_user)
+    ca.post(f'/treinamento/admin/{tid}/video', data={
+        'video': (io.BytesIO(b'0123456789'), 'a.mp4'),
+    }, content_type='multipart/form-data')
+    # admin pré-visualiza rascunho
+    assert ca.get(f'/treinamento/video/{tid}').status_code in (200, 206)
+    # funcionário NÃO acessa vídeo de treinamento inativo
+    cf = app.test_client()
+    with cf.session_transaction() as s:
+        s['_user_id'] = str(uid)
+        s['_fresh'] = True
+    assert cf.get(f'/treinamento/video/{tid}').status_code == 404
 
 
 def test_add_pergunta_correta_fica_no_slot_certo(app, admin_user):
