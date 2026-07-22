@@ -159,11 +159,11 @@ def test_upload_video_funciona_com_csrf_ligado(app, admin_user, tmp_path):
     page = c.get(f'/treinamento/admin/{tid}').get_data(as_text=True)
     m = re.search(r'name="csrf_token" value="([^"]+)"', page)
     assert m, 'token CSRF presente no form'
-    r = c.post(f'/treinamento/admin/{tid}/video', data={
-        'csrf_token': m.group(1),
-        'video': (io.BytesIO(b'0123456789'), 'aula.mp4'),
-    }, content_type='multipart/form-data')
-    assert r.status_code == 302
+    # CSRF na query, vídeo no corpo bruto.
+    r = c.post(
+        f'/treinamento/admin/{tid}/video?csrf={m.group(1)}&nome=aula.mp4',
+        data=b'0123456789', content_type='video/mp4')
+    assert r.status_code == 204
     with app.app_context():
         assert db.session.get(Treinamento, tid).video_ref is not None
 
