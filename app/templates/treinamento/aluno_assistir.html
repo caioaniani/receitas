@@ -23,6 +23,9 @@
     </div>
 </div>
 <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
+{% elif t.video_tipo == 'stream' and t.video_ref %}
+<div class="alert alert-secondary">O vídeo está sendo preparado. Recarregue a
+    página em instantes.</div>
 {% elif t.video_tipo == 'arquivo' and t.video_ref %}
 <video id="video-treino" src="{{ url_for('treinamento.video', id=t.id) }}"
        controls preload="metadata"
