@@ -1,1 +1,1 @@
-web: sh -c "mkdir -p /data/treinamento; chown -R padaria:padaria /data/treinamento || echo 'AVISO: volume /data/treinamento nao preparado' >&2; exec gunicorn run:app --workers 2 --threads 4 --worker-class gthread --timeout 120 --keep-alive 5 --user padaria --group padaria"
+web: gunicorn run:app --workers 2 --threads 4 --worker-class gthread --timeout 120 --keep-alive 5
