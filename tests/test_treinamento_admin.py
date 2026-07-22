@@ -128,10 +128,10 @@ def test_upload_e_servir_video_com_range(app, admin_user, tmp_path):
         db.session.commit()
         tid = t.id
     c = _admin(app, admin_user)
-    r = c.post(f'/treinamento/admin/{tid}/video', data={
-        'video': (io.BytesIO(b'0123456789'), 'aula.mp4'),
-    }, content_type='multipart/form-data')
-    assert r.status_code == 302
+    # Upload por CORPO BRUTO (XHR): nome na query, bytes no body.
+    r = c.post(f'/treinamento/admin/{tid}/video?nome=aula.mp4',
+               data=b'0123456789', content_type='video/mp4')
+    assert r.status_code == 204
     with app.app_context():
         t = db.session.get(Treinamento, tid)
         assert t.video_tipo == 'arquivo' and t.video_ref.endswith('.mp4')
