@@ -30,7 +30,7 @@ __all__ = [
     'TreinamentoConclusao',
 ]
 
-VIDEO_TIPOS = ('arquivo', 'embed')
+VIDEO_TIPOS = ('stream', 'arquivo', 'embed')
 
 
 class Treinamento(db.Model):
