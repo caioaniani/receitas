@@ -153,6 +153,7 @@
 {% endif %}
 {{ _lnk(variant, url_for('main.clientes'), 'Clientes', request.path == '/admin/clientes', title='Cadastros do varejo (site + portal Wi-Fi) — com export pra campanhas') }}
 {{ _lnk(variant, url_for('patrimonio.index'), 'Patrimônio', request.path.startswith('/patrimonio'), title='Inventário de móveis e equipamentos com etiquetas QR') }}
+{{ _lnk(variant, url_for('treinamento.admin_lista'), 'Treinamento', request.path.startswith('/treinamento'), title='Vídeos + quiz gamificado pros funcionários') }}
 {{ _lnk(variant, url_for('main.audit'), 'Histórico de alterações', request.path == '/audit', title='Quem mudou o quê e quando') }}
 {{ _lnk(variant, url_for('slack.install'), 'Slack Bot', request.path.startswith('/slack')) }}
 {{ _lnk(variant, url_for('notificacoes.index'), 'Notificações WhatsApp', request.path.startswith('/notificacoes')) }}
