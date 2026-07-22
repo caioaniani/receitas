@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "gunicorn run:app --workers 2 --threads 4 --worker-class gthread --timeout 120 --keep-alive 5",
+    "startCommand": "sh -c \"mkdir -p /data/treinamento; chown -R padaria:padaria /data/treinamento || echo 'AVISO: volume /data/treinamento nao preparado — upload de video vai falhar' >&2; exec gunicorn run:app --workers 2 --threads 4 --worker-class gthread --timeout 120 --keep-alive 5 --user padaria --group padaria\"",
     "restartPolicyType": "ON_FAILURE"
   }
 }
