@@ -74,7 +74,10 @@ def admin_novo():
 @admin_required
 def admin_editar(id):
     t = _ativos().filter_by(id=id).first_or_404()
-    return render_template('treinamento/admin_editar.html', t=t)
+    return render_template(
+        'treinamento/admin_editar.html', t=t,
+        stream_ok=ts.configurado(),
+        embed=ts.embed_url(t.video_ref) if t.video_tipo == 'stream' else None)
 
 
 @treinamento_bp.route('/admin/<int:id>/salvar', methods=['POST'])
