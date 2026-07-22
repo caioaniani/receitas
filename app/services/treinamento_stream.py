@@ -102,6 +102,7 @@ def status(uid):
         'pronto': bool(res.get('readyToStream')),
         'pct': _int(st.get('pctComplete')),
         'erro': st.get('errorReasonText') or None,
+        'duracao': _int(res.get('duration')),   # segundos (autoritativo)
     }
 
 
