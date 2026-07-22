@@ -10,11 +10,14 @@ sem migration (o único ALTER do módulo é `funcionario.usuario_id`, já aplica
 pelo procedimento de 2 commits em migrations_legacy).
 
 Fonte do vídeo é SWAPPABLE de propósito (`video_tipo`):
+- 'stream'  -> Cloudflare Stream (PADRÃO em prod, decisão do dono 24/07/2026);
+  `video_ref` = UID do vídeo no Cloudflare. O upload vai DIRETO do navegador
+  pro Cloudflare e o player é um iframe embutido na nossa página.
 - 'arquivo' -> hospedado no nosso servidor (volume Railway em /data);
   `video_ref` = nome do arquivo, servido por rota própria com HTTP Range.
+  (Fica como fallback; esbarra em permissão de volume no Railway.)
 - 'embed'   -> URL de player externo (fallback/escape hatch); `video_ref` = URL.
-Assim, migrar os bytes pro Cloudflare R2 no futuro é só trocar como o
-'arquivo' é servido, sem mexer no resto.
+Trocar de fonte é só mudar `video_tipo` — o resto do módulo não muda.
 """
 from app.extensions import db
 from app.utils import agora
