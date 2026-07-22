@@ -45,6 +45,21 @@ class Config:
     TREINAMENTO_MAX_VIDEO = int(
         os.environ.get('TREINAMENTO_MAX_VIDEO_MB', '1024')) * 1024 * 1024
 
+    # Cloudflare Stream (decisão do dono 24/07/2026 após o self-host no volume
+    # /data esbarrar em permissão do Railway): o vídeo do treinamento é ENVIADO
+    # DIRETO do navegador pro Cloudflare (nunca passa pelo nosso servidor — sem
+    # teto de 25 MB, sem volume, sem timeout de worker) e TOCA embutido num
+    # iframe na NOSSA página (o funcionário não sai do site). Sem estas envs o
+    # upload por Stream fica desligado e a tela avisa "não configurado" (mesmo
+    # padrão do Spotify) — nada quebra.
+    CLOUDFLARE_ACCOUNT_ID = os.environ.get('CLOUDFLARE_ACCOUNT_ID', '')
+    CLOUDFLARE_STREAM_TOKEN = os.environ.get('CLOUDFLARE_STREAM_TOKEN', '')
+    # Subdomínio de entrega (customer-XXXX.cloudflarestream.com). Opcional: se
+    # vazio, o serviço descobre sozinho pela API na 1ª vez e cacheia em
+    # AppConfig. Pode colar só o código (customer-XXXX) ou o host inteiro.
+    CLOUDFLARE_STREAM_SUBDOMAIN = os.environ.get(
+        'CLOUDFLARE_STREAM_SUBDOMAIN', '')
+
     # Cookies de sessao — defesa em profundidade contra roubo de sessao
     # (12 atendentes logados ao dia + admins; sessao roubada = acesso
     # total a pedidos/clientes/dinheiro). Auditado em 12/06/2026: zero
