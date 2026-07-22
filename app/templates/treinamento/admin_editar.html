@@ -43,11 +43,23 @@
     </div>
 </form>
 
-{# ── Vídeo (self-host no /data) ── #}
+{# ── Vídeo (Cloudflare Stream: upload DIRETO do navegador, player embutido) ── #}
 <div class="card mb-3">
     <div class="card-header py-2"><strong>Vídeo</strong></div>
     <div class="card-body">
-        {% if t.video_ref %}
+        {% if embed %}
+        <div style="max-width:640px;">
+            <div style="position:relative; padding-top:56.25%;">
+                <iframe src="{{ embed }}"
+                        style="position:absolute; top:0; left:0; width:100%; height:100%; border:0; border-radius:8px;"
+                        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                        allowfullscreen title="Prévia do vídeo"></iframe>
+            </div>
+        </div>
+        <p class="text-muted small mt-1">Enviar outro vídeo substitui este. Se
+            acabou de subir, o Cloudflare leva alguns minutos processando antes
+            de tocar.</p>
+        {% elif t.video_tipo == 'arquivo' and t.video_ref %}
         <video src="{{ url_for('treinamento.video', id=t.id) }}" controls
                preload="metadata"
                style="width:100%; max-width:640px; border-radius:8px; background:#000;"></video>
@@ -55,8 +67,8 @@
         {% else %}
         <p class="text-muted small">Nenhum vídeo enviado ainda.</p>
         {% endif %}
-        {# Upload por XHR: manda o arquivo CRU (sem multipart) com barra de
-           progresso — não trava a página e não passa pelo parse de form. #}
+
+        {% if stream_ok %}
         <div class="d-flex gap-2 flex-wrap align-items-center">
             <input type="file" id="video-file" accept="video/*"
                    class="form-control form-control-sm" style="max-width:420px;">
@@ -71,78 +83,104 @@
             </div>
             <div class="small text-muted mt-1" id="up-msg">enviando…</div>
         </div>
-        <p class="text-muted" style="font-size:12px;">MP4, WebM ou MOV. Dica:
-            exporte em 720p pra pesar menos e carregar rápido no celular.</p>
+        <p class="text-muted" style="font-size:12px;">MP4, WebM ou MOV (até ~200 MB).
+            O vídeo sobe DIRETO pro Cloudflare (não passa pelo nosso servidor) e
+            depois processa alguns minutos. Dica: exporte em 720p pra pesar menos.</p>
+        {% else %}
+        <div class="alert alert-warning small mb-0 mt-2">
+            <strong>Cloudflare Stream não configurado.</strong> Pra enviar vídeo,
+            defina <code>CLOUDFLARE_ACCOUNT_ID</code> e
+            <code>CLOUDFLARE_STREAM_TOKEN</code> nas variáveis do Railway.
+        </div>
+        {% endif %}
     </div>
 </div>
 
+{% if stream_ok %}
 <script>
 (function () {
-    // Upload por PEDAÇOS: fatia o vídeo e manda 4 MB por vez. Cada request é
-    // pequena e rápida — não esbarra no teto de 25 MB, no timeout do worker nem
-    // em limite de proxy (que davam "erro de rede" com o arquivo inteiro).
+    // Upload em 3 tempos: (1) pede ao NOSSO servidor uma uploadURL de uso único
+    // do Cloudflare; (2) manda o arquivo DIRETO pro Cloudflare (o byte nunca
+    // toca nosso servidor — sem teto de 25 MB, sem volume, sem timeout de
+    // worker); (3) grava o UID no treinamento. O token/segredo nunca vai pro
+    // navegador.
     var btn = document.getElementById('btn-upload-video');
     var inp = document.getElementById('video-file');
     var wrap = document.getElementById('up-wrap');
     var bar = document.getElementById('up-bar');
     var msg = document.getElementById('up-msg');
     if (!btn) return;
-    var CHUNK = 4 * 1024 * 1024;   // 4 MB por pedaço
     var CSRF = '{{ csrf_token() }}';
-    var BASE = '{{ url_for("treinamento.admin_video_chunk", id=t.id) }}';
+    var URL_UPLOAD = '{{ url_for("treinamento.admin_video_stream_url", id=t.id) }}';
+    var URL_SALVAR = '{{ url_for("treinamento.admin_video_stream_salvar", id=t.id) }}';
 
-    function tokenHex() {
-        var a = new Uint8Array(16);
-        (window.crypto || window.msCrypto).getRandomValues(a);
-        var s = '';
-        for (var k = 0; k < a.length; k++) s += (a[k] + 0x100).toString(16).slice(1);
-        return s;
+    function post(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: body || ''
+        }).then(function (r) {
+            return r.json().catch(function () { return {}; })
+                .then(function (j) { return {ok: r.ok, j: j}; });
+        });
     }
 
-    function enviarPedaco(f, token, i, n) {
-        var inicio = i * CHUNK;
-        var pedaco = f.slice(inicio, Math.min(inicio + CHUNK, f.size));
-        var url = BASE + '?csrf=' + encodeURIComponent(CSRF)
-            + '&upload=' + token + '&i=' + i + '&n=' + n
-            + '&nome=' + encodeURIComponent(f.name);
+    function subirNoCloudflare(uploadURL, f) {
         return new Promise(function (resolve, reject) {
+            var fd = new FormData();
+            fd.append('file', f, f.name);
             var xhr = new XMLHttpRequest();
-            xhr.open('POST', url);
-            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+            xhr.open('POST', uploadURL);
+            xhr.upload.onprogress = function (e) {
+                if (e.lengthComputable) {
+                    var p = Math.round(100 * e.loaded / e.total);
+                    bar.style.width = p + '%'; bar.textContent = p + '%';
+                }
+            };
             xhr.onload = function () {
                 if (xhr.status >= 200 && xhr.status < 400) { resolve(); }
-                else { reject(new Error(xhr.responseText || ('HTTP ' + xhr.status))); }
+                else { reject(new Error('Cloudflare HTTP ' + xhr.status)); }
             };
             xhr.onerror = function () { reject(new Error('rede')); };
-            xhr.send(pedaco);
+            xhr.send(fd);
         });
     }
 
     btn.addEventListener('click', function () {
         var f = inp.files[0];
         if (!f) { alert('Escolha um arquivo de vídeo.'); return; }
-        var n = Math.max(1, Math.ceil(f.size / CHUNK));
-        var token = tokenHex();
         wrap.style.display = ''; btn.disabled = true; inp.disabled = true;
-        msg.textContent = 'enviando…';
         bar.style.width = '0%'; bar.textContent = '0%';
-        var i = 0;
-        (function proximo() {
-            enviarPedaco(f, token, i, n).then(function () {
-                i++;
-                var p = Math.round(100 * i / n);
-                bar.style.width = p + '%'; bar.textContent = p + '%';
-                if (i < n) { proximo(); }
-                else { msg.textContent = 'pronto!'; location.reload(); }
-            }).catch(function (err) {
-                btn.disabled = false; inp.disabled = false;
-                msg.textContent = 'falhou (' + (err.message || 'erro')
-                    + '). Tente de novo — o envio recomeça do início.';
-            });
-        })();
+        msg.textContent = 'preparando…';
+        var uid = null;
+        post(URL_UPLOAD, 'nome=' + encodeURIComponent(f.name)).then(function (res) {
+            if (!res.ok || !res.j.ok) {
+                throw new Error(res.j.erro || 'falha ao preparar o upload');
+            }
+            uid = res.j.uid;
+            msg.textContent = 'enviando pro Cloudflare…';
+            return subirNoCloudflare(res.j.uploadURL, f);
+        }).then(function () {
+            msg.textContent = 'salvando…';
+            return post(URL_SALVAR, 'uid=' + encodeURIComponent(uid));
+        }).then(function (res) {
+            if (!res.ok || !res.j.ok) {
+                throw new Error(res.j.erro || 'falha ao salvar');
+            }
+            msg.textContent = 'pronto! processando no Cloudflare…';
+            location.reload();
+        }).catch(function (err) {
+            btn.disabled = false; inp.disabled = false;
+            msg.textContent = 'falhou (' + (err.message || 'erro')
+                + '). Tente de novo.';
+        });
     });
 })();
 </script>
+{% endif %}
 
 {# ── Quiz ── #}
 <div class="card mb-3">
