@@ -14,7 +14,7 @@ from flask_login import current_user, login_required
 
 from app.blueprints.treinamento import treinamento_bp
 from app.decorators import admin_required
-from app.extensions import db
+from app.extensions import csrf, db
 from app.models import (
     Funcionario,
     Treinamento,
@@ -88,10 +88,22 @@ def admin_salvar(id):
 @treinamento_bp.route('/admin/<int:id>/video', methods=['POST'])
 @login_required
 @admin_required
+@csrf.exempt
 def admin_video(id):
-    # Libera o teto de upload SÓ nesta rota (o global de 25 MB segue pras
-    # fotos). request.max_content_length é setável por request no Werkzeug 3.
+    # ISENTA do CSRF automático DE PROPÓSITO: a checagem de CSRF roda no
+    # before_request e PARSEIA o multipart pra ler o token — sob o teto global
+    # de 25 MB, o que fazia o vídeo estourar ANTES de a rota poder liberar o
+    # teto ("sessão expirada" no upload). Aqui a gente (1) libera o teto SÓ
+    # nesta rota e só então (2) valida o CSRF na mão, já com o corpo parseável.
     request.max_content_length = current_app.config['TREINAMENTO_MAX_VIDEO']
+    if current_app.config.get('WTF_CSRF_ENABLED', True):
+        from flask_wtf.csrf import validate_csrf
+        try:
+            validate_csrf(request.form.get('csrf_token'))
+        except Exception:  # noqa: BLE001 — token ausente/inválido
+            flash('Sessão de segurança expirada — recarregue a página e '
+                  'tente de novo.', 'warning')
+            return redirect(url_for('treinamento.admin_editar', id=id))
     t = _ativos().filter_by(id=id).first_or_404()
     arq = request.files.get('video')
     if not arq or not arq.filename:
