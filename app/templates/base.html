@@ -119,6 +119,10 @@
            class="sidebar-link {% if request.path.startswith('/notas') %}active{% endif %}">
             Notas (memória do agente)
         </a>
+        <a href="{{ url_for('treinamento.index') }}"
+           class="sidebar-link {% if request.path.startswith('/treinamento') and not request.path.startswith('/treinamento/admin') %}active{% endif %}">
+            🎓 Treinamento
+        </a>
         {# Loja Online: liberada a todos os usuários logados (22/06/2026), porém
            o DASHBOARD (com faturamento) e a config de logo seguem owner-only.
            Por isso o link "🥐 Loja Online" só aparece pro dono. #}
