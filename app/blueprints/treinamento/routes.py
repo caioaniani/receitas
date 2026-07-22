@@ -118,6 +118,56 @@ def admin_video(id):
     return ('', 204)
 
 
+@treinamento_bp.route('/admin/<int:id>/video/chunk', methods=['POST'])
+@login_required
+@admin_required
+@csrf.exempt
+def admin_video_chunk(id):
+    """Upload de vídeo por PEDAÇOS (chunked). O navegador fatia o arquivo e
+    manda cada pedaço numa request pequena (corpo bruto, ~4 MB). Cada request
+    fica MUITO abaixo do teto de 25 MB, sobe em segundos (não estoura o timeout
+    do worker) e passa por qualquer limite de proxy — é assim que vídeo grande
+    (5-10 min) sobe de forma confiável. Query: ?csrf=&upload=<token hex>&i=
+    <índice>&n=<total>&nome=<arquivo>. Responde 204 a cada pedaço; no último,
+    finaliza (renomeia, troca o vídeo antigo, grava no banco)."""
+    if current_app.config.get('WTF_CSRF_ENABLED', True):
+        from flask_wtf.csrf import validate_csrf
+        try:
+            validate_csrf(request.args.get('csrf'))
+        except Exception:  # noqa: BLE001 — token ausente/inválido
+            return ('Sessão de segurança expirada — recarregue a página.', 400)
+    t = _ativos().filter_by(id=id).first_or_404()
+    token = request.args.get('upload', '')
+    nome = request.args.get('nome', '')
+    try:
+        i = int(request.args.get('i', ''))
+        n = int(request.args.get('n', ''))
+    except (TypeError, ValueError):
+        return ('Parâmetros de upload inválidos.', 400)
+    if i < 0 or n < 1 or i >= n:
+        return ('Parâmetros de upload inválidos.', 400)
+    if i == 0:
+        tv.limpar_parciais()   # varre restos de uploads abandonados
+    try:
+        tv.anexar_chunk(request.stream, t.id, token, i, nome,
+                        current_app.config['TREINAMENTO_MAX_VIDEO'])
+    except ValueError as e:
+        return (str(e), 400)
+    if i < n - 1:
+        return ('', 204)                     # ainda faltam pedaços
+    # Último pedaço: fecha o arquivo e aponta o treinamento pra ele.
+    try:
+        ref = tv.finalizar_chunk(t.id, token, nome)
+    except ValueError as e:
+        return (str(e), 400)
+    if t.video_tipo == 'arquivo' and t.video_ref:
+        tv.remover_video(t.video_ref)
+    t.video_tipo = 'arquivo'
+    t.video_ref = ref
+    db.session.commit()
+    return ('', 204)
+
+
 @treinamento_bp.route('/admin/<int:id>/pergunta', methods=['POST'])
 @login_required
 @admin_required
