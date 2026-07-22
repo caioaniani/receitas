@@ -166,6 +166,48 @@ def test_gerar_acesso_cria_conta_e_vincula(app, admin_user, monkeypatch):
     assert enviados.get('ok')
 
 
+def test_gerar_acesso_recusa_conta_de_admin(app):
+    """E-mail que já é de um admin NÃO vincula (seria a conta errada)."""
+    with app.app_context():
+        chefe = Usuario(nome='Chefe', login='chefe@opao.online',
+                        email='chefe@opao.online', papel='admin')
+        chefe.set_senha('x' * 8)
+        db.session.add(chefe)
+        f = Funcionario(nome='Xará', cpf='444.444.444-44',
+                        email='chefe@opao.online')
+        db.session.add(f)
+        db.session.commit()
+        r = svc.gerar_acesso(f)
+        assert r['motivo'] == 'conta_de_outro_papel'
+        db.session.refresh(f)
+        assert f.usuario_id is None
+
+
+def test_nota_de_corte_compara_sem_arredondar(app):
+    """2/3 = 66,66% (arredonda a 67) NÃO passa com nota mínima 67."""
+    with app.app_context():
+        t = _treino(nota=67, n_perg=3)
+        u = _func_user()
+        r = _respostas_certas(t)
+        p2 = t.perguntas[2]
+        r[p2.id] = next(o.id for o in p2.opcoes if not o.correta)   # erra 1
+        res = svc.corrigir_e_registrar(t, u, r)
+        assert res['acertos'] == 2 and res['percentual'] == 67
+        assert not res['aprovado']
+
+
+def test_treinamento_sem_quiz_completa_ao_assistir(app):
+    """Treinamento só-vídeo (0 perguntas) não pode travar a elegibilidade —
+    completa ao assistir."""
+    with app.app_context():
+        t = _treino('SoVideo', n_perg=0)
+        u = _func_user()
+        svc.marcar_assistido(t, u)
+        prog = {p['treinamento'].id: p for p in svc.progresso(u)}
+        assert prog[t.id]['completo']
+        assert 'Aluno' in [e['usuario'].nome for e in svc.elegiveis()]
+
+
 def test_gerar_acesso_sem_email_recusa(app):
     with app.app_context():
         f = Funcionario(nome='Sem Mail', cpf='222.222.222-22', email=None)
