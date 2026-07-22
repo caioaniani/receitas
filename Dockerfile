@@ -53,9 +53,13 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 
 EXPOSE 5000
 
-# Gunicorn em produção — 2 workers gthread (ajusta conforme CPU disponível).
-# Boot: prepara o volume /data (root) e cai pro usuário padaria via --user.
-# (Na Railway quem manda é o startCommand do railway.json; este CMD serve o
-# docker-compose local e espelha a mesma lógica.)
-CMD ["sh", "-c", \
-     "mkdir -p /data/treinamento; chown -R padaria:padaria /data/treinamento || echo 'AVISO: volume /data/treinamento nao preparado' >&2; exec gunicorn run:app --bind 0.0.0.0:5000 --workers 2 --threads 4 --worker-class gthread --timeout 120 --keep-alive 5 --access-logfile - --error-logfile - --user padaria --group padaria"]
+# Gunicorn em produção — 2 workers gthread (ajusta conforme CPU disponível)
+CMD ["gunicorn", "run:app", \
+     "--bind", "0.0.0.0:5000", \
+     "--workers", "2", \
+     "--threads", "4", \
+     "--worker-class", "gthread", \
+     "--timeout", "120", \
+     "--keep-alive", "5", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-"]
