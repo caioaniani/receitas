@@ -55,18 +55,66 @@
         {% else %}
         <p class="text-muted small">Nenhum vídeo enviado ainda.</p>
         {% endif %}
-        <form method="POST" action="{{ url_for('treinamento.admin_video', id=t.id) }}"
-              enctype="multipart/form-data" class="d-flex gap-2 flex-wrap align-items-center">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="file" name="video" accept="video/*"
-                   class="form-control form-control-sm" style="max-width:420px;" required>
-            <button type="submit" class="btn btn-sm btn-outline-dark">
+        {# Upload por XHR: manda o arquivo CRU (sem multipart) com barra de
+           progresso — não trava a página e não passa pelo parse de form. #}
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+            <input type="file" id="video-file" accept="video/*"
+                   class="form-control form-control-sm" style="max-width:420px;">
+            <button type="button" id="btn-upload-video"
+                    class="btn btn-sm btn-outline-dark">
                 <i class="bi bi-upload"></i> Enviar vídeo</button>
-        </form>
+        </div>
+        <div id="up-wrap" class="mt-2" style="display:none; max-width:420px;">
+            <div class="progress" style="height:18px;">
+                <div id="up-bar" class="progress-bar" role="progressbar"
+                     style="width:0%;">0%</div>
+            </div>
+            <div class="small text-muted mt-1" id="up-msg">enviando…</div>
+        </div>
         <p class="text-muted" style="font-size:12px;">MP4, WebM ou MOV. Dica:
             exporte em 720p pra pesar menos e carregar rápido no celular.</p>
     </div>
 </div>
+
+<script>
+(function () {
+    var btn = document.getElementById('btn-upload-video');
+    var inp = document.getElementById('video-file');
+    var wrap = document.getElementById('up-wrap');
+    var bar = document.getElementById('up-bar');
+    var msg = document.getElementById('up-msg');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        var f = inp.files[0];
+        if (!f) { alert('Escolha um arquivo de vídeo.'); return; }
+        var url = '{{ url_for("treinamento.admin_video", id=t.id) }}'
+            + '?csrf=' + encodeURIComponent('{{ csrf_token() }}')
+            + '&nome=' + encodeURIComponent(f.name);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        xhr.setRequestHeader('Content-Type', f.type || 'application/octet-stream');
+        wrap.style.display = ''; btn.disabled = true;
+        xhr.upload.onprogress = function (e) {
+            if (e.lengthComputable) {
+                var p = Math.round(100 * e.loaded / e.total);
+                bar.style.width = p + '%'; bar.textContent = p + '%';
+            }
+        };
+        xhr.onload = function () {
+            if (xhr.status >= 200 && xhr.status < 400) {
+                msg.textContent = 'pronto!'; location.reload();
+            } else {
+                btn.disabled = false;
+                msg.textContent = 'falhou: ' + (xhr.responseText || xhr.status);
+            }
+        };
+        xhr.onerror = function () {
+            btn.disabled = false; msg.textContent = 'erro de rede no upload.';
+        };
+        xhr.send(f);
+    });
+})();
+</script>
 
 {# ── Quiz ── #}
 <div class="card mb-3">
