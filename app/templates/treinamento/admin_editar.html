@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Editar treinamento{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title"><i class="bi bi-mortarboard"></i> {{ t.titulo }}</h1>
+        <p class="page-subtitle"><a href="{{ url_for('treinamento.admin_lista') }}">&larr; Treinamentos</a></p>
+    </div>
+</div>
+
+{# ── Dados do treinamento ── #}
+<form method="POST" action="{{ url_for('treinamento.admin_salvar', id=t.id) }}"
+      class="card mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card-header py-2"><strong>Dados</strong></div>
+    <div class="card-body">
+        <div class="mb-2">
+            <label class="form-label small">Título</label>
+            <input type="text" name="titulo" value="{{ t.titulo }}" maxlength="200"
+                   class="form-control form-control-sm">
+        </div>
+        <div class="mb-2">
+            <label class="form-label small">Descrição (opcional)</label>
+            <textarea name="descricao" rows="2"
+                      class="form-control form-control-sm">{{ t.descricao or '' }}</textarea>
+        </div>
+        <div class="d-flex gap-3 flex-wrap align-items-end">
+            <div>
+                <label class="form-label small">Nota mínima pra passar (%)</label>
+                <input type="number" name="nota_minima" min="0" max="100"
+                       value="{{ t.nota_minima }}"
+                       class="form-control form-control-sm" style="max-width:120px;">
+            </div>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="ativo"
+                       value="1" id="chk-ativo" {% if t.ativo %}checked{% endif %}>
+                <label class="form-check-label small" for="chk-ativo">
+                    Ativo (visível pros funcionários)</label>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary mb-2">Salvar</button>
+        </div>
+    </div>
+</form>
+
+{# ── Vídeo (self-host no /data) ── #}
+<div class="card mb-3">
+    <div class="card-header py-2"><strong>Vídeo</strong></div>
+    <div class="card-body">
+        {% if t.video_ref %}
+        <video src="{{ url_for('treinamento.video', id=t.id) }}" controls
+               preload="metadata"
+               style="width:100%; max-width:640px; border-radius:8px; background:#000;"></video>
+        <p class="text-muted small mt-1">Enviar outro vídeo substitui este.</p>
+        {% else %}
+        <p class="text-muted small">Nenhum vídeo enviado ainda.</p>
+        {% endif %}
+        <form method="POST" action="{{ url_for('treinamento.admin_video', id=t.id) }}"
+              enctype="multipart/form-data" class="d-flex gap-2 flex-wrap align-items-center">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="video" accept="video/*"
+                   class="form-control form-control-sm" style="max-width:420px;" required>
+            <button type="submit" class="btn btn-sm btn-outline-dark">
+                <i class="bi bi-upload"></i> Enviar vídeo</button>
+        </form>
+        <p class="text-muted" style="font-size:12px;">MP4, WebM ou MOV. Dica:
+            exporte em 720p pra pesar menos e carregar rápido no celular.</p>
+    </div>
+</div>
+
+{# ── Quiz ── #}
+<div class="card mb-3">
+    <div class="card-header py-2"><strong>Quiz</strong>
+        <span class="small text-muted">— {{ t.total_perguntas }} pergunta(s)</span></div>
+    <div class="card-body">
+        {% for p in t.perguntas %}
+        <div class="border rounded p-2 mb-2">
+            <div class="d-flex justify-content-between">
+                <strong class="small">{{ loop.index }}. {{ p.enunciado }}</strong>
+                <form method="POST"
+                      action="{{ url_for('treinamento.admin_del_pergunta', pid=p.id) }}"
+                      onsubmit="return confirm('Remover esta pergunta?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-link text-danger p-0">remover</button>
+                </form>
+            </div>
+            <ul class="mb-0 small mt-1" style="list-style:none; padding-left:0;">
+                {% for o in p.opcoes %}
+                <li>{% if o.correta %}<span class="text-success">✓</span>
+                    {% else %}<span class="text-muted">○</span>{% endif %}
+                    {{ o.texto }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+
+        <form method="POST" action="{{ url_for('treinamento.admin_add_pergunta', id=t.id) }}"
+              class="border-top pt-3 mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="form-label small fw-bold">Nova pergunta</label>
+            <input type="text" name="enunciado" required maxlength="500"
+                   placeholder="Enunciado da pergunta"
+                   class="form-control form-control-sm mb-2">
+            <p class="text-muted small mb-1">Marque a opção correta. Deixe em
+                branco as que não usar (mínimo 2).</p>
+            {% for i in range(4) %}
+            <div class="input-group input-group-sm mb-1" style="max-width:520px;">
+                <div class="input-group-text">
+                    <input type="radio" name="correta" value="{{ i }}"
+                           {% if i == 0 %}checked{% endif %} aria-label="Correta">
+                </div>
+                <input type="text" name="opcao[]" maxlength="500"
+                       placeholder="Opção {{ i + 1 }}" class="form-control">
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-sm btn-primary mt-1">
+                <i class="bi bi-plus-lg"></i> Adicionar pergunta</button>
+        </form>
+    </div>
+</div>
+
+{# ── Arquivar ── #}
+<form method="POST" action="{{ url_for('treinamento.admin_excluir', id=t.id) }}"
+      onsubmit="return confirm('Arquivar este treinamento? Ele some da lista dos funcionários.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-sm btn-outline-danger">Arquivar treinamento</button>
+</form>
+{% endblock %}
