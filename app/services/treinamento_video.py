@@ -81,6 +81,89 @@ def salvar_video(file_storage, treino_id):
                          file_storage.filename or '')
 
 
+# ── Upload por PEDAÇOS (chunked) ────────────────────────────────────────
+# Vídeo grande (5-10 min) não sobe numa request só: o teto global de 25 MB, o
+# timeout do worker (gthread, 120s) e limites de proxy cortam a conexão no meio
+# e o navegador mostra "erro de rede". A cura canônica é fatiar o arquivo no
+# cliente e mandar cada pedaço numa request pequena e rápida — assim NENHUM
+# desses limites é tocado. Cada pedaço é anexado a um arquivo temporário
+# `.part-<treino>-<token>` no volume; o último pedaço fecha e renomeia.
+_TOKEN_RE = re.compile(r'^[0-9a-f]{8,64}$')
+
+
+def _part_path(treino_id, token):
+    """Caminho do temporário do upload por pedaços, BLINDADO: o token é hex
+    puro (gerado pelo cliente) — barra/traversal levanta ValueError."""
+    if not _TOKEN_RE.match(token or ''):
+        raise ValueError('Sessão de upload inválida.')
+    return os.path.join(media_dir(), f'.part-{int(treino_id)}-{token}')
+
+
+def anexar_chunk(stream, treino_id, token, indice, nome_original, max_bytes):
+    """Anexa um PEDAÇO do vídeo ao temporário. `indice==0` começa do zero
+    (permite re-tentar do início); os demais anexam em ordem. Valida a
+    extensão já no primeiro pedaço (falha cedo, antes de subir centenas de MB)
+    e o teto ACUMULADO a cada pedaço."""
+    if indice == 0:
+        ext = _ext(nome_original)
+        if ext not in EXTENSOES_OK:
+            raise ValueError(
+                f'Formato de vídeo não suportado: {ext or "?"}. '
+                'Use MP4, WebM ou MOV.')
+    destino = _part_path(treino_id, token)
+    modo = 'wb' if indice == 0 else 'ab'
+    with open(destino, modo) as out:
+        while True:
+            bloco = stream.read(_CHUNK)
+            if not bloco:
+                break
+            out.write(bloco)
+    if os.path.getsize(destino) > int(max_bytes):
+        try:
+            os.remove(destino)
+        except OSError:
+            pass
+        raise ValueError('Vídeo maior que o limite permitido.')
+
+
+def finalizar_chunk(treino_id, token, nome_original):
+    """Fecha o upload por pedaços: renomeia o temporário pro nome final e
+    devolve a `video_ref`. ValueError se o temporário sumiu (upload
+    incompleto) ou a extensão for inválida."""
+    origem = _part_path(treino_id, token)
+    if not os.path.exists(origem):
+        raise ValueError('Upload incompleto — reenvie o vídeo.')
+    ext = _ext(nome_original)
+    if ext not in EXTENSOES_OK:               # blinda o rename (já validado no 0)
+        try:
+            os.remove(origem)
+        except OSError:
+            pass
+        raise ValueError('Formato de vídeo não suportado.')
+    ref = f'treino-{int(treino_id)}-{secrets.token_hex(8)}{ext}'
+    os.replace(origem, os.path.join(media_dir(), ref))
+    return ref
+
+
+def limpar_parciais(horas=12):
+    """Remove restos de upload por pedaços (`.part-*`) mais velhos que N horas
+    — worker caiu no meio, aba fechada. Best-effort, nunca levanta."""
+    import time
+    try:
+        limite = time.time() - horas * 3600
+        for nome in os.listdir(media_dir()):
+            if not nome.startswith('.part-'):
+                continue
+            p = os.path.join(media_dir(), nome)
+            try:
+                if os.path.getmtime(p) < limite:
+                    os.remove(p)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
 def remover_video(ref):
     """Apaga o arquivo (best-effort)."""
     try:
