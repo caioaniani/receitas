@@ -97,6 +97,9 @@ def test_video_abre_com_progresso_salvo(app):
     c = _login(app, uid)
     body = c.get(f'/treino/video/{vid}').get_data(as_text=True)
     assert 'width:100%' in body and 'Concluído' in body
+    # Checkpoint em fullscreen: sai da tela cheia pra a pergunta aparecer
+    # (senão o iframe fica na top-layer e o overlay some atrás).
+    assert 'sairFullscreen' in body and 'exitFullscreen' in body
 
 
 def test_verificacao_publica_de_certificado(app):   # §11
