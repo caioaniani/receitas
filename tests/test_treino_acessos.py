@@ -74,6 +74,69 @@ def test_recusa_conta_de_admin(app):
         assert f.usuario_id is None
 
 
+def test_vincular_conta_existente_sem_email(app):
+    """Caso do dono: conta já existe (sem e-mail), liga sem criar duplicata."""
+    with app.app_context():
+        u = Usuario(nome='Zeca', login='zeca', papel='funcionario')  # sem email
+        u.set_senha('x' * 8)
+        db.session.add(u)
+        db.session.commit()
+        f = _func(email=None, cpf='90000000010')
+        antes = Usuario.query.count()
+        r = acessos.vincular_conta(f, u)
+        assert r['ok'] and r['motivo'] == 'vinculado'
+        assert f.usuario_id == u.id
+        assert Usuario.query.count() == antes   # NÃO criou conta nova
+
+
+def test_vincular_recusa_conta_de_outro_funcionario(app):
+    with app.app_context():
+        u = Usuario(nome='Zeca', login='zeca2', papel='funcionario')
+        u.set_senha('x' * 8)
+        db.session.add(u)
+        db.session.commit()
+        f1 = _func(nome='F1', email=None, cpf='90000000011')
+        f1.usuario_id = u.id
+        db.session.commit()
+        f2 = _func(nome='F2', email=None, cpf='90000000012')
+        r = acessos.vincular_conta(f2, u)
+        assert not r['ok'] and r['motivo'] == 'conta_em_uso'
+        assert f2.usuario_id is None
+
+
+def test_contas_sem_vinculo_exclui_dono_e_vinculados(app):
+    with app.app_context():
+        livre = Usuario(nome='Livre', login='livre', papel='funcionario')
+        dono = Usuario(nome='Dono', login='dono', papel='admin', is_owner=True)
+        usada = Usuario(nome='Usada', login='usada', papel='funcionario')
+        for u in (livre, dono, usada):
+            u.set_senha('x' * 8)
+        db.session.add_all([livre, dono, usada])
+        db.session.commit()
+        f = _func(nome='J', email=None, cpf='90000000013')
+        f.usuario_id = usada.id
+        db.session.commit()
+        logins = {u.login for u in acessos.contas_sem_vinculo()}
+        assert 'livre' in logins
+        assert 'dono' not in logins and 'usada' not in logins
+
+
+def test_rota_vincular_acesso(app, admin_user):
+    with app.app_context():
+        u = Usuario(nome='Zeca', login='zeca3', papel='funcionario')
+        u.set_senha('x' * 8)
+        db.session.add(u)
+        db.session.commit()
+        f = _func(email=None, cpf='90000000014')
+        fid, uid = f.id, u.id
+    c = _admin_client(app, admin_user)
+    r = c.post(f'/treino/admin/acessos/{fid}/vincular',
+               data={'usuario_id': str(uid)})
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(Funcionario, fid).usuario_id == uid
+
+
 def test_rota_admin_gera_acesso(app, admin_user):
     with app.app_context():
         f = _func(cpf='90000000004')
