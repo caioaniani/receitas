@@ -466,6 +466,21 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Treinamento gamificado (§13). Desligar: TREINO_JOBS=0.
+    # Fechamento semanal (meta + streaks) — domingo 23:55 BRT.
+    _scheduler.add_job(
+        lambda app=app: _run_treino_fechamento(app),
+        'cron', day_of_week='sun', hour=23, minute=55, id='treino-fechamento',
+        max_instances=1, coalesce=True,
+    )
+    # Diario 23:50 BRT: snapshot do ranking + encerra temporada vencida +
+    # limpa tentativas de quiz abandonadas.
+    _scheduler.add_job(
+        lambda app=app: _run_treino_diario(app),
+        'cron', hour=23, minute=50, id='treino-diario',
+        max_instances=1, coalesce=True,
+    )
+
     # Radar de saude do negocio (Contas a Pagar + Receitas):
     # DESLIGADO em 14/06/2026 por pedido do dono — chegava todo dia 07:30
     # BRT no WhatsApp dele. A rota `/admin/saude` continua disponivel
