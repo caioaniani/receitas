@@ -1,6 +1,28 @@
 {% extends "base.html" %}{% block title %}{{ v.titulo }} — vídeo{% endblock %}{% block content %}
+{% set _m = v.duracao_segundos // 60 %}{% set _s = v.duracao_segundos % 60 %}
 <div class="page-header"><div><h1 class="page-title">{{ v.titulo }}</h1>
-<p class="page-subtitle"><a href="{{ url_for('treino.admin_home') }}">&larr; Admin</a> · {{ v.duracao_segundos }}s</p></div></div>
+<p class="page-subtitle"><a href="{{ url_for('treino.admin_home') }}">&larr; Admin</a>
+  {% if v.duracao_segundos %} · duração {{ _m }}:{{ '%02d'|format(_s) }} (detectada){% endif %}</p></div></div>
+
+<div class="alert alert-info dica-recolhe small">
+  <strong>Como montar este vídeo.</strong>
+  <strong>1)</strong> Clique em <strong>Escolher arquivo</strong> e <strong>Enviar vídeo</strong> — ele sobe
+  pro Cloudflare e fica <strong>alguns minutos processando</strong> antes de tocar. A
+  <strong>duração é detectada sozinha</strong> (você não precisa digitar segundos); recarregue a
+  página se ela ainda não apareceu.
+  <strong>2)</strong> (opcional) Adicione <strong>checkpoints</strong> — perguntas que
+  <strong>pausam o vídeo</strong> num momento pra garantir que a pessoa está assistindo de verdade.
+  <strong>3)</strong> Quando terminar, volte pro <strong>Admin</strong> — o vídeo já está na trilha.
+  <br><em>Diferença:</em> <strong>checkpoint</strong> = pergunta rápida NO MEIO do vídeo (aqui);
+  <strong>quiz</strong> = a prova no FIM da trilha (no card da trilha, no Admin) — é lá que a
+  <strong>IA gera o banco de perguntas</strong>. Aqui embaixo você também pode gerar a pergunta do
+  checkpoint por IA.
+</div>
+
+{% if v.video_externo_id and proc and not proc.pronto %}
+<div class="alert alert-warning small">⏳ Vídeo <strong>processando no Cloudflare</strong>{% if proc.pct %} ({{ proc.pct }}%){% endif %} — recarregue em instantes pra ele tocar e a duração aparecer.</div>
+{% endif %}
+
 {% if video_embed %}<div style="max-width:560px;"><div style="position:relative;padding-top:56.25%;">
   <iframe src="{{ video_embed }}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;border-radius:8px;" allowfullscreen></iframe></div></div>
 <p class="text-muted small mt-1">Enviar outro substitui.</p>{% endif %}
@@ -21,15 +43,58 @@ document.getElementById('up').onclick=function(){var f=document.getElementById('
 {% else %}<div class="alert alert-warning small">Cloudflare não configurado (CLOUDFLARE_ACCOUNT_ID/TOKEN).</div>{% endif %}
 
 <div class="card mt-3"><div class="card-header py-2"><strong>Checkpoints (pausam o vídeo)</strong></div><div class="card-body">
-  {% for c in v.checkpoints %}<div class="small d-flex justify-content-between"><span>⏸ {{ c.segundo }}s — {{ c.enunciado }} <span class="text-muted">({{ c.alternativas|length }} alt, correta #{{ c.indice_correto }})</span></span><form method="POST" action="{{ url_for('treino.admin_checkpoint_excluir', id=c.id) }}" onsubmit="return confirm('Excluir checkpoint?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger py-0 px-1">🗑</button></form></div>{% endfor %}
+  <p class="small text-muted mb-2">Perguntas que <strong>pausam o vídeo</strong> num momento pra
+    confirmar atenção. O <strong>momento</strong> é onde a pergunta aparece (formato <strong>min:seg</strong>,
+    ex.: <code>2:30</code>). Opcional — um vídeo pode não ter nenhum.</p>
+  {% for c in v.checkpoints %}<div class="small d-flex justify-content-between"><span>⏸ {{ c.segundo // 60 }}:{{ '%02d'|format(c.segundo % 60) }} — {{ c.enunciado }} <span class="text-muted">({{ c.alternativas|length }} alt, correta #{{ c.indice_correto }})</span></span><form method="POST" action="{{ url_for('treino.admin_checkpoint_excluir', id=c.id) }}" onsubmit="return confirm('Excluir checkpoint?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger py-0 px-1">🗑</button></form></div>{% endfor %}
+
+  <div class="border rounded p-2 my-2 bg-light">
+    <div class="small fw-bold mb-1">✨ Gerar a pergunta por IA <span class="text-muted fw-normal">(você revisa e define o momento)</span></div>
+    <textarea id="ia-texto" class="form-control form-control-sm mb-1" rows="2" placeholder="Cole o resumo/roteiro deste vídeo — a IA tira a pergunta disso."></textarea>
+    <button id="ia-gerar" type="button" class="btn btn-sm btn-dark py-0 px-2">Gerar pergunta</button>
+    <span id="ia-msg" class="small text-muted"></span>
+    <div id="ia-props" class="mt-1"></div>
+  </div>
+
   <form method="POST" action="{{ url_for('treino.admin_checkpoint', id=v.id) }}" class="mt-2">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="row g-2"><div class="col-3"><input name="segundo" class="form-control form-control-sm" placeholder="segundo"></div>
-      <div class="col-9"><input name="enunciado" class="form-control form-control-sm" placeholder="Pergunta"></div></div>
+    <div class="row g-2"><div class="col-3"><input name="segundo" id="cp-momento" class="form-control form-control-sm" placeholder="momento (min:seg)"></div>
+      <div class="col-9"><input name="enunciado" id="cp-enun" class="form-control form-control-sm" placeholder="Pergunta"></div></div>
     <div class="small text-muted mt-1">Alternativas (marque a correta):</div>
     {% for i in range(4) %}<div class="input-group input-group-sm mb-1" style="max-width:420px;">
       <div class="input-group-text"><input type="radio" name="correta" value="{{ i }}" {% if i==0 %}checked{% endif %}></div>
-      <input name="alt[]" class="form-control" placeholder="Alternativa {{ i+1 }}"></div>{% endfor %}
+      <input name="alt[]" class="form-control cp-alt" placeholder="Alternativa {{ i+1 }}"></div>{% endfor %}
     <button class="btn btn-sm btn-primary">+ checkpoint</button></form>
 </div></div>
+
+<script>
+(function(){
+  var CSRF='{{ csrf_token() }}', URL='{{ url_for("treino.admin_video_ia", id=v.id) }}';
+  var msg=document.getElementById('ia-msg'), props=document.getElementById('ia-props');
+  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+  document.getElementById('ia-gerar').onclick=function(){
+    msg.textContent='gerando…';props.innerHTML='';
+    var b='texto='+encodeURIComponent(document.getElementById('ia-texto').value)+'&n=3';
+    fetch(URL,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:b})
+      .then(function(r){return r.json();}).then(function(j){
+        if(!j.ok){msg.textContent=j.erro;return;}
+        msg.textContent='clique numa proposta pra preencher o formulário abaixo:';
+        j.perguntas.forEach(function(p){
+          var btn=document.createElement('button');btn.type='button';
+          btn.className='btn btn-sm btn-outline-secondary text-start d-block w-100 mb-1';
+          btn.innerHTML=esc(p.enunciado);
+          btn.onclick=function(){
+            document.getElementById('cp-enun').value=p.enunciado;
+            var alts=document.querySelectorAll('.cp-alt');
+            var radios=document.querySelectorAll('input[name=correta]');
+            alts.forEach(function(a,i){a.value=p.alternativas[i]||'';});
+            if(radios[p.correta])radios[p.correta].checked=true;
+            document.getElementById('cp-momento').focus();
+          };
+          props.appendChild(btn);
+        });
+      }).catch(function(){msg.textContent='falhou.';});
+  };
+})();
+</script>
 {% endblock %}
