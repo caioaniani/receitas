@@ -192,6 +192,12 @@ def toggle_somente_treino(id):
     if u.is_owner:
         flash('Owner não pode ser restrito a treinamento.', 'warning')
         return redirect(url_for('auth.usuarios'))
+    if u.id == current_user.id:
+        # Auto-lockout: marcar a si mesmo prenderia você em /treino e você não
+        # conseguiria nem se desmarcar (a rota não é treino.*).
+        flash('Você não pode restringir a sua própria conta a treinamento.',
+              'warning')
+        return redirect(url_for('auth.usuarios'))
     u.somente_treino = not u.somente_treino
     db.session.commit()
     estado = 'agora vê SÓ treinamento' if u.somente_treino else 'voltou ao acesso normal'
