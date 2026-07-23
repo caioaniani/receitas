@@ -201,6 +201,28 @@ def test_rota_admin_liga_cargos(app, admin_user):
             trilha_id=tid, cargo_id=cid).count() == 1
 
 
+def test_rota_cargos_ajax_persiste_e_devolve_json(app, admin_user):
+    """Auto-salvar ao marcar (ajax=1) persiste e devolve JSON, sem redirect."""
+    with app.app_context():
+        cargo = Cargo(nome='Padeiro')
+        t = TreinoTrilha(nome='Seg')
+        db.session.add_all([cargo, t])
+        db.session.commit()
+        tid, cid = t.id, cargo.id
+    c = _login(app, admin_user.id)
+    r = c.post(f'/treino/admin/trilha/{tid}/cargos',
+               data={'ajax': '1', 'cargo_ids': [str(cid)]})
+    assert r.status_code == 200 and r.get_json()['ok']
+    with app.app_context():
+        assert TreinoTrilhaCargo.query.filter_by(
+            trilha_id=tid, cargo_id=cid).count() == 1
+    # desmarcar tudo (ajax sem cargo_ids) esvazia
+    r2 = c.post(f'/treino/admin/trilha/{tid}/cargos', data={'ajax': '1'})
+    assert r2.status_code == 200
+    with app.app_context():
+        assert TreinoTrilhaCargo.query.filter_by(trilha_id=tid).count() == 0
+
+
 def test_rota_gestor_progressao_renderiza(app, admin_user):
     with app.app_context():
         _temp()
