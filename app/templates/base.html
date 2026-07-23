@@ -100,6 +100,10 @@
         {% endif %}
 
         {% if current_user.is_authenticated %}
+        {# Conta "só treinamento": esconde TODO o resto da navegação; o gate
+           global já barra por URL, isto é só pra não mostrar link que redireciona. #}
+        {% set so_treino = current_user.somente_treino %}
+        {% if not so_treino %}
         <button type="button" onclick="window.abrirCommandPalette && window.abrirCommandPalette()"
                 class="sidebar-link" style="border:0; background:transparent; text-align:left; width:100%;
                        justify-content:space-between; color:var(--text-muted);">
@@ -119,6 +123,7 @@
            class="sidebar-link {% if request.path.startswith('/notas') %}active{% endif %}">
             Notas (memória do agente)
         </a>
+        {% endif %}
         <a href="{{ url_for('treino.home') }}"
            class="sidebar-link {% if request.path.startswith('/treino') %}active{% endif %}">
             🎮 Treinamento
