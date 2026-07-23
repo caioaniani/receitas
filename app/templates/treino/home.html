@@ -33,7 +33,7 @@
   <div class="card-body py-2">
     <div class="d-flex justify-content-between"><strong>{{ t.nome }}</strong>
       {% if e and e.completa %}<span class="badge bg-success">✓ concluída</span>{% else %}<span class="badge bg-primary">obrigatória</span>{% endif %}</div>
-    {% if e %}<div class="small text-muted">{{ e.videos }} aula(s){% if e.aplicacao_ok %} · aplicação ✓{% endif %}</div>{% endif %}
+    {% if e %}{{ barra_progresso(e) }}{% endif %}
   </div></a>
 {% endfor %}
 {% endif %}
