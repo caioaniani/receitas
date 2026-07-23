@@ -135,8 +135,10 @@ def _tentar_concluir(funcionario, video, p, dur, total_baldes):
     pela referência video/id). Retorna True se está concluído."""
     if p.concluido_em:
         return True
+    if dur <= 0:              # sem duração conhecida não se conclui (anti-fraude)
+        return False
     cobertura = len(_baldes(p)) / total_baldes
-    tempo_ok = dur <= 0 or (p.tempo_real_decorrido or 0) >= LIMIAR_TEMPO * dur
+    tempo_ok = (p.tempo_real_decorrido or 0) >= LIMIAR_TEMPO * dur
     checkpoints_ok = _todos_checkpoints_respondidos(funcionario.id, video)
     if cobertura >= LIMIAR_PERCENTUAL and tempo_ok and checkpoints_ok:
         p.concluido_em = agora()
