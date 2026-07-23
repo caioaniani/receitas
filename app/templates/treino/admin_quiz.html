@@ -5,8 +5,19 @@
   {{ q.questoes|length }} questão(ões) no banco · precisa de {{ q.questoes_por_tentativa * 3 }} (3× {{ q.questoes_por_tentativa }}/tentativa) pra publicar.
   {{ '✓ pode publicar' if pode else 'banco insuficiente' }} <form method="POST" action="{{ url_for('treino.admin_quiz_toggle', id=q.id) }}" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-dark py-0 px-1">{{ 'desativar' if q.ativo else 'publicar' }}</button></form></div>
 {% for quest in q.questoes %}<div class="border rounded p-2 mb-1 small"><div class="d-flex justify-content-between"><strong>{{ quest.enunciado }}</strong><form method="POST" action="{{ url_for('treino.admin_questao_excluir', id=quest.id) }}" onsubmit="return confirm('Excluir questão?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger py-0 px-1">🗑</button></form></div>  {% for a in quest.alternativas %}<div>{{ '✓' if a.correta else '○' }} {{ a.texto }}</div>{% endfor %}</div>{% endfor %}
+<div class="card mb-3"><div class="card-header py-2"><strong>✨ Gerar perguntas por IA</strong> <span class="small text-muted">(você revisa antes de salvar)</span></div><div class="card-body">
+  <textarea id="ia-texto" class="form-control form-control-sm mb-2" rows="3" placeholder="Cole aqui o roteiro/resumo/conteúdo do vídeo — a IA tira as perguntas disso."></textarea>
+  <div class="d-flex flex-wrap gap-2 align-items-center">
+    <input id="ia-n" type="number" value="5" min="1" max="15" class="form-control form-control-sm" style="width:80px;">
+    <button id="ia-gerar" class="btn btn-sm btn-dark">Gerar perguntas</button>
+    <span id="ia-msg" class="small text-muted"></span></div>
+  <div id="ia-props" class="mt-2"></div>
+  <button id="ia-salvar" class="btn btn-sm btn-success mt-2" style="display:none;">Salvar selecionadas</button>
+</div></div>
+
 <form method="POST" action="{{ url_for('treino.admin_questao', id=q.id) }}" class="card"><div class="card-body">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="small fw-bold mb-1">Ou adicione uma questão na mão:</div>
   <input name="enunciado" class="form-control form-control-sm mb-2" placeholder="Enunciado da questão" required>
   <div class="small text-muted mb-1">Marque a correta:</div>
   {% for i in range(4) %}<div class="input-group input-group-sm mb-1" style="max-width:420px;">
@@ -14,4 +25,42 @@
     <input name="alt[]" class="form-control" placeholder="Alternativa {{ i+1 }}"></div>{% endfor %}
   <button class="btn btn-sm btn-primary">+ questão</button>
 </div></form>
+
+<script>
+(function(){
+  var CSRF='{{ csrf_token() }}';
+  var URL_IA='{{ url_for("treino.admin_quiz_ia", id=q.id) }}';
+  var URL_Q='{{ url_for("treino.admin_questao", id=q.id) }}';
+  var props=document.getElementById('ia-props'),msg=document.getElementById('ia-msg'),salvar=document.getElementById('ia-salvar');
+  document.getElementById('ia-gerar').onclick=function(){
+    msg.textContent='gerando…';props.innerHTML='';salvar.style.display='none';
+    var b='texto='+encodeURIComponent(document.getElementById('ia-texto').value)+'&n='+document.getElementById('ia-n').value;
+    fetch(URL_IA,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:b}).then(function(r){return r.json();}).then(function(j){
+      if(!j.ok){msg.textContent=j.erro;return;}
+      msg.textContent=j.perguntas.length+' proposta(s) — revise, edite e marque as que quer salvar:';
+      j.perguntas.forEach(function(p,pi){
+        var h='<div class="border rounded p-2 mb-2 ia-p"><div class="form-check mb-1"><input class="form-check-input ia-ok" type="checkbox" checked><label class="form-check-label small text-muted">incluir · '+p.dificuldade+'</label></div>';
+        h+='<input class="form-control form-control-sm mb-1 ia-enun" value="'+esc(p.enunciado)+'">';
+        p.alternativas.forEach(function(a,ai){h+='<div class="input-group input-group-sm mb-1" style="max-width:460px;"><div class="input-group-text"><input type="radio" name="cor'+pi+'" value="'+ai+'" '+(ai===p.correta?'checked':'')+'></div><input class="form-control ia-alt" value="'+esc(a)+'"></div>';});
+        h+='</div>';
+        var d=document.createElement('div');d.innerHTML=h;props.appendChild(d.firstChild);
+      });
+      salvar.style.display='';
+    }).catch(function(){msg.textContent='falhou.';});
+  };
+  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+  salvar.onclick=function(){
+    var blocos=Array.prototype.slice.call(document.querySelectorAll('.ia-p')).filter(function(b){return b.querySelector('.ia-ok').checked;});
+    if(!blocos.length){alert('Marque ao menos uma.');return;}
+    salvar.disabled=true;msg.textContent='salvando…';
+    var proms=blocos.map(function(b){
+      var body=new URLSearchParams();body.append('enunciado',b.querySelector('.ia-enun').value);
+      var cor=b.querySelector('input[type=radio]:checked');body.append('correta',cor?cor.value:'0');
+      b.querySelectorAll('.ia-alt').forEach(function(a){body.append('alt[]',a.value);});
+      return fetch(URL_Q,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+    });
+    Promise.all(proms).then(function(){location.reload();});
+  };
+})();
+</script>
 {% endblock %}
