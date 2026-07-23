@@ -295,6 +295,18 @@ def test_lag_da_lista_itens_no_detalhe_nao_alerta(app):
     assert out['novas'] == 0 and not env.called
 
 
+def test_nfce_em_contingencia_nao_alerta(app):
+    """NFC-e em CONTINGÊNCIA (emitida offline quando a SEFAZ/internet cai) é
+    nota fiscal válida COM produtos — NÃO alerta (caso Nebraska cód 19989588,
+    23/07/2026: café + cookie, NFC-e nº 2360 em contingência). O detalhe pode
+    até estar sem itens por lag, mas a NF em contingência já basta."""
+    lista = _pedido('n2360', 27.50)                 # lista: item-less, sem NF
+    detalhe = _pedido('n2360', 27.50)
+    detalhe['taxInvoice'] = {'status': 'contingency', 'number': '2360'}
+    out, env = _rodar([lista], detalhes={'n2360': detalhe})
+    assert out['novas'] == 0 and not env.called
+
+
 def test_fantasma_confirmado_pelo_detalhe_alerta(app):
     """Sem itens e sem NF na LISTA E no DETALHE (fantasma real, tipo cód
     19875201: itens todos cancelados, sem NF) — alerta normalmente."""
