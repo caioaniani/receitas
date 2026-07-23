@@ -1,8 +1,15 @@
 {% extends "base.html" %}{% block title %}{{ v.titulo }} — vídeo{% endblock %}{% block content %}
 {% set _m = v.duracao_segundos // 60 %}{% set _s = v.duracao_segundos % 60 %}
-<div class="page-header"><div><h1 class="page-title">{{ v.titulo }}</h1>
+<div class="page-header"><div><h1 class="page-title">{{ v.titulo or 'Aula sem título' }}</h1>
 <p class="page-subtitle"><a href="{{ url_for('treino.admin_home') }}">&larr; Admin</a>
   {% if v.duracao_segundos and v.duracao_segundos > 0 %} · duração {{ _m }}:{{ '%02d'|format(_s) }} (detectada){% endif %}</p></div></div>
+
+<form method="POST" action="{{ url_for('treino.admin_video_titulo', id=v.id) }}" class="d-flex flex-wrap gap-1 align-items-center mb-3" style="max-width:520px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label class="small fw-bold me-1 mb-0">Título da aula</label>
+  <input name="titulo" value="{{ v.titulo }}" class="form-control form-control-sm" style="max-width:300px;" placeholder="Nome da aula" maxlength="200" required>
+  <button class="btn btn-sm btn-outline-dark">Salvar título</button>
+</form>
 
 <div class="alert alert-info dica-recolhe small">
   <strong>Como montar este vídeo.</strong>
