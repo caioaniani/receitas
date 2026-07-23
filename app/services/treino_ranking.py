@@ -26,8 +26,10 @@ def nivel(pontos):
 
 
 def _ativos_por_unidade(unidade_id):
-    return sum(1 for f in Loja.query.get(unidade_id).funcionarios if f.ativo) \
-        if unidade_id else 0
+    if not unidade_id:
+        return 0
+    loja = db.session.get(Loja, unidade_id)
+    return sum(1 for f in loja.funcionarios if f.ativo) if loja else 0
 
 
 def ranking_unidades(temporada_id):
