@@ -6,7 +6,7 @@
 de) todas as trilhas obrigatórias do cargo. Liga os selos à evolução de cargo.
 """
 from app.extensions import db
-from app.models import TreinoSelo, TreinoTrilha, TreinoTrilhaCargo
+from app.models import Cargo, TreinoSelo, TreinoTrilha, TreinoTrilhaCargo
 
 
 def trilhas_do_cargo(cargo_id, so_obrigatorias=False):
@@ -29,14 +29,25 @@ def onboarding_do_funcionario(funcionario):
 
 
 def definir_cargos_da_trilha(trilha_id, cargo_ids):
-    """Substitui o conjunto de cargos que exigem a trilha (idempotente)."""
-    cargo_ids = {int(c) for c in cargo_ids if str(c).strip()}
+    """Substitui o conjunto de cargos que exigem a trilha (idempotente).
+
+    Os ids vêm do form (`request.form.getlist`) — parse tolerante (ignora não
+    numérico) e SÓ aceita cargos que existem de fato (evita FK órfã / 500 em
+    Postgres com id inventado por POST forjado)."""
+    pedidos = set()
+    for c in cargo_ids:
+        try:
+            pedidos.add(int(str(c).strip()))
+        except (TypeError, ValueError):
+            continue
+    validos = {c.id for c in Cargo.query.filter(
+        Cargo.id.in_(pedidos)).all()} if pedidos else set()
     atuais = {m.cargo_id: m for m in TreinoTrilhaCargo.query.filter_by(
         trilha_id=trilha_id).all()}
     for cid, m in atuais.items():
-        if cid not in cargo_ids:
+        if cid not in validos:
             db.session.delete(m)
-    for cid in cargo_ids:
+    for cid in validos:
         if cid not in atuais:
             db.session.add(TreinoTrilhaCargo(trilha_id=trilha_id, cargo_id=cid))
     db.session.commit()
