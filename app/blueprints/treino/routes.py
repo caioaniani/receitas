@@ -710,28 +710,55 @@ def admin_trilha_toggle(id):
 def admin_trilha_excluir(id):
     from sqlalchemy.exc import IntegrityError
 
-    from app.models import TreinoChecklistAplicacao, TreinoTrilhaCargo
+    from app.models import (
+        TreinoAplicacaoPratica,
+        TreinoChecklistAplicacao,
+        TreinoProgressoVideo,
+        TreinoRespostaCheckpoint,
+        TreinoSelo,
+        TreinoTentativaQuiz,
+        TreinoTrilhaCargo,
+    )
     t = db.session.get(TreinoTrilha, id) or abort(404)
-    # Bloqueia se houver CONTEÚDO ou HISTÓRICO (preservar) — mensagem precisa.
-    # Só o mapeamento de cargo (config pura) é limpo e não impede a exclusão.
-    bloqueios = []
-    if t.videos:
-        bloqueios.append('vídeos')
-    if TreinoQuiz.query.filter_by(trilha_id=t.id).first():
-        bloqueios.append('quiz')
-    if TreinoChecklistAplicacao.query.filter_by(trilha_id=t.id).first():
-        bloqueios.append('checklist de aplicação')
-    if TreinoAplicacaoPratica.query.filter_by(trilha_id=t.id).first():
-        bloqueios.append('aplicações registradas')
+    video_ids = [v.id for v in t.videos]
+    checkpoint_ids = [c.id for v in t.videos for c in v.checkpoints]
+    quiz_ids = [q.id for q in TreinoQuiz.query.filter_by(trilha_id=t.id).all()]
+    # Bloqueia só quando há HISTÓRICO real (preservar); conteúdo de autoria
+    # (vídeo/checkpoint/quiz/checklist/cargo) é apagado em cascata — assim dá
+    # pra excluir uma trilha de teste que ninguém usou.
+    hist = []
     if TreinoSelo.query.filter_by(trilha_id=t.id).first():
-        bloqueios.append('selos emitidos')
-    if bloqueios:
-        flash(f'Trilha com {", ".join(bloqueios)} — desative em vez de '
+        hist.append('selos emitidos')
+    if TreinoAplicacaoPratica.query.filter_by(trilha_id=t.id).first():
+        hist.append('aplicações registradas')
+    if video_ids and TreinoProgressoVideo.query.filter(
+            TreinoProgressoVideo.video_id.in_(video_ids)).first():
+        hist.append('vídeos já assistidos')
+    if checkpoint_ids and TreinoRespostaCheckpoint.query.filter(
+            TreinoRespostaCheckpoint.checkpoint_id.in_(checkpoint_ids)).first():
+        hist.append('checkpoints respondidos')
+    if quiz_ids and TreinoTentativaQuiz.query.filter(
+            TreinoTentativaQuiz.quiz_id.in_(quiz_ids)).first():
+        hist.append('quizzes respondidos')
+    if hist:
+        flash(f'Trilha com histórico ({", ".join(hist)}) — desative em vez de '
               'excluir (o histórico precisa ser preservado).', 'warning')
         return _voltar()
-    TreinoTrilhaCargo.query.filter_by(trilha_id=t.id).delete()
-    db.session.delete(t)
     try:
+        # ORM delete (respeita os cascades delete-orphan): checkpoints somem com
+        # o vídeo, alternativas com a questão, itens com o checklist.
+        for v in list(t.videos):
+            db.session.delete(v)
+        for q in TreinoQuiz.query.filter_by(trilha_id=t.id).all():
+            for quest in list(q.questoes):
+                db.session.delete(quest)
+            db.session.delete(q)
+        for ch in TreinoChecklistAplicacao.query.filter_by(
+                trilha_id=t.id).all():
+            db.session.delete(ch)
+        for m in TreinoTrilhaCargo.query.filter_by(trilha_id=t.id).all():
+            db.session.delete(m)
+        db.session.delete(t)
         db.session.commit()
     except IntegrityError:
         # rede de segurança: qualquer vínculo não previsto nunca vira 500
@@ -740,6 +767,23 @@ def admin_trilha_excluir(id):
               'Desative em vez de excluir.', 'warning')
         return _voltar()
     flash('Trilha excluída.', 'success')
+    return _voltar()
+
+
+@treino_bp.route('/admin/trilha/<int:id>/editar', methods=['POST'])
+@login_required
+@admin_required
+def admin_trilha_editar(id):
+    """Edita nome/descrição da trilha."""
+    t = db.session.get(TreinoTrilha, id) or abort(404)
+    nome = (request.form.get('nome') or '').strip()
+    if not nome:
+        flash('A trilha precisa de um nome.', 'warning')
+        return _voltar()
+    t.nome = nome[:150]
+    t.descricao = (request.form.get('descricao') or '').strip() or None
+    db.session.commit()
+    flash('Trilha atualizada.', 'success')
     return _voltar()
 
 
