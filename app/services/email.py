@@ -780,7 +780,7 @@ def _texto_boas_vindas(nome, login, senha, base, chatwoot):
         f'  Login: {login}\n'
         f'  Senha: {senha}\n\n'
         f'Entrar: {login_url}\n'
-        f'(Troque a senha no primeiro acesso.)\n\n'
+        f'(No primeiro acesso você vai criar uma nova senha.)\n\n'
         f'{chatwoot_txt}'
         f'Email automático — não responda.'
     )
