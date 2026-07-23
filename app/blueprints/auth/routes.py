@@ -202,8 +202,12 @@ def reset_senha(id):
         return redirect(url_for('auth.usuarios'))
 
     u.set_senha(nova_senha)
+    # Admin resetou → é provisória de novo: força o dono da conta a definir a
+    # dele no próximo login.
+    u.senha_provisoria = True
     db.session.commit()
-    flash(f'Senha de "{u.nome}" alterada.', 'success')
+    flash(f'Senha de "{u.nome}" alterada (ele troca no próximo acesso).',
+          'success')
     return redirect(url_for('auth.usuarios'))
 
 
