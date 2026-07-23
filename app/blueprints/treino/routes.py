@@ -428,9 +428,6 @@ def admin_video_novo(id):
     return redirect(url_for('treino.admin_video_editar', id=v.id))
 
 
-@treino_bp.route('/admin/video/<int:id>')
-@login_required
-@admin_required
 def _garantir_duracao(v):
     """Busca a duração no Cloudflare ENQUANTO é <=0 (recém-subido; o Cloudflare
     devolve -1 durante o processamento) e grava quando vem POSITIVA. Devolve o
@@ -451,6 +448,9 @@ def _garantir_duracao(v):
         return None
 
 
+@treino_bp.route('/admin/video/<int:id>')
+@login_required
+@admin_required
 def admin_video_editar(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
     from app.services import treinamento_stream as ts
