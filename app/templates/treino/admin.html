@@ -108,6 +108,23 @@
     <div class="col-4"><input name="justificativa" class="form-control form-control-sm" placeholder="Justificativa (obrigatória)"></div>
     <div class="col-2"><button class="btn btn-sm btn-warning w-100">Lançar</button></div></form></div></div>
 
+<div class="card mb-3"><div class="card-header py-2"><strong>Acessos / logins dos funcionários</strong></div><div class="card-body">
+  <p class="small text-muted mb-2">É aqui que o funcionário <strong>entra</strong> no
+    treinamento. Cada pessoa precisa de um <strong>login</strong> ligado ao cadastro dela
+    no RH. Clique em <strong>Gerar acesso</strong> e o sistema cria a conta pelo
+    <strong>e-mail</strong> do funcionário e manda a senha por e-mail (idempotente — se já
+    existir conta com aquele e-mail, só vincula). Sem e-mail no RH o botão não aparece —
+    cadastre o e-mail em <em>RH → Funcionários → abrir o funcionário</em> primeiro.</p>
+  <div class="mobile-table-scroll"><table class="table table-sm align-middle mb-0"><tbody>
+  {% for f in funcionarios %}<tr>
+    <td>{{ f.nome }}</td>
+    <td class="text-end">
+      {% if f.usuario_id %}<span class="badge bg-success">✅ tem login</span>
+      {% elif f.email %}<form method="POST" action="{{ url_for('treino.admin_gerar_acesso', func_id=f.id) }}" class="d-inline">{{ csrf() }}<button class="btn btn-sm btn-primary py-0 px-2">Gerar acesso</button></form>
+      {% else %}<span class="badge bg-warning text-dark">sem e-mail — cadastre no RH</span>{% endif %}
+    </td></tr>{% else %}<tr><td class="text-muted">Nenhum funcionário ativo no RH.</td></tr>{% endfor %}
+  </tbody></table></div></div></div>
+
 <div class="card"><div class="card-header py-2"><strong>Valores de pontuação</strong></div><div class="card-body">
   <p class="small text-muted mb-2">Tabela de <strong>quantos pontos cada ação vale</strong>:
     vídeo concluído, acerto em checkpoint, aprovação no quiz, aplicação prática (registrada
