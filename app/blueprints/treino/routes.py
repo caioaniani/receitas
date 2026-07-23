@@ -729,13 +729,34 @@ def admin_video_toggle(id):
 @login_required
 @admin_required
 def admin_video_excluir(id):
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models import TreinoProgressoVideo
     v = db.session.get(TreinoVideo, id) or abort(404)
     tid = v.trilha_id
+    # Preserva histórico: vídeo já assistido ou com quiz atrelado não se apaga
+    # (desative). Checa ANTES de mexer no Cloudflare pra não deixar o vídeo lá
+    # órfão. Checkpoints somem por cascade.
+    bloqueios = []
+    if TreinoProgressoVideo.query.filter_by(video_id=v.id).first():
+        bloqueios.append('já foi assistido')
+    if TreinoQuiz.query.filter_by(video_id=v.id).first():
+        bloqueios.append('tem quiz')
+    if bloqueios:
+        flash(f'Vídeo {" e ".join(bloqueios)} — desative em vez de excluir.',
+              'warning')
+        return redirect(url_for('treino.admin_home', _anchor=f't{tid}'))
     if v.video_externo_id:
         from app.services import treinamento_stream as ts
         ts.deletar(v.video_externo_id)
     db.session.delete(v)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        flash('Não deu pra excluir — há registros vinculados ao vídeo. '
+              'Desative em vez de excluir.', 'warning')
+        return redirect(url_for('treino.admin_home', _anchor=f't{tid}'))
     flash('Vídeo excluído.', 'success')
     return redirect(url_for('treino.admin_home', _anchor=f't{tid}'))
 
