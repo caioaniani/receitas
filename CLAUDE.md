@@ -2187,8 +2187,20 @@ estoque nem entram na previsao.
   + cartao). Fix: a lista virou so PRE-FILTRO barato; toda suspeita e
   re-conferida no `seru.detalhes_pedido` (GET /orders/{id}, fonte
   autoritativa) antes de alertar — venda REAL se o detalhe tem item
-  nao-cancelado OU NFC-e `authorized` (`_nf_autorizada`). Detalhe
+  nao-cancelado OU NFC-e fiscal (`_nf_autorizada`). Detalhe
   indisponivel = NAO alerta nesse ciclo (retenta; id nao entra no dedup).
+  **CONTINGENCIA conta como NF (23/07/2026, caso Nebraska cod 19989588)**:
+  `_nf_autorizada` passou a aceitar `_NF_STATUS_FISCAL = {'authorized',
+  'contingency'}` — NFC-e em contingencia e emitida OFFLINE quando SEFAZ/
+  internet cai (DANFE impressa e entregue, transmitida depois), com produtos;
+  antes so `authorized` contava e uma venda real (cafe + cookie, NFC-e nº
+  2360 em contingencia) virava falso positivo. So falta de nota MESMA
+  (taxInvoice None ou cancelado/negado) segue suspeita. A mesma checagem
+  alimenta a coluna "tem NFC-e" do drill-down da home (briefing_dono importa
+  `_nf_autorizada`). NAO confundir com o OUTRO padrao real que segue
+  alertando: cobranca de VALOR AVULSO (item placeholder sem nome/qtd, que o
+  `extrair_itens` descarta) paga no cartao SEM NF nenhuma (as 4 de 23/07 —
+  Anesio caixa 683867, O Pao Padaria caixa 683812).
   Decisao do dono: SO reverificar, sem carencia — alerta segue imediato
   pras cobrancas que o detalhe confirma fantasma (ex. cod 19875201: 13
   itens TODOS cancelados, sem NF, pagamento vazio). Sonda usada no
