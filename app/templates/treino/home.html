@@ -38,8 +38,9 @@
 {% endfor %}
 {% endif %}
 
-<h5>{% if obrig %}Outras trilhas{% else %}Trilhas{% endif %}</h5>
-{% for t in trilhas if t.id not in onboarding_ids %}
+{% set outras = trilhas|rejectattr('id', 'in', onboarding_ids)|list %}
+{% if outras or not obrig %}<h5>{% if obrig %}Outras trilhas{% else %}Trilhas{% endif %}</h5>{% endif %}
+{% for t in outras %}
 {% set e = progresso.get(t.id) if progresso else None %}
 <a href="{{ url_for('treino.trilha', id=t.id) }}" class="card mb-2 text-decoration-none">
   <div class="card-body py-2">
