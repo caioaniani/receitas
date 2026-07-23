@@ -72,8 +72,8 @@
       <input name="titulo" class="form-control form-control-sm" placeholder="Quiz da trilha" style="width:150px;">
       <input name="por_tent" class="form-control form-control-sm" placeholder="qtd" style="width:56px;" value="5">
       <button class="btn btn-sm btn-outline-primary">+ quiz</button></form>
-    <form method="POST" action="{{ url_for('treino.admin_trilha_cargos', id=t.id) }}" class="mt-2 pt-2 border-top">{{ csrf() }}
-      <div class="small fw-bold mb-1">🎯 Onboarding — cargos que exigem esta trilha:</div>
+    <form method="POST" action="{{ url_for('treino.admin_trilha_cargos', id=t.id) }}" class="cargo-form mt-2 pt-2 border-top">{{ csrf() }}
+      <div class="small fw-bold mb-1">🎯 Onboarding — cargos que exigem esta trilha: <span class="text-muted fw-normal">(salva sozinho ao marcar)</span> <span class="cargo-status small"></span></div>
       <div class="d-flex flex-wrap gap-2">
         {% set atribuidos = cargos_por_trilha.get(t.id, []) %}
         {% for c in cargos %}<label class="small"><input type="checkbox" name="cargo_ids" value="{{ c.id }}"{% if c.id in atribuidos %} checked{% endif %}> {{ c.nome }}{% if not c.ativo %} <span class="text-muted">(inativo)</span>{% endif %}</label>{% else %}<span class="small text-muted">Nenhum cargo cadastrado no RH.</span>{% endfor %}
