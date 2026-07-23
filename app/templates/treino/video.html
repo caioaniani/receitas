@@ -62,6 +62,17 @@
       if(j.concluido){msg.textContent='Concluído! Você pode fazer o quiz.';}
     }).catch(function(){});
   },15000);
+  // Em FULLSCREEN o iframe do player fica na "top layer" do navegador, ACIMA
+  // de qualquer z-index da página — o overlay #cpbox (position:fixed no doc pai)
+  // fica escondido atrás. Então, ao chegar no checkpoint, SAI do fullscreen pra
+  // a pergunta aparecer (senão o vídeo pausa e o aluno fica travado sem ver nada).
+  function sairFullscreen(){
+    try{
+      if(document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
+      else if(document.webkitExitFullscreen && document.webkitFullscreenElement) document.webkitExitFullscreen();
+    }catch(e){}
+  }
+  var aberto=false;
   // checkpoints: pausa no segundo e pergunta
   player.addEventListener('timeupdate',function(){
     var cur=player.currentTime||0;
@@ -70,6 +81,9 @@
     }
   });
   function abrir(id,c){
+    if(aberto) return;                 // evita reabrir/re-sair-fullscreen em loop
+    aberto=true;
+    sairFullscreen();                  // fullscreen esconde o overlay — sai antes de perguntar
     player.pause(); box.style.display='';
     document.getElementById('cp-enun').textContent=c.enun;
     document.getElementById('cp-msg').textContent='';
@@ -80,7 +94,7 @@
         post('{{ url_for("treino.api_checkpoint", id=0) }}'.replace('/0/','/'+id+'/'),'indice='+b.dataset.i).then(function(j){
           c.resp=true;
           document.getElementById('cp-msg').textContent=(j&&j.correta)?'Correto!':'Resposta registrada.';
-          setTimeout(function(){box.style.display='none';player.play();},900);
+          setTimeout(function(){box.style.display='none';aberto=false;player.play();},900);
         });
       };
     });
