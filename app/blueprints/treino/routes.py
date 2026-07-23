@@ -433,7 +433,19 @@ def admin_video_novo(id):
 def admin_video_editar(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
     from app.services import treinamento_stream as ts
-    return render_template('treino/admin_video.html', v=v,
+    # Duração é AUTORITATIVA do Cloudflare — enquanto está 0 (recém-subido/
+    # processando), consulta o status e grava assim que o vídeo fica pronto.
+    # O antifraude depende dela (LIMIAR_TEMPO), então nunca pedimos na mão.
+    proc = None
+    if v.video_externo_id:
+        try:
+            proc = ts.status(v.video_externo_id)
+            if proc.get('duracao') and v.duracao_segundos != proc['duracao']:
+                v.duracao_segundos = proc['duracao']
+                db.session.commit()
+        except Exception:
+            proc = None
+    return render_template('treino/admin_video.html', v=v, proc=proc,
                            stream_ok=ts.configurado(),
                            video_embed=ts.embed_url(v.video_externo_id)
                            if v.video_externo_id else None)
