@@ -111,17 +111,25 @@
 <div class="card mb-3"><div class="card-header py-2"><strong>Acessos / logins dos funcionários</strong></div><div class="card-body">
   <p class="small text-muted mb-2">É aqui que o funcionário <strong>entra</strong> no
     treinamento. Cada pessoa precisa de um <strong>login</strong> ligado ao cadastro dela
-    no RH. Clique em <strong>Gerar acesso</strong> e o sistema cria a conta pelo
-    <strong>e-mail</strong> do funcionário e manda a senha por e-mail (idempotente — se já
-    existir conta com aquele e-mail, só vincula). Sem e-mail no RH o botão não aparece —
-    cadastre o e-mail em <em>RH → Funcionários → abrir o funcionário</em> primeiro.</p>
+    no RH. Dois caminhos:
+    <br>• <strong>Gerar acesso</strong> — cria a conta pelo <strong>e-mail</strong> do
+    funcionário e manda a senha por e-mail (só aparece se tiver e-mail no RH).
+    <br>• <strong>Vincular conta existente</strong> — pra quem <strong>já tem login</strong>
+    (mesmo sem e-mail): escolha a conta e ligue, <strong>sem criar duplicata</strong>.</p>
   <div class="mobile-table-scroll"><table class="table table-sm align-middle mb-0"><tbody>
   {% for f in funcionarios %}<tr>
     <td>{{ f.nome }}</td>
     <td class="text-end">
-      {% if f.usuario_id %}<span class="badge bg-success">✅ tem login</span>
-      {% elif f.email %}<form method="POST" action="{{ url_for('treino.admin_gerar_acesso', func_id=f.id) }}" class="d-inline">{{ csrf() }}<button class="btn btn-sm btn-primary py-0 px-2">Gerar acesso</button></form>
-      {% else %}<span class="badge bg-warning text-dark">sem e-mail — cadastre no RH</span>{% endif %}
+      {% if f.usuario_id %}<span class="badge bg-success">✅ tem login{% if f.usuario %} ({{ f.usuario.login }}){% endif %}</span>
+      {% else %}
+        <div class="d-flex flex-wrap gap-1 justify-content-end align-items-center">
+        {% if f.email %}<form method="POST" action="{{ url_for('treino.admin_gerar_acesso', func_id=f.id) }}" class="d-inline">{{ csrf() }}<button class="btn btn-sm btn-primary py-0 px-2">Gerar acesso</button></form>{% endif %}
+        {% if contas_livres %}<form method="POST" action="{{ url_for('treino.admin_vincular_acesso', func_id=f.id) }}" class="d-inline d-flex gap-1">{{ csrf() }}
+          <select name="usuario_id" class="form-select form-select-sm py-0" style="max-width:200px;"><option value="">vincular conta existente…</option>{% for u in contas_livres %}<option value="{{ u.id }}">{{ u.nome }} ({{ u.login }})</option>{% endfor %}</select>
+          <button class="btn btn-sm btn-outline-dark py-0 px-2">Vincular</button></form>
+        {% elif not f.email %}<span class="badge bg-warning text-dark">sem e-mail e sem conta livre</span>{% endif %}
+        </div>
+      {% endif %}
     </td></tr>{% else %}<tr><td class="text-muted">Nenhum funcionário ativo no RH.</td></tr>{% endfor %}
   </tbody></table></div></div></div>
 
