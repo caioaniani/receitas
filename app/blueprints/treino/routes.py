@@ -438,11 +438,15 @@ def admin_video_editar(id):
     # Depois de detectada, não bate mais no Cloudflare a cada GET (evita HTTP
     # síncrono à toa). O antifraude depende dela (LIMIAR_TEMPO).
     proc = None
-    if v.video_externo_id and v.duracao_segundos == 0:
+    if v.video_externo_id and v.duracao_segundos <= 0:
         try:
             proc = ts.status(v.video_externo_id)
-            if proc.get('duracao'):
-                v.duracao_segundos = proc['duracao']
+            # o Cloudflare devolve duration=-1 ENQUANTO processa — só grava
+            # quando é positiva de verdade (senão vira "-1:59" e quebra o
+            # antifraude). Re-tenta a cada GET até vir positiva.
+            dur = proc.get('duracao') or 0
+            if dur > 0:
+                v.duracao_segundos = dur
                 db.session.commit()
         except Exception:
             proc = None
