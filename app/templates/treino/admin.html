@@ -41,6 +41,19 @@
     <div class="col-2"><button class="btn btn-sm btn-primary w-100">Criar (ATIVA)</button></div></form></div></div>
 
 <div class="card mb-3"><div class="card-header py-2"><strong>Trilhas & vídeos</strong></div><div class="card-body">
+  <p class="small text-muted mb-2">Uma <strong>trilha</strong> é um curso — um conjunto de
+    aulas sobre um tema (ex.: "Higiene", "Atendimento"). Dentro dela você adiciona os
+    <strong>vídeos</strong> (o arquivo é enviado na tela de cada vídeo), pontos de checagem
+    (perguntas que <strong>pausam o vídeo</strong>) e <strong>quizzes</strong>. Concluir a
+    trilha inteira dá <strong>selo + certificado + pontos</strong> ao funcionário.
+    <br>• Ao criar um vídeo, informe a <strong>duração em segundos</strong> — é o que o
+    <strong>antifraude</strong> usa pra só dar o vídeo por concluído se a pessoa
+    <strong>assistiu de verdade</strong>.
+    <br>• O <strong>quiz</strong> só pode ser publicado com o banco de perguntas cheio
+    (no mínimo 3× a quantidade sorteada por tentativa).
+    <br>• Em <strong>🎯 Onboarding</strong> (dentro de cada trilha) você marca de quais
+    <strong>cargos</strong> a trilha é obrigatória — quem tem o cargo já vê a trilha em
+    destaque e entra no relatório de "apto a progredir".</p>
   {% for t in trilhas %}<div class="border rounded p-2 mb-2" id="t{{ t.id }}">
     <div class="d-flex justify-content-between align-items-start">
       <strong>{{ t.nome }} {% if not t.ativa %}<span class="badge bg-secondary">inativa</span>{% endif %}</strong>
