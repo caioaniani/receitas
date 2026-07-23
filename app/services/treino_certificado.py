@@ -76,8 +76,8 @@ def gerar_pdf(selo, base_url=''):
              new_y='NEXT')
     pdf.ln(10)
     pdf.set_font('Helvetica', '', 9)
-    verif = f'{base_url}/treinamento/verificar/{d["codigo"]}' if base_url \
-        else f'/treinamento/verificar/{d["codigo"]}'
+    verif = f'{base_url}/treino/verificar/{d["codigo"]}' if base_url \
+        else f'/treino/verificar/{d["codigo"]}'
     pdf.multi_cell(0, 6, _s(
         f'Código de verificação: {d["codigo"]}\nValidar em: {verif}'))
     saida = pdf.output()
