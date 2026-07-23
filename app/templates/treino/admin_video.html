@@ -46,7 +46,7 @@ document.getElementById('up').onclick=function(){var f=document.getElementById('
   <p class="small text-muted mb-2">Perguntas que <strong>pausam o vídeo</strong> num momento pra
     confirmar atenção. O <strong>momento</strong> é onde a pergunta aparece (formato <strong>min:seg</strong>,
     ex.: <code>2:30</code>). Opcional — um vídeo pode não ter nenhum.</p>
-  {% for c in v.checkpoints %}<div class="small d-flex justify-content-between"><span>⏸ {{ c.segundo // 60 }}:{{ '%02d'|format(c.segundo % 60) }} — {{ c.enunciado }} <span class="text-muted">({{ c.alternativas|length }} alt, correta #{{ c.indice_correto }})</span></span><form method="POST" action="{{ url_for('treino.admin_checkpoint_excluir', id=c.id) }}" onsubmit="return confirm('Excluir checkpoint?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger py-0 px-1">🗑</button></form></div>{% endfor %}
+  <div id="cp-lista">{% for c in v.checkpoints %}<div class="small d-flex justify-content-between"><span>⏸ {{ c.segundo // 60 }}:{{ '%02d'|format(c.segundo % 60) }} — {{ c.enunciado }} <span class="text-muted">({{ c.alternativas|length }} alt, correta #{{ c.indice_correto }})</span></span><form method="POST" action="{{ url_for('treino.admin_checkpoint_excluir', id=c.id) }}" onsubmit="return confirm('Excluir checkpoint?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger py-0 px-1">🗑</button></form></div>{% endfor %}</div>
 
   <div class="border rounded p-2 my-2 bg-light">
     <div class="small fw-bold mb-1">✨ Gerar a pergunta por IA <span class="text-muted fw-normal">(você revisa antes de salvar)</span></div>
