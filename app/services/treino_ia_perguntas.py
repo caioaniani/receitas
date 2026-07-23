@@ -142,8 +142,9 @@ def _sanitizar(dados, com_momento=False, momento_max=None):
                 'correta': correta, 'dificuldade': dif}
         if com_momento:
             try:
-                item['momento_seg'] = max(0, int(q.get('momento_seg')))
+                m = max(0, int(q.get('momento_seg')))
+                item['momento_seg'] = min(m, momento_max) if momento_max else m
             except (TypeError, ValueError):
-                item['momento_seg'] = 0
+                item['momento_seg'] = None   # ausente -> sem sugestão de momento
         out.append(item)
     return out
