@@ -54,15 +54,6 @@
 <a href="{{ url_for('treino.trilha', id=v.trilha_id) }}" class="btn btn-primary btn-sm">Ir para o quiz</a>
 {% endfor %}
 
-{# Modal de checkpoint #}
-<div id="cpbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;">
-  <div style="max-width:480px;margin:12vh auto;background:var(--bs-body-bg,#fff);border-radius:10px;padding:18px;">
-    <div class="fw-bold mb-2" id="cp-enun"></div>
-    <div id="cp-alts"></div>
-    <div class="small text-muted mt-2" id="cp-msg"></div>
-  </div>
-</div>
-
 <script>
 (function(){
   var CPS = {{ checkpoints|map(attribute='id')|list|tojson }};
