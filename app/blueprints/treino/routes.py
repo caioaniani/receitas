@@ -109,8 +109,20 @@ def video(id):
     _garantir_duracao(v)   # sem duração positiva o progresso daria 100% falso
     embed = ts.embed_url(v.video_externo_id) if v.video_externo_id else None
     quizzes = TreinoQuiz.query.filter_by(video_id=v.id, ativo=True).all()
+    # Progresso JÁ salvo — pra a barra abrir no ponto certo (não em 0% quando o
+    # vídeo já foi assistido/concluído).
+    f = _func()
+    pct_inicial, concluido = 0, False
+    if f:
+        from app.models import TreinoProgressoVideo
+        prog = TreinoProgressoVideo.query.filter_by(
+            funcionario_id=f.id, video_id=v.id, versao_video=v.versao).first()
+        if prog:
+            pct_inicial = float(prog.percentual or 0)
+            concluido = bool(prog.concluido_em)
     return render_template('treino/video.html', v=v, video_embed=embed,
-                           checkpoints=v.checkpoints, quizzes=quizzes)
+                           checkpoints=v.checkpoints, quizzes=quizzes,
+                           pct_inicial=pct_inicial, concluido_inicial=concluido)
 
 
 @treino_bp.route('/api/videos/<int:id>/heartbeat', methods=['POST'])
