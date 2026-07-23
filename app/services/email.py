@@ -578,7 +578,7 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
     background:#8b5a2b;color:#fff;text-decoration:none;padding:12px 24px;
     border-radius:6px;font-weight:600;">Entrar no sistema</a>
     <p style="color:#6b5f54;font-size:13px;margin:14px 0 0;">
-      Troque a senha no primeiro acesso (menu do seu perfil).</p>
+      No primeiro acesso o sistema vai pedir pra você criar uma nova senha.</p>
   </div>
 
   {chatwoot_bloco}
