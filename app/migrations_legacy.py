@@ -1936,6 +1936,13 @@ def _migrate_sqlite(app):
     cols_user = [row[1] for row in cursor.fetchall()]
     if cols_user and 'email' not in cols_user:
         cursor.execute("ALTER TABLE usuario ADD COLUMN email VARCHAR(200)")
+    # Senha provisoria + acesso so treinamento (23/07/2026). Commit 1 (schema).
+    if cols_user and 'senha_provisoria' not in cols_user:
+        cursor.execute("ALTER TABLE usuario ADD COLUMN "
+                       "senha_provisoria BOOLEAN DEFAULT 0")
+    if cols_user and 'somente_treino' not in cols_user:
+        cursor.execute("ALTER TABLE usuario ADD COLUMN "
+                       "somente_treino BOOLEAN DEFAULT 0")
 
     # Migração tabela receita_ingrediente
     cursor.execute("PRAGMA table_info(receita_ingrediente)")
