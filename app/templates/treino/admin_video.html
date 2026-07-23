@@ -75,29 +75,37 @@ document.getElementById('up').onclick=function(){var f=document.getElementById('
   var CSRF='{{ csrf_token() }}', URL='{{ url_for("treino.admin_video_ia", id=v.id) }}';
   var msg=document.getElementById('ia-msg'), props=document.getElementById('ia-props');
   function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
-  document.getElementById('ia-gerar').onclick=function(){
+  function mmss(s){s=Math.max(0,parseInt(s,10)||0);var m=Math.floor(s/60),r=s%60;return m+':'+(r<10?'0':'')+r;}
+  function gerar(body){
     msg.textContent='gerando…';props.innerHTML='';
-    var b='texto='+encodeURIComponent(document.getElementById('ia-texto').value)+'&n=3';
-    fetch(URL,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:b})
+    fetch(URL,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:body})
       .then(function(r){return r.json();}).then(function(j){
         if(!j.ok){msg.textContent=j.erro;return;}
         msg.textContent='clique numa proposta pra preencher o formulário abaixo:';
         j.perguntas.forEach(function(p){
+          var temMomento=(typeof p.momento_seg==='number');
           var btn=document.createElement('button');btn.type='button';
           btn.className='btn btn-sm btn-outline-secondary text-start d-block w-100 mb-1';
-          btn.innerHTML=esc(p.enunciado);
+          btn.innerHTML=(temMomento?'<span class="badge bg-dark">'+mmss(p.momento_seg)+'</span> ':'')+esc(p.enunciado);
           btn.onclick=function(){
             document.getElementById('cp-enun').value=p.enunciado;
             var alts=document.querySelectorAll('.cp-alt');
             var radios=document.querySelectorAll('input[name=correta]');
             alts.forEach(function(a,i){a.value=p.alternativas[i]||'';});
             if(radios[p.correta])radios[p.correta].checked=true;
-            document.getElementById('cp-momento').focus();
+            var mom=document.getElementById('cp-momento');
+            if(temMomento)mom.value=mmss(p.momento_seg);
+            mom.focus();
           };
           props.appendChild(btn);
         });
       }).catch(function(){msg.textContent='falhou.';});
+  }
+  document.getElementById('ia-texto-btn').onclick=function(){
+    gerar('texto='+encodeURIComponent(document.getElementById('ia-texto').value)+'&n=3');
   };
+  var bv=document.getElementById('ia-video');
+  if(bv)bv.onclick=function(){gerar('fonte=video&n=3');};
 })();
 </script>
 {% endblock %}
