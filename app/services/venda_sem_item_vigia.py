@@ -88,14 +88,23 @@ def canais_ignorados():
     return {t.strip().lower() for t in bruto.split(',') if t.strip()}
 
 
+# NFC-e/NF-e com nota fiscal EMITIDA (não é venda fantasma "sem nota"):
+# 'authorized' = autorizada pela SEFAZ; 'contingency' = emitida OFFLINE quando
+# internet/SEFAZ cai (DANFE impressa e entregue ao cliente, transmitida depois)
+# — é documento fiscal válido, COM produtos. Contingência entrou em 23/07/2026
+# (caso Nebraska cód 19989588: café + cookie, NFC-e nº 2360 em contingência que
+# o vigia acusava como "sem NF"). Só falta de nota MESMA (taxInvoice None ou
+# status cancelado/negado) é o padrão suspeito.
+_NF_STATUS_FISCAL = {'authorized', 'contingency'}
+
+
 def _nf_autorizada(pedido):
-    """True se o pedido tem NFC-e/NF-e AUTORIZADA (taxInvoice status
-    'authorized'). Venda com NFC-e autorizada NUNCA é o padrão "sem item":
-    a SEFAZ autorizou a nota COM produtos (o padrão Nebraska era 'sem NF')."""
+    """True se o pedido tem NFC-e/NF-e fiscalmente EMITIDA (autorizada OU em
+    contingência) — venda com nota NUNCA é o padrão "sem item/sem NF"."""
     ti = pedido.get('taxInvoice') if isinstance(pedido, dict) else None
     if not isinstance(ti, dict):
         return False
-    return (ti.get('status') or '').strip().lower() == 'authorized'
+    return (ti.get('status') or '').strip().lower() in _NF_STATUS_FISCAL
 
 
 def cobrancas_sem_itens(data_inicial, data_final):
