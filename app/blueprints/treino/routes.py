@@ -525,6 +525,22 @@ def admin_questao(id):
     return redirect(url_for('treino.admin_quiz_editar', id=q.id))
 
 
+@treino_bp.route('/admin/quiz/<int:id>/ia-gerar', methods=['POST'])
+@login_required
+@admin_required
+def admin_quiz_ia(id):
+    """v2 §16.2: a IA PROPÕE perguntas a partir do conteúdo colado. Devolve as
+    propostas pra revisão humana na tela — NÃO grava nada aqui (o admin edita e
+    salva as escolhidas pelo endpoint normal de questão)."""
+    db.session.get(TreinoQuiz, id) or abort(404)
+    from app.services import treino_ia_perguntas as ia
+    r = ia.gerar(request.form.get('texto', ''), request.form.get('n', 5))
+    if 'erro' in r:
+        return jsonify(ok=False, erro=r['erro']), 400
+    return jsonify(ok=True, perguntas=r['perguntas'],
+                   modelo=r.get('modelo_usado'))
+
+
 @treino_bp.route('/admin/recompensa', methods=['POST'])
 @login_required
 @admin_required
