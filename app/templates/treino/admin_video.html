@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% block title %}{{ v.titulo }} — vídeo{% endblock %}{% block content %}
+<div class="page-header"><div><h1 class="page-title">{{ v.titulo }}</h1>
+<p class="page-subtitle"><a href="{{ url_for('treino.admin_home') }}">&larr; Admin</a> · {{ v.duracao_segundos }}s</p></div></div>
+{% if video_embed %}<div style="max-width:560px;"><div style="position:relative;padding-top:56.25%;">
+  <iframe src="{{ video_embed }}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;border-radius:8px;" allowfullscreen></iframe></div></div>
+<p class="text-muted small mt-1">Enviar outro substitui.</p>{% endif %}
+{% if stream_ok %}
+<div class="d-flex gap-2 align-items-center"><input type="file" id="vf" accept="video/*" class="form-control form-control-sm" style="max-width:360px;">
+<button id="up" class="btn btn-sm btn-outline-dark">Enviar vídeo</button></div>
+<div id="wrap" style="display:none;max-width:360px;" class="mt-2"><div class="progress"><div id="bar" class="progress-bar" style="width:0%">0%</div></div><div id="msg" class="small text-muted"></div></div>
+<script>
+var CSRF='{{ csrf_token() }}';
+document.getElementById('up').onclick=function(){var f=document.getElementById('vf').files[0];if(!f)return;
+ var wrap=document.getElementById('wrap'),bar=document.getElementById('bar'),msg=document.getElementById('msg');wrap.style.display='';msg.textContent='preparando…';
+ fetch('{{ url_for("treino.admin_video_upload_url", id=v.id) }}',{method:'POST',headers:{'X-CSRFToken':CSRF}}).then(function(r){return r.json();}).then(function(j){
+  if(!j.ok){msg.textContent=j.erro;return;}var uid=j.uid;var fd=new FormData();fd.append('file',f);var xhr=new XMLHttpRequest();xhr.open('POST',j.uploadURL);
+  xhr.upload.onprogress=function(e){if(e.lengthComputable){var p=Math.round(100*e.loaded/e.total);bar.style.width=p+'%';bar.textContent=p+'%';}};
+  xhr.onload=function(){msg.textContent='salvando…';fetch('{{ url_for("treino.admin_video_salvar", id=v.id) }}',{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:'uid='+uid}).then(function(){location.reload();});};
+  xhr.onerror=function(){msg.textContent='erro de rede';};xhr.send(fd);});};
+</script>
+{% else %}<div class="alert alert-warning small">Cloudflare não configurado (CLOUDFLARE_ACCOUNT_ID/TOKEN).</div>{% endif %}
+
+<div class="card mt-3"><div class="card-header py-2"><strong>Checkpoints (pausam o vídeo)</strong></div><div class="card-body">
+  {% for c in v.checkpoints %}<div class="small">⏸ {{ c.segundo }}s — {{ c.enunciado }} <span class="text-muted">({{ c.alternativas|length }} alt, correta #{{ c.indice_correto }})</span></div>{% endfor %}
+  <form method="POST" action="{{ url_for('treino.admin_checkpoint', id=v.id) }}" class="mt-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2"><div class="col-3"><input name="segundo" class="form-control form-control-sm" placeholder="segundo"></div>
+      <div class="col-9"><input name="enunciado" class="form-control form-control-sm" placeholder="Pergunta"></div></div>
+    <div class="small text-muted mt-1">Alternativas (marque a correta):</div>
+    {% for i in range(4) %}<div class="input-group input-group-sm mb-1" style="max-width:420px;">
+      <div class="input-group-text"><input type="radio" name="correta" value="{{ i }}" {% if i==0 %}checked{% endif %}></div>
+      <input name="alt[]" class="form-control" placeholder="Alternativa {{ i+1 }}"></div>{% endfor %}
+    <button class="btn btn-sm btn-primary">+ checkpoint</button></form>
+</div></div>
+{% endblock %}

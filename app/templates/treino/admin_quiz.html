@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% block title %}{{ q.titulo }} — quiz{% endblock %}{% block content %}
+<div class="page-header"><div><h1 class="page-title">📝 {{ q.titulo }}</h1>
+<p class="page-subtitle"><a href="{{ url_for('treino.admin_home') }}">&larr; Admin</a></p></div></div>
+<div class="alert {{ 'alert-success' if pode else 'alert-warning' }} small">
+  {{ q.questoes|length }} questão(ões) no banco · precisa de {{ q.questoes_por_tentativa * 3 }} (3× {{ q.questoes_por_tentativa }}/tentativa) pra publicar.
+  {{ '✓ pode publicar' if pode else 'banco insuficiente' }}</div>
+{% for quest in q.questoes %}<div class="border rounded p-2 mb-1 small"><strong>{{ quest.enunciado }}</strong>
+  {% for a in quest.alternativas %}<div>{{ '✓' if a.correta else '○' }} {{ a.texto }}</div>{% endfor %}</div>{% endfor %}
+<form method="POST" action="{{ url_for('treino.admin_questao', id=q.id) }}" class="card"><div class="card-body">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input name="enunciado" class="form-control form-control-sm mb-2" placeholder="Enunciado da questão" required>
+  <div class="small text-muted mb-1">Marque a correta:</div>
+  {% for i in range(4) %}<div class="input-group input-group-sm mb-1" style="max-width:420px;">
+    <div class="input-group-text"><input type="radio" name="correta" value="{{ i }}" {% if i==0 %}checked{% endif %}></div>
+    <input name="alt[]" class="form-control" placeholder="Alternativa {{ i+1 }}"></div>{% endfor %}
+  <button class="btn btn-sm btn-primary">+ questão</button>
+</div></form>
+{% endblock %}
