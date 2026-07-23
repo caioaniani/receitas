@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Gestor — treinamento{% endblock %}{% block content %}
 <div class="page-header"><div><h1 class="page-title">👔 Gestor{% if unidade %} · {{ unidade.nome }}{% endif %}</h1>
-<p class="page-subtitle"><a href="{{ url_for('treino.gestor_resgates') }}">Fila de resgates &rarr;</a></p></div></div>
+<p class="page-subtitle"><a href="{{ url_for('treino.gestor_resgates') }}">Fila de resgates &rarr;</a> · <a href="{{ url_for('treino.gestor_progressao') }}">Progressão de cargo &rarr;</a></p></div></div>
 <div class="card"><div class="card-header py-2"><strong>Registrar aplicação prática</strong> <span class="small text-muted">(vale 50 pts)</span></div>
 <div class="card-body">
   <div class="mb-2"><label class="form-label small">Funcionário</label>
