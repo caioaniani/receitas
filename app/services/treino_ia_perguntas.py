@@ -98,6 +98,7 @@ def gerar_com_momento(segmentos, n=3):
     segmentos = segmentos or []
     if not segmentos:
         return {'erro': 'Sem transcrição do vídeo ainda.'}
+    momento_max = max((int(s.get('inicio') or 0) for s in segmentos), default=0)
     linhas = '\n'.join(f'[{int(s.get("inicio") or 0)}] {s.get("texto") or ""}'
                        for s in segmentos)[:8000]
     n = max(1, min(int(n or 3), 15))
@@ -107,7 +108,7 @@ def gerar_com_momento(segmentos, n=3):
         dados = _chamar(SYSTEM_MOMENTO, instrucao)
     except _IAError as e:
         return {'erro': str(e)}
-    perguntas = _sanitizar(dados, com_momento=True)
+    perguntas = _sanitizar(dados, com_momento=True, momento_max=momento_max)
     if not perguntas:
         return {'erro': 'a IA não retornou perguntas utilizáveis.'}
     return {'perguntas': perguntas, 'modelo_usado': MODELO}
