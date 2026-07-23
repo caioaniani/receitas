@@ -531,13 +531,14 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
 </div></body></html>"""
 
 
-def enviar_boas_vindas(destinatario, nome, login, senha):
-    """Email de convite pro novo usuário: senha do gestao.* + como entrar
-    no atendimento (Chatwoot). Cadastro do Chatwoot ainda é manual (Super
-    Admin lá) — o email só ORIENTA o atendente."""
+def enviar_boas_vindas(destinatario, nome, login, senha, *, com_chatwoot=True):
+    """Email de convite pro novo usuário: senha do gestao.* + (opcional) como
+    entrar no atendimento (Chatwoot). `com_chatwoot=False` (contas SÓ de
+    treinamento) omite o bloco do Chatwoot — nem todo funcionário atende
+    cliente, então não deve receber esse convite (decisão do dono 23/07/2026)."""
     cfg = current_app.config
     base = (cfg.get('APP_BASE_URL') or '').rstrip('/')
-    chatwoot = (cfg.get('CHATWOOT_PUBLIC_URL') or '').rstrip('/')
+    chatwoot = (cfg.get('CHATWOOT_PUBLIC_URL') or '').rstrip('/') if com_chatwoot else ''
     assunto = 'Seu acesso — O Pão Padaria Artesanal'
     html = _template_boas_vindas(nome, login, senha, base, chatwoot)
     texto = _texto_boas_vindas(nome, login, senha, base, chatwoot)
