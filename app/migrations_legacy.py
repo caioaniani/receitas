@@ -1390,6 +1390,14 @@ def _migrate_postgres(app):
     # Email do usuario (envio de senha/convite via Postmark, 16/06/2026).
     _try("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS email VARCHAR(200)")
 
+    # Senha provisoria (forca troca no 1o login) + acesso so treinamento
+    # (23/07/2026, decisao do dono). Colunas booleanas em usuario — commit 1
+    # do procedimento de 2 commits (modelo/logica vem no commit seguinte).
+    _try("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS "
+         "senha_provisoria BOOLEAN DEFAULT FALSE")
+    _try("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS "
+         "somente_treino BOOLEAN DEFAULT FALSE")
+
     # Destinatario diferente do pagador no pedido online (Fase 3+, 17/06/2026).
     # PedidoOnline e' tabela criada por db.create_all (Fase 3) -> em prod
     # ja existe sem as colunas; ALTER aplica em commit isolado.
