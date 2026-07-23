@@ -73,8 +73,9 @@ def gerar_acesso(funcionario):
         return {'ok': True, 'motivo': 'vinculado', 'usuario': existente}
 
     senha = secrets.token_urlsafe(8)[:10]
+    # Senha nasce provisória: força a troca no 1º login (o e-mail manda a atual).
     u = Usuario(nome=funcionario.nome, login=email, email=email,
-                papel='funcionario')
+                papel='funcionario', senha_provisoria=True)
     u.set_senha(senha)
     db.session.add(u)
     db.session.flush()
