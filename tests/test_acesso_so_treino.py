@@ -96,6 +96,27 @@ def test_toggle_somente_treino(app, admin_user):
         assert db.session.get(Usuario, uid).somente_treino is False
 
 
+def test_toggle_recusa_a_propria_conta(app, admin_user):
+    """Admin não pode marcar A SI MESMO como só-treino (auto-lockout)."""
+    c = _cli(app, admin_user.id)
+    c.post(f'/auth/usuarios/{admin_user.id}/somente-treino')
+    with app.app_context():
+        assert db.session.get(Usuario, admin_user.id).somente_treino is False
+
+
+def test_troca_forcada_recusa_mesma_senha(app):
+    """Na troca forçada, repetir a senha provisória do e-mail não vale."""
+    with app.app_context():
+        uid = _mk('mesma', senha_provisoria=True).id
+    c = _cli(app, uid)
+    r = c.post('/auth/minha-senha', data={
+        'senha_atual': 'senha-atual-1', 'nova_senha': 'senha-atual-1',
+        'confirma_senha': 'senha-atual-1'}, follow_redirects=False)
+    assert r.status_code == 302 and '/auth/minha-senha' in r.headers['Location']
+    with app.app_context():
+        assert db.session.get(Usuario, uid).senha_provisoria is True   # não trocou
+
+
 def test_reset_senha_remarca_provisoria(app, admin_user):
     with app.app_context():
         uid = _mk('rst', senha_provisoria=False).id
