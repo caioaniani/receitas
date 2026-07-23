@@ -354,6 +354,7 @@ def admin_home():
             TreinoTemporada.inicio.desc()).all(),
         recompensas=TreinoRecompensa.query.all(),
         cargos=cargos, cargos_por_trilha=cargos_por_trilha,
+        contas_livres=contas_livres,
         funcionarios=Funcionario.query.filter_by(ativo=True).order_by(
             Funcionario.nome).all())
 
