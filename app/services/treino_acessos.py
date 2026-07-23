@@ -9,7 +9,37 @@ do RH a uma conta `Usuario` papel 'funcionario'. Sem esse vínculo a pessoa abre
 import secrets
 
 from app.extensions import db
-from app.models import Usuario
+from app.models import Funcionario, Usuario
+
+
+def contas_sem_vinculo():
+    """Contas de login (Usuario) que AINDA não estão ligadas a nenhum
+    funcionário — candidatas a vínculo manual. Exclui o dono. Ordenadas por
+    nome pra o admin achar pelo nome."""
+    vinculados = {r[0] for r in db.session.query(Funcionario.usuario_id).filter(
+        Funcionario.usuario_id.isnot(None)).all()}
+    q = Usuario.query.filter(Usuario.is_owner.is_(False))
+    if vinculados:
+        q = q.filter(~Usuario.id.in_(vinculados))
+    return q.order_by(Usuario.nome).all()
+
+
+def vincular_conta(funcionario, usuario):
+    """Liga um funcionário a uma conta de login JÁ EXISTENTE (sem criar/gerar
+    nada) — pro caso de quem já tem cadastro mas sem e-mail. Idempotente e
+    seguro: não rouba conta de outro funcionário nem liga à conta do dono."""
+    if funcionario.usuario_id:
+        return {'ok': False, 'motivo': 'ja_tem'}
+    if usuario is None:
+        return {'ok': False, 'motivo': 'sem_usuario'}
+    if getattr(usuario, 'is_owner', False):
+        return {'ok': False, 'motivo': 'owner'}
+    outro = getattr(usuario, 'funcionario', None)
+    if outro is not None and outro.id != funcionario.id:
+        return {'ok': False, 'motivo': 'conta_em_uso'}
+    funcionario.usuario_id = usuario.id
+    db.session.commit()
+    return {'ok': True, 'motivo': 'vinculado', 'usuario': usuario}
 
 
 def gerar_acesso(funcionario):
