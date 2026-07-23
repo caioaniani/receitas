@@ -106,6 +106,52 @@ def status(uid):
     }
 
 
+def _lang():
+    """Idioma da legenda automática (default pt). Override via config."""
+    return (current_app.config.get('TREINO_LEGENDA_LANG') or 'pt').strip()
+
+
+def gerar_legenda(uid, lang=None):
+    """Dispara a geração da legenda automática (async) no Cloudflare. O vídeo
+    precisa estar PRONTO (transcodificado). Best-effort: devolve {'ok','status',
+    'erro'} — nunca levanta (re-disparar enquanto processa é inofensivo)."""
+    acct, token = _cfg()
+    lang = lang or _lang()
+    if not (acct and token and uid):
+        return {'ok': False, 'status': None, 'erro': 'não configurado'}
+    try:
+        r = requests.post(
+            f'{_BASE}/accounts/{acct}/stream/{uid}/captions/{lang}/generate',
+            headers=_headers(), timeout=_TIMEOUT)
+        dados = _json(r)
+    except requests.RequestException as e:
+        return {'ok': False, 'status': None, 'erro': str(e)}
+    res = dados.get('result') or {}
+    return {'ok': bool(r.ok and dados.get('success')),
+            'status': res.get('status'),
+            'erro': None if r.ok else _erro(dados, r)}
+
+
+def transcricao(uid, lang=None):
+    """Baixa a legenda (VTT) do Cloudflare e devolve a transcrição COM TEMPO:
+    lista de {'inicio': segundos, 'texto': str}, ordenada. `[]` se a legenda
+    ainda não está pronta (ou não configurado) — o chamador dispara a geração
+    e tenta de novo depois."""
+    acct, token = _cfg()
+    lang = lang or _lang()
+    if not (acct and token and uid):
+        return []
+    try:
+        r = requests.get(
+            f'{_BASE}/accounts/{acct}/stream/{uid}/captions/{lang}/vtt',
+            headers=_headers(), timeout=_TIMEOUT)
+    except requests.RequestException:
+        return []
+    if r.status_code != 200 or not (r.text or '').strip():
+        return []
+    return _parse_vtt(r.text)
+
+
 def deletar(uid):
     """Remove o vídeo do Cloudflare (troca de vídeo / limpeza). Best-effort."""
     acct, token = _cfg()
@@ -143,6 +189,29 @@ def thumb_url(uid):
 
 
 # ── internos ────────────────────────────────────────────────────────────
+def _parse_vtt(txt):
+    """WEBVTT -> [{'inicio': segundos, 'texto': str}]. Ignora o cabeçalho e
+    cues sem texto. Tolerante a HH:MM:SS.mmm e MM:SS.mmm."""
+    segs = []
+    for bloco in re.split(r'\n\s*\n', (txt or '').replace('\r\n', '\n').strip()):
+        linhas = [ln for ln in bloco.split('\n') if ln.strip()]
+        idx = next((i for i, ln in enumerate(linhas) if '-->' in ln), None)
+        if idx is None:
+            continue
+        inicio = _vtt_ts_para_seg(linhas[idx].split('-->')[0])
+        texto = ' '.join(ln.strip() for ln in linhas[idx + 1:]).strip()
+        if texto:
+            segs.append({'inicio': inicio, 'texto': texto})
+    return segs
+
+
+def _vtt_ts_para_seg(ts):
+    m = re.match(r'(?:(\d+):)?(\d{1,2}):(\d{2})(?:[.,]\d+)?', (ts or '').strip())
+    if not m:
+        return 0
+    return int(m.group(1) or 0) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+
+
 def _normaliza_subdomain(v):
     v = v.strip().replace('https://', '').replace('http://', '').strip('/')
     if '.' not in v:                       # colaram só o código customer-XXXX
