@@ -147,6 +147,44 @@ def test_progressao_sem_cargo_nao_e_apto(app):
         assert p['total'] == 0 and not p['apto']
 
 
+def test_definir_cargos_ignora_invalidos_e_inexistentes(app):
+    with app.app_context():
+        c1 = Cargo(nome='A')
+        t = TreinoTrilha(nome='X')
+        db.session.add_all([c1, t])
+        db.session.commit()
+        # 'abc' (não numérico), '' (vazio) e 999999 (inexistente) são ignorados;
+        # só c1 (válido) vira vínculo — nada de 500 nem FK órfã.
+        ob.definir_cargos_da_trilha(t.id, ['abc', '', '999999', str(c1.id)])
+        vinc = TreinoTrilhaCargo.query.filter_by(trilha_id=t.id).all()
+        assert [m.cargo_id for m in vinc] == [c1.id]
+
+
+def test_progressao_lote_bate_com_progressao(app):
+    with app.app_context():
+        cargo = Cargo(nome='Padeiro')
+        t1 = TreinoTrilha(nome='Seg', ordem=1)
+        t2 = TreinoTrilha(nome='Higiene', ordem=2)
+        db.session.add_all([cargo, t1, t2])
+        db.session.commit()
+        db.session.add_all([
+            TreinoTrilhaCargo(trilha_id=t1.id, cargo_id=cargo.id),
+            TreinoTrilhaCargo(trilha_id=t2.id, cargo_id=cargo.id)])
+        db.session.commit()
+        _, fa, _ = _func(nome='Com', cargo=cargo)
+        _, fb, _ = _func(nome='Sem', cargo=None)
+        db.session.add(TreinoSelo(funcionario_id=fa.id, trilha_id=t1.id,
+                                  carga_horaria_minutos=10))
+        db.session.commit()
+        lote = ob.progressao_lote([fa, fb])
+        pa, pb = ob.progressao(fa), ob.progressao(fb)
+        assert lote[fa.id]['total'] == pa['total'] == 2
+        assert lote[fa.id]['concluidas'] == pa['concluidas'] == 1
+        assert lote[fa.id]['apto'] == pa['apto'] is False
+        assert lote[fb.id]['total'] == pb['total'] == 0
+        assert ob.progressao_lote([]) == {}
+
+
 def test_rota_admin_liga_cargos(app, admin_user):
     with app.app_context():
         cargo = Cargo(nome='Padeiro')
