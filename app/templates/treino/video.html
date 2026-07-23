@@ -97,8 +97,8 @@
   function abrir(id,c){
     if(aberto) return;                 // evita reabrir/re-sair-fullscreen em loop
     aberto=true;
-    sairFullscreen();                  // fullscreen esconde o overlay — sai antes de perguntar
-    player.pause(); box.style.display='';
+    sairFullscreen();                  // desktop: sai da tela cheia p/ o overlay aparecer
+    player.pause(); box.style.display='block';   // 'block' (o display:none agora vem do CSS)
     document.getElementById('cp-enun').textContent=c.enun;
     document.getElementById('cp-msg').textContent='';
     var h='';for(var i=0;i<c.alts.length;i++){h+='<button class="btn btn-outline-dark w-100 mb-2 cp-a" data-i="'+i+'">'+c.alts[i]+'</button>';}
