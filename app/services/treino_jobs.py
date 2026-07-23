@@ -16,7 +16,7 @@ from app.models import (
 from app.services import treino_ledger as ledger
 from app.services import treino_pontos as cfg
 from app.services import treino_quiz as tq
-from app.utils import agora
+from app.utils import agora, hoje
 
 
 def _intervalo_semana(ano, semana):
@@ -73,6 +73,43 @@ def fechamento_semanal(ano, semana_iso):
                                 referencia_id=ref_semana)
         processados += 1
     return processados
+
+
+def snapshot_ranking():
+    """Congela o ranking por unidade do dia (§13) em AppConfig (JSON por data).
+    Idempotente: regravar o mesmo dia sobrescreve. Retorna nº de unidades."""
+    import json
+
+    from app.models import AppConfig
+    from app.services import treino_ranking as rk
+    temp = ledger.temporada_ativa()
+    if temp is None:
+        return 0
+    dados = rk.ranking_unidades(temp.id)
+    chave = f'treino_ranking_{hoje().isoformat()}'
+    row = db.session.get(AppConfig, chave)
+    valor = json.dumps({'temporada_id': temp.id, 'ranking': dados})
+    if row:
+        row.value = valor
+    else:
+        db.session.add(AppConfig(key=chave, value=valor))
+    db.session.commit()
+    return len(dados)
+
+
+def encerramento_temporada():
+    """Encerra temporadas ATIVAs cujo fim já passou (§13): status ENCERRADA
+    (níveis ficam congelados; o histórico do ledger é preservado). Abrir a
+    próxima é gesto do admin. Idempotente. Retorna nº encerradas."""
+    from app.models import TreinoTemporada
+    h = hoje()
+    vencidas = TreinoTemporada.query.filter(
+        TreinoTemporada.status == 'ATIVA', TreinoTemporada.fim < h).all()
+    for t in vencidas:
+        t.status = 'ENCERRADA'
+    if vencidas:
+        db.session.commit()
+    return len(vencidas)
 
 
 def limpeza_tentativas():
