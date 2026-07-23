@@ -36,6 +36,9 @@ def test_mmss_para_seg():
     assert _mmss_para_seg('') == 0
     assert _mmss_para_seg('lixo') == 0
     assert _mmss_para_seg('1:') == 60
+    assert _mmss_para_seg('1:02:30') == 3750   # hora:min:seg
+    assert _mmss_para_seg('-5') == 0           # nunca negativo
+    assert _mmss_para_seg('90:00') == 5400     # minutos > 60 valem
 
 
 def test_checkpoint_aceita_mmss(app, admin_user):
