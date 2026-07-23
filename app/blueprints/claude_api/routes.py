@@ -1460,3 +1460,66 @@ def treinamento_diag():
     except OSError as e:
         out['erro_listar'] = f'{type(e).__name__}: {e}'
     return jsonify(out)
+
+
+@claude_api_bp.route('/pagamento-debug')
+@_claude_auth_required
+def pagamento_debug():
+    """Diagnostico de checkout que o Pagar.me RECUSA na validacao ("The request
+    is invalid") — o pedido nem chega a nascer no gateway. Mostra o payload que
+    seria enviado + checagens (documento/email/telefone/soma dos itens). Com
+    ?post=1 faz UM POST real e devolve o corpo COMPLETO do erro (campo `errors`
+    do Pagar.me), que e a fonte definitiva do campo invalido. Read-only exceto
+    o post opcional (que so cria mais uma tentativa falha, inofensivo).
+    Param: ?codigo=<codigo do pedido> [&post=1]."""
+    from app.models import PedidoOnline
+    from app.services import pagarme
+    codigo = (request.args.get('codigo') or '').strip()
+    if not codigo:
+        return jsonify(ok=False, erro='informe ?codigo=<codigo do pedido>'), 400
+    pedido = PedidoOnline.query.filter_by(codigo=codigo).first()
+    if pedido is None:
+        return jsonify(ok=False, erro=f'pedido {codigo} nao encontrado'), 404
+
+    cust = pagarme._payload_customer(pedido)
+    itens = pagarme._payload_items(pedido)
+    soma_itens = sum(i['amount'] * i['quantity'] for i in itens)
+    total_c = pagarme._centavos(pedido.valor_total)
+    cli = getattr(pedido, 'cliente', None)
+    doc = pagarme._so_digitos(getattr(cli, 'cpf', '') if cli else '')
+    email = (pedido.email_cliente or '')
+    out = {
+        'ok': True,
+        'codigo': codigo,
+        'status_pedido': pedido.status,
+        'valor_total': str(pedido.valor_total),
+        'total_centavos': total_c,
+        'soma_itens_centavos': soma_itens,
+        'itens_batem_com_total': soma_itens == total_c,
+        'n_itens': len(itens),
+        'customer_enviado': {k: v for k, v in cust.items() if k != 'document'},
+        'documento': {
+            'digitos': len(doc),
+            'valido': len(doc) in (11, 14),
+            'seria_enviado': 'document' in cust,
+        },
+        'email': {
+            'valor': email,
+            'tem_arroba': '@' in email,
+            'tem_espaco': (email != email.strip()) or (' ' in email),
+        },
+        'telefone_valido': pagarme._telefone_br(pedido.telefone_cliente)
+        is not None,
+    }
+    if request.args.get('post') == '1':
+        payload = {
+            'customer': cust, 'items': itens,
+            'payments': [{'payment_method': 'pix',
+                          'amount': total_c, 'pix': {'expires_in': 1800}}],
+            'code': pedido.codigo,
+        }
+        st, body = pagarme._post_order(payload)
+        out['pagarme_http'] = st
+        out['pagarme_message'] = body.get('message')
+        out['pagarme_errors'] = body.get('errors')
+    return jsonify(out)
