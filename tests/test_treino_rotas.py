@@ -76,6 +76,29 @@ def test_funcionario_ve_trilha_e_video(app):
     assert c.get('/treino/extrato').status_code == 200
 
 
+def test_video_abre_com_progresso_salvo(app):
+    """Vídeo já concluído abre mostrando o progresso salvo, não 0%."""
+    from app.models import TreinoProgressoVideo
+    from app.utils import agora
+    with app.app_context():
+        _temp()
+        u, f, _ = _func_logado(app)
+        trilha = TreinoTrilha(nome='Seg')
+        db.session.add(trilha)
+        db.session.commit()
+        v = TreinoVideo(trilha_id=trilha.id, titulo='A', duracao_segundos=100)
+        db.session.add(v)
+        db.session.commit()
+        db.session.add(TreinoProgressoVideo(
+            funcionario_id=f.id, video_id=v.id, versao_video=v.versao,
+            percentual=100, concluido_em=agora()))
+        db.session.commit()
+        uid, vid = u.id, v.id
+    c = _login(app, uid)
+    body = c.get(f'/treino/video/{vid}').get_data(as_text=True)
+    assert 'width:100%' in body and 'Concluído' in body
+
+
 def test_verificacao_publica_de_certificado(app):   # §11
     with app.app_context():
         _temp()
