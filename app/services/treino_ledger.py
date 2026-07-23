@@ -102,9 +102,14 @@ def creditar(funcionario, tipo, pontos, *, temporada=None,
         u = unidade_do_funcionario(funcionario)
         unidade_id = u.id if u else None
 
-    ja = _existente(funcionario.id, tipo, referencia_tipo, referencia_id)
-    if ja is not None:
-        return ja, False
+    # Idempotência SÓ quando há referência real. Eventos sem referência
+    # (AJUSTE_MANUAL) são fatos independentes e podem repetir — o índice único
+    # trata NULLs como distintos, então a pré-checagem também precisa pular.
+    tem_ref = referencia_id is not None or referencia_tipo is not None
+    if tem_ref:
+        ja = _existente(funcionario.id, tipo, referencia_tipo, referencia_id)
+        if ja is not None:
+            return ja, False
 
     pontos_efetivos = int(pontos)
     obs = observacao
