@@ -864,10 +864,13 @@ def admin_gerar_acesso(func_id):
 @login_required
 @admin_required
 def admin_trilha_cargos(id):
-    """v2 §16.1: liga a trilha a cargos (onboarding automático por cargo)."""
+    """v2 §16.1: liga a trilha a cargos (onboarding automático por cargo).
+    Suporta ajax=1 (auto-salvar ao marcar, sem recarregar) — devolve JSON."""
     from app.services import treino_onboarding as ob
     db.session.get(TreinoTrilha, id) or abort(404)
     ob.definir_cargos_da_trilha(id, request.form.getlist('cargo_ids'))
+    if request.form.get('ajax') == '1':
+        return jsonify(ok=True)
     flash('Cargos da trilha atualizados.', 'success')
     return _voltar()
 
