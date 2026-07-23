@@ -156,6 +156,13 @@ def _telefone_br(raw):
 def _payload_customer(pedido):
     """Customer (cliente final). E-mail é obrigatório; document/phones se
     tiverem. Pagar.me usa esse customer pra associar e contatar."""
+    # NOME cortado em 64 chars: o Pagar.me v5 recusa o customer.name acima de
+    # 64 com "The request is invalid" e derruba a cobrança INTEIRA (pix E
+    # cartão). CAUSA RAIZ do incidente 23/07/2026 (pedido 12A2F73D, PJ com
+    # razão social longa "Marilia Aguiar Junqueira Arquitetura, Projetos e
+    # Decoração de Interiores" = >64 chars): 8 tentativas falhando ANTES de o
+    # pedido nascer no gateway. Confirmado pela sonda /api/claude/pagamento-
+    # debug — com o nome truncado, o mesmo customer/CNPJ é ACEITO (HTTP 200).
     payload = {
         'name': (pedido.nome_cliente or '').strip()[:64] or 'Cliente',
         'email': (pedido.email_cliente or '').strip(),
@@ -163,12 +170,9 @@ def _payload_customer(pedido):
     }
     cli = getattr(pedido, 'cliente', None)
     doc = _so_digitos(getattr(cli, 'cpf', '') if cli else '')
-    # SÓ manda o documento se o TAMANHO for de CPF (11) ou CNPJ (14). Documento
-    # de tamanho errado (cliente digitou faltando/sobrando dígito) fazia o
-    # Pagar.me RECUSAR a cobrança INTEIRA com "The request is invalid" — mesma
-    # classe defensiva do telefone (`_telefone_br`). Incidente 23/07/2026,
-    # pedido 12a2f73d: 8 tentativas (pix+cartão) falhando antes de criar o
-    # pedido no gateway. Documento inválido é OMITIDO, nunca enviado sujo.
+    # Documento: SÓ manda se o TAMANHO for de CPF (11) ou CNPJ (14). Tamanho
+    # errado (cliente digitou faltando/sobrando dígito) é OMITIDO, nunca
+    # enviado sujo — mesma defesa do telefone (`_telefone_br`).
     if len(doc) == 14:
         payload['document'] = doc
         payload['document_type'] = 'cnpj'
