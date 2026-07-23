@@ -20,7 +20,6 @@
   <em>RH → Funcionários → abrir o funcionário</em>). Sem esse login, ele abre o
   treinamento e vê "sua conta não está vinculada a um funcionário".
 </div>
-{% endraw %}{# marcador nulo pra não quebrar caso de edição futura #}
 {% macro mini(action, label, cls='btn-outline-secondary', confirm='') %}
 <form method="POST" action="{{ action }}" class="d-inline"{% if confirm %} onsubmit="return confirm('{{ confirm }}')"{% endif %}>{{ csrf() }}<button class="btn btn-sm {{ cls }} py-0 px-1">{{ label }}</button></form>{% endmacro %}
 
