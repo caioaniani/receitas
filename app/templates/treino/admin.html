@@ -40,7 +40,7 @@
       <div class="small fw-bold mb-1">🎯 Onboarding — cargos que exigem esta trilha:</div>
       <div class="d-flex flex-wrap gap-2">
         {% set atribuidos = cargos_por_trilha.get(t.id, []) %}
-        {% for c in cargos %}<label class="small"><input type="checkbox" name="cargo_ids" value="{{ c.id }}"{% if c.id in atribuidos %} checked{% endif %}> {{ c.nome }}</label>{% else %}<span class="small text-muted">Nenhum cargo cadastrado no RH.</span>{% endfor %}
+        {% for c in cargos %}<label class="small"><input type="checkbox" name="cargo_ids" value="{{ c.id }}"{% if c.id in atribuidos %} checked{% endif %}> {{ c.nome }}{% if not c.ativo %} <span class="text-muted">(inativo)</span>{% endif %}</label>{% else %}<span class="small text-muted">Nenhum cargo cadastrado no RH.</span>{% endfor %}
       </div>
       {% if cargos %}<button class="btn btn-sm btn-outline-dark mt-1 py-0 px-1">Salvar cargos</button>{% endif %}</form></div>{% endfor %}
   <form method="POST" action="{{ url_for('treino.admin_trilha') }}" class="d-flex flex-wrap gap-1">{{ csrf() }}
