@@ -398,6 +398,32 @@ def create_app(config_class=None):
             return redirect('/loja/', code=302)
         abort(404)
 
+    @app.before_request
+    def _gate_conta():
+        """Trava por conta (23/07/2026, decisão do dono):
+        - `senha_provisoria`: força trocar a senha no 1º acesso antes de
+          liberar qualquer tela (a senha veio no e-mail; a pessoa sabe a atual).
+        - `somente_treino`: acesso restrito à área de treinamento (/treino);
+          o resto vira redirect (barra por URL também, não só escondendo link).
+        Roda depois do roteamento por host; `getattr` defensivo enquanto a
+        coluna propaga. Allowlist evita loop (a própria troca, sair, estáticos).
+        """
+        from flask import url_for
+        from flask_login import current_user
+        if not getattr(current_user, 'is_authenticated', False):
+            return None
+        ep = request.endpoint or ''
+        liberados = {'auth.minha_senha', 'auth.logout', 'auth.csrf_token_novo',
+                     'static', 'pwa_service_worker', 'pwa_manifest', 'health'}
+        if ep in liberados or ep.endswith('.static'):
+            return None
+        if getattr(current_user, 'senha_provisoria', False):
+            return redirect(url_for('auth.minha_senha'))
+        if (getattr(current_user, 'somente_treino', False)
+                and not ep.startswith('treino.')):
+            return redirect(url_for('treino.home'))
+        return None
+
     @app.after_request
     def add_security_headers(response):
         import os
