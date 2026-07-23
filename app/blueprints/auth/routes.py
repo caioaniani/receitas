@@ -293,7 +293,9 @@ def minha_senha():
         flash('Senha alterada com sucesso.', 'success')
         return redirect(url_for('main.index'))
 
-    return render_template('auth/minha_senha.html')
+    return render_template('auth/minha_senha.html',
+                           forcado=bool(getattr(current_user,
+                                                'senha_provisoria', False)))
 
 
 @auth_bp.route('/painel')
