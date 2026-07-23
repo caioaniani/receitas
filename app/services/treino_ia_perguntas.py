@@ -114,10 +114,12 @@ def gerar_com_momento(segmentos, n=3):
     return {'perguntas': perguntas, 'modelo_usado': MODELO}
 
 
-def _sanitizar(dados, com_momento=False):
+def _sanitizar(dados, com_momento=False, momento_max=None):
     """Blinda a proposta da IA: enunciado não-vazio, 2-5 alternativas, índice
-    correto válido. Com `com_momento`, exige `momento_seg` int >= 0. Descarta o
-    que não bate."""
+    correto válido. Com `com_momento`, `momento_seg` vira int em [0, momento_max]
+    (a IA não pode sugerir um tempo além do fim do vídeo) ou `None` quando
+    ausente/inválido — o front NÃO exibe "0:00" como se fosse sugestão. Descarta
+    o que não bate."""
     if isinstance(dados, dict):
         dados = dados.get('perguntas') or dados.get('questoes') or []
     out = []
