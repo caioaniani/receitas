@@ -1752,6 +1752,16 @@ def _migrate_postgres(app):
         app.logger.warning('backfill token driver falhou: %s', e)
         db.session.rollback()
 
+    # Módulo antigo "Vídeos simples" (blueprint treinamento) REMOVIDO em
+    # 24/07/2026 e substituído pelo treinamento gamificado (/treino). O dono
+    # autorizou explicitamente o DROP das 6 tabelas antigas ("Pode destruir").
+    # CASCADE resolve as FKs internas (pergunta→treinamento, opcao→pergunta,
+    # tentativa/conclusao/progresso→treinamento). Idempotente (IF EXISTS).
+    for _t in ('treinamento_progresso', 'treinamento_conclusao',
+               'treinamento_tentativa', 'treinamento_opcao',
+               'treinamento_pergunta', 'treinamento'):
+        _try(f"DROP TABLE IF EXISTS {_t} CASCADE")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
