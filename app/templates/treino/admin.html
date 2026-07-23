@@ -133,4 +133,23 @@
   <div class="mobile-table-scroll"><table class="table table-sm mb-0"><tbody>
   {% for k,v in pontos.items() %}<tr><td>{{ k }}</td><td class="text-end">{{ v }}</td></tr>{% endfor %}
   </tbody></table></div></div></div>
+
+<script>
+// Onboarding: auto-salva os cargos ao MARCAR (sem recarregar) — some a dúvida
+// "como salvar / voltou vazio". O botão "Salvar cargos" segue como reserva.
+document.querySelectorAll('.cargo-form').forEach(function(form){
+  var status=form.querySelector('.cargo-status');
+  function salvar(){
+    if(status)status.textContent='salvando…';
+    var fd=new FormData(form);fd.append('ajax','1');
+    fetch(form.action,{method:'POST',headers:{'X-CSRFToken':form.querySelector('[name=csrf_token]').value},body:fd})
+      .then(function(r){return r.json();})
+      .then(function(j){if(status)status.textContent=j.ok?'✓ salvo':'não salvou';})
+      .catch(function(){if(status)status.textContent='erro de rede';});
+  }
+  form.querySelectorAll('input[name=cargo_ids]').forEach(function(cb){
+    cb.addEventListener('change',salvar);
+  });
+});
+</script>
 {% endblock %}
