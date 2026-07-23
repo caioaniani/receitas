@@ -562,3 +562,115 @@ def admin_ajuste():
     else:
         flash('Ajuste lançado.', 'success')
     return redirect(url_for('treino.admin_home'))
+
+
+# ── Admin: edição / desativação / exclusão ──────────────────────────────
+def _voltar():
+    return redirect(request.referrer or url_for('treino.admin_home'))
+
+
+@treino_bp.route('/admin/trilha/<int:id>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def admin_trilha_toggle(id):
+    t = db.session.get(TreinoTrilha, id) or abort(404)
+    t.ativa = not t.ativa
+    db.session.commit()
+    return _voltar()
+
+
+@treino_bp.route('/admin/trilha/<int:id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def admin_trilha_excluir(id):
+    t = db.session.get(TreinoTrilha, id) or abort(404)
+    if t.videos:
+        flash('Trilha com vídeos — desative em vez de excluir.', 'warning')
+    else:
+        db.session.delete(t)
+        db.session.commit()
+        flash('Trilha excluída.', 'success')
+    return _voltar()
+
+
+@treino_bp.route('/admin/video/<int:id>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def admin_video_toggle(id):
+    v = db.session.get(TreinoVideo, id) or abort(404)
+    v.ativo = not v.ativo
+    db.session.commit()
+    return _voltar()
+
+
+@treino_bp.route('/admin/video/<int:id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def admin_video_excluir(id):
+    v = db.session.get(TreinoVideo, id) or abort(404)
+    tid = v.trilha_id
+    if v.video_externo_id:
+        from app.services import treinamento_stream as ts
+        ts.deletar(v.video_externo_id)
+    db.session.delete(v)
+    db.session.commit()
+    flash('Vídeo excluído.', 'success')
+    return redirect(url_for('treino.admin_home', _anchor=f't{tid}'))
+
+
+@treino_bp.route('/admin/checkpoint/<int:id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def admin_checkpoint_excluir(id):
+    c = db.session.get(TreinoCheckpoint, id) or abort(404)
+    db.session.delete(c)
+    db.session.commit()
+    return _voltar()
+
+
+@treino_bp.route('/admin/quiz/<int:id>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def admin_quiz_toggle(id):
+    q = db.session.get(TreinoQuiz, id) or abort(404)
+    if not q.ativo and not tq.pode_publicar(q):
+        flash('Banco insuficiente (precisa de 3× as questões por tentativa).',
+              'warning')
+        return _voltar()
+    q.ativo = not q.ativo
+    db.session.commit()
+    return _voltar()
+
+
+@treino_bp.route('/admin/questao/<int:id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def admin_questao_excluir(id):
+    from app.models import TreinoQuestao
+    quest = db.session.get(TreinoQuestao, id) or abort(404)
+    db.session.delete(quest)
+    db.session.commit()
+    return _voltar()
+
+
+@treino_bp.route('/admin/recompensa/<int:id>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def admin_recompensa_toggle(id):
+    r = db.session.get(TreinoRecompensa, id) or abort(404)
+    r.ativa = not r.ativa
+    db.session.commit()
+    return _voltar()
+
+
+@treino_bp.route('/admin/temporada/<int:id>/status', methods=['POST'])
+@login_required
+@admin_required
+def admin_temporada_status(id):
+    from app.models import TreinoTemporada
+    t = db.session.get(TreinoTemporada, id) or abort(404)
+    novo = request.form.get('status')
+    if novo in ('PLANEJADA', 'ATIVA', 'ENCERRADA'):
+        t.status = novo
+        db.session.commit()
+    return _voltar()
