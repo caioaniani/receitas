@@ -82,6 +82,9 @@ def gerar_acesso(funcionario):
     db.session.commit()
 
     from app.services import email as email_svc
-    res = email_svc.enviar_boas_vindas(email, funcionario.nome, email, senha)
+    # Conta de TREINAMENTO: sem o bloco do Chatwoot (nem todo funcionário
+    # atende cliente — decisão do dono 23/07/2026).
+    res = email_svc.enviar_boas_vindas(email, funcionario.nome, email, senha,
+                                       com_chatwoot=False)
     return {'ok': True, 'motivo': 'criado', 'usuario': u, 'senha': senha,
             'email_ok': res.get('ok'), 'email_erro': res.get('erro')}
