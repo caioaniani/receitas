@@ -133,7 +133,7 @@ def creditar(funcionario, tipo, pontos, *, temporada=None,
     except IntegrityError:
         db.session.rollback()               # perdeu a corrida -> devolve o que há
         return _existente(funcionario.id, tipo, referencia_tipo,
-                          referencia_id), False
+                          referencia_id) if tem_ref else None, False
 
 
 # ── Estorno (nunca apaga o original) ────────────────────────────────────
