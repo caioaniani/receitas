@@ -332,8 +332,10 @@ def gestor_decidir(id):
 @admin_required
 def admin_home():
     from app.models import Cargo, TreinoTemporada, TreinoTrilhaCargo
+    from app.services import treino_acessos as acessos
     from app.services import treino_pontos as cfg
     trilhas = TreinoTrilha.query.order_by(TreinoTrilha.ordem).all()
+    contas_livres = acessos.contas_sem_vinculo()
     # mapa trilha_id -> conjunto de cargo_ids exigidos (v2 §16.1)
     cargos_por_trilha = {}
     vinculados = set()
