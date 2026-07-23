@@ -157,22 +157,25 @@ def _payload_customer(pedido):
     """Customer (cliente final). E-mail é obrigatório; document/phones se
     tiverem. Pagar.me usa esse customer pra associar e contatar."""
     payload = {
-        'name': pedido.nome_cliente,
-        'email': pedido.email_cliente,
+        'name': (pedido.nome_cliente or '').strip()[:64] or 'Cliente',
+        'email': (pedido.email_cliente or '').strip(),
         'type': 'individual',
     }
     cli = getattr(pedido, 'cliente', None)
     doc = _so_digitos(getattr(cli, 'cpf', '') if cli else '')
-    if doc:
-        # O campo `cpf` do Cliente guarda CPF (11 dígitos) OU CNPJ (14) —
-        # o checkout aceita os dois desde 13/07/2026. Pagar.me exige
-        # type='company' quando o documento é CNPJ.
+    # SÓ manda o documento se o TAMANHO for de CPF (11) ou CNPJ (14). Documento
+    # de tamanho errado (cliente digitou faltando/sobrando dígito) fazia o
+    # Pagar.me RECUSAR a cobrança INTEIRA com "The request is invalid" — mesma
+    # classe defensiva do telefone (`_telefone_br`). Incidente 23/07/2026,
+    # pedido 12a2f73d: 8 tentativas (pix+cartão) falhando antes de criar o
+    # pedido no gateway. Documento inválido é OMITIDO, nunca enviado sujo.
+    if len(doc) == 14:
         payload['document'] = doc
-        if len(doc) == 14:
-            payload['document_type'] = 'cnpj'
-            payload['type'] = 'company'
-        else:
-            payload['document_type'] = 'cpf'
+        payload['document_type'] = 'cnpj'
+        payload['type'] = 'company'
+    elif len(doc) == 11:
+        payload['document'] = doc
+        payload['document_type'] = 'cpf'
     fone = _telefone_br(pedido.telefone_cliente)
     if fone:
         ddd, num = fone
