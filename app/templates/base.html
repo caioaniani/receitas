@@ -120,12 +120,8 @@
             Notas (memória do agente)
         </a>
         <a href="{{ url_for('treino.home') }}"
-           class="sidebar-link {% if request.path.startswith('/treino') and not request.path.startswith('/treinamento') %}active{% endif %}">
+           class="sidebar-link {% if request.path.startswith('/treino') %}active{% endif %}">
             🎮 Treinamento
-        </a>
-        <a href="{{ url_for('treinamento.index') }}"
-           class="sidebar-link {% if request.path.startswith('/treinamento') and not request.path.startswith('/treinamento/admin') %}active{% endif %}">
-            🎓 Vídeos (simples)
         </a>
         {# Loja Online: liberada a todos os usuários logados (22/06/2026), porém
            o DASHBOARD (com faturamento) e a config de logo seguem owner-only.
