@@ -24,6 +24,10 @@
 <form method="POST" action="{{ action }}" class="d-inline"{% if confirm %} onsubmit="return confirm('{{ confirm }}')"{% endif %}>{{ csrf() }}<button class="btn btn-sm {{ cls }} py-0 px-1">{{ label }}</button></form>{% endmacro %}
 
 <div class="card mb-3"><div class="card-header py-2"><strong>Temporadas</strong></div><div class="card-body">
+  <p class="small text-muted mb-2">É o <strong>período da competição</strong>. Os pontos e o
+    ranking valem <strong>por temporada</strong> — precisa de <strong>uma temporada ATIVA</strong>
+    pra qualquer pessoa pontuar. Ao <strong>encerrar</strong>, o ranking daquele período é
+    fechado; abra uma nova pra recomeçar do zero (ex.: uma por mês ou por trimestre).</p>
   {% for t in temporadas %}<div class="small d-flex justify-content-between align-items-center mb-1">
     <span>{{ t.nome }} — {{ t.inicio }} a {{ t.fim }} <span class="badge bg-{{ 'success' if t.status=='ATIVA' else 'secondary' }}">{{ t.status }}</span></span>
     <span>
