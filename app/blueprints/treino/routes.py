@@ -680,13 +680,38 @@ def admin_trilha_toggle(id):
 @login_required
 @admin_required
 def admin_trilha_excluir(id):
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models import TreinoChecklistAplicacao, TreinoTrilhaCargo
     t = db.session.get(TreinoTrilha, id) or abort(404)
+    # Bloqueia se houver CONTEÚDO ou HISTÓRICO (preservar) — mensagem precisa.
+    # Só o mapeamento de cargo (config pura) é limpo e não impede a exclusão.
+    bloqueios = []
     if t.videos:
-        flash('Trilha com vídeos — desative em vez de excluir.', 'warning')
-    else:
-        db.session.delete(t)
+        bloqueios.append('vídeos')
+    if TreinoQuiz.query.filter_by(trilha_id=t.id).first():
+        bloqueios.append('quiz')
+    if TreinoChecklistAplicacao.query.filter_by(trilha_id=t.id).first():
+        bloqueios.append('checklist de aplicação')
+    if TreinoAplicacaoPratica.query.filter_by(trilha_id=t.id).first():
+        bloqueios.append('aplicações registradas')
+    if TreinoSelo.query.filter_by(trilha_id=t.id).first():
+        bloqueios.append('selos emitidos')
+    if bloqueios:
+        flash(f'Trilha com {", ".join(bloqueios)} — desative em vez de '
+              'excluir (o histórico precisa ser preservado).', 'warning')
+        return _voltar()
+    TreinoTrilhaCargo.query.filter_by(trilha_id=t.id).delete()
+    db.session.delete(t)
+    try:
         db.session.commit()
-        flash('Trilha excluída.', 'success')
+    except IntegrityError:
+        # rede de segurança: qualquer vínculo não previsto nunca vira 500
+        db.session.rollback()
+        flash('Não deu pra excluir — há registros vinculados à trilha. '
+              'Desative em vez de excluir.', 'warning')
+        return _voltar()
+    flash('Trilha excluída.', 'success')
     return _voltar()
 
 
