@@ -19,6 +19,5 @@ from app.models.pedidos import *  # noqa: F401, F403
 from app.models.producao import *  # noqa: F401, F403
 from app.models.projetos import *  # noqa: F401, F403
 from app.models.rh import *  # noqa: F401, F403
-from app.models.treinamento import *  # noqa: F401, F403
 from app.models.treino_conteudo import *  # noqa: F401, F403
 from app.models.treino_gamificacao import *  # noqa: F401, F403
