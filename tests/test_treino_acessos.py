@@ -48,6 +48,17 @@ def test_cria_conta_e_vincula(app):
         assert r2['motivo'] == 'ja_tem'
 
 
+def test_email_de_treino_nao_fala_de_chatwoot(app):
+    """Conta de treinamento não recebe o convite do Chatwoot (nem todo
+    funcionário atende cliente) — gerar_acesso manda com_chatwoot=False."""
+    with app.app_context():
+        f = _func()
+        with patch('app.services.email.enviar_boas_vindas',
+                   return_value={'ok': True}) as mock_env:
+            acessos.gerar_acesso(f)
+        assert mock_env.call_args.kwargs.get('com_chatwoot') is False
+
+
 def test_vincula_conta_existente_de_funcionario(app):
     with app.app_context():
         u = Usuario(nome='Ze', login='ze@opao.online', email='ze@opao.online',
