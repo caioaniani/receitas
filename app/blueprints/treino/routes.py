@@ -520,12 +520,29 @@ def admin_checkpoint(id):
 @login_required
 @admin_required
 def admin_video_ia(id):
-    """v2 §16.2 no CHECKPOINT: a IA PROPÕE a pergunta + alternativas a partir
-    do conteúdo colado. O admin escolhe uma, define o MOMENTO (min:seg) e salva
-    pelo endpoint normal de checkpoint. Não grava nada aqui."""
-    db.session.get(TreinoVideo, id) or abort(404)
+    """v2 §16.2 no CHECKPOINT: a IA PROPÕE pergunta + alternativas. Duas fontes:
+    `fonte=video` usa a TRANSCRIÇÃO com tempo do Cloudflare (a IA também sugere
+    o MOMENTO); qualquer outra usa o texto colado (sem momento). Não grava nada
+    aqui — o admin revisa, ajusta o momento e salva pelo endpoint de checkpoint."""
+    v = db.session.get(TreinoVideo, id) or abort(404)
     from app.services import treino_ia_perguntas as ia
-    r = ia.gerar(request.form.get('texto', ''), request.form.get('n', 3))
+    n = request.form.get('n', 3)
+    if request.form.get('fonte') == 'video':
+        if not v.video_externo_id:
+            return jsonify(ok=False, erro='Envie o vídeo primeiro.'), 400
+        from app.services import treinamento_stream as ts
+        segs = ts.transcricao(v.video_externo_id)
+        if not segs:
+            # legenda ainda não pronta — dispara a geração e pede pra tentar de
+            # novo (o Cloudflare leva ~1-2 min pra transcrever).
+            ts.gerar_legenda(v.video_externo_id)
+            return jsonify(ok=False, processando=True,
+                           erro='Legenda automática do vídeo ainda sendo gerada '
+                                'pelo Cloudflare. Tente de novo em 1-2 minutos.'
+                           ), 409
+        r = ia.gerar_com_momento(segs, n)
+    else:
+        r = ia.gerar(request.form.get('texto', ''), n)
     if 'erro' in r:
         return jsonify(ok=False, erro=r['erro']), 400
     return jsonify(ok=True, perguntas=r['perguntas'])
