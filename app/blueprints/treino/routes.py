@@ -77,7 +77,11 @@ def home():
     temp = _temp()
     trilhas = TreinoTrilha.query.filter_by(ativa=True).order_by(
         TreinoTrilha.ordem).all()
-    ctx = {'trilhas': trilhas, 'func': f, 'temp': temp}
+    ctx = {'trilhas': trilhas, 'func': f, 'temp': temp, 'onboarding_ids': set()}
+    if f:
+        from app.services import treino_onboarding as ob
+        ctx['onboarding_ids'] = {t.id for t in ob.onboarding_do_funcionario(f)}
+        ctx['progressao'] = ob.progressao(f)
     if f and temp:
         ctx['pos'] = rk.posicao_individual(f, temp.id)
         ctx['progresso'] = {
