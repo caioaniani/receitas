@@ -717,7 +717,8 @@ def gestor_progressao():
         unidade = ledger.unidade_do_funcionario(gestor) if gestor else None
         equipe = [f for f in (unidade.funcionarios if unidade else [])
                   if f.ativo]
-    linhas = [{'func': f, 'prog': ob.progressao(f)} for f in equipe]
+    progs = ob.progressao_lote(equipe)   # 2 queries, sem N+1
+    linhas = [{'func': f, 'prog': progs[f.id]} for f in equipe]
     return render_template('treino/gestor_progressao.html', linhas=linhas)
 
 
