@@ -486,17 +486,19 @@ def admin_video_salvar(id):
 
 
 def _mmss_para_seg(valor):
-    """Aceita 'min:seg' (ex '2:30' -> 150) OU segundos crus (ex '150'). Campo
-    do checkpoint é o MOMENTO do vídeo, e o dono pensa em min:seg."""
+    """Aceita 'min:seg' (ex '2:30' -> 150), 'hora:min:seg' (ex '1:02:30' ->
+    3750) OU segundos crus (ex '150'). Campo do checkpoint é o MOMENTO do vídeo,
+    e o dono pensa em min:seg. Nunca devolve negativo."""
     v = (valor or '').strip()
     if ':' in v:
-        partes = v.split(':')
         try:
-            m, s = int(partes[0] or 0), int(partes[1] or 0)
-            return max(0, m * 60 + s)
-        except (ValueError, IndexError):
+            seg = 0
+            for parte in v.split(':'):        # base-60: mm:ss e hh:mm:ss
+                seg = seg * 60 + int(parte or 0)
+            return max(0, seg)
+        except ValueError:
             return 0
-    return _int(v)
+    return max(0, _int(v))
 
 
 @treino_bp.route('/admin/video/<int:id>/checkpoint', methods=['POST'])
