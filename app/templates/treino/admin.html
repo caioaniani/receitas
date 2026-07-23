@@ -59,8 +59,13 @@
     <div class="d-flex justify-content-between align-items-start">
       <strong>{{ t.nome }} {% if not t.ativa %}<span class="badge bg-secondary">inativa</span>{% endif %}</strong>
       <span class="d-flex flex-wrap gap-1">
+        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="var e=document.getElementById('edt{{ t.id }}');e.style.display=e.style.display==='none'?'':'none';">✏️ editar</button>
         {{ mini(url_for('treino.admin_trilha_toggle', id=t.id), 'ativa on/off') }}
-        {{ mini(url_for('treino.admin_trilha_excluir', id=t.id), '🗑', 'btn-outline-danger', 'Excluir trilha?') }}</span></div>
+        {{ mini(url_for('treino.admin_trilha_excluir', id=t.id), '🗑', 'btn-outline-danger', 'Excluir trilha? (só se ninguém usou ainda)') }}</span></div>
+    <form id="edt{{ t.id }}" method="POST" action="{{ url_for('treino.admin_trilha_editar', id=t.id) }}" class="row g-1 my-1" style="display:none;">{{ csrf() }}
+      <div class="col-12 col-md-4"><input name="nome" class="form-control form-control-sm" value="{{ t.nome }}" placeholder="Nome da trilha"></div>
+      <div class="col-12 col-md-6"><input name="descricao" class="form-control form-control-sm" value="{{ t.descricao or '' }}" placeholder="Descrição (opcional)"></div>
+      <div class="col-12 col-md-2"><button class="btn btn-sm btn-primary w-100">Salvar</button></div></form>
     {% for v in t.videos %}<div class="small d-flex justify-content-between">
       <span>▶️ <a href="{{ url_for('treino.admin_video_editar', id=v.id) }}">{{ v.titulo }}</a> ({% if v.duracao_segundos and v.duracao_segundos > 0 %}{{ v.duracao_segundos // 60 }}:{{ '%02d'|format(v.duracao_segundos % 60) }}{% elif v.video_externo_id %}processando{% else %}sem vídeo{% endif %}{% if v.video_externo_id %}, ✓{% endif %}, {{ v.checkpoints|length }} cp){% if not v.ativo %} <span class="badge bg-secondary">off</span>{% endif %}</span>
       <span class="d-flex flex-wrap gap-1">{{ mini(url_for('treino.admin_video_toggle', id=v.id), 'on/off') }}{{ mini(url_for('treino.admin_video_excluir', id=v.id), '🗑', 'btn-outline-danger', 'Excluir vídeo?') }}</span></div>{% endfor %}
