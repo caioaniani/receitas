@@ -53,6 +53,14 @@ def definir_cargos_da_trilha(trilha_id, cargo_ids):
     db.session.commit()
 
 
+def _montar_progressao(funcionario, exigidas, com_selo_ids):
+    itens = [{'trilha': t, 'tem_selo': t.id in com_selo_ids} for t in exigidas]
+    apto = bool(exigidas) and all(i['tem_selo'] for i in itens)
+    return {'cargo': getattr(funcionario, 'cargo', None), 'itens': itens,
+            'apto': apto, 'total': len(itens),
+            'concluidas': sum(1 for i in itens if i['tem_selo'])}
+
+
 def progressao(funcionario):
     """Estado de progressão do funcionário no cargo atual (§16.3): as trilhas
     obrigatórias do cargo e se cada uma já tem selo; `apto` quando todas têm."""
@@ -60,8 +68,38 @@ def progressao(funcionario):
     exigidas = trilhas_do_cargo(cargo_id, so_obrigatorias=True)
     com_selo = {s.trilha_id for s in TreinoSelo.query.filter_by(
         funcionario_id=funcionario.id).all()}
-    itens = [{'trilha': t, 'tem_selo': t.id in com_selo} for t in exigidas]
-    apto = bool(exigidas) and all(i['tem_selo'] for i in itens)
-    return {'cargo': getattr(funcionario, 'cargo', None), 'itens': itens,
-            'apto': apto, 'total': len(itens),
-            'concluidas': sum(1 for i in itens if i['tem_selo'])}
+    return _montar_progressao(funcionario, exigidas, com_selo)
+
+
+def progressao_lote(funcionarios):
+    """Progressão de VÁRIOS funcionários sem N+1 (relatório do gestor): agrega
+    trilhas-por-cargo e selos em 2 queries e resolve em memória.
+    Devolve dict {funcionario_id: progressao}."""
+    funcionarios = list(funcionarios)
+    if not funcionarios:
+        return {}
+    cargo_ids = {f.cargo_id for f in funcionarios if getattr(f, 'cargo_id', None)}
+    func_ids = [f.id for f in funcionarios]
+    # trilhas obrigatórias ATIVAS por cargo (1 query)
+    exig_por_cargo = {}
+    if cargo_ids:
+        rows = (db.session.query(TreinoTrilhaCargo.cargo_id, TreinoTrilha)
+                .join(TreinoTrilha,
+                      TreinoTrilha.id == TreinoTrilhaCargo.trilha_id)
+                .filter(TreinoTrilhaCargo.cargo_id.in_(cargo_ids),
+                        TreinoTrilhaCargo.obrigatoria.is_(True),
+                        TreinoTrilha.ativa.is_(True))
+                .order_by(TreinoTrilha.ordem).all())
+        for cid, trilha in rows:
+            exig_por_cargo.setdefault(cid, []).append(trilha)
+    # selos por funcionário (1 query)
+    selos_por_func = {}
+    for s in TreinoSelo.query.filter(
+            TreinoSelo.funcionario_id.in_(func_ids)).all():
+        selos_por_func.setdefault(s.funcionario_id, set()).add(s.trilha_id)
+    out = {}
+    for f in funcionarios:
+        exigidas = exig_por_cargo.get(getattr(f, 'cargo_id', None), [])
+        out[f.id] = _montar_progressao(
+            f, exigidas, selos_por_func.get(f.id, set()))
+    return out
