@@ -326,14 +326,20 @@ def gestor_decidir(id):
 @login_required
 @admin_required
 def admin_home():
-    from app.models import TreinoTemporada
+    from app.models import Cargo, TreinoTemporada, TreinoTrilhaCargo
     from app.services import treino_pontos as cfg
     trilhas = TreinoTrilha.query.order_by(TreinoTrilha.ordem).all()
+    # mapa trilha_id -> conjunto de cargo_ids exigidos (v2 §16.1)
+    cargos_por_trilha = {}
+    for m in TreinoTrilhaCargo.query.all():
+        cargos_por_trilha.setdefault(m.trilha_id, set()).add(m.cargo_id)
     return render_template(
         'treino/admin.html', trilhas=trilhas, pontos=cfg.todos(),
         temporadas=TreinoTemporada.query.order_by(
             TreinoTemporada.inicio.desc()).all(),
         recompensas=TreinoRecompensa.query.all(),
+        cargos=Cargo.query.filter_by(ativo=True).order_by(Cargo.nome).all(),
+        cargos_por_trilha=cargos_por_trilha,
         funcionarios=Funcionario.query.filter_by(ativo=True).order_by(
             Funcionario.nome).all())
 
