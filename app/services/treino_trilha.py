@@ -34,33 +34,47 @@ def _quizzes_da_trilha(trilha):
 
 
 def progresso_trilha(funcionario, trilha, temporada):
-    """Estado da trilha pro funcionário: vídeos ok, quizzes ok, aplicação ok."""
+    """Estado da trilha pro funcionário: vídeos ok, quizzes ok, aplicação ok +
+    `percentual` (0-100) pra barra de progresso."""
     videos = _videos_ativos(trilha)
     concluidos = {p.video_id for p in TreinoProgressoVideo.query.filter(
         TreinoProgressoVideo.funcionario_id == funcionario.id,
         TreinoProgressoVideo.concluido_em.isnot(None),
         TreinoProgressoVideo.video_id.in_([v.id for v in videos] or [0])).all()}
-    videos_ok = all(v.id in concluidos for v in videos) if videos else False
+    n_videos_ok = sum(1 for v in videos if v.id in concluidos)
+    videos_ok = bool(videos) and n_videos_ok == len(videos)
 
     quizzes = _quizzes_da_trilha(trilha)
-    quizzes_ok = True
+    n_quizzes_ok = 0
     for quiz in quizzes:
-        aprovada = TreinoTentativaQuiz.query.filter_by(
-            funcionario_id=funcionario.id, quiz_id=quiz.id,
-            aprovada=True).first()
-        if aprovada is None:
-            quizzes_ok = False
-            break
+        if TreinoTentativaQuiz.query.filter_by(
+                funcionario_id=funcionario.id, quiz_id=quiz.id,
+                aprovada=True).first() is not None:
+            n_quizzes_ok += 1
+    quizzes_ok = n_quizzes_ok == len(quizzes)
 
     aplicacao_ok = TreinoAplicacaoPratica.query.filter_by(
         funcionario_id=funcionario.id, trilha_id=trilha.id,
         temporada_id=temporada.id, status='REGISTRADA').first() is not None
 
+    completa = bool(videos and videos_ok and quizzes_ok and aplicacao_ok)
+
+    # Barra de progresso: cada aula + cada quiz + a aplicação prática = 1
+    # unidade (o MESMO trio que fecha a trilha — §4). 100% SÓ quando completa
+    # (mesmo critério do selo ✓); antes disso, fração das unidades feitas com
+    # teto de 99% pra nunca "mentir concluída" (ex.: trilha sem vídeo, ou tudo
+    # feito menos a aplicação).
+    total_un = len(videos) + len(quizzes) + 1        # +1 = aplicação prática
+    ok_un = n_videos_ok + n_quizzes_ok + (1 if aplicacao_ok else 0)
+    percentual = 100 if completa else min(99, round(100 * ok_un / total_un))
+
     return {'videos': len(videos), 'videos_ok': videos_ok,
+            'videos_feitos': n_videos_ok,
             'quizzes': len(quizzes), 'quizzes_ok': quizzes_ok,
+            'quizzes_feitos': n_quizzes_ok,
             'aplicacao_ok': aplicacao_ok,
-            'completa': bool(videos and videos_ok and quizzes_ok
-                             and aplicacao_ok)}
+            'completa': completa,
+            'percentual': percentual}
 
 
 def verificar_conclusao(funcionario, trilha, temporada):
