@@ -235,8 +235,10 @@
             Minhas Fichas
         </a>
         {% endif %}
+        {% endif %}{# fim: nav escondida pra conta só-treino #}
         {% endif %}
 
+        {% if not (current_user.is_authenticated and current_user.somente_treino) %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Fichas Técnicas</div>
         {{ areanav.fichas('sidebar') }}
