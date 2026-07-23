@@ -26,6 +26,12 @@ class Usuario(UserMixin, db.Model):
     papel = db.Column(db.String(20), nullable=False, default='funcionario')
     loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
     is_owner = db.Column(db.Boolean, default=False)
+    # Senha provisória (gerada no cadastro): força a troca no 1º login antes de
+    # liberar qualquer tela. Coluna via _migrate_* (procedimento de 2 commits).
+    senha_provisoria = db.Column(db.Boolean, default=False, nullable=False)
+    # Acesso SÓ TREINAMENTO (por pessoa — decisão do dono 23/07/2026): o usuário
+    # marcado só enxerga /treino; o gate global barra o resto (mesmo por URL).
+    somente_treino = db.Column(db.Boolean, default=False, nullable=False)
 
     loja = db.relationship('Loja', backref='usuarios')
 
