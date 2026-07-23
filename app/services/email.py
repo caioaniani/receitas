@@ -769,6 +769,11 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
 
 def _texto_boas_vindas(nome, login, senha, base, chatwoot):
     login_url = f'{base}/auth/login' if base else '(link do sistema)'
+    chatwoot_txt = (
+        f'Atendimento aos clientes (Chatwoot): {chatwoot}\n'
+        f'Você receberá um convite por email direto do Chatwoot pra criar '
+        f'sua conta lá.\n\n'
+    ) if chatwoot else ''
     return (
         f'Bem-vindo(a), {nome}!\n\n'
         f'Seu acesso ao sistema de gestão:\n'
@@ -776,8 +781,6 @@ def _texto_boas_vindas(nome, login, senha, base, chatwoot):
         f'  Senha: {senha}\n\n'
         f'Entrar: {login_url}\n'
         f'(Troque a senha no primeiro acesso.)\n\n'
-        f'Atendimento aos clientes (Chatwoot): {chatwoot}\n'
-        f'Você receberá um convite por email direto do Chatwoot pra criar '
-        f'sua conta lá.\n\n'
+        f'{chatwoot_txt}'
         f'Email automático — não responda.'
     )
