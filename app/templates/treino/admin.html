@@ -98,6 +98,10 @@
     <div class="col-2"><button class="btn btn-sm btn-primary w-100">Criar</button></div></form></div></div>
 
 <div class="card mb-3"><div class="card-header py-2"><strong>Ajuste manual de pontos</strong></div><div class="card-body">
+  <p class="small text-muted mb-2">Adiciona (número positivo) ou remove (negativo) pontos de
+    um funcionário <strong>na mão</strong>. A <strong>justificativa é obrigatória</strong> e
+    fica registrada no extrato. Use para corrigir um erro ou premiar algo que as regras
+    automáticas não cobrem. O lançamento entra na <strong>temporada ATIVA</strong>.</p>
   <form method="POST" action="{{ url_for('treino.admin_ajuste') }}" class="row g-2">{{ csrf() }}
     <div class="col-4"><select name="funcionario_id" class="form-select form-select-sm">{% for f in funcionarios %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}</select></div>
     <div class="col-2"><input name="pontos" class="form-control form-control-sm" placeholder="±pts"></div>
