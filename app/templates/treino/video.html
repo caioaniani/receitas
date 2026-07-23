@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ v.titulo }}{% endblock %}
+{% block content %}
+<div class="page-header"><div>
+  <h1 class="page-title">{{ v.titulo }}</h1>
+  <p class="page-subtitle"><a href="{{ url_for('treino.trilha', id=v.trilha_id) }}">&larr; Trilha</a></p>
+</div></div>
+
+{% if video_embed %}
+<div style="max-width:720px;"><div style="position:relative;padding-top:56.25%;">
+  <iframe id="vf" src="{{ video_embed }}"
+    style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;border-radius:8px;"
+    allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;"
+    allowfullscreen></iframe>
+</div></div>
+<script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
+{% else %}
+<div class="alert alert-secondary">Vídeo em preparação. Recarregue em instantes.</div>
+{% endif %}
+
+<div class="my-3" style="max-width:720px;">
+  <div class="d-flex justify-content-between small mb-1">
+    <span class="fw-bold">Progresso</span><span id="pct">0%</span></div>
+  <div class="progress" style="height:16px;">
+    <div id="bar" class="progress-bar bg-success" style="width:0%;"></div></div>
+  <div class="small text-muted mt-1" id="msg">Assista até o fim (pular não conta). Vai ter perguntas no meio.</div>
+</div>
+
+{% for q in quizzes %}
+<a href="{{ url_for('treino.trilha', id=v.trilha_id) }}" class="btn btn-primary btn-sm">Ir para o quiz</a>
+{% endfor %}
+
+{# Modal de checkpoint #}
+<div id="cpbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;">
+  <div style="max-width:480px;margin:12vh auto;background:var(--bs-body-bg,#fff);border-radius:10px;padding:18px;">
+    <div class="fw-bold mb-2" id="cp-enun"></div>
+    <div id="cp-alts"></div>
+    <div class="small text-muted mt-2" id="cp-msg"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var CPS = {{ checkpoints|map(attribute='id')|list|tojson }};
+  var CPDATA = {
+  {% for c in checkpoints %}"{{ c.id }}":{seg:{{ c.segundo }},enun:{{ c.enunciado|tojson }},alts:{{ c.alternativas|tojson }},resp:false},{% endfor %}
+  };
+  var HB='{{ url_for("treino.api_heartbeat", id=v.id) }}';
+  var CSRF='{{ csrf_token() }}';
+  var bar=document.getElementById('bar'),pct=document.getElementById('pct'),msg=document.getElementById('msg');
+  var box=document.getElementById('cpbox');
+  var frame=document.getElementById('vf');
+  var player=(frame&&window.Stream)?window.Stream(frame):null;
+  if(!player) return;
+  function post(url,body){return fetch(url,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(r){return r.json();});}
+  // heartbeat 15s
+  setInterval(function(){
+    var cur=player.currentTime||0; if(player.paused) return;
+    post(HB,'t='+cur+'&v='+(player.playbackRate||1)).then(function(j){
+      if(!j||!j.ok)return; bar.style.width=j.pct+'%'; pct.textContent=Math.round(j.pct)+'%';
+      if(j.concluido){msg.textContent='Concluído! Você pode fazer o quiz.';}
+    }).catch(function(){});
+  },15000);
+  // checkpoints: pausa no segundo e pergunta
+  player.addEventListener('timeupdate',function(){
+    var cur=player.currentTime||0;
+    for(var id in CPDATA){var c=CPDATA[id];
+      if(!c.resp && cur>=c.seg){ abrir(id,c); break; }
+    }
+  });
+  function abrir(id,c){
+    player.pause(); box.style.display='';
+    document.getElementById('cp-enun').textContent=c.enun;
+    document.getElementById('cp-msg').textContent='';
+    var h='';for(var i=0;i<c.alts.length;i++){h+='<button class="btn btn-outline-dark w-100 mb-2 cp-a" data-i="'+i+'">'+c.alts[i]+'</button>';}
+    document.getElementById('cp-alts').innerHTML=h;
+    Array.prototype.forEach.call(document.querySelectorAll('.cp-a'),function(b){
+      b.onclick=function(){
+        post('{{ url_for("treino.api_checkpoint", id=0) }}'.replace('/0/','/'+id+'/'),'indice='+b.dataset.i).then(function(j){
+          c.resp=true;
+          document.getElementById('cp-msg').textContent=(j&&j.correta)?'Correto!':'Resposta registrada.';
+          setTimeout(function(){box.style.display='none';player.play();},900);
+        });
+      };
+    });
+  }
+})();
+</script>
+{% endblock %}
