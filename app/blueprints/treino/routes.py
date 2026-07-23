@@ -326,10 +326,16 @@ def gestor_decidir(id):
 @login_required
 @admin_required
 def admin_home():
-    trilhas = TreinoTrilha.query.order_by(TreinoTrilha.ordem).all()
+    from app.models import TreinoTemporada
     from app.services import treino_pontos as cfg
-    return render_template('treino/admin.html', trilhas=trilhas,
-                           pontos=cfg.todos())
+    trilhas = TreinoTrilha.query.order_by(TreinoTrilha.ordem).all()
+    return render_template(
+        'treino/admin.html', trilhas=trilhas, pontos=cfg.todos(),
+        temporadas=TreinoTemporada.query.order_by(
+            TreinoTemporada.inicio.desc()).all(),
+        recompensas=TreinoRecompensa.query.all(),
+        funcionarios=Funcionario.query.filter_by(ativo=True).order_by(
+            Funcionario.nome).all())
 
 
 @treino_bp.route('/admin/aplicacoes/<int:id>/estornar', methods=['POST'])
