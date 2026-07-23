@@ -21,22 +21,22 @@
   {% for t in trilhas %}<div class="border rounded p-2 mb-2" id="t{{ t.id }}">
     <div class="d-flex justify-content-between align-items-start">
       <strong>{{ t.nome }} {% if not t.ativa %}<span class="badge bg-secondary">inativa</span>{% endif %}</strong>
-      <span class="d-flex gap-1">
+      <span class="d-flex flex-wrap gap-1">
         {{ mini(url_for('treino.admin_trilha_toggle', id=t.id), 'ativa on/off') }}
         {{ mini(url_for('treino.admin_trilha_excluir', id=t.id), '🗑', 'btn-outline-danger', 'Excluir trilha?') }}</span></div>
     {% for v in t.videos %}<div class="small d-flex justify-content-between">
       <span>▶️ <a href="{{ url_for('treino.admin_video_editar', id=v.id) }}">{{ v.titulo }}</a> ({{ v.duracao_segundos }}s{% if v.video_externo_id %}, ✓vídeo{% endif %}, {{ v.checkpoints|length }} cp){% if not v.ativo %} <span class="badge bg-secondary">off</span>{% endif %}</span>
-      <span class="d-flex gap-1">{{ mini(url_for('treino.admin_video_toggle', id=v.id), 'on/off') }}{{ mini(url_for('treino.admin_video_excluir', id=v.id), '🗑', 'btn-outline-danger', 'Excluir vídeo?') }}</span></div>{% endfor %}
-    <form method="POST" action="{{ url_for('treino.admin_video_novo', id=t.id) }}" class="d-flex gap-1 mt-1">{{ csrf() }}
+      <span class="d-flex flex-wrap gap-1">{{ mini(url_for('treino.admin_video_toggle', id=v.id), 'on/off') }}{{ mini(url_for('treino.admin_video_excluir', id=v.id), '🗑', 'btn-outline-danger', 'Excluir vídeo?') }}</span></div>{% endfor %}
+    <form method="POST" action="{{ url_for('treino.admin_video_novo', id=t.id) }}" class="d-flex flex-wrap gap-1 mt-1">{{ csrf() }}
       <input name="titulo" class="form-control form-control-sm" placeholder="Nova aula" style="width:130px;">
       <input name="duracao" class="form-control form-control-sm" placeholder="seg" style="width:64px;">
       <button class="btn btn-sm btn-outline-dark">+ vídeo</button></form>
-    <form method="POST" action="{{ url_for('treino.admin_quiz_novo') }}" class="d-flex gap-1 mt-1">{{ csrf() }}
+    <form method="POST" action="{{ url_for('treino.admin_quiz_novo') }}" class="d-flex flex-wrap gap-1 mt-1">{{ csrf() }}
       <input type="hidden" name="trilha_id" value="{{ t.id }}">
       <input name="titulo" class="form-control form-control-sm" placeholder="Quiz da trilha" style="width:150px;">
       <input name="por_tent" class="form-control form-control-sm" placeholder="qtd" style="width:56px;" value="5">
       <button class="btn btn-sm btn-outline-primary">+ quiz</button></form></div>{% endfor %}
-  <form method="POST" action="{{ url_for('treino.admin_trilha') }}" class="d-flex gap-1">{{ csrf() }}
+  <form method="POST" action="{{ url_for('treino.admin_trilha') }}" class="d-flex flex-wrap gap-1">{{ csrf() }}
     <input name="nome" class="form-control form-control-sm" placeholder="Nova trilha">
     <button class="btn btn-sm btn-primary">Criar trilha</button></form></div></div>
 
