@@ -547,6 +547,16 @@ def enviar_boas_vindas(destinatario, nome, login, senha, *, com_chatwoot=True):
 
 def _template_boas_vindas(nome, login, senha, base, chatwoot):
     login_url = f'{base}/auth/login' if base else '(link do sistema)'
+    chatwoot_bloco = f"""\
+<div style="background:#f5efe5;border-radius:12px;padding:18px 22px;">
+    <p style="margin:0 0 8px;font-weight:600;">📞 Atendimento (Chatwoot)</p>
+    <p style="margin:0 0 10px;font-size:14px;color:#6b5f54;">
+      O atendimento aos clientes (WhatsApp, Instagram, site) é feito no
+      Chatwoot, um sistema separado. Você vai receber um convite por email
+      direto dele pra criar sua conta lá.</p>
+    <p style="margin:0;font-size:14px;">
+      Endereço: <a href="{chatwoot}" style="color:#1971c2;">{chatwoot}</a></p>
+  </div>""" if chatwoot else ''
     return f"""\
 <!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
 font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
@@ -571,15 +581,7 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
       Troque a senha no primeiro acesso (menu do seu perfil).</p>
   </div>
 
-  <div style="background:#f5efe5;border-radius:12px;padding:18px 22px;">
-    <p style="margin:0 0 8px;font-weight:600;">📞 Atendimento (Chatwoot)</p>
-    <p style="margin:0 0 10px;font-size:14px;color:#6b5f54;">
-      O atendimento aos clientes (WhatsApp, Instagram, site) é feito no
-      Chatwoot, um sistema separado. Você vai receber um convite por email
-      direto dele pra criar sua conta lá.</p>
-    <p style="margin:0;font-size:14px;">
-      Endereço: <a href="{chatwoot}" style="color:#1971c2;">{chatwoot}</a></p>
-  </div>
+  {chatwoot_bloco}
 
   <p style="color:#9a8d80;font-size:12px;margin-top:28px;">
     Email automático — não responda. Dúvidas? Fale com o gerente.</p>
