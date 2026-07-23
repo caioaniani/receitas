@@ -535,12 +535,15 @@ def admin_video_ia(id):
         segs = ts.transcricao(v.video_externo_id)
         if not segs:
             # legenda ainda não pronta — dispara a geração e pede pra tentar de
-            # novo (o Cloudflare leva ~1-2 min pra transcrever).
-            ts.gerar_legenda(v.video_externo_id)
-            return jsonify(ok=False, processando=True,
-                           erro='Legenda automática do vídeo ainda sendo gerada '
-                                'pelo Cloudflare. Tente de novo em 1-2 minutos.'
-                           ), 409
+            # novo (o Cloudflare leva ~1-2 min pra transcrever). Se a geração
+            # falhar (ex.: vídeo ainda não transcodificado, idioma), mostra o
+            # motivo real em vez de "processando" pra sempre.
+            res = ts.gerar_legenda(v.video_externo_id)
+            msg = ('Legenda automática do vídeo ainda sendo gerada pelo '
+                   'Cloudflare. Tente de novo em 1-2 minutos.')
+            if res and not res.get('ok') and res.get('erro'):
+                msg = f'Não consegui gerar a legenda do vídeo: {res["erro"]}'
+            return jsonify(ok=False, processando=True, erro=msg), 409
         r = ia.gerar_com_momento(segs, n)
     else:
         r = ia.gerar(request.form.get('texto', ''), n)
