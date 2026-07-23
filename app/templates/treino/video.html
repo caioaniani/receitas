@@ -18,12 +18,13 @@
 <div class="alert alert-secondary">Vídeo em preparação. Recarregue em instantes.</div>
 {% endif %}
 
+{% set _pi = (pct_inicial or 0)|round|int %}
 <div class="my-3" style="max-width:720px;">
   <div class="d-flex justify-content-between small mb-1">
-    <span class="fw-bold">Progresso</span><span id="pct">0%</span></div>
+    <span class="fw-bold">Progresso</span><span id="pct">{{ _pi }}%</span></div>
   <div class="progress" style="height:16px;">
-    <div id="bar" class="progress-bar bg-success" style="width:0%;"></div></div>
-  <div class="small text-muted mt-1" id="msg">Assista até o fim (pular não conta). Vai ter perguntas no meio.</div>
+    <div id="bar" class="progress-bar bg-success" style="width:{{ _pi }}%;"></div></div>
+  <div class="small text-muted mt-1" id="msg">{% if concluido_inicial %}✅ Concluído! Você já assistiu este vídeo.{% else %}Assista até o fim (pular não conta). Vai ter perguntas no meio.{% endif %}</div>
 </div>
 
 {% for q in quizzes %}
