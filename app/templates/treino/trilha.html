@@ -5,6 +5,12 @@
 {% if est %}<div class="mb-3 small">
   Vídeos: {% if est.videos_ok %}✅{% else %}⬜{% endif %} · Quizzes: {% if est.quizzes_ok %}✅{% else %}⬜{% endif %} · Aplicação prática: {% if est.aplicacao_ok %}✅{% else %}⬜{% endif %}
   {% if est.completa %}<span class="badge bg-success ms-1">Trilha concluída</span>{% endif %}
+  <div class="progress mt-2" style="height:8px;max-width:420px;">
+    <div class="progress-bar{% if est.completa %} bg-success{% endif %}" role="progressbar"
+         style="width:{{ est.percentual }}%;" aria-valuenow="{{ est.percentual }}"
+         aria-valuemin="0" aria-valuemax="100"></div>
+  </div>
+  <div class="text-muted mt-1">{{ est.percentual }}% concluído{% if est.videos %} · {{ est.videos_feitos }}/{{ est.videos }} aula(s){% endif %}</div>
 </div>{% endif %}
 <h6>Aulas</h6>
 {% for v in t.videos if v.ativo %}
