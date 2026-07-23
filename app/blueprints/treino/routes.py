@@ -433,14 +433,15 @@ def admin_video_novo(id):
 def admin_video_editar(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
     from app.services import treinamento_stream as ts
-    # Duração é AUTORITATIVA do Cloudflare — enquanto está 0 (recém-subido/
-    # processando), consulta o status e grava assim que o vídeo fica pronto.
-    # O antifraude depende dela (LIMIAR_TEMPO), então nunca pedimos na mão.
+    # Duração é AUTORITATIVA do Cloudflare — SÓ enquanto está 0 (recém-subido/
+    # processando) consultamos o status e gravamos quando o vídeo fica pronto.
+    # Depois de detectada, não bate mais no Cloudflare a cada GET (evita HTTP
+    # síncrono à toa). O antifraude depende dela (LIMIAR_TEMPO).
     proc = None
-    if v.video_externo_id:
+    if v.video_externo_id and v.duracao_segundos == 0:
         try:
             proc = ts.status(v.video_externo_id)
-            if proc.get('duracao') and v.duracao_segundos != proc['duracao']:
+            if proc.get('duracao'):
                 v.duracao_segundos = proc['duracao']
                 db.session.commit()
         except Exception:
