@@ -88,6 +88,15 @@
                                 <option value="admin" {% if u.papel == 'admin' %}selected{% endif %}>Admin</option>
                             </select>
                         </form>
+                        <form method="POST" action="{{ url_for('auth.toggle_somente_treino', id=u.id) }}" class="mt-1">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="form-check form-switch" style="font-size:11px;">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="st-{{ u.id }}" {% if u.somente_treino %}checked{% endif %}
+                                       onchange="this.form.submit()">
+                                <label class="form-check-label" for="st-{{ u.id }}">🎓 só treino</label>
+                            </div>
+                        </form>
                     {% endif %}
                 </td>
                 <td>
