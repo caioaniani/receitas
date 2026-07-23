@@ -97,9 +97,36 @@ def test_video_abre_com_progresso_salvo(app):
     c = _login(app, uid)
     body = c.get(f'/treino/video/{vid}').get_data(as_text=True)
     assert 'width:100%' in body and 'Concluído' in body
-    # Checkpoint em fullscreen: sai da tela cheia pra a pergunta aparecer
-    # (senão o iframe fica na top-layer e o overlay some atrás).
-    assert 'sairFullscreen' in body and 'exitFullscreen' in body
+
+
+def test_video_sem_fullscreen_no_celular(app):
+    """Celular: iframe SEM allowfullscreen (tela cheia no iOS abre o player
+    nativo e a pergunta do checkpoint não aparece). Desktop mantém."""
+    from unittest.mock import patch
+    with app.app_context():
+        _temp()
+        u, f, _ = _func_logado(app)
+        trilha = TreinoTrilha(nome='Seg')
+        db.session.add(trilha)
+        db.session.commit()
+        v = TreinoVideo(trilha_id=trilha.id, titulo='A', duracao_segundos=100,
+                        video_externo_id='a' * 32, provedor='cloudflare')
+        db.session.add(v)
+        db.session.commit()
+        uid, vid = u.id, v.id
+    c = _login(app, uid)
+    with patch('app.services.treinamento_stream.embed_url',
+               return_value='https://x.cloudflarestream.com/abc/iframe'):
+        # desktop: UA padrão do test client não casa mobile → mantém fullscreen
+        body_d = c.get(f'/treino/video/{vid}').get_data(as_text=True)
+        assert 'allowfullscreen' in body_d
+        assert 'sairFullscreen' in body_d          # exit-fullscreen segue no desktop
+        # celular (iPhone): sem allowfullscreen + aviso
+        body_m = c.get(f'/treino/video/{vid}', headers={
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)'
+        }).get_data(as_text=True)
+    assert 'allowfullscreen' not in body_m
+    assert 'sem tela cheia' in body_m
 
 
 def test_verificacao_publica_de_certificado(app):   # §11
