@@ -506,15 +506,31 @@ def _mmss_para_seg(valor):
 @admin_required
 def admin_checkpoint(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
+    ajax = request.form.get('ajax') == '1'   # salvar sem recarregar a página
     alts = [a.strip() for a in request.form.getlist('alt[]') if a.strip()]
+    correta = _int(request.form.get('correta'))
+    erro = None
     if len(alts) < 2:
-        flash('Checkpoint precisa de ao menos 2 alternativas.', 'warning')
+        erro = 'Checkpoint precisa de ao menos 2 alternativas.'
+    elif not 0 <= correta < len(alts):
+        erro = 'Marque a alternativa correta entre as que você preencheu.'
+    if erro:
+        if ajax:
+            return jsonify(ok=False, erro=erro), 400
+        flash(erro, 'warning')
         return redirect(url_for('treino.admin_video_editar', id=v.id))
-    db.session.add(TreinoCheckpoint(
+    cp = TreinoCheckpoint(
         video_id=v.id, segundo=_mmss_para_seg(request.form.get('segundo')),
         enunciado=request.form.get('enunciado', '')[:500], alternativas=alts,
-        indice_correto=_int(request.form.get('correta'))))
+        indice_correto=correta)
+    db.session.add(cp)
     db.session.commit()
+    if ajax:
+        return jsonify(ok=True, id=cp.id, segundo=cp.segundo,
+                       enunciado=cp.enunciado, n_alts=len(alts),
+                       correta=correta,
+                       excluir_url=url_for('treino.admin_checkpoint_excluir',
+                                           id=cp.id))
     flash('Checkpoint adicionado.', 'success')
     return redirect(url_for('treino.admin_video_editar', id=v.id))
 
