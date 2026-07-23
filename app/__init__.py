@@ -413,6 +413,8 @@ def create_app(config_class=None):
         if not getattr(current_user, 'is_authenticated', False):
             return None
         ep = request.endpoint or ''
+        if not ep:
+            return None  # URL sem rota → deixa 404 (não redireciona asset/404)
         liberados = {'auth.minha_senha', 'auth.logout', 'auth.csrf_token_novo',
                      'static', 'pwa_service_worker', 'pwa_manifest', 'health'}
         if ep in liberados or ep.endswith('.static'):
