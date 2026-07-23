@@ -1,6 +1,26 @@
 {% extends "base.html" %}{% block title %}Admin treinamento{% endblock %}{% block content %}
 <div class="page-header"><div><h1 class="page-title">⚙️ Treinamento — admin</h1></div></div>
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+
+<div class="alert alert-info dica-recolhe small">
+  <strong>Como funciona (leia antes).</strong> Esta é a tela onde você <strong>monta o
+  conteúdo</strong> do treinamento. A ideia do jogo: o funcionário assiste às aulas e
+  faz os quizzes → <strong>ganha pontos</strong> → sobe de nível e no <strong>ranking da
+  loja</strong> → troca pontos por <strong>recompensas</strong>. Concluir uma trilha
+  inteira dá um <strong>selo + certificado</strong>.
+  <br><br>
+  <strong>Ordem para montar:</strong>
+  <strong>1)</strong> crie uma <strong>Temporada ATIVA</strong> (sem ela ninguém pontua);
+  <strong>2)</strong> crie as <strong>Trilhas</strong> e, dentro de cada uma, os
+  <strong>vídeos</strong> e <strong>quizzes</strong>;
+  <strong>3)</strong> (opcional) cadastre <strong>Recompensas</strong>.
+  <br>
+  <strong>Como o funcionário entra:</strong> ele precisa ter um <strong>login</strong>
+  ligado ao cadastro dele no RH (com <strong>e-mail</strong> preenchido em
+  <em>RH → Funcionários → abrir o funcionário</em>). Sem esse login, ele abre o
+  treinamento e vê "sua conta não está vinculada a um funcionário".
+</div>
+{% endraw %}{# marcador nulo pra não quebrar caso de edição futura #}
 {% macro mini(action, label, cls='btn-outline-secondary', confirm='') %}
 <form method="POST" action="{{ action }}" class="d-inline"{% if confirm %} onsubmit="return confirm('{{ confirm }}')"{% endif %}>{{ csrf() }}<button class="btn btn-sm {{ cls }} py-0 px-1">{{ label }}</button></form>{% endmacro %}
 
