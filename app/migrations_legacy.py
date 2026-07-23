@@ -2485,5 +2485,14 @@ def _migrate_sqlite(app):
         if cols_cli and _c not in cols_cli:
             cursor.execute(f"ALTER TABLE cliente ADD COLUMN {_c} INTEGER")
 
+    # Módulo antigo "Vídeos simples" REMOVIDO (24/07/2026, DROP autorizado pelo
+    # dono). Espelho do bloco Postgres. Filhas antes das pais (sem CASCADE no
+    # SQLite); idempotente (IF EXISTS). Em teste as tabelas nem existem mais
+    # (o modelo foi apagado, db.create_all não as cria) — no-op gracioso.
+    for _t in ('treinamento_progresso', 'treinamento_conclusao',
+               'treinamento_tentativa', 'treinamento_opcao',
+               'treinamento_pergunta', 'treinamento'):
+        cursor.execute(f"DROP TABLE IF EXISTS {_t}")
+
     conn.commit()
     conn.close()
