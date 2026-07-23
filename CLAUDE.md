@@ -2986,6 +2986,37 @@ conferencia — zero app, zero digitacao.
   `reativar` limpa `baixado_em` (trilha fica no /audit). Testes:
   `tests/test_patrimonio.py` (18 casos).
 
+## Acesso: senha provisoria forcada + "so treinamento" (23/07/2026)
+
+Duas colunas em `Usuario` (procedimento de 2 commits — ALTER em
+`migrations_legacy` deployado ANTES do modelo, sonda `/api/claude/deploy`):
+
+- **`senha_provisoria`** (decisao do dono): a senha gerada no cadastro
+  (`treino_acessos.gerar_acesso`, `auth.novo_usuario`, `auth.reset_senha`)
+  nasce provisoria. O gate global `app/__init__.py::_gate_conta`
+  (`@app.before_request`, roda DEPOIS do roteamento por host) prende o
+  usuario em `/auth/minha-senha` ate ele trocar (a senha do e-mail e a
+  "atual"; `minha_senha` recusa `nova == atual` e zera o flag no sucesso).
+  Reset por admin RE-forca. Motivo de ser `before_request` e nao pos-login:
+  `login_user(remember=True)` faz a pessoa voltar autenticada sem repassar
+  pelo POST.
+- **`somente_treino`** (POR PESSOA — o dono escolheu pessoa, nao cargo, via
+  AskUserQuestion): conta marcada so enxerga `/treino`; o gate redireciona
+  todo o resto pra `treino.home` (barra por URL tambem, GET+POST;
+  `ep.startswith('treino.')` libera o blueprint inteiro). Checkbox no cadastro
+  (`/auth/usuarios`) + toggle por linha (`auth.toggle_somente_treino`). A
+  `base.html` esconde a navegacao nao-treino pra essas contas (defesa em
+  profundidade; "Trocar senha"/"Sair" FICAM). Conta so-treino nao recebe o
+  Chatwoot no e-mail (`enviar_boas_vindas(com_chatwoot=...)`).
+
+Allowlist do gate (evita loop): `auth.minha_senha`, `auth.logout`,
+`auth.csrf_token_novo`, `static`/`*.static`, `pwa_service_worker`,
+`pwa_manifest`, `health`; endpoint None (URL sem rota) passa pra 404.
+Guardas: owner nunca e restrito; admin NAO pode marcar a PROPRIA conta
+so-treino (auto-lockout — `toggle` recusa `u.id == current_user.id`).
+`gerar_acesso` seta so `senha_provisoria` (NAO `somente_treino` — flag
+separada, marcada a mao). Testes: `tests/test_acesso_so_treino.py` (12 casos).
+
 ## Sidebar
 
 Secoes (`sidebar-section-title`) sao **colapsaveis** — JS adiciona chevron + persiste
