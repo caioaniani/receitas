@@ -679,6 +679,38 @@ def admin_recompensa_toggle(id):
     return _voltar()
 
 
+@treino_bp.route('/admin/trilha/<int:id>/cargos', methods=['POST'])
+@login_required
+@admin_required
+def admin_trilha_cargos(id):
+    """v2 §16.1: liga a trilha a cargos (onboarding automático por cargo)."""
+    from app.services import treino_onboarding as ob
+    db.session.get(TreinoTrilha, id) or abort(404)
+    ob.definir_cargos_da_trilha(id, request.form.getlist('cargo_ids'))
+    flash('Cargos da trilha atualizados.', 'success')
+    return _voltar()
+
+
+@treino_bp.route('/gestor/progressao')
+@login_required
+@gestor_required
+def gestor_progressao():
+    """v2 §16.3: quem está apto a progredir de cargo (concluiu as trilhas
+    exigidas do cargo)."""
+    from app.services import treino_onboarding as ob
+    gestor = _func()
+    is_admin = ledger.papel_treino(current_user) == 'ADMIN'
+    if is_admin:
+        equipe = Funcionario.query.filter_by(ativo=True).order_by(
+            Funcionario.nome).all()
+    else:
+        unidade = ledger.unidade_do_funcionario(gestor) if gestor else None
+        equipe = [f for f in (unidade.funcionarios if unidade else [])
+                  if f.ativo]
+    linhas = [{'func': f, 'prog': ob.progressao(f)} for f in equipe]
+    return render_template('treino/gestor_progressao.html', linhas=linhas)
+
+
 @treino_bp.route('/admin/temporada/<int:id>/status', methods=['POST'])
 @login_required
 @admin_required
