@@ -62,7 +62,7 @@
         {{ mini(url_for('treino.admin_trilha_toggle', id=t.id), 'ativa on/off') }}
         {{ mini(url_for('treino.admin_trilha_excluir', id=t.id), '🗑', 'btn-outline-danger', 'Excluir trilha?') }}</span></div>
     {% for v in t.videos %}<div class="small d-flex justify-content-between">
-      <span>▶️ <a href="{{ url_for('treino.admin_video_editar', id=v.id) }}">{{ v.titulo }}</a> ({% if v.duracao_segundos %}{{ v.duracao_segundos // 60 }}:{{ '%02d'|format(v.duracao_segundos % 60) }}{% else %}sem vídeo{% endif %}{% if v.video_externo_id %}, ✓{% endif %}, {{ v.checkpoints|length }} cp){% if not v.ativo %} <span class="badge bg-secondary">off</span>{% endif %}</span>
+      <span>▶️ <a href="{{ url_for('treino.admin_video_editar', id=v.id) }}">{{ v.titulo }}</a> ({% if v.duracao_segundos and v.duracao_segundos > 0 %}{{ v.duracao_segundos // 60 }}:{{ '%02d'|format(v.duracao_segundos % 60) }}{% elif v.video_externo_id %}processando{% else %}sem vídeo{% endif %}{% if v.video_externo_id %}, ✓{% endif %}, {{ v.checkpoints|length }} cp){% if not v.ativo %} <span class="badge bg-secondary">off</span>{% endif %}</span>
       <span class="d-flex flex-wrap gap-1">{{ mini(url_for('treino.admin_video_toggle', id=v.id), 'on/off') }}{{ mini(url_for('treino.admin_video_excluir', id=v.id), '🗑', 'btn-outline-danger', 'Excluir vídeo?') }}</span></div>{% endfor %}
     <form method="POST" action="{{ url_for('treino.admin_video_novo', id=t.id) }}" class="d-flex flex-wrap gap-1 mt-1">{{ csrf() }}
       <input name="titulo" class="form-control form-control-sm" placeholder="Nova aula (só o nome)" style="width:180px;">
