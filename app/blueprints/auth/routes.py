@@ -307,6 +307,12 @@ def minha_senha():
         if nova != confirma:
             flash('Confirmacao nao bate com a nova senha.', 'warning')
             return redirect(url_for('auth.minha_senha'))
+        # A nova senha tem que ser DIFERENTE da atual — na troca forçada, isso
+        # impede "trocar" pela mesma senha provisória do e-mail (que pode ter
+        # sido interceptada) sem rotacionar de fato.
+        if nova == atual:
+            flash('A nova senha precisa ser diferente da atual.', 'warning')
+            return redirect(url_for('auth.minha_senha'))
 
         current_user.set_senha(nova)
         # Trocou → não é mais provisória: libera o gate global (some_treino/
