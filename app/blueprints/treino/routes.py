@@ -340,3 +340,219 @@ def admin_estornar_aplicacao(id):
     ap.estornar(a, criado_por_id=current_user.id)
     flash('Aplicação estornada.', 'success')
     return redirect(request.referrer or url_for('treino.admin_home'))
+
+
+# ── Admin: AUTORIA (criar conteúdo) ─────────────────────────────────────
+def _int(v, d=0):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return d
+
+
+@treino_bp.route('/admin/temporada', methods=['POST'])
+@login_required
+@admin_required
+def admin_temporada():
+    from datetime import date
+
+    from app.models import TreinoTemporada
+    try:
+        ini = date.fromisoformat(request.form['inicio'])
+        fim = date.fromisoformat(request.form['fim'])
+    except (KeyError, ValueError):
+        flash('Datas inválidas.', 'warning')
+        return redirect(url_for('treino.admin_home'))
+    t = TreinoTemporada(nome=request.form.get('nome', 'Temporada')[:100],
+                        inicio=ini, fim=fim,
+                        status=request.form.get('status', 'ATIVA'))
+    db.session.add(t)
+    db.session.commit()
+    flash('Temporada criada.', 'success')
+    return redirect(url_for('treino.admin_home'))
+
+
+@treino_bp.route('/admin/trilha', methods=['POST'])
+@login_required
+@admin_required
+def admin_trilha():
+    nome = (request.form.get('nome') or '').strip()
+    if not nome:
+        flash('Dê um nome à trilha.', 'warning')
+        return redirect(url_for('treino.admin_home'))
+    ordem = (db.session.query(db.func.max(TreinoTrilha.ordem)).scalar() or 0) + 1
+    db.session.add(TreinoTrilha(
+        nome=nome[:150], descricao=request.form.get('descricao') or None,
+        ordem=ordem))
+    db.session.commit()
+    flash('Trilha criada.', 'success')
+    return redirect(url_for('treino.admin_home'))
+
+
+@treino_bp.route('/admin/trilha/<int:id>/video', methods=['POST'])
+@login_required
+@admin_required
+def admin_video_novo(id):
+    t = db.session.get(TreinoTrilha, id) or abort(404)
+    ordem = _int(db.session.query(db.func.max(TreinoVideo.ordem)).filter_by(
+        trilha_id=t.id).scalar()) + 1
+    v = TreinoVideo(trilha_id=t.id, titulo=request.form.get('titulo', 'Aula')[:200],
+                    duracao_segundos=_int(request.form.get('duracao')), ordem=ordem)
+    db.session.add(v)
+    db.session.commit()
+    flash('Vídeo criado — suba o arquivo agora.', 'success')
+    return redirect(url_for('treino.admin_video_editar', id=v.id))
+
+
+@treino_bp.route('/admin/video/<int:id>')
+@login_required
+@admin_required
+def admin_video_editar(id):
+    v = db.session.get(TreinoVideo, id) or abort(404)
+    from app.services import treinamento_stream as ts
+    return render_template('treino/admin_video.html', v=v,
+                           stream_ok=ts.configurado(),
+                           video_embed=ts.embed_url(v.video_externo_id)
+                           if v.video_externo_id else None)
+
+
+@treino_bp.route('/admin/video/<int:id>/upload-url', methods=['POST'])
+@login_required
+@admin_required
+def admin_video_upload_url(id):
+    v = db.session.get(TreinoVideo, id) or abort(404)
+    from app.services import treinamento_stream as ts
+    if not ts.configurado():
+        return jsonify(ok=False, erro='Cloudflare não configurado'), 503
+    try:
+        d = ts.criar_upload_direto(f'treino video {v.id}')
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 502
+    return jsonify(ok=True, uid=d['uid'], uploadURL=d['uploadURL'])
+
+
+@treino_bp.route('/admin/video/<int:id>/salvar', methods=['POST'])
+@login_required
+@admin_required
+def admin_video_salvar(id):
+    import re as _re
+    v = db.session.get(TreinoVideo, id) or abort(404)
+    uid = (request.form.get('uid') or '').strip()
+    if not _re.fullmatch(r'[0-9a-f]{32}', uid):
+        return jsonify(ok=False, erro='UID inválido'), 400
+    from app.services import treinamento_stream as ts
+    v.video_externo_id = uid
+    v.provedor = 'cloudflare'
+    db.session.commit()
+    if not ts.subdomain():
+        ts.status(uid)
+    return jsonify(ok=True)
+
+
+@treino_bp.route('/admin/video/<int:id>/checkpoint', methods=['POST'])
+@login_required
+@admin_required
+def admin_checkpoint(id):
+    v = db.session.get(TreinoVideo, id) or abort(404)
+    alts = [a.strip() for a in request.form.getlist('alt[]') if a.strip()]
+    if len(alts) < 2:
+        flash('Checkpoint precisa de ao menos 2 alternativas.', 'warning')
+        return redirect(url_for('treino.admin_video_editar', id=v.id))
+    db.session.add(TreinoCheckpoint(
+        video_id=v.id, segundo=_int(request.form.get('segundo')),
+        enunciado=request.form.get('enunciado', '')[:500], alternativas=alts,
+        indice_correto=_int(request.form.get('correta'))))
+    db.session.commit()
+    flash('Checkpoint adicionado.', 'success')
+    return redirect(url_for('treino.admin_video_editar', id=v.id))
+
+
+@treino_bp.route('/admin/quiz', methods=['POST'])
+@login_required
+@admin_required
+def admin_quiz_novo():
+    trilha_id = _int(request.form.get('trilha_id')) or None
+    video_id = _int(request.form.get('video_id')) or None
+    if bool(trilha_id) == bool(video_id):
+        flash('Escolha trilha OU vídeo pro quiz.', 'warning')
+        return redirect(url_for('treino.admin_home'))
+    q = TreinoQuiz(titulo=request.form.get('titulo', 'Quiz')[:200],
+                   trilha_id=trilha_id, video_id=video_id,
+                   questoes_por_tentativa=_int(request.form.get('por_tent'), 5),
+                   cooldown_minutos=_int(request.form.get('cooldown'), 120))
+    db.session.add(q)
+    db.session.commit()
+    flash('Quiz criado — adicione as questões.', 'success')
+    return redirect(url_for('treino.admin_quiz_editar', id=q.id))
+
+
+@treino_bp.route('/admin/quiz/<int:id>')
+@login_required
+@admin_required
+def admin_quiz_editar(id):
+    q = db.session.get(TreinoQuiz, id) or abort(404)
+    return render_template('treino/admin_quiz.html', q=q,
+                           pode=tq.pode_publicar(q))
+
+
+@treino_bp.route('/admin/quiz/<int:id>/questao', methods=['POST'])
+@login_required
+@admin_required
+def admin_questao(id):
+    from app.models import TreinoAlternativa, TreinoQuestao
+    q = db.session.get(TreinoQuiz, id) or abort(404)
+    alts = request.form.getlist('alt[]')
+    correta = _int(request.form.get('correta'))
+    pares = [(a.strip(), i == correta) for i, a in enumerate(alts) if a.strip()]
+    if not request.form.get('enunciado') or len(pares) < 2:
+        flash('Questão precisa de enunciado e ao menos 2 alternativas.',
+              'warning')
+        return redirect(url_for('treino.admin_quiz_editar', id=q.id))
+    quest = TreinoQuestao(quiz_id=q.id, enunciado=request.form['enunciado'])
+    db.session.add(quest)
+    db.session.flush()
+    for texto, cor in pares:
+        db.session.add(TreinoAlternativa(questao_id=quest.id, texto=texto,
+                                         correta=cor))
+    db.session.commit()
+    flash('Questão adicionada.', 'success')
+    return redirect(url_for('treino.admin_quiz_editar', id=q.id))
+
+
+@treino_bp.route('/admin/recompensa', methods=['POST'])
+@login_required
+@admin_required
+def admin_recompensa():
+    nome = (request.form.get('nome') or '').strip()
+    if not nome:
+        flash('Dê um nome à recompensa.', 'warning')
+        return redirect(url_for('treino.admin_home'))
+    est = request.form.get('estoque')
+    db.session.add(TreinoRecompensa(
+        nome=nome[:150], descricao=request.form.get('descricao') or None,
+        custo_pontos=_int(request.form.get('custo'), 100),
+        estoque=_int(est) if est else None))
+    db.session.commit()
+    flash('Recompensa criada.', 'success')
+    return redirect(url_for('treino.admin_home'))
+
+
+@treino_bp.route('/admin/ajuste', methods=['POST'])
+@login_required
+@admin_required
+def admin_ajuste():
+    f = db.session.get(Funcionario, _int(request.form.get('funcionario_id')))
+    temp = _temp()
+    just = (request.form.get('justificativa') or '').strip()
+    if not (f and temp and just):
+        flash('Funcionário, temporada ativa e justificativa são obrigatórios.',
+              'warning')
+        return redirect(url_for('treino.admin_home'))
+    try:
+        ledger.ajuste_manual(f, _int(request.form.get('pontos')), just,
+                             criado_por_id=current_user.id, temporada=temp)
+    except ValueError as e:
+        flash(str(e), 'warning')
+    else:
+        flash('Ajuste lançado.', 'success')
+    return redirect(url_for('treino.admin_home'))
