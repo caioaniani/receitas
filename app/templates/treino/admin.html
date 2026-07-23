@@ -109,6 +109,10 @@
     <div class="col-2"><button class="btn btn-sm btn-warning w-100">Lançar</button></div></form></div></div>
 
 <div class="card"><div class="card-header py-2"><strong>Valores de pontuação</strong></div><div class="card-body">
+  <p class="small text-muted mb-2">Tabela de <strong>quantos pontos cada ação vale</strong>:
+    vídeo concluído, acerto em checkpoint, aprovação no quiz, aplicação prática (registrada
+    pelo gestor), sequências (streak), trilha concluída e o <strong>teto diário</strong> de
+    pontos. É a régua do jogo — hoje é <strong>só de leitura</strong>.</p>
   <div class="mobile-table-scroll"><table class="table table-sm mb-0"><tbody>
   {% for k,v in pontos.items() %}<tr><td>{{ k }}</td><td class="text-end">{{ v }}</td></tr>{% endfor %}
   </tbody></table></div></div></div>
