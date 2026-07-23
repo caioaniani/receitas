@@ -104,6 +104,40 @@ def test_checkpoint_ajax_correta_fora_do_range_400(app, admin_user):
         assert TreinoCheckpoint.query.filter_by(video_id=vid).count() == 0
 
 
+def test_admin_video_titulo_renomeia(app, admin_user):
+    """Editar o título da aula depois de criada (antes só dava na criação)."""
+    vid = _video(app)                              # nasce como 'Aula'
+    c = _admin(app, admin_user)
+    c.post(f'/treino/admin/video/{vid}/titulo',
+           data={'titulo': 'Higiene das mãos'})
+    with app.app_context():
+        assert db.session.get(TreinoVideo, vid).titulo == 'Higiene das mãos'
+
+
+def test_admin_video_titulo_vazio_nao_apaga(app, admin_user):
+    """Título em branco não zera o que já existe (aula ficaria sem nome)."""
+    vid = _video(app)
+    c = _admin(app, admin_user)
+    c.post(f'/treino/admin/video/{vid}/titulo', data={'titulo': '   '})
+    with app.app_context():
+        assert db.session.get(TreinoVideo, vid).titulo == 'Aula'   # inalterado
+
+
+def test_criar_video_titulo_em_branco_vira_aula(app, admin_user):
+    """Criar aula com nome vazio cai no default 'Aula' — nunca '' (sem nome,
+    sem jeito de corrigir na tela da trilha). Editável depois pela tela."""
+    with app.app_context():
+        t = TreinoTrilha(nome='Seg')
+        db.session.add(t)
+        db.session.commit()
+        tid = t.id
+    c = _admin(app, admin_user)
+    c.post(f'/treino/admin/trilha/{tid}/video', data={'titulo': ''})
+    with app.app_context():
+        v = TreinoVideo.query.filter_by(trilha_id=tid).first()
+        assert v is not None and v.titulo == 'Aula'
+
+
 def _fake_ia(payload):
     blk = MagicMock(); blk.type = 'text'; blk.text = _json.dumps(payload)
     resp = MagicMock(); resp.content = [blk]; resp.usage = None
