@@ -318,9 +318,12 @@ def minha_senha():
         # Trocou → não é mais provisória: libera o gate global (some_treino/
         # navegação normal). Enquanto provisória, o before_request prendia aqui.
         current_user.senha_provisoria = False
+        so_treino = getattr(current_user, 'somente_treino', False)
         db.session.commit()
         flash('Senha alterada com sucesso.', 'success')
-        return redirect(url_for('main.index'))
+        # Conta só-treino vai direto pro treino (senão o gate rebateria de
+        # main.index pra lá num salto extra).
+        return redirect(url_for('treino.home' if so_treino else 'main.index'))
 
     return render_template('auth/minha_senha.html',
                            forcado=bool(getattr(current_user,
