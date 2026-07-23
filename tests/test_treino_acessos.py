@@ -43,6 +43,7 @@ def test_cria_conta_e_vincula(app):
         assert f.usuario_id is not None
         u = db.session.get(Usuario, f.usuario_id)
         assert u.papel == 'funcionario' and u.login == 'zeca@opao.online'
+        assert u.senha_provisoria is True   # força troca no 1º login
         # idempotente: segunda chamada não recria
         r2 = acessos.gerar_acesso(f)
         assert r2['motivo'] == 'ja_tem'
