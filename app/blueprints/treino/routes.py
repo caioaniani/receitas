@@ -865,6 +865,30 @@ def admin_gerar_acesso(func_id):
     return _voltar()
 
 
+@treino_bp.route('/admin/acessos/<int:func_id>/vincular', methods=['POST'])
+@login_required
+@admin_required
+def admin_vincular_acesso(func_id):
+    """Liga o funcionário a uma conta de login JÁ EXISTENTE (sem duplicar) —
+    pro caso de quem já tem cadastro mas sem e-mail."""
+    from app.models import Usuario
+    from app.services import treino_acessos as acessos
+    f = Funcionario.query.get_or_404(func_id)
+    u = db.session.get(Usuario, _int(request.form.get('usuario_id')))
+    r = acessos.vincular_conta(f, u)
+    if r['ok']:
+        flash(f'{f.nome} vinculado à conta "{r["usuario"].login}".', 'success')
+    elif r['motivo'] == 'conta_em_uso':
+        flash('Essa conta já está vinculada a outro funcionário.', 'danger')
+    elif r['motivo'] == 'owner':
+        flash('Não dá pra vincular à conta do dono.', 'danger')
+    elif r['motivo'] == 'ja_tem':
+        flash(f'{f.nome} já tem login.', 'info')
+    else:
+        flash('Selecione uma conta pra vincular.', 'warning')
+    return _voltar()
+
+
 @treino_bp.route('/admin/trilha/<int:id>/cargos', methods=['POST'])
 @login_required
 @admin_required
