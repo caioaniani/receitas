@@ -286,6 +286,9 @@ def minha_senha():
             return redirect(url_for('auth.minha_senha'))
 
         current_user.set_senha(nova)
+        # Trocou → não é mais provisória: libera o gate global (some_treino/
+        # navegação normal). Enquanto provisória, o before_request prendia aqui.
+        current_user.senha_provisoria = False
         db.session.commit()
         flash('Senha alterada com sucesso.', 'success')
         return redirect(url_for('main.index'))
