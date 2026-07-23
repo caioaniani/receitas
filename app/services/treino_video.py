@@ -107,8 +107,15 @@ def heartbeat(funcionario, video, posicao_segundos, velocidade=1.0):
 
     p.ultima_posicao = pos
     p.ultimo_heartbeat_em = agora_dt
+    if dur <= 0:
+        # Duração ainda desconhecida (Cloudflare processando / devolveu -1).
+        # Sem ela NÃO dá pra medir cobertura — NÃO reporta 100% nem conclui
+        # (senão o 1º balde já daria 100%, bug real). A rota do vídeo busca a
+        # duração; quando vier positiva, o progresso passa a valer de fato.
+        db.session.commit()
+        return {'pct': 0, 'tempo': p.tempo_real_decorrido, 'concluido': False}
     # segundos_assistidos / percentual derivados dos baldes cobertos.
-    total_baldes = max(1, math.ceil(dur / BUCKET_SEG)) if dur > 0 else 1
+    total_baldes = max(1, math.ceil(dur / BUCKET_SEG))
     cobertos = len(_baldes(p))
     p.segundos_assistidos = cobertos * BUCKET_SEG
     p.percentual = min(100, round(100 * cobertos / total_baldes, 2))
