@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% block title %}Resgates{% endblock %}{% block content %}
+<div class="page-header"><div><h1 class="page-title">🎁 Fila de resgates</h1>
+<p class="page-subtitle"><a href="{{ url_for('treino.gestor_home') }}">&larr; Gestor</a></p></div></div>
+{% for r in pendentes %}
+<div class="card mb-2"><div class="card-body py-2 d-flex justify-content-between align-items-center">
+  <div><strong>{{ r.funcionario.nome }}</strong> — {{ r.recompensa.nome }} <span class="small text-muted">({{ r.recompensa.custo_pontos }} pts)</span></div>
+  <div><button class="btn btn-sm btn-success dec" data-id="{{ r.id }}" data-a="aprovar">Aprovar</button>
+  <button class="btn btn-sm btn-outline-danger dec" data-id="{{ r.id }}" data-a="recusar">Recusar</button></div>
+</div></div>
+{% else %}<p class="text-muted">Nenhum resgate pendente.</p>{% endfor %}
+<script>
+var CSRF='{{ csrf_token() }}';
+document.querySelectorAll('.dec').forEach(function(b){b.onclick=function(){
+  fetch('/treino/gestor/api/resgates/'+b.dataset.id+'/decidir',{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:'acao='+b.dataset.a}).then(function(r){return r.json();}).then(function(j){
+    if(j.ok)location.reload();else alert(j.erro);});
+};});
+</script>
+{% endblock %}

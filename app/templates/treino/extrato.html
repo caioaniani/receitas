@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}Extrato{% endblock %}{% block content %}
+<div class="page-header"><div><h1 class="page-title">📜 Meu extrato</h1>
+<p class="page-subtitle"><a href="{{ url_for('treino.home') }}">&larr; Treinamentos</a> · Saldo: <strong>{{ saldo }} pts</strong></p></div></div>
+<div class="mobile-table-scroll"><table class="table table-sm"><thead><tr><th>Quando</th><th>Evento</th><th class="text-end">Pontos</th></tr></thead><tbody>
+{% for e in eventos %}<tr><td class="small">{{ e.criado_em.strftime('%d/%m %H:%M') if e.criado_em }}</td>
+<td>{{ e.tipo }}{% if e.observacao %} <span class="small text-muted">{{ e.observacao }}</span>{% endif %}</td>
+<td class="text-end {{ 'text-success' if e.pontos>0 else ('text-danger' if e.pontos<0 else 'text-muted') }}">{{ e.pontos }}</td></tr>
+{% else %}<tr><td colspan="3" class="text-muted">Sem lançamentos.</td></tr>{% endfor %}
+</tbody></table></div>{% endblock %}

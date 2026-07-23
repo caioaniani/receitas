@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% block title %}Recompensas{% endblock %}{% block content %}
+<div class="page-header"><div><h1 class="page-title">🎁 Recompensas</h1>
+<p class="page-subtitle"><a href="{{ url_for('treino.home') }}">&larr; Treinamentos</a> · Saldo: <strong>{{ saldo }} pts</strong></p></div></div>
+{% for r in recompensas %}
+<div class="card mb-2"><div class="card-body py-2 d-flex justify-content-between align-items-center">
+  <div><strong>{{ r.nome }}</strong> <span class="text-muted small">{{ r.custo_pontos }} pts</span>
+    {% if r.descricao %}<div class="small text-muted">{{ r.descricao }}</div>{% endif %}</div>
+  <button class="btn btn-sm btn-success resgatar" data-id="{{ r.id }}" {% if saldo < r.custo_pontos %}disabled{% endif %}>Resgatar</button>
+</div></div>
+{% else %}<p class="text-muted">Nenhuma recompensa no catálogo.</p>{% endfor %}
+<script>
+var CSRF='{{ csrf_token() }}';
+document.querySelectorAll('.resgatar').forEach(function(b){b.onclick=function(){
+  fetch('/treino/api/resgates',{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:'recompensa_id='+b.dataset.id}).then(function(r){return r.json();}).then(function(j){
+    alert(j.ok?'Resgate solicitado! Aguarde a aprovação do gestor.':(j.erro||'erro'));if(j.ok)location.reload();});
+};});
+</script>
+{% endblock %}

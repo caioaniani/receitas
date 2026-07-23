@@ -1,0 +1,23 @@
+{% extends "base.html" %}{% block title %}Gestor — treinamento{% endblock %}{% block content %}
+<div class="page-header"><div><h1 class="page-title">👔 Gestor{% if unidade %} · {{ unidade.nome }}{% endif %}</h1>
+<p class="page-subtitle"><a href="{{ url_for('treino.gestor_resgates') }}">Fila de resgates &rarr;</a></p></div></div>
+<div class="card"><div class="card-header py-2"><strong>Registrar aplicação prática</strong> <span class="small text-muted">(vale 50 pts)</span></div>
+<div class="card-body">
+  <div class="mb-2"><label class="form-label small">Funcionário</label>
+    <select id="fid" class="form-select form-select-sm">{% for f in equipe %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}</select></div>
+  <div class="mb-2"><label class="form-label small">Trilha</label>
+    <select id="tid" class="form-select form-select-sm">{% for t in trilhas %}<option value="{{ t.id }}">{{ t.nome }}</option>{% endfor %}</select></div>
+  <div class="mb-2"><label class="form-label small">Evidência (o que observou — mín. 20 caracteres)</label>
+    <textarea id="ev" rows="2" class="form-control form-control-sm"></textarea></div>
+  <button class="btn btn-success btn-sm" id="registrar">Registrar</button>
+  <div id="res" class="small mt-2"></div>
+</div></div>
+<script>
+var CSRF='{{ csrf_token() }}';
+document.getElementById('registrar').onclick=function(){
+  var b='funcionario_id='+fid.value+'&trilha_id='+tid.value+'&evidencia='+encodeURIComponent(ev.value);
+  fetch('/treino/gestor/api/aplicacao',{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:b}).then(function(r){return r.json();}).then(function(j){
+    document.getElementById('res').innerHTML=j.ok?'<span class="text-success">Registrado! +50 pts.</span>':'<span class="text-danger">'+j.erro+'</span>';});
+};
+</script>
+{% endblock %}

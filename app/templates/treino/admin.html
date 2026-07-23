@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block title %}Admin treinamento{% endblock %}{% block content %}
+<div class="page-header"><div><h1 class="page-title">⚙️ Treinamento — admin</h1></div></div>
+<div class="alert alert-info small">Autoria de trilhas/vídeos/quizzes, temporadas e recompensas. Pontuação configurável abaixo. (CRUD completo em construção — os valores já valem pelo backend.)</div>
+<h6>Trilhas</h6>
+{% for t in trilhas %}<div class="card mb-1"><div class="card-body py-2 d-flex justify-content-between">
+  <span>{{ t.nome }} {% if not t.ativa %}<span class="badge bg-secondary">inativa</span>{% endif %}</span>
+  <span class="small text-muted">{{ t.videos|length }} vídeo(s)</span></div></div>
+{% else %}<p class="text-muted">Nenhuma trilha.</p>{% endfor %}
+<h6 class="mt-3">Valores de pontuação</h6>
+<div class="mobile-table-scroll"><table class="table table-sm"><tbody>
+{% for k,v in pontos.items() %}<tr><td>{{ k }}</td><td class="text-end">{{ v }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

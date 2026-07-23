@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% block title %}Treinamento{% endblock %}{% block content %}
+<div class="page-header"><div><h1 class="page-title">🎓 Treinamento</h1></div></div>
+{% if func %}
+{% if pos %}
+<div class="card mb-3"><div class="card-body d-flex flex-wrap gap-3 align-items-center">
+  <div><div class="small text-muted">Seus pontos</div><div class="h3 mb-0">{{ pos.pontos }}</div></div>
+  <div><div class="small text-muted">Nível</div><div class="h5 mb-0">🏅 {{ pos.nivel }}</div></div>
+  {% if pos.posicao_na_unidade %}<div><div class="small text-muted">Na {{ pos.unidade }}</div><div class="h5 mb-0">{{ pos.posicao_na_unidade }}º de {{ pos.total_na_unidade }}</div></div>{% endif %}
+  <a href="{{ url_for('treino.extrato') }}" class="btn btn-sm btn-outline-secondary ms-auto">Extrato</a>
+  <a href="{{ url_for('treino.recompensas') }}" class="btn btn-sm btn-outline-success">Recompensas</a>
+  <a href="{{ url_for('treino.ranking') }}" class="btn btn-sm btn-outline-primary">Ranking</a>
+</div></div>
+{% endif %}
+{% else %}
+<div class="alert alert-warning">Sua conta não está vinculada a um funcionário do RH — fale com o gestor.</div>
+{% endif %}
+<h5>Trilhas</h5>
+{% for t in trilhas %}
+{% set e = progresso.get(t.id) if progresso else None %}
+<a href="{{ url_for('treino.trilha', id=t.id) }}" class="card mb-2 text-decoration-none">
+  <div class="card-body py-2">
+    <div class="d-flex justify-content-between"><strong>{{ t.nome }}</strong>
+      {% if e and e.completa %}<span class="badge bg-success">✓ concluída</span>{% endif %}</div>
+    {% if e %}<div class="small text-muted">{{ e.videos }} aula(s){% if e.aplicacao_ok %} · aplicação ✓{% endif %}</div>{% endif %}
+  </div></a>
+{% else %}<p class="text-muted">Nenhuma trilha publicada ainda.</p>{% endfor %}
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block title %}Verificar certificado{% endblock %}{% block content %}
+<div class="page-header"><div><h1 class="page-title">Verificação de certificado</h1></div></div>
+{% if dados %}
+<div class="card"><div class="card-body">
+  <p class="mb-1">✅ <strong>Certificado válido.</strong></p>
+  <p class="mb-1"><strong>{{ dados.nome }}</strong> (matrícula {{ dados.matricula }})</p>
+  <p class="mb-1">Trilha: <strong>{{ dados.trilha }}</strong> · {{ dados.estabelecimento }}</p>
+  <p class="mb-1">Carga horária: {{ dados.carga_horaria_minutos }} min · Emitido em {{ dados.emitido_em.strftime('%d/%m/%Y') if dados.emitido_em }}</p>
+  <p class="small text-muted mb-1">Conteúdo: {{ dados.conteudo|join(', ') }}</p>
+  <p class="small text-muted mb-0">Código: {{ dados.codigo }}</p>
+</div></div>
+{% else %}<div class="alert alert-danger">Certificado não encontrado — código inválido.</div>{% endif %}
+{% endblock %}

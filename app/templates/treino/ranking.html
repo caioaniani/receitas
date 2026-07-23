@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Ranking{% endblock %}{% block content %}
+<div class="page-header"><div><h1 class="page-title">🏆 Ranking por unidade</h1>
+<p class="page-subtitle"><a href="{{ url_for('treino.home') }}">&larr; Treinamentos</a></p></div></div>
+{% if pos %}<div class="alert alert-info">Você: <strong>{{ pos.pontos }} pts</strong> · {{ pos.nivel }}{% if pos.posicao_na_unidade %} · {{ pos.posicao_na_unidade }}º na {{ pos.unidade }}{% endif %} <span class="small text-muted">(visível só pra você)</span></div>{% endif %}
+<div class="mobile-table-scroll"><table class="table"><thead><tr><th>#</th><th>Unidade</th><th>Normalizado</th><th>Pontos</th><th>Ativos</th></tr></thead><tbody>
+{% for u in unidades %}<tr><td>{{ u.posicao }}</td><td>{{ u.unidade }}</td><td><strong>{{ u.normalizado }}</strong></td><td>{{ u.pontos }}</td><td>{{ u.ativos }}</td></tr>
+{% else %}<tr><td colspan="5" class="text-muted">Sem pontos ainda.</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="small text-muted">Normalizado = pontos ÷ nº de funcionários ativos (pra loja grande não ganhar sempre).</p>
+{% endblock %}
