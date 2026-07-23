@@ -44,7 +44,7 @@ _SEQ = [0]
 def _func(nome='Ana', papel='funcionario', cargo=None, ativo=True):
     _SEQ[0] += 1
     n = _SEQ[0]
-    loja = Loja(nome='Brooklin', ativa=True)
+    loja = Loja(nome=f'Brooklin {n}', ativa=True)
     u = Usuario(nome=nome, login=f'{nome}-{papel}-{n}', papel=papel)
     u.set_senha('x' * 8)
     db.session.add_all([loja, u])
