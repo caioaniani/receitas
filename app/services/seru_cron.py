@@ -318,6 +318,63 @@ def _run_auditor(app, modo='janela'):
             conn.close()
 
 
+def _treino_sob_lock(app, lock_key, fn, nome):
+    """Roda um job do treino sob advisory lock (execucao unica entre workers).
+    Desligavel via TREINO_JOBS=0. Best-effort — nunca derruba o scheduler."""
+    if os.environ.get('TREINO_JOBS', '1') == '0':
+        return
+    with app.app_context():
+        uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+        is_pg = 'postgresql' in uri
+        from app.extensions import db
+        conn = db.engine.connect()
+        try:
+            if is_pg:
+                got = conn.execute(text('SELECT pg_try_advisory_lock(:k)'),
+                                   {'k': lock_key}).scalar()
+                if not got:
+                    return
+            try:
+                res = fn()
+                logger.info('treino job %s: %s', nome, res)
+            except Exception:
+                logger.exception('treino job %s falhou', nome)
+            finally:
+                if is_pg:
+                    try:
+                        conn.execute(text('SELECT pg_advisory_unlock(:k)'),
+                                     {'k': lock_key})
+                    except Exception:
+                        pass
+        finally:
+            conn.close()
+
+
+def _run_treino_fechamento(app):
+    """Fechamento semanal do treino (domingo 23:55): meta, streaks e marcos."""
+    from app.services import treino_jobs
+    from app.utils import hoje
+
+    def _fn():
+        ano, semana, _ = hoje().isocalendar()
+        return f'{treino_jobs.fechamento_semanal(ano, semana)} func processado(s)'
+    _treino_sob_lock(app, LOCK_KEY_TREINO_FECH, _fn, 'fechamento-semanal')
+
+
+def _run_treino_diario(app):
+    """Jobs diarios do treino: snapshot do ranking, encerramento de temporada
+    vencida e limpeza de tentativas de quiz abandonadas."""
+    from app.services import treino_jobs
+
+    def _fn():
+        s = treino_jobs.snapshot_ranking()
+        e = treino_jobs.encerramento_temporada()
+        li = treino_jobs.limpeza_tentativas()
+        return f'{s} unidade(s) no ranking, {e} temporada(s) encerrada(s), ' \
+               f'{li} tentativa(s) finalizada(s)'
+    _treino_sob_lock(app, LOCK_KEY_TREINO_DIARIO, _fn, 'diario')
+
+
 def _run_snapshot_acuracia(app):
     """Job diario de acuracia do forecast: congela a previsao do pedido
     semanal (idempotente) e casa o realizado das datas que ja passaram.
