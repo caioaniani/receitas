@@ -430,26 +430,30 @@ def admin_video_novo(id):
 @treino_bp.route('/admin/video/<int:id>')
 @login_required
 @admin_required
+def _garantir_duracao(v):
+    """Busca a duração no Cloudflare ENQUANTO é <=0 (recém-subido; o Cloudflare
+    devolve -1 durante o processamento) e grava quando vem POSITIVA. Devolve o
+    proc (status) ou None. Progresso e antifraude dependem de duração positiva —
+    sem ela o cálculo de cobertura daria 100% falso. Depois de detectada não
+    bate mais no Cloudflare (evita HTTP síncrono à toa)."""
+    if not v.video_externo_id or v.duracao_segundos > 0:
+        return None
+    from app.services import treinamento_stream as ts
+    try:
+        proc = ts.status(v.video_externo_id)
+        dur = proc.get('duracao') or 0
+        if dur > 0:
+            v.duracao_segundos = dur
+            db.session.commit()
+        return proc
+    except Exception:
+        return None
+
+
 def admin_video_editar(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
     from app.services import treinamento_stream as ts
-    # Duração é AUTORITATIVA do Cloudflare — SÓ enquanto está 0 (recém-subido/
-    # processando) consultamos o status e gravamos quando o vídeo fica pronto.
-    # Depois de detectada, não bate mais no Cloudflare a cada GET (evita HTTP
-    # síncrono à toa). O antifraude depende dela (LIMIAR_TEMPO).
-    proc = None
-    if v.video_externo_id and v.duracao_segundos <= 0:
-        try:
-            proc = ts.status(v.video_externo_id)
-            # o Cloudflare devolve duration=-1 ENQUANTO processa — só grava
-            # quando é positiva de verdade (senão vira "-1:59" e quebra o
-            # antifraude). Re-tenta a cada GET até vir positiva.
-            dur = proc.get('duracao') or 0
-            if dur > 0:
-                v.duracao_segundos = dur
-                db.session.commit()
-        except Exception:
-            proc = None
+    proc = _garantir_duracao(v)
     return render_template('treino/admin_video.html', v=v, proc=proc,
                            stream_ok=ts.configurado(),
                            video_embed=ts.embed_url(v.video_externo_id)
