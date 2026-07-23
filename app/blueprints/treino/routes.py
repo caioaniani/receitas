@@ -335,15 +335,22 @@ def admin_home():
     trilhas = TreinoTrilha.query.order_by(TreinoTrilha.ordem).all()
     # mapa trilha_id -> conjunto de cargo_ids exigidos (v2 §16.1)
     cargos_por_trilha = {}
+    vinculados = set()
     for m in TreinoTrilhaCargo.query.all():
         cargos_por_trilha.setdefault(m.trilha_id, set()).add(m.cargo_id)
+        vinculados.add(m.cargo_id)
+    # cargos ativos + os já vinculados a alguma trilha (mesmo se desativados) —
+    # sem os vinculados, salvar o form de uma trilha apagaria em silêncio o
+    # vínculo a um cargo que foi desativado depois (achado da revisão).
+    cargos = Cargo.query.filter(db.or_(
+        Cargo.ativo.is_(True), Cargo.id.in_(vinculados) if vinculados else
+        db.false())).order_by(Cargo.nome).all()
     return render_template(
         'treino/admin.html', trilhas=trilhas, pontos=cfg.todos(),
         temporadas=TreinoTemporada.query.order_by(
             TreinoTemporada.inicio.desc()).all(),
         recompensas=TreinoRecompensa.query.all(),
-        cargos=Cargo.query.filter_by(ativo=True).order_by(Cargo.nome).all(),
-        cargos_por_trilha=cargos_por_trilha,
+        cargos=cargos, cargos_por_trilha=cargos_por_trilha,
         funcionarios=Funcionario.query.filter_by(ativo=True).order_by(
             Funcionario.nome).all())
 
