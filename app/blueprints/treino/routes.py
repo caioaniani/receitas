@@ -696,6 +696,40 @@ def admin_recompensa_toggle(id):
     return _voltar()
 
 
+@treino_bp.route('/admin/acessos/<int:func_id>/gerar', methods=['POST'])
+@login_required
+@admin_required
+def admin_gerar_acesso(func_id):
+    """Cria/vincula o LOGIN do funcionário (onboarding). Sem esse vínculo a
+    pessoa não entra no treinamento. Migrado do módulo antigo."""
+    from app.services import treino_acessos as acessos
+    f = Funcionario.query.get_or_404(func_id)
+    r = acessos.gerar_acesso(f)
+    if r['motivo'] == 'sem_email':
+        flash(f'{f.nome}: cadastre o e-mail no RH antes de gerar o acesso.',
+              'warning')
+    elif r['motivo'] == 'ja_tem':
+        flash(f'{f.nome} já tem acesso.', 'info')
+    elif r['motivo'] == 'conta_de_outro_papel':
+        flash(f'O e-mail de {f.nome} já é de uma conta de admin/gerente — '
+              'não vinculei (seria a conta errada). Use outro e-mail no RH.',
+              'danger')
+    elif r['motivo'] == 'email_em_uso':
+        flash(f'O e-mail de {f.nome} já está vinculado a outro funcionário — '
+              'confira o cadastro.', 'danger')
+    elif r['motivo'] == 'vinculado':
+        flash(f'{f.nome} vinculado a uma conta existente.', 'success')
+    elif r['motivo'] == 'criado':
+        if r.get('email_ok'):
+            flash(f'Acesso de {f.nome} criado — senha enviada por e-mail.',
+                  'success')
+        else:
+            flash(f'Acesso de {f.nome} criado, mas o e-mail falhou '
+                  f'({r.get("email_erro")}). Senha: {r.get("senha")} — '
+                  'passe manualmente.', 'warning')
+    return _voltar()
+
+
 @treino_bp.route('/admin/trilha/<int:id>/cargos', methods=['POST'])
 @login_required
 @admin_required
