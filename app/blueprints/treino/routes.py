@@ -516,6 +516,21 @@ def admin_checkpoint(id):
     return redirect(url_for('treino.admin_video_editar', id=v.id))
 
 
+@treino_bp.route('/admin/video/<int:id>/ia-gerar', methods=['POST'])
+@login_required
+@admin_required
+def admin_video_ia(id):
+    """v2 §16.2 no CHECKPOINT: a IA PROPÕE a pergunta + alternativas a partir
+    do conteúdo colado. O admin escolhe uma, define o MOMENTO (min:seg) e salva
+    pelo endpoint normal de checkpoint. Não grava nada aqui."""
+    db.session.get(TreinoVideo, id) or abort(404)
+    from app.services import treino_ia_perguntas as ia
+    r = ia.gerar(request.form.get('texto', ''), request.form.get('n', 3))
+    if 'erro' in r:
+        return jsonify(ok=False, erro=r['erro']), 400
+    return jsonify(ok=True, perguntas=r['perguntas'])
+
+
 @treino_bp.route('/admin/quiz', methods=['POST'])
 @login_required
 @admin_required
