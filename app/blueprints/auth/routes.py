@@ -113,16 +113,22 @@ def novo_usuario():
     # do email/flash (hash imediato via set_senha).
     senha = secrets.token_urlsafe(8)[:10]
 
-    u = Usuario(nome=nome, login=login_val, email=email, papel=papel)
+    # "Só treinamento" (por pessoa, decisão do dono 23/07/2026): a conta vê só
+    # /treino. Senha nasce provisória — força troca no 1º login.
+    somente_treino = bool(request.form.get('somente_treino'))
+    u = Usuario(nome=nome, login=login_val, email=email, papel=papel,
+                senha_provisoria=True, somente_treino=somente_treino)
     u.set_senha(senha)
     db.session.add(u)
     db.session.commit()
 
     # Envio do email com a senha (best-effort). Sem email cadastrado ou se o
     # Postmark falhar, mostra a senha no flash pra o admin copiar e passar.
+    # Conta só-treino não recebe o convite do Chatwoot (não atende cliente).
     if email:
         from app.services import email as email_svc
-        res = email_svc.enviar_boas_vindas(email, nome, login_val, senha)
+        res = email_svc.enviar_boas_vindas(email, nome, login_val, senha,
+                                            com_chatwoot=not somente_treino)
         if res.get('ok'):
             flash(f'Usuario "{nome}" criado! Senha enviada para {email}.',
                   'success')
