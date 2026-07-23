@@ -182,6 +182,23 @@ def alterar_papel(id):
     return redirect(url_for('auth.usuarios'))
 
 
+@auth_bp.route('/usuarios/<int:id>/somente-treino', methods=['POST'])
+@login_required
+@admin_required
+def toggle_somente_treino(id):
+    """Liga/desliga o acesso SÓ TREINAMENTO da conta (por pessoa — decisão do
+    dono 23/07/2026). Owner nunca é restrito."""
+    u = Usuario.query.get_or_404(id)
+    if u.is_owner:
+        flash('Owner não pode ser restrito a treinamento.', 'warning')
+        return redirect(url_for('auth.usuarios'))
+    u.somente_treino = not u.somente_treino
+    db.session.commit()
+    estado = 'agora vê SÓ treinamento' if u.somente_treino else 'voltou ao acesso normal'
+    flash(f'"{u.nome}" {estado}.', 'success')
+    return redirect(url_for('auth.usuarios'))
+
+
 @auth_bp.route('/usuarios/<int:id>/reset-senha', methods=['POST'])
 @login_required
 @admin_required
