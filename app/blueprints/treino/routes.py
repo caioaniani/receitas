@@ -106,6 +106,7 @@ def trilha(id):
 def video(id):
     v = TreinoVideo.query.filter_by(id=id, ativo=True).first_or_404()
     from app.services import treinamento_stream as ts
+    _garantir_duracao(v)   # sem duração positiva o progresso daria 100% falso
     embed = ts.embed_url(v.video_externo_id) if v.video_externo_id else None
     quizzes = TreinoQuiz.query.filter_by(video_id=v.id, ativo=True).all()
     return render_template('treino/video.html', v=v, video_embed=embed,
