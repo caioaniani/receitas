@@ -106,14 +106,17 @@ def test_gerar_com_momento_sanitiza(app, monkeypatch):
         {'enunciado': 'Quando lavar a mão?', 'alternativas': ['Antes', 'Nunca'],
          'correta': 0, 'momento_seg': 150, 'dificuldade': 'FACIL'},
         {'enunciado': 'Sem momento', 'alternativas': ['a', 'b'], 'correta': 0},
+        {'enunciado': 'Momento alucinado', 'alternativas': ['a', 'b'],
+         'correta': 1, 'momento_seg': 99999},   # além do vídeo -> capado
     ]
     segs = [{'inicio': 150, 'texto': 'lave as mãos'}]
     with app.app_context(), \
             patch('anthropic.Anthropic', return_value=_fake_ia(payload)):
         r = ia.gerar_com_momento(segs, n=3)
-    assert 'perguntas' in r and len(r['perguntas']) == 2
+    assert 'perguntas' in r and len(r['perguntas']) == 3
     assert r['perguntas'][0]['momento_seg'] == 150
-    assert r['perguntas'][1]['momento_seg'] == 0    # ausente -> 0 gracioso
+    assert r['perguntas'][1]['momento_seg'] is None   # ausente -> sem sugestão
+    assert r['perguntas'][2]['momento_seg'] == 150     # capado no maior tempo
 
 
 def test_gerar_com_momento_sem_transcricao():
