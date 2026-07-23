@@ -117,6 +117,21 @@ def test_2x_nao_conclui_cedo(app, monkeypatch):   # critério 3
         assert ledger.saldo(f.id, temp.id) == 0
 
 
+def test_sem_duracao_nao_reporta_100(app, monkeypatch):   # bug do -1/0
+    """Duração <=0 (Cloudflare ainda processando / devolveu -1) NÃO pode dar
+    100% no 1º balde (total_baldes=1) nem concluir."""
+    with app.app_context():
+        temp, f, v, _ = _setup(dur=0)     # duração desconhecida
+        clock = Clock(datetime(2026, 7, 23, 10, 0, 0))
+        monkeypatch.setattr(tv, 'agora', clock)
+        tv.heartbeat(f, v, 0)             # baseline
+        clock.tick(15)
+        r = tv.heartbeat(f, v, 10)        # assistiu 10s
+        assert r['pct'] == 0              # não dispara 100 falso
+        assert r['concluido'] is False
+        assert ledger.saldo(f.id, temp.id) == 0
+
+
 def test_checkpoint_idempotente_e_pontua_uma_vez(app, monkeypatch):
     with app.app_context():
         temp, f, v, cp = _setup(dur=100, com_checkpoint=True)
