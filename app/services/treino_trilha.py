@@ -5,6 +5,7 @@ aprovados + ≥1 aplicação prática validada (§4). Ao concluir: emite SELO
 (idempotente) e credita TRILHA_CONCLUIDA (100). O selo carrega o código de
 verificação e a carga horária pro certificado (§11).
 """
+
 from app.extensions import db
 from app.models import (
     TreinoAplicacaoPratica,
