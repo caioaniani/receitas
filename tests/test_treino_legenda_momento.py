@@ -130,8 +130,11 @@ def test_rota_video_processando_quando_sem_legenda(app, admin_user, monkeypatch)
     vid = _video(app, video_externo_id='a' * 32, provedor='cloudflare')
     monkeypatch.setattr(ts, 'transcricao', lambda uid: [])
     disparou = {}
-    monkeypatch.setattr(ts, 'gerar_legenda',
-                        lambda uid: disparou.setdefault('x', True))
+
+    def fake_gerar(uid):
+        disparou['x'] = True
+        return {'ok': True, 'status': 'inprogress', 'erro': None}
+    monkeypatch.setattr(ts, 'gerar_legenda', fake_gerar)
     c = _admin(app, admin_user)
     r = c.post(f'/treino/admin/video/{vid}/ia-gerar', data={'fonte': 'video'})
     assert r.status_code == 409
