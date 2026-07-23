@@ -14,8 +14,7 @@
     border:0;border-radius:8px;}
   /* Overlay do checkpoint DENTRO do player (cobre o vídeo embutido). No desktop
      em tela cheia o overlay fica atrás do iframe — por isso lá o JS SAI da tela
-     cheia; no celular não há tela cheia (sem allowfullscreen), então o overlay
-     aparece sempre. */
+     cheia; no celular a tela cheia é desligada, então o overlay aparece sempre. */
   #cpbox{position:absolute;inset:0;z-index:10;background:rgba(0,0,0,.82);
     display:none;overflow:auto;border-radius:8px;}
   #cpbox .cp-card{max-width:460px;margin:24px auto;background:var(--bs-body-bg,#fff);
