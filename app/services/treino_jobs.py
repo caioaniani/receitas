@@ -16,6 +16,7 @@ from app.models import (
 from app.services import treino_ledger as ledger
 from app.services import treino_pontos as cfg
 from app.services import treino_quiz as tq
+from app.utils import agora
 
 
 def _intervalo_semana(ano, semana):
@@ -87,7 +88,7 @@ def limpeza_tentativas():
         limite = t.iniciado_em + timedelta(
             seconds=tq.SEG_MAX_POR_QUESTAO * (t.total or
                                               quiz.questoes_por_tentativa))
-        if ledger.agora_dt() >= limite:
+        if agora() >= limite:
             tq.finalizar(t, quiz)
             n += 1
     return n
