@@ -1,51 +1,61 @@
 {% extends "base.html" %}{% block title %}Admin treinamento{% endblock %}{% block content %}
 <div class="page-header"><div><h1 class="page-title">⚙️ Treinamento — admin</h1></div></div>
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+{% macro mini(action, label, cls='btn-outline-secondary', confirm='') %}
+<form method="POST" action="{{ action }}" class="d-inline"{% if confirm %} onsubmit="return confirm('{{ confirm }}')"{% endif %}>{{ csrf() }}<button class="btn btn-sm {{ cls }} py-0 px-1">{{ label }}</button></form>{% endmacro %}
 
 <div class="card mb-3"><div class="card-header py-2"><strong>Temporadas</strong></div><div class="card-body">
-  {% for t in temporadas %}<div class="small">{{ t.nome }} — {{ t.inicio }} a {{ t.fim }} <span class="badge bg-{{ 'success' if t.status=='ATIVA' else 'secondary' }}">{{ t.status }}</span></div>{% endfor %}
+  {% for t in temporadas %}<div class="small d-flex justify-content-between align-items-center mb-1">
+    <span>{{ t.nome }} — {{ t.inicio }} a {{ t.fim }} <span class="badge bg-{{ 'success' if t.status=='ATIVA' else 'secondary' }}">{{ t.status }}</span></span>
+    <span>
+      {% if t.status!='ATIVA' %}<form method="POST" action="{{ url_for('treino.admin_temporada_status', id=t.id) }}" class="d-inline">{{ csrf() }}<input type="hidden" name="status" value="ATIVA"><button class="btn btn-sm btn-outline-success py-0 px-1">Ativar</button></form>{% endif %}
+      {% if t.status=='ATIVA' %}<form method="POST" action="{{ url_for('treino.admin_temporada_status', id=t.id) }}" class="d-inline">{{ csrf() }}<input type="hidden" name="status" value="ENCERRADA"><button class="btn btn-sm btn-outline-secondary py-0 px-1">Encerrar</button></form>{% endif %}
+    </span></div>{% endfor %}
   <form method="POST" action="{{ url_for('treino.admin_temporada') }}" class="row g-2 mt-2">{{ csrf() }}
     <div class="col-4"><input name="nome" class="form-control form-control-sm" placeholder="Nome"></div>
     <div class="col-3"><input type="date" name="inicio" class="form-control form-control-sm"></div>
     <div class="col-3"><input type="date" name="fim" class="form-control form-control-sm"></div>
-    <div class="col-2"><button class="btn btn-sm btn-primary w-100">Criar (ATIVA)</button></div>
-  </form></div></div>
+    <div class="col-2"><button class="btn btn-sm btn-primary w-100">Criar (ATIVA)</button></div></form></div></div>
 
 <div class="card mb-3"><div class="card-header py-2"><strong>Trilhas & vídeos</strong></div><div class="card-body">
-  {% for t in trilhas %}<div class="border rounded p-2 mb-2">
-    <div class="d-flex justify-content-between"><strong>{{ t.nome }}</strong>
-      <form method="POST" action="{{ url_for('treino.admin_video_novo', id=t.id) }}" class="d-flex gap-1">{{ csrf() }}
-        <input name="titulo" class="form-control form-control-sm" placeholder="Nova aula" style="width:130px;">
-        <input name="duracao" class="form-control form-control-sm" placeholder="seg" style="width:64px;">
-        <button class="btn btn-sm btn-outline-dark">+ vídeo</button></form></div>
-    {% for v in t.videos %}<div class="small">▶️ <a href="{{ url_for('treino.admin_video_editar', id=v.id) }}">{{ v.titulo }}</a> ({{ v.duracao_segundos }}s{% if v.video_externo_id %}, ✓vídeo{% endif %}, {{ v.checkpoints|length }} checkpoint)</div>{% endfor %}
+  {% for t in trilhas %}<div class="border rounded p-2 mb-2" id="t{{ t.id }}">
+    <div class="d-flex justify-content-between align-items-start">
+      <strong>{{ t.nome }} {% if not t.ativa %}<span class="badge bg-secondary">inativa</span>{% endif %}</strong>
+      <span class="d-flex gap-1">
+        {{ mini(url_for('treino.admin_trilha_toggle', id=t.id), 'ativa on/off') }}
+        {{ mini(url_for('treino.admin_trilha_excluir', id=t.id), '🗑', 'btn-outline-danger', 'Excluir trilha?') }}</span></div>
+    {% for v in t.videos %}<div class="small d-flex justify-content-between">
+      <span>▶️ <a href="{{ url_for('treino.admin_video_editar', id=v.id) }}">{{ v.titulo }}</a> ({{ v.duracao_segundos }}s{% if v.video_externo_id %}, ✓vídeo{% endif %}, {{ v.checkpoints|length }} cp){% if not v.ativo %} <span class="badge bg-secondary">off</span>{% endif %}</span>
+      <span class="d-flex gap-1">{{ mini(url_for('treino.admin_video_toggle', id=v.id), 'on/off') }}{{ mini(url_for('treino.admin_video_excluir', id=v.id), '🗑', 'btn-outline-danger', 'Excluir vídeo?') }}</span></div>{% endfor %}
+    <form method="POST" action="{{ url_for('treino.admin_video_novo', id=t.id) }}" class="d-flex gap-1 mt-1">{{ csrf() }}
+      <input name="titulo" class="form-control form-control-sm" placeholder="Nova aula" style="width:130px;">
+      <input name="duracao" class="form-control form-control-sm" placeholder="seg" style="width:64px;">
+      <button class="btn btn-sm btn-outline-dark">+ vídeo</button></form>
     <form method="POST" action="{{ url_for('treino.admin_quiz_novo') }}" class="d-flex gap-1 mt-1">{{ csrf() }}
       <input type="hidden" name="trilha_id" value="{{ t.id }}">
       <input name="titulo" class="form-control form-control-sm" placeholder="Quiz da trilha" style="width:150px;">
       <input name="por_tent" class="form-control form-control-sm" placeholder="qtd" style="width:56px;" value="5">
-      <button class="btn btn-sm btn-outline-primary">+ quiz</button></form>
-  </div>{% endfor %}
+      <button class="btn btn-sm btn-outline-primary">+ quiz</button></form></div>{% endfor %}
   <form method="POST" action="{{ url_for('treino.admin_trilha') }}" class="d-flex gap-1">{{ csrf() }}
     <input name="nome" class="form-control form-control-sm" placeholder="Nova trilha">
-    <button class="btn btn-sm btn-primary">Criar trilha</button></form>
-</div></div>
+    <button class="btn btn-sm btn-primary">Criar trilha</button></form></div></div>
 
 <div class="card mb-3"><div class="card-header py-2"><strong>Recompensas</strong></div><div class="card-body">
-  {% for r in recompensas %}<div class="small">🎁 {{ r.nome }} — {{ r.custo_pontos }} pts{% if r.estoque is not none %} (estoque {{ r.estoque }}){% endif %}</div>{% endfor %}
+  {% for r in recompensas %}<div class="small d-flex justify-content-between align-items-center mb-1">
+    <span>🎁 {{ r.nome }} — {{ r.custo_pontos }} pts{% if r.estoque is not none %} (estoque {{ r.estoque }}){% endif %}{% if not r.ativa %} <span class="badge bg-secondary">off</span>{% endif %}</span>
+    {{ mini(url_for('treino.admin_recompensa_toggle', id=r.id), 'on/off') }}</div>{% endfor %}
   <form method="POST" action="{{ url_for('treino.admin_recompensa') }}" class="row g-2 mt-2">{{ csrf() }}
     <div class="col-4"><input name="nome" class="form-control form-control-sm" placeholder="Nome"></div>
     <div class="col-3"><input name="custo" class="form-control form-control-sm" placeholder="Custo pts"></div>
     <div class="col-3"><input name="estoque" class="form-control form-control-sm" placeholder="Estoque (vazio=∞)"></div>
-    <div class="col-2"><button class="btn btn-sm btn-primary w-100">Criar</button></div>
-  </form></div></div>
+    <div class="col-2"><button class="btn btn-sm btn-primary w-100">Criar</button></div></form></div></div>
 
 <div class="card mb-3"><div class="card-header py-2"><strong>Ajuste manual de pontos</strong></div><div class="card-body">
   <form method="POST" action="{{ url_for('treino.admin_ajuste') }}" class="row g-2">{{ csrf() }}
     <div class="col-4"><select name="funcionario_id" class="form-select form-select-sm">{% for f in funcionarios %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}</select></div>
     <div class="col-2"><input name="pontos" class="form-control form-control-sm" placeholder="±pts"></div>
     <div class="col-4"><input name="justificativa" class="form-control form-control-sm" placeholder="Justificativa (obrigatória)"></div>
-    <div class="col-2"><button class="btn btn-sm btn-warning w-100">Lançar</button></div>
-  </form></div></div>
+    <div class="col-2"><button class="btn btn-sm btn-warning w-100">Lançar</button></div></form></div></div>
 
 <div class="card"><div class="card-header py-2"><strong>Valores de pontuação</strong></div><div class="card-body">
   <div class="mobile-table-scroll"><table class="table table-sm mb-0"><tbody>

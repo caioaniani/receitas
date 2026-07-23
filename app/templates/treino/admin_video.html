@@ -21,7 +21,7 @@ document.getElementById('up').onclick=function(){var f=document.getElementById('
 {% else %}<div class="alert alert-warning small">Cloudflare não configurado (CLOUDFLARE_ACCOUNT_ID/TOKEN).</div>{% endif %}
 
 <div class="card mt-3"><div class="card-header py-2"><strong>Checkpoints (pausam o vídeo)</strong></div><div class="card-body">
-  {% for c in v.checkpoints %}<div class="small">⏸ {{ c.segundo }}s — {{ c.enunciado }} <span class="text-muted">({{ c.alternativas|length }} alt, correta #{{ c.indice_correto }})</span></div>{% endfor %}
+  {% for c in v.checkpoints %}<div class="small d-flex justify-content-between"><span>⏸ {{ c.segundo }}s — {{ c.enunciado }} <span class="text-muted">({{ c.alternativas|length }} alt, correta #{{ c.indice_correto }})</span></span><form method="POST" action="{{ url_for('treino.admin_checkpoint_excluir', id=c.id) }}" onsubmit="return confirm('Excluir checkpoint?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger py-0 px-1">🗑</button></form></div>{% endfor %}
   <form method="POST" action="{{ url_for('treino.admin_checkpoint', id=v.id) }}" class="mt-2">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row g-2"><div class="col-3"><input name="segundo" class="form-control form-control-sm" placeholder="segundo"></div>

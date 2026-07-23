@@ -3,9 +3,8 @@
 <p class="page-subtitle"><a href="{{ url_for('treino.admin_home') }}">&larr; Admin</a></p></div></div>
 <div class="alert {{ 'alert-success' if pode else 'alert-warning' }} small">
   {{ q.questoes|length }} questão(ões) no banco · precisa de {{ q.questoes_por_tentativa * 3 }} (3× {{ q.questoes_por_tentativa }}/tentativa) pra publicar.
-  {{ '✓ pode publicar' if pode else 'banco insuficiente' }}</div>
-{% for quest in q.questoes %}<div class="border rounded p-2 mb-1 small"><strong>{{ quest.enunciado }}</strong>
-  {% for a in quest.alternativas %}<div>{{ '✓' if a.correta else '○' }} {{ a.texto }}</div>{% endfor %}</div>{% endfor %}
+  {{ '✓ pode publicar' if pode else 'banco insuficiente' }} <form method="POST" action="{{ url_for('treino.admin_quiz_toggle', id=q.id) }}" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-dark py-0 px-1">{{ 'desativar' if q.ativo else 'publicar' }}</button></form></div>
+{% for quest in q.questoes %}<div class="border rounded p-2 mb-1 small"><div class="d-flex justify-content-between"><strong>{{ quest.enunciado }}</strong><form method="POST" action="{{ url_for('treino.admin_questao_excluir', id=quest.id) }}" onsubmit="return confirm('Excluir questão?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger py-0 px-1">🗑</button></form></div>  {% for a in quest.alternativas %}<div>{{ '✓' if a.correta else '○' }} {{ a.texto }}</div>{% endfor %}</div>{% endfor %}
 <form method="POST" action="{{ url_for('treino.admin_questao', id=q.id) }}" class="card"><div class="card-body">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input name="enunciado" class="form-control form-control-sm mb-2" placeholder="Enunciado da questão" required>
