@@ -120,9 +120,17 @@ def video(id):
         if prog:
             pct_inicial = float(prog.percentual or 0)
             concluido = bool(prog.concluido_em)
+    # No CELULAR o vídeo NÃO pode ir a tela cheia: em fullscreen o iOS abre o
+    # player nativo do sistema (camada acima da página) e a pergunta do
+    # checkpoint não aparece nem dá pra sair (vídeo é cross-origin do
+    # Cloudflare). Sem `allowfullscreen` ele toca embutido e o overlay funciona.
+    import re as _re
+    ua = request.headers.get('User-Agent', '')
+    is_mobile = bool(_re.search(r'Mobi|Android|iPhone|iPad|iPod', ua, _re.I))
     return render_template('treino/video.html', v=v, video_embed=embed,
                            checkpoints=v.checkpoints, quizzes=quizzes,
-                           pct_inicial=pct_inicial, concluido_inicial=concluido)
+                           pct_inicial=pct_inicial, concluido_inicial=concluido,
+                           is_mobile=is_mobile)
 
 
 @treino_bp.route('/api/videos/<int:id>/heartbeat', methods=['POST'])
