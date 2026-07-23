@@ -6,6 +6,8 @@ aprovados + ≥1 aplicação prática validada (§4). Ao concluir: emite SELO
 verificação e a carga horária pro certificado (§11).
 """
 
+import math
+
 from app.extensions import db
 from app.models import (
     TreinoAplicacaoPratica,
@@ -70,7 +72,7 @@ def verificar_conclusao(funcionario, trilha, temporada):
     selo = TreinoSelo.query.filter_by(
         funcionario_id=funcionario.id, trilha_id=trilha.id).first()
     if selo is None:
-        carga = sum(round((v.duracao_segundos or 0) / 60 + 0.999)  # ceil min
+        carga = sum(math.ceil((v.duracao_segundos or 0) / 60)
                     for v in _videos_ativos(trilha)) or \
             (trilha.carga_horaria_minutos or 0)
         selo = TreinoSelo(funcionario_id=funcionario.id, trilha_id=trilha.id,
