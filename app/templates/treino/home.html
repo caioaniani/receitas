@@ -1,4 +1,13 @@
-{% extends "base.html" %}{% block title %}Treinamento{% endblock %}{% block content %}
+{% extends "base.html" %}{% block title %}Treinamento{% endblock %}
+{% macro barra_progresso(e) %}
+<div class="progress mt-2" style="height:6px;">
+  <div class="progress-bar{% if e.completa %} bg-success{% endif %}" role="progressbar"
+       style="width:{{ e.percentual }}%;" aria-valuenow="{{ e.percentual }}"
+       aria-valuemin="0" aria-valuemax="100"></div>
+</div>
+<div class="small text-muted mt-1">{{ e.percentual }}%{% if e.videos %} · {{ e.videos_feitos }}/{{ e.videos }} aula(s){% endif %}{% if e.aplicacao_ok %} · aplicação ✓{% endif %}</div>
+{% endmacro %}
+{% block content %}
 <div class="page-header"><div><h1 class="page-title">🎓 Treinamento</h1></div></div>
 {% if func %}
 {% if pos %}
