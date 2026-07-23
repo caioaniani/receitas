@@ -142,6 +142,19 @@ def test_rota_video_processando_quando_sem_legenda(app, admin_user, monkeypatch)
     assert j['processando'] and disparou.get('x')   # disparou a geração
 
 
+def test_rota_video_surfacea_erro_da_legenda(app, admin_user, monkeypatch):
+    _cfg(app)
+    vid = _video(app, video_externo_id='a' * 32, provedor='cloudflare')
+    monkeypatch.setattr(ts, 'transcricao', lambda uid: [])
+    monkeypatch.setattr(ts, 'gerar_legenda', lambda uid: {
+        'ok': False, 'status': None, 'erro': 'video ainda não transcodificado'})
+    c = _admin(app, admin_user)
+    r = c.post(f'/treino/admin/video/{vid}/ia-gerar', data={'fonte': 'video'})
+    assert r.status_code == 409
+    # mostra o motivo REAL, não o genérico "processando"
+    assert 'transcodificado' in r.get_json()['erro']
+
+
 def test_rota_video_com_legenda_devolve_momento(app, admin_user, monkeypatch):
     monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-teste')
     _cfg(app)
