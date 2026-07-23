@@ -435,11 +435,31 @@ def admin_video_novo(id):
     t = db.session.get(TreinoTrilha, id) or abort(404)
     ordem = _int(db.session.query(db.func.max(TreinoVideo.ordem)).filter_by(
         trilha_id=t.id).scalar()) + 1
-    v = TreinoVideo(trilha_id=t.id, titulo=request.form.get('titulo', 'Aula')[:200],
+    # Titulo em branco NAO pode virar '' (a tela da trilha mostraria uma aula
+    # sem nome, sem jeito de corrigir) — cai no default 'Aula', editavel depois.
+    titulo = (request.form.get('titulo') or '').strip()[:200] or 'Aula'
+    v = TreinoVideo(trilha_id=t.id, titulo=titulo,
                     duracao_segundos=_int(request.form.get('duracao')), ordem=ordem)
     db.session.add(v)
     db.session.commit()
     flash('Vídeo criado — suba o arquivo agora.', 'success')
+    return redirect(url_for('treino.admin_video_editar', id=v.id))
+
+
+@treino_bp.route('/admin/video/<int:id>/titulo', methods=['POST'])
+@login_required
+@admin_required
+def admin_video_titulo(id):
+    """Renomeia a aula (o titulo do video). So havia como setar na criacao;
+    aula criada com nome em branco ficava sem titulo e sem edicao."""
+    v = db.session.get(TreinoVideo, id) or abort(404)
+    titulo = (request.form.get('titulo') or '').strip()
+    if not titulo:
+        flash('O título da aula não pode ficar em branco.', 'warning')
+    else:
+        v.titulo = titulo[:200]
+        db.session.commit()
+        flash('Título salvo.', 'success')
     return redirect(url_for('treino.admin_video_editar', id=v.id))
 
 
