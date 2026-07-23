@@ -54,6 +54,9 @@ LOCK_KEY_PDV_VIGIA = 7746  # advisory lock pro vigia do PDV (loja muda / company
 LOCK_KEY_USO_IA_VIGIA = 7748  # advisory lock pro vigia de custo de IA (teto diario)
 LOCK_KEY_GOOGLE_REVIEWS = 7749  # advisory lock pro sync de avaliacoes do Google
 # 7752 = LOCK_KEY_REPROCESSO (seru_sync.py) — reprocesso retroativo de baixas.
+# 7753 = reservado pro chatbot (lock por conversa cross-worker).
+LOCK_KEY_TREINO_FECH = 7754    # advisory lock pro fechamento semanal do treino
+LOCK_KEY_TREINO_DIARIO = 7755  # advisory lock pros jobs diarios do treino
 # Locks LIBERADOS mas RESERVADOS (nao reusar — evita conflito se algum
 # dos jobs for reativado no futuro):
 # - 7730 era do `zapi-digest-anomalias` (job 23:00 BRT, removido 14/06/2026).
