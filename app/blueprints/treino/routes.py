@@ -484,6 +484,20 @@ def admin_video_salvar(id):
     return jsonify(ok=True)
 
 
+def _mmss_para_seg(valor):
+    """Aceita 'min:seg' (ex '2:30' -> 150) OU segundos crus (ex '150'). Campo
+    do checkpoint é o MOMENTO do vídeo, e o dono pensa em min:seg."""
+    v = (valor or '').strip()
+    if ':' in v:
+        partes = v.split(':')
+        try:
+            m, s = int(partes[0] or 0), int(partes[1] or 0)
+            return max(0, m * 60 + s)
+        except (ValueError, IndexError):
+            return 0
+    return _int(v)
+
+
 @treino_bp.route('/admin/video/<int:id>/checkpoint', methods=['POST'])
 @login_required
 @admin_required
@@ -494,7 +508,7 @@ def admin_checkpoint(id):
         flash('Checkpoint precisa de ao menos 2 alternativas.', 'warning')
         return redirect(url_for('treino.admin_video_editar', id=v.id))
     db.session.add(TreinoCheckpoint(
-        video_id=v.id, segundo=_int(request.form.get('segundo')),
+        video_id=v.id, segundo=_mmss_para_seg(request.form.get('segundo')),
         enunciado=request.form.get('enunciado', '')[:500], alternativas=alts,
         indice_correto=_int(request.form.get('correta'))))
     db.session.commit()
