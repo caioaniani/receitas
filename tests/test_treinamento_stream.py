@@ -1,13 +1,15 @@
 """Cloudflare Stream — upload direto do navegador + player embutido.
 
-A API do Cloudflare é SEMPRE mockada (padrão da casa, igual Anthropic/Seru):
-nenhum teste toca a rede.
+`treinamento_stream` é o serviço COMPARTILHADO de vídeo (Cloudflare); sobreviveu
+à remoção do módulo antigo de vídeos (24/07/2026). As rotas exercitadas aqui são
+as do módulo NOVO gamificado (`treino`). A API do Cloudflare é SEMPRE mockada
+(padrão da casa, igual Anthropic/Seru): nenhum teste toca a rede.
 """
 
 import pytest
 
 from app.extensions import db
-from app.models import Treinamento, Usuario
+from app.models import TreinoTrilha, TreinoVideo, Usuario
 from app.services import treinamento_stream as ts
 
 UID = 'a' * 32
@@ -38,6 +40,19 @@ def _admin(app, admin_user):
         s['_user_id'] = str(admin_user.id)
         s['_fresh'] = True
     return c
+
+
+def _video(app, **kw):
+    """Cria uma trilha + vídeo no módulo novo e devolve o id do vídeo."""
+    with app.app_context():
+        t = TreinoTrilha(nome='Seg')
+        db.session.add(t)
+        db.session.commit()
+        v = TreinoVideo(trilha_id=t.id, titulo=kw.pop('titulo', 'Aula'),
+                        duracao_segundos=kw.pop('duracao', 60), **kw)
+        db.session.add(v)
+        db.session.commit()
+        return v.id
 
 
 # ── serviço ─────────────────────────────────────────────────────────────
@@ -120,17 +135,13 @@ def test_cachear_subdomain_pela_preview(app):
             f'https://customer-xyz.cloudflarestream.com/{UID}/iframe'
 
 
-# ── rotas ───────────────────────────────────────────────────────────────
+# ── rotas (módulo NOVO gamificado) ──────────────────────────────────────
 def test_upload_url_503_sem_config(app, admin_user):
     app.config['CLOUDFLARE_ACCOUNT_ID'] = ''
     app.config['CLOUDFLARE_STREAM_TOKEN'] = ''
-    with app.app_context():
-        t = Treinamento(titulo='S1')
-        db.session.add(t)
-        db.session.commit()
-        tid = t.id
+    vid = _video(app)
     c = _admin(app, admin_user)
-    r = c.post(f'/treinamento/admin/{tid}/video/stream/upload-url')
+    r = c.post(f'/treino/admin/video/{vid}/upload-url')
     assert r.status_code == 503
 
 
@@ -139,64 +150,44 @@ def test_upload_url_devolve_uid_e_url(app, admin_user, monkeypatch):
     monkeypatch.setattr(ts.requests, 'post', lambda url, **kw: FakeResp(
         200, {'success': True,
               'result': {'uid': UID, 'uploadURL': UPLOAD_URL}}))
-    with app.app_context():
-        t = Treinamento(titulo='S2')
-        db.session.add(t)
-        db.session.commit()
-        tid = t.id
+    vid = _video(app)
     c = _admin(app, admin_user)
-    r = c.post(f'/treinamento/admin/{tid}/video/stream/upload-url',
-               data={'nome': 'aula.mp4'})
+    r = c.post(f'/treino/admin/video/{vid}/upload-url')
     assert r.status_code == 200
     j = r.get_json()
     assert j['ok'] and j['uid'] == UID and j['uploadURL'] == UPLOAD_URL
 
 
-def test_salvar_grava_uid_e_troca_tipo(app, admin_user):
+def test_upload_url_502_se_api_recusa(app, admin_user, monkeypatch):
     _config_stream(app)
-    with app.app_context():
-        t = Treinamento(titulo='S3')
-        db.session.add(t)
-        db.session.commit()
-        tid = t.id
+    monkeypatch.setattr(ts.requests, 'post', lambda url, **kw: FakeResp(
+        403, {'success': False, 'errors': [{'message': 'sem permissão'}]}))
+    vid = _video(app)
     c = _admin(app, admin_user)
-    r = c.post(f'/treinamento/admin/{tid}/video/stream/salvar',
-               data={'uid': UID})
+    r = c.post(f'/treino/admin/video/{vid}/upload-url')
+    assert r.status_code == 502 and not r.get_json()['ok']
+
+
+def test_salvar_grava_uid_e_provedor(app, admin_user):
+    _config_stream(app)
+    vid = _video(app, titulo='S3')
+    c = _admin(app, admin_user)
+    r = c.post(f'/treino/admin/video/{vid}/salvar', data={'uid': UID})
     assert r.status_code == 200 and r.get_json()['ok']
     with app.app_context():
-        t = db.session.get(Treinamento, tid)
-        assert t.video_tipo == 'stream' and t.video_ref == UID
+        v = db.session.get(TreinoVideo, vid)
+        assert v.provedor == 'cloudflare' and v.video_externo_id == UID
 
 
 def test_salvar_recusa_uid_invalido(app, admin_user):
     _config_stream(app)
-    with app.app_context():
-        t = Treinamento(titulo='S4')
-        db.session.add(t)
-        db.session.commit()
-        tid = t.id
+    vid = _video(app, titulo='S4')
     c = _admin(app, admin_user)
-    r = c.post(f'/treinamento/admin/{tid}/video/stream/salvar',
+    r = c.post(f'/treino/admin/video/{vid}/salvar',
                data={'uid': '../etc/passwd'})
     assert r.status_code == 400
     with app.app_context():
-        assert db.session.get(Treinamento, tid).video_ref is None
-
-
-def test_troca_de_stream_apaga_o_anterior_no_cloudflare(app, admin_user,
-                                                        monkeypatch):
-    _config_stream(app)
-    apagados = []
-    monkeypatch.setattr(ts, 'deletar', lambda uid: apagados.append(uid))
-    velho = 'b' * 32
-    with app.app_context():
-        t = Treinamento(titulo='S5', video_tipo='stream', video_ref=velho)
-        db.session.add(t)
-        db.session.commit()
-        tid = t.id
-    c = _admin(app, admin_user)
-    c.post(f'/treinamento/admin/{tid}/video/stream/salvar', data={'uid': UID})
-    assert apagados == [velho]   # o vídeo antigo do Cloudflare foi removido
+        assert db.session.get(TreinoVideo, vid).video_externo_id is None
 
 
 def test_salvar_descobre_subdomain_sem_env(app, admin_user, monkeypatch):
@@ -210,14 +201,9 @@ def test_salvar_descobre_subdomain_sem_env(app, admin_user, monkeypatch):
             'readyToStream': False,
             'preview': f'https://customer-zzz.cloudflarestream.com/{UID}/watch',
             'status': {'pctComplete': '10'}}}))
-    with app.app_context():
-        t = Treinamento(titulo='Sub')
-        db.session.add(t)
-        db.session.commit()
-        tid = t.id
+    vid = _video(app, titulo='Sub')
     c = _admin(app, admin_user)
-    r = c.post(f'/treinamento/admin/{tid}/video/stream/salvar',
-               data={'uid': UID})
+    r = c.post(f'/treino/admin/video/{vid}/salvar', data={'uid': UID})
     assert r.status_code == 200
     with app.app_context():
         from app.models.config import AppConfig
@@ -227,35 +213,23 @@ def test_salvar_descobre_subdomain_sem_env(app, admin_user, monkeypatch):
             f'https://customer-zzz.cloudflarestream.com/{UID}/iframe'
 
 
-def test_swap_stream_para_arquivo_apaga_no_cloudflare(app, admin_user,
-                                                      tmp_path, monkeypatch):
-    """Trocar um vídeo do Stream por um self-host (rota legada) NÃO pode deixar
-    o vídeo antigo orfão no Cloudflare."""
-    app.config['TREINAMENTO_MEDIA_DIR'] = str(tmp_path)
+def test_excluir_video_apaga_no_cloudflare(app, admin_user, monkeypatch):
+    """Excluir um vídeo do Stream NÃO pode deixar o vídeo órfão no Cloudflare."""
     _config_stream(app)
     apagados = []
     monkeypatch.setattr(ts, 'deletar', lambda uid: apagados.append(uid))
-    velho = 'c' * 32
-    with app.app_context():
-        t = Treinamento(titulo='Swap', video_tipo='stream', video_ref=velho)
-        db.session.add(t)
-        db.session.commit()
-        tid = t.id
+    vid = _video(app, titulo='Del', video_externo_id=UID, provedor='cloudflare')
     c = _admin(app, admin_user)
-    c.post(f'/treinamento/admin/{tid}/video?nome=a.mp4',
-           data=b'0123456789', content_type='video/mp4')
-    assert apagados == [velho]
+    c.post(f'/treino/admin/video/{vid}/excluir')
+    assert apagados == [UID]   # o vídeo do Cloudflare foi removido junto
 
 
-def test_aluno_ve_iframe_do_stream(app, tmp_path):
+def test_aluno_ve_iframe_do_stream(app):
     """Funcionário vê o player embutido (iframe) — nunca sai do site."""
     _config_stream(app)
+    vid = _video(app, titulo='S6', ativo=True, video_externo_id=UID,
+                 provedor='cloudflare')
     with app.app_context():
-        t = Treinamento(titulo='S6', ativo=True, video_tipo='stream',
-                        video_ref=UID)
-        db.session.add(t)
-        db.session.commit()
-        tid = t.id
         u = Usuario(nome='F', login='f-stream', papel='funcionario')
         u.set_senha('x' * 8)
         db.session.add(u)
@@ -265,6 +239,6 @@ def test_aluno_ve_iframe_do_stream(app, tmp_path):
     with c.session_transaction() as s:
         s['_user_id'] = str(uid_user)
         s['_fresh'] = True
-    body = c.get(f'/treinamento/{tid}/assistir').get_data(as_text=True)
+    body = c.get(f'/treino/video/{vid}').get_data(as_text=True)
     assert f'customer-abc.cloudflarestream.com/{UID}/iframe' in body
     assert 'embed.cloudflarestream.com/embed/sdk' in body   # SDK do auto-marcar
