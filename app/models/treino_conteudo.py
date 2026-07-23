@@ -17,6 +17,7 @@ __all__ = [
     'TreinoAlternativa', 'TreinoTentativaQuiz', 'TreinoRespostaQuiz',
     'TreinoChecklistAplicacao', 'TreinoItemChecklist', 'TreinoAplicacaoPratica',
     'TreinoSelo', 'TreinoRecompensa', 'TreinoResgate', 'TreinoFechamentoSemanal',
+    'TreinoTrilhaCargo',
     'DIFICULDADES', 'APLICACAO_STATUS', 'RESGATE_STATUS',
 ]
 
@@ -325,3 +326,26 @@ class TreinoFechamentoSemanal(db.Model):
     meta_cumprida = db.Column(db.Boolean, default=False, nullable=False)
     semanas_consecutivas = db.Column(db.Integer, default=0, nullable=False)
     processado_em = db.Column(db.DateTime, default=agora, nullable=False)
+
+
+# ── Onboarding por cargo / progressão (v2 §16.1, §16.3) ─────────────────
+class TreinoTrilhaCargo(db.Model):
+    """Mapeia quais TRILHAS são exigidas por CARGO. Serve pro onboarding
+    automático (na admissão, o funcionário já vê as trilhas do cargo dele) E
+    pra progressão (apto ao cargo = concluiu — tem selo — as trilhas exigidas).
+    Tabela nova (db.create_all)."""
+    __tablename__ = 'treino_trilha_cargo'
+    __table_args__ = (
+        db.UniqueConstraint('trilha_id', 'cargo_id',
+                            name='uq_treino_trilha_cargo'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    trilha_id = db.Column(
+        db.Integer, db.ForeignKey('treino_trilha.id'), nullable=False,
+        index=True)
+    cargo_id = db.Column(
+        db.Integer, db.ForeignKey('cargo.id'), nullable=False, index=True)
+    obrigatoria = db.Column(db.Boolean, default=True, nullable=False)
+
+    trilha = db.relationship('TreinoTrilha')
+    cargo = db.relationship('Cargo')
