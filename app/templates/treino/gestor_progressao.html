@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block title %}Progressão — treinamento{% endblock %}{% block content %}
+<div class="page-header"><div><h1 class="page-title">🎯 Progressão de cargo</h1>
+<p class="page-subtitle"><a href="{{ url_for('treino.gestor_home') }}">&larr; Gestor</a> · quem já concluiu as trilhas exigidas do cargo (§16.3)</p></div></div>
+<div class="mobile-table-scroll"><table class="table table-sm align-middle">
+  <thead><tr><th>Funcionário</th><th>Cargo</th><th>Trilhas obrigatórias</th><th class="text-end">Situação</th></tr></thead>
+  <tbody>
+  {% for l in linhas %}<tr>
+    <td>{{ l.func.nome }}</td>
+    <td class="small text-muted">{{ l.prog.cargo.nome if l.prog.cargo else '—' }}</td>
+    <td class="small">
+      {% if l.prog.total %}{{ l.prog.concluidas }}/{{ l.prog.total }}
+        <div class="d-flex flex-wrap gap-1 mt-1">{% for i in l.prog.itens %}<span class="badge bg-{{ 'success' if i.tem_selo else 'secondary' }}">{{ '✓' if i.tem_selo else '○' }} {{ i.trilha.nome }}</span>{% endfor %}</div>
+      {% else %}<span class="text-muted">sem trilha de cargo</span>{% endif %}</td>
+    <td class="text-end">{% if l.prog.total and l.prog.apto %}<span class="badge bg-success">✓ apto</span>{% elif l.prog.total %}<span class="badge bg-warning text-dark">em andamento</span>{% else %}<span class="text-muted small">—</span>{% endif %}</td>
+  </tr>{% else %}<tr><td colspan="4" class="text-muted">Nenhum funcionário na equipe.</td></tr>{% endfor %}
+  </tbody></table></div>
+{% endblock %}
