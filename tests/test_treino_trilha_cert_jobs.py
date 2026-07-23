@@ -110,3 +110,34 @@ def test_fechamento_semanal_idempotente(app):   # critério 16
         assert ledger.saldo(f.id, temp.id) == 15          # STREAK_SEMANAL
         jobs.fechamento_semanal(ano, semana)              # roda de novo
         assert ledger.saldo(f.id, temp.id) == 15          # NÃO dobra
+
+
+def test_encerramento_temporada_vencida(app):
+    with app.app_context():
+        vencida = TreinoTemporada(nome='V', inicio=hoje() - timedelta(days=40),
+                                  fim=hoje() - timedelta(days=1), status='ATIVA')
+        viva = TreinoTemporada(nome='A', inicio=hoje() - timedelta(days=1),
+                               fim=hoje() + timedelta(days=30), status='ATIVA')
+        db.session.add_all([vencida, viva])
+        db.session.commit()
+        assert jobs.encerramento_temporada() == 1
+        assert db.session.get(TreinoTemporada, vencida.id).status == 'ENCERRADA'
+        assert db.session.get(TreinoTemporada, viva.id).status == 'ATIVA'
+
+
+def test_snapshot_ranking_grava(app):
+    with app.app_context():
+        from app.models import AppConfig, Funcionario, Loja
+        temp = TreinoTemporada(nome='A', inicio=hoje() - timedelta(days=1),
+                               fim=hoje() + timedelta(days=30), status='ATIVA')
+        loja = Loja(nome='Brooklin', ativa=True)
+        db.session.add_all([temp, loja])
+        db.session.commit()
+        f = Funcionario(nome='Ana', cpf='9', ativo=True)
+        f.lojas.append(loja)
+        db.session.add(f)
+        db.session.commit()
+        ledger.creditar(f, 'AJUSTE_MANUAL', 100, temporada=temp)
+        assert jobs.snapshot_ranking() == 1
+        assert db.session.get(
+            AppConfig, f'treino_ranking_{hoje().isoformat()}') is not None
