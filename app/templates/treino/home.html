@@ -14,8 +14,32 @@
 {% else %}
 <div class="alert alert-warning">Sua conta não está vinculada a um funcionário do RH — fale com o gestor.</div>
 {% endif %}
-<h5>Trilhas</h5>
-{% for t in trilhas %}
+{% if func and progressao and progressao.total %}
+<div class="card mb-3 border-primary"><div class="card-body py-2">
+  <div class="d-flex justify-content-between align-items-center">
+    <div><strong>🎯 Sua trilha de cargo{% if progressao.cargo %} — {{ progressao.cargo.nome }}{% endif %}</strong>
+      <div class="small text-muted">{{ progressao.concluidas }} de {{ progressao.total }} trilha(s) obrigatória(s) concluída(s)</div></div>
+    {% if progressao.apto %}<span class="badge bg-success">✓ apto no cargo</span>
+    {% else %}<span class="badge bg-warning text-dark">em andamento</span>{% endif %}</div>
+</div></div>
+{% endif %}
+
+{% set obrig = trilhas|selectattr('id', 'in', onboarding_ids)|list %}
+{% if obrig %}
+<h5>📌 Onboarding do seu cargo</h5>
+{% for t in obrig %}
+{% set e = progresso.get(t.id) if progresso else None %}
+<a href="{{ url_for('treino.trilha', id=t.id) }}" class="card mb-2 text-decoration-none border-primary">
+  <div class="card-body py-2">
+    <div class="d-flex justify-content-between"><strong>{{ t.nome }}</strong>
+      {% if e and e.completa %}<span class="badge bg-success">✓ concluída</span>{% else %}<span class="badge bg-primary">obrigatória</span>{% endif %}</div>
+    {% if e %}<div class="small text-muted">{{ e.videos }} aula(s){% if e.aplicacao_ok %} · aplicação ✓{% endif %}</div>{% endif %}
+  </div></a>
+{% endfor %}
+{% endif %}
+
+<h5>{% if obrig %}Outras trilhas{% else %}Trilhas{% endif %}</h5>
+{% for t in trilhas if t.id not in onboarding_ids %}
 {% set e = progresso.get(t.id) if progresso else None %}
 <a href="{{ url_for('treino.trilha', id=t.id) }}" class="card mb-2 text-decoration-none">
   <div class="card-body py-2">
@@ -23,5 +47,5 @@
       {% if e and e.completa %}<span class="badge bg-success">✓ concluída</span>{% endif %}</div>
     {% if e %}<div class="small text-muted">{{ e.videos }} aula(s){% if e.aplicacao_ok %} · aplicação ✓{% endif %}</div>{% endif %}
   </div></a>
-{% else %}<p class="text-muted">Nenhuma trilha publicada ainda.</p>{% endfor %}
+{% else %}{% if not obrig %}<p class="text-muted">Nenhuma trilha publicada ainda.</p>{% endif %}{% endfor %}
 {% endblock %}
