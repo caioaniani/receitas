@@ -466,7 +466,8 @@ def create_app(config_class=None):
         # Treinamento (24/07/2026): o <video> self-host toca da MESMA origem
         # (default-src 'self' já cobriria media, mas o media-src explícito
         # garante o playback). Escopado à área — o resto segue com CSP estrita.
-        if request.path.startswith('/treinamento'):
+        if request.path.startswith('/treinamento') or \
+                request.path.startswith('/treino'):
             # Cloudflare Stream: o player é um iframe (frame-src), o SDK do
             # player carrega de embed.cloudflarestream.com (script-src), e o
             # upload DIRETO do navegador vai pro host de ingest do Cloudflare
