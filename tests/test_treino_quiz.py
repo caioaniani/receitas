@@ -29,11 +29,12 @@ def _base(n_questoes=10, por_tentativa=10, cooldown=0):
     db.session.add_all([temp, loja, trilha])
     db.session.commit()
     f = Funcionario(nome='Ana', cpf='111.111.111-11')
-    f.lojas.append(loja)
     quiz = TreinoQuiz(trilha_id=trilha.id, titulo='Q',
                       questoes_por_tentativa=por_tentativa,
                       cooldown_minutos=cooldown)
     db.session.add_all([f, quiz])
+    db.session.commit()
+    f.lojas.append(loja)
     db.session.commit()
     for i in range(n_questoes):
         q = TreinoQuestao(quiz_id=quiz.id, enunciado=f'Q{i}?')
