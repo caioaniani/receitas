@@ -20,6 +20,10 @@ PADRAO = {
     'QUIZ_BASE_1': 20,
     'QUIZ_BASE_2': 10,
     'QUIZ_BASE_3': 5,
+    # Faixas de nível por pontos na temporada (§6). Bronze = 0.
+    'NIVEL_PRATA': 300,
+    'NIVEL_OURO': 800,
+    'NIVEL_DIAMANTE': 1500,
 }
 
 
