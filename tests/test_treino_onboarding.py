@@ -38,13 +38,18 @@ def _login(app, usuario_id):
     return c
 
 
+_SEQ = [0]
+
+
 def _func(nome='Ana', papel='funcionario', cargo=None, ativo=True):
+    _SEQ[0] += 1
+    n = _SEQ[0]
     loja = Loja(nome='Brooklin', ativa=True)
-    u = Usuario(nome=nome, login=f'{nome}-{papel}', papel=papel)
+    u = Usuario(nome=nome, login=f'{nome}-{papel}-{n}', papel=papel)
     u.set_senha('x' * 8)
     db.session.add_all([loja, u])
     db.session.commit()
-    f = Funcionario(nome=nome, cpf=str(id(nome)) [:11], ativo=ativo,
+    f = Funcionario(nome=nome, cpf=str(10000000000 + n), ativo=ativo,
                     usuario_id=u.id, cargo_id=cargo.id if cargo else None)
     f.lojas.append(loja)
     db.session.add(f)
