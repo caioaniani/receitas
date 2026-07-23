@@ -65,6 +65,45 @@ def test_duracao_detectada_do_cloudflare_no_load(app, admin_user):
         assert db.session.get(TreinoVideo, vid).duracao_segundos == 213
 
 
+def test_duracao_negativa_do_cloudflare_nao_grava(app, admin_user):
+    """Cloudflare devolve duration=-1 enquanto processa — não pode virar '-1:59'."""
+    vid = _video(app, video_externo_id='a' * 32, provedor='cloudflare',
+                 duracao_segundos=0)
+    c = _admin(app, admin_user)
+    with patch('app.services.treinamento_stream.status',
+               return_value={'pronto': False, 'pct': 40, 'duracao': -1,
+                             'erro': None}):
+        r = c.get(f'/treino/admin/video/{vid}')
+    assert r.status_code == 200
+    with app.app_context():
+        assert db.session.get(TreinoVideo, vid).duracao_segundos == 0
+
+
+def test_checkpoint_ajax_salva_sem_reload(app, admin_user):
+    """+ checkpoint via ajax devolve JSON (não recarrega — mantém as propostas)."""
+    vid = _video(app)
+    c = _admin(app, admin_user)
+    r = c.post(f'/treino/admin/video/{vid}/checkpoint', data={
+        'ajax': '1', 'segundo': '1:30', 'enunciado': 'Q?',
+        'alt[]': ['a', 'b'], 'correta': '1'})
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['ok'] and j['segundo'] == 90 and j['correta'] == 1 and j['n_alts'] == 2
+    with app.app_context():
+        assert TreinoCheckpoint.query.filter_by(video_id=vid).count() == 1
+
+
+def test_checkpoint_ajax_correta_fora_do_range_400(app, admin_user):
+    vid = _video(app)
+    c = _admin(app, admin_user)
+    r = c.post(f'/treino/admin/video/{vid}/checkpoint', data={
+        'ajax': '1', 'segundo': '0:10', 'enunciado': 'Q?',
+        'alt[]': ['a', 'b'], 'correta': '3'})   # correta aponta alt inexistente
+    assert r.status_code == 400
+    with app.app_context():
+        assert TreinoCheckpoint.query.filter_by(video_id=vid).count() == 0
+
+
 def _fake_ia(payload):
     blk = MagicMock(); blk.type = 'text'; blk.text = _json.dumps(payload)
     resp = MagicMock(); resp.content = [blk]; resp.usage = None
