@@ -83,7 +83,13 @@ def _ctx_checkout(erros=None, form=None):
         # (usa a hora do SERVIDOR — evita divergência de relógio do cliente).
         hoje_iso=base.date().isoformat(),
         min_hora_hoje=base.hour + loja_checkout.LEAD_HORAS,
-        express_ok=loja_checkout.express_disponivel(),
+        # Express indisponível quando o carrinho tem item sob encomenda
+        # (same-day conflita com D+2). O front esconde a opção; o servidor
+        # também recusa.
+        express_ok=(loja_checkout.express_disponivel()
+                    and lead_encomenda == 0),
+        encomenda_no_carrinho=(lead_encomenda > 0),
+        encomenda_lead_dias=lead_encomenda,
         # Corte por distância: pro JS cortar a 1ª janela quando a cotação
         # chegar e for >= corte_km (motoboy não chega a tempo). Servidor é
         # autoridade — esses dados sao DICA do front, validação real em
