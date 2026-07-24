@@ -210,6 +210,15 @@ class Receita(db.Model):
     # REAL na produção segue debitando EstoqueProducao normalmente (a flag é
     # só de planejamento). ALTER + backfill em migrations_legacy (2 commits).
     estoque_nao_abate = db.Column(db.Boolean, default=False, nullable=False)
+    # Sob encomenda D+2 (dono 21/07/2026): no site, este item so pode ser
+    # escolhido pra ENTREGA/RETIRADA a partir de D+2 (dois dias uteis a
+    # frente, desde a janela das 08:00). E PRODUZIDO PRO PEDIDO — nao abate
+    # a prateleira (a venda NAO baixa EstoqueLoja) e fica SEMPRE disponivel
+    # na vitrine (nao olha plano-do-dia/estoque). O pedido pago vira demanda
+    # firme de producao (entra no balanco/cronograma, estilo B2B) e aparece
+    # na tela do padeiro (separacao + pre-preparo). ALTER em migrations_legacy
+    # (commit 1 deployado e confirmado antes deste modelo).
+    sob_encomenda = db.Column(db.Boolean, default=False, nullable=False)
     # Devolucao loja->industria: sobras devolvidas DESTA receita creditam a
     # receita apontada no estoque da industria (ex: Croissant Tradicional ->
     # "Croissant Tradicional — Retorno"). NULL = credita a propria. O retorno
