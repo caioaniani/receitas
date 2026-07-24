@@ -217,7 +217,8 @@ def test_consumir_nao_baixa_estoque_de_sob_encomenda(app):
         db.session.commit()
         db.session.refresh(el)
         assert el.quantidade == 10  # intacto — produzido pro pedido
-        assert MovEstoqueLoja.query.filter_by(receita_id=r.id).count() == 0
+        # nenhum movimento de venda gerado (o item não abate a loja)
+        assert MovEstoqueLoja.query.count() == 0
 
 
 def test_receita_normal_ainda_baixa(app):
