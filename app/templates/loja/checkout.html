@@ -100,6 +100,9 @@
             {% if express_ok %}
               Entrega no mesmo dia, por volta de 1 hora — dependendo do
               endereço (mais distante), pode levar até 2 horas.
+            {% elif encomenda_no_carrinho %}
+              Indisponível: seu carrinho tem item sob encomenda (só a partir
+              de D+2).
             {% else %}
               Indisponível agora (fora do horário de entrega 8h–18h).
             {% endif %}</span>
