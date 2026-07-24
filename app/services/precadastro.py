@@ -7,6 +7,7 @@ RH e PROMOVE pra `Funcionario` de verdade (informando o CPF que falta).
 Validação leve, reusando o validador de celular BR do portal Wi-Fi.
 """
 import re
+from datetime import timedelta
 
 from app.extensions import db
 from app.models import Funcionario, PreCadastroFuncionario
@@ -49,9 +50,23 @@ def validar(nome, sobrenome, email, telefone):
             'email': email[:150], 'telefone': telefone[:30]}, None
 
 
+def _podar_processados():
+    """Apaga pré-cadastros já processados mais velhos que o prazo (PII/LGPD).
+    Best-effort — nunca deixa a poda derrubar o cadastro em si."""
+    try:
+        limite = agora() - timedelta(days=_PODAR_PROCESSADOS_DIAS)
+        (PreCadastroFuncionario.query
+         .filter(PreCadastroFuncionario.processado_em.isnot(None),
+                 PreCadastroFuncionario.processado_em < limite)
+         .delete(synchronize_session=False))
+    except Exception:  # noqa: BLE001 — poda oportunista, não bloqueia o insert
+        db.session.rollback()
+
+
 def criar(dados):
     """Cria (ou atualiza um pendente do MESMO e-mail) o pré-cadastro. Evita
     duplicata quando a mesma pessoa reenvia. Retorna a linha."""
+    _podar_processados()
     pend = (PreCadastroFuncionario.query
             .filter(db.func.lower(PreCadastroFuncionario.email) == dados['email'],
                     PreCadastroFuncionario.processado_em.is_(None))
