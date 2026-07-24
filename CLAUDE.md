@@ -3017,6 +3017,41 @@ so-treino (auto-lockout — `toggle` recusa `u.id == current_user.id`).
 `gerar_acesso` seta so `senha_provisoria` (NAO `somente_treino` — flag
 separada, marcada a mao). Testes: `tests/test_acesso_so_treino.py` (12 casos).
 
+## Pre-cadastro de funcionario por QR (23/07/2026)
+
+Pedido do dono ("formulario QR pra captar nome, sobrenome, e-mail e telefone
+de cada funcionario"; escolha dele via AskUserQuestion: **Pre-cadastro no
+RH**). O novo funcionario aponta a camera no QR impresso, preenche um form
+PUBLICO (sem login) e o admin promove pra `Funcionario` de verdade informando
+o CPF que falta.
+
+- **Modelo** `PreCadastroFuncionario` (`app/models/rh.py`): nome/sobrenome/
+  email/telefone + `criado_em`/`processado_em`/`funcionario_id`. **Tabela nova
+  via `db.create_all`** — SEM ALTER, sem procedimento de 2 commits (so tabela
+  nova, nao coluna). Guarda PII (podavel).
+- **Servico** `app/services/precadastro.py`: `validar` (nome+sobrenome >=2,
+  e-mail por regex, telefone via `wifi_portal._whatsapp_valido` — celular BR,
+  com fallback tolerante); `criar` (DEDUP por e-mail entre PENDENTES — mesma
+  pessoa reenviando atualiza a linha em vez de duplicar); `pendentes`;
+  `promover(pre, cpf)` (cria `Funcionario` com `cadastro_pendente=True`,
+  liga `funcionario_id`, marca `processado_em`; CPF vazio/duplicado = erro,
+  nada criado); `descartar`. Timezone via `agora()`.
+- **Endpoint PUBLICO** `precadastro` (`/cadastro-funcionario` GET+POST):
+  form standalone (`templates/precadastro/form.html`, sem `base.html` — o
+  captive-portal do wifi ja provou que scripts externos travam a janelinha;
+  aqui e so leveza). `@limiter.limit('6 per minute')` no POST, CSRF do
+  Flask-WTF ativo, autoescape do Jinja. O gate global `_gate_conta` nao age
+  em ANONIMO (endpoint aberto).
+- **Tela admin** `/rh/pre-cadastros` (**OWNER-only** — todo o blueprint RH
+  passa pelo `_rh_restrito_ao_owner` before_request): QR (via
+  `qrcode_svc.gerar_png_data_url`, URL montada de `APP_BASE_URL`) + lista dos
+  pendentes com input de CPF -> "Criar" (promover) e "Descartar". Link
+  "Pre-cadastro (QR)" no macro `rh` de `_area_nav.html`. Promover redireciona
+  pro detalhe do funcionario pra completar cargo/salario.
+- Manual de operacao registrado (secao QUANDO PRECISAR). Testes:
+  `tests/test_precadastro_funcionario.py` (11 casos; rotas RH usam
+  `owner_user`, nao `admin_user`, por causa do gate owner-only do RH).
+
 ## Sidebar
 
 Secoes (`sidebar-section-title`) sao **colapsaveis** — JS adiciona chevron + persiste
