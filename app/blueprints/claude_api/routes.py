@@ -605,6 +605,7 @@ def receita():
         'sugerir_pedido_loja': rec.sugerir_pedido_loja,
         'reaproveitavel': rec.reaproveitavel,
         'estoque_nao_abate': rec.estoque_nao_abate,
+        'sob_encomenda': rec.sob_encomenda,
         'descricao_atacado': rec.descricao_atacado,
         'retorno_receita': ({'id': rec.retorno_receita.id,
                              'nome': rec.retorno_receita.nome}
