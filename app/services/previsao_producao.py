@@ -808,7 +808,10 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                  for l in lojas_op]
                 + ([{'loja_id': None, 'loja_nome': 'Vendas B2B',
                      'qtd': comprometido_b2b[rid]}]
-                   if comprometido_b2b.get(rid) else []),
+                   if comprometido_b2b.get(rid) else [])
+                + ([{'loja_id': None, 'loja_nome': 'Encomenda site',
+                     'qtd': comprometido_encomenda[rid]}]
+                   if comprometido_encomenda.get(rid) else []),
                 key=lambda b: (-b['qtd'], b['loja_nome']),
             ),
         })
