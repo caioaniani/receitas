@@ -58,7 +58,7 @@ def _podar_processados():
         (PreCadastroFuncionario.query
          .filter(PreCadastroFuncionario.processado_em.isnot(None),
                  PreCadastroFuncionario.processado_em < limite)
-         .delete(synchronize_session=False))
+         .delete(synchronize_session='fetch'))
     except Exception:  # noqa: BLE001 — poda oportunista, não bloqueia o insert
         db.session.rollback()
 
