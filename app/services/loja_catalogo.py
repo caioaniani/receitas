@@ -227,6 +227,14 @@ def anotar_esgotado(itens):
     saldos_cache = {}
     for it in itens:
         kind, item_id = it['kind'], it['id']
+        # Sob encomenda: produzido pro pedido, SEMPRE disponivel na vitrine
+        # (nunca esgota — a trava e so a data D+2 no checkout). Nao olha
+        # plano-do-dia nem estoque fisico.
+        if it.get('sob_encomenda'):
+            it['esgotado_hoje'] = False
+            it['tem_em_outros_dias'] = True
+            it['esgotado'] = False
+            continue
         saldo_hoje = _saldo_para_dia(
             kind, item_id, dia_hoje, saldos_dia_cache=saldos_cache)
         if saldo_hoje is None:
