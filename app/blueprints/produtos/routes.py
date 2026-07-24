@@ -91,6 +91,7 @@ def duplicar(id):
         modo_preparo=original.modo_preparo,
         observacao=original.observacao,
         reaproveitavel=original.reaproveitavel,
+        sob_encomenda=original.sob_encomenda,
     )
     db.session.add(copia)
     db.session.flush()
