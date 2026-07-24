@@ -1503,6 +1503,66 @@ MARCADO como divulgação (fora de faturamento e da previsão de venda) +
   fazer a divulgação contar como venda nem usar o tipo `venda_site` (mataria a
   distinção), e NUNCA abrir o gate pra admin comum sem ordem do dono.
 
+## Produto SOB ENCOMENDA D+2 no site (21/07/2026)
+
+Pedido do dono: alguns produtos do site são **sob encomenda** — só podem ser
+pedidos com **2 dias de antecedência** (ex.: mini pain au chocolat; comprou na
+segunda → entrega/retirada válida só a partir de quarta, desde a janela das
+08:00). Decisões do dono (AskUserQuestion): **produzido pro pedido** (NÃO abate
+a prateleira, sempre disponível na vitrine) + **igual a B2B** (entra na produção
+do padeiro: separação + cronograma + pré-preparo) + **lead FIXO D+2**.
+
+- **Schema (2 commits, sonda /api/claude/deploy)**: `Receita.sob_encomenda` +
+  `Produto.sob_encomenda` BOOLEAN NOT NULL DEFAULT FALSE (ALTER em
+  `migrations_legacy` PG+SQLite deployado ANTES do modelo). Checkbox na ficha
+  da receita e no cadastro do produto; `duplicar` copia a flag.
+- **Constante** `loja_checkout.ENCOMENDA_LEAD_DIAS = 2` (FIXO, não varia por
+  receita). Helper `loja_checkout.lead_do_carrinho(itens)` = 2 se QUALQUER item
+  é sob encomenda, senão 0 (o carrinho todo herda o MAIOR lead — uma data de
+  entrega por pedido; misturar item normal + encomenda empurra tudo pra D+2).
+- **Data D+2 no checkout**: `datas_disponiveis(modo, ..., lead_dias=N)` — com
+  N>0 a 1ª data válida vira `hoje + N` (sem hoje/amanhã; dia futuro → todas as
+  janelas a partir das 08:00). `criar_pedido` computa o lead do carrinho, valida
+  a data contra ele e **bloqueia express** (same-day conflita com D+2). O
+  `_ctx_checkout` (loja/routes) seta o `min` do calendário e esconde o express
+  quando o carrinho tem encomenda (`encomenda_no_carrinho`); checkout.html mostra
+  aviso e produto.html um selo "📅 sob encomenda".
+- **Vitrine SEMPRE disponível**: `loja_catalogo._serializar_*` expõe
+  `sob_encomenda`; `anotar_esgotado` força `esgotado=False` (não olha
+  plano-do-dia). `tem_estoque_para_dia`/`item_e_sob_encomenda` (fonte única)
+  liberam sem estoque. `montar_itens` propaga a flag e pula a checagem de
+  estoque.
+- **NÃO abate EstoqueLoja (produzido pro pedido)**: `loja_estoque_reserva.
+  item_sob_encomenda(item)` faz `_expandir_estoque` retornar `[]` (fora de
+  reserva/liberação) E o loop de baixa real do `consumir` PULA o item (as DUAS
+  pontas — a baixa real NÃO passa pelo `_expandir_estoque`, achado do 1º teste).
+  `loja_pagamento._reservar/_devolver_ao_plano_do_dia` também pulam (fora do
+  plano-do-dia). Item do site NÃO sob encomenda continua abatendo normalmente
+  (teste-guarda). ATENÇÃO: a DIVULGAÇÃO tem baixa própria (canal 'divulgacao')
+  e NÃO é afetada por isso — de propósito (brinde sai pela porta).
+- **Produção (padeiro + cronograma)**: pedido PAGO (status pago/em_preparo/
+  a_caminho — nunca aguardando_pagamento/cancelado/entregue; divulgação fora)
+  com item sob encomenda:
+  - **Balanço firme** (`previsao_producao.balanco_industria`, bloco "2c",
+    espelho do B2B `_contrib_b2b`): SÓ os itens sob encomenda viram demanda
+    firme por receita (cesta explode em receita). É ADITIVO e sem risco de
+    dobra — o site não é lido em nenhum outro ramo do balanço e o item não
+    baixa EstoqueLoja. Linha própria "Encomenda site" no
+    `breakdown_comprometido`. Alimenta o cronograma → ordem do padeiro.
+  - **Separação do padeiro** (`padeiro._dados_listas` + `_card_online`, tipo
+    `'online'`): card DOURADO informativo na fila "a separar" (sem botão
+    SEPARAR — a entrega do site roda pelo /entregas/painel; aqui é só garantir
+    a produção). Mostra SÓ os itens sob encomenda. Hoje inclui atrasados
+    (data <= hj), como B2B.
+  - **Pré-preparo** (`padeiro.preparar_json`): itens sob encomenda com
+    `data_entrega == alvo` (dia+1) entram no pré-preparo da véspera; estado =
+    `Receita.estado_padrao` (assado/backup) ou 'assado' de fallback pra sempre
+    aparecer.
+- Sonda `/api/claude/receita` expõe `sob_encomenda`. Testes:
+  `tests/test_sob_encomenda.py` (18 casos). NUNCA fazer sob encomenda abater
+  EstoqueLoja nem contar como venda de prateleira; NUNCA permitir data < D+2 ou
+  express; a produção é a única forma de atender.
+
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
 Escrito na pedra a pedido do dono ("ja tinha falado uma vez mas nao ficou
