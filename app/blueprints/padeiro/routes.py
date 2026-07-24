@@ -884,6 +884,27 @@ def preparar_json():
     for it in itens_b2b:
         cli = ('B2B · ' + it.venda.cliente_display) if it.venda else 'B2B'
         agg[(cli, it.nome_item, it.estado_efetivo)] += (it.quantidade or 0)
+    # Pedidos do SITE sob encomenda (D+2, dono 21/07/2026): o item PRODUZIDO
+    # pro pedido entra no pre-preparo da vespera (aparece na terca pra entrega
+    # na quarta). Como PedidoOnlineItem nao tem `estado`, usa o estado_padrao
+    # da receita (assado/backup); sem estado_padrao cai em 'assado' pra o item
+    # sempre aparecer (a producao propria e o lembrete que o dono pediu).
+    from app.models import PedidoOnline, PedidoOnlineItem
+    from app.services.loja_estoque_reserva import item_sob_encomenda
+    itens_online = (PedidoOnlineItem.query.join(PedidoOnline)
+                    .options(selectinload(PedidoOnlineItem.receita),
+                             selectinload(PedidoOnlineItem.pedido))
+                    .filter(PedidoOnline.data_entrega == alvo,
+                            PedidoOnline.status.in_(_STATUS_ONLINE_ATIVO),
+                            PedidoOnline.divulgacao.is_(False))
+                    .all())
+    for it in itens_online:
+        if not item_sob_encomenda(it):
+            continue
+        est = (it.receita.estado_padrao
+               if (it.receita and it.receita.estado_padrao in _estados_pre)
+               else 'assado')
+        agg[('Site · encomenda', it.nome, est)] += (it.quantidade or 0)
     linhas = [{'loja': lj, 'nome': n, 'estado': e,
                'estado_label': ESTADO_LABEL.get(e, e.upper()), 'qtd': q}
               for (lj, n, e), q in agg.items()]
