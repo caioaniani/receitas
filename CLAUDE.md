@@ -1559,9 +1559,27 @@ do padeiro: separação + cronograma + pré-preparo) + **lead FIXO D+2**.
     `Receita.estado_padrao` (assado/backup) ou 'assado' de fallback pra sempre
     aparecer.
 - Sonda `/api/claude/receita` expõe `sob_encomenda`. Testes:
-  `tests/test_sob_encomenda.py` (18 casos). NUNCA fazer sob encomenda abater
+  `tests/test_sob_encomenda.py` (19 casos). NUNCA fazer sob encomenda abater
   EstoqueLoja nem contar como venda de prateleira; NUNCA permitir data < D+2 ou
   express; a produção é a única forma de atender.
+- **PÓS-REVISÃO (fixado)**: `loja_pagamento._rebaixar_pedido` (correção owner
+  "reduzir qtd de pedido pago") re-baixava TODOS os itens, recriando a baixa
+  fantasma do item sob encomenda — que aí contaria 2x (`venda_site` no
+  motor=vendas + firme no 2c). Agora pula sob encomenda (mesma guarda do
+  `consumir`) e o `reduzir_item_pedido_pago` também não devolve plano-do-dia
+  pra item sob encomenda (nunca reservou). O rótulo do express no checkout
+  explica o bloqueio por encomenda; pré-preparo faz eager-load de `produto`
+  (sem N+1). Testes: `test_rebaixar_pedido_pula_sob_encomenda`.
+- **LIMITAÇÕES ACEITAS (baixa severidade, achados de revisão — decisão
+  separada)**: (1) receita sob encomenda usada como COMPONENTE de uma cesta
+  NÃO sob encomenda ainda abate EstoqueLoja (a flag só é checada no item de
+  topo do `_expandir_estoque`; itens sob encomenda são vendidos DIRETO, não
+  dentro de cesta); (2) receita sob encomenda ARQUIVADA com pedido pago
+  pendente some do balanço (`receitas` exclui arquivadas) mas segue no card do
+  padeiro — mesma classe do B2B pré-existente; (3) `lead_do_carrinho` (front,
+  `item_e_sob_encomenda` sem filtrar arquivada/preço) pode mostrar `data_min`
+  D+2 pra um item que `montar_itens` descarta — direção SEGURA (front mais
+  restrito que o servidor, que recalcula lead=0 e o item cai fora).
 
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
