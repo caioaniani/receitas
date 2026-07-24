@@ -413,6 +413,10 @@ class Produto(db.Model):
     # Quando True, desperdicio com motivo='validade' NAO baixa estoque
     # (mesma logica de Receita.reaproveitavel).
     reaproveitavel = db.Column(db.Boolean, default=False, nullable=False)
+    # Sob encomenda D+2 (dono 21/07/2026) — espelho da Receita: no site so
+    # vende pra data >= D+2, e produzido pro pedido (nao abate prateleira) e
+    # entra na producao do padeiro. ALTER em migrations_legacy (commit 1).
+    sob_encomenda = db.Column(db.Boolean, default=False, nullable=False)
     ativo = db.Column(db.Boolean, default=True)
 
     itens = db.relationship(
