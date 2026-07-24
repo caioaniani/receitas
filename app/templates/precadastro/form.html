@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Cadastro — O Pão Padaria Artesanal</title>
+  <style>
+    *{box-sizing:border-box;}
+    body{margin:0;background:#fbf8f3;color:#2a2520;
+         font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+         padding:24px 16px;}
+    .card{max-width:420px;margin:0 auto;background:#fff;border-radius:14px;
+          box-shadow:0 2px 10px rgba(0,0,0,.07);padding:24px 20px;}
+    h1{font-size:20px;margin:0 0 2px;}
+    .sub{color:#6b5f54;margin:0 0 18px;font-size:14px;}
+    label{display:block;font-size:13px;color:#6b5f54;margin:12px 0 4px;font-weight:600;}
+    input{width:100%;font-size:16px;padding:11px 12px;border:1px solid #d9cfc2;
+          border-radius:8px;background:#fdfbf7;}
+    input:focus{outline:none;border-color:#8b5a2b;background:#fff;}
+    button{width:100%;margin-top:20px;background:#8b5a2b;color:#fff;border:0;
+           padding:13px;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;}
+    button:active{background:#764a22;}
+    .erro{background:#fdecea;color:#a1322a;border-radius:8px;padding:10px 12px;
+          font-size:14px;margin-bottom:14px;}
+    .ok{text-align:center;padding:14px 0;}
+    .ok .big{font-size:44px;line-height:1;}
+    .foot{color:#9a8d80;font-size:12px;text-align:center;margin-top:16px;}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>O Pão · Padaria Artesanal</h1>
+    {% if enviado %}
+    <div class="ok">
+      <div class="big">✅</div>
+      <p style="font-size:17px;font-weight:600;margin:12px 0 4px;">Cadastro recebido!</p>
+      <p class="sub" style="margin:0;">Obrigado. Já registramos seus dados —
+        a equipe vai dar sequência.</p>
+    </div>
+    {% else %}
+    <p class="sub">Preencha seus dados para o cadastro de funcionário.</p>
+    {% if erro %}<div class="erro">{{ erro }}</div>{% endif %}
+    <form method="POST" action="{{ url_for('precadastro.enviar') }}" autocomplete="on">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="nome">Nome</label>
+      <input id="nome" name="nome" required autocomplete="given-name"
+             value="{{ dados.get('nome', '') }}" maxlength="100">
+      <label for="sobrenome">Sobrenome</label>
+      <input id="sobrenome" name="sobrenome" required autocomplete="family-name"
+             value="{{ dados.get('sobrenome', '') }}" maxlength="100">
+      <label for="email">E-mail</label>
+      <input id="email" name="email" type="email" required autocomplete="email"
+             inputmode="email" value="{{ dados.get('email', '') }}" maxlength="150">
+      <label for="telefone">Telefone (celular com DDD)</label>
+      <input id="telefone" name="telefone" type="tel" required autocomplete="tel"
+             inputmode="tel" placeholder="(11) 99999-9999"
+             value="{{ dados.get('telefone', '') }}" maxlength="30">
+      <button type="submit">Enviar cadastro</button>
+    </form>
+    {% endif %}
+    <p class="foot">O Pão Padaria Artesanal</p>
+  </div>
+</body>
+</html>
