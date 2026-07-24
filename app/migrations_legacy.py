@@ -349,6 +349,8 @@ def _migrate_postgres(app):
                 'modo_preparo': 'ALTER TABLE produto ADD COLUMN modo_preparo TEXT',
                 'observacao': 'ALTER TABLE produto ADD COLUMN observacao TEXT',
                 'reaproveitavel': 'ALTER TABLE produto ADD COLUMN reaproveitavel BOOLEAN NOT NULL DEFAULT FALSE',
+                # Sob encomenda D+2 (dono 21/07/2026) — espelho da Receita.
+                'sob_encomenda': 'ALTER TABLE produto ADD COLUMN sob_encomenda BOOLEAN NOT NULL DEFAULT FALSE',
             }
             for col, sql in migrações_produto.items():
                 if col not in cols_prod:
