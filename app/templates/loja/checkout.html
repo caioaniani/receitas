@@ -213,6 +213,13 @@
     <!-- ─── 5) Data + janela ─────────────────────────────────── -->
     <div class="checkout-bloco" id="bloco-data">
       <h2>Quando</h2>
+      {% if encomenda_no_carrinho %}
+      <p class="checkout-nota-encomenda" style="background:#fffdf3;border:1px solid #e6cf7a;border-radius:10px;padding:10px 12px;font-size:14px;color:#8a6d0b;">
+        📅 Seu carrinho tem item <strong>sob encomenda</strong>: a entrega ou
+        retirada só fica disponível a partir de <strong>2 dias</strong> — o item
+        é preparado especialmente pro seu pedido.
+      </p>
+      {% endif %}
       <label>Dia
         <input type="date" name="data_entrega" id="data_entrega"
                min="{{ data_min }}" max="{{ data_max }}"
