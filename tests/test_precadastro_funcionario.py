@@ -8,10 +8,10 @@ _OK = {'nome': 'Ana', 'sobrenome': 'Souza', 'email': 'ana@exemplo.com',
        'telefone': '11987654321'}
 
 
-def _admin(app, admin_user):
+def _admin(app, owner_user):
     c = app.test_client()
     with c.session_transaction() as s:
-        s['_user_id'] = str(admin_user.id)
+        s['_user_id'] = str(owner_user.id)
         s['_fresh'] = True
     return c
 
@@ -65,20 +65,20 @@ def test_tela_rh_exige_rh(app):
     assert app.test_client().get('/rh/pre-cadastros').status_code in (302, 403)
 
 
-def test_tela_rh_mostra_qr_e_pendentes(app, admin_user):
+def test_tela_rh_mostra_qr_e_pendentes(app, owner_user):
     with app.app_context():
         svc.criar(dict(_OK))
-    c = _admin(app, admin_user)
+    c = _admin(app, owner_user)
     r = c.get('/rh/pre-cadastros')
     assert r.status_code == 200
     body = r.get_data(as_text=True)
     assert 'data:image/png;base64' in body and 'Ana Souza' in body
 
 
-def test_promover_cria_funcionario_pendente(app, admin_user):
+def test_promover_cria_funcionario_pendente(app, owner_user):
     with app.app_context():
         pid = svc.criar(dict(_OK)).id
-    c = _admin(app, admin_user)
+    c = _admin(app, owner_user)
     c.post(f'/rh/pre-cadastros/{pid}/promover', data={'cpf': '123.456.789-00'})
     with app.app_context():
         p = db.session.get(PreCadastroFuncionario, pid)
@@ -88,31 +88,31 @@ def test_promover_cria_funcionario_pendente(app, admin_user):
         assert f.telefone == '11987654321' and f.cadastro_pendente is True
 
 
-def test_promover_sem_cpf_recusa(app, admin_user):
+def test_promover_sem_cpf_recusa(app, owner_user):
     with app.app_context():
         pid = svc.criar(dict(_OK)).id
-    c = _admin(app, admin_user)
+    c = _admin(app, owner_user)
     c.post(f'/rh/pre-cadastros/{pid}/promover', data={'cpf': ''})
     with app.app_context():
         assert db.session.get(PreCadastroFuncionario, pid).processado_em is None
         assert Funcionario.query.count() == 0
 
 
-def test_promover_cpf_duplicado_recusa(app, admin_user):
+def test_promover_cpf_duplicado_recusa(app, owner_user):
     with app.app_context():
         db.session.add(Funcionario(nome='Outro', cpf='111', ativo=True))
         db.session.commit()
         pid = svc.criar(dict(_OK)).id
-    c = _admin(app, admin_user)
+    c = _admin(app, owner_user)
     c.post(f'/rh/pre-cadastros/{pid}/promover', data={'cpf': '111'})
     with app.app_context():
         assert db.session.get(PreCadastroFuncionario, pid).processado_em is None
 
 
-def test_descartar_remove(app, admin_user):
+def test_descartar_remove(app, owner_user):
     with app.app_context():
         pid = svc.criar(dict(_OK)).id
-    c = _admin(app, admin_user)
+    c = _admin(app, owner_user)
     c.post(f'/rh/pre-cadastros/{pid}/descartar')
     with app.app_context():
         assert db.session.get(PreCadastroFuncionario, pid) is None
