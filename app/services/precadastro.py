@@ -102,7 +102,7 @@ def promover(pre, cpf):
     if Funcionario.query.filter_by(cpf=cpf).first():
         return None, f'Já existe funcionário com o CPF {cpf}.'
     func = Funcionario(
-        nome=pre.nome_completo, cpf=cpf,
+        nome=pre.nome_completo[:200], cpf=cpf,  # nome+sobrenome cabe em 200
         telefone=pre.telefone, email=pre.email,
         ativo=True, cadastro_pendente=True,
         observacao='Veio do pré-cadastro por QR — completar cargo/salário/CPF.')
