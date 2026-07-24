@@ -55,6 +55,14 @@
     <div class="produto-preco">R$ {{ '%.2f'|format(item.preco)|replace('.', ',') }}</div>
     {% endif %}
 
+    {% if item.sob_encomenda %}
+    <p class="produto-encomenda" style="background:#fffdf3;border:1px solid #e6cf7a;border-radius:10px;padding:8px 12px;font-size:14px;color:#8a6d0b;margin:8px 0;">
+      📅 <strong>Sob encomenda</strong> — preparado especialmente pro seu
+      pedido. A entrega/retirada começa <strong>2 dias</strong> após a compra
+      (você escolhe a data no checkout).
+    </p>
+    {% endif %}
+
     {% if item.descricao %}
     <p class="produto-descricao">{{ item.descricao }}</p>
     {% endif %}
