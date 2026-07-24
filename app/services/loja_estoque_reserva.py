@@ -55,6 +55,19 @@ def _filtro_item(item):
     return None
 
 
+def item_sob_encomenda(item):
+    """True se a receita/produto do PedidoOnlineItem está marcada
+    `sob_encomenda` (produzido pro pedido). Esses itens ficam FORA do
+    EstoqueLoja e do plano-do-dia — quem os atende é a produção do padeiro
+    (estilo B2B). Best-effort: relationship lazy-load; None = não sob."""
+    alvo = None
+    if item.receita_id:
+        alvo = item.receita
+    elif item.produto_id:
+        alvo = item.produto
+    return bool(alvo is not None and getattr(alvo, 'sob_encomenda', False))
+
+
 def _expandir_estoque(item):
     """Expande um PedidoOnlineItem nas linhas de estoque que ele baixa.
 
@@ -64,12 +77,17 @@ def _expandir_estoque(item):
     decorativo/nao-rastreado nao inventa linha nem bloqueia a venda).
     Item simples -> ele mesmo, `criar=True` (comportamento de sempre).
     Item solto (sem FK) ou cesta toda orfa -> [].
+    Item SOB ENCOMENDA -> [] (produzido pro pedido, nao abate EstoqueLoja;
+    decisao do dono 21/07). Espelhado em reservar/consumir/liberar porque as
+    3 passam por aqui.
 
     Retorna [(filtro_dict, qtd, nome, criar)]. A MESMA expansao roda em
     reservar/consumir/liberar pra a contabilidade de reserva bater — reserva e
     baixa TEM que mexer exatamente nas mesmas linhas."""
     qtd_compra = int(item.quantidade or 0)
     if qtd_compra <= 0:
+        return []
+    if item_sob_encomenda(item):
         return []
     if item.produto_id:
         from app.models import Produto
