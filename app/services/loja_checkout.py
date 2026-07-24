@@ -583,9 +583,17 @@ def criar_pedido(form, itens_raw, *, base=None):
             data_entrega = base.date()
             janela = janela_express_para_distancia(distancia_km)
     else:
-        disponiveis = {d.isoformat() for d in datas_disponiveis(modo, base=base)}
+        # `lead_encomenda` (D+2) empurra a 1ª data válida quando o carrinho
+        # tem item sob encomenda — mesma conta que o front usa pro `min` do
+        # calendário. Servidor é a autoridade.
+        disponiveis = {d.isoformat() for d in datas_disponiveis(
+            modo, base=base, lead_dias=lead_encomenda)}
         if data_str not in disponiveis:
-            erros.append('Escolha uma data de entrega válida.')
+            if lead_encomenda > 0:
+                erros.append('Item sob encomenda: escolha uma data a partir '
+                             'de D+2 (dois dias à frente).')
+            else:
+                erros.append('Escolha uma data de entrega válida.')
         else:
             data_entrega = date.fromisoformat(data_str)
             # Janela tem que ser válida PARA AQUELA DATA (janelas passadas de
