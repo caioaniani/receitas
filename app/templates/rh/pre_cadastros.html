@@ -48,7 +48,7 @@
                     <button type="submit" class="btn btn-sm btn-primary" title="Criar funcionário">Criar</button>
                   </form>
                   <form method="POST" action="{{ url_for('rh.pre_cadastro_descartar', id=p.id) }}"
-                        onsubmit="return confirm('Descartar o pré-cadastro de {{ p.nome_completo }}?')">
+                        class="form-descartar" data-nome="{{ p.nome_completo }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Descartar">
                       <i class="bi bi-trash"></i>
