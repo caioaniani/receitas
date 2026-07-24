@@ -245,6 +245,9 @@ def montar_itens(itens_raw):
             'qtd': qtd,
             'subtotal': preco * qtd,
             'fatiado': fatiado,
+            # Sob encomenda (dono 21/07): pro checkout saber o lead do
+            # carrinho (D+2) e pular a checagem de estoque por dia.
+            'sob_encomenda': sob_encomenda,
         })
     return itens, avisos
 
