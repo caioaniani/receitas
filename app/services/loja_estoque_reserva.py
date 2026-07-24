@@ -213,6 +213,12 @@ def consumir(pedido, *, loja_id, usuario_id=None):
     for it in pedido.itens:
         if not (it.receita_id or it.produto_id):
             continue
+        # Sob encomenda: produzido pro pedido, NAO abate EstoqueLoja (a
+        # producao do padeiro atende). Pula a baixa real — igual pulou a
+        # reserva no _expandir_estoque acima.
+        if item_sob_encomenda(it):
+            total['pulado'] += 1
+            continue
         res = aplicar_venda(
             loja_id, receita_id=it.receita_id, produto_id=it.produto_id,
             qtd=it.quantidade, canal='site', referencia=ref,
