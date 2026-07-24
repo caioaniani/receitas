@@ -232,6 +232,12 @@ def _migrate_postgres(app):
             'estoque_nao_abate': ('ALTER TABLE receita ADD COLUMN '
                                   'estoque_nao_abate BOOLEAN NOT NULL '
                                   'DEFAULT FALSE'),
+            # Sob encomenda D+2 (dono 21/07/2026): venda no site so pra data
+            # >= D+2; o pedido vira demanda de producao pro padeiro (estilo
+            # B2B) e NAO abate prateleira (produzido pro pedido).
+            'sob_encomenda': ('ALTER TABLE receita ADD COLUMN '
+                              'sob_encomenda BOOLEAN NOT NULL '
+                              'DEFAULT FALSE'),
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
