@@ -1057,6 +1057,9 @@ def duplicar(id):
         custo_embalagem=original.custo_embalagem,
         modo_preparo=original.modo_preparo,
         descricao_atacado=original.descricao_atacado,
+        # Sob encomenda D+2: a cópia de um item sob encomenda também nasce
+        # sob encomenda (21/07/2026).
+        sob_encomenda=original.sob_encomenda,
     )
     db.session.add(copia)
     db.session.flush()
