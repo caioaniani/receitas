@@ -543,6 +543,58 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             if q > 0:
                 _contrib_b2b(comp_id, data_ent, q)
 
+    # 2c. Pedidos do SITE sob encomenda (D+2, dono 21/07/2026): item marcado
+    # `sob_encomenda` é PRODUZIDO pro pedido — não sai da prateleira (a venda
+    # NÃO baixa EstoqueLoja) e NÃO é lido em nenhum outro ramo do balanço,
+    # então entra aqui como demanda firme PURA (aditivo, sem risco de dobra).
+    # Conta do pagamento até a entrega (status ativo, não cancelado/entregue);
+    # data_entrega na janela [hoje, comp_fim]. SÓ os itens sob encomenda; os
+    # demais itens do mesmo pedido saem da prateleira e não produzem aqui.
+    # Cesta explode em receita (mesmo padrão do B2B). Divulgação fica fora.
+    from app.models import PedidoOnline, PedidoOnlineItem
+    enc_rows = (db.session.query(PedidoOnlineItem, PedidoOnline.data_entrega)
+                .join(PedidoOnline,
+                      PedidoOnlineItem.pedido_id == PedidoOnline.id)
+                .filter(PedidoOnline.status.in_(
+                            ('pago', 'em_preparo', 'a_caminho')),
+                        PedidoOnline.divulgacao.is_(False),
+                        PedidoOnline.data_entrega.isnot(None),
+                        PedidoOnline.data_entrega >= hoje_d,
+                        PedidoOnline.data_entrega <= comp_fim)
+                .all())
+    comprometido_encomenda = defaultdict(int)
+
+    def _contrib_encomenda(rid, data_ent, q):
+        firme_dia[rid][data_ent] += q
+        L = lead.get(rid, 0)
+        if (inicio_d + timedelta(days=L) <= data_ent
+                <= inicio_d + timedelta(days=L + horizonte_dias - 1)):
+            comprometido[rid] += q
+            comprometido_encomenda[rid] += q
+
+    for pi, data_ent in enc_rows:
+        qtd = int(pi.quantidade or 0)
+        if qtd <= 0:
+            continue
+        if pi.receita_id:
+            # Só receita sob encomenda (a flag mora na Receita).
+            rec = receitas.get(pi.receita_id)
+            if rec is not None and getattr(rec, 'sob_encomenda', False):
+                _contrib_encomenda(pi.receita_id, data_ent, qtd)
+            continue
+        if pi.produto_id:
+            prod = Produto.query.get(pi.produto_id)
+            if not (prod is not None and getattr(prod, 'sob_encomenda', False)):
+                continue
+            if pi.produto_id not in _cache_cesta:
+                _cache_cesta[pi.produto_id] = componentes_de_cesta(prod)
+            for col, comp_id, _nome, qtd_por in _cache_cesta[pi.produto_id]:
+                if col != 'receita_id' or comp_id not in receitas:
+                    continue
+                q = int(round(qtd * qtd_por))
+                if q > 0:
+                    _contrib_encomenda(comp_id, data_ent, q)
+
     # 3. Historico pra previsao por dia-da-semana. Conta DATAS distintas (nao
     # linhas) pra a media: varias lojas no mesmo dia somam, mas a media e por
     # dia-calendario observado. Exclui cancelados (nao foram demanda real).
