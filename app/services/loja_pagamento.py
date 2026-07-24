@@ -345,11 +345,18 @@ def _rebaixar_pedido(pedido, loja_id, referencia, pedido_ref, usuario_id=None):
     guarda de idempotencia (o chamador — reducao — controla) nem reserva
     (o pago ja consumiu a reserva fisica)."""
     from app.services.baixa_venda import aplicar_venda
+    from app.services.loja_estoque_reserva import item_sob_encomenda
     total = {'baixado': 0, 'faltou': 0}
     for it in pedido.itens:
         if not (it.receita_id or it.produto_id):
             continue
         if int(it.quantidade or 0) <= 0:
+            continue
+        # Sob encomenda: produzido pro pedido, NAO abate EstoqueLoja (mesma
+        # guarda do consumir). Sem isso a reducao de um pedido pago recriaria
+        # a baixa fantasma e o item passaria a contar 2x (venda_site no
+        # motor=vendas + firme no bloco 2c). Achado de revisao 21/07/2026.
+        if item_sob_encomenda(it):
             continue
         res = aplicar_venda(
             loja_id, receita_id=it.receita_id, produto_id=it.produto_id,
