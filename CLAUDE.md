@@ -3049,8 +3049,28 @@ o CPF que falta.
   "Pre-cadastro (QR)" no macro `rh` de `_area_nav.html`. Promover redireciona
   pro detalhe do funcionario pra completar cargo/salario.
 - Manual de operacao registrado (secao QUANDO PRECISAR). Testes:
-  `tests/test_precadastro_funcionario.py` (11 casos; rotas RH usam
+  `tests/test_precadastro_funcionario.py` (15 casos; rotas RH usam
   `owner_user`, nao `admin_user`, por causa do gate owner-only do RH).
+- **POS-REVISAO (fixados)**: (1) XSS ARMAZENADO CRITICO — o nome (input
+  PUBLICO anonimo) ia num `onsubmit="confirm('...{{nome}}...')"`; Jinja escapa
+  `'` pra `&#39;`, mas o browser HTML-DECODIFICA o atributo antes do JS
+  parsear, revertendo pro `'` e quebrando a string (`x');alert(...)//` roda na
+  sessao do OWNER, que e a unica vitima porque o RH e owner-only). Trocado por
+  `data-nome` + handler delegado no `{% block scripts %}` (lido via `.dataset`,
+  texto puro, nunca avaliado) — fecha tambem o bug de nome legitimo com
+  apostrofo (D'Ávila quebrava o `confirm`). REGRA: dado de origem publica NUNCA
+  entra em handler inline nem `<script>`; use `data-*` + JS que trata como
+  texto (ou `|tojson` em contexto de script, nunca `|e`, que e p/ HTML).
+  (2) `promover` TRUNCA `nome_completo[:200]` (nome[:100]+' '+sobrenome[:100] =
+  ate 201 chars estouraria `Funcionario.nome` String(200) = DataError/500 no
+  Postgres). (3) `criar` PODA processados > `_PODAR_PROCESSADOS_DIAS`=180d
+  (PII/LGPD; best-effort, `synchronize_session='fetch'`).
+- **PENDENCIAS ACEITAS (baixa severidade, decisao separada)**: corrida na dedup
+  por e-mail (coluna nao-unique; 2 POSTs simultaneos do mesmo e-mail = 2 linhas
+  pendentes — impacto so cosmetico, o admin descarta uma); sem teto diario/
+  CAPTCHA no form publico alem do `6/min` (alvo de baixo valor, admin descarta
+  spam); CPF sem validacao de digito verificador (pre-existente e consistente
+  com o cadastro manual em `rh/routes.py` — validar so aqui divergiria).
 
 ## Sidebar
 
