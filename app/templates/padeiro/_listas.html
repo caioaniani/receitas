@@ -55,6 +55,13 @@
     </p>
     {% endif %}
   </div>
+  {% elif c.tipo == 'online' %}
+  <div class="card online" data-order="online-{{ c.id }}">
+    <p class="loja">🌐 {{ c.titulo }}</p>
+    <p class="meta">Encomenda site {{ c.codigo }}{% if c.data_entrega %} · entrega {{ c.data_entrega.strftime('%d/%m') }}{% endif %}{% if c.modo %} · {{ c.modo }}{% endif %}</p>
+    {{ lista_itens(c) }}
+    <p class="online-nota">Produzir pro pedido (sai pelo painel de entregas — não separar aqui).</p>
+  </div>
   {% else %}
   <div class="card{% if c.tipo == 'b2b' %} b2b{% endif %}" data-order="{{ c.tipo }}-{{ c.id }}">
     <p class="loja">{{ c.titulo }}</p>
