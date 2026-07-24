@@ -624,6 +624,10 @@ def criar_pedido(form, itens_raw, *, base=None):
     if data_entrega and itens:
         esgotados = []
         for it in itens:
+            # Sob encomenda é produzido pro pedido: nunca esgota por plano-do-
+            # dia (a data D+2 já foi validada acima).
+            if it.get('sob_encomenda'):
+                continue
             if not loja_catalogo.tem_estoque_para_dia(
                     it['kind'], it['id'], data_entrega):
                 esgotados.append(it['nome'])
