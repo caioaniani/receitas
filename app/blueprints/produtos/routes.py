@@ -215,6 +215,9 @@ def salvar_composicao(id):
     produto.modo_preparo = request.form.get('modo_preparo', '').strip() or None
     produto.observacao = request.form.get('observacao', '').strip() or None
     produto.reaproveitavel = bool(request.form.get('reaproveitavel'))
+    # Sob encomenda D+2 (dono 21/07/2026): so vende D+2 no site, produzido pro
+    # pedido (nao abate prateleira), entra na producao do padeiro.
+    produto.sob_encomenda = bool(request.form.get('sob_encomenda'))
 
     # Recriar itens. Antes de apagar, guarda as FKs atuais por (tipo, nome):
     # GRANDFATHER da linha existente (pos-revisao 19/07/2026) — componente
