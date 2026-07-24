@@ -893,6 +893,7 @@ def preparar_json():
     from app.services.loja_estoque_reserva import item_sob_encomenda
     itens_online = (PedidoOnlineItem.query.join(PedidoOnline)
                     .options(selectinload(PedidoOnlineItem.receita),
+                             selectinload(PedidoOnlineItem.produto),
                              selectinload(PedidoOnlineItem.pedido))
                     .filter(PedidoOnline.data_entrega == alvo,
                             PedidoOnline.status.in_(_STATUS_ONLINE_ATIVO),
