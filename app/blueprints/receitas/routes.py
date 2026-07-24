@@ -929,6 +929,9 @@ def salvar(id):
     # Estoque fisico nao abate a producao sugerida (balanco/cronograma) —
     # so a producao ja mandada conta. Caso Massa para folhar (dono 19/07/2026).
     receita.estoque_nao_abate = bool(request.form.get('estoque_nao_abate'))
+    # Sob encomenda D+2 (dono 21/07/2026): no site so vende pra data >= D+2,
+    # e produzido pro pedido (nao abate prateleira) e vira producao do padeiro.
+    receita.sob_encomenda = bool(request.form.get('sob_encomenda'))
     # Receita de retorno (devolucao loja->industria): sobras devolvidas creditam
     # esta receita. Valida existencia e evita auto-referencia; vazio = NULL.
     try:
