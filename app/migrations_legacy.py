@@ -1990,6 +1990,9 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE produto ADD COLUMN imagem_mimetype VARCHAR(50)")
     if cols_prod and 'modo_preparo' not in cols_prod:
         cursor.execute("ALTER TABLE produto ADD COLUMN modo_preparo TEXT")
+    if cols_prod and 'sob_encomenda' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN sob_encomenda "
+                       "BOOLEAN NOT NULL DEFAULT 0")
 
     # Migração receita.modo_preparo
     if 'modo_preparo' not in colunas:
