@@ -56,6 +56,29 @@ def janela_express_para_distancia(distancia_km):
 # Quantos dias de agenda oferecer a partir da primeira data válida.
 DIAS_AGENDA = 14
 
+# Sob encomenda (dono 21/07/2026): item marcado `sob_encomenda` só pode ser
+# entregue/retirado a partir de D+2 (dois dias à frente, desde a janela das
+# 08:00). Ex: comprou na segunda → entrega/retirada válida a partir de
+# quarta. FIXO (decisão do dono: não varia por receita). O carrinho todo
+# herda o MAIOR lead dos seus itens (uma data de entrega por pedido).
+ENCOMENDA_LEAD_DIAS = 2
+
+
+def lead_do_carrinho(itens_raw):
+    """Lead mínimo (em dias) que o carrinho exige: ENCOMENDA_LEAD_DIAS se
+    QUALQUER item for `sob_encomenda`, senão 0. Recebe a lista crua
+    [{kind,id,...}] (mesma de `montar_itens`) e consulta o catálogo. Best-
+    effort: item inválido/fora de catálogo é ignorado (não força lead)."""
+    for raw in (itens_raw or []):
+        kind = (str(raw.get('kind') or '')).strip()
+        try:
+            item_id = int(raw.get('id'))
+        except (TypeError, ValueError):
+            continue
+        if loja_catalogo.item_e_sob_encomenda(kind, item_id):
+            return ENCOMENDA_LEAD_DIAS
+    return 0
+
 
 def lojas_retirada():
     """Lojas físicas mostradas na opção de retirada — ativas, fora a
