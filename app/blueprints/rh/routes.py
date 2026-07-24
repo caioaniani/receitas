@@ -167,6 +167,55 @@ def novo_funcionario():
     return render_template('rh/funcionario_form.html', func=None, lojas=lojas)
 
 
+# ── Pré-cadastro por QR (23/07/2026) ──────────────────────────────────────
+
+@rh_bp.route('/pre-cadastros')
+@login_required
+@rh_required
+def pre_cadastros():
+    """QR do formulário público + lista dos pré-cadastros pendentes pra promover."""
+    from app.services import precadastro as pre_svc
+    from app.services import qrcode_svc
+    base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+    url_form = (base + url_for('precadastro.form')) if base \
+        else url_for('precadastro.form', _external=True)
+    qr = qrcode_svc.gerar_png_data_url(url_form, box_size=8)
+    return render_template('rh/pre_cadastros.html',
+                           pendentes=pre_svc.pendentes(),
+                           url_form=url_form, qr=qr)
+
+
+@rh_bp.route('/pre-cadastros/<int:id>/promover', methods=['POST'])
+@login_required
+@rh_required
+def pre_cadastro_promover(id):
+    from app.models import PreCadastroFuncionario
+    from app.services import precadastro as pre_svc
+    pre = PreCadastroFuncionario.query.get_or_404(id)
+    if pre.processado_em:
+        flash('Esse pré-cadastro já foi processado.', 'warning')
+        return redirect(url_for('rh.pre_cadastros'))
+    func, erro = pre_svc.promover(pre, request.form.get('cpf', ''))
+    if erro:
+        flash(erro, 'warning')
+        return redirect(url_for('rh.pre_cadastros'))
+    flash(f'Funcionário "{func.nome}" criado — complete cargo/salário.',
+          'success')
+    return redirect(url_for('rh.detalhe_funcionario', id=func.id))
+
+
+@rh_bp.route('/pre-cadastros/<int:id>/descartar', methods=['POST'])
+@login_required
+@rh_required
+def pre_cadastro_descartar(id):
+    from app.models import PreCadastroFuncionario
+    from app.services import precadastro as pre_svc
+    pre = PreCadastroFuncionario.query.get_or_404(id)
+    pre_svc.descartar(pre)
+    flash('Pré-cadastro descartado.', 'success')
+    return redirect(url_for('rh.pre_cadastros'))
+
+
 @rh_bp.route('/funcionarios/<int:id>')
 @login_required
 @rh_required
