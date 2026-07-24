@@ -454,6 +454,17 @@ def criar_pedido(form, itens_raw, *, base=None):
     if not itens:
         erros.append('Seu carrinho está vazio ou os itens saíram de catálogo.')
 
+    # Sob encomenda (dono 21/07/2026): se QUALQUER item é sob encomenda, o
+    # pedido inteiro só entrega/retira a partir de D+2 (o item precisa de
+    # antecedência pra ser produzido) e NÃO pode express (same-day). O lead
+    # do carrinho é o MAIOR dos itens — uma data de entrega por pedido.
+    lead_encomenda = (ENCOMENDA_LEAD_DIAS
+                      if any(it.get('sob_encomenda') for it in itens) else 0)
+    if lead_encomenda > 0 and modo == 'express':
+        erros.append('Este pedido tem item sob encomenda e não pode ser '
+                     'entrega express (no mesmo dia). Escolha entrega '
+                     'agendada ou retirada, a partir de D+2.')
+
     # ── Por modo: endereço/loja + frete (servidor manda) ───────────────
     loja_retirada_id = None
     endereco_entrega = None
