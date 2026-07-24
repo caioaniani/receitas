@@ -13,6 +13,9 @@ from app.models import Funcionario, PreCadastroFuncionario
 from app.utils import agora, normalizar_telefone
 
 _RE_EMAIL = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$')
+# PII: poda pré-cadastros JÁ PROCESSADOS (viraram funcionário) mais antigos que
+# isso — o dado vive na ficha do Funcionário, aqui é redundante (LGPD).
+_PODAR_PROCESSADOS_DIAS = 180
 
 
 def _telefone_valido(telefone):
