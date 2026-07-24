@@ -516,6 +516,22 @@
                 </div>
             </label>
         </div>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" name="sob_encomenda" id="sob-encomenda-receita"
+                   value="1" {% if receita.sob_encomenda %}checked{% endif %}>
+            <label class="form-check-label" for="sob-encomenda-receita">
+                <strong>Sob encomenda no site (D+2)</strong>
+                <div class="text-muted small">
+                    No site, este item só pode ser escolhido pra entrega/retirada
+                    a partir de <strong>D+2</strong> (dois dias à frente, desde a janela
+                    das 08:00 — ex.: comprou na segunda, entrega a partir de quarta).
+                    É <strong>produzido pro pedido</strong>: fica sempre disponível na
+                    vitrine, a venda <strong>não abate</strong> o estoque da loja, e o
+                    pedido pago entra na produção do padeiro (separação + pré-preparo)
+                    como demanda firme.
+                </div>
+            </label>
+        </div>
         <div class="form-check">
             <input class="form-check-input" type="checkbox" name="reaproveitavel" id="reaproveitavel-receita"
                    value="1" {% if receita.reaproveitavel %}checked{% endif %}>
