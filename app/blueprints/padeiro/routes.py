@@ -62,6 +62,25 @@ def _card_b2b(v):
                       for it in v.itens]}
 
 
+def _card_online(p):
+    """Pedido do SITE com item SOB ENCOMENDA (produzido pro pedido, D+2):
+    aparece na fila do padeiro pra garantir que sera preparado (decisao do
+    dono 21/07/2026). Mostra SO os itens sob encomenda — os demais itens do
+    pedido saem da prateleira e nao sao produzidos aqui. E card INFORMATIVO
+    (sem botao SEPARAR): a entrega do site roda pelo /entregas/painel; a
+    fila do padeiro so garante a producao. A producao real entra pelo
+    cronograma (balanco firme), este card e o lembrete visivel."""
+    from app.services.loja_estoque_reserva import item_sob_encomenda
+    return {'tipo': 'online', 'id': p.id,
+            'titulo': 'Site · ' + (p.nome_cliente or 'Pedido'),
+            'codigo': p.codigo,
+            'modo': p.modo_entrega,
+            'data_entrega': p.data_entrega,
+            'itens': [{'id': it.id, 'qtd': it.quantidade,
+                       'nome': it.nome, 'obs': None}
+                      for it in p.itens if item_sob_encomenda(it)]}
+
+
 def _card_retirada(r):
     """Retirada de sobras (loja → industria): aparece na fila do padeiro como
     RECEBIMENTO — a industria vai receber esses itens de volta, nao separar."""
