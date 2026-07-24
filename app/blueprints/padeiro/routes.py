@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 _A_SEPARAR = ('pendente', 'confirmado')
 
+# Pedido do site ATIVO pra fila do padeiro (sob encomenda): pago e ainda nao
+# entregue/cancelado. Fora: aguardando_pagamento (pode expirar sem pagar).
+_STATUS_ONLINE_ATIVO = ('pago', 'em_preparo', 'a_caminho')
+
 
 def _eager_itens_receita():
     """Eager load dos itens do plano + receita (N+1 do Sentry 13/07/2026:
@@ -158,9 +162,31 @@ def _dados_listas(dia, eh_hoje):
         qr_ = qr_.filter(RetiradaSobra.data_retirada == dia)
     retiradas = qr_.order_by(RetiradaSobra.data_retirada).all()
 
+    # Pedidos do SITE com item sob encomenda (D+2, dono 21/07/2026): entram
+    # na fila do padeiro como lembrete de producao — pagos (nao cancelado/
+    # entregue/aguardando_pagamento), com data de entrega, e que contenham ao
+    # menos um item sob encomenda. Divulgacao fica de fora (nao produz pro
+    # cliente). Como B2B: hoje inclui os atrasados (data <= hj).
+    from app.models import PedidoOnline, PedidoOnlineItem
+    from app.services.loja_estoque_reserva import item_sob_encomenda
+    qo = PedidoOnline.query.options(
+        selectinload(PedidoOnline.itens).selectinload(PedidoOnlineItem.receita),
+        selectinload(PedidoOnline.itens).selectinload(PedidoOnlineItem.produto),
+    ).filter(
+        PedidoOnline.status.in_(_STATUS_ONLINE_ATIVO),
+        PedidoOnline.divulgacao.is_(False),
+        PedidoOnline.data_entrega.isnot(None))
+    if eh_hoje:
+        qo = qo.filter(PedidoOnline.data_entrega <= hj)
+    else:
+        qo = qo.filter(PedidoOnline.data_entrega == dia)
+    onlines = [p for p in qo.order_by(PedidoOnline.data_entrega).all()
+               if any(item_sob_encomenda(it) for it in p.itens)]
+
     a_separar = ([_card_retirada(r) for r in retiradas]
                  + [_card_loja(p) for p in pedidos if p.status in _A_SEPARAR]
-                 + [_card_b2b(v) for v in vendas if v.status_entrega == 'pendente'])
+                 + [_card_b2b(v) for v in vendas if v.status_entrega == 'pendente']
+                 + [_card_online(p) for p in onlines])
     aguardando = ([_card_loja(p) for p in pedidos if p.status == 'separado']
                   + [_card_b2b(v) for v in vendas if v.status_entrega == 'separado'])
     drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
