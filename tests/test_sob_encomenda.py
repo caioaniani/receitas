@@ -256,9 +256,12 @@ def test_balanco_ignora_encomenda_nao_paga_e_cancelada(app):
         _pedido_pago(r, qtd=9, dias=1, status='cancelado')
         itens = {i['receita_id']: i for i in
                  balanco_industria(horizonte_dias=7, usar_cache=False)['itens']}
-        # nenhum pedido ativo → sem comprometido de encomenda
-        assert not any(b['loja_nome'] == 'Encomenda site'
-                       for b in itens[r.id]['breakdown_comprometido'])
+        # nenhum pedido ativo → receita sem demanda (pode nem aparecer);
+        # se aparecer, sem linha de encomenda.
+        it = itens.get(r.id)
+        assert it is None or not any(
+            b['loja_nome'] == 'Encomenda site'
+            for b in it['breakdown_comprometido'])
 
 
 def test_balanco_ignora_item_normal_do_site(app):
