@@ -1816,7 +1816,7 @@ def _migrate_sqlite(app):
                        "WHERE nome = 'Massa para folhar'")
         cursor.execute(
             "UPDATE receita_ingrediente SET porcentagem = 1.2011 "
-            "WHERE receita_id = (SELECT id FROM receita "
+            "WHERE receita_id = (SELECT id FROM receita "  # noqa: ERA001
             "                    WHERE nome = 'Croissant Tradicional' "
             "                    ORDER BY id LIMIT 1) "
             "  AND sub_receita_id = (SELECT id FROM receita "
