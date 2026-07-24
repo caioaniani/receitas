@@ -39,7 +39,13 @@ def _ctx_checkout(erros=None, form=None):
     com os dados da conta (form da requisição prevalece se tiver — não
     sobrescreve o que o cliente acabou de digitar)."""
     from app.utils import agora
-    datas = loja_checkout.datas_disponiveis('agendada')
+    # Sob encomenda (dono 21/07/2026): se o carrinho tem item sob encomenda,
+    # a 1ª data válida do calendário vira D+2 (o item precisa de antecedência)
+    # e o express some. O lead é do CARRINHO (maior dos itens) — uma data de
+    # entrega por pedido. O servidor re-valida em `criar_pedido`.
+    lead_encomenda = loja_checkout.lead_do_carrinho(_carrinho_sessao())
+    datas = loja_checkout.datas_disponiveis(
+        'agendada', lead_dias=lead_encomenda)
     base = agora()
     form = dict(form or {})
     cli = loja_auth.cliente_atual()
