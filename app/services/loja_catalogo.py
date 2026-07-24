@@ -102,6 +102,8 @@ def _serializar_produto(p):
         # a cadastrar conservas/geleias/molhos como Produto e elas caíam
         # erradas na vitrine.
         'categoria': p.categoria or 'Outros',
+        # Sob encomenda D+2 (espelho da receita) — ver _serializar_receita.
+        'sob_encomenda': bool(getattr(p, 'sob_encomenda', False)),
         'preco': float(p.preco_site) if p.preco_site else None,
         'imagem': p.imagem_dropbox_url or p.imagem_url or '',
         # descricao_seo (editorial) prevalece sobre `descricao` curta — vai
