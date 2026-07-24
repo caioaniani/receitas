@@ -221,6 +221,37 @@ def test_consumir_nao_baixa_estoque_de_sob_encomenda(app):
         assert MovEstoqueLoja.query.count() == 0
 
 
+def test_rebaixar_pedido_pula_sob_encomenda(app):
+    """Correção owner (reduzir qtd de pedido pago) NÃO pode reintroduzir a
+    baixa de item sob encomenda — senão ele passa a contar 2x (venda + firme).
+    Achado de revisão 21/07/2026."""
+    from app.models import PedidoOnline, PedidoOnlineItem
+    from app.services import loja_pagamento
+    with app.app_context():
+        loja = _loja_origem()
+        enc = _receita(nome='Enc', sob_encomenda=True)
+        nrm = _receita(nome='Normal', sob_encomenda=False)
+        el_enc = _estoque(loja, enc, 10)
+        el_nrm = _estoque(loja, nrm, 10)
+        p = PedidoOnline(codigo='MIX1', nome_cliente='X',
+                         email_cliente='c@x.com', modo_entrega='retirada',
+                         status='pago', data_entrega=hoje() + timedelta(days=2))
+        db.session.add(p)
+        db.session.flush()
+        for r, q in ((enc, 3), (nrm, 3)):
+            db.session.add(PedidoOnlineItem(
+                pedido_id=p.id, kind='receita', receita_id=r.id, nome=r.nome,
+                preco_unitario=8, quantidade=q, subtotal=8 * q))
+        db.session.commit()
+        loja_pagamento._rebaixar_pedido(p, loja.id, 'Site #MIX1#v1',
+                                        'site:MIX1#v1')
+        db.session.commit()
+        db.session.refresh(el_enc)
+        db.session.refresh(el_nrm)
+        assert el_enc.quantidade == 10   # sob encomenda intacto
+        assert el_nrm.quantidade == 7    # normal baixou 3
+
+
 def test_receita_normal_ainda_baixa(app):
     """Guarda: item NÃO sob encomenda continua abatendo o EstoqueLoja."""
     from app.services import loja_estoque_reserva
