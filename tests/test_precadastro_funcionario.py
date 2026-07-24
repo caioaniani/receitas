@@ -116,3 +116,58 @@ def test_descartar_remove(app, owner_user):
     c.post(f'/rh/pre-cadastros/{pid}/descartar')
     with app.app_context():
         assert db.session.get(PreCadastroFuncionario, pid) is None
+
+
+# ── Segurança / correção (achados da revisão) ─────────────────────────────
+
+def test_nome_malicioso_nao_vira_handler_inline(app, owner_user):
+    """Nome vindo do form PÚBLICO anônimo nunca pode cair num onsubmit inline
+    (breakout de string = XSS na sessão do owner)."""
+    mal = "x');alert(document.cookie);//"
+    with app.app_context():
+        svc.criar(dict(_OK, sobrenome=mal))
+    c = _admin(app, owner_user)
+    body = c.get('/rh/pre-cadastros').get_data(as_text=True)
+    # Sem handler inline em lugar nenhum da página, e o nome só num data-attr.
+    assert 'onsubmit=' not in body
+    assert 'data-nome=' in body
+    # A sequência de breakout com aspa literal não aparece (Jinja escapa p/ &#39;).
+    assert "');alert(document.cookie)" not in body
+
+
+def test_nome_com_apostrofo_renderiza(app, owner_user):
+    """Nome legítimo com apóstrofo (D'Ávila) não quebra a tela."""
+    with app.app_context():
+        svc.criar(dict(_OK, nome="D'Ávila", sobrenome='Nunes'))
+    c = _admin(app, owner_user)
+    r = c.get('/rh/pre-cadastros')
+    assert r.status_code == 200
+    assert 'Nunes' in r.get_data(as_text=True)
+
+
+def test_promover_trunca_nome_em_200(app, owner_user):
+    """nome[:100] + sobrenome[:100] = até 201 chars; Funcionario.nome é 200."""
+    with app.app_context():
+        pid = svc.criar(dict(_OK, nome='A' * 100, sobrenome='B' * 100)).id
+    c = _admin(app, owner_user)
+    c.post(f'/rh/pre-cadastros/{pid}/promover', data={'cpf': '999'})
+    with app.app_context():
+        f = Funcionario.query.filter_by(cpf='999').first()
+        assert f is not None and len(f.nome) <= 200
+
+
+def test_criar_poda_processados_antigos(app):
+    """Pré-cadastro já processado e velho é podado no próximo criar (PII/LGPD)."""
+    from datetime import timedelta
+
+    from app.utils import agora
+    with app.app_context():
+        velho = svc.criar(dict(_OK, email='velho@exemplo.com'))
+        velho.processado_em = agora() - timedelta(days=svc._PODAR_PROCESSADOS_DIAS + 1)
+        recente = svc.criar(dict(_OK, email='recente@exemplo.com'))
+        recente.processado_em = agora()  # processado mas novo — fica
+        db.session.commit()
+        svc.criar(dict(_OK, email='novo@exemplo.com'))  # dispara a poda
+        emails = {p.email for p in PreCadastroFuncionario.query.all()}
+        assert 'velho@exemplo.com' not in emails
+        assert 'recente@exemplo.com' in emails and 'novo@exemplo.com' in emails
