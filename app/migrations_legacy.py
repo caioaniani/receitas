@@ -1823,6 +1823,11 @@ def _migrate_sqlite(app):
             "                        WHERE nome = 'Massa para folhar' "
             "                        ORDER BY id LIMIT 1) "
             "  AND porcentagem = 1.0")
+    # receita.sob_encomenda — venda sob encomenda D+2 (dono 21/07/2026);
+    # espelho do bloco Postgres.
+    if 'sob_encomenda' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN sob_encomenda "
+                       "BOOLEAN NOT NULL DEFAULT 0")
     # receita.descricao_atacado — descrição sincera do cardápio atacado
     # (dono 20/07/2026); backfill único junto com a criação, espelho do
     # bloco Postgres (DESCRICOES_ATACADO_SEED).
