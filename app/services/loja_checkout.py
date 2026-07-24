@@ -168,19 +168,29 @@ def janelas_do_modo(modo):
     return list(JANELAS_HORARIAS)
 
 
-def datas_disponiveis(modo, base=None, dias=DIAS_AGENDA):
+def datas_disponiveis(modo, base=None, dias=DIAS_AGENDA, *, lead_dias=0):
     """Datas válidas pro modo.
 
     - express: só hoje (entrega imediata, dentro do horário).
     - agendada/retirada: HOJE entra se ainda houver janela viável (lead),
       depois amanhã em diante (contíguo). Sem o antigo corte-17h-do-dia:
       janelas passadas são filtradas por `janelas_disponiveis`.
+
+    `lead_dias` (sob encomenda, dono 21/07/2026): quando > 0, a PRIMEIRA data
+    válida vira `hoje + lead_dias` (D+2 pro mini pain), sem hoje nem os dias
+    intermediários — o item precisa de antecedência pra ser produzido. Como
+    é dia futuro, todas as janelas (a partir das 08:00) valem.
     """
     base = base or agora()
     hoje_d = base.date()
     if modo == 'express':
-        return [hoje_d] if express_disponivel(base) else []
+        # Express é same-day; item sob encomenda (lead>0) não pode express.
+        return [hoje_d] if (lead_dias <= 0 and express_disponivel(base)) else []
     datas = []
+    if lead_dias > 0:
+        inicio = hoje_d + timedelta(days=lead_dias)
+        datas.extend(inicio + timedelta(days=i) for i in range(dias))
+        return datas
     if janelas_disponiveis(modo, hoje_d, base=base):
         datas.append(hoje_d)
     inicio = hoje_d + timedelta(days=1)
