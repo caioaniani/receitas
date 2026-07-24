@@ -72,6 +72,10 @@ def _serializar_receita(r):
         # Sourdough → oferece "fatiado?" no site (só preferência de corte;
         # não muda preço nem estoque). Front gateia o checkbox por aqui.
         'fatiavel': receita_fatiavel(r),
+        # Sob encomenda D+2 (dono 21/07/2026): so vende pra data >= D+2 e e
+        # produzido pro pedido — a vitrine trata como SEMPRE disponivel
+        # (nao olha plano-do-dia) e a venda nao abate EstoqueLoja.
+        'sob_encomenda': bool(getattr(r, 'sob_encomenda', False)),
         'preco': float(r.preco_site) if r.preco_site else None,
         'imagem': r.imagem_dropbox_url or r.imagem_url or '',
         # descricao_seo: editorial, gerada com IA e revisada pelo dono em
