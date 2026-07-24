@@ -751,6 +751,9 @@ def create_app(config_class=None):
     app.register_blueprint(padeiro_bp, url_prefix='/padeiro')
     from app.blueprints.patrimonio import patrimonio_bp
     app.register_blueprint(patrimonio_bp, url_prefix='/patrimonio')
+
+    from app.blueprints.precadastro import precadastro_bp
+    app.register_blueprint(precadastro_bp)
     from app.blueprints.industria_teste import industria_teste_bp
     app.register_blueprint(industria_teste_bp, url_prefix='/telaindustriateste')
     from app.blueprints.avisos import avisos_bp
