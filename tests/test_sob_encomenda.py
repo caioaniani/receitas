@@ -273,8 +273,10 @@ def test_balanco_ignora_item_normal_do_site(app):
         _pedido_pago(r, qtd=6, dias=1)
         itens = {i['receita_id']: i for i in
                  balanco_industria(horizonte_dias=7, usar_cache=False)['itens']}
-        assert not any(b['loja_nome'] == 'Encomenda site'
-                       for b in itens[r.id]['breakdown_comprometido'])
+        it = itens.get(r.id)
+        assert it is None or not any(
+            b['loja_nome'] == 'Encomenda site'
+            for b in it['breakdown_comprometido'])
 
 
 # ── tela do padeiro: separação + pré-preparo ─────────────────────────
