@@ -221,8 +221,12 @@ def montar_itens(itens_raw):
         if not cat or not cat.get('preco'):
             avisos.append('Um item saiu de catálogo e foi removido do pedido.')
             continue
+        sob_encomenda = bool(cat.get('sob_encomenda'))
         # Esgotou entre o carrinho e o checkout → não vende (regra do dono).
-        if not loja_catalogo.tem_estoque_site(kind, item_id):
+        # Item sob encomenda é produzido pro pedido: SEMPRE disponível (não
+        # olha estoque/plano — a trava dele é só a data D+2).
+        if not sob_encomenda and not loja_catalogo.tem_estoque_site(
+                kind, item_id):
             avisos.append(f'"{cat["nome"]}" esgotou e foi removido do pedido.')
             continue
         preco = Decimal(str(cat['preco']))
