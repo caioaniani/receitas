@@ -73,3 +73,19 @@
   </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+<script>
+  // Confirmação de descarte. O nome vem do formulário PÚBLICO anônimo, então
+  // nunca pode entrar num handler inline (breakout de string = XSS). Lemos
+  // via .dataset (texto puro, jamais avaliado como código).
+  document.querySelectorAll('.form-descartar').forEach(function (f) {
+    f.addEventListener('submit', function (e) {
+      var nome = f.dataset.nome || 'este pré-cadastro';
+      if (!confirm('Descartar o pré-cadastro de ' + nome + '?')) {
+        e.preventDefault();
+      }
+    });
+  });
+</script>
+{% endblock %}
