@@ -439,7 +439,10 @@ def reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
         _rebaixar_pedido(pedido, loja.id, ref_nova, pref_nova, usuario_id)
 
     # 3) PLANO-DO-DIA: devolve as unidades removidas (disponibilidade do site).
-    if pedido.data_entrega:
+    #    Item sob encomenda NUNCA reservou plano (fica fora dele) — pular o
+    #    devolver evita mexer numa reserva que nao existe (revisao 21/07/2026).
+    from app.services import loja_estoque_reserva
+    if pedido.data_entrega and not loja_estoque_reserva.item_sob_encomenda(item):
         from app.services import loja_plano_dia
         if item.receita_id:
             loja_plano_dia.devolver('receita', item.receita_id,
