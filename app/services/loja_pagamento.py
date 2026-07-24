@@ -194,8 +194,12 @@ def _reservar_no_plano_do_dia(pedido):
     saldo individual do plano. Decisao do dono 22/06/2026."""
     if not pedido.data_entrega:
         return
-    from app.services import loja_plano_dia
+    from app.services import loja_estoque_reserva, loja_plano_dia
     for it in pedido.itens:
+        # Sob encomenda: produzido pro pedido, fica FORA do plano-do-dia
+        # (a vitrine trata como sempre disponivel). Nao reserva plano.
+        if loja_estoque_reserva.item_sob_encomenda(it):
+            continue
         if it.receita_id:
             kind, item_id = 'receita', it.receita_id
         elif it.produto_id:
