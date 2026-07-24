@@ -279,11 +279,29 @@ def tem_estoque_site(kind, item_id):
 def tem_estoque_para_dia(kind, item_id, data):
     """True se da pra vender o item pra entregar na data X — SO pelo plano-do-
     dia. Fail-open: sem plano cadastrado pra o item/data → True (vende livre);
-    com plano → saldo do plano > 0. O EstoqueLoja fisico NAO entra."""
+    com plano → saldo do plano > 0. O EstoqueLoja fisico NAO entra.
+
+    Item sob encomenda (produzido pro pedido) e SEMPRE vendavel — nao passa
+    pelo plano-do-dia (a unica trava dele e a data D+2 no checkout)."""
+    if item_e_sob_encomenda(kind, item_id):
+        return True
     s = _saldo_para_dia(kind, item_id, data)
     if s is None:
         return True
     return s > 0
+
+
+def item_e_sob_encomenda(kind, item_id):
+    """True se a receita/produto esta marcada `sob_encomenda` (produzido pro
+    pedido: nao abate EstoqueLoja, fica fora do plano-do-dia, so vende D+2).
+    Fonte unica pra o checkout/reserva/pagamento/previsao consultarem."""
+    if kind == 'receita':
+        r = Receita.query.get(item_id)
+        return bool(r and getattr(r, 'sob_encomenda', False))
+    if kind == 'produto':
+        p = Produto.query.get(item_id)
+        return bool(p and getattr(p, 'sob_encomenda', False))
+    return False
 
 
 # Categoria especial: produtos com este nome de categoria abrem o modo
