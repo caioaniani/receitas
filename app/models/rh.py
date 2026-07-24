@@ -273,4 +273,32 @@ class RegistroPonto(db.Model):
         return f'<Ponto {self.funcionario_id} {self.data}>'
 
 
+class PreCadastroFuncionario(db.Model):
+    """Pré-cadastro auto-serviço (23/07/2026): o funcionário preenche
+    nome/sobrenome/e-mail/telefone num formulário aberto por QR Code. Vira uma
+    linha aqui; o admin revisa no RH e PROMOVE pra `Funcionario` (informando o
+    CPF que falta). Tabela nova via db.create_all (sem ALTER). Guarda PII —
+    processados/antigos podem ser podados."""
+    __tablename__ = 'pre_cadastro_funcionario'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    sobrenome = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(150), nullable=False)
+    telefone = db.Column(db.String(30), nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
+    # Preenchidos quando o admin promove pra Funcionario (senão fica pendente).
+    processado_em = db.Column(db.DateTime, nullable=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'),
+                               nullable=True)
+
+    funcionario = db.relationship('Funcionario')
+
+    @property
+    def nome_completo(self):
+        return f'{self.nome} {self.sobrenome}'.strip()
+
+    def __repr__(self):
+        return f'<PreCadastroFuncionario {self.nome_completo}>'
+
+
 # ── Estoque de Congelados (Produção) ──
