@@ -164,11 +164,18 @@ abrir tela). Tres pecas, UMA fonte de dados
   na home, SO pro dono (faturamento = cockpit pessoal, mesmo gate do
   /admin/briefing), com DUAS secoes: **HOJE em destaque** (parciais —
   `vendas_hoje()`, snapshot que o cron de 15min recaptura; SEM delta de
-  proposito: dia incompleto vs media de dia cheio daria "-60%" falso a
-  manha toda) e **Ontem** (total geral PDV+site, PDV com delta vs media do
-  MESMO dia-da-semana — media do TOTAL: soma das lojas POR DATA → media das
-  ultimas 6 ocorrencias — chaves `total_geral`/`pdv_media`/`pdv_delta_pct`/
-  `snapshot_ok` em `vendas_ontem()`), site e linhas por loja compactas.
+  proposito: dia incompleto vs dia cheio daria "-60%" falso a manha toda) e
+  **Ontem** (total geral PDV+site, PDV com delta vs a **SEMANA PASSADA** —
+  chaves `total_geral`/`comparado_com`/`comparado_com_label`/`pdv_base`/
+  `pdv_delta_pct`/`snapshot_ok` em `vendas_ontem()`), site e linhas por loja
+  compactas.
+  **COMPARACAO = MESMO DIA-DA-SEMANA, 7 DIAS ANTES (dono 23/07/2026)**:
+  "sexta faturou X vs a sexta passada". SUBSTITUIU a media das ultimas 6
+  ocorrencias do dia-da-semana — o dono quer comparar com UM dia concreto,
+  nao com media (`_DIAS_COMPARACAO = 7`; a chave por loja virou `base`, nao
+  `media`, porque o valor e de um dia so). Base ausente ou ZERO => delta
+  `None` (nao existe % sobre zero; a tela mostra "sem comparacao"). Loja que
+  vendeu na semana passada e ZEROU ontem continua aparecendo com -100%.
   REGRA: a home chama `vendas_hoje()`/`vendas_ontem(capturar=False)` — le
   SO o snapshot do banco e NUNCA bate na API Seru; sem snapshot de ontem a
   home AVISA em vez de mostrar R$ 0 falso (`snapshot_ok`). O briefing/
