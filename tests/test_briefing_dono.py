@@ -230,6 +230,21 @@ def test_loja_com_historico_e_venda_zero_aparece(app):
     assert lj['delta_pct'] == -100.0
 
 
+def test_loja_sem_venda_na_semana_passada_fica_sem_comparacao(app):
+    """Sem base (loja nova / PDV fora naquele dia) NÃO inventa percentual: o
+    delta vem None e a tela mostra "sem comparação". Não existe % sobre zero."""
+    from app.services import briefing_dono
+    ontem = hoje() - timedelta(days=1)
+    _venda_dia(ontem, loja_seru='Loja A', fat=900)
+    _venda_dia(ontem - timedelta(days=14), loja_seru='Loja A', fat=800)
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        v = briefing_dono.vendas_ontem()
+    lj = next(x for x in v['por_loja'] if x['loja'] == 'Loja A')
+    assert lj['faturamento'] == 900.0
+    assert lj['base'] is None and lj['delta_pct'] is None
+    assert v['pdv_delta_pct'] is None
+
+
 def test_vendas_ontem_inclui_site_pago_por_pago_em(app):
     from app.models import PedidoOnline
     from app.services import briefing_dono
