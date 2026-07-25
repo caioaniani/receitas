@@ -487,8 +487,8 @@ def montar_texto(dados=None):
     for lj in v['por_loja']:
         if lj['delta_pct'] is not None:
             sinal = '+' if lj['delta_pct'] >= 0 else ''
-            comp = ' (média %s: %s, %s%.0f%%)' % (
-                v['label'].split()[0], _fmt_brl(lj['media']),
+            comp = ' (%s: %s, %s%.0f%%)' % (
+                v['comparado_com_label'], _fmt_brl(lj['base']),
                 sinal, lj['delta_pct'])
         else:
             comp = ''
