@@ -45,8 +45,8 @@
                             <td class="text-end">R$ {{ '%.0f' % lj.faturamento }}</td>
                             <td class="text-end small {% if lj.delta_pct is not none and lj.delta_pct < -15 %}text-danger{% elif lj.delta_pct is not none and lj.delta_pct > 15 %}text-success{% else %}text-muted{% endif %}">
                                 {% if lj.delta_pct is not none %}
-                                    {{ '%+.0f%%' % lj.delta_pct }} vs média
-                                {% else %}sem histórico{% endif %}
+                                    {{ '%+.0f%%' % lj.delta_pct }} vs {{ dados.vendas.comparado_com_label }}
+                                {% else %}sem comparação{% endif %}
                             </td>
                         </tr>
                     {% else %}
