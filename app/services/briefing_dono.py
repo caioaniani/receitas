@@ -255,7 +255,12 @@ def _resolver_loja_seru():
 
 
 def vendas_ontem(capturar=True):
-    """Vendas de ONTEM: PDV por loja (vs média do mesmo dia-da-semana) + site.
+    """Vendas de ONTEM: PDV por loja (vs a SEMANA PASSADA) + site.
+
+    A comparação é contra o MESMO dia-da-semana 7 dias antes ("sexta vs sexta
+    passada" — decisão do dono 23/07/2026): `comparado_com` traz a data-base,
+    `pdv_base`/`base` o faturamento dela e `*_delta_pct` a variação. Base
+    ausente ou ZERO devolve delta None (não existe % sobre zero).
 
     PDV lê o snapshot `VendaSeruDiaLoja` (faturamento_pedidos = total do
     pedido, inclui kit/box — mesma base do /api/bot/faturamento), AGRUPADO
