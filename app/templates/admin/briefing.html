@@ -30,7 +30,7 @@
                     · {{ dados.vendas.n_pedidos }} pedidos
                     {% if dados.vendas.pdv_delta_pct is not none %}
                     <span class="small {% if dados.vendas.pdv_delta_pct < -15 %}text-danger{% elif dados.vendas.pdv_delta_pct > 15 %}text-success{% else %}text-muted{% endif %}">
-                        ({{ '%+.0f%%' % dados.vendas.pdv_delta_pct }} vs média)
+                        ({{ '%+.0f%%' % dados.vendas.pdv_delta_pct }} vs {{ dados.vendas.comparado_com_label }})
                     </span>
                     {% endif %}
                     &nbsp;|&nbsp; Site: <strong>R$ {{ '%.0f' % dados.vendas.site_total }}</strong>
