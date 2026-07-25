@@ -27,10 +27,11 @@ logger = logging.getLogger(__name__)
 
 _DOW_PT = ('seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom')
 
-# Quantas ocorrências passadas do MESMO dia-da-semana entram na média de
-# comparação das vendas de ontem (mesma ordem de grandeza da janela de 6
-# semanas dos motores de previsão).
-_SEMANAS_MEDIA = 6
+# A comparação das vendas é contra a SEMANA PASSADA: o mesmo dia-da-semana,
+# exatamente 7 dias antes ("sexta vs sexta passada"). Decisão do dono
+# 23/07/2026, substituindo a média das últimas 6 ocorrências do dia-da-semana
+# — ele quer comparar com UM dia concreto, não com uma média.
+_DIAS_COMPARACAO = 7
 
 
 def _fmt_brl(v):
@@ -277,48 +278,36 @@ def vendas_ontem(capturar=True):
     snapshot_ok = ontem in vendas_diarias.dias_capturados(ontem, ontem)
     vinculo = _resolver_loja_seru()
 
-    # Média das últimas ocorrências do MESMO dia-da-semana, por LOJA (dois
-    # companies do mesmo dia somam antes da média), lida numa query só
-    # (janela de 8 semanas; o dow filtra em Python — weekday() no SQL
-    # diverge entre SQLite e Postgres).
-    ini_hist = ontem - timedelta(days=7 * (_SEMANAS_MEDIA + 2))
-    por_dia = defaultdict(float)                 # (loja, data) -> fat
-    for loja_seru, d, fat in (db.session.query(
-            VendaSeruDiaLoja.loja_seru, VendaSeruDiaLoja.data,
-            VendaSeruDiaLoja.faturamento_pedidos)
-            .filter(VendaSeruDiaLoja.data >= ini_hist,
-                    VendaSeruDiaLoja.data < ontem).all()):
-        if d.weekday() == ontem.weekday():
-            por_dia[(vinculo.get(loja_seru, loja_seru), d)] += float(fat or 0)
-    hist = defaultdict(list)
-    for (nome, d), fat in por_dia.items():
-        hist[nome].append((d, fat))
+    # Base da comparação: a MESMA data 7 dias antes ("sexta vs sexta passada").
+    # Uma query só, por LOJA (dois companies da mesma Loja somam antes).
+    comparado_com = ontem - timedelta(days=_DIAS_COMPARACAO)
+    base_por_loja = defaultdict(float)           # loja -> fat da semana passada
+    for loja_seru, fat in (db.session.query(
+            VendaSeruDiaLoja.loja_seru, VendaSeruDiaLoja.faturamento_pedidos)
+            .filter(VendaSeruDiaLoja.data == comparado_com).all()):
+        base_por_loja[vinculo.get(loja_seru, loja_seru)] += float(fat or 0)
 
-    # Loja com histórico e venda ZERO ontem NÃO some — é exatamente a
-    # anomalia que o briefing existe pra mostrar (PDV fora o dia inteiro,
-    # loja fechada...): entra com R$ 0 e queda de 100% vs a média.
+    # Loja que vendeu na semana passada e ZEROU ontem NÃO some — é exatamente
+    # a anomalia que o briefing existe pra mostrar (PDV fora o dia inteiro,
+    # loja fechada...): entra com R$ 0 e queda de 100%.
     fat_por_loja = defaultdict(float)
     for loja_seru, fat in por_company.items():
         fat_por_loja[vinculo.get(loja_seru, loja_seru)] += fat
-    for nome in hist:
+    for nome in base_por_loja:
         fat_por_loja.setdefault(nome, 0.0)
     lojas = []
     for nome, fat in sorted(fat_por_loja.items(), key=lambda kv: -kv[1]):
-        ocorr = sorted(hist.get(nome, []), reverse=True)[:_SEMANAS_MEDIA]
-        media = (sum(f for _, f in ocorr) / len(ocorr)) if ocorr else None
-        delta = ((fat - media) / media * 100.0) if media else None
-        lojas.append({'loja': nome, 'faturamento': fat, 'media': media,
+        # base 0/ausente => delta None ("sem comparação"): não dá pra calcular
+        # variação percentual sobre zero (nem inventar 'crescimento infinito').
+        base = base_por_loja.get(nome)
+        delta = ((fat - base) / base * 100.0) if base else None
+        lojas.append({'loja': nome, 'faturamento': fat, 'base': base,
                       'delta_pct': round(delta, 1) if delta is not None else None})
 
-    # Média do TOTAL PDV do mesmo dia-da-semana (soma das lojas POR DATA,
-    # depois média das últimas ocorrências) — dá o "ontem vs terça típica"
-    # do total, não só por loja.
-    total_por_data = defaultdict(float)
-    for (_, d), fat in por_dia.items():
-        total_por_data[d] += fat
-    ocorr_tot = sorted(total_por_data.items(), reverse=True)[:_SEMANAS_MEDIA]
-    pdv_media = (sum(f for _, f in ocorr_tot) / len(ocorr_tot)) if ocorr_tot else None
-    pdv_delta = ((total - pdv_media) / pdv_media * 100.0) if pdv_media else None
+    # Mesma comparação pro TOTAL do PDV (soma das lojas na data-base) — dá o
+    # "ontem vs a mesma sexta da semana passada" do total, não só por loja.
+    pdv_base = sum(base_por_loja.values()) or None
+    pdv_delta = ((total - pdv_base) / pdv_base * 100.0) if pdv_base else None
 
     ini = datetime.combine(ontem, time.min)
     fim = datetime.combine(hoje(), time.min)
@@ -335,7 +324,11 @@ def vendas_ontem(capturar=True):
         'ontem': ontem,
         'label': '%s %s' % (_DOW_PT[ontem.weekday()], ontem.strftime('%d/%m')),
         'pdv_total': total,
-        'pdv_media': pdv_media,
+        # Base da comparação: o MESMO dia-da-semana 7 dias antes.
+        'comparado_com': comparado_com,
+        'comparado_com_label': '%s %s' % (_DOW_PT[comparado_com.weekday()],
+                                          comparado_com.strftime('%d/%m')),
+        'pdv_base': pdv_base,
         'pdv_delta_pct': round(pdv_delta, 1) if pdv_delta is not None else None,
         'n_pedidos': n_pedidos,
         'por_loja': lojas,
