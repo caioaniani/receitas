@@ -212,7 +212,7 @@ def test_dois_companies_da_mesma_loja_somam_numa_linha(app):
     assert 'BREAD & BREW' not in nomes
     lj = next(x for x in v['por_loja'] if x['loja'] == 'Loja Nebraska')
     assert lj['faturamento'] == 1000.0           # 300 + 700
-    assert lj['media'] == 500.0                  # (200+300) somados no dia
+    assert lj['base'] == 500.0                   # (200+300) somados no dia
 
 
 def test_loja_com_historico_e_venda_zero_aparece(app):
