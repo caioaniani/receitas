@@ -166,7 +166,8 @@
                 <span class="text-nowrap">
                     R$ {{ '{:,.0f}'.format(lj.faturamento).replace(',', '.') }}
                     {% if lj.delta_pct is not none %}
-                    <span class="{% if lj.delta_pct < -15 %}text-danger{% elif lj.delta_pct > 15 %}text-success{% else %}text-muted{% endif %}">{{ '%+.0f%%' % lj.delta_pct }}</span>
+                    <span class="{% if lj.delta_pct < -15 %}text-danger{% elif lj.delta_pct > 15 %}text-success{% else %}text-muted{% endif %}"
+                          title="{{ vendas.comparado_com_label }}: R$ {{ '{:,.0f}'.format(lj.base).replace(',', '.') }}">{{ '%+.0f%%' % lj.delta_pct }}</span>
                     {% endif %}
                 </span>
             </div>
