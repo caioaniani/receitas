@@ -1524,3 +1524,86 @@ def pagamento_debug():
         out['pagarme_message'] = body.get('message')
         out['pagarme_errors'] = body.get('errors')
     return jsonify(out)
+
+
+@claude_api_bp.route('/cancelados-estorno')
+@_claude_auth_required
+def cancelados_estorno():
+    """Auditoria dos pedidos CANCELADOS de um dia: tinham item de verdade? o
+    estoque foi baixado? foi estornado? (pergunta do dono 25/07/2026 ao abrir o
+    drill-down de cancelados na home).
+
+    Cruza a API Seru (fonte do cancelamento) com `SeruPedidoProcessado` (o que
+    o sync fez). O gatilho de ESTORNO é keyed em `canceledAt`: pedido cancelado
+    SÓ por `status=='canceled'` que já tinha baixado estoque NÃO estorna
+    sozinho — é o risco que esta sonda expõe (`veredito=BAIXOU_SEM_ESTORNO`).
+    Read-only estrito. Params: ?dia=YYYY-MM-DD (default hoje BRT).
+    """
+    from datetime import date as _date
+
+    from app.extensions import db
+    from app.models import SeruPedidoProcessado
+    from app.services import seru
+    from app.services.briefing_dono import _resolver_loja_seru
+    from app.services.vendas_itens import _nome_loja
+    from app.utils import hoje
+
+    dia_s = (request.args.get('dia') or '').strip()
+    try:
+        dia = _date.fromisoformat(dia_s) if dia_s else hoje()
+    except ValueError:
+        return jsonify(ok=False, erro='dia inválido (use YYYY-MM-DD)'), 400
+
+    try:
+        pedidos = seru.listar_pedidos_completo(dia, dia)
+    except Exception as exc:  # noqa: BLE001 — Seru fora vira 502 claro
+        return jsonify(ok=False, erro=f'Seru indisponível: {exc}'), 502
+
+    vinculo = _resolver_loja_seru()
+    linhas, alertas = [], 0
+    for p in pedidos:
+        if not isinstance(p, dict):
+            continue
+        try:
+            if seru.data_local(p.get('createdAt')) != dia:
+                continue
+            if not seru.pedido_cancelado(p):
+                continue
+            itens = seru.extrair_itens(p)
+            vivos = [i for i in itens if not i.get('cancelado')]
+            pid = str(p.get('id') or '')
+            reg = db.session.get(SeruPedidoProcessado, pid) if pid else None
+            baixados = int(getattr(reg, 'n_itens_baixados', 0) or 0)
+            estornado = getattr(reg, 'estornado_em', None)
+            if reg is None:
+                veredito = 'NAO_PROCESSADO'      # sync ainda não viu / filtrou
+            elif baixados == 0:
+                veredito = 'NUNCA_BAIXOU'        # registrado já cancelado — ok
+            elif estornado:
+                veredito = 'BAIXOU_E_ESTORNOU'   # ok
+            else:
+                veredito = 'BAIXOU_SEM_ESTORNO'  # ⚠ estoque a menos
+                alertas += 1
+            dh = seru.datahora_local(p.get('createdAt'))
+            ln = _nome_loja(p) or '(sem loja)'
+            cx = p.get('cashier')
+            linhas.append({
+                'codigo': p.get('code'),
+                'hora': dh.strftime('%H:%M') if dh else '?',
+                'loja': vinculo.get(ln, ln),
+                'valor': round(float(p.get('total') or 0), 2),
+                'caixa': cx.get('code') if isinstance(cx, dict) else None,
+                'itens_total': len(itens),
+                'itens_nao_cancelados': len(vivos),
+                'cancelado_por': 'canceledAt' if p.get('canceledAt')
+                                 else 'status',
+                'n_itens_baixados': baixados,
+                'estornado_em': estornado.isoformat() if estornado else None,
+                'veredito': veredito,
+            })
+        except Exception as exc:  # noqa: BLE001 — um pedido torto não derruba
+            linhas.append({'codigo': p.get('code'), 'erro': str(exc)[:200]})
+    linhas.sort(key=lambda x: x.get('hora') or '')
+    return jsonify(ok=True, dia=dia.isoformat(), n_cancelados=len(linhas),
+                   valor_total=round(sum(x.get('valor') or 0 for x in linhas), 2),
+                   alertas_estoque=alertas, pedidos=linhas)
