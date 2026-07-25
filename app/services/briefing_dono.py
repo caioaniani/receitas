@@ -352,9 +352,9 @@ def vendas_hoje(capturar=False):
 
     O cron do Seru recaptura ontem+hoje a cada ~15 min, então o snapshot de
     hoje fica no máximo esse tanto atrasado. Default `capturar=False` (modo
-    da home — nunca bate na API); sem delta vs média DE PROPÓSITO: comparar
-    um dia INCOMPLETO com a média de dias cheios só geraria um "-60%" falso
-    a manhã inteira.
+    da home — nunca bate na API); SEM delta DE PROPÓSITO: comparar um dia
+    INCOMPLETO com um dia CHEIO (a semana passada inteira) só geraria um
+    "-60%" falso a manhã inteira. A comparação vive no painel de ONTEM.
     """
     from app.models import PedidoOnline
     from app.services import vendas_diarias
