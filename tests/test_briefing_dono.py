@@ -270,7 +270,7 @@ def test_vendas_ontem_total_geral_e_base_do_total(app):
     assert v['pdv_total'] == 1200.0
     assert v['site_total'] == 300.0
     assert v['total_geral'] == 1500.0
-    assert v['pdv_media'] == 1000.0
+    assert v['pdv_base'] == 1000.0
     assert v['pdv_delta_pct'] == 20.0
 
 
