@@ -248,17 +248,18 @@ def test_vendas_ontem_inclui_site_pago_por_pago_em(app):
     assert v['site_total'] == 80.0
 
 
-def test_vendas_ontem_total_geral_e_media_do_total(app):
-    """total_geral = PDV + site; pdv_media compara o TOTAL de ontem com a
-    média do total (soma das lojas por data) do mesmo dia-da-semana."""
+def test_vendas_ontem_total_geral_e_base_do_total(app):
+    """total_geral = PDV + site; pdv_base compara o TOTAL de ontem com o total
+    da SEMANA PASSADA (soma das lojas na data-base)."""
     from app.models import PedidoOnline
     from app.services import briefing_dono
     ontem = hoje() - timedelta(days=1)
     _venda_dia(ontem, loja_seru='Loja A', fat=700)
     _venda_dia(ontem, loja_seru='Loja B', fat=500)          # total ontem 1200
-    for sem in (1, 2):                                       # média total 1000
-        _venda_dia(ontem - timedelta(days=7 * sem), loja_seru='Loja A', fat=600)
-        _venda_dia(ontem - timedelta(days=7 * sem), loja_seru='Loja B', fat=400)
+    # semana passada: 600+400 = 1000 (a base). 2 semanas atrás é ignorada.
+    _venda_dia(ontem - timedelta(days=7), loja_seru='Loja A', fat=600)
+    _venda_dia(ontem - timedelta(days=7), loja_seru='Loja B', fat=400)
+    _venda_dia(ontem - timedelta(days=14), loja_seru='Loja A', fat=50)
     db.session.add(PedidoOnline(
         codigo='PO-T', nome_cliente='X', email_cliente='x@x.com',
         modo_entrega='retirada', valor_total=Decimal('300'),
