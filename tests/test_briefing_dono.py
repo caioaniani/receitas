@@ -164,18 +164,21 @@ def test_incluir_owner_false_esconde_itens_owner(app, catalogo):
 
 # ── vendas de ontem / custo de IA ────────────────────────────────────────────
 
-def test_vendas_ontem_compara_com_media_do_dow(app):
+def test_vendas_ontem_compara_com_a_semana_passada(app):
+    """Decisão do dono 23/07/2026: "sexta vs sexta passada" — a base é a MESMA
+    data 7 dias antes, NÃO a média de várias semanas."""
     from app.services import briefing_dono
     ontem = hoje() - timedelta(days=1)
     _venda_dia(ontem, fat=1200)
-    _venda_dia(ontem - timedelta(days=7), fat=1000)
-    _venda_dia(ontem - timedelta(days=14), fat=1000)
-    _venda_dia(ontem - timedelta(days=2), loja_seru='Loja A', fat=555)  # dow errado, fora
+    _venda_dia(ontem - timedelta(days=7), fat=1000)     # <- a base
+    _venda_dia(ontem - timedelta(days=14), fat=400)     # 2 semanas: IGNORADA
+    _venda_dia(ontem - timedelta(days=2), loja_seru='Loja A', fat=555)  # fora
     with patch('app.services.vendas_diarias.garantir_capturado'):
         v = briefing_dono.vendas_ontem()
     assert v['pdv_total'] == 1200.0
+    assert v['comparado_com'] == ontem - timedelta(days=7)
     lj = v['por_loja'][0]
-    assert lj['media'] == 1000.0
+    assert lj['base'] == 1000.0        # só a semana passada (média daria 700)
     assert lj['delta_pct'] == 20.0
 
 
