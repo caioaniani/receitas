@@ -101,14 +101,14 @@
       }
     },
 
-    mudarQtd: function (kind, id, qtd, fatiado) {
+    mudarQtd: function (kind, id, qtd, fatiado, comp) {
       qtd = parseInt(qtd, 10) || 0;
       var itens = this.ler();
-      var k = this._chaveItem(kind, id, fatiado);
+      var k = this._chaveItem(kind, id, fatiado, comp);
       var out = [];
       for (var i = 0; i < itens.length; i++) {
         if (this._chaveItem(itens[i].kind, itens[i].id,
-                            itens[i].fatiado) === k) {
+                            itens[i].fatiado, itens[i].comp) === k) {
           if (qtd > 0) { itens[i].qtd = qtd; out.push(itens[i]); }
           // qtd <= 0 remove (não adiciona ao out)
         } else {
