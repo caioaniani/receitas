@@ -104,9 +104,17 @@
             (it.fatiado ? '1' : '') + '"' + (it.fatiado ? ' checked' : '') +
             '> 🔪 fatiado</label>'
           : (it.fatiado ? ' <em>(fatiado)</em>' : '');
+        // Menu configurável: mostra O QUE o cliente montou — é a última
+        // tela antes de pagar, tem que dar pra conferir (26/07/2026).
+        var montado = '';
+        if (it.comp_resumo && it.comp_resumo.length) {
+          montado = '<small class="linha-comp">' + it.comp_resumo.map(
+            function (c) { return escapeHtml(c.qtd + 'x ' + c.nome); }
+          ).join(' · ') + '</small>';
+        }
         h += '<li><span>' + (parseInt(it.qtd, 10) || 0) + '× ' +
-          escapeHtml(it.nome) + fat + '</span><span>' + fmtBRL(sub) +
-          '</span></li>';
+          escapeHtml(it.nome) + fat + montado + '</span><span>' +
+          fmtBRL(sub) + '</span></li>';
       });
       h += '</ul>';
       $('#checkout-resumo').innerHTML = h;
