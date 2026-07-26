@@ -308,14 +308,17 @@
       e.stopPropagation();   // não navega pro href do card
       var acao = btn.getAttribute('data-acao');
       var item = lerItemDoCardEl(el);
+      var cComp = item.comp;
       if (acao === 'add') {
         Carrinho.adicionar(item, 1);
       } else if (acao === 'mais') {
-        Carrinho.mudarQtd(item.kind, item.id,
-                          Carrinho.qtdDe(item.kind, item.id) + 1);
+        Carrinho.mudarQtd(
+          item.kind, item.id,
+          Carrinho.qtdDe(item.kind, item.id, false, cComp) + 1, false, cComp);
       } else if (acao === 'menos') {
-        Carrinho.mudarQtd(item.kind, item.id,
-                          Carrinho.qtdDe(item.kind, item.id) - 1);
+        Carrinho.mudarQtd(
+          item.kind, item.id,
+          Carrinho.qtdDe(item.kind, item.id, false, cComp) - 1, false, cComp);
       }
     });
   }
