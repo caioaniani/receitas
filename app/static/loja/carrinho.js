@@ -471,15 +471,24 @@
         var chkFat = document.getElementById('quer-fatiado');
         var fatiado = !!(btn.getAttribute('data-fatiavel') && chkFat
                          && chkFat.checked);
+        // Menu configurável: lê a montagem da tela (steppers por mini). O
+        // botão só chega aqui habilitado quando o total bate — mas o
+        // SERVIDOR revalida tudo (`loja_menu` + `montar_itens`).
+        var menu = window.MenuMontador;
+        var comp = (menu && menu.ativo()) ? menu.comp() : null;
+        if (menu && menu.ativo() && !menu.valido()) return;
         Carrinho.adicionar({
           kind: btn.getAttribute('data-kind'),
           id: btn.getAttribute('data-id'),
           nome: btn.getAttribute('data-nome'),
-          preco: btn.getAttribute('data-preco'),
+          preco: (menu && menu.ativo()) ? menu.preco()
+            : btn.getAttribute('data-preco'),
           categoria: btn.getAttribute('data-categoria'),
           imagem: btn.getAttribute('data-imagem'),
           fatiado: fatiado,
           fatiavel: !!btn.getAttribute('data-fatiavel'),
+          comp: comp,
+          comp_resumo: (menu && menu.ativo()) ? menu.resumo() : null,
         }, qtd);
         // Feedback rápido
         var antes = btn.textContent;
