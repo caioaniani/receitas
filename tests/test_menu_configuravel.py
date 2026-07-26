@@ -511,3 +511,52 @@ def test_chave_da_sessao_usa_o_helper_canonico(app):
         assert len(norm) == 1 and norm[0]['qtd'] == 3
         # ordenação NUMÉRICA (não lexicográfica): 9 antes de 10
         assert loja_menu.chave({10: 5, 9: 5}) == '9:5,10:5'
+
+
+def test_sem_teto_por_item_o_cliente_fecha_com_um_so(app):
+    """Dono 26/07/2026: "quero tirar a regra de 30/10, quero que tenha 30
+    unidades do mini independente de quantos sejam". `menu_max_por_item` em
+    branco = SEM limite — dá pra fechar o total com um item só."""
+    from app.extensions import db
+    from app.services import loja_checkout, loja_menu
+    with app.app_context():
+        menu, _ = _menu(db, total=15, teto=10, precos=(2.0, 3.0, 4.0))
+        menu.menu_max_por_item = None          # em branco = sem teto
+        db.session.commit()
+
+        total, teto = loja_menu.regras(menu)
+        assert (total, teto) == (15, 15)
+
+        a, b, c = _pis(menu)
+        comp = loja_menu.normalizar(menu, [[a, 15]])
+        assert comp == {a: 15}                 # não clampa mais em 10
+        assert loja_menu.validar(menu, comp) is None
+
+        itens, avisos = loja_checkout.montar_itens([
+            {'kind': 'produto', 'id': menu.id, 'qtd': 1,
+             'comp': [[a, 15]]}])
+        assert avisos == []
+        assert itens[0]['preco'] == Decimal('30')   # 15 x R$ 2,00
+
+
+def test_teto_acima_do_total_e_normalizado(app):
+    """"Máximo 50" num menu de 30 não quer dizer nada — vira o próprio
+    total, pra a mensagem da tela e do cardápio não prometerem bobagem."""
+    from app.extensions import db
+    from app.services import loja_menu
+    with app.app_context():
+        menu, _ = _menu(db, total=15)
+        menu.menu_max_por_item = 50
+        db.session.commit()
+        assert loja_menu.regras(menu) == (15, 15)
+
+
+def test_teto_explicito_continua_valendo(app):
+    """Guarda: quem PREENCHER o máximo continua limitado."""
+    from app.extensions import db
+    from app.services import loja_menu
+    with app.app_context():
+        menu, _ = _menu(db, total=15, teto=6)
+        a, _b, _c = _pis(menu)
+        assert loja_menu.regras(menu) == (15, 6)
+        assert loja_menu.normalizar(menu, [[a, 15]]) == {a: 6}

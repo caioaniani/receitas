@@ -679,10 +679,15 @@ def _mosaico_explodido(pdf, item):
         pdf.set_x(g.margem)
         pdf.set_font('Helvetica', '', 7.5)
         pdf.set_text_color(*_C_FG)
-        pdf.cell(0, 4.5, _latin1(
-            'Pedido minimo de %d unidades — escolha as que quiser, no maximo '
-            '%d de cada.' % (regra.get('total', 30), regra.get('max', 10))),
-            new_x='LMARGIN', new_y='NEXT')
+        _tot = regra.get('total', 30)
+        _max = regra.get('max') or _tot
+        # Sem teto por item (o padrao desde 26/07/2026), a frase para no
+        # "as que quiser" — prometer um maximo que nao existe confunde.
+        _txt = 'Pedido minimo de %d unidades — escolha as que quiser' % _tot
+        if _max < _tot:
+            _txt += ', no maximo %d de cada' % _max
+        pdf.cell(0, 4.5, _latin1(_txt + '.'),
+                 new_x='LMARGIN', new_y='NEXT')
     pdf.ln(1)
 
     for i in range(linhas):

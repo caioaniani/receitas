@@ -96,8 +96,8 @@
       <h3>Monte seu menu</h3>
       <p class="menu-regra">
         Escolha <strong>{{ item.menu.total }} unidades</strong> no total —
-        as que você quiser, no máximo
-        <strong>{{ item.menu.max_por_item }} de cada</strong>.
+        as que você quiser{% if item.menu.max_por_item < item.menu.total %},
+        no máximo <strong>{{ item.menu.max_por_item }} de cada</strong>{% endif %}.
         Já deixamos uma sugestão marcada.
       </p>
       <ul class="menu-slots">

@@ -303,8 +303,12 @@
                 <input type="number" min="1" step="1" id="menu-max-por-item"
                        name="menu_max_por_item"
                        value="{{ produto.menu_max_por_item or '' }}"
-                       placeholder="10"
+                       placeholder="sem limite"
                        class="form-control form-control-sm input-blue text-end">
+                <div class="form-text small">
+                    Em branco = <strong>sem limite</strong> (o cliente pode
+                    fechar o total com um item so).
+                </div>
             </div>
         </div>
     </div>
