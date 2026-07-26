@@ -41,11 +41,25 @@
   <div class="produto-foto">
     {% if item.esgotado %}<span class="selo-esgotado grande">Esgotado</span>{% endif %}
     {% if item.imagem %}
-    <img src="{{ item.imagem }}" alt="{{ item.nome }}">
+    <img src="{{ item.imagem }}" alt="{{ item.nome }}" id="foto-principal">
     {% else %}
     <div class="card-foto-placeholder grande">🥐</div>
     {% endif %}
   </div>
+  {% if item.imagens and item.imagens|length > 1 %}
+  {# Galeria (26/07/2026, pedido do dono): a capa + as fotos extras. Clicar
+     na miniatura troca a foto principal — sem biblioteca, só JS local. #}
+  <div class="produto-galeria" id="produto-galeria">
+    {% for url in item.imagens %}
+    <button type="button" class="galeria-thumb{% if loop.first %} ativa{% endif %}"
+            data-url="{{ url }}"
+            aria-label="Ver foto {{ loop.index }} de {{ item.imagens|length }}">
+      <img src="{{ url }}" alt="{{ item.nome }} — foto {{ loop.index }}"
+           loading="lazy">
+    </button>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   <div class="produto-info">
     <p class="produto-cat">{{ item.categoria }}</p>
@@ -182,6 +196,19 @@
       var input = document.getElementById('dispon-data');
       var status = document.getElementById('dispon-status');
       var btn = document.getElementById('btn-comprar-produto');
+      // O botao tem DOIS donos: este checador de data e o MenuMontador
+      // (menu configuravel). Sem esta ponte, liberar por data reabilitava o
+      // botao com o menu incompleto e o clique virava no-op silencioso
+      // (achado de revisao 26/07/2026). O montador tem a ultima palavra.
+      function liberar(ok) {
+        // Marca o veredito DA DATA no proprio botao: assim o MenuMontador
+        // tambem o respeita quando repinta (senao fechar os 30 reabilitaria
+        // o botao num dia esgotado). Os dois lados leem a mesma flag.
+        btn.dataset.dataOk = ok ? '1' : '';
+        var m = window.MenuMontador;
+        if (ok && m && m.ativo() && !m.valido()) ok = false;
+        btn.disabled = !ok;
+      }
       function checar() {
         var d = input.value;
         if (!d) return;
@@ -191,7 +218,7 @@
         fetch(URL + '?kind=' + KIND + '&item_id=' + ITEM_ID + '&data=' + d)
           .then(function (r) { return r.json(); })
           .then(function (j) {
-            btn.disabled = false;
+            liberar(true);
             if (j.disponivel) {
               status.textContent = '✓ disponível pra essa data';
               status.className = 'dispon-status ok';
@@ -199,13 +226,13 @@
             } else {
               status.textContent = '✗ esgotado pra essa data — escolha outra';
               status.className = 'dispon-status ko';
-              btn.disabled = true;
+              liberar(false);
             }
           })
           .catch(function () {
             status.textContent = 'erro ao verificar';
             status.className = 'dispon-status ko';
-            btn.disabled = false;
+            liberar(true);
           });
       }
       input.addEventListener('change', checar);
@@ -252,11 +279,7 @@
         <div class="card-add"
              data-kind="{{ it.kind }}" data-id="{{ it.id }}"
              data-nome="{{ it.nome }}" data-preco="{{ it.preco }}"
-             data-categoria="{{ it.categoria }}" data-imagem="{{ it.imagem }}"
-             {%- if it.menu %}
-             data-menu-comp="{{ it.menu.comp_padrao|tojson|forceescape }}"
-             data-menu-resumo="{{ it.menu.resumo_padrao|tojson|forceescape }}"
-             {%- endif %}>
+             data-categoria="{{ it.categoria }}" data-imagem="{{ it.imagem }}">
         </div>
         {% endif %}
       {% endif %}
