@@ -119,11 +119,20 @@ def aplicar_venda(loja_id, *, receita_id=None, produto_id=None,
       pular_sem_linha: se True, COMPONENTE de cesta sem linha de EstoqueLoja eh
         ignorado (nao cria linha nem baixa). Usado pelo site, que nao rastreia
         componente decorativo. O item simples (identidade) sempre baixa.
+      composicao: SUBSTITUI a composicao do cadastro, no MESMO formato de
+        `cestas.componentes_de_cesta` — `[(coluna, id, nome, qtd_por_unid)]`.
+        Existe pro MENU CONFIGURAVEL do site (26/07/2026), onde a composicao
+        que vale e a ESCOLHIDA pelo cliente e persistida no pedido, nao a do
+        cadastro (que guarda so a pre-selecao). Passar aqui — em vez de
+        chamar `aplicar_venda` uma vez por componente — mantem o acumulador
+        de fracao, a referencia enriquecida de cesta e o `pular_sem_linha`
+        identicos aos das outras cestas.
 
     Retorna {baixado, faltou, acumulado, sem_alvo}.
     """
-    comp = composicao_de_venda(receita_id=receita_id, produto_id=produto_id,
-                               materia_prima_id=materia_prima_id)
+    comp = composicao or composicao_de_venda(
+        receita_id=receita_id, produto_id=produto_id,
+        materia_prima_id=materia_prima_id)
     if not comp:
         return {'baixado': 0, 'faltou': 0, 'acumulado': False, 'sem_alvo': True}
 
