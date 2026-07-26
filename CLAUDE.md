@@ -1588,6 +1588,72 @@ do padeiro: separação + cronograma + pré-preparo) + **lead FIXO D+2**.
   D+2 pra um item que `montar_itens` descarta — direção SEGURA (front mais
   restrito que o servidor, que recalcula lead=0 e o item cai fora).
 
+## Menu degustação CONFIGURÁVEL no site (26/07/2026)
+
+Pedido do dono: "menu degustação dos minis, uma **pré-seleção de 5 de cada**.
+Porém se o cliente quiser alterar as quantidades não tem problema; porém ele
+deve ser obrigado a selecionar **30 unidades** dos minis independente de
+quais". Decisões dele (AskUserQuestion): **preço varia conforme a escolha,
+cadastrado POR MINI** (o menu custa a soma do escolhido), **máximo 10 de
+cada**, regra **só pra esse menu** (não vira comportamento global de cesta).
+
+- **Modelagem**: é uma cesta NORMAL (`Produto` + `ProdutoItem`) com 3 colunas
+  novas no Produto (`menu_configuravel`, `menu_total_unidades`,
+  `menu_max_por_item`) e 1 no ProdutoItem (`preco_menu`) — procedimento de
+  2 commits, ALTER confirmado pela sonda `/api/claude/deploy` antes do
+  modelo. `ProdutoItem.quantidade` do cadastro = **pré-seleção**.
+- **`preco_menu` mora no ProdutoItem, NÃO na Receita**, de propósito: os
+  minis não são vendidos avulsos e um `preco_site` neles os PUBLICARIA na
+  vitrine (`produtos_publicados` usa `preco_site > 0` como flag). Efeito
+  colateral desejado: o preço é por-menu, então o mesmo mini pode valer
+  diferente em menus diferentes.
+- **`Produto.preco_site` do menu vira só o INTERRUPTOR de publicação** — o
+  preço exibido e cobrado é a soma (`loja_catalogo._anotar_menu` troca o
+  `preco` pelo da pré-seleção). Deixar os dois divergirem na tela seria
+  mentir o preço. **Menu com algum mini sem `preco_menu` SAI DA VITRINE**
+  (fail-close com WARNING; `por_id_publicado` devolve None) — não vendemos
+  sem saber o preço (dinheiro tem peso especial).
+- **Endereçamento pelo `produto_item_id`**: a escolha viaja como
+  `{produto_item_id: qtd}`. O cliente NUNCA manda `receita_id` — POST
+  forjado não consegue enfiar no menu um item que não é dele. Slot de outro
+  menu é descartado em `loja_menu.normalizar`.
+- **Servidor é a autoridade** (`loja_menu` + `loja_checkout.montar_itens`):
+  re-sanitiza contra o cadastro, clampa no teto, exige o total EXATO e
+  RECALCULA o preço. Total errado (aba parada, carrinho velho, POST forjado)
+  **sai do pedido com aviso** — nunca "conserta" em silêncio. O JS
+  (`MenuMontador` em `carrinho.js`) é só conveniência de tela.
+- **ESTOQUE — a regra que não pode regredir**: a composição escolhida é
+  PERSISTIDA no pedido (`PedidoOnlineItemComponente`, tabela nova via
+  `db.create_all`) e é ELA que a reserva (`loja_estoque_reserva.
+  _expandir_estoque` → `composicao_escolhida`) e a baixa real (`consumir` →
+  `aplicar_venda(composicao=...)`, param novo no motor único) explodem —
+  **NUNCA o cadastro da cesta**, que guarda só a pré-seleção e debitaria a
+  composição errada. Reserva e baixa mexem nas MESMAS linhas (senão
+  `quantidade_reservada` não zera). `_rebaixar_pedido` e o bloco 2c da
+  previsão espelham. Cesta de composição FIXA segue pelo cadastro (há teste
+  de regressão travando isso).
+- **Chave da linha do carrinho inclui a composição** (`carrinho.js::
+  _chaveComp` / `loja_menu.chave` / `routes._set_carrinho_sessao`): dois
+  menus montados DIFERENTE são linhas separadas — sem isso somariam
+  quantidade numa linha só e o cliente receberia dois iguais. Os 3 lugares
+  têm que concordar nas classes de equivalência (a string não precisa ser
+  idêntica; a ordenação é numérica no Python e no JS).
+- **Cookie de sessão**: a composição viaja nele. Orçamento
+  `_CARRINHO_MAX_PARES_COMP = 120` pares somados no carrinho inteiro (~1KB
+  dos ~4KB). Linha que estouraria é RECUSADA inteira — nunca entra sem a
+  composição (sem ela o servidor cairia na pré-seleção e o cliente receberia
+  outra coisa).
+- **`PedidoOnlineItemComponente.produto_item_id` é Integer PURO, sem FK**:
+  `produtos.salvar_composicao` APAGA e RECRIA todos os `ProdutoItem` a cada
+  salvamento — uma FK real bloquearia o admin de editar o menu assim que
+  existisse um pedido. Quem manda na baixa são as FKs de alvo (estáveis).
+  O `preco_menu` sobrevive ao recriar por grandfather `(tipo, nome)`.
+- A composição escolhida aparece no carrinho/drawer/checkout, no e-mail de
+  confirmação, no **painel de entregas**, no **PDF do motorista** e no
+  detalhe admin do pedido — a cozinha separa pelo que o cliente montou.
+- Testes: `tests/test_menu_configuravel.py` (21 casos). Manual de operação
+  registrado (seção QUANDO PRECISAR).
+
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
 Escrito na pedra a pedido do dono ("ja tinha falado uma vez mas nao ficou
