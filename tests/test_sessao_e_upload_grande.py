@@ -33,6 +33,9 @@ def test_csrf_nao_expira_por_tempo(app):
 def test_upload_acima_do_limite_avisa_o_tamanho(app, admin_user):
     """413 vira mensagem clara (com o limite em MB), não página crua."""
     app.config['MAX_CONTENT_LENGTH'] = 1024          # 1 KB só pro teste
+    # TESTING=True propaga a exceção; em prod ela cai no errorhandler. Queremos
+    # exercitar o handler (é ele que o usuário vê).
+    app.config['PROPAGATE_EXCEPTIONS'] = False
     c = app.test_client()
     with c.session_transaction() as s:
         s['_user_id'] = str(admin_user.id)
