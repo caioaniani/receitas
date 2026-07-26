@@ -818,9 +818,13 @@ def _carrinho_sessao():
 
 def _set_carrinho_sessao(itens):
     """Grava o carrinho (substitui) na sessão — validado, com qtd de repetidos
-    somada e teto de itens. Devolve a lista normalizada. `fatiado` entra na
-    chave de dedup: fatiado e inteiro do mesmo item são linhas separadas."""
+    somada e teto de itens. Devolve a lista normalizada. `fatiado` e a
+    composição do MENU entram na chave de dedup: fatiado e inteiro do mesmo
+    item — ou dois menus montados DIFERENTE — são linhas separadas (senão
+    somariam quantidade numa linha só e o cliente receberia a composição
+    errada)."""
     norm, idx = [], {}
+    pares_comp = 0
     for it in itens or []:
         kind = str((it or {}).get('kind') or '').strip().lower()
         if kind not in ('receita', 'produto'):
@@ -831,13 +835,24 @@ def _set_carrinho_sessao(itens):
         except (TypeError, ValueError):
             continue
         fatiado = bool(it.get('fatiado'))
-        chave = (kind, iid, fatiado)
+        comp = _comp_normalizada(it.get('comp'))
+        # Chave da composição igual à do `loja_menu.chave` / `carrinho.js`.
+        chave = (kind, iid, fatiado,
+                 ','.join(f'{p[0]}:{p[1]}' for p in sorted(comp or [])))
         if chave in idx:
             norm[idx[chave]]['qtd'] = min(99, norm[idx[chave]]['qtd'] + qtd)
-        elif len(norm) < _CARRINHO_MAX_ITENS:
-            idx[chave] = len(norm)
-            norm.append({'kind': kind, 'id': iid, 'qtd': qtd,
-                         'fatiado': fatiado})
+            continue
+        if len(norm) >= _CARRINHO_MAX_ITENS:
+            continue
+        if comp and pares_comp + len(comp) > _CARRINHO_MAX_PARES_COMP:
+            current_app.logger.warning(
+                'carrinho: composição de menu recusada (orçamento de cookie '
+                'estourado) — item %s:%s', kind, iid)
+            continue
+        pares_comp += len(comp or [])
+        idx[chave] = len(norm)
+        norm.append({'kind': kind, 'id': iid, 'qtd': qtd,
+                     'fatiado': fatiado, 'comp': comp})
     session['carrinho'] = norm
     session.modified = True
     return norm
