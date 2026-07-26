@@ -545,7 +545,10 @@
         body: JSON.stringify({
           itens: (itens || []).map(function (it) {
             return { kind: it.kind, id: it.id, qtd: it.qtd,
-                     fatiado: !!it.fatiado };
+                     fatiado: !!it.fatiado,
+                     // Menu configurável: sem `comp` aqui a escolha morre
+                     // antes do checkout (a SESSÃO é a fonte de verdade).
+                     comp: (it.comp && it.comp.length) ? it.comp : null };
           }),
         }),
       }).catch(function () {});
