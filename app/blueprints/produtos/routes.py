@@ -184,6 +184,17 @@ def detalhe(id):
                            produto_custos=produto_custos)
 
 
+def _int_ou_none(bruto):
+    """Inteiro POSITIVO do form, ou None (campo em branco / lixo). Usado nas
+    travas do menu configurável — em branco significa "usa o default do
+    `loja_menu`", nunca zero (zero travaria a venda em silêncio)."""
+    try:
+        v = int(str(bruto or '').strip())
+    except (TypeError, ValueError):
+        return None
+    return v if v > 0 else None
+
+
 @produtos_bp.route('/<int:id>/salvar', methods=['POST'])
 @login_required
 @admin_required
@@ -218,6 +229,15 @@ def salvar_composicao(id):
     # Sob encomenda D+2 (dono 21/07/2026): so vende D+2 no site, produzido pro
     # pedido (nao abate prateleira), entra na producao do padeiro.
     produto.sob_encomenda = bool(request.form.get('sob_encomenda'))
+    # Menu configuravel no site (26/07/2026): cliente escolhe as quantidades
+    # de cada componente, com total obrigatorio e teto por item; o preco vira
+    # a soma do `preco_menu` do que ele escolher. Campo em branco = usa o
+    # default do `loja_menu` (30 un / 10 por item, os numeros do dono).
+    produto.menu_configuravel = bool(request.form.get('menu_configuravel'))
+    produto.menu_total_unidades = _int_ou_none(
+        request.form.get('menu_total_unidades'))
+    produto.menu_max_por_item = _int_ou_none(
+        request.form.get('menu_max_por_item'))
 
     # Recriar itens. Antes de apagar, guarda as FKs atuais por (tipo, nome):
     # GRANDFATHER da linha existente (pos-revisao 19/07/2026) — componente
