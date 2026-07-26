@@ -242,12 +242,25 @@
   // Cada `.card-add[data-kind][data-id]…` é renderizado conforme a qtd no
   // carrinho. Clique em "Adicionar" → vira stepper. Stepper sincroniza o
   // carrinho e some quando qtd cai pra 0.
+  // Composição PADRÃO de um menu configurável no card da vitrine. O
+  // quick-add do card adiciona a pré-seleção — a mesma que a página do
+  // produto já vem marcada — pra as duas portas gerarem a MESMA linha de
+  // carrinho (sem isso o cliente ficaria com duas linhas do mesmo menu).
+  function compDoCardEl(el) {
+    var raw = el.getAttribute('data-menu-comp');
+    if (!raw) return null;
+    try {
+      var c = JSON.parse(raw);
+      return (c && c.length) ? c : null;
+    } catch (e) { return null; }
+  }
+
   function renderCardAdds() {
     var addsEls = document.querySelectorAll('.card-add[data-kind][data-id]');
     addsEls.forEach(function (el) {
       var kind = el.getAttribute('data-kind');
       var id = el.getAttribute('data-id');
-      var qtd = Carrinho.qtdDe(kind, id);
+      var qtd = Carrinho.qtdDe(kind, id, false, compDoCardEl(el));
       if (qtd > 0) {
         el.innerHTML =
           '<div class="stepper">' +
