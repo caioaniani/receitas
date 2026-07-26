@@ -92,6 +92,38 @@ def _serializar_receita(r):
     }
 
 
+def _anotar_menu(d, p, *, com_slots=False):
+    """Anota o bloco `menu` num Produto que é MENU CONFIGURÁVEL (26/07/2026)
+    e troca o `preco` exibido pelo preço REAL da pré-seleção.
+
+    O `preco_site` do menu continua sendo só o interruptor de publicação
+    (`produtos_publicados` filtra por ele) — o preço que o cliente vê e paga
+    é a soma do `preco_menu` de cada mini escolhido (decisão do dono).
+    Deixar os dois divergirem na tela seria mentir o preço.
+
+    Devolve False quando o menu NÃO pode ser vendido (algum mini da
+    pré-seleção sem `preco_menu`): fail-close — some da vitrine com WARNING
+    em vez de cobrar um preço que não é o dele. O admin vê o pendente em
+    vermelho na tela da cesta."""
+    from app.services import loja_menu
+    padrao = loja_menu.composicao_padrao(p)
+    preco_padrao = loja_menu.preco(p, padrao)
+    if preco_padrao is None or not padrao:
+        logger.warning('menu %r fora da vitrine: pré-seleção vazia ou sem '
+                       'preço por item cadastrado.', p.nome)
+        return False
+    total, teto = loja_menu.regras(p)
+    d['preco'] = float(preco_padrao)
+    d['menu'] = {
+        'total': total,
+        'max_por_item': teto,
+        'comp_padrao': loja_menu.compactar(padrao),
+    }
+    if com_slots:
+        d['menu']['slots'] = loja_menu.slots(p)
+    return True
+
+
 def _serializar_produto(p):
     return {
         'id': p.id,
