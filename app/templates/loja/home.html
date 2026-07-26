@@ -34,7 +34,9 @@
         <div class="card-corpo">
           <h3 class="card-nome">{{ it.nome }}</h3>
           {% if it.preco is not none %}
-          <div class="card-preco">R$ {{ '%.2f'|format(it.preco)|replace('.', ',') }}</div>
+          {# Menu configurável: o cliente monta, então o preço anunciado é
+             o MÍNIMO possível ("a partir de") — ver loja_catalogo. #}
+          <div class="card-preco">{% if it.preco_a_partir %}<small class="preco-apartir">a partir de</small> {% endif %}R$ {{ '%.2f'|format(it.preco)|replace('.', ',') }}</div>
           {% endif %}
         </div>
       </a>

@@ -575,6 +575,18 @@ a:hover { text-decoration: underline; }
 .menu-contador.ok { color: #1b7f4c; }
 .menu-contador.pendente { color: #b45309; }
 .menu-preco { font-size: 19px; font-weight: 700; color: var(--acento); }
+/* "a partir de" — menu configuravel: o preco anunciado e o MINIMO possivel
+   (o cliente monta como quiser). Discreto, acima/antes do numero. */
+.preco-apartir {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: .5px;
+  text-transform: lowercase;
+  color: var(--texto-suave);
+  line-height: 1.2;
+}
+
 /* Galeria de fotos do produto (26/07/2026). Trilho horizontal rolável —
    no celular as miniaturas rolam no lugar, nunca esticam o body. */
 .produto-galeria {

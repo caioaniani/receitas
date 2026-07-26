@@ -137,7 +137,21 @@ def _anotar_menu(d, p, *, com_slots=False):
     if not preco_padrao or preco_padrao <= 0:
         logger.warning('menu %r fora da vitrine: preço total zerado.', p.nome)
         return False
-    d['preco'] = float(preco_padrao)
+    # PREÇO EXIBIDO = "a partir de" (decisão do dono 26/07/2026): o cliente
+    # monta como quiser, então anunciar o preço da PRÉ-SELEÇÃO seria mostrar
+    # um valor que ele pode não pagar. O mínimo é o piso REAL — nenhuma
+    # montagem válida sai por menos. None aqui = cadastro impossível (total
+    # inalcançável com o teto): fail-close, igual aos outros motivos.
+    minimo = loja_menu.preco_minimo(p, slots_=slots)
+    if not minimo or minimo <= 0:
+        logger.warning('menu %r fora da vitrine: não dá pra fechar o total '
+                       'com o teto por item cadastrado.', p.nome)
+        return False
+    d['preco'] = float(minimo)
+    d['preco_a_partir'] = True
+    # O preço da pré-seleção continua exposto — é o que o montador mostra
+    # assim que a página abre, antes de o cliente mexer.
+    d['preco_padrao'] = float(preco_padrao)
     d['menu'] = {
         'total': total,
         'max_por_item': teto,

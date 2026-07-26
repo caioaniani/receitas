@@ -602,7 +602,13 @@ def _card(pdf, x, y, item, foto, card_h=None):
     pdf.set_xy(x + 2.5, y_preco)
     pdf.set_font('Helvetica', 'B', 9.5)
     pdf.set_text_color(*_C_PRIMARY)
-    pdf.cell(g.col_w - 5, 5, _latin1(_moeda(item['preco_venda'])))
+    # Menu configuravel: preco anunciado e o MINIMO possivel (dono
+    # 26/07/2026) — o "a partir de" avisa que o cliente monta e pode pagar
+    # mais. Sem o rotulo o numero mentiria pra quem escolhesse os caros.
+    _pv = _moeda(item['preco_venda'])
+    if item.get('preco_a_partir'):
+        _pv = 'a partir de ' + _pv
+    pdf.cell(g.col_w - 5, 5, _latin1(_pv))
 
 
 def _grid_categoria(pdf, itens_foto, card_h=None):
@@ -747,7 +753,8 @@ def _lista_categoria(pdf, itens):
             pdf.set_fill_color(255, 255, 255)
             pdf.rect(x, y0, g.linha_w, lh, style='FD',
                      round_corners=True, corner_radius=_RAIO)
-            preco = _latin1(_moeda(item['preco_venda']))
+            preco = _latin1(('a partir de ' if item.get('preco_a_partir')
+                             else '') + _moeda(item['preco_venda']))
             pdf.set_font('Helvetica', 'B', 9)
             w_preco = pdf.get_string_width(preco) + 2
             pdf.set_xy(x + 4, y0 + 2)

@@ -70,7 +70,7 @@
     <h1>{{ item.nome }}</h1>
 
     {% if item.preco is not none %}
-    <div class="produto-preco">R$ {{ '%.2f'|format(item.preco)|replace('.', ',') }}</div>
+    <div class="produto-preco">{% if item.preco_a_partir %}<small class="preco-apartir">a partir de</small> {% endif %}R$ {{ '%.2f'|format(item.preco)|replace('.', ',') }}</div>
     {% endif %}
 
     {% if item.sob_encomenda %}
@@ -272,7 +272,7 @@
         <div class="card-corpo">
           <h3 class="card-nome">{{ it.nome }}</h3>
           {% if it.preco is not none %}
-          <div class="card-preco">R$ {{ '%.2f'|format(it.preco)|replace('.', ',') }}</div>
+          <div class="card-preco">{% if it.preco_a_partir %}<small class="preco-apartir">a partir de</small> {% endif %}R$ {{ '%.2f'|format(it.preco)|replace('.', ',') }}</div>
           {% endif %}
         </div>
       </a>

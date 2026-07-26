@@ -920,7 +920,20 @@ def _cardapio_categorias(tipo):
             'menu_regra': ({'total': p.menu_total_unidades or 30,
                             'max': p.menu_max_por_item or 10}
                            if getattr(p, 'menu_configuravel', False) else None),
+            'preco_a_partir': False,      # sobrescrito abaixo em menu
         })
+        # MENU CONFIGURAVEL: o preco do cardapio vira o MINIMO possivel, com
+        # "a partir de" (dono 26/07/2026). O cliente monta como quiser, entao
+        # anunciar o preco fixo do cadastro seria prometer um valor que ele
+        # pode nao pagar. MESMO numero nos tres cardapios: o preco do menu
+        # sai do `preco_menu` dos componentes, que e unico (nao ha versao
+        # atacado/loja/site dele).
+        if getattr(p, 'menu_configuravel', False):
+            from app.services import loja_menu
+            minimo = loja_menu.preco_minimo(p)
+            if minimo:
+                categorias[cat][-1]['preco_venda'] = float(minimo)
+                categorias[cat][-1]['preco_a_partir'] = True
 
     regras = _regras_atacado() if tipo == 'atacado' else []
     # Ordem final das categorias (drag-and-drop do dono, 21/07/2026) — aqui

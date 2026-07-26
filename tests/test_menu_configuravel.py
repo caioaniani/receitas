@@ -133,14 +133,22 @@ def test_preco_none_quando_mini_escolhido_nao_tem_preco(app):
 
 # ── Vitrine ──────────────────────────────────────────────────────────────
 
-def test_vitrine_mostra_o_preco_da_pre_selecao(app):
-    """O preco_site do menu só PUBLICA; o preço exibido é o real (soma)."""
+def test_vitrine_anuncia_o_preco_MINIMO_a_partir_de(app):
+    """Decisão do dono 26/07/2026: "esse valor do cardápio, inclusive no
+    site, deveria ser o valor a partir de (mínimo possível)".
+
+    O cliente MONTA o menu, então anunciar o preço da pré-seleção seria
+    mostrar um valor que ele pode não pagar. O mínimo é o piso REAL:
+    nenhuma montagem válida sai por menos. Total 15 com teto 10 e preços
+    2/3/4 → 10x2 + 5x3 = 35 (a pré-seleção 5/5/5 daria 45)."""
     from app.extensions import db
     from app.services import loja_catalogo
     with app.app_context():
         menu, _ = _menu(db, precos=(2.0, 3.0, 4.0), padroes=(5, 5, 5))
         d = loja_catalogo.por_id_publicado('produto', menu.id)
-        assert d['preco'] == 45.0                 # 5*(2+3+4)
+        assert d['preco'] == 35.0
+        assert d['preco_a_partir'] is True
+        assert d['preco_padrao'] == 45.0          # a pré-seleção segue exposta
         assert d['menu']['total'] == 15
         assert d['menu']['max_por_item'] == 10
         assert len(d['menu']['slots']) == 3
@@ -560,3 +568,39 @@ def test_teto_explicito_continua_valendo(app):
         a, _b, _c = _pis(menu)
         assert loja_menu.regras(menu) == (15, 6)
         assert loja_menu.normalizar(menu, [[a, 15]]) == {a: 6}
+
+
+def test_preco_minimo_sem_teto_enche_tudo_no_mais_barato(app):
+    from app.extensions import db
+    from app.services import loja_menu
+    with app.app_context():
+        menu, _ = _menu(db, total=15, precos=(2.0, 3.0, 4.0))
+        menu.menu_max_por_item = None             # sem teto
+        db.session.commit()
+        assert loja_menu.preco_minimo(menu) == Decimal('30')   # 15 x 2
+
+
+def test_menu_com_total_inalcancavel_sai_da_vitrine(app):
+    """Cadastro impossível: 3 itens com teto 2 num menu de 15 — o cliente
+    nunca fecharia a seleção e ficaria travado na tela."""
+    from app.extensions import db
+    from app.services import loja_catalogo, loja_menu
+    with app.app_context():
+        menu, _ = _menu(db, total=15, teto=2)
+        assert loja_menu.preco_minimo(menu) is None
+        assert loja_catalogo.por_id_publicado('produto', menu.id) is None
+
+
+def test_cardapio_usa_o_minimo_com_a_partir_de(app):
+    from app.extensions import db
+    with app.app_context():
+        menu, _ = _menu(db, total=15, precos=(2.0, 3.0, 4.0))
+        menu.preco_atacado = 999                  # ignorado no menu
+        db.session.commit()
+    with app.test_request_context('/'):
+        from app.blueprints.main.routes import _cardapio_categorias
+        cats, _r = _cardapio_categorias('atacado')
+        alvo = [i for c in cats.values() for i in c
+                if i['nome'].startswith('Menu Degust')][0]
+        assert alvo['preco_venda'] == 35.0
+        assert alvo['preco_a_partir'] is True

@@ -458,7 +458,7 @@ footer p { margin: 0; }
                         <div class="card-name">{{ it.nome }}</div>
                         {% if it.descricao %}<div class="card-desc">{{ it.descricao }}</div>{% endif %}
                     </div>
-                    <span class="card-price">R$ {{ ('%.2f' % it.preco_venda) | replace('.', ',') }}</span>
+                    <span class="card-price">{% if it.preco_a_partir %}<small style="font-weight:400;font-size:.72em;">a partir de</small> {% endif %}R$ {{ ('%.2f' % it.preco_venda) | replace('.', ',') }}</span>
                 </div>
             </article>
             {% endfor %}
@@ -471,7 +471,7 @@ footer p { margin: 0; }
                     <div class="list-item-name">{{ it.nome }}</div>
                     {% if it.descricao %}<div class="list-item-desc">{{ it.descricao }}</div>{% endif %}
                 </div>
-                <span class="list-item-price">R$ {{ ('%.2f' % it.preco_venda) | replace('.', ',') }}</span>
+                <span class="list-item-price">{% if it.preco_a_partir %}<small style="font-weight:400;font-size:.72em;">a partir de</small> {% endif %}R$ {{ ('%.2f' % it.preco_venda) | replace('.', ',') }}</span>
             </div>
             {% endfor %}
         </div>
