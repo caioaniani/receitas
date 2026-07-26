@@ -33,10 +33,27 @@
       this.atualizarBadge();
     },
 
+    // Assinatura da composição de um MENU CONFIGURÁVEL (26/07/2026):
+    // [[pi_id, qtd], ...] → "12:5,13:7". Ordena por pi_id (numérico) pra a
+    // mesma escolha gerar sempre a mesma string. Espelha
+    // `loja_menu.chave` no servidor — a ordenação não precisa ser a MESMA
+    // string dos dois lados, mas as classes de equivalência sim (dois
+    // carrinhos idênticos têm que casar tanto aqui quanto lá).
+    _chaveComp: function (comp) {
+      if (!comp || !comp.length) return '';
+      return comp.slice()
+        .sort(function (a, b) { return (a[0] | 0) - (b[0] | 0); })
+        .map(function (p) { return (p[0] | 0) + ':' + (p[1] | 0); })
+        .join(',');
+    },
+
     // Chave de identidade da LINHA. `fatiado` entra na chave: fatiado e
-    // inteiro do mesmo pão são linhas distintas (não somam qtd).
-    _chaveItem: function (kind, id, fatiado) {
-      return kind + ':' + id + ':' + (fatiado ? 'f' : '');
+    // inteiro do mesmo pão são linhas distintas (não somam qtd). A
+    // composição do menu também: dois menus montados DIFERENTE não podem
+    // somar quantidade na mesma linha (o cliente receberia outra coisa).
+    _chaveItem: function (kind, id, fatiado, comp) {
+      return kind + ':' + id + ':' + (fatiado ? 'f' : '') + ':' +
+        this._chaveComp(comp);
     },
 
     adicionar: function (item, qtd) {
