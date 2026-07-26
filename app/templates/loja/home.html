@@ -48,18 +48,18 @@
           Esgotado hoje — compre pra outro dia →
         </a>
         {% else %}
+        {% if it.menu %}
+        {# Menu configurável: o card NÃO faz quick-add. O cliente precisa
+           montar (escolher 30 unidades) e, se ele já montou um customizado,
+           um botão de "+1" aqui criaria uma SEGUNDA linha com a pré-seleção
+           sem ele perceber (achado de revisão 26/07/2026). Manda pra página. #}
+        <a class="card-montar" href="{{ it.href }}">Montar o meu →</a>
+        {% else %}
         <div class="card-add"
              data-kind="{{ it.kind }}" data-id="{{ it.id }}"
              data-nome="{{ it.nome }}" data-preco="{{ it.preco }}"
              data-categoria="{{ it.categoria }}" data-imagem="{{ it.imagem }}"
-             {% if it.fatiavel %}data-fatiavel="1"{% endif %}
-             {%- if it.menu %}
-             {# Menu configurável: o quick-add do card leva a PRÉ-SELEÇÃO —
-                a mesma composição que a página do produto já vem marcada,
-                pra as duas portas caírem na MESMA linha de carrinho. #}
-             data-menu-comp="{{ it.menu.comp_padrao|tojson|forceescape }}"
-             data-menu-resumo="{{ it.menu.resumo_padrao|tojson|forceescape }}"
-             {%- endif %}>
+             {% if it.fatiavel %}data-fatiavel="1"{% endif %}>
           <!-- preenchido pelo JS (botão "Adicionar" ou stepper) -->
         </div>
         {% endif %}
