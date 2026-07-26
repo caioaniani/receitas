@@ -183,6 +183,12 @@ def validar(produto, comp):
     trava na tela — aqui é a autoridade (carrinho velho, aba parada, POST
     forjado). Nunca "conserta" em silêncio: o cliente refaz a escolha."""
     total, teto = regras(produto)
+    if not comp:
+        # Escolha inteira invalidada (o admin editou o menu depois que o
+        # cliente montou o dele — ver `normalizar`). Mensagem PRÓPRIA: dizer
+        # "você escolheu 0" seria confuso, ele escolheu 30.
+        return (f'O {produto.nome} mudou depois que você montou o seu. '
+                f'Monte de novo, por favor.')
     escolhido = sum(comp.values())
     if escolhido != total:
         return (f'O {produto.nome} precisa somar exatamente {total} unidades '
