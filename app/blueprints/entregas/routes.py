@@ -168,7 +168,12 @@ def _serializar_pedido_online(p):
             {'nome': i.nome, 'quantidade': i.quantidade,
              'preco_unitario': float(i.preco_unitario or 0), 'sku': '',
              'subtotal': float(i.subtotal or 0),
-             'fatiado': bool(i.fatiado)}   # sourdough pedido fatiado
+             'fatiado': bool(i.fatiado),   # sourdough pedido fatiado
+             # Menu configurável (26/07/2026): a composição que o CLIENTE
+             # montou. Sem isso a cozinha separa a cesta padrão e entrega
+             # o que ele NÃO escolheu.
+             'comp': [{'nome': c.nome, 'qtd': int(c.quantidade or 0)}
+                      for c in (getattr(i, 'componentes', None) or [])]}
             for i in p.itens
         ],
         'total': float(p.valor_total or 0),
