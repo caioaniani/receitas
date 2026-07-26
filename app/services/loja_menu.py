@@ -106,6 +106,10 @@ def slots(produto):
             'col': alvo[0],
             'alvo_id': alvo[1],
             'nome': pi.nome_resolvido,
+            # `preco` (float) é o que vai pro JSON da tela; `preco_dec`
+            # (Decimal) é o que a CONTA usa — dinheiro não passa por float
+            # (decisão B4 do CLAUDE.md).
+            'preco_dec': Decimal(pm) if pm is not None else None,
             'preco': float(pm) if pm is not None else None,
             # A pré-seleção é a quantidade do cadastro, já limitada pelo teto
             # (cadastro incoerente não pode nascer inválido na tela).
