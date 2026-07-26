@@ -180,7 +180,7 @@ def detalhe(id):
             'unidade': unidade,
             'custo_por_kg': info.get('custo_por_kg', 0) if item.tipo == 'mp' else None,
             # Preço por unidade dentro do menu configurável (26/07/2026).
-            'preco_menu': item.preco_menu,
+            'preco_menu': getattr(item, 'preco_menu', None),
         })
 
     custo_total = sum(i['custo_un'] * i['quantidade'] for i in itens_data)
