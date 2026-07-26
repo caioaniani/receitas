@@ -67,7 +67,48 @@
     <p class="produto-descricao">{{ item.descricao }}</p>
     {% endif %}
 
-    {% if item.itens %}
+    {% if item.menu %}
+    {# MENU CONFIGURÁVEL (26/07/2026, pedido do dono): a pré-seleção vem
+       marcada e o cliente ajusta as quantidades, com total OBRIGATÓRIO e
+       teto por item. O botão de comprar só libera quando o total bate; o
+       servidor revalida tudo (loja_menu + montar_itens). #}
+    <div class="produto-composicao menu-montador" id="menu-montador"
+         data-total="{{ item.menu.total }}"
+         data-max="{{ item.menu.max_por_item }}">
+      <h3>Monte seu menu</h3>
+      <p class="menu-regra">
+        Escolha <strong>{{ item.menu.total }} unidades</strong> no total —
+        as que você quiser, no máximo
+        <strong>{{ item.menu.max_por_item }} de cada</strong>.
+        Já deixamos uma sugestão marcada.
+      </p>
+      <ul class="menu-slots">
+        {% for s in item.menu.slots %}
+        <li class="menu-slot" data-pi="{{ s.pi_id }}"
+            data-preco="{{ s.preco }}" data-nome="{{ s.nome }}">
+          <div class="menu-slot-nome">
+            {{ s.nome }}
+            <small>R$ {{ '%.2f'|format(s.preco)|replace('.', ',') }} cada</small>
+          </div>
+          <div class="stepper menu-stepper">
+            <button type="button" data-acao="menos"
+                    aria-label="Menos {{ s.nome }}">−</button>
+            <input type="number" class="menu-qtd" inputmode="numeric"
+                   value="{{ s.padrao }}" min="0"
+                   max="{{ item.menu.max_por_item }}"
+                   aria-label="Quantidade de {{ s.nome }}">
+            <button type="button" data-acao="mais"
+                    aria-label="Mais {{ s.nome }}">+</button>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="menu-rodape">
+        <div class="menu-contador" id="menu-contador" aria-live="polite"></div>
+        <div class="menu-preco" id="menu-preco"></div>
+      </div>
+    </div>
+    {% elif item.itens %}
     <div class="produto-composicao">
       <h3>O que vem nessa cesta</h3>
       <ul>
