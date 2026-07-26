@@ -198,10 +198,29 @@ def _entrega_linha(pedido):
     return onde, quando
 
 
+def _comp_html(it):
+    """Composicao escolhida num MENU CONFIGURAVEL (26/07/2026), pra o cliente
+    conferir no e-mail o que ele montou. Vazio em item comum."""
+    comps = getattr(it, 'componentes', None) or []
+    if not comps:
+        return ''
+    txt = ' · '.join(f'{int(c.quantidade or 0)}x {c.nome}' for c in comps)
+    return (f'<br><span style="font-size:12px;color:#7a6a55;">{txt}</span>')
+
+
+def _comp_texto(it):
+    """Versao texto puro de `_comp_html` (e-mail sem HTML)."""
+    comps = getattr(it, 'componentes', None) or []
+    if not comps:
+        return ''
+    return ('\n     ' + ', '.join(
+        f'{int(c.quantidade or 0)}x {c.nome}' for c in comps))
+
+
 def _template_confirmacao(pedido, base):
     itens = ''.join(
         f'<tr><td style="padding:4px 0;">{it.quantidade}× {it.nome}'
-        f'{" (fatiado)" if it.fatiado else ""}</td>'
+        f'{" (fatiado)" if it.fatiado else ""}{_comp_html(it)}</td>'
         f'<td style="padding:4px 0;text-align:right;">{_fmt_brl(it.subtotal)}</td></tr>'
         for it in pedido.itens)
     onde, quando = _entrega_linha(pedido)
@@ -239,6 +258,7 @@ def _texto_confirmacao(pedido):
     linhas = '\n'.join(
         f'  {it.quantidade}x {it.nome}'
         f'{" (fatiado)" if it.fatiado else ""} — {_fmt_brl(it.subtotal)}'
+        f'{_comp_texto(it)}'
         for it in pedido.itens)
     return (
         f'Pagamento confirmado! Pedido {pedido.codigo}.\n\n'
@@ -252,7 +272,7 @@ def _texto_confirmacao(pedido):
 def _template_pedido_recebido(pedido, base):
     itens = ''.join(
         f'<tr><td style="padding:4px 0;">{it.quantidade}× {it.nome}'
-        f'{" (fatiado)" if it.fatiado else ""}</td>'
+        f'{" (fatiado)" if it.fatiado else ""}{_comp_html(it)}</td>'
         f'<td style="padding:4px 0;text-align:right;">{_fmt_brl(it.subtotal)}</td></tr>'
         for it in pedido.itens)
     onde, quando = _entrega_linha(pedido)
@@ -292,6 +312,7 @@ def _texto_pedido_recebido(pedido, base):
     linhas = '\n'.join(
         f'  {it.quantidade}x {it.nome}'
         f'{" (fatiado)" if it.fatiado else ""} — {_fmt_brl(it.subtotal)}'
+        f'{_comp_texto(it)}'
         for it in pedido.itens)
     link = f'{base}/loja/pedido/{pedido.codigo}/pagamento' if base else ''
     return (
