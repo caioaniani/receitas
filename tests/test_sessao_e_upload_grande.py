@@ -32,6 +32,14 @@ def test_csrf_nao_expira_por_tempo(app):
 
 def test_upload_acima_do_limite_avisa_o_tamanho(app, admin_user):
     """413 vira mensagem clara (com o limite em MB), não página crua."""
+    from app.extensions import db
+    from app.models import Receita
+    with app.app_context():
+        r_obj = Receita(nome='Pão da Foto', categoria='Paes', rendimento_qtd=1,
+                        rendimento_unidade='un')
+        db.session.add(r_obj)
+        db.session.commit()
+        rid = r_obj.id
     app.config['MAX_CONTENT_LENGTH'] = 1024          # 1 KB só pro teste
     # TESTING=True propaga a exceção; em prod ela cai no errorhandler. Queremos
     # exercitar o handler (é ele que o usuário vê).
@@ -41,7 +49,7 @@ def test_upload_acima_do_limite_avisa_o_tamanho(app, admin_user):
         s['_user_id'] = str(admin_user.id)
         s['_fresh'] = True
     grande = io.BytesIO(b'x' * 5000)                 # 5 KB > 1 KB
-    r = c.post('/cardapio-img/receita/1/upload',
+    r = c.post(f'/cardapio-img/receita/{rid}/upload',
                data={'imagem_arquivo': (grande, 'foto.jpg')},
                content_type='multipart/form-data', follow_redirects=True)
     corpo = r.get_data(as_text=True)
