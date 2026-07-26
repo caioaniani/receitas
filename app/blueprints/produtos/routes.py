@@ -322,6 +322,7 @@ def salvar_composicao(id):
             pm = parse_float_br(precos_menu[i]) if i < len(precos_menu) else None
         else:
             pm = precos_menu_atuais.get((tipo, nome))
+        extra = {'preco_menu': pm} if _menu_no_modelo() else {}
 
         item = ProdutoItem(
             produto_id=produto.id,
@@ -331,7 +332,7 @@ def salvar_composicao(id):
             produto_componente_id=produto_componente_id,
             materia_prima_id=materia_prima_id,
             quantidade=qtd,
-            preco_menu=pm,
+            **extra,
         )
         db.session.add(item)
 
