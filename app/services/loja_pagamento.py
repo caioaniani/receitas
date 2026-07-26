@@ -345,7 +345,7 @@ def _rebaixar_pedido(pedido, loja_id, referencia, pedido_ref, usuario_id=None):
     guarda de idempotencia (o chamador — reducao — controla) nem reserva
     (o pago ja consumiu a reserva fisica)."""
     from app.services.baixa_venda import aplicar_venda
-    from app.services.loja_estoque_reserva import item_sob_encomenda
+    from app.services.loja_estoque_reserva import composicao_escolhida, item_sob_encomenda
     total = {'baixado': 0, 'faltou': 0}
     for it in pedido.itens:
         if not (it.receita_id or it.produto_id):
@@ -362,7 +362,10 @@ def _rebaixar_pedido(pedido, loja_id, referencia, pedido_ref, usuario_id=None):
             loja_id, receita_id=it.receita_id, produto_id=it.produto_id,
             qtd=it.quantidade, canal='site', referencia=referencia,
             pedido_ref=pedido_ref, usuario_id=usuario_id,
-            nome_venda=it.nome, pular_sem_linha=True)
+            nome_venda=it.nome, pular_sem_linha=True,
+            # Menu configurável: rebaixa pela composição ESCOLHIDA (mesma do
+            # consumir/estorno) — nunca pelo cadastro da cesta.
+            composicao=composicao_escolhida(it))
         total['baixado'] += res['baixado']
         total['faltou'] += res['faltou']
     return total
