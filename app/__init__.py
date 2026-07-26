@@ -532,10 +532,17 @@ def create_app(config_class=None):
         # Embutidos same-origin com ?embed=1: detalhe do pedido + o painel de
         # pedidos (v1, em /entregas/painel-testes apos o swap de 26/06; tambem
         # /entregas/painel pra cobrir transicao — inocuo, so libera same-origin).
-        if (request.values.get('embed') and (
-                request.path.startswith('/admin/loja-online/pedidos')
+        # `request.args` (query string), NUNCA `request.values`: values inclui o
+        # FORM, e ler o form aqui re-dispara o parse do corpo — num upload acima
+        # do MAX_CONTENT_LENGTH isso levantava RequestEntityTooLarge DENTRO do
+        # after_request, ou seja, DEPOIS da resposta amigavel de 413 ja pronta,
+        # virando erro cru (achado 25/07/2026). O `?embed=1` sempre foi query
+        # param (base.html usa request.args). Path primeiro: curto-circuito
+        # barato, sem tocar em nada da request.
+        if ((request.path.startswith('/admin/loja-online/pedidos')
                 or request.path == '/entregas/painel'
-                or request.path == '/entregas/painel-testes')):
+                or request.path == '/entregas/painel-testes')
+                and request.args.get('embed')):
             response.headers['X-Frame-Options'] = 'SAMEORIGIN'
             response.headers['Content-Security-Policy'] = (
                 "default-src 'self'; "
