@@ -281,6 +281,11 @@ def montar_itens(itens_raw):
             # Sob encomenda (dono 21/07): pro checkout saber o lead do
             # carrinho (D+2) e pular a checagem de estoque por dia.
             'sob_encomenda': sob_encomenda,
+            # Menu configurável (26/07): a escolha JÁ sanitizada. None em
+            # item comum. É ela que o pedido persiste e que a baixa de
+            # estoque explode — nunca o cadastro da cesta.
+            'comp': comp,
+            'menu_resumo': menu_resumo,
         })
     return itens, avisos
 
