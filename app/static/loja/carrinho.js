@@ -286,6 +286,13 @@
       // Sourdough: mesmo no quick-add da vitrine o item nasce "fatiável"
       // (inteiro por padrão) pra o checkbox aparecer na linha do carrinho.
       fatiavel: !!el.getAttribute('data-fatiavel'),
+      // Menu configurável: quick-add leva a pré-seleção.
+      comp: compDoCardEl(el),
+      comp_resumo: (function () {
+        var raw = el.getAttribute('data-menu-resumo');
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch (e) { return null; }
+      })(),
     };
   }
 
