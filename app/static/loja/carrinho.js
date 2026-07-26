@@ -128,14 +128,15 @@
     //   posição, senão ela "pula" ao marcar/desmarcar);
     // - com linha do outro estado → SOMA nela e remove a origem (ex: tinha
     //   1 fatiado + 2 inteiro, marca o inteiro → 3 fatiado). Só item fatiável.
-    alternarFatiado: function (kind, id, deFatiado) {
+    alternarFatiado: function (kind, id, deFatiado, comp) {
       var itens = this.ler();
-      var kDe = this._chaveItem(kind, id, deFatiado);
+      var kDe = this._chaveItem(kind, id, deFatiado, comp);
       var novoFat = !deFatiado;
-      var kPara = this._chaveItem(kind, id, novoFat);
+      var kPara = this._chaveItem(kind, id, novoFat, comp);
       var iOrigem = -1, iDest = -1;
       for (var i = 0; i < itens.length; i++) {
-        var k = this._chaveItem(itens[i].kind, itens[i].id, itens[i].fatiado);
+        var k = this._chaveItem(itens[i].kind, itens[i].id, itens[i].fatiado,
+                                itens[i].comp);
         if (iOrigem < 0 && k === kDe) iOrigem = i;
         else if (iDest < 0 && k === kPara) iDest = i;
       }
