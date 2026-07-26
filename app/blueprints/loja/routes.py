@@ -1158,9 +1158,17 @@ def produto(slug_completo):
 
     from app.utils import hoje
     data_hoje = hoje()
-    data_max = data_hoje + timedelta(days=14)
-    data_padrao = data_hoje
-    if item['esgotado_hoje'] and item['tem_em_outros_dias']:
+    # SOB ENCOMENDA (D+2): o item é produzido pro pedido, então a primeira
+    # data possível é `hoje + ENCOMENDA_LEAD_DIAS` — a MESMA regra que o
+    # checkout aplica (`loja_checkout.datas_disponiveis(lead_dias=…)`).
+    # Sem isso o seletor abria em HOJE dizendo "✓ disponível pra essa data"
+    # e o cliente só descobria o bloqueio no checkout (26/07/2026).
+    lead = (loja_checkout.ENCOMENDA_LEAD_DIAS
+            if item.get('sob_encomenda') else 0)
+    data_min = data_hoje + timedelta(days=lead)
+    data_max = data_min + timedelta(days=14)
+    data_padrao = data_min
+    if lead == 0 and item['esgotado_hoje'] and item['tem_em_outros_dias']:
         for i in range(1, 15):
             d = data_hoje + timedelta(days=i)
             if loja_catalogo.tem_estoque_para_dia(kind, item_id, d):

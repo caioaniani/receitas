@@ -992,7 +992,13 @@ def cardapio_img_upload(tipo, id):
     from app.services import dropbox_storage
     from app.utils import comprimir_imagem
     try:
-        final = comprimir_imagem(data)
+        # 1600px (não os 700 do default): a foto do produto é o ARGUMENTO DE
+        # VENDA do site. A página do produto exibe ~830px de largura e tela
+        # retina pede o dobro em pixels reais — com 700px o navegador
+        # esticava 2,4x e a foto saía visivelmente pixelada (26/07/2026).
+        # 1600 q88 ≈ 250-450KB, servido pela CDN do Dropbox.
+        final = comprimir_imagem(data, max_size=CARDAPIO_IMG_MAX_PX,
+                                 quality=CARDAPIO_IMG_QUALITY)
         tamanho_kb = len(final) // 1024
         if dropbox_storage.disponivel():
             # Path deterministico — overwrite ao re-upload do mesmo item.
