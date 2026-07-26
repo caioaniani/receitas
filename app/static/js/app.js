@@ -1382,3 +1382,96 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 });
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Compressão de foto NO NAVEGADOR, antes do upload (25/07/2026).
+
+   Por que: a foto da fototeca do celular tem 5–15 MB. O servidor já reduz pra
+   700px (utils.comprimir_imagem), mas SÓ DEPOIS que o arquivo inteiro sobe —
+   então a subida ficava lenta e, no 4G, era cortada no meio: o corpo chegava
+   truncado, o campo csrf_token não chegava e o usuário via "Sessão de segurança
+   expirada [token-ausente · 0 campos]". Reduzindo aqui, sobe ~200 KB e acabou.
+
+   Uso: <input type="file" data-comprimir> (opcional data-max="1600").
+   FAIL-OPEN: qualquer erro/navegador antigo → sobe o arquivo original.
+   ────────────────────────────────────────────────────────────────────────── */
+(function () {
+    var MAX_PADRAO = 1600;      // lado maior; o servidor ainda reduz pra 700
+    var QUALIDADE = 0.85;
+
+    function suportado() {
+        return !!(window.HTMLCanvasElement && window.DataTransfer && window.File);
+    }
+
+    function carregarBitmap(file) {
+        // createImageBitmap aplica a orientação do EXIF (foto de celular
+        // deitada) e é bem mais rápido; <img> é o fallback.
+        if (window.createImageBitmap) {
+            try {
+                return createImageBitmap(file, { imageOrientation: 'from-image' });
+            } catch (e) { /* navegador sem a opção — cai no fallback */ }
+        }
+        return new Promise(function (ok, erro) {
+            var url = URL.createObjectURL(file);
+            var img = new Image();
+            img.onload = function () { URL.revokeObjectURL(url); ok(img); };
+            img.onerror = function () { URL.revokeObjectURL(url); erro(); };
+            img.src = url;
+        });
+    }
+
+    function comprimir(file, max) {
+        return carregarBitmap(file).then(function (bmp) {
+            var w = bmp.width, h = bmp.height;
+            if (!w || !h) throw new Error('sem dimensao');
+            var escala = Math.min(1, max / Math.max(w, h));
+            var cv = document.createElement('canvas');
+            cv.width = Math.round(w * escala);
+            cv.height = Math.round(h * escala);
+            cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+            if (bmp.close) bmp.close();
+            return new Promise(function (ok, erro) {
+                cv.toBlob(function (blob) {
+                    if (!blob) { erro(); return; }
+                    ok(blob);
+                }, 'image/jpeg', QUALIDADE);
+            });
+        });
+    }
+
+    document.addEventListener('change', function (ev) {
+        var input = ev.target;
+        if (!input || input.type !== 'file' || !input.hasAttribute('data-comprimir')) return;
+        var file = input.files && input.files[0];
+        if (!file || !/^image\//.test(file.type || '') || !suportado()) return;
+        if (file.size < 800 * 1024) return;        // já é pequena: não mexe
+
+        var max = parseInt(input.getAttribute('data-max'), 10) || MAX_PADRAO;
+        var aviso = document.createElement('small');
+        aviso.className = 'text-muted d-block mt-1 js-aviso-comprimir';
+        aviso.textContent = 'Otimizando a foto pra subir mais rápido…';
+        input.parentNode.insertBefore(aviso, input.nextSibling);
+        var form = input.form;
+        var botao = form && form.querySelector('button[type=submit], button:not([type])');
+        if (botao) botao.disabled = true;
+
+        comprimir(file, max).then(function (blob) {
+            // Só troca se REALMENTE ficou menor (evita piorar um JPEG já ótimo).
+            if (blob.size < file.size) {
+                var nome = (file.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg';
+                var dt = new DataTransfer();
+                dt.items.add(new File([blob], nome, { type: 'image/jpeg' }));
+                input.files = dt.files;
+                aviso.textContent = 'Foto otimizada: '
+                    + Math.round(file.size / 1024) + ' KB → '
+                    + Math.round(blob.size / 1024) + ' KB.';
+            } else {
+                aviso.remove();
+            }
+        }).catch(function () {
+            aviso.remove();          // fail-open: sobe o arquivo original
+        }).then(function () {
+            if (botao) botao.disabled = false;
+        });
+    });
+})();
