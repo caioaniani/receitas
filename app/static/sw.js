@@ -86,14 +86,12 @@ self.addEventListener('fetch', (event) => {
     // mostramos a tela "Sem conexão" — honesto e sem efeito colateral.
     event.respondWith(
         fetch(request)
-            .catch(() => caches.match(request).then((cached) =>
-                cached || new Response(
-                    '<!DOCTYPE html><html><body style="font-family:system-ui;padding:40px;text-align:center;color:#444">' +
-                    '<h2>Sem conexão</h2><p>Não foi possível carregar esta página. Verifique sua internet.</p>' +
-                    '<p><button onclick="location.reload()" style="padding:10px 20px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer">Tentar de novo</button></p>' +
-                    '</body></html>',
-                    { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-                )
+            .catch(() => new Response(
+                '<!DOCTYPE html><html><body style="font-family:system-ui;padding:40px;text-align:center;color:#444">' +
+                '<h2>Sem conexão</h2><p>Não foi possível carregar esta página. Verifique sua internet.</p>' +
+                '<p><button onclick="location.reload()" style="padding:10px 20px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer">Tentar de novo</button></p>' +
+                '</body></html>',
+                { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
             ))
     );
 });
