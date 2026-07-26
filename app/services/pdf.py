@@ -345,6 +345,11 @@ def _folha_pedido(pdf, p, via, data_fmt):
             pdf.cell(118, 6, f'  {nome}'[:80], border='B')
             pdf.cell(40, 6, _moeda(_campo_valor_item(it)) + '  ',
                      border='B', align='R', new_x='LMARGIN', new_y='NEXT')
+        if comp_linhas:
+            pdf.set_font('Helvetica', '', 8)
+            pdf.multi_cell(0, 4, _latin1('        ' + ' · '.join(comp_linhas)),
+                           new_x='LMARGIN', new_y='NEXT')
+            pdf.set_font('Helvetica', '', 10)
     pdf.ln(3)
 
     # Observacao
