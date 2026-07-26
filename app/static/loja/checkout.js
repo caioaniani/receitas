@@ -648,7 +648,10 @@
       document.getElementById('itens_json').value = JSON.stringify(
         atual.map(function (it) {
           return { kind: it.kind, id: it.id, qtd: it.qtd,
-                   fatiado: !!it.fatiado };
+                   fatiado: !!it.fatiado,
+                   // Menu configurável: a escolha tem que ir junto no
+                   // fallback do form (a sessão é a fonte primária).
+                   comp: (it.comp && it.comp.length) ? it.comp : null };
         }));
       enviando = true;
       var btn = document.getElementById('btn-finalizar');
