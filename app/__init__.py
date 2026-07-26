@@ -673,8 +673,27 @@ def create_app(config_class=None):
         # front distinguir "token de seguranca invalido" de erro real — ele
         # busca token novo em /auth/csrf-token e re-tenta em vez de falhar
         # com alert criptico.
+        # DIAGNÓSTICO (25/07/2026): o upload de foto da ficha continuou dando
+        # "sessão expirada" mesmo com a sessão permanente. A causa real está no
+        # `description` do Flask-WTF ("token is missing" = campo não chegou no
+        # corpo, ex. multipart truncado; "do not match"/"session token is
+        # missing" = cookie de sessão) — sem ela ficamos adivinhando. Loga o
+        # contexto e devolve um código curto pro usuário conseguir reportar.
+        motivo = str(getattr(e, 'description', '') or '')[:120]
+        campos = 0
+        try:                       # ler o form aqui pode reestourar (413)
+            campos = len(request.form)
+        except Exception:          # noqa: BLE001
+            campos = -1
+        logger.warning(
+            'CSRF falhou: motivo=%r path=%s ct=%s len=%s campos=%s '
+            'tem_cookie_sessao=%s',
+            motivo, request.path, request.content_type,
+            request.content_length, campos,
+            bool(request.cookies.get(app.config.get('SESSION_COOKIE_NAME',
+                                                    'session'))))
         if request.is_json:
-            return jsonify(ok=False, erro='csrf_expirada',
+            return jsonify(ok=False, erro='csrf_expirada', motivo=motivo,
                            msg='Sessão de segurança expirada — recarregue a '
                                'página e tente de novo.'), 400
         # Form HTML: volta pra tela de origem com aviso + token novo, no lugar
