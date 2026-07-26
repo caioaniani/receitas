@@ -681,6 +681,23 @@ def create_app(config_class=None):
               'código novo. Tente de novo.', 'warning')
         return redirect(destino)
 
+    @app.errorhandler(413)
+    def arquivo_grande(e):
+        """Upload acima do MAX_CONTENT_LENGTH. Sem este handler o usuario via a
+        pagina crua "Request Entity Too Large" e nao entendia que o problema era
+        o TAMANHO da foto (celular novo tira foto de 20MB+)."""
+        limite = app.config.get('MAX_CONTENT_LENGTH') or 0
+        mb = int(limite / (1024 * 1024)) if limite else '?'
+        msg = (f'Arquivo grande demais (o limite e {mb} MB). '
+               'Tire uma foto menor ou reduza a imagem antes de enviar.')
+        if request.is_json:
+            return jsonify(ok=False, erro='arquivo_grande', msg=msg), 413
+        from urllib.parse import urlparse
+        ref = request.referrer or ''
+        destino = ref if urlparse(ref).netloc == request.host else '/'
+        flash(msg, 'warning')
+        return redirect(destino)
+
     @app.errorhandler(403)
     def forbidden(e):
         return render_template('errors/403.html'), 403
