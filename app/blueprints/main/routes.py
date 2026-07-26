@@ -910,6 +910,16 @@ def cardapio_pdf_export():
     return resp
 
 
+# Foto de catálogo (receita/produto): resolução e qualidade da compressão.
+# 1600px, NÃO os 700 do default de `comprimir_imagem` — a foto do produto é o
+# argumento de venda do site: a página exibe ~830px de largura e tela retina
+# pede o dobro em pixels reais, então 700px saía visivelmente pixelado
+# (relatado pelo dono em 26/07/2026). 1600 q88 ≈ 250-450KB, servido pela CDN
+# do Dropbox. Fotos JÁ salvas continuam em 700 — pra melhorar, re-suba.
+CARDAPIO_IMG_MAX_PX = 1600
+CARDAPIO_IMG_QUALITY = 88
+
+
 @main_bp.route('/cardapio-img/<tipo>/<int:id>')
 def cardapio_img(tipo, id):
     """Serve imagem de receita/produto. Prioriza Dropbox URL (M6+).
