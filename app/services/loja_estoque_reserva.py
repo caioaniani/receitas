@@ -115,6 +115,12 @@ def _expandir_estoque(item):
         return []
     if item_sob_encomenda(item):
         return []
+    escolhida = composicao_escolhida(item)        # menu -> escolha do cliente
+    if escolhida is not None:
+        return [({col: cid}, int(round(qtd_compra * float(qtd_comp or 1))),
+                 nome, False)
+                for col, cid, nome, qtd_comp in escolhida
+                if int(round(qtd_compra * float(qtd_comp or 1))) > 0]
     if item.produto_id:
         from app.models import Produto
         from app.services.cestas import componentes_de_cesta
