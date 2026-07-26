@@ -331,6 +331,19 @@ def create_app(config_class=None):
                         code=301)
 
     @app.before_request
+    def _sessao_permanente():
+        """Sessao PERMANENTE (PERMANENT_SESSION_LIFETIME, 30d rolando).
+
+        Sem isto o cookie de sessao e "de navegador" e morre ao fechar/reciclar
+        a aba; o remember-me (1 ano) reloga numa sessao NOVA e o token CSRF da
+        pagina que ja estava aberta para de bater — o usuario leva "Sessao de
+        seguranca expirada" ao enviar o form (caso real 25/07/2026: subir foto
+        na ficha da receita). Nao afrouxa acesso: quem estava logado ja seguia
+        logado pelo remember-me."""
+        from flask import session
+        session.permanent = True
+
+    @app.before_request
     def assign_request_id():
         """Atribui ID curto por request pra correlacionar logs.
         Se o cliente mandou X-Request-ID (proxy / load balancer), usa esse."""
