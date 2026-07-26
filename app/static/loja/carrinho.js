@@ -640,6 +640,105 @@
     }
   }
 
+  // ── Montador do MENU CONFIGURÁVEL (26/07/2026) ──────────────────────
+  // "Menu degustação dos minis": pré-seleção marcada, cliente ajusta as
+  // quantidades e o total tem que bater EXATO (regra do dono). Isto aqui é
+  // conveniência de tela — quem valida de verdade é o servidor
+  // (`loja_menu.validar` no `montar_itens`); um POST forjado não passa.
+  var MenuMontador = (function () {
+    var raiz = null, total = 0, teto = 0;
+
+    function slots() {
+      return raiz ? Array.prototype.slice.call(
+        raiz.querySelectorAll('.menu-slot')) : [];
+    }
+
+    function qtdDoSlot(li) {
+      var v = parseInt(li.querySelector('.menu-qtd').value, 10);
+      if (isNaN(v) || v < 0) v = 0;
+      return Math.min(v, teto);
+    }
+
+    function somar() {
+      return slots().reduce(function (n, li) { return n + qtdDoSlot(li); }, 0);
+    }
+
+    var api = {
+      ativo: function () { return !!raiz; },
+      valido: function () { return !!raiz && somar() === total; },
+      comp: function () {
+        return slots().map(function (li) {
+          return [parseInt(li.getAttribute('data-pi'), 10), qtdDoSlot(li)];
+        }).filter(function (p) { return p[1] > 0; });
+      },
+      resumo: function () {
+        return slots().filter(function (li) { return qtdDoSlot(li) > 0; })
+          .map(function (li) {
+            return { nome: li.getAttribute('data-nome'), qtd: qtdDoSlot(li),
+                     preco: Number(li.getAttribute('data-preco')) || 0 };
+          });
+      },
+      preco: function () {
+        return slots().reduce(function (s, li) {
+          return s + (Number(li.getAttribute('data-preco')) || 0)
+            * qtdDoSlot(li);
+        }, 0);
+      },
+    };
+
+    function pintar() {
+      if (!raiz) return;
+      // Normaliza o que foi digitado à mão (o teto vale no input também).
+      slots().forEach(function (li) {
+        var inp = li.querySelector('.menu-qtd');
+        var v = String(qtdDoSlot(li));
+        if (inp.value !== v) inp.value = v;
+      });
+      var soma = somar();
+      var falta = total - soma;
+      var cont = document.getElementById('menu-contador');
+      if (cont) {
+        cont.textContent = soma + ' de ' + total + ' selecionadas' +
+          (falta > 0 ? ' — faltam ' + falta
+            : (falta < 0 ? ' — tire ' + (-falta) : ' ✓'));
+        cont.className = 'menu-contador' + (falta === 0 ? ' ok' : ' pendente');
+      }
+      var pEl = document.getElementById('menu-preco');
+      if (pEl) pEl.textContent = fmtBRL(api.preco());
+      var btn = document.getElementById('btn-comprar-produto');
+      if (btn) {
+        btn.disabled = falta !== 0;
+        btn.classList.toggle('menu-bloqueado', falta !== 0);
+      }
+    }
+
+    function iniciar() {
+      raiz = document.getElementById('menu-montador');
+      if (!raiz) return;
+      total = parseInt(raiz.getAttribute('data-total'), 10) || 0;
+      teto = parseInt(raiz.getAttribute('data-max'), 10) || 0;
+      raiz.addEventListener('click', function (e) {
+        var b = e.target.closest('.menu-stepper button[data-acao]');
+        if (!b) return;
+        e.preventDefault();
+        var li = b.closest('.menu-slot');
+        var inp = li.querySelector('.menu-qtd');
+        var novo = qtdDoSlot(li) + (b.getAttribute('data-acao') === 'mais'
+          ? 1 : -1);
+        inp.value = Math.max(0, Math.min(novo, teto));
+        pintar();
+      });
+      raiz.addEventListener('input', function (e) {
+        if (e.target.classList.contains('menu-qtd')) pintar();
+      });
+      pintar();
+    }
+
+    api.iniciar = iniciar;
+    return api;
+  })();
+  window.MenuMontador = MenuMontador;
+
   document.addEventListener('DOMContentLoaded', function () {
     if (document.getElementById('limpar-carrinho')) {
       // Pedido criado: o servidor já zerou a sessão. Limpa o cache local também
