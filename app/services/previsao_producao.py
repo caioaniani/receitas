@@ -586,9 +586,17 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             prod = Produto.query.get(pi.produto_id)
             if not (prod is not None and getattr(prod, 'sob_encomenda', False)):
                 continue
-            if pi.produto_id not in _cache_cesta:
-                _cache_cesta[pi.produto_id] = componentes_de_cesta(prod)
-            for col, comp_id, _nome, qtd_por in _cache_cesta[pi.produto_id]:
+            # Menu configurável (26/07/2026): a composição que vale é a
+            # ESCOLHIDA pelo cliente, gravada no pedido — o cadastro guarda
+            # só a pré-seleção e produziria a cesta errada. Não cacheia:
+            # varia por item de pedido, não por produto.
+            from app.services.loja_estoque_reserva import composicao_escolhida
+            comps_pi = composicao_escolhida(pi)
+            if comps_pi is None:
+                if pi.produto_id not in _cache_cesta:
+                    _cache_cesta[pi.produto_id] = componentes_de_cesta(prod)
+                comps_pi = _cache_cesta[pi.produto_id]
+            for col, comp_id, _nome, qtd_por in comps_pi:
                 if col != 'receita_id' or comp_id not in receitas:
                     continue
                 q = int(round(qtd * qtd_por))
