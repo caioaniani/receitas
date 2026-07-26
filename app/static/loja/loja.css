@@ -575,6 +575,31 @@ a:hover { text-decoration: underline; }
 .menu-contador.ok { color: #1b7f4c; }
 .menu-contador.pendente { color: #b45309; }
 .menu-preco { font-size: 19px; font-weight: 700; color: var(--acento); }
+/* Galeria de fotos do produto (26/07/2026). Trilho horizontal rolável —
+   no celular as miniaturas rolam no lugar, nunca esticam o body. */
+.produto-galeria {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 0 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.galeria-thumb {
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  overflow: hidden;
+  background: none;
+  cursor: pointer;
+  opacity: .72;
+}
+.galeria-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.galeria-thumb.ativa { border-color: var(--acento); opacity: 1; }
+.galeria-thumb:hover { opacity: 1; }
+
 /* Card de MENU na vitrine: convite a montar, no lugar do "+ Adicionar"
    (o menu exige escolher 30 unidades — não dá pra quick-add). */
 .card-montar {
