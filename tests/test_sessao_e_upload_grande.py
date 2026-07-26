@@ -55,3 +55,22 @@ def test_upload_acima_do_limite_avisa_o_tamanho(app, admin_user):
     corpo = r.get_data(as_text=True)
     assert 'grande demais' in corpo and 'MB' in corpo
     assert 'Sessão de segurança expirada' not in corpo   # não confunde mais
+
+
+def test_upload_cortado_no_meio_nao_diz_sessao_expirada(app, admin_user):
+    """POST multipart SEM nenhum campo = corpo não completou (conexão caiu).
+    A mensagem tem que falar de ENVIO, não de sessão — foi a mensagem enganosa
+    que fez perseguir sessão/cookie por horas (25/07/2026)."""
+    app.config['WTF_CSRF_ENABLED'] = True
+    app.config['PROPAGATE_EXCEPTIONS'] = False
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    # multipart declarado, corpo vazio = exatamente o que chega num envio cortado
+    r = c.post('/cardapio-img/receita/1/upload', data=b'',
+               content_type='multipart/form-data; boundary=x',
+               follow_redirects=True)
+    corpo = r.get_data(as_text=True)
+    assert 'envio da foto não completou' in corpo
+    assert 'Sessão de segurança expirada' not in corpo
