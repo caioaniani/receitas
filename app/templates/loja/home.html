@@ -52,7 +52,14 @@
              data-kind="{{ it.kind }}" data-id="{{ it.id }}"
              data-nome="{{ it.nome }}" data-preco="{{ it.preco }}"
              data-categoria="{{ it.categoria }}" data-imagem="{{ it.imagem }}"
-             {% if it.fatiavel %}data-fatiavel="1"{% endif %}>
+             {% if it.fatiavel %}data-fatiavel="1"{% endif %}
+             {%- if it.menu %}
+             {# Menu configurável: o quick-add do card leva a PRÉ-SELEÇÃO —
+                a mesma composição que a página do produto já vem marcada,
+                pra as duas portas caírem na MESMA linha de carrinho. #}
+             data-menu-comp="{{ it.menu.comp_padrao|tojson|forceescape }}"
+             data-menu-resumo="{{ it.menu.resumo_padrao|tojson|forceescape }}"
+             {%- endif %}>
           <!-- preenchido pelo JS (botão "Adicionar" ou stepper) -->
         </div>
         {% endif %}
