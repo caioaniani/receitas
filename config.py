@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 # Banco de dados: PostgreSQL em produção, SQLite local
 DB_DIR = os.path.join(os.path.expanduser('~'), '.padaria')
@@ -82,6 +83,16 @@ class Config:
     # (caso real 02/07/2026 no /telaindustriateste/enviar; antes ja tinha
     # acontecido no autosave via fetch, que ganhou retry via /auth/csrf-token).
     WTF_CSRF_TIME_LIMIT = None
+    # Sessao PERMANENTE (30 dias, rolando a cada request). Sem isso o cookie de
+    # sessao e "de navegador": morre ao fechar/reciclar a aba (celular mata a
+    # aba com frequencia). O login SOBREVIVE (remember-me de ~1 ano), mas o
+    # Flask-Login restaura o usuario numa sessao NOVA e VAZIA -> o token CSRF da
+    # pagina ja aberta nao bate mais -> "Sessao de seguranca expirada" ao
+    # enviar o form (caso real 25/07/2026: subir foto na ficha da receita).
+    # NAO afrouxa o acesso: o remember-me ja mantinha a pessoa logada por 1 ano;
+    # isto so faz o cookie de sessao (e o CSRF) durarem o suficiente pra nao
+    # quebrar o form no meio do uso.
+    PERMANENT_SESSION_LIFETIME = timedelta(days=30)
     VNDA_API_TOKEN = os.environ.get('VNDA_API_TOKEN', '')
     # Token dedicado ao catalogo (/products). O VNDA_API_TOKEN pode nao ter o
     # escopo "Produtos" habilitado (so pedidos -> 403 no /products). Se setado,
