@@ -17,7 +17,11 @@ def _jpeg(cor=(230, 220, 200)):
 def _menu_com_fotos(db):
     from app.models import CatalogoFoto, Produto, ProdutoItem, Receita
     p = Produto(nome='Menu Teste', categoria='Minis', preco_atacado=100,
-                ativo=True, imagem_blob=_jpeg(), imagem_mimetype='image/jpeg')
+                ativo=True, imagem_blob=_jpeg(), imagem_mimetype='image/jpeg',
+                # SÓ menu configurável explode (dono 26/07: "somente pros
+                # minis por enquanto").
+                menu_configuravel=True, menu_total_unidades=15,
+                menu_max_por_item=10)
     db.session.add(p)
     db.session.flush()
     receitas = []
@@ -103,3 +107,24 @@ def test_foto_que_nao_baixa_nao_derruba_o_pdf(app, monkeypatch):
         cats, regras = _cardapio_categorias('atacado')
         conteudo = svc.gerar_cardapio_pdf('atacado', cats, regras)
     assert conteudo[:4] == b'%PDF'
+
+
+def test_cesta_de_composicao_FIXA_nao_explode(app):
+    """Decisão do dono 26/07/2026: "não precisa para todas as cestas, queria
+    somente para os minis por enquanto". Uma cesta comum, mesmo com todos os
+    componentes fotografados, segue com o card de sempre."""
+    from app.extensions import db
+    from app.models import Produto
+    with app.app_context():
+        p, _receitas = _menu_com_fotos(db)
+        from app.blueprints.main.routes import _galeria_explodida
+        assert len(_galeria_explodida(p)) == 5      # é menu: explode
+
+        p.menu_configuravel = False                 # vira cesta comum
+        db.session.commit()
+        assert _galeria_explodida(p) == []
+
+        # e nem por ter componentes com foto uma cesta nova explode
+        outra = Produto.query.filter_by(nome='Menu Teste').first()
+        assert outra is not None
+        assert _galeria_explodida(outra) == []
