@@ -10,7 +10,9 @@
 //
 // Atualizar pra forçar refresh: bumpar VERSION + clientes recarregam.
 
-const VERSION = 'loja-v2';
+// loja-v3 (25/07/2026): bump obriga o 'activate' a APAGAR os caches v2 — que
+// ja tem HTML de checkout/conta com token CSRF velho gravado nos aparelhos.
+const VERSION = 'loja-v3';
 const CACHE_STATIC = `opao-loja-static-${VERSION}`;
 const CACHE_RUNTIME = `opao-loja-runtime-${VERSION}`;
 
