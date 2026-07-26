@@ -787,8 +787,18 @@ def _galeria_explodida(produto):
     2. por componente-receita: a CAPA dela + as extras dela.
 
     Cesta sem componentes e sem extras devolve [] (nada muda no PDF).
-    A capa do proprio produto NAO entra: ela ja e a foto do card."""
+    A capa do proprio produto NAO entra: ela ja e a foto do card.
+
+    SO MENU CONFIGURAVEL (decisao do dono 26/07/2026: "nao precisa para
+    todas as cestas, queria somente para os minis por enquanto"). A regra
+    fecha com o sentido do bloco: num menu que o cliente MONTA, as fotos
+    explodidas sao as OPCOES que ele pode escolher — numa cesta de
+    composicao fixa seriam so ilustracao. Se um dia uma cesta fixa precisar
+    explodir, o caminho e um checkbox proprio no cadastro, nao afrouxar
+    este gate (voltaria a explodir tudo)."""
     from app.models import CatalogoFoto
+    if not getattr(produto, 'menu_configuravel', False):
+        return []
     itens = getattr(produto, 'itens', None) or []
     extras_prod = (CatalogoFoto.query
                    .filter_by(kind='produto', item_id=produto.id)
