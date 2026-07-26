@@ -266,6 +266,47 @@
                 </div>
             </label>
         </div>
+        {# Menu degustacao CONFIGURAVEL (26/07/2026, pedido do dono) #}
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" name="menu_configuravel"
+                   id="menu-configuravel" value="1"
+                   {% if produto.menu_configuravel %}checked{% endif %}>
+            <label class="form-check-label" for="menu-configuravel">
+                <strong>Menu configuravel no site</strong>
+                <div class="text-muted small">
+                    No site, o cliente ajusta <strong>quantas unidades de cada
+                    item</strong> da composicao acima. A quantidade cadastrada
+                    vira a <strong>pre-selecao</strong>; ele precisa fechar o
+                    total exato e respeitar o maximo por item.
+                    O <strong>preco</strong> do menu passa a ser a
+                    <strong>soma do "Preco no menu"</strong> dos itens
+                    escolhidos — o "Preco Site" acima so serve pra
+                    <strong>publicar</strong> (precisa ser maior que zero).
+                    <span class="text-danger">Item sem "Preco no menu" tira o
+                    menu do ar</span> (nao vendemos sem saber o preco).
+                </div>
+            </label>
+        </div>
+        <div class="row g-2 mt-1 ms-4" id="menu-regras-campos">
+            <div class="col-6 col-md-3">
+                <label class="form-label small fw-bold mb-1"
+                       for="menu-total-unidades">Total obrigatorio (un)</label>
+                <input type="number" min="1" step="1" id="menu-total-unidades"
+                       name="menu_total_unidades"
+                       value="{{ produto.menu_total_unidades or '' }}"
+                       placeholder="30"
+                       class="form-control form-control-sm input-blue text-end">
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small fw-bold mb-1"
+                       for="menu-max-por-item">Maximo por item (un)</label>
+                <input type="number" min="1" step="1" id="menu-max-por-item"
+                       name="menu_max_por_item"
+                       value="{{ produto.menu_max_por_item or '' }}"
+                       placeholder="10"
+                       class="form-control form-control-sm input-blue text-end">
+            </div>
+        </div>
     </div>
 
     <!-- Observações / Pendências -->
