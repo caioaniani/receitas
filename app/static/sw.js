@@ -2,7 +2,13 @@
 // Cache estratégia: Network First para HTML/JSON (dados sempre frescos),
 // Cache First para assets estáticos (CSS, JS, fontes, imagens).
 
-const VERSION = 'v2';
+// v3 (25/07/2026): PARAMOS de cachear HTML. O HTML autenticado carrega o TOKEN
+// CSRF embutido; servir a pagina do cache (rede oscilando no celular) entregava
+// um token VELHO e todo envio de form morria em "Sessao de seguranca expirada"
+// — caso real: subir foto na ficha da receita. Cache de HTML logado tambem
+// deixava dado privado no aparelho depois do logout. Bump da versao apaga os
+// caches v2 no `activate` (limpa o HTML velho que ja esta nos aparelhos).
+const VERSION = 'v3';
 const CACHE_STATIC = `padaria-static-${VERSION}`;
 const CACHE_RUNTIME = `padaria-runtime-${VERSION}`;
 
