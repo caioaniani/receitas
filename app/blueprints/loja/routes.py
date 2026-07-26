@@ -851,8 +851,12 @@ def _set_carrinho_sessao(itens):
             continue
         pares_comp += len(comp or [])
         idx[chave] = len(norm)
-        norm.append({'kind': kind, 'id': iid, 'qtd': qtd,
-                     'fatiado': fatiado, 'comp': comp})
+        linha = {'kind': kind, 'id': iid, 'qtd': qtd, 'fatiado': fatiado}
+        # `comp` só entra quando existe: um `"comp":null` em cada uma das 60
+        # linhas possíveis desperdiçaria ~700 bytes dos ~4KB do cookie.
+        if comp:
+            linha['comp'] = comp
+        norm.append(linha)
     session['carrinho'] = norm
     session.modified = True
     return norm
