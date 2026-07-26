@@ -1778,6 +1778,25 @@ def _migrate_postgres(app):
                'treinamento_pergunta', 'treinamento'):
         _try(f"DROP TABLE IF EXISTS {_t} CASCADE")
 
+    # ── Menu degustação CONFIGURÁVEL no site (26/07/2026, pedido do dono) ──
+    # Cesta cujo cliente escolhe as quantidades de cada componente, com
+    # total FIXO ("30 minis, quais você quiser") e teto por componente. O
+    # preço é a SOMA do preço por unidade de cada mini escolhido (decisão do
+    # dono: "cadastrar preço por mini") — por isso `preco_menu` mora no
+    # ProdutoItem (preço DENTRO deste menu), não na Receita: os minis não
+    # são vendidos avulsos na vitrine e um `preco_site` neles os publicaria.
+    # `ProdutoItem.quantidade` (já existente) continua sendo a PRÉ-SELEÇÃO.
+    # Commit 1 do procedimento de 2 commits (CLAUDE.md "Schema migrations"):
+    # este ALTER deploya ANTES do modelo, confirmado por /api/claude/deploy.
+    _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS "
+         "menu_configuravel BOOLEAN NOT NULL DEFAULT FALSE")
+    _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS "
+         "menu_total_unidades INTEGER")
+    _try("ALTER TABLE produto ADD COLUMN IF NOT EXISTS "
+         "menu_max_por_item INTEGER")
+    _try("ALTER TABLE produto_item ADD COLUMN IF NOT EXISTS "
+         "preco_menu NUMERIC(10, 2)")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
