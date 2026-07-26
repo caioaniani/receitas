@@ -94,9 +94,10 @@ def duplicar(id):
         sob_encomenda=original.sob_encomenda,
         # Menu configuravel: as travas viajam com a copia (o preco_site nao
         # vem, entao a copia so publica quando o admin revisar).
-        menu_configuravel=original.menu_configuravel,
-        menu_total_unidades=original.menu_total_unidades,
-        menu_max_por_item=original.menu_max_por_item,
+        **({'menu_configuravel': original.menu_configuravel,
+            'menu_total_unidades': original.menu_total_unidades,
+            'menu_max_por_item': original.menu_max_por_item}
+           if _menu_no_modelo() else {}),
     )
     db.session.add(copia)
     db.session.flush()
