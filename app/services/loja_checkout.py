@@ -212,6 +212,8 @@ def montar_itens(itens_raw):
     exatos) e o preço RECALCULADO pela soma do preço por mini. `comp` ausente
     = pré-seleção do cadastro.
     """
+    from app.models import Produto
+    from app.services import loja_menu
     itens = []
     avisos = []
     for raw in (itens_raw or []):
@@ -236,6 +238,31 @@ def montar_itens(itens_raw):
             avisos.append(f'"{cat["nome"]}" esgotou e foi removido do pedido.')
             continue
         preco = Decimal(str(cat['preco']))
+        # ── Menu configurável: escolha do cliente é lei do SERVIDOR ──
+        # Re-sanitiza contra o cadastro (slot de outro menu / qtd acima do
+        # teto caem), valida o total obrigatório e RECALCULA o preço pela
+        # soma do preço por mini. Nunca conserta em silêncio: escolha errada
+        # (aba parada, carrinho velho, POST forjado) sai do pedido com aviso.
+        comp = None
+        menu_resumo = None
+        if kind == 'produto' and cat.get('menu'):
+            menu_prod = Produto.query.get(item_id)
+            if not loja_menu.eh_menu(menu_prod):
+                avisos.append('Um item saiu de catálogo e foi removido do '
+                              'pedido.')
+                continue
+            comp = loja_menu.normalizar(menu_prod, raw.get('comp'))
+            erro = loja_menu.validar(menu_prod, comp)
+            if erro:
+                avisos.append(erro)
+                continue
+            preco_menu = loja_menu.preco(menu_prod, comp)
+            if preco_menu is None:
+                avisos.append(f'"{cat["nome"]}" está sem preço configurado e '
+                              'foi removido do pedido.')
+                continue
+            preco = preco_menu
+            menu_resumo = loja_menu.resumo(menu_prod, comp)
         # "Fatiado?" sanitizado no SERVIDOR: só vale quando o cliente pediu E
         # o item de fato oferece a opção (sourdough, `cat['fatiavel']`) — não
         # confia no navegador (um POST forjado com fatiado=true num item que
