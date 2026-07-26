@@ -251,11 +251,12 @@ def salvar_composicao(id):
     # de cada componente, com total obrigatorio e teto por item; o preco vira
     # a soma do `preco_menu` do que ele escolher. Campo em branco = usa o
     # default do `loja_menu` (30 un / 10 por item, os numeros do dono).
-    produto.menu_configuravel = bool(request.form.get('menu_configuravel'))
-    produto.menu_total_unidades = _int_ou_none(
-        request.form.get('menu_total_unidades'))
-    produto.menu_max_por_item = _int_ou_none(
-        request.form.get('menu_max_por_item'))
+    if _menu_no_modelo():
+        produto.menu_configuravel = bool(request.form.get('menu_configuravel'))
+        produto.menu_total_unidades = _int_ou_none(
+            request.form.get('menu_total_unidades'))
+        produto.menu_max_por_item = _int_ou_none(
+            request.form.get('menu_max_por_item'))
 
     # Recriar itens. Antes de apagar, guarda as FKs atuais por (tipo, nome):
     # GRANDFATHER da linha existente (pos-revisao 19/07/2026) — componente
