@@ -752,6 +752,7 @@
     ligarDrawer();             // handlers do drawer (1x por página)
     Carrinho.atualizarBadge(); // renderiza cards iniciais
     ligarBotoesAdd();
+    MenuMontador.iniciar();    // página de menu configurável (no-op nas demais)
     renderCarrinho();
   });
 })();
