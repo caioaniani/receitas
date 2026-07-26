@@ -192,6 +192,16 @@ def detalhe(id):
                            produto_custos=produto_custos)
 
 
+def _menu_no_modelo():
+    """True quando o MODELO já tem as colunas do menu configurável.
+
+    Procedimento de 2 commits (CLAUDE.md "Schema migrations"): o ALTER
+    deploya ANTES do modelo. Entre os dois deploys esta tela não pode
+    quebrar — ler/gravar as colunas fica atrás desta guarda. Depois que o
+    modelo sobe, tudo funciona normalmente e a guarda vira sempre True."""
+    return hasattr(Produto, 'menu_configuravel')
+
+
 def _int_ou_none(bruto):
     """Inteiro POSITIVO do form, ou None (campo em branco / lixo). Usado nas
     travas do menu configurável — em branco significa "usa o default do
