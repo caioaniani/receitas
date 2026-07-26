@@ -401,7 +401,8 @@
       var linha = chk.closest('.cart-drawer-linha');
       var fatiado = linha.getAttribute('data-fatiado') === '1';
       Carrinho.alternarFatiado(linha.getAttribute('data-kind'),
-                               linha.getAttribute('data-id'), fatiado);
+                               linha.getAttribute('data-id'), fatiado,
+                               lerCompDaLinha(linha));
       renderDrawer();
     });
     // ESC fecha
