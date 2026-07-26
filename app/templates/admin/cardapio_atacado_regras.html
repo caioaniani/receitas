@@ -132,10 +132,17 @@
         </div>
 
         <hr>
-        <h6 class="fw-semibold"><i class="bi bi-arrows-move"></i> Ordem das seções do cardápio</h6>
+        {# Ancora `#ordem-cardapio`: o atalho "Ordenar categorias" da tela do
+           cardapio (os TRES tipos) aponta pra ca. O dono nao achava como
+           ordenar o cardapio do SITE porque o acesso so existia no Atacado
+           e a tela se chama "regras do atacado" (26/07/2026). #}
+        <h6 class="fw-semibold" id="ordem-cardapio">
+            <i class="bi bi-arrows-move"></i> Ordem das seções do cardápio
+        </h6>
         <p class="small text-muted mb-2">
             Arraste para reordenar (ou use as setas). A ordem vale para a tela
-            e para os dois PDFs, nos três tipos. Salve para aplicar.
+            e para os dois PDFs, e é a <strong>mesma nos três cardápios</strong>
+            — atacado, loja e site. Salve para aplicar.
         </p>
         <div class="row g-3">
             <div class="col-md-6">
@@ -152,7 +159,12 @@
                     {% endfor %}
                 </ul>
                 <input type="hidden" name="ordem_categorias" id="inp-ordem-categorias">
-                <div class="form-text">Categoria nova entra no fim, em ordem alfabética.</div>
+                <div class="form-text">
+                    Vale pros <strong>três cardápios</strong> (atacado, loja e
+                    site). A lista traz as categorias dos três — uma que só
+                    existe no site também pode ser arrastada aqui.
+                    Categoria nova entra no fim, em ordem alfabética.
+                </div>
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold small">Seções da página</label>

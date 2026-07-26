@@ -382,6 +382,15 @@ footer p { margin: 0; }
     <a href="{{ url_for('main.cardapio_img_revisar') }}" class="tipo-btn">
         <i class="bi bi-check2-square"></i> Revisar fotos
     </a>
+    {# A ORDEM das categorias vale pros TRES cardapios (a fonte unica
+       `_cardapio_categorias` aplica `_aplicar_ordem_categorias` em atacado,
+       loja e site). O acesso a ela so aparecia no Atacado, entao o dono nao
+       achava como ordenar o cardapio do SITE (26/07/2026) — agora o atalho
+       aparece nos tres, ancorado no bloco de ordenacao. #}
+    <a href="{{ url_for('main.cardapio_atacado_regras') }}#ordem-cardapio"
+       class="tipo-btn" title="Arraste as categorias — a ordem vale pros três cardápios">
+        <i class="bi bi-arrows-move"></i> Ordenar categorias
+    </a>
     {% if tipo == 'atacado' %}
     <a href="{{ url_for('main.cardapio_atacado_regras') }}" class="tipo-btn">
         <i class="bi bi-pencil-square"></i> Editar regras

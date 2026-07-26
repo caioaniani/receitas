@@ -199,3 +199,44 @@ def test_processar_logo_branco_vira_png_transparente(app):
         assert uri.startswith('data:image/png;base64,')
         fiel = _processar_logo_cardapio(_png_preto_no_branco(), branco=False)
         assert fiel.startswith('data:image/jpeg;base64,')  # opaco = JPEG
+
+
+# ── Descoberta da ordenação de categorias (26/07/2026) ───────────────────
+# O dono pediu "um drag and drop no cardápio PDF site pra ordenar quais
+# categorias vêm na frente" — o controle JÁ existia e JÁ valia pro site,
+# mas o acesso só aparecia no cardápio de Atacado.
+
+def test_ordem_das_categorias_vale_para_o_site(app):
+    """A fonte única aplica a ordem salva nos TRÊS tipos — é o que torna
+    desnecessário um segundo drag-and-drop só pro site."""
+    import json
+
+    from app.extensions import db
+    from app.models import AppConfig, Produto
+    with app.app_context():
+        for nome, cat in (('Pao A', 'Zebra'), ('Pao B', 'Abelha')):
+            db.session.add(Produto(nome=nome, categoria=cat, ativo=True,
+                                   preco_site=10, preco_atacado=10,
+                                   preco_loja=10))
+        AppConfig.set('cardapio_ordem_categorias',
+                      json.dumps(['Zebra', 'Abelha']))
+        db.session.commit()
+    with app.test_request_context('/'):
+        from app.blueprints.main.routes import _cardapio_categorias
+        for tipo in ('atacado', 'loja', 'site'):
+            cats, _r = _cardapio_categorias(tipo)
+            ordem = [c for c in cats if c in ('Zebra', 'Abelha')]
+            assert ordem == ['Zebra', 'Abelha'], tipo   # não é alfabética
+
+
+def test_atalho_de_ordenar_aparece_nos_tres_cardapios(app, admin_user):
+    """Antes só o Atacado tinha link pra tela de ordenação — por isso o dono
+    achou que não dava pra ordenar o cardápio do site."""
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    for tipo in ('atacado', 'loja', 'site'):
+        corpo = c.get(f'/cardapio?tipo={tipo}').get_data(as_text=True)
+        assert 'Ordenar categorias' in corpo, tipo
+        assert '#ordem-cardapio' in corpo, tipo
