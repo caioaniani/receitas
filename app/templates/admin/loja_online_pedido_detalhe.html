@@ -69,7 +69,14 @@
           <tbody>
             {% for it in p.itens %}
             <tr>
-              <td>{{ it.quantidade }}× {{ it.nome }}{% if it.fatiado %} <span class="badge text-bg-warning">🔪 fatiado</span>{% endif %}</td>
+              <td>{{ it.quantidade }}× {{ it.nome }}{% if it.fatiado %} <span class="badge text-bg-warning">🔪 fatiado</span>{% endif %}
+                {%- if it.componentes %}
+                {# Menu configuravel (26/07/2026): o que o CLIENTE montou. #}
+                <div class="small text-muted">
+                  {% for c in it.componentes %}{{ c.quantidade }}x {{ c.nome }}{% if not loop.last %} · {% endif %}{% endfor %}
+                </div>
+                {%- endif %}
+              </td>
               <td class="text-end text-muted small">R$ {{ '%.2f'|format(it.preco_unitario)|replace('.', ',') }} un</td>
               <td class="text-end fw-bold">R$ {{ '%.2f'|format(it.subtotal)|replace('.', ',') }}</td>
             </tr>
