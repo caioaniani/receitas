@@ -1607,3 +1607,44 @@ def cancelados_estorno():
     return jsonify(ok=True, dia=dia.isoformat(), n_cancelados=len(linhas),
                    valor_total=round(sum(x.get('valor') or 0 for x in linhas), 2),
                    alertas_estoque=alertas, pedidos=linhas)
+
+
+@claude_api_bp.route('/echo-upload', methods=['POST'])
+@_claude_auth_required
+def echo_upload():
+    """Diagnostico de UPLOAD: devolve exatamente o que o servidor RECEBEU do
+    corpo da request (25/07/2026 — "Sessao de seguranca expirada" ao subir foto
+    na ficha, com [token-ausente · 0 campos] = corpo chegando VAZIO).
+
+    Permite testar de fora (curl) sem precisar do dono repetir o teste: mostra
+    Content-Length/Transfer-Encoding/boundary, quantos campos e arquivos o
+    Werkzeug conseguiu parsear e `wsgi.input_terminated` — que e o que decide se
+    um corpo CHUNKED e lido ou vira 0 byte atras do proxy. Read-only (nao grava
+    nada, nao toca banco)."""
+    env = request.environ
+    try:
+        campos = {k: (v[:40] if isinstance(v, str) else str(v)[:40])
+                  for k, v in request.form.items()}
+        erro_form = None
+    except Exception as exc:  # noqa: BLE001
+        campos, erro_form = {}, f'{type(exc).__name__}: {exc}'[:200]
+    arquivos = {}
+    try:
+        for nome, fs in request.files.items():
+            dados = fs.read()
+            arquivos[nome] = {'filename': fs.filename, 'bytes': len(dados),
+                              'mimetype': fs.mimetype}
+    except Exception as exc:  # noqa: BLE001
+        arquivos = {'_erro': f'{type(exc).__name__}: {exc}'[:200]}
+    return jsonify(
+        ok=True,
+        content_length=request.content_length,
+        content_type=request.content_type,
+        transfer_encoding=request.headers.get('Transfer-Encoding'),
+        wsgi_input_terminated=bool(env.get('wsgi.input_terminated')),
+        servidor=env.get('SERVER_SOFTWARE'),
+        max_content_length=current_app.config.get('MAX_CONTENT_LENGTH'),
+        n_campos=len(campos), campos=campos, erro_form=erro_form,
+        n_arquivos=len([k for k in arquivos if not k.startswith('_')]),
+        arquivos=arquivos,
+    )
