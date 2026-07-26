@@ -476,7 +476,18 @@
         // SERVIDOR revalida tudo (`loja_menu` + `montar_itens`).
         var menu = window.MenuMontador;
         var comp = (menu && menu.ativo()) ? menu.comp() : null;
-        if (menu && menu.ativo() && !menu.valido()) return;
+        if (menu && menu.ativo() && !menu.valido()) {
+          // Nunca sair em silêncio: leva o cliente até o contador e pisca
+          // o que falta (antes o clique não fazia NADA e ele ficava sem
+          // saber por quê — achado de revisão 26/07/2026).
+          var cont = document.getElementById('menu-contador');
+          if (cont) {
+            cont.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            cont.classList.add('piscando');
+            setTimeout(function () { cont.classList.remove('piscando'); }, 1200);
+          }
+          return;
+        }
         Carrinho.adicionar({
           kind: btn.getAttribute('data-kind'),
           id: btn.getAttribute('data-id'),
