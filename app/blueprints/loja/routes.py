@@ -760,6 +760,9 @@ def _resolver_prefill_carrinho(add):
             'kind': kind, 'id': iid, 'nome': item['nome'],
             'preco': item['preco'], 'imagem': item.get('imagem') or '',
             'categoria': item.get('categoria') or '', 'qtd': qtd,
+            # Menu configurável: carrega a pré-seleção pra a linha do
+            # carrinho nascer com a MESMA chave das outras portas.
+            'menu': item.get('menu'),
         })
     return itens, esgotados
 
