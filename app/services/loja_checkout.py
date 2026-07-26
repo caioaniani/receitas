@@ -262,7 +262,6 @@ def montar_itens(itens_raw):
                               'foi removido do pedido.')
                 continue
             preco = preco_menu
-            menu_resumo = loja_menu.resumo(menu_prod, comp)
         # "Fatiado?" sanitizado no SERVIDOR: só vale quando o cliente pediu E
         # o item de fato oferece a opção (sourdough, `cat['fatiavel']`) — não
         # confia no navegador (um POST forjado com fatiado=true num item que
