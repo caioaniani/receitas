@@ -60,13 +60,14 @@
       qtd = parseInt(qtd, 10) || 1;
       if (qtd < 1) qtd = 1;
       var fatiado = !!item.fatiado;
+      var comp = (item.comp && item.comp.length) ? item.comp : null;
       var antesQtd = this.contar();
       var itens = this.ler();
-      var k = this._chaveItem(item.kind, item.id, fatiado);
+      var k = this._chaveItem(item.kind, item.id, fatiado, comp);
       var achou = false;
       for (var i = 0; i < itens.length; i++) {
         if (this._chaveItem(itens[i].kind, itens[i].id,
-                            itens[i].fatiado) === k) {
+                            itens[i].fatiado, itens[i].comp) === k) {
           itens[i].qtd += qtd;
           achou = true;
           break;
@@ -78,6 +79,10 @@
           preco: Number(item.preco) || 0, imagem: item.imagem || '',
           categoria: item.categoria || '', qtd: qtd, fatiado: fatiado,
           fatiavel: !!item.fatiavel,   // mostra o checkbox na linha do carrinho
+          // Menu configurável: a escolha do cliente ([[pi_id, qtd], ...]) e
+          // o resumo legível pra linha do carrinho. O servidor re-sanitiza.
+          comp: comp,
+          comp_resumo: item.comp_resumo || null,
         });
       }
       this.salvar(itens);
