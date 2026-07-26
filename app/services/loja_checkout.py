@@ -290,6 +290,38 @@ def montar_itens(itens_raw):
     return itens, avisos
 
 
+def _persistir_composicao_menu(poi, produto_id, comp):
+    """Congela a composição escolhida do menu como filhos do item do pedido
+    (`PedidoOnlineItemComponente`). Snapshot de nome e preço por unidade —
+    reajuste posterior do cadastro não reescreve o que foi cobrado.
+
+    Slot que sumiu do cadastro entre o carrinho e o commit é ignorado (o
+    `montar_itens` já re-sanitizou contra o cadastro imediatamente antes)."""
+    from app.models import PedidoOnlineItemComponente, Produto
+    from app.services import loja_menu
+    prod = Produto.query.get(produto_id) if produto_id else None
+    if prod is None:
+        return
+    por_id = {s['pi_id']: s for s in loja_menu.slots(prod)}
+    for pi_id, qtd in sorted(comp.items()):
+        s = por_id.get(int(pi_id))
+        if not s or qtd <= 0:
+            continue
+        poi.componentes.append(PedidoOnlineItemComponente(
+            produto_item_id=s['pi_id'],
+            tipo={'receita_id': 'receita', 'produto_id': 'produto',
+                  'materia_prima_id': 'mp'}[s['col']],
+            receita_id=s['alvo_id'] if s['col'] == 'receita_id' else None,
+            produto_componente_id=(s['alvo_id'] if s['col'] == 'produto_id'
+                                   else None),
+            materia_prima_id=(s['alvo_id'] if s['col'] == 'materia_prima_id'
+                              else None),
+            nome=s['nome'][:200], quantidade=int(qtd),
+            preco_unitario=(Decimal(str(s['preco']))
+                            if s['preco'] is not None else None),
+        ))
+
+
 def _email_valido(email):
     email = (email or '').strip()
     return '@' in email and '.' in email.split('@')[-1] and len(email) >= 6
@@ -732,13 +764,19 @@ def criar_pedido(form, itens_raw, *, base=None):
     db.session.add(pedido)
     db.session.flush()
     for it in itens:
-        pedido.itens.append(PedidoOnlineItem(
+        poi = PedidoOnlineItem(
             kind=it['kind'],
             receita_id=it['receita_id'], produto_id=it['produto_id'],
             nome=it['nome'], preco_unitario=it['preco'],
             quantidade=it['qtd'], subtotal=it['subtotal'],
             fatiado=it.get('fatiado') or None,   # None = inteiro (compat)
-        ))
+        )
+        # Menu configurável: congela a composição ESCOLHIDA no pedido. É ela
+        # que a baixa de estoque e a produção vão ler — o cadastro da cesta
+        # guarda só a pré-seleção (26/07/2026).
+        if it.get('comp'):
+            _persistir_composicao_menu(poi, it['produto_id'], it['comp'])
+        pedido.itens.append(poi)
     pedido.recalcular_total()
     db.session.flush()
     # Reserva estoque ANTES do commit (race condition no cutover loja
