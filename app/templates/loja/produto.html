@@ -54,8 +54,12 @@
     <button type="button" class="galeria-thumb{% if loop.first %} ativa{% endif %}"
             data-url="{{ url }}"
             aria-label="Ver foto {{ loop.index }} de {{ item.imagens|length }}">
+      {# width/height REAIS no atributo: sem CSS (asset velho no cache do
+         aparelho) o navegador usa o tamanho intrinseco e a foto de 1600px
+         estoura a pagina — foi o que aconteceu em 26/07/2026. Com os
+         atributos, o pior caso e uma miniatura de 72px sem borda. #}
       <img src="{{ url }}" alt="{{ item.nome }} — foto {{ loop.index }}"
-           loading="lazy">
+           width="72" height="72" loading="lazy">
     </button>
     {% endfor %}
   </div>
