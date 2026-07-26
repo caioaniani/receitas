@@ -552,6 +552,7 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     # demais itens do mesmo pedido saem da prateleira e não produzem aqui.
     # Cesta explode em receita (mesmo padrão do B2B). Divulgação fica fora.
     from app.models import PedidoOnline, PedidoOnlineItem
+    from app.services.loja_estoque_reserva import composicao_escolhida
     enc_rows = (db.session.query(PedidoOnlineItem, PedidoOnline.data_entrega)
                 .join(PedidoOnline,
                       PedidoOnlineItem.pedido_id == PedidoOnline.id)
@@ -590,7 +591,6 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             # ESCOLHIDA pelo cliente, gravada no pedido — o cadastro guarda
             # só a pré-seleção e produziria a cesta errada. Não cacheia:
             # varia por item de pedido, não por produto.
-            from app.services.loja_estoque_reserva import composicao_escolhida
             comps_pi = composicao_escolhida(pi)
             if comps_pi is None:
                 if pi.produto_id not in _cache_cesta:
