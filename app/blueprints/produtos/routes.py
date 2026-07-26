@@ -112,6 +112,7 @@ def duplicar(id):
             materia_prima_id=item.materia_prima_id,
             item_nome=item.item_nome,
             quantidade=item.quantidade,
+            preco_menu=item.preco_menu,
         ))
 
     db.session.commit()
