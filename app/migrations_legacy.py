@@ -2544,5 +2544,21 @@ def _migrate_sqlite(app):
                'treinamento_pergunta', 'treinamento'):
         cursor.execute(f"DROP TABLE IF EXISTS {_t}")
 
+    # Menu degustação configurável no site (26/07/2026) — espelho do bloco
+    # Postgres. Ver lá o porquê de `preco_menu` morar no ProdutoItem.
+    cursor.execute("PRAGMA table_info(produto)")
+    cols_prod2 = [row[1] for row in cursor.fetchall()]
+    if cols_prod2 and 'menu_configuravel' not in cols_prod2:
+        cursor.execute("ALTER TABLE produto ADD COLUMN menu_configuravel "
+                       "BOOLEAN NOT NULL DEFAULT 0")
+    for _c in ('menu_total_unidades', 'menu_max_por_item'):
+        if cols_prod2 and _c not in cols_prod2:
+            cursor.execute(f"ALTER TABLE produto ADD COLUMN {_c} INTEGER")
+    cursor.execute("PRAGMA table_info(produto_item)")
+    cols_pi = [row[1] for row in cursor.fetchall()]
+    if cols_pi and 'preco_menu' not in cols_pi:
+        cursor.execute("ALTER TABLE produto_item ADD COLUMN preco_menu "
+                       "NUMERIC(10, 2)")
+
     conn.commit()
     conn.close()
