@@ -711,7 +711,11 @@
       if (pEl) pEl.textContent = fmtBRL(api.preco());
       var btn = document.getElementById('btn-comprar-produto');
       if (btn) {
-        btn.disabled = falta !== 0;
+        // O botão tem DOIS donos: este montador e o checador de data da
+        // página (que marca `dataOk`). Ignorar o outro fazia o botão
+        // reabilitar com o menu incompleto — e o clique virava no-op mudo.
+        var dataOk = btn.dataset.dataOk !== '';
+        btn.disabled = falta !== 0 || !dataOk;
         btn.classList.toggle('menu-bloqueado', falta !== 0);
       }
     }
