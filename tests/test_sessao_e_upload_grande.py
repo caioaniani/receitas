@@ -36,7 +36,7 @@ def test_upload_acima_do_limite_avisa_o_tamanho(app, admin_user):
     from app.models import Receita
     with app.app_context():
         r_obj = Receita(nome='Pão da Foto', categoria='Paes', rendimento_qtd=1,
-                        rendimento_unidade='un')
+                        rendimento_unidade='un', peso_base=1000)
         db.session.add(r_obj)
         db.session.commit()
         rid = r_obj.id
