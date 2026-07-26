@@ -269,7 +269,7 @@ def salvar_composicao(id):
         chave_it = (it.tipo, (it.item_nome or '').strip())
         fks_atuais[chave_it] = (
             it.receita_id, it.produto_componente_id, it.materia_prima_id)
-        precos_menu_atuais[chave_it] = it.preco_menu
+        precos_menu_atuais[chave_it] = getattr(it, 'preco_menu', None)
     ProdutoItem.query.filter_by(produto_id=produto.id).delete()
 
     tipos = request.form.getlist('item_tipo[]')
