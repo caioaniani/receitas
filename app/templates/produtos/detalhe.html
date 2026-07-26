@@ -173,6 +173,12 @@
                     <td class="text-end item-custo-total fw-bold" style="background:#fff8e1; vertical-align:middle; font-size:12px;">
                         {{ (item.custo_un * item.quantidade) | brl }}
                     </td>
+                    <td>
+                        <input type="number" name="preco_menu[]"
+                               value="{{ '%.2f' % item.preco_menu if item.preco_menu is not none else '' }}"
+                               step="0.01" min="0" placeholder="—"
+                               class="form-control form-control-sm input-blue text-end item-preco-menu">
+                    </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" title="Remover">
                             <i class="bi bi-x-lg"></i>
