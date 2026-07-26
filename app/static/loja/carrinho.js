@@ -214,6 +214,30 @@
     return it.fatiado ? '<div class="fatiado-tag">🔪 fatiado</div>' : '';
   }
 
+  // "O que você montou" na linha do carrinho de um MENU CONFIGURÁVEL
+  // (26/07/2026). Sem isso, dois menus montados diferente ficam
+  // indistinguíveis na tela — o cliente não confere o que escolheu.
+  function compResumoHtml(it) {
+    if (!it.comp_resumo || !it.comp_resumo.length) return '';
+    var partes = it.comp_resumo.map(function (c) {
+      return escapeHtml(c.qtd + 'x ' + c.nome);
+    });
+    return '<div class="linha-comp">' + partes.join(' · ') + '</div>';
+  }
+
+  // `data-comp` da linha: a composição precisa voltar pro Carrinho nos
+  // steppers/remover, senão a chave não casa e o clique mexe na linha errada.
+  function compAttr(it) {
+    if (!it.comp || !it.comp.length) return '';
+    return ' data-comp="' + escapeHtml(JSON.stringify(it.comp)) + '"';
+  }
+
+  function lerCompDaLinha(linha) {
+    var raw = linha.getAttribute('data-comp');
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) { return null; }
+  }
+
   // ── Cards na vitrine: botão "Adicionar" ↔ stepper (− N +) ───────────
   // Cada `.card-add[data-kind][data-id]…` é renderizado conforme a qtd no
   // carrinho. Clique em "Adicionar" → vira stepper. Stepper sincroniza o
