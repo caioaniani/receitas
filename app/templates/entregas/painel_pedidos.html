@@ -632,7 +632,15 @@
     var itens = (p.itens || []).map(function (it) {
       var fat = it.fatiado
         ? ' <span class="item-fatiado">🔪 fatiado</span>' : '';
-      return '<div class="item"><b>' + (Number(it.qtd) || 1) + 'x</b> ' + esc(it.nome) + fat + '</div>';
+      // Menu configurável: o que o CLIENTE montou (26/07/2026). Sem isso a
+      // separação usa a composição padrão e entrega o que ele não pediu.
+      var comp = (it.comp && it.comp.length)
+        ? '<div class="item-comp">' + it.comp.map(function (c) {
+            return esc(c.qtd + 'x ' + c.nome);
+          }).join(' · ') + '</div>'
+        : '';
+      return '<div class="item"><b>' + (Number(it.qtd) || 1) + 'x</b> ' +
+        esc(it.nome) + fat + comp + '</div>';
     }).join('') || '<div class="item">—</div>';
     var janela = p.expresso ? '⚡ Expresso (1h)' : ('🕐 ' + (p.periodo || 'Sem horário'));
 
