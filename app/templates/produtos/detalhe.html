@@ -353,6 +353,15 @@
         <td class="text-end item-custo-total fw-bold" style="background:#fff8e1; vertical-align:middle; font-size:12px;">
             -
         </td>
+        <td>
+            {# Menu configuravel: preco por unidade DESTE item dentro do menu.
+               A ordem das colunas tem que bater com o cabecalho e com as
+               linhas ja renderizadas — o POST casa `preco_menu[]` com
+               `item_nome[]` por INDICE. #}
+            <input type="number" name="preco_menu[]" value=""
+                   step="0.01" min="0" placeholder="—"
+                   class="form-control form-control-sm input-blue text-end item-preco-menu">
+        </td>
         <td class="text-center">
             <button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" title="Remover">
                 <i class="bi bi-x-lg"></i>
