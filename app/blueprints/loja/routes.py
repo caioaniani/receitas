@@ -836,9 +836,13 @@ def _set_carrinho_sessao(itens):
             continue
         fatiado = bool(it.get('fatiado'))
         comp = _comp_normalizada(it.get('comp'))
-        # Chave da composição igual à do `loja_menu.chave` / `carrinho.js`.
+        # Chave da composição pelo helper CANÔNICO (`loja_menu.chave`); o
+        # `carrinho.js::_chaveComp` espelha a mesma regra. Reimplementar aqui
+        # era a duplicação que o CLAUDE.md manda evitar — divergir faria duas
+        # composições diferentes somarem na mesma linha.
+        from app.services import loja_menu as _lm
         chave = (kind, iid, fatiado,
-                 ','.join(f'{p[0]}:{p[1]}' for p in sorted(comp or [])))
+                 _lm.chave({p[0]: p[1] for p in (comp or [])}))
         if chave in idx:
             norm[idx[chave]]['qtd'] = min(99, norm[idx[chave]]['qtd'] + qtd)
             continue
