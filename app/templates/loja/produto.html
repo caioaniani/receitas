@@ -166,7 +166,8 @@
               data-preco="{{ item.preco }}"
               data-categoria="{{ item.categoria or '' }}"
               data-imagem="{{ item.imagem or '' }}"
-              {% if item.fatiavel %}data-fatiavel="1"{% endif %}>
+              {% if item.fatiavel %}data-fatiavel="1"{% endif %}
+              {% if item.menu %}data-menu="1"{% endif %}>
         Adicionar ao carrinho
       </button>
       <a href="{{ url_for('loja.carrinho') }}" class="ver-carrinho">
