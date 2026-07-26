@@ -321,8 +321,74 @@ class PedidoOnlineItem(db.Model):
     receita = db.relationship('Receita', foreign_keys=[receita_id])
     produto = db.relationship('Produto', foreign_keys=[produto_id])
 
+    componentes = db.relationship(
+        'PedidoOnlineItemComponente', backref='item',
+        cascade='all, delete-orphan', lazy='selectin')
+
     def __repr__(self):
         return f'<PedidoOnlineItem {self.nome} x{self.quantidade}>'
+
+
+class PedidoOnlineItemComponente(db.Model):
+    """Composição ESCOLHIDA pelo cliente num menu configurável (26/07/2026).
+
+    Só existe pra item de menu (`Produto.menu_configuravel`) — item comum e
+    cesta de composição fixa não têm linhas aqui e continuam sendo expandidos
+    pelo cadastro (`cestas.componentes_de_cesta`).
+
+    Por que persistir: o cadastro guarda a PRÉ-SELEÇÃO, não a escolha. Sem
+    esta tabela, a baixa de estoque, a produção e a impressão do motorista
+    leriam a cesta padrão e entregariam/debitariam a composição ERRADA
+    (estoque tem peso especial — CLAUDE.md). Quem manda na baixa é esta
+    linha; o cadastro vira só o menu de opções.
+
+    `quantidade` é por UMA unidade do menu (2 menus x 7 minis = 14 minis) —
+    a mesma semântica de `ProdutoItem.quantidade`. `preco_unitario` é
+    snapshot do `ProdutoItem.preco_menu` no momento da compra (o admin pode
+    reajustar depois; o pedido tem que refletir o que foi cobrado).
+    """
+    __tablename__ = 'pedido_online_item_componente'
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(
+        db.Integer, db.ForeignKey('pedido_online_item.id'),
+        nullable=False, index=True)
+    # Slot de origem no cadastro do menu. Rastreabilidade — a baixa usa as
+    # FKs abaixo (o ProdutoItem pode ser removido do menu depois).
+    produto_item_id = db.Column(
+        db.Integer, db.ForeignKey('produto_item.id'), nullable=True)
+    # 'receita' | 'produto' | 'mp' — espelha ProdutoItem.tipo.
+    tipo = db.Column(db.String(10), nullable=False)
+    receita_id = db.Column(
+        db.Integer, db.ForeignKey('receita.id'), nullable=True)
+    produto_componente_id = db.Column(
+        db.Integer, db.ForeignKey('produto.id'), nullable=True)
+    materia_prima_id = db.Column(
+        db.Integer, db.ForeignKey('materia_prima.id'), nullable=True)
+
+    nome = db.Column(db.String(200), nullable=False)          # snapshot
+    quantidade = db.Column(db.Integer, nullable=False, default=0)
+    preco_unitario = db.Column(db.Numeric(10, 2), nullable=True)  # snapshot
+
+    @property
+    def coluna_estoque(self):
+        """'receita_id' | 'produto_id' | 'materia_prima_id' — pronto pra
+        filtrar EstoqueLoja, igual `cestas.componentes_de_cesta`."""
+        if self.receita_id:
+            return 'receita_id'
+        if self.produto_componente_id:
+            return 'produto_id'
+        if self.materia_prima_id:
+            return 'materia_prima_id'
+        return None
+
+    @property
+    def alvo_id(self):
+        return (self.receita_id or self.produto_componente_id
+                or self.materia_prima_id)
+
+    def __repr__(self):
+        return f'<PedidoOnlineItemComponente {self.nome} x{self.quantidade}>'
 
 
 # Status do pagamento (espelha o ciclo do Pagar.me, simplificado).
