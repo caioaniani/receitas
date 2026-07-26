@@ -202,9 +202,15 @@ def montar_itens(itens_raw):
     """Re-valida o carrinho contra o catálogo. NUNCA usa o preço do
     cliente — pega o preço publicado atual. Devolve (itens, avisos).
 
-    itens_raw: lista de {kind, id, qtd, fatiado} (vindo do localStorage/sessão).
+    itens_raw: lista de {kind, id, qtd, fatiado, comp} (do localStorage/sessão).
     item de saída: {kind, id, receita_id, produto_id, nome, preco, qtd,
-                    subtotal, fatiado}
+                    subtotal, fatiado, comp, menu_resumo}
+
+    MENU CONFIGURÁVEL (26/07/2026): item cujo Produto é `menu_configuravel`
+    tem a escolha do cliente (`comp` = {produto_item_id: qtd}) re-sanitizada
+    contra o cadastro, o TOTAL obrigatório validado (regra do dono: 30 minis
+    exatos) e o preço RECALCULADO pela soma do preço por mini. `comp` ausente
+    = pré-seleção do cadastro.
     """
     itens = []
     avisos = []
