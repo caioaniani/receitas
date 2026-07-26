@@ -103,8 +103,16 @@ def create_app(config_class=None):
         import hashlib
         import os
         versions = {}
+        # LOJA inclusa (26/07/2026): os assets da loja publica ficavam de FORA
+        # deste versionamento e o <link>/<script> iam sem `?v=`. Com o service
+        # worker fazendo cache-first em /static, o navegador do cliente
+        # continuava servindo o loja.css VELHO depois do deploy — o HTML novo
+        # (miniaturas da galeria) chegava sem as regras que as dimensionam e a
+        # pagina do produto ESTOUROU com fotos em tamanho natural (relatado
+        # pelo dono). Sem `?v=` a correcao de CSS so chegaria por hard-refresh.
         for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js',
-                    'js/pdv_mapeamento.js', 'css/style.css'):
+                    'js/pdv_mapeamento.js', 'css/style.css',
+                    'loja/loja.css', 'loja/carrinho.js', 'loja/checkout.js'):
             try:
                 p = os.path.join(app.static_folder, rel)
                 with open(p, 'rb') as f:
