@@ -863,17 +863,32 @@ def _resolver_carrinho_sessao():
     [{kind,id,nome,preco,imagem,categoria,qtd,fatiado}] pro carrinho.js
     renderizar. Dropa item inexistente/despublicado (sem display); mantém
     esgotado (o checkout avisa). Best-effort: nunca quebra a página."""
+    from app.models import Produto
+    from app.services import loja_menu
     out = []
     try:
         for it in _carrinho_sessao():
             item = loja_catalogo.por_id_publicado(it['kind'], it['id'])
             if not item:
                 continue
+            # Menu configurável: preço e "o que vem" saem da escolha DESTA
+            # linha, não do cadastro. Sem isso o carrinho mostraria sempre o
+            # preço/composição da pré-seleção (26/07/2026).
+            preco, comp_resumo = item['preco'], None
+            if it.get('comp') and item.get('menu'):
+                prod = Produto.query.get(it['id'])
+                if loja_menu.eh_menu(prod):
+                    comp = loja_menu.normalizar(prod, it['comp'])
+                    p = loja_menu.preco(prod, comp)
+                    if p is not None:
+                        preco = float(p)
+                    comp_resumo = loja_menu.resumo(prod, comp)
             out.append({
                 'kind': it['kind'], 'id': it['id'], 'nome': item['nome'],
-                'preco': item['preco'], 'imagem': item.get('imagem') or '',
+                'preco': preco, 'imagem': item.get('imagem') or '',
                 'categoria': item.get('categoria') or '', 'qtd': it['qtd'],
                 'fatiado': it['fatiado'],
+                'comp': it.get('comp'), 'comp_resumo': comp_resumo,
                 # `fatiavel` diz se o carrinho mostra o checkbox 'fatiado'
                 # na linha (só sourdough). Item não-fatiável não vira fatiado
                 # nem por toggle (o servidor re-sanitiza no checkout).
