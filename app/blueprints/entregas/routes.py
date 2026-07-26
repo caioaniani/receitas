@@ -524,7 +524,8 @@ def api_painel():
             'cartinha': p.get('cartinha') or '',
             'itens': [{'nome': it.get('nome') or '',
                        'qtd': it.get('quantidade') or 1,
-                       'fatiado': bool(it.get('fatiado'))}
+                       'fatiado': bool(it.get('fatiado')),
+                       'comp': it.get('comp') or []}
                       for it in (p.get('itens') or [])],
             'status': status,            # novo|visto|pronto|entregue
             'novo': status == 'novo',    # mantido pra o alerta sonoro
