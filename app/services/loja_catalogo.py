@@ -101,18 +101,42 @@ def _anotar_menu(d, p, *, com_slots=False):
     é a soma do `preco_menu` de cada mini escolhido (decisão do dono).
     Deixar os dois divergirem na tela seria mentir o preço.
 
-    Devolve False quando o menu NÃO pode ser vendido (algum mini da
-    pré-seleção sem `preco_menu`): fail-close — some da vitrine com WARNING
-    em vez de cobrar um preço que não é o dele. O admin vê o pendente em
-    vermelho na tela da cesta."""
+    Devolve False quando o menu NÃO pode ser vendido — fail-close, some da
+    vitrine com WARNING em vez de publicar algo que o cliente não consegue
+    comprar. O admin vê o pendente na tela da cesta. Três motivos (os três
+    achados de revisão 26/07/2026):
+
+    1. **algum SLOT sem `preco_menu` > 0** — não só os da pré-seleção: o
+       cliente pode escolher QUALQUER slot, então todos precisam de preço.
+       (Antes, um slot com quantidade 0 e preço vazio passava pelo gate e
+       estourava a página do produto ao formatar `None`.)
+    2. **pré-seleção que não fecha o total obrigatório** — o preço da
+       vitrine nunca poderia ser cobrado e o quick-add do card geraria um
+       carrinho impossível de fechar no checkout.
+    3. **preço total zero** — publicaria "R$ 0,00" e o checkout responderia
+       "saiu de catálogo" (o gate genérico trata preço 0 como ausente)."""
     from app.services import loja_menu
-    padrao = loja_menu.composicao_padrao(p)
-    preco_padrao = loja_menu.preco(p, padrao)
-    if preco_padrao is None or not padrao:
-        logger.warning('menu %r fora da vitrine: pré-seleção vazia ou sem '
-                       'preço por item cadastrado.', p.nome)
+    slots = loja_menu.slots(p)
+    if not slots:
+        logger.warning('menu %r fora da vitrine: sem componentes.', p.nome)
+        return False
+    sem_preco = [s['nome'] for s in slots
+                 if s['preco'] is None or s['preco'] <= 0]
+    if sem_preco:
+        logger.warning('menu %r fora da vitrine: sem "preço no menu" em %s.',
+                       p.nome, ', '.join(sem_preco))
         return False
     total, teto = loja_menu.regras(p)
+    padrao = loja_menu.composicao_padrao(p)
+    if sum(padrao.values()) != total:
+        logger.warning('menu %r fora da vitrine: a pré-seleção soma %d, mas '
+                       'o total obrigatório é %d — ajuste as quantidades do '
+                       'cadastro.', p.nome, sum(padrao.values()), total)
+        return False
+    preco_padrao = loja_menu.preco(p, padrao)
+    if not preco_padrao or preco_padrao <= 0:
+        logger.warning('menu %r fora da vitrine: preço total zerado.', p.nome)
+        return False
     d['preco'] = float(preco_padrao)
     d['menu'] = {
         'total': total,
