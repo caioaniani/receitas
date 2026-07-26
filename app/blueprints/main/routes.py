@@ -806,7 +806,10 @@ def _galeria_explodida(produto):
                              CatalogoFoto.id.asc()).all())
     if not itens and not extras_prod:
         return []
-    out = [{'nome': produto.nome, 'imagem_url': f.dropbox_url}
+    # Fotos do PROPRIO produto: sem preco (retratam o menu inteiro, nao um
+    # mini). Preco so nas dos COMPONENTES — e o preco POR UNIDADE dentro do
+    # menu (`ProdutoItem.preco_menu`), pedido do dono em 26/07/2026.
+    out = [{'nome': produto.nome, 'imagem_url': f.dropbox_url, 'preco': None}
            for f in extras_prod if f.dropbox_url]
     for pi in itens:
         if pi.tipo != 'receita' or not pi.receita_id:
@@ -814,14 +817,18 @@ def _galeria_explodida(produto):
         r = pi.receita
         if r is None:
             continue
+        pm = getattr(pi, 'preco_menu', None)
+        preco = float(pm) if pm is not None else None
         if r.imagem_dropbox_url or r.imagem_blob:
-            out.append({'nome': r.nome, 'img_ref': ('receita', r.id)})
+            out.append({'nome': r.nome, 'img_ref': ('receita', r.id),
+                        'preco': preco})
         for f in (CatalogoFoto.query
                   .filter_by(kind='receita', item_id=r.id)
                   .order_by(CatalogoFoto.ordem.asc(),
                             CatalogoFoto.id.asc()).all()):
             if f.dropbox_url:
-                out.append({'nome': r.nome, 'imagem_url': f.dropbox_url})
+                out.append({'nome': r.nome, 'imagem_url': f.dropbox_url,
+                            'preco': preco})
     return out
 
 
@@ -908,6 +915,11 @@ def _cardapio_categorias(tipo):
             # COMPONENTES (capa + galeria de cada receita) mais as fotos
             # EXTRAS do proprio produto. So o PDF usa; a tela segue igual.
             'galeria': _galeria_explodida(p),
+            # Regras do menu pro PDF escrever a observacao de pedido minimo
+            # (dono 26/07/2026). None em produto que nao e menu.
+            'menu_regra': ({'total': p.menu_total_unidades or 30,
+                            'max': p.menu_max_por_item or 10}
+                           if getattr(p, 'menu_configuravel', False) else None),
         })
 
     regras = _regras_atacado() if tipo == 'atacado' else []

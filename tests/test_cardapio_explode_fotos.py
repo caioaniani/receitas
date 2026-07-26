@@ -33,7 +33,7 @@ def _menu_com_fotos(db):
         db.session.flush()
         db.session.add(ProdutoItem(produto_id=p.id, tipo='receita',
                                    receita_id=r.id, item_nome=r.nome,
-                                   quantidade=5))
+                                   quantidade=5, preco_menu=10 + i))
         receitas.append(r)
     # 1 extra do produto + 1 extra de uma receita
     db.session.add(CatalogoFoto(kind='produto', item_id=p.id, ordem=1,
@@ -128,3 +128,40 @@ def test_cesta_de_composicao_FIXA_nao_explode(app):
         outra = Produto.query.filter_by(nome='Menu Teste').first()
         assert outra is not None
         assert _galeria_explodida(outra) == []
+
+
+def test_mosaico_leva_preco_por_unidade_e_pedido_minimo(app):
+    """Dono 26/07/2026: "trazer no cardápio PDF o valor individual dos minis
+    e a observação de pedido mínimo 30 unidades"."""
+    from app.extensions import db
+    with app.app_context():
+        p, _ = _menu_com_fotos(db)
+        from app.blueprints.main.routes import _galeria_explodida
+        g = _galeria_explodida(p)
+        # extra do produto NÃO tem preço (retrata o menu, não um mini)
+        assert g[0]['preco'] is None
+        precos = sorted(e['preco'] for e in g if e['preco'] is not None)
+        assert precos == [11.0, 11.0, 12.0, 13.0]   # r1 aparece 2x (capa+extra)
+
+    with app.test_request_context('/'):
+        from app.blueprints.main.routes import _cardapio_categorias
+        cats, _regras = _cardapio_categorias('atacado')
+        alvo = [i for c in cats.values() for i in c
+                if i['nome'] == 'Menu Teste'][0]
+        assert alvo['menu_regra'] == {'total': 15, 'max': 10}
+
+
+def test_cesta_comum_nao_tem_menu_regra(app):
+    from app.extensions import db
+    from app.models import Produto
+    with app.app_context():
+        p = Produto(nome='Cesta Fixa', categoria='Cestas', preco_atacado=50,
+                    ativo=True)
+        db.session.add(p)
+        db.session.commit()
+    with app.test_request_context('/'):
+        from app.blueprints.main.routes import _cardapio_categorias
+        cats, _regras = _cardapio_categorias('atacado')
+        alvo = [i for c in cats.values() for i in c
+                if i['nome'] == 'Cesta Fixa'][0]
+        assert alvo['menu_regra'] is None

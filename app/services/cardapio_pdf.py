@@ -642,7 +642,8 @@ def _mosaico_explodido(pdf, item):
     cols = 4 if g.util >= 150 else 3
     gap = 3.0
     lado = (g.util - gap * (cols - 1)) / cols
-    alt_cel = lado + 6.5                      # foto + legenda (6pt)
+    tem_preco = any(f.get('preco') for f in galeria)
+    alt_cel = lado + (10 if tem_preco else 6.5)   # foto + nome (+ preço)
 
     # Baixa TUDO antes de desenhar: assim o "não sobrou nenhuma" é decidido
     # antes de gastar o título, e a quebra de página vê a altura real.
@@ -650,22 +651,38 @@ def _mosaico_explodido(pdf, item):
     for foto in galeria:
         b = _bytes_foto(foto)
         if b:
-            prontas.append((foto.get('nome') or '', b))
+            prontas.append((foto.get('nome') or '', b, foto.get('preco')))
     if not prontas:
         return
 
     linhas = (len(prontas) + cols - 1) // cols
-    titulo_h = 7.5
-    # Não deixar o título órfão no pé da página: leva a 1ª fileira junto.
-    if pdf.get_y() + titulo_h + alt_cel > g.y_limite:
+    regra = item.get('menu_regra') or {}
+    titulo_h = 7.5 + (4.5 if regra else 0)
+    bloco_h = titulo_h + linhas * (alt_cel + 1.5)
+    # MANTER O MOSAICO INTEIRO NUMA PÁGINA quando ele cabe numa página limpa
+    # (mesma regra das categorias): sem isso o último mini ficava sozinho na
+    # página seguinte, com um vazio enorme antes (dono 26/07/2026).
+    if pdf.get_y() + bloco_h > g.y_limite and bloco_h <= g.pag_util:
         pdf.add_page()
-    pdf.set_x(g.margem)
+    elif pdf.get_y() + titulo_h + alt_cel > g.y_limite:
+        pdf.add_page()          # mosaico maior que a página: só não deixa
+    pdf.set_x(g.margem)         # o título órfão no pé
     pdf.set_font('Helvetica', 'B', 8)
     pdf.set_text_color(*_C_MUTED)
     pdf.set_char_spacing(0.6)
     pdf.cell(0, 5, _latin1('O QUE VEM NO %s' % (item.get('nome') or '').upper()),
              new_x='LMARGIN', new_y='NEXT')
     pdf.set_char_spacing(0)
+    if regra:
+        # Observação de pedido mínimo (dono 26/07/2026). Os números vêm do
+        # cadastro do menu — mudar a trava lá muda o texto aqui.
+        pdf.set_x(g.margem)
+        pdf.set_font('Helvetica', '', 7.5)
+        pdf.set_text_color(*_C_FG)
+        pdf.cell(0, 4.5, _latin1(
+            'Pedido minimo de %d unidades — escolha as que quiser, no maximo '
+            '%d de cada.' % (regra.get('total', 30), regra.get('max', 10))),
+            new_x='LMARGIN', new_y='NEXT')
     pdf.ln(1)
 
     for i in range(linhas):
@@ -673,7 +690,7 @@ def _mosaico_explodido(pdf, item):
         if pdf.get_y() + alt_cel > g.y_limite:
             pdf.add_page()
         y0 = pdf.get_y()
-        for col, (nome, blob) in enumerate(fileira):
+        for col, (nome, blob, preco) in enumerate(fileira):
             x = g.margem + col * (lado + gap)
             try:
                 pdf.image(BytesIO(blob), x=x, y=y0, w=lado, h=lado)
@@ -688,6 +705,14 @@ def _mosaico_explodido(pdf, item):
                 txt = txt[:-1]
             pdf.set_xy(x, y0 + lado + 1)
             pdf.cell(lado, 3.5, txt, align='C')
+            # Preço POR UNIDADE do mini dentro do menu (dono 26/07/2026).
+            # Foto do próprio produto não tem preço — fica só o nome.
+            if preco:
+                pdf.set_font('Helvetica', 'B', 6.5)
+                pdf.set_text_color(*_C_PRIMARY)
+                pdf.set_xy(x, y0 + lado + 4.2)
+                pdf.cell(lado, 3.2, _latin1(_moeda(preco) + ' cada'),
+                         align='C')
         pdf.set_y(y0 + alt_cel + 1.5)
     pdf.ln(1)
 
