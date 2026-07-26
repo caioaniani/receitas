@@ -765,13 +765,41 @@ def _resolver_prefill_carrinho(add):
 # navegador. Guarda só {kind,id,qtd} (cabe no cookie); preço/nome/estoque são
 # resolvidos no servidor a cada render (autoritativo).
 _CARRINHO_MAX_ITENS = 60  # teto pra caber no cookie de sessão (~4KB)
+# Orçamento de pares [pi_id, qtd] da composição de MENUS somados no carrinho
+# inteiro (26/07/2026). Cada par custa ~8 bytes no cookie; 120 pares ≈ 1KB,
+# folgado dentro dos ~4KB. Um menu real tem ~6 slots, então isso é ~20 menus
+# de composições DIFERENTES — muito além do uso real. Linha que estouraria o
+# orçamento é RECUSADA inteira (nunca entra sem a composição: sem ela o
+# servidor cairia na pré-seleção e o cliente receberia outra coisa).
+_CARRINHO_MAX_PARES_COMP = 120
+
+
+def _comp_normalizada(bruto):
+    """[[pi_id, qtd], ...] saneado (só pares de inteiros positivos), ou None.
+    Formato compacto do menu configurável no cookie de sessão — quem valida
+    contra o CADASTRO (slot pertence ao menu? total bate?) é o
+    `loja_menu`/`montar_itens`; aqui é só higiene de tipo."""
+    if not isinstance(bruto, (list, tuple)):
+        return None
+    out = []
+    for par in bruto:
+        if not isinstance(par, (list, tuple)) or len(par) != 2:
+            continue
+        try:
+            pi_id, qtd = int(par[0]), int(par[1])
+        except (TypeError, ValueError):
+            continue
+        if pi_id > 0 and qtd > 0:
+            out.append([pi_id, qtd])
+    return out or None
 
 
 def _carrinho_sessao():
-    """Lista normalizada [{kind,id,qtd,fatiado}] do carrinho na sessão.
+    """Lista normalizada [{kind,id,qtd,fatiado,comp}] do carrinho na sessão.
 
-    `fatiado` (sourdough, 16/07/2026) é preservado — sem isso a preferência
-    de corte some antes do checkout (a sessão é a fonte de verdade)."""
+    `fatiado` (sourdough, 16/07/2026) e `comp` (menu configurável,
+    26/07/2026) são preservados — sem isso a escolha do cliente some antes
+    do checkout (a sessão é a fonte de verdade)."""
     out = []
     for it in session.get('carrinho') or []:
         kind = str((it or {}).get('kind') or '').strip().lower()
@@ -783,7 +811,8 @@ def _carrinho_sessao():
         except (TypeError, ValueError):
             continue
         out.append({'kind': kind, 'id': iid, 'qtd': qtd,
-                    'fatiado': bool(it.get('fatiado'))})
+                    'fatiado': bool(it.get('fatiado')),
+                    'comp': _comp_normalizada(it.get('comp'))})
     return out
 
 
