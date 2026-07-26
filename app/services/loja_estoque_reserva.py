@@ -68,9 +68,35 @@ def item_sob_encomenda(item):
     return bool(alvo is not None and getattr(alvo, 'sob_encomenda', False))
 
 
+def composicao_escolhida(item):
+    """[(coluna_estoque, id, nome, qtd_por_unidade)] da composição que o
+    CLIENTE escolheu num menu configurável (26/07/2026), ou None quando o
+    item não é menu (aí vale o cadastro, como sempre).
+
+    Mesmo formato de `cestas.componentes_de_cesta`, pra ser plugável nos dois
+    caminhos de estoque (reserva e baixa real). Componente órfão (FK perdida
+    depois da compra) é pulado — não dá pra debitar o que não tem alvo."""
+    comps = getattr(item, 'componentes', None)
+    if not comps:
+        return None
+    out = []
+    for c in comps:
+        col, alvo = c.coluna_estoque, c.alvo_id
+        qtd = int(c.quantidade or 0)
+        if not col or not alvo or qtd <= 0:
+            logger.warning('menu: componente %r do item #%s sem alvo/qtd — '
+                           'fora da baixa de estoque.', c.nome, item.id)
+            continue
+        out.append((col, alvo, c.nome, float(qtd)))
+    return out or None
+
+
 def _expandir_estoque(item):
     """Expande um PedidoOnlineItem nas linhas de estoque que ele baixa.
 
+    MENU CONFIGURÁVEL -> explode pela composição ESCOLHIDA pelo cliente
+    (`PedidoOnlineItemComponente`), NUNCA pelo cadastro da cesta — o cadastro
+    guarda só a pré-seleção e debitaria a composição errada.
     CESTA (Produto com componentes) -> explode em cada componente
     (`cestas.componentes_de_cesta`): qtd = qtd_comprada x qtd_do_componente,
     com `criar=False` (componente so conta se JA tiver linha de estoque — item
