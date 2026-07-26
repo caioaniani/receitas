@@ -118,6 +118,9 @@ def _anotar_menu(d, p, *, com_slots=False):
         'total': total,
         'max_por_item': teto,
         'comp_padrao': loja_menu.compactar(padrao),
+        # Resumo da pré-seleção: o quick-add do card da vitrine precisa dele
+        # pra a linha do carrinho já nascer dizendo o que vem dentro.
+        'resumo_padrao': loja_menu.resumo(p, padrao),
     }
     if com_slots:
         d['menu']['slots'] = loja_menu.slots(p)
