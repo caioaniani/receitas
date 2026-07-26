@@ -204,7 +204,9 @@ def _comp_html(it):
     comps = getattr(it, 'componentes', None) or []
     if not comps:
         return ''
-    txt = ' · '.join(f'{int(c.quantidade or 0)}x {c.nome}' for c in comps)
+    from html import escape
+    txt = ' · '.join(f'{int(c.quantidade or 0)}x {escape(c.nome or "")}'
+                     for c in comps)
     return (f'<br><span style="font-size:12px;color:#7a6a55;">{txt}</span>')
 
 

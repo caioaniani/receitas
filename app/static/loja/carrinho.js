@@ -242,25 +242,12 @@
   // Cada `.card-add[data-kind][data-id]…` é renderizado conforme a qtd no
   // carrinho. Clique em "Adicionar" → vira stepper. Stepper sincroniza o
   // carrinho e some quando qtd cai pra 0.
-  // Composição PADRÃO de um menu configurável no card da vitrine. O
-  // quick-add do card adiciona a pré-seleção — a mesma que a página do
-  // produto já vem marcada — pra as duas portas gerarem a MESMA linha de
-  // carrinho (sem isso o cliente ficaria com duas linhas do mesmo menu).
-  function compDoCardEl(el) {
-    var raw = el.getAttribute('data-menu-comp');
-    if (!raw) return null;
-    try {
-      var c = JSON.parse(raw);
-      return (c && c.length) ? c : null;
-    } catch (e) { return null; }
-  }
-
   function renderCardAdds() {
     var addsEls = document.querySelectorAll('.card-add[data-kind][data-id]');
     addsEls.forEach(function (el) {
       var kind = el.getAttribute('data-kind');
       var id = el.getAttribute('data-id');
-      var qtd = Carrinho.qtdDe(kind, id, false, compDoCardEl(el));
+      var qtd = Carrinho.qtdDe(kind, id);
       if (qtd > 0) {
         el.innerHTML =
           '<div class="stepper">' +
@@ -286,13 +273,6 @@
       // Sourdough: mesmo no quick-add da vitrine o item nasce "fatiável"
       // (inteiro por padrão) pra o checkbox aparecer na linha do carrinho.
       fatiavel: !!el.getAttribute('data-fatiavel'),
-      // Menu configurável: quick-add leva a pré-seleção.
-      comp: compDoCardEl(el),
-      comp_resumo: (function () {
-        var raw = el.getAttribute('data-menu-resumo');
-        if (!raw) return null;
-        try { return JSON.parse(raw); } catch (e) { return null; }
-      })(),
     };
   }
 
@@ -308,17 +288,16 @@
       e.stopPropagation();   // não navega pro href do card
       var acao = btn.getAttribute('data-acao');
       var item = lerItemDoCardEl(el);
-      var cComp = item.comp;
+      // Menu configurável não tem quick-add no card (o template manda pra
+      // a página do produto) — aqui só passam itens simples.
       if (acao === 'add') {
         Carrinho.adicionar(item, 1);
       } else if (acao === 'mais') {
-        Carrinho.mudarQtd(
-          item.kind, item.id,
-          Carrinho.qtdDe(item.kind, item.id, false, cComp) + 1, false, cComp);
+        Carrinho.mudarQtd(item.kind, item.id,
+                          Carrinho.qtdDe(item.kind, item.id) + 1);
       } else if (acao === 'menos') {
-        Carrinho.mudarQtd(
-          item.kind, item.id,
-          Carrinho.qtdDe(item.kind, item.id, false, cComp) - 1, false, cComp);
+        Carrinho.mudarQtd(item.kind, item.id,
+                          Carrinho.qtdDe(item.kind, item.id) - 1);
       }
     });
   }
@@ -655,6 +634,26 @@
     }
   }
 
+  // ── Galeria de fotos do produto (26/07/2026) ────────────────────────
+  // Clicar na miniatura troca a foto principal. Sem biblioteca: o HTML já
+  // veio pronto do servidor, aqui é só o clique.
+  function ligarGaleria() {
+    var wrap = document.getElementById('produto-galeria');
+    var principal = document.getElementById('foto-principal');
+    if (!wrap || !principal) return;
+    wrap.addEventListener('click', function (e) {
+      var b = e.target.closest('.galeria-thumb');
+      if (!b) return;
+      e.preventDefault();
+      var url = b.getAttribute('data-url');
+      if (!url) return;
+      principal.src = url;
+      wrap.querySelectorAll('.galeria-thumb').forEach(function (t) {
+        t.classList.toggle('ativa', t === b);
+      });
+    });
+  }
+
   // ── Montador do MENU CONFIGURÁVEL (26/07/2026) ──────────────────────
   // "Menu degustação dos minis": pré-seleção marcada, cliente ajusta as
   // quantidades e o total tem que bater EXATO (regra do dono). Isto aqui é
@@ -772,6 +771,7 @@
     Carrinho.atualizarBadge(); // renderiza cards iniciais
     ligarBotoesAdd();
     MenuMontador.iniciar();    // página de menu configurável (no-op nas demais)
+    ligarGaleria();            // galeria de fotos (no-op sem miniaturas)
     renderCarrinho();
   });
 })();

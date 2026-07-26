@@ -567,3 +567,38 @@ class ProdutoItem(db.Model):
 
     def __repr__(self):
         return f'<ProdutoItem {self.nome_resolvido} x{self.quantidade}>'
+
+
+class CatalogoFoto(db.Model):
+    """Foto EXTRA de uma receita/produto — a galeria do site (26/07/2026).
+
+    Pedido do dono: "gostaria de adicionar mais de uma, pelo menos 4".
+
+    A foto PRINCIPAL continua sendo `Receita/Produto.imagem_dropbox_url` (a
+    capa): é ela que aparece no card da vitrine, no cardápio, no PDF, no
+    e-mail e no painel. Esta tabela só acrescenta as fotos SEGUINTES, que
+    aparecem como miniaturas na página do produto. Nada que lê a capa hoje
+    muda de comportamento.
+
+    Endereçamento por (`kind`, `item_id`) em vez de duas FKs porque serve os
+    dois catálogos com o mesmo código — mesmo par que `loja_catalogo` já usa
+    ('receita'|'produto'). Tabela NOVA: nasce por `db.create_all`, sem ALTER.
+    """
+    __tablename__ = 'catalogo_foto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(10), nullable=False)      # 'receita'|'produto'
+    item_id = db.Column(db.Integer, nullable=False)
+    dropbox_url = db.Column(db.String(500), nullable=False)
+    # Path no Dropbox pra conseguir DELETAR o arquivo junto com a linha (sem
+    # isso a foto removida ficaria órfã ocupando espaço pra sempre).
+    storage_path = db.Column(db.String(500))
+    ordem = db.Column(db.Integer, nullable=False, default=0)
+    criado_em = db.Column(db.DateTime, default=agora)
+
+    __table_args__ = (
+        db.Index('ix_catalogo_foto_item', 'kind', 'item_id'),
+    )
+
+    def __repr__(self):
+        return f'<CatalogoFoto {self.kind}:{self.item_id} #{self.ordem}>'

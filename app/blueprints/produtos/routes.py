@@ -185,12 +185,22 @@ def detalhe(id):
 
     custo_total = sum(i['custo_un'] * i['quantidade'] for i in itens_data)
 
+    # Galeria de fotos extras do site (26/07/2026) — a capa continua sendo
+    # `imagem_dropbox_url`; estas sao as SEGUINTES.
+    from app.blueprints.main.routes import GALERIA_MAX_FOTOS
+    from app.models import CatalogoFoto
+    galeria_fotos = (CatalogoFoto.query
+                     .filter_by(kind='produto', item_id=produto.id)
+                     .order_by(CatalogoFoto.ordem.asc(),
+                               CatalogoFoto.id.asc()).all())
     return render_template('produtos/detalhe.html',
                            produto=produto,
                            itens_data=itens_data,
                            custo_total=custo_total,
                            receita_custos=receita_custos,
-                           produto_custos=produto_custos)
+                           produto_custos=produto_custos,
+                           galeria_fotos=galeria_fotos,
+                           galeria_max=GALERIA_MAX_FOTOS)
 
 
 def _menu_no_modelo():

@@ -12,6 +12,8 @@ Testa cada camada isoladamente.
 """
 from datetime import datetime, timedelta
 
+import pytest
+
 from app.extensions import db
 from app.utils import hoje
 
@@ -354,3 +356,52 @@ def test_padeiro_pre_preparo_vespera(app):
         data = resp.get_json()
         nomes = [x['nome'] for x in data['itens']]
         assert r.nome in nomes
+
+
+@pytest.mark.loja_host
+def test_pagina_do_produto_respeita_o_D2_no_seletor_de_data(app, monkeypatch):
+    """Caso real (dono 26/07/2026): o checkout já travava em D+2, mas a
+    página do produto abria o seletor em HOJE dizendo "✓ disponível pra
+    essa data" — o cliente só descobria o bloqueio no fim. O `min` e o
+    valor padrão do seletor têm que nascer com o lead."""
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import Produto
+    from app.services import loja_checkout
+    from app.utils import hoje
+    with app.app_context():
+        p = Produto(nome='Caixa Sob Encomenda', categoria='Cestas',
+                    preco_site=100, ativo=True, sob_encomenda=True)
+        db.session.add(p)
+        db.session.commit()
+        pid, slug = p.id, 'caixa-sob-encomenda'
+        esperado = (hoje() + timedelta(
+            days=loja_checkout.ENCOMENDA_LEAD_DIAS)).isoformat()
+
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    c = app.test_client()
+    r = c.get(f'/loja/{slug}-p{pid}')
+    corpo = r.get_data(as_text=True)
+    assert r.status_code == 200
+    assert f'min="{esperado}"' in corpo
+    assert f'value="{esperado}"' in corpo
+    assert f'min="{hoje().isoformat()}"' not in corpo   # nunca oferece hoje
+
+
+@pytest.mark.loja_host
+def test_produto_normal_continua_podendo_hoje(app, monkeypatch):
+    """Guarda: o lead só vale pra sob encomenda."""
+    from app.extensions import db
+    from app.models import Produto
+    from app.utils import hoje
+    with app.app_context():
+        p = Produto(nome='Caixa Normal', categoria='Cestas',
+                    preco_site=100, ativo=True)
+        db.session.add(p)
+        db.session.commit()
+        pid = p.id
+    monkeypatch.setenv('LOJA_VISIVEL', '1')
+    c = app.test_client()
+    corpo = c.get(f'/loja/caixa-normal-p{pid}').get_data(as_text=True)
+    assert f'min="{hoje().isoformat()}"' in corpo

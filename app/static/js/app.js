@@ -1475,3 +1475,13 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 })();
+
+// Confirmação de remoção em forms marcados com `data-confirma-remocao`
+// (galeria de fotos, 26/07/2026). Delegado e SEM texto interpolado no HTML —
+// handler inline com dado do banco já causou XSS armazenado uma vez
+// (pré-cadastro, 23/07/2026); aqui a regra é a mesma: nada de onsubmit="".
+document.addEventListener('submit', function (e) {
+  var form = e.target.closest('form[data-confirma-remocao]');
+  if (!form) return;
+  if (!window.confirm('Remover esta foto da galeria?')) e.preventDefault();
+});

@@ -204,7 +204,7 @@ def montar_itens(itens_raw):
 
     itens_raw: lista de {kind, id, qtd, fatiado, comp} (do localStorage/sessão).
     item de saída: {kind, id, receita_id, produto_id, nome, preco, qtd,
-                    subtotal, fatiado, comp, menu_resumo}
+                    subtotal, fatiado, comp}
 
     MENU CONFIGURÁVEL (26/07/2026): item cujo Produto é `menu_configuravel`
     tem a escolha do cliente (`comp` = {produto_item_id: qtd}) re-sanitizada
@@ -244,7 +244,6 @@ def montar_itens(itens_raw):
         # soma do preço por mini. Nunca conserta em silêncio: escolha errada
         # (aba parada, carrinho velho, POST forjado) sai do pedido com aviso.
         comp = None
-        menu_resumo = None
         if kind == 'produto' and cat.get('menu'):
             menu_prod = Produto.query.get(item_id)
             if not loja_menu.eh_menu(menu_prod):
@@ -284,7 +283,6 @@ def montar_itens(itens_raw):
             # item comum. É ela que o pedido persiste e que a baixa de
             # estoque explode — nunca o cadastro da cesta.
             'comp': comp,
-            'menu_resumo': menu_resumo,
         })
     return itens, avisos
 

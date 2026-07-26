@@ -393,3 +393,121 @@ def test_comp_lixo_nao_derruba_o_carrinho(app):
             {'kind': 'produto', 'id': 7, 'qtd': 1,
              'comp': ['x', [1], [2, 'a'], [3, 4]]}])
         assert norm[0]['comp'] == [[3, 4]]
+
+
+# ── Achados da revisão independente (26/07/2026) ─────────────────────────
+
+def test_escolha_invalidada_nao_vira_pre_selecao_em_silencio(app):
+    """CRÍTICO. `salvar_composicao` APAGA e RECRIA os ProdutoItem e o
+    Postgres nunca reusa id — qualquer edição do menu invalida os `pi_id`
+    de todo carrinho em voo. Antes, `normalizar` caía na pré-seleção e o
+    cliente era COBRADO outro valor e RECEBIA outra composição, sem aviso."""
+    from app.extensions import db
+    from app.services import loja_checkout, loja_menu
+    with app.app_context():
+        menu, _ = _menu(db, total=15, precos=(2.0, 3.0, 4.0))
+        obsoletos = [pi + 10_000 for pi in _pis(menu)]   # ids que não existem
+        comp = loja_menu.normalizar(menu, [[obsoletos[0], 10],
+                                           [obsoletos[1], 3],
+                                           [obsoletos[2], 2]])
+        assert comp == {}, 'não pode cair na pré-seleção'
+        erro = loja_menu.validar(menu, comp)
+        assert erro and 'mudou' in erro
+
+        itens, avisos = loja_checkout.montar_itens([
+            {'kind': 'produto', 'id': menu.id, 'qtd': 1,
+             'comp': [[obsoletos[0], 10]]}])
+        assert itens == []
+        assert avisos and 'mudou' in avisos[0]
+
+
+def test_slot_fora_da_pre_selecao_sem_preco_tira_o_menu_do_ar(app):
+    """O cliente pode escolher QUALQUER slot — então todos precisam de
+    preço, não só os da pré-seleção. Antes, um slot com quantidade 0 e
+    preço vazio passava no gate e estourava a página do produto."""
+    from app.extensions import db
+    from app.services import loja_catalogo
+    with app.app_context():
+        menu, _ = _menu(db, total=15, precos=(2.0, 3.0, None),
+                        padroes=(10, 5, 0))
+        assert loja_catalogo.por_id_publicado('produto', menu.id) is None
+
+
+def test_pre_selecao_que_nao_fecha_o_total_sai_da_vitrine(app):
+    """Publicar assim mostraria um preço que nunca poderia ser cobrado e o
+    cliente levaria um bloqueio no checkout sem saber o que fazer."""
+    from app.extensions import db
+    from app.services import loja_catalogo
+    with app.app_context():
+        menu, _ = _menu(db, total=15, padroes=(5, 5, 5))
+        menu.menu_total_unidades = 30          # pré-seleção soma 15, não 30
+        db.session.commit()
+        assert loja_catalogo.por_id_publicado('produto', menu.id) is None
+
+
+def test_preco_zero_no_menu_nao_publica(app):
+    """R$ 0,00 na vitrine + 'saiu de catálogo' no checkout (o gate genérico
+    trata preço 0 como ausente). Fail-close antes disso."""
+    from app.extensions import db
+    from app.services import loja_catalogo
+    with app.app_context():
+        menu, _ = _menu(db, total=15, precos=(0.0, 0.0, 0.0))
+        assert loja_catalogo.por_id_publicado('produto', menu.id) is None
+
+
+def test_preco_menu_negativo_do_form_e_recusado(app, admin_user):
+    """`min="0"` do HTML não vale nada num POST forjado; preço negativo
+    derrubaria o total do menu."""
+    from app.extensions import db
+    from app.models import ProdutoItem
+    with app.app_context():
+        menu, _ = _menu(db, total=15)
+        mid = menu.id
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    r = c.post(f'/produtos/{mid}/salvar', data={
+        'nome': 'Menu Degustação dos Minis',
+        'item_tipo[]': ['receita'], 'item_nome[]': ['Mini 1'],
+        'quantidade[]': ['5'], 'preco_menu[]': ['-9,90'],
+    }, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        pi = ProdutoItem.query.filter_by(produto_id=mid).first()
+        assert pi.preco_menu is None
+
+
+def test_preco_menu_com_lixo_no_form_nao_da_500(app, admin_user):
+    from app.extensions import db
+    from app.models import ProdutoItem
+    with app.app_context():
+        menu, _ = _menu(db, total=15)
+        mid = menu.id
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(admin_user.id)
+        s['_fresh'] = True
+    r = c.post(f'/produtos/{mid}/salvar', data={
+        'nome': 'Menu Degustação dos Minis',
+        'item_tipo[]': ['receita'], 'item_nome[]': ['Mini 1'],
+        'quantidade[]': ['5'], 'preco_menu[]': ['abc'],
+    }, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        pi = ProdutoItem.query.filter_by(produto_id=mid).first()
+        assert pi.preco_menu is None
+
+
+def test_chave_da_sessao_usa_o_helper_canonico(app):
+    """A chave da linha vive em 3 lugares (JS, sessão, loja_menu). Este
+    teste trava que a sessão usa o helper, não uma cópia."""
+    from app.blueprints.loja import routes as loja_routes
+    from app.services import loja_menu
+    with app.test_request_context('/loja/'):
+        norm = loja_routes._set_carrinho_sessao([
+            {'kind': 'produto', 'id': 7, 'qtd': 1, 'comp': [[10, 5], [9, 5]]},
+            {'kind': 'produto', 'id': 7, 'qtd': 2, 'comp': [[9, 5], [10, 5]]}])
+        assert len(norm) == 1 and norm[0]['qtd'] == 3
+        # ordenação NUMÉRICA (não lexicográfica): 9 antes de 10
+        assert loja_menu.chave({10: 5, 9: 5}) == '9:5,10:5'

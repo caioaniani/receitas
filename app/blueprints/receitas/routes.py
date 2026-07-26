@@ -72,13 +72,23 @@ def ficha(id):
                                     Receita.id != receita.id)
                             .order_by(Receita.nome).all())
 
+    # Galeria de fotos extras do site (26/07/2026) — a capa continua sendo
+    # `imagem_dropbox_url`; estas sao as SEGUINTES.
+    from app.blueprints.main.routes import GALERIA_MAX_FOTOS
+    from app.models import CatalogoFoto
+    galeria_fotos = (CatalogoFoto.query
+                     .filter_by(kind='receita', item_id=receita.id)
+                     .order_by(CatalogoFoto.ordem.asc(),
+                               CatalogoFoto.id.asc()).all())
     return render_template('receitas/ficha.html', receita=receita, mp_dict=mp_dict,
                            funcionarios=funcionarios,
                            receitas_retorno=receitas_retorno,
                            etapas_preparo=dividir_etapas_preparo(receita.modo_preparo),
                            receita_custos=resultado['custos'],
                            receita_pesos=resultado['pesos'],
-                           carga_impostos=_carga_impostos_venda())
+                           carga_impostos=_carga_impostos_venda(),
+                           galeria_fotos=galeria_fotos,
+                           galeria_max=GALERIA_MAX_FOTOS)
 
 
 def _carga_impostos_venda():

@@ -646,7 +646,47 @@
                 <i class="bi bi-upload"></i> {% if tem_foto %}Trocar foto{% else %}Enviar foto{% endif %}
             </button>
         </form>
-        <small class="text-muted d-block mt-1">Comprime pra ~700×700 JPEG. Se subir foto aqui, ignora a URL no campo de cima.</small>
+        <small class="text-muted d-block mt-1">Comprime pra ~1600px JPEG (alta
+            resolucao pro site). Se subir foto aqui, ignora a URL no campo de cima.</small>
+
+        {# ── Galeria: fotos EXTRAS do site (26/07/2026) ───────────────── #}
+        <hr class="my-3">
+        <div class="fw-bold small mb-1">
+            <i class="bi bi-images"></i> Mais fotos (galeria do site)
+        </div>
+        <div class="text-muted small mb-2">
+            A foto acima e a <strong>capa</strong> (aparece na vitrine, no
+            cardapio e na impressao). Estas aparecem como miniaturas na pagina
+            do produto, pro cliente ver de varios angulos. Ate {{ galeria_max }}.
+        </div>
+        {% if galeria_fotos %}
+        <div class="d-flex flex-wrap gap-2 mb-2">
+            {% for f in galeria_fotos %}
+            <div class="position-relative" style="width:92px;">
+                <img src="{{ f.dropbox_url }}" alt="Foto {{ loop.index }}"
+                     style="width:92px; height:92px; object-fit:cover;
+                            border-radius:6px; border:1px solid #dee2e6;">
+                <form method="POST" class="position-absolute top-0 end-0"
+                      action="{{ url_for('main.cardapio_galeria_remover', foto_id=f.id) }}"
+                      data-confirma-remocao>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-danger py-0 px-1"
+                            title="Remover foto">&times;</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <form method="POST" enctype="multipart/form-data"
+              action="{{ url_for('main.cardapio_galeria_upload', tipo='receita', id=receita.id) }}"
+              class="d-flex gap-2 align-items-center">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="galeria_arquivos" accept="image/*" multiple
+                   class="form-control form-control-sm" required data-comprimir>
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-plus-lg"></i> Adicionar
+            </button>
+        </form>
     </div>
 </div>
 

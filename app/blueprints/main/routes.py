@@ -1101,6 +1101,123 @@ def cardapio_img_remover(tipo, id):
     return redirect(url_back)
 
 
+# Galeria de fotos EXTRAS (26/07/2026, pedido do dono: "pelo menos 4").
+# A capa continua sendo `imagem_dropbox_url` — estas sao as SEGUINTES.
+GALERIA_MAX_FOTOS = 8
+
+
+def _alvo_catalogo(tipo, id):
+    """(objeto, url_de_volta) pra receita/produto — mesma resolucao das rotas
+    de imagem principal. 404 em tipo desconhecido."""
+    from flask import abort, url_for
+
+    from app.models import Produto, Receita
+    if tipo == 'receita':
+        return Receita.query.get_or_404(id), url_for('receitas.ficha', id=id)
+    if tipo == 'produto':
+        return Produto.query.get_or_404(id), url_for('produtos.detalhe', id=id)
+    abort(404)
+
+
+@main_bp.route('/cardapio-img/<tipo>/<int:id>/galeria', methods=['POST'])
+@login_required
+def cardapio_galeria_upload(tipo, id):
+    """Sobe UMA OU MAIS fotos extras pra a galeria do item.
+
+    Cada foto vira uma linha `CatalogoFoto` + um arquivo proprio no Dropbox
+    (path com o id da linha, pra o remover deletar exatamente a dela). Se o
+    Dropbox nao estiver configurado a galeria NAO funciona (nao ha fallback
+    BLOB de proposito: seria ressuscitar a divida que o M6 esta pagando)."""
+    from flask import abort, flash, redirect
+
+    from app.extensions import db as _db
+    from app.models import CatalogoFoto
+    from app.services import dropbox_storage
+    from app.utils import comprimir_imagem
+    if not current_user.is_admin():
+        abort(403)
+    obj, url_back = _alvo_catalogo(tipo, id)
+    if not dropbox_storage.disponivel():
+        flash('Dropbox nao configurado — galeria indisponivel.', 'danger')
+        return redirect(url_back)
+
+    ja_tem = CatalogoFoto.query.filter_by(kind=tipo, item_id=obj.id).count()
+    arquivos = [f for f in request.files.getlist('galeria_arquivos')
+                if f and f.filename]
+    if not arquivos:
+        flash('Selecione ao menos uma imagem.', 'danger')
+        return redirect(url_back)
+    livres = GALERIA_MAX_FOTOS - ja_tem
+    if livres <= 0:
+        flash(f'A galeria ja tem o maximo de {GALERIA_MAX_FOTOS} fotos. '
+              'Remova alguma antes de subir outra.', 'warning')
+        return redirect(url_back)
+    ignoradas = max(0, len(arquivos) - livres)
+    arquivos = arquivos[:livres]
+
+    salvas, erros = 0, []
+    for f in arquivos:
+        if not (f.mimetype or '').startswith('image/'):
+            erros.append(f'{f.filename}: nao e imagem')
+            continue
+        data = f.read()
+        if not data:
+            erros.append(f'{f.filename}: arquivo vazio')
+            continue
+        if len(data) > 25 * 1024 * 1024:
+            erros.append(f'{f.filename}: maior que 25MB')
+            continue
+        try:
+            final = comprimir_imagem(data, max_size=CARDAPIO_IMG_MAX_PX,
+                                     quality=CARDAPIO_IMG_QUALITY)
+            # A linha nasce ANTES do upload pra o path carregar o id dela —
+            # sem isso duas fotos do mesmo item disputariam o mesmo arquivo.
+            foto = CatalogoFoto(kind=tipo, item_id=obj.id, dropbox_url='',
+                                ordem=ja_tem + salvas + 1)
+            _db.session.add(foto)
+            _db.session.flush()
+            info = dropbox_storage.upload_publico(
+                final, f'/cardapio/{tipo}/{obj.id}-g{foto.id}.jpg',
+                mode='overwrite', autorename=False)
+            foto.dropbox_url = info['url']
+            foto.storage_path = info['storage_path']
+            salvas += 1
+        except Exception as e:  # noqa: BLE001 — uma foto ruim nao derruba as outras
+            _db.session.rollback()
+            erros.append(f'{f.filename}: {e}')
+    _db.session.commit()
+
+    if salvas:
+        flash(f'{salvas} foto(s) adicionada(s) a galeria.', 'success')
+    if ignoradas:
+        flash(f'{ignoradas} foto(s) ignorada(s) — limite de '
+              f'{GALERIA_MAX_FOTOS}.', 'warning')
+    for e in erros:
+        flash(f'Erro: {e}', 'danger')
+    return redirect(url_back)
+
+
+@main_bp.route('/cardapio-img/galeria/<int:foto_id>/remover', methods=['POST'])
+@login_required
+def cardapio_galeria_remover(foto_id):
+    """Remove UMA foto da galeria (e o arquivo no Dropbox)."""
+    from flask import abort, flash, redirect
+
+    from app.extensions import db as _db
+    from app.models import CatalogoFoto
+    if not current_user.is_admin():
+        abort(403)
+    foto = CatalogoFoto.query.get_or_404(foto_id)
+    _obj, url_back = _alvo_catalogo(foto.kind, foto.item_id)
+    if foto.storage_path:
+        from app.services import dropbox_storage
+        dropbox_storage.deletar(foto.storage_path)   # best-effort
+    _db.session.delete(foto)
+    _db.session.commit()
+    flash('Foto removida da galeria.', 'info')
+    return redirect(url_back)
+
+
 @main_bp.route('/api/exportar')
 @login_required
 def exportar():

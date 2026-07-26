@@ -460,7 +460,11 @@ def por_id_publicado(kind, item_id):
             Receita.arquivada_em.is_(None),
             Receita.preco_site.isnot(None),
             Receita.preco_site > 0).first()
-        return _serializar_receita(r) if r else None
+        if not r:
+            return None
+        d = _serializar_receita(r)
+        d['imagens'] = galeria('receita', r.id, d.get('imagem'))
+        return d
     if kind == 'produto':
         p = Produto.query.filter(
             Produto.id == item_id,
@@ -480,6 +484,7 @@ def por_id_publicado(kind, item_id):
         # Detalhe inclui composição da cesta (nomes só, sem custos). Mostra a
         # quantidade JA FORMATADA com unidade (g/ml/un) — sem isso, peso virava
         # "100x peito de peru" (incidente 22/06/2026, era 100g).
+        d['imagens'] = galeria('produto', p.id, d.get('imagem'))
         d['itens'] = [
             {'nome': it.nome_resolvido,
              'quantidade': float(it.quantidade or 1),
