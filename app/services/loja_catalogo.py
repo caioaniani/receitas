@@ -426,6 +426,13 @@ def por_id_publicado(kind, item_id):
         if not p:
             return None
         d = _serializar_produto(p)
+        from app.services import loja_menu
+        if loja_menu.eh_menu(p):
+            # Menu configurável: leva os SLOTS (o cliente escolhe quantos de
+            # cada). Sem preço por item cadastrado, o menu não é vendável —
+            # devolve None (mesma porta do "saiu de catálogo").
+            if not _anotar_menu(d, p, com_slots=True):
+                return None
         # Detalhe inclui composição da cesta (nomes só, sem custos). Mostra a
         # quantidade JA FORMATADA com unidade (g/ml/un) — sem isso, peso virava
         # "100x peito de peru" (incidente 22/06/2026, era 100g).
