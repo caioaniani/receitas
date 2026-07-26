@@ -703,8 +703,17 @@ def create_app(config_class=None):
         from urllib.parse import urlparse
         ref = request.referrer or ''
         destino = ref if urlparse(ref).netloc == request.host else '/'
+        # O código entre colchetes é diagnóstico: diz SE o token não chegou no
+        # corpo (multipart/arquivo) ou SE o cookie de sessão falhou. Some quando
+        # a causa raiz estiver fechada.
+        curto = ('token-ausente' if 'missing' in motivo.lower()
+                                    and 'session' not in motivo.lower()
+                 else 'sessao-ausente' if 'session' in motivo.lower()
+                 else 'token-nao-bate' if 'match' in motivo.lower()
+                 else 'outro')
         flash('Sessão de segurança expirada — a página foi recarregada com um '
-              'código novo. Tente de novo.', 'warning')
+              f'código novo. Tente de novo. [{curto} · {campos} campos]',
+              'warning')
         return redirect(destino)
 
     @app.errorhandler(413)
