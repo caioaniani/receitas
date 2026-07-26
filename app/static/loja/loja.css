@@ -565,6 +565,13 @@ a:hover { text-decoration: underline; }
   border-top: 2px solid #e4dbcc;
 }
 .menu-contador { font-size: 15px; font-weight: 600; }
+/* Clique no "Adicionar" com o menu incompleto: pisca o que falta em vez de
+   não fazer nada (o botão fica travado, mas o cliente precisa saber por quê). */
+.menu-contador.piscando { animation: menu-pisca .4s ease-in-out 3; }
+@keyframes menu-pisca {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); color: #b45309; }
+}
 .menu-contador.ok { color: #1b7f4c; }
 .menu-contador.pendente { color: #b45309; }
 .menu-preco { font-size: 19px; font-weight: 700; color: var(--acento); }
