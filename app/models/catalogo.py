@@ -417,6 +417,19 @@ class Produto(db.Model):
     # vende pra data >= D+2, e produzido pro pedido (nao abate prateleira) e
     # entra na producao do padeiro. ALTER em migrations_legacy (commit 1).
     sob_encomenda = db.Column(db.Boolean, default=False, nullable=False)
+    # ── Menu degustacao CONFIGURAVEL no site (26/07/2026, pedido do dono) ──
+    # Cesta cujo cliente ajusta as quantidades de cada componente: a
+    # `ProdutoItem.quantidade` do cadastro vira a PRE-SELECAO, o total tem
+    # que fechar `menu_total_unidades` (o "30 minis, quais voce quiser") e
+    # nenhum item passa de `menu_max_por_item`. O preco do menu no site e a
+    # SOMA do `ProdutoItem.preco_menu` do que ele escolher — o `preco_site`
+    # so PUBLICA. Travas NULL = defaults do `loja_menu` (30 / 10).
+    # Regra e sanitizacao ficam em app/services/loja_menu.py.
+    # ALTER em migrations_legacy (commit 1 deployado e confirmado por
+    # /api/claude/deploy antes deste modelo).
+    menu_configuravel = db.Column(db.Boolean, default=False, nullable=False)
+    menu_total_unidades = db.Column(db.Integer, nullable=True)
+    menu_max_por_item = db.Column(db.Integer, nullable=True)
     ativo = db.Column(db.Boolean, default=True)
 
     itens = db.relationship(
