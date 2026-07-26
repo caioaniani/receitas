@@ -434,6 +434,23 @@ def categorias_publicadas():
             for cat, _itens in por_categorias(produtos_publicados())]
 
 
+def galeria(kind, item_id, capa=None):
+    """URLs das fotos do item pra a página do produto: a CAPA primeiro,
+    depois as extras (`CatalogoFoto`, 26/07/2026 — "pelo menos 4").
+
+    Só no DETALHE: o listing da vitrine segue com a capa e nada mais (uma
+    query por card mataria a home). Sem extras devolve só a capa — o
+    template cai no layout de foto única, como sempre foi."""
+    from app.models import CatalogoFoto
+    urls = [capa] if capa else []
+    extras = (CatalogoFoto.query
+              .filter_by(kind=kind, item_id=item_id)
+              .order_by(CatalogoFoto.ordem.asc(), CatalogoFoto.id.asc())
+              .all())
+    urls.extend(f.dropbox_url for f in extras if f.dropbox_url)
+    return urls
+
+
 def por_id_publicado(kind, item_id):
     """`kind` = 'receita' (r) ou 'produto' (p). Devolve o dict do item se
     estiver publicado (preço > 0 + ativo); senão None."""
