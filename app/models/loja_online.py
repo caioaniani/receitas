@@ -353,10 +353,13 @@ class PedidoOnlineItemComponente(db.Model):
     item_id = db.Column(
         db.Integer, db.ForeignKey('pedido_online_item.id'),
         nullable=False, index=True)
-    # Slot de origem no cadastro do menu. Rastreabilidade — a baixa usa as
-    # FKs abaixo (o ProdutoItem pode ser removido do menu depois).
-    produto_item_id = db.Column(
-        db.Integer, db.ForeignKey('produto_item.id'), nullable=True)
+    # Slot de origem no cadastro do menu. Integer PURO, SEM ForeignKey de
+    # propósito: `produtos.salvar_composicao` APAGA e RECRIA todos os
+    # `ProdutoItem` da cesta a cada salvamento — uma FK real bloquearia o
+    # admin de editar o menu assim que existisse um pedido (ou deixaria a
+    # linha órfã). Aqui o campo é só rastreabilidade; quem manda na baixa de
+    # estoque são as FKs de alvo abaixo, que são estáveis.
+    produto_item_id = db.Column(db.Integer, nullable=True)
     # 'receita' | 'produto' | 'mp' — espelha ProdutoItem.tipo.
     tipo = db.Column(db.String(10), nullable=False)
     receita_id = db.Column(
