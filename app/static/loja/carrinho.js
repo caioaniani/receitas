@@ -324,8 +324,9 @@
         html +=
           '<div class="cart-drawer-linha" data-kind="' + it.kind +
           '" data-id="' + it.id + '" data-fatiado="' +
-          (it.fatiado ? '1' : '') + '">' + foto +
+          (it.fatiado ? '1' : '') + '"' + compAttr(it) + '>' + foto +
           '<div><div class="nome">' + escapeHtml(it.nome) + '</div>' + fatCtrl +
+          compResumoHtml(it) +
           '<div class="preco-un">' + fmtBRL(it.preco) + ' cada</div></div>' +
           '<div class="stepper">' +
           '<button type="button" data-acao="menos" aria-label="Diminuir">−</button>' +
