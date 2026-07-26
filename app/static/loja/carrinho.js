@@ -527,10 +527,11 @@
       html +=
         '<div class="carrinho-linha" data-kind="' + it.kind +
         '" data-id="' + it.id + '" data-fatiado="' +
-        (it.fatiado ? '1' : '') + '">' +
+        (it.fatiado ? '1' : '') + '"' + compAttr(it) + '>' +
         '<div class="carrinho-foto">' + foto + '</div>' +
         '<div class="carrinho-desc">' +
         '<div class="carrinho-nome">' + escapeHtml(it.nome) + '</div>' + fatCtrl +
+        compResumoHtml(it) +
         '<div class="carrinho-preco-un">' + fmtBRL(it.preco) + ' cada</div>' +
         '</div>' +
         '<div class="carrinho-qtd">' +
