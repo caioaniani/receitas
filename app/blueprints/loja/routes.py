@@ -1177,9 +1177,10 @@ def produto(slug_completo):
     return render_template(
         'loja/produto.html', item=item, em_teste=_em_teste(),
         personalizada=personalizada, monte=monte,
-        data_hoje_iso=data_hoje.isoformat(),
+        data_hoje_iso=data_min.isoformat(),   # `min` do seletor (já com lead)
         data_max_iso=data_max.isoformat(),
         data_padrao_iso=data_padrao.isoformat(),
+        lead_dias=lead,
     )
 
 
