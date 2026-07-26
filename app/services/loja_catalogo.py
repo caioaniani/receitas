@@ -170,7 +170,15 @@ def produtos_publicados():
                 .order_by(Produto.ordem_site.asc().nullslast(),
                           Produto.nome.asc())
                 .all())
-    out = [_serializar_produto(p) for p in produtos]
+    from app.services import loja_menu
+    out = []
+    for p in produtos:
+        d = _serializar_produto(p)
+        # Menu configurável (26/07/2026): preço vem da pré-seleção, não do
+        # preco_site. Menu sem preço por item cadastrado NÃO vai pra vitrine.
+        if loja_menu.eh_menu(p) and not _anotar_menu(d, p):
+            continue
+        out.append(d)
     out.extend(_serializar_receita(r) for r in receitas)
     return out
 
