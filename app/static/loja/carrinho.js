@@ -384,10 +384,14 @@
       var kind = linha.getAttribute('data-kind');
       var id = linha.getAttribute('data-id');
       var fatiado = linha.getAttribute('data-fatiado') === '1';
-      var atual = Carrinho.qtdDe(kind, id, fatiado);
+      var comp = lerCompDaLinha(linha);
+      var atual = Carrinho.qtdDe(kind, id, fatiado, comp);
       var acao = btn.getAttribute('data-acao');
-      if (acao === 'mais') Carrinho.mudarQtd(kind, id, atual + 1, fatiado);
-      else if (acao === 'menos') Carrinho.mudarQtd(kind, id, atual - 1, fatiado);
+      if (acao === 'mais') {
+        Carrinho.mudarQtd(kind, id, atual + 1, fatiado, comp);
+      } else if (acao === 'menos') {
+        Carrinho.mudarQtd(kind, id, atual - 1, fatiado, comp);
+      }
       renderDrawer();
     });
     // Checkbox "fatiado" da linha (change, não click).
