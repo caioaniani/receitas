@@ -775,6 +775,17 @@ def cardapio_quem_somos_foto_remover():
     return redirect(url_for('main.cardapio_atacado_regras'))
 
 
+def _url_site_do_item(kind, item_id, nome):
+    """URL ABSOLUTA da pagina do item na loja publica (LOJA_BASE_URL —
+    opao.online, nao o dominio da gestao). Absoluta porque o cardapio PDF
+    e aberto FORA do navegador (WhatsApp, e-mail, impressao): link
+    relativo nao levaria a lugar nenhum."""
+    base = (current_app.config.get('LOJA_BASE_URL')
+            or 'https://opao.online').rstrip('/')
+    from app.services.loja_catalogo import href_publico
+    return base + href_publico(kind, item_id, nome)
+
+
 def _galeria_explodida(produto):
     """Fotos pra "explodir" a cesta no PDF do cardapio (dono 26/07/2026:
     "que o cardapio PDF dos minis exploda para trazer as fotos que estao na
@@ -887,6 +898,13 @@ def _cardapio_categorias(tipo):
             'preco_venda': preco,
             'imagem_url': img,
             'img_ref': ('receita', r.id) if com_foto else None,
+            # Link pra pagina do item no SITE — o PDF do cardapio deixa o
+            # card CLICAVEL (dono 26/07/2026: "quero que o menu seja
+            # clicavel para levar o cliente ate o produto do site"). So quem
+            # esta PUBLICADO (preco_site > 0) ganha link; o resto nao tem
+            # pagina e levaria o cliente a um 404.
+            'href_site': (_url_site_do_item('receita', r.id, r.nome)
+                          if (r.preco_site or 0) > 0 else None),
         })
 
     # Produtos cadastrados (cestas, kits, etc.)
@@ -911,6 +929,8 @@ def _cardapio_categorias(tipo):
             'preco_venda': preco,
             'imagem_url': img,
             'img_ref': ('produto', p.id) if com_foto else None,
+            'href_site': (_url_site_do_item('produto', p.id, p.nome)
+                          if (p.preco_site or 0) > 0 else None),
             # "Explodir" a cesta no PDF (dono 26/07/2026): as fotos dos
             # COMPONENTES (capa + galeria de cada receita) mais as fotos
             # EXTRAS do proprio produto. So o PDF usa; a tela segue igual.

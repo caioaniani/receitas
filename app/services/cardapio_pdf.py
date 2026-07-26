@@ -220,7 +220,8 @@ def _logo_bytes(logo_data):
         return None
 
 
-def _capa(pdf, titulo_tipo, logo_data=None, slogan=None):
+def _capa(pdf, titulo_tipo, logo_data=None, slogan=None,
+          tem_link=False):
     """Hero escuro da marca (como o do site) + label de seção centrado —
     espelho do main/cardapio.html. As caixas de regras/métodos vão no FIM
     do documento (pedido do dono 20/07: produtos primeiro).
@@ -272,6 +273,15 @@ def _capa(pdf, titulo_tipo, logo_data=None, slogan=None):
     pdf.cell(0, 5, _latin1('CARDÁPIO · %s' % titulo_tipo.upper()),
              align='C', new_x='LMARGIN', new_y='NEXT')
     pdf.set_char_spacing(0)
+    # Aviso de que o PDF e CLICAVEL (dono 26/07/2026): um cardapio que abre
+    # o produto no site so serve se o cliente souber que da pra tocar. So
+    # aparece quando ha ao menos um item publicado (`tem_link`) — num
+    # cardapio sem nada no site a linha seria mentira.
+    if tem_link:
+        pdf.set_font('Helvetica', 'I', 7.5)
+        pdf.set_text_color(*_C_MUTED)
+        pdf.cell(0, 4, _latin1('toque em um produto para abrir no site'),
+                 align='C', new_x='LMARGIN', new_y='NEXT')
 
     pdf.ln(4)
 
@@ -565,9 +575,15 @@ def _card(pdf, x, y, item, foto, card_h=None):
     pdf.set_fill_color(255, 255, 255)
     pdf.rect(x, y, g.col_w, card_h, style='FD',
              round_corners=True, corner_radius=_RAIO)
+    # CARD CLICAVEL (dono 26/07/2026): a foto e o nome viram link pra
+    # pagina do item no site. So itens PUBLICADOS tem `href_site` — o resto
+    # segue sem link (nao existe pagina pra eles). O PDF e aberto fora do
+    # navegador (WhatsApp/e-mail), por isso a URL e absoluta.
+    link = item.get('href_site') or ''
     if foto:
         pdf.image(BytesIO(foto), x=x + 0.5, y=y + 0.5,
-                  w=g.col_w - 1, h=g.foto_h - 1)
+                  w=g.col_w - 1, h=g.foto_h - 1,
+                  link=link or None)
     else:
         # .card-img.placeholder: bege com a marca discreta no centro.
         pdf.set_fill_color(*_C_TAG)
@@ -576,7 +592,8 @@ def _card(pdf, x, y, item, foto, card_h=None):
         pdf.set_font('Times', 'I', 13)
         pdf.set_text_color(*_C_SOFT)
         pdf.set_xy(x, y + g.foto_h / 2 - 3)
-        pdf.cell(g.col_w, 6, _latin1('O Pão'), align='C')
+        pdf.cell(g.col_w, 6, _latin1('O Pão'), align='C',
+                 link=link or None)
     pdf.set_xy(x + 2.5, y + g.foto_h + 1.5)
     pdf.set_font('Helvetica', 'B', 8.5)
     pdf.set_text_color(*_C_FG)
@@ -586,7 +603,7 @@ def _card(pdf, x, y, item, foto, card_h=None):
                and len(nome) > 3):
             nome = nome[:-1]
         nome += '...'
-    pdf.cell(g.col_w - 5, 4.5, nome)
+    pdf.cell(g.col_w - 5, 4.5, nome, link=link or None)
     if card_h > g.card_h:
         desc = item.get('descricao')
         if desc:
@@ -766,7 +783,8 @@ def _lista_categoria(pdf, itens):
                        and len(nome) > 3):
                     nome = nome[:-1]
                 nome += '...'
-            pdf.cell(max_nome, 6, nome)
+            pdf.cell(max_nome, 6, nome,
+                     link=(item.get('href_site') or None))
             pdf.set_xy(x + g.linha_w - w_preco - 4, y0 + 2)
             pdf.set_text_color(*_C_PRIMARY)
             pdf.cell(w_preco, 6, preco, align='R')
@@ -825,7 +843,9 @@ def gerar_cardapio_pdf(tipo, categorias, regras, logo=None, preparo=None,
     geo = _GEO_MOBILE if formato == 'mobile' else _GEO_A4
     pdf = _CardapioPDF(titulo, geo=geo)
     pdf.add_page()
-    _capa(pdf, titulo, logo_data=logo, slogan=slogan)
+    tem_link = any(i.get('href_site')
+                   for itens in categorias.values() for i in itens)
+    _capa(pdf, titulo, logo_data=logo, slogan=slogan, tem_link=tem_link)
 
     # Lista incompleta é COMPLETADA (mesma regra do _ordem_secoes da rota):
     # caller futuro que passe só ['quem_somos'] não perde as categorias em

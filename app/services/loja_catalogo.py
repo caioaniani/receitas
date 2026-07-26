@@ -63,6 +63,16 @@ def receita_fatiavel(r):
     return 'sourdough' in nome
 
 
+def href_publico(kind, item_id, nome):
+    """Caminho da página do item no site: '/loja/<slug>-r12' | '-p7'.
+
+    Função PURA (sem query) — quem já tem nome+id monta o link sem bater no
+    banco. É o mesmo `href` que os serializadores devolvem; existe pra o
+    cardápio (tela e PDF) linkar pro site sem reimplementar o slug."""
+    letra = 'r' if kind == 'receita' else 'p'
+    return f'/loja/{_slugify(nome)}-{letra}{item_id}'
+
+
 def _serializar_receita(r):
     return {
         'id': r.id,
@@ -88,7 +98,7 @@ def _serializar_receita(r):
         # contencao). None = ficha sem peso unitario.
         'peso_g': int(r.peso_unitario) if r.peso_unitario else None,
         'slug': _slugify(r.nome),
-        'href': f'/loja/{_slugify(r.nome)}-r{r.id}',
+        'href': href_publico('receita', r.id, r.nome),
     }
 
 
@@ -184,7 +194,7 @@ def _serializar_produto(p):
         # template cai no fallback "Nome — Categoria".
         'descricao': p.descricao_seo or p.descricao or '',
         'slug': _slugify(p.nome),
-        'href': f'/loja/{_slugify(p.nome)}-p{p.id}',
+        'href': href_publico('produto', p.id, p.nome),
         # No detalhe, vamos expandir os itens da cesta (mas não no listing
         # pra não pesar).
     }

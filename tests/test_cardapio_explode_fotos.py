@@ -165,3 +165,64 @@ def test_cesta_comum_nao_tem_menu_regra(app):
         alvo = [i for c in cats.values() for i in c
                 if i['nome'] == 'Cesta Fixa'][0]
         assert alvo['menu_regra'] is None
+
+
+# ── Cardápio PDF clicável (26/07/2026) ───────────────────────────────────
+
+def _publicado_no_site(db):
+    from app.models import Produto, Receita
+    db.session.add(Produto(nome='Caixa de Mini', categoria='Minis',
+                           ativo=True, preco_atacado=100, preco_site=100))
+    db.session.add(Receita(nome='Pao Sem Site', categoria='Paes',
+                           rendimento_qtd=1, rendimento_unidade='un',
+                           peso_base=500, preco_venda=20))   # sem preco_site
+    db.session.commit()
+
+
+def test_item_publicado_ganha_link_absoluto_pro_site(app):
+    """Dono 26/07/2026: "quando exportar um pdf de cardápio quero que o menu
+    seja clicável para levar o cliente até o produto do site"."""
+    from app.extensions import db
+    with app.app_context():
+        _publicado_no_site(db)
+    with app.test_request_context('/'):
+        from app.blueprints.main.routes import _cardapio_categorias
+        cats, _r = _cardapio_categorias('atacado')
+        por_nome = {i['nome']: i for c in cats.values() for i in c}
+        href = por_nome['Caixa de Mini']['href_site']
+        # ABSOLUTA e na loja pública (o PDF abre fora do navegador)
+        assert href.startswith('https://')
+        assert '/loja/caixa-de-mini-p' in href
+        # item que NÃO está no site não ganha link (levaria a 404)
+        assert por_nome['Pao Sem Site']['href_site'] is None
+
+
+def test_pdf_do_cardapio_sai_com_link_clicavel(app):
+    from app.extensions import db
+    with app.app_context():
+        _publicado_no_site(db)
+    with app.test_request_context('/'):
+        from app.blueprints.main.routes import _cardapio_categorias
+        from app.services import cardapio_pdf as svc
+        svc.limpar_cache_fotos()
+        cats, regras = _cardapio_categorias('atacado')
+        conteudo = svc.gerar_cardapio_pdf('atacado', cats, regras)
+    assert conteudo[:4] == b'%PDF'
+    # A anotação de link vira /URI no PDF — sem ela o card não é clicável.
+    assert b'/URI' in conteudo
+    assert b'caixa-de-mini-p' in conteudo
+
+
+def test_href_publico_bate_com_o_href_da_vitrine(app):
+    """O link do PDF tem que apontar pro MESMO caminho que a vitrine gera —
+    divergir levaria o cliente pra um 404."""
+    from app.extensions import db
+    from app.models import Produto
+    from app.services import loja_catalogo
+    with app.app_context():
+        p = Produto(nome='Caixa de Mini', categoria='Minis', ativo=True,
+                    preco_site=100)
+        db.session.add(p)
+        db.session.commit()
+        d = loja_catalogo.por_id_publicado('produto', p.id)
+        assert d['href'] == loja_catalogo.href_publico('produto', p.id, p.nome)
