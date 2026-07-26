@@ -118,8 +118,8 @@
       this.salvar(out);
     },
 
-    remover: function (kind, id, fatiado) {
-      this.mudarQtd(kind, id, 0, fatiado);
+    remover: function (kind, id, fatiado, comp) {
+      this.mudarQtd(kind, id, 0, fatiado, comp);
     },
 
     // Liga/desliga "fatiado" de uma LINHA já no carrinho (checkbox da linha
