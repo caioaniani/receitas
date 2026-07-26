@@ -298,7 +298,8 @@
         <form method="POST" action="{{ url_for('main.cardapio_img_upload', tipo='produto', id=produto.id) }}"
               enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="file" name="imagem_arquivo" accept="image/*" class="form-control form-control-sm" required>
+            <input type="file" name="imagem_arquivo" accept="image/*" class="form-control form-control-sm" required
+                   data-comprimir>
             <button type="submit" class="btn btn-sm btn-primary">
                 <i class="bi bi-upload"></i> {% if tem_foto %}Trocar foto{% else %}Enviar foto{% endif %}
             </button>
