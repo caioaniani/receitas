@@ -245,14 +245,23 @@ def salvar_composicao(id):
     # silencio num salvar que mexeu em OUTRA linha (a baixa de venda dele
     # pararia). Sem match ativo, a linha reusa a FK que ja tinha.
     fks_atuais = {}
+    precos_menu_atuais = {}
     for it in ProdutoItem.query.filter_by(produto_id=produto.id).all():
-        fks_atuais[(it.tipo, (it.item_nome or '').strip())] = (
+        chave_it = (it.tipo, (it.item_nome or '').strip())
+        fks_atuais[chave_it] = (
             it.receita_id, it.produto_componente_id, it.materia_prima_id)
+        precos_menu_atuais[chave_it] = it.preco_menu
     ProdutoItem.query.filter_by(produto_id=produto.id).delete()
 
     tipos = request.form.getlist('item_tipo[]')
     nomes = request.form.getlist('item_nome[]')
     qtds = request.form.getlist('quantidade[]')
+    # Preço por unidade DENTRO do menu configurável. POST sem o campo (form
+    # antigo / outra tela) NÃO apaga o preço já cadastrado — mesmo cuidado do
+    # grandfather das FKs logo abaixo (a linha é recriada a cada salvamento,
+    # então "não veio" tem que significar "mantém", não "zera").
+    precos_menu = request.form.getlist('preco_menu[]')
+    tem_campo_preco_menu = 'preco_menu[]' in request.form
 
     for i in range(len(nomes)):
         nome = nomes[i].strip()
