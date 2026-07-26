@@ -575,6 +575,20 @@ a:hover { text-decoration: underline; }
 .menu-contador.ok { color: #1b7f4c; }
 .menu-contador.pendente { color: #b45309; }
 .menu-preco { font-size: 19px; font-weight: 700; color: var(--acento); }
+/* Card de MENU na vitrine: convite a montar, no lugar do "+ Adicionar"
+   (o menu exige escolher 30 unidades — não dá pra quick-add). */
+.card-montar {
+  display: block;
+  text-align: center;
+  padding: 10px 12px;
+  border: 1px solid var(--acento);
+  border-radius: 4px;
+  color: var(--acento);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+}
+.card-montar:hover { background: var(--acento); color: #fff; }
 /* Composição escolhida, na linha do carrinho/drawer/checkout. */
 .linha-comp {
   font-size: 12px;
