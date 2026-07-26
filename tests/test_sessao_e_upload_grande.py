@@ -41,7 +41,7 @@ def test_upload_acima_do_limite_avisa_o_tamanho(app, admin_user):
         s['_user_id'] = str(admin_user.id)
         s['_fresh'] = True
     grande = io.BytesIO(b'x' * 5000)                 # 5 KB > 1 KB
-    r = c.post('/cardapio/img/receita/1/upload',
+    r = c.post('/cardapio-img/receita/1/upload',
                data={'imagem_arquivo': (grande, 'foto.jpg')},
                content_type='multipart/form-data', follow_redirects=True)
     corpo = r.get_data(as_text=True)
