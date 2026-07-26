@@ -12,7 +12,12 @@
 
 // loja-v3 (25/07/2026): bump obriga o 'activate' a APAGAR os caches v2 — que
 // ja tem HTML de checkout/conta com token CSRF velho gravado nos aparelhos.
-const VERSION = 'loja-v3';
+// loja-v4 (26/07/2026): o cache-first de /static estava servindo o loja.css
+// VELHO depois do deploy — a pagina do produto recebeu o HTML novo (galeria)
+// sem as regras que dimensionam as miniaturas e ESTOUROU com as fotos em
+// tamanho natural. O bump limpa os aparelhos que ja pegaram o CSS velho; o
+// `?v=<hash>` no <link>/<script> (_base.html) evita que volte a acontecer.
+const VERSION = 'loja-v4';
 const CACHE_STATIC = `opao-loja-static-${VERSION}`;
 const CACHE_RUNTIME = `opao-loja-runtime-${VERSION}`;
 

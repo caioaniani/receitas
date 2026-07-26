@@ -289,5 +289,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('loja.static', filename='checkout.js') }}"></script>
+<script src="{{ url_for('loja.static', filename='checkout.js') }}?v={{ static_v['loja/checkout.js'] }}"></script>
 {% endblock %}

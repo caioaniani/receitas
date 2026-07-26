@@ -85,7 +85,10 @@
 
 {% if em_teste %}<meta name="robots" content="noindex,nofollow">{% endif %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
-<link rel="stylesheet" href="{{ url_for('loja.static', filename='loja.css') }}">
+{# `?v=` com o hash do conteudo (app/__init__.py::inject_static_version):
+   sem isso o service worker (cache-first em /static) servia o CSS VELHO
+   depois do deploy — foi o que estourou a pagina do produto em 26/07/2026. #}
+<link rel="stylesheet" href="{{ url_for('loja.static', filename='loja.css') }}?v={{ static_v['loja/loja.css'] }}">
 
 {# ── Analytics / Pixel ───────────────────────────────────────────────
    GA4 e Meta Pixel sao opt-in por env var. Sem env, nada e' carregado
@@ -367,7 +370,7 @@
 {# Carrinho da SESSÃO (fonte de verdade, resolvido no servidor). O carrinho.js
    inicializa o estado a partir disto — não depende mais do localStorage. #}
 <script type="application/json" id="carrinho-sessao">{{ carrinho_sessao | tojson }}</script>
-<script src="{{ url_for('loja.static', filename='carrinho.js') }}"></script>
+<script src="{{ url_for('loja.static', filename='carrinho.js') }}?v={{ static_v['loja/carrinho.js'] }}"></script>
 {% block scripts %}{% endblock %}
 
 {# Chatwoot widget (botão de chat no canto). Só renderiza se a env
