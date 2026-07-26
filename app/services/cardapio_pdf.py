@@ -624,6 +624,74 @@ def _grid_categoria(pdf, itens_foto, card_h=None):
         pdf.set_y(y0 + card_h + _GAP)
 
 
+def _mosaico_explodido(pdf, item):
+    """"Explode" uma cesta no PDF: mosaico com as fotos dos COMPONENTES
+    (capa + galeria de cada receita) e as fotos EXTRAS do produto, cada uma
+    legendada com o nome (dono 26/07/2026 — "o cardápio dos minis tem que
+    explodir e trazer as fotos que estão na receita").
+
+    Fica LOGO ABAIXO do grid da categoria, num bloco próprio de largura
+    cheia — o card do grid tem altura fixa e não comporta o mosaico.
+    Foto que não baixa é simplesmente pulada (o PDF nunca deixa de sair);
+    se NENHUMA baixar, o bloco inteiro é omitido (não sobra um título
+    solto sobre um vazio)."""
+    galeria = item.get('galeria') or []
+    if not galeria:
+        return
+    g = pdf.geo
+    cols = 4 if g.util >= 150 else 3
+    gap = 3.0
+    lado = (g.util - gap * (cols - 1)) / cols
+    alt_cel = lado + 6.5                      # foto + legenda (6pt)
+
+    # Baixa TUDO antes de desenhar: assim o "não sobrou nenhuma" é decidido
+    # antes de gastar o título, e a quebra de página vê a altura real.
+    prontas = []
+    for foto in galeria:
+        b = _bytes_foto(foto)
+        if b:
+            prontas.append((foto.get('nome') or '', b))
+    if not prontas:
+        return
+
+    linhas = (len(prontas) + cols - 1) // cols
+    titulo_h = 7.5
+    # Não deixar o título órfão no pé da página: leva a 1ª fileira junto.
+    if pdf.get_y() + titulo_h + alt_cel > g.y_limite:
+        pdf.add_page()
+    pdf.set_x(g.margem)
+    pdf.set_font('Helvetica', 'B', 8)
+    pdf.set_text_color(*_C_MUTED)
+    pdf.set_char_spacing(0.6)
+    pdf.cell(0, 5, _latin1('O QUE VEM NO %s' % (item.get('nome') or '').upper()),
+             new_x='LMARGIN', new_y='NEXT')
+    pdf.set_char_spacing(0)
+    pdf.ln(1)
+
+    for i in range(linhas):
+        fileira = prontas[i * cols:(i + 1) * cols]
+        if pdf.get_y() + alt_cel > g.y_limite:
+            pdf.add_page()
+        y0 = pdf.get_y()
+        for col, (nome, blob) in enumerate(fileira):
+            x = g.margem + col * (lado + gap)
+            try:
+                pdf.image(BytesIO(blob), x=x, y=y0, w=lado, h=lado)
+            except Exception:  # noqa: BLE001 — foto ruim não derruba o PDF
+                logger.warning('cardapio_pdf: foto do mosaico nao embutiu',
+                               exc_info=True)
+                continue
+            pdf.set_font('Helvetica', '', 6)
+            pdf.set_text_color(*_C_MUTED)
+            txt = _latin1(nome)
+            while pdf.get_string_width(txt) > lado and len(txt) > 3:
+                txt = txt[:-1]
+            pdf.set_xy(x, y0 + lado + 1)
+            pdf.cell(lado, 3.5, txt, align='C')
+        pdf.set_y(y0 + alt_cel + 1.5)
+    pdf.ln(1)
+
+
 _LINHA_H = 10
 _LINHA_H_DESC = 17                      # nome + até 2 linhas de descrição
 _LINHA_W = (190 - _GAP) / 2   # legado A4 (geo.linha_w nas funções)
@@ -770,3 +838,8 @@ def _secao_produtos(pdf, categorias, geo):
         else:
             _lista_categoria(pdf, itens)
             pdf.ln(2)
+        # Cestas "explodidas": o mosaico com as fotos dos componentes vem
+        # DEPOIS do grid da categoria (o card tem altura fixa e não cabe).
+        for it in itens:
+            if it.get('galeria'):
+                _mosaico_explodido(pdf, it)

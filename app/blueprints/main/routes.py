@@ -775,6 +775,46 @@ def cardapio_quem_somos_foto_remover():
     return redirect(url_for('main.cardapio_atacado_regras'))
 
 
+def _galeria_explodida(produto):
+    """Fotos pra "explodir" a cesta no PDF do cardapio (dono 26/07/2026:
+    "que o cardapio PDF dos minis exploda para trazer as fotos que estao na
+    receita e tambem todas as fotos a mais que vou adicionar no produto").
+
+    Devolve `[{'nome', 'img_ref'|'imagem_url'}]` — a MESMA forma que
+    `cardapio_pdf._bytes_foto` ja sabe ler:
+
+    1. fotos EXTRAS do proprio produto (`CatalogoFoto`);
+    2. por componente-receita: a CAPA dela + as extras dela.
+
+    Cesta sem componentes e sem extras devolve [] (nada muda no PDF).
+    A capa do proprio produto NAO entra: ela ja e a foto do card."""
+    from app.models import CatalogoFoto
+    itens = getattr(produto, 'itens', None) or []
+    extras_prod = (CatalogoFoto.query
+                   .filter_by(kind='produto', item_id=produto.id)
+                   .order_by(CatalogoFoto.ordem.asc(),
+                             CatalogoFoto.id.asc()).all())
+    if not itens and not extras_prod:
+        return []
+    out = [{'nome': produto.nome, 'imagem_url': f.dropbox_url}
+           for f in extras_prod if f.dropbox_url]
+    for pi in itens:
+        if pi.tipo != 'receita' or not pi.receita_id:
+            continue
+        r = pi.receita
+        if r is None:
+            continue
+        if r.imagem_dropbox_url or r.imagem_blob:
+            out.append({'nome': r.nome, 'img_ref': ('receita', r.id)})
+        for f in (CatalogoFoto.query
+                  .filter_by(kind='receita', item_id=r.id)
+                  .order_by(CatalogoFoto.ordem.asc(),
+                            CatalogoFoto.id.asc()).all()):
+            if f.dropbox_url:
+                out.append({'nome': r.nome, 'imagem_url': f.dropbox_url})
+    return out
+
+
 def _cardapio_categorias(tipo):
     """Monta as categorias do cardápio — FONTE ÚNICA da tela E do PDF
     (19/07/2026): divergência aqui = cardápio impresso diferente do site.
@@ -854,6 +894,10 @@ def _cardapio_categorias(tipo):
             'preco_venda': preco,
             'imagem_url': img,
             'img_ref': ('produto', p.id) if com_foto else None,
+            # "Explodir" a cesta no PDF (dono 26/07/2026): as fotos dos
+            # COMPONENTES (capa + galeria de cada receita) mais as fotos
+            # EXTRAS do proprio produto. So o PDF usa; a tela segue igual.
+            'galeria': _galeria_explodida(p),
         })
 
     regras = _regras_atacado() if tipo == 'atacado' else []
