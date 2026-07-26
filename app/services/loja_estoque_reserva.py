@@ -255,7 +255,11 @@ def consumir(pedido, *, loja_id, usuario_id=None):
             loja_id, receita_id=it.receita_id, produto_id=it.produto_id,
             qtd=it.quantidade, canal='site', referencia=ref,
             pedido_ref=f'site:{pedido.codigo}', usuario_id=usuario_id,
-            nome_venda=it.nome, pular_sem_linha=True)
+            nome_venda=it.nome, pular_sem_linha=True,
+            # Menu configurável: baixa pela composição ESCOLHIDA (a mesma que
+            # `_expandir_estoque` reservou) — reserva e baixa TÊM que mexer
+            # nas mesmas linhas, senão a `quantidade_reservada` não fecha.
+            composicao=composicao_escolhida(it))
         total['baixado'] += res['baixado']
         total['faltou'] += res['faltou']
 
