@@ -102,7 +102,7 @@ def _get_debito(loja_id, col, item_id):
 def aplicar_venda(loja_id, *, receita_id=None, produto_id=None,
                   materia_prima_id=None, qtd, fator=1.0, canal,
                   referencia, pedido_ref, usuario_id=None, nome_venda=None,
-                  pular_sem_linha=False):
+                  pular_sem_linha=False, composicao=None):
     """Baixa o estoque de UMA venda (qtd unidades do item) na loja.
 
     Args:
