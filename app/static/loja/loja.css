@@ -626,6 +626,9 @@ a:hover { text-decoration: underline; }
   text-decoration: none;
 }
 .card-montar:hover { background: var(--acento); color: #fff; }
+/* Menu cuja escolha foi invalidada por edição do cadastro: o cliente
+   precisa remontar (o checkout recusaria). */
+.linha-remontar { color: #b45309; font-weight: 600; }
 /* Composição escolhida, na linha do carrinho/drawer/checkout. */
 .linha-comp {
   font-size: 12px;

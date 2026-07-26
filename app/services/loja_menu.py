@@ -6,15 +6,17 @@ as quantidades não tem problema; porém ele deve ser obrigado a selecionar
 30 unidades dos minis independente de quais". Decisões dele (AskUserQuestion):
 
 - **preço varia conforme a escolha**, cadastrado POR MINI → o preço do menu
-  é a SOMA de `preço do mini x quantidade escolhida`;
-- **máximo 10 de cada**;
+  é a SOMA de `preço do mini x quantidade escolhida`; o ANUNCIADO é o
+  MÍNIMO possível ("a partir de", ver `preco_minimo`);
+- **sem teto por item** (o "máximo 10 de cada" foi revogado no mesmo dia —
+  ver `regras`);
 - a regra vale **só pra este menu** (não vira comportamento global de cesta).
 
 MODELAGEM — o menu é um Produto-cesta NORMAL:
 - `ProdutoItem` (a composição que o admin já cadastra) = os minis
   disponíveis; `ProdutoItem.quantidade` = a PRÉ-SELEÇÃO (5 de cada);
-- `Produto.menu_configuravel` liga o modo; `menu_total_unidades` (30) e
-  `menu_max_por_item` (10) são as travas;
+- `Produto.menu_configuravel` liga o modo; `menu_total_unidades` (30) é a
+  trava obrigatória e `menu_max_por_item` (opcional) limita por item;
 - `ProdutoItem.preco_menu` = preço por unidade DAQUELE mini DENTRO deste
   menu. Mora no ProdutoItem, não na Receita, de propósito: os minis não são
   vendidos avulsos e um `preco_site` neles os publicaria na vitrine
@@ -223,6 +225,11 @@ def preco(produto, comp, *, slots_=None):
     menos. O admin vê o pendente na tela da cesta.
 
     `slots_` evita re-varrer o cadastro quando o chamador já tem a lista."""
+    if not comp:
+        # Composição VAZIA não é "de graça": é escolha invalidada (o admin
+        # editou o menu depois que o cliente montou). Devolver Decimal('0')
+        # fazia o carrinho exibir R$ 0,00 — achado de revisão 26/07/2026.
+        return None
     por_id = {s['pi_id']: s for s in (slots(produto) if slots_ is None
                                       else slots_)}
     total = Decimal('0')

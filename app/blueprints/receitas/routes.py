@@ -1502,6 +1502,9 @@ def excluir(id):
     # estoque, produtos/cestas, mapeamentos de PDV) — FKs sem cascade. Aborta
     # de forma limpa com mensagem em vez de 500; o historico fica intacto.
     try:
+        # Galeria some junto (CatalogoFoto nao tem FK — ninguem apagaria).
+        from app.blueprints.main.routes import apagar_galeria_do_item
+        apagar_galeria_do_item('receita', receita.id)
         db.session.delete(receita)
         db.session.commit()
         flash(f'"{nome}" excluído com sucesso!', 'success')

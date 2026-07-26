@@ -6,7 +6,7 @@ from app.decorators import admin_required, catalogo_required
 from app.extensions import db
 from app.models import MateriaPrima, Produto, ProdutoItem, Receita
 from app.services.custos import calcular_custo_produto, calcular_custos_receitas
-from app.utils import parse_float_br
+from app.utils import fmt_brl, parse_float_br
 
 
 @produtos_bp.route('/')
@@ -193,14 +193,60 @@ def detalhe(id):
                      .filter_by(kind='produto', item_id=produto.id)
                      .order_by(CatalogoFoto.ordem.asc(),
                                CatalogoFoto.id.asc()).all())
+    # Diagnostico do MENU: por que ele nao esta no site. Os gates de
+    # `loja_catalogo._anotar_menu` so logavam WARNING — o admin acrescentava
+    # um 7o mini, a pre-selecao passava do total e o menu SUMIA da vitrine
+    # sem nada explicar (achado de revisao 26/07/2026).
+    menu_diagnostico = _diagnostico_menu(produto)
+    menu_preco_minimo = menu_preco_padrao = None
+    if getattr(produto, 'menu_configuravel', False) and not menu_diagnostico:
+        from app.services import loja_menu
+        menu_preco_minimo = fmt_brl(loja_menu.preco_minimo(produto))
+        menu_preco_padrao = fmt_brl(
+            loja_menu.preco(produto, loja_menu.composicao_padrao(produto)))
     return render_template('produtos/detalhe.html',
                            produto=produto,
+                           menu_diagnostico=menu_diagnostico,
+                           menu_preco_minimo=menu_preco_minimo,
+                           menu_preco_padrao=menu_preco_padrao,
                            itens_data=itens_data,
                            custo_total=custo_total,
                            receita_custos=receita_custos,
                            produto_custos=produto_custos,
                            galeria_fotos=galeria_fotos,
                            galeria_max=GALERIA_MAX_FOTOS)
+
+
+def _diagnostico_menu(produto):
+    """Mensagem explicando por que o menu NAO aparece no site, ou None se
+    esta tudo certo. Espelha os gates de `loja_catalogo._anotar_menu` — o
+    admin precisa ver na tela, nao so no log."""
+    if not getattr(produto, 'menu_configuravel', False):
+        return None
+    from app.services import loja_menu
+    if not produto.itens:
+        return 'A composicao esta vazia — adicione os itens do menu.'
+    slots = loja_menu.slots(produto)
+    if not slots:
+        return ('Nenhum item da composicao tem vinculo valido (todos orfaos) '
+                '— resolva em /produtos/cestas/orfaos.')
+    sem_preco = [s['nome'] for s in slots
+                 if s['preco'] is None or s['preco'] <= 0]
+    if sem_preco:
+        return ('Sem "Preco no menu" em: %s.' % ', '.join(sem_preco))
+    total, teto = loja_menu.regras(produto)
+    padrao = sum(loja_menu.composicao_padrao(produto).values())
+    if padrao != total:
+        return ('A pre-selecao soma %d unidades, mas o total obrigatorio e '
+                '%d — ajuste as quantidades da composicao.' % (padrao, total))
+    if teto * len(slots) < total:
+        return ('Com %d itens e maximo %d por item da no maximo %d unidades, '
+                'mas o total exigido e %d — o cliente nunca fecharia a '
+                'selecao.' % (len(slots), teto, teto * len(slots), total))
+    if not (produto.preco_site or 0) > 0:
+        return ('O "Preco Site" precisa ser maior que zero pra publicar '
+                '(ele so PUBLICA; o preco cobrado e a soma dos minis).')
+    return None
 
 
 def _menu_no_modelo():
@@ -418,6 +464,9 @@ def excluir(id):
     # apontando pra ele, o FK aborta — nesse caso DESATIVA em vez de excluir
     # (preserva historico/estoque; o produto some da lista por ficar inativo).
     try:
+        # Galeria some junto (CatalogoFoto nao tem FK — ninguem apagaria).
+        from app.blueprints.main.routes import apagar_galeria_do_item
+        apagar_galeria_do_item('produto', produto.id)
         db.session.delete(produto)
         db.session.commit()
         flash(f'"{nome}" excluido!', 'success')

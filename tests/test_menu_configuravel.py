@@ -604,3 +604,107 @@ def test_cardapio_usa_o_minimo_com_a_partir_de(app):
                 if i['nome'].startswith('Menu Degust')][0]
         assert alvo['preco_venda'] == 35.0
         assert alvo['preco_a_partir'] is True
+
+
+# ── Achados da 2ª revisão independente (26/07/2026) ──────────────────────
+
+def test_carrinho_e_checkout_mostram_o_MESMO_preco_sem_comp(app):
+    """CRÍTICO. Linha sem `comp` (sessão antiga, JS velho no cache) exibia o
+    preço MÍNIMO no carrinho e era cobrada pela PRÉ-SELEÇÃO no checkout — o
+    cliente via R$ 35 e pagava R$ 45. Agora os dois usam o mesmo cálculo."""
+    from app.blueprints.loja import routes as loja_routes
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        menu, _ = _menu(db, total=15, precos=(2.0, 3.0, 4.0), padroes=(5, 5, 5))
+        mid = menu.id
+
+    with app.test_request_context('/loja/'):
+        loja_routes._set_carrinho_sessao([
+            {'kind': 'produto', 'id': mid, 'qtd': 1}])       # SEM comp
+        linha = loja_routes._resolver_carrinho_sessao()[0]
+
+    itens, avisos = loja_checkout.montar_itens([
+        {'kind': 'produto', 'id': mid, 'qtd': 1}])           # SEM comp
+    assert avisos == []
+    assert float(itens[0]['preco']) == linha['preco'], (
+        'carrinho e checkout divergiram')
+    assert linha['preco'] == 45.0        # a pré-seleção, que é o que se cobra
+
+
+def test_escolha_invalidada_nao_vira_R0_no_carrinho(app):
+    """Composição vazia não é "de graça": era exibida como R$ 0,00."""
+    from app.blueprints.loja import routes as loja_routes
+    from app.extensions import db
+    from app.services import loja_menu
+    with app.app_context():
+        menu, _ = _menu(db, total=15, precos=(2.0, 3.0, 4.0))
+        assert loja_menu.preco(menu, {}) is None
+        mid = menu.id
+        obsoleto = _pis(menu)[0] + 10_000
+
+    with app.test_request_context('/loja/'):
+        loja_routes._set_carrinho_sessao([
+            {'kind': 'produto', 'id': mid, 'qtd': 1, 'comp': [[obsoleto, 15]]}])
+        linha = loja_routes._resolver_carrinho_sessao()[0]
+    assert linha['preco'] != 0
+    assert linha['remontar'] is True      # a tela pede pra remontar
+
+
+def test_menu_nao_entra_no_monte_sua_cesta(app):
+    """O card do menu no grid "Monte sua cesta" fazia quick-add SEM
+    composição — alimentava o bug de preço acima e duplicava a linha."""
+    from app.extensions import db
+    from app.services import loja_catalogo
+    with app.app_context():
+        menu, _ = _menu(db, total=15, precos=(2.0, 3.0, 4.0))
+        menu.categoria = 'Minis'         # fora de 'Cestas': o filtro antigo
+        db.session.commit()              # por categoria não pegava
+        nomes = [i['nome'] for i in loja_catalogo.itens_para_montar()]
+        assert menu.nome not in nomes
+
+
+def test_pdf_usa_as_regras_canonicas_do_menu(app):
+    """O cardápio reimplementava os defaults (30/10) e prometia "no máximo
+    10 de cada" DEPOIS de o dono ter tirado a regra."""
+    from app.extensions import db
+    with app.app_context():
+        menu, _ = _menu(db, total=15, teto=10, precos=(2.0, 3.0, 4.0))
+        menu.menu_max_por_item = None    # sem teto
+        menu.preco_atacado = 111         # pra entrar no cardápio de atacado
+        db.session.commit()
+    with app.test_request_context('/'):
+        from app.blueprints.main.routes import _cardapio_categorias
+        cats, _r = _cardapio_categorias('atacado')
+        alvo = [i for c in cats.values() for i in c
+                if i['nome'].startswith('Menu Degust')][0]
+        assert alvo['menu_regra'] == {'total': 15, 'max': 15}
+
+
+def test_menu_sem_preco_sai_do_cardapio_tambem(app):
+    """Divergência: o site escondia o menu e o cardápio continuava listando
+    com o preço do cadastro (e link pra um 404)."""
+    from app.extensions import db
+    with app.app_context():
+        menu, _ = _menu(db, total=15, precos=(2.0, None, 4.0))
+        menu.preco_atacado = 111
+        db.session.commit()
+    with app.test_request_context('/'):
+        from app.blueprints.main.routes import _cardapio_categorias
+        cats, _r = _cardapio_categorias('atacado')
+        nomes = [i['nome'] for c in cats.values() for i in c]
+        assert not [n for n in nomes if n.startswith('Menu Degust')]
+
+
+def test_admin_ve_por_que_o_menu_sumiu_do_site(app):
+    """Os gates só logavam WARNING — o admin não tinha como saber."""
+    from app.blueprints.produtos.routes import _diagnostico_menu
+    from app.extensions import db
+    with app.app_context():
+        menu, _ = _menu(db, total=15, padroes=(5, 5, 5))
+        assert _diagnostico_menu(menu) is None          # tudo certo
+
+        menu.menu_total_unidades = 30                   # pré-seleção soma 15
+        db.session.commit()
+        d = _diagnostico_menu(menu)
+        assert d and '15' in d and '30' in d

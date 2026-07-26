@@ -775,6 +775,17 @@ def cardapio_quem_somos_foto_remover():
     return redirect(url_for('main.cardapio_atacado_regras'))
 
 
+def _regra_do_menu(produto):
+    """{'total', 'max'} do menu pelo helper canonico, ou None se nao e menu.
+    Fonte unica: `loja_menu.regras` ja normaliza "em branco = sem teto" e
+    "teto acima do total"."""
+    if not getattr(produto, 'menu_configuravel', False):
+        return None
+    from app.services import loja_menu
+    total, teto = loja_menu.regras(produto)
+    return {'total': total, 'max': teto}
+
+
 def _url_site_do_item(kind, item_id, nome):
     """URL ABSOLUTA da pagina do item na loja publica (LOJA_BASE_URL —
     opao.online, nao o dominio da gestao). Absoluta porque o cardapio PDF
@@ -936,10 +947,12 @@ def _cardapio_categorias(tipo):
             # EXTRAS do proprio produto. So o PDF usa; a tela segue igual.
             'galeria': _galeria_explodida(p),
             # Regras do menu pro PDF escrever a observacao de pedido minimo
-            # (dono 26/07/2026). None em produto que nao e menu.
-            'menu_regra': ({'total': p.menu_total_unidades or 30,
-                            'max': p.menu_max_por_item or 10}
-                           if getattr(p, 'menu_configuravel', False) else None),
+            # (dono 26/07/2026). Vem do helper CANONICO `loja_menu.regras` —
+            # reimplementar os defaults aqui fez o PDF prometer "no maximo 10
+            # de cada" DEPOIS do dono ter tirado a regra (achado de revisao):
+            # o site permitia 30 de um so e o cardapio impresso dizia o
+            # contrario. None em produto que nao e menu.
+            'menu_regra': _regra_do_menu(p),
             'preco_a_partir': False,      # sobrescrito abaixo em menu
         })
         # MENU CONFIGURAVEL: o preco do cardapio vira o MINIMO possivel, com
@@ -954,6 +967,16 @@ def _cardapio_categorias(tipo):
             if minimo:
                 categorias[cat][-1]['preco_venda'] = float(minimo)
                 categorias[cat][-1]['preco_a_partir'] = True
+            else:
+                # Menu nao precificavel (slot sem preco ou total inalcancavel)
+                # esta FORA do site — deixa-lo no cardapio com o preco do
+                # cadastro faria a "fonte unica" contradizer a vitrine, e o
+                # link levaria a um 404 (achado de revisao 26/07/2026).
+                current_app.logger.warning(
+                    'cardapio: menu %r fora da lista — sem preco calculavel.',
+                    p.nome)
+                categorias[cat].pop()
+                continue
 
     regras = _regras_atacado() if tipo == 'atacado' else []
     # Ordem final das categorias (drag-and-drop do dono, 21/07/2026) — aqui
@@ -1205,6 +1228,29 @@ def cardapio_img_remover(tipo, id):
 GALERIA_MAX_FOTOS = 8
 
 
+def apagar_galeria_do_item(kind, item_id):
+    """Apaga as fotos EXTRAS de uma receita/produto (linhas + arquivos no
+    Dropbox). Chamado ANTES do delete do item: `CatalogoFoto` endereca por
+    (kind, item_id) sem FK, entao nada apagaria essas linhas sozinho e elas
+    virariam lixo permanente — e a rota de remover ficaria inalcancavel (o
+    `_alvo_catalogo` faz get_or_404 no item que ja nao existe). Achado de
+    revisao 26/07/2026. Best-effort: nao commita nem levanta."""
+    from app.models import CatalogoFoto
+    fotos = CatalogoFoto.query.filter_by(kind=kind, item_id=item_id).all()
+    if not fotos:
+        return 0
+    from app.services import dropbox_storage
+    for f in fotos:
+        if f.storage_path:
+            try:
+                dropbox_storage.deletar(f.storage_path)
+            except Exception:  # noqa: BLE001 — arquivo orfao nao trava o delete
+                current_app.logger.warning(
+                    'galeria: nao deletou %s no Dropbox', f.storage_path)
+        db.session.delete(f)
+    return len(fotos)
+
+
 def _alvo_catalogo(tipo, id):
     """(objeto, url_de_volta) pra receita/produto — mesma resolucao das rotas
     de imagem principal. 404 em tipo desconhecido."""
@@ -1280,11 +1326,16 @@ def cardapio_galeria_upload(tipo, id):
                 mode='overwrite', autorename=False)
             foto.dropbox_url = info['url']
             foto.storage_path = info['storage_path']
+            # COMMIT POR FOTO: o `rollback` do except desfaz a transacao
+            # INTEIRA, entao com commit so no fim uma falha na 3a foto
+            # apagava as 2 primeiras do banco — mas os arquivos ja estavam
+            # no Dropbox e a mensagem dizia "3 adicionadas" (achado de
+            # revisao 26/07/2026). Commitando por foto, o que subiu fica.
+            _db.session.commit()
             salvas += 1
         except Exception as e:  # noqa: BLE001 — uma foto ruim nao derruba as outras
             _db.session.rollback()
             erros.append(f'{f.filename}: {e}')
-    _db.session.commit()
 
     if salvas:
         flash(f'{salvas} foto(s) adicionada(s) a galeria.', 'success')

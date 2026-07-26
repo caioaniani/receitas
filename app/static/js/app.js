@@ -1442,34 +1442,62 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('change', function (ev) {
         var input = ev.target;
         if (!input || input.type !== 'file' || !input.hasAttribute('data-comprimir')) return;
-        var file = input.files && input.files[0];
-        if (!file || !/^image\//.test(file.type || '') || !suportado()) return;
-        if (file.size < 800 * 1024) return;        // já é pequena: não mexe
+        // TODOS os arquivos, não só o primeiro: o input da galeria é
+        // `multiple` e a versão anterior reescrevia a FileList com UM File
+        // — o dono escolhia 4 fotos e só 1 subia, sem aviso (achado de
+        // revisão 26/07/2026). Cada arquivo é comprimido em paralelo e a
+        // lista é remontada NA ORDEM original.
+        var arquivos = Array.prototype.slice.call(input.files || []);
+        if (!arquivos.length || !suportado()) return;
+        var precisa = arquivos.some(function (f) {
+            return /^image\//.test(f.type || '') && f.size >= 800 * 1024;
+        });
+        if (!precisa) return;                      // todas já pequenas
 
         var max = parseInt(input.getAttribute('data-max'), 10) || MAX_PADRAO;
         var aviso = document.createElement('small');
         aviso.className = 'text-muted d-block mt-1 js-aviso-comprimir';
-        aviso.textContent = 'Otimizando a foto pra subir mais rápido…';
+        aviso.textContent = arquivos.length > 1
+            ? 'Otimizando ' + arquivos.length + ' fotos pra subir mais rápido…'
+            : 'Otimizando a foto pra subir mais rápido…';
         input.parentNode.insertBefore(aviso, input.nextSibling);
         var form = input.form;
         var botao = form && form.querySelector('button[type=submit], button:not([type])');
         if (botao) botao.disabled = true;
 
-        comprimir(file, max).then(function (blob) {
-            // Só troca se REALMENTE ficou menor (evita piorar um JPEG já ótimo).
-            if (blob.size < file.size) {
-                var nome = (file.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg';
+        // Cada item vira o File FINAL (comprimido ou o original). Um erro
+        // numa foto mantém a original — nunca perde arquivo.
+        Promise.all(arquivos.map(function (f) {
+            if (!/^image\//.test(f.type || '') || f.size < 800 * 1024) {
+                return Promise.resolve({ file: f, antes: f.size, depois: f.size });
+            }
+            return comprimir(f, max).then(function (blob) {
+                if (blob.size < f.size) {          // só troca se ficou menor
+                    var nome = (f.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg';
+                    return { file: new File([blob], nome, { type: 'image/jpeg' }),
+                             antes: f.size, depois: blob.size };
+                }
+                return { file: f, antes: f.size, depois: f.size };
+            }).catch(function () {
+                return { file: f, antes: f.size, depois: f.size };
+            });
+        })).then(function (res) {
+            var mudou = res.some(function (r) { return r.depois < r.antes; });
+            if (mudou) {
                 var dt = new DataTransfer();
-                dt.items.add(new File([blob], nome, { type: 'image/jpeg' }));
-                input.files = dt.files;
-                aviso.textContent = 'Foto otimizada: '
-                    + Math.round(file.size / 1024) + ' KB → '
-                    + Math.round(blob.size / 1024) + ' KB.';
+                res.forEach(function (r) { dt.items.add(r.file); });
+                input.files = dt.files;            // MESMA ordem, todos os arquivos
+                var antes = res.reduce(function (a, r) { return a + r.antes; }, 0);
+                var depois = res.reduce(function (a, r) { return a + r.depois; }, 0);
+                aviso.textContent = (res.length > 1
+                    ? res.length + ' fotos otimizadas: ' : 'Foto otimizada: ')
+                    + Math.round(antes / 1024) + ' KB → '
+                    + Math.round(depois / 1024) + ' KB.';
             } else {
                 aviso.remove();
             }
         }).catch(function () {
-            aviso.remove();          // fail-open: sobe o arquivo original
+            aviso.remove();          // fail-open: sobe os arquivos originais
         }).then(function () {
             if (botao) botao.disabled = false;
         });

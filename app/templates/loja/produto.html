@@ -40,8 +40,13 @@
 
   <div class="produto-foto">
     {% if item.esgotado %}<span class="selo-esgotado grande">Esgotado</span>{% endif %}
-    {% if item.imagem %}
-    <img src="{{ item.imagem }}" alt="{{ item.nome }}" id="foto-principal">
+    {% if item.imagens %}
+    {# Sem capa mas COM fotos extras: a 1a extra vira a principal. Antes o
+       template caia no placeholder e o `#foto-principal` nem existia — as
+       miniaturas apareciam e o clique nao fazia nada (achado de revisao
+       26/07/2026). `item.imagens` ja vem com a capa na frente quando ela
+       existe, entao [0] e sempre a foto certa. #}
+    <img src="{{ item.imagens[0] }}" alt="{{ item.nome }}" id="foto-principal">
     {% else %}
     <div class="card-foto-placeholder grande">🥐</div>
     {% endif %}
@@ -279,6 +284,13 @@
       {% if it.preco is not none %}
         {% if it.esgotado %}
         <div class="card-esgotado" aria-disabled="true">Esgotado</div>
+        {% elif it.menu %}
+        {# MESMA guarda da vitrine (home.html): menu NÃO tem quick-add. Um
+           "+ Adicionar" aqui criaria linha SEM composição — o carrinho
+           mostraria o preço mínimo e o checkout cobraria a pré-seleção
+           (achado de revisão 26/07/2026), além de duplicar a linha de quem
+           já montou o seu. #}
+        <a class="card-montar" href="{{ it.href }}">Montar o meu →</a>
         {% else %}
         <div class="card-add"
              data-kind="{{ it.kind }}" data-id="{{ it.id }}"

@@ -282,11 +282,25 @@
                     <strong>soma do "Preco no menu"</strong> dos itens
                     escolhidos — o "Preco Site" acima so serve pra
                     <strong>publicar</strong> (precisa ser maior que zero).
-                    <span class="text-danger">Item sem "Preco no menu" tira o
-                    menu do ar</span> (nao vendemos sem saber o preco).
+                    <span class="text-danger">O menu SAI DO AR</span> se
+                    algum item ficar sem "Preco no menu", se a soma das
+                    quantidades acima nao fechar o total, ou se o total for
+                    inalcancavel com o maximo por item.
                 </div>
             </label>
         </div>
+        {% if menu_diagnostico %}
+        <div class="alert alert-danger py-2 px-3 mt-2 ms-4 mb-0 small">
+            <strong>⚠ Este menu NAO esta aparecendo no site.</strong>
+            {{ menu_diagnostico }}
+        </div>
+        {% elif produto.menu_configuravel %}
+        <div class="alert alert-success py-2 px-3 mt-2 ms-4 mb-0 small">
+            ✓ Menu no ar. Preco anunciado (o "a partir de"):
+            <strong>{{ menu_preco_minimo }}</strong>; a pre-selecao acima sai
+            por <strong>{{ menu_preco_padrao }}</strong>.
+        </div>
+        {% endif %}
         <div class="row g-2 mt-1 ms-4" id="menu-regras-campos">
             <div class="col-6 col-md-3">
                 <label class="form-label small fw-bold mb-1"

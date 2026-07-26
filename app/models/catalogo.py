@@ -423,7 +423,8 @@ class Produto(db.Model):
     # que fechar `menu_total_unidades` (o "30 minis, quais voce quiser") e
     # nenhum item passa de `menu_max_por_item`. O preco do menu no site e a
     # SOMA do `ProdutoItem.preco_menu` do que ele escolher — o `preco_site`
-    # so PUBLICA. Travas NULL = defaults do `loja_menu` (30 / 10).
+    # so PUBLICA. `menu_total_unidades` NULL = 30; `menu_max_por_item` NULL = SEM
+    # teto (o cliente fecha o total com um item so, se quiser).
     # Regra e sanitizacao ficam em app/services/loja_menu.py.
     # ALTER em migrations_legacy (commit 1 deployado e confirmado por
     # /api/claude/deploy antes deste modelo).

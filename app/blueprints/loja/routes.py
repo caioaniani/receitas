@@ -888,23 +888,38 @@ def _resolver_carrinho_sessao():
             if not item:
                 continue
             # Menu configurável: preço e "o que vem" saem da escolha DESTA
-            # linha, não do cadastro. Sem isso o carrinho mostraria sempre o
-            # preço/composição da pré-seleção (26/07/2026).
-            preco, comp_resumo = item['preco'], None
-            if it.get('comp') and item.get('menu'):
+            # linha, pela MESMA rota do checkout — `normalizar` +  `preco`,
+            # com `comp` do jeito que estiver (None inclusive).
+            #
+            # Antes só recalculava QUANDO havia `comp`; linha sem `comp`
+            # (sessão antiga, carrinho.js velho no cache, quick-add do card)
+            # exibia o `item['preco']`, que virou o MÍNIMO "a partir de",
+            # enquanto o `montar_itens` cobrava a PRÉ-SELEÇÃO. O cliente via
+            # R$ 300 e pagava R$ 360 — achado de revisão 26/07/2026,
+            # dinheiro tem peso especial. Agora carrinho e checkout são o
+            # mesmo cálculo por construção.
+            preco, comp_resumo, remontar = item['preco'], None, False
+            if item.get('menu'):
                 prod = Produto.query.get(it['id'])
                 if loja_menu.eh_menu(prod):
-                    comp = loja_menu.normalizar(prod, it['comp'])
+                    comp = loja_menu.normalizar(prod, it.get('comp'))
                     p = loja_menu.preco(prod, comp)
                     if p is not None:
                         preco = float(p)
-                    comp_resumo = loja_menu.resumo(prod, comp)
+                        comp_resumo = loja_menu.resumo(prod, comp)
+                    else:
+                        # Escolha invalidada (o admin editou a composição
+                        # depois): NÃO dá pra precificar. Marca a linha pra
+                        # o cliente remontar — o checkout recusaria assim
+                        # mesmo, e mostrar um preço qualquer aqui mentiria.
+                        remontar = True
             out.append({
                 'kind': it['kind'], 'id': it['id'], 'nome': item['nome'],
                 'preco': preco, 'imagem': item.get('imagem') or '',
                 'categoria': item.get('categoria') or '', 'qtd': it['qtd'],
                 'fatiado': it['fatiado'],
                 'comp': it.get('comp'), 'comp_resumo': comp_resumo,
+                'remontar': remontar,
                 # `fatiavel` diz se o carrinho mostra o checkbox 'fatiado'
                 # na linha (só sourdough). Item não-fatiável não vira fatiado
                 # nem por toggle (o servidor re-sanitiza no checkout).

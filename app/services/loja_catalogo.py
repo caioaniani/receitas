@@ -419,6 +419,14 @@ def itens_para_montar(excluir_item=None):
         cat = (it.get('categoria') or '').strip().lower()
         if cat in excluir_cats:
             continue
+        # MENU configurável nunca entra "dentro" de uma cesta personalizada:
+        # ele é um menu de 30 unidades que o cliente MONTA, não um item
+        # avulso. Sem isso o card dele aparecia no grid "Monte sua cesta" e
+        # o quick-add criava linha SEM composição (achado de revisão
+        # 26/07/2026) — o filtro por categoria não pegava menu cadastrado
+        # fora de 'Cestas'.
+        if it.get('menu'):
+            continue
         if excluir_item and excluir_item.get('kind') == it['kind'] \
                 and excluir_item.get('id') == it['id']:
             continue

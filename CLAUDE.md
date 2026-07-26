@@ -1594,8 +1594,12 @@ Pedido do dono: "menu degustação dos minis, uma **pré-seleção de 5 de cada*
 Porém se o cliente quiser alterar as quantidades não tem problema; porém ele
 deve ser obrigado a selecionar **30 unidades** dos minis independente de
 quais". Decisões dele (AskUserQuestion): **preço varia conforme a escolha,
-cadastrado POR MINI** (o menu custa a soma do escolhido), **máximo 10 de
-cada**, regra **só pra esse menu** (não vira comportamento global de cesta).
+cadastrado POR MINI** (o menu custa a soma do escolhido) e regra **só pra
+esse menu** (não vira comportamento global de cesta). O "máximo 10 de cada"
+foi **REVOGADO no mesmo dia** ("quero tirar a regra de 30/10, quero que
+tenha 30 unidades do mini independente de quantos sejam"): `menu_max_por_item`
+em branco = **SEM teto** (dá pra fechar as 30 com um mini só). Quem quiser
+limitar preenche o campo — NÃO reintroduzir o default 10.
 
 - **Modelagem**: é uma cesta NORMAL (`Produto` + `ProdutoItem`) com 3 colunas
   novas no Produto (`menu_configuravel`, `menu_total_unidades`,
@@ -1608,9 +1612,22 @@ cada**, regra **só pra esse menu** (não vira comportamento global de cesta).
   colateral desejado: o preço é por-menu, então o mesmo mini pode valer
   diferente em menus diferentes.
 - **`Produto.preco_site` do menu vira só o INTERRUPTOR de publicação** — o
-  preço exibido e cobrado é a soma (`loja_catalogo._anotar_menu` troca o
-  `preco` pelo da pré-seleção). Deixar os dois divergirem na tela seria
-  mentir o preço. **Menu com algum mini sem `preco_menu` SAI DA VITRINE**
+  preço exibido é o **MÍNIMO possível** ("a partir de", decisão do dono
+  26/07: "esse valor do cardápio, inclusive no site, deveria ser o valor a
+  partir de"). `loja_menu.preco_minimo` enche o total com os mais baratos
+  respeitando o teto — é o piso REAL, nenhuma montagem válida sai por menos.
+  Vale também no **cardápio** (tela e PDF), onde o `preco_atacado/loja/site`
+  do cadastro passa a ser IGNORADO no menu (o `preco_menu` é único).
+- **Carrinho e checkout têm que calcular o preço PELA MESMA ROTA**
+  (`normalizar` + `preco`, com `comp` do jeito que estiver). Já quebrou:
+  linha sem `comp` exibia o mínimo no carrinho e era cobrada pela
+  pré-seleção — R$ 300 na tela, R$ 360 na fatura (achado de revisão
+  26/07/2026). `preco(produto, {})` devolve **None**, nunca `Decimal('0')`:
+  composição vazia é escolha invalidada, não item de graça.
+- **Menu NÃO tem quick-add em card nenhum** (vitrine e "Monte sua cesta"):
+  o card vira link "Montar o meu →". Um "+ Adicionar" cria linha SEM
+  composição — cai no bug de preço acima e duplica a linha de quem montou.
+  `itens_para_montar` também exclui menu na origem. **Menu com algum mini sem `preco_menu` SAI DA VITRINE**
   (fail-close com WARNING; `por_id_publicado` devolve None) — não vendemos
   sem saber o preço (dinheiro tem peso especial).
 - **Endereçamento pelo `produto_item_id`**: a escolha viaja como
@@ -1651,7 +1668,7 @@ cada**, regra **só pra esse menu** (não vira comportamento global de cesta).
 - A composição escolhida aparece no carrinho/drawer/checkout, no e-mail de
   confirmação, no **painel de entregas**, no **PDF do motorista** e no
   detalhe admin do pedido — a cozinha separa pelo que o cliente montou.
-- Testes: `tests/test_menu_configuravel.py` (21 casos). Manual de operação
+- Testes: `tests/test_menu_configuravel.py` (~40 casos). Manual de operação
   registrado (seção QUANDO PRECISAR).
 
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)

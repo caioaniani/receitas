@@ -218,6 +218,13 @@
   // (26/07/2026). Sem isso, dois menus montados diferente ficam
   // indistinguíveis na tela — o cliente não confere o que escolheu.
   function compResumoHtml(it) {
+    // Escolha invalidada (o admin editou a composição do menu depois): o
+    // checkout vai recusar, então avisa AQUI em vez de deixar o cliente
+    // descobrir no fim. Ver `_resolver_carrinho_sessao`.
+    if (it.remontar) {
+      return '<div class="linha-comp linha-remontar">⚠ este menu mudou — ' +
+        'abra o produto e monte de novo</div>';
+    }
     if (!it.comp_resumo || !it.comp_resumo.length) return '';
     var partes = it.comp_resumo.map(function (c) {
       return escapeHtml(c.qtd + 'x ' + c.nome);
