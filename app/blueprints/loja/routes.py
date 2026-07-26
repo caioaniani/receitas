@@ -711,8 +711,13 @@ def carrinho():
     add = (request.args.get('add') or '').strip()
     if add:
         novos, esgotados = _resolver_prefill_carrinho(add)
+        # Menu configurável: o link de 1 clique leva a PRÉ-SELEÇÃO. Sem a
+        # `comp` a chave da linha ficaria vazia e o mesmo menu apareceria em
+        # DUAS linhas no carrinho (a do link e a da página do produto).
         _set_carrinho_sessao(_carrinho_sessao() + [
-            {'kind': i['kind'], 'id': i['id'], 'qtd': i['qtd']} for i in novos])
+            {'kind': i['kind'], 'id': i['id'], 'qtd': i['qtd'],
+             'comp': (i.get('menu') or {}).get('comp_padrao')}
+            for i in novos])
         if esgotados:
             session['_carrinho_esg'] = esgotados
         return redirect(url_for('loja.carrinho'))
