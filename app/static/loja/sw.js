@@ -58,6 +58,18 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.includes('/webhook') || url.pathname.includes('/api/')) {
     return;
   }
+  // Páginas com FORMULÁRIO ou LOGIN nunca são cacheadas (25/07/2026): o HTML
+  // carrega o token CSRF embutido — servir do cache entrega token VELHO e o
+  // envio morre em "Sessão de segurança expirada" (foi o que quebrou o upload
+  // de foto no admin). Aqui é pior: seria o cliente sem conseguir PAGAR. Também
+  // evita deixar dado da conta no aparelho. A vitrine pública segue cacheada.
+  const SEM_CACHE_HTML = ['/loja/checkout', '/loja/carrinho', '/loja/conta',
+                          '/loja/pedido', '/loja/entrar', '/loja/cadastrar',
+                          '/loja/esqueci-senha', '/loja/redefinir-senha',
+                          '/loja/wifi'];
+  if (SEM_CACHE_HTML.some((p) => url.pathname.startsWith(p))) {
+    return;
+  }
 
   // Navegação HTML: network first (rede fresca; cache fallback offline).
   if (request.mode === 'navigate'
