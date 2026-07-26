@@ -135,8 +135,18 @@ def normalizar(produto, comp_raw):
     - quantidade 0 some do dict (slot não escolhido).
 
     `comp_raw` aceita dict {pi_id: qtd} ou lista de pares [[pi_id, qtd], ...]
-    (o formato compacto que viaja no cookie/JSON). Vazio/inválido → devolve
-    a composição PADRÃO (o cliente que não mexeu compra a pré-seleção).
+    (o formato compacto que viaja no cookie/JSON).
+
+    DUAS situações que NÃO podem se confundir (achado de revisão 26/07/2026,
+    era bug de dinheiro):
+    - **não veio escolha nenhuma** (`None`/vazio) → composição PADRÃO: o
+      cliente não mexeu, compra a pré-seleção;
+    - **veio escolha e NADA dela sobreviveu** → devolve `{}` VAZIO, pra o
+      `validar` recusar. Cair na pré-seleção aqui seria trocar em silêncio o
+      que ele montou (e o preço que ele viu) por outra coisa. Isso acontece
+      de verdade: `produtos.salvar_composicao` APAGA e RECRIA os
+      `ProdutoItem` a cada salvamento e o Postgres nunca reusa id, então
+      QUALQUER edição do menu invalida os `pi_id` de todo carrinho em voo.
 
     NÃO valida o total — isso é `validar`, pra a mensagem de erro poder dizer
     quanto faltou."""
@@ -151,6 +161,8 @@ def normalizar(produto, comp_raw):
                 pares.append((par[0], par[1]))
             elif isinstance(par, dict):
                 pares.append((par.get('pi_id'), par.get('qtd')))
+    if not pares:
+        return composicao_padrao(produto)     # não escolheu nada
     out = {}
     for pi_id, qtd in pares:
         try:
@@ -161,7 +173,7 @@ def normalizar(produto, comp_raw):
         if pi_id not in validos or qtd <= 0:
             continue
         out[pi_id] = min(qtd, teto)
-    return out or composicao_padrao(produto)
+    return out                                 # pode sair VAZIO — ver acima
 
 
 def validar(produto, comp):
