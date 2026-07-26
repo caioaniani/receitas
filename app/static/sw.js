@@ -79,16 +79,13 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Páginas HTML = network first com fallback ao cache
+    // Páginas HTML = SEMPRE da rede, NUNCA do cache.
+    // Não cacheamos (nem servimos do cache) HTML: a página autenticada traz o
+    // token CSRF embutido e dado do usuário. Uma cópia em cache = token velho
+    // (todo form quebra) + dado privado no aparelho após o logout. Sem rede,
+    // mostramos a tela "Sem conexão" — honesto e sem efeito colateral.
     event.respondWith(
         fetch(request)
-            .then((resp) => {
-                if (resp.ok && resp.type === 'basic') {
-                    const clone = resp.clone();
-                    caches.open(CACHE_RUNTIME).then((c) => c.put(request, clone));
-                }
-                return resp;
-            })
             .catch(() => caches.match(request).then((cached) =>
                 cached || new Response(
                     '<!DOCTYPE html><html><body style="font-family:system-ui;padding:40px;text-align:center;color:#444">' +
