@@ -325,6 +325,17 @@ def _folha_pedido(pdf, p, via, data_fmt):
             qtd = 1
         nome = _latin1((it.get('nome') or '—')
                        + (' (fatiado)' if it.get('fatiado') else ''))
+        # Menu configuravel (26/07/2026): a composicao que o CLIENTE montou
+        # entra ABAIXO do nome, em linhas proprias. E o papel que vai com o
+        # motorista/cozinha — sem isso, separam a cesta padrao.
+        comp_linhas = []
+        for c in (it.get('comp') or []):
+            try:
+                cq = int(c.get('qtd') or 0)
+            except (TypeError, ValueError):
+                cq = 0
+            if cq > 0:
+                comp_linhas.append(_latin1(f'{cq}x {c.get("nome") or "?"}'))
         if not mostrar_valores:
             pdf.cell(24, 6, f'{qtd}x ', border='B', align='R')
             pdf.cell(0, 6, f'  {nome}'[:90], border='B',
