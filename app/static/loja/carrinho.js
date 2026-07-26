@@ -583,9 +583,9 @@
     });
   }
 
-  function ajustar(kind, id, delta, fatiado) {
-    var atual = Carrinho.qtdDe(kind, id, fatiado);
-    Carrinho.mudarQtd(kind, id, atual + delta, fatiado);
+  function ajustar(kind, id, delta, fatiado, comp) {
+    var atual = Carrinho.qtdDe(kind, id, fatiado, comp);
+    Carrinho.mudarQtd(kind, id, atual + delta, fatiado, comp);
     renderCarrinho();
   }
 
