@@ -203,6 +203,33 @@ def _menu_no_modelo():
     return hasattr(Produto, 'menu_configuravel')
 
 
+def _preco_menu_do_form(bruto, nome_item):
+    """Preço por unidade dentro do menu, vindo do form. Em branco = None
+    (não cadastrado). Guardas server-side (achados de revisão 26/07/2026):
+
+    - **negativo é recusado** (vira None + flash). O `min="0"` do HTML não
+      vale nada num POST forjado, e preço negativo derrubaria o total do
+      menu — dinheiro precisa de trava no servidor.
+    - **texto inválido não derruba a tela**: `parse_float_br` levanta
+      ValueError; sem isso, um POST com lixo virava 500 no cadastro."""
+    texto = (bruto or '').strip()
+    if not texto:
+        return None
+    try:
+        valor = parse_float_br(texto)
+    except ValueError:
+        flash(f'Preço no menu inválido em "{nome_item}" ({texto}) — deixei '
+              'em branco. Corrija e salve de novo.', 'warning')
+        return None
+    if valor is None:
+        return None
+    if valor < 0:
+        flash(f'Preço no menu negativo em "{nome_item}" — ignorado.',
+              'warning')
+        return None
+    return valor
+
+
 def _int_ou_none(bruto):
     """Inteiro POSITIVO do form, ou None (campo em branco / lixo). Usado nas
     travas do menu configurável — em branco significa "usa o default do
@@ -320,7 +347,8 @@ def salvar_composicao(id):
                 receita_id, produto_componente_id, materia_prima_id = antigos
 
         if tem_campo_preco_menu:
-            pm = parse_float_br(precos_menu[i]) if i < len(precos_menu) else None
+            pm = _preco_menu_do_form(precos_menu[i] if i < len(precos_menu)
+                                     else None, nome)
         else:
             pm = precos_menu_atuais.get((tipo, nome))
         extra = {'preco_menu': pm} if _menu_no_modelo() else {}
