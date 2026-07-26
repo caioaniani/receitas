@@ -239,6 +239,43 @@ def preco(produto, comp, *, slots_=None):
     return total
 
 
+def preco_minimo(produto, *, slots_=None):
+    """Menor preço possível de UMA unidade do menu — o "a partir de" que a
+    vitrine e o cardápio exibem (decisão do dono 26/07/2026).
+
+    Enche o total com os itens mais BARATOS, respeitando o teto por item
+    (sem teto, cabe tudo no mais barato). É o piso REAL: nenhuma montagem
+    válida sai por menos que isso — por isso pode ser anunciado.
+
+    None quando algum slot está sem preço (menu não é vendável) ou quando o
+    total NÃO É ALCANÇÁVEL — teto × nº de itens < total. Esse segundo caso é
+    cadastro impossível (ex.: 3 minis com teto 5 num menu de 30): o cliente
+    nunca fecharia a seleção e ficaria travado na tela."""
+    total, teto = regras(produto)
+    slots_ = slots(produto) if slots_ is None else slots_
+    if not slots_:
+        return None
+    precos = []
+    for s in slots_:
+        if s['preco_dec'] is None or s['preco_dec'] <= 0:
+            return None
+        precos.append(s['preco_dec'])
+    if teto * len(precos) < total:
+        logger.warning('menu %s: total %d inalcançável — %d itens com teto '
+                       '%d dão no máximo %d.', getattr(produto, 'id', '?'),
+                       total, len(precos), teto, teto * len(precos))
+        return None
+    soma = Decimal('0')
+    faltam = total
+    for p in sorted(precos):
+        leva = min(teto, faltam)
+        soma += p * leva
+        faltam -= leva
+        if faltam <= 0:
+            break
+    return soma
+
+
 def resumo(produto, comp, *, slots_=None):
     """[{'nome', 'qtd', 'preco'}] na ordem dos slots — pro carrinho, o
     e-mail, o painel de entregas e o PDF do motorista mostrarem O QUE o
