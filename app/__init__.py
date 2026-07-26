@@ -703,9 +703,23 @@ def create_app(config_class=None):
         from urllib.parse import urlparse
         ref = request.referrer or ''
         destino = ref if urlparse(ref).netloc == request.host else '/'
-        # O código entre colchetes é diagnóstico: diz SE o token não chegou no
-        # corpo (multipart/arquivo) ou SE o cookie de sessão falhou. Some quando
-        # a causa raiz estiver fechada.
+        # ENVIO CORTADO NO MEIO (upload) != sessão expirada. Num POST multipart
+        # que chega SEM NENHUM campo, o corpo não completou: a conexão caiu no
+        # meio da subida do arquivo. O Werkzeug devolve form vazio em SILÊNCIO
+        # (get_input_stream sem tamanho -> stream vazio; FormDataParser é
+        # silent=True), e o Flask-WTF só consegue dizer "token ausente" — o que
+        # virava a mensagem ENGANOSA de sessão expirada e fez o dono perseguir
+        # sessão/cookie por horas (25/07/2026, foto de 12MB da fototeca no 4G).
+        # Aqui a mensagem passa a dizer a verdade e o que fazer.
+        multipart = 'multipart/form-data' in (request.content_type or '')
+        if multipart and campos == 0:
+            flash('O envio da foto não completou — a conexão caiu no meio da '
+                  'subida (arquivo grande / sinal fraco). Tente de novo: a '
+                  'foto agora é reduzida automaticamente antes de subir.',
+                  'warning')
+            return redirect(destino)
+        # Demais casos: CSRF de verdade. O código entre colchetes diz SE o token
+        # não chegou no corpo ou SE o cookie de sessão falhou.
         curto = ('token-ausente' if 'missing' in motivo.lower()
                                     and 'session' not in motivo.lower()
                  else 'sessao-ausente' if 'session' in motivo.lower()
