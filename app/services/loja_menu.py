@@ -35,10 +35,13 @@ from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
-# Fallbacks quando o admin liga o modo e esquece de preencher as travas.
-# Os números do pedido do dono (30 minis, no máximo 10 de cada).
+# Fallback do total quando o admin liga o modo e esquece de preencher.
 TOTAL_PADRAO = 30
-MAX_POR_ITEM_PADRAO = 10
+
+# NÃO existe teto padrão por item: campo em branco = SEM LIMITE (o cliente
+# pode fechar as 30 com um mini só). Decisão do dono 26/07/2026 — "quero
+# tirar a regra de 30/10, quero que tenha 30 unidades do mini independente
+# de quantos sejam". Quem quiser limitar preenche `menu_max_por_item`.
 
 # Teto de slots que um menu pode ter. Protege o cookie de sessão (a escolha
 # viaja dentro dele) e a tela. Menu maior que isso é erro de cadastro.
@@ -58,10 +61,16 @@ def eh_menu(produto):
 
 
 def regras(produto):
-    """(total_obrigatorio, max_por_item) do menu, já com os defaults."""
-    total = getattr(produto, 'menu_total_unidades', None) or TOTAL_PADRAO
-    teto = getattr(produto, 'menu_max_por_item', None) or MAX_POR_ITEM_PADRAO
-    return int(total), int(teto)
+    """(total_obrigatorio, max_por_item) do menu.
+
+    `menu_max_por_item` em branco = SEM LIMITE por item: o teto vira o
+    próprio total (dá pra fechar as 30 com um mini só). Teto acima do total
+    também é normalizado pro total — um "máximo 50" num menu de 30 não
+    significa nada e só confundiria a mensagem na tela e no cardápio."""
+    total = int(getattr(produto, 'menu_total_unidades', None) or TOTAL_PADRAO)
+    teto = getattr(produto, 'menu_max_por_item', None)
+    teto = int(teto) if teto else total
+    return total, min(teto, total)
 
 
 def _alvo_do_slot(pi):
