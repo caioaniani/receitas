@@ -788,6 +788,10 @@ def create_app(config_class=None):
     # API read-only do assistente (Claude Code): leituras de producao via
     # token CLAUDE_API_TOKEN. Sem a env, as rotas respondem 503.
     from app.blueprints.claude_api import claude_api_bp
+    # CSRF isento: a autenticacao aqui e Bearer (CLAUDE_API_TOKEN), nao cookie
+    # — CSRF protege sessao por cookie e nao se aplica. Mesmo padrao do
+    # wifi_api abaixo. Necessario pro POST de diagnostico (/echo-upload).
+    csrf.exempt(claude_api_bp)
     app.register_blueprint(claude_api_bp, url_prefix='/api/claude')
     # API de autenticacao do Wi-Fi das lojas (RADIUS). A ponte RADIUS
     # (wifi_radius/bridge.py, roda num VPS) chama POST /api/wifi/radius-check
