@@ -204,43 +204,40 @@ def validar(produto, comp):
     return None
 
 
-def preco(produto, comp):
+def preco(produto, comp, *, slots_=None):
     """Preço de UMA unidade do menu = soma de `preco_menu x qtd escolhida`.
-    Decisão do dono: "cadastrar preço por mini".
+    Decisão do dono: "cadastrar preço por mini". Em `Decimal` do começo ao
+    fim (dinheiro nunca passa por float — decisão B4 do CLAUDE.md).
 
-    Devolve None se algum item ESCOLHIDO está sem preço cadastrado —
-    fail-close: o checkout recusa o menu em vez de cobrar a menos (dinheiro
-    tem peso especial, CLAUDE.md). O admin vê o pendente na tela da cesta."""
-    por_id = {s['pi_id']: s for s in slots(produto)}
+    Devolve None se algum item ESCOLHIDO está sem preço cadastrado (ou com
+    preço <= 0) — fail-close: o checkout recusa o menu em vez de cobrar a
+    menos. O admin vê o pendente na tela da cesta.
+
+    `slots_` evita re-varrer o cadastro quando o chamador já tem a lista."""
+    por_id = {s['pi_id']: s for s in (slots(produto) if slots_ is None
+                                      else slots_)}
     total = Decimal('0')
     for pi_id, qtd in comp.items():
         s = por_id.get(pi_id)
         if s is None:
             continue
-        if s['preco'] is None:
+        if s['preco_dec'] is None or s['preco_dec'] <= 0:
             logger.warning('menu %s: componente %r sem preco_menu — menu '
                            'não pode ser vendido.',
                            getattr(produto, 'id', '?'), s['nome'])
             return None
-        total += Decimal(str(s['preco'])) * qtd
+        total += s['preco_dec'] * qtd
     return total
 
 
-def resumo(produto, comp):
+def resumo(produto, comp, *, slots_=None):
     """[{'nome', 'qtd', 'preco'}] na ordem dos slots — pro carrinho, o
     e-mail, o painel de entregas e o PDF do motorista mostrarem O QUE o
     cliente escolheu (o cadastro não conta mais essa história)."""
     return [{'nome': s['nome'], 'qtd': comp[s['pi_id']],
              'preco': s['preco']}
-            for s in slots(produto) if comp.get(s['pi_id'])]
-
-
-def componentes_para_estoque(produto, comp):
-    """[(coluna_estoque, id, nome, qtd_por_menu)] — o MESMO formato de
-    `cestas.componentes_de_cesta`, pra a baixa/reserva de estoque explodir
-    o menu pela escolha DO CLIENTE em vez do cadastro."""
-    return [(s['col'], s['alvo_id'], s['nome'], float(comp[s['pi_id']]))
-            for s in slots(produto) if comp.get(s['pi_id'])]
+            for s in (slots(produto) if slots_ is None else slots_)
+            if comp.get(s['pi_id'])]
 
 
 def chave(comp):
