@@ -562,20 +562,23 @@
       var kind = linha.getAttribute('data-kind');
       var id = linha.getAttribute('data-id');
       var fatiado = linha.getAttribute('data-fatiado') === '1';
+      var comp = lerCompDaLinha(linha);
       linha.querySelector('[data-acao="menos"]').addEventListener('click',
-        function () { ajustar(kind, id, -1, fatiado); });
+        function () { ajustar(kind, id, -1, fatiado, comp); });
       linha.querySelector('[data-acao="mais"]').addEventListener('click',
-        function () { ajustar(kind, id, +1, fatiado); });
+        function () { ajustar(kind, id, +1, fatiado, comp); });
       linha.querySelector('[data-acao="remover"]').addEventListener('click',
-        function () { Carrinho.remover(kind, id, fatiado); renderCarrinho(); });
+        function () {
+          Carrinho.remover(kind, id, fatiado, comp); renderCarrinho();
+        });
       linha.querySelector('.qtd-in').addEventListener('change',
         function (e) {
-          Carrinho.mudarQtd(kind, id, e.target.value, fatiado);
+          Carrinho.mudarQtd(kind, id, e.target.value, fatiado, comp);
           renderCarrinho();
         });
       var chkFat = linha.querySelector('input[data-acao="fatiado"]');
       if (chkFat) chkFat.addEventListener('change', function () {
-        Carrinho.alternarFatiado(kind, id, fatiado); renderCarrinho();
+        Carrinho.alternarFatiado(kind, id, fatiado, comp); renderCarrinho();
       });
     });
   }
