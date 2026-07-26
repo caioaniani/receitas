@@ -489,6 +489,16 @@ class ProdutoItem(db.Model):
     # Mantido por compat e como nome humano-legivel quando FK estiver NULL.
     item_nome = db.Column(db.String(150), nullable=False)
     quantidade = db.Column(db.Float, nullable=False, default=1)
+    # Preco por UNIDADE deste componente DENTRO de um menu configuravel
+    # (26/07/2026). So e lido quando o Produto-pai tem `menu_configuravel`;
+    # o preco do menu vira a soma disto pelo que o cliente escolher (decisao
+    # do dono: "cadastrar preco por mini"). Mora AQUI, e nao na Receita, de
+    # proposito: os minis nao sao vendidos avulsos e um `preco_site` neles os
+    # publicaria na vitrine (`loja_catalogo.produtos_publicados` usa
+    # `preco_site > 0` como flag). NULL = nao cadastrado — o menu inteiro sai
+    # do ar em vez de cobrar um preco que nao e o dele (fail-close).
+    # ALTER em migrations_legacy (commit 1 deployado e confirmado antes).
+    preco_menu = db.Column(db.Numeric(10, 2), nullable=True)
 
     receita = db.relationship('Receita', foreign_keys=[receita_id])
     produto_componente = db.relationship('Produto', foreign_keys=[produto_componente_id])
