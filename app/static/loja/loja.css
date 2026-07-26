@@ -504,6 +504,78 @@ a:hover { text-decoration: underline; }
 .produto-composicao li { padding: 4px 0; font-size: 16px; }
 .produto-composicao li strong { color: var(--acento); }
 
+/* ── Menu configurável "monte seu menu" (26/07/2026) ──────────────────
+   Cliente ajusta a quantidade de cada item; o total tem que bater exato.
+   Mobile-first: a linha quebra a 390px em vez de estourar o body. */
+.menu-montador .menu-regra {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: var(--texto-suave);
+  line-height: 1.5;
+}
+.menu-slots { list-style: none; margin: 0; padding: 0; }
+.menu-slot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e4dbcc;
+}
+.menu-slot:last-child { border-bottom: 0; }
+.menu-slot-nome { font-size: 16px; min-width: 0; flex: 1 1 55%; }
+.menu-slot-nome small {
+  display: block;
+  color: var(--texto-suave);
+  font-size: 12px;
+}
+.menu-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.menu-stepper button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #cdbfa8;
+  background: #fff;
+  border-radius: 6px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.menu-stepper .menu-qtd {
+  width: 52px;
+  text-align: center;
+  /* 16px: iOS não dá zoom ao focar (convenção da varredura mobile). */
+  font-size: 16px;
+  padding: 6px 2px;
+  border: 1px solid #cdbfa8;
+  border-radius: 6px;
+}
+.menu-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 2px solid #e4dbcc;
+}
+.menu-contador { font-size: 15px; font-weight: 600; }
+.menu-contador.ok { color: #1b7f4c; }
+.menu-contador.pendente { color: #b45309; }
+.menu-preco { font-size: 19px; font-weight: 700; color: var(--acento); }
+/* Composição escolhida, na linha do carrinho/drawer/checkout. */
+.linha-comp {
+  font-size: 12px;
+  color: var(--texto-suave);
+  line-height: 1.4;
+  margin: 2px 0;
+}
+
 .btn-comprar {
   width: 100%;
   padding: 16px 24px;
