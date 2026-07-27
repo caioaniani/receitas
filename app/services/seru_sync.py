@@ -167,13 +167,6 @@ def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
         usuario_id=user_id, nome_venda=mapping_produto.alvo_nome)
 
 
-def _e_estorno_pendente(pedido, reg):
-    """Delega pra REGRA CANONICA do vigia (import tardio evita ciclo) —
-    a tela sob demanda usa a mesma, entao as duas nunca divergem."""
-    from app.services.estorno_pendente_vigia import e_estorno_pendente
-    return e_estorno_pendente(pedido, reg)
-
-
 def _total_seguro(pedido):
     """Total do pedido em float, tolerante a lixo da API (mesmo cuidado do
     `venda_sem_item_vigia`: UM pedido malformado nao pode matar o sync)."""
@@ -181,6 +174,33 @@ def _total_seguro(pedido):
         return float(pedido.get('total') or 0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _detecta_estorno_pendente(pedido, reg, dia, pid, stats):
+    """Anota (SO anota) o pedido cujo estorno nunca vai disparar sozinho.
+
+    BLINDADO DE PROPOSITO: isto e um alerta best-effort morando DENTRO do
+    loop que mexe em estoque, e o loop nao tem try/except por pedido — uma
+    excecao aqui escaparia do `processar_pedidos`, o `db.session.commit()`
+    do fim nunca rodaria e as baixas ja feitas NESTE ciclo seriam
+    descartadas (achado de revisao 26/07/2026, reproduzido com `company`
+    vindo como string). Alerta que falha vira log; estoque nao paga a
+    conta. Devolve True se anotou."""
+    try:
+        from app.services.estorno_pendente_vigia import e_estorno_pendente
+        if not e_estorno_pendente(pedido, reg):
+            return False
+        stats['estornos_pendentes'].append({
+            'id': pid,
+            'data': dia.isoformat(),
+            'loja': seru.nome_company(pedido),
+            'total': _total_seguro(pedido),
+            'itens_baixados': int(reg.n_itens_baixados or 0),
+        })
+        return True
+    except Exception:  # noqa: BLE001 — ver docstring: nunca derrubar o sync
+        logger.exception('deteccao de estorno pendente falhou (pedido %s)', pid)
+        return False
 
 
 def _estornar_pedido(reg, lojas_ativas, user_id):
@@ -333,7 +353,7 @@ def processar_pedidos(data_inicial, data_final, user=None,
                 _estornar_pedido(reg, lojas_ativas, user_id)
                 reg.cancelado_em = agora()
                 stats['pedidos_cancelados_estornados'] += 1
-            elif _e_estorno_pendente(p, reg):
+            elif _detecta_estorno_pendente(p, reg):
                 # ESTORNO QUE NUNCA VAI DISPARAR: o pedido ja baixou
                 # estoque e agora aparece CANCELADO, mas SEM `canceledAt`
                 # — o gatilho acima e keyed nele (decisao separada,
