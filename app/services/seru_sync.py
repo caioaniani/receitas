@@ -386,15 +386,11 @@ def processar_pedidos(data_inicial, data_final, user=None,
 
         # Resolve loja
         company = p.get('company') or {}
-        cname = ''
-        cid = None
+        cname = seru.nome_company(p)      # tolera company dict OU string
+        cid = cdoc = None
         if isinstance(company, dict):
-            cname = (company.get('name') or '').strip()
             cid = company.get('id')
             cdoc = company.get('document')
-        elif isinstance(company, str):
-            cname = company.strip()
-            cdoc = None
 
         loja, loja_map = _resolver_loja(cname, lojas_ativas, cid, cdoc)
         if not loja:
