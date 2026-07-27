@@ -104,10 +104,23 @@ def _carregar_estado():
 
 
 def _gravar_estado(estado):
+    """Persiste o estado. NUNCA levanta (contrato do `alertar`) — devolve
+    False se falhou. Consequência conhecida de um False depois do envio: os
+    ids não ficam marcados e o pedido alerta de novo no próximo ciclo.
+    Direção segura: repetir aviso de estoque é melhor que perder."""
     from app.extensions import db
     from app.models import AppConfig
-    AppConfig.set(_KEY_ESTADO, json.dumps(estado, ensure_ascii=False))
-    db.session.commit()
+    try:
+        AppConfig.set(_KEY_ESTADO, json.dumps(estado, ensure_ascii=False))
+        db.session.commit()
+        return True
+    except Exception:  # noqa: BLE001
+        logger.exception('vigia estorno pendente: gravar estado falhou')
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return False
 
 
 def _pode_enviar(estado, agora_dt, hoje_iso):
