@@ -261,6 +261,119 @@ def test_vitrine_marca_esgotado_hoje_mas_disponivel_outro_dia(app):
     assert itens[0]['esgotado_hoje'] is True
     assert itens[0]['tem_em_outros_dias'] is True
     assert itens[0]['esgotado'] is False  # nao mostra "esgotado duro"
+    # 27/07/2026 (dono): a vitrine anuncia QUANDO volta, nao so que acabou.
+    assert itens[0]['proxima_data'] == (
+        dia_hoje + timedelta(days=1)).isoformat()   # 1o dia SEM plano (livre)
+
+
+def test_proxima_data_pula_os_dias_zerados(app):
+    """Com plano zerado nos próximos dias, a data anunciada é o primeiro dia
+    que REALMENTE tem saldo — não o dia seguinte."""
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import Receita
+    from app.services import loja_catalogo, loja_plano_dia
+    from app.utils import hoje
+
+    r = Receita(nome='Foccacia', categoria='Paes', preco_site=18.0,
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=300.0)
+    db.session.add(r)
+    db.session.commit()
+    dia_hoje = hoje()
+    for i in range(3):                       # hoje, +1 e +2 zerados
+        loja_plano_dia.definir('receita', r.id, dia_hoje + timedelta(days=i), 0)
+    loja_plano_dia.definir('receita', r.id, dia_hoje + timedelta(days=3), 5)
+    itens = [{'kind': 'receita', 'id': r.id, 'nome': 'Foccacia'}]
+    loja_catalogo.anotar_esgotado(itens)
+    assert itens[0]['proxima_data'] == (
+        dia_hoje + timedelta(days=3)).isoformat()
+    assert itens[0]['proxima_data_label']            # tem rótulo pra tela
+
+
+def test_disponivel_hoje_nao_anuncia_data(app):
+    """Item que dá pra comprar hoje não mostra "a partir de" — a data só é
+    informação útil quando o cliente NÃO pode levar hoje."""
+    from app.extensions import db
+    from app.models import Receita
+    from app.services import loja_catalogo, loja_plano_dia
+    from app.utils import hoje
+
+    r = Receita(nome='Baguete', categoria='Paes', preco_site=12.0,
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=200.0)
+    db.session.add(r)
+    db.session.commit()
+    loja_plano_dia.definir('receita', r.id, hoje(), 9)
+    itens = [{'kind': 'receita', 'id': r.id, 'nome': 'Baguete'}]
+    loja_catalogo.anotar_esgotado(itens)
+    assert itens[0]['esgotado_hoje'] is False
+    assert itens[0]['proxima_data'] is None
+
+
+def test_proxima_data_e_string_iso_nao_date(app):
+    """O mesmo dict vai pro bot de atendimento e pra JSON — `date` cru
+    estouraria na serialização."""
+    import json
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import Receita
+    from app.services import loja_catalogo, loja_plano_dia
+    from app.utils import hoje
+
+    r = Receita(nome='Brioche', categoria='Paes', preco_site=15.0,
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=200.0)
+    db.session.add(r)
+    db.session.commit()
+    dia_hoje = hoje()
+    loja_plano_dia.definir('receita', r.id, dia_hoje, 0)
+    loja_plano_dia.definir('receita', r.id, dia_hoje + timedelta(days=2), 3)
+    itens = [{'kind': 'receita', 'id': r.id, 'nome': 'Brioche'}]
+    loja_catalogo.anotar_esgotado(itens)
+    json.dumps(itens)                        # não pode levantar
+    assert isinstance(itens[0]['proxima_data'], str)
+
+
+def test_esgotado_duro_nao_promete_data(app):
+    """Sem saldo em dia nenhum não há o que anunciar — a etiqueta vermelha
+    continua sendo a verdade."""
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import Receita
+    from app.services import loja_catalogo, loja_plano_dia
+    from app.utils import hoje
+
+    r = Receita(nome='Foccacia', categoria='Paes', preco_site=18.0,
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=300.0)
+    db.session.add(r)
+    db.session.commit()
+    dia = hoje()
+    for i in range(14):
+        loja_plano_dia.definir('receita', r.id, dia + timedelta(days=i), 0)
+    itens = [{'kind': 'receita', 'id': r.id, 'nome': 'Foccacia'}]
+    loja_catalogo.anotar_esgotado(itens)
+    assert itens[0]['esgotado'] is True
+    assert itens[0]['proxima_data'] is None
+    assert itens[0]['proxima_data_label'] == ''
+
+
+# ── Rótulo em português ──────────────────────────────────────────────────
+
+def test_rotulo_amanha_e_dia_da_semana():
+    """"01/08" faz o cliente contar nos dedos; o dia da semana resolve."""
+    from datetime import date, timedelta
+
+    from app.services.loja_catalogo import rotulo_data_disponivel
+    seg = date(2026, 7, 27)                  # segunda-feira
+    assert rotulo_data_disponivel(seg + timedelta(days=1), seg) == 'amanhã'
+    assert rotulo_data_disponivel(
+        seg + timedelta(days=4), seg) == 'sexta, 31/07'
+    # Além de uma semana o nome do dia deixa de ajudar (qual sexta?).
+    assert rotulo_data_disponivel(seg + timedelta(days=11), seg) == '07/08'
+    # Selo sobre a foto: não cabe dia da semana.
+    assert rotulo_data_disponivel(
+        seg + timedelta(days=4), seg, curto=True) == '31/07'
 
 
 def test_vitrine_esgotado_duro_quando_zerado_em_todos(app):
