@@ -270,6 +270,14 @@ _FALLBACK = 'Já te passo para um atendente pra te ajudar melhor.'
 # processamento estoura em excecao — antes a conversa ia pra fila humana EM
 # SILENCIO (02/07/2026).
 FALLBACK_TEXTO = _FALLBACK
+# Turno vazio do modelo quando o cliente acabou de RECLAMAR (ex.: fechou a
+# conversa dizendo que cancelou porque o pedido nao chegou). Nao da pra
+# encerrar em silencio — e venda perdida que a equipe precisa ver — e o
+# "Ja te passo para um atendente." seco que saia antes era resposta de
+# maquina pra quem acabou de ter um problema (26/07/2026).
+_TEXTO_VAZIO_RECLAMACAO = (
+    'Sinto muito que tenha acontecido isso. Vou passar seu caso agora '
+    'para a nossa equipe dar retorno.')
 # Timeout da chamada a Anthropic. Sem isso o default do SDK (~10 min) segura
 # a thread E o lock da conversa quando a conexao trava — o cliente espera 10
 # minutos pelo fallback. 60s cobre Opus com tools folgado.
@@ -1088,8 +1096,36 @@ def responder(historico, *, telefone_contato=None,
             texto = '\n'.join(b.text for b in resp.content
                               if getattr(b, 'type', None) == 'text' and b.text).strip()
             if not texto:
-                return _resp_handoff('Já te passo para um atendente.',
-                                     'resposta vazia',
+                # Turno VAZIO (nenhuma tool E nenhum texto). Quase sempre e o
+                # modelo obedecendo METADE da secao FECHAMENTO do prompt
+                # ("NAO responda nada") e esquecendo a outra metade (chamar
+                # `encerrar_conversa`). Tratar isso como falha e transferir
+                # era o motivo de handoff MAIS FREQUENTE do periodo (3 dos 16
+                # handoffs de 12-26/07/2026 — conv 842 "Obrigada. Esclareceu",
+                # 897 "Nao, muito obrigada !", 918 "Eu acabei cancelando...").
+                # Enchia a fila humana com fechamento banal e ainda contava
+                # como "handoff preguicoso" na metrica do auditor (tools
+                # vazias). Agora o ramo DISCRIMINA os 3 casos:
+                from app.services.chatbot_vigia import _SINAIS_RECLAMACAO
+                if _SINAIS_RECLAMACAO.search(texto_user or ''):
+                    # (a) Fechamento COM problema — "cancelei, nao chegava
+                    # nunca, obrigada". Silenciar seria o PIOR desfecho: e
+                    # venda perdida que a equipe precisa ver. Vai pra fila,
+                    # mas com mensagem DE VERDADE (antes saia o
+                    # "Ja te passo para um atendente." acidental).
+                    return _resp_handoff(_TEXTO_VAZIO_RECLAMACAO,
+                                         'resposta vazia (reclamacao)',
+                                         tools_usadas=tools_usadas)
+                if not _bot_aguarda_resposta(historico):
+                    # (b) Fechamento sem pendencia: o SILENCIO e a decisao do
+                    # dono (16/06/2026, reforcada 21/07) — mesma saida da
+                    # Camada 1, que so nao pegou porque `_e_fechamento` e
+                    # ancorado nas duas pontas e nao tolera texto extra.
+                    return _resp_encerrar('resposta vazia em fechamento',
+                                          tools_usadas=tools_usadas)
+                # (c) O bot tinha PERGUNTA pendente e o modelo emudeceu: o
+                # cliente nunca pode ficar no vacuo (regra P1, 02/07/2026).
+                return _resp_handoff(FALLBACK_TEXTO, 'resposta vazia',
                                      tools_usadas=tools_usadas)
             # Camada 3 anti-injection: filtro de saida. Se o bot regurgita
             # o canario ou frase-padrao do system prompt, o jailbreak
