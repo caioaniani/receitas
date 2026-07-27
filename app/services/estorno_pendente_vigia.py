@@ -108,6 +108,64 @@ def _pode_enviar(estado, agora_dt, hoje_iso):
     return True, ''
 
 
+def e_estorno_pendente(pedido, reg):
+    """REGRA CANÔNICA: este pedido baixou estoque, aparece cancelado e o
+    estorno automático NUNCA vai disparar?
+
+    Condições, todas necessárias:
+    - já processado e ainda NÃO estornado (`reg`);
+    - baixou alguma coisa (`n_itens_baixados > 0`) — pedido que não baixou
+      nada não tem o que devolver;
+    - está cancelado pela regra canônica (`seru.pedido_cancelado`: status
+      OU canceledAt) MAS **sem** `canceledAt` — é justamente o `canceledAt`
+      que o `seru_sync` usa como gatilho do estorno.
+
+    Usada nos DOIS caminhos (o sync e a tela sob demanda) pra eles nunca
+    divergirem — se a regra mudar, muda num lugar só."""
+    from app.services import seru
+    if reg is None or reg.estornado_em:
+        return False
+    if int(getattr(reg, 'n_itens_baixados', 0) or 0) <= 0:
+        return False
+    if pedido.get('canceledAt'):
+        return False              # o gatilho normal cobre este
+    return bool(seru.pedido_cancelado(pedido))
+
+
+def detectar(data_inicial, data_final):
+    """Lista READ-ONLY dos estornos pendentes na janela — bate na API e no
+    registro de processados, sem tocar em estoque. É o que a tela sob
+    demanda usa; o cron aproveita a detecção que o próprio sync já faz."""
+    from app.models import SeruPedidoProcessado
+    from app.services import seru
+    pedidos = seru.listar_pedidos_completo(data_inicial, data_final)
+    out = []
+    for p in pedidos or []:
+        if not isinstance(p, dict):
+            continue
+        pid = str(p.get('id') or p.get('orderNumber')
+                  or p.get('code') or '').strip()
+        if not pid:
+            continue
+        d = seru.data_local(p.get('createdAt'))
+        if not d or not (data_inicial <= d <= data_final):
+            continue
+        reg = SeruPedidoProcessado.query.get(pid)
+        if not e_estorno_pendente(p, reg):
+            continue
+        try:
+            total = float(p.get('total') or 0)
+        except (TypeError, ValueError):
+            total = 0.0
+        out.append({
+            'id': pid, 'data': d.isoformat(),
+            'loja': str(((p.get('company') or {}).get('name') or '')).strip(),
+            'total': total,
+            'itens_baixados': int(reg.n_itens_baixados or 0),
+        })
+    return out
+
+
 def itens_baixados(pedido_id):
     """O que este pedido tirou do estoque, pra o dono saber o que devolver:
     [(nome_da_linha, quantidade)]. Lê os `MovEstoqueLoja` pela MESMA

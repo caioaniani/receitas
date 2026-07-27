@@ -170,6 +170,17 @@ def _run_sync(app):
                         venda_sem_item_vigia.vigiar()
                 except Exception:
                     logger.exception('vigia venda sem item falhou')
+                # Estorno que nunca vai disparar (cancelamento SEM
+                # canceledAt): o `processar_pedidos` ja detectou e poe em
+                # stats; aqui so avisa. NAO mexe em estoque — decisao do
+                # dono 26/07/2026 ("alertar", nao "corrigir o gatilho").
+                try:
+                    pend = stats.get('estornos_pendentes') or []
+                    if pend:
+                        from app.services import estorno_pendente_vigia
+                        estorno_pendente_vigia.alertar(pend)
+                except Exception:
+                    logger.exception('vigia estorno pendente falhou')
                 ativas = any(stats.get(k, 0) for k in (
                     'pedidos_novos', 'itens_baixados',
                     'pedidos_cancelados_estornados'))

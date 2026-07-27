@@ -3445,6 +3445,44 @@ def vigia_uso_ia():
     return jsonify(uso_ia_vigia.rodar_checks()), 200
 
 
+@main_bp.route('/admin/vigia-estorno-pendente')
+@owner_required
+def vigia_estorno_pendente():
+    """Vendas canceladas que NAO devolveram o estoque (owner-only).
+
+    O estorno de pedido ja processado dispara por `canceledAt`; cancelamento
+    feito so pelo `status` nunca fecha essa condicao e o estoque fica
+    baixado pra sempre (4 casos reais em 22-24/07/2026, 7 itens). Decisao do
+    dono 26/07/2026: ALERTAR, sem mexer no gatilho.
+
+    Read-only sempre: usa a MESMA regra do sync (`e_estorno_pendente`) sem
+    baixar nem estornar nada. Sem parametro lista o que ha agora + o estado
+    de dedup; `?alertar=1` dispara o WhatsApp das novas."""
+    from datetime import timedelta as _td
+
+    from app.services import estorno_pendente_vigia
+    from app.utils import hoje as _hoje
+
+    hoje_d = _hoje()
+    di, df = hoje_d - _td(days=2), hoje_d
+    try:
+        pendentes = estorno_pendente_vigia.detectar(di, df)
+    except Exception as e:  # noqa: BLE001 — API fora nao vira 500
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:200]}'), 200
+
+    detalhe = [dict(c, saiu_do_estoque=[
+        {'item': n, 'qtd': q} for n, q in
+        estorno_pendente_vigia.itens_baixados(c['id'])]) for c in pendentes]
+    if request.args.get('alertar') == '1':
+        return jsonify(ok=True, janela=[di.isoformat(), df.isoformat()],
+                       pendentes=detalhe,
+                       resultado=estorno_pendente_vigia.alertar(pendentes)), 200
+    return jsonify(ok=True, dry_run=True,
+                   janela=[di.isoformat(), df.isoformat()],
+                   total=len(detalhe), pendentes=detalhe,
+                   estado=estorno_pendente_vigia._carregar_estado()), 200
+
+
 @main_bp.route('/admin/vigia-venda-sem-item')
 @owner_required
 def vigia_venda_sem_item():

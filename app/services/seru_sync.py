@@ -167,6 +167,22 @@ def _baixar_item(loja_id, mapping_produto, qtd, seru_pedido_id, user_id):
         usuario_id=user_id, nome_venda=mapping_produto.alvo_nome)
 
 
+def _e_estorno_pendente(pedido, reg):
+    """Delega pra REGRA CANONICA do vigia (import tardio evita ciclo) —
+    a tela sob demanda usa a mesma, entao as duas nunca divergem."""
+    from app.services.estorno_pendente_vigia import e_estorno_pendente
+    return e_estorno_pendente(pedido, reg)
+
+
+def _total_seguro(pedido):
+    """Total do pedido em float, tolerante a lixo da API (mesmo cuidado do
+    `venda_sem_item_vigia`: UM pedido malformado nao pode matar o sync)."""
+    try:
+        return float(pedido.get('total') or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _estornar_pedido(reg, lojas_ativas, user_id):
     """Reverte baixas de um pedido Seru cancelado via o MOTOR UNICO
     (`baixa_venda.estornar_venda`): inteiros pela referencia, fracoes pelo
@@ -281,6 +297,10 @@ def processar_pedidos(data_inicial, data_final, user=None,
         'pedidos_novos': 0,
         'pedidos_ja_processados': 0,
         'pedidos_cancelados_estornados': 0,
+        # Pedidos que baixaram estoque, aparecem cancelados e NUNCA vao
+        # estornar sozinhos (cancelamento sem `canceledAt`). So deteccao —
+        # quem avisa e o `estorno_pendente_vigia`.
+        'estornos_pendentes': [],
         'pedidos_sem_loja_mapeada': 0,
         'pedidos_aguardando_loja': 0,
         'itens_baixados': 0,
@@ -313,6 +333,25 @@ def processar_pedidos(data_inicial, data_final, user=None,
                 _estornar_pedido(reg, lojas_ativas, user_id)
                 reg.cancelado_em = agora()
                 stats['pedidos_cancelados_estornados'] += 1
+            elif _e_estorno_pendente(p, reg):
+                # ESTORNO QUE NUNCA VAI DISPARAR: o pedido ja baixou
+                # estoque e agora aparece CANCELADO, mas SEM `canceledAt`
+                # — o gatilho acima e keyed nele (decisao separada,
+                # documentada). Aconteceu de verdade: 4 cancelamentos de
+                # 22-24/07/2026 baixaram 7 itens e nunca devolveram, e
+                # ninguem percebeu ate uma auditoria manual.
+                #
+                # AQUI SO ANOTA — nao mexe em estoque (o dono escolheu
+                # "alertar", nao "corrigir o gatilho", em 26/07/2026). O
+                # vigia `estorno_pendente_vigia` avisa no WhatsApp.
+                stats['estornos_pendentes'].append({
+                    'id': pid,
+                    'data': d.isoformat(),
+                    'loja': str(((p.get('company') or {}).get('name')
+                                 or '')).strip(),
+                    'total': _total_seguro(p),
+                    'itens_baixados': int(reg.n_itens_baixados or 0),
+                })
             continue
 
         # Pedido novo. Cancelado por canceledAt OU por status=='canceled'
