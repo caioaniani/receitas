@@ -49,9 +49,13 @@
         <div class="card-esgotado" aria-disabled="true">Esgotado</div>
         {% elif it.esgotado_hoje %}
         {# Esgotado hoje mas tem em outros dias: leva o cliente pra pagina do
-           produto pra ele escolher uma data com saldo. #}
+           produto, que ja abre o seletor NA proxima data disponivel. #}
         <a class="card-esgotado-hoje" href="{{ it.href }}">
+          {% if it.proxima_data_label %}
+          Disponível a partir de {{ it.proxima_data_label }} →
+          {% else %}
           Esgotado hoje — compre pra outro dia →
+          {% endif %}
         </a>
         {% else %}
         {% if it.menu %}
