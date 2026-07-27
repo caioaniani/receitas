@@ -220,3 +220,223 @@ def test_estado_podado_nao_cresce_pra_sempre(app, monkeypatch):
         db.session.commit()
         est = v._carregar_estado()
     assert velho not in est['ids']
+
+
+def test_teto_diario_segura_mas_acumula(app, monkeypatch):
+    """Teto atingido não descarta: os ids não são marcados e voltam."""
+    from app.services import estorno_pendente_vigia as v
+    from app.services import zapi
+    enviados = []
+    monkeypatch.setattr(zapi, 'enviar_texto',
+                        lambda n, m, **k: enviados.append(m) or {'ok': True})
+    monkeypatch.setenv('ESTORNO_PENDENTE_COOLDOWN_MIN', '0')
+    monkeypatch.setenv('ESTORNO_PENDENTE_MAX_MSGS_DIA', '1')
+    with app.app_context():
+        app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999999999'
+        v.alertar(_pend('T1'))
+        r2 = v.alertar(_pend('T2'))
+    assert len(enviados) == 1
+    assert r2['enviado'] is False and r2['novos'] == 1
+
+
+def test_env_negativa_nao_cala_o_vigia(app, monkeypatch):
+    """`0 >= -1` deixaria o teto sempre atingido — silêncio permanente
+    escondendo estoque baixado indevidamente."""
+    from app.services import estorno_pendente_vigia as v
+    from app.services import zapi
+    enviados = []
+    monkeypatch.setattr(zapi, 'enviar_texto',
+                        lambda n, m, **k: enviados.append(m) or {'ok': True})
+    monkeypatch.setenv('ESTORNO_PENDENTE_COOLDOWN_MIN', '0')
+    monkeypatch.setenv('ESTORNO_PENDENTE_MAX_MSGS_DIA', '-1')
+    with app.app_context():
+        app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999999999'
+        r = v.alertar(_pend('N1'))
+    assert r['enviado'] is True and len(enviados) == 1
+
+
+def test_estado_corrompido_nao_cega_o_vigia(app, monkeypatch):
+    """Estado torto não se autocorrige — sem isinstance, o vigia ficaria
+    mudo até alguém apagar a chave na mão."""
+    from app.extensions import db
+    from app.models import AppConfig
+    from app.services import estorno_pendente_vigia as v
+    from app.services import zapi
+    enviados = []
+    monkeypatch.setattr(zapi, 'enviar_texto',
+                        lambda n, m, **k: enviados.append(m) or {'ok': True})
+    monkeypatch.setenv('ESTORNO_PENDENTE_COOLDOWN_MIN', '0')
+    with app.app_context():
+        AppConfig.set('estorno_pendente_alertados',
+                      '{"ids": ["lista, nao dict"], "envios": {"x": "abc"}}')
+        db.session.commit()
+        app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999999999'
+        r = v.alertar(_pend('K1'))
+    assert r['enviado'] is True and len(enviados) == 1
+
+
+# ── Detalhe do que saiu do estoque ───────────────────────────────────────
+
+def _mov(db, ref, *, tipo='venda_seru', qtd=3, nome='Cookie'):
+    from app.models import EstoqueLoja, Loja, MovEstoqueLoja, Receita
+    loja = Loja.query.filter_by(nome='Nebraska').first()
+    if loja is None:
+        loja = Loja(nome='Nebraska', ativa=True)
+        db.session.add(loja)
+        db.session.commit()
+    r = Receita(nome=nome, categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=50)
+    db.session.add(r)
+    db.session.commit()
+    el = EstoqueLoja(loja_id=loja.id, receita_id=r.id, quantidade=10)
+    db.session.add(el)
+    db.session.commit()
+    db.session.add(MovEstoqueLoja(estoque_loja_id=el.id, tipo=tipo,
+                                  quantidade=qtd, referencia=ref))
+    db.session.commit()
+
+
+def test_detalhe_ignora_baixa_que_nunca_saiu(app):
+    """`venda_seru_sem_estoque` não tirou nada — mandar devolver criaria
+    estoque fantasma."""
+    from app.extensions import db
+    from app.services.estorno_pendente_vigia import itens_baixados
+    with app.app_context():
+        _mov(db, 'Seru #E1', tipo='venda_seru_sem_estoque', nome='Baguete')
+        itens, fracs = itens_baixados('E1')
+    assert itens == [] and fracs == 0
+
+
+def test_detalhe_separa_fracao_e_nao_manda_devolver(app):
+    """A unidade inteira que fechou no acumulador pode ser de VÁRIAS vendas
+    — o próprio estorno a pula. Só conta, não lista."""
+    from app.extensions import db
+    from app.services.estorno_pendente_vigia import itens_baixados
+    with app.app_context():
+        _mov(db, 'Seru #E2', nome='Pão Inteiro')
+        _mov(db, 'Seru #E2 (fracao)', nome='Cookie Calebaut')
+        itens, fracs = itens_baixados('E2')
+    assert [n for n, _ in itens] == ['Pão Inteiro']
+    assert fracs == 1
+
+
+def test_mensagem_avisa_para_nao_devolver_fracao(app, monkeypatch):
+    from app.extensions import db
+    from app.services import estorno_pendente_vigia as v
+    from app.services import zapi
+    enviados = []
+    monkeypatch.setattr(zapi, 'enviar_texto',
+                        lambda n, m, **k: enviados.append(m) or {'ok': True})
+    monkeypatch.setenv('ESTORNO_PENDENTE_COOLDOWN_MIN', '0')
+    with app.app_context():
+        _mov(db, 'Seru #E3 (fracao)', nome='Cookie Calebaut')
+        app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999999999'
+        v.alertar(_pend('E3'))
+    assert enviados and 'NAO devolver na mao' in enviados[0]
+
+
+# ── Integração com o sync: detecta SEM tocar em estoque ──────────────────
+
+def _seru_fake(monkeypatch, pedidos):
+    from app.services import seru
+    monkeypatch.setattr(seru, 'listar_pedidos_completo',
+                        lambda di, df, **k: pedidos)
+
+
+def test_sync_anota_pendente_e_nao_estorna(app, monkeypatch):
+    from app.extensions import db
+    from app.services import seru_sync
+    with app.app_context():
+        _reg(db, 'S1')
+        _seru_fake(monkeypatch, [_pedido('S1')])
+        from app.utils import hoje
+        stats = seru_sync.processar_pedidos(hoje(), hoje())
+    assert [c['id'] for c in stats['estornos_pendentes']] == ['S1']
+    assert stats['pedidos_cancelados_estornados'] == 0
+
+
+def test_sync_company_STRING_nao_derruba_o_ciclo(app, monkeypatch):
+    """A API manda `company` ora dict ora string (o próprio seru_sync já
+    tratava os dois na resolução de loja). Um alerta best-effort que
+    estourasse aqui abortaria `processar_pedidos` ANTES do commit — as
+    baixas de estoque do ciclo inteiro seriam descartadas."""
+    from app.extensions import db
+    from app.services import seru_sync
+    from app.utils import hoje
+    with app.app_context():
+        _reg(db, 'S2')
+        p = _pedido('S2')
+        p['company'] = 'Nebraska'          # string crua
+        _seru_fake(monkeypatch, [p])
+        stats = seru_sync.processar_pedidos(hoje(), hoje())
+    assert [c['loja'] for c in stats['estornos_pendentes']] == ['Nebraska']
+
+
+def test_sync_deteccao_quebrada_nao_mata_o_loop(app, monkeypatch):
+    """Blindagem: alerta é best-effort, estoque não paga a conta dele."""
+    from app.extensions import db
+    from app.services import estorno_pendente_vigia as v
+    from app.services import seru_sync
+    from app.utils import hoje
+    with app.app_context():
+        _reg(db, 'S3')
+        _seru_fake(monkeypatch, [_pedido('S3')])
+        monkeypatch.setattr(v, 'e_estorno_pendente',
+                            lambda p, r: (_ for _ in ()).throw(RuntimeError()))
+        stats = seru_sync.processar_pedidos(hoje(), hoje())
+    assert stats['estornos_pendentes'] == []
+    assert stats['pedidos_ja_processados'] == 1
+
+
+def test_detectar_respeita_a_janela_por_createdAt(app, monkeypatch):
+    from datetime import timedelta as _td
+
+    from app.extensions import db
+    from app.services import estorno_pendente_vigia as v
+    from app.utils import agora, hoje
+    with app.app_context():
+        _reg(db, 'J1')
+        p = _pedido('J1')
+        p['createdAt'] = (agora() - _td(days=20)).isoformat() + 'Z'
+        _seru_fake(monkeypatch, [p])
+        assert v.detectar(hoje() - _td(days=2), hoje()) == []
+
+
+def test_detectar_tolera_lixo_da_api(app, monkeypatch):
+    from app.extensions import db
+    from app.services import estorno_pendente_vigia as v
+    from app.utils import hoje
+    with app.app_context():
+        _reg(db, 'J2')
+        bom = _pedido('J2', total='nao-e-numero')
+        _seru_fake(monkeypatch, ['string solta', None, {'sem': 'id'}, bom])
+        out = v.detectar(hoje(), hoje())
+    assert [c['id'] for c in out] == ['J2'] and out[0]['total'] == 0.0
+
+
+# ── Rota sob demanda ─────────────────────────────────────────────────────
+
+def test_rota_exige_owner(client, admin_user):
+    client.post('/auth/login', data={'login': admin_user.login,
+                                     'senha': 'senha123'})
+    r = client.get('/admin/vigia-estorno-pendente')
+    assert r.status_code in (302, 403)
+
+
+def test_rota_dry_run_nao_envia_nem_marca(client, owner_user, app,
+                                          monkeypatch):
+    from app.services import zapi
+    enviados = []
+    monkeypatch.setattr(zapi, 'enviar_texto',
+                        lambda n, m, **k: enviados.append(m) or {'ok': True})
+    with app.app_context():
+        from app.extensions import db
+        _reg(db, 'R1')
+    _seru_fake(monkeypatch, [_pedido('R1')])
+    client.post('/auth/login', data={'login': owner_user.login,
+                                     'senha': 'senha123'})
+    r = client.get('/admin/vigia-estorno-pendente')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['dry_run'] is True and [c['id'] for c in j['pendentes']] == ['R1']
+    assert enviados == []
