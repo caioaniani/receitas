@@ -3468,19 +3468,56 @@ def vigia_estorno_pendente():
     try:
         pendentes = estorno_pendente_vigia.detectar(di, df)
     except Exception as e:  # noqa: BLE001 — API fora nao vira 500
-        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:200]}'), 200
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {str(e)[:200]}'), 502
 
-    detalhe = [dict(c, saiu_do_estoque=[
-        {'item': n, 'qtd': q} for n, q in
-        estorno_pendente_vigia.itens_baixados(c['id'])]) for c in pendentes]
+    def _detalhar(c):
+        itens, fracs = estorno_pendente_vigia.itens_baixados(c['id'])
+        return dict(c, saiu_do_estoque=[{'item': n, 'qtd': q}
+                                        for n, q in itens],
+                    baixas_fracionarias=fracs)
+
+    detalhe = [_detalhar(c) for c in pendentes]
+    janela = [di.isoformat(), df.isoformat()]
     if request.args.get('alertar') == '1':
-        return jsonify(ok=True, janela=[di.isoformat(), df.isoformat()],
-                       pendentes=detalhe,
-                       resultado=estorno_pendente_vigia.alertar(pendentes)), 200
-    return jsonify(ok=True, dry_run=True,
-                   janela=[di.isoformat(), df.isoformat()],
+        # Corrida com o ciclo do cron (mesmo fix do vigia irmao): sem trava,
+        # os dois leem o estado velho, mandam a MESMA mensagem e o ultimo
+        # `_gravar_estado` apaga os ids marcados pelo outro. Usa o try-lock
+        # do PROPRIO sync (que envolve o vigia no cron); ocupado = o ciclo
+        # esta rodando agora e ja cobre. SQLite (dev/teste) roda direto.
+        from sqlalchemy import text as _text
+
+        from app.extensions import db as _db
+        from app.services.seru_cron import LOCK_KEY as _LOCK_SYNC
+        uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
+        if 'postgresql' in uri:
+            conn = _db.engine.connect()
+            try:
+                got = conn.execute(_text('SELECT pg_try_advisory_lock(:k)'),
+                                   {'k': _LOCK_SYNC}).scalar()
+                if not got:
+                    return jsonify(
+                        ok=False,
+                        erro='ciclo do sync Seru rodando agora (o vigia dele '
+                             'ja cobre) — tente em ~1 min'), 409
+                try:
+                    return jsonify(
+                        ok=True, janela=janela, pendentes=detalhe,
+                        resultado=estorno_pendente_vigia.alertar(
+                            pendentes)), 200
+                finally:
+                    try:
+                        conn.execute(_text('SELECT pg_advisory_unlock(:k)'),
+                                     {'k': _LOCK_SYNC})
+                    except Exception:  # noqa: BLE001
+                        pass
+            finally:
+                conn.close()
+        return jsonify(ok=True, janela=janela, pendentes=detalhe,
+                       resultado=estorno_pendente_vigia.alertar(
+                           pendentes)), 200
+    return jsonify(ok=True, dry_run=True, janela=janela,
                    total=len(detalhe), pendentes=detalhe,
-                   estado=estorno_pendente_vigia._carregar_estado()), 200
+                   estado=estorno_pendente_vigia.estado_dedup()), 200
 
 
 @main_bp.route('/admin/vigia-venda-sem-item')
