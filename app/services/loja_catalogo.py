@@ -356,6 +356,9 @@ def anotar_esgotado(itens):
     saldos_cache = {}
     for it in itens:
         kind, item_id = it['kind'], it['id']
+        it['proxima_data'] = None
+        it['proxima_data_label'] = ''
+        it['proxima_data_curta'] = ''
         # Sob encomenda: produzido pro pedido, SEMPRE disponivel na vitrine
         # (nunca esgota — a trava e so a data D+2 no checkout). Nao olha
         # plano-do-dia nem estoque fisico.
@@ -373,20 +376,28 @@ def anotar_esgotado(itens):
             continue
         it['esgotado_hoje'] = saldo_hoje <= 0
         # Olha os PROXIMOS dias (sem incluir hoje) pra saber se ainda da pra
-        # comprar pra outra data.
-        tem_outros = False
+        # comprar pra outra data — e QUAL e essa data (o dono quer o dia na
+        # vitrine, nao so o "esgotou").
+        proxima = None
         for d in datas[1:]:
             s = _saldo_para_dia(
                 kind, item_id, d, saldos_dia_cache=saldos_cache)
             if s is None:
                 # Sem plano pra esse dia → sem controle → disponivel (fail-open).
-                tem_outros = True
+                proxima = d
                 break
             if s > 0:
-                tem_outros = True
+                proxima = d
                 break
-        it['tem_em_outros_dias'] = tem_outros
-        it['esgotado'] = it['esgotado_hoje'] and not tem_outros
+        it['tem_em_outros_dias'] = proxima is not None
+        it['esgotado'] = it['esgotado_hoje'] and proxima is None
+        # So anuncia a data quando ela e a informacao util: item disponivel
+        # HOJE nao precisa de "a partir de", e esgotado duro nao tem data.
+        if it['esgotado_hoje'] and proxima is not None:
+            it['proxima_data'] = proxima.isoformat()
+            it['proxima_data_label'] = rotulo_data_disponivel(proxima, dia_hoje)
+            it['proxima_data_curta'] = rotulo_data_disponivel(
+                proxima, dia_hoje, curto=True)
     return itens
 
 
