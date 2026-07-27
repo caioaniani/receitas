@@ -339,6 +339,13 @@ def anotar_esgotado(itens):
       (fail-open: cliente pode comprar pra outro dia).
     - `esgotado`: a "esgotado dura" (sem saldo em nenhum dia). Pra o template
       mostrar a etiqueta vermelha.
+    - `proxima_data` / `proxima_data_label` / `proxima_data_curta`: o
+      PRIMEIRO dia com saldo (ISO + rotulos prontos), so quando esgotou hoje
+      mas ainda da pra comprar. Pedido do dono 27/07/2026: a vitrine diz
+      QUANDO volta em vez de so dizer que acabou. Sai de graca — o loop
+      abaixo ja parava no primeiro dia disponivel, so nao guardava qual era.
+      ISO (str) e nao `date` de proposito: o mesmo dict vai pro bot de
+      atendimento (`bot_tools`) e pra JSON, onde `date` nao serializa.
 
     Disponibilidade vem SO do plano-do-dia (regra do dono 01/07/2026) — o
     EstoqueLoja fisico NAO entra aqui. Sem plano → flags False (fail-open).
