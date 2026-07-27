@@ -181,11 +181,17 @@ def detectar(data_inicial, data_final):
             total = 0.0
         out.append({
             'id': pid, 'data': d.isoformat(),
-            'loja': str(((p.get('company') or {}).get('name') or '')).strip(),
+            'loja': seru.nome_company(p),   # company vem dict OU string
             'total': total,
             'itens_baixados': int(reg.n_itens_baixados or 0),
         })
     return out
+
+
+def estado_dedup():
+    """Estado de dedup/anti-flood, ja podado — API publica pra tela sob
+    demanda (o irmao `venda_sem_item_vigia` expoe o mesmo)."""
+    return _carregar_estado()
 
 
 def itens_baixados(pedido_id):
