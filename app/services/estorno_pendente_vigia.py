@@ -83,7 +83,7 @@ def _carregar_estado():
         return vazio
     # A poda NUNCA pode ser mais curta que a janela que o sync varre: id
     # podado cedo demais volta a alertar sozinho a cada ciclo.
-    dias = max(_JANELA_DIAS, _cfg_int('SERU_SYNC_CATCHUP_DIAS', 2) + 1)
+    dias = max(_JANELA_DIAS, _cfg_int('SYNC_CATCHUP_DIAS', 2) + 1)
     corte = (_hoje() - timedelta(days=dias)).isoformat()
     # `isinstance` em TUDO: um estado torto nao pode cegar o vigia pra
     # sempre (ele nao se autocorrige — ficaria mudo ate alguem apagar a
