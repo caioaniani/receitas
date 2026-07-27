@@ -393,7 +393,14 @@ _SINAIS_COMPRA = re.compile(
 # Reclamacao = handoff humano e correto (nao alerta como preguicoso).
 _SINAIS_RECLAMACAO = re.compile(
     r'('
-    r'\bn[aã]o chegou|\bn[aã]o (recebi|veio)|\batras(ou|ado|ando|o)|'
+    # 26/07/2026 (caso Gabriela, conv 918): o cliente escreveu "as visitas
+    # estavam esperando e nao chegava nunca" + "eu acabei cancelando" e
+    # NENHUMA alternativa casava — 'chegou' nao cobre 'chegava/chegaram' e
+    # 'cancelar meu pedido' nao cobre 'cancelei/cancelando'. Sem casar aqui,
+    # uma reclamacao de venda PERDIDA era classificada como fechamento banal.
+    r'\bn[aã]o cheg(ou|aram|ava|avam)|\bnunca cheg\w*|'
+    r'\bcancelei\b|\bacabei cancelando\b|'
+    r'\bn[aã]o (recebi|veio)|\batras(ou|ado|ando|o)|'
     r'\bveio (errado|quebrado|estragado|diferente|faltando|amassado|'
     r'murcho|seco|menor|assim)|'
     r'\breembolso|\breclamar|\breclama[cç][aã]o|\bcancelar (meu )?pedido|'
