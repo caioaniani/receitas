@@ -708,3 +708,42 @@ def test_admin_ve_por_que_o_menu_sumiu_do_site(app):
         db.session.commit()
         d = _diagnostico_menu(menu)
         assert d and '15' in d and '30' in d
+
+
+def test_sem_preco_no_tipo_o_menu_NAO_aparece_naquele_cardapio(app):
+    """Regra do dono (26/07/2026): "se não tem preço é porque a gente não
+    vende e não deve aparecer no cardápio". O preço do TIPO (atacado/loja/
+    site) é o interruptor de aparição; o valor cobrado é a soma por mini."""
+    from app.extensions import db
+    with app.app_context():
+        menu, _ = _menu(db, total=15, precos=(2.0, 3.0, 4.0))
+        menu.preco_site = 1.0        # publicado só no site
+        menu.preco_atacado = None    # não vendemos no atacado
+        menu.preco_loja = None
+        db.session.commit()
+        nome = menu.nome
+
+    with app.test_request_context('/'):
+        from app.blueprints.main.routes import _cardapio_categorias
+        for tipo, deve_aparecer in (('site', True), ('atacado', False),
+                                    ('loja', False)):
+            cats, _r = _cardapio_categorias(tipo)
+            nomes = [i['nome'] for c in cats.values() for i in c]
+            assert (nome in nomes) is deve_aparecer, tipo
+
+
+def test_quando_publicado_no_atacado_o_preco_e_a_soma_por_mini(app):
+    """O número digitado no Preço Atacado é IGNORADO no menu — vale a soma
+    (mínimo, "a partir de"). Por isso a tela avisa que ele só publica."""
+    from app.extensions import db
+    with app.app_context():
+        menu, _ = _menu(db, total=15, precos=(2.0, 3.0, 4.0))
+        menu.preco_atacado = 280     # publica, mas não define o preço
+        db.session.commit()
+        nome = menu.nome
+    with app.test_request_context('/'):
+        from app.blueprints.main.routes import _cardapio_categorias
+        cats, _r = _cardapio_categorias('atacado')
+        alvo = [i for c in cats.values() for i in c if i['nome'] == nome][0]
+        assert alvo['preco_venda'] == 35.0      # 10x2 + 5x3, não 280
+        assert alvo['preco_a_partir'] is True

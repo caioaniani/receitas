@@ -75,6 +75,22 @@
                    value="{{ '%.2f' % produto.preco_interno if produto.preco_interno else '' }}"
                    step="0.01" min="0" class="form-control form-control-sm input-blue text-end">
         </div>
+        {% if produto.menu_configuravel %}
+        {# MENU: os tres precos acima so PUBLICAM. Quem define o valor e a
+           soma do "Preco no menu" dos itens escolhidos — digitar 350 aqui e
+           ver 360 na tela ja confundiu o dono (26/07/2026). #}
+        <div class="col-md-12">
+            <div class="alert alert-warning py-2 px-3 mb-0 small">
+                <strong>Neste menu, os preços acima só PUBLICAM.</strong>
+                O valor que o cliente vê e paga é a <strong>soma do "Preço no
+                menu"</strong> dos itens que ele escolher — o número digitado
+                aqui é ignorado. Preencha com qualquer valor maior que zero
+                no cardápio onde o menu deve <strong>aparecer</strong>;
+                deixe <strong>vazio</strong> onde ele <strong>não</strong>
+                deve ser vendido.
+            </div>
+        </div>
+        {% endif %}
         <div class="col-md-12 mt-2 p-2 border rounded bg-light">
             <label class="form-label small fw-bold mb-1">
                 <i class="bi bi-image"></i> Imagem pro cardápio digital
