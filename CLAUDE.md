@@ -2568,9 +2568,38 @@ vigia estornar — estoque so muda por gesto do dono.
   sufixos de cesta/fracao) — sem isso o dono saberia que ha um rombo mas nao
   o que devolver. Detalhe e BONUS: falha nele nunca derruba o alerta.
 - Sob demanda: `GET /admin/vigia-estorno-pendente` (owner; dry-run lista
-  pendentes+estado sem WhatsApp, `?alertar=1` roda o fluxo).
-- Testes: `tests/test_estorno_pendente_vigia.py` (14 casos; Seru e Z-API
-  sempre mockadas). Manual de operacao registrado.
+  pendentes+estado sem WhatsApp, `?alertar=1` roda o fluxo pegando o
+  try-lock do sync — corrida rota×cron nao duplica WhatsApp nem apaga ids).
+- **POS-REVISAO (fixados)**: (1) CRITICO — `company` vem da API ora DICT
+  ora STRING (o proprio `seru_sync` ja tratava os dois na resolucao de
+  loja) e o `.get('name')` cru do bloco novo estourava `AttributeError`
+  DENTRO do loop que mexe em estoque; sem try/except por pedido a excecao
+  escapava do `processar_pedidos`, o `db.session.commit()` do fim nunca
+  rodava e as baixas JA FEITAS no ciclo eram descartadas — a cada 15min,
+  enquanto o pedido estivesse na janela. Helper canonico
+  `seru.nome_company(pedido)` (usar SEMPRE; nunca `.get('company').get(...)`)
+  + `_detecta_estorno_pendente` inteiro blindado em try/except: alerta
+  best-effort NUNCA derruba o sync. (2) `itens_baixados` devolve
+  `(itens, n_fracionarias)` e EXCLUI as baixas '(fracao)'/'(fator' da lista
+  — a unidade inteira que fechou no acumulador pode ser de VARIAS vendas
+  (por isso o proprio estorno as pula na fase 1), e mandar devolver "1x
+  Cookie" que era de 5 cafes criaria estoque fantasma; a mensagem CONTA as
+  fracoes com o aviso de nao devolver na mao. (3) env negativa
+  (`MAX_MSGS_DIA=-1`) calaria o vigia pra sempre em silencio (`0 >= -1`) —
+  `_cfg_int` tem piso zero + WARNING. (4) `_carregar_estado` valida com
+  `isinstance` em TUDO (estado torto nao se autocorrige: cegaria o vigia
+  ate alguem apagar a chave na mao) e a poda respeita `SYNC_CATCHUP_DIAS`
+  (id podado cedo demais re-alertaria sozinho). (5) `_gravar_estado` nunca
+  levanta (o docstring do `alertar` promete isso; na rota virava 500).
+  (6) rota devolve 502 quando a Seru cai e usa a API publica
+  `estado_dedup()`.
+- **LIMITACAO ACEITA**: a janela e a do sync (`hoje - SYNC_CATCHUP_DIAS`,
+  filtrada por `createdAt`) — cobranca criada dia 20 e cancelada so dia 25
+  ja saiu da janela e NAO e detectada. Cobre o caso real (cancelamento no
+  mesmo dia ou no seguinte); ampliar custa varredura extra na API.
+- Testes: `tests/test_estorno_pendente_vigia.py` (27 casos; Seru e Z-API
+  sempre mockadas — incluindo a integracao com `processar_pedidos` e o
+  `company` string que reproduzia o critico). Manual de operacao registrado.
 
 ## NF de TRANSFERENCIA industria→loja no scan do QR (20/07/2026)
 
