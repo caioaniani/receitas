@@ -27,7 +27,7 @@
           {% if it.esgotado %}
           <span class="selo-esgotado">Esgotado</span>
           {% elif it.esgotado_hoje %}
-          <span class="selo-esgotado-hoje">Esgotado hoje</span>
+          <span class="selo-esgotado-hoje">{% if it.proxima_data_curta %}A partir de {{ it.proxima_data_curta }}{% else %}Esgotado hoje{% endif %}</span>
           {% endif %}
           {% if it.imagem %}
           <img src="{{ it.imagem }}" alt="{{ it.nome }} — {{ it.categoria or 'padaria artesanal' }} d'O Pão" loading="lazy">
