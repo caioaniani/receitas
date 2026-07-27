@@ -195,10 +195,21 @@ def estado_dedup():
 
 
 def itens_baixados(pedido_id):
-    """O que este pedido tirou do estoque, pra o dono saber o que devolver:
-    [(nome_da_linha, quantidade)]. Lê os `MovEstoqueLoja` pela MESMA
-    referência que a baixa gravou ('Seru #<id>', com o sufixo de cesta/
-    fração quando houver). Read-only; erro devolve []."""
+    """O que este pedido tirou do estoque, pra o dono saber o que devolver.
+
+    Devolve `([(nome, qtd)], n_fracionarias)`. Lê os `MovEstoqueLoja` pela
+    MESMA referência que a baixa gravou ('Seru #<id>', com o sufixo de
+    cesta/fração quando houver).
+
+    FRAÇÕES FICAM DE FORA da lista de propósito: uma baixa marcada
+    '(fracao)'/'(fator' é a unidade inteira que FECHOU no acumulador, e ela
+    pode ter contribuição de VÁRIAS vendas — por isso o próprio estorno
+    (`baixa_venda`, fase 1) as pula. Mandar o dono devolver na mão "1x
+    Cookie" que era de 5 cafés criaria estoque fantasma. Elas só são
+    CONTADAS, pra a mensagem não fingir que não existem.
+
+    Read-only; erro devolve ([], 0) — o detalhe é bônus, o alerta é o que
+    importa."""
     try:
         from app.extensions import db
         from app.models import EstoqueLoja, MovEstoqueLoja
@@ -208,18 +219,22 @@ def itens_baixados(pedido_id):
                         db.or_(MovEstoqueLoja.referencia == ref,
                                MovEstoqueLoja.referencia.like(ref + ' %')))
                 .all())
-        out = []
+        out, fracionarias = [], 0
         for m in movs:
+            ref_m = m.referencia or ''
+            if '(fracao)' in ref_m or '(fator' in ref_m:
+                fracionarias += 1
+                continue
             el = EstoqueLoja.query.get(m.estoque_loja_id)
             nome = '?'
             if el is not None:
                 alvo = el.receita or el.produto or el.materia_prima
                 nome = getattr(alvo, 'nome', None) or el.nome_pendente or '?'
             out.append((nome, int(m.quantidade or 0)))
-        return out
+        return out, fracionarias
     except Exception:  # noqa: BLE001 — detalhe é bônus, nunca derruba o alerta
         logger.exception('vigia estorno pendente: detalhe dos movs falhou')
-        return []
+        return [], 0
 
 
 def _montar_mensagem(novos):
