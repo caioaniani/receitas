@@ -241,9 +241,13 @@ def _montar_mensagem(novos):
     from app.utils import fmt_brl
     linhas = []
     for c in novos[:_MAX_LINHAS_MSG]:
-        det = itens_baixados(c['id'])
+        det, fracs = itens_baixados(c['id'])
         oque = ', '.join(f'{q}x {n}' for n, q in det) if det else \
             f"{c.get('itens_baixados', 0)} item(ns)"
+        if fracs:
+            # Ver `itens_baixados`: fracao nao se devolve na mao.
+            oque += (f' (+{fracs} baixa(s) fracionaria(s) — NAO devolver na '
+                     'mao, sao de varias vendas)')
         linhas.append(
             f"• {c.get('loja') or 'loja ?'} — {fmt_brl(c.get('total') or 0)}"
             f"\n  cobrança {c['id']} ({c.get('data', '?')})"
