@@ -50,10 +50,19 @@ _JANELA_DIAS = 7          # poda do estado (a janela do sync é bem menor)
 
 
 def _cfg_int(nome, padrao):
+    """Int da env, com piso ZERO. Valor negativo CALARIA o vigia pra sempre
+    em silencio (`0 >= -1` no teto) — aqui o silencio esconde estoque baixado
+    indevidamente, entao negativo vira o default com WARNING. Pra desligar de
+    verdade existe o kill-switch."""
     try:
-        return int(os.environ.get(nome, str(padrao)))
+        v = int(os.environ.get(nome, str(padrao)))
     except (TypeError, ValueError):
         return padrao
+    if v < 0:
+        logger.warning('vigia estorno pendente: %s=%s invalido (negativo) '
+                       '— usando %s', nome, v, padrao)
+        return padrao
+    return v
 
 
 def _carregar_estado():
