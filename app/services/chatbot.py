@@ -208,7 +208,11 @@ def _bot_aguarda_resposta(historico):
 # (a recusa e 1x so; na insistencia o handoff sai).
 _HANDOFF_EXCECAO = re.compile(
     r'(?i)('
-    r'\b(alerg|reclama|humano|atendente|'
+    # `al[eé]rg` (nao so `alerg`): o radical sem acento NUNCA casou
+    # "alérgico"/"alérgica" — a excecao de MAIOR risco (saude) so valia se o
+    # modelo escrevesse "alergia". Defeito pre-existente, achado em
+    # 26/07/2026 ao cobrir o regex com teste.
+    r'\b(al[eé]rg|reclama|humano|atendente|'
     r'estorno|reembolso|cancelamento)\w*'
     # "falar com uma PESSOA" no singular. Sem o \b final, o \w* do grupo
     # acima casava 'pessoas' — e um motivo legitimo de VENDA ("cesta para
