@@ -1728,6 +1728,33 @@ diferentes; e pedido de RETIRADA em loja != origem baixa a loja escolhida
 site). Testes: `tests/test_loja_estoque_vitrine.py`,
 `tests/test_loja_estoque_reserva.py`, `tests/test_loja_online_vendas.py`.
 
+### Vitrine anuncia a PROXIMA DATA, nao "esgotado hoje" (27/07/2026)
+
+Pedido do dono: "quando o item nao tem disponivel para hoje colocar o dia
+que ele vai estar disponivel". O cliente batia numa negativa seca ("ESGOTADO
+HOJE") sem saber quando voltava — motivo de abandono, nao de informacao.
+
+- `anotar_esgotado` passou a expor `proxima_data` (**ISO string**),
+  `proxima_data_label` ("amanha" / "sexta, 31/07" / "07/08") e
+  `proxima_data_curta` (so a data, pro selo sobre a foto). Sai DE GRACA: o
+  loop dos 14 dias ja parava no primeiro dia com saldo, so nao guardava
+  qual era. ISO e nao `date` de proposito — o mesmo dict vai pro
+  `bot_tools` e pra JSON, onde `date` nao serializa (ha teste travando).
+- So anuncia quando a data e util: item vendavel HOJE nao ganha rotulo, e
+  **esgotado duro nao promete data nenhuma** (a etiqueta vermelha continua
+  sendo a verdade). Os textos antigos ficaram de fallback.
+- Rotulo por `loja_catalogo.rotulo_data_disponivel(data, referencia)` —
+  funcao PURA (recebe a referencia, testavel sem mexer no relogio). Dia da
+  semana so ate 7 dias: alem disso "qual sexta?" confunde mais que ajuda.
+- A rota do produto (`loja.produto`) NAO recalcula mais a proxima data com
+  loop proprio — le `item['proxima_data']`. Eram duas contas do mesmo fato
+  e podiam divergir: card anunciando um dia e o seletor abrindo em outro.
+- CSS: `.selo-esgotado-hoje` ganhou `max-width`/`line-height` — o texto novo
+  e mais largo e o selo e absolute sobre a foto (a 390px o card tem ~175px).
+  Validado a 390px com Playwright (11 checks, incl. "selo nao vaza da foto"
+  e "data do aviso == data pre-selecionada no seletor").
+- Testes: secao "Etapa 4" de `tests/test_loja_plano_dia.py`.
+
 ## B2B — baixa na SEPARACAO + orcamento aprovado VIRA venda (regras do dono, 07/07/2026)
 
 Tres regras ditadas pelo dono, escritas na pedra:
