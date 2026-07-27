@@ -81,12 +81,25 @@ def _carregar_estado():
     except (ValueError, TypeError):
         logger.warning('vigia estorno pendente: estado inválido — recomeça')
         return vazio
-    corte = (_hoje() - timedelta(days=_JANELA_DIAS)).isoformat()
-    ids = {d: list(v) for d, v in (est.get('ids') or {}).items()
-           if isinstance(v, list) and d >= corte}
-    envios = {d: int(n) for d, n in (est.get('envios') or {}).items()
-              if d >= corte}
-    return {'ids': ids, 'ultimo_envio': est.get('ultimo_envio'),
+    # A poda NUNCA pode ser mais curta que a janela que o sync varre: id
+    # podado cedo demais volta a alertar sozinho a cada ciclo.
+    dias = max(_JANELA_DIAS, _cfg_int('SERU_SYNC_CATCHUP_DIAS', 2) + 1)
+    corte = (_hoje() - timedelta(days=dias)).isoformat()
+    # `isinstance` em TUDO: um estado torto nao pode cegar o vigia pra
+    # sempre (ele nao se autocorrige — ficaria mudo ate alguem apagar a
+    # chave na mao). O que nao entende, descarta.
+    bruto_ids = est.get('ids')
+    ids, envios = {}, {}
+    if isinstance(bruto_ids, dict):
+        ids = {d: [str(i) for i in v] for d, v in bruto_ids.items()
+               if isinstance(d, str) and isinstance(v, list) and d >= corte}
+    bruto_envios = est.get('envios')
+    if isinstance(bruto_envios, dict):
+        envios = {d: n for d, n in bruto_envios.items()
+                  if isinstance(d, str) and isinstance(n, int) and d >= corte}
+    ultimo = est.get('ultimo_envio')
+    return {'ids': ids,
+            'ultimo_envio': ultimo if isinstance(ultimo, str) else None,
             'envios': envios}
 
 
