@@ -353,7 +353,7 @@ def processar_pedidos(data_inicial, data_final, user=None,
                 _estornar_pedido(reg, lojas_ativas, user_id)
                 reg.cancelado_em = agora()
                 stats['pedidos_cancelados_estornados'] += 1
-            elif _detecta_estorno_pendente(p, reg):
+            else:
                 # ESTORNO QUE NUNCA VAI DISPARAR: o pedido ja baixou
                 # estoque e agora aparece CANCELADO, mas SEM `canceledAt`
                 # — o gatilho acima e keyed nele (decisao separada,
@@ -361,17 +361,10 @@ def processar_pedidos(data_inicial, data_final, user=None,
                 # 22-24/07/2026 baixaram 7 itens e nunca devolveram, e
                 # ninguem percebeu ate uma auditoria manual.
                 #
-                # AQUI SO ANOTA — nao mexe em estoque (o dono escolheu
+                # SO ANOTA — nao mexe em estoque (o dono escolheu
                 # "alertar", nao "corrigir o gatilho", em 26/07/2026). O
                 # vigia `estorno_pendente_vigia` avisa no WhatsApp.
-                stats['estornos_pendentes'].append({
-                    'id': pid,
-                    'data': d.isoformat(),
-                    'loja': str(((p.get('company') or {}).get('name')
-                                 or '')).strip(),
-                    'total': _total_seguro(p),
-                    'itens_baixados': int(reg.n_itens_baixados or 0),
-                })
+                _detecta_estorno_pendente(p, reg, d, pid, stats)
             continue
 
         # Pedido novo. Cancelado por canceledAt OU por status=='canceled'
