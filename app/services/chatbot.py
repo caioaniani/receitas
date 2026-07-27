@@ -207,8 +207,25 @@ def _bot_aguarda_resposta(historico):
 # virou preguica, nao excecao. Mudanca de cartinha continua indo pro humano
 # (a recusa e 1x so; na insistencia o handoff sai).
 _HANDOFF_EXCECAO = re.compile(
-    r'(?i)\b(alerg|reclama|humano|atendente|pessoa|'
-    r'estorno|reembolso|cancelamento)\w*')
+    r'(?i)('
+    r'\b(alerg|reclama|humano|atendente|'
+    r'estorno|reembolso|cancelamento)\w*'
+    # "falar com uma PESSOA" no singular. Sem o \b final, o \w* do grupo
+    # acima casava 'pessoas' — e um motivo legitimo de VENDA ("cesta para
+    # 10 pessoas") virava excecao, anulando o enforcement justamente onde
+    # ele importa. Achado da revisao de 26/07/2026.
+    r'|\bpessoa\b'
+    # ENTREGA PARADA / ATRASO: o cliente esta esperando AGORA. Exigir
+    # consulta antes de transferir custava uma rodada inteira enquanto ele
+    # esperava — e, quando o pedido e de marketplace (Rappi/iFood/99Food),
+    # NAO EXISTE tool que consulte: `consultar_pedido` so enxerga
+    # PedidoOnline (bot_tools.py). O bot ficava sem saida e caia no texto
+    # generico "veja no app". Caso Gabriela 26/07/2026: motorista ja no
+    # balcao, venda perdida. O VIGIA ja tratava atraso como handoff
+    # LEGITIMO (chatbot_vigia._SINAIS_RECLAMACAO) — o enforcement divergia.
+    r'|\batras(o|os|ou|ado|ada|ando)\b'
+    r'|\b(rappi|ifood|99\s*food|marketplace)\b'
+    r')')
 
 
 def _handoff_excecao(inp):
