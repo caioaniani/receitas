@@ -1169,7 +1169,7 @@ def produto(slug_completo):
     # Datas pro seletor de disponibilidade (janela de 14 dias). Default = HOJE
     # se ainda tem saldo, senao PRIMEIRO dia futuro com saldo (cliente nao
     # precisa ficar trocando o seletor sozinho ate achar uma data viavel).
-    from datetime import timedelta
+    from datetime import date, timedelta
 
     from app.utils import hoje
     data_hoje = hoje()
@@ -1183,12 +1183,12 @@ def produto(slug_completo):
     data_min = data_hoje + timedelta(days=lead)
     data_max = data_min + timedelta(days=14)
     data_padrao = data_min
-    if lead == 0 and item['esgotado_hoje'] and item['tem_em_outros_dias']:
-        for i in range(1, 15):
-            d = data_hoje + timedelta(days=i)
-            if loja_catalogo.tem_estoque_para_dia(kind, item_id, d):
-                data_padrao = d
-                break
+    # A proxima data disponivel ja vem do `anotar_esgotado` (o mesmo numero
+    # que a vitrine anuncia). Antes esta rota recalculava com um loop proprio
+    # — duas contas do mesmo fato, que podiam divergir e mostrar uma data no
+    # card e outra no seletor.
+    if lead == 0 and item.get('proxima_data'):
+        data_padrao = date.fromisoformat(item['proxima_data'])
     return render_template(
         'loja/produto.html', item=item, em_teste=_em_teste(),
         personalizada=personalizada, monte=monte,
