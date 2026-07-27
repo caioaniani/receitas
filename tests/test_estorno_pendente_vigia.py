@@ -416,27 +416,32 @@ def test_detectar_tolera_lixo_da_api(app, monkeypatch):
 
 # ── Rota sob demanda ─────────────────────────────────────────────────────
 
-def test_rota_exige_owner(client, admin_user):
-    client.post('/auth/login', data={'login': admin_user.login,
-                                     'senha': 'senha123'})
-    r = client.get('/admin/vigia-estorno-pendente')
-    assert r.status_code in (302, 403)
+def _logado(app, user):
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(user.id)
+        s['_fresh'] = True
+    return c
 
 
-def test_rota_dry_run_nao_envia_nem_marca(client, owner_user, app,
-                                          monkeypatch):
+def test_rota_exige_owner(app, admin_user):
+    """Admin comum não vê — é diagnóstico de estoque do dono."""
+    assert _logado(app, admin_user).get(
+        '/admin/vigia-estorno-pendente').status_code == 403
+
+
+def test_rota_dry_run_nao_envia_nem_marca(app, owner_user, monkeypatch):
+    from app.extensions import db
     from app.services import zapi
     enviados = []
     monkeypatch.setattr(zapi, 'enviar_texto',
                         lambda n, m, **k: enviados.append(m) or {'ok': True})
+    c = _logado(app, owner_user)
     with app.app_context():
-        from app.extensions import db
         _reg(db, 'R1')
-    _seru_fake(monkeypatch, [_pedido('R1')])
-    client.post('/auth/login', data={'login': owner_user.login,
-                                     'senha': 'senha123'})
-    r = client.get('/admin/vigia-estorno-pendente')
+        _seru_fake(monkeypatch, [_pedido('R1')])
+        r = c.get('/admin/vigia-estorno-pendente')
     assert r.status_code == 200
     j = r.get_json()
-    assert j['dry_run'] is True and [c['id'] for c in j['pendentes']] == ['R1']
+    assert j['dry_run'] is True and [x['id'] for x in j['pendentes']] == ['R1']
     assert enviados == []
