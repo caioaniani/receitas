@@ -299,6 +299,37 @@ def _datas_janela_futura(inicio):
     return [inicio + timedelta(days=i) for i in range(_JANELA_DIAS_FUTUROS)]
 
 
+_DIAS_SEMANA = ('segunda', 'terça', 'quarta', 'quinta', 'sexta',
+                'sábado', 'domingo')
+
+
+def rotulo_data_disponivel(data, referencia=None, *, curto=False):
+    """Data em português pra vitrine: "amanhã", "sexta, 01/08" ou "01/08".
+
+    Pedido do dono (27/07/2026): em vez de "esgotado hoje", a vitrine diz
+    QUANDO o item volta. Data crua ("01/08") faz o cliente contar nos dedos;
+    o dia da semana resolve isso pra a semana que vem. Além de uma semana o
+    nome do dia deixa de ajudar (qual sexta?), então fica só a data.
+
+    `curto=True` = versão do selo sobre a foto, onde não cabe o dia da
+    semana. Função PURA (recebe a referência) — o rótulo é testável sem
+    mexer no relógio."""
+    if data is None:
+        return ''
+    if referencia is None:
+        from app.utils import hoje
+        referencia = hoje()
+    dias = (data - referencia).days
+    if dias <= 0:
+        return 'hoje'
+    if dias == 1:
+        return 'amanhã'
+    ddmm = f'{data.day:02d}/{data.month:02d}'
+    if curto or dias > 7:
+        return ddmm
+    return f'{_DIAS_SEMANA[data.weekday()]}, {ddmm}'
+
+
 def anotar_esgotado(itens):
     """Marca cada item com 3 flags pra a vitrine sinalizar disponibilidade:
 
