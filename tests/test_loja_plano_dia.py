@@ -552,8 +552,12 @@ def test_pagina_produto_mostra_seletor_quando_esgotado_so_hoje(app):
     assert 'dispon-data' in html
     # Default eh a primeira data com saldo (proxima), nao hoje
     assert f'value="{proxima.isoformat()}"' in html
-    # Aviso amarelo "Esgotado hoje"
-    assert 'Esgotado hoje' in html
+    # Aviso amarelo anuncia QUANDO volta (dono 27/07/2026) — antes dizia so
+    # "Esgotado hoje" e o cliente ficava sem saber quando podia comprar.
+    from app.services.loja_catalogo import rotulo_data_disponivel
+    assert 'Disponível a partir de' in html
+    assert rotulo_data_disponivel(proxima, dia_hoje) in html
+    assert 'Esgotado hoje' not in html
 
 
 def test_api_disponibilidade_checkout(app):
