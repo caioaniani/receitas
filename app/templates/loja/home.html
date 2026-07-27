@@ -14,9 +14,13 @@
     {% for it in itens %}
     {# 3 estados (22/06/2026): `esgotado` (sem saldo em nenhum dos 14 dias) ->
        etiqueta vermelha + bloqueia. `esgotado_hoje` E tem_em_outros_dias ->
-       etiqueta amarela "esgotado hoje, compre pra outro dia" (cliente pode
-       comprar mas precisa escolher data > hoje). Normal -> botao Adicionar
-       comum. #}
+       etiqueta amarela com a PROXIMA DATA disponivel (cliente pode comprar
+       mas precisa escolher data > hoje). Normal -> botao Adicionar comum.
+
+       27/07/2026 (dono): esses dois avisos diziam so "esgotado hoje" — o
+       cliente batia numa negativa sem saber quando voltava. Agora anunciam
+       a data (`proxima_data_label`, calculada em `loja_catalogo`). O texto
+       antigo fica de fallback pro caso raro de a data nao vir. #}
     <div class="produto-cell{% if it.esgotado %} is-esgotado{% elif it.esgotado_hoje %} is-esgotado-hoje{% endif %}">
       <a class="card-produto" href="{{ it.href }}">
         <div class="card-foto">
