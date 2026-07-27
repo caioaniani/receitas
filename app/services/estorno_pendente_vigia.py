@@ -27,6 +27,12 @@ Funcionamento:
 - Anti-flood igual ao `venda_sem_item_vigia`: cooldown entre mensagens e
   teto diário, ambos por env.
 
+LIMITAÇÃO CONHECIDA (aceita): a janela é a do sync — `hoje -
+SYNC_CATCHUP_DIAS` (default 2), filtrada por **`createdAt`**. Cobrança
+criada dia 20 e cancelada só no dia 25 já saiu da janela e NÃO é detectada.
+Cobre o caso real (cancelamento no mesmo dia ou no dia seguinte); ampliar
+custa varredura extra na API e é decisão separada.
+
 Config (env):
 - `ESTORNO_PENDENTE_VIGIA=0` desliga (kill-switch).
 - `ESTORNO_PENDENTE_COOLDOWN_MIN` (default 60) — intervalo mínimo entre
