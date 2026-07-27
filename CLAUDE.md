@@ -2166,6 +2166,62 @@ pelo WHATSAPP e abre no navegador de verdade.
 Pesquisa de melhorias no bot/vigia/auditor aprovada pelo dono virou 4
 pacotes, todos implementados. Testes: `tests/test_bot_melhorias_0702.py`.
 
+**26/07/2026 (auditor: caso Gabriela conv 918 + turno vazio)** — dois
+defeitos reais, um deles o motivo de handoff MAIS FREQUENTE do periodo.
+Diagnostico feito com a sonda `/api/claude/vigia-vereditos` (o relatorio do
+auditor nao traz `conv_id`; SEMPRE puxar a conversa real antes de agir — o
+enquadramento do auditor estava errado em 2 dos 3 achados).
+
+- **Turno VAZIO do modelo nao e falha — quase sempre e fechamento.** O
+  prompt manda "NAO responda nada" no fechamento; o modelo obedece metade
+  (silencio) e esquece a outra (chamar `encerrar_conversa`), devolvendo
+  turno sem tool e sem texto. O codigo tratava isso como falha e transferia
+  com motivo `'resposta vazia'`: **3 dos 16 handoffs de 12-26/07** sairam
+  assim (conv 842 "Obrigada. Esclareceu", 897 "Nao, muito obrigada !", 918),
+  entupindo a fila humana com fechamento banal e ainda contando como
+  "handoff preguicoso" na metrica do auditor (tools vazias) — era dai que
+  vinha o "preguicoso 1/2" do relatorio. O ramo agora DISCRIMINA 3 casos:
+  (a) fechamento COM reclamacao (`_SINAIS_RECLAMACAO`) -> handoff com
+  mensagem DE VERDADE (`_TEXTO_VAZIO_RECLAMACAO`), porque silenciar venda
+  perdida e o pior desfecho; (b) sem pendencia -> `_resp_encerrar`, o
+  SILENCIO que o dono decidiu em 16/06 (mesma saida da Camada 1, que so nao
+  pegou porque `_e_fechamento` e ancorado nas duas pontas e nao tolera texto
+  extra); (c) bot com PERGUNTA pendente -> `FALLBACK_TEXTO` (regra P1,
+  cliente nunca no vacuo). NAO alargar `_e_fechamento` pra pegar esses
+  casos: ele silenciaria RECLAMACAO (o caso 918 termina em "Obrigada").
+- **Atraso de pedido de APP (Rappi/iFood/99Food) transfere DIRETO.** Caso
+  Gabriela: "pedido do Rappi previsto 17:20 e ate agora nada. **O motorista
+  ja esta ai**" — o entregador estava NO BALCAO (vigia: "3 motoboys foram
+  embora"), ou seja o gargalo era NOSSO. O bot mandou pro suporte do Rappi
+  (lugar errado) e ninguem na padaria soube; a cliente cancelou 1h depois.
+  Duas causas: (1) NENHUMA tool consulta pedido de marketplace
+  (`consultar_pedido` so ve `PedidoOnline`), entao o enforcement que exige
+  "consulte antes de transferir" era beco sem saida — o caminho barato pro
+  modelo virava o texto generico "veja no app"; (2) `_HANDOFF_EXCECAO` nao
+  cobria atraso, embora o VIGIA ja tratasse atraso como handoff LEGITIMO
+  (`_SINAIS_RECLAMACAO`) — duas implementacoes do mesmo conceito divergindo.
+  Agora: excecao cobre `atras*`/rappi/ifood/99food/marketplace + secao no
+  prompt (bullet em "ANTES DE TRANSFERIR") mandando transferir SEM pedir
+  numero de pedido (pedido de app nao tem numero nosso) e distinguindo
+  "entregador ja esta aqui" (gargalo nosso, aciona humano) de "pedido ja
+  saiu" (ai sim orienta o app).
+- **Dois defeitos pre-existentes achados no caminho, corrigidos**: o radical
+  `alerg` NUNCA casou "alérgico"/"alérgica" (acento) — a excecao de MAIOR
+  risco (saude) so valia se o modelo escrevesse "alergia"; e `pessoa\w*`
+  casava **"pessoas"**, entao um motivo de VENDA ("cesta para 10 pessoas")
+  anulava o enforcement inteiro. `_SINAIS_RECLAMACAO` tambem nao reconhecia
+  "nao chegava/chegaram" (so "chegou") nem "cancelei/cancelando" (so
+  "cancelar meu pedido") — por isso a venda perdida da 918 era lida como
+  fechamento banal.
+- **A sugestao do auditor foi PARCIALMENTE recusada** (ele e IA, o dono
+  manda): ele pediu "resposta padrao de empatia" no fechamento, o que
+  contraria a decisao de 16/06+21/07 (fechamento puro = SILENCIO). Empatia
+  entra SO no ramo com reclamacao. O 3o achado dele ("pedido entregue mas
+  nao recebido", R$309) foi confirmado SEM defeito de codigo: o bot usou
+  `consultar_pedido` e transferiu com motivo completo — e acompanhamento
+  operacional, nao software.
+- Testes: `tests/test_bot_resposta_vazia.py` (10 casos).
+
 **21/07/2026 (caso Daiane Food Center, auditor)** — fechamento puro NUNCA
 vira handoff. A fornecedora agradeceu ("Muito Obrigada🙏") depois de o bot ja
 ter respondido e o bot respondeu "Já te passo para um atendente" — handoff
