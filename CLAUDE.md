@@ -2535,6 +2535,43 @@ estoque nem entram na previsao.
   pedidos de delivery ANTIGOS (ate 30d) de uma vez — rajada esperada,
   avisar o dono. Testes: `tests/test_seru_nf_itens.py` (9 casos).
 
+## Vigia de ESTORNO PENDENTE — cancelada que nao devolveu estoque (26/07/2026)
+
+Caso real: 4 cobrancas canceladas entre 22 e 24/07/2026 tinham baixado
+estoque (7 itens) e NUNCA devolveram; so apareceram numa auditoria manual.
+Causa = a pendencia ja documentada acima: o estorno de pedido JA PROCESSADO
+(`seru_sync.processar_pedidos`) e keyed SO em `canceledAt`, e essas foram
+canceladas so pelo `status` — a condicao nunca fecha.
+
+**DECISAO DO DONO (26/07/2026)**: "esses 4 deixa pra la, vejo os proximos" e,
+avisado de que os proximos passariam batidos igual, escolheu **ALERTAR** em
+vez de mexer no gatilho. Ou seja: **o gatilho do estorno NAO mudou** (segue
+`canceledAt`), o vigia so torna visivel o que era silencioso. NAO fazer o
+vigia estornar — estoque so muda por gesto do dono.
+
+- **Servico** `app/services/estorno_pendente_vigia.py`. Regra CANONICA
+  `e_estorno_pendente(pedido, reg)` = processado, nao estornado,
+  `n_itens_baixados > 0`, cancelado por `seru.pedido_cancelado` MAS **sem**
+  `canceledAt`. Usada nos DOIS caminhos (sync e tela) pra nunca divergirem.
+- **Deteccao sem custo**: mora no proprio `processar_pedidos` (que ja tem os
+  pedidos da API e o registro na mao) e sai em `stats['estornos_pendentes']`
+  — zero request extra a Seru. A tela sob demanda usa `detectar(di, df)`,
+  que refaz a leitura read-only.
+- **Alerta**: `alertar(pendentes)` roda a cada ciclo do sync (15min) DENTRO
+  do advisory lock do `_run_sync` (execucao unica entre workers). Dedup POR
+  PEDIDO em AppConfig (`estorno_pendente_alertados`), envio falho NAO marca
+  os ids (retenta). Anti-flood igual ao `venda_sem_item_vigia`:
+  `ESTORNO_PENDENTE_COOLDOWN_MIN` (60) + `ESTORNO_PENDENTE_MAX_MSGS_DIA` (4);
+  kill-switch `ESTORNO_PENDENTE_VIGIA=0`.
+- A mensagem diz **o que saiu do estoque** (`itens_baixados(pedido_id)` le
+  os `MovEstoqueLoja` pela MESMA referencia `Seru #<id>`, incluindo os
+  sufixos de cesta/fracao) — sem isso o dono saberia que ha um rombo mas nao
+  o que devolver. Detalhe e BONUS: falha nele nunca derruba o alerta.
+- Sob demanda: `GET /admin/vigia-estorno-pendente` (owner; dry-run lista
+  pendentes+estado sem WhatsApp, `?alertar=1` roda o fluxo).
+- Testes: `tests/test_estorno_pendente_vigia.py` (14 casos; Seru e Z-API
+  sempre mockadas). Manual de operacao registrado.
+
 ## NF de TRANSFERENCIA industria→loja no scan do QR (20/07/2026)
 
 Pedido do dono: NF de transferencia emitida quando o motorista escaneia o
