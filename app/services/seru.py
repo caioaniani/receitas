@@ -357,6 +357,25 @@ def pedido_cancelado(pedido):
     return str(pedido.get('status') or '').strip().lower() == 'canceled'
 
 
+def nome_company(pedido):
+    """Nome da company (loja no PDV) de um pedido, ou ''.
+
+    A API manda `company` ora como DICT, ora como STRING crua — os dois
+    formatos ja apareceram em producao. Quem faz `pedido['company'].get(...)`
+    direto estoura `AttributeError` no dia em que vier string (achado de
+    revisao 26/07/2026: um alerta best-effort dentro do `processar_pedidos`
+    derrubaria o ciclo INTEIRO do sync, descartando as baixas de estoque ja
+    feitas). Use SEMPRE este helper."""
+    if not isinstance(pedido, dict):
+        return ''
+    company = pedido.get('company')
+    if isinstance(company, dict):
+        return str(company.get('name') or '').strip()
+    if isinstance(company, str):
+        return company.strip()
+    return ''
+
+
 def canal_tag(pedido):
     """Tag do canal de venda ('pdv-facil', '99food', ...) ou ''."""
     sc = pedido.get('salesChannel') if isinstance(pedido, dict) else None
