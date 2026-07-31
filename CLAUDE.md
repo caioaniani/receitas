@@ -654,6 +654,37 @@ status; `?testar=1` manda evento de teste.
   retornam UTC, e a partir das 21h BRT viram D+1 (causa bugs do copilot
   achando que é "amanhã" às 22h, lembretes de hoje sumindo, etc.).
 
+## Dias de funcionamento da loja (27/07/2026)
+
+Pedido do dono: "Cantina nao precisa lancar sobras durante a semana pois so
+funciona de sabado e domingo". Antes, a cobranca de sobras listava TODA loja
+ativa em TODO dia — a Cantina levava **5 lembretes por dia util** (Slack
+20:10/15/20/25 + WhatsApp do dono as 20:30) por sobra que nao existia.
+
+- **Coluna** `Loja.dias_funcionamento` VARCHAR(7) — os dias em que a loja
+  ABRE, em digitos do `date.weekday()` (0=segunda ... 6=domingo): `'56'` =
+  sabado e domingo. Procedimento de 2 commits (ALTER em `migrations_legacy`
+  PG+SQLite deployado e confirmado pela sonda `/api/claude/deploy` ANTES do
+  modelo). Backfill UNICO na criacao da coluna marca `'56'` em quem casa
+  `LOWER(nome) LIKE '%cantina%'` — nunca sobrescreve edicao futura do dono.
+- **VAZIO/NULL = abre TODO DIA**, que e o valor de todas as lojas antigas —
+  a feature nasce sem mudar comportamento de ninguem. Isso e **fail-open
+  DELIBERADO**: loja mal configurada continua sendo cobrada; sumir da
+  cobranca em silencio por causa de config faltando seria o erro caro.
+- **Consumidor unico hoje**: `desperdicio_alerta.lojas_sem_desperdicio(dia)`
+  filtra por `Loja.funciona_em(dia)`. Conferido que e o UNICO ponto que cobra
+  lancamento de sobras — o "Precisa de voce hoje" e o `alertas_operacionais`
+  so tratam de *retirada de sobra presa em transporte*, coisa diferente.
+- **Onde se edita**: checkboxes dos 7 dias no card da loja em `/rh/lojas`
+  (mesmo form dos dados fiscais; o botao virou "Salvar dados da loja"). O
+  POST usa `getlist` + whitelist `0123456` — valor forjado nao entra na
+  coluna. Nenhum dia marcado grava NULL (volta a "abre todo dia").
+- **NAO** usar a flag pra capar previsao/pedido/estoque sem ordem do dono: o
+  pedido foi so sobre a COBRANCA de sobras. Uma loja fechada segunda ainda
+  pode ter estoque e pedido pendentes.
+- Testes: `tests/test_loja_dias_funcionamento.py` (11 casos, incluindo a
+  regressao do fail-open e o POST forjado). Manual de operacao atualizado.
+
 ## Estoque pendente (congelados + loja)
 
 Tanto `EstoqueProducao` quanto `EstoqueLoja` tem coluna `nome_pendente`. Quando o
