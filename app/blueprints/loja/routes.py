@@ -25,7 +25,13 @@ from flask_login import current_user
 from app.blueprints.loja import loja_bp
 from app.extensions import csrf, limiter
 from app.services import frete as frete_svc
-from app.services import loja_auth, loja_catalogo, loja_checkout, loja_pagamento
+from app.services import (
+    loja_auth,
+    loja_catalogo,
+    loja_checkout,
+    loja_data_especial,
+    loja_pagamento,
+)
 
 
 def _ctx_checkout(erros=None, form=None):
@@ -100,6 +106,11 @@ def _ctx_checkout(erros=None, form=None):
         # também recusa.
         express_ok=(loja_checkout.express_disponivel()
                     and lead_encomenda == 0),
+        # Motivo do express estar fora HOJE: sem distinguir "data especial"
+        # de "fora do horário", o rótulo diria "fora do horário 8h–18h" às
+        # 11h do Dia dos Pais.
+        express_bloqueado_hoje=loja_data_especial.express_bloqueado_em(
+            base.date()),
         encomenda_no_carrinho=(lead_encomenda > 0),
         encomenda_lead_dias=lead_encomenda,
         # Corte por distância: pro JS cortar a 1ª janela quando a cotação
