@@ -226,13 +226,14 @@ def test_pedido_ja_pago_fora_do_horario_aparece(app):
     regra = _definir()
     db.session.add_all([
         PedidoOnline(codigo='VELHO1', nome_cliente='A', email_cliente='a@x.com',
-                     status='pago', data_entrega=DIA_DOS_PAIS,
+                     status='pago', modo_entrega='agendada', data_entrega=DIA_DOS_PAIS,
                      janela_entrega='15:00–16:00', valor_total=10),
         PedidoOnline(codigo='NOVO1', nome_cliente='B', email_cliente='b@x.com',
-                     status='pago', data_entrega=DIA_DOS_PAIS,
+                     status='pago', modo_entrega='agendada', data_entrega=DIA_DOS_PAIS,
                      janela_entrega=JANELA_PAIS, valor_total=10),
         PedidoOnline(codigo='CANC1', nome_cliente='C', email_cliente='c@x.com',
-                     status='cancelado', data_entrega=DIA_DOS_PAIS,
+                     status='cancelado', modo_entrega='agendada',
+                     data_entrega=DIA_DOS_PAIS,
                      janela_entrega='15:00–16:00', valor_total=10),
     ])
     db.session.commit()
@@ -462,7 +463,7 @@ def test_tela_avisa_de_pedido_ja_agendado_fora_do_horario(app):
     _definir()
     db.session.add(PedidoOnline(
         codigo='VELHO9', nome_cliente='A', email_cliente='a@x.com',
-        status='pago', data_entrega=DIA_DOS_PAIS,
+        status='pago', modo_entrega='agendada', data_entrega=DIA_DOS_PAIS,
         janela_entrega='15:00–16:00', valor_total=10))
     db.session.commit()
     html = c.get('/admin/loja-online/horarios-especiais').data.decode()
