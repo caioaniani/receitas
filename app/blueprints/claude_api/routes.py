@@ -1790,3 +1790,94 @@ def tiny_vendas():
     out['notas'] = notas[:30]
     out['notas_erros'] = erros_notas or None
     return jsonify(out)
+
+
+@claude_api_bp.route('/conferencia-loja')
+@_claude_auth_required
+def conferencia_loja():
+    """As CORREÇÕES de conferência que o dono aplicou no estoque das lojas
+    (31/07/2026, "na conferência de estoque das lojas tem dado uma diferença
+    enorme"). Lê os `MovEstoqueLoja` tipo='ajuste_conferencia' da janela — que
+    é o registro do que ELE contou na prateleira contra o que o sistema dizia —
+    e ordena pelo tamanho da diferença, pra achar de onde vem o rombo.
+
+    Sinal (mesma convenção dos dois caminhos de conferência):
+      diff > 0  -> real MAIOR que o sistema: o sistema baixou DEMAIS (sangrou).
+      diff < 0  -> real MENOR que o sistema: o sistema NÃO baixou o que saiu.
+
+    Read-only estrito. Params: ?dias=N (default 2, max 60), ?loja=<nome|id>,
+    ?limite=N (default 60, max 300).
+    """
+    from datetime import datetime, time, timedelta
+
+    from app.extensions import db
+    from app.models import EstoqueLoja, Loja, MovEstoqueLoja
+    from app.utils import hoje, resolver_loja_por_nome
+
+    dias = max(1, min(request.args.get('dias', 2, type=int) or 2, 60))
+    limite = max(1, min(request.args.get('limite', 60, type=int) or 60, 300))
+    ini = datetime.combine(hoje() - timedelta(days=dias - 1), time.min)
+
+    q = (db.session.query(MovEstoqueLoja, EstoqueLoja, Loja)
+         .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
+         .join(Loja, EstoqueLoja.loja_id == Loja.id)
+         .filter(MovEstoqueLoja.tipo == 'ajuste_conferencia',
+                 MovEstoqueLoja.data >= ini))
+
+    bruto = (request.args.get('loja') or '').strip()
+    loja_sel = None
+    if bruto:
+        if bruto.isdigit():
+            loja_sel = db.session.get(Loja, int(bruto))
+        if loja_sel is None:
+            loja_sel = resolver_loja_por_nome(bruto)
+        if loja_sel is None:
+            return jsonify(ok=False, erro='loja nao encontrada'), 404
+        q = q.filter(EstoqueLoja.loja_id == loja_sel.id)
+
+    linhas = q.order_by(MovEstoqueLoja.data.desc()).limit(3000).all()
+
+    ajustes, por_loja = [], {}
+    for mov, el, loja in linhas:
+        diff = int(mov.quantidade or 0)
+        ajustes.append({
+            'data': mov.data.isoformat() if mov.data else None,
+            'loja': loja.nome,
+            'item': el.nome_item,
+            'tipo_item': ('receita' if el.receita_id else
+                          'produto' if el.produto_id else
+                          'materia_prima' if el.materia_prima_id else
+                          'pendente'),
+            'diff': diff,
+            'saldo_atual': int(el.quantidade or 0),
+            'referencia': mov.referencia,
+        })
+        b = por_loja.setdefault(loja.nome, {
+            'n_ajustes': 0, 'faltava_no_sistema': 0, 'sobrava_no_sistema': 0})
+        b['n_ajustes'] += 1
+        if diff > 0:
+            b['faltava_no_sistema'] += diff     # sistema baixou demais
+        else:
+            b['sobrava_no_sistema'] += -diff    # sistema nao baixou
+
+    # Agregado por ITEM — é aqui que o padrão aparece (mesmo item em várias lojas).
+    por_item = {}
+    for a in ajustes:
+        k = (a['item'], a['tipo_item'])
+        b = por_item.setdefault(k, {'item': a['item'], 'tipo_item': a['tipo_item'],
+                                    'n': 0, 'soma_diff': 0, 'lojas': set()})
+        b['n'] += 1
+        b['soma_diff'] += a['diff']
+        b['lojas'].add(a['loja'])
+    itens = sorted(({**v, 'lojas': sorted(v['lojas'])} for v in por_item.values()),
+                   key=lambda x: -abs(x['soma_diff']))
+
+    return jsonify(
+        ok=True,
+        janela={'inicio': ini.date().isoformat(), 'dias': dias},
+        loja=(loja_sel.nome if loja_sel else None),
+        total_ajustes=len(ajustes),
+        por_loja=por_loja,
+        por_item=itens[:limite],
+        maiores=sorted(ajustes, key=lambda a: -abs(a['diff']))[:limite],
+    )
