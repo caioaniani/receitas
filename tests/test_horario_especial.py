@@ -219,16 +219,21 @@ def _carrinho(db):
     return [{'kind': 'produto', 'id': p.id, 'qtd': 1}]
 
 
-def _form(data, janela, modo='retirada', loja_id=None):
-    f = {
-        'modo_entrega': modo, 'nome': 'Fulano de Tal',
+# Endereço da NF-e: a retirada também o exige desde 20/07/2026 (a SEFAZ
+# rejeita destinatário em branco).
+_END_NF = {'cep': '04077-000', 'logradouro': 'Rua X', 'numero': '10',
+           'bairro': 'Moema', 'cidade': 'São Paulo', 'uf': 'SP'}
+
+
+def _form(data, janela, loja_id):
+    return {
+        'modo_entrega': 'retirada', 'nome': 'Fulano de Tal',
         'email': 'f@x.com', 'telefone': '11999998888',
+        'cpf': '529.982.247-25', 'aceite_lgpd': '1',
+        'loja_id': str(loja_id),
         'data_entrega': data.isoformat(), 'janela_entrega': janela,
-        'aceite_lgpd': '1',
+        **_END_NF,
     }
-    if modo == 'retirada':
-        f['loja_retirada_id'] = str(loja_id)
-    return f
 
 
 def test_checkout_aceita_a_janela_especial_e_recusa_a_normal(app):
