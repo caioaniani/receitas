@@ -81,7 +81,7 @@
     </thead>
     <tbody>
       {% for r in regras %}
-      <tr {% if r.data < hoje_iso|from_iso %}class="text-muted"{% endif %}>
+      <tr {% if r.data < hoje_d %}class="text-muted"{% endif %}>
         <td class="fw-bold text-nowrap">{{ r.data.strftime('%d/%m/%Y') }}</td>
         <td>{{ r.rotulo or '—' }}</td>
         <td>
