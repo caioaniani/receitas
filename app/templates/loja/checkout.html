@@ -103,6 +103,9 @@
             {% elif encomenda_no_carrinho %}
               Indisponível: seu carrinho tem item sob encomenda (só a partir
               de D+2).
+            {% elif hoje_fechado %}
+              Hoje não estamos entregando — escolha uma
+              <strong>data mais pra frente</strong>.
             {% elif express_bloqueado_hoje %}
               {# Data especial (27/07/2026): sem este ramo o site diria "fora
                  do horário 8h–18h" às 11h do Dia dos Pais — mentira. #}
