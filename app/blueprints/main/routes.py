@@ -6048,7 +6048,8 @@ def loja_horarios_especiais():
         regras=regras,
         hoje_d=hoje_brt(),
         hoje_iso=hoje_brt().isoformat(),
-        janelas_normais=list(loja_checkout.JANELAS_HORARIAS),
+        hora_abre=loja_checkout.HORA_ABRE,
+        hora_fecha=loja_checkout.HORA_FECHA,
     )
 
 
