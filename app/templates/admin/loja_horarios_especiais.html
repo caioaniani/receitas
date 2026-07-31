@@ -43,8 +43,6 @@
                   placeholder="06:00-10:00"></textarea>
         <div class="form-text">
           Ex.: <code>06:00-10:00</code>. Pode pôr vários (um por linha).
-          <strong>Deixe em branco para fechar o dia</strong> — a data some do
-          site e ninguém consegue pedir para ela.
         </div>
       </div>
       <div class="col-12">
@@ -57,9 +55,24 @@
             na hora durante o dia, fora dos horários acima.
           </label>
         </div>
+        {# Fechar o dia é um gesto EXPLÍCITO. Antes era "deixe em branco", e
+           reabrir a tela só pra corrigir o rótulo fecharia o dia sem
+           querer (achado de revisão 27/07/2026). #}
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="1"
+                 id="lfechar" name="fechar_dia">
+          <label class="form-check-label small" for="lfechar">
+            <strong class="text-danger">Fechar o dia</strong> — não vender
+            para essa data. A data some do site e os horários acima são
+            ignorados.
+          </label>
+        </div>
       </div>
       <div class="col-12">
         <button class="btn btn-primary btn-sm" type="submit">Salvar dia</button>
+        <button class="btn btn-sm btn-outline-secondary d-none" type="button"
+                id="lcancelar">Cancelar edição</button>
+        <span class="small text-muted ms-2" id="leditando"></span>
       </div>
     </form>
   </div>
