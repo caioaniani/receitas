@@ -111,6 +111,9 @@ def _ctx_checkout(erros=None, form=None):
         # 11h do Dia dos Pais.
         express_bloqueado_hoje=loja_data_especial.express_bloqueado_em(
             base.date()),
+        # Dia fechado também bloqueia express, mas "as entregas saem só nos
+        # horários abaixo" seria mentira — não há horário nenhum abaixo.
+        hoje_fechado=loja_data_especial.dia_fechado(base.date()),
         encomenda_no_carrinho=(lead_encomenda > 0),
         encomenda_lead_dias=lead_encomenda,
         # Corte por distância: pro JS cortar a 1ª janela quando a cotação
