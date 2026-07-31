@@ -8,7 +8,13 @@ def _latin1(texto):
     pode ter qualquer coisa."""
     if texto is None:
         return ''
-    return str(texto).encode('latin-1', 'replace').decode('latin-1')
+    # EN-DASH e EM-DASH viram hifen ANTES do encode: latin-1 nao os conhece e
+    # o 'replace' os transformaria em '?'. A janela de entrega usa en-dash
+    # ('08:00–09:00'), entao o papel que vai com o motorista vinha saindo
+    # "08:00?09:00" (achado de revisao 27/07/2026 — defeito antigo, so
+    # invisivel porque ninguem leu o PDF procurando por isso).
+    texto = str(texto).replace('–', '-').replace('—', '-')
+    return texto.encode('latin-1', 'replace').decode('latin-1')
 
 
 class PadariaPDF(FPDF):
