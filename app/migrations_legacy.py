@@ -2304,6 +2304,16 @@ def _migrate_sqlite(app):
                    ('razao_social', 'VARCHAR(200)')):
         if cols_loja and _c not in cols_loja:
             cursor.execute(f"ALTER TABLE loja ADD COLUMN {_c} {_t}")
+    # Dias de funcionamento (27/07/2026) — ver _migrate_postgres. NULL = abre
+    # todo dia; '56' = so sabado e domingo (digitos do date.weekday()).
+    if cols_loja and 'dias_funcionamento' not in cols_loja:
+        cursor.execute("ALTER TABLE loja ADD COLUMN "
+                       "dias_funcionamento VARCHAR(7)")
+        # Backfill unico, so na criacao da coluna (nao sobrescreve edicao
+        # futura do dono): a Cantina abre so no fim de semana.
+        cursor.execute("UPDATE loja SET dias_funcionamento = '56' "
+                       "WHERE LOWER(nome) LIKE '%cantina%' "
+                       "  AND dias_funcionamento IS NULL")
     cursor.execute("PRAGMA table_info(pedido_loja)")
     cols_pl = [row[1] for row in cursor.fetchall()]
     for _c, _t in (('tiny_nota_fiscal_id', 'VARCHAR(40)'),
