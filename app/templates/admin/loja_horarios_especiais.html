@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% block title %}Horários especiais — Loja Online{% endblock %}
+
+{% block content %}
+<h1 class="page-title"><i class="bi bi-clock-history"></i> Horários especiais do site</h1>
+
+<div class="alert alert-light border small mb-3">
+  <strong>Use isto quando um dia tiver horário de entrega diferente do
+  normal</strong> — Dia dos Pais, Natal, Dia das Mães. O que você cadastrar
+  aqui <strong>substitui</strong> o horário de sempre
+  ({{ janelas_normais[0] }} até {{ janelas_normais[-1] }}, de hora em hora)
+  naquele dia, tanto pra <strong>entrega</strong> quanto pra
+  <strong>retirada na loja</strong>.
+  <br>
+  Não confunda com
+  <a href="{{ url_for('main.loja_online_plano_dia') }}">Disponibilidade do dia</a>,
+  que controla <em>quanto</em> de cada item dá pra vender. Aqui é
+  <em>a que horas</em> a entrega acontece.
+</div>
+
+{# ── Cadastro ──────────────────────────────────────────────────────── #}
+<div class="card mb-4">
+  <div class="card-header py-2 fw-bold">Cadastrar / alterar um dia</div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('main.loja_horarios_especiais_salvar') }}"
+          class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-bold" for="ldata">Dia</label>
+        <input type="date" class="form-control" id="ldata" name="data"
+               min="{{ hoje_iso }}" required>
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-bold" for="lrotulo">
+          O que é (opcional)</label>
+        <input type="text" class="form-control" id="lrotulo" name="rotulo"
+               maxlength="80" placeholder="Dia dos Pais">
+      </div>
+      <div class="col-12 col-md-5">
+        <label class="form-label small fw-bold" for="ljanelas">
+          Horários desse dia — <strong>um por linha</strong></label>
+        <textarea class="form-control" id="ljanelas" name="janelas" rows="3"
+                  placeholder="06:00-10:00"></textarea>
+        <div class="form-text">
+          Ex.: <code>06:00-10:00</code>. Pode pôr vários (um por linha).
+          <strong>Deixe em branco para fechar o dia</strong> — a data some do
+          site e ninguém consegue pedir para ela.
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="1"
+                 id="lexpress" name="express_bloqueado" checked>
+          <label class="form-check-label small" for="lexpress">
+            <strong>Não aceitar entrega imediata (express) nesse dia</strong>
+            — recomendado. Sem isto, o cliente ainda consegue pedir entrega
+            na hora durante o dia, fora dos horários acima.
+          </label>
+        </div>
+      </div>
+      <div class="col-12">
+        <button class="btn btn-primary btn-sm" type="submit">Salvar dia</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Lista ─────────────────────────────────────────────────────────── #}
+<h2 class="h6 fw-bold mb-2">Dias cadastrados</h2>
+{% if not regras %}
+<p class="text-muted small">Nenhum dia especial cadastrado — o site está
+  usando o horário normal em todas as datas.</p>
+{% else %}
+<div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>Dia</th><th>O que é</th><th>Horários</th>
+        <th>Entrega imediata</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in regras %}
+      <tr {% if r.data < hoje_iso|from_iso %}class="text-muted"{% endif %}>
+        <td class="fw-bold text-nowrap">{{ r.data.strftime('%d/%m/%Y') }}</td>
+        <td>{{ r.rotulo or '—' }}</td>
+        <td>
+          {% if r.fechado %}
+          <span class="badge bg-danger">fechado — não vende para esse dia</span>
+          {% else %}
+          {% for j in r.lista_janelas() %}
+          <span class="badge bg-dark me-1">{{ j }}</span>
+          {% endfor %}
+          {% endif %}
+        </td>
+        <td>
+          {% if r.express_bloqueado %}
+          <span class="badge bg-secondary">bloqueada</span>
+          {% else %}
+          <span class="badge bg-light text-dark border">normal</span>
+          {% endif %}
+        </td>
+        <td class="text-end">
+          <form method="POST"
+                action="{{ url_for('main.loja_horarios_especiais_remover') }}"
+                class="d-inline" data-confirma-remocao
+                data-dia="{{ r.data.strftime('%d/%m/%Y') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="data" value="{{ r.data.isoformat() }}">
+            <button class="btn btn-sm btn-outline-danger" type="submit">
+              Voltar ao normal</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Confirmação por `data-*` (nunca `onsubmit` com texto do banco — o rótulo é
+// digitado por gente e um apóstrofo quebraria a string; lição de 23/07/2026).
+document.querySelectorAll('form[data-confirma-remocao]').forEach(function (f) {
+  f.addEventListener('submit', function (e) {
+    var dia = f.dataset.dia || 'esse dia';
+    if (!confirm('Voltar ' + dia + ' para o horário normal (08:00 às 18:00)?')) {
+      e.preventDefault();
+    }
+  });
+});
+</script>
+{% endblock %}
