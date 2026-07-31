@@ -177,6 +177,38 @@ def listar(desde=None):
     return q.order_by(LojaDataEspecial.data).all()
 
 
+def pedidos_fora_do_horario(regras):
+    """`{data_iso: [(codigo, janela), ...]}` dos pedidos JA PAGOS marcados
+    pra essas datas com horario que a regra nova NAO oferece mais.
+
+    A agenda do site e de 14 dias: quando a regra e cadastrada (ou o seed
+    roda no deploy), pode JA existir venda pra aquele dia com a janela
+    antiga — cadastrar nao migra nem avisa ninguem, e a operacao so
+    descobriria no dia, no painel de entregas. Read-only e best-effort:
+    falha aqui nunca pode derrubar a tela."""
+    try:
+        from app.models import PedidoOnline
+        alvos = {r.data: set(r.lista_janelas()) for r in (regras or [])}
+        if not alvos:
+            return {}
+        pedidos = (PedidoOnline.query
+                   .filter(PedidoOnline.data_entrega.in_(list(alvos)),
+                           PedidoOnline.status.notin_(
+                               ['cancelado', 'aguardando_pagamento']))
+                   .all())
+        out = {}
+        for p in pedidos:
+            ok = alvos.get(p.data_entrega) or set()
+            if (p.janela_entrega or '') in ok:
+                continue
+            out.setdefault(p.data_entrega.isoformat(), []).append(
+                (p.codigo, p.janela_entrega or '—'))
+        return out
+    except Exception:  # noqa: BLE001 — aviso e bonus, nao pode quebrar a tela
+        logger.exception('data especial: contagem de pedidos falhou')
+        return {}
+
+
 def definir(data, janelas, *, express_bloqueado=True, rotulo=None,
             usuario_id=None):
     """Cria ou atualiza a regra da data (upsert). Devolve a linha.
