@@ -43,6 +43,25 @@ class Loja(db.Model):
     # marcada nunca emite NF no scan do QR. Decisao do ADMIN no /rh/lojas
     # — motorista/padeiro nao veem a opcao.
     nf_dispensada = db.Column(db.Boolean, nullable=False, default=False)
+    # Dias em que a loja ABRE (27/07/2026, pedido do dono: "Cantina nao
+    # precisa lancar sobras durante a semana pois so funciona de sabado e
+    # domingo"). Digitos do `date.weekday()` (0=segunda ... 6=domingo) numa
+    # string: '56' = sabado e domingo; '0123456' = todo dia.
+    # VAZIO/NULL = abre TODO DIA — e o valor de todas as lojas antigas, entao
+    # o default nao muda comportamento nenhum. ALTER em migrations_legacy
+    # (commit 1 deployado e confirmado antes deste modelo).
+    dias_funcionamento = db.Column(db.String(7))
+
+    def funciona_em(self, dia):
+        """A loja abre nesse `date`? Vazio/NULL = abre todo dia (fail-open
+        DELIBERADO: loja sem configuracao continua sendo cobrada normalmente
+        — sumir da cobranca em silencio por causa de config faltando seria o
+        erro caro). Hoje quem usa e a cobranca de sobras
+        (desperdicio_alerta.lojas_sem_desperdicio)."""
+        dias = (self.dias_funcionamento or '').strip()
+        if not dias:
+            return True
+        return str(dia.weekday()) in dias
 
     @property
     def fiscal_completo(self):
