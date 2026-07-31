@@ -112,7 +112,8 @@ def express_disponivel(base=None):
     janela no Dia dos Pais" ser verdade: sem isto, o cliente pediria entrega
     imediata às 15h e alguém teria que sair pra rua fora da leva única.
     Fica aqui, e não só na tela, porque `criar_pedido` valida por esta mesma
-    função (loja_checkout.py:600) — POST forjado também bate na trava."""
+    função (ver o guard de modo e o ramo express em `criar_pedido`) — POST
+    forjado também bate na trava."""
     from app.services import loja_data_especial
     base = base or agora()
     if loja_data_especial.express_bloqueado_em(base.date()):
