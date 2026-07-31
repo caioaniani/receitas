@@ -188,10 +188,14 @@
           return parseInt(j.slice(0, 2), 10) >= (dados.minHoraHoje || 0);
         });
       }
-      // Corte por distância (>= corteKm tira a 1ª janela da manhã).
+      // Corte por distância (>= corteKm tira a 1ª janela da manhã). NÃO se
+      // aplica a dia especial: aquelas janelas foram escolhidas a dedo pro
+      // dia e cortá-las poderia zerar o dia inteiro pra quem mora longe
+      // (espelha loja_checkout.janelas_disponiveis).
       var corte = dados.corteKm;
       var janelasCortadas = dados.janelasCortadasLonge || [];
-      if (modo === 'agendada' && corte != null && ultimaDistKm != null
+      if (!temEspecial && modo === 'agendada' && corte != null
+          && ultimaDistKm != null
           && ultimaDistKm >= corte && janelasCortadas.length) {
         lista = lista.filter(function (j) {
           return janelasCortadas.indexOf(j) === -1;
