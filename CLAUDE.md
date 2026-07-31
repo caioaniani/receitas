@@ -1728,6 +1728,59 @@ diferentes; e pedido de RETIRADA em loja != origem baixa a loja escolhida
 site). Testes: `tests/test_loja_estoque_vitrine.py`,
 `tests/test_loja_estoque_reserva.py`, `tests/test_loja_online_vendas.py`.
 
+### Horario de entrega ESPECIAL por data (27/07/2026)
+
+Pedido do dono: "no dia 09/08 tenha somente uma janela de horario para
+entrega: das 06:00 as 10:00. E dia dos pais". Escolhas dele
+(AskUserQuestion): express **BLOQUEADO** no dia, **retirada TAMBEM**
+restrita a mesma faixa, e a data vira **CADASTRO numa tela** (nao constante
+no codigo) pra ele resolver Natal/Dia das Maes sem deploy.
+
+- **Modelo** `LojaDataEspecial` (data unica, `janelas` uma por linha,
+  `express_bloqueado`, `rotulo`). **Tabela NOVA via `db.create_all`** — o
+  procedimento de 2 commits vale pra COLUNA nova, nao pra tabela.
+- **Contrato que nao pode regredir**: `janelas_do_dia(data)` devolve
+  `(tem_regra, janelas)`. `(False, [])` = dia normal; `(True, [...])` = usa
+  EXATAMENTE essas; `(True, [])` = **dia FECHADO**. Lista vazia NUNCA pode
+  cair no horario normal — viraria "fechado" em "aberto o dia inteiro". Por
+  isso a tupla: `[]` nao serve de sentinela. O JS espelha com
+  `hasOwnProperty`, nao com `||`.
+- **Ponto unico**: `loja_checkout.janelas_disponiveis` — o site oferece, o
+  `criar_pedido` valida e o endpoint da divulgacao consultam TODOS por ela.
+  `express_disponivel` consulta a data (por isso POST forjado tambem bate na
+  trava) e `datas_disponiveis` tira o dia fechado do calendario.
+  `janelas_do_modo` foi **REMOVIDA**: era codigo morto sem chamador que
+  devolvia a lista global ignorando a data — quem a usasse furaria o dia
+  especial em silencio.
+- **O front NAO pergunta janela por data** (o seletor e montado no cliente a
+  partir da lista global). Por isso `_ctx_checkout` manda
+  `janelas_por_data` (`janelas_especiais_do_periodo`); sem ele o site
+  mostraria 08:00-18:00 no 09/08 e so o POST recusaria — anulando a feature
+  na pratica. O mapa cobre o INTERVALO inteiro (nao so as datas validas):
+  o `<input type=date>` e min/max contiguo, entao dia fechado continua
+  clicavel e precisa aparecer com `[]`.
+- **Corte da 1a janela por distancia NAO se aplica** a dia especial (server
+  e JS): `JANELAS_CORTADAS_LONGE` e keyed na string '08:00–09:00' e cortar a
+  janela unica zeraria o dia pra quem mora longe.
+- **Traco**: o dono digita hifen no celular; `normalizar_janela` converte pra
+  EN-DASH (o resto do sistema compara janela por string).
+- **Seed** do 09/08 em `migrations_legacy`, marcado por AppConfig: roda UMA
+  vez e **nao ressuscita** se o dono apagar/alterar — cadastro do dono manda
+  sobre seed. Pulado sob `PYTEST_RUNNING` (senao a suite ficaria
+  date-dependent: a agenda de 14 dias cobre 09/08).
+- **Bot de atendimento**: `chatbot._horarios_especiais_texto` injeta as datas
+  dos proximos 14 dias no system prompt — o prompt crava "todos os dias das
+  8h as 18h" (`chatbot_prompt.py:339,507,520`) e mentiria no dia de maior
+  movimento. Sem data cadastrada devolve '' (nao infla token nem mexe no
+  cache).
+- Consertados no caminho (defeitos ANTIGOS): `pdf._latin1` imprimia
+  `08:00?09:00` no papel do motorista (latin-1 nao conhece en-dash) e a
+  mensagem de erro fatiava a janela com HIFEN (`split('-')`) numa string com
+  en-dash.
+- Tela: `/admin/loja-online/horarios-especiais` (owner) + card no painel da
+  loja online. Manual de operacao registrado. Testes:
+  `tests/test_horario_especial.py`.
+
 ### Vitrine anuncia a PROXIMA DATA, nao "esgotado hoje" (27/07/2026)
 
 Pedido do dono: "quando o item nao tem disponivel para hoje colocar o dia
