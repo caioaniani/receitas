@@ -127,10 +127,45 @@ def regra_do_dia(data):
         regra = LojaDataEspecial.query.filter_by(data=data).first()
     except Exception:  # noqa: BLE001
         logger.exception('data especial: consulta falhou (%s)', data)
+        # ROLLBACK obrigatório: no Postgres um statement que falha deixa a
+        # transação ABORTADA e toda query seguinte da mesma request morre —
+        # o "pior caso vira o horário de sempre" prometido acima só é
+        # verdade com isto (lição já registrada duas vezes no CLAUDE.md).
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
         regra = None
     if cache is not None:
         cache[data] = regra
     return regra
+
+
+def regras_do_periodo(datas):
+    """`{date: regra}` das datas que TÊM regra, em UMA query.
+
+    `_sem_dias_fechados` e o payload do checkout perguntam por ~15 datas a
+    cada render; data a data isso vira 15 SELECTs (e 15 `logger.exception`
+    quando o banco está intermitente). Popula o cache de request de quebra."""
+    datas = [d for d in (datas or []) if isinstance(d, _date_type)]
+    if not datas:
+        return {}
+    cache = _cache()
+    try:
+        linhas = (LojaDataEspecial.query
+                  .filter(LojaDataEspecial.data.in_(datas)).all())
+    except Exception:  # noqa: BLE001
+        logger.exception('data especial: consulta do período falhou')
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return {}
+    achadas = {r.data: r for r in linhas}
+    if cache is not None:
+        for d in datas:
+            cache[d] = achadas.get(d)
+    return achadas
 
 
 def janelas_do_dia(data):
