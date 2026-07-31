@@ -341,6 +341,82 @@ def test_post_sem_marcar_express_desbloqueia(app):
     assert LojaDataEspecial.query.first().express_bloqueado is False
 
 
+# ── O que o CLIENTE vê no checkout ───────────────────────────────────────
+#
+# O seletor de horário é montado no navegador a partir de uma lista que vem
+# no HTML. Sem o mapa por data, o site mostraria 08:00–18:00 no Dia dos Pais
+# e só o POST recusaria — com a mensagem errada. Estes testes travam isso.
+
+def test_payload_do_checkout_leva_a_janela_do_dia(app):
+    from datetime import datetime as _dt
+
+    from app.services import loja_checkout
+    _definir()
+    datas = loja_checkout.datas_disponiveis(
+        'agendada', base=_dt(2026, 8, 3, 10, 0))
+    mapa = loja_checkout.janelas_especiais_do_periodo(datas)
+    assert mapa['2026-08-09'] == [JANELA_PAIS]
+
+
+def test_payload_nao_carrega_dia_normal(app):
+    """Só data COM regra entra — dia normal usa a lista global."""
+    from datetime import datetime as _dt
+
+    from app.services import loja_checkout
+    _definir()
+    datas = loja_checkout.datas_disponiveis(
+        'agendada', base=_dt(2026, 8, 3, 10, 0))
+    mapa = loja_checkout.janelas_especiais_do_periodo(datas)
+    assert list(mapa) == ['2026-08-09']
+
+
+def test_payload_inclui_dia_fechado_mesmo_fora_da_lista(app):
+    """O calendário do checkout é um intervalo contíguo (min/max), então o
+    dia fechado continua clicável mesmo tendo saído de `datas_disponiveis`.
+    Ele PRECISA vir no mapa (com []) pra a tela dizer "não entregamos nesse
+    dia" em vez de mostrar o horário normal."""
+    from datetime import datetime as _dt
+
+    from app.services import loja_checkout
+    _definir(janelas='')
+    base = _dt(2026, 8, 3, 10, 0)
+    datas = loja_checkout.datas_disponiveis('agendada', base=base)
+    assert DIA_DOS_PAIS not in datas
+    mapa = loja_checkout.janelas_especiais_do_periodo(datas, base=base)
+    assert mapa['2026-08-09'] == []
+
+
+def test_checkout_renderiza_a_janela_especial(app):
+    """Ponta a ponta: o HTML entregue ao cliente carrega a janela do dia."""
+    import json
+
+    from app.extensions import db
+    from app.models import AppConfig, Loja
+    loja = Loja(nome='Brooklin', endereco='Rua X, 1', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    AppConfig.set('loja_site_estoque_id', loja.id)
+    _definir()
+    itens = _carrinho(db)
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['carrinho'] = [{'kind': 'produto', 'id': itens[0]['id'], 'qtd': 1}]
+    html = c.get('/loja/checkout').data.decode()
+    assert '"janelasPorData"' in html
+    bruto = html.split('id="checkout-dados" type="application/json">')[1]
+    dados = json.loads(bruto.split('</script>')[0])
+    assert dados['janelasPorData']['2026-08-09'] == [JANELA_PAIS]
+    # A lista normal continua lá, pros outros dias.
+    assert '08:00–09:00' in dados['janelas']
+
+
+def test_janelas_do_modo_nao_existe_mais(app):
+    """Era código morto que devolvia a lista GLOBAL ignorando a data — quem
+    o usasse furaria o dia especial em silêncio."""
+    from app.services import loja_checkout
+    assert not hasattr(loja_checkout, 'janelas_do_modo')
+
+
 def test_remover_pela_tela(app):
     from app.models import LojaDataEspecial
     c = _owner(app)
