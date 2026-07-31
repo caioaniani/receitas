@@ -133,7 +133,8 @@ def test_vazio_com_pergunta_pendente_nao_deixa_cliente_no_vacuo(
             {'role': 'user', 'content': '123'},
         ])
     assert out['acao'] == 'handoff'
-    assert out['texto'] == chatbot.FALLBACK_TEXTO
+    # `in` pelo mesmo motivo do teste acima (prefixo de fora-de-horario).
+    assert chatbot.FALLBACK_TEXTO in out['texto']
     assert out['texto']                  # nunca vazio
 
 
