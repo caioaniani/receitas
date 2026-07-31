@@ -16,10 +16,9 @@ O QUE TORNA ISSO SEGURO (conferido em 27/07/2026 antes de escrever):
 
 Salvaguardas (mesmas do Seru, e pelos mesmos motivos):
 - Idempotencia por `TinyPedidoProcessado` (id do pedido no Tiny).
-- Produto sem mapa vira `VendaMapa` PENDENTE (canal 'tiny') e o pedido NAO
-  e marcado como processado enquanto nenhum item baixar? NAO — ver
-  `_processar_pedido`: o pedido E marcado, e o item pendente fica visivel na
-  tela de mapeamento. Espelha o Seru: pendente nao trava o resto da venda.
+- Produto sem mapa vira `VendaMapa` PENDENTE (canal 'tiny') e o item e
+  PULADO sem alarme — o pedido segue processado e o pendente aparece na tela
+  de mapeamento. Espelha o Seru: um produto novo nao trava a venda inteira.
 - Detalhe indisponivel (falha de rede) => pedido NAO marcado, retenta.
 - Estoque insuficiente => `venda_tiny_sem_estoque` (nunca nega o saldo).
 - Venda CANCELADA depois no Tiny => estorno no ciclo seguinte.
