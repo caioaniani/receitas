@@ -70,6 +70,51 @@ def _migrate(app):
     # necessidade. O teste dedicado chama `_migrate_estoque_trava` diretamente.
     if not os.environ.get('PYTEST_RUNNING'):
         _migrate_estoque_trava(app)
+        _seed_horario_dia_dos_pais(app)
+
+
+# Data do pedido original do dono (27/07/2026): "no dia 09/08 tenha somente
+# uma janela de horario para entrega: das 06:00 as 10:00. E dia dos pais".
+_SEED_DIA_DOS_PAIS = {
+    'chave': 'seed_horario_dia_dos_pais_2026',
+    'data': '2026-08-09',
+    'rotulo': 'Dia dos Pais',
+    'janelas': '06:00–10:00',
+}
+
+
+def _seed_horario_dia_dos_pais(app):
+    """Cadastra UMA VEZ o horario especial do Dia dos Pais 2026.
+
+    A tabela `loja_data_especial` nasce vazia (`db.create_all`) e a tela e do
+    dono — mas o pedido dele foi pra ESTA data, entao ela ja tem que estar la
+    quando o deploy subir, sem depender de alguem lembrar de digitar.
+
+    Roda UMA vez, marcada por AppConfig: se o dono APAGAR a data depois (ou
+    mudar o horario), o proximo deploy NAO ressuscita o que ele decidiu —
+    cadastro do dono manda sobre seed. Best-effort: falhar aqui nunca pode
+    derrubar o startup do app."""
+    from datetime import date as _date
+    try:
+        from app.models import AppConfig, LojaDataEspecial
+        if AppConfig.get(_SEED_DIA_DOS_PAIS['chave']):
+            return
+        data = _date.fromisoformat(_SEED_DIA_DOS_PAIS['data'])
+        if not LojaDataEspecial.query.filter_by(data=data).first():
+            db.session.add(LojaDataEspecial(
+                data=data,
+                rotulo=_SEED_DIA_DOS_PAIS['rotulo'],
+                janelas=_SEED_DIA_DOS_PAIS['janelas'],
+                express_bloqueado=True))
+        AppConfig.set(_SEED_DIA_DOS_PAIS['chave'], '1')
+        db.session.commit()
+        logger.info('seed: horario especial do Dia dos Pais cadastrado')
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed dia dos pais): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _migrate_estoque_trava(app):
