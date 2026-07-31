@@ -6046,6 +6046,7 @@ def loja_horarios_especiais():
     return render_template(
         'admin/loja_horarios_especiais.html',
         regras=regras,
+        hoje_d=hoje_brt(),
         hoje_iso=hoje_brt().isoformat(),
         janelas_normais=list(loja_checkout.JANELAS_HORARIAS),
     )
