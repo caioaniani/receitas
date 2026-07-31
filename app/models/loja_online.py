@@ -692,3 +692,57 @@ class WifiVoucher(db.Model):
     def __repr__(self):
         return (f'<WifiVoucher {self.codigo} '
                 f'{"usado" if self.usado_em else "livre"}>')
+
+
+class LojaDataEspecial(db.Model):
+    """Data com horario de entrega DIFERENTE do normal (27/07/2026).
+
+    Pedido do dono: no Dia dos Pais (09/08/2026) o site so pode oferecer UMA
+    janela de entrega, das 06:00 as 10:00 — bem fora do 08:00-18:00 de todo
+    dia. Em vez de cravar essa data no codigo, a data vira CADASTRO: o dono
+    resolve Natal, Dia das Maes e qualquer outra sozinho, sem deploy (escolha
+    dele em 27/07/2026, via AskUserQuestion).
+
+    Contrato de cada campo:
+    - `janelas`: as janelas daquele dia, UMA POR LINHA, no formato
+      'HH:MM–HH:MM' (EN-DASH, igual `loja_checkout.JANELAS_HORARIAS`).
+      SUBSTITUEM a lista normal — nao somam. Vale pra entrega agendada E pra
+      retirada (decisao do dono: a restricao e das duas pontas).
+    - VAZIO = **fechado**: o dia some do calendario do site. E um estado
+      legitimo (Natal), nao um cadastro pela metade — por isso nao ha
+      fallback pras janelas normais quando a lista esta vazia; cair no
+      normal transformaria "fechado" em "aberto o dia inteiro".
+    - `express_bloqueado`: tira a entrega imediata do ar NAQUELE dia. Sem
+      isso, "so uma janela" seria mentira — o cliente pediria express as 15h
+      e a padaria teria que sair pra rua fora da leva unica.
+    - `rotulo`: pra que serve a data ("Dia dos Pais"), so pra tela/manual.
+
+    Tabela NOVA via `db.create_all` — nao precisa de ALTER nem do
+    procedimento de 2 commits (isso vale pra COLUNA nova, nao pra tabela).
+    """
+    __tablename__ = 'loja_data_especial'
+
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.Date, unique=True, nullable=False, index=True)
+    rotulo = db.Column(db.String(80), nullable=True)
+    # Uma janela por linha. Vazio/NULL = fechado (ver docstring).
+    janelas = db.Column(db.Text, nullable=True)
+    express_bloqueado = db.Column(db.Boolean, default=True, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
+                              nullable=True)
+
+    criado_por = db.relationship('Usuario')
+
+    def lista_janelas(self):
+        """As janelas como lista, sem linhas vazias. [] = dia fechado."""
+        return [ln.strip() for ln in (self.janelas or '').splitlines()
+                if ln.strip()]
+
+    @property
+    def fechado(self):
+        return not self.lista_janelas()
+
+    def __repr__(self):
+        return (f'<LojaDataEspecial {self.data} '
+                f'{"FECHADO" if self.fechado else self.lista_janelas()}>')
