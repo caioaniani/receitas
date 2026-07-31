@@ -1778,8 +1778,34 @@ no codigo) pra ele resolver Natal/Dia das Maes sem deploy.
   mensagem de erro fatiava a janela com HIFEN (`split('-')`) numa string com
   en-dash.
 - Tela: `/admin/loja-online/horarios-especiais` (owner) + card no painel da
-  loja online. Manual de operacao registrado. Testes:
-  `tests/test_horario_especial.py`.
+  loja online. Manual de operacao registrado.
+- **POS-REVISAO (fixados)**: (1) **FECHAR O DIA virou CHECKBOX EXPLICITO** —
+  era "deixe o campo em branco", e como o form nasce vazio e `definir` e
+  upsert, reabrir a tela so pra corrigir o rotulo FECHARIA o site no Dia dos
+  Pais sem confirmacao (pior falha possivel aqui). Textarea vazio sem o
+  checkbox agora RECUSA; e a lista ganhou botao **Editar** que carrega os
+  valores atuais no form. (2) dia FECHADO bloqueia express SEMPRE, mesmo com
+  a caixa desmarcada — o express nao olha a lista de janelas, entao o
+  contrato "a data some do site" nao valia. (3) `regra_do_dia` faz
+  **rollback** no except (no Postgres a transacao abortada mataria a request
+  inteira — a promessa "pior caso vira o horario de sempre" so vale com
+  isso). (4) `regras_do_periodo` resolve as ~15 datas do render em UMA query
+  (era 1 SELECT por data, e 15 `logger.exception` com banco intermitente).
+  (5) `_sem_janelas_passadas` tolera janela ilegivel (a coluna e texto; uma
+  linha escrita por fora com '6:00-10:00' fazia `int('6:')` estourar DENTRO
+  do render = site em 500). (6) a tela AVISA quando ha **pedido ja pago**
+  pra aquela data com horario que a regra nova nao oferece mais (a agenda e
+  de 14 dias — da pra ter venda anterior ao cadastro; o sistema NAO muda
+  pedido feito). (7) teste do payload deixou de cravar 09/08 (quebraria a
+  suite a partir de 10/08/2026 e, com Wait-for-CI, travaria TODO deploy).
+- **PENDENCIAS ACEITAS (baixa, decisao separada)**: `divulgacao.
+  criar_divulgacao` so exige janela nao-vazia (pre-existente; o select da
+  tela ja herda a regra); a pagina do PRODUTO nao olha dia fechado no
+  seletor de data (o checkout barra); `LojaDataEspecial` fora de
+  `AUDITED_MODELS` e `criado_por_id` nao atualiza na edicao; `definir` sem
+  try/except de IntegrityError (um dono so).
+- Testes: `tests/test_horario_especial.py` (45 casos). Validado a 390px com
+  Playwright: 11 checks no checkout do cliente + 9 na tela do dono.
 
 ### Vitrine anuncia a PROXIMA DATA, nao "esgotado hoje" (27/07/2026)
 
