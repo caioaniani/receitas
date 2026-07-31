@@ -53,6 +53,10 @@ _MOVS = {
     # site (sinal de estorno negativo).
     'divulgacao': ('venda_site_divulgacao', 'venda_site_divulgacao_sem_estoque',
                    'venda_site_divulgacao_estorno'),
+    # PDV do TINY (27/07/2026): a Cantina vende pelo Tiny, nao pelo Seru.
+    # Venda de balcao igual ao Seru — baixa EstoqueLoja e CONTA demanda
+    # (esta em VENDA_TIPOS_DEMANDA_LOJA). Estorno POSITIVO, familia Seru.
+    'tiny': ('venda_tiny', 'venda_tiny_sem_estoque', 'venda_tiny_estorno'),
 }
 
 
