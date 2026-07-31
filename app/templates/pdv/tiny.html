@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}PDV do Tiny{% endblock %}
+{% block content %}
+<h1 class="page-title"><i class="bi bi-shop"></i> PDV do Tiny (Cantina)</h1>
+
+<div class="alert alert-info small">
+  A Cantina vende pelo <strong>PDV do Tiny</strong>, não pelo Seru. Esta tela
+  liga essas vendas ao sistema: elas passam a <strong>baixar o estoque da
+  loja</strong> e a contar na <strong>previsão de produção</strong>.
+  O sync roda sozinho a cada 15 minutos (janela de ontem+hoje) — o botão de
+  importar aqui embaixo serve pra puxar um período passado.
+</div>
+
+{# ── 1) Loja ───────────────────────────────────────────────────── #}
+<div class="card mb-3" style="max-width:640px;">
+  <div class="card-header py-2"><strong class="small">
+    <i class="bi bi-geo-alt"></i> 1. De qual loja sai o estoque
+  </strong></div>
+  <div class="card-body py-2">
+    {% if not loja_atual %}
+    <div class="alert alert-warning py-2 small mb-2">
+      <strong>Sem loja definida, a importação NÃO roda.</strong> Baixar na
+      loja errada é pior do que não baixar.
+    </div>
+    {% endif %}
+    <form method="POST" class="d-flex gap-2 align-items-center flex-wrap">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="acao" value="loja">
+      <select name="loja_id" class="form-select form-select-sm" style="max-width:280px;">
+        {% for l in lojas %}
+        <option value="{{ l.id }}" {% if loja_atual and l.id == loja_atual.id %}selected{% endif %}>{{ l.nome }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-sm btn-primary">Salvar</button>
+      {% if loja_atual %}
+      <span class="text-muted small">atual: <strong>{{ loja_atual.nome }}</strong></span>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+{# ── 2) Mapeamento ─────────────────────────────────────────────── #}
+<div class="card mb-3">
+  <div class="card-header py-2"><strong class="small">
+    <i class="bi bi-link-45deg"></i> 2. Produtos do Tiny → nossas receitas
+    {% if pendentes %}<span class="badge bg-warning text-dark ms-1">{{ pendentes|length }} sem vínculo</span>{% endif %}
+  </strong></div>
+  <div class="card-body py-2 small">
+    <p class="text-muted mb-2">
+      Produto <strong>sem vínculo não baixa estoque</strong> — a venda entra,
+      o item é pulado e fica listado aqui. O <strong>fator</strong> é quantas
+      unidades da receita cada venda consome: "CONE DE PÃO DE QUEIJO COM 5 UN"
+      → fator <strong>5</strong>; um café que leva 1/5 de cookie → <strong>0,2</strong>.
+    </p>
+    {% if not mapas %}
+    <p class="text-muted mb-0">Nenhum produto visto ainda — rode uma importação abaixo.</p>
+    {% else %}
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered bg-white align-middle">
+        <thead class="thead-padaria">
+          <tr><th>Produto no Tiny</th><th style="width:300px">Vincular a</th>
+              <th style="width:90px">Fator</th><th style="width:90px"></th></tr>
+        </thead>
+        <tbody>
+          {% for m in mapas %}
+          <tr {% if not (m.receita_id or m.produto_id) and not m.ignorar %}class="table-warning"{% endif %}>
+            <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="acao" value="mapear">
+            <input type="hidden" name="mapa_id" value="{{ m.id }}">
+            <td>
+              {{ m.nome_externo }}
+              {% if m.sku %}<br><span class="text-muted" style="font-size:11px;">id Tiny: {{ m.sku }}</span>{% endif %}
+            </td>
+            <td>
+              <select name="alvo" class="form-select form-select-sm">
+                <option value="">— sem vínculo (não baixa) —</option>
+                <option value="ignorar" {% if m.ignorar %}selected{% endif %}>Ignorar de vez</option>
+                <optgroup label="Receitas">
+                  {% for r in receitas %}
+                  <option value="r:{{ r.id }}" {% if m.receita_id == r.id %}selected{% endif %}>{{ r.nome }}</option>
+                  {% endfor %}
+                </optgroup>
+                <optgroup label="Produtos / cestas">
+                  {% for p in produtos %}
+                  <option value="p:{{ p.id }}" {% if m.produto_id == p.id %}selected{% endif %}>{{ p.nome }}</option>
+                  {% endfor %}
+                </optgroup>
+              </select>
+            </td>
+            <td><input type="text" name="fator" value="{{ m.fator_quantidade or 1 }}"
+                       class="form-control form-control-sm text-end"></td>
+            <td><button class="btn btn-sm btn-outline-primary w-100">Salvar</button></td>
+            </form>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── 3) Importar periodo ───────────────────────────────────────── #}
+<div class="card mb-3" style="max-width:640px;">
+  <div class="card-header py-2"><strong class="small">
+    <i class="bi bi-download"></i> 3. Importar um período
+  </strong></div>
+  <div class="card-body py-2">
+    <form method="POST" class="d-flex gap-2 align-items-end flex-wrap">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="acao" value="importar">
+      <div><label class="form-label small mb-0">De</label>
+        <input type="date" name="de" value="{{ hoje_iso }}" class="form-control form-control-sm"></div>
+      <div><label class="form-label small mb-0">Até</label>
+        <input type="date" name="ate" value="{{ hoje_iso }}" class="form-control form-control-sm"></div>
+      <button class="btn btn-sm btn-primary">Importar</button>
+    </form>
+    <p class="text-muted small mb-0 mt-2">
+      Pode rodar quantas vezes quiser: cada venda é processada <strong>uma
+      única vez</strong> (idempotente). Venda cancelada no Tiny depois da
+      baixa é <strong>estornada</strong> sozinha no ciclo seguinte.
+    </p>
+  </div>
+</div>
+{% endblock %}
