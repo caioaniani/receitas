@@ -151,9 +151,17 @@ def janelas_do_dia(data):
 
 def express_bloqueado_em(data):
     """True se o express está bloqueado nesse dia. Dia sem cadastro = False
-    (express segue a regra normal de horário)."""
+    (express segue a regra normal de horário).
+
+    DIA FECHADO bloqueia SEMPRE, mesmo com a caixa desmarcada: o contrato
+    (modelo e manual) promete que a data "some do site e ninguém consegue
+    comprar pra ela", e o express é um canal de venda que não olha a lista
+    de janelas — sem esta linha, um dia fechado com a caixa desmarcada
+    continuaria vendendo (achado de revisão 27/07/2026)."""
     regra = regra_do_dia(data)
-    return bool(regra is not None and regra.express_bloqueado)
+    if regra is None:
+        return False
+    return bool(regra.express_bloqueado or regra.fechado)
 
 
 def dia_fechado(data):
