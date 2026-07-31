@@ -79,6 +79,18 @@ def _ctx_checkout(erros=None, form=None):
         data_min=(datas[0].isoformat() if datas else ''),
         data_max=(datas[-1].isoformat() if datas else ''),
         janelas=list(loja_checkout.JANELAS_HORARIAS),
+        # HORÁRIO ESPECIAL POR DATA (27/07/2026): {iso: [janelas]} pras datas
+        # do calendário que têm horário diferente do normal (Dia dos Pais
+        # 06:00–10:00). Lista VAZIA = dia fechado.
+        #
+        # Vai no payload em vez de virar endpoint AJAX porque o seletor já é
+        # montado 100% no cliente a partir de `janelas` (checkout.js::
+        # popularJanelas) — sem isto o site mostraria 08:00–18:00 no 09/08, o
+        # cliente escolheria 12:00–13:00 e só o POST recusaria, com a mensagem
+        # errada ("o horário escolhido já passou"). São no máximo 15 datas por
+        # render e quase sempre nenhuma.
+        janelas_por_data=loja_checkout.janelas_especiais_do_periodo(
+            datas, base=base),
         # Pro JS filtrar janelas passadas quando a data escolhida é hoje
         # (usa a hora do SERVIDOR — evita divergência de relógio do cliente).
         hoje_iso=base.date().isoformat(),
