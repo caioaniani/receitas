@@ -6046,6 +6046,10 @@ def loja_horarios_especiais():
     return render_template(
         'admin/loja_horarios_especiais.html',
         regras=regras,
+        # Pedidos JÁ PAGOS pra essas datas com horário fora do novo (a agenda
+        # do site é de 14 dias, então dá pra ter venda anterior ao cadastro).
+        # Sem isto ninguém descobre até o dia, no painel de entregas.
+        fora_do_horario=loja_data_especial.pedidos_fora_do_horario(regras),
         hoje_d=hoje_brt(),
         hoje_iso=hoje_brt().isoformat(),
         hora_abre=loja_checkout.HORA_ABRE,
