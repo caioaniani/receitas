@@ -133,6 +133,9 @@ DISTANCIA_CORTE_PRIMEIRA_JANELA_KM = float(
 # está longe. Hoje só 08-09; se um dia tiver janelas <8h, listamos aqui.
 # IMPORTANTE: usa en-dash (–) pra bater com JANELAS_HORARIAS (NÃO hífen).
 JANELAS_CORTADAS_LONGE = ('08:00–09:00',)
+# O separador das janelas, pra quem precisa fatiar a string (mensagem de
+# erro). Fatiar com hífen NÃO funciona — é en-dash.
+TRACO_JANELA = '–'
 
 # Cartinha de presente: limite de caracteres (23/06/2026, decisão do dono —
 # clientes empolgavam e enchiam o cupom da entrega).
@@ -761,14 +764,30 @@ def criar_pedido(form, itens_raw, *, base=None):
             if janela not in janelas_ok:
                 # Mensagem diferenciada quando o motivo é a distância (cliente
                 # entende por que sumiu a 1ª janela).
+                especiais = _janelas_especiais(data_entrega)
                 if (modo == 'agendada' and distancia_km is not None
                         and distancia_km >= DISTANCIA_CORTE_PRIMEIRA_JANELA_KM
                         and janela in JANELAS_CORTADAS_LONGE):
                     erros.append(
                         f'Para o seu endereço ({distancia_km:.1f} km da loja), '
                         'não conseguimos entregar na janela das '
-                        f'{janela.split("-")[0]} — '
+                        # split no EN-DASH: a janela usa '–', não '-'. Com o
+                        # hífen o split não achava nada e imprimia a janela
+                        # inteira (defeito antigo, achado em 27/07/2026).
+                        f'{janela.split(TRACO_JANELA)[0]} — '
                         'escolha a partir das 09:00.')
+                elif especiais is not None:
+                    # DIA ESPECIAL (27/07/2026): "o horário já passou" seria
+                    # mentira — o horário nem existe nesse dia. O cliente
+                    # precisa saber QUAL é o horário, senão fica tentando.
+                    if especiais:
+                        erros.append(
+                            'Nesse dia entregamos só em '
+                            + ', '.join(especiais)
+                            + ' — escolha um desses horários.')
+                    else:
+                        erros.append('Não entregamos nesse dia — escolha '
+                                     'outra data.')
                 else:
                     erros.append('Escolha uma janela de horário válida '
                                  '(o horário escolhido já passou).')
