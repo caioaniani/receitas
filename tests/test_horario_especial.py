@@ -251,10 +251,13 @@ def test_checkout_aceita_a_janela_especial_e_recusa_a_normal(app):
     _definir()
     base = datetime(2026, 8, 3, 10, 0)
 
-    # A janela NORMAL não existe mais nesse dia.
+    # A janela NORMAL não existe mais nesse dia — e a recusa diz QUAL é o
+    # horário, em vez do genérico "o horário escolhido já passou" (que seria
+    # mentira: o horário nem existe nesse dia).
     _, erros = loja_checkout.criar_pedido(
         _form(DIA_DOS_PAIS, '09:00–10:00', loja_id=loja.id), itens, base=base)
-    assert any('janela' in e.lower() for e in erros)
+    assert any(JANELA_PAIS in e for e in erros), erros
+    assert not any('já passou' in e for e in erros)
 
     # A especial passa.
     pedido, erros = loja_checkout.criar_pedido(
