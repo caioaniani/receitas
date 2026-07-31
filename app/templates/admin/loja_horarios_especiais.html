@@ -113,7 +113,16 @@
           <span class="badge bg-light text-dark border">normal</span>
           {% endif %}
         </td>
-        <td class="text-end">
+        <td class="text-end text-nowrap">
+          {# Editar carrega os valores ATUAIS no formulário. Sem isto, salvar
+             de novo pra corrigir um rótulo apagaria os horários. #}
+          <button type="button" class="btn btn-sm btn-outline-secondary"
+                  data-editar
+                  data-data="{{ r.data.isoformat() }}"
+                  data-rotulo="{{ r.rotulo or '' }}"
+                  data-janelas="{{ r.lista_janelas()|join('\n') }}"
+                  data-express="{{ '1' if r.express_bloqueado else '' }}"
+                  data-fechado="{{ '1' if r.fechado else '' }}">Editar</button>
           <form method="POST"
                 action="{{ url_for('main.loja_horarios_especiais_remover') }}"
                 class="d-inline" data-confirma-remocao
@@ -125,6 +134,26 @@
           </form>
         </td>
       </tr>
+      {% set pendentes = fora_do_horario.get(r.data.isoformat()) %}
+      {% if pendentes %}
+      {# A agenda do site é de 14 dias: pode haver venda ANTERIOR ao cadastro
+         marcada num horário que não existe mais nesse dia. #}
+      <tr>
+        <td colspan="5" class="pt-0">
+          <div class="alert alert-warning py-2 mb-0 small">
+            <strong>⚠ {{ pendentes|length }} pedido(s) já pago(s)</strong>
+            para esse dia estão marcados em horário que não é mais oferecido:
+            {% for cod, jan in pendentes[:8] %}
+            <span class="badge bg-warning text-dark me-1">{{ cod }} · {{ jan }}</span>
+            {% endfor %}
+            {% if pendentes|length > 8 %}<span>e mais {{ pendentes|length - 8 }}</span>{% endif %}
+            <br>O sistema <strong>não muda pedido já feito</strong> — combine
+            com esses clientes e ajuste no
+            <a href="{{ url_for('entregas.painel') }}">painel de entregas</a>.
+          </div>
+        </td>
+      </tr>
+      {% endif %}
       {% endfor %}
     </tbody>
   </table>
