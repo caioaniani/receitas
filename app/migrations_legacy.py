@@ -1606,6 +1606,25 @@ def _migrate_postgres(app):
          "nf_dispensada BOOLEAN NOT NULL DEFAULT FALSE")
     _try("ALTER TABLE loja ADD COLUMN IF NOT EXISTS "
          "nf_dispensada BOOLEAN NOT NULL DEFAULT FALSE")
+
+    # Dias de funcionamento da loja (27/07/2026, pedido do dono: "Cantina nao
+    # precisa lancar sobras durante a semana pois so funciona de sabado e
+    # domingo"). Guarda os dias em que a loja ABRE, no formato de digitos do
+    # `date.weekday()` (0=segunda ... 6=domingo): '56' = sabado e domingo.
+    # NULL/vazio = abre TODO DIA — e o valor de todas as lojas existentes,
+    # entao nada muda pra quem nao configurar (fail-open deliberado: uma loja
+    # mal configurada continua sendo cobrada, nunca some da cobranca em
+    # silencio). Hoje o unico consumidor e a cobranca de sobras
+    # (desperdicio_alerta.lojas_sem_desperdicio).
+    _loja_tinha_dias = 'dias_funcionamento' in _cols('loja')
+    _try("ALTER TABLE loja ADD COLUMN IF NOT EXISTS "
+         "dias_funcionamento VARCHAR(7)")
+    if not _loja_tinha_dias:
+        # Backfill UNICO — so quando a coluna acaba de nascer, pra nunca
+        # sobrescrever uma edicao futura do dono na tela /rh/lojas.
+        _try("UPDATE loja SET dias_funcionamento = '56' "
+             "WHERE LOWER(nome) LIKE '%cantina%' "
+             "  AND dias_funcionamento IS NULL")
     # Motivo da REJEICAO da SEFAZ persistido (20/07/2026): antes o texto
     # ("CST com beneficio sem cBenef, cod 32") ia so no flash e sumia — o
     # dono/contador ficava sem saber o que corrigir no Tiny. TEXT porque a
