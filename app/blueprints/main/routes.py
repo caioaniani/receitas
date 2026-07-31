@@ -6070,10 +6070,22 @@ def loja_horarios_especiais_salvar():
     except ValueError:
         flash('Escolha uma data válida.', 'danger')
         return redirect(destino)
+    # FECHAR O DIA é um checkbox EXPLÍCITO, não "campo em branco".
+    # Achado de revisão 27/07/2026: o formulário nasce vazio e `definir` é
+    # upsert, então o dono que reabrisse a tela só pra corrigir o rótulo do
+    # Dia dos Pais salvaria com o textarea em branco e FECHARIA o site no dia
+    # — a pior falha possível aqui, sem nenhuma confirmação.
+    fechar = bool(request.form.get('fechar_dia'))
+    janelas = request.form.get('janelas') or ''
+    if not fechar and not janelas.strip():
+        flash('Informe pelo menos um horário (ex.: 06:00-10:00) — ou marque '
+              '"fechar o dia" se a intenção é não vender para essa data.',
+              'danger')
+        return redirect(destino)
     try:
         loja_data_especial.definir(
             data,
-            request.form.get('janelas') or '',
+            '' if fechar else janelas,
             express_bloqueado=bool(request.form.get('express_bloqueado')),
             rotulo=request.form.get('rotulo'),
             usuario_id=current_user.id)
