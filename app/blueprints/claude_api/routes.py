@@ -1648,3 +1648,145 @@ def echo_upload():
         n_arquivos=len([k for k in arquivos if not k.startswith('_')]),
         arquivos=arquivos,
     )
+
+
+@claude_api_bp.route('/tiny-vendas')
+@_claude_auth_required
+def tiny_vendas():
+    """SONDA read-only das VENDAS no Tiny por PERIODO (27/07/2026).
+
+    Motivo: a Cantina vende pelo PDV do Tiny, e a integracao existente e de
+    MAO UNICA — `tiny.py` so EMITE nota e busca pedido pontual (por CPF ou
+    por numero_ordem_compra); nada le venda por data. Antes de escrever a
+    importacao (que baixa EstoqueLoja e entra em faturamento/previsao),
+    preciso ver o payload REAL: se a venda de PDV vira `pedido`, se vira so
+    NFC-e, quais campos trazem produto/quantidade/valor e o que identifica a
+    loja. Codificar mapeamento as cegas e como nascem bug de estoque.
+
+    Uso: ?de=2026-07-25&ate=2026-07-26[&detalhe=1][&paginas=2]
+    - `de`/`ate` em ISO (converto pro dd/mm/aaaa que a v2 espera).
+    - `detalhe=1` abre os N primeiros pedidos (`pedido.obter.php`) pra
+      mostrar os ITENS — e o que decide o mapeamento produto->receita.
+
+    Consulta os DOIS caminhos (pedidos e notas fiscais) porque o PDV pode
+    gravar so um deles. READ-ONLY: nao escreve nada, nao baixa estoque.
+    """
+    from datetime import date as _date
+
+    from app.services import tiny
+
+    def _br(iso, fallback_dias):
+        """ISO -> dd/mm/aaaa (formato da API v2). Sem valor: hoje-N dias."""
+        from datetime import timedelta
+
+        from app.utils import hoje
+        try:
+            d = _date.fromisoformat((iso or '').strip())
+        except ValueError:
+            d = hoje() - timedelta(days=fallback_dias)
+        return d.strftime('%d/%m/%Y'), d.isoformat()
+
+    de_br, de_iso = _br(request.args.get('de'), 7)
+    ate_br, ate_iso = _br(request.args.get('ate'), 0)
+    paginas = _int_arg('paginas', 2, 1, 10)
+    detalhe = request.args.get('detalhe') in ('1', 'true', 'sim')
+    max_detalhe = _int_arg('max_detalhe', 5, 1, 20)
+
+    out = {'ok': True, 'de': de_iso, 'ate': ate_iso,
+           'de_br': de_br, 'ate_br': ate_br,
+           'tiny_disponivel': tiny.disponivel()}
+    if not tiny.disponivel():
+        out['ok'] = False
+        out['erro'] = 'TINY_API_TOKEN nao configurado neste ambiente'
+        return jsonify(out), 503
+
+    # ── 1) pedidos.pesquisa.php por data ────────────────────────────
+    pedidos = []
+    erros_pedidos = []
+    for pagina in range(1, paginas + 1):
+        retorno = tiny._get('pedidos.pesquisa.php',
+                            params={'dataInicial': de_br, 'dataFinal': ate_br,
+                                    'pagina': str(pagina)},
+                            retornar_erro=True)
+        if not isinstance(retorno, dict):
+            erros_pedidos.append(tiny._consumir_falha() or 'sem resposta')
+            break
+        erros = tiny._extrair_erros(retorno)
+        if erros:
+            erros_pedidos.extend(erros)
+            break
+        lote = retorno.get('pedidos') or []
+        for item in lote:
+            p = item.get('pedido') if isinstance(item, dict) else None
+            if isinstance(p, dict):
+                pedidos.append(p)
+        if len(lote) < 100:
+            break
+    out['pedidos_n'] = len(pedidos)
+    out['pedidos_erros'] = erros_pedidos or None
+    # Amostra ENXUTA: so os campos que interessam pro desenho da importacao.
+    out['pedidos'] = [
+        {k: p.get(k) for k in
+         ('id', 'numero', 'data_pedido', 'nome', 'situacao', 'valor',
+          'id_natureza_operacao', 'numero_ordem_compra', 'id_vendedor',
+          'nome_vendedor', 'deposito', 'id_lista_preco', 'descricao_curta')
+         if p.get(k) not in (None, '')}
+        for p in pedidos[:30]
+    ]
+    # Chaves CRUAS do 1o pedido: mostra o que existe alem do que eu chutei.
+    if pedidos:
+        out['pedido_chaves_disponiveis'] = sorted(pedidos[0].keys())
+
+    # ── 2) detalhe (itens) dos primeiros pedidos ────────────────────
+    if detalhe and pedidos:
+        detalhes = []
+        for p in pedidos[:max_detalhe]:
+            pid = str(p.get('id') or '')
+            if not pid:
+                continue
+            det = tiny.obter_pedido_detalhe(pid)
+            if not isinstance(det, dict):
+                detalhes.append({'id': pid,
+                                 'erro': tiny._consumir_falha() or 'sem detalhe'})
+                continue
+            itens = []
+            for it in (det.get('itens') or []):
+                i = it.get('item') if isinstance(it, dict) else None
+                if isinstance(i, dict):
+                    itens.append({k: i.get(k) for k in
+                                  ('id_produto', 'codigo', 'descricao',
+                                   'quantidade', 'valor_unitario', 'unidade')
+                                  if i.get(k) not in (None, '')})
+            detalhes.append({
+                'id': pid, 'numero': det.get('numero'),
+                'data_pedido': det.get('data_pedido'),
+                'situacao': det.get('situacao'),
+                'deposito': det.get('deposito'),
+                'valor': det.get('total_pedido') or det.get('valor'),
+                'itens': itens,
+                'chaves_disponiveis': sorted(det.keys()),
+            })
+        out['detalhes'] = detalhes
+
+    # ── 3) notas fiscais por data (o PDV pode gravar so NFC-e) ──────
+    notas = []
+    erros_notas = []
+    retorno = tiny._get('notas.fiscais.pesquisa.php',
+                        params={'dataInicial': de_br, 'dataFinal': ate_br,
+                                'pagina': '1'},
+                        retornar_erro=True)
+    if isinstance(retorno, dict):
+        erros_notas = tiny._extrair_erros(retorno) or []
+        for item in (retorno.get('notas_fiscais') or []):
+            n = item.get('nota_fiscal') if isinstance(item, dict) else None
+            if isinstance(n, dict):
+                notas.append({k: n.get(k) for k in
+                              ('id', 'numero', 'data_emissao', 'modelo',
+                               'situacao', 'valor', 'cliente_nome', 'serie')
+                              if n.get(k) not in (None, '')})
+    else:
+        erros_notas = [tiny._consumir_falha() or 'sem resposta']
+    out['notas_n'] = len(notas)
+    out['notas'] = notas[:30]
+    out['notas_erros'] = erros_notas or None
+    return jsonify(out)
