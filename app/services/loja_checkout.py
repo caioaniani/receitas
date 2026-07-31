@@ -102,8 +102,18 @@ def loja_retirada_permitida():
 
 def express_disponivel(base=None):
     """Express só faz sentido dentro do horário de entrega e com folga pra
-    chegar em ~1h (até a hora de corte do fim do expediente)."""
+    chegar em ~1h (até a hora de corte do fim do expediente).
+
+    DATA ESPECIAL (27/07/2026): o dia cadastrado com `express_bloqueado`
+    não tem express NENHUM — nem dentro do horário. É o que faz "só uma
+    janela no Dia dos Pais" ser verdade: sem isto, o cliente pediria entrega
+    imediata às 15h e alguém teria que sair pra rua fora da leva única.
+    Fica aqui, e não só na tela, porque `criar_pedido` valida por esta mesma
+    função (loja_checkout.py:600) — POST forjado também bate na trava."""
+    from app.services import loja_data_especial
     base = base or agora()
+    if loja_data_especial.express_bloqueado_em(base.date()):
+        return False
     return HORA_ABRE <= base.hour < HORA_FECHA
 
 
