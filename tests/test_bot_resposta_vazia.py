@@ -96,8 +96,12 @@ def test_vazio_com_reclamacao_vira_handoff_com_mensagem_real(app, modelo_mudo):
         ])
     assert out['acao'] == 'handoff'
     assert out['motivo'] == 'resposta vazia (reclamacao)'
-    assert out['texto'] == chatbot._TEXTO_VAZIO_RECLAMACAO
-    assert out['texto'] != 'Já te passo para um atendente.'
+    # `in`, nao `==`: FORA do horario de atendimento (07:00-20:00) o bot
+    # PREFIXA um aviso no texto. Assertar igualdade fazia o teste passar de
+    # dia e quebrar de noite — e, com Wait-for-CI, um teste hora-dependente
+    # TRAVA TODO DEPLOY (aconteceu em 31/07/2026, CI das 20:11).
+    assert chatbot._TEXTO_VAZIO_RECLAMACAO in out['texto']
+    assert 'Já te passo para um atendente.' not in out['texto']
     assert 'Sinto muito' in out['texto']
 
 
