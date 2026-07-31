@@ -241,12 +241,24 @@ def datas_disponiveis(modo, base=None, dias=DIAS_AGENDA, *, lead_dias=0):
     if lead_dias > 0:
         inicio = hoje_d + timedelta(days=lead_dias)
         datas.extend(inicio + timedelta(days=i) for i in range(dias))
-        return datas
+        return _sem_dias_fechados(datas)
     if janelas_disponiveis(modo, hoje_d, base=base):
         datas.append(hoje_d)
     inicio = hoje_d + timedelta(days=1)
     datas.extend(inicio + timedelta(days=i) for i in range(dias))
-    return datas
+    return _sem_dias_fechados(datas)
+
+
+def _sem_dias_fechados(datas):
+    """Tira do calendário as datas cadastradas SEM nenhuma janela.
+
+    Sem isto, o dia fechado (Natal) apareceria no seletor e o cliente
+    escolheria uma data cujo seletor de horário vem vazio — beco sem saída
+    no checkout. Só mexe em dia CADASTRADO como fechado; dia normal passa
+    intacto (não vale a pena consultar janela de 14 datas aqui, e o dia de
+    HOJE já é filtrado por janela logo acima)."""
+    from app.services import loja_data_especial
+    return [d for d in datas if not loja_data_especial.dia_fechado(d)]
 
 
 def montar_itens(itens_raw):
