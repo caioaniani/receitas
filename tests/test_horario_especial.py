@@ -267,6 +267,35 @@ def test_checkout_aceita_a_janela_especial_e_recusa_a_normal(app):
     assert pedido.data_entrega == DIA_DOS_PAIS
 
 
+def test_recusa_em_dia_fechado_manda_trocar_de_data(app):
+    """"Escolha outro horário" num dia fechado faz o cliente ficar tentando
+    horário atrás de horário que não existe."""
+    from app.extensions import db
+    from app.models import AppConfig, Loja
+    from app.services import loja_checkout
+    loja = Loja(nome='Brooklin', endereco='Rua X, 1', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    AppConfig.set('loja_site_estoque_id', loja.id)
+    itens = _carrinho(db)
+    _definir(janelas='')
+    _, erros = loja_checkout.criar_pedido(
+        _form(DIA_DOS_PAIS, '08:00–09:00', loja_id=loja.id), itens,
+        base=datetime(2026, 8, 3, 10, 0))
+    assert any('Não entregamos nesse dia' in e or 'data de entrega' in e
+               for e in erros), erros
+
+
+def test_pdf_do_motorista_nao_imprime_interrogacao(app):
+    """O papel que vai com o motorista saía "08:00?09:00" — latin-1 não
+    conhece en-dash (defeito antigo, agora com a janela do Dia dos Pais na
+    jogada)."""
+    from app.services.pdf import _latin1
+    assert _latin1(JANELA_PAIS) == '06:00-10:00'
+    assert _latin1('08:00–09:00') == '08:00-09:00'
+    assert '?' not in _latin1(JANELA_PAIS)
+
+
 def test_janela_especial_cabe_na_coluna(app):
     """`PedidoOnline.janela_entrega` é String(40)."""
     from app.models import PedidoOnline
