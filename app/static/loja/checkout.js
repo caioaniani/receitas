@@ -171,9 +171,18 @@
       if (!sel) return;
       // Janelas de 1h. Se a data escolhida é HOJE, remove as que já
       // passaram (usa a hora do servidor: minHoraHoje = hora_atual + lead).
-      var lista = (dados.janelas || []).slice();
       var dataEl = document.getElementById('data_entrega');
       var dataVal = dataEl ? dataEl.value : '';
+      // HORÁRIO ESPECIAL DA DATA (27/07/2026): dia cadastrado pelo dono
+      // (Dia dos Pais = 06:00–10:00) SUBSTITUI a lista normal — não soma.
+      // Lista vazia = dia fechado, e por isso o teste é `in`, não
+      // `especiais[data] || padrão`: um `[]` cairia de volta no horário
+      // normal e transformaria "fechado" em "aberto o dia inteiro".
+      var especiais = dados.janelasPorData || {};
+      var temEspecial = dataVal && Object.prototype.hasOwnProperty.call(
+        especiais, dataVal);
+      var lista = (temEspecial ? especiais[dataVal]
+                               : (dados.janelas || [])).slice();
       if (dataVal && dataVal === dados.hojeIso) {
         lista = lista.filter(function (j) {
           return parseInt(j.slice(0, 2), 10) >= (dados.minHoraHoje || 0);
