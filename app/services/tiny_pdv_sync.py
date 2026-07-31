@@ -120,7 +120,10 @@ def _processar_pedido(pedido, loja, user_id=None):
         if (sit in SITUACOES_CANCELADA and reg.estornado_em is None
                 and (reg.n_itens_baixados or 0) > 0):
             from app.services.baixa_venda import estornar_venda
-            estornar_venda(CANAL, f'Tiny #{pid}', f'Tiny #{pid}',
+            # (canal, pedido_ref, referencia) — o pedido_ref e a chave das
+            # FRACOES ('tiny:<id>'), a referencia e a dos INTEIROS
+            # ('Tiny #<id>'). Trocar os dois deixa fracao fantasma.
+            estornar_venda(CANAL, f'tiny:{pid}', f'Tiny #{pid}',
                            loja_id=loja.id, usuario_id=user_id)
             reg.cancelado_em = reg.cancelado_em or agora()
             reg.estornado_em = agora()
