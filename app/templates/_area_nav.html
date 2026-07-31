@@ -88,6 +88,7 @@
 {{ _lnk(variant, url_for('pdv.index'), 'Vendas do Caixa (PDV)', request.path in ['/pdv/', '/pdv']) }}
 {{ _lnk(variant, url_for('pdv.itens_vendidos'), 'Itens Vendidos', '/pdv/itens-vendidos' in request.path, sub=true) }}
 {{ _lnk(variant, url_for('pdv.mapeamentos'), 'Vincular produtos do caixa', '/pdv/mapeamentos' in request.path, sub=true) }}
+{{ _lnk(variant, url_for('pdv.tiny_pdv'), 'PDV do Tiny (Cantina)', '/pdv/tiny' in request.path, sub=true) }}
 {{ _lnk(variant, url_for('pdv.saude'), 'Saúde do sync de vendas', '/pdv/saude' in request.path, sub=true) }}
 {{ _lnk(variant, url_for('pdv.reconciliacao'), 'Conferência de vendas', '/pdv/reconciliacao' in request.path, sub=true) }}
 {% endif %}

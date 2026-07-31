@@ -43,6 +43,8 @@ VENDA_TIPOS_DEMANDA_LOJA = (
     'saida_lote', 'venda_loja_sem_estoque',
     'venda', 'venda_sem_estoque',
     'venda_vnda', 'venda_vnda_sem_estoque',
+    # PDV do Tiny (Cantina) — venda de balcao, conta demanda como o Seru.
+    'venda_tiny', 'venda_tiny_sem_estoque',
 )
 
 # Estornos de venda e o SINAL com que a QUANTIDADE foi GRAVADA no ledger
@@ -56,6 +58,8 @@ VENDA_ESTORNO_SINAL_DEMANDA = {
     'saida_lote_estorno': -1,
     'venda_site_estorno': 1,
     'venda_vnda_estorno': 1,
+    # Tiny grava o estorno POSITIVO (familia Seru/lote) -> sinal -1.
+    'venda_tiny_estorno': -1,
 }
 
 # Filtro completo pra queries de demanda (vendas + estornos). Agregue com

@@ -57,6 +57,7 @@ LOCK_KEY_GOOGLE_REVIEWS = 7749  # advisory lock pro sync de avaliacoes do Google
 # 7753 = reservado pro chatbot (lock por conversa cross-worker).
 LOCK_KEY_TREINO_FECH = 7754    # advisory lock pro fechamento semanal do treino
 LOCK_KEY_TREINO_DIARIO = 7755  # advisory lock pros jobs diarios do treino
+LOCK_KEY_TINY_PDV = 7756  # advisory lock pro import do PDV do Tiny (Cantina)
 # Locks LIBERADOS mas RESERVADOS (nao reusar — evita conflito se algum
 # dos jobs for reativado no futuro):
 # - 7730 era do `zapi-digest-anomalias` (job 23:00 BRT, removido 14/06/2026).
@@ -595,6 +596,16 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Import do PDV do TINY (Cantina, 27/07/2026): a cada 15 min, janela
+    # ontem+hoje. Desligavel por TINY_PDV_SYNC=0. So roda com a loja
+    # configurada em AppConfig `tiny_pdv_loja_id` (o job checa e sai).
+    if os.environ.get('TINY_PDV_SYNC', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_tiny_pdv(app),
+            'interval', minutes=15, id='tiny-pdv-sync',
+            max_instances=1, coalesce=True,
+        )
+
     # Alerta de desperdicio: escalada Slack (20:10/15/20/25) -> WhatsApp (20:30)
     if os.environ.get('DESPERDICIO_ALERTA', '1') != '0':
         # 4 ticks no Slack — gerentes veem la e podem resolver antes do WhatsApp
@@ -717,6 +728,29 @@ def _run_zapi_digest_tarefas(app):
 
     with app.app_context():
         _com_lock(7728, zapi_resumos.enviar_digest_tarefas, 'zapi digest tarefas')
+
+
+def _run_tiny_pdv(app):
+    """Job: importa as vendas do PDV do TINY (Cantina) e baixa o estoque.
+
+    Janela ontem+hoje: o PDV pode faturar depois da virada e a API do Tiny
+    as vezes atrasa a listagem. Idempotente por `TinyPedidoProcessado`, entao
+    re-varrer o mesmo dia nao baixa duas vezes. Best-effort: NUNCA derruba o
+    scheduler (o service ja engole excecao e devolve stats com `erro`).
+    """
+    from datetime import timedelta
+
+    from app.services import tiny_pdv_sync
+    from app.utils import hoje
+
+    with app.app_context():
+        if tiny_pdv_sync.loja_pdv_tiny() is None:
+            return                       # nao configurado: nem tenta
+        hj = hoje()
+        _com_lock(LOCK_KEY_TINY_PDV,
+                  lambda: tiny_pdv_sync.processar_periodo(
+                      hj - timedelta(days=1), hj),
+                  'import PDV Tiny')
 
 
 def _run_desperdicio_alerta_slack(app):

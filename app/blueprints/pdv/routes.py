@@ -1133,3 +1133,88 @@ def debug_seru():
     from app.services.pdv_saude import debug_seru_status
     return jsonify(debug_seru_status())
 
+
+
+@pdv_bp.route('/tiny', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def tiny_pdv():
+    """PDV do TINY (27/07/2026, caso Cantina): aponta a loja, mapeia os
+    produtos do Tiny pras nossas receitas e importa as vendas.
+
+    A Cantina vende pelo Tiny, nao pelo Seru — sem esta tela as vendas dela
+    ficam invisiveis (nao baixam estoque, nao entram na previsao). O sync
+    roda sozinho a cada 15 min; o botao aqui e pra puxar um periodo passado.
+    """
+    from app.services import tiny_pdv_sync
+
+    if request.method == 'POST':
+        acao = (request.form.get('acao') or '').strip()
+        if acao == 'loja':
+            try:
+                tiny_pdv_sync.definir_loja_pdv(int(request.form['loja_id']))
+                flash('Loja do PDV do Tiny definida.', 'success')
+            except (KeyError, TypeError, ValueError):
+                flash('Escolha uma loja válida.', 'danger')
+        elif acao == 'mapear':
+            try:
+                mapa = db.session.get(VendaMapa, int(request.form['mapa_id']))
+            except (KeyError, TypeError, ValueError):
+                mapa = None
+            if mapa is None or mapa.canal != 'tiny':
+                flash('Mapeamento não encontrado.', 'danger')
+                return redirect(url_for('pdv.tiny_pdv'))
+            alvo = (request.form.get('alvo') or '').strip()
+            mapa.receita_id = mapa.produto_id = None
+            mapa.ignorar = False
+            if alvo == 'ignorar':
+                mapa.ignorar = True
+            elif alvo.startswith('r:'):
+                mapa.receita_id = int(alvo[2:])
+            elif alvo.startswith('p:'):
+                mapa.produto_id = int(alvo[2:])
+            try:
+                fator = float((request.form.get('fator') or '1')
+                              .replace(',', '.'))
+            except ValueError:
+                fator = 1.0
+            # Fator <= 0 zeraria a baixa em silencio; > 999 e dedo escorregado.
+            mapa.fator_quantidade = fator if 0 < fator <= 999 else 1.0
+            mapa.confirmado_em = agora()
+            mapa.confirmado_por = current_user.id
+            db.session.commit()
+            flash(f'"{mapa.nome_externo}" atualizado.', 'success')
+        elif acao == 'importar':
+            di = request.form.get('de') or ''
+            df = request.form.get('ate') or ''
+            try:
+                from datetime import date as _d
+                d1, d2 = _d.fromisoformat(di), _d.fromisoformat(df)
+            except ValueError:
+                flash('Informe as duas datas.', 'danger')
+                return redirect(url_for('pdv.tiny_pdv'))
+            st = tiny_pdv_sync.processar_periodo(d1, d2,
+                                                 user_id=current_user.id)
+            if st.get('erro'):
+                flash(f'Importação não rodou: {st["erro"]}', 'danger')
+            else:
+                flash(f'{st["pedidos"]} venda(s) lidas — {st["baixados"]} '
+                      f'baixadas, {st["ja_processados"]} já processadas, '
+                      f'{st["mapas_pendentes"]} produto(s) sem vínculo.',
+                      'success')
+        return redirect(url_for('pdv.tiny_pdv'))
+
+    mapas = (VendaMapa.query.filter_by(canal='tiny')
+             .order_by(VendaMapa.nome_externo).all())
+    return render_template(
+        'pdv/tiny.html',
+        loja_atual=tiny_pdv_sync.loja_pdv_tiny(),
+        lojas=Loja.query.filter_by(ativa=True).order_by(Loja.nome).all(),
+        mapas=mapas,
+        pendentes=[m for m in mapas
+                   if not (m.receita_id or m.produto_id) and not m.ignorar],
+        receitas=Receita.ativas().order_by(Receita.nome).all(),
+        produtos=(Produto.query.filter_by(ativo=True)
+                  .order_by(Produto.nome).all()),
+        hoje_iso=hoje_brt().isoformat(),
+    )
