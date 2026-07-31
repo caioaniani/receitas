@@ -6029,6 +6029,79 @@ def loja_online_plano_dia_copiar():
     return jsonify(ok=True, copiados=copiados, origem=origem.isoformat())
 
 
+# ── Horarios especiais do site (27/07/2026) ──────────────────────────────
+#
+# Pedido do dono: Dia dos Pais (09/08/2026) so pode ter UMA janela de
+# entrega, 06:00-10:00. Escolha dele: TELA pra ele mesmo cadastrar (Natal,
+# Dia das Maes) em vez de a data ficar cravada no codigo.
+
+@main_bp.route('/admin/loja-online/horarios-especiais')
+@owner_required
+def loja_horarios_especiais():
+    """Lista as datas com horario diferente do normal + formulario."""
+    from datetime import timedelta as _td
+
+    from app.services import loja_checkout, loja_data_especial
+    regras = loja_data_especial.listar(desde=hoje_brt() - _td(days=30))
+    return render_template(
+        'admin/loja_horarios_especiais.html',
+        regras=regras,
+        hoje_iso=hoje_brt().isoformat(),
+        janelas_normais=list(loja_checkout.JANELAS_HORARIAS),
+    )
+
+
+@main_bp.route('/admin/loja-online/horarios-especiais/salvar',
+               methods=['POST'])
+@owner_required
+def loja_horarios_especiais_salvar():
+    """Cria/atualiza a regra de uma data.
+
+    Horario torto NAO grava nada (`JanelaInvalida`): cadastro pela metade em
+    horario de entrega e pior que recusar — o dono corrige e reenvia."""
+    from datetime import date as _date
+
+    from app.services import loja_data_especial
+    destino = url_for('main.loja_horarios_especiais')
+    try:
+        data = _date.fromisoformat((request.form.get('data') or '').strip())
+    except ValueError:
+        flash('Escolha uma data válida.', 'danger')
+        return redirect(destino)
+    try:
+        loja_data_especial.definir(
+            data,
+            request.form.get('janelas') or '',
+            express_bloqueado=bool(request.form.get('express_bloqueado')),
+            rotulo=request.form.get('rotulo'),
+            usuario_id=current_user.id)
+    except loja_data_especial.JanelaInvalida as e:
+        flash(str(e), 'danger')
+        return redirect(destino)
+    flash(f'Horário de {data.strftime("%d/%m/%Y")} salvo.', 'success')
+    return redirect(destino)
+
+
+@main_bp.route('/admin/loja-online/horarios-especiais/remover',
+               methods=['POST'])
+@owner_required
+def loja_horarios_especiais_remover():
+    """Apaga a regra — o dia volta ao horario normal (08:00-18:00)."""
+    from datetime import date as _date
+
+    from app.services import loja_data_especial
+    destino = url_for('main.loja_horarios_especiais')
+    try:
+        data = _date.fromisoformat((request.form.get('data') or '').strip())
+    except ValueError:
+        flash('Data inválida.', 'danger')
+        return redirect(destino)
+    if loja_data_especial.remover(data):
+        flash(f'{data.strftime("%d/%m/%Y")} voltou ao horário normal.',
+              'success')
+    return redirect(destino)
+
+
 # ── Debug VNDA: o que campo a Loja usa pra marcar RETIRADA? (16/06/2026) ──
 #
 # Bug do dono: "pedidos de retirada nao aparecem em lugar nenhum". Causa
