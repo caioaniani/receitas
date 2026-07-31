@@ -398,7 +398,7 @@ def test_checkout_renderiza_a_janela_especial(app):
     AppConfig.set('loja_site_estoque_id', loja.id)
     _definir()
     itens = _carrinho(db)
-    c = app.test_client()
+    c = _owner(app)          # no host de gestão a loja só responde a staff
     with c.session_transaction() as s:
         s['carrinho'] = [{'kind': 'produto', 'id': itens[0]['id'], 'qtd': 1}]
     html = c.get('/loja/checkout').data.decode()
