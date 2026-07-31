@@ -1,0 +1,303 @@
+"""Importacao das vendas do PDV do TINY (27/07/2026, caso Cantina).
+
+A Cantina vende pelo Tiny, nao pelo Seru — as vendas dela eram invisiveis
+(nao baixavam EstoqueLoja, nao entravam em faturamento/previsao). Este
+service espelha o `seru_sync`.
+
+Contrato que torna seguro importar por `pedidos.pesquisa.php`: o NOSSO
+sistema so cria NOTA no Tiny, nunca pedido (`tiny.incluir_pedido` sem
+chamador) — logo pedido = venda de PDV, sem colidir com a baixa do site/B2B.
+
+A API do Tiny e SEMPRE mockada (padrao da casa).
+"""
+from datetime import date
+
+import pytest
+
+from app.extensions import db
+from app.models import (
+    AppConfig,
+    EstoqueLoja,
+    Loja,
+    MovEstoqueLoja,
+    Receita,
+    TinyPedidoProcessado,
+    VendaMapa,
+)
+from app.services import tiny_pdv_sync
+
+_DIA = date(2026, 7, 25)
+
+
+def _cantina():
+    lj = Loja(nome='Cantina', ativa=True, dias_funcionamento='56')
+    db.session.add(lj)
+    db.session.commit()
+    AppConfig.set(tiny_pdv_sync._CFG_LOJA, lj.id)
+    db.session.commit()
+    return lj
+
+
+def _receita(nome='Croissant Francês'):
+    r = Receita(nome=nome, categoria='Viennoiserie', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0)
+    db.session.add(r)
+    db.session.commit()
+    return r
+
+
+def _estoque(loja, receita, qtd):
+    el = EstoqueLoja(loja_id=loja.id, receita_id=receita.id, quantidade=qtd)
+    db.session.add(el)
+    db.session.commit()
+    return el
+
+
+def _pedido(pid='909754567', numero='99263', situacao='Faturado', valor=73):
+    return {'id': pid, 'numero': numero, 'situacao': situacao,
+            'valor': valor, 'data_pedido': '25/07/2026',
+            'nome': 'Consumidor Final'}
+
+
+def _itens(nome='CROISSANT FRANCÊS CANTINA', qtd=2.0, pid='635556424'):
+    return [{'tiny_produto_id': pid, 'codigo': '12', 'nome': nome,
+             'quantidade': qtd, 'valor_unitario': '18.00'}]
+
+
+@pytest.fixture
+def tiny_mock(monkeypatch):
+    """Mocka o cliente do Tiny. `estado` controla o que a API devolve."""
+    estado = {'pedidos': [], 'itens': {}, 'disponivel': True}
+
+    monkeypatch.setattr(tiny_pdv_sync, 'CANAL', 'tiny')
+    import app.services.tiny as tiny_mod
+    monkeypatch.setattr(tiny_mod, 'disponivel', lambda: estado['disponivel'])
+    monkeypatch.setattr(tiny_mod, 'listar_pedidos_periodo',
+                        lambda di, df, **kw: estado['pedidos'])
+    monkeypatch.setattr(tiny_mod, 'itens_do_pedido',
+                        lambda pid: estado['itens'].get(str(pid)))
+    return estado
+
+
+# ── guarda de configuracao ──────────────────────────────────────────
+
+def test_sem_loja_configurada_nao_baixa_nada(app, tiny_mock):
+    """Baixar na loja errada e pior que nao baixar: sem AppConfig o sync
+    recusa e diz por que."""
+    with app.app_context():
+        r = _receita()
+        lj = Loja(nome='Cantina', ativa=True)
+        db.session.add(lj)
+        db.session.commit()
+        _estoque(lj, r, 10)
+        tiny_mock['pedidos'] = [_pedido()]
+        tiny_mock['itens'] = {'909754567': _itens()}
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['erro'] and 'tiny_pdv_loja_id' in st['erro']
+        assert MovEstoqueLoja.query.count() == 0
+
+
+# ── baixa de estoque ────────────────────────────────────────────────
+
+def test_venda_do_pdv_baixa_estoque_da_cantina(app, tiny_mock):
+    with app.app_context():
+        lj = _cantina()
+        r = _receita()
+        el = _estoque(lj, r, 10)
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='CROISSANT FRANCÊS CANTINA',
+                                 receita_id=r.id, fator_quantidade=1.0))
+        db.session.commit()
+        tiny_mock['pedidos'] = [_pedido()]
+        tiny_mock['itens'] = {'909754567': _itens(qtd=2.0)}
+
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['erro'] is None
+        assert st['baixados'] == 1
+        db.session.refresh(el)
+        assert el.quantidade == 8
+        mov = MovEstoqueLoja.query.filter_by(tipo='venda_tiny').first()
+        assert mov is not None
+        assert 'Tiny #909754567' in mov.referencia
+
+
+def test_idempotente_nao_baixa_duas_vezes(app, tiny_mock):
+    """O cron roda a cada N minutos sobre a MESMA janela."""
+    with app.app_context():
+        lj = _cantina()
+        r = _receita()
+        el = _estoque(lj, r, 10)
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='CROISSANT FRANCÊS CANTINA',
+                                 receita_id=r.id, fator_quantidade=1.0))
+        db.session.commit()
+        tiny_mock['pedidos'] = [_pedido()]
+        tiny_mock['itens'] = {'909754567': _itens(qtd=2.0)}
+
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        st2 = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st2['ja_processados'] == 1
+        assert st2['baixados'] == 0
+        db.session.refresh(el)
+        assert el.quantidade == 8          # continua 8, nao 6
+
+
+def test_fator_do_mapa_multiplica(app, tiny_mock):
+    """'CONE DE PÃO DE QUEIJO COM 5 UN' = 5 unidades por venda."""
+    with app.app_context():
+        lj = _cantina()
+        r = _receita('Pão de Queijo')
+        el = _estoque(lj, r, 50)
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='CONE DE PÃO DE QUEIJO COM 5 UN  CANTINA',
+                                 receita_id=r.id, fator_quantidade=5.0))
+        db.session.commit()
+        tiny_mock['pedidos'] = [_pedido()]
+        tiny_mock['itens'] = {'909754567': _itens(
+            nome='CONE DE PÃO DE QUEIJO COM 5 UN  CANTINA', qtd=2.0)}
+
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        db.session.refresh(el)
+        assert el.quantidade == 40         # 2 cones x 5 un
+
+
+def test_sem_estoque_registra_e_nao_fica_negativo(app, tiny_mock):
+    with app.app_context():
+        lj = _cantina()
+        r = _receita()
+        el = _estoque(lj, r, 1)
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='CROISSANT FRANCÊS CANTINA',
+                                 receita_id=r.id, fator_quantidade=1.0))
+        db.session.commit()
+        tiny_mock['pedidos'] = [_pedido()]
+        tiny_mock['itens'] = {'909754567': _itens(qtd=3.0)}
+
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        db.session.refresh(el)
+        assert el.quantidade >= 0
+        assert MovEstoqueLoja.query.filter_by(
+            tipo='venda_tiny_sem_estoque').count() >= 1
+
+
+# ── produto novo / pendente ─────────────────────────────────────────
+
+def test_produto_sem_mapa_vira_pendente_e_nao_trava_a_venda(app, tiny_mock):
+    """O 'CAFÉ EXPRESSO' apareceu no fim de semana sem sufixo CANTINA e sem
+    cadastro: tem que virar pendente, nao explodir."""
+    with app.app_context():
+        lj = _cantina()
+        r = _receita()
+        el = _estoque(lj, r, 10)
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='CROISSANT FRANCÊS CANTINA',
+                                 receita_id=r.id, fator_quantidade=1.0))
+        db.session.commit()
+        tiny_mock['pedidos'] = [_pedido()]
+        tiny_mock['itens'] = {'909754567': (
+            _itens(qtd=1.0) + [{'tiny_produto_id': '703178642',
+                                'codigo': '9', 'nome': 'CAFÉ EXPRESSO',
+                                'quantidade': 1.0, 'valor_unitario': '8.00'}])}
+
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['baixados'] == 1
+        db.session.refresh(el)
+        assert el.quantidade == 9          # o croissant baixou
+        pend = [m.nome_externo for m in tiny_pdv_sync.pendentes_de_mapeamento()]
+        assert 'CAFÉ EXPRESSO' in pend
+        assert st['mapas_pendentes'] == 1
+
+
+def test_mapa_novo_guarda_o_id_do_tiny(app, tiny_mock):
+    """O nome muda quando o dono renomeia no Tiny; o id_produto nao."""
+    with app.app_context():
+        _cantina()
+        tiny_mock['pedidos'] = [_pedido()]
+        tiny_mock['itens'] = {'909754567': _itens(qtd=1.0)}
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        mapa = VendaMapa.query.filter_by(
+            canal='tiny', nome_externo='CROISSANT FRANCÊS CANTINA').first()
+        assert mapa is not None
+        assert mapa.sku == '635556424'
+
+
+# ── falhas e cancelamento ───────────────────────────────────────────
+
+def test_detalhe_indisponivel_nao_marca_processado(app, tiny_mock):
+    """Falha de rede nao pode fazer a venda sumir pra sempre."""
+    with app.app_context():
+        _cantina()
+        tiny_mock['pedidos'] = [_pedido()]
+        tiny_mock['itens'] = {}            # itens_do_pedido -> None
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['pendentes_detalhe'] == 1
+        assert TinyPedidoProcessado.query.count() == 0
+
+
+def test_pedido_cancelado_nunca_baixa(app, tiny_mock):
+    with app.app_context():
+        lj = _cantina()
+        r = _receita()
+        el = _estoque(lj, r, 10)
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='CROISSANT FRANCÊS CANTINA',
+                                 receita_id=r.id, fator_quantidade=1.0))
+        db.session.commit()
+        tiny_mock['pedidos'] = [_pedido(situacao='Cancelado')]
+        tiny_mock['itens'] = {'909754567': _itens(qtd=2.0)}
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['ignorados'] == 1
+        db.session.refresh(el)
+        assert el.quantidade == 10
+
+
+def test_cancelado_depois_da_baixa_estorna(app, tiny_mock):
+    """Venda faturada e depois cancelada no Tiny: o ciclo seguinte devolve."""
+    with app.app_context():
+        lj = _cantina()
+        r = _receita()
+        el = _estoque(lj, r, 10)
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='CROISSANT FRANCÊS CANTINA',
+                                 receita_id=r.id, fator_quantidade=1.0))
+        db.session.commit()
+        tiny_mock['pedidos'] = [_pedido()]
+        tiny_mock['itens'] = {'909754567': _itens(qtd=2.0)}
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        db.session.refresh(el)
+        assert el.quantidade == 8
+
+        tiny_mock['pedidos'] = [_pedido(situacao='Cancelado')]
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['estornados'] == 1
+        db.session.refresh(el)
+        assert el.quantidade == 10         # devolvido
+        reg = db.session.get(TinyPedidoProcessado, '909754567')
+        assert reg.estornado_em is not None
+
+
+def test_situacao_desconhecida_nao_baixa_nem_marca(app, tiny_mock):
+    """Orcamento/aberto: quando virar venda o proximo ciclo pega."""
+    with app.app_context():
+        _cantina()
+        tiny_mock['pedidos'] = [_pedido(situacao='Em aberto')]
+        tiny_mock['itens'] = {'909754567': _itens()}
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['ignorados'] == 1
+        assert TinyPedidoProcessado.query.count() == 0
+
+
+# ── a venda entra na DEMANDA (previsao) ─────────────────────────────
+
+def test_tipos_tiny_contam_como_demanda(app):
+    """Sem isso a venda da Cantina baixaria estoque mas nao alimentaria a
+    previsao de producao — o erro que a integracao existe pra corrigir."""
+    from app.constants import (
+        VENDA_TIPOS_DEMANDA_COM_ESTORNO,
+        VENDA_TIPOS_DEMANDA_LOJA,
+        VENDA_TIPOS_LOJA,
+    )
+    assert 'venda_tiny' in VENDA_TIPOS_DEMANDA_LOJA
+    assert 'venda_tiny_sem_estoque' in VENDA_TIPOS_DEMANDA_LOJA
+    assert 'venda_tiny' in VENDA_TIPOS_LOJA
+    assert 'venda_tiny_estorno' in VENDA_TIPOS_DEMANDA_COM_ESTORNO
