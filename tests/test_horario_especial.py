@@ -24,6 +24,13 @@ def _definir(**kw):
     return loja_data_especial.definir(**kw)
 
 
+def _daqui(dias):
+    """Data relativa a HOJE — estes testes não podem depender de o relógio
+    do CI estar antes ou depois de 09/08/2026."""
+    from app.utils import hoje
+    return hoje() + timedelta(days=dias)
+
+
 # ── Normalização do que o dono digita ────────────────────────────────────
 
 def test_hifen_do_teclado_vira_en_dash(app):
@@ -171,6 +178,67 @@ def test_dia_fechado_some_tambem_com_lead_de_encomenda(app):
     datas = loja_checkout.datas_disponiveis(
         'agendada', base=datetime(2026, 8, 3, 10, 0), lead_dias=2)
     assert DIA_DOS_PAIS not in datas
+
+
+def test_dia_fechado_bloqueia_express_mesmo_desmarcado(app):
+    """O manual promete que a data "some do site e ninguém consegue comprar
+    pra ela". O express não olha a lista de janelas — sem esta trava, dia
+    fechado com a caixa desmarcada continuaria vendendo."""
+    from app.services import loja_checkout
+    _definir(janelas='', express_bloqueado=False)
+    meio_dia = datetime(2026, 8, 9, 12, 0)
+    assert loja_checkout.express_disponivel(base=meio_dia) is False
+    assert loja_checkout.datas_disponiveis('express', base=meio_dia) == []
+
+
+def test_janela_ilegivel_nao_derruba_o_site(app):
+    """A coluna é texto e só o cadastro pela tela normaliza. Uma linha
+    escrita por fora ('6:00-10:00') fazia `int('6:')` estourar DENTRO do
+    render do checkout — o site inteiro em 500."""
+    from app.extensions import db
+    from app.models import LojaDataEspecial
+    from app.services import loja_checkout
+    db.session.add(LojaDataEspecial(data=DIA_DOS_PAIS,
+                                    janelas='6:00-10:00'))
+    db.session.commit()
+    js = loja_checkout.janelas_disponiveis(
+        'agendada', DIA_DOS_PAIS, base=datetime(2026, 8, 9, 3, 0))
+    assert js == ['6:00-10:00']          # mantida, não explodiu
+
+
+def test_periodo_resolve_em_uma_query(app):
+    """15 datas por render viravam 15 SELECTs (e 15 logger.exception com o
+    banco intermitente)."""
+    from app.services import loja_data_especial
+    _definir()
+    datas = [DIA_DOS_PAIS + timedelta(days=i) for i in range(-3, 4)]
+    regras = loja_data_especial.regras_do_periodo(datas)
+    assert list(regras) == [DIA_DOS_PAIS]
+    assert regras[DIA_DOS_PAIS].lista_janelas() == [JANELA_PAIS]
+
+
+def test_pedido_ja_pago_fora_do_horario_aparece(app):
+    """A agenda do site é de 14 dias: pode haver venda ANTERIOR ao cadastro
+    marcada num horário que não existe mais. Ninguém descobriria até o dia."""
+    from app.extensions import db
+    from app.models import PedidoOnline
+    from app.services import loja_data_especial
+    regra = _definir()
+    db.session.add_all([
+        PedidoOnline(codigo='VELHO1', nome_cliente='A', email_cliente='a@x.com',
+                     status='pago', data_entrega=DIA_DOS_PAIS,
+                     janela_entrega='15:00–16:00', valor_total=10),
+        PedidoOnline(codigo='NOVO1', nome_cliente='B', email_cliente='b@x.com',
+                     status='pago', data_entrega=DIA_DOS_PAIS,
+                     janela_entrega=JANELA_PAIS, valor_total=10),
+        PedidoOnline(codigo='CANC1', nome_cliente='C', email_cliente='c@x.com',
+                     status='cancelado', data_entrega=DIA_DOS_PAIS,
+                     janela_entrega='15:00–16:00', valor_total=10),
+    ])
+    db.session.commit()
+    fora = loja_data_especial.pedidos_fora_do_horario([regra])
+    codigos = [c for c, _ in fora['2026-08-09']]
+    assert codigos == ['VELHO1']          # o certo e o cancelado ficam fora
 
 
 # ── Cadastro (upsert / remoção) ──────────────────────────────────────────
@@ -455,13 +523,6 @@ def test_janelas_do_modo_nao_existe_mais(app):
 
 
 # ── O bot de atendimento ─────────────────────────────────────────────────
-
-def _daqui(dias):
-    """Data relativa a HOJE — estes testes não podem depender de o relógio
-    do CI estar antes ou depois de 09/08/2026."""
-    from app.utils import hoje
-    return hoje() + timedelta(days=dias)
-
 
 def test_bot_sabe_do_horario_especial(app):
     """O prompt crava "todos os dias das 8h às 18h" — no Dia dos Pais o bot
