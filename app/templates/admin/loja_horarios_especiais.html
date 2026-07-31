@@ -173,5 +173,43 @@ document.querySelectorAll('form[data-confirma-remocao]').forEach(function (f) {
     }
   });
 });
+
+// Editar = carregar os valores atuais no formulário. Tudo via `data-*` e
+// lido como TEXTO (nunca handler inline com conteúdo do banco).
+(function () {
+  var f = {
+    data: document.getElementById('ldata'),
+    rotulo: document.getElementById('lrotulo'),
+    janelas: document.getElementById('ljanelas'),
+    express: document.getElementById('lexpress'),
+    fechar: document.getElementById('lfechar'),
+    aviso: document.getElementById('leditando'),
+    cancelar: document.getElementById('lcancelar'),
+  };
+  function limpar() {
+    f.data.value = ''; f.rotulo.value = ''; f.janelas.value = '';
+    f.express.checked = true; f.fechar.checked = false;
+    f.aviso.textContent = ''; f.cancelar.classList.add('d-none');
+  }
+  document.querySelectorAll('[data-editar]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      f.data.value = b.dataset.data || '';
+      f.rotulo.value = b.dataset.rotulo || '';
+      f.janelas.value = b.dataset.janelas || '';
+      f.express.checked = !!b.dataset.express;
+      f.fechar.checked = !!b.dataset.fechado;
+      f.aviso.textContent = 'editando ' + (b.dataset.data || '');
+      f.cancelar.classList.remove('d-none');
+      f.data.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+  if (f.cancelar) f.cancelar.addEventListener('click', limpar);
+  // Fechar o dia e listar horários são coisas opostas — deixar os dois
+  // marcados dá a impressão de que os horários valem.
+  f.fechar.addEventListener('change', function () {
+    f.janelas.disabled = f.fechar.checked;
+    if (f.fechar.checked) f.express.checked = true;
+  });
+})();
 </script>
 {% endblock %}
