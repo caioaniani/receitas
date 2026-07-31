@@ -471,6 +471,13 @@ def salvar_loja_fiscal(id):
     # emissao em TODOS os pedidos desta loja. Gesto fica AQUI (RH/admin)
     # de proposito — motorista/padeiro nao tem essa opcao.
     loja.nf_dispensada = request.form.get('nf_dispensada') == '1'
+    # Dias em que a loja ABRE (dono 27/07/2026). Checkboxes -> digitos do
+    # date.weekday() ordenados ('56' = sab+dom). NENHUM marcado = None =
+    # abre todo dia (fail-open: a loja segue sendo cobrada por sobras).
+    # `getlist` + whitelist: valor forjado no POST nao entra na coluna.
+    _dias = sorted({d for d in request.form.getlist('dias_funcionamento')
+                    if d in '0123456' and len(d) == 1})
+    loja.dias_funcionamento = ''.join(_dias) or None
     db.session.commit()
     if loja.nf_dispensada:
         flash(f'Loja "{loja.nome}": NF de transferência DISPENSADA — o '
