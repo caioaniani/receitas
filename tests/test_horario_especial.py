@@ -451,38 +451,48 @@ def test_janelas_do_modo_nao_existe_mais(app):
 
 # ── O bot de atendimento ─────────────────────────────────────────────────
 
-def test_bot_sabe_do_horario_especial(app, monkeypatch):
+def _daqui(dias):
+    """Data relativa a HOJE — estes testes não podem depender de o relógio
+    do CI estar antes ou depois de 09/08/2026."""
+    from app.utils import hoje
+    return hoje() + timedelta(days=dias)
+
+
+def test_bot_sabe_do_horario_especial(app):
     """O prompt crava "todos os dias das 8h às 18h" — no Dia dos Pais o bot
     afirmaria o horário errado no dia de maior movimento."""
     from app.services import chatbot
-    from app.utils import hoje
-    monkeypatch.setattr(chatbot, '_HORARIO_ESPECIAL_DIAS', 400)
-    _definir(rotulo='Dia dos Pais')
+    dia = _daqui(5)
+    _definir(data=dia, rotulo='Dia dos Pais')
     txt = chatbot._horarios_especiais_texto()
-    assert '09/08' in txt and JANELA_PAIS in txt
+    assert dia.strftime('%d/%m') in txt and JANELA_PAIS in txt
     assert 'Dia dos Pais' in txt
     assert 'sem entrega expressa' in txt
-    assert hoje() is not None            # sanidade do fuso (BRT)
 
 
 def test_bot_nao_gasta_token_sem_data_especial(app):
     """Sem data cadastrada o bloco some — não infla prompt nem mexe no
-    cache."""
+    cache do prompt."""
     from app.services import chatbot
     assert chatbot._horarios_especiais_texto() == ''
 
 
-def test_bot_avisa_dia_fechado(app, monkeypatch):
+def test_bot_avisa_dia_fechado(app):
     from app.services import chatbot
-    monkeypatch.setattr(chatbot, '_HORARIO_ESPECIAL_DIAS', 400)
-    _definir(janelas='')
+    _definir(data=_daqui(3), janelas='')
     assert 'NAO entregamos' in chatbot._horarios_especiais_texto()
 
 
 def test_bot_ignora_data_fora_da_janela(app):
     """Data daqui a meses não interessa — o cliente nem consegue escolher."""
     from app.services import chatbot
-    _definir()                            # 09/08/2026, longe de "hoje"
+    _definir(data=_daqui(90))
+    assert chatbot._horarios_especiais_texto() == ''
+
+
+def test_bot_ignora_data_que_ja_passou(app):
+    from app.services import chatbot
+    _definir(data=_daqui(-3))
     assert chatbot._horarios_especiais_texto() == ''
 
 
