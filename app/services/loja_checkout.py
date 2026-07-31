@@ -211,12 +211,37 @@ def _sem_janelas_passadas(janelas, base):
     return [j for j in janelas if int(j[:2]) >= limite]
 
 
-def janelas_do_modo(modo):
-    """Lista completa de janelas do modo (sem filtro de data). Mantida por
-    compat; a validação real usa janelas_disponiveis(modo, data)."""
-    if modo == 'express':
-        return [JANELA_EXPRESS]
-    return list(JANELAS_HORARIAS)
+def janelas_especiais_do_periodo(datas, base=None):
+    """`{'2026-08-09': ['06:00–10:00']}` pras datas com horário especial.
+
+    Pro CHECKOUT do site, cujo seletor é montado no cliente a partir da lista
+    global (`checkout.js::popularJanelas`): sem este mapa o site mostraria
+    08:00–18:00 num dia especial e só o POST recusaria — com a mensagem
+    errada. Só entram as datas que TÊM regra; dia normal fica de fora e o JS
+    usa a lista global.
+
+    Cobre o intervalo inteiro `[datas[0], datas[-1]]`, e não só as datas da
+    lista: o `<input type=date>` do checkout é um intervalo contíguo
+    (min/max), então um dia FECHADO — que `datas_disponiveis` já removeu da
+    lista — continua clicável e precisa aparecer aqui com `[]` pra o cliente
+    ver "não entregamos nesse dia" em vez de um seletor mentindo.
+
+    Devolve as janelas CRUAS (sem o filtro de hora passada / distância): o JS
+    aplica os mesmos filtros que aplica na lista global, e o servidor
+    revalida tudo em `criar_pedido`."""
+    from app.services import loja_data_especial
+    if not datas:
+        return {}
+    base = base or agora()
+    out = {}
+    dia = min(datas)
+    ultimo = max(datas)
+    while dia <= ultimo:
+        tem, janelas = loja_data_especial.janelas_do_dia(dia)
+        if tem:
+            out[dia.isoformat()] = list(janelas)
+        dia += timedelta(days=1)
+    return out
 
 
 def datas_disponiveis(modo, base=None, dias=DIAS_AGENDA, *, lead_dias=0):
