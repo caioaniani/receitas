@@ -18,6 +18,7 @@ Modos de entrega (decisão do dono 17/06/2026):
   pode ser Lalamove de várias faixas de veículo ou entregador próprio,
   decidido no painel). Só disponível dentro do horário de entrega.
 """
+import logging
 import os
 from datetime import date, timedelta
 from decimal import Decimal
@@ -27,6 +28,8 @@ from app.models import Cliente, Loja, PedidoOnline, PedidoOnlineItem
 from app.services import frete as frete_svc
 from app.services import loja_catalogo
 from app.utils import agora
+
+logger = logging.getLogger(__name__)
 
 # Horário de entrega do site (8h–18h). O antigo "corte 17h do dia inteiro"
 # foi trocado por filtro de janela passada + lead (ver LEAD_HORAS abaixo).
@@ -209,9 +212,24 @@ def _sem_janelas_passadas(janelas, base):
     """Tira as janelas de HOJE que já passaram (início < agora + LEAD_HORAS).
 
     Compara pelo horário de INÍCIO da janela — funciona igual pra janela de
-    1h ('08:00–09:00') e pra faixa larga de dia especial ('06:00–10:00')."""
+    1h ('08:00–09:00') e pra faixa larga de dia especial ('06:00–10:00').
+
+    Janela ilegível é MANTIDA em vez de derrubar a página: a coluna
+    `LojaDataEspecial.janelas` é texto e só o cadastro pela tela normaliza —
+    uma linha escrita por fora (psql, import) com '6:00-10:00' faria
+    `int('6:')` estourar DENTRO do render do checkout, ou seja o site
+    inteiro em 500 (achado de revisão 27/07/2026)."""
     limite = base.hour + LEAD_HORAS
-    return [j for j in janelas if int(j[:2]) >= limite]
+    out = []
+    for j in janelas:
+        try:
+            passou = int(j[:2]) < limite
+        except (TypeError, ValueError):
+            logger.warning('janela ilegível no filtro de hora: %r', j)
+            passou = False
+        if not passou:
+            out.append(j)
+    return out
 
 
 def janelas_especiais_do_periodo(datas, base=None):
