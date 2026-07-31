@@ -246,6 +246,39 @@ class SeruPedidoProcessado(db.Model):
     cancelado_em = db.Column(db.DateTime, nullable=True)
     estornado_em = db.Column(db.DateTime, nullable=True)
 
+class TinyPedidoProcessado(db.Model):
+    """Idempotencia do PDV do TINY (27/07/2026): cada pedido do Tiny e
+    processado UMA vez, mesmo com o sync rodando a cada N minutos.
+
+    Espelho do `SeruPedidoProcessado`. Tabela NOVA — criada por
+    `db.create_all` no startup, sem ALTER (o procedimento de 2 commits vale
+    pra COLUNA nova, nao pra tabela).
+
+    IMPORTANTE: no Tiny, o NOSSO sistema so cria NOTA (`tiny_nf`), nunca
+    pedido — `tiny.incluir_pedido` nao tem chamador. Logo todo `pedido` que
+    a API devolve nasceu no PDV, e importar por ali NAO colide com a baixa
+    que o site/B2B ja fazem por conta propria.
+    """
+    __tablename__ = 'tiny_pedido_processado'
+
+    tiny_pedido_id = db.Column(db.String(100), primary_key=True)
+    numero = db.Column(db.String(40), nullable=True)
+    processado_em = db.Column(db.DateTime, default=agora)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=True)
+    data_pedido = db.Column(db.Date, nullable=True, index=True)
+    valor = db.Column(db.Numeric(10, 2), nullable=True)
+    n_itens_total = db.Column(db.Integer, default=0)
+    n_itens_baixados = db.Column(db.Integer, default=0)
+    # Situacao do Tiny no momento do processamento (ex: 'Faturado'). Venda
+    # que vira 'Cancelado' depois gera estorno no proximo sync.
+    situacao = db.Column(db.String(40), nullable=True)
+    cancelado_em = db.Column(db.DateTime, nullable=True)
+    estornado_em = db.Column(db.DateTime, nullable=True)
+
+    def __repr__(self):
+        return f'<TinyPedidoProcessado {self.tiny_pedido_id} {self.situacao}>'
+
+
 class SeruDebito(db.Model):
     """Acumulador de baixas fracionadas por (loja, produto Seru).
 
