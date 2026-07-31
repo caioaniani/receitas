@@ -1,0 +1,235 @@
+"""Importa as vendas do PDV do TINY pro nosso estoque (27/07/2026).
+
+Pedido do dono: a Cantina vende pelo PDV do Tiny (nao pelo Seru), entao as
+vendas dela eram invisiveis — nao baixavam EstoqueLoja, nao entravam em
+faturamento nem na previsao de demanda. Este service e o espelho do
+`seru_sync` pro Tiny.
+
+O QUE TORNA ISSO SEGURO (conferido em 27/07/2026 antes de escrever):
+- O nosso sistema NUNCA cria pedido no Tiny — so NOTA (`tiny_nf.py:504` →
+  `incluir_nota_fiscal`); `tiny.incluir_pedido` nao tem um unico chamador.
+  Logo TODO pedido que a API devolve nasceu no PDV, e importa-lo nao duplica
+  a baixa que o site/B2B ja fazem por conta propria.
+- A loja e UMA so (decisao do dono 27/07: "so a Cantina"), configurada em
+  AppConfig `tiny_pdv_loja_id`. Sem config o sync NAO RODA — baixar na loja
+  errada e pior que nao baixar.
+
+Salvaguardas (mesmas do Seru, e pelos mesmos motivos):
+- Idempotencia por `TinyPedidoProcessado` (id do pedido no Tiny).
+- Produto sem mapa vira `VendaMapa` PENDENTE (canal 'tiny') e o pedido NAO
+  e marcado como processado enquanto nenhum item baixar? NAO — ver
+  `_processar_pedido`: o pedido E marcado, e o item pendente fica visivel na
+  tela de mapeamento. Espelha o Seru: pendente nao trava o resto da venda.
+- Detalhe indisponivel (falha de rede) => pedido NAO marcado, retenta.
+- Estoque insuficiente => `venda_tiny_sem_estoque` (nunca nega o saldo).
+- Venda CANCELADA depois no Tiny => estorno no ciclo seguinte.
+"""
+import logging
+
+from app.constants import VENDA_TIPOS_LOJA  # noqa: F401  (doc do contrato)
+from app.extensions import db
+from app.models import AppConfig, Loja, TinyPedidoProcessado, VendaMapa
+from app.utils import agora, hoje
+
+logger = logging.getLogger(__name__)
+
+CANAL = 'tiny'
+_CFG_LOJA = 'tiny_pdv_loja_id'
+
+# Situacoes do Tiny que representam venda EFETIVADA. 'Faturado' e o que o PDV
+# grava (conferido no fim de semana 25-26/07: 54 pedidos, todos 'Faturado').
+SITUACOES_VENDA = ('faturado', 'atendido', 'entregue', 'pronto para envio',
+                   'enviado')
+SITUACOES_CANCELADA = ('cancelado', 'cancelada')
+
+
+def loja_pdv_tiny():
+    """A Loja em que o PDV do Tiny vende. None = nao configurado (sync nao
+    roda). Decisao do dono 27/07/2026: e a Cantina, uma so."""
+    try:
+        lid = int(AppConfig.get(_CFG_LOJA) or 0)
+    except (TypeError, ValueError):
+        return None
+    return db.session.get(Loja, lid) if lid else None
+
+
+def definir_loja_pdv(loja_id):
+    """Configura a loja do PDV do Tiny (gesto de admin)."""
+    AppConfig.set(_CFG_LOJA, int(loja_id))
+    db.session.commit()
+
+
+def _situacao(pedido):
+    return (pedido.get('situacao') or '').strip().lower()
+
+
+def _resolver_mapa(nome, tiny_produto_id=None):
+    """Acha (ou CRIA como pendente) o VendaMapa do produto do Tiny.
+
+    Chave = `nome_externo` (contrato do VendaMapa, unique por canal+nome).
+    O `sku` guarda o id_produto do Tiny — chave estavel pra quando o dono
+    renomear o item no Tiny (o nome muda, o id nao)."""
+    nome = (nome or '').strip()
+    if not nome:
+        return None
+    mapa = VendaMapa.query.filter_by(canal=CANAL, nome_externo=nome).first()
+    if mapa is None:
+        mapa = VendaMapa(canal=CANAL, nome_externo=nome,
+                         sku=tiny_produto_id, fator_quantidade=1.0)
+        db.session.add(mapa)
+        db.session.flush()
+        logger.info('tiny_pdv: produto NOVO pendente de mapeamento: %r', nome)
+    elif tiny_produto_id and not mapa.sku:
+        mapa.sku = tiny_produto_id
+    return mapa
+
+
+def _tem_alvo(mapa):
+    return bool(mapa and (mapa.receita_id or mapa.produto_id
+                          or mapa.materia_prima_id))
+
+
+def _baixar_item(loja_id, mapa, qtd, tiny_pedido_id, user_id=None):
+    """Baixa UM item pelo MOTOR UNICO (`baixa_venda.aplicar_venda`): explode
+    cesta, aplica `fator_quantidade`, acumula fracao e grava o movimento."""
+    from app.services.baixa_venda import aplicar_venda
+    return aplicar_venda(
+        loja_id,
+        receita_id=mapa.receita_id,
+        produto_id=mapa.produto_id,
+        materia_prima_id=getattr(mapa, 'materia_prima_id', None),
+        qtd=qtd, fator=mapa.fator_quantidade or 1.0, canal=CANAL,
+        referencia=f'Tiny #{tiny_pedido_id}',
+        pedido_ref=f'tiny:{tiny_pedido_id}',
+        usuario_id=user_id, nome_venda=mapa.nome_externo)
+
+
+def _processar_pedido(pedido, loja, user_id=None):
+    """Processa UM pedido do Tiny. Devolve o codigo do desfecho:
+    'baixado' | 'pendente_detalhe' | 'ignorado' | 'ja_processado'."""
+    from app.services import tiny
+
+    pid = str(pedido.get('id') or '').strip()
+    if not pid:
+        return 'ignorado'
+    reg = db.session.get(TinyPedidoProcessado, pid)
+    sit = _situacao(pedido)
+
+    # Cancelado depois de processado -> estorna (proximo ciclo ve o status).
+    if reg is not None:
+        if (sit in SITUACOES_CANCELADA and reg.estornado_em is None
+                and (reg.n_itens_baixados or 0) > 0):
+            from app.services.baixa_venda import estornar_venda
+            estornar_venda(CANAL, f'Tiny #{pid}', f'Tiny #{pid}',
+                           loja_id=loja.id, usuario_id=user_id)
+            reg.cancelado_em = reg.cancelado_em or agora()
+            reg.estornado_em = agora()
+            logger.info('tiny_pdv: pedido %s cancelado -> estornado', pid)
+            return 'estornado'
+        return 'ja_processado'
+
+    if sit in SITUACOES_CANCELADA:
+        return 'ignorado'
+    if sit and sit not in SITUACOES_VENDA:
+        # Situacao desconhecida (orcamento, aberto...): NAO baixa e NAO marca
+        # — quando virar venda o proximo ciclo pega.
+        return 'ignorado'
+
+    itens = tiny.itens_do_pedido(pid)
+    if itens is None:
+        # Falha de rede/API: NAO marca como processado (a venda sumiria).
+        logger.warning('tiny_pdv: sem detalhe do pedido %s — retenta', pid)
+        return 'pendente_detalhe'
+
+    baixados = 0
+    for it in itens:
+        mapa = _resolver_mapa(it['nome'], it.get('tiny_produto_id'))
+        if not mapa or mapa.ignorar or not _tem_alvo(mapa):
+            continue                     # pendente/ignorado: some sem alarme
+        qtd = int(round(it['quantidade']))
+        if qtd <= 0:
+            continue
+        res = _baixar_item(loja.id, mapa, qtd, pid, user_id)
+        baixados += res.get('baixado', 0) + res.get('faltou', 0)
+
+    data_ped = None
+    try:
+        from datetime import datetime
+        data_ped = datetime.strptime(
+            (pedido.get('data_pedido') or '').strip(), '%d/%m/%Y').date()
+    except ValueError:
+        data_ped = None
+    db.session.add(TinyPedidoProcessado(
+        tiny_pedido_id=pid, numero=str(pedido.get('numero') or '')[:40],
+        loja_id=loja.id, data_pedido=data_ped,
+        valor=pedido.get('valor'), situacao=(pedido.get('situacao') or '')[:40],
+        n_itens_total=len(itens), n_itens_baixados=baixados))
+    return 'baixado'
+
+
+def processar_periodo(data_ini=None, data_fim=None, user_id=None):
+    """Le as vendas do PDV do Tiny no periodo e baixa o estoque da loja
+    configurada. Idempotente — pode rodar quantas vezes quiser.
+
+    Retorna dict de stats. NUNCA levanta: o cron nao pode morrer por causa
+    de uma janela ruim da API.
+    """
+    from app.services import tiny
+
+    stats = {'pedidos': 0, 'baixados': 0, 'ja_processados': 0,
+             'estornados': 0, 'ignorados': 0, 'pendentes_detalhe': 0,
+             'mapas_pendentes': 0, 'erro': None}
+    loja = loja_pdv_tiny()
+    if loja is None:
+        stats['erro'] = f'AppConfig {_CFG_LOJA} nao configurado'
+        logger.warning('tiny_pdv: %s — sync nao roda', stats['erro'])
+        return stats
+    if not tiny.disponivel():
+        stats['erro'] = 'TINY_API_TOKEN ausente'
+        return stats
+
+    di = data_ini or hoje()
+    df = data_fim or hoje()
+    try:
+        pedidos = tiny.listar_pedidos_periodo(di, df)
+    except Exception as exc:                              # noqa: BLE001
+        stats['erro'] = f'{type(exc).__name__}: {exc}'
+        logger.warning('tiny_pdv: falha ao listar pedidos: %s', exc)
+        return stats
+
+    stats['pedidos'] = len(pedidos)
+    for pedido in pedidos:
+        try:
+            desfecho = _processar_pedido(pedido, loja, user_id)
+        except Exception as exc:                          # noqa: BLE001
+            # Um pedido torto nao pode matar a varredura (licao do
+            # estorno_pendente_vigia, 26/07/2026).
+            logger.warning('tiny_pdv: pedido %s falhou: %s',
+                           pedido.get('id'), exc)
+            db.session.rollback()
+            continue
+        chave = {'baixado': 'baixados', 'ja_processado': 'ja_processados',
+                 'estornado': 'estornados', 'ignorado': 'ignorados',
+                 'pendente_detalhe': 'pendentes_detalhe'}[desfecho]
+        stats[chave] += 1
+    db.session.commit()
+    stats['mapas_pendentes'] = VendaMapa.query.filter(
+        VendaMapa.canal == CANAL,
+        VendaMapa.ignorar.is_(False),
+        VendaMapa.receita_id.is_(None),
+        VendaMapa.produto_id.is_(None),
+        VendaMapa.materia_prima_id.is_(None)).count()
+    logger.info('tiny_pdv: %s', stats)
+    return stats
+
+
+def pendentes_de_mapeamento():
+    """Produtos do PDV do Tiny ainda sem receita/produto vinculado — o que a
+    tela de mapeamento mostra pro dono resolver."""
+    return (VendaMapa.query
+            .filter(VendaMapa.canal == CANAL,
+                    VendaMapa.ignorar.is_(False),
+                    VendaMapa.receita_id.is_(None),
+                    VendaMapa.produto_id.is_(None),
+                    VendaMapa.materia_prima_id.is_(None))
+            .order_by(VendaMapa.nome_externo).all())
