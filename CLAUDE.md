@@ -654,6 +654,54 @@ status; `?testar=1` manda evento de teste.
   retornam UTC, e a partir das 21h BRT viram D+1 (causa bugs do copilot
   achando que é "amanhã" às 22h, lembretes de hoje sumindo, etc.).
 
+## PDV do TINY — vendas da Cantina entram no sistema (27/07/2026)
+
+A Cantina vende pelo **PDV do Tiny**, nao pelo Seru. Consequencia ate aqui:
+as vendas dela eram INVISIVEIS — nao baixavam `EstoqueLoja`, nao entravam em
+faturamento nem na previsao de demanda, e a loja nao tinha nenhuma linha de
+estoque no sistema. Decisao do dono 27/07: **importar de verdade, como o
+Seru** (AskUserQuestion; a outra opcao era so uma sonda de leitura).
+
+**O contrato que torna seguro importar por `pedidos.pesquisa.php`** (conferir
+antes de mexer): o NOSSO sistema **so cria NOTA** no Tiny (`tiny_nf.py` →
+`incluir_nota_fiscal`); `tiny.incluir_pedido` **nao tem um unico chamador**.
+Logo todo `pedido` que a API devolve nasceu no PDV — importar NAO duplica a
+baixa que site/B2B ja fazem sozinhos. Se um dia alguem ligar `incluir_pedido`,
+esta premissa cai e o sync passa a contar em dobro.
+
+- **Descoberta do payload (sonda `/api/claude/tiny-vendas?de=&ate=`)**: venda
+  de PDV vira `pedido` com `nome='Consumidor Final'` e `situacao='Faturado'`.
+  `deposito` e `'Geral'` em TUDO — **nao identifica loja**. O que sinaliza a
+  Cantina e o sufixo no nome do produto ("SUCO VERDE CANTINA"), mas NEM
+  SEMPRE: `CAFÉ EXPRESSO`, `ADICIONAL DE OVOS AO PONTO`, `CHOCOLATE DO PADRE
+  GELADO` e `DANISH CALABRESA` vieram sem sufixo. Por isso a loja e
+  CONFIGURACAO (`AppConfig.tiny_pdv_loja_id`), nao regra por nome — decisao
+  do dono: "so a Cantina" usa esse PDV.
+- **Sem loja configurada o sync NAO RODA** (`processar_periodo` devolve
+  `erro`): baixar na loja errada e pior que nao baixar.
+- **Mapeamento** produto Tiny → receita/produto no `VendaMapa` canal
+  `'tiny'` (chave = `nome_externo`; `sku` guarda o `id_produto` do Tiny, que
+  e ESTAVEL quando o dono renomeia). Produto sem vinculo vira PENDENTE, e
+  PULADO sem alarme e nao trava o resto da venda (espelho do Seru).
+  `fator_quantidade` cobre os compostos: "CONE DE PÃO DE QUEIJO COM 5 UN" =
+  fator 5. Tela: `/pdv/tiny` (admin) — loja + mapeamento + importar periodo.
+- **Baixa pelo motor unico** (`baixa_venda.aplicar_venda`, canal `'tiny'`):
+  tipos `venda_tiny` / `venda_tiny_sem_estoque` / `venda_tiny_estorno`, todos
+  em `VENDA_TIPOS_LOJA` e os dois primeiros em `VENDA_TIPOS_DEMANDA_LOJA` —
+  **a venda da Cantina passa a alimentar a previsao de producao**, que era o
+  ponto da integracao. Estorno POSITIVO (familia Seru/lote), sinal -1 na
+  demanda.
+- **Idempotencia**: `TinyPedidoProcessado` (tabela nova via `db.create_all`,
+  sem ALTER). Detalhe indisponivel (falha de rede) => pedido **NAO** marcado,
+  retenta no proximo ciclo. Situacao desconhecida (orcamento/aberto) => nao
+  baixa e nao marca. Venda faturada e depois CANCELADA no Tiny => estorno no
+  ciclo seguinte (`estornar_venda(canal, 'tiny:<id>', 'Tiny #<id>')` — nao
+  trocar a ordem: `pedido_ref` e a chave das FRACOES, `referencia` a dos
+  INTEIROS; trocar deixa fracao fantasma).
+- **Cron**: `seru_cron`, 15 min, janela ontem+hoje, advisory lock 7756,
+  kill-switch `TINY_PDV_SYNC=0`.
+- Testes: `tests/test_tiny_pdv_sync.py` (12 casos, Tiny sempre mockado).
+
 ## Dias de funcionamento da loja (27/07/2026)
 
 Pedido do dono: "Cantina nao precisa lancar sobras durante a semana pois so
