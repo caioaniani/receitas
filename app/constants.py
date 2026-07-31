@@ -20,6 +20,9 @@ VENDA_TIPOS_LOJA = (
     # `venda_site_sem_estoque` na propria linha (padrao Seru/VNDA).
     # Estorno (cancelamento ou refund) usa `venda_site_estorno`.
     'venda_site', 'venda_site_sem_estoque', 'venda_site_estorno',
+    # PDV do TINY (27/07/2026): a Cantina vende pelo Tiny, nao pelo Seru.
+    # Mesma natureza do Seru — venda de balcao que baixa EstoqueLoja.
+    'venda_tiny', 'venda_tiny_sem_estoque', 'venda_tiny_estorno',
 )
 
 # ─── Demanda de venda da loja (previsoes / ponto de reposicao) ─────────
