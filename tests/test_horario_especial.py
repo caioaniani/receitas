@@ -431,6 +431,44 @@ def test_post_com_horario_torto_avisa_e_nao_grava(app):
     assert LojaDataEspecial.query.count() == 0
 
 
+def test_post_sem_horario_recusa_em_vez_de_fechar_o_dia(app):
+    """O formulário nasce vazio e `definir` é upsert: reabrir a tela só pra
+    corrigir o rótulo NÃO pode fechar o site no Dia dos Pais."""
+    from app.models import LojaDataEspecial
+    c = _owner(app)
+    _definir(rotulo='Dia dos Pais')
+    r = c.post('/admin/loja-online/horarios-especiais/salvar',
+               data={'data': '2026-08-09', 'rotulo': 'Dia dos Pais 2026',
+                     'janelas': '', 'express_bloqueado': '1'},
+               follow_redirects=True)
+    assert 'Informe pelo menos um horário' in r.data.decode()
+    # E o cadastro anterior segue intacto — o dia NÃO fechou.
+    assert LojaDataEspecial.query.first().lista_janelas() == [JANELA_PAIS]
+
+
+def test_fechar_o_dia_e_gesto_explicito(app):
+    from app.models import LojaDataEspecial
+    c = _owner(app)
+    c.post('/admin/loja-online/horarios-especiais/salvar',
+           data={'data': '2026-08-09', 'janelas': '', 'fechar_dia': '1'},
+           follow_redirects=True)
+    assert LojaDataEspecial.query.first().fechado is True
+
+
+def test_tela_avisa_de_pedido_ja_agendado_fora_do_horario(app):
+    from app.extensions import db
+    from app.models import PedidoOnline
+    c = _owner(app)
+    _definir()
+    db.session.add(PedidoOnline(
+        codigo='VELHO9', nome_cliente='A', email_cliente='a@x.com',
+        status='pago', data_entrega=DIA_DOS_PAIS,
+        janela_entrega='15:00–16:00', valor_total=10))
+    db.session.commit()
+    html = c.get('/admin/loja-online/horarios-especiais').data.decode()
+    assert 'VELHO9' in html and 'já pago' in html
+
+
 def test_post_sem_marcar_express_desbloqueia(app):
     """Checkbox ausente no POST = desmarcado (comportamento de HTML)."""
     from app.models import LojaDataEspecial
