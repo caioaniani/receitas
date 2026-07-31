@@ -24,7 +24,12 @@ logger = logging.getLogger(__name__)
 def lojas_sem_desperdicio(dia=None):
     """Lojas operacionais sem nenhum Desperdicio lancado no dia.
 
-    Operacional = ativa e != 'Industria' (mesmo filtro de _lojas_operacionais).
+    Operacional = ativa e != 'Industria' (mesmo filtro de _lojas_operacionais)
+    E que ABRE nesse dia (`Loja.funciona_em`). Loja fechada nao tem sobra pra
+    lancar — cobra-la e ruido que ensina a ignorar o alerta. Decisao do dono
+    27/07/2026: "Cantina nao precisa lancar sobras durante a semana pois so
+    funciona de sabado e domingo". Loja SEM dias configurados continua sendo
+    cobrada todo dia (fail-open — ver Loja.funciona_em).
     """
     dia = dia or hoje()
     lojas = (Loja.query
@@ -32,7 +37,8 @@ def lojas_sem_desperdicio(dia=None):
              .order_by(Loja.nome).all())
     com_lancamento = {d.loja_id for d in
                       Desperdicio.query.filter_by(data=dia).all()}
-    return [lj for lj in lojas if lj.id not in com_lancamento]
+    return [lj for lj in lojas
+            if lj.id not in com_lancamento and lj.funciona_em(dia)]
 
 
 def mensagem_pendentes(lojas):
