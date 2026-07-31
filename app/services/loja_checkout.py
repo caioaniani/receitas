@@ -146,19 +146,41 @@ def janelas_disponiveis(modo, data=None, base=None, *, distancia_km=None):
 
     `distancia_km` (opcional, vem do `consultar_frete`): quando informado e
     >= DISTANCIA_CORTE_PRIMEIRA_JANELA_KM, corta a 1ª janela (08-09) — o
-    motoboy não chega a tempo (caso real Alphaville)."""
-    if modo == 'express':
-        return [JANELA_EXPRESS]
+    motoboy não chega a tempo (caso real Alphaville).
+
+    DATA ESPECIAL (27/07/2026, `loja_data_especial`): dia cadastrado usa as
+    janelas DELE no lugar das normais — vale pra agendada E pra retirada
+    (decisão do dono). Esta função é o ponto único por onde o site oferece e
+    o `criar_pedido` valida janela, então a regra especial entra aqui e
+    todos os caminhos herdam de uma vez.
+    """
     base = base or agora()
     if isinstance(data, str):
         try:
             data = date.fromisoformat(data)
         except ValueError:
             data = None
+    if modo == 'express':
+        # Express é sempre HOJE. Bloqueado na data → nenhuma janela.
+        from app.services import loja_data_especial
+        if loja_data_especial.express_bloqueado_em(data or base.date()):
+            return []
+        return [JANELA_EXPRESS]
+    especiais = _janelas_especiais(data)
+    if especiais is not None:
+        # Dia especial: as janelas do dono SUBSTITUEM as normais. Lista vazia
+        # = dia fechado (e não "cai no normal" — ver loja_data_especial).
+        # O corte da 1ª janela por distância NÃO se aplica: aquelas janelas
+        # foram escolhidas a dedo pra esse dia, e cortá-las poderia zerar o
+        # dia inteiro pra quem mora longe (o 06:00–10:00 do Dia dos Pais tem
+        # 4h de folga — o gargalo de alocação matinal não vale aqui).
+        janelas = list(especiais)
+        if data and data == base.date():
+            janelas = _sem_janelas_passadas(janelas, base)
+        return janelas
     janelas = list(JANELAS_HORARIAS)
     if data and data == base.date():
-        limite = base.hour + LEAD_HORAS
-        janelas = [j for j in janelas if int(j[:2]) >= limite]
+        janelas = _sem_janelas_passadas(janelas, base)
     # Corte de janelas matinais por distância (só agendada — express é por
     # horário; retirada não tem distância). Aplica EM QUALQUER dia (não só
     # hoje): pra a quinta às 8h o motoboy já passa pelo mesmo gargalo de
@@ -168,6 +190,25 @@ def janelas_disponiveis(modo, data=None, base=None, *, distancia_km=None):
             and distancia_km >= DISTANCIA_CORTE_PRIMEIRA_JANELA_KM):
         janelas = [j for j in janelas if j not in JANELAS_CORTADAS_LONGE]
     return janelas
+
+
+def _janelas_especiais(data):
+    """Janelas cadastradas pra essa data, ou None se o dia é normal.
+
+    `[]` (dia fechado) é DIFERENTE de None (sem cadastro) — por isso não dá
+    pra usar lista vazia como sentinela."""
+    from app.services import loja_data_especial
+    tem, janelas = loja_data_especial.janelas_do_dia(data)
+    return janelas if tem else None
+
+
+def _sem_janelas_passadas(janelas, base):
+    """Tira as janelas de HOJE que já passaram (início < agora + LEAD_HORAS).
+
+    Compara pelo horário de INÍCIO da janela — funciona igual pra janela de
+    1h ('08:00–09:00') e pra faixa larga de dia especial ('06:00–10:00')."""
+    limite = base.hour + LEAD_HORAS
+    return [j for j in janelas if int(j[:2]) >= limite]
 
 
 def janelas_do_modo(modo):
