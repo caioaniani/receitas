@@ -205,7 +205,13 @@
       sel.innerHTML = '';
       if (!lista.length) {
         var vazio = document.createElement('option');
-        vazio.value = ''; vazio.textContent = 'Sem horário disponível neste dia';
+        vazio.value = '';
+        // Dia FECHADO pelo dono ≠ "as janelas de hoje já passaram". Dizer
+        // "sem horário" num dia fechado faz o cliente ficar trocando de
+        // horário atrás de um que não existe.
+        vazio.textContent = (temEspecial && !especiais[dataVal].length)
+          ? 'Não entregamos nesse dia — escolha outra data'
+          : 'Sem horário disponível neste dia';
         sel.appendChild(vazio);
         return;
       }
