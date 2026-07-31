@@ -312,6 +312,78 @@ def obter_pedido_detalhe(pedido_id):
     return pedido if isinstance(pedido, dict) else None
 
 
+def listar_pedidos_periodo(data_ini, data_fim, max_paginas=20):
+    """pedidos.pesquisa.php filtrado por PERIODO — a leitura das vendas do
+    PDV do Tiny (27/07/2026, caso Cantina).
+
+    `data_ini`/`data_fim` sao `date`; a API v2 espera dd/mm/aaaa.
+    Devolve a lista de dicts `pedido` (ja desembrulhados de {'pedido': {...}}).
+
+    ATENCAO ao contrato que torna isso seguro: o NOSSO sistema nunca cria
+    pedido no Tiny (so nota, via `tiny_nf`) — `incluir_pedido` nao tem
+    chamador. Logo todo pedido aqui nasceu no PDV, e importa-lo NAO duplica
+    a baixa que o site/B2B ja fazem sozinhos.
+
+    Lista vazia em qualquer falha (sem token, erro da API) — o chamador
+    trata como "nada a processar" e tenta de novo no proximo ciclo, nunca
+    marca pedido como processado sem ter visto.
+    """
+    if not data_ini or not data_fim:
+        return []
+    di = data_ini.strftime('%d/%m/%Y')
+    df = data_fim.strftime('%d/%m/%Y')
+    out = []
+    for pagina in range(1, max_paginas + 1):
+        retorno = _get('pedidos.pesquisa.php',
+                       params={'dataInicial': di, 'dataFinal': df,
+                               'pagina': str(pagina)})
+        if not retorno:
+            break
+        lote = retorno.get('pedidos') or []
+        if not lote:
+            break
+        for item in lote:
+            p = item.get('pedido') if isinstance(item, dict) else None
+            if isinstance(p, dict) and p.get('id'):
+                out.append(p)
+        # A v2 devolve 100 por pagina; menos que isso = ultima.
+        if len(lote) < 100:
+            break
+    return out
+
+
+def itens_do_pedido(pedido_id):
+    """Itens de um pedido do Tiny, normalizados pra
+    [{'tiny_produto_id', 'codigo', 'nome', 'quantidade', 'valor_unitario'}].
+
+    `nome` (descricao) e a chave de mapeamento humana; `tiny_produto_id` e a
+    chave ESTAVEL (o nome muda quando o dono renomeia no Tiny). Devolve []
+    quando o detalhe nao vem — o chamador NAO marca o pedido como processado
+    nesse caso (senao a venda sumiria pra sempre)."""
+    det = obter_pedido_detalhe(pedido_id)
+    if not isinstance(det, dict):
+        return None                      # None = falha (≠ pedido sem itens)
+    itens = []
+    for it in (det.get('itens') or []):
+        i = it.get('item') if isinstance(it, dict) else None
+        if not isinstance(i, dict):
+            continue
+        try:
+            qtd = float(str(i.get('quantidade') or 0).replace(',', '.'))
+        except (TypeError, ValueError):
+            qtd = 0.0
+        if qtd <= 0:
+            continue
+        itens.append({
+            'tiny_produto_id': str(i.get('id_produto') or '').strip() or None,
+            'codigo': str(i.get('codigo') or '').strip() or None,
+            'nome': (i.get('descricao') or '').strip(),
+            'quantidade': qtd,
+            'valor_unitario': i.get('valor_unitario'),
+        })
+    return itens
+
+
 def listar_produtos(max_paginas=20):
     """Lista os produtos do Tiny (produtos.pesquisa.php), paginado. Devolve
     [{'sku', 'nome', 'tiny_id'}] — usado pra sugerir o SKU por nome no
