@@ -286,7 +286,9 @@ def _sem_dias_fechados(datas):
     intacto (não vale a pena consultar janela de 14 datas aqui, e o dia de
     HOJE já é filtrado por janela logo acima)."""
     from app.services import loja_data_especial
-    return [d for d in datas if not loja_data_especial.dia_fechado(d)]
+    regras = loja_data_especial.regras_do_periodo(datas)   # 1 query, não N
+    return [d for d in datas
+            if not (d in regras and regras[d].fechado)]
 
 
 def montar_itens(itens_raw):
