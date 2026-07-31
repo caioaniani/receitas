@@ -449,6 +449,43 @@ def test_janelas_do_modo_nao_existe_mais(app):
     assert not hasattr(loja_checkout, 'janelas_do_modo')
 
 
+# ── O bot de atendimento ─────────────────────────────────────────────────
+
+def test_bot_sabe_do_horario_especial(app, monkeypatch):
+    """O prompt crava "todos os dias das 8h às 18h" — no Dia dos Pais o bot
+    afirmaria o horário errado no dia de maior movimento."""
+    from app.services import chatbot
+    from app.utils import hoje
+    monkeypatch.setattr(chatbot, '_HORARIO_ESPECIAL_DIAS', 400)
+    _definir(rotulo='Dia dos Pais')
+    txt = chatbot._horarios_especiais_texto()
+    assert '09/08' in txt and JANELA_PAIS in txt
+    assert 'Dia dos Pais' in txt
+    assert 'sem entrega expressa' in txt
+    assert hoje() is not None            # sanidade do fuso (BRT)
+
+
+def test_bot_nao_gasta_token_sem_data_especial(app):
+    """Sem data cadastrada o bloco some — não infla prompt nem mexe no
+    cache."""
+    from app.services import chatbot
+    assert chatbot._horarios_especiais_texto() == ''
+
+
+def test_bot_avisa_dia_fechado(app, monkeypatch):
+    from app.services import chatbot
+    monkeypatch.setattr(chatbot, '_HORARIO_ESPECIAL_DIAS', 400)
+    _definir(janelas='')
+    assert 'NAO entregamos' in chatbot._horarios_especiais_texto()
+
+
+def test_bot_ignora_data_fora_da_janela(app):
+    """Data daqui a meses não interessa — o cliente nem consegue escolher."""
+    from app.services import chatbot
+    _definir()                            # 09/08/2026, longe de "hoje"
+    assert chatbot._horarios_especiais_texto() == ''
+
+
 def test_remover_pela_tela(app):
     from app.models import LojaDataEspecial
     c = _owner(app)
