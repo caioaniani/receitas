@@ -428,7 +428,12 @@ def test_checkout_renderiza_a_janela_especial(app):
     db.session.add(loja)
     db.session.commit()
     AppConfig.set('loja_site_estoque_id', loja.id)
-    _definir()
+    # Data RELATIVA a hoje: o payload cobre só os próximos 14 dias, então
+    # cravar 09/08/2026 deixaria a suíte vermelha a partir de 10/08/2026 —
+    # e com "Wait for CI" ligado, CI vermelho trava TODO deploy, inclusive
+    # hotfix (achado de revisão 27/07/2026).
+    dia = _daqui(4)
+    _definir(data=dia)
     itens = _carrinho(db)
     c = _owner(app)          # no host de gestão a loja só responde a staff
     with c.session_transaction() as s:
@@ -437,7 +442,7 @@ def test_checkout_renderiza_a_janela_especial(app):
     assert '"janelasPorData"' in html
     bruto = html.split('id="checkout-dados" type="application/json">')[1]
     dados = json.loads(bruto.split('</script>')[0])
-    assert dados['janelasPorData']['2026-08-09'] == [JANELA_PAIS]
+    assert dados['janelasPorData'][dia.isoformat()] == [JANELA_PAIS]
     # A lista normal continua lá, pros outros dias.
     assert '08:00–09:00' in dados['janelas']
 
