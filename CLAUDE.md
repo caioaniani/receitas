@@ -1655,8 +1655,18 @@ do padeiro: separação + cronograma + pré-preparo) + **lead FIXO D+2**.
   - **Separação do padeiro** (`padeiro._dados_listas` + `_card_online`, tipo
     `'online'`): card DOURADO informativo na fila "a separar" (sem botão
     SEPARAR — a entrega do site roda pelo /entregas/painel; aqui é só garantir
-    a produção). Mostra SÓ os itens sob encomenda. Hoje inclui atrasados
-    (data <= hj), como B2B.
+    a produção). Mostra SÓ os itens sob encomenda. **Na visão de HOJE entram
+    TAMBÉM as encomendas de data FUTURA** (fix 31/07/2026, caso real: menu de
+    minis vendido na sexta pra entrega no domingo e a TV ficou muda até
+    domingo — o sob encomenda existe JUSTAMENTE pra produzir com
+    antecedência, o cronograma agenda fornadas dias antes): o card aparece do
+    pagamento até virar entregue/cancelado, com a data de entrega visível.
+    **Item de MENU CONFIGURÁVEL explode na COMPOSIÇÃO ESCOLHIDA** (mesmo fix;
+    fonte = `composicao_escolhida`, a mesma do bloco 2c) — antes o card e o
+    pré-preparo diziam só "1x Menu Degustação dos Minis" e o padeiro não
+    tinha como produzir; agora listam "20x Mini Nutella, 10x Mini Danish...",
+    e no pré-preparo cada mini sai com o SEU `estado_padrao`. Testes: seção
+    "Fixes 31/07/2026" em `tests/test_sob_encomenda.py`.
   - **Pré-preparo** (`padeiro.preparar_json`): itens sob encomenda com
     `data_entrega == alvo` (dia+1) entram no pré-preparo da véspera; estado =
     `Receita.estado_padrao` (assado/backup) ou 'assado' de fallback pra sempre
