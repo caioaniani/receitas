@@ -96,23 +96,22 @@
           <tr class="linha-mapa {% if pendente %}table-warning{% endif %}"
               data-nome="{{ m.nome_externo|lower }}"
               data-pendente="{{ '1' if pendente else '0' }}">
-            <form method="POST">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="acao" value="mapear">
-            <input type="hidden" name="mapa_id" value="{{ m.id }}">
             <td>
               {{ m.nome_externo }}
               {% if m.sku %}<br><span class="text-muted" style="font-size:11px;">id Tiny: {{ m.sku }}</span>{% endif %}
             </td>
             <td>
               {# Typeahead: digite e vai filtrando por "contém". O valor real
-                 vai no hidden — texto solto NUNCA vira vínculo. #}
+                 vai no hidden — texto solto NUNCA vira vínculo. O atributo
+                 form= amarra os campos ao form da última coluna (form
+                 atravessando <tr> depende de quirk do parser HTML). #}
               <div class="ta-wrap position-relative">
                 <input type="text" class="form-control form-control-sm ta-input"
                        placeholder="digite pra buscar receita ou cesta..."
                        autocomplete="off"
                        value="{% if sug and pendente and sug.preenche %}{{ sug.nome }}{% else %}{{ rotulo.get(atual, 'Ignorar de vez' if m.ignorar else '') }}{% endif %}">
                 <input type="hidden" name="alvo" class="ta-valor"
+                       form="fm-{{ m.id }}"
                        value="{% if sug and pendente and sug.preenche %}{{ sug.kind[0] }}:{{ sug.id }}{% else %}{{ atual }}{% endif %}">
                 <div class="ta-lista list-group position-absolute w-100 shadow"
                      style="z-index:20; display:none; max-height:240px; overflow:auto;"></div>
@@ -137,11 +136,17 @@
                 {% endif %}
               {% endif %}
             </td>
-            <td><input type="text" name="fator"
+            <td><input type="text" name="fator" form="fm-{{ m.id }}"
                        value="{{ sug.fator if (sug and pendente and sug.preenche and sug.fator != 1.0) else (m.fator_quantidade or 1) }}"
                        class="form-control form-control-sm text-end"></td>
-            <td><button class="btn btn-sm btn-outline-primary w-100">Salvar</button></td>
-            </form>
+            <td>
+              <form method="POST" id="fm-{{ m.id }}" class="form-mapa">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="acao" value="mapear">
+                <input type="hidden" name="mapa_id" value="{{ m.id }}">
+                <button class="btn btn-sm btn-outline-primary w-100">Salvar</button>
+              </form>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
