@@ -33,6 +33,9 @@
                         ({{ '%+.0f%%' % dados.vendas.pdv_delta_pct }} vs {{ dados.vendas.comparado_com_label }})
                     </span>
                     {% endif %}
+                    {% if dados.vendas.tiny_total %}
+                    <span class="small text-muted" title="A Cantina vende pelo PDV do Tiny, não pelo Seru — já está somada acima.">(inclui Tiny: R$ {{ '%.0f' % dados.vendas.tiny_total }})</span>
+                    {% endif %}
                     &nbsp;|&nbsp; Site: <strong>R$ {{ '%.0f' % dados.vendas.site_total }}</strong>
                     · {{ dados.vendas.site_qtd }} pagos</p>
                 <p class="mb-2">Total (PDV + site):
