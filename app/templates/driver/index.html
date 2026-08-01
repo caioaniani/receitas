@@ -296,6 +296,7 @@
     // --- Detalhe ---
     function abrirDetalhe(p) {
         pedidoAtual = p;
+        marcarAposFoto = false;   // modal novo = intencao antiga morre
         document.getElementById('modal-titulo').textContent = (p.destinatario || '—');
         var fotosHtml = '';
         if (p.fotos && p.fotos.length > 0) {
