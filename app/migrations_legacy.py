@@ -1957,6 +1957,15 @@ def _migrate_sqlite(app):
     if 'sob_encomenda' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN sob_encomenda "
                        "BOOLEAN NOT NULL DEFAULT 0")
+    # receita.cobra_sobra_diaria — cobrança de sobra POR ITEM (01/08/2026,
+    # caso croissant tradicional); backfill único na criação, espelho do
+    # bloco Postgres (COBRA_SOBRA_SEED).
+    if 'cobra_sobra_diaria' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN cobra_sobra_diaria "
+                       "BOOLEAN NOT NULL DEFAULT 0")
+        for _nome in COBRA_SOBRA_SEED:
+            cursor.execute("UPDATE receita SET cobra_sobra_diaria = 1 "
+                           "WHERE nome = ?", (_nome,))
     # receita.descricao_atacado — descrição sincera do cardápio atacado
     # (dono 20/07/2026); backfill único junto com a criação, espelho do
     # bloco Postgres (DESCRICOES_ATACADO_SEED).
