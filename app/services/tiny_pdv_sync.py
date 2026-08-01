@@ -299,6 +299,11 @@ PISO_SUGESTAO = 0.5
 # clicar Salvar num vinculo errado = baixa de estoque errada em silencio.
 # Abaixo do piso a sugestao aparece como DICA e o campo fica VAZIO.
 PISO_PREENCHE = 0.75
+# Piso pro ACEITE EM LOTE ("salvar de uma vez", pedido do dono 27/07/2026):
+# SO os matches PERFEITOS — todos os tokens do alvo no nome do Tiny E
+# vice-versa (fora ruido/numeros). E o unico nivel em que gravar sem olhar
+# linha a linha e defensavel; 75-99% continua exigindo o Salvar individual.
+PISO_LOTE = 1.0
 
 _RUIDO = (
     'cantina', 'un', 'ml', 'g', 'kg', 'de', 'do', 'da', 'com', 'no', 'na',
