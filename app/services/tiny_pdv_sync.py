@@ -103,9 +103,30 @@ def _baixar_item(loja_id, mapa, qtd, tiny_pedido_id, user_id=None):
         usuario_id=user_id, nome_venda=mapa.nome_externo)
 
 
+def _baixar_itens(itens, loja, pid, user_id=None):
+    """Baixa os itens MAPEADOS de um pedido. Devolve (baixados, tinha_pendente)
+    — `tinha_pendente` = havia item sem mapa (nem alvo nem ignorar), o que
+    habilita a re-baixa quando o dono mapear depois."""
+    baixados = 0
+    tinha_pendente = False
+    for it in itens:
+        mapa = _resolver_mapa(it['nome'], it.get('tiny_produto_id'))
+        if not mapa or mapa.ignorar or not _tem_alvo(mapa):
+            if mapa and not mapa.ignorar:
+                tinha_pendente = True
+            continue                     # pendente/ignorado: some sem alarme
+        qtd = int(round(it['quantidade']))
+        if qtd <= 0:
+            continue
+        res = _baixar_item(loja.id, mapa, qtd, pid, user_id)
+        baixados += res.get('baixado', 0) + res.get('faltou', 0)
+    return baixados, tinha_pendente
+
+
 def _processar_pedido(pedido, loja, user_id=None):
     """Processa UM pedido do Tiny. Devolve o codigo do desfecho:
-    'baixado' | 'pendente_detalhe' | 'ignorado' | 'ja_processado'."""
+    'baixado' | 'rebaixado' | 'pendente_detalhe' | 'ignorado' |
+    'ja_processado'."""
     from app.services import tiny
 
     pid = str(pedido.get('id') or '').strip()
@@ -128,6 +149,34 @@ def _processar_pedido(pedido, loja, user_id=None):
             reg.estornado_em = agora()
             logger.info('tiny_pdv: pedido %s cancelado -> estornado', pid)
             return 'estornado'
+        # RE-BAIXA de pedido que ficou com ZERO itens baixados (27/07/2026):
+        # no primeiro import da Cantina NENHUM dos 77 produtos tinha mapa,
+        # entao TODO pedido foi marcado processado com 0 baixas — e mapear
+        # depois nao traria essas vendas de volta (a idempotencia barrava).
+        # Como NADA foi baixado antes, re-baixar aqui nao duplica. So entra
+        # quando ALGUM item agora tem alvo (senao 'ja_processado' — pedido
+        # todo-ignorado nao fica em loop de refetch). Pedido PARCIAL
+        # (n_itens_baixados > 0) nunca re-baixa: nao ha idempotencia por
+        # item, re-processar duplicaria o que ja saiu.
+        if (sit in SITUACOES_VENDA
+                and (reg.n_itens_baixados or 0) == 0
+                and (reg.n_itens_total or 0) > 0
+                and reg.estornado_em is None):
+            itens = tiny.itens_do_pedido(pid)
+            if itens is None:
+                return 'pendente_detalhe'
+            tem_alvo_agora = any(
+                (m := _resolver_mapa(it['nome'], it.get('tiny_produto_id')))
+                and not m.ignorar and _tem_alvo(m)
+                for it in itens)
+            if not tem_alvo_agora:
+                return 'ja_processado'
+            baixados, _pend = _baixar_itens(itens, loja, pid, user_id)
+            reg.n_itens_total = len(itens)
+            reg.n_itens_baixados = baixados
+            logger.info('tiny_pdv: pedido %s RE-baixado apos mapeamento '
+                        '(%d item[ns])', pid, baixados)
+            return 'rebaixado'
         return 'ja_processado'
 
     if sit in SITUACOES_CANCELADA:
@@ -143,16 +192,7 @@ def _processar_pedido(pedido, loja, user_id=None):
         logger.warning('tiny_pdv: sem detalhe do pedido %s — retenta', pid)
         return 'pendente_detalhe'
 
-    baixados = 0
-    for it in itens:
-        mapa = _resolver_mapa(it['nome'], it.get('tiny_produto_id'))
-        if not mapa or mapa.ignorar or not _tem_alvo(mapa):
-            continue                     # pendente/ignorado: some sem alarme
-        qtd = int(round(it['quantidade']))
-        if qtd <= 0:
-            continue
-        res = _baixar_item(loja.id, mapa, qtd, pid, user_id)
-        baixados += res.get('baixado', 0) + res.get('faltou', 0)
+    baixados, _pend = _baixar_itens(itens, loja, pid, user_id)
 
     data_ped = None
     try:
