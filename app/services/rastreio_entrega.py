@@ -97,8 +97,8 @@ def _enviar_emails_saida(driver, dia):
         if not p.email_cliente:
             continue
         try:
-            url = (f'{base}/loja/pedido/{p.codigo}/confirmado'
-                   if base else None)
+            # Rota real: loja_bp.route('/pedido/<codigo>') — prefixo /loja.
+            url = f'{base}/loja/pedido/{p.codigo}' if base else None
             r = email_svc.enviar_pedido_a_caminho(p, rastreio_url=url)
             if isinstance(r, dict) and r.get('ok') is False:
                 continue
