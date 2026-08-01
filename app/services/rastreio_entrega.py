@@ -75,8 +75,12 @@ def iniciar_rota(driver, dia=None):
 
 def _enviar_emails_saida(driver, dia):
     """"Seu pedido saiu para entrega" pra cada pedido do SITE na rota do
-    driver. Só pedidos ainda não entregues; sem e-mail = pula em silêncio."""
-    from flask import url_for
+    driver. Só pedidos ainda não entregues; sem e-mail = pula em silêncio.
+
+    O link vem da base LOJA_BASE_URL que o `enviar_pedido_a_caminho` já
+    resolve sozinho (site, não gestão) — nada de `url_for(_external=True)`,
+    que quebra fora de request e apontaria pro host errado."""
+    from flask import current_app
 
     from app.services import email as email_svc
     atribs = [a for a in _rota_do_driver(driver.id, dia)
@@ -86,14 +90,18 @@ def _enviar_emails_saida(driver, dia):
         return 0
     pedidos = PedidoOnline.query.filter(
         PedidoOnline.codigo.in_(codes)).all()
+    base = (current_app.config.get('LOJA_BASE_URL')
+            or current_app.config.get('APP_BASE_URL') or '').rstrip('/')
     enviados = 0
     for p in pedidos:
         if not p.email_cliente:
             continue
         try:
-            url = url_for('loja.pedido_confirmado', codigo=p.codigo,
-                          _external=True)
-            email_svc.enviar_pedido_a_caminho(p, rastreio_url=url)
+            url = (f'{base}/loja/pedido/{p.codigo}/confirmado'
+                   if base else None)
+            r = email_svc.enviar_pedido_a_caminho(p, rastreio_url=url)
+            if isinstance(r, dict) and r.get('ok') is False:
+                continue
             enviados += 1
         except Exception:  # noqa: BLE001 — um e-mail ruim não trava a rota
             logger.exception('rastreio: email de saída falhou (%s)', p.codigo)
