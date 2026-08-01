@@ -176,7 +176,7 @@ def enviar_alerta_desperdicio():
         return
 
     faltam = lojas_sem_desperdicio()
-    itens = itens_sem_sobra()
+    itens = _itens_sem_sobra_safe()
     if not faltam and not itens:
         logger.info('desperdicio_alerta: todas as lojas lancaram, nada a enviar')
         return
