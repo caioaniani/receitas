@@ -924,11 +924,15 @@ def preparar_json():
     # na quarta). Como PedidoOnlineItem nao tem `estado`, usa o estado_padrao
     # da receita (assado/backup); sem estado_padrao cai em 'assado' pra o item
     # sempre aparecer (a producao propria e o lembrete que o dono pediu).
-    from app.models import PedidoOnline, PedidoOnlineItem
-    from app.services.loja_estoque_reserva import item_sob_encomenda
+    from app.models import PedidoOnline, PedidoOnlineItem, Receita
+    from app.services.loja_estoque_reserva import (
+        composicao_escolhida,
+        item_sob_encomenda,
+    )
     itens_online = (PedidoOnlineItem.query.join(PedidoOnline)
                     .options(selectinload(PedidoOnlineItem.receita),
                              selectinload(PedidoOnlineItem.produto),
+                             selectinload(PedidoOnlineItem.componentes),
                              selectinload(PedidoOnlineItem.pedido))
                     .filter(PedidoOnline.data_entrega == alvo,
                             PedidoOnline.status.in_(_STATUS_ONLINE_ATIVO),
@@ -936,6 +940,24 @@ def preparar_json():
                     .all())
     for it in itens_online:
         if not item_sob_encomenda(it):
+            continue
+        # Menu configuravel (fix 31/07/2026): o pre-preparo listava
+        # "1x Menu Degustacao" com estado chutado — o padeiro precisa dos
+        # MINIS que o cliente escolheu, cada um com o SEU estado_padrao.
+        comps = composicao_escolhida(it)
+        if comps:
+            qtd_item = int(it.quantidade or 1)
+            for col, comp_id, nome, qtd_por in comps:
+                q = int(round(qtd_item * float(qtd_por or 0)))
+                if q <= 0:
+                    continue
+                rec = (Receita.query.get(comp_id)
+                       if col == 'receita_id' else None)
+                est = (rec.estado_padrao
+                       if (rec is not None
+                           and rec.estado_padrao in _estados_pre)
+                       else 'assado')
+                agg[('Site · encomenda', nome, est)] += q
             continue
         est = (it.receita.estado_padrao
                if (it.receita and it.receita.estado_padrao in _estados_pre)
