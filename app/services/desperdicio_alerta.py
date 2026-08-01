@@ -127,7 +127,8 @@ def alertar_slack_pendentes(dia=None):
     from app.services import slack
 
     faltam = lojas_sem_desperdicio(dia)
-    if not faltam:
+    itens = itens_sem_sobra(dia)
+    if not faltam and not itens:
         logger.info('desperdicio_alerta(slack): sem pendencias, nada a enviar')
         return {'enviado': False, 'motivo': 'sem_pendencias'}
 
@@ -138,7 +139,7 @@ def alertar_slack_pendentes(dia=None):
         return {'enviado': False, 'motivo': 'sem_canal_configurado',
                 'pendentes': len(faltam)}
 
-    texto = mensagem_pendentes(faltam)
+    texto = mensagem_pendentes(faltam, itens)
     res = slack.post_message(canal, texto)
     if res.get('ok'):
         logger.info('desperdicio_alerta(slack): enviado pro canal %s (%d loja[s])',
