@@ -101,6 +101,18 @@ def itens_sem_sobra(dia=None):
     return out
 
 
+def _itens_sem_sobra_safe(dia=None):
+    """`itens_sem_sobra` best-effort pros SENDERS: a cobrança POR ITEM é
+    adição de 01/08/2026 — se a query nova falhar por qualquer motivo, o
+    alerta POR LOJA (que já funcionava antes) NÃO pode morrer junto. Erro
+    fica visível no log (exception), nunca engolido em silêncio."""
+    try:
+        return itens_sem_sobra(dia)
+    except Exception:  # noqa: BLE001 — alerta pré-existente não pode cair
+        logger.exception('itens_sem_sobra falhou; alerta segue só por loja')
+        return []
+
+
 def mensagem_pendentes(lojas, itens_por_loja=None):
     """Monta o texto do alerta: lojas sem NENHUM lançamento + itens
     cobrados nominalmente (`itens_sem_sobra`). Qualquer um dos dois pode
@@ -127,7 +139,7 @@ def alertar_slack_pendentes(dia=None):
     from app.services import slack
 
     faltam = lojas_sem_desperdicio(dia)
-    itens = itens_sem_sobra(dia)
+    itens = _itens_sem_sobra_safe(dia)
     if not faltam and not itens:
         logger.info('desperdicio_alerta(slack): sem pendencias, nada a enviar')
         return {'enviado': False, 'motivo': 'sem_pendencias'}
