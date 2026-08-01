@@ -20,6 +20,10 @@ from app.utils import hoje
 
 logger = logging.getLogger(__name__)
 
+# Cap de itens NOMINAIS por loja na mensagem (alerta gigante vira ruido que
+# ensina a ignorar — mesmo padrao do vigia de venda sem item).
+_MAX_ITENS_POR_LOJA = 8
+
 
 def lojas_sem_desperdicio(dia=None):
     """Lojas operacionais sem nenhum Desperdicio lancado no dia.
