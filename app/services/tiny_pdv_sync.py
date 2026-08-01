@@ -339,10 +339,27 @@ def faturamento_periodo(data_ini, data_fim):
     }
 
 
-def faturamento_do_dia(dia):
-    """Atalho: (total, n_pedidos) de UM dia. Usado pelo cockpit da home."""
-    d = faturamento_por_dia(dia, dia).get(dia)
-    return (d['total'], d['n']) if d else (0.0, 0)
+def faturamento_do_dia_por_loja(dia):
+    """{loja_id: {'total': float, 'n': int}} de UM dia — o que o cockpit da
+    home usa.
+
+    Agrupa pela loja REGISTRADA em cada venda, nao pela config atual: trocar
+    `tiny_pdv_loja_id` no futuro nao pode reatribuir faturamento passado pra
+    outra loja.
+    """
+    from sqlalchemy import func
+
+    if not dia:
+        return {}
+    rows = (db.session.query(
+        TinyPedidoProcessado.loja_id,
+        func.coalesce(func.sum(TinyPedidoProcessado.valor), 0),
+        func.count(TinyPedidoProcessado.tiny_pedido_id))
+        .filter(TinyPedidoProcessado.data_pedido == dia,
+                TinyPedidoProcessado.cancelado_em.is_(None))
+        .group_by(TinyPedidoProcessado.loja_id).all())
+    return {lid: {'total': float(v or 0), 'n': int(n or 0)}
+            for lid, v, n in rows if lid}
 
 
 def pendentes_de_mapeamento():
