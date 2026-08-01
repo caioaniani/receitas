@@ -1218,10 +1218,12 @@ def tiny_pdv():
             if st.get('erro'):
                 flash(f'Importação não rodou: {st["erro"]}', 'danger')
             else:
+                extra = (f', {st["rebaixados"]} recuperadas após mapeamento'
+                         if st.get('rebaixados') else '')
                 flash(f'{st["pedidos"]} venda(s) lidas — {st["baixados"]} '
-                      f'baixadas, {st["ja_processados"]} já processadas, '
-                      f'{st["mapas_pendentes"]} produto(s) sem vínculo.',
-                      'success')
+                      f'baixadas{extra}, {st["ja_processados"]} já '
+                      f'processadas, {st["mapas_pendentes"]} produto(s) '
+                      'sem vínculo.', 'success')
         return redirect(url_for('pdv.tiny_pdv'))
 
     mapas = (VendaMapa.query.filter_by(canal='tiny')
