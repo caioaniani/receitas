@@ -137,18 +137,26 @@ def _processar_pedido(pedido, loja, user_id=None):
 
     # Cancelado depois de processado -> estorna (proximo ciclo ve o status).
     if reg is not None:
-        if (sit in SITUACOES_CANCELADA and reg.estornado_em is None
-                and (reg.n_itens_baixados or 0) > 0):
-            from app.services.baixa_venda import estornar_venda
-            # (canal, pedido_ref, referencia) — o pedido_ref e a chave das
-            # FRACOES ('tiny:<id>'), a referencia e a dos INTEIROS
-            # ('Tiny #<id>'). Trocar os dois deixa fracao fantasma.
-            estornar_venda(CANAL, f'tiny:{pid}', f'Tiny #{pid}',
-                           loja_id=loja.id, usuario_id=user_id)
-            reg.cancelado_em = reg.cancelado_em or agora()
-            reg.estornado_em = agora()
-            logger.info('tiny_pdv: pedido %s cancelado -> estornado', pid)
-            return 'estornado'
+        if sit in SITUACOES_CANCELADA:
+            # O marcador `cancelado_em` e gravado SEMPRE, mesmo sem nenhuma
+            # baixa: o `valor` deste registro e a fonte do FATURAMENTO do
+            # Tiny (`faturamento_por_dia`), entao uma venda cancelada sem
+            # marcador seguiria contando como dinheiro pra sempre. O ESTORNO,
+            # esse sim, so faz sentido se algo chegou a sair do estoque.
+            if reg.cancelado_em is None:
+                reg.cancelado_em = agora()
+                reg.situacao = (pedido.get('situacao') or '')[:40] or reg.situacao
+            if reg.estornado_em is None and (reg.n_itens_baixados or 0) > 0:
+                from app.services.baixa_venda import estornar_venda
+                # (canal, pedido_ref, referencia) — o pedido_ref e a chave das
+                # FRACOES ('tiny:<id>'), a referencia e a dos INTEIROS
+                # ('Tiny #<id>'). Trocar os dois deixa fracao fantasma.
+                estornar_venda(CANAL, f'tiny:{pid}', f'Tiny #{pid}',
+                               loja_id=loja.id, usuario_id=user_id)
+                reg.estornado_em = agora()
+                logger.info('tiny_pdv: pedido %s cancelado -> estornado', pid)
+                return 'estornado'
+            return 'cancelado'
         # RE-BAIXA de pedido que ficou com ZERO itens baixados (27/07/2026):
         # no primeiro import da Cantina NENHUM dos 77 produtos tinha mapa,
         # entao TODO pedido foi marcado processado com 0 baixas — e mapear
