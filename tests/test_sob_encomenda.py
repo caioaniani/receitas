@@ -405,3 +405,107 @@ def test_produto_normal_continua_podendo_hoje(app, monkeypatch):
     c = app.test_client()
     corpo = c.get(f'/loja/caixa-normal-p{pid}').get_data(as_text=True)
     assert f'min="{hoje().isoformat()}"' in corpo
+
+
+def _menu_pago(dias=2, escolha=((20, 'Mini Croissant Nutella'),
+                                (10, 'Mini Danish de alho poró'))):
+    """Menu configurável SOB ENCOMENDA pago, com composição ESCOLHIDA
+    persistida no pedido (como o checkout grava)."""
+    from app.models import PedidoOnline, PedidoOnlineItem, PedidoOnlineItemComponente, Produto, ProdutoItem
+    minis = []
+    for _q, nome in escolha:
+        minis.append(_receita(nome=nome, sob_encomenda=True,
+                              estado_padrao='assado'))
+    menu = Produto(nome='Menu Degustação dos Minis', categoria='Cestas',
+                   preco_site=300.0, ativo=True, menu_configuravel=True,
+                   menu_total_unidades=30, sob_encomenda=True)
+    db.session.add(menu)
+    db.session.commit()
+    pis = []
+    for m in minis:
+        pi = ProdutoItem(produto_id=menu.id, tipo='receita',
+                         item_nome=m.nome, quantidade=5, receita_id=m.id)
+        db.session.add(pi)
+        pis.append(pi)
+    db.session.commit()
+    p = PedidoOnline(codigo=f'MENU{dias}', nome_cliente='Cliente Menu',
+                     email_cliente='m@x.com', modo_entrega='agendada',
+                     status='pago', data_entrega=hoje() + timedelta(days=dias))
+    db.session.add(p)
+    db.session.flush()
+    it = PedidoOnlineItem(pedido_id=p.id, kind='produto',
+                          produto_id=menu.id, nome=menu.nome,
+                          preco_unitario=300, quantidade=1, subtotal=300)
+    db.session.add(it)
+    db.session.flush()
+    for (q, _nome), m, pi in zip(escolha, minis, pis):
+        db.session.add(PedidoOnlineItemComponente(
+            item_id=it.id, produto_item_id=pi.id, tipo='receita',
+            receita_id=m.id, nome=m.nome, quantidade=q))
+    db.session.commit()
+    return p, menu, minis
+
+
+# ── Fixes 31/07/2026 (caso real: menu de minis vendido pra domingo) ───
+
+def test_padeiro_hoje_mostra_encomenda_de_data_futura(app):
+    """Vendido na sexta pra entrega no domingo: a TV de HOJE tem que
+    mostrar — o item é D+2 justamente porque a produção começa antes; o
+    cronograma já agenda fornadas dias antes da entrega. Antes o card só
+    aparecia no próprio dia (e o padeiro ficou sem saber da venda)."""
+    from app.blueprints.padeiro.routes import _dados_listas
+    with app.app_context():
+        r = _receita(sob_encomenda=True)
+        p = _pedido_pago(r, qtd=3, dias=2)   # entrega DEPOIS de amanhã
+        dados = _dados_listas(hoje(), eh_hoje=True)
+        cards = [c for c in dados['a_separar'] if c['tipo'] == 'online']
+        assert [c['id'] for c in cards] == [p.id]
+        assert cards[0]['data_entrega'] == hoje() + timedelta(days=2)
+
+
+def test_padeiro_hoje_nao_mostra_encomenda_entregue(app):
+    """O card some quando o pedido conclui — senão a fila acumula lixo."""
+    from app.blueprints.padeiro.routes import _dados_listas
+    with app.app_context():
+        r = _receita(sob_encomenda=True)
+        _pedido_pago(r, qtd=3, dias=2, status='entregue')
+        dados = _dados_listas(hoje(), eh_hoje=True)
+        assert not [c for c in dados['a_separar'] if c['tipo'] == 'online']
+
+
+def test_card_do_menu_explode_a_composicao_escolhida(app):
+    """"1x Menu Degustação" não produz nada: o padeiro precisa dos MINIS que
+    o cliente montou (20x Nutella, 10x Danish) — a mesma fonte do bloco 2c
+    do balanço (composição persistida no pedido, nunca a pré-seleção)."""
+    from app.blueprints.padeiro.routes import _dados_listas
+    with app.app_context():
+        p, _menu, _minis = _menu_pago(dias=2)
+        dados = _dados_listas(hoje(), eh_hoje=True)
+        card = [c for c in dados['a_separar'] if c['tipo'] == 'online'][0]
+        linhas = {i['nome'].lstrip('· '): i['qtd'] for i in card['itens']}
+        assert linhas.get('Mini Croissant Nutella') == 20
+        assert linhas.get('Mini Danish de alho poró') == 10
+        # E o total escolhido, não a pré-seleção do cadastro (5+5).
+        assert 20 + 10 == 30
+
+
+def test_pre_preparo_do_menu_lista_os_minis(app):
+    """A véspera precisa listar os minis escolhidos, cada um com o SEU
+    estado — não "1x Menu Degustação, assado"."""
+    from app.models import Usuario
+    with app.app_context():
+        _menu_pago(dias=1)                   # entrega amanhã
+        u = Usuario(nome='Pad', login='padm', papel='padeiro')
+        u.set_senha('x' * 8)
+        db.session.add(u)
+        db.session.commit()
+        c = app.test_client()
+        with c.session_transaction() as s:
+            s['_user_id'] = str(u.id)
+            s['_fresh'] = True
+        resp = c.get(f'/padeiro/preparar.json?data={hoje().isoformat()}')
+        data = resp.get_json()
+        por_nome = {x['nome']: x['qtd'] for x in data['itens']}
+        assert por_nome.get('Mini Croissant Nutella') == 20
+        assert por_nome.get('Mini Danish de alho poró') == 10
+        assert 'Menu Degustação dos Minis' not in por_nome
