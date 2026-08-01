@@ -142,7 +142,10 @@ def status_do_pedido(codigo):
         # irrita; "por volta de 07:40" e chegar 07:35 agrada.
         eta = agora() + timedelta(minutes=minutos)
         eta += timedelta(minutes=(5 - eta.minute % 5) % 5)
-        nome = atrib.driver.nome if atrib.driver else 'nosso motorista'
+        # AtribuicaoEntrega NAO tem relationship com Driver — lookup por id.
+        from app.models import Driver
+        drv = db.session.get(Driver, atrib.driver_id)
+        nome = drv.nome if drv else 'nosso motorista'
         return {'fase': 'a_caminho',
                 'driver': nome,
                 'parada': pendentes_antes + 1,
