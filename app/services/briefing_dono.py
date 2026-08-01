@@ -432,6 +432,7 @@ def vendas_hoje(capturar=False):
         'pdv_total': total,
         'n_pedidos': n_pedidos,
         'por_loja': lojas,
+        'tiny_total': round(tiny_total, 2),
         'site_qtd': int(site_rows[0] or 0),
         'site_total': site_total,
         'total_geral': round(total + site_total, 2),
