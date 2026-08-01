@@ -1220,6 +1220,8 @@ def tiny_pdv():
             else:
                 extra = (f', {st["rebaixados"]} recuperadas após mapeamento'
                          if st.get('rebaixados') else '')
+                extra += (f', {st["cancelados"]} canceladas no Tiny'
+                          if st.get('cancelados') else '')
                 flash(f'{st["pedidos"]} venda(s) lidas — {st["baixados"]} '
                       f'baixadas{extra}, {st["ja_processados"]} já '
                       f'processadas, {st["mapas_pendentes"]} produto(s) '
