@@ -227,8 +227,9 @@ def processar_periodo(data_ini=None, data_fim=None, user_id=None):
     from app.services import tiny
 
     stats = {'pedidos': 0, 'baixados': 0, 'rebaixados': 0,
-             'ja_processados': 0, 'estornados': 0, 'ignorados': 0,
-             'pendentes_detalhe': 0, 'mapas_pendentes': 0, 'erro': None}
+             'ja_processados': 0, 'estornados': 0, 'cancelados': 0,
+             'ignorados': 0, 'pendentes_detalhe': 0, 'mapas_pendentes': 0,
+             'erro': None}
     loja = loja_pdv_tiny()
     if loja is None:
         stats['erro'] = f'AppConfig {_CFG_LOJA} nao configurado'
