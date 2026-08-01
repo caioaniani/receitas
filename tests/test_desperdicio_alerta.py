@@ -56,7 +56,10 @@ def test_alerta_nao_envia_se_todas_lancaram(app, admin_user, catalogo, monkeypat
 
 
 def test_mensagem_pendentes_formato(app):
-    """Helper de texto: lista os nomes em bullets + cabecalho explicativo."""
+    """Helper de texto: lista os nomes em bullets + cabecalho explicativo.
+    Contrato atualizado em 01/08/2026 (cobranca POR ITEM): o titulo virou
+    "Sobras de hoje — pendencias" porque a mensagem passou a cobrir DUAS
+    pendencias (loja sem nada + itens nominais)."""
     from app.extensions import db
     from app.models import Loja
     from app.services.desperdicio_alerta import mensagem_pendentes
@@ -67,7 +70,8 @@ def test_mensagem_pendentes_formato(app):
     msg = mensagem_pendentes([a, b])
     assert 'Nebraska' in msg
     assert 'Anesio' in msg
-    assert 'desperdício' in msg.lower()
+    assert 'sobras' in msg.lower()
+    assert 'não lançaram' in msg.lower()
 
 
 def test_alertar_slack_pendentes_envia_quando_tem_pendencias(app, admin_user, monkeypatch):
