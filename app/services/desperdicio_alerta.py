@@ -188,7 +188,8 @@ def enviar_alerta_desperdicio():
     texto = mensagem_pendentes(faltam, itens)
     res = zapi.enviar_texto(numero, texto)
     if res.get('ok'):
-        logger.info('desperdicio_alerta: enviado pra %s (%d loja[s] faltando)',
-                    numero, len(faltam))
+        logger.info('desperdicio_alerta: enviado pra %s (%d loja[s], '
+                    '%d item[ns] nominais)', numero, len(faltam),
+                    sum(len(its) for _, its in itens))
     else:
         logger.warning('desperdicio_alerta: falha ao enviar: %s', res.get('erro'))
