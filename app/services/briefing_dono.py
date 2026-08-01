@@ -316,6 +316,8 @@ def vendas_ontem(capturar=True):
             VendaSeruDiaLoja.loja_seru, VendaSeruDiaLoja.faturamento_pedidos)
             .filter(VendaSeruDiaLoja.data == comparado_com).all()):
         base_por_loja[vinculo.get(loja_seru, loja_seru)] += float(fat or 0)
+    for nome, d in _vendas_tiny(comparado_com).items():
+        base_por_loja[nome] += d['total']
 
     # Loja que vendeu na semana passada e ZEROU ontem NÃO some — é exatamente
     # a anomalia que o briefing existe pra mostrar (PDV fora o dia inteiro,
@@ -323,6 +325,14 @@ def vendas_ontem(capturar=True):
     fat_por_loja = defaultdict(float)
     for loja_seru, fat in por_company.items():
         fat_por_loja[vinculo.get(loja_seru, loja_seru)] += fat
+    # PDV do Tiny (Cantina) entra na MESMA lista, somando por nome de loja:
+    # se um dia a loja tiver os dois PDVs, viram uma linha só.
+    tiny = _vendas_tiny(ontem)
+    tiny_total = sum(d['total'] for d in tiny.values())
+    for nome, d in tiny.items():
+        fat_por_loja[nome] += d['total']
+        total += d['total']
+        n_pedidos += d['n']
     for nome in base_por_loja:
         fat_por_loja.setdefault(nome, 0.0)
     lojas = []
