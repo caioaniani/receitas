@@ -192,19 +192,28 @@ def _dados_listas(dia, eh_hoje):
     # na fila do padeiro como lembrete de producao — pagos (nao cancelado/
     # entregue/aguardando_pagamento), com data de entrega, e que contenham ao
     # menos um item sob encomenda. Divulgacao fica de fora (nao produz pro
-    # cliente). Como B2B: hoje inclui os atrasados (data <= hj).
+    # cliente).
+    #
+    # Na visao de HOJE entram TAMBEM as encomendas de data FUTURA (fix
+    # 31/07/2026, caso real: menu de minis vendido na sexta pra entrega no
+    # domingo e a TV muda ate domingo). Diferente dos pedidos de loja/B2B, o
+    # sob encomenda existe JUSTAMENTE pra ser produzido com antecedencia
+    # (D+2) — o cronograma ja agenda fornadas dias antes da entrega, entao o
+    # lembrete visivel tem que aparecer do pagamento ate a entrega, nao so
+    # no dia. O card mostra a data de entrega; o pedido some quando vira
+    # 'entregue'/'cancelado'.
     from app.models import PedidoOnline, PedidoOnlineItem
     from app.services.loja_estoque_reserva import item_sob_encomenda
     qo = PedidoOnline.query.options(
         selectinload(PedidoOnline.itens).selectinload(PedidoOnlineItem.receita),
         selectinload(PedidoOnline.itens).selectinload(PedidoOnlineItem.produto),
+        selectinload(PedidoOnline.itens)
+        .selectinload(PedidoOnlineItem.componentes),
     ).filter(
         PedidoOnline.status.in_(_STATUS_ONLINE_ATIVO),
         PedidoOnline.divulgacao.is_(False),
         PedidoOnline.data_entrega.isnot(None))
-    if eh_hoje:
-        qo = qo.filter(PedidoOnline.data_entrega <= hj)
-    else:
+    if not eh_hoje:
         qo = qo.filter(PedidoOnline.data_entrega == dia)
     onlines = [p for p in qo.order_by(PedidoOnline.data_entrega).all()
                if any(item_sob_encomenda(it) for it in p.itens)]
