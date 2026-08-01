@@ -366,3 +366,148 @@ def test_sugestao_nao_toca_no_banco(app):
         tiny_pdv_sync.sugestoes_pendentes()
         m = VendaMapa.query.filter_by(canal='tiny').first()
         assert m.receita_id is None and m.produto_id is None
+
+
+# ── aceite em lote das sugestoes de 100% ────────────────────────────
+
+def test_aceitar_lote_aplica_so_os_100(app):
+    """'SOURDOUGH 7 GRÃOS CANTINA' (100%) entra; 'SOURDOUGH DE GRÃOS SÓ
+    ESQUENTADO' (92%) fica pra revisao manual."""
+    with app.app_context():
+        r = _receita('Sourdough 7 Grãos')
+        db.session.add_all([
+            VendaMapa(canal='tiny', nome_externo='SOURDOUGH 7 GRÃOS CANTINA'),
+            VendaMapa(canal='tiny',
+                      nome_externo='SOURDOUGH DE GRÃOS SÓ ESQUENTADO CANTINA'),
+        ])
+        db.session.commit()
+        aplicados = tiny_pdv_sync.aceitar_sugestoes_lote(user_id=1)
+        assert len(aplicados) == 1
+        assert aplicados[0][0] == 'SOURDOUGH 7 GRÃOS CANTINA'
+        m1 = VendaMapa.query.filter_by(
+            canal='tiny', nome_externo='SOURDOUGH 7 GRÃOS CANTINA').first()
+        assert m1.receita_id == r.id
+        assert m1.confirmado_em is not None
+        m2 = VendaMapa.query.filter_by(
+            canal='tiny',
+            nome_externo='SOURDOUGH DE GRÃOS SÓ ESQUENTADO CANTINA').first()
+        assert m2.receita_id is None       # 92% NAO entra no lote
+
+
+def test_aceitar_lote_usa_fator_do_nome(app):
+    """Match perfeito com 'COM 5 UN' no nome grava fator 5."""
+    with app.app_context():
+        r = _receita('Cone')
+        db.session.add(VendaMapa(canal='tiny', nome_externo='CONE COM 5 UN'))
+        db.session.commit()
+        aplicados = tiny_pdv_sync.aceitar_sugestoes_lote()
+        assert len(aplicados) == 1
+        m = VendaMapa.query.filter_by(canal='tiny',
+                                      nome_externo='CONE COM 5 UN').first()
+        assert m.receita_id == r.id
+        assert m.fator_quantidade == 5.0
+
+
+def test_aceitar_lote_nao_sobrescreve_mapeado(app):
+    """So pendentes entram — vinculo existente do dono nunca e tocado."""
+    with app.app_context():
+        r1 = _receita('Sourdough 7 Grãos')
+        r2 = _receita('Outra Receita')
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='SOURDOUGH 7 GRÃOS CANTINA',
+                                 receita_id=r2.id))
+        db.session.commit()
+        aplicados = tiny_pdv_sync.aceitar_sugestoes_lote()
+        assert aplicados == []
+        m = VendaMapa.query.filter_by(
+            canal='tiny', nome_externo='SOURDOUGH 7 GRÃOS CANTINA').first()
+        assert m.receita_id == r2.id       # ficou como o dono deixou
+        assert r1.id != r2.id
+
+
+# ── re-baixa: importou ANTES de mapear (o caso real da Cantina) ─────
+
+def test_importar_mapear_reimportar_recupera_a_baixa(app, tiny_mock):
+    """O fluxo que aconteceu de verdade: 1º import sem NENHUM mapa (pedido
+    marcado com 0 baixas) → dono mapeia → 2º import RE-baixa. Sem isso as
+    vendas do 1º fim de semana nunca chegariam ao estoque."""
+    with app.app_context():
+        lj = _cantina()
+        r = _receita()
+        el = _estoque(lj, r, 10)
+        tiny_mock['pedidos'] = [_pedido()]
+        tiny_mock['itens'] = {'909754567': _itens(qtd=2.0)}
+
+        st1 = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st1['baixados'] == 1        # processado, mas item pulado
+        db.session.refresh(el)
+        assert el.quantidade == 10         # nada baixou (sem mapa)
+
+        # dono mapeia (aqui: em lote, tanto faz o caminho)
+        m = VendaMapa.query.filter_by(
+            canal='tiny', nome_externo='CROISSANT FRANCÊS CANTINA').first()
+        m.receita_id = r.id
+        db.session.commit()
+
+        st2 = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st2['rebaixados'] == 1
+        db.session.refresh(el)
+        assert el.quantidade == 8          # a venda perdida entrou
+        reg = db.session.get(TinyPedidoProcessado, '909754567')
+        assert reg.n_itens_baixados > 0
+
+        # 3º import: nada muda (idempotente de novo)
+        st3 = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st3['ja_processados'] == 1
+        db.session.refresh(el)
+        assert el.quantidade == 8
+
+
+def test_pedido_todo_ignorado_nao_fica_em_loop(app, tiny_mock):
+    """Item marcado 'ignorar' de proposito (cafe): o pedido com 0 baixas NAO
+    re-busca detalhe a cada ciclo pra sempre."""
+    with app.app_context():
+        lj = _cantina()
+        tiny_mock['pedidos'] = [_pedido()]
+        tiny_mock['itens'] = {'909754567': _itens(qtd=1.0)}
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        m = VendaMapa.query.filter_by(
+            canal='tiny', nome_externo='CROISSANT FRANCÊS CANTINA').first()
+        m.ignorar = True
+        db.session.commit()
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['ja_processados'] == 1
+        assert st['rebaixados'] == 0
+
+
+def test_pedido_parcial_nunca_rebaixa(app, tiny_mock):
+    """Pedido que JA baixou algum item nao re-processa (nao ha idempotencia
+    por item — re-baixar duplicaria o que ja saiu)."""
+    with app.app_context():
+        lj = _cantina()
+        r = _receita()
+        el = _estoque(lj, r, 10)
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='CROISSANT FRANCÊS CANTINA',
+                                 receita_id=r.id, fator_quantidade=1.0))
+        db.session.commit()
+        tiny_mock['pedidos'] = [_pedido()]
+        # croissant mapeado + cafe sem mapa -> baixa parcial
+        tiny_mock['itens'] = {'909754567': (
+            _itens(qtd=2.0) + [{'tiny_produto_id': '703178642', 'codigo': '9',
+                                'nome': 'CAFÉ EXPRESSO', 'quantidade': 1.0,
+                                'valor_unitario': '8.00'}])}
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        db.session.refresh(el)
+        assert el.quantidade == 8
+
+        # mapeia o cafe depois — mesmo assim NAO re-processa (parcial)
+        cafe = VendaMapa.query.filter_by(canal='tiny',
+                                         nome_externo='CAFÉ EXPRESSO').first()
+        cafe.receita_id = r.id
+        db.session.commit()
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['ja_processados'] == 1
+        assert st['rebaixados'] == 0
+        db.session.refresh(el)
+        assert el.quantidade == 8          # croissant NAO baixou de novo
