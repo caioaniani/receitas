@@ -96,21 +96,30 @@
                 <input type="text" class="form-control form-control-sm ta-input"
                        placeholder="digite pra buscar receita ou cesta..."
                        autocomplete="off"
-                       value="{{ rotulo.get(atual, 'Ignorar de vez' if m.ignorar else '') }}"
-                       {% if sug and pendente %}data-sugerido="{{ sug.nome }}"{% endif %}>
+                       value="{% if sug and pendente and sug.preenche %}{{ sug.nome }}{% else %}{{ rotulo.get(atual, 'Ignorar de vez' if m.ignorar else '') }}{% endif %}">
                 <input type="hidden" name="alvo" class="ta-valor"
-                       value="{% if sug and pendente %}{{ sug.kind[0] }}:{{ sug.id }}{% else %}{{ atual }}{% endif %}">
+                       value="{% if sug and pendente and sug.preenche %}{{ sug.kind[0] }}:{{ sug.id }}{% else %}{{ atual }}{% endif %}">
                 <div class="ta-lista list-group position-absolute w-100 shadow"
                      style="z-index:20; display:none; max-height:240px; overflow:auto;"></div>
               </div>
               {% if sug and pendente %}
-              <span class="badge bg-info text-dark mt-1" style="font-size:10px;">
-                sugestão · {{ (sug.score * 100)|round|int }}%
-              </span>
+                {% if sug.preenche %}
+                <span class="badge bg-info text-dark mt-1" style="font-size:10px;">
+                  sugestão preenchida · {{ (sug.score * 100)|round|int }}% — confira
+                </span>
+                {% else %}
+                {# Confianca baixa: NAO preenche. Vira botao — um clique
+                   aceita, mas exige o gesto (evita Salvar em massa errado). #}
+                <button type="button" class="btn btn-link p-0 mt-1 sug-fraca"
+                        style="font-size:11px;" data-valor="{{ sug.kind[0] }}:{{ sug.id }}"
+                        data-nome="{{ sug.nome }}">
+                  talvez: {{ sug.nome }} ({{ (sug.score * 100)|round|int }}%) — clique pra usar
+                </button>
+                {% endif %}
               {% endif %}
             </td>
             <td><input type="text" name="fator"
-                       value="{{ sug.fator if (sug and pendente and sug.fator != 1.0) else (m.fator_quantidade or 1) }}"
+                       value="{{ sug.fator if (sug and pendente and sug.preenche and sug.fator != 1.0) else (m.fator_quantidade or 1) }}"
                        class="form-control form-control-sm text-end"></td>
             <td><button class="btn btn-sm btn-outline-primary w-100">Salvar</button></td>
             </form>
@@ -157,7 +166,7 @@
   CAT = [{v: 'ignorar', n: 'Ignorar de vez'}].concat(CAT);
 
   function norm(s) {
-    return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
   }
   // Pre-computa o nome normalizado uma vez (77 linhas x 500 itens por tecla
@@ -212,6 +221,16 @@
     });
   }
   document.querySelectorAll('.ta-wrap').forEach(montar);
+
+  // Sugestao de confianca BAIXA: so preenche no clique explicito.
+  document.querySelectorAll('.sug-fraca').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var td = b.closest('td');
+      td.querySelector('.ta-input').value = b.dataset.nome;
+      td.querySelector('.ta-valor').value = b.dataset.valor;
+      td.querySelector('.ta-input').classList.remove('is-invalid');
+    });
+  });
 
   // ── filtro da tabela (por nome do produto do Tiny) ──
   var filtro = document.getElementById('filtro-produtos');

@@ -1206,6 +1206,14 @@ def tiny_pdv():
 
     mapas = (VendaMapa.query.filter_by(canal='tiny')
              .order_by(VendaMapa.nome_externo).all())
+    receitas = Receita.ativas().order_by(Receita.nome).all()
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
+    # Catalogo UNICO embutido como JSON: com ~77 produtos x centenas de
+    # opcoes, um <select> por linha geraria dezenas de milhares de <option>
+    # (pagina impraticavel). O typeahead filtra este array no cliente.
+    catalogo = ([{'v': f'r:{r.id}', 'n': r.nome} for r in receitas]
+                + [{'v': f'p:{p.id}', 'n': p.nome} for p in produtos])
+    rotulo = {c['v']: c['n'] for c in catalogo}
     return render_template(
         'pdv/tiny.html',
         loja_atual=tiny_pdv_sync.loja_pdv_tiny(),
@@ -1213,8 +1221,7 @@ def tiny_pdv():
         mapas=mapas,
         pendentes=[m for m in mapas
                    if not (m.receita_id or m.produto_id) and not m.ignorar],
-        receitas=Receita.ativas().order_by(Receita.nome).all(),
-        produtos=(Produto.query.filter_by(ativo=True)
-                  .order_by(Produto.nome).all()),
+        catalogo=catalogo, rotulo=rotulo,
+        sugestoes=tiny_pdv_sync.sugestoes_pendentes(),
         hoje_iso=hoje_brt().isoformat(),
     )

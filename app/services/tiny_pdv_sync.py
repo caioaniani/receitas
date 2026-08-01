@@ -235,3 +235,114 @@ def pendentes_de_mapeamento():
                     VendaMapa.produto_id.is_(None),
                     VendaMapa.materia_prima_id.is_(None))
             .order_by(VendaMapa.nome_externo).all())
+
+
+# ── Sugestao automatica de mapeamento (27/07/2026) ──────────────────
+#
+# Sao ~77 produtos no Tiny e mapear na mao e trabalho de horas. O nome do
+# Tiny descreve o PREPARO ("SOURDOUGH TRADICIONAL NA CHAPA COM MANTEIGA
+# CANTINA") e o catalogo ja tem o item equivalente (receita ou cesta), entao
+# um matcher por tokens acerta a maioria.
+#
+# A sugestao NUNCA se aplica sozinha: ela so PRE-SELECIONA na tela, e quem
+# confirma e o dono. Mapeamento errado = baixa de estoque errada em silencio
+# — e a licao do "cafe com fator 0.2" (CLAUDE.md) e que so o dono sabe a
+# regra de negocio local.
+
+# Piso pra SUGERIR (aparece na tela como dica).
+PISO_SUGESTAO = 0.5
+# Piso pra PRE-PREENCHER o campo. Mais alto de proposito: validado contra os
+# nomes reais em 27/07/2026, a faixa 0.50-0.74 produz erro CONVINCENTE —
+# "CROISSANT DE AMENDOAS" casava "Creme de Amendoas" e "CROISSANT FRANCES"
+# casava "Croissant Almond" com 0.50. Pre-preencher isso e convidar o dono a
+# clicar Salvar num vinculo errado = baixa de estoque errada em silencio.
+# Abaixo do piso a sugestao aparece como DICA e o campo fica VAZIO.
+PISO_PREENCHE = 0.75
+
+_RUIDO = (
+    'cantina', 'un', 'ml', 'g', 'kg', 'de', 'do', 'da', 'com', 'no', 'na',
+    'e', 'a', 'o', 'ao', 'em', 'so', 'sem', 'para', 'pra',
+)
+
+
+def _tokens(nome):
+    """Tokens normalizados (sem acento, sem pontuacao, sem ruido)."""
+    import re
+    import unicodedata
+    s = unicodedata.normalize('NFKD', (nome or '')).encode(
+        'ascii', 'ignore').decode().lower()
+    s = re.sub(r'[^a-z0-9]+', ' ', s)
+    return [t for t in s.split() if t and t not in _RUIDO and not t.isdigit()]
+
+
+def fator_do_nome(nome):
+    """Le o multiplicador embutido no nome: 'CONE DE PÃO DE QUEIJO COM 5 UN'
+    -> 5.0. Sem padrao reconhecido -> 1.0. So conta 'COM N UN(IDADES)' — um
+    '300 ml' ou '500 g' e gramagem, nao quantidade."""
+    import re
+    m = re.search(r'\bcom\s+(\d{1,3})\s*un', (nome or ''), re.IGNORECASE)
+    if m:
+        try:
+            n = float(m.group(1))
+            return n if 0 < n <= 100 else 1.0
+        except ValueError:
+            return 1.0
+    return 1.0
+
+
+def _score(tokens_tiny, tokens_alvo):
+    """0..1. Premia o alvo cujos tokens estao TODOS no nome do Tiny (o nome
+    do Tiny e mais longo, por descrever o preparo), e penaliza alvo curto
+    demais que casaria com qualquer coisa."""
+    if not tokens_tiny or not tokens_alvo:
+        return 0.0
+    st, sa = set(tokens_tiny), set(tokens_alvo)
+    comuns = st & sa
+    if not comuns:
+        return 0.0
+    # cobertura do ALVO (quanto do nome do catalogo aparece no Tiny)
+    cob_alvo = len(comuns) / len(sa)
+    # cobertura do TINY (evita 'croissant' casar tudo que tem croissant)
+    cob_tiny = len(comuns) / len(st)
+    return round(0.75 * cob_alvo + 0.25 * cob_tiny, 4)
+
+
+def sugerir_alvo(nome_tiny, catalogo=None):
+    """(kind, id, nome_alvo, score) do melhor candidato pro nome do Tiny, ou
+    None. `catalogo` = [(kind, id, nome)] — passe pronto pra nao requerer o
+    banco em loop."""
+    from app.models import Produto, Receita
+    if catalogo is None:
+        catalogo = ([('receita', r.id, r.nome)
+                     for r in Receita.ativas().all()]
+                    + [('produto', p.id, p.nome)
+                       for p in Produto.query.filter_by(ativo=True).all()])
+    tt = _tokens(nome_tiny)
+    melhor = None
+    for kind, iid, nome in catalogo:
+        s = _score(tt, _tokens(nome))
+        if s > 0 and (melhor is None or s > melhor[3]):
+            melhor = (kind, iid, nome, s)
+    # Piso: abaixo disso a sugestao atrapalha mais do que ajuda.
+    if melhor and melhor[3] >= PISO_SUGESTAO:
+        return melhor
+    return None
+
+
+def sugestoes_pendentes():
+    """{venda_mapa_id: {'kind','id','nome','score','fator'}} pros produtos do
+    Tiny ainda sem vinculo. So sugere — nao grava nada."""
+    from app.models import Produto, Receita
+    catalogo = ([('receita', r.id, r.nome) for r in Receita.ativas().all()]
+                + [('produto', p.id, p.nome)
+                   for p in Produto.query.filter_by(ativo=True).all()])
+    out = {}
+    for m in pendentes_de_mapeamento():
+        sug = sugerir_alvo(m.nome_externo, catalogo)
+        if sug:
+            kind, iid, nome, score = sug
+            out[m.id] = {'kind': kind, 'id': iid, 'nome': nome,
+                         'score': score,
+                         'preenche': score >= PISO_PREENCHE,
+                         'fator': fator_do_nome(m.nome_externo)}
+    return out

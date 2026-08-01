@@ -301,3 +301,68 @@ def test_tipos_tiny_contam_como_demanda(app):
     assert 'venda_tiny_sem_estoque' in VENDA_TIPOS_DEMANDA_LOJA
     assert 'venda_tiny' in VENDA_TIPOS_LOJA
     assert 'venda_tiny_estorno' in VENDA_TIPOS_DEMANDA_COM_ESTORNO
+
+
+# ── sugestao automatica de mapeamento (77 produtos) ─────────────────
+
+def test_fator_do_nome_le_o_multiplicador():
+    """'CONE DE PÃO DE QUEIJO COM 5 UN' = 5 unidades por venda."""
+    f = tiny_pdv_sync.fator_do_nome
+    assert f('CONE DE PÃO DE QUEIJO COM 5 UN  CANTINA') == 5.0
+    assert f('CONE DE PÃO DE QUEIJO COM 10 UN CANTINA') == 10.0
+    assert f('CROISSANT FRANCÊS CANTINA') == 1.0
+    # gramagem/volume NAO e quantidade
+    assert f('SUCO DE LARANJA NATURAL 300 ml  CANTINA') == 1.0
+    assert f('BRIOCHE 500 g CANTINA') == 1.0
+
+
+def test_sugestao_acerta_o_obvio(app):
+    with app.app_context():
+        r = _receita('Sourdough 7 Grãos')
+        cat = [('receita', r.id, r.nome)]
+        sug = tiny_pdv_sync.sugerir_alvo('SOURDOUGH 7 GRÃOS CANTINA', cat)
+        assert sug is not None
+        kind, iid, nome, score = sug
+        assert (kind, iid) == ('receita', r.id)
+        assert score >= tiny_pdv_sync.PISO_PREENCHE   # confianca alta
+
+
+def test_sugestao_fraca_NAO_preenche(app):
+    """Guarda do achado de 27/07: 'CROISSANT DE AMÊNDOAS' casava 'Creme de
+    Amêndoas' com 0.50. Sugestao dessa faixa aparece como dica, mas NAO pode
+    vir pre-preenchida — o dono clicaria Salvar num vinculo errado."""
+    with app.app_context():
+        r = _receita('Creme de Amêndoas')
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='CROISSANT DE AMÊNDOAS CANTINA'))
+        db.session.commit()
+        sugs = tiny_pdv_sync.sugestoes_pendentes()
+        alvo = [s for s in sugs.values() if s['id'] == r.id]
+        if alvo:                       # so vale se o matcher sugeriu mesmo
+            assert alvo[0]['score'] < tiny_pdv_sync.PISO_PREENCHE
+            assert alvo[0]['preenche'] is False
+
+
+def test_sugestao_nao_inventa_para_bebida(app):
+    """Café/suco não têm receita equivalente — sugerir qualquer coisa aqui
+    seria pior que não sugerir."""
+    with app.app_context():
+        _receita('Croissant Tradicional')
+        _receita('Sourdough Tradicional')
+        cat = [('receita', 1, 'Croissant Tradicional'),
+               ('receita', 2, 'Sourdough Tradicional')]
+        assert tiny_pdv_sync.sugerir_alvo('CAFÉ EXPRESSO', cat) is None
+        assert tiny_pdv_sync.sugerir_alvo('CAPPUCCINO', cat) is None
+        assert tiny_pdv_sync.sugerir_alvo('TODDY QUENTE MÉDIO', cat) is None
+
+
+def test_sugestao_nao_toca_no_banco(app):
+    """`sugestoes_pendentes` so SUGERE — nao pode gravar vinculo nenhum."""
+    with app.app_context():
+        _receita('Sourdough 7 Grãos')
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='SOURDOUGH 7 GRÃOS CANTINA'))
+        db.session.commit()
+        tiny_pdv_sync.sugestoes_pendentes()
+        m = VendaMapa.query.filter_by(canal='tiny').first()
+        assert m.receita_id is None and m.produto_id is None
