@@ -73,16 +73,41 @@ def _card_online(p):
     pedido saem da prateleira e nao sao produzidos aqui. E card INFORMATIVO
     (sem botao SEPARAR): a entrega do site roda pelo /entregas/painel; a
     fila do padeiro so garante a producao. A producao real entra pelo
-    cronograma (balanco firme), este card e o lembrete visivel."""
-    from app.services.loja_estoque_reserva import item_sob_encomenda
+    cronograma (balanco firme), este card e o lembrete visivel.
+
+    MENU CONFIGURAVEL explode na COMPOSICAO ESCOLHIDA (fix 31/07/2026, caso
+    real: venda do Menu Degustacao pra domingo): o card mostrava so
+    "1x Menu Degustacao dos Minis" — o padeiro nao tem como produzir a
+    partir disso, e a escolha do cliente (20x Nutella, 10x Danish...) so
+    existia no painel de entregas. Mesma fonte do bloco 2c do balanco
+    (`composicao_escolhida`); cesta comum (sem composicao no pedido) segue
+    mostrando o nome do cadastro."""
+    from app.services.loja_estoque_reserva import (
+        composicao_escolhida,
+        item_sob_encomenda,
+    )
+    itens = []
+    for it in p.itens:
+        if not item_sob_encomenda(it):
+            continue
+        comps = composicao_escolhida(it)
+        if comps:
+            qtd_item = int(it.quantidade or 1)
+            itens.append({'id': it.id, 'qtd': qtd_item, 'nome': it.nome,
+                          'obs': 'montado pelo cliente:'})
+            itens.extend(
+                {'id': f'{it.id}c{i}', 'qtd': qtd_item * int(qtd_por),
+                 'nome': '· ' + nome, 'obs': None}
+                for i, (_col, _cid, nome, qtd_por) in enumerate(comps))
+        else:
+            itens.append({'id': it.id, 'qtd': it.quantidade,
+                          'nome': it.nome, 'obs': None})
     return {'tipo': 'online', 'id': p.id,
             'titulo': 'Site · ' + (p.nome_cliente or 'Pedido'),
             'codigo': p.codigo,
             'modo': p.modo_entrega,
             'data_entrega': p.data_entrega,
-            'itens': [{'id': it.id, 'qtd': it.quantidade,
-                       'nome': it.nome, 'obs': None}
-                      for it in p.itens if item_sob_encomenda(it)]}
+            'itens': itens}
 
 
 def _card_retirada(r):
