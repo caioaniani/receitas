@@ -63,7 +63,22 @@
       → fator <strong>5</strong>; um café que leva 1/5 de cookie → <strong>0,2</strong>.
       Onde aparece <span class="badge bg-info text-dark">sugestão</span>, eu já
       preenchi um palpite pelo nome — <strong>confira antes de salvar</strong>.
+      Atalho: digite, <kbd>Enter</kbd> escolhe o primeiro da lista,
+      <kbd>Enter</kbd> de novo salva a linha <strong>sem recarregar a
+      página</strong> (e o cursor pula pro próximo pendente).
     </p>
+    {% if n_lote %}
+    <form method="POST" class="mb-2"
+          onsubmit="return confirm('Vincular de uma vez os {{ n_lote }} produtos cujo nome bate 100% com o catálogo?\n\nSó os matches PERFEITOS entram — os demais continuam pra revisão manual. Depois, rode a importação de novo pra baixar as vendas que ficaram pra trás.')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="acao" value="aceitar_lote">
+      <button class="btn btn-sm btn-success">
+        ✓ Aceitar as {{ n_lote }} sugestões de 100% de uma vez
+      </button>
+      <span class="text-muted small ms-1">só os matches perfeitos; o resto
+        fica pra revisão</span>
+    </form>
+    {% endif %}
     {% if not mapas %}
     <p class="text-muted mb-0">Nenhum produto visto ainda — rode uma importação abaixo.</p>
     {% else %}
