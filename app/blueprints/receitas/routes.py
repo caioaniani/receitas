@@ -1073,6 +1073,7 @@ def duplicar(id):
         # Sob encomenda D+2: a cópia de um item sob encomenda também nasce
         # sob encomenda (21/07/2026).
         sob_encomenda=original.sob_encomenda,
+        cobra_sobra_diaria=original.cobra_sobra_diaria,
     )
     db.session.add(copia)
     db.session.flush()
