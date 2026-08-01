@@ -237,7 +237,16 @@ def pedido_status(codigo):
     p = PedidoOnline.query.filter_by(codigo=codigo).first()
     if not p:
         return jsonify(status='nao_encontrado'), 404
-    return jsonify(status=p.status, codigo=p.codigo)
+    out = {'status': p.status, 'codigo': p.codigo}
+    # Rastreio por PROGRESSO (01/08/2026, Dia dos Pais): quando o pedido é
+    # de HOJE e a rota do motorista já saiu, a página de acompanhar mostra
+    # "você é a Nª parada · previsão ~HH:MM". Mesma autorização de sempre:
+    # quem tem o código vê o pedido (allowlist do gate, routes.py:394).
+    if p.data_entrega and p.status in ('pago', 'em_preparo', 'a_caminho',
+                                       'entregue'):
+        from app.services import rastreio_entrega
+        out['rastreio'] = rastreio_entrega.status_do_pedido(p.codigo)
+    return jsonify(**out)
 
 
 _PAGARME_HIT_PATH = '/tmp/pagarme_webhook_ultimo.json'
