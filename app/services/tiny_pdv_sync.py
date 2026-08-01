@@ -276,6 +276,75 @@ def processar_periodo(data_ini=None, data_fim=None, user_id=None):
     return stats
 
 
+# ── Faturamento do PDV do Tiny (01/08/2026) ─────────────────────────
+#
+# Pergunta do dono: "e como eu sei o faturamento da cantina?". Ate aqui a
+# resposta era "nao sabe": a venda do Tiny baixava estoque e alimentava a
+# previsao, mas NENHUMA tela mostrava o dinheiro — o painel 💰 da home e o
+# /pdv/ leem SO o snapshot do Seru (`VendaSeruDiaLoja`), e a Cantina nao
+# vende pelo Seru.
+#
+# NAO existe snapshot proprio do Tiny (nem precisa): o registro de
+# idempotencia `TinyPedidoProcessado` ja guarda `valor` + `data_pedido` de
+# cada venda importada. Estas funcoes so LEEM isso.
+
+def faturamento_por_dia(data_ini, data_fim):
+    """Faturamento do PDV do Tiny por DIA: {date: {'total': float, 'n': int}}.
+
+    Conta o que o sync JA IMPORTOU e nao foi cancelado (`cardado_em` NULL).
+    Venda cancelada no Tiny sai da conta no ciclo seguinte (o marcador e
+    gravado mesmo quando nao houve baixa de estoque).
+
+    LIMITE que o chamador precisa conhecer: nao ha historico retroativo. O
+    cron varre ontem+hoje a cada 15 min, entao dia ANTERIOR ao inicio da
+    integracao (ou nao importado a mao na tela) aparece como R$ 0 — que e
+    "nao importado", nao "nao vendeu".
+    """
+    from sqlalchemy import func
+
+    if not data_ini or not data_fim:
+        return {}
+    rows = (db.session.query(
+        TinyPedidoProcessado.data_pedido,
+        func.coalesce(func.sum(TinyPedidoProcessado.valor), 0),
+        func.count(TinyPedidoProcessado.tiny_pedido_id))
+        .filter(TinyPedidoProcessado.data_pedido >= data_ini,
+                TinyPedidoProcessado.data_pedido <= data_fim,
+                TinyPedidoProcessado.cancelado_em.is_(None))
+        .group_by(TinyPedidoProcessado.data_pedido).all())
+    return {d: {'total': float(v or 0), 'n': int(n or 0)} for d, v, n in rows}
+
+
+def faturamento_periodo(data_ini, data_fim):
+    """Total do PDV do Tiny no periodo + o detalhe por dia.
+
+    `loja` = nome da Loja configurada (a Cantina) ou None. `sem_data` conta
+    vendas importadas cuja `data_pedido` nao pode ser lida da API — elas nao
+    entram em NENHUM dia e a tela avisa em vez de sumir com o dinheiro.
+    """
+    from sqlalchemy import func
+
+    por_dia = faturamento_por_dia(data_ini, data_fim)
+    loja = loja_pdv_tiny()
+    sem_data = (db.session.query(func.count(TinyPedidoProcessado.tiny_pedido_id))
+                .filter(TinyPedidoProcessado.data_pedido.is_(None),
+                        TinyPedidoProcessado.cancelado_em.is_(None)).scalar())
+    return {
+        'total': round(sum(d['total'] for d in por_dia.values()), 2),
+        'n_pedidos': sum(d['n'] for d in por_dia.values()),
+        'por_dia': por_dia,
+        'loja': loja.nome if loja else None,
+        'loja_id': loja.id if loja else None,
+        'sem_data': int(sem_data or 0),
+    }
+
+
+def faturamento_do_dia(dia):
+    """Atalho: (total, n_pedidos) de UM dia. Usado pelo cockpit da home."""
+    d = faturamento_por_dia(dia, dia).get(dia)
+    return (d['total'], d['n']) if d else (0.0, 0)
+
+
 def pendentes_de_mapeamento():
     """Produtos do PDV do Tiny ainda sem receita/produto vinculado — o que a
     tela de mapeamento mostra pro dono resolver."""
