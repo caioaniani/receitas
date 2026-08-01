@@ -196,8 +196,24 @@
     var input = wrap.querySelector('.ta-input');
     var hidden = wrap.querySelector('.ta-valor');
     var lista = wrap.querySelector('.ta-lista');
+    var ativo = -1;                       // item destacado pelas setas
 
-    function fechar() { lista.style.display = 'none'; }
+    function fechar() { lista.style.display = 'none'; ativo = -1; }
+
+    function pintar() {
+      var itens = lista.children;
+      for (var i = 0; i < itens.length; i++) {
+        itens[i].classList.toggle('active', i === ativo);
+      }
+      if (ativo >= 0 && itens[ativo]) { itens[ativo].scrollIntoView({block: 'nearest'}); }
+    }
+
+    function escolher(c) {
+      input.value = c.n;
+      hidden.value = c.v;
+      input.classList.remove('is-invalid');
+      fechar();
+    }
 
     function abrir(termo) {
       var t = norm(termo);
@@ -205,18 +221,17 @@
         return !t || c._n.indexOf(t) !== -1;   // "contém", não só começo
       }).slice(0, 15);
       lista.innerHTML = '';
+      ativo = -1;
       if (!achados.length) { fechar(); return; }
       achados.forEach(function (c) {
         var b = document.createElement('button');
         b.type = 'button';
         b.className = 'list-group-item list-group-item-action py-1 small';
         b.textContent = c.n;
+        b._cat = c;
         b.addEventListener('mousedown', function (e) {
           e.preventDefault();               // antes do blur
-          input.value = c.n;
-          hidden.value = c.v;
-          input.classList.remove('is-invalid');
-          fechar();
+          escolher(c);
         });
         lista.appendChild(b);
       });
@@ -231,6 +246,26 @@
       abrir(input.value);
     });
     input.addEventListener('focus', function () { abrir(input.value); });
+    input.addEventListener('keydown', function (e) {
+      var aberta = lista.style.display === 'block' && lista.children.length;
+      if (e.key === 'ArrowDown' && aberta) {
+        e.preventDefault(); ativo = Math.min(ativo + 1, lista.children.length - 1); pintar();
+      } else if (e.key === 'ArrowUp' && aberta) {
+        e.preventDefault(); ativo = Math.max(ativo - 1, 0); pintar();
+      } else if (e.key === 'Escape' && aberta) {
+        fechar();
+      } else if (e.key === 'Enter') {
+        // 1º Enter: escolhe o destacado (ou o primeiro) da lista aberta.
+        // 2º Enter (lista fechada, vínculo escolhido): deixa o form salvar.
+        if (aberta) {
+          e.preventDefault();
+          escolher(lista.children[ativo >= 0 ? ativo : 0]._cat);
+        } else if (!hidden.value) {
+          e.preventDefault();             // sem vínculo não salva
+          input.classList.add('is-invalid');
+        }
+      }
+    });
     input.addEventListener('blur', function () {
       setTimeout(function () {
         fechar();
@@ -240,6 +275,67 @@
     });
   }
   document.querySelectorAll('.ta-wrap').forEach(montar);
+
+  // ── Salvar a linha SEM recarregar (77 linhas: reload perdia scroll e
+  //    filtro). Fallback sem JS: submit normal com flash+redirect. ──
+  function proximaPendente(aposTr) {
+    var todas = Array.prototype.slice.call(
+      document.querySelectorAll('#tabela-mapas .linha-mapa'));
+    var i = todas.indexOf(aposTr);
+    for (var j = i + 1; j < todas.length; j++) {
+      if (todas[j].dataset.pendente === '1' && todas[j].style.display !== 'none') {
+        return todas[j];
+      }
+    }
+    return null;
+  }
+  document.querySelectorAll('#tabela-mapas form').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var tr = form.closest ? (document.getElementById('mapa-tr-' + form.querySelector('[name=mapa_id]').value) || form.closest('tr')) : null;
+      // form dentro de <tr> é içado pelo parser; os controles seguem
+      // associados pelo form owner — FormData(form) funciona, mas o
+      // closest('tr') não. Localiza a linha pelo mapa_id.
+      if (!tr || tr.tagName !== 'TR') {
+        tr = document.querySelector('.linha-mapa [name=mapa_id][value="'
+              + form.querySelector('[name=mapa_id]').value + '"]');
+        tr = tr && tr.closest('tr');
+      }
+      var hidden = form.querySelector('.ta-valor')
+        || (tr && tr.querySelector('.ta-valor'));
+      if (hidden && !hidden.value) {
+        var inp = tr && tr.querySelector('.ta-input');
+        if (inp) { inp.classList.add('is-invalid'); inp.focus(); }
+        return;                            // sem vínculo escolhido: não salva
+      }
+      var btn = form.querySelector('button[type=submit]')
+        || (tr && tr.querySelector('button.btn-outline-primary'));
+      if (btn) { btn.disabled = true; btn.textContent = '...'; }
+      fetch(window.location.pathname, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: {'X-Requested-With': 'fetch'}
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; }
+        if (!d.ok) { alert(d.erro || 'Não salvou — tente de novo.'); return; }
+        if (tr) {
+          tr.classList.remove('table-warning');
+          tr.classList.add('table-success');
+          tr.dataset.pendente = d.pendente ? '1' : '0';
+          setTimeout(function () { tr.classList.remove('table-success'); }, 1200);
+          var prox = proximaPendente(tr);
+          if (prox) {
+            var inp = prox.querySelector('.ta-input');
+            if (inp) { inp.focus(); }
+          }
+        }
+      }).catch(function () {
+        if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; }
+        // Rede falhou no fetch: submit clássico como fallback.
+        form.submit();
+      });
+    });
+  });
 
   // Sugestao de confianca BAIXA: so preenche no clique explicito.
   document.querySelectorAll('.sug-fraca').forEach(function (b) {
