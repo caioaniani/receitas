@@ -261,7 +261,8 @@ def processar_periodo(data_ini=None, data_fim=None, user_id=None):
             continue
         chave = {'baixado': 'baixados', 'rebaixado': 'rebaixados',
                  'ja_processado': 'ja_processados',
-                 'estornado': 'estornados', 'ignorado': 'ignorados',
+                 'estornado': 'estornados', 'cancelado': 'cancelados',
+                 'ignorado': 'ignorados',
                  'pendente_detalhe': 'pendentes_detalhe'}[desfecho]
         stats[chave] += 1
     db.session.commit()
