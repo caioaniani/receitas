@@ -942,6 +942,9 @@ def salvar(id):
     # Sob encomenda D+2 (dono 21/07/2026): no site so vende pra data >= D+2,
     # e produzido pro pedido (nao abate prateleira) e vira producao do padeiro.
     receita.sob_encomenda = bool(request.form.get('sob_encomenda'))
+    # Cobranca de sobra POR ITEM no alerta das 20h (01/08/2026, caso
+    # croissant tradicional).
+    receita.cobra_sobra_diaria = bool(request.form.get('cobra_sobra_diaria'))
     # Receita de retorno (devolucao loja->industria): sobras devolvidas creditam
     # esta receita. Valida existencia e evita auto-referencia; vazio = NULL.
     try:
