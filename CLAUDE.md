@@ -717,7 +717,31 @@ esta premissa cai e o sync passa a contar em dobro.
   isso convida o dono a clicar Salvar num vinculo errado = baixa de estoque
   errada em silencio. Abaixo do piso vira BOTAO "talvez: X — clique pra
   usar". A sugestao NUNCA grava sozinha (`sugestoes_pendentes` e read-only).
-- Testes: `tests/test_tiny_pdv_sync.py` (17 casos, Tiny sempre mockado).
+- **Aceite em LOTE (dono 01/08/2026: "os que tiverem 100% pode ter um botao
+  pra salvar de uma vez")**: `aceitar_sugestoes_lote` grava de uma vez SO os
+  matches de score 100% (`PISO_LOTE=1.0` — todos os tokens do alvo no nome
+  do Tiny e vice-versa, fora ruido/numeros); recomputa no SERVIDOR (nunca
+  confia em lista do navegador) e revalida cada mapa antes de gravar. A
+  faixa 75-99% segue exigindo o Salvar individual. Botao na tela com
+  confirm + badge verde "100% — entra no aceite em lote" por linha.
+- **RE-BAIXA de pedido com ZERO itens baixados** (armadilha do 1o uso real):
+  o 1o import da Cantina rodou com NENHUM mapa — todo pedido foi marcado
+  processado com 0 baixas, e a idempotencia impedia que o mapeamento
+  posterior trouxesse essas vendas. `_processar_pedido` agora RE-baixa
+  pedido processado com `n_itens_baixados == 0` quando algum item ganhou
+  alvo (nada foi baixado antes -> nao duplica); stats `rebaixados`. Pedido
+  todo-ignorado nao entra em loop de refetch; pedido PARCIAL
+  (`n_itens_baixados > 0`) NUNCA re-baixa (nao ha idempotencia por item —
+  duplicaria o que ja saiu; item mapeado tarde num pedido parcial fica de
+  fora mesmo, limitacao aceita). Fluxo canonico pro dono: mapear -> rodar a
+  importacao DE NOVO no periodo.
+- **Tela sem reload**: o Salvar da linha grava via fetch
+  (`X-Requested-With: fetch` -> JSON; sem JS cai no flash+redirect de
+  sempre) e o foco pula pro proximo pendente. Teclado: Enter escolhe o 1o
+  da lista, Enter de novo salva; setas navegam. Os campos alvo/fator usam o
+  atributo `form=` apontando pro form da ultima coluna — `<form>`
+  atravessando `<tr>` dependia de quirk do parser HTML.
+- Testes: `tests/test_tiny_pdv_sync.py` (23 casos, Tiny sempre mockado).
 
 ## Dias de funcionamento da loja (27/07/2026)
 
