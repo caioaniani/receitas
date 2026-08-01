@@ -219,6 +219,16 @@ class Receita(db.Model):
     # na tela do padeiro (separacao + pre-preparo). ALTER em migrations_legacy
     # (commit 1 deployado e confirmado antes deste modelo).
     sob_encomenda = db.Column(db.Boolean, default=False, nullable=False)
+    # Cobranca de sobra POR ITEM no alerta das 20h (01/08/2026, caso
+    # croissant tradicional): com a flag, se a loja tem saldo desta receita
+    # e NAO lancou Desperdicio dela no dia, o item aparece NOMINALMENTE na
+    # cobranca de sobras (desperdicio_alerta.itens_sem_sobra). Antes o
+    # alerta so cobrava a LOJA ("lancou algo?") — lancar a sobra de UM item
+    # calava a cobranca de todos os outros (Pao Frances ficou 14 dias com
+    # zero lancamento e 492 un de rombo, achado na conferencia de 29-31/07).
+    # ALTER + seed em migrations_legacy (2 commits; seed = itens que o dono
+    # ajustou na conferencia). Checkbox na ficha.
+    cobra_sobra_diaria = db.Column(db.Boolean, default=False, nullable=False)
     # Devolucao loja->industria: sobras devolvidas DESTA receita creditam a
     # receita apontada no estoque da industria (ex: Croissant Tradicional ->
     # "Croissant Tradicional — Retorno"). NULL = credita a propria. O retorno
