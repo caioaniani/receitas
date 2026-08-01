@@ -441,3 +441,27 @@ def pedido_danfe(token, pedido_id):
         return render_template('handshake/erro.html',
                                 msg=f'DANFE ainda não disponível: {motivo}'), 502
     return redirect(link)
+
+
+@driver_bp.route('/api/<token>/iniciar-rota', methods=['POST'])
+def api_iniciar_rota(token):
+    """🚚 O motorista SAIU pra rua (01/08/2026, Dia dos Pais). Marca o
+    RotaInicio do dia — que liga o "saiu para entrega" na pagina de cada
+    cliente da rota e dispara o e-mail com o link de acompanhar (1x;
+    idempotente, o segundo clique nao reenvia nada)."""
+    driver = _driver_por_token(token)
+    if not driver or not driver.ativo:
+        return jsonify(ok=False, erro='Driver invalido'), 404
+    if not _autenticado(driver):
+        return jsonify(ok=False, erro='Autenticacao necessaria',
+                       precisa_pin=True), 401
+    from app.services import rastreio_entrega
+    data_str = request.args.get('data', hoje_brt().isoformat())
+    try:
+        dia = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        dia = hoje_brt()
+    ri, enviados = rastreio_entrega.iniciar_rota(driver, dia)
+    return jsonify(ok=True, iniciado_em=ri.iniciado_em.strftime('%H:%M'),
+                   emails_enviados=enviados,
+                   ja_iniciada=(enviados == 0 and ri.emails_em is not None))

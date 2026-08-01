@@ -214,3 +214,32 @@ class ImpressaoLote(db.Model):
     payload = db.Column(db.Text, nullable=False)   # JSON (lista de pedidos)
     criado_em = db.Column(db.DateTime, default=agora, index=True)
     criado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+
+class RotaInicio(db.Model):
+    """Marco "o motorista SAIU pra rua" de uma rota (driver × dia) — 01/08/2026.
+
+    Pedido do dono pro Dia dos Pais (150 pedidos, 06:00-10:00, motoristas
+    contratados): o cliente acompanha a entrega ao vivo por PROGRESSO
+    (parada N de M + previsao), sem GPS — decisao dele 31/07/2026 via
+    AskUserQuestion (GPS de navegador morre com o celular no bolso).
+
+    Este marco e o gatilho de tudo: liga o "saiu para entrega" na pagina do
+    cliente, dispara o e-mail com o link de acompanhar (1x — `emails_em`
+    marca) e zera o relogio da ETA (media real por parada da PROPRIA rota).
+    Tabela NOVA via db.create_all — sem ALTER, sem procedimento de 2 commits
+    (prazo do dia 09 nao comporta janela de deploy dupla)."""
+    __tablename__ = 'rota_inicio'
+    __table_args__ = (
+        db.UniqueConstraint('driver_id', 'data', name='uq_rota_inicio'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver_entrega.id'),
+                          nullable=False, index=True)
+    data = db.Column(db.Date, nullable=False, index=True)
+    iniciado_em = db.Column(db.DateTime, default=agora, nullable=False)
+    # Quando os e-mails "saiu para entrega" foram disparados (1x por rota).
+    emails_em = db.Column(db.DateTime, nullable=True)
+
+    driver = db.relationship('Driver')
