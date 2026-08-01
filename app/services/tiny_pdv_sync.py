@@ -291,7 +291,7 @@ def processar_periodo(data_ini=None, data_fim=None, user_id=None):
 def faturamento_por_dia(data_ini, data_fim):
     """Faturamento do PDV do Tiny por DIA: {date: {'total': float, 'n': int}}.
 
-    Conta o que o sync JA IMPORTOU e nao foi cancelado (`cardado_em` NULL).
+    Conta o que o sync JA IMPORTOU e nao foi cancelado (`cancelado_em` NULL).
     Venda cancelada no Tiny sai da conta no ciclo seguinte (o marcador e
     gravado mesmo quando nao houve baixa de estoque).
 
