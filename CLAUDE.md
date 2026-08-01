@@ -741,7 +741,35 @@ esta premissa cai e o sync passa a contar em dobro.
   da lista, Enter de novo salva; setas navegam. Os campos alvo/fator usam o
   atributo `form=` apontando pro form da ultima coluna — `<form>`
   atravessando `<tr>` dependia de quirk do parser HTML.
-- Testes: `tests/test_tiny_pdv_sync.py` (23 casos, Tiny sempre mockado).
+- **FATURAMENTO da Cantina (01/08/2026, pergunta do dono "e como eu sei o
+  faturamento da cantina?")**: ate aqui a resposta era "nao sabe" — a venda
+  do Tiny baixava estoque e alimentava a previsao, mas NENHUMA tela mostrava
+  o dinheiro (o painel 💰 da home e o /pdv/ leem so o snapshot do Seru, e a
+  Cantina nao vende pelo Seru). NAO foi criado snapshot novo: o registro de
+  idempotencia `TinyPedidoProcessado` ja guardava `valor` + `data_pedido`;
+  `tiny_pdv_sync.faturamento_por_dia/periodo/do_dia_por_loja` so LEEM isso.
+  Duas telas: card "Faturamento do PDV do Tiny" no topo de `/pdv/tiny`
+  (por dia + total, janela 7/30/90d) e a Cantina somada as outras lojas no
+  painel 💰 da home (`briefing_dono._vendas_tiny` entra em `pdv_total`,
+  `n_pedidos`, `por_loja` e no delta vs a semana passada; chave nova
+  `tiny_total` diz quanto veio de la e a tela/WhatsApp explicitam "inclui
+  Tiny" — sem isso o dono compararia com o /pdv/, que e SO Seru, e caçaria
+  um erro que nao existe). `cancelados_*`/`desconto` seguem SO do Seru (o
+  Tiny nao expoe esses eixos) — os botoes da home dizem isso no title.
+  **REGRESSAO fechada junto**: `cancelado_em` so era gravado quando havia
+  estoque baixado; com o faturamento lendo esta tabela, venda cancelada SEM
+  baixa (produto nao mapeado — o estado do 1o import) contaria como dinheiro
+  PRA SEMPRE. Agora o marcador e gravado sempre e o ESTORNO segue condicional
+  a ter havido baixa (stat novo `cancelados`). **Dia que nao aparece e dia
+  NAO IMPORTADO, nao dia sem venda** (o cron cobre so ontem+hoje) — as duas
+  telas dizem isso; por isso tambem a Cantina fica "sem comparacao" (delta
+  None, nunca -100%) enquanto nao houver a semana passada importada.
+  `faturamento_do_dia_por_loja` agrupa pela loja GRAVADA na venda, nao pela
+  config atual: trocar `tiny_pdv_loja_id` nao reatribui faturamento passado.
+  Sonda `/api/claude/tiny-vendas` ganhou o bloco `importado` (responde ANTES
+  do gate do token do Tiny — diagnostica com a API do Tiny fora).
+- Testes: `tests/test_tiny_pdv_sync.py` (31 casos, Tiny sempre mockado) +
+  secao "PDV do Tiny no cockpit" em `tests/test_briefing_dono.py` (7 casos).
 
 ## Dias de funcionamento da loja (27/07/2026)
 
