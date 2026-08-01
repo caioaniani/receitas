@@ -700,7 +700,24 @@ esta premissa cai e o sync passa a contar em dobro.
   INTEIROS; trocar deixa fracao fantasma).
 - **Cron**: `seru_cron`, 15 min, janela ontem+hoje, advisory lock 7756,
   kill-switch `TINY_PDV_SYNC=0`.
-- Testes: `tests/test_tiny_pdv_sync.py` (12 casos, Tiny sempre mockado).
+- **Mapear os ~77 produtos (27/07/2026)**: a tela tem TYPEAHEAD (digita e
+  filtra por "contem", acento-insensivel) em vez de `<select>` por linha —
+  com 77 linhas x centenas de itens seriam ~38 mil `<option>` e a pagina
+  ficaria impraticavel (hoje: 66 KB, zero option na tabela). O catalogo vai
+  UMA vez como JSON e o filtro roda no cliente. Digitar INVALIDA a escolha
+  anterior (`hidden` zera) — sem isso o texto diria uma coisa e o vinculo
+  salvo seria outro. Texto solto sem item escolhido NAO vira vinculo.
+- **Sugestao automatica com DOIS pisos** (`sugerir_alvo`/`sugestoes_pendentes`):
+  matcher por tokens (tira acento/ruido/'cantina') + `fator_do_nome`
+  ("COM 5 UN" -> 5; "300 ml"/"500 g" NAO sao quantidade). `PISO_SUGESTAO`
+  =0.5 mostra a dica; **`PISO_PREENCHE`=0.75 e o unico que PRE-PREENCHE**.
+  Motivo (validado contra os nomes reais): a faixa 0.50-0.74 produz erro
+  CONVINCENTE — "CROISSANT DE AMENDOAS" casava *Creme de Amendoas* e
+  "CROISSANT FRANCES" casava *Croissant Almond*, ambos 0.50. Pre-preencher
+  isso convida o dono a clicar Salvar num vinculo errado = baixa de estoque
+  errada em silencio. Abaixo do piso vira BOTAO "talvez: X — clique pra
+  usar". A sugestao NUNCA grava sozinha (`sugestoes_pendentes` e read-only).
+- Testes: `tests/test_tiny_pdv_sync.py` (17 casos, Tiny sempre mockado).
 
 ## Dias de funcionamento da loja (27/07/2026)
 
