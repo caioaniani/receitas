@@ -1881,3 +1881,77 @@ def conferencia_loja():
         por_item=itens[:limite],
         maiores=sorted(ajustes, key=lambda a: -abs(a['diff']))[:limite],
     )
+
+
+@claude_api_bp.route('/estoque-ledger')
+@_claude_auth_required
+def estoque_ledger():
+    """Razão do estoque de UM item numa loja: todo `MovEstoqueLoja` da janela
+    somado POR TIPO (entrou x saiu), pra responder "onde foi parar" quando a
+    conferência acusa diferença (31/07/2026, caso "diferença enorme").
+
+    Sem `?item=`, devolve o resumo por tipo da loja inteira. Read-only.
+    Params: ?loja=<nome|id> (obrigatório), ?item=<trecho do nome>,
+    ?dias=N (default 14, max 90).
+    """
+    from datetime import datetime, time, timedelta
+
+    from sqlalchemy import func
+
+    from app.extensions import db
+    from app.models import EstoqueLoja, Loja, MovEstoqueLoja
+    from app.utils import hoje, resolver_loja_por_nome
+
+    dias = max(1, min(request.args.get('dias', 14, type=int) or 14, 90))
+    ini = datetime.combine(hoje() - timedelta(days=dias - 1), time.min)
+
+    bruto = (request.args.get('loja') or '').strip()
+    if not bruto:
+        return jsonify(ok=False, erro='informe ?loja='), 400
+    loja = db.session.get(Loja, int(bruto)) if bruto.isdigit() else None
+    if loja is None:
+        loja = resolver_loja_por_nome(bruto)
+    if loja is None:
+        return jsonify(ok=False, erro='loja nao encontrada'), 404
+
+    alvo = (request.args.get('item') or '').strip().lower()
+    linhas = (EstoqueLoja.query.filter_by(loja_id=loja.id).all())
+    if alvo:
+        linhas = [el for el in linhas if alvo in (el.nome_item or '').lower()]
+    if not linhas:
+        return jsonify(ok=False, erro='nenhuma linha de estoque casou',
+                       loja=loja.nome), 404
+
+    ids = [el.id for el in linhas]
+    somas = {}
+    for eid, tipo, soma, n in (
+            db.session.query(MovEstoqueLoja.estoque_loja_id, MovEstoqueLoja.tipo,
+                             func.sum(MovEstoqueLoja.quantidade),
+                             func.count(MovEstoqueLoja.id))
+            .filter(MovEstoqueLoja.estoque_loja_id.in_(ids),
+                    MovEstoqueLoja.data >= ini)
+            .group_by(MovEstoqueLoja.estoque_loja_id, MovEstoqueLoja.tipo).all()):
+        somas.setdefault(eid, {})[tipo] = {'soma': int(soma or 0), 'n': int(n or 0)}
+
+    itens = []
+    for el in linhas:
+        por_tipo = somas.get(el.id, {})
+        entrou = sum(v['soma'] for v in por_tipo.values() if v['soma'] > 0)
+        saiu = sum(-v['soma'] for v in por_tipo.values() if v['soma'] < 0)
+        itens.append({
+            'item': el.nome_item,
+            'estoque_loja_id': el.id,
+            'estado': el.estado,
+            'tipo_item': ('receita' if el.receita_id else
+                          'produto' if el.produto_id else
+                          'materia_prima' if el.materia_prima_id else 'pendente'),
+            'saldo_atual': int(el.quantidade or 0),
+            'entrou_na_janela': entrou,
+            'saiu_na_janela': saiu,
+            'por_tipo': por_tipo,
+        })
+    itens.sort(key=lambda x: -(x['entrou_na_janela'] + x['saiu_na_janela']))
+
+    return jsonify(ok=True, loja=loja.nome,
+                   janela={'inicio': ini.date().isoformat(), 'dias': dias},
+                   itens=itens[:40])
