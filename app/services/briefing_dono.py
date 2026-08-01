@@ -289,7 +289,11 @@ def vendas_ontem(capturar=True):
 
     PDV lê o snapshot `VendaSeruDiaLoja` (faturamento_pedidos = total do
     pedido, inclui kit/box — mesma base do /api/bot/faturamento), AGRUPADO
-    pela Loja vinculada (dois companies da mesma loja somam numa linha).
+    pela Loja vinculada (dois companies da mesma loja somam numa linha),
+    MAIS o PDV do Tiny da Cantina (`_vendas_tiny`, 01/08/2026 — sem ele o
+    total do dono ficava subestimado). `tiny_total` diz quanto veio de lá.
+    ATENÇÃO: `cancelados_*`/`desconto` continuam sendo SÓ do Seru — o Tiny
+    não expõe esses eixos.
     Site soma `PedidoOnline.valor_total` dos PAGOS ontem (por pago_em).
 
     `capturar=False` lê SÓ o snapshot do banco, sem chance de bater na API
