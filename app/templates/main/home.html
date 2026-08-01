@@ -101,6 +101,9 @@
         <p class="small mb-2">
             PDV: <strong>R$ {{ '{:,.0f}'.format(vendas_hoje.pdv_total).replace(',', '.') }}</strong>
             · {{ vendas_hoje.n_pedidos }} pedido{{ 's' if vendas_hoje.n_pedidos != 1 }}
+            {% if vendas_hoje.tiny_total %}
+            <span class="text-muted" title="A Cantina vende pelo PDV do Tiny, não pelo Seru — já está somada acima.">(inclui Tiny: R$ {{ '{:,.0f}'.format(vendas_hoje.tiny_total).replace(',', '.') }})</span>
+            {% endif %}
             &nbsp;|&nbsp; Site: <strong>R$ {{ '{:,.0f}'.format(vendas_hoje.site_total).replace(',', '.') }}</strong>
             · {{ vendas_hoje.site_qtd }} pago{{ 's' if vendas_hoje.site_qtd != 1 }}
         </p>
