@@ -298,27 +298,19 @@
     }
     return null;
   }
-  document.querySelectorAll('#tabela-mapas form').forEach(function (form) {
+  document.querySelectorAll('#tabela-mapas .form-mapa').forEach(function (form) {
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      var tr = form.closest ? (document.getElementById('mapa-tr-' + form.querySelector('[name=mapa_id]').value) || form.closest('tr')) : null;
-      // form dentro de <tr> é içado pelo parser; os controles seguem
-      // associados pelo form owner — FormData(form) funciona, mas o
-      // closest('tr') não. Localiza a linha pelo mapa_id.
-      if (!tr || tr.tagName !== 'TR') {
-        tr = document.querySelector('.linha-mapa [name=mapa_id][value="'
-              + form.querySelector('[name=mapa_id]').value + '"]');
-        tr = tr && tr.closest('tr');
-      }
-      var hidden = form.querySelector('.ta-valor')
-        || (tr && tr.querySelector('.ta-valor'));
+      var tr = form.closest('tr');
+      // Os campos alvo/fator vivem noutras colunas, amarrados por form= —
+      // FormData(form) os inclui via form owner.
+      var hidden = tr.querySelector('.ta-valor');
       if (hidden && !hidden.value) {
-        var inp = tr && tr.querySelector('.ta-input');
+        var inp = tr.querySelector('.ta-input');
         if (inp) { inp.classList.add('is-invalid'); inp.focus(); }
         return;                            // sem vínculo escolhido: não salva
       }
-      var btn = form.querySelector('button[type=submit]')
-        || (tr && tr.querySelector('button.btn-outline-primary'));
+      var btn = form.querySelector('button');
       if (btn) { btn.disabled = true; btn.textContent = '...'; }
       fetch(window.location.pathname, {
         method: 'POST',
@@ -327,16 +319,14 @@
       }).then(function (r) { return r.json(); }).then(function (d) {
         if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; }
         if (!d.ok) { alert(d.erro || 'Não salvou — tente de novo.'); return; }
-        if (tr) {
-          tr.classList.remove('table-warning');
-          tr.classList.add('table-success');
-          tr.dataset.pendente = d.pendente ? '1' : '0';
-          setTimeout(function () { tr.classList.remove('table-success'); }, 1200);
-          var prox = proximaPendente(tr);
-          if (prox) {
-            var inp = prox.querySelector('.ta-input');
-            if (inp) { inp.focus(); }
-          }
+        tr.classList.remove('table-warning');
+        tr.classList.add('table-success');
+        tr.dataset.pendente = d.pendente ? '1' : '0';
+        setTimeout(function () { tr.classList.remove('table-success'); }, 1200);
+        var prox = proximaPendente(tr);
+        if (prox) {
+          var inp2 = prox.querySelector('.ta-input');
+          if (inp2) { inp2.focus(); }
         }
       }).catch(function () {
         if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; }
