@@ -1574,6 +1574,28 @@ def _migrate_postgres(app):
         except Exception as e:
             log.warning('migrate skip (seed descricao_atacado): %s', e)
 
+    # Cobrança de sobra POR ITEM (01/08/2026, caso croissant tradicional).
+    # A conferência de 29-31/07 provou o padrão: Pão Francês na Ribeiro com
+    # 1.050 recebidos, 558 vendidos e ZERO sobra lançada em 14 dias — o
+    # alerta das 20h só cobrava a LOJA ("lançou algo hoje?"), então lançar a
+    # sobra de UM item calava a cobrança de todos os outros. A flag marca as
+    # receitas cuja sobra é cobrada item a item. Backfill único na criação
+    # (COBRA_SOBRA_SEED = a lista que o dono ajustou na conferência); a
+    # ficha da receita manda dali em diante. Procedimento de 2 commits.
+    cols_receita3 = _cols('receita')
+    if cols_receita3 and 'cobra_sobra_diaria' not in cols_receita3:
+        _try("ALTER TABLE receita ADD COLUMN IF NOT EXISTS "
+             "cobra_sobra_diaria BOOLEAN NOT NULL DEFAULT FALSE")
+        try:
+            with db.engine.connect() as c:
+                for _nome in COBRA_SOBRA_SEED:
+                    c.execute(text(
+                        'UPDATE receita SET cobra_sobra_diaria = TRUE '
+                        'WHERE nome = :n'), {'n': _nome})
+                c.commit()
+        except Exception as e:
+            log.warning('migrate skip (seed cobra_sobra_diaria): %s', e)
+
     # Memoria cross-conversa do bot de atendimento (19/07/2026, achado do
     # auditor "bot reiniciando do zero"): chatbot_conversa era chaveada SO
     # pelo conversation_id do Chatwoot — cliente que volta em conversa NOVA
