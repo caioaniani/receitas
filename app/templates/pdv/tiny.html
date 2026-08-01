@@ -11,6 +11,70 @@
   importar aqui embaixo serve pra puxar um período passado.
 </div>
 
+{# ── Faturamento (01/08/2026, pergunta do dono) ────────────────── #}
+<div class="card mb-3">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <strong class="small">
+      <i class="bi bi-cash-coin"></i> Faturamento do PDV do Tiny
+      {% if fat.loja %}<span class="text-muted fw-normal">— {{ fat.loja }}</span>{% endif %}
+      <span class="text-muted fw-normal">· últimos {{ fat_janela }} dias</span>
+    </strong>
+    <div class="d-flex gap-1">
+      {% for d in [7, 30, 90] %}
+      <a class="btn btn-sm {{ 'btn-primary' if fat_janela == d else 'btn-outline-secondary' }}"
+         href="{{ url_for('pdv.tiny_pdv', dias=d) }}">{{ d }}d</a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="card-body py-2 small">
+    <div class="d-flex gap-4 flex-wrap align-items-baseline mb-2">
+      <div>
+        <div class="text-muted" style="font-size:11px;">Total do período</div>
+        <div style="font-size:1.35rem;font-weight:800;letter-spacing:-0.02em;">{{ fat.total|brl }}</div>
+      </div>
+      <div>
+        <div class="text-muted" style="font-size:11px;">Vendas</div>
+        <div style="font-size:1.1rem;font-weight:700;">{{ fat.n_pedidos }}</div>
+      </div>
+      <div>
+        <div class="text-muted" style="font-size:11px;">Ticket médio</div>
+        <div style="font-size:1.1rem;font-weight:700;">
+          {{ (fat.total / fat.n_pedidos)|brl if fat.n_pedidos else '—' }}</div>
+      </div>
+    </div>
+    {% if fat_dias %}
+    <div class="mobile-table-scroll">
+      <table class="table table-sm table-hover mb-1" style="max-width:420px;">
+        <thead><tr><th>Dia</th><th class="text-end">Vendas</th><th class="text-end">Faturamento</th></tr></thead>
+        <tbody>
+          {% for l in fat_dias %}
+          <tr>
+            <td>{{ l.dia.strftime('%d/%m') }} <span class="text-muted">{{ ['seg','ter','qua','qui','sex','sáb','dom'][l.dia.weekday()] }}</span></td>
+            <td class="text-end">{{ l.n }}</td>
+            <td class="text-end">{{ l.total|brl }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-1">Nenhuma venda importada nesse período.</p>
+    {% endif %}
+    <p class="text-muted mb-0" style="font-size:11px;">
+      Conta as vendas <strong>já importadas</strong> (canceladas no Tiny saem
+      da conta). <strong>Dia que não aparece é dia não importado</strong>, não
+      necessariamente dia sem venda — o sync automático cobre só ontem+hoje;
+      para trás disso, use a importação de período aqui embaixo.
+      Esse mesmo valor entra no painel <strong>💰 Vendas</strong> da tela
+      inicial, junto com as outras lojas.
+      {% if fat.sem_data %}
+      <br><span class="text-warning">⚠ {{ fat.sem_data }} venda(s) importada(s)
+      sem data legível do Tiny — não entram em nenhum dia acima.</span>
+      {% endif %}
+    </p>
+  </div>
+</div>
+
 {# ── 1) Loja ───────────────────────────────────────────────────── #}
 <div class="card mb-3" style="max-width:640px;">
   <div class="card-header py-2"><strong class="small">
