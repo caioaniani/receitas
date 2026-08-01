@@ -1157,11 +1157,17 @@ def tiny_pdv():
             except (KeyError, TypeError, ValueError):
                 flash('Escolha uma loja válida.', 'danger')
         elif acao == 'mapear':
+            # `eh_fetch`: o Salvar da linha grava SEM recarregar a pagina
+            # (com 77 linhas, cada reload perdia o scroll e o filtro). O
+            # form continua funcionando sem JS (flash + redirect).
+            eh_fetch = request.headers.get('X-Requested-With') == 'fetch'
             try:
                 mapa = db.session.get(VendaMapa, int(request.form['mapa_id']))
             except (KeyError, TypeError, ValueError):
                 mapa = None
             if mapa is None or mapa.canal != 'tiny':
+                if eh_fetch:
+                    return jsonify(ok=False, erro='Mapeamento não encontrado.')
                 flash('Mapeamento não encontrado.', 'danger')
                 return redirect(url_for('pdv.tiny_pdv'))
             alvo = (request.form.get('alvo') or '').strip()
@@ -1183,7 +1189,21 @@ def tiny_pdv():
             mapa.confirmado_em = agora()
             mapa.confirmado_por = current_user.id
             db.session.commit()
+            if eh_fetch:
+                return jsonify(ok=True, mapa_id=mapa.id,
+                               pendente=not (mapa.receita_id or mapa.produto_id
+                                             or mapa.ignorar))
             flash(f'"{mapa.nome_externo}" atualizado.', 'success')
+        elif acao == 'aceitar_lote':
+            aplicados = tiny_pdv_sync.aceitar_sugestoes_lote(
+                user_id=current_user.id)
+            if aplicados:
+                flash(f'{len(aplicados)} produto(s) vinculados de uma vez '
+                      'pelas sugestões de 100%. Confira a lista — e rode a '
+                      'importação de novo pra baixar as vendas que ficaram '
+                      'pra trás.', 'success')
+            else:
+                flash('Nenhuma sugestão de 100% pendente.', 'info')
         elif acao == 'importar':
             di = request.form.get('de') or ''
             df = request.form.get('ate') or ''
