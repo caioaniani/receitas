@@ -254,6 +254,31 @@ def _resolver_loja_seru():
     return out
 
 
+def _vendas_tiny(dia):
+    """Faturamento do PDV do TINY no dia: {nome_da_loja: {'total', 'n'}}.
+
+    A Cantina vende pelo PDV do Tiny, NAO pelo Seru (27/07/2026) — sem esta
+    fonte o cockpit do dono mostrava a padaria inteira MENOS a Cantina, e o
+    "Total" saía subestimado. Fonte: `TinyPedidoProcessado` (o registro de
+    idempotência do sync já guarda valor e data de cada venda); cancelada
+    não conta.
+
+    Só existe o que o sync já importou (janela ontem+hoje a cada 15 min):
+    dia anterior ao início da integração vem vazio, e é por isso que a
+    comparação com a semana passada da Cantina fica "sem comparação" no
+    começo — não é queda, é falta de histórico.
+    """
+    from app.models import Loja
+    from app.services import tiny_pdv_sync
+
+    por_loja_id = tiny_pdv_sync.faturamento_do_dia_por_loja(dia)
+    if not por_loja_id:
+        return {}
+    nomes = dict(db.session.query(Loja.id, Loja.nome)
+                 .filter(Loja.id.in_(list(por_loja_id))).all())
+    return {nomes.get(lid, 'PDV Tiny'): d for lid, d in por_loja_id.items()}
+
+
 def vendas_ontem(capturar=True):
     """Vendas de ONTEM: PDV por loja (vs a SEMANA PASSADA) + site.
 
