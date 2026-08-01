@@ -393,7 +393,9 @@ def vendas_hoje(capturar=False):
     """Vendas de HOJE até agora (parciais): PDV do snapshot + site pago hoje.
 
     O cron do Seru recaptura ontem+hoje a cada ~15 min, então o snapshot de
-    hoje fica no máximo esse tanto atrasado. Default `capturar=False` (modo
+    hoje fica no máximo esse tanto atrasado. O PDV do Tiny (Cantina) entra
+    junto, pelo mesmo caminho de `vendas_ontem` (`tiny_total` separa quanto
+    veio de lá). Default `capturar=False` (modo
     da home — nunca bate na API); SEM delta DE PROPÓSITO: comparar um dia
     INCOMPLETO com um dia CHEIO (a semana passada inteira) só geraria um
     "-60%" falso a manhã inteira. A comparação vive no painel de ONTEM.
