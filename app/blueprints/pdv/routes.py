@@ -1237,8 +1237,23 @@ def tiny_pdv():
                 + [{'v': f'p:{p.id}', 'n': p.nome} for p in produtos])
     rotulo = {c['v']: c['n'] for c in catalogo}
     sugestoes = tiny_pdv_sync.sugestoes_pendentes()
+    # Faturamento do PDV do Tiny (01/08/2026, pergunta do dono "e como eu sei
+    # o faturamento da cantina?"). Le SO o que o sync ja importou — dia sem
+    # linha e dia NAO IMPORTADO, nao dia sem venda; por isso a lista mostra
+    # apenas os dias com movimento e a tela explica o limite.
+    try:
+        dias = min(max(int(request.args.get('dias') or 30), 1), 180)
+    except (TypeError, ValueError):
+        dias = 30
+    fat_fim = hoje_brt()
+    fat = tiny_pdv_sync.faturamento_periodo(fat_fim - timedelta(days=dias - 1),
+                                            fat_fim)
+    fat_dias = sorted(
+        ({'dia': d, **v} for d, v in fat['por_dia'].items() if v['total'] or v['n']),
+        key=lambda x: x['dia'], reverse=True)
     return render_template(
         'pdv/tiny.html',
+        fat=fat, fat_dias=fat_dias, fat_janela=dias,
         loja_atual=tiny_pdv_sync.loja_pdv_tiny(),
         lojas=Loja.query.filter_by(ativa=True).order_by(Loja.nome).all(),
         mapas=mapas,
