@@ -87,13 +87,22 @@ def test_vazio_com_reclamacao_vira_handoff_com_mensagem_real(app, modelo_mudo):
     seria o pior desfecho — vai pra fila humana, mas com mensagem real, nao
     com o 'Já te passo para um atendente.' acidental."""
     from app.services import chatbot
-    with app.app_context():
-        out = chatbot.responder([
-            {'role': 'assistant', 'content': 'Fico à disposição.'},
-            {'role': 'user',
-             'content': 'Eu acabei cancelando\nAs visitas estavam esperando '
-                        'e não chegava nunca\nObrigada'},
-        ])
+    # Trava o relógio "dentro do horário de atendimento": rodada à noite, a
+    # suíte ganhava o prefixo "Estamos fora do nosso horário..." no texto e
+    # este teste ficava VERMELHO das 20h às 7h BRT — com Wait-for-CI, isso
+    # bloqueava TODO deploy noturno (achado 31/07/2026).
+    _orig = chatbot._fora_horario_chat
+    chatbot._fora_horario_chat = lambda: False
+    try:
+        with app.app_context():
+            out = chatbot.responder([
+                {'role': 'assistant', 'content': 'Fico à disposição.'},
+                {'role': 'user',
+                 'content': 'Eu acabei cancelando\nAs visitas estavam '
+                            'esperando e não chegava nunca\nObrigada'},
+            ])
+    finally:
+        chatbot._fora_horario_chat = _orig
     assert out['acao'] == 'handoff'
     assert out['motivo'] == 'resposta vazia (reclamacao)'
     # `in`, nao `==`: FORA do horario de atendimento (07:00-20:00) o bot
