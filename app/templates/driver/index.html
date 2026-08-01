@@ -124,6 +124,9 @@
     var CSRF = document.querySelector('meta[name=csrf-token]').content;
 
     var pedidoAtual = null; // referencia ao pedido sendo editado
+    // "Marcar entregue" sem foto abriu a camera: quando a foto subir,
+    // marca entregue automaticamente (fluxo foto-obrigatoria 01/08/2026).
+    var marcarAposFoto = false;
     var pedidos = [];
     var origemEndereco = '';
 
