@@ -261,13 +261,17 @@
         fechar();
       } else if (e.key === 'Enter') {
         // 1º Enter: escolhe o destacado (ou o primeiro) da lista aberta.
-        // 2º Enter (lista fechada, vínculo escolhido): deixa o form salvar.
+        // 2º Enter (lista fechada, vínculo escolhido): salva a linha. O
+        // input de texto não pertence ao form (só o hidden tem form=),
+        // então o submit é disparado à mão.
+        e.preventDefault();
         if (aberta) {
-          e.preventDefault();
           escolher(lista.children[ativo >= 0 ? ativo : 0]._cat);
-        } else if (!hidden.value) {
-          e.preventDefault();             // sem vínculo não salva
-          input.classList.add('is-invalid');
+        } else if (hidden.value) {
+          var f = hidden.form;
+          if (f) { f.requestSubmit ? f.requestSubmit() : f.submit(); }
+        } else {
+          input.classList.add('is-invalid');   // sem vínculo não salva
         }
       }
     });
