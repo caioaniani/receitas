@@ -372,6 +372,9 @@ def vendas_ontem(capturar=True):
         'pdv_delta_pct': round(pdv_delta, 1) if pdv_delta is not None else None,
         'n_pedidos': n_pedidos,
         'por_loja': lojas,
+        # Quanto do `pdv_total` veio do PDV do Tiny (Cantina). A tela avisa
+        # que cancelados/descontos abaixo são SÓ do Seru.
+        'tiny_total': round(tiny_total, 2),
         'site_qtd': int(site_rows[0] or 0),
         'site_total': site_total,
         'total_geral': round(total + site_total, 2),
