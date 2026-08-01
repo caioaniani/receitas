@@ -96,7 +96,8 @@ def _card_online(p):
             itens.append({'id': it.id, 'qtd': qtd_item, 'nome': it.nome,
                           'obs': 'montado pelo cliente:'})
             itens.extend(
-                {'id': f'{it.id}c{i}', 'qtd': qtd_item * int(qtd_por),
+                {'id': f'{it.id}c{i}',
+                 'qtd': int(round(qtd_item * float(qtd_por or 0))),
                  'nome': '· ' + nome, 'obs': None}
                 for i, (_col, _cid, nome, qtd_por) in enumerate(comps))
         else:
