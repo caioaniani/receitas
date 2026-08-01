@@ -374,7 +374,7 @@
 
     function subirFoto(e) {
         var arquivo = e.target.files[0];
-        if (!arquivo) return;
+        if (!arquivo) { marcarAposFoto = false; return; }  // cancelou a camera
         var fd = new FormData();
         fd.append('foto', arquivo);
         fd.append('atribuicao_id', pedidoAtual.atribuicao_id);
