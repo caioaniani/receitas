@@ -25,6 +25,30 @@ logger = logging.getLogger(__name__)
 # ingredientes"). Textos escritos a partir dos ingredientes REAIS das fichas
 # em prod (FarinhaT65/T45, Baton Callebaut etc.) + metodos ditados. Aplicado
 # SO quando a coluna e criada; depois disso a ficha da receita manda.
+# Cobrança de sobra POR ITEM (01/08/2026, dono: "o pessoal não tem lançado
+# sobra do croissant tradicional, precisamos atacar isso"). Backfill ÚNICO na
+# criação da coluna `receita.cobra_sobra_diaria`: os itens que o dono AJUSTOU
+# na conferência de estoque de 29-31/07 (lista comprovada — é o que ele
+# controla nas lojas); depois disso o checkbox da ficha manda.
+COBRA_SOBRA_SEED = [
+    'Pão Francês Fermentado',
+    'Croissant Tradicional',
+    'Pain au Chocolat',
+    'Sourdough 7 Grãos',
+    'Sourdough Integral',
+    'Sourdough Tradicional',
+    'Sourdough Nozes e Azeitonas',
+    'Cinnamon Roll',
+    'Cinnamon Roll Doce de leite',
+    'Danish de queijo branco',
+    'Danish de Calabresa',
+    'Danish de alho poró',
+    'Cookie Calebaut',
+    'Brioche',
+    'Pão de Forma Integral com Grãos',
+    'Croissant Almond',
+]
+
 DESCRICOES_ATACADO_SEED = [
     ('Sourdough Tradicional',
      'Farinha francesa T65, água, sal e levain. '
