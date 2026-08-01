@@ -1696,6 +1696,20 @@ def tiny_vendas():
     out = {'ok': True, 'de': de_iso, 'ate': ate_iso,
            'de_br': de_br, 'ate_br': ate_br,
            'tiny_disponivel': tiny.disponivel()}
+
+    # O que JA foi IMPORTADO pro nosso banco (01/08/2026) — mesma conta do
+    # faturamento da tela /pdv/tiny e do cockpit da home. Vem ANTES do gate
+    # do token de proposito: responde "quanto a Cantina faturou" mesmo com a
+    # API do Tiny fora, e diferencia "nao vendeu" de "nao importado".
+    from app.services import tiny_pdv_sync
+    _fat = tiny_pdv_sync.faturamento_periodo(
+        _date.fromisoformat(de_iso), _date.fromisoformat(ate_iso))
+    out['importado'] = {
+        'loja': _fat['loja'], 'total': _fat['total'],
+        'n_pedidos': _fat['n_pedidos'], 'sem_data': _fat['sem_data'],
+        'por_dia': {d.isoformat(): v for d, v in _fat['por_dia'].items()},
+    }
+
     if not tiny.disponivel():
         out['ok'] = False
         out['erro'] = 'TINY_API_TOKEN nao configurado neste ambiente'
