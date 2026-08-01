@@ -399,8 +399,13 @@
                   }
                   abrirDetalhe(pedidoAtual);
               } else {
+                  marcarAposFoto = false;   // upload falhou: nao marca nada
                   alert(d.erro || 'Falha ao enviar foto');
               }
+          })
+          .catch(function() {
+              marcarAposFoto = false;
+              alert('Sem conexão — tente a foto de novo.');
           });
     }
 
