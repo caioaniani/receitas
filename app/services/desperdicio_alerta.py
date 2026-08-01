@@ -45,12 +45,79 @@ def lojas_sem_desperdicio(dia=None):
             if lj.id not in com_lancamento and lj.funciona_em(dia)]
 
 
-def mensagem_pendentes(lojas):
-    """Monta o texto do alerta a partir da lista de lojas pendentes."""
-    nomes = '\n'.join(f'• {lj.nome}' for lj in lojas)
-    return ('⚠ *Desperdício não lançado*\n'
-            'Estas lojas ainda não enviaram o desperdício de hoje:\n'
-            + nomes)
+def itens_sem_sobra(dia=None):
+    """Cobrança POR ITEM (01/08/2026, dono: "o pessoal não tem lançado sobra
+    do croissant tradicional, precisamos atacar isso").
+
+    Por que existe: o alerta por loja pergunta só "lançou ALGO hoje?" —
+    lançar a sobra de UM item calava a cobrança de todos os outros. A
+    conferência de 29-31/07 provou o custo: Pão Francês na Ribeiro com
+    1.050 recebidos, 558 vendidos e ZERO sobra lançada em 14 dias (rombo de
+    ~492 un que só apareceu na contagem física).
+
+    Regra: receita com `cobra_sobra_diaria` (checkbox na ficha; seed = os
+    itens que o dono ajustou na conferência) + saldo > 0 no EstoqueLoja da
+    loja + NENHUM Desperdicio da receita naquela loja no dia. Só lojas
+    operacionais que funcionam no dia (mesma régua de
+    `lojas_sem_desperdicio`). Receita arquivada fica fora.
+
+    Retorna [(loja, [(nome_receita, saldo), ...])], lojas por nome e itens
+    por saldo desc. O saldo vai na mensagem de propósito: se a loja vendeu
+    tudo e o sistema ainda mostra saldo, o gesto certo é conferir o
+    estoque — a cobrança aponta divergência, não só esquecimento.
+    """
+    from sqlalchemy import func
+
+    from app.extensions import db
+    from app.models import EstoqueLoja, Receita
+
+    dia = dia or hoje()
+    rows = (db.session.query(Loja, Receita,
+                             func.sum(EstoqueLoja.quantidade))
+            .join(EstoqueLoja, EstoqueLoja.loja_id == Loja.id)
+            .join(Receita, EstoqueLoja.receita_id == Receita.id)
+            .filter(Loja.ativa.is_(True), Loja.nome != 'Industria',
+                    Receita.cobra_sobra_diaria.is_(True),
+                    Receita.arquivada_em.is_(None))
+            .group_by(Loja.id, Receita.id)
+            .having(func.sum(EstoqueLoja.quantidade) > 0)
+            .all())
+    if not rows:
+        return []
+    lancados = {(d.loja_id, d.receita_id)
+                for d in Desperdicio.query.filter_by(data=dia).all()
+                if d.receita_id}
+    por_loja = {}
+    for loja, rec, saldo in rows:
+        if not loja.funciona_em(dia):
+            continue
+        if (loja.id, rec.id) in lancados:
+            continue
+        por_loja.setdefault(loja, []).append((rec.nome, int(saldo or 0)))
+    out = []
+    for loja in sorted(por_loja, key=lambda lj: lj.nome):
+        itens = sorted(por_loja[loja], key=lambda x: (-x[1], x[0]))
+        out.append((loja, itens))
+    return out
+
+
+def mensagem_pendentes(lojas, itens_por_loja=None):
+    """Monta o texto do alerta: lojas sem NENHUM lançamento + itens
+    cobrados nominalmente (`itens_sem_sobra`). Qualquer um dos dois pode
+    vir vazio."""
+    partes = ['⚠ *Sobras de hoje — pendências*']
+    if lojas:
+        nomes = '\n'.join(f'• {lj.nome}' for lj in lojas)
+        partes.append('Lojas que ainda não lançaram NADA:\n' + nomes)
+    for loja, itens in (itens_por_loja or []):
+        visiveis = itens[:_MAX_ITENS_POR_LOJA]
+        resto = len(itens) - len(visiveis)
+        linha = ', '.join(f'{nome} ({saldo})' for nome, saldo in visiveis)
+        if resto > 0:
+            linha += f' e mais {resto}'
+        partes.append(f'🥐 *{loja.nome}* — itens sem sobra lançada '
+                      f'(lance a sobra ou confira o estoque):\n{linha}')
+    return '\n'.join(partes)
 
 
 def alertar_slack_pendentes(dia=None):
