@@ -118,7 +118,11 @@
                      style="z-index:20; display:none; max-height:240px; overflow:auto;"></div>
               </div>
               {% if sug and pendente %}
-                {% if sug.preenche %}
+                {% if sug.lote %}
+                <span class="badge bg-success mt-1" style="font-size:10px;">
+                  100% — entra no aceite em lote
+                </span>
+                {% elif sug.preenche %}
                 <span class="badge bg-info text-dark mt-1" style="font-size:10px;">
                   sugestão preenchida · {{ (sug.score * 100)|round|int }}% — confira
                 </span>
