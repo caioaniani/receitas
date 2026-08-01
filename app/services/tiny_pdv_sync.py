@@ -390,5 +390,37 @@ def sugestoes_pendentes():
             out[m.id] = {'kind': kind, 'id': iid, 'nome': nome,
                          'score': score,
                          'preenche': score >= PISO_PREENCHE,
+                         'lote': score >= PISO_LOTE,
                          'fator': fator_do_nome(m.nome_externo)}
     return out
+
+
+def aceitar_sugestoes_lote(user_id=None):
+    """Grava DE UMA VEZ as sugestoes de score 100% (pedido do dono
+    27/07/2026: "os que tiverem 100% pode ter um botao pra salvar de uma
+    vez"). Recomputa as sugestoes no SERVIDOR — nunca confia numa lista
+    vinda do navegador — e revalida cada mapa antes de gravar (outra aba
+    pode ter mapeado no meio). Fator vem de `fator_do_nome`.
+
+    Devolve a lista [(nome_tiny, nome_alvo)] do que foi aplicado."""
+    aplicados = []
+    for mid, s in sugestoes_pendentes().items():
+        if s['score'] < PISO_LOTE:
+            continue
+        m = db.session.get(VendaMapa, mid)
+        if (m is None or m.canal != CANAL or m.ignorar
+                or m.receita_id or m.produto_id or m.materia_prima_id):
+            continue                     # deixou de ser pendente: nao mexe
+        if s['kind'] == 'receita':
+            m.receita_id = s['id']
+        else:
+            m.produto_id = s['id']
+        m.fator_quantidade = s['fator']
+        m.confirmado_em = agora()
+        m.confirmado_por = user_id
+        aplicados.append((m.nome_externo, s['nome']))
+    db.session.commit()
+    if aplicados:
+        logger.info('tiny_pdv: aceite em lote aplicou %d vinculo(s) de 100%%',
+                    len(aplicados))
+    return aplicados
