@@ -20,11 +20,6 @@ from app.extensions import db
 
 logger = logging.getLogger(__name__)
 
-# Backfill UNICO de receita.descricao_atacado (20/07/2026, ditado do dono:
-# "descricao sincera de cada produto b2b, quanto menos e mais... fala dos
-# ingredientes"). Textos escritos a partir dos ingredientes REAIS das fichas
-# em prod (FarinhaT65/T45, Baton Callebaut etc.) + metodos ditados. Aplicado
-# SO quando a coluna e criada; depois disso a ficha da receita manda.
 # Cobrança de sobra POR ITEM (01/08/2026, dono: "o pessoal não tem lançado
 # sobra do croissant tradicional, precisamos atacar isso"). Backfill ÚNICO na
 # criação da coluna `receita.cobra_sobra_diaria`: os itens que o dono AJUSTOU
