@@ -41,29 +41,46 @@
 
 {# ── 2) Mapeamento ─────────────────────────────────────────────── #}
 <div class="card mb-3">
-  <div class="card-header py-2"><strong class="small">
-    <i class="bi bi-link-45deg"></i> 2. Produtos do Tiny → nossas receitas
-    {% if pendentes %}<span class="badge bg-warning text-dark ms-1">{{ pendentes|length }} sem vínculo</span>{% endif %}
-  </strong></div>
+  <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <strong class="small">
+      <i class="bi bi-link-45deg"></i> 2. Produtos do Tiny → nossas receitas
+      {% if pendentes %}<span class="badge bg-warning text-dark ms-1">{{ pendentes|length }} sem vínculo</span>{% endif %}
+    </strong>
+    <div class="d-flex gap-2 align-items-center">
+      <input type="search" id="filtro-produtos" class="form-control form-control-sm"
+             placeholder="Filtrar produtos do Tiny..." style="max-width:260px;">
+      <div class="form-check form-switch mb-0 small">
+        <input class="form-check-input" type="checkbox" id="so-pendentes">
+        <label class="form-check-label" for="so-pendentes">só sem vínculo</label>
+      </div>
+    </div>
+  </div>
   <div class="card-body py-2 small">
     <p class="text-muted mb-2">
       Produto <strong>sem vínculo não baixa estoque</strong> — a venda entra,
       o item é pulado e fica listado aqui. O <strong>fator</strong> é quantas
       unidades da receita cada venda consome: "CONE DE PÃO DE QUEIJO COM 5 UN"
       → fator <strong>5</strong>; um café que leva 1/5 de cookie → <strong>0,2</strong>.
+      Onde aparece <span class="badge bg-info text-dark">sugestão</span>, eu já
+      preenchi um palpite pelo nome — <strong>confira antes de salvar</strong>.
     </p>
     {% if not mapas %}
     <p class="text-muted mb-0">Nenhum produto visto ainda — rode uma importação abaixo.</p>
     {% else %}
     <div class="table-responsive">
-      <table class="table table-sm table-bordered bg-white align-middle">
+      <table class="table table-sm table-bordered bg-white align-middle" id="tabela-mapas">
         <thead class="thead-padaria">
-          <tr><th>Produto no Tiny</th><th style="width:300px">Vincular a</th>
-              <th style="width:90px">Fator</th><th style="width:90px"></th></tr>
+          <tr><th>Produto no Tiny</th><th style="width:340px">Vincular a</th>
+              <th style="width:90px">Fator</th><th style="width:100px"></th></tr>
         </thead>
         <tbody>
           {% for m in mapas %}
-          <tr {% if not (m.receita_id or m.produto_id) and not m.ignorar %}class="table-warning"{% endif %}>
+          {% set sug = sugestoes.get(m.id) %}
+          {% set pendente = not (m.receita_id or m.produto_id) and not m.ignorar %}
+          {% set atual = ('r:' ~ m.receita_id) if m.receita_id else (('p:' ~ m.produto_id) if m.produto_id else ('ignorar' if m.ignorar else '')) %}
+          <tr class="linha-mapa {% if pendente %}table-warning{% endif %}"
+              data-nome="{{ m.nome_externo|lower }}"
+              data-pendente="{{ '1' if pendente else '0' }}">
             <form method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="acao" value="mapear">
@@ -73,22 +90,27 @@
               {% if m.sku %}<br><span class="text-muted" style="font-size:11px;">id Tiny: {{ m.sku }}</span>{% endif %}
             </td>
             <td>
-              <select name="alvo" class="form-select form-select-sm">
-                <option value="">— sem vínculo (não baixa) —</option>
-                <option value="ignorar" {% if m.ignorar %}selected{% endif %}>Ignorar de vez</option>
-                <optgroup label="Receitas">
-                  {% for r in receitas %}
-                  <option value="r:{{ r.id }}" {% if m.receita_id == r.id %}selected{% endif %}>{{ r.nome }}</option>
-                  {% endfor %}
-                </optgroup>
-                <optgroup label="Produtos / cestas">
-                  {% for p in produtos %}
-                  <option value="p:{{ p.id }}" {% if m.produto_id == p.id %}selected{% endif %}>{{ p.nome }}</option>
-                  {% endfor %}
-                </optgroup>
-              </select>
+              {# Typeahead: digite e vai filtrando por "contém". O valor real
+                 vai no hidden — texto solto NUNCA vira vínculo. #}
+              <div class="ta-wrap position-relative">
+                <input type="text" class="form-control form-control-sm ta-input"
+                       placeholder="digite pra buscar receita ou cesta..."
+                       autocomplete="off"
+                       value="{{ rotulo.get(atual, 'Ignorar de vez' if m.ignorar else '') }}"
+                       {% if sug and pendente %}data-sugerido="{{ sug.nome }}"{% endif %}>
+                <input type="hidden" name="alvo" class="ta-valor"
+                       value="{% if sug and pendente %}{{ sug.kind[0] }}:{{ sug.id }}{% else %}{{ atual }}{% endif %}">
+                <div class="ta-lista list-group position-absolute w-100 shadow"
+                     style="z-index:20; display:none; max-height:240px; overflow:auto;"></div>
+              </div>
+              {% if sug and pendente %}
+              <span class="badge bg-info text-dark mt-1" style="font-size:10px;">
+                sugestão · {{ (sug.score * 100)|round|int }}%
+              </span>
+              {% endif %}
             </td>
-            <td><input type="text" name="fator" value="{{ m.fator_quantidade or 1 }}"
+            <td><input type="text" name="fator"
+                       value="{{ sug.fator if (sug and pendente and sug.fator != 1.0) else (m.fator_quantidade or 1) }}"
                        class="form-control form-control-sm text-end"></td>
             <td><button class="btn btn-sm btn-outline-primary w-100">Salvar</button></td>
             </form>
@@ -123,4 +145,88 @@
     </p>
   </div>
 </div>
+
+<script type="application/json" id="catalogo-tiny">{{ catalogo|tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var CAT = JSON.parse(document.getElementById('catalogo-tiny').textContent);
+  // "Ignorar de vez" entra como opcao normal do typeahead.
+  CAT = [{v: 'ignorar', n: 'Ignorar de vez'}].concat(CAT);
+
+  function norm(s) {
+    return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase();
+  }
+  // Pre-computa o nome normalizado uma vez (77 linhas x 500 itens por tecla
+  // seria lento sem isso).
+  CAT.forEach(function (c) { c._n = norm(c.n); });
+
+  function montar(wrap) {
+    var input = wrap.querySelector('.ta-input');
+    var hidden = wrap.querySelector('.ta-valor');
+    var lista = wrap.querySelector('.ta-lista');
+
+    function fechar() { lista.style.display = 'none'; }
+
+    function abrir(termo) {
+      var t = norm(termo);
+      var achados = CAT.filter(function (c) {
+        return !t || c._n.indexOf(t) !== -1;   // "contém", não só começo
+      }).slice(0, 15);
+      lista.innerHTML = '';
+      if (!achados.length) { fechar(); return; }
+      achados.forEach(function (c) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'list-group-item list-group-item-action py-1 small';
+        b.textContent = c.n;
+        b.addEventListener('mousedown', function (e) {
+          e.preventDefault();               // antes do blur
+          input.value = c.n;
+          hidden.value = c.v;
+          input.classList.remove('is-invalid');
+          fechar();
+        });
+        lista.appendChild(b);
+      });
+      lista.style.display = 'block';
+    }
+
+    input.addEventListener('input', function () {
+      // Digitar INVALIDA a escolha anterior: sem isso o texto diria uma coisa
+      // e o vínculo salvo seria outro (baixa de estoque errada em silêncio).
+      hidden.value = '';
+      input.classList.add('is-invalid');
+      abrir(input.value);
+    });
+    input.addEventListener('focus', function () { abrir(input.value); });
+    input.addEventListener('blur', function () {
+      setTimeout(function () {
+        fechar();
+        // Texto solto sem item escolhido: limpa, não inventa vínculo.
+        if (!hidden.value) { input.value = ''; input.classList.remove('is-invalid'); }
+      }, 150);
+    });
+  }
+  document.querySelectorAll('.ta-wrap').forEach(montar);
+
+  // ── filtro da tabela (por nome do produto do Tiny) ──
+  var filtro = document.getElementById('filtro-produtos');
+  var soPend = document.getElementById('so-pendentes');
+  function refiltrar() {
+    var t = norm(filtro.value);
+    var apenas = soPend.checked;
+    document.querySelectorAll('#tabela-mapas .linha-mapa').forEach(function (tr) {
+      var casaTexto = !t || norm(tr.dataset.nome).indexOf(t) !== -1;
+      var casaPend = !apenas || tr.dataset.pendente === '1';
+      tr.style.display = (casaTexto && casaPend) ? '' : 'none';
+    });
+  }
+  if (filtro) { filtro.addEventListener('input', refiltrar); }
+  if (soPend) { soPend.addEventListener('change', refiltrar); }
+})();
+</script>
 {% endblock %}
