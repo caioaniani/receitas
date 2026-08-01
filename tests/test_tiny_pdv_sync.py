@@ -511,3 +511,154 @@ def test_pedido_parcial_nunca_rebaixa(app, tiny_mock):
         assert st['rebaixados'] == 0
         db.session.refresh(el)
         assert el.quantidade == 8          # croissant NAO baixou de novo
+
+
+# ── Faturamento do PDV do Tiny (01/08/2026) ──────────────────────────
+#
+# Pergunta do dono: "e como eu sei o faturamento da cantina?". A venda do
+# Tiny ja baixava estoque e alimentava a previsao, mas NENHUMA tela mostrava
+# o dinheiro — o painel da home e o /pdv/ leem so o snapshot do Seru.
+
+def test_faturamento_soma_as_vendas_importadas(app, tiny_mock):
+    with app.app_context():
+        lj = _cantina()
+        r = _receita()
+        _estoque(lj, r, 10)
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='CROISSANT FRANCÊS CANTINA',
+                                 receita_id=r.id, fator_quantidade=1.0))
+        db.session.commit()
+        tiny_mock['pedidos'] = [_pedido(pid='1', valor=73),
+                                _pedido(pid='2', valor='27.50')]
+        tiny_mock['itens'] = {'1': _itens(qtd=1.0), '2': _itens(qtd=1.0)}
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+
+        fat = tiny_pdv_sync.faturamento_periodo(_DIA, _DIA)
+        assert fat['total'] == 100.50
+        assert fat['n_pedidos'] == 2
+        assert fat['loja'] == 'Cantina'
+        assert fat['por_dia'][_DIA] == {'total': 100.50, 'n': 2}
+
+
+def test_faturamento_ignora_dias_fora_da_janela(app, tiny_mock):
+    """A conta e por `data_pedido`, nao pela data em que o sync rodou."""
+    with app.app_context():
+        _cantina()
+        tiny_mock['pedidos'] = [_pedido(pid='1', valor=50)]
+        tiny_mock['itens'] = {'1': _itens()}
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+
+        assert tiny_pdv_sync.faturamento_periodo(_DIA, _DIA)['total'] == 50
+        outro = date(2026, 7, 24)
+        assert tiny_pdv_sync.faturamento_periodo(outro, outro)['total'] == 0
+        assert tiny_pdv_sync.faturamento_periodo(outro, _DIA)['total'] == 50
+
+
+def test_faturamento_conta_venda_sem_mapeamento(app, tiny_mock):
+    """O dinheiro entrou mesmo com o produto ainda sem vinculo — o
+    faturamento nao pode esperar o mapeamento (foi exatamente o estado do
+    primeiro import da Cantina: 54 vendas, zero mapas)."""
+    with app.app_context():
+        _cantina()
+        tiny_mock['pedidos'] = [_pedido(pid='1', valor=73)]
+        tiny_mock['itens'] = {'1': _itens()}
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['mapas_pendentes'] == 1
+        assert tiny_pdv_sync.faturamento_periodo(_DIA, _DIA)['total'] == 73
+
+
+def test_cancelada_sai_do_faturamento_mesmo_sem_baixa(app, tiny_mock):
+    """REGRESSAO: o marcador `cancelado_em` so era gravado quando havia
+    estoque baixado. Com o faturamento lendo esta tabela, uma venda
+    cancelada SEM baixa (produto nao mapeado) seguiria contando como
+    dinheiro pra sempre."""
+    with app.app_context():
+        _cantina()
+        tiny_mock['pedidos'] = [_pedido(pid='1', valor=73)]
+        tiny_mock['itens'] = {'1': _itens()}
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        reg = db.session.get(TinyPedidoProcessado, '1')
+        assert reg.n_itens_baixados == 0          # nada baixou (sem mapa)
+        assert tiny_pdv_sync.faturamento_periodo(_DIA, _DIA)['total'] == 73
+
+        tiny_mock['pedidos'] = [_pedido(pid='1', valor=73,
+                                        situacao='Cancelado')]
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['cancelados'] == 1
+        assert st['estornados'] == 0              # nao havia o que estornar
+        db.session.refresh(reg)
+        assert reg.cancelado_em is not None
+        assert reg.estornado_em is None
+        assert tiny_pdv_sync.faturamento_periodo(_DIA, _DIA)['total'] == 0
+
+
+def test_cancelada_com_baixa_estorna_e_sai_do_faturamento(app, tiny_mock):
+    with app.app_context():
+        lj = _cantina()
+        r = _receita()
+        el = _estoque(lj, r, 10)
+        db.session.add(VendaMapa(canal='tiny',
+                                 nome_externo='CROISSANT FRANCÊS CANTINA',
+                                 receita_id=r.id, fator_quantidade=1.0))
+        db.session.commit()
+        tiny_mock['pedidos'] = [_pedido(pid='1', valor=73)]
+        tiny_mock['itens'] = {'1': _itens(qtd=2.0)}
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert tiny_pdv_sync.faturamento_periodo(_DIA, _DIA)['total'] == 73
+
+        tiny_mock['pedidos'] = [_pedido(pid='1', valor=73,
+                                        situacao='Cancelado')]
+        st = tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        assert st['estornados'] == 1
+        db.session.refresh(el)
+        assert el.quantidade == 10
+        assert tiny_pdv_sync.faturamento_periodo(_DIA, _DIA)['total'] == 0
+
+
+def test_faturamento_por_loja_usa_a_loja_da_venda(app, tiny_mock):
+    """Trocar a loja configurada no futuro NAO pode reatribuir faturamento
+    ja registrado — a conta e pela loja gravada em cada venda."""
+    with app.app_context():
+        cantina = _cantina()
+        tiny_mock['pedidos'] = [_pedido(pid='1', valor=73)]
+        tiny_mock['itens'] = {'1': _itens()}
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+
+        outra = Loja(nome='Outra', ativa=True)
+        db.session.add(outra)
+        db.session.commit()
+        tiny_pdv_sync.definir_loja_pdv(outra.id)
+
+        por_loja = tiny_pdv_sync.faturamento_do_dia_por_loja(_DIA)
+        assert por_loja == {cantina.id: {'total': 73.0, 'n': 1}}
+
+
+def test_faturamento_de_periodo_vazio_e_zero(app):
+    with app.app_context():
+        fat = tiny_pdv_sync.faturamento_periodo(_DIA, _DIA)
+        assert fat == {'total': 0, 'n_pedidos': 0, 'por_dia': {},
+                       'loja': None, 'loja_id': None, 'sem_data': 0}
+        assert tiny_pdv_sync.faturamento_do_dia_por_loja(_DIA) == {}
+
+
+def test_tela_mostra_o_faturamento(app, admin_user, tiny_mock):
+    """A tela /pdv/tiny responde a pergunta do dono sem precisar de query."""
+    with app.app_context():
+        _cantina()
+        tiny_mock['pedidos'] = [_pedido(pid='1', valor=73)]
+        tiny_mock['itens'] = {'1': _itens()}
+        # A janela padrao e "ultimos 30 dias" a partir de HOJE — a venda
+        # precisa cair dentro dela pra aparecer.
+        from app.utils import hoje as _hoje
+        tiny_pdv_sync.processar_periodo(_DIA, _DIA)
+        reg = db.session.get(TinyPedidoProcessado, '1')
+        reg.data_pedido = _hoje()
+        db.session.commit()
+
+    cli = app.test_client()
+    with cli.session_transaction() as sess:
+        sess['_user_id'] = str(admin_user.id)
+        sess['_fresh'] = True
+    html = cli.get('/pdv/tiny').get_data(as_text=True)
+    assert 'Faturamento do PDV do Tiny' in html
+    assert 'R$ 73,00' in html

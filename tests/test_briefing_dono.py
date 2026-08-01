@@ -729,3 +729,115 @@ def test_api_acuracia_devolve_resumo_e_por_item(app, loja, catalogo):
     assert len(linhas) == 1
     assert linhas[0]['receita'] == catalogo['receita'].nome
     assert linhas[0]['wape_pct'] == 100.0        # |10-5|*5 / (5*5) = 100%
+
+
+# ── PDV do Tiny (Cantina) no cockpit do dono (01/08/2026) ────────────────────
+#
+# Pergunta do dono: "e como eu sei o faturamento da cantina?". A Cantina vende
+# pelo PDV do TINY, não pelo Seru — o painel 💰 da home mostrava a padaria
+# inteira MENOS ela, e o "Total" saía subestimado.
+
+def _venda_tiny(data, valor=100, pid='t1', loja=None, cancelada=False):
+    from app.models import AppConfig, Loja, TinyPedidoProcessado
+    from app.services import tiny_pdv_sync
+    from app.utils import agora
+    if loja is None:
+        loja = Loja.query.filter_by(nome='Cantina').first()
+        if loja is None:
+            loja = Loja(nome='Cantina', ativa=True)
+            db.session.add(loja)
+            db.session.commit()
+        AppConfig.set(tiny_pdv_sync._CFG_LOJA, loja.id)
+    db.session.add(TinyPedidoProcessado(
+        tiny_pedido_id=pid, loja_id=loja.id, data_pedido=data,
+        valor=Decimal(valor), situacao='Faturado', n_itens_total=1,
+        n_itens_baixados=1, cancelado_em=agora() if cancelada else None))
+    db.session.commit()
+    return loja
+
+
+def test_vendas_ontem_inclui_o_pdv_do_tiny(app):
+    from app.services import briefing_dono
+    ontem = hoje() - timedelta(days=1)
+    _venda_dia(ontem, loja_seru='Loja A', fat=1000)
+    _venda_tiny(ontem, valor=250, pid='t1')
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        v = briefing_dono.vendas_ontem()
+    assert v['tiny_total'] == 250.0
+    assert v['pdv_total'] == 1250.0            # Seru + Tiny
+    assert v['total_geral'] == 1250.0
+    cantina = next(x for x in v['por_loja'] if x['loja'] == 'Cantina')
+    assert cantina['faturamento'] == 250.0
+
+
+def test_vendas_ontem_compara_a_cantina_com_a_semana_passada(app):
+    """A Cantina entra na MESMA regra das outras lojas: sábado vs sábado."""
+    from app.services import briefing_dono
+    ontem = hoje() - timedelta(days=1)
+    _venda_tiny(ontem, valor=300, pid='t1')
+    _venda_tiny(ontem - timedelta(days=7), valor=200, pid='t0')
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        v = briefing_dono.vendas_ontem()
+    lj = next(x for x in v['por_loja'] if x['loja'] == 'Cantina')
+    assert lj['base'] == 200.0
+    assert lj['delta_pct'] == 50.0
+
+
+def test_cantina_sem_historico_fica_sem_comparacao(app):
+    """A integração nasceu em 27/07 e o sync só cobre ontem+hoje: no começo
+    não existe a semana passada. Isso é FALTA DE HISTÓRICO, não queda — o
+    delta vem None ("sem comparação"), nunca -100%."""
+    from app.services import briefing_dono
+    ontem = hoje() - timedelta(days=1)
+    _venda_tiny(ontem, valor=300, pid='t1')
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        v = briefing_dono.vendas_ontem()
+    lj = next(x for x in v['por_loja'] if x['loja'] == 'Cantina')
+    assert lj['base'] is None and lj['delta_pct'] is None
+
+
+def test_venda_tiny_cancelada_nao_conta_no_cockpit(app):
+    from app.services import briefing_dono
+    ontem = hoje() - timedelta(days=1)
+    _venda_tiny(ontem, valor=300, pid='t1')
+    _venda_tiny(ontem, valor=999, pid='t2', cancelada=True)
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        v = briefing_dono.vendas_ontem()
+    assert v['tiny_total'] == 300.0
+
+
+def test_vendas_hoje_inclui_o_pdv_do_tiny(app):
+    from app.services import briefing_dono
+    _venda_dia(hoje(), loja_seru='Loja A', fat=500)
+    _venda_tiny(hoje(), valor=120, pid='t1')
+    v = briefing_dono.vendas_hoje()
+    assert v['tiny_total'] == 120.0
+    assert v['pdv_total'] == 620.0
+    assert v['total_geral'] == 620.0
+    assert any(x['loja'] == 'Cantina' for x in v['por_loja'])
+
+
+def test_sem_venda_no_tiny_o_cockpit_nao_muda(app):
+    """Regressão: sem Tiny configurado/importado o painel é o de sempre e
+    `tiny_total` fica em 0 (nenhuma linha nova, nenhum aviso na tela)."""
+    from app.services import briefing_dono
+    ontem = hoje() - timedelta(days=1)
+    _venda_dia(ontem, loja_seru='Loja A', fat=1000)
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        v = briefing_dono.vendas_ontem()
+    assert v['tiny_total'] == 0
+    assert v['pdv_total'] == 1000.0
+    assert [x['loja'] for x in v['por_loja']] == ['Loja A']
+
+
+def test_texto_do_whatsapp_explicita_o_tiny(app):
+    """O dono compara o número do briefing com o /pdv/ (que é SÓ Seru) — sem
+    a menção, a diferença viraria caça ao erro."""
+    from app.services import briefing_dono
+    ontem = hoje() - timedelta(days=1)
+    _venda_dia(ontem, loja_seru='Loja A', fat=1000)
+    _venda_tiny(ontem, valor=250, pid='t1')
+    with patch('app.services.vendas_diarias.garantir_capturado'):
+        texto = briefing_dono.montar_texto()
+    assert 'inclui Tiny' in texto
+    assert 'Cantina' in texto
