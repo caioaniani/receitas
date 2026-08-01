@@ -806,9 +806,20 @@ ALGO hoje?") — lancar a sobra de UM item calava a cobranca de todos.
 - Os senders (Slack 20:10-25 + WhatsApp dono 20:30) disparam se HOUVER
   QUALQUER pendencia (loja OU item) — antes, loja que lancava 1 item sumia
   e levava os itens junto. A cobranca por-loja continua existindo.
-- **LIMITACAO CONHECIDA**: lancamento PARCIAL nao e detectavel (lancou 5
-  croissants mas sobraram 50 — a linha de Desperdicio existe, o item some
-  da cobranca). So a contagem fisica pega; e o que a conferencia e.
+- **LIMITACOES CONHECIDAS (pos-revisao, aceitas)**: (1) lancamento PARCIAL
+  nao e detectavel (lancou 5 croissants mas sobraram 50 — a linha de
+  Desperdicio existe, o item some da cobranca; so a contagem fisica pega).
+  (2) Desperdicio lancado num PRODUTO homonimo (`receita_id=None`) NAO cala
+  a receita flagged — o bot fuzzy pode resolver "pao frances" pro Produto
+  'Pao Frances' e a receita 'Pão Francês Fermentado' seguir cobrada; mapear
+  produto->receita no set de lancados e decisao separada do dono (risco:
+  fadiga de alerta). (3) Loja sem NENHUM lancamento aparece na lista
+  por-loja E na secao de itens — DELIBERADO (mais informacao, nao
+  duplicata). (4) A guarda `_itens_sem_sobra_safe` nos senders e
+  best-effort COM exception no log: a cobranca por-loja pre-existente
+  nunca morre por falha da query nova. (5) A tela /admin/slack-diagnostico
+  conta so lojas (cosmetico); o retorno dos senders ja expoe
+  `pendentes_itens`.
 - **Sondas criadas no diagnostico** (read-only): `/api/claude/
   conferencia-loja` (os ajustes de conferencia do dono por item/loja, com
   sinal: + = sistema tinha MENOS que a prateleira) e `/api/claude/
