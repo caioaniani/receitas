@@ -339,6 +339,15 @@
         if (fInput) fInput.addEventListener('change', subirFoto);
 
         document.getElementById('btn-entregue').addEventListener('click', function() {
+            // FOTO OBRIGATÓRIA (dono 01/08/2026): sem foto ainda, o botão
+            // abre a CÂMERA direto — tirou a foto, o upload marca entregue
+            // sozinho (ver subirFoto). Menos um toque pro motorista, e o
+            // servidor recusa de qualquer jeito se vier sem foto (422).
+            if (!(pedidoAtual.fotos && pedidoAtual.fotos.length)) {
+                marcarAposFoto = true;
+                if (fInput) fInput.click();
+                return;
+            }
             marcarStatus('entregue', null);
         });
         document.getElementById('btn-nao-entregue').addEventListener('click', function() {
