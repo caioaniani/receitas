@@ -144,22 +144,26 @@ def alertar_slack_pendentes(dia=None):
         logger.info('desperdicio_alerta(slack): sem pendencias, nada a enviar')
         return {'enviado': False, 'motivo': 'sem_pendencias'}
 
+    n_itens = sum(len(its) for _, its in itens)
     canal = (current_app.config.get('SLACK_CANAL_COPILOT') or '').strip()
     if not canal:
         logger.warning('desperdicio_alerta(slack): SLACK_CANAL_COPILOT nao '
-                       'configurado, pulando (%d loja[s] pendente[s])', len(faltam))
+                       'configurado, pulando (%d loja[s], %d item[ns])',
+                       len(faltam), n_itens)
         return {'enviado': False, 'motivo': 'sem_canal_configurado',
-                'pendentes': len(faltam)}
+                'pendentes': len(faltam), 'pendentes_itens': n_itens}
 
     texto = mensagem_pendentes(faltam, itens)
     res = slack.post_message(canal, texto)
     if res.get('ok'):
-        logger.info('desperdicio_alerta(slack): enviado pro canal %s (%d loja[s])',
-                    canal, len(faltam))
-        return {'enviado': True, 'pendentes': len(faltam)}
+        logger.info('desperdicio_alerta(slack): enviado pro canal %s '
+                    '(%d loja[s], %d item[ns] nominais)',
+                    canal, len(faltam), n_itens)
+        return {'enviado': True, 'pendentes': len(faltam),
+                'pendentes_itens': n_itens}
     logger.warning('desperdicio_alerta(slack): falha ao enviar: %s', res.get('erro'))
     return {'enviado': False, 'motivo': 'erro_envio', 'erro': res.get('erro'),
-            'pendentes': len(faltam)}
+            'pendentes': len(faltam), 'pendentes_itens': n_itens}
 
 
 def enviar_alerta_desperdicio():
