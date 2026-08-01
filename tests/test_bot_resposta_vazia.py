@@ -136,15 +136,41 @@ def test_vazio_com_pergunta_pendente_nao_deixa_cliente_no_vacuo(
     """O bot tinha PERGUNTA aberta e o modelo emudeceu: nao da pra encerrar
     em silencio — o cliente estava esperando resposta."""
     from app.services import chatbot
-    with app.app_context():
-        out = chatbot.responder([
-            {'role': 'assistant', 'content': 'Qual o seu CPF?'},
-            {'role': 'user', 'content': '123'},
-        ])
+    # Relógio travado "dentro do horário" — mesmo motivo do teste da
+    # reclamação acima (suíte noturna ganhava o prefixo de fora-de-horário).
+    _orig = chatbot._fora_horario_chat
+    chatbot._fora_horario_chat = lambda: False
+    try:
+        with app.app_context():
+            out = chatbot.responder([
+                {'role': 'assistant', 'content': 'Qual o seu CPF?'},
+                {'role': 'user', 'content': '123'},
+            ])
+    finally:
+        chatbot._fora_horario_chat = _orig
     assert out['acao'] == 'handoff'
     # `in` pelo mesmo motivo do teste acima (prefixo de fora-de-horario).
     assert chatbot.FALLBACK_TEXTO in out['texto']
     assert out['texto']                  # nunca vazio
+
+
+def test_handoff_de_madrugada_avisa_o_horario(app, modelo_mudo):
+    """A outra ponta, travada de propósito: FORA do horário o texto ganha o
+    aviso "07:00 às 20:00" — o cliente não pode esperar atendente às 23h."""
+    from app.services import chatbot
+    _orig = chatbot._fora_horario_chat
+    chatbot._fora_horario_chat = lambda: True
+    try:
+        with app.app_context():
+            out = chatbot.responder([
+                {'role': 'assistant', 'content': 'Qual o seu CPF?'},
+                {'role': 'user', 'content': '123'},
+            ])
+    finally:
+        chatbot._fora_horario_chat = _orig
+    assert out['acao'] == 'handoff'
+    assert '07:00' in out['texto']
+    assert out['texto'].endswith(chatbot.FALLBACK_TEXTO)
 
 
 # ── enforcement: atraso passa; "10 pessoas" NAO e pedido de humano ──
