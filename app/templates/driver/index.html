@@ -388,10 +388,16 @@
               if (d.ok) {
                   pedidoAtual.fotos = pedidoAtual.fotos || [];
                   pedidoAtual.fotos.push(d.foto);
-                  abrirDetalhe(pedidoAtual);
                   // Atualiza no estado local
                   var p = pedidos.find(function(x) { return x.atribuicao_id === pedidoAtual.atribuicao_id; });
                   if (p) p.fotos = pedidoAtual.fotos;
+                  if (marcarAposFoto) {
+                      // Veio do "Marcar entregue": foto subiu, fecha o ciclo.
+                      marcarAposFoto = false;
+                      marcarStatus('entregue', null);
+                      return;
+                  }
+                  abrirDetalhe(pedidoAtual);
               } else {
                   alert(d.erro || 'Falha ao enviar foto');
               }
