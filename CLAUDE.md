@@ -774,6 +774,51 @@ ativa em TODO dia — a Cantina levava **5 lembretes por dia util** (Slack
 - Testes: `tests/test_loja_dias_funcionamento.py` (11 casos, incluindo a
   regressao do fail-open e o POST forjado). Manual de operacao atualizado.
 
+## Cobranca de sobra POR ITEM (01/08/2026) — caso croissant tradicional
+
+Caso real ("na conferencia de estoque das lojas tem dado uma diferenca
+enorme" -> "o pessoal nao tem lancado sobra do croissant tradicional,
+precisamos atacar isso"). DIAGNOSTICO pelas sondas novas: os ajustes de
+conferencia do dono (29-31/07) mostraram DOIS padroes — (a) itens que ele
+NAO controla (Pao de Queijo MP, sistema 0 vs prateleira 1.221; a venda
+drena sem nunca ter entrada — nao ajustar, sao esperados ate ele
+controlar) e (b) paes/viennoiserie com sistema ~2x a prateleira: o razao
+(`/api/claude/estoque-ledger`) provou SOBRA NAO LANCADA — Pao Frances na
+Ribeiro com 1.050 recebidos, 558 vendidos e ZERO desperdicio em 14 dias
+(rombo ~492). CAUSA SISTEMICA: o alerta das 20h
+(`desperdicio_alerta.lojas_sem_desperdicio`) cobrava so a LOJA ("lancou
+ALGO hoje?") — lancar a sobra de UM item calava a cobranca de todos.
+
+- **Flag** `Receita.cobra_sobra_diaria` (checkbox na ficha, junto do
+  reaproveitavel; procedimento de 2 commits com sonda /api/claude/deploy).
+  Seed UNICO na criacao da coluna (`migrations_legacy.COBRA_SOBRA_SEED`):
+  os 16 itens que o dono AJUSTOU na conferencia (pao frances, croissant,
+  sourdoughs, danishes, cinnamon, cookie, brioche, almond). Depois disso a
+  ficha manda. `duplicar` copia a flag; sonda `/api/claude/receita` expoe.
+- **`desperdicio_alerta.itens_sem_sobra(dia)`**: receita flagged +
+  saldo > 0 no EstoqueLoja da loja + NENHUM `Desperdicio` da receita
+  naquela loja no dia => cobranca NOMINAL na mensagem ("Croissant
+  Tradicional (45) sem sobra lancada — lance a sobra ou confira o
+  estoque"). Mesma regua de loja do alerta por-loja (operacional +
+  `funciona_em`); arquivada fora; cap `_MAX_ITENS_POR_LOJA=8` + "e mais
+  N". O SALDO vai na mensagem de proposito: se a loja vendeu tudo e o item
+  aparece, e divergencia de estoque — o gesto e conferir, nao ignorar.
+- Os senders (Slack 20:10-25 + WhatsApp dono 20:30) disparam se HOUVER
+  QUALQUER pendencia (loja OU item) — antes, loja que lancava 1 item sumia
+  e levava os itens junto. A cobranca por-loja continua existindo.
+- **LIMITACAO CONHECIDA**: lancamento PARCIAL nao e detectavel (lancou 5
+  croissants mas sobraram 50 — a linha de Desperdicio existe, o item some
+  da cobranca). So a contagem fisica pega; e o que a conferencia e.
+- **Sondas criadas no diagnostico** (read-only): `/api/claude/
+  conferencia-loja` (os ajustes de conferencia do dono por item/loja, com
+  sinal: + = sistema tinha MENOS que a prateleira) e `/api/claude/
+  estoque-ledger` (razao de MovEstoqueLoja por TIPO de um item numa loja).
+  ATENCAO ledger: o canal Seru/lote grava BAIXA como quantidade POSITIVA
+  (`baixa_venda._SINAL_ESTORNO` — so o site grava negativo), entao NUNCA
+  somar entrou/saiu pelo sinal; ler por tipo.
+- Testes: `tests/test_sobra_por_item.py` (15 casos). Manual atualizado
+  (linha das sobras no DIARIO).
+
 ## Estoque pendente (congelados + loja)
 
 Tanto `EstoqueProducao` quanto `EstoqueLoja` tem coluna `nome_pendente`. Quando o
