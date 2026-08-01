@@ -44,6 +44,11 @@ COBRA_SOBRA_SEED = [
     'Croissant Almond',
 ]
 
+# Backfill UNICO de receita.descricao_atacado (20/07/2026, ditado do dono:
+# "descricao sincera de cada produto b2b, quanto menos e mais... fala dos
+# ingredientes"). Textos escritos a partir dos ingredientes REAIS das fichas
+# em prod (FarinhaT65/T45, Baton Callebaut etc.) + metodos ditados. Aplicado
+# SO quando a coluna e criada; depois disso a ficha da receita manda.
 DESCRICOES_ATACADO_SEED = [
     ('Sourdough Tradicional',
      'Farinha francesa T65, água, sal e levain. '
