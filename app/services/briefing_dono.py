@@ -539,8 +539,12 @@ def montar_texto(dados=None):
     v = d['vendas']
     linhas = ['☀️ *Briefing O Pão* — %s' % d['hoje_label'], '']
     linhas.append('💰 *Vendas de ontem (%s)*' % v['label'])
-    linhas.append('PDV: %s · %d pedidos' % (_fmt_brl(v['pdv_total']),
-                                            v['n_pedidos']))
+    linhas.append('PDV: %s · %d pedidos%s' % (
+        _fmt_brl(v['pdv_total']), v['n_pedidos'],
+        # A Cantina vende pelo PDV do Tiny; ja esta somada no PDV acima —
+        # explicitar evita o dono procurar a diferenca no /pdv/ (que e Seru).
+        (' (inclui Tiny: %s)' % _fmt_brl(v['tiny_total']))
+        if v.get('tiny_total') else ''))
     for lj in v['por_loja']:
         if lj['delta_pct'] is not None:
             sinal = '+' if lj['delta_pct'] >= 0 else ''
