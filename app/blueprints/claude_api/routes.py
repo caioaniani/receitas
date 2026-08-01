@@ -1890,6 +1890,11 @@ def estoque_ledger():
     somado POR TIPO (entrou x saiu), pra responder "onde foi parar" quando a
     conferência acusa diferença (31/07/2026, caso "diferença enorme").
 
+    ATENCAO — o SINAL de `MovEstoqueLoja.quantidade` NAO indica direcao: o
+    canal Seru/lote grava a BAIXA como POSITIVO (convencao historica, ver
+    `baixa_venda._SINAL_ESTORNO`). Por isso este endpoint NAO tenta somar
+    "entrou x saiu": devolve o bruto POR TIPO, que e o unico corte confiavel.
+
     Sem `?item=`, devolve o resumo por tipo da loja inteira. Read-only.
     Params: ?loja=<nome|id> (obrigatório), ?item=<trecho do nome>,
     ?dias=N (default 14, max 90).
@@ -1936,8 +1941,6 @@ def estoque_ledger():
     itens = []
     for el in linhas:
         por_tipo = somas.get(el.id, {})
-        entrou = sum(v['soma'] for v in por_tipo.values() if v['soma'] > 0)
-        saiu = sum(-v['soma'] for v in por_tipo.values() if v['soma'] < 0)
         itens.append({
             'item': el.nome_item,
             'estoque_loja_id': el.id,
@@ -1946,11 +1949,10 @@ def estoque_ledger():
                           'produto' if el.produto_id else
                           'materia_prima' if el.materia_prima_id else 'pendente'),
             'saldo_atual': int(el.quantidade or 0),
-            'entrou_na_janela': entrou,
-            'saiu_na_janela': saiu,
+            'n_movimentos': sum(v['n'] for v in por_tipo.values()),
             'por_tipo': por_tipo,
         })
-    itens.sort(key=lambda x: -(x['entrou_na_janela'] + x['saiu_na_janela']))
+    itens.sort(key=lambda x: -x['n_movimentos'])
 
     return jsonify(ok=True, loja=loja.nome,
                    janela={'inicio': ini.date().isoformat(), 'dias': dias},
