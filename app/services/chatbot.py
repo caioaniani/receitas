@@ -88,9 +88,25 @@ def _horarios_especiais_texto():
                     if r.express_bloqueado else
                     f'- {dia}{nome}: SO {", ".join(r.lista_janelas())} '
                     '(entrega e retirada).')
-        return ('\n\nHORARIOS ESPECIAIS (valem SOBRE o "todos os dias das 8h '
-                'as 18h" acima — nestes dias o horario normal NAO vale):\n'
-                + '\n'.join(linhas))
+        bloco = ('\n\nHORARIOS ESPECIAIS (valem SOBRE o "todos os dias das '
+                 '8h as 18h" acima — nestes dias o horario normal NAO '
+                 'vale):\n' + '\n'.join(linhas))
+        # Expectativa DENTRO da faixa (dono 01/08/2026, Dia dos Pais): a
+        # faixa larga e uma LEVA unica de rota otimizada — nao existe hora
+        # individual por pedido, e prometer uma seria mentira que vira
+        # reclamacao as 09h30. So entra quando ha dia especial ABERTO
+        # (dia fechado nao tem entrega pra explicar).
+        if any(not r.fechado for r in regras):
+            bloco += (
+                '\nNesses dias NAO existe horario individual por pedido: '
+                'por conta da alta demanda as entregas saem em rota unica '
+                'e chegam em algum momento DENTRO da faixa. NUNCA prometa '
+                'hora exata dentro da faixa, mesmo que o cliente insista '
+                '— explique com carinho e diga que no dia ele acompanha a '
+                'entrega ao vivo pela pagina do pedido (link no e-mail de '
+                'confirmacao; ele tambem recebe e-mail quando o pedido '
+                'sair pra entrega).')
+        return bloco
     except Exception:  # noqa: BLE001
         logger.exception('chatbot: horarios especiais falharam')
         return ''
