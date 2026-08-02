@@ -608,3 +608,25 @@ def test_remover_pela_tela(app):
     c.post('/admin/loja-online/horarios-especiais/remover',
            data={'data': '2026-08-09'}, follow_redirects=True)
     assert LojaDataEspecial.query.count() == 0
+
+
+def test_bot_explica_que_nao_ha_hora_individual_na_faixa(app):
+    """Dono 01/08/2026: "não tem um horário definido por conta da alta
+    demanda" — o bot precisa gerenciar a expectativa DENTRO da faixa e
+    apontar o acompanhamento ao vivo, nunca prometer hora exata."""
+    from app.services import chatbot
+    _definir(data=_daqui(5), rotulo='Dia dos Pais')
+    txt = chatbot._horarios_especiais_texto()
+    assert 'NAO existe horario individual' in txt
+    assert 'NUNCA prometa hora exata' in txt
+    assert 'acompanha a entrega ao vivo' in txt
+
+
+def test_bot_dia_fechado_nao_ganha_papo_de_faixa(app):
+    """Dia FECHADO não tem entrega — explicar "dentro da faixa" seria
+    confuso. O aviso só entra quando há dia especial aberto."""
+    from app.services import chatbot
+    _definir(data=_daqui(3), janelas='')
+    txt = chatbot._horarios_especiais_texto()
+    assert 'NAO entregamos' in txt
+    assert 'horario individual' not in txt
