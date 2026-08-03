@@ -241,9 +241,16 @@ def conferencia():
         dias = min(max(int(request.args.get('dias') or 7), 1), 90)
     except (TypeError, ValueError):
         dias = 7
+    from sqlalchemy.orm import joinedload, selectinload
+
     loja = _resolver_loja(request.args.get('loja'))
     di = hoje() - timedelta(days=dias - 1)
     q = (ChecklistPreenchimento.query
+         .options(joinedload(ChecklistPreenchimento.loja),
+                  joinedload(ChecklistPreenchimento.usuario),
+                  # selectinload: o template lê respostas + n_problemas de
+                  # cada linha — sem isso, ~3 lazy-loads × 400 linhas.
+                  selectinload(ChecklistPreenchimento.respostas))
          .filter(ChecklistPreenchimento.data >= di,
                  ChecklistPreenchimento.data <= hoje()))
     if loja:
@@ -252,8 +259,8 @@ def conferencia():
                               ChecklistPreenchimento.criado_em.desc())
                    .limit(400).all())
     faltando = {
-        'abertura_hoje': checklist_loja._lojas_faltando('abertura', hoje()),
-        'fechamento_ontem': checklist_loja._lojas_faltando(
+        'abertura_hoje': checklist_loja.lojas_faltando('abertura', hoje()),
+        'fechamento_ontem': checklist_loja.lojas_faltando(
             'fechamento', hoje() - timedelta(days=1)),
     }
     return render_template(
