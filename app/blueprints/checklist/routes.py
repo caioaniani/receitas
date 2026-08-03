@@ -205,7 +205,9 @@ def config():
             flash('Item atualizado.', 'success')
         elif acao == 'toggle':
             it = _item_do_form()
-            if it is not None:
+            if it is None:
+                flash('Item não encontrado.', 'danger')
+            else:
                 it.ativo = not it.ativo
                 db.session.commit()
                 flash(('Item reativado.' if it.ativo
@@ -213,7 +215,9 @@ def config():
                             'o histórico não muda.'), 'success')
         elif acao == 'excluir':
             it = _item_do_form()
-            if it is not None:
+            if it is None:
+                flash('Item não encontrado.', 'danger')
+            elif it is not None:
                 usado = (ChecklistResposta.query
                          .filter_by(item_id=it.id).first() is not None)
                 if usado:
