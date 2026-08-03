@@ -20,7 +20,7 @@
    iOS Safari trava o picker pra sempre se a permissão de câmera for negada
    uma vez (lição de 24/06/2026); sem o atributo ele oferece câmera OU
    galeria. #}
-<form method="POST" enctype="multipart/form-data">
+<form method="POST" enctype="multipart/form-data" id="form-checklist">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="loja" value="{{ loja.id }}">
   <input type="hidden" name="tipo" value="{{ tipo }}">
