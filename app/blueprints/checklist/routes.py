@@ -82,6 +82,25 @@ def preencher():
         return redirect(url_for('checklist.index', loja=loja.id))
 
     if request.method == 'POST':
+        # Anti-duplo-submit (achado da revisão 03/08/2026): upload de foto em
+        # 3G dá janela real pro segundo clique. Mesmo (loja, tipo, usuário)
+        # criado há < 30s = duplicata acidental, não re-preenchimento
+        # intencional (esse continua permitido depois da janela).
+        from datetime import timedelta
+
+        from app.utils import agora
+        recente = (ChecklistPreenchimento.query
+                   .filter(ChecklistPreenchimento.loja_id == loja.id,
+                           ChecklistPreenchimento.tipo == tipo,
+                           ChecklistPreenchimento.usuario_id == current_user.id,
+                           ChecklistPreenchimento.criado_em
+                           >= agora() - timedelta(seconds=30))
+                   .first())
+        if recente is not None:
+            flash('Esse checklist acabou de ser registrado — não gravei em '
+                  'dobro. (Pra preencher de novo de propósito, aguarde '
+                  'meio minuto.)', 'info')
+            return redirect(url_for('checklist.index', loja=loja.id))
         respostas = {}
         for it in itens:
             estado = request.form.get(f'ok_{it.id}')
