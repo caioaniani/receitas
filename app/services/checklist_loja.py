@@ -181,29 +181,40 @@ def _subir_fotos(loja, itens, respostas):
 
 # ── Cobrança (pendência na home do dono) ─────────────────────────────
 
-def _lojas_operacionais():
+def lojas_operacionais():
     """Mesma régua do desperdicio_alerta: ativa e != 'Industria'."""
     return Loja.query.filter(Loja.ativa.is_(True),
                              Loja.nome != 'Industria').all()
 
 
-def _lojas_faltando(tipo, dia):
+def lojas_faltando(tipo, dia):
     """Lojas que FUNCIONAM no dia, TÊM item do tipo cadastrado e NÃO
-    preencheram. Devolve a lista de nomes (a pendência mostra quem)."""
-    lojas = [lj for lj in _lojas_operacionais() if lj.funciona_em(dia)]
+    preencheram. Devolve a lista de nomes (a pendência mostra quem).
+
+    Item criado DEPOIS do dia cobrado não conta pra ele: cadastrar o
+    primeiro item de fechamento hoje de manhã não pode acusar todas as
+    lojas de "fechamento de ontem ausente" retroativo (achado da revisão
+    03/08/2026). `criado_em` compara com o FIM do dia cobrado.
+    """
+    from datetime import datetime as _dt
+    from datetime import time as _t
+
+    lojas = [lj for lj in lojas_operacionais() if lj.funciona_em(dia)]
     if not lojas:
         return []
     ids = [lj.id for lj in lojas]
+    fim_do_dia = _dt.combine(dia + timedelta(days=1), _t.min)
+    base = (ChecklistItemModelo.tipo == tipo,
+            ChecklistItemModelo.ativo.is_(True),
+            db.or_(ChecklistItemModelo.criado_em.is_(None),
+                   ChecklistItemModelo.criado_em < fim_do_dia))
     # Item global ativo do tipo cobre todas; específico cobre a dele.
     tem_global = (db.session.query(ChecklistItemModelo.id)
-                  .filter(ChecklistItemModelo.tipo == tipo,
-                          ChecklistItemModelo.ativo.is_(True),
-                          ChecklistItemModelo.loja_id.is_(None))
+                  .filter(*base, ChecklistItemModelo.loja_id.is_(None))
                   .first() is not None)
     com_item = set(ids) if tem_global else {
         lid for (lid,) in db.session.query(ChecklistItemModelo.loja_id)
-        .filter(ChecklistItemModelo.tipo == tipo,
-                ChecklistItemModelo.ativo.is_(True),
+        .filter(*base,
                 ChecklistItemModelo.loja_id.in_(ids)).distinct().all()}
     if not com_item:
         return []
@@ -223,10 +234,16 @@ def pendencias_checklist():
     Fechamento: cobrado o de ONTEM (o turno fecha à noite; cobrar hoje de
     manhã é o primeiro momento útil). Troca de turno nunca é cobrada.
     """
+    # Curto-circuito: sem NENHUM item ativo cadastrado (o estado até o dono
+    # configurar), a home não paga as queries de loja/preenchimento — um
+    # EXISTS e pronto (achado da revisão 03/08/2026).
+    if (db.session.query(ChecklistItemModelo.id)
+            .filter(ChecklistItemModelo.ativo.is_(True)).first() is None):
+        return []
     out = []
     hj = hoje()
     if agora().time() >= HORA_COBRA_ABERTURA:
-        faltam = _lojas_faltando('abertura', hj)
+        faltam = lojas_faltando('abertura', hj)
         if faltam:
             out.append({
                 'chave': 'checklist_abertura',
@@ -234,7 +251,7 @@ def pendencias_checklist():
                            % (CHECKLIST_TIPO_LABEL['abertura'].lower(),
                               ', '.join(sorted(faltam)))),
                 'qtd': len(faltam), 'url': '/checklist/conferencia'})
-    faltam = _lojas_faltando('fechamento', hj - timedelta(days=1))
+    faltam = lojas_faltando('fechamento', hj - timedelta(days=1))
     if faltam:
         out.append({
             'chave': 'checklist_fechamento',
