@@ -47,6 +47,10 @@ AUDITED_MODELS = {
     # dinheiro-adjacentes e baixo volume — trilha barata. Conferencias
     # ficam fora (ja sao o proprio registro de evento).
     'ativo',
+    # Checklist de loja (03/08/2026): editar/desativar item muda o que os
+    # turnos sao cobrados a comprovar — baixo volume, trilha barata.
+    # Preenchimentos/respostas ficam fora (ja sao o proprio registro).
+    'checklist_item_modelo',
 }
 
 
