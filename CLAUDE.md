@@ -858,6 +858,60 @@ ALGO hoje?") — lancar a sobra de UM item calava a cobranca de todos.
 - Testes: `tests/test_sobra_por_item.py` (15 casos). Manual atualizado
   (linha das sobras no DIARIO).
 
+## Checklist de loja — abertura / troca de turno / fechamento (03/08/2026)
+
+Pedido do dono: o gerente/atendente chefe responsavel do turno preenche um
+checklist e tira FOTO comprovando os pontos necessarios. Decisoes dele
+(AskUserQuestion): tela no CELULAR (nao Slack), itens CADASTRAVEIS em tela
+(sem deploy), foto POR ITEM selecionado, cobranca = pendencia na home.
+
+- **Modelos** (`app/models/checklist.py`, tabelas novas via `db.create_all`):
+  `ChecklistItemModelo` (tipo/texto/exige_foto/ordem/ativo/loja_id NULL =
+  todas), `ChecklistPreenchimento` (loja/tipo/data/usuario; SEM unique — troca
+  de turno pode repetir no dia) e `ChecklistResposta` com **SNAPSHOT**
+  (`item_texto`/`exigia_foto`): editar o cadastro depois nao reescreve a
+  historia. Foto so Dropbox (`foto_url` raw, regra M6), path
+  `/checklists/<loja>/<data>/<item>_<ms>.jpg`.
+- **Service** `app/services/checklist_loja.py`, tudo FAIL-CLOSE (nada e
+  gravado em erro; uploads ANTES do 1o INSERT): todo item respondido;
+  `exige_foto` sem foto = recusa (vale tambem em "problema" — a foto prova o
+  estado); problema sem observacao = recusa; Dropbox fora/imagem ilegivel/
+  erro de REDE do upload = recusa com mensagem legivel (catch largo
+  deliberado — ConnectionError do retry escapando viraria 500 e o
+  funcionario perderia as marcacoes). **Fechamento de madrugada** (antes de
+  `HORA_VIRADA_FECHAMENTO`=04:00) grava `data` = dia ANTERIOR (turno de
+  segunda fechado 00:15 de terca e fechamento de SEGUNDA — mesma classe do
+  padeiro pos-meia-noite).
+- **Telas** (blueprint `checklist`, prefixo `/checklist`): hub + preencher
+  (mobile 560px, radios OK/Problema, input de foto SEM `capture=` — armadilha
+  iOS 24/06/2026; re-render de erro preserva marcacoes e avisa que fotos
+  precisam re-anexar; anti-duplo-submit = botao desabilita no JS + guarda de
+  30s no servidor por loja+tipo+usuario), `/checklist/config` (admin; item
+  usado nunca e excluido, so desativado; loja invalida no cadastro NAO vira
+  item global em silencio — recusa) e `/checklist/conferencia` (admin;
+  eager-load de loja/usuario/respostas; topo mostra quem esta DEVENDO
+  hoje/ontem). Validado a 390px (Playwright, 16 checks).
+- **Permissao**: capacidade editavel `web_checklist` (default gerente+
+  funcionario; admin/owner sempre) — decorator `checklist_required` +
+  `Usuario.pode_checklist()`. O atendente chefe (papel funcionario) NAO ve a
+  area Lojas: a sidebar tem bloco avulso "Loja → Checklist da loja" pra quem
+  tem a capacidade sem `pode_lojas` (`base.html`). `ChecklistItemModelo` em
+  `AUDITED_MODELS` (editar item muda o que os turnos comprovam).
+- **Cobranca** (`pendencias_checklist` → `briefing_dono.pendencias`, com
+  try/except que nunca derruba a home): abertura de HOJE ausente so depois de
+  `HORA_COBRA_ABERTURA`=10:00; fechamento de ONTEM ausente. Respeita
+  `funciona_em` (Cantina so sab/dom), so cobra loja com item aplicavel, item
+  criado DEPOIS do dia cobrado nao conta (cadastrar o 1o item de fechamento
+  hoje nao acusa "ontem" retroativo), e SEM NENHUM item cadastrado a funcao
+  curto-circuita num EXISTS (feature nao configurada nao custa nem cobra).
+  Troca de turno NUNCA e cobrada.
+- **DECISOES ACEITAS** (mencionadas ao dono): funcionario pode preencher
+  checklist de QUALQUER loja (gerente cobre outra loja; o registro guarda
+  quem — travar por `Usuario.loja_id` e decisao separada); hora de cobranca
+  10:00 e GLOBAL, nao por loja; foto extra em item sem exige_foto e aceita.
+- Testes: `tests/test_checklist_loja.py` (36 casos). Manual de operacao
+  atualizado (secao DIARIO) na mesma mudanca.
+
 ## Estoque pendente (congelados + loja)
 
 Tanto `EstoqueProducao` quanto `EstoqueLoja` tem coluna `nome_pendente`. Quando o
