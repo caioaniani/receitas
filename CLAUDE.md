@@ -3681,6 +3681,31 @@ so-treino (auto-lockout — `toggle` recusa `u.id == current_user.id`).
 `gerar_acesso` seta so `senha_provisoria` (NAO `somente_treino` — flag
 separada, marcada a mao). Testes: `tests/test_acesso_so_treino.py` (12 casos).
 
+## Importar FOLHA DE PAGAMENTO (xlsx) no RH (03/08/2026)
+
+Pedido do dono ("Preciso atualizar o RH", folha 06/2026 da contabilidade). A
+folha e MENSAL, entao virou tela em vez de acerto manual:
+`/rh/folha/importar` (owner, gate do blueprint RH; link "Importar folha
+(xlsx)" no macro rh — NAO confundir com `/rh/folha`, a folha CALCULADA
+interna que ja existia). Servico `app/services/folha_import.py`.
+
+- **Match por CPF** (so digitos; `Funcionario.cpf` e unique). Colunas
+  localizadas por NOME no cabecalho (a contabilidade muda a ordem);
+  aba "Funcionários" ou qualquer aba com coluna CPF.
+- **Fluxo**: upload → `ler_folha` (linha sem CPF/salario legivel vira AVISO
+  visivel, nunca sumico) → `comparar` (previa: novos / alterados com
+  antes→depois / iguais / ativos FORA da folha) → o dono MARCA →
+  `aplicar` re-valida tudo contra o banco (a previa e tela, nao autoridade).
+- **Regras de peso** (salario e dinheiro): NADA se grava sem checkbox;
+  fora-da-folha NUNCA desliga sozinho (ferias/licenca tambem somem de
+  folha — checkbox "marcar desligado" POR PESSOA); quem volta pra folha
+  desligado e REATIVADO (limpa data_demissao); a folha manda so em
+  salario_base/funcao/data_admissao — VT/VR/telefone/loja intactos.
+- Linha da previa viaja como JSON em hidden (`|tojson|forceescape`).
+- Validado com a folha REAL 06/2026: 38 funcionarios, 0 avisos.
+- Testes: `tests/test_folha_import.py` (11 casos). Manual registrado
+  (secao QUANDO PRECISAR).
+
 ## Pre-cadastro de funcionario por QR (23/07/2026)
 
 Pedido do dono ("formulario QR pra captar nome, sobrenome, e-mail e telefone
