@@ -86,6 +86,18 @@ def rh_required(f):
     return decorated
 
 
+def checklist_required(f):
+    """Checklist de loja (abertura/troca de turno/fechamento) — quem o dono
+    pediu foi o responsável do turno. Capacidade editável: web_checklist
+    (default gerente+funcionario; admin/owner sempre)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not _pode_cap('web_checklist'):
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
 def owner_required(f):
     """Bloqueia acesso para usuários que não são super admin (is_owner=True).
     Use em telas/endpoints que envolvem salários e dados financeiros sensíveis.
