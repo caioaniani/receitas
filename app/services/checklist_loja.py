@@ -132,9 +132,8 @@ def registrar(loja, tipo, usuario_id, respostas, observacao=None):
 def _data_do_registro(tipo):
     """Fechamento preenchido de madrugada (< HORA_VIRADA_FECHAMENTO) pertence
     ao dia ANTERIOR; o resto é do dia corrente."""
-    ag = agora()
-    if tipo == 'fechamento' and ag.time() < HORA_VIRADA_FECHAMENTO:
-        return ag.date() - timedelta(days=1)
+    if tipo == 'fechamento' and agora().time() < HORA_VIRADA_FECHAMENTO:
+        return hoje() - timedelta(days=1)
     return hoje()
 
 
