@@ -95,6 +95,30 @@ def _migrate(app):
     if not os.environ.get('PYTEST_RUNNING'):
         _migrate_estoque_trava(app)
         _seed_horario_dia_dos_pais(app)
+        _seed_checklist_padrao(app)
+
+
+def _seed_checklist_padrao(app):
+    """Importa UMA VEZ o checklist em papel da Opão (11 setores, 169 pontos).
+
+    O dono mandou o PDF "CHECKLISTS OPERACIONAIS POR SETOR" em 03/08/2026 e
+    pediu pra importar — então os itens já têm que estar lá quando o deploy
+    subir, sem depender de alguém digitar 169 linhas.
+
+    Guard em AppConfig: se ele apagar/editar itens depois, o próximo deploy
+    NÃO ressuscita — cadastro do dono manda sobre seed (mesma regra do
+    horário do Dia dos Pais). Best-effort: falhar aqui nunca derruba o
+    startup. Pulado sob PYTEST_RUNNING (169 itens em toda fixture quebraria
+    os testes que contam itens); o teste do seed chama o serviço direto."""
+    try:
+        from app.services import checklist_seed
+        checklist_seed.importar_padrao()
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed checklist padrao): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 # Data do pedido original do dono (27/07/2026): "no dia 09/08 tenha somente
