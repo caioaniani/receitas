@@ -66,7 +66,7 @@ não existe e ninguém é cobrado.</p>
   <div class="card-header py-2"><strong class="small">
     {% if t == 'abertura' %}🌅{% elif t == 'troca_turno' %}🔄{% else %}🌙{% endif %}
     {{ labels[t] }}
-    <span class="text-muted fw-normal">· {{ por_tipo[t]|length }} item(ns)</span>
+    <span class="text-muted fw-normal">· {{ n_por_tipo[t] }} ponto(s)</span>
   </strong></div>
   <div class="card-body py-2 small">
     {% if not por_tipo[t] %}
@@ -77,7 +77,13 @@ não existe e ninguém é cobrado.</p>
       <thead><tr><th style="width:45%">Texto</th><th>Loja</th><th>Ordem</th>
         <th>📷</th><th></th></tr></thead>
       <tbody>
-        {% for it in por_tipo[t] %}
+        {% for setor, itens_do_setor in por_tipo[t] %}
+        {% if por_tipo[t]|length > 1 %}
+        <tr class="table-light"><td colspan="5" class="fw-semibold text-uppercase"
+            style="font-size:11px;letter-spacing:.06em;">{{ setor }}
+            <span class="text-muted">({{ itens_do_setor|length }})</span></td></tr>
+        {% endif %}
+        {% for it in itens_do_setor %}
         <tr class="{{ 'opacity-50' if not it.ativo }}">
           <td>
             <input form="fi{{ it.id }}" type="text" name="texto" maxlength="300"
