@@ -165,7 +165,15 @@ def _subir_fotos(loja, itens, respostas):
                 f'{it.id}_{int(agora().timestamp() * 1000)}.jpg')
         try:
             out[it.id] = dropbox_storage.upload_publico(comprimida, path)
-        except RuntimeError as exc:
+        except Exception as exc:                           # noqa: BLE001
+            # Broad DE PROPÓSITO (achado da revisão 03/08/2026): além do
+            # RuntimeError do serviço, o retry de rede re-levanta
+            # requests.ConnectionError/Timeout e o r.json() pode levantar
+            # JSONDecodeError — qualquer uma escapando viraria 500 genérico
+            # e o funcionário perderia as marcações. O fail-close se mantém
+            # (nada gravado); o erro real fica no log.
+            logger.warning('checklist: upload de foto falhou (%s): %s',
+                           type(exc).__name__, exc)
             raise ValueError('Falha ao subir a foto de '
                              f'"{it.texto}". Tente de novo.') from exc
     return out
