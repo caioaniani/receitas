@@ -79,6 +79,9 @@ CAP_DEFAULT = {
     'web_lista_compras': {'gerente', 'producao'},
     # Consolidar/decidir o que pedir: vazio pra editaveis (= so admin/owner).
     'web_lista_compras_consolidar': set(),
+    # Checklist de abertura/troca/fechamento (03/08/2026): quem o dono pediu
+    # foi "gerente ou atendente chefe do turno" — gerente + funcionario.
+    'web_checklist': {'gerente', 'funcionario'},
     # ── Copilot/Slack — nivel gerente ──
     'criar_pedido': {'gerente'},
     'editar_pedido': {'gerente'},
