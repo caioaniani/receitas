@@ -190,13 +190,23 @@ def api_pedidos(token):
     except ValueError:
         target = hoje_brt()
 
-    # Reaproveita a busca da API geral
+    # FIX 03/08/2026 (mesma classe do /rotas cego): a pagina do driver era
+    # da era VNDA — com o VNDA aposentado o `erro` virava 502 e o motorista
+    # nao via NADA, nem os pedidos do site. Erro do VNDA agora e tolerado
+    # (base vazia) e os pedidos do SITE entram pelo serializador do painel.
+    # Retirada fora (cliente busca na loja).
     overrides = {}  # nao mexe em overrides na pagina do driver
-    resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    try:
+        resultado = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    except Exception:  # noqa: BLE001
+        resultado = {'erro': 'vnda indisponivel'}
     if 'erro' in resultado:
-        return jsonify(ok=False, erro=resultado['erro']), 502
+        resultado = {'pedidos': []}
 
-    pedidos = resultado.get('pedidos', [])
+    from app.blueprints.entregas.routes import _pedidos_online_do_dia
+    pedidos = (resultado.get('pedidos', [])
+               + [p for p in _pedidos_online_do_dia(target)
+                  if not p.get('retirada')])
     codes = [p['code'] for p in pedidos if p.get('code')]
     if not codes:
         return jsonify(ok=True, pedidos=[], driver={'id': driver.id, 'nome': driver.nome, 'cor': driver.cor})
