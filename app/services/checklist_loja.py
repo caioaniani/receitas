@@ -164,7 +164,7 @@ def _subir_fotos(loja, itens, respostas, data_reg):
         except ValueError as exc:
             raise ValueError(f'A foto de "{it.texto}" não pôde ser lida '
                              '(formato não suportado?). Tire de novo.') from exc
-        path = (f'/checklists/{loja.id}/{hoje().isoformat()}/'
+        path = (f'/checklists/{loja.id}/{data_reg.isoformat()}/'
                 f'{it.id}_{int(agora().timestamp() * 1000)}.jpg')
         try:
             out[it.id] = dropbox_storage.upload_publico(comprimida, path)
