@@ -110,7 +110,7 @@ def test_registrar_grava_com_snapshot(app):
         i2 = _item(texto='Caixa conferido', ordem=1)
         p = checklist_loja.registrar(
             lj, 'abertura', u.id,
-            _resp([i1, i2], **{i2.id: {'ok': False, 'observacao': 'faltou troco'}}))
+            _resp([i1, i2], {i2.id: {'ok': False, 'observacao': 'faltou troco'}}))
         assert p.data == hoje()
         assert p.usuario_id == u.id
         assert len(p.respostas) == 2
@@ -154,7 +154,7 @@ def test_problema_sem_observacao_recusa(app):
         with pytest.raises(ValueError, match='observa'):
             checklist_loja.registrar(
                 lj, 'abertura', u.id,
-                _resp([it], **{it.id: {'ok': False}}))
+                _resp([it], {it.id: {'ok': False}}))
 
 
 def test_foto_sobe_pro_dropbox_e_grava_url(app, dropbox_ok):
@@ -164,7 +164,7 @@ def test_foto_sobe_pro_dropbox_e_grava_url(app, dropbox_ok):
         it = _item(texto='Vitrine', exige_foto=True)
         p = checklist_loja.registrar(
             lj, 'abertura', u.id,
-            _resp([it], **{it.id: {'ok': True, 'foto': b'jpg'}}))
+            _resp([it], {it.id: {'ok': True, 'foto': b'jpg'}}))
         assert dropbox_ok.called
         path = dropbox_ok.call_args[0][1]
         assert path.startswith(f'/checklists/{lj.id}/{hoje().isoformat()}/')
@@ -185,7 +185,7 @@ def test_dropbox_fora_recusa_fail_close(app):
             with pytest.raises(ValueError, match='indispon'):
                 checklist_loja.registrar(
                     lj, 'abertura', u.id,
-                    _resp([it], **{it.id: {'ok': True, 'foto': b'jpg'}}))
+                    _resp([it], {it.id: {'ok': True, 'foto': b'jpg'}}))
         assert ChecklistPreenchimento.query.count() == 0
 
 
@@ -201,7 +201,7 @@ def test_foto_ilegivel_recusa_com_o_nome_do_item(app):
             with pytest.raises(ValueError, match='Vitrine'):
                 checklist_loja.registrar(
                     lj, 'abertura', u.id,
-                    _resp([it], **{it.id: {'ok': True, 'foto': b'heic'}}))
+                    _resp([it], {it.id: {'ok': True, 'foto': b'heic'}}))
         assert ChecklistPreenchimento.query.count() == 0
 
 
