@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Checklist — {{ label }} — {{ loja.nome }}{% endblock %}
+{% block content %}
+<div style="max-width:560px;">
+<h1 class="page-title">
+  {% if tipo == 'abertura' %}🌅{% elif tipo == 'troca_turno' %}🔄{% else %}🌙{% endif %}
+  {{ label }} — {{ loja.nome }}
+</h1>
+
+{% if anteriores %}
+<div class="alert alert-info small py-2">
+  Já preenchido hoje
+  {% for p in anteriores %}às <strong>{{ p.criado_em.strftime('%H:%M') }}</strong> por
+  {{ p.usuario.nome if p.usuario else '?' }}{{ ' · ' if not loop.last }}{% endfor %}.
+  Preencher de novo cria <strong>outro registro</strong> (não apaga o anterior).
+</div>
+{% endif %}
+
+{# multipart: as fotos sobem no mesmo POST. SEM capture= no input de foto —
+   iOS Safari trava o picker pra sempre se a permissão de câmera for negada
+   uma vez (lição de 24/06/2026); sem o atributo ele oferece câmera OU
+   galeria. #}
+<form method="POST" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="loja" value="{{ loja.id }}">
+  <input type="hidden" name="tipo" value="{{ tipo }}">
+
+  {% for it in itens %}
+  {% set marcado = form.get('ok_' ~ it.id) if form else none %}
+  <div class="card mb-2">
+    <div class="card-body py-2">
+      <div class="fw-semibold">{{ it.texto }}
+        {% if it.exige_foto %}
+        <span class="badge bg-warning text-dark">📷 exige foto</span>
+        {% endif %}
+      </div>
+      <div class="btn-group mt-2 w-100" role="group">
+        <input type="radio" class="btn-check" name="ok_{{ it.id }}"
+               id="ok{{ it.id }}" value="ok" required
+               {% if marcado == 'ok' %}checked{% endif %}>
+        <label class="btn btn-outline-success" for="ok{{ it.id }}">✔ OK</label>
+        <input type="radio" class="btn-check" name="ok_{{ it.id }}"
+               id="pb{{ it.id }}" value="problema"
+               {% if marcado == 'problema' %}checked{% endif %}>
+        <label class="btn btn-outline-danger" for="pb{{ it.id }}">⚠ Problema</label>
+      </div>
+      <input type="text" name="obs_{{ it.id }}" maxlength="500"
+             class="form-control form-control-sm mt-2"
+             placeholder="Observação (obrigatória se marcar problema)"
+             value="{{ form.get('obs_' ~ it.id, '') if form else '' }}">
+      {% if it.exige_foto %}
+      <input type="file" name="foto_{{ it.id }}" accept="image/*" required
+             class="form-control form-control-sm mt-2">
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="card mb-3">
+    <div class="card-body py-2">
+      <label class="form-label small mb-1">Observação geral do turno (opcional)</label>
+      <textarea name="observacao" class="form-control form-control-sm" rows="2"
+                maxlength="500">{{ form.get('observacao', '') if form else '' }}</textarea>
+    </div>
+  </div>
+
+  <div class="d-grid gap-2 mb-3">
+    <button class="btn btn-lg btn-primary">✅ Fechar checklist de {{ label|lower }}</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('checklist.index', loja=loja.id) }}">Voltar</a>
+  </div>
+</form>
+</div>
+{% endblock %}
