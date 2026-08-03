@@ -141,6 +141,7 @@ def preencher():
     return render_template(
         'checklist/preencher.html', loja=loja, tipo=tipo,
         label=CHECKLIST_TIPO_LABEL[tipo], itens=itens,
+        grupos=checklist_loja.agrupar_por_setor(itens),
         anteriores=_do_dia(loja, tipo), form=None)
 
 
