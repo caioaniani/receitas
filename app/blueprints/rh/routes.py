@@ -1125,3 +1125,69 @@ def ponto_resumo():
             resumo[r.funcionario_id]['dias'] += 1
 
     return render_template('rh/ponto_resumo.html', resumo=resumo.values(), mes=mes, ano=ano)
+
+
+@rh_bp.route('/folha/importar', methods=['GET', 'POST'])
+def folha_importar():
+    """Importa a FOLHA DE PAGAMENTO da contabilidade (xlsx) — 03/08/2026.
+
+    GET = form de upload; POST = parse + PRÉVIA (nada gravado). Salário é
+    dinheiro: só a rota /folha/aplicar grava, e só o que o dono marcar.
+    Owner-only pelo gate do blueprint (_rh_restrito_ao_owner)."""
+    from app.services import folha_import
+    if request.method == 'GET':
+        return render_template('rh/folha_importar.html', preview=None)
+    arq = request.files.get('arquivo')
+    if not arq or not arq.filename:
+        flash('Escolha o arquivo da folha (.xlsx).', 'warning')
+        return redirect(url_for('rh.folha_importar'))
+    raw = arq.read()
+    if len(raw) > 8 * 1024 * 1024:
+        flash('Arquivo maior que 8MB — confira se é a folha certa.', 'danger')
+        return redirect(url_for('rh.folha_importar'))
+    try:
+        linhas, avisos = folha_import.ler_folha(raw)
+    except Exception as e:  # noqa: BLE001 — parse de arquivo externo
+        flash(f'Não consegui ler a planilha: {e}', 'danger')
+        return redirect(url_for('rh.folha_importar'))
+    preview = folha_import.comparar(linhas)
+    # `admissao` é date — vira ISO pros hidden JSON do form da prévia.
+    for ln in linhas:
+        ln['admissao'] = ln['admissao'].isoformat() if ln['admissao'] else None
+    return render_template('rh/folha_importar.html', preview=preview,
+                           avisos=avisos, nome_arquivo=arq.filename)
+
+
+@rh_bp.route('/folha/importar/aplicar', methods=['POST'])
+def folha_aplicar():
+    """Aplica o que o dono MARCOU na prévia. Cada linha viaja como JSON no
+    form e é re-validada no serviço — a prévia é tela, não autoridade."""
+    import json as _json
+
+    from app.services import folha_import
+    escolhas = {'criar': [], 'atualizar': [], 'desligar': []}
+    for chave in ('criar', 'atualizar'):
+        for bruto in request.form.getlist(chave):
+            try:
+                escolhas[chave].append(_json.loads(bruto))
+            except ValueError:
+                flash('Uma linha veio ilegível e foi pulada.', 'warning')
+    escolhas['desligar'] = request.form.getlist('desligar')
+    if not any(escolhas.values()):
+        flash('Nada marcado — nada foi alterado.', 'info')
+        return redirect(url_for('rh.folha_importar'))
+    stats = folha_import.aplicar(escolhas)
+    partes = []
+    if stats['criados']:
+        partes.append(f"{stats['criados']} cadastrado(s)")
+    if stats['atualizados']:
+        partes.append(f"{stats['atualizados']} atualizado(s)")
+    if stats['reativados']:
+        partes.append(f"{stats['reativados']} reativado(s)")
+    if stats['desligados']:
+        partes.append(f"{stats['desligados']} desligado(s)")
+    flash('Folha aplicada: ' + (', '.join(partes) or 'nenhuma mudança') + '.',
+          'success')
+    for e in stats['erros']:
+        flash(e, 'warning')
+    return redirect(url_for('rh.funcionarios'))
