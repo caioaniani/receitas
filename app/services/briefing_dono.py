@@ -177,6 +177,15 @@ def pendencias(incluir_owner=True):
                       'rotulo': 'Itens sem vínculo no estoque das lojas',
                       'qtd': el, 'url': '/pedidos/estoque-loja'})
 
+    # Checklist de loja (03/08/2026): abertura de hoje (após 10h) e
+    # fechamento de ontem ausentes. Só cobra loja que funciona no dia e
+    # depois que o dono cadastrar itens — a conta vive no service.
+    try:
+        from app.services import checklist_loja
+        itens.extend(checklist_loja.pendencias_checklist())
+    except Exception:
+        logger.exception('pendencias: checklist_loja falhou')
+
     if incluir_owner:
         # 6. Órfãos de cesta (componente sem FK não baixa estoque na venda).
         from app.services.cestas import contar_produto_itens_orfaos
