@@ -111,7 +111,8 @@ def registrar(loja, tipo, usuario_id, respostas, observacao=None):
     fotos_up = _subir_fotos(loja, itens, respostas)
 
     p = ChecklistPreenchimento(
-        loja_id=loja.id, tipo=tipo, data=hoje(), usuario_id=usuario_id,
+        loja_id=loja.id, tipo=tipo, data=_data_do_registro(tipo),
+        usuario_id=usuario_id,
         observacao=(observacao or '').strip()[:500] or None)
     db.session.add(p)
     db.session.flush()
@@ -126,6 +127,15 @@ def registrar(loja, tipo, usuario_id, respostas, observacao=None):
             foto_storage_path=info.get('storage_path')))
     db.session.commit()
     return p
+
+
+def _data_do_registro(tipo):
+    """Fechamento preenchido de madrugada (< HORA_VIRADA_FECHAMENTO) pertence
+    ao dia ANTERIOR; o resto é do dia corrente."""
+    ag = agora()
+    if tipo == 'fechamento' and ag.time() < HORA_VIRADA_FECHAMENTO:
+        return ag.date() - timedelta(days=1)
+    return hoje()
 
 
 def _subir_fotos(loja, itens, respostas):
