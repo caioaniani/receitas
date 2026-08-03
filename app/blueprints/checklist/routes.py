@@ -18,8 +18,17 @@ from app.utils import hoje
 
 
 def _lojas_escolhiveis():
-    return (Loja.query.filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
-            .order_by(Loja.nome).all())
+    return sorted(checklist_loja.lojas_operacionais(),
+                  key=lambda lj: lj.nome)
+
+
+def _item_do_form():
+    """Resolve o item_id do POST sem estourar 500 em valor forjado."""
+    try:
+        iid = int(request.form.get('item_id') or 0)
+    except (TypeError, ValueError):
+        return None
+    return db.session.get(ChecklistItemModelo, iid) if iid else None
 
 
 def _resolver_loja(valor):
