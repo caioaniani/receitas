@@ -202,7 +202,7 @@ def config():
 def conferencia():
     """Histórico: quem preencheu, quando, problemas e fotos — e quem está
     DEVENDO hoje/ontem (mesma conta da pendência da home)."""
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     try:
         dias = min(max(int(request.args.get('dias') or 7), 1), 90)
@@ -223,7 +223,6 @@ def conferencia():
         'fechamento_ontem': checklist_loja._lojas_faltando(
             'fechamento', hoje() - timedelta(days=1)),
     }
-    _ = date  # noqa: F841
     return render_template(
         'checklist/conferencia.html', preenchidos=preenchidos,
         labels=CHECKLIST_TIPO_LABEL, lojas=_lojas_escolhiveis(),
