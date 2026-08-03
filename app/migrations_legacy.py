@@ -2705,5 +2705,12 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE produto_item ADD COLUMN preco_menu "
                        "NUMERIC(10, 2)")
 
+    # Setor no item de checklist (03/08/2026) — espelho do bloco Postgres.
+    cursor.execute("PRAGMA table_info(checklist_item_modelo)")
+    cols_chk = [row[1] for row in cursor.fetchall()]
+    if cols_chk and 'setor' not in cols_chk:
+        cursor.execute("ALTER TABLE checklist_item_modelo ADD COLUMN setor "
+                       "VARCHAR(60)")
+
     conn.commit()
     conn.close()
