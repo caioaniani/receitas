@@ -460,12 +460,21 @@ def test_fechamento_de_madrugada_conta_pro_dia_anterior(app, monkeypatch):
         lj = _loja()
         u = _user()
         it = _item(tipo='fechamento', texto='Loja trancada')
+        # Retro-data o item: sem isso o assert da pendência passaria pelo
+        # filtro de criado_em (item novo não cobra ontem), não pelo
+        # preenchimento — asserção vácua apontada na revisão rodada 2.
+        from datetime import datetime as _dt
+        it.criado_em = _dt.combine(hoje() - timedelta(days=2), _time(12, 0))
+        db.session.commit()
+        assert checklist_loja.lojas_faltando(
+            'fechamento', hoje() - timedelta(days=1)) == ['Loja A']
         from app.utils import agora as _agora
         madrugada = _agora().replace(hour=0, minute=15)
         monkeypatch.setattr(checklist_loja, 'agora', lambda: madrugada)
         p = checklist_loja.registrar(lj, 'fechamento', u.id, _resp([it]))
         assert p.data == hoje() - timedelta(days=1)
-        # e a pendência de "fechamento de ontem" se cala
+        # e a pendência de "fechamento de ontem" se cala DE VERDADE (o item
+        # existia ontem; quem calou foi o preenchimento)
         assert checklist_loja.lojas_faltando(
             'fechamento', hoje() - timedelta(days=1)) == []
 
