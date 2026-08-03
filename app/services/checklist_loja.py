@@ -41,6 +41,13 @@ logger = logging.getLogger(__name__)
 # gritar de madrugada seria alarme falso todo dia).
 HORA_COBRA_ABERTURA = _time(10, 0)
 
+# Fechamento preenchido de MADRUGADA (antes desta hora) conta pro dia
+# ANTERIOR: o turno de segunda fechado à 00:15 de terça é o fechamento de
+# SEGUNDA — gravar `data`=terça geraria falso "devendo" de segunda na home
+# e ainda calaria a cobrança de terça (mesma classe do problema da tela do
+# padeiro pós-meia-noite, achado da revisão 03/08/2026).
+HORA_VIRADA_FECHAMENTO = _time(4, 0)
+
 
 def itens_para(loja_id, tipo):
     """Itens ativos do tipo que valem pra loja: globais (loja_id NULL) +
