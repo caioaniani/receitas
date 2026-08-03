@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Checklist da loja{% endblock %}
+{% block content %}
+<div style="max-width:560px;">
+<h1 class="page-title"><i class="bi bi-clipboard-check"></i> Checklist da loja</h1>
+
+<p class="text-muted small">O responsável do turno preenche na <strong>abertura</strong>,
+na <strong>troca de turno</strong> e no <strong>fechamento</strong> — com foto nos
+pontos que exigem comprovação.</p>
+
+{% if not lojas %}
+<div class="alert alert-warning small">Nenhuma loja ativa cadastrada.</div>
+{% else %}
+<form method="GET" class="mb-3">
+  <label class="form-label small mb-1">Loja</label>
+  <select name="loja" class="form-select" onchange="this.form.submit()">
+    {% for l in lojas %}
+    <option value="{{ l.id }}" {% if loja and l.id == loja.id %}selected{% endif %}>{{ l.nome }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+{% if loja %}
+<div class="d-grid gap-2">
+  {% for t in tipos %}
+    {% set n = configurados.get(t) %}
+    {% set feitos = feitos_hoje.get(t) or [] %}
+    {% if n %}
+    <a class="btn btn-lg {{ 'btn-outline-success' if feitos else 'btn-primary' }} text-start d-flex justify-content-between align-items-center"
+       href="{{ url_for('checklist.preencher', loja=loja.id, tipo=t) }}">
+      <span>
+        {% if t == 'abertura' %}🌅{% elif t == 'troca_turno' %}🔄{% else %}🌙{% endif %}
+        {{ labels[t] }}
+        <span class="small opacity-75">· {{ n }} ponto{{ 's' if n != 1 }}</span>
+      </span>
+      {% if feitos %}
+      <span class="badge bg-success">✓ hoje às {{ feitos[-1].criado_em.strftime('%H:%M') }}</span>
+      {% endif %}
+    </a>
+    {% else %}
+    <button class="btn btn-lg btn-outline-secondary text-start" disabled
+            title="Sem itens cadastrados — o admin configura em Checklist → Configurar itens.">
+      {% if t == 'abertura' %}🌅{% elif t == 'troca_turno' %}🔄{% else %}🌙{% endif %}
+      {{ labels[t] }} <span class="small">· sem itens cadastrados</span>
+    </button>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+
+{% if current_user.is_admin() %}
+<hr>
+<p class="small mb-0">
+  <a href="{{ url_for('checklist.config') }}">⚙️ Configurar itens</a>
+  &nbsp;·&nbsp;
+  <a href="{{ url_for('checklist.conferencia') }}">📋 Conferência (histórico)</a>
+</p>
+{% endif %}
+</div>
+{% endblock %}
