@@ -254,12 +254,16 @@ def pendencias_checklist():
                            % (CHECKLIST_TIPO_LABEL['abertura'].lower(),
                               ', '.join(sorted(faltam)))),
                 'qtd': len(faltam), 'url': '/checklist/conferencia'})
-    faltam = lojas_faltando('fechamento', hj - timedelta(days=1))
-    if faltam:
-        out.append({
-            'chave': 'checklist_fechamento',
-            'rotulo': ('Checklist de %s de ontem não preenchido: %s'
-                       % (CHECKLIST_TIPO_LABEL['fechamento'].lower(),
-                          ', '.join(sorted(faltam)))),
-            'qtd': len(faltam), 'url': '/checklist/conferencia'})
+    # Antes de HORA_VIRADA_FECHAMENTO "ontem" ainda está fechando (o próprio
+    # registro de madrugada pertence a ontem) — cobrar às 00:30 seria
+    # pendência transitória falsa.
+    if agora().time() >= HORA_VIRADA_FECHAMENTO:
+        faltam = lojas_faltando('fechamento', hj - timedelta(days=1))
+        if faltam:
+            out.append({
+                'chave': 'checklist_fechamento',
+                'rotulo': ('Checklist de %s de ontem não preenchido: %s'
+                           % (CHECKLIST_TIPO_LABEL['fechamento'].lower(),
+                              ', '.join(sorted(faltam)))),
+                'qtd': len(faltam), 'url': '/checklist/conferencia'})
     return out
