@@ -154,3 +154,90 @@ def test_nao_entregue_nao_exige_foto(app):
                json={'atribuicao_id': a.id, 'status': 'nao_entregue',
                      'motivo_falha': 'ausente'})
     assert r.status_code == 200
+
+
+# ── /rotas e /driver enxergam pedido do SITE (fix 03/08/2026) ────────────
+#
+# A aba Rotas e a página do motorista eram da era VNDA: só montavam o pool
+# com VNDA + manuais, e com o VNDA aposentado o `erro` derrubava tudo —
+# "em /rotas não consigo ver nada do site" (dono, 03/08/2026).
+
+def _admin_client(app):
+    from app.models import Usuario
+    u = Usuario(nome='Adm', login='adm_rotas', papel='admin')
+    u.set_senha('x' * 8)
+    db.session.add(u)
+    db.session.commit()
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(u.id)
+        s['_fresh'] = True
+    return c
+
+
+def test_api_rotas_ve_pedido_do_site_sem_vnda(app):
+    """VNDA aposentado (sem token) não pode cegar a roteirização."""
+    from app.models import PedidoOnline
+    d = _driver()
+    p = PedidoOnline(codigo='SITE1', nome_cliente='Cliente Site',
+                     email_cliente='s@x.com', status='pago',
+                     modo_entrega='agendada', data_entrega=hoje(),
+                     janela_entrega='06:00–10:00', valor_total=100,
+                     endereco_entrega='Rua X, 1 - Brooklin')
+    db.session.add(p)
+    db.session.commit()
+    c = _admin_client(app)
+    r = c.get(f'/entregas/api/rotas?data={hoje().isoformat()}')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert 'erro' not in j or not j.get('erro')
+    # Sem chave do Google (teste) o fallback por CEP poe endereco sem CEP
+    # em `sem_cep` — o que importa e o pedido estar no POOL, em qualquer
+    # balde (em prod, com a chave, ele e geocodado e roteirizado).
+    codes = {pp['code'] for rota in j.get('rotas', [])
+             for pp in rota.get('paradas', [])}
+    codes |= {pp['code'] for pp in j.get('sem_atribuir', [])}
+    codes |= {pp['code'] for pp in j.get('sem_cep', [])}
+    assert 'SITE1' in codes
+    assert j.get('total_pedidos') == 1
+    assert d is not None
+
+
+def test_api_rotas_nao_roteiriza_retirada(app):
+    """Retirada o cliente busca na loja — motoboy não vai."""
+    from app.models import PedidoOnline
+    _driver()
+    p = PedidoOnline(codigo='RETIR1', nome_cliente='Cliente Ret',
+                     email_cliente='r@x.com', status='pago',
+                     modo_entrega='retirada', data_entrega=hoje(),
+                     janela_entrega='06:00–10:00', valor_total=50)
+    db.session.add(p)
+    db.session.commit()
+    c = _admin_client(app)
+    j = c.get(f'/entregas/api/rotas?data={hoje().isoformat()}').get_json()
+    codes = {pp['code'] for rota in j.get('rotas', [])
+             for pp in rota.get('paradas', [])}
+    codes |= {pp['code'] for pp in j.get('sem_atribuir', [])}
+    codes |= {pp['code'] for pp in j.get('sem_cep', [])}
+    assert 'RETIR1' not in codes
+    assert j.get('total_pedidos') == 0
+
+
+def test_driver_ve_pedido_do_site_sem_vnda(app):
+    from app.models import AtribuicaoEntrega, PedidoOnline
+    d = _driver()
+    p = PedidoOnline(codigo='SITE2', nome_cliente='Cliente Site',
+                     email_cliente='s2@x.com', status='pago',
+                     modo_entrega='agendada', data_entrega=hoje(),
+                     janela_entrega='06:00–10:00', valor_total=100,
+                     endereco_entrega='Rua Y, 2')
+    db.session.add(p)
+    db.session.commit()
+    db.session.add(AtribuicaoEntrega(pedido_code='SITE2', driver_id=d.id,
+                                     data_entrega=hoje(), ordem=1))
+    db.session.commit()
+    c = _client_driver(app, d)
+    r = c.get(f'/driver/api/{d.token}/pedidos')
+    assert r.status_code == 200          # antes: 502 (erro do VNDA)
+    j = r.get_json()
+    assert [pp['code'] for pp in j['pedidos']] == ['SITE2']
