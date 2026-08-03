@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Checklist — configurar itens{% endblock %}
+{% block content %}
+<h1 class="page-title"><i class="bi bi-gear"></i> Checklist — configurar itens</h1>
+
+<p class="text-muted small dica-recolhe">Cada item é um ponto que o responsável do
+turno confirma (OK ou problema). Marque <strong>📷 exige foto</strong> nos pontos
+que precisam de comprovação — o checklist não fecha sem a foto deles.
+<strong>Loja em branco = vale pra todas.</strong> A ordem define a sequência na
+tela. Excluir um item que já tem respostas no histórico só o desativa (a
+história não se apaga). Sem nenhum item cadastrado num tipo, aquele checklist
+não existe e ninguém é cobrado.</p>
+
+<div class="card mb-3" style="max-width:760px;">
+  <div class="card-header py-2"><strong class="small">Novo item</strong></div>
+  <div class="card-body py-2">
+    <form method="POST" class="row g-2 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="acao" value="novo">
+      <div class="col-12 col-md-5">
+        <label class="form-label small mb-1">Texto do ponto</label>
+        <input type="text" name="texto" class="form-control form-control-sm"
+               maxlength="300" required placeholder="Ex.: Vitrine montada e limpa">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1">Tipo</label>
+        <select name="tipo" class="form-select form-select-sm">
+          {% for t in tipos %}<option value="{{ t }}">{{ labels[t] }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1">Loja</label>
+        <select name="loja_id" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          {% for l in lojas %}<option value="{{ l.id }}">{{ l.nome }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-4 col-md-1">
+        <label class="form-label small mb-1">Ordem</label>
+        <input type="number" name="ordem" class="form-control form-control-sm" value="0">
+      </div>
+      <div class="col-4 col-md-1">
+        <div class="form-check mt-3">
+          <input class="form-check-input" type="checkbox" name="exige_foto" id="nf">
+          <label class="form-check-label small" for="nf">📷 foto</label>
+        </div>
+      </div>
+      <div class="col-4 col-md-1">
+        <button class="btn btn-sm btn-primary w-100">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% for t in tipos %}
+<div class="card mb-3">
+  <div class="card-header py-2"><strong class="small">
+    {% if t == 'abertura' %}🌅{% elif t == 'troca_turno' %}🔄{% else %}🌙{% endif %}
+    {{ labels[t] }}
+    <span class="text-muted fw-normal">· {{ por_tipo[t]|length }} item(ns)</span>
+  </strong></div>
+  <div class="card-body py-2 small">
+    {% if not por_tipo[t] %}
+    <p class="text-muted mb-0">Nenhum item — este checklist não aparece pras lojas.</p>
+    {% else %}
+    <div class="mobile-table-scroll">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th style="width:45%">Texto</th><th>Loja</th><th>Ordem</th>
+        <th>📷</th><th></th></tr></thead>
+      <tbody>
+        {% for it in por_tipo[t] %}
+        <tr class="{{ 'opacity-50' if not it.ativo }}">
+          <td>
+            <input form="fi{{ it.id }}" type="text" name="texto" maxlength="300"
+                   class="form-control form-control-sm" value="{{ it.texto }}">
+          </td>
+          <td>{{ it.loja.nome if it.loja else 'Todas' }}</td>
+          <td style="max-width:80px;">
+            <input form="fi{{ it.id }}" type="number" name="ordem"
+                   class="form-control form-control-sm" value="{{ it.ordem }}">
+          </td>
+          <td>
+            <input form="fi{{ it.id }}" class="form-check-input" type="checkbox"
+                   name="exige_foto" {% if it.exige_foto %}checked{% endif %}>
+          </td>
+          <td class="text-nowrap">
+            <form method="POST" id="fi{{ it.id }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="acao" value="editar">
+              <input type="hidden" name="item_id" value="{{ it.id }}">
+              <button class="btn btn-sm btn-outline-primary">Salvar</button>
+            </form>
+            <form method="POST" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="acao" value="toggle">
+              <input type="hidden" name="item_id" value="{{ it.id }}">
+              <button class="btn btn-sm btn-outline-secondary">
+                {{ 'Reativar' if not it.ativo else 'Desativar' }}</button>
+            </form>
+            <form method="POST" class="d-inline"
+                  data-confirma="Excluir este item?">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="acao" value="excluir">
+              <input type="hidden" name="item_id" value="{{ it.id }}">
+              <button class="btn btn-sm btn-outline-danger">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+<p class="small"><a href="{{ url_for('checklist.conferencia') }}">📋 Conferência (histórico)</a>
+  &nbsp;·&nbsp; <a href="{{ url_for('checklist.index') }}">Tela de preenchimento</a></p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Confirm de exclusão sem handler inline (dado nunca entra em JS inline —
+// regra do pre-cadastro, 23/07/2026).
+document.querySelectorAll('form[data-confirma]').forEach(function (f) {
+  f.addEventListener('submit', function (ev) {
+    if (!window.confirm(f.dataset.confirma)) ev.preventDefault();
+  });
+});
+</script>
+{% endblock %}
