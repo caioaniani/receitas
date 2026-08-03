@@ -107,11 +107,14 @@ def registrar(loja, tipo, usuario_id, respostas, observacao=None):
         raise ValueError('Ponto marcado com problema precisa da observação '
                          '(o que está errado?): ' + '; '.join(sem_obs[:5]))
 
+    # A data do registro é decidida ANTES do upload: um submit às 03:59
+    # cujo upload termina 04:01 pertence ao dia que a pessoa viu na tela.
+    data_reg = _data_do_registro(tipo)
     # Uploads ANTES de qualquer INSERT: falha de foto = nada gravado.
-    fotos_up = _subir_fotos(loja, itens, respostas)
+    fotos_up = _subir_fotos(loja, itens, respostas, data_reg)
 
     p = ChecklistPreenchimento(
-        loja_id=loja.id, tipo=tipo, data=_data_do_registro(tipo),
+        loja_id=loja.id, tipo=tipo, data=data_reg,
         usuario_id=usuario_id,
         observacao=(observacao or '').strip()[:500] or None)
     db.session.add(p)
