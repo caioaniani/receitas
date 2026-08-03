@@ -53,11 +53,11 @@ def _login(client, login, senha='123'):
     client.post('/auth/login', data={'login': login, 'senha': senha})
 
 
-def _resp(itens, **overrides):
-    """Respostas OK pra todos os itens; overrides por item_id."""
+def _resp(itens, overrides=None):
+    """Respostas OK pra todos os itens; `overrides` = {item_id: {campo: v}}."""
     base = {it.id: {'ok': True, 'observacao': None, 'foto': None}
             for it in itens}
-    for iid, d in overrides.items():
+    for iid, d in (overrides or {}).items():
         base[iid] = {**base[iid], **d}
     return base
 
