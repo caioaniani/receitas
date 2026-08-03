@@ -211,6 +211,17 @@ ESTADO_LABEL = {
     'assado': 'ASSADO',
 }
 
+# Checklist de loja (03/08/2026): abertura, troca de turno e fechamento.
+# O responsável do turno (gerente/atendente chefe) preenche na tela do
+# celular; itens cadastráveis pelo dono, foto obrigatória nos marcados.
+CHECKLIST_TIPOS = ('abertura', 'troca_turno', 'fechamento')
+
+CHECKLIST_TIPO_LABEL = {
+    'abertura': 'Abertura',
+    'troca_turno': 'Troca de turno',
+    'fechamento': 'Fechamento',
+}
+
 
 def familia_default():
     """Familia default pra Receita sem familia setada — assume `pao_sourdough`
