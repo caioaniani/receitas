@@ -25,7 +25,17 @@
   <input type="hidden" name="loja" value="{{ loja.id }}">
   <input type="hidden" name="tipo" value="{{ tipo }}">
 
-  {% for it in itens %}
+  {# Agrupado por SETOR (subtítulo), na ordem do checklist em papel — o
+     responsável do turno preenche tudo numa tela só (decisão do dono
+     03/08/2026). Com 1 grupo só ("Geral"), o subtítulo some. #}
+  {% for setor, itens_do_setor in grupos %}
+  {% if grupos|length > 1 %}
+  <h2 class="h6 text-uppercase text-muted mt-3 mb-2"
+      style="font-size:12px;letter-spacing:.06em;border-bottom:1px solid var(--bs-border-color);padding-bottom:4px;">
+    {{ setor }} <span class="text-muted">({{ itens_do_setor|length }})</span>
+  </h2>
+  {% endif %}
+  {% for it in itens_do_setor %}
   {% set marcado = form.get('ok_' ~ it.id) if form else none %}
   <div class="card mb-2">
     <div class="card-body py-2">
