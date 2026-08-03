@@ -2383,11 +2383,23 @@ def api_rotas():
                       for d in drivers_db]
 
     overrides = _carregar_overrides_data()
-    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
-    if 'erro' in resultado:
-        resp = jsonify(rotas=[], erro=resultado['erro'])
-        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
-        return resp
+    # FIX 03/08/2026 (dono: "em /rotas nao consigo ver nada do site"): a aba
+    # Rotas era da era VNDA e NUNCA foi repontada — so montava o pool com
+    # VNDA + manuais, e com o VNDA aposentado o `erro` do client derrubava a
+    # resposta inteira. Agora: erro do VNDA vira base VAZIA (e o caminho
+    # normal — VNDA aposentado em 24/06/2026) e os pedidos do SITE entram
+    # pelo MESMO serializador do painel. Retirada fica fora: cliente busca
+    # na loja, motoboy nao vai.
+    try:
+        base = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    except Exception:  # noqa: BLE001
+        base = {'erro': 'vnda indisponivel'}
+    if 'erro' in base:
+        base = {'pedidos': []}
+    resultado = _injetar_pedidos_locais(target, base)
+    resultado['pedidos'] = (resultado.get('pedidos', [])
+                            + [p for p in _pedidos_online_do_dia(target)
+                               if not p.get('retirada')])
 
     pedidos = resultado.get('pedidos', [])
 
