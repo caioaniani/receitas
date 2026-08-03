@@ -237,10 +237,20 @@ def config():
         return redirect(url_for('checklist.config'))
 
     itens = (ChecklistItemModelo.query
-             .order_by(ChecklistItemModelo.tipo, ChecklistItemModelo.ordem,
-                       ChecklistItemModelo.id).all())
-    por_tipo = {t: [i for i in itens if i.tipo == t] for t in CHECKLIST_TIPOS}
+             .order_by(ChecklistItemModelo.ordem, ChecklistItemModelo.id)
+             .all())
+    # Por tipo e, dentro dele, agrupado por setor (mesma ordem da tela de
+    # preenchimento — com 169 pontos, uma lista corrida era ilegível).
+    por_tipo = {t: checklist_loja.agrupar_por_setor(
+        [i for i in itens if i.tipo == t]) for t in CHECKLIST_TIPOS}
+    n_por_tipo = {t: sum(1 for i in itens if i.tipo == t)
+                  for t in CHECKLIST_TIPOS}
+    setores = []
+    for i in itens:
+        if i.setor and i.setor not in setores:
+            setores.append(i.setor)
     return render_template('checklist/config.html', por_tipo=por_tipo,
+                           n_por_tipo=n_por_tipo, setores=setores,
                            tipos=CHECKLIST_TIPOS,
                            labels=CHECKLIST_TIPO_LABEL,
                            lojas=_lojas_escolhiveis())
