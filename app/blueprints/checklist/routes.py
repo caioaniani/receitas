@@ -177,8 +177,7 @@ def config():
             db.session.commit()
             flash('Item adicionado.', 'success')
         elif acao == 'editar':
-            it = db.session.get(ChecklistItemModelo,
-                                int(request.form.get('item_id') or 0))
+            it = _item_do_form()
             if it is None:
                 flash('Item não encontrado.', 'danger')
                 return redirect(url_for('checklist.config'))
@@ -193,8 +192,7 @@ def config():
             db.session.commit()
             flash('Item atualizado.', 'success')
         elif acao == 'toggle':
-            it = db.session.get(ChecklistItemModelo,
-                                int(request.form.get('item_id') or 0))
+            it = _item_do_form()
             if it is not None:
                 it.ativo = not it.ativo
                 db.session.commit()
@@ -202,8 +200,7 @@ def config():
                        else 'Item desativado — sai dos próximos checklists; '
                             'o histórico não muda.'), 'success')
         elif acao == 'excluir':
-            it = db.session.get(ChecklistItemModelo,
-                                int(request.form.get('item_id') or 0))
+            it = _item_do_form()
             if it is not None:
                 usado = (ChecklistResposta.query
                          .filter_by(item_id=it.id).first() is not None)
