@@ -19,7 +19,7 @@ from app.utils import hoje
 
 def _lojas_escolhiveis():
     return sorted(checklist_loja.lojas_operacionais(),
-                  key=lambda lj: lj.nome)
+                  key=lambda lj: (lj.nome or '').casefold())
 
 
 def _item_do_form():
