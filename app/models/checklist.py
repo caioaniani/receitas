@@ -25,6 +25,12 @@ class ChecklistItemModelo(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     tipo = db.Column(db.String(20), nullable=False, index=True)
+    # Setor do checklist em papel (Café/Barista, Chapa, Cozinha, Câmara Fria,
+    # Caixa, Salão, Limpeza, Área Externa, Escritório e Forno, Supervisão da
+    # Loja). É SUBTÍTULO na tela — não navegação: o dono escolheu preencher
+    # tudo numa tela só, agrupado (03/08/2026). NULL = item sem setor (o que
+    # o cadastro manual cria por padrão), agrupado em "Geral".
+    setor = db.Column(db.String(60), nullable=True)
     texto = db.Column(db.String(300), nullable=False)
     exige_foto = db.Column(db.Boolean, nullable=False, default=False)
     ordem = db.Column(db.Integer, nullable=False, default=0)
