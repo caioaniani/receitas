@@ -968,13 +968,16 @@ def _carregar_pedidos_imprimir_get(src, target, diag):
             overrides_full = _carregar_overrides_full()
             overrides_data = {code: o['data']
                               for code, o in overrides_full.items()}
-            resultado = _injetar_pedidos_locais(
-                target,
-                vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
+            base = vnda.buscar_pedidos_do_dia(target,
+                                              overrides=overrides_data)
+            if 'erro' in base:
+                # FIX 03/08/2026: VNDA aposentado — o erro dele nao pode
+                # esvaziar a impressao; manuais + site seguem imprimiveis.
+                diag['problema'] = 'VNDA: %s' % str(base['erro'])[:200]
+                base = {'pedidos': []}
+            resultado = _injetar_pedidos_locais(target, base)
             pedidos = (resultado.get('pedidos', [])
-                       if 'erro' not in resultado else [])
-            if 'erro' in resultado:
-                diag['problema'] = 'VNDA: %s' % str(resultado['erro'])[:200]
+                       + _pedidos_online_do_dia(target))
         except Exception as e:  # noqa: BLE001
             current_app.logger.exception('imprimir: falha carregando pedidos')
             diag['problema'] = 'excecao carregando: %s' % type(e).__name__
