@@ -842,6 +842,8 @@ def create_app(config_class=None):
     app.register_blueprint(padeiro_bp, url_prefix='/padeiro')
     from app.blueprints.patrimonio import patrimonio_bp
     app.register_blueprint(patrimonio_bp, url_prefix='/patrimonio')
+    from app.blueprints.checklist import checklist_bp
+    app.register_blueprint(checklist_bp, url_prefix='/checklist')
 
     from app.blueprints.precadastro import precadastro_bp
     app.register_blueprint(precadastro_bp)
