@@ -74,6 +74,17 @@ class Usuario(UserMixin, db.Model):
         """Pedidos, Estoque Loja, Relatorio."""
         return self.is_admin() or self.is_gerente()
 
+    def pode_checklist(self):
+        """Checklist de abertura/troca/fechamento da loja (03/08/2026).
+
+        Espelha o decorator `checklist_required` pra sidebar poder mostrar o
+        link ao atendente chefe (papel funcionario), que NAO ve a area Lojas.
+        """
+        if self.is_admin():
+            return True
+        from app.services import permissoes
+        return permissoes.pode(self.papel or '', 'web_checklist')
+
     def pode_producao(self):
         """Plano de Producao, Congelados, Separacao."""
         return self.is_admin() or self.is_producao()
