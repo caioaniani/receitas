@@ -1907,6 +1907,22 @@ def _migrate_postgres(app):
     _try("ALTER TABLE produto_item ADD COLUMN IF NOT EXISTS "
          "preco_menu NUMERIC(10, 2)")
 
+    # ── Setor no item de checklist de loja (03/08/2026) ──
+    # O checklist em papel do dono é organizado por SETOR (Café/Barista,
+    # Chapa, Cozinha, Câmara Fria, Caixa, Salão, Limpeza, Área Externa,
+    # Escritório e Forno, Supervisão da Loja) — 11 folhas, ~169 pontos.
+    # Ele escolheu preencher TUDO NUMA TELA, agrupado por setor: o setor é
+    # SUBTÍTULO, não navegação. Sem esta coluna o agrupamento viraria
+    # prefixo no texto ("CAFÉ — Ligar máquina…"), que sujaria também o
+    # snapshot histórico das respostas. NULL = item sem setor (o que o
+    # cadastro manual cria por padrão) — cai no grupo "Geral".
+    # Commit 1 do procedimento de 2 commits: este ALTER deploya ANTES do
+    # modelo, confirmado por /api/claude/deploy. A TABELA já existe em prod
+    # (criada por db.create_all no deploy de 03/08); `IF NOT EXISTS` no
+    # ALTER e o _try cobrem o caso de ela ainda não existir.
+    _try("ALTER TABLE checklist_item_modelo ADD COLUMN IF NOT EXISTS "
+         "setor VARCHAR(60)")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
