@@ -61,6 +61,20 @@ def itens_para(loja_id, tipo):
             .all())
 
 
+def agrupar_por_setor(itens):
+    """[(setor, [itens])] preservando a ordem de PRIMEIRA aparição do setor.
+
+    Agrupa sem reordenar (o `ordem` já traz os setores na sequência do papel)
+    e junta tudo do mesmo setor no primeiro lugar em que ele aparece — um
+    item novo cadastrado com ordem 0 no meio não faz o setor sair repetido
+    na tela. Item sem setor cai em "Geral".
+    """
+    grupos = {}
+    for it in itens:
+        grupos.setdefault(it.setor or 'Geral', []).append(it)
+    return list(grupos.items())
+
+
 def tipos_configurados(loja_id):
     """{tipo: n_itens} só dos tipos com pelo menos 1 item aplicável à loja."""
     from sqlalchemy import func
