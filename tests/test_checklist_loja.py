@@ -402,6 +402,10 @@ def test_pendencia_fechamento_de_ontem(app):
         lj = _loja()
         u = _user()
         it = _item(tipo='fechamento', texto='Caixa fechado')
+        # O item precisa EXISTIR ontem pra ontem ser cobrado (item criado
+        # hoje não acusa retroativo — ver teste do fix da revisão).
+        from datetime import datetime as _dt
+        it.criado_em = _dt.combine(hoje() - timedelta(days=2), _time(12, 0))
         _loja('Loja B')
         # Loja A fechou ontem; Loja B não.
         p = checklist_loja.registrar(lj, 'fechamento', u.id, _resp([it]))
@@ -444,3 +448,113 @@ def test_manual_registra_o_checklist(app, admin_user):
     html = c.get('/admin/manual').get_data(as_text=True)
     assert 'Checklist do turno' in html
     assert '/checklist/' in html
+
+
+# ── fixes da revisão (03/08/2026) ───────────────────────────────────
+
+def test_fechamento_de_madrugada_conta_pro_dia_anterior(app, monkeypatch):
+    """Turno de segunda fechado à 00:15 de terça é o fechamento de SEGUNDA —
+    gravar a data corrente geraria falso "devendo" e calaria a cobrança do
+    dia seguinte (mesma classe do problema do padeiro pós-meia-noite)."""
+    with app.app_context():
+        lj = _loja()
+        u = _user()
+        it = _item(tipo='fechamento', texto='Loja trancada')
+        from app.utils import agora as _agora
+        madrugada = _agora().replace(hour=0, minute=15)
+        monkeypatch.setattr(checklist_loja, 'agora', lambda: madrugada)
+        p = checklist_loja.registrar(lj, 'fechamento', u.id, _resp([it]))
+        assert p.data == hoje() - timedelta(days=1)
+        # e a pendência de "fechamento de ontem" se cala
+        assert checklist_loja.lojas_faltando(
+            'fechamento', hoje() - timedelta(days=1)) == []
+
+
+def test_fechamento_a_noite_conta_pro_dia_corrente(app, monkeypatch):
+    with app.app_context():
+        lj = _loja()
+        u = _user()
+        it = _item(tipo='fechamento', texto='Loja trancada')
+        from app.utils import agora as _agora
+        noite = _agora().replace(hour=21, minute=30)
+        monkeypatch.setattr(checklist_loja, 'agora', lambda: noite)
+        p = checklist_loja.registrar(lj, 'fechamento', u.id, _resp([it]))
+        assert p.data == hoje()
+
+
+def test_item_criado_hoje_nao_cobra_fechamento_de_ontem(app):
+    """Cadastrar o 1º item de fechamento hoje não pode acusar todas as
+    lojas de 'fechamento de ontem ausente' retroativo."""
+    with app.app_context():
+        _loja()
+        _item(tipo='fechamento', texto='Novo de hoje')
+        assert checklist_loja.lojas_faltando(
+            'fechamento', hoje() - timedelta(days=1)) == []
+        # mas cobra normalmente o dia de HOJE em diante
+        assert checklist_loja.lojas_faltando('fechamento', hoje()) == ['Loja A']
+
+
+def test_duplo_submit_em_30s_nao_duplica(app):
+    with app.app_context():
+        lj = _loja()
+        _user(login='atend')
+        it = _item(texto='Vitrine')
+        lid, iid = lj.id, it.id
+    c = app.test_client()
+    _login(c, 'atend')
+    dados = {'loja': lid, 'tipo': 'abertura', f'ok_{iid}': 'ok'}
+    c.post('/checklist/preencher', data=dados,
+           content_type='multipart/form-data')
+    r = c.post('/checklist/preencher', data=dados,
+               content_type='multipart/form-data', follow_redirects=True)
+    assert 'não gravei em dobro' in r.get_data(as_text=True)
+    with app.app_context():
+        assert ChecklistPreenchimento.query.count() == 1
+
+
+def test_item_id_forjado_no_config_nao_da_500(app, admin_user):
+    c = app.test_client()
+    _login(c, 'admin')
+    for acao in ('editar', 'toggle', 'excluir'):
+        r = c.post('/checklist/config',
+                   data={'acao': acao, 'item_id': 'abc'},
+                   follow_redirects=True)
+        assert r.status_code == 200
+
+
+def test_loja_invalida_no_novo_item_nao_vira_global(app, admin_user):
+    """Loja desativada/forjada no cadastro: criar como 'todas as lojas' em
+    silêncio cobraria a padaria inteira — recusa com aviso."""
+    with app.app_context():
+        lj = Loja(nome='Desativada', ativa=False)
+        db.session.add(lj)
+        db.session.commit()
+        lid = lj.id
+    c = app.test_client()
+    _login(c, 'admin')
+    r = c.post('/checklist/config', data={
+        'acao': 'novo', 'texto': 'X', 'tipo': 'abertura', 'loja_id': lid,
+    }, follow_redirects=True)
+    assert 'não está mais disponível' in r.get_data(as_text=True)
+    with app.app_context():
+        assert ChecklistItemModelo.query.count() == 0
+
+
+def test_upload_com_erro_de_rede_vira_erro_amigavel(app):
+    """ConnectionError do retry do Dropbox não pode escapar como 500 — vira
+    ValueError com mensagem legível (fail-close preservado)."""
+    import requests as _rq
+    with app.app_context():
+        lj = _loja()
+        u = _user()
+        it = _item(texto='Vitrine', exige_foto=True)
+        with patch('app.services.dropbox_storage.disponivel',
+                   return_value=True), \
+             patch('app.utils.comprimir_imagem', side_effect=lambda b: b), \
+             patch('app.services.dropbox_storage.upload_publico',
+                   side_effect=_rq.exceptions.ConnectionError('rede')):
+            with pytest.raises(ValueError, match='Falha ao subir'):
+                checklist_loja.registrar(
+                    lj, 'abertura', u.id,
+                    _resp([it], {it.id: {'ok': True, 'foto': b'jpg'}}))
+        assert ChecklistPreenchimento.query.count() == 0
