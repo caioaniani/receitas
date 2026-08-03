@@ -157,7 +157,15 @@ def config():
             if not texto or tipo not in CHECKLIST_TIPOS:
                 flash('Informe o texto do item e o tipo.', 'danger')
                 return redirect(url_for('checklist.config'))
-            loja = _resolver_loja(request.form.get('loja_id'))
+            loja_raw = (request.form.get('loja_id') or '').strip()
+            loja = _resolver_loja(loja_raw)
+            if loja_raw and loja is None:
+                # Loja informada mas inválida (desativada no meio-tempo,
+                # POST velho): criar como GLOBAL em silêncio cobraria TODAS
+                # as lojas — recusa com aviso (achado da revisão).
+                flash('A loja escolhida não está mais disponível — item '
+                      'não criado. Escolha de novo.', 'danger')
+                return redirect(url_for('checklist.config'))
             try:
                 ordem = int(request.form.get('ordem') or 0)
             except ValueError:
