@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Checklist — conferência{% endblock %}
+{% block content %}
+<h1 class="page-title"><i class="bi bi-clipboard-data"></i> Checklist — conferência</h1>
+
+{% if faltando.abertura_hoje or faltando.fechamento_ontem %}
+<div class="alert alert-warning small py-2">
+  {% if faltando.abertura_hoje %}
+  <div>🌅 <strong>Abertura de HOJE faltando:</strong>
+    {{ faltando.abertura_hoje|sort|join(', ') }}</div>
+  {% endif %}
+  {% if faltando.fechamento_ontem %}
+  <div>🌙 <strong>Fechamento de ONTEM faltando:</strong>
+    {{ faltando.fechamento_ontem|sort|join(', ') }}</div>
+  {% endif %}
+</div>
+{% endif %}
+
+<form method="GET" class="d-flex gap-2 align-items-end flex-wrap mb-3">
+  <div>
+    <label class="form-label small mb-1">Loja</label>
+    <select name="loja" class="form-select form-select-sm">
+      <option value="">Todas</option>
+      {% for l in lojas %}
+      <option value="{{ l.id }}" {% if loja and l.id == loja.id %}selected{% endif %}>{{ l.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="form-label small mb-1">Janela</label>
+    <select name="dias" class="form-select form-select-sm">
+      {% for d in [7, 14, 30, 90] %}
+      <option value="{{ d }}" {% if dias == d %}selected{% endif %}>{{ d }} dias</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button class="btn btn-sm btn-primary">Filtrar</button>
+</form>
+
+{% if not preenchidos %}
+<p class="text-muted small">Nenhum checklist preenchido no período.</p>
+{% else %}
+{% for p in preenchidos %}
+<details class="card mb-2">
+  <summary class="card-body py-2 small d-flex justify-content-between align-items-center flex-wrap gap-1" style="cursor:pointer;">
+    <span>
+      {% if p.tipo == 'abertura' %}🌅{% elif p.tipo == 'troca_turno' %}🔄{% else %}🌙{% endif %}
+      <strong>{{ labels.get(p.tipo, p.tipo) }}</strong> — {{ p.loja.nome if p.loja else '?' }}
+      <span class="text-muted">· {{ p.data.strftime('%d/%m') }}
+        {{ p.criado_em.strftime('%H:%M') if p.criado_em }}
+        · {{ p.usuario.nome if p.usuario else '?' }}</span>
+    </span>
+    <span>
+      {% if p.n_problemas %}
+      <span class="badge bg-danger">{{ p.n_problemas }} problema{{ 's' if p.n_problemas != 1 }}</span>
+      {% else %}
+      <span class="badge bg-success">tudo OK</span>
+      {% endif %}
+    </span>
+  </summary>
+  <div class="card-body pt-0 small">
+    {% if p.observacao %}<p class="mb-1 text-muted">Obs. do turno: {{ p.observacao }}</p>{% endif %}
+    <ul class="list-unstyled mb-0">
+      {% for r in p.respostas %}
+      <li class="mb-1">
+        {{ '✅' if r.ok else '⚠️' }} {{ r.item_texto }}
+        {% if r.observacao %}<span class="text-muted">— {{ r.observacao }}</span>{% endif %}
+        {% if r.foto_url %}
+        · <a href="{{ r.foto_url }}" target="_blank" rel="noopener">📷 foto</a>
+        {% elif r.exigia_foto %}
+        <span class="text-danger">(foto exigida ausente)</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</details>
+{% endfor %}
+{% endif %}
+
+<p class="small mt-3"><a href="{{ url_for('checklist.config') }}">⚙️ Configurar itens</a></p>
+{% endblock %}
