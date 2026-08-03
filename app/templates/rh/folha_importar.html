@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% block title %}Importar folha de pagamento — RH{% endblock %}
+
+{% block content %}
+<h1 class="page-title"><i class="bi bi-file-earmark-spreadsheet"></i>
+  Importar folha de pagamento</h1>
+
+<div class="alert alert-light border small mb-3">
+  Suba o <strong>xlsx da contabilidade</strong> (o relatório mensal da
+  folha). O sistema compara pelo <strong>CPF</strong> e mostra uma
+  <strong>prévia</strong> — nada muda até você marcar e confirmar. Salário,
+  cargo e admissão vêm da folha; o resto do cadastro (VT/VR, telefone,
+  loja) não é tocado.
+</div>
+
+<form method="POST" enctype="multipart/form-data" class="d-flex gap-2 flex-wrap align-items-end mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div>
+    <label class="form-label small fw-bold" for="arquivo">Arquivo da folha (.xlsx)</label>
+    <input type="file" class="form-control" id="arquivo" name="arquivo"
+           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+  </div>
+  <button class="btn btn-primary" type="submit">Ver prévia</button>
+</form>
+
+{% if avisos %}
+<div class="alert alert-warning small">
+  <strong>⚠ Linhas que não consegui ler</strong> (ignoradas — confira na planilha):
+  <ul class="mb-0">{% for a in avisos %}<li>{{ a }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if preview %}
+<form method="POST" action="{{ url_for('rh.folha_aplicar') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="alert alert-info small">
+    Prévia de <strong>{{ nome_arquivo }}</strong> — marque o que aplicar e
+    confirme no fim da página. {{ preview.iguais|length }} funcionário(s)
+    já estão iguais à folha (nada a fazer).
+  </div>
+
+  {% if preview.novos %}
+  <h2 class="h6 fw-bold mt-3">🆕 Na folha, mas não no sistema ({{ preview.novos|length }})</h2>
+  <div class="table-responsive"><table class="table table-sm align-middle">
+    <thead><tr><th></th><th>Nome</th><th>CPF</th><th>Cargo</th>
+      <th class="text-end">Salário base</th><th>Admissão</th></tr></thead>
+    <tbody>
+    {% for ln in preview.novos %}
+    <tr>
+      <td><input class="form-check-input" type="checkbox" name="criar"
+                 value="{{ ln|tojson|forceescape }}" checked></td>
+      <td>{{ ln.nome }}</td>
+      <td class="text-nowrap">{{ ln.cpf }}</td>
+      <td>{{ ln.cargo or '—' }}</td>
+      <td class="text-end">R$ {{ '%.2f'|format(ln.salario)|replace('.', ',') }}</td>
+      <td>{{ ln.admissao or '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+
+  {% if preview.alterados %}
+  <h2 class="h6 fw-bold mt-3">✏️ Diferentes da folha ({{ preview.alterados|length }})</h2>
+  <div class="table-responsive"><table class="table table-sm align-middle">
+    <thead><tr><th></th><th>Nome</th><th>O que muda</th></tr></thead>
+    <tbody>
+    {% for a in preview.alterados %}
+    <tr>
+      <td><input class="form-check-input" type="checkbox" name="atualizar"
+                 value="{{ a.linha|tojson|forceescape }}" checked></td>
+      <td>{{ a.nome }}
+        {% if a.inativo %}<span class="badge bg-warning text-dark">desligado no sistema — reativa</span>{% endif %}
+      </td>
+      <td class="small">
+        {% if a.difs.salario %}
+        salário <s>R$ {{ '%.2f'|format(a.difs.salario[0])|replace('.', ',') }}</s>
+        → <strong>R$ {{ '%.2f'|format(a.difs.salario[1])|replace('.', ',') }}</strong><br>
+        {% endif %}
+        {% if a.difs.cargo %}
+        cargo <s>{{ a.difs.cargo[0] }}</s> → <strong>{{ a.difs.cargo[1] }}</strong><br>
+        {% endif %}
+        {% if a.difs.admissao %}
+        admissão {{ a.difs.admissao[0] or '—' }} → <strong>{{ a.difs.admissao[1] }}</strong>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+
+  {% if preview.fora_da_folha %}
+  <h2 class="h6 fw-bold mt-3">👻 Ativos no sistema, mas FORA da folha ({{ preview.fora_da_folha|length }})</h2>
+  <p class="small text-muted mb-1">Pode ser desligamento — mas férias e
+    licença também somem da folha. Por isso <strong>nada aqui é automático</strong>:
+    marque só quem realmente saiu.</p>
+  <div class="table-responsive"><table class="table table-sm align-middle">
+    <thead><tr><th>Marcar desligado</th><th>Nome</th><th>Cargo</th></tr></thead>
+    <tbody>
+    {% for f in preview.fora_da_folha %}
+    <tr>
+      <td><input class="form-check-input" type="checkbox" name="desligar"
+                 value="{{ f.id }}"></td>
+      <td>{{ f.nome }}</td>
+      <td>{{ f.funcao or '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+
+  {% if preview.novos or preview.alterados or preview.fora_da_folha %}
+  <button class="btn btn-success mt-2" type="submit"
+          onclick="return confirm('Aplicar as mudanças marcadas no RH?');">
+    Aplicar o que está marcado
+  </button>
+  {% else %}
+  <div class="alert alert-success">Tudo em dia — o RH já bate com a folha. 🎉</div>
+  {% endif %}
+</form>
+{% endif %}
+{% endblock %}
