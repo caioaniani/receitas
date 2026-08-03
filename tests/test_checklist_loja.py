@@ -567,3 +567,52 @@ def test_upload_com_erro_de_rede_vira_erro_amigavel(app):
                     lj, 'abertura', u.id,
                     _resp([it], {it.id: {'ok': True, 'foto': b'jpg'}}))
         assert ChecklistPreenchimento.query.count() == 0
+
+
+def test_pendencia_fechamento_nao_cobra_de_madrugada(app, monkeypatch):
+    """Entre 00:00 e a virada (04:00), 'ontem' ainda está fechando — cobrar
+    às 00:30 seria pendência transitória falsa (revisão rodada 2)."""
+    with app.app_context():
+        _loja()
+        it = _item(tipo='fechamento', texto='Caixa fechado')
+        from datetime import datetime as _dt
+        it.criado_em = _dt.combine(hoje() - timedelta(days=2), _time(12, 0))
+        db.session.commit()
+        from app.utils import agora as _agora
+        madrugada = _agora().replace(hour=0, minute=30)
+        monkeypatch.setattr(checklist_loja, 'agora', lambda: madrugada)
+        pend = checklist_loja.pendencias_checklist()
+        assert not any(p['chave'] == 'checklist_fechamento' for p in pend)
+        # depois da virada, cobra normalmente
+        manha = _agora().replace(hour=8, minute=0)
+        monkeypatch.setattr(checklist_loja, 'agora', lambda: manha)
+        pend = checklist_loja.pendencias_checklist()
+        assert any(p['chave'] == 'checklist_fechamento' for p in pend)
+
+
+def test_fechamento_de_madrugada_aparece_no_aviso_ja_preenchido(
+        app, monkeypatch):
+    """Regressão da rodada 2: o fechamento das 00:15 grava data=ontem e
+    SUMIA do 'Já preenchido' — o mesmo fechamento entrava em dobro sem
+    alerta. O aviso agora olha o 'dia do turno' (_data_do_registro)."""
+    with app.app_context():
+        lj = _loja()
+        u = _user(login='atend')
+        it = _item(tipo='fechamento', texto='Loja trancada')
+        from app.utils import agora as _agora
+        madrugada = _agora().replace(hour=0, minute=15)
+        monkeypatch.setattr(checklist_loja, 'agora', lambda: madrugada)
+        checklist_loja.registrar(lj, 'fechamento', u.id, _resp([it]))
+        lid = lj.id
+        # o relógio do ROUTES também precisa estar na madrugada
+        import app.blueprints.checklist.routes as rotas  # noqa: F401
+    c = app.test_client()
+    _login(c, 'atend')
+    with patch.object(checklist_loja, 'agora',
+                      lambda: __import__('app.utils', fromlist=['agora'])
+                      .agora().replace(hour=0, minute=40)):
+        html = c.get(f'/checklist/preencher?loja={lid}&tipo=fechamento'
+                     ).get_data(as_text=True)
+        assert 'Já preenchido' in html
+        hub = c.get(f'/checklist/?loja={lid}').get_data(as_text=True)
+        assert '✓ hoje às' in hub
