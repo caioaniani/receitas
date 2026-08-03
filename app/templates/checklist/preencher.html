@@ -65,9 +65,20 @@
   </div>
 
   <div class="d-grid gap-2 mb-3">
-    <button class="btn btn-lg btn-primary">✅ Fechar checklist de {{ label|lower }}</button>
+    <button class="btn btn-lg btn-primary" id="btn-fechar">✅ Fechar checklist de {{ label|lower }}</button>
     <a class="btn btn-outline-secondary" href="{{ url_for('checklist.index', loja=loja.id) }}">Voltar</a>
   </div>
 </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Anti-duplo-clique: upload de foto em 3G demora — desabilita o botão no
+// submit (o servidor ainda tem a guarda de 30s como rede de segurança).
+document.querySelector('form[enctype]').addEventListener('submit', function () {
+  var b = document.getElementById('btn-fechar');
+  if (b) { b.disabled = true; b.textContent = 'Enviando…'; }
+});
+</script>
 {% endblock %}
