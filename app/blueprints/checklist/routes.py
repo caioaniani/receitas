@@ -217,7 +217,7 @@ def config():
             it = _item_do_form()
             if it is None:
                 flash('Item não encontrado.', 'danger')
-            elif it is not None:
+            else:
                 usado = (ChecklistResposta.query
                          .filter_by(item_id=it.id).first() is not None)
                 if usado:
