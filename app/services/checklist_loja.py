@@ -140,7 +140,7 @@ def _data_do_registro(tipo):
     return hoje()
 
 
-def _subir_fotos(loja, itens, respostas):
+def _subir_fotos(loja, itens, respostas, data_reg):
     """Comprime e sobe pro Dropbox as fotos enviadas (exigidas ou extras).
 
     Fail-close DELIBERADO: se o Dropbox está fora ou a imagem é ilegível,
