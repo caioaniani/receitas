@@ -32,9 +32,10 @@ def _loja(nome='Loja A', dias=None):
 
 
 def _item(tipo='abertura', texto='Vitrine montada', exige_foto=False,
-          loja_id=None, ordem=0, ativo=True):
+          loja_id=None, ordem=0, ativo=True, setor=None):
     it = ChecklistItemModelo(tipo=tipo, texto=texto, exige_foto=exige_foto,
-                             loja_id=loja_id, ordem=ordem, ativo=ativo)
+                             loja_id=loja_id, ordem=ordem, ativo=ativo,
+                             setor=setor)
     db.session.add(it)
     db.session.commit()
     return it
@@ -616,3 +617,135 @@ def test_fechamento_de_madrugada_aparece_no_aviso_ja_preenchido(
         assert 'Já preenchido' in html
         hub = c.get(f'/checklist/?loja={lid}').get_data(as_text=True)
         assert '✓ hoje às' in hub
+
+
+# ── Importação do checklist em papel da Opão (03/08/2026) ───────────
+#
+# O dono mandou o PDF "CHECKLISTS OPERACIONAIS POR SETOR" (11 folhas) e
+# pediu pra importar. Escolhas dele: tudo numa tela agrupado por setor,
+# "durante o expediente" como tipo próprio, nenhuma foto obrigatória.
+
+def test_seed_importa_os_169_pontos(app):
+    from app.services import checklist_seed
+    with app.app_context():
+        n = checklist_seed.importar_padrao()
+        assert n == 169
+        assert ChecklistItemModelo.query.count() == 169
+        # os 11 setores do papel, todos globais (valem pra todas as lojas)
+        setores = {i.setor for i in ChecklistItemModelo.query.all()}
+        assert len(setores) == 11
+        assert 'Café / Barista' in setores and 'Supervisão da Loja' in setores
+        assert ChecklistItemModelo.query.filter(
+            ChecklistItemModelo.loja_id.isnot(None)).count() == 0
+
+
+def test_seed_nao_marca_nenhuma_foto_obrigatoria(app):
+    """Decisão do dono: "os check que EU selecionar que precisa de foto"."""
+    from app.services import checklist_seed
+    with app.app_context():
+        checklist_seed.importar_padrao()
+        assert ChecklistItemModelo.query.filter_by(exige_foto=True).count() == 0
+
+
+def test_seed_roda_uma_vez_e_nao_ressuscita(app):
+    """Guard em AppConfig: apagar/editar item não volta no próximo deploy."""
+    from app.models import AppConfig
+    from app.services import checklist_seed
+    with app.app_context():
+        checklist_seed.importar_padrao()
+        ChecklistItemModelo.query.filter_by(setor='Caixa').delete()
+        db.session.commit()
+        assert checklist_seed.importar_padrao() == 0
+        assert ChecklistItemModelo.query.filter_by(setor='Caixa').count() == 0
+        assert AppConfig.get(checklist_seed.CFG_SEED)
+
+
+def test_seed_forcado_nao_duplica(app):
+    from app.services import checklist_seed
+    with app.app_context():
+        checklist_seed.importar_padrao()
+        assert checklist_seed.importar_padrao(forcar=True) == 0
+        assert ChecklistItemModelo.query.count() == 169
+
+
+def test_seed_distribui_nos_tres_momentos(app):
+    from app.constants import CHECKLIST_TIPOS
+    from app.services import checklist_seed
+    with app.app_context():
+        checklist_seed.importar_padrao()
+        por_tipo = {t: ChecklistItemModelo.query.filter_by(tipo=t).count()
+                    for t in CHECKLIST_TIPOS}
+        assert por_tipo == {'abertura': 60, 'durante': 64,
+                            'troca_turno': 0, 'fechamento': 45}
+
+
+def test_agrupar_por_setor_preserva_a_ordem_do_papel(app):
+    from app.services import checklist_seed
+    with app.app_context():
+        checklist_seed.importar_padrao()
+        lj = _loja()
+        itens = checklist_loja.itens_para(lj.id, 'abertura')
+        grupos = checklist_loja.agrupar_por_setor(itens)
+        assert [s for s, _ in grupos][:3] == [
+            'Café / Barista', 'Chapa', 'Cozinha']
+        assert sum(len(g) for _, g in grupos) == 60
+
+
+def test_agrupar_junta_setor_repetido_num_grupo_so(app):
+    """Item novo cadastrado com ordem 0 no meio não faz o setor sair duas
+    vezes na tela."""
+    with app.app_context():
+        _item(texto='A', setor='Salão', ordem=1)
+        _item(texto='B', setor='Caixa', ordem=2)
+        _item(texto='C', setor='Salão', ordem=3)
+        lj = _loja()
+        grupos = checklist_loja.agrupar_por_setor(
+            checklist_loja.itens_para(lj.id, 'abertura'))
+        assert [s for s, _ in grupos] == ['Salão', 'Caixa']
+        assert [i.texto for i in grupos[0][1]] == ['A', 'C']
+
+
+def test_item_sem_setor_cai_em_geral(app):
+    with app.app_context():
+        _item(texto='Ponto solto')
+        lj = _loja()
+        grupos = checklist_loja.agrupar_por_setor(
+            checklist_loja.itens_para(lj.id, 'abertura'))
+        assert grupos[0][0] == 'Geral'
+
+
+def test_tipo_durante_existe_e_e_preenchivel(app):
+    from app.constants import CHECKLIST_TIPO_LABEL
+    assert CHECKLIST_TIPO_LABEL['durante'] == 'Durante o expediente'
+    with app.app_context():
+        lj = _loja()
+        u = _user()
+        it = _item(tipo='durante', texto='Limpar porta-filtro após uso.',
+                   setor='Café / Barista')
+        p = checklist_loja.registrar(lj, 'durante', u.id, _resp([it]))
+        assert p.tipo == 'durante' and len(p.respostas) == 1
+
+
+def test_cadastro_manual_aceita_setor(app, admin_user):
+    c = app.test_client()
+    _login(c, 'admin')
+    c.post('/checklist/config', data={
+        'acao': 'novo', 'texto': 'Conferir toldo', 'tipo': 'abertura',
+        'setor': 'Área Externa',
+    }, follow_redirects=True)
+    with app.app_context():
+        assert ChecklistItemModelo.query.one().setor == 'Área Externa'
+
+
+def test_tela_de_preenchimento_mostra_os_setores(app, admin_user):
+    from app.services import checklist_seed
+    with app.app_context():
+        checklist_seed.importar_padrao()
+        lj = _loja()
+        lid = lj.id
+    c = app.test_client()
+    _login(c, 'admin')
+    html = c.get(f'/checklist/preencher?loja={lid}&tipo=abertura'
+                 ).get_data(as_text=True)
+    assert 'Café / Barista' in html and 'Supervisão da Loja' in html
+    assert 'Ligar máquina de espresso' in html
