@@ -176,7 +176,7 @@ def _subir_fotos(loja, itens, respostas, data_reg):
             # e o funcionário perderia as marcações. O fail-close se mantém
             # (nada gravado); o erro real fica no log.
             logger.warning('checklist: upload de foto falhou (%s): %s',
-                           type(exc).__name__, exc)
+                           type(exc).__name__, exc, exc_info=True)
             raise ValueError('Falha ao subir a foto de '
                              f'"{it.texto}". Tente de novo.') from exc
     return out
