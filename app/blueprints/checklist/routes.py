@@ -186,6 +186,7 @@ def config():
                 ordem = 0
             db.session.add(ChecklistItemModelo(
                 tipo=tipo, texto=texto,
+                setor=(request.form.get('setor') or '').strip()[:60] or None,
                 exige_foto=bool(request.form.get('exige_foto')),
                 ordem=ordem, loja_id=loja.id if loja else None))
             db.session.commit()
