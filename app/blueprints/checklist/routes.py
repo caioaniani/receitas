@@ -56,10 +56,17 @@ def index():
     tipos = checklist_loja.tipos_configurados(loja.id) if loja else {}
     feitos_hoje = {}
     if loja:
+        # Janela hoje+ontem e filtro pelo "dia do turno" de cada tipo: o
+        # fechamento de madrugada grava data=ontem e ainda precisa aparecer
+        # como "✓ hoje" (revisão rodada 2).
+        from datetime import timedelta
         for p in (ChecklistPreenchimento.query
-                  .filter_by(loja_id=loja.id, data=hoje())
+                  .filter(ChecklistPreenchimento.loja_id == loja.id,
+                          ChecklistPreenchimento.data
+                          >= hoje() - timedelta(days=1))
                   .order_by(ChecklistPreenchimento.criado_em).all()):
-            feitos_hoje.setdefault(p.tipo, []).append(p)
+            if p.data == checklist_loja._data_do_registro(p.tipo):
+                feitos_hoje.setdefault(p.tipo, []).append(p)
     return render_template(
         'checklist/index.html', lojas=lojas, loja=loja,
         tipos=CHECKLIST_TIPOS, labels=CHECKLIST_TIPO_LABEL,
