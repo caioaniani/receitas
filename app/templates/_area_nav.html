@@ -29,7 +29,7 @@
 
 {% macro lojas(variant) %}
 {{ _lnk(variant, url_for('pedidos.lista'), 'Pedidos', request.path in ['/pedidos/', '/pedidos']) }}
-{{ _lnk(variant, url_for('checklist.index'), 'Checklist da loja', request.path in ['/checklist/', '/checklist'], icon='bi-clipboard-check') }}
+{{ _lnk(variant, url_for('checklist.index'), 'Checklist da loja', request.path in ['/checklist/', '/checklist'] or request.path.startswith('/checklist/preencher'), icon='bi-clipboard-check') }}
 {% if current_user.is_admin() %}
 {{ _lnk(variant, url_for('checklist.config'), 'Checklist — itens', request.path == '/checklist/config', sub=true) }}
 {{ _lnk(variant, url_for('checklist.conferencia'), 'Checklist — conferência', request.path == '/checklist/conferencia', sub=true) }}
