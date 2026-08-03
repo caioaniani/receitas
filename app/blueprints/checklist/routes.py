@@ -138,8 +138,13 @@ def preencher():
 
 
 def _do_dia(loja, tipo):
+    """Preenchimentos do "dia do turno" corrente — pra fechamento de
+    madrugada, é ONTEM (`_data_do_registro`): sem isso o registro de 00:15
+    sumia do aviso "já preenchido" e o mesmo fechamento entrava em dobro
+    sem alerta (regressão apontada na revisão, rodada 2)."""
     return (ChecklistPreenchimento.query
-            .filter_by(loja_id=loja.id, tipo=tipo, data=hoje())
+            .filter_by(loja_id=loja.id, tipo=tipo,
+                       data=checklist_loja._data_do_registro(tipo))
             .order_by(ChecklistPreenchimento.criado_em).all())
 
 
