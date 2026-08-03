@@ -76,7 +76,7 @@
 <script>
 // Anti-duplo-clique: upload de foto em 3G demora — desabilita o botão no
 // submit (o servidor ainda tem a guarda de 30s como rede de segurança).
-document.querySelector('form[enctype]').addEventListener('submit', function () {
+document.getElementById('form-checklist').addEventListener('submit', function () {
   var b = document.getElementById('btn-fechar');
   if (b) { b.disabled = true; b.textContent = 'Enviando…'; }
 });
