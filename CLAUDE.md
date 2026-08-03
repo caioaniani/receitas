@@ -909,7 +909,38 @@ checklist e tira FOTO comprovando os pontos necessarios. Decisoes dele
   checklist de QUALQUER loja (gerente cobre outra loja; o registro guarda
   quem — travar por `Usuario.loja_id` e decisao separada); hora de cobranca
   10:00 e GLOBAL, nao por loja; foto extra em item sem exige_foto e aceita.
-- Testes: `tests/test_checklist_loja.py` (36 casos). Manual de operacao
+- **IMPORTACAO do checklist em papel (03/08/2026)**: o dono mandou o PDF
+  "CHECKLISTS OPERACIONAIS POR SETOR" (11 folhas — Cafe/Barista, Chapa,
+  Cozinha, Viagem/Embalagem, Camara Fria, Caixa, Salao, Limpeza, Area
+  Externa, Escritorio e Forno, Supervisao da Loja) e pediu pra importar.
+  Escolhas dele (AskUserQuestion): **tudo numa tela agrupado por setor**
+  (nao navegacao por setor), **"Durante o expediente" virou TIPO PROPRIO**
+  (`CHECKLIST_TIPOS` ganhou `'durante'`; `troca_turno` segue separado) e
+  **nenhum ponto entra exigindo foto** ("os check que EU selecionar").
+  - Coluna `ChecklistItemModelo.setor` VARCHAR(60) — e SUBTITULO na tela,
+    NULL = grupo "Geral". Sem ela o agrupamento viraria prefixo no texto
+    ("CAFE — Ligar maquina…"), que sujaria tambem o snapshot historico.
+  - Seed em `app/services/checklist_seed.py` (169 pontos; a linha
+    "RESPONSAVEL" da Supervisao ficou de fora — o sistema ja grava quem
+    preencheu). Blocos sem tipo proprio: "MANHA" (Limpeza) → abertura;
+    "PADRAO DO CAFE", "ORGANIZACAO PEPS", "MEIO DO DIA" → durante.
+    Distribuicao: 60 abertura / 64 durante / 45 fechamento.
+  - `importar_padrao()` roda UMA vez (guard AppConfig `checklist_seed_
+    opao_v1`, chamado de `migrations_legacy._seed_checklist_padrao`,
+    pulado sob PYTEST_RUNNING) e **nunca ressuscita** — apagar/editar item
+    depois manda sobre o seed. `forcar=True` ignora so o guard: a dedup por
+    (tipo, setor, texto) impede duplicata em qualquer caso.
+  - `checklist_loja.agrupar_por_setor` preserva a ordem de PRIMEIRA
+    aparicao (item novo com ordem 0 no meio nao faz o setor sair repetido).
+  - ARMADILHA REAL desta mudanca: o auto-commit hook pusha a CADA edicao,
+    entao cada push CANCELA o CI anterior — com Wait-for-CI, o deploy do
+    "commit 1" (ALTER) nunca subiu sozinho e ALTER+modelo cairam no MESMO
+    deploy. Foi seguro AQUI porque `_setup_schema` roda `db.create_all()` →
+    `_migrate()` ANTES de servir request, entao a coluna nasce antes do
+    primeiro SELECT. Pra valer o procedimento de 2 commits DE VERDADE, o
+    commit 1 tem que ser pushado e o deploy CONFIRMADO pela sonda antes de
+    tocar qualquer outro arquivo (o hook nao espera).
+- Testes: `tests/test_checklist_loja.py` (49 casos). Manual de operacao
   atualizado (secao DIARIO) na mesma mudanca.
 
 ## Estoque pendente (congelados + loja)
