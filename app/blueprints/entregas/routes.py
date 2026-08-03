@@ -84,9 +84,18 @@ def _painel_pedidos_do_dia(target):
             target, vnda.buscar_pedidos_do_dia(target, overrides=overrides_data))
     except Exception as e:  # noqa: BLE001
         current_app.logger.exception('painel: erro carregando VNDA')
-        return [], f'{type(e).__name__}: {str(e)[:200]}'
+        # FIX 03/08/2026: erro do VNDA (aposentado) nao pode engolir os
+        # pedidos MANUAIS — injeta locais numa base vazia e segue.
+        resultado = _injetar_pedidos_locais(target, {'pedidos': []})
+        pedidos = resultado.get('pedidos', [])
+        _aplicar_cartinhas(pedidos)
+        return pedidos, f'{type(e).__name__}: {str(e)[:200]}'
     if 'erro' in resultado:
-        return [], resultado['erro']
+        erro = resultado['erro']
+        resultado = _injetar_pedidos_locais(target, {'pedidos': []})
+        pedidos = resultado.get('pedidos', [])
+        _aplicar_cartinhas(pedidos)
+        return pedidos, erro
     pedidos = resultado.get('pedidos', [])
     _aplicar_cartinhas(pedidos)
     return pedidos, None
