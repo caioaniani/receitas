@@ -179,6 +179,14 @@
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Lojas</div>
         {{ areanav.lojas('sidebar') }}
+        {% elif current_user.pode_checklist() %}
+        {# Atendente chefe (papel funcionario) não vê a área Lojas — o link
+           do checklist do turno precisa aparecer avulso (03/08/2026). #}
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title">Loja</div>
+        <a href="{{ url_for('checklist.index') }}"
+           class="sidebar-link {{ 'active' if request.path.startswith('/checklist') }}">
+            Checklist da loja</a>
         {% endif %}
 
         {# ── 2. PRODUÇÃO (industria) ── #}
