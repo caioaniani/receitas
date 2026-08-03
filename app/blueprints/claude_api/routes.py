@@ -1972,3 +1972,63 @@ def estoque_ledger():
     return jsonify(ok=True, loja=loja.nome,
                    janela={'inicio': ini.date().isoformat(), 'dias': dias},
                    itens=itens[:40])
+
+
+@claude_api_bp.route('/checklist')
+@_claude_auth_required
+def checklist_estado():
+    """SONDA read-only do checklist de loja (03/08/2026).
+
+    Serve pra duas coisas: confirmar de fora que a importacao do checklist
+    em papel entrou (itens por tipo/setor) e ver quem esta DEVENDO hoje —
+    a mesma conta que alimenta o "Precisa de voce hoje" da home.
+
+    ?dias=N (default 7) inclui os preenchimentos recentes.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    from app.constants import CHECKLIST_TIPO_LABEL
+    from app.extensions import db
+    from app.models import ChecklistItemModelo, ChecklistPreenchimento
+    from app.services import checklist_loja
+    from app.utils import hoje
+
+    dias = _int_arg('dias', 7, 1, 90)
+    itens = ChecklistItemModelo.query.all()
+    por_tipo = {}
+    for it in itens:
+        d = por_tipo.setdefault(it.tipo, {'total': 0, 'ativos': 0,
+                                          'exigem_foto': 0, 'setores': {}})
+        d['total'] += 1
+        if it.ativo:
+            d['ativos'] += 1
+            d['setores'][it.setor or 'Geral'] = (
+                d['setores'].get(it.setor or 'Geral', 0) + 1)
+        if it.exige_foto:
+            d['exigem_foto'] += 1
+
+    di = hoje() - timedelta(days=dias - 1)
+    recentes = (db.session.query(
+        ChecklistPreenchimento.data, ChecklistPreenchimento.tipo,
+        func.count(ChecklistPreenchimento.id))
+        .filter(ChecklistPreenchimento.data >= di)
+        .group_by(ChecklistPreenchimento.data,
+                  ChecklistPreenchimento.tipo).all())
+
+    return jsonify(
+        ok=True,
+        itens_cadastrados=len(itens),
+        por_tipo={CHECKLIST_TIPO_LABEL.get(t, t): v
+                  for t, v in por_tipo.items()},
+        devendo={
+            'abertura_hoje': checklist_loja.lojas_faltando('abertura', hoje()),
+            'fechamento_ontem': checklist_loja.lojas_faltando(
+                'fechamento', hoje() - timedelta(days=1)),
+        },
+        preenchimentos={'janela_dias': dias,
+                        'por_dia': [{'data': d.isoformat(), 'tipo': t,
+                                     'n': int(n)} for d, t, n in recentes]},
+        pendencias_na_home=checklist_loja.pendencias_checklist(),
+    )
