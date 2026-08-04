@@ -500,6 +500,17 @@ def api_iniciar_rota(token):
         dia = datetime.strptime(data_str, '%Y-%m-%d').date()
     except ValueError:
         dia = hoje_brt()
+    # SÓ NO DIA da entrega (achado de revisão): a tela do driver abre já na
+    # próxima data com rota — na véspera, um clique de curiosidade mandaria
+    # "saiu para entrega" pra rota inteira UM DIA ANTES e queimaria a
+    # idempotência (no dia real, nada seria reenviado e a ETA nasceria
+    # podre). O confirm() do front não é barreira suficiente.
+    if dia != hoje_brt():
+        return jsonify(
+            ok=False,
+            erro=(f'A rota de {dia.strftime("%d/%m")} só pode ser iniciada '
+                  f'no próprio dia (hoje é '
+                  f'{hoje_brt().strftime("%d/%m")}).')), 422
     ri, enviados = rastreio_entrega.iniciar_rota(driver, dia)
     return jsonify(ok=True, iniciado_em=ri.iniciado_em.strftime('%H:%M'),
                    emails_enviados=enviados,
