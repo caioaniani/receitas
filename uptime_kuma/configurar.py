@@ -17,6 +17,7 @@ no sistema):
 
 Sem as variáveis do Z-API ele cria só os monitores (sem notificação).
 """
+import json
 import os
 import sys
 
@@ -119,7 +120,18 @@ def _garantir_notificacao(api):
         sys.exit(f'ZAPI_PHONE inválido: {telefone!r}. Use só dígitos, com o '
                  '55 e o DDD (ex.: 5511987654321) — sem +, espaço ou traço.')
 
-    cabecalhos = ('{"Client-Token": "%s"}' % client_token) if client_token else ''
+    # Content-Type OBRIGATÓRIO aqui (achado em 04/08/2026, depois de o alerta
+    # falhar com 400 {"error":"Phone is empty"} mesmo com o corpo correto):
+    # no branch `custom`, o webhook.js do Uptime Kuma renderiza o template
+    # pra uma STRING e NÃO define Content-Type — e o axios, ao receber
+    # string sem header, manda `application/x-www-form-urlencoded`. A Z-API
+    # tenta ler como formulário, não encontra `phone` e recusa. Os
+    # `webhookAdditionalHeaders` são mesclados DEPOIS, então é aqui que se
+    # conserta. (Comprovado com axios real contra um servidor de eco.)
+    cabecalhos = {'Content-Type': 'application/json'}
+    if client_token:
+        cabecalhos['Client-Token'] = client_token
+    cabecalhos = json.dumps(cabecalhos)
     r = api.add_notification(
         name=nome,
         type=NotificationType.WEBHOOK,
