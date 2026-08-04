@@ -1076,6 +1076,42 @@ checklist e tira FOTO comprovando os pontos necessarios. Decisoes dele
 - Testes: `tests/test_checklist_loja.py` (49 casos). Manual de operacao
   atualizado (secao DIARIO) na mesma mudanca.
 
+## Uptime Kuma — vigia EXTERNO no VPS (04/08/2026)
+
+Pedido do dono depois de perguntar que ferramentas open source ajudariam.
+Motivo tecnico: TODOS os vigias (`seru_cron`) e o Sentry rodam DENTRO do
+app — cobrem "app de pe e algo deu errado" e ficam MUDOS em "app nao sobe /
+crashloop / banco fora / deploy travado". Nesse caso o silencio e
+indistinguivel de "tudo bem". O Uptime Kuma roda FORA e fecha essa classe.
+
+- **Arquivos**: pasta `uptime_kuma/` (espelha o padrao do `wifi_radius/`):
+  `docker-compose.yml`, `docker-compose.https.yml` (overlay com Caddy +
+  Let's Encrypt), `Caddyfile`, `setup.sh` (idempotente) e `README.md` com
+  os monitores e a notificacao.
+- **Onde roda**: VPS Vultr SP que ja existe pra ponte RADIUS do Wi-Fi.
+  NUNCA no Railway (cairia junto com o alvo). O `setup.sh` NAO mexe em
+  firewall DE PROPOSITO — ligar UFW nesse VPS sem `ufw allow 1812/udp`
+  derruba a autenticacao do Wi-Fi das lojas.
+- **Monitores**: `/health` do gestao (Keyword `ok` — status 200 do proxy
+  com pagina de erro nao basta), `opao.online`, Chatwoot, e porta TCP 1812
+  (a propria ponte RADIUS). Retries=2 pra nao alarmar por blip de rede.
+- **ARMADILHA REAL (testada com liquidjs)**: o exemplo de Custom Body que a
+  tela do proprio Uptime Kuma sugere usa `"{{ msg }}"` ENTRE ASPAS. Isso
+  QUEBRA — o corpo e renderizado por LiquidJS e precisa sair JSON valido, e
+  msg de queda costuma ter aspas/quebra de linha (`getaddrinfo ENOTFOUND
+  "gestao"`). Resultado: o alerta nao sai justamente na hora da queda. O
+  certo e `{{ msg | json }}` SEM aspas em volta (o filtro ja produz a
+  string escapada). Validado nos 4 casos: aspas, multilinha, barra
+  invertida e mensagem de recuperacao.
+- **Webhook fala com a Z-API DIRETO** (`/send-text` + header
+  `Client-Token`), sem passar por `app/services/zapi.py` — logo fora do
+  whitelist e do teto/hora. E o desejado: alerta de queda nunca pode ser
+  suprimido por throttle.
+- Pendente do dono: rodar o `setup.sh` no VPS (nao ha SSH do container de
+  dev — a saida so libera HTTPS) e, opcionalmente, criar o DNS
+  `status.opaopadariaartesanal.com.br` pro modo HTTPS.
+- Registrado no manual de operacao (secao RODA SOZINHO).
+
 ## Estoque pendente (congelados + loja)
 
 Tanto `EstoqueProducao` quanto `EstoqueLoja` tem coluna `nome_pendente`. Quando o
