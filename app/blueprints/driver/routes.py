@@ -216,8 +216,18 @@ def api_pedidos(token):
                + [p for p in _pedidos_online_do_dia(target)
                   if not p.get('retirada')])
     codes = [p['code'] for p in pedidos if p.get('code')]
+
+    # Estado do "🚚 Iniciar rota" do dia — o front decide mostrar o botao
+    # (rota nao iniciada) ou o selo "rota iniciada as HH:MM".
+    from app.models import RotaInicio
+    ri = RotaInicio.query.filter_by(driver_id=driver.id, data=target).first()
+    rota_info = {'iniciada': ri is not None,
+                 'iniciada_em': (ri.iniciado_em.strftime('%H:%M')
+                                 if ri and ri.iniciado_em else None)}
+
     if not codes:
-        return jsonify(ok=True, pedidos=[], driver={'id': driver.id, 'nome': driver.nome, 'cor': driver.cor})
+        return jsonify(ok=True, pedidos=[], rota=rota_info,
+                       driver={'id': driver.id, 'nome': driver.nome, 'cor': driver.cor})
 
     atribs = AtribuicaoEntrega.query.filter(
         AtribuicaoEntrega.pedido_code.in_(codes),
