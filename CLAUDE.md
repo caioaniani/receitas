@@ -440,6 +440,23 @@ nao recria nem dropa). AINDA dormentes (camada CRM, intocada): `vnda.py`
 (client da API), `vnda_card.py`, `/admin/vnda/contatos`, modelo `PedidoSite`
 (cache do card de cliente do Chatwoot). Migrations antigas tambem ficam.
 
+**Endpoints de ENTREGA da era VNDA repontados (03-04/08/2026)**: a familia
+inteira que montava "pedidos do dia" via `vnda.buscar_pedidos_do_dia` ficou
+CEGA pro site apos o cutover — com o VNDA aposentado, o `erro` do client
+derrubava a resposta e os pedidos do SITE nunca entravam no pool. Casos
+reais do dono: "/rotas nao mostra nada do site" e "mapa da aba Operacao com
+pinos reais e a LISTA dizendo nenhum pedido" (mapa vinha do /api/rotas ja
+corrigido; a lista vem do /api/atribuidos, que nao). REGRA: todo consumidor
+de `buscar_pedidos_do_dia` TOLERA o erro (base vazia) e injeta o site via
+`_pedidos_online_do_dia`; retirada fica FORA da roteirizacao (/api/rotas)
+mas DENTRO do inventario (/api/atribuidos, /api/produtos). Os 9 chamadores
+cobertos: api_rotas, api_atribuidos (lista da aba Operacao), api_produtos
+(aba Produtos), resetar_atribuicoes_dia (devolvia 500), _painel_pedidos_do_
+dia, api_pedidos (entregas), imprimir por codes, driver api_pedidos (dava
+502) e driver api_debug. Endpoint NOVO de pedidos-do-dia deve nascer desse
+padrao. Testes: secao "/rotas e /driver enxergam pedido do SITE" em
+`tests/test_rastreio_entrega.py`.
+
 **Mapas unificados no `VendaMapa` (30/06/2026)**: o trio paralelo de
 mapeamentos virou UM modelo `VendaMapa` com `canal` em {'seru', 'lote'}.
 `SeruProdutoMap` (canal seru) e `LojaProdutoMap` (canal lote) seguem como
