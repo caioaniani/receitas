@@ -550,7 +550,18 @@ _STATUS_IGNORAR = {'canceled', 'cancelled'}
 
 def buscar_pedidos_do_dia(target_date, overrides=None):
     """overrides: dict {pedido_code: data_entrega} para sobrescrever a data extraida."""
+    import os
     import time
+
+    # VNDA APOSENTADO (24/06/2026; curto-circuito 03/08/2026): nao ha pedido
+    # novo la, mas TODA tela de entrega ainda batia nesta funcao — com token
+    # configurado isso era um HTTP morto por carregamento (ate 25s de spinner
+    # + banner de retry na aba Operacao). Agora o caminho de PEDIDOS do VNDA
+    # e opt-in: sem `VNDA_PEDIDOS=1` no env, devolve vazio NA HORA, sem rede
+    # e SEM 'erro' (os 9 consumidores seguem com site+manuais). Reativar =
+    # setar a env (o codigo abaixo fica intacto).
+    if os.environ.get('VNDA_PEDIDOS', '0') != '1':
+        return {'pedidos': []}
     token = current_app.config.get('VNDA_API_TOKEN')
     if not token:
         return {'erro': 'Token Vnda nao configurado. Adicione VNDA_API_TOKEN nas variaveis de ambiente.', 'pedidos': []}
