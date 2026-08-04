@@ -65,11 +65,24 @@ def iniciar_rota(driver, dia=None):
                                             data=dia).first()
             if ri is None:
                 raise
+    # CLAIM atômico do disparo (padrão do Confirmar do Slack): dois POSTs
+    # quase simultâneos (2 aparelhos, retry de rede) passavam ambos pelo
+    # `if emails_em is None` e a rota INTEIRA recebia a rajada em dobro.
+    # Falha catastrófica no envio devolve o claim (retentável); e-mail
+    # individual ruim já é engolido por pedido lá dentro.
     enviados = 0
-    if ri.emails_em is None:
-        enviados = _enviar_emails_saida(driver, dia)
-        ri.emails_em = agora()
-        db.session.commit()
+    ganhou = (RotaInicio.query
+              .filter(RotaInicio.id == ri.id, RotaInicio.emails_em.is_(None))
+              .update({'emails_em': agora()}, synchronize_session=False))
+    db.session.commit()
+    if ganhou:
+        try:
+            enviados = _enviar_emails_saida(driver, dia)
+        except Exception:
+            ri.emails_em = None
+            db.session.commit()
+            raise
+    db.session.refresh(ri)
     return ri, enviados
 
 
