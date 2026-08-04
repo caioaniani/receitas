@@ -101,7 +101,7 @@ campo ou se o script falhar.
 
 ### 1. Monitores
 
-Em **Add New Monitor**, crie estes quatro. Em todos: `Retries = 2`
+Em **Add New Monitor**, crie estes três. Em todos: `Retries = 2`
 (evita alarme falso por oscilação de rede) e deixe
 **Certificate Expiry Notification** ligado.
 
@@ -110,17 +110,26 @@ Em **Add New Monitor**, crie estes quatro. Em todos: `Retries = 2`
 | Sistema — gestão | HTTP(s) - Keyword | `https://gestao.opaopadariaartesanal.com.br/health` | 60s | Keyword: `ok` — rota leve que já existe pra isso (`app/__init__.py:298`) |
 | Loja online | HTTP(s) | `https://opao.online` | 60s | Site fora num sábado = venda perdida em silêncio |
 | Atendimento (Chatwoot) | HTTP(s) | `https://atendimento.opaopadariaartesanal.com.br` | 120s | Projeto separado no Railway |
-| Ponte RADIUS (Wi-Fi) | TCP Port | `127.0.0.1` : `1812` | 300s | Confirma que a ponte do Wi-Fi está viva |
 
 Por que **Keyword** no primeiro: o Railway pode devolver uma página de erro
 com status 200. Exigir a palavra `ok` no corpo garante que quem respondeu foi
-o app, não o proxy.
+o app, não o proxy. (Confirmado na instalação: `200 - OK, keyword is found`.)
 
-> **Verificação feita ao escrever isto (03/08/2026)**: `/health` foi testado
-> e responde `200` com o corpo `ok`. As URLs da loja e do Chatwoot **não**
-> puderam ser testadas do ambiente de desenvolvimento (a saída de rede de lá
-> só libera `gestao.*`) — confirme as duas no primeiro *Test* do Kuma. Se
-> alguma responder diferente do esperado, ajuste o monitor, não o site.
+### ⚠️ Não monitore a ponte RADIUS como "TCP Port"
+
+Erro cometido em 04/08/2026 — gerou alarme falso já no primeiro ciclo. A
+ponte escuta em **UDP**/1812 (`ss -ulnp` mostra `UNCONN`) e o monitor de
+porta do Kuma testa **TCP**: `ECONNREFUSED` garantido. Somado a isso, o
+container tem rede própria, então `127.0.0.1` lá dentro é o container e não
+o VPS.
+
+Para monitorar a ponte de verdade existe `MonitorType.RADIUS`, que faz
+autenticação real e cobre a cadeia inteira (Kuma → ponte → endpoint
+`/api/wifi/radius-check` no gestão → banco). Exige `radiusSecret`
+(`WIFI_RADIUS_SECRET`), `radiusUsername`/`radiusPassword` de uma conta de
+cliente **dedicada a teste**, e o hostname alcançável de dentro do container
+(o IP do VPS). Decisão do dono pendente — sem isso, a ponte fica coberta
+pelo systemd (`Restart` automático, já se recuperou sozinha em 01/08).
 
 ### 2. Alerta no WhatsApp (Z-API)
 
