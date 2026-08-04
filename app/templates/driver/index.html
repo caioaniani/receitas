@@ -405,19 +405,22 @@
             new bootstrap.Modal(document.getElementById('modal-motivo')).show();
         });
 
-        // Deletar foto
-        document.getElementById('modal-body').addEventListener('click', function(e) {
-            var x = e.target.closest('.x[data-foto-id]');
-            if (!x) return;
-            if (!confirm('Apagar essa foto?')) return;
-            api('/foto/' + x.dataset.fotoId, {method: 'DELETE'}).then(function(r) {
-                if (r.body.ok) {
-                    pedidoAtual.fotos = (pedidoAtual.fotos || []).filter(function(f) { return f.id != x.dataset.fotoId; });
-                    abrirDetalhe(pedidoAtual);
-                }
-            });
-        });
     }
+
+    // Deletar foto — delegado e registrado UMA vez (achado de revisão: o
+    // listener era re-adicionado a cada abrirDetalhe e empilhava — apagar
+    // uma foto depois de abrir N pedidos disparava N confirms/DELETEs).
+    document.getElementById('modal-body').addEventListener('click', function(e) {
+        var x = e.target.closest('.x[data-foto-id]');
+        if (!x || !pedidoAtual) return;
+        if (!confirm('Apagar essa foto?')) return;
+        api('/foto/' + x.dataset.fotoId, {method: 'DELETE'}).then(function(r) {
+            if (r.body.ok) {
+                pedidoAtual.fotos = (pedidoAtual.fotos || []).filter(function(f) { return f.id != x.dataset.fotoId; });
+                abrirDetalhe(pedidoAtual);
+            }
+        });
+    });
 
     function subirFoto(e) {
         var arquivo = e.target.files[0];
