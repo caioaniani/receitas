@@ -238,6 +238,7 @@
             }
             pedidos = r.body.pedidos || [];
             origemEndereco = r.body.origem_endereco || '';
+            rotaInfo = r.body.rota || {iniciada: false, iniciada_em: null};
             document.getElementById('topo-data').textContent =
                 data.split('-').reverse().join('/') + ' — ' + pedidos.length + ' entrega' + (pedidos.length !== 1 ? 's' : '');
             renderPedidos();
