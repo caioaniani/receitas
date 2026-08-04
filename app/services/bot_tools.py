@@ -288,33 +288,18 @@ def catalogo_disponibilidade():
     disponível pra 09/08" e o vigia, olhando só a disponibilidade geral,
     acusava erro do bot (falso ALTA). Sob encomenda nunca fica indisponível
     (produzido pro pedido)."""
-    from datetime import timedelta
-
-    from app.services import loja_catalogo, loja_plano_dia
-    from app.utils import hoje
+    from app.services import loja_catalogo
     try:
         catalogo = loja_catalogo.anotar_esgotado(
             loja_catalogo.produtos_publicados())
-        di = hoje()
-        janela = getattr(loja_catalogo, '_JANELA_DIAS_FUTUROS', 14)
-        saldos = loja_plano_dia.saldos_no_periodo(
-            di, di + timedelta(days=janela - 1))
+        saldos = _saldos_janela_plano()
     except Exception:  # noqa: BLE001
         logger.exception('catalogo_disponibilidade falhou')
         return None
-    out = []
-    for it in catalogo:
-        chave = (it['kind'], it['id'])
-        datas = []
-        if not it.get('sob_encomenda'):
-            for d in sorted(saldos):
-                saldo = saldos[d].get(chave)
-                if saldo is not None and saldo <= 0:
-                    datas.append(d.strftime('%d/%m'))
-        out.append({'nome': it['nome'],
-                    'disponivel': not it.get('esgotado', False),
-                    'indisponivel_em': datas})
-    return out
+    return [{'nome': it['nome'],
+             'disponivel': not it.get('esgotado', False),
+             'indisponivel_em': _datas_indisponiveis(it, saldos)}
+            for it in catalogo]
 
 
 def consultar_ingredientes(nome_produto):
