@@ -480,6 +480,37 @@ dia, api_pedidos (entregas), imprimir por codes, driver api_pedidos (dava
 padrao. Testes: secao "/rotas e /driver enxergam pedido do SITE" em
 `tests/test_rastreio_entrega.py`.
 
+**Payload MAGRO da aba Operacao + kill-switch VNDA_PEDIDOS (04/08/2026,
+pedido do dono "nessa tela nao precisa de cartinha e item")**:
+- `_serializar_pedido_online(p, detalhes=True)` ganhou modo magro
+  (`detalhes=False`): `itens=[]` e `cartinha_vnda=''`, mantendo codigo/
+  destinatario/telefones/e_presente/divulgacao/endereco/data/periodo/
+  expresso/retirada/status. `_pedidos_online_do_dia(target, detalhes=True)`
+  espelha e, no modo completo, faz `selectinload(itens).selectinload(
+  componentes)` (matou o N+1 de 150 pedidos x itens x componentes do menu).
+- MAGRO: `api_atribuidos` (lista da Operacao; o card nao renderiza
+  cartinha — conferido no JS antes de cortar), `api_rotas`,
+  `resetar_atribuicoes_dia`, driver `api_debug`. COMPLETO (nao regredir):
+  painel (`_painel_pedidos_do_dia`), `api_pedidos` (aba legada tem o
+  EDITOR de cartinha), `api_produtos` (conta itens), imprimir e driver
+  `api_pedidos` (motorista/cozinha separam pelo item).
+- **Impressao SEMPRE re-busca por codes** (`entregas.js::
+  imprimirSelecionados` virou GET `/entregas/imprimir?codes=...`): o POST
+  de snapshot mandava o estado em memoria da aba — com a lista magra, o
+  papel do motorista sairia SEM itens/cartinha. O servidor reconstroi
+  completo (com `_aplicar_cartinhas`). NUNCA voltar ao snapshot POST
+  enquanto a lista da Operacao for magra.
+- `vnda.buscar_pedidos_do_dia` agora tem curto-circuito: env
+  `VNDA_PEDIDOS` != '1' (default) devolve `{'pedidos': []}` SEM HTTP e SEM
+  `erro` — mata os spinners de ate ~25s e o banner "Erro temporario ao
+  buscar pedidos no VNDA" que a tela mostrava a cada load. Religar so com
+  ordem do dono (VNDA aposentado).
+- Testes: `test_lista_da_operacao_vem_magra`, `test_painel_segue_completo`,
+  `test_impressao_por_codes_sai_completa` (cartinha so na via CLIENTE — a
+  do motorista omite DE PROPOSITO, `imprimir.html` linha 3) e
+  `test_vnda_pedidos_curto_circuito_por_default` em
+  `tests/test_rastreio_entrega.py`.
+
 **Mapas unificados no `VendaMapa` (30/06/2026)**: o trio paralelo de
 mapeamentos virou UM modelo `VendaMapa` com `canal` em {'seru', 'lote'}.
 `SeruProdutoMap` (canal seru) e `LojaProdutoMap` (canal lote) seguem como
