@@ -2275,11 +2275,23 @@ def api_atribuidos():
         target = hoje_brt()
 
     overrides = _carregar_overrides_data()
-    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
-    if 'erro' in resultado:
-        resp = jsonify(drivers=[], sem_driver=[], erro=resultado['erro'])
-        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
-        return resp
+    # FIX 03/08/2026 (caso real do dono: mapa da aba Operacao com os pinos
+    # do dia 09 e a LISTA dizendo "nenhum pedido"): a lista vem DESTE
+    # endpoint, que era da era VNDA e nao foi repontado junto com o
+    # /api/rotas — o mapa (rotas, corrigido) via os pedidos do site e a
+    # lista (aqui) nao. Mesmo padrao dos irmaos: erro do VNDA vira base
+    # vazia e o SITE entra pelo serializador do painel. Retirada ENTRA na
+    # lista (diferente da roteirizacao): a aba Operacao e o inventario do
+    # dia e a retirada precisa ser separada mesmo sem motoboy.
+    try:
+        base = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    except Exception:  # noqa: BLE001
+        base = {'erro': 'vnda indisponivel'}
+    if 'erro' in base:
+        base = {'pedidos': []}
+    resultado = _injetar_pedidos_locais(target, base)
+    resultado['pedidos'] = (resultado.get('pedidos', [])
+                            + _pedidos_online_do_dia(target))
 
     pedidos = resultado.get('pedidos', [])
     _aplicar_cartinhas(pedidos)   # resolve p['cartinha'] (manual > VNDA) p/ a aba Operacao
