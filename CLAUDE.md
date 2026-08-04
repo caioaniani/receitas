@@ -1103,6 +1103,15 @@ indistinguivel de "tudo bem". O Uptime Kuma roda FORA e fecha essa classe.
   certo e `{{ msg | json }}` SEM aspas em volta (o filtro ja produz a
   string escapada). Validado nos 4 casos: aspas, multilinha, barra
   invertida e mensagem de recuperacao.
+- **ARMADILHA 2, pior que a primeira (custou a sessao inteira de
+  04/08/2026)**: no branch `custom` o `webhook.js` do Kuma renderiza o
+  template pra uma STRING e **NAO define Content-Type**; o axios, com
+  string e sem header, manda `application/x-www-form-urlencoded`. A Z-API
+  le como formulario, nao acha `phone` e responde `400 {"error":"Phone is
+  empty"}` — COM o JSON perfeito no corpo. O sintoma aponta pro lugar
+  errado (parece dado faltando). Fix: por `"Content-Type":
+  "application/json"` nos **Additional Headers**, que o Kuma mescla DEPOIS
+  do branch. Comprovado com axios real contra servidor de eco.
 - **Webhook fala com a Z-API DIRETO** (`/send-text` + header
   `Client-Token`), sem passar por `app/services/zapi.py` — logo fora do
   whitelist e do teto/hora. E o desejado: alerta de queda nunca pode ser
