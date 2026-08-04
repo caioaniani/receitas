@@ -22,6 +22,25 @@ pé e algo deu errado"* — e ficam **mudos** na classe oposta:
 Silêncio total é indistinguível de "está tudo bem" — é esse buraco que o
 Uptime Kuma fecha.
 
+## Estado atual (04/08/2026)
+
+**Instalado e rodando** no VPS da Vultr (São Paulo, `216.238.102.67`), em
+`/opt/uptime-kuma`, modo HTTP na porta 3001. Container `unless-stopped`
+(volta sozinho em qualquer reinício), Docker 29.7.1 sobre Ubuntu 26.04.
+
+Confirmado na instalação:
+- A ponte RADIUS do Wi-Fi (`wifi-radius.service`) está **`enabled`** — sobe
+  sozinha no boot, então reiniciar o VPS é seguro para o Wi-Fi das lojas.
+- Instalar o Docker não afetou a ponte (`active`, porta 1812 escutando).
+
+Pendências opcionais:
+- **HTTPS**: hoje o login trafega em texto claro na porta 3001 exposta.
+  Criar o DNS `status.opaopadariaartesanal.com.br` → IP do VPS e rodar
+  `./setup.sh status.opaopadariaartesanal.com.br` fecha isso (a 3001 sai
+  da internet e o Caddy assume 80/443).
+- **Vigiar o vigia**: UptimeRobot free apontado para este Kuma.
+- O VPS tem reinício pendente (atualizações de kernel) — seguro de fazer.
+
 ## Onde roda
 
 No **VPS da Vultr (São Paulo)** que já existe para a ponte RADIUS do Wi-Fi.
