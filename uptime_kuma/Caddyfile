@@ -1,0 +1,6 @@
+# Proxy HTTPS pro Uptime Kuma. O Caddy pede e renova o certificado
+# Let's Encrypt sozinho — só exige que o DNS do domínio já aponte pro VPS.
+{$KUMA_DOMINIO} {
+	# WebSocket incluso: a UI do Kuma é socket.io e não funciona sem ele.
+	reverse_proxy uptime-kuma:3001
+}
