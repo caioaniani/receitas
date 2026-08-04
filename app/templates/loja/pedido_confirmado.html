@@ -85,6 +85,80 @@
     {% endif %}
   </div>
 
+  {% if rastreio %}
+  <div class="checkout-bloco" id="rastreio-bloco">
+    <h2>Acompanhe sua entrega</h2>
+    <style>
+      .rastreio-passos { display:flex; gap:4px; margin:10px 0 14px; }
+      .rastreio-passo { flex:1; text-align:center; font-size:13px; color:#94a3b8; }
+      .rastreio-passo .bolinha { display:block; height:6px; border-radius:3px;
+        background:#e2e8f0; margin-bottom:6px; }
+      .rastreio-passo.ativo { color:#166534; font-weight:600; }
+      .rastreio-passo.ativo .bolinha { background:#16a34a; }
+    </style>
+    <div id="rastreio-conteudo"></div>
+  </div>
+  <script type="application/json" id="rastreio-inicial">{{ rastreio | tojson }}</script>
+  <script>
+    // Acompanhamento por PROGRESSO (sem GPS): estado inicial vem do
+    // servidor; depois, poll de 30s no /status enquanto a entrega não
+    // termina. Nunca quebra a página — erro de rede só pula o ciclo.
+    (function () {
+      var el = document.getElementById('rastreio-conteudo');
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+      }
+      function render(r) {
+        if (!el || !r) return null;
+        var fases = ['em_preparo', 'a_caminho', 'entregue'];
+        var idx = fases.indexOf(r.fase);
+        var passos = ['Em preparo', 'A caminho', 'Entregue'];
+        var html = '<div class="rastreio-passos">';
+        for (var i = 0; i < 3; i++) {
+          html += '<div class="rastreio-passo' + (idx >= i ? ' ativo' : '') + '">' +
+                  '<span class="bolinha"></span>' + passos[i] + '</div>';
+        }
+        html += '</div>';
+        if (r.fase === 'a_caminho') {
+          html += '<p><strong>🚚 A caminho com ' + esc(r.driver) + '.</strong><br>' +
+            'Você é a ' + esc(r.parada) + 'ª parada' +
+            (r.faltam > 0
+              ? ' — ' + esc(r.faltam) + ' entrega' + (r.faltam > 1 ? 's' : '') + ' antes da sua'
+              : ' — você é a próxima!') + '.<br>' +
+            'Previsão: por volta de <strong>' + esc(r.eta) + '</strong>.</p>';
+        } else if (r.fase === 'entregue') {
+          html += '<p><strong>✓ Entregue' +
+            (r.entregue_em ? ' às ' + esc(r.entregue_em) : '') +
+            '.</strong> Bom apetite!</p>';
+        } else if (r.fase === 'problema') {
+          html += '<p><strong>Tivemos um imprevisto na sua entrega.</strong> ' +
+            'Nossa equipe já está cuidando e entra em contato com você.</p>';
+        } else {
+          html += '<p>Seu pedido está com a equipe. Quando o motorista sair ' +
+            'pra rua, você acompanha a entrega aqui — esta página atualiza ' +
+            'sozinha.</p>';
+        }
+        el.innerHTML = html;
+        return r.fase;
+      }
+      var ini = document.getElementById('rastreio-inicial');
+      var fase = render(ini ? JSON.parse(ini.textContent || 'null') : null);
+      if (fase === 'entregue' || fase === 'problema') return;
+      var t = setInterval(function () {
+        fetch('/loja/pedido/{{ pedido.codigo }}/status')
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            if (!d || !d.rastreio) return;
+            var f = render(d.rastreio);
+            if (f === 'entregue' || f === 'problema') clearInterval(t);
+          }).catch(function () {});
+      }, 30000);
+    })();
+  </script>
+  {% endif %}
+
   {% if pedido.nf_emitida_em %}
   <div class="checkout-bloco">
     <h2>Nota fiscal</h2>
