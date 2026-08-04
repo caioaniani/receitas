@@ -241,3 +241,68 @@ def test_driver_ve_pedido_do_site_sem_vnda(app):
     assert r.status_code == 200          # antes: 502 (erro do VNDA)
     j = r.get_json()
     assert [pp['code'] for pp in j['pedidos']] == ['SITE2']
+
+
+def test_api_atribuidos_lista_pedido_do_site(app):
+    """O caso do print do dono (03/08): o MAPA da aba Operação mostrava os
+    pedidos do dia 09 (via /api/rotas, corrigido) e a LISTA dizia "nenhum
+    pedido" — porque a lista vem de /api/atribuidos, um TERCEIRO endpoint
+    da era VNDA que tinha ficado cego."""
+    from app.models import PedidoOnline
+    p = PedidoOnline(codigo='LISTA1', nome_cliente='Cliente Lista',
+                     email_cliente='l@x.com', status='pago',
+                     modo_entrega='agendada', data_entrega=hoje(),
+                     janela_entrega='06:00–10:00', valor_total=450,
+                     endereco_entrega='Rua Z, 3')
+    db.session.add(p)
+    db.session.commit()
+    c = _admin_client(app)
+    j = c.get(f'/entregas/api/atribuidos?data={hoje().isoformat()}').get_json()
+    assert 'erro' not in j or not j.get('erro')
+    codes = [pp['code'] for pp in j.get('sem_driver', [])]
+    assert 'LISTA1' in codes
+
+
+def test_api_produtos_conta_pedido_do_site(app):
+    """Aba Produtos = o que separar/produzir no dia. Sem os pedidos do
+    site, no Dia dos Pais ela diria "nada a produzir"."""
+    from app.models import PedidoOnline, PedidoOnlineItem, Receita
+    r = Receita(nome='Cesta Pais Recheada', categoria='Cestas',
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=1000)
+    db.session.add(r)
+    db.session.commit()
+    p = PedidoOnline(codigo='PROD1', nome_cliente='C', email_cliente='p@x.com',
+                     status='pago', modo_entrega='agendada',
+                     data_entrega=hoje(), janela_entrega='06:00–10:00',
+                     valor_total=450)
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoOnlineItem(pedido_id=p.id, kind='receita',
+                                    receita_id=r.id, nome=r.nome,
+                                    preco_unitario=450, quantidade=2,
+                                    subtotal=900))
+    db.session.commit()
+    c = _admin_client(app)
+    j = c.get(f'/entregas/api/produtos?data={hoje().isoformat()}').get_json()
+    nomes = {v['nome']: v for v in j.get('vendidos', [])}
+    assert any('Cesta Pais' in n for n in nomes), j.get('vendidos')
+
+
+def test_resetar_atribuicoes_alcanca_pedido_do_site(app):
+    from app.models import AtribuicaoEntrega, PedidoOnline
+    d = _driver()
+    p = PedidoOnline(codigo='RST1', nome_cliente='C', email_cliente='r2@x.com',
+                     status='pago', modo_entrega='agendada',
+                     data_entrega=hoje(), janela_entrega='06:00–10:00',
+                     valor_total=100)
+    db.session.add(p)
+    db.session.commit()
+    db.session.add(AtribuicaoEntrega(pedido_code='RST1', driver_id=d.id,
+                                     data_entrega=hoje(), ordem=1))
+    db.session.commit()
+    c = _admin_client(app)
+    r = c.post('/entregas/api/atribuicao/reset',
+               json={'data': hoje().isoformat()})
+    j = r.get_json()
+    assert j['ok'] is True and j['removidas'] >= 1
+    assert AtribuicaoEntrega.query.filter_by(pedido_code='RST1').count() == 0
