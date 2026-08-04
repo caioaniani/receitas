@@ -2577,7 +2577,15 @@
             return r.paradas.some(function(p) { return p.lat != null && p.lng != null; });
         });
         var temCoordsSem = (d.sem_driver || []).some(function(p) { return p.lat != null && p.lng != null; });
-        if (!temCoordsRotas && !temCoordsSem) { el.style.display = 'none'; return; }
+        if (!temCoordsRotas && !temCoordsSem) {
+            // Limpa ANTES de sair: sem isso os pinos da data ANTERIOR
+            // ficavam pendurados e reapareciam ao mostrar o mapa numa data
+            // vazia (visto em prod 03/08/2026 — mapa de 09/08 "com pedidos"
+            // que eram os de hoje).
+            if (opMapaLayers) opMapaLayers.clearLayers();
+            el.style.display = 'none';
+            return;
+        }
         el.style.display = '';
         if (!opMapa) {
             opMapa = L.map('op-mapa', {scrollWheelZoom: false}).setView([-23.5505, -46.6333], 11);
