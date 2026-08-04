@@ -143,19 +143,31 @@ def status_do_pedido(codigo):
     o estado neutro 'em_preparo' (a página já mostra o pedido em si)."""
     try:
         atrib = AtribuicaoEntrega.query.filter_by(pedido_code=codigo).first()
-        if atrib is None or atrib.driver_id is None:
-            return {'fase': 'em_preparo'}
-        if (atrib.status or '') == 'entregue':
+        if atrib is not None and (atrib.status or '') == 'entregue':
             return {'fase': 'entregue',
                     'entregue_em': (atrib.entregue_em.strftime('%H:%M')
                                     if atrib.entregue_em else None)}
-        if (atrib.status or '') == 'nao_entregue':
+        if atrib is not None and (atrib.status or '') == 'nao_entregue':
             # Problema na entrega: a página não detalha (quem fala com o
             # cliente é a loja) — mostra o telefone em vez de prometer hora.
             return {'fase': 'problema'}
+        # Entrega marcada POR FORA da rota (painel staff, express/Lalamove):
+        # o PedidoOnline manda — sem isso a página dizia "✓ Entregue" no
+        # topo e "em preparo" no bloco de acompanhar (achado de revisão).
+        # a_caminho sem rota sai SEM parada/ETA (o front mostra o genérico).
+        p = PedidoOnline.query.filter_by(codigo=codigo).first()
+        st_pedido = (p.status if p else '') or ''
+        if st_pedido == 'entregue':
+            return {'fase': 'entregue', 'entregue_em': None}
+        if atrib is None or atrib.driver_id is None:
+            if st_pedido == 'a_caminho':
+                return {'fase': 'a_caminho'}
+            return {'fase': 'em_preparo'}
         ri = RotaInicio.query.filter_by(driver_id=atrib.driver_id,
                                         data=atrib.data_entrega).first()
         if ri is None:
+            if st_pedido == 'a_caminho':
+                return {'fase': 'a_caminho'}
             return {'fase': 'em_preparo'}
         rota = _rota_do_driver(atrib.driver_id, atrib.data_entrega)
         entregues = sum(1 for a in rota if (a.status or '') == 'entregue')
