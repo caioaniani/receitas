@@ -136,8 +136,47 @@ def _endereco_online(p):
     return base
 
 
-def _serializar_pedido_online(p):
-    """PedidoOnline -> dict no formato do painel (igual VNDA/local)."""
+def _serializar_pedido_online(p, detalhes=True):
+    """PedidoOnline -> dict no formato do painel (igual VNDA/local).
+
+    `detalhes=False` (03/08/2026, pedido do dono: "nessa tela nao precisamos
+    de cartinha nem itens") = payload MAGRO pra lista/mapa/reset da aba
+    Operacao: corta `itens` (com composicao de menu) e cartinha. Com ~150
+    pedidos no Dia dos Pais isso e a diferenca entre um poll leve e um
+    payload de centenas de KB + N+1 de itens. QUEM IMPRIME ou SEPARA usa o
+    caminho COMPLETO (painel, aba Produtos, /entregas/imprimir) — a
+    impressao foi repontada pra rebuscar do servidor por codes justamente
+    pra nunca imprimir a versao magra."""
+    if not detalhes:
+        return {
+            'id': p.id,
+            'pedido_online': True,
+            'code': p.codigo,
+            'destinatario': (p.nome_destinatario or p.nome_cliente
+                             or 'Sem nome'),
+            'comprador': p.nome_cliente or '',
+            'telefone': (p.telefone_destinatario or p.telefone_cliente or ''),
+            'telefone_comprador': p.telefone_cliente or '',
+            'e_presente': bool(p.nome_destinatario or p.telefone_destinatario
+                               or (p.cartinha or '').strip()),
+            'divulgacao': bool(getattr(p, 'divulgacao', False)),
+            'endereco': _endereco_online(p),
+            'data_entrega': (p.data_entrega.isoformat()
+                             if p.data_entrega else None),
+            'data_entrega_fmt': (p.data_entrega.strftime('%d/%m/%Y')
+                                 if p.data_entrega else ''),
+            'periodo': p.janela_entrega or '',
+            'expresso': p.modo_entrega == 'express',
+            'retirada': p.modo_entrega == 'retirada',
+            'cartinha_vnda': '',
+            'observacao': '',
+            'status_vnda': 'online',
+            'data_override': False,
+            'tem_customizacao': False,
+            'status_painel_fallback': _STATUS_ONLINE_PARA_PAINEL.get(
+                p.status, 'novo'),
+            'itens': [],
+        }
     return {
         'id': p.id,
         'pedido_online': True,
