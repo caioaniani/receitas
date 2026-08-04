@@ -101,8 +101,13 @@ def _enviar_emails_saida(driver, dia):
     codes = [a.pedido_code for a in atribs if a.pedido_code]
     if not codes:
         return 0
+    # Só quem vai MESMO receber a entrega: cancelado depois de a rota ser
+    # salva NÃO pode ganhar "saiu para entrega" (nada limpa a atribuição no
+    # cancelamento); divulgação tem e-mail placeholder que nunca recebe
+    # nada; aguardando_pagamento nem deveria estar na rota.
     pedidos = PedidoOnline.query.filter(
-        PedidoOnline.codigo.in_(codes)).all()
+        PedidoOnline.codigo.in_(codes),
+        PedidoOnline.status.in_(('pago', 'em_preparo', 'a_caminho'))).all()
     base = (current_app.config.get('LOJA_BASE_URL')
             or current_app.config.get('APP_BASE_URL') or '').rstrip('/')
     enviados = 0
