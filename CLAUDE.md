@@ -552,6 +552,24 @@ rota. Pecas:
   150 paradas, k-means real), salvar lote 179ms, /api/atribuidos 51ms,
   driver /pedidos 21ms, status_do_pedido 1.5ms/req (150 clientes em poll de
   30s ≈ 5 req/s — folga grande). Roteirizacao aguenta o dia.
+- **POS-REVISAO (fixados 04/08)**: (1) iniciar rota SO NO DIA da entrega —
+  a tela do driver abre ja na PROXIMA data com rota, e um clique de
+  curiosidade na vespera mandaria "saiu para entrega" um dia antes E
+  queimaria a idempotencia do dia real (endpoint recusa 422); (2) claim
+  ATOMICO do disparo de e-mails (UPDATE condicional em `emails_em`, padrao
+  Confirmar do Slack; falha catastrofica devolve o claim); (3) o e-mail de
+  saida FILTRA status in (pago, em_preparo, a_caminho) — cancelado apos a
+  rota salva nao recebe "saiu para entrega" (nada limpa a atribuicao no
+  cancelamento) e divulgacao fica fora (e-mail placeholder); (4)
+  `status_do_pedido` consulta o `PedidoOnline` — pedido entregue/a_caminho
+  POR FORA da rota (painel staff, express/Lalamove) nao mostra mais
+  "Entregue" no topo com "em preparo" no bloco (a_caminho sem rota sai sem
+  parada/ETA, front mostra o generico); (5) regra "tem rastreio?"
+  centralizada em `loja/routes._rastreio_do_pedido` (pagina + JSON, antes
+  divergiam); (6) polling para em `cancelado`; (7) front do driver: guard
+  de resposta em voo na troca de data + listener de apagar foto delegado
+  1x (empilhava por modal aberto). ACEITO (cosmetico): `<style>` do bloco
+  dentro do body.
 - Testes: `tests/test_rastreio_entrega.py`. Manual de operacao registrado
   (QUANDO PRECISAR — "Dia de MUITAS entregas com motoristas proprios").
 
