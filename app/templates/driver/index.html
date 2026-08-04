@@ -306,14 +306,20 @@
     document.getElementById('pedidos-container').addEventListener('click', function(e) {
         var ir = e.target.closest('#btn-iniciar-rota');
         if (ir) {
-            if (!confirm('Iniciar a rota agora? Todos os clientes da rota recebem o e-mail "saiu para entrega".')) return;
-            ir.disabled = true;
             var data = document.getElementById('data-input').value;
+            var dataBr = data.split('-').reverse().join('/');
+            if (!confirm('Iniciar a rota de ' + dataBr + ' agora? Todos os clientes da rota recebem o e-mail "saiu para entrega".')) return;
+            ir.disabled = true;
             api('/iniciar-rota?data=' + encodeURIComponent(data), {method: 'POST'})
                 .then(function(r) {
+                    // Motorista trocou de data com o POST em voo: a resposta
+                    // é da data ANTIGA — não pinta selo falso na nova.
+                    var atual = document.getElementById('data-input').value;
                     if (r.body && r.body.ok) {
-                        rotaInfo = {iniciada: true, iniciada_em: r.body.iniciado_em};
-                        renderPedidos();
+                        if (atual === data) {
+                            rotaInfo = {iniciada: true, iniciada_em: r.body.iniciado_em};
+                            renderPedidos();
+                        }
                     } else {
                         ir.disabled = false;
                         alert((r.body && r.body.erro) || 'Erro ao iniciar a rota');
