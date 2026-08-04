@@ -74,6 +74,12 @@ Por que **Keyword** no primeiro: o Railway pode devolver uma página de erro
 com status 200. Exigir a palavra `ok` no corpo garante que quem respondeu foi
 o app, não o proxy.
 
+> **Verificação feita ao escrever isto (03/08/2026)**: `/health` foi testado
+> e responde `200` com o corpo `ok`. As URLs da loja e do Chatwoot **não**
+> puderam ser testadas do ambiente de desenvolvimento (a saída de rede de lá
+> só libera `gestao.*`) — confirme as duas no primeiro *Test* do Kuma. Se
+> alguma responder diferente do esperado, ajuste o monitor, não o site.
+
 ### 2. Alerta no WhatsApp (Z-API)
 
 Em **Settings → Notifications → Setup Notification**:
