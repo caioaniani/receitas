@@ -52,6 +52,12 @@ GRAVIDADE=ALTA (urgente — o dono precisa saber AGORA):
 - Cliente IRRITADO, agressivo, SURTANDO/alterado, ofendido, ou prestes a desistir/cancelar
 - Cliente reclamando de algo sério (pedido errado, atraso, cobrança indevida)
 - Bot afirmou "esgotado"/"não temos" para item que aparece como DISPONÍVEL=true no catálogo do site abaixo (ERRO REAL — o bot e o cliente compram pelo SITE; estoque de loja física é OUTRA fonte e NÃO deve ser usado pra contradizer o bot)
+  ⚠️ ATENÇÃO À DATA: disponibilidade é POR DATA DE ENTREGA. Se o item traz
+  "INDISPONIVEL para entrega em: DD/MM" e a conversa é sobre ESSA data, o bot
+  dizendo "não temos para DD/MM" está CERTO — NÃO alerte (falso positivo real
+  na véspera do Dia dos Pais: só cestas à venda pra 09/08 e o item DISPONÍVEL
+  no geral). Só é erro quando a data da conversa NÃO está listada e o item
+  está DISPONÍVEL (ou quando ele nega o item sem data nenhuma envolvida).
 - Bot disse algo claramente errado: preço estranho, prazo errado, info inventada, contradição grave
 - PERDA DE VENDA clara: cliente estava comprando, o bot atrapalhou/confundiu, e o cliente saiu
 - HANDOFF PREGUIÇOSO EM VENDA: o bot transferiu pro humano SEM usar nenhuma ferramenta
