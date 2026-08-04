@@ -156,8 +156,16 @@ def api_debug(token):
     ).all()
     todas_atribs = AtribuicaoEntrega.query.filter_by(driver_id=driver.id).count()
 
-    resultado = vnda.buscar_pedidos_do_dia(target, overrides={})
-    vnda_codes = [p.get('code') for p in resultado.get('pedidos', []) if p.get('code')]
+    try:
+        resultado = vnda.buscar_pedidos_do_dia(target, overrides={})
+    except Exception:  # noqa: BLE001 — debug nunca estoura por VNDA morto
+        resultado = {'erro': 'vnda indisponivel', 'pedidos': []}
+    # Debug fiel ao pool REAL (03/08/2026): o site entra na conta de matches
+    # — sem isso o diagnostico dizia "atribuicao sem pedido" pra pedido do
+    # site perfeitamente valido.
+    from app.blueprints.entregas.routes import _pedidos_online_do_dia
+    pool = (resultado.get('pedidos', []) or []) + _pedidos_online_do_dia(target)
+    vnda_codes = [p.get('code') for p in pool if p.get('code')]
     matches = [a.pedido_code for a in atribs_data if a.pedido_code in vnda_codes]
     so_no_banco = [a.pedido_code for a in atribs_data if a.pedido_code not in vnda_codes]
 
