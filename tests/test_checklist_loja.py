@@ -398,8 +398,13 @@ def test_preenchido_some_da_pendencia(app, monkeypatch):
     assert not any(p['chave'] == 'checklist_abertura' for p in pend)
 
 
-def test_pendencia_fechamento_de_ontem(app):
+def test_pendencia_fechamento_de_ontem(app, monkeypatch):
     with app.app_context():
+        # Relógio TRAVADO: a cobrança de fechamento só existe depois de
+        # HORA_VIRADA_FECHAMENTO (04:00) — sem o freeze, este teste ficava
+        # VERMELHO todo dia das 00:00 às 04:00 BRT e, com Wait-for-CI,
+        # travava qualquer deploy de madrugada (classe proibida).
+        _tarde(monkeypatch)
         lj = _loja()
         u = _user()
         it = _item(tipo='fechamento', texto='Caixa fechado')
