@@ -681,10 +681,14 @@
             if (inst) inst.hide();
         }
 
-        if (!pedidosSnapshot.length) {
-            // Fallback: sem dados em memoria (nenhum estado carregado
-            // continha os codes) — manda so os codes via GET e deixa o
-            // servidor rebuscar do VNDA pela data.
+        // SEMPRE por codes via GET (03/08/2026): a lista da aba Operacao
+        // virou payload MAGRO (sem itens/cartinha — pedido do dono) e
+        // imprimir o snapshot dela mandaria o papel do motorista SEM os
+        // itens e SEM a cartinha do presente. O servidor rebusca a versao
+        // COMPLETA pelos codes (site + manuais vem do NOSSO banco pela data
+        // do seletor — deterministico; o motivo historico do snapshot era o
+        // VNDA, que esta aposentado).
+        if (codesSnapshotImpr.length) {
             var qs = 'codes=' + encodeURIComponent(codesSnapshotImpr.join(','))
                    + '&vias=' + encodeURIComponent(vias || 'cliente')
                    + (dataVal ? '&data=' + encodeURIComponent(dataVal) : '');
