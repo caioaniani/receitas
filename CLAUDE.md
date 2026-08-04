@@ -1107,9 +1107,15 @@ indistinguivel de "tudo bem". O Uptime Kuma roda FORA e fecha essa classe.
   `Client-Token`), sem passar por `app/services/zapi.py` — logo fora do
   whitelist e do teto/hora. E o desejado: alerta de queda nunca pode ser
   suprimido por throttle.
-- Pendente do dono: rodar o `setup.sh` no VPS (nao ha SSH do container de
-  dev — a saida so libera HTTPS) e, opcionalmente, criar o DNS
-  `status.opaopadariaartesanal.com.br` pro modo HTTPS.
+- **INSTALADO em 04/08/2026** pelo dono (nao ha SSH do container de dev — a
+  saida so libera HTTPS; ele rodou no terminal dele). Estado: `/opt/
+  uptime-kuma`, HTTP na 3001, Docker 29.7.1 / Ubuntu 26.04, container
+  `unless-stopped`. Confirmado no ato: `wifi-radius.service` esta
+  **enabled** (sobe no boot -> reiniciar o VPS e seguro pro Wi-Fi) e
+  instalar o Docker nao derrubou a ponte.
+- Pendencias opcionais: HTTPS (DNS `status.opaopadariaartesanal.com.br` +
+  `./setup.sh <dominio>` — hoje a senha trafega em claro na 3001) e um
+  UptimeRobot free vigiando o proprio Kuma.
 - Registrado no manual de operacao (secao RODA SOZINHO).
 
 ## Estoque pendente (congelados + loja)
