@@ -160,6 +160,20 @@ Em **Settings → Notifications → Setup Notification**:
 - Marque **Default enabled** e **Apply on all existing monitors**.
 - Clique em **Test** — a mensagem tem que chegar no WhatsApp na hora.
 
+#### ⚠️ Por que o `Content-Type` precisa ir na mão
+
+Sem ele o alerta **não sai** — e o sintoma engana, porque o corpo está
+certo. No branch `custom` o `webhook.js` do Uptime Kuma renderiza o
+template pra uma **string** e **não define Content-Type**; o axios, ao
+receber string sem esse header, envia como
+`application/x-www-form-urlencoded`. A Z-API tenta ler como formulário, não
+encontra o campo `phone` e responde `400 {"error":"Phone is empty"}` — com
+o JSON perfeito no corpo. Custou uma sessão inteira de diagnóstico em
+04/08/2026.
+
+Os `webhookAdditionalHeaders` são mesclados DEPOIS do branch, então é ali
+que se corrige. (Comprovado com axios real contra um servidor de eco.)
+
 #### ⚠️ Por que `{{ msg | json }}` e não `"{{ msg }}"`
 
 O exemplo que o próprio Uptime Kuma mostra na tela usa a mensagem entre
