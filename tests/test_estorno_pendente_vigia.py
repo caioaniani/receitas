@@ -20,9 +20,17 @@ def _reg(db, pid, *, baixados=2, estornado=False):
 
 
 def _pedido(pid, *, status='canceled', canceled_at=None, total=101.0):
-    from app.utils import agora
+    # createdAt em UTC DE VERDADE, meio-dia BRT (15:00Z): `agora()` é BRT e
+    # colar 'Z' nele mentia o fuso — entre 00:00 e 03:00 BRT a conversão
+    # UTC→BRT do sync jogava o pedido pro dia ANTERIOR, fora da janela
+    # [hoje, hoje], e 4 testes ficavam vermelhos SÓ de madrugada (com
+    # Wait-for-CI, deploy travado nessa faixa). Meio-dia nunca cruza a data.
+    from datetime import datetime, time
+
+    from app.utils import hoje
+    meio_dia_utc = datetime.combine(hoje(), time(15, 0))
     return {'id': pid, 'status': status, 'canceledAt': canceled_at,
-            'total': total, 'createdAt': agora().isoformat() + 'Z',
+            'total': total, 'createdAt': meio_dia_utc.isoformat() + 'Z',
             'company': {'name': 'Nebraska'}, 'items': []}
 
 
