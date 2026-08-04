@@ -109,6 +109,16 @@ def _garantir_notificacao(api):
               'a notificação')
         return None
 
+    # Valida o telefone ANTES de criar (04/08/2026): com o número vazio ou
+    # torto a notificação nasce quebrada e só se descobre no primeiro
+    # alerta REAL — a Z-API responde 400 {"error":"Phone is empty"} e o
+    # aviso de queda simplesmente não chega. Falhar aqui é muito melhor.
+    so_digitos = ''.join(c for c in telefone if c.isdigit())
+    if so_digitos != telefone or not so_digitos.startswith('55') \
+            or not 12 <= len(so_digitos) <= 13:
+        sys.exit(f'ZAPI_PHONE inválido: {telefone!r}. Use só dígitos, com o '
+                 '55 e o DDD (ex.: 5511987654321) — sem +, espaço ou traço.')
+
     cabecalhos = ('{"Client-Token": "%s"}' % client_token) if client_token else ''
     r = api.add_notification(
         name=nome,
