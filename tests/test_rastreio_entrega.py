@@ -306,3 +306,79 @@ def test_resetar_atribuicoes_alcanca_pedido_do_site(app):
     j = r.get_json()
     assert j['ok'] is True and j['removidas'] >= 1
     assert AtribuicaoEntrega.query.filter_by(pedido_code='RST1').count() == 0
+
+
+# ── Payload MAGRO da aba Operação (03/08/2026, pedido do dono) ───────────
+
+def _pedido_com_itens(codigo='MAGRO1'):
+    from app.models import PedidoOnline, PedidoOnlineItem, Receita
+    r = Receita(nome=f'Pao {codigo}', categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100)
+    db.session.add(r)
+    db.session.commit()
+    p = PedidoOnline(codigo=codigo, nome_cliente='C', email_cliente='m@x.com',
+                     status='pago', modo_entrega='agendada',
+                     data_entrega=hoje(), janela_entrega='06:00–10:00',
+                     valor_total=100, cartinha='Feliz dia dos pais, pai!')
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoOnlineItem(pedido_id=p.id, kind='receita',
+                                    receita_id=r.id, nome=r.nome,
+                                    preco_unitario=50, quantidade=2,
+                                    subtotal=100))
+    db.session.commit()
+    return p
+
+
+def test_lista_da_operacao_vem_magra(app):
+    """Sem itens nem cartinha — o card não os usa e, com 150 pedidos, isso
+    é a diferença entre um poll leve e centenas de KB + N+1."""
+    _pedido_com_itens('MAGRO1')
+    c = _admin_client(app)
+    j = c.get(f'/entregas/api/atribuidos?data={hoje().isoformat()}').get_json()
+    p = [x for x in j['sem_driver'] if x['code'] == 'MAGRO1'][0]
+    assert p['itens'] == []
+    assert p['cartinha_vnda'] == ''
+    assert 'cartinha' not in p or not p.get('cartinha')
+    # O que o card USA continua lá:
+    assert p['destinatario'] and p['endereco'] is not None
+    assert p['periodo'] == '06:00–10:00'
+    assert p['e_presente'] is True       # selo 🎁 continua (tem cartinha)
+
+
+def test_impressao_por_codes_sai_completa(app):
+    """A impressão NÃO pode herdar o payload magro: o papel do motorista
+    precisa dos itens e da cartinha. O caminho por codes rebusca cheio."""
+    _pedido_com_itens('CHEIO1')
+    c = _admin_client(app)
+    r = c.get(f'/entregas/imprimir?codes=CHEIO1&vias=cliente,motorista'
+              f'&data={hoje().isoformat()}')
+    html = r.data.decode()
+    assert 'Pao CHEIO1' in html          # item aparece
+    # Cartinha sai na via do CLIENTE (a do motorista omite DE PROPÓSITO —
+    # design pré-existente do template, linha 3 do imprimir.html).
+    assert 'Feliz dia dos pais' in html
+
+
+def test_painel_segue_completo(app):
+    """O painel separa pedido — precisa de itens e cartinha."""
+    _pedido_com_itens('PAINEL1')
+    c = _admin_client(app)
+    j = c.get(f'/entregas/api/painel?data={hoje().isoformat()}').get_json()
+    p = [x for x in j['pedidos'] if x['code'] == 'PAINEL1'][0]
+    assert len(p['itens']) == 1
+    assert 'Feliz dia dos pais' in (p.get('cartinha') or p['cartinha_vnda'])
+
+
+def test_vnda_pedidos_curto_circuito_por_default(app, monkeypatch):
+    """VNDA aposentado: sem VNDA_PEDIDOS=1, devolve vazio NA HORA, sem rede
+    e sem 'erro' (era até 25s de spinner por carregamento da Operação)."""
+    from app.services import vnda
+    monkeypatch.delenv('VNDA_PEDIDOS', raising=False)
+    chamou = {'n': 0}
+    monkeypatch.setattr(vnda, '_get_paginado', lambda *a, **k: chamou.__setitem__('n', 1),
+                        raising=False)
+    with app.app_context():
+        out = vnda.buscar_pedidos_do_dia(hoje())
+    assert out == {'pedidos': []}
+    assert chamou['n'] == 0

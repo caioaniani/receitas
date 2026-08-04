@@ -1687,7 +1687,7 @@ def resetar_atribuicoes_dia():
         base = {'pedidos': []}
     resultado = _injetar_pedidos_locais(target, base)
     resultado['pedidos'] = (resultado.get('pedidos', [])
-                            + _pedidos_online_do_dia(target))
+                            + _pedidos_online_do_dia(target, detalhes=False))
 
     codes = [p['code'] for p in resultado.get('pedidos', []) if p.get('code')]
     n = 0
@@ -2360,11 +2360,13 @@ def api_atribuidos():
     if 'erro' in base:
         base = {'pedidos': []}
     resultado = _injetar_pedidos_locais(target, base)
+    # MAGRO (03/08/2026, pedido do dono): a lista da Operacao nao mostra
+    # itens nem cartinha — payload/queries so do que o card usa. A impressao
+    # NAO depende deste payload (rebusca completa por codes no servidor).
     resultado['pedidos'] = (resultado.get('pedidos', [])
-                            + _pedidos_online_do_dia(target))
+                            + _pedidos_online_do_dia(target, detalhes=False))
 
     pedidos = resultado.get('pedidos', [])
-    _aplicar_cartinhas(pedidos)   # resolve p['cartinha'] (manual > VNDA) p/ a aba Operacao
     codes = [p['code'] for p in pedidos if p.get('code')]
 
     atribuicoes_por_code = {}
@@ -2492,7 +2494,8 @@ def api_rotas():
         base = {'pedidos': []}
     resultado = _injetar_pedidos_locais(target, base)
     resultado['pedidos'] = (resultado.get('pedidos', [])
-                            + [p for p in _pedidos_online_do_dia(target)
+                            + [p for p in _pedidos_online_do_dia(
+                                   target, detalhes=False)
                                if not p.get('retirada')])
 
     pedidos = resultado.get('pedidos', [])

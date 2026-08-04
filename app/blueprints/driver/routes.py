@@ -164,7 +164,7 @@ def api_debug(token):
     # — sem isso o diagnostico dizia "atribuicao sem pedido" pra pedido do
     # site perfeitamente valido.
     from app.blueprints.entregas.routes import _pedidos_online_do_dia
-    pool = (resultado.get('pedidos', []) or []) + _pedidos_online_do_dia(target)
+    pool = (resultado.get('pedidos', []) or []) + _pedidos_online_do_dia(target, detalhes=False)
     vnda_codes = [p.get('code') for p in pool if p.get('code')]
     matches = [a.pedido_code for a in atribs_data if a.pedido_code in vnda_codes]
     so_no_banco = [a.pedido_code for a in atribs_data if a.pedido_code not in vnda_codes]
