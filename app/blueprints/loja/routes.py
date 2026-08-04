@@ -1172,8 +1172,19 @@ def pedido_confirmado(codigo):
                 'quantity': it.quantidade,
             } for it in pedido.itens],
         }
+    # Bloco "Acompanhe sua entrega" (01/08/2026, Dia dos Pais): estado
+    # inicial renderizado no servidor (sem flash de loading); o JS da página
+    # segue com polling de 30s no /status. Retirada fica fora — não há
+    # entrega pra acompanhar (o cliente busca na loja).
+    rastreio = None
+    if (pedido.data_entrega and pedido.modo_entrega != 'retirada'
+            and pedido.status in ('pago', 'em_preparo', 'a_caminho',
+                                  'entregue')):
+        from app.services import rastreio_entrega
+        rastreio = rastreio_entrega.status_do_pedido(pedido.codigo)
     return render_template('loja/pedido_confirmado.html', pedido=pedido,
-                           ga_purchase=ga_purchase, em_teste=_em_teste())
+                           ga_purchase=ga_purchase, rastreio=rastreio,
+                           em_teste=_em_teste())
 
 
 @loja_bp.route('/<slug_completo>')
