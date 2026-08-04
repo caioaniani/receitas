@@ -200,16 +200,44 @@ def _fmt_item_catalogo(it, base):
     return d
 
 
+def _datas_indisponiveis(it, saldos):
+    """Datas dd/mm (janela do plano) em que o plano-do-dia ZEROU o item.
+    Sob encomenda nunca fica indisponível (produzido pro pedido)."""
+    if it.get('sob_encomenda'):
+        return []
+    chave = (it['kind'], it['id'])
+    out = []
+    for d in sorted(saldos):
+        saldo = saldos[d].get(chave)
+        if saldo is not None and saldo <= 0:
+            out.append(d.strftime('%d/%m'))
+    return out
+
+
+def _saldos_janela_plano():
+    """{data: {(kind,id): saldo}} do plano-do-dia pros próximos 14 dias —
+    uma query, compartilhada por consultar_produtos e o vigia."""
+    from datetime import timedelta
+
+    from app.services import loja_catalogo, loja_plano_dia
+    from app.utils import hoje
+    di = hoje()
+    janela = getattr(loja_catalogo, '_JANELA_DIAS_FUTUROS', 14)
+    return loja_plano_dia.saldos_no_periodo(di, di + timedelta(days=janela - 1))
+
+
 def consultar_produtos(busca):
     """Busca no catálogo PRÓPRIO (opao.online, via `loja_catalogo`). Retorna
     {'produtos': [{nome, kind, id, preco, disponivel, descricao, categoria,
-    url, itens?}]} ou {'erro': ...}.
+    url, itens?, indisponivel_em?}]} ou {'erro': ...}.
 
     `disponivel` = ESTOQUE REAL agora (fim do "bug do site"). Match focado
     (achou pelo termo) inclui `descricao` e, em cesta, `itens` (composição) —
-    pra responder "o que vem na cesta X?". Sem match: catálogo amplo
-    token-light (sem descrição/itens) pro Claude aplicar sinônimos
-    ("amendoas" → "Almond"). Identidade = kind+id (não SKU)."""
+    pra responder "o que vem na cesta X?" — e `indisponivel_em` (datas dd/mm
+    em que o plano-do-dia zerou o item; caso Dia dos Pais: só cestas pra
+    09/08, o bot precisa saber negar POR DATA com base em dado). Sem match:
+    catálogo amplo token-light (sem descrição/itens/datas) pro Claude aplicar
+    sinônimos ("amendoas" → "Almond"). Identidade = kind+id (não SKU)."""
     from app.services import loja_catalogo
     from app.utils import normalizar_busca
     try:
@@ -225,9 +253,17 @@ def consultar_produtos(busca):
         filtrados = [it for it in catalogo
                      if any(t in normalizar_busca(it['nome']) for t in termos)]
         if filtrados:
+            try:
+                saldos = _saldos_janela_plano()
+            except Exception:  # noqa: BLE001 — best-effort, sem datas
+                logger.exception('consultar_produtos: plano-do-dia falhou')
+                saldos = {}
             out = []
             for it in filtrados[:40]:
                 d = _fmt_item_catalogo(it, base)
+                datas = _datas_indisponiveis(it, saldos)
+                if datas:
+                    d['indisponivel_em'] = datas
                 if it['kind'] == 'produto':  # cesta: anexa composição
                     det = loja_catalogo.por_id_publicado('produto', it['id'])
                     if det and det.get('itens'):
