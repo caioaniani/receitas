@@ -2491,6 +2491,20 @@ recuperacao. Estado persistido em `AppConfig` (anti-spam sobrevive a deploy).
 SITE (VNDA — MESMA fonte que o bot consulta). NUNCA comparar com EstoqueLoja:
 bot vende pelo site; loja fisica e outra realidade (falso "bot delirou" em
 12/06/2026: VNDA disponivel + 872 un na loja — bot estava certo).
+**Disponibilidade e POR DATA (04/08/2026, caso Giovana conv 1134)**: na
+vespera do Dia dos Pais o plano-do-dia de 09/08 so vendia cestas; o bot
+negou croissant/cinnamon/pao frances PRA 09/08 (certo) e o vigia — que so
+via a disponibilidade GERAL — acusou "erro real" (falso ALTA; o dono pegou:
+"o vigia nao entra no espirito do bot"). Fix em 3 camadas:
+`loja_plano_dia.saldos_no_periodo(di, df)` (1 query),
+`bot_tools.catalogo_disponibilidade()` agora devolve `indisponivel_em`
+(datas dd/mm da janela de 14d em que o plano ZEROU o item; sob encomenda
+nunca entra), o resumo do vigia imprime "INDISPONIVEL para entrega em:
+DD/MM" (dedup por nome INTERSECTA as datas — homonimo livre libera o nome)
+e o PROMPT_VIGIA manda NAO contradizer o bot quando ele nega o item pra
+data listada. O `consultar_produtos` do BOT tambem expoe `indisponivel_em`
+no match focado (antes o bot acertava a data por eco do cliente, nao por
+dado). Testes: `tests/test_vigia_disponibilidade_por_data.py` (8 casos).
 
 **Alertas do Vigia no /entregas/painel (15/06/2026)**: alem do WhatsApp, os
 alertas ALTA do vigia aparecem num BANNER pulsante com som "chato" (klaxon
