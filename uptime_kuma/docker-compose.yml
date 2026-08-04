@@ -1,0 +1,24 @@
+# Uptime Kuma — monitor de disponibilidade que roda FORA do Railway.
+#
+# Por que fora: todos os vigias do sistema (Chatwoot, site/frete, custo de
+# IA, PDV, baixas presas) rodam DENTRO do app, no seru_cron. Se o app não
+# sobe, eles não rodam — e o Sentry também fica mudo, porque precisa do
+# processo vivo pra reportar. Um monitor externo é a única coisa que
+# distingue "está tudo bem" de "morreu e ninguém viu".
+#
+# Sobe junto com o VPS (restart unless-stopped) e convive com a ponte
+# RADIUS do Wi-Fi, que usa 1812/udp — porta diferente, sem conflito.
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      # Bind mount (não volume nomeado) pra o backup ser um tar simples
+      # desta pasta — o banco é um SQLite em data/kuma.db.
+      - ./data:/app/data
+    ports:
+      # 3001 na interface pública. Com HTTPS (docker-compose.https.yml), o
+      # Caddy publica 80/443 e este bind vira 127.0.0.1 — ver README.
+      - "3001:3001"
