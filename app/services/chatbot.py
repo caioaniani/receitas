@@ -724,7 +724,11 @@ TOOLS = [
                        'REAL/estoque, descrição e conteúdo da cesta). Cada item '
                        'vem com kind+id — passe-os pro gerar_link_carrinho. Use '
                        'SEMPRE antes de sugerir um produto, montar um link, ou '
-                       'responder o que vem numa cesta.',
+                       'responder o que vem numa cesta. Quando o item tiver '
+                       '"indisponivel_em" (lista de datas dd/mm), ele NÃO pode '
+                       'ser entregue nessas datas mesmo estando disponível no '
+                       'geral — responda disponibilidade POR DATA por esse '
+                       'campo (ex.: Dia dos Pais com venda só de cestas).',
         'input_schema': {
             'type': 'object',
             'properties': {
