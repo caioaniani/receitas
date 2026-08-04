@@ -129,17 +129,31 @@ def _resumo_catalogo_site(limite=120):
         return ''
     if not catalogo:
         return '(catalogo do site indisponivel agora)'
-    # Dedup por nome (mesma fonte do bot; soma disponibilidade)
+    # Dedup por nome (mesma fonte do bot): disponibilidade soma (OR); as
+    # datas indisponiveis se INTERSECTAM — homonimo (receita+produto) conta
+    # como indisponivel numa data so se TODAS as entradas estiverem.
     estado = {}
     for p in catalogo:
         nome = (p.get('nome') or '').strip()
         if not nome:
             continue
-        estado[nome] = estado.get(nome, False) or bool(p.get('disponivel'))
+        disp = bool(p.get('disponivel'))
+        datas = set(p.get('indisponivel_em') or [])
+        if nome in estado:
+            d0, s0 = estado[nome]
+            estado[nome] = (d0 or disp, s0 & datas)
+        else:
+            estado[nome] = (disp, datas)
     itens = sorted(estado.items())[:limite]
-    return '\n'.join(
-        f'- {nome}: {"DISPONIVEL" if disp else "ESGOTADO"}'
-        for nome, disp in itens)
+    linhas = []
+    for nome, (disp, datas) in itens:
+        extra = ''
+        if datas:
+            ordenadas = sorted(datas, key=lambda s: (s[3:], s[:2]))
+            extra = ' — INDISPONIVEL para entrega em: ' + ', '.join(ordenadas)
+        linhas.append(
+            f'- {nome}: {"DISPONIVEL" if disp else "ESGOTADO"}{extra}')
+    return '\n'.join(linhas)
 
 
 def _formatar_historico(historico):
