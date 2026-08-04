@@ -1,0 +1,32 @@
+# Overlay opcional: publica o Uptime Kuma em HTTPS com certificado
+# automático (Let's Encrypt via Caddy), num subdomínio seu.
+#
+# Uso:
+#   1. Crie um registro A: status.opaopadariaartesanal.com.br -> IP do VPS
+#   2. export KUMA_DOMINIO=status.opaopadariaartesanal.com.br
+#   3. docker compose -f docker-compose.yml -f docker-compose.https.yml up -d
+#
+# Sem isso, o Kuma responde em http://<ip>:3001 — funciona, mas a senha
+# trafega em texto claro. Com domínio, o Caddy resolve o certificado
+# sozinho e o 3001 deixa de ficar exposto.
+
+services:
+  uptime-kuma:
+    ports: !override
+      # Só o Caddy alcança; a porta some da internet.
+      - "127.0.0.1:3001:3001"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: uptime-kuma-caddy
+    restart: unless-stopped
+    depends_on: [uptime-kuma]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      KUMA_DOMINIO: ${KUMA_DOMINIO:?defina KUMA_DOMINIO com o subdominio}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-data:/data
+      - ./caddy-config:/config
