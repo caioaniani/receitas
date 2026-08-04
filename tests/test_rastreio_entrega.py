@@ -389,6 +389,83 @@ def test_api_pedidos_do_driver_expoe_estado_da_rota(app):
     assert j['rota']['iniciada'] is True and j['rota']['iniciada_em']
 
 
+def test_iniciar_rota_recusa_data_futura(app):
+    """A tela do driver abre já na PRÓXIMA data com rota — na véspera, um
+    clique de curiosidade mandaria "saiu para entrega" um dia antes e
+    queimaria a idempotência do dia real. Só no próprio dia."""
+    from datetime import timedelta
+
+    from app.models import RotaInicio
+    d = _driver()
+    _rota(d, n=1)
+    c = _client_driver(app, d)
+    amanha = (hoje() + timedelta(days=1)).isoformat()
+    with patch('app.services.email.enviar_pedido_a_caminho') as env:
+        r = c.post(f'/driver/api/{d.token}/iniciar-rota?data={amanha}')
+    assert r.status_code == 422
+    assert 'no próprio dia' in r.get_json()['erro']
+    env.assert_not_called()
+    assert RotaInicio.query.count() == 0
+
+
+def test_email_de_saida_pula_pedido_cancelado(app):
+    """Cliente que cancelou depois de a rota ser salva NÃO pode receber
+    "saiu para entrega" (nada limpa a atribuição no cancelamento)."""
+    from app.models import PedidoOnline
+    from app.services import rastreio_entrega as svc
+    d = _driver()
+    codes = _rota(d, n=2)
+    p = PedidoOnline.query.filter_by(codigo=codes[0]).first()
+    p.status = 'cancelado'
+    db.session.commit()
+    with patch('app.services.email.enviar_pedido_a_caminho',
+               return_value={'ok': True}) as env:
+        _, enviados = svc.iniciar_rota(d)
+    assert enviados == 1
+    assert env.call_args[0][0].codigo == codes[1]
+
+
+def test_falha_catastrofica_no_envio_devolve_o_claim(app):
+    """O claim atômico marca `emails_em` ANTES de enviar; se o envio
+    explodir inteiro, o claim volta (retentável) — padrão do Confirmar."""
+    from app.models import RotaInicio
+    from app.services import rastreio_entrega as svc
+    d = _driver()
+    _rota(d, n=1)
+    with patch.object(svc, '_enviar_emails_saida',
+                      side_effect=RuntimeError('smtp caiu')):
+        try:
+            svc.iniciar_rota(d)
+        except RuntimeError:
+            pass
+    ri = RotaInicio.query.filter_by(driver_id=d.id).first()
+    assert ri is not None and ri.emails_em is None
+    # Retentativa funciona:
+    with patch('app.services.email.enviar_pedido_a_caminho',
+               return_value={'ok': True}):
+        _, enviados = svc.iniciar_rota(d)
+    assert enviados == 1
+
+
+def test_entregue_por_fora_da_rota_mostra_entregue(app):
+    """Pedido marcado entregue pelo painel/Lalamove SEM rota de driver: a
+    página dizia "✓ Entregue" no topo e "em preparo" no bloco de
+    acompanhar (achado de revisão). O PedidoOnline manda."""
+    from app.models import PedidoOnline
+    from app.services import rastreio_entrega as svc
+    p = PedidoOnline(codigo='FORA1', nome_cliente='C', email_cliente='f@x.com',
+                     status='entregue', modo_entrega='express',
+                     data_entrega=hoje(), valor_total=80)
+    db.session.add(p)
+    db.session.commit()
+    assert svc.status_do_pedido('FORA1')['fase'] == 'entregue'
+    p.status = 'a_caminho'
+    db.session.commit()
+    s = svc.status_do_pedido('FORA1')
+    assert s['fase'] == 'a_caminho'
+    assert 'parada' not in s          # sem rota não há parada/ETA a prometer
+
+
 def test_pagina_do_pedido_mostra_bloco_de_rastreio(app):
     """Pedido pago de ENTREGA ganha o bloco "Acompanhe sua entrega" com o
     estado inicial embutido (o polling de 30s continua no navegador)."""
