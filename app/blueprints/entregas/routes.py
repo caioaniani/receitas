@@ -1623,9 +1623,18 @@ def resetar_atribuicoes_dia():
         return jsonify(ok=False, erro='data invalida'), 400
 
     overrides = _carregar_overrides_data()
-    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
-    if 'erro' in resultado:
-        return jsonify(ok=False, erro=resultado['erro']), 500
+    # FIX 03/08/2026 (familia do /rotas cego): com o VNDA aposentado o
+    # resetar devolvia 500; e sem os pedidos do SITE no pool, as
+    # atribuicoes deles nunca eram resetadas. Erro tolerado + site no pool.
+    try:
+        base = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    except Exception:  # noqa: BLE001
+        base = {'erro': 'vnda indisponivel'}
+    if 'erro' in base:
+        base = {'pedidos': []}
+    resultado = _injetar_pedidos_locais(target, base)
+    resultado['pedidos'] = (resultado.get('pedidos', [])
+                            + _pedidos_online_do_dia(target))
 
     codes = [p['code'] for p in resultado.get('pedidos', []) if p.get('code')]
     n = 0
