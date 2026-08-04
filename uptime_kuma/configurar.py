@@ -126,16 +126,37 @@ def _garantir_monitores(api, notif_id):
         campos = dict(
             type=cfg['tipo'], name=nome,
             interval=cfg['interval'],
-            # 2 tentativas antes de alertar: um blip de rede não vira
-            # alarme falso às 3h da manhã.
-            retries=2,
+            # `maxretries` (não `retries`): 2 tentativas antes de alertar —
+            # um blip de rede não vira alarme falso às 3h da manhã.
+            maxretries=2,
             notificationIDList=ids,
         )
+        # Aviso de certificado vencendo só existe em monitor HTTP/keyword.
+        if cfg['tipo'] in (MonitorType.HTTP, MonitorType.KEYWORD):
+            campos['expiryNotification'] = True
         for k in ('url', 'keyword', 'hostname', 'port'):
             if k in cfg:
                 campos[k] = cfg[k]
+        _conferir_campos(campos)
         api.add_monitor(**campos)
         print(f'· monitor "{nome}" criado')
+
+
+def _conferir_campos(campos):
+    """Falha CEDO e com mensagem clara se algum nome de campo não existir
+    na versão instalada da lib.
+
+    Motivo: `add_monitor(**kwargs)` engole tudo e só estoura lá dentro, com
+    um TypeError críptico — foi o que aconteceu com `retries` (o certo é
+    `maxretries`) na primeira execução real, 04/08/2026.
+    """
+    import inspect
+    aceitos = set(inspect.signature(
+        UptimeKumaApi._build_monitor_data).parameters)
+    desconhecidos = set(campos) - aceitos
+    if desconhecidos:
+        sys.exit(f'Campo(s) que a uptime-kuma-api não aceita: '
+                 f'{sorted(desconhecidos)}. Aceitos: {sorted(aceitos)}')
 
 
 if __name__ == '__main__':
