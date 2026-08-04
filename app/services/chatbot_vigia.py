@@ -270,7 +270,9 @@ def _avaliar_interno(historico, *, conv_id=None, nome_contato='', resultado_bot=
             f'FERRAMENTAS USADAS PELO BOT NESTE TURNO: {tools_txt}\n\n'
             f'CATALOGO DO SITE (mesma fonte que o bot usa — '
             f'CONTRADIGA o bot SO se ele disser esgotado pra item '
-            f'marcado DISPONIVEL aqui):\n'
+            f'marcado DISPONIVEL aqui; "INDISPONIVEL para entrega em: '
+            f'DD/MM" e a verdade POR DATA — bot negando o item PRA ESSA '
+            f'data esta CERTO):\n'
             f'{_resumo_catalogo_site()}'
         )
         veredicto = _chamar_modelo(api_key, contexto)
