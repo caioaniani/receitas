@@ -156,7 +156,9 @@
         fetch('/loja/pedido/{{ pedido.codigo }}/status')
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (d) {
-            if (!d || !d.rastreio) return;
+            if (!d) return;
+            if (d.status === 'cancelado') { clearInterval(t); return; }
+            if (!d.rastreio) return;
             var f = render(d.rastreio);
             if (f === 'entregue' || f === 'problema') clearInterval(t);
           }).catch(function () {});
