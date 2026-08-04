@@ -2120,11 +2120,19 @@ def api_produtos():
     janelas = [j for j in request.args.getlist('janela') if j]
 
     overrides = _carregar_overrides_data()
-    resultado = _injetar_pedidos_locais(target, vnda.buscar_pedidos_do_dia(target, overrides=overrides))
-    if 'erro' in resultado:
-        resp = jsonify(vendidos=[], producao=[], erro=resultado['erro'])
-        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
-        return resp
+    # FIX 03/08/2026 (mesma familia do /rotas e /atribuidos cegos): a aba
+    # Produtos nao contava os pedidos do SITE — pro Dia dos Pais ela diria
+    # "nada a produzir". Erro do VNDA tolerado; site entra pelo serializador
+    # do painel (o dict tem 'itens', mesma forma que o agregador le).
+    try:
+        base = vnda.buscar_pedidos_do_dia(target, overrides=overrides)
+    except Exception:  # noqa: BLE001
+        base = {'erro': 'vnda indisponivel'}
+    if 'erro' in base:
+        base = {'pedidos': []}
+    resultado = _injetar_pedidos_locais(target, base)
+    resultado['pedidos'] = (resultado.get('pedidos', [])
+                            + _pedidos_online_do_dia(target))
 
     pedidos = resultado.get('pedidos', [])
     if janelas:
