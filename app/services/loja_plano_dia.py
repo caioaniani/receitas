@@ -73,6 +73,20 @@ def saldos_para_dia(data):
             for r in rows}
 
 
+def saldos_no_periodo(di, df):
+    """{data: {(kind, item_id): saldo}} de TUDO planejado no intervalo
+    [di, df] — versão em UMA query do `saldos_para_dia`, pra quem olha
+    vários dias de uma vez (vigia do bot) não fazer N queries por ciclo."""
+    rows = (db.session.query(EstoqueSitePlano)
+            .filter(EstoqueSitePlano.data >= di,
+                    EstoqueSitePlano.data <= df).all())
+    out = {}
+    for r in rows:
+        out.setdefault(r.data, {})[(r.kind, r.item_id)] = max(
+            0, (r.qtd_planejada or 0) - (r.qtd_reservada or 0))
+    return out
+
+
 def definir(kind, item_id, data, qtd_planejada):
     """Upsert do planejado (tela admin). NAO mexe em reservada.
     qtd_planejada deve ser >= 0; 0 = ESGOTADO planejado (cliente nao compra)."""
