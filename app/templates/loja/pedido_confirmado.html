@@ -122,12 +122,18 @@
         }
         html += '</div>';
         if (r.fase === 'a_caminho') {
-          html += '<p><strong>🚚 A caminho com ' + esc(r.driver) + '.</strong><br>' +
-            'Você é a ' + esc(r.parada) + 'ª parada' +
-            (r.faltam > 0
-              ? ' — ' + esc(r.faltam) + ' entrega' + (r.faltam > 1 ? 's' : '') + ' antes da sua'
-              : ' — você é a próxima!') + '.<br>' +
-            'Previsão: por volta de <strong>' + esc(r.eta) + '</strong>.</p>';
+          if (r.parada) {
+            html += '<p><strong>🚚 A caminho com ' + esc(r.driver) + '.</strong><br>' +
+              'Você é a ' + esc(r.parada) + 'ª parada' +
+              (r.faltam > 0
+                ? ' — ' + esc(r.faltam) + ' entrega' + (r.faltam > 1 ? 's' : '') + ' antes da sua'
+                : ' — você é a próxima!') + '.<br>' +
+              'Previsão: por volta de <strong>' + esc(r.eta) + '</strong>.</p>';
+          } else {
+            // Entrega marcada por fora da rota (express/equipe): sem
+            // parada/ETA pra prometer — só o essencial.
+            html += '<p><strong>🚚 Seu pedido saiu para entrega!</strong></p>';
+          }
         } else if (r.fase === 'entregue') {
           html += '<p><strong>✓ Entregue' +
             (r.entregue_em ? ' às ' + esc(r.entregue_em) : '') +
