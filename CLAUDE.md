@@ -75,6 +75,29 @@ Esta regra é obrigatória e se aplica a TODA conversa.
   pediu A; se você achou B no caminho, é responsabilidade reportar B. Cada
   vez que isso falha (eu menciono risco hipotético em vez de ir conferir o
   código real), é um problema concreto, não estilo.
+- **Ausência numa sonda NÃO é prova de ausência.** Antes de usar uma sonda/
+  consulta como evidência de que "X não existe", diga PRIMEIRO qual é a
+  cobertura dela — o que ela enxerga e o que fica de fora. Sonda que cobre
+  um subconjunto só prova presença, nunca ausência. Caso real (03/08/2026):
+  afirmei "zero pedidos pro dia 09, é a verdade do banco" com base no
+  `/api/claude/cronograma`, que só enxerga demanda firme de item SOB
+  ENCOMENDA — cesta comum vendida pro dia 9 era invisível ali por desenho.
+  Havia dezenas de pedidos.
+- **Quando o usuário diz "os dados existem, eu estou vendo" e a minha
+  verificação diz que não, o default é que a MINHA verificação está errada
+  ou parcial.** O dono conhece a operação dele; investigar a divergência
+  vem ANTES de explicar a observação dele como engano/cache/tela velha.
+  Só concluir "o que você vê não é real" com prova positiva (reproduzido,
+  com `arquivo:linha` do defeito) — nunca por eliminação.
+- **Duas visões da mesma coisa discordando é a PISTA, não ruído.** Mapa
+  mostrando pedidos e lista dizendo zero (03/08/2026) = cada um vem de uma
+  fonte; a obrigação é rastrear QUAL endpoint alimenta cada um antes de
+  declarar um dos lados "residual/cosmético". No caso real, o lado que
+  descartei ("pinos velhos") era o dado CERTO (`/api/rotas` corrigido) e o
+  lado em que confiei (lista) vinha de um endpoint ainda cego
+  (`/api/atribuidos`). Inventei um bug cosmético pra fechar a história em
+  vez de seguir a contradição — e entreguei diagnóstico errado ao dono
+  duas vezes seguidas.
 
 ## Fluxo multi-agente (só para tarefas complexas)
 
