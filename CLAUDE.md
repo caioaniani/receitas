@@ -511,6 +511,50 @@ pedido do dono "nessa tela nao precisa de cartinha e item")**:
   `test_vnda_pedidos_curto_circuito_por_default` em
   `tests/test_rastreio_entrega.py`.
 
+**Rastreio de entrega por PROGRESSO + "Iniciar rota" (01-04/08/2026, Dia
+dos Pais)**: dono trocou o Lalamove por motoristas contratados (~150
+pedidos, janela 06:00-10:00 do 09/08) e pediu rotas prontas + cliente
+acompanhando ao vivo. Decisoes dele (AskUserQuestion): **progresso + ETA,
+SEM GPS** (GPS de navegador so funciona com a pagina aberta — com motorista
+avulso metade dos mapas congelaria) e **e-mail automatico** na saida da
+rota. Pecas:
+- **`RotaInicio`** (driver_id+data unique, tabela nova via db.create_all):
+  marco de "saiu pra rua". `rastreio_entrega.iniciar_rota(driver, dia)`
+  idempotente (`emails_em` trava re-disparo) manda o e-mail "saiu para
+  entrega" com link `LOJA_BASE_URL + /loja/pedido/<codigo>` (NUNCA
+  `url_for(_external=True)` — quebra fora de request e aponta pro host
+  errado) — best-effort POR pedido, um e-mail ruim nao trava os outros.
+- **Botao "🚚 Iniciar rota"** na pagina do driver (`driver/index.html`;
+  endpoint `POST /driver/api/<token>/iniciar-rota`). O `/pedidos` do driver
+  devolve `rota: {iniciada, iniciada_em}` — o front alterna botao/selo.
+  Confirm antes (dispara e-mail em massa).
+- **`status_do_pedido(codigo)`** (nunca levanta; erro = 'em_preparo'):
+  fases em_preparo / a_caminho (driver, parada N, faltam M, `eta`) /
+  entregue (hora) / problema (atribuicao nao_entregue — a pagina NAO
+  detalha o motivo, quem fala com o cliente e a loja). ETA = media REAL de
+  min/parada da propria rota (relogio no iniciar_rota, piso 4min); antes da
+  1a entrega usa `RASTREIO_MIN_POR_PARADA` (default 12). Arredonda pra CIMA
+  em blocos de 5min ("por volta de"). `AtribuicaoEntrega` NAO tem
+  relationship com Driver — lookup por id.
+- **Pagina do cliente** (`loja/pedido_confirmado.html`): bloco "Acompanhe
+  sua entrega" com 3 passos + texto por fase; estado inicial renderizado no
+  SERVIDOR (rota `pedido_confirmado` passa `rastreio`; sem flash de
+  loading) e polling de 30s no `/loja/pedido/<codigo>/status` (JSON ja
+  expunha `out['rastreio']`). RETIRADA fica FORA (nao ha entrega); polling
+  para em entregue/problema.
+- **Foto OBRIGATORIA no entregue** (dono 01/08): `api_status` do driver
+  recusa entregue com 0 fotos (422 `precisa_foto`); no front o botao sem
+  foto abre a CAMERA direto e o upload marca entregue sozinho
+  (`marcarAposFoto`, resetado em cancelamento/erro). O painel staff mantem
+  a valvula de escape sem foto. "Nao entregue" NAO exige foto.
+- **Ensaio de carga 04/08** (scratchpad `ensaio_dia_dos_pais.py`, Google e
+  e-mail mockados): 150 pedidos / 9 motoristas → /api/rotas 150ms (9 rotas,
+  150 paradas, k-means real), salvar lote 179ms, /api/atribuidos 51ms,
+  driver /pedidos 21ms, status_do_pedido 1.5ms/req (150 clientes em poll de
+  30s ≈ 5 req/s — folga grande). Roteirizacao aguenta o dia.
+- Testes: `tests/test_rastreio_entrega.py`. Manual de operacao registrado
+  (QUANDO PRECISAR — "Dia de MUITAS entregas com motoristas proprios").
+
 **Mapas unificados no `VendaMapa` (30/06/2026)**: o trio paralelo de
 mapeamentos virou UM modelo `VendaMapa` com `canal` em {'seru', 'lote'}.
 `SeruProdutoMap` (canal seru) e `LojaProdutoMap` (canal lote) seguem como
