@@ -229,6 +229,19 @@ def pedido_cartao(codigo):
     return redirect(url_for('loja.pedido_confirmado', codigo=codigo))
 
 
+def _rastreio_do_pedido(p):
+    """Fonte ÚNICA da regra "este pedido tem acompanhamento de entrega" —
+    usada pela página (bloco 'Acompanhe sua entrega') e pelo JSON do
+    polling; duplicada, as duas divergiam (achado de revisão). Retirada
+    fica fora (não há entrega); divulgação idem (e-mail placeholder nunca
+    recebe o link). Devolve o dict do rastreio ou None."""
+    if not (p.data_entrega and p.modo_entrega != 'retirada'
+            and p.status in ('pago', 'em_preparo', 'a_caminho', 'entregue')):
+        return None
+    from app.services import rastreio_entrega
+    return rastreio_entrega.status_do_pedido(p.codigo)
+
+
 @loja_bp.route('/pedido/<codigo>/status')
 def pedido_status(codigo):
     """JSON com o status do pedido — usado pelo polling da tela de Pix
@@ -242,10 +255,9 @@ def pedido_status(codigo):
     # de HOJE e a rota do motorista já saiu, a página de acompanhar mostra
     # "você é a Nª parada · previsão ~HH:MM". Mesma autorização de sempre:
     # quem tem o código vê o pedido (allowlist do gate, routes.py:394).
-    if p.data_entrega and p.status in ('pago', 'em_preparo', 'a_caminho',
-                                       'entregue'):
-        from app.services import rastreio_entrega
-        out['rastreio'] = rastreio_entrega.status_do_pedido(p.codigo)
+    rastreio = _rastreio_do_pedido(p)
+    if rastreio is not None:
+        out['rastreio'] = rastreio
     return jsonify(**out)
 
 
