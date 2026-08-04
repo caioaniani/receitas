@@ -240,18 +240,45 @@ def consultar_produtos(busca):
 
 
 def catalogo_disponibilidade():
-    """[{nome, disponivel}] do catálogo do site (ESTOQUE REAL) — usado pela
+    """[{nome, disponivel, indisponivel_em}] do catálogo do site — usado pela
     vigia pra comparar o que o bot disse com a MESMA fonte que o bot consulta
-    (antes era o VNDA). Devolve None se o catálogo falhar."""
-    from app.services import loja_catalogo
+    (antes era o VNDA). Devolve None se o catálogo falhar.
+
+    `disponivel` é a disponibilidade GERAL (hoje/próximos dias, visão da
+    vitrine). `indisponivel_em` lista as DATAS (dd/mm, próximos 14 dias) em
+    que o plano-do-dia ZEROU o item — a verdade POR DATA de entrega, a mesma
+    que o site/checkout aplicam. Caso real 04/08/2026 (véspera do Dia dos
+    Pais): plano de 09/08 só com cestas; o bot dizia CERTO "croissant não
+    disponível pra 09/08" e o vigia, olhando só a disponibilidade geral,
+    acusava erro do bot (falso ALTA). Sob encomenda nunca fica indisponível
+    (produzido pro pedido)."""
+    from datetime import timedelta
+
+    from app.services import loja_catalogo, loja_plano_dia
+    from app.utils import hoje
     try:
         catalogo = loja_catalogo.anotar_esgotado(
             loja_catalogo.produtos_publicados())
+        di = hoje()
+        janela = getattr(loja_catalogo, '_JANELA_DIAS_FUTUROS', 14)
+        saldos = loja_plano_dia.saldos_no_periodo(
+            di, di + timedelta(days=janela - 1))
     except Exception:  # noqa: BLE001
         logger.exception('catalogo_disponibilidade falhou')
         return None
-    return [{'nome': it['nome'], 'disponivel': not it.get('esgotado', False)}
-            for it in catalogo]
+    out = []
+    for it in catalogo:
+        chave = (it['kind'], it['id'])
+        datas = []
+        if not it.get('sob_encomenda'):
+            for d in sorted(saldos):
+                saldo = saldos[d].get(chave)
+                if saldo is not None and saldo <= 0:
+                    datas.append(d.strftime('%d/%m'))
+        out.append({'nome': it['nome'],
+                    'disponivel': not it.get('esgotado', False),
+                    'indisponivel_em': datas})
+    return out
 
 
 def consultar_ingredientes(nome_produto):
