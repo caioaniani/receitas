@@ -74,7 +74,30 @@ resolve o certificado sozinho:
 Nesse modo a porta 3001 deixa de ficar exposta (fica só em `127.0.0.1`) e o
 acesso passa pelo Caddy em 80/443.
 
-## Configuração
+## Configuração POR COMANDO (mais rápido)
+
+`configurar.py` cria os quatro monitores e o alerta de WhatsApp de uma vez.
+É **idempotente** (compara por nome; rodar de novo não duplica) e roda num
+container Python descartável — não instala nada no VPS:
+
+```bash
+cd /opt/uptime-kuma
+# baixe/copie o configurar.py pra cá, então:
+docker run --rm --network host \
+  -e KUMA_USER='admin' -e KUMA_PASS='SUA_SENHA' \
+  -e ZAPI_INSTANCE_ID='...' -e ZAPI_TOKEN='...' \
+  -e ZAPI_CLIENT_TOKEN='...' -e ZAPI_PHONE='5511999999999' \
+  -v /opt/uptime-kuma/configurar.py:/c.py:ro \
+  python:3.12-slim sh -c "pip install -q uptime-kuma-api && python /c.py"
+```
+
+Sem as variáveis `ZAPI_*` ele cria só os monitores e avisa que ninguém será
+notificado. Depois é só clicar em **Test** na notificação, pela tela.
+
+O que segue abaixo é o mesmo, na mão — use se preferir conferir campo a
+campo ou se o script falhar.
+
+## Configuração pela tela
 
 ### 1. Monitores
 
