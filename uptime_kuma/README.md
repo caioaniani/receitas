@@ -149,9 +149,13 @@ Em **Settings → Notifications → Setup Notification**:
     "message": {{ msg | prepend: "🚨 O Pão — " | json }}
   }
   ```
-- **Additional Headers** (marque a caixa):
+- **Additional Headers** (marque a caixa) — o `Content-Type` é
+  **obrigatório**, ver o porquê abaixo:
   ```json
-  { "Client-Token": "SEU_ZAPI_CLIENT_TOKEN" }
+  {
+    "Content-Type": "application/json",
+    "Client-Token": "SEU_ZAPI_CLIENT_TOKEN"
+  }
   ```
 - Marque **Default enabled** e **Apply on all existing monitors**.
 - Clique em **Test** — a mensagem tem que chegar no WhatsApp na hora.
