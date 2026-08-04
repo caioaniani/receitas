@@ -370,6 +370,58 @@ def test_painel_segue_completo(app):
     assert 'Feliz dia dos pais' in (p.get('cartinha') or p['cartinha_vnda'])
 
 
+# ── Botão "Iniciar rota" (driver) + página do cliente (04/08/2026) ───────
+
+def test_api_pedidos_do_driver_expoe_estado_da_rota(app):
+    """O front decide entre o botão "Iniciar rota" e o selo "iniciada às
+    HH:MM" pelo campo `rota` do /pedidos."""
+    d = _driver()
+    _rota(d, n=1)
+    c = _client_driver(app, d)
+    j = c.get(f'/driver/api/{d.token}/pedidos').get_json()
+    assert j['rota'] == {'iniciada': False, 'iniciada_em': None}
+    with patch('app.services.email.enviar_pedido_a_caminho',
+               return_value={'ok': True}):
+        r = c.post(f'/driver/api/{d.token}/iniciar-rota'
+                   f'?data={hoje().isoformat()}')
+    assert r.get_json()['ok'] is True
+    j = c.get(f'/driver/api/{d.token}/pedidos').get_json()
+    assert j['rota']['iniciada'] is True and j['rota']['iniciada_em']
+
+
+def test_pagina_do_pedido_mostra_bloco_de_rastreio(app):
+    """Pedido pago de ENTREGA ganha o bloco "Acompanhe sua entrega" com o
+    estado inicial embutido (o polling de 30s continua no navegador)."""
+    d = _driver()
+    codes = _rota(d, n=1)
+    with patch('app.services.email.enviar_pedido_a_caminho',
+               return_value={'ok': True}):
+        from app.services.rastreio_entrega import iniciar_rota
+        iniciar_rota(d)
+    c = app.test_client()
+    r = c.get(f'/loja/pedido/{codes[0]}')
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert 'Acompanhe sua entrega' in html
+    assert 'id="rastreio-inicial"' in html
+    assert '"a_caminho"' in html          # estado inicial do servidor
+
+
+def test_pagina_de_retirada_nao_mostra_rastreio(app):
+    """Retirada o cliente busca na loja — não há entrega pra acompanhar."""
+    from app.models import PedidoOnline
+    p = PedidoOnline(codigo='RETRAS1', nome_cliente='C',
+                     email_cliente='rr@x.com', status='pago',
+                     modo_entrega='retirada', data_entrega=hoje(),
+                     janela_entrega='06:00–10:00', valor_total=50)
+    db.session.add(p)
+    db.session.commit()
+    c = app.test_client()
+    r = c.get('/loja/pedido/RETRAS1')
+    assert r.status_code == 200
+    assert 'Acompanhe sua entrega' not in r.data.decode()
+
+
 def test_vnda_pedidos_curto_circuito_por_default(app, monkeypatch):
     """VNDA aposentado: sem VNDA_PEDIDOS=1, devolve vazio NA HORA, sem rede
     e sem 'erro' (era até 25s de spinner por carregamento da Operação)."""
