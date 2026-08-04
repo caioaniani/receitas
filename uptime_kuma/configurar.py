@@ -52,9 +52,19 @@ MONITORES = [
     dict(nome='Atendimento (Chatwoot)',
          tipo=MonitorType.HTTP,
          url='https://atendimento.opaopadariaartesanal.com.br', interval=120),
-    dict(nome='Ponte RADIUS (Wi-Fi das lojas)',
-         tipo=MonitorType.PORT,
-         hostname='127.0.0.1', port=1812, interval=300),
+    # NÃO adicione a ponte RADIUS como MonitorType.PORT (erro cometido em
+    # 04/08/2026, gerou alarme falso no primeiro ciclo): o monitor "porta" do
+    # Uptime Kuma testa TCP e a ponte escuta em **UDP/1812** (`ss -ulnp`
+    # mostra UNCONN) — teste TCP em porta UDP dá ECONNREFUSED sempre. Some a
+    # isso que o container tem rede própria, então `127.0.0.1` lá dentro é o
+    # container, não o VPS.
+    #
+    # Pra monitorar a ponte DE VERDADE existe MonitorType.RADIUS, que faz
+    # autenticação real e testa a cadeia inteira (Kuma -> ponte -> endpoint
+    # /api/wifi/radius-check no gestão -> banco). Exige `radiusSecret`
+    # (WIFI_RADIUS_SECRET), `radiusUsername`/`radiusPassword` de uma conta de
+    # cliente DEDICADA a teste, e o hostname acessível de dentro do container
+    # (o IP do VPS, não 127.0.0.1). Decisão do dono pendente.
 ]
 
 
