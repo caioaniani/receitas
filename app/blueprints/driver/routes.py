@@ -250,6 +250,7 @@ def api_pedidos(token):
         data=data_str,
         driver={'id': driver.id, 'nome': driver.nome, 'cor': driver.cor},
         origem_endereco=rotas_svc.origem_endereco(current_app),
+        rota=rota_info,
         pedidos=pedidos_driver,
     )
 
