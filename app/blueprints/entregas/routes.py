@@ -228,16 +228,30 @@ def _serializar_pedido_online(p, detalhes=True):
     }
 
 
-def _pedidos_online_do_dia(target_date):
+def _pedidos_online_do_dia(target_date, detalhes=True):
     """Lista os PedidoOnline (loja própria) pra entregar/retirar na data —
-    pagos em diante. Aplica cartinha manual (mesma regra do VNDA)."""
-    online = (PedidoOnline.query
-              .filter(PedidoOnline.data_entrega == target_date,
-                      PedidoOnline.status.in_(_STATUS_ONLINE_NO_PAINEL))
-              .order_by(PedidoOnline.criado_em.asc())
-              .all())
-    pedidos = [_serializar_pedido_online(p) for p in online]
-    _aplicar_cartinhas(pedidos)
+    pagos em diante. Aplica cartinha manual (mesma regra do VNDA).
+
+    `detalhes=False` = versão magra (ver `_serializar_pedido_online`): sem
+    itens/cartinha e SEM as queries deles. No modo completo, eager-load de
+    itens+componentes+loja — serializar 150 pedidos fazia 1 SELECT de itens
+    POR PEDIDO (e outro de componentes por item de menu)."""
+    from sqlalchemy.orm import selectinload
+
+    from app.models import PedidoOnlineItem
+    q = (PedidoOnline.query
+         .filter(PedidoOnline.data_entrega == target_date,
+                 PedidoOnline.status.in_(_STATUS_ONLINE_NO_PAINEL))
+         .order_by(PedidoOnline.criado_em.asc()))
+    if detalhes:
+        q = q.options(
+            selectinload(PedidoOnline.itens)
+            .selectinload(PedidoOnlineItem.componentes))
+    online = q.all()
+    pedidos = [_serializar_pedido_online(p, detalhes=detalhes)
+               for p in online]
+    if detalhes:
+        _aplicar_cartinhas(pedidos)
     return pedidos
 
 
