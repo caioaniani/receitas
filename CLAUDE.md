@@ -4092,6 +4092,14 @@ o CPF que falta.
   NUNCA grava sozinha). Rota `POST /rh/pre-cadastros/<id>/vincular`;
   o Criar antigo segue pra contratacao nova. Conta so-treino continua
   gesto manual em /auth/usuarios (flag `somente_treino`).
+  **Conta JA existente (caso Marina, mesmo dia)**: segundo select opcional
+  "conta do sistema" — quando a pessoa ja usa o sistema com OUTRO login,
+  o vincular faz os DOIS vinculos (pre→RH e RH→Usuario existente) SEM
+  criar conta nem mandar senha (login intocado). Guardas em
+  `_PAPEIS_VINCULAVEIS` (funcionario/gerente/producao/padeiro/rh; admin/
+  owner/marketing recusados) + conta de outro funcionario recusada; o
+  select so lista contas vinculaveis SEM funcionario. `gerar_acesso` e
+  ignorado quando ha conta escolhida.
 - **POS-REVISAO (fixados)**: (1) XSS ARMAZENADO CRITICO — o nome (input
   PUBLICO anonimo) ia num `onsubmit="confirm('...{{nome}}...')"`; Jinja escapa
   `'` pra `&#39;`, mas o browser HTML-DECODIFICA o atributo antes do JS

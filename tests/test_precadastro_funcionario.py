@@ -306,3 +306,92 @@ def test_tela_mostra_select_com_sugestao(app, owner_user):
     assert 'Vincular' in html
     assert '(sugerido)' in html
     assert 'gerar_acesso' in html
+
+
+# ── Conta do sistema JÁ existente (05/08/2026, caso Marina) ───────────────
+
+def _usuario(nome='Marina Santos Silva', login='marina.antiga',
+             papel='funcionario', is_owner=False):
+    from app.models import Usuario
+    u = Usuario(nome=nome, login=login, papel=papel, is_owner=is_owner)
+    u.set_senha('x' * 10)
+    db.session.add(u)
+    db.session.commit()
+    return u
+
+
+def test_vincular_conta_existente_faz_os_dois_vinculos(app):
+    """Pré-cadastro → RH e RH → conta que a pessoa JÁ usa: nada é criado,
+    o login antigo não muda e nenhum e-mail de senha é disparado."""
+    from unittest.mock import patch
+    with app.app_context():
+        pre, func = _pre_e_func(nome_pre='Marina Silva',
+                                email='marinanova@gmail.com')
+        u = _usuario()
+        with patch('app.services.email.enviar_boas_vindas') as env:
+            f2, acesso, erro = svc.vincular(pre, func,
+                                            gerar_acesso_treino=True,
+                                            usuario=u)
+        assert erro is None
+        assert acesso['motivo'] == 'conta_existente'
+        env.assert_not_called()                 # nenhuma senha enviada
+        assert f2.usuario_id == u.id            # RH → conta
+        assert pre.funcionario_id == f2.id      # pré-cadastro → RH
+        assert u.login == 'marina.antiga'       # login intocado
+        assert f2.email == 'marinanova@gmail.com'
+        from app.models import Usuario
+        assert Usuario.query.count() == 1       # nada criado
+
+
+def test_vincular_conta_de_gestao_recusa(app):
+    with app.app_context():
+        pre, func = _pre_e_func(email='gestao@exemplo.com')
+        chefe = _usuario(nome='Chefe', login='chefe', papel='admin')
+        _, _, erro = svc.vincular(pre, func, usuario=chefe)
+        assert 'gestão' in erro or 'gestao' in erro
+        assert pre.processado_em is None        # nada gravado
+
+
+def test_vincular_conta_de_outro_funcionario_recusa(app):
+    with app.app_context():
+        pre, func = _pre_e_func(email='dupla@exemplo.com')
+        u = _usuario(login='conta.ocupada')
+        outro = Funcionario(nome='Outra Pessoa', cpf='00011122233',
+                            ativo=True, usuario_id=u.id)
+        db.session.add(outro)
+        db.session.commit()
+        _, _, erro = svc.vincular(pre, func, usuario=u)
+        assert 'já está vinculada' in erro
+        assert pre.processado_em is None
+
+
+def test_rota_vincular_com_conta_existente(app, owner_user):
+    with app.app_context():
+        pre, func = _pre_e_func(nome_pre='Bruna Costa',
+                                nome_rh='Bruna Costa Lima',
+                                email='bruna@exemplo.com')
+        u = _usuario(nome='Bruna Costa Lima', login='bruna.sistema')
+        pre_id, func_id, u_id = pre.id, func.id, u.id
+    c = _admin(app, owner_user)
+    r = c.post(f'/rh/pre-cadastros/{pre_id}/vincular',
+               data={'funcionario_id': func_id, 'usuario_id': u_id,
+                     'gerar_acesso': '1'},
+               follow_redirects=True)
+    html = r.get_data(as_text=True)
+    assert 'bruna.sistema' in html and 'login e a senha de sempre' in html
+    with app.app_context():
+        assert db.session.get(Funcionario, func_id).usuario_id == u_id
+
+
+def test_tela_lista_contas_do_sistema_com_sugestao(app, owner_user):
+    with app.app_context():
+        _pre_e_func(nome_pre='Carla Dias', nome_rh='Carla Dias Moreira',
+                    email='carla@exemplo.com')
+        _usuario(nome='Carla Dias Moreira', login='carla.d')
+        # Conta de gestão NÃO aparece no select
+        _usuario(nome='Dono da Padaria', login='dono.teste', papel='admin')
+    c = _admin(app, owner_user)
+    html = c.get('/rh/pre-cadastros').get_data(as_text=True)
+    assert 'já tem conta: Carla Dias Moreira (carla.d)' in html
+    assert '— sugerido' in html
+    assert 'já tem conta: Dono da Padaria' not in html
