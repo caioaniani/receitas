@@ -86,6 +86,9 @@ def _chamar(client, modelo, bloco):
     response = client.messages.create(
         model=modelo,
         max_tokens=2000,
+        # Extracao de NF/boleto sem tools: thinking adaptativo (padrao do
+        # Sonnet 5) so comeria teto/custo — desligado.
+        thinking={'type': 'disabled'},
         system=SYSTEM_PROMPT,
         messages=[{'role': 'user', 'content': [
             bloco,
