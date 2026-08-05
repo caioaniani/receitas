@@ -469,7 +469,7 @@ def rascunho_resposta(review_pk):
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
         return None, 'IA indisponivel (sem ANTHROPIC_API_KEY).'
-    modelo = os.environ.get('GOOGLE_REVIEWS_IA_MODELO', 'claude-sonnet-4-6')
+    modelo = os.environ.get('GOOGLE_REVIEWS_IA_MODELO', 'claude-sonnet-5')
     estrelas = rev.nota or 0
     prompt = (
         'Voce e o dono de uma padaria artesanal (Opao) respondendo a uma '
