@@ -287,6 +287,38 @@ def test_colhe_descadastro_da_transiente_antes_de_apagar(app):
     assert c.marketing_descadastro_em is not None
 
 
+def test_falha_ao_disparar_nao_vira_dois_parabens(app):
+    """O marcador do dia é gravado ANTES do disparo: se o "iniciar" quebrar,
+    hoje fica sem e-mail — nunca com dois."""
+    from app.models import AppConfig
+    from app.services import marketing
+    _cfg(app)
+    p = _patches(2)
+    with p[0], p[1], p[2], p[3], p[4], p[5], \
+         patch('app.services.listmonk.iniciar_campanha',
+               side_effect=RuntimeError('timeout')) as inicia:
+        st = marketing.campanha_aniversario(date(2026, 8, 9), enviar=True)
+        assert 'timeout' in st['erro'] and st['enviada'] is False
+        assert AppConfig.get(marketing.CFG_ANIV_ULTIMO) == '2026-08-09'
+        st2 = marketing.campanha_aniversario(date(2026, 8, 9), enviar=True)
+    assert st2['pulou'] == 'já enviada hoje'
+    assert inicia.call_count == 1
+
+
+def test_resumo_le_a_contagem_numa_requisicao_so(app):
+    """Painel do dono não pode ficar pendurado num `contar` por lista."""
+    from app.services import marketing
+    _cfg(app)
+    with patch('app.services.listmonk.listas_detalhe',
+               return_value={'Clientes do site': {'id': 1, 'n': 42}}) as det, \
+         patch('app.services.listmonk.contar') as contar:
+        r = marketing.resumo()
+    det.assert_called_once()
+    contar.assert_not_called()
+    assert r['listas'][0]['n'] == 42
+    assert r['listas'][3]['id'] is None      # transiente ainda não existe
+
+
 def test_falha_do_listmonk_nao_sobe_pro_cron(app):
     from app.services import marketing
     _cfg(app)
