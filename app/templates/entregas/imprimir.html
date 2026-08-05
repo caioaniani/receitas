@@ -163,8 +163,10 @@
 
     <div class="linha-meta">
       <div>
+        {# Data DO PEDIDO (com override do ERP); a do lote é só fallback —
+           mesma regra do PDF (pdf.py::_folha_pedido, caso 05/08/2026). #}
         <div class="rotulo">Entrega</div>
-        <div class="val">{{ data.strftime('%d/%m/%Y') }}</div>
+        <div class="val">{{ p.data_entrega_fmt or data.strftime('%d/%m/%Y') }}</div>
       </div>
       {% if p.periodo or p.expresso %}
       <div>
