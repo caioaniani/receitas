@@ -1117,8 +1117,10 @@ def responder(historico, *, telefone_contato=None,
     # uma unica vez — o modelo recebe um tool_result mandando consultar.
     handoff_ja_bloqueado = False
     # Retry unico quando a resposta trunca no max_tokens (senao link/preco
-    # cortado ia pro cliente).
-    max_tokens_atual = 1200
+    # cortado ia pro cliente). Teto com folga pro Sonnet 5: o thinking
+    # adaptativo (ligado por padrao, e desejado — bot usa tools melhor) e o
+    # tokenizador novo (~30% mais tokens) dividem o MESMO max_tokens.
+    max_tokens_atual = 4000
     retry_truncado_usado = False
     # Breakpoint de cache movel no fim das messages: as iteracoes do loop de
     # tools releem o prefixo inteiro (historico + tool_results anteriores) do
