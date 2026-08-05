@@ -521,7 +521,8 @@ def cadastrar():
                 verificacao_enviada = True
             else:
                 # E-mail novo: cadastro instantâneo (mesmo de antes).
-                c = Cliente(nome=nome, email=email, telefone=telefone)
+                c = Cliente(nome=nome, email=email, telefone=telefone,
+                            origem='site')
                 db.session.add(c)
                 c.set_senha(senha)
                 c.aceite_lgpd_em = c.aceite_lgpd_em or agora()
