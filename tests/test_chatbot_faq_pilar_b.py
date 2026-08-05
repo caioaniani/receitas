@@ -671,10 +671,11 @@ def test_canario_embutido_no_system_da_chamada(app, monkeypatch):
 
 # -------- Opus 4.8 + regra "responder antes de perguntar" (14/06/2026) ---
 
-def test_chatbot_usa_opus_4_8():
-    """Trava que o modelo do bot é Opus 4.8 (decisao do dono 14/06/2026)."""
+def test_chatbot_usa_sonnet_5():
+    """Trava do modelo do bot: Sonnet 5 (decisao do dono 05/08/2026 —
+    'trocar todos para sonnet 5'; substituiu o Opus 4.8 de 14/06)."""
     from app.services.chatbot import MODELO
-    assert MODELO == 'claude-opus-4-8', f'modelo mudou: {MODELO}'
+    assert MODELO == 'claude-sonnet-5', f'modelo mudou: {MODELO}'
 
 
 def test_prompt_tem_regra_responder_antes_de_perguntar():
