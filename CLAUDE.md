@@ -587,7 +587,7 @@ nao usa mapa (FK do `PedidoOnlineItem`).
 
 Flask 3 + SQLAlchemy + Bootstrap 5 + Postgres em prod / SQLite local.
 Padaria Opão: receitas, pedidos, entregas, PDV, estoque, RH, copilot
-(motor unico — Sonnet 4.6 no Slack, Opus 4.8 no WhatsApp do dono).
+(motor unico — Sonnet 5 em todos os canais desde 05/08/2026).
 
 ### Modelos Anthropic em uso (atualizado 05/08/2026)
 
