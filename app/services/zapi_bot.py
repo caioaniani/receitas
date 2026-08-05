@@ -26,7 +26,7 @@ MAX_HIST_TURNOS = 80
 # Fork de persona/modelo (decisao do dono, 11/06/2026): este canal e o
 # "bot completo" — assessor pessoal do dono, com Opus. O Slack continua
 # operacional com Sonnet. Motor (tools/permissoes) e um so: copilot_svc.
-MODELO_WHATSAPP_DEFAULT = 'claude-opus-4-8'
+MODELO_WHATSAPP_DEFAULT = 'claude-sonnet-5'
 
 PERSONA_DONO = """
 PERSONA DESTE CANAL (WhatsApp pessoal do dono):
