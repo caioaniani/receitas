@@ -308,9 +308,10 @@ def contatos_de_planilha(stream, nome_arquivo='planilha.xlsx', origem='sorteio')
         if email in vistos:
             st['repetidos'] += 1
             continue
-        nome = ' '.join(x for x in (cel('nome'), cel('sobrenome')) if x)
+        nome = ' '.join(x for x in (cel(linha, 'nome'),
+                                    cel(linha, 'sobrenome')) if x)
         attrs = {'origem': origem}
-        tel = re.sub(r'\D', '', cel('telefone'))
+        tel = re.sub(r'\D', '', cel(linha, 'telefone'))
         if tel:
             attrs['telefone'] = tel
         vistos[email] = {'email': email, 'nome': nome or email.split('@')[0],
