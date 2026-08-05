@@ -61,10 +61,17 @@ def _req(metodo, caminho, **kw):
 
 # ── Listas ───────────────────────────────────────────────────────────
 
+def listas_detalhe():
+    """{nome: {'id', 'n'}} — o próprio /api/lists já devolve a contagem, então
+    o painel sai numa requisição só (nada de um `contar` por lista)."""
+    dados = _req('GET', '/api/lists', params={'per_page': 100})
+    return {x['name']: {'id': x['id'], 'n': x.get('subscriber_count') or 0}
+            for x in (dados.get('data') or {}).get('results', [])}
+
+
 def listas():
     """{nome: id} das listas existentes."""
-    dados = _req('GET', '/api/lists', params={'per_page': 100})
-    return {x['name']: x['id'] for x in (dados.get('data') or {}).get('results', [])}
+    return {n: v['id'] for n, v in listas_detalhe().items()}
 
 
 def garantir_lista(nome, descricao=''):
