@@ -27,14 +27,12 @@ def _interpretar(app, admin_user, **kwargs):
             return cliente.messages.create.call_args[1]
 
 
-def test_default_e_sonnet_4_6(app, admin_user, monkeypatch):
-    """Fork de modelo (14/06/2026, decisao do dono):
-    - Slack (default, sem override `modelo=`) → Sonnet 4.6 (mais barato).
-    - WhatsApp do dono (zapi_bot passa override) → Opus 4.8.
-    Trava o lado Sonnet; o lado Opus tem teste separado abaixo."""
+def test_default_e_sonnet_5(app, admin_user, monkeypatch):
+    """Padronizacao do dono 05/08/2026: Sonnet 5 em todos os canais (o
+    mecanismo de override `modelo=` continua vivo — teste abaixo)."""
     monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-teste')
     chamada = _interpretar(app, admin_user)
-    assert chamada['model'] == 'claude-sonnet-4-6'
+    assert chamada['model'] == 'claude-sonnet-5'
 
 
 def test_override_de_modelo_e_persona(app, admin_user, monkeypatch):
