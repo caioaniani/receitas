@@ -470,6 +470,43 @@ def test_teste_falha_do_listmonk_vira_mensagem(app):
     assert '502 do VPS' in st['erro'] and st['enviado'] is False
 
 
+def test_rascunho_cria_campanha_sem_disparar(app):
+    from app.services import marketing
+    _cfg(app)
+    with patch('app.services.listmonk.listas_detalhe',
+               return_value={'Clientes do site': {'id': 1, 'n': 373}}), \
+         patch('app.services.listmonk.criar_campanha', return_value=91) as cria, \
+         patch('app.services.listmonk.iniciar_campanha') as inicia:
+        st = marketing.criar_rascunho('Dia dos Pais', '<p>peça</p>',
+                                      'Clientes do site')
+    assert st['erro'] is None and st['campanha_id'] == 91
+    assert st['url'].endswith('/admin/campaigns/91')
+    assert cria.call_args.args[3] == [1]
+    inicia.assert_not_called()
+
+
+def test_rascunho_recusa_a_lista_transiente(app):
+    """Campanha apontada pra lista do aniversário sairia pra quem faz
+    aniversário hoje, não pra base — e a lista é apagada amanhã."""
+    from app.services import marketing
+    _cfg(app)
+    with patch('app.services.listmonk.criar_campanha') as cria:
+        st = marketing.criar_rascunho('X', '<p>y</p>',
+                                      marketing.LISTA_ANIVERSARIO)
+    assert 'aniversário' in st['erro']
+    cria.assert_not_called()
+
+
+def test_rascunho_com_lista_inexistente_avisa(app):
+    from app.services import marketing
+    _cfg(app)
+    with patch('app.services.listmonk.listas_detalhe', return_value={}), \
+         patch('app.services.listmonk.criar_campanha') as cria:
+        st = marketing.criar_rascunho('X', '<p>y</p>', 'Lista Fantasma')
+    assert 'não existe' in st['erro']
+    cria.assert_not_called()
+
+
 # ── Tela do dono ─────────────────────────────────────────────────────
 
 def _login(c, user_id):
