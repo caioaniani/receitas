@@ -78,9 +78,11 @@
                            placeholder="O Dia dos Pais está chegando">
                 </div>
                 <div class="col-12 col-md-5">
-                    <label class="form-label small">Enviar para</label>
+                    <label class="form-label small">Enviar teste para</label>
+                    {# sem `required`: o botão de rascunho usa o MESMO form e
+                       não precisa de destinatário. O servidor valida. #}
                     <input type="email" name="email"
-                           class="form-control form-control-sm" required
+                           class="form-control form-control-sm"
                            value="{{ current_user.email or '' }}">
                 </div>
             </div>
