@@ -259,6 +259,7 @@ def analisar(*, file_bytes=None, mimetype=None, texto=None):
     try:
         response = client.messages.create(
             model=MODELO, max_tokens=4000, system=SYSTEM_PROMPT,
+            thinking={'type': 'disabled'},  # extracao de JSON sem tools
             messages=[{'role': 'user', 'content': content}])
         from app.services import uso_ia
         uso_ia.registrar('cadastro_ia', MODELO,
