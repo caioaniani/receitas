@@ -726,3 +726,51 @@ def test_vendas_snapshot_exige_token(app):
     app.config['CLAUDE_API_TOKEN'] = TOKEN
     assert app.test_client().get(
         '/api/claude/vendas-snapshot').status_code == 401
+
+
+# ── /api/claude/funcionarios (lote de assinatura do RI, 05/08/2026) ──
+
+def test_funcionarios_lista_ativos_com_canais_da_ficha(app):
+    from app.models import Funcionario, Loja
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    loja = Loja(nome='Ribeiro do Vale', ativa=True)
+    a = Funcionario(nome='Ana Silva', cpf='111.111.111-11',
+                    funcao='Atendente', email='ana@x.com',
+                    telefone='11999998888', ativo=True)
+    b = Funcionario(nome='Bruno Souza', cpf='222.222.222-22',
+                    funcao='Padeiro', ativo=True)          # sem email/telefone
+    c = Funcionario(nome='Carla Lima', cpf='333.333.333-33',
+                    ativo=False)                            # desligada
+    a.lojas.append(loja)
+    db.session.add_all([loja, a, b, c])
+    db.session.commit()
+    resp = app.test_client().get(
+        '/api/claude/funcionarios',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True and d['total'] == 2              # desligada fora
+    assert d['sem_email'] == 1 and d['sem_telefone'] == 1
+    ana = next(x for x in d['funcionarios'] if x['nome'] == 'Ana Silva')
+    assert ana['email'] == 'ana@x.com'
+    assert ana['telefone'] == '11999998888'
+    assert ana['lojas'] == ['Ribeiro do Vale']
+
+
+def test_funcionarios_todos_inclui_desligados(app):
+    from app.models import Funcionario
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    db.session.add(Funcionario(nome='Carla Lima', cpf='333.333.333-33',
+                               ativo=False))
+    db.session.commit()
+    resp = app.test_client().get(
+        '/api/claude/funcionarios?todos=1',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    nomes = [x['nome'] for x in resp.get_json()['funcionarios']]
+    assert 'Carla Lima' in nomes
+
+
+def test_funcionarios_exige_token(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    assert app.test_client().get(
+        '/api/claude/funcionarios').status_code == 401
