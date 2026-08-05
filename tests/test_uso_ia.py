@@ -120,7 +120,8 @@ def test_rota_uso_ia_exige_owner(app, admin_user):
 
 
 def test_modelos_por_funcao():
-    """Sonnet 4.6 em tudo, EXCETO bot Chatwoot / WhatsApp dono / OCRs = Opus 4.8."""
+    """Padronizacao do dono (05/08/2026): TUDO em Sonnet 5 — substituiu a
+    regra de 25/06 ('Sonnet 4.6 exceto bot/WhatsApp/OCRs = Opus 4.8')."""
     from app.services import (
         chatbot,
         chatbot_auditor,
@@ -130,24 +131,29 @@ def test_modelos_por_funcao():
         seo_descricoes,
         zapi_bot,
     )
-    # Subiram pra Sonnet
-    assert chatbot_vigia.MODELO == 'claude-sonnet-4-6'
-    assert chatbot.FOLLOWUP_MODELO == 'claude-sonnet-4-6'
-    assert seo_descricoes.MODELO == 'claude-sonnet-4-6'
-    # Ja eram Sonnet
-    assert chatbot_auditor.MODELO == 'claude-sonnet-4-6'
-    assert copilot.MODELO_DEFAULT == 'claude-sonnet-4-6'
-    # Exceções em Opus 4.8
-    assert chatbot.MODELO == 'claude-opus-4-8'                 # bot Chatwoot
-    assert zapi_bot.MODELO_WHATSAPP_DEFAULT == 'claude-opus-4-8'  # WhatsApp dono
-    assert conta_pagar_ia.MODELO.startswith('claude-opus-4-8')   # OCR contas
+    assert chatbot_vigia.MODELO == 'claude-sonnet-5'
+    assert chatbot.FOLLOWUP_MODELO == 'claude-sonnet-5'
+    assert seo_descricoes.MODELO == 'claude-sonnet-5'
+    assert chatbot_auditor.MODELO == 'claude-sonnet-5'
+    assert copilot.MODELO_DEFAULT == 'claude-sonnet-5'
+    assert chatbot.MODELO == 'claude-sonnet-5'                 # bot Chatwoot
+    assert zapi_bot.MODELO_WHATSAPP_DEFAULT == 'claude-sonnet-5'  # WhatsApp dono
+    assert conta_pagar_ia.MODELO.startswith('claude-sonnet-5')   # OCR contas
 
 
-def test_ocr_cupom_usa_opus():
+def test_sonnet_5_tem_preco_na_tabela():
+    """Sem a linha do modelo em _PRECOS o custo para de ser registrado —
+    trava pra troca de modelo nunca mais esquecer a tabela."""
+    from app.services.uso_ia import calcular_custo
+    assert calcular_custo('claude-sonnet-5', 1_000_000, 1_000_000) \
+        == Decimal('18')
+
+
+def test_ocr_cupom_usa_sonnet_5():
     """ocr_nota nao tem constante (modelo inline) — confere via codigo-fonte."""
     import inspect
 
     from app.services import ocr_nota
     src = inspect.getsource(ocr_nota)
-    assert "modelo = 'claude-opus-4-8'" in src
+    assert "modelo = 'claude-sonnet-5'" in src
     assert 'claude-sonnet-4-6' not in src  # nao sobrou o antigo
