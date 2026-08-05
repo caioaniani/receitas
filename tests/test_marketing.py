@@ -134,7 +134,7 @@ def test_sincronizar_puxa_descadastro_antes_de_importar(app):
     from app.services import marketing
     _cfg(app)
     ordem = []
-    with patch('app.services.listmonk.garantir_lista', side_effect=[1, 2, 3]), \
+    with patch('app.services.listmonk.garantir_lista', side_effect=[1, 2, 3, 9]), \
          patch('app.services.listmonk.descadastrados', return_value={}) as desc, \
          patch('app.services.listmonk.mudar_listas'), \
          patch('app.services.listmonk.importar') as imp:
