@@ -920,14 +920,48 @@ def deploy_info():
     """Qual commit esta NO AR (11/07/2026): o procedimento de 2 commits de
     schema exige confirmar que o ALTER deployou antes de subir o modelo —
     antes disso o assistente precisava pedir ao dono que conferisse o
-    Railway. O Railway injeta RAILWAY_GIT_COMMIT_SHA no build. Read-only."""
+    Railway. O Railway injeta RAILWAY_GIT_COMMIT_SHA no build. Read-only.
+
+    `?colunas=tabela.coluna,outra.coluna` (05/08/2026) fecha o buraco que
+    sobrava no procedimento: o commit estar no ar NAO prova que o ALTER
+    pegou — `_try` engole a falha com WARNING no log, e o assistente nao ve
+    log. Sem esta checagem, subir o modelo com a coluna faltando derruba
+    TODA tela que le a tabela (incidente de 22/05/2026). Consulta o
+    information_schema; nao le dado nenhum das linhas.
+    """
     import os
-    return jsonify(
-        ok=True,
-        commit=os.environ.get('RAILWAY_GIT_COMMIT_SHA'),
-        branch=os.environ.get('RAILWAY_GIT_BRANCH'),
-        deployment_id=os.environ.get('RAILWAY_DEPLOYMENT_ID'),
-    )
+
+    from sqlalchemy import text
+
+    from app.extensions import db
+
+    out = {
+        'ok': True,
+        'commit': os.environ.get('RAILWAY_GIT_COMMIT_SHA'),
+        'branch': os.environ.get('RAILWAY_GIT_BRANCH'),
+        'deployment_id': os.environ.get('RAILWAY_DEPLOYMENT_ID'),
+    }
+    pedidas = [c.strip() for c in
+               (request.args.get('colunas') or '').split(',') if c.strip()]
+    if pedidas:
+        achadas = {}
+        for item in pedidas[:20]:
+            tabela, _, coluna = item.partition('.')
+            if not tabela or not coluna:
+                achadas[item] = 'formato invalido (use tabela.coluna)'
+                continue
+            try:
+                with db.engine.connect() as c:
+                    r = c.execute(text(
+                        'SELECT 1 FROM information_schema.columns '
+                        'WHERE table_name = :t AND column_name = :c'),
+                        {'t': tabela.lower(), 'c': coluna.lower()}).first()
+                achadas[item] = bool(r)
+            except Exception as exc:                          # noqa: BLE001
+                achadas[item] = f'erro: {type(exc).__name__}'
+        out['colunas'] = achadas
+        out['todas_presentes'] = all(v is True for v in achadas.values())
+    return jsonify(out)
 
 
 @claude_api_bp.route('/projetos')
