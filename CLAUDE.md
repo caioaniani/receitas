@@ -4077,8 +4077,21 @@ o CPF que falta.
   "Pre-cadastro (QR)" no macro `rh` de `_area_nav.html`. Promover redireciona
   pro detalhe do funcionario pra completar cargo/salario.
 - Manual de operacao registrado (secao QUANDO PRECISAR). Testes:
-  `tests/test_precadastro_funcionario.py` (15 casos; rotas RH usam
+  `tests/test_precadastro_funcionario.py` (23 casos; rotas RH usam
   `owner_user`, nao `admin_user`, por causa do gate owner-only do RH).
+- **VINCULAR a funcionario EXISTENTE (05/08/2026, pedido do dono)**: quem
+  veio da folha JA esta no RH e preencheu o QR so pra informar e-mail —
+  o Criar duplicaria a pessoa. `precadastro.vincular(pre, func,
+  gerar_acesso_treino=)` leva e-mail/telefone pra ficha (avisa quando
+  SUBSTITUI e-mail existente), marca processado e, se pedido, chama
+  `treino_acessos.gerar_acesso` na mesma tacada (reusa TODAS as guardas:
+  conta de admin com o mesmo e-mail ou e-mail de OUTRO funcionario =
+  recusa com aviso, nunca vincula conta errada). `sugerir_funcionario`
+  pre-seleciona o select por nome (score >= 0.75, mesmo piso do
+  pre-preenchimento do PDV do Tiny; empate = sem sugestao — a sugestao
+  NUNCA grava sozinha). Rota `POST /rh/pre-cadastros/<id>/vincular`;
+  o Criar antigo segue pra contratacao nova. Conta so-treino continua
+  gesto manual em /auth/usuarios (flag `somente_treino`).
 - **POS-REVISAO (fixados)**: (1) XSS ARMAZENADO CRITICO — o nome (input
   PUBLICO anonimo) ia num `onsubmit="confirm('...{{nome}}...')"`; Jinja escapa
   `'` pra `&#39;`, mas o browser HTML-DECODIFICA o atributo antes do JS
