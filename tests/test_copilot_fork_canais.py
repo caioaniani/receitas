@@ -44,8 +44,8 @@ def test_override_de_modelo_e_persona(app, admin_user, monkeypatch):
     assert system_texto.rstrip().endswith('PERSONA TESTE XYZ')
 
 
-def test_zapi_bot_usa_opus_e_persona(app, admin_user, monkeypatch):
-    """O canal do dono passa Opus (default ou env ZAPI_BOT_MODELO) e a
+def test_zapi_bot_usa_sonnet_5_e_persona(app, admin_user, monkeypatch):
+    """O canal do dono passa Sonnet 5 (default ou env ZAPI_BOT_MODELO) e a
     persona de assessor pro motor compartilhado."""
     from app.extensions import db
     from app.models import Usuario
