@@ -171,3 +171,138 @@ def test_criar_poda_processados_antigos(app):
         emails = {p.email for p in PreCadastroFuncionario.query.all()}
         assert 'velho@exemplo.com' not in emails
         assert 'recente@exemplo.com' in emails and 'novo@exemplo.com' in emails
+
+
+# ── Vincular a funcionário EXISTENTE (05/08/2026) ─────────────────────────
+#
+# Caso do dono: o pessoal da folha JÁ está no RH e preencheu o QR só pra
+# informar e-mail/telefone e acessar o curso — o Criar duplicaria a pessoa.
+
+def _pre_e_func(nome_pre='Maria Silva', nome_rh='Maria da Silva Santos',
+                email='maria@exemplo.com', ativo=True):
+    pre = PreCadastroFuncionario(nome=nome_pre.split()[0],
+                                 sobrenome=' '.join(nome_pre.split()[1:]),
+                                 email=email, telefone='11987654321')
+    func = Funcionario(nome=nome_rh, cpf=f'999{abs(hash(nome_rh)) % 10**8}',
+                       ativo=ativo)
+    db.session.add_all([pre, func])
+    db.session.commit()
+    return pre, func
+
+
+def test_vincular_leva_email_e_telefone_pra_ficha(app):
+    with app.app_context():
+        pre, func = _pre_e_func()
+        f2, acesso, erro = svc.vincular(pre, func)
+        assert erro is None and acesso is None
+        assert f2.email == 'maria@exemplo.com'
+        assert f2.telefone == '11987654321'
+        assert pre.processado_em is not None
+        assert pre.funcionario_id == func.id
+        # NÃO criou funcionário novo
+        assert Funcionario.query.count() == 1
+
+
+def test_vincular_com_acesso_cria_login_do_treino(app, monkeypatch):
+    from unittest.mock import patch
+    with app.app_context():
+        pre, func = _pre_e_func(email='curso@exemplo.com')
+        with patch('app.services.email.enviar_boas_vindas',
+                   return_value={'ok': True}):
+            _, acesso, erro = svc.vincular(pre, func, gerar_acesso_treino=True)
+        assert erro is None
+        assert acesso['ok'] is True and acesso['motivo'] == 'criado'
+        from app.models import Usuario
+        u = Usuario.query.filter_by(login='curso@exemplo.com').first()
+        assert u is not None and u.papel == 'funcionario'
+        assert u.senha_provisoria is True
+        assert func.usuario_id == u.id
+
+
+def test_vincular_avisa_quando_substitui_email(app):
+    with app.app_context():
+        pre, func = _pre_e_func(email='novo@exemplo.com')
+        func.email = 'antigo@exemplo.com'
+        db.session.commit()
+        _, acesso, erro = svc.vincular(pre, func)
+        assert erro is None
+        assert acesso['email_substituido'] == 'antigo@exemplo.com'
+        assert func.email == 'novo@exemplo.com'
+
+
+def test_vincular_recusa_desligado_e_ja_processado(app):
+    from app.utils import agora
+    with app.app_context():
+        pre, func = _pre_e_func(ativo=False)
+        _, _, erro = svc.vincular(pre, func)
+        assert 'desligado' in erro
+        assert pre.processado_em is None       # nada gravado
+        func.ativo = True
+        pre.processado_em = agora()
+        db.session.commit()
+        _, _, erro = svc.vincular(pre, func)
+        assert 'processado' in erro
+
+
+def test_sugestao_por_nome_forte_e_sem_empate(app):
+    with app.app_context():
+        pre, func = _pre_e_func(nome_pre='Joao Pedro',
+                                nome_rh='Joao Pedro de Almeida')
+        outro = Funcionario(nome='Carlos Souza', cpf='11122233344', ativo=True)
+        db.session.add(outro)
+        db.session.commit()
+        assert svc.sugerir_funcionario(pre, [func, outro]).id == func.id
+        # Match fraco (1 de 2 tokens = 0.5 < 0.75) nao sugere
+        fraco = Funcionario(nome='Joao Carlos', cpf='55566677788', ativo=True)
+        pre2 = PreCadastroFuncionario(nome='Joao', sobrenome='Batista',
+                                      email='jb@exemplo.com',
+                                      telefone='11987654322')
+        db.session.add_all([fraco, pre2])
+        db.session.commit()
+        assert svc.sugerir_funcionario(pre2, [fraco, outro]) is None
+
+
+def test_rota_vincular_fluxo_completo(app, owner_user):
+    from unittest.mock import patch
+    with app.app_context():
+        pre, func = _pre_e_func(email='rota@exemplo.com')
+        pre_id, func_id = pre.id, func.id
+    c = _admin(app, owner_user)
+    with patch('app.services.email.enviar_boas_vindas',
+               return_value={'ok': True}):
+        r = c.post(f'/rh/pre-cadastros/{pre_id}/vincular',
+                   data={'funcionario_id': func_id, 'gerar_acesso': '1'},
+                   follow_redirects=True)
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert 'vinculado' in html
+    assert 'senha foi enviada' in html
+    with app.app_context():
+        f = db.session.get(Funcionario, func_id)
+        assert f.email == 'rota@exemplo.com' and f.usuario_id is not None
+
+
+def test_rota_vincular_sem_funcionario_recusa(app, owner_user):
+    with app.app_context():
+        pre, _ = _pre_e_func(email='semfunc@exemplo.com')
+        pre_id = pre.id
+    c = _admin(app, owner_user)
+    r = c.post(f'/rh/pre-cadastros/{pre_id}/vincular',
+               data={'funcionario_id': ''}, follow_redirects=True)
+    assert r.status_code == 200
+    assert 'Escolha o funcion' in r.get_data(as_text=True)
+    with app.app_context():
+        p = db.session.get(PreCadastroFuncionario, pre_id)
+        assert p.processado_em is None
+
+
+def test_tela_mostra_select_com_sugestao(app, owner_user):
+    with app.app_context():
+        _pre_e_func(nome_pre='Ana Clara', nome_rh='Ana Clara Ribeiro',
+                    email='sel@exemplo.com')
+    c = _admin(app, owner_user)
+    r = c.get('/rh/pre-cadastros')
+    html = r.get_data(as_text=True)
+    assert 'Vincular' in html
+    assert '(sugerido)' in html
+    assert 'gerar_acesso' in html
