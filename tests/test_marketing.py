@@ -11,6 +11,8 @@ O fixture `app` mantém um app-context ativo — não abrir outro aninhado.
 from datetime import date
 from unittest.mock import patch
 
+import pytest
+
 from app.extensions import db
 
 
@@ -197,6 +199,68 @@ def test_descadastro_nao_remarca_quem_ja_saiu(app):
         assert marketing.marcar_descadastros([1]) == 0
     db.session.refresh(c)
     assert c.marketing_descadastro_em == antes
+
+
+# ── Import de planilha ───────────────────────────────────────────────
+
+def _planilha_csv(linhas):
+    import io
+    return io.StringIO('\n'.join(linhas))
+
+
+def test_planilha_acha_as_colunas_pelo_nome(app):
+    """Planilha de formulário muda a ordem das colunas entre um sorteio e
+    outro — por isso o cabeçalho manda, não a posição."""
+    from app.services import marketing
+    csv = _planilha_csv([
+        'Como vai ser?,Telefone,Sobrenome,Nome,E-mail',
+        'Ok,(11) 99333-5672,Silva,Ana,ANA@X.com'])
+    contatos, st = marketing.contatos_de_planilha(csv, 'x.csv')
+    assert st['validos'] == 1
+    assert contatos[0]['email'] == 'ana@x.com'      # normaliza
+    assert contatos[0]['nome'] == 'Ana Silva'
+    assert '11993335672' in contatos[0]['attribs_json']
+
+
+def test_planilha_descarta_invalido_e_repetido(app):
+    from app.services import marketing
+    csv = _planilha_csv([
+        'Nome,E-mail',
+        'A,a@x.com', 'A de novo,A@X.COM', 'B,nao-e-email', 'C,', 'D,d@x.com'])
+    contatos, st = marketing.contatos_de_planilha(csv, 'x.csv')
+    assert st == {'linhas': 5, 'validos': 2, 'invalidos': 1,
+                  'repetidos': 1, 'sem_email': 1}
+    assert sorted(c['email'] for c in contatos) == ['a@x.com', 'd@x.com']
+
+
+def test_planilha_sem_coluna_de_email_recusa(app):
+    from app.services import marketing
+    csv = _planilha_csv(['Nome,Telefone', 'A,119999'])
+    with pytest.raises(ValueError, match='coluna de e-mail'):
+        marketing.contatos_de_planilha(csv, 'x.csv')
+
+
+def test_importar_planilha_manda_pra_lista_escolhida(app):
+    from app.services import marketing
+    _cfg(app)
+    csv = _planilha_csv(['Nome,E-mail', 'A,a@x.com'])
+    with patch('app.services.listmonk.garantir_lista', return_value=3), \
+         patch('app.services.listmonk.importar') as imp:
+        st = marketing.importar_planilha(csv, 'x.csv', 'Sorteio 2026')
+    assert st['erro'] is None and st['validos'] == 1
+    imp.assert_called_once()
+    assert imp.call_args.args[0] == [3]
+
+
+def test_importar_planilha_vazia_avisa_e_nao_chama_listmonk(app):
+    from app.services import marketing
+    _cfg(app)
+    csv = _planilha_csv(['Nome,E-mail', 'A,'])
+    with patch('app.services.listmonk.garantir_lista'), \
+         patch('app.services.listmonk.importar') as imp:
+        st = marketing.importar_planilha(csv, 'x.csv')
+    assert 'Nenhum e-mail válido' in st['erro']
+    imp.assert_not_called()
 
 
 # ── Campanha de aniversário ──────────────────────────────────────────
