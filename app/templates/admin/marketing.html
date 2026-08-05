@@ -88,15 +88,30 @@
             <textarea name="corpo" id="teste-corpo" rows="8" required
                       class="form-control"
                       style="font-family:monospace;font-size:12px"></textarea>
-            <div class="d-flex gap-2 flex-wrap mt-2">
-                <button class="btn btn-primary btn-sm"
-                        {{ 'disabled' if not r.disponivel }}>
-                    <i class="bi bi-send"></i> Enviar teste
-                </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm"
-                        id="usar-aniversario">
-                    Preencher com o e-mail de aniversário
-                </button>
+            <div class="row g-2 align-items-end mt-1">
+                <div class="col-12 col-md-5">
+                    <label class="form-label small">Rascunho para a lista</label>
+                    <select name="lista" class="form-select form-select-sm">
+                        {% for l in r.listas if not l.transiente and l.id %}
+                        <option value="{{ l.nome }}">{{ l.nome }} ({{ l.n }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-md-7 d-flex gap-2 flex-wrap">
+                    <button class="btn btn-primary btn-sm"
+                            {{ 'disabled' if not r.disponivel }}>
+                        <i class="bi bi-send"></i> Enviar teste
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm"
+                            formaction="{{ url_for('main.marketing_rascunho') }}"
+                            {{ 'disabled' if not r.disponivel }}>
+                        <i class="bi bi-file-earmark-plus"></i> Criar rascunho no Listmonk
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                            id="usar-aniversario">
+                        Usar o texto do aniversário
+                    </button>
+                </div>
             </div>
         </form>
     </div>
