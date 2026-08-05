@@ -84,6 +84,29 @@ def test_wifi_pega_quem_passou_pelo_portal(app):
     assert emails == ['w@x.com']
 
 
+def test_wifi_pega_o_cadastro_do_modo_radius(app):
+    """REGRESSÃO (05/08/2026): o portal no modo RADIUS cria só o `Cliente`,
+    sem `WifiPortalSessao`. Derivar da sessão fazia a lista mostrar 1 pessoa
+    em vez de dezenas."""
+    from app.services import marketing
+    _cliente('R', 'r@x.com')                      # cadastro antigo, sem origem
+    c = _cliente('W', 'w@x.com')
+    c.origem = 'wifi'
+    db.session.commit()
+    emails = [x['email'] for x in marketing.contatos_do_wifi()]
+    assert emails == ['w@x.com']
+
+
+def test_criar_conta_do_portal_carimba_a_origem(app):
+    """A origem tem que ser gravada NA HORA — inferir depois foi o erro."""
+    from app.services import wifi_portal
+    status, c = wifi_portal.criar_conta_direta({
+        'nome': 'Ana Silva', 'email': 'ana@x.com', 'telefone': '11999998888',
+        'senha': 'segredo123', 'aniversario_dia': 9, 'aniversario_mes': 8,
+        'nascimento_ano': None})
+    assert status == 'criada' and c.origem == 'wifi'
+
+
 def test_descadastrado_fica_fora_de_tudo(app):
     from app.services import marketing
     from app.utils import agora
