@@ -36,11 +36,14 @@ def _pedido_pago(email, pago=True, divulgacao=False):
 
 
 def _sessao_wifi(email):
+    from datetime import timedelta
+
     from app.models import WifiPortalSessao
     from app.utils import agora
     s = WifiPortalSessao(token=f't{email}', codigo='WIFI-AAA111', nome='X',
                          email=email, telefone='11999998888',
-                         senha_hash='x', aceite_lgpd_em=agora())
+                         senha_hash='x', aceite_lgpd_em=agora(),
+                         expira_em=agora() + timedelta(minutes=30))
     db.session.add(s)
     db.session.commit()
     return s
