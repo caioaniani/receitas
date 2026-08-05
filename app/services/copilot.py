@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 #   modelo default mais barato. Decidido apos a janela de tentar Opus
 #   default em todos os canais: o ganho de qualidade no Slack nao
 #   compensou o custo extra com 12 atendentes usando.
-MODELO_DEFAULT = 'claude-sonnet-4-6'
+MODELO_DEFAULT = 'claude-sonnet-5'
 
 
 # ── Tools ──────────────────────────────────────────────────────────────
