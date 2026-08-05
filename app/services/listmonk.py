@@ -152,7 +152,7 @@ def descadastrados(lista_id):
         res = (dados.get('data') or {}).get('results') or []
         for s in res:
             email = (s.get('email') or '').strip().lower()
-            if email and s.get('id'):
+            if email and s.get('id') is not None:
                 saida[email] = s['id']
         if len(res) < 500:
             break
