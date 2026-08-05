@@ -32,6 +32,11 @@ logger = logging.getLogger(__name__)
 # (input, output) em USD por 1M tokens. Casa por PREFIXO do model id pra
 # tolerar sufixos (ex: 'claude-haiku-4-5-20251001').
 _PRECOS = {
+    # Sonnet 5 tem preco promocional $2/$10 ate 2026-08-31; registramos a
+    # TABELA CHEIA ($3/$15) de proposito — superestimar um pouco ate la e
+    # mais seguro pro vigia de custo do que subestimar depois.
+    'claude-sonnet-5': (Decimal('3'), Decimal('15')),
+    'claude-opus-5': (Decimal('5'), Decimal('25')),
     'claude-opus-4-8': (Decimal('5'), Decimal('25')),
     'claude-opus-4-7': (Decimal('5'), Decimal('25')),
     'claude-opus-4-6': (Decimal('5'), Decimal('25')),
