@@ -27,6 +27,7 @@ stats, nunca propagada.
 """
 import json
 import logging
+import re
 
 from sqlalchemy import func
 
@@ -230,6 +231,117 @@ def aniversariantes(dia=None):
     q = _base_query().filter(Cliente.aniversario_dia == d.day,
                              Cliente.aniversario_mes == d.month)
     return [_contato(c) for c in q.all()]
+
+
+# ── Import de planilha (sorteio, evento, lista de papel) ─────────────
+
+_RE_EMAIL = re.compile(r'^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$')
+
+
+def _linhas_da_planilha(stream, nome_arquivo):
+    """Lê xlsx ou csv e devolve a lista de linhas (tuplas de células)."""
+    if (nome_arquivo or '').lower().endswith('.csv'):
+        import csv
+        import io
+        texto = stream.read()
+        if isinstance(texto, bytes):
+            texto = texto.decode('utf-8-sig', errors='replace')
+        return [tuple(l) for l in csv.reader(io.StringIO(texto))]
+    import openpyxl
+    wb = openpyxl.load_workbook(stream, read_only=True, data_only=True)
+    return list(wb.worksheets[0].iter_rows(values_only=True))
+
+
+def _achar_colunas(cabecalho):
+    """Descobre por NOME onde estão e-mail/nome/sobrenome/telefone.
+
+    Por nome e não por posição: a planilha vem de formulário e a ordem das
+    colunas muda entre um sorteio e outro.
+    """
+    idx = {}
+    for i, c in enumerate(cabecalho or []):
+        t = str(c or '').strip().lower()
+        if 'mail' in t and 'email' not in idx:
+            idx['email'] = i
+        elif t.startswith('sobrenome') and 'sobrenome' not in idx:
+            idx['sobrenome'] = i
+        elif t.startswith('nome') and 'nome' not in idx:
+            idx['nome'] = i
+        elif ('telefone' in t or 'celular' in t or 'whats' in t) \
+                and 'telefone' not in idx:
+            idx['telefone'] = i
+    return idx
+
+
+def contatos_de_planilha(stream, nome_arquivo='planilha.xlsx', origem='sorteio'):
+    """Extrai contatos de uma planilha. Devolve (contatos, stats).
+
+    Descarta linha sem e-mail, e-mail malformado e repetido — o import não é
+    lugar de "quase e-mail": endereço inválido vira bounce, e bounce em
+    volume queima a reputação do domínio (o transacional de pedido sai do
+    mesmo Postmark).
+    """
+    linhas = _linhas_da_planilha(stream, nome_arquivo)
+    st = {'linhas': max(0, len(linhas) - 1), 'validos': 0,
+          'invalidos': 0, 'repetidos': 0, 'sem_email': 0}
+    if not linhas:
+        return [], st
+    idx = _achar_colunas(linhas[0])
+    if 'email' not in idx:
+        raise ValueError('A planilha não tem uma coluna de e-mail no '
+                         'cabeçalho da primeira linha.')
+    def cel(linha, chave):
+        i = idx.get(chave)
+        if i is None or i >= len(linha):
+            return ''
+        return str(linha[i] or '').strip()
+
+    vistos = {}
+    for linha in linhas[1:]:
+        email = cel(linha, 'email').lower()
+        if not email:
+            st['sem_email'] += 1
+            continue
+        if not _RE_EMAIL.match(email):
+            st['invalidos'] += 1
+            continue
+        if email in vistos:
+            st['repetidos'] += 1
+            continue
+        nome = ' '.join(x for x in (cel('nome'), cel('sobrenome')) if x)
+        attrs = {'origem': origem}
+        tel = re.sub(r'\D', '', cel('telefone'))
+        if tel:
+            attrs['telefone'] = tel
+        vistos[email] = {'email': email, 'nome': nome or email.split('@')[0],
+                         'attribs_json': json.dumps(attrs, ensure_ascii=False)}
+    st['validos'] = len(vistos)
+    return list(vistos.values()), st
+
+
+def importar_planilha(stream, nome_arquivo='planilha.xlsx',
+                      lista_nome=LISTA_SORTEIO):
+    """Sobe a planilha pra uma lista do Listmonk. Devolve stats + `erro`."""
+    from app.services import listmonk
+
+    st = {'validos': 0, 'erro': None}
+    if not listmonk.disponivel():
+        st['erro'] = 'Listmonk não configurado (LISTMONK_URL/TOKEN)'
+        return st
+    try:
+        contatos, st = contatos_de_planilha(stream, nome_arquivo)
+        st['erro'] = None
+        if not contatos:
+            st['erro'] = 'Nenhum e-mail válido na planilha.'
+            return st
+        lid = listmonk.garantir_lista(lista_nome, 'Importada de planilha')
+        listmonk.importar([lid], contatos)
+        logger.info('marketing: %d contato(s) importados em %r',
+                    len(contatos), lista_nome)
+    except Exception as exc:                                  # noqa: BLE001
+        st['erro'] = f'{type(exc).__name__}: {exc}'
+        logger.exception('marketing: import de planilha falhou')
+    return st
 
 
 # ── Campanha de aniversário ──────────────────────────────────────────
