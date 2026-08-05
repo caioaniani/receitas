@@ -174,15 +174,24 @@ def novo_funcionario():
 @rh_required
 def pre_cadastros():
     """QR do formulário público + lista dos pré-cadastros pendentes pra promover."""
+    from app.models import Funcionario
     from app.services import precadastro as pre_svc
     from app.services import qrcode_svc
     base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
     url_form = (base + url_for('precadastro.form')) if base \
         else url_for('precadastro.form', _external=True)
     qr = qrcode_svc.gerar_png_data_url(url_form, box_size=8)
+    pendentes = pre_svc.pendentes()
+    # Vincular a funcionário EXISTENTE (05/08/2026): quem veio da folha já
+    # está no RH — o select lista os ativos e a sugestão por nome pré-seleciona.
+    funcionarios = (Funcionario.query.filter_by(ativo=True)
+                    .order_by(Funcionario.nome).all())
+    sugestoes = {p.id: (pre_svc.sugerir_funcionario(p, funcionarios) or
+                        Funcionario(id=None)).id
+                 for p in pendentes}
     return render_template('rh/pre_cadastros.html',
-                           pendentes=pre_svc.pendentes(),
-                           url_form=url_form, qr=qr)
+                           pendentes=pendentes, funcionarios=funcionarios,
+                           sugestoes=sugestoes, url_form=url_form, qr=qr)
 
 
 @rh_bp.route('/pre-cadastros/<int:id>/promover', methods=['POST'])
