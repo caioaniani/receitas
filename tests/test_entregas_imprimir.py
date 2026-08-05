@@ -808,3 +808,67 @@ def test_writes_de_atribuicao_continuam_guardados(app):
         s['_fresh'] = True
     r = c.post('/entregas/api/atribuicao/VND-1', json={'driver_id': 1})
     assert r.status_code == 403
+
+
+# ── Data de entrega POR PEDIDO na folha (fix 05/08/2026) ────────────────────
+# Caso real (WhatsApp da equipe): pedidos do Dia dos Pais impressos com
+# antecedência saíam TODOS com a data de HOJE — a folha usava a data do
+# LOTE (?data=) em vez da data_entrega_fmt de cada pedido. Agora a data do
+# pedido manda; a do lote é só fallback (pedido antigo sem o campo).
+
+def _texto_pdf(data):
+    """Descomprime os content streams do PDF pra procurar texto literal."""
+    import re
+    import zlib
+    out = b''
+    for m in re.findall(rb'stream\r?\n(.*?)endstream', data, re.S):
+        try:
+            out += zlib.decompress(m)
+        except Exception:  # noqa: BLE001 — stream de fonte/imagem
+            pass
+    return out
+
+
+def test_folha_pdf_usa_data_do_pedido_nao_do_lote(app):
+    from datetime import date
+
+    from app.services.pdf import gerar_pedidos_pdf
+    ped = dict(_pedidos_fake()[0])
+    ped['data_entrega_fmt'] = '09/08/2026'
+    pdf = gerar_pedidos_pdf([ped], ['cliente'], date(2026, 8, 5))
+    txt = _texto_pdf(pdf)
+    assert b'09/08/2026' in txt
+    assert b'05/08/2026' not in txt
+
+
+def test_folha_pdf_sem_data_do_pedido_cai_na_do_lote(app):
+    from datetime import date
+
+    from app.services.pdf import gerar_pedidos_pdf
+    pdf = gerar_pedidos_pdf([_pedidos_fake()[1]], ['cliente'],
+                            date(2026, 8, 5))
+    assert b'05/08/2026' in _texto_pdf(pdf)
+
+
+def test_preview_html_usa_data_do_pedido(app, admin_user):
+    c = app.test_client()
+    _login(c)
+    pedidos = _pedidos_fake()
+    pedidos[0]['data_entrega_fmt'] = '09/08/2026'
+    mocks = [
+        patch('app.blueprints.entregas.routes.vnda.buscar_pedidos_do_dia',
+              return_value={'pedidos': pedidos}),
+        patch('app.blueprints.entregas.routes._injetar_pedidos_locais',
+              side_effect=lambda target, res: res),
+        patch('app.blueprints.entregas.routes._carregar_overrides_full',
+              return_value={}),
+    ]
+    [m.start() for m in mocks]
+    try:
+        r = c.get('/entregas/imprimir?codes=VND-1,VND-2&vias=cliente'
+                  '&data=2026-08-05')
+    finally:
+        [m.stop() for m in mocks]
+    body = r.get_data(as_text=True)
+    assert '09/08/2026' in body            # VND-1: data do pedido
+    assert '05/08/2026' in body            # VND-2 (sem o campo): fallback
