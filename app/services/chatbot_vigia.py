@@ -664,6 +664,7 @@ def _chamar_modelo_abandono(api_key, contexto):
     resp = client.messages.create(
         model=MODELO,
         max_tokens=MAX_TOKENS,
+        thinking={'type': 'disabled'},   # mesma regra da avaliacao acima
         # cache_control: o cron avalia varias conversas paradas em sequencia
         # na mesma janela de 5min — o PROMPT_ABANDONO estatico cacheia.
         system=[{'type': 'text', 'text': PROMPT_ABANDONO,
