@@ -2056,6 +2056,23 @@ def marketing_teste():
     return redirect(url_for('main.marketing_painel'))
 
 
+@main_bp.route('/admin/marketing/rascunho', methods=['POST'])
+@owner_required
+def marketing_rascunho():
+    """Cria a campanha no Listmonk (rascunho) a partir do HTML da tela."""
+    from app.services import marketing
+    st = marketing.criar_rascunho(request.form.get('assunto'),
+                                  request.form.get('corpo'),
+                                  request.form.get('lista'),
+                                  request.form.get('nome_peca'))
+    if st.get('erro'):
+        flash(f'Rascunho não criado: {st["erro"]}', 'danger')
+    else:
+        flash(f'Rascunho criado no Listmonk para a lista "{st["lista"]}". '
+              f'Confira e dispare por lá: {st["url"]}', 'success')
+    return redirect(url_for('main.marketing_painel'))
+
+
 @main_bp.route('/admin/marketing/salvar', methods=['POST'])
 @owner_required
 def marketing_salvar():
