@@ -55,6 +55,43 @@
 </form>
 
 <div class="card mb-4">
+    <div class="card-header"><strong>
+        <i class="bi bi-file-earmark-spreadsheet"></i> Importar planilha
+    </strong></div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('main.marketing_importar_planilha') }}"
+              enctype="multipart/form-data" class="row g-2 align-items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-12 col-md-5">
+                <label class="form-label small">Arquivo (.xlsx ou .csv)</label>
+                <input type="file" name="planilha" accept=".xlsx,.csv"
+                       class="form-control form-control-sm" required>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small">Entra na lista</label>
+                <input type="text" name="lista" class="form-control form-control-sm"
+                       value="Sorteio 2026">
+            </div>
+            <div class="col-12 col-md-3">
+                <button class="btn btn-outline-primary btn-sm w-100"
+                        {{ 'disabled' if not r.disponivel }}>
+                    <i class="bi bi-upload"></i> Importar
+                </button>
+            </div>
+        </form>
+        <p class="small text-muted mt-2 mb-0">
+            Serve pra base que não nasce no sistema (sorteio, evento, lista de
+            papel). O sistema acha as colunas pelo <strong>nome no cabeçalho</strong>
+            (e-mail, nome, sobrenome, telefone), então a ordem não importa.
+            E-mail repetido ou malformado fica de fora — endereço inválido vira
+            devolução, e devolução em volume queima a reputação do domínio.
+            Quem já cancelou a inscrição continua fora, mesmo que esteja na
+            planilha.
+        </p>
+    </div>
+</div>
+
+<div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <strong><i class="bi bi-balloon"></i> Feliz aniversário automático</strong>
         {% if r.auto %}
