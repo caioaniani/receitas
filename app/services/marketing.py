@@ -105,14 +105,22 @@ def contatos_do_site():
 
 
 def contatos_do_wifi():
-    """Quem passou pelo portal Wi-Fi das lojas."""
+    """Quem se cadastrou pelo portal Wi-Fi das lojas.
+
+    A fonte é `Cliente.origem == 'wifi'`. A sessão do portal entra como rede
+    de segurança, mas NÃO pode ser a fonte principal: o portal no modo RADIUS
+    (o que está vivo desde 13/07/2026) cria só o `Cliente` — quem deixa
+    `WifiPortalSessao` é o fluxo antigo, de validação por WhatsApp. Derivar
+    da sessão fazia a lista mostrar 1 pessoa em vez de dezenas (05/08/2026).
+    """
     from app.models import Cliente, WifiPortalSessao
     emails_wifi = (db.session.query(func.lower(WifiPortalSessao.email))
                    .filter(WifiPortalSessao.email.isnot(None),
                            WifiPortalSessao.email != '')
                    .distinct().subquery())
-    q = _base_query().filter(func.lower(Cliente.email).in_(
-        db.session.query(emails_wifi.c[0])))
+    q = _base_query().filter(db.or_(
+        Cliente.origem == 'wifi',
+        func.lower(Cliente.email).in_(db.session.query(emails_wifi.c[0]))))
     return [_contato(c) for c in q.all()]
 
 
