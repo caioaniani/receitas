@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}E-mail marketing{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0"><i class="bi bi-envelope-heart"></i> E-mail marketing</h1>
+    {% if r.url %}
+    <a href="{{ r.url }}" target="_blank" rel="noopener"
+       class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-box-arrow-up-right"></i> Abrir o Listmonk
+    </a>
+    {% endif %}
+</div>
+
+{% if r.erro %}
+<div class="alert alert-danger small"><i class="bi bi-exclamation-triangle"></i>
+    {{ r.erro }}</div>
+{% endif %}
+
+<div class="alert alert-info small">
+    <i class="bi bi-info-circle"></i>
+    As campanhas (promoção, novidade, data comemorativa) você escreve e dispara
+    <strong>dentro do Listmonk</strong>. O que o sistema faz sozinho é
+    <strong>manter as listas atualizadas</strong> (todo dia às 09:00) e
+    <strong>mandar a felicitação de aniversário</strong> — se você ligar a chave
+    aqui embaixo. Quem clica em “cancelar inscrição” em qualquer e-mail sai de
+    <strong>todas</strong> as listas e nunca mais volta pela sincronização.
+</div>
+
+<div class="row g-3 mb-3">
+    {% for l in r.listas %}
+    <div class="col-6 col-md-3">
+        <div class="card h-100"><div class="card-body text-center py-3">
+            <div class="display-6 mb-0">{{ l.n }}</div>
+            <div class="small text-muted">{{ l.nome }}</div>
+            {% if l.transiente %}
+            <div class="badge bg-secondary mt-1">refeita todo dia</div>
+            {% elif not l.id %}
+            <div class="badge bg-warning text-dark mt-1">ainda não criada</div>
+            {% endif %}
+        </div></div>
+    </div>
+    {% endfor %}
+</div>
+
+<form method="POST" action="{{ url_for('main.marketing_sincronizar') }}"
+      class="mb-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-outline-primary btn-sm" {{ 'disabled' if not r.disponivel }}>
+        <i class="bi bi-arrow-repeat"></i> Sincronizar a base agora
+    </button>
+    <span class="small text-muted ms-2">Roda sozinho às 09:00 — este botão é
+        pra quando você não quer esperar.</span>
+</form>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <strong><i class="bi bi-balloon"></i> Feliz aniversário automático</strong>
+        {% if r.auto %}
+        <span class="badge bg-success">LIGADO — sai todo dia às 09:00</span>
+        {% else %}
+        <span class="badge bg-secondary">DESLIGADO — nada é enviado</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <p class="small text-muted">
+            Hoje fazem aniversário <strong>{{ r.aniversariantes_hoje }}</strong>
+            cliente(s) com e-mail na base. Por segurança, se um dia a conta
+            passar de <strong>{{ r.teto }}</strong> pessoas o envio não sai
+            (sinal de cadastro errado, não de festa).
+            {% if r.ultimo_envio %}
+            Último envio: <strong>{{ r.ultimo_envio }}</strong>.
+            {% else %}
+            Nenhum envio ainda.
+            {% endif %}
+        </p>
+
+        <form method="POST" action="{{ url_for('main.marketing_salvar') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label class="form-label small">Assunto</label>
+                <input type="text" name="assunto" class="form-control"
+                       value="{{ r.assunto }}">
+            </div>
+            <div class="mb-3">
+                <label class="form-label small">Mensagem (HTML)</label>
+                <textarea name="corpo" class="form-control" rows="10"
+                          style="font-family:monospace;font-size:13px">{{ r.corpo }}</textarea>
+                <div class="form-text">
+                    <code>{{ '{{ .Subscriber.FirstName }}' }}</code> vira o
+                    primeiro nome da pessoa. O link de cancelar inscrição é
+                    acrescentado sozinho — não precisa escrever.
+                </div>
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="auto"
+                       value="1" id="auto" {{ 'checked' if r.auto }}>
+                <label class="form-check-label" for="auto">
+                    <strong>Enviar automaticamente todo dia às 09:00</strong>
+                    <span class="d-block small text-muted">Desmarcado, o sistema
+                        só deixa a campanha em rascunho no Listmonk.</span>
+                </label>
+            </div>
+            <button class="btn btn-primary btn-sm">
+                <i class="bi bi-check-lg"></i> Salvar
+            </button>
+        </form>
+
+        <hr>
+        <div class="d-flex gap-2 flex-wrap">
+            <form method="POST"
+                  action="{{ url_for('main.marketing_aniversario_agora') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-outline-secondary btn-sm"
+                        {{ 'disabled' if not r.disponivel }}>
+                    <i class="bi bi-file-earmark-text"></i> Criar rascunho de hoje
+                </button>
+            </form>
+            <form method="POST"
+                  action="{{ url_for('main.marketing_aniversario_agora') }}"
+                  onsubmit="return confirm('Enviar o e-mail de aniversário AGORA para {{ r.aniversariantes_hoje }} pessoa(s)?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="enviar" value="1">
+                <button class="btn btn-outline-danger btn-sm"
+                        {{ 'disabled' if not r.disponivel or not r.aniversariantes_hoje }}>
+                    <i class="bi bi-send"></i> Enviar agora
+                </button>
+            </form>
+        </div>
+        <p class="small text-muted mt-2 mb-0">
+            O rascunho não manda nada — serve pra você conferir o texto no
+            Listmonk antes. “Enviar agora” dispara de verdade.
+        </p>
+    </div>
+</div>
+{% endblock %}
