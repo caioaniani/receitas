@@ -647,6 +647,16 @@ def iniciar(app):
     # VNDA card-sync APOSENTADO em 24/06/2026 (junto com o VNDA principal —
     # ver bloco acima). NAO eh mais agendado.
 
+    # Marketing por e-mail (Listmonk) — 09:00 BRT: sincroniza a base e monta a
+    # campanha de aniversario do dia. So DISPARA se o dono ligou o automatico
+    # em /admin/marketing. Desligar de vez: MARKETING_AUTO=0.
+    if os.environ.get('MARKETING_AUTO', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_marketing(app),
+            'cron', hour=9, minute=0, id='marketing-listmonk',
+            max_instances=1, coalesce=True,
+        )
+
     # Automacoes WhatsApp configuraveis (mensagens agendadas) — checa a cada 5 min
     _scheduler.add_job(
         lambda app=app: _run_automacoes_whatsapp(app),
