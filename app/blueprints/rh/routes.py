@@ -186,13 +186,26 @@ def pre_cadastros():
     # está no RH — o select lista os ativos e a sugestão por nome pré-seleciona.
     funcionarios = (Funcionario.query.filter_by(ativo=True)
                     .order_by(Funcionario.nome).all())
-    sugestoes = {}
+    # Conta do sistema JÁ existente (caso Marina): papéis operacionais sem
+    # funcionário vinculado — pro segundo vínculo Funcionario↔Usuario.
+    from app.models import Usuario
+    usuarios = [u for u in (Usuario.query
+                            .filter(Usuario.papel.in_(
+                                sorted(pre_svc._PAPEIS_VINCULAVEIS)))
+                            .order_by(Usuario.nome).all())
+                if not getattr(u, 'is_owner', False)
+                and getattr(u, 'funcionario', None) is None]
+    sugestoes, sugestoes_usuario = {}, {}
     for p in pendentes:
         s = pre_svc.sugerir_funcionario(p, funcionarios)
         sugestoes[p.id] = s.id if s else None
+        su = pre_svc.sugerir_funcionario(p, usuarios)  # mesmo matcher (.nome)
+        sugestoes_usuario[p.id] = su.id if su else None
     return render_template('rh/pre_cadastros.html',
                            pendentes=pendentes, funcionarios=funcionarios,
-                           sugestoes=sugestoes, url_form=url_form, qr=qr)
+                           usuarios=usuarios, sugestoes=sugestoes,
+                           sugestoes_usuario=sugestoes_usuario,
+                           url_form=url_form, qr=qr)
 
 
 @rh_bp.route('/pre-cadastros/<int:id>/promover', methods=['POST'])
