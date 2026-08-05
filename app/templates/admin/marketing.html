@@ -160,12 +160,12 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mb-3">
                 <label class="form-label small">Assunto</label>
-                <input type="text" name="assunto" class="form-control"
-                       value="{{ r.assunto }}">
+                <input type="text" name="assunto" id="aniv-assunto"
+                       class="form-control" value="{{ r.assunto }}">
             </div>
             <div class="mb-3">
                 <label class="form-label small">Mensagem (HTML)</label>
-                <textarea name="corpo" class="form-control" rows="10"
+                <textarea name="corpo" id="aniv-corpo" class="form-control" rows="10"
                           style="font-family:monospace;font-size:13px">{{ r.corpo }}</textarea>
                 <div class="form-text">
                     <code>{{ '{{ .Subscriber.FirstName }}' }}</code> vira o
