@@ -116,6 +116,34 @@ def contatos_do_wifi():
     return [_contato(c) for c in q.all()]
 
 
+def _ids_permanentes():
+    """[site, wifi, sorteio] — cria as listas se ainda não existirem."""
+    from app.services import listmonk
+    return [
+        listmonk.garantir_lista(LISTA_SITE,
+                                'Clientes com pedido pago no site'),
+        listmonk.garantir_lista(LISTA_WIFI,
+                                'Cadastros do portal Wi-Fi das lojas'),
+        listmonk.garantir_lista(LISTA_SORTEIO,
+                                'Planilha do sorteio (importada uma vez)'),
+    ]
+
+
+def _todas_listas():
+    """As permanentes + a transiente de aniversário.
+
+    O descadastro precisa ser colhido de TODAS: quem clica em "cancelar" no
+    e-mail de aniversário cancela na lista transiente, que é apagada no dia
+    seguinte — se não colhermos antes, o "não quero mais" some.
+    """
+    from app.services import listmonk
+    return _ids_permanentes() + [
+        listmonk.garantir_lista(
+            LISTA_ANIVERSARIO,
+            'Transiente: reconstruída todo dia pela campanha de aniversário'),
+    ]
+
+
 def sincronizar():
     """Empurra as duas bases vivas pro Listmonk e traz os descadastros de
     volta. Idempotente — pode rodar quantas vezes quiser.
@@ -131,12 +159,9 @@ def sincronizar():
         stats['erro'] = 'Listmonk não configurado (LISTMONK_URL/TOKEN)'
         return stats
     try:
-        id_site = listmonk.garantir_lista(
-            LISTA_SITE, 'Clientes com pedido pago no site')
-        id_wifi = listmonk.garantir_lista(
-            LISTA_WIFI, 'Cadastros do portal Wi-Fi das lojas')
+        id_site, id_wifi = _ids_permanentes()[:2]
 
-        stats['descadastros'] = marcar_descadastros([id_site, id_wifi])
+        stats['descadastros'] = marcar_descadastros(_todas_listas())
 
         site = contatos_do_site()
         wifi = contatos_do_wifi()
