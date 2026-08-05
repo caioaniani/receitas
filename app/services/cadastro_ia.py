@@ -28,7 +28,7 @@ from app.models import MateriaPrima, Produto, ProdutoItem, Receita
 
 logger = logging.getLogger(__name__)
 
-MODELO = os.environ.get('CADASTRO_IA_MODELO', 'claude-sonnet-4-6')
+MODELO = os.environ.get('CADASTRO_IA_MODELO', 'claude-sonnet-5')
 
 # Campos de preco do Produto que a tela pode escolher como destino do
 # valor lido (whitelist — nunca aceitar nome de coluna vindo do form).
