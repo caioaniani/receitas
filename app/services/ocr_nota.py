@@ -38,7 +38,7 @@ def extrair_itens_nota(image_bytes, mimetype='image/jpeg'):
 
     b64 = base64.b64encode(image_bytes).decode('ascii')
     client = anthropic.Anthropic(api_key=api_key)
-    modelo = 'claude-opus-4-8'
+    modelo = 'claude-sonnet-5'
     try:
         response = client.messages.create(
             model=modelo,
