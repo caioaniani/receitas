@@ -2020,13 +2020,13 @@ def catalogo_site():
     ?busca=texto filtra por nome (acento-insensivel, "contem").
     """
     from app.services.loja_catalogo import produtos_publicados
-    from app.utils import remover_acentos
+    from app.utils import normalizar_busca
 
     base = (current_app.config.get('LOJA_BASE_URL') or '').rstrip('/')
-    busca = remover_acentos((request.args.get('busca') or '').strip().lower())
+    busca = normalizar_busca(request.args.get('busca') or '')
     itens = []
     for it in produtos_publicados():
-        if busca and busca not in remover_acentos((it.get('nome') or '').lower()):
+        if busca and busca not in normalizar_busca(it.get('nome') or ''):
             continue
         slug = f"{it.get('slug')}-{'p' if it['kind'] == 'produto' else 'r'}{it['id']}"
         itens.append({
