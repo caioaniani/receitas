@@ -2035,6 +2035,27 @@ def marketing_importar_planilha():
     return redirect(url_for('main.marketing_painel'))
 
 
+@main_bp.route('/admin/marketing/teste', methods=['POST'])
+@owner_required
+def marketing_teste():
+    """Manda uma peça (HTML) pro e-mail informado, sem disparar campanha.
+
+    Serve pra conferir no Gmail antes de mandar pra base — o preview do
+    navegador não mostra o que o cliente de e-mail faz com o HTML.
+    """
+    from app.services import marketing
+    st = marketing.enviar_teste(request.form.get('assunto'),
+                                request.form.get('corpo'),
+                                request.form.get('email'),
+                                request.form.get('nome_peca') or 'Peça')
+    if st.get('erro'):
+        flash(f'Teste não saiu: {st["erro"]}', 'danger')
+    else:
+        flash(f'Teste enviado para {request.form.get("email")}. '
+              f'Se não chegar em alguns minutos, olhe o spam.', 'success')
+    return redirect(url_for('main.marketing_painel'))
+
+
 @main_bp.route('/admin/marketing/salvar', methods=['POST'])
 @owner_required
 def marketing_salvar():
