@@ -1988,6 +1988,75 @@ def frete_sensores():
                            r=frete_sensor.resumo(dias), dias=dias)
 
 
+# ── Marketing por e-mail (Listmonk) — 05/08/2026 ──
+
+@main_bp.route('/admin/marketing')
+@owner_required
+def marketing_painel():
+    """Painel do e-mail marketing: estado das listas, texto do aniversário e
+    a chave que liga o disparo automático."""
+    from app.services import marketing
+    return render_template('admin/marketing.html', r=marketing.resumo())
+
+
+@main_bp.route('/admin/marketing/sincronizar', methods=['POST'])
+@owner_required
+def marketing_sincronizar():
+    """Empurra a base pro Listmonk agora (o cron já faz isso às 09:00)."""
+    from app.services import marketing
+    st = marketing.sincronizar()
+    if st.get('erro'):
+        flash(f'Sincronização falhou: {st["erro"]}', 'danger')
+    else:
+        flash(f'Base sincronizada: {st["site"]} do site, {st["wifi"]} do '
+              f'Wi-Fi, {st["descadastros"]} descadastro(s) registrado(s).',
+              'success')
+    return redirect(url_for('main.marketing_painel'))
+
+
+@main_bp.route('/admin/marketing/salvar', methods=['POST'])
+@owner_required
+def marketing_salvar():
+    """Salva o texto do e-mail de aniversário e a chave do automático."""
+    from app.models import AppConfig
+    from app.services import marketing
+    AppConfig.set(marketing.CFG_ANIV_ASSUNTO,
+                  (request.form.get('assunto') or '').strip())
+    AppConfig.set(marketing.CFG_ANIV_CORPO,
+                  (request.form.get('corpo') or '').strip())
+    ligado = request.form.get('auto') == '1'
+    AppConfig.set(marketing.CFG_ANIV_ATIVO, '1' if ligado else '0')
+    db.session.commit()
+    flash('Salvo. Disparo automático %s.'
+          % ('LIGADO — sai todo dia às 09:00' if ligado else 'desligado'),
+          'success' if ligado else 'info')
+    return redirect(url_for('main.marketing_painel'))
+
+
+@main_bp.route('/admin/marketing/aniversario', methods=['POST'])
+@owner_required
+def marketing_aniversario_agora():
+    """Monta a campanha de aniversário de hoje AGORA.
+
+    `enviar=1` dispara de verdade (gesto explícito, mesmo com o automático
+    desligado); sem ele, cria só o rascunho pra conferir no Listmonk.
+    """
+    from app.services import marketing
+    enviar = request.form.get('enviar') == '1'
+    st = marketing.campanha_aniversario(enviar=enviar, forcar=True)
+    if st.get('erro'):
+        flash(f'Campanha falhou: {st["erro"]}', 'danger')
+    elif st.get('enviada'):
+        flash(f'Campanha enviada para {st["n"]} aniversariante(s).', 'success')
+    elif st.get('campanha_id'):
+        flash(f'Rascunho criado no Listmonk para {st["n"]} aniversariante(s) '
+              f'— confira e envie por lá.', 'info')
+    else:
+        flash(f'Nada a enviar: {st.get("pulou") or "sem aniversariantes"}.',
+              'info')
+    return redirect(url_for('main.marketing_painel'))
+
+
 # ── Avaliacoes do Google (Business Profile) — 12/07/2026 ──
 
 @main_bp.route('/admin/avaliacoes-google')
