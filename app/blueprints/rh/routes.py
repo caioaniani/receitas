@@ -234,13 +234,21 @@ def pre_cadastro_vincular(id):
     """Vincula o pré-cadastro a um funcionário JÁ existente no RH (leva
     e-mail/telefone pra ficha) e, se marcado, gera o acesso ao treinamento
     na mesma tacada (senha provisória por e-mail)."""
-    from app.models import Funcionario, PreCadastroFuncionario
+    from app.models import Funcionario, PreCadastroFuncionario, Usuario
     from app.services import precadastro as pre_svc
     pre = PreCadastroFuncionario.query.get_or_404(id)
     func = db.session.get(Funcionario,
                           request.form.get('funcionario_id', type=int) or 0)
+    usuario = None
+    usuario_id = request.form.get('usuario_id', type=int)
+    if usuario_id:
+        usuario = db.session.get(Usuario, usuario_id)
+        if usuario is None:
+            flash('Conta do sistema não encontrada.', 'warning')
+            return redirect(url_for('rh.pre_cadastros'))
     gerar = request.form.get('gerar_acesso') == '1'
-    func, acesso, erro = pre_svc.vincular(pre, func, gerar_acesso_treino=gerar)
+    func, acesso, erro = pre_svc.vincular(pre, func, gerar_acesso_treino=gerar,
+                                          usuario=usuario)
     if erro:
         flash(erro, 'warning')
         return redirect(url_for('rh.pre_cadastros'))
