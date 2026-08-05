@@ -450,6 +450,49 @@ def campanha_aniversario(dia=None, enviar=None, forcar=False):
     return st
 
 
+LISTA_TESTE = 'Testes internos'
+
+
+def enviar_teste(assunto, corpo, email, nome_peca='Peça'):
+    """Manda a peça pro e-mail informado SEM disparar campanha nenhuma.
+
+    A campanha nasce em rascunho mirando a lista `Testes internos` (que só
+    tem quem foi cadastrado aqui) — mesmo que alguém a inicie por engano no
+    Listmonk, ela não alcança a base.
+    """
+    from app.services import listmonk
+
+    st = {'enviado': False, 'erro': None, 'campanha_id': None}
+    email = (email or '').strip().lower()
+    if not _RE_EMAIL.match(email):
+        st['erro'] = 'E-mail inválido.'
+        return st
+    if not (assunto or '').strip() or not (corpo or '').strip():
+        st['erro'] = 'Assunto e mensagem são obrigatórios.'
+        return st
+    if not listmonk.disponivel():
+        st['erro'] = 'Listmonk não configurado (LISTMONK_URL/TOKEN)'
+        return st
+    try:
+        lid = listmonk.garantir_lista(
+            LISTA_TESTE, 'Destinatários das mensagens de teste')
+        # O Listmonk só testa pra quem já é assinante.
+        listmonk.garantir_assinante(email, None, [lid])
+        payload = listmonk.montar_campanha(
+            f'[teste] {nome_peca} — {agora():%d/%m %H:%M}',
+            assunto, corpo, [lid], content_type='html',
+            tags=['opao', 'teste'])
+        st['campanha_id'] = listmonk.criar_campanha(
+            payload['name'], assunto, corpo, [lid],
+            content_type='html', tags=['opao', 'teste'])
+        listmonk.enviar_teste(st['campanha_id'], payload, [email])
+        st['enviado'] = True
+    except Exception as exc:                                  # noqa: BLE001
+        st['erro'] = f'{type(exc).__name__}: {exc}'
+        logger.exception('marketing: envio de teste falhou')
+    return st
+
+
 def resumo():
     """Estado da integração pra tela do dono. Nunca levanta."""
     from app.models import AppConfig
