@@ -3,10 +3,9 @@
 # -------- Fork de modelo Slack/WhatsApp + regra "responder antes" (14/06) -
 
 def test_copilot_default_e_sonnet_no_slack():
-    """Fork (14/06/2026): default = Sonnet 4.6 (Slack). WhatsApp do dono
-    sobrescreve pra Opus 4.8 via override `modelo=` no zapi_bot."""
+    """Padronizacao do dono 05/08/2026: Sonnet 5 em todos os canais."""
     from app.services.copilot import MODELO_DEFAULT
-    assert MODELO_DEFAULT == 'claude-sonnet-4-6', \
+    assert MODELO_DEFAULT == 'claude-sonnet-5', \
         f'modelo mudou: {MODELO_DEFAULT}'
 
 
