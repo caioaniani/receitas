@@ -223,14 +223,21 @@ def mudar_listas_por_query(query, acao, listas_alvo, listas_origem=None,
 
 # ── Campanhas ────────────────────────────────────────────────────────
 
+def montar_campanha(nome, assunto, corpo, lista_ids, content_type='richtext',
+                    tags=None):
+    """Corpo da requisição de campanha. Separado da criação porque o
+    endpoint de TESTE quer exatamente os mesmos campos."""
+    return {'name': nome, 'subject': assunto, 'lists': list(lista_ids),
+            'type': 'regular', 'content_type': content_type, 'body': corpo,
+            'messenger': 'email', 'tags': tags or ['opao']}
+
+
 def criar_campanha(nome, assunto, corpo, lista_ids, content_type='richtext',
                    tags=None):
     """Cria a campanha em RASCUNHO e devolve o id. Não envia nada."""
-    dados = _req('POST', '/api/campaigns', json={
-        'name': nome, 'subject': assunto, 'lists': list(lista_ids),
-        'type': 'regular', 'content_type': content_type, 'body': corpo,
-        'messenger': 'email', 'tags': tags or ['opao'],
-    })
+    payload = montar_campanha(nome, assunto, corpo, lista_ids,
+                              content_type, tags)
+    dados = _req('POST', '/api/campaigns', json=payload)
     cid = (dados.get('data') or {}).get('id')
     logger.info('listmonk: campanha %r criada (id %s)', nome, cid)
     return cid
