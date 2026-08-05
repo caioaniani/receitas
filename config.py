@@ -355,6 +355,14 @@ class Config:
     # opao.online) so permite MX na raiz. Postmark valida com CNAME, que
     # o Wix aceita — sem precisar mover o DNS.
     POSTMARK_SERVER_TOKEN = os.environ.get('POSTMARK_SERVER_TOKEN', '')
+    # ── Listmonk (e-mail marketing, 05/08/2026) ──
+    # Roda no VPS da Vultr atrás de HTTPS. NUNCA apontar pra http:// — o
+    # token vai em BasicAuth e trafegaria em claro (o service recusa).
+    # Vazio = módulo dormente, nada quebra.
+    LISTMONK_URL = os.environ.get(
+        'LISTMONK_URL', 'https://mkt.opaopadariaartesanal.com.br')
+    LISTMONK_API_USER = os.environ.get('LISTMONK_API_USER', 'api_padaria')
+    LISTMONK_API_TOKEN = os.environ.get('LISTMONK_API_TOKEN', '')
     # Remetente — precisa de Sender Signature verificada no Postmark
     # (DKIM TXT na raiz + Return-Path CNAME em subdominio).
     EMAIL_REMETENTE = os.environ.get('EMAIL_REMETENTE', 'noreply@opao.online')
