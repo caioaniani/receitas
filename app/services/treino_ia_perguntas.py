@@ -54,6 +54,7 @@ def _chamar(system, instrucao):
     try:
         resp = client.messages.create(
             model=MODELO, max_tokens=3000, system=system,
+            thinking={'type': 'disabled'},  # gerador de JSON sem tools
             messages=[{'role': 'user', 'content': instrucao}])
         from app.services import uso_ia
         uso_ia.registrar('treino_ia_perguntas', MODELO,
