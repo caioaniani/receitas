@@ -487,6 +487,7 @@ def rascunho_resposta(review_pk):
         client = anthropic.Anthropic(api_key=api_key, timeout=45, max_retries=1)
         resp = client.messages.create(
             model=modelo, max_tokens=400,
+            thinking={'type': 'disabled'},  # sem tools; teto curto
             messages=[{'role': 'user', 'content': prompt}])
         from app.services import uso_ia
         uso_ia.registrar('avaliacao_google', modelo, getattr(resp, 'usage', None))
