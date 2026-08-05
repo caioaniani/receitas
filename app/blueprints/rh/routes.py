@@ -257,6 +257,13 @@ def pre_cadastro_vincular(id):
     if acesso and acesso.get('email_substituido'):
         partes.append(f'(o e-mail anterior era '
                       f'{acesso["email_substituido"]})')
+    motivo_conta = (acesso or {}).get('motivo')
+    if motivo_conta == 'conta_existente':
+        partes.append(f'Conta do sistema "{acesso["usuario"].login}" '
+                      'vinculada — ela usa o login e a senha de sempre '
+                      '(nada foi criado nem enviado).')
+        flash(' '.join(partes), 'success')
+        return redirect(url_for('rh.pre_cadastros'))
     if gerar:
         motivo = (acesso or {}).get('motivo')
         if motivo == 'criado':
