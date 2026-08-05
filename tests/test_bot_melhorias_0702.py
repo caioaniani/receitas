@@ -274,7 +274,7 @@ def test_stop_reason_max_tokens_refaz_uma_vez(app):
                                     'content': 'me manda o link do carrinho'}])
         assert M.return_value.messages.create.call_count == 2
         segunda = M.return_value.messages.create.call_args_list[1]
-        assert segunda.kwargs['max_tokens'] == 2400
+        assert segunda.kwargs['max_tokens'] == 8000
     assert r['acao'] == 'responder'
     assert r['texto'].endswith('carrinho')
 
