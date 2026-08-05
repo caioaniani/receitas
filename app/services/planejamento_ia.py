@@ -129,6 +129,7 @@ def _chamar_opus(system, payload_texto, funcao):
         from app.services import uso_ia
         response = client.messages.create(
             model=MODELO, max_tokens=4000, system=system,
+            thinking={'type': 'disabled'},  # proposta em JSON, sem tools
             messages=[{'role': 'user', 'content': payload_texto}])
         uso_ia.registrar(funcao, MODELO, getattr(response, 'usage', None))
         if getattr(response, 'stop_reason', None) == 'max_tokens':
