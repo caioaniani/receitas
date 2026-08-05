@@ -1127,6 +1127,67 @@ indistinguivel de "tudo bem". O Uptime Kuma roda FORA e fecha essa classe.
   UptimeRobot free vigiando o proprio Kuma.
 - Registrado no manual de operacao (secao RODA SOZINHO).
 
+## E-mail marketing (Listmonk) — base + aniversario (05/08/2026)
+
+Pedido do dono: "preciso de um opensource para disparar propaganda, feliz
+aniversario, etc para os e-mails cadastrados no banco de dados. Temos tanto
+dos clientes que usam o Wi-Fi da loja quanto os que compraram no site" +
+"usarei os dados de quem usa wi-fi para marketing" + planilha de um sorteio
+como terceira base. Escolha: **Listmonk** (Go + Postgres, self-hosted).
+
+- **Onde roda**: VPS Vultr SP (o mesmo do Wi-Fi RADIUS e do Uptime Kuma),
+  `https://mkt.opaopadariaartesanal.com.br` com Let's Encrypt; a 9000 fica
+  FECHADA pra internet. Envio pelo **stream BROADCAST do Postmark**
+  (`smtp-broadcasts.postmarkapp.com:587`), separado do transacional DE
+  PROPOSITO: reclamacao de spam numa campanha nao pode derrubar a entrega
+  de e-mail de pedido/magic link. Remetente `pedidos@opao.online`.
+- **Envs (Railway)**: `LISTMONK_URL`, `LISTMONK_API_USER` (default
+  `api_padaria`), `LISTMONK_API_TOKEN`. Sem elas o modulo fica DORMENTE
+  (`listmonk.disponivel()` False) e nada quebra. `_req` RECUSA URL que nao
+  seja `https://` — o token vai em BasicAuth.
+- **REGIME = OPT-OUT, decisao do dono (registrada em `marketing.py`)**: a
+  base inteira entra e quem clicar em "cancelar inscricao" para de receber.
+  Levantei que o aceite do portal Wi-Fi foi dado pra *usar o Wi-Fi* (base
+  mais fragil que a de quem comprou); ele reafirmou que quer as duas.
+  Salvaguardas: link de descadastro em todo e-mail + `Cliente.
+  marketing_descadastro_em` (ALTER pelo procedimento de 2 commits).
+- **Tres listas por ORIGEM** (`Clientes do site` = tem PedidoOnline com
+  `pago_em`, divulgacao fora; `Wi-Fi das lojas`; `Sorteio 2026`, importado
+  uma vez por CSV e que NAO sincroniza) + a TRANSIENTE `Aniversariantes de
+  hoje`.
+- **Por que a lista transiente**: campanha do Listmonk mira LISTA, nao
+  consulta (conferido na doc da API — o POST /api/campaigns nao aceita
+  segmentacao SQL). Entao a campanha do dia esvazia e reconstroi essa lista
+  com `PUT /api/subscribers/query/lists` consultando
+  `subscribers.attribs->>'aniv_dia'` — por isso dia/mes viajam em `attribs`
+  no import.
+- **ARMADILHA que isso cria e que esta fechada**: quem clica em "cancelar"
+  no e-mail de aniversario cancela **na lista transiente**, que e apagada no
+  dia seguinte — o "nao quero mais" sumiria. Por isso `campanha_aniversario`
+  **colhe os descadastros ANTES de reconstruir** e `marcar_descadastros`
+  **propaga o unsubscribe pra TODAS as listas** (por ID, via
+  `listmonk.mudar_listas` — nunca montando SQL com o e-mail) alem de marcar
+  no banco. NUNCA inverter essa ordem nem tirar a propagacao.
+- **Disparo automatico NASCE DESLIGADO** (`AppConfig marketing_aniv_ativo`):
+  o primeiro e-mail de marketing pra base real e gesto do dono na tela, nao
+  efeito colateral de deploy. Desligado, o cron so deixa a campanha em
+  RASCUNHO no Listmonk.
+- **Teto de sanidade** `MARKETING_ANIV_TETO` (default 200): mais gente que
+  isso fazendo aniversario no MESMO dia = consulta errada, nao festa — nao
+  envia e loga erro. Idempotencia do dia em `AppConfig marketing_aniv_ultimo`
+  (nao manda dois "parabens" pra mesma pessoa se o job reexecutar).
+- **Cron**: `seru_cron` 09:00 BRT, advisory lock **7750** (reciclado do
+  `briefing-dono`, removido em 17/07/2026), kill-switch `MARKETING_AUTO=0`.
+  Sincroniza a base e monta a campanha do dia, nessa ordem.
+- **Tela** `/admin/marketing` (owner; link na area Administracao): listas com
+  contagem, "Sincronizar agora", editor do assunto/corpo do aniversario
+  (`{{ .Subscriber.FirstName }}` e template do Listmonk, nao Jinja), a chave
+  do automatico, "Criar rascunho de hoje" e "Enviar agora". As PROMOCOES o
+  dono escreve e dispara dentro do proprio Listmonk.
+- Testes: `tests/test_marketing.py` (21) + `tests/test_listmonk.py` (12) —
+  `requests`/Listmonk SEMPRE mockados, nenhum teste dispara e-mail. Manual
+  de operacao registrado (RODA SOZINHO + QUANDO PRECISAR).
+
 ## Estoque pendente (congelados + loja)
 
 Tanto `EstoqueProducao` quanto `EstoqueLoja` tem coluna `nome_pendente`. Quando o
