@@ -881,6 +881,29 @@ def _run_google_reviews(app):
 # /admin/briefing (owner), sem cron e sem lock.
 
 
+def _run_marketing(app):
+    """Job: marketing por e-mail (05/08/2026) — 09:00 BRT.
+
+    Duas etapas na MESMA execucao e nesta ordem:
+      1. `sincronizar()` empurra a base (site + Wi-Fi) pro Listmonk e traz de
+         volta quem descadastrou;
+      2. `campanha_aniversario()` monta e (se o dono ligou na tela) dispara a
+         felicitacao do dia.
+
+    O disparo nasce DESLIGADO: sem o gesto do dono em /admin/marketing a
+    campanha e criada em RASCUNHO e nada sai. Kill-switch: MARKETING_AUTO=0.
+    Best-effort — os dois servicos ja engolem excecao e devolvem `erro`.
+    """
+    from app.services import marketing
+
+    def _fn():
+        marketing.sincronizar()
+        marketing.campanha_aniversario()
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_MARKETING, _fn, 'marketing (Listmonk)')
+
+
 def _run_alerta_baixas_presas(app):
     """Job: baixas presas (03/07/2026) — pedido 'separado' com entrega
     vencida (QR de saida nao lido = industria nao baixou) e retirada de
