@@ -309,10 +309,13 @@ def campanha_aniversario(dia=None, enviar=None, forcar=False):
         if not enviar:
             st['pulou'] = 'envio automático desligado — campanha ficou em rascunho'
             return st
-        listmonk.iniciar_campanha(st['campanha_id'])
-        st['enviada'] = True
+        # Marca o dia ANTES de disparar: se o "iniciar" falhar no meio, hoje
+        # fica sem e-mail (o erro vai pro log e pra tela) em vez de arriscar
+        # dois "parabéns" pra mesma pessoa na retentativa.
         AppConfig.set(CFG_ANIV_ULTIMO, d.isoformat())
         db.session.commit()
+        listmonk.iniciar_campanha(st['campanha_id'])
+        st['enviada'] = True
         logger.info('marketing: campanha de aniversário enviada (%d pessoas)',
                     st['n'])
     except Exception as exc:                                  # noqa: BLE001
