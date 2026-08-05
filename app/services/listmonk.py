@@ -241,3 +241,28 @@ def iniciar_campanha(campanha_id):
     _req('PUT', f'/api/campaigns/{campanha_id}/status',
          json={'status': 'running'})
     logger.info('listmonk: campanha %s iniciada', campanha_id)
+
+
+def garantir_assinante(email, nome, lista_ids):
+    """Cria o assinante se ainda não existir (409 = já existe, tudo bem).
+
+    O Listmonk só manda mensagem de teste pra e-mail que JÁ é assinante —
+    sem isso o botão "enviar teste" falharia justamente na primeira vez.
+    """
+    _req('POST', '/api/subscribers', tolerar=(409, 400, 422), json={
+        'email': email, 'name': nome or email.split('@')[0],
+        'status': 'enabled', 'lists': list(lista_ids),
+        'preconfirm_subscriptions': True})
+
+
+def enviar_teste(campanha_id, corpo_campanha, emails):
+    """Manda a peça pros e-mails informados SEM disparar a campanha.
+
+    O endpoint de teste do Listmonk quer os mesmos campos da criação, então
+    o corpo da campanha é reenviado junto.
+    """
+    payload = dict(corpo_campanha)
+    payload['subscribers'] = list(emails)
+    _req('POST', f'/api/campaigns/{campanha_id}/test', json=payload)
+    logger.info('listmonk: teste da campanha %s enviado para %s',
+                campanha_id, ', '.join(emails))
