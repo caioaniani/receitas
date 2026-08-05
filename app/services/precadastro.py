@@ -114,6 +114,64 @@ def promover(pre, cpf):
     return func, None
 
 
+def vincular(pre, funcionario, gerar_acesso_treino=False):
+    """Vincula o pré-cadastro a um funcionário QUE JÁ EXISTE no RH (caso
+    05/08/2026: o pessoal da folha preencheu o QR pra informar e-mail e
+    acessar o curso — o Criar duplicaria a pessoa). Leva e-mail/telefone do
+    pré-cadastro pra ficha e, se pedido, já gera o acesso ao treinamento
+    (`treino_acessos.gerar_acesso` — senha provisória por e-mail).
+
+    Retorna (funcionario, resultado_acesso|None, erro). Nada muda em erro."""
+    if pre.processado_em is not None:
+        return None, None, 'Este pré-cadastro já foi processado.'
+    if funcionario is None:
+        return None, None, 'Escolha o funcionário do RH pra vincular.'
+    if not funcionario.ativo:
+        return None, None, (f'{funcionario.nome} está desligado no RH — '
+                            'reative a ficha antes de vincular.')
+    email_anterior = (funcionario.email or '').strip()
+    funcionario.email = pre.email
+    if pre.telefone:
+        funcionario.telefone = pre.telefone
+    pre.funcionario_id = funcionario.id
+    pre.processado_em = agora()
+    db.session.commit()
+
+    resultado_acesso = None
+    if gerar_acesso_treino:
+        from app.services import treino_acessos
+        resultado_acesso = treino_acessos.gerar_acesso(funcionario)
+    if email_anterior and email_anterior.lower() != pre.email.lower():
+        resultado_acesso = dict(resultado_acesso or {})
+        resultado_acesso['email_substituido'] = email_anterior
+    return funcionario, resultado_acesso, None
+
+
+def sugerir_funcionario(pre, funcionarios):
+    """Melhor candidato do RH pro pré-cadastro, POR NOME (pré-seleção do
+    select — o humano confirma; nada é gravado sozinho). Mesma filosofia do
+    piso de pré-preenchimento do PDV do Tiny: só sugere match forte
+    (score >= 0.75 = todos ou quase todos os tokens do nome informado
+    presentes no nome do RH); empate no topo = nenhuma sugestão."""
+    from app.utils import normalizar_busca
+    alvo = set(normalizar_busca(pre.nome_completo or '').split())
+    if not alvo:
+        return None
+    melhor, melhor_score, empate = None, 0.0, False
+    for f in funcionarios:
+        tokens = set(normalizar_busca(f.nome or '').split())
+        if not tokens:
+            continue
+        score = len(alvo & tokens) / len(alvo)
+        if score > melhor_score:
+            melhor, melhor_score, empate = f, score, False
+        elif score == melhor_score and melhor is not None:
+            empate = True
+    if melhor_score >= 0.75 and not empate:
+        return melhor
+    return None
+
+
 def descartar(pre):
     """Descarta um pré-cadastro (spam/duplicata) sem criar funcionário."""
     db.session.delete(pre)
