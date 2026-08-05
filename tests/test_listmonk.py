@@ -10,9 +10,10 @@ import pytest
 
 
 class _Resp:
-    def __init__(self, payload=None, texto='{}'):
+    def __init__(self, payload=None, texto='{}', status=200):
         self._payload = payload if payload is not None else {}
         self.text = texto
+        self.status_code = status
 
     def raise_for_status(self):
         pass
