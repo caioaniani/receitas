@@ -2748,5 +2748,12 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE checklist_item_modelo ADD COLUMN setor "
                        "VARCHAR(60)")
 
+    # Descadastro de marketing (05/08/2026) — espelho do bloco Postgres.
+    cursor.execute("PRAGMA table_info(cliente)")
+    cols_cli2 = [row[1] for row in cursor.fetchall()]
+    if cols_cli2 and 'marketing_descadastro_em' not in cols_cli2:
+        cursor.execute("ALTER TABLE cliente ADD COLUMN "
+                       "marketing_descadastro_em TIMESTAMP")
+
     conn.commit()
     conn.close()
