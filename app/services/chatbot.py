@@ -18,7 +18,7 @@ from app.services.chatbot_prompt import PROMPT
 
 logger = logging.getLogger(__name__)
 
-MODELO = 'claude-opus-4-8'
+MODELO = 'claude-sonnet-5'
 
 # === Defesa anti-prompt-injection (14/06/2026) =========================
 #
