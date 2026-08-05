@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Sonnet 4.6 por decisao do dono (25/06/2026) — padronizacao dos modelos.
 # Geracao de descricao e tarefa simples (baixo volume: ~1x por receita), o
 # custo extra vs Haiku e marginal aqui.
-MODELO = 'claude-sonnet-4-6'
+MODELO = 'claude-sonnet-5'
 
 _INSTRUCOES_BASE = (
     "Escreva uma descricao curta (2 frases, MAXIMO 220 caracteres) "
