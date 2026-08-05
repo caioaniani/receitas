@@ -1221,6 +1221,18 @@ como terceira base. Escolha: **Listmonk** (Go + Postgres, self-hosted).
   (`{{ .Subscriber.FirstName }}` e template do Listmonk, nao Jinja), a chave
   do automatico, "Criar rascunho de hoje" e "Enviar agora". As PROMOCOES o
   dono escreve e dispara dentro do proprio Listmonk.
+- **REGRA: todo link de campanha leva UTM.** Sem UTM o GA4 joga o clique em
+  "direto" e o trafego do e-mail fica INDISTINGUIVEL de quem digitou o
+  endereco — nao da pra separar depois, o dado nasce perdido. Padrao:
+  `?utm_source=listmonk&utm_medium=email&utm_campaign=<slug-da-peca>`
+  (ex. `dia-dos-pais`); se houver mais de um link pro mesmo produto,
+  `utm_content=<posicao>`. Vale pro botao E pra foto clicavel — as duas sao
+  link. Caso que criou a regra (05/08/2026, 1a campanha real): Dia dos Pais,
+  1.038 enviados / 305 aberturas / 20 bounces (1,9%), 27 pedidos criados e
+  R$ 7.886,50 no dia com 20 clientes NOVOS — e nenhuma forma de provar no
+  GA4 quanto veio do e-mail. O Listmonk conta clique por link (stats da
+  campanha), mas so ATE o clique; o que acontece dentro do site so o UTM
+  amarra.
 - Testes: `tests/test_marketing.py` (21) + `tests/test_listmonk.py` (12) —
   `requests`/Listmonk SEMPRE mockados, nenhum teste dispara e-mail. Manual
   de operacao registrado (RODA SOZINHO + QUANDO PRECISAR).
