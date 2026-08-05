@@ -40,7 +40,7 @@ from app.utils import hoje
 
 logger = logging.getLogger(__name__)
 
-MODELO = os.environ.get('PLANEJAMENTO_IA_MODELO', 'claude-opus-4-8')
+MODELO = os.environ.get('PLANEJAMENTO_IA_MODELO', 'claude-sonnet-5')
 
 # Template unico pros dois modos da tela de pedidos (media | venda+estoque):
 # muda qual motor e a BASE exibida na grade e o campo identificador que o
