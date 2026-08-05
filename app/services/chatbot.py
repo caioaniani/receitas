@@ -1396,6 +1396,10 @@ def _followup_gerar_texto(api_key, historico, minutos):
     resp = client.messages.create(
         model=FOLLOWUP_MODELO,
         max_tokens=150,
+        # Sonnet 5 liga thinking adaptativo por padrao; num gerador de UMA
+        # frase com teto de 150 tokens, o thinking comeria o teto e custaria
+        # a mais sem ganho — desligado explicito (padrao dos classificadores).
+        thinking={'type': 'disabled'},
         system=FOLLOWUP_PROMPT.format(minutos=minutos),
         messages=[{'role': 'user', 'content': '\n'.join(linhas) or '(vazio)'}],
     )
