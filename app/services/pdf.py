@@ -226,12 +226,16 @@ def _folha_pedido(pdf, p, via, data_fmt):
     pdf.set_line_width(0.2)
     pdf.ln(6)
 
-    # Entrega + janela
+    # Entrega + janela. A data e a DO PEDIDO (data_entrega_fmt, que ja
+    # reflete override do ERP) — a data do lote e so fallback. Caso real
+    # 05/08/2026: pedidos do Dia dos Pais impressos com antecedencia
+    # saiam TODOS com a data de impressao ("os pedidos estao saindo
+    # todos com a data de hoje") e o entregador nao tinha como conferir.
     pdf.set_font('Helvetica', 'B', 9)
     pdf.cell(40, 5, 'ENTREGA', new_x='RIGHT')
     pdf.cell(0, 5, 'JANELA', new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('Helvetica', 'B', 13)
-    pdf.cell(40, 7, data_fmt, new_x='RIGHT')
+    pdf.cell(40, 7, p.get('data_entrega_fmt') or data_fmt, new_x='RIGHT')
     if p.get('expresso'):
         janela = 'EXPRESSO (1h)'
     else:
