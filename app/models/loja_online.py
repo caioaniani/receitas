@@ -64,6 +64,15 @@ class Cliente(db.Model):
     aniversario_dia = db.Column(db.Integer, nullable=True)
     aniversario_mes = db.Column(db.Integer, nullable=True)
     nascimento_ano = db.Column(db.Integer, nullable=True)
+    # E-mail marketing (05/08/2026): regime OPT-OUT por decisão do dono — a
+    # base inteira (site + Wi-Fi das lojas) recebe campanha, e quem clica em
+    # "cancelar inscrição" no e-mail é marcado AQUI. NULL = recebe.
+    # `app/services/marketing.py` puxa os descadastros do Listmonk ANTES de
+    # cada envio: sem isso a sincronização re-inscreveria quem acabou de
+    # sair. ALTER aplicado em prod (e777e0d0) e CONFIRMADO pela sonda
+    # /api/claude/deploy?colunas= ANTES deste modelo — procedimento de 2
+    # commits.
+    marketing_descadastro_em = db.Column(db.DateTime, nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     criado_em = db.Column(db.DateTime, default=agora)
 
