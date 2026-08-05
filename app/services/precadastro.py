@@ -114,12 +114,24 @@ def promover(pre, cpf):
     return func, None
 
 
-def vincular(pre, funcionario, gerar_acesso_treino=False):
+# Papeis que PODEM ser vinculados como a conta do proprio funcionario.
+# Admin/owner/marketing ficam fora: ligar o progresso do treino (e a
+# elegibilidade do RH) numa conta de gestao seria a conta errada — mesma
+# classe de guarda do treino_acessos.gerar_acesso.
+_PAPEIS_VINCULAVEIS = {'funcionario', 'gerente', 'producao', 'padeiro', 'rh'}
+
+
+def vincular(pre, funcionario, gerar_acesso_treino=False, usuario=None):
     """Vincula o pré-cadastro a um funcionário QUE JÁ EXISTE no RH (caso
     05/08/2026: o pessoal da folha preencheu o QR pra informar e-mail e
     acessar o curso — o Criar duplicaria a pessoa). Leva e-mail/telefone do
     pré-cadastro pra ficha e, se pedido, já gera o acesso ao treinamento
     (`treino_acessos.gerar_acesso` — senha provisória por e-mail).
+
+    `usuario` (05/08/2026, caso Marina): quando a pessoa JÁ TEM conta no
+    sistema com OUTRO login, o gerar_acesso criaria uma conta nova duplicada
+    — em vez disso o admin escolhe a conta existente e o vínculo
+    Funcionario↔Usuario é feito direto (o login da conta NÃO muda).
 
     Retorna (funcionario, resultado_acesso|None, erro). Nada muda em erro."""
     if pre.processado_em is not None:
@@ -129,16 +141,33 @@ def vincular(pre, funcionario, gerar_acesso_treino=False):
     if not funcionario.ativo:
         return None, None, (f'{funcionario.nome} está desligado no RH — '
                             'reative a ficha antes de vincular.')
+    if usuario is not None:
+        if usuario.papel not in _PAPEIS_VINCULAVEIS \
+                or getattr(usuario, 'is_owner', False):
+            return None, None, (f'A conta "{usuario.login}" é de '
+                                f'{usuario.papel}/gestão — não dá pra '
+                                'vincular como conta do funcionário.')
+        outro = getattr(usuario, 'funcionario', None)
+        if outro is not None and outro.id != funcionario.id:
+            return None, None, (f'A conta "{usuario.login}" já está '
+                                f'vinculada a {outro.nome} no RH.')
+        if funcionario.usuario_id and funcionario.usuario_id != usuario.id:
+            return None, None, (f'{funcionario.nome} já tem OUTRA conta '
+                                'vinculada — desfaça na ficha antes.')
     email_anterior = (funcionario.email or '').strip()
     funcionario.email = pre.email
     if pre.telefone:
         funcionario.telefone = pre.telefone
     pre.funcionario_id = funcionario.id
     pre.processado_em = agora()
+    resultado_acesso = None
+    if usuario is not None:
+        funcionario.usuario_id = usuario.id
+        resultado_acesso = {'ok': True, 'motivo': 'conta_existente',
+                            'usuario': usuario}
     db.session.commit()
 
-    resultado_acesso = None
-    if gerar_acesso_treino:
+    if resultado_acesso is None and gerar_acesso_treino:
         from app.services import treino_acessos
         resultado_acesso = treino_acessos.gerar_acesso(funcionario)
     if email_anterior and email_anterior.lower() != pre.email.lower():
