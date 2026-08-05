@@ -1158,8 +1158,34 @@ como terceira base. Escolha: **Listmonk** (Go + Postgres, self-hosted).
   marketing_descadastro_em` (ALTER pelo procedimento de 2 commits).
 - **Tres listas por ORIGEM** (`Clientes do site` = tem PedidoOnline com
   `pago_em`, divulgacao fora; `Wi-Fi das lojas`; `Sorteio 2026`, importado
-  uma vez por CSV e que NAO sincroniza) + a TRANSIENTE `Aniversariantes de
+  por planilha e que NAO sincroniza) + a TRANSIENTE `Aniversariantes de
   hoje`.
+- **`Cliente.origem`** ('site' | 'wifi' | 'balcao' | NULL) — coluna nova
+  (procedimento de 2 commits; ALTER `2768944d` confirmado pela sonda
+  `?colunas=cliente.origem` antes do modelo). BUG REAL que a criou (dono
+  05/08: "So tem 1 cliente do wi-fi?"): `contatos_do_wifi` derivava a
+  origem de `WifiPortalSessao`, que so existe no fluxo ANTIGO (validacao
+  por WhatsApp) — o caminho VIVO desde 13/07 e
+  `wifi_portal.criar_conta_direta` (modo RADIUS), que cria SO o `Cliente`.
+  A lista mostrava 1 pessoa. Agora a origem e gravada NA HORA em
+  `criar_conta_direta`, no `_resolver_conta` do portal, no cadastro do site
+  e no checkout de convidado; a sessao fica so como rede de seguranca.
+  Backfill unico na criacao da coluna: `aniversario_dia IS NOT NULL` OU tem
+  sessao => 'wifi' (os dois formularios do portal sao os UNICOS lugares do
+  sistema que perguntam aniversario — conferido; o cadastro do site nao
+  pergunta). REGRA: cadastro NOVO de cliente grava `origem` — nao inferir
+  depois.
+- **Import de planilha na tela** (`marketing.contatos_de_planilha` +
+  `importar_planilha`, rota `/admin/marketing/importar`): xlsx ou csv, acha
+  as colunas pelo NOME no cabecalho (e-mail/nome/sobrenome/telefone — a
+  ordem muda entre formularios) e descarta invalido/repetido/sem e-mail com
+  contagem visivel. Foi assim que a base do sorteio entrou (643 validos de
+  677 linhas; 34 repetidos).
+- **Sonda `/api/claude/catalogo-site?busca=`** (read-only): nome, preco,
+  FOTO e link de cada item publicado — o assistente precisa disso pra
+  escrever campanha, e as paginas da loja so respondem no host da loja
+  (opao.online), que o proxy do container nem alcanca. O `url` sai de
+  `href` do proprio catalogo (mesma fonte do sitemap).
 - **Por que a lista transiente**: campanha do Listmonk mira LISTA, nao
   consulta (conferido na doc da API — o POST /api/campaigns nao aceita
   segmentacao SQL). Entao a campanha do dia esvazia e reconstroi essa lista
