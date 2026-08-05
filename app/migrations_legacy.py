@@ -1959,6 +1959,26 @@ def _migrate_postgres(app):
     _try("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS "
          "marketing_descadastro_em TIMESTAMP")
 
+    # ── Origem do cadastro do cliente (05/08/2026) ──
+    # Bug real: a lista "Wi-Fi das lojas" mostrava UMA pessoa. O caminho vivo
+    # do portal (modo RADIUS, 13/07/2026) é `wifi_portal.criar_conta_direta`,
+    # que cria SÓ o `Cliente` — quem deixa `WifiPortalSessao` é o fluxo ANTIGO
+    # (validação por WhatsApp). Derivar "veio do Wi-Fi" da sessão enxergava,
+    # então, uma fração mínima da base.
+    # A marca passa a ser explícita ('site' | 'wifi' | 'balcao' | NULL).
+    if 'origem' not in _cols('cliente'):
+        _try("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS "
+             "origem VARCHAR(20)")
+        # Backfill ÚNICO (só na criação da coluna): quem tem sessão do portal
+        # OU aniversário preenchido veio do Wi-Fi — os dois formulários do
+        # portal são os ÚNICOS lugares do sistema que perguntam aniversário
+        # (o cadastro do site não pergunta). Depois disso quem manda é o
+        # código que grava a origem na hora do cadastro.
+        _try("UPDATE cliente SET origem = 'wifi' WHERE origem IS NULL AND ("
+             "aniversario_dia IS NOT NULL OR EXISTS ("
+             "SELECT 1 FROM wifi_portal_sessao s "
+             "WHERE LOWER(s.email) = LOWER(cliente.email)))")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
