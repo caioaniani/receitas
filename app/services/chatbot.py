@@ -1325,7 +1325,7 @@ def responder(historico, *, telefone_contato=None,
 # - Teto por ciclo (CHATBOT_FOLLOWUP_MAX_POR_CICLO, default 3).
 # - Kill-switch: CHATBOT_FOLLOWUP=0.
 
-FOLLOWUP_MODELO = 'claude-sonnet-4-6'
+FOLLOWUP_MODELO = 'claude-sonnet-5'
 
 FOLLOWUP_PROMPT = (
     'Você é o atendente virtual da padaria O Pão. A conversa abaixo parou: '
