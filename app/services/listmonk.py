@@ -14,6 +14,7 @@ NUNCA usar HTTP puro aqui: o token vai em BasicAuth e viajaria em claro.
 """
 import csv
 import io
+import json
 import logging
 
 import requests
@@ -123,9 +124,8 @@ def importar(lista_ids, contatos, sobrescrever=False):
             'lists': list(lista_ids),
             'overwrite': bool(sobrescrever),
         }
-        import json as _json
         _req('POST', '/api/import/subscribers',
-             data={'params': _json.dumps(params)},
+             data={'params': json.dumps(params)},
              files={'file': ('contatos.csv', _csv_de(fatia), 'text/csv')})
         total += len(fatia)
         lotes += 1
