@@ -44,9 +44,13 @@ def _auth():
             (cfg.get('LISTMONK_API_TOKEN') or '').strip())
 
 
-def _req(metodo, caminho, **kw):
+def _req(metodo, caminho, tolerar=(), **kw):
     """Chamada crua. Levanta requests.HTTPError em erro — quem chama decide
-    se derruba o fluxo ou só loga (campanha nunca pode quebrar o cron)."""
+    se derruba o fluxo ou só loga (campanha nunca pode quebrar o cron).
+
+    `tolerar` = status HTTP que NÃO são erro pra quem chama (ex.: 409 de
+    "já existe" ao criar assinante). Devolve {} nesses casos.
+    """
     url = f'{_base()}{caminho}'
     if not url.startswith('https://'):
         # Guard deliberado: o token vai em BasicAuth. Em HTTP puro ele
@@ -55,6 +59,8 @@ def _req(metodo, caminho, **kw):
                          'em BasicAuth e não pode trafegar em claro.')
     kw.setdefault('timeout', _TIMEOUT)
     r = requests.request(metodo, url, auth=_auth(), **kw)
+    if r.status_code in tolerar:
+        return {}
     r.raise_for_status()
     return r.json() if r.text else {}
 
