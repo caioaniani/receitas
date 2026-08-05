@@ -56,6 +56,51 @@
 
 <div class="card mb-4">
     <div class="card-header"><strong>
+        <i class="bi bi-send-check"></i> Enviar um teste pra você
+    </strong></div>
+    <div class="card-body">
+        <p class="small text-muted">
+            Cole o HTML da peça e receba no seu e-mail antes de mandar pra
+            base. <strong>Não dispara campanha</strong>: a mensagem vai só pro
+            endereço abaixo. Vale a pena porque o preview do navegador não
+            mostra o que o Gmail e o Outlook fazem com o HTML.
+        </p>
+        <form method="POST" action="{{ url_for('main.marketing_teste') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-2 mb-2">
+                <div class="col-12 col-md-7">
+                    <label class="form-label small">Assunto</label>
+                    <input type="text" name="assunto" id="teste-assunto"
+                           class="form-control form-control-sm" required
+                           placeholder="O Dia dos Pais está chegando">
+                </div>
+                <div class="col-12 col-md-5">
+                    <label class="form-label small">Enviar para</label>
+                    <input type="email" name="email"
+                           class="form-control form-control-sm" required
+                           value="{{ current_user.email or '' }}">
+                </div>
+            </div>
+            <label class="form-label small">Mensagem (HTML)</label>
+            <textarea name="corpo" id="teste-corpo" rows="8" required
+                      class="form-control"
+                      style="font-family:monospace;font-size:12px"></textarea>
+            <div class="d-flex gap-2 flex-wrap mt-2">
+                <button class="btn btn-primary btn-sm"
+                        {{ 'disabled' if not r.disponivel }}>
+                    <i class="bi bi-send"></i> Enviar teste
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm"
+                        id="usar-aniversario">
+                    Preencher com o e-mail de aniversário
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header"><strong>
         <i class="bi bi-file-earmark-spreadsheet"></i> Importar planilha
     </strong></div>
     <div class="card-body">
