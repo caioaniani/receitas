@@ -62,9 +62,19 @@
                       <i class="bi bi-link-45deg"></i> Vincular
                     </button>
                   </div>
+                  <select name="usuario_id" class="form-select form-select-sm"
+                          title="Se a pessoa JÁ usa o sistema, escolha a conta dela aqui — nada é criado e o login não muda">
+                    <option value="">conta do sistema: criar pelo e-mail (padrão)</option>
+                    {% for u in usuarios %}
+                    <option value="{{ u.id }}"
+                            {% if sugestoes_usuario.get(p.id) == u.id %}selected{% endif %}>
+                      já tem conta: {{ u.nome }} ({{ u.login }}){% if sugestoes_usuario.get(p.id) == u.id %} — sugerido{% endif %}
+                    </option>
+                    {% endfor %}
+                  </select>
                   <label class="small mb-0">
                     <input type="checkbox" name="gerar_acesso" value="1" checked>
-                    já gerar o acesso ao treinamento (senha vai por e-mail)
+                    gerar acesso ao treinamento (ignorado se escolher conta existente)
                   </label>
                 </form>
                 <div class="d-flex gap-1">
