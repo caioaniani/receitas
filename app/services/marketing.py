@@ -198,9 +198,10 @@ def marcar_descadastros(lista_ids):
         saiu.update(listmonk.descadastrados(lid))
     if not saiu:
         return 0
-    # Re-aplicado a cada execução de propósito (é idempotente e barato): o
-    # efeito colateral bom é carimbar "unsubscribed" também nas listas em que
-    # a pessoa nunca entrou — assim um import futuro não a ressuscita.
+    # Re-aplicado a cada execução de propósito: é idempotente, e o conjunto
+    # de quem saiu cresce devagar (uma chamada com algumas dezenas de ids).
+    # A trava principal contra ressurreição continua sendo o
+    # `marketing_descadastro_em` abaixo, que tira a pessoa da origem.
     listmonk.mudar_listas(sorted(saiu.values()), 'unsubscribe', lista_ids)
     n = (Cliente.query
          .filter(func.lower(Cliente.email).in_(set(saiu)),
