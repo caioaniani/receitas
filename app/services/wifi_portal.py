@@ -408,7 +408,7 @@ def _resolver_conta(sessao):
     cliente = Cliente(nome=sessao.nome, email=sessao.email,
                       telefone=sessao.telefone_validado or sessao.telefone,
                       senha_hash=sessao.senha_hash,
-                      aceite_lgpd_em=agora(),
+                      aceite_lgpd_em=agora(), origem='wifi',
                       aniversario_dia=sessao.aniversario_dia,
                       aniversario_mes=sessao.aniversario_mes,
                       nascimento_ano=sessao.nascimento_ano)
