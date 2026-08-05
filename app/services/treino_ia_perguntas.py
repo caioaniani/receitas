@@ -12,7 +12,7 @@ import logging
 import os
 import re
 
-MODELO = os.environ.get('TREINO_IA_MODELO', 'claude-sonnet-4-6')
+MODELO = os.environ.get('TREINO_IA_MODELO', 'claude-sonnet-5')
 logger = logging.getLogger(__name__)
 
 SYSTEM = (
