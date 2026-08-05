@@ -2052,12 +2052,13 @@ def funcionarios():
     Default = só ativos; ?todos=1 inclui desligados. PII: mesma classe das
     demais sondas (Bearer token, read-only).
     """
-    from app.models import Funcionario, Loja
+    from sqlalchemy.orm import selectinload
 
-    q = Funcionario.query
+    from app.models import Funcionario
+
+    q = Funcionario.query.options(selectinload(Funcionario.lojas))
     if request.args.get('todos') != '1':
         q = q.filter(Funcionario.ativo.is_(True))
-    lojas = {l.id: l.nome for l in Loja.query.all()}
     itens = []
     for f in q.order_by(Funcionario.nome).all():
         itens.append({
@@ -2065,7 +2066,7 @@ def funcionarios():
             'funcao': f.funcao or f.funcao_operacional or '',
             'email': (f.email or '').strip(),
             'telefone': (f.telefone or '').strip(),
-            'loja': lojas.get(f.loja_id, '') if hasattr(f, 'loja_id') else '',
+            'lojas': [l.nome for l in f.lojas],
             'ativo': bool(f.ativo),
             'cadastro_pendente': bool(f.cadastro_pendente),
         })
