@@ -32,9 +32,9 @@ def _fake_client(respostas_por_modelo):
     return client, chamadas
 
 
-def test_modelo_default_e_opus_4_8():
+def test_modelo_default_e_sonnet_5():
     from app.services import conta_pagar_ia
-    assert conta_pagar_ia.MODELO == 'claude-opus-4-8', \
+    assert conta_pagar_ia.MODELO == 'claude-sonnet-5', \
         f'modelo mudou: {conta_pagar_ia.MODELO}'
 
 
