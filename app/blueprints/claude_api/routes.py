@@ -2008,6 +2008,36 @@ def estoque_ledger():
                    itens=itens[:40])
 
 
+@claude_api_bp.route('/catalogo-site')
+@_claude_auth_required
+def catalogo_site():
+    """SONDA read-only da vitrine do site (05/08/2026).
+
+    Nasceu pra montar e-mail de campanha: o assistente precisa do NOME, do
+    LINK e da FOTO de cada produto pra escrever a peça, e as paginas da loja
+    so respondem no host da loja (opao.online), inalcancavel daqui.
+
+    ?busca=texto filtra por nome (acento-insensivel, "contem").
+    """
+    from app.services.loja_catalogo import produtos_publicados
+    from app.utils import remover_acentos
+
+    base = (current_app.config.get('LOJA_BASE_URL') or '').rstrip('/')
+    busca = remover_acentos((request.args.get('busca') or '').strip().lower())
+    itens = []
+    for it in produtos_publicados():
+        if busca and busca not in remover_acentos((it.get('nome') or '').lower()):
+            continue
+        slug = f"{it.get('slug')}-{'p' if it['kind'] == 'produto' else 'r'}{it['id']}"
+        itens.append({
+            'nome': it.get('nome'), 'kind': it.get('kind'), 'id': it.get('id'),
+            'categoria': it.get('categoria'), 'preco': it.get('preco'),
+            'imagem': it.get('imagem') or '',
+            'url': f'{base}/loja/{slug}' if base else f'/loja/{slug}',
+        })
+    return jsonify({'ok': True, 'total': len(itens), 'itens': itens})
+
+
 @claude_api_bp.route('/checklist')
 @_claude_auth_required
 def checklist_estado():
