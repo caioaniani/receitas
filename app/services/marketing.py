@@ -493,6 +493,48 @@ def enviar_teste(assunto, corpo, email, nome_peca='Peça'):
     return st
 
 
+def criar_rascunho(assunto, corpo, lista_nome, nome_peca=None):
+    """Cria a campanha no Listmonk em RASCUNHO, mirando uma lista de verdade.
+
+    Fecha o vazio entre "escrevi a peça" e "ela existe no Listmonk": sem
+    isso o dono teria que recortar e colar o HTML lá dentro. NÃO envia — o
+    disparo continua sendo um gesto dele, na tela do Listmonk, depois de
+    conferir.
+    """
+    from flask import current_app
+
+    from app.services import listmonk
+
+    st = {'campanha_id': None, 'url': None, 'erro': None, 'lista': lista_nome}
+    if not (assunto or '').strip() or not (corpo or '').strip():
+        st['erro'] = 'Assunto e mensagem são obrigatórios.'
+        return st
+    if not listmonk.disponivel():
+        st['erro'] = 'Listmonk não configurado (LISTMONK_URL/TOKEN)'
+        return st
+    if lista_nome == LISTA_ANIVERSARIO:
+        # A transiente é esvaziada e reconstruída todo dia — uma campanha
+        # apontada pra ela sairia pra quem fizer aniversário, não pra base.
+        st['erro'] = (f'"{LISTA_ANIVERSARIO}" é a lista automática do '
+                      f'aniversário. Escolha uma das listas de origem.')
+        return st
+    try:
+        atuais = listmonk.listas_detalhe()
+        lid = (atuais.get(lista_nome) or {}).get('id')
+        if not lid:
+            st['erro'] = f'Lista "{lista_nome}" não existe no Listmonk.'
+            return st
+        st['campanha_id'] = listmonk.criar_campanha(
+            nome_peca or assunto, assunto, corpo, [lid],
+            content_type='html', tags=['opao'])
+        base = (current_app.config.get('LISTMONK_URL') or '').rstrip('/')
+        st['url'] = f'{base}/admin/campaigns/{st["campanha_id"]}'
+    except Exception as exc:                                  # noqa: BLE001
+        st['erro'] = f'{type(exc).__name__}: {exc}'
+        logger.exception('marketing: criação de rascunho falhou')
+    return st
+
+
 def resumo():
     """Estado da integração pra tela do dono. Nunca levanta."""
     from app.models import AppConfig
