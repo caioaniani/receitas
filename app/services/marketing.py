@@ -182,17 +182,24 @@ def marcar_descadastros(lista_ids):
 
     Sem isso a próxima sincronização re-inscreveria a pessoa — o caminho
     mais rápido pra reclamação de spam e queima do domínio.
+
+    Faz DUAS coisas, e as duas importam:
+      1. propaga o descadastro pra TODAS as listas no Listmonk (quem cancelou
+         no e-mail de aniversário cancelou só na lista transiente);
+      2. marca `Cliente.marketing_descadastro_em`, que tira a pessoa de toda
+         sincronização futura daqui.
     """
     from app.models import Cliente
     from app.services import listmonk
 
-    saiu = set()
+    saiu = {}
     for lid in lista_ids:
-        saiu |= listmonk.descadastrados(lid)
+        saiu.update(listmonk.descadastrados(lid))
     if not saiu:
         return 0
+    listmonk.mudar_listas(sorted(saiu.values()), 'unsubscribe', lista_ids)
     n = (Cliente.query
-         .filter(func.lower(Cliente.email).in_(saiu),
+         .filter(func.lower(Cliente.email).in_(set(saiu)),
                  Cliente.marketing_descadastro_em.is_(None))
          .update({'marketing_descadastro_em': agora()},
                  synchronize_session=False))
@@ -210,3 +217,137 @@ def aniversariantes(dia=None):
     q = _base_query().filter(Cliente.aniversario_dia == d.day,
                              Cliente.aniversario_mes == d.month)
     return [_contato(c) for c in q.all()]
+
+
+# ── Campanha de aniversário ──────────────────────────────────────────
+
+def _txt_cfg(chave, padrao):
+    from app.models import AppConfig
+    v = AppConfig.get(chave)
+    return v if (v or '').strip() else padrao
+
+
+def envio_automatico_ligado():
+    """O disparo automático nasce DESLIGADO de propósito: o primeiro e-mail
+    de marketing pra base real é gesto do dono, na tela, não efeito colateral
+    de um deploy."""
+    from app.models import AppConfig
+    return AppConfig.get(CFG_ANIV_ATIVO) == '1'
+
+
+def _teto():
+    import os
+    try:
+        return max(1, int(os.environ.get('MARKETING_ANIV_TETO',
+                                         TETO_ANIVERSARIANTES)))
+    except (TypeError, ValueError):
+        return TETO_ANIVERSARIANTES
+
+
+def campanha_aniversario(dia=None, enviar=None, forcar=False):
+    """Monta (e opcionalmente dispara) a campanha de aniversário do dia.
+
+    Passos, nesta ordem — a ordem é a proteção:
+      1. colhe quem descadastrou (inclusive na lista transiente de ontem) e
+         propaga, ANTES de reconstruir qualquer coisa;
+      2. esvazia a lista transiente;
+      3. enche com os aniversariantes do dia, consultando `attribs` no
+         Postgres do Listmonk e limitando o universo às nossas listas;
+      4. confere o tamanho (0 = não há campanha; acima do teto = a consulta
+         está errada, não dispara);
+      5. cria a campanha e, se autorizado, inicia.
+
+    Best-effort: qualquer falha volta em `erro`, nunca sobe pro cron.
+    """
+    from app.models import AppConfig
+    from app.services import listmonk
+
+    d = dia or hoje()
+    st = {'dia': d.isoformat(), 'n': 0, 'campanha_id': None,
+          'enviada': False, 'pulou': None, 'erro': None}
+    if enviar is None:
+        enviar = envio_automatico_ligado()
+    if not listmonk.disponivel():
+        st['erro'] = 'Listmonk não configurado (LISTMONK_URL/TOKEN)'
+        return st
+    if enviar and not forcar and AppConfig.get(CFG_ANIV_ULTIMO) == d.isoformat():
+        st['pulou'] = 'já enviada hoje'
+        return st
+    try:
+        permanentes = _ids_permanentes()
+        id_aniv = listmonk.garantir_lista(
+            LISTA_ANIVERSARIO,
+            'Transiente: reconstruída todo dia pela campanha de aniversário')
+
+        marcar_descadastros(permanentes + [id_aniv])
+
+        # `subscribers.id > 0` = todos; o alvo é só a lista transiente, então
+        # o "remove" nunca alcança as listas de origem.
+        listmonk.mudar_listas_por_query(
+            'subscribers.id > 0', 'remove', [id_aniv])
+        listmonk.mudar_listas_por_query(
+            f"subscribers.attribs->>'aniv_dia' = '{d.day}' "
+            f"AND subscribers.attribs->>'aniv_mes' = '{d.month}'",
+            'add', [id_aniv], listas_origem=permanentes)
+
+        st['n'] = listmonk.contar(id_aniv)
+        if st['n'] == 0:
+            st['pulou'] = 'ninguém faz aniversário hoje'
+            return st
+        if st['n'] > _teto():
+            st['erro'] = (f'{st["n"]} aniversariantes num dia só passa do teto '
+                          f'({_teto()}) — não enviei. Confira os cadastros.')
+            logger.error('marketing: %s', st['erro'])
+            return st
+
+        st['campanha_id'] = listmonk.criar_campanha(
+            f'Aniversário {d.strftime("%d/%m/%Y")}',
+            _txt_cfg(CFG_ANIV_ASSUNTO, ASSUNTO_PADRAO),
+            _txt_cfg(CFG_ANIV_CORPO, CORPO_PADRAO),
+            [id_aniv], tags=['opao', 'aniversario'])
+        if not enviar:
+            st['pulou'] = 'envio automático desligado — campanha ficou em rascunho'
+            return st
+        listmonk.iniciar_campanha(st['campanha_id'])
+        st['enviada'] = True
+        AppConfig.set(CFG_ANIV_ULTIMO, d.isoformat())
+        db.session.commit()
+        logger.info('marketing: campanha de aniversário enviada (%d pessoas)',
+                    st['n'])
+    except Exception as exc:                                  # noqa: BLE001
+        st['erro'] = f'{type(exc).__name__}: {exc}'
+        logger.exception('marketing: campanha de aniversário falhou')
+        db.session.rollback()
+    return st
+
+
+def resumo():
+    """Estado da integração pra tela do dono. Nunca levanta."""
+    from app.models import AppConfig
+    from app.services import listmonk
+
+    r = {'disponivel': False, 'url': '', 'listas': [], 'erro': None,
+         'auto': envio_automatico_ligado(),
+         'ultimo_envio': AppConfig.get(CFG_ANIV_ULTIMO),
+         'assunto': _txt_cfg(CFG_ANIV_ASSUNTO, ASSUNTO_PADRAO),
+         'corpo': _txt_cfg(CFG_ANIV_CORPO, CORPO_PADRAO),
+         'aniversariantes_hoje': len(aniversariantes()),
+         'teto': _teto()}
+    from flask import current_app
+    r['url'] = (current_app.config.get('LISTMONK_URL') or '').rstrip('/')
+    r['disponivel'] = listmonk.disponivel()
+    if not r['disponivel']:
+        r['erro'] = 'Configure LISTMONK_URL e LISTMONK_API_TOKEN no Railway.'
+        return r
+    try:
+        atuais = listmonk.listas()
+        for nome in (LISTA_SITE, LISTA_WIFI, LISTA_SORTEIO, LISTA_ANIVERSARIO):
+            lid = atuais.get(nome)
+            r['listas'].append({
+                'nome': nome, 'id': lid,
+                'n': listmonk.contar(lid) if lid else 0,
+                'transiente': nome == LISTA_ANIVERSARIO})
+    except Exception as exc:                                  # noqa: BLE001
+        r['erro'] = f'{type(exc).__name__}: {exc}'
+        logger.exception('marketing: resumo falhou')
+    return r
