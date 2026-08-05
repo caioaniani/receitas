@@ -1153,7 +1153,7 @@ def responder(historico, *, telefone_contato=None,
         if (getattr(resp, 'stop_reason', None) == 'max_tokens'
                 and not retry_truncado_usado):
             retry_truncado_usado = True
-            max_tokens_atual = 2400
+            max_tokens_atual = 8000
             logger.warning('chatbot: resposta truncada em max_tokens — '
                            'refazendo com %d', max_tokens_atual)
             continue
