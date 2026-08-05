@@ -1210,6 +1210,12 @@ como terceira base. Escolha: **Listmonk** (Go + Postgres, self-hosted).
 - **Cron**: `seru_cron` 09:00 BRT, advisory lock **7750** (reciclado do
   `briefing-dono`, removido em 17/07/2026), kill-switch `MARKETING_AUTO=0`.
   Sincroniza a base e monta a campanha do dia, nessa ordem.
+- **Enviar teste** (`marketing.enviar_teste`, rota `/admin/marketing/teste`):
+  cria campanha em RASCUNHO mirando a lista `Testes internos` e usa o
+  `POST /api/campaigns/<id>/test` — NUNCA `iniciar_campanha` (ha teste
+  travando). Cadastra o destinatario antes (`garantir_assinante`, 409
+  tolerado): o Listmonk so testa pra quem JA e assinante, senao o botao
+  falharia na primeira vez. `content_type='html'` (o dono cola HTML pronto).
 - **Tela** `/admin/marketing` (owner; link na area Administracao): listas com
   contagem, "Sincronizar agora", editor do assunto/corpo do aniversario
   (`{{ .Subscriber.FirstName }}` e template do Listmonk, nao Jinja), a chave
