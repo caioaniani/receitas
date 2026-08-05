@@ -214,6 +214,54 @@ def pre_cadastro_promover(id):
     return redirect(url_for('rh.detalhe_funcionario', id=func.id))
 
 
+@rh_bp.route('/pre-cadastros/<int:id>/vincular', methods=['POST'])
+@login_required
+@rh_required
+def pre_cadastro_vincular(id):
+    """Vincula o pré-cadastro a um funcionário JÁ existente no RH (leva
+    e-mail/telefone pra ficha) e, se marcado, gera o acesso ao treinamento
+    na mesma tacada (senha provisória por e-mail)."""
+    from app.models import Funcionario, PreCadastroFuncionario
+    from app.services import precadastro as pre_svc
+    pre = PreCadastroFuncionario.query.get_or_404(id)
+    func = db.session.get(Funcionario,
+                          request.form.get('funcionario_id', type=int) or 0)
+    gerar = request.form.get('gerar_acesso') == '1'
+    func, acesso, erro = pre_svc.vincular(pre, func, gerar_acesso_treino=gerar)
+    if erro:
+        flash(erro, 'warning')
+        return redirect(url_for('rh.pre_cadastros'))
+    partes = [f'Pré-cadastro vinculado a "{func.nome}" — e-mail e telefone '
+              'atualizados na ficha.']
+    if acesso and acesso.get('email_substituido'):
+        partes.append(f'(o e-mail anterior era '
+                      f'{acesso["email_substituido"]})')
+    if gerar:
+        motivo = (acesso or {}).get('motivo')
+        if motivo == 'criado':
+            partes.append(f'Acesso ao treinamento criado — a senha foi '
+                          f'enviada para {func.email}.')
+        elif motivo == 'vinculado':
+            partes.append('Já existia conta com esse e-mail — vinculada ao '
+                          'funcionário.')
+        elif motivo == 'ja_tem':
+            partes.append('Este funcionário já tinha acesso ao sistema.')
+        elif motivo == 'conta_de_outro_papel':
+            flash(' '.join(partes), 'success')
+            flash('NÃO gerei o acesso: esse e-mail pertence a uma conta de '
+                  'admin/gestor — resolva em Treinamento → Acessos.',
+                  'warning')
+            return redirect(url_for('rh.pre_cadastros'))
+        elif motivo == 'email_em_uso':
+            flash(' '.join(partes), 'success')
+            flash('NÃO gerei o acesso: esse e-mail já é o login de OUTRO '
+                  'funcionário — confira se não há duplicata no RH.',
+                  'warning')
+            return redirect(url_for('rh.pre_cadastros'))
+    flash(' '.join(partes), 'success')
+    return redirect(url_for('rh.pre_cadastros'))
+
+
 @rh_bp.route('/pre-cadastros/<int:id>/descartar', methods=['POST'])
 @login_required
 @rh_required
