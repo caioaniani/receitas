@@ -255,6 +255,7 @@ def criar_conta_direta(dados):
                 aniversario_dia=dados['aniversario_dia'],
                 aniversario_mes=dados['aniversario_mes'],
                 nascimento_ano=dados['nascimento_ano'],
+                origem='wifi',
                 aceite_lgpd_em=agora())
     c.set_senha(dados['senha'])
     db.session.add(c)
