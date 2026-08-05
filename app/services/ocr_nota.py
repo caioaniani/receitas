@@ -43,6 +43,9 @@ def extrair_itens_nota(image_bytes, mimetype='image/jpeg'):
         response = client.messages.create(
             model=modelo,
             max_tokens=2000,
+            # Extracao de cupom sem tools: thinking adaptativo (padrao do
+            # Sonnet 5) so comeria teto/custo — desligado.
+            thinking={'type': 'disabled'},
             system=SYSTEM_PROMPT,
             messages=[{
                 'role': 'user',
