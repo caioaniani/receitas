@@ -853,7 +853,8 @@ def criar_pedido(form, itens_raw, *, base=None):
     cliente = Cliente.query.filter(
         db.func.lower(Cliente.email) == email.lower()).first()
     if not cliente:
-        cliente = Cliente(nome=nome, email=email, telefone=telefone, cpf=cpf)
+        cliente = Cliente(nome=nome, email=email, telefone=telefone, cpf=cpf,
+                          origem='site')
         db.session.add(cliente)
     else:
         # Atualiza dados de contato com o que o cliente acabou de informar.
