@@ -159,9 +159,10 @@ def sincronizar():
         stats['erro'] = 'Listmonk não configurado (LISTMONK_URL/TOKEN)'
         return stats
     try:
-        id_site, id_wifi = _ids_permanentes()[:2]
+        todas = _todas_listas()
+        id_site, id_wifi = todas[0], todas[1]
 
-        stats['descadastros'] = marcar_descadastros(_todas_listas())
+        stats['descadastros'] = marcar_descadastros(todas)
 
         site = contatos_do_site()
         wifi = contatos_do_wifi()
