@@ -38,6 +38,29 @@ logger = logging.getLogger(__name__)
 LISTA_SITE = 'Clientes do site'
 LISTA_WIFI = 'Wi-Fi das lojas'
 LISTA_SORTEIO = 'Sorteio 2026'
+# Lista TRANSIENTE: é reconstruída todo dia com quem faz aniversário hoje.
+# Existe porque campanha do Listmonk mira LISTA, não consulta — não dá pra
+# dizer "mande só pros aniversariantes" numa lista permanente.
+LISTA_ANIVERSARIO = 'Aniversariantes de hoje'
+
+CFG_ANIV_ATIVO = 'marketing_aniv_ativo'      # '1' = o cron dispara sozinho
+CFG_ANIV_ASSUNTO = 'marketing_aniv_assunto'
+CFG_ANIV_CORPO = 'marketing_aniv_corpo'
+CFG_ANIV_ULTIMO = 'marketing_aniv_ultimo'    # 'AAAA-MM-DD' do último disparo
+
+# `{{ .Subscriber.FirstName }}` é template do Listmonk (Go), não do Jinja.
+ASSUNTO_PADRAO = 'Feliz aniversário, {{ .Subscriber.FirstName }}! 🎂'
+CORPO_PADRAO = """<p>Oi, {{ .Subscriber.FirstName }}!</p>
+<p>Hoje é o seu dia — e a gente queria ser um dos primeiros a desejar
+<strong>feliz aniversário</strong>. 🎉</p>
+<p>Passa numa das nossas lojas ou peça no site: tem pão fresco saindo do
+forno pra deixar o seu dia ainda melhor.</p>
+<p><a href="https://opao.online">Ver o que tem hoje →</a></p>
+<p>Um abraço,<br>Equipe O Pão Padaria Artesanal</p>"""
+
+# Teto de sanidade: mais gente que isso fazendo aniversário no MESMO dia
+# significa que a consulta pegou o que não devia. Não envia e avisa.
+TETO_ANIVERSARIANTES = 200
 
 
 def _attribs(cli):
