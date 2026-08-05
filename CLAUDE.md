@@ -589,38 +589,43 @@ Flask 3 + SQLAlchemy + Bootstrap 5 + Postgres em prod / SQLite local.
 Padaria Opão: receitas, pedidos, entregas, PDV, estoque, RH, copilot
 (motor unico — Sonnet 4.6 no Slack, Opus 4.8 no WhatsApp do dono).
 
-### Modelos Anthropic em uso (atualizado 14/06/2026)
+### Modelos Anthropic em uso (atualizado 05/08/2026)
 
-**Copilot (motor compartilhado em `copilot.py::interpretar`)**:
-- **Slack** (`slack_bot.py`, sem override): cai no `MODELO_DEFAULT =
-  'claude-sonnet-4-6'`. 12 atendentes usam — Sonnet eh mais barato e o
-  ganho de qualidade do Opus aqui nao compensou (decisao do dono
-  14/06/2026 apos teste curto com Opus default).
-- **WhatsApp do dono** (`zapi_bot.py`, override `modelo=
-  MODELO_WHATSAPP_DEFAULT='claude-opus-4-8'`): Opus 4.8. Premium pro
-  uso pessoal do dono, baixo volume, read-only.
+**PADRONIZACAO DO DONO (05/08/2026, "pode trocar todos para sonnet 5")**:
+TODAS as funcoes de IA rodam **`claude-sonnet-5`** — bot Chatwoot, WhatsApp
+do dono, copilot Slack, vigia, auditor, follow-up, OCRs (NF/boleto e
+cupom), SEO, cadastro IA, planejamento IA, Google reviews, treino.
+Substituiu a regra de 25/06 ("Sonnet 4.6 exceto bot/WhatsApp/OCRs =
+Opus 4.8"). Motivacao: custo (Sonnet 5 = $3/$15 tabela, promo $2/$10 ate
+31/08/2026; Opus 4.8 = $5/$25) com qualidade de geracao mais nova.
+Testes que travam: `test_uso_ia.py::test_modelos_por_funcao` (+ os pinos
+em test_chatbot_faq_pilar_b/test_copilot/test_conta_pagar_ia/
+test_copilot_fork_canais).
 
-**Outros canais**:
-- **Bot de atendimento (Padeiro, Chatwoot)**: `claude-opus-4-8`
-  (`chatbot.py:MODELO`). Decisao do dono: vale o custo extra pra o bot
-  responder com confianca em vez de pingar perguntas.
-- **OCR de NF/boleto (Contas a Pagar)**: `claude-opus-4-8` direto
-  (`conta_pagar_ia.py:MODELO`). Sem cascata Sonnet->Opus.
-- **Auditor** (`chatbot_auditor.py`): Sonnet 4.6.
-- **Vigia chatbot** (`chatbot_vigia.py`): **Sonnet 4.6** (era Haiku 4.5;
-  subido pelo dono em 25/06/2026 na padronizacao geral. ATENCAO: o vigia roda
-  a CADA resposta do bot — `crm/routes.py` — entao e o de MAIOR volume; pesa
-  no custo. A funcao `_chamar_modelo` foi renomeada de `_chamar_haiku` porque
-  nao usa mais Haiku).
-- **OCR de cupom** (`ocr_nota.py`): **Opus 4.8** (era Sonnet 4.6; subido pelo
-  dono em 25/06/2026). Modelo inline, sem constante.
-- **Follow-up pos-handoff** (`chatbot.py:FOLLOWUP_MODELO`): **Sonnet 4.6**
-  (era Haiku 4.5; 25/06/2026).
-- **Descricoes SEO** (`seo_descricoes.py:MODELO`): Sonnet 4.6 (era Haiku;
-  25/06/2026).
-
-**Padronizacao de modelos (dono, 25/06/2026)**: "tudo Sonnet 4.6, exceto bot
-Chatwoot + WhatsApp do dono + OCR Contas a Pagar + OCR cupom = Opus 4.8".
+**Regras da migracao pro Sonnet 5 (nao regredir)**:
+- **Thinking**: o Sonnet 5 liga thinking ADAPTATIVO por padrao (omitir o
+  param = pensa; o teto `max_tokens` cobre thinking + texto juntos).
+  Politica adotada: chamadas COM tools (bot Chatwoot `chatbot.py`, copilot
+  `copilot.py`) ficam com adaptativo (ajuda a usar tools; o bot subiu o
+  teto pra 4000/retry 8000); chamadas SEM tools (vigia, auditor, followup,
+  OCRs, SEO, reviews, treino, cadastro, planejamento) levam
+  `thinking={'type': 'disabled'}` EXPLICITO — sao classificadores/
+  extratores de teto curto onde thinking so comeria teto e custo.
+- **Sampling**: `temperature`/`top_p`/`top_k` nao-default = 400 no
+  Sonnet 5. Nenhum call site usa — NAO introduzir.
+- **Tokenizador novo** (~30% mais tokens pro mesmo texto): tetos justos
+  truncam; ao criar chamada nova, dar folga.
+- **Extracao de resposta**: SEMPRE iterar `resp.content` filtrando
+  `type == 'text'` (com adaptativo o primeiro bloco pode ser thinking —
+  `content[0]` quebra). Todos os call sites ja fazem isso.
+- **`uso_ia._PRECOS` tem a linha do sonnet-5 ($3/$15 tabela cheia de
+  proposito — superestima ~30% ate 31/08, direcao segura pro vigia de
+  custo)**. Modelo novo SEM linha na tabela = custo some do /admin/uso-ia
+  (ha teste travando).
+- **Envs do Railway MANDAM sobre os defaults**: OCR_MODELO_OPUS,
+  CADASTRO_IA_MODELO, PLANEJAMENTO_IA_MODELO, GOOGLE_REVIEWS_IA_MODELO,
+  TREINO_IA_MODELO, ZAPI_BOT_MODELO — se setadas com modelo antigo, a
+  troca de default nao vale; conferir/limpar no painel.
 
 **Instrumentacao de custo (25/06/2026)**: TODA chamada de IA agora registra
 tokens + custo em USD na tabela `UsoIA`, rotulada por funcao, via
