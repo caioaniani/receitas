@@ -2775,5 +2775,14 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE cliente ADD COLUMN "
                        "marketing_descadastro_em TIMESTAMP")
 
+    # Origem do cadastro (05/08/2026) — espelho do bloco Postgres.
+    if cols_cli2 and 'origem' not in cols_cli2:
+        cursor.execute("ALTER TABLE cliente ADD COLUMN origem VARCHAR(20)")
+        cursor.execute(
+            "UPDATE cliente SET origem = 'wifi' WHERE origem IS NULL AND ("
+            "aniversario_dia IS NOT NULL OR EXISTS ("
+            "SELECT 1 FROM wifi_portal_sessao s "
+            "WHERE LOWER(s.email) = LOWER(cliente.email)))")
+
     conn.commit()
     conn.close()
