@@ -19,7 +19,7 @@ from flask import current_app
 
 logger = logging.getLogger(__name__)
 
-MODELO = 'claude-sonnet-4-6'
+MODELO = 'claude-sonnet-5'
 MAX_TOKENS = 1200
 
 PROMPT_AUDITOR = """Você é o Auditor do bot de atendimento da O Pão (padaria artesanal).
