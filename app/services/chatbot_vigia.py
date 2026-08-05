@@ -181,6 +181,10 @@ def _chamar_modelo(api_key, contexto):
     resp = client.messages.create(
         model=MODELO,
         max_tokens=MAX_TOKENS,
+        # Sonnet 5 liga thinking adaptativo por padrao; o vigia e o MAIOR
+        # volume de IA do sistema e devolve JSON curto — thinking aqui
+        # comeria o teto de 400 tokens e multiplicaria o custo. Desligado.
+        thinking={'type': 'disabled'},
         # cache_control: o PROMPT_VIGIA e estatico e o vigia e o maior volume
         # de IA do sistema — cache read custa 0.1x do input.
         system=[{'type': 'text', 'text': PROMPT_VIGIA,
