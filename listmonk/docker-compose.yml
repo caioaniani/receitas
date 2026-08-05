@@ -1,0 +1,62 @@
+# Listmonk — e-mail marketing (aniversário, novidades) da Opão.
+#
+# Roda no MESMO VPS do Uptime Kuma e da ponte RADIUS do Wi-Fi. Por isso os
+# `mem_limit`: o VPS tem ~950 MB no total e a ponte é CRÍTICA (Wi-Fi das
+# lojas). Com teto explícito, se faltar memória o kernel mata o Listmonk ou
+# o banco dele — nunca a ponte. O pior caso vira "campanha reinicia",
+# não "Wi-Fi das lojas cai".
+#
+# Envio: Postmark, stream BROADCAST (`marketing`), host
+# smtp-broadcasts.postmarkapp.com — separado do transacional de propósito.
+# Reclamação de spam numa campanha não pode derrubar a entrega dos e-mails
+# de pedido/magic link (que saem pelo stream `outbound`).
+
+services:
+  listmonk:
+    image: listmonk/listmonk:latest
+    container_name: listmonk
+    restart: unless-stopped
+    mem_limit: 300m
+    depends_on:
+      listmonk-db:
+        condition: service_healthy
+    # --install --idempotent: cria o schema na primeira subida e é no-op
+    # nas seguintes. --upgrade aplica migrações de versão nova.
+    command: >
+      sh -c "./listmonk --install --idempotent --yes --config '' &&
+             ./listmonk --upgrade --yes --config '' &&
+             ./listmonk --config ''"
+    environment:
+      LISTMONK_app__address: 0.0.0.0:9000
+      LISTMONK_db__host: listmonk-db
+      LISTMONK_db__port: 5432
+      LISTMONK_db__user: listmonk
+      LISTMONK_db__password: ${LISTMONK_DB_PASS:?defina LISTMONK_DB_PASS no .env}
+      LISTMONK_db__database: listmonk
+      LISTMONK_db__ssl_mode: disable
+      # Super admin criado na primeira subida.
+      LISTMONK_ADMIN_USER: ${LISTMONK_ADMIN_USER:-admin}
+      LISTMONK_ADMIN_PASSWORD: ${LISTMONK_ADMIN_PASS:?defina LISTMONK_ADMIN_PASS no .env}
+    ports:
+      # 9000 na interface pública (mesmo modelo do Kuma). A senha trafega
+      # em claro — ver README pra publicar com HTTPS via Caddy.
+      - "9000:9000"
+    volumes:
+      - ./uploads:/listmonk/uploads
+
+  listmonk-db:
+    image: postgres:17-alpine
+    container_name: listmonk-db
+    restart: unless-stopped
+    mem_limit: 200m
+    environment:
+      POSTGRES_USER: listmonk
+      POSTGRES_PASSWORD: ${LISTMONK_DB_PASS:?defina LISTMONK_DB_PASS no .env}
+      POSTGRES_DB: listmonk
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U listmonk"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - ./data:/var/lib/postgresql/data
