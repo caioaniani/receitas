@@ -2014,6 +2014,27 @@ def marketing_sincronizar():
     return redirect(url_for('main.marketing_painel'))
 
 
+@main_bp.route('/admin/marketing/importar', methods=['POST'])
+@owner_required
+def marketing_importar_planilha():
+    """Sobe uma planilha (sorteio, evento, lista de papel) pra uma lista."""
+    from app.services import marketing
+    arq = request.files.get('planilha')
+    if not arq or not arq.filename:
+        flash('Escolha um arquivo .xlsx ou .csv.', 'warning')
+        return redirect(url_for('main.marketing_painel'))
+    lista = (request.form.get('lista') or marketing.LISTA_SORTEIO).strip()
+    st = marketing.importar_planilha(arq.stream, arq.filename, lista)
+    if st.get('erro'):
+        flash(f'Import falhou: {st["erro"]}', 'danger')
+    else:
+        flash(f'{st["validos"]} e-mail(s) importados para "{lista}" '
+              f'({st.get("repetidos", 0)} repetidos e '
+              f'{st.get("invalidos", 0)} inválidos ficaram de fora).',
+              'success')
+    return redirect(url_for('main.marketing_painel'))
+
+
 @main_bp.route('/admin/marketing/salvar', methods=['POST'])
 @owner_required
 def marketing_salvar():
