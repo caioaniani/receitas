@@ -2028,12 +2028,13 @@ def catalogo_site():
     for it in produtos_publicados():
         if busca and busca not in normalizar_busca(it.get('nome') or ''):
             continue
-        slug = f"{it.get('slug')}-{'p' if it['kind'] == 'produto' else 'r'}{it['id']}"
+        # `href` vem do próprio catálogo (mesma fonte do sitemap e da
+        # vitrine) — montar o slug aqui divergiria no dia de um rename.
         itens.append({
             'nome': it.get('nome'), 'kind': it.get('kind'), 'id': it.get('id'),
             'categoria': it.get('categoria'), 'preco': it.get('preco'),
             'imagem': it.get('imagem') or '',
-            'url': f'{base}/loja/{slug}' if base else f'/loja/{slug}',
+            'url': base + it.get('href', ''),
         })
     return jsonify({'ok': True, 'total': len(itens), 'itens': itens})
 
