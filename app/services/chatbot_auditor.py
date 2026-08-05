@@ -314,6 +314,9 @@ def _chamar_sonnet(api_key, contexto, prompt_sistema=None):
     resp = client.messages.create(
         model=MODELO,
         max_tokens=MAX_TOKENS,
+        # Sonnet 5 liga thinking adaptativo por padrao; relatorio de texto
+        # sem tools nao precisa — desligado (custo/teto previsiveis).
+        thinking={'type': 'disabled'},
         system=prompt_sistema or PROMPT_AUDITOR,
         messages=[{'role': 'user', 'content': contexto}],
     )
