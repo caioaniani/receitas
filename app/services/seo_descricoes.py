@@ -51,6 +51,7 @@ def _chamar_claude(prompt):
         resp = client.messages.create(
             model=MODELO,
             max_tokens=400,
+            thinking={'type': 'disabled'},  # sem tools; teto curto
             messages=[{'role': 'user', 'content': prompt}],
         )
         from app.services import uso_ia
