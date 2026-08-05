@@ -2039,6 +2039,44 @@ def catalogo_site():
     return jsonify({'ok': True, 'total': len(itens), 'itens': itens})
 
 
+@claude_api_bp.route('/funcionarios')
+@_claude_auth_required
+def funcionarios():
+    """SONDA read-only do quadro de funcionários (05/08/2026).
+
+    Nasceu pra montar o lote de assinatura eletrônica do Regulamento
+    Interno (Autentique): o assistente precisa de nome + e-mail + telefone
+    DA FICHA de cada funcionário — o canal cadastrado no RH é o que amarra
+    a prova da assinatura em juízo (associação unívoca da Lei 14.063).
+
+    Default = só ativos; ?todos=1 inclui desligados. PII: mesma classe das
+    demais sondas (Bearer token, read-only).
+    """
+    from app.models import Funcionario, Loja
+
+    q = Funcionario.query
+    if request.args.get('todos') != '1':
+        q = q.filter(Funcionario.ativo.is_(True))
+    lojas = {l.id: l.nome for l in Loja.query.all()}
+    itens = []
+    for f in q.order_by(Funcionario.nome).all():
+        itens.append({
+            'id': f.id, 'nome': f.nome, 'cpf': f.cpf,
+            'funcao': f.funcao or f.funcao_operacional or '',
+            'email': (f.email or '').strip(),
+            'telefone': (f.telefone or '').strip(),
+            'loja': lojas.get(f.loja_id, '') if hasattr(f, 'loja_id') else '',
+            'ativo': bool(f.ativo),
+            'cadastro_pendente': bool(f.cadastro_pendente),
+        })
+    return jsonify({
+        'ok': True, 'total': len(itens),
+        'sem_email': sum(1 for x in itens if not x['email']),
+        'sem_telefone': sum(1 for x in itens if not x['telefone']),
+        'funcionarios': itens,
+    })
+
+
 @claude_api_bp.route('/checklist')
 @_claude_auth_required
 def checklist_estado():
