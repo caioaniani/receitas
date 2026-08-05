@@ -158,6 +158,7 @@
 {{ _lnk(variant, url_for('main.frete_sensores'), 'Sensores do frete', request.path == '/admin/frete-sensores', title='Endereços que barraram/erraram venda no site') }}
 {{ _lnk(variant, url_for('main.avaliacoes_google'), 'Avaliações Google', request.path.startswith('/admin/avaliacoes-google'), title='Ver e responder as avaliações do Google (Business Profile)') }}
 {{ _lnk(variant, url_for('main.wifi_vouchers'), 'Vouchers do Wi-Fi', request.path == '/admin/wifi-vouchers', title='Estoque de códigos do portal Wi-Fi das lojas') }}
+{{ _lnk(variant, url_for('main.marketing_painel'), 'E-mail marketing', request.path.startswith('/admin/marketing'), title='Listas do Listmonk + felicitação de aniversário automática') }}
 {% endif %}
 {{ _lnk(variant, url_for('main.clientes'), 'Clientes', request.path == '/admin/clientes', title='Cadastros do varejo (site + portal Wi-Fi) — com export pra campanhas') }}
 {{ _lnk(variant, url_for('patrimonio.index'), 'Patrimônio', request.path.startswith('/patrimonio'), title='Inventário de móveis e equipamentos com etiquetas QR') }}
