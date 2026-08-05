@@ -73,6 +73,14 @@ class Cliente(db.Model):
     # /api/claude/deploy?colunas= ANTES deste modelo — procedimento de 2
     # commits.
     marketing_descadastro_em = db.Column(db.DateTime, nullable=True)
+    # De ONDE veio o cadastro: 'site' | 'wifi' | 'balcao' | NULL (antigo).
+    # Existe porque derivar isso de outra tabela deu errado: o portal Wi-Fi
+    # no modo RADIUS (13/07/2026) cria só o `Cliente`, sem `WifiPortalSessao`
+    # — a lista de marketing do Wi-Fi enxergava 1 pessoa em vez de dezenas.
+    # ALTER aplicado em prod (2768944d) e CONFIRMADO pela sonda
+    # /api/claude/deploy?colunas= ANTES deste modelo — procedimento de 2
+    # commits.
+    origem = db.Column(db.String(20), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     criado_em = db.Column(db.DateTime, default=agora)
 
