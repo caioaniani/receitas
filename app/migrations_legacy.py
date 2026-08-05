@@ -1947,6 +1947,18 @@ def _migrate_postgres(app):
     _try("ALTER TABLE checklist_item_modelo ADD COLUMN IF NOT EXISTS "
          "setor VARCHAR(60)")
 
+    # ── Descadastro de marketing no Cliente (05/08/2026) ──
+    # E-mail marketing (Listmonk no VPS): decisão do dono é OPT-OUT — a base
+    # inteira (quem comprou no site E quem usou o Wi-Fi das lojas) recebe
+    # campanha, e quem clicar em "cancelar inscrição" para de receber.
+    # NULL = recebe; preenchido = cancelou (e a data fica registrada, que é o
+    # que prova o respeito ao pedido caso alguém questione).
+    # Refletir o descadastro DE VOLTA aqui é obrigatório: sem isso a próxima
+    # sincronização re-inscreveria quem acabou de cancelar — a forma mais
+    # rápida de virar spam e queimar o domínio.
+    _try("ALTER TABLE cliente ADD COLUMN IF NOT EXISTS "
+         "marketing_descadastro_em TIMESTAMP")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
