@@ -56,16 +56,19 @@
 
 <div class="card mb-4">
     <div class="card-header"><strong>
-        <i class="bi bi-send-check"></i> Enviar um teste pra você
+        <i class="bi bi-send-check"></i> Montar uma peça (promoção, data comemorativa)
     </strong></div>
     <div class="card-body">
         <p class="small text-muted">
-            Cole o HTML da peça e receba no seu e-mail antes de mandar pra
-            base. <strong>Não dispara campanha</strong>: a mensagem vai só pro
-            endereço abaixo. Vale a pena porque o preview do navegador não
-            mostra o que o Gmail e o Outlook fazem com o HTML.
+            Cole o HTML aqui uma vez. <strong>Enviar teste</strong> manda só
+            pro seu e-mail (não dispara campanha) — vale a pena porque o
+            preview do navegador não mostra o que o Gmail faz com o HTML.
+            <strong>Criar rascunho</strong> cria a campanha já pronta no
+            Listmonk, apontando pra lista escolhida; você confere e dispara
+            por lá.
         </p>
-        <form method="POST" action="{{ url_for('main.marketing_teste') }}">
+        <form method="POST" action="{{ url_for('main.marketing_teste') }}"
+              id="form-peca">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="row g-2 mb-2">
                 <div class="col-12 col-md-7">
