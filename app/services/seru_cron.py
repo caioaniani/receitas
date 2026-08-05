@@ -58,6 +58,9 @@ LOCK_KEY_GOOGLE_REVIEWS = 7749  # advisory lock pro sync de avaliacoes do Google
 LOCK_KEY_TREINO_FECH = 7754    # advisory lock pro fechamento semanal do treino
 LOCK_KEY_TREINO_DIARIO = 7755  # advisory lock pros jobs diarios do treino
 LOCK_KEY_TINY_PDV = 7756  # advisory lock pro import do PDV do Tiny (Cantina)
+# 7750 foi reciclado: era do `briefing-dono` (removido 17/07/2026), agora e do
+# marketing (sync da base + campanha de aniversario no Listmonk).
+LOCK_KEY_MARKETING = 7750  # advisory lock pro marketing (Listmonk)
 # Locks LIBERADOS mas RESERVADOS (nao reusar — evita conflito se algum
 # dos jobs for reativado no futuro):
 # - 7730 era do `zapi-digest-anomalias` (job 23:00 BRT, removido 14/06/2026).
