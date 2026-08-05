@@ -66,7 +66,7 @@ def test_zapi_bot_usa_opus_e_persona(app, admin_user, monkeypatch):
                 'text': {'message': 'resumo de hoje'},
             })
         kwargs = fake.call_args[1]
-        assert kwargs['modelo'] == 'claude-opus-4-8'
+        assert kwargs['modelo'] == 'claude-sonnet-5'
         assert 'assessor executivo' in kwargs['system_extra']
         assert kwargs['apenas_leitura'] is True
 
