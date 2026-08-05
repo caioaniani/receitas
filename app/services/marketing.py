@@ -341,12 +341,11 @@ def resumo():
         r['erro'] = 'Configure LISTMONK_URL e LISTMONK_API_TOKEN no Railway.'
         return r
     try:
-        atuais = listmonk.listas()
+        atuais = listmonk.listas_detalhe()
         for nome in (LISTA_SITE, LISTA_WIFI, LISTA_SORTEIO, LISTA_ANIVERSARIO):
-            lid = atuais.get(nome)
+            l = atuais.get(nome) or {}
             r['listas'].append({
-                'nome': nome, 'id': lid,
-                'n': listmonk.contar(lid) if lid else 0,
+                'nome': nome, 'id': l.get('id'), 'n': l.get('n') or 0,
                 'transiente': nome == LISTA_ANIVERSARIO})
     except Exception as exc:                                  # noqa: BLE001
         r['erro'] = f'{type(exc).__name__}: {exc}'
