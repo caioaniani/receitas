@@ -423,6 +423,53 @@ def test_resumo_sem_config_avisa(app):
     assert r['disponivel'] is False and 'LISTMONK_URL' in r['erro']
 
 
+# ── Envio de teste ───────────────────────────────────────────────────
+
+def test_teste_nao_dispara_campanha(app):
+    """O teste vai SÓ pro e-mail informado — nunca pode iniciar campanha."""
+    from app.services import marketing
+    _cfg(app)
+    with patch('app.services.listmonk.garantir_lista', return_value=8), \
+         patch('app.services.listmonk.garantir_assinante') as assina, \
+         patch('app.services.listmonk.criar_campanha', return_value=44), \
+         patch('app.services.listmonk.enviar_teste') as teste, \
+         patch('app.services.listmonk.iniciar_campanha') as inicia:
+        st = marketing.enviar_teste('Oi', '<p>peça</p>', 'Caio@Opao.online')
+    assert st['enviado'] is True and st['erro'] is None
+    inicia.assert_not_called()
+    # cadastra o destinatário: o Listmonk só testa pra quem já é assinante
+    assina.assert_called_once_with('caio@opao.online', None, [8])
+    assert teste.call_args.args[2] == ['caio@opao.online']
+    # a campanha de teste mira a lista de testes, não a base
+    assert teste.call_args.args[1]['lists'] == [8]
+    assert teste.call_args.args[1]['content_type'] == 'html'
+
+
+def test_teste_recusa_email_invalido(app):
+    from app.services import marketing
+    _cfg(app)
+    with patch('app.services.listmonk.garantir_lista') as gl:
+        st = marketing.enviar_teste('Oi', '<p>x</p>', 'nao-e-email')
+    assert st['erro'] == 'E-mail inválido.'
+    gl.assert_not_called()
+
+
+def test_teste_recusa_corpo_vazio(app):
+    from app.services import marketing
+    _cfg(app)
+    st = marketing.enviar_teste('Oi', '   ', 'caio@opao.online')
+    assert 'obrigatórios' in st['erro']
+
+
+def test_teste_falha_do_listmonk_vira_mensagem(app):
+    from app.services import marketing
+    _cfg(app)
+    with patch('app.services.listmonk.garantir_lista',
+               side_effect=RuntimeError('502 do VPS')):
+        st = marketing.enviar_teste('Oi', '<p>x</p>', 'caio@opao.online')
+    assert '502 do VPS' in st['erro'] and st['enviado'] is False
+
+
 # ── Tela do dono ─────────────────────────────────────────────────────
 
 def _login(c, user_id):
