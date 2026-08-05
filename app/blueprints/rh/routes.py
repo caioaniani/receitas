@@ -186,9 +186,10 @@ def pre_cadastros():
     # está no RH — o select lista os ativos e a sugestão por nome pré-seleciona.
     funcionarios = (Funcionario.query.filter_by(ativo=True)
                     .order_by(Funcionario.nome).all())
-    sugestoes = {p.id: (pre_svc.sugerir_funcionario(p, funcionarios) or
-                        Funcionario(id=None)).id
-                 for p in pendentes}
+    sugestoes = {}
+    for p in pendentes:
+        s = pre_svc.sugerir_funcionario(p, funcionarios)
+        sugestoes[p.id] = s.id if s else None
     return render_template('rh/pre_cadastros.html',
                            pendentes=pendentes, funcionarios=funcionarios,
                            sugestoes=sugestoes, url_form=url_form, qr=qr)
