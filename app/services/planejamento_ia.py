@@ -138,6 +138,7 @@ def _chamar_opus(system, payload_texto, funcao):
             # sem isso o JSON cortado viraria "resposta invalida" eterno.
             response = client.messages.create(
                 model=MODELO, max_tokens=8000, system=system,
+                thinking={'type': 'disabled'},
                 messages=[{'role': 'user', 'content': payload_texto}])
             uso_ia.registrar(funcao, MODELO,
                              getattr(response, 'usage', None))
