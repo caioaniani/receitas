@@ -146,6 +146,39 @@ def test_criar_campanha_nasce_em_rascunho(app):
     assert 'status' not in corpo
 
 
+def test_assinante_que_ja_existe_nao_e_erro(app):
+    """409 do Listmonk = "já é assinante". Levantar aqui faria o botão de
+    teste falhar na segunda vez."""
+    from app.services import listmonk
+    _cfg(app)
+
+    class _R409:
+        status_code = 409
+        text = ''
+
+        def raise_for_status(self):
+            raise AssertionError('não deveria levantar em 409')
+
+    with patch('requests.request', return_value=_R409()):
+        listmonk.garantir_assinante('a@x.com', None, [8])
+
+
+def test_enviar_teste_reenvia_o_corpo_da_campanha(app):
+    """O endpoint de teste do Listmonk quer os mesmos campos da criação."""
+    from app.services import listmonk
+    _cfg(app)
+    payload = listmonk.montar_campanha('C', 'Assunto', '<p>x</p>', [8],
+                                       content_type='html')
+    with patch('requests.request', return_value=_Resp()) as req:
+        listmonk.enviar_teste(44, payload, ['a@x.com'])
+    metodo, url = req.call_args.args
+    assert metodo == 'POST' and url.endswith('/api/campaigns/44/test')
+    corpo = req.call_args.kwargs['json']
+    assert corpo['subscribers'] == ['a@x.com']
+    assert corpo['subject'] == 'Assunto' and corpo['body'] == '<p>x</p>'
+    assert payload.get('subscribers') is None   # não muta o original
+
+
 def test_iniciar_campanha_poe_pra_rodar(app):
     from app.services import listmonk
     _cfg(app)
