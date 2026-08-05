@@ -215,3 +215,18 @@
     </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+<script>
+// Copia o texto do aniversário pro formulário de teste (o do aniversário é o
+// que mais se testa, e ninguém quer recortar e colar HTML na mão).
+document.getElementById('usar-aniversario')?.addEventListener('click', () => {
+    document.getElementById('teste-assunto').value =
+        document.getElementById('aniv-assunto').value;
+    document.getElementById('teste-corpo').value =
+        document.getElementById('aniv-corpo').value;
+    document.getElementById('teste-assunto').scrollIntoView(
+        {behavior: 'smooth', block: 'center'});
+});
+</script>
+{% endblock %}
