@@ -21,7 +21,7 @@ import re
 
 logger = logging.getLogger(__name__)
 
-MODELO = os.environ.get('OCR_MODELO_OPUS', 'claude-opus-4-8')
+MODELO = os.environ.get('OCR_MODELO_OPUS', 'claude-sonnet-5')
 
 SYSTEM_PROMPT = (
     "Voce extrai dados de documentos de compra (nota fiscal ou boleto) a "
