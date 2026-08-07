@@ -2117,11 +2117,23 @@ do padeiro: separação + cronograma + pré-preparo) + **lead FIXO D+2**.
   `_ctx_checkout` (loja/routes) seta o `min` do calendário e esconde o express
   quando o carrinho tem encomenda (`encomenda_no_carrinho`); checkout.html mostra
   aviso e produto.html um selo "📅 sob encomenda".
-- **Vitrine SEMPRE disponível**: `loja_catalogo._serializar_*` expõe
-  `sob_encomenda`; `anotar_esgotado` força `esgotado=False` (não olha
-  plano-do-dia). `tem_estoque_para_dia`/`item_e_sob_encomenda` (fonte única)
-  liberam sem estoque. `montar_itens` propaga a flag e pula a checagem de
-  estoque.
+- **Vitrine: era "SEMPRE disponível" — SUBSTITUÍDO em 07/08/2026 (dono:
+  "Quero controlar tudo numa só tela", caso Caixa de Mini no Dia dos
+  Pais)**: sob encomenda agora RESPEITA o plano-do-dia como qualquer item —
+  `tem_estoque_para_dia` consulta o plano (sem bypass), `anotar_esgotado`
+  calcula esgotado pela janela >= D+2, o loop de esgotados do
+  `criar_pedido` não pula mais a flag, `loja_pagamento._reservar/_devolver_
+  ao_plano_do_dia` reservam/devolvem quantidade (sem isso o cap do plano
+  não seguraria nada) e `bot_tools._datas_indisponiveis` expõe dia curado
+  de encomenda pro bot/vigia. Sem plano cadastrado segue fail-open
+  (disponível). O que NÃO mudou: continua produzido pro pedido (nunca
+  abate/reserva EstoqueLoja físico — `_rebaixar_pedido` e
+  `loja_estoque_reserva` seguem pulando), D+2, produção firme (2c) e card
+  do padeiro. Pedido antigo (nunca reservou plano) cancelado após o
+  deploy: `devolver` trunca em 0/no-op — não cria saldo fantasma (caso
+  raro de linha com reservas novas: aceito). Testes: seções novas em
+  `test_sob_encomenda.py` + contrato novo em
+  `test_vigia_disponibilidade_por_data.py`.
 - **NÃO abate EstoqueLoja (produzido pro pedido)**: `loja_estoque_reserva.
   item_sob_encomenda(item)` faz `_expandir_estoque` retornar `[]` (fora de
   reserva/liberação) E o loop de baixa real do `consumir` PULA o item (as DUAS
