@@ -438,10 +438,10 @@ def tem_estoque_para_dia(kind, item_id, data):
     dia. Fail-open: sem plano cadastrado pra o item/data → True (vende livre);
     com plano → saldo do plano > 0. O EstoqueLoja fisico NAO entra.
 
-    Item sob encomenda (produzido pro pedido) e SEMPRE vendavel — nao passa
-    pelo plano-do-dia (a unica trava dele e a data D+2 no checkout)."""
-    if item_e_sob_encomenda(kind, item_id):
-        return True
+    Sob encomenda TAMBEM passa por aqui desde 07/08/2026 (decisão do dono,
+    caso "Caixa de Mini vendida pro Dia dos Pais" — SUBSTITUI o "sempre
+    vendável" de 21/07): zerar o item no plano-do-dia agora vale pra
+    encomenda igual. A trava D+2 continua sendo do checkout."""
     s = _saldo_para_dia(kind, item_id, data)
     if s is None:
         return True
