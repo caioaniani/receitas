@@ -58,8 +58,6 @@ def lista():
                            remessas=remessas, hoje=hoje())
 
 
-@cobrancas_bp.route('/gerar-da-parcela/<int:parcela_id>', methods=['POST'])
-@login_required
 def _snapshot_pagador(cli):
     """(endereco, cep) do CADASTRO do ClienteB2B — fonte ÚNICA das duas
     rotas de geração (07/08/2026, pergunta do dono "por que não puxa o CEP
@@ -81,6 +79,8 @@ def _snapshot_pagador(cli):
     return endereco, cep
 
 
+@cobrancas_bp.route('/gerar-da-parcela/<int:parcela_id>', methods=['POST'])
+@login_required
 def gerar_da_parcela(parcela_id):
     """Cria a cobrança de UMA parcela B2B (snapshot do pagador da venda)."""
     _admin_ou_403()
