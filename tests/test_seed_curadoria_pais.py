@@ -127,3 +127,35 @@ def test_sonda_plano_dia(app, catalogo):
     nomes_livres = {x['nome'] for x in d['publicados_sem_linha_vendem_livre']}
     assert 'Caixa de Mini' in nomes_livres
     assert d['data_especial']['rotulo'] == 'Dia dos Pais'
+
+
+# ── v2: reabre as duas cestas que o v1 fechou por engano ─────────────────
+
+def test_v2_reabre_cestas_zeradas_e_respeita_ajuste_do_dono(app, catalogo):
+
+    from app.migrations_legacy import _seed_curadoria_dia_pais_v2
+    from app.models import EstoqueSitePlano, Produto
+    cesta = Produto(nome='Cesta dia dos pais', categoria='Cestas',
+                    preco_site=250.0, ativo=True)
+    caixa = Produto(nome='Caixa Especial', categoria='Cestas',
+                    preco_site=400.0, ativo=True)
+    db.session.add_all([cesta, caixa])
+    db.session.commit()
+    db.session.add(EstoqueSitePlano(kind='produto', item_id=cesta.id,
+                                    data=ALVO, qtd_planejada=0,
+                                    qtd_reservada=39))
+    # Dono já ajustou a Caixa Especial na mão entre deploys: v2 não mexe.
+    db.session.add(EstoqueSitePlano(kind='produto', item_id=caixa.id,
+                                    data=ALVO, qtd_planejada=25,
+                                    qtd_reservada=10))
+    db.session.commit()
+    _seed_curadoria_dia_pais_v2(app, _hoje=HOJE_FAKE)
+    assert _linha('produto', cesta.id).qtd_planejada == 10000
+    assert _linha('produto', cesta.id).qtd_reservada == 39
+    assert _linha('produto', caixa.id).qtd_planejada == 25
+
+    # Marker: segunda execução é no-op mesmo se o dono zerar de novo.
+    _linha('produto', cesta.id).qtd_planejada = 0
+    db.session.commit()
+    _seed_curadoria_dia_pais_v2(app, _hoje=HOJE_FAKE)
+    assert _linha('produto', cesta.id).qtd_planejada == 0
