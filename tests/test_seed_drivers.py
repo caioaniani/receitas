@@ -96,5 +96,5 @@ def test_sonda_drivers_lista_sem_token_nem_pin(app, _token_sonda):
     assert r2.get_json()['total'] == 2
 
 
-def test_sonda_drivers_exige_token(client, app, _token_sonda):
-    assert client.get('/api/claude/drivers').status_code == 401
+def test_sonda_drivers_exige_token(app, _token_sonda):
+    assert app.test_client().get('/api/claude/drivers').status_code == 401
