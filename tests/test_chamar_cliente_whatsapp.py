@@ -280,15 +280,15 @@ def test_chamar_telefone_sem_pedido(app, admin_user):
                return_value={'ok': True, 'conversation_id': 901,
                              'nova': True, 'erro': None}) as m:
         r = client.post('/entregas/api/atendimento/chamar-telefone',
-                        json={'telefone': '12 98148-1371',
-                              'nome': 'Camilla',
+                        json={'telefone': '12 91234-5678',
+                              'nome': 'Fulana',
                               'sobre': 'Cesta dia dos pais'})
     assert r.status_code == 200
     d = r.get_json()
     assert d['ok'] is True and d['conversation_id'] == 901
     args, kwargs = m.call_args
-    assert args[0] == '12 98148-1371' and args[1] == 'Camilla'
-    assert kwargs['params'] == ['Camilla', 'Cesta dia dos pais']
+    assert args[0] == '12 91234-5678' and args[1] == 'Fulana'
+    assert kwargs['params'] == ['Fulana', 'Cesta dia dos pais']
 
 
 def test_chamar_telefone_defaults(app, admin_user):
