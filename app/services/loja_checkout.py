@@ -837,6 +837,26 @@ def criar_pedido(form, itens_raw, *, base=None):
                     f'Os seguintes itens não estão disponíveis pra entrega '
                     f'em {data_fmt}: {", ".join(esgotados)}. Escolha outra '
                     'data ou tire-os do carrinho.')
+
+    # Bloqueio de itens por DATA ESPECIAL (07/08/2026, caso "Caixa de Mini
+    # vendida pro Dia dos Pais"): a data cadastrada pode barrar categorias/
+    # itens específicos (LojaDataEspecial.bloquear_itens). Vale pra entrega
+    # agendada, retirada E express (no express a data_entrega é hoje — se
+    # hoje for a data especial, a curadoria vale igual). Diferente do
+    # esgotado (estado transitório de estoque), aqui é curadoria do dono —
+    # a mensagem diz isso pro cliente não ficar re-tentando.
+    if data_entrega and itens and not erros:
+        from app.services import loja_data_especial
+        barrados = loja_data_especial.itens_bloqueados(data_entrega, itens)
+        if barrados:
+            regra = loja_data_especial.regra_do_dia(data_entrega)
+            rotulo = (regra.rotulo if regra and regra.rotulo
+                      else data_entrega.strftime('%d/%m/%Y'))
+            nomes = '", "'.join(barrados)
+            erros.append(
+                f'Para {rotulo} trabalhamos com um cardápio especial — '
+                f'"{nomes}" não está disponível pra entrega nessa data. '
+                'Escolha outra data de entrega ou tire o item do carrinho.')
             # Alerta IMEDIATO ao dono (WhatsApp): o cliente ia comprar e foi
             # barrado por esgotado. Best-effort/async — nunca afeta o checkout.
             try:
