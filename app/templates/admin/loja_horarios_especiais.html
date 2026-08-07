@@ -45,6 +45,20 @@
           Ex.: <code>06:00-10:00</code>. Pode pôr vários (um por linha).
         </div>
       </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label small fw-bold" for="lbloqueios">
+          Itens que NÃO vendem para esse dia — <strong>um por linha</strong>
+          (opcional)</label>
+        <textarea class="form-control" id="lbloqueios" name="bloquear_itens"
+                  rows="3" placeholder="Mini Pães&#10;Caixa de Mini"></textarea>
+        <div class="form-text">
+          Nome de <strong>categoria</strong> (ex.: <code>Mini Pães</code>)
+          ou de <strong>produto</strong> (ex.: <code>Caixa de Mini</code>) —
+          maiúsculas e acentos não importam. O cliente que tentar fechar o
+          pedido com um deles para essa data é barrado no checkout, com a
+          mensagem do cardápio especial. Em branco = tudo à venda.
+        </div>
+      </div>
       <div class="col-12">
         <div class="form-check">
           <input class="form-check-input" type="checkbox" value="1"
