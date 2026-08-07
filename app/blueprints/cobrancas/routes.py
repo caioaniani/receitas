@@ -60,6 +60,27 @@ def lista():
 
 @cobrancas_bp.route('/gerar-da-parcela/<int:parcela_id>', methods=['POST'])
 @login_required
+def _snapshot_pagador(cli):
+    """(endereco, cep) do CADASTRO do ClienteB2B — fonte ÚNICA das duas
+    rotas de geração (07/08/2026, pergunta do dono "por que não puxa o CEP
+    direto do cadastro?"): a rota de parcela avulsa gravava `pagador_cep=''`
+    fixo e toda cobrança exigia digitação manual na tela, mesmo com o
+    cadastro completo. Montagem idêntica à que a fatura mensal já usava
+    (homologada): campo livre com fallback pros estruturados; CEP só
+    dígitos."""
+    if cli is None:
+        return '', ''
+    endereco = (cli.endereco or '').strip()
+    if not endereco and cli.endereco_logradouro:
+        endereco = ' '.join(x for x in (
+            cli.endereco_logradouro,
+            (f'{cli.endereco_numero}' if cli.endereco_numero else ''),
+            (f'- {cli.endereco_bairro}' if cli.endereco_bairro else ''))
+            if x)
+    cep = ''.join(ch for ch in (cli.endereco_cep or '') if ch.isdigit())
+    return endereco, cep
+
+
 def gerar_da_parcela(parcela_id):
     """Cria a cobrança de UMA parcela B2B (snapshot do pagador da venda)."""
     _admin_ou_403()
