@@ -476,17 +476,38 @@
       if (sobre === null) return;
       var btn = this;
       btn.disabled = true;
-      postJSON('/entregas/api/atendimento/chamar-telefone',
-               { telefone: tel, nome: nome.trim(), sobre: sobre.trim() })
+      function req() {
+        return postJSON('/entregas/api/atendimento/chamar-telefone',
+                        { telefone: tel, nome: nome.trim(), sobre: sobre.trim() });
+      }
+      req()
+        .then(function (r) {
+          // csrf_expirada (painel aberto ha dias, sessao trocada): token
+          // novo + 1 retry — padrao canonico do chamar-cliente
+          // (painel_pedidos.html) / autosave do cronograma.
+          if (r.body && r.body.erro === 'csrf_expirada') {
+            return fetch('/auth/csrf-token', { credentials: 'same-origin' })
+              .then(function (x) { return x.json(); })
+              .then(function (t) {
+                if (t && t.token) { CSRF = t.token; return req(); }
+                return r;
+              });
+          }
+          return r;
+        })
         .then(function (r) {
           btn.disabled = false;
           var b = r.body || {};
           if (r.status === 200 && b.ok) {
             toast(b.nova ? 'Template enviado — conversa aberta'
-                         : 'Conversa reaberta — template reenviado', 'ok');
+                         : 'Conversa ja existia — template reenviado', 'ok');
             abrirThread(b.conversation_id, b.nome);
           } else {
-            toast('Erro: ' + (b.erro || r.status), 'erro');
+            var msg = b.erro || r.status;
+            if (b.erro === 'csrf_expirada') {
+              msg = 'sessao expirou — recarregue a pagina (F5) e tente de novo';
+            }
+            toast('Erro: ' + msg, 'erro');
             // Conversa pode ter sido criada mesmo com template falho —
             // abre pra o atendente ver o estado real.
             if (b.conversation_id) abrirThread(b.conversation_id, b.nome);
