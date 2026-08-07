@@ -446,6 +446,39 @@ def api_atendimento_chamar_cliente():
     }), (200 if res.get('ok') else 502)
 
 
+@entregas_bp.route('/api/atendimento/chamar-telefone', methods=['POST'])
+@login_required
+def api_atendimento_chamar_telefone():
+    """Botao "Chamar por telefone" na barra do atendimento (07/08/2026,
+    dono: "Tem que ser direto no sistema"): abre conversa de WhatsApp com um
+    cliente que NAO tem pedido — caso real da venda BARRADA no site (o
+    alerta de esgotado traz nome+telefone, mas sem pedido o chamar-cliente
+    por codigo nao serve). Mesmo motor/template do chamar-cliente
+    (`chatwoot.iniciar_conversa_whatsapp`); o {{2}} do template vira o
+    ASSUNTO digitado (ex.: 'Cesta dia dos pais') em vez do codigo."""
+    from app.services import chatwoot as cw_svc
+    from app.utils import telefone_chave
+    data = request.get_json(silent=True) or {}
+    telefone = (data.get('telefone') or '').strip()
+    # telefone_chave devolve '' com menos de 10 digitos (sem DDD nao ha
+    # match seguro — mesma regua da memoria do bot).
+    if not telefone_chave(telefone):
+        return jsonify({'ok': False,
+                        'erro': 'Telefone invalido — informe DDD + numero.'
+                        }), 400
+    nome = (data.get('nome') or '').strip() or 'Cliente'
+    sobre = (data.get('sobre') or '').strip() or 'no site'
+    res = cw_svc.iniciar_conversa_whatsapp(telefone, nome,
+                                           params=[nome, sobre])
+    return jsonify({
+        'ok': bool(res.get('ok')),
+        'conversation_id': res.get('conversation_id'),
+        'nova': bool(res.get('nova')),
+        'nome': nome,
+        'erro': res.get('erro'),
+    }), (200 if res.get('ok') else 502)
+
+
 @entregas_bp.route('/api/atendimento/chamar-motorista', methods=['POST'])
 @login_required
 def api_atendimento_chamar_motorista():
