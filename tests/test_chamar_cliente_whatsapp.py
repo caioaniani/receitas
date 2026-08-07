@@ -266,3 +266,68 @@ def test_debug_admin_barrado(app, admin_user):
     _login(client, admin_user)
     r = client.get('/entregas/api/atendimento/chamar-cliente/debug?codigo=X')
     assert r.status_code == 403
+
+
+# ── Endpoint /entregas/api/atendimento/chamar-telefone (sem pedido) ───────
+# 07/08/2026, dono "Tem que ser direto no sistema": venda barrada no site
+# (alerta de esgotado) traz nome+telefone mas NAO existe pedido — o chamar
+# por codigo nao serve. Mesmo motor/template; {{2}} = assunto digitado.
+
+def test_chamar_telefone_sem_pedido(app, admin_user):
+    client = app.test_client()
+    _login(client, admin_user)
+    with patch('app.services.chatwoot.iniciar_conversa_whatsapp',
+               return_value={'ok': True, 'conversation_id': 901,
+                             'nova': True, 'erro': None}) as m:
+        r = client.post('/entregas/api/atendimento/chamar-telefone',
+                        json={'telefone': '12 98148-1371',
+                              'nome': 'Camilla',
+                              'sobre': 'Cesta dia dos pais'})
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d['ok'] is True and d['conversation_id'] == 901
+    args, kwargs = m.call_args
+    assert args[0] == '12 98148-1371' and args[1] == 'Camilla'
+    assert kwargs['params'] == ['Camilla', 'Cesta dia dos pais']
+
+
+def test_chamar_telefone_defaults(app, admin_user):
+    """Nome/assunto vazios caem em 'Cliente'/'no site' — o template nunca
+    sai com buraco no {{1}}/{{2}}."""
+    client = app.test_client()
+    _login(client, admin_user)
+    with patch('app.services.chatwoot.iniciar_conversa_whatsapp',
+               return_value={'ok': True, 'conversation_id': 902,
+                             'nova': False, 'erro': None}) as m:
+        r = client.post('/entregas/api/atendimento/chamar-telefone',
+                        json={'telefone': '11999998888'})
+    assert r.status_code == 200
+    args, kwargs = m.call_args
+    assert args[1] == 'Cliente'
+    assert kwargs['params'] == ['Cliente', 'no site']
+
+
+def test_chamar_telefone_invalido_400(app, admin_user):
+    """Sem DDD (menos de 10 digitos) nao ha destino seguro — recusa antes
+    de tocar o Chatwoot."""
+    client = app.test_client()
+    _login(client, admin_user)
+    with patch('app.services.chatwoot.iniciar_conversa_whatsapp') as m:
+        r = client.post('/entregas/api/atendimento/chamar-telefone',
+                        json={'telefone': '98148-1371'})
+    assert r.status_code == 400
+    assert m.call_count == 0
+    assert 'ddd' in r.get_json()['erro'].lower()
+
+
+def test_chamar_telefone_falha_do_servico_vira_502(app, admin_user):
+    client = app.test_client()
+    _login(client, admin_user)
+    with patch('app.services.chatwoot.iniciar_conversa_whatsapp',
+               return_value={'ok': False, 'conversation_id': 903,
+                             'nova': True, 'erro': 'HTTP 422: template'}):
+        r = client.post('/entregas/api/atendimento/chamar-telefone',
+                        json={'telefone': '11999998888', 'nome': 'X'})
+    assert r.status_code == 502
+    d = r.get_json()
+    assert d['ok'] is False and d['conversation_id'] == 903
