@@ -1132,7 +1132,10 @@ def pedidos_site():
                 'preco_unitario': float(it.preco_unitario or 0),
                 'subtotal': float(it.subtotal or 0),
                 'kind': it.kind,
-                'componentes': [c.nome for c in (it.componentes or [])],
+                'componentes': [{
+                    'nome': c.nome, 'qtd': c.quantidade,
+                    'preco': float(c.preco_unitario or 0),
+                } for c in (it.componentes or [])],
             } for it in p.itens],
             'pagamentos': [{
                 'metodo': pg.metodo, 'status': pg.status,
