@@ -845,7 +845,7 @@ def criar_pedido(form, itens_raw, *, base=None):
     # hoje for a data especial, a curadoria vale igual). Diferente do
     # esgotado (estado transitório de estoque), aqui é curadoria do dono —
     # a mensagem diz isso pro cliente não ficar re-tentando.
-    if data_entrega and itens and not erros:
+    if data_entrega and itens:
         from app.services import loja_data_especial
         barrados = loja_data_especial.itens_bloqueados(data_entrega, itens)
         if barrados:
