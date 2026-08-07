@@ -765,6 +765,12 @@ class LojaDataEspecial(db.Model):
         return [ln.strip() for ln in (self.janelas or '').splitlines()
                 if ln.strip()]
 
+    def lista_bloqueios(self):
+        """As regras de bloqueio como lista (texto cru, sem linhas vazias).
+        [] = sem restrição de itens."""
+        return [ln.strip() for ln in (self.bloquear_itens or '').splitlines()
+                if ln.strip()]
+
     @property
     def fechado(self):
         return not self.lista_janelas()
