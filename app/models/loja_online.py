@@ -745,6 +745,15 @@ class LojaDataEspecial(db.Model):
     # Uma janela por linha. Vazio/NULL = fechado (ver docstring).
     janelas = db.Column(db.Text, nullable=True)
     express_bloqueado = db.Column(db.Boolean, default=True, nullable=False)
+    # Itens que NAO podem ser vendidos pra ENTREGA neste dia (07/08/2026,
+    # caso "Caixa de Mini vendida pro Dia dos Pais" — dono: "os clientes nao
+    # poderiam comprar os minis para o dia 9"). Uma REGRA por linha: nome de
+    # CATEGORIA (ex.: 'Mini Pães') ou nome de ITEM do catálogo (ex.: 'Caixa
+    # de Mini'); comparação sem acento/caixa no serviço. NULL/vazio = sem
+    # restrição (todo o catálogo vale, comportamento de sempre). ALTER em
+    # migrations_legacy (procedimento de 2 commits, coluna confirmada em
+    # prod pela sonda /api/claude/deploy?colunas= antes deste modelo).
+    bloquear_itens = db.Column(db.Text, nullable=True)
     criado_em = db.Column(db.DateTime, default=agora, nullable=False)
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'),
                               nullable=True)
