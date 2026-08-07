@@ -819,10 +819,10 @@ def criar_pedido(form, itens_raw, *, base=None):
     if data_entrega and itens:
         esgotados = []
         for it in itens:
-            # Sob encomenda é produzido pro pedido: nunca esgota por plano-do-
-            # dia (a data D+2 já foi validada acima).
-            if it.get('sob_encomenda'):
-                continue
+            # Sob encomenda TAMBÉM valida contra o plano-do-dia desde
+            # 07/08/2026 (decisão do dono — SUBSTITUI o pulo de 21/07):
+            # o dono zera o item no plano do dia curado e a encomenda é
+            # barrada igual aos demais. O D+2 segue validado acima.
             if not loja_catalogo.tem_estoque_para_dia(
                     it['kind'], it['id'], data_entrega):
                 esgotados.append(it['nome'])
