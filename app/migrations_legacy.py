@@ -97,6 +97,7 @@ def _migrate(app):
         _seed_horario_dia_dos_pais(app)
         _seed_checklist_padrao(app)
         _seed_curadoria_dia_pais(app)
+        _seed_curadoria_dia_pais_v2(app)
 
 
 def _seed_checklist_padrao(app):
