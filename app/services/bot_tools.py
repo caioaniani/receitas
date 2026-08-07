@@ -202,9 +202,9 @@ def _fmt_item_catalogo(it, base):
 
 def _datas_indisponiveis(it, saldos):
     """Datas dd/mm (janela do plano) em que o plano-do-dia ZEROU o item.
-    Sob encomenda nunca fica indisponível (produzido pro pedido)."""
-    if it.get('sob_encomenda'):
-        return []
+    Sob encomenda TAMBÉM entra desde 07/08/2026 (decisão do dono — o plano
+    passou a valer pra encomenda; sem isto o bot afirmaria disponível num
+    dia curado e o vigia acusaria falso erro na direção oposta)."""
     chave = (it['kind'], it['id'])
     out = []
     for d in sorted(saldos):
