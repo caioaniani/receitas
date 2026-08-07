@@ -493,3 +493,42 @@ def test_nome_arquivo_remessa_padrao_do_banco(app, admin_user):
         mes = '123456789OND'[d.month - 1]
         assert r1.nome_arquivo == f'34325{mes}{d.day:02d}.CRM'
         assert r2.nome_arquivo == f'34325{mes}{d.day:02d}.RM2'
+
+
+def test_gerar_da_parcela_puxa_cep_e_endereco_do_cadastro(app, admin_user):
+    """07/08/2026 (dono: "por que não puxa o CEP direto do cadastro?"): a
+    rota de parcela avulsa gravava pagador_cep='' fixo — agora usa o MESMO
+    snapshot da fatura mensal (_snapshot_pagador): CEP só dígitos e
+    endereço com fallback pros campos estruturados."""
+    with app.app_context():
+        cli = ClienteB2B(nome='United Coffee', cnpj_cpf='44737537000104',
+                         endereco='', endereco_logradouro='Rua Cel Otaviano',
+                         endereco_numero='55', endereco_bairro='Centro',
+                         endereco_cep='04005-001', ativo=True)
+        db.session.add(cli)
+        db.session.commit()
+        p = _parcela(cli)
+        pid = p.id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    c.post(f'/cobrancas/gerar-da-parcela/{pid}', follow_redirects=True)
+    with app.app_context():
+        cob = Cobranca.query.filter_by(parcela_id=pid).first()
+        assert cob.pagador_cep == '04005001'
+        assert cob.pagador_endereco == 'Rua Cel Otaviano 55 - Centro'
+
+
+def test_lista_tem_link_pra_venda(app, admin_user):
+    """07/08/2026 (dono: "deveria ter um hiperlink pra clicar e abrir o
+    pedido"): o seu_numero da cobrança vira link pro detalhe da venda B2B
+    (ou da fatura), em outra aba."""
+    with app.app_context():
+        cli = _cliente()
+        p = _parcela(cli)
+        pid, vid = p.id, p.venda_id
+    c = app.test_client()
+    _login(c, admin_user.id)
+    c.post(f'/cobrancas/gerar-da-parcela/{pid}')
+    body = c.get('/cobrancas/').get_data(as_text=True)
+    assert f'/b2b/vendas/{vid}' in body
+    assert 'target="_blank"' in body

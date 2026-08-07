@@ -64,7 +64,7 @@
             <td>{% if c.status == 'pendente' %}
                 <input type="checkbox" name="ids" value="{{ c.id }}">{% endif %}</td>
             <td>{{ c.pagador_nome }}<br>
-                <span class="small text-muted">{{ c.pagador_cnpj_cpf }} · {{ c.seu_numero }}</span></td>
+                <span class="small text-muted">{{ c.pagador_cnpj_cpf }} · {% if c.parcela and c.parcela.venda_id %}<a href="{{ url_for('b2b.venda_detalhe', vid=c.parcela.venda_id) }}" target="_blank" title="Abrir a venda em outra aba">{{ c.seu_numero }} ↗</a>{% elif c.fatura_id %}<a href="{{ url_for('b2b.fatura_detalhe', fid=c.fatura_id) }}" target="_blank" title="Abrir a fatura em outra aba">{{ c.seu_numero }} ↗</a>{% else %}{{ c.seu_numero }}{% endif %}</span></td>
             <td>{{ c.nosso_numero_fmt or '—' }}</td>
             <td>{{ c.vencimento.strftime('%d/%m/%Y') }}{% if c.vencida %} <span class="badge bg-warning text-dark">vencida</span>{% endif %}</td>
             <td class="text-end">R$ {{ '%.2f'|format(c.valor) }}</td>
@@ -192,7 +192,8 @@
     <div class="col-md-6"><div class="card">
         <div class="card-header py-2"><strong>Pagas</strong></div>
         <div class="card-body p-0"><table class="table table-sm mb-0"><tbody>
-        {% for c in pagas %}<tr><td>{{ c.pagador_nome }}</td>
+        {% for c in pagas %}<tr><td>{{ c.pagador_nome }}<br>
+            <span class="small">{% if c.parcela and c.parcela.venda_id %}<a href="{{ url_for('b2b.venda_detalhe', vid=c.parcela.venda_id) }}" target="_blank" title="Abrir a venda em outra aba">{{ c.seu_numero }} ↗</a>{% elif c.fatura_id %}<a href="{{ url_for('b2b.fatura_detalhe', fid=c.fatura_id) }}" target="_blank" title="Abrir a fatura em outra aba">{{ c.seu_numero }} ↗</a>{% else %}{{ c.seu_numero }}{% endif %}</span></td>
             <td>{{ c.nosso_numero_fmt }}</td>
             <td>{{ c.pago_em.strftime('%d/%m/%Y') if c.pago_em }}</td>
             <td class="text-end text-success fw-bold">R$ {{ '%.2f'|format(c.valor_pago or c.valor) }}</td></tr>
@@ -200,7 +201,8 @@
     <div class="col-md-6"><div class="card">
         <div class="card-header py-2"><strong>Rejeitadas / baixadas</strong></div>
         <div class="card-body p-0"><table class="table table-sm mb-0"><tbody>
-        {% for c in problemas %}<tr><td>{{ c.pagador_nome }}</td>
+        {% for c in problemas %}<tr><td>{{ c.pagador_nome }}<br>
+            <span class="small">{% if c.parcela and c.parcela.venda_id %}<a href="{{ url_for('b2b.venda_detalhe', vid=c.parcela.venda_id) }}" target="_blank" title="Abrir a venda em outra aba">{{ c.seu_numero }} ↗</a>{% elif c.fatura_id %}<a href="{{ url_for('b2b.fatura_detalhe', fid=c.fatura_id) }}" target="_blank" title="Abrir a fatura em outra aba">{{ c.seu_numero }} ↗</a>{% else %}{{ c.seu_numero }}{% endif %}</span></td>
             <td>{{ c.nosso_numero_fmt }}</td>
             <td><span class="badge bg-danger">{{ c.status }}</span></td>
             <td class="small text-muted">{{ c.motivo_retorno or '' }}</td>
