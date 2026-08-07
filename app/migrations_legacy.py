@@ -96,6 +96,7 @@ def _migrate(app):
         _migrate_estoque_trava(app)
         _seed_horario_dia_dos_pais(app)
         _seed_checklist_padrao(app)
+        _seed_curadoria_dia_pais(app)
 
 
 def _seed_checklist_padrao(app):
@@ -159,6 +160,79 @@ def _seed_horario_dia_dos_pais(app):
         logger.info('seed: horario especial do Dia dos Pais cadastrado')
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed dia dos pais): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_curadoria_dia_pais(app, _hoje=None):
+    """Fecha o catálogo do site pro Dia dos Pais 2026 (pedido do dono
+    07/08/2026, "Faz isso pra mim": dos 9 somente as cestas que ele deixou
+    com quantidade no plano-do-dia).
+
+    O que faz, UMA vez (marker em AppConfig; edição do dono manda depois):
+    1. Plano-do-dia de 09/08: cria linha `qtd_planejada=0` pra todo item
+       PUBLICADO sem linha na data (o fail-open do plano deixaria vender
+       livre) e ZERA linha auto-criada com o default 99999 (rastro de venda,
+       não é curadoria; `qtd_reservada` preservada). Linha com
+       0 < qtd < 99999 é CURADORIA DO DONO — intocada (as cestas dele).
+    2. GUARD DE SEGURANÇA: só age se já existe pelo menos UMA linha de
+       curadoria (0 < qtd < 99999) na data. Sem ela, zerar tudo deixaria o
+       dia 9 SEM NADA à venda — inclusive as cestas.
+    3. `LojaDataEspecial` de 09/08: preenche `bloquear_itens='Mini Pães'`
+       quando vazio (cinto e suspensório da mesma decisão — barra a
+       categoria dos minis mesmo pra item publicado depois da curadoria).
+    Depois de 09/08/2026 só marca e sai (seed velho não mexe em nada)."""
+    from datetime import date as _date
+    try:
+        from app.models import AppConfig, EstoqueSitePlano, LojaDataEspecial
+        from app.services import loja_catalogo
+        from app.services.loja_plano_dia import DEFAULT_QTD_PLANEJADA
+        from app.utils import hoje as _hoje_fn
+        chave = 'seed_curadoria_dia_pais_2026'
+        if AppConfig.get(chave):
+            return
+        alvo = _date(2026, 8, 9)
+        hoje_d = _hoje if _hoje is not None else _hoje_fn()
+        if hoje_d > alvo:
+            AppConfig.set(chave, 'expirado')
+            db.session.commit()
+            return
+        linhas = EstoqueSitePlano.query.filter_by(data=alvo).all()
+        curadas = [ln for ln in linhas
+                   if 0 < (ln.qtd_planejada or 0) < DEFAULT_QTD_PLANEJADA]
+        if not curadas:
+            logger.warning(
+                'seed curadoria dia dos pais: NENHUMA linha com quantidade '
+                'no plano de %s — não vou zerar o dia inteiro; nada feito '
+                '(o dono cura na tela e o seed fica de fora)', alvo)
+            AppConfig.set(chave, 'sem_curadoria')
+            db.session.commit()
+            return
+        por_chave = {(ln.kind, ln.item_id): ln for ln in linhas}
+        criadas = zeradas = 0
+        for it in loja_catalogo.produtos_publicados():
+            ln = por_chave.get((it['kind'], it['id']))
+            if ln is None:
+                db.session.add(EstoqueSitePlano(
+                    kind=it['kind'], item_id=it['id'], data=alvo,
+                    qtd_planejada=0, qtd_reservada=0))
+                criadas += 1
+            elif (ln.qtd_planejada or 0) >= DEFAULT_QTD_PLANEJADA:
+                ln.qtd_planejada = 0
+                zeradas += 1
+        regra = LojaDataEspecial.query.filter_by(data=alvo).first()
+        if regra is not None and not (regra.bloquear_itens or '').strip():
+            regra.bloquear_itens = 'Mini Pães'
+        AppConfig.set(chave, '1')
+        db.session.commit()
+        logger.info(
+            'seed curadoria dia dos pais: %d linha(s) zerada(s) criada(s), '
+            '%d default-99999 zerada(s); curadoria do dono preservada '
+            '(%d item(ns) com quantidade)', criadas, zeradas, len(curadas))
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed curadoria dia dos pais): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001
