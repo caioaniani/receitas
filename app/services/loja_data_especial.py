@@ -259,8 +259,8 @@ def definir(data, janelas, *, express_bloqueado=True, rotulo=None,
     `janelas` aceita texto do textarea ou lista; passa por
     `normalizar_lista`, então horário torto levanta `JanelaInvalida` e NADA
     é gravado. `bloquear_itens`: texto (uma regra por linha — categoria ou
-    nome de item); None = NÃO mexe no que está gravado (compat com
-    chamadores antigos, ex. o seed do 09/08); '' = limpa de propósito."""
+    nome de item); None = NÃO mexe no que está gravado (POST sem o campo
+    nunca apaga bloqueio por acidente); '' = limpa de propósito."""
     if isinstance(data, str):
         data = _date_type.fromisoformat(data)
     janelas_norm = normalizar_lista(janelas)
