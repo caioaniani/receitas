@@ -179,6 +179,10 @@
           <button type="button" data-status="open" class="on">Abertas</button>
           <button type="button" data-status="pending">Conversas do bot</button>
         </span>
+        <!-- FORA do span .filtros de proposito: o handler de troca de
+             status pega '.at-topo .filtros button' e engoliria o clique. -->
+        <button type="button" id="at-chamar" class="chamar-novo"
+                title="Abre conversa de WhatsApp com um cliente SEM pedido (ex.: venda barrada no site). Manda o template aprovado da Meta.">💬 Chamar por telefone</button>
         <span class="att" id="at-att"></span>
       </div>
 
