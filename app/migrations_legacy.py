@@ -98,6 +98,7 @@ def _migrate(app):
         _seed_checklist_padrao(app)
         _seed_curadoria_dia_pais(app)
         _seed_curadoria_dia_pais_v2(app)
+        _seed_drivers_entrega(app)
 
 
 def _seed_checklist_padrao(app):
@@ -281,6 +282,92 @@ def _seed_curadoria_dia_pais_v2(app, _hoje=None):
                     'reaberta(s) com 10000', n)
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed curadoria pais v2): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+# Motoristas contratados que o dono mandou por WhatsApp (07/08/2026,
+# "cadastrar esses motoristas" — semana do Dia dos Pais). Telefone ja em
+# digitos com DDI 55: e o formato que a Z-API usa no envio do magic link
+# (`normalizar_telefone` so tira mascara, nao adiciona o 55).
+_SEED_DRIVERS_2026_08 = [
+    ('Andreia', '5511998909264'),
+    ('Alinne', '5511984652398'),
+    ('Rodrigo', '5511983578852'),
+    ('Roberta', '5511966152906'),
+    ('Anderson', '5511998513825'),
+    ('Carolina', '5511920488991'),
+    ('Luís', '5511911874548'),
+    ('Márcia', '5511998137354'),
+    ('Alessandra', '5511953950106'),
+    ('Sibele', '5511988976979'),
+    ('Hélio', '5511983811876'),
+]
+
+
+def _seed_drivers_entrega(app):
+    """Cadastra UMA VEZ os motoristas da lista do dono (07/08/2026).
+
+    Marker em AppConfig: depois do primeiro boot a tela de drivers do
+    /entregas/painel manda — o seed nunca re-cria quem o dono apagar nem
+    sobrescreve o que ele editar. Regras de colisao (nunca duplicar pessoa,
+    nunca sobrescrever dado do dono):
+    - Match contra os drivers existentes por NOME (sem acento/caixa —
+      'Marcia' de prod casa 'Márcia' da lista) OU por TELEFONE
+      (`telefone_chave` colapsa +55/9o digito).
+    - Existente SEM telefone ganha o telefone da lista; existente COM
+      telefone (mesmo divergente) fica intocado — inclusive `ativo`.
+    - So driver realmente novo e criado (ativo, token proprio, capacidade
+      default do modelo), igual ao POST /entregas/api/drivers.
+    Best-effort: falhar aqui nunca derruba o startup.
+    """
+    import secrets as _secrets
+    import unicodedata as _ud
+    try:
+        from app.models import AppConfig, Driver
+        from app.utils import telefone_chave
+        chave = 'seed_drivers_entrega_2026_08'
+        if AppConfig.get(chave):
+            return
+
+        def _norm(s):
+            s = _ud.normalize('NFKD', s or '')
+            s = ''.join(c for c in s if not _ud.combining(c))
+            return ' '.join(s.casefold().split())
+
+        existentes = Driver.query.all()
+        por_nome = {_norm(d.nome): d for d in existentes}
+        por_fone = {telefone_chave(d.telefone): d for d in existentes
+                    if telefone_chave(d.telefone)}
+        criados, preenchidos, intocados = [], [], []
+        for nome, fone in _SEED_DRIVERS_2026_08:
+            d = por_nome.get(_norm(nome)) or por_fone.get(telefone_chave(fone))
+            if d is not None:
+                if not (d.telefone or '').strip():
+                    d.telefone = fone
+                    preenchidos.append(d.nome)
+                else:
+                    intocados.append(d.nome)
+                continue
+            novo = Driver(nome=nome, telefone=fone, ativo=True,
+                          token=_secrets.token_urlsafe(16))
+            db.session.add(novo)
+            # Indexa o recem-criado: colisao DENTRO da propria lista (ou
+            # numa segunda execucao sem marker) tambem nao duplica.
+            por_nome[_norm(nome)] = novo
+            k = telefone_chave(fone)
+            if k:
+                por_fone[k] = novo
+            criados.append(nome)
+        AppConfig.set(chave, f'criados={len(criados)}')
+        db.session.commit()
+        logger.info('seed drivers: %d criado(s) %s | telefone preenchido: '
+                    '%s | ja existiam: %s', len(criados), criados,
+                    preenchidos, intocados)
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed drivers): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001
