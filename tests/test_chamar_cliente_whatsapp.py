@@ -314,10 +314,25 @@ def test_chamar_telefone_invalido_400(app, admin_user):
     _login(client, admin_user)
     with patch('app.services.chatwoot.iniciar_conversa_whatsapp') as m:
         r = client.post('/entregas/api/atendimento/chamar-telefone',
-                        json={'telefone': '98148-1371'})
+                        json={'telefone': '91234-5678'})
     assert r.status_code == 400
     assert m.call_count == 0
     assert 'ddd' in r.get_json()['erro'].lower()
+
+
+def test_chamar_telefone_identifier_ig_400(app, admin_user):
+    """Identifier de IG (~17 digitos) e numero colado 2x tem >13 digitos —
+    a guarda 10-13 recusa (achado de revisao: telefone_chave sozinho
+    aceitaria os ultimos 10 e o template poderia sair pro contato errado)."""
+    client = app.test_client()
+    _login(client, admin_user)
+    with patch('app.services.chatwoot.iniciar_conversa_whatsapp') as m:
+        for ruim in ('12345678901234567',
+                     '5511999998888 5511888887777'):
+            r = client.post('/entregas/api/atendimento/chamar-telefone',
+                            json={'telefone': ruim})
+            assert r.status_code == 400
+    assert m.call_count == 0
 
 
 def test_chamar_telefone_falha_do_servico_vira_502(app, admin_user):
