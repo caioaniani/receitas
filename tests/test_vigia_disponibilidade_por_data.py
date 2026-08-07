@@ -53,15 +53,20 @@ def test_catalogo_disponibilidade_lista_datas_zeradas(app):
     assert item['indisponivel_em'] == [alvo.strftime('%d/%m')]
 
 
-def test_sob_encomenda_nunca_fica_indisponivel_por_data(app):
+def test_sob_encomenda_tambem_fica_indisponivel_por_data(app):
+    """CONTRATO NOVO 07/08/2026 (decisão do dono, caso Caixa de Mini no Dia
+    dos Pais — SUBSTITUI o "nunca fica indisponível" de 04/08): o plano-do-
+    dia zerado vale pra sob encomenda também, e o bot/vigia enxergam a data
+    curada em `indisponivel_em`."""
     from app.services import bot_tools, loja_plano_dia
     r = _receita_publicada('Mini Pain Encomenda')
     r.sob_encomenda = True
     db.session.commit()
-    loja_plano_dia.definir('receita', r.id, hoje() + timedelta(days=5), 0)
+    alvo = hoje() + timedelta(days=5)
+    loja_plano_dia.definir('receita', r.id, alvo, 0)
     cat = bot_tools.catalogo_disponibilidade()
     item = next(c for c in cat if c['nome'] == 'Mini Pain Encomenda')
-    assert item['indisponivel_em'] == []
+    assert item['indisponivel_em'] == [alvo.strftime('%d/%m')]
 
 
 def test_consultar_produtos_expoe_indisponivel_em(app):

@@ -3,7 +3,9 @@
 Produto/receita marcado `sob_encomenda`:
 - no site só vende pra ENTREGA/RETIRADA a partir de D+2 (dois dias à frente,
   janela das 08:00) — nunca hoje/amanhã nem express (same-day);
-- é PRODUZIDO PRO PEDIDO: sempre disponível na vitrine (não olha plano-do-dia)
+- é PRODUZIDO PRO PEDIDO. Desde 07/08/2026 RESPEITA o plano-do-dia
+  (curadoria por data — decisão do dono, caso Caixa de Mini); estoque
+  FÍSICO segue fora
   e a venda NÃO abate o EstoqueLoja físico;
 - o pedido pago entra na produção do padeiro (separação + pré-preparo) e no
   balanço firme da indústria (cronograma), estilo B2B.
@@ -83,9 +85,14 @@ def test_serializacao_expoe_flag(app):
         assert d['sob_encomenda'] is True
 
 
-# ── vitrine: sempre disponível ───────────────────────────────────────
+# ── vitrine: disponível por default, mas o PLANO-DO-DIA manda ────────
+# CONTRATO NOVO 07/08/2026 (decisão do dono, caso "Caixa de Mini vendida
+# pro Dia dos Pais" — SUBSTITUI o "sempre disponível" de 21/07): sob
+# encomenda respeita o plano-do-dia como qualquer item. Sem plano = segue
+# fail-open (disponível); plano zerado no dia curado = barrado. O estoque
+# FÍSICO continua fora (produzido pro pedido).
 
-def test_vitrine_sob_encomenda_nunca_esgota(app):
+def test_vitrine_sob_encomenda_sem_plano_segue_disponivel(app):
     from app.services import loja_catalogo
     with app.app_context():
         r = _receita(sob_encomenda=True)
@@ -94,6 +101,38 @@ def test_vitrine_sob_encomenda_nunca_esgota(app):
         assert itens[0]['esgotado'] is False
         assert itens[0]['esgotado_hoje'] is False
         assert itens[0]['tem_em_outros_dias'] is True
+
+
+def test_vitrine_sob_encomenda_esgota_quando_plano_zera_a_janela(app):
+    """Plano zerado em TODOS os dias >= D+2 da janela → esgotado duro; um
+    único dia >= D+2 com saldo → disponível de novo."""
+    from app.services import loja_catalogo, loja_plano_dia
+    with app.app_context():
+        r = _receita(sob_encomenda=True)
+        for i in range(2, 16):
+            loja_plano_dia.definir('receita', r.id,
+                                   hoje() + timedelta(days=i), 0)
+        itens = [loja_catalogo.por_id_publicado('receita', r.id)]
+        loja_catalogo.anotar_esgotado(itens)
+        assert itens[0]['esgotado'] is True
+
+        loja_plano_dia.definir('receita', r.id,
+                               hoje() + timedelta(days=5), 10)
+        itens = [loja_catalogo.por_id_publicado('receita', r.id)]
+        loja_catalogo.anotar_esgotado(itens)
+        assert itens[0]['esgotado'] is False
+
+
+def test_tem_estoque_para_dia_respeita_plano_em_sob_encomenda(app):
+    from app.services import loja_catalogo, loja_plano_dia
+    with app.app_context():
+        r = _receita(sob_encomenda=True)
+        alvo = hoje() + timedelta(days=3)
+        assert loja_catalogo.tem_estoque_para_dia('receita', r.id, alvo)
+        loja_plano_dia.definir('receita', r.id, alvo, 0)
+        assert not loja_catalogo.tem_estoque_para_dia('receita', r.id, alvo)
+        loja_plano_dia.definir('receita', r.id, alvo, 4)
+        assert loja_catalogo.tem_estoque_para_dia('receita', r.id, alvo)
 
 
 # ── datas D+2 ────────────────────────────────────────────────────────
@@ -509,3 +548,62 @@ def test_pre_preparo_do_menu_lista_os_minis(app):
         assert por_nome.get('Mini Croissant Nutella') == 20
         assert por_nome.get('Mini Danish de alho poró') == 10
         assert 'Menu Degustação dos Minis' not in por_nome
+
+
+# ── Plano-do-dia no CHECKOUT e na RESERVA (contrato novo 07/08/2026) ──
+
+def test_checkout_barra_encomenda_em_dia_zerado_no_plano(app):
+    """Plano zerado na data escolhida barra a encomenda no criar_pedido —
+    é o que garante "dos 9 somente as 4 cestas do plano" (caso Caixa de
+    Mini no Dia dos Pais)."""
+    from app.services import loja_checkout, loja_plano_dia
+    with app.app_context():
+        lo = _loja_origem()
+        r = _receita(sob_encomenda=True)
+        alvo = hoje() + timedelta(days=4)
+        loja_plano_dia.definir('receita', r.id, alvo, 0)
+        form = {
+            'modo_entrega': 'retirada', 'nome': 'Fulano de Tal',
+            'email': 'f@x.com', 'telefone': '11999998888',
+            'cpf': '529.982.247-25', 'aceite_lgpd': '1',
+            'loja_id': str(lo.id), 'data_entrega': alvo.isoformat(),
+            'janela_entrega': '10:00–11:00',
+            'cep': '04077-000', 'logradouro': 'Rua X', 'numero': '10',
+            'bairro': 'Moema', 'cidade': 'São Paulo', 'uf': 'SP',
+        }
+        itens = [{'kind': 'receita', 'id': r.id, 'qtd': 1}]
+        _, erros = loja_checkout.criar_pedido(form, itens)
+        assert any('não está disponível' in e for e in erros), erros
+
+        # Com saldo no plano, o mesmo pedido passa.
+        loja_plano_dia.definir('receita', r.id, alvo, 5)
+        pedido, erros = loja_checkout.criar_pedido(form, itens)
+        assert erros == [] and pedido is not None
+
+
+def test_pagamento_reserva_e_devolve_plano_pra_encomenda(app):
+    """Sem a reserva, o cap do plano não seguraria nada (10 planejados
+    venderiam 100). O cancelamento devolve — e pedido ANTIGO (nunca
+    reservou, linha inexistente) não cria saldo fantasma."""
+    from app.models import EstoqueSitePlano
+    from app.services import loja_pagamento, loja_plano_dia
+    with app.app_context():
+        _loja_origem()
+        r = _receita(sob_encomenda=True)
+        p = _pedido_pago(r, qtd=3, dias=4)
+        alvo = p.data_entrega
+        loja_plano_dia.definir('receita', r.id, alvo, 10)
+
+        loja_pagamento._reservar_no_plano_do_dia(p)
+        linha = EstoqueSitePlano.query.filter_by(
+            kind='receita', item_id=r.id, data=alvo).first()
+        assert linha.qtd_reservada == 3
+
+        loja_pagamento._devolver_ao_plano_do_dia(p)
+        db.session.refresh(linha)
+        assert linha.qtd_reservada == 0
+
+        # Devolver de novo (pedido antigo/duplicado): trunca em 0.
+        loja_pagamento._devolver_ao_plano_do_dia(p)
+        db.session.refresh(linha)
+        assert linha.qtd_reservada == 0

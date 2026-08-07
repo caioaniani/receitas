@@ -389,7 +389,8 @@ def montar_itens(itens_raw):
             'subtotal': preco * qtd,
             'fatiado': fatiado,
             # Sob encomenda (dono 21/07): pro checkout saber o lead do
-            # carrinho (D+2) e pular a checagem de estoque por dia.
+            # carrinho (D+2). Desde 07/08/2026 a checagem do plano-do-dia
+            # vale pra encomenda tambem (não é mais pulada).
             'sob_encomenda': sob_encomenda,
             # Menu configurável (26/07): a escolha JÁ sanitizada. None em
             # item comum. É ela que o pedido persiste e que a baixa de
