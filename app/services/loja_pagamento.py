@@ -194,12 +194,11 @@ def _reservar_no_plano_do_dia(pedido):
     saldo individual do plano. Decisao do dono 22/06/2026."""
     if not pedido.data_entrega:
         return
-    from app.services import loja_estoque_reserva, loja_plano_dia
+    from app.services import loja_plano_dia
     for it in pedido.itens:
-        # Sob encomenda: produzido pro pedido, fica FORA do plano-do-dia
-        # (a vitrine trata como sempre disponivel). Nao reserva plano.
-        if loja_estoque_reserva.item_sob_encomenda(it):
-            continue
+        # Sob encomenda RESERVA plano desde 07/08/2026 (decisão do dono —
+        # SUBSTITUI o pulo de 21/07): sem a reserva, o cap que o dono põe
+        # no plano-do-dia não seguraria nada (10 planejados venderiam 100).
         if it.receita_id:
             kind, item_id = 'receita', it.receita_id
         elif it.produto_id:
@@ -225,11 +224,12 @@ def _devolver_ao_plano_do_dia(pedido):
     sem cair pra negativo (devolver trunca em 0)."""
     if not pedido.data_entrega:
         return
-    from app.services import loja_estoque_reserva, loja_plano_dia
+    from app.services import loja_plano_dia
     for it in pedido.itens:
-        # Sob encomenda nunca reservou plano — nao devolve (espelho do reservar).
-        if loja_estoque_reserva.item_sob_encomenda(it):
-            continue
+        # Sob encomenda devolve plano desde 07/08/2026 (espelho do reservar).
+        # Pedido ANTIGO (pago antes do deploy, nunca reservou) cancelado
+        # depois: `devolver` trunca em 0 / no-op sem linha — não cria saldo
+        # fantasma, salvo o caso raro de linha com reservas novas (aceito).
         if it.receita_id:
             kind, item_id = 'receita', it.receita_id
         elif it.produto_id:
@@ -442,10 +442,10 @@ def reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
         _rebaixar_pedido(pedido, loja.id, ref_nova, pref_nova, usuario_id)
 
     # 3) PLANO-DO-DIA: devolve as unidades removidas (disponibilidade do site).
-    #    Item sob encomenda NUNCA reservou plano (fica fora dele) — pular o
-    #    devolver evita mexer numa reserva que nao existe (revisao 21/07/2026).
-    from app.services import loja_estoque_reserva
-    if pedido.data_entrega and not loja_estoque_reserva.item_sob_encomenda(item):
+    #    Sob encomenda tambem devolve desde 07/08/2026 (passou a reservar —
+    #    decisao do dono, SUBSTITUI a revisao de 21/07). Pedido antigo que
+    #    nunca reservou: `devolver` trunca em 0 / no-op sem linha.
+    if pedido.data_entrega:
         from app.services import loja_plano_dia
         if item.receita_id:
             loja_plano_dia.devolver('receita', item.receita_id,
