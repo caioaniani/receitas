@@ -1117,11 +1117,23 @@ def pedidos_site():
             'nome_cliente': p.nome_cliente,
             'valor_total': float(p.valor_total or 0),
             'modo_entrega': p.modo_entrega,
+            'data_entrega': (p.data_entrega.isoformat()
+                             if p.data_entrega else None),
             'criado_em': p.criado_em.isoformat() if p.criado_em else None,
             'pago_em': p.pago_em.isoformat() if p.pago_em else None,
             'cancelado_em': p.cancelado_em.isoformat()
             if getattr(p, 'cancelado_em', None) else None,
             'motivo_cancelamento': p.motivo_cancelamento,
+            # Itens (07/08/2026, caso "como saiu Caixa de Mini pro dia dos
+            # pais?!"): sem eles a sonda nao dizia O QUE foi comprado nem
+            # pra QUANDO — nao dava pra ligar o item da tela ao pedido.
+            'itens': [{
+                'nome': it.nome, 'qtd': it.quantidade,
+                'preco_unitario': float(it.preco_unitario or 0),
+                'subtotal': float(it.subtotal or 0),
+                'kind': it.kind,
+                'componentes': [c.nome for c in (it.componentes or [])],
+            } for it in p.itens],
             'pagamentos': [{
                 'metodo': pg.metodo, 'status': pg.status,
                 'valor': float(pg.valor or 0),
