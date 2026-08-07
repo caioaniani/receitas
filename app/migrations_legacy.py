@@ -2793,5 +2793,12 @@ def _migrate_sqlite(app):
             "SELECT 1 FROM wifi_portal_sessao s "
             "WHERE LOWER(s.email) = LOWER(cliente.email)))")
 
+    # Bloqueio de itens por data especial (07/08/2026) — espelho do PG.
+    cursor.execute("PRAGMA table_info(loja_data_especial)")
+    cols_lde = [row[1] for row in cursor.fetchall()]
+    if cols_lde and 'bloquear_itens' not in cols_lde:
+        cursor.execute("ALTER TABLE loja_data_especial ADD COLUMN "
+                       "bloquear_itens TEXT")
+
     conn.commit()
     conn.close()
