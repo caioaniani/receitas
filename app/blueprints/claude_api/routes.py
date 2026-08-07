@@ -2023,6 +2023,60 @@ def estoque_ledger():
                    itens=itens[:40])
 
 
+@claude_api_bp.route('/plano-dia')
+@_claude_auth_required
+def plano_dia_site():
+    """Plano-do-dia do SITE de uma data (read-only, 07/08/2026 — criada pra
+    conferir a curadoria do Dia dos Pais sem login de owner): linhas do
+    plano com nome resolvido + itens publicados SEM linha (fail-open =
+    vendem livre) + bloqueios da data especial. Params: ?data=YYYY-MM-DD
+    (default amanhã)."""
+    from datetime import date as _date
+    from datetime import timedelta
+
+    from app.models import EstoqueSitePlano
+    from app.services import loja_catalogo, loja_data_especial
+    from app.utils import hoje
+
+    data_s = (request.args.get('data') or '').strip()
+    if data_s:
+        try:
+            alvo = _date.fromisoformat(data_s)
+        except ValueError:
+            return jsonify(ok=False, erro='data invalida (YYYY-MM-DD)'), 400
+    else:
+        alvo = hoje() + timedelta(days=1)
+
+    publicados = {(it['kind'], it['id']): it['nome']
+                  for it in loja_catalogo.produtos_publicados()}
+    linhas = (EstoqueSitePlano.query.filter_by(data=alvo)
+              .order_by(EstoqueSitePlano.kind, EstoqueSitePlano.item_id)
+              .all())
+    out = []
+    for ln in linhas:
+        out.append({
+            'kind': ln.kind, 'item_id': ln.item_id,
+            'nome': publicados.get((ln.kind, ln.item_id)),
+            'publicado': (ln.kind, ln.item_id) in publicados,
+            'qtd_planejada': int(ln.qtd_planejada or 0),
+            'qtd_reservada': int(ln.qtd_reservada or 0),
+        })
+    com_linha = {(ln.kind, ln.item_id) for ln in linhas}
+    sem_linha = [{'kind': k, 'item_id': i, 'nome': n}
+                 for (k, i), n in sorted(publicados.items())
+                 if (k, i) not in com_linha]
+    regra = loja_data_especial.regra_do_dia(alvo)
+    return jsonify(
+        ok=True, data=alvo.isoformat(), linhas=out,
+        publicados_sem_linha_vendem_livre=sem_linha,
+        data_especial=None if regra is None else {
+            'rotulo': regra.rotulo,
+            'janelas': regra.lista_janelas(),
+            'express_bloqueado': bool(regra.express_bloqueado),
+            'bloquear_itens': regra.lista_bloqueios(),
+        })
+
+
 @claude_api_bp.route('/catalogo-site')
 @_claude_auth_required
 def catalogo_site():
