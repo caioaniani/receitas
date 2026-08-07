@@ -343,10 +343,12 @@ def montar_itens(itens_raw):
             continue
         sob_encomenda = bool(cat.get('sob_encomenda'))
         # Esgotou entre o carrinho e o checkout → não vende (regra do dono).
-        # Item sob encomenda é produzido pro pedido: SEMPRE disponível (não
-        # olha estoque/plano — a trava dele é só a data D+2).
-        if not sob_encomenda and not loja_catalogo.tem_estoque_site(
-                kind, item_id):
+        # Sob encomenda TAMBÉM passa por aqui desde 07/08/2026 (o plano-do-
+        # dia vale pra encomenda — decisão do dono, SUBSTITUI 21/07): o
+        # "esgotado duro" (plano zerado na janela toda) remove do carrinho
+        # com aviso, igual aos demais; a checagem POR DATA segue no
+        # criar_pedido.
+        if not loja_catalogo.tem_estoque_site(kind, item_id):
             avisos.append(f'"{cat["nome"]}" esgotou e foi removido do pedido.')
             continue
         preco = Decimal(str(cat['preco']))
