@@ -104,12 +104,13 @@ def gerar_da_parcela(parcela_id):
     cli = venda.cliente
     emissao = hoje()
     venc = max(p.vencimento, emissao + timedelta(days=7))  # regra Sicredi
+    endereco, cep = _snapshot_pagador(cli)
     cob = Cobranca(
         parcela_id=p.id,
         pagador_nome=(cli.nome if cli else venda.cliente_nome or ''),
         pagador_cnpj_cpf=(cli.cnpj_cpf if cli else '') or '',
-        pagador_endereco=(cli.endereco if cli else '') or '',
-        pagador_cep='',
+        pagador_endereco=endereco,
+        pagador_cep=cep,
         valor=p.valor, vencimento=venc, emissao=emissao,
         seu_numero=f'V{venda.id}P{p.numero}',
         criado_por_id=current_user.id,
