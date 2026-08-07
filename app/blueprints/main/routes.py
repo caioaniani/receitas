@@ -6221,9 +6221,12 @@ def loja_horarios_especiais_salvar():
             express_bloqueado=bool(request.form.get('express_bloqueado')),
             rotulo=request.form.get('rotulo'),
             usuario_id=current_user.id,
-            # O form SEMPRE manda o campo (o Editar pré-carrega o valor
-            # atual) — '' aqui significa "limpar de propósito".
-            bloquear_itens=request.form.get('bloquear_itens') or '')
+            # Passa o valor CRU do form: None quando o campo está AUSENTE
+            # (POST antigo/forjado — preserva o gravado) e '' quando veio
+            # vazio da tela (limpa de propósito; o Editar pré-carrega o
+            # valor atual, então '' na tela é gesto real do dono). Achado
+            # do revisor 07/08: `or ''` fazia POST sem o campo limpar tudo.
+            bloquear_itens=request.form.get('bloquear_itens'))
     except loja_data_especial.JanelaInvalida as e:
         flash(str(e), 'danger')
         return redirect(destino)
