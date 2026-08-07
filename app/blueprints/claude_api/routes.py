@@ -2205,3 +2205,34 @@ def checklist_estado():
                                      'n': int(n)} for d, t, n in recentes]},
         pendencias_na_home=checklist_loja.pendencias_checklist(),
     )
+
+
+@claude_api_bp.route('/drivers')
+@_claude_auth_required
+def drivers():
+    """SONDA read-only dos motoristas de entrega (07/08/2026).
+
+    Nasceu pra confirmar de fora o seed dos motoristas do Dia dos Pais —
+    o container de dev nao enxerga o Postgres de prod e nao havia sonda de
+    Driver. NUNCA expoe `token` nem `pin` (o token abre a pagina do
+    motorista); so presenca.
+
+    Default = so ativos; ?todos=1 inclui inativos.
+    """
+    from app.models import Driver
+
+    q = Driver.query
+    if request.args.get('todos') != '1':
+        q = q.filter(Driver.ativo.is_(True))
+    itens = [{
+        'id': d.id, 'nome': d.nome,
+        'telefone': (d.telefone or '').strip(),
+        'ativo': bool(d.ativo),
+        'capacidade': d.capacidade or 999,
+        'tem_token': bool(d.token),
+        'tem_pin': bool(d.pin),
+        'criado_em': d.criado_em.isoformat() if d.criado_em else None,
+    } for d in q.order_by(Driver.nome).all()]
+    return jsonify(ok=True, total=len(itens),
+                   sem_telefone=sum(1 for x in itens if not x['telefone']),
+                   drivers=itens)
