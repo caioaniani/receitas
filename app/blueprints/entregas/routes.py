@@ -457,12 +457,15 @@ def api_atendimento_chamar_telefone():
     (`chatwoot.iniciar_conversa_whatsapp`); o {{2}} do template vira o
     ASSUNTO digitado (ex.: 'Cesta dia dos pais') em vez do codigo."""
     from app.services import chatwoot as cw_svc
-    from app.utils import telefone_chave
+    from app.utils import normalizar_telefone
     data = request.get_json(silent=True) or {}
     telefone = (data.get('telefone') or '').strip()
-    # telefone_chave devolve '' com menos de 10 digitos (sem DDD nao ha
-    # match seguro — mesma regua da memoria do bot).
-    if not telefone_chave(telefone):
+    # Mesma guarda do canal do bot (crm/routes.py): 10-13 digitos = DDD +
+    # numero, com/sem 55. Fora disso nao e telefone BR — identifier de IG
+    # (~17 digitos) ou numero colado 2x passariam num check de minimo e o
+    # template poderia sair pra contato errado (achado de revisao).
+    digitos = normalizar_telefone(telefone)
+    if not (10 <= len(digitos) <= 13):
         return jsonify({'ok': False,
                         'erro': 'Telefone invalido — informe DDD + numero.'
                         }), 400
