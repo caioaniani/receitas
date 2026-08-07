@@ -82,9 +82,9 @@ def _serializar_receita(r):
         # Sourdough → oferece "fatiado?" no site (só preferência de corte;
         # não muda preço nem estoque). Front gateia o checkbox por aqui.
         'fatiavel': receita_fatiavel(r),
-        # Sob encomenda D+2 (dono 21/07/2026): so vende pra data >= D+2 e e
-        # produzido pro pedido — a vitrine trata como SEMPRE disponivel
-        # (nao olha plano-do-dia) e a venda nao abate EstoqueLoja.
+        # Sob encomenda D+2 (dono 21/07/2026; plano-do-dia passou a valer
+        # em 07/08/2026): so vende pra data >= D+2, e produzido pro pedido
+        # e a venda nao abate EstoqueLoja fisico.
         'sob_encomenda': bool(getattr(r, 'sob_encomenda', False)),
         'preco': float(r.preco_site) if r.preco_site else None,
         'imagem': r.imagem_dropbox_url or r.imagem_url or '',
@@ -450,7 +450,9 @@ def tem_estoque_para_dia(kind, item_id, data):
 
 def item_e_sob_encomenda(kind, item_id):
     """True se a receita/produto esta marcada `sob_encomenda` (produzido pro
-    pedido: nao abate EstoqueLoja, fica fora do plano-do-dia, so vende D+2).
+    pedido: nao abate EstoqueLoja fisico, so vende D+2; desde 07/08/2026
+    RESPEITA o plano-do-dia como qualquer item — decisao do dono, SUBSTITUI
+    o "fora do plano" de 21/07).
     Fonte unica pra o checkout/reserva/pagamento/previsao consultarem."""
     if kind == 'receita':
         r = Receita.query.get(item_id)

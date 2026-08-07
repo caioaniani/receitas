@@ -58,8 +58,11 @@ def _filtro_item(item):
 def item_sob_encomenda(item):
     """True se a receita/produto do PedidoOnlineItem está marcada
     `sob_encomenda` (produzido pro pedido). Esses itens ficam FORA do
-    EstoqueLoja e do plano-do-dia — quem os atende é a produção do padeiro
-    (estilo B2B). Best-effort: relationship lazy-load; None = não sob."""
+    EstoqueLoja FÍSICO — quem os atende é a produção do padeiro (estilo
+    B2B). O plano-do-dia (disponibilidade) passou a valer pra eles em
+    07/08/2026 (decisão do dono), mas isso é papel do loja_pagamento/
+    checkout — aqui é só estoque físico. Best-effort: relationship
+    lazy-load; None = não sob."""
     alvo = None
     if item.receita_id:
         alvo = item.receita
