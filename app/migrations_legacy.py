@@ -239,6 +239,53 @@ def _seed_curadoria_dia_pais(app, _hoje=None):
             pass
 
 
+def _seed_curadoria_dia_pais_v2(app, _hoje=None):
+    """Correção do seed v1 (07/08/2026, mesmo dia): a 'Cesta dia dos pais'
+    (39 vendas pagas pro dia 9) e a 'Caixa Especial' (10) estavam com a
+    linha AUTO-criada de 99999 — o dono nunca digitou quantidade nelas — e
+    o v1 as zerou junto com o resto, fechando as duas cestas MAIS vendidas
+    do Dia dos Pais. Reabre as duas com 10000, o mesmo 'sem limite prático'
+    que o dono digitou na Family Box e na Bandeja. Guard: só mexe em linha
+    que está EM ZERO (ajuste do dono entre deploys manda); marker; expira
+    depois de 09/08."""
+    from datetime import date as _date
+    try:
+        from app.models import AppConfig, EstoqueSitePlano
+        from app.services import loja_catalogo
+        chave = 'seed_curadoria_dia_pais_2026_v2'
+        if AppConfig.get(chave):
+            return
+        alvo = _date(2026, 8, 9)
+        if _hoje is None:
+            from app.utils import hoje as _hoje_fn
+            _hoje = _hoje_fn()
+        if _hoje > alvo:
+            AppConfig.set(chave, 'expirado')
+            db.session.commit()
+            return
+        reabrir = {'cesta dia dos pais', 'caixa especial'}
+        alvos = [(it['kind'], it['id']) for it in
+                 loja_catalogo.produtos_publicados()
+                 if (it['nome'] or '').strip().lower() in reabrir]
+        n = 0
+        for kind, item_id in alvos:
+            ln = EstoqueSitePlano.query.filter_by(
+                kind=kind, item_id=item_id, data=alvo).first()
+            if ln is not None and (ln.qtd_planejada or 0) == 0:
+                ln.qtd_planejada = 10000
+                n += 1
+        AppConfig.set(chave, '1')
+        db.session.commit()
+        logger.info('seed curadoria dia dos pais v2: %d cesta(s) '
+                    'reaberta(s) com 10000', n)
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed curadoria pais v2): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _migrate_estoque_trava(app):
     """Estoque por produto: consolida duplicatas legadas e cria a trava de
     unicidade. Estado vive so no PEDIDO; o estoque (loja e industria) eh 1 linha
