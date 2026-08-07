@@ -460,6 +460,41 @@
                   'Marcar esta conversa como resolvida?');
     });
 
+    // ── Chamar por telefone (cliente SEM pedido — ex.: venda barrada) ──
+    // Dispara o template aprovado pelo mesmo motor do "Chamar cliente" do
+    // modal de pedidos; aqui o cliente nunca criou pedido, entao a entrada
+    // e telefone + nome + assunto na mao.
+    document.getElementById('at-chamar').addEventListener('click', function () {
+      var tel = prompt('Telefone do cliente (com DDD):', '');
+      if (tel === null) return;
+      tel = tel.trim();
+      if (!tel) { toast('Telefone vazio', 'erro'); return; }
+      var nome = prompt('Nome do cliente:', '');
+      if (nome === null) return;
+      var sobre = prompt('Sobre o quê? (entra na mensagem: '
+                         + '"seu pedido …")', 'no site');
+      if (sobre === null) return;
+      var btn = this;
+      btn.disabled = true;
+      postJSON('/entregas/api/atendimento/chamar-telefone',
+               { telefone: tel, nome: nome.trim(), sobre: sobre.trim() })
+        .then(function (r) {
+          btn.disabled = false;
+          var b = r.body || {};
+          if (r.status === 200 && b.ok) {
+            toast(b.nova ? 'Template enviado — conversa aberta'
+                         : 'Conversa reaberta — template reenviado', 'ok');
+            abrirThread(b.conversation_id, b.nome);
+          } else {
+            toast('Erro: ' + (b.erro || r.status), 'erro');
+            // Conversa pode ter sido criada mesmo com template falho —
+            // abre pra o atendente ver o estado real.
+            if (b.conversation_id) abrirThread(b.conversation_id, b.nome);
+          }
+        })
+        .catch(function () { btn.disabled = false; toast('Falha de rede', 'erro'); });
+    });
+
     // Alerta do vigia (no iframe do painel à esquerda) pede pra abrir a
     // conversa aqui na direita. Valida a origem (same-origin) por seguranca —
     // ignora postMessage de qualquer outra janela/origem.
