@@ -2133,7 +2133,15 @@ do padeiro: separação + cronograma + pré-preparo) + **lead FIXO D+2**.
   deploy: `devolver` trunca em 0/no-op — não cria saldo fantasma (caso
   raro de linha com reservas novas: aceito). Testes: seções novas em
   `test_sob_encomenda.py` + contrato novo em
-  `test_vigia_disponibilidade_por_data.py`.
+  `test_vigia_disponibilidade_por_data.py`. PENDÊNCIA (achado de revisão,
+  decisão separada): o botão "Reparar órfãs" do plano-do-dia
+  (`loja_plano_dia.reparar_linhas_orfas`) trata TODA linha `(planejada=0,
+  reservada>0)` como bug pré-24/06 e sobe pra 99999 — com encomendas
+  reservando plano, esse estado virou LEGÍTIMO (venda antes da curadoria +
+  dono zera o dia) e o clique REABRIRIA o dia curado. Não clicar após
+  curar um dia; distinguir órfã real exigiria marcador novo. Também
+  pré-existente: divulgação não consome plano
+  (`divulgacao.criar_divulgacao` — by design, gesto de owner).
 - **NÃO abate EstoqueLoja (produzido pro pedido)**: `loja_estoque_reserva.
   item_sob_encomenda(item)` faz `_expandir_estoque` retornar `[]` (fora de
   reserva/liberação) E o loop de baixa real do `consumir` PULA o item (as DUAS
