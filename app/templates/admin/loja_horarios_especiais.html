@@ -103,7 +103,7 @@
     <thead>
       <tr>
         <th>Dia</th><th>O que é</th><th>Horários</th>
-        <th>Entrega imediata</th><th></th>
+        <th>Entrega imediata</th><th>Itens bloqueados</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -127,15 +127,25 @@
           <span class="badge bg-light text-dark border">normal</span>
           {% endif %}
         </td>
+        <td>
+          {% set bloq = r.lista_bloqueios() %}
+          {% if bloq %}
+          {% for b in bloq %}<span class="badge bg-warning text-dark me-1">🚫 {{ b }}</span>{% endfor %}
+          {% else %}
+          <span class="text-muted small">—</span>
+          {% endif %}
+        </td>
         <td class="text-end text-nowrap">
           {# Editar carrega os valores ATUAIS no formulário. Sem isto, salvar
-             de novo pra corrigir um rótulo apagaria os horários. #}
+             de novo pra corrigir um rótulo apagaria os horários (e agora
+             também os itens bloqueados). #}
           <button type="button" class="btn btn-sm btn-outline-secondary"
                   data-editar
                   data-data="{{ r.data.isoformat() }}"
                   data-rotulo="{{ r.rotulo or '' }}"
                   data-janelas="{{ r.lista_janelas()|join('\n') }}"
                   data-express="{{ '1' if r.express_bloqueado else '' }}"
+                  data-bloqueios="{{ r.lista_bloqueios()|join('\n') }}"
                   data-fechado="{{ '1' if r.fechado else '' }}">Editar</button>
           <form method="POST"
                 action="{{ url_for('main.loja_horarios_especiais_remover') }}"
@@ -195,6 +205,7 @@ document.querySelectorAll('form[data-confirma-remocao]').forEach(function (f) {
     data: document.getElementById('ldata'),
     rotulo: document.getElementById('lrotulo'),
     janelas: document.getElementById('ljanelas'),
+    bloqueios: document.getElementById('lbloqueios'),
     express: document.getElementById('lexpress'),
     fechar: document.getElementById('lfechar'),
     aviso: document.getElementById('leditando'),
@@ -202,6 +213,7 @@ document.querySelectorAll('form[data-confirma-remocao]').forEach(function (f) {
   };
   function limpar() {
     f.data.value = ''; f.rotulo.value = ''; f.janelas.value = '';
+    f.bloqueios.value = '';
     f.express.checked = true; f.fechar.checked = false;
     f.aviso.textContent = ''; f.cancelar.classList.add('d-none');
   }
@@ -210,6 +222,7 @@ document.querySelectorAll('form[data-confirma-remocao]').forEach(function (f) {
       f.data.value = b.dataset.data || '';
       f.rotulo.value = b.dataset.rotulo || '';
       f.janelas.value = b.dataset.janelas || '';
+      f.bloqueios.value = b.dataset.bloqueios || '';
       f.express.checked = !!b.dataset.express;
       f.fechar.checked = !!b.dataset.fechado;
       f.aviso.textContent = 'editando ' + (b.dataset.data || '');

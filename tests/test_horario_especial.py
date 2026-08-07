@@ -630,3 +630,130 @@ def test_bot_dia_fechado_nao_ganha_papo_de_faixa(app):
     txt = chatbot._horarios_especiais_texto()
     assert 'NAO entregamos' in txt
     assert 'horario individual' not in txt
+
+
+# ── Bloqueio de ITENS por data especial (07/08/2026) ─────────────────────
+# Caso real: "Caixa de Mini" (categoria Mini Pães) vendida pra entrega no
+# Dia dos Pais — dono: "os clientes nao poderiam comprar os minis para o
+# dia 9". A data especial ganhou `bloquear_itens` (uma regra por linha:
+# categoria ou nome de item); o checkout barra com a mensagem do cardápio
+# especial. Vazio = sem restrição (comportamento de sempre).
+
+def _produto_mini(db):
+    from app.models import Produto
+    p = Produto(nome='Caixa de Mini', categoria='Mini Pães',
+                preco_site=300.0, imagem_dropbox_url='https://x/m.jpg',
+                ativo=True)
+    db.session.add(p)
+    db.session.commit()
+    return p
+
+
+def test_itens_bloqueados_por_categoria_sem_acento(app):
+    """'mini paes' digitado sem acento/caixa casa a categoria 'Mini Pães'."""
+    from app.extensions import db
+    from app.services import loja_data_especial
+    p = _produto_mini(db)
+    _definir(bloquear_itens='mini paes')
+    itens = [{'kind': 'produto', 'id': p.id, 'nome': p.nome}]
+    assert loja_data_especial.itens_bloqueados(DIA_DOS_PAIS, itens) == \
+        ['Caixa de Mini']
+    # Dia normal: nada barrado.
+    assert loja_data_especial.itens_bloqueados(
+        DIA_DOS_PAIS + timedelta(days=1), itens) == []
+
+
+def test_itens_bloqueados_por_nome_do_item(app):
+    from app.extensions import db
+    from app.services import loja_data_especial
+    p = _produto_mini(db)
+    _definir(bloquear_itens='caixa de mini')
+    itens = [{'kind': 'produto', 'id': p.id, 'nome': p.nome}]
+    assert loja_data_especial.itens_bloqueados(DIA_DOS_PAIS, itens) == \
+        ['Caixa de Mini']
+
+
+def test_sem_bloqueio_nada_barrado_e_none_preserva(app):
+    """Regra sem bloqueio não barra nada; `definir(bloquear_itens=None)`
+    (chamador antigo, ex. seed) NÃO apaga o que está gravado; '' limpa."""
+    from app.extensions import db
+    from app.services import loja_data_especial
+    p = _produto_mini(db)
+    _definir()                              # sem bloqueio
+    itens = [{'kind': 'produto', 'id': p.id, 'nome': p.nome}]
+    assert loja_data_especial.itens_bloqueados(DIA_DOS_PAIS, itens) == []
+
+    _definir(bloquear_itens='Mini Pães')
+    regra = _definir()                      # None: preserva
+    assert regra.lista_bloqueios() == ['Mini Pães']
+    regra = _definir(bloquear_itens='')     # '': limpa de propósito
+    assert regra.lista_bloqueios() == []
+
+
+def test_checkout_barra_item_bloqueado_na_data(app):
+    """Checkout recusa o item barrado pra data especial, citando o rótulo
+    ('cardápio especial'); pra OUTRA data o mesmo carrinho passa."""
+    from app.extensions import db
+    from app.models import AppConfig, Loja
+    from app.services import loja_checkout
+    loja = Loja(nome='Brooklin', endereco='Rua X, 1', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    AppConfig.set('loja_site_estoque_id', loja.id)
+    p = _produto_mini(db)
+    itens = [{'kind': 'produto', 'id': p.id, 'qtd': 1}]
+    _definir(rotulo='Dia dos Pais', bloquear_itens='Mini Pães')
+    base = datetime(2026, 8, 3, 10, 0)
+
+    _, erros = loja_checkout.criar_pedido(
+        _form(DIA_DOS_PAIS, JANELA_PAIS, loja_id=loja.id), itens, base=base)
+    assert any('Caixa de Mini' in e and 'cardápio especial' in e
+               for e in erros), erros
+
+    # Mesmo carrinho, dia normal (D+2, sem regra): passa.
+    outra = date(2026, 8, 5)
+    pedido, erros = loja_checkout.criar_pedido(
+        _form(outra, '10:00–11:00', loja_id=loja.id), itens, base=base)
+    assert erros == [] and pedido is not None
+
+
+def test_checkout_nao_barra_item_fora_da_regra(app):
+    """Categoria diferente não é afetada — o bloqueio é curadoria pontual,
+    não fechamento do dia."""
+    from app.extensions import db
+    from app.models import AppConfig, Loja
+    from app.services import loja_checkout
+    loja = Loja(nome='Brooklin', endereco='Rua X, 1', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    AppConfig.set('loja_site_estoque_id', loja.id)
+    itens = _carrinho(db)                   # 'Cesta Pais', categoria Cestas
+    _definir(bloquear_itens='Mini Pães')
+    pedido, erros = loja_checkout.criar_pedido(
+        _form(DIA_DOS_PAIS, JANELA_PAIS, loja_id=loja.id), itens,
+        base=datetime(2026, 8, 3, 10, 0))
+    assert erros == [] and pedido is not None
+
+
+def test_tela_salva_edita_e_preserva_bloqueios(app, owner_user):
+    """POST da tela grava; o botão Editar carrega o valor (data-bloqueios);
+    salvar de novo com o campo intacto não apaga."""
+    from app.models import LojaDataEspecial
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s['_user_id'] = str(owner_user.id)
+        s['_fresh'] = True
+    r = c.post('/admin/loja-online/horarios-especiais/salvar', data={
+        'data': DIA_DOS_PAIS.isoformat(), 'rotulo': 'Dia dos Pais',
+        'janelas': '06:00-10:00', 'express_bloqueado': '1',
+        'bloquear_itens': 'Mini Pães\nCaixa de Mini',
+    })
+    assert r.status_code in (302, 303)
+    regra = LojaDataEspecial.query.filter_by(data=DIA_DOS_PAIS).first()
+    assert regra.lista_bloqueios() == ['Mini Pães', 'Caixa de Mini']
+
+    body = c.get('/admin/loja-online/horarios-especiais').get_data(
+        as_text=True)
+    assert 'name="bloquear_itens"' in body
+    assert 'data-bloqueios="Mini Pães' in body
+    assert '🚫 Mini Pães' in body
