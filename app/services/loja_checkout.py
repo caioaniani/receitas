@@ -837,6 +837,18 @@ def criar_pedido(form, itens_raw, *, base=None):
                     f'Os seguintes itens não estão disponíveis pra entrega '
                     f'em {data_fmt}: {", ".join(esgotados)}. Escolha outra '
                     'data ou tire-os do carrinho.')
+            # Alerta IMEDIATO ao dono (WhatsApp): o cliente ia comprar e foi
+            # barrado por esgotado. Best-effort/async — nunca afeta o
+            # checkout. FICA DENTRO do `if esgotados:` — a 1ª versão do
+            # bloco de data especial abaixo o engoliu sem querer e o alerta
+            # de esgotado morreu (achado CRÍTICO do revisor 07/08/2026,
+            # pego pelo teste de test_loja_alerta no CI).
+            try:
+                from app.services import loja_alerta
+                loja_alerta.alertar_esgotado(
+                    nome, telefone, email, esgotados, data_entrega)
+            except Exception:  # noqa: BLE001
+                pass
 
     # Bloqueio de itens por DATA ESPECIAL (07/08/2026, caso "Caixa de Mini
     # vendida pro Dia dos Pais"): a data cadastrada pode barrar categorias/
@@ -857,14 +869,6 @@ def criar_pedido(form, itens_raw, *, base=None):
                 f'Para {rotulo} trabalhamos com um cardápio especial — '
                 f'"{nomes}" não está disponível pra entrega nessa data. '
                 'Escolha outra data de entrega ou tire o item do carrinho.')
-            # Alerta IMEDIATO ao dono (WhatsApp): o cliente ia comprar e foi
-            # barrado por esgotado. Best-effort/async — nunca afeta o checkout.
-            try:
-                from app.services import loja_alerta
-                loja_alerta.alertar_esgotado(
-                    nome, telefone, email, esgotados, data_entrega)
-            except Exception:  # noqa: BLE001
-                pass
 
     if erros:
         return None, erros
