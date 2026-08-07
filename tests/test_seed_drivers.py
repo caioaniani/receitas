@@ -75,12 +75,13 @@ def _token_sonda(app):
     return {'Authorization': 'Bearer tok-teste'}
 
 
-def test_sonda_drivers_lista_sem_token_nem_pin(client, app, _token_sonda):
+def test_sonda_drivers_lista_sem_token_nem_pin(app, _token_sonda):
     db.session.add(Driver(nome='Zeca', telefone='5511900001111', ativo=True,
                           token='segredo-do-driver', pin='1234'))
     db.session.add(Driver(nome='Fora', ativo=False, token='tok-fora-1234'))
     db.session.commit()
 
+    client = app.test_client()
     r = client.get('/api/claude/drivers', headers=_token_sonda)
     assert r.status_code == 200
     data = r.get_json()
