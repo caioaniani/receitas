@@ -1979,6 +1979,15 @@ def _migrate_postgres(app):
              "SELECT 1 FROM wifi_portal_sessao s "
              "WHERE LOWER(s.email) = LOWER(cliente.email)))")
 
+    # Bloqueio de ITENS por data especial (07/08/2026, caso Caixa de Mini
+    # vendida pro Dia dos Pais — dono: "os clientes nao poderiam comprar os
+    # minis para o dia 9"). Uma linha por regra (nome de categoria ou de
+    # item); NULL/vazio = sem restricao. Commit 1 do procedimento de 2
+    # commits — o modelo/logica so entram depois deste ALTER estar no ar.
+    if 'bloquear_itens' not in _cols('loja_data_especial'):
+        _try("ALTER TABLE loja_data_especial ADD COLUMN IF NOT EXISTS "
+             "bloquear_itens TEXT")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
