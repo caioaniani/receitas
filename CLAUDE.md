@@ -2372,6 +2372,23 @@ no codigo) pra ele resolver Natal/Dia das Maes sem deploy.
   en-dash.
 - Tela: `/admin/loja-online/horarios-especiais` (owner) + card no painel da
   loja online. Manual de operacao registrado.
+- **Bloqueio de ITENS por data (07/08/2026, caso "Caixa de Mini vendida pro
+  Dia dos Pais" — dono: "os clientes nao poderiam comprar os minis para o
+  dia 9")**: `LojaDataEspecial.bloquear_itens` (TEXT, procedimento de 2
+  commits — ALTER confirmado pela sonda ?colunas= antes do modelo). Uma
+  REGRA por linha: nome de CATEGORIA ou de ITEM do catalogo (comparacao
+  sem acento/caixa — `_norm_regra`). `loja_data_especial.itens_bloqueados
+  (data, itens)` e chamado no `criar_pedido` DEPOIS do bloco de esgotados;
+  a recusa cita o rotulo da data ("cardapio especial"), diferente da msg de
+  esgotado (curadoria != falta de estoque). FAIL-OPEN deliberado (erro na
+  consulta = nao barra — mesmo contrato do regra_do_dia: problema aqui
+  nunca derruba o checkout). `definir(bloquear_itens=None)` NAO mexe no
+  gravado (compat com seed); `''` limpa de proposito — a tela SEMPRE manda
+  o campo e o botao Editar pre-carrega (`data-bloqueios`), senao corrigir o
+  rotulo apagaria os bloqueios. LIMITACAO CONHECIDA: a VITRINE nao esconde
+  o item por data (o cliente so descobre no checkout) — mostrar aviso na
+  pagina do produto e melhoria separada. Testes: secao "Bloqueio de ITENS"
+  em `tests/test_horario_especial.py`.
 - **POS-REVISAO (fixados)**: (1) **FECHAR O DIA virou CHECKBOX EXPLICITO** —
   era "deixe o campo em branco", e como o form nasce vazio e `definir` e
   upsert, reabrir a tela so pra corrigir o rotulo FECHARIA o site no Dia dos
