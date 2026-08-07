@@ -253,12 +253,14 @@ def pedidos_fora_do_horario(regras):
 
 
 def definir(data, janelas, *, express_bloqueado=True, rotulo=None,
-            usuario_id=None):
+            usuario_id=None, bloquear_itens=None):
     """Cria ou atualiza a regra da data (upsert). Devolve a linha.
 
     `janelas` aceita texto do textarea ou lista; passa por
     `normalizar_lista`, então horário torto levanta `JanelaInvalida` e NADA
-    é gravado."""
+    é gravado. `bloquear_itens`: texto (uma regra por linha — categoria ou
+    nome de item); None = NÃO mexe no que está gravado (compat com
+    chamadores antigos, ex. o seed do 09/08); '' = limpa de propósito."""
     if isinstance(data, str):
         data = _date_type.fromisoformat(data)
     janelas_norm = normalizar_lista(janelas)
@@ -269,9 +271,61 @@ def definir(data, janelas, *, express_bloqueado=True, rotulo=None,
     regra.janelas = '\n'.join(janelas_norm)
     regra.express_bloqueado = bool(express_bloqueado)
     regra.rotulo = (rotulo or '').strip()[:80] or None
+    if bloquear_itens is not None:
+        linhas = [ln.strip() for ln in str(bloquear_itens).splitlines()
+                  if ln.strip()]
+        regra.bloquear_itens = '\n'.join(linhas) or None
     db.session.commit()
     _limpar_cache()
     return regra
+
+
+def _norm_regra(s):
+    """Normaliza pra comparação: sem acento, caixa baixa, espaços únicos.
+    'Mini Pães' == 'mini paes' — o dono digita no celular, sem acento."""
+    import unicodedata
+    s = unicodedata.normalize('NFKD', str(s or ''))
+    s = ''.join(c for c in s if not unicodedata.combining(c))
+    return ' '.join(s.casefold().split())
+
+
+def itens_bloqueados(data, itens):
+    """Nomes dos itens do carrinho BARRADOS pra entrega nesta data.
+
+    Cada linha de `bloquear_itens` casa (sem acento/caixa) com a CATEGORIA
+    do item no catálogo ou com o NOME do item. `itens` = lista de dicts do
+    `loja_checkout.montar_itens` (kind/id/nome). Dia sem regra ou sem
+    bloqueio = []. Best-effort: erro de consulta devolve [] — bloquear é
+    curadoria, e um problema aqui NUNCA pode derrubar o checkout (mesmo
+    contrato do `regra_do_dia`; o fail-open é deliberado)."""
+    try:
+        regra = regra_do_dia(data)
+        if regra is None:
+            return []
+        regras = {_norm_regra(ln) for ln in regra.lista_bloqueios()}
+        if not regras:
+            return []
+        from app.models import Produto, Receita
+        barrados = []
+        for it in itens:
+            nome = it.get('nome') or ''
+            alvo = None
+            if it.get('kind') == 'receita':
+                alvo = Receita.query.get(it.get('id'))
+            elif it.get('kind') == 'produto':
+                alvo = Produto.query.get(it.get('id'))
+            categoria = getattr(alvo, 'categoria', None)
+            if (_norm_regra(nome) in regras
+                    or (categoria and _norm_regra(categoria) in regras)):
+                barrados.append(nome)
+        return barrados
+    except Exception:  # noqa: BLE001 — fail-open documentado acima
+        logger.exception('data especial: bloqueio de itens falhou (%s)', data)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return []
 
 
 def remover(data):
