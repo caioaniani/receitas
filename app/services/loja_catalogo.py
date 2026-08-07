@@ -359,13 +359,30 @@ def anotar_esgotado(itens):
         it['proxima_data'] = None
         it['proxima_data_label'] = ''
         it['proxima_data_curta'] = ''
-        # Sob encomenda: produzido pro pedido, SEMPRE disponivel na vitrine
-        # (nunca esgota — a trava e so a data D+2 no checkout). Nao olha
-        # plano-do-dia nem estoque fisico.
+        # Sob encomenda RESPEITA o plano-do-dia desde 07/08/2026 (decisão do
+        # dono no caso "Caixa de Mini vendida pro Dia dos Pais" — SUBSTITUI o
+        # "sempre disponível na vitrine" de 21/07: a curadoria do dia é uma
+        # tela só, o plano). "Hoje" nunca é comprável de qualquer forma (lead
+        # D+2), então a pergunta certa é: algum dia >= D+2 da janela tem
+        # saldo? Nenhum = esgotado duro. O estoque FÍSICO segue fora (o item
+        # continua produzido pro pedido — só a curadoria por data mudou).
         if it.get('sob_encomenda'):
+            from datetime import timedelta
+
+            from app.services.loja_checkout import ENCOMENDA_LEAD_DIAS
+            minimo = dia_hoje + timedelta(days=ENCOMENDA_LEAD_DIAS)
+            tem_dia = False
+            for d in datas:
+                if d < minimo:
+                    continue
+                s = _saldo_para_dia(
+                    kind, item_id, d, saldos_dia_cache=saldos_cache)
+                if s is None or s > 0:
+                    tem_dia = True
+                    break
             it['esgotado_hoje'] = False
-            it['tem_em_outros_dias'] = True
-            it['esgotado'] = False
+            it['tem_em_outros_dias'] = tem_dia
+            it['esgotado'] = not tem_dia
             continue
         saldo_hoje = _saldo_para_dia(
             kind, item_id, dia_hoje, saldos_dia_cache=saldos_cache)
