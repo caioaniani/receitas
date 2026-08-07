@@ -152,6 +152,15 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
 - `GET /api/claude/acuracia?dias=&motor=` (16/07/2026): resumo do painel de
   acuracia + WAPE por (loja, receita) dos motores vivos — pro assistente
   diagnosticar de fora onde a previsao erra.
+- `GET /api/claude/drivers?todos=1` (07/08/2026): motoristas de entrega
+  (nome, telefone, ativo, capacidade, tem_token/tem_pin — NUNCA o token/PIN
+  em si). Criada pra confirmar o seed dos motoristas do Dia dos Pais
+  (`migrations_legacy._seed_drivers_entrega`, marker
+  `seed_drivers_entrega_2026_08`): cadastro em massa que o dono manda por
+  WhatsApp entra por seed one-shot (match por nome sem acento/caixa OU
+  `telefone_chave`; nunca sobrescreve dado do dono, telefone so preenche se
+  vazio; grava ja com DDI 55 — `normalizar_telefone` nao adiciona o 55 no
+  envio Z-API). Testes: `tests/test_seed_drivers.py`.
 - `GET /api/claude/vendas-snapshot?dias=&loja=&pedidos=1` (18/07/2026):
   faturamento POR DIA do snapshot `VendaSeruDiaLoja` (itens vs total dos
   pedidos) + lista ao vivo dos pedidos com a diferenca total−itens. Criada
