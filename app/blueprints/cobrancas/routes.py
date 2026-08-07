@@ -142,13 +142,7 @@ def gerar_da_fatura(fatura_id):
         flash(f'A fatura {fat.codigo} já tem cobrança.', 'warning')
         return redirect(url_for('b2b.fatura_detalhe', fid=fatura_id))
     cli = fat.cliente
-    endereco = (cli.endereco or '').strip()
-    if not endereco and cli.endereco_logradouro:
-        endereco = ' '.join(x for x in (
-            cli.endereco_logradouro,
-            (f'{cli.endereco_numero}' if cli.endereco_numero else ''),
-            (f'- {cli.endereco_bairro}' if cli.endereco_bairro else '')) if x)
-    cep = ''.join(ch for ch in (cli.endereco_cep or '') if ch.isdigit())
+    endereco, cep = _snapshot_pagador(cli)
     emissao = hoje()
     venc = max(fat.vencimento, emissao + timedelta(days=7))  # regra Sicredi
     cob = Cobranca(
