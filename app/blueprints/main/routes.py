@@ -6220,7 +6220,10 @@ def loja_horarios_especiais_salvar():
             '' if fechar else janelas,
             express_bloqueado=bool(request.form.get('express_bloqueado')),
             rotulo=request.form.get('rotulo'),
-            usuario_id=current_user.id)
+            usuario_id=current_user.id,
+            # O form SEMPRE manda o campo (o Editar pré-carrega o valor
+            # atual) — '' aqui significa "limpar de propósito".
+            bloquear_itens=request.form.get('bloquear_itens') or '')
     except loja_data_especial.JanelaInvalida as e:
         flash(str(e), 'danger')
         return redirect(destino)
