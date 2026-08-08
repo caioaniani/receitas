@@ -399,12 +399,29 @@
             // abre a CÂMERA direto — tirou a foto, o upload marca entregue
             // sozinho (ver subirFoto). Menos um toque pro motorista, e o
             // servidor recusa de qualquer jeito se vier sem foto (422).
-            if (!(pedidoAtual.fotos && pedidoAtual.fotos.length)) {
+            // Pós-PULO a foto da portaria não vale (precisa_foto_nova):
+            // abre a câmera pra foto da entrega de verdade.
+            if (!(pedidoAtual.fotos && pedidoAtual.fotos.length)
+                    || pedidoAtual.precisa_foto_nova) {
                 marcarAposFoto = true;
                 if (fInput) fInput.click();
                 return;
             }
             marcarStatus('entregue', null);
+        });
+        var btnPular = document.getElementById('btn-pular');
+        if (btnPular) btnPular.addEventListener('click', function() {
+            // Pular endereço (dono 08/08/2026): SÓ com foto provando que
+            // esteve lá. Sem foto → câmera direto (o pulo acontece quando a
+            // foto sobe — ver subirFoto). Com foto → confirma e pula.
+            if (!(pedidoAtual.fotos && pedidoAtual.fotos.length)) {
+                pularAposFoto = true;
+                if (fInput) fInput.click();
+                return;
+            }
+            if (!confirm('Pular este endereço? Ele vai pro FIM da sua rota '
+                         + 'e você volta pra entregar depois.')) return;
+            pularEndereco();
         });
         document.getElementById('btn-nao-entregue').addEventListener('click', function() {
             bootstrap.Modal.getInstance(document.getElementById('modal-pedido')).hide();
