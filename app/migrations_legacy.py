@@ -2197,6 +2197,14 @@ def _migrate_postgres(app):
         _try("ALTER TABLE loja_data_especial ADD COLUMN IF NOT EXISTS "
              "bloquear_itens TEXT")
 
+    # "Pular endereço" do motorista (08/08/2026, dono, véspera do Dia dos
+    # Pais: portaria recusou → foto provando que esteve lá + o pedido vai
+    # pro FIM da rota, segue pendente pra voltar depois; NÃO é nao_entregue,
+    # que é desfecho final). Commit 1 do procedimento de 2 commits.
+    if 'pulado_em' not in _cols('atribuicao_entrega'):
+        _try("ALTER TABLE atribuicao_entrega ADD COLUMN IF NOT EXISTS "
+             "pulado_em TIMESTAMP")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
