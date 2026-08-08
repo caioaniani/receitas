@@ -2405,17 +2405,39 @@ owner `GET /admin/acerto-despacho?data=YYYY-MM-DD[&executar=1]`:
 - **Idempotente POR PEDIDO** (AppConfig `acerto_despacho_<data>` = JSON de
   codigos): re-rodar so pega pedidos novos; a fase 1 do `estornar_venda`
   (inteiros) exige chamada unica e e o marcador que garante. Transacao
-  unica com rollback.
+  unica com rollback. Marker ILEGIVEL = ValueError alto (degradar pra
+  vazio re-creditaria tudo em silencio).
 - A rota RECUSA `executar=1` com data >= hoje (mercadoria precisa ter
-  saido); dry-run e livre. CUIDADO: cancelamento DEPOIS do acerto
-  creditaria a loja de novo pelo caminho normal do cancelamento (o pedido
-  ja estornado pelo acerto) = credito em dobro — caso raro (cancelar
-  pos-entrega), conferir antes de cancelar pedido ja acertado.
+  saido — executa a partir do dia SEGUINTE, de proposito: cancelamentos
+  tardios saem sozinhos); dry-run e livre.
+- **POS-REVISAO (fixados, 08/08/2026)**: (1) claim de execucao — advisory
+  lock GLOBAL 7757 + `serializar_lojas` ascendente ANTES de ler o marcador
+  (rodada concorrente espera, rele e vira no-op; ordem canonica nao
+  deadlocka com o sync do Seru); (2) estornos RE-DATADOS pra data da baixa
+  original — no dia da execucao, ~255 croissants negativos zerariam a
+  demanda do (item, dia) em `prever_demanda` (clamp em 0) e poluiriam a
+  media do dia-da-semana por ~8 semanas; re-datado, venda e estorno se
+  anulam no mesmo dia historico (venda de evento nao e demanda da loja);
+  (3) GUARDAS nos fluxos pos-acerto em `loja_pagamento._acertado_no_
+  despacho`: cancelamento NAO re-credita a loja (a fase 1 re-varreria os
+  movs originais = dobro; frases ja protegidas por `estornado_em`) e
+  `reduzir_item_pedido_pago` RECUSA antes do refund; (4) previa exclui
+  movs com tag `(fracao)`/`(fator` (a fase 1 do estorno os pula — dry-run
+  nao promete mais do que o executar devolve); (5) falta na industria
+  persiste como mov `saida_site_direto_sem_estoque` (o JSON da resposta se
+  perde, o ledger nao); (6) plano com `credito_por_loja` (dimensao de
+  loja — retirada credita a loja ESCOLHIDA, visivel no dry-run) +
+  `pedidos_retirada` + `nada_a_fazer` + `credito_aplicado_movs` (contagem
+  de movimentos, nome honesto).
 - NAO rodar antes do despacho fisico; NAO aplicar conferencia na loja de
-  origem nem na industria antes do acerto (corrigiria 2x).
-Testes: `tests/test_acerto_despacho.py` (10 casos). PENDENTE (decisao
+  origem nem na industria antes do acerto (corrigiria 2x). RETIRADAS
+  entram no acerto (o dono confirma no dry-run pelo `pedidos_retirada` —
+  se alguma saiu da prateleira da loja, acertar so os demais e caso
+  manual).
+Testes: `tests/test_acerto_despacho.py` (18 casos). PENDENTE (decisao
 separada, proxima data especial): flag em `LojaDataEspecial` tipo "sai da
 industria" roteando a baixa do site pra EstoqueProducao ja no pagamento.
+Advisory lock 7757 RESERVADO pro acerto de despacho.
 
 ### Horario de entrega ESPECIAL por data (27/07/2026)
 
