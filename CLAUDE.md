@@ -507,11 +507,15 @@ pedido do dono "nessa tela nao precisa de cartinha e item")**:
   `GET /entregas/produtos.xlsx?data=&janela=...` — a agregacao de
   `api_produtos` virou o helper `_produtos_do_dia(target, janelas)` (fonte
   UNICA da aba e do export; o servidor RE-agrega, mesma regra da impressao
-  por codes). Gerador `app/services/entregas_xlsx.py` (openpyxl, 2 abas:
-  "Vendidos no dia" com valor + "A produzir" explodida com unidade/origem;
-  totais de producao POR UNIDADE — g e un nao se somam). Botao "XLSX" no
-  card da aba (entregas.js, href montado do eco d.data/d.janelas da API).
-  Testes: `tests/test_entregas_produtos_xlsx.py`.
+  por codes). Gerador `app/services/entregas_xlsx.py` (openpyxl). CONTRATO
+  ajustado pelo dono no 1º uso real (mesmo dia): **UMA aba so** — "Vendidos
+  no dia" e "A produzir" ABAIXO (a 2ª aba passava despercebida no celular)
+  — e **SEM valores em R$** ("ninguem precisa saber dos valores, so eu"; a
+  planilha circula com a equipe de montagem, dinheiro fica nas telas do
+  dono — ha teste travando a ausencia de preco). Totais de producao POR
+  UNIDADE — g e un nao se somam. Botao "XLSX" no card da aba (entregas.js,
+  href do eco d.data/d.janelas da API). Testes:
+  `tests/test_entregas_produtos_xlsx.py`.
 - **Card "ENTREGAS DO SITE" no /padeiro (08/08/2026, dono: "tela pra usar
   2x no ano, dia das maes e dia dos pais")**: o resumo da aba Produtos
   (Vendidos + A produzir) DENTRO da TV do padeiro, mesmo motor
