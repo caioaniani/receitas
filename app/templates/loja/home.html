@@ -27,7 +27,10 @@
           {% if it.esgotado %}
           <span class="selo-esgotado">Esgotado</span>
           {% elif it.esgotado_hoje %}
-          <span class="selo-esgotado-hoje">{% if it.proxima_data_curta %}A partir de {{ it.proxima_data_curta }}{% else %}Esgotado hoje{% endif %}</span>
+          {# "Entrega X", nunca "a partir de X" (dono 08/08/2026, véspera do
+             Dia dos Pais): o cliente lia como "só posso COMPRAR amanhã" e
+             adiava a compra — a data é da ENTREGA, a compra é agora. #}
+          <span class="selo-esgotado-hoje">{% if it.proxima_data_curta %}Entrega {{ it.proxima_data_curta }}{% else %}Esgotado hoje{% endif %}</span>
           {% endif %}
           {% if it.imagem %}
           <img src="{{ it.imagem }}" alt="{{ it.nome }} — {{ it.categoria or 'padaria artesanal' }} d'O Pão" loading="lazy">
