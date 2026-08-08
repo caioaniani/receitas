@@ -503,6 +503,15 @@ pedido do dono "nessa tela nao precisa de cartinha e item")**:
   painel (`_painel_pedidos_do_dia`), `api_pedidos` (aba legada tem o
   EDITOR de cartinha), `api_produtos` (conta itens), imprimir e driver
   `api_pedidos` (motorista/cozinha separam pelo item).
+- **XLSX da aba Produtos (08/08/2026, dono na vespera do Dia dos Pais)**:
+  `GET /entregas/produtos.xlsx?data=&janela=...` — a agregacao de
+  `api_produtos` virou o helper `_produtos_do_dia(target, janelas)` (fonte
+  UNICA da aba e do export; o servidor RE-agrega, mesma regra da impressao
+  por codes). Gerador `app/services/entregas_xlsx.py` (openpyxl, 2 abas:
+  "Vendidos no dia" com valor + "A produzir" explodida com unidade/origem;
+  totais de producao POR UNIDADE — g e un nao se somam). Botao "XLSX" no
+  card da aba (entregas.js, href montado do eco d.data/d.janelas da API).
+  Testes: `tests/test_entregas_produtos_xlsx.py`.
 - **Impressao SEMPRE re-busca por codes** (`entregas.js::
   imprimirSelecionados` virou GET `/entregas/imprimir?codes=...`): o POST
   de snapshot mandava o estado em memoria da aba — com a lista magra, o
