@@ -417,6 +417,14 @@ def reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
     delta = atual - nova
     delta_valor = Decimal(str(item.preco_unitario or 0)) * delta
 
+    # Pedido já acertado pelo despacho direto: o estorno da versão atual
+    # re-creditaria a loja em dobro E a rebaixa #v(N+1) escaparia do
+    # marcador do acerto. Recusa ANTES do refund (nada mexeu).
+    if _acertado_no_despacho(pedido):
+        return False, ('Este pedido já passou pelo acerto de despacho direto '
+                       'da indústria — reduzir agora duplicaria estoque. '
+                       'Corrija o estoque manualmente se precisar.')
+
     # 1) DINHEIRO primeiro: refund parcial. Falhou -> aborta, nada mexeu.
     pago = next((p for p in pedido.pagamentos if p.status == 'pago'), None)
     charge_id = pago.pagarme_charge_id if pago else None
