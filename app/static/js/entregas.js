@@ -1399,9 +1399,14 @@
                 '<strong><i class="bi bi-cart-check"></i> Vendidos no dia</strong>' +
                 '<div>' +
                     '<small class="text-muted me-2">' + d.total_skus_vendidos + ' SKUs · ' + d.total_itens_vendidos + ' itens · R$ ' + formatMoney(d.valor_total) + '</small>' +
-                    '<button class="btn btn-sm btn-outline-success btn-prod-copiar-vendidos d-print-none">' +
+                    '<button class="btn btn-sm btn-outline-success btn-prod-copiar-vendidos d-print-none me-1">' +
                         '<i class="bi bi-clipboard"></i> Copiar' +
                     '</button>' +
+                    // XLSX = as DUAS listas (Vendidos + A produzir), re-agregadas
+                    // no servidor com os mesmos filtros de data/janela da aba.
+                    '<a class="btn btn-sm btn-success btn-prod-xlsx d-print-none" download>' +
+                        '<i class="bi bi-file-earmark-spreadsheet"></i> XLSX' +
+                    '</a>' +
                 '</div>' +
             '</div>' +
             tabelaProdutos(d.vendidos, {preco: true}) +
