@@ -13,18 +13,37 @@ O acerto, POR PEDIDO (rastreável, cirúrgico):
   ÚNICO (`loja_pagamento._estornar_estoque` → `baixa_venda.estornar_venda`,
   que respeita a VERSÃO da baixa e as frações). Só devolve o que saiu de
   saldo REAL (`venda_site_sem_estoque` nunca mexeu em saldo — nada a
-  devolver).
+  devolver). Os movimentos de estorno são RE-DATADOS pra data da baixa
+  original (pós-revisão): sem isso, ~255 croissants negativos cairiam no
+  dia da EXECUÇÃO e zerariam a demanda daquele (item, dia) na previsão
+  (`prever_demanda` clampa em 0) — re-datado, a venda e o estorno se anulam
+  no MESMO dia histórico, que é a semântica certa (venda de evento não é
+  demanda da loja).
 - **Débito na indústria**: agrega a composição FÍSICA despachada (cesta
   explodida; menu pela composição ESCOLHIDA; item sob_encomenda ENTRA aqui
   — saiu da indústria — embora nunca tenha baixado loja) e debita
-  `EstoqueProducao` (receita/produto) e `MateriaPrima.estoque_atual` (MP),
-  espelhando a semântica de `pedido_estoque.baixar_industria_pedido`:
-  falta NUNCA vira saldo negativo, fica anotada.
+  `EstoqueProducao` (receita/produto, mov `saida_site_direto`) e
+  `MateriaPrima.estoque_atual` (MP), espelhando a semântica de
+  `pedido_estoque.baixar_industria_pedido`: falta NUNCA vira saldo negativo
+  — fica anotada nos avisos E persistida em mov
+  `saida_site_direto_sem_estoque` (padrão da casa; o JSON da resposta se
+  perde, o ledger não).
 
 Idempotência POR PEDIDO em AppConfig (`acerto_despacho_<data>` = JSON de
 códigos já acertados): rodar de novo só pega pedidos novos. A fase 1 do
 `estornar_venda` (inteiros) exige chamada única por referência — é o
-marcador que garante.
+marcador que garante. Marker ILEGÍVEL levanta erro (nunca degrada pra
+"nunca acertado", que re-creditaria tudo em silêncio).
+
+CONCORRÊNCIA (pós-revisão): o executar pega um advisory lock GLOBAL do
+acerto (7757) + `serializar_lojas` ascendente de TODAS as lojas envolvidas
+ANTES de ler o marcador — duas execuções simultâneas não dobram estoque
+(a segunda espera, relê o marcador e vira no-op) e a ordem canônica de
+locks não deadlocka com o sync do Seru.
+
+Os fluxos de cancelamento/redução pós-acerto têm guarda própria em
+`loja_pagamento` (`_acertado_no_despacho`) — re-creditar a loja depois do
+acerto duplicaria estoque.
 
 Dry-run por default (`executar=False`): monta o plano inteiro sem escrever.
 NUNCA rodar antes do despacho físico — o gesto é do dono, depois do evento.
@@ -32,11 +51,14 @@ NUNCA rodar antes do despacho físico — o gesto é do dono, depois do evento.
 import json
 import logging
 
+from sqlalchemy import text
+
 from app.extensions import db
 from app.models import (
     AppConfig,
     EstoqueLoja,
     EstoqueProducao,
+    Loja,
     MateriaPrima,
     MovEstoqueLoja,
     MovEstoqueProducao,
@@ -51,7 +73,15 @@ logger = logging.getLogger(__name__)
 # aguardando_pagamento nunca baixou).
 STATUS_ACERTAVEIS = ('pago', 'em_preparo', 'a_caminho', 'entregue')
 _TIPO_MOV_INDUSTRIA = 'saida_site_direto'
+_TIPO_MOV_INDUSTRIA_SEM = 'saida_site_direto_sem_estoque'
+# Advisory lock GLOBAL do acerto (registro de locks do projeto; 7756 era o
+# último usado — Tiny PDV).
+_LOCK_ACERTO = 7757
 _TOL = 1e-6
+# Referências de movimento que NASCEM do acumulador de fração — a fase 1 do
+# estorno as PULA (baixa_venda.py); a prévia precisa pular igual, senão o
+# dry-run promete devolver mais do que o executar devolve.
+_TAGS_FRACAO = ('(fracao)', '(fator')
 
 
 def _chave_marker(data):
@@ -59,11 +89,22 @@ def _chave_marker(data):
 
 
 def _codigos_acertados(data):
-    try:
-        v = json.loads(AppConfig.get(_chave_marker(data)) or '[]')
-        return set(v) if isinstance(v, list) else set()
-    except (TypeError, ValueError):
+    """Códigos já acertados. Marker ILEGÍVEL = erro alto e claro — degradar
+    pra set() vazio reabriria a idempotência inteira e re-creditaria tudo."""
+    bruto = AppConfig.get(_chave_marker(data))
+    if not bruto:
         return set()
+    try:
+        v = json.loads(bruto)
+    except (TypeError, ValueError) as e:
+        raise ValueError(
+            'marcador %s ilegível (%s) — NÃO rodar o acerto até corrigir a '
+            'chave no AppConfig; degradar pra vazio re-creditaria tudo'
+            % (_chave_marker(data), e)) from e
+    if not isinstance(v, list):
+        raise ValueError('marcador %s não é lista — corrigir antes de rodar'
+                         % _chave_marker(data))
+    return set(v)
 
 
 def _pedidos_do_dia(data):
@@ -90,43 +131,92 @@ def _componentes_do_pedido(pedido):
             continue
         comp = composicao_escolhida(it) or composicao_de_venda(
             receita_id=it.receita_id, produto_id=it.produto_id)
+        if not comp:
+            # Item legado sem FK — sem linha possível (espelho do WARNING de
+            # baixar_industria_pedido; simétrico: também nunca baixou loja).
+            logger.warning('acerto_despacho: item #%s do pedido %s sem FK '
+                           '(receita/produto) — fora do débito', it.id,
+                           pedido.codigo)
+            continue
         for col, cid, nome, qpu in comp:
             out.append((col, cid, nome, float(qtd) * float(qpu or 0)))
     return out
 
 
-def _previa_credito_loja(pedido):
-    """O que o estorno do pedido devolveria HOJE (inteiros por item, pela
-    referência da versão ATUAL da baixa). Read-only — espelha a fase 1 do
-    `estornar_venda`; frações ficam de fora da prévia (pequenas)."""
+def _refs_do_pedido(pedido):
     from app.services.loja_pagamento import _ref_estoque, _versao_estoque_atual
-    ref, _pref = _ref_estoque(pedido.codigo, _versao_estoque_atual(pedido))
-    rows = (db.session.query(MovEstoqueLoja, EstoqueLoja)
+    return _ref_estoque(pedido.codigo, _versao_estoque_atual(pedido))
+
+
+def _previa_credito_loja(pedido):
+    """O que a fase 1 do estorno devolveria HOJE, POR LOJA: {loja: {item: un}}.
+
+    Espelha o filtro real do `estornar_venda`: só movs `venda_site` da
+    referência da versão ATUAL, PULANDO os que nasceram do acumulador de
+    fração (tags '(fracao)'/'(fator' — a fase 2 os trata via
+    DebitoEstoqueMov e pode devolver menos que o acumulado). Read-only."""
+    ref, _pref = _refs_do_pedido(pedido)
+    rows = (db.session.query(MovEstoqueLoja, EstoqueLoja, Loja)
             .join(EstoqueLoja, MovEstoqueLoja.estoque_loja_id == EstoqueLoja.id)
+            .join(Loja, EstoqueLoja.loja_id == Loja.id)
             .filter(MovEstoqueLoja.tipo == 'venda_site',
                     db.or_(MovEstoqueLoja.referencia == ref,
                            MovEstoqueLoja.referencia.like(ref + ' %')))
             .all())
-    por_item = {}
-    for mov, el in rows:
-        nome = el.nome_item
-        por_item[nome] = por_item.get(nome, 0) + int(mov.quantidade or 0)
-    return por_item
+    por_loja = {}
+    for mov, el, loja in rows:
+        if any(t in (mov.referencia or '') for t in _TAGS_FRACAO):
+            continue
+        itens = por_loja.setdefault(loja.nome, {})
+        itens[el.nome_item] = itens.get(el.nome_item, 0) + int(mov.quantidade or 0)
+    return por_loja
+
+
+def _data_baixa_original(pedido):
+    """Datetime da baixa original do pedido (pra RE-DATAR o estorno)."""
+    ref, _pref = _refs_do_pedido(pedido)
+    return (db.session.query(db.func.max(MovEstoqueLoja.data))
+            .filter(MovEstoqueLoja.tipo == 'venda_site',
+                    db.or_(MovEstoqueLoja.referencia == ref,
+                           MovEstoqueLoja.referencia.like(ref + ' %')))
+            .scalar())
+
+
+def _travar_execucao(pedidos):
+    """Lock global do acerto + lojas envolvidas em ordem canônica (ANTES de
+    ler o marcador). No-op fora do Postgres (SQLite dos testes)."""
+    from app.services.estoque_helpers import serializar_lojas
+    from app.services.loja_pagamento import _loja_baixa
+    if db.engine.dialect.name == 'postgresql':
+        db.session.execute(text('SELECT pg_advisory_xact_lock(:k)'),
+                           {'k': _LOCK_ACERTO})
+    lojas = set()
+    for p in pedidos:
+        loja = _loja_baixa(p)
+        if loja is not None:
+            lojas.add(loja.id)
+    serializar_lojas(lojas)
 
 
 def acertar(data, executar=False, usuario_id=None):
     """Monta (e, com `executar=True`, aplica) o acerto do dia. Retorna dict
     com o plano completo — o mesmo nos dois modos, pra o dry-run ser fiel."""
-    ja = _codigos_acertados(data)
     pedidos = _pedidos_do_dia(data)
+    if executar:
+        # Locks ANTES do marcador: execução concorrente espera aqui, relê o
+        # marcador já atualizado e vira no-op (nunca credita/debita 2x).
+        _travar_execucao(pedidos)
+    ja = _codigos_acertados(data)
     novos = [p for p in pedidos if p.codigo not in ja]
 
-    # ── Plano: crédito na loja (por pedido) + débito agregado na indústria ──
-    credito_loja = {}          # nome_item -> un (prévia dos inteiros)
+    # ── Plano: crédito POR LOJA (por pedido) + débito agregado indústria ──
+    credito_por_loja = {}      # loja -> {item: un} (prévia dos inteiros)
     debito = {}                # (col, id) -> {'nome', 'qtd'}
     for p in novos:
-        for nome, q in _previa_credito_loja(p).items():
-            credito_loja[nome] = credito_loja.get(nome, 0) + q
+        for loja_nome, itens in _previa_credito_loja(p).items():
+            alvo = credito_por_loja.setdefault(loja_nome, {})
+            for nome, q in itens.items():
+                alvo[nome] = alvo.get(nome, 0) + q
         for col, cid, nome, q in _componentes_do_pedido(p):
             d = debito.setdefault((col, cid), {'nome': nome, 'qtd': 0.0})
             d['qtd'] += q
@@ -160,21 +250,39 @@ def acertar(data, executar=False, usuario_id=None):
         'executado': False,
         'pedidos_no_dia': len(pedidos),
         'pedidos_a_acertar': [p.codigo for p in novos],
+        'pedidos_retirada': sorted(p.codigo for p in novos
+                                   if p.modo_entrega == 'retirada'),
         'ja_acertados': sorted(ja & {p.codigo for p in pedidos}),
-        'credito_loja': dict(sorted(credito_loja.items())),
-        'credito_loja_total_un': sum(credito_loja.values()),
+        'credito_por_loja': {lj: dict(sorted(itens.items()))
+                             for lj, itens in sorted(credito_por_loja.items())},
+        'credito_loja_total_un': sum(q for itens in credito_por_loja.values()
+                                     for q in itens.values()),
         'debito_industria': plano_debito,
         'avisos': avisos,
     }
-    if not executar or not novos:
+    if not executar:
+        return plano
+    if not novos:
+        plano['nada_a_fazer'] = True
         return plano
 
     # ── Executar: transação única; qualquer erro desfaz tudo ──────────────
     from app.services.loja_pagamento import _estornar_estoque
     try:
-        creditado_total = 0
+        creditado_movs = 0
         for p in novos:
-            creditado_total += _estornar_estoque(p)
+            dt_orig = _data_baixa_original(p)
+            mov_max = (db.session.query(db.func.max(MovEstoqueLoja.id))
+                       .scalar() or 0)
+            creditado_movs += _estornar_estoque(p)
+            if dt_orig is not None:
+                # RE-DATA os estornos recém-criados pra data da baixa
+                # original (ver docstring do módulo: previsão de demanda).
+                db.session.flush()
+                (MovEstoqueLoja.query
+                 .filter(MovEstoqueLoja.id > mov_max,
+                         MovEstoqueLoja.tipo == 'venda_site_estorno')
+                 .update({'data': dt_orig}, synchronize_session=False))
 
         dd_mm = data.strftime('%d/%m')
         ref = ('Acerto despacho direto site %s (%d pedidos)'
@@ -190,11 +298,14 @@ def acertar(data, executar=False, usuario_id=None):
                 disp = float(mp.estoque_atual or 0)
                 baixa = min(float(item['qtd']), disp)
                 mp.estoque_atual = disp - baixa
-                ref_mp = ref + (' — faltaram %g' % (item['qtd'] - baixa)
-                                if item['qtd'] > baixa else '')
+                falta = float(item['qtd']) - baixa
+                ref_mp = ref + (' — faltaram %g' % falta if falta > _TOL else '')
                 db.session.add(MovimentacaoEstoque(
                     materia_prima_id=mp.id, tipo='saida', quantidade=baixa,
                     referencia=ref_mp, usuario_id=usuario_id))
+                if falta > _TOL:
+                    avisos.append('%s (MP): havia %g de %g — faltaram %g'
+                                  % (item['nome'], disp, item['qtd'], falta))
                 continue
             ep = obter_linha_producao(
                 receita_id=item['id'] if item['tipo'] == 'receita' else None,
@@ -207,12 +318,16 @@ def acertar(data, executar=False, usuario_id=None):
                 db.session.add(MovEstoqueProducao(
                     estoque_producao_id=ep.id, tipo=_TIPO_MOV_INDUSTRIA,
                     quantidade=baixa, referencia=ref, usuario_id=usuario_id))
-            if item['qtd'] > baixa:
-                # Falta NUNCA vira saldo negativo — fica anotada no retorno
-                # (mesma regra do baixar_industria_pedido).
+            falta = int(item['qtd']) - baixa
+            if falta > 0:
+                # Falta NUNCA vira saldo negativo — anotada no retorno E
+                # persistida no ledger (o JSON da resposta se perde).
+                db.session.add(MovEstoqueProducao(
+                    estoque_producao_id=ep.id, tipo=_TIPO_MOV_INDUSTRIA_SEM,
+                    quantidade=falta,
+                    referencia=ref + ' — sem saldo', usuario_id=usuario_id))
                 avisos.append('%s: indústria tinha %d de %d — faltaram %d'
-                              % (item['nome'], disp, item['qtd'],
-                                 int(item['qtd']) - baixa))
+                              % (item['nome'], disp, item['qtd'], falta))
 
         AppConfig.set(_chave_marker(data),
                       json.dumps(sorted(ja | {p.codigo for p in novos})))
@@ -223,6 +338,8 @@ def acertar(data, executar=False, usuario_id=None):
         raise
 
     plano['executado'] = True
-    plano['credito_aplicado_un'] = creditado_total
+    # CONTAGEM de movimentos revertidos (retorno do estornar_venda), não
+    # unidades — o total de unidades previsto está em credito_loja_total_un.
+    plano['credito_aplicado_movs'] = creditado_movs
     plano['avisos'] = avisos
     return plano
