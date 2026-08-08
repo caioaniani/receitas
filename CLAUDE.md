@@ -2368,6 +2368,55 @@ diferentes; e pedido de RETIRADA em loja != origem baixa a loja escolhida
 site). Testes: `tests/test_loja_estoque_vitrine.py`,
 `tests/test_loja_estoque_reserva.py`, `tests/test_loja_online_vendas.py`.
 
+### Acerto de DESPACHO DIRETO da industria (08/08/2026, Dia dos Pais)
+
+Aviso do dono na vespera: "no dia 9 os itens dos pedidos sairao diretamente
+da industria e isso interfere no estoque". Auditoria (3 agentes, codigo +
+sondas) confirmou a DISTORCAO DUPLA:
+- A baixa do site e no PAGAMENTO (`loja_pagamento.py:488`), nunca na
+  entrega — os ~106 pedidos pagos do dia 9 (104 entrega + 2 retiradas)
+  drenaram o EstoqueLoja da ANESIO ao longo da semana (6d: 255 croissants,
+  258 pains, 179 cookies, 160 almonds... de saldo REAL; peito de peru/mel/
+  bases MDF cairam 100% em `sem_estoque` = so ruido) por mercadoria que
+  NUNCA passou na prateleira dela.
+- Pedido do site NAO debita a industria em NENHUM caminho (zero ocorrencias
+  de EstoqueProducao na cadeia pagamento→baixa) — a producao do evento fica
+  creditada (1.161 croissants em estoque na industria) e sai sem debito:
+  infla ~1.818 un e o cronograma da semana seguinte SUPRIME producao
+  (produzir = alvo − estoque).
+- Cestas comuns do site sao INVISIVEIS ao balanco da industria por desenho
+  (bloco 2c so cobre sob_encomenda) — data especial repete a cegueira se
+  ninguem conferir os pedidos pagos a mao (a aba Produtos/XLSX e o gesto).
+
+**Decisao do dono (AskUserQuestion): ajuste CIRURGICO por pedido** — rejeitado
+o PedidoLoja retroativo (poluiria a media da previsao de pedidos) e a
+conferencia manual (mistura com sobras reais). Ferramenta:
+`app/services/acerto_despacho.py::acertar(data, executar=False)` + rota
+owner `GET /admin/acerto-despacho?data=YYYY-MM-DD[&executar=1]`:
+- **Credito na loja** POR PEDIDO via `loja_pagamento._estornar_estoque`
+  (motor unico; respeita versao da baixa e fracoes; devolve SO o que saiu
+  de saldo real — sem_estoque nao credita nada).
+- **Debito na industria** pela composicao FISICA despachada (cesta explode;
+  menu pela composicao ESCOLHIDA; **sob_encomenda ENTRA no debito** — saiu
+  da industria — embora nunca tenha baixado loja): EstoqueProducao via
+  `obter_linha_producao` (mov tipo `saida_site_direto`) e MP via
+  `MateriaPrima.estoque_atual` (espelho do `baixar_industria_pedido`);
+  falta NUNCA vira saldo negativo, fica anotada nos avisos.
+- **Idempotente POR PEDIDO** (AppConfig `acerto_despacho_<data>` = JSON de
+  codigos): re-rodar so pega pedidos novos; a fase 1 do `estornar_venda`
+  (inteiros) exige chamada unica e e o marcador que garante. Transacao
+  unica com rollback.
+- A rota RECUSA `executar=1` com data >= hoje (mercadoria precisa ter
+  saido); dry-run e livre. CUIDADO: cancelamento DEPOIS do acerto
+  creditaria a loja de novo pelo caminho normal do cancelamento (o pedido
+  ja estornado pelo acerto) = credito em dobro — caso raro (cancelar
+  pos-entrega), conferir antes de cancelar pedido ja acertado.
+- NAO rodar antes do despacho fisico; NAO aplicar conferencia na loja de
+  origem nem na industria antes do acerto (corrigiria 2x).
+Testes: `tests/test_acerto_despacho.py` (10 casos). PENDENTE (decisao
+separada, proxima data especial): flag em `LojaDataEspecial` tipo "sai da
+industria" roteando a baixa do site pra EstoqueProducao ja no pagamento.
+
 ### Horario de entrega ESPECIAL por data (27/07/2026)
 
 Pedido do dono: "no dia 09/08 tenha somente uma janela de horario para
