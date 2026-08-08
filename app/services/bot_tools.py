@@ -723,15 +723,19 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
     frete = float(p.frete_valor or 0)
     # Rastreio AO VIVO + link fixo da página do pedido (08/08/2026, dono:
     # "treinar o bot pra instruir o cliente a rastrear"). Só chega aqui
-    # AUTORIZADO (mesmo gate da cartinha). `status_do_pedido` nunca levanta;
-    # o try é só pra import/contexto — rastreio é bônus, nunca derruba a
-    # consulta. SEM horário estimado (decisão do dono de 08/08: só posição).
+    # AUTORIZADO (mesmo gate da cartinha). Usa o gate CANÔNICO da página
+    # (`_rastreio_do_pedido`, fonte única): retirada/cancelado/
+    # aguardando_pagamento/divulgação ficam SEM rastreio — achado de
+    # revisão: sem o gate, pedido CANCELADO com atribuição viva saía
+    # "a_caminho" no mesmo dict do status oficial e o modelo podia ditar
+    # posição de entrega cancelada. Best-effort: rastreio é bônus, nunca
+    # derruba a consulta. SEM horário estimado (decisão do dono de 08/08).
     rastreio = None
     try:
-        from app.services import rastreio_entrega
-        rastreio = rastreio_entrega.status_do_pedido(p.codigo)
+        from app.blueprints.loja.routes import _rastreio_do_pedido
+        rastreio = _rastreio_do_pedido(p)
     except Exception:  # noqa: BLE001
-        pass
+        logger.exception('bot: rastreio do pedido %s falhou', code)
     return {
         'numero': p.codigo,
         'status': _STATUS_ONLINE_CLIENTE.get(p.status, p.status),
