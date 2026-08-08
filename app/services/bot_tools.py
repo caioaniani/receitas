@@ -721,6 +721,17 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
     # precisa inferir número — só rotular: "itens + frete = total".
     total = float(p.valor_total or 0)
     frete = float(p.frete_valor or 0)
+    # Rastreio AO VIVO + link fixo da página do pedido (08/08/2026, dono:
+    # "treinar o bot pra instruir o cliente a rastrear"). Só chega aqui
+    # AUTORIZADO (mesmo gate da cartinha). `status_do_pedido` nunca levanta;
+    # o try é só pra import/contexto — rastreio é bônus, nunca derruba a
+    # consulta. SEM horário estimado (decisão do dono de 08/08: só posição).
+    rastreio = None
+    try:
+        from app.services import rastreio_entrega
+        rastreio = rastreio_entrega.status_do_pedido(p.codigo)
+    except Exception:  # noqa: BLE001
+        pass
     return {
         'numero': p.codigo,
         'status': _STATUS_ONLINE_CLIENTE.get(p.status, p.status),
