@@ -348,6 +348,7 @@
     function abrirDetalhe(p) {
         pedidoAtual = p;
         marcarAposFoto = false;   // modal novo = intencao antiga morre
+        pularAposFoto = false;
         document.getElementById('modal-titulo').textContent = (p.destinatario || '—');
         var fotosHtml = '';
         if (p.fotos && p.fotos.length > 0) {
