@@ -106,6 +106,38 @@ def test_consultar_pedido_online_vem_com_valores_rotulados(app):
         assert 'rotule' in r['como_apresentar']
 
 
+def test_consultar_pedido_traz_link_e_rastreio_sem_horario(app):
+    """08/08/2026 (dono, véspera do Dia dos Pais): a consulta autorizada
+    traz o link fixo da página do pedido + o rastreio ao vivo — em rota, a
+    POSIÇÃO (parada/faltam) SEM horário estimado (o ETA foi removido)."""
+    from app.extensions import db
+    from app.models import AtribuicaoEntrega, Driver, PedidoOnline, RotaInicio
+    from app.services import bot_tools
+    from app.utils import agora, hoje
+    with app.app_context():
+        p = PedidoOnline(codigo='TESTERAS1', status='em_preparo',
+                         nome_cliente='Bia', telefone_cliente='11966665555',
+                         email_cliente='bia@example.com',
+                         modo_entrega='agendada', data_entrega=hoje(),
+                         subtotal=90, frete_valor=0, valor_total=90)
+        d = Driver(nome='Motorista Rastreio', ativo=True, token='tok-ras-123')
+        db.session.add_all([p, d])
+        db.session.flush()
+        db.session.add(AtribuicaoEntrega(pedido_code='TESTERAS1',
+                                         driver_id=d.id, data_entrega=hoje(),
+                                         ordem=2, status='pendente'))
+        db.session.add(RotaInicio(driver_id=d.id, data=hoje(),
+                                  iniciado_em=agora(), emails_em=agora()))
+        db.session.commit()
+        r = bot_tools.consultar_pedido('TESTERAS1',
+                                       telefone_contato='11966665555')
+        assert r['link_acompanhamento'].endswith('/loja/pedido/TESTERAS1')
+        assert r['rastreio']['fase'] == 'a_caminho'
+        assert r['rastreio']['parada'] == 1
+        assert 'eta' not in r['rastreio']       # decisão do dono: sem horário
+        assert 'NUNCA prometa horário' in r['como_apresentar']
+
+
 # ── Auditor 06/07 (parte 2): cartinha sem handoff ───────────────────────
 
 def test_consultar_pedido_devolve_cartinha(app):
