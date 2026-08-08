@@ -159,8 +159,9 @@
               border:1px solid #f5c451; padding:10px 14px; border-radius:8px;
               margin-bottom:10px;">
         {% if item.proxima_data_label %}
-        <strong>Disponível a partir de {{ item.proxima_data_label }}</strong>
-        — já deixamos essa data escolhida aqui embaixo.
+        <strong>Pode comprar agora!</strong> A entrega é
+        {{ item.proxima_data_label }} — já deixamos essa data escolhida
+        aqui embaixo.
         {% else %}
         <strong>Esgotado hoje</strong> — compre pra entrega nos próximos dias.
         {% endif %}
