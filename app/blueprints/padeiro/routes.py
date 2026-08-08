@@ -332,7 +332,7 @@ def _plano_em_aberto(dia):
 @login_required
 @padeiro_required
 def index():
-    from app.models import LousaRecado
+    from app.models import AppConfig, LousaRecado
     hj = hoje()
     dia = _parse_dia(request.args.get('data')) or hj
     eh_hoje = (dia == hj)
@@ -340,6 +340,7 @@ def index():
     recados_lousa = (LousaRecado.query
                      .filter(LousaRecado.apagado_em.is_(None))
                      .order_by(LousaRecado.criado_em.desc()).all())
+    resumo_flag = AppConfig.get(_FLAG_RESUMO_ENTREGAS) == '1'
     return render_template(
         'padeiro/index.html', dia=dia, eh_hoje=eh_hoje,
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
@@ -348,7 +349,58 @@ def index():
         plano_ontem=(_plano_em_aberto(ontem) if eh_hoje else None),
         data_ontem=ontem, n_lousa=len(recados_lousa),
         recados_lousa=recados_lousa,
+        resumo_entregas=(_resumo_entregas() if resumo_flag else None),
+        resumo_entregas_flag=resumo_flag,
         **_dados_listas(dia, eh_hoje))
+
+
+# ── Resumo das entregas do site (2x/ano: Dia das Mães / Dia dos Pais) ────
+#
+# Pedido do dono 08/08/2026: a aba Produtos do /entregas (Vendidos no dia +
+# A produzir) DENTRO da tela do padeiro, pro time montar as ~108 entregas do
+# evento sem sair da TV. Liga/desliga fácil (AppConfig) porque fica dormente
+# o resto do ano.
+_FLAG_RESUMO_ENTREGAS = 'padeiro_resumo_entregas'
+
+
+def _alvo_resumo(agora_dt):
+    """Dia-alvo do resumo: AMANHÃ por padrão (o padeiro produz na véspera);
+    antes das 10h, HOJE — na madrugada/manhã do evento a equipe está
+    montando as entregas do dia EM VOO (mesma classe da ordem-de-ontem)."""
+    d = agora_dt.date()
+    return d if agora_dt.hour < 10 else d + timedelta(days=1)
+
+
+def _resumo_entregas():
+    """Resumo da aba Produtos pro dia-alvo — MESMO motor da aba e do XLSX
+    (`entregas.routes._produtos_do_dia`). Best-effort: erro aqui nunca
+    derruba a TV do padeiro."""
+    from app.utils import agora
+    try:
+        from app.blueprints.entregas.routes import _produtos_do_dia
+        alvo = _alvo_resumo(agora())
+        d = _produtos_do_dia(alvo, [])
+        d['alvo'] = alvo
+        d['alvo_eh_hoje'] = (alvo == hoje())
+        return d
+    except Exception:  # noqa: BLE001 — card informativo, TV nunca cai
+        logger.exception('resumo de entregas do padeiro falhou')
+        return None
+
+
+@padeiro_bp.route('/resumo-entregas/toggle', methods=['POST'])
+@login_required
+@admin_required
+def resumo_entregas_toggle():
+    """Liga/desliga o card (admin; o padeiro não vê o botão). Gesto de 2x
+    por ano — véspera de Dia das Mães / Dia dos Pais."""
+    from app.models import AppConfig
+    ligado = AppConfig.get(_FLAG_RESUMO_ENTREGAS) == '1'
+    AppConfig.set(_FLAG_RESUMO_ENTREGAS, '0' if ligado else '1')
+    db.session.commit()
+    flash('Resumo de entregas %s.' % ('desligado' if ligado else
+                                      'LIGADO na tela do padeiro'), 'success')
+    return redirect(url_for('padeiro.index'))
 
 
 @padeiro_bp.route('/gantt')
