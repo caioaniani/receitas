@@ -57,7 +57,8 @@ def test_iniciar_rota_dispara_email_uma_vez(app):
 
 
 def test_progresso_avanca_quando_o_motorista_entrega(app):
-    """Cada "entregue" move a posição e a ETA de TODOS os da rota."""
+    """Cada "entregue" move a posição de TODOS os da rota. SEM previsão de
+    horário (dono 08/08/2026: só a posição na rota — o ETA foi removido)."""
     from app.models import AtribuicaoEntrega
     from app.services import rastreio_entrega as svc
     from app.utils import agora
@@ -70,7 +71,7 @@ def test_progresso_avanca_quando_o_motorista_entrega(app):
     assert s['fase'] == 'a_caminho'
     assert s['parada'] == 3 and s['faltam'] == 2
     assert s['driver'] == 'João Rota'
-    assert s['eta']                       # tem previsão
+    assert 'eta' not in s                 # decisão do dono: sem previsão
     a = AtribuicaoEntrega.query.filter_by(pedido_code=codes[0]).first()
     a.status = 'entregue'
     a.entregue_em = agora()
