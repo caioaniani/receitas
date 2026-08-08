@@ -84,10 +84,18 @@ def criar_divulgacao(*, itens, modo_entrega='agendada', loja_retirada_id=None,
         raise ValueError('informe o telefone')
     if data_entrega is None:
         raise ValueError('informe a data de entrega')
-    # Nunca no MESMO dia — divulgacao e planejada, entrega a partir de amanha
-    # (decisao do dono 21/07/2026).
+    # Data minima por papel (decisao do dono 08/08/2026: "eu como owner devo
+    # conseguir lancar para quando quiser"): com `permitir_hoje` (o DONO), a
+    # divulgacao pode ser pra HOJE — o painel de entregas já mostra o dia
+    # corrente e as janelas de hoje vem cortadas pelo horario (mesma regra do
+    # site). Sem a flag (papel marketing), vale a regra original de 21/07:
+    # nunca no mesmo dia. Passado nao existe pra ninguem — nao ha o que
+    # entregar ontem.
     from app.utils import hoje as _hoje
-    if data_entrega <= _hoje():
+    if permitir_hoje:
+        if data_entrega < _hoje():
+            raise ValueError('a data não pode ser no passado')
+    elif data_entrega <= _hoje():
         raise ValueError('a data tem que ser a partir de amanhã')
     if not (janela_entrega or '').strip():
         raise ValueError('informe a janela/horario')
