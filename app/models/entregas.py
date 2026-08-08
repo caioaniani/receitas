@@ -173,6 +173,11 @@ class AtribuicaoEntrega(db.Model):
     entregue_em = db.Column(db.DateTime)
     nota = db.Column(db.String(500))
     motivo_falha = db.Column(db.String(50))  # ausente|recusou|endereco_errado|outro
+    # "Pular endereco" (08/08/2026): portaria recusou -> foto provando que o
+    # motorista esteve la + o pedido vai pro FIM da rota (ordem = max+1),
+    # SEGUE pendente pra ele voltar depois. Nao e nao_entregue (desfecho
+    # final). Entregue pos-pulo exige foto NOVA (tirada_em > pulado_em).
+    pulado_em = db.Column(db.DateTime)
     geo_lat = db.Column(db.Float)
     geo_lng = db.Column(db.Float)
     # Hash publico pra link compartilhavel com cliente
