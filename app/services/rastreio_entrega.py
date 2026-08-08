@@ -19,23 +19,15 @@ O que nasce aqui:
 - `iniciar_rota(driver, dia)`: marco RotaInicio (idempotente) + e-mails
   best-effort com o link de acompanhar (1x — `emails_em` trava re-disparo);
 - `status_do_pedido(codigo)`: o dict que a página do cliente consome —
-  em_preparo | a_caminho (parada N, faltam M, previsão ~HH:MM) | entregue.
-
-ETA deliberadamente simples e honesta: média REAL de minutos por parada da
-própria rota (relógio começa no iniciar_rota); antes da 1ª entrega usa
-`ETA_MIN_POR_PARADA` (default 12min, env RASTREIO_MIN_POR_PARADA). Previsão
-é arredondada pra cima em blocos de 5min e apresentada como "por volta de".
+  em_preparo | a_caminho (parada N, faltam M) | entregue.
 """
 import logging
-import os
 
 from app.extensions import db
 from app.models import AtribuicaoEntrega, PedidoOnline, RotaInicio
 from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
-
-ETA_MIN_POR_PARADA = float(os.environ.get('RASTREIO_MIN_POR_PARADA', '12'))
 
 
 def _rota_do_driver(driver_id, dia):
