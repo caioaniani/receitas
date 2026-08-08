@@ -547,10 +547,13 @@ pedido do dono "nessa tela nao precisa de cartinha e item")**:
 **Rastreio de entrega por PROGRESSO + "Iniciar rota" (01-04/08/2026, Dia
 dos Pais)**: dono trocou o Lalamove por motoristas contratados (~150
 pedidos, janela 06:00-10:00 do 09/08) e pediu rotas prontas + cliente
-acompanhando ao vivo. Decisoes dele (AskUserQuestion): **progresso + ETA,
+acompanhando ao vivo. Decisoes dele (AskUserQuestion): **progresso,
 SEM GPS** (GPS de navegador so funciona com a pagina aberta — com motorista
 avulso metade dos mapas congelaria) e **e-mail automatico** na saida da
-rota. Pecas:
+rota. **ETA REMOVIDO em 08/08/2026 a pedido do dono ("nao precisa estimar
+o tempo de entrega, talvez somente a posicao")** — o cliente ve so "voce e
+a Nª parada — faltam M"; `_eta_minutos`/`RASTREIO_MIN_POR_PARADA` sairam
+do codigo. NAO reintroduzir previsao de horario sem ordem. Pecas:
 - **`RotaInicio`** (driver_id+data unique, tabela nova via db.create_all):
   marco de "saiu pra rua". `rastreio_entrega.iniciar_rota(driver, dia)`
   idempotente (`emails_em` trava re-disparo) manda o e-mail "saiu para
