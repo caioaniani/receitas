@@ -414,6 +414,61 @@ def test_rota_post_cria_completo(app, owner_user, cliente):
     assert _saldo(origem, r) == 8
 
 
+def test_rota_post_owner_pra_hoje_cria(app, owner_user, cliente):
+    """A rota liga `permitir_hoje` pelo papel: dono lança pra HOJE."""
+    from app.models import PedidoOnline
+    from app.utils import hoje
+    origem = _loja('Origem Site', origem=True)
+    r = _receita()
+    _estoque(origem, r, 10)
+    _login(cliente, owner_user)
+    resp = cliente.post('/admin/loja-online/divulgacao', data={
+        'modo_entrega': 'agendada',
+        'nome_destinatario': 'Cliente PR',
+        'telefone': '11999990000',
+        'data_entrega': hoje().isoformat(),
+        'janela_entrega': '16:00–17:00',
+        'endereco_cep': '01310-100',
+        'endereco_logradouro': 'Av Paulista',
+        'endereco_numero': '1000',
+        'endereco_bairro': 'Bela Vista',
+        'endereco_cidade': 'São Paulo',
+        'endereco_uf': 'SP',
+        'item_alvo[]': f'receita:{r.id}',
+        'item_qtd[]': '1',
+    })
+    assert resp.status_code in (302, 303)
+    p = PedidoOnline.query.filter_by(divulgacao=True).first()
+    assert p is not None and p.data_entrega == hoje()
+
+
+def test_rota_post_marketing_pra_hoje_nao_cria(app, cliente):
+    """Marketing segue na regra de 21/07: a partir de amanhã."""
+    from app.models import PedidoOnline
+    from app.utils import hoje
+    origem = _loja('Origem Site', origem=True)
+    r = _receita()
+    _estoque(origem, r, 10)
+    mkt = _marketing_user()
+    _login(cliente, mkt)
+    cliente.post('/admin/loja-online/divulgacao', data={
+        'modo_entrega': 'agendada',
+        'nome_destinatario': 'Cliente PR',
+        'telefone': '11999990000',
+        'data_entrega': hoje().isoformat(),
+        'janela_entrega': '16:00–17:00',
+        'endereco_cep': '01310-100',
+        'endereco_logradouro': 'Av Paulista',
+        'endereco_numero': '1000',
+        'endereco_bairro': 'Bela Vista',
+        'endereco_cidade': 'São Paulo',
+        'endereco_uf': 'SP',
+        'item_alvo[]': f'receita:{r.id}',
+        'item_qtd[]': '1',
+    })
+    assert PedidoOnline.query.filter_by(divulgacao=True).first() is None
+
+
 def test_rota_post_incompleto_nao_cria(app, owner_user, cliente):
     origem = _loja('Origem Site', origem=True)
     r = _receita()
