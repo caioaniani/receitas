@@ -512,6 +512,17 @@ pedido do dono "nessa tela nao precisa de cartinha e item")**:
   totais de producao POR UNIDADE — g e un nao se somam). Botao "XLSX" no
   card da aba (entregas.js, href montado do eco d.data/d.janelas da API).
   Testes: `tests/test_entregas_produtos_xlsx.py`.
+- **Card "ENTREGAS DO SITE" no /padeiro (08/08/2026, dono: "tela pra usar
+  2x no ano, dia das maes e dia dos pais")**: o resumo da aba Produtos
+  (Vendidos + A produzir) DENTRO da TV do padeiro, mesmo motor
+  (`_produtos_do_dia`). Liga/desliga por AppConfig
+  `padeiro_resumo_entregas` — botao so pra ADMIN na propria tela
+  (`padeiro.resumo_entregas_toggle`); padeiro ve o card, nunca o botao.
+  Alvo = AMANHA (padeiro produz na vespera); antes das 10h = HOJE
+  (madrugada do evento monta as entregas do dia em voo —
+  `_alvo_resumo`, funcao pura). Best-effort: erro no motor nunca derruba
+  a TV (card some, admin ve aviso). Testes:
+  `tests/test_padeiro_resumo_entregas.py` (7 casos).
 - **Impressao SEMPRE re-busca por codes** (`entregas.js::
   imprimirSelecionados` virou GET `/entregas/imprimir?codes=...`): o POST
   de snapshot mandava o estado em memoria da aba — com a lista magra, o
