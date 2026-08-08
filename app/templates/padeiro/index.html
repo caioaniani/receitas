@@ -504,6 +504,66 @@
   </div>
   {% endmacro %}
 
+  {# ── Resumo das entregas do site (2x/ano: Dia das Mães / Dia dos Pais) ──
+     Liga/desliga pelo botão de admin abaixo (AppConfig). Mesma conta da aba
+     Produtos do /entregas — Vendidos no dia + A produzir explodido. #}
+  {% if resumo_entregas %}
+  <div class="card" style="border:2px solid #b8860b; background:#fffaf0; margin-bottom:14px;">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap"
+         style="background:#b8860b; color:#fff;">
+      <strong>📦 ENTREGAS DO SITE — {{ 'HOJE' if resumo_entregas.alvo_eh_hoje else 'AMANHÃ' }}
+        ({{ resumo_entregas.alvo.strftime('%d/%m') }}) ·
+        {{ resumo_entregas.total_pedidos }} pedido(s)</strong>
+      {% if current_user.is_admin() %}
+      <form method="POST" action="{{ url_for('padeiro.resumo_entregas_toggle') }}" class="mb-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-light">desligar</button>
+      </form>
+      {% endif %}
+    </div>
+    <div class="card-body py-2">
+      <div class="row g-3">
+        <div class="col-md-5">
+          <strong class="small">🛒 Vendidos ({{ resumo_entregas.total_itens_vendidos }} itens)</strong>
+          <table class="table table-sm mb-0" style="font-size:.95rem;">
+            {% for v in resumo_entregas.vendidos %}
+            <tr><td>{{ v.nome }}</td><td class="text-end fw-bold">{{ v.quantidade }}</td></tr>
+            {% endfor %}
+          </table>
+        </div>
+        <div class="col-md-7">
+          <strong class="small">🛠 A produzir (cestas explodidas)</strong>
+          <table class="table table-sm mb-0" style="font-size:.95rem;">
+            {% for p in resumo_entregas.producao %}
+            <tr>
+              <td>{{ p.nome }}</td>
+              <td class="text-end fw-bold">{{ p.quantidade }} {{ p.unidade or 'un' }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% elif resumo_entregas_flag and current_user.is_admin() %}
+  {# Flag ligada mas a conta falhou (best-effort): admin vê o aviso, padeiro não. #}
+  <div class="alert alert-warning py-2 small">Resumo de entregas ligado, mas a
+    consulta falhou — ver logs.
+    <form method="POST" action="{{ url_for('padeiro.resumo_entregas_toggle') }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-outline-secondary">desligar</button>
+    </form>
+  </div>
+  {% elif current_user.is_admin() %}
+  <form method="POST" action="{{ url_for('padeiro.resumo_entregas_toggle') }}"
+        class="d-print-none" style="margin-bottom:10px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-sm btn-outline-secondary">
+      📦 Ligar resumo de entregas do site (Dia das Mães/Pais)
+    </button>
+  </form>
+  {% endif %}
+
   {# Ordem de ontem em aberto: o padeiro trabalha de madrugada — na virada da
      meia-noite a ordem que ele está executando NÃO some; persiste aqui até
      ser produzida ou o admin dispensar na auditoria. Só o que ainda falta. #}
