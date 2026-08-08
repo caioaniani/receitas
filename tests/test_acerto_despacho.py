@@ -194,6 +194,110 @@ def test_falta_na_industria_nunca_negativa(app):
         assert any('faltaram' in a for a in plano['avisos'])
 
 
+# ── pós-revisão (08/08/2026) ────────────────────────────────────────
+
+def test_marker_corrompido_levanta_erro(app):
+    """Marker ilegível NUNCA degrada pra 'nunca acertado' (re-creditaria
+    tudo em silêncio) — levanta erro alto e claro."""
+    import pytest
+    with app.app_context():
+        _setup()
+        AppConfig.set(f'acerto_despacho_{_DIA.isoformat()}', '{lixo')
+        with pytest.raises(ValueError):
+            svc.acertar(_DIA, executar=False)
+
+
+def test_previa_ignora_movimento_de_fracao(app):
+    """Mov nascido do acumulador de fração (tag '(fracao)') fica FORA da
+    prévia — a fase 1 do estorno também o pula (dry-run fiel ao executar)."""
+    with app.app_context():
+        loja, rec, mp, cesta, p = _setup()
+        el = EstoqueLoja.query.filter_by(loja_id=loja.id,
+                                         receita_id=rec.id).first()
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo='venda_site', quantidade=1,
+            referencia=f'Site #{p.codigo} [X -> cesta] Y (fracao)'))
+        db.session.commit()
+        plano = svc.acertar(_DIA, executar=False)
+        # Só os 4 inteiros da baixa real; o mov de fração não entra.
+        assert plano['credito_por_loja'][loja.nome] == {
+            'Croissant Tradicional': 4}
+
+
+def test_estorno_e_redatado_pro_dia_da_baixa_original(app):
+    """Os estornos do acerto caem na DATA da baixa original — no dia da
+    execução eles zerariam a demanda do (item, dia) na previsão."""
+    from datetime import datetime
+
+    from app.models import MovEstoqueLoja as Mov
+    with app.app_context():
+        loja, rec, mp, cesta, p = _setup()
+        antiga = datetime(2026, 8, 3, 14, 30)
+        (Mov.query.filter(Mov.tipo == 'venda_site')
+         .update({'data': antiga}, synchronize_session=False))
+        db.session.commit()
+        svc.acertar(_DIA, executar=True)
+        estornos = Mov.query.filter_by(tipo='venda_site_estorno').all()
+        assert estornos and all(m.data == antiga for m in estornos)
+
+
+def test_falta_na_industria_persiste_no_ledger(app):
+    """A falta não vive só no JSON da resposta — vira movimento
+    `saida_site_direto_sem_estoque` (o JSON se perde, o ledger não)."""
+    with app.app_context():
+        loja, rec, mp, cesta, p = _setup(qtd_cestas=2)
+        ep = EstoqueProducao.query.filter_by(receita_id=rec.id).first()
+        ep.quantidade = 3                             # débito seria 4
+        db.session.commit()
+        svc.acertar(_DIA, executar=True)
+        mv = MovEstoqueProducao.query.filter_by(
+            tipo='saida_site_direto_sem_estoque').first()
+        assert mv is not None and mv.quantidade == 1
+
+
+def test_falta_de_mp_anotada_e_nunca_negativa(app):
+    with app.app_context():
+        loja, rec, mp, cesta, p = _setup(qtd_cestas=2)   # débito MP = 200 g
+        mp.estoque_atual = 150.0
+        db.session.commit()
+        plano = svc.acertar(_DIA, executar=True)
+        assert float(mp.estoque_atual) == 0.0
+        assert any('MP' in a and 'faltaram' in a for a in plano['avisos'])
+
+
+def test_cancelamento_pos_acerto_nao_recredita_a_loja(app):
+    """Guarda no fluxo de cancelamento: pedido já acertado NÃO re-credita a
+    loja (a fase 1 do estorno re-varreria os movs originais = dobro)."""
+    from app.services import loja_pagamento
+    with app.app_context():
+        loja, rec, mp, cesta, p = _setup()
+        svc.acertar(_DIA, executar=True)
+        assert _saldo_loja(loja, rec) == 50           # acerto devolveu
+        loja_pagamento._marcar_estornado(p, None)
+        db.session.commit()
+        assert p.status == 'cancelado'
+        assert _saldo_loja(loja, rec) == 50           # NÃO creditou de novo
+
+
+def test_reducao_pos_acerto_recusa(app):
+    from app.services.loja_pagamento import reduzir_item_pedido_pago
+    with app.app_context():
+        loja, rec, mp, cesta, p = _setup()
+        svc.acertar(_DIA, executar=True)
+        item = p.itens[0]
+        ok, msg = reduzir_item_pedido_pago(p, item.id, 1)
+        assert ok is False and 'acerto de despacho' in msg
+        assert _saldo_loja(loja, rec) == 50           # nada mexeu
+
+
+def test_segunda_rodada_executar_sinaliza_nada_a_fazer(app):
+    with app.app_context():
+        _setup()
+        svc.acertar(_DIA, executar=True)
+        plano2 = svc.acertar(_DIA, executar=True)
+        assert plano2.get('nada_a_fazer') is True
+
+
 # ── rota ────────────────────────────────────────────────────────────
 
 def _owner_client(app, owner_user):
