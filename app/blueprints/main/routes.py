@@ -3300,6 +3300,40 @@ def retencao_admin():
     return jsonify(rel), 200
 
 
+@main_bp.route('/admin/acerto-despacho')
+@owner_required
+def acerto_despacho():
+    """Acerto de DESPACHO DIRETO da indústria (owner-only, 08/08/2026 —
+    Dia dos Pais; decisão do dono: "ajuste cirúrgico por pedido").
+
+    Pedidos do site do dia informado saíram DIRETO da indústria: o acerto
+    estorna da loja de origem o que cada pedido baixou no pagamento e
+    debita a indústria pela composição despachada. Sem `?executar=1` =
+    DRY-RUN (plano completo, nada escrito). Idempotente por pedido —
+    rodar de novo só pega pedidos novos (ex.: cancelamentos tardios já
+    ficam de fora sozinhos). RODAR SÓ DEPOIS do despacho físico.
+    """
+    from datetime import date as _date
+
+    from app.services import acerto_despacho as svc
+    data_str = (request.args.get('data') or '').strip()
+    if not data_str:
+        return jsonify(ok=False,
+                       erro='informe ?data=YYYY-MM-DD (o dia do despacho)'), 400
+    try:
+        alvo = _date.fromisoformat(data_str)
+    except ValueError:
+        return jsonify(ok=False, erro='data inválida'), 400
+    executar = request.args.get('executar') == '1'
+    if executar and alvo >= hoje_brt():
+        # Trava de sequência: o acerto pressupõe mercadoria JÁ despachada.
+        return jsonify(ok=False, erro='o acerto só roda DEPOIS do dia do '
+                       'despacho — hoje ainda é %s' % hoje_brt().isoformat()), 400
+    plano = svc.acertar(alvo, executar=executar,
+                        usuario_id=current_user.id)
+    return jsonify(ok=True, **plano)
+
+
 @main_bp.route('/admin/arquivadas-saldo')
 @owner_required
 def arquivadas_saldo():
