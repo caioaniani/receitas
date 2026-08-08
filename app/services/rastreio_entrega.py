@@ -26,7 +26,6 @@ própria rota (relógio começa no iniciar_rota); antes da 1ª entrega usa
 """
 import logging
 import os
-from datetime import timedelta
 
 from app.extensions import db
 from app.models import AtribuicaoEntrega, PedidoOnline, RotaInicio
@@ -126,18 +125,6 @@ def _enviar_emails_saida(driver, dia):
     return enviados
 
 
-def _eta_minutos(ri, entregues, restantes_antes):
-    """Minutos até a entrega DESTE cliente: média real da rota quando já há
-    entrega feita; senão o chute configurável. `restantes_antes` = paradas
-    pendentes na frente + a dele própria."""
-    if entregues > 0:
-        decorrido = (agora() - ri.iniciado_em).total_seconds() / 60.0
-        media = max(4.0, decorrido / entregues)   # piso: ninguém entrega em 2min
-    else:
-        media = ETA_MIN_POR_PARADA
-    return media * restantes_antes
-
-
 def status_do_pedido(codigo):
     """Dict pro JSON público da página do pedido. Nunca levanta — erro vira
     o estado neutro 'em_preparo' (a página já mostra o pedido em si)."""
@@ -175,11 +162,12 @@ def status_do_pedido(codigo):
             1 for a in rota
             if (a.status or 'pendente') == 'pendente'
             and (a.ordem or 0, a.id) < (atrib.ordem or 0, atrib.id))
-        minutos = _eta_minutos(ri, entregues, pendentes_antes + 1)
-        # Blocos de 5min, sempre pra cima: prometer 07:32 e chegar 07:40
-        # irrita; "por volta de 07:40" e chegar 07:35 agrada.
-        eta = agora() + timedelta(minutes=minutos)
-        eta += timedelta(minutes=(5 - eta.minute % 5) % 5)
+        # SEM previsão de horário (dono 08/08/2026: "não precisa estimar o
+        # tempo de entrega, talvez somente a posição") — o cliente vê só a
+        # POSIÇÃO na rota. Substituiu o ETA por média de min/parada de
+        # 01-04/08; `entregues` continua contado porque a posição muda a
+        # cada entrega feita à frente. `rota` já vem ordenada por (ordem, id).
+        _ = entregues  # documentação: o avanço da rota é o próprio contador
         # AtribuicaoEntrega NAO tem relationship com Driver — lookup por id.
         from app.models import Driver
         drv = db.session.get(Driver, atrib.driver_id)
@@ -187,8 +175,7 @@ def status_do_pedido(codigo):
         return {'fase': 'a_caminho',
                 'driver': nome,
                 'parada': pendentes_antes + 1,
-                'faltam': pendentes_antes,
-                'eta': eta.strftime('%H:%M')}
+                'faltam': pendentes_antes}
     except Exception:  # noqa: BLE001
         logger.exception('rastreio: status falhou (%s)', codigo)
         return {'fase': 'em_preparo'}
