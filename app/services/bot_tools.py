@@ -749,9 +749,15 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
         # pos-compra sem handoff (auditor 06/07/2026: 2 handoffs de cartinha
         # que a tool ja respondia).
         'cartinha': (p.cartinha or '').strip() or None,
+        'rastreio': rastreio,
+        'link_acompanhamento': f'{_base_loja()}/loja/pedido/{p.codigo}',
         'como_apresentar': ('Ao citar valores, SEMPRE rotule: '
                             '"itens R$ X + frete R$ Y = total R$ Z". '
-                            'Nunca mostre dois números sem dizer o que são.'),
+                            'Nunca mostre dois números sem dizer o que são. '
+                            'Pergunta sobre ENTREGA: mande o '
+                            'link_acompanhamento (a página atualiza sozinha) '
+                            'e, se rastreio.fase=a_caminho com parada, diga '
+                            'a posição na rota. NUNCA prometa horário.'),
     }
 
 
