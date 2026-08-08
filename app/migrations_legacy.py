@@ -3017,5 +3017,12 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE loja_data_especial ADD COLUMN "
                        "bloquear_itens TEXT")
 
+    # "Pular endereço" do motorista (08/08/2026) — espelho do bloco PG.
+    cursor.execute("PRAGMA table_info(atribuicao_entrega)")
+    cols_ae = [row[1] for row in cursor.fetchall()]
+    if cols_ae and 'pulado_em' not in cols_ae:
+        cursor.execute("ALTER TABLE atribuicao_entrega ADD COLUMN "
+                       "pulado_em TIMESTAMP")
+
     conn.commit()
     conn.close()
