@@ -2202,21 +2202,11 @@ def salvar_cartinha(code):
     return jsonify(ok=True)
 
 
-@entregas_bp.route('/api/produtos')
-@login_required
-@entrega_access_required
-def api_produtos():
-    """Agrega itens dos pedidos do dia. Retorna duas listas:
-    - 'vendidos': como veio do VNDA (cestas como produto unico)
-    - 'producao': cestas explodidas em componentes (usa Produto+ProdutoItem do banco)"""
-    data_str = request.args.get('data', hoje_brt().isoformat())
-    try:
-        target = datetime.strptime(data_str, '%Y-%m-%d').date()
-    except ValueError:
-        target = hoje_brt()
-
-    janelas = [j for j in request.args.getlist('janela') if j]
-
+def _produtos_do_dia(target, janelas):
+    """Agrega os itens dos pedidos do dia — fonte UNICA da aba Produtos
+    (`api_produtos`) e do export XLSX (`produtos_xlsx`, 08/08/2026).
+    Devolve dict com 'vendidos' (como vendido — cesta e 1 linha, com valor)
+    e 'producao' (cestas explodidas em componentes) + totais."""
     overrides = _carregar_overrides_data()
     # FIX 03/08/2026 (mesma familia do /rotas e /atribuidos cegos): a aba
     # Produtos nao contava os pedidos do SITE — pro Dia dos Pais ela diria
@@ -2348,8 +2338,8 @@ def api_produtos():
         u = p.get('unidade') or 'un'
         totais_por_unidade[u] = totais_por_unidade.get(u, 0) + p['quantidade']
 
-    resp = jsonify(
-        data=data_str,
+    return dict(
+        data=target.isoformat(),
         janelas=janelas,
         periodos_disponiveis=periodos,
         vendidos=vendidos_lista,
@@ -2361,8 +2351,53 @@ def api_produtos():
         totais_producao_por_unidade=totais_por_unidade,
         valor_total=round(sum(p['valor_total'] for p in vendidos_lista), 2),
     )
+
+
+def _parse_data_produtos():
+    """(target, janelas) dos query params — compartilhado entre a aba e o XLSX."""
+    data_str = request.args.get('data', hoje_brt().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = hoje_brt()
+    return target, [j for j in request.args.getlist('janela') if j]
+
+
+@entregas_bp.route('/api/produtos')
+@login_required
+@entrega_access_required
+def api_produtos():
+    """Agrega itens dos pedidos do dia. Retorna duas listas:
+    - 'vendidos': como veio do VNDA (cestas como produto unico)
+    - 'producao': cestas explodidas em componentes (Produto+ProdutoItem)."""
+    target, janelas = _parse_data_produtos()
+    resp = jsonify(**_produtos_do_dia(target, janelas))
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return resp
+
+
+@entregas_bp.route('/produtos.xlsx')
+@login_required
+@entrega_access_required
+def produtos_xlsx():
+    """Exporta a aba Produtos (Vendidos no dia + A produzir) em XLSX
+    (pedido do dono 08/08/2026, vespera do Dia dos Pais). O servidor
+    RE-AGREGA pelo mesmo motor da aba — nunca o estado do navegador
+    (mesma regra da impressao por codes)."""
+    import io
+
+    from flask import send_file
+
+    from app.services import entregas_xlsx
+    target, janelas = _parse_data_produtos()
+    dados = _produtos_do_dia(target, janelas)
+    blob = entregas_xlsx.gerar_xlsx_produtos_dia(dados)
+    return send_file(
+        io.BytesIO(blob),
+        mimetype=('application/vnd.openxmlformats-officedocument'
+                  '.spreadsheetml.sheet'),
+        as_attachment=True,
+        download_name='produtos_%s.xlsx' % target.isoformat())
 
 
 @entregas_bp.route('/api/atribuidos')
