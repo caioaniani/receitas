@@ -330,6 +330,47 @@ def api_status(token):
     return jsonify(ok=True, status=a.status, proof_hash=a.proof_hash)
 
 
+@driver_bp.route('/api/<token>/pular', methods=['POST'])
+def api_pular(token):
+    """"Pular endereço" (dono 08/08/2026, véspera do Dia dos Pais): portaria
+    não recebeu / ninguém atendeu → o motorista PROVA que esteve lá com foto
+    e o pedido vai pro FIM da rota do dia, seguindo PENDENTE pra ele voltar
+    depois. NÃO é nao_entregue (desfecho final) — a entrega ainda vai
+    acontecer. Regras: só pendente pula; exige >=1 foto (mesmo enforcement
+    do entregue — sem comprovação, "passei lá" é só uma palavra)."""
+    driver = _driver_por_token(token)
+    if not driver or not driver.ativo:
+        return jsonify(ok=False, erro='Driver invalido'), 404
+    if not _autenticado(driver):
+        return jsonify(ok=False, erro='Autenticacao necessaria'), 401
+
+    body = request.get_json(silent=True) or {}
+    a = AtribuicaoEntrega.query.get(body.get('atribuicao_id'))
+    if not a or a.driver_id != driver.id:
+        return jsonify(ok=False, erro='Pedido nao pertence a este driver'), 403
+    if (a.status or 'pendente') != 'pendente':
+        return jsonify(ok=False,
+                       erro='Só entrega pendente pode ser pulada.'), 422
+    if a.fotos.count() == 0:
+        return jsonify(ok=False, precisa_foto=True,
+                       erro='Tire uma foto da fachada/portaria primeiro — '
+                            'ela comprova que você esteve no endereço.'), 422
+
+    from sqlalchemy import func
+    max_ordem = (db.session.query(func.max(AtribuicaoEntrega.ordem))
+                 .filter(AtribuicaoEntrega.driver_id == a.driver_id,
+                         AtribuicaoEntrega.data_entrega == a.data_entrega)
+                 .scalar()) or 0
+    a.ordem = max_ordem + 1
+    a.pulado_em = agora()
+    nota = (body.get('nota') or '').strip()
+    if nota:
+        a.nota = nota[:500]
+    db.session.commit()
+    return jsonify(ok=True, pulado_em=a.pulado_em.strftime('%H:%M'),
+                   ordem=a.ordem)
+
+
 @driver_bp.route('/api/<token>/foto', methods=['POST'])
 def api_foto(token):
     driver = _driver_por_token(token)
