@@ -2,9 +2,11 @@
 
 Pedido do dono pro Dia dos Pais (~150 pedidos, janela 06:00-10:00, motoristas
 contratados no lugar do Lalamove). Decisões dele (AskUserQuestion,
-31/07/2026): acompanhar por **progresso + ETA** (GPS de navegador só funciona
+31/07/2026): acompanhar por **progresso** (GPS de navegador só funciona
 com a página aberta — com motorista avulso, metade dos mapas congelaria) e
-aviso por **e-mail automático** quando a rota sai.
+aviso por **e-mail automático** quando a rota sai. Em 08/08/2026 o dono
+REMOVEU a previsão de horário ("não precisa estimar o tempo de entrega,
+talvez somente a posição") — o cliente vê só a posição na rota.
 
 As peças que JÁ existiam e este serviço só amarra:
 - rota otimizada por motorista: `rotas.gerar_rotas` + `AtribuicaoEntrega`
