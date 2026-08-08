@@ -72,6 +72,14 @@ def _marcar_autenticado(driver):
         session[f'driver_auth_{driver.id}'] = True
 
 
+def _fotos_pos_pulo(atrib):
+    """Fotos validas pro ENTREGUE: depois de um pulo, so conta foto tirada
+    APOS o pulado_em — a foto da portaria prova a visita, nao a entrega."""
+    if not atrib.pulado_em:
+        return atrib.fotos.count()
+    return atrib.fotos.filter(EntregaFoto.tirada_em > atrib.pulado_em).count()
+
+
 def _enriquecer_pedido(pedido, atrib):
     """Adiciona status/fotos do pedido ao dict que o frontend recebe."""
     fotos = [{'id': f.id, 'url': f.url} for f in atrib.fotos.order_by(EntregaFoto.tirada_em).all()] if atrib else []
@@ -84,6 +92,13 @@ def _enriquecer_pedido(pedido, atrib):
         'motivo_falha': atrib.motivo_falha if atrib else None,
         'fotos': fotos,
         'proof_hash': atrib.proof_hash if atrib else None,
+        'pulado_em': (atrib.pulado_em.strftime('%H:%M')
+                      if atrib and atrib.pulado_em else None),
+        # O front usa pra abrir a camera direto no Entregue pos-pulo (a foto
+        # da portaria ja esta na lista, mas nao vale como comprovante).
+        'precisa_foto_nova': bool(atrib and atrib.pulado_em
+                                  and (atrib.status or 'pendente') == 'pendente'
+                                  and _fotos_pos_pulo(atrib) == 0),
     }
 
 
