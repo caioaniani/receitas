@@ -292,7 +292,10 @@
                 '</div>' +
                 '<div class="text-muted small"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>' +
                 (p.telefone ? '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>' : '') +
-                (p.periodo ? '<span class="badge bg-light text-dark mt-1" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>' : '') +
+                (p.periodo ? '<span class="badge bg-light text-dark mt-1" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span> ' : '') +
+                (st === 'pendente' && p.pulado_em
+                    ? '<span class="badge bg-warning text-dark mt-1" style="font-size:10px;">⏭️ pulado às ' + escapeHtml(p.pulado_em) + ' — voltar depois</span>'
+                    : '') +
                 '<div class="mt-2 d-flex gap-2">' +
                     '<button class="btn btn-sm btn-outline-primary flex-grow-1 btn-detalhe" data-idx="' + i + '">' +
                         '<i class="bi bi-eye"></i> Abrir</button>' +
