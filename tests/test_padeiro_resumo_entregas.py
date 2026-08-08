@@ -98,20 +98,22 @@ def test_flag_ligada_mostra_vendidos_e_a_produzir(app):
 
 
 def test_card_nao_quebra_a_tv_quando_a_conta_falha(app, monkeypatch):
-    """Best-effort: erro no motor da aba nunca derruba o /padeiro."""
-    from app.blueprints.padeiro import routes as mod
+    """Best-effort: erro no MOTOR da aba (o que o card consome) nunca
+    derruba o /padeiro — o try/except do `_resumo_entregas` engole com
+    log e a página abre sem o card."""
+    from app.blueprints.entregas import routes as entregas_mod
     with app.app_context():
         AppConfig.set('padeiro_resumo_entregas', '1')
         db.session.commit()
 
-        def _boom():
+        def _boom(*a, **k):
             raise RuntimeError('x')
-        monkeypatch.setattr(mod, '_resumo_entregas', _boom, raising=True)
-        # o route chama _resumo_entregas() direto — patch acima cobre;
-        # a página tem que abrir mesmo assim pro papel padeiro.
+        monkeypatch.setattr(entregas_mod, '_produtos_do_dia', _boom,
+                            raising=True)
         c = _login(app, 'padeiro')
         r = c.get('/padeiro/')
         assert r.status_code == 200
+        assert 'ENTREGAS DO SITE' not in r.get_data(as_text=True)
 
 
 # ── toggle ──────────────────────────────────────────────────────────
