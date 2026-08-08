@@ -63,7 +63,7 @@ def _resolver_item(kind, item_id):
 def criar_divulgacao(*, itens, modo_entrega='agendada', loja_retirada_id=None,
                      nome_destinatario, telefone=None, data_entrega=None,
                      janela_entrega=None, endereco=None, cartinha=None,
-                     usuario_id=None):
+                     usuario_id=None, permitir_hoje=False):
     """Cria o pedido de divulgacao E baixa o estoque numa transacao unica.
 
     `itens`: lista de {'kind': 'receita'|'produto', 'id': int, 'qtd': int}.
