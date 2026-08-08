@@ -157,17 +157,14 @@ def status_do_pedido(codigo):
                 return {'fase': 'a_caminho'}
             return {'fase': 'em_preparo'}
         rota = _rota_do_driver(atrib.driver_id, atrib.data_entrega)
-        entregues = sum(1 for a in rota if (a.status or '') == 'entregue')
+        # SEM previsão de horário (dono 08/08/2026: "não precisa estimar o
+        # tempo de entrega, talvez somente a posição") — o cliente vê só a
+        # POSIÇÃO na rota. A posição avança sozinha: cada entrega feita à
+        # frente sai de 'pendente' e o `faltam` cai no próximo poll.
         pendentes_antes = sum(
             1 for a in rota
             if (a.status or 'pendente') == 'pendente'
             and (a.ordem or 0, a.id) < (atrib.ordem or 0, atrib.id))
-        # SEM previsão de horário (dono 08/08/2026: "não precisa estimar o
-        # tempo de entrega, talvez somente a posição") — o cliente vê só a
-        # POSIÇÃO na rota. Substituiu o ETA por média de min/parada de
-        # 01-04/08; `entregues` continua contado porque a posição muda a
-        # cada entrega feita à frente. `rota` já vem ordenada por (ordem, id).
-        _ = entregues  # documentação: o avanço da rota é o próprio contador
         # AtribuicaoEntrega NAO tem relationship com Driver — lookup por id.
         from app.models import Driver
         drv = db.session.get(Driver, atrib.driver_id)
