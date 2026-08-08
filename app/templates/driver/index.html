@@ -450,7 +450,7 @@
 
     function subirFoto(e) {
         var arquivo = e.target.files[0];
-        if (!arquivo) { marcarAposFoto = false; return; }  // cancelou a camera
+        if (!arquivo) { marcarAposFoto = false; pularAposFoto = false; return; }  // cancelou a camera
         var fd = new FormData();
         fd.append('foto', arquivo);
         fd.append('atribuicao_id', pedidoAtual.atribuicao_id);
@@ -464,25 +464,56 @@
               if (d.ok) {
                   pedidoAtual.fotos = pedidoAtual.fotos || [];
                   pedidoAtual.fotos.push(d.foto);
+                  // Foto recém-tirada é sempre POSTERIOR a um pulo antigo.
+                  pedidoAtual.precisa_foto_nova = false;
                   // Atualiza no estado local
                   var p = pedidos.find(function(x) { return x.atribuicao_id === pedidoAtual.atribuicao_id; });
-                  if (p) p.fotos = pedidoAtual.fotos;
+                  if (p) { p.fotos = pedidoAtual.fotos; p.precisa_foto_nova = false; }
                   if (marcarAposFoto) {
                       // Veio do "Marcar entregue": foto subiu, fecha o ciclo.
                       marcarAposFoto = false;
                       marcarStatus('entregue', null);
                       return;
                   }
+                  if (pularAposFoto) {
+                      // Veio do "Pular endereço": foto da fachada subiu, pula.
+                      pularAposFoto = false;
+                      pularEndereco();
+                      return;
+                  }
                   abrirDetalhe(pedidoAtual);
               } else {
                   marcarAposFoto = false;   // upload falhou: nao marca nada
+                  pularAposFoto = false;
                   alert(d.erro || 'Falha ao enviar foto');
               }
           })
           .catch(function() {
               marcarAposFoto = false;
+              pularAposFoto = false;
               alert('Sem conexão — tente a foto de novo.');
           });
+    }
+
+    function pularEndereco() {
+        api('/pular', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                atribuicao_id: pedidoAtual.atribuicao_id,
+                nota: (document.getElementById('nota-input') || {}).value || '',
+            }),
+        }).then(function(r) {
+            if (r.body && r.body.ok) {
+                var m1 = bootstrap.Modal.getInstance(document.getElementById('modal-pedido'));
+                if (m1) m1.hide();
+                // Re-busca a lista: o pedido reaparece no FIM da rota, com
+                // o selo "pulado" — e o motorista segue pro próximo.
+                carregarPedidos();
+            } else {
+                alert((r.body && r.body.erro) || 'Erro ao pular');
+            }
+        }).catch(function() { alert('Sem conexão — tente de novo.'); });
     }
 
     function marcarStatus(status, motivo) {
