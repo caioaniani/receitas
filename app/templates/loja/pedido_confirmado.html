@@ -123,15 +123,16 @@
         html += '</div>';
         if (r.fase === 'a_caminho') {
           if (r.parada) {
+            // Sem previsão de horário (dono 08/08/2026) — só a posição na
+            // rota; ela avança sozinha a cada entrega feita à frente.
             html += '<p><strong>🚚 A caminho com ' + esc(r.driver) + '.</strong><br>' +
-              'Você é a ' + esc(r.parada) + 'ª parada' +
+              'Você é a ' + esc(r.parada) + 'ª parada da rota' +
               (r.faltam > 0
                 ? ' — ' + esc(r.faltam) + ' entrega' + (r.faltam > 1 ? 's' : '') + ' antes da sua'
-                : ' — você é a próxima!') + '.<br>' +
-              'Previsão: por volta de <strong>' + esc(r.eta) + '</strong>.</p>';
+                : ' — <strong>você é a próxima!</strong>') + '.</p>';
           } else {
             // Entrega marcada por fora da rota (express/equipe): sem
-            // parada/ETA pra prometer — só o essencial.
+            // parada pra prometer — só o essencial.
             html += '<p><strong>🚚 Seu pedido saiu para entrega!</strong></p>';
           }
         } else if (r.fase === 'entregue') {
