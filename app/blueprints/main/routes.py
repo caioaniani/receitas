@@ -5178,9 +5178,12 @@ def loja_online_divulgacao():
         return redirect(url_for('main.loja_online_divulgacao'))
 
     amanha = (hoje_brt() + timedelta(days=1)).isoformat()
+    # O calendário abre em amanhã (default planejado) mas o DONO pode voltar
+    # até hoje (decisão 08/08/2026); marketing fica travado em amanhã.
+    data_min = hoje_brt().isoformat() if current_user.is_dono() else amanha
     return render_template('admin/loja_online_divulgacao.html',
                            catalogo=_catalogo_divulgacao(), lojas=lojas,
-                           amanha=amanha)
+                           amanha=amanha, data_min=data_min)
 
 
 @main_bp.route('/admin/loja-online/divulgacao/janelas')
