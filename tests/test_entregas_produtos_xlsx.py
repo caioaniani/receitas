@@ -1,9 +1,10 @@
 """Export XLSX da aba Produtos do /entregas (08/08/2026, pedido do dono).
 
 Rota `/entregas/produtos.xlsx` re-agrega no SERVIDOR pelo MESMO motor da aba
-(`_produtos_do_dia`) — nunca o estado do navegador. Duas abas: "Vendidos no
-dia" (cesta = 1 linha, com valor) e "A produzir" (cesta explodida em
-componentes).
+(`_produtos_do_dia`) — nunca o estado do navegador. Contrato ajustado pelo
+dono no 1º uso real (08/08): UMA aba só, "A produzir" ABAIXO de "Vendidos"
+(a 2ª aba passava despercebida no celular) e SEM valores em R$ (a planilha
+circula com a equipe; "ninguém precisa saber dos valores, só eu").
 """
 import io
 
@@ -34,7 +35,7 @@ def _admin_client(app):
 
 
 def _cenario(janela='06:00–10:00'):
-    """Cesta (2 croissants por unidade) vendida 3x + 1 item simples."""
+    """Cesta (2 croissants por unidade) vendida 3x."""
     r = Receita(nome='Croissant Tradicional', categoria='Croissants',
                 rendimento_qtd=1, rendimento_unidade='un', peso_base=100)
     db.session.add(r)
@@ -59,50 +60,64 @@ def _cenario(janela='06:00–10:00'):
     return r, cesta
 
 
-def _abrir(resp):
-    return load_workbook(io.BytesIO(resp.data), read_only=True)
+def _linhas(resp):
+    wb = load_workbook(io.BytesIO(resp.data), read_only=True)
+    ws = wb[wb.sheetnames[0]]
+    return wb, [[c_.value for c_ in row] for row in ws.rows]
 
 
-def test_xlsx_tem_as_duas_abas_com_cesta_e_explosao(app):
+def test_uma_aba_so_com_a_produzir_abaixo_dos_vendidos(app):
     with app.app_context():
         _cenario()
         c = _admin_client(app)
         resp = c.get(f'/entregas/produtos.xlsx?data={hoje().isoformat()}')
         assert resp.status_code == 200
         assert 'spreadsheetml' in resp.mimetype
-        assert hoje().isoformat() in resp.headers.get(
-            'Content-Disposition', '')
-        wb = _abrir(resp)
-        assert wb.sheetnames == ['Vendidos no dia', 'A produzir']
+        wb, linhas = _linhas(resp)
+        # UMA aba só (a 2ª passava despercebida no celular — dono 08/08).
+        assert wb.sheetnames == ['Produtos do dia']
+        col_a = [li[0] for li in linhas if li and li[0]]
+        # Vendidos primeiro, A produzir ABAIXO na mesma aba:
+        assert col_a.index('Vendidos no dia') < col_a.index(
+            'A produzir (cestas explodidas)')
 
-        vend = [[c_.value for c_ in row] for row in wb['Vendidos no dia'].rows]
-        # A cesta aparece COMO VENDIDA (1 linha, qtd 3, valor 450).
-        linha = next(li for li in vend if li[0] == 'Cesta Dia dos Pais')
-        assert linha[2] == 3 and float(linha[4]) == 450.0
-        total = next(li for li in vend if li[0] == 'TOTAL')
-        assert total[2] == 3 and float(total[4]) == 450.0
+        vendida = next(li for li in linhas if li[0] == 'Cesta Dia dos Pais')
+        assert vendida[1] == 3                        # como vendida
+        explodida = next(li for li in linhas
+                         if li[0] == 'Croissant Tradicional')
+        assert explodida[1] == 6 and explodida[2] == 'un'   # 3 x 2
+        assert 'Cesta Dia dos Pais' in (explodida[3] or '')
+        totais = [li for li in linhas if li[0] == 'TOTAL']
+        assert totais[0][1] == 3                      # vendidos
+        assert '6 un' in str(totais[1][1])            # produção por unidade
 
-        prod = [[c_.value for c_ in row] for row in wb['A produzir'].rows]
-        # Explodida: 3 cestas x 2 croissants = 6 un, com a origem anotada.
-        linha = next(li for li in prod if li[0] == 'Croissant Tradicional')
-        assert linha[1] == 6 and linha[2] == 'un'
-        assert 'Cesta Dia dos Pais' in (linha[3] or '')
-        total = next(li for li in prod if li[0] == 'TOTAL')
-        assert '6 un' in str(total[1])
+
+def test_sem_nenhum_valor_em_reais(app):
+    """"Ninguém precisa saber dos valores, só eu" — a planilha circula com
+    a equipe de montagem: nenhum preço/total em R$ no arquivo."""
+    with app.app_context():
+        _cenario()
+        c = _admin_client(app)
+        resp = c.get(f'/entregas/produtos.xlsx?data={hoje().isoformat()}')
+        _wb, linhas = _linhas(resp)
+        achatado = [str(v) for li in linhas for v in li if v is not None]
+        assert not any('R$' in v or 'Preço' in v or 'Total (R$)' in v
+                       for v in achatado)
+        # O valor da venda (450) não aparece em lugar nenhum:
+        assert not any(v in ('450', '450.0', '150', '150.0')
+                       for v in achatado)
 
 
 def test_filtro_de_janela_vale_no_xlsx(app):
-    """Mesmos filtros da aba: janela que não casa = lista vazia."""
     with app.app_context():
         _cenario(janela='06:00–10:00')
         c = _admin_client(app)
         resp = c.get(f'/entregas/produtos.xlsx?data={hoje().isoformat()}'
                      '&janela=09:00–10:00')
-        wb = _abrir(resp)
-        vend = [[c_.value for c_ in row] for row in wb['Vendidos no dia'].rows]
-        assert not any(li[0] == 'Cesta Dia dos Pais' for li in vend)
-        # E o subtítulo diz qual janela foi aplicada (rastreável no papel).
-        assert any('09:00–10:00' in str(li[0]) for li in vend if li and li[0])
+        _wb, linhas = _linhas(resp)
+        assert not any(li[0] == 'Cesta Dia dos Pais' for li in linhas)
+        assert any('09:00–10:00' in str(li[0]) for li in linhas
+                   if li and li[0])
 
 
 def test_xlsx_exige_login(app):
