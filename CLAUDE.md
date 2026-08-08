@@ -569,6 +569,15 @@ do codigo. NAO reintroduzir previsao de horario sem ordem. Pecas:
   desde 08/08/2026) / entregue (hora) / problema (atribuicao nao_entregue —
   a pagina NAO detalha o motivo, quem fala com o cliente e a loja).
   `AtribuicaoEntrega` NAO tem relationship com Driver — lookup por id.
+- **BOT de atendimento instrui o rastreio (08/08/2026)**: `bot_tools.
+  _consultar_pedido_online` (so AUTORIZADO — mesmo gate da cartinha)
+  devolve `rastreio` (status_do_pedido) + `link_acompanhamento`
+  (LOJA_BASE_URL/loja/pedido/<codigo>); passo 2b da secao RASTREAMENTO do
+  `chatbot_prompt.py` manda o link + posicao na rota e PROIBE estimar
+  horario. Testes: `test_consultar_pedido_traz_link_e_rastreio_sem_horario`
+  (test_handoff_dedupe.py) + `test_secao_rastreamento_manda_o_link_...`
+  (test_chatbot_faq_pilar_b.py — janela do teste vizinho alargada pra 3200,
+  armadilha conhecida dos testes de prompt).
 - **Pagina do cliente** (`loja/pedido_confirmado.html`): bloco "Acompanhe
   sua entrega" com 3 passos + texto por fase; estado inicial renderizado no
   SERVIDOR (rota `pedido_confirmado` passa `rastreio`; sem flash de
