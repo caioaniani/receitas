@@ -184,7 +184,8 @@ def test_campos_obrigatorios(app):
 
 
 def test_data_hoje_ou_passado_recusada(app):
-    """Nunca no mesmo dia — a partir de amanhã (regra do dono 21/07)."""
+    """Nunca no mesmo dia — a partir de amanhã (regra do dono 21/07). Sem
+    `permitir_hoje` (papel marketing), hoje segue recusado."""
     from app.services import divulgacao as svc
     from app.utils import hoje
     _loja('Origem Site', origem=True)
@@ -194,6 +195,38 @@ def test_data_hoje_ou_passado_recusada(app):
         svc.criar_divulgacao(itens=it, modo_entrega='agendada',
                              endereco=dict(_END_OK),
                              **_base_kw(data_entrega=hoje()))
+
+
+def test_dono_pode_lancar_pra_hoje(app):
+    """Decisão do dono 08/08/2026 ("eu como owner devo conseguir lançar para
+    quando quiser"): com `permitir_hoje`, a data pode ser HOJE."""
+    from app.services import divulgacao as svc
+    from app.utils import hoje
+    origem = _loja('Origem Site', origem=True)
+    r = _receita()
+    _estoque(origem, r, 10)
+    it = [{'kind': 'receita', 'id': r.id, 'qtd': 2}]
+    p = svc.criar_divulgacao(itens=it, modo_entrega='agendada',
+                             endereco=dict(_END_OK), permitir_hoje=True,
+                             **_base_kw(data_entrega=hoje()))
+    assert p is not None and p.data_entrega == hoje()
+    assert _saldo(origem, r) == 8          # baixa normal
+
+
+def test_nem_o_dono_lanca_pro_passado(app):
+    """"Quando quiser" não inclui ontem — não há o que entregar no passado."""
+    from datetime import timedelta
+
+    from app.services import divulgacao as svc
+    from app.utils import hoje
+    _loja('Origem Site', origem=True)
+    r = _receita()
+    it = [{'kind': 'receita', 'id': r.id, 'qtd': 1}]
+    with pytest.raises(ValueError):
+        svc.criar_divulgacao(
+            itens=it, modo_entrega='agendada', endereco=dict(_END_OK),
+            permitir_hoje=True,
+            **_base_kw(data_entrega=hoje() - timedelta(days=1)))
 
 
 def test_endpoint_janelas_retirada_e_agendada(app, owner_user, cliente):
