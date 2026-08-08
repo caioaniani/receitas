@@ -548,6 +548,29 @@ def _emitir_nf_e_enviar(pedido):
                          pedido.codigo)
 
 
+def _acertado_no_despacho(pedido):
+    """True se o pedido já foi acertado pelo /admin/acerto-despacho (08/08/
+    2026, Dia dos Pais): o estoque dele JÁ foi estornado da loja e debitado
+    da indústria. Cancelamento/redução depois disso NÃO pode re-creditar a
+    loja — a fase 1 do `estornar_venda` re-varreria os movs `venda_site`
+    originais e dobraria o crédito. Best-effort: marcador ilegível loga e
+    devolve False (o alarme alto fica no lado do acerto, que RECUSA rodar)."""
+    import json as _json
+    if not pedido.data_entrega:
+        return False
+    from app.models import AppConfig
+    bruto = AppConfig.get(
+        f'acerto_despacho_{pedido.data_entrega.isoformat()}')
+    if not bruto:
+        return False
+    try:
+        return pedido.codigo in set(_json.loads(bruto))
+    except (TypeError, ValueError):
+        logger.exception('marcador de acerto_despacho ilegível — assumindo '
+                         'pedido NÃO acertado')
+        return False
+
+
 def _marcar_estornado(pedido, pagamento):
     if pedido.status == 'cancelado':
         return False
@@ -559,7 +582,12 @@ def _marcar_estornado(pedido, pagamento):
         pagamento.status = 'estornado'
     # Só estorna estoque se já havia sido pago (= baixou).
     if estado_anterior == 'pago':
-        _estornar_estoque(pedido)
+        if _acertado_no_despacho(pedido):
+            logger.warning('pedido %s já acertado pelo despacho direto — '
+                           'estoque NÃO re-creditado no cancelamento',
+                           pedido.codigo)
+        else:
+            _estornar_estoque(pedido)
         _devolver_ao_plano_do_dia(pedido)
     elif estado_anterior == 'aguardando_pagamento':
         # Pedido nunca chegou a pago — libera reserva (Pix expirado,
