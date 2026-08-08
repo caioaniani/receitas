@@ -179,7 +179,7 @@ def test_sob_encomenda_entra_no_debito_mas_nao_no_credito(app):
                                         subtotal=80))
         db.session.commit()          # sob encomenda: NENHUMA baixa de loja
         plano = svc.acertar(_DIA, executar=True)
-        assert plano['credito_loja'] == {}
+        assert plano['credito_por_loja'] == {}
         assert _saldo_industria(rec) == 20            # 30 - 10
 
 
