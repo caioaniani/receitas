@@ -565,13 +565,10 @@ do codigo. NAO reintroduzir previsao de horario sem ordem. Pecas:
   devolve `rota: {iniciada, iniciada_em}` — o front alterna botao/selo.
   Confirm antes (dispara e-mail em massa).
 - **`status_do_pedido(codigo)`** (nunca levanta; erro = 'em_preparo'):
-  fases em_preparo / a_caminho (driver, parada N, faltam M, `eta`) /
-  entregue (hora) / problema (atribuicao nao_entregue — a pagina NAO
-  detalha o motivo, quem fala com o cliente e a loja). ETA = media REAL de
-  min/parada da propria rota (relogio no iniciar_rota, piso 4min); antes da
-  1a entrega usa `RASTREIO_MIN_POR_PARADA` (default 12). Arredonda pra CIMA
-  em blocos de 5min ("por volta de"). `AtribuicaoEntrega` NAO tem
-  relationship com Driver — lookup por id.
+  fases em_preparo / a_caminho (driver, parada N, faltam M — SEM `eta`
+  desde 08/08/2026) / entregue (hora) / problema (atribuicao nao_entregue —
+  a pagina NAO detalha o motivo, quem fala com o cliente e a loja).
+  `AtribuicaoEntrega` NAO tem relationship com Driver — lookup por id.
 - **Pagina do cliente** (`loja/pedido_confirmado.html`): bloco "Acompanhe
   sua entrega" com 3 passos + texto por fase; estado inicial renderizado no
   SERVIDOR (rota `pedido_confirmado` passa `rastreio`; sem flash de
