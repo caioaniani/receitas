@@ -5159,7 +5159,10 @@ def loja_online_divulgacao():
                 janela_entrega=request.form.get('janela_entrega'),
                 endereco=endereco,
                 cartinha=request.form.get('cartinha'),
-                usuario_id=current_user.id)
+                usuario_id=current_user.id,
+                # Dono lança pra HOJE se quiser (decisão 08/08/2026);
+                # marketing segue "a partir de amanhã" (21/07/2026).
+                permitir_hoje=current_user.is_dono())
         except ValueError as e:
             flash('Não deu pra lançar a divulgação: %s' % e, 'danger')
             return redirect(url_for('main.loja_online_divulgacao'))
