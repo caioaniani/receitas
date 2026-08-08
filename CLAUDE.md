@@ -589,6 +589,18 @@ do codigo. NAO reintroduzir previsao de horario sem ordem. Pecas:
   foto abre a CAMERA direto e o upload marca entregue sozinho
   (`marcarAposFoto`, resetado em cancelamento/erro). O painel staff mantem
   a valvula de escape sem foto. "Nao entregue" NAO exige foto.
+- **"PULAR ENDERECO" (dono 08/08/2026, "portaria nao quis receber... ele
+  vai voltar")**: `AtribuicaoEntrega.pulado_em` (procedimento de 2 commits,
+  sonda ?colunas= confirmada) + `POST /driver/api/<token>/pular` — exige
+  >=1 FOTO (fachada/portaria = prova de visita), so status pendente, joga
+  a `ordem` pro fim da rota do dia (max+1) e o pedido SEGUE pendente (NAO
+  e nao_entregue, que e desfecho final). Entregue POS-pulo exige foto NOVA
+  (`_fotos_pos_pulo`: tirada_em > pulado_em — a foto da portaria nao
+  comprova entrega; o front usa `precisa_foto_nova` pra abrir a camera
+  direto). Botao "⏭️ Pular endereco" no modal do driver (fluxo
+  `pularAposFoto`, espelho do marcarAposFoto) + selo "pulado as HH:MM" no
+  card. O cliente pulado cai pro fim da fila no rastreio sozinho (posicao
+  = pendentes a frente). Testes: `tests/test_driver_pular.py` (7 casos).
 - **Ensaio de carga 04/08** (scratchpad `ensaio_dia_dos_pais.py`, Google e
   e-mail mockados): 150 pedidos / 9 motoristas → /api/rotas 150ms (9 rotas,
   150 paradas, k-means real), salvar lote 179ms, /api/atribuidos 51ms,
