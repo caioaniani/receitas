@@ -1450,6 +1450,13 @@
         if (btnVend) btnVend.addEventListener('click', function() { copiarListaProdutos('vendidos'); });
         var btnProd = container.querySelector('.btn-prod-copiar-producao');
         if (btnProd) btnProd.addEventListener('click', function() { copiarListaProdutos('producao'); });
+        // Link do XLSX com os MESMOS filtros que geraram a tela (o servidor
+        // re-agrega; d.data/d.janelas sao o eco do que a API aplicou).
+        var btnXlsx = container.querySelector('.btn-prod-xlsx');
+        if (btnXlsx) {
+            btnXlsx.href = '/entregas/produtos.xlsx?data=' + encodeURIComponent(d.data || '') +
+                (d.janelas || []).map(function(j) { return '&janela=' + encodeURIComponent(j); }).join('');
+        }
     }
 
     function copiarListaProdutos(tipo) {
