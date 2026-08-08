@@ -2089,9 +2089,18 @@ MARCADO como divulgação (fora de faturamento e da previsão de venda) +
   `/loja/api/cep/<cep>` (alcançável do host gestão) preenchendo logradouro/
   bairro/cidade/uf; a `endereco_entrega` (snapshot do painel/motorista) é
   montada dos campos estruturados no route.
-- **Data ≥ AMANHÃ + janela pela regra do site (dono 21/07)**: nunca no mesmo
-  dia — `min`/`value` do date = amanhã e `criar_divulgacao` recusa
-  `data_entrega <= hoje()`. A janela virou **select dinâmico** preenchido pelo
+- **Data mínima POR PAPEL (dono 08/08/2026: "eu como owner devo conseguir
+  lançar para quando quiser")**: `criar_divulgacao(permitir_hoje=...)` — o
+  DONO (`is_dono()`, ligado na rota) lança pra **HOJE** em diante (passado
+  recusado pra todos: não há o que entregar ontem); o papel `marketing`
+  segue a regra original de 21/07 (**≥ amanhã**). O `min` do calendário
+  acompanha o papel (`data_min`); o `value` default continua amanhã. As
+  janelas de HOJE vêm cortadas pelo horário (mesma
+  `janelas_disponiveis` do site) — dono lançando à noite pode não ter
+  janela restante pra hoje, e aí só amanhã mesmo. Testes:
+  `test_dono_pode_lancar_pra_hoje`, `test_nem_o_dono_lanca_pro_passado`,
+  `test_rota_post_owner_pra_hoje_cria`,
+  `test_rota_post_marketing_pra_hoje_nao_cria`. A janela virou **select dinâmico** preenchido pelo
   endpoint `/admin/loja-online/divulgacao/janelas`, que replica a MESMA regra
   do site (`loja_checkout.janelas_disponiveis`): agendada corta a 1ª janela da
   manhã (08:00–09:00) quando o endereço está longe (distância do
