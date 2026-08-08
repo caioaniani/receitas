@@ -293,7 +293,8 @@ def api_status(token):
     # é só uma palavra. Enforcement AQUI (endpoint do driver) de propósito —
     # o painel de entregas do staff continua podendo marcar sem foto, que é
     # a válvula de escape se o upload (Dropbox) cair no meio da rota.
-    if novo_status == 'entregue' and a.fotos.count() == 0:
+    if novo_status == 'entregue' and _fotos_pos_pulo(a) == 0:
+        # Pos-pulo, a foto da portaria nao vale: exige foto NOVA da entrega.
         return jsonify(ok=False, precisa_foto=True,
                        erro='Tire a foto da entrega primeiro — ela é a '
                             'comprovação de que o pedido foi entregue.'), 422
