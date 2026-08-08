@@ -378,6 +378,9 @@
             '<textarea id="nota-input" class="form-control" rows="2">' + escapeHtml(p.nota || '') + '</textarea>' +
             '<div class="d-grid gap-2 mt-3">' +
                 '<button class="btn btn-success btn-acao" id="btn-entregue"><i class="bi bi-check-circle"></i> Marcar entregue</button>' +
+                ((p.status || 'pendente') === 'pendente'
+                    ? '<button class="btn btn-outline-warning btn-acao" id="btn-pular"><i class="bi bi-skip-forward"></i> Pular endereço (volto depois)</button>'
+                    : '') +
                 '<button class="btn btn-outline-danger btn-acao" id="btn-nao-entregue"><i class="bi bi-x-circle"></i> Não entregue</button>' +
             '</div>';
         document.getElementById('modal-body').innerHTML = html;
