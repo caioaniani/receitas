@@ -734,9 +734,9 @@ def test_secao_rastreamento_diz_pra_ler_numero_antes_de_pedir():
     from app.services.chatbot_prompt import PROMPT
     idx = PROMPT.find('RASTREAMENTO')
     assert idx >= 0
-    # 2000: a seção cresceu em 19/07/2026 com o passo da busca por telefone
-    # (mesma janela do teste de frete acima).
-    bloco = PROMPT[idx:idx + 2000]
+    # 3200: a seção cresceu em 19/07/2026 (busca por telefone) e em
+    # 08/08/2026 (passo 2b do acompanhamento ao vivo — link + posição).
+    bloco = PROMPT[idx:idx + 3200]
     assert 'ANTES DE PEDIR' in bloco
     # Exemplos do número EMBUTIDO na mensagem
     assert 'pedido 12345' in bloco or '12345' in bloco
@@ -745,6 +745,20 @@ def test_secao_rastreamento_diz_pra_ler_numero_antes_de_pedir():
     assert 'consultar_pedido SEM' in bloco
     # Ainda transfere quando cliente não tem número (caso real do #115)
     assert 'pelo seu cadastro' in bloco or 'pelo cadastro' in bloco
+
+
+def test_secao_rastreamento_manda_o_link_e_a_posicao_sem_horario():
+    """08/08/2026 (dono, véspera do Dia dos Pais): o bot instrui o cliente
+    a acompanhar pela página do pedido — link + posição na rota — e NUNCA
+    estima horário de chegada (o ETA foi removido do rastreio)."""
+    from app.services.chatbot_prompt import PROMPT
+    idx = PROMPT.find('ACOMPANHAMENTO AO VIVO')
+    assert idx >= 0
+    bloco = PROMPT[idx:idx + 1200]
+    assert 'link_acompanhamento' in bloco
+    assert 'parada' in bloco
+    assert 'NUNCA prometa horário' in bloco
+    assert 'problema' in bloco          # imprevisto → transferir com contexto
 
 
 def test_prompt_NAO_tem_mais_peca_o_cep_1_pergunta_so_isolado():
