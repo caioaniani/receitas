@@ -99,7 +99,9 @@ def test_dry_run_monta_plano_sem_escrever(app):
         plano = svc.acertar(_DIA, executar=False)
         assert plano['executado'] is False
         assert plano['pedidos_a_acertar'] == ['ACERT1']
-        assert plano['credito_loja'] == {'Croissant Tradicional': 4}
+        assert plano['credito_por_loja'] == {
+            'Loja Anesio Pinto Rosa': {'Croissant Tradicional': 4}}
+        assert plano['credito_loja_total_un'] == 4
         deb = {d['nome']: d for d in plano['debito_industria']}
         assert deb['Croissant Tradicional']['qtd'] == 4
         assert deb['Mussarela']['qtd'] == 200.0      # 2 cestas x 100 g
