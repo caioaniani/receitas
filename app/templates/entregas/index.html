@@ -541,6 +541,31 @@
 </div>
 
 <!-- Modal: gerenciar drivers -->
+<!-- Seletor de motoristas do Auto-distribuir (aba Rotas; dono 09/08/2026:
+     "deve aparecer os motoristas para eu poder selecionar quais"). -->
+<div class="modal fade" id="modal-rotas-motoristas" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h6 class="modal-title"><i class="bi bi-people"></i> Quem entra na distribuição?</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small text-muted">Só os marcados recebem pedidos.</span>
+                    <button type="button" class="btn btn-link btn-sm p-0" id="rotas-sel-todos">marcar/desmarcar todos</button>
+                </div>
+                <div id="rotas-sel-drivers" style="max-height:50vh;overflow-y:auto;"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="rotas-sel-confirmar">
+                    <i class="bi bi-magic"></i> Distribuir com os selecionados</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="modal-drivers" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
