@@ -267,7 +267,8 @@ def _refinar_clusters(pontos, atribuicoes, n_drivers, max_raio_km=8.0, max_iter=
     return atribuicoes
 
 
-def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
+def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None,
+                otimizar_ordem=True):
     """Distribui pedidos entre drivers nominais. Usa Google quando disponivel.
 
     drivers: lista de {id, nome, cor}.
@@ -276,6 +277,12 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
     Pedidos com atribuicao salva ficam com seu driver original (em ordem salva).
     Pedidos sem atribuicao sao distribuidos por proximidade (lat/lng com Google,
     ou por CEP se Google nao disponivel).
+
+    `otimizar_ordem=False` (modo LEVE, 09/08/2026 — mapa do Dia dos Pais
+    sumia): pula o Directions do Google e desenha na ordem salva/da lista.
+    Com ~144 paradas salvas em 12 rotas, re-otimizar TUDO a cada carga do
+    mapa levava minutos — e a ordem ja esta gravada; otimizar de novo so
+    pra RENDERIZAR e custo puro. Geocode (cacheado) continua.
     """
     atribuicoes = atribuicoes or {}
     if not drivers:
