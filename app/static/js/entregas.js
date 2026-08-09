@@ -2647,7 +2647,7 @@
         html += '<div class="d-flex align-items-start gap-2" style="flex:1; min-width:240px;">';
         html += '<input type="checkbox" class="form-check-input op-check d-print-none mt-1" data-code="' + escapeHtml(p.code) + '">';
         html += '<div style="flex:1; min-width:0;">';
-        html += '<a href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" class="text-decoration-none small fw-bold" style="color:var(--accent);">' +
+        html += '<a href="' + linkAdminPedido(p) + '" target="_blank" rel="noopener" class="text-decoration-none small fw-bold" style="color:var(--accent);">' +
             '[' + escapeHtml(p.code) + '] <i class="bi bi-box-arrow-up-right" style="font-size:10px;"></i></a> ';
         html += '<span class="fw-semibold"><i class="bi bi-person-fill"></i> ' + escapeHtml(p.destinatario || '—') + '</span>';
         if (stBadge) html += ' ' + stBadge;
