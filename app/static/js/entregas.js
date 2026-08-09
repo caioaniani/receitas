@@ -1635,7 +1635,7 @@
         if (!sel) return;
         var html = '<option value="">— Sem driver —</option>';
         for (var i = 0; i < __driversDisp.length; i++) {
-            html += '<option value="' + __driversDisp[i].id + '">' + escapeHtml(__driversDisp[i].nome) + '</option>';
+            html += '<option value="' + __driversDisp[i].id + '">' + corEmoji(__driversDisp[i].cor) + ' ' + escapeHtml(__driversDisp[i].nome) + '</option>';
         }
         sel.innerHTML = html;
     }
@@ -1723,7 +1723,7 @@
             for (var k = 0; k < (driversDisp || []).length; k++) {
                 var dd = driversDisp[k];
                 var sel = (driver.id && dd.id === driver.id) ? ' selected' : '';
-                html += '<option value="' + dd.id + '"' + sel + '>' + escapeHtml(dd.nome) + '</option>';
+                html += '<option value="' + dd.id + '"' + sel + '>' + corEmoji(dd.cor) + ' ' + escapeHtml(dd.nome) + '</option>';
             }
             html += '</select>' +
                     '</div>' +
@@ -2489,7 +2489,7 @@
         var sel = document.getElementById('op-bulk-driver');
         var html = '<option value="">— Sem driver —</option>';
         (d.drivers_disponiveis || []).forEach(function(dr) {
-            html += '<option value="' + dr.id + '">' + escapeHtml(dr.nome) + '</option>';
+            html += '<option value="' + dr.id + '">' + corEmoji(dr.cor) + ' ' + escapeHtml(dr.nome) + '</option>';
         });
         sel.innerHTML = html;
     }
@@ -2654,7 +2654,7 @@
         html += '<option value="">— Sem driver —</option>';
         (driversDisp || []).forEach(function(dd) {
             var sel = (driver.id && dd.id === driver.id) ? ' selected' : '';
-            html += '<option value="' + dd.id + '"' + sel + '>' + escapeHtml(dd.nome) + '</option>';
+            html += '<option value="' + dd.id + '"' + sel + '>' + corEmoji(dd.cor) + ' ' + escapeHtml(dd.nome) + '</option>';
         });
         html += '</select></div></div></div>';
         return html;
@@ -2699,7 +2699,7 @@
         var opts = '<option value="">— Sem driver —</option>';
         drivers.forEach(function(dr) {
             var sel = (dr.id === driverIdAtual) ? ' selected' : '';
-            opts += '<option value="' + dr.id + '"' + sel + '>' + escapeHtml(dr.nome) + '</option>';
+            opts += '<option value="' + dr.id + '"' + sel + '>' + corEmoji(dr.cor) + ' ' + escapeHtml(dr.nome) + '</option>';
         });
         var titulo = nomeAtual
             ? '<b>' + escapeHtml(nomeAtual) + (ordem ? ' · #' + ordem : '') + '</b>'
