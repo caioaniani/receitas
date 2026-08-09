@@ -2691,7 +2691,12 @@ def api_rotas():
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
         return resp
 
-    geradas = rotas_svc.gerar_rotas(pedidos, drivers_struct, atribuicoes=atribuicoes)
+    # ?leve=1: modo MAPA — desenha a ordem salva sem re-otimizar no Google
+    # (com 144 paradas em 12 rotas a re-otimizacao passava do timeout e o
+    # mapa nunca chegava; a ordem ja esta no banco).
+    geradas = rotas_svc.gerar_rotas(
+        pedidos, drivers_struct, atribuicoes=atribuicoes,
+        otimizar_ordem=(request.args.get('leve') != '1'))
     # Enriquece cada parada com lote_id da atribuicao salva (pra filtro de lote no front)
     for r in geradas.get('rotas', []):
         for p in r.get('paradas', []):
