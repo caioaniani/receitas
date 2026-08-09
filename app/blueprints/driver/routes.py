@@ -394,6 +394,7 @@ def api_pular(token):
     if nota:
         a.nota = nota[:500]
     db.session.commit()
+    _auto_iniciar_rota(driver, a)
     return jsonify(ok=True, pulado_em=a.pulado_em.strftime('%H:%M'),
                    ordem=a.ordem)
 
