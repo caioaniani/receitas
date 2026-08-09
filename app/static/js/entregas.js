@@ -13,6 +13,34 @@
     // selecionar"). null = todos os ativos; re-buscas por janela/data
     // respeitam a última escolha.
     var rotasDriversSel = null;
+    // "Reagrupar tudo que está pendente" (checkbox do seletor): vale pra
+    // UMA distribuição — refaz o clustering do zero só nos pendentes.
+    var rotasReagrupar = false;
+
+    // Bolinha da cor do motorista como TEXTO (dono 09/08/2026: "trazer a
+    // cor junto ao nome"): <option> de <select> nativo (iOS) não aceita
+    // HTML/CSS — a cor vira o emoji de círculo mais próximo do hex.
+    function corEmoji(hex) {
+        var m = /^#?([0-9a-f]{6})$/i.exec((hex || '').trim());
+        if (!m) return '⚪';
+        var v = parseInt(m[1], 16);
+        var r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
+        var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+        if (mx < 70) return '⚫';
+        if (mx - mn < 30) return mx > 180 ? '⚪' : '⚫';
+        var h;
+        if (mx === r) h = 60 * (((g - b) / (mx - mn)) % 6);
+        else if (mx === g) h = 60 * ((b - r) / (mx - mn) + 2);
+        else h = 60 * ((r - g) / (mx - mn) + 4);
+        if (h < 0) h += 360;
+        if (h < 15) return '🔴';
+        if (h < 45) return mx < 165 ? '🟤' : '🟠';
+        if (h < 70) return '🟡';
+        if (h < 165) return '🟢';
+        if (h < 255) return '🔵';
+        if (h < 335) return '🟣';
+        return '🔴';
+    }
     var ROTA_CORES = ['#e6194b','#3cb44b','#4363d8','#f58231','#911eb4','#46f0f0','#f032e6','#bcf60c','#fabebe','#008080','#9a6324','#800000','#aaffc3','#808000','#000075','#808080'];
     var MAPS_MAX_PARADAS = 9;  // Google Maps deeplink: ate 9 waypoints + destino
     var rotasMapaLeaflet = null;
