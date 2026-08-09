@@ -1764,9 +1764,59 @@
         document.body.removeChild(ta);
     }
 
+    // Seletor de motoristas do Auto-distribuir (aba Rotas). Busca a lista
+    // fresca em /api/drivers (o modal pode abrir antes do 1º gerarRotas).
+    function abrirSeletorMotoristas() {
+        fetch('/entregas/api/drivers', {credentials: 'same-origin'})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                var drivers = (d && d.drivers) || [];
+                if (!drivers.length) {
+                    alert('Nenhum motorista cadastrado. Vá em "Drivers" e cadastre.');
+                    return;
+                }
+                var cont = document.getElementById('rotas-sel-drivers');
+                var html = '';
+                drivers.forEach(function(dr) {
+                    var marcado = (rotasDriversSel === null
+                                   || rotasDriversSel.indexOf(dr.id) !== -1)
+                        ? 'checked' : '';
+                    html += '<label class="form-check mb-1 d-block">' +
+                        '<input class="form-check-input rotas-sel-cb" type="checkbox" value="' + dr.id + '" ' + marcado + '>' +
+                        '<span class="form-check-label small">' +
+                        '<span style="display:inline-block;width:10px;height:10px;background:' + escapeHtml(dr.cor || '#666') + ';border-radius:50%;margin-right:6px;"></span>' +
+                        escapeHtml(dr.nome) +
+                        ' <span class="text-muted">(cap ' + (dr.capacidade || 999) + ')</span>' +
+                        '</span></label>';
+                });
+                cont.innerHTML = html;
+                bootstrap.Modal.getOrCreateInstance(
+                    document.getElementById('modal-rotas-motoristas')).show();
+            })
+            .catch(function() { alert('Falha ao carregar os motoristas.'); });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         var btn = document.getElementById('btn-gerar-rotas');
-        if (btn) btn.addEventListener('click', function() { gerarRotas(true); });
+        // Antes de distribuir, pergunta QUAIS motoristas entram (dono
+        // 09/08/2026) — o backend já aceitava ?drivers=, faltava a tela.
+        if (btn) btn.addEventListener('click', abrirSeletorMotoristas);
+        var selTodos = document.getElementById('rotas-sel-todos');
+        if (selTodos) selTodos.addEventListener('click', function() {
+            var cbs = document.querySelectorAll('.rotas-sel-cb');
+            var todosMarcados = Array.prototype.every.call(cbs, function(c) { return c.checked; });
+            cbs.forEach(function(c) { c.checked = !todosMarcados; });
+        });
+        var selOk = document.getElementById('rotas-sel-confirmar');
+        if (selOk) selOk.addEventListener('click', function() {
+            var ids = Array.from(document.querySelectorAll('.rotas-sel-cb:checked'))
+                .map(function(cb) { return parseInt(cb.value, 10); });
+            if (!ids.length) { alert('Selecione pelo menos um motorista.'); return; }
+            rotasDriversSel = ids;
+            bootstrap.Modal.getInstance(
+                document.getElementById('modal-rotas-motoristas')).hide();
+            gerarRotas(true);
+        });
         var tabBtn = document.getElementById('btn-tab-rotas');
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', function() {
             var dataPedidos = document.getElementById('data-entrega').value;
