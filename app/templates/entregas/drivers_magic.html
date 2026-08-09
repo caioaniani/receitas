@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Links dos motoristas{% endblock %}
+{% block content %}
+{# Tela criada em 09/08/2026 (manhã do Dia dos Pais): a rota existia desde
+   01-04/08 mas o template nunca foi commitado — 500 no primeiro uso real.
+   Lista cada motorista com o link do painel e o botão de enviar por
+   WhatsApp (magic link do dia via Z-API, forcar=True). #}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <h4 class="mb-0">🔗 Links dos motoristas</h4>
+  <a href="{{ url_for('entregas.index') }}" class="btn btn-sm btn-outline-secondary ms-auto">← Entregas</a>
+</div>
+
+{% if not zapi_ok %}
+<div class="alert alert-warning py-2 small">
+  ⚠ Z-API não configurada — o botão de WhatsApp não vai funcionar.
+  Use o <strong>Copiar link</strong> e mande manualmente.
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Motorista</th>
+            <th>Telefone</th>
+            <th>Link de hoje</th>
+            <th>Último envio</th>
+            <th class="text-end">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          {% set d = r.driver %}
+          {% set link = url_for('driver.index', token=(r.ativo.token if r.ativo else d.token), _external=True) %}
+          <tr>
+            <td>
+              <span style="display:inline-block;width:12px;height:12px;background:{{ d.cor or '#666' }};border-radius:50%;margin-right:6px;vertical-align:middle;"></span>
+              <strong>{{ d.nome }}</strong>
+            </td>
+            <td class="small">{{ d.telefone or '—' }}</td>
+            <td class="small">
+              {% if r.ativo %}
+                <span class="badge bg-success">magic link ativo (vale até meia-noite)</span>
+              {% elif d.token %}
+                <span class="badge bg-secondary">link fixo</span>
+              {% else %}
+                <span class="text-muted">sem link</span>
+              {% endif %}
+            </td>
+            <td class="small">
+              {% if r.ultimo and r.ultimo.enviado_em %}
+                {{ r.ultimo.enviado_em.strftime('%d/%m %H:%M') }}
+                {% if r.ultimo.enviado_ok %}<span class="text-success">✓ enviado</span>
+                {% else %}<span class="text-danger">✗ falhou</span>{% endif %}
+              {% else %}
+                <span class="text-muted">nunca</span>
+              {% endif %}
+            </td>
+            <td class="text-end" style="min-width:280px;">
+              {% if d.token or r.ativo %}
+              <button type="button" class="btn btn-sm btn-outline-success btn-copiar-magic"
+                      data-link="{{ link }}">📋 Copiar link</button>
+              {% endif %}
+              {% if d.telefone %}
+              <form method="post" class="d-inline"
+                    action="{{ url_for('entregas.drivers_magic_regerar', did=d.id) }}"
+                    onsubmit="this.querySelector('button').disabled = true;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-success">
+                  💬 Enviar por WhatsApp</button>
+              </form>
+              {% else %}
+              <span class="text-muted small">sem telefone</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="form-text small mt-2">
+  O link abre o painel do motorista com a rota do dia na ordem, telefone e
+  endereço de cada parada e o botão <strong>🚚 Iniciar rota</strong> (que
+  dispara o e-mail "saiu para entrega" pros clientes). "Enviar por
+  WhatsApp" gera um link novo do dia e manda na hora pelo número do
+  sistema.
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('.btn-copiar-magic');
+  if (!b) return;
+  var link = b.dataset.link;
+  function ok() {
+    b.textContent = '✓ Copiado!';
+    setTimeout(function () { b.textContent = '📋 Copiar link'; }, 1500);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link).then(ok, function () { prompt('Copie o link:', link); });
+  } else {
+    prompt('Copie o link:', link);
+  }
+});
+</script>
+{% endblock %}
