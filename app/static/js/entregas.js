@@ -3073,6 +3073,35 @@
             .catch(function() { msg.innerHTML = '<div class="alert alert-danger py-2 small">Falha de rede.</div>'; });
     }
 
+    // Re-otimiza SO as rotas dos motoristas das paradas SELECIONADAS
+    // (dono 09/08/2026: "Eu selecionei os 11 e nao apareceu re-otimizar").
+    // Acha os motoristas dos codes marcados e re-sequencia a rota INTEIRA
+    // de cada um — reordenar so um pedaco deixaria `ordem` duplicada com as
+    // paradas de fora da selecao. Os pedidos SEM driver do dia ficam fora
+    // (escopo por codes no /api/rotas).
+    function opReotimizarSelecao() {
+        if (!opUltimoResultado) return;
+        var checks = document.querySelectorAll('.op-check:checked');
+        if (checks.length === 0) return;
+        var selCodes = {};
+        checks.forEach(function(cb) { selCodes[cb.dataset.code] = true; });
+        var driverIds = [], codes = [];
+        (opUltimoResultado.drivers || []).forEach(function(dr) {
+            var did = (dr.driver && dr.driver.id) || dr.id;
+            var paradas = dr.paradas || [];
+            if (!did || !paradas.some(function(p) { return selCodes[p.code]; })) return;
+            driverIds.push(did);
+            paradas.forEach(function(p) { codes.push(p.code); });
+        });
+        var msg = document.getElementById('op-msg');
+        if (driverIds.length === 0) {
+            if (msg) msg.innerHTML = '<div class="alert alert-warning py-2 small">Nenhuma parada selecionada tem motorista — atribua primeiro (Atribuir a), depois re-otimize.</div>';
+            return;
+        }
+        opReotimizarRotas({driverIds: driverIds, codes: codes,
+                           rotulo: 'rota(s) de ' + driverIds.length + ' motorista(s)'});
+    }
+
     // Delegação: change no select dentro do popup do Leaflet
     document.addEventListener('change', function(e) {
         if (e.target && e.target.classList && e.target.classList.contains('op-pin-select')) {
