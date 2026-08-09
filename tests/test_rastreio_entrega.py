@@ -70,6 +70,7 @@ def test_progresso_avanca_quando_o_motorista_entrega(app):
     s = svc.status_do_pedido(codes[2])
     assert s['fase'] == 'a_caminho'
     assert s['parada'] == 3 and s['faltam'] == 2
+    assert s['motorista_em'] == 1         # 1ª pendente = onde ele está
     assert s['driver'] == 'João Rota'
     assert 'eta' not in s                 # decisão do dono: sem previsão
     a = AtribuicaoEntrega.query.filter_by(pedido_code=codes[0]).first()
@@ -77,7 +78,10 @@ def test_progresso_avanca_quando_o_motorista_entrega(app):
     a.entregue_em = agora()
     db.session.commit()
     s = svc.status_do_pedido(codes[2])
-    assert s['parada'] == 2 and s['faltam'] == 1
+    # 09/08/2026 (dono): `parada` é a posição FIXA na rota (não renumera);
+    # quem avança é o motorista (`motorista_em`) e o `faltam` cai junto.
+    assert s['parada'] == 3 and s['faltam'] == 1
+    assert s['motorista_em'] == 2
 
 
 def test_entregue_mostra_hora(app):
