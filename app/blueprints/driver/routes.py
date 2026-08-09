@@ -441,6 +441,18 @@ def api_foto(token):
     if len(raw) > 10 * 1024 * 1024:  # 10 MB
         return jsonify(ok=False, erro='Foto maior que 10MB'), 400
 
+    # Comprime ANTES do Dropbox (dono 09/08/2026: "resolução mais baixa,
+    # mas não ruim"): 1400px no maior lado + JPEG 80 mantém porta/fachada/
+    # etiqueta legíveis (~150-400KB vs os ~3-8MB da câmera) — upload e
+    # comprovante abrem rápido no 4G. BEST-EFFORT: formato que o PIL não
+    # lê (HEIC raro) sobe original — foto de comprovação nunca é recusada
+    # por causa da compressão.
+    try:
+        from app.utils import comprimir_imagem
+        raw = comprimir_imagem(raw, max_size=1400, quality=80)
+    except ValueError:
+        pass
+
     if not dropbox_storage.disponivel():
         return jsonify(ok=False, erro='Storage nao configurado'), 500
 
