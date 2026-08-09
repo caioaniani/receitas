@@ -2011,28 +2011,7 @@
                     return;
                 }
                 if (e.target.closest('.btn-drv-salvar')) {
-                    var capEl = row.querySelector('.drv-cap-edit');
-                    var dados = {
-                        nome: row.querySelector('.drv-nome-edit').value,
-                        telefone: row.querySelector('.drv-tel-edit').value,
-                        cor: row.querySelector('.drv-cor-edit').value,
-                        ativo: row.querySelector('.drv-ativo-edit').checked,
-                        pin: row.querySelector('.drv-pin-edit').value,
-                        capacidade: capEl ? parseInt(capEl.value, 10) || 999 : 999,
-                    };
-                    fetch('/entregas/api/drivers/' + id, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
-                        body: JSON.stringify(dados),
-                    }).then(function(r) { return r.json(); })
-                      .then(function(d) {
-                          if (d.ok) {
-                              row.style.background = '#d4edda';
-                              setTimeout(function() { row.style.background = ''; carregarDrivers(); }, 700);
-                          } else {
-                              alert('Erro: ' + (d.erro || 'desconhecido'));
-                          }
-                      });
+                    salvarLinhaDriver(row, id, true);
                 } else if (e.target.closest('.btn-drv-desativar')) {
                     if (!confirm('Excluir esse driver?')) return;
                     fetch('/entregas/api/drivers/' + id, {
