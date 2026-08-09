@@ -757,3 +757,38 @@ def test_tela_salva_edita_e_preserva_bloqueios(app, owner_user):
     assert 'name="bloquear_itens"' in body
     assert 'data-bloqueios="Mini Pães' in body
     assert '🚫 Mini Pães' in body
+
+
+# ── Faixa larga corta pelo FIM, não pelo início (09/08/2026, caso real) ──
+
+def test_faixa_larga_vale_ate_o_lead_do_fim(app):
+    """Caso Roberta, 07:29 do Dia dos Pais: o corte de janela passada
+    comparava o INÍCIO — a faixa 06:00–10:00 "passava" às ~4h da manhã e o
+    dia inteiro sumia do calendário ("entrega só amanhã") com 6h de janela
+    pela frente. Viável = FIM além de agora + LEAD_HORAS."""
+    from app.services import loja_checkout
+    _definir()
+    as_729 = datetime(2026, 8, 9, 7, 29)
+    js = loja_checkout.janelas_disponiveis('agendada', DIA_DOS_PAIS,
+                                           base=as_729)
+    assert js == [JANELA_PAIS]                  # ainda vendável
+    assert DIA_DOS_PAIS in loja_checkout.datas_disponiveis(
+        'agendada', base=as_729)                # hoje volta pro calendário
+    # Às 08:00 o lead de 2h encosta no fim (10h): aí sim fecha.
+    as_8 = datetime(2026, 8, 9, 8, 0)
+    assert loja_checkout.janelas_disponiveis('agendada', DIA_DOS_PAIS,
+                                             base=as_8) == []
+    assert DIA_DOS_PAIS not in loja_checkout.datas_disponiveis(
+        'agendada', base=as_8)
+
+
+def test_janela_de_1h_mantem_o_corte_historico(app):
+    """O corte pelo fim NÃO afrouxa dia normal: às 07:29, a 08:00–09:00
+    continua fora (fim 9 <= 7+2) e a 09:00–10:00 continua dentro."""
+    from app.services import loja_checkout
+    from app.utils import hoje as _hoje
+    dia = _hoje()
+    base = datetime(dia.year, dia.month, dia.day, 7, 29)
+    js = loja_checkout.janelas_disponiveis('agendada', dia, base=base)
+    assert '08:00–09:00' not in js
+    assert '09:00–10:00' in js
