@@ -210,10 +210,17 @@ def _janelas_especiais(data):
 
 
 def _sem_janelas_passadas(janelas, base):
-    """Tira as janelas de HOJE que já passaram (início < agora + LEAD_HORAS).
+    """Tira as janelas de HOJE que já passaram — viável = o FIM da janela
+    ainda está além de agora + LEAD_HORAS (dá tempo de produzir e entregar
+    DENTRO dela).
 
-    Compara pelo horário de INÍCIO da janela — funciona igual pra janela de
-    1h ('08:00–09:00') e pra faixa larga de dia especial ('06:00–10:00').
+    Pra janela de 1h o corte é IDÊNTICO ao histórico (fim = início + 1, então
+    fim <= limite ⇔ início < limite). A diferença é a FAIXA LARGA de dia
+    especial ('06:00–10:00'): o corte antigo pelo INÍCIO fechava o dia
+    INTEIRO às ~4h da manhã (06 < 4+2), com 6h de janela pela frente — caso
+    real 09/08/2026 às 07:29, Dia dos Pais, venda barrada com "entrega só
+    amanhã" (dono: "é algo sobre data especial?"). Sem o fim legível, cai no
+    início + 1h (comportamento antigo).
 
     Janela ilegível é MANTIDA em vez de derrubar a página: a coluna
     `LojaDataEspecial.janelas` é texto e só o cadastro pela tela normaliza —
@@ -224,7 +231,13 @@ def _sem_janelas_passadas(janelas, base):
     out = []
     for j in janelas:
         try:
-            passou = int(j[:2]) < limite
+            inicio = int(j[:2])
+            partes = j.split(TRACO_JANELA)
+            try:
+                fim = int(partes[1].strip()[:2]) if len(partes) > 1 else inicio + 1
+            except (TypeError, ValueError, IndexError):
+                fim = inicio + 1
+            passou = fim <= limite
         except (TypeError, ValueError):
             logger.warning('janela ilegível no filtro de hora: %r', j)
             passou = False
