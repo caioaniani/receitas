@@ -74,19 +74,21 @@
   }
 </style>
 
+<div class="aviv-wrap">
 <div class="aviv-topo mb-1">
   <h4 class="mb-0">🚚 Entregas ao vivo</h4>
-  <span><span class="aviv-num text-success" id="aviv-entregues">–</span>
+  <span><span class="aviv-num" id="aviv-entregues">–</span>
         <span class="text-muted">/ <span id="aviv-total">–</span> entregues</span></span>
   <span id="aviv-problemas" class="text-danger" style="display:none;"></span>
   <span class="aviv-att ms-auto" id="aviv-att"></span>
 </div>
 <div class="aviv-barra"><div id="aviv-fill"></div></div>
 <input type="search" id="aviv-busca" class="form-control mb-2"
-       placeholder="🔍 buscar pedido, destinatário, comprador ou endereço…"
+       placeholder="🔍 buscar pedido, destinatário, comprador, telefone ou endereço…"
        autocomplete="off">
 <div id="aviv-busca-res" class="aviv-busca-res" style="display:none;"></div>
 <div id="aviv-linhas"><div class="text-muted py-4 text-center">Carregando…</div></div>
+</div>
 
 <script>
 (function () {
