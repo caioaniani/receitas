@@ -909,8 +909,11 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
         # Não promete prazo nem responde a dúvida — só tira o cliente do
         # vácuo. Dedupe herdado do alerta (1x/12h por conversa, o registro
         # acima). Best-effort: falha nunca derruba o alerta ao dono.
-        # Kill-switch: ESPERA_HUMANO_CONTENCAO=0.
-        if (current_app.config.get('ESPERA_HUMANO_CONTENCAO', '1') != '0'):
+        # Kill-switch: ESPERA_HUMANO_CONTENCAO=0 (env direto — a armadilha
+        # do Spotify: env nova só chega ao app.config se declarada no
+        # config.py; kill-switch de vigia lê os.environ como os demais).
+        import os as _os
+        if _os.environ.get('ESPERA_HUMANO_CONTENCAO', '1') != '0':
             try:
                 chatwoot.enviar_mensagem(conv_id, TEXTO_CONTENCAO_ESPERA)
             except Exception:  # noqa: BLE001
