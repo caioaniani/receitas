@@ -78,6 +78,14 @@
         var tip = p.ordem + '. ' + (p.quem || '') +
                   (p.hora ? ' — entregue às ' + p.hora : '') +
                   (p.pulado ? ' — PULADO (volta depois)' : '');
+        // Bolinha verde CLICÁVEL (dono 09/08/2026): abre o comprovante de
+        // entrega (foto + hora) na página pública /entrega/<hash>.
+        if (p.status === 'entregue' && p.proof) {
+          return '<a class="aviv-ponto entregue" style="text-decoration:none;cursor:pointer;" ' +
+                 'href="/entrega/' + encodeURIComponent(p.proof) + '" target="_blank" rel="noopener" ' +
+                 'title="' + esc(tip + ' — clique pra ver o comprovante') + '">' +
+                 p.ordem + '</a>';
+        }
         return '<span class="aviv-ponto ' + cls + '" title="' + esc(tip) + '">' +
                p.ordem + '</span>';
       }).join('');
