@@ -2204,8 +2204,11 @@
         // /api/rotas re-otimiza tudo no Google e passa dos 25s — o timeout
         // abortava o Promise.all inteiro e "o mapa não aparece"). Timeout
         // próprio de 90s + erro vira null (a lista renderiza igual).
+        // `leve=1`: o mapa desenha a ordem SALVA sem re-otimizar no Google
+        // (re-otimizar 12 rotas a cada carga passava do timeout do servidor
+        // e o mapa nunca chegava — caso real da manhã do Dia dos Pais).
         var pRotas = opMapaVisivel
-            ? fetchTimeout('/entregas/api/rotas?data=' + encodeURIComponent(data), 90000)
+            ? fetchTimeout('/entregas/api/rotas?data=' + encodeURIComponent(data) + '&leve=1', 90000)
                 .catch(function() { return {__falhou: true}; })
             : Promise.resolve(null);
 
