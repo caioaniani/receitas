@@ -372,31 +372,55 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None):
         vagas = max(0, cap - ja_tem)
         novos = distribuidos.get(d['id']) or []
         if len(novos) > vagas:
+            # Corta as paradas MAIS LONGE do centro do cluster (dono
+            # 09/08/2026, "por que nao distribui as mais proximas pro mesmo
+            # motorista?"): o corte era pela ordem arbitraria da lista e
+            # podia expulsar parada vizinha mantendo a distante.
+            com_xy = [q for q in novos if 'lat' in q and 'lng' in q]
+            if com_xy and vagas > 0:
+                cx = sum(q['lat'] for q in com_xy) / len(com_xy)
+                cy = sum(q['lng'] for q in com_xy) / len(com_xy)
+                novos = sorted(novos, key=lambda q: (
+                    _haversine((cx, cy), (q['lat'], q['lng']))
+                    if 'lat' in q and 'lng' in q else 1e9))
             distribuidos[d['id']] = novos[:vagas]
             excedentes.extend(novos[vagas:])
 
-    # Tenta encaixar excedentes em drivers com vagas restantes (round-robin)
+    # Encaixa excedentes no driver COM VAGA cujo cluster esta MAIS PERTO
+    # (era round-robin cego — parada do Morumbi caia no motorista de Moema
+    # so porque ele tinha vaga; caso real do mapa do Dia dos Pais).
+    sem_atribuir = []
     if excedentes:
-        i = 0
-        sem_atribuir = []
+        def _centroide(did):
+            pts = [(q['lat'], q['lng'])
+                   for q in (distribuidos.get(did) or [])
+                   if 'lat' in q and 'lng' in q]
+            if not pts:
+                return None
+            return (sum(x for x, _ in pts) / len(pts),
+                    sum(y for _, y in pts) / len(pts))
+
         for p in excedentes:
-            colocado = False
-            tentativas = 0
-            while tentativas < len(drivers):
-                d = drivers[i % len(drivers)]
+            candidatos = []
+            for d in drivers:
                 cap = d.get('capacidade') or 999
-                total_atual = len(pre_atribuidos.get(d['id'], [])) + len(distribuidos.get(d['id'], []))
-                if total_atual < cap:
-                    distribuidos[d['id']].append(p)
-                    colocado = True
-                    i += 1
-                    break
-                i += 1
-                tentativas += 1
-            if not colocado:
+                total_atual = (len(pre_atribuidos.get(d['id'], []))
+                               + len(distribuidos.get(d['id'], [])))
+                if total_atual >= cap:
+                    continue
+                c = _centroide(d['id'])
+                if c is not None and 'lat' in p and 'lng' in p:
+                    dist = _haversine(c, (p['lat'], p['lng']))
+                else:
+                    # Sem referencia geografica: so entra se nenhum driver
+                    # com cluster proximo tiver vaga.
+                    dist = 1e9
+                candidatos.append((dist, d['id']))
+            if not candidatos:
                 sem_atribuir.append(p)
-    else:
-        sem_atribuir = []
+                continue
+            candidatos.sort()
+            distribuidos[candidatos[0][1]].append(p)
 
     logger.info('rotas: final → %d distribuidos, %d sem_atribuir, %d sem_cep',
                 sum(len(v) for v in distribuidos.values()),
