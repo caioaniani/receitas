@@ -1987,9 +1987,58 @@
         var btnCriar = document.getElementById('btn-criar-driver');
         if (btnCriar) btnCriar.addEventListener('click', criarDriver);
 
+        // Salva a linha inteira do driver (usada pelo ✓ e pelo AUTOSAVE).
+        // `recarregar`: re-render da lista — só no gesto explícito do ✓;
+        // no autosave NÃO recarrega (re-render roubaria o foco de quem está
+        // tabulando pelos campos), só pisca verde. Erro (nome duplicado,
+        // PIN inválido) avisa e recarrega pra mostrar o valor REAL do banco.
+        function salvarLinhaDriver(row, id, recarregar) {
+            var capEl = row.querySelector('.drv-cap-edit');
+            var dados = {
+                nome: row.querySelector('.drv-nome-edit').value,
+                telefone: row.querySelector('.drv-tel-edit').value,
+                cor: row.querySelector('.drv-cor-edit').value,
+                ativo: row.querySelector('.drv-ativo-edit').checked,
+                pin: row.querySelector('.drv-pin-edit').value,
+                capacidade: capEl ? parseInt(capEl.value, 10) || 999 : 999,
+            };
+            fetch('/entregas/api/drivers/' + id, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+                body: JSON.stringify(dados),
+            }).then(function(r) { return r.json(); })
+              .then(function(d) {
+                  if (d.ok) {
+                      row.style.background = '#d4edda';
+                      setTimeout(function() {
+                          row.style.background = '';
+                          if (recarregar) carregarDrivers();
+                      }, 700);
+                  } else {
+                      alert('Erro: ' + (d.erro || 'desconhecido'));
+                      carregarDrivers();      // volta ao que está no banco
+                  }
+              })
+              .catch(function() {
+                  row.style.background = '#f8d7da';
+                  setTimeout(function() { row.style.background = ''; }, 1200);
+              });
+        }
+
         var modalDrv = document.getElementById('modal-drivers');
         if (modalDrv) {
             modalDrv.addEventListener('show.bs.modal', carregarDrivers);
+            // AUTOSAVE (dono 09/08/2026: "toda mudança tem que salvar
+            // automaticamente, apertar o botão do lado atrasa muito"):
+            // qualquer campo da linha salva no 'change' (texto salva ao
+            // sair do campo; checkbox/cor/número salvam na hora).
+            modalDrv.addEventListener('change', function(e) {
+                if (!e.target.matches('.drv-nome-edit, .drv-tel-edit, '
+                        + '.drv-cor-edit, .drv-cap-edit, .drv-pin-edit, '
+                        + '.drv-ativo-edit')) return;
+                var row = e.target.closest('tr[data-id]');
+                if (row) salvarLinhaDriver(row, row.dataset.id, false);
+            });
             // Salvar/desativar
             modalDrv.addEventListener('click', function(e) {
                 var row = e.target.closest('tr[data-id]');
