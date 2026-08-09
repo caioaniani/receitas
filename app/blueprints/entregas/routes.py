@@ -2593,12 +2593,17 @@ def api_atribuidos():
     for d in drivers_db:
         if d.id not in paradas_por_driver:
             continue
-        # Ordena por JANELA (expresso primeiro, depois por horario) e, dentro
-        # da janela, pela ordem salva da rota. Respeita o SLA de horario mesmo
-        # antes de re-otimizar.
+        # ORDEM SALVA manda (09/08/2026, dono: "algo segura e nao permite a
+        # troca da ordem"): a lista exibia janela-primeiro por cima da ordem
+        # salva — o drag salvava certo, o reload re-impunha a janela e o
+        # PROXIMO drag persistia a ordem re-imposta, desfazendo a troca em
+        # silencio. Agora a exibicao segue a MESMA ordem do motorista/ao
+        # vivo/rastreio; a janela vira so desempate (e selo de aviso no JS).
+        # O SLA de janela continua garantido onde a ordem NASCE (gerar_rotas
+        # com otimizar_ordem=True — distribuir/re-otimizar).
         paradas_list = sorted(
             paradas_por_driver[d.id],
-            key=lambda x: (rotas_svc.janela_rank(x[1]), x[0]))
+            key=lambda x: (x[0], rotas_svc.janela_rank(x[1])))
         drivers_resp.append({
             'id': d.id,
             'nome': d.nome,
