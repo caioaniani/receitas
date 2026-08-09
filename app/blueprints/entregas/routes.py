@@ -2863,7 +2863,8 @@ def api_rotas():
              'endereco': p.get('endereco', ''), 'periodo': p.get('periodo', '')}
             for p in geradas.get('sem_atribuir') or []
         ],
-        total_pedidos=len(pedidos),
+        sem_driver=sem_driver_payload,
+        total_pedidos=len(pedidos) + len(sem_driver_payload),
         origem_endereco=rotas_svc.origem_endereco(current_app),
         origem=origem_payload,
     )
