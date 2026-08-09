@@ -2802,6 +2802,75 @@
         setTimeout(function() { if (opMapa) opMapa.invalidateSize(); }, 80);
     }
 
+    // ── Seleção por ÁREA no mapa (dono 09/08/2026: "selecionar mais de um
+    // pelo mapa e escolher pra qual motorista alocar") ──
+    // Botão arma o modo; um arrasto desenha o retângulo; ao soltar, todos os
+    // pinos dentro entram na seleção da LISTA (checkboxes) e a barra
+    // "N selecionados · Atribuir a: → Aplicar" faz o resto.
+    var opMapaPins = [];
+    var opLassoAtivo = false;
+    var opLassoRect = null;
+    var opLassoInicio = null;
+
+    function opLassoTerminar(boundsFinal) {
+        if (opLassoRect) { opMapa.removeLayer(opLassoRect); opLassoRect = null; }
+        opLassoInicio = null;
+        opLassoAtivo = false;
+        opMapa.dragging.enable();
+        var el = document.getElementById('op-mapa');
+        if (el) el.style.cursor = '';
+        var btn = document.getElementById('op-mapa-lasso');
+        if (btn) btn.classList.remove('btn-warning');
+        if (!boundsFinal) return;
+        var marcados = 0, foraDaLista = 0;
+        opMapaPins.forEach(function(pin) {
+            if (!boundsFinal.contains([pin.lat, pin.lng])) return;
+            var cb = document.querySelector('.op-check[data-code="' + pin.code + '"]');
+            if (cb) { cb.checked = true; marcados += 1; }
+            else foraDaLista += 1;
+        });
+        opAtualizarBulkBar();
+        var bar = document.getElementById('op-bulk-bar');
+        if (marcados > 0 && bar) bar.scrollIntoView({behavior: 'smooth', block: 'center'});
+        if (marcados === 0) {
+            alert('Nenhum pino dentro da área.'
+                  + (foraDaLista ? ' (' + foraDaLista + ' estão escondidos por filtro de janela/lote — limpe os filtros.)' : ''));
+        }
+    }
+
+    function opLassoArmar() {
+        if (!opMapa || !opMapaVisivel) { alert('Mostre o mapa primeiro.'); return; }
+        if (opLassoAtivo) { opLassoTerminar(null); return; }   // 2º clique cancela
+        opLassoAtivo = true;
+        opMapa.dragging.disable();
+        opMapa.closePopup();
+        document.getElementById('op-mapa').style.cursor = 'crosshair';
+        var btn = document.getElementById('op-mapa-lasso');
+        if (btn) btn.classList.add('btn-warning');
+
+        function aoDescer(e) {
+            opLassoInicio = e.latlng;
+            opLassoRect = L.rectangle(L.latLngBounds(e.latlng, e.latlng),
+                                      {color: '#fd7e14', weight: 2, fillOpacity: 0.08});
+            opLassoRect.addTo(opMapa);
+            opMapa.on('mousemove', aoMover);
+            opMapa.once('mouseup', aoSoltar);
+        }
+        function aoMover(e) {
+            if (opLassoRect && opLassoInicio) {
+                opLassoRect.setBounds(L.latLngBounds(opLassoInicio, e.latlng));
+            }
+        }
+        function aoSoltar(e) {
+            opMapa.off('mousemove', aoMover);
+            opMapa.off('mousedown', aoDescer);
+            var b = (opLassoInicio && e.latlng)
+                ? L.latLngBounds(opLassoInicio, e.latlng) : null;
+            opLassoTerminar(b);
+        }
+        opMapa.once('mousedown', aoDescer);
+    }
+
     function opAbrirModalDistribuir() {
         if (!opUltimoResultado) return;
         // Popula motoristas (so ativos)
