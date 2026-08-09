@@ -167,3 +167,71 @@ def test_api_pedidos_expoe_pulado_e_precisa_foto_nova(app):
     assert por_code[codes[1]]['pulado_em'] is None
     # Lista reordenada: o pulado aparece POR ÚLTIMO
     assert dados['pedidos'][-1]['code'] == codes[0]
+
+
+def test_baixa_aciona_iniciar_rota_sozinha(app):
+    """Cinto de segurança (dono 09/08/2026): motorista que esqueceu o
+    "Iniciar rota" e marcou a 1ª entrega — o marco RotaInicio nasce sozinho
+    (liga o rastreio dos clientes e os e-mails de saída). O pedido
+    recém-entregue NÃO recebe "saiu para entrega" (já não está pendente)."""
+    from unittest.mock import patch
+
+    from app.models import RotaInicio
+    d = _driver()
+    codes = _rota(d, n=3)
+    a = _atrib(codes[0])
+    _foto(a)
+    c = _client(app, d)
+    assert RotaInicio.query.filter_by(driver_id=d.id).first() is None
+    with patch('app.services.email.enviar_pedido_a_caminho',
+               return_value={'ok': True}) as env:
+        r = c.post(f'/driver/api/{d.token}/status',
+                   json={'atribuicao_id': a.id, 'status': 'entregue'})
+    assert r.status_code == 200
+    ri = RotaInicio.query.filter_by(driver_id=d.id, data=hoje()).first()
+    assert ri is not None and ri.emails_em is not None
+    # Só os 2 ainda pendentes ganham o e-mail — nunca o recém-entregue.
+    enviados = {c0.args[0].codigo for c0 in env.call_args_list}
+    assert enviados == {codes[1], codes[2]}
+
+
+def test_pular_tambem_aciona_iniciar_rota(app):
+    from unittest.mock import patch
+
+    from app.models import RotaInicio
+    d = _driver()
+    codes = _rota(d, n=2)
+    a = _atrib(codes[0])
+    _foto(a)
+    c = _client(app, d)
+    with patch('app.services.email.enviar_pedido_a_caminho',
+               return_value={'ok': True}):
+        assert c.post(f'/driver/api/{d.token}/pular',
+                      json={'atribuicao_id': a.id}).status_code == 200
+    assert RotaInicio.query.filter_by(driver_id=d.id,
+                                      data=hoje()).first() is not None
+
+
+def test_baixa_de_outro_dia_nao_inicia_rota(app):
+    """A proteção de véspera continua: baixar entrega agendada pra AMANHÃ
+    (ajuste/teste) não dispara o "saiu para entrega" do dia errado."""
+    from datetime import timedelta as _td
+
+    from app.models import RotaInicio
+    d = _driver()
+    amanha = hoje() + _td(days=1)
+    p = PedidoOnline(codigo='FUT1', nome_cliente='F', email_cliente='f@x.com',
+                     status='pago', modo_entrega='agendada',
+                     data_entrega=amanha, janela_entrega='06:00–10:00',
+                     valor_total=100)
+    db.session.add(p)
+    db.session.add(AtribuicaoEntrega(pedido_code='FUT1', driver_id=d.id,
+                                     data_entrega=amanha, ordem=1))
+    db.session.commit()
+    a = AtribuicaoEntrega.query.filter_by(pedido_code='FUT1').first()
+    c = _client(app, d)
+    r = c.post(f'/driver/api/{d.token}/status',
+               json={'atribuicao_id': a.id, 'status': 'nao_entregue',
+                     'motivo_falha': 'teste'})
+    assert r.status_code == 200
+    assert RotaInicio.query.filter_by(driver_id=d.id).first() is None
