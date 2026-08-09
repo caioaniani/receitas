@@ -118,6 +118,10 @@
                title="Tela ao vivo: um ponto por endereço, verde quando o motorista entrega. Atualiza sozinha.">
                 <i class="bi bi-broadcast"></i> ao vivo
             </a>
+            <a class="btn-pill btn-pill-outline" href="{{ url_for('entregas.drivers_magic_status') }}"
+               title="Links de acesso dos motoristas: enviar por WhatsApp, copiar e imprimir os pedidos de cada um.">
+                <i class="bi bi-link-45deg"></i> links motoristas
+            </a>
             <input type="text" id="op-busca" class="form-control form-control-sm" placeholder="buscar cliente ou code..." style="max-width:220px; border-radius:var(--radius-pill);">
             <button class="btn-pill btn-pill-outline ms-auto" data-bs-toggle="modal" data-bs-target="#modal-drivers">
                 <i class="bi bi-people"></i> drivers
