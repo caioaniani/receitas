@@ -388,12 +388,22 @@ def _seed_cores_drivers(app):
         chave = 'seed_cores_drivers_2026_08'
         if AppConfig.get(chave):
             return
+        drivers = Driver.query.order_by(Driver.id).all()
+        # 1º passe: registra TODAS as cores distintas existentes (primeiro
+        # dono por id mantém) — sem isso, um driver SEM cor pegaria da
+        # paleta a cor que um dono legítimo já usa e expulsaria o dono
+        # (pego por teste).
         usadas = set()
-        trocados = 0
-        for d in Driver.query.order_by(Driver.id).all():
+        donos = set()
+        for d in drivers:
             c = (d.cor or '').strip().lower()
             if c and c not in usadas:
                 usadas.add(c)
+                donos.add(d.id)
+        # 2º passe: NULL/vazia/repetida ganha a próxima cor livre.
+        trocados = 0
+        for d in drivers:
+            if d.id in donos:
                 continue
             nova = cor_driver_livre(usadas)
             d.cor = nova
