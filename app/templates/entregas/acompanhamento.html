@@ -79,10 +79,11 @@
         var tip = p.ordem + '. ' + (p.quem || '') +
                   (p.hora ? ' — entregue às ' + p.hora : '') +
                   (p.pulado ? ' — PULADO (volta depois)' : '');
-        // Bolinha verde CLICÁVEL (dono 09/08/2026): abre o comprovante de
-        // entrega (foto + hora) na página pública /entrega/<hash>.
-        if (p.status === 'entregue' && p.proof) {
-          return '<a class="aviv-ponto entregue" style="text-decoration:none;cursor:pointer;" ' +
+        // Bolinha verde/amarela CLICÁVEL (dono 09/08/2026): abre a página
+        // pública /entrega/<hash> — comprovante de entrega (verde) ou da
+        // VISITA pulada (amarela: foto da portaria, "o entregador volta").
+        if ((p.status === 'entregue' || p.pulado) && p.proof) {
+          return '<a class="aviv-ponto ' + cls + '" style="text-decoration:none;cursor:pointer;" ' +
                  'href="/entrega/' + encodeURIComponent(p.proof) + '" target="_blank" rel="noopener" ' +
                  'title="' + esc(tip + ' — clique pra ver o comprovante') + '">' +
                  p.ordem + '</a>';
