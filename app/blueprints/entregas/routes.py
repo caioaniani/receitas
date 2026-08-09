@@ -3195,8 +3195,19 @@ def drivers_magic_status():
         })
     zapi_ok = zapi_svc.disponivel()
     whitelist = sorted(driver_magic.telefones_drivers_ativos())
+    # Codes do dia por motorista (dono 09/08/2026: botão de imprimir os
+    # pedidos aqui) — alimenta o link GET /entregas/imprimir?codes=...
+    hoje_d = hoje_brt()
+    codes_por_driver = {}
+    for a in (AtribuicaoEntrega.query
+              .filter(AtribuicaoEntrega.data_entrega == hoje_d,
+                      AtribuicaoEntrega.driver_id.isnot(None))
+              .order_by(AtribuicaoEntrega.ordem, AtribuicaoEntrega.id)):
+        codes_por_driver.setdefault(a.driver_id, []).append(a.pedido_code)
     return render_template('entregas/drivers_magic.html',
-                            rows=rows, zapi_ok=zapi_ok, whitelist=whitelist)
+                            rows=rows, zapi_ok=zapi_ok, whitelist=whitelist,
+                            codes_por_driver=codes_por_driver,
+                            data_hoje=hoje_d.isoformat())
 
 
 @entregas_bp.route('/drivers/magic/<int:did>/regerar', methods=['POST'])
