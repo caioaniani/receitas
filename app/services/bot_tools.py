@@ -775,6 +775,7 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
         'cartinha': (p.cartinha or '').strip() or None,
         'rastreio': rastreio,
         'link_acompanhamento': f'{_base_loja()}/loja/pedido/{p.codigo}',
+        'link_comprovante': link_comprovante,
         'como_apresentar': ('Ao citar valores, SEMPRE rotule: '
                             '"itens R$ X + frete R$ Y = total R$ Z". '
                             'Nunca mostre dois números sem dizer o que são. '
@@ -784,7 +785,11 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
                             'a posição na rota: "você é a <parada>ª parada; '
                             'o motorista está na parada <motorista_em>, '
                             'faltam <faltam> antes da sua". '
-                            'NUNCA prometa horário.'),
+                            'NUNCA prometa horário. Cliente diz que NÃO '
+                            'recebeu mas o status é entregue: mande o '
+                            'link_comprovante (foto da entrega na porta) e '
+                            'peça pra conferir com porteiro/família; se a '
+                            'dúvida persistir, transfira pra equipe.'),
     }
 
 
