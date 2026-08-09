@@ -341,3 +341,34 @@ def test_sincronizar_entregues_alinha_sem_regredir(app, admin_user):
             == 'entregue')
     assert (PedidoOnline.query.filter_by(codigo='SY2').first().status
             == 'cancelado')                             # nunca regride/mexe
+
+
+def test_entregue_staff_sem_foto_valvula_de_escape(app, admin_user):
+    """Dono 09/08/2026 (celular do motorista sem memória pra foto): admin
+    marca a atribuição entregue SEM foto pela Operação — bolinha verde,
+    PedidoOnline 'entregue' e nunca duplica (idempotente)."""
+    from unittest.mock import patch
+
+    from app.models import Driver as _D
+    d = _D(nome='D Valv', ativo=True, token='tok-valv-1', capacidade=99)
+    db.session.add(d)
+    _pedido_online('VF1')
+    db.session.flush()
+    db.session.add(AtribuicaoEntrega(pedido_code='VF1', driver_id=d.id,
+                                     data_entrega=hoje(), ordem=1,
+                                     status='pendente'))
+    db.session.commit()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    with patch('app.services.email.enviar_pedido_entregue',
+               return_value={'ok': True}):
+        r = client.post('/entregas/api/entrega/VF1/entregue')
+    assert r.get_json()['ok'] is True
+    a = AtribuicaoEntrega.query.filter_by(pedido_code='VF1').first()
+    assert a.status == 'entregue' and a.entregue_em is not None
+    assert (PedidoOnline.query.filter_by(codigo='VF1').first().status
+            == 'entregue')
+    # Idempotente: segundo clique não muda nada nem re-manda e-mail.
+    r2 = client.post('/entregas/api/entrega/VF1/entregue')
+    assert r2.get_json().get('ja_estava') is True
