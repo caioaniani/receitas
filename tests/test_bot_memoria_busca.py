@@ -369,3 +369,28 @@ def test_sonda_vereditos_lista_do_banco_e_traz_store(app):
     assert v['motivo_vigia'] == 'transferiu sem tool'
     assert d['conversa']['existe_no_store'] is True
     assert d['conversa']['mensagens'][-1]['content'] == 'Já vejo!'
+
+
+def test_consultar_pedido_traz_link_do_comprovante_quando_entregue(app):
+    """Dono 09/08/2026 (conv 1457 "consta entregue mas não chegou"): pedido
+    ENTREGUE com foto expõe link_comprovante (/entrega/<hash>) pro bot
+    mostrar a foto da porta ao cliente autorizado. Pendente = None."""
+    from app.extensions import db
+    from app.models import AtribuicaoEntrega, PedidoOnline
+    from app.services import bot_tools
+    from app.utils import hoje
+    p = PedidoOnline(codigo='CPV1', status='entregue', nome_cliente='Ana',
+                     email_cliente='a@x.com', telefone_cliente='11999990000',
+                     modo_entrega='agendada', data_entrega=hoje(),
+                     janela_entrega='06:00–10:00', valor_total=100)
+    db.session.add(p)
+    db.session.add(AtribuicaoEntrega(pedido_code='CPV1', driver_id=None,
+                                     data_entrega=hoje(), ordem=1,
+                                     status='entregue', proof_hash='abc123'))
+    db.session.commit()
+    app.config['APP_BASE_URL'] = 'https://gestao.exemplo.com.br'
+    with app.test_request_context():
+        r = bot_tools._consultar_pedido_online(
+            'CPV1', telefone_contato='11999990000', cpf_cliente=None)
+    assert r['link_comprovante'] == 'https://gestao.exemplo.com.br/entrega/abc123'
+    assert 'não recebeu' in r['como_apresentar'].lower() or 'NÃO' in r['como_apresentar']

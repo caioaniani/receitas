@@ -828,6 +828,14 @@ def _e_mencao_story(texto):
             or 'mencionou voce no story' in t)
 
 
+# Mensagem de CONTENÇÃO pro cliente esperando atendente (dono 09/08/2026).
+# Sem prazo prometido de propósito — só confirma que a mensagem foi vista.
+TEXTO_CONTENCAO_ESPERA = (
+    'Recebemos a sua mensagem! 🙏 Nossa equipe está com o atendimento em '
+    'alta demanda neste momento, mas já vai te responder por aqui. '
+    'Obrigado pela paciência!')
+
+
 def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
                                        max_por_ciclo=5):
     """Detector C (12/06/2026, conv #198): cliente manda mensagem em
@@ -894,6 +902,20 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
             continue
         _registrar_espera_humano(conv_id, nome, minutos, ultima,
                                  bool(envio.get('ok')))
+        # CONTENÇÃO ao CLIENTE (dono 09/08/2026, Dia dos Pais: 12 clientes
+        # esperando 10-14min em conversa open enquanto a equipe entregava —
+        # inclusive VENDA esperando): junto com o alerta ao dono, o cliente
+        # recebe UM aviso de que foi visto ("a equipe já te responde").
+        # Não promete prazo nem responde a dúvida — só tira o cliente do
+        # vácuo. Dedupe herdado do alerta (1x/12h por conversa, o registro
+        # acima). Best-effort: falha nunca derruba o alerta ao dono.
+        # Kill-switch: ESPERA_HUMANO_CONTENCAO=0.
+        if (current_app.config.get('ESPERA_HUMANO_CONTENCAO', '1') != '0'):
+            try:
+                chatwoot.enviar_mensagem(conv_id, TEXTO_CONTENCAO_ESPERA)
+            except Exception:  # noqa: BLE001
+                logger.exception('espera-humano: contenção falhou conv=%s',
+                                 conv_id)
         if envio.get('ok'):
             enviadas += 1
             logger.info('espera-humano alertado conv=%s (%smin)',
