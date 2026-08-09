@@ -2648,6 +2648,18 @@ def api_rotas():
                     atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
             else:
                 # MODO PADRAO: cria lote novo, capacidade fresca
+                if request.args.get('reagrupar') == '1':
+                    # REAGRUPAR (dono 09/08/2026, mapa do Dia dos Pais com
+                    # rota retalhada): TODO pendente volta pro pool e o
+                    # clustering refaz as rotas do zero por geografia — cada
+                    # "Auto-distribuir vazios" anterior agrupava SO as
+                    # sobras, e rodar 2-3x deixava cada motorista com um
+                    # retalho de cada rodada. Entregue/nao_entregue ficam
+                    # FORA (historico e comprovante intocados).
+                    if ja_finalizado:
+                        codes_excluir.add(a.pedido_code)
+                    # pendente: fica fora de `atribuicoes` => nao_atribuido
+                    continue
                 ja_em_outro_lote = bool(a.lote_id) and a.driver_id is not None
                 if ja_finalizado or ja_em_outro_lote:
                     codes_excluir.add(a.pedido_code)
