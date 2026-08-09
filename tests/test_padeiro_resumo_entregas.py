@@ -84,11 +84,23 @@ def test_flag_desligada_padeiro_nao_ve_botao(app):
         assert 'Ligar resumo de entregas' not in body
 
 
-def test_flag_ligada_mostra_vendidos_e_a_produzir(app):
+def test_flag_ligada_mostra_vendidos_e_a_produzir(app, monkeypatch):
+    from datetime import timedelta
+
+    from app.blueprints.padeiro import routes as padeiro_mod
+    from app.utils import hoje
     with app.app_context():
         _pedido_amanha()
         AppConfig.set('padeiro_resumo_entregas', '1')
         db.session.commit()
+        # O alvo do card depende da HORA REAL (_alvo_resumo: antes das 10h
+        # BRT = hoje; depois = amanhã). Rodar a suíte de madrugada fazia o
+        # pedido de AMANHÃ sumir do card e o teste falhar — caso real
+        # 09/08/2026 00:39 BRT, CI vermelho travando deploy. Trava no
+        # cenário testado (véspera à tarde → alvo = amanhã).
+        monkeypatch.setattr(padeiro_mod, '_alvo_resumo',
+                            lambda dt: hoje() + timedelta(days=1),
+                            raising=True)
         c = _login(app, 'padeiro')          # o PADEIRO vê o card (é pra ele)
         body = c.get('/padeiro/').get_data(as_text=True)
         assert 'ENTREGAS DO SITE' in body
