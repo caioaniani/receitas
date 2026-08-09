@@ -469,11 +469,43 @@
         });
     });
 
+    // Reduz a foto NO CELULAR antes de subir (dono 09/08/2026): a câmera
+    // solta 3-8MB e o upload trava no 4G/celular fraco; 1400px + JPEG 0.8
+    // fica legível (~200-400KB). FAIL-OPEN: qualquer erro (canvas, memória,
+    // formato) manda o arquivo ORIGINAL — a foto nunca deixa de subir por
+    // causa da redução. O servidor re-comprime de garantia.
+    function reduzirFoto(arquivo) {
+        return new Promise(function(resolve) {
+            try {
+                if (!window.createImageBitmap || !document.createElement('canvas').toBlob) {
+                    resolve(arquivo); return;
+                }
+                createImageBitmap(arquivo).then(function(bmp) {
+                    var MAX = 1400;
+                    var esc = Math.min(1, MAX / Math.max(bmp.width, bmp.height));
+                    if (esc >= 1) { bmp.close && bmp.close(); resolve(arquivo); return; }
+                    var cv = document.createElement('canvas');
+                    cv.width = Math.round(bmp.width * esc);
+                    cv.height = Math.round(bmp.height * esc);
+                    cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+                    bmp.close && bmp.close();
+                    cv.toBlob(function(blob) {
+                        resolve(blob && blob.size > 0 ? blob : arquivo);
+                    }, 'image/jpeg', 0.8);
+                }, function() { resolve(arquivo); });
+            } catch (err) { resolve(arquivo); }
+        });
+    }
+
     function subirFoto(e) {
-        var arquivo = e.target.files[0];
-        if (!arquivo) { marcarAposFoto = false; pularAposFoto = false; return; }  // cancelou a camera
+        var original = e.target.files[0];
+        if (!original) { marcarAposFoto = false; pularAposFoto = false; return; }  // cancelou a camera
+        reduzirFoto(original).then(function(arquivo) { subirFotoBlob(arquivo); });
+    }
+
+    function subirFotoBlob(arquivo) {
         var fd = new FormData();
-        fd.append('foto', arquivo);
+        fd.append('foto', arquivo, 'foto.jpg');
         fd.append('atribuicao_id', pedidoAtual.atribuicao_id);
         fetch('/driver/api/' + TOKEN_DRIVER + '/foto', {
             method: 'POST',
