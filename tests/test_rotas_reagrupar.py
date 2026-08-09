@@ -309,3 +309,35 @@ def test_acompanhamento_ao_vivo(app, admin_user):
     assert j['total'] == 2 and j['entregues'] == 1 and j['problemas'] == 0
     assert [p['status'] for p in j['linhas'][0]['paradas']] == [
         'entregue', 'pendente']
+
+
+def test_sincronizar_entregues_alinha_sem_regredir(app, admin_user):
+    """One-shot 09/08/2026: atribuição 'entregue' do dia com PedidoOnline
+    parado em pago vira 'entregue' (sem e-mail). Cancelado fica intocado e
+    o dry-run não grava nada."""
+    from app.models import Driver as _D
+    d = _D(nome='D Sync', ativo=True, token='tok-sync-1', capacidade=99)
+    db.session.add(d)
+    _pedido_online('SY1')
+    p2 = _pedido_online('SY2')
+    p2.status = 'cancelado'
+    db.session.flush()
+    for code in ('SY1', 'SY2'):
+        db.session.add(AtribuicaoEntrega(pedido_code=code, driver_id=d.id,
+                                         data_entrega=hoje(), ordem=1,
+                                         status='entregue'))
+    db.session.commit()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    base = f'/entregas/admin/sincronizar-entregues?data={hoje().isoformat()}'
+    j = client.get(base).get_json()                     # dry-run
+    assert j['executado'] is False and j['alinhados'] == ['SY1']
+    assert PedidoOnline.query.filter_by(codigo='SY1').first().status == 'pago'
+
+    j2 = client.get(f'{base}&executar=1').get_json()
+    assert j2['executado'] is True and j2['alinhados'] == ['SY1']
+    assert (PedidoOnline.query.filter_by(codigo='SY1').first().status
+            == 'entregue')
+    assert (PedidoOnline.query.filter_by(codigo='SY2').first().status
+            == 'cancelado')                             # nunca regride/mexe
