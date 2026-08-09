@@ -167,3 +167,42 @@ def test_polir_desfaz_o_grupo_lixao():
     out = _polir_clusters(pts, list(clusters), 2)
     assert out[3] == 1 and out[7] == 0       # cada um voltou pra sua regiao
     assert sorted([out.count(0), out.count(1)]) == [4, 4]   # tamanhos iguais
+
+
+def test_ancoragem_cluster_vai_pro_driver_da_zona(app):
+    """"Roteirizar sobras embaralhou tudo": o vinculo cluster->driver era
+    pelo INDICE (ordem alfabetica). Agora o bolsao novo vai pro motorista
+    cujas paradas JA atribuidas estao mais perto — William com paradas do
+    lado da padaria recebe as sobras DA PADARIA, nao as de Sao Bernardo."""
+    from app.services import rotas as svc
+    drivers = [
+        {'id': 1, 'nome': 'Aaa Longe', 'cor': '#111111', 'capacidade': 99},
+        {'id': 2, 'nome': 'Zzz William', 'cor': '#222222', 'capacidade': 99},
+    ]
+    # William (id 2) JA tem uma parada na "padaria" (-23.60); o driver Aaa
+    # (id 1, PRIMEIRO da lista) ja esta em "Sao Bernardo" (-23.70).
+    atribuicoes = {'W1': {'driver_id': 2, 'ordem': 1},
+                   'L1': {'driver_id': 1, 'ordem': 1}}
+    pedidos = [
+        {'code': 'W1', 'endereco': 'PAD1', 'destinatario': 'x'},
+        {'code': 'L1', 'endereco': 'SBC1', 'destinatario': 'x'},
+        {'code': 'N1', 'endereco': 'PAD2', 'destinatario': 'x'},   # sobra perto da padaria
+        {'code': 'N2', 'endereco': 'SBC2', 'destinatario': 'x'},   # sobra em Sao Bernardo
+    ]
+    coords = {'PAD1': (-23.600, -46.680), 'PAD2': (-23.601, -46.681),
+              'SBC1': (-23.700, -46.550), 'SBC2': (-23.701, -46.551)}
+    app.config['GOOGLE_MAPS_API_KEY'] = 'fake'
+    with app.app_context(), \
+            patch.object(svc.google_maps, 'geocode_em_lote',
+                         side_effect=lambda ends: {e: coords[e] for e in ends}), \
+            patch.object(svc.google_maps, 'geocode',
+                         side_effect=lambda e: coords.get(e)), \
+            patch.object(svc.google_maps, 'directions_otimizado',
+                         return_value=None):
+        r = svc.gerar_rotas(pedidos, drivers, atribuicoes=atribuicoes, app=app)
+    por_driver = {rt['driver']['id']: sorted(p['code'] for p in rt['paradas'])
+                  for rt in r['rotas']}
+    # ANTES (por indice): cluster 0 -> Aaa, mesmo sendo a zona do William.
+    # AGORA (ancora): sobra da padaria vai pro William; a de SBC pro Aaa.
+    assert por_driver[2] == ['N1', 'W1']
+    assert por_driver[1] == ['L1', 'N2']
