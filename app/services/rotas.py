@@ -306,6 +306,71 @@ def _balancear_clusters(pts, clusters, k):
     return clusters
 
 
+def _polir_clusters(pts, clusters, k, max_sweeps=4):
+    """Dissolve o "grupo lixão" do k-means (dono 09/08/2026: "o algoritmo
+    ferra com o amarelo"): com k grupos, k-1 grudam nas regiões densas e o
+    último vira coletor das pontas soltas da cidade inteira — e o
+    nivelamento ainda o completa com sobras. Varre TROCANDO pares entre
+    clusters quando a troca aproxima os dois dos seus centros (preserva os
+    tamanhos = não desfaz o nivelamento) e aceitando MOVE quando o destino
+    está menor que a origem (melhora coesão sem piorar o balanço)."""
+    n = len(pts)
+    if n == 0 or k <= 1:
+        return clusters
+
+    def _cents():
+        out = []
+        for j in range(k):
+            mem = [pts[i] for i, cl in enumerate(clusters) if cl == j]
+            out.append((sum(x for x, _ in mem) / len(mem),
+                        sum(y for _, y in mem) / len(mem)) if mem else None)
+        return out
+
+    for _ in range(max_sweeps):
+        cent = _cents()
+        sizes = [0] * k
+        for cl in clusters:
+            sizes[cl] += 1
+        mudou = False
+        for i in range(n):
+            a = clusters[i]
+            if cent[a] is None:
+                continue
+            d_ia = _haversine(pts[i], cent[a])
+            for j in range(k):
+                if j == a or cent[j] is None:
+                    continue
+                d_ij = _haversine(pts[i], cent[j])
+                if d_ij >= d_ia:
+                    continue
+                # MOVE puro se o destino está menor que a origem
+                if sizes[j] < sizes[a]:
+                    clusters[i] = j
+                    sizes[a] -= 1
+                    sizes[j] += 1
+                    mudou = True
+                    break
+                # Senão, TROCA com alguém de j que fique melhor em a
+                melhor_m, melhor_ganho = None, 0.0
+                for m in range(n):
+                    if clusters[m] != j:
+                        continue
+                    ganho = ((d_ia - d_ij)
+                             + (_haversine(pts[m], cent[j])
+                                - _haversine(pts[m], cent[a])))
+                    if ganho > melhor_ganho:
+                        melhor_ganho, melhor_m = ganho, m
+                if melhor_m is not None:
+                    clusters[i], clusters[melhor_m] = j, a
+                    mudou = True
+                    break
+            if mudou:
+                cent = _cents()
+        if not mudou:
+            break
+    return clusters
+
+
 def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None,
                 otimizar_ordem=True):
     """Distribui pedidos entre drivers nominais. Usa Google quando disponivel.
