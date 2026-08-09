@@ -712,6 +712,10 @@ def criar_pedido(form, itens_raw, *, base=None):
             erros.append('Informe o logradouro (rua/avenida) para a nota fiscal.')
         if not numero:
             erros.append('Informe o número do endereço para a nota fiscal.')
+        elif not numero.isdigit():
+            # Mesma regra da entrega (dono 09/08/2026): numero so digitos.
+            erros.append('O número do endereço deve conter apenas números '
+                         '(apto/bloco vão no campo complemento).')
         if not bairro:
             erros.append('Informe o bairro para a nota fiscal.')
         if not cidade:
