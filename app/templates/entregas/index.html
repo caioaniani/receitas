@@ -251,7 +251,12 @@
                 <i class="bi bi-magic"></i> Auto-distribuir vazios
             </button>
 
-            <button class="btn btn-outline-secondary btn-sm ms-auto" id="btn-gerenciar-drivers"
+            <a class="btn btn-outline-secondary btn-sm ms-auto"
+               href="{{ url_for('entregas.drivers_magic_status') }}"
+               title="Links de acesso dos motoristas (WhatsApp, copiar, imprimir).">
+                <i class="bi bi-link-45deg"></i> Links motoristas
+            </a>
+            <button class="btn btn-outline-secondary btn-sm" id="btn-gerenciar-drivers"
                     data-bs-toggle="modal" data-bs-target="#modal-drivers">
                 <i class="bi bi-people"></i> Drivers
             </button>
