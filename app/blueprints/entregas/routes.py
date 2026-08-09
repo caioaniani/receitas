@@ -2169,12 +2169,18 @@ def api_acompanhamento():
                         AtribuicaoEntrega.ordem, AtribuicaoEntrega.id)
               .all())
     codes = [a.pedido_code for a in atribs]
-    nomes = {}
+    # Busca da tela (dono 09/08/2026): code + destinatário + comprador +
+    # endereço viajam por parada pro filtro rodar no cliente, sem request.
+    info = {}
     if codes:
         from app.models import PedidoOnline
         for p in (PedidoOnline.query
                   .filter(PedidoOnline.codigo.in_(codes)).all()):
-            nomes[p.codigo] = (p.nome_destinatario or p.nome_cliente or '')
+            info[p.codigo] = {
+                'quem': (p.nome_destinatario or p.nome_cliente or ''),
+                'comprador': p.nome_cliente or '',
+                'endereco': _endereco_online(p),
+            }
     ids = {a.driver_id for a in atribs}
     drivers = ({d.id: d for d in Driver.query.filter(Driver.id.in_(ids))}
                if ids else {})
@@ -2193,11 +2199,15 @@ def api_acompanhamento():
             'paradas': [],
         })
         st = a.status or 'pendente'
+        pi = info.get(a.pedido_code) or {}
         linha['paradas'].append({
             'ordem': a.ordem or 0,
             'status': st,
             'pulado': bool(a.pulado_em) and st == 'pendente',
-            'quem': nomes.get(a.pedido_code) or a.pedido_code,
+            'code': a.pedido_code,
+            'quem': pi.get('quem') or a.pedido_code,
+            'comprador': pi.get('comprador') or '',
+            'endereco': pi.get('endereco') or '',
             'hora': (a.entregue_em.strftime('%H:%M')
                      if a.entregue_em else None),
         })
