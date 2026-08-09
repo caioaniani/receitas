@@ -1841,10 +1841,20 @@
             var ids = Array.from(document.querySelectorAll('.rotas-sel-cb:checked'))
                 .map(function(cb) { return parseInt(cb.value, 10); });
             if (!ids.length) { alert('Selecione pelo menos um motorista.'); return; }
+            var cbRe = document.getElementById('rotas-sel-reagrupar');
+            rotasReagrupar = !!(cbRe && cbRe.checked);
+            if (rotasReagrupar && !confirm('Reagrupar TUDO que está pendente? '
+                    + 'As rotas pendentes são refeitas do zero por '
+                    + 'proximidade — motorista na rua vai ver a lista '
+                    + 'mudar. Entregas já feitas não são tocadas.')) {
+                return;
+            }
             rotasDriversSel = ids;
             bootstrap.Modal.getInstance(
                 document.getElementById('modal-rotas-motoristas')).hide();
             gerarRotas(true);
+            rotasReagrupar = false;     // vale só pra esta distribuição
+            if (cbRe) cbRe.checked = false;
         });
         var tabBtn = document.getElementById('btn-tab-rotas');
         if (tabBtn) tabBtn.addEventListener('shown.bs.tab', function() {
