@@ -3024,9 +3024,12 @@
     }
 
     // Re-otimiza ordem das rotas com base nas atribuições atuais.
-    // Chama /api/rotas (que respeita pre-atribuídos) com TODOS drivers/janelas
-    // e salva o resultado.
-    function opReotimizarRotas() {
+    // Chama /api/rotas (que respeita pre-atribuídos) e salva o resultado.
+    // opts.driverIds + opts.codes = escopo da SELEÇÃO (só esses motoristas,
+    // só esses pedidos — os sem-driver do dia ficam fora); sem opts, escopo
+    // é o lote filtrado (ou tudo) com TODOS os drivers.
+    function opReotimizarRotas(opts) {
+        opts = opts || {};
         var data = opData();
         if (!data) return;
         if (!opUltimoResultado) return;
@@ -3040,13 +3043,15 @@
             (dr.paradas || []).forEach(function(p) { loteByCode[p.code] = p.lote_id || null; });
         });
         (opUltimoResultado.sem_driver || []).forEach(function(p) { loteByCode[p.code] = p.lote_id || null; });
-        var escopoLote = (opLoteFiltro && opLoteFiltro !== 'sem_lote') ? opLoteFiltro : null;
-        var rotulo = escopoLote ? 'lote selecionado' : 'todas as rotas';
+        var escopoLote = (!opts.driverIds && opLoteFiltro && opLoteFiltro !== 'sem_lote') ? opLoteFiltro : null;
+        var rotulo = opts.rotulo || (escopoLote ? 'lote selecionado' : 'todas as rotas');
         msg.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-arrow-repeat"></i> Re-otimizando ' + rotulo + '…</div>';
         // `reotimizar=1`: inclui os JA atribuidos (driver+ordem salvos) —
         // sem o flag, dia todo distribuido em lote voltava VAZIO e o botao
         // dizia "Nada a re-otimizar" (madrugada do Dia dos Pais).
-        var qs = '&reotimizar=1&drivers=' + drivers.map(function(d) { return d.id; }).join(',');
+        var ids = opts.driverIds || drivers.map(function(d) { return d.id; });
+        var qs = '&reotimizar=1&drivers=' + ids.join(',');
+        if (opts.codes && opts.codes.length) qs += '&codes=' + opts.codes.map(encodeURIComponent).join(',');
         fetch('/entregas/api/rotas?data=' + encodeURIComponent(data) + qs,
             {credentials: 'same-origin'}).then(function(r) { return r.json(); })
             .then(function(d) {
