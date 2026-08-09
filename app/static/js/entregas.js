@@ -3248,6 +3248,18 @@
                 }); else prompt('Link:', link);
                 return;
             }
+            if ((b = e.target.closest('.op-entregar-staff'))) {
+                e.preventDefault();
+                if (!confirm('Marcar ' + b.dataset.code + ' como ENTREGUE sem foto?\nO cliente recebe o e-mail de entrega. A comprovação fica por sua conta (WhatsApp do grupo).')) return;
+                b.disabled = true;
+                fetch('/entregas/api/entrega/' + encodeURIComponent(b.dataset.code) + '/entregue', {
+                    method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN}, credentials: 'same-origin',
+                }).then(function(r) { return r.json(); }).then(function(d) {
+                    if (!d.ok) { alert('Erro: ' + (d.erro || '?')); b.disabled = false; return; }
+                    opCarregar();
+                }).catch(function() { alert('Falha de rede.'); b.disabled = false; });
+                return;
+            }
             if ((b = e.target.closest('.op-reabrir'))) {
                 e.preventDefault();
                 if (!confirm('Reabrir o pedido ' + b.dataset.code + '?\nApaga as fotos e volta pra pendente.')) return;
