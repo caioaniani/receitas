@@ -2778,6 +2778,39 @@ def api_rotas():
         codes_no_lote = {c for c, lid in lote_por_code.items() if lid == lote_alvo_id}
         pedidos = [p for p in pedidos if p.get('code') in codes_no_lote]
 
+    # `leve`/`reotimizar` sao de EXIBICAO/re-sequencia: pedido SEM driver
+    # NUNCA entra no pool do clustering nesses modos — o motor os "alocava
+    # sozinho" no mapa (pino com a cor de um motorista que o dono nem
+    # escolheu) e o re-otimizar SALVAVA a alocacao fantasma (caso real
+    # 09/08/2026: dono tirou 3 pedidos dos motoristas e eles voltavam ao
+    # atualizar a pagina — um de Guarulhos caiu na rota do Luis). Eles saem
+    # na chave `sem_driver` (pino cinza "?" que o mapa ja sabe desenhar,
+    # clicavel pra atribuir). Distribuir DE VERDADE continua sendo so o
+    # Auto-distribuir / roteirizar sobras (sem esses flags).
+    sem_driver_payload = []
+    if incluir_atrib and not lote_alvo_id:
+        com_driver = {c for c, a in atribuicoes.items() if a.get('driver_id')}
+        soltos = [p for p in pedidos if p.get('code') not in com_driver]
+        pedidos = [p for p in pedidos if p.get('code') in com_driver]
+        if soltos:
+            coords = {}
+            try:
+                ends = [p.get('endereco') or '' for p in soltos]
+                coords = rotas_svc.google_maps.geocode_em_lote(
+                    [e for e in ends if e]) or {}
+            except Exception:  # noqa: BLE001 — pino sem coordenada so nao aparece
+                coords = {}
+            for p in soltos:
+                ll = coords.get(p.get('endereco') or '')
+                sem_driver_payload.append({
+                    'code': p['code'],
+                    'destinatario': p.get('destinatario', ''),
+                    'endereco': p.get('endereco', ''),
+                    'periodo': p.get('periodo', ''),
+                    'lat': ll[0] if ll else None,
+                    'lng': ll[1] if ll else None,
+                })
+
     if not drivers_struct:
         resp = jsonify(
             data=data_str,
