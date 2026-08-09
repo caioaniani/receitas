@@ -333,6 +333,29 @@ def test_rota_executa_dia_passado(app, owner_user):
         assert _saldo_loja(loja, rec) == 50
 
 
+def test_rota_executa_hoje_so_com_entregas_concluidas(app, owner_user):
+    """Dono 09/08/2026 (noite do Dia dos Pais): executar no PRÓPRIO dia é
+    permitido com o gesto explícito &entregas_concluidas=1 (despacho físico
+    terminou). Sem o flag, hoje segue recusado; data FUTURA recusa sempre,
+    mesmo com o flag."""
+    with app.app_context():
+        hoje_d = hoje()
+        loja, rec, mp, cesta, p = _setup(dia=hoje_d)
+        c = _owner_client(app, owner_user)
+        r0 = c.get(f'/admin/acerto-despacho?data={hoje_d.isoformat()}'
+                   '&executar=1')
+        assert r0.status_code == 400
+        assert 'entregas_concluidas' in r0.get_json()['erro']
+        r1 = c.get(f'/admin/acerto-despacho?data={hoje_d.isoformat()}'
+                   '&executar=1&entregas_concluidas=1')
+        assert r1.status_code == 200 and r1.get_json()['executado'] is True
+        assert _saldo_loja(loja, rec) == 50
+        amanha = hoje_d + timedelta(days=1)
+        r2 = c.get(f'/admin/acerto-despacho?data={amanha.isoformat()}'
+                   '&executar=1&entregas_concluidas=1')
+        assert r2.status_code == 400          # futuro nunca executa
+
+
 def test_rota_sem_data_400_e_admin_comum_403(app, admin_user):
     with app.app_context():
         c = app.test_client()
