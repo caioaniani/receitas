@@ -872,3 +872,16 @@ def test_preview_html_usa_data_do_pedido(app, admin_user):
     body = r.get_data(as_text=True)
     assert '09/08/2026' in body            # VND-1: data do pedido
     assert '05/08/2026' in body            # VND-2 (sem o campo): fallback
+
+
+def test_rodape_do_pdf_leva_o_nome_do_entregador():
+    """Dono 09/08/2026 (manha do Dia dos Pais): no rodape, abaixo do numero
+    do pedido, o NOME do entregador — nas DUAS vias."""
+    from datetime import date
+
+    from app.services.pdf import montar_pedidos_pdf
+    p = {'code': 'ROD1', 'destinatario': 'Cliente X', 'endereco': 'Rua A, 1',
+         'itens': [], 'driver_nome': 'Sibele'}
+    pdf = montar_pedidos_pdf([p], ['motorista', 'cliente'], date(2026, 8, 9))
+    corpo = _texto_pdf(bytes(pdf.output()))
+    assert corpo.count('Entregador: Sibele') == 2
