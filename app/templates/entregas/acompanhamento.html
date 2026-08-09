@@ -151,6 +151,7 @@
           '<span class="aviv-cor" style="background:' + esc(l.cor) + '"></span>' +
           esc(l.nome) + '</span>' +
         '<span class="text-muted">' + esc(p.ordem) + 'ª parada</span>' + st +
+        (p.telefone ? '<a class="text-muted" href="tel:' + esc(p.telefone) + '">📞 ' + esc(p.telefone) + '</a>' : '') +
         (p.endereco ? '<span class="text-muted small w-100">📍 ' + esc(p.endereco) + '</span>' : '') +
         '</div>';
     });
