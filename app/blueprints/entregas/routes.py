@@ -1807,6 +1807,37 @@ def resetar_entrega(code):
                    data=atrib.data_entrega.isoformat() if atrib.data_entrega else None)
 
 
+@entregas_bp.route('/api/entrega/<code>/entregue', methods=['POST'])
+@login_required
+@entrega_access_required
+def marcar_entrega_staff(code):
+    """Valvula de escape SEM FOTO (dono 09/08/2026, motorista com celular
+    sem memoria que nao conseguia subir a foto): admin marca a atribuicao
+    como ENTREGUE pela aba Operacao — a foto obrigatoria e regra do
+    ENDPOINT DO DRIVER, o staff sempre pode marcar sem (comprovacao vai
+    pelo WhatsApp do grupo). Mesmos efeitos da baixa do motorista: bolinha
+    verde no ao vivo, progresso da rota, PedidoOnline 'entregue' no admin
+    e e-mail ao cliente (avancar_status_entrega — idempotente)."""
+    if not current_user.is_admin():
+        return jsonify(ok=False, erro='somente admin'), 403
+    atrib = AtribuicaoEntrega.query.filter_by(pedido_code=code).first()
+    if not atrib:
+        return jsonify(ok=False, erro='atribuicao nao encontrada'), 404
+    if (atrib.status or 'pendente') == 'entregue':
+        return jsonify(ok=True, ja_estava=True)
+    atrib.status = 'entregue'
+    atrib.entregue_em = agora()
+    atrib.motivo_falha = None
+    if atrib.lote_id:
+        _recompute_lote_status(atrib.lote_id)
+    db.session.commit()
+    from app.services.loja_entrega import avancar_status_entrega
+    avancar_status_entrega(code, 'entregue')
+    return jsonify(ok=True,
+                   data=(atrib.data_entrega.isoformat()
+                         if atrib.data_entrega else None))
+
+
 @entregas_bp.route('/api/entrega/<code>/migrar', methods=['POST'])
 @login_required
 @entrega_access_required
