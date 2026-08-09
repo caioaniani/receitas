@@ -2199,8 +2199,14 @@
         var pAtrib = fetchTimeout('/entregas/api/atribuidos?data=' + encodeURIComponent(data));
         var pLotes = fetchTimeout('/entregas/api/lotes?data=' + encodeURIComponent(data))
             .catch(function() { return {lotes: []}; });
+        // Mapa NUNCA segura nem derruba a lista (caso real 09/08/2026,
+        // manhã do Dia dos Pais: com 144 pedidos atribuídos em 12 rotas o
+        // /api/rotas re-otimiza tudo no Google e passa dos 25s — o timeout
+        // abortava o Promise.all inteiro e "o mapa não aparece"). Timeout
+        // próprio de 90s + erro vira null (a lista renderiza igual).
         var pRotas = opMapaVisivel
-            ? fetchTimeout('/entregas/api/rotas?data=' + encodeURIComponent(data))
+            ? fetchTimeout('/entregas/api/rotas?data=' + encodeURIComponent(data), 90000)
+                .catch(function() { return {__falhou: true}; })
             : Promise.resolve(null);
 
         Promise.all([pAtrib, pRotas, pLotes]).then(function(rs) {
