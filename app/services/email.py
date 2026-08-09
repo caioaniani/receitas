@@ -229,6 +229,16 @@ def _template_confirmacao(pedido, base):
     link = f'{base}/loja/pedido/{pedido.codigo}' if base else ''
     link_html = (f'<a href="{link}" style="color:#8b5a2b;">Acompanhar pedido</a>'
                  if link else '')
+    # Conferência do endereço (dono 09/08/2026, pós-Dia dos Pais: número/
+    # complemento errados em massa): o e-mail é a segunda chance de o
+    # cliente pegar o erro, ANTES de a rota ser montada. Só entrega.
+    aviso_endereco = ''
+    if pedido.modo_entrega != 'retirada':
+        aviso_endereco = (
+            '<br><span style="font-size:13px;color:#8a6d3b;">⚠️ Confira o '
+            '<strong>número</strong> e o <strong>complemento</strong> do '
+            'endereço acima. Algo errado? Responda este e-mail ou chame no '
+            'WhatsApp <strong>antes do dia da entrega</strong>.</span>')
     return f"""\
 <!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
 font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
@@ -247,7 +257,7 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
   </div>
   <div style="background:#f5efe5;border-radius:12px;padding:16px 20px;">
     <p style="margin:0 0 6px;font-weight:600;">Entrega</p>
-    <p style="margin:0;font-size:14px;color:#6b5f54;">{onde}<br>{quando}</p>
+    <p style="margin:0;font-size:14px;color:#6b5f54;">{onde}<br>{quando}{aviso_endereco}</p>
   </div>
   <p style="margin-top:20px;">{link_html}</p>
   <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
