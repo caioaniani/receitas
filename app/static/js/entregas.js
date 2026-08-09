@@ -2568,11 +2568,26 @@
         html += '</div>';
 
         html += '<div class="list-group list-group-flush op-list" data-driver-id="' + (driver.id || '') + '">';
+        // A lista segue a ORDEM SALVA (a mesma do motorista). Aviso quando
+        // uma parada de janela mais CEDO vem depois de uma de janela mais
+        // tarde — a ordem vale, o selo so chama atencao pro horario.
+        var maxRank = -99;
         for (var j = 0; j < driver.paradas.length; j++) {
-            html += opRenderItem(driver.paradas[j], driver, driversDisp);
+            var rk = janelaRankJs(driver.paradas[j]);
+            var fora = !isSemDriver && rk < maxRank;
+            if (rk > maxRank) maxRank = rk;
+            html += opRenderItem(driver.paradas[j], driver, driversDisp, fora);
         }
         html += '</div></div>';
         return html;
+    }
+
+    // Espelho do janela_rank do servidor (rotas.py): expresso primeiro,
+    // depois pela hora de INICIO da janela; sem janela = por ultimo.
+    function janelaRankJs(p) {
+        if (p.expresso) return -1;
+        var m = /(\d{1,2})/.exec(p.periodo || '');
+        return m ? parseInt(m[1], 10) : 99;
     }
 
     function opRenderItem(p, driver, driversDisp) {
