@@ -736,6 +736,26 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
         rastreio = _rastreio_do_pedido(p)
     except Exception:  # noqa: BLE001
         logger.exception('bot: rastreio do pedido %s falhou', code)
+    # COMPROVANTE de entrega (dono 09/08/2026, caso conv 1457 "consta
+    # entregue mas não chegou"): quando a entrega foi baixada com foto, o
+    # bot manda o link da página pública /entrega/<hash> — o cliente VÊ a
+    # foto da própria porta e metade das contestações morre ali. Só pro
+    # dono AUTORIZADO do pedido (mesmo gate de tudo acima) e só quando a
+    # atribuição está ENTREGUE. Best-effort: nunca derruba a consulta.
+    link_comprovante = None
+    try:
+        from flask import current_app
+
+        from app.models import AtribuicaoEntrega
+        atrib = (AtribuicaoEntrega.query
+                 .filter_by(pedido_code=p.codigo).first())
+        if (atrib is not None and (atrib.status or '') == 'entregue'
+                and atrib.proof_hash):
+            base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+            if base:
+                link_comprovante = f'{base}/entrega/{atrib.proof_hash}'
+    except Exception:  # noqa: BLE001
+        logger.exception('bot: comprovante do pedido %s falhou', code)
     return {
         'numero': p.codigo,
         'status': _STATUS_ONLINE_CLIENTE.get(p.status, p.status),
