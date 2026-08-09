@@ -354,6 +354,14 @@ def api_status(token):
     db.session.commit()
     if novo_status in ('entregue', 'nao_entregue'):
         _auto_iniciar_rota(driver, a)
+    if novo_status == 'entregue':
+        # Sincroniza o PedidoOnline (dono 09/08/2026: "os pedidos entregues
+        # vao sendo dados como entregues no /admin/loja-online/pedidos?") —
+        # MESMO motor do painel staff: idempotente, nunca regride, manda o
+        # e-mail "entregue" ao cliente e reflete no painel de entregas.
+        # Best-effort (nunca desfaz a baixa); pedido manual/VNDA é no-op.
+        from app.services.loja_entrega import avancar_status_entrega
+        avancar_status_entrega(a.pedido_code, 'entregue')
     return jsonify(ok=True, status=a.status, proof_hash=a.proof_hash)
 
 
