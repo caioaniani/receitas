@@ -282,8 +282,16 @@ Testes: `tests/test_briefing_dono.py`.
     cada teste (ex: `uq_estoque_loja_receita` de `_migrate_estoque_trava`) — eles
     vazavam entre testes e quebravam os que criam duplicatas de proposito.
   - **Config**: snapshot/restore por teste (mutacoes `app.config[X]=Y` nao vazam).
-  - xdist ainda dormente (`PYTEST_XDIST_WORKER` da SQLite proprio por worker);
-    com 73s sequencial nao foi preciso paralelizar.
+  - **xdist LIGADO no CI em 09/08/2026** (`pytest -n auto`): a suite passou
+    de ~2400 pra ~3900 testes e o sequencial nao cabia mais no "Wait for
+    CI". ARMADILHA resolvida no conftest: o processo CONTROLADOR do xdist
+    importa o conftest primeiro e seta `DATABASE_URL` no `os.environ`; os
+    workers HERDAM a env e "respeitavam" o arquivo do controlador — todos
+    no mesmo SQLite = `table usuario already exists` em massa (1678 erros).
+    O marcador `_PADARIA_TEST_DB_AUTO` distingue env auto-setada (worker
+    sobrescreve com o slot proprio) de env do dev (segue respeitada).
+    CONSEQUENCIA: rodar `pytest -n N` com `DATABASE_URL` fixado na mao
+    volta a colidir — pra paralelo, deixe a env vazia.
   - **Banco isolado POR PROCESSO (17/07/2026)**: o topo do `conftest.py` agora
     da a CADA processo pytest seu proprio SQLite em `tempfile.gettempdir()`
     (chave = worker do xdist, senao `pidNNNN`), respeitando `DATABASE_URL`
