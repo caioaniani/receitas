@@ -440,6 +440,8 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None,
             clusters = _refinar_clusters(pts, clusters, n, max_raio_km=8.0)
             # Nivela o tamanho (carga justa por motorista; ver docstring)
             clusters = _balancear_clusters(pts, clusters, n)
+            # Pole: dissolve o "grupo lixão" trocando pares entre vizinhos
+            clusters = _polir_clusters(pts, clusters, n)
             for i, p in enumerate(com_coords):
                 cluster_id = clusters[i]
                 if cluster_id < len(drivers):
