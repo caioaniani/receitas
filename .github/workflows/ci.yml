@@ -31,7 +31,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install ruff pytest
+          pip install ruff pytest pytest-xdist
 
       - name: Ruff (lint)
         run: ruff check app/ tests/
@@ -39,7 +39,11 @@ jobs:
       - name: Pytest
         # `python -m pytest` adiciona cwd ao sys.path (vs `pytest` direto
         # que nao adiciona). Sem isso, `from app import ...` falha no CI.
-        run: python -m pytest -q --tb=short
+        # `-n auto` (xdist, 09/08/2026): 1 worker por nucleo, cada um com
+        # SQLite proprio (conftest marca _PADARIA_TEST_DB_AUTO pra o worker
+        # sobrescrever a env herdada do controlador — sem isso os workers
+        # dividiam 1 arquivo e a suite explodia com "table already exists").
+        run: python -m pytest -q --tb=short -n auto
         env:
           # SECRET_KEY obrigatorio em prod (Postgres). Como CI usa SQLite
           # in-memory via conftest.py, o fallback dev gera SECRET_KEY
