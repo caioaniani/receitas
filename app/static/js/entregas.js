@@ -2618,6 +2618,12 @@
                 ' <button class="btn btn-link btn-sm p-0 ms-2 op-reabrir d-print-none" data-code="' + escapeHtml(p.code) + '" style="font-size:11px;color:#b45309;" title="Voltar pra pendente e apagar fotos"><i class="bi bi-arrow-counterclockwise"></i> Reabrir</button>' +
                 ' <button class="btn btn-link btn-sm p-0 ms-2 op-mover d-print-none" data-code="' + escapeHtml(p.code) + '" style="font-size:11px;color:#0369a1;" title="Mover comprovante pra outro pedido"><i class="bi bi-arrow-left-right"></i> Mover</button>';
         }
+        // Válvula de escape SEM FOTO (dono 09/08/2026, celular do motorista
+        // sem memória): admin marca entregue pela Operação — mesmos efeitos
+        // da baixa do driver (bolinha verde, admin, e-mail ao cliente).
+        if (isAdmin() && st === 'pendente' && driver && driver.id) {
+            adminBtns += ' <button class="btn btn-link btn-sm p-0 ms-2 op-entregar-staff d-print-none" data-code="' + escapeHtml(p.code) + '" style="font-size:11px;color:#16a34a;" title="Marcar entregue SEM foto (a comprovação fica no WhatsApp do grupo)"><i class="bi bi-check2-all"></i> Entregue (sem foto)</button>';
+        }
 
         // Botao 'Mudar data' (abre modal de override que ja existe)
         var btnData = '';
