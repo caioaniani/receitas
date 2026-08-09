@@ -802,3 +802,46 @@ def test_nf_tiny_cnpj_vira_pessoa_juridica(app):
         cli.cpf = '52998224725'
         db.session.commit()
         assert tiny_nf._payload_cliente(ped)['tipo_pessoa'] == 'F'
+
+
+# ── Número do endereço: SÓ DÍGITOS (dono 09/08/2026, pós-Dia dos Pais) ──
+
+def _form_entrega_num(numero):
+    return {'nome': 'M', 'email': 'm@x.com', 'cpf': '52998224725',
+            'aceite_lgpd': '1', 'modo_entrega': 'agendada',
+            'cep': '04571-010', 'logradouro': 'Rua X', 'numero': numero,
+            'bairro': 'Brooklin', 'cidade': 'São Paulo', 'uf': 'SP',
+            'data_entrega': '2026-06-18', 'janela_entrega': '09:00–10:00'}
+
+
+def test_numero_com_letras_e_recusado(app):
+    """"Muitos clientes colocaram errado o número ou o complemento, foi
+    caótico": número aceita apenas dígitos — "123 apto 4" e "s/n" recusam
+    apontando o campo complemento."""
+    from datetime import datetime as _dt
+
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        base = _dt(2026, 6, 17, 10, 0)
+        for ruim in ('123 apto 4', 's/n', 'SN'):
+            pedido, erros = loja_checkout.criar_pedido(
+                _form_entrega_num(ruim),
+                [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+            assert pedido is None, ruim
+            assert any('apenas números' in e for e in erros), (ruim, erros)
+
+
+def test_numero_so_digitos_nao_acusa(app):
+    from datetime import datetime as _dt
+
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        base = _dt(2026, 6, 17, 10, 0)
+        _pedido, erros = loja_checkout.criar_pedido(
+            _form_entrega_num('123'),
+            [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert not any('apenas números' in e for e in erros), erros
