@@ -49,6 +49,32 @@
                 <i class="bi bi-bag-check"></i>
                 Padaria Artesanal Online
             </div>
+        {% elif pulado %}
+            <div class="check"><i class="bi bi-arrow-repeat"></i></div>
+            <h3 class="text-center mb-1">Entregador esteve no endereço</h3>
+            <p class="text-center text-muted small mb-4">
+                {{ atribuicao.pulado_em.strftime('%d/%m/%Y às %H:%M') if atribuicao.pulado_em else '' }}
+                — não foi possível entregar (ninguém pôde receber).
+                <strong>O entregador volta ainda hoje.</strong>
+            </p>
+            <div class="meta mb-3">
+                <strong>Pedido:</strong> {{ atribuicao.pedido_code }}<br>
+                {% if driver_nome %}<strong>Entregador:</strong> {{ driver_nome }}<br>{% endif %}
+                {% if atribuicao.nota %}
+                    <div class="mt-2 fst-italic"><i class="bi bi-chat-left-quote"></i> {{ atribuicao.nota }}</div>
+                {% endif %}
+            </div>
+            {% if fotos %}
+                <div class="foto-grid">
+                    {% for f in fotos %}
+                        <a href="{{ f.url }}" target="_blank" rel="noopener"><img src="{{ f.url }}" alt="Foto da visita"></a>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            <div class="text-center mt-4 small text-muted">
+                <i class="bi bi-bag-check"></i>
+                Padaria Artesanal Online
+            </div>
         {% else %}
             <div class="check"><i class="bi bi-clock"></i></div>
             <h3 class="text-center mb-1">Entrega ainda não realizada</h3>
