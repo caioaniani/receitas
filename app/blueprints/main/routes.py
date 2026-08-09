@@ -3325,10 +3325,20 @@ def acerto_despacho():
     except ValueError:
         return jsonify(ok=False, erro='data inválida'), 400
     executar = request.args.get('executar') == '1'
-    if executar and alvo >= hoje_brt():
+    # `entregas_concluidas=1` (dono 09/08/2026, noite do Dia dos Pais:
+    # "o 7 podemos fazer hoje?"): permite executar NO PRÓPRIO dia quando o
+    # dono afirma que o despacho físico terminou — as guardas pós-acerto
+    # (`_acertado_no_despacho`) já cobrem cancelamento tardio sem crédito
+    # em dobro, e o acerto é idempotente por pedido (pedido pago DEPOIS da
+    # execução entra numa re-rodada). Data FUTURA segue recusada sempre.
+    hoje_ok = request.args.get('entregas_concluidas') == '1'
+    if executar and (alvo > hoje_brt()
+                     or (alvo == hoje_brt() and not hoje_ok)):
         # Trava de sequência: o acerto pressupõe mercadoria JÁ despachada.
         return jsonify(ok=False, erro='o acerto só roda DEPOIS do dia do '
-                       'despacho — hoje ainda é %s' % hoje_brt().isoformat()), 400
+                       'despacho — hoje ainda é %s. Se as entregas do dia '
+                       'JÁ terminaram, adicione &entregas_concluidas=1.'
+                       % hoje_brt().isoformat()), 400
     plano = svc.acertar(alvo, executar=executar,
                         usuario_id=current_user.id)
     return jsonify(ok=True, **plano)
