@@ -402,14 +402,18 @@ def _folha_pedido(pdf, p, via, data_fmt):
         pdf.cell(91, 8, _moeda(tot), align='R',
                  new_x='LMARGIN', new_y='NEXT')
 
-    # Rodape da folha
-    pdf.set_y(-20)
+    # Rodape da folha (2 linhas quando ha entregador — dono 09/08/2026:
+    # "abaixo do numero do pedido, o NOME DO ENTREGADOR")
+    pdf.set_y(-24)
     pdf.set_font('Helvetica', 'I', 8)
     pdf.set_text_color(100, 100, 100)
     via_lbl = 'entregador' if motorista else 'cliente'
     pdf.cell(95, 5, _latin1('O Pão Padaria Artesanal'), new_x='RIGHT')
     pdf.cell(0, 5, _latin1(f'Pedido {p.get("code") or "—"} · {via_lbl}'),
              align='R', new_x='LMARGIN', new_y='NEXT')
+    if p.get('driver_nome'):
+        pdf.cell(0, 5, _latin1(f'Entregador: {p["driver_nome"]}'),
+                 align='R', new_x='LMARGIN', new_y='NEXT')
     pdf.set_text_color(0, 0, 0)
 
 
