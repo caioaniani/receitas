@@ -2660,8 +2660,16 @@ def api_rotas():
                         codes_excluir.add(a.pedido_code)
                     # pendente: fica fora de `atribuicoes` => nao_atribuido
                     continue
+                # `leve` (mapa) e `reotimizar` (botao re-otimizar) INCLUEM os
+                # ja atribuidos como pre-atribuidos (driver + ordem salvos).
+                # Sem isso, com o dia todo distribuido em lote, a resposta
+                # vinha VAZIA: mapa sem nenhum pino e "Nada a re-otimizar"
+                # (caso real, madrugada do Dia dos Pais — a exclusao de
+                # 05/2026 e pro fluxo de DISTRIBUIR, nao pra visualizar).
+                incluir_atrib = (request.args.get('leve') == '1'
+                                 or request.args.get('reotimizar') == '1')
                 ja_em_outro_lote = bool(a.lote_id) and a.driver_id is not None
-                if ja_finalizado or ja_em_outro_lote:
+                if ja_finalizado or (ja_em_outro_lote and not incluir_atrib):
                     codes_excluir.add(a.pedido_code)
                 else:
                     atribuicoes[a.pedido_code] = {'driver_id': a.driver_id, 'ordem': a.ordem or 0}
