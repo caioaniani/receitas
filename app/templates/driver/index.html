@@ -142,7 +142,7 @@
         // derrubava a última (testado pelo dono na rota de 11 paradas do
         // Dia dos Pais: o certo é 1-9 e 10-11).
         var links = [];
-        var chunkSize = 10;
+        var chunkSize = matriz ? 9 : 10;
         for (var i = 0; i < paradas.length; i += chunkSize) {
             var chunk = paradas.slice(i, i + chunkSize);
             var origem = matriz || chunk[0].endereco;
