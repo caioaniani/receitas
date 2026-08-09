@@ -26,15 +26,19 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <p class="mb-2">Quer imprimir <b>também a via do entregador</b>?</p>
+        <p class="mb-2">Quais vias você quer imprimir?</p>
         <p class="small text-muted mb-0">
-          A via do cliente tem cartinha e valores. A via do entregador tem só
-          o que ele precisa pra entregar (destinatário, endereço, telefone,
-          itens, janela) e um campo pra assinatura — sem valores nem cartinha.
+          A via do <b>cliente</b> tem cartinha e valores. A via do
+          <b>entregador</b> tem só o que ele precisa pra entregar
+          (destinatário, endereço, telefone, itens, janela) e um campo pra
+          assinatura — sem valores nem cartinha.
         </p>
       </div>
-      <div class="modal-footer py-2">
+      <div class="modal-footer py-2 flex-wrap">
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-outline-primary" onclick="imprimirSelecionados('motorista')">
+          Só via do entregador
+        </button>
         <button class="btn btn-outline-primary" onclick="imprimirSelecionados('cliente')">
           Só via do cliente
         </button>
