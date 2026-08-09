@@ -2180,9 +2180,9 @@
 
         // fetch com timeout: se backend pendura (VNDA lento, etc), nao
         // fica eternamente em 'Carregando...'. Cancela apos 25s e retenta.
-        function fetchTimeout(url) {
+        function fetchTimeout(url, ms) {
             var ctrl = new AbortController();
-            var t = setTimeout(function() { ctrl.abort(); }, 25000);
+            var t = setTimeout(function() { ctrl.abort(); }, ms || 25000);
             return fetch(url, {credentials: 'same-origin', signal: ctrl.signal})
                 .then(function(r) { clearTimeout(t); return r.json(); })
                 .catch(function(e) {
