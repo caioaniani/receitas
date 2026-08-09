@@ -738,8 +738,15 @@ def criar_pedido(form, itens_raw, *, base=None):
             erros.append('Informe o CEP de entrega.')
         if not logradouro:
             erros.append('Informe o logradouro (rua/avenida).')
+        # Numero SO DIGITOS (dono 09/08/2026, pos-Dia dos Pais: "muitos
+        # clientes colocaram errado o numero ou o complemento, foi caotico"
+        # — "deve ser obrigatoriamente NUMEROS, nao aceitar vazio"). Letra/
+        # texto no numero ("123 apto 4", "s/n") quebrava geocode e rota.
         if not numero:
             erros.append('Informe o número do endereço.')
+        elif not numero.isdigit():
+            erros.append('O número do endereço deve conter apenas números '
+                         '(apto/bloco vão no campo complemento).')
         if not cidade:
             erros.append('Informe a cidade.')
         # Snapshot estruturado pra NF-e (alem da linha unica abaixo).
