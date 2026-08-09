@@ -2723,6 +2723,11 @@ def api_rotas():
     # O que SOBROU pra distribuir nesta rodada:
     # - Pedidos novos (nunca atribuidos)
     # - Sobras de lotes anteriores (lote_id != NULL mas driver_id == NULL)
+    # `leve` (mapa) e `reotimizar` (botao re-otimizar) INCLUEM os ja
+    # atribuidos como pre-atribuidos (driver + ordem salvos) — ver o
+    # comentario no loop abaixo.
+    incluir_atrib = (request.args.get('leve') == '1'
+                     or request.args.get('reotimizar') == '1')
     codes = [p['code'] for p in pedidos if p.get('code')]
     atribuicoes = {}
     lote_por_code = {}
