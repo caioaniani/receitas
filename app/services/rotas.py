@@ -267,6 +267,45 @@ def _refinar_clusters(pontos, atribuicoes, n_drivers, max_raio_km=8.0, max_iter=
     return atribuicoes
 
 
+def _balancear_clusters(pts, clusters, k):
+    """Nivela o TAMANHO dos clusters (dono 09/08/2026, manhã do Dia dos
+    Pais: um motorista com 14 paradas e outro com 1 — ponto isolado vira
+    "grupo de 1" e consome um motorista inteiro enquanto o centro denso
+    empilha). Enquanto houver cluster acima do teto justo (ceil(n/k)),
+    move a parada dele que estiver MAIS PERTO de um cluster com folga —
+    mexe só na borda, preservando a coesão do miolo."""
+    n = len(pts)
+    if n == 0 or k <= 1:
+        return clusters
+    alvo = math.ceil(n / k)
+    for _ in range(2 * n):
+        sizes = [0] * k
+        for c in clusters:
+            sizes[c] += 1
+        cheio = max(range(k), key=lambda i: sizes[i])
+        if sizes[cheio] <= alvo:
+            break
+        cents = []
+        for j in range(k):
+            mem = [pts[i] for i, c in enumerate(clusters) if c == j]
+            cents.append((sum(x for x, _ in mem) / len(mem),
+                          sum(y for _, y in mem) / len(mem)) if mem else None)
+        melhor = None       # (dist ao destino, idx da parada, destino)
+        for i, c in enumerate(clusters):
+            if c != cheio:
+                continue
+            for j in range(k):
+                if j == cheio or sizes[j] >= alvo or cents[j] is None:
+                    continue
+                d = _haversine(pts[i], cents[j])
+                if melhor is None or d < melhor[0]:
+                    melhor = (d, i, j)
+        if melhor is None:
+            break
+        clusters[melhor[1]] = melhor[2]
+    return clusters
+
+
 def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None,
                 otimizar_ordem=True):
     """Distribui pedidos entre drivers nominais. Usa Google quando disponivel.
