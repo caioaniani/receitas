@@ -34,11 +34,21 @@ import pytest
 # Tem que rodar ANTES de qualquer `from app import ...` (que importa config.py);
 # por isso fica no topo do conftest.
 _xdist_worker = os.environ.get('PYTEST_XDIST_WORKER')
-if not os.environ.get('DATABASE_URL'):
+# ARMADILHA do xdist (09/08/2026, 1678 erros "table usuario already exists"):
+# o processo CONTROLADOR importa este conftest primeiro (sem
+# PYTEST_XDIST_WORKER), seta DATABASE_URL=pid<controlador> no os.environ, e
+# os WORKERS herdam essa env ao nascer — o conftest deles via a env
+# preenchida, "respeitava" achando que foi o dev, e TODOS caiam no arquivo
+# do controlador (create_all concorrente = tabela duplicada). O marcador
+# _PADARIA_TEST_DB_AUTO distingue: env setada POR NOS pode ser sobrescrita
+# pelo slot do worker; env setada pelo DEV (sem marcador) segue respeitada.
+_db_auto = os.environ.get('_PADARIA_TEST_DB_AUTO')
+if not os.environ.get('DATABASE_URL') or (_db_auto and _xdist_worker):
     import tempfile
     _db_slot = _xdist_worker or f'pid{os.getpid()}'
     os.environ['DATABASE_URL'] = (
         f'sqlite:///{tempfile.gettempdir()}/padaria_test_{_db_slot}.db')
+    os.environ['_PADARIA_TEST_DB_AUTO'] = '1'
 
 os.environ.setdefault('SECRET_KEY', 'test-secret')
 os.environ['PYTEST_RUNNING'] = '1'
