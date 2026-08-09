@@ -142,7 +142,11 @@
           : (p.status === 'nao_entregue'
               ? '<span class="badge bg-danger">imprevisto</span>'
               : (p.pulado
-                  ? '<span class="badge bg-warning text-dark">pulado — volta depois</span>'
+                  ? (p.proof
+                      ? '<a class="badge bg-warning text-dark" style="text-decoration:none;" href="/entrega/' +
+                        encodeURIComponent(p.proof) + '" target="_blank" rel="noopener" ' +
+                        'title="Ver a foto da visita">pulado — volta depois 📷</a>'
+                      : '<span class="badge bg-warning text-dark">pulado — volta depois</span>')
                   : '<span class="badge bg-light text-dark border">pendente</span>'));
       html += '<div class="aviv-res-item">' +
         '<strong>[' + esc(p.code) + ']</strong> ' + esc(p.quem || '') +
