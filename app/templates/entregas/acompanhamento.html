@@ -99,11 +99,60 @@
         String(ag.getMinutes()).padStart(2, '0') + ':' +
         String(ag.getSeconds()).padStart(2, '0');
   }
+  // Busca (dono 09/08/2026): filtra por code, destinatário, comprador ou
+  // endereço e mostra COM QUAL ENTREGADOR o pedido está. Roda em cima do
+  // último payload (sem request); o poll de 15s re-renderiza o resultado.
+  var ultimo = null;
+  function norm(s) {
+    return String(s || '').normalize('NFD')
+      .replace(/[̀-ͯ]/g, '').toLowerCase();
+  }
+  function renderBusca() {
+    var box = document.getElementById('aviv-busca-res');
+    var q = norm(document.getElementById('aviv-busca').value.trim());
+    if (!q || !ultimo) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    var achados = [];
+    (ultimo.linhas || []).forEach(function (l) {
+      l.paradas.forEach(function (p) {
+        var alvo = norm((p.code || '') + ' ' + (p.quem || '') + ' ' +
+                        (p.comprador || '') + ' ' + (p.endereco || ''));
+        if (alvo.indexOf(q) !== -1) achados.push({l: l, p: p});
+      });
+    });
+    var html = '';
+    achados.slice(0, 20).forEach(function (a) {
+      var p = a.p, l = a.l;
+      var st = p.status === 'entregue'
+          ? '<span class="badge bg-success">✓ entregue' + (p.hora ? ' às ' + esc(p.hora) : '') + '</span>'
+          : (p.status === 'nao_entregue'
+              ? '<span class="badge bg-danger">imprevisto</span>'
+              : (p.pulado
+                  ? '<span class="badge bg-warning text-dark">pulado — volta depois</span>'
+                  : '<span class="badge bg-light text-dark border">pendente</span>'));
+      html += '<div class="aviv-res-item">' +
+        '<strong>[' + esc(p.code) + ']</strong> ' + esc(p.quem || '') +
+        (p.comprador && p.comprador !== p.quem
+            ? ' <span class="text-muted">(comprador: ' + esc(p.comprador) + ')</span>' : '') +
+        '<span class="aviv-nome" style="min-width:0;">' +
+          '<span class="aviv-cor" style="background:' + esc(l.cor) + '"></span>' +
+          esc(l.nome) + '</span>' +
+        '<span class="text-muted">' + esc(p.ordem) + 'ª parada</span>' + st +
+        (p.endereco ? '<span class="text-muted small w-100">📍 ' + esc(p.endereco) + '</span>' : '') +
+        '</div>';
+    });
+    if (achados.length > 20) {
+      html += '<div class="aviv-res-item text-muted">… e mais ' + (achados.length - 20) + ' — refine a busca.</div>';
+    }
+    box.innerHTML = html ||
+        '<div class="aviv-res-item text-muted">Nenhum pedido bate com a busca.</div>';
+    box.style.display = '';
+  }
+  document.getElementById('aviv-busca').addEventListener('input', renderBusca);
   function carregar() {
     fetch('/entregas/api/acompanhamento?data=' + encodeURIComponent(DATA),
           {credentials: 'same-origin'})
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { if (d && d.ok) render(d); })
+      .then(function (d) { if (d && d.ok) { ultimo = d; render(d); renderBusca(); } })
       .catch(function () { /* rede: mantém o que tinha */ });
   }
   carregar();
