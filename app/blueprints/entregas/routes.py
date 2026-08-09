@@ -2682,6 +2682,14 @@ def api_rotas():
     if janelas:
         pedidos = [p for p in pedidos if (p.get('periodo') or '') in janelas]
 
+    # ESCOPO POR CODES (09/08/2026, dono: "selecionei os 11 e nao apareceu
+    # re-otimizar"): o re-otimizar da SELECAO manda os codes das rotas dos
+    # motoristas escolhidos — o pool fica restrito a eles, entao os pedidos
+    # SEM driver do dia NAO sao varridos pra dentro dessas rotas.
+    codes_escopo = {c for c in (request.args.get('codes') or '').split(',') if c}
+    if codes_escopo:
+        pedidos = [p for p in pedidos if p.get('code') in codes_escopo]
+
     # MODO 'roteirizar lote': escopa a um lote especifico. Pega so as sobras
     # desse lote (driver_id NULL), e a capacidade dos drivers e' calculada
     # contando os atribuidos do MESMO lote (nao do dia inteiro).
