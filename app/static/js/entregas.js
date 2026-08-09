@@ -921,7 +921,8 @@
         var url = '/entregas/api/rotas?data=' + encodeURIComponent(data) +
                   janelas.map(function(j) { return '&janela=' + encodeURIComponent(j); }).join('') +
                   (rotasDriversSel && rotasDriversSel.length
-                      ? '&drivers=' + rotasDriversSel.join(',') : '');
+                      ? '&drivers=' + rotasDriversSel.join(',') : '') +
+                  (salvar && rotasReagrupar ? '&reagrupar=1' : '');
 
         fetch(url, {credentials: 'same-origin'})
             .then(function(r) {
