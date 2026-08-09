@@ -69,3 +69,68 @@ def test_api_atribuidos_sem_driver_ordena_por_janela(app):
     data = r.get_json()
     codes = [p['code'] for p in data['sem_driver']]
     assert codes == ['C', 'B', 'A']   # expresso, 8h, 14h
+
+
+def test_api_atribuidos_driver_segue_a_ordem_salva(app):
+    """09/08/2026 (dono: "algo segura e nao permite a troca da ordem"): a
+    lista do driver na Operacao exibia janela-primeiro POR CIMA da ordem
+    salva — o drag salvava, o reload revertia na tela e o proximo drag
+    persistia a reversao. A exibicao agora segue a ordem SALVA (a mesma da
+    tela do motorista/ao vivo/rastreio), mesmo cruzando janelas."""
+    from datetime import date
+
+    from app.extensions import db
+    from app.models import AtribuicaoEntrega, Driver, Usuario
+    u = Usuario(nome='Admin', login='adm2', papel='admin')
+    u.set_senha('x' * 8)
+    d = Driver(nome='D Ordem', ativo=True, token='tok-ord-1', capacidade=99)
+    db.session.add_all([u, d])
+    db.session.flush()
+    hoje_d = date.today()
+    # Ordem salva CRUZA as janelas de proposito: 14h antes da 8h.
+    db.session.add(AtribuicaoEntrega(pedido_code='A', driver_id=d.id,
+                                     data_entrega=hoje_d, ordem=1,
+                                     status='pendente'))
+    db.session.add(AtribuicaoEntrega(pedido_code='B', driver_id=d.id,
+                                     data_entrega=hoje_d, ordem=2,
+                                     status='pendente'))
+    db.session.commit()
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(u.id)
+        sess['_fresh'] = True
+
+    pedidos = [
+        {'code': 'A', 'destinatario': 'Ana', 'endereco': 'R X', 'periodo': '14h às 15h',
+         'expresso': False, 'itens': [], 'cartinha_vnda': '', 'comprador': '', 'telefone': ''},
+        {'code': 'B', 'destinatario': 'Bia', 'endereco': 'R Y', 'periodo': '8h às 9h',
+         'expresso': False, 'itens': [], 'cartinha_vnda': '', 'comprador': '', 'telefone': ''},
+    ]
+    with patch('app.services.vnda.buscar_pedidos_do_dia',
+               return_value={'pedidos': pedidos}):
+        r = client.get('/entregas/api/atribuidos')
+    data = r.get_json()
+    rota = [dr for dr in data['drivers'] if dr['id'] == d.id][0]
+    codes = [p['code'] for p in rota['paradas']]
+    assert codes == ['A', 'B']   # ordem SALVA, nao a janela (que daria B, A)
+
+
+def test_gerar_rotas_leve_preserva_a_ordem_salva(app):
+    """Modo leve (mapa, otimizar_ordem=False): a numeracao dos pinos e a
+    ordem SALVA, sem re-impor a janela — senao o mapa diverge da tela do
+    motorista. O sort de janela continua valendo quando a ordem NASCE
+    (otimizar_ordem=True, coberto pelos testes acima)."""
+    from app.services import rotas
+    with app.app_context():
+        app.config['GOOGLE_MAPS_API_KEY'] = ''
+        pedidos = [
+            {'code': 'A', 'endereco': 'Rua X, 01310-100', 'periodo': '14h às 15h'},
+            {'code': 'B', 'endereco': 'Rua Y, 01310-200', 'periodo': '8h às 9h'},
+        ]
+        drivers = [{'id': 1, 'nome': 'Joao', 'cor': '#f00', 'capacidade': 999}]
+        atrib = {'A': {'driver_id': 1, 'ordem': 1},
+                 'B': {'driver_id': 1, 'ordem': 2}}
+        res = rotas.gerar_rotas(pedidos, drivers, atribuicoes=atrib,
+                                app=app, otimizar_ordem=False)
+    ordem = [p['code'] for p in res['rotas'][0]['paradas']]
+    assert ordem == ['A', 'B']   # ordem salva; janela daria ['B', 'A']
