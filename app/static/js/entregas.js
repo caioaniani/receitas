@@ -2670,6 +2670,7 @@
         if (p.retirada) html += ' <span class="badge" style="background:#1971c2;color:#fff;font-size:10px;"><i class="bi bi-shop"></i> Retirada</span>';
         if (p.expresso && !p.retirada) html += ' <span class="badge" style="background:#e8590c;color:#fff;font-size:10px;"><i class="bi bi-lightning-fill"></i> Expresso</span>';
         if (p.periodo && !p.retirada) html += ' <span class="badge bg-light text-dark" style="font-size:10px;"><i class="bi bi-clock"></i> ' + escapeHtml(p.periodo) + '</span>';
+        if (foraJanela) html += ' <span class="badge bg-warning text-dark" style="font-size:10px;" title="Janela mais cedo depois de uma mais tarde na sequência — confira se o horário fecha. A ordem vale assim mesmo."><i class="bi bi-exclamation-triangle"></i> confira a janela</span>';
         html += totalHtml + proofLink + adminBtns + btnData + editLocal;
         html += '<div class="text-muted small mt-1"><i class="bi bi-geo-alt"></i> ' + escapeHtml(p.endereco || '') + '</div>';
         if (p.telefone) html += '<div class="text-muted small"><i class="bi bi-telephone"></i> ' + escapeHtml(p.telefone) + '</div>';
