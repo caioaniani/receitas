@@ -2969,7 +2969,10 @@
         var escopoLote = (opLoteFiltro && opLoteFiltro !== 'sem_lote') ? opLoteFiltro : null;
         var rotulo = escopoLote ? 'lote selecionado' : 'todas as rotas';
         msg.innerHTML = '<div class="alert alert-info py-2 small"><i class="bi bi-arrow-repeat"></i> Re-otimizando ' + rotulo + '…</div>';
-        var qs = '&drivers=' + drivers.map(function(d) { return d.id; }).join(',');
+        // `reotimizar=1`: inclui os JA atribuidos (driver+ordem salvos) —
+        // sem o flag, dia todo distribuido em lote voltava VAZIO e o botao
+        // dizia "Nada a re-otimizar" (madrugada do Dia dos Pais).
+        var qs = '&reotimizar=1&drivers=' + drivers.map(function(d) { return d.id; }).join(',');
         fetch('/entregas/api/rotas?data=' + encodeURIComponent(data) + qs,
             {credentials: 'same-origin'}).then(function(r) { return r.json(); })
             .then(function(d) {
