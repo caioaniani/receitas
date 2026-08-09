@@ -5,90 +5,51 @@
    linha por motorista, um ponto por endereço — vazio = pendente, verde =
    entregue, vermelho = imprevisto, âmbar tracejado = pulado. Poll 15s. #}
 <style>
-  /* Piloto ui-ux-pro-max (09/08/2026): paleta "Bakery/Cafe" (marrom quente
-     #92400E + creme #FEF3C7, WCAG AA) + hierarquia/espacamento de painel
-     operacional. Escopo SO desta tela; hooks de JS (ids/classes) intactos.
-     Webfont fora (CSP so libera self+jsdelivr) — stack de sistema. */
-  .aviv-wrap { --pao-primario:#92400E; --pao-escuro:#78350F;
-               --pao-creme:#FDF6E3; --pao-borda:#EFE2C0;
-               --pao-ok:#16A34A; --pao-alerta:#D97706; --pao-erro:#DC2626;
-               font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI',
-                           Roboto, 'Helvetica Neue', sans-serif;
-               background:var(--pao-creme); border:1px solid var(--pao-borda);
-               border-radius:16px; padding:20px 22px; }
   .aviv-topo { display:flex; flex-wrap:wrap; align-items:baseline; gap:14px; }
-  .aviv-topo h4 { color:var(--pao-escuro); font-weight:800;
-                  letter-spacing:-.01em; }
-  .aviv-num { font-size:2.6rem; font-weight:800; line-height:1;
-              color:var(--pao-ok); font-variant-numeric:tabular-nums; }
-  .aviv-barra { height:12px; background:#F3EAD3; border-radius:6px;
-                overflow:hidden; margin:12px 0 16px;
-                box-shadow:inset 0 1px 2px rgba(120,53,15,.08); }
-  .aviv-barra > div { height:100%; width:0; border-radius:6px;
-                      background:linear-gradient(90deg,#22C55E,#16A34A);
-                      transition:width .6s ease; }
-  #aviv-busca { border:1.5px solid var(--pao-borda); border-radius:12px;
-                background:#fff; padding:10px 14px; font-size:16px; }
-  #aviv-busca:focus { border-color:var(--pao-primario); box-shadow:0 0 0 3px
-                      rgba(146,64,14,.15); outline:none; }
-  .aviv-linha { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-                background:#fff; border:1px solid var(--pao-borda);
-                border-radius:12px; padding:12px 14px; margin-bottom:10px;
-                box-shadow:0 1px 3px rgba(120,53,15,.05); }
-  .aviv-nome { min-width:170px; font-weight:700; color:#1F2937;
-               display:flex; align-items:center; gap:8px; }
-  .aviv-cor { width:14px; height:14px; border-radius:50%; flex:0 0 14px;
-              box-shadow:0 0 0 2px #fff, 0 0 0 3px rgba(0,0,0,.12); }
-  .aviv-prog { font-variant-numeric:tabular-nums; color:var(--pao-escuro);
-               min-width:56px; font-size:.92rem; font-weight:700; }
-  .aviv-pontos { display:flex; flex-wrap:wrap; gap:7px; }
-  .aviv-ponto { width:24px; height:24px; border-radius:50%;
-                border:2px solid #D6CBB2; background:#FBF7EC; cursor:default;
+  .aviv-num { font-size:2.4rem; font-weight:800; line-height:1; }
+  .aviv-barra { height:10px; background:#e9ecef; border-radius:5px;
+                overflow:hidden; margin:10px 0 18px; }
+  .aviv-barra > div { height:100%; background:#16a34a; width:0;
+                      transition:width .6s; }
+  .aviv-linha { display:flex; align-items:center; gap:10px; padding:9px 4px;
+                border-bottom:1px solid #f1f3f5; flex-wrap:wrap; }
+  .aviv-nome { min-width:150px; font-weight:600; display:flex;
+               align-items:center; gap:7px; }
+  .aviv-cor { width:13px; height:13px; border-radius:50%; flex:0 0 13px; }
+  .aviv-prog { font-variant-numeric:tabular-nums; color:#6c757d;
+               min-width:52px; font-size:.9rem; }
+  .aviv-pontos { display:flex; flex-wrap:wrap; gap:6px; }
+  .aviv-ponto { width:20px; height:20px; border-radius:50%;
+                border:2px solid #adb5bd; background:#fff; cursor:default;
                 display:inline-flex; align-items:center; justify-content:center;
-                font-size:10px; color:#9A8F76; font-weight:700;
-                transition:transform .15s ease, box-shadow .15s ease; }
-  a.aviv-ponto:hover { transform:scale(1.25);
-                       box-shadow:0 2px 8px rgba(0,0,0,.18); }
-  .aviv-ponto.entregue { background:var(--pao-ok); border-color:var(--pao-ok);
-                         color:#fff; }
-  .aviv-ponto.nao_entregue { background:var(--pao-erro);
-                             border-color:var(--pao-erro); color:#fff; }
-  .aviv-ponto.pulado { background:#F59E0B; border-color:var(--pao-alerta);
+                font-size:9px; color:#adb5bd; font-weight:700; }
+  .aviv-ponto.entregue { background:#16a34a; border-color:#16a34a; color:#fff; }
+  .aviv-ponto.nao_entregue { background:#dc2626; border-color:#dc2626; color:#fff; }
+  .aviv-ponto.pulado { background:#f59e0b; border-color:#d97706;
                        border-style:dashed; color:#fff; }
-  .aviv-selo { font-size:.75rem; color:#8A7B60; font-weight:500; }
-  .aviv-att { font-size:.8rem; color:#B3A788; }
-  .aviv-busca-res { border:1px solid var(--pao-borda); border-radius:12px;
-                    margin-bottom:14px; overflow:hidden; background:#fff; }
+  .aviv-selo { font-size:.75rem; color:#6c757d; }
+  .aviv-att { font-size:.8rem; color:#adb5bd; }
+  .aviv-busca-res { border:1px solid #e2e8f0; border-radius:8px;
+                    margin-bottom:14px; overflow:hidden; }
   .aviv-res-item { display:flex; flex-wrap:wrap; gap:8px; align-items:center;
-                   padding:10px 14px; border-bottom:1px solid #F6EFDD;
+                   padding:8px 12px; border-bottom:1px solid #f1f5f9;
                    font-size:.9rem; }
   .aviv-res-item:last-child { border-bottom:0; }
-  .aviv-res-item strong { color:var(--pao-primario); }
-  @media (prefers-reduced-motion: reduce) {
-    .aviv-barra > div, .aviv-ponto { transition:none; }
-    a.aviv-ponto:hover { transform:none; }
-  }
-  @media (max-width:560px) {
-    .aviv-wrap { padding:14px; border-radius:12px; }
-    .aviv-nome { min-width:130px; }
-  }
 </style>
 
-<div class="aviv-wrap">
 <div class="aviv-topo mb-1">
   <h4 class="mb-0">🚚 Entregas ao vivo</h4>
-  <span><span class="aviv-num" id="aviv-entregues">–</span>
+  <span><span class="aviv-num text-success" id="aviv-entregues">–</span>
         <span class="text-muted">/ <span id="aviv-total">–</span> entregues</span></span>
   <span id="aviv-problemas" class="text-danger" style="display:none;"></span>
   <span class="aviv-att ms-auto" id="aviv-att"></span>
 </div>
 <div class="aviv-barra"><div id="aviv-fill"></div></div>
 <input type="search" id="aviv-busca" class="form-control mb-2"
-       placeholder="🔍 buscar pedido, destinatário, comprador, telefone ou endereço…"
+       placeholder="🔍 buscar pedido, destinatário, comprador ou endereço…"
        autocomplete="off">
 <div id="aviv-busca-res" class="aviv-busca-res" style="display:none;"></div>
 <div id="aviv-linhas"><div class="text-muted py-4 text-center">Carregando…</div></div>
-</div>
 
 <script>
 (function () {
