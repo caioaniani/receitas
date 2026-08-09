@@ -113,6 +113,11 @@
             <button class="btn-pill btn-pill-outline" id="op-novo-pedido" title="Cadastrar pedido feito fora do VNDA" style="border-color:var(--cor-verde); color:var(--cor-verde);">
                 <i class="bi bi-plus-lg"></i> novo pedido
             </button>
+            <a class="btn-pill btn-pill-outline" href="{{ url_for('entregas.acompanhamento') }}"
+               target="_blank" rel="noopener"
+               title="Tela ao vivo: um ponto por endereço, verde quando o motorista entrega. Atualiza sozinha.">
+                <i class="bi bi-broadcast"></i> ao vivo
+            </a>
             <input type="text" id="op-busca" class="form-control form-control-sm" placeholder="buscar cliente ou code..." style="max-width:220px; border-radius:var(--radius-pill);">
             <button class="btn-pill btn-pill-outline ms-auto" data-bs-toggle="modal" data-bs-target="#modal-drivers">
                 <i class="bi bi-people"></i> drivers
