@@ -137,6 +137,10 @@
 
     function gerarLinksMaps(matriz, paradas) {
         if (!paradas || !paradas.length) return [];
+        // Google Maps aceita 10 PONTOS no total (origem inclusa). Com a
+        // matriz na frente, cabem só 9 paradas por link — bloco de 10
+        // derrubava a última (testado pelo dono na rota de 11 paradas do
+        // Dia dos Pais: o certo é 1-9 e 10-11).
         var links = [];
         var chunkSize = 10;
         for (var i = 0; i < paradas.length; i += chunkSize) {
