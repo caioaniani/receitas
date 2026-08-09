@@ -269,3 +269,41 @@ def test_nao_entregue_nao_mexe_no_pedido_online(app):
     assert r.status_code == 200
     p = PedidoOnline.query.filter_by(codigo=codes[0]).first()
     assert p.status == 'pago'                       # intocado
+
+
+def test_pular_gera_comprovante_da_visita(app):
+    """Dono 09/08/2026: a bolinha amarela do acompanhamento abre o
+    comprovante — pular gera proof_hash e a página pública mostra a foto
+    da visita + "o entregador volta". Quando virar entregue, o MESMO link
+    passa a mostrar o comprovante de entrega."""
+    from unittest.mock import patch
+    d = _driver()
+    codes = _rota(d, n=1)
+    a = _atrib(codes[0])
+    _foto(a)
+    c = _client(app, d)
+    with patch('app.services.email.enviar_pedido_a_caminho',
+               return_value={'ok': True}):
+        assert c.post(f'/driver/api/{d.token}/pular',
+                      json={'atribuicao_id': a.id}).status_code == 200
+    db.session.refresh(a)
+    assert a.proof_hash                              # nasceu no pulo
+    pub = app.test_client()                          # página é pública
+    r = pub.get(f'/entrega/{a.proof_hash}')
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200
+    assert 'esteve no endereço' in html
+    assert 'volta ainda hoje' in html
+    assert 'x.example/f.jpg' in html                 # foto da portaria
+    # Entregue depois (foto nova) → o mesmo link vira comprovante de entrega
+    from datetime import timedelta as _td
+    _foto(a, quando=a.pulado_em + _td(minutes=20))
+    with patch('app.services.email.enviar_pedido_a_caminho',
+               return_value={'ok': True}), \
+         patch('app.services.email.enviar_pedido_entregue',
+               return_value={'ok': True}):
+        assert c.post(f'/driver/api/{d.token}/status',
+                      json={'atribuicao_id': a.id,
+                            'status': 'entregue'}).status_code == 200
+    html2 = pub.get(f'/entrega/{a.proof_hash}').get_data(as_text=True)
+    assert 'Entrega realizada' in html2
