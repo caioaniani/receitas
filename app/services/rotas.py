@@ -373,6 +373,8 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None,
             clusters = _kmeans(pts, n)
             # Pos-processo: move outliers pra reduzir raio dos clusters
             clusters = _refinar_clusters(pts, clusters, n, max_raio_km=8.0)
+            # Nivela o tamanho (carga justa por motorista; ver docstring)
+            clusters = _balancear_clusters(pts, clusters, n)
             for i, p in enumerate(com_coords):
                 cluster_id = clusters[i]
                 if cluster_id < len(drivers):
