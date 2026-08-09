@@ -2151,6 +2151,59 @@ def acompanhamento():
                                                  hoje_brt().isoformat()))
 
 
+@entregas_bp.route('/admin/sincronizar-entregues')
+@login_required
+def sincronizar_entregues():
+    """One-shot admin (dono 09/08/2026): alinha os PedidoOnline das entregas
+    JA baixadas pelo motorista ANTES do deploy que ligou a sincronizacao —
+    atribuicao 'entregue' do dia com PedidoOnline ainda em pago/em_preparo/
+    a_caminho vira 'entregue' + reflete no painel. SEM e-mail de proposito
+    (o aviso atrasado horas depois só confundiria o cliente; daqui pra
+    frente o e-mail sai na hora pela baixa do motorista).
+
+    Dry-run por padrao (lista o que faria); `?executar=1` aplica.
+    Nunca regride: cancelado/aguardando_pagamento/entregue ficam fora."""
+    if not current_user.is_admin():
+        return jsonify(ok=False, erro='somente admin'), 403
+    from app.models import PainelPedidoStatus, PedidoOnline
+    data_str = request.args.get('data', hoje_brt().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = hoje_brt()
+    atribs = (AtribuicaoEntrega.query
+              .filter(AtribuicaoEntrega.data_entrega == target,
+                      AtribuicaoEntrega.status == 'entregue')
+              .all())
+    codes = [a.pedido_code for a in atribs if a.pedido_code]
+    alvo = []
+    if codes:
+        alvo = (PedidoOnline.query
+                .filter(PedidoOnline.codigo.in_(codes),
+                        PedidoOnline.status.in_(
+                            ('pago', 'em_preparo', 'a_caminho')))
+                .all())
+    executar = request.args.get('executar') == '1'
+    if executar:
+        for p in alvo:
+            p.status = 'entregue'
+            s = PainelPedidoStatus.query.filter_by(
+                pedido_code=p.codigo).first()
+            if s:
+                s.status = 'entregue'
+            else:
+                db.session.add(PainelPedidoStatus(
+                    pedido_code=p.codigo, status='entregue',
+                    data_ref=target))
+        db.session.commit()
+    return jsonify(ok=True, data=data_str, executado=executar,
+                   entregues_na_rota=len(codes),
+                   alinhados=[p.codigo for p in alvo],
+                   n_alinhados=len(alvo),
+                   aviso=(None if executar else
+                          'dry-run — nada gravado; adicione &executar=1'))
+
+
 @entregas_bp.route('/api/acompanhamento')
 @login_required
 def api_acompanhamento():
