@@ -394,7 +394,7 @@
                             (status !== 'pendente' ? '<button class="btn btn-sm btn-outline-secondary" onclick="marcarStatus(\'' + p.code + '\',\'pendente\')"><i class="bi bi-arrow-counterclockwise"></i></button>' : '') +
                             '<button class="btn btn-sm btn-outline-warning" onclick="editarData(\'' + p.code + '\',\'' + (p.data_entrega || '') + '\',' + (p.data_override ? 'true' : 'false') + ')" title="Mudar data de entrega"><i class="bi bi-calendar-event"></i></button>' +
                             '<button class="btn btn-sm btn-outline-warning" onclick="toggleCartinha(\'' + p.code + '\')" title="' + (temCart ? 'Corrigir cartinha' : 'Adicionar cartinha') + '"><i class="bi bi-envelope-heart"></i></button>' +
-                            '<a class="btn btn-sm btn-outline-dark" href="https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code) + '" target="_blank" rel="noopener" title="Abrir pedido no VNDA"><i class="bi bi-box-arrow-up-right"></i> VNDA</a>' +
+                            '<a class="btn btn-sm btn-outline-dark" href="' + linkAdminPedido(p) + '" target="_blank" rel="noopener" title="Abrir o pedido"><i class="bi bi-box-arrow-up-right"></i> ' + (p.pedido_online ? 'Pedido' : 'VNDA') + '</a>' +
                         '</div>' +
                     '</div>' +
                     cartinhaEdit +
