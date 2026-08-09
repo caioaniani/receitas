@@ -235,3 +235,37 @@ def test_baixa_de_outro_dia_nao_inicia_rota(app):
                      'motivo_falha': 'teste'})
     assert r.status_code == 200
     assert RotaInicio.query.filter_by(driver_id=d.id).first() is None
+
+
+def test_entregue_do_driver_sincroniza_o_pedido_online(app):
+    """Dono 09/08/2026: a baixa do motorista tem que refletir no
+    /admin/loja-online/pedidos — o PedidoOnline avança pra 'entregue'
+    (mesmo motor do painel staff; nunca regride, best-effort)."""
+    from unittest.mock import patch
+    d = _driver()
+    codes = _rota(d, n=1)
+    a = _atrib(codes[0])
+    _foto(a)
+    c = _client(app, d)
+    with patch('app.services.email.enviar_pedido_a_caminho',
+               return_value={'ok': True}):
+        r = c.post(f'/driver/api/{d.token}/status',
+                   json={'atribuicao_id': a.id, 'status': 'entregue'})
+    assert r.status_code == 200
+    p = PedidoOnline.query.filter_by(codigo=codes[0]).first()
+    assert p.status == 'entregue'
+
+
+def test_nao_entregue_nao_mexe_no_pedido_online(app):
+    """Imprevisto NÃO vira 'entregue' no admin — o pedido segue no status
+    de preparo até a equipe resolver."""
+    d = _driver()
+    codes = _rota(d, n=1)
+    a = _atrib(codes[0])
+    c = _client(app, d)
+    r = c.post(f'/driver/api/{d.token}/status',
+               json={'atribuicao_id': a.id, 'status': 'nao_entregue',
+                     'motivo_falha': 'ausente'})
+    assert r.status_code == 200
+    p = PedidoOnline.query.filter_by(codigo=codes[0]).first()
+    assert p.status == 'pago'                       # intocado
