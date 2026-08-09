@@ -206,3 +206,28 @@ def test_ancoragem_cluster_vai_pro_driver_da_zona(app):
     # AGORA (ancora): sobra da padaria vai pro William; a de SBC pro Aaa.
     assert por_driver[2] == ['N1', 'W1']
     assert por_driver[1] == ['L1', 'N2']
+
+
+def test_tela_drivers_magic_renderiza(app, admin_user):
+    """09/08/2026, manha do Dia dos Pais: a rota /entregas/drivers/magic
+    existia desde 01-04/08 mas o template nunca foi commitado — 500 no
+    PRIMEIRO uso real (a tela de mandar os links pros motoristas)."""
+    from datetime import timedelta
+
+    from app.models import DriverMagicToken
+    from app.utils import agora
+    d = Driver(nome='Magica', ativo=True, token='tok-mg-1',
+               telefone='5511977776666', cor='#3cb44b')
+    db.session.add(d)
+    db.session.flush()
+    db.session.add(DriverMagicToken(driver_id=d.id, token='t' * 40,
+                                    expira_em=agora() + timedelta(hours=3)))
+    db.session.commit()
+    client = app.test_client()
+    _login(client, admin_user)
+    r = client.get('/entregas/drivers/magic')
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert 'Links dos motoristas' in body
+    assert 'Enviar por WhatsApp' in body
+    assert 'Magica' in body
