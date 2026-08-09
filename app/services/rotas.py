@@ -658,7 +658,12 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None,
         # expresso no fim da rota ou visitar um pedido das 8h depois das 14h.
         # km/minutos ficam como estimativa do melhor caso (ordem geo-otima);
         # a janela pode alongar um pouco, mas SLA de horario > distancia exata.
-        todas.sort(key=janela_rank)
+        # SO quando a ordem esta NASCENDO aqui (distribuir/re-otimizar). No
+        # modo leve (mapa, otimizar_ordem=False) a ordem exibida e a SALVA —
+        # re-impor a janela fazia o mapa divergir da tela do motorista e
+        # "segurar" a troca manual de ordem (dono 09/08/2026).
+        if otimizar_ordem:
+            todas.sort(key=janela_rank)
 
         paradas = [{**p, 'ordem': idx + 1} for idx, p in enumerate(todas)]
         rotas.append({
