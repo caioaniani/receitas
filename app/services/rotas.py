@@ -467,7 +467,7 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None,
             todas = paradas_com_coords
 
         # Otimiza ordem com Directions API se: origem geocodada + todas com coords
-        if tem_google and origem and all('lat' in p for p in todas):
+        if otimizar_ordem and tem_google and origem and all('lat' in p for p in todas):
             MAX_WAYPOINTS = 25
             latlngs = [(p['lat'], p['lng']) for p in todas]
 
