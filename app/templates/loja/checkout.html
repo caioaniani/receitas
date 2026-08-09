@@ -281,6 +281,19 @@
       Concordo em compartilhar meus dados para processar este pedido.
     </label>
 
+    {# Conferência do endereço (dono 09/08/2026, pós-Dia dos Pais: número/
+       complemento errados em massa): resumo VIVO montado dos campos, com
+       número e complemento em destaque, logo acima do Concluir — ninguém
+       relê formulário, mas uma frase única as pessoas leem. Só aparece
+       nos modos de entrega (retirada não tem endereço de entrega). #}
+    <div id="confere-endereco" hidden
+         style="background:#fff8e6;border:1px solid #e6d9b8;border-radius:10px;
+                padding:12px 14px;margin-bottom:12px;font-size:15px;">
+      📍 Entregaremos em: <span id="confere-endereco-texto"></span><br>
+      <span style="font-size:13px;color:#8a6d3b;">Confira o <strong>número</strong>
+        e o <strong>complemento</strong> — é exatamente pra lá que o
+        entregador vai.</span>
+    </div>
     <button type="submit" class="btn-loja btn-finalizar" id="btn-finalizar">
       Concluir pedido
     </button>
