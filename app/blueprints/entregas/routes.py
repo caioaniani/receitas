@@ -2140,6 +2140,79 @@ def _recompute_lote_status(lote_id):
         current_app.logger.warning('falha ao recalcular status do lote %s: %s', lote_id, exc)
 
 
+@entregas_bp.route('/acompanhamento')
+@login_required
+def acompanhamento():
+    """Tela AO VIVO das entregas do dia (dono 09/08/2026, Dia dos Pais):
+    uma linha por motorista, um ponto por endereço — vazio = pendente,
+    verde = entregue, vermelho = imprevisto, âmbar = pulado. Poll de 15s."""
+    return render_template('entregas/acompanhamento.html',
+                           data=request.args.get('data',
+                                                 hoje_brt().isoformat()))
+
+
+@entregas_bp.route('/api/acompanhamento')
+@login_required
+def api_acompanhamento():
+    """JSON da tela de acompanhamento: atribuições do dia por motorista, na
+    ordem da rota, com status/hora. Read-only e barato (3 queries)."""
+    from app.models import RotaInicio
+    data_str = request.args.get('data', hoje_brt().isoformat())
+    try:
+        target = datetime.strptime(data_str, '%Y-%m-%d').date()
+    except ValueError:
+        target = hoje_brt()
+    atribs = (AtribuicaoEntrega.query
+              .filter(AtribuicaoEntrega.data_entrega == target,
+                      AtribuicaoEntrega.driver_id.isnot(None))
+              .order_by(AtribuicaoEntrega.driver_id,
+                        AtribuicaoEntrega.ordem, AtribuicaoEntrega.id)
+              .all())
+    codes = [a.pedido_code for a in atribs]
+    nomes = {}
+    if codes:
+        from app.models import PedidoOnline
+        for p in (PedidoOnline.query
+                  .filter(PedidoOnline.codigo.in_(codes)).all()):
+            nomes[p.codigo] = (p.nome_destinatario or p.nome_cliente or '')
+    ids = {a.driver_id for a in atribs}
+    drivers = ({d.id: d for d in Driver.query.filter(Driver.id.in_(ids))}
+               if ids else {})
+    inicios = {r.driver_id: r for r in
+               RotaInicio.query.filter_by(data=target).all()}
+    por_driver = {}
+    for a in atribs:
+        d = drivers.get(a.driver_id)
+        if d is None:
+            continue
+        ri = inicios.get(d.id)
+        linha = por_driver.setdefault(a.driver_id, {
+            'id': d.id, 'nome': d.nome, 'cor': d.cor or '#666',
+            'iniciada_em': (ri.iniciado_em.strftime('%H:%M')
+                            if ri and ri.iniciado_em else None),
+            'paradas': [],
+        })
+        st = a.status or 'pendente'
+        linha['paradas'].append({
+            'ordem': a.ordem or 0,
+            'status': st,
+            'pulado': bool(a.pulado_em) and st == 'pendente',
+            'quem': nomes.get(a.pedido_code) or a.pedido_code,
+            'hora': (a.entregue_em.strftime('%H:%M')
+                     if a.entregue_em else None),
+        })
+    linhas = sorted(por_driver.values(), key=lambda x: x['nome'].lower())
+    total = sum(len(x['paradas']) for x in linhas)
+    entregues = sum(1 for x in linhas for p in x['paradas']
+                    if p['status'] == 'entregue')
+    problemas = sum(1 for x in linhas for p in x['paradas']
+                    if p['status'] == 'nao_entregue')
+    resp = jsonify(ok=True, data=data_str, linhas=linhas, total=total,
+                   entregues=entregues, problemas=problemas)
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
 @entregas_bp.route('/api/lotes', methods=['GET'])
 @login_required
 def listar_lotes():
