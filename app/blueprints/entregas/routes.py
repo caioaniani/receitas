@@ -2263,6 +2263,7 @@ def api_acompanhamento():
             info[p.codigo] = {
                 'quem': (p.nome_destinatario or p.nome_cliente or ''),
                 'comprador': p.nome_cliente or '',
+                'telefone': p.telefone_cliente or '',
                 'endereco': _endereco_online(p),
             }
     ids = {a.driver_id for a in atribs}
