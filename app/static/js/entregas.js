@@ -2590,7 +2590,7 @@
         return m ? parseInt(m[1], 10) : 99;
     }
 
-    function opRenderItem(p, driver, driversDisp) {
+    function opRenderItem(p, driver, driversDisp, foraJanela) {
         var st = p.status || 'pendente';
         var stBadge = '';
         if (st === 'entregue') {
