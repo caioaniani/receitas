@@ -307,3 +307,37 @@ def test_pular_gera_comprovante_da_visita(app):
                             'status': 'entregue'}).status_code == 200
     html2 = pub.get(f'/entrega/{a.proof_hash}').get_data(as_text=True)
     assert 'Entrega realizada' in html2
+
+
+def test_upload_de_foto_comprime_antes_do_dropbox(app):
+    """Dono 09/08/2026 ("resolução mais baixa, mas não ruim"): a foto da
+    câmera (3-8MB) é comprimida pra <=1400px JPEG antes do Dropbox; bytes
+    ilegíveis (formato exótico) sobem originais — nunca recusa por causa
+    da compressão."""
+    import io
+    from unittest.mock import patch
+
+    from PIL import Image
+    d = _driver()
+    codes = _rota(d, n=1)
+    a = _atrib(codes[0])
+    c = _client(app, d)
+    grande = io.BytesIO()
+    Image.new('RGB', (4000, 3000), 'red').save(grande, format='JPEG')
+    capturado = {}
+
+    def _up(raw, atrib_id, ext='jpg'):
+        capturado['raw'] = raw
+        return {'url': 'https://x.example/f.jpg',
+                'storage_path': '/f.jpg', 'tamanho': len(raw)}
+
+    with patch('app.services.dropbox_storage.disponivel', return_value=True), \
+         patch('app.services.dropbox_storage.upload_foto', side_effect=_up):
+        r = c.post(f'/driver/api/{d.token}/foto',
+                   data={'atribuicao_id': str(a.id),
+                         'foto': (io.BytesIO(grande.getvalue()), 'f.jpg')},
+                   content_type='multipart/form-data')
+    assert r.get_json()['ok'] is True
+    img = Image.open(io.BytesIO(capturado['raw']))
+    assert max(img.size) <= 1400                    # reduziu de 4000px
+    assert len(capturado['raw']) < len(grande.getvalue())
