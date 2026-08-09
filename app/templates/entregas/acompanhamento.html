@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Entregas ao vivo{% endblock %}
+{% block content %}
+{# Tela AO VIVO das entregas do dia (dono 09/08/2026, Dia dos Pais): uma
+   linha por motorista, um ponto por endereço — vazio = pendente, verde =
+   entregue, vermelho = imprevisto, âmbar tracejado = pulado. Poll 15s. #}
+<style>
+  .aviv-topo { display:flex; flex-wrap:wrap; align-items:baseline; gap:14px; }
+  .aviv-num { font-size:2.4rem; font-weight:800; line-height:1; }
+  .aviv-barra { height:10px; background:#e9ecef; border-radius:5px;
+                overflow:hidden; margin:10px 0 18px; }
+  .aviv-barra > div { height:100%; background:#16a34a; width:0;
+                      transition:width .6s; }
+  .aviv-linha { display:flex; align-items:center; gap:10px; padding:9px 4px;
+                border-bottom:1px solid #f1f3f5; flex-wrap:wrap; }
+  .aviv-nome { min-width:150px; font-weight:600; display:flex;
+               align-items:center; gap:7px; }
+  .aviv-cor { width:13px; height:13px; border-radius:50%; flex:0 0 13px; }
+  .aviv-prog { font-variant-numeric:tabular-nums; color:#6c757d;
+               min-width:52px; font-size:.9rem; }
+  .aviv-pontos { display:flex; flex-wrap:wrap; gap:6px; }
+  .aviv-ponto { width:20px; height:20px; border-radius:50%;
+                border:2px solid #adb5bd; background:#fff; cursor:default;
+                display:inline-flex; align-items:center; justify-content:center;
+                font-size:9px; color:#adb5bd; font-weight:700; }
+  .aviv-ponto.entregue { background:#16a34a; border-color:#16a34a; color:#fff; }
+  .aviv-ponto.nao_entregue { background:#dc2626; border-color:#dc2626; color:#fff; }
+  .aviv-ponto.pulado { border-color:#f59e0b; border-style:dashed; color:#f59e0b; }
+  .aviv-selo { font-size:.75rem; color:#6c757d; }
+  .aviv-att { font-size:.8rem; color:#adb5bd; }
+</style>
+
+<div class="aviv-topo mb-1">
+  <h4 class="mb-0">🚚 Entregas ao vivo</h4>
+  <span><span class="aviv-num text-success" id="aviv-entregues">–</span>
+        <span class="text-muted">/ <span id="aviv-total">–</span> entregues</span></span>
+  <span id="aviv-problemas" class="text-danger" style="display:none;"></span>
+  <span class="aviv-att ms-auto" id="aviv-att"></span>
+</div>
+<div class="aviv-barra"><div id="aviv-fill"></div></div>
+<div id="aviv-linhas"><div class="text-muted py-4 text-center">Carregando…</div></div>
+
+<script>
+(function () {
+  var DATA = {{ data | tojson }};
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function render(d) {
+    document.getElementById('aviv-entregues').textContent = d.entregues;
+    document.getElementById('aviv-total').textContent = d.total;
+    var probEl = document.getElementById('aviv-problemas');
+    if (d.problemas > 0) {
+      probEl.textContent = '⚠ ' + d.problemas + ' imprevisto(s)';
+      probEl.style.display = '';
+    } else { probEl.style.display = 'none'; }
+    document.getElementById('aviv-fill').style.width =
+        (d.total ? Math.round(100 * d.entregues / d.total) : 0) + '%';
+    var html = '';
+    (d.linhas || []).forEach(function (l) {
+      var feitos = l.paradas.filter(function (p) { return p.status === 'entregue'; }).length;
+      var pontos = l.paradas.map(function (p) {
+        var cls = p.status === 'entregue' ? 'entregue'
+                : (p.status === 'nao_entregue' ? 'nao_entregue'
+                : (p.pulado ? 'pulado' : ''));
+        var tip = p.ordem + '. ' + (p.quem || '') +
+                  (p.hora ? ' — entregue às ' + p.hora : '') +
+                  (p.pulado ? ' — PULADO (volta depois)' : '');
+        return '<span class="aviv-ponto ' + cls + '" title="' + esc(tip) + '">' +
+               p.ordem + '</span>';
+      }).join('');
+      html += '<div class="aviv-linha">' +
+        '<span class="aviv-nome"><span class="aviv-cor" style="background:' + esc(l.cor) + '"></span>' +
+        esc(l.nome) +
+        (l.iniciada_em ? ' <span class="aviv-selo">🚚 saiu às ' + esc(l.iniciada_em) + '</span>'
+                       : ' <span class="aviv-selo">ainda não iniciou</span>') +
+        '</span>' +
+        '<span class="aviv-prog">' + feitos + '/' + l.paradas.length + '</span>' +
+        '<span class="aviv-pontos">' + pontos + '</span>' +
+        '</div>';
+    });
+    document.getElementById('aviv-linhas').innerHTML =
+        html || '<div class="text-muted py-4 text-center">Nenhuma rota atribuída pra ' + esc(d.data) + '.</div>';
+    var ag = new Date();
+    document.getElementById('aviv-att').textContent =
+        'atualizado ' + String(ag.getHours()).padStart(2, '0') + ':' +
+        String(ag.getMinutes()).padStart(2, '0') + ':' +
+        String(ag.getSeconds()).padStart(2, '0');
+  }
+  function carregar() {
+    fetch('/entregas/api/acompanhamento?data=' + encodeURIComponent(DATA),
+          {credentials: 'same-origin'})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.ok) render(d); })
+      .catch(function () { /* rede: mantém o que tinha */ });
+  }
+  carregar();
+  setInterval(carregar, 15000);
+})();
+</script>
+{% endblock %}
