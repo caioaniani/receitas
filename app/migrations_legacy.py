@@ -99,6 +99,7 @@ def _migrate(app):
         _seed_curadoria_dia_pais(app)
         _seed_curadoria_dia_pais_v2(app)
         _seed_drivers_entrega(app)
+        _seed_cores_drivers(app)
 
 
 def _seed_checklist_padrao(app):
