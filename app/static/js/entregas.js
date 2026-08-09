@@ -2788,6 +2788,7 @@
         (d.sem_driver || []).forEach(function(p) {
             if (p.lat == null || p.lng == null) return;
             if (!opPassaLoteSem(p)) return;
+            opMapaPins.push({code: p.code, lat: p.lat, lng: p.lng});
             bounds.push([p.lat, p.lng]);
             L.marker([p.lat, p.lng], {
                 icon: L.divIcon({
