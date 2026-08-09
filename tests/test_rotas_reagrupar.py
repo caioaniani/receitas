@@ -231,3 +231,27 @@ def test_tela_drivers_magic_renderiza(app, admin_user):
     assert 'Links dos motoristas' in body
     assert 'Enviar por WhatsApp' in body
     assert 'Magica' in body
+
+
+def test_acompanhamento_ao_vivo(app, admin_user):
+    """Tela ao vivo do dia (dono 09/08/2026): um ponto por endereco, verde
+    quando entrega. API conta entregues/problemas e ordena pela rota."""
+    from app.utils import agora
+    d = Driver(nome='Aviv', ativo=True, token='tok-av-9', cor='#3cb44b')
+    db.session.add(d)
+    db.session.flush()
+    for i, st in enumerate(('entregue', 'pendente')):
+        _pedido_online(f'AVV{i}')
+        a = AtribuicaoEntrega(pedido_code=f'AVV{i}', driver_id=d.id,
+                              data_entrega=hoje(), ordem=i + 1, status=st)
+        if st == 'entregue':
+            a.entregue_em = agora()
+        db.session.add(a)
+    db.session.commit()
+    client = app.test_client()
+    _login(client, admin_user)
+    assert client.get('/entregas/acompanhamento').status_code == 200
+    j = client.get('/entregas/api/acompanhamento').get_json()
+    assert j['total'] == 2 and j['entregues'] == 1 and j['problemas'] == 0
+    assert [p['status'] for p in j['linhas'][0]['paradas']] == [
+        'entregue', 'pendente']
