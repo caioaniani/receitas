@@ -442,10 +442,56 @@ def gerar_rotas(pedidos, drivers, atribuicoes=None, app=None,
             clusters = _balancear_clusters(pts, clusters, n)
             # Pole: dissolve o "grupo lixão" trocando pares entre vizinhos
             clusters = _polir_clusters(pts, clusters, n)
+
+            # ANCORAGEM cluster→driver (dono 09/08/2026, "roteirizar sobras
+            # embaralhou tudo"): o vínculo era pelo ÍNDICE da lista (ordem
+            # alfabética!) — redistribuir sobras jogava cada bolsão pra um
+            # motorista aleatório em relação à zona dele. Agora: cluster vai
+            # pro driver cujas paradas JÁ ATRIBUÍDAS estão mais perto
+            # (matching guloso por distância); driver sem parada pega os
+            # clusters que sobrarem.
+            cent_cluster = {}
             for i, p in enumerate(com_coords):
-                cluster_id = clusters[i]
-                if cluster_id < len(drivers):
-                    distribuidos[drivers[cluster_id]['id']].append(p)
+                cent_cluster.setdefault(clusters[i], []).append(
+                    (p['lat'], p['lng']))
+            for cid, mem in cent_cluster.items():
+                cent_cluster[cid] = (sum(x for x, _ in mem) / len(mem),
+                                     sum(y for _, y in mem) / len(mem))
+            ancoras = {}
+            ends_pre = {did: [p.get('endereco') or '' for _, p in lst]
+                        for did, lst in pre_atribuidos.items()}
+            todos_ends = [e for ends in ends_pre.values() for e in ends if e]
+            coords_pre = (google_maps.geocode_em_lote(todos_ends)
+                          if todos_ends else {})
+            for did, ends in ends_pre.items():
+                pts_d = [coords_pre.get(e) for e in ends]
+                pts_d = [c for c in pts_d if c]
+                if pts_d:
+                    ancoras[did] = (sum(x for x, _ in pts_d) / len(pts_d),
+                                    sum(y for _, y in pts_d) / len(pts_d))
+            pares = sorted(
+                (_haversine(ancoras[d['id']], cent_cluster[cid]), d['id'], cid)
+                for d in drivers if d['id'] in ancoras
+                for cid in cent_cluster)
+            dono_cluster = {}
+            driver_com_cluster = set()
+            for _, did, cid in pares:
+                if cid in dono_cluster or did in driver_com_cluster:
+                    continue
+                dono_cluster[cid] = did
+                driver_com_cluster.add(did)
+            livres = iter(d['id'] for d in drivers
+                          if d['id'] not in driver_com_cluster)
+            for cid in sorted(cent_cluster):
+                if cid not in dono_cluster:
+                    did = next(livres, None)
+                    if did is None:
+                        did = drivers[cid % len(drivers)]['id']
+                    dono_cluster[cid] = did
+            for i, p in enumerate(com_coords):
+                did = dono_cluster.get(clusters[i])
+                if did is not None:
+                    distribuidos[did].append(p)
     elif nao_atribuidos:
         # Fallback: ordenar por CEP, dividir em chunks
         com_cep = []
