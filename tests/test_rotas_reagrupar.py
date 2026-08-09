@@ -140,6 +140,31 @@ def test_leve_e_reotimizar_incluem_os_atribuidos(app, admin_user):
         assert achado == [(d1.id, 'MP1')], flag   # com o driver salvo
 
 
+def test_reotimizar_com_codes_restringe_o_pool(app, admin_user):
+    """Re-otimizar da SELEÇÃO (09/08/2026, dono: "selecionei os 11 e nao
+    apareceu re-otimizar"): `codes=` restringe o pool aos codes mandados —
+    o pedido SEM driver do dia NÃO é varrido pra dentro da rota."""
+    d1 = Driver(nome='D Sel', ativo=True, token='tok-sel-1', capacidade=99)
+    lote = LoteSaida(nome='L3', data_entrega=hoje())
+    db.session.add_all([d1, lote])
+    _pedido_online('SEL1')
+    _pedido_online('SEMDRV')            # do dia, mas sem atribuição nenhuma
+    db.session.flush()
+    db.session.add(AtribuicaoEntrega(pedido_code='SEL1', driver_id=d1.id,
+                                     lote_id=lote.id, data_entrega=hoje(),
+                                     ordem=1, status='pendente'))
+    db.session.commit()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    base = f'/entregas/api/rotas?data={hoje().isoformat()}'
+    r = client.get(f'{base}&drivers={d1.id}&reotimizar=1&codes=SEL1')
+    codes = [p['code'] for rt in r.get_json()['rotas']
+             for p in rt['paradas']]
+    assert 'SEL1' in codes
+    assert 'SEMDRV' not in codes        # sem-driver ficou fora do escopo
+
+
 def test_balancear_clusters_nivela_o_tamanho():
     """14 paradas pra um e 1 pro outro (mapa do Dia dos Pais): o cluster
     cheio repassa a parada mais proxima de quem tem folga; teto justo."""
