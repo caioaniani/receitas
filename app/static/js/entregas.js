@@ -891,7 +891,9 @@
         sc.innerHTML = '';
 
         var url = '/entregas/api/rotas?data=' + encodeURIComponent(data) +
-                  janelas.map(function(j) { return '&janela=' + encodeURIComponent(j); }).join('');
+                  janelas.map(function(j) { return '&janela=' + encodeURIComponent(j); }).join('') +
+                  (rotasDriversSel && rotasDriversSel.length
+                      ? '&drivers=' + rotasDriversSel.join(',') : '');
 
         fetch(url, {credentials: 'same-origin'})
             .then(function(r) {
