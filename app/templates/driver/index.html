@@ -414,8 +414,17 @@
             // abre a câmera pra foto da entrega de verdade.
             if (!(pedidoAtual.fotos && pedidoAtual.fotos.length)
                     || pedidoAtual.precisa_foto_nova) {
+                if (!fInput) {
+                    // 3 fotos, todas de ANTES do pulo: o campo de câmera
+                    // nem renderiza (cap 3) — sem este aviso o botão
+                    // morreria em silêncio (achado de revisão).
+                    alert('As fotos deste pedido são de antes do pulo e não '
+                          + 'valem como comprovante da entrega. Apague uma '
+                          + 'no × e tire a foto da entrega.');
+                    return;
+                }
                 marcarAposFoto = true;
-                if (fInput) fInput.click();
+                fInput.click();
                 return;
             }
             marcarStatus('entregue', null);
