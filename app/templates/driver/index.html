@@ -394,7 +394,15 @@
         // Handlers dentro do modal
         var fInput = document.getElementById('foto-input');
         var btnFoto = document.getElementById('btn-tirar-foto');
-        if (btnFoto) btnFoto.addEventListener('click', function() { fInput.click(); });
+        if (btnFoto) btnFoto.addEventListener('click', function() {
+            // "Tirar foto" avulso mata intenção pendurada de entregar/pular
+            // (achado de revisão: cancelar a câmera nem sempre dispara o
+            // 'change' que reseta os flags — sem isso, a foto avulsa
+            // executaria o pulo/entrega antiga sem confirmação).
+            marcarAposFoto = false;
+            pularAposFoto = false;
+            fInput.click();
+        });
         if (fInput) fInput.addEventListener('change', subirFoto);
 
         document.getElementById('btn-entregue').addEventListener('click', function() {
