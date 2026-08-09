@@ -352,6 +352,8 @@ def api_status(token):
         _recompute_lote_status(a.lote_id)
 
     db.session.commit()
+    if novo_status in ('entregue', 'nao_entregue'):
+        _auto_iniciar_rota(driver, a)
     return jsonify(ok=True, status=a.status, proof_hash=a.proof_hash)
 
 
