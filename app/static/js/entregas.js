@@ -3067,8 +3067,6 @@
                 apiSalvarLote(items, 'Re-otimizar ' + rotulo + ' (' + items.length + ')').then(function() {
                     msg.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle"></i> ' + items.length + ' parada(s) re-otimizada(s).</div>';
                     opTeveEdicaoManual = false;
-                    var btnReot = document.getElementById('op-reotimizar');
-                    if (btnReot) btnReot.style.display = 'none';
                     opCarregar();
                 });
             })
