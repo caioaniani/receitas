@@ -106,3 +106,49 @@ def test_reagrupar_devolve_pendente_pro_pool(app, admin_user):
               for p in rt['paradas']]
     assert 'RG1' in codes2
     assert 'RG2' not in codes2
+
+
+def test_leve_e_reotimizar_incluem_os_atribuidos(app, admin_user):
+    """Madrugada do Dia dos Pais: com o dia TODO distribuido em lote, o
+    /api/rotas vinha VAZIO (exclusao de 05/2026, feita pro fluxo de
+    distribuir) — mapa sem pinos e "Nada a re-otimizar". `leve=1` (mapa) e
+    `reotimizar=1` (botao) incluem os atribuidos com driver+ordem salvos."""
+    d1 = Driver(nome='D Mapa', ativo=True, token='tok-mp-1', capacidade=99)
+    lote = LoteSaida(nome='L2', data_entrega=hoje())
+    db.session.add_all([d1, lote])
+    _pedido_online('MP1')
+    db.session.flush()
+    db.session.add(AtribuicaoEntrega(pedido_code='MP1', driver_id=d1.id,
+                                     lote_id=lote.id, data_entrega=hoje(),
+                                     ordem=7, status='pendente'))
+    db.session.commit()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    base = f'/entregas/api/rotas?data={hoje().isoformat()}'
+
+    # Sem flag: excluido (contrato de 05/2026 preservado pro distribuir)
+    r0 = client.get(base)
+    assert all(p['code'] != 'MP1' for rt in r0.get_json()['rotas']
+               for p in rt['paradas'])
+
+    for flag in ('leve=1', 'reotimizar=1'):
+        r = client.get(f'{base}&{flag}')
+        achado = [(rt['driver']['id'], p['code'])
+                  for rt in r.get_json()['rotas']
+                  for p in rt['paradas'] if p['code'] == 'MP1']
+        assert achado == [(d1.id, 'MP1')], flag   # com o driver salvo
+
+
+def test_balancear_clusters_nivela_o_tamanho():
+    """14 paradas pra um e 1 pro outro (mapa do Dia dos Pais): o cluster
+    cheio repassa a parada mais proxima de quem tem folga; teto justo."""
+    from app.services.rotas import _balancear_clusters
+    # 6 pontos juntos no "centro" + 1 isolado longe; 2 clusters.
+    pts = [(0.0, 0.0), (0.0, 0.01), (0.01, 0.0), (0.01, 0.01),
+           (0.02, 0.0), (0.02, 0.01), (2.0, 2.0)]
+    clusters = [0, 0, 0, 0, 0, 0, 1]        # 6 x 1
+    out = _balancear_clusters(pts, list(clusters), 2)
+    sizes = [out.count(0), out.count(1)]
+    assert max(sizes) <= 4                  # ceil(7/2) = 4: nivelado
+    assert out[6] == 1                      # o isolado fica onde esta
