@@ -152,3 +152,18 @@ def test_balancear_clusters_nivela_o_tamanho():
     sizes = [out.count(0), out.count(1)]
     assert max(sizes) <= 4                  # ceil(7/2) = 4: nivelado
     assert out[6] == 1                      # o isolado fica onde esta
+
+
+def test_polir_desfaz_o_grupo_lixao():
+    """"O algoritmo ferra com o amarelo": pontas soltas de regioes opostas
+    caiam no MESMO cluster (o coletor). O polimento troca pares ate cada
+    ponto ficar com o grupo da SUA regiao — sem mudar os tamanhos."""
+    from app.services.rotas import _polir_clusters
+    # Blob A em ~(0,0), blob B em ~(1,1); um ponto de cada preso no grupo
+    # errado (o padrao do lixao).
+    pts = [(0.0, 0.0), (0.0, 0.01), (0.01, 0.0), (1.0, 1.01),
+           (1.0, 1.0), (1.01, 1.0), (1.01, 1.01), (0.01, 0.01)]
+    clusters = [0, 0, 0, 0, 1, 1, 1, 1]      # pts[3] e pts[7] trocados
+    out = _polir_clusters(pts, list(clusters), 2)
+    assert out[3] == 1 and out[7] == 0       # cada um voltou pra sua regiao
+    assert sorted([out.count(0), out.count(1)]) == [4, 4]   # tamanhos iguais
