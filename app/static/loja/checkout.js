@@ -272,7 +272,48 @@
       else freteAtual = null;
       popularJanelas(modo);
       atualizarTotais();
+      conferirEndereco();
     }
+
+    // ── Conferência do endereço (dono 09/08/2026, pós-Dia dos Pais:
+    // número/complemento errados em massa). Resumo VIVO acima do Concluir,
+    // com número e complemento em destaque; só nos modos de ENTREGA. O
+    // campo número aceita SÓ DÍGITOS (máscara + servidor valida igual). ──
+    function esconderTexto(s) {
+      return String(s || '').replace(/[&<>"']/g, function (c) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+      });
+    }
+    function conferirEndereco() {
+      var box = document.getElementById('confere-endereco');
+      if (!box) return;
+      var modo = modoSelecionado();
+      var v = function (id) {
+        var el = form.querySelector('#' + id) || form.querySelector('[name="' + id + '"]');
+        return el ? el.value.trim() : '';
+      };
+      var rua = v('logradouro'), num = v('numero'), comp = v('complemento');
+      var bairro = v('bairro'), cidade = v('cidade');
+      if (modo === 'retirada' || !rua || !num) { box.hidden = true; return; }
+      var txt = esconderTexto(rua) + ', <strong>' + esconderTexto(num) + '</strong>';
+      if (comp) txt += ', <strong>' + esconderTexto(comp) + '</strong>';
+      if (bairro) txt += ' — ' + esconderTexto(bairro);
+      if (cidade) txt += ', ' + esconderTexto(cidade);
+      document.getElementById('confere-endereco-texto').innerHTML = txt;
+      box.hidden = false;
+    }
+    var numeroEl = document.getElementById('numero');
+    if (numeroEl) numeroEl.addEventListener('input', function () {
+      var so = this.value.replace(/\D/g, '');
+      if (so !== this.value) this.value = so;   // só reatribui se mudou (cursor)
+    });
+    ['logradouro', 'numero', 'bairro', 'cidade'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', conferirEndereco);
+    });
+    var compEl = form.querySelector('[name="complemento"]');
+    if (compEl) compEl.addEventListener('input', conferirEndereco);
+    conferirEndereco();
 
     // Toggle "é um presente" (mostra campos do destinatário)
     var chkPresente = document.getElementById('e_presente');
