@@ -1409,6 +1409,34 @@ def listar_drivers():
     ])
 
 
+# Paleta de cores dos motoristas (dono 09/08/2026: "as cores nao podem ser
+# repetidas" — cor igual em dois drivers confunde mapa e cards da rota).
+# 18 tons distintos e legiveis sobre fundo branco (chips e pinos do Leaflet).
+PALETA_DRIVERS = [
+    '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#42d4f4',
+    '#f032e6', '#469990', '#9a6324', '#800000', '#808000', '#000075',
+    '#e91e63', '#00a86b', '#ff8c00', '#6a5acd', '#2f4f4f', '#b8860b',
+]
+
+
+def cor_driver_livre(usadas):
+    """Primeira cor da paleta ainda não usada. `usadas` = set de hex em
+    minúsculas. Paleta esgotada (>18 drivers): gera um tom espalhado pelo
+    círculo de matiz (ângulo áureo) — nunca devolve repetida."""
+    for c in PALETA_DRIVERS:
+        if c.lower() not in usadas:
+            return c
+    import colorsys
+    i = len(usadas)
+    while True:
+        h = (i * 0.618033988749895) % 1.0
+        r, g, b = colorsys.hsv_to_rgb(h, 0.75, 0.80)
+        c = '#%02x%02x%02x' % (int(r * 255), int(g * 255), int(b * 255))
+        if c not in usadas:
+            return c
+        i += 1
+
+
 @entregas_bp.route('/api/drivers', methods=['POST'])
 @login_required
 @entrega_access_required
@@ -1424,9 +1452,16 @@ def criar_driver():
         cap = int(data.get('capacidade') or 999)
     except (TypeError, ValueError):
         cap = 999
+    cor = (data.get('cor') or '').strip()
+    if not cor:
+        # Sem cor escolhida: pega uma LIVRE da paleta — driver novo nunca
+        # nasce com a cor de outro (nem com o cinza genérico de antes).
+        usadas = {(d.cor or '').strip().lower()
+                  for d in Driver.query.all() if (d.cor or '').strip()}
+        cor = cor_driver_livre(usadas)
     d = Driver(
         nome=nome,
-        cor=(data.get('cor') or '').strip() or None,
+        cor=cor,
         telefone=(data.get('telefone') or '').strip() or None,
         ativo=True,
         token=secrets.token_urlsafe(16),
