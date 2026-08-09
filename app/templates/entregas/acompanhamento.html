@@ -105,7 +105,7 @@
   var ultimo = null;
   function norm(s) {
     return String(s || '').normalize('NFD')
-      .replace(/[̀-ͯ]/g, '').toLowerCase();
+      .replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
   function renderBusca() {
     var box = document.getElementById('aviv-busca-res');
