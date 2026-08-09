@@ -124,7 +124,8 @@
     (ultimo.linhas || []).forEach(function (l) {
       l.paradas.forEach(function (p) {
         var alvo = norm((p.code || '') + ' ' + (p.quem || '') + ' ' +
-                        (p.comprador || '') + ' ' + (p.endereco || ''));
+                        (p.comprador || '') + ' ' + (p.telefone || '') + ' ' +
+                        (p.endereco || ''));
         if (alvo.indexOf(q) !== -1) achados.push({l: l, p: p});
       });
     });
