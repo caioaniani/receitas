@@ -123,13 +123,19 @@
         html += '</div>';
         if (r.fase === 'a_caminho') {
           if (r.parada) {
-            // Sem previsão de horário (dono 08/08/2026) — só a posição na
-            // rota; ela avança sozinha a cada entrega feita à frente.
-            html += '<p><strong>🚚 A caminho com ' + esc(r.driver) + '.</strong><br>' +
-              'Você é a ' + esc(r.parada) + 'ª parada da rota' +
-              (r.faltam > 0
-                ? ' — ' + esc(r.faltam) + ' entrega' + (r.faltam > 1 ? 's' : '') + ' antes da sua'
-                : ' — <strong>você é a próxima!</strong>') + '.</p>';
+            // Sem previsão de horário (dono 08/08/2026) — só a posição.
+            // 09/08: mostra também ONDE o motorista está (motorista_em =
+            // primeira parada pendente), que avança a cada entrega.
+            var pos = 'Você é a ' + esc(r.parada) + 'ª parada da rota';
+            if (r.faltam > 0) {
+              pos += r.motorista_em
+                ? ' — o motorista está na parada ' + esc(r.motorista_em) +
+                  ', ' + esc(r.faltam) + ' entrega' + (r.faltam > 1 ? 's' : '') + ' antes da sua'
+                : ' — ' + esc(r.faltam) + ' entrega' + (r.faltam > 1 ? 's' : '') + ' antes da sua';
+            } else {
+              pos += ' — <strong>o motorista está a caminho do seu endereço, você é a próxima entrega!</strong>';
+            }
+            html += '<p><strong>🚚 A caminho com ' + esc(r.driver) + '.</strong><br>' + pos + '.</p>';
           } else {
             // Entrega marcada por fora da rota (express/equipe): sem
             // parada pra prometer — só o essencial.
