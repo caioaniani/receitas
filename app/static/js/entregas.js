@@ -970,9 +970,11 @@
     function gerarLinksMaps(matriz, paradas) {
         if (!paradas || !paradas.length) return [];
         var links = [];
-        // Cada chunk: ate MAPS_MAX_PARADAS+1 paradas (matriz + 9 waypoints + destino seria 11, mas Google
-        // parece aceitar 10 efetivos. Vou cortar em 10 paradas por link, ultima vira destination, resto waypoints).
-        var chunkSize = 10;
+        // Google Maps aceita 10 PONTOS no total (origem inclusa). Com a
+        // matriz na frente cabem so 9 paradas por link — bloco de 10
+        // derrubava a ultima (testado pelo dono na rota de 11 paradas do
+        // Dia dos Pais: o certo e 1-9 e 10-11).
+        var chunkSize = matriz ? 9 : 10;
         for (var i = 0; i < paradas.length; i += chunkSize) {
             var chunk = paradas.slice(i, i + chunkSize);
             var origem = matriz || chunk[0].endereco;
