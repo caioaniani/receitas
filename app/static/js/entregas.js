@@ -3138,6 +3138,8 @@
             if (!opMapaVisivel) document.getElementById('op-mapa').style.display = 'none';
             opCarregar();
         });
+        var btnLasso = document.getElementById('op-mapa-lasso');
+        if (btnLasso) btnLasso.addEventListener('click', opLassoArmar);
         if (inpData) inpData.addEventListener('change', function() { opJanelaFiltro.clear(); opCarregar(); });
 
         if (contJan) contJan.addEventListener('change', function(e) {
