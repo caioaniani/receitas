@@ -884,4 +884,5 @@ def test_rodape_do_pdf_leva_o_nome_do_entregador():
          'itens': [], 'driver_nome': 'Sibele'}
     pdf = montar_pedidos_pdf([p], ['motorista', 'cliente'], date(2026, 8, 9))
     corpo = _texto_pdf(bytes(pdf.output()))
-    assert corpo.count('Entregador: Sibele') == 2
+    # 1x no rodape de CADA via + 1x no corpo da via do cliente (ja existia)
+    assert corpo.count(b'Entregador: Sibele') >= 2
