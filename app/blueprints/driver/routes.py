@@ -31,6 +31,31 @@ from app.utils import agora
 from app.utils import hoje as hoje_brt
 
 
+def _auto_iniciar_rota(driver, atrib):
+    """Cinto de segurança (dono 09/08/2026, manhã do Dia dos Pais: "se o
+    motorista esquecer de iniciar a rota, quando ele entregar um endereço
+    qualquer acionar iniciar rota"): a primeira baixa (entregue/não-entregue/
+    pulado) aciona o marco RotaInicio sozinha — liga o rastreio dos clientes
+    e dispara os e-mails "saiu para entrega". Preserva as regras do botão:
+    só no PRÓPRIO dia (a proteção de véspera continua — quem baixou entrega
+    está na rua) e idempotente (marco existente = no-op barato). BEST-EFFORT:
+    roda DEPOIS do commit da baixa e nunca a desfaz; e o pedido recém-baixado
+    já não está 'pendente', então não recebe "saiu para entrega" atrasado."""
+    try:
+        dia = atrib.data_entrega
+        if dia != hoje_brt():
+            return
+        from app.models import RotaInicio
+        if RotaInicio.query.filter_by(driver_id=driver.id,
+                                      data=dia).first() is not None:
+            return
+        from app.services import rastreio_entrega
+        rastreio_entrega.iniciar_rota(driver, dia)
+    except Exception:  # noqa: BLE001 — marco/e-mail nunca derruba a baixa
+        current_app.logger.exception(
+            'driver: auto-iniciar rota falhou (driver %s)', driver.id)
+
+
 def _gerar_token():
     return secrets.token_urlsafe(16)
 
