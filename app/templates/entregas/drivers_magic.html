@@ -59,6 +59,13 @@
               {% endif %}
             </td>
             <td class="text-end" style="min-width:280px;">
+              {% set codes = codes_por_driver.get(d.id) %}
+              {% if codes %}
+              <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
+                 href="{{ url_for('entregas.imprimir', codes=codes|join(','), data=data_hoje, vias='motorista,cliente') }}"
+                 title="Abre a folha de impressão dos pedidos de hoje deste motorista (via do entregador + via do cliente).">
+                🖨 Imprimir ({{ codes|length }})</a>
+              {% endif %}
               {% if d.token or r.ativo %}
               <button type="button" class="btn btn-sm btn-outline-success btn-copiar-magic"
                       data-link="{{ link }}">📋 Copiar link</button>
