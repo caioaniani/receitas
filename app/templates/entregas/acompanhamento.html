@@ -131,7 +131,11 @@
     achados.slice(0, 20).forEach(function (a) {
       var p = a.p, l = a.l;
       var st = p.status === 'entregue'
-          ? '<span class="badge bg-success">✓ entregue' + (p.hora ? ' às ' + esc(p.hora) : '') + '</span>'
+          ? (p.proof
+              ? '<a class="badge bg-success" style="text-decoration:none;" href="/entrega/' +
+                encodeURIComponent(p.proof) + '" target="_blank" rel="noopener" ' +
+                'title="Ver comprovante de entrega">✓ entregue' + (p.hora ? ' às ' + esc(p.hora) : '') + ' 📷</a>'
+              : '<span class="badge bg-success">✓ entregue' + (p.hora ? ' às ' + esc(p.hora) : '') + '</span>')
           : (p.status === 'nao_entregue'
               ? '<span class="badge bg-danger">imprevisto</span>'
               : (p.pulado
