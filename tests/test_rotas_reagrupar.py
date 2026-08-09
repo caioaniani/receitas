@@ -165,6 +165,35 @@ def test_reotimizar_com_codes_restringe_o_pool(app, admin_user):
     assert 'SEMDRV' not in codes        # sem-driver ficou fora do escopo
 
 
+def test_leve_e_reotimizar_nunca_alocam_sem_driver(app, admin_user):
+    """09/08/2026 (dono: "ele fica alocando sozinho as rotas... eu tirei
+    essas 3 e se eu atualizar a pagina ela volta para eles"): nos modos
+    leve (mapa) e reotimizar, pedido SEM driver NAO entra no pool do
+    clustering — sai na chave `sem_driver` (pino cinza) e nenhuma rota o
+    carrega. Sem isso o mapa pintava o pedido com a cor de um motorista e
+    o re-otimizar SALVAVA a alocacao fantasma."""
+    d1 = Driver(nome='D Fant', ativo=True, token='tok-fant-1', capacidade=99)
+    lote = LoteSaida(nome='L4', data_entrega=hoje())
+    db.session.add_all([d1, lote])
+    _pedido_online('COMDRV')
+    _pedido_online('TIRADO')            # dono tirou: sem atribuição nenhuma
+    db.session.flush()
+    db.session.add(AtribuicaoEntrega(pedido_code='COMDRV', driver_id=d1.id,
+                                     lote_id=lote.id, data_entrega=hoje(),
+                                     ordem=1, status='pendente'))
+    db.session.commit()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    base = f'/entregas/api/rotas?data={hoje().isoformat()}'
+    for flag in ('leve=1', 'reotimizar=1'):
+        j = client.get(f'{base}&drivers={d1.id}&{flag}').get_json()
+        codes = [p['code'] for rt in j['rotas'] for p in rt['paradas']]
+        assert 'COMDRV' in codes, flag
+        assert 'TIRADO' not in codes, flag          # nunca alocado sozinho
+        assert 'TIRADO' in [p['code'] for p in j['sem_driver']], flag
+
+
 def test_balancear_clusters_nivela_o_tamanho():
     """14 paradas pra um e 1 pro outro (mapa do Dia dos Pais): o cluster
     cheio repassa a parada mais proxima de quem tem folga; teto justo."""
