@@ -232,17 +232,19 @@ def _template_confirmacao(pedido, base):
     # Conferência do endereço (dono 09/08/2026, pós-Dia dos Pais: número/
     # complemento errados em massa): o e-mail é a segunda chance de o
     # cliente pegar o erro, ANTES de a rota ser montada. Só entrega.
-    # Canal do aviso = SÓ WhatsApp (dono 09/08/2026: "ninguém lê esse
-    # e-mail, é o noreply") — mesmo número do rodapé do site.
+    # Conferência do endereço (dono 09/08/2026, pós-Dia dos Pais). Canal =
+    # SÓ WhatsApp ("ninguém lê esse e-mail, é o noreply") e tom LEVE — a
+    # 1ª versão com ⚠️/"algo errado?" soava como problema no pagamento
+    # (feedback do dono no mesmo dia). É um lembrete simpático, não alarme.
     aviso_endereco = ''
     if pedido.modo_entrega != 'retirada':
         aviso_endereco = (
-            '<br><span style="font-size:13px;color:#8a6d3b;">⚠️ Confira o '
-            '<strong>número</strong> e o <strong>complemento</strong> do '
-            'endereço acima. Algo errado? Chame no WhatsApp '
+            '<br><span style="font-size:13px;color:#8a6d3b;">Vamos entregar '
+            'exatamente no endereço acima — dá uma conferida no '
+            '<strong>número</strong> e no <strong>complemento</strong>? '
+            'Se precisar ajustar algo, é só chamar no WhatsApp '
             '<a href="https://wa.me/5511971097090" style="color:#8b5a2b;">'
-            '(11) 97109-7090</a> <strong>antes do dia da entrega</strong>.'
-            '</span>')
+            '(11) 97109-7090</a> antes do dia da entrega. 😊</span>')
     return f"""\
 <!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
 font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
