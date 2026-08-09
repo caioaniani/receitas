@@ -761,7 +761,10 @@ def _consultar_pedido_online(code, telefone_contato, cpf_cliente):
                             'Pergunta sobre ENTREGA: mande o '
                             'link_acompanhamento (a página atualiza sozinha) '
                             'e, se rastreio.fase=a_caminho com parada, diga '
-                            'a posição na rota. NUNCA prometa horário.'),
+                            'a posição na rota: "você é a <parada>ª parada; '
+                            'o motorista está na parada <motorista_em>, '
+                            'faltam <faltam> antes da sua". '
+                            'NUNCA prometa horário.'),
     }
 
 
