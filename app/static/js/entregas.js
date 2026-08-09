@@ -3289,6 +3289,8 @@
             document.querySelectorAll('.op-check, .op-check-secao').forEach(function(cb) { cb.checked = false; });
             opAtualizarBulkBar();
         });
+        var bulkReot = document.getElementById('op-bulk-reotimizar');
+        if (bulkReot) bulkReot.addEventListener('click', opReotimizarSelecao);
 
         // Busca por cliente/code
         var busca = document.getElementById('op-busca');
