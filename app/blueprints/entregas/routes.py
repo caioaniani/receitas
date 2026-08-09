@@ -2292,6 +2292,7 @@ def api_acompanhamento():
             'code': a.pedido_code,
             'quem': pi.get('quem') or a.pedido_code,
             'comprador': pi.get('comprador') or '',
+            'telefone': pi.get('telefone') or '',
             'endereco': pi.get('endereco') or '',
             'proof': a.proof_hash,
             'hora': (a.entregue_em.strftime('%H:%M')
