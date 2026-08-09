@@ -2767,11 +2767,13 @@
             }).addTo(opMapaLayers).bindPopup('<b>Loja matriz</b>');
             bounds.push([d.origem.lat, d.origem.lng]);
         }
+        opMapaPins = [];        // registro code→coords pra seleção por área
         (d.rotas || []).forEach(function(r, i) {
             var cor = (r.driver && r.driver.cor) || ROTA_CORES[i % ROTA_CORES.length];
             (r.paradas || []).forEach(function(p) {
                 if (p.lat == null || p.lng == null) return;
                 if (!opPassaLoteParada(p)) return;
+                opMapaPins.push({code: p.code, lat: p.lat, lng: p.lng});
                 bounds.push([p.lat, p.lng]);
                 L.marker([p.lat, p.lng], {
                     icon: L.divIcon({
