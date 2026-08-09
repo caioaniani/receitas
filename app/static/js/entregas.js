@@ -869,6 +869,16 @@
         return div.innerHTML;
     }
 
+    // Link "abrir o pedido" do card (09/08/2026, dono: link do 6296BF71 dava
+    // 404): pedido do SITE abre o detalhe admin AQUI no gestão; o admin do
+    // VNDA (padariaartesanalonline.com.br/admin) morreu com a plataforma.
+    function linkAdminPedido(p) {
+        if (p && p.pedido_online) {
+            return '/admin/loja-online/pedidos/' + encodeURIComponent(p.code);
+        }
+        return 'https://www.padariaartesanalonline.com.br/admin/pedido?id=' + encodeURIComponent(p.code);
+    }
+
     function formatMoney(val) {
         if (!val && val !== 0) return '0,00';
         return Number(val).toFixed(2).replace('.', ',');
