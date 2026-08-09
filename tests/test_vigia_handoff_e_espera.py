@@ -253,3 +253,48 @@ def test_dm_real_do_instagram_continua_alertando(app):
             chatbot_vigia.alertar_clientes_esperando_humano()
         assert tx.called
         assert 'esperando ATENDENTE' in tx.call_args[0][1]
+
+
+def test_espera_humano_manda_contencao_ao_cliente(app):
+    """Dono 09/08/2026 (12 clientes no vácuo 10-14min no Dia dos Pais):
+    junto do alerta ao dono, o CLIENTE recebe 1 mensagem de contenção na
+    conversa ("a equipe já te responde"). Dedupe herdado do alerta;
+    ESPERA_HUMANO_CONTENCAO=0 desliga."""
+    import os
+
+    from app.services import chatbot_vigia
+    base = {'id': 320, 'nome_contato': 'Bia', 'minutos_paradas': 15}
+    hist = [{'role': 'user', 'content': 'Vocês têm cesta de café?'}]
+    with app.app_context(), \
+         patch('app.services.chatbot_vigia._numero_destino',
+               return_value='5511999990000'), \
+         patch('app.services.chatwoot.listar_conversas_paradas',
+               return_value=[base]), \
+         patch('app.services.chatwoot.buscar_historico', return_value=hist), \
+         patch('app.services.chatwoot.enviar_mensagem',
+               return_value={'ok': True}) as contem, \
+         patch('app.services.zapi.enviar_texto', return_value={'ok': True}):
+        chatbot_vigia.alertar_clientes_esperando_humano()
+    contem.assert_called_once()
+    assert contem.call_args[0][0] == 320
+    assert 'já vai te responder' in contem.call_args[0][1]
+
+    # Kill-switch desliga só a contenção (alerta ao dono segue).
+    base2 = {'id': 321, 'nome_contato': 'Cau', 'minutos_paradas': 15}
+    os.environ['ESPERA_HUMANO_CONTENCAO'] = '0'
+    try:
+        with app.app_context(), \
+             patch('app.services.chatbot_vigia._numero_destino',
+                   return_value='5511999990000'), \
+             patch('app.services.chatwoot.listar_conversas_paradas',
+                   return_value=[base2]), \
+             patch('app.services.chatwoot.buscar_historico',
+                   return_value=hist), \
+             patch('app.services.chatwoot.enviar_mensagem') as contem2, \
+             patch('app.services.zapi.enviar_texto',
+                   return_value={'ok': True}) as alerta:
+            chatbot_vigia.alertar_clientes_esperando_humano()
+        contem2.assert_not_called()
+        alerta.assert_called_once()
+    finally:
+        os.environ.pop('ESPERA_HUMANO_CONTENCAO', None)
