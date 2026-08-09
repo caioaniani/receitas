@@ -152,20 +152,31 @@ def status_do_pedido(codigo):
             return {'fase': 'em_preparo'}
         rota = _rota_do_driver(atrib.driver_id, atrib.data_entrega)
         # SEM previsão de horário (dono 08/08/2026: "não precisa estimar o
-        # tempo de entrega, talvez somente a posição") — o cliente vê só a
-        # POSIÇÃO na rota. A posição avança sozinha: cada entrega feita à
-        # frente sai de 'pendente' e o `faltam` cai no próximo poll.
+        # tempo de entrega, talvez somente a posição"). Em 09/08 (dia real)
+        # o dono pediu a posição ATUAL do motorista junto ("fica mais fácil
+        # de compreender"): `parada` virou a posição FIXA do cliente na rota
+        # completa (não renumera a cada entrega) e `motorista_em` é a
+        # primeira parada ainda pendente — avança sozinha a cada entregue/
+        # não-entregue à frente; `faltam` segue caindo junto.
         pendentes_antes = sum(
             1 for a in rota
             if (a.status or 'pendente') == 'pendente'
             and (a.ordem or 0, a.id) < (atrib.ordem or 0, atrib.id))
+        pos_por_id = {a.id: i + 1 for i, a in enumerate(rota)}
+        minha_pos = pos_por_id.get(atrib.id, pendentes_antes + 1)
+        motorista_em = minha_pos
+        for a in rota:
+            if (a.status or 'pendente') == 'pendente':
+                motorista_em = pos_por_id[a.id]
+                break
         # AtribuicaoEntrega NAO tem relationship com Driver — lookup por id.
         from app.models import Driver
         drv = db.session.get(Driver, atrib.driver_id)
         nome = drv.nome if drv else 'nosso motorista'
         return {'fase': 'a_caminho',
                 'driver': nome,
-                'parada': pendentes_antes + 1,
+                'parada': minha_pos,
+                'motorista_em': motorista_em,
                 'faltam': pendentes_antes}
     except Exception:  # noqa: BLE001
         logger.exception('rastreio: status falhou (%s)', codigo)
