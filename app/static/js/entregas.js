@@ -2242,8 +2242,20 @@
             opMontarBulkSelect(d);
             opAtualizarResumo(d);
             opRenderLista(d, container);
-            opUltimoRotas = dRotas;
-            if (opMapaVisivel && dRotas) opRenderMapa(dRotas);
+            if (dRotas && dRotas.__falhou) {
+                // Mapa falhou/estourou o tempo: mantém o último mapa bom em
+                // tela (se houver) e avisa discreto — a lista segue viva.
+                var mapaBox = document.getElementById('op-mapa');
+                if (mapaBox && !opUltimoRotas) {
+                    msg.innerHTML += '<div class="alert alert-warning py-2 small">' +
+                        '<i class="bi bi-map"></i> O mapa demorou demais pra ' +
+                        'calcular e não veio desta vez — a lista está ' +
+                        'completa; recarregue pra tentar o mapa de novo.</div>';
+                }
+            } else {
+                opUltimoRotas = dRotas;
+                if (opMapaVisivel && dRotas) opRenderMapa(dRotas);
+            }
         }).catch(function(e) {
             // Falha de rede ou timeout — retenta com backoff
             loading.classList.add('d-none');
