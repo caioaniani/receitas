@@ -286,7 +286,7 @@
 
     <div class="footer">
       <span>O Pão Padaria Artesanal</span>
-      <span>Pedido {{ p.code }} · {% if motorista %}entregador{% else %}cliente{% endif %}</span>
+      <span style="text-align:right;">Pedido {{ p.code }} · {% if motorista %}entregador{% else %}cliente{% endif %}{% if p.driver_nome %}<br>Entregador: {{ p.driver_nome }}{% endif %}</span>
     </div>
   </div>
   {% endfor %}
