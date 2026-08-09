@@ -398,6 +398,12 @@ def api_pular(token):
                  .scalar()) or 0
     a.ordem = max_ordem + 1
     a.pulado_em = agora()
+    # Comprovante da VISITA (dono 09/08/2026): o pulado também ganha a
+    # página pública /entrega/<hash> — mostra a foto da portaria e avisa
+    # que o entregador volta. Se depois virar entregue, o MESMO link vira
+    # o comprovante de entrega.
+    if not a.proof_hash:
+        a.proof_hash = _gerar_proof_hash()
     nota = (body.get('nota') or '').strip()
     if nota:
         a.nota = nota[:500]
