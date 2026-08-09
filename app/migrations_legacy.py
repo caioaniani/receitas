@@ -374,6 +374,41 @@ def _seed_drivers_entrega(app):
             pass
 
 
+def _seed_cores_drivers(app):
+    """Dá cor ÚNICA a cada motorista (dono 09/08/2026, manhã do Dia dos
+    Pais: "Preciso que as cores nao sejam repetidas"). UMA vez, marcado em
+    AppConfig: cor já distinta fica como está (primeiro dono da cor mantém);
+    NULL/vazia/repetida ganha a próxima cor livre da paleta
+    (`entregas.routes.PALETA_DRIVERS` — a mesma que o cadastro novo usa).
+    Depois disso a tela de Drivers manda. Best-effort."""
+    try:
+        from app.blueprints.entregas.routes import cor_driver_livre
+        from app.models import AppConfig, Driver
+        chave = 'seed_cores_drivers_2026_08'
+        if AppConfig.get(chave):
+            return
+        usadas = set()
+        trocados = 0
+        for d in Driver.query.order_by(Driver.id).all():
+            c = (d.cor or '').strip().lower()
+            if c and c not in usadas:
+                usadas.add(c)
+                continue
+            nova = cor_driver_livre(usadas)
+            d.cor = nova
+            usadas.add(nova.lower())
+            trocados += 1
+        AppConfig.set(chave, f'trocados={trocados}')
+        db.session.commit()
+        logger.info('seed cores drivers: %d cor(es) atribuida(s)', trocados)
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed cores drivers): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _migrate_estoque_trava(app):
     """Estoque por produto: consolida duplicatas legadas e cria a trava de
     unicidade. Estado vive so no PEDIDO; o estoque (loja e industria) eh 1 linha
