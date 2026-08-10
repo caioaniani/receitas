@@ -1115,6 +1115,13 @@ def pedidos_site():
         out.append({
             'codigo': p.codigo, 'status': p.status,
             'nome_cliente': p.nome_cliente,
+            # Presente/entrega (10/08/2026, pergunta do dono "teve compra
+            # para ou de Gaelle?"): sem destinatário/endereço a sonda só
+            # enxergava o COMPRADOR — ausência não provava nada sobre
+            # presente. Read-only, mesmo gate Bearer de sempre.
+            'nome_destinatario': p.nome_destinatario,
+            'email_cliente': p.email_cliente,
+            'endereco_entrega': p.endereco_entrega,
             'valor_total': float(p.valor_total or 0),
             'modo_entrega': p.modo_entrega,
             'data_entrega': (p.data_entrega.isoformat()
