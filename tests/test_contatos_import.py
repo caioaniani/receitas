@@ -203,6 +203,74 @@ def test_aplicar_forjado_com_email_invalido_nao_grava(app):
     assert f.email == 'antigo@x.com'
 
 
+# ── Fixes pós-revisão (05/08/2026) ───────────────────────────────────
+
+def test_novo_incompleto_vira_aviso_nao_promessa(app):
+    """A prévia só oferece pré-cadastro que o aplicar consegue criar —
+    antes prometia (checkbox marcado) e recusava depois."""
+    from app.services import contatos_import
+    prev = contatos_import.comparar([
+        {'nome': 'FULANO', 'email': 'f@x.com', 'telefone': '11988887777',
+         'desligado': False},                       # nome de UMA palavra
+        {'nome': 'BELTRANO DA SILVA', 'email': '', 'telefone': '11988887777',
+         'desligado': False}])                      # sem e-mail
+    assert not prev['novos']
+    assert len([a for a in prev['avisos'] if 'pré-cadastro' in a]) == 2
+
+
+def test_aplicar_json_forjado_nao_dict_nao_estoura(app):
+    from app.services import contatos_import
+    st = contatos_import.aplicar({'atualizar': ['"texto"', 42],
+                                  'precadastro': [[1, 2]]})
+    assert st['atualizados'] == 0 and st['precadastros'] == 0
+    assert len(st['erros']) == 3
+
+
+def test_ficha_com_55_nao_gera_falso_dif(app):
+    from app.services import contatos_import
+    _func('ANA SILVA', '111.111.111-11', telefone='5511988887777')
+    prev = contatos_import.comparar([
+        {'nome': 'Ana Silva', 'email': '', 'telefone': '11988887777',
+         'desligado': False}])
+    assert not prev['atualizar']                    # mesmo número, sem churn
+
+
+def test_telefone_com_zero_de_operadora_aceito(app):
+    from app.services import contatos_import
+    raw = _xlsx([[1, 'ANA SILVA', '', 'ana@x.com', '(011) 98888-7777', '']])
+    linhas, avisos = contatos_import.ler_planilha(raw)
+    assert linhas[0]['telefone'] == '11988887777' and not avisos
+
+
+def test_atualizar_de_inativo_vem_sinalizado(app):
+    from app.services import contatos_import
+    _func('ANA SILVA', '111.111.111-11', ativo=False)
+    prev = contatos_import.comparar([
+        {'nome': 'Ana Silva', 'email': 'a@x.com', 'telefone': '',
+         'desligado': False}])
+    assert prev['atualizar'][0]['inativo'] is True
+
+
+def test_fichas_commitadas_antes_do_precadastro(app, monkeypatch):
+    """`precadastro.criar` commita (e a poda dele pode dar rollback) — as
+    mutações de ficha têm que estar commitadas ANTES dele rodar."""
+    from app.services import contatos_import, precadastro
+    f = _func('ANA SILVA', '111.111.111-11')
+    original = precadastro.criar
+
+    def criar_confere_commit(dados):
+        db.session.rollback()               # o pior caso: rollback interno
+        return original(dados)
+
+    monkeypatch.setattr(precadastro, 'criar', criar_confere_commit)
+    contatos_import.aplicar({
+        'atualizar': [{'id': f.id, 'email': 'a@x.com', 'telefone': ''}],
+        'precadastro': [{'nome': 'RAYANA DOS ANJOS', 'email': 'r@x.com',
+                         'telefone': '11979520652'}]})
+    db.session.refresh(f)
+    assert f.email == 'a@x.com'             # o rollback não descartou a ficha
+
+
 # ── rotas ────────────────────────────────────────────────────────────
 
 def _login(c, user_id):
