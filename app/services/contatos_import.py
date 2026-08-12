@@ -61,8 +61,16 @@ def ler_planilha(conteudo_bytes):
         for i, row in enumerate(cand.iter_rows(min_row=1, max_row=10,
                                                values_only=True), 1):
             cels = [str(c or '').strip().lower() for c in row]
-            if any('mail' in c for c in cels) and \
-                    any(('funcion' in c or c.startswith('nome')) for c in cels):
+            # Cabeçalho de verdade tem nome e e-mail em CÉLULAS DIFERENTES.
+            # A legenda da planilha é uma célula mesclada cujo texto contém
+            # as duas palavras — sem esta exigência ela era aceita como
+            # cabeçalho e o parser lia a coluna A inteira (bug real, pego
+            # validando contra a planilha do gerente).
+            i_mail = next((j for j, c in enumerate(cels) if 'mail' in c), None)
+            i_nom = next((j for j, c in enumerate(cels)
+                          if j != i_mail and ('funcion' in c
+                                              or c.startswith('nome'))), None)
+            if i_mail is not None and i_nom is not None:
                 ws, cab, linha_cab = cand, cels, i
                 break
         if ws is not None:
