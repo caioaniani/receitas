@@ -58,7 +58,9 @@
     <tr>
       <td><input class="form-check-input" type="checkbox" name="atualizar"
                  value="{{ {'id': a.id, 'nome': a.nome, 'email': a.linha.email, 'telefone': a.linha.telefone}|tojson|forceescape }}" checked></td>
-      <td>{{ a.nome }}</td>
+      <td>{{ a.nome }}
+        {% if a.inativo %}<span class="badge bg-secondary">desligado na ficha</span>{% endif %}
+      </td>
       <td class="small">
         {% if a.difs.email %}e-mail: <span class="text-muted">{{ a.difs.email[0] }}</span>
           → <strong>{{ a.difs.email[1] }}</strong>{% endif %}
