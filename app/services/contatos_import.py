@@ -90,14 +90,14 @@ def ler_planilha(conteudo_bytes):
         nome = cel(row, i_nome)
         if not nome or nome.upper().startswith('EXEMPLO'):
             continue
-        email = cel(i_email).lower()
-        obs = cel(i_obs)
+        email = cel(row, i_email).lower()
+        obs = cel(row, i_obs)
         desligado = 'desligad' in obs.lower()
         if email and not _RE_EMAIL.match(email):
             avisos.append(f'{nome}: e-mail ilegível ("{email}") — campo '
                           'IGNORADO, confira na planilha.')
             email = ''
-        tel_bruto = cel(i_tel)
+        tel_bruto = cel(row, i_tel)
         telefone = _telefone_celular(tel_bruto)
         if tel_bruto and not telefone and not desligado:
             avisos.append(f'{nome}: celular ilegível ("{tel_bruto}") — não é '
