@@ -662,11 +662,26 @@ def reembolsar_pedido(pedido):
                            pedido.codigo, res.get('erro'))
     _marcar_estornado(pedido, pago)
     db.session.commit()
+    # Comprovante do estorno pro CLIENTE (dono 12/08/2026): sai dos DOIS
+    # desfechos (estornado agora OU sincronizado de estorno feito no painel
+    # do gateway) — o cliente merece o aviso igual. Best-effort: e-mail
+    # ruim nunca desfaz o estorno já commitado.
+    try:
+        from app.services import email as email_svc
+        if email_svc.disponivel():
+            email_svc.enviar_reembolso_confirmado(
+                pedido,
+                valor=(pago.valor if pago else pedido.valor_total),
+                metodo=(pago.metodo if pago else None))
+    except Exception:  # noqa: BLE001
+        logger.exception('reembolso %s: email de estorno falhou',
+                         pedido.codigo)
     if ja_estornado:
         return True, ('A cobrança já estava estornada no Pagar.me — sincronizei '
                       'o cancelamento aqui (estoque e plano devolvidos). Confira '
-                      'a NF no Tiny se já foi emitida.')
-    return True, 'Pedido reembolsado e estornado.'
+                      'a NF no Tiny se já foi emitida. Cliente avisado por '
+                      'e-mail.')
+    return True, 'Pedido reembolsado e estornado. Cliente avisado por e-mail.'
 
 
 def conciliar_pedido(codigo, aplicar=False):
