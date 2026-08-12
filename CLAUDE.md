@@ -4199,6 +4199,52 @@ so-treino (auto-lockout — `toggle` recusa `u.id == current_user.id`).
 `gerar_acesso` seta so `senha_provisoria` (NAO `somente_treino` — flag
 separada, marcada a mao). Testes: `tests/test_acesso_so_treino.py` (12 casos).
 
+## Assinatura eletronica do Regulamento Interno + Importar CONTATOS (05/08/2026)
+
+Pedido do dono: "preciso que os funcionarios assinem o RI" com tres
+exigencias dele (verificacao SMS/selfie/gov.br; guardar o log de auditoria;
+cada um recebe a copia assinada). Pesquisa verificada (workflow, fontes
+2026) mudou a recomendacao inicial:
+
+- **Open source NAO cumpre a exigencia 1**: DocuSeal so tem SMS no Pro
+  (US$20/usuario/mes + US$0,20/SMS, passa pela infra deles mesmo
+  self-hosted); Documenso 2FA = Enterprise com licenca; OpenSign so OTP por
+  e-mail. **Nenhuma plataforma privada assina "com gov.br"** (a API do
+  gov.br so e concedida a gestor publico) — o que existe e biometria contra
+  base Serpro nas pagas.
+- **Base legal** (para não re-pesquisar): Portaria MTP 671/2021 orienta
+  assinatura AVANCADA ou qualificada em docs trabalhistas; STJ REsp
+  2.159.442/PR (dez/2024) — exigir ICP-Brasil em tudo e formalismo
+  excessivo, log+IP+hash+multifator bastam entre particulares. Token via
+  WhatsApp ≈ token SMS (posse do numero); o que amarra a prova e o numero
+  ser O DA FICHA de registro. Guardar PDF+certificado >= 5 anos.
+- **ESCOLHA DO DONO: Autentique** (plano Profissional mensal R$ 99 sem
+  fidelidade, docs ilimitados, token WhatsApp/SMS + selfie por creditos;
+  depois desce pro gratis ~10 docs/mes). Precos conferidos so por fontes
+  secundarias (sites oficiais 403 no proxy) — conferir no checkout.
+- **Sonda `/api/claude/funcionarios`** (?todos=1 inclui desligados):
+  nome/cpf/funcao/email/telefone/lojas do quadro — criada pra montar o
+  lote de assinatura. REVELOU: as fichas estavam SEM contato (41 ativos,
+  40 sem e-mail, 41 sem telefone) e o quadro desatualizado (4 desligados
+  ainda ativos + 6 contratados sem ficha).
+- **Fluxo da coleta**: gerei planilha pro gerente preencher (scratchpad;
+  celulas amarelas = falta, aba "e-mails sem dono"); ele devolveu e a
+  planilha entra pela tela **`/rh/contatos/importar`** (owner, gate do
+  blueprint RH; servico `app/services/contatos_import.py`, espelho do
+  folha_import): match por NOME normalizado (planilha nao tem CPF;
+  homonimo = aviso e fica FORA), previa antes→depois, campo ilegivel
+  (celular fixo, e-mail torto) recusado com aviso SEM derrubar o outro
+  campo da linha, vazio NUNCA apaga valor existente, nome fora do quadro
+  vira PRE-CADASTRO (promover com CPF depois — nunca cria Funcionario
+  direto), linha "desligado" na observacao vira checkbox DESMARCADO
+  (desligar e decisao humana). ARMADILHA REAL do parser: a LEGENDA da
+  planilha (celula mesclada) contem "e-mail" e "FUNCIONARIO" no mesmo
+  texto e era aceita como cabecalho — a deteccao exige as palavras em
+  CELULAS DIFERENTES (fixture do teste trava a legenda real).
+- Testes: `tests/test_contatos_import.py` (17). Manual registrado (QUANDO
+  PRECISAR). E-mail corporativo coletivo (contato@opao.online) NAO vale
+  pra assinatura individual — controle exclusivo do canal.
+
 ## Importar FOLHA DE PAGAMENTO (xlsx) no RH (03/08/2026)
 
 Pedido do dono ("Preciso atualizar o RH", folha 06/2026 da contabilidade). A
