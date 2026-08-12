@@ -4241,7 +4241,21 @@ cada um recebe a copia assinada). Pesquisa verificada (workflow, fontes
   planilha (celula mesclada) contem "e-mail" e "FUNCIONARIO" no mesmo
   texto e era aceita como cabecalho — a deteccao exige as palavras em
   CELULAS DIFERENTES (fixture do teste trava a legenda real).
-- Testes: `tests/test_contatos_import.py` (17). Manual registrado (QUANDO
+- **POS-REVISAO (fixados)**: guard isinstance(dict) no `aplicar` (JSON
+  forjado nao-objeto dava 500 — classe compartilhada com folha_import,
+  que segue com ela); a previa so oferece "novo" que o `aplicar` consegue
+  criar (nome completo + e-mail + celular — antes prometia e recusava);
+  fichas COMMITADAS antes do loop de pre-cadastros (`precadastro.criar`
+  commita e a poda interna pode dar rollback — descartaria as fichas em
+  silencio); indices do cabecalho reusados da deteccao (col() re-procurava
+  e podia divergir); ficha gravada com 55 nao gera falso "mudou";
+  "(011) 9..." com zero de operadora aceito; badge "desligado na ficha"
+  na previa de atualizacao; regex de e-mail importada do precadastro
+  (validador unico previa==aplicar). ACEITOS com justificativa: sonda
+  expoe CPF (a Autentique pede CPF do signatario; Bearer read-only);
+  linha desligada com contato preenchido nao gera item de atualizacao
+  (re-importar sem a marca resolve).
+- Testes: `tests/test_contatos_import.py` (23). Manual registrado (QUANDO
   PRECISAR). E-mail corporativo coletivo (contato@opao.online) NAO vale
   pra assinatura individual — controle exclusivo do canal.
 
