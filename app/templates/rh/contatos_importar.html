@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}Importar contatos — RH{% endblock %}
+
+{% block content %}
+<h1 class="page-title"><i class="bi bi-person-lines-fill"></i>
+  Importar contatos (e-mail + celular)</h1>
+
+<div class="alert alert-light border small mb-3">
+  Suba a <strong>planilha de contatos</strong> (a que o gerente preencheu).
+  O sistema casa pelo <strong>nome</strong> e mostra uma
+  <strong>prévia</strong> — nada muda até você marcar e confirmar. Só
+  e-mail e celular são tocados; o resto da ficha fica como está. Nome que
+  não existe no quadro vira <strong>pré-cadastro</strong> (você promove com
+  o CPF depois). O contato da ficha é o que vale como prova nas
+  assinaturas eletrônicas — por isso ele entra por aqui, não numa lista
+  avulsa.
+</div>
+
+<form method="POST" enctype="multipart/form-data" class="d-flex gap-2 flex-wrap align-items-end mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div>
+    <label class="form-label small fw-bold" for="arquivo">Planilha de contatos (.xlsx)</label>
+    <input type="file" class="form-control" id="arquivo" name="arquivo"
+           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+  </div>
+  <button class="btn btn-primary" type="submit">Ver prévia</button>
+</form>
+
+{% if avisos %}
+<div class="alert alert-warning small">
+  <strong>⚠ Campos que não consegui ler</strong> (ignorados — confira na planilha):
+  <ul class="mb-0">{% for a in avisos %}<li>{{ a }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if preview %}
+{% if preview.avisos %}
+<div class="alert alert-warning small">
+  <strong>⚠ Linhas fora da prévia</strong>:
+  <ul class="mb-0">{% for a in preview.avisos %}<li>{{ a }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="POST" action="{{ url_for('rh.contatos_aplicar') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="alert alert-info small">
+    Prévia de <strong>{{ nome_arquivo }}</strong> — marque o que aplicar e
+    confirme no fim da página. {{ preview.iguais|length }} ficha(s) já
+    batem com a planilha (nada a fazer).
+  </div>
+
+  {% if preview.atualizar %}
+  <h2 class="h6 fw-bold mt-3">✏️ Contato novo ou diferente ({{ preview.atualizar|length }})</h2>
+  <div class="table-responsive"><table class="table table-sm align-middle">
+    <thead><tr><th></th><th>Funcionário</th><th>O que muda</th></tr></thead>
+    <tbody>
+    {% for a in preview.atualizar %}
+    <tr>
+      <td><input class="form-check-input" type="checkbox" name="atualizar"
+                 value="{{ {'id': a.id, 'nome': a.nome, 'email': a.linha.email, 'telefone': a.linha.telefone}|tojson|forceescape }}" checked></td>
+      <td>{{ a.nome }}</td>
+      <td class="small">
+        {% if a.difs.email %}e-mail: <span class="text-muted">{{ a.difs.email[0] }}</span>
+          → <strong>{{ a.difs.email[1] }}</strong>{% endif %}
+        {% if a.difs.email and a.difs.telefone %}<br>{% endif %}
+        {% if a.difs.telefone %}celular: <span class="text-muted">{{ a.difs.telefone[0] }}</span>
+          → <strong>{{ a.difs.telefone[1] }}</strong>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+
+  {% if preview.novos %}
+  <h2 class="h6 fw-bold mt-3">🆕 Na planilha, mas não no quadro ({{ preview.novos|length }}) — viram pré-cadastro</h2>
+  <div class="table-responsive"><table class="table table-sm align-middle">
+    <thead><tr><th></th><th>Nome</th><th>E-mail</th><th>Celular</th></tr></thead>
+    <tbody>
+    {% for ln in preview.novos %}
+    <tr>
+      <td><input class="form-check-input" type="checkbox" name="precadastro"
+                 value="{{ ln|tojson|forceescape }}" checked></td>
+      <td>{{ ln.nome }}</td>
+      <td>{{ ln.email or '—' }}</td>
+      <td>{{ ln.telefone or '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="small text-muted">Pré-cadastro não é ficha: depois de aplicar,
+    promova cada um com o CPF em
+    <a href="{{ url_for('rh.pre_cadastros') }}">Pré-cadastros</a>.</p>
+  {% endif %}
+
+  {% if preview.desligar %}
+  <h2 class="h6 fw-bold mt-3">🚪 Marcados como desligados na planilha ({{ preview.desligar|length }})</h2>
+  <div class="table-responsive"><table class="table table-sm align-middle">
+    <thead><tr><th></th><th>Funcionário</th></tr></thead>
+    <tbody>
+    {% for d in preview.desligar %}
+    <tr>
+      <td><input class="form-check-input" type="checkbox" name="desligar"
+                 value="{{ d.id }}"></td>
+      <td>{{ d.nome }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="small text-muted">Desmarcado por padrão — desligar é decisão
+    sua, não da planilha. Marque só quem saiu de verdade.</p>
+  {% endif %}
+
+  <button class="btn btn-success" type="submit"
+          onclick="return confirm('Aplicar o que está marcado nas fichas?');">
+    <i class="bi bi-check-lg"></i> Aplicar o que está marcado
+  </button>
+</form>
+{% endif %}
+{% endblock %}
