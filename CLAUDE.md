@@ -4255,7 +4255,16 @@ cada um recebe a copia assinada). Pesquisa verificada (workflow, fontes
   expoe CPF (a Autentique pede CPF do signatario; Bearer read-only);
   linha desligada com contato preenchido nao gera item de atualizacao
   (re-importar sem a marca resolve).
-- Testes: `tests/test_contatos_import.py` (23). Manual registrado (QUANDO
+- **Homonimo com UMA ficha ativa casa nela (1o uso real, 05/08/2026)**: a
+  regra original bloqueava QUALQUER nome duplicado e recusou 26 das 43
+  linhas — prod tem 25 pares "ficha velha DESLIGADA com CPF placeholder
+  (000.000.0XX-XX, de antes da folha da contabilidade) + ficha nova ATIVA
+  com CPF real" (a folha de 03/08 nao achou os CPFs falsos e criou fichas
+  novas). Nenhum par tem as duas ativas (conferido pela sonda). Agora so
+  bloqueia com 2+ ativas ou nenhuma; o desligar de linha homonima mira a
+  ATIVA. As 25 fichas placeholder desligadas sao lixo historico inofensivo
+  — limpar e decisao separada do dono.
+- Testes: `tests/test_contatos_import.py` (25). Manual registrado (QUANDO
   PRECISAR). E-mail corporativo coletivo (contato@opao.online) NAO vale
   pra assinatura individual — controle exclusivo do canal.
 
