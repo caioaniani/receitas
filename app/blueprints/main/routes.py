@@ -5781,9 +5781,22 @@ def loja_online_pedido_cancelar(codigo):
     from app.services import loja_pagamento
     from app.utils import agora
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
-    if p.status in ('entregue', 'cancelado'):
-        flash(f'Pedido {p.codigo} nao pode ser cancelado (status '
-              f'{p.status}).', 'warning')
+    if p.status == 'cancelado':
+        flash(f'Pedido {p.codigo} já está cancelado.', 'warning')
+    elif p.status == 'entregue':
+        # Estorno de pedido ENTREGUE (dono 12/08/2026, caso 131B16EA):
+        # permitido SÓ com o gesto explícito `confirmar_entregue=1` (botão
+        # próprio com dupla confirmação). Reembolso total via Pagar.me;
+        # estoque NÃO re-credita (estado_anterior != 'pago' no
+        # _marcar_estornado — a mercadoria saiu de verdade). NF já emitida
+        # se cancela no Tiny, manualmente.
+        if request.form.get('confirmar_entregue') != '1':
+            flash(f'Pedido {p.codigo} está ENTREGUE — use o botão '
+                  f'"Estornar pedido entregue" (reembolso total, o estoque '
+                  f'não volta sozinho).', 'warning')
+        else:
+            ok, msg = loja_pagamento.reembolsar_pedido(p)
+            flash(f'{p.codigo}: {msg}', 'success' if ok else 'danger')
     elif p.status in ('pago', 'em_preparo', 'a_caminho'):
         sinal = _expedicao_com_pedido(p)
         if sinal and request.form.get('confirmar_expedicao') != '1':
