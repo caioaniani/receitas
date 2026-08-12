@@ -149,10 +149,22 @@ def comparar(linhas):
                 out['avisos'].append(
                     f"{ln['nome']}: marcado como desligado mas não está no "
                     'quadro — nada a fazer.')
+            elif len(ln['nome'].split()) < 2 or not ln['email'] \
+                    or not ln['telefone']:
+                # A prévia só oferece o que o `aplicar` consegue criar: o
+                # pré-cadastro exige nome+sobrenome, e-mail e celular
+                # (achado de revisão — antes prometia e recusava depois).
+                out['avisos'].append(
+                    f"{ln['nome']}: não está no quadro e falta "
+                    'nome completo, e-mail ou celular válidos pro '
+                    'pré-cadastro — complete na planilha.')
             else:
                 out['novos'].append(ln)
             continue
         if ln['desligado']:
+            # Limitação aceita: linha desligada com contato preenchido não
+            # gera item de atualização — se o desligamento for desmarcado,
+            # o contato dela não entra (re-importar sem a marca resolve).
             if f.ativo:
                 out['desligar'].append({'id': f.id, 'nome': f.nome})
             else:
@@ -162,7 +174,10 @@ def comparar(linhas):
         difs = {}
         if ln['email'] and (f.email or '').strip().lower() != ln['email']:
             difs['email'] = ((f.email or '—').strip(), ln['email'])
-        tel_ficha = re.sub(r'\D', '', f.telefone or '')
+        # Normaliza a ponta da FICHA com a mesma régua da planilha — ficha
+        # gravada com o 55 na frente não pode virar falso "mudou".
+        tel_ficha = _telefone_celular(f.telefone) \
+            or re.sub(r'\D', '', f.telefone or '')
         if ln['telefone'] and tel_ficha != ln['telefone']:
             difs['telefone'] = (f.telefone or '—', ln['telefone'])
         alvo = {'id': f.id, 'nome': f.nome, 'linha': ln, 'difs': difs}
