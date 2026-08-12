@@ -306,6 +306,25 @@
     </div>
     {% endif %}
 
+    {# Estorno de pedido ENTREGUE (dono 12/08/2026, caso 131B16EA):
+       reembolso total com dupla confirmação; o estoque NÃO volta (a
+       mercadoria saiu) e o cliente recebe o e-mail do estorno. #}
+    {% if current_user.is_owner and p.status == 'entregue' %}
+    <form method="POST" action="{{ url_for('main.loja_online_pedido_cancelar', codigo=p.codigo) }}"
+          onsubmit="return confirm('Estornar o pedido ENTREGUE {{ p.codigo }}?\n\n' +
+                    'O valor volta pro cliente pelo Pagar.me e o pedido vira ' +
+                    'cancelado (sai do faturamento). O estoque NÃO é devolvido ' +
+                    '(a mercadoria saiu) e a NF, se emitida, se cancela no Tiny.\n\n' +
+                    'O cliente recebe o e-mail de comprovante do estorno.')
+                    && (this.querySelector('[name=confirmar_entregue]').value = '1', true);">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
+      <input type="hidden" name="confirmar_entregue" value="">
+      <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+        💸 Estornar pedido entregue (reembolso total)
+      </button>
+    </form>
+    {% endif %}
+
     {# Reembolso/cancelamento mexe em dinheiro — só o dono (decisão 22/06/2026). #}
     {% if current_user.is_owner and p.status not in ('entregue', 'cancelado') %}
     {% set eh_pago = p.status in ('pago', 'em_preparo', 'a_caminho') %}
