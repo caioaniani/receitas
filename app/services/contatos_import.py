@@ -139,10 +139,21 @@ def comparar(linhas):
     for ln in linhas:
         candidatos = por_nome.get(_norm_nome(ln['nome']), [])
         if len(candidatos) > 1:
-            out['avisos'].append(
-                f"{ln['nome']}: há {len(candidatos)} fichas com esse nome — "
-                'linha FORA da prévia; acerte direto na ficha.')
-            continue
+            # Caso real de prod (05/08/2026): 25 nomes tinham DUAS fichas —
+            # a antiga DESLIGADA com CPF placeholder (000.000.0XX-XX, de
+            # antes da folha da contabilidade) e a nova ATIVA com CPF real.
+            # Homônimo com exatamente UMA ficha ativa não é ambíguo: o alvo
+            # é ela. Só bloqueia quando há mais de uma ativa (aí sim
+            # ninguém pode chutar) ou nenhuma.
+            ativos = [c for c in candidatos if c.ativo]
+            if len(ativos) == 1:
+                candidatos = ativos
+            else:
+                out['avisos'].append(
+                    f"{ln['nome']}: há {len(candidatos)} fichas com esse "
+                    f"nome ({len(ativos)} ativas) — linha FORA da prévia; "
+                    'acerte direto na ficha.')
+                continue
         f = candidatos[0] if candidatos else None
         if f is None:
             if ln['desligado']:
