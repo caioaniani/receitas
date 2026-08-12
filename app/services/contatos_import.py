@@ -26,9 +26,12 @@ import unicodedata
 from app.extensions import db
 from app.models import Funcionario
 
-logger = logging.getLogger(__name__)
+# MESMO validador de e-mail do pré-cadastro DE PROPÓSITO (achado de
+# revisão): o `aplicar` delega os novos ao `precadastro.validar`, então uma
+# regex local divergente faria a prévia aceitar o que o aplicar recusa.
+from app.services.precadastro import _RE_EMAIL
 
-_RE_EMAIL = re.compile(r'^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$')
+logger = logging.getLogger(__name__)
 
 
 def _norm_nome(s):
