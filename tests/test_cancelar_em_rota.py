@@ -130,3 +130,52 @@ def test_prompt_direciona_prospeccao_para_email(app):
     from app.services.chatbot_prompt import PROMPT
     assert 'contato@opao.online' in PROMPT
     assert 'PROSPECÇÃO COMERCIAL' in PROMPT
+
+
+# ── Estorno de pedido ENTREGUE (dono 12/08/2026, caso 131B16EA) ──────────
+
+def test_entregue_sem_confirmacao_recusa(app, owner_user, cliente):
+    """Entregue continua protegido: sem o gesto explícito, nada acontece."""
+    p = _pedido('entregue', codigo='PED-ENT-1')
+    _login(cliente, owner_user)
+    with patch('app.services.loja_pagamento.reembolsar_pedido') as rb:
+        cliente.post(f'/admin/loja-online/pedidos/{p.codigo}/cancelar',
+                     data={})
+    rb.assert_not_called()
+    db.session.refresh(p)
+    assert p.status == 'entregue'
+
+
+def test_entregue_com_confirmacao_reembolsa(app, owner_user, cliente):
+    """Com confirmar_entregue=1 (botão próprio), reembolsa total."""
+    p = _pedido('entregue', codigo='PED-ENT-2')
+    _login(cliente, owner_user)
+    with patch('app.services.loja_pagamento.reembolsar_pedido',
+               return_value=(True, 'ok')) as rb:
+        cliente.post(f'/admin/loja-online/pedidos/{p.codigo}/cancelar',
+                     data={'confirmar_entregue': '1'})
+    rb.assert_called_once()
+
+
+def test_reembolso_manda_email_de_estorno_e_nao_recredita_estoque(app):
+    """O reembolso de pedido ENTREGUE: (1) dispara o e-mail de comprovante
+    do estorno pro cliente; (2) NÃO re-credita estoque (mercadoria saiu —
+    estado_anterior != 'pago' no _marcar_estornado)."""
+    from unittest.mock import patch as _patch
+
+    from app.services import loja_pagamento
+    p = _pedido('entregue', codigo='PED-ENT-3')
+    with _patch('app.services.pagarme.cancelar_charge',
+                return_value={'ok': True}), \
+         _patch('app.services.email.disponivel', return_value=True), \
+         _patch('app.services.email.enviar_reembolso_confirmado',
+                return_value={'ok': True}) as mail, \
+         _patch('app.services.loja_pagamento._estornar_estoque') as est:
+        ok, msg = loja_pagamento.reembolsar_pedido(p)
+    assert ok is True
+    mail.assert_called_once()
+    assert mail.call_args[0][0].codigo == 'PED-ENT-3'
+    est.assert_not_called()                 # entregue nunca re-credita
+    db.session.refresh(p)
+    assert p.status == 'cancelado'
+    assert p.motivo_cancelamento == 'reembolso'
