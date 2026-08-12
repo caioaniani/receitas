@@ -41,11 +41,15 @@ def _norm_nome(s):
 
 
 def _telefone_celular(bruto):
-    """Só dígitos, sem o 55; '' quando não é celular BR plausível."""
+    """Só dígitos, sem o 55 e sem o 0 de operadora; '' quando não é celular
+    BR plausível."""
     from app.services.wifi_portal import _whatsapp_valido
     tel = re.sub(r'\D', '', str(bruto or ''))
     if tel.startswith('55') and len(tel) in (12, 13):
         tel = tel[2:]
+    if tel.startswith('0') and len(tel) == 12:
+        # "(011) 98888-7777" — escrita comum com o zero de operadora.
+        tel = tel[1:]
     return tel if tel and _whatsapp_valido(tel) else ''
 
 
