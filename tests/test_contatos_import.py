@@ -16,7 +16,12 @@ def _xlsx(linhas, cabecalho_na_linha_3=True):
     wb = Workbook()
     ws = wb.active
     if cabecalho_na_linha_3:
-        ws.append(['CONTATOS PARA ASSINATURA — preencher as células amarelas'])
+        # Legenda REAL da planilha do gerente: uma célula só, cujo texto
+        # contém "e-mail" E "FUNCIONÁRIO" — foi ela que enganou a detecção
+        # de cabeçalho na 1ª versão (bug real). O fixture trava isso.
+        ws.append(['CONTATOS PARA ASSINATURA DO REGULAMENTO INTERNO — '
+                   'preencher as células AMARELAS (e-mail e celular). O '
+                   'celular precisa ser o WhatsApp DO FUNCIONÁRIO.'])
         ws.append([])
     ws.append(['Nº', 'Funcionário (ficha do RH)', 'Função', 'E-mail',
                'Celular (WhatsApp)', 'Observação'])
