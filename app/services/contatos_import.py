@@ -92,8 +92,10 @@ def ler_planilha(conteudo_bytes):
                 return i
         return None
 
-    i_nome = col('funcion', 'nome')
-    i_email = col('mail')
+    # Reusa os índices DA DETECÇÃO (achado de revisão): re-procurar aqui
+    # podia divergir — num cabeçalho "E-mail do funcionário | Nome", o
+    # col('funcion') cairia na coluna do e-mail.
+    i_nome, i_email = i_nom, i_mail
     i_tel = col('celular', 'telefone', 'whats')
     i_obs = col('observa')
 
