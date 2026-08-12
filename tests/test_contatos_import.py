@@ -102,8 +102,8 @@ def test_comparar_casa_por_nome_sem_acento_e_caixa(app):
     assert prev['atualizar'][0]['difs']['email'][1] == 'jp@x.com'
 
 
-def test_comparar_homonimo_vira_aviso_e_fica_fora(app):
-    """Duas fichas com o mesmo nome: nunca chutar em quem grava contato."""
+def test_comparar_homonimo_com_duas_ativas_vira_aviso(app):
+    """Duas fichas ATIVAS com o mesmo nome: nunca chutar em quem grava."""
     from app.services import contatos_import
     _func('ANA SILVA', '111.111.111-11')
     _func('ANA SILVA', '222.222.222-22')
@@ -112,6 +112,31 @@ def test_comparar_homonimo_vira_aviso_e_fica_fora(app):
          'desligado': False}])
     assert not prev['atualizar'] and not prev['novos']
     assert any('2 fichas' in a for a in prev['avisos'])
+
+
+def test_comparar_homonimo_com_uma_ativa_casa_na_ativa(app):
+    """Caso real de prod (05/08/2026): ficha velha DESLIGADA com CPF
+    placeholder + ficha nova ATIVA — 25 nomes assim. O alvo é a ativa."""
+    from app.services import contatos_import
+    _func('ANA SILVA', '000.000.001-01', ativo=False)   # placeholder antigo
+    viva = _func('ANA SILVA', '111.111.111-11')
+    prev = contatos_import.comparar([
+        {'nome': 'Ana Silva', 'email': 'a@x.com', 'telefone': '',
+         'desligado': False}])
+    assert not prev['avisos']
+    assert prev['atualizar'][0]['id'] == viva.id
+
+
+def test_comparar_homonimo_desligado_na_planilha_desliga_a_ativa(app):
+    """Linha marcada "desligada" com homônimo: o desligamento oferecido é
+    o da ficha ATIVA, nunca o da velha já desligada."""
+    from app.services import contatos_import
+    _func('ANA SILVA', '000.000.001-01', ativo=False)
+    viva = _func('ANA SILVA', '111.111.111-11')
+    prev = contatos_import.comparar([
+        {'nome': 'Ana Silva', 'email': '', 'telefone': '',
+         'desligado': True}])
+    assert [d['id'] for d in prev['desligar']] == [viva.id]
 
 
 def test_comparar_sem_match_vira_novo_e_desligado_sem_match_vira_aviso(app):
