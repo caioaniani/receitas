@@ -111,8 +111,9 @@ def ler_planilha(conteudo_bytes):
         obs = cel(row, i_obs)
         desligado = 'desligad' in obs.lower()
         if email and not _RE_EMAIL.match(email):
-            avisos.append(f'{nome}: e-mail ilegível ("{email}") — campo '
-                          'IGNORADO, confira na planilha.')
+            if not desligado:      # desligado não assina — aviso seria ruído
+                avisos.append(f'{nome}: e-mail ilegível ("{email}") — campo '
+                              'IGNORADO, confira na planilha.')
             email = ''
         tel_bruto = cel(row, i_tel)
         telefone = _telefone_celular(tel_bruto)
