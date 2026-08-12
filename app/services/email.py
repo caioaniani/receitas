@@ -162,6 +162,54 @@ def enviar_pedido_entregue(pedido):
     return enviar(destinatario, assunto, html, texto=texto)
 
 
+def enviar_reembolso_confirmado(pedido, valor=None, metodo=None):
+    """Comprovante de ESTORNO pro cliente (dono 12/08/2026, caso 131B16EA:
+    "quando for estornado o cliente recebesse o e-mail com o comprovante").
+    Disparado pelo reembolso ADMIN (`loja_pagamento.reembolsar_pedido`) —
+    não pelo webhook, pra estorno iniciado no painel do gateway não gerar
+    e-mail duplicado. Best-effort — falha silente."""
+    destinatario = (pedido.email_cliente or '').strip()
+    if not destinatario:
+        return {'ok': False, 'erro': 'pedido sem email'}
+    assunto = (f'Estorno confirmado — pedido {pedido.codigo} · '
+               f'O Pão Padaria Artesanal')
+    v = _fmt_brl(valor if valor is not None else pedido.valor_total)
+    met = (metodo or '').lower()
+    if met == 'pix':
+        prazo = ('O valor volta pela MESMA chave Pix do pagamento — '
+                 'normalmente em instantes.')
+        met_label = 'Pix'
+    elif met:
+        prazo = ('O valor volta na fatura do MESMO cartão usado na compra — '
+                 'o prazo de aparecer depende do seu banco (em geral até '
+                 '2 faturas).')
+        met_label = 'Cartão'
+    else:
+        prazo = 'O valor volta pela mesma forma de pagamento da compra.'
+        met_label = 'mesma forma de pagamento'
+    html = f"""\
+<!doctype html><html lang="pt-BR"><body style="margin:0;background:#fbf8f3;
+font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
+<div style="max-width:540px;margin:0 auto;padding:32px 24px;">
+  <h1 style="font-size:22px;margin:0 0 4px;">O Pão · Padaria Artesanal</h1>
+  <p style="color:#6b5f54;margin:0 0 20px;">Estorno confirmado.
+    Pedido <strong>{pedido.codigo}</strong>.</p>
+  <div style="background:#fff;border-radius:12px;padding:18px 20px;margin-bottom:18px;">
+    <p style="margin:0 0 6px;font-weight:600;">Valor estornado</p>
+    <p style="margin:0;font-size:26px;font-weight:700;color:#8b5a2b;">{v}</p>
+    <p style="margin:8px 0 0;font-size:14px;color:#6b5f54;">
+      Forma: {met_label}<br>{prazo}</p>
+  </div>
+  <p style="color:#9a8d80;font-size:12px;margin-top:24px;">
+    Qualquer dúvida, chame no WhatsApp
+    <a href="https://wa.me/5511971097090" style="color:#8b5a2b;">(11) 97109-7090</a>.</p>
+</div></body></html>"""
+    texto = (f'Estorno confirmado — pedido {pedido.codigo}.\n\n'
+             f'Valor estornado: {v}\nForma: {met_label}\n{prazo}\n\n'
+             'Dúvidas? WhatsApp (11) 97109-7090.')
+    return enviar(destinatario, assunto, html, texto=texto)
+
+
 def enviar_nf_emitida(pedido):
     """E-mail "sua nota fiscal foi emitida" — disparado logo após a emissão
     automática (pós-pagamento). Inclui o link público pra DANFE (PDF).
