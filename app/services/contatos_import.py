@@ -199,6 +199,11 @@ def aplicar(escolhas):
     stats = {'atualizados': 0, 'precadastros': 0, 'desligados': 0,
              'erros': []}
     for item in escolhas.get('atualizar', []):
+        if not isinstance(item, dict):
+            # POST forjado com JSON que não é objeto ('"texto"', '[1]') —
+            # sem o guard virava 500 (achado de revisão).
+            stats['erros'].append('atualizar: linha ilegível, pulada')
+            continue
         try:
             f = db.session.get(Funcionario, int(item.get('id')))
         except (TypeError, ValueError):
@@ -220,16 +225,6 @@ def aplicar(escolhas):
             stats['atualizados'] += 1
         else:
             stats['erros'].append(f'{f.nome}: nenhum contato válido pra gravar')
-    for item in escolhas.get('precadastro', []):
-        partes = (item.get('nome') or '').split()
-        dados, erro = precadastro.validar(
-            partes[0] if partes else '', ' '.join(partes[1:]),
-            item.get('email'), item.get('telefone'))
-        if erro:
-            stats['erros'].append(f"pré-cadastro {item.get('nome')}: {erro}")
-            continue
-        precadastro.criar(dados)
-        stats['precadastros'] += 1
     for fid in escolhas.get('desligar', []):
         try:
             f = db.session.get(Funcionario, int(fid))
@@ -241,5 +236,22 @@ def aplicar(escolhas):
         if not f.data_demissao:
             f.data_demissao = hoje()
         stats['desligados'] += 1
+    # Commit das FICHAS antes dos pré-cadastros (achado de revisão): o
+    # `precadastro.criar` commita (e a poda interna dele pode dar rollback)
+    # — rodá-lo com mutações de ficha ainda pendentes podia descartá-las em
+    # silêncio enquanto o flash reportava sucesso.
     db.session.commit()
+    for item in escolhas.get('precadastro', []):
+        if not isinstance(item, dict):
+            stats['erros'].append('pré-cadastro: linha ilegível, pulada')
+            continue
+        partes = (item.get('nome') or '').split()
+        dados, erro = precadastro.validar(
+            partes[0] if partes else '', ' '.join(partes[1:]),
+            item.get('email'), item.get('telefone'))
+        if erro:
+            stats['erros'].append(f"pré-cadastro {item.get('nome')}: {erro}")
+            continue
+        precadastro.criar(dados)
+        stats['precadastros'] += 1
     return stats
