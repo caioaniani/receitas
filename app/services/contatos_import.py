@@ -180,7 +180,11 @@ def comparar(linhas):
             or re.sub(r'\D', '', f.telefone or '')
         if ln['telefone'] and tel_ficha != ln['telefone']:
             difs['telefone'] = (f.telefone or '—', ln['telefone'])
-        alvo = {'id': f.id, 'nome': f.nome, 'linha': ln, 'difs': difs}
+        # `inativo` vai pra tela (achado de revisão): atualizar contato de
+        # desligado é permitido (ex-funcionário também assina), mas o dono
+        # precisa VER que a ficha está desligada.
+        alvo = {'id': f.id, 'nome': f.nome, 'linha': ln, 'difs': difs,
+                'inativo': not f.ativo}
         (out['atualizar'] if difs else out['iguais']).append(
             alvo if difs else {'nome': f.nome, 'motivo': 'contatos já batem'})
     return out
