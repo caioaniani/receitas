@@ -2756,10 +2756,13 @@ def executar_criar_pedido(params, user):
     if alvo:
         res = mesclar_itens(alvo, itens_norm, modificado_por_id=user.id)
         db.session.commit()
-        return {'ok': True, 'pedido_id': alvo.id, 'mesclado': True,
-                'itens_salvos': res['adicionados'] + res['somados'],
-                'nao_resolvidos': nao_resolvidos, 'registro_tipo': 'pedido_loja',
-                'registro_id': alvo.id, 'url': f'/pedidos/{alvo.id}'}
+        out = {'ok': True, 'pedido_id': alvo.id, 'mesclado': True,
+               'itens_salvos': res['adicionados'] + res['somados'],
+               'nao_resolvidos': nao_resolvidos, 'registro_tipo': 'pedido_loja',
+               'registro_id': alvo.id, 'url': f'/pedidos/{alvo.id}'}
+        if aviso_corte:
+            out['aviso'] = aviso_corte
+        return out
 
     pedido = PedidoLoja(
         loja_id=loja_id, data_entrega=data_entrega,
@@ -2777,9 +2780,12 @@ def executar_criar_pedido(params, user):
         alertar_pedido_emergencia(pedido)
     except Exception:  # noqa: BLE001
         logger.exception('Alerta emergencia falhou (copilot)')
-    return {'ok': True, 'pedido_id': pedido.id, 'itens_salvos': len(itens_norm),
-            'nao_resolvidos': nao_resolvidos, 'registro_tipo': 'pedido_loja',
-            'registro_id': pedido.id, 'url': f'/pedidos/{pedido.id}'}
+    out = {'ok': True, 'pedido_id': pedido.id, 'itens_salvos': len(itens_norm),
+           'nao_resolvidos': nao_resolvidos, 'registro_tipo': 'pedido_loja',
+           'registro_id': pedido.id, 'url': f'/pedidos/{pedido.id}'}
+    if aviso_corte:
+        out['aviso'] = aviso_corte
+    return out
 
 
 def executar_editar_pedido(params, user):
@@ -2799,6 +2805,21 @@ def executar_editar_pedido(params, user):
     mudancas = []
 
     nova_data = params.get('data_entrega')
+    # Corte das 18h (dono 10/08/2026): olha a data ATUAL e a NOVA — mover
+    # um pedido PRA amanha (ou tirar de amanha) depois das 18h muda o
+    # pre-preparo igual. Espelho da tela web, no executor.
+    from app.services.pedido_corte import bloqueio_do_corte
+    _datas_corte = [pedido.data_entrega]
+    if nova_data:
+        try:
+            _datas_corte.append(
+                datetime.strptime(nova_data, '%Y-%m-%d').date())
+        except (ValueError, TypeError):
+            pass                       # data invalida ja falha logo abaixo
+    bloqueado_corte, aviso_corte = bloqueio_do_corte(_datas_corte, user=user)
+    if bloqueado_corte:
+        return {'ok': False, 'erro': aviso_corte}
+
     if nova_data:
         try:
             d = datetime.strptime(nova_data, '%Y-%m-%d').date()
