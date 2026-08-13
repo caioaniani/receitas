@@ -157,7 +157,7 @@
     .cel-enviado { display: block; font-size: .62rem; color: #b26a00;
         line-height: 1.1; cursor: help; font-weight: 700; }
     .dia-difere { background: #ffc107; color: #212529; cursor: help; }
-    /* Fornada especial: dia sem producao permitida (produz so qui/sex/sab). */
+    /* Fornada especial: dia sem producao permitida (produz so sex/sab). */
     .crono td.cel-bloq { background: repeating-linear-gradient(45deg,
         #f4f5f7 0 6px, #eceef1 6px 12px); }
     .crono td.cel-bloq .cel-input { color: #b6bcc4; cursor: not-allowed;
@@ -538,7 +538,7 @@
         <span class="leg-item"><span class="leg-swatch" style="background:#fff8e1;border-color:#e0c46c;"></span> coluna de <strong>hoje</strong></span>
         <span class="leg-item"><span class="leg-swatch" style="background:#fde0e4;border-color:#f1aeb5;"></span> entrega firme <strong>em risco</strong> nesse dia</span>
         <span class="leg-item"><span class="leg-swatch" style="background:#f6f4fb;border-color:#e4def5;"></span> <span class="tag-insumo">insumo</span> — derivado dos produtos (edite o produto, não o insumo)</span>
-        <span class="leg-item"><span class="leg-swatch" style="background:repeating-linear-gradient(45deg,#f4f5f7 0 4px,#eceef1 4px 8px);"></span> dia bloqueado (<span class="tag-fds">fim de semana</span> produz só qui/sex/sáb)</span>
+        <span class="leg-item"><span class="leg-swatch" style="background:repeating-linear-gradient(45deg,#f4f5f7 0 4px,#eceef1 4px 8px);"></span> dia bloqueado (<span class="tag-fds">fim de semana</span> produz só sex/sáb)</span>
         <span class="leg-item"><span class="leg-swatch" style="background:#eef4fb;border-color:#cfe0f1;"></span> dia <strong>fechado 🔒</strong> — edições e "limpar" pulam ele</span>
         <span class="leg-item">📤 N = o número que o <strong>padeiro está vendo</strong> (quando o grid difere da ordem enviada)</span>
         <span class="leg-item">✏️ = linha editada à mão (↺ volta ao cálculo) · <span class="tag-lead">Nd</span> = leva N dias pra ficar pronta (produção antecipada)</span>
@@ -727,7 +727,7 @@
                         {% if r.estoque_nao_abate %}<span class="tag-insumo" title="Flag da ficha (19/07/2026): o estoque físico registrado desta receita NÃO abate a produção sugerida — a sugestão cobre o consumo inteiro; só a produção já mandada ao padeiro (o 'a produzir' verde) desconta. O número 'em estoque' continua exibido como referência.">📦 estoque não abate</span>{% endif %}
                         {% if r.retorno %}<span class="tag-retorno" title="Receita de RETORNO: o estoque entra por devolução das lojas (sobras que voltam pra virar Almond etc.) — nunca por produção. A linha aparece só pra visibilidade; não dá pra agendar fornada dela.">♻️ retorno — não se produz</span>{% endif %}
                         {% if r.insumo_sem_vespera %}<span class="tag-vespera" title="Consumo de {{ r.insumo_sem_vespera.faltam }} já está acontecendo (produção de hoje/destes dias usa este insumo), mas não há estoque pronto da véspera pra cobrir — e produzir agora não resolve: este insumo leva {{ r.insumo_sem_vespera.lead }}d pra ficar pronto. Ou existe estoque não registrado (acerte em ajuste de estoque), ou a produção que o consome precisa ser revista.">⚠ sem véspera: faltam {{ r.insumo_sem_vespera.faltam }}</span>{% endif %}
-                        {% if r.fornada_especial %}<span class="tag-fds" title="Fornada especial: vende sex/sáb/dom e PRODUZ só qui/sex/sáb (a venda sai da véspera). Os dias hachurados não recebem produção.">fim de semana</span>{% endif %}
+                        {% if r.fornada_especial %}<span class="tag-fds" title="Fornada especial: vende sáb/dom e PRODUZ só sex/sáb (a venda sai da véspera). Os dias hachurados não recebem produção.">fim de semana</span>{% endif %}
                         {% if r.limitado_por_retorno %}<span class="tag-retorno" title="Política 'só de sobras': a produção sugerida é capada ao estoque devolvido de {{ r.limitado_por_retorno.sub_nome }} ({{ r.limitado_por_retorno.disponivel }} disponível → produz até {{ r.limitado_por_retorno.cap }}).">♻️ capado ao retorno</span>{% endif %}
                         {% if r.entregas_risco %}<span class="tag-risco" title="Pedido de loja sem produto, mesmo produzindo como programado:{% for e in r.entregas_risco %}&#10;• {{ e.label }}: pedido de {{ e.firme }}, faltam {{ e.faltam }}{% endfor %}">🚨 falta {{ r.entregas_risco[0].label }}</span>{% endif %}
                     </div>
@@ -738,7 +738,7 @@
                 {% set env_dia = ordem_enviada.get(c.data) %}
                 {% set difere_cel = env_dia is not none and r.receita_id in difere.get(c.data, ()) %}
                 <td class="cel {% if c.data == crono.hoje %}hoje-col{% endif %}{% if r.insumo or r.retorno %} cel-insumo{% endif %}{% if c.bloqueado %} cel-bloq{% endif %}{% if fechado %} cel-fechada{% endif %}{% if c.data in r.risco_datas %} cel-risco{% endif %}{% if r.insumo_sem_vespera and c.data in r.insumo_sem_vespera.dias %} cel-vespera{% endif %}"
-                    {% if c.data in r.risco_datas %}title="Entrega firme deste dia sem produto — aumente a produção dos dias anteriores (contando o lead)"{% elif c.bloqueado %}title="Fornada especial produz só quinta/sexta/sábado — a venda de sex/sáb/dom sai da véspera."{% elif fechado %}title="Dia fechado com o cadeado (🔒) — reabra no cabeçalho do dia para editar."{% endif %}
+                    {% if c.data in r.risco_datas %}title="Entrega firme deste dia sem produto — aumente a produção dos dias anteriores (contando o lead)"{% elif c.bloqueado %}title="Fornada especial produz só sexta/sábado — a venda de sáb/dom sai da véspera."{% elif fechado %}title="Dia fechado com o cadeado (🔒) — reabra no cabeçalho do dia para editar."{% endif %}
                     data-rid="{{ r.receita_id }}" data-data="{{ c.data }}"
                     data-fornadas="{{ c.fornadas if c.fornadas is not none else '' }}">
                     <input type="number" min="0" inputmode="numeric"
@@ -748,7 +748,7 @@
                            {% elif r.insumo %}readonly tabindex="-1"
                            title="Calculado automaticamente a partir do produto final que consome este insumo. Pra mudar, edite a produção do PRODUTO (ex: o croissant), não o insumo."
                            {% elif c.bloqueado %}readonly tabindex="-1"
-                           title="Fornada especial produz só quinta/sexta/sábado — edite um desses dias."
+                           title="Fornada especial produz só sexta/sábado — edite um desses dias."
                            {% elif fechado %}readonly tabindex="-1"
                            title="Dia fechado com o cadeado (🔒) — reabra no cabeçalho do dia para editar."{% endif %}>
                     <span class="cel-forn">{% if c.fornadas is not none %}{{ c.fornadas }} fornada(s){% elif c.qtd %}un{% endif %}</span>
@@ -929,7 +929,7 @@
 
     function msgErro(resp, d) {
         if (d && d.erro === 'dia_bloqueado')
-            return d.msg || 'fornada especial produz só quinta/sexta/sábado.';
+            return d.msg || 'fornada especial produz só sexta/sábado.';
         if (d && d.erro === 'dia_fechado')
             return d.msg || 'dia fechado com o cadeado (🔒) — reabra no cabeçalho do dia.';
         if (d && d.erro === 'receita_retorno')
