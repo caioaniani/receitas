@@ -210,7 +210,7 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
                 'msg': 'Receita de retorno não se produz — o estoque dela '
                        'entra por devolução das lojas (sobras que voltam), '
                        'não por fornada.'}
-    # Fornada especial: produção só qui/sex/sáb (decisão do dono 06/07/2026).
+    # Fornada especial: produção só sex/sáb (decisão do dono 10/08/2026).
     # Recusa a edição em dia bloqueado ANTES de salvar — a tela já trava a
     # célula, mas o guard vale pra qualquer chamador (defesa em profundidade).
     from app.services.previsao_producao import producao_permitida_no_dia
