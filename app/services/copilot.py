@@ -3345,6 +3345,17 @@ def executar_mudar_status_pedido(params, user):
                          'Abra a ficha do pedido no app e confirme com a foto — '
                          f'/pedidos/{pid}')}
 
+    # Corte das 18h (dono 10/08/2026): CANCELAR o pedido de amanhã depois
+    # das 18h muda o pré-preparo já calculado — mesmo bloqueio da rota web
+    # de cancelar (a revisão de 13/08 pegou este executor sem o check).
+    aviso_corte = None
+    if novo == 'cancelar':
+        from app.services.pedido_corte import bloqueio_do_corte
+        bloqueado_corte, aviso_corte = bloqueio_do_corte(
+            [p.data_entrega], user=user)
+        if bloqueado_corte:
+            return {'ok': False, 'erro': aviso_corte}
+
     try:
         # ENVIAR: baixa estoque da industria pelo MOTOR ÚNICO (03/07/2026) —
         # mesma função da rota web/QR (get-or-create da linha + quantidade
