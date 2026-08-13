@@ -1614,24 +1614,61 @@ regra de 04/07/2026 "enviar ao padeiro e gesto humano" —, motor
 - **Auto-pedidos** (`app/services/auto_pedidos.py::gerar_pedidos_
   automaticos`, cron 06:30 e 17:30 BRT, lock 7758, kill-switch
   `AUTO_PEDIDOS=0`): roda `sugerir_pedidos_por_venda` (o motor da tela
-  /pedidos-semana/estoque; `AUTO_PEDIDOS_SEGURANCA_PCT` opcional) com
-  offset 1 e materializa D+1..D+3 via `pedidos_semana.aplicar_grade`
-  com `user_id=None` — rascunho 'pendente' com o marcador padrao (o motor
-  de MEDIA ja exclui esses rascunhos do historico, sem retroalimentacao).
+  /pedidos-semana/estoque; `AUTO_PEDIDOS_SEGURANCA_PCT` opcional, valor
+  ilegivel vira 0 com WARNING) com offset 1 e materializa D+1..D+3 via
+  `pedidos_semana.aplicar_grade` com `user_id=None` — rascunho 'pendente'
+  com o marcador padrao. **RE-SINCRONIZACAO REAL (fix da revisao
+  13/08/2026)**: o motor recebe `ressincronizar_datas` e trata o rascunho
+  do PROPRIO cron como substituivel (fora do `ja_tem` e das entregas
+  simuladas) — sem isso, dia ja pedido devolvia sugestao 0 e a quantidade
+  congelava na 1a criacao (o refresh das 17:30 era um no-op perpetuo; os
+  testes so passavam porque mockavam o motor). A "venda do dia" entra no
+  refresh via ESTOQUE atual (o sync do Seru drena a cada 15min), nao via
+  media (hist fecha em ontem).
   REGRAS DE RESPEITO: (loja, dia) com pedido CRIADO ou MODIFICADO por
   humano (criado_por/modificado_por_id nao-nulos) NUNCA e sobrescrito
-  (`_dias_protegidos`); D+1 sob o corte nunca e tocado; sugestao zerada
-  nao cria pedido vazio. `criado_por=None` e o que marca "do cron" — a
-  rodada seguinte re-sincroniza so esses. O rascunho pendente JA conta
-  como comprometido no cronograma (comportamento existente — e o que puxa
-  a producao 3 dias a frente).
+  (`_dias_protegidos`); **confirmar (web e copilot) e voltar-status agora
+  CARIMBAM modificado_por_id** — o clique "Confirmar" do gerente protege
+  o rascunho do re-sync; D+1 sob o corte nunca e tocado; sugestao zerada
+  nao cria pedido vazio; pedido ENTREGUE antes da data (entrega
+  antecipada) nao protege o dia (mesmo carve-out do motor/aplicar_grade).
+  O rascunho pendente JA conta como comprometido no cronograma
+  (comportamento existente — e o que puxa a producao 3 dias a frente).
+  **COLISAO humano×cron fechada (critico 2 da revisao 13/08)**: os 3
+  caminhos humanos de criacao (web /novo, web /sugerir-pedido, copilot
+  criar_pedido) agora ADOTAM o rascunho automatico do dia
+  (`pedido_merge.rascunho_automatico_aberto`/`adotar_rascunho_automatico`)
+  em vez de criar um 2o pedido — item citado SUBSTITUI a quantidade do
+  motor (somar seria demanda em DOBRO na ordem das 18h), item do motor
+  nao citado FICA (com aviso "MANTIDOS" visivel), status vira
+  'confirmado' e o carimbo protege. Se ja ha pedido humano 'confirmado' E
+  sobrou rascunho do cron no mesmo dia (estado pre-fix), o proximo criar
+  humano CANCELA o rascunho (`absorver_rascunho_automatico`). A tela
+  pedidos-semana ja sincronizava o rascunho com carimbo (aplicar_grade
+  com user_id).
+  **RETROALIMENTACAO (decisao documentada 13/08)**: pedido-maquina que
+  SAI de 'pendente' (separado/entregue) ENTRA na media de pedidos —
+  exclui-lo pra sempre faria a media (denominador com zeros por data)
+  definhar em ~janela_semanas e o motor 'pedidos' subestimar alem de D+3.
+  O eco e limitado pela `quantidade_recebida` (conferencia na entrega) e
+  medido em `previsao_acuracia.circularidade_pct`. Rascunho ainda
+  'pendente' segue fora (exclusao de sempre).
 - **Auto-envio** (`enviar_plano_automatico`, cron 18:00 BRT, lock 7759,
   kill-switch `AUTO_ENVIO_PLANO=0`): as 18h o pedido de amanha trava
-  (corte) e a ordem de producao de AMANHA e aprovada+ENVIADA ao padeiro
-  (`aprovar_plano_do_dia` tolerando `PlanoJaEnviadoError` +
-  `enviar_plano_do_dia`, motor env `AUTO_ENVIO_MOTOR` default 'pedidos').
-  Re-pressavel por desenho; dia sem grid = nada enviado. O envio manual
-  do dono continua funcionando (o das 18h re-sincroniza).
+  (corte) e, SE a ordem de amanha ainda nao foi enviada, ela e
+  aprovada+ENVIADA ao padeiro (motor env `AUTO_ENVIO_MOTOR` default
+  'pedidos'). **Ordem JA ENVIADA (gesto humano na tela, com o motor/
+  equilibrar DELE) NAO e reenviada** (fix achado 3 da revisao 13/08 —
+  reenviar com os defaults do cron trocaria os numeros do padeiro em
+  silencio; a regra "ordem enviada nunca muda por caminho implicito"
+  segue valendo). `PlanoJaEnviadoError` no aprovar = humano enviou na
+  corrida → desiste tambem. Dia sem grid = nada enviado. LIMITACAO
+  DOCUMENTADA: o plano de amanha congela a VESPERA da venda de D+2
+  (fornada especial/lead 1) — mudanca em D+2 depois do envio so chega ao
+  padeiro pelo "🔄 atualizar producao" manual (mesma janela do fluxo
+  humano de antes). Corrida residual aceita: humano criando pedido nos
+  segundos entre o snapshot de protecao e o commit do cron pode ser
+  sobrescrito UMA vez (proxima rodada protege).
 - **Corte das 18:00** (`app/services/pedido_corte.py`): pedido com
   `data_entrega == amanha` trava as 18:00 BRT — e o horario do
   PRE-PREPARO do padeiro (preparar.json calcula a vespera). Gerente/
