@@ -141,3 +141,18 @@ def test_snapshot_ranking_grava(app):
         assert jobs.snapshot_ranking() == 1
         assert db.session.get(
             AppConfig, f'treino_ranking_{hoje().isoformat()}') is not None
+
+
+def test_certificado_translitera_travessao_e_aspas_curvas():
+    """Achado de revisão 12/08/2026 (seed da Universidade): os módulos usam
+    travessão ("Módulo 1 — Cultura") e aspas curvas — no latin-1 do FPDF
+    viravam '?' no certificado RDC 216 (documento de fiscalização). O _s
+    translitera antes do encode; emoji segue virando '?'."""
+    from app.services.treino_certificado import _s
+    assert _s('Módulo 1 — Cultura') == 'Módulo 1 - Cultura'
+    assert (_s('Princípio: “Como você atenderia sua mãe?”')
+            == 'Princípio: "Como você atenderia sua mãe?"')
+    assert _s('08:00–09:00') == '08:00-09:00'
+    assert _s("D’Ávila") == "D'Ávila"
+    assert _s('café ☕') == 'café ?'          # sem equivalente: segue '?'
+    assert _s(None) == ''
