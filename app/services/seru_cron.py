@@ -58,6 +58,9 @@ LOCK_KEY_GOOGLE_REVIEWS = 7749  # advisory lock pro sync de avaliacoes do Google
 LOCK_KEY_TREINO_FECH = 7754    # advisory lock pro fechamento semanal do treino
 LOCK_KEY_TREINO_DIARIO = 7755  # advisory lock pros jobs diarios do treino
 LOCK_KEY_TINY_PDV = 7756  # advisory lock pro import do PDV do Tiny (Cantina)
+# 7757 RESERVADO: acerto de despacho direto (acerto_despacho.py)
+LOCK_KEY_AUTO_PEDIDOS = 7758  # advisory lock pros pedidos automaticos loja->industria
+LOCK_KEY_AUTO_ENVIO = 7759  # advisory lock pro envio automatico da ordem ao padeiro
 # 7750 foi reciclado: era do `briefing-dono` (removido 17/07/2026), agora e do
 # marketing (sync da base + campanha de aniversario no Listmonk).
 LOCK_KEY_MARKETING = 7750  # advisory lock pro marketing (Listmonk)
