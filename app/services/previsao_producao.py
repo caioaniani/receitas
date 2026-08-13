@@ -1296,6 +1296,7 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
     #   pela quantidade_recebida (conferencia humana na entrega) e medido
     #   em previsao_acuracia.circularidade_pct;
     # - cancelados continuam fora.
+    from app.services.pedido_merge import MARCADOR_RASCUNHO_AUTO
     hist_lrd = defaultdict(lambda: defaultdict(
         lambda: defaultdict(lambda: defaultdict(int))))
     for rid, loja_id, data_ent, qtd, qtd_rec in (db.session.query(
@@ -1307,7 +1308,8 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
                     PedidoLoja.status != 'cancelado',
                     db.or_(PedidoLoja.status != 'pendente',
                            PedidoLoja.observacao.is_(None),
-                           ~PedidoLoja.observacao.like('Gerado do histórico%')),
+                           ~PedidoLoja.observacao.like(
+                               MARCADOR_RASCUNHO_AUTO + '%')),
                     PedidoLoja.data_entrega >= hist_ini,
                     PedidoLoja.data_entrega <= hist_fim).all()):
         if data_ent is None or rid not in receitas:
