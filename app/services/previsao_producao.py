@@ -1494,8 +1494,18 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
 
 
 def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
-                              inicio_offset_dias=0, seguranca_pct=0):
+                              inicio_offset_dias=0, seguranca_pct=0,
+                              ressincronizar_datas=None):
     """Maneira 2 — previsao de pedido por VENDA + ESTOQUE (ponto de reposicao).
+
+    `ressincronizar_datas` (10/08/2026, auto-pedidos): datas cujo RASCUNHO
+    AUTOMATICO do cron (status 'pendente', sem autor humano, observacao
+    'Gerado do histórico%') deve ser tratado como SUBSTITUIVEL — o pedido
+    dele sai do `ja_tem` e das entregas simuladas e a sugestao nasce fresca,
+    porque o `aplicar_grade` da rodada vai sobrescrever esses itens. Sem o
+    param (tela), dia com QUALQUER pedido segue travado como sempre — e dia
+    com pedido de HUMANO segue travado mesmo listado aqui (as linhas dele
+    nao sao rascunho automatico).
 
     Pra cada (loja, receita): mede o consumo medio POR DIA-DA-SEMANA e simula o
     estoque dia a dia partindo do saldo ATUAL. Quando o estoque projetado nao
