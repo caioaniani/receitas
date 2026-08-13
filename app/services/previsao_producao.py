@@ -47,17 +47,19 @@ from app.utils import SUB_RECEITA_TIPOS, hoje, unidades_subreceita
 # pediu nesse dia-da-semana em >= N datas distintas (1 vez = avulso/errado).
 _MIN_OCORRENCIAS_DOW = 2
 
-# Fornada especial (ex: Focaccia): vendida SO sex/sab/dom. weekday(): seg=0 ..
-# dom=6 -> sex=4, sab=5, dom=6. O forecast de pedido NAO sugere esses produtos
-# em outros dias, mesmo que o historico tenha ruido (1 pedido avulso num dia de
-# semana nao vira recorrencia).
-_DIAS_FORNADA_ESPECIAL = frozenset({4, 5, 6})
+# Fornada especial (ex: Focaccia): vendida SO sab/dom (decisao do dono
+# 10/08/2026 — SUBSTITUI a regra de 06/07 que incluia sexta). weekday():
+# seg=0 .. dom=6 -> sab=5, dom=6. O forecast de pedido NAO sugere esses
+# produtos em outros dias, mesmo que o historico tenha ruido (1 pedido
+# avulso num dia de semana nao vira recorrencia). Pedido FIRME lancado pra
+# outro dia segue contando (firme nao passa por este gate).
+_DIAS_FORNADA_ESPECIAL = frozenset({5, 6})
 
-# Fornada especial: a PRODUCAO acontece so qui/sex/sab (decisao do dono
-# 06/07/2026) — o assado fresco do fim de semana sai da vespera da venda
-# (qui->sex, sex->sab, sab->dom). O cronograma nunca programa (nem deixa
-# editar) producao de fornada especial fora desses dias. qui=3, sex=4, sab=5.
-_DIAS_PRODUCAO_FORNADA = frozenset({3, 4, 5})
+# Fornada especial: a PRODUCAO acontece so sex/sab (dono 10/08/2026) — o
+# assado fresco do fim de semana sai da vespera da venda (sex->sab,
+# sab->dom). O cronograma nunca programa (nem deixa editar) producao de
+# fornada especial fora desses dias. sex=4, sab=5.
+_DIAS_PRODUCAO_FORNADA = frozenset({4, 5})
 
 # Motores de previsao da demanda do CRONOGRAMA/balanco (pedido do dono
 # 06/07/2026 — "+1 opcao de previsao, baseada nas vendas"):
