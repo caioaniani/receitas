@@ -2740,6 +2740,16 @@ def executar_criar_pedido(params, user):
                 f'{nomes}. Um admin pode liberar no Banco de MPs '
                 f'(checkbox "sugerir pedido loja").')}
 
+    # Corte das 18h (dono 10/08/2026): pedido pra AMANHA fecha as 18:00 —
+    # e o horario de corte do pre-preparo do padeiro. Espelho da tela web,
+    # checado no EXECUTOR (preview re-enviado nao fura); admin passa com
+    # aviso no resultado. ANTES do merge — "criar" pode virar mesclar num
+    # pedido de amanha ja existente.
+    from app.services.pedido_corte import bloqueio_do_corte
+    bloqueado_corte, aviso_corte = bloqueio_do_corte([data_entrega], user=user)
+    if bloqueado_corte:
+        return {'ok': False, 'erro': aviso_corte}
+
     # Ja existe pedido aberto da loja nessa data? Junta nele em vez de duplicar.
     from app.services.pedido_merge import mesclar_itens, pedido_aberto_para_merge
     alvo = pedido_aberto_para_merge(loja_id, data_entrega, 'confirmado')
