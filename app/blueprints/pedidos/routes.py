@@ -520,10 +520,25 @@ def editar(id):
             return redirect(url_for('pedidos.editar', id=id))
 
         try:
+            data_mudou = (data_entrega != pedido.data_entrega)
             pedido.data_entrega = data_entrega
             pedido.observacao = obs or None
             pedido.modificado_em = agora()
             pedido.modificado_por_id = current_user.id
+            if data_mudou:
+                # Mover o pedido pra um dia que o cron de auto-pedidos já
+                # cobriu deixaria rascunho + pedido humano no mesmo dia
+                # (demanda em dobro) — o rascunho vira redundância e cai.
+                from app.services.pedido_merge import (
+                    absorver_rascunho_automatico,
+                )
+                absorvido = absorver_rascunho_automatico(
+                    pedido.loja_id, data_entrega, current_user.id,
+                    excluir_id=pedido.id)
+                if absorvido is not None:
+                    flash(f'O rascunho automático #{absorvido.id} do dia de '
+                          'destino foi cancelado — o seu pedido manda.',
+                          'info')
 
             # REPLACE total dos itens. Deletar VIA ORM (não Query.delete em
             # massa) pra disparar o cascade 'all, delete-orphan' das fotos de
