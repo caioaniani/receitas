@@ -103,6 +103,7 @@ def adotar_rascunho_automatico(pedido, itens, user_id, observacao=None):
             )
             db.session.add(pi)
             idx[ch] = pi
+            tocadas.add(ch)
             adicionados += 1
     mantidos = len([ch for ch in idx if ch not in tocadas])
     pedido.status = 'confirmado'
