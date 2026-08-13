@@ -625,6 +625,12 @@ def detalhe(id):
 def confirmar(id):
     pedido = PedidoLoja.query.get_or_404(id)
     pedido.status = 'confirmado'
+    # Carimbo do gesto humano (10/08/2026, auto-pedidos): confirmar um
+    # rascunho automático SEM mexer em item é revisão — o carimbo protege o
+    # pedido do re-sync do cron (a observação do rascunho pede exatamente
+    # "revisar e confirmar").
+    pedido.modificado_em = agora()
+    pedido.modificado_por_id = current_user.id
     db.session.commit()
     flash('Pedido confirmado.', 'success')
     return redirect(url_for('pedidos.detalhe', id=id))
