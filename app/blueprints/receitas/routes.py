@@ -959,8 +959,8 @@ def salvar(id):
     # entao some da sugestao de pedido semanal. Checkbox guarda o INVERSO pra o
     # default (desmarcado) manter a receita pedivel.
     receita.sugerir_pedido_loja = not bool(request.form.get('nao_pedir_loja'))
-    # Fornada especial: vendida só sex/sáb/dom (o forecast não sugere em dia de
-    # semana). Ex: Focaccia Gorgonzola.
+    # Fornada especial: vendida só sáb/dom (o forecast não sugere nos outros
+    # dias). Ex: Focaccia Gorgonzola.
     receita.fornada_especial = bool(request.form.get('fornada_especial'))
     # Lead time de producao (dias). Vazio/invalido -> 0. Limite defensivo de
     # 0..14 (nada na padaria leva mais que 2 semanas pra ficar pronto).
