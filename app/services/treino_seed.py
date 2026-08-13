@@ -232,6 +232,11 @@ def importar_universidade(forcar=False):
         db.func.coalesce(db.func.max(TreinoTrilha.ordem), 0)).scalar() or 0)
     criadas = aulas_criadas = 0
     for nome, descricao, aulas in MODULOS:
+        # Dedup pela MESMA forma que é gravada (truncada): com os dados de
+        # hoje o truncamento nunca dispara (nome máx 39 chars), mas num
+        # segundo lote uma string longa deduplicada pela forma inteira e
+        # gravada truncada duplicaria no re-run (achado de revisão).
+        nome = nome[:150]
         trilha = trilhas_por_nome.get(_norm(nome))
         if trilha is None:
             prox_ordem += 1
