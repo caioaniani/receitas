@@ -1603,6 +1603,56 @@ ordem nao bate com o grid visto). Cache do balanco tem motor na chave.
 Constante: `previsao_producao.MOTORES_PREVISAO_PRODUCAO`. Testes: secao
 "motor de previsao" em `tests/test_cronograma.py`.
 
+## Automacao de pedidos + envio + corte 18h + fornada sab/dom (10/08/2026)
+
+Pedido do dono ("hoje eu tenho que lancar o pedido manualmente... quero que
+o sistema faca os pedidos automaticamente de 3 dias na frente"), decisoes
+dele via AskUserQuestion: **automatizar TUDO (pedido + envio)** — REVOGA a
+regra de 04/07/2026 "enviar ao padeiro e gesto humano" —, motor
+**venda+estoque**, corte 18h com **admin passando com aviso**.
+
+- **Auto-pedidos** (`app/services/auto_pedidos.py::gerar_pedidos_
+  automaticos`, cron 06:30 e 17:30 BRT, lock 7758, kill-switch
+  `AUTO_PEDIDOS=0`): roda `sugerir_pedidos_por_venda` (o motor da tela
+  /pedidos-semana/estoque; `AUTO_PEDIDOS_SEGURANCA_PCT` opcional) com
+  offset 1 e materializa D+1..D+3 via `pedidos_semana.aplicar_grade`
+  com `user_id=None` — rascunho 'pendente' com o marcador padrao (o motor
+  de MEDIA ja exclui esses rascunhos do historico, sem retroalimentacao).
+  REGRAS DE RESPEITO: (loja, dia) com pedido CRIADO ou MODIFICADO por
+  humano (criado_por/modificado_por_id nao-nulos) NUNCA e sobrescrito
+  (`_dias_protegidos`); D+1 sob o corte nunca e tocado; sugestao zerada
+  nao cria pedido vazio. `criado_por=None` e o que marca "do cron" — a
+  rodada seguinte re-sincroniza so esses. O rascunho pendente JA conta
+  como comprometido no cronograma (comportamento existente — e o que puxa
+  a producao 3 dias a frente).
+- **Auto-envio** (`enviar_plano_automatico`, cron 18:00 BRT, lock 7759,
+  kill-switch `AUTO_ENVIO_PLANO=0`): as 18h o pedido de amanha trava
+  (corte) e a ordem de producao de AMANHA e aprovada+ENVIADA ao padeiro
+  (`aprovar_plano_do_dia` tolerando `PlanoJaEnviadoError` +
+  `enviar_plano_do_dia`, motor env `AUTO_ENVIO_MOTOR` default 'pedidos').
+  Re-pressavel por desenho; dia sem grid = nada enviado. O envio manual
+  do dono continua funcionando (o das 18h re-sincroniza).
+- **Corte das 18:00** (`app/services/pedido_corte.py`): pedido com
+  `data_entrega == amanha` trava as 18:00 BRT — e o horario do
+  PRE-PREPARO do padeiro (preparar.json calcula a vespera). Gerente/
+  funcionario/producao/padeiro BARRADOS; admin/owner passa com AVISO.
+  Defesa em profundidade (padrao da trava de MP): web novo (ANTES do
+  merge — criar podia virar mesclar num pedido de amanha), editar (data
+  ATUAL e NOVA — mover pra/tirar de amanha fura igual), cancelar, e
+  executores do copilot (preview re-enviado nao fura; admin ganha
+  `aviso` no resultado). LIMITACAO ACEITA: apos a meia-noite o pedido
+  (agora "de hoje") volta ao regime normal — o corte protege a janela
+  18:00-00:00; loja nao opera de madrugada.
+- **Fornada especial vende SO sab/dom** (dono 10/08/2026; SUBSTITUI
+  qui/sex/sab->sex/sab/dom de 06/07/2026): `_DIAS_FORNADA_ESPECIAL =
+  {5,6}` e `_DIAS_PRODUCAO_FORNADA = {4,5}` em previsao_producao.py.
+  Textos das telas (teste.html, ficha.html, msg do cronograma_edit)
+  acompanharam. Pedido FIRME lancado pra outro dia segue contando (firme
+  nao passa pelo gate de venda). Testes da secao reescritos.
+- Testes: `tests/test_auto_pedidos.py` (10), `tests/test_pedido_corte.py`
+  (10), secao fornada de `tests/test_cronograma.py` reescrita. Manual de
+  operacao atualizado (RODA SOZINHO + DIARIO).
+
 ## Pré-baixa de MP na ordem enviada (07/07/2026)
 
 Pedido do dono: ENVIAR a ordem ao padeiro dá uma PRÉ-BAIXA nas MPs; a
