@@ -139,7 +139,12 @@ def _sincronizar_itens(pedido, itens, user_id):
             ajustados += 1
     if ajustados:
         pedido.modificado_em = agora()
-        pedido.modificado_por_id = user_id
+        # O cron (user_id=None) NUNCA apaga um carimbo humano existente: na
+        # corrida "humano adota o rascunho entre o snapshot de proteção e o
+        # commit do cron", zerar o carimbo deixaria o pedido re-sincronizável
+        # pra sempre (achado da revisão rodada 2). Humano sempre carimba.
+        if user_id is not None or pedido.modificado_por_id is None:
+            pedido.modificado_por_id = user_id
     return ajustados, ambiguos
 
 
