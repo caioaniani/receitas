@@ -2307,8 +2307,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             running -= cobre
             residual.append(g - cobre)
         pesos = residual if sum(residual) > 0 else gross
-        # Fornada especial: PRODUCAO so qui/sex/sab (decisao do dono
-        # 06/07/2026) — a venda de sex/sab/dom sai da vespera. O peso de um dia
+        # Fornada especial: PRODUCAO so sex/sab (decisao do dono
+        # 10/08/2026) — a venda de sab/dom sai da vespera. O peso de um dia
         # bloqueado vai pro ultimo dia PERMITIDO anterior (produzir mais cedo
         # chega a tempo; mais tarde nao). Ex: venda de domingo com lead 0 caia
         # no proprio domingo -> vai pro sabado. Sem nenhum dia permitido antes
