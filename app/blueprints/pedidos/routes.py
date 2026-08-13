@@ -319,6 +319,22 @@ def novo():
                                    amanha=amanha, data_min=data_min,
                                    loja_id=loja_id)
 
+        # Corte das 18h (dono 10/08/2026): pedido pra AMANHÃ fecha às 18:00
+        # (pré-preparo do padeiro). Admin passa com aviso; loja é barrada.
+        # Checado ANTES do merge — criar "novo" pode virar mesclar num
+        # pedido de amanhã já existente.
+        from app.services.pedido_corte import bloqueio_do_corte
+        bloqueado, aviso_corte = bloqueio_do_corte([data_entrega],
+                                                   user=current_user)
+        if bloqueado:
+            flash(aviso_corte, 'warning')
+            lojas = _lojas_operacionais()
+            return render_template('pedidos/novo.html', lojas=lojas,
+                                   amanha=amanha, data_min=data_min,
+                                   loja_id=loja_id)
+        if aviso_corte:
+            flash(aviso_corte, 'warning')
+
         # Monta a lista de itens normalizada antes de decidir merge vs novo.
         ids = request.form.getlist('item_id[]')
         qtds = request.form.getlist('item_qtd[]')
