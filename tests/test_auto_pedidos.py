@@ -23,6 +23,15 @@ def _receita(nome='Pao Auto'):
     return r
 
 
+def _as_10h(monkeypatch):
+    """Congela o relógio do corte às 10:00 de hoje: os testes de
+    materialização não são sobre o corte, e rodar a suíte após as 18h BRT
+    reais pularia o D+1 e quebraria o CI (deploy travado — mesma classe do
+    caso do card do padeiro em 09/08)."""
+    fake = datetime.combine(hoje(), datetime.min.time()).replace(hour=10)
+    monkeypatch.setattr(pedido_corte, 'agora', lambda: fake)
+
+
 def _sugestao(loja, receita, por_dia):
     """Mock do retorno de sugerir_pedidos_por_venda (forma real, enxuta)."""
     dias = [(hoje() + timedelta(days=1 + i)) for i in range(len(por_dia))]
@@ -40,6 +49,7 @@ def _sugestao(loja, receita, por_dia):
 
 def test_cria_rascunhos_3_dias_sem_autor_humano(app, loja, monkeypatch):
     with app.app_context():
+        _as_10h(monkeypatch)
         r = _receita()
         from app.services import previsao_producao
         monkeypatch.setattr(previsao_producao, 'sugerir_pedidos_por_venda',
@@ -61,6 +71,7 @@ def test_cria_rascunhos_3_dias_sem_autor_humano(app, loja, monkeypatch):
 def test_rerodada_sincroniza_quantidades(app, loja, monkeypatch):
     from app.services import previsao_producao
     with app.app_context():
+        _as_10h(monkeypatch)
         r = _receita()
         monkeypatch.setattr(previsao_producao, 'sugerir_pedidos_por_venda',
                             lambda **kw: _sugestao(loja, r, [10, 20, 30]))
@@ -81,6 +92,7 @@ def test_pedido_tocado_por_humano_e_preservado(app, loja, admin_user,
     modificado por gente NUNCA é sobrescrito pelo cron."""
     from app.services import previsao_producao
     with app.app_context():
+        _as_10h(monkeypatch)
         r = _receita()
         monkeypatch.setattr(previsao_producao, 'sugerir_pedidos_por_venda',
                             lambda **kw: _sugestao(loja, r, [10, 20, 30]))
@@ -108,6 +120,7 @@ def test_pedido_criado_por_humano_e_preservado(app, loja, admin_user,
                                                monkeypatch):
     from app.services import previsao_producao
     with app.app_context():
+        _as_10h(monkeypatch)
         r = _receita()
         p = PedidoLoja(loja_id=loja.id,
                        data_entrega=hoje() + timedelta(days=2),
@@ -148,6 +161,7 @@ def test_d1_sob_corte_nunca_e_tocado(app, loja, monkeypatch):
 def test_sugestao_zerada_nao_cria_pedido_vazio(app, loja, monkeypatch):
     from app.services import previsao_producao
     with app.app_context():
+        _as_10h(monkeypatch)
         r = _receita()
         monkeypatch.setattr(previsao_producao, 'sugerir_pedidos_por_venda',
                             lambda **kw: _sugestao(loja, r, [0, 0, 0]))
