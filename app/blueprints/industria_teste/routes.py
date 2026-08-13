@@ -484,7 +484,7 @@ def celula():
     if res is None:
         return jsonify(ok=False, erro='nao_encontrado'), 404
     if res.get('erro'):
-        # ex: dia_bloqueado (fornada especial produz só qui/sex/sáb)
+        # ex: dia_bloqueado (fornada especial produz só sex/sáb)
         return jsonify(ok=False, erro=res['erro'], msg=res.get('msg')), 422
     return jsonify(ok=True, **res)
 
