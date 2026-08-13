@@ -242,7 +242,7 @@ def importar_universidade(forcar=False):
             prox_ordem += 1
             # DESLIGADA de propósito: o dono liga o módulo no /treino/admin
             # quando os vídeos dele estiverem no ar (ver docstring do topo).
-            trilha = TreinoTrilha(nome=nome[:150], descricao=descricao,
+            trilha = TreinoTrilha(nome=nome, descricao=descricao,
                                   ordem=prox_ordem, ativa=False)
             db.session.add(trilha)
             db.session.flush()
