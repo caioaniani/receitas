@@ -224,7 +224,7 @@ def test_copilot_criar_pra_amanha_apos_18h_gerente_recusado(
         ger = _gerente()
         r = _receita()
         res = executar_criar_pedido({
-            'loja': loja.nome,
+            'loja_id': loja.id,
             'data_entrega': (hoje() + timedelta(days=1)).isoformat(),
             'itens': [{'resolvido': {'tipo': 'receita', 'id': r.id,
                                      'nome': r.nome}, 'quantidade': 5}],
