@@ -1686,9 +1686,17 @@ regra de 04/07/2026 "enviar ao padeiro e gesto humano" —, motor
   Textos das telas (teste.html, ficha.html, msg do cronograma_edit)
   acompanharam. Pedido FIRME lancado pra outro dia segue contando (firme
   nao passa pelo gate de venda). Testes da secao reescritos.
-- Testes: `tests/test_auto_pedidos.py` (10), `tests/test_pedido_corte.py`
-  (10), secao fornada de `tests/test_cronograma.py` reescrita. Manual de
-  operacao atualizado (RODA SOZINHO + DIARIO).
+- **Corte tambem no copilot cancelar** (fix achado 4 da revisao 13/08):
+  `executar_mudar_status_pedido('cancelar')` agora passa pelo
+  `bloqueio_do_corte` (a rota web ja passava); admin ganha `aviso`. Toda
+  transicao de status via copilot carimba modificado_por_id. A tela
+  pedidos-semana (admin) ganhou o aviso do corte no gerar (flash + msg do
+  ajax).
+- Testes: `tests/test_auto_pedidos.py` (18 — inclui 2 com o MOTOR REAL
+  travando a re-sincronizacao e os 3 de colisao/adocao),
+  `tests/test_pedido_corte.py` (12), secao fornada de
+  `tests/test_cronograma.py` reescrita. Manual de operacao atualizado
+  (RODA SOZINHO + DIARIO).
 
 ## Pré-baixa de MP na ordem enviada (07/07/2026)
 
