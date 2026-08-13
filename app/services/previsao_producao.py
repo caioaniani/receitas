@@ -2438,7 +2438,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             for d in range(n):
                 while carga[d] < alvo:
                     # Fornada especial nunca e adiantada pra dia fora de
-                    # qui/sex/sab (a nivelacao encheria uma segunda ociosa).
+                    # sex/sab (a nivelacao encheria uma segunda ociosa).
                     cands = sorted((it for it in itens_eq if it['dia'] > d
                                     and producao_permitida_no_dia(
                                         it['rec'], dias_prod[d])),
