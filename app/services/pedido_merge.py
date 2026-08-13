@@ -58,21 +58,36 @@ def adotar_rascunho_automatico(pedido, itens, user_id, observacao=None):
 
     Semantica (10/08/2026, junto do pacote de auto-pedidos):
     - item CITADO pelo humano SUBSTITUI a quantidade do motor (somar
-      dobraria — o gesto e "o pedido e este");
+      dobraria — o gesto e "o pedido e este"). O match cai pra FK-sem-estado
+      quando a chave exata nao existe e o rascunho tem UMA linha do item:
+      o cron grava tudo com estado None, e "45 assado" citando o pao de 40
+      do motor tem que substituir a linha (nao criar uma 2a — seria a dobra
+      parcial que a adocao quis evitar; achado da revisao rodada 2);
     - item do motor que o humano NAO citou FICA (remove-lo em silencio
       deixaria a loja sem o item; a diferenca fica visivel no pedido);
     - status vira 'confirmado' e modificado_por_id protege o pedido do cron.
     NAO commita. Retorna {'substituidos', 'adicionados', 'mantidos'}.
     """
     idx = {_chave(it): it for it in pedido.itens}
+    por_fk = {}
+    for it in pedido.itens:
+        fk = (it.receita_id, it.produto_id, it.materia_prima_id)
+        por_fk[fk] = it if fk not in por_fk else None   # None = ambiguo
     substituidos = adicionados = 0
     tocadas = set()
     for novo in itens:
         ch = _chave(novo)
-        tocadas.add(ch)
         existente = idx.get(ch)
+        if existente is None:
+            fk = (novo.get('receita_id'), novo.get('produto_id'),
+                  novo.get('materia_prima_id'))
+            candidato = por_fk.get(fk)
+            if candidato is not None and _chave(candidato) not in tocadas:
+                existente = candidato
         if existente is not None:
+            tocadas.add(_chave(existente))
             existente.quantidade = int(novo['quantidade'])
+            existente.estado = novo.get('estado')
             if novo.get('observacao'):
                 existente.observacao = novo['observacao']
             substituidos += 1
