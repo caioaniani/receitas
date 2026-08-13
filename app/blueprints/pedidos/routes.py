@@ -388,8 +388,11 @@ def novo():
 
         try:
             from app.services.pedido_merge import (
+                absorver_rascunho_automatico,
+                adotar_rascunho_automatico,
                 mesclar_itens,
                 pedido_aberto_para_merge,
+                rascunho_automatico_aberto,
             )
             # Ja existe pedido aberto da loja nessa data? Junta nele em vez de duplicar.
             alvo = pedido_aberto_para_merge(sel_loja, data_entrega, 'confirmado')
@@ -397,10 +400,36 @@ def novo():
                 mesclar_itens(alvo, itens_norm, modificado_por_id=current_user.id)
                 if obs:
                     alvo.observacao = ((alvo.observacao + ' | ') if alvo.observacao else '') + obs
+                # Colisao com o cron de auto-pedidos: se um rascunho
+                # automatico tambem cobre o dia, ele virou redundancia —
+                # somar os itens dele seria demanda em dobro.
+                absorvido = absorver_rascunho_automatico(
+                    sel_loja, data_entrega, current_user.id)
                 db.session.commit()
                 flash(f'Itens adicionados ao pedido #{alvo.id} — ja existia '
                       'para esta loja nesta data.', 'success')
+                if absorvido is not None:
+                    flash(f'O rascunho automático #{absorvido.id} do mesmo dia '
+                          'foi cancelado — o pedido da loja manda.', 'info')
                 return redirect(url_for('pedidos.detalhe', id=alvo.id))
+
+            # Dia coberto pelo CRON de auto-pedidos (10/08/2026): adota o
+            # rascunho em vez de criar um segundo pedido (2 pedidos no mesmo
+            # dia = producao em dobro na ordem das 18h). Item citado
+            # SUBSTITUI a quantidade do motor; item do motor nao citado FICA.
+            rascunho = rascunho_automatico_aberto(sel_loja, data_entrega)
+            if rascunho is not None:
+                res_adote = adotar_rascunho_automatico(
+                    rascunho, itens_norm, current_user.id, observacao=obs)
+                db.session.commit()
+                flash(f'Pedido #{rascunho.id} confirmado a partir da sugestão '
+                      'automática do dia: suas quantidades substituíram as '
+                      'sugeridas.', 'success')
+                if res_adote['mantidos']:
+                    flash(f'{res_adote["mantidos"]} item(ns) da sugestão '
+                          'automática que você não citou foram MANTIDOS no '
+                          'pedido — revise e ajuste se não quiser.', 'warning')
+                return redirect(url_for('pedidos.detalhe', id=rascunho.id))
 
             pedido = PedidoLoja(
                 loja_id=sel_loja,
