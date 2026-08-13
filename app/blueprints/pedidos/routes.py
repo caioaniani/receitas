@@ -1226,6 +1226,16 @@ def cancelar(id):
     if pedido.status not in ('pendente', 'confirmado', 'separado'):
         flash('Só é possível cancelar pedidos pendentes, confirmados ou separados (antes do envio).', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
+    # Corte das 18h (dono 10/08/2026): cancelar o pedido de amanhã depois
+    # das 18h também muda o pré-preparo já calculado.
+    from app.services.pedido_corte import bloqueio_do_corte
+    bloqueado, aviso_corte = bloqueio_do_corte([pedido.data_entrega],
+                                               user=current_user)
+    if bloqueado:
+        flash(aviso_corte, 'warning')
+        return redirect(url_for('pedidos.detalhe', id=id))
+    if aviso_corte:
+        flash(aviso_corte, 'warning')
     pedido.status = 'cancelado'
     db.session.commit()
     flash('Pedido cancelado.', 'success')
