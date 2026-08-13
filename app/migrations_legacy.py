@@ -100,6 +100,26 @@ def _migrate(app):
         _seed_curadoria_dia_pais_v2(app)
         _seed_drivers_entrega(app)
         _seed_cores_drivers(app)
+        _seed_treino_universidade(app)
+
+
+def _seed_treino_universidade(app):
+    """Cadastra UMA VEZ os 9 módulos e 140 aulas da Universidade Padaria
+    Artesanal (estrutura mandada pelo dono em 12/08/2026) — as aulas nascem
+    sem vídeo e as trilhas DESLIGADAS; o dono sobe os vídeos e liga cada
+    módulo no /treino/admin. Guard em AppConfig: apagar/renomear depois NÃO
+    ressuscita (cadastro do dono manda sobre seed). Best-effort: falhar
+    aqui nunca derruba o startup. Pulado sob PYTEST_RUNNING (o teste do
+    seed chama o serviço direto)."""
+    try:
+        from app.services import treino_seed
+        treino_seed.importar_universidade()
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed treino universidade): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _seed_checklist_padrao(app):
