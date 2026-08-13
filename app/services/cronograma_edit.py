@@ -217,9 +217,8 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
     rec = db.session.get(Receita, int(receita_id))
     if not producao_permitida_no_dia(rec, alvo):
         return {'erro': 'dia_bloqueado',
-                'msg': 'Fornada especial produz só quinta/sexta/sábado — a '
-                       'venda de sex/sáb/dom sai da véspera. Edite um desses '
-                       'dias.'}
+                'msg': 'Fornada especial produz só sexta/sábado — a venda '
+                       'de sáb/dom sai da véspera. Edite um desses dias.'}
     novo_qtd = max(0, int(qtd))                       # sem clamp no total: da pra subir
     _salvar_overrides(int(receita_id), [alvo], [novo_qtd])   # so a celula editada
 
