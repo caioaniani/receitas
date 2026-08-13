@@ -2751,17 +2751,52 @@ def executar_criar_pedido(params, user):
         return {'ok': False, 'erro': aviso_corte}
 
     # Ja existe pedido aberto da loja nessa data? Junta nele em vez de duplicar.
-    from app.services.pedido_merge import mesclar_itens, pedido_aberto_para_merge
+    from app.services.pedido_merge import (
+        absorver_rascunho_automatico,
+        adotar_rascunho_automatico,
+        mesclar_itens,
+        pedido_aberto_para_merge,
+        rascunho_automatico_aberto,
+    )
     alvo = pedido_aberto_para_merge(loja_id, data_entrega, 'confirmado')
     if alvo:
         res = mesclar_itens(alvo, itens_norm, modificado_por_id=user.id)
+        absorvido = absorver_rascunho_automatico(loja_id, data_entrega, user.id)
         db.session.commit()
         out = {'ok': True, 'pedido_id': alvo.id, 'mesclado': True,
                'itens_salvos': res['adicionados'] + res['somados'],
                'nao_resolvidos': nao_resolvidos, 'registro_tipo': 'pedido_loja',
                'registro_id': alvo.id, 'url': f'/pedidos/{alvo.id}'}
-        if aviso_corte:
-            out['aviso'] = aviso_corte
+        avisos = [a for a in (aviso_corte,) if a]
+        if absorvido is not None:
+            avisos.append(f'O rascunho automático #{absorvido.id} do mesmo '
+                          'dia foi cancelado — o pedido da loja manda.')
+        if avisos:
+            out['aviso'] = ' | '.join(avisos)
+        return out
+
+    # Dia coberto pelo CRON de auto-pedidos (10/08/2026): adota o rascunho
+    # em vez de criar um segundo pedido (2 pedidos no mesmo dia = producao
+    # em dobro na ordem das 18h). Item citado SUBSTITUI a quantidade do
+    # motor; item do motor nao citado FICA no pedido (o aviso lista).
+    rascunho = rascunho_automatico_aberto(loja_id, data_entrega)
+    if rascunho is not None:
+        res_adote = adotar_rascunho_automatico(
+            rascunho, itens_norm, user.id,
+            observacao=(params.get('observacao') or '').strip() or None)
+        db.session.commit()
+        out = {'ok': True, 'pedido_id': rascunho.id, 'adotou_rascunho': True,
+               'itens_salvos': res_adote['substituidos'] + res_adote['adicionados'],
+               'nao_resolvidos': nao_resolvidos, 'registro_tipo': 'pedido_loja',
+               'registro_id': rascunho.id, 'url': f'/pedidos/{rascunho.id}'}
+        avisos = [a for a in (aviso_corte,) if a]
+        avisos.append('Este dia já tinha a sugestão automática do sistema: '
+                      'suas quantidades substituíram as sugeridas'
+                      + (f' e {res_adote["mantidos"]} item(ns) da sugestão '
+                         'que você não citou foram MANTIDOS no pedido'
+                         if res_adote['mantidos'] else '')
+                      + f' (pedido #{rascunho.id}, confirmado).')
+        out['aviso'] = ' | '.join(avisos)
         return out
 
     pedido = PedidoLoja(
