@@ -246,3 +246,40 @@ def test_copilot_editar_amanha_apos_18h_gerente_recusado(
         res = executar_editar_pedido({'pedido_id': p.id,
                                       'observacao': 'muda'}, ger)
         assert res['ok'] is False and 'corte' in res['erro']
+
+
+def test_copilot_cancelar_amanha_apos_18h_gerente_recusado(
+        app, loja, monkeypatch):
+    """Achado 4 da revisão de 13/08: o executor de mudar_status deixava
+    CANCELAR o pedido de amanhã depois das 18h — o pré-preparo já calculado
+    sumia por um caminho que a rota web bloqueia."""
+    from app.services.copilot import executar_mudar_status_pedido
+    with app.app_context():
+        _as_19h(monkeypatch)
+        ger = _gerente()
+        p = PedidoLoja(loja_id=loja.id,
+                       data_entrega=hoje() + timedelta(days=1),
+                       status='confirmado', criado_por=ger.id)
+        db.session.add(p)
+        db.session.commit()
+        res = executar_mudar_status_pedido(
+            {'pedido_id': p.id, 'novo_status': 'cancelar'}, ger)
+        assert res['ok'] is False and 'corte' in res['erro']
+        assert db.session.get(PedidoLoja, p.id).status == 'confirmado'
+
+
+def test_copilot_cancelar_amanha_apos_18h_admin_passa_com_aviso(
+        app, admin_user, loja, monkeypatch):
+    from app.services.copilot import executar_mudar_status_pedido
+    with app.app_context():
+        _as_19h(monkeypatch)
+        p = PedidoLoja(loja_id=loja.id,
+                       data_entrega=hoje() + timedelta(days=1),
+                       status='confirmado', criado_por=admin_user.id)
+        db.session.add(p)
+        db.session.commit()
+        res = executar_mudar_status_pedido(
+            {'pedido_id': p.id, 'novo_status': 'cancelar'}, admin_user)
+        assert res['ok'] is True
+        assert 'PODE prosseguir' in res.get('aviso', '')
+        assert db.session.get(PedidoLoja, p.id).status == 'cancelado'
