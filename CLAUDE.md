@@ -1639,13 +1639,48 @@ regra de 04/07/2026 "enviar ao padeiro e gesto humano" —, motor
   criar_pedido) agora ADOTAM o rascunho automatico do dia
   (`pedido_merge.rascunho_automatico_aberto`/`adotar_rascunho_automatico`)
   em vez de criar um 2o pedido — item citado SUBSTITUI a quantidade do
-  motor (somar seria demanda em DOBRO na ordem das 18h), item do motor
-  nao citado FICA (com aviso "MANTIDOS" visivel), status vira
-  'confirmado' e o carimbo protege. Se ja ha pedido humano 'confirmado' E
-  sobrou rascunho do cron no mesmo dia (estado pre-fix), o proximo criar
-  humano CANCELA o rascunho (`absorver_rascunho_automatico`). A tela
-  pedidos-semana ja sincronizava o rascunho com carimbo (aplicar_grade
-  com user_id).
+  motor (somar seria demanda em DOBRO na ordem das 18h; o match cai pra
+  FK-sem-estado quando ha UMA linha do item — "45 assado" substitui a
+  linha sem-estado do cron, nunca duplica), item do motor nao citado FICA
+  (com aviso "MANTIDOS" visivel), status vira 'confirmado' e o carimbo
+  protege. Se ja ha pedido humano 'confirmado' E sobrou rascunho do cron
+  no mesmo dia, o proximo criar humano CANCELA o rascunho
+  (`absorver_rascunho_automatico`); EDITAR a data de um pedido pra cima
+  de um dia com rascunho tambem absorve (web e copilot, `excluir_id`
+  protege o proprio pedido); e o PROPRIO CRON absorve dias mistos no
+  inicio de cada rodada (`_absorver_rascunhos_orfaos` — a dobra nao
+  espera gesto humano). A tela pedidos-semana ja sincronizava o rascunho
+  com carimbo (aplicar_grade com user_id).
+  **Regras da rodada 2 da revisao (13/08, todas com teste)**:
+  - **Sugestao que CAI a 0 sincroniza tambem**: item que sumiu da
+    sugestao vai na grade com qtd 0 explicita (o `_sincronizar_itens`
+    remove) e dia cuja sugestao zerou POR INTEIRO tem o rascunho
+    CANCELADO (`rascunhos_cancelados_zero`) — sem isso os 50 velhos
+    congelavam as 18h e viravam entrega desnecessaria.
+  - **Dia MISTO nao e substituivel no motor**: `ressincronizar_datas` so
+    destrava (loja, dia) ocupado SO por rascunho do cron; dia com pedido
+    humano mantem o rascunho no carry (excluir so a linha dele inflava
+    D+2 — reproduzido pela revisao).
+  - **CANCELAR e palavra da loja**: web cancelar e copilot cancelar
+    carimbam modificado_por_id, e `_dias_protegidos` protege dia com
+    pedido CANCELADO por humano — o cron nao ressuscita pedido que a
+    loja matou. Quem quiser o pedido de volta lanca na mao. Cancelado
+    SEM carimbo (historico antigo, absorcao do proprio cron) nao
+    protege.
+  - **Sync do cron NUNCA apaga carimbo humano** (`_sincronizar_itens`
+    so escreve modificado_por_id=None se ja era None) — na corrida
+    "humano adota entre o snapshot e o commit do cron", as quantidades
+    podem ser sobrescritas UMA vez mas o carimbo sobrevive e a rodada
+    seguinte protege.
+  - **Marcador 'Gerado do histórico' tem FONTE UNICA**:
+    `pedido_merge.MARCADOR_RASCUNHO_AUTO`/`OBSERVACAO_RASCUNHO_AUTO` —
+    pedidos_semana (escrita), previsao_producao (media + ressinc) e
+    previsao_acuracia (circularidade) importam de la. NUNCA re-literalar.
+  - PENDENCIA ACEITA (design consistente com o fluxo do cronograma, que
+    so enxerga origem='cronograma'): plano AVULSO/manual de amanha ja
+    enviado ao padeiro NAO suprime o auto-envio das 18h — se um dia o
+    dono usar plano avulso pra cobrir amanha, viram duas ordens;
+    decisao separada.
   **RETROALIMENTACAO (decisao documentada 13/08)**: pedido-maquina que
   SAI de 'pendente' (separado/entregue) ENTRA na media de pedidos —
   exclui-lo pra sempre faria a media (denominador com zeros por data)
