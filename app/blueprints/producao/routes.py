@@ -500,6 +500,13 @@ def pedidos_semana_gerar():
                for k, v in agrupado.items()]
     res = aplicar_grade(pedidos, current_user.id)
 
+    # Corte das 18h (dono 10/08/2026): a tela é admin_required, então o
+    # gerar passa — mas o aviso de que o pré-preparo de amanhã já foi
+    # calculado vai junto (mesmo texto do /pedidos/novo pra admin).
+    from app.services.pedido_corte import bloqueio_do_corte
+    _, aviso_corte = bloqueio_do_corte(
+        sorted({p['data_entrega'] for p in pedidos}), user=current_user)
+
     if so_loja is not None:
         from app.models import Loja
         loja = db.session.get(Loja, so_loja)
