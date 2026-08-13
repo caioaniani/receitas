@@ -1667,34 +1667,52 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # Dias ja pedidos no horizonte (a tela trava; o gerar pula) + a QUANTIDADE ja
     # pedida por (loja, data, receita) — pra simulacao usar a entrega real do dia
     # travado como carry, em vez da sugestao (que nao sera criada).
-    # Com `ressincronizar_datas`, o rascunho AUTOMATICO nessas datas e pulado
-    # nos DOIS levantamentos (dia destrava E a quantidade dele sai da entrega
+    # Com `ressincronizar_datas`, o (loja, dia) SUBSTITUIVEL e pulado nos
+    # DOIS levantamentos (dia destrava E a quantidade dele sai da entrega
     # simulada — ele vai ser sobrescrito pela propria rodada, contar seria
-    # dobrar a reposicao). Pedido com toque humano nunca e pulado.
+    # dobrar a reposicao). SUBSTITUIVEL = data listada E ocupada SO por
+    # rascunho(s) automatico(s) do cron. Dia MISTO (rascunho + pedido de
+    # humano) NAO e substituivel: o gerar pula o dia (protegido pelo
+    # humano), o rascunho segue vivo e a quantidade dele TEM que continuar
+    # no carry — excluir so a linha do rascunho num dia misto inflava D+2
+    # (achado da revisao rodada 2, reproduzido).
+    from app.services.pedido_merge import MARCADOR_RASCUNHO_AUTO
     ressinc = {d.isoformat() if hasattr(d, 'isoformat') else str(d)
                for d in (ressincronizar_datas or [])}
 
     def _rascunho_auto(status_p, criado, modif, obs):
         return (status_p == 'pendente' and criado is None and modif is None
-                and (obs or '').startswith('Gerado do histórico'))
+                and (obs or '').startswith(MARCADOR_RASCUNHO_AUTO))
 
     ja_tem = defaultdict(set)
     status_dia = defaultdict(lambda: defaultdict(list))
     pedido_existente = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    for loja_id, data_ent, status_p, criado_p, modif_p, obs_p in (
-            db.session.query(
-                PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoLoja.status,
-                PedidoLoja.criado_por, PedidoLoja.modificado_por_id,
-                PedidoLoja.observacao)
-            .filter(PedidoLoja.status != 'cancelado',
-                    _cond_sem_entrega_antecipada(hoje_d),
-                    PedidoLoja.data_entrega >= inicio_d,
-                    PedidoLoja.data_entrega <= horizonte_fim)
-            .all()):
+    _rows_horizonte = (db.session.query(
+            PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoLoja.status,
+            PedidoLoja.criado_por, PedidoLoja.modificado_por_id,
+            PedidoLoja.observacao)
+        .filter(PedidoLoja.status != 'cancelado',
+                _cond_sem_entrega_antecipada(hoje_d),
+                PedidoLoja.data_entrega >= inicio_d,
+                PedidoLoja.data_entrega <= horizonte_fim)
+        .all())
+    _dias_sub = set()
+    _dias_com_outro = set()
+    for loja_id, data_ent, status_p, criado_p, modif_p, obs_p in _rows_horizonte:
         if data_ent is None:
             continue
-        if (data_ent.isoformat() in ressinc
-                and _rascunho_auto(status_p, criado_p, modif_p, obs_p)):
+        chave_ld = (loja_id, data_ent.isoformat())
+        if _rascunho_auto(status_p, criado_p, modif_p, obs_p):
+            if data_ent.isoformat() in ressinc:
+                _dias_sub.add(chave_ld)
+        else:
+            _dias_com_outro.add(chave_ld)
+    _dias_sub -= _dias_com_outro
+
+    for loja_id, data_ent, status_p, _c, _m, _o in _rows_horizonte:
+        if data_ent is None:
+            continue
+        if (loja_id, data_ent.isoformat()) in _dias_sub:
             continue
         ja_tem[loja_id].add(data_ent.isoformat())
         status_dia[loja_id][data_ent.isoformat()].append(status_p)
