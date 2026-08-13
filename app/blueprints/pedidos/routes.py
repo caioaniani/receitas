@@ -461,6 +461,18 @@ def editar(id):
             flash(f'A data de entrega deve ser a partir de {data_min.strftime("%d/%m")}.', 'warning')
             return redirect(url_for('pedidos.editar', id=id))
 
+        # Corte das 18h (dono 10/08/2026): olha a data ATUAL e a NOVA —
+        # mover um pedido PRA amanhã (ou tirar de amanhã) depois das 18h
+        # muda o pré-preparo do padeiro do mesmo jeito.
+        from app.services.pedido_corte import bloqueio_do_corte
+        bloqueado, aviso_corte = bloqueio_do_corte(
+            [pedido.data_entrega, data_entrega], user=current_user)
+        if bloqueado:
+            flash(aviso_corte, 'warning')
+            return redirect(url_for('pedidos.detalhe', id=id))
+        if aviso_corte:
+            flash(aviso_corte, 'warning')
+
         # MP NOVA só entra se liberada pra pedido de loja (checkbox no Banco
         # de MPs). MP que JÁ estava no pedido continua válida — sem isso,
         # desmarcar a flag travaria a edição de pedidos antigos legítimos.
