@@ -1,32 +1,39 @@
-"""Corte das 18:00 do pedido loja→indústria (10/08/2026, regra do dono).
+"""Corte do fim do dia do pedido loja→indústria (10/08/2026, regra do dono).
 
 "O pedido que as lojas fazem para receber no dia seguinte não pode ser
-modificado após as 18:00" — é o horário de corte do PRÉ-PREPARO: às 18h a
+modificado após o corte" — é o horário de corte do PRÉ-PREPARO: no corte a
 TV do padeiro calcula o que assar/adiantar pra amanhã (`preparar.json`),
 e mudar o pedido de amanhã depois disso muda a lista com a produção já
 adiantada.
 
-Regra: pedido com `data_entrega == amanhã` fica TRAVADO das 18:00 (BRT) em
-diante pra gerente/funcionário/produção/padeiro. ADMIN/OWNER passa, com
+HORÁRIO: `HORA_CORTE` (nasceu 18:00; **19:00 desde 13/08/2026**, pedido do
+dono no 1º dia real — as lojas precisavam da hora extra pra revisar). Os
+crons acompanham: refresh dos auto-pedidos 30min antes do corte e envio
+automático da ordem NO corte (`seru_cron`) — mudar a hora aqui exige mudar
+os dois jobs lá junto.
+
+Regra: pedido com `data_entrega == amanhã` fica TRAVADO da HORA_CORTE (BRT)
+em diante pra gerente/funcionário/produção/padeiro. ADMIN/OWNER passa, com
 AVISO explícito (válvula de emergência — decisão do dono 10/08/2026, junto
 com a automação de pedidos). O mesmo corte é o motivo de o cron de
-auto-pedidos nunca tocar o D+1 depois das 18h.
+auto-pedidos nunca tocar o D+1 depois do corte.
 
 Defesa em profundidade (mesmo desenho da trava de MP não-pedível): web
 novo/editar/cancelar + executores do copilot. LIMITAÇÃO CONHECIDA e aceita:
 após a MEIA-NOITE o pedido (agora "de hoje") volta ao regime normal de
-edição — o corte protege a janela 18:00–00:00, que é quando o pré-preparo
-acontece; loja não opera de madrugada.
+edição — o corte protege a janela HORA_CORTE–00:00, que é quando o
+pré-preparo acontece; loja não opera de madrugada.
 """
 from datetime import timedelta
 
 from app.utils import agora
 
-HORA_CORTE = 18
+HORA_CORTE = 19
 
 
 def corte_ativo(data_entrega, *, agora_dt=None):
-    """True se ESTA data de entrega está sob o corte agora (amanhã + >=18h).
+    """True se ESTA data de entrega está sob o corte agora (amanhã +
+    >= HORA_CORTE).
 
     `data_entrega` None nunca trava (pedido sem data não participa do
     pré-preparo por data). `agora_dt` injetável pra teste."""
