@@ -184,6 +184,162 @@ def test_motor_real_nao_mexe_em_dia_de_humano(app, loja, admin_user,
         assert p2.itens[0].quantidade == 40
 
 
+def test_motor_real_sugestao_zerada_cancela_rascunho(app, loja, monkeypatch):
+    """Rodada 2 da revisão: sugestão que CAI a 0 (estoque subiu e cobre)
+    também tem que chegar no rascunho — deixar os 50 velhos congelarem às
+    18h viraria produção/entrega desnecessária. Dia todo-zerado CANCELA."""
+    with app.app_context():
+        _as_10h(monkeypatch)
+        r = _receita('Pao Zera Dia')
+        el = EstoqueLoja(loja_id=loja.id, receita_id=r.id, quantidade=0,
+                         estoque_minimo=50)
+        db.session.add(el)
+        db.session.commit()
+        el_id = el.id
+        out1 = auto_pedidos.gerar_pedidos_automaticos()
+        assert out1['criados'] == 1
+
+        db.session.get(EstoqueLoja, el_id).quantidade = 200   # cobre tudo
+        db.session.commit()
+        out2 = auto_pedidos.gerar_pedidos_automaticos()
+        assert out2['rascunhos_cancelados_zero'] == 1
+        assert (PedidoLoja.query
+                .filter(PedidoLoja.loja_id == loja.id,
+                        PedidoLoja.status != 'cancelado')
+                .count()) == 0
+
+
+def test_motor_real_item_que_saiu_da_sugestao_e_removido(app, loja,
+                                                         monkeypatch):
+    """Item cuja sugestão caiu a 0 sai do rascunho (qtd 0 explícita na
+    grade); o resto do pedido segue sincronizando."""
+    with app.app_context():
+        _as_10h(monkeypatch)
+        ra = _receita('Pao Fica')
+        rb = _receita('Croissant Sai')
+        ela = EstoqueLoja(loja_id=loja.id, receita_id=ra.id, quantidade=0,
+                          estoque_minimo=50)
+        elb = EstoqueLoja(loja_id=loja.id, receita_id=rb.id, quantidade=0,
+                          estoque_minimo=30)
+        db.session.add_all([ela, elb])
+        db.session.commit()
+        elb_id = elb.id
+        auto_pedidos.gerar_pedidos_automaticos()
+        p1 = (PedidoLoja.query
+              .filter_by(loja_id=loja.id,
+                         data_entrega=hoje() + timedelta(days=1)).one())
+        assert {it.receita_id: it.quantidade for it in p1.itens} == {
+            ra.id: 50, rb.id: 30}
+
+        db.session.get(EstoqueLoja, elb_id).quantidade = 200
+        db.session.commit()
+        auto_pedidos.gerar_pedidos_automaticos()
+        p1 = db.session.get(PedidoLoja, p1.id)
+        assert {it.receita_id: it.quantidade for it in p1.itens} == {
+            ra.id: 50}                              # rb removido, ra fica
+
+
+def test_dia_misto_absorve_rascunho_e_carry_fica_certo(app, loja, admin_user,
+                                                       monkeypatch):
+    """Rodada 2: dia com rascunho do cron E pedido humano (colisão — edição
+    de data, legado): o cron ABSORVE o rascunho antes do motor, o carry da
+    simulação fica só com o pedido que vale e D+2 não infla."""
+    with app.app_context():
+        _as_10h(monkeypatch)
+        r = _receita('Pao Dia Misto')
+        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=r.id,
+                                   quantidade=0, estoque_minimo=50))
+        humano = PedidoLoja(loja_id=loja.id,
+                            data_entrega=hoje() + timedelta(days=1),
+                            status='confirmado', criado_por=admin_user.id)
+        db.session.add(humano)
+        db.session.flush()
+        db.session.add(PedidoItem(pedido_id=humano.id, receita_id=r.id,
+                                  quantidade=10))
+        db.session.commit()
+        rascunho = _rascunho_auto(loja, [(r, 40)])
+        hid, raid = humano.id, rascunho.id
+
+        out = auto_pedidos.gerar_pedidos_automaticos()
+        assert out['rascunhos_absorvidos'] == 1
+        assert db.session.get(PedidoLoja, raid).status == 'cancelado'
+        assert db.session.get(PedidoLoja, hid).itens[0].quantidade == 10
+        # Carry de D+1 = só os 10 do humano → D+2 repõe 40 (não 50).
+        p2 = (PedidoLoja.query
+              .filter_by(loja_id=loja.id,
+                         data_entrega=hoje() + timedelta(days=2)).one())
+        assert p2.itens[0].quantidade == 40
+
+
+def test_cancelamento_humano_nao_ressuscita(app, loja, admin_user,
+                                            monkeypatch):
+    """Rodada 2: a loja cancela o pedido automático de D+2 ("não quero
+    pedido") — o cron NÃO recria na rodada seguinte (o cancelar carimba e o
+    dia fica protegido)."""
+    from app.services import previsao_producao
+    with app.app_context():
+        _as_10h(monkeypatch)
+        r = _receita()
+        p = _rascunho_auto(loja, [(r, 20)], dias=2)
+        pid = p.id
+        c = app.test_client()
+        _login(c, admin_user)
+        c.post(f'/pedidos/{pid}/cancelar')
+        p = db.session.get(PedidoLoja, pid)
+        assert p.status == 'cancelado'
+        assert p.modificado_por_id == admin_user.id
+
+        monkeypatch.setattr(previsao_producao, 'sugerir_pedidos_por_venda',
+                            lambda **kw: _sugestao(loja, r, [11, 22, 33]))
+        auto_pedidos.gerar_pedidos_automaticos()
+        assert (PedidoLoja.query
+                .filter(PedidoLoja.loja_id == loja.id,
+                        PedidoLoja.status != 'cancelado',
+                        PedidoLoja.data_entrega == hoje() + timedelta(days=2))
+                .count()) == 0                      # D+2 segue sem pedido
+
+
+def test_sincronizar_do_cron_nao_apaga_carimbo_humano(app, loja, admin_user):
+    """Rodada 2 (corrida cron×adoção): o sync com user_id=None nunca zera um
+    carimbo humano existente — na corrida, a rodada seguinte protege."""
+    from app.services.pedidos_semana import _sincronizar_itens
+    with app.app_context():
+        r = _receita()
+        p = _rascunho_auto(loja, [(r, 40)])
+        p.modificado_por_id = admin_user.id         # humano tocou no meio
+        db.session.commit()
+        _sincronizar_itens(p, [{'receita_id': r.id, 'qtd': 30}], None)
+        db.session.commit()
+        assert p.itens[0].quantidade == 30
+        assert p.modificado_por_id == admin_user.id  # carimbo sobrevive
+
+
+def test_adocao_com_estado_divergente_nao_duplica_linha(app, loja,
+                                                        admin_user,
+                                                        monkeypatch):
+    """Rodada 2: humano cita "45 assado" e o rascunho tem a linha sem
+    estado — substitui a MESMA linha (estado junto), nunca cria uma 2ª
+    (seria a dobra parcial que a adoção quis evitar)."""
+    from app.services.copilot import executar_criar_pedido
+    with app.app_context():
+        _as_10h(monkeypatch)
+        r = _receita('Pao Estado Divergente')
+        p = _rascunho_auto(loja, [(r, 40)])
+        pid = p.id
+        res = executar_criar_pedido({
+            'loja_id': loja.id,
+            'data_entrega': (hoje() + timedelta(days=1)).isoformat(),
+            'itens': [{'resolvido': {'tipo': 'receita', 'id': r.id,
+                                     'nome': r.nome}, 'quantidade': 45,
+                       'estado': 'assado'}],
+        }, admin_user)
+        assert res['ok'] is True
+        p = db.session.get(PedidoLoja, pid)
+        assert len(p.itens) == 1
+        assert p.itens[0].quantidade == 45
+        assert p.itens[0].estado == 'assado'
+
+
 def test_pedido_tocado_por_humano_e_preservado(app, loja, admin_user,
                                                monkeypatch):
     """A palavra da loja vale mais que a do motor: pedido criado ou
