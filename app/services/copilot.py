@@ -3402,6 +3402,11 @@ def executar_mudar_status_pedido(params, user):
                 ))
 
         p.status = para
+        # Carimbo do gesto humano (10/08/2026, auto-pedidos): confirmar/
+        # separar/etc. via copilot é decisão de gente — protege o pedido do
+        # re-sync do cron (espelho da rota web de confirmar).
+        p.modificado_em = agora()
+        p.modificado_por_id = user.id
         db.session.commit()
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
