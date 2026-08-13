@@ -1792,7 +1792,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             # (Difere DE PROPOSITO do dia travado dentro da janela, que NAO
             # clampa: la o deficit segue visivel na propria grade.)
             for d in dias_pre_janela:
-                # Fornada especial nao vende fora de sex/sab/dom, mas uma
+                # Fornada especial nao vende fora de sab/dom, mas uma
                 # entrega agendada num dia comum ainda credita o saldo.
                 if fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL:
                     consumo_pre = 0.0
