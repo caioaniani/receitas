@@ -3394,6 +3394,18 @@ def sugerir_pedido(loja_id):
         except ValueError:
             flash('Data invalida.', 'danger')
             return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
+        # Corte das 18h: a rota é admin (passa), mas o aviso de que o
+        # pré-preparo de amanhã já foi calculado vai junto — mesmo contrato
+        # dos outros caminhos de escrita (defesa em profundidade).
+        from app.services.pedido_corte import bloqueio_do_corte
+        bloqueado_corte, aviso_corte = bloqueio_do_corte(
+            [data_entrega], user=current_user)
+        if bloqueado_corte:
+            flash(aviso_corte, 'warning')
+            return redirect(url_for('pedidos.sugerir_pedido',
+                                    loja_id=loja_id))
+        if aviso_corte:
+            flash(aviso_corte, 'warning')
         refs = request.form.getlist('item_ref[]')
         qtds = request.form.getlist('item_qtd[]')
         itens = []
