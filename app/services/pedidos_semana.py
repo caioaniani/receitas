@@ -53,13 +53,14 @@ def criar_pedidos_rascunho(pedidos, user_id):
         if existe:
             pulados += 1
             continue
+        from app.services.pedido_merge import OBSERVACAO_RASCUNHO_AUTO
         pedido = PedidoLoja(
             loja_id=loja_id,
             data_entrega=data_ent,
             data_pedido=hoje_d,
             status='pendente',
             criado_por=user_id,
-            observacao='Gerado do histórico (rascunho) — revisar e confirmar.',
+            observacao=OBSERVACAO_RASCUNHO_AUTO,
         )
         db.session.add(pedido)
         db.session.flush()
