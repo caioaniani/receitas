@@ -251,11 +251,12 @@ def importar_universidade(forcar=False):
         titulos_ja = {_norm(v.titulo) for v in trilha.videos}
         ordem_video = max((v.ordem for v in trilha.videos), default=-1)
         for titulo in aulas:
+            titulo = titulo[:200]          # dedup pela forma gravada
             if _norm(titulo) in titulos_ja:
                 continue
             ordem_video += 1
             db.session.add(TreinoVideo(
-                trilha_id=trilha.id, titulo=titulo[:200], ordem=ordem_video,
+                trilha_id=trilha.id, titulo=titulo, ordem=ordem_video,
                 provedor='cloudflare', ativo=True))
             titulos_ja.add(_norm(titulo))
             aulas_criadas += 1
