@@ -1181,6 +1181,10 @@ def _aplicar_voltar_status(pedido, usuario_id):
         return None
 
     pedido.status = novo_status
+    # Carimbo do gesto humano (10/08/2026, auto-pedidos): mexer no status é
+    # decisão de gente — protege o pedido do re-sync do cron.
+    pedido.modificado_em = agora()
+    pedido.modificado_por_id = usuario_id
     return (status_atual, novo_status)
 
 
