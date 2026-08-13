@@ -41,9 +41,6 @@ def _sugestao(loja, receita, por_dia):
 def test_cria_rascunhos_3_dias_sem_autor_humano(app, loja, monkeypatch):
     with app.app_context():
         r = _receita()
-        monkeypatch.setattr(
-            auto_pedidos.__name__ + '.previsao_producao', None,
-            raising=False)
         from app.services import previsao_producao
         monkeypatch.setattr(previsao_producao, 'sugerir_pedidos_por_venda',
                             lambda **kw: _sugestao(loja, r, [10, 20, 30]))
