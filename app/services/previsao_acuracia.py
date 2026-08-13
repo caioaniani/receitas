@@ -347,10 +347,12 @@ def resumo_acuracia(dias=30, motor=None):
     tot_ped = (db.session.query(func.count(PedidoLoja.id))
                .filter(PedidoLoja.status.in_(_STATUS_ENTREGUE),
                        PedidoLoja.data_entrega >= corte).scalar()) or 0
+    from app.services.pedido_merge import MARCADOR_RASCUNHO_AUTO
     tot_auto = (db.session.query(func.count(PedidoLoja.id))
                 .filter(PedidoLoja.status.in_(_STATUS_ENTREGUE),
                         PedidoLoja.data_entrega >= corte,
-                        PedidoLoja.observacao.like('Gerado do histórico%'))
+                        PedidoLoja.observacao.like(
+                            MARCADOR_RASCUNHO_AUTO + '%'))
                 .scalar()) or 0
 
     return {'total': total, 'por_receita': por_receita, 'por_loja': por_loja,
