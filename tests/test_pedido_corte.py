@@ -1,7 +1,8 @@
-"""Corte das 18:00 do pedido loja→indústria (10/08/2026, regra do dono).
+"""Corte do fim do dia do pedido loja→indústria (10/08/2026, regra do dono;
+19:00 desde 13/08/2026).
 
 "O pedido que as lojas fazem para receber no dia seguinte não pode ser
-modificado após as 18:00" — horário de corte do pré-preparo do padeiro.
+modificado após o corte" — horário de corte do pré-preparo do padeiro.
 Gerente/funcionário barrados; admin/owner passa com aviso. Defesa em
 profundidade: web novo/editar/cancelar + executores do copilot.
 """
@@ -39,31 +40,31 @@ def _receita(nome='Croissant Corte'):
 
 
 def _as_19h(monkeypatch):
-    """Congela o relógio do serviço às 19:00 de hoje (dentro do corte)."""
-    fake = datetime.combine(hoje(), datetime.min.time()).replace(hour=19)
+    """Congela o relógio do serviço às 20:00 de hoje (dentro do corte)."""
+    fake = datetime.combine(hoje(), datetime.min.time()).replace(hour=20)
     monkeypatch.setattr(pedido_corte, 'agora', lambda: fake)
 
 
 # ── unidade ─────────────────────────────────────────────────────────
 
-def test_corte_ativo_so_amanha_apos_18h():
-    base = datetime(2026, 8, 10, 17, 59)
+def test_corte_ativo_so_amanha_apos_19h():
+    base = datetime(2026, 8, 10, 18, 59)
     amanha = base.date() + timedelta(days=1)
-    assert corte_ativo(amanha, agora_dt=base) is False          # 17:59
-    as18 = base.replace(hour=18, minute=0)
-    assert corte_ativo(amanha, agora_dt=as18) is True           # 18:00
+    assert corte_ativo(amanha, agora_dt=base) is False          # 18:59
+    as18 = base.replace(hour=19, minute=0)
+    assert corte_ativo(amanha, agora_dt=as18) is True           # 19:00
     assert corte_ativo(amanha + timedelta(days=1), agora_dt=as18) is False
     assert corte_ativo(base.date(), agora_dt=as18) is False     # hoje não
     assert corte_ativo(None, agora_dt=as18) is False
 
 
 def test_bloqueio_gerente_barrado_admin_avisado(app, admin_user):
-    as19 = datetime(2026, 8, 10, 19, 0)
+    as19 = datetime(2026, 8, 10, 19, 30)
     amanha = as19.date() + timedelta(days=1)
     with app.app_context():
         ger = _gerente()
         bloq, msg = bloqueio_do_corte([amanha], user=ger, agora_dt=as19)
-        assert bloq is True and '18:00' in msg
+        assert bloq is True and '19:00' in msg
         bloq, msg = bloqueio_do_corte([amanha], user=admin_user,
                                       agora_dt=as19)
         assert bloq is False and 'PODE prosseguir' in msg
@@ -74,7 +75,7 @@ def test_bloqueio_gerente_barrado_admin_avisado(app, admin_user):
 
 # ── web ─────────────────────────────────────────────────────────────
 
-def test_web_novo_pra_amanha_apos_18h_gerente_barrado(app, loja,
+def test_web_novo_pra_amanha_no_corte_gerente_barrado(app, loja,
                                                       monkeypatch):
     with app.app_context():
         _as_19h(monkeypatch)
@@ -95,7 +96,7 @@ def test_web_novo_pra_amanha_apos_18h_gerente_barrado(app, loja,
         assert PedidoLoja.query.filter_by(loja_id=lid).count() == 0
 
 
-def test_web_novo_pra_amanha_apos_18h_admin_passa_com_aviso(
+def test_web_novo_pra_amanha_no_corte_admin_passa_com_aviso(
         app, admin_user, loja, monkeypatch):
     with app.app_context():
         _as_19h(monkeypatch)
@@ -115,7 +116,7 @@ def test_web_novo_pra_amanha_apos_18h_admin_passa_com_aviso(
         assert PedidoLoja.query.filter_by(loja_id=lid).count() == 1
 
 
-def test_web_novo_pra_depois_de_amanha_livre_apos_18h(app, loja,
+def test_web_novo_pra_depois_de_amanha_livre_no_corte(app, loja,
                                                       monkeypatch):
     with app.app_context():
         _as_19h(monkeypatch)
@@ -135,9 +136,9 @@ def test_web_novo_pra_depois_de_amanha_livre_apos_18h(app, loja,
         assert PedidoLoja.query.filter_by(loja_id=lid).count() == 1
 
 
-def test_web_editar_mover_PRA_amanha_apos_18h_barrado(app, loja,
+def test_web_editar_mover_PRA_amanha_no_corte_barrado(app, loja,
                                                       monkeypatch):
-    """Mover um pedido de D+3 pra AMANHÃ depois das 18h fura o pré-preparo
+    """Mover um pedido de D+3 pra AMANHÃ depois do corte fura o pré-preparo
     do mesmo jeito — o corte olha a data NOVA também."""
     with app.app_context():
         _as_19h(monkeypatch)
@@ -166,7 +167,7 @@ def test_web_editar_mover_PRA_amanha_apos_18h_barrado(app, loja,
                 == hoje() + timedelta(days=3))      # não moveu
 
 
-def test_web_cancelar_amanha_apos_18h_barrado(app, loja, monkeypatch):
+def test_web_cancelar_amanha_no_corte_barrado(app, loja, monkeypatch):
     with app.app_context():
         _as_19h(monkeypatch)
         ger = _gerente()
@@ -182,12 +183,12 @@ def test_web_cancelar_amanha_apos_18h_barrado(app, loja, monkeypatch):
         assert db.session.get(PedidoLoja, pid).status == 'confirmado'
 
 
-def test_web_editar_amanha_antes_das_18h_livre(app, loja):
-    """Sem monkeypatch de hora só roda o caminho: se AGORA for >= 18h de
+def test_web_editar_amanha_antes_do_corte_livre(app, loja):
+    """Sem monkeypatch de hora só roda o caminho: se AGORA for >= HORA_CORTE de
     verdade, o teste vira no-op honesto (pula) — sem flakiness de relógio."""
     from app.utils import agora
     if agora().hour >= pedido_corte.HORA_CORTE:
-        pytest.skip('suite rodando após as 18h BRT — caminho coberto pelos '
+        pytest.skip('suite rodando após o corte BRT — caminho coberto pelos '
                     'testes com relógio congelado')
     with app.app_context():
         ger = _gerente()
@@ -216,7 +217,7 @@ def test_web_editar_amanha_antes_das_18h_livre(app, loja):
 
 # ── copilot (executores — preview re-enviado não fura) ──────────────
 
-def test_copilot_criar_pra_amanha_apos_18h_gerente_recusado(
+def test_copilot_criar_pra_amanha_no_corte_gerente_recusado(
         app, loja, monkeypatch):
     from app.services.copilot import executar_criar_pedido
     with app.app_context():
@@ -232,7 +233,7 @@ def test_copilot_criar_pra_amanha_apos_18h_gerente_recusado(
         assert res['ok'] is False and 'corte' in res['erro']
 
 
-def test_copilot_editar_amanha_apos_18h_gerente_recusado(
+def test_copilot_editar_amanha_no_corte_gerente_recusado(
         app, loja, monkeypatch):
     from app.services.copilot import executar_editar_pedido
     with app.app_context():
@@ -248,10 +249,10 @@ def test_copilot_editar_amanha_apos_18h_gerente_recusado(
         assert res['ok'] is False and 'corte' in res['erro']
 
 
-def test_copilot_cancelar_amanha_apos_18h_gerente_recusado(
+def test_copilot_cancelar_amanha_no_corte_gerente_recusado(
         app, loja, monkeypatch):
     """Achado 4 da revisão de 13/08: o executor de mudar_status deixava
-    CANCELAR o pedido de amanhã depois das 18h — o pré-preparo já calculado
+    CANCELAR o pedido de amanhã depois do corte — o pré-preparo já calculado
     sumia por um caminho que a rota web bloqueia."""
     from app.services.copilot import executar_mudar_status_pedido
     with app.app_context():
@@ -268,7 +269,7 @@ def test_copilot_cancelar_amanha_apos_18h_gerente_recusado(
         assert db.session.get(PedidoLoja, p.id).status == 'confirmado'
 
 
-def test_copilot_cancelar_amanha_apos_18h_admin_passa_com_aviso(
+def test_copilot_cancelar_amanha_no_corte_admin_passa_com_aviso(
         app, admin_user, loja, monkeypatch):
     from app.services.copilot import executar_mudar_status_pedido
     with app.app_context():

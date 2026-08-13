@@ -500,7 +500,7 @@ def pedidos_semana_gerar():
                for k, v in agrupado.items()]
     res = aplicar_grade(pedidos, current_user.id)
 
-    # Corte das 18h (dono 10/08/2026): a tela é admin_required, então o
+    # Corte do fim do dia (dono 10/08/2026): a tela é admin_required — o
     # gerar passa — mas o aviso de que o pré-preparo de amanhã já foi
     # calculado vai junto (mesmo texto do /pedidos/novo pra admin).
     from app.services.pedido_corte import bloqueio_do_corte

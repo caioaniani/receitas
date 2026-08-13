@@ -2740,7 +2740,8 @@ def executar_criar_pedido(params, user):
                 f'{nomes}. Um admin pode liberar no Banco de MPs '
                 f'(checkbox "sugerir pedido loja").')}
 
-    # Corte das 18h (dono 10/08/2026): pedido pra AMANHA fecha as 18:00 —
+    # Corte do fim do dia (dono 10/08/2026): pedido pra AMANHA fecha na
+    # HORA_CORTE —
     # e o horario de corte do pre-preparo do padeiro. Espelho da tela web,
     # checado no EXECUTOR (preview re-enviado nao fura); admin passa com
     # aviso no resultado. ANTES do merge — "criar" pode virar mesclar num
@@ -2777,7 +2778,7 @@ def executar_criar_pedido(params, user):
 
     # Dia coberto pelo CRON de auto-pedidos (10/08/2026): adota o rascunho
     # em vez de criar um segundo pedido (2 pedidos no mesmo dia = producao
-    # em dobro na ordem das 18h). Item citado SUBSTITUI a quantidade do
+    # em dobro na ordem enviada no corte). Item citado SUBSTITUI a quantidade do
     # motor; item do motor nao citado FICA no pedido (o aviso lista).
     rascunho = rascunho_automatico_aberto(loja_id, data_entrega)
     if rascunho is not None:
@@ -2840,9 +2841,9 @@ def executar_editar_pedido(params, user):
     mudancas = []
 
     nova_data = params.get('data_entrega')
-    # Corte das 18h (dono 10/08/2026): olha a data ATUAL e a NOVA — mover
-    # um pedido PRA amanha (ou tirar de amanha) depois das 18h muda o
-    # pre-preparo igual. Espelho da tela web, no executor.
+    # Corte do fim do dia (dono 10/08/2026): olha a data ATUAL e a NOVA —
+    # mover um pedido PRA amanha (ou tirar de amanha) depois do corte muda
+    # o pre-preparo igual. Espelho da tela web, no executor.
     from app.services.pedido_corte import bloqueio_do_corte
     _datas_corte = [pedido.data_entrega]
     if nova_data:
@@ -3359,8 +3360,8 @@ def executar_mudar_status_pedido(params, user):
                          'Abra a ficha do pedido no app e confirme com a foto — '
                          f'/pedidos/{pid}')}
 
-    # Corte das 18h (dono 10/08/2026): CANCELAR o pedido de amanhã depois
-    # das 18h muda o pré-preparo já calculado — mesmo bloqueio da rota web
+    # Corte do fim do dia (dono 10/08/2026): CANCELAR o pedido de amanhã
+    # depois do corte muda o pré-preparo já calculado — mesmo bloqueio da rota web
     # de cancelar (a revisão de 13/08 pegou este executor sem o check).
     aviso_corte = None
     if novo == 'cancelar':

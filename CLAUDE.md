@@ -1626,7 +1626,7 @@ do seru_cron junto.
   13/08/2026)**: o motor recebe `ressincronizar_datas` e trata o rascunho
   do PROPRIO cron como substituivel (fora do `ja_tem` e das entregas
   simuladas) — sem isso, dia ja pedido devolvia sugestao 0 e a quantidade
-  congelava na 1a criacao (o refresh das 17:30 era um no-op perpetuo; os
+  congelava na 1a criacao (o refresh pre-corte era um no-op perpetuo; os
   testes so passavam porque mockavam o motor). A "venda do dia" entra no
   refresh via ESTOQUE atual (o sync do Seru drena a cada 15min), nao via
   media (hist fecha em ontem).
@@ -1644,7 +1644,7 @@ do seru_cron junto.
   criar_pedido) agora ADOTAM o rascunho automatico do dia
   (`pedido_merge.rascunho_automatico_aberto`/`adotar_rascunho_automatico`)
   em vez de criar um 2o pedido — item citado SUBSTITUI a quantidade do
-  motor (somar seria demanda em DOBRO na ordem das 18h; o match cai pra
+  motor (somar seria demanda em DOBRO na ordem enviada no corte; o match cai pra
   FK-sem-estado quando ha UMA linha do item — "45 assado" substitui a
   linha sem-estado do cron, nunca duplica), item do motor nao citado FICA
   (com aviso "MANTIDOS" visivel), status vira 'confirmado' e o carimbo
@@ -1661,7 +1661,7 @@ do seru_cron junto.
     sugestao vai na grade com qtd 0 explicita (o `_sincronizar_itens`
     remove) e dia cuja sugestao zerou POR INTEIRO tem o rascunho
     CANCELADO (`rascunhos_cancelados_zero`) — sem isso os 50 velhos
-    congelavam as 18h e viravam entrega desnecessaria.
+    congelavam no corte e viravam entrega desnecessaria.
   - **Dia MISTO nao e substituivel no motor**: `ressincronizar_datas` so
     destrava (loja, dia) ocupado SO por rascunho do cron; dia com pedido
     humano mantem o rascunho no carry (excluir so a linha dele inflava
@@ -1683,7 +1683,7 @@ do seru_cron junto.
     previsao_acuracia (circularidade) importam de la. NUNCA re-literalar.
   - PENDENCIA ACEITA (design consistente com o fluxo do cronograma, que
     so enxerga origem='cronograma'): plano AVULSO/manual de amanha ja
-    enviado ao padeiro NAO suprime o auto-envio das 18h — se um dia o
+    enviado ao padeiro NAO suprime o auto-envio do corte — se um dia o
     dono usar plano avulso pra cobrir amanha, viram duas ordens;
     decisao separada.
   **RETROALIMENTACAO (decisao documentada 13/08)**: pedido-maquina que
@@ -1693,8 +1693,9 @@ do seru_cron junto.
   O eco e limitado pela `quantidade_recebida` (conferencia na entrega) e
   medido em `previsao_acuracia.circularidade_pct`. Rascunho ainda
   'pendente' segue fora (exclusao de sempre).
-- **Auto-envio** (`enviar_plano_automatico`, cron 18:00 BRT, lock 7759,
-  kill-switch `AUTO_ENVIO_PLANO=0`): as 18h o pedido de amanha trava
+- **Auto-envio** (`enviar_plano_automatico`, cron 19:00 BRT = HORA_CORTE,
+  lock 7759, kill-switch `AUTO_ENVIO_PLANO=0`): no corte o pedido de
+  amanha trava
   (corte) e, SE a ordem de amanha ainda nao foi enviada, ela e
   aprovada+ENVIADA ao padeiro (motor env `AUTO_ENVIO_MOTOR` default
   'pedidos'). **Ordem JA ENVIADA (gesto humano na tela, com o motor/
@@ -1709,8 +1710,9 @@ do seru_cron junto.
   humano de antes). Corrida residual aceita: humano criando pedido nos
   segundos entre o snapshot de protecao e o commit do cron pode ser
   sobrescrito UMA vez (proxima rodada protege).
-- **Corte das 18:00** (`app/services/pedido_corte.py`): pedido com
-  `data_entrega == amanha` trava as 18:00 BRT — e o horario do
+- **Corte do fim do dia** (`app/services/pedido_corte.py`, HORA_CORTE=19
+  desde 13/08/2026): pedido com
+  `data_entrega == amanha` trava as 19:00 BRT — e o horario do
   PRE-PREPARO do padeiro (preparar.json calcula a vespera). Gerente/
   funcionario/producao/padeiro BARRADOS; admin/owner passa com AVISO.
   Defesa em profundidade (padrao da trava de MP): web novo (ANTES do
@@ -1719,7 +1721,7 @@ do seru_cron junto.
   executores do copilot (preview re-enviado nao fura; admin ganha
   `aviso` no resultado). LIMITACAO ACEITA: apos a meia-noite o pedido
   (agora "de hoje") volta ao regime normal — o corte protege a janela
-  18:00-00:00; loja nao opera de madrugada.
+  HORA_CORTE-00:00; loja nao opera de madrugada.
 - **Fornada especial vende SO sab/dom** (dono 10/08/2026; SUBSTITUI
   qui/sex/sab->sex/sab/dom de 06/07/2026): `_DIAS_FORNADA_ESPECIAL =
   {5,6}` e `_DIAS_PRODUCAO_FORNADA = {4,5}` em previsao_producao.py.

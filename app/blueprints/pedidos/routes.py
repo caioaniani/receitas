@@ -319,7 +319,7 @@ def novo():
                                    amanha=amanha, data_min=data_min,
                                    loja_id=loja_id)
 
-        # Corte das 18h (dono 10/08/2026): pedido pra AMANHÃ fecha às 18:00
+        # Corte do fim do dia (dono 10/08/2026): pedido pra AMANHÃ fecha na HORA_CORTE
         # (pré-preparo do padeiro). Admin passa com aviso; loja é barrada.
         # Checado ANTES do merge — criar "novo" pode virar mesclar num
         # pedido de amanhã já existente.
@@ -415,7 +415,7 @@ def novo():
 
             # Dia coberto pelo CRON de auto-pedidos (10/08/2026): adota o
             # rascunho em vez de criar um segundo pedido (2 pedidos no mesmo
-            # dia = producao em dobro na ordem das 18h). Item citado
+            # dia = producao em dobro na ordem enviada no corte). Item citado
             # SUBSTITUI a quantidade do motor; item do motor nao citado FICA.
             rascunho = rascunho_automatico_aberto(sel_loja, data_entrega)
             if rascunho is not None:
@@ -490,8 +490,8 @@ def editar(id):
             flash(f'A data de entrega deve ser a partir de {data_min.strftime("%d/%m")}.', 'warning')
             return redirect(url_for('pedidos.editar', id=id))
 
-        # Corte das 18h (dono 10/08/2026): olha a data ATUAL e a NOVA —
-        # mover um pedido PRA amanhã (ou tirar de amanhã) depois das 18h
+        # Corte do fim do dia (dono 10/08/2026): olha a data ATUAL e a NOVA —
+        # mover um pedido PRA amanhã (ou tirar de amanhã) depois do corte
         # muda o pré-preparo do padeiro do mesmo jeito.
         from app.services.pedido_corte import bloqueio_do_corte
         bloqueado, aviso_corte = bloqueio_do_corte(
@@ -1280,8 +1280,8 @@ def cancelar(id):
     if pedido.status not in ('pendente', 'confirmado', 'separado'):
         flash('Só é possível cancelar pedidos pendentes, confirmados ou separados (antes do envio).', 'warning')
         return redirect(url_for('pedidos.detalhe', id=id))
-    # Corte das 18h (dono 10/08/2026): cancelar o pedido de amanhã depois
-    # das 18h também muda o pré-preparo já calculado.
+    # Corte do fim do dia (dono 10/08/2026): cancelar o pedido de amanhã
+    # depois do corte também muda o pré-preparo já calculado.
     from app.services.pedido_corte import bloqueio_do_corte
     bloqueado, aviso_corte = bloqueio_do_corte([pedido.data_entrega],
                                                user=current_user)
@@ -3394,7 +3394,7 @@ def sugerir_pedido(loja_id):
         except ValueError:
             flash('Data invalida.', 'danger')
             return redirect(url_for('pedidos.sugerir_pedido', loja_id=loja_id))
-        # Corte das 18h: a rota é admin (passa), mas o aviso de que o
+        # Corte do fim do dia: a rota é admin (passa), mas o aviso de que o
         # pré-preparo de amanhã já foi calculado vai junto — mesmo contrato
         # dos outros caminhos de escrita (defesa em profundidade).
         from app.services.pedido_corte import bloqueio_do_corte

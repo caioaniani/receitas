@@ -2,16 +2,16 @@
 (10/08/2026, decisão do dono: "quero que o sistema, com base em venda,
 estoque e previsão, faça os pedidos automaticamente de 3 dias na frente" +
 AskUserQuestion "Automatizar TUDO (pedido + envio)" — REVOGA a regra de
-04/07/2026 "enviar ao padeiro é gesto humano" APENAS pro envio das 18:00 de
+04/07/2026 "enviar ao padeiro é gesto humano" APENAS pro envio das 19:00 de
 um dia SEM ordem; ordem já enviada nunca é reescrita por caminho implícito).
 
 Duas pontas, dois jobs do cron (`seru_cron`):
 
-1. `gerar_pedidos_automaticos()` (06:30 e 17:30 BRT): roda o motor
+1. `gerar_pedidos_automaticos()` (06:30 e 18:30 BRT): roda o motor
    VENDA+ESTOQUE (`previsao_producao.sugerir_pedidos_por_venda` — o mesmo
    da tela /producao/pedidos-semana/estoque, escolha do dono) pra janela
    D+1..D+3 e materializa via `pedidos_semana.aplicar_grade` (rascunho
-   'pendente' com o marcador padrão). A rodada das 17:30 é o refresh antes
+   'pendente' com o marcador padrão). A rodada das 18:30 é o refresh antes
    do corte: o motor lê o ESTOQUE ATUAL da loja (que o sync do Seru drena a
    cada 15min conforme o dia vende) — é por aí que a venda do próprio dia
    entra (a média histórica fecha em ontem).
@@ -26,7 +26,7 @@ Duas pontas, dois jobs do cron (`seru_cron`):
      (criado_por/modificado_por_id preenchidos) é PULADO — a palavra da
      loja/admin vale mais que a do motor. Confirmar/voltar-status também
      carimbam modificado_por_id (o clique de revisão protege o pedido).
-   - D+1 sob o corte das 18h NUNCA é tocado (`pedido_corte.corte_ativo`).
+   - D+1 sob o corte (19h) NUNCA é tocado (`pedido_corte.corte_ativo`).
    - Loja/dia sem sugestão (>0) não cria pedido vazio.
    - Pedido finalizado ANTES da data (entrega antecipada de emergência) não
      protege o dia — mesmo carve-out do motor/aplicar_grade (caso Anesio
@@ -40,7 +40,7 @@ Duas pontas, dois jobs do cron (`seru_cron`):
    subestimar. O eco é limitado: `quantidade_recebida` (conferência humana
    na entrega) corrige o número, e a acurácia expõe `circularidade_pct`.
 
-2. `enviar_plano_automatico()` (18:00 BRT, logo após o corte travar o
+2. `enviar_plano_automatico()` (19:00 BRT = HORA_CORTE, logo após o corte travar o
    pedido de amanhã): se a ordem de AMANHÃ ainda não foi enviada, aprova e
    ENVIA ao padeiro pelo cronograma (motor env `AUTO_ENVIO_MOTOR`, default
    'pedidos' — o firme dos pedidos automáticos conta em qualquer motor).
@@ -233,7 +233,7 @@ def gerar_pedidos_automaticos(horizonte=HORIZONTE_DIAS):
     # a 0 também tem que chegar no rascunho — item que sumiu da sugestão vai
     # na grade com qtd 0 explícita (o _sincronizar_itens remove), e dia cuja
     # sugestão zerou POR INTEIRO cancela o rascunho (estoque subiu e cobre —
-    # deixar os 50 velhos congelarem às 18h viraria produção desnecessária).
+    # deixar os 50 velhos congelarem no corte viraria produção desnecessária).
     rascunhos = _rascunhos_por_dia(datas_ressinc)
     cancelados_zero = 0
     for (loja_id, data_ent), ped in rascunhos.items():
@@ -279,7 +279,7 @@ def gerar_pedidos_automaticos(horizonte=HORIZONTE_DIAS):
 
 
 def enviar_plano_automatico():
-    """ENVIA ao padeiro a ordem de produção de AMANHÃ (18:00, logo após o
+    """ENVIA ao padeiro a ordem de produção de AMANHÃ (na HORA_CORTE, logo após o
     corte) — SÓ quando ninguém enviou antes. Ordem já enviada por gesto
     humano fica como está: o humano escolheu motor/equilibrar na tela dele e
     reenviar com os defaults do cron reescreveria os números do padeiro em

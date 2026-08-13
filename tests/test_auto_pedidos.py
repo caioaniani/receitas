@@ -37,8 +37,8 @@ def _receita(nome='Pao Auto'):
 
 def _as_10h(monkeypatch):
     """Congela o relógio do corte às 10:00 de hoje: os testes de
-    materialização não são sobre o corte, e rodar a suíte após as 18h BRT
-    reais pularia o D+1 e quebraria o CI (deploy travado — mesma classe do
+    materialização não são sobre o corte, e rodar a suíte no corte BRT
+    real (>= HORA_CORTE) pularia o D+1 e quebraria o CI (deploy travado — mesma classe do
     caso do card do padeiro em 09/08)."""
     fake = datetime.combine(hoje(), datetime.min.time()).replace(hour=10)
     monkeypatch.setattr(pedido_corte, 'agora', lambda: fake)
@@ -187,7 +187,7 @@ def test_motor_real_nao_mexe_em_dia_de_humano(app, loja, admin_user,
 def test_motor_real_sugestao_zerada_cancela_rascunho(app, loja, monkeypatch):
     """Rodada 2 da revisão: sugestão que CAI a 0 (estoque subiu e cobre)
     também tem que chegar no rascunho — deixar os 50 velhos congelarem às
-    18h viraria produção/entrega desnecessária. Dia todo-zerado CANCELA."""
+    no corte viraria produção/entrega desnecessária. Dia todo-zerado CANCELA."""
     with app.app_context():
         _as_10h(monkeypatch)
         r = _receita('Pao Zera Dia')
@@ -419,12 +419,12 @@ def test_confirmar_na_web_carimba_e_protege_do_cron(app, loja, admin_user,
 
 
 def test_d1_sob_corte_nunca_e_tocado(app, loja, monkeypatch):
-    """Rodada depois das 18h (ex.: disparo manual): o D+1 está travado pelo
-    corte — o cron respeita o MESMO corte que trava as lojas."""
+    """Rodada depois do corte (ex.: disparo manual): o D+1 está travado — o
+    cron respeita o MESMO corte que trava as lojas."""
     from app.services import previsao_producao
     with app.app_context():
         r = _receita()
-        fake = datetime.combine(hoje(), datetime.min.time()).replace(hour=19)
+        fake = datetime.combine(hoje(), datetime.min.time()).replace(hour=20)
         monkeypatch.setattr(pedido_corte, 'agora', lambda: fake)
         monkeypatch.setattr(previsao_producao, 'sugerir_pedidos_por_venda',
                             lambda **kw: _sugestao(loja, r, [10, 20, 30]))
