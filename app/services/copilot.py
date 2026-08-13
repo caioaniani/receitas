@@ -2855,12 +2855,25 @@ def executar_editar_pedido(params, user):
     if bloqueado_corte:
         return {'ok': False, 'erro': aviso_corte}
 
+    aviso_rascunho = None
     if nova_data:
         try:
             d = datetime.strptime(nova_data, '%Y-%m-%d').date()
             if d != pedido.data_entrega:
                 pedido.data_entrega = d
                 mudancas.append('data_entrega')
+                # Mover o pedido pra um dia que o cron de auto-pedidos já
+                # cobriu deixaria rascunho + pedido humano no mesmo dia
+                # (demanda em dobro) — o rascunho vira redundância e cai.
+                from app.services.pedido_merge import (
+                    absorver_rascunho_automatico,
+                )
+                absorvido = absorver_rascunho_automatico(
+                    pedido.loja_id, d, user.id, excluir_id=pedido.id)
+                if absorvido is not None:
+                    aviso_rascunho = (
+                        f'O rascunho automático #{absorvido.id} do dia de '
+                        'destino foi cancelado — o seu pedido manda.')
         except (ValueError, TypeError):
             return {'ok': False, 'erro': f'Data invalida: {nova_data}'}
 
