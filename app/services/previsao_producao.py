@@ -1703,10 +1703,13 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     from app.constants import STATUS_PEDIDO_FINALIZADOS
     _status_entregues = tuple(s for s in STATUS_PEDIDO_FINALIZADOS
                               if s != 'cancelado')
-    for loja_id, data_ent, rid_e, mid_e, qtd_e in (db.session.query(
+    for loja_id, data_ent, rid_e, mid_e, qtd_e, status_p, criado_p, modif_p, \
+            obs_p in (db.session.query(
             PedidoLoja.loja_id, PedidoLoja.data_entrega,
             PedidoItem.receita_id, PedidoItem.materia_prima_id,
-            PedidoItem.quantidade)
+            PedidoItem.quantidade, PedidoLoja.status,
+            PedidoLoja.criado_por, PedidoLoja.modificado_por_id,
+            PedidoLoja.observacao)
             .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
             .filter(PedidoLoja.status != 'cancelado',
                     _cond_sem_entrega_antecipada(hoje_d),
@@ -1718,8 +1721,12 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                            PedidoLoja.status.notin_(_status_entregues)))
             .all()):
         tok = _token(rid_e, mid_e)
-        if data_ent is not None and tok is not None:
-            pedido_existente[loja_id][data_ent.isoformat()][tok] += int(qtd_e or 0)
+        if data_ent is None or tok is None:
+            continue
+        if (data_ent.isoformat() in ressinc
+                and _rascunho_auto(status_p, criado_p, modif_p, obs_p)):
+            continue
+        pedido_existente[loja_id][data_ent.isoformat()][tok] += int(qtd_e or 0)
 
     # Dias entre HOJE e o inicio da janela ("A partir de" no futuro). O saldo
     # inicial da simulacao NAO pode ser o estoque de hoje: a loja consome (e
