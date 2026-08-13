@@ -14,6 +14,9 @@ from app.utils import agora
 # ja estao em movimento e juntar item seria errado.
 STATUS_MESCLAVEL = ('pendente', 'confirmado')
 
+# Marcador que o gerar da grade/cron grava na observacao (pedidos_semana).
+MARCADOR_RASCUNHO_AUTO = 'Gerado do histórico'
+
 
 def pedido_aberto_para_merge(loja_id, data_entrega, status='confirmado'):
     """Retorna o PedidoLoja aberto pra mesclar (mesma loja + data + status), ou
@@ -25,6 +28,85 @@ def pedido_aberto_para_merge(loja_id, data_entrega, status='confirmado'):
             .filter_by(loja_id=loja_id, data_entrega=data_entrega, status=status)
             .order_by(PedidoLoja.id)
             .first())
+
+
+def rascunho_automatico_aberto(loja_id, data_entrega):
+    """Rascunho do CRON de auto-pedidos pra (loja, data): 'pendente', SEM
+    autor humano (criado_por/modificado_por_id nulos) e com o marcador do
+    gerar. Qualquer toque humano tira o pedido daqui (vira pedido normal)."""
+    if not data_entrega:
+        return None
+    return (PedidoLoja.query
+            .filter_by(loja_id=loja_id, data_entrega=data_entrega,
+                       status='pendente')
+            .filter(PedidoLoja.criado_por.is_(None),
+                    PedidoLoja.modificado_por_id.is_(None),
+                    PedidoLoja.observacao.like(MARCADOR_RASCUNHO_AUTO + '%'))
+            .order_by(PedidoLoja.id)
+            .first())
+
+
+def adotar_rascunho_automatico(pedido, itens, user_id, observacao=None):
+    """O humano "criou o pedido do dia" num (loja, dia) que o cron ja cobriu
+    com rascunho automatico: ADOTA o rascunho em vez de duplicar (2 pedidos
+    no mesmo dia = demanda em DOBRO no balanco e na ordem do padeiro).
+
+    Semantica (10/08/2026, junto do pacote de auto-pedidos):
+    - item CITADO pelo humano SUBSTITUI a quantidade do motor (somar
+      dobraria — o gesto e "o pedido e este");
+    - item do motor que o humano NAO citou FICA (remove-lo em silencio
+      deixaria a loja sem o item; a diferenca fica visivel no pedido);
+    - status vira 'confirmado' e modificado_por_id protege o pedido do cron.
+    NAO commita. Retorna {'substituidos', 'adicionados', 'mantidos'}.
+    """
+    idx = {_chave(it): it for it in pedido.itens}
+    substituidos = adicionados = 0
+    tocadas = set()
+    for novo in itens:
+        ch = _chave(novo)
+        tocadas.add(ch)
+        existente = idx.get(ch)
+        if existente is not None:
+            existente.quantidade = int(novo['quantidade'])
+            if novo.get('observacao'):
+                existente.observacao = novo['observacao']
+            substituidos += 1
+        else:
+            pi = PedidoItem(
+                pedido_id=pedido.id,
+                receita_id=novo.get('receita_id'),
+                produto_id=novo.get('produto_id'),
+                materia_prima_id=novo.get('materia_prima_id'),
+                quantidade=int(novo['quantidade']),
+                estado=novo.get('estado'),
+                observacao=novo.get('observacao'),
+            )
+            db.session.add(pi)
+            idx[ch] = pi
+            adicionados += 1
+    mantidos = len([ch for ch in idx if ch not in tocadas])
+    pedido.status = 'confirmado'
+    pedido.observacao = (observacao
+                         or 'Sugestão automática ajustada pelo pedido da loja.')
+    pedido.modificado_em = agora()
+    pedido.modificado_por_id = user_id
+    return {'substituidos': substituidos, 'adicionados': adicionados,
+            'mantidos': mantidos}
+
+
+def absorver_rascunho_automatico(loja_id, data_entrega, user_id):
+    """Ja existe pedido HUMANO 'confirmado' no dia e o cron tambem deixou um
+    rascunho automatico (estado de colisao — ex.: pedidos criados antes do
+    merge cobrir o rascunho): o rascunho virou redundancia e CANCELA (somar
+    os itens dele seria exatamente a dobra que se quer evitar). NAO commita.
+    Retorna o rascunho cancelado ou None."""
+    r = rascunho_automatico_aberto(loja_id, data_entrega)
+    if r is None:
+        return None
+    r.status = 'cancelado'
+    r.modificado_em = agora()
+    r.modificado_por_id = user_id
+    return r
 
 
 def _chave(it_ou_dict):
