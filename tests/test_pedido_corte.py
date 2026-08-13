@@ -1,0 +1,248 @@
+"""Corte das 18:00 do pedido loja→indústria (10/08/2026, regra do dono).
+
+"O pedido que as lojas fazem para receber no dia seguinte não pode ser
+modificado após as 18:00" — horário de corte do pré-preparo do padeiro.
+Gerente/funcionário barrados; admin/owner passa com aviso. Defesa em
+profundidade: web novo/editar/cancelar + executores do copilot.
+"""
+from datetime import datetime, timedelta
+
+import pytest
+
+from app.extensions import db
+from app.models import PedidoItem, PedidoLoja, Receita, Usuario
+from app.services import pedido_corte
+from app.services.pedido_corte import bloqueio_do_corte, corte_ativo
+from app.utils import hoje
+
+
+def _login(client, user):
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(user.id)
+        sess['_fresh'] = True
+
+
+def _gerente():
+    u = Usuario(nome='ger', login='ger_corte', papel='gerente')
+    u.set_senha('x' * 8)
+    db.session.add(u)
+    db.session.commit()
+    return u
+
+
+def _receita(nome='Croissant Corte'):
+    r = Receita(nome=nome, categoria='Croissants', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100)
+    db.session.add(r)
+    db.session.commit()
+    return r
+
+
+def _as_19h(monkeypatch):
+    """Congela o relógio do serviço às 19:00 de hoje (dentro do corte)."""
+    fake = datetime.combine(hoje(), datetime.min.time()).replace(hour=19)
+    monkeypatch.setattr(pedido_corte, 'agora', lambda: fake)
+
+
+# ── unidade ─────────────────────────────────────────────────────────
+
+def test_corte_ativo_so_amanha_apos_18h():
+    base = datetime(2026, 8, 10, 17, 59)
+    amanha = base.date() + timedelta(days=1)
+    assert corte_ativo(amanha, agora_dt=base) is False          # 17:59
+    as18 = base.replace(hour=18, minute=0)
+    assert corte_ativo(amanha, agora_dt=as18) is True           # 18:00
+    assert corte_ativo(amanha + timedelta(days=1), agora_dt=as18) is False
+    assert corte_ativo(base.date(), agora_dt=as18) is False     # hoje não
+    assert corte_ativo(None, agora_dt=as18) is False
+
+
+def test_bloqueio_gerente_barrado_admin_avisado(app, admin_user):
+    as19 = datetime(2026, 8, 10, 19, 0)
+    amanha = as19.date() + timedelta(days=1)
+    with app.app_context():
+        ger = _gerente()
+        bloq, msg = bloqueio_do_corte([amanha], user=ger, agora_dt=as19)
+        assert bloq is True and '18:00' in msg
+        bloq, msg = bloqueio_do_corte([amanha], user=admin_user,
+                                      agora_dt=as19)
+        assert bloq is False and 'PODE prosseguir' in msg
+        bloq, msg = bloqueio_do_corte([as19.date() + timedelta(days=3)],
+                                      user=ger, agora_dt=as19)
+        assert bloq is False and msg is None
+
+
+# ── web ─────────────────────────────────────────────────────────────
+
+def test_web_novo_pra_amanha_apos_18h_gerente_barrado(app, loja,
+                                                      monkeypatch):
+    with app.app_context():
+        _as_19h(monkeypatch)
+        ger = _gerente()
+        r = _receita()
+        rid, lid = r.id, loja.id
+        c = app.test_client()
+        _login(c, ger)
+        resp = c.post('/pedidos/novo', data={
+            'loja_id': str(lid),
+            'data_entrega': (hoje() + timedelta(days=1)).isoformat(),
+            'item_id[]': f'r_{rid}',
+            'item_qtd[]': '10',
+            'item_estado[]': '',
+            'item_obs[]': '',
+        }, follow_redirects=True)
+        assert 'horário de corte' in resp.get_data(as_text=True)
+        assert PedidoLoja.query.filter_by(loja_id=lid).count() == 0
+
+
+def test_web_novo_pra_amanha_apos_18h_admin_passa_com_aviso(
+        app, admin_user, loja, monkeypatch):
+    with app.app_context():
+        _as_19h(monkeypatch)
+        r = _receita()
+        rid, lid = r.id, loja.id
+        c = app.test_client()
+        _login(c, admin_user)
+        resp = c.post('/pedidos/novo', data={
+            'loja_id': str(lid),
+            'data_entrega': (hoje() + timedelta(days=1)).isoformat(),
+            'item_id[]': f'r_{rid}',
+            'item_qtd[]': '10',
+            'item_estado[]': '',
+            'item_obs[]': '',
+        }, follow_redirects=True)
+        assert 'PODE prosseguir' in resp.get_data(as_text=True)
+        assert PedidoLoja.query.filter_by(loja_id=lid).count() == 1
+
+
+def test_web_novo_pra_depois_de_amanha_livre_apos_18h(app, loja,
+                                                      monkeypatch):
+    with app.app_context():
+        _as_19h(monkeypatch)
+        ger = _gerente()
+        r = _receita()
+        rid, lid = r.id, loja.id
+        c = app.test_client()
+        _login(c, ger)
+        c.post('/pedidos/novo', data={
+            'loja_id': str(lid),
+            'data_entrega': (hoje() + timedelta(days=2)).isoformat(),
+            'item_id[]': f'r_{rid}',
+            'item_qtd[]': '10',
+            'item_estado[]': '',
+            'item_obs[]': '',
+        })
+        assert PedidoLoja.query.filter_by(loja_id=lid).count() == 1
+
+
+def test_web_editar_mover_PRA_amanha_apos_18h_barrado(app, loja,
+                                                      monkeypatch):
+    """Mover um pedido de D+3 pra AMANHÃ depois das 18h fura o pré-preparo
+    do mesmo jeito — o corte olha a data NOVA também."""
+    with app.app_context():
+        _as_19h(monkeypatch)
+        ger = _gerente()
+        r = _receita()
+        p = PedidoLoja(loja_id=loja.id,
+                       data_entrega=hoje() + timedelta(days=3),
+                       status='pendente', criado_por=ger.id)
+        db.session.add(p)
+        db.session.flush()
+        db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id,
+                                  quantidade=5))
+        db.session.commit()
+        pid, rid = p.id, r.id
+        c = app.test_client()
+        _login(c, ger)
+        c.post(f'/pedidos/{pid}/editar', data={
+            'data_entrega': (hoje() + timedelta(days=1)).isoformat(),
+            'observacao': '',
+            'item_id[]': f'r_{rid}',
+            'item_qtd[]': '5',
+            'item_estado[]': '',
+            'item_obs[]': '',
+        }, follow_redirects=True)
+        assert (db.session.get(PedidoLoja, pid).data_entrega
+                == hoje() + timedelta(days=3))      # não moveu
+
+
+def test_web_cancelar_amanha_apos_18h_barrado(app, loja, monkeypatch):
+    with app.app_context():
+        _as_19h(monkeypatch)
+        ger = _gerente()
+        p = PedidoLoja(loja_id=loja.id,
+                       data_entrega=hoje() + timedelta(days=1),
+                       status='confirmado', criado_por=ger.id)
+        db.session.add(p)
+        db.session.commit()
+        pid = p.id
+        c = app.test_client()
+        _login(c, ger)
+        c.post(f'/pedidos/{pid}/cancelar', follow_redirects=True)
+        assert db.session.get(PedidoLoja, pid).status == 'confirmado'
+
+
+def test_web_editar_amanha_antes_das_18h_livre(app, loja):
+    """Sem monkeypatch de hora só roda o caminho: se AGORA for >= 18h de
+    verdade, o teste vira no-op honesto (pula) — sem flakiness de relógio."""
+    from app.utils import agora
+    if agora().hour >= pedido_corte.HORA_CORTE:
+        pytest.skip('suite rodando após as 18h BRT — caminho coberto pelos '
+                    'testes com relógio congelado')
+    with app.app_context():
+        ger = _gerente()
+        r = _receita()
+        p = PedidoLoja(loja_id=loja.id,
+                       data_entrega=hoje() + timedelta(days=1),
+                       status='pendente', criado_por=ger.id)
+        db.session.add(p)
+        db.session.flush()
+        db.session.add(PedidoItem(pedido_id=p.id, receita_id=r.id,
+                                  quantidade=5))
+        db.session.commit()
+        pid, rid = p.id, r.id
+        c = app.test_client()
+        _login(c, ger)
+        c.post(f'/pedidos/{pid}/editar', data={
+            'data_entrega': (hoje() + timedelta(days=1)).isoformat(),
+            'observacao': 'ajuste',
+            'item_id[]': f'r_{rid}',
+            'item_qtd[]': '8',
+            'item_estado[]': '',
+            'item_obs[]': '',
+        })
+        assert db.session.get(PedidoLoja, pid).itens[0].quantidade == 8
+
+
+# ── copilot (executores — preview re-enviado não fura) ──────────────
+
+def test_copilot_criar_pra_amanha_apos_18h_gerente_recusado(
+        app, loja, monkeypatch):
+    from app.services.copilot import executar_criar_pedido
+    with app.app_context():
+        _as_19h(monkeypatch)
+        ger = _gerente()
+        r = _receita()
+        res = executar_criar_pedido({
+            'loja': loja.nome,
+            'data_entrega': (hoje() + timedelta(days=1)).isoformat(),
+            'itens': [{'resolvido': {'tipo': 'receita', 'id': r.id,
+                                     'nome': r.nome}, 'quantidade': 5}],
+        }, ger)
+        assert res['ok'] is False and 'corte' in res['erro']
+
+
+def test_copilot_editar_amanha_apos_18h_gerente_recusado(
+        app, loja, monkeypatch):
+    from app.services.copilot import executar_editar_pedido
+    with app.app_context():
+        _as_19h(monkeypatch)
+        ger = _gerente()
+        p = PedidoLoja(loja_id=loja.id,
+                       data_entrega=hoje() + timedelta(days=1),
+                       status='confirmado', criado_por=ger.id)
+        db.session.add(p)
+        db.session.commit()
+        res = executar_editar_pedido({'pedido_id': p.id,
+                                      'observacao': 'muda'}, ger)
+        assert res['ok'] is False and 'corte' in res['erro']
