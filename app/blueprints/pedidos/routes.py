@@ -3390,16 +3390,40 @@ def sugerir_pedido(loja_id):
         } for it in itens]
 
         from app.services.pedido_merge import (
+            absorver_rascunho_automatico,
+            adotar_rascunho_automatico,
             mesclar_itens,
             pedido_aberto_para_merge,
+            rascunho_automatico_aberto,
         )
         alvo = pedido_aberto_para_merge(loja_id, data_entrega, 'confirmado')
         if alvo:
             mesclar_itens(alvo, itens_norm, modificado_por_id=current_user.id)
+            absorvido = absorver_rascunho_automatico(
+                loja_id, data_entrega, current_user.id)
             db.session.commit()
             flash(f'Itens adicionados ao pedido #{alvo.id} — ja existia '
                   'para esta loja nesta data.', 'success')
+            if absorvido is not None:
+                flash(f'O rascunho automático #{absorvido.id} do mesmo dia '
+                      'foi cancelado — o pedido da loja manda.', 'info')
             return redirect(url_for('pedidos.detalhe', id=alvo.id))
+
+        # Dia coberto pelo cron de auto-pedidos: adota o rascunho (mesma
+        # regra do /pedidos/novo — nunca um segundo pedido no mesmo dia).
+        rascunho = rascunho_automatico_aberto(loja_id, data_entrega)
+        if rascunho is not None:
+            res_adote = adotar_rascunho_automatico(
+                rascunho, itens_norm, current_user.id)
+            db.session.commit()
+            flash(f'Pedido #{rascunho.id} confirmado a partir da sugestão '
+                  'automática do dia: suas quantidades substituíram as '
+                  'sugeridas.', 'success')
+            if res_adote['mantidos']:
+                flash(f'{res_adote["mantidos"]} item(ns) da sugestão '
+                      'automática que você não citou foram MANTIDOS no '
+                      'pedido — revise e ajuste se não quiser.', 'warning')
+            return redirect(url_for('pedidos.detalhe', id=rascunho.id))
 
         pedido = PedidoLoja(loja_id=loja_id, data_entrega=data_entrega,
                             criado_por=current_user.id, status='confirmado')
