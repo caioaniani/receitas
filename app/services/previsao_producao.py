@@ -1661,19 +1661,37 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # Dias ja pedidos no horizonte (a tela trava; o gerar pula) + a QUANTIDADE ja
     # pedida por (loja, data, receita) — pra simulacao usar a entrega real do dia
     # travado como carry, em vez da sugestao (que nao sera criada).
+    # Com `ressincronizar_datas`, o rascunho AUTOMATICO nessas datas e pulado
+    # nos DOIS levantamentos (dia destrava E a quantidade dele sai da entrega
+    # simulada — ele vai ser sobrescrito pela propria rodada, contar seria
+    # dobrar a reposicao). Pedido com toque humano nunca e pulado.
+    ressinc = {d.isoformat() if hasattr(d, 'isoformat') else str(d)
+               for d in (ressincronizar_datas or [])}
+
+    def _rascunho_auto(status_p, criado, modif, obs):
+        return (status_p == 'pendente' and criado is None and modif is None
+                and (obs or '').startswith('Gerado do histórico'))
+
     ja_tem = defaultdict(set)
     status_dia = defaultdict(lambda: defaultdict(list))
     pedido_existente = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    for loja_id, data_ent, status_p in (db.session.query(
-            PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoLoja.status)
+    for loja_id, data_ent, status_p, criado_p, modif_p, obs_p in (
+            db.session.query(
+                PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoLoja.status,
+                PedidoLoja.criado_por, PedidoLoja.modificado_por_id,
+                PedidoLoja.observacao)
             .filter(PedidoLoja.status != 'cancelado',
                     _cond_sem_entrega_antecipada(hoje_d),
                     PedidoLoja.data_entrega >= inicio_d,
                     PedidoLoja.data_entrega <= horizonte_fim)
             .all()):
-        if data_ent is not None:
-            ja_tem[loja_id].add(data_ent.isoformat())
-            status_dia[loja_id][data_ent.isoformat()].append(status_p)
+        if data_ent is None:
+            continue
+        if (data_ent.isoformat() in ressinc
+                and _rascunho_auto(status_p, criado_p, modif_p, obs_p)):
+            continue
+        ja_tem[loja_id].add(data_ent.isoformat())
+        status_dia[loja_id][data_ent.isoformat()].append(status_p)
     # As entregas ja pedidas entram desde HOJE (nao so da janela): com
     # "A partir de" no futuro, a simulacao pre-janela precisa creditar o que
     # chega antes do inicio (ver dias_pre_janela abaixo). Na faixa PRE-janela
