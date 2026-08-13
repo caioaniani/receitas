@@ -15,7 +15,12 @@ from app.utils import agora
 STATUS_MESCLAVEL = ('pendente', 'confirmado')
 
 # Marcador que o gerar da grade/cron grava na observacao (pedidos_semana).
+# FONTE UNICA: pedidos_semana (escrita), previsao_producao (exclusao da
+# media + ressinc do motor) e previsao_acuracia (circularidade) leem daqui —
+# mudar o texto num lugar so quebraria os 4 em silencio.
 MARCADOR_RASCUNHO_AUTO = 'Gerado do histórico'
+OBSERVACAO_RASCUNHO_AUTO = ('Gerado do histórico (rascunho) — revisar e '
+                            'confirmar.')
 
 
 def pedido_aberto_para_merge(loja_id, data_entrega, status='confirmado'):
