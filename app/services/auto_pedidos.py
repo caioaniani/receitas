@@ -187,6 +187,10 @@ def gerar_pedidos_automaticos(horizonte=HORIZONTE_DIAS):
     datas_janela = [hoje() + timedelta(days=1 + i) for i in range(horizonte)]
     datas_ressinc = [d for d in datas_janela if not corte_ativo(d)]
 
+    # Dia com pedido humano E rascunho do cron: cancela o rascunho ANTES de
+    # rodar o motor (o carry da simulação fica só com o pedido que vale).
+    absorvidos = _absorver_rascunhos_orfaos(datas_ressinc)
+
     sug = previsao_producao.sugerir_pedidos_por_venda(
         horizonte_dias=horizonte, inicio_offset_dias=1,
         seguranca_pct=_seguranca_pct(),
@@ -195,7 +199,7 @@ def gerar_pedidos_automaticos(horizonte=HORIZONTE_DIAS):
     datas = [_date.fromisoformat(d['data']) for d in sug.get('dias') or []]
     protegidos = _dias_protegidos(datas)
 
-    grade = []
+    grade_por_dia = {}
     pulados_corte = set()
     pulados_humano = set()
     for lj in sug.get('lojas') or []:
@@ -223,19 +227,54 @@ def gerar_pedidos_automaticos(horizonte=HORIZONTE_DIAS):
                               'materia_prima_id': prod.get('materia_prima_id'),
                               'qtd': qtd})
             if itens:
-                grade.append({'loja_id': loja_id, 'data_entrega': data_ent,
-                              'itens': itens})
+                grade_por_dia[(loja_id, data_ent)] = itens
+
+    # SINCRONIZAÇÃO ATÉ ZERO (achado da revisão rodada 2): sugestão que CAI
+    # a 0 também tem que chegar no rascunho — item que sumiu da sugestão vai
+    # na grade com qtd 0 explícita (o _sincronizar_itens remove), e dia cuja
+    # sugestão zerou POR INTEIRO cancela o rascunho (estoque subiu e cobre —
+    # deixar os 50 velhos congelarem às 18h viraria produção desnecessária).
+    rascunhos = _rascunhos_por_dia(datas_ressinc)
+    cancelados_zero = 0
+    for (loja_id, data_ent), ped in rascunhos.items():
+        if (loja_id, data_ent) in protegidos or corte_ativo(data_ent):
+            continue
+        itens_grade = grade_por_dia.get((loja_id, data_ent))
+        if itens_grade is None:
+            ped.status = 'cancelado'
+            ped.modificado_em = agora()
+            cancelados_zero += 1
+            continue
+        fks_grade = {(('r', it['receita_id']) if it.get('receita_id')
+                      else ('m', it['materia_prima_id']))
+                     for it in itens_grade}
+        for it_p in ped.itens:
+            fk = (('r', it_p.receita_id) if it_p.receita_id
+                  else ('m', it_p.materia_prima_id)
+                  if it_p.materia_prima_id else None)
+            if fk is not None and fk not in fks_grade:
+                itens_grade.append({'receita_id': it_p.receita_id,
+                                    'materia_prima_id': it_p.materia_prima_id,
+                                    'qtd': 0})
+
+    grade = [{'loja_id': k[0], 'data_entrega': k[1], 'itens': v}
+             for k, v in grade_por_dia.items()]
 
     # user_id=None: o rascunho nasce SEM autor humano — é assim que a
     # próxima rodada sabe que pode re-sincronizar (e que um toque humano
-    # o torna intocável).
+    # o torna intocável). O commit do aplicar_grade também persiste os
+    # cancelamentos por sugestão-zerada feitos acima.
     out = pedidos_semana.aplicar_grade(grade, user_id=None)
     out['dias_pulados_corte'] = sorted(d.isoformat() for d in pulados_corte)
     out['dias_pulados_humano'] = len(pulados_humano)
+    out['rascunhos_absorvidos'] = absorvidos
+    out['rascunhos_cancelados_zero'] = cancelados_zero
     logger.info('auto_pedidos: %s criados, %s atualizados, %s dia(s) sob '
-                'corte, %s (loja,dia) de humano preservados',
+                'corte, %s (loja,dia) de humano preservados, %s absorvido(s), '
+                '%s cancelado(s) por sugestão zerada',
                 out.get('criados'), out.get('atualizados'),
-                len(pulados_corte), len(pulados_humano))
+                len(pulados_corte), len(pulados_humano), absorvidos,
+                cancelados_zero)
     return out
 
 
