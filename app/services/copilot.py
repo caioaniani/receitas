@@ -2936,10 +2936,15 @@ def executar_editar_pedido(params, user):
     pedido.modificado_em = agora()
     pedido.modificado_por_id = user.id
     db.session.commit()
-    return {'ok': True, 'pedido_id': pedido.id, 'mudancas': mudancas,
-            'nao_resolvidos': nao_resolvidos,
-            'registro_tipo': 'pedido_loja', 'registro_id': pedido.id,
-            'url': f'/pedidos/{pedido.id}'}
+    out = {'ok': True, 'pedido_id': pedido.id, 'mudancas': mudancas,
+           'nao_resolvidos': nao_resolvidos,
+           'registro_tipo': 'pedido_loja', 'registro_id': pedido.id,
+           'url': f'/pedidos/{pedido.id}'}
+    if aviso_corte:
+        # Admin editando sob o corte: passa, mas o aviso vai junto (mesmo
+        # contrato do executar_criar_pedido).
+        out['aviso'] = aviso_corte
+    return out
 
 
 def executar_receber_mp(params, user):
