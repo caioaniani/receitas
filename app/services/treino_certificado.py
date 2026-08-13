@@ -12,8 +12,19 @@ from app.services import treino_ledger as ledger
 
 
 def _s(txt):
-    """Sanitiza pra fonte core do FPDF (latin-1)."""
-    return (txt or '').encode('latin-1', 'replace').decode('latin-1')
+    """Sanitiza pra fonte core do FPDF (latin-1).
+
+    Translitera ANTES do encode o que o latin-1 não conhece mas tem
+    equivalente óbvio — em/en-dash e aspas curvas (achado de revisão
+    12/08/2026: os módulos da Universidade usam travessão, "Módulo 1 —
+    Cultura", e o certificado RDC 216 — documento de fiscalização — sairia
+    "Módulo 1 ? Cultura"; mesma classe do bug do en-dash em pdf._latin1,
+    27/07/2026). O resto fora do latin-1 (emoji etc.) segue virando '?'."""
+    txt = (txt or '')
+    for de, para in (('—', '-'), ('–', '-'), ('“', '"'), ('”', '"'),
+                     ('‘', "'"), ('’', "'")):
+        txt = txt.replace(de, para)
+    return txt.encode('latin-1', 'replace').decode('latin-1')
 
 
 def por_codigo(codigo):
