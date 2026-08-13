@@ -34,7 +34,6 @@ import logging
 import os
 from datetime import timedelta
 
-from app.extensions import db
 from app.models import PedidoLoja
 from app.utils import hoje
 
@@ -138,7 +137,13 @@ def enviar_plano_automatico():
         # re-sincroniza a ordem com o grid — comportamento re-pressável.
         pass
     plano = enviar_plano_do_dia(amanha, user_id=None, motor=motor)
-    db.session.commit()
+    if plano is None:
+        # Dia sem nada a produzir no grid: nada a enviar (o service já
+        # commitou a limpeza que fez).
+        logger.info('auto_envio: %s sem itens no grid — nada enviado',
+                    amanha.isoformat())
+        return {'data': amanha.isoformat(), 'itens': 0, 'motor': motor,
+                'vazio': True}
     n_itens = len(getattr(plano, 'itens', []) or [])
     logger.info('auto_envio: ordem de %s enviada ao padeiro (%d item[ns], '
                 'motor=%s)', amanha.isoformat(), n_itens, motor)
