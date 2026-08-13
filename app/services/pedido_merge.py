@@ -115,14 +115,17 @@ def adotar_rascunho_automatico(pedido, itens, user_id, observacao=None):
             'mantidos': mantidos}
 
 
-def absorver_rascunho_automatico(loja_id, data_entrega, user_id):
-    """Ja existe pedido HUMANO 'confirmado' no dia e o cron tambem deixou um
-    rascunho automatico (estado de colisao — ex.: pedidos criados antes do
-    merge cobrir o rascunho): o rascunho virou redundancia e CANCELA (somar
-    os itens dele seria exatamente a dobra que se quer evitar). NAO commita.
-    Retorna o rascunho cancelado ou None."""
+def absorver_rascunho_automatico(loja_id, data_entrega, user_id,
+                                 excluir_id=None):
+    """Ja existe pedido HUMANO no dia e o cron tambem deixou um rascunho
+    automatico (estado de colisao — ex.: pedidos criados antes do merge
+    cobrir o rascunho, ou pedido humano MOVIDO de data pra cima do
+    rascunho): o rascunho virou redundancia e CANCELA (somar os itens dele
+    seria exatamente a dobra que se quer evitar). `excluir_id` protege o
+    proprio pedido em edicao de se cancelar. NAO commita. Retorna o
+    rascunho cancelado ou None."""
     r = rascunho_automatico_aberto(loja_id, data_entrega)
-    if r is None:
+    if r is None or r.id == excluir_id:
         return None
     r.status = 'cancelado'
     r.modificado_em = agora()
