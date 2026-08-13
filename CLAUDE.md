@@ -1603,16 +1603,21 @@ ordem nao bate com o grid visto). Cache do balanco tem motor na chave.
 Constante: `previsao_producao.MOTORES_PREVISAO_PRODUCAO`. Testes: secao
 "motor de previsao" em `tests/test_cronograma.py`.
 
-## Automacao de pedidos + envio + corte 18h + fornada sab/dom (10/08/2026)
+## Automacao de pedidos + envio + corte 19h + fornada sab/dom (10/08/2026)
 
 Pedido do dono ("hoje eu tenho que lancar o pedido manualmente... quero que
 o sistema faca os pedidos automaticamente de 3 dias na frente"), decisoes
 dele via AskUserQuestion: **automatizar TUDO (pedido + envio)** — REVOGA a
 regra de 04/07/2026 "enviar ao padeiro e gesto humano" —, motor
-**venda+estoque**, corte 18h com **admin passando com aviso**.
+**venda+estoque**, corte com **admin passando com aviso**. **CORTE = 19:00
+desde 13/08/2026** (nasceu 18:00; o dono mudou no 1o dia real — caso Joao/
+Nebraska, as lojas precisavam da hora extra pra revisar o rascunho).
+`pedido_corte.HORA_CORTE` e a fonte; os crons acompanham (refresh 18:30 =
+30min antes do corte; envio 19:00) — mudar a hora exige mudar os DOIS jobs
+do seru_cron junto.
 
 - **Auto-pedidos** (`app/services/auto_pedidos.py::gerar_pedidos_
-  automaticos`, cron 06:30 e 17:30 BRT, lock 7758, kill-switch
+  automaticos`, cron 06:30 e 18:30 BRT, lock 7758, kill-switch
   `AUTO_PEDIDOS=0`): roda `sugerir_pedidos_por_venda` (o motor da tela
   /pedidos-semana/estoque; `AUTO_PEDIDOS_SEGURANCA_PCT` opcional, valor
   ilegivel vira 0 com WARNING) com offset 1 e materializa D+1..D+3 via
