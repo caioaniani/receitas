@@ -1276,6 +1276,11 @@ def cancelar(id):
     if aviso_corte:
         flash(aviso_corte, 'warning')
     pedido.status = 'cancelado'
+    # Carimbo do gesto humano (revisão 13/08): cancelar um pedido de dia
+    # FUTURO é "não quero pedido nesse dia" — o carimbo impede o cron de
+    # auto-pedidos de recriar o pedido na rodada seguinte.
+    pedido.modificado_em = agora()
+    pedido.modificado_por_id = current_user.id
     db.session.commit()
     flash('Pedido cancelado.', 'success')
     if pedido.nf_emitida_em:
