@@ -604,24 +604,26 @@ def iniciar(app):
 
     # Pedidos AUTOMATICOS loja->industria (10/08/2026, decisao do dono):
     # motor venda+estoque materializa D+1..D+3 como rascunhos, 2x ao dia —
-    # 06:30 (planejamento) e 17:30 (refresh com a venda do dia, antes do
-    # corte das 18h). Pedido tocado por humano NUNCA e sobrescrito; D+1
-    # sob corte nunca e tocado. Desligavel por AUTO_PEDIDOS=0.
+    # 06:30 (planejamento) e 18:30 (refresh com a venda do dia, 30min antes
+    # do corte — que virou 19:00 em 13/08/2026, pedido do dono no 1o dia).
+    # Pedido tocado por humano NUNCA e sobrescrito; D+1 sob corte nunca e
+    # tocado. Desligavel por AUTO_PEDIDOS=0.
     if os.environ.get('AUTO_PEDIDOS', '1') != '0':
         _scheduler.add_job(
             lambda app=app: _run_auto_pedidos(app),
-            'cron', hour='6,17', minute=30, id='auto-pedidos',
+            'cron', hour='6,18', minute=30, id='auto-pedidos',
             max_instances=1, coalesce=True,
         )
 
-    # Envio AUTOMATICO da ordem de producao de AMANHA ao padeiro (18:00,
-    # logo apos o corte travar o pedido de amanha — decisao do dono
-    # 10/08/2026, REVOGA "enviar e gesto humano" de 04/07/2026).
+    # Envio AUTOMATICO da ordem de producao de AMANHA ao padeiro (19:00 =
+    # pedido_corte.HORA_CORTE, logo apos o corte travar o pedido de amanha
+    # — decisao do dono 10/08/2026, REVOGA "enviar e gesto humano" de
+    # 04/07/2026; horario acompanhou o corte em 13/08/2026).
     # Desligavel por AUTO_ENVIO_PLANO=0.
     if os.environ.get('AUTO_ENVIO_PLANO', '1') != '0':
         _scheduler.add_job(
             lambda app=app: _run_auto_envio(app),
-            'cron', hour=18, minute=0, id='auto-envio-plano',
+            'cron', hour=19, minute=0, id='auto-envio-plano',
             max_instances=1, coalesce=True,
         )
 
