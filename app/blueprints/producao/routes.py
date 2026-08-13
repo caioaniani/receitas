@@ -536,6 +536,8 @@ def pedidos_semana_gerar():
             msg = '. '.join(partes_msg) + '.'
         else:
             msg = 'Nada a atualizar (coluna igual ao pedido).'
+        if aviso_corte:
+            msg += ' ' + aviso_corte
         return jsonify(ok=True, mudou=mudou, msg=msg, res=res)
 
     if partes_msg:
@@ -544,6 +546,8 @@ def pedidos_semana_gerar():
     else:
         flash('Nada a criar nem atualizar (grade igual aos pedidos existentes).',
               'info')
+    if aviso_corte:
+        flash(aviso_corte, 'warning')
 
     return _voltar()
 
