@@ -206,7 +206,7 @@ def _previsto_dow(por_data, hoje_d, residual_rate, datas_possiveis=None):
 
 def _fornada_no_dia(rec, dia):
     """True se a receita PODE ser vendida/projetada nesse dia. Fornada especial
-    (ex: Focaccia) só sex/sáb/dom -> False nos outros dias (não projeta demanda;
+    (ex: Focaccia) só sáb/dom -> False nos outros dias (não projeta demanda;
     o produto não é vendido nesse dia). Receita normal -> sempre True."""
     return not (rec is not None
                 and getattr(rec, 'fornada_especial', False)
