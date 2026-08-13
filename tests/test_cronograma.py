@@ -271,26 +271,26 @@ def test_cronograma_padroniza_em_lotes(app):
 
 
 def test_fornada_especial_produz_na_vespera(app):
-    """Fornada especial (vende sex/sáb/dom) com lead 1: produzida na QUINTA pra a
-    venda na SEXTA. A regra restringe a VENDA; o lead desloca a produção pra
-    véspera — então a quinta NÃO é bloqueada."""
+    """Fornada especial (vende sáb/dom — dono 10/08/2026) com lead 1:
+    produzida na SEXTA pra venda no SÁBADO. A regra restringe a VENDA; o
+    lead desloca a produção pra véspera — então a sexta NÃO é bloqueada."""
     loja = _loja()
     r = _receita('Focaccia')
     r.fornada_especial = True
     r.dias_producao = 1
     db.session.commit()
     hoje_d = hoje()
-    sexta = next(hoje_d + timedelta(days=i) for i in range(1, 14)
-                 if (hoje_d + timedelta(days=i)).weekday() == 4)
-    quinta = sexta - timedelta(days=1)
-    _pedido(loja, 'pendente', sexta, r, 50)           # entrega na sexta
-    horizonte = (sexta - hoje_d).days + 1
+    sabado = next(hoje_d + timedelta(days=i) for i in range(1, 14)
+                  if (hoje_d + timedelta(days=i)).weekday() == 5)
+    sexta = sabado - timedelta(days=1)
+    _pedido(loja, 'pendente', sabado, r, 50)          # entrega no sábado
+    horizonte = (sabado - hoje_d).days + 1
     crono = cronograma_producao(horizonte_dias=horizonte, inicio_offset_dias=0)
     rr = _rec_out(crono, r.id)
     assert rr is not None
     por_data = {c['data']: c['qtd'] for c in rr['por_dia']}
-    assert por_data.get(quinta.isoformat(), 0) > 0    # produz na quinta
-    assert por_data.get(sexta.isoformat(), 0) == 0    # não na sexta
+    assert por_data.get(sexta.isoformat(), 0) > 0     # produz na sexta
+    assert por_data.get(sabado.isoformat(), 0) == 0   # não no sábado
 
 
 # ── motor de previsão: pedidos | vendas | maior (dono, 06/07/2026) ──────────
@@ -438,9 +438,9 @@ def test_enviar_com_motor_vendas_usa_a_grade_de_vendas(app, admin_user):
     assert item is not None and item.qtd_alvo > 0
 
 
-# ── fornada especial: PRODUÇÃO só qui/sex/sáb (decisão do dono 06/07/2026) ──
-# A venda de sex/sáb/dom sai da véspera (qui→sex, sex→sáb, sáb→dom); o
-# cronograma nunca programa (nem deixa editar) produção em seg/ter/qua/dom.
+# ── fornada especial: PRODUÇÃO só sex/sáb (dono 10/08/2026; antes qui/sex/
+# sáb desde 06/07). A venda de sáb/dom sai da véspera (sex→sáb, sáb→dom); o
+# cronograma nunca programa (nem deixa editar) produção nos demais dias.
 
 def _proximo_dow(base, dow):
     return next(base + timedelta(days=i) for i in range(1, 15)
@@ -468,9 +468,9 @@ def test_fornada_especial_lead0_venda_domingo_produz_sabado(app):
     assert por_data.get(sabado.isoformat(), 0) >= 40     # sai da véspera
 
 
-def test_fornada_especial_nunca_produz_fora_qui_sex_sab(app):
+def test_fornada_especial_nunca_produz_fora_sex_sab(app):
     """Nem pedido firme aberrante numa TERÇA faz o cronograma programar dia
-    útil: a produção só cai em qui/sex/sáb; sem dia permitido antes da
+    útil: a produção só cai em sex/sáb; sem dia permitido antes da
     entrega, a linha não produz (a falta vira alerta de entrega em risco —
     decisão humana, não do cronograma)."""
     from datetime import date as _date
@@ -486,7 +486,7 @@ def test_fornada_especial_nunca_produz_fora_qui_sex_sab(app):
     assert rr is not None
     for c in rr['por_dia']:
         if c['qtd']:
-            assert _date.fromisoformat(c['data']).weekday() in (3, 4, 5)
+            assert _date.fromisoformat(c['data']).weekday() in (4, 5)
 
 
 def test_equilibrar_nao_adianta_fornada_especial_pra_dia_util(app):
@@ -498,7 +498,7 @@ def test_equilibrar_nao_adianta_fornada_especial_pra_dia_util(app):
     r = _receita('Focaccia')
     r.fornada_especial = True
     db.session.commit()
-    _pedido(loja, 'pendente', _proximo_dow(hoje(), 4), r, 40)   # sexta
+    _pedido(loja, 'pendente', _proximo_dow(hoje(), 5), r, 40)   # sábado
 
     crono = cronograma_producao(horizonte_dias=14, inicio_offset_dias=0,
                                 equilibrar=True)
@@ -506,7 +506,7 @@ def test_equilibrar_nao_adianta_fornada_especial_pra_dia_util(app):
     assert rr is not None and rr['total'] > 0
     for c in rr['por_dia']:
         if c['qtd']:
-            assert _date.fromisoformat(c['data']).weekday() in (3, 4, 5)
+            assert _date.fromisoformat(c['data']).weekday() in (4, 5)
 
 
 def test_editar_celula_recusa_dia_bloqueado(app):
@@ -565,7 +565,7 @@ def test_fornada_especial_celula_bloqueada_na_tela(app, admin_user):
     html = client.get('/telaindustriateste/?horizonte=7').get_data(as_text=True)
     assert 'cel-bloq' in html            # horizonte de 7 dias sempre tem seg-qua
     assert 'fim de semana' in html
-    assert 'produz só quinta/sexta/sábado' in html
+    assert 'produz só sexta/sábado' in html
 
 
 def test_bom_explode_sub_receita(app):
