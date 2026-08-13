@@ -215,7 +215,7 @@ def _fornada_no_dia(rec, dia):
 
 def producao_permitida_no_dia(rec, dia):
     """True se a receita PODE ser PRODUZIDA nesse dia. Fornada especial produz
-    só qui/sex/sáb (decisão do dono 06/07/2026): a venda de sex/sáb/dom sai da
+    só sex/sáb (decisão do dono 10/08/2026): a venda de sáb/dom sai da
     véspera. Receita normal -> sempre True. Público de propósito: o
     cronograma_edit usa pra recusar edição manual em dia bloqueado."""
     return not (rec is not None
