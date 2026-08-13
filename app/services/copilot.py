@@ -2953,10 +2953,11 @@ def executar_editar_pedido(params, user):
            'nao_resolvidos': nao_resolvidos,
            'registro_tipo': 'pedido_loja', 'registro_id': pedido.id,
            'url': f'/pedidos/{pedido.id}'}
-    if aviso_corte:
-        # Admin editando sob o corte: passa, mas o aviso vai junto (mesmo
-        # contrato do executar_criar_pedido).
-        out['aviso'] = aviso_corte
+    # Admin editando sob o corte: passa, mas o aviso vai junto (mesmo
+    # contrato do executar_criar_pedido). Idem pro rascunho absorvido.
+    avisos = [a for a in (aviso_corte, aviso_rascunho) if a]
+    if avisos:
+        out['aviso'] = ' | '.join(avisos)
     return out
 
 
