@@ -33,8 +33,9 @@ logger = logging.getLogger(__name__)
 # Chave do guard — bump no sufixo só se um dia houver um segundo lote.
 CFG_SEED = 'treino_seed_universidade_v1'
 
-# (nome, descricao, [aulas na ordem do dono]). A `ordem` gravada de cada
-# aula é o índice na lista; a das trilhas continua do max existente.
+# (nome, descricao, [aulas na ordem do dono]). Trilha NOVA: `ordem` das
+# aulas = índice na lista; trilha reusada (top-up): continua do max dela.
+# A `ordem` das trilhas continua do max global existente.
 MODULOS = [
     ('Módulo 1 — Cultura',
      'Quem somos, como nos comportamos e o padrão do qual não abrimos '
