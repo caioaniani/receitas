@@ -56,26 +56,43 @@ import logging
 import os
 from datetime import timedelta
 
+from app.extensions import db
 from app.models import PedidoLoja
-from app.utils import hoje
+from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
 
 HORIZONTE_DIAS = 3
 
 
+def _e_rascunho_auto(p):
+    from app.services.pedido_merge import MARCADOR_RASCUNHO_AUTO
+    return (p.status == 'pendente' and p.criado_por is None
+            and p.modificado_por_id is None
+            and (p.observacao or '').startswith(MARCADOR_RASCUNHO_AUTO))
+
+
 def _dias_protegidos(datas):
     """(loja_id, data) que o cron NÃO pode tocar: pedido criado/modificado
     por HUMANO ou já além de editável. Exceção espelhada do motor e do
     aplicar_grade: pedido ENTREGUE/RECEBIDO antes da data (entrega
-    antecipada de emergência) não é "o pedido do dia" e não protege."""
+    antecipada de emergência) não é "o pedido do dia" e não protege.
+
+    CANCELADO por humano (modificado_por_id preenchido — as rotas de
+    cancelar carimbam) TAMBÉM protege: "cancelei o pedido de sexta" é a
+    palavra da loja; sem isso o cron ressuscitava o pedido na rodada
+    seguinte (achado da revisão rodada 2). Cancelado sem carimbo
+    (histórico antigo, absorção pelo próprio cron) não protege."""
     from app.constants import STATUS_PEDIDO_EDITAVEIS, STATUS_PEDIDO_ENTREGUES
     protegidos = set()
     rows = (PedidoLoja.query
-            .filter(PedidoLoja.data_entrega.in_(datas),
-                    PedidoLoja.status != 'cancelado')
+            .filter(PedidoLoja.data_entrega.in_(datas))
             .all())
     for p in rows:
+        if p.status == 'cancelado':
+            if p.modificado_por_id is not None:
+                protegidos.add((p.loja_id, p.data_entrega))
+            continue
         if p.status in STATUS_PEDIDO_ENTREGUES:
             # datas aqui são sempre futuras (D+1..D+N): entregue = antecipada.
             continue
@@ -86,16 +103,72 @@ def _dias_protegidos(datas):
     return protegidos
 
 
+def _absorver_rascunhos_orfaos(datas):
+    """(loja, dia) com pedido de HUMANO e TAMBÉM rascunho do cron — estado
+    de colisão (edição de data movendo um pedido pra cima do rascunho,
+    legado pré-fix, corrida): o rascunho é redundância de máquina e a dobra
+    não pode esperar o próximo gesto humano (achado da revisão rodada 2).
+    Cancela os rascunhos e commita. Retorna o nº cancelado."""
+    from app.constants import STATUS_PEDIDO_ENTREGUES
+    rows = (PedidoLoja.query
+            .filter(PedidoLoja.data_entrega.in_(datas),
+                    PedidoLoja.status != 'cancelado')
+            .all())
+    por_dia = {}
+    for p in rows:
+        por_dia.setdefault((p.loja_id, p.data_entrega), []).append(p)
+    n = 0
+    for _, ps in por_dia.items():
+        rascs = [p for p in ps if _e_rascunho_auto(p)]
+        outros = [p for p in ps
+                  if not _e_rascunho_auto(p)
+                  and p.status not in STATUS_PEDIDO_ENTREGUES]
+        if rascs and outros:
+            for p_r in rascs:
+                p_r.status = 'cancelado'
+                p_r.modificado_em = agora()
+                n += 1
+    if n:
+        db.session.commit()
+        logger.info('auto_pedidos: %d rascunho(s) redundante(s) absorvido(s) '
+                    '(dia já tem pedido humano)', n)
+    return n
+
+
+def _rascunhos_por_dia(datas):
+    """Rascunhos automáticos abertos por (loja_id, data) — o mais antigo é
+    o alvo canônico (mesma regra do rascunho_automatico_aberto)."""
+    from app.services.pedido_merge import MARCADOR_RASCUNHO_AUTO
+    out = {}
+    rows = (PedidoLoja.query
+            .filter(PedidoLoja.data_entrega.in_(datas),
+                    PedidoLoja.status == 'pendente',
+                    PedidoLoja.criado_por.is_(None),
+                    PedidoLoja.modificado_por_id.is_(None),
+                    PedidoLoja.observacao.like(MARCADOR_RASCUNHO_AUTO + '%'))
+            .order_by(PedidoLoja.id)
+            .all())
+    for p in rows:
+        out.setdefault((p.loja_id, p.data_entrega), p)
+    return out
+
+
 def _seguranca_pct():
     """Env `AUTO_PEDIDOS_SEGURANCA_PCT` com piso 0 e WARNING em valor
-    ilegível — int('abc') mataria o job em silêncio a cada rodada."""
+    ilegível ou negativo — int('abc') mataria o job em silêncio a cada
+    rodada, e -10 calado esconderia config errada."""
     bruto = (os.environ.get('AUTO_PEDIDOS_SEGURANCA_PCT') or '0').strip()
     try:
-        return max(0, int(bruto or 0))
+        val = int(bruto or 0)
     except ValueError:
         logger.warning('AUTO_PEDIDOS_SEGURANCA_PCT=%r ilegível — usando 0',
                        bruto)
         return 0
+    if val < 0:
+        logger.warning('AUTO_PEDIDOS_SEGURANCA_PCT=%r negativo — usando 0',
+                       bruto)
+        return 0
+    return val
 
 
 def gerar_pedidos_automaticos(horizonte=HORIZONTE_DIAS):
