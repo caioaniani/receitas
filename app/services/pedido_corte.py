@@ -47,7 +47,8 @@ def corte_ativo(data_entrega, *, agora_dt=None):
 def bloqueio_do_corte(datas, user=None, *, agora_dt=None):
     """Verifica o corte pra um GESTO que toca as `datas` (iterável de
     date/None — na edição entram a data ATUAL e a NOVA: mover um pedido
-    PRA amanhã ou TIRAR de amanhã depois das 18h muda o pré-preparo igual).
+    PRA amanhã ou TIRAR de amanhã depois do corte muda o pré-preparo
+    igual).
 
     Retorna (bloqueado, aviso):
     - (True, msg)  -> recusar (gerente/funcionário/produção/padeiro);
