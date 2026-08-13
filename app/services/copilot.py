@@ -3425,6 +3425,8 @@ def executar_mudar_status_pedido(params, user):
     resultado = {'ok': True, 'pedido_id': pid, 'novo_status': para,
                  'registro_tipo': 'pedido_loja', 'registro_id': pid,
                  'url': f'/pedidos/{pid}'}
+    if aviso_corte:
+        resultado['aviso'] = aviso_corte
 
     # Se acabou de marcar como separado, ja gera o QR Code de saida e
     # devolve no resultado pro Slack mostrar pro motorista escanear.
