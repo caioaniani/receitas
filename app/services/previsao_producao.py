@@ -1286,9 +1286,15 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
     #   entrega e demanda mais real que o pedido digitado);
     # - exclui RASCUNHO ABANDONADO: pedido gerado pela propria grade
     #   (observacao 'Gerado do histórico...') que continua 'pendente' — sem
-    #   isso a media re-aprende o que a media criou (auto-reforco); confirmado
-    #   pelo humano (status muda), entra normal. Filtro NULL-safe: observacao
-    #   NULL nunca casa LIKE, entao a condicao e um OR explicito;
+    #   isso a media re-aprende o que a media criou (auto-reforco). Filtro
+    #   NULL-safe: observacao NULL nunca casa LIKE, entao a condicao e um OR
+    #   explicito. DECISAO 13/08/2026 (era da automacao de pedidos): pedido-
+    #   maquina que SAIU de 'pendente' (separado/entregue) ENTRA no
+    #   historico mesmo sem toque humano — exclui-lo pra sempre faria a
+    #   media (denominador com zeros por data) definhar ate zero em
+    #   ~janela_semanas e o motor 'pedidos' subestimar; o eco e limitado
+    #   pela quantidade_recebida (conferencia humana na entrega) e medido
+    #   em previsao_acuracia.circularidade_pct;
     # - cancelados continuam fora.
     hist_lrd = defaultdict(lambda: defaultdict(
         lambda: defaultdict(lambda: defaultdict(int))))
