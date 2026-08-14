@@ -136,7 +136,14 @@ def _linhas_pedido(pedido):
 
 
 def pedidos_pendentes_de_aviso():
-    """Pedidos entregues recentes ainda sem o sentinela de aviso."""
+    """Pedidos entregues recentes ainda sem o sentinela de aviso.
+
+    Janela por QUALQUER um dos tres marcos >= corte: `data_entrega` (data
+    planejada), `modificado_em` (carimbado no ato do recebimento pelo
+    `_executar_recebimento_pedido` — cobre pedido recebido com ATRASO,
+    cuja data planejada ja saiu da janela) e, sem `data_entrega`,
+    `criado_em`. O corte existe so pra nao ressuscitar entregues antigos
+    de antes do regime de sentinela (pre-06/2026, todos sem marca)."""
     from sqlalchemy import func, or_
 
     from app.models import PedidoLoja
@@ -145,11 +152,14 @@ def pedidos_pendentes_de_aviso():
     candidatos = (PedidoLoja.query
                   .filter(PedidoLoja.status == 'entregue')
                   .filter(or_(PedidoLoja.data_entrega >= corte,
+                              func.date(PedidoLoja.modificado_em) >= corte,
                               PedidoLoja.data_entrega.is_(None)
                               & (func.date(PedidoLoja.criado_em) >= corte)))
                   .order_by(PedidoLoja.id)
                   .all())
-    return [p for p in candidatos if not _ja_avisado(p)]
+    return [p for p in candidatos
+            if not _ja_avisado(p)
+            and _MARCA_TESTE not in (p.observacao or '')]
 
 
 def enviar_digest_recebimentos():
