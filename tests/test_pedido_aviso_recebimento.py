@@ -259,6 +259,105 @@ def test_digest_ignora_ja_avisado_e_fora_da_janela(app):
     assert antigo.id not in ids
 
 
+def test_digest_pega_pedido_recebido_com_atraso(app):
+    """Achado da revisão 14/08: `data_entrega` é a data PLANEJADA — pedido
+    preso e recebido dias depois sairia da janela e nunca seria avisado.
+    O executor de recebimento agora carimba `modificado_em`, e a janela
+    do digest olha esse carimbo também."""
+    from datetime import timedelta
+
+    from app.extensions import db
+    from app.models import Loja, PedidoLoja
+    from app.services import pedidos_notificacao
+    from app.utils import agora, hoje
+    loja = Loja(nome='Atrasada', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    p = PedidoLoja(loja_id=loja.id, status='entregue',
+                   data_entrega=hoje() - timedelta(days=10),
+                   modificado_em=agora())      # recebido HOJE, com atraso
+    db.session.add(p)
+    db.session.commit()
+    ids = [x.id for x in pedidos_notificacao.pedidos_pendentes_de_aviso()]
+    assert p.id in ids
+
+
+def test_executor_de_recebimento_carimba_modificado_em(app):
+    from datetime import timedelta
+
+    from app.blueprints.pedidos.routes import _executar_recebimento_pedido
+    from app.extensions import db
+    from app.models import (
+        Loja,
+        PedidoItem,
+        PedidoItemFoto,
+        PedidoLoja,
+        Receita,
+    )
+    from app.utils import hoje
+    loja = Loja(nome='Carimbo', ativa=True)
+    r = Receita(nome='Pao Carimbo', categoria='Paes', rendimento_qtd=1,
+                rendimento_unidade='un', peso_base=100.0)
+    db.session.add_all([loja, r])
+    db.session.flush()
+    p = PedidoLoja(loja_id=loja.id, status='em_transporte',
+                   data_entrega=hoje() - timedelta(days=10))
+    db.session.add(p)
+    db.session.flush()
+    item = PedidoItem(pedido_id=p.id, receita_id=r.id, quantidade=5)
+    db.session.add(item)
+    db.session.flush()
+    db.session.add(PedidoItemFoto(
+        pedido_item_id=item.id, etapa='entrega',
+        imagem_url='http://x/c.jpg',
+        imagem_storage_path=f'/conferencia/{p.id}/{item.id}_entrega.jpg'))
+    db.session.commit()
+    assert p.modificado_em is None
+    ok, _msg, _div = _executar_recebimento_pedido(p, user=None)
+    db.session.commit()
+    assert ok is True
+    assert p.modificado_em is not None
+
+
+def test_digest_pula_pedido_de_teste_do_owner(app):
+    """O pedido sintético da rota /admin/teste-aviso-recebimento carrega
+    '[PEDIDO-TESTE-AVISO]' na observacao — se o envio imediato do teste
+    falhar, ele NÃO pode vazar pro digest real."""
+    from app.extensions import db
+    from app.models import Loja
+    from app.services import pedidos_notificacao
+    loja = Loja(nome='TesteOwner', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    p = _pedido_entregue(loja)
+    p.observacao = '[PEDIDO-TESTE-AVISO] criado pela rota de teste'
+    db.session.commit()
+    assert p.id not in [x.id for x in
+                        pedidos_notificacao.pedidos_pendentes_de_aviso()]
+
+
+def test_digest_capa_e_deixa_o_resto_pro_proximo(app):
+    from unittest.mock import patch as _patch
+
+    from app.extensions import db
+    from app.models import Loja
+    from app.services import pedidos_notificacao
+    loja = Loja(nome='Volume', ativa=True)
+    db.session.add(loja)
+    db.session.commit()
+    for _ in range(4):
+        _pedido_entregue(loja, com_foto=False)
+    app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999990000'
+    with _patch.object(pedidos_notificacao, '_MAX_PEDIDOS_DIGEST', 3), \
+         patch('app.services.zapi.enviar_texto',
+               return_value={'ok': True}) as send:
+        res = pedidos_notificacao.enviar_digest_recebimentos()
+    assert res['pedidos'] == 3
+    assert 'e mais 1 no proximo digest' in send.call_args[0][1]
+    # o 4º não foi marcado — fica pro digest seguinte
+    assert len(pedidos_notificacao.pedidos_pendentes_de_aviso()) == 1
+
+
 def test_digest_desligavel_por_config(app):
     from app.extensions import db
     from app.models import Loja
