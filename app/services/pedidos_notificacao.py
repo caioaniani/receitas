@@ -130,8 +130,11 @@ def _linhas_pedido(pedido):
     elif n_fotos == 0:
         linhas.append('_(sem fotos)_')
     else:
-        linhas.append('_(link da pasta indisponivel — '
-                      'veja em /pedidos/' + str(pedido.id) + ')_')
+        # Link ABSOLUTO (padrao da casa, ex. alertas de retirada presa):
+        # caminho relativo nao e clicavel no WhatsApp.
+        base = (current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+        linhas.append('_(link da pasta indisponivel — veja em '
+                      f'{base}/pedidos/{pedido.id})_')
     return linhas
 
 
