@@ -41,8 +41,7 @@ def test_recebimento_com_foto_nova_entrega(app):
     from app.blueprints.pedidos.routes import _executar_recebimento_pedido
     p, _ = _pedido_em_transporte(app)
     fotos = [{'imagem': b'\xff\xd8\xff\xfake-jpeg', 'mimetype': 'image/jpeg'}]
-    with patch('app.services.dropbox_storage.disponivel', return_value=False), \
-         patch('app.services.pedidos_notificacao.notificar_pedido_recebido'):
+    with patch('app.services.dropbox_storage.disponivel', return_value=False):
         ok, _msg, _div = _executar_recebimento_pedido(p, user=None, fotos=fotos)
     assert ok is True
     assert p.status == 'entregue'
