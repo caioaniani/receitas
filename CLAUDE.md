@@ -1064,6 +1064,35 @@ ALGO hoje?") — lancar a sobra de UM item calava a cobranca de todos.
 - Testes: `tests/test_sobra_por_item.py` (15 casos). Manual atualizado
   (linha das sobras no DIARIO).
 
+## Aviso de pedido recebido = DIGEST 12:00 (14/08/2026)
+
+Pedido do dono ("os pedidos recebidos pelas lojas podem ser acumulados ate
+as 12:00 dai dispara uma unica mensagem ao inves de mandar picado — esta
+ficando flodado e eu nao estou vendo as mensagens"): o WhatsApp por pedido
+na hora da entrega FOI DESLIGADO (call sites removidos em
+`pedidos/routes.py` receber e `copilot.executar_mudar_status_pedido`; ha
+teste travando contra reintroducao). Em vez disso:
+
+- **`pedidos_notificacao.enviar_digest_recebimentos()`** roda as 12:00 BRT
+  (`seru_cron`, job `zapi-digest-recebimentos`, lock **7760**, mesmo
+  kill-switch `ZAPI_BOT_AVISO_RECEBIMENTO=0`): UMA mensagem com TODOS os
+  pedidos entregues ainda sem aviso — um bloco por pedido (loja, contagem
+  de fotos, link da pasta de conferencia no Dropbox).
+- **Idempotencia** = o MESMO sentinela `[avisado-fotos]` em
+  `pedido.observacao` de sempre; o digest acha pendentes por
+  `status='entregue'` + ausencia do sentinela, janela `_JANELA_DIAS=3`
+  por `data_entrega` (fallback `criado_em` se NULL). Envio falho nao
+  marca ninguem (re-entra no digest seguinte); recebido APOS as 12:00
+  entra no digest do dia seguinte (aceito pelo desenho — entrega e de
+  manha).
+- `notificar_pedido_recebido` (aviso imediato de UM pedido) segue vivo SO
+  pra rota de teste do owner `/admin/teste-aviso-recebimento` (valida o
+  pipe Z-API+Dropbox). O corpo por pedido e compartilhado
+  (`_linhas_pedido`/`_fotos_e_link`).
+- Testes: secao "Digest das 12:00" em
+  `tests/test_pedido_aviso_recebimento.py`. Manual atualizado (RODA
+  SOZINHO).
+
 ## Checklist de loja — abertura / troca de turno / fechamento (03/08/2026)
 
 Pedido do dono: o gerente/atendente chefe responsavel do turno preenche um
