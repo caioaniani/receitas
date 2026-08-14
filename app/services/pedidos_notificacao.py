@@ -173,12 +173,18 @@ def enviar_digest_recebimentos():
         pendentes = pedidos_pendentes_de_aviso()
         if not pendentes:
             return {'enviado': False, 'motivo': 'sem_pendentes'}
+        # Cap: os que passarem NAO sao marcados e saem no digest seguinte.
+        excedente = max(0, len(pendentes) - _MAX_PEDIDOS_DIGEST)
+        pendentes = pendentes[:_MAX_PEDIDOS_DIGEST]
 
         from app.services import zapi
         partes = [f'📦 *Pedidos recebidos nas lojas* ({len(pendentes)})']
         for p in pendentes:
             partes.append('')
             partes.extend(_linhas_pedido(p))
+        if excedente:
+            partes.append('')
+            partes.append(f'… e mais {excedente} no proximo digest.')
 
         numero = current_app.config.get('ZAPI_BOT_DONO_NUMERO') or ''
         resp = zapi.enviar_texto(numero, '\n'.join(partes))
@@ -188,16 +194,21 @@ def enviar_digest_recebimentos():
                     'erro': resp.get('erro'), 'pendentes': len(pendentes)}
 
         from app.extensions import db
+        marcados = True
         for p in pendentes:
             _marcar_avisado(p, commit=False)
         try:
             db.session.commit()
         except Exception:  # noqa: BLE001
             db.session.rollback()
+            marcados = False
+            # Mensagem JA saiu; sem sentinela, o digest de amanha repete
+            # esses pedidos (duplicar > perder — mas o retorno diz).
             logger.exception('falha marcando sentinelas do digest')
         logger.info('digest recebimentos: %d pedido(s) avisados',
                     len(pendentes))
-        return {'enviado': True, 'pedidos': len(pendentes)}
+        return {'enviado': True, 'pedidos': len(pendentes),
+                'marcados': marcados}
     except Exception:  # noqa: BLE001
         logger.exception('enviar_digest_recebimentos falhou')
         return {'enviado': False, 'motivo': 'excecao'}
