@@ -14,6 +14,7 @@ from app.models import Desperdicio, EstoqueLoja, Loja
 from app.services.desperdicio_alerta import (
     itens_sem_sobra,
     mensagem_pendentes,
+    mensagem_resumo,
 )
 from tests.conftest import _make_receita
 
@@ -160,6 +161,48 @@ def test_mensagem_junta_loja_sem_nada_e_itens(app):
         texto = mensagem_pendentes([outra], itens_sem_sobra(_DIA))
         assert 'Loja Nebraska' in texto           # não lançou nada
         assert 'Croissant Tradicional (45)' in texto
+
+
+# ── mensagem_resumo (WhatsApp do dono, 14/08/2026) ──────────────────
+
+def test_resumo_sem_nome_de_item(app):
+    """O WhatsApp do dono é COMPACTO: conta itens, nunca lista nomes
+    (dono 14/08/2026: "muita informação, só fala se lançaram ou não")."""
+    with app.app_context():
+        _cenario()
+        texto = mensagem_resumo([], itens_sem_sobra(_DIA))
+        assert 'Croissant' not in texto
+        assert '1 item sem sobra' in texto
+        assert 'Loja Ribeiro do Vale' in texto
+        assert 'Slack' in texto                  # aponta onde está o detalhe
+
+
+def test_resumo_loja_sem_nada_nao_repete_na_lista_de_itens(app):
+    """Loja que não lançou NADA aparece uma vez só ("não lançou nada") —
+    a linha de contagem de itens seria redundante."""
+    with app.app_context():
+        lj, rec = _cenario()
+        texto = mensagem_resumo([lj], itens_sem_sobra(_DIA))
+        assert texto.count('Loja Ribeiro do Vale') == 1
+        assert 'não lançou nada' in texto
+        assert 'sem sobra' not in texto.replace('sobra lançada', '')
+
+
+def test_resumo_plural_de_itens(app):
+    with app.app_context():
+        lj = Loja(nome='Loja Teste', ativa=True)
+        db.session.add(lj)
+        db.session.flush()
+        for i in range(3):
+            rec = _make_receita(f'Pao {i:02d}')
+            rec.cobra_sobra_diaria = True
+            db.session.add(rec)
+            db.session.flush()
+            db.session.add(EstoqueLoja(loja_id=lj.id, receita_id=rec.id,
+                                       quantidade=5))
+        db.session.commit()
+        texto = mensagem_resumo([], itens_sem_sobra(_DIA))
+        assert '3 itens sem sobra' in texto
 
 
 # ── senders disparam com pendência só de item ───────────────────────
