@@ -924,6 +924,13 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
         ))
 
     pedido.status = 'entregue'
+    # Momento REAL do recebimento (14/08/2026): o digest das 12:00 usa
+    # `modificado_em` na janela de pendentes — sem o carimbo, pedido
+    # recebido com atraso (>3 dias da data planejada) nunca seria avisado
+    # (`data_entrega` e a data PLANEJADA, nao a efetiva). So o timestamp:
+    # `modificado_por_id` fica como esta (semantica de protecao dos
+    # auto-pedidos e outra decisao).
+    pedido.modificado_em = agora()
     if divergencias:
         nota = 'Divergencias no recebimento: ' + '; '.join(divergencias)
         pedido.observacao = (pedido.observacao + ' | ' if pedido.observacao else '') + nota
