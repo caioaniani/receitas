@@ -212,7 +212,7 @@ def enviar_alerta_desperdicio():
         logger.info('desperdicio_alerta: todas as lojas lancaram, nada a enviar')
         return
 
-    texto = mensagem_pendentes(faltam, itens)
+    texto = mensagem_resumo(faltam, itens)
     res = zapi.enviar_texto(numero, texto)
     if res.get('ok'):
         logger.info('desperdicio_alerta: enviado pra %s (%d loja[s], '
