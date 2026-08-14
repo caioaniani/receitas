@@ -841,6 +841,19 @@ def _run_desperdicio_alerta(app):
                   'zapi alerta desperdicio')
 
 
+def _run_digest_recebimentos(app):
+    """Job: digest UNICO dos pedidos recebidos nas lojas, 12:00 BRT
+    (14/08/2026, dono: "acumula ate as 12:00 e dispara uma unica mensagem
+    ao inves de mandar picado"). Idempotente pelo sentinela em
+    pedido.observacao; recebido apos as 12:00 entra no digest seguinte."""
+    from app.services import pedidos_notificacao
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_DIGEST_RECEBIMENTOS,
+                  pedidos_notificacao.enviar_digest_recebimentos,
+                  'digest pedidos recebidos')
+
+
 def _run_automacoes_whatsapp(app):
     """Job: dispara as automacoes WhatsApp agendadas que estao no horario
     (checa a cada 5 min). Idempotente por dia via ultimo_disparo_em."""
