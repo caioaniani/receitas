@@ -194,7 +194,7 @@ def test_digest_junta_todos_numa_mensagem_so(app):
          patch('app.services.zapi.enviar_texto',
                return_value={'ok': True}) as send:
         res = pedidos_notificacao.enviar_digest_recebimentos()
-    assert res == {'enviado': True, 'pedidos': 2}
+    assert res == {'enviado': True, 'pedidos': 2, 'marcados': True}
     send.assert_called_once()                       # UMA mensagem
     msg = send.call_args[0][1]
     assert f'Pedido #{p1.id}' in msg
