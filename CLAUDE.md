@@ -1034,6 +1034,12 @@ ALGO hoje?") — lancar a sobra de UM item calava a cobranca de todos.
 - Os senders (Slack 20:10-25 + WhatsApp dono 20:30) disparam se HOUVER
   QUALQUER pendencia (loja OU item) — antes, loja que lancava 1 item sumia
   e levava os itens junto. A cobranca por-loja continua existindo.
+- **WhatsApp do dono e RESUMO desde 14/08/2026** (dono: "muita informacao,
+  so fala se lancaram ou nao — esta ficando flodado"): `mensagem_resumo` —
+  uma linha por loja ("nao lancou nada" / "lancou parcial, N itens sem
+  sobra"), SEM nome de item nem saldo, com o aviso "detalhe por item no
+  Slack". A lista NOMINAL (`mensagem_pendentes`) continua no Slack, que e
+  onde o gerente age. NAO voltar a lista nominal pro WhatsApp sem ordem.
 - **LIMITACOES CONHECIDAS (pos-revisao, aceitas)**: (1) lancamento PARCIAL
   nao e detectavel (lancou 5 croissants mas sobraram 50 — a linha de
   Desperdicio existe, o item some da cobranca; so a contagem fisica pega).
