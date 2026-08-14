@@ -3428,14 +3428,9 @@ def executar_mudar_status_pedido(params, user):
         logger.exception('mudar_status_pedido %s falhou', novo)
         return {'ok': False, 'erro': f'Erro: {exc}'}
 
-    # Aviso pro WhatsApp do dono quando o pedido vira ENTREGUE pelo copilot
-    # (Slack/WhatsApp). Best-effort: falha so loga, nao volta erro pra o usuario.
-    if para == 'entregue':
-        try:
-            from app.services import pedidos_notificacao
-            pedidos_notificacao.notificar_pedido_recebido(p)
-        except Exception:  # noqa: BLE001
-            logger.exception('notificar_pedido_recebido (copilot) pid=%s', pid)
+    # O aviso de pedido ENTREGUE nao dispara mais aqui (14/08/2026): o
+    # digest das 12:00 (pedidos_notificacao.enviar_digest_recebimentos)
+    # acumula e manda UMA mensagem — ver seru_cron.
 
     resultado = {'ok': True, 'pedido_id': pid, 'novo_status': para,
                  'registro_tipo': 'pedido_loja', 'registro_id': pid,
