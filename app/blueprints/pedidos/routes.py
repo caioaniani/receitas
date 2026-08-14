@@ -957,15 +957,10 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
         ))
 
     db.session.commit()
-    # Aviso best-effort pro WhatsApp do dono com o link da pasta de fotos.
-    # Depois do commit pra o sentinela 'avisado' so persistir se o aviso
-    # de fato saiu.
-    try:
-        from app.services import pedidos_notificacao
-        pedidos_notificacao.notificar_pedido_recebido(pedido)
-    except Exception:  # noqa: BLE001
-        current_app.logger.exception(
-            'notificar_pedido_recebido falhou pedido=%s', pedido.id)
+    # O aviso pro WhatsApp do dono NAO sai mais aqui (14/08/2026, "esta
+    # ficando flodado"): o digest das 12:00 (pedidos_notificacao.
+    # enviar_digest_recebimentos, cron do seru_cron) varre os entregues
+    # sem sentinela e manda UMA mensagem com todos.
     msg = ('Pedido recebido com divergencias. Detalhes salvos na observacao.'
            if divergencias else
            'Pedido recebido integralmente. Estoque da loja atualizado.')
