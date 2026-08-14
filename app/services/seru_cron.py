@@ -638,6 +638,16 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # Digest dos pedidos recebidos nas lojas — 12:00 BRT, UMA mensagem
+    # (14/08/2026; o aviso por pedido na hora da entrega foi desligado).
+    # Mesmo kill-switch do aviso antigo: ZAPI_BOT_AVISO_RECEBIMENTO=0.
+    if os.environ.get('ZAPI_BOT_AVISO_RECEBIMENTO', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_digest_recebimentos(app),
+            'cron', hour=12, minute=0, id='zapi-digest-recebimentos',
+            max_instances=1, coalesce=True,
+        )
+
     # Alerta de desperdicio: escalada Slack (20:10/15/20/25) -> WhatsApp (20:30)
     if os.environ.get('DESPERDICIO_ALERTA', '1') != '0':
         # 4 ticks no Slack — gerentes veem la e podem resolver antes do WhatsApp
