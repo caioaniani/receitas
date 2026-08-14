@@ -60,9 +60,8 @@ def test_caminho_qr_nao_quebra_com_foto_de_conferencia(app):
         imagem_url='http://x/c.jpg',
         imagem_storage_path=f'/conferencia/{p.id}/{item.id}_entrega.jpg'))
     db.session.commit()
-    with patch('app.services.pedidos_notificacao.notificar_pedido_recebido'):
-        ok, _msg, _div = _executar_recebimento_pedido(
-            p, user=None, ref_extra='via QR / loja Ribeiro do Vale')
+    ok, _msg, _div = _executar_recebimento_pedido(
+        p, user=None, ref_extra='via QR / loja Ribeiro do Vale')
     assert ok is True
     assert p.status == 'entregue'
 
