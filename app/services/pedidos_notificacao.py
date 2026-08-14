@@ -38,6 +38,16 @@ _SENTINELA = '[avisado-fotos]'
 # ressuscitar pedido antigo de antes do regime.
 _JANELA_DIAS = 3
 
+# Cap de pedidos por digest (padrao da casa: mensagem gigante vira ruido).
+# Os que passarem do cap NAO sao marcados — saem no digest seguinte.
+_MAX_PEDIDOS_DIGEST = 20
+
+# Marcador que a rota de teste do owner poe na observacao do pedido
+# sintetico (/admin/teste-aviso-recebimento). O digest PULA esses pedidos:
+# se o envio imediato do teste falhar (que e justamente o cenario de quem
+# esta debugando o pipe), o pedido fake nao pode vazar pro digest real.
+_MARCA_TESTE = '[PEDIDO-TESTE-AVISO]'
+
 
 def _disponivel():
     cfg = current_app.config
