@@ -191,7 +191,11 @@ def alertar_slack_pendentes(dia=None):
 
 def enviar_alerta_desperdicio():
     """Job WhatsApp: se alguma loja nao lancou desperdicio hoje, avisa o dono
-    (ZAPI_NUMERO_DESTINO). So envia se houver pendentes."""
+    (ZAPI_NUMERO_DESTINO). So envia se houver pendentes.
+
+    Mensagem COMPACTA (`mensagem_resumo`) desde 14/08/2026 — o dono pediu
+    so "lançou ou não" no WhatsApp dele; a lista nominal de itens segue
+    no Slack (`alertar_slack_pendentes`)."""
     from app.services import zapi
 
     numero = (current_app.config.get('ZAPI_NUMERO_DESTINO') or '').strip()
