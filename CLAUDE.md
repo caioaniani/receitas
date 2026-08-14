@@ -1089,6 +1089,21 @@ teste travando contra reintroducao). Em vez disso:
   pra rota de teste do owner `/admin/teste-aviso-recebimento` (valida o
   pipe Z-API+Dropbox). O corpo por pedido e compartilhado
   (`_linhas_pedido`/`_fotos_e_link`).
+- **POS-REVISAO (fixados 14/08)**: (1) `_executar_recebimento_pedido`
+  agora CARIMBA `pedido.modificado_em` no ato do recebimento (web, QR e
+  copilot passam por ele) e a janela do digest olha esse carimbo tambem —
+  sem isso, pedido recebido com ATRASO (>3d da `data_entrega`, que e a
+  data PLANEJADA) saia da janela e nunca era avisado; `modificado_por_id`
+  fica intocado de proposito (semantica de protecao dos auto-pedidos).
+  (2) o digest PULA pedido com `[PEDIDO-TESTE-AVISO]` na observacao (o
+  sintetico da rota de teste nao vaza pro digest real se o envio imediato
+  do teste falhar). (3) cap `_MAX_PEDIDOS_DIGEST=20` + "e mais N no
+  proximo digest" (excedente nao e marcado). (4) commit das sentinelas
+  falhando apos envio OK devolve `marcados: False` (digest de amanha
+  repete — duplicar > perder, mas o retorno diz). (5) fallback de link
+  usa `APP_BASE_URL` (relativo nao clica no WhatsApp). ACEITO (era assim
+  no aviso antigo): pedido estornado e RE-recebido nao re-avisa (sentinela
+  fica na observacao).
 - Testes: secao "Digest das 12:00" em
   `tests/test_pedido_aviso_recebimento.py`. Manual atualizado (RODA
   SOZINHO).
