@@ -132,6 +132,29 @@ def mensagem_pendentes(lojas, itens_por_loja=None):
     return '\n'.join(partes)
 
 
+def mensagem_resumo(lojas, itens_por_loja=None):
+    """Versão COMPACTA pro WhatsApp do dono (14/08/2026: "muita informação,
+    só fala se lançaram ou não"): UMA linha por loja — quem não lançou nada
+    e quem tem N itens pendentes. Sem nome de item, sem saldo. O detalhe
+    nominal por item continua no Slack (`mensagem_pendentes`), que é o
+    canal onde o gerente age. Loja que não lançou NADA não repete na
+    lista de itens (a linha "não lançou nada" já diz tudo)."""
+    sem_nada = {lj.id for lj in lojas}
+    linhas = ['⚠ *Sobras de hoje — pendências*']
+    for lj in lojas:
+        linhas.append(f'• {lj.nome} — não lançou nada')
+    for loja, itens in (itens_por_loja or []):
+        if loja.id in sem_nada:
+            continue
+        n = len(itens)
+        plural = 'itens' if n != 1 else 'item'
+        linhas.append(f'• {loja.nome} — lançou parcial, {n} {plural} '
+                      'sem sobra')
+    if len(linhas) > 1:
+        linhas.append('_Detalhe por item no Slack._')
+    return '\n'.join(linhas)
+
+
 def alertar_slack_pendentes(dia=None):
     """Posta no canal Slack `SLACK_CANAL_COPILOT` a lista de lojas que ainda
     nao lancaram desperdicio. So envia se houver pendentes; se o canal nao
