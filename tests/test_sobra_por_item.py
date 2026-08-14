@@ -231,7 +231,10 @@ def test_whatsapp_dispara_quando_so_ha_pendencia_de_item(app, monkeypatch):
                             lambda n, t: enviados.append((n, t)) or {'ok': True})
         mod.enviar_alerta_desperdicio()
         assert len(enviados) == 1
-        assert 'Croissant Tradicional (45)' in enviados[0][1]
+        # Contrato NOVO (14/08/2026): o WhatsApp do dono é compacto — conta
+        # itens, não lista nomes. O nome segue no Slack.
+        assert 'Croissant' not in enviados[0][1]
+        assert '1 item sem sobra' in enviados[0][1]
 
 
 def test_whatsapp_nao_dispara_sem_nenhuma_pendencia(app, monkeypatch):
