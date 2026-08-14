@@ -143,14 +143,18 @@ def mensagem_resumo(lojas, itens_por_loja=None):
     linhas = ['⚠ *Sobras de hoje — pendências*']
     for lj in lojas:
         linhas.append(f'• {lj.nome} — não lançou nada')
+    tem_parcial = False
     for loja, itens in (itens_por_loja or []):
         if loja.id in sem_nada:
             continue
+        tem_parcial = True
         n = len(itens)
         plural = 'itens' if n != 1 else 'item'
         linhas.append(f'• {loja.nome} — lançou parcial, {n} {plural} '
                       'sem sobra')
-    if len(linhas) > 1:
+    # O rodapé só quando existe detalhe nominal a mais no Slack — com só
+    # "não lançou nada", o Slack não tem nada além desta mesma lista.
+    if tem_parcial:
         linhas.append('_Detalhe por item no Slack._')
     return '\n'.join(linhas)
 
