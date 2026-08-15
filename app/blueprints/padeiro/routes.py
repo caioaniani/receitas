@@ -1168,6 +1168,64 @@ def producao_historico():
     } for m in movs])
 
 
+# ── Perdas de produção (13/08/2026, pedido do dono) ──────────────────────
+# "Colocar as perdas na tela do padeiro, eles precisam ter uma aba para
+# lançar se queimou algo". Item PRONTO debita EstoqueProducao; FORNADA
+# queimada consome a ficha (MP + subs) sem creditar. Motor:
+# app/services/perda_producao.py; relatório admin em /producao/perdas.
+
+@padeiro_bp.route('/perdas', methods=['GET', 'POST'])
+@login_required
+@padeiro_required
+def perdas():
+    from datetime import timedelta
+
+    from app.models import PerdaProducao
+    from app.services import perda_producao as pp
+    from app.utils import agora
+
+    if request.method == 'POST':
+        ref = (request.form.get('item_ref') or '').strip()
+        if not ref.startswith('receita:'):
+            flash('Escolha o item na lista de busca (perda de produção é '
+                  'por receita).', 'warning')
+            return redirect(url_for('padeiro.perdas'))
+        try:
+            receita_id = int(ref.split(':', 1)[1])
+        except (TypeError, ValueError):
+            flash('Item inválido — escolha de novo na busca.', 'warning')
+            return redirect(url_for('padeiro.perdas'))
+        try:
+            res = pp.registrar(
+                receita_id=receita_id,
+                quantidade=request.form.get('quantidade'),
+                motivo=(request.form.get('motivo') or '').strip(),
+                usuario_id=current_user.id,
+                fornada=bool(request.form.get('fornada')),
+                observacao=request.form.get('observacao'))
+        except ValueError as exc:
+            flash(str(exc), 'warning')
+            return redirect(url_for('padeiro.perdas'))
+        except Exception:  # noqa: BLE001
+            from flask import current_app
+            db.session.rollback()
+            current_app.logger.exception('perda_producao falhou')
+            flash('Erro ao registrar a perda — nada foi gravado. Tente de '
+                  'novo ou avise um admin.', 'danger')
+            return redirect(url_for('padeiro.perdas'))
+        flash('Perda registrada. Sentimos pelo pão — acontece! 🙏', 'success')
+        for a in res['avisos']:
+            flash(a, 'warning')
+        return redirect(url_for('padeiro.perdas'))
+
+    recentes = (PerdaProducao.query
+                .filter(PerdaProducao.criado_em >= agora() - timedelta(days=7))
+                .order_by(PerdaProducao.criado_em.desc())
+                .limit(30).all())
+    return render_template('padeiro/perdas.html', recentes=recentes,
+                           motivos=pp.MOTIVOS)
+
+
 # ── Lousa dos padeiros (11/07/2026, pedido do dono) ──────────────────────
 # Recados entre colegas de turno, escritos na própria tela do padeiro e
 # visíveis durante o dia — como giz numa lousa, fica até alguém apagar.
