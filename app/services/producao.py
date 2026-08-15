@@ -522,6 +522,36 @@ def consumir_subreceitas_prontas(rec, unidades, user_id):
     return out
 
 
+def consumir_ficha(rec, unidades, user_id, referencia_mp):
+    """Consome da ficha técnica o que PRODUZIR `unidades` da receita consome:
+    MP proporcional (multiplicador fracionário = unidades/rendimento — consumo
+    REAL, não batida cheia) + sub-receitas prontas do congelado (fração
+    acumulada). NÃO credita estoque, NÃO commita — quem chama controla a
+    transação.
+
+    Extraído de `produzir_item_plano` em 13/08/2026 pra ser compartilhado com
+    a FORNADA QUEIMADA da tela de perdas do padeiro (consome a ficha como se
+    tivesse produzido, sem creditar — o produto queimou)."""
+    from app.models import MateriaPrima, MovimentacaoEstoque
+
+    rend = rendimento_massa_crua(rec)
+    mult = unidades / rend if rend > 0 else 0
+    lista = consolidar_lista_compras([{'receita_id': rec.id,
+                                       'multiplicador': mult}])
+    mps = {mp.nome: mp for mp in MateriaPrima.query.all()}
+    for nome, dados in lista.items():
+        mp = mps.get(nome)
+        if not mp:
+            continue
+        qtd = dados['quantidade']
+        db.session.add(MovimentacaoEstoque(
+            materia_prima_id=mp.id, tipo='saida', quantidade=qtd,
+            referencia=referencia_mp, usuario_id=user_id))
+        mp.estoque_atual = max(0, (mp.estoque_atual or 0) - qtd)
+
+    consumir_subreceitas_prontas(rec, unidades, user_id)
+
+
 def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
     """OPCAO B: o padeiro produz `unidades` de um item do plano aprovado.
     Numa unica transacao: (1) credita o produto pronto na industria
@@ -536,7 +566,7 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
     OK/dispensar ou reagendar de volta). So marca se ainda restar falta;
     estoque credita apenas o produzido de verdade.
     """
-    from app.models import MovimentacaoEstoque, PlanejamentoItem
+    from app.models import PlanejamentoItem
     from app.services.estoque_congelados import entrada_producao
 
     try:
@@ -563,27 +593,10 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
     entrada_producao(receita_id=rec.id, quantidade=unidades, usuario_id=user_id,
                      referencia='Produção (cronograma) %s' % rec.nome)
 
-    # 2) baixa a MP proporcional as unidades (multiplicador fracionario =
-    #    unidades/rendimento; segue o consumo REAL, nao a batida cheia).
-    rend = rendimento_massa_crua(rec)
-    mult = unidades / rend if rend > 0 else 0
-    lista = consolidar_lista_compras([{'receita_id': rec.id,
-                                       'multiplicador': mult}])
-    mps = {mp.nome: mp for mp in MateriaPrima.query.all()}
-    for nome, dados in lista.items():
-        mp = mps.get(nome)
-        if not mp:
-            continue
-        qtd = dados['quantidade']
-        db.session.add(MovimentacaoEstoque(
-            materia_prima_id=mp.id, tipo='saida', quantidade=qtd,
-            referencia='Produção %s (%d un)' % (rec.nome, unidades),
-            usuario_id=user_id))
-        mp.estoque_atual = max(0, (mp.estoque_atual or 0) - qtd)
-
-    # 2b) consome SUB-RECEITAS prontas do congelado (ex: croissant almond usa
-    #     croissant tradicional congelado).
-    consumir_subreceitas_prontas(rec, unidades, user_id)
+    # 2 + 2b) baixa MP + sub-receitas prontas da ficha (helper compartilhado
+    #         com a fornada queimada da tela de perdas — 13/08/2026).
+    consumir_ficha(rec, unidades, user_id,
+                   referencia_mp='Produção %s (%d un)' % (rec.nome, unidades))
 
     # 3) avanca o produzido do item.
     item.produzido_qtd = int(item.produzido_qtd or 0) + unidades
