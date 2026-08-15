@@ -285,6 +285,8 @@
     <a class="dnav" onclick="toggleSpot()" style="cursor:pointer;">🎵 Música</a>
     <a class="dnav" style="background:#8a5a2b;"
        href="{{ url_for('padeiro.lousa') }}">🖍 Lousa{% if n_lousa %} ({{ n_lousa }}){% endif %}</a>
+    <a class="dnav" style="background:#7f1d1d;"
+       href="{{ url_for('padeiro.perdas') }}">🔥 Perdas</a>
   </div>
   <a class="sair" href="{{ url_for('auth.logout') }}">Sair</a>
 </header>
