@@ -52,6 +52,8 @@ def registrar(receita_id, quantidade, motivo, usuario_id, fornada=False,
     Retorna {'perda_id', 'baixado', 'falta', 'avisos': [str]}.
     Levanta ValueError com mensagem legível em entrada inválida (nada é
     gravado)."""
+    from datetime import timedelta
+
     try:
         quantidade = int(quantidade or 0)
     except (TypeError, ValueError):
@@ -67,9 +69,34 @@ def registrar(receita_id, quantidade, motivo, usuario_id, fornada=False,
     if motivo == 'outro' and not observacao:
         raise ValueError('Motivo "Outro" precisa da observação — escreva o '
                          'que aconteceu.')
-    rec = db.session.get(Receita, int(receita_id or 0))
+    try:
+        rec = db.session.get(Receita, int(receita_id or 0))
+    except (TypeError, ValueError):
+        raise ValueError('Receita inválida.') from None
     if rec is None:
         raise ValueError('Receita não encontrada.')
+    if fornada and rec.arquivada_em is not None:
+        # Item PRONTO de receita arquivada pode se perder (estoque físico
+        # ainda escoa — mesma exceção da classe desperdício); consumir a
+        # FICHA de receita morta não tem justificativa.
+        raise ValueError('Receita arquivada não tem fornada — se há estoque '
+                         'pronto dela se perdendo, lance SEM marcar '
+                         '"fornada queimada".')
+
+    # Guarda de duplo lançamento (padrão do checklist): o mesmo usuário com a
+    # MESMA receita+quantidade em <30s é retry de rede/toque duplo, não uma
+    # 2ª perda. Perda igual de verdade: espere meio minuto ou ajuste a qtd.
+    recente = (PerdaProducao.query
+               .filter(PerdaProducao.receita_id == rec.id,
+                       PerdaProducao.quantidade == quantidade,
+                       PerdaProducao.criado_por_id == usuario_id,
+                       PerdaProducao.criado_em >= agora() - timedelta(
+                           seconds=30))
+               .first())
+    if recente is not None:
+        raise ValueError('Uma perda IGUAL a essa foi registrada há segundos '
+                         '(#%d) — não repeti. Se foi outra perda de verdade, '
+                         'aguarde meio minuto e lance de novo.' % recente.id)
 
     perda = PerdaProducao(
         receita_id=rec.id, quantidade=quantidade, motivo=motivo,
