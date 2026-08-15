@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Perdas da produção{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="page-title mb-0"><i class="bi bi-fire"></i> Perdas da produção</h1>
+    <form method="GET" class="d-flex align-items-center gap-2">
+        <label for="dias" class="form-label mb-0 small text-muted">Período</label>
+        <select id="dias" name="dias" class="form-select form-select-sm"
+                onchange="this.form.submit()">
+            {% for d in (7, 30, 90) %}
+            <option value="{{ d }}" {% if dias == d %}selected{% endif %}>
+                últimos {{ d }} dias</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+<p class="text-muted small mb-3">
+    Lançadas pelo padeiro em <code>/padeiro/perdas</code>. Perda de item
+    <strong>pronto</strong> debitou o estoque da indústria; perda de
+    <strong>fornada</strong> consumiu a matéria-prima da ficha sem creditar
+    (o produto queimou antes de existir). O custo é o da ficha atual.
+</p>
+
+<div class="row g-3 mb-3">
+    <div class="col-auto">
+        <div class="card px-3 py-2">
+            <span class="small text-muted">Unidades perdidas</span>
+            <strong class="fs-5">{{ total_qtd }}</strong>
+        </div>
+    </div>
+    <div class="col-auto">
+        <div class="card px-3 py-2">
+            <span class="small text-muted">Custo estimado</span>
+            <strong class="fs-5 text-danger">R$ {{ '%.2f'|format(total_custo)|replace('.', ',') }}</strong>
+        </div>
+    </div>
+</div>
+
+{% if perdas %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Quando</th>
+                <th>Item</th>
+                <th class="text-end">Qtd</th>
+                <th>Motivo</th>
+                <th class="text-end">Custo (R$)</th>
+                <th>Quem</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in perdas %}
+            <tr>
+                <td class="text-nowrap">{{ p.criado_em.strftime('%d/%m %H:%M') }}</td>
+                <td>
+                    {{ p.receita }}
+                    {% if p.fornada %}
+                    <span class="badge text-bg-warning">fornada queimada</span>
+                    {% endif %}
+                    {% if p.observacao %}
+                    <div class="small text-muted">{{ p.observacao }}</div>
+                    {% endif %}
+                </td>
+                <td class="text-end">{{ p.quantidade }}</td>
+                <td>{{ p.motivo }}</td>
+                <td class="text-end">
+                    {% if p.sem_custo %}
+                    <span class="text-muted" title="ficha sem custo calculável">—</span>
+                    {% else %}
+                    {{ '%.2f'|format(p.custo_total)|replace('.', ',') }}
+                    {% endif %}
+                </td>
+                <td>{{ p.quem }}</td>
+                <td class="text-end">
+                    <form method="POST"
+                          action="{{ url_for('producao.perdas_excluir', perda_id=p.id) }}"
+                          onsubmit="return confirm('Excluir esta perda?{% if not p.fornada %} O que saiu do estoque volta (estorno exato).{% else %} Perda de fornada NÃO tem estorno automático de matéria-prima.{% endif %}');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-outline-danger btn-sm"
+                                title="Excluir (lançado errado)">
+                            <i class="bi bi-trash"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-success">Nenhuma perda registrada no período. 👏</div>
+{% endif %}
+{% endblock %}
