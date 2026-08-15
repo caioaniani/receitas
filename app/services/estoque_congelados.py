@@ -422,14 +422,16 @@ def entrada_producao(*, receita_id=None, produto_id=None, estado=None,
     return ep
 
 
-def saida_producao(*, receita_id, quantidade, usuario_id, referencia='Consumo'):
+def saida_producao(*, receita_id, quantidade, usuario_id, referencia='Consumo',
+                   tipo='consumo_subreceita'):
     """BAIXA `quantidade` (inteiro) do congelado de uma receita — usado quando
     produzir uma receita DERIVADA consome unidades de outra já pronta (ex:
-    croissant almond consome croissant tradicional congelado).
+    croissant almond consome croissant tradicional congelado) e pela PERDA de
+    produção do padeiro (`tipo='perda_producao'`, 13/08/2026).
 
     Salvaguarda (mesmo padrão do Seru/B2B): NUNCA zera/negativa silenciosamente.
     Baixa o que tem; se faltar, registra o déficit num Mov
-    `consumo_subreceita_sem_estoque` (não trava a produção). NÃO commita.
+    `<tipo>_sem_estoque` (não trava a produção). NÃO commita.
     Retorna {'baixado': int, 'falta': int}.
     """
     quantidade = int(quantidade or 0)
@@ -442,11 +444,11 @@ def saida_producao(*, receita_id, quantidade, usuario_id, referencia='Consumo'):
     if baixa > 0:
         ep.quantidade = disp - baixa
         db.session.add(MovEstoqueProducao(
-            estoque_producao_id=ep.id, tipo='consumo_subreceita',
+            estoque_producao_id=ep.id, tipo=tipo,
             quantidade=baixa, referencia=referencia, usuario_id=usuario_id))
     if falta > 0:
         db.session.add(MovEstoqueProducao(
-            estoque_producao_id=ep.id, tipo='consumo_subreceita_sem_estoque',
+            estoque_producao_id=ep.id, tipo=tipo + '_sem_estoque',
             quantidade=falta, referencia='%s (faltou %d no estoque)' % (
                 referencia, falta), usuario_id=usuario_id))
     return {'baixado': baixa, 'falta': falta}
