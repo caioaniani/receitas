@@ -113,9 +113,19 @@ def registrar(receita_id, quantidade, motivo, usuario_id, fornada=False,
         # na linha da receita de propósito: mov sem efeito de saldo
         # quebraria a leitura por tipo do ledger; o registro é a PerdaProducao.
         from app.services.producao import consumir_ficha
-        consumir_ficha(rec, quantidade, usuario_id,
-                       referencia_mp='Fornada queimada %s (%d un) — perda #%d'
-                       % (rec.nome, quantidade, perda.id))
+        subs = consumir_ficha(
+            rec, quantidade, usuario_id,
+            referencia_mp='Fornada queimada %s (%d un) — perda #%d'
+            % (rec.nome, quantidade, perda.id)) or []
+        for s in subs:
+            if int(s.get('falta') or 0) > 0:
+                sub_rec = db.session.get(Receita, s.get('sub_id'))
+                nome_sub = sub_rec.nome if sub_rec else f'#{s.get("sub_id")}'
+                avisos.append(
+                    f'O congelado só tinha {s.get("baixado", 0)} de '
+                    f'{nome_sub} pra cobrir a fornada (faltaram '
+                    f'{s["falta"]} — ficou no ledger, sem saldo negativo). '
+                    'Se a prateleira tinha mais, confira o estoque.')
     else:
         from app.services.estoque_congelados import saida_producao
         res = saida_producao(
