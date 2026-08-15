@@ -1527,7 +1527,8 @@ def congelados_historico():
 
     tipos_disp = ['entrada', 'saida_pedido', 'saida_pedido_sem_estoque',
                   'estorno_saida_pedido', 'ajuste', 'ajuste_conferencia',
-                  'balanco', 'desperdicio']
+                  'balanco', 'desperdicio', 'perda_producao',
+                  'perda_producao_sem_estoque', 'perda_producao_estorno']
 
     q = db.session.query(MovEstoqueProducao, EstoqueProducao).join(
         EstoqueProducao, MovEstoqueProducao.estoque_producao_id == EstoqueProducao.id
