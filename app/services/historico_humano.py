@@ -398,7 +398,7 @@ def mov_producao_label(tipo):
 # - 'ajuste_conferencia' e ASSINADO (quantidade negativa = baixa).
 MOV_PRODUCAO_CREDITOS = {
     'producao', 'entrada', 'entrada_nf', 'retorno_loja', 'balanco_entrada',
-    'estorno_saida_pedido', 'venda_b2b_estorno',
+    'estorno_saida_pedido', 'venda_b2b_estorno', 'perda_producao_estorno',
 }
 MOV_PRODUCAO_NEUTROS = {'consolidacao_estado'}
 
