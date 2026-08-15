@@ -38,6 +38,11 @@
     </div>
 </div>
 
+{% if truncado %}
+<div class="alert alert-warning small">Mais de 500 perdas no período — a
+    lista e os totais cobrem só as 500 mais recentes. Encurte o período.</div>
+{% endif %}
+
 {% if perdas %}
 <div class="table-responsive">
     <table class="table table-sm table-hover align-middle">
