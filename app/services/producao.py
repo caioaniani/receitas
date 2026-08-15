@@ -531,7 +531,11 @@ def consumir_ficha(rec, unidades, user_id, referencia_mp):
 
     Extraído de `produzir_item_plano` em 13/08/2026 pra ser compartilhado com
     a FORNADA QUEIMADA da tela de perdas do padeiro (consome a ficha como se
-    tivesse produzido, sem creditar — o produto queimou)."""
+    tivesse produzido, sem creditar — o produto queimou).
+
+    Retorna o resultado de `consumir_subreceitas_prontas` (lista com
+    baixado/falta por sub) — a tela de perdas avisa quando o congelado não
+    cobriu a sub; o produzir ignora (comportamento de sempre)."""
     from app.models import MateriaPrima, MovimentacaoEstoque
 
     rend = rendimento_massa_crua(rec)
@@ -549,7 +553,7 @@ def consumir_ficha(rec, unidades, user_id, referencia_mp):
             referencia=referencia_mp, usuario_id=user_id))
         mp.estoque_atual = max(0, (mp.estoque_atual or 0) - qtd)
 
-    consumir_subreceitas_prontas(rec, unidades, user_id)
+    return consumir_subreceitas_prontas(rec, unidades, user_id)
 
 
 def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
