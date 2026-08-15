@@ -1108,6 +1108,55 @@ teste travando contra reintroducao). Em vez disso:
   `tests/test_pedido_aviso_recebimento.py`. Manual atualizado (RODA
   SOZINHO).
 
+## Perdas de PRODUCAO na tela do padeiro (13/08/2026)
+
+Pedido do dono ("colocar as perdas na tela do padeiro, eles precisam ter
+uma aba para lancar se queimou algo"). Decisoes dele via AskUserQuestion:
+perda de item PRONTO **debita EstoqueProducao** (saturando em 0); opcao
+**"fornada queimada"** consome MP + sub-receitas prontas da ficha SEM
+creditar (o produto nunca existiu); relatorio admin com **custo em R$**
+pela ficha.
+
+- **Modelo** `PerdaProducao` (app/models/estoque.py, tabela nova via
+  db.create_all; em AUDITED_MODELS). **Service**
+  `app/services/perda_producao.py`: `registrar` (validacoes com ValueError
+  legivel; teto QTD_MAXIMA=2000 contra dedo errado; guarda de duplo
+  lancamento — mesma receita+qtd+usuario em <30s recusa, padrao checklist;
+  fornada de receita ARQUIVADA recusa — item pronto de arquivada segue
+  escoavel), `excluir` (admin; CLAIM ATOMICO por DELETE condicional —
+  2 admins concorrentes nao creditam 2x; estorno EXATO pelos movs
+  'Perda #<id> — ' com delimitador anti #1×#11; fornada NAO tem estorno
+  automatico — MP/ConsumoSubFracao irreversiveis, recusa orienta o acerto
+  manual de MP e /pedidos/congelados) e `listar` (custo 1x fora do loop
+  por NOME, joinedload, cap 500 com flag `truncado` visivel).
+- **Ledger**: tipos `perda_producao` (debito), `perda_producao_sem_estoque`
+  (neutro pelo sufixo) e `perda_producao_estorno` (credito —
+  MOV_PRODUCAO_CREDITOS). Labels em `historico_humano.TIPOS_MOV_PRODUCAO`
+  + dropdown do /pedidos/congelados/historico. `saida_producao`
+  (estoque_congelados) ganhou kwarg `tipo=` (default intacto).
+- **Fornada queimada**: `producao.consumir_ficha(rec, unidades, user_id,
+  referencia_mp)` — EXTRAIDO do bloco inline de `produzir_item_plano`
+  (MP por consolidar_lista_compras com mult fracionario + subs por
+  consumir_subreceitas_prontas; devolve a lista das subs pra tela avisar
+  falta de congelado). Pre-baixa de MP e plano do dia INTOCADOS de
+  proposito (a falta segue reservada pro re-assamento; re-assar = 2x MP
+  fisica, correto). MP do mov leva 'Fornada queimada ... — perda #N'.
+- **Telas**: `/padeiro/perdas` (padeiro_required; link 🔥 no header da TV;
+  standalone dark, validada a 390px com Playwright; typeahead reusa
+  buscar-receitas.json filtrando receita — ref forjada nao-receita recusada
+  no server; motivos como botoes, 'outro' exige observacao) e
+  `/producao/perdas` (admin; periodo 7/30/90d, custo unit×qtd + total,
+  excluir com confirm; link na area Producao). Manual atualizado (DIARIO +
+  resumo por papel) na mesma mudanca.
+- **ACEITOS (revisao, baixa severidade)**: mov de sub-receita da fornada
+  sai como 'Consumo p/ <pai>' sem vinculo com a perda (referencia e
+  compartilhada com o produzir); movs orfaos apos exclusao (trilha
+  preservada, padrao desperdicio); custo por NOME herda a fraqueza das
+  homonimas do custos.py; `consumir_ficha` grava o mov de MP com a
+  quantidade CHEIA mesmo saturando o saldo em 0 (herdado byte-a-byte do
+  produzir — pre-existente).
+- Testes: `tests/test_perda_producao.py` (21 casos).
+
 ## Checklist de loja — abertura / troca de turno / fechamento (03/08/2026)
 
 Pedido do dono: o gerente/atendente chefe responsavel do turno preenche um
