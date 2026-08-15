@@ -160,14 +160,30 @@ def excluir(perda_id, usuario_id):
         raise ValueError('Perda não encontrada (já excluída?).')
     if perda.fornada:
         raise ValueError(
-            'Perda de FORNADA consumiu matéria-prima e sub-receitas da '
-            'ficha — não há estorno automático. Se lançou errado, ajuste o '
-            'estoque de MP na mão (recebimento/ajuste) e registre o motivo.')
+            'Perda de FORNADA consumiu matéria-prima E sub-receitas prontas '
+            'da ficha — não há estorno automático. Se lançou errado, ajuste '
+            'na mão: MP em recebimento/ajuste de estoque e as sub-receitas '
+            'em /pedidos/congelados (entrada), registrando o motivo.')
+
+    # CLAIM ATÔMICO (achado A1 da revisão): o DELETE condicional é a trava —
+    # duas exclusões concorrentes (duas abas/dois admins) leriam a perda e
+    # creditariam o estoque 2x. Quem perde o DELETE (0 linhas) desiste antes
+    # de mexer em estoque (padrão do Confirmar do Slack/retiradas). Trilha:
+    # o INSERT da perda foi auditado e o mov de estorno abaixo (auditado,
+    # com usuario_id) registra quem excluiu — o delete em massa não passa
+    # pelos listeners do AuditLog, e essa troca é deliberada.
+    pid, receita_id_perda = perda.id, perda.receita_id
+    apagadas = (db.session.query(PerdaProducao)
+                .filter(PerdaProducao.id == pid)
+                .delete(synchronize_session=False))
+    if not apagadas:
+        db.session.rollback()
+        raise ValueError('Perda já excluída por outra pessoa — nada a fazer.')
 
     # Estorno EXATO: soma o que os movimentos 'perda_producao' desta perda
     # baixaram de verdade (a falta _sem_estoque nunca saiu — não volta).
     # O prefixo 'Perda #<id> — ' com delimitador não casa #1 com #12.
-    ref_prefixo = 'Perda #%d — ' % perda.id
+    ref_prefixo = 'Perda #%d — ' % pid
     movs = (db.session.query(MovEstoqueProducao)
             .join(EstoqueProducao,
                   MovEstoqueProducao.estoque_producao_id == EstoqueProducao.id)
