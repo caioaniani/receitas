@@ -218,10 +218,15 @@ def listar(dias=30):
     'dias'}."""
     from datetime import timedelta
 
+    from sqlalchemy.orm import joinedload
+
     from app.services.custos import calcular_custos_receitas
 
-    corte = agora() - timedelta(days=max(1, min(int(dias or 30), 365)))
+    dias = max(1, min(int(dias or 30), 365))
+    corte = agora() - timedelta(days=dias)
     rows = (PerdaProducao.query
+            .options(joinedload(PerdaProducao.receita),
+                     joinedload(PerdaProducao.criado_por))
             .filter(PerdaProducao.criado_em >= corte)
             .order_by(PerdaProducao.criado_em.desc())
             .limit(500)
