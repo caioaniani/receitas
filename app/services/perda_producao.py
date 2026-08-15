@@ -187,7 +187,7 @@ def excluir(perda_id, usuario_id):
     movs = (db.session.query(MovEstoqueProducao)
             .join(EstoqueProducao,
                   MovEstoqueProducao.estoque_producao_id == EstoqueProducao.id)
-            .filter(EstoqueProducao.receita_id == perda.receita_id,
+            .filter(EstoqueProducao.receita_id == receita_id_perda,
                     MovEstoqueProducao.tipo == 'perda_producao',
                     MovEstoqueProducao.referencia.like(ref_prefixo + '%'))
             .all())
@@ -200,10 +200,9 @@ def excluir(perda_id, usuario_id):
             db.session.add(MovEstoqueProducao(
                 estoque_producao_id=ep.id, tipo='perda_producao_estorno',
                 quantidade=q,
-                referencia='Estorno da perda #%d (excluída)' % perda.id,
+                referencia='Estorno da perda #%d (excluída)' % pid,
                 usuario_id=usuario_id))
             estornado += q
-    db.session.delete(perda)
     db.session.commit()
     logger.info('perda_producao #%d excluída: %d un estornadas', perda_id,
                 estornado)
