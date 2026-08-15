@@ -52,6 +52,12 @@ TIPOS_MOV_PRODUCAO = {
     'ajuste': 'Ajuste',
     'balanco': 'Balanço (correção)',
     'desperdicio': 'Desperdício',
+    # Perda de produção do padeiro (13/08/2026): débito por default (não
+    # entra em MOV_PRODUCAO_CREDITOS); o _sem_estoque cai em 'neutro' pelo
+    # sufixo. O estorno (exclusão pelo admin) é CRÉDITO — está na lista.
+    'perda_producao': 'Perda (padeiro)',
+    'perda_producao_sem_estoque': 'Perda sem saldo',
+    'perda_producao_estorno': 'Estorno de perda',
 }
 
 TIPOS_MOV_MP = {
