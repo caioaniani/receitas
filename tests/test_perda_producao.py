@@ -167,17 +167,86 @@ def test_excluir_fornada_recusa(app, admin_user):
 
 def test_excluir_nao_confunde_perda_1_com_11(app, admin_user):
     """O estorno acha os movimentos por prefixo 'Perda #<id> — ' — o
-    delimitador impede #1 de casar #11 (classe do bug ret-1×ret-16)."""
+    delimitador impede #1 de casar #11 (classe do bug ret-1×ret-16).
+    Quantidades variadas de propósito: iguais em sequência cairiam na
+    guarda de duplo lançamento (30s)."""
     r = _receita()
-    ep = _estoque(r, 30)
+    ep = _estoque(r, 1000)
     primeira = pp.registrar(r.id, 3, 'queimou', admin_user.id)
-    for _ in range(9):                              # ids intermediários
-        pp.registrar(r.id, 1, 'caiu', admin_user.id)
+    soma_meio = 0
+    for i in range(9):                              # ids intermediários
+        pp.registrar(r.id, 10 + i, 'caiu', admin_user.id)
+        soma_meio += 10 + i
     decima_primeira = pp.registrar(r.id, 5, 'caiu', admin_user.id)
     assert decima_primeira['perda_id'] == primeira['perda_id'] + 10
     pp.excluir(primeira['perda_id'], admin_user.id)
     db.session.refresh(ep)
-    assert ep.quantidade == 30 - 3 - 9 - 5 + 3      # só os 3 da 1ª voltaram
+    assert ep.quantidade == 1000 - 3 - soma_meio - 5 + 3   # só os 3 voltaram
+
+
+def test_excluir_duas_vezes_recusa(app, admin_user):
+    """Claim atômico (achado A1 da revisão): a 2ª exclusão acha 0 linhas no
+    DELETE condicional e desiste — o estoque nunca é creditado 2x."""
+    r = _receita()
+    ep = _estoque(r, 30)
+    res = pp.registrar(r.id, 10, 'queimou', admin_user.id)
+    pp.excluir(res['perda_id'], admin_user.id)
+    with pytest.raises(ValueError):
+        pp.excluir(res['perda_id'], admin_user.id)
+    db.session.refresh(ep)
+    assert ep.quantidade == 30                      # voltou UMA vez
+    assert (MovEstoqueProducao.query
+            .filter_by(tipo='perda_producao_estorno').count()) == 1
+
+
+def test_duplo_lancamento_em_30s_recusado(app, admin_user):
+    """Retry de rede/toque duplo: mesma receita+quantidade+usuário em <30s
+    não vira 2ª perda (padrão do checklist). Quantidade diferente passa."""
+    r = _receita()
+    _estoque(r, 30)
+    pp.registrar(r.id, 5, 'queimou', admin_user.id)
+    with pytest.raises(ValueError):
+        pp.registrar(r.id, 5, 'queimou', admin_user.id)
+    pp.registrar(r.id, 6, 'queimou', admin_user.id)  # outra perda de verdade
+    assert PerdaProducao.query.count() == 2
+
+
+def test_fornada_de_receita_arquivada_recusa(app, admin_user):
+    """Consumir a FICHA de receita morta não tem justificativa (item pronto
+    de arquivada segue podendo se perder — exceção da classe desperdício)."""
+    from app.utils import agora
+    r = _receita('Pao Morto')
+    _com_ficha_mp(r)
+    r.arquivada_em = agora()
+    db.session.commit()
+    with pytest.raises(ValueError):
+        pp.registrar(r.id, 5, 'queimou', admin_user.id, fornada=True)
+    # item PRONTO de arquivada ainda escoa
+    _estoque(r, 10)
+    res = pp.registrar(r.id, 5, 'queimou', admin_user.id)
+    assert res['baixado'] == 5
+
+
+def test_fornada_avisa_falta_de_subreceita(app, admin_user):
+    """Achado A2 da revisão: congelado que não cobre a sub da fornada tem
+    que virar aviso visível (antes só ficava no ledger)."""
+    sub = _receita('Massa Sub Falta')
+    _estoque(sub, 2)
+    r = _receita('Croissant Sub Falta')
+    db.session.add(ReceitaIngrediente(receita_id=r.id, tipo='receita',
+                                      ingrediente_nome=sub.nome,
+                                      sub_receita_id=sub.id, porcentagem=5))
+    db.session.commit()
+    res = pp.registrar(r.id, 10, 'queimou', admin_user.id, fornada=True)
+    # consumo = 10×5/10 = 5; só havia 2 no congelado.
+    assert res['avisos'] and 'congelado só tinha 2' in res['avisos'][0]
+    ep_sub = EstoqueProducao.query.filter_by(receita_id=sub.id).one()
+    assert ep_sub.quantidade == 0
+
+
+def test_listar_clampa_o_periodo(app, admin_user):
+    out = pp.listar(dias=9999)
+    assert out['dias'] == 365                       # rótulo honesto
 
 
 # ── relatório com custo ─────────────────────────────────────────────
