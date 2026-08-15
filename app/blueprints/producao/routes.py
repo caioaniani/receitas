@@ -955,3 +955,41 @@ def pedidos_semana_ia():
     if out.get('erro'):
         return jsonify(ok=False, erro=out['erro']), 502
     return jsonify(ok=True, **out)
+
+
+# ── Perdas de produção — relatório do admin (13/08/2026) ─────────────────
+# O padeiro lança em /padeiro/perdas; aqui o admin vê o CUSTO (pela ficha)
+# e pode excluir um lançamento errado (estorno exato pelo movimento).
+
+@producao_bp.route('/perdas')
+@login_required
+@admin_required
+def perdas_admin():
+    from app.services import perda_producao as pp
+    try:
+        dias = int(request.args.get('dias', 30))
+    except (TypeError, ValueError):
+        dias = 30
+    dados = pp.listar(dias=dias)
+    return render_template('producao/perdas_admin.html', **dados)
+
+
+@producao_bp.route('/perdas/<int:perda_id>/excluir', methods=['POST'])
+@login_required
+@admin_required
+def perdas_excluir(perda_id):
+    from app.services import perda_producao as pp
+    try:
+        res = pp.excluir(perda_id, current_user.id)
+    except ValueError as exc:
+        flash(str(exc), 'warning')
+        return redirect(url_for('producao.perdas_admin'))
+    except Exception:  # noqa: BLE001
+        from flask import current_app
+        db.session.rollback()
+        current_app.logger.exception('excluir perda %s falhou', perda_id)
+        flash('Erro ao excluir — nada foi alterado.', 'danger')
+        return redirect(url_for('producao.perdas_admin'))
+    flash(f'Perda excluída — {res["estornado"]} un devolvida(s) ao estoque '
+          'da indústria.', 'success')
+    return redirect(url_for('producao.perdas_admin'))
