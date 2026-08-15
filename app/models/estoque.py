@@ -322,4 +322,32 @@ class Desperdicio(db.Model):
         return '?'
 
 
+class PerdaProducao(db.Model):
+    """Perda de PRODUÇÃO lançada pelo padeiro (queimou, caiu, erro de ponto —
+    13/08/2026, pedido do dono). Tabela nova via db.create_all.
+
+    Registro estruturado; quem mexe em estoque é o service
+    `perda_producao.registrar`:
+    - perda de item PRONTO debita EstoqueProducao (mov 'perda_producao',
+      ligado pela referência 'Perda #<id> — ...');
+    - `fornada=True` = fornada que queimou ANTES de lançar a produção —
+      consome MP + sub-receitas da ficha (motor do produzir) SEM creditar
+      estoque (o produto nunca existiu).
+    """
+    __tablename__ = 'perda_producao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'),
+                           nullable=False, index=True)
+    quantidade = db.Column(db.Integer, nullable=False)
+    motivo = db.Column(db.String(20), nullable=False)
+    observacao = db.Column(db.Text)
+    fornada = db.Column(db.Boolean, nullable=False, default=False)
+    criado_em = db.Column(db.DateTime, default=agora, index=True)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+
+    receita = db.relationship('Receita')
+    criado_por = db.relationship('Usuario')
+
+
 # ── Slack bot (copilot via DM/@mention) ───────────────────────────────
