@@ -183,12 +183,12 @@
     if (q.length < 2) { caixa.style.display = 'none'; return; }
     timer = setTimeout(function () {
       var minha = ++seq;
-      fetch('{{ url_for("padeiro.buscar_receitas_json") }}?q=' +
+      fetch('{{ url_for("padeiro.buscar_receitas") }}?q=' +
             encodeURIComponent(q))
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (minha !== seq) return;    // resposta obsoleta
-          var itens = (d.itens || d.resultados || []).filter(function (it) {
+          var itens = (d.itens || []).filter(function (it) {
             return (it.ref || '').indexOf('receita:') === 0;
           });
           render(itens.slice(0, 12));
