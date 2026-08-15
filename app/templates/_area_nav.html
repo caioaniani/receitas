@@ -59,8 +59,9 @@
 {{ _lnk(variant, url_for('industria_teste.index'), 'Cronograma', '/telaindustriateste' in request.path, icon='bi-calendar-week') }}
 {{ _lnk(variant, url_for('padeiro.index'), 'Tela do padeiro', request.path == '/padeiro' or request.path.startswith('/padeiro/'), icon='bi-hammer') }}
 {{ _lnk(variant, url_for('producao.pedidos_semana_media'), 'Pedidos da semana', '/pedidos-semana' in request.path, icon='bi-cart-plus') }}
+{{ _lnk(variant, url_for('producao.perdas_admin'), 'Perdas da produção', '/producao/perdas' in request.path, icon='bi-fire') }}
 {% endif %}
-{{ _lnk(variant, url_for('producao.lista'), 'Listas de compra', request.path.startswith('/producao') and '/painel' not in request.path and '/pedidos-semana' not in request.path) }}
+{{ _lnk(variant, url_for('producao.lista'), 'Listas de compra', request.path.startswith('/producao') and '/painel' not in request.path and '/pedidos-semana' not in request.path and '/perdas' not in request.path) }}
 {{ _lnk(variant, url_for('pedidos.congelados'), 'Congelados', '/pedidos/congelados' in request.path) }}
 {{ _lnk(variant, url_for('pedidos.separacao'), 'Pedidos a Separar', '/pedidos/separacao' in request.path) }}
 {% if current_user.is_admin() %}
