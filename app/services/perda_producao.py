@@ -254,4 +254,7 @@ def listar(dias=30):
         total_qtd += int(p.quantidade or 0)
         total_custo += custo_total
     return {'perdas': perdas, 'total_qtd': total_qtd,
-            'total_custo': total_custo, 'dias': int(dias or 30)}
+            'total_custo': total_custo, 'dias': dias,
+            # Cap defensivo: com 500+ perdas no período os totais somam só
+            # as mais recentes — a tela avisa em vez de mentir.
+            'truncado': len(rows) >= 500}
