@@ -1202,7 +1202,8 @@ def perdas():
                 motivo=(request.form.get('motivo') or '').strip(),
                 usuario_id=current_user.id,
                 fornada=bool(request.form.get('fornada')),
-                observacao=request.form.get('observacao'))
+                observacao=request.form.get('observacao'),
+                funcionario_id=request.form.get('funcionario_id'))
         except ValueError as exc:
             flash(str(exc), 'warning')
             return redirect(url_for('padeiro.perdas'))
