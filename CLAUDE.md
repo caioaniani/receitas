@@ -1155,7 +1155,17 @@ pela ficha.
   homonimas do custos.py; `consumir_ficha` grava o mov de MP com a
   quantidade CHEIA mesmo saturando o saldo em 0 (herdado byte-a-byte do
   produzir — pre-existente).
-- Testes: `tests/test_perda_producao.py` (21 casos).
+- **RESPONSÁVEL pela perda (follow-up do dono, mesmo dia)**: select
+  obrigatório com o QUADRO DO RH (`PerdaProducao.funcionario_id`, ALTER
+  pelo procedimento de 2 commits com sonda ?colunas= — a conta da TV é
+  compartilhada, criado_por só diz quem digitou).
+  `perda_producao.responsaveis_producao()` filtra funcionários ativos por
+  FUNÇÃO normalizada (`FUNCOES_RESPONSAVEL` = padeir/produc/confeit/
+  forneir/massa — cobre padeiro, ajudante de padeiro, auxiliar de
+  produção); NINGUÉM casando = fallback pra todos os ativos (fail-open —
+  RH renomeado nunca trava a perda). `registrar` exige funcionário ATIVO;
+  relatório mostra Responsável + "lançado por" quando diferem.
+- Testes: `tests/test_perda_producao.py` (24 casos).
 
 ## Checklist de loja — abertura / troca de turno / fechamento (03/08/2026)
 
