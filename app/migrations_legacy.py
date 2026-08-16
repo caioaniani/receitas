@@ -3098,5 +3098,12 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE atribuicao_entrega ADD COLUMN "
                        "pulado_em TIMESTAMP")
 
+    # Responsável pela perda de produção (13/08/2026) — espelho do bloco PG.
+    cursor.execute("PRAGMA table_info(perda_producao)")
+    cols_pp = [row[1] for row in cursor.fetchall()]
+    if cols_pp and 'funcionario_id' not in cols_pp:
+        cursor.execute("ALTER TABLE perda_producao ADD COLUMN "
+                       "funcionario_id INTEGER")
+
     conn.commit()
     conn.close()
