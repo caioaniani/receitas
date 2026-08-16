@@ -98,6 +98,14 @@
     <input type="number" id="quantidade" name="quantidade" min="1" step="1"
            inputmode="numeric" required>
 
+    <label for="funcionario">Quem era o responsável?</label>
+    <select id="funcionario" name="funcionario_id" required>
+      <option value="" disabled selected>escolha o nome…</option>
+      {% for f in responsaveis %}
+      <option value="{{ f.id }}">{{ f.nome }}{% if f.funcao %} — {{ f.funcao }}{% endif %}</option>
+      {% endfor %}
+    </select>
+
     <label>O que aconteceu?</label>
     <div class="motivos">
       {% for cod, rotulo in motivos.items() %}
