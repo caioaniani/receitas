@@ -79,7 +79,11 @@
                     {{ '%.2f'|format(p.custo_total)|replace('.', ',') }}
                     {% endif %}
                 </td>
-                <td>{{ p.quem }}</td>
+                <td>{{ p.responsavel }}
+                    {% if p.quem != p.responsavel %}
+                    <div class="small text-muted" title="conta que registrou na TV">lançado por {{ p.quem }}</div>
+                    {% endif %}
+                </td>
                 <td class="text-end">
                     <form method="POST"
                           action="{{ url_for('producao.perdas_excluir', perda_id=p.id) }}"
