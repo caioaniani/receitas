@@ -44,9 +44,38 @@ MOTIVOS = {
 # tem ~centenas de unidades). Recusa com mensagem clara em vez de debitar.
 QTD_MAXIMA = 2000
 
+# Funções do quadro do RH que aparecem como RESPONSÁVEL pela perda (dono
+# 13/08/2026: "padeiro, ajudante de padeiro, etc"). Comparação sobre o texto
+# NORMALIZADO (sem acento/caixa) de funcao/funcao_operacional/cargo —
+# 'padeir' cobre padeiro E ajudante de padeiro; 'produc' cobre auxiliar de
+# produção. Nenhum funcionário casando = lista cai pra TODOS os ativos
+# (fail-open deliberado: RH renomeado nunca trava o lançamento da perda).
+FUNCOES_RESPONSAVEL = ('padeir', 'produc', 'confeit', 'forneir', 'massa')
+
+
+def responsaveis_producao():
+    """Funcionários ativos elegíveis a responsável pela perda, ordenados por
+    nome. Filtro por função (FUNCOES_RESPONSAVEL); vazio = todos os ativos."""
+    from app.models import Funcionario
+    from app.utils import normalizar_busca
+
+    ativos = (Funcionario.query
+              .filter(Funcionario.ativo.is_(True))
+              .order_by(Funcionario.nome)
+              .all())
+
+    def _casa(f):
+        textos = [f.funcao or '', f.funcao_operacional or '',
+                  f.cargo.nome if f.cargo_id and f.cargo else '']
+        alvo = normalizar_busca(' '.join(textos))
+        return any(k in alvo for k in FUNCOES_RESPONSAVEL)
+
+    filtrados = [f for f in ativos if _casa(f)]
+    return filtrados or ativos
+
 
 def registrar(receita_id, quantidade, motivo, usuario_id, fornada=False,
-              observacao=None):
+              observacao=None, funcionario_id=None):
     """Registra a perda e aplica o efeito de estoque. Commita.
 
     Retorna {'perda_id', 'baixado', 'falta', 'avisos': [str]}.
