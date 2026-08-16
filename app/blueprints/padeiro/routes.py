@@ -1224,7 +1224,8 @@ def perdas():
                 .order_by(PerdaProducao.criado_em.desc())
                 .limit(30).all())
     return render_template('padeiro/perdas.html', recentes=recentes,
-                           motivos=pp.MOTIVOS)
+                           motivos=pp.MOTIVOS,
+                           responsaveis=pp.responsaveis_producao())
 
 
 # ── Lousa dos padeiros (11/07/2026, pedido do dono) ──────────────────────
