@@ -2271,6 +2271,14 @@ def _migrate_postgres(app):
         _try("ALTER TABLE atribuicao_entrega ADD COLUMN IF NOT EXISTS "
              "pulado_em TIMESTAMP")
 
+    # Responsável pela perda de produção (13/08/2026, dono: "escolher o
+    # responsável — lista de funcionários padeiro, ajudante etc"). FK pro
+    # quadro do RH (Funcionario), não pra conta logada (a TV é conta
+    # compartilhada). Commit 1 do procedimento de 2 commits.
+    if 'funcionario_id' not in _cols('perda_producao'):
+        _try("ALTER TABLE perda_producao ADD COLUMN IF NOT EXISTS "
+             "funcionario_id INTEGER")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
