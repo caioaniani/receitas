@@ -46,6 +46,24 @@ def _estoque(r, qtd):
     return ep
 
 
+def _func_padrao():
+    from app.models import Funcionario
+    f = Funcionario.query.filter_by(cpf='999.999.999-99').first()
+    if not f:
+        f = Funcionario(nome='Padeiro Teste RH', cpf='999.999.999-99',
+                        funcao='Padeiro', ativo=True)
+        db.session.add(f)
+        db.session.commit()
+    return f
+
+
+def _registrar(*args, **kw):
+    """pp.registrar com responsável default — o contrato do responsável tem
+    testes próprios; os demais não precisam repetir o boilerplate."""
+    kw.setdefault('funcionario_id', _func_padrao().id)
+    return pp.registrar(*args, **kw)
+
+
 def _padeiro(login='pad_perda'):
     u = Usuario(nome='Padeiro Perda', login=login, papel='padeiro')
     u.set_senha('12345678')
@@ -64,7 +82,7 @@ def _login(client, user, senha):
 def test_perda_item_pronto_debita_estoque(app, admin_user):
     r = _receita()
     ep = _estoque(r, 30)
-    res = pp.registrar(r.id, 10, 'queimou', admin_user.id)
+    res = _registrar(r.id, 10, 'queimou', admin_user.id)
     db.session.refresh(ep)
     assert ep.quantidade == 20
     assert res['baixado'] == 10 and res['falta'] == 0 and not res['avisos']
@@ -78,7 +96,7 @@ def test_perda_item_pronto_debita_estoque(app, admin_user):
 def test_perda_maior_que_saldo_satura_em_zero_e_avisa(app, admin_user):
     r = _receita()
     ep = _estoque(r, 4)
-    res = pp.registrar(r.id, 10, 'caiu', admin_user.id)
+    res = _registrar(r.id, 10, 'caiu', admin_user.id)
     db.session.refresh(ep)
     assert ep.quantidade == 0                       # nunca negativa
     assert res['baixado'] == 4 and res['falta'] == 6
@@ -93,7 +111,7 @@ def test_perda_maior_que_saldo_satura_em_zero_e_avisa(app, admin_user):
 def test_fornada_consome_mp_sem_creditar_estoque(app, admin_user):
     r = _receita()
     mp = _com_ficha_mp(r, farinha=5000)
-    pp.registrar(r.id, 10, 'queimou', admin_user.id, fornada=True)
+    _registrar(r.id, 10, 'queimou', admin_user.id, fornada=True)
     db.session.refresh(mp)
     # 10 un / rendimento 10 = 1 base = 1000 g de farinha (mesma conta do
     # produzir — teste espelho de test_produzir_credita_estoque_e_baixa_mp).
@@ -115,7 +133,7 @@ def test_fornada_consome_subreceita_pronta(app, admin_user):
                                       ingrediente_nome=sub.nome,
                                       sub_receita_id=sub.id, porcentagem=5))
     db.session.commit()
-    pp.registrar(r.id, 10, 'queimou', admin_user.id, fornada=True)
+    _registrar(r.id, 10, 'queimou', admin_user.id, fornada=True)
     ep_sub = EstoqueProducao.query.filter_by(receita_id=sub.id).one()
     # 10 un do pai × 5 subs/lote ÷ rendimento 10 = 5 subs consumidas.
     assert ep_sub.quantidade == 5
@@ -127,15 +145,15 @@ def test_validacoes_nada_e_gravado(app, admin_user):
     r = _receita()
     _estoque(r, 30)
     with pytest.raises(ValueError):
-        pp.registrar(r.id, 0, 'queimou', admin_user.id)
+        _registrar(r.id, 0, 'queimou', admin_user.id)
     with pytest.raises(ValueError):
-        pp.registrar(r.id, 5, 'motivo_inventado', admin_user.id)
+        _registrar(r.id, 5, 'motivo_inventado', admin_user.id)
     with pytest.raises(ValueError):                 # outro exige observação
-        pp.registrar(r.id, 5, 'outro', admin_user.id)
+        _registrar(r.id, 5, 'outro', admin_user.id)
     with pytest.raises(ValueError):                 # sanidade de dedo errado
-        pp.registrar(r.id, pp.QTD_MAXIMA + 1, 'queimou', admin_user.id)
+        _registrar(r.id, pp.QTD_MAXIMA + 1, 'queimou', admin_user.id)
     with pytest.raises(ValueError):                 # receita inexistente
-        pp.registrar(999999, 5, 'queimou', admin_user.id)
+        _registrar(999999, 5, 'queimou', admin_user.id)
     assert PerdaProducao.query.count() == 0
     assert MovEstoqueProducao.query.count() == 0
 
@@ -145,7 +163,7 @@ def test_validacoes_nada_e_gravado(app, admin_user):
 def test_excluir_estorna_exato_o_que_saiu(app, admin_user):
     r = _receita()
     ep = _estoque(r, 4)
-    res = pp.registrar(r.id, 10, 'queimou', admin_user.id)   # baixa só 4
+    res = _registrar(r.id, 10, 'queimou', admin_user.id)   # baixa só 4
     out = pp.excluir(res['perda_id'], admin_user.id)
     assert out['estornado'] == 4                    # nunca os 10 nominais
     db.session.refresh(ep)
@@ -159,7 +177,7 @@ def test_excluir_estorna_exato_o_que_saiu(app, admin_user):
 def test_excluir_fornada_recusa(app, admin_user):
     r = _receita()
     _com_ficha_mp(r)
-    res = pp.registrar(r.id, 10, 'queimou', admin_user.id, fornada=True)
+    res = _registrar(r.id, 10, 'queimou', admin_user.id, fornada=True)
     with pytest.raises(ValueError):
         pp.excluir(res['perda_id'], admin_user.id)
     assert PerdaProducao.query.count() == 1         # segue registrada
@@ -172,12 +190,12 @@ def test_excluir_nao_confunde_perda_1_com_11(app, admin_user):
     guarda de duplo lançamento (30s)."""
     r = _receita()
     ep = _estoque(r, 1000)
-    primeira = pp.registrar(r.id, 3, 'queimou', admin_user.id)
+    primeira = _registrar(r.id, 3, 'queimou', admin_user.id)
     soma_meio = 0
     for i in range(9):                              # ids intermediários
-        pp.registrar(r.id, 10 + i, 'caiu', admin_user.id)
+        _registrar(r.id, 10 + i, 'caiu', admin_user.id)
         soma_meio += 10 + i
-    decima_primeira = pp.registrar(r.id, 5, 'caiu', admin_user.id)
+    decima_primeira = _registrar(r.id, 5, 'caiu', admin_user.id)
     assert decima_primeira['perda_id'] == primeira['perda_id'] + 10
     pp.excluir(primeira['perda_id'], admin_user.id)
     db.session.refresh(ep)
@@ -189,7 +207,7 @@ def test_excluir_duas_vezes_recusa(app, admin_user):
     DELETE condicional e desiste — o estoque nunca é creditado 2x."""
     r = _receita()
     ep = _estoque(r, 30)
-    res = pp.registrar(r.id, 10, 'queimou', admin_user.id)
+    res = _registrar(r.id, 10, 'queimou', admin_user.id)
     pp.excluir(res['perda_id'], admin_user.id)
     with pytest.raises(ValueError):
         pp.excluir(res['perda_id'], admin_user.id)
@@ -204,10 +222,10 @@ def test_duplo_lancamento_em_30s_recusado(app, admin_user):
     não vira 2ª perda (padrão do checklist). Quantidade diferente passa."""
     r = _receita()
     _estoque(r, 30)
-    pp.registrar(r.id, 5, 'queimou', admin_user.id)
+    _registrar(r.id, 5, 'queimou', admin_user.id)
     with pytest.raises(ValueError):
-        pp.registrar(r.id, 5, 'queimou', admin_user.id)
-    pp.registrar(r.id, 6, 'queimou', admin_user.id)  # outra perda de verdade
+        _registrar(r.id, 5, 'queimou', admin_user.id)
+    _registrar(r.id, 6, 'queimou', admin_user.id)  # outra perda de verdade
     assert PerdaProducao.query.count() == 2
 
 
@@ -220,10 +238,10 @@ def test_fornada_de_receita_arquivada_recusa(app, admin_user):
     r.arquivada_em = agora()
     db.session.commit()
     with pytest.raises(ValueError):
-        pp.registrar(r.id, 5, 'queimou', admin_user.id, fornada=True)
+        _registrar(r.id, 5, 'queimou', admin_user.id, fornada=True)
     # item PRONTO de arquivada ainda escoa
     _estoque(r, 10)
-    res = pp.registrar(r.id, 5, 'queimou', admin_user.id)
+    res = _registrar(r.id, 5, 'queimou', admin_user.id)
     assert res['baixado'] == 5
 
 
@@ -237,7 +255,7 @@ def test_fornada_avisa_falta_de_subreceita(app, admin_user):
                                       ingrediente_nome=sub.nome,
                                       sub_receita_id=sub.id, porcentagem=5))
     db.session.commit()
-    res = pp.registrar(r.id, 10, 'queimou', admin_user.id, fornada=True)
+    res = _registrar(r.id, 10, 'queimou', admin_user.id, fornada=True)
     # consumo = 10×5/10 = 5; só havia 2 no congelado.
     assert res['avisos'] and 'congelado só tinha 2' in res['avisos'][0]
     ep_sub = EstoqueProducao.query.filter_by(receita_id=sub.id).one()
@@ -255,7 +273,7 @@ def test_listar_traz_custo_pela_ficha(app, admin_user):
     r = _receita()
     _com_ficha_mp(r)                                # 1000g × R$5/kg / 10 un
     _estoque(r, 30)
-    pp.registrar(r.id, 10, 'queimou', admin_user.id)
+    _registrar(r.id, 10, 'queimou', admin_user.id)
     out = pp.listar(dias=7)
     assert out['total_qtd'] == 10
     assert out['total_custo'] == pytest.approx(5.0)  # R$ 0,50/un × 10
@@ -274,6 +292,7 @@ def test_rota_padeiro_lanca_perda(app):
     resp = c.post('/padeiro/perdas', data={
         'item_ref': f'receita:{r.id}', 'quantidade': '5',
         'motivo': 'queimou', 'observacao': '',
+        'funcionario_id': str(_func_padrao().id),
     })
     assert resp.status_code == 302
     p = PerdaProducao.query.one()
@@ -304,7 +323,7 @@ def test_rota_funcionario_nao_entra(app):
 def test_relatorio_admin_e_exclusao_via_rota(app, admin_user):
     r = _receita()
     _estoque(r, 30)
-    res = pp.registrar(r.id, 10, 'queimou', admin_user.id)
+    res = _registrar(r.id, 10, 'queimou', admin_user.id)
     c = app.test_client()
     _login(c, admin_user, '123')
     page = c.get('/producao/perdas')
@@ -327,3 +346,59 @@ def test_link_perdas_no_header_da_tv(app, admin_user):
     _login(c, admin_user, '123')
     resp = c.get('/padeiro/')
     assert '/padeiro/perdas'.encode() in resp.data
+
+
+# ── responsável pela perda (dono 13/08/2026, follow-up) ─────────────
+
+def test_responsavel_obrigatorio_e_ativo(app, admin_user):
+    r = _receita()
+    _estoque(r, 30)
+    with pytest.raises(ValueError):                 # sem responsável
+        pp.registrar(r.id, 5, 'queimou', admin_user.id)
+    f = _func_padrao()
+    f.ativo = False
+    db.session.commit()
+    with pytest.raises(ValueError):                 # desligado no RH
+        pp.registrar(r.id, 5, 'queimou', admin_user.id, funcionario_id=f.id)
+    assert PerdaProducao.query.count() == 0
+    f.ativo = True
+    db.session.commit()
+    pp.registrar(r.id, 5, 'queimou', admin_user.id, funcionario_id=f.id)
+    assert PerdaProducao.query.one().funcionario_id == f.id
+
+
+def test_responsaveis_filtra_por_funcao(app):
+    from app.models import Funcionario
+    db.session.add_all([
+        Funcionario(nome='Ana Padeira', cpf='001', funcao='Padeiro',
+                    ativo=True),
+        Funcionario(nome='Beto Ajudante', cpf='002',
+                    funcao='Ajudante de Padeiro', ativo=True),
+        Funcionario(nome='Caua Auxiliar', cpf='003',
+                    funcao='Auxiliar de Produção', ativo=True),
+        Funcionario(nome='Dani Atendente', cpf='004', funcao='Atendente',
+                    ativo=True),
+        Funcionario(nome='Eva Desligada', cpf='005', funcao='Padeiro',
+                    ativo=False),
+    ])
+    db.session.commit()
+    nomes = [f.nome for f in pp.responsaveis_producao()]
+    assert nomes == ['Ana Padeira', 'Beto Ajudante', 'Caua Auxiliar']
+
+
+def test_responsaveis_fallback_quando_nenhuma_funcao_casa(app):
+    """RH com funções renomeadas nunca trava a perda: sem ninguém casando o
+    filtro, a lista cai pra TODOS os ativos (fail-open deliberado)."""
+    from app.models import Funcionario
+    db.session.add(Funcionario(nome='Zeca Atendente', cpf='006',
+                               funcao='Atendente', ativo=True))
+    db.session.commit()
+    assert [f.nome for f in pp.responsaveis_producao()] == ['Zeca Atendente']
+
+
+def test_relatorio_mostra_responsavel(app, admin_user):
+    r = _receita()
+    _estoque(r, 30)
+    _registrar(r.id, 10, 'queimou', admin_user.id)
+    out = pp.listar(dias=7)
+    assert out['perdas'][0]['responsavel'] == 'Padeiro Teste RH'
