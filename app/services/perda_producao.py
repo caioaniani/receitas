@@ -112,6 +112,20 @@ def registrar(receita_id, quantidade, motivo, usuario_id, fornada=False,
                          'pronto dela se perdendo, lance SEM marcar '
                          '"fornada queimada".')
 
+    # RESPONSÁVEL obrigatório (dono 13/08/2026): funcionário do quadro do
+    # RH, ativo — a conta logada na TV é compartilhada e não identifica quem
+    # era o responsável pela fornada/item.
+    from app.models import Funcionario
+    try:
+        func = db.session.get(Funcionario, int(funcionario_id or 0))
+    except (TypeError, ValueError):
+        func = None
+    if func is None:
+        raise ValueError('Escolha o RESPONSÁVEL pela perda na lista.')
+    if not func.ativo:
+        raise ValueError(f'{func.nome} está desligado no RH — escolha um '
+                         'responsável ativo.')
+
     # Guarda de duplo lançamento (padrão do checklist): o mesmo usuário com a
     # MESMA receita+quantidade em <30s é retry de rede/toque duplo, não uma
     # 2ª perda. Perda igual de verdade: espere meio minuto ou ajuste a qtd.
