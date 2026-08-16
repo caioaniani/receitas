@@ -343,10 +343,18 @@ class PerdaProducao(db.Model):
     motivo = db.Column(db.String(20), nullable=False)
     observacao = db.Column(db.Text)
     fornada = db.Column(db.Boolean, nullable=False, default=False)
+    # RESPONSÁVEL pela perda = funcionário do quadro do RH (dono 13/08/2026:
+    # "escolher o responsável — padeiro, ajudante de padeiro etc"). A TV do
+    # padeiro roda em conta compartilhada — criado_por_id diz quem LANÇOU,
+    # não quem era o responsável. ALTER em migrations_legacy (2 commits,
+    # sonda ?colunas= confirmada). Nullable: perdas pré-feature.
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'),
+                               nullable=True)
     criado_em = db.Column(db.DateTime, default=agora, index=True)
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
 
     receita = db.relationship('Receita')
+    funcionario = db.relationship('Funcionario')
     criado_por = db.relationship('Usuario')
 
 
