@@ -145,7 +145,8 @@
     <span class="tag">{{ motivos.get(p.motivo, p.motivo) }}</span>
     {% if p.fornada %}<span class="tag fornada">fornada queimada</span>{% endif %}
     <span class="meta">{{ p.criado_em.strftime('%d/%m %H:%M') }}
-      · {{ p.criado_por.nome if p.criado_por else '—' }}</span>
+      · {{ p.funcionario.nome if p.funcionario
+           else (p.criado_por.nome if p.criado_por else '—') }}</span>
   </div>
   {% else %}
   <div class="vazio">Nenhuma perda registrada nos últimos 7 dias. 👏</div>
