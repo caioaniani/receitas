@@ -290,6 +290,9 @@ def listar(dias=30):
             'observacao': p.observacao or '',
             'fornada': bool(p.fornada),
             'criado_em': p.criado_em,
+            # Responsável = funcionário do RH; perda pré-feature sem ele
+            # mostra '—'. 'quem' segue sendo a conta que LANÇOU (TV).
+            'responsavel': p.funcionario.nome if p.funcionario else '—',
             'quem': p.criado_por.nome if p.criado_por else '—',
             'custo_unit': custo_unit,
             'custo_total': custo_total,
