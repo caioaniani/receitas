@@ -144,7 +144,7 @@ def registrar(receita_id, quantidade, motivo, usuario_id, fornada=False,
     perda = PerdaProducao(
         receita_id=rec.id, quantidade=quantidade, motivo=motivo,
         observacao=observacao, fornada=bool(fornada),
-        criado_por_id=usuario_id)
+        funcionario_id=func.id, criado_por_id=usuario_id)
     db.session.add(perda)
     db.session.flush()
 
