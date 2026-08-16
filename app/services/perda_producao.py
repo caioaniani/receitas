@@ -269,6 +269,7 @@ def listar(dias=30):
     corte = agora() - timedelta(days=dias)
     rows = (PerdaProducao.query
             .options(joinedload(PerdaProducao.receita),
+                     joinedload(PerdaProducao.funcionario),
                      joinedload(PerdaProducao.criado_por))
             .filter(PerdaProducao.criado_em >= corte)
             .order_by(PerdaProducao.criado_em.desc())
