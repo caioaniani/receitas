@@ -64,14 +64,13 @@ def _motor():
 
 
 def _params_visao(**extra):
-    """Query params que preservam a visao atual nos redirects. O motor vai
-    SEMPRE explicito: omitir "quando e o default" ja causou classe de bug —
-    o default mudou (17/08/2026) e URL/form sem o param voltaria pro motor
-    errado em silencio."""
+    """Query params que preservam a visao atual nos redirects. Motor E
+    equilibrar vao SEMPRE explicitos: omitir "quando e o default" ja causou
+    classe de bug — o default mudou (17/08/2026) e URL/form sem o param
+    voltaria pro comportamento errado em silencio."""
     p = {'horizonte': _horizonte_janela()[0], 'janela': _horizonte_janela()[1],
-         'inicio': _inicio_offset(), 'motor': _motor()}
-    if _equilibrar():
-        p['equilibrar'] = 1
+         'inicio': _inicio_offset(), 'motor': _motor(),
+         'equilibrar': 1 if _equilibrar() else 0}
     p.update(extra)
     return p
 
