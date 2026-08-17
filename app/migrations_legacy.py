@@ -521,6 +521,64 @@ def _seed_minimo_danish(app):
             pass
 
 
+def _seed_minimo_danish_v2(app):
+    """UMA VEZ (v2, mesma tarde de 17/08/2026): converte o colchao do v1 no
+    piso INCONDICIONAL — `pedido_minimo_diario = 2` nas 5 danishes das
+    lojas diarias ("receber 2 por dia impreterivelmente", sem descontar o
+    estoque que sobrou) e LIMPA o `estoque_minimo` que o v1 deixou em
+    exatamente 2 (valor diferente = ajuste do dono, fica). Depois do seed a
+    coluna "Diario" de /pedidos/estoque-loja manda. Best-effort."""
+    import unicodedata as _ud
+    try:
+        from app.models import AppConfig, EstoqueLoja, Loja, Receita
+        cfg = SEED_MINIMO_DANISH
+        if AppConfig.get(cfg['chave_v2']):
+            return
+
+        def _norm(s):
+            s = _ud.normalize('NFKD', s or '')
+            s = ''.join(c for c in s if not _ud.combining(c))
+            return ' '.join(s.casefold().split())
+
+        alvos = set(cfg['nomes'])
+        receitas = [r for r in Receita.query
+                    .filter(Receita.arquivada_em.is_(None)).all()
+                    if _norm(r.nome) in alvos]
+        lojas = [
+            loja for loja in Loja.query.filter_by(ativa=True).all()
+            if 'industria' not in _norm(loja.nome)
+            and not (getattr(loja, 'dias_funcionamento', None) or '').strip()
+        ]
+        setados, mantidos = 0, 0
+        for loja in lojas:
+            for r in receitas:
+                el = EstoqueLoja.query.filter_by(
+                    loja_id=loja.id, receita_id=r.id).first()
+                if el is None:
+                    el = EstoqueLoja(loja_id=loja.id, receita_id=r.id,
+                                     quantidade=0)
+                    db.session.add(el)
+                if int(el.estoque_minimo or 0) == int(cfg['minimo']):
+                    el.estoque_minimo = None       # colchao v1 vira o diario
+                if int(el.pedido_minimo_diario or 0) > 0:
+                    mantidos += 1                  # valor do dono manda
+                    continue
+                el.pedido_minimo_diario = int(cfg['minimo'])
+                setados += 1
+        AppConfig.set(cfg['chave_v2'],
+                      f'setados={setados} mantidos={mantidos}')
+        db.session.commit()
+        logger.info('seed minimo danish v2: %d piso(s) diario(s) em %d '
+                    'loja(s) x %d receita(s); %d mantidos', setados,
+                    len(lojas), len(receitas), mantidos)
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed minimo danish v2): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _migrate_estoque_trava(app):
     """Estoque por produto: consolida duplicatas legadas e cria a trava de
     unicidade. Estado vive so no PEDIDO; o estoque (loja e industria) eh 1 linha
