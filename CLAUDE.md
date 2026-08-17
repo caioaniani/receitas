@@ -1726,16 +1726,30 @@ entregas:
 
 `/telaindustriateste` tem o seletor **"Prever por"** (pedido do dono: "+1
 opcao de previsao baseada nas vendas"): **pedidos** (historico de pedidos
-loja→industria — default/original), **vendas** (venda real das lojas +
+loja→industria — o original), **vendas** (venda real das lojas +
 merma estrutural — MESMA demanda unificada da Fase 0.1, so receita_id) ou
 **maior** (max dos dois POR DIA). O firme conta SEMPRE, em qualquer motor.
+**DEFAULT = 'vendas' desde 17/08/2026** (dono: "producao da semana
+programada baseado no historico de vendas e estoque" + "mesma regua em
+tudo" via AskUserQuestion): a tela SEM ?motor=, os fallbacks dos POSTs
+JSON (celula/ia) e a sonda `/api/claude/cronograma` abrem em 'vendas' —
+mesma regua da automacao (AUTO_ENVIO_MOTOR abaixo). CONSEQUENCIA no
+front: o motor viaja SEMPRE explicito (hidden dos forms `campos_dia`/
+limpar-edicoes, links da /previsao e `_params_visao` dos redirects) — a
+otimizacao antiga "omite quando e o default" viraria bug na troca de
+default (escolher 'pedidos' no select voltaria pra 'vendas' no POST).
+EXCECAO documentada: o painel legado `/producao/painel` (e o "criar plano
+do deficit" dele) segue no default do SERVICE (`balanco_industria(motor=
+'pedidos')` — assinaturas de service NAO mudaram; so os defaults de
+REQUEST/env mudaram); alinhar o painel e decisao separada.
 Param `motor=` atravessa `balanco_industria`/`cronograma_producao`/
 `editar_celula`/`aprovar_plano_do_dia`/`enviar_plano_do_dia`/
 `decompor_previsao` e a API do assistente (`/api/claude/cronograma?motor=`).
 Aprovar/enviar usa o motor DA TELA (mesma regra do equilibrar — senao a
 ordem nao bate com o grid visto). Cache do balanco tem motor na chave.
 Constante: `previsao_producao.MOTORES_PREVISAO_PRODUCAO`. Testes: secao
-"motor de previsao" em `tests/test_cronograma.py`.
+"motor de previsao" em `tests/test_cronograma.py` (incl. default da tela
+e preservacao da escolha 'pedidos').
 
 ## Automacao de pedidos + envio + corte 19h + fornada sab/dom (10/08/2026)
 
