@@ -488,6 +488,7 @@ def test_nivelamento_respeita_antecedencia_maxima(app):
     até D+antecedência."""
     from datetime import date as _date
 
+    from app.services.previsao_producao import _ANTECEDENCIA_MAX_DIAS
 
     loja = _loja()
     r = _receita('Brioche Fresco')
@@ -504,13 +505,14 @@ def test_nivelamento_respeita_antecedencia_maxima(app):
     assert rr is not None and rr['total'] >= 100
     datas = [c['data'] for c in rr['por_dia']]
     prod_acum = 0
+    ant = _ANTECEDENCIA_MAX_DIAS
     for idx, c in enumerate(rr['por_dia']):
         prod_acum += c['qtd']
-        dem_ate_2d = sum(q for d_iso, q in demanda.items()
-                         if d_iso <= datas[min(idx + 2, len(datas) - 1)])
-        assert prod_acum <= dem_ate_2d + 1e-9, (
-            'produção adiantada além de 2 dias da necessidade em %s'
-            % c['data'])
+        dem_ate = sum(q for d_iso, q in demanda.items()
+                      if d_iso <= datas[min(idx + ant, len(datas) - 1)])
+        assert prod_acum <= dem_ate + 1e-9, (
+            'produção adiantada além de %d dias da necessidade em %s'
+            % (ant, c['data']))
         if c['qtd']:
             assert _date.fromisoformat(c['data']).weekday() < 5
 
