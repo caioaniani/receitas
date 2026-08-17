@@ -114,11 +114,16 @@ def _get_uma_vez(path, params=None):
                          headers={'Authorization': f'Bearer {token}'},
                          params=params or {}, timeout=20)
     if r.status_code != 200:
-        logger.error('Seru %s %s: %s', path, r.status_code, r.text[:300])
         if r.status_code in (502, 503, 504):
             # Gateway/indisponibilidade transitoria do lado deles (Sentry
             # 13/07/2026: 502 no /orders) — re-tentavel como falha de rede.
+            # WARNING de proposito (17/08/2026): o `_get` re-tenta e, se
+            # persistir, a exceção sobe e o CALLER decide o nível — logar
+            # ERROR aqui gerava evento Sentry a cada blip re-tentado e
+            # comia a cota grátis.
+            logger.warning('Seru %s %s: %s', path, r.status_code, r.text[:300])
             raise _Erro5xx(f'Seru {path} {r.status_code}: {r.text[:200]}')
+        logger.error('Seru %s %s: %s', path, r.status_code, r.text[:300])
         raise RuntimeError(f'Seru {path} {r.status_code}: {r.text[:200]}')
     return r.json()
 
