@@ -113,7 +113,16 @@
     <div class="col-4"><input name="justificativa" class="form-control form-control-sm" placeholder="Justificativa (obrigatória)"></div>
     <div class="col-2"><button class="btn btn-sm btn-warning w-100">Lançar</button></div></form></div></div>
 
-<div class="card mb-3"><div class="card-header py-2"><strong>Acessos / logins dos funcionários</strong></div><div class="card-body">
+{% set sem_login = funcionarios | rejectattr('usuario_id') | selectattr('email') | list %}
+<div class="card mb-3"><div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2"><strong>Acessos / logins dos funcionários</strong>
+  {% if sem_login %}
+  <form method="POST" action="{{ url_for('treino.admin_gerar_acessos_todos') }}" class="d-inline"
+        onsubmit="return confirm('Gerar o acesso de {{ sem_login|length }} funcionário(s) de uma vez? Cada um recebe a senha no próprio e-mail.');">
+    {{ csrf() }}
+    <button class="btn btn-sm btn-primary py-0 px-2">⚡ Gerar acesso pra todos ({{ sem_login|length }})</button>
+  </form>
+  {% endif %}
+</div><div class="card-body">
   <p class="small text-muted mb-2">É aqui que o funcionário <strong>entra</strong> no
     treinamento. Cada pessoa precisa de um <strong>login</strong> ligado ao cadastro dela
     no RH. Dois caminhos:
