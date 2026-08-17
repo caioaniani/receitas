@@ -123,8 +123,8 @@ def _com_lock(key, fn, label='job'):
     if db.engine.dialect.name != 'postgresql':
         try:
             fn()
-        except Exception:
-            logger.exception('%s falhou', label)
+        except Exception as exc:  # noqa: BLE001 — _falha_de_job classifica
+            _falha_de_job(label, exc)
         return
     conn = db.engine.connect()
     try:
@@ -134,8 +134,8 @@ def _com_lock(key, fn, label='job'):
             return
         try:
             fn()
-        except Exception:
-            logger.exception('%s falhou', label)
+        except Exception as exc:  # noqa: BLE001 — _falha_de_job classifica
+            _falha_de_job(label, exc)
         finally:
             try:
                 conn.execute(text('SELECT pg_advisory_unlock(:k)'), {'k': key})
