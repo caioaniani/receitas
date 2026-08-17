@@ -436,6 +436,50 @@ def admin_trilha():
     return redirect(url_for('treino.admin_home'))
 
 
+@treino_bp.route('/admin/roteiros/importar', methods=['POST'])
+@login_required
+@admin_required
+def admin_importar_roteiros():
+    """Importa o PLANO DE CONTEÚDO (xlsx de roteiros) — 13/08/2026.
+
+    Módulo vira trilha, aula vira vídeo RASCUNHO com o roteiro anexado.
+    Tudo nasce desativado; idempotente (re-importar atualiza roteiros sem
+    duplicar e sem tocar em aula com vídeo gravado)."""
+    from app.services import treino_roteiros
+    arq = request.files.get('arquivo')
+    if not arq or not arq.filename:
+        flash('Escolha a planilha de roteiros (.xlsx).', 'warning')
+        return redirect(url_for('treino.admin_home'))
+    raw = arq.read()
+    if len(raw) > 8 * 1024 * 1024:
+        flash('Arquivo maior que 8MB — confira se é a planilha certa.',
+              'danger')
+        return redirect(url_for('treino.admin_home'))
+    try:
+        stats = treino_roteiros.importar(raw)
+    except Exception as e:  # noqa: BLE001 — parse de arquivo externo
+        flash(f'Não consegui importar: {e}', 'danger')
+        return redirect(url_for('treino.admin_home'))
+    partes = []
+    if stats['trilhas_criadas']:
+        partes.append(f"{stats['trilhas_criadas']} trilha(s) criada(s) "
+                      '(desativadas — ative quando os vídeos subirem)')
+    if stats['aulas_criadas']:
+        partes.append(f"{stats['aulas_criadas']} aula(s) criada(s) em "
+                      'rascunho com roteiro')
+    if stats['roteiros_atualizados']:
+        partes.append(f"{stats['roteiros_atualizados']} roteiro(s) "
+                      'atualizado(s)')
+    if stats['aulas_com_video_preservadas']:
+        partes.append(f"{stats['aulas_com_video_preservadas']} aula(s) já "
+                      'gravada(s) preservada(s)')
+    flash('Roteiros importados: ' + ('; '.join(partes) or 'nenhuma mudança')
+          + '.', 'success')
+    for a in stats['avisos']:
+        flash(a, 'warning')
+    return redirect(url_for('treino.admin_home'))
+
+
 @treino_bp.route('/admin/trilha/<int:id>/video', methods=['POST'])
 @login_required
 @admin_required
