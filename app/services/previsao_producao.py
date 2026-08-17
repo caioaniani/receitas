@@ -84,6 +84,15 @@ MOTORES_PREVISAO_PRODUCAO = ('pedidos', 'vendas', 'maior')
 # (rend pequeno) nao sofre — produzir 1 la ja e uma fornada cheia.
 _MIN_FRACAO_FORNADA = 0.2
 
+# Nivelamento (equilibrar): ANTECEDENCIA MAXIMA em dias — um lote pode ser
+# produzido no maximo N dias ANTES do dia em que a curva de demanda o pedia
+# (dono 17/08/2026, caso Brioche: "nao da para produzir tudo isso de
+# brioche, ele vence em 3 dias, nao e congelado" — o nivelamento antigo
+# punha a receita INTEIRA num dia so). 2 dias = produto entregue com ate 2
+# dias de folga, dentro da validade de 3 do caso mais fresco. SUBSTITUI o
+# "sem limite de frescor" de 29/06.
+_ANTECEDENCIA_MAX_DIAS = 2
+
 _CACHE = {}
 _CACHE_TTL = 60  # segundos
 
