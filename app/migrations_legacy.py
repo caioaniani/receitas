@@ -452,6 +452,12 @@ def _seed_cores_drivers(app):
 # sai "(assado)" sem precisar de nada.
 SEED_MINIMO_DANISH = {
     'chave': 'seed_minimo_danish_2026_08',
+    # v2 (mesmo dia): "as lojas devem receber 2 danishes desses por dia
+    # IMPRETERIVELMENTE" — o colchao de estoque (v1) virou o piso
+    # INCONDICIONAL `pedido_minimo_diario` (nao desconta o estoque que
+    # sobrou). O v2 converte: seta o diario=2 e LIMPA o estoque_minimo
+    # que o v1 deixou em exatamente 2 (valor diferente = do dono, fica).
+    'chave_v2': 'seed_minimo_danish_2026_08_v2',
     'minimo': 2,
     'nomes': ('danish de calabresa', 'danish de queijo branco',
               'danish de mucarela de bufala', 'danish de alho poro',
