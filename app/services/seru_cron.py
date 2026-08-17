@@ -60,7 +60,7 @@ LOCK_KEY_TREINO_DIARIO = 7755  # advisory lock pros jobs diarios do treino
 LOCK_KEY_TINY_PDV = 7756  # advisory lock pro import do PDV do Tiny (Cantina)
 # 7757 RESERVADO: acerto de despacho direto (acerto_despacho.py)
 LOCK_KEY_AUTO_PEDIDOS = 7758  # advisory lock pros pedidos automaticos loja->industria
-LOCK_KEY_AUTO_ENVIO = 7759  # advisory lock pro envio automatico da ordem ao padeiro
+LOCK_KEY_AUTO_ENVIO = 7759  # advisory lock pras ordens da SEMANA (dom 12:00 + rede diaria + retro)
 LOCK_KEY_DIGEST_RECEBIMENTOS = 7760  # advisory lock pro digest 12:00 de pedidos recebidos
 LOCK_KEY_ATUALIZA_PLANO = 7761  # advisory lock pro 🔄 automatico da ordem do dia (06:45/19:05)
 # 7750 foi reciclado: era do `briefing-dono` (removido 17/07/2026), agora e do
