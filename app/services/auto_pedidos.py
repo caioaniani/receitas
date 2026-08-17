@@ -7,14 +7,19 @@ um dia SEM ordem; ordem já enviada nunca é reescrita por caminho implícito).
 
 Duas pontas, dois jobs do cron (`seru_cron`):
 
-1. `gerar_pedidos_automaticos()` (06:30 e 18:30 BRT): roda o motor
-   VENDA+ESTOQUE (`previsao_producao.sugerir_pedidos_por_venda` — o mesmo
-   da tela /producao/pedidos-semana/estoque, escolha do dono) pra janela
-   D+1..D+3 e materializa via `pedidos_semana.aplicar_grade` (rascunho
-   'pendente' com o marcador padrão). A rodada das 18:30 é o refresh antes
-   do corte: o motor lê o ESTOQUE ATUAL da loja (que o sync do Seru drena a
-   cada 15min conforme o dia vende) — é por aí que a venda do próprio dia
-   entra (a média histórica fecha em ontem).
+1. `gerar_pedidos_automaticos()` (meio-dia junto das ordens + refreshes
+   06:30 e 18:30 BRT): roda o motor VENDA+ESTOQUE
+   (`previsao_producao.sugerir_pedidos_por_venda` — o mesmo da tela
+   /producao/pedidos-semana/estoque, escolha do dono) pra janela da SEMANA
+   (amanhã até o PRÓXIMO DOMINGO — dono 17/08/2026: "os pedidos da semana
+   também devem ser lançados tudo no domingo meio dia, prevendo o que vai
+   ser vendido durante a semana baseado no histórico de vendas"; era
+   D+1..D+3 de 10 a 17/08) e materializa via `pedidos_semana.aplicar_grade`
+   (rascunho 'pendente' com o marcador padrão). No domingo isso abre os
+   pedidos de seg..dom; os refreshes diários re-sincronizam a MESMA janela
+   com o ESTOQUE ATUAL da loja (que o sync do Seru drena a cada 15min
+   conforme o dia vende) — é por aí que a venda do próprio dia entra (a
+   média histórica fecha em ontem).
 
    RE-SINCRONIZAÇÃO REAL: o motor recebe `ressincronizar_datas` com os dias
    que o cron pode reescrever — sem isso, dia com pedido devolve sugestão 0
