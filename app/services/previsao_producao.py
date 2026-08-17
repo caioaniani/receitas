@@ -2131,8 +2131,19 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
             else:
                 extra = int(ceil(max(0.0, sum(gross) - livre_rest)))
             pesos = residual if sum(residual) > 0 else gross
-            add = _distribuir_inteiro(extra, pesos)
             rec = receitas.get(rid)
+            # Insumo tambem respeita os dias de producao (dono 17/08/2026:
+            # fim de semana nao produz): levain da vespera de segunda cairia
+            # no DOMINGO — rola pro ultimo dia permitido anterior (sexta;
+            # produzir mais cedo chega a tempo, custo = geladeira). Sem dia
+            # permitido antes, a parcela nao produz (vespera ja passou — o
+            # que o estoque nao cobrir aparece via insumo_sem_vespera/risco).
+            permitido_i = [producao_permitida_no_dia(rec, p)
+                           for p in dias_prod]
+            pesos = _rolar_pesos_permitidos(pesos, permitido_i)
+            if sum(pesos) <= 0:
+                extra = 0     # _distribuir_inteiro despejaria no dia 0
+            add = _distribuir_inteiro(extra, pesos)
             from app.services.massa_base import rendimento_massa_crua
             rend = rendimento_massa_crua(rec) if rec else 1.0
             base = prod.get(rid, [0] * n)
