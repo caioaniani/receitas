@@ -1937,6 +1937,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 # Estoque minimo da loja pra este item (0 = sem piso): a tela
                 # pode mostrar/editar o colchao configurado.
                 'estoque_minimo': minimo_est,
+                # Pedido minimo diario (0 = sem piso incondicional).
+                'pedido_minimo_diario': diario,
                 'abaixo_lote': False,
                 # Profundidade da amostra de VENDA (datas com baixa na
                 # janela) — a tela marca "pouco histórico" quando a média
