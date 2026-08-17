@@ -55,7 +55,8 @@ def cronograma():
     UI (projeção dia a dia, breakdowns) ficam de fora do payload.
 
     Params: ?horizonte=7 (1-14), ?janela=6 (1-26), ?inicio=0 (0-14),
-    ?motor=pedidos|vendas|maior (fonte da demanda prevista).
+    ?motor=pedidos|vendas|maior (fonte da demanda prevista; default
+    'vendas' desde 17/08/2026 — mesma régua da tela e da automação).
     """
     from app.services.previsao_producao import (
         MOTORES_PREVISAO_PRODUCAO,
@@ -63,9 +64,9 @@ def cronograma():
     )
     from app.services.producao_pendente import pendencias_por_receita
 
-    motor = (request.args.get('motor') or 'pedidos').strip()
+    motor = (request.args.get('motor') or 'vendas').strip()
     if motor not in MOTORES_PREVISAO_PRODUCAO:
-        motor = 'pedidos'
+        motor = 'vendas'
     crono = cronograma_producao(
         horizonte_dias=_int_arg('horizonte', 7, 1, 14),
         janela_semanas=_int_arg('janela', 6, 1, 26),
