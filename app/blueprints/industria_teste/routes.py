@@ -229,7 +229,10 @@ def index():
     if resumo['stale_n']:
         acoes.append({'tipo': 'stale', 'n': resumo['stale_n']})
 
-    return render_template('industria_teste/teste.html', crono=crono,
+    template = ('industria_teste/preview.html'
+                if request.args.get('preview') == '1'
+                else 'industria_teste/teste.html')
+    return render_template(template, crono=crono,
                            horizonte=horizonte, janela=janela, inicio=inicio,
                            equilibrar=equilibrar, motor=motor, estados=estados,
                            totais_dia=totais_dia, pico_idx=pico_idx,
