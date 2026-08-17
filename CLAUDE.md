@@ -1807,8 +1807,15 @@ do seru_cron junto.
   em estoque_minimo. Diagnostico de fora: sonda
   `/api/claude/deploy?seeds=1` (criada no caso) lista os markers de
   one-shot. REGRA: seed com filtro de dado de producao SEMPRE grava as
-  contagens no marker. Testes: `tests/test_seed_minimo_danish.py`
-  (12 casos). **RE-SINCRONIZACAO REAL (fix da revisao
+  contagens no marker. **Cinnamon Roll entrou na MESMA regra
+  (dono, mesma noite: "Esqueci de falar sobre o cinnamon Roll, entra na
+  mesma regra dos 2 danishes")**: seed proprio `_seed_minimo_cinnamon`
+  (marker `seed_minimo_cinnamon_2026_08`) — piso 2 SO do 'Cinnamon
+  Roll' classico (o Doce de leite fica fora; match por nome normalizado
+  EXATO) nas lojas diarias, e como o cadastro estava com `estado_padrao`
+  vazio em prod, o seed tambem seta 'assado' (SO quando vazio — valor
+  do dono manda). Testes: `tests/test_seed_minimo_danish.py`
+  (15 casos, secao Cinnamon inclusa). **RE-SINCRONIZACAO REAL (fix da revisao
   13/08/2026)**: o motor recebe `ressincronizar_datas` e trata o rascunho
   do PROPRIO cron como substituivel (fora do `ja_tem` e das entregas
   simuladas) — sem isso, dia ja pedido devolvia sugestao 0 e a quantidade
