@@ -482,10 +482,13 @@ def test_default_nivelado_espalha_pra_dias_ocupados(app):
 def test_nivelamento_respeita_antecedencia_maxima(app):
     """Caso Brioche (dono 17/08/2026 à noite: "vence em 3 dias, não é
     congelado"): demanda DIÁRIA da semana NÃO vira um dia-monstro na
-    segunda — cada lote é produzido no máximo 2 dias antes da necessidade.
-    Invariante: o acumulado produzido até o dia D nunca passa do acumulado
-    de demanda até D+2."""
+    segunda — cada lote é produzido no máximo _ANTECEDENCIA_MAX_DIAS antes
+    da necessidade (3 desde "Tem que adiantar" da mesma noite). Invariante:
+    o acumulado produzido até o dia D nunca passa do acumulado de demanda
+    até D+antecedência."""
     from datetime import date as _date
+
+    from app.services.previsao_producao import _ANTECEDENCIA_MAX_DIAS
 
     loja = _loja()
     r = _receita('Brioche Fresco')
@@ -502,15 +505,73 @@ def test_nivelamento_respeita_antecedencia_maxima(app):
     assert rr is not None and rr['total'] >= 100
     datas = [c['data'] for c in rr['por_dia']]
     prod_acum = 0
+    ant = _ANTECEDENCIA_MAX_DIAS
     for idx, c in enumerate(rr['por_dia']):
         prod_acum += c['qtd']
-        dem_ate_2d = sum(q for d_iso, q in demanda.items()
-                         if d_iso <= datas[min(idx + 2, len(datas) - 1)])
-        assert prod_acum <= dem_ate_2d + 1e-9, (
-            'produção adiantada além de 2 dias da necessidade em %s'
-            % c['data'])
+        dem_ate = sum(q for d_iso, q in demanda.items()
+                      if d_iso <= datas[min(idx + ant, len(datas) - 1)])
+        assert prod_acum <= dem_ate + 1e-9, (
+            'produção adiantada além de %d dias da necessidade em %s'
+            % (ant, c['data']))
         if c['qtd']:
             assert _date.fromisoformat(c['data']).weekday() < 5
+
+
+def test_nivelamento_nao_antecipa_parcela_do_fim_de_semana(app):
+    """A demanda de SÁB/DOM já rolou pra sexta (produção seg-sex), mas a
+    antecedência é medida POR PARCELA contra o dia de DEMANDA original
+    (ref_pesos): com 3 dias, a parcela de SÁBADO pode ir até quarta e a de
+    DOMINGO até quinta. Nada em seg/ter — pão de sábado assado na terça
+    teria 4 dias."""
+    from datetime import date as _date
+
+    loja = _loja()
+    r = _receita('Pão Fresco FDS')
+    hoje_d = hoje()                                # segunda congelada
+    sabado = hoje_d + timedelta(days=5)
+    domingo = hoje_d + timedelta(days=6)
+    _pedido(loja, 'pendente', sabado, r, 40)
+    _pedido(loja, 'pendente', domingo, r, 40)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 80
+    for c in rr['por_dia']:
+        d = _date.fromisoformat(c['data'])
+        if c['qtd']:
+            # qua (sáb−3) a sex são os únicos válidos; seg/ter nunca
+            assert d.weekday() in (2, 3, 4), \
+                'parcela do FDS adiantada pra %s' % d
+
+
+def test_nivelamento_redistribui_excedente_da_sexta(app):
+    """Caso real 17/08 (dono: "Esta assim ainda"): o teto alvo=total/dias
+    uteis deixava a cota dos dias que o frescor impede de receber morrer
+    e os paes empilhavam TODOS na sexta. Sem o teto, o excedente da sexta
+    se redistribui pelos dias anteriores que a antecedencia (3) alcanca —
+    a parcela de sexta pode ir ate terca, a de sabado ate quarta, a de
+    domingo ate quinta; segunda nunca."""
+    from datetime import date as _date
+
+    loja = _loja()
+    r = _receita('Pão de Fim de Semana')
+    hoje_d = hoje()                                # segunda congelada
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=4), r, 30)   # sex
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=5), r, 30)   # sáb
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=6), r, 30)   # dom
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 90
+    por_wd = {}
+    for c in rr['por_dia']:
+        if c['qtd']:
+            por_wd[_date.fromisoformat(c['data']).weekday()] = c['qtd']
+    assert set(por_wd) <= {1, 2, 3, 4}       # segunda nunca (sex − 3 = ter)
+    assert sum(por_wd.values()) == rr['total']
+    assert len(por_wd) >= 3                  # redistribuido, nao empilhado
 
 
 def test_nivelamento_fatia_receita_grande_em_lotes(app):

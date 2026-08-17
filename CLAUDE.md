@@ -1807,8 +1807,15 @@ do seru_cron junto.
   em estoque_minimo. Diagnostico de fora: sonda
   `/api/claude/deploy?seeds=1` (criada no caso) lista os markers de
   one-shot. REGRA: seed com filtro de dado de producao SEMPRE grava as
-  contagens no marker. Testes: `tests/test_seed_minimo_danish.py`
-  (12 casos). **RE-SINCRONIZACAO REAL (fix da revisao
+  contagens no marker. **Cinnamon Roll entrou na MESMA regra
+  (dono, mesma noite: "Esqueci de falar sobre o cinnamon Roll, entra na
+  mesma regra dos 2 danishes")**: seed proprio `_seed_minimo_cinnamon`
+  (marker `seed_minimo_cinnamon_2026_08`) — piso 2 SO do 'Cinnamon
+  Roll' classico (o Doce de leite fica fora; match por nome normalizado
+  EXATO) nas lojas diarias, e como o cadastro estava com `estado_padrao`
+  vazio em prod, o seed tambem seta 'assado' (SO quando vazio — valor
+  do dono manda). Testes: `tests/test_seed_minimo_danish.py`
+  (15 casos, secao Cinnamon inclusa). **RE-SINCRONIZACAO REAL (fix da revisao
   13/08/2026)**: o motor recebe `ressincronizar_datas` e trata o rascunho
   do PROPRIO cron como substituivel (fora do `ja_tem` e das entregas
   simuladas) — sem isso, dia ja pedido devolvia sugestao 0 e a quantidade
@@ -1937,9 +1944,12 @@ do seru_cron junto.
   redistribuir o croissant em lotes menores?" com 1000 num dia)**: parte
   da curva de demanda e move LOTES (lote_producao > lote_pedido > 1
   fornada da amassadeira) pra dias anteriores menos carregados, com
-  ANTECEDENCIA MAXIMA `_ANTECEDENCIA_MAX_DIAS = 2` (frescor — REVOGA o
+  ANTECEDENCIA MAXIMA `_ANTECEDENCIA_MAX_DIAS = 3` (frescor — REVOGA o
   "sem limite de frescor" de 29/06; o modo receita-inteira-num-dia foi
-  SUBSTITUIDO), nunca pra depois (entrega no prazo), nivelando FORNADAS
+  SUBSTITUIDO; nasceu 2 e virou 3 na mesma noite, dono "Tem que
+  adiantar, olha so terca nao tem producao" — com 2 a demanda do fim de
+  semana nao alcancava a terca), nunca pra depois (entrega no prazo),
+  nivelando FORNADAS
   (peso 1/fornada — levain em gramas nao domina croissant em pecas) e
   respeitando dias bloqueados. A TELA acompanha (mesma regua):
   `_equilibrar()` default True; o checkbox virou SELECT "Carga:
@@ -1949,10 +1959,35 @@ do seru_cron junto.
   /api/claude/cronograma tambem default 1 (`?equilibrar=0` = curva).
   Overrides de celula APLICAM POR CIMA do nivelado (aplicar_overrides
   roda depois); testes que validam mecanica no "dia da demanda" pedem
-  `equilibrar=0` explicito. Retros: 'd' redistribuiu a semana no modo
-  antigo; 'e' re-nivelou POR LOTES a semana E a ordem DE HOJE (o 🔄 das
-  19:05 tinha posto o pico do brioche na ordem da madrugada). Testes:
-  antecedencia + fatiamento em test_cronograma.py.
+  `equilibrar=0` explicito. REFINOS (retros 'f'/'g'/'h', mesma noite):
+  (1) a antecedencia e medida POR PARCELA contra
+  o dia de DEMANDA original (`ref_pesos`: cada celula carrega
+  [[dia_ref, peso], ...]; a rolagem do fim de semana APPENDA a parcela
+  preservando o ref) — o 'f' usava o ref MAXIMO da celula e isso
+  CONGELAVA a sexta inteira (propria+sab+dom misturados; croissant
+  voltou a 1000 num dia — regressao pega em prod), o 'g' corrigiu: cada
+  parcela anda ate `ref - _ANTECEDENCIA_MAX_DIAS` (com 3: a de sexta ate
+  terca, a de sabado ate quarta, a de domingo ate quinta; segunda nunca
+  recebe demanda do FDS). No equilibrar as celulas viram SEGMENTOS [[ref, qtd]]
+  (reparticao proporcional aos pesos, sobra de arredondamento no MAIOR
+  ref — conservador); move-se primeiro a parcela de MENOR ref e a
+  parcela movida MANTEM o ref no destino. (2) retro 'h' ("Esta assim
+  ainda", paes empilhados na sexta): o teto alvo=total/dias-uteis do
+  'f' foi REMOVIDO — quando o estoque cobre o comeco da semana e o
+  frescor impede seg/ter de receber, a cota desses dias morria e o
+  excedente ficava TODO na sexta; a equalizacao agora e guiada so pelo
+  guard fonte×destino ("so move se melhora o balanco"), que tambem
+  termina o loop. Junto: receita SEM rendimento entrava com peso
+  1.0/unidade (croissant = 1 fornada POR PECA, distorcia a regua) —
+  fallback 1/chunk. Retros: 'd' redistribuiu no modo antigo; 'e'
+  re-nivelou POR LOTES a semana E a ordem DE HOJE (o 🔄 das 19:05 tinha
+  posto o pico do brioche na ordem da madrugada); 'f' alvo por dias
+  uteis (superado pelo 'h'); 'g' por-parcela; 'h' sem teto + peso
+  fallback; 'i' antecedencia 2->3 ("Tem que adiantar, olha so terca nao
+  tem producao") + piso do Cinnamon Roll. COSMETICO conhecido: celula
+  de 5 digitos (levain 27835) corta visualmente no grid. Testes: antecedencia + fatiamento +
+  frescor do FDS (qui+sex permitidos, dom nunca sai da sexta) +
+  redistribuicao do excedente da sexta em test_cronograma.py.
 - **Producao NORMAL so de SEG a SEX (dono 17/08/2026: "Sabado e domingo a
   gente nao produz, jogar tudo para segunda a sexta, a unica coisa que
   produzimos de sabado e a fornada especial")**: `_DIAS_PRODUCAO_NORMAL =
