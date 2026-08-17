@@ -56,6 +56,13 @@ class TreinoVideo(db.Model):
     versao = db.Column(db.Integer, default=1, nullable=False)
     exige_reassistir = db.Column(db.Boolean, default=False, nullable=False)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
+    # Roteiro de GRAVAÇÃO da aula (13/08/2026): o plano de conteúdo da
+    # "Universidade" chega por planilha antes dos vídeos existirem — a aula
+    # nasce rascunho com o roteiro anexado e quem grava lê aqui. Material de
+    # ADMIN: o funcionário nunca vê. ALTER aplicado em prod (c32f4c37) e
+    # confirmado pela sonda ?colunas= ANTES deste modelo — procedimento de
+    # 2 commits.
+    roteiro = db.Column(db.Text)
 
     checkpoints = db.relationship(
         'TreinoCheckpoint', backref='video',
