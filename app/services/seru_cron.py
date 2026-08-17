@@ -659,15 +659,18 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
-    # Ordem de producao da SEMANA (dono 17/08/2026, "quanto menos e mais"):
-    # DOMINGO 12:00 solta as ordens de seg..dom da semana que comeca — o
-    # padeiro enxerga a semana inteira de uma vez. O job roda TODO dia ao
-    # meio-dia DE PROPOSITO: fora do domingo e rede (re-preenche dia
-    # excluido e disparo engolido por deploy — o APScheduler nao persiste
-    # misfire e o auto-deploy reinicia o processo a qualquer hora); com a
-    # semana de pe e no-op. SUBSTITUI o envio diario das 19:00
-    # (10-17/08/2026) — o CONTEUDO fica em dia pelo 🔄 das 06:45/19:05.
-    # Desligavel por AUTO_ENVIO_PLANO=0.
+    # SEMANA no meio-dia (dono 17/08/2026, "quanto menos e mais"): DOMINGO
+    # 12:00 solta os PEDIDOS loja->industria de seg..dom (motor
+    # venda+estoque) e em seguida as ORDENS de producao da semana — o
+    # padeiro enxerga a semana inteira de uma vez, com o firme ja criado.
+    # O job roda TODO dia ao meio-dia DE PROPOSITO: fora do domingo
+    # re-sincroniza pedidos/ordens do cron com a realidade e re-preenche
+    # buraco (dia excluido, disparo engolido por deploy — o APScheduler nao
+    # persiste misfire e o auto-deploy reinicia o processo a qualquer
+    # hora). SUBSTITUI o envio diario das 19:00 (10-17/08/2026) — o numero
+    # final da ordem DE HOJE segue saindo do 🔄 das 06:45/19:05.
+    # Desligavel por AUTO_ENVIO_PLANO=0 (a parte de pedidos respeita
+    # AUTO_PEDIDOS=0).
     if os.environ.get('AUTO_ENVIO_PLANO', '1') != '0':
         _scheduler.add_job(
             lambda app=app: _run_ordens_semana(app),
