@@ -644,12 +644,14 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
-    # Pedidos AUTOMATICOS loja->industria (10/08/2026, decisao do dono):
-    # motor venda+estoque materializa D+1..D+3 como rascunhos, 2x ao dia —
-    # 06:30 (planejamento) e 18:30 (refresh com a venda do dia, 30min antes
-    # do corte — que virou 19:00 em 13/08/2026, pedido do dono no 1o dia).
-    # Pedido tocado por humano NUNCA e sobrescrito; D+1 sob corte nunca e
-    # tocado. Desligavel por AUTO_PEDIDOS=0.
+    # Pedidos AUTOMATICOS loja->industria (10/08/2026; janela virou a
+    # SEMANA inteira em 17/08/2026 — "os pedidos da semana tambem devem ser
+    # lancados tudo no domingo meio dia"): o job do meio-dia (ordens-semana,
+    # abaixo) abre os pedidos de seg..dom; estas 2 rodadas diarias sao o
+    # REFRESH da mesma janela (amanha..proximo domingo) — 06:30
+    # (planejamento) e 18:30 (venda do dia via estoque atual, 30min antes
+    # do corte de 19:00). Pedido tocado por humano NUNCA e sobrescrito;
+    # D+1 sob corte nunca e tocado. Desligavel por AUTO_PEDIDOS=0.
     if os.environ.get('AUTO_PEDIDOS', '1') != '0':
         _scheduler.add_job(
             lambda app=app: _run_auto_pedidos(app),
