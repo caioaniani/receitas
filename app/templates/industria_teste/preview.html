@@ -25,7 +25,7 @@
         <a href="/area/administracao"><i class="bi bi-gear"></i><span>Administração</span></a>
       </nav>
       <div class="nav-spacer"></div>
-      <a class="nav-help" href="{{ url_for('industria_teste.index') }}"><i class="bi bi-arrow-counterclockwise"></i><span>Voltar à tela atual</span></a>
+      <a class="nav-help" href="{{ url_for('industria_teste.index', legacy=1) }}"><i class="bi bi-arrow-counterclockwise"></i><span>Comparar com tela antiga</span></a>
       <div class="user-card"><span class="avatar">{{ current_user.nome[:1]|upper }}</span><span><strong>{{ current_user.nome }}</strong><small>Administrador</small></span><i class="bi bi-three-dots"></i></div>
     </aside>
 
@@ -39,7 +39,7 @@
         <div class="breadcrumbs"><a href="/area/producao">Produção</a><i class="bi bi-chevron-right"></i><span>Planejamento</span></div>
         <section class="page-head">
           <div><span class="eyebrow">Planejamento de produção</span><h1>O que precisa acontecer agora</h1><p>Prioridades, riscos e produção dos próximos dias em uma única visão.</p></div>
-          <a class="primary-action" href="{{ url_for('industria_teste.index') }}"><i class="bi bi-grid-3x3-gap"></i>Abrir grade avançada</a>
+          <a class="primary-action" href="{{ url_for('industria_teste.index', legacy=1) }}"><i class="bi bi-grid-3x3-gap"></i>Abrir grade avançada</a>
         </section>
 
         <nav class="view-tabs" aria-label="Visões da produção">
@@ -69,7 +69,7 @@
                 {% elif a.tipo == 'risco' %}<h3>Resolver entregas em risco</h3><p>{{ a.n }} receita(s) podem não atender pedidos programados.</p>
                 {% else %}<h3>Revisar edição manual</h3><p>Há uma previsão que pode estar desatualizada.</p>{% endif %}
               </div>
-              <a href="{{ url_for('industria_teste.index') }}">Revisar <i class="bi bi-chevron-right"></i></a>
+              <a href="{{ url_for('industria_teste.index', legacy=1) }}">Revisar <i class="bi bi-chevron-right"></i></a>
             </article>
             {% endfor %}
           </div>
@@ -85,14 +85,14 @@
               <header><div><small>{{ 'Hoje' if dia.data == crono.hoje else 'Próximo dia' }}</small><h3>{{ dia.label }}</h3></div><span class="state {{ 'sent' if est and est.enviado else 'draft' }}">{{ 'Enviado' if est and est.enviado else ('Rascunho' if est else 'A planejar') }}</span></header>
               <div class="day-volume"><strong>{{ totais_dia[idx].un }}</strong><span>unidades</span><b>{{ totais_dia[idx].fornadas }} fornadas</b></div>
               <div class="load-track"><span style="width:{{ [100, (totais_dia[idx].fornadas * 8)]|min }}%"></span></div>
-              <a href="{{ url_for('industria_teste.index', inicio=idx) }}">Ver produção do dia <i class="bi bi-arrow-right"></i></a>
+              <a href="{{ url_for('industria_teste.index', inicio=idx, legacy=1) }}">Ver produção do dia <i class="bi bi-arrow-right"></i></a>
             </article>
             {% endfor %}
           </div>
         </section>
 
         <section class="workspace hidden" data-panel="week">
-          <div class="section-title"><div><h2>Planejamento semanal</h2><p>Visão resumida; edições continuam na grade avançada.</p></div><a href="{{ url_for('industria_teste.index') }}">Editar planejamento <i class="bi bi-arrow-right"></i></a></div>
+          <div class="section-title"><div><h2>Planejamento semanal</h2><p>Visão resumida; edições continuam na grade avançada.</p></div><a href="{{ url_for('industria_teste.index', legacy=1) }}">Editar planejamento <i class="bi bi-arrow-right"></i></a></div>
           <div class="week-table-wrap"><table><thead><tr><th>Receita</th>{% for dia in crono.dias[:7] %}<th>{{ dia.label }}</th>{% endfor %}<th>Total</th></tr></thead><tbody>
             {% for r in crono.receitas[:12] %}<tr><td><strong>{{ r.nome }}</strong><small>{{ r.categoria or 'Sem categoria' }}</small></td>{% for c in r.por_dia[:7] %}<td class="{{ 'has-value' if c.qtd }}">{{ c.qtd or '—' }}</td>{% endfor %}<td><strong>{{ r.total }}</strong></td></tr>{% endfor %}
           </tbody></table></div>
@@ -100,7 +100,7 @@
 
         <section class="workspace hidden" data-panel="exceptions">
           <div class="section-title"><div><h2>Exceções</h2><p>Problemas separados do planejamento rotineiro.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Abrir auditoria <i class="bi bi-arrow-right"></i></a></div>
-          {% if crono.alertas_falta %}<div class="exception-list">{% for alerta in crono.alertas_falta %}<article><span><i class="bi bi-exclamation-triangle"></i></span><div><h3>{{ alerta.nome }}</h3><p>{% for e in alerta.entregas %}{{ e.label }}: faltam {{ e.faltam }} de {{ e.firme }}{% if not loop.last %} · {% endif %}{% endfor %}</p></div><a href="{{ url_for('industria_teste.index') }}">Resolver</a></article>{% endfor %}</div>{% else %}<div class="empty-state"><span><i class="bi bi-check2"></i></span><div><h3>Nenhuma entrega em risco</h3><p>Não encontramos exceções no horizonte selecionado.</p></div></div>{% endif %}
+          {% if crono.alertas_falta %}<div class="exception-list">{% for alerta in crono.alertas_falta %}<article><span><i class="bi bi-exclamation-triangle"></i></span><div><h3>{{ alerta.nome }}</h3><p>{% for e in alerta.entregas %}{{ e.label }}: faltam {{ e.faltam }} de {{ e.firme }}{% if not loop.last %} · {% endif %}{% endfor %}</p></div><a href="{{ url_for('industria_teste.index', legacy=1) }}">Resolver</a></article>{% endfor %}</div>{% else %}<div class="empty-state"><span><i class="bi bi-check2"></i></span><div><h3>Nenhuma entrega em risco</h3><p>Não encontramos exceções no horizonte selecionado.</p></div></div>{% endif %}
         </section>
       </div>
     </main>
