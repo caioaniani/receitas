@@ -61,6 +61,13 @@ _DIAS_FORNADA_ESPECIAL = frozenset({5, 6})
 # fornada especial fora desses dias. sex=4, sab=5.
 _DIAS_PRODUCAO_FORNADA = frozenset({4, 5})
 
+# Producao NORMAL so de SEGUNDA a SEXTA (dono 17/08/2026: "Sabado e domingo
+# a gente nao produz, jogar tudo para segunda a sexta, a unica coisa que
+# produzimos de sabado e a fornada especial"). A demanda do fim de semana
+# rola pro ultimo dia PERMITIDO anterior (sexta) — mesma mecanica da
+# fornada especial. seg=0 .. sex=4.
+_DIAS_PRODUCAO_NORMAL = frozenset({0, 1, 2, 3, 4})
+
 # Motores de previsao da demanda do CRONOGRAMA/balanco (pedido do dono
 # 06/07/2026 — "+1 opcao de previsao, baseada nas vendas"):
 # - 'pedidos': historico de PEDIDOS loja->industria (comportamento original);
