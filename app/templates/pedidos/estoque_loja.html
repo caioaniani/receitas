@@ -188,6 +188,15 @@
                                min="0" step="1" placeholder="—"
                                value="{{ el.estoque_minimo if el.estoque_minimo else '' }}">
                     </td>
+                    <td>
+                        {# Piso INCONDICIONAL do pedido de cada dia — não
+                           desconta o estoque que sobrou (danishes assadas,
+                           dono 17/08/2026). Salvo pelo "Salvar mínimos". #}
+                        <input type="number" name="diario[]"
+                               class="form-control form-control-sm text-center"
+                               min="0" step="1" placeholder="—"
+                               value="{{ el.pedido_minimo_diario if el.pedido_minimo_diario else '' }}">
+                    </td>
                 </tr>
     {% endmacro %}
 
