@@ -125,3 +125,105 @@ def test_receita_arquivada_fica_fora(app):
         mins = _minimos(lojas['anesio'])
         assert receitas[2].id not in mins
         assert len(mins) == 4
+
+
+# ── v2: o colchão vira piso INCONDICIONAL (pedido_minimo_diario) ────────
+
+def test_v2_converte_colchao_em_piso_diario(app):
+    """O v2 seta pedido_minimo_diario=2 e LIMPA o estoque_minimo que o v1
+    deixou em exatamente 2; colchão diferente (ajuste do dono) fica."""
+    from app.migrations_legacy import _seed_minimo_danish_v2
+    with app.app_context():
+        receitas, lojas = _cenario()
+        _seed_minimo_danish(app)                     # v1: colchão 2
+        el0 = EstoqueLoja.query.filter_by(loja_id=lojas['anesio'].id,
+                                          receita_id=receitas[0].id).one()
+        el0.estoque_minimo = 5                       # dono ajustou depois
+        db.session.commit()
+        _seed_minimo_danish_v2(app)
+        for chave in ('anesio', 'ribeiro'):
+            for el in EstoqueLoja.query.filter_by(loja_id=lojas[chave].id):
+                assert int(el.pedido_minimo_diario or 0) == 2
+        db.session.refresh(el0)
+        assert el0.estoque_minimo == 5               # ajuste do dono fica
+        outros = [el for el in EstoqueLoja.query.filter_by(
+            loja_id=lojas['anesio'].id) if el.receita_id != receitas[0].id]
+        assert all(el.estoque_minimo is None for el in outros)
+        assert AppConfig.get(SEED_MINIMO_DANISH['chave_v2'])
+
+
+def test_v2_roda_uma_vez_e_nao_sobrescreve(app):
+    from app.migrations_legacy import _seed_minimo_danish_v2
+    with app.app_context():
+        receitas, lojas = _cenario()
+        el = EstoqueLoja(loja_id=lojas['anesio'].id,
+                         receita_id=receitas[0].id, quantidade=0,
+                         pedido_minimo_diario=4)     # valor do dono
+        db.session.add(el)
+        db.session.commit()
+        _seed_minimo_danish_v2(app)
+        db.session.refresh(el)
+        assert el.pedido_minimo_diario == 4          # mantido
+        el.pedido_minimo_diario = None               # dono tirou o piso
+        db.session.commit()
+        _seed_minimo_danish_v2(app)
+        db.session.refresh(el)
+        assert el.pedido_minimo_diario is None       # não ressuscita
+
+
+# ── motor: o piso diário é INCONDICIONAL no pedido de cada dia ──────────
+
+def test_motor_pede_2_por_dia_mesmo_com_estoque_sobrando(app, loja):
+    """"Receber 2 por dia impreterivelmente": com 10 em estoque e venda
+    zero, a sugestão continua 2 em TODOS os dias — o piso diário NÃO
+    desconta o estoque (diferente do colchão estoque_minimo)."""
+    from app.services.previsao_producao import sugerir_pedidos_por_venda
+    with app.app_context():
+        r = Receita(nome='Danish Piso', categoria='Danishes',
+                    rendimento_qtd=1, rendimento_unidade='un',
+                    peso_base=100.0, estado_padrao='assado')
+        db.session.add(r)
+        db.session.flush()
+        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=r.id,
+                                   quantidade=10, pedido_minimo_diario=2))
+        db.session.commit()
+        sug = sugerir_pedidos_por_venda(horizonte_dias=5,
+                                        inicio_offset_dias=1)
+        lj = next(x for x in sug['lojas'] if x['loja_id'] == loja.id)
+        p = next(x for x in lj['produtos'] if x['receita_id'] == r.id)
+        assert p['por_dia'] == [2, 2, 2, 2, 2]
+        assert p['pedido_minimo_diario'] == 2
+
+
+def test_motor_media_manda_acima_do_piso(app, loja):
+    """"Se vendeu 2 ou mais... deveria pedir a mais": média de venda de
+    5/dia no dia-da-semana supera o piso — o pedido sai 5, não trava em 2."""
+    from datetime import datetime as _dt
+    from datetime import time as _time
+    from datetime import timedelta
+
+    from app.models import MovEstoqueLoja
+    from app.services.previsao_producao import sugerir_pedidos_por_venda
+    from app.utils import hoje
+    with app.app_context():
+        r = Receita(nome='Danish Vende', categoria='Danishes',
+                    rendimento_qtd=1, rendimento_unidade='un',
+                    peso_base=100.0)
+        db.session.add(r)
+        db.session.flush()
+        el = EstoqueLoja(loja_id=loja.id, receita_id=r.id, quantidade=0,
+                         pedido_minimo_diario=2)
+        db.session.add(el)
+        db.session.flush()
+        alvo = hoje() + timedelta(days=1)
+        for sem in range(1, 5):                      # 4 semanas do mesmo dow
+            d = alvo - timedelta(days=7 * sem)
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='venda_seru', quantidade=5,
+                data=_dt.combine(d, _time(12, 0)), referencia='teste-piso'))
+        db.session.commit()
+        sug = sugerir_pedidos_por_venda(horizonte_dias=1,
+                                        inicio_offset_dias=1)
+        lj = next(x for x in sug['lojas'] if x['loja_id'] == loja.id)
+        p = next(x for x in lj['produtos'] if x['receita_id'] == r.id)
+        assert p['por_dia'][0] >= 5                  # média venceu o piso
