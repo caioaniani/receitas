@@ -650,10 +650,11 @@ def test_atualiza_re_sincroniza_ordem_do_cron(app, monkeypatch):
         db.session.commit()
         monkeypatch.setattr(
             producao, 'enviar_plano_do_dia',
-            lambda data, user_id=None, **kw: chamadas.append(data) or
+            lambda data, user_id=None, **kw: chamadas.append(
+                (data, kw.get('motor'))) or
             type('P', (), {'itens': [1, 2, 3]})())
         out = auto_pedidos.atualizar_plano_automatico()
-        assert chamadas == [hoje()]
+        assert chamadas == [(hoje(), 'vendas')]   # mesmo default do envio
         assert out['atualizada'] is True and out['itens'] == 3
 
 
