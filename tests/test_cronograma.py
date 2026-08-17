@@ -545,6 +545,34 @@ def test_nivelamento_nao_antecipa_parcela_do_fim_de_semana(app):
     assert na_sexta >= 40
 
 
+def test_nivelamento_redistribui_excedente_da_sexta(app):
+    """Caso real 17/08 (dono: "Esta assim ainda"): o teto alvo=total/dias
+    uteis deixava a cota de seg/ter (que o frescor impede de receber)
+    morrer e os paes empilhavam TODOS na sexta. Sem o teto, o excedente
+    da sexta se redistribui: parcela de sexta vai pra quarta, a de sabado
+    pra quinta e a de domingo fica."""
+    from datetime import date as _date
+
+    loja = _loja()
+    r = _receita('Pão de Fim de Semana')
+    hoje_d = hoje()                                # segunda congelada
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=4), r, 30)   # sex
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=5), r, 30)   # sáb
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=6), r, 30)   # dom
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 90
+    por_wd = {}
+    for c in rr['por_dia']:
+        if c['qtd']:
+            por_wd[_date.fromisoformat(c['data']).weekday()] = c['qtd']
+    assert set(por_wd) <= {2, 3, 4}          # nada em seg/ter (frescor)
+    assert por_wd.get(4, 0) == 30            # sexta fica SO com a de domingo
+    assert por_wd.get(2, 0) + por_wd.get(3, 0) == 60   # resto redistribuido
+
+
 def test_nivelamento_fatia_receita_grande_em_lotes(app):
     """Caso Croissant (dono: "por que não redistribuir em lotes menores?"):
     demanda grande num dia só é FATIADA — nenhum dia carrega o total
