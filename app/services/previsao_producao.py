@@ -2409,8 +2409,24 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # sabado), a demanda fica sem peso: se nada mais puxar, a linha nao
         # produz e a entrega aparece como EM RISCO — decisao humana, o
         # cronograma nao viola a regra por conta propria.
+        #
+        # `ref_dia[i]` = o dia de DEMANDA mais tardio que caiu na celula i
+        # (o proprio i, ou o dia rolado do fim de semana). O nivelamento usa
+        # isso pra medir a antecedencia contra a NECESSIDADE real — sem
+        # isso, a sexta (que ja carrega sab/dom) poderia ser adiantada mais
+        # 2 dias e o pao de domingo sairia com 4 dias (frescor furado).
         permitido = [producao_permitida_no_dia(rec, p) for p in dias_prod]
-        pesos = _rolar_pesos_permitidos(pesos, permitido)
+        ref_dia = list(range(horizonte_dias))
+        if not all(permitido):
+            ajust = [0.0] * horizonte_dias
+            for i, w in enumerate(pesos):
+                if w <= 0:
+                    continue
+                j = next((k for k in range(i, -1, -1) if permitido[k]), None)
+                if j is not None:
+                    ajust[j] += float(w)
+                    ref_dia[j] = max(ref_dia[j], i)
+            pesos = ajust
         # Padroniza a PRODUCAO em LOTES inteiros (nao produzir picado — decisao
         # do dono 29/06): arredonda o total pro multiplo do lote da receita e
         # distribui em pacotes inteiros pelos dias (cada dia 0 ou multiplo do
