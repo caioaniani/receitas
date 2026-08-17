@@ -2550,13 +2550,34 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             # (levain em gramas nao pode dominar croissant em pecas).
             peso = (1.0 / unid_forn) if unid_forn >= 1 else (
                 1.0 / max(1.0, rend))
+            # Celula i vira SEGMENTOS [ref, qtd]: a quantidade inteira e
+            # repartida pelas parcelas de demanda (ref_pesos) por proporcao
+            # (sobra de arredondamento fica no MAIOR ref — conservador: a
+            # parcela menos movel). Sem ref_pesos (linha injetada), a
+            # celula inteira referencia o proprio dia.
+            qtds = [c['qtd'] for c in rr['por_dia']]
+            rp = rr.get('ref_pesos') or []
+            segs = []
+            for i in range(n):
+                q = int(qtds[i])
+                pares = sorted(p for p in (rp[i] if i < len(rp) else [])
+                               if p[1] > 0)
+                if q <= 0:
+                    segs.append([])
+                    continue
+                if not pares:
+                    segs.append([[i, q]])
+                    continue
+                tot_w = sum(w for _, w in pares)
+                fatias, resto = [], q
+                for ref, w in pares:
+                    qi = int(q * w / tot_w)
+                    fatias.append([int(ref), qi])
+                    resto -= qi
+                fatias[-1][1] += resto           # sobra no maior ref
+                segs.append([f for f in fatias if f[1] > 0])
             itens_eq.append({'rr': rr, 'rec': rec, 'rend': rend,
-                             'qtds': [c['qtd'] for c in rr['por_dia']],
-                             # dia de DEMANDA por celula: a antecedencia e
-                             # medida contra ele (fim de semana rolado pra
-                             # sexta carrega a referencia de sab/dom junto —
-                             # essa parcela nao anda mais pra tras).
-                             'ref': list(rr.get('ref_dia') or range(n)),
+                             'qtds': qtds, 'segs': segs,
                              'chunk': max(1, chunk), 'peso': peso})
         if itens_eq:
             carga = [0.0] * n
@@ -2568,33 +2589,51 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             # nivelador parava cedo — croissant fatiava, sourdough nao.
             dias_uteis = sum(1 for p in dias_prod if p.weekday() < 5) or n
             alvo = (sum(carga) / dias_uteis) if dias_uteis else 0.0
+
+            def _movel(it, s, d):
+                """Qtd da celula s movel pra d: parcelas cujo dia de DEMANDA
+                esta a no maximo _ANTECEDENCIA_MAX_DIAS de d (frescor por
+                PARCELA — a de sexta anda, a de domingo rolada nao)."""
+                return sum(q for ref, q in it['segs'][s]
+                           if ref - d <= _ANTECEDENCIA_MAX_DIAS)
+
             for d in range(n):
                 while carga[d] < alvo:
-                    # Fonte: o dia MAIS carregado com lote movel pra d —
-                    # movel = dentro da antecedencia CONTADA DO DIA DE
-                    # DEMANDA da celula (ref), nao do dia da curva.
+                    # Fonte: o dia MAIS carregado com parcela movel pra d.
                     melhor = None
                     for it in itens_eq:
                         if not producao_permitida_no_dia(it['rec'],
                                                          dias_prod[d]):
                             continue
                         for s in range(d + 1, n):
-                            if it['qtds'][s] <= 0:
+                            if it['qtds'][s] <= 0 or _movel(it, s, d) <= 0:
                                 continue
-                            if it['ref'][s] - d > _ANTECEDENCIA_MAX_DIAS:
-                                continue          # frescor: longe demais
                             if melhor is None or carga[s] > carga[melhor[1]]:
                                 melhor = (it, s)
                     if melhor is None:
                         break
                     it, s = melhor
-                    mv = min(it['qtds'][s], it['chunk'])
+                    mv = min(_movel(it, s, d), it['chunk'])
                     # So move se MELHORA o balanco (d pos-movimento nao
                     # passa do que a fonte tinha); dia vazio aceita ao
                     # menos um lote.
                     if carga[d] > 0 and carga[d] + mv * it['peso'] > \
                             carga[s]:
                         break
+                    # Consome as parcelas MOVEIS de menor ref primeiro
+                    # (deixa as menos moveis onde estao).
+                    falta_mv = mv
+                    for f in sorted(it['segs'][s]):
+                        if falta_mv <= 0:
+                            break
+                        ref, q = f
+                        if ref - d > _ANTECEDENCIA_MAX_DIAS or q <= 0:
+                            continue
+                        tira = min(q, falta_mv)
+                        f[1] -= tira
+                        falta_mv -= tira
+                        it['segs'][d].append([ref, tira])
+                    it['segs'][s] = [f for f in it['segs'][s] if f[1] > 0]
                     it['qtds'][s] -= mv
                     it['qtds'][d] += mv
                     carga[s] -= mv * it['peso']
