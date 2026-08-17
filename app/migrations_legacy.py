@@ -918,6 +918,13 @@ def _migrate_postgres(app):
         # previsao_producao.sugerir_pedidos_por_venda). Vazio = sem piso.
         if cols_el and 'estoque_minimo' not in cols_el:
             conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN estoque_minimo INTEGER"))
+        # Pedido minimo DIARIO por item (dono 17/08/2026, danishes assadas:
+        # "as lojas devem receber 2 danishes desses por dia
+        # IMPRETERIVELMENTE"): piso INCONDICIONAL do pedido do dia — nao
+        # desconta o estoque que sobrou na loja (diferente do
+        # estoque_minimo, que e colchao). Vazio = sem piso.
+        if cols_el and 'pedido_minimo_diario' not in cols_el:
+            conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN pedido_minimo_diario INTEGER"))
 
         # Tabelas Seru (mapeamento + idempotencia). db.create_all() cria
         # automaticamente, este bloco e so safety pra ambientes que ja
