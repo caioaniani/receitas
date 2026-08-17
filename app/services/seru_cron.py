@@ -898,8 +898,11 @@ def _run_ordens_semana(app):
 # madrugada e tinha absorvido o pico no 🔄 das 19:05); 'f' = nivelador
 # refinado (alvo pelos dias uteis + antecedencia contra o dia de DEMANDA
 # via ref_dia — sourdoughs fatiam e a parcela do fim de semana nao e
-# adiantada de novo).
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17f'
+# adiantada de novo); 'g' = antecedencia POR PARCELA (ref_pesos): o ref
+# MAXIMO da celula congelava a sexta inteira (propria+sab+dom misturados
+# — croissant voltou a 1000 num dia); agora cada parcela viaja com o seu
+# dia de demanda e so a parcela cujo frescor permite anda.
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17g'
 
 
 def _run_ordens_semana_retro(app):
