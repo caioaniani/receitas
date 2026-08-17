@@ -48,23 +48,24 @@ def _equilibrar():
 
 def _motor():
     """Motor de previsao da demanda (pedido do dono 06/07/2026): 'pedidos'
-    (historico de pedidos das lojas — original/default), 'vendas' (venda real
-    das lojas + merma) ou 'maior' (o maior dos dois por dia)."""
+    (historico de pedidos das lojas — o original), 'vendas' (venda real
+    das lojas + merma) ou 'maior' (o maior dos dois por dia). Default =
+    'vendas' desde 17/08/2026 (dono: "producao da semana programada baseado
+    no historico de vendas e estoque" — mesma regua da automacao)."""
     from app.services.previsao_producao import MOTORES_PREVISAO_PRODUCAO
-    m = (request.values.get('motor') or 'pedidos').strip()
-    return m if m in MOTORES_PREVISAO_PRODUCAO else 'pedidos'
+    m = (request.values.get('motor') or 'vendas').strip()
+    return m if m in MOTORES_PREVISAO_PRODUCAO else 'vendas'
 
 
 def _params_visao(**extra):
-    """Query params que preservam a visao atual nos redirects (motor so
-    quando nao e o default, pra manter as URLs antigas limpas)."""
+    """Query params que preservam a visao atual nos redirects. O motor vai
+    SEMPRE explicito: omitir "quando e o default" ja causou classe de bug —
+    o default mudou (17/08/2026) e URL/form sem o param voltaria pro motor
+    errado em silencio."""
     p = {'horizonte': _horizonte_janela()[0], 'janela': _horizonte_janela()[1],
-         'inicio': _inicio_offset()}
+         'inicio': _inicio_offset(), 'motor': _motor()}
     if _equilibrar():
         p['equilibrar'] = 1
-    m = _motor()
-    if m != 'pedidos':
-        p['motor'] = m
     p.update(extra)
     return p
 
