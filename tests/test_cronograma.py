@@ -471,7 +471,8 @@ def test_enviar_com_motor_vendas_usa_a_grade_de_vendas(app, admin_user):
                 follow_redirects=True)
     resp = client.post('/telaindustriateste/enviar',
                        data={'data': alvo.isoformat(), 'horizonte': 7,
-                             'janela': 6, 'inicio': 0, 'motor': 'vendas'})
+                             'janela': 6, 'inicio': 0, 'motor': 'vendas',
+                             'equilibrar': 0})          # modo curva explícito
     assert resp.status_code in (302, 303)
     assert '/telaindustriateste/' in resp.headers['Location']
     assert 'motor=vendas' in resp.headers['Location']   # visão preservada
