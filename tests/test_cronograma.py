@@ -514,10 +514,11 @@ def test_nivelamento_respeita_antecedencia_maxima(app):
 
 
 def test_nivelamento_nao_antecipa_parcela_do_fim_de_semana(app):
-    """A demanda de SÁB/DOM já rolou pra sexta (produção seg-sex) — o
-    nivelador NÃO pode adiantá-la de novo (pão de domingo assado na quarta
-    teria 4 dias). A antecedência é medida contra o dia de DEMANDA (ref),
-    então essa parcela fica na sexta mesmo com dias ociosos antes."""
+    """A demanda de SÁB/DOM já rolou pra sexta (produção seg-sex), mas a
+    antecedência é medida POR PARCELA contra o dia de DEMANDA original
+    (ref_pesos): a parcela de SÁBADO pode ir até quinta (sáb − 2), a de
+    DOMINGO só até sexta (dom − 2). Nada em seg..qua — pão de domingo
+    assado na quarta teria 4 dias."""
     from datetime import date as _date
 
     loja = _loja()
@@ -532,12 +533,16 @@ def test_nivelamento_nao_antecipa_parcela_do_fim_de_semana(app):
                                 equilibrar=True)
     rr = _rec_out(crono, r.id)
     assert rr is not None and rr['total'] >= 80
+    na_sexta = 0
     for c in rr['por_dia']:
         d = _date.fromisoformat(c['data'])
         if c['qtd']:
-            # só sexta (ref sáb/dom − antecedência 2 = sexta em diante;
-            # sáb/dom bloqueados) — nada em seg..qui
-            assert d.weekday() == 4, 'parcela do FDS adiantada pra %s' % d
+            # qui (parcela de sáb) e sex (sáb/dom) são os únicos válidos
+            assert d.weekday() in (3, 4), 'parcela do FDS adiantada pra %s' % d
+            if d.weekday() == 4:
+                na_sexta += c['qtd']
+    # a parcela de DOMINGO (40) nunca sai da sexta
+    assert na_sexta >= 40
 
 
 def test_nivelamento_fatia_receita_grande_em_lotes(app):
