@@ -1183,9 +1183,12 @@ def test_rota_aprovar(app, admin_user):
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
                 follow_redirects=True)
+    # equilibrar=0 explícito: o teste valida a mecânica do aprovar no DIA da
+    # demanda (modo curva); no default nivelado a produção migraria pra
+    # segunda e o dia alvo sairia vazio.
     resp = client.post('/telaindustriateste/aprovar',
                        data={'data': d2.isoformat(), 'horizonte': 7,
-                             'janela': 6})
+                             'janela': 6, 'equilibrar': 0})
     assert resp.status_code == 302
     assert PlanejamentoProducao.query.filter_by(
         data=d2, origem='cronograma').first() is not None
