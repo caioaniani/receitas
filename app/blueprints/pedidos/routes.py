@@ -2966,6 +2966,7 @@ def estoque_loja_minimos():
 
     ids = request.form.getlist('estoque_id[]')
     minimos = request.form.getlist('minimo[]')
+    diarios = request.form.getlist('diario[]')
     eids = []
     for eid in ids:
         try:
@@ -2975,19 +2976,29 @@ def estoque_loja_minimos():
     validos = [e for e in eids if e is not None]
     els = {e.id: e for e in EstoqueLoja.query.filter(
         EstoqueLoja.id.in_(validos)).all()} if validos else {}
+
+    def _piso(lista, i):
+        """0/vazio -> sem piso (NULL); ilegivel -> None = pula o campo."""
+        raw = lista[i] if i < len(lista) else ''
+        try:
+            v = int(raw) if str(raw).strip() != '' else 0
+        except (TypeError, ValueError):
+            return 'pula'
+        return v if v > 0 else None
+
     alterados = 0
     for i, eid in enumerate(eids):
         el = els.get(eid)
         if not el or el.loja_id != loja_id:      # so a loja do form
             continue
-        raw = minimos[i] if i < len(minimos) else ''
-        try:
-            v = int(raw) if str(raw).strip() != '' else 0
-        except (TypeError, ValueError):
-            continue
-        novo = v if v > 0 else None              # 0/vazio -> sem piso (NULL)
-        if el.estoque_minimo != novo:
+        novo = _piso(minimos, i)
+        if novo != 'pula' and el.estoque_minimo != novo:
             el.estoque_minimo = novo
+            alterados += 1
+        # Pedido minimo DIARIO (piso incondicional — dono 17/08/2026).
+        novo_d = _piso(diarios, i)
+        if novo_d != 'pula' and el.pedido_minimo_diario != novo_d:
+            el.pedido_minimo_diario = novo_d
             alterados += 1
     if alterados:
         db.session.commit()
