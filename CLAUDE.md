@@ -1961,13 +1961,22 @@ do seru_cron junto.
   dias). No equilibrar as celulas viram SEGMENTOS [[ref, qtd]]
   (reparticao proporcional aos pesos, sobra de arredondamento no MAIOR
   ref — conservador); move-se primeiro a parcela de MENOR ref e a
-  parcela movida MANTEM o ref no destino. Retros: 'd' redistribuiu no
-  modo antigo; 'e' re-nivelou POR LOTES a semana E a ordem DE HOJE (o 🔄
-  das 19:05 tinha posto o pico do brioche na ordem da madrugada); 'f'
-  aplicou o refino de dias uteis; 'g' o por-parcela. COSMETICO
-  conhecido: celula de 5 digitos (levain 27835) corta visualmente no
-  grid. Testes: antecedencia + fatiamento + frescor do FDS (qui+sex
-  permitidos, dom nunca sai da sexta) em test_cronograma.py.
+  parcela movida MANTEM o ref no destino. (2) retro 'h' ("Esta assim
+  ainda", paes empilhados na sexta): o teto alvo=total/dias-uteis do
+  'f' foi REMOVIDO — quando o estoque cobre o comeco da semana e o
+  frescor impede seg/ter de receber, a cota desses dias morria e o
+  excedente ficava TODO na sexta; a equalizacao agora e guiada so pelo
+  guard fonte×destino ("so move se melhora o balanco"), que tambem
+  termina o loop. Junto: receita SEM rendimento entrava com peso
+  1.0/unidade (croissant = 1 fornada POR PECA, distorcia a regua) —
+  fallback 1/chunk. Retros: 'd' redistribuiu no modo antigo; 'e'
+  re-nivelou POR LOTES a semana E a ordem DE HOJE (o 🔄 das 19:05 tinha
+  posto o pico do brioche na ordem da madrugada); 'f' alvo por dias
+  uteis (superado pelo 'h'); 'g' por-parcela; 'h' sem teto + peso
+  fallback. COSMETICO conhecido: celula de 5 digitos (levain 27835)
+  corta visualmente no grid. Testes: antecedencia + fatiamento +
+  frescor do FDS (qui+sex permitidos, dom nunca sai da sexta) +
+  redistribuicao do excedente da sexta em test_cronograma.py.
 - **Producao NORMAL so de SEG a SEX (dono 17/08/2026: "Sabado e domingo a
   gente nao produz, jogar tudo para segunda a sexta, a unica coisa que
   produzimos de sabado e a fornada especial")**: `_DIAS_PRODUCAO_NORMAL =
