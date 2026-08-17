@@ -45,7 +45,7 @@
     <h1 class="page-title mb-0"><i class="bi bi-search"></i> De onde vem a previsão</h1>
     {% if motor == 'vendas' %}<span class="badge text-bg-primary">motor: VENDAS das lojas</span>
     {% elif motor == 'maior' %}<span class="badge text-bg-primary">motor: maior (pedidos × vendas)</span>{% endif %}
-    <a href="{{ url_for('industria_teste.index', horizonte=horizonte, janela=janela, inicio=inicio, motor=(motor if motor != 'pedidos' else None)) }}"
+    <a href="{{ url_for('industria_teste.index', horizonte=horizonte, janela=janela, inicio=inicio, motor=motor) }}"
        class="btn btn-sm btn-outline-secondary">← voltar ao cronograma</a>
 </div>
 
