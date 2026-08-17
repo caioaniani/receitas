@@ -236,8 +236,8 @@ def _run_sync(app):
                     logger.info('seru auto-sync (com mudancas): %s', stats)
                 else:
                     logger.debug('seru auto-sync (sem mudancas)')
-            except Exception:
-                logger.exception('seru auto-sync falhou')
+            except Exception as exc:  # noqa: BLE001 — _falha_de_job classifica
+                _falha_de_job('seru auto-sync', exc)
             finally:
                 if is_pg:
                     try:
