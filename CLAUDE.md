@@ -1931,18 +1931,28 @@ do seru_cron junto.
   sem eu ter que apertar botao algum de equilibrar, o sistema deve
   equilibrar sozinho")**: `auto_pedidos.EQUILIBRAR_AUTO = True` — toda
   ordem criada/re-sincronizada pela automacao (semana do meio-dia + 🔄
-  06:45/19:05) sai NIVELADA (cada receita inteira num dia, fornadas
-  niveladas seg-sex, deadline = 1o dia da curva, entrega nunca atrasa —
-  o motor opt-in de 29/06, agora default). A TELA acompanha (mesma
-  regua): `_equilibrar()` default True; o checkbox virou SELECT
-  "Carga: equilibrada | pela demanda" e o valor viaja SEMPRE explicito
-  (hidden dos forms, JS, `_params_visao`, fallbacks JSON '1') — mesma
-  licao do motor: omitir-quando-default vira bug na troca. Sonda
+  06:45/19:05) sai NIVELADA. **O nivelamento e POR LOTES desde a mesma
+  noite (v2 — casos reais da 1a rodada: "nao da para produzir tudo isso
+  de brioche, ele vence em 3 dias" com 160 num dia so, e "por que nao
+  redistribuir o croissant em lotes menores?" com 1000 num dia)**: parte
+  da curva de demanda e move LOTES (lote_producao > lote_pedido > 1
+  fornada da amassadeira) pra dias anteriores menos carregados, com
+  ANTECEDENCIA MAXIMA `_ANTECEDENCIA_MAX_DIAS = 2` (frescor — REVOGA o
+  "sem limite de frescor" de 29/06; o modo receita-inteira-num-dia foi
+  SUBSTITUIDO), nunca pra depois (entrega no prazo), nivelando FORNADAS
+  (peso 1/fornada — levain em gramas nao domina croissant em pecas) e
+  respeitando dias bloqueados. A TELA acompanha (mesma regua):
+  `_equilibrar()` default True; o checkbox virou SELECT "Carga:
+  equilibrada | pela demanda" e o valor viaja SEMPRE explicito (hidden
+  dos forms, JS, `_params_visao`, fallbacks JSON '1') — mesma licao do
+  motor: omitir-quando-default vira bug na troca. Sonda
   /api/claude/cronograma tambem default 1 (`?equilibrar=0` = curva).
   Overrides de celula APLICAM POR CIMA do nivelado (aplicar_overrides
   roda depois); testes que validam mecanica no "dia da demanda" pedem
-  `equilibrar=0` explicito. Retro marker 'd' redistribuiu a semana de
-  17-23/08 no deploy.
+  `equilibrar=0` explicito. Retros: 'd' redistribuiu a semana no modo
+  antigo; 'e' re-nivelou POR LOTES a semana E a ordem DE HOJE (o 🔄 das
+  19:05 tinha posto o pico do brioche na ordem da madrugada). Testes:
+  antecedencia + fatiamento em test_cronograma.py.
 - **Producao NORMAL so de SEG a SEX (dono 17/08/2026: "Sabado e domingo a
   gente nao produz, jogar tudo para segunda a sexta, a unica coisa que
   produzimos de sabado e a fornada especial")**: `_DIAS_PRODUCAO_NORMAL =
