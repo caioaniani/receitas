@@ -71,7 +71,7 @@ def cronograma():
         horizonte_dias=_int_arg('horizonte', 7, 1, 14),
         janela_semanas=_int_arg('janela', 6, 1, 26),
         inicio_offset_dias=_int_arg('inicio', 0, 0, 14),
-        equilibrar=request.args.get('equilibrar') in ('1', 'true'),
+        equilibrar=request.args.get('equilibrar', '1') in ('1', 'true'),
         motor=motor)
     pend = pendencias_por_receita()
 
