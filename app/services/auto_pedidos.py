@@ -332,7 +332,7 @@ def enviar_plano_automatico():
         aprovar_plano_do_dia,
         enviar_plano_do_dia,
     )
-    motor = (os.environ.get('AUTO_ENVIO_MOTOR') or 'pedidos').strip()
+    motor = (os.environ.get('AUTO_ENVIO_MOTOR') or 'vendas').strip()
     amanha = hoje() + timedelta(days=1)
 
     ja_enviado = (PlanejamentoProducao.query
