@@ -482,10 +482,12 @@ def test_default_nivelado_espalha_pra_dias_ocupados(app):
 def test_nivelamento_respeita_antecedencia_maxima(app):
     """Caso Brioche (dono 17/08/2026 à noite: "vence em 3 dias, não é
     congelado"): demanda DIÁRIA da semana NÃO vira um dia-monstro na
-    segunda — cada lote é produzido no máximo 2 dias antes da necessidade.
-    Invariante: o acumulado produzido até o dia D nunca passa do acumulado
-    de demanda até D+2."""
+    segunda — cada lote é produzido no máximo _ANTECEDENCIA_MAX_DIAS antes
+    da necessidade (3 desde "Tem que adiantar" da mesma noite). Invariante:
+    o acumulado produzido até o dia D nunca passa do acumulado de demanda
+    até D+antecedência."""
     from datetime import date as _date
+
 
     loja = _loja()
     r = _receita('Brioche Fresco')
