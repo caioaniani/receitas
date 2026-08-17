@@ -324,7 +324,8 @@ def enviar_plano_automatico():
     corte) — SÓ quando ninguém enviou antes. Ordem já enviada por gesto
     humano fica como está: o humano escolheu motor/equilibrar na tela dele e
     reenviar com os defaults do cron reescreveria os números do padeiro em
-    silêncio. Motor: env `AUTO_ENVIO_MOTOR` (default 'pedidos')."""
+    silêncio. Motor: env `AUTO_ENVIO_MOTOR` (default 'vendas' — dono
+    17/08/2026, "baseado no histórico de vendas e estoque")."""
     from app.models import PlanejamentoProducao
     from app.services.producao import (
         PlanoJaEnviadoError,
