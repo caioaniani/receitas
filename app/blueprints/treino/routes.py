@@ -952,6 +952,57 @@ def admin_gerar_acesso(func_id):
     return _voltar()
 
 
+@treino_bp.route('/admin/acessos/gerar-todos', methods=['POST'])
+@login_required
+@admin_required
+def admin_gerar_acessos_todos():
+    """Gera o acesso de TODO funcionário ativo com e-mail e sem login, de uma
+    vez (12/08/2026 — os e-mails entraram nas fichas pela rodada do RI e
+    clicar 36 vezes não é gesto). Reusa `gerar_acesso`, que é idempotente e
+    tem todas as guardas (conta de outro papel / e-mail em uso = recusa).
+    Cada conta criada recebe a senha no PRÓPRIO e-mail."""
+    from app.services import treino_acessos as acessos
+    fila = (Funcionario.query
+            .filter(Funcionario.ativo.is_(True),
+                    Funcionario.usuario_id.is_(None),
+                    Funcionario.email.isnot(None), Funcionario.email != '')
+            .order_by(Funcionario.nome).all())
+    if not fila:
+        flash('Ninguém pendente: todo funcionário ativo com e-mail já tem '
+              'login.', 'info')
+        return _voltar()
+    criados, vinculados, problemas = 0, 0, []
+    for f in fila:
+        r = acessos.gerar_acesso(f)
+        if r['motivo'] == 'criado':
+            criados += 1
+            if not r.get('email_ok'):
+                # Sem o aviso a pessoa ficaria com conta e sem senha.
+                problemas.append(f'{f.nome}: conta criada mas o e-mail '
+                                 f'falhou ({r.get("email_erro")}). Senha: '
+                                 f'{r.get("senha")} — passe manualmente.')
+        elif r['motivo'] == 'vinculado':
+            vinculados += 1
+        elif r['motivo'] == 'conta_de_outro_papel':
+            problemas.append(f'{f.nome}: o e-mail já é de uma conta '
+                             'administrativa — não vinculei; use outro '
+                             'e-mail no RH.')
+        elif r['motivo'] == 'email_em_uso':
+            problemas.append(f'{f.nome}: o e-mail já está vinculado a outro '
+                             'funcionário — confira o cadastro.')
+    partes = []
+    if criados:
+        partes.append(f'{criados} acesso(s) criado(s) — senha enviada por '
+                      'e-mail')
+    if vinculados:
+        partes.append(f'{vinculados} vinculado(s) a conta existente')
+    flash('Acessos em lote: ' + ('; '.join(partes) or 'nenhuma mudança') + '.',
+          'success' if (criados or vinculados) else 'info')
+    for p in problemas:
+        flash(p, 'warning')
+    return _voltar()
+
+
 @treino_bp.route('/admin/acessos/<int:func_id>/vincular', methods=['POST'])
 @login_required
 @admin_required
