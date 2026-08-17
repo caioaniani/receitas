@@ -817,6 +817,18 @@ travando isso, `test_nflog_nunca_e_apagado`).
 (`app/__init__.py::_init_sentry`, opt-in). Ativar = setar `SENTRY_DSN`
 no Railway. Diagnostico: `GET /admin/debug-sentry` (owner) mostra
 status; `?testar=1` manda evento de teste.
+**POLITICA DE RUIDO (17/08/2026, dono: "nao consigo pagar o plano")**: o
+plano e o GRATIS e a cota estourou so com transitorios do cron — a
+integracao de logging promove todo `logger.error/exception` a evento.
+`seru_cron._erro_transitorio` classifica: RuntimeError de SHUTDOWN
+(deploy no meio do ciclo) e falha de REDE da Seru pos-retry
+(RequestException/_Erro5xx) viram WARNING via `_falha_de_job` (proximo
+ciclo re-tenta; Seru fora PERSISTENTE aparece pelos vigias); o resto
+segue ERROR → Sentry. O 5xx re-tentavel do `seru._get_uma_vez` loga
+WARNING (o ERROR por tentativa gerava evento mesmo quando o retry
+resolvia). REGRA: em job de cron best-effort, usar `_falha_de_job` em
+vez de `logger.exception` cru; NAO promover transitorio de rede a ERROR.
+Testes: `tests/test_seru_cron_ruido.py`.
 
 ## Convenções de codigo
 
