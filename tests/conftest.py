@@ -191,3 +191,31 @@ def catalogo(app):
     db.session.add_all([r, p, mp])
     db.session.commit()
     return {'receita': r, 'produto': p, 'mp': mp}
+
+
+@pytest.fixture
+def congela_hoje(monkeypatch):
+    """Congela `app.utils.hoje()`/`agora()` numa data FIXA (default: SEGUNDA
+    17/08/2026, 10:00 BRT). Criada em 17/08/2026 junto da regra "produção só
+    seg-sex": o shaping do cronograma passou a depender do dia da semana e os
+    cenários hoje()-relativos (demanda em hoje+1..+4) quebrariam de quinta a
+    domingo por FIXTURE caindo no fim de semana, não por bug. Uso: fixture
+    autouse por arquivo chama `congela_hoje()`.
+
+    Mecânica: `hoje()`/`agora()` chamam `datetime.now(BRT)` resolvendo o nome
+    `datetime` no namespace de app.utils EM TEMPO DE CHAMADA — patchear
+    `app.utils.datetime` congela os dois pra TODO importador (todos compartilham
+    o mesmo objeto-função). Módulos que importaram `datetime` direto não são
+    afetados (e não devem usar — regra do timezone no CLAUDE.md)."""
+    def _congelar(ano=2026, mes=8, dia=17, hora=10):
+        import app.utils as _u
+        real = _u.datetime
+
+        class _Congelado(real):
+            @classmethod
+            def now(cls, tz=None):
+                base = real(ano, mes, dia, hora, 0, 0)
+                return base.replace(tzinfo=tz) if tz is not None else base
+
+        monkeypatch.setattr(_u, 'datetime', _Congelado)
+    return _congelar

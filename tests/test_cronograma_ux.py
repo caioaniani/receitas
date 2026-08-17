@@ -8,6 +8,8 @@ batida, peso_unitario 100 g → rendimento massa crua = 10 un/batida →
 """
 from datetime import timedelta
 
+import pytest
+
 from app.extensions import db
 from app.models import (
     Loja,
@@ -19,6 +21,15 @@ from app.models import (
 )
 from app.services.producao import mp_necessaria_do_dia
 from app.utils import hoje
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao so seg-sex (dono 17/08/2026) tornou o shaping do cronograma
+    sensivel ao dia da semana — congela hoje() numa SEGUNDA pros cenarios
+    hoje()+N deste arquivo cairem sempre em dia util, em qualquer dia em que
+    a suite rode (ver conftest.congela_hoje)."""
+    congela_hoje()
 
 G_POR_UN = 100.0
 

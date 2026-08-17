@@ -7,8 +7,19 @@ regra criada pras subs de MONTAGEM dos Danish). A flag diferencia os dois
 casos: sub de amassadeira entra na massa em gramas (qtd × peso_unitario) e
 o rendimento volta a ser massa/peso; sub de montagem segue fora.
 """
+import pytest
+
 from app.extensions import db
 from app.models import MassaBase, MassaBaseItem, Receita, ReceitaIngrediente
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao so seg-sex (dono 17/08/2026) tornou o shaping do cronograma
+    sensivel ao dia da semana — congela hoje() numa SEGUNDA pros cenarios
+    hoje()+N deste arquivo cairem sempre em dia util, em qualquer dia em que
+    a suite rode (ver conftest.congela_hoje)."""
+    congela_hoje()
 
 
 def _receita(nome, peso_base=1000.0, peso_unitario=500.0, rendimento=3.0,

@@ -6,6 +6,8 @@ lote sumia/sobrava ~meia bola por dia; agora floor(consumo + acumulado)
 baixa inteiros e a fração fica em `ConsumoSubFracao` pra próxima produção —
 exato no longo prazo. Consumo inteiro (almond 1:1) nunca cria fração.
 """
+import pytest
+
 from app.extensions import db
 from app.models import (
     ConsumoSubFracao,
@@ -13,6 +15,15 @@ from app.models import (
     Receita,
     ReceitaIngrediente,
 )
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao so seg-sex (dono 17/08/2026) tornou o shaping do cronograma
+    sensivel ao dia da semana — congela hoje() numa SEGUNDA pros cenarios
+    hoje()+N deste arquivo cairem sempre em dia util, em qualquer dia em que
+    a suite rode (ver conftest.congela_hoje)."""
+    congela_hoje()
 
 
 def _setup(porcentagem, rend_pai=50, estoque_sub=10):
