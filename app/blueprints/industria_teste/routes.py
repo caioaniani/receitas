@@ -41,9 +41,15 @@ def _inicio_offset():
 
 
 def _equilibrar():
-    """Modo 'equilibrar carga': cada receita inteira num dia, fornadas niveladas
-    (adianta receitas pra encher dia ocioso). Off por padrao."""
-    return request.values.get('equilibrar') in ('1', 'true', 'on')
+    """Modo 'equilibrar carga': cada receita inteira num dia, fornadas
+    niveladas (adianta receitas pra encher dia ocioso). LIGADO por padrão
+    desde 17/08/2026 (dono: "o sistema deve equilibrar sozinho" — mesma
+    régua da automação); desligar = ?equilibrar=0 explícito (o select da
+    tela sempre manda o valor)."""
+    v = request.values.get('equilibrar')
+    if v is None:
+        return True
+    return v in ('1', 'true', 'on')
 
 
 def _motor():
