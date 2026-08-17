@@ -1765,12 +1765,19 @@ Nebraska, as lojas precisavam da hora extra pra revisar o rascunho).
 do seru_cron junto.
 
 - **Auto-pedidos** (`app/services/auto_pedidos.py::gerar_pedidos_
-  automaticos`, cron 06:30 e 18:30 BRT, lock 7758, kill-switch
-  `AUTO_PEDIDOS=0`): roda `sugerir_pedidos_por_venda` (o motor da tela
-  /pedidos-semana/estoque; `AUTO_PEDIDOS_SEGURANCA_PCT` opcional, valor
-  ilegivel vira 0 com WARNING) com offset 1 e materializa D+1..D+3 via
-  `pedidos_semana.aplicar_grade` com `user_id=None` — rascunho 'pendente'
-  com o marcador padrao. **RE-SINCRONIZACAO REAL (fix da revisao
+  automaticos`, lock 7758, kill-switch `AUTO_PEDIDOS=0`; roda no job do
+  MEIO-DIA antes das ordens + refreshes 06:30 e 18:30 BRT): roda
+  `sugerir_pedidos_por_venda` (o motor da tela /pedidos-semana/estoque;
+  `AUTO_PEDIDOS_SEGURANCA_PCT` opcional, valor ilegivel vira 0 com
+  WARNING) com offset 1 e materializa a JANELA DA SEMANA — amanha ate o
+  PROXIMO DOMINGO (`_janela_da_semana`, fonte unica compartilhada com as
+  ordens; dono 17/08/2026 "os pedidos da semana tambem devem ser lancados
+  tudo no domingo meio dia, prevendo o que vai ser vendido durante a
+  semana baseado no historico de vendas" — era D+1..D+3 de 10 a 17/08)
+  via `pedidos_semana.aplicar_grade` com `user_id=None` — rascunho
+  'pendente' com o marcador padrao. No domingo 12:00 nascem os pedidos de
+  seg..dom E na sequencia as ordens da semana (mesmo job `ordens-semana`
+  — pedidos primeiro, o firme alimenta o grid). **RE-SINCRONIZACAO REAL (fix da revisao
   13/08/2026)**: o motor recebe `ressincronizar_datas` e trata o rascunho
   do PROPRIO cron como substituivel (fora do `ja_tem` e das entregas
   simuladas) — sem isso, dia ja pedido devolvia sugestao 0 e a quantidade
