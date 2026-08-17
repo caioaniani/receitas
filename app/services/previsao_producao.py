@@ -2591,11 +2591,6 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             for it in itens_eq:
                 for i, q in enumerate(it['qtds']):
                     carga[i] += q * it['peso']
-            # Alvo pelos dias que PODEM produzir (seg-sex no grid): dividir
-            # pelos 7 (com sab/dom bloqueados) subestimava o alvo e o
-            # nivelador parava cedo — croissant fatiava, sourdough nao.
-            dias_uteis = sum(1 for p in dias_prod if p.weekday() < 5) or n
-            alvo = (sum(carga) / dias_uteis) if dias_uteis else 0.0
 
             def _movel(it, s, d):
                 """Qtd da celula s movel pra d: parcelas cujo dia de DEMANDA
@@ -2604,8 +2599,14 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                 return sum(q for ref, q in it['segs'][s]
                            if ref - d <= _ANTECEDENCIA_MAX_DIAS)
 
+            # Equalizacao guiada SO pela comparacao fonte×destino: o teto
+            # "alvo = total/dias uteis" deixava a cota de seg/ter (que o
+            # frescor impede de receber) MORRER — o excedente ficava todo
+            # na sexta em vez de se redistribuir entre qua/qui/sex (caso
+            # real: paes empilhados na sexta com qua/qui abaixo do teto).
+            # O guard "so move se melhora o balanco" e quem termina o loop.
             for d in range(n):
-                while carga[d] < alvo:
+                while True:
                     # Fonte: o dia MAIS carregado com parcela movel pra d.
                     melhor = None
                     for it in itens_eq:
