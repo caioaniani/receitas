@@ -26,6 +26,15 @@
   checkpoint por IA.
 </div>
 
+{% if v.roteiro %}
+<div class="card mb-3" style="max-width:720px;"><div class="card-header py-2">
+  <strong>🎬 Roteiro de gravação</strong>
+  <span class="text-muted small">— só o admin vê; o funcionário vê o vídeo</span>
+</div><div class="card-body py-2">
+  <div class="small" style="white-space:pre-wrap;">{{ v.roteiro }}</div>
+</div></div>
+{% endif %}
+
 {% if v.video_externo_id and proc and not proc.pronto %}
 <div class="alert alert-warning small">⏳ Vídeo <strong>processando no Cloudflare</strong>{% if proc.pct %} ({{ proc.pct }}%){% endif %} — recarregue em instantes pra ele tocar e a duração aparecer.</div>
 {% endif %}
