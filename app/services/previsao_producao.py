@@ -2385,10 +2385,11 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # lote_pedido com o arredondamento original (mais proximo, 29/06).
         lote_prod = int(getattr(rec, 'lote_producao', 0) or 0)
         lote = lote_prod or int(getattr(rec, 'lote_pedido', 0) or 0)
-        if permitido is not None and sum(pesos) <= 0:
-            # Fornada especial sem dia permitido que atenda a demanda: nao
-            # produz (o fallback do _distribuir_inteiro despejaria tudo no
-            # dia 0, que pode ser segunda — exatamente o que a regra proibe).
+        if sum(pesos) <= 0:
+            # Nenhum dia permitido atende a demanda (fornada especial fora
+            # de sex/sab; grid comecando no fim de semana): nao produz — o
+            # fallback do _distribuir_inteiro despejaria tudo no dia 0, que
+            # pode ser um dia bloqueado, exatamente o que a regra proibe.
             liquido = [0] * horizonte_dias
         elif lote > 1 and produzir > 0:
             if lote_prod:
