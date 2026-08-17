@@ -1177,6 +1177,29 @@ def test_rota_telaindustriateste(app, admin_user):
     assert 'cronograma' in resp.get_data(as_text=True).lower()
 
 
+def test_rota_telaindustriateste_preview_read_only(app, admin_user):
+    """A prévia usa os mesmos dados sem substituir a tela operacional."""
+    loja = _loja()
+    r = _receita()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 10)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+
+    preview = client.get('/telaindustriateste/?preview=1')
+    assert preview.status_code == 200
+    html = preview.get_data(as_text=True)
+    assert 'Prévia de interface · somente leitura' in html
+    assert 'O que precisa acontecer agora' in html
+    assert 'Planejamento semanal' in html
+    assert r.nome in html
+
+    atual = client.get('/telaindustriateste/')
+    assert 'Prévia de interface · somente leitura' not in atual.get_data(
+        as_text=True)
+
+
 def test_rota_telaindustriateste_renderiza_aviso_stale(app, admin_user):
     """E3: a página renderiza o aviso de edição desatualizada (template válido
     com override_stale)."""
