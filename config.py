@@ -13,6 +13,9 @@ if DATABASE_URL.startswith('postgres://'):
 
 
 class Config:
+    # Ambiente visual de homologacao. Ativa o shell v2 e recursos de preview
+    # sem mudar a experiencia do ambiente de producao.
+    PREVIEW_MODE = os.environ.get('PREVIEW_MODE', '0') == '1'
     _env_secret = os.environ.get('SECRET_KEY')
     if _env_secret:
         SECRET_KEY = _env_secret
