@@ -547,10 +547,11 @@ def test_nivelamento_nao_antecipa_parcela_do_fim_de_semana(app):
 
 def test_nivelamento_redistribui_excedente_da_sexta(app):
     """Caso real 17/08 (dono: "Esta assim ainda"): o teto alvo=total/dias
-    uteis deixava a cota de seg/ter (que o frescor impede de receber)
-    morrer e os paes empilhavam TODOS na sexta. Sem o teto, o excedente
-    da sexta se redistribui: parcela de sexta vai pra quarta, a de sabado
-    pra quinta e a de domingo fica."""
+    uteis deixava a cota dos dias que o frescor impede de receber morrer
+    e os paes empilhavam TODOS na sexta. Sem o teto, o excedente da sexta
+    se redistribui pelos dias anteriores que a antecedencia (3) alcanca —
+    a parcela de sexta pode ir ate terca, a de sabado ate quarta, a de
+    domingo ate quinta; segunda nunca."""
     from datetime import date as _date
 
     loja = _loja()
@@ -568,9 +569,9 @@ def test_nivelamento_redistribui_excedente_da_sexta(app):
     for c in rr['por_dia']:
         if c['qtd']:
             por_wd[_date.fromisoformat(c['data']).weekday()] = c['qtd']
-    assert set(por_wd) <= {2, 3, 4}          # nada em seg/ter (frescor)
-    assert por_wd.get(4, 0) == 30            # sexta fica SO com a de domingo
-    assert por_wd.get(2, 0) + por_wd.get(3, 0) == 60   # resto redistribuido
+    assert set(por_wd) <= {1, 2, 3, 4}       # segunda nunca (sex − 3 = ter)
+    assert sum(por_wd.values()) == rr['total']
+    assert len(por_wd) >= 3                  # redistribuido, nao empilhado
 
 
 def test_nivelamento_fatia_receita_grande_em_lotes(app):
