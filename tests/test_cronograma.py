@@ -513,6 +513,33 @@ def test_nivelamento_respeita_antecedencia_maxima(app):
             assert _date.fromisoformat(c['data']).weekday() < 5
 
 
+def test_nivelamento_nao_antecipa_parcela_do_fim_de_semana(app):
+    """A demanda de SÁB/DOM já rolou pra sexta (produção seg-sex) — o
+    nivelador NÃO pode adiantá-la de novo (pão de domingo assado na quarta
+    teria 4 dias). A antecedência é medida contra o dia de DEMANDA (ref),
+    então essa parcela fica na sexta mesmo com dias ociosos antes."""
+    from datetime import date as _date
+
+    loja = _loja()
+    r = _receita('Pão Fresco FDS')
+    hoje_d = hoje()                                # segunda congelada
+    sabado = hoje_d + timedelta(days=5)
+    domingo = hoje_d + timedelta(days=6)
+    _pedido(loja, 'pendente', sabado, r, 40)
+    _pedido(loja, 'pendente', domingo, r, 40)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 80
+    for c in rr['por_dia']:
+        d = _date.fromisoformat(c['data'])
+        if c['qtd']:
+            # só sexta (ref sáb/dom − antecedência 2 = sexta em diante;
+            # sáb/dom bloqueados) — nada em seg..qui
+            assert d.weekday() == 4, 'parcela do FDS adiantada pra %s' % d
+
+
 def test_nivelamento_fatia_receita_grande_em_lotes(app):
     """Caso Croissant (dono: "por que não redistribuir em lotes menores?"):
     demanda grande num dia só é FATIADA — nenhum dia carrega o total
