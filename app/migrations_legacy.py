@@ -2759,6 +2759,10 @@ def _migrate_sqlite(app):
     # estoque_loja.estoque_minimo — piso do pedido loja->industria por item.
     if cols_el and 'estoque_minimo' not in cols_el:
         cursor.execute("ALTER TABLE estoque_loja ADD COLUMN estoque_minimo INTEGER")
+    # estoque_loja.pedido_minimo_diario — piso INCONDICIONAL do pedido do
+    # dia (danishes assadas, dono 17/08/2026); nao desconta estoque.
+    if cols_el and 'pedido_minimo_diario' not in cols_el:
+        cursor.execute("ALTER TABLE estoque_loja ADD COLUMN pedido_minimo_diario INTEGER")
     # Reserva de estoque (21/06/2026 — race condition no cutover).
     if cols_el and 'quantidade_reservada' not in cols_el:
         cursor.execute("ALTER TABLE estoque_loja ADD COLUMN "
