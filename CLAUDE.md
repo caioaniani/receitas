@@ -1888,6 +1888,27 @@ do seru_cron junto.
   Textos das telas (teste.html, ficha.html, msg do cronograma_edit)
   acompanharam. Pedido FIRME lancado pra outro dia segue contando (firme
   nao passa pelo gate de venda). Testes da secao reescritos.
+- **Producao NORMAL so de SEG a SEX (dono 17/08/2026: "Sabado e domingo a
+  gente nao produz, jogar tudo para segunda a sexta, a unica coisa que
+  produzimos de sabado e a fornada especial")**: `_DIAS_PRODUCAO_NORMAL =
+  {0..4}` + `producao_permitida_no_dia` generalizada (fornada especial
+  segue {4,5}; o resto seg-sex). O shaping final E o `_explodir_bom`
+  (insumos — levain da vespera de segunda cairia no DOMINGO) rolam o peso
+  de dia bloqueado pro ultimo dia permitido ANTERIOR via helper
+  `_rolar_pesos_permitidos` (produzir mais cedo chega a tempo; sem dia
+  permitido antes, nao produz e a entrega aparece em risco — o cronograma
+  nunca viola a regra sozinho). Celulas de sab/dom saem `bloqueado` pra
+  TODA receita (hachura+readonly na tela, title proprio); `editar_celula`
+  recusa `dia_bloqueado` com msg propria ("produção é de segunda a
+  sexta"); equilibrar ja nao adianta pra dia bloqueado. CONSEQUENCIA: a
+  demanda de sab/dom e produzida na SEXTA (ordem de sexta engorda; sabado
+  fica so com fornada especial; domingo vazio). ARMADILHA DE TESTE
+  fechada junto: o shaping virou weekday-sensivel e ~30 cenarios
+  hoje()+N quebravam se a suite rodasse qui-dom — fixture
+  `congela_hoje` no conftest (patcheia `app.utils.datetime`; hoje() e
+  agora() resolvem o nome EM TEMPO DE CHAMADA) congela os 8 arquivos de
+  teste do cronograma numa SEGUNDA fixa (17/08/2026). Testes novos:
+  secao "producao NORMAL so de segunda a sexta" em test_cronograma.py.
 - **🔄 AUTOMATICO da ordem do dia** (`atualizar_plano_automatico`, cron
   06:45 e 19:05 BRT, lock 7761, mesmo kill-switch `AUTO_ENVIO_PLANO=0` —
   criado 17/08/2026, caso real do 1o fim de semana: "as ordens nao estao
