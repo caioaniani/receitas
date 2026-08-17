@@ -2358,27 +2358,18 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             running -= cobre
             residual.append(g - cobre)
         pesos = residual if sum(residual) > 0 else gross
-        # Fornada especial: PRODUCAO so sex/sab (decisao do dono
-        # 10/08/2026) — a venda de sab/dom sai da vespera. O peso de um dia
-        # bloqueado vai pro ultimo dia PERMITIDO anterior (produzir mais cedo
-        # chega a tempo; mais tarde nao). Ex: venda de domingo com lead 0 caia
-        # no proprio domingo -> vai pro sabado. Sem nenhum dia permitido antes
-        # (pedido aberrante em dia de semana), a demanda fica sem peso: se nada
-        # mais puxar, a linha nao produz e a entrega aparece como EM RISCO —
-        # decisao humana, o cronograma nao viola a regra por conta propria.
-        permitido = None
-        if getattr(rec, 'fornada_especial', False):
-            permitido = [producao_permitida_no_dia(rec, p) for p in dias_prod]
-            if not all(permitido):
-                ajust = [0.0] * horizonte_dias
-                for i, w in enumerate(pesos):
-                    if w <= 0:
-                        continue
-                    j = next((k for k in range(i, -1, -1) if permitido[k]),
-                             None)
-                    if j is not None:
-                        ajust[j] += float(w)
-                pesos = ajust
+        # Dias PERMITIDOS de producao (fonte unica producao_permitida_no_dia):
+        # fornada especial produz so sex/sab (dono 10/08/2026 — a venda de
+        # sab/dom sai da vespera); TODA receita normal produz so seg-sex
+        # (dono 17/08/2026 — fim de semana nao produz; a demanda de sab/dom
+        # sai de sexta). O peso de um dia bloqueado vai pro ultimo dia
+        # PERMITIDO anterior (produzir mais cedo chega a tempo; mais tarde
+        # nao). Sem nenhum dia permitido antes (ex: grid comecando no
+        # sabado), a demanda fica sem peso: se nada mais puxar, a linha nao
+        # produz e a entrega aparece como EM RISCO — decisao humana, o
+        # cronograma nao viola a regra por conta propria.
+        permitido = [producao_permitida_no_dia(rec, p) for p in dias_prod]
+        pesos = _rolar_pesos_permitidos(pesos, permitido)
         # Padroniza a PRODUCAO em LOTES inteiros (nao produzir picado — decisao
         # do dono 29/06): arredonda o total pro multiplo do lote da receita e
         # distribui em pacotes inteiros pelos dias (cada dia 0 ou multiplo do
