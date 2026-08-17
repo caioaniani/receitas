@@ -866,12 +866,19 @@ def _run_auto_pedidos(app):
 
 
 def _run_ordens_semana(app):
-    """Job: solta a ordem de produção da SEMANA (dono 17/08/2026) — no
-    domingo 12:00 abre seg..dom; nos outros dias re-preenche buraco e é
-    no-op com a semana de pé. Dia enviado (humano ou cron) é pulado."""
+    """Job do meio-dia (dono 17/08/2026): 1) PEDIDOS da semana loja→indústria
+    (motor venda+estoque, amanhã..próximo domingo — "os pedidos da semana
+    também devem ser lançados tudo no domingo meio dia"); 2) ORDENS de
+    produção da semana (o firme recém-criado alimenta o grid). No domingo
+    12:00 abre seg..dom; nos outros dias re-sincroniza/re-preenche. Pedido
+    e ordem de humano nunca são tocados (regras nos services)."""
     from app.services import auto_pedidos
 
     with app.app_context():
+        if os.environ.get('AUTO_PEDIDOS', '1') != '0':
+            _com_lock(LOCK_KEY_AUTO_PEDIDOS,
+                      auto_pedidos.gerar_pedidos_automaticos,
+                      'pedidos da semana (meio-dia)')
         _com_lock(LOCK_KEY_AUTO_ENVIO,
                   auto_pedidos.enviar_ordens_da_semana,
                   'ordens de producao da semana')
