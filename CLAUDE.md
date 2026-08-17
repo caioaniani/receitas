@@ -1854,20 +1854,22 @@ do seru_cron junto.
   `AUTO_ENVIO_MOTOR`; default **'vendas'** (dono 17/08/2026; env setada
   no Railway MANDA sobre o codigo — dono confirmou que NAO ha env la). O
   🔄 automatico (abaixo) usa o MESMO fallback — mudar um exige mudar o
-  outro. Dia JA ENVIADO (humano ou cron) e PULADO — "ordem enviada nunca
-  muda por caminho implicito"; `PlanoJaEnviadoError` no aprovar (humano
-  enviou na corrida) tambem pula so aquele dia. Dia sem nada no grid =
-  `vazias` (nada criado). CONSEQUENCIAS deliberadas: (1) pra TIRAR um
-  dia da producao, zera-se o grid (envio de dia vazio limpa a ordem) —
-  EXCLUIR a ordem faz o meio-dia seguinte reenvia-la do grid; (2) a
-  pre-baixa de MP reserva a SEMANA inteira no envio (mesma semantica de
-  sempre do enviar — o 🔄 diario reconcilia o delta); (3) ordem de dia
-  futuro fica com numero do domingo ate o 🔄 do proprio dia — o padeiro
-  executa so a ordem DE HOJE, que o 🔄 mantem em dia (06:45/19:05), e a
-  tela mostra "difere do enviado" nos demais. RETRO one-shot no deploy
-  de 17/08/2026: job 'date' no boot (+2min) roda a 1a semana com marker
-  AppConfig `ordens_semana_retro_2026_08_17` (falhou = proximo boot
-  retenta; rodou = deploys futuros pulam).
+  outro. Ordem enviada por HUMANO (criado_por preenchido) e INTOCAVEL
+  ("ordem enviada nunca muda por caminho implicito" vale pra gesto
+  humano; `PlanoJaEnviadoError` no aprovar = humano enviou na corrida →
+  pula so aquele dia); ordem do PROPRIO CRON e RE-SINCRONIZADA com o
+  grid a cada meio-dia (o grid e a verdade — edicao do dono vira
+  override e o re-sync a respeita; mesmo principio do 🔄). Dia sem nada
+  no grid = `vazias` (nada criado). CONSEQUENCIAS deliberadas: (1) pra
+  TIRAR um dia da producao, zera-se o grid (envio de dia vazio limpa a
+  ordem) — EXCLUIR a ordem faz o meio-dia seguinte reenvia-la do grid;
+  (2) a pre-baixa de MP reserva a SEMANA inteira no envio (mesma
+  semantica de sempre do enviar — o re-sync diario reconcilia o delta);
+  (3) o padeiro executa so a ordem DE HOJE, cujo numero final sai do 🔄
+  (06:45/19:05). RETRO one-shot no deploy: job 'date' no boot (+2min)
+  roda a semana com marker AppConfig `ordens_semana_retro_2026_08_17b`
+  (sufixo b = regra seg-sex do mesmo dia exigiu re-rodar; falhou =
+  proximo boot retenta; rodou = deploys futuros pulam).
 - **Corte do fim do dia** (`app/services/pedido_corte.py`, HORA_CORTE=19
   desde 13/08/2026): pedido com
   `data_entrega == amanha` trava as 19:00 BRT — e o horario do
