@@ -472,9 +472,9 @@ def celula():
     except (TypeError, ValueError):
         return jsonify(ok=False, erro='parametros'), 400
     from app.services.previsao_producao import MOTORES_PREVISAO_PRODUCAO
-    motor = str(p.get('motor') or 'pedidos')
+    motor = str(p.get('motor') or 'vendas')
     if motor not in MOTORES_PREVISAO_PRODUCAO:
-        motor = 'pedidos'
+        motor = 'vendas'
     res = editar_celula(
         receita_id, p.get('data') or '', qtd,
         horizonte_dias=_payload_int(p, 'horizonte', 7, 1, 14),
@@ -620,9 +620,9 @@ def ia_proposta():
     from app.services.previsao_producao import MOTORES_PREVISAO_PRODUCAO
 
     p = request.get_json(silent=True) or request.form
-    motor = str(p.get('motor') or 'pedidos')
+    motor = str(p.get('motor') or 'vendas')
     if motor not in MOTORES_PREVISAO_PRODUCAO:
-        motor = 'pedidos'
+        motor = 'vendas'
     out = planejamento_ia.analisar_producao_ia(
         horizonte_dias=_payload_int(p, 'horizonte', 7, 1, 14),
         janela_semanas=_payload_int(p, 'janela', 6, 1, 26),
@@ -648,9 +648,9 @@ def ia_aplicar():
     from app.services.previsao_producao import MOTORES_PREVISAO_PRODUCAO
 
     p = request.get_json(silent=True) or {}
-    motor = str(p.get('motor') or 'pedidos')
+    motor = str(p.get('motor') or 'vendas')
     if motor not in MOTORES_PREVISAO_PRODUCAO:
-        motor = 'pedidos'
+        motor = 'vendas'
     ajustes = p.get('ajustes') or []
     if not isinstance(ajustes, list) or not ajustes:
         return jsonify(ok=False, erro='nenhum ajuste marcado'), 400
