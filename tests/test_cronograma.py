@@ -1200,6 +1200,21 @@ def test_rota_telaindustriateste_preview_read_only(app, admin_user):
         as_text=True)
 
 
+def test_preview_mode_torna_nova_industria_padrao_com_comparacao_legacy(
+        app, admin_user):
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    app.config['PREVIEW_MODE'] = True
+
+    nova = client.get('/telaindustriateste/').get_data(as_text=True)
+    antiga = client.get('/telaindustriateste/?legacy=1').get_data(as_text=True)
+
+    assert 'Prévia de interface · somente leitura' in nova
+    assert 'Comparar com tela antiga' in nova
+    assert 'Prévia de interface · somente leitura' not in antiga
+
+
 def test_rota_telaindustriateste_renderiza_aviso_stale(app, admin_user):
     """E3: a página renderiza o aviso de edição desatualizada (template válido
     com override_stale)."""
