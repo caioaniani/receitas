@@ -891,9 +891,10 @@ def _run_ordens_semana(app):
 
 # Sufixos do marker: 'b' = regra "producao so seg-sex" (mesma tarde) exigiu
 # re-sincronizar a semana ja enviada; 'c' = pedidos da semana inteira no
-# meio-dia (mesma tarde) — o one-shot re-roda pra criar os pedidos de
-# sex..dom e re-sincronizar as ordens com o firme novo.
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17c'
+# meio-dia (mesma tarde); 'd' = equilibrar carga virou padrao da automacao
+# (mesma tarde, "o sistema deve equilibrar sozinho") — o one-shot re-roda
+# pra redistribuir a semana ja enviada seg-sex nivelada.
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17d'
 
 
 def _run_ordens_semana_retro(app):
