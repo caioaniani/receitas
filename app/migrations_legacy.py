@@ -588,6 +588,74 @@ def _seed_minimo_danish_v2(app):
             pass
 
 
+def _loja_abre_todo_dia(loja):
+    """True se a loja abre TODO dia: `dias_funcionamento` vazio (default
+    historico) OU com a semana inteira ('0123456' — e o que a tela de lojas
+    grava quando os 7 checkboxes estao marcados). Restrita = subconjunto
+    PROPRIO da semana (ex: Cantina '56')."""
+    dias = (getattr(loja, 'dias_funcionamento', None) or '').strip()
+    return not dias or set('0123456') <= set(dias)
+
+
+def _seed_minimo_danish_v3(app):
+    """Terceira rodada (mesma noite de 17/08/2026): v1/v2 commitaram
+    `setados=0` em prod porque o filtro de loja so aceitava
+    `dias_funcionamento` VAZIO — e as lojas diarias de prod tem '0123456'
+    gravado pela tela. Seta `pedido_minimo_diario = 2` nas 5 danishes das
+    lojas que ABREM TODO DIA (`_loja_abre_todo_dia`; Industria fora),
+    nunca sobrescrevendo piso ja definido e SEM tocar em estoque_minimo
+    (os =2 esparsos de prod sao ajuste manual do dono). O marker guarda
+    lojas=/receitas= — `setados=0` nunca mais passa batido."""
+    import unicodedata as _ud
+    try:
+        from app.models import AppConfig, EstoqueLoja, Loja, Receita
+        cfg = SEED_MINIMO_DANISH
+        if AppConfig.get(cfg['chave_v3']):
+            return
+
+        def _norm(s):
+            s = _ud.normalize('NFKD', s or '')
+            s = ''.join(c for c in s if not _ud.combining(c))
+            return ' '.join(s.casefold().split())
+
+        alvos = set(cfg['nomes'])
+        receitas = [r for r in Receita.query
+                    .filter(Receita.arquivada_em.is_(None)).all()
+                    if _norm(r.nome) in alvos]
+        lojas = [
+            loja for loja in Loja.query.filter_by(ativa=True).all()
+            if 'industria' not in _norm(loja.nome)
+            and _loja_abre_todo_dia(loja)
+        ]
+        setados, mantidos = 0, 0
+        for loja in lojas:
+            for r in receitas:
+                el = EstoqueLoja.query.filter_by(
+                    loja_id=loja.id, receita_id=r.id).first()
+                if el is None:
+                    el = EstoqueLoja(loja_id=loja.id, receita_id=r.id,
+                                     quantidade=0)
+                    db.session.add(el)
+                if int(el.pedido_minimo_diario or 0) > 0:
+                    mantidos += 1                  # valor do dono manda
+                    continue
+                el.pedido_minimo_diario = int(cfg['minimo'])
+                setados += 1
+        AppConfig.set(cfg['chave_v3'],
+                      f'setados={setados} mantidos={mantidos} '
+                      f'lojas={len(lojas)} receitas={len(receitas)}')
+        db.session.commit()
+        logger.info('seed minimo danish v3: setados=%d mantidos=%d em %d '
+                    'loja(s) x %d receita(s)', setados, mantidos,
+                    len(lojas), len(receitas))
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed minimo danish v3): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _migrate_estoque_trava(app):
     """Estoque por produto: consolida duplicatas legadas e cria a trava de
     unicidade. Estado vive so no PEDIDO; o estoque (loja e industria) eh 1 linha
