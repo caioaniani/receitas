@@ -278,3 +278,82 @@ def test_motor_media_manda_acima_do_piso(app, loja):
         lj = next(x for x in sug['lojas'] if x['loja_id'] == loja.id)
         p = next(x for x in lj['produtos'] if x['receita_id'] == r.id)
         assert p['por_dia'][0] >= 5                  # média venceu o piso
+
+
+# ---------------------------------------------------------------------------
+# Cinnamon Roll na mesma regra (dono 17/08/2026: "Esqueci de falar sobre o
+# cinnamon Roll, entra na mesma regra dos 2 danishes")
+# ---------------------------------------------------------------------------
+
+def _cenario_cinnamon():
+    classico = Receita(nome='Cinnamon Roll', categoria='Viennoiserie',
+                       rendimento_qtd=1, rendimento_unidade='un',
+                       peso_base=100.0)          # estado_padrao vazio (prod)
+    doce = Receita(nome='Cinnamon Roll Doce de leite',
+                   categoria='Viennoiserie', rendimento_qtd=1,
+                   rendimento_unidade='un', peso_base=100.0)
+    lojas = {
+        'anesio': Loja(nome='Anesio', ativa=True),
+        'semana': Loja(nome='Loja Semana Cheia', ativa=True,
+                       dias_funcionamento='0123456'),
+        'cantina': Loja(nome='Cantina', ativa=True, dias_funcionamento='56'),
+        'industria': Loja(nome='Industria', ativa=True),
+        'fechada': Loja(nome='Loja Fechada', ativa=False),
+    }
+    db.session.add_all([classico, doce, *lojas.values()])
+    db.session.commit()
+    return classico, doce, lojas
+
+
+def _pisos(loja):
+    return {el.receita_id: int(el.pedido_minimo_diario or 0)
+            for el in EstoqueLoja.query.filter_by(loja_id=loja.id)}
+
+
+def test_cinnamon_piso_2_nas_lojas_diarias_e_assado(app):
+    from app.migrations_legacy import _seed_minimo_cinnamon
+    with app.app_context():
+        classico, doce, lojas = _cenario_cinnamon()
+        _seed_minimo_cinnamon(app)
+        for chave in ('anesio', 'semana'):           # vazio E '0123456'
+            assert _pisos(lojas[chave]).get(classico.id) == 2
+        for chave in ('cantina', 'industria', 'fechada'):
+            assert classico.id not in _pisos(lojas[chave])
+        # so o classico — o Doce de leite fica fora (dono citou um)
+        assert doce.id not in _pisos(lojas['anesio'])
+        # a regra e receber ASSADO: estado_padrao vazio vira 'assado'
+        assert classico.estado_padrao == 'assado'
+        assert not doce.estado_padrao
+        marker = AppConfig.get('seed_minimo_cinnamon_2026_08')
+        assert 'setados=2' in marker and 'lojas=2' in marker
+        assert 'receitas=1' in marker
+
+
+def test_cinnamon_nao_sobrescreve_piso_nem_estado_do_dono(app):
+    from app.migrations_legacy import _seed_minimo_cinnamon
+    with app.app_context():
+        classico, _doce, lojas = _cenario_cinnamon()
+        classico.estado_padrao = 'backup'            # escolha explicita
+        db.session.add(EstoqueLoja(loja_id=lojas['anesio'].id,
+                                   receita_id=classico.id, quantidade=0,
+                                   pedido_minimo_diario=5))
+        db.session.commit()
+        _seed_minimo_cinnamon(app)
+        assert _pisos(lojas['anesio']).get(classico.id) == 5
+        assert classico.estado_padrao == 'backup'
+        marker = AppConfig.get('seed_minimo_cinnamon_2026_08')
+        assert 'mantidos=1' in marker and 'assado=0' in marker
+
+
+def test_cinnamon_roda_uma_vez(app):
+    from app.migrations_legacy import _seed_minimo_cinnamon
+    with app.app_context():
+        classico, _doce, lojas = _cenario_cinnamon()
+        _seed_minimo_cinnamon(app)
+        el = EstoqueLoja.query.filter_by(
+            loja_id=lojas['anesio'].id, receita_id=classico.id).first()
+        el.pedido_minimo_diario = 9                  # dono mexeu depois
+        db.session.commit()
+        _seed_minimo_cinnamon(app)                   # 2a rodada = no-op
+        db.session.refresh(el)
+        assert el.pedido_minimo_diario == 9
