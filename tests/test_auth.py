@@ -111,3 +111,18 @@ def test_hash_de_senha_nao_e_o_proprio_texto(app):
     assert u.check_senha('senha-secreta')
     assert not u.check_senha('outra-coisa')
     assert not u.check_senha('')
+
+def test_preview_admin_password_redefine_admin(app, admin_user, monkeypatch):
+    """Senha de preview so e aplicada quando o modo preview esta explicito."""
+    from app import _criar_admin
+    from app.extensions import db
+
+    assert not admin_user.check_senha('senha-da-previa')
+    monkeypatch.setenv('PREVIEW_MODE', '1')
+    monkeypatch.setenv('PREVIEW_ADMIN_PASSWORD', 'senha-da-previa')
+
+    _criar_admin()
+    db.session.refresh(admin_user)
+
+    assert admin_user.check_senha('senha-da-previa')
+    assert admin_user.senha_provisoria is False
