@@ -413,8 +413,8 @@ def test_rota_cronograma_motor_vendas_renderiza(app, admin_user):
 
 def test_enviar_com_motor_vendas_usa_a_grade_de_vendas(app, admin_user):
     """Enviar ao padeiro com motor=vendas cria a ordem a partir da grade de
-    VENDAS — receita sem pedido histórico entra no plano (no motor default
-    ela nem apareceria)."""
+    VENDAS — receita sem pedido histórico entra no plano (no motor
+    'pedidos' ela nem apareceria)."""
     from app.models import PlanejamentoItem, PlanejamentoProducao
 
     loja = _loja()
