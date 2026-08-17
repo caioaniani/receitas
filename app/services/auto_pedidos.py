@@ -323,13 +323,20 @@ def atualizar_plano_automatico():
             'motor': motor}
 
 
-def enviar_plano_automatico():
-    """ENVIA ao padeiro a ordem de produção de AMANHÃ (na HORA_CORTE, logo após o
-    corte) — SÓ quando ninguém enviou antes. Ordem já enviada por gesto
-    humano fica como está: o humano escolheu motor/equilibrar na tela dele e
-    reenviar com os defaults do cron reescreveria os números do padeiro em
-    silêncio. Motor: env `AUTO_ENVIO_MOTOR` (default 'vendas' — dono
-    17/08/2026, "baseado no histórico de vendas e estoque")."""
+def enviar_ordens_da_semana():
+    """Solta a ORDEM DE PRODUÇÃO DA SEMANA (dono 17/08/2026: "a ordem de
+    produção da semana soltando ela no domingo, meio-dia, até o próximo
+    domingo"): envia ao padeiro a ordem de cada dia de AMANHÃ até o
+    PRÓXIMO DOMINGO (inclusive) que ainda não tem ordem enviada.
+
+    No domingo ao meio-dia isso abre a semana inteira (seg..dom). Nos
+    demais dias o job é REDE: re-preenche dia que ficou sem ordem (dia
+    excluído na tela, deploy que engoliu o disparo de domingo — o
+    APScheduler não persiste misfire) e é no-op quando a semana está de
+    pé. Dia JÁ ENVIADO (humano ou cron) é pulado — "ordem enviada nunca
+    muda por caminho implícito"; o CONTEÚDO de cada ordem é mantido em
+    dia pelo 🔄 automático do próprio dia (`atualizar_plano_automatico`).
+    Motor: env `AUTO_ENVIO_MOTOR` (default 'vendas')."""
     from app.models import PlanejamentoProducao
     from app.services.producao import (
         PlanoJaEnviadoError,
@@ -337,37 +344,46 @@ def enviar_plano_automatico():
         enviar_plano_do_dia,
     )
     motor = (os.environ.get('AUTO_ENVIO_MOTOR') or 'vendas').strip()
-    amanha = hoje() + timedelta(days=1)
+    hoje_d = hoje()
+    inicio = hoje_d + timedelta(days=1)
+    # Próximo domingo INCLUSIVE a partir de amanhã (weekday: seg=0..dom=6).
+    fim = inicio + timedelta(days=(6 - inicio.weekday()) % 7)
+    # O grid precisa CONTER o fim (coluna fora do horizonte = envio no-op).
+    horizonte = min(14, (fim - hoje_d).days + 1)
 
-    ja_enviado = (PlanejamentoProducao.query
-                  .filter_by(data=amanha, origem='cronograma')
-                  .filter(PlanejamentoProducao.enviado_ao_padeiro.is_(True))
-                  .first())
-    if ja_enviado is not None:
-        n = len(ja_enviado.itens or [])
-        logger.info('auto_envio: ordem de %s JÁ enviada (%d item[ns]) — '
-                    'não reenviando', amanha.isoformat(), n)
-        return {'data': amanha.isoformat(), 'itens': n, 'motor': motor,
-                'ja_enviado': True}
+    ja_enviadas = {p.data for p in (
+        PlanejamentoProducao.query
+        .filter_by(origem='cronograma')
+        .filter(PlanejamentoProducao.data >= inicio,
+                PlanejamentoProducao.data <= fim,
+                PlanejamentoProducao.enviado_ao_padeiro.is_(True)))}
 
-    try:
-        aprovar_plano_do_dia(amanha, user_id=None, motor=motor)
-    except PlanoJaEnviadoError:
-        # Corrida: um humano enviou entre a checagem acima e o aprovar.
-        # A ordem dele vale — não reenviamos.
-        logger.info('auto_envio: ordem de %s enviada por humano durante a '
-                    'rodada — não reenviando', amanha.isoformat())
-        return {'data': amanha.isoformat(), 'itens': 0, 'motor': motor,
-                'ja_enviado': True}
-    plano = enviar_plano_do_dia(amanha, user_id=None, motor=motor)
-    if plano is None:
-        # Dia sem nada a produzir no grid: nada a enviar (o service já
-        # commitou a limpeza que fez).
-        logger.info('auto_envio: %s sem itens no grid — nada enviado',
-                    amanha.isoformat())
-        return {'data': amanha.isoformat(), 'itens': 0, 'motor': motor,
-                'vazio': True}
-    n_itens = len(getattr(plano, 'itens', []) or [])
-    logger.info('auto_envio: ordem de %s enviada ao padeiro (%d item[ns], '
-                'motor=%s)', amanha.isoformat(), n_itens, motor)
-    return {'data': amanha.isoformat(), 'itens': n_itens, 'motor': motor}
+    out = {'de': inicio.isoformat(), 'ate': fim.isoformat(), 'motor': motor,
+           'enviadas': [], 'puladas': [], 'vazias': []}
+    dia = inicio
+    while dia <= fim:
+        iso = dia.isoformat()
+        if dia in ja_enviadas:
+            out['puladas'].append(iso)
+            dia += timedelta(days=1)
+            continue
+        try:
+            aprovar_plano_do_dia(dia, user_id=None, horizonte_dias=horizonte,
+                                 motor=motor)
+        except PlanoJaEnviadoError:
+            # Corrida: um humano enviou entre o snapshot e o aprovar — a
+            # ordem dele vale.
+            out['puladas'].append(iso)
+            dia += timedelta(days=1)
+            continue
+        plano = enviar_plano_do_dia(dia, user_id=None,
+                                    horizonte_dias=horizonte, motor=motor)
+        if plano is None:
+            out['vazias'].append(iso)      # grid sem nada a produzir no dia
+        else:
+            out['enviadas'].append(iso)
+        dia += timedelta(days=1)
+    logger.info('ordens_semana: %s..%s enviadas=%s puladas=%s vazias=%s '
+                '(motor=%s)', out['de'], out['ate'], out['enviadas'],
+                out['puladas'], out['vazias'], motor)
+    return out
