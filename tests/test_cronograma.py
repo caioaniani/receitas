@@ -1734,7 +1734,10 @@ def test_rota_header_dia_enviado_menu_completo(app, admin_user):
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
                 follow_redirects=True)
-    html = client.get('/telaindustriateste/').get_data(as_text=True)
+    # equilibrar=0: a ordem foi criada no modo curva (service default) — a
+    # tela na MESMA visão mostra "enviado" limpo, sem o badge de divergência.
+    html = client.get('/telaindustriateste/?equilibrar=0').get_data(
+        as_text=True)
     assert '📤 enviado' in html
     assert 'atualizar produção (aplica o grid)' in html
     assert 'excluir ordem' in html
