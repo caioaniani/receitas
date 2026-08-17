@@ -832,7 +832,7 @@
                     </table>
                     {% endif %}
                     {% if not r.insumo %}
-                    <a class="proj-explica" href="{{ url_for('industria_teste.previsao', receita_id=r.receita_id, horizonte=horizonte, janela=janela, inicio=inicio, motor=(motor if motor != 'pedidos' else None)) }}">
+                    <a class="proj-explica" href="{{ url_for('industria_teste.previsao', receita_id=r.receita_id, horizonte=horizonte, janela=janela, inicio=inicio, motor=motor) }}">
                         <i class="bi bi-search"></i> De onde vem a previsão? (por dia e por loja)</a>
                     {% endif %}
                 </td>
