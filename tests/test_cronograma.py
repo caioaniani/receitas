@@ -1789,7 +1789,10 @@ def test_rota_totais_do_dia_excluem_insumo(app, admin_user):
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
                 follow_redirects=True)
-    html = client.get('/telaindustriateste/').get_data(as_text=True)
+    # equilibrar=0: no modo nivelado os 100 se fatiam em lotes por dia — o
+    # teste é sobre o RODAPÉ (insumo fora da soma), então usa a curva.
+    html = client.get('/telaindustriateste/?equilibrar=0').get_data(
+        as_text=True)
     # dia da produção do croissant: 100 un no rodapé (a massa não soma)
     assert '<span class="tot-dia-un">100 un</span>' in html
 
