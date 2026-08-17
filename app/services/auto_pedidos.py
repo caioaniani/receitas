@@ -75,7 +75,16 @@ from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
 
-HORIZONTE_DIAS = 3
+
+def _janela_da_semana(hoje_d):
+    """(início, fim) da janela da SEMANA: amanhã até o PRÓXIMO DOMINGO,
+    inclusive (weekday: seg=0..dom=6). Fonte ÚNICA da janela dos pedidos
+    automáticos E das ordens de produção (dono 17/08/2026: pedidos e ordens
+    da semana saem juntos no domingo ao meio-dia). No domingo devolve
+    seg..dom (7 dias); no sábado, só o domingo."""
+    inicio = hoje_d + timedelta(days=1)
+    fim = inicio + timedelta(days=(6 - inicio.weekday()) % 7)
+    return inicio, fim
 
 
 def _e_rascunho_auto(p):
@@ -184,8 +193,9 @@ def _seguranca_pct():
     return val
 
 
-def gerar_pedidos_automaticos(horizonte=HORIZONTE_DIAS):
-    """Materializa a sugestão do motor venda+estoque como pedidos D+1..D+N.
+def gerar_pedidos_automaticos():
+    """Materializa a sugestão do motor venda+estoque como pedidos da SEMANA
+    (amanhã até o próximo domingo — dono 17/08/2026; era D+1..D+3).
 
     Retorna o dict do `aplicar_grade` + contadores próprios
     (`dias_pulados_corte`, `dias_pulados_humano`)."""
@@ -194,10 +204,14 @@ def gerar_pedidos_automaticos(horizonte=HORIZONTE_DIAS):
     from app.services import pedidos_semana, previsao_producao
     from app.services.pedido_corte import corte_ativo
 
+    hoje_d = hoje()
+    inicio, fim = _janela_da_semana(hoje_d)
+    horizonte = (fim - hoje_d).days          # nº de dias a partir de amanhã
+
     # Datas que a rodada PODE reescrever (fora do corte). O motor trata os
     # rascunhos automáticos dessas datas como substituíveis — sem isso a
     # sugestão volta 0 pra dia já pedido e nada re-sincroniza.
-    datas_janela = [hoje() + timedelta(days=1 + i) for i in range(horizonte)]
+    datas_janela = [inicio + timedelta(days=i) for i in range(horizonte)]
     datas_ressinc = [d for d in datas_janela if not corte_ativo(d)]
 
     # Dia com pedido humano E rascunho do cron: cancela o rascunho ANTES de
