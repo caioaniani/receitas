@@ -1797,8 +1797,18 @@ do seru_cron junto.
   o colchao=2 que o v1 deixou (valor diferente = do dono, fica); nunca
   sobrescreve piso ja definido. O "ASSADO" sai de graca: as 5 ja tem
   `estado_padrao='assado'` e `PedidoItem.estado_efetivo` renderiza
-  "(assado)" na linha do pedido. Testes:
-  `tests/test_seed_minimo_danish.py` (10 casos). **RE-SINCRONIZACAO REAL (fix da revisao
+  "(assado)" na linha do pedido. **ARMADILHA REAL (v3, mesma noite)**:
+  v1/v2 commitaram `setados=0` em prod — o filtro "dias_funcionamento
+  VAZIO = abre todo dia" nao previa que a TELA de lojas grava '0123456'
+  quando os 7 checkboxes estao marcados; toda loja diaria foi excluida.
+  Fix: `_loja_abre_todo_dia` (vazio OU semana inteira; restrita =
+  subconjunto proprio, ex. Cantina '56') + seed v3 (marker com
+  `lojas=/receitas=` — setados=0 nunca mais passa batido) que NAO toca
+  em estoque_minimo. Diagnostico de fora: sonda
+  `/api/claude/deploy?seeds=1` (criada no caso) lista os markers de
+  one-shot. REGRA: seed com filtro de dado de producao SEMPRE grava as
+  contagens no marker. Testes: `tests/test_seed_minimo_danish.py`
+  (12 casos). **RE-SINCRONIZACAO REAL (fix da revisao
   13/08/2026)**: o motor recebe `ressincronizar_datas` e trata o rascunho
   do PROPRIO cron como substituivel (fora do `ja_tem` e das entregas
   simuladas) — sem isso, dia ja pedido devolvia sugestao 0 e a quantidade
