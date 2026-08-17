@@ -223,11 +223,31 @@ def _fornada_no_dia(rec, dia):
 def producao_permitida_no_dia(rec, dia):
     """True se a receita PODE ser PRODUZIDA nesse dia. Fornada especial produz
     só sex/sáb (decisão do dono 10/08/2026): a venda de sáb/dom sai da
-    véspera. Receita normal -> sempre True. Público de propósito: o
-    cronograma_edit usa pra recusar edição manual em dia bloqueado."""
-    return not (rec is not None
-                and getattr(rec, 'fornada_especial', False)
-                and dia.weekday() not in _DIAS_PRODUCAO_FORNADA)
+    véspera. Receita NORMAL produz só de SEGUNDA a SEXTA (decisão do dono
+    17/08/2026: fim de semana não produz; a demanda de sáb/dom sai de
+    sexta). Público de propósito: o cronograma_edit usa pra recusar edição
+    manual em dia bloqueado."""
+    if rec is not None and getattr(rec, 'fornada_especial', False):
+        return dia.weekday() in _DIAS_PRODUCAO_FORNADA
+    return dia.weekday() in _DIAS_PRODUCAO_NORMAL
+
+
+def _rolar_pesos_permitidos(pesos, permitido):
+    """Rola o peso de cada dia BLOQUEADO pro último dia PERMITIDO anterior
+    (produzir mais cedo chega a tempo; mais tarde não). Peso sem nenhum dia
+    permitido antes é DESCARTADO — se nada mais puxar, a linha não produz e
+    a entrega aparece como EM RISCO (decisão humana; o cronograma não viola
+    a regra por conta própria). Devolve a lista ajustada."""
+    if all(permitido):
+        return pesos
+    ajust = [0.0] * len(pesos)
+    for i, w in enumerate(pesos):
+        if w <= 0:
+            continue
+        j = next((k for k in range(i, -1, -1) if permitido[k]), None)
+        if j is not None:
+            ajust[j] += float(w)
+    return ajust
 
 
 def _hist_vendas_receita_por_dow(hist_ini, hist_fim, com_loja=False):
