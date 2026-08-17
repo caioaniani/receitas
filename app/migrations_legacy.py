@@ -2279,6 +2279,16 @@ def _migrate_postgres(app):
         _try("ALTER TABLE perda_producao ADD COLUMN IF NOT EXISTS "
              "funcionario_id INTEGER")
 
+    # Roteiro de gravação da aula do treinamento (13/08/2026): o dono mandou
+    # o plano de conteúdo da "Universidade" (9 módulos, 140 aulas) em
+    # planilha — cada aula vira um TreinoVideo RASCUNHO com o roteiro
+    # anexado, e quem grava abre o roteiro na própria tela de admin. Só o
+    # admin vê (o funcionário vê o vídeo, nunca o roteiro). Commit 1 do
+    # procedimento de 2 commits.
+    if 'roteiro' not in _cols('treino_video'):
+        _try("ALTER TABLE treino_video ADD COLUMN IF NOT EXISTS "
+             "roteiro TEXT")
+
 
 def _migrate_sqlite(app):
     """Adiciona colunas novas no SQLite."""
