@@ -1659,11 +1659,16 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # Estoque MINIMO por (loja, item): piso da sugestao — o alvo do dia nunca
     # cai abaixo dele (mantem colchao do item na loja). Vem da MESMA linha.
     minimo_loja = defaultdict(lambda: defaultdict(int))
-    for loja_id, rid, mid, q, qres, emin in (db.session.query(
+    # Pedido minimo DIARIO por (loja, item): piso INCONDICIONAL do pedido de
+    # cada dia — NAO desconta o estoque que sobrou (dono 17/08/2026,
+    # danishes assadas: "receber 2 por dia impreterivelmente"). A media de
+    # venda manda quando passa do piso.
+    diario_loja = defaultdict(lambda: defaultdict(int))
+    for loja_id, rid, mid, q, qres, emin, pdia in (db.session.query(
             EstoqueLoja.loja_id, EstoqueLoja.receita_id,
             EstoqueLoja.materia_prima_id,
             EstoqueLoja.quantidade, EstoqueLoja.quantidade_reservada,
-            EstoqueLoja.estoque_minimo)
+            EstoqueLoja.estoque_minimo, EstoqueLoja.pedido_minimo_diario)
             .filter(db.or_(EstoqueLoja.receita_id.isnot(None),
                            EstoqueLoja.materia_prima_id.isnot(None))).all()):
         tok = _token(rid, mid)
@@ -1672,6 +1677,9 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
         estoque_atual[loja_id][tok] += max(0, int(q or 0) - int(qres or 0))
         if emin:
             minimo_loja[loja_id][tok] = max(minimo_loja[loja_id][tok], int(emin))
+        if pdia:
+            diario_loja[loja_id][tok] = max(diario_loja[loja_id][tok],
+                                            int(pdia))
 
     # Produtos que a loja PEDE da industria (historico de pedidos na janela).
     # A previsao por venda so "ve" o que teve baixa registrada; sem isto, um item
