@@ -485,7 +485,7 @@ def celula():
         horizonte_dias=_payload_int(p, 'horizonte', 7, 1, 14),
         janela_semanas=_payload_int(p, 'janela', 6, 1, 26),
         inicio_offset_dias=_payload_int(p, 'inicio', 1, 0, 14),
-        equilibrar=str(p.get('equilibrar', '')) in ('1', 'true', 'on', 'True'),
+        equilibrar=str(p.get('equilibrar', '1')) in ('1', 'true', 'on', 'True'),
         motor=motor)
     if res is None:
         return jsonify(ok=False, erro='nao_encontrado'), 404
@@ -634,7 +634,7 @@ def ia_proposta():
         # inicio default 0 = HOJE, mesma base da tela de produção
         # (_inicio_offset); a 1ª coluna do grid é hoje.
         inicio_offset_dias=_payload_int(p, 'inicio', 0, 0, 14),
-        equilibrar=str(p.get('equilibrar', '')) in ('1', 'true', 'on', 'True'),
+        equilibrar=str(p.get('equilibrar', '1')) in ('1', 'true', 'on', 'True'),
         motor=motor)
     if out.get('erro'):
         return jsonify(ok=False, erro=out['erro']), 502
