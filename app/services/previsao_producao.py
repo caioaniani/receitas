@@ -2410,23 +2410,28 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # produz e a entrega aparece como EM RISCO — decisao humana, o
         # cronograma nao viola a regra por conta propria.
         #
-        # `ref_dia[i]` = o dia de DEMANDA mais tardio que caiu na celula i
-        # (o proprio i, ou o dia rolado do fim de semana). O nivelamento usa
-        # isso pra medir a antecedencia contra a NECESSIDADE real — sem
-        # isso, a sexta (que ja carrega sab/dom) poderia ser adiantada mais
-        # 2 dias e o pao de domingo sairia com 4 dias (frescor furado).
+        # `ref_pesos[i]` = PARCELAS da celula i por dia de DEMANDA: lista de
+        # [dia_ref, peso]. A rolagem do fim de semana carrega a referencia
+        # junto — o nivelamento mede a antecedencia POR PARCELA contra a
+        # necessidade real (a parcela de sexta pode adiantar; a de domingo
+        # rolada pra sexta nao — pao de domingo assado na quarta teria 4
+        # dias). Um ref unico por celula (max) congelava a celula inteira
+        # e o croissant voltava a 1000 num dia (regressao pega em prod).
         permitido = [producao_permitida_no_dia(rec, p) for p in dias_prod]
-        ref_dia = list(range(horizonte_dias))
+        ref_pesos = [[[i, float(pesos[i])]] if pesos[i] > 0 else []
+                     for i in range(horizonte_dias)]
         if not all(permitido):
             ajust = [0.0] * horizonte_dias
+            novo_refs = [[] for _ in range(horizonte_dias)]
             for i, w in enumerate(pesos):
                 if w <= 0:
                     continue
                 j = next((k for k in range(i, -1, -1) if permitido[k]), None)
                 if j is not None:
                     ajust[j] += float(w)
-                    ref_dia[j] = max(ref_dia[j], i)
+                    novo_refs[j].append([i, float(w)])
             pesos = ajust
+            ref_pesos = novo_refs
         # Padroniza a PRODUCAO em LOTES inteiros (nao produzir picado — decisao
         # do dono 29/06): arredonda o total pro multiplo do lote da receita e
         # distribui em pacotes inteiros pelos dias (cada dia 0 ou multiplo do
@@ -2502,8 +2507,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             'receita_id': rid, 'nome': rec.nome, 'dias_producao': L,
             'em_estoque': estoque,
             'por_dia': por_dia, 'total': sum(liquido),
-            # dia de demanda mais tardio por celula (frescor do nivelamento)
-            'ref_dia': ref_dia,
+            # parcelas por dia de DEMANDA (frescor do nivelamento por lote)
+            'ref_pesos': ref_pesos,
         })
 
     # Equilibrar carga POR LOTES (dono 17/08/2026, v2 — SUBSTITUI o
