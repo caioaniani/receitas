@@ -459,6 +459,14 @@ SEED_MINIMO_DANISH = {
     # sobrou). O v2 converte: seta o diario=2 e LIMPA o estoque_minimo
     # que o v1 deixou em exatamente 2 (valor diferente = do dono, fica).
     'chave_v2': 'seed_minimo_danish_2026_08_v2',
+    # v3: v1/v2 commitaram `setados=0` em prod (marker visto pela sonda
+    # ?seeds=1) — as lojas diarias tem `dias_funcionamento` PREENCHIDO com
+    # a semana inteira (a tela de lojas grava '0123456'; so vazio contava
+    # como "abre todo dia" no filtro). Restrita agora = subconjunto PROPRIO
+    # da semana. O v3 NAO mexe em estoque_minimo (os =2 esparsos de prod
+    # sao ajuste manual do dono) e o marker guarda lojas=/receitas= pra
+    # zero nunca mais passar batido.
+    'chave_v3': 'seed_minimo_danish_2026_08_v3',
     'minimo': 2,
     'nomes': ('danish de calabresa', 'danish de queijo branco',
               'danish de mucarela de bufala', 'danish de alho poro',
