@@ -155,6 +155,13 @@ class EstoqueLoja(db.Model):
     # dia nunca cai abaixo dele — a loja mantem um colchao do item. Vazio =
     # sem piso. ALTER em migrations_legacy (commit 1, 16/07/2026).
     estoque_minimo = db.Column(db.Integer, nullable=True)
+    # Pedido minimo DIARIO desta loja pra este item (dono 17/08/2026,
+    # danishes assadas: "as lojas devem receber 2 danishes desses por dia
+    # IMPRETERIVELMENTE"): piso INCONDICIONAL do pedido de cada dia — NAO
+    # desconta o estoque que sobrou (diferente do colchao acima). A media
+    # de venda manda quando passa do piso. Vazio = sem piso. ALTER em
+    # migrations_legacy (commit 1, 17/08/2026).
+    pedido_minimo_diario = db.Column(db.Integer, nullable=True)
 
     loja = db.relationship('Loja')
     receita = db.relationship('Receita')
