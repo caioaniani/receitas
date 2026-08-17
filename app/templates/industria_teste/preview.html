@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Prévia — Produção</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,650&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/industria-preview.css') }}" rel="stylesheet">
+</head>
+<body>
+  <div class="preview-ribbon">Prévia de interface · somente leitura</div>
+  <div class="app-shell">
+    <aside class="app-nav" id="preview-nav">
+      <div class="brand"><span class="brand-mark">p</span><span>padaria</span></div>
+      <button class="nav-search" type="button"><i class="bi bi-search"></i><span>Buscar</span><kbd>⌘ K</kbd></button>
+      <nav aria-label="Navegação principal">
+        <a href="/"><i class="bi bi-house"></i><span>Hoje</span></a>
+        <a href="/area/lojas"><i class="bi bi-shop"></i><span>Lojas</span></a>
+        <a class="active" href="/area/producao"><i class="bi bi-box-seam"></i><span>Produção</span></a>
+        <a href="/area/vendas"><i class="bi bi-receipt"></i><span>Vendas e entregas</span></a>
+        <a href="/area/financeiro"><i class="bi bi-graph-up"></i><span>Financeiro</span></a>
+        <a href="/area/administracao"><i class="bi bi-gear"></i><span>Administração</span></a>
+      </nav>
+      <div class="nav-spacer"></div>
+      <a class="nav-help" href="{{ url_for('industria_teste.index') }}"><i class="bi bi-arrow-counterclockwise"></i><span>Voltar à tela atual</span></a>
+      <div class="user-card"><span class="avatar">{{ current_user.nome[:1]|upper }}</span><span><strong>{{ current_user.nome }}</strong><small>Administrador</small></span><i class="bi bi-three-dots"></i></div>
+    </aside>
+
+    <main>
+      <header class="mobile-head">
+        <button type="button" id="nav-toggle" aria-label="Abrir menu"><i class="bi bi-list"></i></button>
+        <span class="brand"><span class="brand-mark">p</span><span>padaria</span></span>
+      </header>
+
+      <div class="page">
+        <div class="breadcrumbs"><a href="/area/producao">Produção</a><i class="bi bi-chevron-right"></i><span>Planejamento</span></div>
+        <section class="page-head">
+          <div><span class="eyebrow">Planejamento de produção</span><h1>O que precisa acontecer agora</h1><p>Prioridades, riscos e produção dos próximos dias em uma única visão.</p></div>
+          <a class="primary-action" href="{{ url_for('industria_teste.index') }}"><i class="bi bi-grid-3x3-gap"></i>Abrir grade avançada</a>
+        </section>
+
+        <nav class="view-tabs" aria-label="Visões da produção">
+          <button class="active" type="button" data-view="today">Hoje <span>{{ acoes|length }}</span></button>
+          <button type="button" data-view="week">Planejamento semanal</button>
+          <button type="button" data-view="exceptions">Exceções {% if resumo.risco_n or resumo.pend_vencido %}<span>{{ resumo.risco_n + (1 if resumo.pend_vencido else 0) }}</span>{% endif %}</button>
+        </nav>
+
+        <section class="metrics" aria-label="Resumo">
+          <article><span class="metric-icon blue"><i class="bi bi-box-seam"></i></span><div><strong>{{ totais_dia[0].un if totais_dia else 0 }}</strong><span>unidades no primeiro dia</span></div><small>{{ totais_dia[0].fornadas if totais_dia else 0 }} fornadas</small></article>
+          <article><span class="metric-icon {{ 'red' if resumo.risco_n else 'green' }}"><i class="bi {{ 'bi-exclamation-triangle' if resumo.risco_n else 'bi-check2' }}"></i></span><div><strong>{{ resumo.risco_n }}</strong><span>entregas em risco</span></div><small>{{ 'Requer atenção' if resumo.risco_n else 'Tudo em ordem' }}</small></article>
+          <article><span class="metric-icon amber"><i class="bi bi-hourglass-split"></i></span><div><strong>{{ resumo.pend_agendado + resumo.pend_vencido }}</strong><span>aguardando confirmação</span></div><small>{% if resumo.pend_vencido %}{{ resumo.pend_vencido }} vencidas{% else %}Dentro do prazo{% endif %}</small></article>
+        </section>
+
+        <section class="workspace" data-panel="today">
+          <div class="section-title"><div><h2>Prioridades</h2><p>Somente o que pede uma decisão sua.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Ver auditoria <i class="bi bi-arrow-right"></i></a></div>
+          {% if acoes %}
+          <div class="action-list">
+            {% for a in acoes[:4] %}
+            <article class="action-row {{ 'danger' if a.tipo in ('risco','vencido') else '' }}">
+              <span class="status-dot"><i class="bi {{ 'bi-exclamation-lg' if a.tipo in ('risco','vencido','difere') else 'bi-arrow-up-right' }}"></i></span>
+              <div>
+                {% if a.tipo == 'enviar_hoje' %}<h3>Enviar a produção de hoje</h3><p>O plano de {{ a.label }} está pronto para revisão.</p>
+                {% elif a.tipo == 'rascunho' %}<h3>Concluir o plano de {{ a.label }}</h3><p>O rascunho foi aprovado, mas ainda não chegou ao padeiro.</p>
+                {% elif a.tipo == 'difere' %}<h3>Revisar alterações de {{ a.label }}</h3><p>{{ a.n }} receita(s) diferem da ordem enviada.</p>
+                {% elif a.tipo == 'vencido' %}<h3>Confirmar produção vencida</h3><p>{{ a.n }} unidade(s) ainda aguardam confirmação.</p>
+                {% elif a.tipo == 'risco' %}<h3>Resolver entregas em risco</h3><p>{{ a.n }} receita(s) podem não atender pedidos programados.</p>
+                {% else %}<h3>Revisar edição manual</h3><p>Há uma previsão que pode estar desatualizada.</p>{% endif %}
+              </div>
+              <a href="{{ url_for('industria_teste.index') }}">Revisar <i class="bi bi-chevron-right"></i></a>
+            </article>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="empty-state"><span><i class="bi bi-check2"></i></span><div><h3>Nenhuma ação pendente</h3><p>O planejamento está em dia. Você pode acompanhar a semana abaixo.</p></div></div>
+          {% endif %}
+
+          <div class="section-title schedule-title"><div><h2>Próximos dias</h2><p>Uma leitura rápida da carga planejada.</p></div><button type="button" data-open="week">Ver semana completa <i class="bi bi-arrow-right"></i></button></div>
+          <div class="day-grid">
+            {% for dia in crono.dias[:3] %}
+            {% set idx = loop.index0 %}{% set est = estados.get(dia.data) %}
+            <article class="day-card {{ 'today' if dia.data == crono.hoje }}">
+              <header><div><small>{{ 'Hoje' if dia.data == crono.hoje else 'Próximo dia' }}</small><h3>{{ dia.label }}</h3></div><span class="state {{ 'sent' if est and est.enviado else 'draft' }}">{{ 'Enviado' if est and est.enviado else ('Rascunho' if est else 'A planejar') }}</span></header>
+              <div class="day-volume"><strong>{{ totais_dia[idx].un }}</strong><span>unidades</span><b>{{ totais_dia[idx].fornadas }} fornadas</b></div>
+              <div class="load-track"><span style="width:{{ [100, (totais_dia[idx].fornadas * 8)]|min }}%"></span></div>
+              <a href="{{ url_for('industria_teste.index', inicio=idx) }}">Ver produção do dia <i class="bi bi-arrow-right"></i></a>
+            </article>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="workspace hidden" data-panel="week">
+          <div class="section-title"><div><h2>Planejamento semanal</h2><p>Visão resumida; edições continuam na grade avançada.</p></div><a href="{{ url_for('industria_teste.index') }}">Editar planejamento <i class="bi bi-arrow-right"></i></a></div>
+          <div class="week-table-wrap"><table><thead><tr><th>Receita</th>{% for dia in crono.dias[:7] %}<th>{{ dia.label }}</th>{% endfor %}<th>Total</th></tr></thead><tbody>
+            {% for r in crono.receitas[:12] %}<tr><td><strong>{{ r.nome }}</strong><small>{{ r.categoria or 'Sem categoria' }}</small></td>{% for c in r.por_dia[:7] %}<td class="{{ 'has-value' if c.qtd }}">{{ c.qtd or '—' }}</td>{% endfor %}<td><strong>{{ r.total }}</strong></td></tr>{% endfor %}
+          </tbody></table></div>
+        </section>
+
+        <section class="workspace hidden" data-panel="exceptions">
+          <div class="section-title"><div><h2>Exceções</h2><p>Problemas separados do planejamento rotineiro.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Abrir auditoria <i class="bi bi-arrow-right"></i></a></div>
+          {% if crono.alertas_falta %}<div class="exception-list">{% for alerta in crono.alertas_falta %}<article><span><i class="bi bi-exclamation-triangle"></i></span><div><h3>{{ alerta.nome }}</h3><p>{% for e in alerta.entregas %}{{ e.label }}: faltam {{ e.faltam }} de {{ e.firme }}{% if not loop.last %} · {% endif %}{% endfor %}</p></div><a href="{{ url_for('industria_teste.index') }}">Resolver</a></article>{% endfor %}</div>{% else %}<div class="empty-state"><span><i class="bi bi-check2"></i></span><div><h3>Nenhuma entrega em risco</h3><p>Não encontramos exceções no horizonte selecionado.</p></div></div>{% endif %}
+        </section>
+      </div>
+    </main>
+  </div>
+  <script>
+    (function () {
+      var tabs = document.querySelectorAll('[data-view]');
+      function openPanel(name) {
+        tabs.forEach(function (tab) { tab.classList.toggle('active', tab.dataset.view === name); });
+        document.querySelectorAll('[data-panel]').forEach(function (panel) { panel.classList.toggle('hidden', panel.dataset.panel !== name); });
+      }
+      tabs.forEach(function (tab) { tab.addEventListener('click', function () { openPanel(tab.dataset.view); }); });
+      document.querySelectorAll('[data-open]').forEach(function (button) { button.addEventListener('click', function () { openPanel(button.dataset.open); window.scrollTo({top: 0, behavior: 'smooth'}); }); });
+      document.getElementById('nav-toggle').addEventListener('click', function () { document.getElementById('preview-nav').classList.toggle('open'); });
+    }());
+  </script>
+</body>
+</html>
