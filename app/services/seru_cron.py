@@ -9,7 +9,7 @@ SERU_AUTO_SYNC=0 antes do startup.
 """
 import logging
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text
 
@@ -657,16 +657,28 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
-    # Envio AUTOMATICO da ordem de producao de AMANHA ao padeiro (19:00 =
-    # pedido_corte.HORA_CORTE, logo apos o corte travar o pedido de amanha
-    # — decisao do dono 10/08/2026, REVOGA "enviar e gesto humano" de
-    # 04/07/2026; horario acompanhou o corte em 13/08/2026).
+    # Ordem de producao da SEMANA (dono 17/08/2026, "quanto menos e mais"):
+    # DOMINGO 12:00 solta as ordens de seg..dom da semana que comeca — o
+    # padeiro enxerga a semana inteira de uma vez. O job roda TODO dia ao
+    # meio-dia DE PROPOSITO: fora do domingo e rede (re-preenche dia
+    # excluido e disparo engolido por deploy — o APScheduler nao persiste
+    # misfire e o auto-deploy reinicia o processo a qualquer hora); com a
+    # semana de pe e no-op. SUBSTITUI o envio diario das 19:00
+    # (10-17/08/2026) — o CONTEUDO fica em dia pelo 🔄 das 06:45/19:05.
     # Desligavel por AUTO_ENVIO_PLANO=0.
     if os.environ.get('AUTO_ENVIO_PLANO', '1') != '0':
         _scheduler.add_job(
-            lambda app=app: _run_auto_envio(app),
-            'cron', hour=19, minute=0, id='auto-envio-plano',
+            lambda app=app: _run_ordens_semana(app),
+            'cron', hour=12, minute=0, id='ordens-semana',
             max_instances=1, coalesce=True,
+        )
+        # One-shot de retroacao (17/08/2026): a 1ª semana sai ~2min apos o
+        # boot; o marker AppConfig faz os deploys seguintes pularem.
+        _scheduler.add_job(
+            lambda app=app: _run_ordens_semana_retro(app),
+            'date', run_date=datetime.now(timezone.utc) + timedelta(
+                seconds=120),
+            id='ordens-semana-retro',
         )
         # 🔄 AUTOMATICO da ordem DE HOJE (17/08/2026, caso do 1o fim de
         # semana): os itens de vespera da ordem (levain/lead-1) sao
@@ -853,15 +865,41 @@ def _run_auto_pedidos(app):
                   'pedidos automaticos loja->industria')
 
 
-def _run_auto_envio(app):
-    """Job: envia a ordem de produção de AMANHÃ ao padeiro às 19:00 (o
-    pedido de amanhã acabou de travar pelo corte — balanço estável)."""
+def _run_ordens_semana(app):
+    """Job: solta a ordem de produção da SEMANA (dono 17/08/2026) — no
+    domingo 12:00 abre seg..dom; nos outros dias re-preenche buraco e é
+    no-op com a semana de pé. Dia enviado (humano ou cron) é pulado."""
     from app.services import auto_pedidos
 
     with app.app_context():
         _com_lock(LOCK_KEY_AUTO_ENVIO,
-                  auto_pedidos.enviar_plano_automatico,
-                  'envio automatico da ordem ao padeiro')
+                  auto_pedidos.enviar_ordens_da_semana,
+                  'ordens de producao da semana')
+
+
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17'
+
+
+def _run_ordens_semana_retro(app):
+    """One-shot de RETROAÇÃO (dono 17/08/2026: "você vai ter que retroagir,
+    a de ontem porque foi ontem o domingo"): a 1ª semana sai no primeiro
+    boot após o deploy, sem esperar o próximo meio-dia. O marker em
+    AppConfig garante que roda UMA vez — deploys futuros não re-executam;
+    se a rodada falhar (exceção antes do marker), o próximo boot retenta."""
+    from app.extensions import db
+    from app.models import AppConfig
+    from app.services import auto_pedidos
+
+    def _fn():
+        if AppConfig.get(ORDENS_SEMANA_RETRO_MARKER):
+            return
+        auto_pedidos.enviar_ordens_da_semana()
+        AppConfig.set(ORDENS_SEMANA_RETRO_MARKER,
+                      datetime.now(timezone.utc).isoformat())
+        db.session.commit()
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_AUTO_ENVIO, _fn, 'ordens da semana (retro one-shot)')
 
 
 def _run_atualiza_plano(app):
