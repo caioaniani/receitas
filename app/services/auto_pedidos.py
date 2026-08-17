@@ -43,7 +43,9 @@ Duas pontas, dois jobs do cron (`seru_cron`):
 2. `enviar_plano_automatico()` (19:00 BRT = HORA_CORTE, logo após o corte travar o
    pedido de amanhã): se a ordem de AMANHÃ ainda não foi enviada, aprova e
    ENVIA ao padeiro pelo cronograma (motor env `AUTO_ENVIO_MOTOR`, default
-   'pedidos' — o firme dos pedidos automáticos conta em qualquer motor).
+   'vendas' desde 17/08/2026 — decisão do dono: "produção da semana
+   programada baseado no histórico de vendas e estoque"; o firme dos
+   pedidos automáticos conta em qualquer motor).
    Ordem JÁ ENVIADA (gesto humano na tela, com o motor/equilibrar DELE) é
    respeitada: o cron NÃO reenvia — reenviar com outros parâmetros mudaria
    os números do padeiro em silêncio (regra "ordem enviada nunca muda por
