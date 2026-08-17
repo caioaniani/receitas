@@ -573,67 +573,91 @@ def test_copilot_criar_adota_rascunho(app, loja, admin_user, monkeypatch):
                 .count()) == 1
 
 
-# ── envio automático da ordem ───────────────────────────────────────
+# ── ordem de produção da SEMANA (dono 17/08/2026) ───────────────────
 
-def test_envio_automatico_aprova_e_envia_amanha(app, monkeypatch):
+def test_semana_no_domingo_abre_seg_a_dom(app, monkeypatch):
+    """Rodada de DOMINGO: envia as ordens de segunda até o PRÓXIMO domingo
+    (7 dias), motor default 'vendas', horizonte que alcança o fim."""
+    from datetime import date
+
     from app.services import producao
     chamadas = []
     with app.app_context():
-        monkeypatch.setattr(
-            producao, 'aprovar_plano_do_dia',
-            lambda data, user_id=None, **kw: chamadas.append(
-                ('aprovar', data, kw.get('motor'))))
+        dom = date(2026, 8, 16)                        # um domingo real
+        monkeypatch.setattr(auto_pedidos, 'hoje', lambda: dom)
+        monkeypatch.setattr(producao, 'aprovar_plano_do_dia',
+                            lambda data, user_id=None, **kw: None)
         monkeypatch.setattr(
             producao, 'enviar_plano_do_dia',
             lambda data, user_id=None, **kw: chamadas.append(
-                ('enviar', data, kw.get('motor'))) or
-            type('P', (), {'itens': [1, 2]})())
-        out = auto_pedidos.enviar_plano_automatico()
-        amanha = hoje() + timedelta(days=1)
-        # Default = motor 'vendas' (dono 17/08/2026: "produção da semana
-        # programada baseado no histórico de vendas e estoque").
-        assert ('aprovar', amanha, 'vendas') in chamadas
-        assert ('enviar', amanha, 'vendas') in chamadas
-        assert out['data'] == amanha.isoformat() and out['itens'] == 2
+                (data, kw.get('motor'), kw.get('horizonte_dias'))) or
+            type('P', (), {'itens': [1]})())
+        out = auto_pedidos.enviar_ordens_da_semana()
+        esperados = [dom + timedelta(days=i) for i in range(1, 8)]
+        assert [c[0] for c in chamadas] == esperados   # seg..dom seguinte
+        assert {c[1] for c in chamadas} == {'vendas'}  # default 17/08/2026
+        # o grid precisa CONTER o próximo domingo (dia 7 → horizonte 8)
+        assert {c[2] for c in chamadas} == {8}
+        assert out['de'] == esperados[0].isoformat()
+        assert out['ate'] == esperados[-1].isoformat()
+        assert len(out['enviadas']) == 7 and not out['puladas']
 
 
-def test_envio_nao_reenvia_ordem_ja_enviada(app, monkeypatch):
-    """Ordem de amanhã JÁ ENVIADA (gesto humano na tela, com o motor/
-    equilibrar DELE): o cron NÃO reenvia — reenviar com os defaults trocaria
-    os números do padeiro em silêncio (achado 3 da revisão de 13/08; regra
-    "ordem enviada nunca muda por caminho implícito" preservada)."""
+def test_semana_fora_do_domingo_e_rede_e_pula_enviadas(app, monkeypatch):
+    """Fora do domingo o job é REDE: cobre amanhã..próximo domingo e PULA
+    dia que já tem ordem ENVIADA (humano ou cron) — "ordem enviada nunca
+    muda por caminho implícito"."""
+    from datetime import date
+
     from app.models import PlanejamentoProducao
     from app.services import producao
     chamadas = []
     with app.app_context():
+        seg = date(2026, 8, 17)                        # uma segunda real
+        monkeypatch.setattr(auto_pedidos, 'hoje', lambda: seg)
+        qua = date(2026, 8, 19)
         db.session.add(PlanejamentoProducao(
-            data=hoje() + timedelta(days=1), origem='cronograma',
-            enviado_ao_padeiro=True, nome='Ordem humana'))
+            data=qua, origem='cronograma', enviado_ao_padeiro=True,
+            nome='Ordem humana'))
         db.session.commit()
         monkeypatch.setattr(producao, 'aprovar_plano_do_dia',
-                            lambda *a, **kw: chamadas.append('aprovar'))
-        monkeypatch.setattr(producao, 'enviar_plano_do_dia',
-                            lambda *a, **kw: chamadas.append('enviar'))
-        out = auto_pedidos.enviar_plano_automatico()
-        assert out.get('ja_enviado') is True
-        assert chamadas == []
+                            lambda data, user_id=None, **kw: None)
+        monkeypatch.setattr(
+            producao, 'enviar_plano_do_dia',
+            lambda data, user_id=None, **kw: chamadas.append(data) or
+            type('P', (), {'itens': [1]})())
+        out = auto_pedidos.enviar_ordens_da_semana()
+        esperados = [date(2026, 8, d) for d in (18, 20, 21, 22, 23)]
+        assert chamadas == esperados                   # ter, qui..dom
+        assert out['puladas'] == [qua.isoformat()]
+        assert out['ate'] == '2026-08-23'              # próximo domingo
 
 
-def test_envio_corrida_plano_ja_enviado_nao_reenvia(app, monkeypatch):
-    """Humano enviou ENTRE a checagem e o aprovar (corrida): o aprovar
-    recusa (PlanoJaEnviadoError) e o cron desiste — a ordem do humano
-    vale."""
+def test_semana_corrida_humano_enviou_pula_o_dia(app, monkeypatch):
+    """Humano enviou um dia ENTRE o snapshot e o aprovar (corrida): o
+    aprovar recusa (PlanoJaEnviadoError), o dia é pulado e o resto da
+    semana segue normal."""
+    from datetime import date
+
     from app.services import producao
     chamadas = []
     with app.app_context():
-        def _boom(*a, **kw):
-            raise producao.PlanoJaEnviadoError('ja enviado')
-        monkeypatch.setattr(producao, 'aprovar_plano_do_dia', _boom)
-        monkeypatch.setattr(producao, 'enviar_plano_do_dia',
-                            lambda *a, **kw: chamadas.append('enviar'))
-        out = auto_pedidos.enviar_plano_automatico()
-        assert out.get('ja_enviado') is True
-        assert chamadas == []
+        seg = date(2026, 8, 17)
+        monkeypatch.setattr(auto_pedidos, 'hoje', lambda: seg)
+        alvo_corrida = date(2026, 8, 20)
+
+        def _aprovar(data, user_id=None, **kw):
+            if data == alvo_corrida:
+                raise producao.PlanoJaEnviadoError(data.isoformat())
+        monkeypatch.setattr(producao, 'aprovar_plano_do_dia', _aprovar)
+        monkeypatch.setattr(
+            producao, 'enviar_plano_do_dia',
+            lambda data, user_id=None, **kw: chamadas.append(data) or
+            type('P', (), {'itens': [1]})())
+        out = auto_pedidos.enviar_ordens_da_semana()
+        assert alvo_corrida not in chamadas
+        assert out['puladas'] == [alvo_corrida.isoformat()]
+        assert len(out['enviadas']) == 5               # ter..dom menos qui
 
 
 def test_atualiza_re_sincroniza_ordem_do_cron(app, monkeypatch):
