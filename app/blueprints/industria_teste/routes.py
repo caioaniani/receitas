@@ -8,7 +8,7 @@ padeiro produz (opção B). NÃO mexe na /padeiro oficial.
 """
 from datetime import date
 
-from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.industria_teste import industria_teste_bp
@@ -229,8 +229,12 @@ def index():
     if resumo['stale_n']:
         acoes.append({'tipo': 'stale', 'n': resumo['stale_n']})
 
-    template = ('industria_teste/preview.html'
-                if request.args.get('preview') == '1'
+    preview_ativo = (
+        request.args.get('preview') == '1'
+        or (current_app.config.get('PREVIEW_MODE')
+            and request.args.get('legacy') != '1')
+    )
+    template = ('industria_teste/preview.html' if preview_ativo
                 else 'industria_teste/teste.html')
     return render_template(template, crono=crono,
                            horizonte=horizonte, janela=janela, inicio=inicio,
