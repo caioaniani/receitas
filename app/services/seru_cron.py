@@ -216,8 +216,8 @@ def _run_sync(app):
                     if os.environ.get('VENDA_SEM_ITEM_VIGIA', '1') != '0':
                         from app.services import venda_sem_item_vigia
                         venda_sem_item_vigia.vigiar()
-                except Exception:
-                    logger.exception('vigia venda sem item falhou')
+                except Exception as exc:  # noqa: BLE001 — _falha_de_job classifica
+                    _falha_de_job('vigia venda sem item', exc)
                 # Estorno que nunca vai disparar (cancelamento SEM
                 # canceledAt): o `processar_pedidos` ja detectou e poe em
                 # stats; aqui so avisa. NAO mexe em estoque — decisao do
