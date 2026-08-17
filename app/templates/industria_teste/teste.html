@@ -738,7 +738,7 @@
                 {% set env_dia = ordem_enviada.get(c.data) %}
                 {% set difere_cel = env_dia is not none and r.receita_id in difere.get(c.data, ()) %}
                 <td class="cel {% if c.data == crono.hoje %}hoje-col{% endif %}{% if r.insumo or r.retorno %} cel-insumo{% endif %}{% if c.bloqueado %} cel-bloq{% endif %}{% if fechado %} cel-fechada{% endif %}{% if c.data in r.risco_datas %} cel-risco{% endif %}{% if r.insumo_sem_vespera and c.data in r.insumo_sem_vespera.dias %} cel-vespera{% endif %}"
-                    {% if c.data in r.risco_datas %}title="Entrega firme deste dia sem produto — aumente a produção dos dias anteriores (contando o lead)"{% elif c.bloqueado %}title="Fornada especial produz só sexta/sábado — a venda de sáb/dom sai da véspera."{% elif fechado %}title="Dia fechado com o cadeado (🔒) — reabra no cabeçalho do dia para editar."{% endif %}
+                    {% if c.data in r.risco_datas %}title="Entrega firme deste dia sem produto — aumente a produção dos dias anteriores (contando o lead)"{% elif c.bloqueado %}title="{% if r.fornada_especial %}Fornada especial produz só sexta/sábado — a venda de sáb/dom sai da véspera.{% else %}Fim de semana não produz (produção é seg–sex) — a demanda de sáb/dom sai de sexta.{% endif %}"{% elif fechado %}title="Dia fechado com o cadeado (🔒) — reabra no cabeçalho do dia para editar."{% endif %}
                     data-rid="{{ r.receita_id }}" data-data="{{ c.data }}"
                     data-fornadas="{{ c.fornadas if c.fornadas is not none else '' }}">
                     <input type="number" min="0" inputmode="numeric"
