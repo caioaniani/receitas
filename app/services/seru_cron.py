@@ -62,6 +62,7 @@ LOCK_KEY_TINY_PDV = 7756  # advisory lock pro import do PDV do Tiny (Cantina)
 LOCK_KEY_AUTO_PEDIDOS = 7758  # advisory lock pros pedidos automaticos loja->industria
 LOCK_KEY_AUTO_ENVIO = 7759  # advisory lock pro envio automatico da ordem ao padeiro
 LOCK_KEY_DIGEST_RECEBIMENTOS = 7760  # advisory lock pro digest 12:00 de pedidos recebidos
+LOCK_KEY_ATUALIZA_PLANO = 7761  # advisory lock pro 🔄 automatico da ordem do dia (06:45/19:05)
 # 7750 foi reciclado: era do `briefing-dono` (removido 17/07/2026), agora e do
 # marketing (sync da base + campanha de aniversario no Listmonk).
 LOCK_KEY_MARKETING = 7750  # advisory lock pro marketing (Listmonk)
@@ -667,6 +668,24 @@ def iniciar(app):
             'cron', hour=19, minute=0, id='auto-envio-plano',
             max_instances=1, coalesce=True,
         )
+        # 🔄 AUTOMATICO da ordem DE HOJE (17/08/2026, caso do 1o fim de
+        # semana): os itens de vespera da ordem (levain/lead-1) sao
+        # dirigidos pela demanda de AMANHA, que o cron de pedidos
+        # re-sincroniza 06:30/18:30 DEPOIS de a ordem congelar as 19:00 da
+        # vespera — sem este refresh a ordem amanhecia magra (3 itens vs 8
+        # no grid). 06:45 = pos-refresh da manha; 19:05 = pos-corte (numero
+        # final pra madrugada). Ordem enviada por HUMANO nunca e tocada.
+        # Mesmo kill-switch do envio (e a mesma automacao).
+        _scheduler.add_job(
+            lambda app=app: _run_atualiza_plano(app),
+            'cron', hour=6, minute=45, id='auto-atualiza-plano-manha',
+            max_instances=1, coalesce=True,
+        )
+        _scheduler.add_job(
+            lambda app=app: _run_atualiza_plano(app),
+            'cron', hour=19, minute=5, id='auto-atualiza-plano-corte',
+            max_instances=1, coalesce=True,
+        )
 
     # Import do PDV do TINY (Cantina, 27/07/2026): a cada 15 min, janela
     # ontem+hoje. Desligavel por TINY_PDV_SYNC=0. So roda com a loja
@@ -835,7 +854,7 @@ def _run_auto_pedidos(app):
 
 
 def _run_auto_envio(app):
-    """Job: envia a ordem de produção de AMANHÃ ao padeiro às 18:00 (o
+    """Job: envia a ordem de produção de AMANHÃ ao padeiro às 19:00 (o
     pedido de amanhã acabou de travar pelo corte — balanço estável)."""
     from app.services import auto_pedidos
 
@@ -843,6 +862,17 @@ def _run_auto_envio(app):
         _com_lock(LOCK_KEY_AUTO_ENVIO,
                   auto_pedidos.enviar_plano_automatico,
                   'envio automatico da ordem ao padeiro')
+
+
+def _run_atualiza_plano(app):
+    """Job: re-sincroniza a ordem DE HOJE (criada pelo cron) com o grid —
+    o 🔄 automático das 06:45/19:05. Ordem de humano nunca é tocada."""
+    from app.services import auto_pedidos
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_ATUALIZA_PLANO,
+                  auto_pedidos.atualizar_plano_automatico,
+                  'atualizacao automatica da ordem do dia')
 
 
 def _run_tiny_pdv(app):
