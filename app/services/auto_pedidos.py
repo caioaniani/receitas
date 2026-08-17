@@ -403,13 +403,14 @@ def enviar_ordens_da_semana():
         if enviado:
             # Ordem do PRÓPRIO CRON: re-sincroniza com o grid de agora.
             r = enviar_plano_do_dia(dia, user_id=None,
-                                    horizonte_dias=horizonte, motor=motor)
+                                    horizonte_dias=horizonte, motor=motor,
+                                    equilibrar=EQUILIBRAR_AUTO)
             out['resincronizadas' if r is not None else 'vazias'].append(iso)
             dia += timedelta(days=1)
             continue
         try:
             aprovar_plano_do_dia(dia, user_id=None, horizonte_dias=horizonte,
-                                 motor=motor)
+                                 motor=motor, equilibrar=EQUILIBRAR_AUTO)
         except PlanoJaEnviadoError:
             # Corrida: um humano enviou entre o snapshot e o aprovar — a
             # ordem dele vale.
@@ -417,7 +418,8 @@ def enviar_ordens_da_semana():
             dia += timedelta(days=1)
             continue
         plano = enviar_plano_do_dia(dia, user_id=None,
-                                    horizonte_dias=horizonte, motor=motor)
+                                    horizonte_dias=horizonte, motor=motor,
+                                    equilibrar=EQUILIBRAR_AUTO)
         if plano is None:
             out['vazias'].append(iso)      # grid sem nada a produzir no dia
         else:
