@@ -10,7 +10,12 @@ openpyxl==3.1.5
 gunicorn==23.0.0
 psycopg2-binary==2.9.10
 requests==2.32.3
-anthropic==0.40.0
+# 0.40.0 (11/2024) nao conhecia o param `thinking` — as 6 chamadas com
+# thinking={'type':'disabled'} da migracao Sonnet 5 (05/08/2026) estouravam
+# TypeError e vigia/auditor/followup/OCRs/planejamento ficaram mortos ~2
+# semanas (Sentry GESTAO-PADARIA-3A). Upgrade isolado com ordem do dono
+# (17/08/2026).
+anthropic==0.122.0
 APScheduler==3.10.4
 slack-sdk==3.33.4
 sentry-sdk[flask]==2.18.0
