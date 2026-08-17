@@ -634,6 +634,56 @@ def test_envio_corrida_plano_ja_enviado_nao_reenvia(app, monkeypatch):
         assert chamadas == []
 
 
+def test_atualiza_re_sincroniza_ordem_do_cron(app, monkeypatch):
+    """🔄 automático (17/08/2026): a ordem DE HOJE criada pelo cron é
+    re-sincronizada com o grid às 06:45/19:05 — os itens de véspera dela
+    são dirigidos pela demanda de amanhã, que muda depois do envio."""
+    from app.models import PlanejamentoProducao
+    from app.services import producao
+    chamadas = []
+    with app.app_context():
+        db.session.add(PlanejamentoProducao(
+            data=hoje(), origem='cronograma', enviado_ao_padeiro=True,
+            criado_por=None, nome='Ordem do cron'))
+        db.session.commit()
+        monkeypatch.setattr(
+            producao, 'enviar_plano_do_dia',
+            lambda data, user_id=None, **kw: chamadas.append(data) or
+            type('P', (), {'itens': [1, 2, 3]})())
+        out = auto_pedidos.atualizar_plano_automatico()
+        assert chamadas == [hoje()]
+        assert out['atualizada'] is True and out['itens'] == 3
+
+
+def test_atualiza_nao_toca_ordem_de_humano(app, admin_user, monkeypatch):
+    """Ordem enviada por HUMANO nunca muda por caminho implícito — o 🔄
+    automático só re-sincroniza ordem do próprio cron."""
+    from app.models import PlanejamentoProducao
+    from app.services import producao
+    chamadas = []
+    with app.app_context():
+        db.session.add(PlanejamentoProducao(
+            data=hoje(), origem='cronograma', enviado_ao_padeiro=True,
+            criado_por=admin_user.id, nome='Ordem do dono'))
+        db.session.commit()
+        monkeypatch.setattr(producao, 'enviar_plano_do_dia',
+                            lambda *a, **kw: chamadas.append('enviar'))
+        out = auto_pedidos.atualizar_plano_automatico()
+        assert out.get('ordem_humana') is True
+        assert chamadas == []
+
+
+def test_atualiza_sem_ordem_e_noop(app, monkeypatch):
+    from app.services import producao
+    chamadas = []
+    with app.app_context():
+        monkeypatch.setattr(producao, 'enviar_plano_do_dia',
+                            lambda *a, **kw: chamadas.append('enviar'))
+        out = auto_pedidos.atualizar_plano_automatico()
+        assert out.get('sem_ordem') is True
+        assert chamadas == []
+
+
 def test_envio_dia_vazio_nao_explode(app, monkeypatch):
     from app.services import producao
     with app.app_context():
