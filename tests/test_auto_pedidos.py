@@ -590,8 +590,10 @@ def test_envio_automatico_aprova_e_envia_amanha(app, monkeypatch):
             type('P', (), {'itens': [1, 2]})())
         out = auto_pedidos.enviar_plano_automatico()
         amanha = hoje() + timedelta(days=1)
-        assert ('aprovar', amanha, 'pedidos') in chamadas
-        assert ('enviar', amanha, 'pedidos') in chamadas
+        # Default = motor 'vendas' (dono 17/08/2026: "produção da semana
+        # programada baseado no histórico de vendas e estoque").
+        assert ('aprovar', amanha, 'vendas') in chamadas
+        assert ('enviar', amanha, 'vendas') in chamadas
         assert out['data'] == amanha.isoformat() and out['itens'] == 2
 
 
