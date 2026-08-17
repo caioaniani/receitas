@@ -877,7 +877,10 @@ def _run_ordens_semana(app):
                   'ordens de producao da semana')
 
 
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17'
+# Sufixo 'b': a regra "producao so seg-sex" (dono 17/08/2026, mesma tarde)
+# exigiu re-sincronizar a semana ja enviada — marker novo = o one-shot
+# roda mais uma vez no proximo boot e corrige sab/dom.
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17b'
 
 
 def _run_ordens_semana_retro(app):
