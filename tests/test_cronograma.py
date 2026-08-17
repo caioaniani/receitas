@@ -473,10 +473,64 @@ def test_default_nivelado_espalha_pra_dias_ocupados(app):
     rr = _rec_out(crono, r.id)
     assert rr is not None and rr['total'] == 50
     por_data = {c['data']: c['qtd'] for c in rr['por_dia']}
-    # a receita inteira foi puxada pra um dia ANTERIOR ao deadline (nunca
-    # depois — a entrega de quinta continua garantida)
+    # a produção foi puxada pra dias ANTERIORES ao deadline (nunca depois —
+    # a entrega de quinta continua garantida)
     dia_prod = next(d for d, q in por_data.items() if q > 0)
     assert dia_prod <= quinta.isoformat()
+
+
+def test_nivelamento_respeita_antecedencia_maxima(app):
+    """Caso Brioche (dono 17/08/2026 à noite: "vence em 3 dias, não é
+    congelado"): demanda DIÁRIA da semana NÃO vira um dia-monstro na
+    segunda — cada lote é produzido no máximo 2 dias antes da necessidade.
+    Invariante: o acumulado produzido até o dia D nunca passa do acumulado
+    de demanda até D+2."""
+    from datetime import date as _date
+
+    loja = _loja()
+    r = _receita('Brioche Fresco')
+    hoje_d = hoje()                                # segunda congelada
+    demanda = {}                                   # dia -> qtd firme
+    for i in range(1, 7):                          # ter..dom, 20/dia
+        d = hoje_d + timedelta(days=i)
+        _pedido(loja, 'pendente', d, r, 20)
+        demanda[d.isoformat()] = 20
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 100
+    datas = [c['data'] for c in rr['por_dia']]
+    prod_acum = 0
+    for idx, c in enumerate(rr['por_dia']):
+        prod_acum += c['qtd']
+        dem_ate_2d = sum(q for d_iso, q in demanda.items()
+                         if d_iso <= datas[min(idx + 2, len(datas) - 1)])
+        assert prod_acum <= dem_ate_2d + 1e-9, (
+            'produção adiantada além de 2 dias da necessidade em %s'
+            % c['data'])
+        if c['qtd']:
+            assert _date.fromisoformat(c['data']).weekday() < 5
+
+
+def test_nivelamento_fatia_receita_grande_em_lotes(app):
+    """Caso Croissant (dono: "por que não redistribuir em lotes menores?"):
+    demanda grande num dia só é FATIADA — nenhum dia carrega o total
+    inteiro quando há dias anteriores dentro da antecedência."""
+    loja = _loja()
+    r = _receita('Croissant Lote')
+    r.lote_producao = 100                          # lotes de 100
+    db.session.commit()
+    quinta = hoje() + timedelta(days=3)            # segunda congelada
+    _pedido(loja, 'pendente', quinta, r, 300)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 300
+    qtds = [c['qtd'] for c in rr['por_dia']]
+    assert max(qtds) < 300                         # fatiado, sem dia-monstro
+    assert sum(1 for q in qtds if q > 0) >= 2      # espalhado em 2+ dias
 
 
 def test_escolher_pedidos_no_select_e_preservado(app, admin_user):
