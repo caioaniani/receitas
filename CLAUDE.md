@@ -1937,9 +1937,12 @@ do seru_cron junto.
   redistribuir o croissant em lotes menores?" com 1000 num dia)**: parte
   da curva de demanda e move LOTES (lote_producao > lote_pedido > 1
   fornada da amassadeira) pra dias anteriores menos carregados, com
-  ANTECEDENCIA MAXIMA `_ANTECEDENCIA_MAX_DIAS = 2` (frescor — REVOGA o
+  ANTECEDENCIA MAXIMA `_ANTECEDENCIA_MAX_DIAS = 3` (frescor — REVOGA o
   "sem limite de frescor" de 29/06; o modo receita-inteira-num-dia foi
-  SUBSTITUIDO), nunca pra depois (entrega no prazo), nivelando FORNADAS
+  SUBSTITUIDO; nasceu 2 e virou 3 na mesma noite, dono "Tem que
+  adiantar, olha so terca nao tem producao" — com 2 a demanda do fim de
+  semana nao alcancava a terca), nunca pra depois (entrega no prazo),
+  nivelando FORNADAS
   (peso 1/fornada — levain em gramas nao domina croissant em pecas) e
   respeitando dias bloqueados. A TELA acompanha (mesma regua):
   `_equilibrar()` default True; o checkbox virou SELECT "Carga:
