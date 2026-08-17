@@ -88,10 +88,12 @@ _MIN_FRACAO_FORNADA = 0.2
 # produzido no maximo N dias ANTES do dia em que a curva de demanda o pedia
 # (dono 17/08/2026, caso Brioche: "nao da para produzir tudo isso de
 # brioche, ele vence em 3 dias, nao e congelado" — o nivelamento antigo
-# punha a receita INTEIRA num dia so). 2 dias = produto entregue com ate 2
-# dias de folga, dentro da validade de 3 do caso mais fresco. SUBSTITUI o
-# "sem limite de frescor" de 29/06.
-_ANTECEDENCIA_MAX_DIAS = 2
+# punha a receita INTEIRA num dia so). SUBSTITUI o "sem limite de frescor"
+# de 29/06. 3 dias desde a mesma noite (dono: "Tem que adiantar, olha so
+# terca nao tem producao" — com 2, a demanda do fim de semana so alcancava
+# qua/qui/sex e terca ficava vazia; 3 = o teto da validade do caso mais
+# fresco, pao de domingo pode sair na quinta).
+_ANTECEDENCIA_MAX_DIAS = 3
 
 _CACHE = {}
 _CACHE_TTL = 60  # segundos
