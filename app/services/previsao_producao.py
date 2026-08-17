@@ -2546,10 +2546,17 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             chunk = int(lote or (round(unid_forn) if unid_forn >= 1 else 0)
                         or max(1, ceil(rr['total'] / n)))
             # Peso de nivelamento em "fornadas": 1 unidade vale 1/fornada
-            # (sem amassadeira, 1/rend) — nivela o trabalho, nao a unidade
-            # (levain em gramas nao pode dominar croissant em pecas).
-            peso = (1.0 / unid_forn) if unid_forn >= 1 else (
-                1.0 / max(1.0, rend))
+            # (sem amassadeira, 1/rend; sem rendimento NENHUM, 1/chunk —
+            # peso 1.0/unidade fazia o croissant sem rendimento valer 1
+            # fornada POR PECA e distorcia a regua inteira). Nivela o
+            # trabalho, nao a unidade (levain em gramas nao pode dominar
+            # croissant em pecas).
+            if unid_forn >= 1:
+                peso = 1.0 / unid_forn
+            elif rend > 0:
+                peso = 1.0 / rend
+            else:
+                peso = 1.0 / max(1, chunk)
             # Celula i vira SEGMENTOS [ref, qtd]: a quantidade inteira e
             # repartida pelas parcelas de demanda (ref_pesos) por proporcao
             # (sobra de arredondamento fica no MAIOR ref — conservador: a
