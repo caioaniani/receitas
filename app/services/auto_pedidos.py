@@ -76,6 +76,16 @@ from app.utils import agora, hoje
 logger = logging.getLogger(__name__)
 
 
+# Nivelamento automático da carga (dono 17/08/2026: "a previsão serve
+# exatamente para isso... distribuir automaticamente para segunda a sexta
+# sem eu ter que apertar botão algum de equilibrar, o sistema deve
+# equilibrar sozinho"): toda ordem criada/re-sincronizada pela automação sai
+# com o "equilibrar carga" LIGADO — cada receita inteira num dia, fornadas
+# niveladas seg-sex, entrega nunca atrasa (mesmo motor do antigo checkbox da
+# tela, que virou padrão lá também — grid e ordem na mesma régua).
+EQUILIBRAR_AUTO = True
+
+
 def _janela_da_semana(hoje_d):
     """(início, fim) da janela da SEMANA: amanhã até o PRÓXIMO DOMINGO,
     inclusive (weekday: seg=0..dom=6). Fonte ÚNICA da janela dos pedidos
@@ -336,7 +346,8 @@ def atualizar_plano_automatico():
         logger.info('auto_atualiza: ordem de %s foi enviada por humano — '
                     'intocada', hoje_d.isoformat())
         return {'data': hoje_d.isoformat(), 'ordem_humana': True}
-    plano2 = enviar_plano_do_dia(hoje_d, user_id=None, motor=motor)
+    plano2 = enviar_plano_do_dia(hoje_d, user_id=None, motor=motor,
+                                 equilibrar=EQUILIBRAR_AUTO)
     n = len(getattr(plano2, 'itens', []) or []) if plano2 is not None else 0
     logger.info('auto_atualiza: ordem de %s re-sincronizada com o grid '
                 '(%d item[ns], motor=%s)', hoje_d.isoformat(), n, motor)
