@@ -689,6 +689,19 @@ test_copilot_fork_canais).
   TREINO_IA_MODELO, ZAPI_BOT_MODELO — se setadas com modelo antigo, a
   troca de default nao vale; conferir/limpar no painel.
 
+**INCIDENTE do SDK velho (17/08/2026)**: o pin `anthropic==0.40.0`
+(11/2024) NAO conhecia o param `thinking` — as 6 chamadas com
+`thinking={'type':'disabled'}` da migracao acima estouraram `TypeError`
+em TODA execucao por ~2 semanas e NINGUEM notou (best-effort silencioso):
+vigia do bot, auditor, follow-up, OCR de NF/boleto, OCR de cupom e
+planejamento IA ficaram MORTOS de 05 a 17/08. O Sentry acusava
+(GESTAO-PADARIA-3A) mas a cota gratis tinha estourado de ruido. Upgrade
+isolado pra `anthropic==0.122.0` com ordem do dono. REGRAS: (1) a suite
+mocka a Anthropic — teste verde NAO prova que o SDK aceita um param novo;
+ao introduzir param de API, conferir `inspect.signature` contra o pin do
+requirements; (2) upgrade de dependencia segue exigindo ordem do dono
+(regra de 12/07), este teve.
+
 **Instrumentacao de custo (25/06/2026)**: TODA chamada de IA agora registra
 tokens + custo em USD na tabela `UsoIA`, rotulada por funcao, via
 `app/services/uso_ia.py::registrar` (sessao isolada + best-effort, nunca
