@@ -1,12 +1,25 @@
-"""Seed do colchão de danishes ASSADAS (dono 17/08/2026): estoque_minimo=2
-nas 5 danishes em cada loja ativa que abre todo dia — o motor venda+estoque
-repõe o piso diariamente e pede a mais quando a média de venda passa dele.
+"""Danishes ASSADAS: 2 por loja POR DIA, "impreterivelmente" (dono
+17/08/2026). O v1 (colchão de estoque) foi convertido pelo v2 no piso
+INCONDICIONAL `pedido_minimo_diario` — a loja recebe 2 de cada TODO dia,
+sem descontar o estoque que sobrou; a média de venda manda quando passa do
+piso. Seeds rodam UMA vez (markers em AppConfig), nunca sobrescrevem valor
+do dono e ignoram Industria/loja de funcionamento restrito."""
 
-O seed roda UMA vez (marker em AppConfig), nunca sobrescreve mínimo já
-definido pelo dono e ignora Industria/loja de funcionamento restrito."""
+import pytest
+
 from app.extensions import db
-from app.migrations_legacy import SEED_MINIMO_DANISH, _seed_minimo_danish
+from app.migrations_legacy import (
+    SEED_MINIMO_DANISH,
+    _seed_minimo_danish,
+)
 from app.models import AppConfig, EstoqueLoja, Loja, Receita
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """O motor de pedidos tem janela semanal e produção seg-sex — congela
+    numa SEGUNDA pros cenários não variarem com o dia da suíte."""
+    congela_hoje()
 
 NOMES = ['Danish de Calabresa', 'Danish de queijo branco',
          'Danish de Muçarela de Búfala', 'Danish de alho poró',
