@@ -905,8 +905,11 @@ def _run_ordens_semana(app):
 # alvo=total/dias-uteis REMOVIDO (a cota de seg/ter, que o frescor impede
 # de receber, morria e os paes empilhavam na sexta — "Esta assim ainda")
 # + peso fallback 1/chunk pra receita sem rendimento (croissant valia 1
-# fornada POR PECA e distorcia a regua).
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17h'
+# fornada POR PECA e distorcia a regua); 'i' = antecedencia 2->3 dias
+# (dono: "Tem que adiantar, olha so terca nao tem producao" — com 2 a
+# demanda do fim de semana nao alcancava a terca) + piso diario do
+# Cinnamon Roll (seed proprio, mesma regra das danishes).
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17i'
 
 
 def _run_ordens_semana_retro(app):
