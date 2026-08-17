@@ -1845,8 +1845,13 @@ do seru_cron junto.
   lock 7759, kill-switch `AUTO_ENVIO_PLANO=0`): no corte o pedido de
   amanha trava
   (corte) e, SE a ordem de amanha ainda nao foi enviada, ela e
-  aprovada+ENVIADA ao padeiro (motor env `AUTO_ENVIO_MOTOR` default
-  'pedidos'). **Ordem JA ENVIADA (gesto humano na tela, com o motor/
+  aprovada+ENVIADA ao padeiro (motor env `AUTO_ENVIO_MOTOR`; default
+  **'vendas' desde 17/08/2026** — dono: "producao da semana programada
+  baseado no historico de vendas e estoque"; era 'pedidos'. ATENCAO: env
+  setada no Railway MANDA sobre o default do codigo — se um dia o motor
+  parecer errado, conferir se `AUTO_ENVIO_MOTOR` existe la). O 🔄
+  automatico (abaixo) usa o MESMO fallback — mudar um exige mudar o
+  outro. **Ordem JA ENVIADA (gesto humano na tela, com o motor/
   equilibrar DELE) NAO e reenviada** (fix achado 3 da revisao 13/08 —
   reenviar com os defaults do cron trocaria os numeros do padeiro em
   silencio; a regra "ordem enviada nunca muda por caminho implicito"
