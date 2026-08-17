@@ -2502,6 +2502,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             'receita_id': rid, 'nome': rec.nome, 'dias_producao': L,
             'em_estoque': estoque,
             'por_dia': por_dia, 'total': sum(liquido),
+            # dia de demanda mais tardio por celula (frescor do nivelamento)
+            'ref_dia': ref_dia,
         })
 
     # Equilibrar carga POR LOTES (dono 17/08/2026, v2 — SUBSTITUI o
