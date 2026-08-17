@@ -297,7 +297,7 @@ def atualizar_plano_automatico():
     from app.models import PlanejamentoProducao
     from app.services.producao import enviar_plano_do_dia
 
-    motor = (os.environ.get('AUTO_ENVIO_MOTOR') or 'pedidos').strip()
+    motor = (os.environ.get('AUTO_ENVIO_MOTOR') or 'vendas').strip()
     hoje_d = hoje()
     plano = (PlanejamentoProducao.query
              .filter_by(data=hoje_d, origem='cronograma')
