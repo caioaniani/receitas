@@ -1325,7 +1325,7 @@
         horizonte: {{ horizonte|tojson }},
         janela: {{ janela|tojson }},
         inicio: {{ inicio|tojson }},
-        {% if equilibrar %}equilibrar: 1,{% endif %}
+        equilibrar: {{ (1 if equilibrar else 0)|tojson }},
         motor: {{ motor|tojson }}
     });
     const modalEl = document.getElementById('mp-dia-modal');
