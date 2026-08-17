@@ -901,8 +901,12 @@ def _run_ordens_semana(app):
 # adiantada de novo); 'g' = antecedencia POR PARCELA (ref_pesos): o ref
 # MAXIMO da celula congelava a sexta inteira (propria+sab+dom misturados
 # — croissant voltou a 1000 num dia); agora cada parcela viaja com o seu
-# dia de demanda e so a parcela cujo frescor permite anda.
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17g'
+# dia de demanda e so a parcela cujo frescor permite anda; 'h' = teto
+# alvo=total/dias-uteis REMOVIDO (a cota de seg/ter, que o frescor impede
+# de receber, morria e os paes empilhavam na sexta — "Esta assim ainda")
+# + peso fallback 1/chunk pra receita sem rendimento (croissant valia 1
+# fornada POR PECA e distorcia a regua).
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17h'
 
 
 def _run_ordens_semana_retro(app):
