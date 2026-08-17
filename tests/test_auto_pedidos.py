@@ -768,15 +768,42 @@ def test_motor_da_semana_por_env(app, monkeypatch):
 
 def test_retro_one_shot_roda_uma_vez(app, monkeypatch):
     """O one-shot de retroação (boot pós-deploy de 17/08/2026) roda UMA
-    vez: grava o marker em AppConfig e o boot seguinte não re-executa."""
+    vez — PEDIDOS da semana antes das ORDENS (o firme alimenta o grid) —
+    grava o marker em AppConfig e o boot seguinte não re-executa."""
     from app.models import AppConfig
     from app.services import seru_cron
     chamadas = []
     with app.app_context():
+        monkeypatch.setattr(auto_pedidos, 'gerar_pedidos_automaticos',
+                            lambda: chamadas.append('pedidos'))
         monkeypatch.setattr(auto_pedidos, 'enviar_ordens_da_semana',
-                            lambda: chamadas.append(1))
+                            lambda: chamadas.append('ordens'))
         seru_cron._run_ordens_semana_retro(app)
-        assert chamadas == [1]
+        assert chamadas == ['pedidos', 'ordens']       # nesta ordem
         assert AppConfig.get(seru_cron.ORDENS_SEMANA_RETRO_MARKER)
         seru_cron._run_ordens_semana_retro(app)
-        assert chamadas == [1]                         # não repetiu
+        assert chamadas == ['pedidos', 'ordens']       # não repetiu
+
+
+def test_janela_dos_pedidos_vai_ate_o_proximo_domingo(app, loja, monkeypatch):
+    """Dono 17/08/2026: os pedidos automáticos cobrem amanhã..PRÓXIMO
+    DOMINGO (numa segunda: ter..dom, 6 dias) — não mais D+1..D+3."""
+    from datetime import date
+
+    from app.services import previsao_producao
+    capt = {}
+    with app.app_context():
+        _as_10h(monkeypatch)
+        r = _receita()
+
+        def _motor(**kw):
+            capt.update(kw)
+            return _sugestao(loja, r, [10])
+        monkeypatch.setattr(previsao_producao, 'sugerir_pedidos_por_venda',
+                            _motor)
+        auto_pedidos.gerar_pedidos_automaticos()
+        assert capt['horizonte_dias'] == 6         # segunda congelada
+        assert capt['inicio_offset_dias'] == 1
+        datas = capt['ressincronizar_datas']
+        assert datas[0] == date(2026, 8, 18)       # amanhã (terça)
+        assert datas[-1] == date(2026, 8, 23)      # próximo domingo
