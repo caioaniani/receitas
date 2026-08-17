@@ -892,9 +892,11 @@ def _run_ordens_semana(app):
 # Sufixos do marker: 'b' = regra "producao so seg-sex" (mesma tarde) exigiu
 # re-sincronizar a semana ja enviada; 'c' = pedidos da semana inteira no
 # meio-dia (mesma tarde); 'd' = equilibrar carga virou padrao da automacao
-# (mesma tarde, "o sistema deve equilibrar sozinho") — o one-shot re-roda
-# pra redistribuir a semana ja enviada seg-sex nivelada.
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17d'
+# (mesma tarde, "o sistema deve equilibrar sozinho"); 'e' = nivelamento
+# POR LOTES com antecedencia maxima (mesma noite, caso Brioche 160 num dia
+# so — inclui re-nivelar a ordem DE HOJE, que o padeiro executa de
+# madrugada e tinha absorvido o pico no 🔄 das 19:05).
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17e'
 
 
 def _run_ordens_semana_retro(app):
