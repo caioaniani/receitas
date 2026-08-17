@@ -2258,6 +2258,7 @@ def ordens_producao():
     """
     from datetime import date, timedelta
 
+    from app.extensions import db
     from app.models import PlanejamentoProducao, Usuario
     from app.utils import hoje
 
