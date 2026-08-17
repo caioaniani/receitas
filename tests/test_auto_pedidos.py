@@ -698,10 +698,12 @@ def test_envio_dia_vazio_nao_explode(app, monkeypatch):
 
 
 def test_motor_do_envio_por_env(app, monkeypatch):
+    """A env AUTO_ENVIO_MOTOR segue mandando sobre o default 'vendas' —
+    setada com outro motor, é ela que vale (Railway sobrepõe o código)."""
     from app.services import producao
     chamadas = []
     with app.app_context():
-        monkeypatch.setenv('AUTO_ENVIO_MOTOR', 'vendas')
+        monkeypatch.setenv('AUTO_ENVIO_MOTOR', 'pedidos')
         monkeypatch.setattr(producao, 'aprovar_plano_do_dia',
                             lambda data, user_id=None, **kw:
                             chamadas.append(kw.get('motor')))
@@ -711,4 +713,4 @@ def test_motor_do_envio_por_env(app, monkeypatch):
             chamadas.append(kw.get('motor')) or
             type('P', (), {'itens': []})())
         auto_pedidos.enviar_plano_automatico()
-        assert chamadas == ['vendas', 'vendas']
+        assert chamadas == ['pedidos', 'pedidos']
