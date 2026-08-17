@@ -160,3 +160,47 @@ def test_rota_admin_gera_acesso(app, admin_user):
     assert r.status_code in (302, 303)
     with app.app_context():
         assert db.session.get(Funcionario, fid).usuario_id is not None
+
+
+def test_rota_gerar_todos_cobre_so_quem_falta(app, admin_user):
+    """Lote (12/08/2026): cria pra quem tem e-mail e não tem login; pula quem
+    já tem, quem não tem e-mail e quem está desligado."""
+    with app.app_context():
+        a = _func(nome='Ana', email='ana@opao.online', cpf='90000000021')
+        b = _func(nome='Bia', email=None, cpf='90000000022')
+        c_ = _func(nome='Caio J', email='cj@opao.online', cpf='90000000023')
+        d = _func(nome='Deb', email='deb@opao.online', cpf='90000000024')
+        d.ativo = False
+        u = Usuario(nome='Caio J', login='cj-ja-tem', papel='funcionario')
+        u.set_senha('x' * 8)
+        db.session.add(u)
+        db.session.flush()
+        c_.usuario_id = u.id
+        db.session.commit()
+        ida, idb, idc, idd = a.id, b.id, c_.id, d.id
+    cli = _admin_client(app, admin_user)
+    with patch('app.services.email.enviar_boas_vindas',
+               return_value={'ok': True}) as env:
+        r = cli.post('/treino/admin/acessos/gerar-todos')
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(Funcionario, ida).usuario_id is not None
+        assert db.session.get(Funcionario, idb).usuario_id is None
+        assert db.session.get(Funcionario, idd).usuario_id is None
+        # quem já tinha login continua com A MESMA conta
+        assert db.session.get(Funcionario, idc).usuario.login == 'cj-ja-tem'
+    env.assert_called_once()          # 1 e-mail: só a conta nova da Ana
+
+
+def test_rota_gerar_todos_sem_pendentes_nao_cria_nada(app, admin_user):
+    with app.app_context():
+        f = _func(nome='Ana', email='ana@opao.online', cpf='90000000025')
+        r = acessos.gerar_acesso(f)
+        assert r['ok']
+        n_antes = Usuario.query.count()
+    cli = _admin_client(app, admin_user)
+    with patch('app.services.email.enviar_boas_vindas',
+               return_value={'ok': True}):
+        cli.post('/treino/admin/acessos/gerar-todos')
+    with app.app_context():
+        assert Usuario.query.count() == n_antes
