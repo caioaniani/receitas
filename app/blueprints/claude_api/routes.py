@@ -962,6 +962,21 @@ def deploy_info():
                 achadas[item] = f'erro: {type(exc).__name__}'
         out['colunas'] = achadas
         out['todas_presentes'] = all(v is True for v in achadas.values())
+    # ?seeds=1 (17/08/2026, caso "seed das danishes nao pegou"): expoe os
+    # MARKERS de one-shot (AppConfig com prefixo de seed/retro) — "o seed
+    # rodou?" responde-se de fora, sem log do Railway. Read-only; so chaves
+    # de marker, nunca dado de negocio.
+    if request.args.get('seeds'):
+        from app.models import AppConfig
+        prefixos = ('seed_', 'ordens_semana_retro', 'checklist_seed')
+        try:
+            out['seeds'] = {
+                row.key: row.value
+                for row in AppConfig.query.all()
+                if any(row.key.startswith(p) for p in prefixos)
+            }
+        except Exception as exc:                              # noqa: BLE001
+            out['seeds'] = f'erro: {type(exc).__name__}'
     return jsonify(out)
 
 
