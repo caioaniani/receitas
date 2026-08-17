@@ -1235,7 +1235,7 @@ def test_rota_enviar(app, admin_user):
            follow_redirects=True)
     resp = c.post('/telaindustriateste/enviar',
                   data={'data': d2.isoformat(), 'horizonte': 7, 'janela': 6,
-                        'inicio': 0})
+                        'inicio': 0, 'equilibrar': 0})   # modo curva explícito
     assert resp.status_code in (302, 303)
     db.session.expire_all()
     plano = PlanejamentoProducao.query.filter_by(
