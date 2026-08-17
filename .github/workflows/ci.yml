@@ -24,7 +24,10 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          # 3.12 = a MESMA versão do Dockerfile (python:3.12-slim) que roda em
+          # produção. Estava 3.11: o CI validava uma versão que o Railway não
+          # executa (alinhado em 13/08/2026 a pedido do dono).
+          python-version: '3.12'
           cache: 'pip'
 
       - name: Install dependencies
