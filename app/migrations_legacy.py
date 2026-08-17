@@ -103,6 +103,7 @@ def _migrate(app):
         _seed_treino_universidade(app)
         _seed_minimo_danish(app)
         _seed_minimo_danish_v2(app)
+        _seed_minimo_danish_v3(app)
 
 
 def _seed_treino_universidade(app):
