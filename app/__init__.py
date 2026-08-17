@@ -924,8 +924,25 @@ def _criar_admin():
     nao ha como recuperar depois sem reset manual.
     """
     from app.models import Usuario
-    if not Usuario.query.filter_by(papel='admin').first():
-        senha_env = os.environ.get('ADMIN_PASSWORD')
+    admin = Usuario.query.filter_by(papel='admin').first()
+    preview_senha = None
+    if os.environ.get('PREVIEW_MODE') == '1':
+        preview_senha = os.environ.get('PREVIEW_ADMIN_PASSWORD')
+
+    # Ambiente temporario de homologacao: permite recuperar o acesso sem
+    # compartilhar o banco/senha da producao. Os dois flags sao obrigatorios,
+    # portanto esta regra fica inerte em producao mesmo se a branch for
+    # incorporada por engano.
+    if admin and preview_senha:
+        if not admin.check_senha(preview_senha):
+            admin.set_senha(preview_senha)
+            admin.senha_provisoria = False
+            db.session.commit()
+            logger.warning('Senha do admin redefinida para o ambiente preview.')
+        return
+
+    if not admin:
+        senha_env = preview_senha or os.environ.get('ADMIN_PASSWORD')
         if senha_env:
             senha = senha_env
         else:
