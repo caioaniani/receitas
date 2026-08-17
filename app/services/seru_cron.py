@@ -884,18 +884,20 @@ def _run_ordens_semana(app):
                   'ordens de producao da semana')
 
 
-# Sufixo 'b': a regra "producao so seg-sex" (dono 17/08/2026, mesma tarde)
-# exigiu re-sincronizar a semana ja enviada — marker novo = o one-shot
-# roda mais uma vez no proximo boot e corrige sab/dom.
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17b'
+# Sufixos do marker: 'b' = regra "producao so seg-sex" (mesma tarde) exigiu
+# re-sincronizar a semana ja enviada; 'c' = pedidos da semana inteira no
+# meio-dia (mesma tarde) — o one-shot re-roda pra criar os pedidos de
+# sex..dom e re-sincronizar as ordens com o firme novo.
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17c'
 
 
 def _run_ordens_semana_retro(app):
     """One-shot de RETROAÇÃO (dono 17/08/2026: "você vai ter que retroagir,
-    a de ontem porque foi ontem o domingo"): a 1ª semana sai no primeiro
-    boot após o deploy, sem esperar o próximo meio-dia. O marker em
-    AppConfig garante que roda UMA vez — deploys futuros não re-executam;
-    se a rodada falhar (exceção antes do marker), o próximo boot retenta."""
+    a de ontem porque foi ontem o domingo"): a 1ª semana (pedidos + ordens)
+    sai no primeiro boot após o deploy, sem esperar o próximo meio-dia. O
+    marker em AppConfig garante que roda UMA vez — deploys futuros não
+    re-executam; se a rodada falhar (exceção antes do marker), o próximo
+    boot retenta."""
     from app.extensions import db
     from app.models import AppConfig
     from app.services import auto_pedidos
@@ -903,6 +905,8 @@ def _run_ordens_semana_retro(app):
     def _fn():
         if AppConfig.get(ORDENS_SEMANA_RETRO_MARKER):
             return
+        if os.environ.get('AUTO_PEDIDOS', '1') != '0':
+            auto_pedidos.gerar_pedidos_automaticos()
         auto_pedidos.enviar_ordens_da_semana()
         AppConfig.set(ORDENS_SEMANA_RETRO_MARKER,
                       datetime.now(timezone.utc).isoformat())
