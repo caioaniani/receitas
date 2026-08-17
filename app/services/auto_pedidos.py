@@ -330,13 +330,15 @@ def enviar_ordens_da_semana():
     PRÓXIMO DOMINGO (inclusive) que ainda não tem ordem enviada.
 
     No domingo ao meio-dia isso abre a semana inteira (seg..dom). Nos
-    demais dias o job é REDE: re-preenche dia que ficou sem ordem (dia
-    excluído na tela, deploy que engoliu o disparo de domingo — o
-    APScheduler não persiste misfire) e é no-op quando a semana está de
-    pé. Dia JÁ ENVIADO (humano ou cron) é pulado — "ordem enviada nunca
-    muda por caminho implícito"; o CONTEÚDO de cada ordem é mantido em
-    dia pelo 🔄 automático do próprio dia (`atualizar_plano_automatico`).
-    Motor: env `AUTO_ENVIO_MOTOR` (default 'vendas')."""
+    demais dias o job mantém a semana FIEL AO GRID: dia sem ordem é
+    enviado (rede contra dia excluído/deploy que engoliu o disparo — o
+    APScheduler não persiste misfire) e ordem do PRÓPRIO CRON é
+    RE-SINCRONIZADA com o grid do dia (o grid é a verdade; enviar é
+    re-pressável e preserva o já produzido). Ordem enviada por HUMANO é
+    intocável — "ordem enviada nunca muda por caminho implícito" vale pra
+    gesto humano; ordem de cron sempre foi mantida por refresh automático
+    (mesmo princípio do 🔄 das 06:45/19:05, que segue sendo a precisão do
+    PRÓPRIO dia). Motor: env `AUTO_ENVIO_MOTOR` (default 'vendas')."""
     from app.models import PlanejamentoProducao
     from app.services.producao import (
         PlanoJaEnviadoError,
@@ -351,20 +353,28 @@ def enviar_ordens_da_semana():
     # O grid precisa CONTER o fim (coluna fora do horizonte = envio no-op).
     horizonte = min(14, (fim - hoje_d).days + 1)
 
-    ja_enviadas = {p.data for p in (
+    planos = {p.data: p for p in (
         PlanejamentoProducao.query
         .filter_by(origem='cronograma')
         .filter(PlanejamentoProducao.data >= inicio,
-                PlanejamentoProducao.data <= fim,
-                PlanejamentoProducao.enviado_ao_padeiro.is_(True)))}
+                PlanejamentoProducao.data <= fim))}
 
     out = {'de': inicio.isoformat(), 'ate': fim.isoformat(), 'motor': motor,
-           'enviadas': [], 'puladas': [], 'vazias': []}
+           'enviadas': [], 'resincronizadas': [], 'puladas': [], 'vazias': []}
     dia = inicio
     while dia <= fim:
         iso = dia.isoformat()
-        if dia in ja_enviadas:
-            out['puladas'].append(iso)
+        plano = planos.get(dia)
+        enviado = plano is not None and plano.enviado_ao_padeiro is not False
+        if enviado and plano.criado_por is not None:
+            out['puladas'].append(iso)     # ordem HUMANA: nunca tocada
+            dia += timedelta(days=1)
+            continue
+        if enviado:
+            # Ordem do PRÓPRIO CRON: re-sincroniza com o grid de agora.
+            r = enviar_plano_do_dia(dia, user_id=None,
+                                    horizonte_dias=horizonte, motor=motor)
+            out['resincronizadas' if r is not None else 'vazias'].append(iso)
             dia += timedelta(days=1)
             continue
         try:
@@ -383,7 +393,8 @@ def enviar_ordens_da_semana():
         else:
             out['enviadas'].append(iso)
         dia += timedelta(days=1)
-    logger.info('ordens_semana: %s..%s enviadas=%s puladas=%s vazias=%s '
-                '(motor=%s)', out['de'], out['ate'], out['enviadas'],
-                out['puladas'], out['vazias'], motor)
+    logger.info('ordens_semana: %s..%s enviadas=%s resinc=%s puladas=%s '
+                'vazias=%s (motor=%s)', out['de'], out['ate'],
+                out['enviadas'], out['resincronizadas'], out['puladas'],
+                out['vazias'], motor)
     return out
