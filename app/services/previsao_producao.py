@@ -1910,6 +1910,14 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                                   if caixa > 1 else minimo)
                 else:
                     pedido = 0
+                # Pedido minimo DIARIO (dono 17/08/2026, danishes assadas):
+                # piso INCONDICIONAL do dia — vale mesmo com estoque
+                # sobrando (a loja recebe fresco "impreterivelmente"; a
+                # sobra e assunto do lancamento de sobras). A media manda
+                # quando o pedido calculado ja passa do piso.
+                if diario > 0 and pedido < diario:
+                    pedido = (int(ceil(diario / caixa)) * caixa
+                              if caixa > 1 else diario)
                 por_dia[i] = pedido
                 estoque = estoque + pedido - consumo_d
             # Mostra TODOS os produtos do "mundo" da loja (vende/estoca/pede),
