@@ -1976,8 +1976,9 @@ do seru_cron junto.
   re-nivelou POR LOTES a semana E a ordem DE HOJE (o 🔄 das 19:05 tinha
   posto o pico do brioche na ordem da madrugada); 'f' alvo por dias
   uteis (superado pelo 'h'); 'g' por-parcela; 'h' sem teto + peso
-  fallback. COSMETICO conhecido: celula de 5 digitos (levain 27835)
-  corta visualmente no grid. Testes: antecedencia + fatiamento +
+  fallback; 'i' antecedencia 2->3 ("Tem que adiantar, olha so terca nao
+  tem producao") + piso do Cinnamon Roll. COSMETICO conhecido: celula
+  de 5 digitos (levain 27835) corta visualmente no grid. Testes: antecedencia + fatiamento +
   frescor do FDS (qui+sex permitidos, dom nunca sai da sexta) +
   redistribuicao do excedente da sexta em test_cronograma.py.
 - **Producao NORMAL so de SEG a SEX (dono 17/08/2026: "Sabado e domingo a
