@@ -73,6 +73,46 @@ LOCK_KEY_MARKETING = 7750  # advisory lock pro marketing (Listmonk)
 #   do dono; o envio manual em /admin/briefing nao usa lock).
 
 
+def _erro_transitorio(exc):
+    """Condições ESPERADAS e re-tentáveis do cron que NÃO devem virar evento
+    no Sentry (17/08/2026 — a integração de logging promove todo ERROR a
+    evento e a cota grátis estourou só com este ruído):
+
+    - RuntimeError de SHUTDOWN do interpretador: deploy no meio do ciclo —
+      o ThreadPoolExecutor do `listar_pedidos_completo` recusa submissões
+      ("cannot schedule new futures..."). O worker novo refaz o ciclo.
+    - Falha de REDE da API da Seru que sobrou APÓS os retries do `_get`
+      (pool/ConnectionError, "Response ended prematurely", timeout, 5xx do
+      gateway). O ciclo de 15min re-tenta e o catch-up cobre o buraco;
+      indisponibilidade PERSISTENTE aparece pelos vigias/snapshot, não por
+      evento de exceção.
+
+    Qualquer outra exceção continua como `logger.exception` → Sentry.
+    Justificativa documentada aqui de propósito (regra do CLAUDE.md:
+    nunca silenciar erro sem justificativa)."""
+    import requests as _rq
+
+    from app.services import seru as _seru
+    if isinstance(exc, _seru._Erro5xx):
+        return True
+    if isinstance(exc, RuntimeError) and 'shutdown' in str(exc).lower():
+        return True
+    if isinstance(exc, _rq.exceptions.RequestException):
+        return True
+    return False
+
+
+def _falha_de_job(label, exc):
+    """Log canônico de falha de job do cron: transitório vira WARNING (não
+    gera evento Sentry), o resto segue exception/ERROR."""
+    if _erro_transitorio(exc):
+        logger.warning('%s: condição transitória (rede Seru/shutdown de '
+                       'deploy) — próximo ciclo re-tenta: %s',
+                       label, str(exc)[:200])
+    else:
+        logger.exception('%s falhou', label)
+
+
 def _com_lock(key, fn, label='job'):
     """Roda fn() protegida por advisory lock de sessao, com lock E unlock na
     MESMA conexao. Critico: advisory lock e por sessao — se o unlock roda
