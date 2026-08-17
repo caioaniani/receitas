@@ -1949,10 +1949,8 @@ do seru_cron junto.
   /api/claude/cronograma tambem default 1 (`?equilibrar=0` = curva).
   Overrides de celula APLICAM POR CIMA do nivelado (aplicar_overrides
   roda depois); testes que validam mecanica no "dia da demanda" pedem
-  `equilibrar=0` explicito. REFINO (retros 'f' e 'g', mesma noite): (1)
-  alvo de fornadas dividido pelos DIAS UTEIS do grid (dividir por 7 com
-  sab/dom bloqueados subestimava e o nivelador parava cedo — croissant
-  fatiava, sourdough nao); (2) a antecedencia e medida POR PARCELA contra
+  `equilibrar=0` explicito. REFINOS (retros 'f'/'g'/'h', mesma noite):
+  (1) a antecedencia e medida POR PARCELA contra
   o dia de DEMANDA original (`ref_pesos`: cada celula carrega
   [[dia_ref, peso], ...]; a rolagem do fim de semana APPENDA a parcela
   preservando o ref) — o 'f' usava o ref MAXIMO da celula e isso
