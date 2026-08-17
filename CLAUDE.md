@@ -1958,10 +1958,10 @@ do seru_cron junto.
   [[dia_ref, peso], ...]; a rolagem do fim de semana APPENDA a parcela
   preservando o ref) — o 'f' usava o ref MAXIMO da celula e isso
   CONGELAVA a sexta inteira (propria+sab+dom misturados; croissant
-  voltou a 1000 num dia — regressao pega em prod), o 'g' corrigiu: a
-  parcela propria de sexta pode ir ate quarta, a de sabado ate quinta e
-  a de domingo fica na sexta (pao de domingo assado na quarta teria 4
-  dias). No equilibrar as celulas viram SEGMENTOS [[ref, qtd]]
+  voltou a 1000 num dia — regressao pega em prod), o 'g' corrigiu: cada
+  parcela anda ate `ref - _ANTECEDENCIA_MAX_DIAS` (com 3: a de sexta ate
+  terca, a de sabado ate quarta, a de domingo ate quinta; segunda nunca
+  recebe demanda do FDS). No equilibrar as celulas viram SEGMENTOS [[ref, qtd]]
   (reparticao proporcional aos pesos, sobra de arredondamento no MAIOR
   ref — conservador); move-se primeiro a parcela de MENOR ref e a
   parcela movida MANTEM o ref no destino. (2) retro 'h' ("Esta assim
