@@ -603,10 +603,12 @@ def test_semana_no_domingo_abre_seg_a_dom(app, monkeypatch):
         assert len(out['enviadas']) == 7 and not out['puladas']
 
 
-def test_semana_fora_do_domingo_e_rede_e_pula_enviadas(app, monkeypatch):
-    """Fora do domingo o job é REDE: cobre amanhã..próximo domingo e PULA
-    dia que já tem ordem ENVIADA (humano ou cron) — "ordem enviada nunca
-    muda por caminho implícito"."""
+def test_semana_pula_ordem_humana_e_resincroniza_a_do_cron(app, admin_user,
+                                                          monkeypatch):
+    """Fora do domingo o job mantém a semana FIEL AO GRID: ordem enviada
+    por HUMANO (criado_por preenchido) nunca é tocada; ordem do PRÓPRIO
+    CRON (criado_por None) é re-sincronizada com o grid; dia sem ordem é
+    enviado (rede)."""
     from datetime import date
 
     from app.models import PlanejamentoProducao
@@ -615,10 +617,14 @@ def test_semana_fora_do_domingo_e_rede_e_pula_enviadas(app, monkeypatch):
     with app.app_context():
         seg = date(2026, 8, 17)                        # uma segunda real
         monkeypatch.setattr(auto_pedidos, 'hoje', lambda: seg)
-        qua = date(2026, 8, 19)
+        qua = date(2026, 8, 19)                        # ordem HUMANA
+        qui = date(2026, 8, 20)                        # ordem do CRON
         db.session.add(PlanejamentoProducao(
             data=qua, origem='cronograma', enviado_ao_padeiro=True,
-            nome='Ordem humana'))
+            criado_por=admin_user.id, nome='Ordem humana'))
+        db.session.add(PlanejamentoProducao(
+            data=qui, origem='cronograma', enviado_ao_padeiro=True,
+            criado_por=None, nome='Ordem do cron'))
         db.session.commit()
         monkeypatch.setattr(producao, 'aprovar_plano_do_dia',
                             lambda data, user_id=None, **kw: None)
@@ -627,9 +633,13 @@ def test_semana_fora_do_domingo_e_rede_e_pula_enviadas(app, monkeypatch):
             lambda data, user_id=None, **kw: chamadas.append(data) or
             type('P', (), {'itens': [1]})())
         out = auto_pedidos.enviar_ordens_da_semana()
+        # qua (humana) fora; qui entra como RE-SYNC; o resto como envio.
         esperados = [date(2026, 8, d) for d in (18, 20, 21, 22, 23)]
-        assert chamadas == esperados                   # ter, qui..dom
+        assert chamadas == esperados
         assert out['puladas'] == [qua.isoformat()]
+        assert out['resincronizadas'] == [qui.isoformat()]
+        assert out['enviadas'] == [date(2026, 8, d).isoformat()
+                                   for d in (18, 21, 22, 23)]
         assert out['ate'] == '2026-08-23'              # próximo domingo
 
 
