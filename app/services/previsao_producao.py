@@ -2591,11 +2591,13 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # cobre tambem a linha de insumo injetada pelo _explodir_bom.
         if rec is not None and getattr(rec, 'estoque_nao_abate', False):
             rr['estoque_nao_abate'] = True
-        # Fornada especial: marca as células de dia SEM produção permitida
-        # (seg-qua) pra tela travar a edição — vale também pras linhas
-        # injetadas depois da distribuição (zeradas/override).
-        if rec is not None and getattr(rec, 'fornada_especial', False):
-            rr['fornada_especial'] = True
+        # Marca as células de dia SEM produção permitida pra tela travar a
+        # edição — fornada especial fora de sex/sáb E (desde 17/08/2026)
+        # fim de semana pra TODA receita. Vale também pras linhas injetadas
+        # depois da distribuição (zeradas/override/insumo).
+        if rec is not None:
+            if getattr(rec, 'fornada_especial', False):
+                rr['fornada_especial'] = True
             for c, p in zip(rr['por_dia'], dias_prod):
                 if not producao_permitida_no_dia(rec, p):
                     c['bloqueado'] = True
