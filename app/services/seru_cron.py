@@ -205,8 +205,8 @@ def _run_sync(app):
                 # pendencia. Best-effort: nunca derruba o sync.
                 try:
                     seru_sync.retomar_reprocesso_pendente(app)
-                except Exception:
-                    logger.exception('retomada de reprocesso pendente falhou')
+                except Exception as exc:  # noqa: BLE001 — _falha_de_job classifica
+                    _falha_de_job('retomada de reprocesso pendente', exc)
                 # Vigia de venda SEM itens (18/07/2026, caso Nebraska: 23
                 # cobrancas "PDV Facil" so-valor, R$7.028,50, sem NF). Roda
                 # DENTRO do advisory lock do sync — execucao unica entre
