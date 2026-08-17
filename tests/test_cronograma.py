@@ -6,10 +6,21 @@ descontando o estoque dos primeiros dias.
 """
 from datetime import timedelta
 
+import pytest
+
 from app.extensions import db
 from app.models import EstoqueProducao, Loja, PedidoItem, PedidoLoja, Receita
 from app.services.previsao_producao import cronograma_producao
 from app.utils import hoje
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao so seg-sex (dono 17/08/2026) tornou o shaping do cronograma
+    sensivel ao dia da semana — congela hoje() numa SEGUNDA pros cenarios
+    hoje()+N deste arquivo cairem sempre em dia util, em qualquer dia em que
+    a suite rode (ver conftest.congela_hoje)."""
+    congela_hoje()
 
 
 def _receita(nome='Pão'):
@@ -600,6 +611,93 @@ def test_fornada_especial_celula_bloqueada_na_tela(app, admin_user):
     assert 'cel-bloq' in html            # horizonte de 7 dias sempre tem seg-qua
     assert 'fim de semana' in html
     assert 'produz só sexta/sábado' in html
+
+
+# ── produção NORMAL só de segunda a sexta (dono 17/08/2026): "Sábado e
+# domingo a gente não produz, jogar tudo para segunda a sexta, a única coisa
+# que produzimos de sábado é a fornada especial". A demanda de sáb/dom rola
+# pro último dia permitido anterior (sexta), na receita final E no insumo. ──
+
+def test_receita_normal_nao_produz_no_fim_de_semana(app):
+    """Pedidos firmes de SÁBADO e DOMINGO numa receita comum: nenhuma célula
+    de fim de semana produz — tudo rola pra SEXTA. As células de sáb/dom
+    saem bloqueadas pra tela."""
+    from datetime import date as _date
+
+    loja = _loja()
+    r = _receita('Pao de Semana')
+    hoje_d = hoje()
+    domingo = _proximo_dow(hoje_d, 6)
+    sexta = domingo - timedelta(days=2)
+    assert sexta >= hoje_d               # garantido pelo hoje() congelado (seg)
+    _pedido(loja, 'pendente', domingo, r, 40)
+    _pedido(loja, 'pendente', domingo - timedelta(days=1), r, 30)   # sábado
+
+    horizonte = (domingo - hoje_d).days + 1
+    crono = cronograma_producao(horizonte_dias=horizonte, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 70          # nada se perde
+    por_data = {c['data']: c['qtd'] for c in rr['por_dia']}
+    for c in rr['por_dia']:
+        d = _date.fromisoformat(c['data'])
+        if c['qtd']:
+            assert d.weekday() < 5                       # só dia útil
+        if d.weekday() >= 5:
+            assert c.get('bloqueado') is True            # tela trava a célula
+    assert por_data.get(sexta.isoformat(), 0) >= 70      # sáb+dom saem de sexta
+
+
+def test_insumo_vespera_de_segunda_nao_cai_no_domingo(app):
+    """Croissant pedido pra SEGUNDA com massa de lead 1: a véspera cairia no
+    DOMINGO — a produção do insumo rola pra SEXTA (produzir mais cedo chega
+    a tempo); a linha do insumo também não produz em fim de semana."""
+    from datetime import date as _date
+
+    from app.models import ReceitaIngrediente
+
+    loja = _loja()
+    massa = _receita('Massa FDS')
+    massa.dias_producao = 1
+    cro = _receita('Croissant FDS')
+    cro.rendimento_qtd = 50
+    db.session.add(ReceitaIngrediente(
+        receita_id=cro.id, tipo='receita', sub_receita_id=massa.id,
+        ingrediente_nome='Massa FDS', porcentagem=1))
+    db.session.commit()
+    hoje_d = hoje()
+    segunda = _proximo_dow(hoje_d, 0)
+    assert segunda - timedelta(days=3) >= hoje_d         # sexta no grid
+    _pedido(loja, 'pendente', segunda, cro, 100)
+
+    horizonte = (segunda - hoje_d).days + 1
+    crono = cronograma_producao(horizonte_dias=horizonte, inicio_offset_dias=0)
+    rm = _rec_out(crono, massa.id)
+    assert rm is not None and rm['total'] >= 2           # 100 × (1/50)
+    for c in rm['por_dia']:
+        if c['qtd']:
+            assert _date.fromisoformat(c['data']).weekday() < 5
+
+
+def test_editar_celula_recusa_fim_de_semana_receita_normal(app):
+    """Editar célula de RECEITA COMUM no sábado é recusado (dia_bloqueado,
+    mensagem própria — não a da fornada); sexta segue editável."""
+    from app.models import CronogramaOverride
+    from app.services.cronograma_edit import editar_celula
+
+    loja = _loja()
+    r = _receita('Pao Semana Edit')
+    _pedido(loja, 'pendente', _proximo_dow(hoje(), 3), r, 40)     # na grade
+
+    sabado = _proximo_dow(hoje(), 5)
+    res = editar_celula(r.id, sabado.isoformat(), 25,
+                        horizonte_dias=14, inicio_offset_dias=0)
+    assert res['erro'] == 'dia_bloqueado'
+    assert 'segunda a sexta' in res['msg']
+    assert CronogramaOverride.query.count() == 0         # nada salvo
+    sexta = _proximo_dow(hoje(), 4)
+    res2 = editar_celula(r.id, sexta.isoformat(), 25,
+                         horizonte_dias=14, inicio_offset_dias=0)
+    assert res2 is not None and 'erro' not in res2
 
 
 def test_bom_explode_sub_receita(app):
