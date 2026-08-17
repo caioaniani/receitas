@@ -86,7 +86,15 @@
       {% if cargos %}<button class="btn btn-sm btn-outline-dark mt-1 py-0 px-1">Salvar cargos</button>{% endif %}</form></div>{% endfor %}
   <form method="POST" action="{{ url_for('treino.admin_trilha') }}" class="d-flex flex-wrap gap-1">{{ csrf() }}
     <input name="nome" class="form-control form-control-sm" placeholder="Nova trilha">
-    <button class="btn btn-sm btn-primary">Criar trilha</button></form></div></div>
+    <button class="btn btn-sm btn-primary">Criar trilha</button></form>
+  <form method="POST" action="{{ url_for('treino.admin_importar_roteiros') }}"
+        enctype="multipart/form-data" class="d-flex flex-wrap gap-1 mt-2 pt-2 border-top"
+        onsubmit="return confirm('Importar o plano de conteúdo? Trilhas e aulas novas nascem DESATIVADAS (rascunho com roteiro); nada existente é apagado.');">
+    {{ csrf() }}
+    <input type="file" name="arquivo" accept=".xlsx" class="form-control form-control-sm" style="max-width:300px;" required>
+    <button class="btn btn-sm btn-outline-primary">📋 Importar roteiros (xlsx)</button>
+    <span class="small text-muted align-self-center">módulo → trilha; aula → rascunho com o roteiro de gravação dentro</span>
+  </form></div></div>
 
 <div class="card mb-3"><div class="card-header py-2"><strong>Recompensas</strong></div><div class="card-body">
   <p class="small text-muted mb-2">São os <strong>prêmios</strong> que o funcionário troca
