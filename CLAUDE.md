@@ -1830,10 +1830,10 @@ do seru_cron junto.
     pedidos_semana (escrita), previsao_producao (media + ressinc) e
     previsao_acuracia (circularidade) importam de la. NUNCA re-literalar.
   - PENDENCIA ACEITA (design consistente com o fluxo do cronograma, que
-    so enxerga origem='cronograma'): plano AVULSO/manual de amanha ja
-    enviado ao padeiro NAO suprime o auto-envio do corte — se um dia o
-    dono usar plano avulso pra cobrir amanha, viram duas ordens;
-    decisao separada.
+    so enxerga origem='cronograma'): plano AVULSO/manual ja enviado ao
+    padeiro NAO suprime a ordem da semana daquele dia — se um dia o dono
+    usar plano avulso pra cobrir um dia, viram duas ordens; decisao
+    separada.
   **RETROALIMENTACAO (decisao documentada 13/08)**: pedido-maquina que
   SAI de 'pendente' (separado/entregue) ENTRA na media de pedidos —
   exclui-lo pra sempre faria a media (denominador com zeros por data)
