@@ -1777,7 +1777,25 @@ do seru_cron junto.
   via `pedidos_semana.aplicar_grade` com `user_id=None` — rascunho
   'pendente' com o marcador padrao. No domingo 12:00 nascem os pedidos de
   seg..dom E na sequencia as ordens da semana (mesmo job `ordens-semana`
-  — pedidos primeiro, o firme alimenta o grid). **RE-SINCRONIZACAO REAL (fix da revisao
+  — pedidos primeiro, o firme alimenta o grid).
+- **Danishes ASSADAS: colchao diario de 2 por loja (dono 17/08/2026,
+  "receberem assado 2 danishes ASSADOS de cada... se vendeu 2 ou mais
+  deveria pedir a mais")**: implementado SEM mecanismo novo — seed
+  one-shot `migrations_legacy._seed_minimo_danish` (marker
+  `seed_minimo_danish_2026_08`) poe `estoque_loja.estoque_minimo = 2` nas
+  5 receitas (calabresa, queijo branco, mucarela de bufala, alho poro,
+  maca) em cada loja ATIVA de funcionamento diario (Industria e Cantina
+  fora; minimo ja definido pelo dono NUNCA e sobrescrito; depois do seed
+  a tela /pedidos/estoque-loja manda). O motor venda+estoque ja faz o
+  resto: alvo do dia = max(media de venda, minimo) − estoque (repoe o
+  colchao E pede a mais quando a venda passa de 2), e item com minimo
+  NUNCA some da grade. O "ASSADO" sai de graca: as 5 receitas ja tem
+  `estado_padrao='assado'` e `PedidoItem.estado_efetivo` faz a linha do
+  pedido (cron ou humana sem estado) renderizar "(assado)". CONSEQUENCIA
+  operacional: o colchao so "gira" se a loja LANCA a sobra das que nao
+  venderam (o desperdicio baixa o estoque e o dia seguinte repoe fresco)
+  — e a mesma disciplina da cobranca das 20h. Testes:
+  `tests/test_seed_minimo_danish.py` (6 casos). **RE-SINCRONIZACAO REAL (fix da revisao
   13/08/2026)**: o motor recebe `ressincronizar_datas` e trata o rascunho
   do PROPRIO cron como substituivel (fora do `ja_tem` e das entregas
   simuladas) — sem isso, dia ja pedido devolvia sugestao 0 e a quantidade
