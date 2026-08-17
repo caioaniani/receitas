@@ -3094,6 +3094,12 @@ def _migrate_sqlite(app):
             "SELECT 1 FROM wifi_portal_sessao s "
             "WHERE LOWER(s.email) = LOWER(cliente.email)))")
 
+    # Roteiro da aula do treinamento (13/08/2026) — espelho do bloco Postgres.
+    cursor.execute("PRAGMA table_info(treino_video)")
+    cols_tv = [row[1] for row in cursor.fetchall()]
+    if cols_tv and 'roteiro' not in cols_tv:
+        cursor.execute("ALTER TABLE treino_video ADD COLUMN roteiro TEXT")
+
     # Bloqueio de itens por data especial (07/08/2026) — espelho do PG.
     cursor.execute("PRAGMA table_info(loja_data_especial)")
     cols_lde = [row[1] for row in cursor.fetchall()]
