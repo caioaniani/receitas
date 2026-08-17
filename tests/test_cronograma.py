@@ -411,6 +411,40 @@ def test_rota_cronograma_motor_vendas_renderiza(app, admin_user):
     assert 'Croissant Motor UI' in html
 
 
+def test_tela_abre_no_motor_vendas_por_default(app, admin_user):
+    """Decisão do dono 17/08/2026 ("mesma régua em tudo"): SEM ?motor= a
+    tela abre em VENDAS — mesma régua da automação (auto-envio + 🔄). URL
+    antiga/bookmark sem o param cai no motor novo."""
+    loja = _loja()
+    r = _receita('Croissant Default Vendas')
+    _vendas_no_dow(r, loja, 40)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    html = client.get('/telaindustriateste/').get_data(as_text=True)
+    assert 'previsão por VENDAS' in html          # badge = motor ativo
+    # receita SÓ com venda (sem pedido histórico) aparece no grid default
+    assert 'Croissant Default Vendas' in html
+    # o motor viaja explícito nos forms de ordem do dia (aprovar/enviar):
+    # escolher 'pedidos' no select também é preservado no POST.
+    assert 'name="motor" value="vendas"' in html
+
+
+def test_escolher_pedidos_no_select_e_preservado(app, admin_user):
+    """Com o default em vendas, quem escolhe 'Pedidos das lojas' no select
+    não pode ser devolvido pra 'vendas' no redirect/POST — o motor agora
+    viaja SEMPRE explícito (hidden + _params_visao)."""
+    _loja()
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    html = client.get('/telaindustriateste/?motor=pedidos').get_data(
+        as_text=True)
+    assert 'previsão por VENDAS' not in html      # badge só fora do pedidos
+    assert 'name="motor" value="pedidos"' in html  # hidden preserva a escolha
+
+
 def test_enviar_com_motor_vendas_usa_a_grade_de_vendas(app, admin_user):
     """Enviar ao padeiro com motor=vendas cria a ordem a partir da grade de
     VENDAS — receita sem pedido histórico entra no plano (no motor
