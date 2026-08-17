@@ -952,7 +952,11 @@ def test_decompor_previsao_por_loja_e_dia(app):
 
 
 def test_rota_previsao_renderiza(app, admin_user):
-    """A rota /telaindustriateste/previsao/<id> renderiza a decomposição."""
+    """A rota /telaindustriateste/previsao/<id> renderiza a decomposição.
+
+    O seed é histórico de PEDIDOS, então pede ?motor=pedidos explícito —
+    desde 17/08/2026 o default da tela é 'vendas' e sem o param a
+    decomposição por loja sairia vazia (não é o que este teste cobre)."""
     loja = _loja('Anesio')
     r = _receita('Croissant')
     db.session.commit()
@@ -963,7 +967,7 @@ def test_rota_previsao_renderiza(app, admin_user):
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
                 follow_redirects=True)
-    resp = client.get('/telaindustriateste/previsao/%d' % r.id)
+    resp = client.get('/telaindustriateste/previsao/%d?motor=pedidos' % r.id)
     assert resp.status_code == 200
     html = resp.get_data(as_text=True)
     assert 'De onde vem a previsão' in html
