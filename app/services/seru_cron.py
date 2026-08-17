@@ -190,8 +190,8 @@ def _run_sync(app):
                 try:
                     from app.services import vendas_diarias
                     vendas_diarias.capturar_periodo(hoje - timedelta(days=1), hoje)
-                except Exception:
-                    logger.exception('captura vendas_diarias no cron falhou')
+                except Exception as exc:  # noqa: BLE001 — _falha_de_job classifica
+                    _falha_de_job('captura vendas_diarias no cron', exc)
                     # Sem rollback, os DELETEs pendentes de um snapshot que
                     # falhou no meio seriam COMMITADOS pelo proximo commit da
                     # mesma sessao (ex: o do vigia abaixo) — dias sumiriam
