@@ -711,31 +711,50 @@ def test_atualiza_sem_ordem_e_noop(app, monkeypatch):
         assert chamadas == []
 
 
-def test_envio_dia_vazio_nao_explode(app, monkeypatch):
+def test_semana_dia_sem_nada_conta_como_vazio(app, monkeypatch):
+    """Dia cujo grid não tem nada a produzir (enviar devolve None) entra em
+    `vazias` — não explode nem conta como enviado."""
     from app.services import producao
     with app.app_context():
         monkeypatch.setattr(producao, 'aprovar_plano_do_dia',
                             lambda *a, **kw: None)
         monkeypatch.setattr(producao, 'enviar_plano_do_dia',
                             lambda *a, **kw: None)
-        out = auto_pedidos.enviar_plano_automatico()
-        assert out.get('vazio') is True and out['itens'] == 0
+        out = auto_pedidos.enviar_ordens_da_semana()
+        assert not out['enviadas']
+        assert len(out['vazias']) >= 1
 
 
-def test_motor_do_envio_por_env(app, monkeypatch):
+def test_motor_da_semana_por_env(app, monkeypatch):
     """A env AUTO_ENVIO_MOTOR segue mandando sobre o default 'vendas' —
     setada com outro motor, é ela que vale (Railway sobrepõe o código)."""
     from app.services import producao
-    chamadas = []
+    motores = set()
     with app.app_context():
         monkeypatch.setenv('AUTO_ENVIO_MOTOR', 'pedidos')
         monkeypatch.setattr(producao, 'aprovar_plano_do_dia',
                             lambda data, user_id=None, **kw:
-                            chamadas.append(kw.get('motor')))
+                            motores.add(kw.get('motor')))
         monkeypatch.setattr(
             producao, 'enviar_plano_do_dia',
             lambda data, user_id=None, **kw:
-            chamadas.append(kw.get('motor')) or
+            motores.add(kw.get('motor')) or
             type('P', (), {'itens': []})())
-        auto_pedidos.enviar_plano_automatico()
-        assert chamadas == ['pedidos', 'pedidos']
+        auto_pedidos.enviar_ordens_da_semana()
+        assert motores == {'pedidos'}
+
+
+def test_retro_one_shot_roda_uma_vez(app, monkeypatch):
+    """O one-shot de retroação (boot pós-deploy de 17/08/2026) roda UMA
+    vez: grava o marker em AppConfig e o boot seguinte não re-executa."""
+    from app.models import AppConfig
+    from app.services import seru_cron
+    chamadas = []
+    with app.app_context():
+        monkeypatch.setattr(auto_pedidos, 'enviar_ordens_da_semana',
+                            lambda: chamadas.append(1))
+        seru_cron._run_ordens_semana_retro(app)
+        assert chamadas == [1]
+        assert AppConfig.get(seru_cron.ORDENS_SEMANA_RETRO_MARKER)
+        seru_cron._run_ordens_semana_retro(app)
+        assert chamadas == [1]                         # não repetiu
