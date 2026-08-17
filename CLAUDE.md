@@ -1841,28 +1841,33 @@ do seru_cron junto.
   O eco e limitado pela `quantidade_recebida` (conferencia na entrega) e
   medido em `previsao_acuracia.circularidade_pct`. Rascunho ainda
   'pendente' segue fora (exclusao de sempre).
-- **Auto-envio** (`enviar_plano_automatico`, cron 19:00 BRT = HORA_CORTE,
-  lock 7759, kill-switch `AUTO_ENVIO_PLANO=0`): no corte o pedido de
-  amanha trava
-  (corte) e, SE a ordem de amanha ainda nao foi enviada, ela e
-  aprovada+ENVIADA ao padeiro (motor env `AUTO_ENVIO_MOTOR`; default
-  **'vendas' desde 17/08/2026** — dono: "producao da semana programada
-  baseado no historico de vendas e estoque"; era 'pedidos'. ATENCAO: env
-  setada no Railway MANDA sobre o default do codigo — se um dia o motor
-  parecer errado, conferir se `AUTO_ENVIO_MOTOR` existe la). O 🔄
-  automatico (abaixo) usa o MESMO fallback — mudar um exige mudar o
-  outro. **Ordem JA ENVIADA (gesto humano na tela, com o motor/
-  equilibrar DELE) NAO e reenviada** (fix achado 3 da revisao 13/08 —
-  reenviar com os defaults do cron trocaria os numeros do padeiro em
-  silencio; a regra "ordem enviada nunca muda por caminho implicito"
-  segue valendo). `PlanoJaEnviadoError` no aprovar = humano enviou na
-  corrida → desiste tambem. Dia sem grid = nada enviado. LIMITACAO
-  DOCUMENTADA: o plano de amanha congela a VESPERA da venda de D+2
-  (fornada especial/lead 1) — mudanca em D+2 depois do envio so chega ao
-  padeiro pelo "🔄 atualizar producao" manual (mesma janela do fluxo
-  humano de antes). Corrida residual aceita: humano criando pedido nos
-  segundos entre o snapshot de protecao e o commit do cron pode ser
-  sobrescrito UMA vez (proxima rodada protege).
+- **Ordem da SEMANA** (`enviar_ordens_da_semana`, dono 17/08/2026:
+  "a ordem de producao da semana soltando ela no domingo, meio-dia, ate o
+  proximo domingo" + "quanto menos e mais" — SUBSTITUI o envio diario das
+  19:00 de 10/08/2026; lock 7759, kill-switch `AUTO_ENVIO_PLANO=0`):
+  job DIARIO as 12:00 BRT (`ordens-semana`) que envia ao padeiro a ordem
+  de cada dia de AMANHA ate o PROXIMO DOMINGO que ainda nao tem ordem
+  enviada. No domingo 12:00 isso abre a semana inteira (seg..dom); nos
+  outros dias e REDE — re-preenche dia excluido/disparo engolido por
+  deploy (APScheduler nao persiste misfire e o auto-deploy reinicia o
+  processo a qualquer hora) e e no-op com a semana de pe. Motor env
+  `AUTO_ENVIO_MOTOR`; default **'vendas'** (dono 17/08/2026; env setada
+  no Railway MANDA sobre o codigo — dono confirmou que NAO ha env la). O
+  🔄 automatico (abaixo) usa o MESMO fallback — mudar um exige mudar o
+  outro. Dia JA ENVIADO (humano ou cron) e PULADO — "ordem enviada nunca
+  muda por caminho implicito"; `PlanoJaEnviadoError` no aprovar (humano
+  enviou na corrida) tambem pula so aquele dia. Dia sem nada no grid =
+  `vazias` (nada criado). CONSEQUENCIAS deliberadas: (1) pra TIRAR um
+  dia da producao, zera-se o grid (envio de dia vazio limpa a ordem) —
+  EXCLUIR a ordem faz o meio-dia seguinte reenvia-la do grid; (2) a
+  pre-baixa de MP reserva a SEMANA inteira no envio (mesma semantica de
+  sempre do enviar — o 🔄 diario reconcilia o delta); (3) ordem de dia
+  futuro fica com numero do domingo ate o 🔄 do proprio dia — o padeiro
+  executa so a ordem DE HOJE, que o 🔄 mantem em dia (06:45/19:05), e a
+  tela mostra "difere do enviado" nos demais. RETRO one-shot no deploy
+  de 17/08/2026: job 'date' no boot (+2min) roda a 1a semana com marker
+  AppConfig `ordens_semana_retro_2026_08_17` (falhou = proximo boot
+  retenta; rodou = deploys futuros pulam).
 - **Corte do fim do dia** (`app/services/pedido_corte.py`, HORA_CORTE=19
   desde 13/08/2026): pedido com
   `data_entrega == amanha` trava as 19:00 BRT — e o horario do
