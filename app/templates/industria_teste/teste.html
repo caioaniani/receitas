@@ -363,11 +363,12 @@
             <option value="vendas" {{ 'selected' if motor == 'vendas' }}>Vendas das lojas</option>
             <option value="maior" {{ 'selected' if motor == 'maior' }}>Maior dos dois</option>
         </select>
-        <label class="small text-muted mb-0 ms-2 d-flex align-items-center gap-1"
-               title="Cada receita inteira num dia; nivela as fornadas por dia, adiantando receitas pra encher dias ociosos.">
-            <input type="checkbox" name="equilibrar" value="1"
-                   {{ 'checked' if equilibrar }}> equilibrar carga
-        </label>
+        <label class="small text-muted mb-0 ms-2">Carga:</label>
+        <select name="equilibrar" class="form-select form-select-sm" style="width:auto;"
+                title="Equilibrada (padrão desde 17/08/2026): cada receita inteira num dia, fornadas niveladas de segunda a sexta — entrega nunca atrasa. Pela demanda: produz no dia em que o estoque acaba (curva).">
+            <option value="1" {{ 'selected' if equilibrar }}>equilibrada</option>
+            <option value="0" {{ 'selected' if not equilibrar }}>pela demanda</option>
+        </select>
         <button class="btn btn-sm btn-outline-secondary">ver</button>
     </form>
     <div class="d-flex gap-2 align-items-center flex-wrap">
