@@ -1949,10 +1949,19 @@ do seru_cron junto.
   /api/claude/cronograma tambem default 1 (`?equilibrar=0` = curva).
   Overrides de celula APLICAM POR CIMA do nivelado (aplicar_overrides
   roda depois); testes que validam mecanica no "dia da demanda" pedem
-  `equilibrar=0` explicito. Retros: 'd' redistribuiu a semana no modo
-  antigo; 'e' re-nivelou POR LOTES a semana E a ordem DE HOJE (o 🔄 das
-  19:05 tinha posto o pico do brioche na ordem da madrugada). Testes:
-  antecedencia + fatiamento em test_cronograma.py.
+  `equilibrar=0` explicito. REFINO (retro 'f', mesma noite): (1) alvo de
+  fornadas dividido pelos DIAS UTEIS do grid (dividir por 7 com sab/dom
+  bloqueados subestimava e o nivelador parava cedo — croissant fatiava,
+  sourdough nao); (2) a antecedencia e medida contra o dia de DEMANDA da
+  celula (`ref_dia`, que a rolagem do fim de semana carrega junto) — sem
+  isso a sexta, que ja embute sab/dom, podia ser adiantada de novo e o
+  pao de domingo sairia com 4 dias (frescor furado; parcela do FDS fica
+  na sexta). Retros: 'd' redistribuiu no modo antigo; 'e' re-nivelou POR
+  LOTES a semana E a ordem DE HOJE (o 🔄 das 19:05 tinha posto o pico do
+  brioche na ordem da madrugada); 'f' aplicou o refino. COSMETICO
+  conhecido: celula de 5 digitos (levain 27835) corta visualmente no
+  grid. Testes: antecedencia + fatiamento + frescor do FDS em
+  test_cronograma.py.
 - **Producao NORMAL so de SEG a SEX (dono 17/08/2026: "Sabado e domingo a
   gente nao produz, jogar tudo para segunda a sexta, a unica coisa que
   produzimos de sabado e a fornada especial")**: `_DIAS_PRODUCAO_NORMAL =
