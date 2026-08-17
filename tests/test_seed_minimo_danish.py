@@ -171,6 +171,57 @@ def test_v2_roda_uma_vez_e_nao_sobrescreve(app):
         assert el.pedido_minimo_diario is None       # não ressuscita
 
 
+# ── v3: filtro de loja corrigido ('0123456' da tela = abre todo dia) ────
+
+def test_v3_inclui_loja_com_semana_inteira_gravada(app):
+    """CAUSA REAL do setados=0 em prod: a tela de lojas grava '0123456' e o
+    filtro antigo só aceitava VAZIO. O v3 trata semana inteira como loja
+    diária; restrita de verdade ('56') segue fora; estoque_minimo (ajuste
+    manual do dono) não é tocado."""
+    from app.migrations_legacy import _seed_minimo_danish_v3
+    with app.app_context():
+        receitas, lojas = _cenario()
+        for chave in ('anesio', 'ribeiro'):
+            lojas[chave].dias_funcionamento = '0123456'   # como em prod
+        el_manual = EstoqueLoja(loja_id=lojas['anesio'].id,
+                                receita_id=receitas[0].id,
+                                quantidade=5, estoque_minimo=2)
+        db.session.add(el_manual)
+        db.session.commit()
+        _seed_minimo_danish_v3(app)
+        for chave in ('anesio', 'ribeiro'):
+            els = EstoqueLoja.query.filter_by(loja_id=lojas[chave].id).all()
+            assert len(els) == 5
+            assert all(int(e.pedido_minimo_diario or 0) == 2 for e in els)
+        for chave in ('cantina', 'industria', 'fechada'):
+            assert EstoqueLoja.query.filter_by(
+                loja_id=lojas[chave].id).count() == 0
+        db.session.refresh(el_manual)
+        assert el_manual.estoque_minimo == 2       # ajuste do dono intocado
+        marker = AppConfig.get(SEED_MINIMO_DANISH['chave_v3'])
+        assert 'setados=10' in marker              # 2 lojas × 5 receitas
+        assert 'lojas=2' in marker and 'receitas=5' in marker
+
+
+def test_v3_nao_sobrescreve_piso_e_roda_uma_vez(app):
+    from app.migrations_legacy import _seed_minimo_danish_v3
+    with app.app_context():
+        receitas, lojas = _cenario()
+        el = EstoqueLoja(loja_id=lojas['anesio'].id,
+                         receita_id=receitas[0].id, quantidade=0,
+                         pedido_minimo_diario=4)   # valor do dono
+        db.session.add(el)
+        db.session.commit()
+        _seed_minimo_danish_v3(app)
+        db.session.refresh(el)
+        assert el.pedido_minimo_diario == 4        # mantido
+        el.pedido_minimo_diario = None             # dono tirou o piso
+        db.session.commit()
+        _seed_minimo_danish_v3(app)
+        db.session.refresh(el)
+        assert el.pedido_minimo_diario is None     # marker: não ressuscita
+
+
 # ── motor: o piso diário é INCONDICIONAL no pedido de cada dia ──────────
 
 def test_motor_pede_2_por_dia_mesmo_com_estoque_sobrando(app, loja):
