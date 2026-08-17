@@ -368,9 +368,7 @@ def enviar_ordens_da_semana():
     )
     motor = (os.environ.get('AUTO_ENVIO_MOTOR') or 'vendas').strip()
     hoje_d = hoje()
-    inicio = hoje_d + timedelta(days=1)
-    # Próximo domingo INCLUSIVE a partir de amanhã (weekday: seg=0..dom=6).
-    fim = inicio + timedelta(days=(6 - inicio.weekday()) % 7)
+    inicio, fim = _janela_da_semana(hoje_d)
     # O grid precisa CONTER o fim (coluna fora do horizonte = envio no-op).
     horizonte = min(14, (fim - hoje_d).days + 1)
 
