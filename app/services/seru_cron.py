@@ -915,6 +915,10 @@ def _run_ordens_semana_retro(app):
             return
         if os.environ.get('AUTO_PEDIDOS', '1') != '0':
             auto_pedidos.gerar_pedidos_automaticos()
+        # A ordem DE HOJE tambem (retro 'e'): o 🔄 das 19:05 tinha aplicado
+        # o nivelamento antigo (receita inteira num dia) na ordem que o
+        # padeiro executa NESTA madrugada — re-nivela por lotes junto.
+        auto_pedidos.atualizar_plano_automatico()
         auto_pedidos.enviar_ordens_da_semana()
         AppConfig.set(ORDENS_SEMANA_RETRO_MARKER,
                       datetime.now(timezone.utc).isoformat())
