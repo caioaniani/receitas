@@ -2488,62 +2488,91 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             'por_dia': por_dia, 'total': sum(liquido),
         })
 
-    # Equilibrar carga (opt-in): em vez de espalhar cada receita pela curva de
-    # demanda, poe cada receita INTEIRA num unico dia e nivela as FORNADAS por
-    # dia, ADIANTANDO receitas (puxando pra frente) pra encher dias ociosos.
-    # Cada receita pode ir de hoje ate seu deadline (1o dia que ja produzia) —
-    # nunca depois (a entrega tem que sair). Sem limite de frescor (decisao do
-    # dono 29/06): qualquer receita pode ser adiantada. Nao divide receita.
+    # Equilibrar carga POR LOTES (dono 17/08/2026, v2 — SUBSTITUI o
+    # "receita inteira num unico dia" de 29/06 pelos dois casos reais da
+    # primeira noite: "nao da para produzir tudo isso de brioche, ele vence
+    # em 3 dias" e "por que nao redistribuir o croissant em lotes
+    # menores?"): parte da CURVA de demanda (que ja rolou fim de semana e
+    # consolidou dribble) e move LOTES pra dias ANTERIORES menos
+    # carregados, nivelando as fornadas seg-sex. Regras:
+    # - nunca move pra DEPOIS (a entrega tem que sair — igual antes);
+    # - antecedencia maxima `_ANTECEDENCIA_MAX_DIAS` (frescor: nada e
+    #   produzido a mais de N dias da necessidade — brioche nunca mais sai
+    #   inteiro na segunda pra semana toda);
+    # - lote do movimento = lote_producao > lote_pedido > 1 fornada da
+    #   amassadeira (receitas SE DIVIDEM entre dias — 1000 croissants viram
+    #   lotes de fornada, nao um dia-monstro);
+    # - dia bloqueado da receita (fim de semana, fornada especial fora de
+    #   sex/sab) nunca recebe (`producao_permitida_no_dia`).
     if equilibrar:
         n = len(dias_prod)
         itens_eq = []
         for rr in receitas_out:
-            total = rr['total']
-            if total <= 0:
+            if rr['total'] <= 0:
                 continue
             rec = receitas.get(rr['receita_id'])
+            if rec is None:
+                continue
             from app.services.massa_base import rendimento_massa_crua
             rend = rendimento_massa_crua(rec)
-            forn = fornadas_amassadeira(rec, max(1, ceil(total / rend))) or 1
-            # deadline = 1o dia com producao na distribuicao normal (o mais
-            # tarde que da pra produzir sem atrasar a entrega); pode adiantar.
-            deadline = next((i for i, c in enumerate(rr['por_dia'])
-                             if c['qtd'] > 0), n - 1)
-            itens_eq.append({'rr': rr, 'total': total, 'rec': rec, 'rend': rend,
-                             'F': forn, 'dia': deadline})
+            lote_prod = int(getattr(rec, 'lote_producao', 0) or 0)
+            lote = lote_prod or int(getattr(rec, 'lote_pedido', 0) or 0)
+            cap_g = int(getattr(rec, 'capacidade_amassadeira_g', 0) or 0)
+            mb = massa_receita_base(rec) if (cap_g > 0 and rend > 0) else 0
+            unid_forn = (cap_g * rend / mb) if mb > 0 else 0.0
+            chunk = int(lote or (round(unid_forn) if unid_forn >= 1 else 0)
+                        or max(1, ceil(rr['total'] / n)))
+            # Peso de nivelamento em "fornadas": 1 unidade vale 1/fornada
+            # (sem amassadeira, 1/rend) — nivela o trabalho, nao a unidade
+            # (levain em gramas nao pode dominar croissant em pecas).
+            peso = (1.0 / unid_forn) if unid_forn >= 1 else (
+                1.0 / max(1.0, rend))
+            itens_eq.append({'rr': rr, 'rec': rec, 'rend': rend,
+                             'qtds': [c['qtd'] for c in rr['por_dia']],
+                             'chunk': max(1, chunk), 'peso': peso})
         if itens_eq:
             carga = [0.0] * n
             for it in itens_eq:
-                carga[it['dia']] += it['F']
-            alvo = sum(it['F'] for it in itens_eq) / n
-            # Enche da frente: puxa receita INTEIRA do dia mais carregado (mais
-            # tarde) pra ca ate chegar perto do alvo; dia ocioso aceita ao menos
-            # uma. So adianta (dia > d) — nunca atrasa.
+                for i, q in enumerate(it['qtds']):
+                    carga[i] += q * it['peso']
+            alvo = (sum(carga) / n) if n else 0.0
             for d in range(n):
                 while carga[d] < alvo:
-                    # Fornada especial nunca e adiantada pra dia fora de
-                    # sex/sab (a nivelacao encheria uma segunda ociosa).
-                    cands = sorted((it for it in itens_eq if it['dia'] > d
-                                    and producao_permitida_no_dia(
-                                        it['rec'], dias_prod[d])),
-                                   key=lambda it: -carga[it['dia']])
-                    if not cands:
+                    # Fonte: o dia MAIS carregado dentro da janela de
+                    # antecedencia com lote movel pra d.
+                    melhor = None
+                    for it in itens_eq:
+                        if not producao_permitida_no_dia(it['rec'],
+                                                         dias_prod[d]):
+                            continue
+                        fim_j = min(n, d + _ANTECEDENCIA_MAX_DIAS + 1)
+                        for s in range(d + 1, fim_j):
+                            if it['qtds'][s] <= 0:
+                                continue
+                            if melhor is None or carga[s] > carga[melhor[1]]:
+                                melhor = (it, s)
+                    if melhor is None:
                         break
-                    escolha = next((it for it in cands
-                                    if carga[d] + it['F'] <= alvo
-                                    or carga[d] == 0), None)
-                    if escolha is None:
+                    it, s = melhor
+                    mv = min(it['qtds'][s], it['chunk'])
+                    # Nao deixa o proprio d virar o novo pico (dia vazio
+                    # aceita ao menos um lote).
+                    if carga[d] > 0 and carga[d] + mv * it['peso'] > \
+                            max(alvo, carga[s]):
                         break
-                    carga[escolha['dia']] -= escolha['F']
-                    escolha['dia'] = d
-                    carga[d] += escolha['F']
-            for it in itens_eq:   # reescreve: receita inteira no dia escolhido
-                rec, rend, total, dia = (it['rec'], it['rend'], it['total'],
-                                         it['dia'])
-                forn = fornadas_amassadeira(rec, max(1, ceil(total / rend)))
+                    it['qtds'][s] -= mv
+                    it['qtds'][d] += mv
+                    carga[s] -= mv * it['peso']
+                    carga[d] += mv * it['peso']
+            for it in itens_eq:   # reescreve a linha com os lotes movidos
+                rend = it['rend']
                 for i, c in enumerate(it['rr']['por_dia']):
-                    c['qtd'] = total if i == dia else 0
-                    c['fornadas'] = forn if i == dia else None
+                    q = int(it['qtds'][i])
+                    c['qtd'] = q
+                    c['fornadas'] = (fornadas_amassadeira(
+                        it['rec'], max(1, ceil(q / rend)))
+                        if q > 0 and rend > 0 else None)
+                it['rr']['total'] = sum(int(x) for x in it['qtds'])
 
     # Receitas que so existem como edicao manual (override) e nao tem demanda
     # prevista — ex: adicionadas na tela 'editar plano' do padeiro. Sem isto nao
