@@ -895,8 +895,11 @@ def _run_ordens_semana(app):
 # (mesma tarde, "o sistema deve equilibrar sozinho"); 'e' = nivelamento
 # POR LOTES com antecedencia maxima (mesma noite, caso Brioche 160 num dia
 # so — inclui re-nivelar a ordem DE HOJE, que o padeiro executa de
-# madrugada e tinha absorvido o pico no 🔄 das 19:05).
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17e'
+# madrugada e tinha absorvido o pico no 🔄 das 19:05); 'f' = nivelador
+# refinado (alvo pelos dias uteis + antecedencia contra o dia de DEMANDA
+# via ref_dia — sourdoughs fatiam e a parcela do fim de semana nao e
+# adiantada de novo).
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17f'
 
 
 def _run_ordens_semana_retro(app):
