@@ -111,7 +111,7 @@ def cronograma():
         inicio=crono['inicio'],
         horizonte_dias=crono['horizonte_dias'],
         janela_semanas=crono['janela_semanas'],
-        motor=crono.get('motor', 'pedidos'),
+        motor=crono.get('motor', 'vendas'),
         dias=crono['dias'],
         receitas=receitas,
         alertas_falta=crono.get('alertas_falta', []),
