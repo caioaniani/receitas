@@ -442,6 +442,43 @@ def test_tela_abre_no_motor_vendas_por_default(app, admin_user):
     assert 'name="motor" value="vendas"' in html
 
 
+def test_tela_abre_equilibrada_por_default(app, admin_user):
+    """Dono 17/08/2026 ("o sistema deve equilibrar sozinho"): sem parâmetro a
+    tela abre com a carga EQUILIBRADA e o valor viaja explícito nos forms;
+    escolher 'pela demanda' (equilibrar=0) é preservado."""
+    _loja()
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    html = client.get('/telaindustriateste/').get_data(as_text=True)
+    assert 'value="1" selected>equilibrada' in html
+    assert 'name="equilibrar" value="1"' in html       # hidden dos forms
+    html2 = client.get('/telaindustriateste/?equilibrar=0').get_data(
+        as_text=True)
+    assert 'value="0" selected>pela demanda' in html2
+    assert 'name="equilibrar" value="0"' in html2      # escolha preservada
+
+
+def test_default_nivelado_espalha_pra_dias_ocupados(app):
+    """Sem equilibrar explícito, o cronograma nivela sozinho: demanda só na
+    QUINTA (com seg-qua ociosos) é ADIANTADA — a produção não fica empilhada
+    no último dia possível."""
+    loja = _loja()
+    r = _receita('Pão Nivelado')
+    quinta = hoje() + timedelta(days=3)            # hoje congelado = segunda
+    _pedido(loja, 'pendente', quinta, r, 50)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] == 50
+    por_data = {c['data']: c['qtd'] for c in rr['por_dia']}
+    # a receita inteira foi puxada pra um dia ANTERIOR ao deadline (nunca
+    # depois — a entrega de quinta continua garantida)
+    dia_prod = next(d for d, q in por_data.items() if q > 0)
+    assert dia_prod <= quinta.isoformat()
+
+
 def test_escolher_pedidos_no_select_e_preservado(app, admin_user):
     """Com o default em vendas, quem escolhe 'Pedidos das lojas' no select
     não pode ser devolvido pra 'vendas' no redirect/POST — o motor agora
