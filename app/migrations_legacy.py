@@ -102,6 +102,7 @@ def _migrate(app):
         _seed_cores_drivers(app)
         _seed_treino_universidade(app)
         _seed_minimo_danish(app)
+        _seed_minimo_danish_v2(app)
 
 
 def _seed_treino_universidade(app):
