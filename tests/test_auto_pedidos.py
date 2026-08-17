@@ -12,12 +12,24 @@ Duas camadas de teste, de propósito:
 """
 from datetime import datetime, timedelta
 
+import pytest
+
 from app.extensions import db
 from app.models import EstoqueLoja, PedidoItem, PedidoLoja, Receita
 from app.services import auto_pedidos, pedido_corte
 from app.utils import hoje
 
 MARCADOR = 'Gerado do histórico (rascunho) — revisar e confirmar.'
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """A janela dos pedidos automáticos virou 'amanhã..próximo domingo'
+    (dono 17/08/2026) — dependente do dia da semana. Congela hoje() numa
+    SEGUNDA (janela ter..dom, 6 dias) pra suíte não variar com o dia em que
+    roda. Os testes da ordem semanal que precisam de outro dia monkeypatcham
+    auto_pedidos.hoje por cima (vence o congelamento)."""
+    congela_hoje()
 
 
 def _login(client, user):
