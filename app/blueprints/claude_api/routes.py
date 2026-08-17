@@ -2243,3 +2243,61 @@ def drivers():
     return jsonify(ok=True, total=len(itens),
                    sem_telefone=sum(1 for x in itens if not x['telefone']),
                    drivers=itens)
+
+
+@claude_api_bp.route('/ordens-producao')
+@_claude_auth_required
+def ordens_producao():
+    """Ordens de produção (PlanejamentoProducao) por data — read-only.
+
+    Criada em 17/08/2026 pra diagnosticar "o envio automático das 19:00 não
+    está enviando": mostra, por dia, se a ordem existe, se está enviada ao
+    padeiro, quem criou e quando — o que o cron fez (ou não fez) fica
+    visível de fora. Params: ?de=YYYY-MM-DD&ate=YYYY-MM-DD (default:
+    últimos 7 dias até amanhã).
+    """
+    from datetime import date, timedelta
+
+    from app.models import PlanejamentoProducao, Usuario
+    from app.utils import hoje
+
+    try:
+        de = date.fromisoformat((request.args.get('de') or '').strip())
+    except ValueError:
+        de = hoje() - timedelta(days=7)
+    try:
+        ate = date.fromisoformat((request.args.get('ate') or '').strip())
+    except ValueError:
+        ate = hoje() + timedelta(days=1)
+
+    planos = (PlanejamentoProducao.query
+              .filter(PlanejamentoProducao.data >= de,
+                      PlanejamentoProducao.data <= ate)
+              .order_by(PlanejamentoProducao.data, PlanejamentoProducao.id)
+              .all())
+
+    def _nome(uid):
+        if not uid:
+            return None
+        u = db.session.get(Usuario, uid)
+        return u.nome if u else f'#{uid}'
+
+    out = []
+    for p in planos:
+        itens = p.itens or []
+        out.append({
+            'id': p.id,
+            'data': p.data.isoformat() if p.data else None,
+            'nome': p.nome,
+            'origem': p.origem,
+            'status': p.status,
+            'enviado_ao_padeiro': bool(p.enviado_ao_padeiro),
+            'criado_em': (p.criado_em.strftime('%Y-%m-%d %H:%M:%S')
+                          if p.criado_em else None),
+            'criado_por': _nome(p.criado_por),
+            'n_itens': len(itens),
+            'soma_alvo': sum(int(i.qtd_alvo or 0) for i in itens),
+            'soma_produzido': sum(int(i.produzido_qtd or 0) for i in itens),
+        })
+    return jsonify(ok=True, de=de.isoformat(), ate=ate.isoformat(),
+                   ordens=out)
