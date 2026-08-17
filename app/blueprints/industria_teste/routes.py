@@ -681,8 +681,8 @@ def ia_aplicar():
             horizonte_dias=_payload_int(p, 'horizonte', 7, 1, 14),
             janela_semanas=_payload_int(p, 'janela', 6, 1, 26),
             inicio_offset_dias=_payload_int(p, 'inicio', 0, 0, 14),
-            equilibrar=str(p.get('equilibrar', '')) in ('1', 'true', 'on',
-                                                        'True'),
+            equilibrar=str(p.get('equilibrar', '1')) in ('1', 'true', 'on',
+                                                         'True'),
             motor=motor)
         if res is None:
             falhas.append({'receita_id': rid, 'data': data,
