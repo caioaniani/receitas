@@ -1862,6 +1862,25 @@ do seru_cron junto.
   Textos das telas (teste.html, ficha.html, msg do cronograma_edit)
   acompanharam. Pedido FIRME lancado pra outro dia segue contando (firme
   nao passa pelo gate de venda). Testes da secao reescritos.
+- **🔄 AUTOMATICO da ordem do dia** (`atualizar_plano_automatico`, cron
+  06:45 e 19:05 BRT, lock 7761, mesmo kill-switch `AUTO_ENVIO_PLANO=0` —
+  criado 17/08/2026, caso real do 1o fim de semana: "as ordens nao estao
+  sendo enviadas" = a ordem de segunda saiu domingo 19:00 com 3 itens/
+  3.274 un e o grid do proprio dia amanhecia pedindo 8 itens/6.577; os
+  itens de VESPERA da ordem — levain, lead-1, pre-preparo — sao dirigidos
+  pela demanda de AMANHA, que o cron de pedidos re-sincroniza 06:30/18:30
+  DEPOIS de a ordem congelar; antes da automacao o dono dava o 🔄 na mao).
+  Re-envia a ordem DE HOJE pelo `enviar_plano_do_dia` (o mesmo gesto do
+  botao 🔄) SO quando ela foi criada pelo PROPRIO CRON (`criado_por`
+  None) — ordem enviada por humano segue intocavel. 06:45 = pos-refresh
+  da manha; 19:05 = pos-corte (demanda de amanha congelada, numero final
+  pra madrugada). Diagnostico foi pela sonda NOVA
+  `/api/claude/ordens-producao?de=&ate=` (criada no caso: lista
+  PlanejamentoProducao com criado_em/criado_por/enviado — "o cron enviou?"
+  responde-se de fora; o envio das 19:00 SEMPRE disparou, o problema era
+  conteudo estagnado). O motor dos 3 (`pedidos`/`vendas`/`maior`) foi
+  comparado no caso e muda pouco o resultado — o gargalo era o relogio,
+  nao o motor.
 - **Corte tambem no copilot cancelar** (fix achado 4 da revisao 13/08):
   `executar_mudar_status_pedido('cancelar')` agora passa pelo
   `bloqueio_do_corte` (a rota web ja passava); admin ganha `aviso`. Toda
