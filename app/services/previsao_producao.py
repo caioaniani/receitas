@@ -1830,16 +1830,19 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             m_dows = merma_hist.get(loja.id, {}).get(tok)
             est0 = estoque_atual.get(loja.id, {}).get(tok, 0)
             minimo_est = minimo_loja.get(loja.id, {}).get(tok, 0)
+            diario = diario_loja.get(loja.id, {}).get(tok, 0)
             pede = tok in pede_loja
             # Pedido JA FEITO no horizonte tambem inclui o item (linha com as
             # celulas azuis do ja-pedido) — mesma regra da tela de media.
             ja_ped_item = [pedido_existente.get(loja.id, {})
                            .get(d.isoformat(), {}).get(tok, 0)
                            for d in dias_futuros]
-            # Item com estoque minimo cadastrado NUNCA some: o dono quer manter
-            # o colchao, entao ele aparece e e reposto mesmo sem venda/estoque.
+            # Item com estoque minimo OU pedido diario cadastrado NUNCA some:
+            # o dono quer o colchao/a entrega diaria, entao ele aparece e e
+            # pedido mesmo sem venda/estoque.
             if not v_dows and not m_dows and est0 <= 0 and not pede \
-                    and not any(ja_ped_item) and minimo_est <= 0:
+                    and not any(ja_ped_item) and minimo_est <= 0 \
+                    and diario <= 0:
                 continue                          # nao vende/estoca/pede, nada pedido
             estoque = est0
             # Projeta o saldo ate o inicio da janela (offset > 0): consumo
