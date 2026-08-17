@@ -1913,6 +1913,23 @@ do seru_cron junto.
   Textos das telas (teste.html, ficha.html, msg do cronograma_edit)
   acompanharam. Pedido FIRME lancado pra outro dia segue contando (firme
   nao passa pelo gate de venda). Testes da secao reescritos.
+- **EQUILIBRAR CARGA virou PADRAO (dono 17/08/2026: "a previsao serve
+  exatamente para isso... distribuir automaticamente para segunda a sexta
+  sem eu ter que apertar botao algum de equilibrar, o sistema deve
+  equilibrar sozinho")**: `auto_pedidos.EQUILIBRAR_AUTO = True` — toda
+  ordem criada/re-sincronizada pela automacao (semana do meio-dia + 🔄
+  06:45/19:05) sai NIVELADA (cada receita inteira num dia, fornadas
+  niveladas seg-sex, deadline = 1o dia da curva, entrega nunca atrasa —
+  o motor opt-in de 29/06, agora default). A TELA acompanha (mesma
+  regua): `_equilibrar()` default True; o checkbox virou SELECT
+  "Carga: equilibrada | pela demanda" e o valor viaja SEMPRE explicito
+  (hidden dos forms, JS, `_params_visao`, fallbacks JSON '1') — mesma
+  licao do motor: omitir-quando-default vira bug na troca. Sonda
+  /api/claude/cronograma tambem default 1 (`?equilibrar=0` = curva).
+  Overrides de celula APLICAM POR CIMA do nivelado (aplicar_overrides
+  roda depois); testes que validam mecanica no "dia da demanda" pedem
+  `equilibrar=0` explicito. Retro marker 'd' redistribuiu a semana de
+  17-23/08 no deploy.
 - **Producao NORMAL so de SEG a SEX (dono 17/08/2026: "Sabado e domingo a
   gente nao produz, jogar tudo para segunda a sexta, a unica coisa que
   produzimos de sabado e a fornada especial")**: `_DIAS_PRODUCAO_NORMAL =
