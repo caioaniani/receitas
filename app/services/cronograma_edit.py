@@ -210,15 +210,22 @@ def editar_celula(receita_id, data_iso, qtd, horizonte_dias=7,
                 'msg': 'Receita de retorno não se produz — o estoque dela '
                        'entra por devolução das lojas (sobras que voltam), '
                        'não por fornada.'}
-    # Fornada especial: produção só sex/sáb (decisão do dono 10/08/2026).
-    # Recusa a edição em dia bloqueado ANTES de salvar — a tela já trava a
-    # célula, mas o guard vale pra qualquer chamador (defesa em profundidade).
+    # Dia de produção bloqueado: fornada especial produz só sex/sáb (dono
+    # 10/08/2026) e receita normal só seg-sex (dono 17/08/2026 — fim de
+    # semana não produz). Recusa a edição ANTES de salvar — a tela já trava
+    # a célula, mas o guard vale pra qualquer chamador (defesa em
+    # profundidade).
     from app.services.previsao_producao import producao_permitida_no_dia
     rec = db.session.get(Receita, int(receita_id))
     if not producao_permitida_no_dia(rec, alvo):
-        return {'erro': 'dia_bloqueado',
-                'msg': 'Fornada especial produz só sexta/sábado — a venda '
-                       'de sáb/dom sai da véspera. Edite um desses dias.'}
+        if getattr(rec, 'fornada_especial', False):
+            msg = ('Fornada especial produz só sexta/sábado — a venda '
+                   'de sáb/dom sai da véspera. Edite um desses dias.')
+        else:
+            msg = ('Fim de semana não produz (produção é de segunda a '
+                   'sexta) — a demanda de sáb/dom sai de sexta. Edite '
+                   'um dia útil.')
+        return {'erro': 'dia_bloqueado', 'msg': msg}
     novo_qtd = max(0, int(qtd))                       # sem clamp no total: da pra subir
     _salvar_overrides(int(receita_id), [alvo], [novo_qtd])   # so a celula editada
 
