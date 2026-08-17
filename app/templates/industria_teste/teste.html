@@ -328,7 +328,7 @@
         <input type="hidden" name="horizonte" value="{{ horizonte }}">
         <input type="hidden" name="janela" value="{{ janela }}">
         <input type="hidden" name="inicio" value="{{ inicio }}">
-        {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
+        <input type="hidden" name="equilibrar" value="{{ 1 if equilibrar else 0 }}">
         <input type="hidden" name="motor" value="{{ motor }}">
 {%- endmacro %}
 
@@ -379,7 +379,7 @@
             <input type="hidden" name="horizonte" value="{{ horizonte }}">
             <input type="hidden" name="janela" value="{{ janela }}">
             <input type="hidden" name="inicio" value="{{ inicio }}">
-            {% if equilibrar %}<input type="hidden" name="equilibrar" value="1">{% endif %}
+            <input type="hidden" name="equilibrar" value="{{ 1 if equilibrar else 0 }}">
             <input type="hidden" name="motor" value="{{ motor }}">
             <button class="btn btn-sm btn-outline-danger"
                     title="Volta todas as receitas pro cálculo automático (apaga os rascunhos de edição manual)">
