@@ -104,6 +104,7 @@ def _migrate(app):
         _seed_minimo_danish(app)
         _seed_minimo_danish_v2(app)
         _seed_minimo_danish_v3(app)
+        _seed_minimo_cinnamon(app)
 
 
 def _seed_treino_universidade(app):
@@ -651,6 +652,70 @@ def _seed_minimo_danish_v3(app):
                     len(lojas), len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed minimo danish v3): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_minimo_cinnamon(app):
+    """UMA VEZ (dono 17/08/2026: "Esqueci de falar sobre o cinnamon Roll,
+    entra na mesma regra dos 2 danishes"): `pedido_minimo_diario = 2` do
+    Cinnamon Roll nas lojas ativas que abrem todo dia (mesma regua do
+    seed v3 das danishes — Industria fora, `_loja_abre_todo_dia`), nunca
+    sobrescrevendo piso ja definido. So o 'Cinnamon Roll' CLASSICO — o
+    'Cinnamon Roll Doce de leite' fica fora (o dono citou um; o match e
+    por nome normalizado EXATO). Como a regra e "receber ASSADO" e o
+    cadastro esta com `estado_padrao` vazio em prod (sonda 17/08), o seed
+    tambem seta 'assado' — SO quando vazio (valor do dono manda). Marker
+    com contagens (regra do v3: setados=0 nunca mais passa batido)."""
+    import unicodedata as _ud
+    try:
+        from app.models import AppConfig, EstoqueLoja, Loja, Receita
+        chave = 'seed_minimo_cinnamon_2026_08'
+        if AppConfig.get(chave):
+            return
+
+        def _norm(s):
+            s = _ud.normalize('NFKD', s or '')
+            s = ''.join(c for c in s if not _ud.combining(c))
+            return ' '.join(s.casefold().split())
+
+        receitas = [r for r in Receita.query
+                    .filter(Receita.arquivada_em.is_(None)).all()
+                    if _norm(r.nome) == 'cinnamon roll']
+        lojas = [
+            loja for loja in Loja.query.filter_by(ativa=True).all()
+            if 'industria' not in _norm(loja.nome)
+            and _loja_abre_todo_dia(loja)
+        ]
+        setados, mantidos, assado = 0, 0, 0
+        for r in receitas:
+            if not (getattr(r, 'estado_padrao', None) or '').strip():
+                r.estado_padrao = 'assado'
+                assado += 1
+            for loja in lojas:
+                el = EstoqueLoja.query.filter_by(
+                    loja_id=loja.id, receita_id=r.id).first()
+                if el is None:
+                    el = EstoqueLoja(loja_id=loja.id, receita_id=r.id,
+                                     quantidade=0)
+                    db.session.add(el)
+                if int(el.pedido_minimo_diario or 0) > 0:
+                    mantidos += 1                  # valor do dono manda
+                    continue
+                el.pedido_minimo_diario = 2
+                setados += 1
+        AppConfig.set(chave,
+                      f'setados={setados} mantidos={mantidos} '
+                      f'assado={assado} lojas={len(lojas)} '
+                      f'receitas={len(receitas)}')
+        db.session.commit()
+        logger.info('seed minimo cinnamon: setados=%d mantidos=%d '
+                    'assado=%d em %d loja(s) x %d receita(s)', setados,
+                    mantidos, assado, len(lojas), len(receitas))
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed minimo cinnamon): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001
