@@ -120,10 +120,19 @@ def test_linha_torta_vira_aviso_e_nao_some(app):
 
 
 def test_planilha_real_do_dono(app):
-    """A planilha REAL (9 módulos, 140 aulas) importa inteira e sem avisos."""
+    """A planilha REAL (9 módulos, 140 aulas) importa inteira e sem avisos.
+
+    Roda só onde o upload existe (a sessão de dev que a recebeu) — no CI é
+    pulada; os demais testes cobrem o contrato com fixtures."""
+    import os
+
+    import pytest
+    caminho = ('/root/.claude/uploads/80083e22-11d6-5981-8fcc-1d3374ee28b5/'
+               '82a1ce27-roteiros_treinamento_9_modulos.xlsx')
+    if not os.path.exists(caminho):
+        pytest.skip('planilha real só existe na sessão de dev')
     from app.services import treino_roteiros
-    raw = open('/root/.claude/uploads/80083e22-11d6-5981-8fcc-1d3374ee28b5/'
-               '82a1ce27-roteiros_treinamento_9_modulos.xlsx', 'rb').read()
+    raw = open(caminho, 'rb').read()
     st = treino_roteiros.importar(raw)
     assert st['trilhas_criadas'] == 9
     assert st['aulas_criadas'] == 140
