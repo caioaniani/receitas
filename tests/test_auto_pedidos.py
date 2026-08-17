@@ -602,7 +602,8 @@ def test_semana_no_domingo_abre_seg_a_dom(app, monkeypatch):
         monkeypatch.setattr(
             producao, 'enviar_plano_do_dia',
             lambda data, user_id=None, **kw: chamadas.append(
-                (data, kw.get('motor'), kw.get('horizonte_dias'))) or
+                (data, kw.get('motor'), kw.get('horizonte_dias'),
+                 kw.get('equilibrar'))) or
             type('P', (), {'itens': [1]})())
         out = auto_pedidos.enviar_ordens_da_semana()
         esperados = [dom + timedelta(days=i) for i in range(1, 8)]
@@ -610,6 +611,8 @@ def test_semana_no_domingo_abre_seg_a_dom(app, monkeypatch):
         assert {c[1] for c in chamadas} == {'vendas'}  # default 17/08/2026
         # o grid precisa CONTER o próximo domingo (dia 7 → horizonte 8)
         assert {c[2] for c in chamadas} == {8}
+        # carga nivelada sozinha (dono 17/08/2026: "equilibrar sozinho")
+        assert {c[3] for c in chamadas} == {True}
         assert out['de'] == esperados[0].isoformat()
         assert out['ate'] == esperados[-1].isoformat()
         assert len(out['enviadas']) == 7 and not out['puladas']
