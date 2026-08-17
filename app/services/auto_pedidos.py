@@ -40,16 +40,20 @@ Duas pontas, dois jobs do cron (`seru_cron`):
    subestimar. O eco é limitado: `quantidade_recebida` (conferência humana
    na entrega) corrige o número, e a acurácia expõe `circularidade_pct`.
 
-2. `enviar_plano_automatico()` (19:00 BRT = HORA_CORTE, logo após o corte travar o
-   pedido de amanhã): se a ordem de AMANHÃ ainda não foi enviada, aprova e
-   ENVIA ao padeiro pelo cronograma (motor env `AUTO_ENVIO_MOTOR`, default
-   'vendas' desde 17/08/2026 — decisão do dono: "produção da semana
-   programada baseado no histórico de vendas e estoque"; o firme dos
-   pedidos automáticos conta em qualquer motor).
-   Ordem JÁ ENVIADA (gesto humano na tela, com o motor/equilibrar DELE) é
-   respeitada: o cron NÃO reenvia — reenviar com outros parâmetros mudaria
-   os números do padeiro em silêncio (regra "ordem enviada nunca muda por
-   caminho implícito", preservada).
+2. `enviar_ordens_da_semana()` (dono 17/08/2026: "a ordem de produção da
+   semana soltando ela no domingo, meio-dia, até o próximo domingo" —
+   SUBSTITUI o envio diário das 19:00 de 10/08/2026): envia ao padeiro a
+   ordem de cada dia de AMANHÃ até o PRÓXIMO DOMINGO que ainda não tem
+   ordem enviada. No domingo ao meio-dia isso abre a semana inteira
+   (seg..dom); nos demais dias o job roda como REDE — re-preenche buraco
+   (dia excluído, deploy que engoliu o disparo) e é no-op com a semana de
+   pé. Motor: env `AUTO_ENVIO_MOTOR`, default 'vendas' (decisão do dono
+   17/08/2026: "baseado no histórico de vendas e estoque"; o firme dos
+   pedidos automáticos conta em qualquer motor). Dia JÁ ENVIADO (humano
+   OU cron) é pulado — "ordem enviada nunca muda por caminho implícito";
+   quem mantém o CONTEÚDO em dia é o 🔄 (item 3). Pra tirar um dia da
+   produção, ZERE as células no grid (envio de dia vazio limpa a ordem);
+   excluir a ordem faz o meio-dia seguinte reenviá-la do grid.
 
 Kill-switches: `AUTO_PEDIDOS=0` e `AUTO_ENVIO_PLANO=0` (default ligados —
 pedido explícito do dono). Locks 7758/7759 no `seru_cron`.
