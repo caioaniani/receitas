@@ -4655,6 +4655,36 @@ interna que ja existia). Servico `app/services/folha_import.py`.
 - Testes: `tests/test_folha_import.py` (11 casos). Manual registrado
   (secao QUANDO PRECISAR).
 
+## Treinamento — plano de conteudo por planilha + acessos em lote (13/08/2026)
+
+Dois gestos que fecharam o onboarding do treinamento (pedidos do dono na
+rodada de assinatura do RI):
+
+- **Acessos em lote**: botao "⚡ Gerar acesso pra todos" no card Acessos do
+  /treino/admin (rota `admin_gerar_acessos_todos`) — cria login pra TODO
+  funcionario ativo com e-mail e sem conta, reusando `treino_acessos.
+  gerar_acesso` (idempotente; guardas de conta-de-outro-papel/e-mail-em-uso
+  recusam com aviso; senha vai no e-mail da FICHA e e provisoria). Quem ja
+  tem login e pulado — o lote so cria o que falta.
+- **Import de roteiros** (`app/services/treino_roteiros.py`, botao "📋
+  Importar roteiros (xlsx)" no card das trilhas): o dono mandou a
+  "Universidade" em planilha (9 modulos, 140 aulas com roteiro de gravacao
+  completo — os VIDEOS nao existem ainda). Modulo vira `TreinoTrilha`,
+  aula vira `TreinoVideo` RASCUNHO com `roteiro` (coluna nova TEXT,
+  procedimento de 2 commits, sonda ?colunas= confirmada) — TUDO nasce
+  `ativa/ativo=False` (funcionario nao ve 9 trilhas vazias; o template da
+  trilha ja filtrava `if v.ativo`). Quem grava abre a aula no admin, LE o
+  roteiro no card "🎬 Roteiro de gravacao" e sobe o video pelo fluxo que ja
+  existia (upload direto pro Cloudflare na tela da aula + toggle ativo).
+  Idempotente: match trilha por NOME, aula por (trilha, Nº da aula);
+  re-importar atualiza roteiros SEM duplicar; aula com `video_externo_id`
+  preserva titulo/duracao (producao no ar nao muda por planilha — a duracao
+  real vem do Cloudflare) e so o roteiro acompanha; o import NUNCA
+  desativa/reativa/apaga nada. Ordem da trilha = numero do modulo;
+  `carga_horaria_minutos` = soma das duracoes sugeridas. Teste com a
+  planilha REAL roda so na sessao de dev (skip no CI — o upload nao existe
+  la). Testes: `tests/test_treino_roteiros.py` (9).
+
 ## Pre-cadastro de funcionario por QR (23/07/2026)
 
 Pedido do dono ("formulario QR pra captar nome, sobrenome, e-mail e telefone
