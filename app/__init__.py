@@ -900,6 +900,10 @@ def create_app(config_class=None):
 
         _criar_admin()
 
+        if os.environ.get('PREVIEW_MODE') == '1':
+            from app.preview_seed import seed_preview_data
+            seed_preview_data()
+
     # Cron de auto-sync Seru → EstoqueLoja (15min). Roda dentro de
     # cada worker gunicorn mas usa pg_try_advisory_lock pra deduplicate.
     # Em teste o conftest seta TESTING só DEPOIS de create_app(), então o
