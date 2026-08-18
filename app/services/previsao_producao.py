@@ -2653,7 +2653,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             # pode deixar/criar celula MENOR que a fracao minima de
             # fornada (mesma regua do dribble, `_MIN_FRACAO_FORNADA`) —
             # ninguem acende o forno por 2 paes. Funde a celula-farelo
-    # numa celula ja existente do MESMO item, parcela a parcela,
+            # numa celula ja existente do MESMO item, parcela a parcela,
             # sempre num dia <= ref (entrega no prazo) e dentro da
             # antecedencia (frescor), preferindo o dia mais TARDE (mais
             # fresco). Parcela sem destino valido fica onde esta.
