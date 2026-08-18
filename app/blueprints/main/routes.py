@@ -137,7 +137,8 @@ def ui_classica():
     from app.ui_v2 import UI_CLASSIC_COOKIE
     resp = redirect(url_for('main.index'))
     resp.set_cookie(UI_CLASSIC_COOKIE, '1', max_age=60 * 60 * 24 * 90,
-                    samesite='Lax')
+                    samesite='Lax', httponly=True,
+                    secure=request.is_secure)
     return resp
 
 
