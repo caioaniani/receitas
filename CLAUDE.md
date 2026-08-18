@@ -2002,7 +2002,13 @@ do seru_cron junto.
   ridiculo, deveria ser nenhum de nozes e azeitonas" — celula que o
   movimento de parcelas deixou MENOR que `_MIN_FRACAO_FORNADA` x chunk
   e fundida numa celula ja existente do item, parcela a parcela, sempre
-  no prazo e dentro da antecedencia, preferindo o dia mais tarde).
+  no prazo e dentro da antecedencia, preferindo o dia mais tarde); 'k'
+  peso da regua pelo `lote_producao` quando definido ("101 brioches e
+  pra acabar" — a fornada TEORICA da capacidade da amassadeira, ~448
+  brioches, fazia 101 valerem 0.2 fornada: mover brioche era "de graca"
+  pro guard e o nivelador empilhava tudo no primeiro dia alcancavel; o
+  lote do dono e 10, entao cada batida pesa 1 e a demanda diaria
+  espalha; croissant 250 / sourdoughs 60 = sem regressao).
   COSMETICO conhecido: celula de 5 digitos (levain 27835) corta
   visualmente no grid. Testes: antecedencia + fatiamento +
   frescor do FDS (qui+sex permitidos, dom nunca sai da sexta) +
