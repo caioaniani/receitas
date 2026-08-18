@@ -156,10 +156,14 @@
                 {% elif est and est.enviado %}<span class="day-state sent">Enviado</span>
                 {% elif est %}<span class="day-state draft">Rascunho</span>
                 {% else %}<span class="day-state neutral">Não enviado</span>{% endif %}
-                <form method="POST" action="{{ url_for('industria_teste.enviar') }}" class="day-send-form" data-day-label="{{ dia.label }}" data-update="{{ 1 if est and est.enviado else 0 }}">
-                  {{ campos_dia(dia.data) }}
-                  <button type="submit" class="day-send {{ 'update' if est and est.enviado }}"><i class="bi {{ 'bi-arrow-repeat' if est and est.enviado else 'bi-send' }}"></i>{{ 'Atualizar' if est and est.enviado else 'Enviar' }}</button>
-                </form>
+                {% if not est or not est.enviado or difere.get(dia.data) %}
+                  <form method="POST" action="{{ url_for('industria_teste.enviar') }}" class="day-send-form" data-day-label="{{ dia.label }}" data-update="{{ 1 if est and est.enviado else 0 }}">
+                    {{ campos_dia(dia.data) }}
+                    <button type="submit" class="day-send {{ 'update' if est and est.enviado }}"><i class="bi {{ 'bi-arrow-repeat' if est and est.enviado else 'bi-send' }}"></i>{{ 'Atualizar' if est and est.enviado else 'Enviar' }}</button>
+                  </form>
+                {% else %}
+                  <span class="day-done"><i class="bi bi-check2"></i> Em dia</span>
+                {% endif %}
               </th>
               {% endfor %}
               <th class="total-col">Total</th>
