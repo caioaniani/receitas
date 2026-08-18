@@ -236,7 +236,12 @@ def index():
     if resumo['stale_n']:
         acoes.append({'tipo': 'stale', 'n': resumo['stale_n']})
 
-    return render_template('industria_teste/teste.html', crono=crono,
+    from app.ui_v2 import ui_v2_ativo
+    v2 = (request.args.get('v2') == '1'
+          or (ui_v2_ativo() and request.args.get('legacy') != '1'))
+    template = ('industria_teste/v2.html' if v2
+                else 'industria_teste/teste.html')
+    return render_template(template, crono=crono,
                            horizonte=horizonte, janela=janela, inicio=inicio,
                            equilibrar=equilibrar, motor=motor, estados=estados,
                            totais_dia=totais_dia, pico_idx=pico_idx,
