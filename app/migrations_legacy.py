@@ -859,7 +859,10 @@ def _seed_acerto_granola_iogurte(app):
         if granola is not None:
             for nome_prod, old, new in ACERTO_CESTAS_GRANOLA:
                 alvo = _norm(nome_prod)
-                linhas = (ProdutoItem.query.join(Produto)
+                # join explicito: ProdutoItem tem DUAS FKs pra produto
+                # (produto_id = cesta dona; produto_componente_id)
+                linhas = (ProdutoItem.query
+                          .join(Produto, ProdutoItem.produto_id == Produto.id)
                           .filter(ProdutoItem.receita_id == granola.id).all())
                 for pi in linhas:
                     if _norm(pi.produto.nome) != alvo:
