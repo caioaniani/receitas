@@ -2008,7 +2008,13 @@ do seru_cron junto.
   brioches, fazia 101 valerem 0.2 fornada: mover brioche era "de graca"
   pro guard e o nivelador empilhava tudo no primeiro dia alcancavel; o
   lote do dono e 10, entao cada batida pesa 1 e a demanda diaria
-  espalha; croissant 250 / sourdoughs 60 = sem regressao).
+  espalha; croissant 250 / sourdoughs 60 = sem regressao); 'l' o MESMO
+  lote no minimo do DRIBBLE pre-nivelamento — a pilha nascia ANTES do
+  nivelador (minimo ~90 da fornada teorica + sumidouro no dia 0 =
+  demanda diaria de ~25 cascateava inteira pra HOJE; o 'k' sozinho nao
+  desfez os 101 da terca). REGRA GERAL dos dois: onde a conta usar
+  "fornada" como batida, `lote_producao` definido no cadastro MANDA
+  sobre a fornada teorica da capacidade.
   COSMETICO conhecido: celula de 5 digitos (levain 27835) corta
   visualmente no grid. Testes: antecedencia + fatiamento +
   frescor do FDS (qui+sex permitidos, dom nunca sai da sexta) +
