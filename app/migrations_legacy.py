@@ -2815,6 +2815,14 @@ def _migrate_sqlite(app):
     if 'sob_encomenda' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN sob_encomenda "
                        "BOOLEAN NOT NULL DEFAULT 0")
+    # receita.antecedencia_max_dias — antecedencia do nivelador POR
+    # receita (dono 18/08/2026, brioche fresco); espelho do Postgres,
+    # backfill unico do Brioche classico em 0.
+    if 'antecedencia_max_dias' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN "
+                       "antecedencia_max_dias INTEGER")
+        cursor.execute("UPDATE receita SET antecedencia_max_dias = 0 "
+                       "WHERE nome = 'Brioche'")
     # receita.cobra_sobra_diaria — cobrança de sobra POR ITEM (01/08/2026,
     # caso croissant tradicional); backfill único na criação, espelho do
     # bloco Postgres (COBRA_SOBRA_SEED).
