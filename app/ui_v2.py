@@ -5,15 +5,17 @@ visual/usabilidade; a infraestrutura de homologacao (preview_copy.py,
 preview_seed.py, PREVIEW_MODE, copia sanitizada de banco, reset de senha
 do admin) NAO foi promovida de proposito — nada aqui toca banco.
 
-Tres camadas, da mais larga pra mais fina:
-- env `UI_V2_ENABLED=1` liga o visual novo pra todo mundo (kill-switch:
-  remover/zerar a env volta TUDO ao visual anterior, sem deploy de
-  codigo);
+A v2 e o PADRAO do sistema interno desde 18/08/2026 (decisao do dono no
+PR #14) — sem variavel de ambiente. Camadas de saida:
+- `config.UI_V2_ENABLED` e uma constante (True) SEM leitura de env:
+  rollback geral = trocar pra False em config.py (1 commit);
 - cookie `ui_classic` devolve UM usuario a interface anterior (link
   "Interface anterior" na sidebar nova; "Nova interface" na antiga
-  re-liga) — rollback individual sem mexer na env;
-- `?v2=1` forca a tela nova NUMA request (validacao em producao antes de
-  ligar a env pra equipe).
+  re-liga) — saida individual de emergencia;
+- `?v2=1` forca a tela nova NUMA request mesmo pra quem optou pelo
+  classico (util pra suporte/comparacao).
+O site publico (/loja, carrinho, checkout, pagamento) nao passa por
+aqui — tem layout proprio, fora do base.html.
 """
 from flask import current_app, request
 
