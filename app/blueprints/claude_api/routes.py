@@ -968,7 +968,8 @@ def deploy_info():
     # de marker, nunca dado de negocio.
     if request.args.get('seeds'):
         from app.models import AppConfig
-        prefixos = ('seed_', 'ordens_semana_retro', 'checklist_seed')
+        prefixos = ('seed_', 'ordens_semana_retro', 'checklist_seed',
+                    'acerto_')
         try:
             out['seeds'] = {
                 row.key: row.value
