@@ -2016,7 +2016,11 @@ do seru_cron junto.
   posto o pico do brioche na ordem da madrugada); 'f' alvo por dias
   uteis (superado pelo 'h'); 'g' por-parcela; 'h' sem teto + peso
   fallback; 'i' antecedencia 2->3 ("Tem que adiantar, olha so terca nao
-  tem producao") + piso do Cinnamon Roll; 'j' anti-farelo ("2 paes e
+  tem producao") + piso do Cinnamon Roll; 'm' antecedencia POR RECEITA
+  (`Receita.antecedencia_max_dias`, campo na ficha; NULL = global 3;
+  0 = assa so no dia da demanda — dono 18/08 "quero o maximo de
+  brioche fresco nas lojas", Brioche seedado 0 no ALTER; vale em
+  _movel, consumo de parcela e anti-farelo); 'j' anti-farelo ("2 paes e
   ridiculo, deveria ser nenhum de nozes e azeitonas" — celula que o
   movimento de parcelas deixou MENOR que `_MIN_FRACAO_FORNADA` x chunk
   e fundida numa celula ja existente do item, parcela a parcela, sempre
