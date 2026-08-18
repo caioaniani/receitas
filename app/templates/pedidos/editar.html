@@ -56,7 +56,7 @@
                    visível (pode ser re-editado pela busca). #}
                 {% for it in pedido.itens %}
                     {% if it.receita_id %}
-                        {{ ta.item_row('r_' ~ it.receita_id, it.receita.nome if it.receita else '', it.quantidade, it.estado or '', it.observacao or '', em_gramas=(it.receita.medida_em_gramas if it.receita else False)) }}
+                        {{ ta.item_row('r_' ~ it.receita_id, it.receita.nome if it.receita else '', it.quantidade, it.estado or '', it.observacao or '', em_gramas=(it.receita.medida_em_gramas if it.receita else False), lote=((it.receita.lote_pedido or 0) if it.receita and it.receita.medida_em_gramas else 0)) }}
                     {% elif it.produto_id %}
                         {{ ta.item_row('p_' ~ it.produto_id, it.produto.nome if it.produto else '', it.quantidade, it.estado or '', it.observacao or '') }}
                     {% elif it.materia_prima_id %}

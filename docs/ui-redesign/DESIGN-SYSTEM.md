@@ -16,6 +16,9 @@ afetada.
    vermelho é erro ou ação destrutiva; azul é informação.
 5. **A mesma gramática em todas as áreas:** página, cartão, formulário, tabela,
    alerta e navegação usam os mesmos componentes.
+6. **Leitura antes da edição:** cadastros extensos mostram primeiro nome,
+   estado e dados essenciais. Campos aparecem somente quando a pessoa escolhe
+   editar um item.
 
 ## Tokens
 
@@ -63,6 +66,18 @@ quando houver operação assíncrona.
 - Números comparáveis são alinhados à direita.
 - No celular, preserve leitura por rolagem horizontal em vez de esmagar
   colunas.
+- Grades de planejamento devem começar focadas no período mais relevante e
+  oferecer a visão completa como alternativa explícita.
+
+### Listas editáveis
+
+- Use o padrão `mp-v2-item` para cadastros extensos: resumo em `<summary>` e
+  formulário dentro de `<details>`.
+- Busca e paginação acontecem antes da lista; a página deve limitar a quantidade
+  de controles carregados de uma vez.
+- O rodapé de salvamento explica quando a alteração passa a valer.
+- Não esconda operações destrutivas no resumo: elas aparecem somente dentro do
+  item aberto, com confirmação.
 
 ### Cartões e alertas
 
@@ -80,6 +95,10 @@ Vendas, Financeiro, Pessoas, Relatórios e Administração. Os links vêm de
 ## Acessibilidade
 
 - Todo controle interativo recebe foco visível.
+- Controles novos têm alvo de pelo menos 40 px no desktop e 44 px em telas de
+  toque.
+- Todo campo tem `<label>` associado; placeholder é apenas exemplo, nunca o
+  único rótulo.
 - Links que abrem outra aba usam `rel="noopener"` e ícone de saída.
 - A hierarquia começa em `h1` e avança sem saltos no layout novo.
 - Animações são praticamente removidas quando o sistema pede movimento

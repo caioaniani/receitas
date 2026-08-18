@@ -169,8 +169,13 @@ def buscar_itens():
     # em_gramas: item medido em g/ml (granola/iogurte "Produção - *") — a
     # tela avisa quando a quantidade parece POTES (caso 18/08/2026, relatorio
     # inflado ~1000x). So aviso; nada bloqueia.
+    # lote: só de item em g/ml — o form recusa quantidade que não seja
+    # múltiplo (iogurte 3000/granola 5000, dono 18/08/2026) e o JS avisa
+    # antes do POST. Receita em unidades fica lote 0 (lá o lote_pedido só
+    # arredonda sugestão, nunca trava — croissant 45 segue válido).
     out += [{'id': f'r_{r.id}', 'nome': r.nome,
-             'em_gramas': r.medida_em_gramas}
+             'em_gramas': r.medida_em_gramas,
+             'lote': int(r.lote_pedido or 0) if r.medida_em_gramas else 0}
             for r in Receita.ativas().order_by(Receita.nome).all()
             if _casa(r.nome)]
     out += [{'id': f'p_{p.id}', 'nome': p.nome, 'em_gramas': False}
@@ -391,6 +396,18 @@ def novo():
                                    amanha=amanha, data_min=data_min,
                                    loja_id=loja_id)
 
+        # Item em g/ml com lote definido só aceita MÚLTIPLO do lote
+        # (iogurte 3000 / granola 5000 — dono 18/08/2026, caso "potes").
+        from app.services.pedido_lote import violacoes_por_ids
+        fora_do_lote = violacoes_por_ids(itens_norm)
+        if fora_do_lote:
+            for msg in fora_do_lote:
+                flash(msg, 'warning')
+            lojas = _lojas_operacionais()
+            return render_template('pedidos/novo.html', lojas=lojas,
+                                   amanha=amanha, data_min=data_min,
+                                   loja_id=loja_id)
+
         try:
             from app.services.pedido_merge import (
                 absorver_rascunho_automatico,
@@ -522,6 +539,30 @@ def editar(id):
             flash('Matéria(s)-prima(s) não liberada(s) pra pedido de loja: '
                   + ', '.join(bloqueadas) + '. Um admin pode liberar no '
                   'Banco de MPs (checkbox "sugerir pedido loja").', 'warning')
+            return redirect(url_for('pedidos.editar', id=id))
+
+        # Item em g/ml com lote definido só aceita MÚLTIPLO do lote
+        # (iogurte 3000 / granola 5000 — dono 18/08/2026, caso "potes").
+        # Validado ANTES do REPLACE dos itens; vale também pro item que já
+        # estava no pedido (o dono escolheu SEM grandfather: 9360 antigo
+        # tem que virar 9000/12000 ao editar).
+        from app.services.pedido_lote import violacoes_por_ids
+        itens_lote = []
+        _ids = request.form.getlist('item_id[]')
+        _qtds = request.form.getlist('item_qtd[]')
+        for i in range(len(_ids)):
+            t, iid = _parse_item_id(_ids[i])
+            if t != 'receita':
+                continue
+            try:
+                q = int(_qtds[i]) if i < len(_qtds) else 0
+            except (TypeError, ValueError):
+                continue
+            itens_lote.append({'receita_id': iid, 'quantidade': q})
+        fora_do_lote = violacoes_por_ids(itens_lote)
+        if fora_do_lote:
+            for msg in fora_do_lote:
+                flash(msg, 'warning')
             return redirect(url_for('pedidos.editar', id=id))
 
         try:

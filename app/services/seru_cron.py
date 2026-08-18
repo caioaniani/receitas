@@ -914,8 +914,11 @@ def _run_ordens_semana(app):
 # numa celula existente do item, no prazo e no frescor); 'k' = peso da
 # regua pelo lote_producao ("101 brioches e pra acabar" — a fornada
 # teorica da capacidade da amassadeira fazia 101 brioches valerem 0.2
-# fornada e o nivelador empilhava sem resistencia do guard).
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17k'
+# fornada e o nivelador empilhava sem resistencia do guard); 'l' = o
+# MESMO lote no minimo do DRIBBLE (a pilha nascia ANTES do nivelador: o
+# minimo ~90 da fornada teorica + sumidouro no dia 0 cascateava a
+# demanda diaria inteira pra hoje — o 'k' sozinho nao desfez os 101).
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17l'
 
 
 def _run_ordens_semana_retro(app):

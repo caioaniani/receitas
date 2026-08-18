@@ -166,6 +166,24 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   item a granel e pedido legitimo). Testes: secao em_gramas de
   `tests/test_pedidos_buscar.py` + secao pedidos-itens de
   `tests/test_claude_api.py`.
+  **Acerto + restricao (mesmo dia, ordem do dono "resolve o 2... o 3 voce
+  restringe... 4 voce pode resolver tambem")**: (1) seed one-shot
+  `migrations_legacy._seed_acerto_granola_iogurte` (marker
+  `acerto_granola_iogurte_2026_08`) corrigiu os ~60 pedidos historicos
+  lancados em potes/litros (mapas `ACERTO_*_PEDIDOS` com (old, new); SO
+  aplica se a qtd atual ainda e a lancada — edicao do dono manda), o
+  fator das cestas 'Granola 50g' 0.05→50 e 'Cesta dia das maes 2026'
+  0.1→100 (`ACERTO_CESTAS_GRANOLA`) e o lote/minimo do iogurte pro
+  padrao 3000 (granola ja estava 5000/5000, config do dono). (2)
+  **Item em g/ml com `lote_pedido` definido SO aceita MULTIPLO do lote**
+  (`app/services/pedido_lote.py`; decisao AskUserQuestion "Multiplos do
+  padrao" — iogurte 3000, granola 5000; consequencia aceita: o 9360
+  antigo vira 9000/12000, SEM grandfather no editar). Defesa em
+  profundidade: web novo+editar, executores copilot criar/editar, e o
+  aviso do typeahead diz o multiplo (`data-lote`). Receita em UNIDADES
+  com lote_pedido (croissant 50) segue LIVRE — la o lote so arredonda
+  sugestao; nao alargar sem ordem. Testes: `tests/test_pedido_lote.py` +
+  `tests/test_acerto_granola_iogurte.py`.
 - `GET /api/claude/drivers?todos=1` (07/08/2026): motoristas de entrega
   (nome, telefone, ativo, capacidade, tem_token/tem_pin — NUNCA o token/PIN
   em si). Criada pra confirmar o seed dos motoristas do Dia dos Pais
@@ -2008,7 +2026,13 @@ do seru_cron junto.
   brioches, fazia 101 valerem 0.2 fornada: mover brioche era "de graca"
   pro guard e o nivelador empilhava tudo no primeiro dia alcancavel; o
   lote do dono e 10, entao cada batida pesa 1 e a demanda diaria
-  espalha; croissant 250 / sourdoughs 60 = sem regressao).
+  espalha; croissant 250 / sourdoughs 60 = sem regressao); 'l' o MESMO
+  lote no minimo do DRIBBLE pre-nivelamento — a pilha nascia ANTES do
+  nivelador (minimo ~90 da fornada teorica + sumidouro no dia 0 =
+  demanda diaria de ~25 cascateava inteira pra HOJE; o 'k' sozinho nao
+  desfez os 101 da terca). REGRA GERAL dos dois: onde a conta usar
+  "fornada" como batida, `lote_producao` definido no cadastro MANDA
+  sobre a fornada teorica da capacidade.
   COSMETICO conhecido: celula de 5 digitos (levain 27835) corta
   visualmente no grid. Testes: antecedencia + fatiamento +
   frescor do FDS (qui+sex permitidos, dom nunca sai da sexta) +

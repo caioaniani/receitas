@@ -105,6 +105,7 @@ def _migrate(app):
         _seed_minimo_danish_v2(app)
         _seed_minimo_danish_v3(app)
         _seed_minimo_cinnamon(app)
+        _seed_acerto_granola_iogurte(app)
         _backfill_totais_orcamento(app)
 
 
@@ -757,6 +758,135 @@ def _seed_minimo_cinnamon(app):
                     mantidos, assado, len(lojas), len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed minimo cinnamon): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+# Acerto UMA VEZ (dono 18/08/2026, auditoria "granola/iogurte em POTES"):
+# pedidos historicos desses itens foram lancados em POTES/LITROS (qtd 1-15)
+# quando o item e medido em g/ml — o relatorio de pedidos saia ~1000x
+# distorcido. Regra dada pelo dono: item "granola 1000" e em GRAMAS; as
+# porcoes 100g/200g sao produtos proprios (nao entram aqui). Mapa por
+# (pedido_id): (qtd_lancada, qtd_certa) — a correcao SO aplica se a qtd
+# atual ainda for a lancada (dono editou no meio = valor dele manda).
+# Fonte: sonda /api/claude/pedidos-itens?dias=90 em 18/08/2026; casos com
+# observacao explicita ("18 litros 2cx", "9360", "3 litros") seguem a
+# observacao; o resto e x1000 (pote 1kg / litro).
+ACERTO_GRANOLA_PEDIDOS = {
+    106: (7, 7000), 162: (15, 15000), 210: (5, 5000), 220: (1, 1000),
+    239: (15, 15000), 309: (3, 3000), 376: (2, 2000), 380: (15, 15000),
+    435: (15, 15000), 478: (15, 15000), 487: (4, 4000),
+}
+ACERTO_IOGURTE_PEDIDOS = {
+    57: (1, 1000), 84: (1, 1000), 85: (1, 1000), 105: (1, 1000),
+    118: (9, 9000), 126: (2, 2000), 128: (1, 1000), 130: (1, 1000),
+    152: (1, 1000), 154: (1, 1000), 156: (1, 1000), 160: (1, 1000),
+    162: (1, 1000), 166: (1, 1000), 172: (1, 1000), 181: (2, 2000),
+    195: (1, 1000),
+    203: (1, 3000),   # obs "Caixa P, 3.100 litros" — caixa de 3L
+    204: (1, 1000), 206: (1, 1000), 213: (1, 1000),
+    222: (1, 1000),   # obs "1 LITRO SOMENTE"
+    229: (1, 3000),   # obs "pote pequeno 3L"
+    230: (1, 1000), 235: (1, 1000),
+    238: (1, 3000),   # obs "3l somente"
+    243: (1, 1000), 244: (2, 2000), 288: (1, 1000), 309: (1, 1000),
+    311: (1, 3000),   # obs "3 litros"
+    319: (1, 1000), 322: (3, 3000), 335: (9, 9000), 376: (1, 1000),
+    379: (3, 3000), 399: (3, 3000), 404: (9, 9000), 408: (9, 9000),
+    428: (3, 3000), 435: (9, 9000), 442: (3, 3000), 460: (3, 3000),
+    462: (3, 3000), 463: (3, 3000),
+    489: (2, 9360),   # obs "9360"
+    496: (2, 18000),  # obs "18 litros 2cx"
+    500: (6, 6000),
+    530: (4, 4000),   # obs "3 litros" mas qtd E recebimento confirmam 4
+}
+# Cestas com o componente de granola 1000x menor (mesma auditoria): a
+# venda baixava quase nada do estoque a granel.
+ACERTO_CESTAS_GRANOLA = [
+    ('Granola 50g', 0.05, 50.0),
+    ('Cesta dia das mães 2026', 0.1, 100.0),
+]
+IOGURTE_LOTE_PADRAO = 3000  # dono 18/08/2026: "o padrao e 3000 para iogurte"
+
+
+def _seed_acerto_granola_iogurte(app):
+    """UMA VEZ (dono 18/08/2026: "resolve o 2 ... 4 voce pode resolver
+    tambem"): corrige as quantidades dos pedidos historicos lancados em
+    potes/litros (mapas acima), conserta o fator das duas cestas e seta o
+    lote/minimo do iogurte pro padrao 3000 (granola ja estava 5000/5000 —
+    config do dono, intocada). Marker com contagens (regra do seed v3)."""
+    import unicodedata as _ud
+    try:
+        from app.models import AppConfig, PedidoItem, Produto, ProdutoItem, Receita
+        chave = 'acerto_granola_iogurte_2026_08'
+        if AppConfig.get(chave):
+            return
+
+        def _norm(s):
+            s = _ud.normalize('NFKD', s or '')
+            s = ''.join(c for c in s if not _ud.combining(c))
+            return ' '.join(s.casefold().split())
+
+        def _achar_receita(nome_norm):
+            return next((r for r in Receita.query.all()
+                         if _norm(r.nome) == nome_norm), None)
+
+        granola = _achar_receita('producao - granola artesanal 1000g')
+        iogurte = _achar_receita('producao - iogurte caseiro 1000ml')
+
+        corrigidos, mantidos = 0, 0
+        for rec, mapa in ((granola, ACERTO_GRANOLA_PEDIDOS),
+                          (iogurte, ACERTO_IOGURTE_PEDIDOS)):
+            if rec is None:
+                continue
+            itens = (PedidoItem.query
+                     .filter(PedidoItem.receita_id == rec.id,
+                             PedidoItem.pedido_id.in_(list(mapa))).all())
+            for it in itens:
+                old, new = mapa[it.pedido_id]
+                if int(it.quantidade or 0) != old:
+                    mantidos += 1        # dono/loja mexeu depois — manda
+                    continue
+                it.quantidade = new
+                if it.quantidade_recebida is not None and \
+                        int(it.quantidade_recebida) == old:
+                    it.quantidade_recebida = new
+                corrigidos += 1
+
+        cestas = 0
+        if granola is not None:
+            for nome_prod, old, new in ACERTO_CESTAS_GRANOLA:
+                alvo = _norm(nome_prod)
+                # join explicito: ProdutoItem tem DUAS FKs pra produto
+                # (produto_id = cesta dona; produto_componente_id)
+                linhas = (ProdutoItem.query
+                          .join(Produto, ProdutoItem.produto_id == Produto.id)
+                          .filter(ProdutoItem.receita_id == granola.id).all())
+                for pi in linhas:
+                    if _norm(pi.produto.nome) != alvo:
+                        continue
+                    if abs(float(pi.quantidade or 0) - old) > 1e-9:
+                        continue         # valor mudou — dono manda
+                    pi.quantidade = new
+                    cestas += 1
+
+        lote = 0
+        if iogurte is not None and not iogurte.lote_pedido:
+            iogurte.lote_pedido = IOGURTE_LOTE_PADRAO
+            iogurte.minimo_pedido = IOGURTE_LOTE_PADRAO
+            lote = 1
+
+        AppConfig.set(chave,
+                      f'corrigidos={corrigidos} mantidos={mantidos} '
+                      f'cestas={cestas} lote_iogurte={lote}')
+        db.session.commit()
+        logger.info('seed acerto granola/iogurte: corrigidos=%d mantidos=%d '
+                    'cestas=%d lote_iogurte=%d', corrigidos, mantidos,
+                    cestas, lote)
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (acerto granola/iogurte): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001

@@ -2022,6 +2022,10 @@ def test_rota_telaindustriateste_preview_funcional(app, admin_user):
     assert r.nome in html
     assert 'id="week-grid"' in html
     assert 'class="plan-input' in html
+    assert 'data-focus-date="all"' in html
+    assert 'id="week-only-planned" checked' in html
+    assert 'class="edit-row"' in html
+    assert 'data-editable="1" readonly tabindex="-1"' in html
     assert '/telaindustriateste/celula' in html
     assert 'Enviar' in html
     assert 'Limpar ajustes manuais' in html

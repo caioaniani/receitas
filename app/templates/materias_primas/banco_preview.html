@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Matérias-primas{% endblock %}
+
+{% macro campo_texto(id, nome, rotulo, valor='', tipo='text', passo=None, ajuda=None) -%}
+<label class="mp-v2-field" for="{{ id }}">
+    <span>{{ rotulo }}</span>
+    <input id="{{ id }}" name="{{ nome }}" type="{{ tipo }}" value="{{ valor }}"
+           {% if passo %}step="{{ passo }}"{% endif %}>
+    {% if ajuda %}<small>{{ ajuda }}</small>{% endif %}
+</label>
+{%- endmacro %}
+
+{% macro campos_mp(mp=None, indice=0) -%}
+{% set prefixo = 'mp-' ~ (mp.id if mp else 'novo') %}
+<input type="hidden" name="mp_id[]" value="{{ mp.id if mp else '' }}">
+<div class="mp-v2-form-grid">
+    {{ campo_texto(prefixo ~ '-nome', 'nome[]', 'Nome', mp.nome if mp else '') }}
+    <label class="mp-v2-field" for="{{ prefixo }}-unidade">
+        <span>Unidade de controle</span>
+        <select id="{{ prefixo }}-unidade" name="unidade[]">
+            {% for unidade, label in [('g', 'Grama (g)'), ('kg', 'Quilograma (kg)'), ('ml', 'Mililitro (ml)'), ('l', 'Litro (l)'), ('un', 'Unidade (un)')] %}
+            <option value="{{ unidade }}" {% if (mp.unidade if mp else 'g') == unidade %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {{ campo_texto(prefixo ~ '-custo', 'custo_por_kg[]', 'Custo de referência (R$)', '%.2f'|format(mp.custo_por_kg or 0) if mp else '0.00', 'number', '0.01') }}
+    {{ campo_texto(prefixo ~ '-peso', 'peso_unidade[]', 'Peso por unidade (g)', mp.peso_unidade or '' if mp else '', 'number', '0.01', 'Use apenas quando a unidade de controle for “un”.') }}
+    {{ campo_texto(prefixo ~ '-fornecedor', 'fornecedor[]', 'Fornecedor', mp.fornecedor or '' if mp else '') }}
+    {{ campo_texto(prefixo ~ '-lote', 'lote_pedido[]', 'Múltiplo do pedido', mp.lote_pedido or '' if mp else '', 'number', '1') }}
+    {{ campo_texto(prefixo ~ '-minimo', 'minimo_pedido[]', 'Pedido mínimo', mp.minimo_pedido or '' if mp else '', 'number', '1') }}
+    <label class="mp-v2-field mp-v2-field-wide" for="{{ prefixo }}-observacoes">
+        <span>Observações</span>
+        <input id="{{ prefixo }}-observacoes" name="observacoes[]" type="text" value="{{ mp.observacoes or '' if mp else '' }}">
+    </label>
+    <label class="mp-v2-check" for="{{ prefixo }}-loja">
+        <input id="{{ prefixo }}-loja" type="checkbox" name="sugerir_loja_ids"
+               value="{{ mp.id if mp else 'novo-' ~ indice }}" {% if mp and mp.sugerir_pedido_loja %}checked{% endif %}>
+        <span><strong>Disponível para pedido das lojas</strong><small>Mostra este item nas sugestões de reposição das lojas.</small></span>
+    </label>
+</div>
+{%- endmacro %}
+
+{% block content %}
+<div class="mp-v2">
+    <header class="mp-v2-header">
+        <div>
+            <span class="mp-v2-kicker">Catálogo</span>
+            <h1>Matérias-primas</h1>
+            <p>Consulte primeiro. Abra um item somente quando precisar alterar seus dados.</p>
+        </div>
+        <button class="btn btn-primary mp-v2-new-button" type="button"
+                onclick="document.getElementById('mp-v2-new').open=true; document.getElementById('mp-novo-nome').focus();">
+            <i class="bi bi-plus-lg"></i> Nova matéria-prima
+        </button>
+    </header>
+
+    <form class="mp-v2-search" method="GET" role="search">
+        <label for="mp-v2-search-input"><i class="bi bi-search"></i><span class="visually-hidden">Buscar matéria-prima</span></label>
+        <input id="mp-v2-search-input" name="q" type="search" value="{{ busca }}"
+               placeholder="Buscar por nome ou fornecedor" autocomplete="off">
+        {% if busca %}<a href="{{ url_for('materias_primas.banco') }}" aria-label="Limpar busca"><i class="bi bi-x-lg"></i></a>{% endif %}
+        <button type="submit">Buscar</button>
+    </form>
+
+    <div class="mp-v2-meta" aria-live="polite">
+        <span><strong>{{ paginacao.total }}</strong> {{ 'resultado' if paginacao.total == 1 else 'resultados' }}{% if busca %} para “{{ busca }}”{% endif %}</span>
+        <span>Página {{ paginacao.page }} de {{ paginacao.pages or 1 }}</span>
+    </div>
+
+    <form method="POST" action="{{ url_for('materias_primas.salvar') }}" class="mp-v2-editor" id="mp-v2-editor">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="q" value="{{ busca }}">
+        <input type="hidden" name="page" value="{{ paginacao.page }}">
+
+        <details class="mp-v2-item mp-v2-new" id="mp-v2-new">
+            <summary>
+                <span class="mp-v2-item-mark"><i class="bi bi-plus-lg"></i></span>
+                <span class="mp-v2-item-title"><strong>Cadastrar nova matéria-prima</strong><small>Preencha somente quando precisar adicionar um item.</small></span>
+                <span class="mp-v2-item-action">Preencher <i class="bi bi-chevron-down"></i></span>
+            </summary>
+            <div class="mp-v2-item-body">
+                {{ campos_mp(None, 0) }}
+                <p class="mp-v2-save-hint"><i class="bi bi-info-circle"></i> A nova matéria-prima será criada ao salvar as alterações da página.</p>
+            </div>
+        </details>
+
+        <div class="mp-v2-list">
+            {% for mp in materias %}
+            <details class="mp-v2-item">
+                <summary>
+                    <span class="mp-v2-item-mark"><i class="bi bi-box-seam"></i></span>
+                    <span class="mp-v2-item-title">
+                        <strong>{{ mp.nome }}</strong>
+                        <small>{{ mp.fornecedor or 'Fornecedor não informado' }}</small>
+                    </span>
+                    <span class="mp-v2-item-fact"><small>Unidade</small><strong>{{ mp.unidade }}</strong></span>
+                    <span class="mp-v2-item-fact"><small>Custo</small><strong>R$ {{ '%.2f'|format(mp.custo_por_kg or 0) }}</strong></span>
+                    {% if mp.sugerir_pedido_loja %}<span class="mp-v2-badge"><i class="bi bi-shop"></i> lojas</span>{% endif %}
+                    <span class="mp-v2-item-action">Editar <i class="bi bi-chevron-down"></i></span>
+                </summary>
+                <div class="mp-v2-item-body">
+                    {{ campos_mp(mp, loop.index) }}
+                    <div class="mp-v2-item-actions">
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('materias_primas.transferir', id=mp.id) }}">
+                            <i class="bi bi-arrow-left-right"></i> Transferir vínculos
+                        </a>
+                        <button class="btn btn-sm btn-outline-secondary" type="submit"
+                                formaction="{{ url_for('materias_primas.arquivar', id=mp.id) }}"
+                                onclick="return confirm('Arquivar esta matéria-prima? O histórico será preservado.');">
+                            <i class="bi bi-archive"></i> Arquivar
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" type="submit"
+                                formaction="{{ url_for('materias_primas.excluir', id=mp.id) }}"
+                                onclick="return confirm('Excluir esta matéria-prima? A ação só será concluída se o item não tiver vínculos.');">
+                            <i class="bi bi-trash"></i> Excluir
+                        </button>
+                    </div>
+                </div>
+            </details>
+            {% else %}
+            <div class="mp-v2-empty">
+                <span><i class="bi bi-search"></i></span>
+                <div><h2>Nenhuma matéria-prima encontrada</h2><p>Tente outro nome ou limpe a busca para ver o catálogo completo.</p></div>
+                {% if busca %}<a class="btn btn-outline-secondary" href="{{ url_for('materias_primas.banco') }}">Limpar busca</a>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="mp-v2-savebar">
+            <span><i class="bi bi-cloud-check"></i> As alterações só entram no catálogo depois de salvar.</span>
+            <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> Salvar alterações</button>
+        </div>
+    </form>
+
+    {% if paginacao.pages > 1 %}
+    <nav class="mp-v2-pages" aria-label="Paginação de matérias-primas">
+        {% if paginacao.has_prev %}<a href="{{ url_for('materias_primas.banco', q=busca or None, page=paginacao.prev_num) }}"><i class="bi bi-arrow-left"></i> Anterior</a>{% else %}<span></span>{% endif %}
+        <span>{{ paginacao.first }}–{{ paginacao.last }} de {{ paginacao.total }}</span>
+        {% if paginacao.has_next %}<a href="{{ url_for('materias_primas.banco', q=busca or None, page=paginacao.next_num) }}">Próxima <i class="bi bi-arrow-right"></i></a>{% endif %}
+    </nav>
+    {% endif %}
+
+    {% if arquivadas %}
+    <details class="mp-v2-archived">
+        <summary><i class="bi bi-archive"></i> Arquivadas ({{ arquivadas|length }}) <i class="bi bi-chevron-down"></i></summary>
+        <div>
+            {% for mp in arquivadas %}
+            <article>
+                <span><strong>{{ mp.nome }}</strong><small>Fora dos seletores; histórico preservado.</small></span>
+                <form method="POST" action="{{ url_for('materias_primas.arquivar', id=mp.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-secondary" type="submit">Desarquivar</button>
+                </form>
+            </article>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+</div>
+{% endblock %}

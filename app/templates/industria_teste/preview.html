@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,650&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link href="{{ url_for('static', filename='css/industria-preview.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/industria-preview.css') }}?v={{ static_v['css/industria-preview.css'] }}" rel="stylesheet">
 </head>
 <body>
   {% macro campos_dia(data) -%}
@@ -104,7 +104,7 @@
 
         <section class="workspace hidden" data-panel="week">
           <div class="section-title week-heading">
-            <div><h2>Planejamento semanal</h2><p>Edite a quantidade no dia. A alteração salva como rascunho até você enviar ao padeiro.</p></div>
+            <div><h2>Planejamento semanal</h2><p>Escolha um dia para revisar. Abra a edição apenas na receita que precisa de ajuste.</p></div>
             <div class="section-actions">
               <a href="{{ url_for('industria_teste.auditoria') }}"><i class="bi bi-clock-history"></i> Auditoria</a>
               <a href="{{ url_for('industria_teste.index', legacy=1) }}"><i class="bi bi-arrow-left-right"></i> Comparar versão anterior</a>
@@ -126,9 +126,19 @@
           </details>
 
           {% if crono.receitas %}
+          <div class="week-day-focus" aria-label="Período visível">
+            <span>Exibir</span>
+            {% for dia in crono.dias %}
+            <button type="button" data-focus-date="{{ dia.data }}" aria-pressed="{{ 'true' if dia.data == crono.hoje else 'false' }}">
+              <strong>{{ 'Hoje' if dia.data == crono.hoje else dia.label.split(' ')[0] }}</strong><small>{{ dia.data[8:] }}/{{ dia.data[5:7] }}</small>
+            </button>
+            {% endfor %}
+            <button type="button" data-focus-date="all" aria-pressed="false"><i class="bi bi-calendar-week"></i> Semana completa</button>
+          </div>
+
           <div class="week-toolbar">
             <label class="search-field"><i class="bi bi-search"></i><input type="search" id="week-search" placeholder="Buscar receita ou categoria" autocomplete="off"></label>
-            <label class="check-filter"><input type="checkbox" id="week-only-planned"> Somente com produção</label>
+            <label class="check-filter"><input type="checkbox" id="week-only-planned" checked> Somente com produção</label>
             {% if resumo.risco_n or resumo.pend_vencido %}<label class="check-filter"><input type="checkbox" id="week-only-attention"> Somente com atenção</label>{% endif %}
             <label class="sort-field">Ordenar<select id="week-sort"><option value="category">por categoria</option><option value="production">maior produção</option><option value="attention">atenção primeiro</option><option value="name">nome A–Z</option></select></label>
             <span id="week-filter-status" class="filter-status" aria-live="polite"></span>
@@ -172,12 +182,15 @@
               {% set ns = namespace(cat='__inicio__') %}
               {% for r in crono.receitas %}
               {% if r.categoria != ns.cat %}
-              <tr class="category-row" data-category-row="{{ (r.categoria or 'Sem categoria')|lower }}"><td colspan="{{ crono.dias|length + 2 }}">{{ r.categoria or 'Sem categoria' }}</td></tr>
+              <tr class="category-row" data-category-row="{{ (r.categoria or 'Sem categoria')|lower }}"><td colspan="{{ crono.dias|length + 2 }}"><button type="button" class="category-toggle" aria-expanded="true"><i class="bi bi-chevron-down"></i>{{ r.categoria or 'Sem categoria' }}</button></td></tr>
               {% set ns.cat = r.categoria %}
               {% endif %}
               <tr class="recipe-row" data-rid="{{ r.receita_id }}" data-name="{{ (r.nome ~ ' ' ~ (r.categoria or ''))|lower }}" data-recipe-name="{{ r.nome|lower }}" data-category="{{ (r.categoria or 'Sem categoria')|lower }}" data-total="{{ r.total or 0 }}" data-attention="{{ 1 if r.entregas_risco or r.pend_vencido or r.override_stale else 0 }}">
                 <td class="recipe-col">
-                  <button type="button" class="recipe-toggle" data-rid="{{ r.receita_id }}" aria-expanded="false"><i class="bi bi-chevron-right"></i><span><strong>{{ r.nome }}</strong><small>Estoque {{ r.em_estoque }}{% if not r.insumo and (r.comprometido or r.previsto) %} · firme {{ r.comprometido }} · previsto {{ r.previsto }}{% elif r.insumo %} · consumo {{ r.consumo_janela or 0 }}{% endif %}</small></span></button>
+                  <div class="recipe-main">
+                    <button type="button" class="recipe-toggle" data-rid="{{ r.receita_id }}" aria-expanded="false"><i class="bi bi-chevron-right"></i><span><strong>{{ r.nome }}</strong><small>Estoque {{ r.em_estoque }}{% if not r.insumo and (r.comprometido or r.previsto) %} · firme {{ r.comprometido }} · previsto {{ r.previsto }}{% elif r.insumo %} · consumo {{ r.consumo_janela or 0 }}{% endif %}</small></span></button>
+                    {% if not r.insumo and not r.retorno %}<button type="button" class="edit-row" data-rid="{{ r.receita_id }}" aria-pressed="false" aria-label="Editar planejamento de {{ r.nome }}"><i class="bi bi-pencil"></i><span>Editar</span></button>{% endif %}
+                  </div>
                   <div class="recipe-tags">
                     {% if r.entregas_risco %}<span class="tag danger"><i class="bi bi-exclamation-triangle-fill"></i> risco</span>{% endif %}
                     {% if r.pend_vencido %}<span class="tag danger">{{ r.pend_vencido }} vencido</span>{% endif %}
@@ -192,7 +205,7 @@
                 {% set env_dia = ordem_enviada.get(c.data) %}
                 {% set difere_cel = env_dia is not none and r.receita_id in difere.get(c.data, ()) %}
                 <td class="plan-cell {{ 'is-today' if c.data == crono.hoje }} {{ 'is-readonly' if r.insumo or r.retorno or c.bloqueado or fechado }} {{ 'has-risk' if c.data in r.risco_datas }}" data-rid="{{ r.receita_id }}" data-date="{{ c.data }}" data-batches="{{ c.fornadas if c.fornadas is not none else '' }}" data-derived="{{ 1 if r.insumo else 0 }}">
-                  <input type="number" min="0" inputmode="numeric" value="{{ c.qtd or 0 }}" aria-label="{{ r.nome }}, {{ c.data }}" class="plan-input {{ 'is-zero' if not c.qtd }}" data-last="{{ c.qtd or 0 }}" {% if r.insumo or r.retorno or c.bloqueado or fechado %}readonly tabindex="-1"{% endif %}>
+                  <input type="number" min="0" inputmode="numeric" value="{{ c.qtd or 0 }}" aria-label="{{ r.nome }}, {{ c.data }}" class="plan-input {{ 'is-zero' if not c.qtd }}" data-last="{{ c.qtd or 0 }}" data-editable="{{ 0 if r.insumo or r.retorno or c.bloqueado or fechado else 1 }}" readonly tabindex="-1">
                   <small class="batch-label">{% if c.fornadas is not none and c.qtd %}{{ c.fornadas }} forn.{% elif r.insumo and c.qtd %}calculado{% endif %}</small>
                   {% if difere_cel %}<span class="sent-value" title="O padeiro está vendo {{ env_dia.get(r.receita_id, 0) }}"><i class="bi bi-send-check"></i> {{ env_dia.get(r.receita_id, 0) }}</span>{% endif %}
                 </td>
@@ -250,6 +263,7 @@
           openPanel(button.dataset.open);
           var day = button.dataset.focusDay;
           var rid = button.dataset.focusRecipe;
+          if (day) setDayFocus(day);
           var target = day ? document.querySelector('.day-column[data-date="' + day + '"]')
             : (rid ? document.querySelector('.recipe-row[data-rid="' + rid + '"]') : null);
           if (target) target.scrollIntoView({behavior: 'smooth', block: 'center', inline: 'center'});
@@ -271,9 +285,39 @@
       var onlyAttention = document.getElementById('week-only-attention');
       var sort = document.getElementById('week-sort');
       var filterStatus = document.getElementById('week-filter-status');
+      var focusButtons = document.querySelectorAll('[data-focus-date]');
+      var activeFocusDate = null;
+
+      function setDayFocus(date) {
+        if (!grid) return;
+        activeFocusDate = date;
+        grid.classList.toggle('single-day', date !== 'all');
+        grid.querySelectorAll('.day-column, .plan-cell, tfoot td[data-date]').forEach(function (cell) {
+          cell.classList.toggle('day-hidden', date !== 'all' && cell.dataset.date !== date);
+        });
+        focusButtons.forEach(function (button) {
+          var selected = button.dataset.focusDate === date;
+          button.classList.toggle('active', selected);
+          button.setAttribute('aria-pressed', String(selected));
+        });
+        var selectedHeader = grid.querySelector('.day-column[data-date="' + date + '"]');
+        if (selectedHeader) selectedHeader.scrollIntoView({block: 'nearest', inline: 'nearest'});
+      }
+
+      focusButtons.forEach(function (button) {
+        button.addEventListener('click', function () { setDayFocus(button.dataset.focusDate); });
+      });
+      var initialFocus = document.querySelector('[data-focus-date][aria-pressed="true"]') || focusButtons[0];
+      if (initialFocus) setDayFocus(initialFocus.dataset.focusDate);
 
       function detailFor(row) {
         return tbody.querySelector('.recipe-detail[data-rid="' + row.dataset.rid + '"]');
+      }
+
+      function categoryFor(row) {
+        return Array.prototype.find.call(tbody.querySelectorAll('.category-row'), function (category) {
+          return category.dataset.categoryRow === row.dataset.category;
+        });
       }
 
       function applyFilters() {
@@ -283,6 +327,8 @@
           var show = !query || row.dataset.name.indexOf(query) !== -1;
           if (show && onlyPlanned.checked && Number(row.dataset.total || 0) === 0) show = false;
           if (show && onlyAttention && onlyAttention.checked && row.dataset.attention !== '1') show = false;
+          var category = categoryFor(row);
+          if (show && !query && category && category.dataset.collapsed === 'true') show = false;
           row.hidden = !show;
           if (show) visible += 1;
           else {
@@ -294,6 +340,7 @@
         });
         tbody.querySelectorAll('.category-row').forEach(function (category) {
           if (sort.value !== 'category') { category.hidden = true; return; }
+          if (!query && category.dataset.collapsed === 'true') { category.hidden = false; return; }
           var hasVisible = Array.prototype.some.call(tbody.querySelectorAll('.recipe-row'), function (row) {
             return row.dataset.category === category.dataset.categoryRow && !row.hidden;
           });
@@ -332,6 +379,37 @@
       applyFilters();
 
       document.addEventListener('click', function (event) {
+        var categoryToggle = event.target.closest('.category-toggle');
+        if (categoryToggle) {
+          var categoryRow = categoryToggle.closest('.category-row');
+          var collapsed = categoryRow.dataset.collapsed !== 'true';
+          categoryRow.dataset.collapsed = String(collapsed);
+          categoryToggle.setAttribute('aria-expanded', String(!collapsed));
+          applyFilters();
+          return;
+        }
+        var edit = event.target.closest('.edit-row');
+        if (edit) {
+          var editRow = tbody.querySelector('.recipe-row[data-rid="' + edit.dataset.rid + '"]');
+          if (!editRow) return;
+          var editing = !editRow.classList.contains('is-editing');
+          editRow.classList.toggle('is-editing', editing);
+          edit.setAttribute('aria-pressed', String(editing));
+          edit.querySelector('span').textContent = editing ? 'Concluir' : 'Editar';
+          edit.querySelector('i').className = 'bi ' + (editing ? 'bi-check2' : 'bi-pencil');
+          editRow.querySelectorAll('.plan-input[data-editable="1"]').forEach(function (input) {
+            input.readOnly = !editing;
+            input.tabIndex = editing ? 0 : -1;
+          });
+          if (editing) {
+            var selector = activeFocusDate && activeFocusDate !== 'all'
+              ? '.plan-cell[data-date="' + activeFocusDate + '"] .plan-input[data-editable="1"]'
+              : '.plan-input[data-editable="1"]';
+            var firstInput = editRow.querySelector(selector);
+            if (firstInput) { firstInput.focus(); firstInput.select(); }
+          }
+          return;
+        }
         var toggle = event.target.closest('.recipe-toggle');
         if (toggle) {
           var detail = tbody.querySelector('.recipe-detail[data-rid="' + toggle.dataset.rid + '"]');
