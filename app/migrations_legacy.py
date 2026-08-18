@@ -105,6 +105,7 @@ def _migrate(app):
         _seed_minimo_danish_v2(app)
         _seed_minimo_danish_v3(app)
         _seed_minimo_cinnamon(app)
+        _seed_acerto_granola_iogurte(app)
         _backfill_totais_orcamento(app)
 
 
