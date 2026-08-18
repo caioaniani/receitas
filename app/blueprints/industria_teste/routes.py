@@ -71,6 +71,13 @@ def _params_visao(**extra):
     p = {'horizonte': _horizonte_janela()[0], 'janela': _horizonte_janela()[1],
          'inicio': _inicio_offset(), 'motor': _motor(),
          'equilibrar': 1 if _equilibrar() else 0}
+    # Interface v2: a acao volta pra experiencia em que nasceu — editar/
+    # enviar da tela nova nao pode devolver o usuario pra tela antiga
+    # (nem vice-versa via ?legacy=1).
+    if request.values.get('v2') == '1':
+        p['v2'] = 1
+    if request.values.get('view') in ('today', 'week', 'exceptions'):
+        p['view'] = request.values['view']
     p.update(extra)
     return p
 
