@@ -228,3 +228,21 @@ def test_fechamento_nao_dispara_espera(app):
     # mensagem que PRECISA de resposta não é fechamento
     assert _e_fechamento('ok, mas e a entrega?') is False
     assert _e_fechamento('Bem e vcs?') is False
+
+
+def test_fechamento_com_emoji_fora_da_whitelist(app):
+    """Caso real conv 1697 (18/08/2026): "Obrigada ✨" disparou alerta de
+    'esperando atendente' à 01:25 + contenção pro cliente — o ✨ não estava
+    na whitelist do regex. Emoji DECORATIVO desconhecido agora é ignorado
+    genericamente (a whitelist já tinha falhado na criação também)."""
+    from app.services.chatbot_vigia import _e_fechamento
+    assert _e_fechamento('Obrigada ✨') is True
+    assert _e_fechamento('valeu 🥖') is True
+    assert _e_fechamento('perfeito 🌟🌟') is True
+    # emoji NEGATIVO muda o sentido — não é fechamento tranquilo
+    assert _e_fechamento('obrigada 😡') is False
+    assert _e_fechamento('ok 😭') is False
+    # só-emoji desconhecido não afirma fechamento (strip esvazia)
+    assert _e_fechamento('✨') is False
+    # e continua exigindo que o TEXTO seja de encerramento
+    assert _e_fechamento('cadê meu pedido? ✨') is False

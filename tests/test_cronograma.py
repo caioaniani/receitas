@@ -1238,8 +1238,9 @@ def test_rota_telaindustriateste(app, admin_user):
     assert 'cronograma' in resp.get_data(as_text=True).lower()
 
 
-def test_rota_telaindustriateste_preview_read_only(app, admin_user):
-    """A prévia usa os mesmos dados sem substituir a tela operacional."""
+def test_rota_telaindustriateste_preview_funcional(app, admin_user):
+    """A prévia usa os mesmos dados e expõe a grade editável sem substituir
+    a tela operacional/legada."""
     loja = _loja()
     r = _receita()
     _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 10)
@@ -1251,13 +1252,19 @@ def test_rota_telaindustriateste_preview_read_only(app, admin_user):
     preview = client.get('/telaindustriateste/?preview=1')
     assert preview.status_code == 200
     html = preview.get_data(as_text=True)
-    assert 'Prévia de interface · somente leitura' in html
+    assert 'Ambiente de teste · dados isolados da produção' in html
+    assert 'somente leitura' not in html
     assert 'O que precisa acontecer agora' in html
     assert 'Planejamento semanal' in html
     assert r.nome in html
+    assert 'id="week-grid"' in html
+    assert 'class="plan-input' in html
+    assert '/telaindustriateste/celula' in html
+    assert 'Enviar' in html
+    assert 'Limpar ajustes manuais' in html
 
     atual = client.get('/telaindustriateste/')
-    assert 'Prévia de interface · somente leitura' not in atual.get_data(
+    assert 'Ambiente de teste · dados isolados da produção' not in atual.get_data(
         as_text=True)
 
 
@@ -1271,9 +1278,26 @@ def test_preview_mode_torna_nova_industria_padrao_com_comparacao_legacy(
     nova = client.get('/telaindustriateste/').get_data(as_text=True)
     antiga = client.get('/telaindustriateste/?legacy=1').get_data(as_text=True)
 
-    assert 'Prévia de interface · somente leitura' in nova
+    assert 'Ambiente de teste · dados isolados da produção' in nova
     assert 'Comparar com tela antiga' in nova
-    assert 'Prévia de interface · somente leitura' not in antiga
+    assert 'Ambiente de teste · dados isolados da produção' not in antiga
+
+
+def test_preview_preserva_grade_apos_post(app, admin_user):
+    """Ações da grade voltam para a própria grade funcional, inclusive quando
+    o preview foi aberto por query string fora do ambiente dedicado."""
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+
+    resp = client.post('/telaindustriateste/limpar-edicoes', data={
+        'horizonte': 7, 'janela': 6, 'inicio': 0, 'motor': 'vendas',
+        'equilibrar': 1, 'preview': 1, 'view': 'week',
+    })
+
+    assert resp.status_code in (302, 303)
+    assert 'preview=1' in resp.location
+    assert 'view=week' in resp.location
 
 
 def test_rota_telaindustriateste_renderiza_aviso_stale(app, admin_user):

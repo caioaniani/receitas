@@ -71,6 +71,13 @@ def _params_visao(**extra):
     p = {'horizonte': _horizonte_janela()[0], 'janela': _horizonte_janela()[1],
          'inicio': _inicio_offset(), 'motor': _motor(),
          'equilibrar': 1 if _equilibrar() else 0}
+    # Mantem a experiencia em que a acao nasceu. Isto e especialmente util
+    # enquanto a interface nova roda como preview explicito fora do Railway:
+    # editar/enviar nao deve devolver o usuario para a tela antiga.
+    if request.values.get('preview') == '1':
+        p['preview'] = 1
+    if request.values.get('view') in ('today', 'week', 'exceptions'):
+        p['view'] = request.values['view']
     p.update(extra)
     return p
 
