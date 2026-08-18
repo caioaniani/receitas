@@ -140,15 +140,25 @@
     });
 
     // Aviso "item em g/ml" (caso granola 18/08/2026): item medido em gramas
-    // com quantidade < 100 quase sempre é gente lançando POTES. Só aviso —
-    // nunca bloqueia (100g de fermento num pedido pequeno é legítimo).
+    // com quantidade < 100 quase sempre é gente lançando POTES; e item com
+    // lote definido (iogurte 3000/granola 5000) só aceita múltiplo — o
+    // servidor recusa, então o JS avisa antes do POST.
     function checarAvisoGramas(tr) {
         var aviso = tr.querySelector('.item-aviso-gramas');
         if (!aviso) return;
-        var flag = (tr.querySelector('.item-id').dataset.emGramas === '1');
+        var hidden = tr.querySelector('.item-id');
+        var flag = (hidden.dataset.emGramas === '1');
+        var lote = parseInt(hidden.dataset.lote || '0', 10);
         var qtd = parseInt(tr.querySelector('input[name="item_qtd[]"]').value, 10);
-        var suspeito = flag && qtd >= 1 && qtd < 100;
-        aviso.classList.toggle('d-none', !suspeito);
+        var msgs = [];
+        if (flag && qtd >= 1 && qtd < 100) {
+            msgs.push('⚠ Este item é pedido em g/ml, não em potes/unidades — ex.: 5 potes de 1kg = 5000.');
+        }
+        if (flag && lote > 0 && qtd >= 1 && qtd % lote !== 0) {
+            msgs.push('⚠ A quantidade tem que ser múltiplo de ' + lote + ' (ex.: ' + lote + ', ' + (lote * 2) + '...). O pedido não vai salvar assim.');
+        }
+        aviso.textContent = msgs.join(' ');
+        aviso.classList.toggle('d-none', msgs.length === 0);
     }
 
     // Mudar a quantidade re-avalia o aviso da linha.
