@@ -11,7 +11,11 @@ from app.models import (
     PedidoLoja,
     Receita,
 )
-from app.preview_copy import _sanitizar, copy_preview_data
+from app.preview_copy import (
+    _sanitizar,
+    copy_preview_data,
+    preview_snapshot_loaded,
+)
 
 
 def test_sanitizador_remove_dados_privados_e_vinculos_pessoais():
@@ -109,6 +113,6 @@ def test_copia_operacional_inclui_estoque_site_e_e_idempotente(app, tmp_path):
         assert copy_preview_data(
             f'sqlite:///{source_path}', 'snapshot-1', dias_historico=180
         ) is None
+        assert preview_snapshot_loaded() is True
 
     source.dispose()
-

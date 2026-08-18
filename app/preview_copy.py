@@ -77,6 +77,13 @@ _LOJA_PRIVATE_COLUMNS = {
 }
 
 
+def preview_snapshot_loaded():
+    """Indica se ja existe uma fotografia importada no banco do preview."""
+    return db.session.execute(text(
+        'SELECT value FROM app_config WHERE key = :key'),
+        {'key': _MARKER_KEY}).scalar() is not None
+
+
 def _normalizar_url(url):
     return url.replace('postgres://', 'postgresql://', 1)
 
@@ -197,4 +204,3 @@ def copy_preview_data(source_url, version, *, dias_historico=180):
         raise
     finally:
         source.dispose()
-

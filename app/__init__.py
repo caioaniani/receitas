@@ -918,8 +918,10 @@ def create_app(config_class=None):
                     logger.exception(
                         'Falha ao carregar copia sanitizada no preview.')
             else:
-                from app.preview_seed import seed_preview_data
-                seed_preview_data()
+                from app.preview_copy import preview_snapshot_loaded
+                if not preview_snapshot_loaded():
+                    from app.preview_seed import seed_preview_data
+                    seed_preview_data()
 
     # Cron de auto-sync Seru → EstoqueLoja (15min). Roda dentro de
     # cada worker gunicorn mas usa pg_try_advisory_lock pra deduplicate.
@@ -1094,4 +1096,3 @@ def _alembic_stamp_se_necessario(app):
             'Alembic stamp/upgrade falhou. Verificar manualmente com '
             '`railway run flask db current` e `flask db upgrade`.'
         )
-
