@@ -901,8 +901,25 @@ def create_app(config_class=None):
         _criar_admin()
 
         if os.environ.get('PREVIEW_MODE') == '1':
-            from app.preview_seed import seed_preview_data
-            seed_preview_data()
+            source_url = app.config.get('PREVIEW_SOURCE_DATABASE_URL')
+            dataset_version = app.config.get('PREVIEW_DATASET_VERSION')
+            if source_url and dataset_version:
+                try:
+                    from app.preview_copy import copy_preview_data
+                    resumo = copy_preview_data(
+                        source_url,
+                        dataset_version,
+                        dias_historico=app.config['PREVIEW_HISTORY_DAYS'],
+                    )
+                    if resumo:
+                        logger.warning(
+                            'Copia sanitizada carregada no preview: %s', resumo)
+                except Exception:
+                    logger.exception(
+                        'Falha ao carregar copia sanitizada no preview.')
+            else:
+                from app.preview_seed import seed_preview_data
+                seed_preview_data()
 
     # Cron de auto-sync Seru → EstoqueLoja (15min). Roda dentro de
     # cada worker gunicorn mas usa pg_try_advisory_lock pra deduplicate.
@@ -1077,5 +1094,4 @@ def _alembic_stamp_se_necessario(app):
             'Alembic stamp/upgrade falhou. Verificar manualmente com '
             '`railway run flask db current` e `flask db upgrade`.'
         )
-
 

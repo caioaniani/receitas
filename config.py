@@ -16,6 +16,10 @@ class Config:
     # Ambiente visual de homologacao. Ativa o shell v2 e recursos de preview
     # sem mudar a experiencia do ambiente de producao.
     PREVIEW_MODE = os.environ.get('PREVIEW_MODE', '0') == '1'
+    PREVIEW_SOURCE_DATABASE_URL = os.environ.get(
+        'PREVIEW_SOURCE_DATABASE_URL', '')
+    PREVIEW_DATASET_VERSION = os.environ.get('PREVIEW_DATASET_VERSION', '')
+    PREVIEW_HISTORY_DAYS = int(os.environ.get('PREVIEW_HISTORY_DAYS', '180'))
     _env_secret = os.environ.get('SECRET_KEY')
     if _env_secret:
         SECRET_KEY = _env_secret
