@@ -1,4 +1,4 @@
-/* Shell v2 — ativo apenas quando PREVIEW_MODE=1. */
+/* Shell v2 — ativo quando UI_V2_ENABLED=1 (cookie ui_classic opta fora; ?v2=1 força). */
 .ui-v2 {
     --sidebar-width: 232px;
     --v2-canvas: #f5f6f3;

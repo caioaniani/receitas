@@ -1,4 +1,11 @@
-"""Shell de navegação exclusivo do ambiente visual de preview."""
+"""Interface v2 (redesenho promovido do preview em 18/08/2026).
+
+Contrato da chave (app/ui_v2.py): env `UI_V2_ENABLED` liga o shell novo;
+cookie `ui_classic` devolve UM usuário à interface anterior; `?v2=1`
+força a tela nova numa request. A infra do ambiente de preview
+(preview_copy/seed, PREVIEW_MODE, cópia de banco) NÃO existe aqui —
+há teste travando isso.
+"""
 
 
 def _login(app, admin_user):
@@ -10,8 +17,8 @@ def _login(app, admin_user):
     return client
 
 
-def test_preview_mode_usa_navegacao_reduzida(app, admin_user):
-    app.config['PREVIEW_MODE'] = True
+def test_ui_v2_usa_navegacao_reduzida(app, admin_user):
+    app.config['UI_V2_ENABLED'] = True
     html = _login(app, admin_user).get('/area/producao').get_data(as_text=True)
 
     assert 'ui-v2-sidebar' in html
@@ -20,16 +27,57 @@ def test_preview_mode_usa_navegacao_reduzida(app, admin_user):
     assert 'Fichas Técnicas' not in html
 
 
-def test_producao_mantem_shell_atual_fora_do_preview(app, admin_user):
-    app.config['PREVIEW_MODE'] = False
+def test_producao_mantem_shell_atual_com_flag_desligada(app, admin_user):
+    app.config['UI_V2_ENABLED'] = False
     html = _login(app, admin_user).get('/area/producao').get_data(as_text=True)
 
     assert 'ui-v2-sidebar' not in html
     assert 'Fichas Técnicas' in html
 
 
-def test_preview_preserva_contrato_do_modo_embed(app, admin_user):
-    app.config['PREVIEW_MODE'] = True
+def test_flag_desligada_e_o_default(app, admin_user):
+    """Sem env UI_V2_ENABLED o sistema fica EXATAMENTE como era — a
+    promoção do visual não muda nada até o dono ligar a chave."""
+    assert app.config['UI_V2_ENABLED'] is False
+
+
+def test_cookie_ui_classic_devolve_a_interface_anterior(app, admin_user):
+    app.config['UI_V2_ENABLED'] = True
+    client = _login(app, admin_user)
+    client.set_cookie('ui_classic', '1')
+    html = client.get('/').get_data(as_text=True)
+
+    assert 'home-v2' not in html
+    assert 'menu-grid' in html
+
+
+def test_rotas_de_alternancia_setam_e_limpam_o_cookie(app, admin_user):
+    app.config['UI_V2_ENABLED'] = True
+    client = _login(app, admin_user)
+
+    resp = client.get('/ui/classica')
+    assert resp.status_code in (302, 303)
+    cookies = resp.headers.getlist('Set-Cookie')
+    assert any('ui_classic=1' in c for c in cookies)
+
+    resp = client.get('/ui/nova')
+    cookies = resp.headers.getlist('Set-Cookie')
+    assert any('ui_classic=;' in c or 'ui_classic="";' in c
+               for c in cookies)
+
+
+def test_v2_na_query_forca_a_tela_nova_sem_flag(app, admin_user):
+    """`?v2=1` permite validar a interface nova EM PRODUÇÃO antes de
+    ligar a env pra equipe inteira."""
+    app.config['UI_V2_ENABLED'] = False
+    html = _login(app, admin_user).get('/?v2=1').get_data(as_text=True)
+
+    assert 'home-v2' in html
+    assert 'ui-v2.css' in html
+
+
+def test_ui_v2_preserva_contrato_do_modo_embed(app, admin_user):
+    app.config['UI_V2_ENABLED'] = True
     html = _login(app, admin_user).get(
         '/admin/loja-online/pedidos/inexistente?embed=1'
     ).get_data(as_text=True)
@@ -38,8 +86,8 @@ def test_preview_preserva_contrato_do_modo_embed(app, admin_user):
     assert '<body class="embed-mode ui-v2">' not in html
 
 
-def test_preview_home_usa_nova_hierarquia_sem_alterar_dados(app, admin_user):
-    app.config['PREVIEW_MODE'] = True
+def test_home_v2_usa_nova_hierarquia_sem_alterar_dados(app, admin_user):
+    app.config['UI_V2_ENABLED'] = True
     html = _login(app, admin_user).get('/').get_data(as_text=True)
 
     assert 'home-v2' in html
@@ -50,8 +98,8 @@ def test_preview_home_usa_nova_hierarquia_sem_alterar_dados(app, admin_user):
     assert 'css/ui-v2.css' in html
 
 
-def test_home_legada_permanece_fora_do_preview(app, admin_user):
-    app.config['PREVIEW_MODE'] = False
+def test_home_legada_permanece_com_flag_desligada(app, admin_user):
+    app.config['UI_V2_ENABLED'] = False
     html = _login(app, admin_user).get('/').get_data(as_text=True)
 
     assert 'home-v2' not in html
@@ -59,8 +107,8 @@ def test_home_legada_permanece_fora_do_preview(app, admin_user):
     assert 'Escolha uma área para continuar.' in html
 
 
-def test_preview_area_usa_mesma_entrada_em_todas_as_equipes(app, admin_user):
-    app.config['PREVIEW_MODE'] = True
+def test_area_v2_usa_mesma_entrada_em_todas_as_equipes(app, admin_user):
+    app.config['UI_V2_ENABLED'] = True
     client = _login(app, admin_user)
 
     for slug, titulo in (
@@ -80,8 +128,8 @@ def test_preview_area_usa_mesma_entrada_em_todas_as_equipes(app, admin_user):
         assert 'area-wrap' not in html
 
 
-def test_area_legada_permanece_fora_do_preview(app, admin_user):
-    app.config['PREVIEW_MODE'] = False
+def test_area_legada_permanece_com_flag_desligada(app, admin_user):
+    app.config['UI_V2_ENABLED'] = False
     html = _login(app, admin_user).get('/area/producao').get_data(as_text=True)
 
     assert 'area-wrap' in html
@@ -89,7 +137,7 @@ def test_area_legada_permanece_fora_do_preview(app, admin_user):
     assert 'O que você quer fazer?' not in html
 
 
-def test_preview_materias_primas_prioriza_leitura_e_pagina_resultados(
+def test_v2_materias_primas_prioriza_leitura_e_pagina_resultados(
         app, admin_user):
     from app.extensions import db
     from app.models import MateriaPrima
@@ -100,7 +148,7 @@ def test_preview_materias_primas_prioriza_leitura_e_pagina_resultados(
         for indice in range(35)
     ])
     db.session.commit()
-    app.config['PREVIEW_MODE'] = True
+    app.config['UI_V2_ENABLED'] = True
 
     html = _login(app, admin_user).get('/materias-primas/').get_data(
         as_text=True)
@@ -113,7 +161,7 @@ def test_preview_materias_primas_prioriza_leitura_e_pagina_resultados(
     assert 'id="mp-table"' not in html
 
 
-def test_preview_materias_primas_busca_no_servidor(app, admin_user):
+def test_v2_materias_primas_busca_no_servidor(app, admin_user):
     from app.extensions import db
     from app.models import MateriaPrima
 
@@ -124,7 +172,7 @@ def test_preview_materias_primas_busca_no_servidor(app, admin_user):
                      fornecedor='Cacau Sul'),
     ])
     db.session.commit()
-    app.config['PREVIEW_MODE'] = True
+    app.config['UI_V2_ENABLED'] = True
 
     html = _login(app, admin_user).get(
         '/materias-primas/?q=Moinho').get_data(as_text=True)
@@ -135,8 +183,8 @@ def test_preview_materias_primas_busca_no_servidor(app, admin_user):
     assert 'para “Moinho”' in html
 
 
-def test_materias_primas_legada_permanece_fora_do_preview(app, admin_user):
-    app.config['PREVIEW_MODE'] = False
+def test_materias_primas_legada_permanece_com_flag_desligada(app, admin_user):
+    app.config['UI_V2_ENABLED'] = False
     html = _login(app, admin_user).get('/materias-primas/').get_data(
         as_text=True)
 
@@ -144,10 +192,24 @@ def test_materias_primas_legada_permanece_fora_do_preview(app, admin_user):
     assert 'class="mp-v2"' not in html
 
 
-def test_preview_contas_vazia_explica_proximo_passo(app, admin_user):
-    app.config['PREVIEW_MODE'] = True
+def test_contas_vazia_explica_proximo_passo(app, admin_user):
+    app.config['UI_V2_ENABLED'] = True
     html = _login(app, admin_user).get('/contas-pagar/').get_data(as_text=True)
 
     assert 'Nenhuma conta em aberto' in html
     assert 'Tudo conferido por aqui' in html
     assert 'aria-current="page"' in html
+
+
+def test_infra_de_preview_nao_foi_promovida(app):
+    """A promoção trouxe SÓ o visual: preview_copy/preview_seed,
+    PREVIEW_MODE e o reset de senha do admin ficaram no branch de
+    homologação — nada disso pode existir em produção."""
+    import os
+
+    import app as app_pkg
+    base = os.path.dirname(app_pkg.__file__)
+    assert not os.path.exists(os.path.join(base, 'preview_copy.py'))
+    assert not os.path.exists(os.path.join(base, 'preview_seed.py'))
+    assert 'PREVIEW_MODE' not in app.config
+    assert 'PREVIEW_SOURCE_DATABASE_URL' not in app.config

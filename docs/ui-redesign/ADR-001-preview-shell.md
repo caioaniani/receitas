@@ -28,3 +28,16 @@ ambiente de preview.
 - Cada fluxo pode ser comparado e validado isoladamente.
 - Por um período, telas migradas e legadas coexistirão no preview.
 - Telas especializadas que não estendem `base.html` exigirão migração própria.
+
+---
+
+## Adendo — promoção pra produção (18/08/2026)
+
+O visual deste ADR foi promovido ao branch de produção de forma
+SELETIVA: somente telas, CSS/JS e melhorias de usabilidade. A
+infraestrutura do ambiente de preview (preview_copy.py,
+preview_seed.py, PREVIEW_MODE, cópia sanitizada de banco, reset de
+senha do admin) NÃO foi promovida. Em produção a chave é
+`UI_V2_ENABLED` (env, opt-in) + cookie `ui_classic` (volta individual
+à interface anterior) + `?v2=1` (força numa request). Ver
+`app/ui_v2.py`.
