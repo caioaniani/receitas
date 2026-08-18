@@ -112,6 +112,7 @@ def create_app(config_class=None):
         # pelo dono). Sem `?v=` a correcao de CSS so chegaria por hard-refresh.
         for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js',
                     'js/pdv_mapeamento.js', 'css/style.css',
+                    'js/home-v2.js', 'css/ui-v2.css', 'css/industria-v2.css',
                     'loja/loja.css', 'loja/carrinho.js', 'loja/checkout.js'):
             try:
                 p = os.path.join(app.static_folder, rel)
