@@ -626,6 +626,31 @@ def test_nivelamento_pesa_pelo_lote_de_producao(app):
     assert sum(1 for q in qtds if q > 0) >= 3      # espalhado na semana
 
 
+def test_dribble_respeita_lote_de_producao(app):
+    """Caso "101 brioches e pra acabar", parte 2: o minimo do dribble
+    vinha da fornada TEORICA da capacidade da amassadeira (~448 un →
+    minimo 90) e, como o sumidouro da consolidacao e o dia 0, a demanda
+    diaria de ~30 cascateava INTEIRA pra hoje. Com `lote_producao`
+    definido (10) o minimo e 2 e a demanda diaria fica em pe no proprio
+    dia."""
+    loja = _loja()
+    r = _receita_amassadeira('Brioche Dribble', rend=4, peso_base=1000,
+                             cap=112000)           # fornada teorica ~448
+    r.lote_producao = 10
+    db.session.commit()
+    hoje_d = hoje()                                # segunda congelada
+    for i in range(1, 5):                          # ter..sex, 30/dia
+        _pedido(loja, 'pendente', hoje_d + timedelta(days=i), r, 30)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=False)  # dribble puro
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 120
+    qtds = [c['qtd'] for c in rr['por_dia']]
+    assert max(qtds) <= 60, qtds                   # nada cascateou pro dia 0
+    assert sum(1 for q in qtds if q > 0) >= 3
+
+
 def test_nivelamento_fatia_receita_grande_em_lotes(app):
     """Caso Croissant (dono: "por que não redistribuir em lotes menores?"):
     demanda grande num dia só é FATIADA — nenhum dia carrega o total
