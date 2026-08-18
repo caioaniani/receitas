@@ -2740,6 +2740,14 @@ def executar_criar_pedido(params, user):
                 f'{nomes}. Um admin pode liberar no Banco de MPs '
                 f'(checkbox "sugerir pedido loja").')}
 
+    # Item em g/ml com lote definido so aceita MULTIPLO do lote (iogurte
+    # 3000 / granola 5000 — dono 18/08/2026, caso "potes"). Espelho da
+    # tela web; no executor pra preview re-enviado nao furar.
+    from app.services.pedido_lote import violacoes_por_ids
+    fora_do_lote = violacoes_por_ids(itens_norm)
+    if fora_do_lote:
+        return {'ok': False, 'erro': ' | '.join(fora_do_lote)}
+
     # Corte do fim do dia (dono 10/08/2026): pedido pra AMANHA fecha na
     # HORA_CORTE —
     # e o horario de corte do pre-preparo do padeiro. Espelho da tela web,
