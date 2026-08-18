@@ -1,33 +1,37 @@
 {% extends "base.html" %}
 
-{% block title %}Usuarios{% endblock %}
+{% block title %}Usuários{% endblock %}
 
 {% block content %}
-<h1 class="page-title mb-3"><i class="bi bi-people"></i> Gerenciar Usuarios</h1>
+<h1 class="page-title mb-3"><i class="bi bi-people"></i> Gerenciar usuários</h1>
 
 <!-- Criar novo usuario -->
-<div class="card mb-4" style="max-width:500px;">
+<div class="card mb-4 users-v2-create">
     <div class="card-header py-2" style="background:#1a1a2e; color:#fff;">
-        <i class="bi bi-person-plus"></i> Novo Usuario
+        <i class="bi bi-person-plus"></i> Novo usuário
     </div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('auth.novo_usuario') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="row g-2">
-                <div class="col-md-3">
-                    <input type="text" name="nome" class="form-control form-control-sm" placeholder="Nome" required>
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label class="form-label small" for="novo-usuario-nome">Nome</label>
+                    <input id="novo-usuario-nome" type="text" name="nome" class="form-control" autocomplete="name" required>
                 </div>
-                <div class="col-md-3">
-                    <input type="text" name="login" class="form-control form-control-sm" placeholder="Login" required>
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label class="form-label small" for="novo-usuario-login">Login</label>
+                    <input id="novo-usuario-login" type="text" name="login" class="form-control" autocomplete="username" required>
                 </div>
-                <div class="col-md-3">
-                    <input type="email" name="email" class="form-control form-control-sm" placeholder="Email (recebe a senha)">
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label class="form-label small" for="novo-usuario-email">E-mail para receber a senha</label>
+                    <input id="novo-usuario-email" type="email" name="email" class="form-control" autocomplete="email">
                 </div>
-                <div class="col-md-3">
-                    <select name="papel" class="form-select form-select-sm">
-                        <option value="funcionario">Funcionario</option>
+                <div class="col-12 col-md-6 col-xl-3">
+                    <label class="form-label small" for="novo-usuario-papel">Perfil de acesso</label>
+                    <select id="novo-usuario-papel" name="papel" class="form-select">
+                        <option value="funcionario">Funcionário</option>
                         <option value="gerente">Gerente</option>
-                        <option value="producao">Producao</option>
+                        <option value="producao">Produção</option>
                         <option value="padeiro">Padeiro</option>
                         <option value="rh">RH</option>
                         <option value="marketing">Marketing</option>
@@ -57,14 +61,14 @@
 
 <!-- Lista de usuarios -->
 <div class="table-responsive">
-    <table class="table table-sm table-bordered bg-white">
+    <table class="table table-sm table-bordered bg-white users-v2-table">
         <thead class="thead-padaria">
             <tr>
                 <th>Nome</th>
                 <th>Login</th>
                 <th>Papel</th>
-                <th>Fichas Atribuidas</th>
-                <th style="width:220px">Acoes</th>
+                <th>Fichas atribuídas</th>
+                <th style="width:240px">Ações</th>
             </tr>
         </thead>
         <tbody>
@@ -78,10 +82,10 @@
                     {% else %}
                         <form method="POST" action="{{ url_for('auth.alterar_papel', id=u.id) }}" class="d-flex gap-1">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <select name="papel" class="form-select form-select-sm" style="width:130px; font-size:11px;" onchange="this.form.submit()">
-                                <option value="funcionario" {% if u.papel == 'funcionario' %}selected{% endif %}>Funcionario</option>
+                            <select name="papel" class="form-select form-select-sm" style="width:140px;" aria-label="Perfil de acesso de {{ u.nome }}" onchange="this.form.submit()">
+                                <option value="funcionario" {% if u.papel == 'funcionario' %}selected{% endif %}>Funcionário</option>
                                 <option value="gerente" {% if u.papel == 'gerente' %}selected{% endif %}>Gerente</option>
-                                <option value="producao" {% if u.papel == 'producao' %}selected{% endif %}>Producao</option>
+                                <option value="producao" {% if u.papel == 'producao' %}selected{% endif %}>Produção</option>
                                 <option value="padeiro" {% if u.papel == 'padeiro' %}selected{% endif %}>Padeiro</option>
                                 <option value="rh" {% if u.papel == 'rh' %}selected{% endif %}>RH</option>
                                 <option value="marketing" {% if u.papel == 'marketing' %}selected{% endif %}>Marketing</option>
@@ -106,7 +110,7 @@
                         <span class="badge bg-warning text-dark">{{ pendentes | length }} pendente{{ 's' if pendentes | length > 1 }}</span>
                     {% endif %}
                     {% if concluidas %}
-                        <span class="badge bg-success">{{ concluidas | length }} concluida{{ 's' if concluidas | length > 1 }}</span>
+                        <span class="badge bg-success">{{ concluidas | length }} concluída{{ 's' if concluidas | length > 1 }}</span>
                     {% endif %}
                     {% if not u.atribuicoes %}
                         <span class="text-muted small">nenhuma</span>
@@ -114,7 +118,7 @@
                 </td>
                 <td>
                     {% if u.id == current_user.id %}
-                        <span class="text-muted small">(voce)</span>
+                        <span class="text-muted small">(você)</span>
                     {% elif u.is_owner and not current_user.is_owner %}
                         <span class="text-muted small">(owner — protegido)</span>
                     {% else %}
@@ -122,8 +126,9 @@
                     <form method="POST" action="{{ url_for('auth.reset_senha', id=u.id) }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="input-group input-group-sm d-inline-flex" style="width:auto;">
-                            <input type="password" name="nova_senha" class="form-control form-control-sm" placeholder="Nova senha" style="width:100px;">
-                            <button type="submit" class="btn btn-outline-warning btn-sm" title="Alterar senha">
+                            <label class="visually-hidden" for="nova-senha-{{ u.id }}">Nova senha de {{ u.nome }}</label>
+                            <input id="nova-senha-{{ u.id }}" type="password" name="nova_senha" class="form-control form-control-sm" placeholder="Nova senha" autocomplete="new-password" style="width:125px;">
+                            <button type="submit" class="btn btn-outline-warning btn-sm" title="Alterar senha" aria-label="Alterar senha de {{ u.nome }}">
                                 <i class="bi bi-key"></i>
                             </button>
                         </div>
@@ -132,7 +137,7 @@
                     <form method="POST" action="{{ url_for('auth.excluir_usuario', id=u.id) }}" class="d-inline"
                           onsubmit="return confirm('Excluir {{ u.nome }}?')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir" aria-label="Excluir {{ u.nome }}">
                             <i class="bi bi-trash"></i>
                         </button>
                     </form>

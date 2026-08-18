@@ -38,7 +38,7 @@
     {% for cid, nome in mapa_lojas.items() %}
     <a class="btn btn-sm {% if loja_sel == cid %}btn-primary{% else %}btn-outline-secondary{% endif %}"
        href="{{ url_for('contas_pagar.lista', aba=aba_atual, loja=cid) }}">
-        {{ nome }}
+        {{ nome if nome and nome != cid else 'Canal sem nome' }}
         {% if total_por_loja.get(cid) %}<span class="badge rounded-pill bg-light text-dark">{{ total_por_loja[cid] }}</span>{% endif %}
     </a>
     {% endfor %}
@@ -48,7 +48,8 @@
 <ul class="nav nav-tabs mb-3" role="tablist">
     {% for slug, label, _ in abas %}
     <li class="nav-item">
-        <a class="nav-link {% if slug == aba_atual %}active{% endif %}"
+        <a class="nav-link {% if slug == aba_atual %}active{% endif %}" role="tab"
+           {% if slug == aba_atual %}aria-current="page" aria-selected="true"{% else %}aria-selected="false"{% endif %}
            href="{{ url_for('contas_pagar.lista', aba=slug, loja=loja_sel) }}">
             {{ label }}
             {% if contagens.get(slug) %}
@@ -79,10 +80,11 @@
                     {% endif %}
                 </div>
                 <div class="small text-muted mt-1">
+                    {% set loja_nome = mapa_lojas.get(c.origem_canal) %}
                     {% if c.vencimento %}
                     <span class="{% if c.atrasado %}text-danger fw-bold{% endif %}"><i class="bi bi-calendar-event"></i> {{ c.vencimento.strftime('%d/%m/%Y') }}{% if c.atrasado %} <i class="bi bi-exclamation-triangle"></i>{% endif %}</span>
                     {% else %}<span class="text-warning">sem vencimento</span>{% endif %}
-                    · {{ mapa_lojas.get(c.origem_canal, c.origem_canal) or '—' }}
+                    · {{ loja_nome if loja_nome and loja_nome != c.origem_canal else ('Canal sem nome' if c.origem_canal else '—') }}
                 </div>
             </div>
             <div class="text-end flex-shrink-0">
@@ -93,7 +95,16 @@
         </div>
     </a>
     {% else %}
-    <div class="list-group-item text-muted text-center py-3">Nenhuma conta nesta aba.</div>
+    {% set vazio = {
+        'aberto': ('Nenhuma conta em aberto', 'Tudo conferido por aqui. Você pode importar documentos ou consultar outra loja.'),
+        'pago': ('Nenhum pagamento encontrado', 'Quando uma conta for marcada como paga, ela aparecerá nesta aba.'),
+        'ignorado': ('Nenhuma conta ignorada', 'Contas removidas do fluxo principal aparecerão aqui.')
+    }.get(aba_atual, ('Nenhuma conta encontrada', 'Tente outra aba ou selecione todas as lojas.')) %}
+    <div class="finance-v2-empty list-group-item">
+        <span><i class="bi bi-receipt"></i></span>
+        <div><h2>{{ vazio[0] }}</h2><p>{{ vazio[1] }}</p></div>
+        {% if loja_sel %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contas_pagar.lista', aba=aba_atual) }}">Ver todas as lojas</a>{% endif %}
+    </div>
     {% endfor %}
 </div>
 {% endblock %}
