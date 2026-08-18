@@ -219,6 +219,14 @@ class Receita(db.Model):
     # na tela do padeiro (separacao + pre-preparo). ALTER em migrations_legacy
     # (commit 1 deployado e confirmado antes deste modelo).
     sob_encomenda = db.Column(db.Boolean, default=False, nullable=False)
+    # Antecedencia maxima do NIVELADOR por receita (dono 18/08/2026,
+    # "quero o maximo de brioche fresco nas lojas"): NULL = regra global
+    # (_ANTECEDENCIA_MAX_DIAS = 3); 0 = assa so no dia da demanda —
+    # fresco maximo; fim de semana continua caindo na sexta pelo
+    # calendario seg-sex (rolagem, nao nivelamento). ALTER + backfill
+    # (Brioche = 0) em migrations_legacy, commit 1 confirmado pela
+    # sonda antes deste modelo.
+    antecedencia_max_dias = db.Column(db.Integer, nullable=True)
     # Cobranca de sobra POR ITEM no alerta das 20h (01/08/2026, caso
     # croissant tradicional): com a flag, se a loja tem saldo desta receita
     # e NAO lancou Desperdicio dela no dia, o item aparece NOMINALMENTE na
