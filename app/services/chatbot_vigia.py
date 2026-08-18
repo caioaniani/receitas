@@ -809,11 +809,49 @@ _FECHAMENTO_RE = re.compile(
 )
 
 
+# Emojis NEGATIVOS nunca são enfeite: "obrigada 😡" não é fechamento
+# tranquilo — o bot/vigia devem tratar como mensagem normal.
+_EMOJI_NEGATIVO = set('😡😠🤬💢😤👎😾😭😢')
+
+
+def _sem_emoji_enfeite(t):
+    """Remove emojis/símbolos DECORATIVOS do texto ("Obrigada ✨" → "Obrigada").
+
+    A whitelist de emoji no _FECHAMENTO_RE já falhou 2x (criação e o ✨ da
+    conv 1697, 18/08/2026: alerta de 'esperando atendente' à 01:25 + msg de
+    contenção pro cliente que só tinha agradecido). Emoji desconhecido agora
+    é tratado como enfeite GENERICAMENTE; só os negativos (raiva/choro)
+    ficam no texto, porque mudam o sentido."""
+    out = []
+    for ch in t:
+        cp = ord(ch)
+        if ch in _EMOJI_NEGATIVO:
+            out.append(ch)
+        elif cp in (0xFE0F, 0x200D) or 0x1F3FB <= cp <= 0x1F3FF:
+            continue                    # variation selector / ZWJ / tom de pele
+        elif 0x1F000 <= cp <= 0x1FAFF or 0x2600 <= cp <= 0x27BF or cp == 0x2B50:
+            continue                    # blocos de emoji/símbolos (✨ = 2728)
+        else:
+            out.append(ch)
+    return ' '.join(''.join(out).split())
+
+
 def _e_fechamento(texto):
     """True pra mensagens curtas de encerramento/agradecimento — cliente não
-    aguarda resposta, não deve disparar 'esperando atendente'."""
+    aguarda resposta, não deve disparar 'esperando atendente'.
+
+    Duas passadas: o texto cru (cobre mensagem SÓ de emoji da whitelist,
+    tipo "🙏") e o texto sem emojis de enfeite (cobre "Obrigada ✨" e
+    qualquer emoji futuro fora da whitelist). Mensagem só de emoji
+    desconhecido NÃO vira fechamento (o strip esvazia e a 2ª passada exige
+    texto)."""
     t = (texto or '').strip()
-    return bool(t) and len(t) <= 30 and bool(_FECHAMENTO_RE.match(t))
+    if not t or len(t) > 30:
+        return False
+    if _FECHAMENTO_RE.match(t):
+        return True
+    limpo = _sem_emoji_enfeite(t)
+    return bool(limpo) and limpo != t and bool(_FECHAMENTO_RE.match(limpo))
 
 
 def _e_mencao_story(texto):
