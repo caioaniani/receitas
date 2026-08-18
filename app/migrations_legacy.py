@@ -137,8 +137,9 @@ def _backfill_totais_orcamento(app):
                 orc.subtotal = sub
                 orc.valor_total = total
                 corrigidos.append(orc.codigo)
-        AppConfig.set(marker, 'corrigidos=%d %s'
-                      % (len(corrigidos), ','.join(corrigidos))[:500])
+        AppConfig.set(marker, ('corrigidos=%d %s'
+                               % (len(corrigidos),
+                                  ','.join(corrigidos)))[:500])
         db.session.commit()
         if corrigidos:
             logger.info('backfill totais orcamento: %d corrigido(s): %s',
