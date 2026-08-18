@@ -601,6 +601,31 @@ def test_nivelamento_nao_deixa_celula_farelo(app):
         assert _date.fromisoformat(d_iso).weekday() <= 4
 
 
+def test_nivelamento_pesa_pelo_lote_de_producao(app):
+    """Caso real 18/08 (dono: "101 brioches e pra acabar"): a regua de
+    peso usava a fornada TEORICA da capacidade da amassadeira (~448
+    brioches) — 101 valiam 0.2 fornada, mover brioche era "de graca" pro
+    guard e o nivelador empilhava tudo no primeiro dia alcancavel. Com o
+    peso pelo `lote_producao` do cadastro (o lote real do dono, 10),
+    cada batida pesa 1 e a demanda diaria fica ESPALHADA."""
+    loja = _loja()
+    r = _receita('Brioche Lote Pequeno')
+    r.lote_producao = 10
+    r.capacidade_amassadeira_g = 112000            # fornada teorica enorme
+    db.session.commit()
+    hoje_d = hoje()                                # segunda congelada
+    for i in range(1, 7):                          # ter..dom, 32/dia
+        _pedido(loja, 'pendente', hoje_d + timedelta(days=i), r, 32)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 190
+    qtds = [c['qtd'] for c in rr['por_dia']]
+    assert max(qtds) <= 70, qtds                   # nada de dia-monstro
+    assert sum(1 for q in qtds if q > 0) >= 3      # espalhado na semana
+
+
 def test_nivelamento_fatia_receita_grande_em_lotes(app):
     """Caso Croissant (dono: "por que não redistribuir em lotes menores?"):
     demanda grande num dia só é FATIADA — nenhum dia carrega o total
