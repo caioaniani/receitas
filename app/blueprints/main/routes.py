@@ -89,7 +89,10 @@ def index():
                   if current_user.is_owner else None)
         vendas_hoje = (briefing_dono.vendas_hoje(capturar=False)
                        if current_user.is_owner else None)
-        return render_template('main/home.html',
+        from app.ui_v2 import ui_v2_ativo
+        template = ('main/home_v2.html' if ui_v2_ativo()
+                    else 'main/home.html')
+        return render_template(template,
                                areas=nav.areas_visiveis(current_user),
                                pendencias=pend,
                                vendas=vendas,
@@ -108,7 +111,35 @@ def area(slug):
         abort(404)
     if not meta['pode'](current_user):
         abort(403)
-    return render_template('main/area.html', area=meta)
+    from app.ui_v2 import ui_v2_ativo
+    template = ('main/area_v2.html' if ui_v2_ativo()
+                else 'main/area.html')
+    return render_template(template, area=meta)
+
+
+@main_bp.route('/ui/nova')
+@login_required
+def ui_nova():
+    """Liga a interface v2 pra ESTE usuário (limpa o opt-out). Só tem
+    efeito com `UI_V2_ENABLED=1` — o link nem aparece sem a env."""
+    from app.ui_v2 import UI_CLASSIC_COOKIE
+    resp = redirect(url_for('main.index'))
+    resp.delete_cookie(UI_CLASSIC_COOKIE)
+    return resp
+
+
+@main_bp.route('/ui/classica')
+@login_required
+def ui_classica():
+    """Volta ESTE usuário à interface anterior (cookie de opt-out, 90d).
+    Rollback individual — a env `UI_V2_ENABLED` segue valendo pros
+    demais; zerar a env desliga a v2 pra todo mundo."""
+    from app.ui_v2 import UI_CLASSIC_COOKIE
+    resp = redirect(url_for('main.index'))
+    resp.set_cookie(UI_CLASSIC_COOKIE, '1', max_age=60 * 60 * 24 * 90,
+                    samesite='Lax', httponly=True,
+                    secure=request.is_secure)
+    return resp
 
 
 @main_bp.route('/dashboard')

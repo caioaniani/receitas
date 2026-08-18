@@ -13,6 +13,12 @@
 {% macro _lnk(variant, url, label, active=false, sub=false, icon='', blank=false, title='') -%}
 {%- if variant == 'sidebar' -%}
 <a href="{{ url }}" class="sidebar-link{% if sub %} ps-4 small{% endif %}{% if active %} active{% endif %}"{% if blank %} target="_blank"{% endif %}{% if title %} title="{{ title }}"{% endif %}>{% if icon %}<i class="bi {{ icon }}"></i> {% endif %}{{ label }}</a>
+{%- elif variant == 'area-v2' -%}
+<a href="{{ url }}" class="area-v2-link{% if sub %} area-v2-link-sub{% endif %}"{% if blank %} target="_blank" rel="noopener"{% endif %}>
+    <span class="area-v2-link-icon"><i class="bi {{ icon or 'bi-arrow-right' }}"></i></span>
+    <span class="area-v2-link-copy"><strong>{{ label }}</strong>{% if title %}<small>{{ title }}</small>{% endif %}</span>
+    {% if blank %}<i class="bi bi-box-arrow-up-right area-v2-link-arrow"></i>{% else %}<i class="bi bi-chevron-right area-v2-link-arrow"></i>{% endif %}
+</a>
 {%- else -%}
 <a href="{{ url }}" class="area-link{% if sub %} area-link-sub{% endif %}"{% if blank %} target="_blank"{% endif %}{% if title %} title="{{ title }}"{% endif %}><span class="area-link-ic"><i class="bi {{ icon or 'bi-arrow-right-short' }}"></i></span><span class="area-link-txt">{{ label }}</span></a>
 {%- endif -%}
@@ -21,6 +27,8 @@
 {% macro _sub(variant, label) -%}
 {%- if variant == 'sidebar' -%}
 <div class="px-3 pt-2 pb-1 text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">{{ label }}</div>
+{%- elif variant == 'area-v2' -%}
+<div class="area-v2-subhead">{{ label }}</div>
 {%- else -%}
 <div class="area-subhead">{{ label }}</div>
 {%- endif -%}

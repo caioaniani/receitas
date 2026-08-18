@@ -1,0 +1,88 @@
+<nav class="sidebar ui-v2-sidebar" id="sidebar" aria-label="Navegação principal">
+    <div class="ui-v2-brand">
+        <span class="ui-v2-brand-mark">p</span>
+        <span>padaria</span>
+        <span class="ui-v2-preview-label">nova</span>
+    </div>
+
+    {% if current_user.is_authenticated %}
+    <button type="button" class="ui-v2-search"
+            onclick="window.abrirCommandPalette && window.abrirCommandPalette()">
+        <i class="bi bi-search"></i><span>Buscar no sistema</span><kbd>⌘ K</kbd>
+    </button>
+
+    <div class="ui-v2-nav-group">
+        <span class="ui-v2-nav-label">Trabalho</span>
+        <a href="{{ url_for('main.index') }}" class="sidebar-link {{ 'active' if request.path == '/' }}">
+            <i class="bi bi-house-door"></i><span>Hoje</span>
+        </a>
+        {% if current_user.pode_lojas() %}
+        <a href="{{ url_for('main.area', slug='lojas') }}" class="sidebar-link {{ 'active' if request.path == '/area/lojas' }}">
+            <i class="bi bi-shop"></i><span>Lojas</span>
+        </a>
+        {% endif %}
+        {% if current_user.pode_producao() %}
+        <a href="{{ url_for('main.area', slug='producao') }}" class="sidebar-link {{ 'active' if request.path == '/area/producao' or request.path.startswith('/telaindustriateste') or request.path.startswith('/producao') or request.path.startswith('/padeiro') }}">
+            <i class="bi bi-box-seam"></i><span>Produção</span>
+        </a>
+        {% endif %}
+        {% if current_user.pode_catalogo() %}
+        <a href="{{ url_for('main.area', slug='catalogo') }}" class="sidebar-link {{ 'active' if request.path == '/area/catalogo' or request.path.startswith('/receitas') or request.path.startswith('/produtos') or request.path.startswith('/materias-primas') }}">
+            <i class="bi bi-journal-text"></i><span>Catálogo</span>
+        </a>
+        {% endif %}
+        {% if current_user.pode_pdv() or current_user.is_admin() or current_user.pode_lojas() %}
+        <a href="{{ url_for('main.area', slug='vendas') }}" class="sidebar-link {{ 'active' if request.path == '/area/vendas' or request.path.startswith('/pdv') or request.path.startswith('/entregas') or request.path.startswith('/b2b') }}">
+            <i class="bi bi-receipt"></i><span>Vendas e entregas</span>
+        </a>
+        {% endif %}
+    </div>
+
+    {% if current_user.is_admin() %}
+    <div class="ui-v2-nav-group">
+        <span class="ui-v2-nav-label">Gestão</span>
+        <a href="{{ url_for('main.area', slug='financeiro') }}" class="sidebar-link {{ 'active' if request.path == '/area/financeiro' }}">
+            <i class="bi bi-wallet2"></i><span>Financeiro</span>
+        </a>
+        {% if current_user.is_owner %}
+        <a href="{{ url_for('main.area', slug='rh') }}" class="sidebar-link {{ 'active' if request.path == '/area/rh' or request.path.startswith('/rh') }}">
+            <i class="bi bi-people"></i><span>Pessoas</span>
+        </a>
+        {% endif %}
+        <a href="{{ url_for('main.area', slug='relatorios') }}" class="sidebar-link {{ 'active' if request.path == '/area/relatorios' or request.path.startswith('/relatorios') }}">
+            <i class="bi bi-bar-chart"></i><span>Relatórios</span>
+        </a>
+        <a href="{{ url_for('main.area', slug='administracao') }}" class="sidebar-link {{ 'active' if request.path == '/area/administracao' or request.path.startswith('/admin') or request.path.startswith('/auth/usuarios') }}">
+            <i class="bi bi-gear"></i><span>Administração</span>
+        </a>
+    </div>
+    {% endif %}
+
+    {% if current_user.pode_producao() %}
+    <div class="ui-v2-nav-group ui-v2-shortcuts">
+        <span class="ui-v2-nav-label">Atalhos</span>
+        {% if current_user.is_admin() %}{# rota é admin_required — mostrar pra 'producao' daria 403 #}
+        <a href="{{ url_for('industria_teste.index', v2=1) }}" class="sidebar-link {{ 'active' if request.path.startswith('/telaindustriateste') }}">
+            <i class="bi bi-calendar3"></i><span>Planejamento da indústria</span>
+        </a>
+        {% endif %}
+        <a href="{{ url_for('padeiro.index') }}" class="sidebar-link">
+            <i class="bi bi-hammer"></i><span>Tela do padeiro</span>
+        </a>
+    </div>
+    {% endif %}
+
+    <div class="ui-v2-nav-spacer"></div>
+    <a href="{{ url_for('main.ui_classica') }}" class="sidebar-link ui-v2-voltar"
+       title="Voltar à interface anterior (só pra você; dá pra voltar quando quiser)">
+        <i class="bi bi-arrow-counterclockwise"></i><span>Interface anterior</span>
+    </a>
+    <div class="ui-v2-user">
+        <span class="ui-v2-avatar">{{ current_user.nome[:1]|upper }}</span>
+        <span class="ui-v2-user-copy"><strong>{{ current_user.nome }}</strong><small>{{ 'Administrador' if current_user.is_admin() else current_user.papel }}</small></span>
+        <a href="{{ url_for('auth.logout') }}" title="Sair" aria-label="Sair"><i class="bi bi-box-arrow-right"></i></a>
+    </div>
+    {% else %}
+    <a href="{{ url_for('auth.login') }}" class="sidebar-link"><i class="bi bi-box-arrow-in-right"></i> Entrar</a>
+    {% endif %}
+</nav>

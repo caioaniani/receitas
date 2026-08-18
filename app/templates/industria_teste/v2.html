@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Prévia — Produção</title>
+  {# Sem Google Fonts: a CSP global (style-src/font-src self+jsdelivr) bloqueia
+     — o stack de fallback do industria-v2.css assume. Afrouxar CSP por fonte, não. #}
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/industria-v2.css') }}?v={{ static_v['css/industria-v2.css'] }}" rel="stylesheet">
+</head>
+<body>
+  {% macro campos_dia(data) -%}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="data" value="{{ data }}">
+    <input type="hidden" name="horizonte" value="{{ horizonte }}">
+    <input type="hidden" name="janela" value="{{ janela }}">
+    <input type="hidden" name="inicio" value="{{ inicio }}">
+    <input type="hidden" name="equilibrar" value="{{ 1 if equilibrar else 0 }}">
+    <input type="hidden" name="motor" value="{{ motor }}">
+    <input type="hidden" name="v2" value="1">
+    <input type="hidden" name="view" value="week">
+  {%- endmacro %}
+  <div class="preview-ribbon">Nova interface · planejamento por dia</div>
+  {% with mensagens = get_flashed_messages(with_categories=true) %}
+    {% if mensagens %}
+    <div class="v2-flashes" role="status">
+      {% for categoria, msg in mensagens %}
+      <div class="v2-flash v2-flash-{{ categoria }}">{{ msg }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endwith %}
+  <div class="app-shell">
+    <aside class="app-nav" id="preview-nav">
+      <div class="brand"><span class="brand-mark">p</span><span>padaria</span></div>
+      <button class="nav-search" type="button"><i class="bi bi-search"></i><span>Buscar</span><kbd>⌘ K</kbd></button>
+      <nav aria-label="Navegação principal">
+        <a href="/"><i class="bi bi-house"></i><span>Hoje</span></a>
+        <a href="/area/lojas"><i class="bi bi-shop"></i><span>Lojas</span></a>
+        <a class="active" href="/area/producao"><i class="bi bi-box-seam"></i><span>Produção</span></a>
+        <a href="/area/vendas"><i class="bi bi-receipt"></i><span>Vendas e entregas</span></a>
+        <a href="/area/financeiro"><i class="bi bi-graph-up"></i><span>Financeiro</span></a>
+        <a href="/area/administracao"><i class="bi bi-gear"></i><span>Administração</span></a>
+      </nav>
+      <div class="nav-spacer"></div>
+      <a class="nav-help" href="{{ url_for('industria_teste.index', legacy=1) }}"><i class="bi bi-arrow-counterclockwise"></i><span>Comparar com tela antiga</span></a>
+      <div class="user-card"><span class="avatar">{{ current_user.nome[:1]|upper }}</span><span><strong>{{ current_user.nome }}</strong><small>Administrador</small></span><i class="bi bi-three-dots"></i></div>
+    </aside>
+
+    <main>
+      <header class="mobile-head">
+        <button type="button" id="nav-toggle" aria-label="Abrir menu"><i class="bi bi-list"></i></button>
+        <span class="brand"><span class="brand-mark">p</span><span>padaria</span></span>
+      </header>
+
+      <div class="page">
+        <div class="breadcrumbs"><a href="/area/producao">Produção</a><i class="bi bi-chevron-right"></i><span>Planejamento</span></div>
+        <section class="page-head">
+          <div><span class="eyebrow">Planejamento de produção</span><h1>O que precisa acontecer agora</h1><p>Prioridades, riscos e produção dos próximos dias em uma única visão.</p></div>
+          <button class="primary-action" type="button" data-open="week"><i class="bi bi-calendar-week"></i>Abrir planejamento semanal</button>
+        </section>
+
+        <nav class="view-tabs" aria-label="Visões da produção">
+          <button class="active" type="button" data-view="today">Hoje <span>{{ acoes|length }}</span></button>
+          <button type="button" data-view="week">Planejamento semanal</button>
+          <button type="button" data-view="exceptions">Exceções {% if resumo.risco_n or resumo.pend_vencido %}<span>{{ resumo.risco_n + (1 if resumo.pend_vencido else 0) }}</span>{% endif %}</button>
+        </nav>
+
+        <section class="metrics" aria-label="Resumo">
+          <article><span class="metric-icon blue"><i class="bi bi-box-seam"></i></span><div><strong>{{ totais_dia[0].un if totais_dia else 0 }}</strong><span>unidades no primeiro dia</span></div><small>{{ totais_dia[0].fornadas if totais_dia else 0 }} fornadas</small></article>
+          <article><span class="metric-icon {{ 'red' if resumo.risco_n else 'green' }}"><i class="bi {{ 'bi-exclamation-triangle' if resumo.risco_n else 'bi-check2' }}"></i></span><div><strong>{{ resumo.risco_n }}</strong><span>entregas em risco</span></div><small>{{ 'Requer atenção' if resumo.risco_n else 'Tudo em ordem' }}</small></article>
+          <article><span class="metric-icon amber"><i class="bi bi-hourglass-split"></i></span><div><strong>{{ resumo.pend_agendado + resumo.pend_vencido }}</strong><span>aguardando confirmação</span></div><small>{% if resumo.pend_vencido %}{{ resumo.pend_vencido }} vencidas{% else %}Dentro do prazo{% endif %}</small></article>
+        </section>
+
+        <section class="workspace" data-panel="today">
+          <div class="section-title"><div><h2>Prioridades</h2><p>Somente o que pede uma decisão sua.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Ver auditoria <i class="bi bi-arrow-right"></i></a></div>
+          {% if acoes %}
+          <div class="action-list">
+            {% for a in acoes[:4] %}
+            <article class="action-row {{ 'danger' if a.tipo in ('risco','vencido') else '' }}">
+              <span class="status-dot"><i class="bi {{ 'bi-exclamation-lg' if a.tipo in ('risco','vencido','difere') else 'bi-arrow-up-right' }}"></i></span>
+              <div>
+                {% if a.tipo == 'enviar_hoje' %}<h3>Enviar a produção de hoje</h3><p>O plano de {{ a.label }} está pronto para revisão.</p>
+                {% elif a.tipo == 'rascunho' %}<h3>Concluir o plano de {{ a.label }}</h3><p>O rascunho foi aprovado, mas ainda não chegou ao padeiro.</p>
+                {% elif a.tipo == 'difere' %}<h3>Revisar alterações de {{ a.label }}</h3><p>{{ a.n }} receita(s) diferem da ordem enviada.</p>
+                {% elif a.tipo == 'vencido' %}<h3>Confirmar produção vencida</h3><p>{{ a.n }} unidade(s) ainda aguardam confirmação.</p>
+                {% elif a.tipo == 'risco' %}<h3>Resolver entregas em risco</h3><p>{{ a.n }} receita(s) podem não atender pedidos programados.</p>
+                {% else %}<h3>Revisar edição manual</h3><p>Há uma previsão que pode estar desatualizada.</p>{% endif %}
+              </div>
+              <button class="row-action" type="button" data-open="week">Revisar <i class="bi bi-chevron-right"></i></button>
+            </article>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="empty-state"><span><i class="bi bi-check2"></i></span><div><h3>Nenhuma ação pendente</h3><p>O planejamento está em dia. Você pode acompanhar a semana abaixo.</p></div></div>
+          {% endif %}
+
+          <div class="section-title schedule-title"><div><h2>Próximos dias</h2><p>Uma leitura rápida da carga planejada.</p></div><button type="button" data-open="week">Ver semana completa <i class="bi bi-arrow-right"></i></button></div>
+          <div class="day-grid">
+            {% for dia in crono.dias[:3] %}
+            {% set idx = loop.index0 %}{% set est = estados.get(dia.data) %}
+            <article class="day-card {{ 'today' if dia.data == crono.hoje }}">
+              <header><div><small>{{ 'Hoje' if dia.data == crono.hoje else 'Próximo dia' }}</small><h3>{{ dia.label }}</h3></div><span class="state {{ 'sent' if est and est.enviado else 'draft' }}">{{ 'Enviado' if est and est.enviado else ('Rascunho' if est else 'A planejar') }}</span></header>
+              <div class="day-volume"><strong>{{ totais_dia[idx].un }}</strong><span>unidades</span><b>{{ totais_dia[idx].fornadas }} fornadas</b></div>
+              <div class="load-track"><span style="width:{{ [100, (totais_dia[idx].fornadas * 8)]|min }}%"></span></div>
+              <button type="button" data-open="week" data-focus-day="{{ dia.data }}">Ver produção do dia <i class="bi bi-arrow-right"></i></button>
+            </article>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="workspace hidden" data-panel="week">
+          <div class="section-title week-heading">
+            <div><h2>Planejamento semanal</h2><p>Escolha um dia para revisar. Abra a edição apenas na receita que precisa de ajuste.</p></div>
+            <div class="section-actions">
+              <a href="{{ url_for('industria_teste.auditoria') }}"><i class="bi bi-clock-history"></i> Auditoria</a>
+              <a href="{{ url_for('industria_teste.index', legacy=1) }}"><i class="bi bi-arrow-left-right"></i> Comparar versão anterior</a>
+            </div>
+          </div>
+
+          <details class="plan-settings">
+            <summary><i class="bi bi-sliders"></i> Período e cálculo da previsão</summary>
+            <form method="GET" class="settings-form">
+              <input type="hidden" name="v2" value="1">
+              <input type="hidden" name="view" value="week">
+              <label>A partir de<select name="inicio"><option value="0" {{ 'selected' if inicio == 0 }}>Hoje</option><option value="1" {{ 'selected' if inicio == 1 }}>Amanhã</option>{% for n in range(2, 8) %}<option value="{{ n }}" {{ 'selected' if inicio == n }}>+{{ n }} dias</option>{% endfor %}</select></label>
+              <label>Dias<input type="number" name="horizonte" min="1" max="14" value="{{ horizonte }}"></label>
+              <label>Histórico<input type="number" name="janela" min="1" max="26" value="{{ janela }}"><small>semanas</small></label>
+              <label>Previsão<select name="motor"><option value="pedidos" {{ 'selected' if motor == 'pedidos' }}>Pedidos</option><option value="vendas" {{ 'selected' if motor == 'vendas' }}>Vendas</option><option value="maior" {{ 'selected' if motor == 'maior' }}>Maior dos dois</option></select></label>
+              <label>Carga<select name="equilibrar"><option value="1" {{ 'selected' if equilibrar }}>Equilibrada</option><option value="0" {{ 'selected' if not equilibrar }}>Pela demanda</option></select></label>
+              <button type="submit">Atualizar visão</button>
+            </form>
+          </details>
+
+          {% if crono.receitas %}
+          <div class="week-day-focus" aria-label="Período visível">
+            <span>Exibir</span>
+            {% for dia in crono.dias %}
+            <button type="button" data-focus-date="{{ dia.data }}" aria-pressed="{{ 'true' if dia.data == crono.hoje else 'false' }}">
+              <strong>{{ 'Hoje' if dia.data == crono.hoje else dia.label.split(' ')[0] }}</strong><small>{{ dia.data[8:] }}/{{ dia.data[5:7] }}</small>
+            </button>
+            {% endfor %}
+            <button type="button" data-focus-date="all" aria-pressed="false"><i class="bi bi-calendar-week"></i> Semana completa</button>
+          </div>
+
+          <div class="week-toolbar">
+            <label class="search-field"><i class="bi bi-search"></i><input type="search" id="week-search" placeholder="Buscar receita ou categoria" autocomplete="off"></label>
+            <label class="check-filter"><input type="checkbox" id="week-only-planned" checked> Somente com produção</label>
+            {% if resumo.risco_n or resumo.pend_vencido %}<label class="check-filter"><input type="checkbox" id="week-only-attention"> Somente com atenção</label>{% endif %}
+            <label class="sort-field">Ordenar<select id="week-sort"><option value="category">por categoria</option><option value="production">maior produção</option><option value="attention">atenção primeiro</option><option value="name">nome A–Z</option></select></label>
+            <span id="week-filter-status" class="filter-status" aria-live="polite"></span>
+            <span id="grid-save-status" class="save-status" aria-live="polite"></span>
+          </div>
+
+          <div class="week-help" role="note">
+            <span><i class="bi bi-pencil"></i><strong>1. Ajuste</strong> uma quantidade</span>
+            <i class="bi bi-chevron-right"></i>
+            <span><i class="bi bi-cloud-check"></i><strong>2. Salva</strong> como rascunho</span>
+            <i class="bi bi-chevron-right"></i>
+            <span><i class="bi bi-send"></i><strong>3. Envie</strong> o dia ao padeiro</span>
+          </div>
+
+          <div class="week-table-wrap" id="week-grid"><table>
+            <thead><tr>
+              <th class="recipe-col">Receita e demanda</th>
+              {% for dia in crono.dias %}
+              {% set est = estados.get(dia.data) %}
+              <th class="day-column {{ 'is-today' if dia.data == crono.hoje }}" data-date="{{ dia.data }}">
+                <span class="day-name">{{ 'Hoje' if dia.data == crono.hoje else dia.label }}</span>
+                <span class="day-date">{{ dia.data[8:] }}/{{ dia.data[5:7] }}</span>
+                {% if dia.data in fechados %}<span class="day-state locked"><i class="bi bi-lock-fill"></i> Fechado</span>
+                {% elif est and est.enviado and difere.get(dia.data) %}<span class="day-state changed">Alterado</span>
+                {% elif est and est.enviado %}<span class="day-state sent">Enviado</span>
+                {% elif est %}<span class="day-state draft">Rascunho</span>
+                {% else %}<span class="day-state neutral">Não enviado</span>{% endif %}
+                {% if not est or not est.enviado or difere.get(dia.data) %}
+                  <form method="POST" action="{{ url_for('industria_teste.enviar') }}" class="day-send-form" data-day-label="{{ dia.label }}" data-update="{{ 1 if est and est.enviado else 0 }}">
+                    {{ campos_dia(dia.data) }}
+                    <button type="submit" class="day-send {{ 'update' if est and est.enviado }}"><i class="bi {{ 'bi-arrow-repeat' if est and est.enviado else 'bi-send' }}"></i>{{ 'Atualizar' if est and est.enviado else 'Enviar' }}</button>
+                  </form>
+                {% else %}
+                  <span class="day-done"><i class="bi bi-check2"></i> Em dia</span>
+                {% endif %}
+              </th>
+              {% endfor %}
+              <th class="total-col">Total</th>
+            </tr></thead>
+            <tbody>
+              {% set ns = namespace(cat='__inicio__') %}
+              {% for r in crono.receitas %}
+              {% if r.categoria != ns.cat %}
+              <tr class="category-row" data-category-row="{{ (r.categoria or 'Sem categoria')|lower }}"><td colspan="{{ crono.dias|length + 2 }}"><button type="button" class="category-toggle" aria-expanded="true"><i class="bi bi-chevron-down"></i>{{ r.categoria or 'Sem categoria' }}</button></td></tr>
+              {% set ns.cat = r.categoria %}
+              {% endif %}
+              <tr class="recipe-row" data-rid="{{ r.receita_id }}" data-name="{{ (r.nome ~ ' ' ~ (r.categoria or ''))|lower }}" data-recipe-name="{{ r.nome|lower }}" data-category="{{ (r.categoria or 'Sem categoria')|lower }}" data-total="{{ r.total or 0 }}" data-attention="{{ 1 if r.entregas_risco or r.pend_vencido or r.override_stale else 0 }}">
+                <td class="recipe-col">
+                  <div class="recipe-main">
+                    <button type="button" class="recipe-toggle" data-rid="{{ r.receita_id }}" aria-expanded="false"><i class="bi bi-chevron-right"></i><span><strong>{{ r.nome }}</strong><small>Estoque {{ r.em_estoque }}{% if not r.insumo and (r.comprometido or r.previsto) %} · firme {{ r.comprometido }} · previsto {{ r.previsto }}{% elif r.insumo %} · consumo {{ r.consumo_janela or 0 }}{% endif %}</small></span></button>
+                    {% if not r.insumo and not r.retorno %}<button type="button" class="edit-row" data-rid="{{ r.receita_id }}" aria-pressed="false" aria-label="Editar planejamento de {{ r.nome }}"><i class="bi bi-pencil"></i><span>Editar</span></button>{% endif %}
+                  </div>
+                  <div class="recipe-tags">
+                    {% if r.entregas_risco %}<span class="tag danger"><i class="bi bi-exclamation-triangle-fill"></i> risco</span>{% endif %}
+                    {% if r.pend_vencido %}<span class="tag danger">{{ r.pend_vencido }} vencido</span>{% endif %}
+                    {% if r.insumo %}<span class="tag muted">insumo</span>{% endif %}
+                    {% if r.retorno %}<span class="tag muted">retorno</span>{% endif %}
+                    {% if r.fornada_especial %}<span class="tag amber">fim de semana</span>{% endif %}
+                    {% if r.editado %}<span class="tag edited"><i class="bi bi-pencil-fill"></i> ajustado</span>{% endif %}
+                  </div>
+                </td>
+                {% for c in r.por_dia %}
+                {% set fechado = c.data in fechados %}
+                {% set env_dia = ordem_enviada.get(c.data) %}
+                {% set difere_cel = env_dia is not none and r.receita_id in difere.get(c.data, ()) %}
+                <td class="plan-cell {{ 'is-today' if c.data == crono.hoje }} {{ 'is-readonly' if r.insumo or r.retorno or c.bloqueado or fechado }} {{ 'has-risk' if c.data in r.risco_datas }}" data-rid="{{ r.receita_id }}" data-date="{{ c.data }}" data-batches="{{ c.fornadas if c.fornadas is not none else '' }}" data-derived="{{ 1 if r.insumo else 0 }}">
+                  <input type="number" min="0" inputmode="numeric" value="{{ c.qtd or 0 }}" aria-label="{{ r.nome }}, {{ c.data }}" class="plan-input {{ 'is-zero' if not c.qtd }}" data-last="{{ c.qtd or 0 }}" data-editable="{{ 0 if r.insumo or r.retorno or c.bloqueado or fechado else 1 }}" readonly tabindex="-1">
+                  <small class="batch-label">{% if c.fornadas is not none and c.qtd %}{{ c.fornadas }} forn.{% elif r.insumo and c.qtd %}calculado{% endif %}</small>
+                  {% if difere_cel %}<span class="sent-value" title="O padeiro está vendo {{ env_dia.get(r.receita_id, 0) }}"><i class="bi bi-send-check"></i> {{ env_dia.get(r.receita_id, 0) }}</span>{% endif %}
+                </td>
+                {% endfor %}
+                <td class="total-col"><strong class="row-total">{{ r.total }}</strong>{% if r.editado %}<button type="button" class="reset-row" data-rid="{{ r.receita_id }}" title="Voltar ao cálculo automático" aria-label="Voltar {{ r.nome }} ao cálculo automático"><i class="bi bi-arrow-counterclockwise"></i></button>{% endif %}</td>
+              </tr>
+              <tr class="recipe-detail" data-rid="{{ r.receita_id }}" hidden><td colspan="{{ crono.dias|length + 2 }}">
+                <div class="detail-summary">
+                  <span><small>Estoque útil</small><strong>{{ r.em_estoque_efetivo }}</strong></span>
+                  <i class="bi bi-dash"></i>
+                  <span><small>Demanda</small><strong>{{ r.demanda }}</strong><em>maior entre firme e previsto</em></span>
+                  <i class="bi bi-arrow-right"></i>
+                  <span class="{{ 'needs-production' if r.produzir else 'covered' }}"><small>Necessidade</small><strong>{{ r.produzir or 0 }}</strong><em>{{ 'produzir na janela' if r.produzir else 'coberta pelo estoque' }}</em></span>
+                  {% if not r.insumo %}<a href="{{ url_for('industria_teste.previsao', receita_id=r.receita_id, horizonte=horizonte, janela=janela, inicio=inicio, motor=motor) }}">Entender a previsão <i class="bi bi-arrow-right"></i></a>{% endif %}
+                </div>
+              </td></tr>
+              {% endfor %}
+            </tbody>
+            <tfoot><tr><td class="recipe-col">Total planejado</td>{% for t in totais_dia %}<td data-date="{{ crono.dias[loop.index0].data }}" class="{{ 'is-today' if crono.dias[loop.index0].data == crono.hoje }}"><strong class="day-total-units">{{ t.un }} un</strong><small class="day-total-batches">{{ t.fornadas or 0 }} forn.</small></td>{% endfor %}<td class="total-col"></td></tr></tfoot>
+          </table></div>
+
+          <div class="week-footer">
+            <p><i class="bi bi-info-circle"></i> Estoque e matéria-prima só mudam quando o padeiro confirma a produção. Editar esta grade não altera o estoque.</p>
+            <form method="POST" action="{{ url_for('industria_teste.limpar_edicoes') }}" class="clear-edits-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="horizonte" value="{{ horizonte }}"><input type="hidden" name="janela" value="{{ janela }}"><input type="hidden" name="inicio" value="{{ inicio }}"><input type="hidden" name="equilibrar" value="{{ 1 if equilibrar else 0 }}"><input type="hidden" name="motor" value="{{ motor }}"><input type="hidden" name="v2" value="1"><input type="hidden" name="view" value="week">
+              <button type="submit"><i class="bi bi-arrow-counterclockwise"></i> Limpar ajustes manuais</button>
+            </form>
+          </div>
+          {% else %}
+          <div class="empty-state"><span><i class="bi bi-calendar2-check"></i></span><div><h3>Nada para planejar neste período</h3><p>Não há pedidos ou previsão que exijam produção.</p></div></div>
+          {% endif %}
+        </section>
+
+        <section class="workspace hidden" data-panel="exceptions">
+          <div class="section-title"><div><h2>Exceções</h2><p>Problemas separados do planejamento rotineiro.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Abrir auditoria <i class="bi bi-arrow-right"></i></a></div>
+          {% if crono.alertas_falta %}<div class="exception-list">{% for alerta in crono.alertas_falta %}<article><span><i class="bi bi-exclamation-triangle"></i></span><div><h3>{{ alerta.nome }}</h3><p>{% for e in alerta.entregas %}{{ e.label }}: faltam {{ e.faltam }} de {{ e.firme }}{% if not loop.last %} · {% endif %}{% endfor %}</p></div><button type="button" data-open="week" data-focus-recipe="{{ alerta.receita_id }}">Resolver</button></article>{% endfor %}</div>{% else %}<div class="empty-state"><span><i class="bi bi-check2"></i></span><div><h3>Nenhuma entrega em risco</h3><p>Não encontramos exceções no horizonte selecionado.</p></div></div>{% endif %}
+        </section>
+      </div>
+    </main>
+  </div>
+  <script>
+    (function () {
+      var tabs = document.querySelectorAll('[data-view]');
+      var saveStatus = document.getElementById('grid-save-status');
+      var activeSaves = 0;
+
+      function openPanel(name, updateHash) {
+        tabs.forEach(function (tab) { tab.classList.toggle('active', tab.dataset.view === name); });
+        document.querySelectorAll('[data-panel]').forEach(function (panel) { panel.classList.toggle('hidden', panel.dataset.panel !== name); });
+        if (updateHash !== false && history.replaceState) history.replaceState(null, '', '#' + name);
+      }
+      tabs.forEach(function (tab) { tab.addEventListener('click', function () { openPanel(tab.dataset.view); }); });
+      document.querySelectorAll('[data-open]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          openPanel(button.dataset.open);
+          var day = button.dataset.focusDay;
+          var rid = button.dataset.focusRecipe;
+          if (day) setDayFocus(day);
+          var target = day ? document.querySelector('.day-column[data-date="' + day + '"]')
+            : (rid ? document.querySelector('.recipe-row[data-rid="' + rid + '"]') : null);
+          if (target) target.scrollIntoView({behavior: 'smooth', block: 'center', inline: 'center'});
+          else window.scrollTo({top: 0, behavior: 'smooth'});
+        });
+      });
+      document.getElementById('nav-toggle').addEventListener('click', function () { document.getElementById('preview-nav').classList.toggle('open'); });
+
+      var initialPanel = new URLSearchParams(location.search).get('view') || location.hash.slice(1);
+      if (initialPanel === 'week' || initialPanel === 'exceptions') openPanel(initialPanel, false);
+
+      var grid = document.getElementById('week-grid');
+      if (!grid) return;
+
+      var tbody = grid.querySelector('tbody');
+      var originalOrder = Array.prototype.slice.call(tbody.children);
+      var search = document.getElementById('week-search');
+      var onlyPlanned = document.getElementById('week-only-planned');
+      var onlyAttention = document.getElementById('week-only-attention');
+      var sort = document.getElementById('week-sort');
+      var filterStatus = document.getElementById('week-filter-status');
+      var focusButtons = document.querySelectorAll('[data-focus-date]');
+      var activeFocusDate = null;
+
+      function setDayFocus(date) {
+        if (!grid) return;
+        activeFocusDate = date;
+        grid.classList.toggle('single-day', date !== 'all');
+        grid.querySelectorAll('.day-column, .plan-cell, tfoot td[data-date]').forEach(function (cell) {
+          cell.classList.toggle('day-hidden', date !== 'all' && cell.dataset.date !== date);
+        });
+        focusButtons.forEach(function (button) {
+          var selected = button.dataset.focusDate === date;
+          button.classList.toggle('active', selected);
+          button.setAttribute('aria-pressed', String(selected));
+        });
+        var selectedHeader = grid.querySelector('.day-column[data-date="' + date + '"]');
+        if (selectedHeader) selectedHeader.scrollIntoView({block: 'nearest', inline: 'nearest'});
+      }
+
+      focusButtons.forEach(function (button) {
+        button.addEventListener('click', function () { setDayFocus(button.dataset.focusDate); });
+      });
+      var initialFocus = document.querySelector('[data-focus-date][aria-pressed="true"]') || focusButtons[0];
+      if (initialFocus) setDayFocus(initialFocus.dataset.focusDate);
+
+      function detailFor(row) {
+        return tbody.querySelector('.recipe-detail[data-rid="' + row.dataset.rid + '"]');
+      }
+
+      function categoryFor(row) {
+        return Array.prototype.find.call(tbody.querySelectorAll('.category-row'), function (category) {
+          return category.dataset.categoryRow === row.dataset.category;
+        });
+      }
+
+      function applyFilters() {
+        var query = (search.value || '').trim().toLocaleLowerCase('pt-BR');
+        var visible = 0;
+        tbody.querySelectorAll('.recipe-row').forEach(function (row) {
+          var show = !query || row.dataset.name.indexOf(query) !== -1;
+          if (show && onlyPlanned.checked && Number(row.dataset.total || 0) === 0) show = false;
+          if (show && onlyAttention && onlyAttention.checked && row.dataset.attention !== '1') show = false;
+          var category = categoryFor(row);
+          if (show && !query && category && category.dataset.collapsed === 'true') show = false;
+          row.hidden = !show;
+          if (show) visible += 1;
+          else {
+            var detail = detailFor(row);
+            if (detail) detail.hidden = true;
+            var toggle = row.querySelector('.recipe-toggle');
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
+          }
+        });
+        tbody.querySelectorAll('.category-row').forEach(function (category) {
+          if (sort.value !== 'category') { category.hidden = true; return; }
+          if (!query && category.dataset.collapsed === 'true') { category.hidden = false; return; }
+          var hasVisible = Array.prototype.some.call(tbody.querySelectorAll('.recipe-row'), function (row) {
+            return row.dataset.category === category.dataset.categoryRow && !row.hidden;
+          });
+          category.hidden = !hasVisible;
+        });
+        var total = tbody.querySelectorAll('.recipe-row').length;
+        filterStatus.textContent = visible === total ? total + ' receitas' : visible + ' de ' + total + ' receitas';
+      }
+
+      function applySort() {
+        if (sort.value === 'category') {
+          originalOrder.forEach(function (node) { tbody.appendChild(node); });
+        } else {
+          var rows = Array.prototype.slice.call(tbody.querySelectorAll('.recipe-row'));
+          rows.sort(function (a, b) {
+            if (sort.value === 'production') return Number(b.dataset.total) - Number(a.dataset.total);
+            if (sort.value === 'attention') {
+              var attention = Number(b.dataset.attention) - Number(a.dataset.attention);
+              return attention || Number(b.dataset.total) - Number(a.dataset.total);
+            }
+            return a.dataset.recipeName.localeCompare(b.dataset.recipeName, 'pt-BR');
+          });
+          rows.forEach(function (row) {
+            tbody.appendChild(row);
+            var detail = detailFor(row);
+            if (detail) tbody.appendChild(detail);
+          });
+        }
+        applyFilters();
+      }
+
+      search.addEventListener('input', applyFilters);
+      onlyPlanned.addEventListener('change', applyFilters);
+      if (onlyAttention) onlyAttention.addEventListener('change', applyFilters);
+      sort.addEventListener('change', applySort);
+      applyFilters();
+
+      document.addEventListener('click', function (event) {
+        var categoryToggle = event.target.closest('.category-toggle');
+        if (categoryToggle) {
+          var categoryRow = categoryToggle.closest('.category-row');
+          var collapsed = categoryRow.dataset.collapsed !== 'true';
+          categoryRow.dataset.collapsed = String(collapsed);
+          categoryToggle.setAttribute('aria-expanded', String(!collapsed));
+          applyFilters();
+          return;
+        }
+        var edit = event.target.closest('.edit-row');
+        if (edit) {
+          var editRow = tbody.querySelector('.recipe-row[data-rid="' + edit.dataset.rid + '"]');
+          if (!editRow) return;
+          var editing = !editRow.classList.contains('is-editing');
+          editRow.classList.toggle('is-editing', editing);
+          edit.setAttribute('aria-pressed', String(editing));
+          edit.querySelector('span').textContent = editing ? 'Concluir' : 'Editar';
+          edit.querySelector('i').className = 'bi ' + (editing ? 'bi-check2' : 'bi-pencil');
+          editRow.querySelectorAll('.plan-input[data-editable="1"]').forEach(function (input) {
+            input.readOnly = !editing;
+            input.tabIndex = editing ? 0 : -1;
+          });
+          if (editing) {
+            var selector = activeFocusDate && activeFocusDate !== 'all'
+              ? '.plan-cell[data-date="' + activeFocusDate + '"] .plan-input[data-editable="1"]'
+              : '.plan-input[data-editable="1"]';
+            var firstInput = editRow.querySelector(selector);
+            if (firstInput) { firstInput.focus(); firstInput.select(); }
+          }
+          return;
+        }
+        var toggle = event.target.closest('.recipe-toggle');
+        if (toggle) {
+          var detail = tbody.querySelector('.recipe-detail[data-rid="' + toggle.dataset.rid + '"]');
+          if (!detail) return;
+          detail.hidden = !detail.hidden;
+          toggle.setAttribute('aria-expanded', String(!detail.hidden));
+          return;
+        }
+        var reset = event.target.closest('.reset-row');
+        if (reset) resetRow(reset.dataset.rid);
+      });
+
+      var params = {
+        horizonte: {{ horizonte|tojson }}, janela: {{ janela|tojson }},
+        inicio: {{ inicio|tojson }}, equilibrar: {{ (1 if equilibrar else 0)|tojson }},
+        motor: {{ motor|tojson }}
+      };
+      var dates = {{ crono.dias|map(attribute='data')|list|tojson }};
+      var urlCell = {{ url_for('industria_teste.celula')|tojson }};
+      var urlReset = {{ url_for('industria_teste.celula_reset')|tojson }};
+      var urlToken = {{ url_for('auth.csrf_token_novo')|tojson }};
+      var csrf = {{ csrf_token()|tojson }};
+
+      async function postJson(url, body) {
+        function request() {
+          return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf}, body: JSON.stringify(body)});
+        }
+        var response;
+        try { response = await request(); } catch (error) { response = null; }
+        if (!response || (response.status >= 502 && response.status <= 504)) {
+          await new Promise(function (resolve) { setTimeout(resolve, 1200); });
+          response = await request();
+        }
+        var data = null;
+        try { data = await response.json(); } catch (error) { data = null; }
+        if (data && data.erro === 'csrf_expirada') {
+          var fresh = await fetch(urlToken).then(function (r) { return r.json(); }).catch(function () { return null; });
+          if (fresh && fresh.token) {
+            csrf = fresh.token;
+            response = await request();
+            try { data = await response.json(); } catch (error) { data = null; }
+          }
+        }
+        return {response: response, data: data};
+      }
+
+      function errorMessage(result) {
+        var data = result && result.data;
+        if (data && data.msg) return data.msg;
+        if (data && data.erro === 'dia_fechado') return 'Este dia está fechado para edição.';
+        if (data && data.erro === 'dia_bloqueado') return 'Esta receita não pode ser produzida neste dia.';
+        if (data && data.erro === 'csrf_expirada') return 'Sua sessão expirou. Recarregue a página.';
+        return 'A alteração não foi salva. Confira sua conexão e tente novamente.';
+      }
+
+      function formatNumber(value) {
+        var number = Math.round((Number(value) || 0) * 10) / 10;
+        return String(number).replace('.', ',');
+      }
+
+      function setRow(rid, cells) {
+        cells.forEach(function (item) {
+          var cell = grid.querySelector('.plan-cell[data-rid="' + rid + '"][data-date="' + item.data + '"]');
+          if (!cell) return;
+          var input = cell.querySelector('.plan-input');
+          input.value = item.qtd || 0;
+          input.dataset.last = item.qtd || 0;
+          input.classList.toggle('is-zero', !item.qtd);
+          cell.dataset.batches = item.fornadas == null ? '' : item.fornadas;
+          var batch = cell.querySelector('.batch-label');
+          batch.textContent = item.qtd && item.fornadas != null ? formatNumber(item.fornadas) + ' forn.'
+            : (item.qtd && cell.dataset.derived === '1' ? 'calculado' : '');
+        });
+        recalcRow(rid);
+      }
+
+      function recalcRow(rid) {
+        var row = tbody.querySelector('.recipe-row[data-rid="' + rid + '"]');
+        if (!row) return;
+        var total = 0;
+        row.querySelectorAll('.plan-input').forEach(function (input) { total += Number(input.value) || 0; });
+        row.dataset.total = total;
+        row.querySelector('.row-total').textContent = formatNumber(total);
+      }
+
+      function recalcDayTotals() {
+        dates.forEach(function (date) {
+          var units = 0, batches = 0;
+          grid.querySelectorAll('.plan-cell[data-date="' + date + '"]').forEach(function (cell) {
+            if (cell.dataset.derived !== '1') units += Number(cell.querySelector('.plan-input').value) || 0;
+            batches += Number(cell.dataset.batches) || 0;
+          });
+          var footer = grid.querySelector('tfoot td[data-date="' + date + '"]');
+          if (footer) {
+            footer.querySelector('.day-total-units').textContent = formatNumber(units) + ' un';
+            footer.querySelector('.day-total-batches').textContent = formatNumber(batches) + ' forn.';
+          }
+        });
+      }
+
+      function markEdited(rid) {
+        var row = tbody.querySelector('.recipe-row[data-rid="' + rid + '"]');
+        if (!row) return;
+        if (!row.querySelector('.tag.edited')) {
+          var tag = document.createElement('span');
+          tag.className = 'tag edited';
+          tag.innerHTML = '<i class="bi bi-pencil-fill"></i> ajustado';
+          row.querySelector('.recipe-tags').appendChild(tag);
+        }
+        if (!row.querySelector('.reset-row')) {
+          var button = document.createElement('button');
+          button.type = 'button'; button.className = 'reset-row'; button.dataset.rid = rid;
+          button.title = 'Voltar ao cálculo automático'; button.setAttribute('aria-label', button.title);
+          button.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>';
+          row.querySelector('.total-col').appendChild(button);
+        }
+      }
+
+      async function saveCell(cell) {
+        var input = cell.querySelector('.plan-input');
+        var previous = input.dataset.last;
+        var quantity = Math.max(0, parseInt(input.value, 10) || 0);
+        if (String(quantity) === String(previous)) { input.value = quantity; return; }
+        input.value = quantity;
+        cell.classList.remove('save-error', 'save-ok');
+        cell.classList.add('is-saving');
+        activeSaves += 1;
+        saveStatus.className = 'save-status is-saving';
+        saveStatus.textContent = 'Salvando alteração…';
+        var result = null;
+        try { result = await postJson(urlCell, Object.assign({receita_id: cell.dataset.rid, data: cell.dataset.date, qtd: quantity}, params)); }
+        catch (error) { result = null; }
+        activeSaves -= 1;
+        cell.classList.remove('is-saving');
+        if (result && result.response && result.response.ok && result.data && result.data.ok) {
+          setRow(cell.dataset.rid, result.data.por_dia);
+          (result.data.insumos || []).forEach(function (item) { setRow(item.receita_id, item.por_dia); });
+          markEdited(cell.dataset.rid);
+          recalcDayTotals();
+          cell.classList.add('save-ok');
+          saveStatus.className = 'save-status saved';
+          saveStatus.innerHTML = '<i class="bi bi-check2"></i> Alteração salva';
+          applyFilters();
+        } else {
+          input.value = previous;
+          input.classList.toggle('is-zero', !Number(previous));
+          cell.classList.add('save-error');
+          saveStatus.className = 'save-status error';
+          saveStatus.textContent = errorMessage(result);
+        }
+      }
+
+      grid.addEventListener('input', function (event) {
+        if (event.target.classList.contains('plan-input')) event.target.classList.toggle('is-zero', !Number(event.target.value));
+      });
+      grid.addEventListener('change', function (event) {
+        if (event.target.classList.contains('plan-input')) saveCell(event.target.closest('.plan-cell'));
+      });
+      grid.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !event.target.classList.contains('plan-input')) return;
+        event.preventDefault();
+        var date = event.target.closest('.plan-cell').dataset.date;
+        event.target.blur();
+        var visibleRows = Array.prototype.slice.call(tbody.querySelectorAll('.recipe-row:not([hidden])'));
+        var currentIndex = visibleRows.indexOf(event.target.closest('.recipe-row'));
+        for (var index = currentIndex + 1; index < visibleRows.length; index += 1) {
+          var next = visibleRows[index].querySelector('.plan-cell[data-date="' + date + '"] .plan-input:not([readonly])');
+          if (next) { next.focus(); next.select(); break; }
+        }
+      });
+
+      async function resetRow(rid) {
+        if (!confirm('Voltar esta receita ao cálculo automático? Os ajustes manuais da linha serão removidos.')) return;
+        var result = await postJson(urlReset, {receita_id: rid, datas: dates});
+        if (result.response && result.response.ok && result.data && result.data.ok) location.reload();
+        else {
+          saveStatus.className = 'save-status error';
+          saveStatus.textContent = errorMessage(result);
+        }
+      }
+
+      document.querySelectorAll('.day-send-form').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+          if (activeSaves) {
+            event.preventDefault();
+            saveStatus.className = 'save-status error';
+            saveStatus.textContent = 'Aguarde a alteração terminar de salvar antes de enviar.';
+            return;
+          }
+          var action = form.dataset.update === '1' ? 'Atualizar' : 'Enviar';
+          if (!confirm(action + ' a produção de ' + form.dataset.dayLabel + ' para o padeiro?')) event.preventDefault();
+        });
+      });
+      var clearForm = document.querySelector('.clear-edits-form');
+      if (clearForm) clearForm.addEventListener('submit', function (event) {
+        if (!confirm('Remover todos os ajustes manuais e voltar ao cálculo automático? Dias fechados serão preservados.')) event.preventDefault();
+      });
+    }());
+  </script>
+</body>
+</html>

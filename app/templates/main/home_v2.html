@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Hoje — Padaria{% endblock %}
+
+{% block content %}
+{% set primeiro_nome = (current_user.nome or '').split(' ')[0] if current_user.nome else '' %}
+{% set area_icons = {
+    'lojas': 'bi-shop',
+    'producao': 'bi-box-seam',
+    'catalogo': 'bi-journal-text',
+    'vendas': 'bi-receipt',
+    'financeiro': 'bi-wallet2',
+    'rh': 'bi-people',
+    'relatorios': 'bi-bar-chart',
+    'administracao': 'bi-gear',
+    'fichas': 'bi-book'
+} %}
+{% set priority_actions = {
+    'producao_vencida': 'Confirmar produção',
+    'ordem_rascunho': 'Concluir e enviar',
+    'ordem_ausente': 'Criar planejamento',
+    'pendente_lojas': 'Vincular itens',
+    'pendente_congelados': 'Vincular itens',
+    'cestas_orfaos': 'Corrigir composição',
+    'pdv_mapeamentos': 'Corrigir mapeamentos',
+    'contas_pagar': 'Revisar vencimentos',
+    'retiradas_presas': 'Liberar retiradas',
+    'separados_presos': 'Concluir entregas',
+    'orcamentos': 'Revisar orçamentos',
+    'orcamentos_aprovados': 'Preparar pedidos'
+} %}
+{% set priority_context = {
+    'producao_vencida': 'A confirmação atualiza estoque e histórico.',
+    'ordem_rascunho': 'O padeiro ainda não recebeu esta ordem.',
+    'ordem_ausente': 'Há um dia de produção sem plano enviado.',
+    'pendente_lojas': 'Itens sem vínculo não entram na reposição correta.',
+    'pendente_congelados': 'Produtos congelados aguardam correspondência.',
+    'cestas_orfaos': 'Há componentes sem produto de origem.',
+    'pdv_mapeamentos': 'Vendas sem correspondência afetam os relatórios.',
+    'contas_pagar': 'Comece pelas contas vencidas ou sem conferência.',
+    'retiradas_presas': 'Pedidos aguardam mudança de etapa.',
+    'separados_presos': 'Pedidos separados ainda não foram concluídos.'
+} %}
+{% set critical_priorities = ['producao_vencida', 'contas_pagar', 'retiradas_presas', 'separados_presos'] %}
+
+<div class="home-v2" data-sales-detail-url="{{ url_for('main.cancelados_descontos_detalhe') }}">
+    <header class="home-v2-header">
+        <div>
+            <span class="home-v2-eyebrow">Visão geral</span>
+            <h1>Bom dia{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}</h1>
+            <p>Comece pelo que precisa de atenção e depois siga para sua área de trabalho.</p>
+        </div>
+        <div class="home-v2-header-actions">
+            {% if current_user.is_admin() %}{# rota é admin_required — pra papel producao o link daria 403 #}
+            <a class="home-v2-btn home-v2-btn-primary" href="{{ url_for('industria_teste.index', v2=1) }}">
+                <i class="bi bi-calendar3"></i> Planejar produção
+            </a>
+            {% endif %}
+            <button type="button" class="home-v2-icon-btn home-v2-mobile-search"
+                    onclick="window.abrirCommandPalette && window.abrirCommandPalette()"
+                    aria-label="Buscar no sistema" title="Buscar no sistema">
+                <i class="bi bi-search"></i>
+            </button>
+        </div>
+    </header>
+
+    <section class="home-v2-overview" aria-label="Resumo do dia">
+        <article class="home-v2-panel home-v2-priorities">
+            <div class="home-v2-panel-heading">
+                <div>
+                    <span class="home-v2-section-kicker">Prioridades</span>
+                    <h2>Precisa de você hoje</h2>
+                </div>
+                {% if pendencias %}
+                <span class="home-v2-count" aria-label="{{ pendencias|length }} pendências">{{ pendencias|length }}</span>
+                {% else %}
+                <span class="home-v2-ok"><i class="bi bi-check2"></i> Em dia</span>
+                {% endif %}
+            </div>
+
+            {% if pendencias %}
+            <div class="home-v2-task-list">
+                {% for it in pendencias %}
+                {% set is_monitor = 'vigia' in it.chave %}
+                {% set severity = 'critical' if it.chave in critical_priorities or is_monitor else 'warning' %}
+                {% set action = priority_actions.get(it.chave, 'Abrir pendência') %}
+                <a class="home-v2-task {{ severity }}" href="{{ it.url }}">
+                    <span class="home-v2-task-icon"><i class="bi {{ 'bi-exclamation-triangle' if severity == 'critical' else 'bi-exclamation-circle' }}"></i></span>
+                    <span class="home-v2-task-copy">
+                        <strong>{{ it.rotulo }}</strong>
+                        <small>{{ priority_context.get(it.chave, 'Abra para entender a causa e resolver a pendência.') }}</small>
+                    </span>
+                    <span class="home-v2-task-side">
+                        {% if it.qtd %}<span class="home-v2-task-qty">{{ '{:,.0f}'.format(it.qtd).replace(',', '.') }}</span>{% endif %}
+                        <span class="home-v2-task-action">{{ action }}</span>
+                    </span>
+                    <i class="bi bi-arrow-up-right home-v2-task-arrow"></i>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="home-v2-empty">
+                <span><i class="bi bi-check2-circle"></i></span>
+                <div><strong>Nada pendente</strong><small>Tudo rodando como esperado.</small></div>
+            </div>
+            {% endif %}
+
+            <footer class="home-v2-panel-footer">
+                {% if current_user.is_dono() %}
+                <a href="{{ url_for('main.briefing_dono_view') }}">Abrir briefing completo <i class="bi bi-arrow-right"></i></a>
+                {% endif %}
+                <a href="{{ url_for('main.manual_operacao') }}">Manual de operação</a>
+            </footer>
+        </article>
+
+        {% if vendas %}
+        <article class="home-v2-panel home-v2-sales">
+            <div class="home-v2-panel-heading">
+                <div>
+                    <span class="home-v2-section-kicker">Vendas</span>
+                    <h2>Movimento das lojas</h2>
+                </div>
+                <i class="bi bi-graph-up-arrow home-v2-heading-icon"></i>
+            </div>
+
+            {% if vendas_hoje %}
+            <div class="home-v2-sales-total">
+                <span>Vendas de hoje <small>{{ vendas_hoje.label }} · parcial</small></span>
+                <strong>R$ {{ '{:,.0f}'.format(vendas_hoje.total_geral).replace(',', '.') }}</strong>
+            </div>
+            <div class="home-v2-sales-split">
+                <div><span>PDV</span><strong>R$ {{ '{:,.0f}'.format(vendas_hoje.pdv_total).replace(',', '.') }}</strong><small>{{ vendas_hoje.n_pedidos }} pedido{{ 's' if vendas_hoje.n_pedidos != 1 }}</small></div>
+                <div><span>Site</span><strong>R$ {{ '{:,.0f}'.format(vendas_hoje.site_total).replace(',', '.') }}</strong><small>{{ vendas_hoje.site_qtd }} pago{{ 's' if vendas_hoje.site_qtd != 1 }}</small></div>
+            </div>
+            <button type="button" class="home-v2-detail-link abrir-cd"
+                    data-dia="{{ vendas_hoje.hoje }}" data-rotulo="hoje ({{ vendas_hoje.label }})">
+                Cancelamentos e descontos <i class="bi bi-arrow-right"></i>
+            </button>
+            {% endif %}
+
+            <div class="home-v2-yesterday">
+                <span>Ontem <small>{{ vendas.label }}</small></span>
+                <strong>R$ {{ '{:,.0f}'.format(vendas.total_geral).replace(',', '.') }}</strong>
+                <button type="button" class="abrir-cd" aria-label="Ver cancelamentos e descontos de ontem"
+                        data-dia="{{ vendas.ontem }}" data-rotulo="ontem ({{ vendas.label }})">
+                    Ver detalhes
+                </button>
+            </div>
+
+            {% if not vendas.snapshot_ok %}
+            <p class="home-v2-warning"><i class="bi bi-exclamation-triangle"></i> O resumo de ontem pode estar incompleto.</p>
+            {% endif %}
+
+            {% if (vendas_hoje and vendas_hoje.por_loja) or vendas.por_loja %}
+            <details class="home-v2-store-details">
+                <summary>Ver vendas por loja <i class="bi bi-chevron-down"></i></summary>
+                <div>
+                    {% for lj in (vendas_hoje.por_loja if vendas_hoje and vendas_hoje.por_loja else vendas.por_loja) %}
+                    <p><span>{{ lj.loja }}</span><strong>R$ {{ '{:,.0f}'.format(lj.faturamento).replace(',', '.') }}</strong></p>
+                    {% endfor %}
+                </div>
+            </details>
+            {% endif %}
+        </article>
+        {% else %}
+        <article class="home-v2-panel home-v2-next">
+            <div class="home-v2-panel-heading">
+                <div><span class="home-v2-section-kicker">Próximo passo</span><h2>Continue o trabalho</h2></div>
+                <i class="bi bi-arrow-right-circle home-v2-heading-icon"></i>
+            </div>
+            {% if current_user.is_admin() %}{# rota é admin_required — pra papel producao o link daria 403 #}
+            <a class="home-v2-feature-link" href="{{ url_for('industria_teste.index', v2=1) }}">
+                <span><i class="bi bi-calendar3"></i></span>
+                <div><strong>Planejamento da indústria</strong><small>Organize a produção da semana.</small></div>
+                <i class="bi bi-arrow-right"></i>
+            </a>
+            {% else %}
+            <p class="home-v2-muted">Escolha uma área abaixo para continuar.</p>
+            {% endif %}
+        </article>
+        {% endif %}
+    </section>
+
+    <section class="home-v2-areas" aria-labelledby="home-v2-areas-title">
+        <div class="home-v2-section-heading">
+            <div>
+                <span class="home-v2-section-kicker">Navegação</span>
+                <h2 id="home-v2-areas-title">Áreas de trabalho</h2>
+            </div>
+            <small>{{ areas|length }} áreas disponíveis</small>
+        </div>
+        <div class="home-v2-area-grid">
+            {% for a in areas %}
+            <a href="{{ url_for('main.area', slug=a.slug) }}" class="home-v2-area-card">
+                <span class="home-v2-area-icon"><i class="bi {{ area_icons.get(a.slug, 'bi-grid') }}"></i></span>
+                <span class="home-v2-area-copy"><strong>{{ a.titulo }}</strong><small>{{ a.desc }}</small></span>
+                <i class="bi bi-arrow-right home-v2-area-arrow"></i>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+
+{% if vendas %}
+<div class="modal fade" id="modalCD" tabindex="-1" aria-labelledby="modalCDTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h6 mb-0" id="modalCDTitulo">Cancelamentos e descontos</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body small" id="modalCDCorpo"><p class="text-muted mb-0">Carregando…</p></div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if vendas %}
+<script src="{{ url_for('static', filename='js/home-v2.js') }}?v={{ static_v['js/home-v2.js'] }}"></script>
+{% endif %}
+{% endblock %}

@@ -96,6 +96,14 @@ def create_app(config_class=None):
         return {'now': agora_brt}
 
     @app.context_processor
+    def inject_ui_v2():
+        # Interface v2 (ver app/ui_v2.py): o base.html troca o shell
+        # (CSS + sidebar) por esta variavel — nunca ler config direto no
+        # template, o cookie de "voltar ao anterior" mora no helper.
+        from app.ui_v2 import ui_v2_ativo
+        return {'ui_v2': ui_v2_ativo()}
+
+    @app.context_processor
     def inject_static_version():
         """Versionamento de arquivos estaticos para cache busting.
         Usa hash MD5 do conteudo (8 chars) — muda sempre que arquivo muda,
@@ -112,6 +120,7 @@ def create_app(config_class=None):
         # pelo dono). Sem `?v=` a correcao de CSS so chegaria por hard-refresh.
         for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js',
                     'js/pdv_mapeamento.js', 'css/style.css',
+                    'js/home-v2.js', 'css/ui-v2.css', 'css/industria-v2.css',
                     'loja/loja.css', 'loja/carrinho.js', 'loja/checkout.js'):
             try:
                 p = os.path.join(app.static_folder, rel)

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% import "_area_nav.html" as areanav with context %}
+
+{% block title %}{{ area.titulo }} — Padaria{% endblock %}
+
+{% block content %}
+<div class="area-v2">
+    <header class="area-v2-header">
+        <a href="{{ url_for('main.index') }}" class="area-v2-back">
+            <i class="bi bi-arrow-left"></i> Hoje
+        </a>
+        <div class="area-v2-heading">
+            <span class="area-v2-mark" aria-hidden="true">{{ area.icone }}</span>
+            <div>
+                <span class="area-v2-kicker">Área de trabalho</span>
+                <h1>{{ area.titulo }}</h1>
+                <p>{{ area.desc }}</p>
+            </div>
+        </div>
+    </header>
+
+    <section class="area-v2-content" aria-labelledby="area-v2-functions">
+        <div class="area-v2-content-heading">
+            <div>
+                <span class="area-v2-kicker">Ferramentas</span>
+                <h2 id="area-v2-functions">O que você quer fazer?</h2>
+            </div>
+            <button type="button" class="area-v2-search"
+                    onclick="window.abrirCommandPalette && window.abrirCommandPalette()">
+                <i class="bi bi-search"></i> Buscar no sistema <kbd>⌘ K</kbd>
+            </button>
+        </div>
+        <div class="area-v2-links">
+            {{ areanav.render(area.slug, 'area-v2') }}
+        </div>
+    </section>
+</div>
+{% endblock %}

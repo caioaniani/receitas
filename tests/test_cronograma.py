@@ -1999,3 +1999,68 @@ def test_rota_renderiza_badge_capado_ao_retorno(app, admin_user):
     html = client.get('/telaindustriateste/').get_data(as_text=True)
     assert 'capado ao retorno' in html
     assert 'Croissant Tradicional — Retorno' in html
+
+
+# ---------------------------------------------------------------------------
+# Interface v2 do planejamento da indústria (promovida do preview 18/08/2026)
+# ---------------------------------------------------------------------------
+
+def test_rota_telaindustriateste_v2_funcional(app, admin_user):
+    """A tela nova usa os MESMOS dados e expõe a grade editável sem
+    substituir a tela operacional (que segue no default sem a flag)."""
+    loja = _loja()
+    r = _receita()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 10)
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+
+    nova = client.get('/telaindustriateste/?v2=1')
+    assert nova.status_code == 200
+    html = nova.get_data(as_text=True)
+    assert 'Nova interface · planejamento por dia' in html
+    assert 'somente leitura' not in html
+    assert 'O que precisa acontecer agora' in html
+    assert 'Planejamento semanal' in html
+    assert r.nome in html
+    assert 'id="week-grid"' in html
+    assert 'class="plan-input' in html
+    assert '/telaindustriateste/celula' in html
+    assert 'Enviar' in html
+
+    atual = client.get('/telaindustriateste/')
+    assert 'Nova interface · planejamento por dia' not in atual.get_data(
+        as_text=True)
+
+
+def test_flag_torna_nova_industria_padrao_com_comparacao_legacy(
+        app, admin_user):
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    app.config['UI_V2_ENABLED'] = True
+
+    nova = client.get('/telaindustriateste/').get_data(as_text=True)
+    antiga = client.get('/telaindustriateste/?legacy=1').get_data(as_text=True)
+
+    assert 'Nova interface · planejamento por dia' in nova
+    assert 'Comparar com tela antiga' in nova
+    assert 'Nova interface · planejamento por dia' not in antiga
+
+
+def test_v2_preserva_grade_apos_post(app, admin_user):
+    """Ações da grade voltam pra própria grade nova — editar/limpar não
+    pode devolver o usuário à tela antiga."""
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+
+    resp = client.post('/telaindustriateste/limpar-edicoes', data={
+        'horizonte': 7, 'janela': 6, 'inicio': 0, 'motor': 'vendas',
+        'equilibrar': 1, 'v2': 1, 'view': 'week',
+    })
+
+    assert resp.status_code in (302, 303)
+    assert 'v2=1' in resp.location
+    assert 'view=week' in resp.location

@@ -1,18 +1,46 @@
 
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import or_
 
 from app.blueprints.materias_primas import materias_primas_bp
 from app.decorators import admin_required, catalogo_required
 from app.extensions import db
 from app.models import AlertaEstoque, MateriaPrima, MovimentacaoEstoque, ReceitaIngrediente
+from app.ui_v2 import ui_v2_ativo
 from app.utils import SUB_RECEITA_TIPOS
 
 
 @materias_primas_bp.route('/')
 @login_required
 def banco():
-    materias = MateriaPrima.ativas().order_by(MateriaPrima.id).all()
+    query = MateriaPrima.ativas()
+    busca = (request.args.get('q') or '').strip()
+    if busca:
+        termo = f'%{busca}%'
+        query = query.filter(or_(MateriaPrima.nome.ilike(termo),
+                                 MateriaPrima.fornecedor.ilike(termo)))
+
+    if ui_v2_ativo():
+        page = request.args.get('page', 1, type=int)
+        paginacao = db.paginate(
+            query.order_by(MateriaPrima.nome),
+            page=max(page, 1),
+            per_page=30,
+            error_out=False,
+        )
+        arquivadas = (MateriaPrima.query
+                      .filter(MateriaPrima.arquivada_em.isnot(None))
+                      .order_by(MateriaPrima.nome).all())
+        return render_template(
+            'materias_primas/banco_v2.html',
+            materias=paginacao.items,
+            paginacao=paginacao,
+            busca=busca,
+            arquivadas=arquivadas,
+        )
+
+    materias = query.order_by(MateriaPrima.id).all()
     arquivadas = (MateriaPrima.query
                   .filter(MateriaPrima.arquivada_em.isnot(None))
                   .order_by(MateriaPrima.nome).all())
@@ -117,6 +145,7 @@ def salvar():
                 observacoes=observacoes_list[i].strip() or None,
                 lote_pedido=_parse_int_opt(lotes_pedido, i),
                 minimo_pedido=_parse_int_opt(minimos_pedido, i),
+                sugerir_pedido_loja=f'novo-{i}' in sugerir_loja_ids,
             )
             db.session.add(mp)
 
@@ -124,7 +153,10 @@ def salvar():
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify(success=True)
     flash('Banco de matérias-primas salvo com sucesso!', 'success')
-    return redirect(url_for('materias_primas.banco'))
+    busca = (request.form.get('q') or '').strip()
+    page = request.form.get('page', type=int)
+    return redirect(url_for('materias_primas.banco',
+                            q=busca or None, page=page or None))
 
 
 def _vinculos_mp(mp):

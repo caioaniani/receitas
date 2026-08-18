@@ -13,6 +13,13 @@ if DATABASE_URL.startswith('postgres://'):
 
 
 class Config:
+    # Interface v2 (redesenho promovido do preview): OPT-IN por env.
+    # Desligada por default — ligar = setar UI_V2_ENABLED=1 no Railway;
+    # desligar a env volta todo mundo ao visual anterior sem deploy de
+    # codigo. NAO confundir com o PREVIEW_MODE do ambiente de homologacao
+    # (aquela infra — copia de banco, seed, senha — NAO existe aqui).
+    UI_V2_ENABLED = os.environ.get('UI_V2_ENABLED', '0') == '1'
+
     _env_secret = os.environ.get('SECRET_KEY')
     if _env_secret:
         SECRET_KEY = _env_secret
