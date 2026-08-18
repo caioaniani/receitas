@@ -138,12 +138,35 @@
         }, 250);
     });
 
+    // Aviso "item em g/ml" (caso granola 18/08/2026): item medido em gramas
+    // com quantidade < 100 quase sempre é gente lançando POTES. Só aviso —
+    // nunca bloqueia (100g de fermento num pedido pequeno é legítimo).
+    function checarAvisoGramas(tr) {
+        var aviso = tr.querySelector('.item-aviso-gramas');
+        if (!aviso) return;
+        var flag = (tr.querySelector('.item-id').dataset.emGramas === '1');
+        var qtd = parseInt(tr.querySelector('input[name="item_qtd[]"]').value, 10);
+        var suspeito = flag && qtd >= 1 && qtd < 100;
+        aviso.classList.toggle('d-none', !suspeito);
+    }
+
+    // Mudar a quantidade re-avalia o aviso da linha.
+    tbody.addEventListener('input', function (e) {
+        if (e.target.name === 'item_qtd[]') checarAvisoGramas(e.target.closest('tr'));
+    });
+
+    // Linhas pré-preenchidas (editar): avalia no load.
+    Array.prototype.forEach.call(
+        tbody.querySelectorAll('tr.item-row:not(#row-template)'), checarAvisoGramas);
+
     // Escolher uma opção: preenche o texto visível + o hidden da linha ativa.
     pop.addEventListener('click', function (e) {
         var opt = e.target.closest('.item-result-opt');
         if (!opt || !activeInput) return;
         activeInput.value = opt.textContent;
         activeHidden.value = opt.dataset.id;
+        activeHidden.dataset.emGramas = opt.dataset.emGramas || '';
+        checarAvisoGramas(activeHidden.closest('tr'));
         hidePop();
     });
 
