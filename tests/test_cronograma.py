@@ -574,6 +574,33 @@ def test_nivelamento_redistribui_excedente_da_sexta(app):
     assert len(por_wd) >= 3                  # redistribuido, nao empilhado
 
 
+def test_nivelamento_nao_deixa_celula_farelo(app):
+    """Caso real 18/08 (dono: "2 paes e ridiculo, deveria ser nenhum de
+    nozes e azeitonas"): parcela minuscula (2 un de sexta) movida pra um
+    dia vazio virava celula-farelo — ninguem acende o forno por 2 paes.
+    A consolidacao anti-farelo funde a celula menor que a fracao minima
+    de fornada numa celula ja existente do item (no prazo e no frescor)."""
+    from datetime import date as _date
+
+    loja = _loja()
+    r = _receita('Sourdough Nozes Farelo')
+    hoje_d = hoje()                                # segunda congelada
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=4), r, 2)     # sex
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=6), r, 118)   # dom
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 120
+    qtds = {c['data']: c['qtd'] for c in rr['por_dia'] if c['qtd']}
+    # nenhuma celula-farelo: tudo que sobrou e >= 2 digitos de fornada
+    assert all(q >= 4 for q in qtds.values()), qtds
+    assert sum(qtds.values()) == rr['total']
+    # e o total nao passou do prazo: nada DEPOIS do dia de demanda
+    for d_iso in qtds:
+        assert _date.fromisoformat(d_iso).weekday() <= 4
+
+
 def test_nivelamento_fatia_receita_grande_em_lotes(app):
     """Caso Croissant (dono: "por que não redistribuir em lotes menores?"):
     demanda grande num dia só é FATIADA — nenhum dia carrega o total
