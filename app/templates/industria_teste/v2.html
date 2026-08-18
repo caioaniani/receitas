@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Prévia — Produção</title>
+  <title>Produção — Motor de previsão</title>
   {# Sem Google Fonts: a CSP global (style-src/font-src self+jsdelivr) bloqueia
      — o stack de fallback do industria-v2.css assume. Afrouxar CSP por fonte, não. #}
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -21,7 +21,7 @@
     <input type="hidden" name="v2" value="1">
     <input type="hidden" name="view" value="week">
   {%- endmacro %}
-  <div class="preview-ribbon">Nova interface · planejamento por dia</div>
+  <div class="preview-ribbon">Planejamento automático · produção</div>
   {% with mensagens = get_flashed_messages(with_categories=true) %}
     {% if mensagens %}
     <div class="v2-flashes" role="status">
@@ -57,46 +57,39 @@
       <div class="page">
         <div class="breadcrumbs"><a href="/area/producao">Produção</a><i class="bi bi-chevron-right"></i><span>Planejamento</span></div>
         <section class="page-head">
-          <div><span class="eyebrow">Planejamento de produção</span><h1>O que precisa acontecer agora</h1><p>Prioridades, riscos e produção dos próximos dias em uma única visão.</p></div>
-          <button class="primary-action" type="button" data-open="week"><i class="bi bi-calendar-week"></i>Abrir planejamento semanal</button>
+          <div><span class="eyebrow">Planejamento de produção</span><h1>Motor de previsão</h1><p>Acompanhe o cálculo automático e a carga programada para os próximos dias.</p></div>
+          <button class="primary-action" type="button" data-open="week"><i class="bi bi-calendar-week"></i>Abrir grade semanal</button>
         </section>
 
         <nav class="view-tabs" aria-label="Visões da produção">
-          <button class="active" type="button" data-view="today">Hoje <span>{{ acoes|length }}</span></button>
+          <button class="active" type="button" data-view="today">Visão geral</button>
           <button type="button" data-view="week">Planejamento semanal</button>
-          <button type="button" data-view="exceptions">Exceções {% if resumo.risco_n or resumo.pend_vencido %}<span>{{ resumo.risco_n + (1 if resumo.pend_vencido else 0) }}</span>{% endif %}</button>
+          <button type="button" data-view="exceptions">Exceções {% if resumo.excecoes_n %}<span>{{ resumo.excecoes_n }}</span>{% endif %}</button>
         </nav>
 
-        <section class="metrics" aria-label="Resumo">
-          <article><span class="metric-icon blue"><i class="bi bi-box-seam"></i></span><div><strong>{{ totais_dia[0].un if totais_dia else 0 }}</strong><span>unidades no primeiro dia</span></div><small>{{ totais_dia[0].fornadas if totais_dia else 0 }} fornadas</small></article>
-          <article><span class="metric-icon {{ 'red' if resumo.risco_n else 'green' }}"><i class="bi {{ 'bi-exclamation-triangle' if resumo.risco_n else 'bi-check2' }}"></i></span><div><strong>{{ resumo.risco_n }}</strong><span>entregas em risco</span></div><small>{{ 'Requer atenção' if resumo.risco_n else 'Tudo em ordem' }}</small></article>
-          <article><span class="metric-icon amber"><i class="bi bi-hourglass-split"></i></span><div><strong>{{ resumo.pend_agendado + resumo.pend_vencido }}</strong><span>aguardando confirmação</span></div><small>{% if resumo.pend_vencido %}{{ resumo.pend_vencido }} vencidas{% else %}Dentro do prazo{% endif %}</small></article>
+        <section class="engine-status" aria-labelledby="engine-status-title">
+          <div class="engine-status-signal" aria-hidden="true"><span></span><i class="bi bi-activity"></i></div>
+          <div class="engine-status-copy">
+            <span class="engine-status-label"><i class="bi bi-check-circle-fill"></i> Cálculo concluído</span>
+            <h2 id="engine-status-title">Motor funcionando normalmente</h2>
+            <p>Previsão recalculada nesta abertura às {{ monitor.calculado_em.strftime('%H:%M') }} em {{ monitor.duracao }}.</p>
+          </div>
+          <dl class="engine-facts">
+            <div><dt>Fonte</dt><dd>{{ monitor.motor_label }}</dd></div>
+            <div><dt>Horizonte</dt><dd>{{ horizonte }} dias</dd></div>
+            <div><dt>Distribuição</dt><dd>{{ monitor.carga_label }}</dd></div>
+          </dl>
         </section>
 
-        <section class="workspace" data-panel="today">
-          <div class="section-title"><div><h2>Prioridades</h2><p>Somente o que pede uma decisão sua.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Ver auditoria <i class="bi bi-arrow-right"></i></a></div>
-          {% if acoes %}
-          <div class="action-list">
-            {% for a in acoes[:4] %}
-            <article class="action-row {{ 'danger' if a.tipo in ('risco','vencido') else '' }}">
-              <span class="status-dot"><i class="bi {{ 'bi-exclamation-lg' if a.tipo in ('risco','vencido','difere') else 'bi-arrow-up-right' }}"></i></span>
-              <div>
-                {% if a.tipo == 'enviar_hoje' %}<h3>Enviar a produção de hoje</h3><p>O plano de {{ a.label }} está pronto para revisão.</p>
-                {% elif a.tipo == 'rascunho' %}<h3>Concluir o plano de {{ a.label }}</h3><p>O rascunho foi aprovado, mas ainda não chegou ao padeiro.</p>
-                {% elif a.tipo == 'difere' %}<h3>Revisar alterações de {{ a.label }}</h3><p>{{ a.n }} receita(s) diferem da ordem enviada.</p>
-                {% elif a.tipo == 'vencido' %}<h3>Confirmar produção vencida</h3><p>{{ a.n }} unidade(s) ainda aguardam confirmação.</p>
-                {% elif a.tipo == 'risco' %}<h3>Resolver entregas em risco</h3><p>{{ a.n }} receita(s) podem não atender pedidos programados.</p>
-                {% else %}<h3>Revisar edição manual</h3><p>Há uma previsão que pode estar desatualizada.</p>{% endif %}
-              </div>
-              <button class="row-action" type="button" data-open="week">Revisar <i class="bi bi-chevron-right"></i></button>
-            </article>
-            {% endfor %}
-          </div>
-          {% else %}
-          <div class="empty-state"><span><i class="bi bi-check2"></i></span><div><h3>Nenhuma ação pendente</h3><p>O planejamento está em dia. Você pode acompanhar a semana abaixo.</p></div></div>
-          {% endif %}
+        <section class="metrics" aria-label="Resumo do planejamento">
+          <article><span class="metric-icon blue"><i class="bi bi-box-seam"></i></span><div><strong>{{ totais_dia[0].un if totais_dia else 0 }}</strong><span>unidades planejadas hoje</span></div><small>{{ totais_dia[0].fornadas if totais_dia else 0 }} fornadas</small></article>
+          <article><span class="metric-icon green"><i class="bi bi-calendar3"></i></span><div><strong>{{ resumo.periodo_un }}</strong><span>unidades no horizonte</span></div><small>{{ resumo.dias_com_carga }} dias com carga</small></article>
+          <article><span class="metric-icon {{ 'red' if resumo.risco_n else 'green' }}"><i class="bi {{ 'bi-exclamation-triangle' if resumo.risco_n else 'bi-shield-check' }}"></i></span><div><strong>{{ resumo.risco_n }}</strong><span>entregas em risco</span></div><small>{{ 'Ver exceções' if resumo.risco_n else 'Cobertura em ordem' }}</small></article>
+        </section>
 
-          <div class="section-title schedule-title"><div><h2>Próximos dias</h2><p>Uma leitura rápida da carga planejada.</p></div><button type="button" data-open="week">Ver semana completa <i class="bi bi-arrow-right"></i></button></div>
+        <section class="workspace engine-overview" data-panel="today">
+          <div class="section-title schedule-title"><div><h2>Carga programada</h2><p>O que o motor distribuiu para hoje e para os próximos dias.</p></div><button type="button" data-open="week">Ver grade completa <i class="bi bi-arrow-right"></i></button></div>
+
           <div class="day-grid">
             {% for dia in crono.dias[:3] %}
             {% set idx = loop.index0 %}{% set est = estados.get(dia.data) %}
@@ -108,11 +101,15 @@
             </article>
             {% endfor %}
           </div>
+          <div class="engine-note">
+            <span><i class="bi bi-arrow-repeat"></i></span>
+            <div><strong>Atualização automática é o comportamento esperado</strong><p>O motor acompanha vendas e estoque e recalcula as quantidades. O histórico continua disponível na grade e na auditoria, sem virar uma tarefa para você.</p></div>
+          </div>
         </section>
 
         <section class="workspace hidden" data-panel="week">
           <div class="section-title week-heading">
-            <div><h2>Planejamento semanal</h2><p>Escolha um dia para revisar. Abra a edição apenas na receita que precisa de ajuste.</p></div>
+            <div><h2>Planejamento semanal</h2><p>Acompanhe a distribuição por dia. Abra a edição somente quando quiser intervir no cálculo automático.</p></div>
             <div class="section-actions">
               <a href="{{ url_for('industria_teste.auditoria') }}"><i class="bi bi-clock-history"></i> Auditoria</a>
               <a href="{{ url_for('industria_teste.index', legacy=1) }}"><i class="bi bi-arrow-left-right"></i> Comparar versão anterior</a>
@@ -154,11 +151,11 @@
           </div>
 
           <div class="week-help" role="note">
-            <span><i class="bi bi-pencil"></i><strong>1. Ajuste</strong> uma quantidade</span>
+            <span><i class="bi bi-eye"></i><strong>1. Acompanhe</strong> o cálculo</span>
             <i class="bi bi-chevron-right"></i>
-            <span><i class="bi bi-cloud-check"></i><strong>2. Salva</strong> como rascunho</span>
+            <span><i class="bi bi-pencil"></i><strong>2. Ajuste</strong> só se necessário</span>
             <i class="bi bi-chevron-right"></i>
-            <span><i class="bi bi-send"></i><strong>3. Envie</strong> o dia ao padeiro</span>
+            <span><i class="bi bi-send"></i><strong>3. Envie</strong> o plano do dia</span>
           </div>
 
           <div class="week-table-wrap" id="week-grid"><table>
@@ -248,8 +245,16 @@
         </section>
 
         <section class="workspace hidden" data-panel="exceptions">
-          <div class="section-title"><div><h2>Exceções</h2><p>Problemas separados do planejamento rotineiro.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Abrir auditoria <i class="bi bi-arrow-right"></i></a></div>
-          {% if crono.alertas_falta %}<div class="exception-list">{% for alerta in crono.alertas_falta %}<article><span><i class="bi bi-exclamation-triangle"></i></span><div><h3>{{ alerta.nome }}</h3><p>{% for e in alerta.entregas %}{{ e.label }}: faltam {{ e.faltam }} de {{ e.firme }}{% if not loop.last %} · {% endif %}{% endfor %}</p></div><button type="button" data-open="week" data-focus-recipe="{{ alerta.receita_id }}">Resolver</button></article>{% endfor %}</div>{% else %}<div class="empty-state"><span><i class="bi bi-check2"></i></span><div><h3>Nenhuma entrega em risco</h3><p>Não encontramos exceções no horizonte selecionado.</p></div></div>{% endif %}
+          <div class="section-title"><div><h2>Exceções reais</h2><p>Aqui só aparecem situações fora do funcionamento normal do motor.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Abrir auditoria <i class="bi bi-arrow-right"></i></a></div>
+          {% if resumo.excecoes_n %}
+          <div class="exception-list">
+            {% for alerta in crono.alertas_falta %}<article><span><i class="bi bi-exclamation-triangle"></i></span><div><h3>{{ alerta.nome }}</h3><p>{% for e in alerta.entregas %}{{ e.label }}: faltam {{ e.faltam }} de {{ e.firme }}{% if not loop.last %} · {% endif %}{% endfor %}</p></div><button type="button" data-open="week" data-focus-recipe="{{ alerta.receita_id }}">Ver na grade</button></article>{% endfor %}
+            {% if resumo.pend_vencido %}<article><span><i class="bi bi-clock-history"></i></span><div><h3>Confirmação de produção vencida</h3><p>{{ resumo.pend_vencido }} unidade(s) passaram do prazo sem confirmação do padeiro.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Abrir auditoria</a></article>{% endif %}
+            {% if resumo.stale_n %}<article class="warning"><span><i class="bi bi-pencil"></i></span><div><h3>Ajuste manual desatualizado</h3><p>{{ resumo.stale_n }} receita(s) possuem ajuste anterior ao cálculo atual e a quantidade pode estar desatualizada.</p></div><button type="button" data-open="week">Ver na grade</button></article>{% endif %}
+          </div>
+          {% else %}
+          <div class="empty-state"><span><i class="bi bi-check2"></i></span><div><h3>Motor saudável, sem exceções</h3><p>O cálculo terminou e a cobertura das entregas está dentro do esperado.</p></div></div>
+          {% endif %}
         </section>
       </div>
     </main>
