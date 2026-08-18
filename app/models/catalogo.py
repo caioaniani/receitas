@@ -268,6 +268,17 @@ class Receita(db.Model):
         order_by='ReceitaEtapa.ordem'
     )
 
+    @property
+    def medida_em_gramas(self):
+        """True quando a receita e pedida/estocada em GRAMAS ou ML, nao em
+        unidades (as "Produção - Granola 1000g" da vida: peso_unitario=1.0 e
+        rendimento em g/ml). Caso real 18/08/2026: pedidos lancados em POTES
+        (5) num item medido em gramas (5000) inflaram o relatorio de pedidos
+        em ~1000x. Heuristica — nao ha flag cadastral; usada pra AVISO
+        nao-bloqueante na tela de pedido, nunca pra validacao dura."""
+        un = (self.rendimento_unidade or '').strip().lower()
+        return un in ('g', 'ml', 'kg', 'l') or self.peso_unitario == 1.0
+
     def to_dict(self):
         return {
             'nome': self.nome,
