@@ -166,13 +166,18 @@ def buscar_itens():
     out = []
     # ativas(): receita arquivada nao pode entrar em pedido NOVO (varredura
     # 19/07/2026 — o typeahead era o unico picker do arquivo sem o filtro).
-    out += [{'id': f'r_{r.id}', 'nome': r.nome}
+    # em_gramas: item medido em g/ml (granola/iogurte "Produção - *") — a
+    # tela avisa quando a quantidade parece POTES (caso 18/08/2026, relatorio
+    # inflado ~1000x). So aviso; nada bloqueia.
+    out += [{'id': f'r_{r.id}', 'nome': r.nome,
+             'em_gramas': r.medida_em_gramas}
             for r in Receita.ativas().order_by(Receita.nome).all()
             if _casa(r.nome)]
-    out += [{'id': f'p_{p.id}', 'nome': p.nome}
+    out += [{'id': f'p_{p.id}', 'nome': p.nome, 'em_gramas': False}
             for p in Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
             if _casa(p.nome)]
-    out += [{'id': f'mp_{m.id}', 'nome': m.nome}
+    out += [{'id': f'mp_{m.id}', 'nome': m.nome,
+             'em_gramas': (m.unidade or '').strip().lower() in ('g', 'ml', 'kg', 'l')}
             for m in _mps_pediveis().all() if _casa(m.nome)]
     return jsonify(itens=out[:50])
 

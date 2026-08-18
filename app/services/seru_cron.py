@@ -908,8 +908,11 @@ def _run_ordens_semana(app):
 # fornada POR PECA e distorcia a regua); 'i' = antecedencia 2->3 dias
 # (dono: "Tem que adiantar, olha so terca nao tem producao" — com 2 a
 # demanda do fim de semana nao alcancava a terca) + piso diario do
-# Cinnamon Roll (seed proprio, mesma regra das danishes).
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17i'
+# Cinnamon Roll (seed proprio, mesma regra das danishes); 'j' =
+# anti-farelo ("2 paes e ridiculo, deveria ser nenhum de nozes e
+# azeitonas" — celula menor que a fracao minima de fornada e fundida
+# numa celula existente do item, no prazo e no frescor).
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17j'
 
 
 def _run_ordens_semana_retro(app):

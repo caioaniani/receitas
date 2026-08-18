@@ -29,7 +29,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/style.css') }}?v={{ static_v['css/style.css'] }}" rel="stylesheet">
     {% if config.PREVIEW_MODE %}
-    <link href="{{ url_for('static', filename='css/ui-v2.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/ui-v2.css') }}?v={{ static_v['css/ui-v2.css'] }}" rel="stylesheet">
     {% endif %}
     {% if embed %}
     {# Modo embed (popup do painel): sem sidebar, conteúdo ocupa tudo. #}

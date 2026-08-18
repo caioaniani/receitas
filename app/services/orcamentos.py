@@ -227,9 +227,15 @@ def atualizar_orcamento(orc, form, itens_raw):
         except ValueError:
             pass
 
-    # Substitui itens: apaga os antigos, adiciona os novos.
-    for it in list(orc.itens):
-        db.session.delete(it)
+    # Substitui itens: apaga os antigos PELA COLECAO (delete-orphan faz o
+    # DELETE no flush). NAO trocar por db.session.delete(it) direto: o
+    # delete direto nao tira o objeto de orc.itens ate o commit expirar, e
+    # o recalcular_total() abaixo somava itens VELHOS + novos — caso real
+    # orc-2026-0003 (18/08/2026): 200x5 editado pra 80x5 gravou subtotal/
+    # total R$ 1.400 (1.000 dos deletados + 400 do novo). A venda da
+    # aprovacao nao herdava o erro (criar_venda recalcula dos itens), mas
+    # tela e PDF do orcamento mostravam o total inflado.
+    orc.itens.clear()
     db.session.flush()
 
     itens_norm = []

@@ -14,16 +14,23 @@
   renderizada e a linha nova são byte-idênticas.
 #}
 
-{% macro item_row(item_id='', item_nome='', qtd=1, estado='', obs='', is_template=False) %}
+{% macro item_row(item_id='', item_nome='', qtd=1, estado='', obs='', is_template=False, em_gramas=False) %}
 <tr class="item-row{% if is_template %} d-none{% endif %}"{% if is_template %} id="row-template"{% endif %}>
     <td>
         <input type="text" class="form-control form-control-sm item-busca"
                placeholder="Digite o nome..." autocomplete="off" value="{{ item_nome }}">
-        <input type="hidden" name="item_id[]" class="item-id" value="{{ item_id }}">
+        <input type="hidden" name="item_id[]" class="item-id" value="{{ item_id }}"
+               data-em-gramas="{{ '1' if em_gramas else '' }}">
     </td>
     <td>
         <input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue"
                min="1" value="{{ qtd }}">
+        {# Aviso nao-bloqueante: item medido em g/ml com quantidade que parece
+           POTES (caso granola 18/08/2026 — 5 lancado onde era 5000). #}
+        <div class="form-text text-warning small d-none item-aviso-gramas">
+            ⚠ Este item é pedido em <strong>g/ml</strong>, não em potes/unidades
+            — ex.: 5 potes de 1kg = <strong>5000</strong>. Confira a quantidade.
+        </div>
     </td>
     <td>
         <select name="item_estado[]" class="form-select form-select-sm">
@@ -104,6 +111,7 @@
             var opt = document.createElement('div');
             opt.className = 'item-result-opt';
             opt.dataset.id = item.id;
+            opt.dataset.emGramas = item.em_gramas ? '1' : '';
             opt.textContent = item.nome;  // textContent escapa o nome
             pop.appendChild(opt);
         });
@@ -119,6 +127,8 @@
         var input = e.target;
         var hidden = input.closest('td').querySelector('.item-id');
         hidden.value = '';
+        hidden.dataset.emGramas = '';
+        checarAvisoGramas(input.closest('tr'));
         var val = input.value.trim();
         clearTimeout(timer);
         if (val.length < 2) { hidePop(); return; }
@@ -130,12 +140,35 @@
         }, 250);
     });
 
+    // Aviso "item em g/ml" (caso granola 18/08/2026): item medido em gramas
+    // com quantidade < 100 quase sempre é gente lançando POTES. Só aviso —
+    // nunca bloqueia (100g de fermento num pedido pequeno é legítimo).
+    function checarAvisoGramas(tr) {
+        var aviso = tr.querySelector('.item-aviso-gramas');
+        if (!aviso) return;
+        var flag = (tr.querySelector('.item-id').dataset.emGramas === '1');
+        var qtd = parseInt(tr.querySelector('input[name="item_qtd[]"]').value, 10);
+        var suspeito = flag && qtd >= 1 && qtd < 100;
+        aviso.classList.toggle('d-none', !suspeito);
+    }
+
+    // Mudar a quantidade re-avalia o aviso da linha.
+    tbody.addEventListener('input', function (e) {
+        if (e.target.name === 'item_qtd[]') checarAvisoGramas(e.target.closest('tr'));
+    });
+
+    // Linhas pré-preenchidas (editar): avalia no load.
+    Array.prototype.forEach.call(
+        tbody.querySelectorAll('tr.item-row:not(#row-template)'), checarAvisoGramas);
+
     // Escolher uma opção: preenche o texto visível + o hidden da linha ativa.
     pop.addEventListener('click', function (e) {
         var opt = e.target.closest('.item-result-opt');
         if (!opt || !activeInput) return;
         activeInput.value = opt.textContent;
         activeHidden.value = opt.dataset.id;
+        activeHidden.dataset.emGramas = opt.dataset.emGramas || '';
+        checarAvisoGramas(activeHidden.closest('tr'));
         hidePop();
     });
 
@@ -160,6 +193,8 @@
         tr.removeAttribute('id');
         tr.querySelector('.item-busca').value = '';
         tr.querySelector('.item-id').value = '';
+        tr.querySelector('.item-id').dataset.emGramas = '';
+        tr.querySelector('.item-aviso-gramas').classList.add('d-none');
         tr.querySelector('input[name="item_qtd[]"]').value = '1';
         tr.querySelector('input[name="item_obs[]"]').value = '';
         tr.querySelector('select[name="item_estado[]"]').selectedIndex = 0;

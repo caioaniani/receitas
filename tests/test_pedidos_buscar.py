@@ -264,3 +264,76 @@ def test_post_novo_pedido_sem_itens_nao_cria(app, admin_user, loja):
 
     with app.app_context():
         assert PedidoLoja.query.filter_by(loja_id=lid).count() == 0
+
+
+# ---------------------------------------------------------------------------
+# Flag em_gramas no typeahead — aviso "granola em potes" (18/08/2026).
+# Caso real: item medido em g/ml ("Produção - Granola Artesanal 1000g",
+# peso_unitario=1.0) recebia quantidade em POTES (5) e o relatório de
+# pedidos inflava ~1000x. A flag alimenta o aviso não-bloqueante do form.
+# ---------------------------------------------------------------------------
+
+def test_buscar_itens_marca_receita_em_gramas(app, admin_user):
+    from app.extensions import db
+    from app.models import Receita
+
+    with app.app_context():
+        # como a granola real: rendimento_unidade VAZIA + peso_unitario=1.0
+        granola = Receita(nome='Produção - Granola Artesanal 1000g',
+                          categoria='Produção', rendimento_qtd=15300,
+                          rendimento_unidade='', peso_base=4000.0,
+                          peso_unitario=1.0)
+        # como o iogurte real: rendimento_unidade='ml'
+        iogurte = Receita(nome='Produção - Iogurte Caseiro 1000ml',
+                          categoria='Produção', rendimento_qtd=1170,
+                          rendimento_unidade='ml', peso_base=1170.0)
+        normal = Receita(nome='Pão Produção Normal', categoria='Pães',
+                         rendimento_qtd=1, rendimento_unidade='un',
+                         peso_base=100.0, peso_unitario=100.0)
+        db.session.add_all([granola, iogurte, normal])
+        db.session.commit()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    data = client.get('/pedidos/buscar-itens.json?q=producao').get_json()
+    flags = {i['nome']: i['em_gramas'] for i in data['itens']}
+    assert flags['Produção - Granola Artesanal 1000g'] is True
+    assert flags['Produção - Iogurte Caseiro 1000ml'] is True
+    assert flags['Pão Produção Normal'] is False
+
+
+def test_buscar_itens_marca_mp_em_gramas(app, admin_user):
+    from app.extensions import db
+    from app.models import MateriaPrima
+
+    with app.app_context():
+        db.session.add_all([
+            MateriaPrima(nome='Granola a granel', unidade='g',
+                         custo_por_kg=30.0, sugerir_pedido_loja=True),
+            MateriaPrima(nome='Granola em pacote', unidade='un',
+                         custo_por_kg=30.0, sugerir_pedido_loja=True),
+        ])
+        db.session.commit()
+
+    client = app.test_client()
+    _login(client, admin_user)
+    data = client.get('/pedidos/buscar-itens.json?q=granola').get_json()
+    flags = {i['nome']: i['em_gramas'] for i in data['itens']}
+    assert flags['Granola a granel'] is True
+    assert flags['Granola em pacote'] is False
+
+
+def test_medida_em_gramas_propriedade(app):
+    """A heurística da Receita: unidade g/ml/kg/l OU peso_unitario == 1.0."""
+    from app.models import Receita
+
+    with app.app_context():
+        def _r(un, peso_unit):
+            return Receita(nome='x', categoria='y', rendimento_qtd=1,
+                           rendimento_unidade=un, peso_base=1.0,
+                           peso_unitario=peso_unit)
+        assert _r('g', None).medida_em_gramas is True
+        assert _r('KG', 500.0).medida_em_gramas is True
+        assert _r('', 1.0).medida_em_gramas is True
+        assert _r('un', 90.0).medida_em_gramas is False
+        assert _r('un', None).medida_em_gramas is False

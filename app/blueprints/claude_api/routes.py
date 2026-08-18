@@ -2318,3 +2318,97 @@ def ordens_producao():
         })
     return jsonify(ok=True, de=de.isoformat(), ate=ate.isoformat(),
                    ordens=out)
+
+
+@claude_api_bp.route('/pedidos-itens')
+@_claude_auth_required
+def pedidos_itens():
+    """Pedidos loja->industria que contem UM item (por trecho do nome) —
+    criada 18/08/2026 na auditoria "granola/iogurte em potes x gramas": o
+    relatorio de pedidos so agrega por item, e sem esta sonda nao da pra
+    dizer de fora QUAL pedido carregou a quantidade suspeita. Read-only.
+
+    Params: ?item=<trecho do nome> (obrigatorio, >=3 chars),
+    ?dias=N (janela por data_entrega, default 60, max 180),
+    ?loja=<nome|id> (opcional). Cap 200 linhas, mais recentes primeiro.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import or_
+
+    from app.models import (
+        Loja,
+        MateriaPrima,
+        PedidoItem,
+        PedidoLoja,
+        Produto,
+        Receita,
+        Usuario,
+    )
+    from app.utils import hoje, normalizar_busca, resolver_loja_por_nome
+
+    trecho = (request.args.get('item') or '').strip()
+    if len(trecho) < 3:
+        return jsonify(ok=False, erro='?item= obrigatorio (>= 3 chars)'), 400
+    dias = max(1, min(request.args.get('dias', 60, type=int) or 60, 180))
+    corte = hoje() - timedelta(days=dias - 1)
+
+    loja = None
+    bruto_loja = (request.args.get('loja') or '').strip()
+    if bruto_loja:
+        loja = (Loja.query.get(int(bruto_loja)) if bruto_loja.isdigit()
+                else resolver_loja_por_nome(bruto_loja))
+        if not loja:
+            return jsonify(ok=False, erro=f'loja {bruto_loja!r} nao achada'), 404
+
+    q = normalizar_busca(trecho)
+    termos = q.split()
+
+    def _casa(nome):
+        n = normalizar_busca(nome or '')
+        return all(t in n for t in termos)
+
+    # Resolve os alvos que casam o trecho (receita/produto/MP — inclui
+    # arquivados de proposito: pedido antigo pode apontar pra item morto).
+    rec_ids = [r.id for r in Receita.query.all() if _casa(r.nome)]
+    prod_ids = [p.id for p in Produto.query.all() if _casa(p.nome)]
+    mp_ids = [m.id for m in MateriaPrima.query.all() if _casa(m.nome)]
+    if not (rec_ids or prod_ids or mp_ids):
+        return jsonify(ok=True, itens=[], aviso='nenhum item casa o trecho')
+
+    filtros = []
+    if rec_ids:
+        filtros.append(PedidoItem.receita_id.in_(rec_ids))
+    if prod_ids:
+        filtros.append(PedidoItem.produto_id.in_(prod_ids))
+    if mp_ids:
+        filtros.append(PedidoItem.materia_prima_id.in_(mp_ids))
+
+    query = (PedidoItem.query.join(PedidoLoja)
+             .filter(or_(*filtros))
+             .filter(or_(PedidoLoja.data_entrega >= corte,
+                         PedidoLoja.data_entrega.is_(None)))
+             .order_by(PedidoLoja.data_entrega.desc().nullslast(),
+                       PedidoLoja.id.desc()))
+    if loja:
+        query = query.filter(PedidoLoja.loja_id == loja.id)
+    linhas = query.limit(200).all()
+
+    usuarios = {u.id: u.nome for u in Usuario.query.all()}
+    lojas_map = {lj.id: lj.nome for lj in Loja.query.all()}
+    out = []
+    for it in linhas:
+        p = it.pedido
+        out.append({
+            'pedido_id': p.id,
+            'loja': lojas_map.get(p.loja_id),
+            'data_entrega': p.data_entrega.isoformat() if p.data_entrega else None,
+            'status': p.status,
+            'item': it.nome_item,
+            'quantidade': it.quantidade,
+            'quantidade_recebida': it.quantidade_recebida,
+            'observacao_item': it.observacao,
+            'observacao_pedido': (p.observacao or '')[:120] or None,
+            'criado_por': usuarios.get(p.criado_por),
+        })
+    return jsonify(ok=True, dias=dias, trecho=trecho, n=len(out), itens=out)

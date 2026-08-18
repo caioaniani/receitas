@@ -89,7 +89,10 @@ def index():
                   if current_user.is_owner else None)
         vendas_hoje = (briefing_dono.vendas_hoje(capturar=False)
                        if current_user.is_owner else None)
-        return render_template('main/home.html',
+        template = ('main/home_preview.html'
+                    if current_app.config.get('PREVIEW_MODE')
+                    else 'main/home.html')
+        return render_template(template,
                                areas=nav.areas_visiveis(current_user),
                                pendencias=pend,
                                vendas=vendas,

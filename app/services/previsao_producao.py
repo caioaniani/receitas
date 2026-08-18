@@ -2648,6 +2648,39 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                     it['qtds'][d] += mv
                     carga[s] -= mv * it['peso']
                     carga[d] += mv * it['peso']
+            # Anti-farelo (dono 18/08/2026, "2 paes e ridiculo, deveria
+            # ser nenhum de nozes e azeitonas"): o movimento de parcelas
+            # pode deixar/criar celula MENOR que a fracao minima de
+            # fornada (mesma regua do dribble, `_MIN_FRACAO_FORNADA`) —
+            # ninguem acende o forno por 2 paes. Funde a celula-farelo
+            # numa celula ja existente do MESMO item, parcela a parcela,
+            # sempre num dia <= ref (entrega no prazo) e dentro da
+            # antecedencia (frescor), preferindo o dia mais TARDE (mais
+            # fresco). Parcela sem destino valido fica onde esta.
+            for it in itens_eq:
+                piso = max(2, ceil(it['chunk'] * _MIN_FRACAO_FORNADA))
+                for d in range(n):
+                    if not (0 < it['qtds'][d] < piso):
+                        continue
+                    for f in list(it['segs'][d]):
+                        ref, q = f
+                        destinos = [
+                            d2 for d2 in range(n)
+                            if d2 != d and it['qtds'][d2] > 0
+                            and d2 <= ref
+                            and ref - d2 <= _ANTECEDENCIA_MAX_DIAS
+                            and producao_permitida_no_dia(it['rec'],
+                                                          dias_prod[d2])
+                        ]
+                        if not destinos:
+                            continue
+                        d2 = max(destinos)
+                        it['segs'][d2].append([ref, q])
+                        it['segs'][d].remove(f)
+                        it['qtds'][d2] += q
+                        it['qtds'][d] -= q
+                        carga[d2] += q * it['peso']
+                        carga[d] -= q * it['peso']
             for it in itens_eq:   # reescreve a linha com os lotes movidos
                 rend = it['rend']
                 for i, c in enumerate(it['rr']['por_dia']):

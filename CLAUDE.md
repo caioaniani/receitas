@@ -152,6 +152,20 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
 - `GET /api/claude/acuracia?dias=&motor=` (16/07/2026): resumo do painel de
   acuracia + WAPE por (loja, receita) dos motores vivos — pro assistente
   diagnosticar de fora onde a previsao erra.
+- `GET /api/claude/pedidos-itens?item=<trecho>&dias=N&loja=` (18/08/2026):
+  pedidos loja->industria que contem UM item (match por trecho do nome em
+  receita/produto/MP, inclui arquivados de proposito). Criada na auditoria
+  "granola/iogurte em POTES x gramas": itens "Produção - *" sao medidos em
+  g/ml (peso_unitario=1.0) e pedidos lancados em potes (qtd 5) inflavam o
+  relatorio de pedidos ~1000x (preco_interno e por g/ml). Junto:
+  `Receita.medida_em_gramas` (heuristica: rendimento_unidade em g/ml/kg/l
+  OU peso_unitario==1.0) alimenta a flag `em_gramas` do typeahead de
+  pedido (`buscar_itens`) e um AVISO nao-bloqueante amarelo no form novo/
+  editar quando a qtd de item em g/ml e < 100 ("5 potes = 5000") —
+  `_item_typeahead.html`. NUNCA virar validacao dura sem ordem (100g de
+  item a granel e pedido legitimo). Testes: secao em_gramas de
+  `tests/test_pedidos_buscar.py` + secao pedidos-itens de
+  `tests/test_claude_api.py`.
 - `GET /api/claude/drivers?todos=1` (07/08/2026): motoristas de entrega
   (nome, telefone, ativo, capacidade, tem_token/tem_pin — NUNCA o token/PIN
   em si). Criada pra confirmar o seed dos motoristas do Dia dos Pais
@@ -1984,8 +1998,13 @@ do seru_cron junto.
   posto o pico do brioche na ordem da madrugada); 'f' alvo por dias
   uteis (superado pelo 'h'); 'g' por-parcela; 'h' sem teto + peso
   fallback; 'i' antecedencia 2->3 ("Tem que adiantar, olha so terca nao
-  tem producao") + piso do Cinnamon Roll. COSMETICO conhecido: celula
-  de 5 digitos (levain 27835) corta visualmente no grid. Testes: antecedencia + fatiamento +
+  tem producao") + piso do Cinnamon Roll; 'j' anti-farelo ("2 paes e
+  ridiculo, deveria ser nenhum de nozes e azeitonas" — celula que o
+  movimento de parcelas deixou MENOR que `_MIN_FRACAO_FORNADA` x chunk
+  e fundida numa celula ja existente do item, parcela a parcela, sempre
+  no prazo e dentro da antecedencia, preferindo o dia mais tarde).
+  COSMETICO conhecido: celula de 5 digitos (levain 27835) corta
+  visualmente no grid. Testes: antecedencia + fatiamento +
   frescor do FDS (qui+sex permitidos, dom nunca sai da sexta) +
   redistribuicao do excedente da sexta em test_cronograma.py.
 - **Producao NORMAL so de SEG a SEX (dono 17/08/2026: "Sabado e domingo a
