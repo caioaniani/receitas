@@ -1,6 +1,6 @@
 # Design system da prévia administrativa
 
-Este sistema visual é ativado somente com `UI_V2_ENABLED=1` (em produção; cookie `ui_classic` opta fora, `?v2=1` força numa request). Ele cobre as
+Este sistema visual é o PADRÃO do sistema interno (cookie `ui_classic` devolve a interface anterior; `?v2=1` força a v2 mesmo pra quem optou fora). Ele cobre as
 telas internas que usam `base.html`; a loja pública usa outro layout e não é
 afetada.
 

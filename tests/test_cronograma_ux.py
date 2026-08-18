@@ -183,6 +183,7 @@ def test_index_proximos_passos_enviar_hoje(app, admin_user):
     """Produção agendada pra HOJE sem ordem → o painel 'Próximos passos'
     aparece com o gesto de enviar; a trilha de dias e o seletor de ordenação
     também rendem."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     loja = Loja(nome='Loja Passos', ativa=True)
     r = Receita(nome='Pao Passos', categoria='Paes', rendimento_qtd=1,
                 rendimento_unidade='un', peso_base=1000.0)
@@ -207,6 +208,7 @@ def test_index_proximos_passos_enviar_hoje(app, admin_user):
 
 def test_index_proximos_passos_rascunho(app, admin_user):
     """Plano aprovado como rascunho (não enviado) vira item acionável."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     from app.services.producao import aprovar_plano_do_dia
     loja = Loja(nome='Loja Rasc', ativa=True)
     r = Receita(nome='Pao Rasc', categoria='Paes', rendimento_qtd=1,
@@ -316,6 +318,7 @@ def test_vespera_consumo_futuro_agenda_na_vespera(app):
 
 def test_vespera_rota_renderiza_aviso(app, admin_user):
     """A tela mostra a tag '⚠ sem véspera' quando o aviso existe."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     _cenario_bom_vespera(qtd=100, dias_entrega=0)
     client = _login_admin(app, admin_user)
     html = client.get('/telaindustriateste/').get_data(as_text=True)

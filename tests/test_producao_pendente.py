@@ -120,6 +120,7 @@ def _login(app, admin_user):
 
 
 def test_grid_mostra_overlay_pendente(app, admin_user):
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     r = _receita()
     _ordem(r, hoje() - timedelta(days=1), alvo=50)          # vencido -> aparece no grid
     c = _login(app, admin_user)

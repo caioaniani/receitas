@@ -33,6 +33,7 @@ def test_home_tem_cards_para_area(app, owner_user):
 
 
 def test_area_owner_ve_todas(app, owner_user):
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     c = app.test_client()
     _login(c, owner_user.id)
     for slug in ('lojas', 'producao', 'catalogo', 'vendas', 'financeiro',
@@ -44,6 +45,7 @@ def test_area_owner_ve_todas(app, owner_user):
 
 def test_area_lista_funcoes_da_area(app, owner_user):
     """A página da área traz os links reais daquela área — e só os dela."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     import re
     c = app.test_client()
     _login(c, owner_user.id)

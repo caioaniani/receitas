@@ -36,6 +36,7 @@ def _criar_usuario(app, login, papel, com_loja=False):
 def test_index_admin_home(app, admin_user):
     """Admin vê home.html: o menu de cards dos menus principais (não mais o
     hero do copilot, que foi removido)."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     client = app.test_client()
     _login(client, admin_user.id)
     resp = client.get('/')

@@ -79,6 +79,7 @@ def test_arquivada_fora_do_datalist_global(app, admin_user):
 
 
 def test_banco_separa_arquivadas_com_desarquivar(app, admin_user):
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     _mp(arquivada=True)
     _mp('Farinha Viva')
     c = _login(app, admin_user)

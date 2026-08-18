@@ -37,7 +37,8 @@ O visual deste ADR foi promovido ao branch de produção de forma
 SELETIVA: somente telas, CSS/JS e melhorias de usabilidade. A
 infraestrutura do ambiente de preview (preview_copy.py,
 preview_seed.py, PREVIEW_MODE, cópia sanitizada de banco, reset de
-senha do admin) NÃO foi promovida. Em produção a chave é
-`UI_V2_ENABLED` (env, opt-in) + cookie `ui_classic` (volta individual
-à interface anterior) + `?v2=1` (força numa request). Ver
-`app/ui_v2.py`.
+senha do admin) NÃO foi promovida. Em 18/08/2026 (mesma noite,
+decisão do dono após o merge) a v2 virou o PADRÃO do sistema interno:
+`config.UI_V2_ENABLED = True` constante, sem variável de ambiente;
+cookie `ui_classic` segue como volta individual à interface anterior e
+`?v2=1` força a v2 pra quem optou fora. Ver `app/ui_v2.py`.

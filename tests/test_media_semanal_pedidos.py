@@ -265,6 +265,7 @@ def test_estoque_atual_zero_sem_linha(app):
 
 
 def test_rota_renderiza(app, admin_user):
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     loja = _loja('Loja Centro')
     r = _receita('Pão Francês')
     hoje_d = hoje()

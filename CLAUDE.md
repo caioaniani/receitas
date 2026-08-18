@@ -4894,14 +4894,18 @@ banco, reset de senha do admin) NAO foi promovida DE PROPOSITO
 (`test_ui_v2.py::test_infra_de_preview_nao_foi_promovida` trava; NUNCA
 setar PREVIEW_MODE em prod — a env nem e lida).
 
-- **Chave em 3 camadas** (`app/ui_v2.py::ui_v2_ativo`): env
-  `UI_V2_ENABLED=1` liga pra todos (**default DESLIGADA** — o merge nao
-  mudou nada; ligar/zerar a env e o rollback geral, sem deploy de
-  codigo); cookie `ui_classic` devolve UM usuario a interface anterior
-  (links "Interface anterior"/"✨ Nova interface" nas sidebars, rotas
-  `main.ui_classica`/`ui_nova`); `?v2=1` forca a tela nova NUMA request
-  (validacao em prod antes de ligar a env). Troca TEMPLATE, nunca
-  permissao — papel producao segue 403 na industria (ha teste).
+- **Chave** (`app/ui_v2.py::ui_v2_ativo`): a v2 e o **PADRAO do
+  sistema interno** (dono, 18/08/2026 apos o merge do #14: "sem
+  depender da variavel de ambiente") — `config.UI_V2_ENABLED = True` e
+  CONSTANTE, NAO le env (rollback geral = trocar pra False, 1 commit);
+  cookie `ui_classic` devolve UM usuario a interface anterior (links
+  "Interface anterior"/"✨ Nova interface" nas sidebars, rotas
+  `main.ui_classica`/`ui_nova`) — saida individual de emergencia;
+  `?v2=1` forca a v2 mesmo pra quem optou pelo classico. Troca
+  TEMPLATE, nunca permissao — papel producao segue 403 na industria
+  (ha teste). Teste que asserta a tela CLASSICA seta
+  `app.config['UI_V2_ENABLED'] = False` (padrao dos ~30 marcados
+  "contrato da tela CLASSICA").
 - **Pecas**: `home_v2.html`/`area_v2.html` + `_ui_v2_sidebar.html`
   (shell trocado no base.html via context processor `ui_v2`),
   `industria_teste/v2.html` (standalone, planejamento por dia; param

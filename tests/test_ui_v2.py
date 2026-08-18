@@ -1,8 +1,10 @@
 """Interface v2 (redesenho promovido do preview em 18/08/2026).
 
-Contrato da chave (app/ui_v2.py): env `UI_V2_ENABLED` liga o shell novo;
-cookie `ui_classic` devolve UM usuário à interface anterior; `?v2=1`
-força a tela nova numa request. A infra do ambiente de preview
+Contrato da chave (app/ui_v2.py): a v2 é o PADRÃO do sistema interno
+(config.UI_V2_ENABLED = True, constante SEM env — decisão do dono
+18/08/2026); cookie `ui_classic` devolve UM usuário à interface
+anterior; `?v2=1` força a tela nova numa request mesmo pra quem optou
+pelo clássico. A infra do ambiente de preview
 (preview_copy/seed, PREVIEW_MODE, cópia de banco) NÃO existe aqui —
 há teste travando isso.
 """
@@ -35,10 +37,21 @@ def test_producao_mantem_shell_atual_com_flag_desligada(app, admin_user):
     assert 'Fichas Técnicas' in html
 
 
-def test_flag_desligada_e_o_default(app, admin_user):
-    """Sem env UI_V2_ENABLED o sistema fica EXATAMENTE como era — a
-    promoção do visual não muda nada até o dono ligar a chave."""
-    assert app.config['UI_V2_ENABLED'] is False
+def test_v2_e_o_default_sem_env(app, admin_user):
+    """A v2 é o PADRÃO do sistema interno (decisão do dono, 18/08/2026):
+    sem env, sem ?v2= e sem cookie, o acesso normal já rende o visual
+    novo. `UI_V2_ENABLED` é constante de código (rollback = 1 commit) —
+    NUNCA voltar a ler variável de ambiente."""
+    import inspect
+
+    import config as config_mod
+    assert app.config['UI_V2_ENABLED'] is True
+    html = _login(app, admin_user).get('/').get_data(as_text=True)
+    assert 'home-v2' in html
+    assert 'ui-v2-sidebar' in html
+    # a env não é lida em lugar nenhum do config
+    fonte = inspect.getsource(config_mod)
+    assert "environ.get('UI_V2_ENABLED'" not in fonte
 
 
 def test_cookie_ui_classic_devolve_a_interface_anterior(app, admin_user):
@@ -66,11 +79,12 @@ def test_rotas_de_alternancia_setam_e_limpam_o_cookie(app, admin_user):
                for c in cookies)
 
 
-def test_v2_na_query_forca_a_tela_nova_sem_flag(app, admin_user):
-    """`?v2=1` permite validar a interface nova EM PRODUÇÃO antes de
-    ligar a env pra equipe inteira."""
-    app.config['UI_V2_ENABLED'] = False
-    html = _login(app, admin_user).get('/?v2=1').get_data(as_text=True)
+def test_v2_na_query_fura_o_cookie_classico(app, admin_user):
+    """`?v2=1` mostra a tela nova mesmo pra quem optou pela interface
+    anterior (suporte/comparação pontual)."""
+    client = _login(app, admin_user)
+    client.set_cookie('ui_classic', '1')
+    html = client.get('/?v2=1').get_data(as_text=True)
 
     assert 'home-v2' in html
     assert 'ui-v2.css' in html

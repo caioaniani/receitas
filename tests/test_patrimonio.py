@@ -275,6 +275,7 @@ def test_conferir_nao_expoe_valor_de_aquisicao(app):
 
 
 def test_area_nav_tem_link(app, admin_user):
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     c = app.test_client()
     _login(c, 'admin')
     html = c.get('/').get_data(as_text=True)

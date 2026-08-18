@@ -409,6 +409,7 @@ def test_decompor_motor_vendas_marca_origem(app):
 
 
 def test_rota_cronograma_motor_vendas_renderiza(app, admin_user):
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     loja = _loja()
     r = _receita('Croissant Motor UI')
     _vendas_no_dow(r, loja, 40)
@@ -426,6 +427,7 @@ def test_tela_abre_no_motor_vendas_por_default(app, admin_user):
     """Decisão do dono 17/08/2026 ("mesma régua em tudo"): SEM ?motor= a
     tela abre em VENDAS — mesma régua da automação (auto-envio + 🔄). URL
     antiga/bookmark sem o param cai no motor novo."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     loja = _loja()
     r = _receita('Croissant Default Vendas')
     _vendas_no_dow(r, loja, 40)
@@ -446,6 +448,7 @@ def test_tela_abre_equilibrada_por_default(app, admin_user):
     """Dono 17/08/2026 ("o sistema deve equilibrar sozinho"): sem parâmetro a
     tela abre com a carga EQUILIBRADA e o valor viaja explícito nos forms;
     escolher 'pela demanda' (equilibrar=0) é preservado."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     _loja()
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
@@ -675,6 +678,7 @@ def test_escolher_pedidos_no_select_e_preservado(app, admin_user):
     """Com o default em vendas, quem escolhe 'Pedidos das lojas' no select
     não pode ser devolvido pra 'vendas' no redirect/POST — o motor agora
     viaja SEMPRE explícito (hidden + _params_visao)."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     _loja()
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
@@ -828,6 +832,7 @@ def test_rota_celula_dia_bloqueado_422(app, admin_user):
 def test_fornada_especial_celula_bloqueada_na_tela(app, admin_user):
     """A tela marca as células de seg/ter/qua/dom da fornada especial
     (hachura + readonly) e mostra o badge 'fim de semana'."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     loja = _loja()
     r = _receita('Focaccia')
     r.fornada_especial = True
@@ -1303,6 +1308,7 @@ def test_rota_previsao_renderiza(app, admin_user):
 
 
 def test_rota_telaindustriateste(app, admin_user):
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     loja = _loja()
     r = _receita()
     _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 10)
@@ -1342,6 +1348,7 @@ def test_rota_telaindustriateste_renderiza_aviso_stale(app, admin_user):
 def test_rota_renderiza_rastreabilidade_do_insumo(app, admin_user):
     """A tela renderiza o expandir do insumo com a origem (breakdown_bom) e a
     coluna Previsto — pro padeiro ver de onde sai a quantidade de massa."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     from app.models import ReceitaIngrediente
     loja = _loja()
     massa = _receita('Massa para folhar')
@@ -1857,6 +1864,7 @@ def test_alerta_celula_editada_pra_baixo_descobre_entrega(app):
 
 def test_rota_renderiza_banner_entregas_risco(app, admin_user):
     """A página mostra o banner com a receita e o realce da célula."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     loja = _loja()
     r = _receita('Sourdough Nozes')
     r.dias_producao = 2
@@ -1892,6 +1900,7 @@ def test_rota_sem_risco_nao_mostra_banner(app, admin_user):
 def test_rota_renderiza_resumo_filtros_e_totais(app, admin_user):
     """A tela traz a faixa de resumo (KPIs), a toolbar de filtros, o rodapé
     'Total do dia' e o explicador colapsável — sem perder o grid."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     loja = _loja()
     r = _receita()
     _pedido(loja, 'pendente', hoje() + timedelta(days=2), r, 50)
@@ -1913,6 +1922,7 @@ def test_rota_renderiza_resumo_filtros_e_totais(app, admin_user):
 def test_rota_totais_do_dia_excluem_insumo(app, admin_user):
     """O rodapé soma unidades de PRODUTO FINAL — a massa (insumo, em bolas)
     fica fora da soma de unidades (senão bolas somavam com croissants)."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     from app.models import ReceitaIngrediente
 
     loja = _loja()
@@ -1938,6 +1948,7 @@ def test_rota_totais_do_dia_excluem_insumo(app, admin_user):
 def test_rota_header_do_dia_com_menu(app, admin_user):
     """Cabeçalho do dia: ação primária visível (📤 enviar) + menu ⋯ com as
     secundárias — antes eram 2-3 botões empilhados repetidos por coluna."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     loja = _loja()
     r = _receita()
     _pedido(loja, 'pendente', hoje() + timedelta(days=2), r, 50)
@@ -1954,6 +1965,7 @@ def test_rota_header_do_dia_com_menu(app, admin_user):
 def test_rota_header_dia_enviado_menu_completo(app, admin_user):
     """Dia ENVIADO: badge visível; atualizar/editar/excluir vivem no menu ⋯
     (o 'atualizar produção' explícito continua existindo — garantia do dono)."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     from app.services.producao import aprovar_plano_do_dia, enviar_plano_do_dia
 
     loja = _loja()
@@ -1979,6 +1991,7 @@ def test_rota_header_dia_enviado_menu_completo(app, admin_user):
 def test_rota_renderiza_badge_capado_ao_retorno(app, admin_user):
     """Receita capada pela política 'só de sobras' mostra o badge ♻️ com o
     porquê (antes o cap era invisível na tela — só no expandir)."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     from app.models import ReceitaIngrediente
 
     retorno = _receita('Croissant Tradicional — Retorno')
@@ -2029,8 +2042,13 @@ def test_rota_telaindustriateste_v2_funcional(app, admin_user):
     assert '/telaindustriateste/celula' in html
     assert 'Enviar' in html
 
+    # v2 e o DEFAULT: a rota crua tambem rende a tela nova; a antiga
+    # continua acessivel por ?legacy=1
     atual = client.get('/telaindustriateste/')
-    assert 'Nova interface · planejamento por dia' not in atual.get_data(
+    assert 'Nova interface · planejamento por dia' in atual.get_data(
+        as_text=True)
+    antiga = client.get('/telaindustriateste/?legacy=1')
+    assert 'Nova interface · planejamento por dia' not in antiga.get_data(
         as_text=True)
 
 

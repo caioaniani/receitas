@@ -176,6 +176,7 @@ def test_enviar_continua_permitido_em_dia_fechado(app, admin_user):
 def test_grid_mostra_ordem_enviada_quando_difere(app, admin_user):
     """Envia a ordem, edita o grid SEM re-enviar → a tela mostra o marcador
     📤 com o número do padeiro e o aviso 'difere do enviado'."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     from app.services.cronograma_edit import editar_celula
     from app.services.producao import enviar_plano_do_dia
     with app.app_context():
@@ -280,6 +281,7 @@ def test_item_dispensado_nao_gera_difere_permanente(app, admin_user):
 def test_reverter_traz_grid_de_volta_a_ordem_enviada(app, admin_user):
     """Envia a ordem, edita o grid (difere), aperta desfazer → grid volta ao
     qtd_alvo da ordem e o 'difere' some. Inverso do 'atualizar produção'."""
+    app.config['UI_V2_ENABLED'] = False  # contrato da tela CLASSICA (viva via cookie ui_classic/?legacy=1)
     from app.services.cronograma_edit import (
         editar_celula,
         reverter_dia_para_ordem_enviada,
