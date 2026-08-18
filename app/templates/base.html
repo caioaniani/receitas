@@ -70,6 +70,9 @@
     {% endif %}
 
     <!-- Sidebar -->
+    {% if ui_v2 %}
+    {% include "_ui_v2_sidebar.html" %}
+    {% else %}
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
             padaria
