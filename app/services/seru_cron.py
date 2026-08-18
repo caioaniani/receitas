@@ -920,8 +920,12 @@ def _run_ordens_semana(app):
 # demanda diaria inteira pra hoje — o 'k' sozinho nao desfez os 101);
 # 'm' = antecedencia POR RECEITA (dono: "quero o maximo de brioche
 # fresco nas lojas" — receita.antecedencia_max_dias, Brioche seedado 0:
-# assa so na madrugada anterior a entrega; NULL = global 3).
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17m'
+# assa so na madrugada anterior a entrega; NULL = global 3); 'n' = o
+# backfill do 'm' nunca rodou em prod (guard coluna-recem-nascida x
+# hook que pusha cada edit — deploy vencedor tinha o ALTER sem o
+# backfill; sonda mostrou antecedencia=None); virou seed com marker
+# (_seed_antecedencia_brioche) e a semana e re-nivelada de novo.
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17n'
 
 
 def _run_ordens_semana_retro(app):
