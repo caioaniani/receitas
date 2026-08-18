@@ -111,6 +111,7 @@
             var opt = document.createElement('div');
             opt.className = 'item-result-opt';
             opt.dataset.id = item.id;
+            opt.dataset.emGramas = item.em_gramas ? '1' : '';
             opt.textContent = item.nome;  // textContent escapa o nome
             pop.appendChild(opt);
         });
