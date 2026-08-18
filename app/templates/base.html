@@ -303,6 +303,11 @@
                 class="sidebar-link" style="display:none; border:0; background:transparent; text-align:left; width:100%;">
             <i class="bi bi-download"></i> Instalar como app
         </button>
+        {% if config.UI_V2_ENABLED %}
+        <a href="{{ url_for('main.ui_nova') }}" class="sidebar-link" title="Experimentar a nova interface (dá pra voltar quando quiser)">
+            ✨ Nova interface
+        </a>
+        {% endif %}
         <a href="{{ url_for('auth.minha_senha') }}" class="sidebar-link">
             <i class="bi bi-key"></i> Trocar minha senha
         </a>
@@ -311,6 +316,7 @@
         </a>
         {% endif %}
     </nav>
+    {% endif %}{# /ui_v2 — fim do shell da sidebar #}
     {% endif %}{# /not embed — fim da sidebar/cabeçalho #}
 
     <!-- Main content -->
