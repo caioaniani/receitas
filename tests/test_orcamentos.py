@@ -249,6 +249,33 @@ def test_frete_soma_no_total(app):
         assert orc.valor_total == Decimal('215.00')
 
 
+def test_editar_recalcula_total_sem_somar_itens_deletados(app):
+    """Caso real orc-2026-0003 (18/08/2026): editar 200x5 pra 80x5 gravava
+    subtotal/total R$ 1.400 — o db.session.delete direto nao tirava os
+    itens velhos de orc.itens antes do recalcular_total, que somava
+    deletados + novos. O replace tem que deixar o total = SO os itens
+    novos."""
+    from decimal import Decimal
+
+    from app.extensions import db
+    from app.services import orcamentos as svc
+    with app.app_context():
+        itens = [{'nome': 'Cookie Calebaut', 'qtd': '200',
+                  'preco_unitario': '5.00'}]
+        orc, erros = svc.criar_orcamento({'cliente_nome': 'Caio'}, itens)
+        assert erros == []
+        assert orc.valor_total == Decimal('1000.00')
+        ok, erros = svc.atualizar_orcamento(
+            orc, {'cliente_nome': 'Caio'},
+            [{'nome': 'Cookie Calebaut', 'qtd': '80',
+              'preco_unitario': '5.00'}])
+        assert ok and erros == []
+        db.session.refresh(orc)
+        assert [float(i.quantidade) for i in orc.itens] == [80.0]
+        assert orc.subtotal == Decimal('400.00')
+        assert orc.valor_total == Decimal('400.00')
+
+
 def test_frete_default_zero(app):
     from decimal import Decimal
 
