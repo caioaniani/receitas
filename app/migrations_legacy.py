@@ -1086,6 +1086,13 @@ def _migrate_postgres(app):
         # por batida (a ficha estava 1.0 = 71,6 g; o valor documentado de
         # 03/07 era 1,257 = 90 g). Guard em porcentagem = 1.0: se o dono já
         # tiver editado a ficha pra outro valor, não sobrescreve.
+        # Backfill UNICO (mesmo padrao do Levain): so o Brioche CLASSICO
+        # nasce com antecedencia 0 — assado na madrugada anterior a
+        # entrega, fresco maximo. Edicao futura do dono na ficha manda.
+        if 'antecedencia_max_dias' not in colunas:
+            conn.execute(text(
+                "UPDATE receita SET antecedencia_max_dias = 0 "
+                "WHERE nome = 'Brioche'"))
         if 'estoque_nao_abate' not in colunas:
             conn.execute(text(
                 "UPDATE receita SET estoque_nao_abate = TRUE "
