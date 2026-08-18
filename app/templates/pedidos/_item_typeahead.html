@@ -127,6 +127,8 @@
         var input = e.target;
         var hidden = input.closest('td').querySelector('.item-id');
         hidden.value = '';
+        hidden.dataset.emGramas = '';
+        checarAvisoGramas(input.closest('tr'));
         var val = input.value.trim();
         clearTimeout(timer);
         if (val.length < 2) { hidePop(); return; }
