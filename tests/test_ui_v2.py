@@ -57,3 +57,33 @@ def test_home_legada_permanece_fora_do_preview(app, admin_user):
     assert 'home-v2' not in html
     assert 'menu-grid' in html
     assert 'Escolha uma área para continuar.' in html
+
+
+def test_preview_area_usa_mesma_entrada_em_todas_as_equipes(app, admin_user):
+    app.config['PREVIEW_MODE'] = True
+    client = _login(app, admin_user)
+
+    for slug, titulo in (
+        ('lojas', 'Lojas'),
+        ('producao', 'Produção'),
+        ('catalogo', 'Catálogo'),
+        ('vendas', 'Vendas &amp; Entregas'),
+        ('financeiro', 'Financeiro'),
+        ('relatorios', 'Relatórios'),
+        ('administracao', 'Administração'),
+    ):
+        html = client.get(f'/area/{slug}').get_data(as_text=True)
+        assert 'area-v2' in html
+        assert 'O que você quer fazer?' in html
+        assert 'area-v2-link' in html
+        assert titulo in html
+        assert 'area-wrap' not in html
+
+
+def test_area_legada_permanece_fora_do_preview(app, admin_user):
+    app.config['PREVIEW_MODE'] = False
+    html = _login(app, admin_user).get('/area/producao').get_data(as_text=True)
+
+    assert 'area-wrap' in html
+    assert 'area-v2-heading' not in html
+    assert 'O que você quer fazer?' not in html
