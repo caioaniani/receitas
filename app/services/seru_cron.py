@@ -911,8 +911,11 @@ def _run_ordens_semana(app):
 # Cinnamon Roll (seed proprio, mesma regra das danishes); 'j' =
 # anti-farelo ("2 paes e ridiculo, deveria ser nenhum de nozes e
 # azeitonas" — celula menor que a fracao minima de fornada e fundida
-# numa celula existente do item, no prazo e no frescor).
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17j'
+# numa celula existente do item, no prazo e no frescor); 'k' = peso da
+# regua pelo lote_producao ("101 brioches e pra acabar" — a fornada
+# teorica da capacidade da amassadeira fazia 101 brioches valerem 0.2
+# fornada e o nivelador empilhava sem resistencia do guard).
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17k'
 
 
 def _run_ordens_semana_retro(app):
