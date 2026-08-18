@@ -14,16 +14,23 @@
   renderizada e a linha nova são byte-idênticas.
 #}
 
-{% macro item_row(item_id='', item_nome='', qtd=1, estado='', obs='', is_template=False) %}
+{% macro item_row(item_id='', item_nome='', qtd=1, estado='', obs='', is_template=False, em_gramas=False) %}
 <tr class="item-row{% if is_template %} d-none{% endif %}"{% if is_template %} id="row-template"{% endif %}>
     <td>
         <input type="text" class="form-control form-control-sm item-busca"
                placeholder="Digite o nome..." autocomplete="off" value="{{ item_nome }}">
-        <input type="hidden" name="item_id[]" class="item-id" value="{{ item_id }}">
+        <input type="hidden" name="item_id[]" class="item-id" value="{{ item_id }}"
+               data-em-gramas="{{ '1' if em_gramas else '' }}">
     </td>
     <td>
         <input type="number" name="item_qtd[]" class="form-control form-control-sm input-blue"
                min="1" value="{{ qtd }}">
+        {# Aviso nao-bloqueante: item medido em g/ml com quantidade que parece
+           POTES (caso granola 18/08/2026 — 5 lancado onde era 5000). #}
+        <div class="form-text text-warning small d-none item-aviso-gramas">
+            ⚠ Este item é pedido em <strong>g/ml</strong>, não em potes/unidades
+            — ex.: 5 potes de 1kg = <strong>5000</strong>. Confira a quantidade.
+        </div>
     </td>
     <td>
         <select name="item_estado[]" class="form-select form-select-sm">
