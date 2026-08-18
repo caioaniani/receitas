@@ -120,8 +120,9 @@ def area(slug):
 @main_bp.route('/ui/nova')
 @login_required
 def ui_nova():
-    """Liga a interface v2 pra ESTE usuário (limpa o opt-out). Só tem
-    efeito com `UI_V2_ENABLED=1` — o link nem aparece sem a env."""
+    """Volta ESTE usuário à interface v2 (limpa o cookie de opt-out).
+    A v2 é o padrão do sistema interno — este é o caminho de volta pra
+    quem clicou em "Interface anterior"."""
     from app.ui_v2 import UI_CLASSIC_COOKIE
     resp = redirect(url_for('main.index'))
     resp.delete_cookie(UI_CLASSIC_COOKIE)
