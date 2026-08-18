@@ -72,10 +72,14 @@ def _params_visao(**extra):
          'inicio': _inicio_offset(), 'motor': _motor(),
          'equilibrar': 1 if _equilibrar() else 0}
     # Interface v2: a acao volta pra experiencia em que nasceu — editar/
-    # enviar da tela nova nao pode devolver o usuario pra tela antiga
-    # (nem vice-versa via ?legacy=1).
+    # enviar da tela nova nao pode devolver o usuario pra tela antiga.
+    # `legacy` propaga quando vem na request (a tela antiga aberta via
+    # "Comparar" nao poe hidden nos forms — POST de la com a env ligada
+    # volta pra v2; limitacao aceita, o link Comparar re-abre a antiga).
     if request.values.get('v2') == '1':
         p['v2'] = 1
+    if request.values.get('legacy') == '1':
+        p['legacy'] = 1
     if request.values.get('view') in ('today', 'week', 'exceptions'):
         p['view'] = request.values['view']
     p.update(extra)
