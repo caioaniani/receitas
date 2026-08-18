@@ -213,3 +213,94 @@ def test_infra_de_preview_nao_foi_promovida(app):
     assert not os.path.exists(os.path.join(base, 'preview_seed.py'))
     assert 'PREVIEW_MODE' not in app.config
     assert 'PREVIEW_SOURCE_DATABASE_URL' not in app.config
+
+
+# ---------------------------------------------------------------------------
+# Papéis e dinheiro (lacunas apontadas pela revisão do porte)
+# ---------------------------------------------------------------------------
+
+def _login_como(app, login):
+    client = app.test_client()
+    client.post('/auth/login', data={'login': login, 'senha': '123'})
+    return client
+
+
+def test_home_v2_mostra_vendas_pro_dono(app, owner_user):
+    """Metade 1 do contrato de DINHEIRO (funções separadas por usuário —
+    armadilha do conftest: g._login_user vaza entre clients do MESMO
+    teste). O dono vê a home v2 com o painel de vendas."""
+    app.config['UI_V2_ENABLED'] = True
+    html = _login_como(app, 'dono').get('/').get_data(as_text=True)
+    assert 'home-v2' in html
+    assert 'abrir-cd' in html            # drill-down de vendas do cockpit
+
+
+def test_home_v2_nao_vaza_vendas_pra_admin_comum(app, admin_user):
+    """Metade 2: admin comum NÃO vê dinheiro na home v2 (mesma regra da
+    home clássica — vendas é cockpit pessoal do dono)."""
+    app.config['UI_V2_ENABLED'] = True
+    html = _login_como(app, 'admin').get('/').get_data(as_text=True)
+    assert 'home-v2' in html
+    assert 'abrir-cd' not in html
+    assert 'home-v2.js' not in html
+
+
+def test_shell_v2_nao_muda_permissao_de_rota(app):
+    """?v2=1 troca TEMPLATE, nunca permissão: papel producao segue 403
+    na /telaindustriateste e a sidebar v2 não mostra o atalho."""
+    from app.extensions import db
+    from app.models import Usuario
+    u = Usuario(nome='prod teste', login='prod', papel='producao')
+    u.set_senha('123')
+    db.session.add(u)
+    db.session.commit()
+    app.config['UI_V2_ENABLED'] = True
+
+    client = _login_como(app, 'prod')
+    resp = client.get('/telaindustriateste/?v2=1')
+    assert resp.status_code == 403
+
+
+def test_sidebar_v2_esconde_atalho_da_industria_de_nao_admin(app):
+    from app.extensions import db
+    from app.models import Usuario
+    u = Usuario(nome='prod2 teste', login='prod2', papel='producao')
+    u.set_senha('123')
+    db.session.add(u)
+    db.session.commit()
+    app.config['UI_V2_ENABLED'] = True
+
+    html = _login_como(app, 'prod2').get('/').get_data(as_text=True)
+    assert 'ui-v2-sidebar' in html
+    assert 'Planejamento da indústria' not in html   # link daria 403
+
+
+def test_v2_salvar_mp_nova_com_checkbox_de_pedido_loja(app, admin_user):
+    """A tela v2 permite marcar 'disponível pro pedido das lojas' já na
+    criação (value 'novo-<i>'); a clássica não emite o checkbox e a MP
+    nova continua nascendo False."""
+    from app.models import MateriaPrima
+    app.config['UI_V2_ENABLED'] = True
+    client = _login_como(app, 'admin')
+
+    resp = client.post('/materias-primas/salvar', data={
+        'q': 'far', 'page': '2',
+        'mp_id[]': [''], 'nome[]': ['Farinha V2'], 'unidade[]': ['kg'],
+        'custo_por_kg[]': ['10'], 'peso_unidade[]': [''], 'fornecedor[]': [''],
+        'observacoes[]': [''], 'lote_pedido[]': [''], 'minimo_pedido[]': [''],
+        'sugerir_loja_ids': ['novo-0'],
+    })
+    assert resp.status_code in (302, 303)
+    assert 'q=far' in resp.location and 'page=2' in resp.location
+    mp = MateriaPrima.query.filter_by(nome='Farinha V2').first()
+    assert mp is not None and mp.sugerir_pedido_loja is True
+
+
+def test_contas_classica_preserva_empty_state_antigo(app, admin_user):
+    """Flag OFF = tela anterior: o empty-state clássico continua o texto
+    antigo (o novo, com <h2>, só aparece na v2)."""
+    app.config['UI_V2_ENABLED'] = False
+    html = _login_como(app, 'admin').get('/contas-pagar/').get_data(
+        as_text=True)
+    assert 'Nenhuma conta nesta aba.' in html
+    assert 'finance-v2-empty' not in html

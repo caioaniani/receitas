@@ -61,9 +61,11 @@
     {% if current_user.pode_producao() %}
     <div class="ui-v2-nav-group ui-v2-shortcuts">
         <span class="ui-v2-nav-label">Atalhos</span>
+        {% if current_user.is_admin() %}{# rota é admin_required — mostrar pra 'producao' daria 403 #}
         <a href="{{ url_for('industria_teste.index', v2=1) }}" class="sidebar-link {{ 'active' if request.path.startswith('/telaindustriateste') }}">
             <i class="bi bi-calendar3"></i><span>Planejamento da indústria</span>
         </a>
+        {% endif %}
         <a href="{{ url_for('padeiro.index') }}" class="sidebar-link">
             <i class="bi bi-hammer"></i><span>Tela do padeiro</span>
         </a>

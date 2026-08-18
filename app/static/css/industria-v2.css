@@ -16,3 +16,10 @@
 
 @media(min-width:768px) and (max-width:900px){.app-shell{grid-template-columns:230px minmax(0,1fr)}.app-nav{position:sticky;z-index:auto;left:auto;top:0;width:auto;height:calc(100vh - 30px);box-shadow:none}.app-nav.open{left:auto}.mobile-head{display:none}.page{padding:28px 24px 48px}}
 @media(max-width:767.98px){.week-day-focus button{min-height:44px}.edit-row{min-width:44px;min-height:44px}.edit-row span{display:none}.plan-input{height:44px}.day-send{min-height:44px}.week-table-wrap.single-day table{min-width:520px}.week-table-wrap.single-day .recipe-col{width:210px;min-width:210px}.week-table-wrap.single-day .day-column{width:150px;min-width:150px}}
+
+/* Flashes (enviar/limpar redirecionam de volta pra esta tela standalone) */
+.v2-flashes { position: sticky; top: 0; z-index: 60; padding: 8px 16px 0; }
+.v2-flash { background: #1d3557; color: #fff; border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; font-size: 14px; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+.v2-flash-success { background: #2a9d5c; }
+.v2-flash-warning { background: #b07d1e; }
+.v2-flash-danger, .v2-flash-error { background: #b03030; }

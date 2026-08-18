@@ -38,7 +38,7 @@
     {% for cid, nome in mapa_lojas.items() %}
     <a class="btn btn-sm {% if loja_sel == cid %}btn-primary{% else %}btn-outline-secondary{% endif %}"
        href="{{ url_for('contas_pagar.lista', aba=aba_atual, loja=cid) }}">
-        {{ nome if nome and nome != cid else 'Canal sem nome' }}
+        {{ (nome if nome and nome != cid else 'Canal sem nome') if ui_v2 else nome }}
         {% if total_por_loja.get(cid) %}<span class="badge rounded-pill bg-light text-dark">{{ total_por_loja[cid] }}</span>{% endif %}
     </a>
     {% endfor %}
@@ -84,7 +84,7 @@
                     {% if c.vencimento %}
                     <span class="{% if c.atrasado %}text-danger fw-bold{% endif %}"><i class="bi bi-calendar-event"></i> {{ c.vencimento.strftime('%d/%m/%Y') }}{% if c.atrasado %} <i class="bi bi-exclamation-triangle"></i>{% endif %}</span>
                     {% else %}<span class="text-warning">sem vencimento</span>{% endif %}
-                    · {{ loja_nome if loja_nome and loja_nome != c.origem_canal else ('Canal sem nome' if c.origem_canal else '—') }}
+                    · {% if ui_v2 %}{{ loja_nome if loja_nome and loja_nome != c.origem_canal else ('Canal sem nome' if c.origem_canal else '—') }}{% else %}{{ mapa_lojas.get(c.origem_canal, c.origem_canal) or '—' }}{% endif %}
                 </div>
             </div>
             <div class="text-end flex-shrink-0">
@@ -100,11 +100,15 @@
         'pago': ('Nenhum pagamento encontrado', 'Quando uma conta for marcada como paga, ela aparecerá nesta aba.'),
         'ignorado': ('Nenhuma conta ignorada', 'Contas removidas do fluxo principal aparecerão aqui.')
     }.get(aba_atual, ('Nenhuma conta encontrada', 'Tente outra aba ou selecione todas as lojas.')) %}
+    {% if ui_v2 %}
     <div class="finance-v2-empty list-group-item">
         <span><i class="bi bi-receipt"></i></span>
         <div><h2>{{ vazio[0] }}</h2><p>{{ vazio[1] }}</p></div>
         {% if loja_sel %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contas_pagar.lista', aba=aba_atual) }}">Ver todas as lojas</a>{% endif %}
     </div>
+    {% else %}
+    <div class="list-group-item text-muted text-center py-3">Nenhuma conta nesta aba.</div>
+    {% endif %}
     {% endfor %}
 </div>
 {% endblock %}
