@@ -2082,3 +2082,57 @@ def test_v2_preserva_grade_apos_post(app, admin_user):
     assert resp.status_code in (302, 303)
     assert 'v2=1' in resp.location
     assert 'view=week' in resp.location
+
+
+def test_antecedencia_por_receita_zero_nao_antecipa(app):
+    """Caso Brioche fresco (dono 18/08/2026: "quero o máximo de brioche
+    fresco nas lojas"): receita com antecedencia_max_dias=0 NUNCA é
+    antecipada pelo nivelador — cada dia assa só a demanda do próprio dia
+    (fim de semana segue caindo na sexta pela rolagem do calendário)."""
+    from datetime import date as _date
+
+    loja = _loja()
+    r = _receita('Brioche Fresquinho')
+    r.lote_producao = 10
+    r.antecedencia_max_dias = 0
+    db.session.commit()
+    hoje_d = hoje()                                # segunda congelada
+    demanda = {}
+    for i in range(1, 7):                          # ter..dom, 20/dia
+        d = hoje_d + timedelta(days=i)
+        _pedido(loja, 'pendente', d, r, 20)
+        demanda[d.isoformat()] = 20
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 100
+    for c in rr['por_dia']:
+        if not c['qtd']:
+            continue
+        d = _date.fromisoformat(c['data'])
+        if d.weekday() == 4:                       # sexta = própria + fds
+            assert c['qtd'] >= demanda.get(c['data'], 0)
+        else:
+            # nada produzido ANTES do dia da demanda: célula == demanda
+            assert c['qtd'] == demanda.get(c['data'], 0), (c['data'], c['qtd'])
+
+
+def test_antecedencia_por_receita_null_usa_global(app):
+    """Sem valor no cadastro (NULL), vale a regra global de 3 dias — a
+    parcela de sexta ainda pode ser antecipada até terça."""
+    loja = _loja()
+    r = _receita('Pão Regra Global')
+    db.session.commit()
+    hoje_d = hoje()
+    _pedido(loja, 'pendente', hoje_d + timedelta(days=4), r, 90)   # sex
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None
+    dias_com_prod = [c['data'] for c in rr['por_dia'] if c['qtd']]
+    # o nivelador PODE espalhar pra antes de sexta (ter..qui) — se tudo
+    # ficou só na sexta, a regra global não está valendo
+    assert any(_d < (hoje_d + timedelta(days=4)).isoformat()
+               for _d in dias_com_prod), dias_com_prod

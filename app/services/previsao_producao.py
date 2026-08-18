@@ -2618,10 +2618,10 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
 
             def _movel(it, s, d):
                 """Qtd da celula s movel pra d: parcelas cujo dia de DEMANDA
-                esta a no maximo _ANTECEDENCIA_MAX_DIAS de d (frescor por
-                PARCELA — a de sexta anda, a de domingo rolada nao)."""
+                esta a no maximo it['ant'] dias de d (frescor por PARCELA e
+                POR RECEITA — brioche com 0 nunca antecipa)."""
                 return sum(q for ref, q in it['segs'][s]
-                           if ref - d <= _ANTECEDENCIA_MAX_DIAS)
+                           if ref - d <= it['ant'])
 
             # Equalizacao guiada SO pela comparacao fonte×destino: o teto
             # "alvo = total/dias uteis" deixava a cota de seg/ter (que o
@@ -2659,7 +2659,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                         if falta_mv <= 0:
                             break
                         ref, q = f
-                        if ref - d > _ANTECEDENCIA_MAX_DIAS or q <= 0:
+                        if ref - d > it['ant'] or q <= 0:
                             continue
                         tira = min(q, falta_mv)
                         f[1] -= tira
@@ -2690,7 +2690,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                             d2 for d2 in range(n)
                             if d2 != d and it['qtds'][d2] > 0
                             and d2 <= ref
-                            and ref - d2 <= _ANTECEDENCIA_MAX_DIAS
+                            and ref - d2 <= it['ant']
                             and producao_permitida_no_dia(it['rec'],
                                                           dias_prod[d2])
                         ]

@@ -939,6 +939,16 @@ def salvar(id):
     # Estoque fisico nao abate a producao sugerida (balanco/cronograma) —
     # so a producao ja mandada conta. Caso Massa para folhar (dono 19/07/2026).
     receita.estoque_nao_abate = bool(request.form.get('estoque_nao_abate'))
+    # Antecedencia maxima do nivelador POR receita (dono 18/08/2026,
+    # brioche fresco): vazio = NULL = regra global; invalido nao mexe.
+    _ant_raw = (request.form.get('antecedencia_max_dias') or '').strip()
+    if _ant_raw == '':
+        receita.antecedencia_max_dias = None
+    else:
+        try:
+            receita.antecedencia_max_dias = max(0, min(7, int(_ant_raw)))
+        except ValueError:
+            pass
     # Sob encomenda D+2 (dono 21/07/2026): no site so vende pra data >= D+2,
     # e produzido pro pedido (nao abate prateleira) e vira producao do padeiro.
     receita.sob_encomenda = bool(request.form.get('sob_encomenda'))
@@ -1073,6 +1083,7 @@ def duplicar(id):
         # Sob encomenda D+2: a cópia de um item sob encomenda também nasce
         # sob encomenda (21/07/2026).
         sob_encomenda=original.sob_encomenda,
+        antecedencia_max_dias=original.antecedencia_max_dias,
         cobra_sobra_diaria=original.cobra_sobra_diaria,
     )
     db.session.add(copia)
