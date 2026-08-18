@@ -153,7 +153,10 @@ def salvar():
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify(success=True)
     flash('Banco de matérias-primas salvo com sucesso!', 'success')
-    return redirect(url_for('materias_primas.banco'))
+    busca = (request.form.get('q') or '').strip()
+    page = request.form.get('page', type=int)
+    return redirect(url_for('materias_primas.banco',
+                            q=busca or None, page=page or None))
 
 
 def _vinculos_mp(mp):
