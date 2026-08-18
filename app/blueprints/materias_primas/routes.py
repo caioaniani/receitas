@@ -145,6 +145,7 @@ def salvar():
                 observacoes=observacoes_list[i].strip() or None,
                 lote_pedido=_parse_int_opt(lotes_pedido, i),
                 minimo_pedido=_parse_int_opt(minimos_pedido, i),
+                sugerir_pedido_loja=f'novo-{i}' in sugerir_loja_ids,
             )
             db.session.add(mp)
 
