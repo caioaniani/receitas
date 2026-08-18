@@ -169,8 +169,13 @@ def buscar_itens():
     # em_gramas: item medido em g/ml (granola/iogurte "Produção - *") — a
     # tela avisa quando a quantidade parece POTES (caso 18/08/2026, relatorio
     # inflado ~1000x). So aviso; nada bloqueia.
+    # lote: só de item em g/ml — o form recusa quantidade que não seja
+    # múltiplo (iogurte 3000/granola 5000, dono 18/08/2026) e o JS avisa
+    # antes do POST. Receita em unidades fica lote 0 (lá o lote_pedido só
+    # arredonda sugestão, nunca trava — croissant 45 segue válido).
     out += [{'id': f'r_{r.id}', 'nome': r.nome,
-             'em_gramas': r.medida_em_gramas}
+             'em_gramas': r.medida_em_gramas,
+             'lote': int(r.lote_pedido or 0) if r.medida_em_gramas else 0}
             for r in Receita.ativas().order_by(Receita.nome).all()
             if _casa(r.nome)]
     out += [{'id': f'p_{p.id}', 'nome': p.nome, 'em_gramas': False}
