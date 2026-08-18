@@ -357,3 +357,29 @@ def test_cinnamon_roda_uma_vez(app):
         _seed_minimo_cinnamon(app)                   # 2a rodada = no-op
         db.session.refresh(el)
         assert el.pedido_minimo_diario == 9
+
+
+def test_seed_antecedencia_brioche(app):
+    """Brioche clássico ganha antecedencia_max_dias=0 (fresco máximo);
+    homônimo composto fica fora; valor já definido pelo dono é mantido;
+    marker grava contagens (setados=0 nunca mais passa batido)."""
+    from app.migrations_legacy import _seed_antecedencia_brioche
+    with app.app_context():
+        b = Receita(nome='Brioche', categoria='Paes', rendimento_qtd=1,
+                    rendimento_unidade='un', peso_base=100.0)
+        gotas = Receita(nome='Brioche gotas de chocolate 250g',
+                        categoria='Paes', rendimento_qtd=1,
+                        rendimento_unidade='un', peso_base=100.0)
+        db.session.add_all([b, gotas])
+        db.session.commit()
+        _seed_antecedencia_brioche(app)
+        assert b.antecedencia_max_dias == 0
+        assert gotas.antecedencia_max_dias is None
+        marker = AppConfig.get('seed_antecedencia_brioche_2026_08')
+        assert 'setados=1' in marker and 'receitas=1' in marker
+        # 2ª rodada é no-op mesmo se o dono mudar depois
+        b.antecedencia_max_dias = 2
+        db.session.commit()
+        _seed_antecedencia_brioche(app)
+        db.session.refresh(b)
+        assert b.antecedencia_max_dias == 2
