@@ -152,6 +152,20 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
 - `GET /api/claude/acuracia?dias=&motor=` (16/07/2026): resumo do painel de
   acuracia + WAPE por (loja, receita) dos motores vivos — pro assistente
   diagnosticar de fora onde a previsao erra.
+- `GET /api/claude/pedidos-itens?item=<trecho>&dias=N&loja=` (18/08/2026):
+  pedidos loja->industria que contem UM item (match por trecho do nome em
+  receita/produto/MP, inclui arquivados de proposito). Criada na auditoria
+  "granola/iogurte em POTES x gramas": itens "Produção - *" sao medidos em
+  g/ml (peso_unitario=1.0) e pedidos lancados em potes (qtd 5) inflavam o
+  relatorio de pedidos ~1000x (preco_interno e por g/ml). Junto:
+  `Receita.medida_em_gramas` (heuristica: rendimento_unidade em g/ml/kg/l
+  OU peso_unitario==1.0) alimenta a flag `em_gramas` do typeahead de
+  pedido (`buscar_itens`) e um AVISO nao-bloqueante amarelo no form novo/
+  editar quando a qtd de item em g/ml e < 100 ("5 potes = 5000") —
+  `_item_typeahead.html`. NUNCA virar validacao dura sem ordem (100g de
+  item a granel e pedido legitimo). Testes: secao em_gramas de
+  `tests/test_pedidos_buscar.py` + secao pedidos-itens de
+  `tests/test_claude_api.py`.
 - `GET /api/claude/drivers?todos=1` (07/08/2026): motoristas de entrega
   (nome, telefone, ativo, capacidade, tem_token/tem_pin — NUNCA o token/PIN
   em si). Criada pra confirmar o seed dos motoristas do Dia dos Pais
