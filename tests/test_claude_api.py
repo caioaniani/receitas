@@ -774,3 +774,98 @@ def test_funcionarios_exige_token(app):
     app.config['CLAUDE_API_TOKEN'] = TOKEN
     assert app.test_client().get(
         '/api/claude/funcionarios').status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# /api/claude/pedidos-itens — auditoria "granola em potes x gramas" (18/08)
+# ---------------------------------------------------------------------------
+
+def _seed_pedidos_granola():
+    loja_a = Loja(nome='Loja Anesio', ativa=True)
+    loja_b = Loja(nome='Loja Nebraska', ativa=True)
+    granola = Receita(nome='Produção - Granola Artesanal 1000g',
+                      categoria='Produção', rendimento_qtd=15300,
+                      rendimento_unidade='', peso_base=4000.0)
+    outra = Receita(nome='Sourdough Tradicional', categoria='Paes',
+                    rendimento_qtd=1, rendimento_unidade='un',
+                    peso_base=1000.0)
+    db.session.add_all([loja_a, loja_b, granola, outra])
+    db.session.commit()
+    p1 = PedidoLoja(loja_id=loja_a.id, status='entregue',
+                    data_entrega=hoje() - timedelta(days=3),
+                    data_pedido=hoje() - timedelta(days=4))
+    p2 = PedidoLoja(loja_id=loja_b.id, status='pendente',
+                    data_entrega=hoje() + timedelta(days=1),
+                    data_pedido=hoje())
+    velho = PedidoLoja(loja_id=loja_a.id, status='entregue',
+                       data_entrega=hoje() - timedelta(days=200),
+                       data_pedido=hoje() - timedelta(days=201))
+    db.session.add_all([p1, p2, velho])
+    db.session.flush()
+    db.session.add_all([
+        # lancado em POTES (suspeito) na Anesio
+        PedidoItem(pedido_id=p1.id, receita_id=granola.id, quantidade=5),
+        # lancado em GRAMAS (correto) na Nebraska
+        PedidoItem(pedido_id=p2.id, receita_id=granola.id, quantidade=5000),
+        # fora da janela
+        PedidoItem(pedido_id=velho.id, receita_id=granola.id, quantidade=3),
+        # outro item no mesmo pedido — nao pode aparecer
+        PedidoItem(pedido_id=p1.id, receita_id=outra.id, quantidade=40),
+    ])
+    db.session.commit()
+    return loja_a, loja_b, p1, p2
+
+
+def test_pedidos_itens_exige_token(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    assert app.test_client().get(
+        '/api/claude/pedidos-itens?item=granola').status_code == 401
+
+
+def test_pedidos_itens_sem_item_400(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    h = {'Authorization': f'Bearer {TOKEN}'}
+    c = app.test_client()
+    assert c.get('/api/claude/pedidos-itens', headers=h).status_code == 400
+    assert c.get('/api/claude/pedidos-itens?item=ab',
+                 headers=h).status_code == 400
+
+
+def test_pedidos_itens_lista_pedidos_do_item(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    loja_a, loja_b, p1, p2 = _seed_pedidos_granola()
+    resp = app.test_client().get(
+        '/api/claude/pedidos-itens?item=Granola%20Artesanal%201000&dias=90',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['ok'] is True and data['n'] == 2
+    por_pedido = {x['pedido_id']: x for x in data['itens']}
+    assert set(por_pedido) == {p1.id, p2.id}  # o velho fica fora da janela
+    assert por_pedido[p1.id]['quantidade'] == 5
+    assert por_pedido[p1.id]['loja'] == 'Loja Anesio'
+    assert por_pedido[p2.id]['quantidade'] == 5000
+    # so o item pedido — o Sourdough do mesmo pedido nao vaza
+    assert all('Granola' in x['item'] for x in data['itens'])
+
+
+def test_pedidos_itens_filtro_por_loja(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    loja_a, loja_b, p1, p2 = _seed_pedidos_granola()
+    h = {'Authorization': f'Bearer {TOKEN}'}
+    c = app.test_client()
+    data = c.get('/api/claude/pedidos-itens?item=granola&dias=90'
+                 f'&loja={loja_b.id}', headers=h).get_json()
+    assert [x['pedido_id'] for x in data['itens']] == [p2.id]
+    assert c.get('/api/claude/pedidos-itens?item=granola&loja=inexistente',
+                 headers=h).status_code == 404
+
+
+def test_pedidos_itens_trecho_sem_match(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    resp = app.test_client().get(
+        '/api/claude/pedidos-itens?item=naoexiste',
+        headers={'Authorization': f'Bearer {TOKEN}'})
+    data = resp.get_json()
+    assert data['ok'] is True and data['itens'] == []
+    assert 'aviso' in data
