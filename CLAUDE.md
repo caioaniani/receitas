@@ -1984,8 +1984,13 @@ do seru_cron junto.
   posto o pico do brioche na ordem da madrugada); 'f' alvo por dias
   uteis (superado pelo 'h'); 'g' por-parcela; 'h' sem teto + peso
   fallback; 'i' antecedencia 2->3 ("Tem que adiantar, olha so terca nao
-  tem producao") + piso do Cinnamon Roll. COSMETICO conhecido: celula
-  de 5 digitos (levain 27835) corta visualmente no grid. Testes: antecedencia + fatiamento +
+  tem producao") + piso do Cinnamon Roll; 'j' anti-farelo ("2 paes e
+  ridiculo, deveria ser nenhum de nozes e azeitonas" — celula que o
+  movimento de parcelas deixou MENOR que `_MIN_FRACAO_FORNADA` x chunk
+  e fundida numa celula ja existente do item, parcela a parcela, sempre
+  no prazo e dentro da antecedencia, preferindo o dia mais tarde).
+  COSMETICO conhecido: celula de 5 digitos (levain 27835) corta
+  visualmente no grid. Testes: antecedencia + fatiamento +
   frescor do FDS (qui+sex permitidos, dom nunca sai da sexta) +
   redistribuicao do excedente da sexta em test_cronograma.py.
 - **Producao NORMAL so de SEG a SEX (dono 17/08/2026: "Sabado e domingo a
