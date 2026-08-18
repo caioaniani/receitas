@@ -105,6 +105,7 @@ def _migrate(app):
         _seed_minimo_danish_v2(app)
         _seed_minimo_danish_v3(app)
         _seed_minimo_cinnamon(app)
+        _seed_antecedencia_brioche(app)
         _seed_acerto_granola_iogurte(app)
         _backfill_totais_orcamento(app)
 
@@ -694,6 +695,50 @@ def _seed_minimo_danish_v3(app):
                     len(lojas), len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed minimo danish v3): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_antecedencia_brioche(app):
+    """UMA VEZ (dono 18/08/2026, "quero o maximo de brioche fresco nas
+    lojas"): `antecedencia_max_dias = 0` no Brioche CLASSICO — assa so
+    na madrugada anterior a entrega. Seed proprio com marker porque o
+    backfill original (guard "coluna acabou de nascer") FALHOU em prod:
+    o hook pusha cada edit e o deploy vencedor bootou com o ALTER sem o
+    backfill no codigo — quando o backfill chegou, a coluna ja existia e
+    o guard nunca mais abriu (mesma classe do danish v1/v2). So aplica
+    onde ainda esta NULL — edicao do dono manda. Marker com contagens."""
+    import unicodedata as _ud
+    try:
+        from app.models import AppConfig, Receita
+        chave = 'seed_antecedencia_brioche_2026_08'
+        if AppConfig.get(chave):
+            return
+
+        def _norm(s):
+            s = _ud.normalize('NFKD', s or '')
+            s = ''.join(c for c in s if not _ud.combining(c))
+            return ' '.join(s.casefold().split())
+
+        receitas = [r for r in Receita.query
+                    .filter(Receita.arquivada_em.is_(None)).all()
+                    if _norm(r.nome) == 'brioche']
+        setados, mantidos = 0, 0
+        for r in receitas:
+            if getattr(r, 'antecedencia_max_dias', None) is not None:
+                mantidos += 1                      # valor do dono manda
+                continue
+            r.antecedencia_max_dias = 0
+            setados += 1
+        AppConfig.set(chave, f'setados={setados} mantidos={mantidos} '
+                             f'receitas={len(receitas)}')
+        db.session.commit()
+        logger.info('seed antecedencia brioche: setados=%d mantidos=%d '
+                    'em %d receita(s)', setados, mantidos, len(receitas))
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed antecedencia brioche): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001
