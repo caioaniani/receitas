@@ -601,6 +601,31 @@ def test_nivelamento_nao_deixa_celula_farelo(app):
         assert _date.fromisoformat(d_iso).weekday() <= 4
 
 
+def test_nivelamento_pesa_pelo_lote_de_producao(app):
+    """Caso real 18/08 (dono: "101 brioches e pra acabar"): a regua de
+    peso usava a fornada TEORICA da capacidade da amassadeira (~448
+    brioches) — 101 valiam 0.2 fornada, mover brioche era "de graca" pro
+    guard e o nivelador empilhava tudo no primeiro dia alcancavel. Com o
+    peso pelo `lote_producao` do cadastro (o lote real do dono, 10),
+    cada batida pesa 1 e a demanda diaria fica ESPALHADA."""
+    loja = _loja()
+    r = _receita('Brioche Lote Pequeno')
+    r.lote_producao = 10
+    r.capacidade_amassadeira_g = 112000            # fornada teorica enorme
+    db.session.commit()
+    hoje_d = hoje()                                # segunda congelada
+    for i in range(1, 7):                          # ter..dom, 32/dia
+        _pedido(loja, 'pendente', hoje_d + timedelta(days=i), r, 32)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] >= 190
+    qtds = [c['qtd'] for c in rr['por_dia']]
+    assert max(qtds) <= 70, qtds                   # nada de dia-monstro
+    assert sum(1 for q in qtds if q > 0) >= 3      # espalhado na semana
+
+
 def test_nivelamento_fatia_receita_grande_em_lotes(app):
     """Caso Croissant (dono: "por que não redistribuir em lotes menores?"):
     demanda grande num dia só é FATIADA — nenhum dia carrega o total
@@ -1263,68 +1288,6 @@ def test_rota_telaindustriateste(app, admin_user):
     resp = client.get('/telaindustriateste/')
     assert resp.status_code == 200
     assert 'cronograma' in resp.get_data(as_text=True).lower()
-
-
-def test_rota_telaindustriateste_preview_funcional(app, admin_user):
-    """A prévia usa os mesmos dados e expõe a grade editável sem substituir
-    a tela operacional/legada."""
-    loja = _loja()
-    r = _receita()
-    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 10)
-
-    client = app.test_client()
-    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
-                follow_redirects=True)
-
-    preview = client.get('/telaindustriateste/?preview=1')
-    assert preview.status_code == 200
-    html = preview.get_data(as_text=True)
-    assert 'Ambiente de teste · dados isolados da produção' in html
-    assert 'somente leitura' not in html
-    assert 'O que precisa acontecer agora' in html
-    assert 'Planejamento semanal' in html
-    assert r.nome in html
-    assert 'id="week-grid"' in html
-    assert 'class="plan-input' in html
-    assert '/telaindustriateste/celula' in html
-    assert 'Enviar' in html
-    assert 'Limpar ajustes manuais' in html
-
-    atual = client.get('/telaindustriateste/')
-    assert 'Ambiente de teste · dados isolados da produção' not in atual.get_data(
-        as_text=True)
-
-
-def test_preview_mode_torna_nova_industria_padrao_com_comparacao_legacy(
-        app, admin_user):
-    client = app.test_client()
-    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
-                follow_redirects=True)
-    app.config['PREVIEW_MODE'] = True
-
-    nova = client.get('/telaindustriateste/').get_data(as_text=True)
-    antiga = client.get('/telaindustriateste/?legacy=1').get_data(as_text=True)
-
-    assert 'Ambiente de teste · dados isolados da produção' in nova
-    assert 'Comparar com tela antiga' in nova
-    assert 'Ambiente de teste · dados isolados da produção' not in antiga
-
-
-def test_preview_preserva_grade_apos_post(app, admin_user):
-    """Ações da grade voltam para a própria grade funcional, inclusive quando
-    o preview foi aberto por query string fora do ambiente dedicado."""
-    client = app.test_client()
-    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
-                follow_redirects=True)
-
-    resp = client.post('/telaindustriateste/limpar-edicoes', data={
-        'horizonte': 7, 'janela': 6, 'inicio': 0, 'motor': 'vendas',
-        'equilibrar': 1, 'preview': 1, 'view': 'week',
-    })
-
-    assert resp.status_code in (302, 303)
-    assert 'preview=1' in resp.location
-    assert 'view=week' in resp.location
 
 
 def test_rota_telaindustriateste_renderiza_aviso_stale(app, admin_user):
@@ -2013,26 +1976,63 @@ def test_rota_renderiza_badge_capado_ao_retorno(app, admin_user):
     assert 'Croissant Tradicional — Retorno' in html
 
 
-def test_nivelamento_pesa_pelo_lote_de_producao(app):
-    """Caso real 18/08 (dono: "101 brioches e pra acabar"): a regua de
-    peso usava a fornada TEORICA da capacidade da amassadeira (~448
-    brioches) — 101 valiam 0.2 fornada, mover brioche era "de graca" pro
-    guard e o nivelador empilhava tudo no primeiro dia alcancavel. Com o
-    peso pelo `lote_producao` do cadastro (o lote real do dono, 10),
-    cada batida pesa 1 e a demanda diaria fica ESPALHADA."""
+def test_rota_telaindustriateste_preview_funcional(app, admin_user):
+    """A prévia usa os mesmos dados e expõe a grade editável sem substituir
+    a tela operacional/legada."""
     loja = _loja()
-    r = _receita('Brioche Lote Pequeno')
-    r.lote_producao = 10
-    r.capacidade_amassadeira_g = 112000            # fornada teorica enorme
-    db.session.commit()
-    hoje_d = hoje()                                # segunda congelada
-    for i in range(1, 7):                          # ter..dom, 32/dia
-        _pedido(loja, 'pendente', hoje_d + timedelta(days=i), r, 32)
+    r = _receita()
+    _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 10)
 
-    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
-                                equilibrar=True)
-    rr = _rec_out(crono, r.id)
-    assert rr is not None and rr['total'] >= 190
-    qtds = [c['qtd'] for c in rr['por_dia']]
-    assert max(qtds) <= 70, qtds                   # nada de dia-monstro
-    assert sum(1 for q in qtds if q > 0) >= 3      # espalhado na semana
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+
+    preview = client.get('/telaindustriateste/?preview=1')
+    assert preview.status_code == 200
+    html = preview.get_data(as_text=True)
+    assert 'Ambiente de teste · dados isolados da produção' in html
+    assert 'somente leitura' not in html
+    assert 'O que precisa acontecer agora' in html
+    assert 'Planejamento semanal' in html
+    assert r.nome in html
+    assert 'id="week-grid"' in html
+    assert 'class="plan-input' in html
+    assert '/telaindustriateste/celula' in html
+    assert 'Enviar' in html
+    assert 'Limpar ajustes manuais' in html
+
+    atual = client.get('/telaindustriateste/')
+    assert 'Ambiente de teste · dados isolados da produção' not in atual.get_data(
+        as_text=True)
+
+
+def test_preview_mode_torna_nova_industria_padrao_com_comparacao_legacy(
+        app, admin_user):
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    app.config['PREVIEW_MODE'] = True
+
+    nova = client.get('/telaindustriateste/').get_data(as_text=True)
+    antiga = client.get('/telaindustriateste/?legacy=1').get_data(as_text=True)
+
+    assert 'Ambiente de teste · dados isolados da produção' in nova
+    assert 'Comparar com tela antiga' in nova
+    assert 'Ambiente de teste · dados isolados da produção' not in antiga
+
+
+def test_preview_preserva_grade_apos_post(app, admin_user):
+    """Ações da grade voltam para a própria grade funcional, inclusive quando
+    o preview foi aberto por query string fora do ambiente dedicado."""
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+
+    resp = client.post('/telaindustriateste/limpar-edicoes', data={
+        'horizonte': 7, 'janela': 6, 'inicio': 0, 'motor': 'vendas',
+        'equilibrar': 1, 'preview': 1, 'view': 'week',
+    })
+
+    assert resp.status_code in (302, 303)
+    assert 'preview=1' in resp.location
+    assert 'view=week' in resp.location
