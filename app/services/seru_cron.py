@@ -917,8 +917,11 @@ def _run_ordens_semana(app):
 # fornada e o nivelador empilhava sem resistencia do guard); 'l' = o
 # MESMO lote no minimo do DRIBBLE (a pilha nascia ANTES do nivelador: o
 # minimo ~90 da fornada teorica + sumidouro no dia 0 cascateava a
-# demanda diaria inteira pra hoje — o 'k' sozinho nao desfez os 101).
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17l'
+# demanda diaria inteira pra hoje — o 'k' sozinho nao desfez os 101);
+# 'm' = antecedencia POR RECEITA (dono: "quero o maximo de brioche
+# fresco nas lojas" — receita.antecedencia_max_dias, Brioche seedado 0:
+# assa so na madrugada anterior a entrega; NULL = global 3).
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17m'
 
 
 def _run_ordens_semana_retro(app):
