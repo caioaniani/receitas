@@ -193,6 +193,8 @@
         tr.removeAttribute('id');
         tr.querySelector('.item-busca').value = '';
         tr.querySelector('.item-id').value = '';
+        tr.querySelector('.item-id').dataset.emGramas = '';
+        tr.querySelector('.item-aviso-gramas').classList.add('d-none');
         tr.querySelector('input[name="item_qtd[]"]').value = '1';
         tr.querySelector('input[name="item_obs[]"]').value = '';
         tr.querySelector('select[name="item_estado[]"]').selectedIndex = 0;
