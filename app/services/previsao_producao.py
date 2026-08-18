@@ -2477,15 +2477,25 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # aceitavel pra congelado/industria). Dribble numa entrega IMINENTE (dia
         # 0, hoje) nao tem dia anterior: fica no dia 0 (produz hoje, no prazo) em
         # vez de atrasar — cumprir o prazo vale mais que poupar uma batida.
+        # A batida de referencia e o `lote_producao` do cadastro quando
+        # definido (caso "101 brioches e pra acabar": a fornada TEORICA da
+        # capacidade da amassadeira — 112kg = ~448 brioches — dava minimo
+        # ~90, e como o sumidouro e o dia 0, a demanda diaria de ~25
+        # cascateava INTEIRA pra hoje = 101 num dia; o lote real do dono e
+        # 10, minimo 2, e a demanda diaria fica em pe). Sem lote:
         # unidades_por_fornada = capacidade_amassadeira x rend / massa de 1
-        # receita — quantas unidades enchem uma batida. So aplica a receita que
-        # passa pela amassadeira (cap>0); item sem fornada (Moeda/creme) nao
-        # consolida (produzir 1 la nao desperdica batida).
+        # receita — quantas unidades enchem uma batida. So aplica a receita
+        # que passa pela amassadeira (cap>0) ou com lote definido; item sem
+        # fornada (Moeda/creme) nao consolida (produzir 1 la nao desperdica
+        # batida).
         cap = int(getattr(rec, 'capacidade_amassadeira_g', 0) or 0)
         massa_base = massa_receita_base(rec) if (cap > 0 and rend > 0) else 0
-        if massa_base > 0:
-            unid_por_fornada = cap * rend / massa_base
-            minimo = ceil(unid_por_fornada * _MIN_FRACAO_FORNADA)
+        lote_prod_drb = int(getattr(rec, 'lote_producao', 0) or 0)
+        if massa_base > 0 or lote_prod_drb > 0:
+            unid_por_fornada = (cap * rend / massa_base) if massa_base > 0 \
+                else 0.0
+            minimo = ceil((lote_prod_drb or unid_por_fornada)
+                          * _MIN_FRACAO_FORNADA)
             for i in range(len(liquido) - 1, 0, -1):
                 if 0 < liquido[i] < minimo:
                     # Consolida no dia anterior PERMITIDO (dribble nunca cai
