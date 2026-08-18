@@ -88,22 +88,17 @@
         </section>
 
         <section class="workspace engine-overview" data-panel="today">
-          <div class="section-title schedule-title"><div><h2>Carga programada</h2><p>O que o motor distribuiu para hoje e para os próximos dias.</p></div><button type="button" data-open="week">Ver grade completa <i class="bi bi-arrow-right"></i></button></div>
+          <div class="section-title schedule-title"><div><h2>Ordens de produção</h2></div><button type="button" data-open="week">Ver todas <i class="bi bi-arrow-right"></i></button></div>
 
-          <div class="day-grid">
+          <div class="order-list" aria-label="Status das ordens de produção">
             {% for dia in crono.dias[:3] %}
-            {% set idx = loop.index0 %}{% set est = estados.get(dia.data) %}
-            <article class="day-card {{ 'today' if dia.data == crono.hoje }}">
-              <header><div><small>{{ 'Hoje' if dia.data == crono.hoje else 'Próximo dia' }}</small><h3>{{ dia.label }}</h3></div><span class="state {{ 'sent' if est and est.enviado else 'draft' }}">{{ 'Enviado' if est and est.enviado else ('Rascunho' if est else 'A planejar') }}</span></header>
-              <div class="day-volume"><strong>{{ totais_dia[idx].un }}</strong><span>unidades</span><b>{{ totais_dia[idx].fornadas }} fornadas</b></div>
-              <div class="load-track"><span style="width:{{ [100, (totais_dia[idx].fornadas * 8)]|min }}%"></span></div>
-              <button type="button" data-open="week" data-focus-day="{{ dia.data }}">Ver produção do dia <i class="bi bi-arrow-right"></i></button>
-            </article>
+            {% set est = estados.get(dia.data) %}
+            <button class="order-day {{ 'today' if dia.data == crono.hoje }}" type="button" data-open="week" data-focus-day="{{ dia.data }}">
+              <strong>{{ dia.label }}</strong>
+              <span class="state {{ 'sent' if est and est.enviado else 'draft' }}">{{ 'Ordem enviada' if est and est.enviado else ('Rascunho' if est else 'Não enviada') }}</span>
+              <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </button>
             {% endfor %}
-          </div>
-          <div class="engine-note">
-            <span><i class="bi bi-arrow-repeat"></i></span>
-            <div><strong>Atualização automática é o comportamento esperado</strong><p>O motor acompanha vendas e estoque e recalcula as quantidades. O histórico continua disponível na grade e na auditoria, sem virar uma tarefa para você.</p></div>
           </div>
         </section>
 

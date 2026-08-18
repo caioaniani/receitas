@@ -2024,6 +2024,11 @@ def test_rota_telaindustriateste_v2_funcional(app, admin_user):
     loja = _loja()
     r = _receita()
     _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 10)
+    from app.models import PlanejamentoProducao
+    db.session.add(PlanejamentoProducao(
+        data=hoje(), nome='Plano hoje', status='aprovado',
+        origem='cronograma', enviado_ao_padeiro=True))
+    db.session.commit()
 
     client = app.test_client()
     client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
@@ -2037,7 +2042,10 @@ def test_rota_telaindustriateste_v2_funcional(app, admin_user):
     assert 'Motor de previsão' in html
     assert 'Motor funcionando normalmente' in html
     assert 'Cálculo concluído' in html
-    assert 'Atualização automática é o comportamento esperado' in html
+    assert 'Ordens de produção' in html
+    assert 'Ordem enviada' in html
+    assert 'Atualização automática é o comportamento esperado' not in html
+    assert 'class="load-track"' not in html
     assert 'Revisar alterações' not in html
     assert 'aguardando confirmação' not in html
     assert 'Planejamento semanal' in html

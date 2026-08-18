@@ -130,6 +130,43 @@
   .engine-note{align-items:flex-start}
 }
 
+/* Resumo das ordens: data e estado bastam; os volumes ficam na grade. */
+.engine-overview{padding:20px 24px}
+.engine-overview .section-title{align-items:center;margin-bottom:12px}
+.engine-overview .section-title h2{margin:0}
+.order-list{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  border:1px solid var(--line);
+  border-radius:13px;
+  overflow:hidden;
+}
+.order-day{
+  min-height:54px;
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  align-items:center;
+  gap:10px;
+  padding:12px 14px;
+  border:0;
+  border-left:1px solid var(--line);
+  background:#fff;
+  color:var(--ink);
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.order-day:first-child{border-left:0}
+.order-day.today{background:#fbfdfb}
+.order-day:hover{background:#f7faf8}
+.order-day strong{font-size:12px}
+.order-day>i{color:#94a099;font-size:10px}
+@media(max-width:700px){
+  .order-list{grid-template-columns:1fr}
+  .order-day{border-left:0;border-top:1px solid var(--line)}
+  .order-day:first-child{border-top:0}
+}
+
 /* Segunda rodada: leitura por dia e edição explícita. */
 .week-day-focus{display:flex;align-items:center;gap:7px;overflow-x:auto;margin:3px 0 14px;padding:3px 0 5px;scrollbar-width:thin}.week-day-focus>span{margin-right:3px;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em}.week-day-focus button{min-height:44px;padding:7px 11px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);border-radius:9px;background:#fff;color:#55615b;font:inherit;font-size:10px;font-weight:650;white-space:nowrap;cursor:pointer}.week-day-focus button strong,.week-day-focus button small{display:block}.week-day-focus button small{color:var(--muted);font-size:8px}.week-day-focus button.active{border-color:var(--green);background:var(--green-soft);color:var(--green)}.week-day-focus button.active small{color:var(--green)}.week-table-wrap .day-hidden{display:none}.week-table-wrap.single-day table{min-width:620px}.week-table-wrap.single-day .day-column{width:180px;min-width:180px}.category-toggle{width:100%;min-height:28px;padding:0;display:flex;align-items:center;gap:7px;border:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}.category-toggle i{font-size:9px;transition:transform .15s}.category-toggle[aria-expanded=false] i{transform:rotate(-90deg)}.recipe-main{display:flex;align-items:flex-start;gap:6px}.recipe-main .recipe-toggle{flex:1}.edit-row{min-width:54px;min-height:40px;padding:0 7px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border:1px solid #d5ddd8;border-radius:8px;background:#fff;color:var(--green);font:inherit;font-size:9px;font-weight:700;cursor:pointer}.edit-row[aria-pressed=true]{border-color:var(--green);background:var(--green-soft)}.recipe-row:not(.is-editing) .plan-input[data-editable="1"]{border-color:transparent;background:transparent;color:#183f61;pointer-events:none}.recipe-row:not(.is-editing) .plan-input[data-editable="1"].is-zero{color:#aab3ae}.recipe-row.is-editing td{background:#fbfdfb}.recipe-row.is-editing .recipe-col,.recipe-row.is-editing .total-col{background:#fbfdfb}.plan-input{height:40px}.day-send,.day-done{min-height:36px}.search-field{min-height:40px}.week-toolbar .search-field input{height:38px}
 
