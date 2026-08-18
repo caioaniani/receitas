@@ -26,3 +26,13 @@ def test_producao_mantem_shell_atual_fora_do_preview(app, admin_user):
 
     assert 'ui-v2-sidebar' not in html
     assert 'Fichas Técnicas' in html
+
+
+def test_preview_preserva_contrato_do_modo_embed(app, admin_user):
+    app.config['PREVIEW_MODE'] = True
+    html = _login(app, admin_user).get(
+        '/admin/loja-online/pedidos/inexistente?embed=1'
+    ).get_data(as_text=True)
+
+    assert '<body class="embed-mode">' in html
+    assert '<body class="embed-mode ui-v2">' not in html

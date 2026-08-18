@@ -38,7 +38,7 @@
     </style>
     {% endif %}
 </head>
-<body class="{% if embed %}embed-mode {% endif %}{% if config.PREVIEW_MODE %}ui-v2{% endif %}">
+<body{% if embed %} class="embed-mode"{% elif config.PREVIEW_MODE %} class="ui-v2"{% endif %}>
     {% if not embed %}
     <!-- Mobile header -->
     <div class="mobile-header d-md-none">
