@@ -2032,9 +2032,14 @@ def test_rota_telaindustriateste_v2_funcional(app, admin_user):
     nova = client.get('/telaindustriateste/?v2=1')
     assert nova.status_code == 200
     html = nova.get_data(as_text=True)
-    assert 'Nova interface · planejamento por dia' in html
+    assert 'Planejamento automático · produção' in html
     assert 'somente leitura' not in html
-    assert 'O que precisa acontecer agora' in html
+    assert 'Motor de previsão' in html
+    assert 'Motor funcionando normalmente' in html
+    assert 'Cálculo concluído' in html
+    assert 'Atualização automática é o comportamento esperado' in html
+    assert 'Revisar alterações' not in html
+    assert 'aguardando confirmação' not in html
     assert 'Planejamento semanal' in html
     assert r.nome in html
     assert 'id="week-grid"' in html
@@ -2045,10 +2050,10 @@ def test_rota_telaindustriateste_v2_funcional(app, admin_user):
     # v2 e o DEFAULT: a rota crua tambem rende a tela nova; a antiga
     # continua acessivel por ?legacy=1
     atual = client.get('/telaindustriateste/')
-    assert 'Nova interface · planejamento por dia' in atual.get_data(
+    assert 'Planejamento automático · produção' in atual.get_data(
         as_text=True)
     antiga = client.get('/telaindustriateste/?legacy=1')
-    assert 'Nova interface · planejamento por dia' not in antiga.get_data(
+    assert 'Planejamento automático · produção' not in antiga.get_data(
         as_text=True)
 
 
@@ -2062,9 +2067,28 @@ def test_flag_torna_nova_industria_padrao_com_comparacao_legacy(
     nova = client.get('/telaindustriateste/').get_data(as_text=True)
     antiga = client.get('/telaindustriateste/?legacy=1').get_data(as_text=True)
 
-    assert 'Nova interface · planejamento por dia' in nova
+    assert 'Planejamento automático · produção' in nova
     assert 'Comparar com tela antiga' in nova
-    assert 'Nova interface · planejamento por dia' not in antiga
+    assert 'Planejamento automático · produção' not in antiga
+
+
+def test_v2_monitora_parametros_reais_do_motor(app, admin_user):
+    """A visão geral descreve o cálculo que acabou de acontecer nesta
+    abertura; não inventa cron/horário futuro e não chama recálculo de tarefa."""
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+
+    html = client.get(
+        '/telaindustriateste/?motor=pedidos&horizonte=5&equilibrar=0'
+    ).get_data(as_text=True)
+
+    assert 'Pedidos das lojas' in html
+    assert '<dd>5 dias</dd>' in html
+    assert 'Distribuição pela demanda' in html
+    assert 'Previsão recalculada nesta abertura às' in html
+    assert 'Próxima execução' not in html
+    assert 'Prioridades' not in html
 
 
 def test_v2_preserva_grade_apos_post(app, admin_user):

@@ -7,6 +7,7 @@ faltar nem sobrar. "Aprovar plano do dia" cria a ordem de produção daquele dia
 padeiro produz (opção B). NÃO mexe na /padeiro oficial.
 """
 from datetime import date
+from time import perf_counter
 
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -93,14 +94,18 @@ def index():
     from app.models import PlanejamentoProducao
     from app.services.previsao_producao import cronograma_producao
     from app.services.producao_pendente import pendencias_por_receita
+    from app.utils import agora
 
     horizonte, janela = _horizonte_janela()
     inicio = _inicio_offset()
     equilibrar = _equilibrar()
     motor = _motor()
+    calculo_inicio = perf_counter()
     crono = cronograma_producao(horizonte_dias=horizonte, janela_semanas=janela,
                                 inicio_offset_dias=inicio, equilibrar=equilibrar,
                                 motor=motor)
+    calculo_segundos = perf_counter() - calculo_inicio
+    calculado_em = agora()
     # Overlay "verde": produção mandada e ainda não confirmada pelo padeiro.
     # Projeção pura (não é estoque real) — soma por cima do em_estoque no grid.
     pend = pendencias_por_receita()
@@ -208,6 +213,32 @@ def index():
         'editados': sum(1 for r in crono['receitas'] if r.get('editado')),
         'stale_n': sum(1 for r in crono['receitas'] if r.get('override_stale')),
         'zerados': sum(1 for r in crono['receitas'] if not r.get('total')),
+        'periodo_un': sum(t['un'] for t in totais_dia),
+        'periodo_fornadas': sum(t['fornadas'] for t in totais_dia),
+        'dias_com_carga': sum(1 for t in totais_dia
+                              if t['un'] or t['fornadas']),
+        'dias_enviados': sum(1 for iso in dias_grid
+                             if estados.get(iso, {}).get('enviado')),
+    }
+    resumo['excecoes_n'] = (
+        resumo['risco_n']
+        + (1 if resumo['pend_vencido'] else 0)
+        + (1 if resumo['stale_n'] else 0)
+    )
+
+    duracao = (f'{max(1, round(calculo_segundos * 1000))} ms'
+               if calculo_segundos < 1
+               else f'{calculo_segundos:.1f} s'.replace('.', ','))
+    monitor = {
+        'calculado_em': calculado_em,
+        'duracao': duracao,
+        'motor_label': {
+            'vendas': 'Vendas reais + estoque',
+            'pedidos': 'Pedidos das lojas',
+            'maior': 'Maior demanda',
+        }.get(motor, motor),
+        'carga_label': ('Carga equilibrada' if equilibrar
+                        else 'Distribuição pela demanda'),
     }
 
     # "Próximos passos": a lista do que está pedindo ação AGORA, com o gesto
@@ -250,7 +281,8 @@ def index():
                            equilibrar=equilibrar, motor=motor, estados=estados,
                            totais_dia=totais_dia, pico_idx=pico_idx,
                            resumo=resumo, ordem_enviada=ordem_enviada,
-                           difere=difere, fechados=fechados, acoes=acoes)
+                           difere=difere, fechados=fechados, acoes=acoes,
+                           monitor=monitor)
 
 
 @industria_teste_bp.route('/auditoria')

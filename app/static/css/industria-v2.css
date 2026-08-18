@@ -11,6 +11,125 @@
 @media(max-width:900px) and (min-width:701px){.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.metrics article{grid-template-columns:auto 1fr;padding:14px}.metrics article>small{grid-column:2;width:max-content}}
 @media(max-width:700px){.metrics{grid-template-columns:1fr}}
 
+/* Visão geral do motor: observabilidade primeiro, tarefas somente quando há
+   uma exceção real. O cálculo acontece nesta própria abertura da página. */
+.engine-status{
+  display:grid;
+  grid-template-columns:auto minmax(240px,1fr) minmax(430px,1.35fr);
+  align-items:center;
+  gap:20px;
+  padding:22px 24px;
+  margin-bottom:14px;
+  border:1px solid #cfe0d6;
+  border-radius:20px;
+  background:linear-gradient(135deg,#fbfdfb 0%,#f1f8f4 100%);
+  box-shadow:var(--shadow);
+}
+.engine-status-signal{
+  position:relative;
+  width:58px;
+  height:58px;
+  display:grid;
+  place-items:center;
+  border-radius:18px;
+  background:var(--green);
+  color:#fff;
+  font-size:24px;
+  box-shadow:0 10px 24px rgba(39,93,69,.18);
+}
+.engine-status-signal span{
+  position:absolute;
+  inset:-5px;
+  border:1px solid rgba(39,93,69,.28);
+  border-radius:22px;
+  animation:engine-heartbeat 2.4s ease-out infinite;
+}
+@keyframes engine-heartbeat{
+  0%,45%{transform:scale(.92);opacity:0}
+  55%{opacity:1}
+  100%{transform:scale(1.12);opacity:0}
+}
+.engine-status-copy{min-width:0}
+.engine-status-label{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-bottom:5px;
+  color:var(--green);
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.engine-status-copy h2{
+  margin:0 0 5px;
+  font-family:Fraunces,serif;
+  font-size:24px;
+  line-height:1.15;
+}
+.engine-status-copy p{margin:0;color:var(--muted);font-size:11px}
+.engine-facts{
+  display:grid;
+  grid-template-columns:1.35fr .7fr 1.05fr;
+  gap:0;
+  margin:0;
+  padding:0;
+  border:1px solid rgba(39,93,69,.12);
+  border-radius:13px;
+  background:rgba(255,255,255,.78);
+}
+.engine-facts div{min-width:0;padding:12px 14px;border-left:1px solid rgba(39,93,69,.1)}
+.engine-facts div:first-child{border-left:0}
+.engine-facts dt{
+  margin:0 0 4px;
+  color:var(--muted);
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.engine-facts dd{margin:0;color:var(--ink);font-size:11px;font-weight:700;line-height:1.25}
+.engine-status+.metrics{margin-top:0;margin-bottom:16px}
+.engine-overview .schedule-title{margin-top:0}
+.engine-note{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-top:18px;
+  padding:13px 15px;
+  border-radius:12px;
+  background:#f4f7f5;
+  color:#4f5e56;
+}
+.engine-note>span{
+  flex:0 0 auto;
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border-radius:10px;
+  background:var(--green-soft);
+  color:var(--green);
+}
+.engine-note strong{display:block;margin-bottom:2px;color:var(--ink);font-size:11px}
+.engine-note p{margin:0;font-size:10px;line-height:1.45}
+.exception-list article.warning{border-color:#ead7b3;background:#fffdf8}
+.exception-list article.warning>span{background:var(--amber-soft);color:var(--amber)}
+@media(prefers-reduced-motion:reduce){.engine-status-signal span{animation:none;opacity:.65}}
+@media(max-width:1050px){
+  .engine-status{grid-template-columns:auto 1fr}
+  .engine-facts{grid-column:1/-1}
+}
+@media(max-width:560px){
+  .engine-status{grid-template-columns:auto 1fr;padding:18px;gap:14px}
+  .engine-status-signal{width:48px;height:48px;border-radius:15px;font-size:20px}
+  .engine-status-copy h2{font-size:20px}
+  .engine-facts{grid-template-columns:1fr;grid-column:1/-1}
+  .engine-facts div{border-left:0;border-top:1px solid rgba(39,93,69,.1)}
+  .engine-facts div:first-child{border-top:0}
+  .engine-note{align-items:flex-start}
+}
+
 /* Segunda rodada: leitura por dia e edição explícita. */
 .week-day-focus{display:flex;align-items:center;gap:7px;overflow-x:auto;margin:3px 0 14px;padding:3px 0 5px;scrollbar-width:thin}.week-day-focus>span{margin-right:3px;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em}.week-day-focus button{min-height:44px;padding:7px 11px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);border-radius:9px;background:#fff;color:#55615b;font:inherit;font-size:10px;font-weight:650;white-space:nowrap;cursor:pointer}.week-day-focus button strong,.week-day-focus button small{display:block}.week-day-focus button small{color:var(--muted);font-size:8px}.week-day-focus button.active{border-color:var(--green);background:var(--green-soft);color:var(--green)}.week-day-focus button.active small{color:var(--green)}.week-table-wrap .day-hidden{display:none}.week-table-wrap.single-day table{min-width:620px}.week-table-wrap.single-day .day-column{width:180px;min-width:180px}.category-toggle{width:100%;min-height:28px;padding:0;display:flex;align-items:center;gap:7px;border:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}.category-toggle i{font-size:9px;transition:transform .15s}.category-toggle[aria-expanded=false] i{transform:rotate(-90deg)}.recipe-main{display:flex;align-items:flex-start;gap:6px}.recipe-main .recipe-toggle{flex:1}.edit-row{min-width:54px;min-height:40px;padding:0 7px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border:1px solid #d5ddd8;border-radius:8px;background:#fff;color:var(--green);font:inherit;font-size:9px;font-weight:700;cursor:pointer}.edit-row[aria-pressed=true]{border-color:var(--green);background:var(--green-soft)}.recipe-row:not(.is-editing) .plan-input[data-editable="1"]{border-color:transparent;background:transparent;color:#183f61;pointer-events:none}.recipe-row:not(.is-editing) .plan-input[data-editable="1"].is-zero{color:#aab3ae}.recipe-row.is-editing td{background:#fbfdfb}.recipe-row.is-editing .recipe-col,.recipe-row.is-editing .total-col{background:#fbfdfb}.plan-input{height:40px}.day-send,.day-done{min-height:36px}.search-field{min-height:40px}.week-toolbar .search-field input{height:38px}
 
