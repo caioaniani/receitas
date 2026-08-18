@@ -391,6 +391,18 @@ def novo():
                                    amanha=amanha, data_min=data_min,
                                    loja_id=loja_id)
 
+        # Item em g/ml com lote definido só aceita MÚLTIPLO do lote
+        # (iogurte 3000 / granola 5000 — dono 18/08/2026, caso "potes").
+        from app.services.pedido_lote import violacoes_por_ids
+        fora_do_lote = violacoes_por_ids(itens_norm)
+        if fora_do_lote:
+            for msg in fora_do_lote:
+                flash(msg, 'warning')
+            lojas = _lojas_operacionais()
+            return render_template('pedidos/novo.html', lojas=lojas,
+                                   amanha=amanha, data_min=data_min,
+                                   loja_id=loja_id)
+
         try:
             from app.services.pedido_merge import (
                 absorver_rascunho_automatico,
