@@ -536,6 +536,30 @@ def editar(id):
                   'Banco de MPs (checkbox "sugerir pedido loja").', 'warning')
             return redirect(url_for('pedidos.editar', id=id))
 
+        # Item em g/ml com lote definido só aceita MÚLTIPLO do lote
+        # (iogurte 3000 / granola 5000 — dono 18/08/2026, caso "potes").
+        # Validado ANTES do REPLACE dos itens; vale também pro item que já
+        # estava no pedido (o dono escolheu SEM grandfather: 9360 antigo
+        # tem que virar 9000/12000 ao editar).
+        from app.services.pedido_lote import violacoes_por_ids
+        itens_lote = []
+        _ids = request.form.getlist('item_id[]')
+        _qtds = request.form.getlist('item_qtd[]')
+        for i in range(len(_ids)):
+            t, iid = _parse_item_id(_ids[i])
+            if t != 'receita':
+                continue
+            try:
+                q = int(_qtds[i]) if i < len(_qtds) else 0
+            except (TypeError, ValueError):
+                continue
+            itens_lote.append({'receita_id': iid, 'quantidade': q})
+        fora_do_lote = violacoes_por_ids(itens_lote)
+        if fora_do_lote:
+            for msg in fora_do_lote:
+                flash(msg, 'warning')
+            return redirect(url_for('pedidos.editar', id=id))
+
         try:
             data_mudou = (data_entrega != pedido.data_entrega)
             pedido.data_entrega = data_entrega
