@@ -111,6 +111,7 @@
             opt.className = 'item-result-opt';
             opt.dataset.id = item.id;
             opt.dataset.emGramas = item.em_gramas ? '1' : '';
+            opt.dataset.lote = item.lote || '';
             opt.textContent = item.nome;  // textContent escapa o nome
             pop.appendChild(opt);
         });
@@ -127,6 +128,7 @@
         var hidden = input.closest('td').querySelector('.item-id');
         hidden.value = '';
         hidden.dataset.emGramas = '';
+        hidden.dataset.lote = '';
         checarAvisoGramas(input.closest('tr'));
         var val = input.value.trim();
         clearTimeout(timer);
@@ -177,6 +179,7 @@
         activeInput.value = opt.textContent;
         activeHidden.value = opt.dataset.id;
         activeHidden.dataset.emGramas = opt.dataset.emGramas || '';
+        activeHidden.dataset.lote = opt.dataset.lote || '';
         checarAvisoGramas(activeHidden.closest('tr'));
         hidePop();
     });
@@ -203,6 +206,7 @@
         tr.querySelector('.item-busca').value = '';
         tr.querySelector('.item-id').value = '';
         tr.querySelector('.item-id').dataset.emGramas = '';
+        tr.querySelector('.item-id').dataset.lote = '';
         tr.querySelector('.item-aviso-gramas').classList.add('d-none');
         tr.querySelector('input[name="item_qtd[]"]').value = '1';
         tr.querySelector('input[name="item_obs[]"]').value = '';
