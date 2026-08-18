@@ -304,3 +304,47 @@ def test_contas_classica_preserva_empty_state_antigo(app, admin_user):
         as_text=True)
     assert 'Nenhuma conta nesta aba.' in html
     assert 'finance-v2-empty' not in html
+
+
+def test_home_v2_esconde_planejar_producao_de_nao_admin(app):
+    """Os DOIS links da Home v2 pra industria_teste.index (botão 'Planejar
+    produção' do topo e card 'Planejamento da indústria') são gated por
+    is_admin() — a rota é @admin_required (achado do dono na revisão do
+    PR #14; defesa em profundidade: hoje papel 'producao' recebe
+    inicio.html na '/', mas o template não pode oferecer link que dá
+    403 se um dia a rota da home alargar)."""
+    from app.extensions import db
+    from app.models import Usuario
+    u = Usuario(nome='prod3 teste', login='prod3', papel='producao')
+    u.set_senha('123')
+    db.session.add(u)
+    db.session.commit()
+    app.config['UI_V2_ENABLED'] = True
+
+    resp = _login_como(app, 'prod3').get('/')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'ui-v2-sidebar' in html                 # shell v2 renderiza
+    assert 'Planejar produção' not in html         # botão do topo
+    assert 'Planejamento da indústria' not in html  # card + atalho sidebar
+    assert '/telaindustriateste' not in html       # nenhum link pra rota 403
+
+    # e o TEMPLATE da home v2 em si (defesa em profundidade): renderizado
+    # com um usuário producao, os dois links não aparecem
+    from flask import render_template
+    from flask_login import login_user
+    with app.test_request_context('/'):
+        login_user(u)
+        html_tpl = render_template('main/home_v2.html', areas=[],
+                                   pendencias={}, vendas=None,
+                                   vendas_hoje=None)
+    assert 'Planejar produção' not in html_tpl
+    assert '/telaindustriateste' not in html_tpl
+
+
+def test_home_v2_admin_ve_planejar_producao(app, admin_user):
+    """O outro lado da moeda: admin segue vendo os dois atalhos."""
+    app.config['UI_V2_ENABLED'] = True
+    html = _login_como(app, 'admin').get('/').get_data(as_text=True)
+    assert 'Planejar produção' in html
+    assert 'Planejamento da indústria' in html

@@ -51,7 +51,7 @@
             <p>Comece pelo que precisa de atenção e depois siga para sua área de trabalho.</p>
         </div>
         <div class="home-v2-header-actions">
-            {% if current_user.pode_producao() %}
+            {% if current_user.is_admin() %}{# rota é admin_required — pra papel producao o link daria 403 #}
             <a class="home-v2-btn home-v2-btn-primary" href="{{ url_for('industria_teste.index', v2=1) }}">
                 <i class="bi bi-calendar3"></i> Planejar produção
             </a>
@@ -168,7 +168,7 @@
                 <div><span class="home-v2-section-kicker">Próximo passo</span><h2>Continue o trabalho</h2></div>
                 <i class="bi bi-arrow-right-circle home-v2-heading-icon"></i>
             </div>
-            {% if current_user.pode_producao() %}
+            {% if current_user.is_admin() %}{# rota é admin_required — pra papel producao o link daria 403 #}
             <a class="home-v2-feature-link" href="{{ url_for('industria_teste.index', v2=1) }}">
                 <span><i class="bi bi-calendar3"></i></span>
                 <div><strong>Planejamento da indústria</strong><small>Organize a produção da semana.</small></div>
