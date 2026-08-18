@@ -2547,13 +2547,20 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             unid_forn = (cap_g * rend / mb) if mb > 0 else 0.0
             chunk = int(lote or (round(unid_forn) if unid_forn >= 1 else 0)
                         or max(1, ceil(rr['total'] / n)))
-            # Peso de nivelamento em "fornadas": 1 unidade vale 1/fornada
-            # (sem amassadeira, 1/rend; sem rendimento NENHUM, 1/chunk —
-            # peso 1.0/unidade fazia o croissant sem rendimento valer 1
-            # fornada POR PECA e distorcia a regua inteira). Nivela o
+            # Peso de nivelamento: 1 unidade vale 1/batida REAL. O
+            # `lote_producao` do cadastro manda quando definido (caso
+            # "101 brioches e pra acabar": a fornada TEORICA da
+            # capacidade da amassadeira — 112kg = ~448 brioches — fazia
+            # 101 valerem 0.2 fornada; mover brioche era "de graca" pro
+            # guard e o nivelador empilhava tudo no primeiro dia; o lote
+            # economico do dono e 10). Sem lote: fornada da capacidade,
+            # senao 1/rend, senao 1/chunk (peso 1.0/unidade fazia peca
+            # valer fornada e distorcia a regua inteira). Nivela o
             # trabalho, nao a unidade (levain em gramas nao pode dominar
             # croissant em pecas).
-            if unid_forn >= 1:
+            if lote_prod > 0:
+                peso = 1.0 / lote_prod
+            elif unid_forn >= 1:
                 peso = 1.0 / unid_forn
             elif rend > 0:
                 peso = 1.0 / rend
