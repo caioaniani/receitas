@@ -105,6 +105,46 @@ def _migrate(app):
         _seed_minimo_danish_v2(app)
         _seed_minimo_danish_v3(app)
         _seed_minimo_cinnamon(app)
+        _backfill_totais_orcamento(app)
+
+
+def _backfill_totais_orcamento(app):
+    """Reconserta UMA VEZ subtotal/valor_total dos orçamentos gravados pelo
+    bug do editar (fix 18/08/2026, caso orc-2026-0003: editar 200x5 pra
+    80x5 gravava R$ 1.400 — o recalcular_total somava itens deletados +
+    novos). A venda da aprovação nunca herdou o erro (recalcula dos
+    itens); aqui é só o registro/PDF do orçamento. Idempotente: recomputa
+    da fonte (itens + desconto + frete). Marker grava a CONTAGEM corrigida
+    (regra dos seeds com filtro). Best-effort: nunca derruba o startup."""
+    try:
+        from decimal import Decimal
+
+        from app.extensions import db
+        from app.models import AppConfig, Orcamento
+
+        marker = 'backfill_orc_totais_2026_08_18'
+        if AppConfig.get(marker):
+            return
+        corrigidos = []
+        for orc in Orcamento.query.all():
+            sub = sum((Decimal(str(i.subtotal or 0)) for i in orc.itens),
+                      Decimal('0'))
+            desc = Decimal(str(orc.desconto_valor or 0))
+            frete = Decimal(str(orc.frete_valor or 0))
+            total = max(Decimal('0'), sub - desc) + frete
+            if (Decimal(str(orc.subtotal or 0)) != sub
+                    or Decimal(str(orc.valor_total or 0)) != total):
+                orc.subtotal = sub
+                orc.valor_total = total
+                corrigidos.append(orc.codigo)
+        AppConfig.set(marker, 'corrigidos=%d %s'
+                      % (len(corrigidos), ','.join(corrigidos))[:500])
+        db.session.commit()
+        if corrigidos:
+            logger.info('backfill totais orcamento: %d corrigido(s): %s',
+                        len(corrigidos), ', '.join(corrigidos))
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (backfill totais orcamento): %s', e)
 
 
 def _seed_treino_universidade(app):
