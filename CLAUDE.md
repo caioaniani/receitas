@@ -4885,6 +4885,40 @@ o CPF que falta.
   spam); CPF sem validacao de digito verificador (pre-existente e consistente
   com o cadastro manual em `rh/routes.py` — validar so aqui divergiria).
 
+## Interface v2 (redesenho, mergeado 18/08/2026 — PR #14)
+
+Promocao SELETIVA do branch `codex/ui-simplification-preview`
+(f26c0586, validado pelo dono): veio SO visual/usabilidade — a infra de
+homologacao (preview_copy/seed, PREVIEW_MODE, copia sanitizada de
+banco, reset de senha do admin) NAO foi promovida DE PROPOSITO
+(`test_ui_v2.py::test_infra_de_preview_nao_foi_promovida` trava; NUNCA
+setar PREVIEW_MODE em prod — a env nem e lida).
+
+- **Chave em 3 camadas** (`app/ui_v2.py::ui_v2_ativo`): env
+  `UI_V2_ENABLED=1` liga pra todos (**default DESLIGADA** — o merge nao
+  mudou nada; ligar/zerar a env e o rollback geral, sem deploy de
+  codigo); cookie `ui_classic` devolve UM usuario a interface anterior
+  (links "Interface anterior"/"✨ Nova interface" nas sidebars, rotas
+  `main.ui_classica`/`ui_nova`); `?v2=1` forca a tela nova NUMA request
+  (validacao em prod antes de ligar a env). Troca TEMPLATE, nunca
+  permissao — papel producao segue 403 na industria (ha teste).
+- **Pecas**: `home_v2.html`/`area_v2.html` + `_ui_v2_sidebar.html`
+  (shell trocado no base.html via context processor `ui_v2`),
+  `industria_teste/v2.html` (standalone, planejamento por dia; param
+  `v2=1` viaja nos forms/`_params_visao`, `?legacy=1` abre a antiga),
+  `materias_primas/banco_v2.html` (busca `?q=` + paginacao), melhorias
+  em usuarios/contas a pagar. Assets: `ui-v2.css`,
+  `industria-v2.css`, `home-v2.js` (no cache-bust do `__init__`).
+- **REGRAS**: flag OFF = telas classicas byte-equivalentes (trechos
+  compartilhados de contas/usuarios sao gated por `ui_v2` — ha teste);
+  links pra `industria_teste.index` em template v2 SEMPRE `is_admin()`
+  (rota e admin_required; `pode_producao()` dava 403 no clique — 2x
+  corrigido, sidebar e home); v2.html da industria NAO usa Google Fonts
+  (CSP global bloqueia — fallback do CSS; nao afrouxar CSP por fonte) e
+  renderiza flashes proprios (standalone, sem base.html).
+- Testes: `tests/test_ui_v2.py` (24) + secao v2 em test_cronograma.py.
+  Docs: `docs/ui-redesign/`.
+
 ## Sidebar
 
 Secoes (`sidebar-section-title`) sao **colapsaveis** — JS adiciona chevron + persiste
