@@ -1059,6 +1059,15 @@ def _migrate_postgres(app):
             'sob_encomenda': ('ALTER TABLE receita ADD COLUMN '
                               'sob_encomenda BOOLEAN NOT NULL '
                               'DEFAULT FALSE'),
+            # Antecedencia maxima do NIVELADOR por receita (dono
+            # 18/08/2026, "quero o maximo de brioche fresco nas lojas":
+            # a antecedencia global de 3 dias — pedida pra encher a
+            # terca — adiantava tambem o brioche, que e fresco).
+            # NULL = regra global (_ANTECEDENCIA_MAX_DIAS); 0 = assa so
+            # no dia da demanda (fim de semana continua caindo na sexta
+            # pelo calendario seg-sex, que e rolagem, nao nivelamento).
+            'antecedencia_max_dias': ('ALTER TABLE receita ADD COLUMN '
+                                      'antecedencia_max_dias INTEGER'),
         }
         for col, sql in migrações_receita.items():
             if col not in colunas:
