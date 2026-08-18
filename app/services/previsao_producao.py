@@ -2602,8 +2602,13 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                     resto -= qi
                 fatias[-1][1] += resto           # sobra no maior ref
                 segs.append([f for f in fatias if f[1] > 0])
+            # Antecedencia POR RECEITA (dono 18/08/2026, brioche fresco):
+            # o cadastro manda quando definido; NULL = global.
+            ant_rec = getattr(rec, 'antecedencia_max_dias', None)
+            ant = (_ANTECEDENCIA_MAX_DIAS if ant_rec is None
+                   else max(0, int(ant_rec)))
             itens_eq.append({'rr': rr, 'rec': rec, 'rend': rend,
-                             'qtds': qtds, 'segs': segs,
+                             'qtds': qtds, 'segs': segs, 'ant': ant,
                              'chunk': max(1, chunk), 'peso': peso})
         if itens_eq:
             carga = [0.0] * n
