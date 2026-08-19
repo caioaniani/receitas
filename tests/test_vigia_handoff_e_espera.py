@@ -298,3 +298,59 @@ def test_espera_humano_manda_contencao_ao_cliente(app):
         alerta.assert_called_once()
     finally:
         os.environ.pop('ESPERA_HUMANO_CONTENCAO', None)
+
+
+def test_contencao_nao_duplica_pro_mesmo_contato_em_duas_conversas(app):
+    """Caso Lissa (19/08/2026): a MESMA cliente em DUAS conversas do
+    Chatwoot (IG junta tudo numa thread) recebia a contenção em cada uma.
+    O alerta ao dono segue POR CONVERSA (ele quer saber das duas), mas a
+    contenção ao cliente sai UMA vez por CONTATO em 12h."""
+    from app.services import chatbot_vigia
+    paradas = [
+        {'id': 1723, 'nome_contato': 'Lissa', 'minutos_paradas': 13,
+         'telefone': '17841400000001'},
+        {'id': 1730, 'nome_contato': 'Lissa', 'minutos_paradas': 14,
+         'telefone': '17841400000001'},
+    ]
+    hist = [{'role': 'user', 'content': 'Av omega 219 apt 144'}]
+    with app.app_context(), \
+         patch('app.services.chatbot_vigia._numero_destino',
+               return_value='5511999990000'), \
+         patch('app.services.chatwoot.listar_conversas_paradas',
+               return_value=paradas), \
+         patch('app.services.chatwoot.buscar_historico', return_value=hist), \
+         patch('app.services.chatwoot.enviar_mensagem',
+               return_value={'ok': True}) as contem, \
+         patch('app.services.zapi.enviar_texto',
+               return_value={'ok': True}) as alerta:
+        chatbot_vigia.alertar_clientes_esperando_humano()
+    assert alerta.call_count == 2          # dono sabe das DUAS conversas
+    contem.assert_called_once()            # cliente recebe UMA contenção
+    assert contem.call_args[0][0] == 1723
+
+
+def test_contencao_nao_repete_se_ja_esta_na_conversa(app):
+    """Re-alerta pós-12h (dedupe da conversa expira) não re-manda o MESMO
+    texto enlatado pro cliente: se a contenção já está no histórico da
+    conversa, só o alerta ao dono sai."""
+    from app.services import chatbot_vigia
+    paradas = [{'id': 900, 'nome_contato': 'Rê', 'minutos_paradas': 20,
+                'telefone': '5511977776666'}]
+    hist = [
+        {'role': 'user', 'content': 'alguém me responde?'},
+        {'role': 'assistant',
+         'content': chatbot_vigia.TEXTO_CONTENCAO_ESPERA},
+        {'role': 'user', 'content': 'sigo aguardando'},
+    ]
+    with app.app_context(), \
+         patch('app.services.chatbot_vigia._numero_destino',
+               return_value='5511999990000'), \
+         patch('app.services.chatwoot.listar_conversas_paradas',
+               return_value=paradas), \
+         patch('app.services.chatwoot.buscar_historico', return_value=hist), \
+         patch('app.services.chatwoot.enviar_mensagem') as contem, \
+         patch('app.services.zapi.enviar_texto',
+               return_value={'ok': True}) as alerta:
+        chatbot_vigia.alertar_clientes_esperando_humano()
+    alerta.assert_called_once()
+    contem.assert_not_called()

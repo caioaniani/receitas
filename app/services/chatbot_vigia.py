@@ -968,7 +968,8 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
             ja_nesta = any(
                 TEXTO_CONTENCAO_ESPERA[:40] in (m.get('content') or '')
                 for m in historico[-15:] if m.get('role') != 'user')
-            if ja_nesta or _contencao_recente_para_contato(chave_contato):
+            if ja_nesta or _contencao_recente_para_contato(chave_contato,
+                                                          conv_id):
                 logger.info('espera-humano: contenção suprimida conv=%s '
                             '(duplicaria pro contato)', conv_id)
             else:
@@ -1003,7 +1004,7 @@ def _ja_avisado_espera_humano(conv_id, horas=12):
         return True   # fail-closed: na duvida nao re-alerta
 
 
-def _contencao_recente_para_contato(chave, horas=12):
+def _contencao_recente_para_contato(chave, conv_id, horas=12):
     """True se ESTE contato (chave \w de telefone/identifier) ja recebeu a
     contencao nas ultimas N horas em QUALQUER conversa — no Instagram, mais
     de uma conversa Chatwoot desagua na mesma thread do cliente (caso
@@ -1018,8 +1019,12 @@ def _contencao_recente_para_contato(chave, horas=12):
         from app.models import VigiaVeredito
         from app.utils import agora
         corte = agora() - timedelta(hours=horas)
+        # Exclui a PROPRIA conversa: o registro desta rodada e gravado
+        # ANTES da contencao — sem o filtro, o guard ve o proprio registro
+        # e suprime ate o primeiro envio.
         return (VigiaVeredito.query
                 .filter(VigiaVeredito.criado_em >= corte,
+                        VigiaVeredito.conv_id != str(conv_id),
                         VigiaVeredito.mensagem_cliente.like(
                             f'[ESPERA_HUMANO%c:{chave}]%'))
                 .first()) is not None
