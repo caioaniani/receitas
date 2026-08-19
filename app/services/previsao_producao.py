@@ -2670,6 +2670,40 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                     it['qtds'][d] += mv
                     carga[s] -= mv * it['peso']
                     carga[d] += mv * it['peso']
+            # Anti-REFORNADA (dono 19/08/2026, "se vai produzir hoje
+            # sourdough integral, amanha nao deveria produzir sourdough
+            # integral novamente — e um re-trabalho pro padeiro; o
+            # Brioche e diferente porque a gente nao congela"): celula
+            # MENOR QUE UM LOTE (chunk) e fundida na celula ANTERIOR
+            # mais proxima do MESMO item, parcela a parcela, dentro da
+            # antecedencia (congelado antecipa; item fresco com
+            # antecedencia 0 fica de fora SOZINHO — ref - d0 >= 1 nunca
+            # passa no teste). Celula >= 1 lote fica: fornada cheia em
+            # dias seguidos e volume legitimo (croissant ~1000/semana
+            # nao cabe num dia — a regra mata o TOP-UP quebrado, nao o
+            # fatiamento por capacidade). Roda ANTES do anti-farelo,
+            # que varre os residuos que nao puderam anticipar.
+            for it in itens_eq:
+                for d in range(n - 1, -1, -1):
+                    if not (0 < it['qtds'][d] < it['chunk']):
+                        continue
+                    destinos = [d0 for d0 in range(d)
+                                if it['qtds'][d0] > 0
+                                and producao_permitida_no_dia(
+                                    it['rec'], dias_prod[d0])]
+                    if not destinos:
+                        continue
+                    d0 = max(destinos)             # o dia anterior mais perto
+                    for f in list(it['segs'][d]):
+                        ref, q = f
+                        if ref - d0 > it['ant'] or q <= 0:
+                            continue               # frescor nao deixa
+                        it['segs'][d0].append([ref, q])
+                        it['segs'][d].remove(f)
+                        it['qtds'][d0] += q
+                        it['qtds'][d] -= q
+                        carga[d0] += q * it['peso']
+                        carga[d] -= q * it['peso']
             # Anti-farelo (dono 18/08/2026, "2 paes e ridiculo, deveria
             # ser nenhum de nozes e azeitonas"): o movimento de parcelas
             # pode deixar/criar celula MENOR que a fracao minima de
