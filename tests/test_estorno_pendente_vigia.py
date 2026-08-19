@@ -453,3 +453,29 @@ def test_rota_dry_run_nao_envia_nem_marca(app, owner_user, monkeypatch):
     j = r.get_json()
     assert j['dry_run'] is True and [x['id'] for x in j['pendentes']] == ['R1']
     assert enviados == []
+
+
+def test_claim_e_gravado_ANTES_do_envio(app, monkeypatch):
+    """Claim-first (19/08/2026, mesma classe do venda_sem_item_vigia): os
+    ids têm que estar no banco quando o WhatsApp sai — kill de deploy entre
+    o envio e o commit não pode duplicar o alerta no container novo."""
+    import json as _json
+
+    from app.models import AppConfig
+    from app.services import estorno_pendente_vigia as v
+    from app.services import zapi
+    monkeypatch.setenv('ESTORNO_PENDENTE_COOLDOWN_MIN', '0')
+    visto = {}
+
+    def _envia(n, m, **k):
+        est = _json.loads(AppConfig.get(v._KEY_ESTADO) or '{}')
+        ids = {i for lst in (est.get('ids') or {}).values() for i in lst}
+        visto['marcado_no_envio'] = 'CF1' in ids
+        return {'ok': True}
+
+    monkeypatch.setattr(zapi, 'enviar_texto', _envia)
+    with app.app_context():
+        app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999999999'
+        r = v.alertar(_pend('CF1'))
+    assert r['enviado'] is True
+    assert visto['marcado_no_envio'] is True
