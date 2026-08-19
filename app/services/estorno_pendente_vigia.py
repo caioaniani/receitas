@@ -115,9 +115,10 @@ def _carregar_estado():
 
 def _gravar_estado(estado):
     """Persiste o estado. NUNCA levanta (contrato do `alertar`) — devolve
-    False se falhou. Consequência conhecida de um False depois do envio: os
-    ids não ficam marcados e o pedido alerta de novo no próximo ciclo.
-    Direção segura: repetir aviso de estoque é melhor que perder."""
+    False se falhou. Com o claim-first (19/08/2026), um False ANTES do envio
+    pula o ciclo (retenta depois — sem claim durável não se envia); um False
+    ao DEVOLVER o claim de envio falho deixa os ids marcados sem envio
+    (alerta se perde — janela mínima, aceita)."""
     from app.extensions import db
     from app.models import AppConfig
     try:
