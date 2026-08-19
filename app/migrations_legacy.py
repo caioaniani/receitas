@@ -701,6 +701,150 @@ def _seed_minimo_danish_v3(app):
             pass
 
 
+# Minis sanduíches do cardápio em PDF (dono 19/08/2026: "Cadastra esses 6
+# minis sanduiches no sistema e coloca eles para serem vendidos como minis
+# em .../caixa-de-mini-p148 junto com os outros minis. Importar fotos e
+# precos do PDF" + "Usar o mesmo codigo SKU do tiny que usamos para o mini
+# croissant"). Fotos extraídas do PDF e conferidas UMA A UMA contra os
+# nomes (ficam em app/seeds_data/minis_2026_08/, viram imagem_blob — o
+# card de migração BLOB do /admin/debug-schema pode levá-las ao Dropbox
+# depois, backfill idempotente).
+MINIS_SANDUICHE_SEED = {
+    'chave': 'seed_minis_sanduiche_2026_08',
+    'menu_produto_id': 148,          # .../loja/caixa-de-mini-p148
+    'referencia': 'mini croissant tradicional',
+    'itens': (
+        ('Posta de Lagarto',
+         'Mini pão sourdough tradicional com posta de lagarto ao molho',
+         '15.00', 'posta-de-lagarto.jpg'),
+        ('Sourdough Avocado',
+         'Mini sourdough tradicional com recheio de avocado com tomates '
+         'picados', '22.00', 'sourdough-avocado.jpg'),
+        ('Posta de Beringela',
+         'Mini sourdough 7 grãos com posta de beringela', '13.00',
+         'posta-de-beringela.jpg'),
+        ('Lanche de Lagarto',
+         'Pão francês tradicional com lagarto desfiado', '25.00',
+         'lanche-de-lagarto.jpg'),
+        ('Brioche Caprese',
+         'Mini brioche bolinha com caprese — mussarela de búfala, tomate '
+         'cereja e manjericão', '19.00', 'brioche-caprese.jpg'),
+        ('Mini Croissant',
+         'Mini croissant com uma fatia de peito de peru e uma fatia de '
+         'queijo branco', '25.00', 'mini-croissant.jpg'),
+    ),
+}
+
+
+def _seed_minis_sanduiche(app):
+    """UMA VEZ: cadastra os 6 minis sanduíches do PDF como Receitas, cria
+    o slot de cada um no menu configurável Caixa de Mini (produto 148,
+    `preco_menu` do PDF, pré-seleção 0 — não muda o default de quem já
+    compra) e herda o SKU do Tiny do Mini Croissant Tradicional (canal
+    site, confirmado — ordem explícita do dono, NF-e automática).
+
+    Regras da casa: só marca no SUCESSO (menu ausente = tenta no próximo
+    boot); homônima ativa não duplica (mantidas); flags/medidas copiadas
+    da receita de REFERÊNCIA (os minis existentes); marker com contagens
+    (setados=0 nunca mais passa batido); edição futura do dono manda."""
+    import os as _os
+    import unicodedata as _ud
+    from decimal import Decimal as _D
+    try:
+        from app.models import AppConfig, Produto, ProdutoItem, Receita, TinyProdutoMap
+        from app.utils import agora as _agora
+        cfg = MINIS_SANDUICHE_SEED
+        if AppConfig.get(cfg['chave']):
+            return
+
+        def _norm(s):
+            s = _ud.normalize('NFKD', s or '')
+            s = ''.join(c for c in s if not _ud.combining(c))
+            return ' '.join(s.casefold().split())
+
+        menu = db.session.get(Produto, cfg['menu_produto_id'])
+        if menu is None or not getattr(menu, 'menu_configuravel', False):
+            logger.warning('seed minis sanduiche: produto %s ausente ou nao '
+                           'e menu configuravel — re-tenta no proximo boot',
+                           cfg['menu_produto_id'])
+            return
+
+        ref = next((r for r in Receita.query
+                    .filter(Receita.arquivada_em.is_(None)).all()
+                    if _norm(r.nome) == cfg['referencia']), None)
+        sku_ref = None
+        if ref is not None:
+            m = TinyProdutoMap.query.filter_by(
+                canal='site', kind='receita', item_id=ref.id).first()
+            if m and (m.tiny_sku or '').strip():
+                sku_ref = m.tiny_sku.strip()
+
+        ativas = {_norm(r.nome): r for r in Receita.query
+                  .filter(Receita.arquivada_em.is_(None)).all()}
+        slots = {}
+        for pi in ProdutoItem.query.filter_by(produto_id=menu.id).all():
+            if pi.receita_id:
+                slots[pi.receita_id] = pi
+
+        base_dir = _os.path.join(_os.path.dirname(__file__),
+                                 'seeds_data', 'minis_2026_08')
+        criadas = mantidas = novos_slots = skus = fotos = 0
+        for nome, desc, preco, arquivo in cfg['itens']:
+            r = ativas.get(_norm(nome))
+            if r is None:
+                r = Receita(
+                    nome=nome, descricao=desc,
+                    categoria=(ref.categoria if ref else 'Minis'),
+                    rendimento_qtd=(ref.rendimento_qtd if ref else 1),
+                    rendimento_unidade=(ref.rendimento_unidade
+                                        if ref else 'un'),
+                    peso_base=(ref.peso_base if ref else 100.0),
+                    estado_padrao=(ref.estado_padrao if ref else 'assado'),
+                    sob_encomenda=(ref.sob_encomenda if ref else True),
+                )
+                caminho = _os.path.join(base_dir, arquivo)
+                try:
+                    with open(caminho, 'rb') as f:
+                        r.imagem_blob = f.read()
+                    fotos += 1
+                except OSError:
+                    logger.warning('seed minis: foto %s ausente', arquivo)
+                db.session.add(r)
+                db.session.flush()
+                criadas += 1
+            else:
+                mantidas += 1
+            if r.id not in slots:
+                db.session.add(ProdutoItem(
+                    produto_id=menu.id, tipo='receita', receita_id=r.id,
+                    item_nome=r.nome, quantidade=0,
+                    preco_menu=_D(preco)))
+                novos_slots += 1
+            if sku_ref:
+                m = TinyProdutoMap.query.filter_by(
+                    canal='site', kind='receita', item_id=r.id).first()
+                if m is None:
+                    db.session.add(TinyProdutoMap(
+                        canal='site', kind='receita', item_id=r.id,
+                        tiny_sku=sku_ref,
+                        tiny_nome='(herdado do Mini Croissant Tradicional)',
+                        confirmado_em=_agora()))
+                    skus += 1
+        AppConfig.set(cfg['chave'],
+                      f'criadas={criadas} mantidas={mantidas} '
+                      f'slots={novos_slots} skus={skus} fotos={fotos}')
+        db.session.commit()
+        logger.info('seed minis sanduiche: criadas=%d mantidas=%d slots=%d '
+                    'skus=%d fotos=%d', criadas, mantidas, novos_slots,
+                    skus, fotos)
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed minis sanduiche): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _seed_antecedencia_brioche(app):
     """UMA VEZ (dono 18/08/2026, "quero o maximo de brioche fresco nas
     lojas"): `antecedencia_max_dias = 0` no Brioche CLASSICO — assa so
