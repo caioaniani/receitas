@@ -922,6 +922,13 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
         avaliadas += 1
         ultima = (historico[-1].get('content') or '')[:120]
         nome = c.get('nome_contato') or '(sem nome)'
+        # Chave do CONTATO (telefone ou identifier do IG, so \w): o dedupe
+        # por conversa nao basta — caso Lissa 19/08/2026: a MESMA cliente
+        # em DUAS conversas do Chatwoot (1723 e 1730) recebeu a contencao
+        # em cada uma, e no Instagram as duas caem na MESMA thread =
+        # mensagem duplicada na tela dela.
+        import re as _re
+        chave_contato = _re.sub(r'\W+', '', (c.get('telefone') or ''))[:40]
         cfg = current_app.config
         base_cw = (cfg.get('CHATWOOT_URL') or '').rstrip('/')
         acc = (cfg.get('CHATWOOT_ACCOUNT_ID') or '').strip()
@@ -939,7 +946,8 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
             logger.exception('espera-humano: envio falhou conv=%s', conv_id)
             continue
         _registrar_espera_humano(conv_id, nome, minutos, ultima,
-                                 bool(envio.get('ok')))
+                                 bool(envio.get('ok')),
+                                 contato_chave=chave_contato)
         # CONTENÇÃO ao CLIENTE (dono 09/08/2026, Dia dos Pais: 12 clientes
         # esperando 10-14min em conversa open enquanto a equipe entregava —
         # inclusive VENDA esperando): junto com o alerta ao dono, o cliente
@@ -952,11 +960,23 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
         # config.py; kill-switch de vigia lê os.environ como os demais).
         import os as _os
         if _os.environ.get('ESPERA_HUMANO_CONTENCAO', '1') != '0':
-            try:
-                chatwoot.enviar_mensagem(conv_id, TEXTO_CONTENCAO_ESPERA)
-            except Exception:  # noqa: BLE001
-                logger.exception('espera-humano: contenção falhou conv=%s',
-                                 conv_id)
+            # Anti-duplicidade em DUAS camadas (caso Lissa, 19/08/2026):
+            # (a) o texto ja esta NESTA conversa (re-alerta pos-12h nao
+            # re-manda o mesmo aviso pro cliente); (b) o MESMO CONTATO ja
+            # recebeu contencao em OUTRA conversa nas ultimas 12h — no IG
+            # varias conversas Chatwoot caem numa unica thread do cliente.
+            ja_nesta = any(
+                TEXTO_CONTENCAO_ESPERA[:40] in (m.get('content') or '')
+                for m in historico[-15:] if m.get('role') != 'user')
+            if ja_nesta or _contencao_recente_para_contato(chave_contato):
+                logger.info('espera-humano: contenção suprimida conv=%s '
+                            '(duplicaria pro contato)', conv_id)
+            else:
+                try:
+                    chatwoot.enviar_mensagem(conv_id, TEXTO_CONTENCAO_ESPERA)
+                except Exception:  # noqa: BLE001
+                    logger.exception('espera-humano: contenção falhou '
+                                     'conv=%s', conv_id)
         if envio.get('ok'):
             enviadas += 1
             logger.info('espera-humano alertado conv=%s (%smin)',
@@ -983,14 +1003,42 @@ def _ja_avisado_espera_humano(conv_id, horas=12):
         return True   # fail-closed: na duvida nao re-alerta
 
 
-def _registrar_espera_humano(conv_id, nome, minutos, ultima_msg, enviado):
+def _contencao_recente_para_contato(chave, horas=12):
+    """True se ESTE contato (chave \w de telefone/identifier) ja recebeu a
+    contencao nas ultimas N horas em QUALQUER conversa — no Instagram, mais
+    de uma conversa Chatwoot desagua na mesma thread do cliente (caso
+    Lissa 19/08/2026). Chave vazia = sem como cruzar, nao bloqueia (as
+    guardas por conversa seguem valendo). Erro = True (na duvida, nao
+    repete texto enlatado pro cliente)."""
+    if not chave:
+        return False
+    try:
+        from datetime import timedelta
+
+        from app.models import VigiaVeredito
+        from app.utils import agora
+        corte = agora() - timedelta(hours=horas)
+        return (VigiaVeredito.query
+                .filter(VigiaVeredito.criado_em >= corte,
+                        VigiaVeredito.mensagem_cliente.like(
+                            f'[ESPERA_HUMANO%c:{chave}]%'))
+                .first()) is not None
+    except Exception:  # noqa: BLE001
+        logger.exception('espera-humano: dedupe por contato falhou '
+                         '(assume enviado)')
+        return True
+
+
+def _registrar_espera_humano(conv_id, nome, minutos, ultima_msg, enviado,
+                             contato_chave=''):
     try:
         from app.extensions import db
         from app.models import VigiaVeredito
         db.session.add(VigiaVeredito(
             conv_id=str(conv_id),
             cliente=(nome or '')[:200] or None,
-            mensagem_cliente=f'[ESPERA_HUMANO {minutos}min] {ultima_msg}'[:2000],
+            mensagem_cliente=(f'[ESPERA_HUMANO {minutos}min '
+                              f'c:{contato_chave}] {ultima_msg}')[:2000],
             bot_acao='espera_humano',
             alerta=True,
             gravidade='alta',
