@@ -29,7 +29,7 @@ import logging
 from flask import current_app
 
 from app.models import Desperdicio, Loja
-from app.utils import hoje
+from app.utils import agora, hoje
 
 logger = logging.getLogger(__name__)
 
@@ -221,10 +221,15 @@ def mensagem_resumo(lojas, itens_por_loja=None):
     return '\n'.join(linhas)
 
 
-def alertar_slack_pendentes(dia=None):
+def alertar_slack_pendentes(dia=None, claim=True):
     """Posta no canal Slack `SLACK_CANAL_COPILOT` a lista de lojas que ainda
     nao lancaram desperdicio. So envia se houver pendentes; se o canal nao
-    estiver configurado, loga warning e pula. Retorna dict com status."""
+    estiver configurado, loga warning e pula. Retorna dict com status.
+
+    `claim=True` (o cron): 1 post por MINUTO via `_claim_envio` — os 4 ticks
+    (20:10/15/20/25) seguem saindo, mas dois containers no MESMO tick nao
+    duplicam. O botao manual do /admin/slack-diagnostico passa claim=False
+    (re-envio deliberado nunca e bloqueado)."""
     from app.services import slack
 
     faltam = lojas_sem_desperdicio(dia)
@@ -242,8 +247,19 @@ def alertar_slack_pendentes(dia=None):
         return {'enviado': False, 'motivo': 'sem_canal_configurado',
                 'pendentes': len(faltam), 'pendentes_itens': n_itens}
 
+    anterior = None
+    if claim:
+        tick = agora().strftime('%Y-%m-%dT%H:%M')
+        status, anterior = _claim_envio(_KEY_CLAIM_SLACK, tick)
+        if status != 'ok':
+            logger.info('desperdicio_alerta(slack): tick %s ja enviado por '
+                        'outro processo (%s) — suprimido', tick, status)
+            return {'enviado': False, 'motivo': f'claim_{status}'}
+
     texto = mensagem_pendentes(faltam, itens)
     res = slack.post_message(canal, texto)
+    if not res.get('ok') and claim:
+        _devolver_claim(_KEY_CLAIM_SLACK, anterior)
     if res.get('ok'):
         logger.info('desperdicio_alerta(slack): enviado pro canal %s '
                     '(%d loja[s], %d item[ns] nominais)',
