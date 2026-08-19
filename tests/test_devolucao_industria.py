@@ -12,6 +12,8 @@ voltam pra indústria e viram Croissant Almond. Cobre:
 - MRP: Almond capado ao estoque de retorno (balanço) e retorno nunca vira
   linha de produção com quantidade.
 """
+import pytest
+
 from app.models import (
     EstoqueLoja,
     EstoqueProducao,
@@ -21,6 +23,16 @@ from app.models import (
     Receita,
 )
 from app.services import devolucao
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao seg-sex + janela semanal tornaram o motor weekday-sensivel
+    — congela numa SEGUNDA fixa (mesma fixture dos arquivos do cronograma;
+    caso real 19/08/2026: test_cronograma_edit quebrou na QUARTA porque o
+    indice 3 do grid caiu no sabado bloqueado)."""
+    congela_hoje()
+
 
 
 def _receita(db, nome, **kw):

@@ -4,10 +4,22 @@ dia SEM pedido vira rascunho; dia COM pedido EDITÁVEL (pendente/confirmado,
 modificado_em/por); separado+ e dias com 2 pedidos não são tocados."""
 from datetime import timedelta
 
+import pytest
+
 from app.extensions import db
 from app.models import Loja, PedidoItem, PedidoLoja, Receita
 from app.services.pedidos_semana import aplicar_grade
 from app.utils import hoje
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao seg-sex + janela semanal tornaram o motor weekday-sensivel
+    — congela numa SEGUNDA fixa (mesma fixture dos arquivos do cronograma;
+    caso real 19/08/2026: test_cronograma_edit quebrou na QUARTA porque o
+    indice 3 do grid caiu no sabado bloqueado)."""
+    congela_hoje()
+
 
 
 def _receita(nome='Croissant'):

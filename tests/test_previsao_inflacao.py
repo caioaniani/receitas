@@ -19,7 +19,19 @@ são capados; variação normal (2-3x) não.
 """
 from datetime import date, timedelta
 
+import pytest
+
 from app.services.previsao_producao import _media_recencia
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao seg-sex + janela semanal tornaram o motor weekday-sensivel
+    — congela numa SEGUNDA fixa (mesma fixture dos arquivos do cronograma;
+    caso real 19/08/2026: test_cronograma_edit quebrou na QUARTA porque o
+    indice 3 do grid caiu no sabado bloqueado)."""
+    congela_hoje()
+
 
 # ── A2: zeros implícitos ──────────────────────────────────────────────────
 _SABADOS = [date(2026, 5, 23), date(2026, 5, 30), date(2026, 6, 6),

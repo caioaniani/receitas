@@ -19,6 +19,16 @@ import pytest
 from app.extensions import db
 from app.utils import hoje
 
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao seg-sex + janela semanal tornaram o motor weekday-sensivel
+    — congela numa SEGUNDA fixa (mesma fixture dos arquivos do cronograma;
+    caso real 19/08/2026: test_cronograma_edit quebrou na QUARTA porque o
+    indice 3 do grid caiu no sabado bloqueado)."""
+    congela_hoje()
+
+
 _END_NF = {'cep': '04077-000', 'logradouro': 'Rua X', 'numero': '10',
            'bairro': 'Moema', 'cidade': 'São Paulo', 'uf': 'SP'}
 

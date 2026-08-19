@@ -6,9 +6,21 @@ quando o estoque cobria (produzir 0) e (2) as linhas de insumo só
 recalculavam no F5. Agora a linha do insumo carrega `consumo_janela` e
 `editar_celula` devolve `insumos` recalculados pro front atualizar na hora.
 """
+import pytest
+
 from app.extensions import db
 from app.models import EstoqueProducao, Receita, ReceitaIngrediente
 from app.utils import hoje
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao seg-sex + janela semanal tornaram o motor weekday-sensivel
+    — congela numa SEGUNDA fixa (mesma fixture dos arquivos do cronograma;
+    caso real 19/08/2026: test_cronograma_edit quebrou na QUARTA porque o
+    indice 3 do grid caiu no sabado bloqueado)."""
+    congela_hoje()
+
 
 
 def _setup(estoque_massa):

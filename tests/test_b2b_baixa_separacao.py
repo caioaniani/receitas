@@ -11,10 +11,22 @@ indústria só baixa quando o padeiro SEPARA o pedido na tela /padeiro.
 """
 from datetime import timedelta
 
+import pytest
+
 from app.extensions import db
 from app.models import EstoqueProducao, Produto, ProdutoItem, VendaB2B
 from app.services import vendas_b2b as svc
 from app.utils import agora, hoje
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao seg-sex + janela semanal tornaram o motor weekday-sensivel
+    — congela numa SEGUNDA fixa (mesma fixture dos arquivos do cronograma;
+    caso real 19/08/2026: test_cronograma_edit quebrou na QUARTA porque o
+    indice 3 do grid caiu no sabado bloqueado)."""
+    congela_hoje()
+
 
 
 def _estoque(catalogo, qtd=20):

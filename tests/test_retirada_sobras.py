@@ -12,6 +12,8 @@ indústria recebe via QR (credita a receita de retorno). Cobre:
 """
 from datetime import timedelta
 
+import pytest
+
 from app.models import (
     Driver,
     EstoqueLoja,
@@ -23,6 +25,16 @@ from app.models import (
     RetiradaSobraItem,
 )
 from app.utils import agora, hoje
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao seg-sex + janela semanal tornaram o motor weekday-sensivel
+    — congela numa SEGUNDA fixa (mesma fixture dos arquivos do cronograma;
+    caso real 19/08/2026: test_cronograma_edit quebrou na QUARTA porque o
+    indice 3 do grid caiu no sabado bloqueado)."""
+    congela_hoje()
+
 
 
 def _receita(db, nome):

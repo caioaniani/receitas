@@ -2,9 +2,21 @@
 de pedido) preservando o histórico — destino da MP que virou receita mas tem
 histórico inapagável (movimentações/preço). Reversível. Leituras de custeio
 por nome continuam enxergando a MP arquivada (ficha antiga não quebra)."""
+import pytest
+
 from app.extensions import db
 from app.models import EstoqueLoja, Loja, MateriaPrima
 from app.utils import agora
+
+
+@pytest.fixture(autouse=True)
+def _hoje_e_segunda_fixa(congela_hoje):
+    """Producao seg-sex + janela semanal tornaram o motor weekday-sensivel
+    — congela numa SEGUNDA fixa (mesma fixture dos arquivos do cronograma;
+    caso real 19/08/2026: test_cronograma_edit quebrou na QUARTA porque o
+    indice 3 do grid caiu no sabado bloqueado)."""
+    congela_hoje()
+
 
 
 def _mp(nome='Geleia Artesanal de Morango', arquivada=False, sugerir=False):
