@@ -1091,6 +1091,22 @@ ALGO hoje?") — lancar a sobra de UM item calava a cobranca de todos.
 - Os senders (Slack 20:10-25 + WhatsApp dono 20:30) disparam se HOUVER
   QUALQUER pendencia (loja OU item) — antes, loja que lancava 1 item sumia
   e levava os itens junto. A cobranca por-loja continua existindo.
+- **ANTI-DUPLICATA por claim (19/08/2026, dono: "Continua duplicando")**:
+  overlap de deploy deixa container VELHO + NOVO vivos no minuto do cron e
+  os DOIS disparam o job (o advisory lock do seru_cron so serializa
+  execucoes SIMULTANEAS — a segunda, segundos depois, pega o lock livre;
+  caso real: push as 20:2x, container novo bootou 20:26 e o dono levou DUAS
+  mensagens de sobras as 20:30, com conteudos diferentes porque um gerente
+  lancou entre os envios). Fix: `desperdicio_alerta._claim_envio` grava e
+  COMMITA marcador em AppConfig ANTES do envio — WhatsApp do dono 1x/DIA
+  (`desperdicio_alerta_dono_dia`), tick do Slack 1x/MINUTO
+  (`desperdicio_alerta_slack_tick`; a escalada 20:10/15/20/25 segue
+  intacta). Envio falho DEVOLVE o claim (lembrete nao se perde por
+  Slack/Z-API fora); kill entre claim e envio perde 1 lembrete do dia
+  (aceito — aqui duplicar e pior que perder). O botao manual do
+  /admin/slack-diagnostico passa `claim=False` (re-envio deliberado nunca
+  e bloqueado). Testes: secao anti-duplicata em
+  `tests/test_desperdicio_alerta.py`.
 - **WhatsApp do dono e RESUMO desde 14/08/2026** (dono: "muita informacao,
   so fala se lancaram ou nao — esta ficando flodado"): `mensagem_resumo` —
   uma linha por loja ("nao lancou nada" / "lancou parcial, N itens sem
