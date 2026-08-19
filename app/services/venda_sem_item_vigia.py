@@ -57,6 +57,7 @@ entra na varredura.
 Sob demanda: `GET /admin/vigia-venda-sem-item` (owner; `?alertar=1` roda o
 fluxo com WhatsApp). Sonda externa: `/api/claude/vendas-snapshot?pedidos=1`.
 """
+import copy
 import json
 import logging
 import os
@@ -380,6 +381,28 @@ def vigiar():
                 'motivo': motivo}
 
     msg = _montar_mensagem(novas, todas)
+    # CLAIM-FIRST (19/08/2026): marca ids + cooldown e COMMITA ANTES do
+    # envio — o kill de deploy entre o envio e a gravação mandava a MESMA
+    # cobrança de novo no ciclo do container novo (cód 21097090, 19:19 e
+    # 19:20). Envio falho DEVOLVE o claim (retenta — Z-API fora continua
+    # sem perder alerta). Claim que não grava = não envia (sem registro
+    # durável, o próximo ciclo duplicaria).
+    anterior = copy.deepcopy(estado)
+    for c in novas:
+        estado['ids'].setdefault(c['data'], []).append(c['id'])
+    estado['ultimo_envio'] = agora_dt.isoformat()
+    estado['envios'][hoje_iso] = estado['envios'].get(hoje_iso, 0) + 1
+    try:
+        _gravar_estado(estado)
+    except Exception:  # noqa: BLE001 — sem claim durável não se envia
+        logger.exception('vigia venda sem item: claim do estado falhou')
+        try:
+            from app.extensions import db
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return {'rodou': True, 'novas': len(novas), 'enviado': False,
+                'motivo': 'claim falhou — retenta no proximo ciclo'}
     try:
         # SEM critico=True de propósito: respeita o teto/hora global do
         # zapi (anti-flood do WhatsApp). Mensagem segurada volta ok=False
@@ -390,13 +413,13 @@ def vigiar():
         logger.exception('vigia venda sem item: envio WhatsApp explodiu')
         ok = False
     if not ok:
-        # Não marca: retenta no próximo ciclo (perder alerta é pior).
+        # Devolve o claim: retenta no próximo ciclo (perder alerta é pior).
+        try:
+            _gravar_estado(anterior)
+        except Exception:  # noqa: BLE001 — claim fica "gasto": ids marcados
+            # sem envio (o alerta se perde; janela mínima, aceita)
+            logger.exception('vigia venda sem item: devolver claim falhou')
         return {'rodou': True, 'novas': len(novas), 'enviado': False,
                 'motivo': 'envio falhou — retenta no proximo ciclo'}
-    for c in novas:
-        estado['ids'].setdefault(c['data'], []).append(c['id'])
-    estado['ultimo_envio'] = agora_dt.isoformat()
-    estado['envios'][hoje_iso] = estado['envios'].get(hoje_iso, 0) + 1
-    _gravar_estado(estado)
     return {'rodou': True, 'novas': len(novas), 'enviado': True,
             'valor_novas': round(sum(c['total'] for c in novas), 2)}
