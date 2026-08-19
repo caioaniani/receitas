@@ -2766,7 +2766,9 @@ def slack_diagnostico_disparar_desperdicio():
 
     from app.services import desperdicio_alerta
 
-    res = desperdicio_alerta.alertar_slack_pendentes()
+    # claim=False: re-envio DELIBERADO do owner nunca e bloqueado pelo
+    # anti-duplicata do cron (que e por tick de minuto).
+    res = desperdicio_alerta.alertar_slack_pendentes(claim=False)
     if res.get('enviado'):
         flash(f'Alerta enviado no Slack ({res.get("pendentes")} loja[s] pendente[s]).',
               'success')
