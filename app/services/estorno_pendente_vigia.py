@@ -46,6 +46,7 @@ Config (env):
 Sob demanda: `GET /admin/vigia-estorno-pendente` (owner; dry-run lista o
 estado sem WhatsApp, `?alertar=1` roda o fluxo).
 """
+import copy
 import json
 import logging
 import os
@@ -337,6 +338,19 @@ def alertar(pendentes):
         return {'rodou': True, 'novos': len(novos), 'enviado': False,
                 'motivo': motivo}
 
+    # CLAIM-FIRST (19/08/2026, mesma classe do venda_sem_item_vigia): marca
+    # e COMMITA os ids ANTES do envio — kill de deploy entre o envio e o
+    # commit duplicava o alerta no ciclo do container novo. Envio falho
+    # devolve o claim (retenta). Claim que não grava = não envia.
+    anterior = copy.deepcopy(estado)
+    for c in novos:
+        estado['ids'].setdefault(c.get('data') or hoje_iso, []).append(c['id'])
+    estado['ultimo_envio'] = agora_dt.isoformat()
+    estado['envios'][hoje_iso] = estado['envios'].get(hoje_iso, 0) + 1
+    if not _gravar_estado(estado):
+        return {'rodou': True, 'novos': len(novos), 'enviado': False,
+                'motivo': 'claim falhou — retenta no proximo ciclo'}
+
     try:
         r = zapi.enviar_texto(dono, _montar_mensagem(novos))
         ok = bool(r.get('ok')) if isinstance(r, dict) else False
@@ -344,12 +358,9 @@ def alertar(pendentes):
         logger.exception('vigia estorno pendente: envio WhatsApp explodiu')
         ok = False
     if not ok:
+        # Devolve o claim; se a devolução falhar, o claim fica "gasto"
+        # (ids marcados sem envio — janela mínima, aceita).
+        _gravar_estado(anterior)
         return {'rodou': True, 'novos': len(novos), 'enviado': False,
                 'motivo': 'envio falhou — retenta no proximo ciclo'}
-
-    for c in novos:
-        estado['ids'].setdefault(c.get('data') or hoje_iso, []).append(c['id'])
-    estado['ultimo_envio'] = agora_dt.isoformat()
-    estado['envios'][hoje_iso] = estado['envios'].get(hoje_iso, 0) + 1
-    _gravar_estado(estado)
     return {'rodou': True, 'novos': len(novos), 'enviado': True}
