@@ -339,3 +339,45 @@ def test_detalhe_nfce_autorizada_nao_marca_e_some(app):
     estado = vigia.estado_dedup([hoje() - timedelta(days=1), hoje()])
     ids = {i for v in estado['ids'].values() for i in v}
     assert 'r3' not in ids
+
+
+def test_claim_e_gravado_ANTES_do_envio(app):
+    """Anti-duplicata 19/08/2026 (cód 21097090 alertado às 19:19 E 19:20):
+    os ids têm que estar COMMITADOS quando o WhatsApp sai — se o deploy
+    matar o container entre o envio e a gravação, o container novo NÃO pode
+    re-alertar. O mock de envio lê o estado direto do banco no momento do
+    disparo e trava a ordem."""
+    from flask import current_app
+    visto = {}
+
+    def _envia(numero, msg):
+        estado = json.loads(AppConfig.get(vigia._KEY_ESTADO) or '{}')
+        ids = {i for lst in (estado.get('ids') or {}).values() for i in lst}
+        visto['marcado_no_envio'] = 'k1' in ids
+        return {'ok': True}
+
+    current_app.config['ZAPI_BOT_DONO_NUMERO'] = '5511999999999'
+    current_app.config['CHATWOOT_VIGIA_INFRA_NUMERO'] = ''
+    pedidos = [_pedido('k1', 500.00)]
+    with patch('app.services.seru.listar_pedidos_completo',
+               return_value=pedidos), \
+         patch('app.services.seru.extrair_itens',
+               side_effect=_extrair_itens_fake), \
+         patch('app.services.seru.detalhes_pedido',
+               side_effect=_detalhe_fake(pedidos, None)), \
+         patch('app.services.zapi.enviar_texto', side_effect=_envia):
+        out = vigia.vigiar()
+    assert out['enviado'] is True
+    assert visto['marcado_no_envio'] is True
+
+
+def test_envio_falho_devolve_o_claim_inteiro(app):
+    """Envio falho não pode consumir cooldown/teto: ultimo_envio e envios
+    voltam ao que eram (o claim é devolvido por inteiro, não só os ids)."""
+    out, _ = _rodar([_pedido('cw1', 500.00)], zapi_ok=False)
+    assert out['enviado'] is False
+    estado = vigia.estado_dedup([hoje() - timedelta(days=1), hoje()])
+    ids = {i for v in estado['ids'].values() for i in v}
+    assert 'cw1' not in ids
+    assert estado['ultimo_envio'] is None
+    assert estado['envios'] == {}
