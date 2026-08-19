@@ -794,7 +794,7 @@ def _seed_minis_sanduiche(app):
             r = ativas.get(_norm(nome))
             if r is None:
                 r = Receita(
-                    nome=nome, descricao=desc,
+                    nome=nome, observacao=desc,
                     categoria=(ref.categoria if ref else 'Minis'),
                     rendimento_qtd=(ref.rendimento_qtd if ref else 1),
                     rendimento_unidade=(ref.rendimento_unidade
@@ -807,6 +807,7 @@ def _seed_minis_sanduiche(app):
                 try:
                     with open(caminho, 'rb') as f:
                         r.imagem_blob = f.read()
+                    r.imagem_mimetype = 'image/jpeg'
                     fotos += 1
                 except OSError:
                     logger.warning('seed minis: foto %s ausente', arquivo)
