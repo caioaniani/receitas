@@ -126,6 +126,55 @@ def _itens_sem_sobra_safe(dia=None):
         return []
 
 
+_KEY_CLAIM_SLACK = 'desperdicio_alerta_slack_tick'
+_KEY_CLAIM_DONO = 'desperdicio_alerta_dono_dia'
+
+
+def _claim_envio(chave, tick_id):
+    """Claim persistente anti-duplicata (ver docstring do modulo): grava e
+    COMMITA o marcador ANTES do envio — quem chegar depois com o MESMO
+    tick_id pula. O advisory lock do cron cobre o caso SIMULTANEO; este
+    claim cobre o SEQUENCIAL (container velho + novo no deploy).
+
+    Retorna ('ok', valor_anterior) quando o claim e nosso, ('duplicata',
+    None) quando outro processo ja enviou este tick, ('erro', None) quando
+    nao deu pra gravar — sem claim duravel NAO se envia (duplicar e pior
+    que atrasar um lembrete diario)."""
+    from app.extensions import db
+    from app.models import AppConfig
+    try:
+        atual = AppConfig.get(chave)
+        if atual == tick_id:
+            return 'duplicata', None
+        AppConfig.set(chave, tick_id)
+        db.session.commit()
+        return 'ok', atual
+    except Exception:  # noqa: BLE001 — claim indisponivel = nao envia
+        logger.exception('desperdicio_alerta: claim %s falhou', chave)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return 'erro', None
+
+
+def _devolver_claim(chave, anterior):
+    """Devolve o claim quando o ENVIO falhou (Slack/Z-API fora) — o proximo
+    tick/dia nao fica bloqueado por mensagem que nunca saiu. Best-effort:
+    falha aqui so deixa o claim "gasto" (perde 1 lembrete, volta amanha)."""
+    from app.extensions import db
+    from app.models import AppConfig
+    try:
+        AppConfig.set(chave, anterior)
+        db.session.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception('desperdicio_alerta: devolver claim %s falhou', chave)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def mensagem_pendentes(lojas, itens_por_loja=None):
     """Monta o texto do alerta: lojas sem NENHUM lançamento + itens
     cobrados nominalmente (`itens_sem_sobra`). Qualquer um dos dois pode
