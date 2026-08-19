@@ -18,8 +18,17 @@ Funcionamento (pedido do dono, 18/07/2026):
   {data: [ids]}, podado pra janela): cada cobrança alerta UMA vez; um
   ciclo com várias novas vira UMA mensagem, agrupada por company, com
   hora, valor, NF (tem/não tem) e caixa.
-- Se o envio falhar (Z-API fora), os ids NÃO são marcados — retenta no
-  próximo ciclo. Perder alerta de possível fraude é pior que duplicar.
+- Se o envio falhar (Z-API fora), o claim é DEVOLVIDO (ids desmarcados) —
+  retenta no próximo ciclo. Perder alerta de possível fraude é pior que
+  duplicar.
+- Os ids são marcados e COMMITADOS **ANTES** do envio (claim-first,
+  19/08/2026, dono: "Continua duplicando"): a ordem antiga (envia → marca)
+  duplicava quando o deploy matava o container entre o envio e o commit —
+  caso real: cód 21097090 alertado às 19:19 E às 19:20, com push em deploy
+  às 19:1x BRT; o container novo re-detectou porque o velho morreu sem
+  gravar o estado. Janela residual ACEITA: kill entre o claim e o envio
+  perde 1 alerta (a cobrança segue visível no /admin/vigia-venda-sem-item
+  e no acumulado da janela das mensagens seguintes).
 
 ANTI-FLOOD (pedido do dono 18/07/2026 — "cuidado com os disparos no
 WhatsApp pra não bloquear a conta"): a PRIMEIRA cobrança nova alerta na
