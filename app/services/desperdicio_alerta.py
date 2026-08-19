@@ -10,6 +10,19 @@ Fluxo (cron em America/Sao_Paulo):
   anterior, so movido pra 20:30.
 
 So envia se houver loja faltando (sem spam).
+
+ANTI-DUPLICATA (19/08/2026, dono: "Continua duplicando"): num deploy, o
+container VELHO e o NOVO ficam vivos ao mesmo tempo por alguns minutos e os
+DOIS disparam o cron do minuto — o advisory lock do seru_cron so serializa
+execucoes SIMULTANEAS; a segunda, segundos depois, pega o lock livre e
+reenvia (caso real: push as 20:2x BRT, container novo bootou 20:26 e o dono
+levou DUAS mensagens de sobras as 20:30 — com conteudos diferentes, porque
+um gerente lancou entre os dois envios). Fix: claim persistente em AppConfig
+COMMITADO ANTES do envio (`_claim_envio`) — WhatsApp do dono e 1x/DIA, cada
+tick do Slack e 1x/MINUTO; envio que falha DEVOLVE o claim (o lembrete nao
+se perde por Slack/Z-API fora). Janela residual aceita: kill entre o claim e
+o envio perde 1 lembrete do dia (volta amanha) — aqui duplicar e pior que
+perder, direcao OPOSTA a dos vigias de fraude.
 """
 import logging
 
