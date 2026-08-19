@@ -925,7 +925,12 @@ def _run_ordens_semana(app):
 # hook que pusha cada edit — deploy vencedor tinha o ALTER sem o
 # backfill; sonda mostrou antecedencia=None); virou seed com marker
 # (_seed_antecedencia_brioche) e a semana e re-nivelada de novo.
-ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17n'
+# 'o' = anti-REFORNADA (dono 19/08: "se vai produzir hoje sourdough
+# integral, amanha nao deveria produzir de novo — re-trabalho; o brioche
+# e diferente porque nao congela"): celula menor que 1 lote funde na
+# fornada anterior do item; congelado (antecedencia NULL) funde no grid
+# inteiro, valor da ficha manda (brioche 0 = nunca).
+ORDENS_SEMANA_RETRO_MARKER = 'ordens_semana_retro_2026_08_17o'
 
 
 def _run_ordens_semana_retro(app):

@@ -2607,8 +2607,15 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             ant_rec = getattr(rec, 'antecedencia_max_dias', None)
             ant = (_ANTECEDENCIA_MAX_DIAS if ant_rec is None
                    else max(0, int(ant_rec)))
+            # Alcance da CONSOLIDACAO (anti-refornada): item SEM valor na
+            # ficha = congelado por default — fundir um caco num dia que
+            # JA produz nao tem custo de frescor (vai pro freezer), entao
+            # o alcance e o grid inteiro; valor explicito na ficha manda
+            # nas duas reguas (brioche 0 = nunca antecipa nem funde).
+            ant_consolida = n if ant_rec is None else ant
             itens_eq.append({'rr': rr, 'rec': rec, 'rend': rend,
                              'qtds': qtds, 'segs': segs, 'ant': ant,
+                             'ant_consolida': ant_consolida,
                              'chunk': max(1, chunk), 'peso': peso})
         if itens_eq:
             carga = [0.0] * n
@@ -2696,8 +2703,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                     d0 = max(destinos)             # o dia anterior mais perto
                     for f in list(it['segs'][d]):
                         ref, q = f
-                        if ref - d0 > it['ant'] or q <= 0:
-                            continue               # frescor nao deixa
+                        if ref - d0 > it['ant_consolida'] or q <= 0:
+                            continue               # ficha nao deixa
                         it['segs'][d0].append([ref, q])
                         it['segs'][d].remove(f)
                         it['qtds'][d0] += q

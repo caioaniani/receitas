@@ -2168,3 +2168,69 @@ def test_antecedencia_por_receita_null_usa_global(app):
     # ficou só na sexta, a regra global não está valendo
     assert any(_d < (hoje_d + timedelta(days=4)).isoformat()
                for _d in dias_com_prod), dias_com_prod
+
+
+def _vendas_diarias(loja, receita, un_dia=20, semanas=4):
+    """Historico de venda POR DIA (motor 'vendas'): e o vetor que produz
+    celulas sub-lote em dias seguidos no grid real (caso Sourdough
+    Integral 98+22 do dono, 19/08/2026)."""
+    from datetime import datetime as _dt
+    from datetime import time as _time
+
+    from app.models import EstoqueLoja, MovEstoqueLoja
+    el = EstoqueLoja(loja_id=loja.id, receita_id=receita.id, quantidade=0)
+    db.session.add(el)
+    db.session.flush()
+    hoje_d = hoje()
+    for d in range(1, 7 * semanas + 1):
+        dia = hoje_d - timedelta(days=d)
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo='venda_seru', quantidade=un_dia,
+            data=_dt.combine(dia, _time(12, 0)), referencia='teste-refornada'))
+    db.session.commit()
+
+
+def test_anti_refornada_funde_topup_na_fornada_anterior(app):
+    """Caso Sourdough Integral (dono 19/08/2026: "se vai produzir hoje,
+    amanhã não deveria produzir novamente — é um re-trabalho"): no motor
+    de VENDAS (o do grid real), item congelado com lote definido não
+    deixa top-up MENOR QUE UM LOTE colado num dia que já produz — a
+    célula quebrada é fundida na fornada anterior."""
+    loja = _loja()
+    r = _receita('Sourdough Consolida')
+    r.lote_producao = 60
+    db.session.commit()
+    _vendas_diarias(loja, r)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True, motor='vendas')
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] > 0
+    qtds = [c['qtd'] for c in rr['por_dia']]
+    for i in range(1, len(qtds)):
+        if qtds[i - 1] > 0 and qtds[i] > 0:
+            assert qtds[i] >= 60, (
+                'top-up sub-lote no dia seguinte a uma fornada: %s' % qtds)
+
+
+def test_anti_refornada_respeita_item_fresco(app):
+    """Brioche (antecedência 0, não congela) fica FORA da consolidação:
+    as fornadas diárias pequenas continuam — a parcela de amanhã não
+    pode ser assada hoje. Mesmo vetor de vendas do teste acima."""
+    loja = _loja()
+    r = _receita('Brioche Diario')
+    r.lote_producao = 60
+    r.antecedencia_max_dias = 0
+    db.session.commit()
+    _vendas_diarias(loja, r)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True, motor='vendas')
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] > 0
+    dias_com_prod = [c['qtd'] for c in rr['por_dia'] if c['qtd']]
+    # produção espalhada em VÁRIOS dias preservada — o congelado do teste
+    # acima colapsa em menos dias; o fresco não pode ser fundido (o
+    # arredondamento por lote pré-existente pode encher as células, mas
+    # a CONTAGEM de dias de fornada é o contrato do fresco)
+    assert len(dias_com_prod) >= 3, dias_com_prod

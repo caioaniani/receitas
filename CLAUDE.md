@@ -2019,8 +2019,17 @@ do seru_cron junto.
   tem producao") + piso do Cinnamon Roll; 'm' antecedencia POR RECEITA
   (`Receita.antecedencia_max_dias`, campo na ficha; NULL = global 3;
   0 = assa so no dia da demanda — dono 18/08 "quero o maximo de
-  brioche fresco nas lojas", Brioche seedado 0 no ALTER; vale em
-  _movel, consumo de parcela e anti-farelo); 'j' anti-farelo ("2 paes e
+  brioche fresco nas lojas", Brioche seedado 0 no seed proprio com
+  marker; vale em _movel, consumo de parcela e anti-farelo); 'o'
+  anti-REFORNADA (dono 19/08: "se vai produzir hoje sourdough integral,
+  amanha nao deveria produzir de novo — e um re-trabalho; o brioche e
+  diferente porque nao congela"): celula MENOR QUE UM LOTE e fundida na
+  fornada ANTERIOR mais proxima do mesmo item, parcela a parcela;
+  alcance da fusao = grid inteiro pra item de antecedencia NULL
+  (congelado: fundir trabalho JA agendado nao tem custo de frescor —
+  o teto de 3 dias segue valendo pro NIVELADOR antecipar) e = valor da
+  ficha quando definido (brioche 0 = nunca funde). Fornada CHEIA em
+  dias seguidos fica — volume legitimo nao cabe num dia; 'j' anti-farelo ("2 paes e
   ridiculo, deveria ser nenhum de nozes e azeitonas" — celula que o
   movimento de parcelas deixou MENOR que `_MIN_FRACAO_FORNADA` x chunk
   e fundida numa celula ja existente do item, parcela a parcela, sempre
