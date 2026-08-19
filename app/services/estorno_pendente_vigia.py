@@ -22,8 +22,11 @@ Funcionamento:
 - O cron chama `alertar(...)` a cada ciclo, DENTRO do advisory lock do sync
   — execução única entre workers, sem alerta duplicado.
 - Dedup POR PEDIDO em AppConfig: cada cobrança avisa UMA vez. Envio falho
-  não marca (retenta no próximo ciclo) — perder um alerta de estoque é pior
-  que repetir.
+  DEVOLVE o claim (retenta no próximo ciclo) — perder um alerta de estoque
+  é pior que repetir. Os ids são marcados e COMMITADOS **antes** do envio
+  (claim-first, 19/08/2026 — mesma classe do `venda_sem_item_vigia`: kill
+  de deploy entre o envio e o commit duplicava o alerta no ciclo do
+  container novo).
 - Anti-flood igual ao `venda_sem_item_vigia`: cooldown entre mensagens e
   teto diário, ambos por env.
 
