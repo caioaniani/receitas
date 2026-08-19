@@ -271,28 +271,41 @@ def alertar_slack_pendentes(dia=None, claim=True):
             'pendentes': len(faltam), 'pendentes_itens': n_itens}
 
 
-def enviar_alerta_desperdicio():
+def enviar_alerta_desperdicio(claim=True):
     """Job WhatsApp: se alguma loja nao lancou desperdicio hoje, avisa o dono
     (ZAPI_NUMERO_DESTINO). So envia se houver pendentes.
 
     Mensagem COMPACTA (`mensagem_resumo`) desde 14/08/2026 — o dono pediu
     so "lançou ou não" no WhatsApp dele; a lista nominal de itens segue
-    no Slack (`alertar_slack_pendentes`)."""
+    no Slack (`alertar_slack_pendentes`).
+
+    `claim=True`: no maximo 1 mensagem por DIA (`_claim_envio` — caso real
+    19/08/2026: overlap de deploy fez o job das 20:30 rodar em DOIS
+    containers e o dono levou a cobranca 2x). Envio falho devolve o claim."""
     from app.services import zapi
 
     numero = (current_app.config.get('ZAPI_NUMERO_DESTINO') or '').strip()
     if not numero:
         logger.info('desperdicio_alerta: ZAPI_NUMERO_DESTINO nao configurado, pulando')
-        return
+        return {'enviado': False, 'motivo': 'sem_numero'}
     if not zapi.disponivel():
         logger.info('desperdicio_alerta: Z-API nao configurado, pulando')
-        return
+        return {'enviado': False, 'motivo': 'zapi_indisponivel'}
 
     faltam = lojas_sem_desperdicio()
     itens = _itens_sem_sobra_safe()
     if not faltam and not itens:
         logger.info('desperdicio_alerta: todas as lojas lancaram, nada a enviar')
-        return
+        return {'enviado': False, 'motivo': 'sem_pendencias'}
+
+    anterior = None
+    if claim:
+        dia_id = hoje().isoformat()
+        status, anterior = _claim_envio(_KEY_CLAIM_DONO, dia_id)
+        if status != 'ok':
+            logger.info('desperdicio_alerta: WhatsApp de %s ja enviado por '
+                        'outro processo (%s) — suprimido', dia_id, status)
+            return {'enviado': False, 'motivo': f'claim_{status}'}
 
     texto = mensagem_resumo(faltam, itens)
     res = zapi.enviar_texto(numero, texto)
@@ -300,5 +313,9 @@ def enviar_alerta_desperdicio():
         logger.info('desperdicio_alerta: enviado pra %s (%d loja[s], '
                     '%d item[ns] nominais)', numero, len(faltam),
                     sum(len(its) for _, its in itens))
-    else:
-        logger.warning('desperdicio_alerta: falha ao enviar: %s', res.get('erro'))
+        return {'enviado': True, 'pendentes': len(faltam),
+                'pendentes_itens': sum(len(its) for _, its in itens)}
+    if claim:
+        _devolver_claim(_KEY_CLAIM_DONO, anterior)
+    logger.warning('desperdicio_alerta: falha ao enviar: %s', res.get('erro'))
+    return {'enviado': False, 'motivo': 'erro_envio', 'erro': res.get('erro')}
