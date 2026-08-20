@@ -1368,20 +1368,36 @@ prova fechou o caso — a sonda `/api/claude/vigia-vereditos?conv=` mostrou
 UMA linha de VigiaVeredito por conversa em prod (logo prod mandou UMA vez)
 e o job e cron `*/5` (`seru_cron.py`), horario de PAREDE, entao as duas
 instancias disparam no MESMO minuto, leem o MESMO Chatwoot e produzem a
-MESMA mensagem. `app/services/instancia.py`: so o servico que deploya
-`BRANCH_PRODUCAO` fala com o mundo — o discriminador e `RAILWAY_GIT_BRANCH`,
-que o Railway INJETA POR SERVICO e que NAO vem junto quando se copiam as
-envs do usuario. Guarda aplicada em `zapi.enviar_texto`,
-`slack.post_message` e `chatwoot.enviar_mensagem` (os tres canais que leem
-estado externo compartilhado; e-mail fica fora de proposito — e dirigido
-por dado do BANCO, e o banco da copia nao tem pedido real). FAIL-OPEN: sem
-a env (dev/teste) libera, e `critico=True` (Lalamove/pedido pago) NUNCA e
-bloqueado. Escapes: `ALERTAS_INSTANCIA_CANONICA=1` forca liberar (usar se
-o branch de producao for renomeado antes de alguem atualizar a constante),
-`=0` silencia uma copia sem deploy. A sonda `/api/claude/deploy` expoe
-`alertas.pode_enviar` — CONFERIR ali depois de qualquer deploy que mexa
-nisso: producao silenciada por engano e a pior falha possivel aqui.
-**AO RENOMEAR O BRANCH DE PRODUCAO, atualizar `instancia.BRANCH_PRODUCAO`.**
+MESMA mensagem. `app/services/instancia.py`: copia de homologacao nao fala com o mundo — o
+discriminador e `RAILWAY_GIT_BRANCH`, que o Railway INJETA POR SERVICO e
+que NAO vem junto quando se copiam as envs do usuario.
+**A REGRA E DENYLIST, NAO ALLOWLIST** (correcao da revisao, e a decisao
+mais importante da secao): branch == `BRANCH_PRODUCAO` libera; branch que
+CASA `_PADROES_COPIA` (codex/, preview, homolog, staging, sandbox,
+ui-simplification, teste/) BLOQUEIA; **branch DESCONHECIDO LIBERA** com
+ERROR no log. Motivo: a assimetria e brutal — copia falando = mensagem
+repetida (irritante); producao calada = silenciosa e cara (sem vigia, sem
+magic link de MOTORISTA, e o BOT PARA DE RESPONDER CLIENTE). Uma allowlist
+transformaria "renomear o branch" em apagao mudo, inclusive do heartbeat
+que existe justamente pra detectar apagao.
+Guarda aplicada nos canais que leem/escrevem estado externo COMPARTILHADO:
+`zapi.enviar_texto`, `slack.post_message` e, no Chatwoot, `enviar_mensagem`
++ `definir_status` + `enviar_mensagem_painel` + `atualizar_atributos_contato`
++ `enviar_template` (o `definir_status` foi achado de revisao: a vassoura o
+chama FORA do `if texto`, entao a copia marcava conversa REAL como
+'resolved' — sumia da fila da equipe — sem mandar nada ao cliente). E-mail
+fica fora de proposito (e dirigido por dado do BANCO, e o banco da copia
+nao tem pedido real). `critico=True` (Lalamove/pedido pago) atravessa o
+bloqueio AUTOMATICO; so o `ALERTAS_INSTANCIA_CANONICA=0` (gesto humano)
+silencia tambem o critico. `=1` forca liberar. A sonda
+`/api/claude/deploy` expoe `alertas.pode_enviar` — CONFERIR ali depois de
+qualquer deploy que mexa nisso.
+**AO RENOMEAR O BRANCH DE PRODUCAO, atualizar `instancia.BRANCH_PRODUCAO`**
+(sem isso o log grita ERROR a cada canal, mas os alertas seguem saindo).
+NAO COBERTO pela guarda (aceito, documentado): Listmonk (campanha), e-mail
+Postmark, NF do Tiny, upload de backup pro Dropbox e o CUSTO de IA — a
+copia continua pagando Anthropic ao avaliar conversa real. O gesto que
+fecha tudo isso segue sendo apagar o servico (ou `SERU_AUTO_SYNC=0`).
 
 **COOLDOWN nos jobs de INTERVALO + heartbeat sem lock (mesma varredura)**:
 a auditoria dos 21 senders automaticos (workflow de 10 agentes) separou as
