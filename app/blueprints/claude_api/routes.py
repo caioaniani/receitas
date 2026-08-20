@@ -2501,7 +2501,8 @@ def chatwoot_thread():
     Read-only estrito (GET no Chatwoot). Params: ?conv=<id>
     (obrigatório), ?limite=40 (1-100).
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
 
     from app.services import chatwoot
 
@@ -2516,12 +2517,14 @@ def chatwoot_thread():
         return jsonify(ok=False, erro=f'{type(e).__name__}: {e}'), 502
 
     def _hora(ts):
-        """epoch UTC -> HH:MM:SS BRT (o Chatwoot devolve epoch)."""
+        """epoch UTC -> HH:MM:SS BRT (o Chatwoot devolve epoch). Usa
+        ZoneInfo, não `-3h` fixo (regra da casa sobre fuso)."""
         if not ts:
             return None
         try:
             return (datetime.fromtimestamp(int(ts), tz=timezone.utc)
-                    - timedelta(hours=3)).strftime('%d/%m %H:%M:%S')
+                    .astimezone(ZoneInfo('America/Sao_Paulo'))
+                    .strftime('%d/%m %H:%M:%S'))
         except (TypeError, ValueError, OSError):
             return None
 
