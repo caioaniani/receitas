@@ -936,12 +936,19 @@ def deploy_info():
     from sqlalchemy import text
 
     from app.extensions import db
+    from app.services import instancia as _inst
 
+    pode_enviar, motivo_inst = _inst.status()
     out = {
         'ok': True,
         'commit': os.environ.get('RAILWAY_GIT_COMMIT_SHA'),
         'branch': os.environ.get('RAILWAY_GIT_BRANCH'),
         'deployment_id': os.environ.get('RAILWAY_DEPLOYMENT_ID'),
+        # Guarda de instancia canonica (20/08/2026): confirma de FORA que a
+        # producao NAO foi silenciada por engano — um branch renomeado
+        # calaria os alertas em silencio, que e a pior falha possivel aqui.
+        'alertas': {'pode_enviar': pode_enviar, 'motivo': motivo_inst,
+                    'branch_producao': _inst.BRANCH_PRODUCAO},
     }
     pedidas = [c.strip() for c in
                (request.args.get('colunas') or '').split(',') if c.strip()]
