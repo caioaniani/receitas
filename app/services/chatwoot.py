@@ -117,7 +117,17 @@ def enviar_mensagem_painel(conversation_id, content):
 
 
 def enviar_mensagem(conversation_id, content):
-    """Posta uma resposta do bot numa conversa. Retorna {'ok': bool}."""
+    """Posta uma resposta do bot numa conversa. Retorna {'ok': bool}.
+
+    Guarda de INSTÂNCIA CANÔNICA (20/08/2026): o Chatwoot é EXTERNO e
+    compartilhado — uma cópia de homologação com as mesmas envs enxerga as
+    conversas REAIS e responderia ao cliente em dobro (caso Lissa, 19/08:
+    contenção duplicada no Instagram). Ver app/services/instancia.py.
+    """
+    from app.services import instancia as _inst
+    if not _inst.pode_falar_com_o_mundo('chatwoot'):
+        return {'ok': False, 'suprimido_instancia': True,
+                'erro': 'instancia nao canonica — envio suprimido'}
     if not bot_disponivel():
         return {'ok': False, 'erro': 'Chatwoot bot nao configurado'}
     url = f'{_base()}/conversations/{conversation_id}/messages'
