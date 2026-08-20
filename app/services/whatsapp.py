@@ -58,6 +58,47 @@ def devolver_claim(chave, anterior):
             pass
 
 
+def claim_por_cooldown(chave, segundos):
+    """Variante do claim por TEMPO, pra job de INTERVALO — que não tem um
+    "tick" redondo pra comparar (20/08/2026).
+
+    Por que precisa existir: `claim_envio` compara um tick calculado igual
+    nos dois processos, o que só funciona em job de CRON (horário de parede
+    idêntico). Job de INTERVALO (`'interval', minutes=N`) conta a partir do
+    boot de CADA worker/container, então os disparos caem em minutos
+    diferentes — nenhum tick coincide e o advisory lock, que só serializa o
+    simultâneo, já foi liberado. É a classe dos vigias (PDV, site, infra,
+    custo de IA, baixas presas), que alertam DOIS no minuto de um deploy.
+
+    Só libera se o último claim tiver mais de `segundos`. Erro de banco =
+    True (fail-open: guarda quebrada não pode calar vigia de produção).
+    """
+    from datetime import datetime, timedelta
+
+    from app.models import AppConfig
+    from app.utils import agora
+    try:
+        agora_dt = agora()
+        bruto = AppConfig.get(chave)
+        if bruto:
+            try:
+                if agora_dt - datetime.fromisoformat(bruto) < timedelta(
+                        seconds=segundos):
+                    return False
+            except (TypeError, ValueError):
+                pass          # valor ilegível: trata como sem claim
+        AppConfig.set(chave, agora_dt.isoformat())
+        db.session.commit()
+        return True
+    except Exception:  # noqa: BLE001 — fail-open
+        logger.exception('whatsapp: cooldown %s falhou', chave)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return True
+
+
 def notificar(numero, mensagem, origem='manual'):
     """Envia uma mensagem pelo Z-API e registra no log (NotificacaoWhatsapp).
     Retorna o dict de zapi.enviar_texto."""
