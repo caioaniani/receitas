@@ -291,6 +291,7 @@
     }
     input.addEventListener('input', function () {
       hidden.value = '';           // digitou = precisa RE-escolher (sem lixo)
+      syncMenu(row, '');
       abrir(input.value);
     });
     input.addEventListener('focus', function () { abrir(input.value); });
@@ -301,8 +302,56 @@
       e.preventDefault();
       hidden.value = opt.getAttribute('data-val');
       input.value = opt.getAttribute('data-nome');
+      syncMenu(row, hidden.value);
       fechar();
     });
+  }
+
+  // ── Montador de MENU (Caixa de Mini): escolher os minis como no site.
+  //    Total EXATO obrigatório; começa na pré-seleção do cadastro; a escolha
+  //    viaja como JSON {produto_item_id: qtd} no hidden item_comp[]. O
+  //    servidor re-valida tudo (loja_menu.normalizar/validar). ─────────────
+  function syncMenu(row, val) {
+    var box = row.querySelector('.menu-box');
+    var compVal = row.querySelector('.menu-comp-val');
+    var regras = val && MENUS[val];
+    if (!regras) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      compVal.value = '';
+      return;
+    }
+    var teto = regras.teto || regras.total;
+    box.innerHTML =
+      '<div class="small fw-semibold mb-1">Monte a caixa — exatamente ' +
+      regras.total + ' unidades <span class="menu-count badge bg-secondary"></span></div>' +
+      regras.slots.map(function (s) {
+        var preco = s.preco != null
+          ? ' <span class="text-muted">R$ ' + s.preco.toFixed(2).replace('.', ',') + '</span>' : '';
+        return '<div class="d-flex align-items-center gap-2 mb-1">' +
+          '<input type="number" class="form-control form-control-sm menu-slot" ' +
+          'style="width:5.5rem" min="0" max="' + teto + '" step="1" ' +
+          'value="' + (s.padrao || 0) + '" data-pi="' + s.pi_id + '">' +
+          '<span class="small">' + s.nome.replace(/</g, '&lt;') + preco + '</span></div>';
+      }).join('');
+    box.style.display = '';
+    function recalc() {
+      var soma = 0, comp = {};
+      box.querySelectorAll('.menu-slot').forEach(function (inp) {
+        var q = parseInt(inp.value, 10) || 0;
+        soma += q;
+        if (q > 0) comp[inp.getAttribute('data-pi')] = q;
+      });
+      var badge = box.querySelector('.menu-count');
+      badge.textContent = soma + '/' + regras.total;
+      badge.className = 'menu-count badge ' +
+        (soma === regras.total ? 'bg-success' : 'bg-danger');
+      compVal.value = JSON.stringify(comp);
+      row.dataset.menuOk = (soma === regras.total) ? '1' : '';
+      row.dataset.menuNome = row.querySelector('.combo-input').value;
+    }
+    box.addEventListener('input', recalc);
+    recalc();
   }
   function addItem() {
     lista.appendChild(tpl.content.cloneNode(true));
