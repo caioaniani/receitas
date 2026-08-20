@@ -57,7 +57,17 @@ def verify_signing(headers, body):
 
 
 def post_message(channel, text=None, blocks=None, thread_ts=None):
-    """chat.postMessage. Retorna {'ok': bool, 'ts': str, ...}."""
+    """chat.postMessage. Retorna {'ok': bool, 'ts': str, ...}.
+
+    Guarda de INSTÂNCIA CANÔNICA (20/08/2026): cópia de homologação com as
+    mesmas envs não posta no Slack da casa — ver app/services/instancia.py.
+    Só POSTAGEM é guardada; `update_message` (resposta a clique de botão)
+    segue livre, porque quem clicou está no Slack real.
+    """
+    from app.services import instancia as _inst
+    if not _inst.pode_falar_com_o_mundo('slack'):
+        return {'ok': False, 'suprimido_instancia': True,
+                'erro': 'instancia nao canonica — envio suprimido'}
     try:
         kwargs = {'channel': channel}
         if text is not None:
