@@ -63,6 +63,7 @@ LOCK_KEY_AUTO_PEDIDOS = 7758  # advisory lock pros pedidos automaticos loja->ind
 LOCK_KEY_AUTO_ENVIO = 7759  # advisory lock pras ordens da SEMANA (dom 12:00 + rede diaria + retro)
 LOCK_KEY_DIGEST_RECEBIMENTOS = 7760  # advisory lock pro digest 12:00 de pedidos recebidos
 LOCK_KEY_ATUALIZA_PLANO = 7761  # advisory lock pro 🔄 automatico da ordem do dia (06:45/19:05)
+LOCK_KEY_HEARTBEAT = 7762  # advisory lock pro heartbeat diario no Slack (08:00)
 # 7750 foi reciclado: era do `briefing-dono` (removido 17/07/2026), agora e do
 # marketing (sync da base + campanha de aniversario no Listmonk).
 LOCK_KEY_MARKETING = 7750  # advisory lock pro marketing (Listmonk)
@@ -1102,7 +1103,7 @@ def _run_vigia_chatwoot(app):
 
     with app.app_context():
         _com_lock(LOCK_KEY_VIGIA_CHATWOOT, chatwoot.vigiar_infra,
-                  'vigia infra chatwoot')
+                  'vigia infra chatwoot', cooldown_seg=600)
 
 
 def _run_site_vigia(app):
@@ -1113,7 +1114,8 @@ def _run_site_vigia(app):
     from app.services import site_vigia
 
     with app.app_context():
-        _com_lock(LOCK_KEY_SITE_VIGIA, site_vigia.vigiar, 'vigia site')
+        _com_lock(LOCK_KEY_SITE_VIGIA, site_vigia.vigiar, 'vigia site',
+                  cooldown_seg=5000)
 
 
 def _run_pdv_vigia(app):
@@ -1122,7 +1124,8 @@ def _run_pdv_vigia(app):
     from app.services import pdv_vigia
 
     with app.app_context():
-        _com_lock(LOCK_KEY_PDV_VIGIA, pdv_vigia.vigiar, 'vigia pdv')
+        _com_lock(LOCK_KEY_PDV_VIGIA, pdv_vigia.vigiar, 'vigia pdv',
+                  cooldown_seg=1200)
 
 
 def _run_uso_ia_vigia(app):
@@ -1133,7 +1136,7 @@ def _run_uso_ia_vigia(app):
 
     with app.app_context():
         _com_lock(LOCK_KEY_USO_IA_VIGIA, uso_ia_vigia.vigiar,
-                  'vigia uso ia')
+                  'vigia uso ia', cooldown_seg=2400)
 
 
 def _run_google_reviews(app):
@@ -1185,7 +1188,7 @@ def _run_alerta_baixas_presas(app):
     with app.app_context():
         _com_lock(LOCK_KEY_BAIXAS_PRESAS,
                   alertas_operacionais.rodar_e_alertar,
-                  'alerta baixas presas')
+                  'alerta baixas presas', cooldown_seg=1200)
 
 
 def _run_backup_diario(app):
