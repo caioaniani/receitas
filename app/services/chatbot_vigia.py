@@ -796,23 +796,19 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
         envio = zapi.enviar_texto(numero, mensagem)
     except Exception as exc:  # noqa: BLE001
         logger.exception('vigia abandono: envio Z-API falhou')
-        if claim is not None:
-            _desfazer_claim_veredito(claim)
         return {'erro': f'zapi: {exc}', 'veredicto': veredicto}
 
     res = {'enviado': bool(envio.get('ok')), 'envio': envio, 'veredicto': veredicto}
-    if claim is None:
-        # Sem claim (persistência falhou): registra do jeito antigo pra não
-        # perder a trilha do que foi enviado.
-        try:
-            _registrar(res, conv_id, nome_contato,
-                       f'[ABANDONO {minutos_sem_resposta}min] {ultima_msg}')
-        except Exception:  # noqa: BLE001
-            logger.exception('vigia abandono: registro falhou')
-    elif res['enviado']:
+    # A linha NUNCA é apagada aqui — mesmo com envio falho — porque
+    # `ja_avisado_abandono` documenta o invariante "existe linha recente =
+    # já avaliado" e porque `_run_vigia_abandono` marca a conversa no set em
+    # memória de qualquer jeito (não haveria retentativa no mesmo processo,
+    # só re-gasto de uma chamada ao modelo). Envio falho fica registrado com
+    # `enviado_whatsapp=False`, que é o comportamento de sempre.
+    if claim is not None and res['enviado']:
         _confirmar_envio_veredito(claim)
-    else:
-        _desfazer_claim_veredito(claim)
+        if _historico:
+            _historico[-1]['enviado'] = True   # /admin/vigia/diag coerente
     return res
 
 
