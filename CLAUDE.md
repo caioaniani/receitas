@@ -1383,6 +1383,29 @@ o branch de producao for renomeado antes de alguem atualizar a constante),
 nisso: producao silenciada por engano e a pior falha possivel aqui.
 **AO RENOMEAR O BRANCH DE PRODUCAO, atualizar `instancia.BRANCH_PRODUCAO`.**
 
+**COOLDOWN nos jobs de INTERVALO + heartbeat sem lock (mesma varredura)**:
+a auditoria dos 21 senders automaticos (workflow de 10 agentes) separou as
+duas mecanicas. Job de **CRON** ja estava seguro: todos os processos
+disparam no MESMO segundo e o advisory lock, que envolve check→envio→
+commit, derruba o segundo. Job de **INTERVALO** (`'interval', minutes=N`)
+conta a partir do BOOT de cada worker/container, entao os disparos caem em
+minutos diferentes, o lock ja foi liberado e o segundo processo repete o
+ciclo inteiro. Fix: `seru_cron._com_lock(..., cooldown_seg=N)` — claim
+persistente por TEMPO (`whatsapp.claim_por_cooldown`, ~70% do intervalo do
+job), aplicado em vigia de infra do Chatwoot (600), PDV (1200), site
+(5000), custo de IA (2400), baixas presas (1200); e em jobs de cron cujo
+sender nao tinha dedupe proprio (resumo diario 3600, lembretes de pedido
+3600/1800, digest de recebimentos 3600, auditor 3600 por modo). Fail-open:
+guarda quebrada nunca cala o job. **ACHADO GRAVE da varredura**: o
+heartbeat das 08:00 (`_run_heartbeat_slack`) era o UNICO job SEM advisory
+lock nenhum — os 2 workers postavam no Slack (e o aviso de dead-man do
+backup junto) 2x TODO DIA desde sempre; agora tem lock 7762 + claim por
+dia. O contrato do teste antigo ("posta 3x e tudo bem") foi SUBSTITUIDO.
+`chatbot_vigia` (espera-humano e abandono) passou a gravar o veredito —
+que E o dedupe — ANTES do envio, com `_desfazer_claim_veredito` quando o
+envio falha. Fonte unica do claim: `whatsapp.claim_envio/devolver_claim/
+claim_por_cooldown` — NUNCA criar um segundo helper.
+
 ## Uptime Kuma — vigia EXTERNO no VPS (04/08/2026)
 
 Pedido do dono depois de perguntar que ferramentas open source ajudariam.
