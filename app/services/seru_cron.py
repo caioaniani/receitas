@@ -1060,7 +1060,7 @@ def _run_digest_recebimentos(app):
     with app.app_context():
         _com_lock(LOCK_KEY_DIGEST_RECEBIMENTOS,
                   pedidos_notificacao.enviar_digest_recebimentos,
-                  'digest pedidos recebidos')
+                  'digest pedidos recebidos', cooldown_seg=3600)
 
 
 def _run_automacoes_whatsapp(app):
