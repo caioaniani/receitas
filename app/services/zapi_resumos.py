@@ -73,9 +73,20 @@ def _resolver_user_default():
             or Usuario.query.filter_by(papel='admin').first())
 
 
-def enviar_digest_tarefas():
-    """Job: monta + envia o digest pro `ZAPI_NUMERO_DESTINO`."""
+_KEY_CLAIM_DIGEST = 'digest_tarefas_dia'
+
+
+def enviar_digest_tarefas(claim=True):
+    """Job: monta + envia o digest pro `ZAPI_NUMERO_DESTINO`.
+
+    `claim=True` (o cron das 07:00): no maximo 1 digest por DIA via
+    `whatsapp.claim_envio` — dois schedulers vivos no mesmo minuto (deploy
+    em overlap ou os 2 workers gunicorn) nao duplicam (caso real
+    20/08/2026: dois "Bom dia!" as 07:00). O botao manual do /notificacoes
+    passa claim=False (re-envio deliberado nunca e bloqueado). Envio falho
+    devolve o claim."""
     from app.services import zapi
+    from app.services.whatsapp import claim_envio, devolver_claim, notificar
 
     numero = (current_app.config.get('ZAPI_NUMERO_DESTINO') or '').strip()
     if not numero:
@@ -90,10 +101,20 @@ def enviar_digest_tarefas():
         logger.warning('zapi_resumos: nenhum usuario owner/admin pra montar digest')
         return
 
+    anterior = None
+    if claim:
+        dia_id = hoje().isoformat()
+        status, anterior = claim_envio(_KEY_CLAIM_DIGEST, dia_id)
+        if status != 'ok':
+            logger.info('zapi_resumos: digest de %s ja enviado por outro '
+                        'processo (%s) — suprimido', dia_id, status)
+            return
+
     texto = montar_digest_tarefas(user)
-    from app.services.whatsapp import notificar
     res = notificar(numero, texto, 'digest_tarefas')
     if res.get('ok'):
         logger.info('zapi_resumos: digest enviado pra %s', numero)
     else:
+        if claim:
+            devolver_claim(_KEY_CLAIM_DIGEST, anterior)
         logger.warning('zapi_resumos: falha ao enviar: %s', res.get('erro'))
