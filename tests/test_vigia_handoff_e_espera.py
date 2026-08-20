@@ -354,3 +354,97 @@ def test_contencao_nao_repete_se_ja_esta_na_conversa(app):
         chatbot_vigia.alertar_clientes_esperando_humano()
     alerta.assert_called_once()
     contem.assert_not_called()
+
+
+# ── Anti-duplicata: claim ANTES do envio (20/08/2026) ───────────────────
+# Caso do dono ("duplo texto do bot, muito serio"): a MESMA mensagem duas
+# vezes no grupo. A ordem antiga (envia -> registra) deixava dois processos
+# no mesmo ciclo (2 workers gunicorn, ou container velho + novo no deploy)
+# passarem juntos pelo dedupe. O registro E o dedupe: tem que estar
+# COMMITADO quando o WhatsApp sai.
+
+def _conversa_parada(conv_id=1759, minutos=12):
+    return [{'id': conv_id, 'nome_contato': 'Dany', 'minutos_paradas': minutos}]
+
+
+_HIST_ESPERANDO = [{'role': 'assistant', 'content': 'ja te respondo'},
+                   {'role': 'user', 'content': 'Boa tarde'}]
+
+
+def test_claim_esta_gravado_ANTES_de_enviar(app):
+    """O mock de envio consulta o banco NO MOMENTO do disparo: se o
+    registro ainda nao estiver la, um segundo processo passaria pelo
+    dedupe e mandaria de novo."""
+    from app.models import VigiaVeredito
+    from app.services import chatbot_vigia
+    visto = {}
+
+    def _envia(numero, msg):
+        visto['ja_registrado'] = VigiaVeredito.query.filter(
+            VigiaVeredito.conv_id == '1759',
+            VigiaVeredito.mensagem_cliente.like('[ESPERA_HUMANO%')
+        ).first() is not None
+        return {'ok': True}
+
+    with app.app_context(), \
+         patch('app.services.chatbot_vigia._numero_destino',
+               return_value='5511999990000'), \
+         patch('app.services.chatwoot.listar_conversas_paradas',
+               return_value=_conversa_parada()), \
+         patch('app.services.chatwoot.buscar_historico',
+               return_value=_HIST_ESPERANDO), \
+         patch('app.services.chatwoot.enviar_mensagem',
+               return_value={'ok': True}), \
+         patch('app.services.zapi.enviar_texto', side_effect=_envia):
+        r = chatbot_vigia.alertar_clientes_esperando_humano()
+    assert r['enviadas'] == 1
+    assert visto['ja_registrado'] is True
+
+
+def test_envio_falho_desfaz_o_claim_e_retenta(app):
+    """Z-API fora nao pode virar dedupe de 12h: o cliente ficaria esperando
+    sem que ninguem fosse avisado."""
+    from app.models import VigiaVeredito
+    from app.services import chatbot_vigia
+    with app.app_context(), \
+         patch('app.services.chatbot_vigia._numero_destino',
+               return_value='5511999990000'), \
+         patch('app.services.chatwoot.listar_conversas_paradas',
+               return_value=_conversa_parada()), \
+         patch('app.services.chatwoot.buscar_historico',
+               return_value=_HIST_ESPERANDO), \
+         patch('app.services.chatwoot.enviar_mensagem',
+               return_value={'ok': True}), \
+         patch('app.services.zapi.enviar_texto',
+               return_value={'ok': False, 'erro': 'z-api fora'}):
+        r1 = chatbot_vigia.alertar_clientes_esperando_humano()
+        assert r1['enviadas'] == 0
+        assert VigiaVeredito.query.filter(
+            VigiaVeredito.conv_id == '1759',
+            VigiaVeredito.mensagem_cliente.like('[ESPERA_HUMANO%')
+        ).first() is None                      # claim devolvido
+        # proximo ciclo: com a Z-API de volta, o alerta sai
+        with patch('app.services.zapi.enviar_texto',
+                   return_value={'ok': True}) as envia:
+            r2 = chatbot_vigia.alertar_clientes_esperando_humano()
+        assert r2['enviadas'] == 1 and envia.called
+
+
+def test_segundo_processo_no_mesmo_ciclo_nao_duplica(app):
+    """Simula os 2 workers: a segunda passada (com o claim ja no banco) nao
+    manda de novo — era exatamente isso que chegava dobrado no WhatsApp."""
+    from app.services import chatbot_vigia
+    with app.app_context(), \
+         patch('app.services.chatbot_vigia._numero_destino',
+               return_value='5511999990000'), \
+         patch('app.services.chatwoot.listar_conversas_paradas',
+               return_value=_conversa_parada()), \
+         patch('app.services.chatwoot.buscar_historico',
+               return_value=_HIST_ESPERANDO), \
+         patch('app.services.chatwoot.enviar_mensagem',
+               return_value={'ok': True}), \
+         patch('app.services.zapi.enviar_texto',
+               return_value={'ok': True}) as envia:
+        chatbot_vigia.alertar_clientes_esperando_humano()   # worker A
+        chatbot_vigia.alertar_clientes_esperando_humano()   # worker B
+    assert envia.call_count == 1

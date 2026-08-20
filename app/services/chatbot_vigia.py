@@ -797,7 +797,7 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
     except Exception as exc:  # noqa: BLE001
         logger.exception('vigia abandono: envio Z-API falhou')
         if claim is not None:
-            _desfazer_claim_espera(claim)
+            _desfazer_claim_veredito(claim)
         return {'erro': f'zapi: {exc}', 'veredicto': veredicto}
 
     res = {'enviado': bool(envio.get('ok')), 'envio': envio, 'veredicto': veredicto}
@@ -810,9 +810,9 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
         except Exception:  # noqa: BLE001
             logger.exception('vigia abandono: registro falhou')
     elif res['enviado']:
-        _confirmar_envio_espera(claim)
+        _confirmar_envio_veredito(claim)
     else:
-        _desfazer_claim_espera(claim)
+        _desfazer_claim_veredito(claim)
     return res
 
 
@@ -982,13 +982,13 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
             envio = zapi.enviar_texto(numero, msg)
         except Exception:  # noqa: BLE001
             logger.exception('espera-humano: envio falhou conv=%s', conv_id)
-            _desfazer_claim_espera(claim)
+            _desfazer_claim_veredito(claim)
             continue
         if not envio.get('ok'):
             # Z-API fora / segurada pelo teto: devolve o claim pra retentar.
-            _desfazer_claim_espera(claim)
+            _desfazer_claim_veredito(claim)
             continue
-        _confirmar_envio_espera(claim)
+        _confirmar_envio_veredito(claim)
         # CONTENÇÃO ao CLIENTE (dono 09/08/2026, Dia dos Pais: 12 clientes
         # esperando 10-14min em conversa open enquanto a equipe entregava —
         # inclusive VENDA esperando): junto com o alerta ao dono, o cliente
@@ -1046,7 +1046,7 @@ def _ja_avisado_espera_humano(conv_id, horas=12):
 
 
 def _contencao_recente_para_contato(chave, conv_id, horas=12):
-    """True se ESTE contato (chave \w de telefone/identifier) ja recebeu a
+    r"""True se ESTE contato (chave \w de telefone/identifier) ja recebeu a
     contencao nas ultimas N horas em QUALQUER conversa — no Instagram, mais
     de uma conversa Chatwoot desagua na mesma thread do cliente (caso
     Lissa 19/08/2026). Chave vazia = sem como cruzar, nao bloqueia (as
@@ -1107,8 +1107,8 @@ def _registrar_espera_humano(conv_id, nome, minutos, ultima_msg, enviado,
         return None
 
 
-def _confirmar_envio_espera(row_id):
-    """Marca `enviado_whatsapp=True` no claim depois do envio OK."""
+def _confirmar_envio_veredito(row_id):
+    """Marca `enviado_whatsapp=True` no claim depois do envio OK (espera-humano e abandono)."""
     try:
         from app.extensions import db
         from app.models import VigiaVeredito
@@ -1125,7 +1125,7 @@ def _confirmar_envio_espera(row_id):
             pass
 
 
-def _desfazer_claim_espera(row_id):
+def _desfazer_claim_veredito(row_id):
     """Apaga o claim quando o envio NÃO saiu — sem isso a linha viraria um
     dedupe de 12h para um alerta que o dono nunca recebeu (cliente ficaria
     esperando em silêncio). Best-effort: falha aqui só mantém a supressão
