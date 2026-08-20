@@ -3880,12 +3880,14 @@ estoque nem entram na previsao.
   pior que duplicar). Sem numero do dono configurado tambem nao marca
   (quando configurar, alerta tudo). **CLAIM-FIRST desde 19/08/2026 (dono:
   "Continua duplicando")**: os ids sao marcados e COMMITADOS ANTES do
-  envio — a ordem antiga (envia → marca) duplicou quando o deploy matou o
-  container entre o envio e o commit (cod 21097090 alertado as 19:19 E
-  19:20; o container novo re-detectou porque o velho morreu sem gravar).
-  Kill entre claim e envio perde 1 alerta (janela minima, aceita — a
-  cobranca segue no /admin/vigia-venda-sem-item). O
-  `estorno_pendente_vigia` ganhou o MESMO claim-first (mesma classe).
+  envio — a ordem antiga (envia → marca) podia duplicar com o deploy
+  matando o container entre o envio e o commit. Kill entre claim e envio
+  perde 1 alerta (janela minima, aceita — a cobranca segue no
+  /admin/vigia-venda-sem-item). O `estorno_pendente_vigia` ganhou o MESMO
+  claim-first (mesma classe). NOTA 20/08: o caso concreto que motivou
+  (cod 21097090 as 19:19 E 19:20) acabou explicado pela INSTANCIA DE
+  PREVIEW viva (ver secao propria) — o claim-first fica como defesa da
+  classe overlap-de-deploy, que e real e documentada.
 - **ANTI-FLOOD (dono 18/07: "cuidado pra nao bloquear a conta")**: 1a
   cobranca alerta NA HORA; as seguintes acumulam (ids nao marcados) e saem
   juntas na proxima janela — cooldown `VENDA_SEM_ITEM_COOLDOWN_MIN`
