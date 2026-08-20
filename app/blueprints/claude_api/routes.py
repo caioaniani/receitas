@@ -2476,3 +2476,67 @@ def alertas_debug():
     return jsonify(ok=True, horas=horas, envios=envios,
                    automacoes=automacoes, seru_loja_map=mapas,
                    pdv_vigia=vigia)
+
+
+@claude_api_bp.route('/chatwoot-thread')
+@_claude_auth_required
+def chatwoot_thread():
+    """Thread AO VIVO de uma conversa do Chatwoot (20/08/2026).
+
+    Criada no caso "duplo texto do bot" (dono: alerta de espera-humano
+    chegando 2x): o container de desenvolvimento NÃO alcança o host do
+    Chatwoot (proxy corta) e o /admin/debug-chatwoot exige sessão web —
+    sem esta sonda, não dá pra provar de fora se uma mensagem do SISTEMA
+    (contenção, resposta do bot) foi entregue DUAS vezes na thread do
+    cliente. Duplicata na thread = houve DOIS remetentes; o dedupe do
+    nosso banco só cobre a instância que o consulta.
+
+    Read-only estrito (GET no Chatwoot). Params: ?conv=<id>
+    (obrigatório), ?limite=40 (1-100).
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.services import chatwoot
+
+    conv = (request.args.get('conv') or '').strip()
+    if not conv:
+        return jsonify(ok=False, erro='informe ?conv=<id da conversa>'), 400
+    limite = _int_arg('limite', 40, 1, 100)
+
+    try:
+        hist = chatwoot.buscar_historico(conv, limite=limite)
+    except Exception as e:  # noqa: BLE001 — sonda nunca 500
+        return jsonify(ok=False, erro=f'{type(e).__name__}: {e}'), 502
+
+    def _hora(ts):
+        """epoch UTC -> HH:MM:SS BRT (o Chatwoot devolve epoch)."""
+        if not ts:
+            return None
+        try:
+            return (datetime.fromtimestamp(int(ts), tz=timezone.utc)
+                    - timedelta(hours=3)).strftime('%d/%m %H:%M:%S')
+        except (TypeError, ValueError, OSError):
+            return None
+
+    msgs = [{
+        'role': m.get('role'),
+        'hora_brt': _hora(m.get('created_at')),
+        'created_at': m.get('created_at'),
+        'content': (m.get('content') or '')[:400],
+        'imagens': len(m.get('imagens') or []),
+    } for m in hist]
+
+    # Duplicatas: MESMO texto aparecendo mais de uma vez (o que interessa
+    # é a mensagem do SISTEMA repetida — dois remetentes distintos).
+    por_texto = {}
+    for m in msgs:
+        chave = (m['role'], (m['content'] or '').strip()[:120])
+        if not chave[1]:
+            continue
+        por_texto.setdefault(chave, []).append(m['hora_brt'])
+    duplicatas = [{'role': k[0], 'trecho': k[1], 'vezes': len(v),
+                   'horas': v}
+                  for k, v in por_texto.items() if len(v) > 1]
+
+    return jsonify(ok=True, conv=conv, total=len(msgs),
+                   duplicatas=duplicatas, mensagens=msgs)
