@@ -5293,7 +5293,8 @@ def loja_online_divulgacao():
     # até hoje (decisão 08/08/2026); marketing fica travado em amanhã.
     data_min = hoje_brt().isoformat() if current_user.is_dono() else amanha
     return render_template('admin/loja_online_divulgacao.html',
-                           catalogo=_catalogo_divulgacao(), lojas=lojas,
+                           catalogo=_catalogo_divulgacao(),
+                           menus=_menus_divulgacao(), lojas=lojas,
                            amanha=amanha, data_min=data_min)
 
 
