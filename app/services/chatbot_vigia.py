@@ -779,18 +779,40 @@ def avaliar_abandono(historico, *, conv_id=None, nome_contato='', minutos_sem_re
     veredicto_msg['motivo'] = (f'[{minutos_sem_resposta} min sem resposta] '
                                 + (veredicto.get('motivo') or '').strip())
     mensagem = _montar_mensagem(veredicto_msg, nome_contato, conv_id)
+    # CLAIM-FIRST (20/08/2026, mesma classe da espera-humano): o registro É
+    # o dedupe (`ja_avisado_abandono` procura '[ABANDONO' no banco), então
+    # ele precisa estar COMMITADO antes do envio — senão dois processos no
+    # mesmo ciclo (2 workers gunicorn / deploy trocando container) alertam
+    # os dois. Envio falho desfaz o claim: o abandono volta no próximo ciclo.
+    claim = None
+    try:
+        claim = _registrar({'enviado': False, 'veredicto': veredicto},
+                           conv_id, nome_contato,
+                           f'[ABANDONO {minutos_sem_resposta}min] {ultima_msg}')
+    except Exception:  # noqa: BLE001
+        logger.exception('vigia abandono: registro falhou')
     try:
         from app.services import zapi
         envio = zapi.enviar_texto(numero, mensagem)
     except Exception as exc:  # noqa: BLE001
         logger.exception('vigia abandono: envio Z-API falhou')
+        if claim is not None:
+            _desfazer_claim_espera(claim)
         return {'erro': f'zapi: {exc}', 'veredicto': veredicto}
 
     res = {'enviado': bool(envio.get('ok')), 'envio': envio, 'veredicto': veredicto}
-    try:
-        _registrar(res, conv_id, nome_contato, f'[ABANDONO {minutos_sem_resposta}min] {ultima_msg}')
-    except Exception:  # noqa: BLE001
-        logger.exception('vigia abandono: registro falhou')
+    if claim is None:
+        # Sem claim (persistência falhou): registra do jeito antigo pra não
+        # perder a trilha do que foi enviado.
+        try:
+            _registrar(res, conv_id, nome_contato,
+                       f'[ABANDONO {minutos_sem_resposta}min] {ultima_msg}')
+        except Exception:  # noqa: BLE001
+            logger.exception('vigia abandono: registro falhou')
+    elif res['enviado']:
+        _confirmar_envio_espera(claim)
+    else:
+        _desfazer_claim_espera(claim)
     return res
 
 
