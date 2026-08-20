@@ -2711,7 +2711,21 @@ MARCADO como divulgação (fora de faturamento e da previsão de venda) +
   `frete.consultar_frete`; fail-open se o geocode falhar → todas as janelas);
   retirada sem distância. O modo **express foi removido** do form (é same-day,
   conflita com "nunca no mesmo dia").
-- Testes: `tests/test_divulgacao.py` (18 casos, inclui gate por papel). NUNCA
+- **Menu configurável na divulgação (20/08/2026, caso 24FB0FFB — dono: "não
+  apareceu os minis para eu selecionar como no site")**: antes, a Caixa de
+  Mini entrava como linha simples e a baixa explodia a PRÉ-SELEÇÃO do
+  cadastro, sem componentes persistidos (cozinha às cegas no painel/PDF).
+  Agora o form tem o MONTADOR (mesma regra do site): a escolha viaja em
+  `item_comp[]` (JSON {produto_item_id: qtd} por linha, '' nas comuns —
+  arrays paralelos a `item_alvo[]`), o service valida com `loja_menu`
+  (normalizar/validar/preco — total EXATO; sem escolha nenhuma = pré-seleção,
+  mesmo contrato do site), persiste `PedidoOnlineItemComponente` e a
+  baixa/estorno explodem a ESCOLHA (`aplicar_venda(composicao=
+  composicao_escolhida(it))`). Valor de referência do item = soma dos
+  `preco_menu` escolhidos (não o preco_site, que no menu é só interruptor).
+  Slots/regras vão pro template via `_menus_divulgacao()` (main/routes.py).
+- Testes: `tests/test_divulgacao.py` (29 casos, inclui gate por papel e a
+  seção do menu). NUNCA
   fazer a divulgação contar como venda nem usar o tipo `venda_site` (mataria a
   distinção), e NUNCA abrir o gate pra admin comum sem ordem do dono.
 
