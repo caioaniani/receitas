@@ -114,13 +114,31 @@ def _falha_de_job(label, exc):
         logger.exception('%s falhou', label)
 
 
-def _com_lock(key, fn, label='job'):
+def _com_lock(key, fn, label='job', cooldown_seg=0):
     """Roda fn() protegida por advisory lock de sessao, com lock E unlock na
     MESMA conexao. Critico: advisory lock e por sessao — se o unlock roda
     noutra conexao do pool (bug antigo), o lock fica PRESO e os jobs seguintes
     pulam pra sempre. Em SQLite/nao-pg roda direto. Se outro worker ja tem o
-    lock, pula silenciosamente."""
+    lock, pula silenciosamente.
+
+    `cooldown_seg` (20/08/2026, caso "duplo texto do bot"): o advisory lock
+    so serializa o SIMULTANEO. Job de INTERVALO conta a partir do boot de
+    cada worker/container, entao os disparos caem em minutos diferentes e o
+    segundo processo pega o lock LIVRE e repete o ciclo inteiro — o dono
+    recebe o alerta duas vezes. Com cooldown, uma segunda execucao dentro
+    da janela e pulada (claim persistente em AppConfig, cruza processos).
+    Use ~70% do intervalo do job. Job de CRON nao precisa (todos os
+    processos disparam no mesmo segundo e o lock resolve)."""
     from app.extensions import db
+    if cooldown_seg:
+        try:
+            from app.services.whatsapp import claim_por_cooldown
+            if not claim_por_cooldown(f'cron_cooldown_{label}', cooldown_seg):
+                logger.debug('%s: pulado pelo cooldown (%ss)', label,
+                             cooldown_seg)
+                return
+        except Exception:  # noqa: BLE001 — guarda nunca derruba o job
+            logger.exception('%s: cooldown falhou (segue)', label)
     if db.engine.dialect.name != 'postgresql':
         try:
             fn()
