@@ -79,8 +79,15 @@ def status():
         return True, 'sem RAILWAY_GIT_BRANCH (dev/teste) — fail-open'
     if branch == BRANCH_PRODUCAO:
         return True, f'instancia de producao ({branch})'
-    return False, (f'instancia NAO canonica: branch "{branch}" != '
-                   f'"{BRANCH_PRODUCAO}" (copia/homologacao)')
+    b = branch.lower()
+    if any(p in b for p in _PADROES_COPIA):
+        return False, (f'instancia de COPIA: branch "{branch}" casa padrao '
+                       'de homologacao/preview')
+    # Branch desconhecido: NAO cala (pode ser producao renomeada). Loga
+    # ERROR — se for cópia de verdade, o log diz o que atualizar.
+    return True, (f'branch "{branch}" desconhecido (esperado '
+                  f'"{BRANCH_PRODUCAO}") — assumindo PRODUCAO por seguranca; '
+                  'atualize instancia.BRANCH_PRODUCAO')
 
 
 def pode_falar_com_o_mundo(canal='', critico=False):
