@@ -965,13 +965,13 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
                'O bot nao responde conversas que ja foram assumidas por '
                'humano — alguem da equipe precisa olhar.'
                + (f'\n\n{link}' if link else ''))
-        # CLAIM-FIRST (20/08/2026): o registro É o dedupe, então ele tem que
-        # estar COMMITADO antes do envio. Na ordem antiga (envia → registra)
-        # dois processos rodando o mesmo ciclo com segundos de diferença —
-        # os 2 workers gunicorn, ou container velho + novo no meio de um
-        # deploy — passavam os dois pelo `_ja_avisado_espera_humano` e o
-        # dono recebia o alerta em dobro. Envio falho DESFAZ o claim (o
-        # cliente esperando não pode ficar sem aviso por um erro de rede).
+        # CLAIM-FIRST (20/08/2026): o registro É o dedupe, então ele fica
+        # COMMITADO antes do envio. O que isso cobre de verdade: o processo
+        # morrer ENTRE o envio e a gravação (deploy no meio do ciclo), que
+        # fazia o próximo processo alertar de novo. (Os 2 workers do mesmo
+        # banco já eram serializados pelo advisory lock 7737 do job, e
+        # duplicata vinda de OUTRA INSTÂNCIA nenhum claim resolve — quem
+        # cobre isso é app/services/instancia.py.)
         claim = _registrar_espera_humano(conv_id, nome, minutos, ultima,
                                          False, contato_chave=chave_contato)
         if claim is None:
@@ -982,13 +982,15 @@ def alertar_clientes_esperando_humano(min_minutos=10, max_minutos=720,
             envio = zapi.enviar_texto(numero, msg)
         except Exception:  # noqa: BLE001
             logger.exception('espera-humano: envio falhou conv=%s', conv_id)
+            envio = {'ok': False}
+        if envio.get('ok'):
+            _confirmar_envio_veredito(claim)
+        else:
+            # Z-API fora / segurada pelo teto: devolve o claim pra retentar o
+            # aviso ao DONO no próximo ciclo. A CONTENÇÃO ao cliente (abaixo)
+            # segue mesmo assim — ele espera há N minutos e não tem nada a
+            # ver com o canal do dono estar fora (achado de revisão 20/08).
             _desfazer_claim_veredito(claim)
-            continue
-        if not envio.get('ok'):
-            # Z-API fora / segurada pelo teto: devolve o claim pra retentar.
-            _desfazer_claim_veredito(claim)
-            continue
-        _confirmar_envio_veredito(claim)
         # CONTENÇÃO ao CLIENTE (dono 09/08/2026, Dia dos Pais: 12 clientes
         # esperando 10-14min em conversa open enquanto a equipe entregava —
         # inclusive VENDA esperando): junto com o alerta ao dono, o cliente
