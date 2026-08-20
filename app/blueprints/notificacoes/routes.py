@@ -103,7 +103,9 @@ def disparar(tipo):
     try:
         if tipo == 'tarefas':
             from app.services import zapi_resumos
-            zapi_resumos.enviar_digest_tarefas()
+            # claim=False: re-envio DELIBERADO do admin nunca e bloqueado
+            # pelo anti-duplicata diario do cron das 07:00.
+            zapi_resumos.enviar_digest_tarefas(claim=False)
         elif tipo == 'anomalias':
             from app.services import anomalias
             anomalias.enviar_digest_whatsapp()
