@@ -128,3 +128,42 @@ def test_chatwoot_nao_responde_cliente_da_copia(app, monkeypatch):
         res = chatwoot.enviar_mensagem(123, 'oi')
     assert res['ok'] is False and res.get('suprimido_instancia') is True
     assert not post.called
+
+
+# ── Cooldown do cron: job de INTERVALO não roda duas vezes na janela ─────
+# Job de 'interval' conta do boot de CADA worker/container, então os
+# disparos caem em minutos diferentes e o advisory lock (que só serializa o
+# SIMULTÂNEO) já foi liberado — o segundo processo repete o ciclo inteiro
+# do vigia e o dono recebe o alerta duas vezes.
+
+def test_com_lock_cooldown_bloqueia_segunda_execucao(app):
+    from app.services import seru_cron
+    chamadas = []
+    with app.app_context():
+        seru_cron._com_lock(9911, lambda: chamadas.append(1),
+                            'teste cooldown', cooldown_seg=600)
+        seru_cron._com_lock(9911, lambda: chamadas.append(1),
+                            'teste cooldown', cooldown_seg=600)
+    assert chamadas == [1]
+
+
+def test_com_lock_sem_cooldown_mantem_comportamento_antigo(app):
+    """Sem o parâmetro, nada muda (jobs de cron seguem como sempre)."""
+    from app.services import seru_cron
+    chamadas = []
+    with app.app_context():
+        seru_cron._com_lock(9912, lambda: chamadas.append(1), 'teste sem cd')
+        seru_cron._com_lock(9912, lambda: chamadas.append(1), 'teste sem cd')
+    assert chamadas == [1, 1]
+
+
+def test_cooldown_com_banco_quebrado_nao_cala_o_job(app, monkeypatch):
+    """Fail-open: guarda quebrada não pode silenciar vigia de produção."""
+    from app.services import seru_cron, whatsapp
+    monkeypatch.setattr(whatsapp, 'claim_por_cooldown',
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError('x')))
+    chamadas = []
+    with app.app_context():
+        seru_cron._com_lock(9913, lambda: chamadas.append(1),
+                            'teste cd quebrado', cooldown_seg=600)
+    assert chamadas == [1]
