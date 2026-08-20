@@ -140,11 +140,29 @@ def enviar_plano_do_dia(data_alvo, user_id=None, horizonte_dias=7,
     depois de editar o grid (decisao do dono — a edicao do grid so chega no
     padeiro quando se aperta 'enviar' de novo). Cria a ordem se nao existir.
     Preserva o que ja foi produzido. Retorna o plano, ou None se nada a
-    produzir no dia."""
+    produzir no dia.
+
+    TRAVA DO DIA CORRENTE (dono 20/08/2026, caso "o padeiro ia fazer 300 de
+    pao frances e virou 400" — o 🔄 automatico das 19:05 reescreveu a ordem
+    com ele ja em producao): "Na data de hoje, nunca que deveriamos ter
+    trocado ou feito alguma mudanca no que o padeiro esta produzindo hoje.
+    Qualquer mudanca deveria ter sido feita ontem." Entao caminho
+    AUTOMATICO (`user_id is None`) NAO reescreve ordem JA ENVIADA de HOJE
+    ou do passado — devolve o plano intacto. Gesto HUMANO (🔄 na tela, com
+    user_id) segue livre: o dono pode corrigir a ordem do dia se quiser,
+    conscientemente. Criar ordem que ainda NAO existe continua permitido
+    (dia sem ordem nenhuma e pior que ordem tardia)."""
     from app.models import PlanejamentoProducao
+    from app.utils import hoje as _hoje
 
     plano = (PlanejamentoProducao.query
              .filter_by(data=data_alvo, origem='cronograma').first())
+    if (user_id is None and plano is not None
+            and plano.enviado_ao_padeiro and data_alvo <= _hoje()):
+        logger.info('enviar_plano_do_dia: ordem de %s JA ENVIADA e o dia ja '
+                    'chegou — caminho automatico nao reescreve (regra do '
+                    'dono 20/08/2026)', data_alvo.isoformat())
+        return plano
     novo = plano is None
     if novo:
         plano = _obter_ou_criar_plano(data_alvo, user_id)

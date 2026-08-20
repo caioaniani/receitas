@@ -316,42 +316,52 @@ def gerar_pedidos_automaticos():
 
 
 def atualizar_plano_automatico():
-    """O "🔄 atualizar produção" AUTOMÁTICO da ordem DE HOJE (17/08/2026,
-    caso real do 1º fim de semana: a ordem de segunda saiu domingo 19:00 com
-    3 itens/3.274 un e o grid do próprio dia amanhecia pedindo 8 itens/6.577
-    — os itens de VÉSPERA do dia, levain/lead-1/pré-preparo, são dirigidos
-    pela demanda de AMANHÃ, que o cron de pedidos re-sincroniza às
-    06:30/18:30 DEPOIS de a ordem já ter congelado; antes da automação era
-    o dono que dava o 🔄 na mão).
+    """O "🔄 atualizar produção" AUTOMÁTICO da ordem DE AMANHÃ.
 
-    Roda às 06:45 (pós-refresh de pedidos da manhã) e às 19:05 (pós-corte —
-    a demanda de amanhã acabou de congelar; número final pra madrugada).
+    POR QUE EXISTE (17/08/2026): a ordem de segunda saiu domingo 19:00 com
+    3 itens/3.274 un e o grid do próprio dia amanhecia pedindo 8 itens/6.577
+    — os itens de VÉSPERA (levain, lead-1, pré-preparo) são dirigidos pela
+    demanda do dia seguinte, que o cron de pedidos re-sincroniza às
+    06:30/18:30 DEPOIS de a ordem já ter congelado.
+
+    POR QUE MIRA AMANHÃ, E NUNCA HOJE (dono 20/08/2026, caso "o padeiro ia
+    fazer 300 de pão francês e do nada virou 400" — a rodada das 19:05
+    reescreveu a ordem que ele estava começando a executar): **"Na data de
+    hoje, nunca que deveríamos ter trocado ou feito alguma mudança no que o
+    padeiro está produzindo hoje. Qualquer mudança deveria ter sido feita
+    ontem."** Então a ordem de um dia recebe seus últimos ajustes na
+    VÉSPERA e chega intocável no dia:
+      - 06:45 → ajusta a ordem de AMANHÃ com o refresh de pedidos das 06:30;
+      - 19:05 → número FINAL de amanhã, logo após o corte das 19:00 (que é
+        justamente quando a demanda de amanhã congela).
+    O dia corrente nunca é tocado por caminho automático — `enviar_plano_do_
+    dia` tem a trava definitiva (defesa em profundidade).
+
     SÓ toca ordem criada pelo PRÓPRIO CRON (criado_por None): ordem enviada
-    por humano nunca muda por caminho implícito (regra de 04/07/2026
-    preservada)."""
+    por humano nunca muda por caminho implícito (regra de 04/07/2026)."""
     from app.models import PlanejamentoProducao
     from app.services.producao import enviar_plano_do_dia
 
     motor = (os.environ.get('AUTO_ENVIO_MOTOR') or 'vendas').strip()
-    hoje_d = hoje()
+    alvo = hoje() + timedelta(days=1)
     plano = (PlanejamentoProducao.query
-             .filter_by(data=hoje_d, origem='cronograma')
+             .filter_by(data=alvo, origem='cronograma')
              .filter(PlanejamentoProducao.enviado_ao_padeiro.is_(True))
              .first())
     if plano is None:
         logger.info('auto_atualiza: %s sem ordem enviada — nada a atualizar',
-                    hoje_d.isoformat())
-        return {'data': hoje_d.isoformat(), 'sem_ordem': True}
+                    alvo.isoformat())
+        return {'data': alvo.isoformat(), 'sem_ordem': True}
     if plano.criado_por is not None:
         logger.info('auto_atualiza: ordem de %s foi enviada por humano — '
-                    'intocada', hoje_d.isoformat())
-        return {'data': hoje_d.isoformat(), 'ordem_humana': True}
-    plano2 = enviar_plano_do_dia(hoje_d, user_id=None, motor=motor,
+                    'intocada', alvo.isoformat())
+        return {'data': alvo.isoformat(), 'ordem_humana': True}
+    plano2 = enviar_plano_do_dia(alvo, user_id=None, motor=motor,
                                  equilibrar=EQUILIBRAR_AUTO)
     n = len(getattr(plano2, 'itens', []) or []) if plano2 is not None else 0
     logger.info('auto_atualiza: ordem de %s re-sincronizada com o grid '
-                '(%d item[ns], motor=%s)', hoje_d.isoformat(), n, motor)
-    return {'data': hoje_d.isoformat(), 'itens': n, 'atualizada': True,
+                '(%d item[ns], motor=%s)', alvo.isoformat(), n, motor)
+    return {'data': alvo.isoformat(), 'itens': n, 'atualizada': True,
             'motor': motor}
 
 
