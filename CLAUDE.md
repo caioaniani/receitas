@@ -1361,6 +1361,28 @@ com credenciais de mensageria nem scheduler ligado — o gesto minimo e
 desligamento do servico de preview e gesto do dono no Railway (sem acesso
 daqui).
 
+**GUARDA DE INSTANCIA CANONICA (20/08/2026, dono: "duplo texto do bot,
+muito serio")**: no dia seguinte o alerta "Cliente esperando ATENDENTE"
+chegou 2x com texto IDENTICO (conv #1759 as 14:50 e #1760 as 15:15) e a
+prova fechou o caso — a sonda `/api/claude/vigia-vereditos?conv=` mostrou
+UMA linha de VigiaVeredito por conversa em prod (logo prod mandou UMA vez)
+e o job e cron `*/5` (`seru_cron.py`), horario de PAREDE, entao as duas
+instancias disparam no MESMO minuto, leem o MESMO Chatwoot e produzem a
+MESMA mensagem. `app/services/instancia.py`: so o servico que deploya
+`BRANCH_PRODUCAO` fala com o mundo — o discriminador e `RAILWAY_GIT_BRANCH`,
+que o Railway INJETA POR SERVICO e que NAO vem junto quando se copiam as
+envs do usuario. Guarda aplicada em `zapi.enviar_texto`,
+`slack.post_message` e `chatwoot.enviar_mensagem` (os tres canais que leem
+estado externo compartilhado; e-mail fica fora de proposito — e dirigido
+por dado do BANCO, e o banco da copia nao tem pedido real). FAIL-OPEN: sem
+a env (dev/teste) libera, e `critico=True` (Lalamove/pedido pago) NUNCA e
+bloqueado. Escapes: `ALERTAS_INSTANCIA_CANONICA=1` forca liberar (usar se
+o branch de producao for renomeado antes de alguem atualizar a constante),
+`=0` silencia uma copia sem deploy. A sonda `/api/claude/deploy` expoe
+`alertas.pode_enviar` — CONFERIR ali depois de qualquer deploy que mexa
+nisso: producao silenciada por engano e a pior falha possivel aqui.
+**AO RENOMEAR O BRANCH DE PRODUCAO, atualizar `instancia.BRANCH_PRODUCAO`.**
+
 ## Uptime Kuma — vigia EXTERNO no VPS (04/08/2026)
 
 Pedido do dono depois de perguntar que ferramentas open source ajudariam.
