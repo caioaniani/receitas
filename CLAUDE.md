@@ -1329,6 +1329,38 @@ checklist e tira FOTO comprovando os pontos necessarios. Decisoes dele
 - Testes: `tests/test_checklist_loja.py` (49 casos). Manual de operacao
   atualizado (secao DIARIO) na mesma mudanca.
 
+## Segunda instancia (preview) mandando WhatsApp (20/08/2026)
+
+Caso "Continua duplicando" resolvido de verdade: depois dos claims
+anti-duplicata (19-20/08), o dono SEGUIU recebendo alertas dobrados —
+sobras 20:30 2x (conteudos DIFERENTES), digest de tarefas 07:00 2x (um
+dizia "nenhuma tarefa", o outro listava 1 atrasada) e "Vigia do PDV"
+00:03/06:03 acusando os 3 vinculos Seru como nao-confirmados.
+
+**Causa raiz: o servico de HOMOLOGACAO da UI v2 no Railway** (deployando o
+branch `codex/ui-simplification-preview`, banco proprio com dados
+seedados/sanitizados e envs COPIADAS de prod — Z-API, Seru, Slack) ficou
+VIVO apos o merge do PR #14. No branch de preview, `PREVIEW_MODE` so
+controla copia de dados e senha do admin — **`seru_cron.iniciar(app)` roda
+SEM gate** (`app/__init__.py` do branch), entao a instancia dispara TODOS
+os crons contra o proprio banco desatualizado: sobras "nao lancou nada"
+(Desperdicio vazio la), digest "nenhuma tarefa" (projetos vazios la),
+pdv_vigia doente (SeruLojaMap sem confirmacao LA — em prod os vinculos
+estao confirmados desde julho e o estado do vigia esta limpo).
+
+Como foi provado (sonda `/api/claude/alertas-debug`, criada no caso): a
+mensagem fantasma NAO esta no `NotificacaoWhatsapp` de prod (logou no
+banco DELA), zero automacoes cadastradas, `SeruLojaMap.confirmado_em`
+todos de julho e `pdv_vigia_*` de prod = None.
+
+REGRAS: (1) claim anti-duplicata e POR BANCO — nunca protege contra outra
+instancia; alerta dobrado com CONTEUDO divergente = suspeitar de segunda
+instancia ANTES de cacar corrida. (2) Ambiente de homologacao NUNCA sobe
+com credenciais de mensageria nem scheduler ligado — o gesto minimo e
+`SERU_AUTO_SYNC=0` no servico (desliga o scheduler inteiro). (3) O
+desligamento do servico de preview e gesto do dono no Railway (sem acesso
+daqui).
+
 ## Uptime Kuma — vigia EXTERNO no VPS (04/08/2026)
 
 Pedido do dono depois de perguntar que ferramentas open source ajudariam.
