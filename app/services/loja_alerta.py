@@ -110,6 +110,14 @@ def _deve_enviar_persistente(chave):
     na sessão compartilhada persistiria/descartaria transação de negócio
     meio-construída. Mesma decisão do `frete_sensor.registrar`."""
     import hashlib
+
+    from flask import has_app_context
+    if not has_app_context():
+        # Chamada direta (teste do dedupe em memória) — não é falha, então
+        # não vira `logger.exception` (a integração do Sentry promove todo
+        # exception a evento; foi assim que a cota estourou em 08/2026).
+        logger.debug('loja_alerta: sem app context, só o dedupe em memória')
+        return True
     try:
         from app.services.whatsapp import claim_por_cooldown
         # A chave carrega endereço/itens (tamanho livre) e AppConfig.key é
