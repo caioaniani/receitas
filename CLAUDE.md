@@ -2192,11 +2192,46 @@ do seru_cron junto.
   itens de VESPERA da ordem — levain, lead-1, pre-preparo — sao dirigidos
   pela demanda de AMANHA, que o cron de pedidos re-sincroniza 06:30/18:30
   DEPOIS de a ordem congelar; antes da automacao o dono dava o 🔄 na mao).
-  Re-envia a ordem DE HOJE pelo `enviar_plano_do_dia` (o mesmo gesto do
-  botao 🔄) SO quando ela foi criada pelo PROPRIO CRON (`criado_por`
-  None) — ordem enviada por humano segue intocavel. 06:45 = pos-refresh
-  da manha; 19:05 = pos-corte (demanda de amanha congelada, numero final
-  pra madrugada). Diagnostico foi pela sonda NOVA
+  Re-envia pelo `enviar_plano_do_dia` (o mesmo gesto do botao 🔄) SO
+  quando a ordem foi criada pelo PROPRIO CRON (`criado_por` None) —
+  ordem enviada por humano segue intocavel.
+  **MIRA A ORDEM DE AMANHA, NUNCA A DE HOJE (dono 20/08/2026: "Na data
+  de hoje, nunca que deveriamos ter trocado ou feito alguma mudanca no
+  que o padeiro esta produzindo hoje. Qualquer mudanca deveria ter sido
+  feita ontem")**. Nasceu mirando HOJE e isso reescreveu a ordem com o
+  padeiro executando: trilha de auditoria da ordem 58 mostra TUDO em
+  `20/08 19:05:01`, por cron — Pao Frances **300 → 450**, Sourdough
+  Tradicional 120→180, Nozes 60→120, Integral 60→120, Brioche 10→20 e
+  **+6 itens novos** (7 Graos 120, Cookie 100, insumo 7 graos 2764,
+  creme, massa para folhar, cinnamon DL): 7 itens viraram 13 no minuto
+  em que ele comecava o turno. (O Croissant 250→400 do mesmo segundo NAO
+  era demanda nova — e o piso `produzido_qtd=400` que o Davi lancou as
+  14:35; o sync so subiu o alvo pro que ja existia.) Agora: 06:45 ajusta
+  a ordem de AMANHA com o refresh de pedidos das 06:30; 19:05 fecha o
+  numero FINAL de amanha logo apos o corte das 19:00 (que e quando a
+  demanda de amanha congela). O dia corrente e intocavel.
+  **TRAVA DE FUNDO em `producao.enviar_plano_do_dia`** (defesa em
+  profundidade, vale pra QUALQUER caminho automatico futuro): com
+  `user_id is None`, ordem JA ENVIADA de dia `<= hoje` NAO e reescrita —
+  devolve o plano intacto. Gesto HUMANO (🔄 na tela, com user_id) segue
+  livre; criar ordem que ainda NAO existe segue permitido (dia sem ordem
+  nenhuma e pior que ordem tardia). Isso cobre tambem o `ordens-semana-
+  retro` do boot, que roda em QUALQUER hora — um deploy de madrugada
+  reescrevia a ordem com o padeiro no forno (foi o que aconteceu em
+  19/08 20:26, retro 'o': Pao Frances 356→450 na ordem daquela noite).
+  **NAO existe corte da ORDEM**: `pedido_corte.HORA_CORTE=19` trava so
+  `PedidoLoja` com entrega amanha (8 consumidores, todos de pedido) —
+  a garantia do padeiro e a regra de 04/07 + esta trava, nao o corte.
+  PENDENCIA CONHECIDA (decisao do dono): os dois jobs que escrevem o
+  MESMO dia usam horizonte DIFERENTE — `atualizar_plano_automatico` sem
+  param (default 7 em `producao.py`) e `enviar_ordens_da_semana` com
+  `min(14, (fim-hoje)+1)`; como o nivelador reparte dentro da janela
+  VISIVEL, o mesmo dia da numeros diferentes por desenho (medido hoje:
+  Pao Frances 450 com horizonte 7 x 600 com horizonte 4; e 0 com
+  `equilibrar=0` x 450 com `equilibrar=1`, total da semana 750 nos
+  dois). Isso nao e mais visivel pro padeiro (so afeta a vespera), mas
+  segue existindo — unificar o horizonte e a proxima decisao.
+  Diagnostico foi pela sonda NOVA
   `/api/claude/ordens-producao?de=&ate=` (criada no caso: lista
   PlanejamentoProducao com criado_em/criado_por/enviado — "o cron enviou?"
   responde-se de fora; o envio das 19:00 SEMPRE disparou, o problema era
