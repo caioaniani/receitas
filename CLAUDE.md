@@ -1664,6 +1664,42 @@ com vespera dentro do grid segue agendando em `dia_consumo - lead` como
 sempre. Testes: secao "Regra da vespera" em `tests/test_cronograma_ux.py`.
 NAO voltar ao "produzir o quanto antes" pra consumo dentro do lead.
 
+## Relogio FISICO da producao — o que o sistema NAO pode contrariar (20/08/2026)
+
+Ditado pelo dono no caso da ordem que mudou sob o padeiro. Sao fatos da
+PADARIA, nao do software: o codigo se adapta a eles, nunca o contrario.
+
+- **O padeiro trabalha de MADRUGADA.** A ordem do dia D e executada no
+  turno que comeca na NOITE de D e entra pela madrugada de D+1 (por isso a
+  tela do /padeiro mostra "ordem de ONTEM em aberto" apos a meia-noite).
+  Consequencia: as 19:05 de D o padeiro JA ESTA com a ordem de D na mao.
+- **MASSA PARA FOLHAR: 24 HORAS antes de modelar** (dono, textual: "o
+  croissant voce tem que passar bem antes porque a massa para folhar e
+  feita 24 horas antes do modelar o croissant, fica esperto"). A massa e
+  batida num turno e so vira croissant no turno SEGUINTE — nao existe
+  croissant no mesmo dia da massa. Quem sai dessa massa: Croissant
+  Tradicional, Croissant Almond, Pain au Chocolat (e bicolor), minis da
+  mesma familia.
+- **CONSEQUENCIA DURA**: aumentar croissant na VESPERA e inutil — a massa
+  daquele dia ja foi batida na antevespera, dimensionada pelo numero
+  ANTIGO. O padeiro recebe uma ordem que a massa nao cobre. Ou seja: a
+  quantidade de croissant tem que estar fechada com MAIS antecedencia que
+  a dos itens que se resolvem no proprio turno.
+  **REGRA GERAL: item com insumo de lead L fecha L dias ANTES dos demais.**
+  Hoje (20/08) o sistema so AVISA (`insumo_sem_vespera`, regra de
+  10/07/2026 acima) — nao impede a mudanca tardia. Cadastro em prod:
+  'Massa para folhar' (id 27) `dias_producao=1`, insumo, `estoque_nao_abate`;
+  'Croissant Tradicional' (id 1) `dias_producao=1`, lote 250, ficha consome
+  a massa. A TRAVA por item ainda esta em desenho — ate ela existir, NAO
+  confiar que um aumento de croissant na vespera seja produzivel.
+- **Levain e da mesma familia de problema** (sub de amassadeira dos
+  sourdoughs, agendado na vespera desde 15/07/2026) — mudanca tardia no
+  sourdough esbarra no levain ja batido.
+- O que PODE mudar tarde, e por isso o 🔄 das 19:05 existe: itens que o
+  padeiro resolve dentro do proprio turno e os itens de VESPERA que sao
+  dirigidos pela demanda do dia seguinte (levain/lead-1/pre-preparo do
+  DIA SEGUINTE, nao do dia corrente).
+
 **Massa para folhar em BOLAS + fracao acumulada (decisao do dono 03/07/2026)**:
 a massa e contada em BOLAS inteiras (1 bola = 1 batida = 3.580g; padeiro
 lanca "2", nao gramas). O consumo por lote e fracionario (batida de 50
