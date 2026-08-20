@@ -102,8 +102,15 @@ def pode_falar_com_o_mundo(canal='', critico=False):
         logger.exception('instancia: checagem falhou — liberando envio')
         return True
     if ok:
+        if 'desconhecido' in motivo:
+            chave = ('branch-desconhecido', canal)
+            if chave not in _ja_logou:
+                _ja_logou.add(chave)
+                logger.error('instancia: %s', motivo)
         return True
-    if critico:
+    # Silêncio pedido explicitamente (=0) vale pra TUDO, inclusive crítico:
+    # é gesto humano dizendo "esta cópia não fala com ninguém".
+    if critico and 'ALERTAS_INSTANCIA_CANONICA=0' not in motivo:
         logger.warning('instancia: %s — mas mensagem CRITICA (%s) segue',
                        motivo, canal or '?')
         return True
