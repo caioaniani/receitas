@@ -134,7 +134,10 @@ def _com_lock(key, fn, label='job', cooldown_seg=0):
     if cooldown_seg:
         try:
             from app.services.whatsapp import claim_por_cooldown
-            if not claim_por_cooldown(f'cron_cooldown_{label}', cooldown_seg):
+            # Chave derivada da LOCK KEY (numero estavel), nao do label —
+            # label e texto de log e pode ser reescrito; a chave nao pode
+            # mudar junto (resetaria o cooldown e deixaria linha orfa).
+            if not claim_por_cooldown(f'cron_cooldown_{key}', cooldown_seg):
                 logger.debug('%s: pulado pelo cooldown (%ss)', label,
                              cooldown_seg)
                 return
