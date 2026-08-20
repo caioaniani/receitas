@@ -537,7 +537,7 @@ def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente,
         tools_json = (_json.dumps(list(tools), ensure_ascii=False)
                       if isinstance(tools, (list, tuple))
                       else None)
-        db.session.add(VigiaVeredito(
+        row = VigiaVeredito(
             conv_id=str(conv_id) if conv_id is not None else None,
             cliente=(nome_contato or '')[:200] or None,
             mensagem_cliente=(ultima_mensagem_cliente or '')[:2000] or None,
@@ -548,8 +548,10 @@ def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente,
             motivo_vigia=(veredicto.get('motivo') or '')[:1000] or None,
             enviado_whatsapp=bool(resultado.get('enviado')),
             tools_usadas=tools_json,
-        ))
+        )
+        db.session.add(row)
         db.session.commit()
+        return row.id      # ID = claim (usado pelo abandono, claim-first)
     except Exception:  # noqa: BLE001
         logger.exception('vigia: persistir VigiaVeredito falhou')
         try:
@@ -557,6 +559,7 @@ def _registrar(resultado, conv_id, nome_contato, ultima_mensagem_cliente,
             db.session.rollback()
         except Exception:  # noqa: BLE001
             pass
+    return None
 
 
 def avaliar(historico, *, conv_id=None, nome_contato='', resultado_bot=None):
