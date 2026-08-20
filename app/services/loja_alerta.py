@@ -103,17 +103,69 @@ def _deve_enviar(chave):
 def _deve_enviar_persistente(chave):
     """Claim do dedupe em AppConfig — cruza os 2 workers gunicorn (o dict em
     memória é por processo). Fail-open: sem app context ou com o banco fora,
-    devolve True (perder alerta de venda barrada é pior que repetir)."""
+    devolve True (perder alerta de venda barrada é pior que repetir).
+
+    SESSÃO ISOLADA de propósito: este caminho roda DENTRO do request do
+    checkout / `/loja/api/frete` (`loja_checkout._frete_para`), e um commit
+    na sessão compartilhada persistiria/descartaria transação de negócio
+    meio-construída. Mesma decisão do `frete_sensor.registrar`."""
     import hashlib
     try:
         from app.services.whatsapp import claim_por_cooldown
         # A chave carrega endereço/itens (tamanho livre) e AppConfig.key é
         # VARCHAR(100) — hash mantém o limite sem colidir na prática.
         h = hashlib.sha1(chave.encode('utf-8', 'ignore')).hexdigest()[:24]
-        return claim_por_cooldown(f'loja_alerta_{h}', _DEDUP_SEGUNDOS)
+        ok = claim_por_cooldown(f'loja_alerta_{h}', _DEDUP_SEGUNDOS,
+                                sessao_isolada=True)
+        if ok:
+            _podar_claims_antigos()
+        return ok
     except Exception:  # noqa: BLE001 — dedupe nunca derruba o alerta
         logger.exception('loja_alerta: dedupe persistente falhou (libera)')
         return True
+
+
+def _podar_claims_antigos(limite=400):
+    """Apaga claims `loja_alerta_*` vencidos. Necessário porque a chave sai
+    de endereço/cliente DISTINTO vindo de endpoint PÚBLICO (`/loja/api/
+    frete`) — sem poda, `app_config` cresceria pra sempre (o dict em memória
+    já podava; o persistente não podava). Best-effort e barato: só roda
+    quando o claim foi concedido, e só se passar de `limite` linhas."""
+    from datetime import datetime, timedelta
+
+    from sqlalchemy.orm import Session
+
+    from app.extensions import db
+    from app.models import AppConfig
+    from app.utils import agora
+    sess = None
+    try:
+        sess = Session(db.engine)
+        rows = sess.query(AppConfig).filter(
+            AppConfig.key.like('loja_alerta_%')).all()
+        if len(rows) <= limite:
+            return
+        corte = agora() - timedelta(seconds=_DEDUP_SEGUNDOS * 2)
+        n = 0
+        for r in rows:
+            try:
+                if datetime.fromisoformat(r.value or '') < corte:
+                    sess.delete(r)
+                    n += 1
+            except (TypeError, ValueError):
+                sess.delete(r)      # valor ilegível não serve de dedupe
+                n += 1
+        if n:
+            sess.commit()
+            logger.info('loja_alerta: %d claim(s) vencido(s) podado(s)', n)
+    except Exception:  # noqa: BLE001 — poda nunca derruba o alerta
+        logger.exception('loja_alerta: poda de claims falhou')
+    finally:
+        if sess is not None:
+            try:
+                sess.close()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def _enviar(app, texto, chave):
