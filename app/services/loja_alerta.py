@@ -97,6 +97,22 @@ def _deve_enviar(chave):
         if ult is not None and agora - ult < _DEDUP_SEGUNDOS:
             return False
         _ultimo_envio[chave] = agora
+    return _deve_enviar_persistente(chave)
+
+
+def _deve_enviar_persistente(chave):
+    """Claim do dedupe em AppConfig — cruza os 2 workers gunicorn (o dict em
+    memória é por processo). Fail-open: sem app context ou com o banco fora,
+    devolve True (perder alerta de venda barrada é pior que repetir)."""
+    import hashlib
+    try:
+        from app.services.whatsapp import claim_por_cooldown
+        # A chave carrega endereço/itens (tamanho livre) e AppConfig.key é
+        # VARCHAR(100) — hash mantém o limite sem colidir na prática.
+        h = hashlib.sha1(chave.encode('utf-8', 'ignore')).hexdigest()[:24]
+        return claim_por_cooldown(f'loja_alerta_{h}', _DEDUP_SEGUNDOS)
+    except Exception:  # noqa: BLE001 — dedupe nunca derruba o alerta
+        logger.exception('loja_alerta: dedupe persistente falhou (libera)')
         return True
 
 
