@@ -387,6 +387,14 @@
     var temItem = Array.prototype.some.call(
       lista.querySelectorAll('.combo-val'), function (h) { return h.value; });
     if (!temItem) faltas.push('ao menos um item');
+    // Menu com total errado não sai da tela (o servidor recusaria igual).
+    lista.querySelectorAll('.item-row').forEach(function (row) {
+      var val = row.querySelector('.combo-val').value;
+      if (val && MENUS[val] && row.dataset.menuOk !== '1') {
+        faltas.push('a montagem de "' + (row.dataset.menuNome || val) +
+                    '" (tem que somar ' + MENUS[val].total + ')');
+      }
+    });
     if (faltas.length) {
       e.preventDefault();
       erroBox.textContent = 'Faltou preencher: ' + faltas.join(', ') + '.';
