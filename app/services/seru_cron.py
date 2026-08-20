@@ -366,6 +366,17 @@ def _run_auditor(app, modo='janela'):
     with app.app_context():
         if not chatbot_auditor.disponivel():
             return
+        # CLAIM POR TICK (20/08/2026): o modo 'resumo' das 19h manda o
+        # WhatsApp SEMPRE (forcar_envio) e nao consulta ponteiro nenhum —
+        # dois processos no mesmo horario mandavam o balanco do dia em
+        # dobro. 1 execucao por (dia, hora, modo).
+        try:
+            from app.services.whatsapp import claim_por_cooldown
+            if not claim_por_cooldown(f'cron_cooldown_auditor_{modo}', 3600):
+                logger.info('auditor %s: ja rodou nesta janela — pulado', modo)
+                return
+        except Exception:  # noqa: BLE001 — guarda nunca derruba o job
+            logger.exception('auditor %s: cooldown falhou (segue)', modo)
         uri = app.config.get('SQLALCHEMY_DATABASE_URI', '') or ''
         is_pg = 'postgresql' in uri
         from app.extensions import db
@@ -857,7 +868,8 @@ def _run_slack_resumo_diario(app):
     from app.services import slack_resumos
 
     with app.app_context():
-        _com_lock(7725, slack_resumos.enviar_resumo_pedidos_dia, 'slack resumo diario')
+        _com_lock(7725, slack_resumos.enviar_resumo_pedidos_dia,
+                  'slack resumo diario', cooldown_seg=3600)
 
 
 def _run_slack_lembretes_amanha(app):
@@ -866,7 +878,7 @@ def _run_slack_lembretes_amanha(app):
 
     with app.app_context():
         _com_lock(7726, slack_resumos.enviar_lembretes_pedido_amanha,
-                  'slack lembrete pedido amanha')
+                  'slack lembrete pedido amanha', cooldown_seg=3600)
 
 
 def _run_zapi_digest_tarefas(app):
@@ -1336,7 +1348,7 @@ def _run_slack_lembretes_pedidos_hoje(app):
 
     with app.app_context():
         _com_lock(7727, slack_resumos.enviar_lembrete_pedidos_hoje_pendentes,
-                  'slack lembrete pedidos hoje')
+                  'slack lembrete pedidos hoje', cooldown_seg=1800)
 
 
 def _run_heartbeat_slack(app):
