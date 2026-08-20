@@ -111,6 +111,7 @@ def criar_divulgacao(*, itens, modo_entrega='agendada', loja_retirada_id=None,
             raise ValueError('endereco incompleto (%s)' % ', '.join(faltando))
 
     # Resolve itens ANTES de criar o pedido (falha cedo, sem lixo no banco).
+    from app.services import loja_menu
     linhas = []
     for it in (itens or []):
         try:
@@ -122,7 +123,24 @@ def criar_divulgacao(*, itens, modo_entrega='agendada', loja_retirada_id=None,
         obj, nome, preco = _resolver_item(it.get('kind'), it.get('id'))
         if obj is None:
             raise ValueError('item invalido ou arquivado: %s' % it.get('id'))
-        linhas.append((it['kind'], obj, nome, preco, qtd))
+        comp = None
+        if it.get('kind') == 'produto' and loja_menu.eh_menu(obj):
+            # MENU CONFIGURAVEL (20/08/2026, caso pedido 24FB0FFB — dono:
+            # "nao apareceu os minis pra eu selecionar como no site"): mesma
+            # autoridade do checkout — normaliza a escolha contra o cadastro,
+            # exige o total EXATO e o valor de referencia vira a soma dos
+            # `preco_menu` escolhidos. Sem escolha nenhuma vale a
+            # PRE-SELECAO (mesmo contrato do site: nao mexeu = padrao).
+            comp = loja_menu.normalizar(obj, it.get('comp'))
+            erro = loja_menu.validar(obj, comp)
+            if erro:
+                raise ValueError(erro)
+            preco_menu = loja_menu.preco(obj, comp)
+            if preco_menu is None:
+                raise ValueError('%s tem item escolhido sem preço cadastrado '
+                                 '— ajuste na tela da cesta' % obj.nome)
+            preco = preco_menu           # Decimal — referencia do valor doado
+        linhas.append((it['kind'], obj, nome, preco, qtd, comp))
     if not linhas:
         raise ValueError('adicione ao menos um item')
 
