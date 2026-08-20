@@ -499,3 +499,147 @@ def test_rota_cancelar_devolve_estoque(app, owner_user, cliente):
     db.session.refresh(p)
     assert p.status == 'cancelado'
     assert _saldo(origem, r) == 10
+
+
+# ── Menu configurável (Caixa de Mini) na divulgação — 20/08/2026 ─────────
+# Caso real 24FB0FFB: o dono lançou a Caixa de Mini sem poder escolher os
+# minis ("não apareceu os minis para eu selecionar como no site") e a baixa
+# explodiu a PRÉ-SELEÇÃO do cadastro. Agora a divulgação aceita 'comp'
+# ({produto_item_id: qtd}) com a MESMA autoridade do checkout: total exato,
+# componentes persistidos (painel/PDF mostram pra cozinha), baixa pela
+# escolha e valor de referência = soma dos preco_menu.
+
+def _menu_div(total=15, teto=10):
+    from decimal import Decimal
+
+    from app.models import Produto, ProdutoItem, Receita
+    menu = Produto(nome='Caixa de Mini Div', categoria='Cestas',
+                   preco_site=1.0, ativo=True, menu_configuravel=True,
+                   menu_total_unidades=total, menu_max_por_item=teto)
+    db.session.add(menu)
+    db.session.flush()
+    minis = []
+    for i, preco in enumerate((2.0, 3.0, 4.0), start=1):
+        r = Receita(nome=f'Mini Div {i}', categoria='Paes', rendimento_qtd=1,
+                    rendimento_unidade='un', peso_base=100)
+        db.session.add(r)
+        db.session.flush()
+        db.session.add(ProdutoItem(produto_id=menu.id, tipo='receita',
+                                   receita_id=r.id, item_nome=r.nome,
+                                   quantidade=5,
+                                   preco_menu=Decimal(str(preco))))
+        minis.append(r)
+    db.session.commit()
+    return menu, minis
+
+
+def _pis(menu):
+    return [pi.id for pi in sorted(menu.itens, key=lambda x: x.id)]
+
+
+def _saldos(loja):
+    from app.models import EstoqueLoja
+    return {el.receita_id: el.quantidade
+            for el in EstoqueLoja.query.filter_by(loja_id=loja.id)}
+
+
+def test_menu_divulgacao_baixa_a_composicao_escolhida(app, admin_user):
+    from decimal import Decimal
+
+    from app.services import divulgacao as div
+    loja = _loja(origem=True)
+    menu, minis = _menu_div()
+    for r in minis:
+        _estoque(loja, r, 20)
+    pis = _pis(menu)
+    comp = {pis[0]: 10, pis[2]: 5}          # 10× Mini 1 + 5× Mini 3 = 15
+    p = div.criar_divulgacao(
+        itens=[{'kind': 'produto', 'id': menu.id, 'qtd': 1, 'comp': comp}],
+        modo_entrega='agendada', endereco=dict(_END_OK), **_base_kw())
+    it = p.itens[0]
+    assert sorted((c.produto_item_id, c.quantidade) for c in it.componentes) \
+        == sorted([(pis[0], 10), (pis[2], 5)])
+    s = _saldos(loja)
+    assert s[minis[0].id] == 10             # baixou a ESCOLHA…
+    assert s[minis[1].id] == 20             # …não a pré-seleção (5/5/5)
+    assert s[minis[2].id] == 15
+    assert it.preco_unitario == Decimal('40')   # 10×2 + 5×4
+
+
+def test_menu_divulgacao_total_errado_recusa(app, admin_user):
+    from app.services import divulgacao as div
+    _loja(origem=True)
+    menu, _ = _menu_div()
+    pis = _pis(menu)
+    with pytest.raises(ValueError):
+        div.criar_divulgacao(
+            itens=[{'kind': 'produto', 'id': menu.id, 'qtd': 1,
+                    'comp': {pis[0]: 3}}],
+            modo_entrega='agendada', endereco=dict(_END_OK), **_base_kw())
+
+
+def test_menu_divulgacao_sem_escolha_vale_a_preselecao(app, admin_user):
+    """Mesmo contrato do site: não mexeu em nada = pré-seleção do cadastro."""
+    from app.services import divulgacao as div
+    loja = _loja(origem=True)
+    menu, minis = _menu_div()
+    for r in minis:
+        _estoque(loja, r, 20)
+    p = div.criar_divulgacao(
+        itens=[{'kind': 'produto', 'id': menu.id, 'qtd': 1}],
+        modo_entrega='agendada', endereco=dict(_END_OK), **_base_kw())
+    assert len(p.itens[0].componentes) == 3
+    assert all(q == 15 for q in _saldos(loja).values())
+
+
+def test_menu_divulgacao_cancelar_estorna_a_escolha(app, admin_user):
+    from app.services import divulgacao as div
+    loja = _loja(origem=True)
+    menu, minis = _menu_div()
+    for r in minis:
+        _estoque(loja, r, 20)
+    pis = _pis(menu)
+    p = div.criar_divulgacao(
+        itens=[{'kind': 'produto', 'id': menu.id, 'qtd': 1,
+                'comp': {pis[0]: 10, pis[2]: 5}}],
+        modo_entrega='agendada', endereco=dict(_END_OK), **_base_kw())
+    div.cancelar_divulgacao(p)
+    assert all(q == 20 for q in _saldos(loja).values())
+
+
+def test_rota_post_menu_com_comp_json(app, owner_user, cliente):
+    """A rota desserializa item_comp[] (JSON por linha) e o pedido nasce com
+    a composição escolhida."""
+    import json as _json
+
+    from app.models import PedidoOnline
+    loja = _loja('Origem Site', origem=True)
+    menu, minis = _menu_div()
+    for r in minis:
+        _estoque(loja, r, 20)
+    pis = _pis(menu)
+    _login(cliente, owner_user)
+    resp = cliente.post('/admin/loja-online/divulgacao', data={
+        'modo_entrega': 'agendada',
+        'nome_destinatario': 'Cliente PR',
+        'telefone': '11999990000',
+        'data_entrega': _amanha().isoformat(),
+        'janela_entrega': '16:00–17:00',
+        'endereco_cep': '01310-100',
+        'endereco_logradouro': 'Av Paulista',
+        'endereco_numero': '1000',
+        'endereco_bairro': 'Bela Vista',
+        'endereco_cidade': 'São Paulo',
+        'endereco_uf': 'SP',
+        'item_alvo[]': f'produto:{menu.id}',
+        'item_qtd[]': '1',
+        'item_comp[]': _json.dumps({str(pis[0]): 8, str(pis[1]): 7}),
+    })
+    assert resp.status_code in (302, 303)
+    p = PedidoOnline.query.filter_by(divulgacao=True).first()
+    assert p is not None
+    comps = sorted((c.produto_item_id, c.quantidade)
+                   for c in p.itens[0].componentes)
+    assert comps == sorted([(pis[0], 8), (pis[1], 7)])
+    assert _saldos(loja)[minis[0].id] == 12     # 20 - 8
+    assert _saldos(loja)[minis[1].id] == 13     # 20 - 7
