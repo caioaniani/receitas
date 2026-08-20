@@ -5215,15 +5215,27 @@ def loja_online_divulgacao():
         # Itens: pares kind:id[] + qtd[] (linhas dinamicas no form).
         alvos = request.form.getlist('item_alvo[]')     # "receita:12"
         qtds = request.form.getlist('item_qtd[]')
+        # Composicao do MENU (montador dos minis, 20/08/2026): um JSON
+        # {produto_item_id: qtd} por linha, '' nas linhas comuns. O service
+        # re-valida tudo (normalizar/validar/preco) — aqui so desserializa.
+        comps = request.form.getlist('item_comp[]')
         itens = []
-        for alvo, q in zip(alvos, qtds):
+        for i, (alvo, q) in enumerate(zip(alvos, qtds)):
             alvo = (alvo or '').strip()
             if not alvo or ':' not in alvo:
                 continue
             kind, _, sid = alvo.partition(':')
+            comp = None
+            if i < len(comps) and (comps[i] or '').strip():
+                try:
+                    bruto = json.loads(comps[i])
+                    if isinstance(bruto, dict):
+                        comp = bruto
+                except (TypeError, ValueError):
+                    comp = None
             try:
                 itens.append({'kind': kind, 'id': int(sid),
-                              'qtd': int(q or 0)})
+                              'qtd': int(q or 0), 'comp': comp})
             except (TypeError, ValueError):
                 continue
         data_str = (request.form.get('data_entrega') or '').strip()
