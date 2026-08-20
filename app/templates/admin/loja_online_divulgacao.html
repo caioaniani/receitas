@@ -159,6 +159,9 @@
 <script>
 (function () {
   var CATALOGO = {{ catalogo | tojson }};
+  // Menus configuráveis (Caixa de Mini etc.): regras + slots pro montador
+  // "como no site" (20/08/2026). Chave = "produto:<id>".
+  var MENUS = {{ menus | tojson }};
 
   // ── Entrega: alterna retirada × endereço ──────────────────────────────
   var boxRetir = document.getElementById('box-retirada');
