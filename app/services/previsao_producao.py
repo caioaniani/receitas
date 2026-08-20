@@ -231,6 +231,123 @@ def _fornada_no_dia(rec, dia):
                 and dia.weekday() not in _DIAS_FORNADA_ESPECIAL)
 
 
+# Teto de sanidade da antecedência por insumo: ficha com lead absurdo (ou
+# cadeia longa) não pode congelar a semana inteira.
+_ANT_INSUMO_MAX = 4
+
+
+def _subs_de(rid, receitas):
+    """Sub-receitas DIRETAS de `rid` como [(sub_id, unidades_por_unidade)].
+
+    Extraída de `_explodir_bom` (era closure) porque a regra de antecedência
+    por insumo precisa percorrer a MESMA árvore de ficha — duas leituras
+    diferentes do BOM divergiriam em silêncio. Mantém o fallback por nome
+    exato pra ingrediente sem FK (grafia antiga após rename)."""
+    from app.services.massa_base import rendimento_massa_crua
+    rec = receitas.get(rid)
+    if rec is None:
+        return []
+    rend = rendimento_massa_crua(rec)
+    out = []
+    for ing in rec.ingredientes:
+        if (ing.tipo or '') not in SUB_RECEITA_TIPOS:
+            continue
+        sid = ing.sub_receita_id
+        if sid is None:                       # fallback por nome exato
+            alvo = (ing.ingrediente_nome or '').strip().lower()
+            sid = next((r.id for r in receitas.values()
+                        if (r.nome or '').strip().lower() == alvo), None)
+        if sid in receitas and rend > 0:
+            out.append((sid, unidades_subreceita(
+                ing.tipo, ing.porcentagem, rec.peso_base) / rend))
+    return out
+
+
+def _retorno_ids():
+    """Receitas de RETORNO (destino de `retorno_receita_id`): não são
+    produzíveis — só entram por devolução de loja. Nunca geram produção nem
+    cascata de insumo."""
+    from app.models import Receita as _Receita
+    return {rid for (rid,) in db.session.query(_Receita.retorno_receita_id)
+            .filter(_Receita.retorno_receita_id.isnot(None)).distinct()}
+
+
+def ant_insumo(rid, dia, receitas, lead, retorno_ids=None, _memo=None):
+    """Dias de CALENDÁRIO que a decisão de `rid` no `dia` precisa estar
+    FECHADA antes do dia, por causa da cadeia de insumos.
+
+    POR QUE EXISTE (dono 20/08/2026): "o croissant você tem que passar bem
+    antes porque a massa para folhar é feita 24 horas antes do modelar o
+    croissant". Aumentar croissant na véspera é inútil — a massa daquele dia
+    já foi batida com o número antigo, e o padeiro recebe ordem impossível.
+    Vale pra TODA receita com sub-receita de lead (decisão do dono na mesma
+    conversa): croissant/pain pela Massa para folhar, pão francês e
+    sourdoughs pelo Levain (pé).
+
+    0 = item sem sub-receita de lead (fecha na véspera, como sempre). O dia
+    do insumo ROLA pro último dia PERMITIDO anterior (produção é seg-sex),
+    então croissant numa TERÇA dá 1, mas numa SEGUNDA dá 3 — a massa dele
+    sai na sexta. Teto `_ANT_INSUMO_MAX`. Ciclo de ficha devolve 0 com
+    ERROR no log (ficha errada não pode travar o motor)."""
+    from datetime import timedelta
+    if retorno_ids is None:
+        retorno_ids = _retorno_ids()
+    if _memo is None:
+        _memo = {}
+
+    def _passo(cur_id, cur_dia, na_pilha):
+        """Maior distância (em dias) entre `dia` e o dia em que algum insumo
+        da cadeia de `cur_id` (produzido em `cur_dia`) precisa ser batido."""
+        chave = (cur_id, cur_dia)
+        if chave in _memo:
+            return _memo[chave]
+        if cur_id in na_pilha:
+            logger.error('ant_insumo: ciclo na ficha da receita %s — '
+                         'assumindo 0', cur_id)
+            return 0
+        if cur_id in retorno_ids:
+            return 0
+        pior = 0
+        for sid, _ratio in _subs_de(cur_id, receitas):
+            L = int(lead.get(sid, 0) or 0)
+            d = cur_dia - timedelta(days=L) if L > 0 else cur_dia
+            # Dia bloqueado (fim de semana) rola pro último permitido antes.
+            rec_sub = receitas.get(sid)
+            for _ in range(7):
+                if producao_permitida_no_dia(rec_sub, d):
+                    break
+                d -= timedelta(days=1)
+            pior = max(pior, (dia - d).days,
+                       _passo(sid, d, na_pilha | {cur_id}))
+        _memo[chave] = pior
+        return pior
+
+    return max(0, min(_ANT_INSUMO_MAX, _passo(rid, dia, frozenset())))
+
+
+def ant_insumo_max(dias, receitas=None, lead=None):
+    """Maior `ant_insumo` entre todas as receitas nos `dias` — o job usa pra
+    saber quantos dias à frente precisa re-sincronizar numa MESMA rodada
+    (senão o insumo e o pai são escritos em rodadas diferentes e o
+    descasamento volta deslocado de um dia)."""
+    from app.models import Receita
+    if receitas is None:
+        receitas = {r.id: r for r in Receita.ativas().all()}
+    if lead is None:
+        lead = {rid: int(rec.dias_producao or 0)
+                for rid, rec in receitas.items()}
+    retorno = _retorno_ids()
+    memo = {}
+    pior = 0
+    for dia in dias:
+        for rid in receitas:
+            pior = max(pior, ant_insumo(rid, dia, receitas, lead, retorno,
+                                        memo))
+            if pior >= _ANT_INSUMO_MAX:
+                return _ANT_INSUMO_MAX
+    return pior
+
+
 def producao_permitida_no_dia(rec, dia):
     """True se a receita PODE ser PRODUZIDA nesse dia. Fornada especial produz
     só sex/sáb (decisão do dono 10/08/2026): a venda de sáb/dom sai da
@@ -2000,30 +2117,9 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
         return
 
     def _subs(rid):
-        from app.services.massa_base import rendimento_massa_crua
-        rec = receitas.get(rid)
-        if rec is None:
-            return []
-        rend = rendimento_massa_crua(rec)
-        out = []
-        for ing in rec.ingredientes:
-            if (ing.tipo or '') not in SUB_RECEITA_TIPOS:
-                continue
-            sid = ing.sub_receita_id
-            if sid is None:                       # fallback por nome exato
-                alvo = (ing.ingrediente_nome or '').strip().lower()
-                sid = next((r.id for r in receitas.values()
-                            if (r.nome or '').strip().lower() == alvo), None)
-            if sid in receitas and rend > 0:
-                out.append((sid, unidades_subreceita(
-                    ing.tipo, ing.porcentagem, rec.peso_base) / rend))
-        return out
+        return _subs_de(rid, receitas)
 
-    # Receitas de RETORNO (destino de retorno_receita_id): nao sao produziveis
-    # — so entram por devolucao de loja. Nunca geram producao nem cascata.
-    from app.models import Receita as _Receita
-    retorno_ids = {rid for (rid,) in db.session.query(_Receita.retorno_receita_id)
-                   .filter(_Receita.retorno_receita_id.isnot(None)).distinct()}
+    retorno_ids = _retorno_ids()
 
     # BOM transitivo a partir dos finais.
     bom = {}

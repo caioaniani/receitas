@@ -12,24 +12,37 @@ logger = logging.getLogger(__name__)
 
 def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
                               inicio_offset_dias, equilibrar,
-                              motor='pedidos'):
+                              motor='pedidos', automatico=False, crono=None):
     """(Re)constroi os itens de `plano` a partir do cronograma do dia (COM as
     edicoes manuais do grid aplicadas — overrides). Preserva o que ja foi
     produzido: nunca baixa qtd_alvo abaixo de produzido_qtd e NAO remove item
-    que ja teve producao (trava no produzido). Nao commita. Retorna o nº de
-    receitas-alvo com qtd>0 no dia.
+    que ja teve producao (trava no produzido). Nao commita. Retorna
+    `(n_alvos, congelados)`.
 
     `inicio_offset_dias`/horizonte/janela/equilibrar/motor TEM que ser os
     mesmos do cronograma exibido — senao as quantidades nao batem com o que
     esta na tela (a distribuicao por dia muda com a janela e com o motor de
-    previsao)."""
-    from app.models import PlanejamentoItem
-    from app.services.previsao_producao import cronograma_producao
+    previsao). `crono` pronto pula o recalculo (o job escreve varios dias da
+    MESMA rodada — insumo e pai precisam sair do MESMO grid).
 
-    crono = cronograma_producao(horizonte_dias=horizonte_dias,
-                                janela_semanas=janela_semanas,
-                                inicio_offset_dias=inicio_offset_dias,
-                                equilibrar=equilibrar, motor=motor)
+    `automatico=True` liga a TRAVA POR INSUMO (dono 20/08/2026): item cuja
+    ficha tem sub-receita de lead (croissant/pain pela Massa para folhar;
+    pao frances e sourdoughs pelo Levain) NAO muda mais quando falta
+    `ant_insumo` dias ou menos pro dia alvo — a massa/levain dele ja foi
+    batida com o numero antigo, entao mudar agora so gera ordem impossivel.
+    Demanda que sobe depois disso NAO entra (decisao do dono) e volta em
+    `congelados` pra tela avisar. Gesto humano (automatico=False) ignora a
+    trava."""
+    from app.models import PlanejamentoItem
+    from app.services.previsao_producao import (
+        cronograma_producao,
+    )
+
+    if crono is None:
+        crono = cronograma_producao(horizonte_dias=horizonte_dias,
+                                    janela_semanas=janela_semanas,
+                                    inicio_offset_dias=inicio_offset_dias,
+                                    equilibrar=equilibrar, motor=motor)
     iso = data_alvo.isoformat()
     alvo = {}  # receita_id -> unidades no dia
     for rec in crono['receitas']:
