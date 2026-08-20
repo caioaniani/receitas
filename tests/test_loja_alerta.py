@@ -317,3 +317,18 @@ def test_teto_hora_de_alerta_endereco_bloqueia_flood(app):
                 loja_alerta.alertar_endereco_falho(f'Rua {i}, São Paulo',
                                                    f'0000{i:04d}')
     assert mock_submit.call_count == loja_alerta._ENDFALHO_MAX_HORA
+
+
+def test_dedupe_cruza_os_dois_workers(app):
+    """20/08/2026 (caso "duplo texto"): o dict de dedupe é POR PROCESSO e o
+    app roda com 2 workers gunicorn — o mesmo endereço falhando em requests
+    que caem em workers diferentes mandava DOIS WhatsApp. Simula o 2º
+    worker limpando a memória e conferindo que o claim em AppConfig segura."""
+    from app.services import loja_alerta
+    with app.app_context():
+        loja_alerta._ultimo_envio.clear()
+        assert loja_alerta._deve_enviar('endereco|x|nao_encontrado') is True
+        loja_alerta._ultimo_envio.clear()          # "outro worker"
+        assert loja_alerta._deve_enviar('endereco|x|nao_encontrado') is False
+        # chave diferente segue passando
+        assert loja_alerta._deve_enviar('endereco|y|nao_encontrado') is True
