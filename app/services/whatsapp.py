@@ -72,14 +72,21 @@ def claim_por_cooldown(chave, segundos, sessao_isolada=False):
 
     Só libera se o último claim tiver mais de `segundos`. Erro de banco =
     True (fail-open: guarda quebrada não pode calar vigia de produção).
+
+    `sessao_isolada=True`: usa uma Session própria em vez de `db.session`.
+    OBRIGATÓRIO quando o claim roda no caminho de um REQUEST (ex.: o alerta
+    de venda barrada dispara dentro do checkout/`/loja/api/frete`) — o
+    commit/rollback aqui contaminaria a transação de negócio. Mesmo motivo
+    e mesmo padrão do `frete_sensor.registrar`.
     """
     from datetime import datetime, timedelta
 
     from app.models import AppConfig
     from app.utils import agora
-    try:
+
+    def _decidir(sess, get, setar):
         agora_dt = agora()
-        bruto = AppConfig.get(chave)
+        bruto = get()
         if bruto:
             try:
                 if agora_dt - datetime.fromisoformat(bruto) < timedelta(
@@ -87,9 +94,39 @@ def claim_por_cooldown(chave, segundos, sessao_isolada=False):
                     return False
             except (TypeError, ValueError):
                 pass          # valor ilegível: trata como sem claim
-        AppConfig.set(chave, agora_dt.isoformat())
-        db.session.commit()
+        setar(agora_dt.isoformat())
+        sess.commit()
         return True
+
+    if sessao_isolada:
+        from sqlalchemy.orm import Session
+        sess = None
+        try:
+            sess = Session(db.engine)
+
+            def _get():
+                row = sess.get(AppConfig, chave)
+                return row.value if row else None
+
+            def _set(v):
+                row = sess.get(AppConfig, chave)
+                if row:
+                    row.value = v
+                else:
+                    sess.add(AppConfig(key=chave, value=v))
+            return _decidir(sess, _get, _set)
+        except Exception:  # noqa: BLE001 — fail-open
+            logger.exception('whatsapp: cooldown isolado %s falhou', chave)
+            return True
+        finally:
+            if sess is not None:
+                try:
+                    sess.close()
+                except Exception:  # noqa: BLE001
+                    pass
+    try:
+        return _decidir(db.session, lambda: AppConfig.get(chave),
+                        lambda v: AppConfig.set(chave, v))
     except Exception:  # noqa: BLE001 — fail-open
         logger.exception('whatsapp: cooldown %s falhou', chave)
         try:
