@@ -1107,6 +1107,10 @@ ALGO hoje?") — lancar a sobra de UM item calava a cobranca de todos.
   /admin/slack-diagnostico passa `claim=False` (re-envio deliberado nunca
   e bloqueado). Testes: secao anti-duplicata em
   `tests/test_desperdicio_alerta.py`.
+  **20/08/2026 — a duplicata que SOBROU apos o claim era OUTRA INSTANCIA**:
+  o servico de PREVIEW da UI v2 no Railway (branch codex, banco proprio,
+  envs copiadas) rodava os MESMOS crons — claim e por banco e nao cruza
+  instancias. Ver secao "Segunda instancia (preview) mandando WhatsApp".
 - **WhatsApp do dono e RESUMO desde 14/08/2026** (dono: "muita informacao,
   so fala se lancaram ou nao — esta ficando flodado"): `mensagem_resumo` —
   uma linha por loja ("nao lancou nada" / "lancou parcial, N itens sem
