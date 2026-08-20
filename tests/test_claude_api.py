@@ -869,3 +869,36 @@ def test_pedidos_itens_trecho_sem_match(app):
     data = resp.get_json()
     assert data['ok'] is True and data['itens'] == []
     assert 'aviso' in data
+
+
+# ── /api/claude/alertas-debug ─────────────────────────────────────────────
+
+def test_alertas_debug_exige_token(app):
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    r = app.test_client().get('/api/claude/alertas-debug',
+                              headers={'Authorization': 'Bearer errado'})
+    assert r.status_code == 401
+
+
+def test_alertas_debug_expoe_envios_automacoes_e_mapas(app):
+    from app.extensions import db
+    from app.models import AutomacaoWhatsapp, NotificacaoWhatsapp, SeruLojaMap
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    db.session.add(NotificacaoWhatsapp(
+        numero='5511999999999', mensagem='Bom dia! Teste',
+        origem='digest_tarefas', ok=True))
+    db.session.add(AutomacaoWhatsapp(
+        nome='Lembrete fixo', horario='07:00', mensagem='Texto fixo'))
+    db.session.add(SeruLojaMap(seru_company_name='O PAO TESTE'))
+    db.session.commit()
+    r = app.test_client().get('/api/claude/alertas-debug',
+                              headers={'Authorization': f'Bearer {TOKEN}'})
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d['ok'] is True
+    assert d['envios'][0]['origem'] == 'digest_tarefas'
+    assert d['automacoes'][0]['horario'] == '07:00'
+    m = [x for x in d['seru_loja_map']
+         if x['seru_company_name'] == 'O PAO TESTE'][0]
+    assert m['confirmado_em'] is None
+    assert 'pdv_vigia_ultima_assinatura' in d['pdv_vigia']

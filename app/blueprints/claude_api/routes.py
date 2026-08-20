@@ -2414,3 +2414,65 @@ def pedidos_itens():
             'criado_por': usuarios.get(p.criado_por),
         })
     return jsonify(ok=True, dias=dias, trecho=trecho, n=len(out), itens=out)
+
+
+@claude_api_bp.route('/alertas-debug')
+@_claude_auth_required
+def alertas_debug():
+    """Sonda de DIAGNOSTICO dos alertas de WhatsApp (20/08/2026, caso
+    "Continua duplicando" com pdv_vigia 00:03/06:03 + digest de tarefas
+    2x as 07:00). Read-only:
+    - `envios`: log NotificacaoWhatsapp (SO digest de tarefas e automacoes
+      passam pelo `whatsapp.notificar` — os vigias chamam zapi direto e NAO
+      aparecem aqui).
+    - `automacoes`: AutomacaoWhatsapp cadastradas (mensagem FIXA agendada).
+    - `seru_loja_map`: vinculos company->loja com confirmado_em (o check 3
+      do pdv_vigia acusa company vendendo sem vinculo confirmado).
+    - `pdv_vigia`: estado em AppConfig — `ultima_assinatura` guarda o texto
+      EXATO do ultimo problema alertado.
+    Params: ?horas=48 (1-720, janela do log de envios).
+    """
+    from datetime import timedelta
+
+    from app.models import (
+        AppConfig,
+        AutomacaoWhatsapp,
+        Loja,
+        NotificacaoWhatsapp,
+        SeruLojaMap,
+    )
+    from app.utils import agora
+
+    horas = _int_arg('horas', 48, 1, 720)
+    corte = agora() - timedelta(hours=horas)
+    envios = [{
+        'em': n.criado_em.isoformat() if n.criado_em else None,
+        'origem': n.origem, 'ok': n.ok, 'erro': n.erro or None,
+        'mensagem_inicio': (n.mensagem or '')[:120],
+    } for n in (NotificacaoWhatsapp.query
+                .filter(NotificacaoWhatsapp.criado_em >= corte)
+                .order_by(NotificacaoWhatsapp.criado_em.desc())
+                .limit(100).all())]
+    automacoes = [{
+        'id': a.id, 'nome': a.nome, 'ativo': a.ativo,
+        'horario': a.horario, 'dias_semana': a.dias_semana or 'todos',
+        'destino': a.destino or '(padrao)',
+        'ultimo_disparo_em': (a.ultimo_disparo_em.isoformat()
+                              if a.ultimo_disparo_em else None),
+        'mensagem_inicio': (a.mensagem or '')[:120],
+    } for a in AutomacaoWhatsapp.query.order_by(AutomacaoWhatsapp.id).all()]
+    lojas = {x.id: x.nome for x in Loja.query.all()}
+    mapas = [{
+        'seru_company_name': m.seru_company_name,
+        'seru_company_id': m.seru_company_id,
+        'loja': lojas.get(m.loja_id),
+        'ignorar': m.ignorar, 'auto_match': m.auto_match,
+        'confirmado_em': (m.confirmado_em.isoformat()
+                          if m.confirmado_em else None),
+    } for m in SeruLojaMap.query.order_by(SeruLojaMap.id).all()]
+    vigia = {k: AppConfig.get(k) for k in (
+        'pdv_vigia_quebrado_desde', 'pdv_vigia_ultimo_alerta_em',
+        'pdv_vigia_ultima_assinatura')}
+    return jsonify(ok=True, horas=horas, envios=envios,
+                   automacoes=automacoes, seru_loja_map=mapas,
+                   pdv_vigia=vigia)
