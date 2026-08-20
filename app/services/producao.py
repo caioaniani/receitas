@@ -1,3 +1,4 @@
+import logging
 from math import ceil
 
 from app.extensions import db
@@ -5,6 +6,8 @@ from app.models import MateriaPrima, Receita
 from app.services.custos import calcular_custos_receitas
 from app.services.massa_base import rendimento_massa_crua
 from app.utils import SUB_RECEITA_TIPOS, unidades_subreceita
+
+logger = logging.getLogger(__name__)
 
 
 def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,

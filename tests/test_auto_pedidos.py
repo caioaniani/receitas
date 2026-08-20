@@ -685,16 +685,22 @@ def test_semana_corrida_humano_enviou_pula_o_dia(app, monkeypatch):
         assert len(out['enviadas']) == 5               # ter..dom menos qui
 
 
-def test_atualiza_re_sincroniza_ordem_do_cron(app, monkeypatch):
-    """🔄 automático (17/08/2026): a ordem DE HOJE criada pelo cron é
-    re-sincronizada com o grid às 06:45/19:05 — os itens de véspera dela
-    são dirigidos pela demanda de amanhã, que muda depois do envio."""
+def test_atualiza_re_sincroniza_ordem_de_AMANHA(app, monkeypatch):
+    """🔄 automático: re-sincroniza a ordem DE AMANHÃ com o grid às
+    06:45/19:05 — os itens de véspera são dirigidos pela demanda do dia
+    seguinte, que muda depois do envio. CONTRATO NOVO (dono 20/08/2026):
+    o alvo é AMANHÃ, nunca HOJE — "na data de hoje nunca deveríamos mudar
+    o que o padeiro está produzindo; qualquer mudança deveria ter sido
+    feita ontem"."""
+    from datetime import timedelta
+
     from app.models import PlanejamentoProducao
     from app.services import producao
+    amanha = hoje() + timedelta(days=1)
     chamadas = []
     with app.app_context():
         db.session.add(PlanejamentoProducao(
-            data=hoje(), origem='cronograma', enviado_ao_padeiro=True,
+            data=amanha, origem='cronograma', enviado_ao_padeiro=True,
             criado_por=None, nome='Ordem do cron'))
         db.session.commit()
         monkeypatch.setattr(
@@ -703,19 +709,41 @@ def test_atualiza_re_sincroniza_ordem_do_cron(app, monkeypatch):
                 (data, kw.get('motor'))) or
             type('P', (), {'itens': [1, 2, 3]})())
         out = auto_pedidos.atualizar_plano_automatico()
-        assert chamadas == [(hoje(), 'vendas')]   # mesmo default do envio
+        assert chamadas == [(amanha, 'vendas')]   # mesmo default do envio
         assert out['atualizada'] is True and out['itens'] == 3
 
 
-def test_atualiza_nao_toca_ordem_de_humano(app, admin_user, monkeypatch):
-    """Ordem enviada por HUMANO nunca muda por caminho implícito — o 🔄
-    automático só re-sincroniza ordem do próprio cron."""
+def test_atualiza_NUNCA_toca_a_ordem_de_hoje(app, monkeypatch):
+    """A regressão que motivou a regra: o padeiro estava executando a ordem
+    de HOJE e ela mudou às 19:05. Com ordem só de hoje no banco, o 🔄
+    automático não acha nada pra atualizar."""
     from app.models import PlanejamentoProducao
     from app.services import producao
     chamadas = []
     with app.app_context():
         db.session.add(PlanejamentoProducao(
             data=hoje(), origem='cronograma', enviado_ao_padeiro=True,
+            criado_por=None, nome='Ordem de HOJE (padeiro executando)'))
+        db.session.commit()
+        monkeypatch.setattr(producao, 'enviar_plano_do_dia',
+                            lambda *a, **kw: chamadas.append('enviar'))
+        out = auto_pedidos.atualizar_plano_automatico()
+        assert out.get('sem_ordem') is True
+        assert chamadas == []
+
+
+def test_atualiza_nao_toca_ordem_de_humano(app, admin_user, monkeypatch):
+    """Ordem enviada por HUMANO nunca muda por caminho implícito — o 🔄
+    automático só re-sincroniza ordem do próprio cron."""
+    from datetime import timedelta
+
+    from app.models import PlanejamentoProducao
+    from app.services import producao
+    chamadas = []
+    with app.app_context():
+        db.session.add(PlanejamentoProducao(
+            data=hoje() + timedelta(days=1), origem='cronograma',
+            enviado_ao_padeiro=True,
             criado_por=admin_user.id, nome='Ordem do dono'))
         db.session.commit()
         monkeypatch.setattr(producao, 'enviar_plano_do_dia',

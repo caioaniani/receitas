@@ -113,3 +113,118 @@ def test_reaprovar_rascunho_continua_permitido(app, admin_user):
         assert p1.enviado_ao_padeiro is False
         p2 = aprovar_plano_do_dia(d2, admin_user.id, horizonte_dias=7)
         assert p2.id == p1.id and p2.enviado_ao_padeiro is False
+
+
+# ── Trava do DIA CORRENTE (dono 20/08/2026) ──────────────────────────────
+# "Na data de hoje, nunca que deveríamos ter trocado ou feito alguma mudança
+# no que o padeiro está produzindo hoje. Qualquer mudança deveria ter sido
+# feita ontem." O 🔄 automático das 19:05 tinha reescrito a ordem do dia com
+# o padeiro já em execução (pão francês 300 → 400).
+
+def test_automatico_NAO_reescreve_ordem_enviada_de_hoje(app, catalogo):
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+    from app.services.producao import enviar_plano_do_dia
+    from app.utils import hoje
+    with app.app_context():
+        plano = PlanejamentoProducao(
+            data=hoje(), origem='cronograma', enviado_ao_padeiro=True,
+            criado_por=None, nome='Ordem de hoje')
+        db.session.add(plano)
+        db.session.flush()
+        db.session.add(PlanejamentoItem(
+            planejamento_id=plano.id, receita_id=catalogo['receita'].id,
+            multiplicador=1, qtd_alvo=300))
+        db.session.commit()
+        pid = plano.id
+
+        # caminho AUTOMÁTICO (user_id=None): devolve o plano intacto
+        out = enviar_plano_do_dia(hoje(), user_id=None)
+        assert out is not None and out.id == pid
+        item = PlanejamentoItem.query.filter_by(planejamento_id=pid).one()
+        assert item.qtd_alvo == 300      # NÃO virou 400
+
+
+def test_humano_ainda_pode_atualizar_a_ordem_de_hoje(app, admin_user, catalogo,
+                                                     monkeypatch):
+    """A trava é só pro caminho automático: o 🔄 na tela (com usuário) segue
+    valendo — o dono pode corrigir a ordem do dia conscientemente."""
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+    from app.services import producao
+    from app.utils import hoje
+    with app.app_context():
+        plano = PlanejamentoProducao(
+            data=hoje(), origem='cronograma', enviado_ao_padeiro=True,
+            criado_por=None, nome='Ordem de hoje')
+        db.session.add(plano)
+        db.session.flush()
+        db.session.add(PlanejamentoItem(
+            planejamento_id=plano.id, receita_id=catalogo['receita'].id,
+            multiplicador=1, qtd_alvo=300))
+        db.session.commit()
+        pid = plano.id
+        rid = catalogo['receita'].id
+
+        def _sync(pl, data_alvo, *a, **kw):
+            it = PlanejamentoItem.query.filter_by(
+                planejamento_id=pl.id, receita_id=rid).one()
+            it.qtd_alvo = 400
+            return 1
+        monkeypatch.setattr(producao, '_sync_itens_do_cronograma', _sync)
+        monkeypatch.setattr(producao, 'sincronizar_pre_baixa_mp',
+                            lambda *a, **kw: None)
+        producao.enviar_plano_do_dia(hoje(), user_id=admin_user.id)
+        item = PlanejamentoItem.query.filter_by(planejamento_id=pid).one()
+        assert item.qtd_alvo == 400      # gesto humano passa
+
+
+def test_automatico_segue_livre_pra_ordem_de_AMANHA(app, catalogo, monkeypatch):
+    """A trava vale só pro dia corrente (e passado): a véspera continua
+    sendo ajustada automaticamente — é exatamente onde a mudança deve
+    acontecer."""
+    from datetime import timedelta
+
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+    from app.services import producao
+    from app.utils import hoje
+    amanha = hoje() + timedelta(days=1)
+    with app.app_context():
+        plano = PlanejamentoProducao(
+            data=amanha, origem='cronograma', enviado_ao_padeiro=True,
+            criado_por=None, nome='Ordem de amanhã')
+        db.session.add(plano)
+        db.session.flush()
+        db.session.add(PlanejamentoItem(
+            planejamento_id=plano.id, receita_id=catalogo['receita'].id,
+            multiplicador=1, qtd_alvo=300))
+        db.session.commit()
+        pid, rid = plano.id, catalogo['receita'].id
+
+        def _sync(pl, data_alvo, *a, **kw):
+            it = PlanejamentoItem.query.filter_by(
+                planejamento_id=pl.id, receita_id=rid).one()
+            it.qtd_alvo = 450
+            return 1
+        monkeypatch.setattr(producao, '_sync_itens_do_cronograma', _sync)
+        monkeypatch.setattr(producao, 'sincronizar_pre_baixa_mp',
+                            lambda *a, **kw: None)
+        producao.enviar_plano_do_dia(amanha, user_id=None)
+        item = PlanejamentoItem.query.filter_by(planejamento_id=pid).one()
+        assert item.qtd_alvo == 450
+
+
+def test_automatico_ainda_CRIA_ordem_que_nao_existe_hoje(app, catalogo,
+                                                         monkeypatch):
+    """Dia sem ordem NENHUMA é pior que ordem tardia — a trava só impede
+    REESCREVER ordem já enviada, não criar a que falta."""
+    from app.models import PlanejamentoProducao
+    from app.services import producao
+    from app.utils import hoje
+    with app.app_context():
+        monkeypatch.setattr(producao, '_sync_itens_do_cronograma',
+                            lambda *a, **kw: 1)
+        monkeypatch.setattr(producao, 'sincronizar_pre_baixa_mp',
+                            lambda *a, **kw: None)
+        plano = producao.enviar_plano_do_dia(hoje(), user_id=None)
+        assert plano is not None
+        assert PlanejamentoProducao.query.filter_by(
+            data=hoje(), origem='cronograma').count() == 1

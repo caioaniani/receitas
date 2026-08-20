@@ -720,12 +720,16 @@ def iniciar(app):
         )
         # 🔄 AUTOMATICO da ordem DE HOJE (17/08/2026, caso do 1o fim de
         # semana): os itens de vespera da ordem (levain/lead-1) sao
-        # dirigidos pela demanda de AMANHA, que o cron de pedidos
-        # re-sincroniza 06:30/18:30 DEPOIS de a ordem congelar as 19:00 da
-        # vespera — sem este refresh a ordem amanhecia magra (3 itens vs 8
-        # no grid). 06:45 = pos-refresh da manha; 19:05 = pos-corte (numero
-        # final pra madrugada). Ordem enviada por HUMANO nunca e tocada.
-        # Mesmo kill-switch do envio (e a mesma automacao).
+        # dirigidos pela demanda do dia seguinte, que o cron de pedidos
+        # re-sincroniza 06:30/18:30 — sem este refresh a ordem amanhecia
+        # magra (3 itens vs 8 no grid).
+        # MIRA A ORDEM DE AMANHA, NUNCA A DE HOJE (dono 20/08/2026, caso do
+        # pao frances 300->400 com o padeiro ja produzindo): "na data de
+        # hoje nunca deveriamos mudar o que o padeiro esta produzindo;
+        # qualquer mudanca deveria ter sido feita ontem". 06:45 =
+        # pos-refresh da manha; 19:05 = numero FINAL de amanha, logo apos o
+        # corte das 19:00 (quando a demanda de amanha congela). Ordem
+        # enviada por HUMANO nunca e tocada. Mesmo kill-switch do envio.
         _scheduler.add_job(
             lambda app=app: _run_atualiza_plano(app),
             'cron', hour=6, minute=45, id='auto-atualiza-plano-manha',
@@ -983,9 +987,8 @@ def _run_ordens_semana_retro(app):
             return
         if os.environ.get('AUTO_PEDIDOS', '1') != '0':
             auto_pedidos.gerar_pedidos_automaticos()
-        # A ordem DE HOJE tambem (retro 'e'): o 🔄 das 19:05 tinha aplicado
-        # o nivelamento antigo (receita inteira num dia) na ordem que o
-        # padeiro executa NESTA madrugada — re-nivela por lotes junto.
+        # E o 🔄 da ordem de AMANHA (retro 'e' mirava a de HOJE; desde
+        # 20/08/2026 o dia corrente e intocavel por caminho automatico).
         auto_pedidos.atualizar_plano_automatico()
         auto_pedidos.enviar_ordens_da_semana()
         AppConfig.set(ORDENS_SEMANA_RETRO_MARKER,
@@ -997,8 +1000,10 @@ def _run_ordens_semana_retro(app):
 
 
 def _run_atualiza_plano(app):
-    """Job: re-sincroniza a ordem DE HOJE (criada pelo cron) com o grid —
-    o 🔄 automático das 06:45/19:05. Ordem de humano nunca é tocada."""
+    """Job: re-sincroniza a ordem DE AMANHÃ (criada pelo cron) com o grid —
+    o 🔄 automático das 06:45/19:05. A ordem do dia CORRENTE nunca é tocada
+    por caminho automático (regra do dono 20/08/2026); ordem de humano
+    nunca é tocada em dia nenhum."""
     from app.services import auto_pedidos
 
     with app.app_context():
