@@ -1934,6 +1934,18 @@ e preservacao da escolha 'pedidos').
 
 ## Automacao de pedidos + envio + corte 19h + fornada sab/dom (10/08/2026)
 
+> **REGRA MAIOR DESTA SECAO (dono 20/08/2026, textual): "Na data de hoje,
+> nunca que deveriamos ter trocado ou feito alguma mudanca no que o padeiro
+> esta produzindo hoje. Qualquer mudanca deveria ter sido feita ontem."**
+> A ordem do dia CORRENTE e INTOCAVEL por caminho automatico — cron, retro
+> de boot, deploy, seja o que for. So gesto HUMANO explicito na tela muda a
+> ordem do dia. Implementacao em DUAS camadas: `atualizar_plano_automatico`
+> mira AMANHA (`auto_pedidos.py`) e `producao.enviar_plano_do_dia` recusa
+> reescrever ordem JA ENVIADA de dia `<= hoje` quando `user_id is None`.
+> Ver tambem "Relogio FISICO da producao" (o croissant precisa fechar ANTES
+> ainda, por causa da massa de 24h). O CORTE das 19:00 NAO cobre isso: ele
+> trava `PedidoLoja`, nunca `PlanejamentoProducao` — nao confundir.
+
 Pedido do dono ("hoje eu tenho que lancar o pedido manualmente... quero que
 o sistema faca os pedidos automaticamente de 3 dias na frente"), decisoes
 dele via AskUserQuestion: **automatizar TUDO (pedido + envio)** — REVOGA a
