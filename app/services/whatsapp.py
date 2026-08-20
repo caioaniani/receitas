@@ -58,7 +58,7 @@ def devolver_claim(chave, anterior):
             pass
 
 
-def claim_por_cooldown(chave, segundos):
+def claim_por_cooldown(chave, segundos, sessao_isolada=False):
     """Variante do claim por TEMPO, pra job de INTERVALO — que não tem um
     "tick" redondo pra comparar (20/08/2026).
 
