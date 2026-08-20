@@ -67,6 +67,9 @@ def criar_divulgacao(*, itens, modo_entrega='agendada', loja_retirada_id=None,
     """Cria o pedido de divulgacao E baixa o estoque numa transacao unica.
 
     `itens`: lista de {'kind': 'receita'|'produto', 'id': int, 'qtd': int}.
+    Item de MENU configuravel aceita tambem 'comp' ({produto_item_id: qtd},
+    a escolha dos minis) — validada como no site (total exato); ausente =
+    pre-selecao do cadastro.
     `endereco`: dict com as chaves do snapshot (entrega/express); None na
     retirada. Levanta ValueError em entrada invalida (o caller flasheia).
 
