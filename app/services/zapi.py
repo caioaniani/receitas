@@ -215,6 +215,16 @@ def enviar_texto(numero, mensagem, *, critico=False, _interno=False):
     if not instance_id or not token:
         return {'ok': False, 'erro': 'Z-API nao configurado (ZAPI_INSTANCE_ID/ZAPI_TOKEN)'}
 
+    # INSTANCIA CANONICA (20/08/2026): copia de homologacao com as MESMAS
+    # envs nao pode mandar WhatsApp — os crons de horario de parede fazem as
+    # duas instancias dispararem no mesmo minuto e o dono recebe tudo em
+    # dobro (ver app/services/instancia.py). Fail-open fora do Railway;
+    # `critico` nunca e bloqueado.
+    from app.services import instancia as _inst
+    if not _inst.pode_falar_com_o_mundo('zapi', critico=critico):
+        return {'ok': False, 'suprimido_instancia': True,
+                'erro': 'instancia nao canonica — envio suprimido'}
+
     if _e_grupo(numero):
         destino = _normalizar_grupo(numero)
         if not destino:
