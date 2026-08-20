@@ -70,7 +70,15 @@ def _texto_esgotado(nome, telefone, email, itens, data_entrega):
 
 
 def _deve_enviar(chave):
-    """Dedup leve, thread-safe. True se pode enviar (e marca o envio)."""
+    """Dedup leve, thread-safe. True se pode enviar (e marca o envio).
+
+    DUAS camadas desde 20/08/2026 (caso "duplo texto", dono): a de memória
+    (abaixo) é POR PROCESSO e o app roda com 2 workers gunicorn — o mesmo
+    endereço falhando em requests que caem em workers diferentes gerava
+    DOIS WhatsApp. A segunda camada (`_deve_enviar_persistente`) é um claim
+    em AppConfig, que cruza processos. Fora de app context (teste unitário
+    do dedupe) a persistente é fail-open e só a de memória vale.
+    """
     agora = time.monotonic()
     with _lock:
         # Poda entradas expiradas quando o dict cresce — evita crescer sem
