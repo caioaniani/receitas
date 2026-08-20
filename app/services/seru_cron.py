@@ -1353,13 +1353,26 @@ def _run_heartbeat_slack(app):
     so ruido)."""
     from app.services import slack
 
-    with app.app_context():
+    def _postar():
         canal = (os.environ.get('SLACK_CHANNEL_HEARTBEAT')
                  or app.config.get('SLACK_CHANNEL_HEARTBEAT') or '').strip()
         if not canal:
             return
         from datetime import datetime
         from zoneinfo import ZoneInfo
+
+        from app.services.whatsapp import claim_envio, devolver_claim
+        from app.utils import hoje
+        # CLAIM POR DIA (20/08/2026): este job era o unico SEM advisory lock
+        # nenhum — os 2 workers gunicorn postavam o heartbeat TODO DIA em
+        # dobro no Slack (e junto o aviso de dead-man do backup). O lock
+        # abaixo cobre o simultaneo; o claim cobre o sequencial.
+        status, anterior = claim_envio('heartbeat_slack_dia',
+                                       hoje().isoformat())
+        if status != 'ok':
+            logger.info('heartbeat: ja postado hoje por outro processo (%s)',
+                        status)
+            return
         agora_brt = datetime.now(ZoneInfo('America/Sao_Paulo'))
         texto = (f':heartbeat: sistema OK · {agora_brt.strftime("%d/%m %H:%M")} BRT\n'
                  'se essa msg sumir do canal por mais de 24h, '
@@ -1367,7 +1380,15 @@ def _run_heartbeat_slack(app):
         aviso = _aviso_backup_atrasado()
         if aviso:
             texto += '\n' + aviso
-        slack.post_message(canal, text=texto)
+        res = slack.post_message(canal, text=texto)
+        if not (res or {}).get('ok'):
+            # Slack fora: devolve o claim pra retentar (heartbeat que nao sai
+            # e justamente o sinal de que a infra caiu — nao pode se perder
+            # por um erro de rede).
+            devolver_claim('heartbeat_slack_dia', anterior)
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_HEARTBEAT, _postar, 'heartbeat slack')
 
 
 def _aviso_backup_atrasado(limite_horas=28):
