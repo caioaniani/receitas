@@ -48,6 +48,26 @@ def test_branch_de_producao_libera(monkeypatch):
     assert instancia.pode_falar_com_o_mundo('zapi') is True
 
 
+def test_branch_desconhecido_LIBERA(monkeypatch):
+    """Achado de revisão 20/08: branch hardcoded era ponto único de falha —
+    renomear o branch de produção calaria TUDO (inclusive o bot respondendo
+    cliente e o próprio heartbeat que detectaria o problema). Regra: só
+    bloqueia branch que CASA padrão de cópia; desconhecido = produção."""
+    monkeypatch.setenv('RAILWAY_GIT_BRANCH', 'claude/branch-renomeado-2027')
+    monkeypatch.delenv('ALERTAS_INSTANCIA_CANONICA', raising=False)
+    ok, motivo = instancia.status()
+    assert ok is True
+    assert 'desconhecido' in motivo
+    assert instancia.pode_falar_com_o_mundo('chatwoot') is True
+
+
+def test_override_zero_silencia_ate_o_critico(monkeypatch):
+    """`=0` é gesto humano explícito ("esta cópia não fala com ninguém") —
+    diferente do bloqueio automático, que deixa o crítico passar."""
+    monkeypatch.setenv('ALERTAS_INSTANCIA_CANONICA', '0')
+    assert instancia.pode_falar_com_o_mundo('zapi', critico=True) is False
+
+
 def test_branch_de_copia_bloqueia(monkeypatch):
     monkeypatch.setenv('RAILWAY_GIT_BRANCH', BRANCH_COPIA)
     monkeypatch.delenv('ALERTAS_INSTANCIA_CANONICA', raising=False)
@@ -167,3 +187,26 @@ def test_cooldown_com_banco_quebrado_nao_cala_o_job(app, monkeypatch):
         seru_cron._com_lock(9913, lambda: chamadas.append(1),
                             'teste cd quebrado', cooldown_seg=600)
     assert chamadas == [1]
+
+
+def test_chatwoot_nao_muda_status_de_conversa_real_da_copia(app, monkeypatch):
+    """Achado de revisão: a vassoura chama `definir_status` FORA do `if
+    texto` — com só o envio guardado, a cópia marcava conversa real como
+    'resolved' (some da fila da equipe) sem mandar nada ao cliente."""
+    from app.services import chatwoot
+    monkeypatch.setenv('RAILWAY_GIT_BRANCH', BRANCH_COPIA)
+    monkeypatch.delenv('ALERTAS_INSTANCIA_CANONICA', raising=False)
+    with patch('requests.post') as post:
+        res = chatwoot.definir_status(123, 'resolved')
+    assert res['ok'] is False and res.get('suprimido_instancia') is True
+    assert not post.called
+
+
+def test_chatwoot_template_pago_nao_sai_da_copia(app, monkeypatch):
+    """Template da Meta custa dinheiro por disparo."""
+    from app.services import chatwoot
+    monkeypatch.setenv('RAILWAY_GIT_BRANCH', BRANCH_COPIA)
+    monkeypatch.delenv('ALERTAS_INSTANCIA_CANONICA', raising=False)
+    with patch('requests.post') as post:
+        res = chatwoot.enviar_template(1, 'tpl', ['a'], 'pt_BR')
+    assert res.get('suprimido_instancia') is True and not post.called

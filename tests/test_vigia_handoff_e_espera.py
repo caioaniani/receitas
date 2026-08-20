@@ -448,3 +448,87 @@ def test_segundo_processo_no_mesmo_ciclo_nao_duplica(app):
         chatbot_vigia.alertar_clientes_esperando_humano()   # worker A
         chatbot_vigia.alertar_clientes_esperando_humano()   # worker B
     assert envia.call_count == 1
+
+
+def test_contencao_ao_cliente_sai_mesmo_com_zapi_fora(app):
+    """Achado de revisão 20/08: o `continue` no envio falho tirava também a
+    CONTENÇÃO ao cliente. Ele espera há 12 min e não tem nada a ver com o
+    WhatsApp do dono estar fora — a contenção tem que sair do mesmo jeito."""
+    from app.services import chatbot_vigia
+    with app.app_context(), \
+         patch('app.services.chatbot_vigia._numero_destino',
+               return_value='5511999990000'), \
+         patch('app.services.chatwoot.listar_conversas_paradas',
+               return_value=_conversa_parada()), \
+         patch('app.services.chatwoot.buscar_historico',
+               return_value=_HIST_ESPERANDO), \
+         patch('app.services.zapi.enviar_texto',
+               return_value={'ok': False, 'erro': 'z-api fora'}), \
+         patch('app.services.chatwoot.enviar_mensagem',
+               return_value={'ok': True}) as contencao:
+        chatbot_vigia.alertar_clientes_esperando_humano()
+    assert contencao.called
+    assert chatbot_vigia.TEXTO_CONTENCAO_ESPERA in contencao.call_args[0][1]
+
+
+def test_abandono_grava_o_veredito_ANTES_de_enviar(app):
+    """Claim-first do ABANDONO (não tinha teste). O mock de envio consulta o
+    banco no momento do disparo."""
+    from app.models import VigiaVeredito
+    from app.services import chatbot_vigia
+    visto = {}
+
+    def _envia(numero, msg):
+        visto['ja_registrado'] = VigiaVeredito.query.filter(
+            VigiaVeredito.conv_id == '4242',
+            VigiaVeredito.mensagem_cliente.like('[ABANDONO%')
+        ).first() is not None
+        return {'ok': True}
+
+    hist = [{'role': 'assistant', 'content': 'temos cesta sim'},
+            {'role': 'user', 'content': 'vou pensar'}]
+    with app.app_context(), \
+         patch('app.services.chatbot_vigia.disponivel', return_value=True), \
+         patch('app.services.chatbot_vigia._numero_destino',
+               return_value='5511999990000'), \
+         patch('app.services.chatbot_vigia._chamar_modelo_abandono',
+               return_value={'alerta': True, 'gravidade': 'alta',
+                             'motivo': 'cliente sumiu comprando'}), \
+         patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'x'}), \
+         patch('app.services.zapi.enviar_texto', side_effect=_envia):
+        res = chatbot_vigia.avaliar_abandono(hist, conv_id=4242,
+                                             nome_contato='Ana',
+                                             minutos_sem_resposta=30)
+    assert res['enviado'] is True
+    assert visto['ja_registrado'] is True
+
+
+def test_abandono_com_envio_falho_MANTEM_a_linha(app):
+    """A linha nunca é apagada: `ja_avisado_abandono` documenta o invariante
+    'existe linha recente = já avaliado', e o set em memória do job impede
+    retentativa no mesmo processo de qualquer jeito (só re-gastaria uma
+    chamada ao modelo)."""
+    from app.models import VigiaVeredito
+    from app.services import chatbot_vigia
+    hist = [{'role': 'assistant', 'content': 'temos cesta sim'},
+            {'role': 'user', 'content': 'vou pensar'}]
+    with app.app_context(), \
+         patch('app.services.chatbot_vigia.disponivel', return_value=True), \
+         patch('app.services.chatbot_vigia._numero_destino',
+               return_value='5511999990000'), \
+         patch('app.services.chatbot_vigia._chamar_modelo_abandono',
+               return_value={'alerta': True, 'gravidade': 'alta',
+                             'motivo': 'cliente sumiu'}), \
+         patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'x'}), \
+         patch('app.services.zapi.enviar_texto',
+               return_value={'ok': False, 'erro': 'fora'}):
+        res = chatbot_vigia.avaliar_abandono(hist, conv_id=4343,
+                                             nome_contato='Bia',
+                                             minutos_sem_resposta=30)
+        assert res['enviado'] is False
+        row = VigiaVeredito.query.filter(
+            VigiaVeredito.conv_id == '4343',
+            VigiaVeredito.mensagem_cliente.like('[ABANDONO%')).first()
+        assert row is not None
+        assert row.enviado_whatsapp is False
+        assert chatbot_vigia.ja_avisado_abandono(4343) is True

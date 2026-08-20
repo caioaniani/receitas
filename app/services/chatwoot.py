@@ -42,6 +42,9 @@ def atualizar_atributos_contato(contact_id, atributos):
     `atributos` é um dict (ex: {'cliente_b2b': 'Zion', 'debito': '120.00'}).
     Best-effort: erro de rede não deve quebrar o fluxo de quem chama.
     """
+    from app.services import instancia as _inst
+    if not _inst.pode_falar_com_o_mundo('chatwoot'):
+        return {'ok': False, 'suprimido_instancia': True, 'erro': 'instancia nao canonica'}
     if not disponivel():
         return {'ok': False, 'erro': 'Chatwoot não configurado'}
     url = f'{_base()}/contacts/{contact_id}'
@@ -100,6 +103,9 @@ def enviar_mensagem_painel(conversation_id, content):
 
     Cuidado: a mensagem aparece como esse agente humano no Chatwoot, com
     nome+foto proprios. Erro = nao envia (cliente nao recebe resposta dupla)."""
+    from app.services import instancia as _inst
+    if not _inst.pode_falar_com_o_mundo('chatwoot'):
+        return {'ok': False, 'suprimido_instancia': True, 'erro': 'instancia nao canonica'}
     if not painel_disponivel():
         return {'ok': False, 'erro': 'CHATWOOT_PAINEL_TOKEN nao configurado'}
     url = f'{_base()}/conversations/{conversation_id}/messages'
@@ -151,6 +157,9 @@ def definir_status(conversation_id, status, tentativas=3):
     handoff: uma falha transitoria aqui deixava a conversa presa no bot e o
     cliente esperando (caso 23/06/2026). Devolve {'ok': bool, 'erro': str} —
     o caller DEVE checar e NAO pode silenciar a falha."""
+    from app.services import instancia as _inst
+    if not _inst.pode_falar_com_o_mundo('chatwoot'):
+        return {'ok': False, 'suprimido_instancia': True, 'erro': 'instancia nao canonica — status nao alterado'}
     if not bot_disponivel():
         return {'ok': False, 'erro': 'Chatwoot bot nao configurado'}
     url = f'{_base()}/conversations/{conversation_id}/toggle_status'
@@ -877,6 +886,9 @@ def enviar_template(conversation_id, nome_template, params, language,
     """Manda uma mensagem de TEMPLATE aprovado (unico jeito de iniciar fora da
     janela de 24h). `params` = lista posicional (vira {{1}},{{2}}...). Retorna
     {'ok': bool, 'erro': str|None}."""
+    from app.services import instancia as _inst
+    if not _inst.pode_falar_com_o_mundo('chatwoot'):
+        return {'ok': False, 'suprimido_instancia': True, 'erro': 'instancia nao canonica'}
     params = [str(p) for p in (params or [])]
     processed = {str(i + 1): v for i, v in enumerate(params)}
     corpo = {
