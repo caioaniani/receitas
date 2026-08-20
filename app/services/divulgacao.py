@@ -173,14 +173,17 @@ def criar_divulgacao(*, itens, modo_entrega='agendada', loja_retirada_id=None,
     db.session.add(pedido)
     db.session.flush()
 
-    for kind, obj, nome, preco, qtd in linhas:
-        p_dec = Decimal(str(preco))
-        pedido.itens.append(PedidoOnlineItem(
+    for kind, obj, nome, preco, qtd, comp in linhas:
+        p_dec = preco if isinstance(preco, Decimal) else Decimal(str(preco))
+        poi = PedidoOnlineItem(
             kind=kind,
             receita_id=obj.id if kind == 'receita' else None,
             produto_id=obj.id if kind == 'produto' else None,
             nome=nome, preco_unitario=p_dec, quantidade=qtd,
-            subtotal=p_dec * qtd))
+            subtotal=p_dec * qtd)
+        pedido.itens.append(poi)
+        if comp:
+            _anexar_componentes(poi, obj, comp)
     pedido.recalcular_total()        # valor_total = soma (valor DOADO, referencia)
     db.session.flush()
 
@@ -192,12 +195,44 @@ def criar_divulgacao(*, itens, modo_entrega='agendada', loja_retirada_id=None,
     return pedido
 
 
+def _anexar_componentes(poi, produto, comp):
+    """Persiste a composicao ESCOLHIDA do menu no pedido (mesmo formato do
+    checkout do site — `loja_checkout`): e ELA que o painel/PDF mostram pra
+    cozinha e que a baixa explode (`composicao_escolhida`), nunca a
+    pre-selecao do cadastro."""
+    from decimal import Decimal as _D
+
+    from app.models import PedidoOnlineItemComponente
+    from app.services import loja_menu
+    por_id = {s['pi_id']: s for s in loja_menu.slots(produto)}
+    for pi_id, qtd in sorted(comp.items()):
+        s = por_id.get(int(pi_id))
+        if not s or qtd <= 0:
+            continue
+        poi.componentes.append(PedidoOnlineItemComponente(
+            produto_item_id=s['pi_id'],
+            tipo={'receita_id': 'receita', 'produto_id': 'produto',
+                  'materia_prima_id': 'mp'}[s['col']],
+            receita_id=s['alvo_id'] if s['col'] == 'receita_id' else None,
+            produto_componente_id=(s['alvo_id'] if s['col'] == 'produto_id'
+                                   else None),
+            materia_prima_id=(s['alvo_id'] if s['col'] == 'materia_prima_id'
+                              else None),
+            nome=s['nome'][:200], quantidade=int(qtd),
+            preco_unitario=(_D(str(s['preco']))
+                            if s['preco'] is not None else None),
+        ))
+
+
 def _baixar_estoque(pedido, usuario_id=None):
     """Baixa fisica pelo MOTOR UNICO, canal 'divulgacao' (tipo proprio,
     rastreavel e fora da previsao). Explode cesta e acumula fracao igual a
     venda do site; tolera shortfall (`venda_site_divulgacao_sem_estoque`).
+    MENU configuravel explode pela composicao ESCOLHIDA (componentes
+    persistidos no pedido), como no site — sem componentes cai no cadastro.
     Sem reserva/plano-do-dia — divulgacao nasce e baixa na hora."""
     from app.services.baixa_venda import aplicar_venda
+    from app.services.loja_estoque_reserva import composicao_escolhida
     loja = _loja_baixa(pedido)
     if not loja:
         logger.warning('divulgacao %s: sem loja de baixa', pedido.codigo)
@@ -211,7 +246,8 @@ def _baixar_estoque(pedido, usuario_id=None):
             loja.id, receita_id=it.receita_id, produto_id=it.produto_id,
             qtd=it.quantidade, canal='divulgacao', referencia=ref,
             pedido_ref=f'divulgacao:{pedido.codigo}', usuario_id=usuario_id,
-            nome_venda=it.nome, pular_sem_linha=True)
+            nome_venda=it.nome, pular_sem_linha=True,
+            composicao=composicao_escolhida(it))
         total['baixado'] += res['baixado']
         total['faltou'] += res['faltou']
     return total
