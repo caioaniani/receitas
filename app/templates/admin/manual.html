@@ -56,6 +56,17 @@
                 decisão de admin; motorista e padeiro não veem essa opção.</li>
         </ul>
         <p class="text-muted mb-0">Se algum desses parar, é o vigia (ou o heartbeat do Slack) que avisa — não é papel seu ficar conferindo.</p>
+        <div class="alert alert-warning mt-3 mb-0 small">
+            <strong>Recebeu o mesmo alerta duas vezes?</strong> Desde 20/08/2026 só o
+            serviço de produção fala com o mundo: qualquer cópia do sistema
+            (homologação/preview no Railway) fica automaticamente muda — não manda
+            WhatsApp, não posta no Slack e não responde cliente no atendimento.
+            Se mesmo assim vier duplicado, é sinal de que existe outra cópia rodando
+            um código antigo: apague o serviço no Railway (ou ponha
+            <code>SERU_AUTO_SYNC=0</code> nele). Para conferir que a produção
+            <em>não</em> foi silenciada por engano, o dono abre
+            <code>/api/claude/deploy</code> e olha <code>alertas.pode_enviar</code>.
+        </div>
     </div>
 </div>
 
