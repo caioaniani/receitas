@@ -2309,9 +2309,16 @@ def ordens_producao():
         return u.nome if u else f'#{uid}'
 
     out = []
+    # ?itens=1 e ?trilha=1 (20/08/2026, caso "o padeiro ia fazer 300 de pão
+    # francês e virou 400"): sem o ITEM não dá pra dizer QUAL item mudou, e
+    # sem a TRILHA não dá pra dizer QUANDO e por qual caminho — `planejamento_
+    # item` está em AUDITED_MODELS desde 02/07, mas o AuditLog só era legível
+    # pela tela /audit (exige sessão web). Read-only, como todo o blueprint.
+    quer_itens = (request.args.get('itens') or '').strip() in ('1', 'true')
+    quer_trilha = (request.args.get('trilha') or '').strip() in ('1', 'true')
     for p in planos:
         itens = p.itens or []
-        out.append({
+        linha = {
             'id': p.id,
             'data': p.data.isoformat() if p.data else None,
             'nome': p.nome,
@@ -2324,9 +2331,79 @@ def ordens_producao():
             'n_itens': len(itens),
             'soma_alvo': sum(int(i.qtd_alvo or 0) for i in itens),
             'soma_produzido': sum(int(i.produzido_qtd or 0) for i in itens),
-        })
+        }
+        if quer_itens or quer_trilha:
+            linha['itens'] = [{
+                'item_id': i.id,
+                'nome': (i.receita.nome if getattr(i, 'receita', None)
+                         else (i.produto.nome if getattr(i, 'produto', None)
+                               else None)),
+                'qtd_alvo': int(i.qtd_alvo or 0),
+                'produzido': int(i.produzido_qtd or 0),
+                'extra': int(getattr(i, 'qtd_extra', 0) or 0),
+                'dispensada_em': (i.dispensada_em.isoformat()
+                                  if getattr(i, 'dispensada_em', None) else None),
+                'falta_encerrada_em': (i.falta_encerrada_em.isoformat()
+                                       if getattr(i, 'falta_encerrada_em', None)
+                                       else None),
+            } for i in itens]
+        if quer_trilha:
+            linha['trilha'] = _trilha_planejamento(p, itens)
+        out.append(linha)
     return jsonify(ok=True, de=de.isoformat(), ate=ate.isoformat(),
                    ordens=out)
+
+
+def _trilha_planejamento(plano, itens, limite=120):
+    """AuditLog de `planejamento_item`/`planejamento_producao` deste plano, do
+    mais novo pro mais antigo, já com a MUDANÇA de qtd_alvo destacada
+    (antes→depois). Sem isso, "quem mexeu na ordem e quando" só era visível
+    pela tela /audit, que exige sessão web — e o diagnóstico de fora ficava
+    no achismo. Nunca levanta: trilha é diagnóstico, não pode derrubar a
+    sonda."""
+    import json as _json
+
+    from sqlalchemy import and_, or_
+
+    from app.models import AuditLog
+    try:
+        ids = [i.id for i in itens]
+        q = AuditLog.query.filter(
+            or_(
+                and_(AuditLog.tabela == 'planejamento_producao',
+                     AuditLog.registro_id == plano.id),
+                and_(AuditLog.tabela == 'planejamento_item',
+                     AuditLog.registro_id.in_(ids or [-1])),
+            ))
+        linhas = q.order_by(AuditLog.criado_em.desc()).limit(limite).all()
+        nomes = {i.id: (i.receita.nome if getattr(i, 'receita', None)
+                        else (i.produto.nome if getattr(i, 'produto', None)
+                              else f'item #{i.id}')) for i in itens}
+        out = []
+        for a in linhas:
+            def _campo(bruto, campo):
+                if not bruto:
+                    return None
+                try:
+                    return (_json.loads(bruto) or {}).get(campo)
+                except (TypeError, ValueError):
+                    return None
+            antes_alvo = _campo(a.antes, 'qtd_alvo')
+            depois_alvo = _campo(a.depois, 'qtd_alvo')
+            reg = {
+                'quando': (a.criado_em.strftime('%d/%m %H:%M:%S')
+                           if a.criado_em else None),
+                'tabela': a.tabela,
+                'acao': a.acao,
+                'item': nomes.get(a.registro_id),
+                'por': (a.usuario.nome if a.usuario else 'automático (cron)'),
+            }
+            if antes_alvo is not None or depois_alvo is not None:
+                reg['qtd_alvo'] = f'{antes_alvo} → {depois_alvo}'
+            out.append(reg)
+        return out
+    except Exception as e:  # noqa: BLE001 — sonda nunca 500
+        return [{'erro': f'{type(e).__name__}: {e}'}]
 
 
 @claude_api_bp.route('/pedidos-itens')
