@@ -5171,6 +5171,27 @@ def _catalogo_divulgacao():
     return itens
 
 
+def _menus_divulgacao():
+    """Regras + slots dos MENUS configuraveis (Caixa de Mini etc.) pro
+    montador da tela de divulgacao (20/08/2026, caso 24FB0FFB — dono quer
+    escolher os minis "como no site"). {'produto:<id>': {'total', 'teto',
+    'slots': [{'pi_id','nome','preco','padrao'}]}}. So produtos ativos que
+    `loja_menu.eh_menu` reconhece."""
+    from app.services import loja_menu
+    out = {}
+    for p in Produto.query.filter_by(ativo=True).all():
+        if not loja_menu.eh_menu(p):
+            continue
+        total, teto = loja_menu.regras(p)
+        out['produto:%d' % p.id] = {
+            'total': total, 'teto': teto,
+            'slots': [{'pi_id': s['pi_id'], 'nome': s['nome'],
+                       'preco': s['preco'], 'padrao': s['padrao']}
+                      for s in loja_menu.slots(p)],
+        }
+    return out
+
+
 @main_bp.route('/admin/loja-online/divulgacao', methods=['GET', 'POST'])
 @login_required
 @divulgacao_required
