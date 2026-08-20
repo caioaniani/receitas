@@ -18,17 +18,25 @@ diferente das envs do usuário, ela não é copiada quando se clona um serviço.
 O serviço de produção deploya `BRANCH_PRODUCAO`; qualquer outro serviço
 rodando este mesmo código é homologação e não deve falar com o mundo.
 
-FAIL-OPEN por desenho (perder alerta de produção é pior que duplicar):
+FAIL-OPEN por desenho, e a assimetria manda: uma cópia falando causa
+mensagem duplicada (irritante); a PRODUÇÃO calada por engano é silenciosa e
+cara — sem alerta de vigia, sem magic link de motorista, e o bot para de
+responder cliente. Por isso a regra NÃO é "bloqueia tudo que não reconheço":
+
 - Sem `RAILWAY_GIT_BRANCH` (dev local, testes, outro host) → LIBERA.
-- Branch igual ao de produção → LIBERA.
-- Só BLOQUEIA quando dá pra provar que é outro branch — e nesse caso loga
-  ERROR (nunca silencia em segredo).
-- `critico=True` (Lalamove, pedido pago) NUNCA é bloqueado: se um dia a
-  detecção estiver errada, o que não pode faltar continua saindo.
+- Branch de produção (`BRANCH_PRODUCAO`) → LIBERA.
+- Branch que CASA um padrão de cópia (`_PADROES_COPIA`: codex/, preview,
+  homolog, staging, ui-simplification…) → BLOQUEIA, logando ERROR.
+- Branch DESCONHECIDO → LIBERA, logando ERROR. É o caso de um branch de
+  produção renomeado: melhor uma duplicata do que produção muda em
+  segredo (achado de revisão 20/08/2026).
+- `critico=True` (Lalamove, pedido pago) atravessa o bloqueio automático:
+  se a detecção errar, o que não pode faltar continua saindo.
 
 Escapes: `ALERTAS_INSTANCIA_CANONICA=1` força liberar (use se o branch de
 produção for renomeado antes de alguém atualizar `BRANCH_PRODUCAO`), `=0`
-força o silêncio (útil pra subir uma cópia sem mexer no código).
+força o silêncio TOTAL — inclusive crítico, porque aí é gesto humano
+explícito de "esta cópia não fala com ninguém".
 
 Cobre os canais que leem estado EXTERNO compartilhado — Z-API (WhatsApp),
 Slack e Chatwoot. E-mail fica de fora de propósito: é dirigido por dado do
