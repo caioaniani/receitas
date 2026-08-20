@@ -55,6 +55,12 @@ BRANCH_PRODUCAO = 'claude/continue-controller-conversation-aGS3F'
 _ENV_OVERRIDE = 'ALERTAS_INSTANCIA_CANONICA'
 _ENV_BRANCH = 'RAILWAY_GIT_BRANCH'
 
+# Padrões de branch que só existem em CÓPIA (homologação/preview). Branch
+# fora desta lista e diferente do de produção é tratado como PRODUÇÃO
+# (fail-open) — ver docstring: calar a produção é a falha cara.
+_PADROES_COPIA = ('codex/', 'preview', 'homolog', 'staging', 'sandbox',
+                  'ui-simplification', 'teste/', 'test/')
+
 # Loga o bloqueio uma vez por branch por processo — se uma cópia ficar
 # viva, o log diz QUEM está calado sem virar enxurrada a cada mensagem.
 _ja_logou = set()
