@@ -168,7 +168,7 @@ def test_humano_ainda_pode_atualizar_a_ordem_de_hoje(app, admin_user, catalogo,
             it = PlanejamentoItem.query.filter_by(
                 planejamento_id=pl.id, receita_id=rid).one()
             it.qtd_alvo = 400
-            return 1
+            return 1, []
         monkeypatch.setattr(producao, '_sync_itens_do_cronograma', _sync)
         monkeypatch.setattr(producao, 'sincronizar_pre_baixa_mp',
                             lambda *a, **kw: None)
@@ -203,7 +203,7 @@ def test_automatico_segue_livre_pra_ordem_de_AMANHA(app, catalogo, monkeypatch):
             it = PlanejamentoItem.query.filter_by(
                 planejamento_id=pl.id, receita_id=rid).one()
             it.qtd_alvo = 450
-            return 1
+            return 1, []
         monkeypatch.setattr(producao, '_sync_itens_do_cronograma', _sync)
         monkeypatch.setattr(producao, 'sincronizar_pre_baixa_mp',
                             lambda *a, **kw: None)
@@ -221,7 +221,7 @@ def test_automatico_ainda_CRIA_ordem_que_nao_existe_hoje(app, catalogo,
     from app.utils import hoje
     with app.app_context():
         monkeypatch.setattr(producao, '_sync_itens_do_cronograma',
-                            lambda *a, **kw: 1)
+                            lambda *a, **kw: (1, []))
         monkeypatch.setattr(producao, 'sincronizar_pre_baixa_mp',
                             lambda *a, **kw: None)
         plano = producao.enviar_plano_do_dia(hoje(), user_id=None)

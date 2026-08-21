@@ -309,3 +309,49 @@ def test_aviso_fica_registrado_pro_dono(app, familia_massa):
         item = pendentes[0][1][0]
         assert item['item'] == 'Croissant Tradicional'
         assert item['ordem'] == 250 and item['grid'] == 400
+
+
+# ── O aviso chega ao dono nas DUAS telas ─────────────────────────────────
+# A v2 é o padrão desde 18/08 e não tem o painel "Próximos passos" — sem
+# isso, o item segurado sumiria da vista justamente na tela que ele usa.
+
+def _login(client, user):
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(user.id)
+        sess['_fresh'] = True
+
+
+def test_aviso_aparece_na_tela_v2(app, admin_user, familia_massa):
+    from app.services import producao
+    from app.utils import hoje
+    with app.app_context():
+        amanha = hoje() + timedelta(days=1)
+        croi = familia_massa['croissant']
+        plano = _ordem(amanha, [(croi, 250)])
+        assert plano is not None
+        producao.enviar_plano_do_dia(
+            amanha, user_id=None, motor='vendas',
+            crono=_crono_falso(amanha, [(croi, 400)]))
+    cli = app.test_client()
+    _login(cli, admin_user)
+    html = cli.get('/telaindustriateste/').get_data(as_text=True)
+    assert 'fechados' in html
+    assert 'Croissant Tradicional' in html
+
+
+def test_aviso_aparece_na_tela_classica(app, admin_user, familia_massa):
+    from app.services import producao
+    from app.utils import hoje
+    app.config['UI_V2_ENABLED'] = False        # contrato da tela CLASSICA
+    with app.app_context():
+        amanha = hoje() + timedelta(days=1)
+        croi = familia_massa['croissant']
+        _ordem(amanha, [(croi, 250)])
+        producao.enviar_plano_do_dia(
+            amanha, user_id=None, motor='vendas',
+            crono=_crono_falso(amanha, [(croi, 400)]))
+    cli = app.test_client()
+    _login(cli, admin_user)
+    html = cli.get('/telaindustriateste/').get_data(as_text=True)
+    assert 'forçar mesmo assim' in html
+    assert 'Croissant Tradicional' in html

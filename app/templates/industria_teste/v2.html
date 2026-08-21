@@ -241,8 +241,23 @@
 
         <section class="workspace hidden" data-panel="exceptions">
           <div class="section-title"><div><h2>Exceções reais</h2><p>Aqui só aparecem situações fora do funcionamento normal do motor.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Abrir auditoria <i class="bi bi-arrow-right"></i></a></div>
-          {% if resumo.excecoes_n %}
+          {% set congelados = acoes | selectattr('tipo', 'equalto', 'congelado') | list %}
+          {% if resumo.excecoes_n or congelados %}
           <div class="exception-list">
+            {% for a in congelados %}
+            <article class="warning">
+              <span><i class="bi bi-lock"></i></span>
+              <div>
+                <h3>{{ a.n }} item(ns) fechados em {{ a.label }}</h3>
+                <p>A massa/levain desses itens já foi batida, então o número
+                  da ordem não muda mais sozinho — o grid pede outro valor.
+                  {% for i in a.itens %}<strong>{{ i.item }}</strong>: ordem {{ i.ordem }} × grid {{ i.grid }}{% if not loop.last %} · {% endif %}{% endfor %}.
+                  Para valer o número do grid é preciso garantir o insumo e
+                  atualizar a produção na mão.</p>
+              </div>
+              <button type="button" data-open="week">Ver na grade</button>
+            </article>
+            {% endfor %}
             {% for alerta in crono.alertas_falta %}<article><span><i class="bi bi-exclamation-triangle"></i></span><div><h3>{{ alerta.nome }}</h3><p>{% for e in alerta.entregas %}{{ e.label }}: faltam {{ e.faltam }} de {{ e.firme }}{% if not loop.last %} · {% endif %}{% endfor %}</p></div><button type="button" data-open="week" data-focus-recipe="{{ alerta.receita_id }}">Ver na grade</button></article>{% endfor %}
             {% if resumo.pend_vencido %}<article><span><i class="bi bi-clock-history"></i></span><div><h3>Confirmação de produção vencida</h3><p>{{ resumo.pend_vencido }} unidade(s) passaram do prazo sem confirmação do padeiro.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Abrir auditoria</a></article>{% endif %}
             {% if resumo.stale_n %}<article class="warning"><span><i class="bi bi-pencil"></i></span><div><h3>Ajuste manual desatualizado</h3><p>{{ resumo.stale_n }} receita(s) possuem ajuste anterior ao cálculo atual e a quantidade pode estar desatualizada.</p></div><button type="button" data-open="week">Ver na grade</button></article>{% endif %}

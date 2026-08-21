@@ -709,8 +709,11 @@ def test_atualiza_re_sincroniza_ordem_de_AMANHA(app, monkeypatch):
                 (data, kw.get('motor'))) or
             type('P', (), {'itens': [1, 2, 3]})())
         out = auto_pedidos.atualizar_plano_automatico()
+        # a rodada varre amanha..amanha+ANT (insumo e pai no MESMO grid),
+        # mas so ha ordem enviada em amanha
         assert chamadas == [(amanha, 'vendas')]   # mesmo default do envio
-        assert out['atualizada'] is True and out['itens'] == 3
+        assert out['atualizadas'] == [{'data': amanha.isoformat(), 'itens': 3}]
+        assert hoje().isoformat() not in out['sem_ordem']
 
 
 def test_atualiza_NUNCA_toca_a_ordem_de_hoje(app, monkeypatch):
@@ -728,7 +731,8 @@ def test_atualiza_NUNCA_toca_a_ordem_de_hoje(app, monkeypatch):
         monkeypatch.setattr(producao, 'enviar_plano_do_dia',
                             lambda *a, **kw: chamadas.append('enviar'))
         out = auto_pedidos.atualizar_plano_automatico()
-        assert out.get('sem_ordem') is True
+        assert out['atualizadas'] == []
+        assert hoje().isoformat() not in out['sem_ordem']   # nem olha hoje
         assert chamadas == []
 
 
@@ -749,7 +753,7 @@ def test_atualiza_nao_toca_ordem_de_humano(app, admin_user, monkeypatch):
         monkeypatch.setattr(producao, 'enviar_plano_do_dia',
                             lambda *a, **kw: chamadas.append('enviar'))
         out = auto_pedidos.atualizar_plano_automatico()
-        assert out.get('ordem_humana') is True
+        assert out['ordem_humana'] == [(hoje() + timedelta(days=1)).isoformat()]
         assert chamadas == []
 
 
@@ -760,7 +764,8 @@ def test_atualiza_sem_ordem_e_noop(app, monkeypatch):
         monkeypatch.setattr(producao, 'enviar_plano_do_dia',
                             lambda *a, **kw: chamadas.append('enviar'))
         out = auto_pedidos.atualizar_plano_automatico()
-        assert out.get('sem_ordem') is True
+        assert out['atualizadas'] == []
+        assert len(out['sem_ordem']) >= 1     # a janela inteira sem ordem
         assert chamadas == []
 
 

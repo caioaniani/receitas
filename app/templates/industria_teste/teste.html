@@ -480,6 +480,20 @@
             <button class="btn btn-warning btn-sm passo-acao">🔄 atualizar produção</button>
         </form>
         <span class="text-muted small">— ou desfaça as edições no menu ⋯ do dia.</span>
+        {% elif a.tipo == 'congelado' %}
+        <span>🔒 <strong>{{ a.n }} item(ns)</strong> de <strong>{{ a.label }}</strong>
+            estão <strong>fechados</strong> — a massa/levain deles já foi batida, então o
+            sistema não mexeu no número (o grid pede outro).
+            <span class="text-muted small">
+                {% for i in a.itens %}{{ i.item }}: ordem {{ i.ordem }} × grid {{ i.grid }}{% if not loop.last %} · {% endif %}{% endfor %}
+            </span>
+        </span>
+        <form method="POST" action="{{ url_for('industria_teste.enviar') }}"
+              onsubmit="return confirm('Forçar o número do grid em {{ a.label }}? A massa/levain já foi batida com o número antigo — só faça isso se você garantir o insumo.');">
+            {{ campos_dia(a.data) }}
+            <button class="btn btn-outline-warning btn-sm passo-acao">🔄 forçar mesmo assim</button>
+        </form>
+        <span class="text-muted small">— ou deixe como está (é o que a massa cobre).</span>
         {% elif a.tipo == 'vencido' %}
         <span><strong>{{ a.n }} un</strong> de produção mandada <strong>venceram</strong> sem confirmação do padeiro.</span>
         <a class="btn btn-outline-danger btn-sm passo-acao" href="{{ url_for('industria_teste.auditoria') }}">🔎 resolver na auditoria</a>

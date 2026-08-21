@@ -31,6 +31,7 @@ tem) pra o usuario calibrar a confianca da previsao.
 Cache: 60s in-memory por (horizonte, janela) — bate com o refresh do painel.
 Em multi-worker (gunicorn) cada worker tem o seu; aceitavel pra este caso.
 """
+import logging
 import time
 from collections import defaultdict
 from datetime import timedelta
@@ -40,6 +41,8 @@ from app.constants import STATUS_PEDIDO_EDITAVEIS, STATUS_PEDIDO_NAO_BAIXADOS
 from app.extensions import db
 from app.models import EstoqueProducao, Loja, PedidoItem, PedidoLoja, Receita
 from app.utils import SUB_RECEITA_TIPOS, hoje, unidades_subreceita
+
+logger = logging.getLogger(__name__)
 
 # Minimo de ocorrencias de um mesmo dia-da-semana na janela pra confiar na
 # media daquele dia. Abaixo disso, cai no fallback (media diaria simples). Vale
