@@ -1,11 +1,12 @@
 import logging
+import os
 from math import ceil
 
 from app.extensions import db
 from app.models import MateriaPrima, Receita
 from app.services.custos import calcular_custos_receitas
 from app.services.massa_base import rendimento_massa_crua
-from app.utils import SUB_RECEITA_TIPOS, unidades_subreceita
+from app.utils import SUB_RECEITA_TIPOS, hoje, unidades_subreceita
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +35,7 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
     `congelados` pra tela avisar. Gesto humano (automatico=False) ignora a
     trava."""
     from app.models import PlanejamentoItem
-    from app.services.previsao_producao import (
-        cronograma_producao,
-    )
+    from app.services.previsao_producao import ant_insumo, cronograma_producao
 
     if crono is None:
         crono = cronograma_producao(horizonte_dias=horizonte_dias,
@@ -59,11 +58,41 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
     receitas = {r.id: r for r in Receita.query.all()}
     existentes = {it.receita_id: it for it in plano.itens}
 
+    congelados = []          # [(nome, qtd_ordem, qtd_grid, ant)]
+    freeze_on = (automatico
+                 and os.environ.get('FREEZE_INSUMO', '1') != '0')
+    lead = {rid: int(getattr(rec, 'dias_producao', 0) or 0)
+            for rid, rec in receitas.items()} if freeze_on else {}
+    memo_ant = {}
+
+    def _fechado(rid):
+        """True se a decisão deste item pro dia já teria de estar tomada —
+        i.e. faltam `ant_insumo` dias ou menos e o insumo dele já foi
+        comprometido na ordem de um dia anterior."""
+        if not freeze_on:
+            return False
+        try:
+            ant = ant_insumo(rid, data_alvo, receitas, lead, None, memo_ant)
+        except Exception:  # noqa: BLE001 — trava nunca derruba o envio
+            logger.exception('freeze por insumo falhou (receita %s)', rid)
+            return False
+        return ant > 0 and (data_alvo - hoje()).days <= ant
+
     for rid, qtd in alvo.items():
         rec = receitas.get(rid)
         # rendimento de massa CRUA (peso_unitario), sem perda — bate com a cascata
         rend = rendimento_massa_crua(rec)
         it = existentes.get(rid)
+        if _fechado(rid):
+            # Item fechado pelo insumo: NÃO muda e NÃO nasce. Demanda nova
+            # aqui viraria croissant sem massa (decisão do dono: "não entra
+            # + avisa"). O 🔄 humano continua podendo forçar.
+            atual = int(it.qtd_alvo or 0) if it is not None else 0
+            if atual != int(qtd):
+                congelados.append(((rec.nome if rec else f'#{rid}'),
+                                   atual, int(qtd),
+                                   (data_alvo - hoje()).days))
+            continue
         if it is None:
             db.session.add(PlanejamentoItem(
                 planejamento_id=plano.id, receita_id=rid,
@@ -81,6 +110,15 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
     for rid, it in existentes.items():
         if rid in alvo:
             continue
+        if _fechado(rid):
+            # Item fechado não é removido nem rebaixado: a massa dele já foi
+            # batida e o padeiro conta com a linha.
+            if int(it.qtd_alvo or 0):
+                rec = receitas.get(rid)
+                congelados.append(((rec.nome if rec else f'#{rid}'),
+                                   int(it.qtd_alvo or 0), 0,
+                                   (data_alvo - hoje()).days))
+            continue
         piso = max(int(it.produzido_qtd or 0), int(it.qtd_extra or 0))
         if piso > 0:
             it.qtd_alvo = piso
@@ -89,7 +127,11 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
             it.multiplicador = max(1, ceil(it.qtd_alvo / rend))
         else:
             db.session.delete(it)
-    return len(alvo)
+    if congelados:
+        logger.info('freeze por insumo: %d item(ns) fechados no dia %s: %s',
+                    len(congelados), data_alvo.isoformat(),
+                    [(n, a, g) for n, a, g, _ in congelados])
+    return len(alvo), congelados
 
 
 def _obter_ou_criar_plano(data_alvo, user_id):
