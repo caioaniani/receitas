@@ -9,7 +9,15 @@ padeiro produz (opção B). NÃO mexe na /padeiro oficial.
 from datetime import date
 from time import perf_counter
 
-from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask import (
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import current_user, login_required
 
 from app.blueprints.industria_teste import industria_teste_bp
@@ -264,6 +272,17 @@ def index():
     for iso in sorted(difere):
         acoes.append({'tipo': 'difere', 'data': iso,
                       'label': labels.get(iso, iso), 'n': len(difere[iso])})
+    # Itens que a TRAVA POR INSUMO segurou (dono 20/08/2026: demanda tardia
+    # "não entra + AVISA você"). Sem este item de ação, o sistema deixaria de
+    # atender venda em silêncio — que é o oposto do que ele pediu.
+    try:
+        from app.services.producao import itens_congelados_pendentes
+        for iso, itens in itens_congelados_pendentes():
+            acoes.append({'tipo': 'congelado', 'data': iso,
+                          'label': labels.get(iso, iso), 'n': len(itens),
+                          'itens': itens})
+    except Exception:  # noqa: BLE001 — aviso nunca derruba a tela
+        current_app.logger.exception('painel: itens congelados falhou')
     if resumo['pend_vencido']:
         acoes.append({'tipo': 'vencido', 'n': resumo['pend_vencido']})
     if resumo['risco_n']:
