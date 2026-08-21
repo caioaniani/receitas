@@ -1,52 +1,18 @@
 {% extends "base.html" %}{% block title %}{{ t.nome }}{% endblock %}{% block content %}
-<div class="page-header"><div><h1 class="page-title">{{ t.nome }}</h1>
-<p class="page-subtitle"><a href="{{ url_for('treino.home') }}">&larr; Treinamentos</a></p></div></div>
-{% if t.descricao %}<p class="text-muted">{{ t.descricao }}</p>{% endif %}
-{% if est %}<div class="mb-3 small">
-  Vídeos: {% if est.videos_ok %}✅{% else %}⬜{% endif %} · Quizzes: {% if est.quizzes_ok %}✅{% else %}⬜{% endif %} · Aplicação prática: {% if est.aplicacao_ok %}✅{% else %}⬜{% endif %}
-  {% if est.completa %}<span class="badge bg-success ms-1">Trilha concluída</span>{% endif %}
-  <div class="progress mt-2" style="height:8px;max-width:420px;">
-    <div class="progress-bar{% if est.completa %} bg-success{% endif %}" role="progressbar"
-         style="width:{{ est.percentual }}%;" aria-valuenow="{{ est.percentual }}"
-         aria-valuemin="0" aria-valuemax="100"></div>
-  </div>
-  <div class="text-muted mt-1">{{ est.percentual }}% concluído{% if est.videos %} · {{ est.videos_feitos }}/{{ est.videos }} aula(s){% endif %}</div>
-</div>{% endif %}
-<h6>Aulas</h6>
-{% for v in videos %}
-<a href="{{ url_for('treino.video', id=v.id) }}" class="card mb-2 text-decoration-none"><div class="card-body py-2">▶️ {{ v.titulo }}</div></a>
-{% else %}<p class="text-muted">Nenhuma aula publicada neste módulo ainda.</p>{% endfor %}
-{% if quizzes %}<h6 class="mt-3">Quizzes</h6>
-{% for q in quizzes %}<div class="card mb-2"><div class="card-body py-2 d-flex justify-content-between align-items-center">
-  <span>📝 {{ q.titulo }}</span>
-  <button class="btn btn-sm btn-primary iniciar-quiz" data-id="{{ q.id }}">Fazer</button></div></div>{% endfor %}{% endif %}
-
-<div id="quizbox"></div>
+<main class="treino-page">
+  <a class="treino-back" href="{{ url_for('treino.home') }}"><i class="bi bi-arrow-left"></i> Meus treinamentos</a>
+  <header class="treino-heading treino-heading-course"><div><span class="treino-eyebrow">Módulo</span><h1>{{ t.nome }}</h1>{% if t.descricao %}<p>{{ t.descricao }}</p>{% endif %}</div>{% if est %}<div class="treino-course-score"><strong>{{ est.percentual }}%</strong><span>concluído</span></div>{% endif %}</header>
+  {% if est %}<section class="treino-module-progress"><div class="treino-progress"><span style="width:{{ est.percentual }}%"></span></div><div class="treino-checks"><span class="{% if est.videos_ok %}is-ok{% endif %}"><i class="bi bi-{% if est.videos_ok %}check-circle-fill{% else %}circle{% endif %}"></i> Aulas {{ est.videos_feitos }}/{{ est.videos }}</span><span class="{% if est.quizzes_ok %}is-ok{% endif %}"><i class="bi bi-{% if est.quizzes_ok %}check-circle-fill{% else %}circle{% endif %}"></i> Avaliações</span><span class="{% if est.aplicacao_ok %}is-ok{% endif %}"><i class="bi bi-{% if est.aplicacao_ok %}check-circle-fill{% else %}circle{% endif %}"></i> Validação do gestor</span></div></section>{% endif %}
+  <section class="treino-section"><div class="treino-section-heading"><div><span class="treino-eyebrow">Conteúdo</span><h2>Aulas</h2></div><span>{{ videos|length }} aula(s)</span></div><div class="treino-lesson-list">
+    {% for v in videos %}{% set p = video_progresso.get(v.id) %}<a href="{{ url_for('treino.video', id=v.id) }}" class="treino-lesson"><span class="treino-lesson-number">{{ '%02d'|format(loop.index) }}</span><span class="treino-lesson-main"><strong>{{ v.titulo }}</strong><small>{% if p and p.concluido_em %}Aula concluída{% elif p %}Continuar de {{ p.percentual|int }}%{% else %}Ainda não iniciada{% endif %}</small></span>{% if p and p.concluido_em %}<span class="treino-status is-done"><i class="bi bi-check"></i> Concluída</span>{% elif p %}<span class="treino-status is-progress">Continuar</span>{% else %}<span class="treino-lesson-play"><i class="bi bi-play-fill"></i></span>{% endif %}</a>{% else %}<div class="treino-empty">Nenhuma aula publicada neste módulo.</div>{% endfor %}
+  </div></section>
+  {% if quizzes %}<section class="treino-section"><div class="treino-section-heading"><div><span class="treino-eyebrow">Verificação</span><h2>Avaliações</h2></div></div><div class="treino-lesson-list">{% for q in quizzes %}<div class="treino-lesson" id="quiz-{{ q.id }}"><span class="treino-lesson-number"><i class="bi bi-ui-checks"></i></span><span class="treino-lesson-main"><strong>{{ q.titulo }}</strong><small>Responda para concluir esta etapa</small></span><button class="btn treino-secondary-action iniciar-quiz" data-id="{{ q.id }}">Fazer avaliação</button></div>{% endfor %}</div></section>{% endif %}
+  <div id="quizbox"></div>
+</main>
 <script>
 var CSRF='{{ csrf_token() }}';
 function post(u,b){return fetch(u,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:b||''}).then(function(r){return r.json();});}
-document.querySelectorAll('.iniciar-quiz').forEach(function(btn){btn.onclick=function(){
-  post('/treino/api/quiz/'+btn.dataset.id+'/iniciar').then(function(j){
-    if(!j.ok){alert(j.erro==='cooldown'?('Aguarde até '+j.liberado_em):j.erro);return;}
-    renderQuiz(j);
-  });
-};});
-function renderQuiz(j){
-  var box=document.getElementById('quizbox');var h='<div class="card my-3"><div class="card-body"><input type="hidden" id="tid" value="'+j.tentativa_id+'">';
-  j.questoes.forEach(function(q,qi){h+='<div class="mb-3" data-q="'+q.questao_id+'" data-t="'+Date.now()+'"><div class="fw-bold small">'+(qi+1)+'. '+q.enunciado+'</div>';
-    q.alternativas.forEach(function(a){h+='<div class="form-check"><input class="form-check-input" type="radio" name="q'+q.questao_id+'" value="'+a.id+'"> <label class="form-check-label">'+a.texto+'</label></div>';});h+='</div>';});
-  h+='<button class="btn btn-primary" id="enviar">Enviar respostas</button><div id="qres" class="mt-2"></div></div></div>';
-  box.innerHTML=h;box.scrollIntoView();
-  document.getElementById('enviar').onclick=function(){
-    var tid=document.getElementById('tid').value;var proms=[];
-    box.querySelectorAll('[data-q]').forEach(function(d){
-      var sel=d.querySelector('input:checked');var seg=Math.round((Date.now()-d.dataset.t)/1000);
-      if(sel)proms.push(post('/treino/api/tentativas/'+tid+'/responder','questao_id='+d.dataset.q+'&alternativa_id='+sel.value+'&segundos='+seg));
-    });
-    Promise.all(proms).then(function(){return post('/treino/api/tentativas/'+tid+'/finalizar');}).then(function(j){
-      document.getElementById('qres').innerHTML='<div class="alert '+(j.aprovada?'alert-success':'alert-warning')+'">'+j.acertos+'/'+j.total+' — '+(j.aprovada?'Passou! 🎉':'Não atingiu a nota. Tente de novo após o cooldown.')+'</div>';
-    });
-  };
-}
+document.querySelectorAll('.iniciar-quiz').forEach(function(btn){btn.onclick=function(){post('/treino/api/quiz/'+btn.dataset.id+'/iniciar').then(function(j){if(!j.ok){alert(j.erro==='cooldown'?('Aguarde até '+j.liberado_em):j.erro);return;}renderQuiz(j);});};});
+function renderQuiz(j){var box=document.getElementById('quizbox');var h='<div class="treino-quiz-box"><input type="hidden" id="tid" value="'+j.tentativa_id+'"><h2>Avaliação</h2>';j.questoes.forEach(function(q,qi){h+='<div class="treino-question" data-q="'+q.questao_id+'" data-t="'+Date.now()+'"><strong>'+(qi+1)+'. '+q.enunciado+'</strong>';q.alternativas.forEach(function(a){h+='<label><input type="radio" name="q'+q.questao_id+'" value="'+a.id+'"> '+a.texto+'</label>';});h+='</div>';});h+='<button class="treino-primary-action" id="enviar">Enviar respostas</button><div id="qres"></div></div>';box.innerHTML=h;box.scrollIntoView({behavior:'smooth'});document.getElementById('enviar').onclick=function(){var tid=document.getElementById('tid').value;var proms=[];box.querySelectorAll('[data-q]').forEach(function(d){var sel=d.querySelector('input:checked');var seg=Math.round((Date.now()-d.dataset.t)/1000);if(sel)proms.push(post('/treino/api/tentativas/'+tid+'/responder','questao_id='+d.dataset.q+'&alternativa_id='+sel.value+'&segundos='+seg));});Promise.all(proms).then(function(){return post('/treino/api/tentativas/'+tid+'/finalizar');}).then(function(j){document.getElementById('qres').innerHTML='<div class="treino-notice '+(j.aprovada?'treino-notice-success':'treino-notice-warning')+'">'+j.acertos+'/'+j.total+' — '+(j.aprovada?'Você passou.':'Você ainda não atingiu a nota mínima.')+'</div>';});};}
 </script>
 {% endblock %}

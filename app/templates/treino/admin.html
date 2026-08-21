@@ -1,224 +1,56 @@
-{% extends "base.html" %}{% block title %}Admin treinamento{% endblock %}{% block content %}
-<div class="page-header"><div><h1 class="page-title">⚙️ Treinamento — admin</h1></div></div>
+{% extends "base.html" %}{% block title %}Central de treinamento{% endblock %}{% block content %}
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+{% macro mini(action, label, cls='btn-outline-secondary', confirm='') %}<form method="POST" action="{{ action }}" class="d-inline"{% if confirm %} onsubmit="return confirm('{{ confirm }}')"{% endif %}>{{ csrf() }}<button class="btn btn-sm {{ cls }}">{{ label }}</button></form>{% endmacro %}
+<main class="treino-page treino-admin">
+  <header class="treino-heading"><div><span class="treino-eyebrow">Universidade O Pão</span><h1>Central de treinamento</h1><p>Publique conteúdo, resolva pendências e acompanhe a equipe sem misturar as tarefas.</p></div><nav class="treino-heading-actions"><a href="{{ url_for('treino.gestor_home') }}">Acompanhar equipe</a>{% if can_open_rh %}<a href="{{ url_for('rh.funcionarios', view='acessos') }}">Gerenciar acessos</a>{% endif %}</nav></header>
 
-<div class="alert alert-info dica-recolhe small">
-  <strong>Como funciona (leia antes).</strong> Esta é a tela onde você <strong>monta o
-  conteúdo</strong> do treinamento. A ideia do jogo: o funcionário assiste às aulas e
-  faz os quizzes → <strong>ganha pontos</strong> → sobe de nível e no <strong>ranking da
-  loja</strong> → troca pontos por <strong>recompensas</strong>. Concluir uma trilha
-  inteira dá um <strong>selo + certificado</strong>.
-  <br><br>
-  <strong>Ordem para montar:</strong>
-  <strong>1)</strong> crie uma <strong>Temporada ATIVA</strong> (sem ela ninguém pontua);
-  <strong>2)</strong> crie as <strong>Trilhas</strong> e, dentro de cada uma, os
-  <strong>vídeos</strong> e <strong>quizzes</strong>;
-  <strong>3)</strong> (opcional) cadastre <strong>Recompensas</strong>.
-  <br>
-  <strong>Como o funcionário entra:</strong> ele precisa ter um <strong>login</strong>
-  ligado ao cadastro dele no RH (com <strong>e-mail</strong> preenchido em
-  <em>RH → Funcionários → abrir o funcionário</em>). Sem esse login, ele abre o
-  treinamento e vê "sua conta não está vinculada a um funcionário".
-</div>
-{% macro mini(action, label, cls='btn-outline-secondary', confirm='') %}
-<form method="POST" action="{{ action }}" class="d-inline"{% if confirm %} onsubmit="return confirm('{{ confirm }}')"{% endif %}>{{ csrf() }}<button class="btn btn-sm {{ cls }} py-0 px-1">{{ label }}</button></form>{% endmacro %}
+  <section class="treino-metrics">
+    <article><span>Módulos no ar</span><strong>{{ painel.modulos_publicados }}</strong><small>de {{ painel.modulos_total }} cadastrados</small></article>
+    <article><span>Aulas publicadas</span><strong>{{ painel.aulas_publicadas }}</strong><small>{{ painel.aulas_sem_arquivo }} título(s) sem vídeo</small></article>
+    <article><span>Funcionários com acesso</span><strong>{{ painel.funcionarios_com_acesso }}</strong><small>de {{ painel.funcionarios_total }} ativos</small></article>
+    <article class="{% if painel.pendencias %}is-warning{% else %}is-success{% endif %}"><span>Pendências reais</span><strong>{{ painel.pendencias|length }}</strong><small>{% if painel.pendencias %}situações que pedem ação{% else %}nada exige ação agora{% endif %}</small></article>
+  </section>
 
-<div class="card mb-3"><div class="card-header py-2"><strong>Temporadas</strong></div><div class="card-body">
-  <p class="small text-muted mb-2">É o <strong>período da competição</strong>. Os pontos e o
-    ranking valem <strong>por temporada</strong> — precisa de <strong>uma temporada ATIVA</strong>
-    pra qualquer pessoa pontuar. Ao <strong>encerrar</strong>, o ranking daquele período é
-    fechado; abra uma nova pra recomeçar do zero (ex.: uma por mês ou por trimestre).</p>
-  {% for t in temporadas %}<div class="small d-flex justify-content-between align-items-center mb-1">
-    <span>{{ t.nome }} — {{ t.inicio }} a {{ t.fim }} <span class="badge bg-{{ 'success' if t.status=='ATIVA' else 'secondary' }}">{{ t.status }}</span></span>
-    <span>
-      {% if t.status!='ATIVA' %}<form method="POST" action="{{ url_for('treino.admin_temporada_status', id=t.id) }}" class="d-inline">{{ csrf() }}<input type="hidden" name="status" value="ATIVA"><button class="btn btn-sm btn-outline-success py-0 px-1">Ativar</button></form>{% endif %}
-      {% if t.status=='ATIVA' %}<form method="POST" action="{{ url_for('treino.admin_temporada_status', id=t.id) }}" class="d-inline">{{ csrf() }}<input type="hidden" name="status" value="ENCERRADA"><button class="btn btn-sm btn-outline-secondary py-0 px-1">Encerrar</button></form>{% endif %}
-    </span></div>{% endfor %}
-  <form method="POST" action="{{ url_for('treino.admin_temporada') }}" class="row g-2 mt-2">{{ csrf() }}
-    <div class="col-4"><input name="nome" class="form-control form-control-sm" placeholder="Nome"></div>
-    <div class="col-3"><input type="date" name="inicio" class="form-control form-control-sm"></div>
-    <div class="col-3"><input type="date" name="fim" class="form-control form-control-sm"></div>
-    <div class="col-2"><button class="btn btn-sm btn-primary w-100">Criar (ATIVA)</button></div></form></div></div>
+  {% if painel.pendencias %}<section class="treino-alert-list"><div class="treino-section-heading"><div><span class="treino-eyebrow">Agora</span><h2>O que precisa de atenção</h2></div></div>{% for p in painel.pendencias %}<div class="treino-alert-row"><span class="treino-alert-icon"><i class="bi bi-{% if p.tipo == 'acesso' %}person-lock{% elif p.tipo == 'processando' %}hourglass-split{% else %}cloud-upload{% endif %}"></i></span><strong>{{ p.quantidade }}</strong><span>{{ p.texto }}</span>{% if p.tipo == 'acesso' and can_open_rh %}<a href="{{ url_for('rh.funcionarios', view='acessos') }}">Resolver</a>{% elif p.tipo != 'acesso' %}<a href="#conteudo">Ver conteúdo</a>{% endif %}</div>{% endfor %}</section>{% endif %}
 
-<div class="card mb-3"><div class="card-header py-2"><strong>Trilhas & vídeos</strong></div><div class="card-body">
-  <p class="small text-muted mb-2">Uma <strong>trilha</strong> é um curso — um conjunto de
-    aulas sobre um tema (ex.: "Higiene", "Atendimento"). Dentro dela você adiciona os
-    <strong>vídeos</strong> (o arquivo é enviado na tela de cada vídeo), pontos de checagem
-    (perguntas que <strong>pausam o vídeo</strong>) e <strong>quizzes</strong>. Concluir a
-    trilha inteira dá <strong>selo + certificado + pontos</strong> ao funcionário.
-    <br>• Crie o vídeo só com o <strong>nome</strong> e envie o arquivo na tela dele; a
-    <strong>duração é detectada sozinha</strong> pelo Cloudflare (é o que o
-    <strong>antifraude</strong> usa pra só dar por concluído quem <strong>assistiu de
-    verdade</strong>). A aula nasce como <strong>rascunho</strong>: depois que o
-    Cloudflare terminar, clique em <strong>Publicar aula</strong>. Publicar o módulo
-    libera somente as aulas publicadas — os outros títulos continuam invisíveis.
-    <br>• O <strong>quiz</strong> só pode ser publicado com o banco de perguntas cheio
-    (no mínimo 3× a quantidade sorteada por tentativa).
-    <br>• Em <strong>🎯 Onboarding</strong> (dentro de cada trilha) você marca de quais
-    <strong>cargos</strong> a trilha é obrigatória — quem tem o cargo já vê a trilha em
-    destaque e entra no relatório de "apto a progredir".</p>
-  {% for t in trilhas %}<div class="border rounded p-2 mb-2" id="t{{ t.id }}">
-    {% set bloqueios_exclusao = exclusao_por_trilha.get(t.id, {}) %}
-    <div class="d-flex justify-content-between align-items-start">
-      <strong>{{ t.nome }} {% if not t.ativa %}<span class="badge bg-secondary">inativa</span>{% endif %}</strong>
-      <span class="d-flex flex-wrap gap-1">
-        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="var e=document.getElementById('edt{{ t.id }}');e.style.display=e.style.display==='none'?'':'none';">✏️ editar</button>
-        {{ mini(url_for('treino.admin_trilha_toggle', id=t.id), 'Tirar módulo do ar' if t.ativa else 'Publicar módulo', 'btn-outline-warning' if t.ativa else 'btn-outline-success') }}
-        {% if not bloqueios_exclusao %}{{ mini(url_for('treino.admin_trilha_excluir', id=t.id), '🗑', 'btn-outline-danger', 'Excluir trilha? (só se ninguém usou ainda)') }}{% endif %}</span></div>
-    {% if bloqueios_exclusao %}
-    <div class="alert alert-warning py-2 px-3 my-2 small d-flex flex-wrap align-items-center justify-content-between gap-2" role="status">
-      <div><strong>Esta trilha já foi usada.</strong> A exclusão comum está bloqueada para preservar
-        {% for chave, quantidade in bloqueios_exclusao.items() %}
-          {% set nomes = {
-            'progresso_video': ('vídeo iniciado', 'vídeos iniciados'),
-            'resposta_checkpoint': ('checkpoint respondido', 'checkpoints respondidos'),
-            'tentativa_quiz': ('tentativa de quiz', 'tentativas de quiz'),
-            'aplicacao': ('aplicação prática', 'aplicações práticas'),
-            'selo': ('certificado emitido', 'certificados emitidos')
-          } %}
-          <strong>{{ quantidade }} {{ nomes[chave][0] if quantidade == 1 else nomes[chave][1] }}</strong>{{ ', ' if not loop.last else '.' }}
-        {% endfor %}
-        Se forem somente dados de teste, é possível limpar o progresso; os pontos serão estornados e continuarão auditáveis.
-      </div>
-      <form method="POST" action="{{ url_for('treino.admin_trilha_excluir', id=t.id) }}"
-            class="d-inline flex-shrink-0"
-            onsubmit="var c=prompt('Isto apagará o progresso desta trilha e estornará os pontos. Digite EXCLUIR para confirmar.');if(c===null)return false;this.elements.confirmar.value=c;return true;">
-        {{ csrf() }}
-        <input type="hidden" name="apagar_historico" value="1">
-        <input type="hidden" name="confirmar" value="">
-        <button class="btn btn-sm btn-outline-danger">Limpar progresso e excluir</button>
-      </form>
+  <section class="treino-section" id="conteudo">
+    <div class="treino-section-heading"><div><span class="treino-eyebrow">Conteúdo</span><h2>Módulos e aulas</h2></div><span>{{ trilhas|length }} módulo(s)</span></div>
+    <div class="treino-create-row">
+      <form method="POST" action="{{ url_for('treino.admin_trilha') }}">{{ csrf() }}<label><span>Novo módulo</span><input name="nome" class="form-control" placeholder="Ex.: Atendimento ao cliente" required></label><button class="treino-primary-action">Criar módulo</button></form>
+      <form method="POST" action="{{ url_for('treino.admin_importar_roteiros') }}" enctype="multipart/form-data" onsubmit="return confirm('Importar o plano? O conteúdo novo será criado como rascunho.');">{{ csrf() }}<label><span>Ou importe o planejamento</span><input type="file" name="arquivo" accept=".xlsx" class="form-control" required></label><button class="treino-secondary-action">Importar planilha</button></form>
     </div>
-    {% endif %}
-    <form id="edt{{ t.id }}" method="POST" action="{{ url_for('treino.admin_trilha_editar', id=t.id) }}" class="row g-1 my-1" style="display:none;">{{ csrf() }}
-      <div class="col-12 col-md-4"><input name="nome" class="form-control form-control-sm" value="{{ t.nome }}" placeholder="Nome da trilha"></div>
-      <div class="col-12 col-md-6"><input name="descricao" class="form-control form-control-sm" value="{{ t.descricao or '' }}" placeholder="Descrição (opcional)"></div>
-      <div class="col-12 col-md-2"><button class="btn btn-sm btn-primary w-100">Salvar</button></div></form>
-    {% for v in t.videos %}<div class="small d-flex justify-content-between align-items-center gap-2 py-1">
-      <span>▶️ <a href="{{ url_for('treino.admin_video_editar', id=v.id) }}">{{ v.titulo }}</a>
-        ({% if v.duracao_segundos and v.duracao_segundos > 0 %}{{ v.duracao_segundos // 60 }}:{{ '%02d'|format(v.duracao_segundos % 60) }}{% elif v.video_externo_id %}processando{% else %}sem vídeo{% endif %}, {{ v.checkpoints|length }} cp)
-        {% if v.ativo and v.video_externo_id %}<span class="badge bg-success">Publicada</span>
-        {% elif v.video_externo_id %}<span class="badge bg-warning text-dark">Rascunho</span>
-        {% else %}<span class="badge bg-secondary">Sem vídeo</span>{% endif %}</span>
-      <span class="d-flex flex-wrap gap-1">
-        {% if v.ativo and v.video_externo_id %}
-        <form method="POST" action="{{ url_for('treino.admin_video_toggle', id=v.id) }}" class="d-inline">{{ csrf() }}<input type="hidden" name="acao" value="ocultar"><button class="btn btn-sm btn-outline-warning py-0 px-1">Tirar do ar</button></form>
-        {% elif v.video_externo_id %}
-        <form method="POST" action="{{ url_for('treino.admin_video_toggle', id=v.id) }}" class="d-inline">{{ csrf() }}<input type="hidden" name="acao" value="publicar"><button class="btn btn-sm btn-outline-success py-0 px-1">Publicar aula</button></form>
-        {% else %}<a class="btn btn-sm btn-outline-primary py-0 px-1" href="{{ url_for('treino.admin_video_editar', id=v.id) }}">Enviar vídeo</a>{% endif %}
-        {{ mini(url_for('treino.admin_video_excluir', id=v.id), '🗑', 'btn-outline-danger', 'Excluir vídeo?') }}
-      </span></div>{% endfor %}
-    <form method="POST" action="{{ url_for('treino.admin_video_novo', id=t.id) }}" class="d-flex flex-wrap gap-1 mt-1">{{ csrf() }}
-      <input name="titulo" class="form-control form-control-sm" placeholder="Nova aula (só o nome)" style="width:180px;">
-      <button class="btn btn-sm btn-outline-dark">+ vídeo</button></form>
-    <form method="POST" action="{{ url_for('treino.admin_quiz_novo') }}" class="d-flex flex-wrap gap-1 mt-1">{{ csrf() }}
-      <input type="hidden" name="trilha_id" value="{{ t.id }}">
-      <input name="titulo" class="form-control form-control-sm" placeholder="Quiz da trilha" style="width:150px;">
-      <input name="por_tent" class="form-control form-control-sm" placeholder="qtd" style="width:56px;" value="5">
-      <button class="btn btn-sm btn-outline-primary">+ quiz</button></form>
-    <form method="POST" action="{{ url_for('treino.admin_trilha_cargos', id=t.id) }}" class="cargo-form mt-2 pt-2 border-top">{{ csrf() }}
-      <div class="small fw-bold mb-1">🎯 Onboarding — cargos que exigem esta trilha: <span class="text-muted fw-normal">(salva sozinho ao marcar)</span> <span class="cargo-status small"></span></div>
-      <div class="d-flex flex-wrap gap-2">
-        {% set atribuidos = cargos_por_trilha.get(t.id, []) %}
-        {% for c in cargos %}<label class="small"><input type="checkbox" name="cargo_ids" value="{{ c.id }}"{% if c.id in atribuidos %} checked{% endif %}> {{ c.nome }}{% if not c.ativo %} <span class="text-muted">(inativo)</span>{% endif %}</label>{% else %}<span class="small text-muted">Nenhum cargo cadastrado no RH.</span>{% endfor %}
-      </div>
-      {% if cargos %}<button class="btn btn-sm btn-outline-dark mt-1 py-0 px-1">Salvar cargos</button>{% endif %}</form></div>{% endfor %}
-  <form method="POST" action="{{ url_for('treino.admin_trilha') }}" class="d-flex flex-wrap gap-1">{{ csrf() }}
-    <input name="nome" class="form-control form-control-sm" placeholder="Nova trilha">
-    <button class="btn btn-sm btn-primary">Criar trilha</button></form>
-  <form method="POST" action="{{ url_for('treino.admin_importar_roteiros') }}"
-        enctype="multipart/form-data" class="d-flex flex-wrap gap-1 mt-2 pt-2 border-top"
-        onsubmit="return confirm('Importar o plano de conteúdo? Trilhas e aulas novas nascem DESATIVADAS (rascunho com roteiro); nada existente é apagado.');">
-    {{ csrf() }}
-    <input type="file" name="arquivo" accept=".xlsx" class="form-control form-control-sm" style="max-width:300px;" required>
-    <button class="btn btn-sm btn-outline-primary">📋 Importar roteiros (xlsx)</button>
-    <span class="small text-muted align-self-center">módulo → trilha; aula → rascunho com o roteiro de gravação dentro</span>
-  </form></div></div>
 
-<div class="card mb-3"><div class="card-header py-2"><strong>Recompensas</strong></div><div class="card-body">
-  <p class="small text-muted mb-2">São os <strong>prêmios</strong> que o funcionário troca
-    pelos pontos acumulados. Defina o <strong>custo em pontos</strong> e, se quiser, um
-    <strong>estoque</strong> limitado (deixe vazio para ilimitado). O funcionário pede o
-    resgate na tela dele e o <strong>gestor aprova</strong> — só aí os pontos são debitados.</p>
-  {% for r in recompensas %}<div class="small d-flex justify-content-between align-items-center mb-1">
-    <span>🎁 {{ r.nome }} — {{ r.custo_pontos }} pts{% if r.estoque is not none %} (estoque {{ r.estoque }}){% endif %}{% if not r.ativa %} <span class="badge bg-secondary">off</span>{% endif %}</span>
-    {{ mini(url_for('treino.admin_recompensa_toggle', id=r.id), 'on/off') }}</div>{% endfor %}
-  <form method="POST" action="{{ url_for('treino.admin_recompensa') }}" class="row g-2 mt-2">{{ csrf() }}
-    <div class="col-4"><input name="nome" class="form-control form-control-sm" placeholder="Nome"></div>
-    <div class="col-3"><input name="custo" class="form-control form-control-sm" placeholder="Custo pts"></div>
-    <div class="col-3"><input name="estoque" class="form-control form-control-sm" placeholder="Estoque (vazio=∞)"></div>
-    <div class="col-2"><button class="btn btn-sm btn-primary w-100">Criar</button></div></form></div></div>
+    <div class="treino-module-list">
+    {% for t in trilhas %}{% set resumo = painel.por_trilha[t.id] %}{% set bloqueios_exclusao = exclusao_por_trilha.get(t.id, {}) %}
+    <details class="treino-module" id="t{{ t.id }}"{% if resumo.rascunhos or resumo.processando %} open{% endif %}>
+      <summary><span class="treino-module-toggle"><i class="bi bi-chevron-right"></i></span><span class="treino-module-title"><strong>{{ t.nome }}</strong><small>{{ resumo.publicadas }} publicada(s) · {{ resumo.rascunhos }} rascunho(s) · {{ resumo.sem_arquivo }} sem vídeo</small></span><span class="treino-status {% if t.ativa %}is-done{% endif %}">{{ 'Módulo no ar' if t.ativa else 'Módulo oculto' }}</span></summary>
+      <div class="treino-module-body">
+        <div class="treino-module-actions"><button type="button" class="treino-link-button" onclick="var e=document.getElementById('edt{{ t.id }}');e.hidden=!e.hidden;"><i class="bi bi-pencil"></i> Editar nome</button>{{ mini(url_for('treino.admin_trilha_toggle', id=t.id), 'Tirar módulo do ar' if t.ativa else 'Publicar módulo', 'btn-outline-warning' if t.ativa else 'btn-outline-success') }}{% if not bloqueios_exclusao %}{{ mini(url_for('treino.admin_trilha_excluir', id=t.id), 'Excluir módulo', 'btn-outline-danger', 'Excluir este módulo?') }}{% endif %}</div>
+        <form id="edt{{ t.id }}" method="POST" action="{{ url_for('treino.admin_trilha_editar', id=t.id) }}" class="treino-inline-form" hidden>{{ csrf() }}<input name="nome" class="form-control" value="{{ t.nome }}" required><input name="descricao" class="form-control" value="{{ t.descricao or '' }}" placeholder="Descrição"><button class="treino-primary-action">Salvar</button></form>
+        {% if bloqueios_exclusao %}<div class="treino-notice treino-notice-warning"><i class="bi bi-shield-exclamation"></i><div><strong>Esta trilha já foi usada.</strong><br>{% for chave, quantidade in bloqueios_exclusao.items() %}{{ quantidade }} {% if chave == 'progresso_video' %}vídeo{{ '' if quantidade == 1 else 's' }} iniciado{{ '' if quantidade == 1 else 's' }}{% elif chave == 'tentativa_quiz' %}tentativa(s) de quiz{% elif chave == 'selo' %}certificado(s) emitido(s){% else %}registro(s) de progresso{% endif %}{{ ', ' if not loop.last else '.' }}{% endfor %}</div><form method="POST" action="{{ url_for('treino.admin_trilha_excluir', id=t.id) }}" onsubmit="var c=prompt('Digite EXCLUIR para apagar o progresso de teste e o módulo.');if(c===null)return false;this.elements.confirmar.value=c;return true;">{{ csrf() }}<input type="hidden" name="apagar_historico" value="1"><input type="hidden" name="confirmar" value=""><button class="btn btn-sm btn-outline-danger">Limpar progresso e excluir</button></form></div>{% endif %}
 
-<div class="card mb-3"><div class="card-header py-2"><strong>Ajuste manual de pontos</strong></div><div class="card-body">
-  <p class="small text-muted mb-2">Adiciona (número positivo) ou remove (negativo) pontos de
-    um funcionário <strong>na mão</strong>. A <strong>justificativa é obrigatória</strong> e
-    fica registrada no extrato. Use para corrigir um erro ou premiar algo que as regras
-    automáticas não cobrem. O lançamento entra na <strong>temporada ATIVA</strong>.</p>
-  <form method="POST" action="{{ url_for('treino.admin_ajuste') }}" class="row g-2">{{ csrf() }}
-    <div class="col-4"><select name="funcionario_id" class="form-select form-select-sm">{% for f in funcionarios %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}</select></div>
-    <div class="col-2"><input name="pontos" class="form-control form-control-sm" placeholder="±pts"></div>
-    <div class="col-4"><input name="justificativa" class="form-control form-control-sm" placeholder="Justificativa (obrigatória)"></div>
-    <div class="col-2"><button class="btn btn-sm btn-warning w-100">Lançar</button></div></form></div></div>
-
-{% set sem_login = funcionarios | rejectattr('usuario_id') | selectattr('email') | list %}
-<div class="card mb-3"><div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2"><strong>Acessos / logins dos funcionários</strong>
-  {% if sem_login %}
-  <form method="POST" action="{{ url_for('treino.admin_gerar_acessos_todos') }}" class="d-inline"
-        onsubmit="return confirm('Gerar o acesso de {{ sem_login|length }} funcionário(s) de uma vez? Cada um recebe a senha no próprio e-mail.');">
-    {{ csrf() }}
-    <button class="btn btn-sm btn-primary py-0 px-2">⚡ Gerar acesso pra todos ({{ sem_login|length }})</button>
-  </form>
-  {% endif %}
-</div><div class="card-body">
-  <p class="small text-muted mb-2">É aqui que o funcionário <strong>entra</strong> no
-    treinamento. Cada pessoa precisa de um <strong>login</strong> ligado ao cadastro dela
-    no RH. Dois caminhos:
-    <br>• <strong>Gerar acesso</strong> — cria a conta pelo <strong>e-mail</strong> do
-    funcionário e manda a senha por e-mail (só aparece se tiver e-mail no RH).
-    <br>• <strong>Vincular conta existente</strong> — pra quem <strong>já tem login</strong>
-    (mesmo sem e-mail): escolha a conta e ligue, <strong>sem criar duplicata</strong>.</p>
-  <div class="mobile-table-scroll"><table class="table table-sm align-middle mb-0"><tbody>
-  {% for f in funcionarios %}<tr>
-    <td>{{ f.nome }}</td>
-    <td class="text-end">
-      {% if f.usuario_id %}<span class="badge bg-success">✅ tem login{% if f.usuario %} ({{ f.usuario.login }}){% endif %}</span>
-      {% else %}
-        <div class="d-flex flex-wrap gap-1 justify-content-end align-items-center">
-        {% if f.email %}<form method="POST" action="{{ url_for('treino.admin_gerar_acesso', func_id=f.id) }}" class="d-inline">{{ csrf() }}<button class="btn btn-sm btn-primary py-0 px-2">Gerar acesso</button></form>{% endif %}
-        {% if contas_livres %}<form method="POST" action="{{ url_for('treino.admin_vincular_acesso', func_id=f.id) }}" class="d-inline d-flex gap-1">{{ csrf() }}
-          <select name="usuario_id" class="form-select form-select-sm py-0" style="max-width:200px;"><option value="">vincular conta existente…</option>{% for u in contas_livres %}<option value="{{ u.id }}">{{ u.nome }} ({{ u.login }})</option>{% endfor %}</select>
-          <button class="btn btn-sm btn-outline-dark py-0 px-2">Vincular</button></form>
-        {% elif not f.email %}<span class="badge bg-warning text-dark">sem e-mail e sem conta livre</span>{% endif %}
+        <div class="treino-admin-lessons">
+        {% for v in t.videos %}<div class="treino-admin-lesson"><span class="treino-lesson-number">{{ '%02d'|format(loop.index) }}</span><a href="{{ url_for('treino.admin_video_editar', id=v.id) }}"><strong>{{ v.titulo }}</strong><small>{% if not v.video_externo_id %}Ainda sem arquivo{% elif not v.duracao_segundos %}Vídeo processando{% elif v.ativo %}Publicada para os funcionários{% else %}Pronta, mas ainda não publicada{% endif %}</small></a><span class="treino-status {% if v.ativo and v.video_externo_id %}is-done{% elif v.video_externo_id %}is-attention{% endif %}">{% if v.ativo and v.video_externo_id %}Publicada{% elif v.video_externo_id %}Rascunho{% else %}Sem vídeo{% endif %}</span><div class="treino-admin-actions">{% if v.ativo and v.video_externo_id %}<form method="POST" action="{{ url_for('treino.admin_video_toggle', id=v.id) }}">{{ csrf() }}<input type="hidden" name="acao" value="ocultar"><button class="btn btn-sm btn-outline-warning">Tirar do ar</button></form>{% elif v.video_externo_id %}<form method="POST" action="{{ url_for('treino.admin_video_toggle', id=v.id) }}">{{ csrf() }}<input type="hidden" name="acao" value="publicar"><button class="btn btn-sm btn-outline-success">Publicar aula</button></form>{% else %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('treino.admin_video_editar', id=v.id) }}">Enviar vídeo</a>{% endif %}{{ mini(url_for('treino.admin_video_excluir', id=v.id), 'Excluir', 'btn-outline-danger', 'Excluir esta aula?') }}</div></div>{% else %}<div class="treino-empty">Nenhuma aula cadastrada neste módulo.</div>{% endfor %}
         </div>
-      {% endif %}
-    </td></tr>{% else %}<tr><td class="text-muted">Nenhum funcionário ativo no RH.</td></tr>{% endfor %}
-  </tbody></table></div></div></div>
 
-<div class="card"><div class="card-header py-2"><strong>Valores de pontuação</strong></div><div class="card-body">
-  <p class="small text-muted mb-2">Tabela de <strong>quantos pontos cada ação vale</strong>:
-    vídeo concluído, acerto em checkpoint, aprovação no quiz, aplicação prática (registrada
-    pelo gestor), sequências (streak), trilha concluída e o <strong>teto diário</strong> de
-    pontos. É a régua do jogo — hoje é <strong>só de leitura</strong>.</p>
-  <div class="mobile-table-scroll"><table class="table table-sm mb-0"><tbody>
-  {% for k,v in pontos.items() %}<tr><td>{{ k }}</td><td class="text-end">{{ v }}</td></tr>{% endfor %}
-  </tbody></table></div></div></div>
+        {% set quizzes = quizzes_por_trilha.get(t.id, []) %}{% if quizzes %}<div class="treino-subsection"><strong>Avaliações</strong>{% for q in quizzes %}<div class="treino-quiz-row"><a href="{{ url_for('treino.admin_quiz_editar', id=q.id) }}">{{ q.titulo }}</a><span>{{ q.questoes|length }} pergunta(s)</span><span class="treino-status {% if q.ativo %}is-done{% endif %}">{{ 'Publicada' if q.ativo else 'Rascunho' }}</span>{{ mini(url_for('treino.admin_quiz_toggle', id=q.id), 'Tirar do ar' if q.ativo else 'Publicar', 'btn-outline-warning' if q.ativo else 'btn-outline-success') }}</div>{% endfor %}</div>{% endif %}
 
-<script>
-// Onboarding: auto-salva os cargos ao MARCAR (sem recarregar) — some a dúvida
-// "como salvar / voltou vazio". O botão "Salvar cargos" segue como reserva.
-document.querySelectorAll('.cargo-form').forEach(function(form){
-  var status=form.querySelector('.cargo-status');
-  function salvar(){
-    if(status)status.textContent='salvando…';
-    var fd=new FormData(form);fd.append('ajax','1');
-    fetch(form.action,{method:'POST',headers:{'X-CSRFToken':form.querySelector('[name=csrf_token]').value},body:fd})
-      .then(function(r){return r.json();})
-      .then(function(j){if(status)status.textContent=j.ok?'✓ salvo':'não salvou';})
-      .catch(function(){if(status)status.textContent='erro de rede';});
-  }
-  form.querySelectorAll('input[name=cargo_ids]').forEach(function(cb){
-    cb.addEventListener('change',salvar);
-  });
-});
-</script>
+        <div class="treino-add-grid"><form method="POST" action="{{ url_for('treino.admin_video_novo', id=t.id) }}">{{ csrf() }}<label><span>Adicionar aula</span><input name="titulo" class="form-control" placeholder="Nome da aula" required></label><button class="treino-secondary-action">Adicionar</button></form><form method="POST" action="{{ url_for('treino.admin_quiz_novo') }}">{{ csrf() }}<input type="hidden" name="trilha_id" value="{{ t.id }}"><label><span>Adicionar avaliação</span><input name="titulo" class="form-control" placeholder="Nome da avaliação" required></label><input name="por_tent" type="number" min="1" class="form-control" value="5" aria-label="Questões por tentativa"><button class="treino-secondary-action">Adicionar</button></form></div>
+
+        <details class="treino-details treino-role-settings"><summary><span><i class="bi bi-person-badge"></i> Cargos que precisam deste módulo</span><small>{{ cargos_por_trilha.get(t.id, [])|length }} selecionado(s)</small></summary><form method="POST" action="{{ url_for('treino.admin_trilha_cargos', id=t.id) }}" class="cargo-form">{{ csrf() }}<div class="treino-checkbox-grid">{% set atribuidos = cargos_por_trilha.get(t.id, []) %}{% for c in cargos %}<label><input type="checkbox" name="cargo_ids" value="{{ c.id }}"{% if c.id in atribuidos %} checked{% endif %}> {{ c.nome }}{% if not c.ativo %} (inativo){% endif %}</label>{% else %}<span>Nenhum cargo cadastrado no RH.</span>{% endfor %}</div><span class="cargo-status"></span><button class="treino-secondary-action">Salvar cargos</button></form></details>
+      </div>
+    </details>
+    {% else %}<div class="treino-empty">Crie o primeiro módulo para começar.</div>{% endfor %}
+    </div>
+  </section>
+
+  <section class="treino-section"><div class="treino-section-heading"><div><span class="treino-eyebrow">Pessoas e resultados</span><h2>Acompanhamento</h2></div></div><div class="treino-shortcuts">{% if can_open_rh %}<a href="{{ url_for('rh.funcionarios', view='acessos') }}"><i class="bi bi-person-lock"></i><span><strong>Acessos dos funcionários</strong><small>Vincular contas e enviar senhas</small></span><i class="bi bi-arrow-right"></i></a>{% endif %}<a href="{{ url_for('treino.gestor_home') }}"><i class="bi bi-people"></i><span><strong>Progresso da equipe</strong><small>Quem iniciou, parou ou concluiu</small></span><i class="bi bi-arrow-right"></i></a><a href="{{ url_for('treino.gestor_progressao') }}"><i class="bi bi-graph-up-arrow"></i><span><strong>Progressão por cargo</strong><small>Trilhas obrigatórias de cada pessoa</small></span><i class="bi bi-arrow-right"></i></a></div></section>
+
+  <section class="treino-section"><div class="treino-section-heading"><div><span class="treino-eyebrow">Configurações</span><h2>Regras do programa</h2></div><span>Abra somente quando precisar alterar</span></div>
+    <details class="treino-details"><summary><span><i class="bi bi-calendar-range"></i> Temporadas</span><small>{{ temporadas|length }} cadastrada(s)</small></summary><div class="treino-setting-body">{% for t in temporadas %}<div class="treino-setting-row"><span><strong>{{ t.nome }}</strong><small>{{ t.inicio }} a {{ t.fim }}</small></span><span class="treino-status {% if t.status == 'ATIVA' %}is-done{% endif %}">{{ t.status|lower }}</span>{% if t.status != 'ATIVA' %}<form method="POST" action="{{ url_for('treino.admin_temporada_status', id=t.id) }}">{{ csrf() }}<input type="hidden" name="status" value="ATIVA"><button class="btn btn-sm btn-outline-success">Ativar</button></form>{% else %}<form method="POST" action="{{ url_for('treino.admin_temporada_status', id=t.id) }}">{{ csrf() }}<input type="hidden" name="status" value="ENCERRADA"><button class="btn btn-sm btn-outline-secondary">Encerrar</button></form>{% endif %}</div>{% endfor %}<form method="POST" action="{{ url_for('treino.admin_temporada') }}" class="treino-form-grid">{{ csrf() }}<label><span>Nome</span><input name="nome" class="form-control" required></label><label><span>Início</span><input type="date" name="inicio" class="form-control" required></label><label><span>Fim</span><input type="date" name="fim" class="form-control" required></label><button class="treino-primary-action">Criar temporada</button></form></div></details>
+    <details class="treino-details"><summary><span><i class="bi bi-gift"></i> Recompensas</span><small>{{ recompensas|length }} cadastrada(s)</small></summary><div class="treino-setting-body">{% for r in recompensas %}<div class="treino-setting-row"><span><strong>{{ r.nome }}</strong><small>{{ r.custo_pontos }} pontos{% if r.estoque is not none %} · estoque {{ r.estoque }}{% endif %}</small></span><span class="treino-status {% if r.ativa %}is-done{% endif %}">{{ 'Ativa' if r.ativa else 'Oculta' }}</span>{{ mini(url_for('treino.admin_recompensa_toggle', id=r.id), 'Ativar/desativar') }}</div>{% endfor %}<form method="POST" action="{{ url_for('treino.admin_recompensa') }}" class="treino-form-grid">{{ csrf() }}<label><span>Recompensa</span><input name="nome" class="form-control" required></label><label><span>Custo em pontos</span><input name="custo" type="number" class="form-control" required></label><label><span>Estoque (opcional)</span><input name="estoque" type="number" class="form-control"></label><button class="treino-primary-action">Criar recompensa</button></form></div></details>
+    <details class="treino-details"><summary><span><i class="bi bi-sliders"></i> Pontos e ajustes manuais</span><small>Uso administrativo</small></summary><div class="treino-setting-body"><form method="POST" action="{{ url_for('treino.admin_ajuste') }}" class="treino-form-grid">{{ csrf() }}<label><span>Funcionário</span><select name="funcionario_id" class="form-select">{% for f in funcionarios %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}</select></label><label><span>Pontos (+ ou -)</span><input name="pontos" type="number" class="form-control" required></label><label><span>Justificativa</span><input name="justificativa" class="form-control" required></label><button class="treino-primary-action">Registrar ajuste</button></form><div class="treino-points-grid">{% for k,v in pontos.items() %}<span>{{ k|replace('_', ' ')|lower }}<strong>{{ v }}</strong></span>{% endfor %}</div></div></details>
+  </section>
+</main>
+<script>document.querySelectorAll('.cargo-form').forEach(function(form){var status=form.querySelector('.cargo-status');function salvar(){status.textContent='salvando…';var fd=new FormData(form);fd.append('ajax','1');fetch(form.action,{method:'POST',headers:{'X-CSRFToken':form.querySelector('[name=csrf_token]').value},body:fd}).then(function(r){return r.json();}).then(function(j){status.textContent=j.ok?'✓ salvo':'não salvou';}).catch(function(){status.textContent='erro de rede';});}form.querySelectorAll('input[name=cargo_ids]').forEach(function(cb){cb.addEventListener('change',salvar);});});</script>
 {% endblock %}

@@ -121,6 +121,7 @@ def create_app(config_class=None):
         for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js',
                     'js/pdv_mapeamento.js', 'css/style.css',
                     'js/home-v2.js', 'css/ui-v2.css', 'css/industria-v2.css',
+                    'css/treino-v2.css',
                     'loja/loja.css', 'loja/carrinho.js', 'loja/checkout.js'):
             try:
                 p = os.path.join(app.static_folder, rel)
@@ -1065,5 +1066,4 @@ def _alembic_stamp_se_necessario(app):
             'Alembic stamp/upgrade falhou. Verificar manualmente com '
             '`railway run flask db current` e `flask db upgrade`.'
         )
-
 

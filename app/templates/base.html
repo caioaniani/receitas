@@ -30,6 +30,9 @@
     <link href="{{ url_for('static', filename='css/style.css') }}?v={{ static_v['css/style.css'] }}" rel="stylesheet">
     {% if ui_v2 %}
     <link href="{{ url_for('static', filename='css/ui-v2.css') }}?v={{ static_v['css/ui-v2.css'] }}" rel="stylesheet">
+    {% if request.path.startswith('/treino') or request.path.startswith('/rh/funcionarios/') %}
+    <link href="{{ url_for('static', filename='css/treino-v2.css') }}?v={{ static_v['css/treino-v2.css'] }}" rel="stylesheet">
+    {% endif %}
     {% endif %}
     {% if embed %}
     {# Modo embed (popup do painel): sem sidebar, conteúdo ocupa tudo. #}

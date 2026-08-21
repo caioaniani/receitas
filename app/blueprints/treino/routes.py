@@ -37,6 +37,7 @@ from app.models import (
 from app.services import treino_aplicacao as ap
 from app.services import treino_certificado as cert
 from app.services import treino_ledger as ledger
+from app.services import treino_painel as painel
 from app.services import treino_quiz as tq
 from app.services import treino_ranking as rk
 from app.services import treino_recompensa as rc
@@ -86,6 +87,8 @@ def home():
         ctx['pos'] = rk.posicao_individual(f, temp.id)
         ctx['progresso'] = {
             t.id: tt.progresso_trilha(f, t, temp) for t in trilhas}
+    ctx['proximo'] = painel.proximo_passo(
+        f, trilhas, ctx['onboarding_ids']) if f else None
     return render_template('treino/home.html', **ctx)
 
 
@@ -97,10 +100,10 @@ def trilha(id):
     temp = _temp()
     est = tt.progresso_trilha(f, t, temp) if (f and temp) else None
     videos = tt.videos_publicados(t)
-    quizzes = TreinoQuiz.query.filter_by(
-        trilha_id=t.id, ativo=True).all()
+    quizzes = tt.quizzes_publicados(t)
+    video_progresso = painel.progresso_dos_videos(f, videos)
     return render_template('treino/trilha.html', t=t, est=est, videos=videos,
-                           quizzes=quizzes)
+                           quizzes=quizzes, video_progresso=video_progresso)
 
 
 @treino_bp.route('/video/<int:id>')
@@ -292,8 +295,11 @@ def gestor_home():
         equipe = [f for f in (unidade.funcionarios if unidade else [])
                   if f.ativo]
     trilhas = TreinoTrilha.query.filter_by(ativa=True).all()
+    visao_equipe = painel.painel_equipe(equipe, _temp())
     return render_template('treino/gestor.html', equipe=equipe, trilhas=trilhas,
-                           unidade=unidade)
+                           unidade=unidade, painel=visao_equipe,
+                           is_admin=is_admin,
+                           can_open_rh=current_user.is_dono())
 
 
 @treino_bp.route('/gestor/api/aplicacao', methods=['POST'])
@@ -373,6 +379,12 @@ def admin_home():
     cargos = Cargo.query.filter(db.or_(
         Cargo.ativo.is_(True), Cargo.id.in_(vinculados) if vinculados else
         db.false())).order_by(Cargo.nome).all()
+    funcionarios = Funcionario.query.filter_by(ativo=True).order_by(
+        Funcionario.nome).all()
+    quizzes_por_trilha = {}
+    for quiz in TreinoQuiz.query.order_by(TreinoQuiz.id).all():
+        if quiz.trilha_id:
+            quizzes_por_trilha.setdefault(quiz.trilha_id, []).append(quiz)
     return render_template(
         'treino/admin.html', trilhas=trilhas, pontos=cfg.todos(),
         temporadas=TreinoTemporada.query.order_by(
@@ -381,8 +393,9 @@ def admin_home():
         cargos=cargos, cargos_por_trilha=cargos_por_trilha,
         exclusao_por_trilha=exclusao.mapa_historico(trilhas),
         contas_livres=contas_livres,
-        funcionarios=Funcionario.query.filter_by(ativo=True).order_by(
-            Funcionario.nome).all())
+        funcionarios=funcionarios, quizzes_por_trilha=quizzes_por_trilha,
+        painel=painel.resumo_admin(trilhas, funcionarios),
+        can_open_rh=current_user.is_dono())
 
 
 @treino_bp.route('/admin/aplicacoes/<int:id>/estornar', methods=['POST'])

@@ -36,13 +36,18 @@ def _videos_ativos(trilha):
     return videos_publicados(trilha)
 
 
-def _quizzes_da_trilha(trilha):
-    """Quizzes da trilha: os de nível trilha + os de cada vídeo ativo."""
+def quizzes_publicados(trilha):
+    """Avaliações publicadas do módulo e de suas aulas publicadas."""
     ids_video = [v.id for v in _videos_ativos(trilha)]
     q = TreinoQuiz.query.filter(TreinoQuiz.ativo.is_(True)).filter(
         db.or_(TreinoQuiz.trilha_id == trilha.id,
                TreinoQuiz.video_id.in_(ids_video) if ids_video else False))
     return q.all()
+
+
+def _quizzes_da_trilha(trilha):
+    """Compatibilidade interna com o nome usado antes da tela v2."""
+    return quizzes_publicados(trilha)
 
 
 def progresso_trilha(funcionario, trilha, temporada):

@@ -466,6 +466,8 @@ def pre_cadastro_descartar(id):
 @login_required
 @rh_required
 def detalhe_funcionario(id):
+    from app.services import treino_ledger, treino_painel
+
     func = Funcionario.query.get_or_404(id)
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
     cargos_disp = Cargo.query.filter_by(ativo=True).order_by(Cargo.nome).all()
@@ -476,7 +478,9 @@ def detalhe_funcionario(id):
 
     return render_template('rh/funcionario_detalhe.html',
                            func=func, lojas=lojas, cargos_disponiveis=cargos_disp,
-                           feedbacks=feedbacks, folhas=folhas)
+                           feedbacks=feedbacks, folhas=folhas,
+                           treino_resumo=treino_painel.resumo_funcionario(
+                               func, treino_ledger.temporada_ativa()))
 
 
 @rh_bp.route('/funcionarios/<int:id>/salvar', methods=['POST'])

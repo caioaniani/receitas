@@ -1,61 +1,37 @@
-{% extends "base.html" %}{% block title %}Treinamento{% endblock %}
-{% macro barra_progresso(e) %}
-<div class="progress mt-2" style="height:6px;">
-  <div class="progress-bar{% if e.completa %} bg-success{% endif %}" role="progressbar"
-       style="width:{{ e.percentual }}%;" aria-valuenow="{{ e.percentual }}"
-       aria-valuemin="0" aria-valuemax="100"></div>
-</div>
-<div class="small text-muted mt-1">{{ e.percentual }}%{% if e.videos %} · {{ e.videos_feitos }}/{{ e.videos }} aula(s){% endif %}{% if e.aplicacao_ok %} · aplicação ✓{% endif %}</div>
-{% endmacro %}
+{% extends "base.html" %}{% block title %}Meu treinamento{% endblock %}
+{% macro barra(e) %}<div class="treino-progress" aria-label="{{ e.percentual }}% concluído"><span style="width:{{ e.percentual }}%"></span></div>{% endmacro %}
 {% block content %}
-<div class="page-header"><div><h1 class="page-title">🎓 Treinamento</h1></div></div>
-{% if func %}
-{% if pos %}
-<div class="card mb-3"><div class="card-body d-flex flex-wrap gap-3 align-items-center">
-  <div><div class="small text-muted">Seus pontos</div><div class="h3 mb-0">{{ pos.pontos }}</div></div>
-  <div><div class="small text-muted">Nível</div><div class="h5 mb-0">🏅 {{ pos.nivel }}</div></div>
-  {% if pos.posicao_na_unidade %}<div><div class="small text-muted">Na {{ pos.unidade }}</div><div class="h5 mb-0">{{ pos.posicao_na_unidade }}º de {{ pos.total_na_unidade }}</div></div>{% endif %}
-  <a href="{{ url_for('treino.extrato') }}" class="btn btn-sm btn-outline-secondary ms-auto">Extrato</a>
-  <a href="{{ url_for('treino.recompensas') }}" class="btn btn-sm btn-outline-success">Recompensas</a>
-  <a href="{{ url_for('treino.ranking') }}" class="btn btn-sm btn-outline-primary">Ranking</a>
-</div></div>
-{% endif %}
-{% else %}
-<div class="alert alert-warning">Sua conta não está vinculada a um funcionário do RH — fale com o gestor.</div>
-{% endif %}
-{% if func and progressao and progressao.total %}
-<div class="card mb-3 border-primary"><div class="card-body py-2">
-  <div class="d-flex justify-content-between align-items-center">
-    <div><strong>🎯 Sua trilha de cargo{% if progressao.cargo %} — {{ progressao.cargo.nome }}{% endif %}</strong>
-      <div class="small text-muted">{{ progressao.concluidas }} de {{ progressao.total }} trilha(s) obrigatória(s) concluída(s)</div></div>
-    {% if progressao.apto %}<span class="badge bg-success">✓ apto no cargo</span>
-    {% else %}<span class="badge bg-warning text-dark">em andamento</span>{% endif %}</div>
-</div></div>
-{% endif %}
-
-{% set obrig = trilhas|selectattr('id', 'in', onboarding_ids)|list %}
-{% if obrig %}
-<h5>📌 Onboarding do seu cargo</h5>
-{% for t in obrig %}
-{% set e = progresso.get(t.id) if progresso else None %}
-<a href="{{ url_for('treino.trilha', id=t.id) }}" class="card mb-2 text-decoration-none border-primary">
-  <div class="card-body py-2">
-    <div class="d-flex justify-content-between"><strong>{{ t.nome }}</strong>
-      {% if e and e.completa %}<span class="badge bg-success">✓ concluída</span>{% else %}<span class="badge bg-primary">obrigatória</span>{% endif %}</div>
-    {% if e %}{{ barra_progresso(e) }}{% endif %}
-  </div></a>
-{% endfor %}
-{% endif %}
-
-{% set outras = trilhas|rejectattr('id', 'in', onboarding_ids)|list %}
-{% if outras or not obrig %}<h5>{% if obrig %}Outras trilhas{% else %}Trilhas{% endif %}</h5>{% endif %}
-{% for t in outras %}
-{% set e = progresso.get(t.id) if progresso else None %}
-<a href="{{ url_for('treino.trilha', id=t.id) }}" class="card mb-2 text-decoration-none">
-  <div class="card-body py-2">
-    <div class="d-flex justify-content-between"><strong>{{ t.nome }}</strong>
-      {% if e and e.completa %}<span class="badge bg-success">✓ concluída</span>{% endif %}</div>
-    {% if e %}{{ barra_progresso(e) }}{% endif %}
-  </div></a>
-{% else %}{% if not obrig %}<p class="text-muted">Nenhuma trilha publicada ainda.</p>{% endif %}{% endfor %}
+<main class="treino-page">
+  <header class="treino-heading"><div><span class="treino-eyebrow">Universidade O Pão</span><h1>Meu treinamento</h1><p>Continue de onde parou e acompanhe o que é obrigatório para o seu cargo.</p></div></header>
+  {% if not func %}
+  <div class="treino-notice treino-notice-warning"><i class="bi bi-person-exclamation"></i><div><strong>Seu acesso ainda não está ligado ao RH.</strong><br>Peça ao gestor para vincular sua conta ao cadastro de funcionário.</div></div>
+  {% else %}
+    {% if proximo %}
+    <section class="treino-next" aria-labelledby="proximo-titulo">
+      <div class="treino-next-copy"><span class="treino-eyebrow">{% if proximo.obrigatorio %}Próximo passo obrigatório{% else %}Continue aprendendo{% endif %}</span><h2 id="proximo-titulo">{% if proximo.tipo == 'video' %}{{ proximo.video.titulo }}{% else %}{{ proximo.quiz.titulo }}{% endif %}</h2><p>{{ proximo.trilha.nome }}{% if proximo.percentual %} · {{ proximo.percentual }}% assistido{% endif %}</p>{% if proximo.percentual %}<div class="treino-progress treino-progress-light"><span style="width:{{ proximo.percentual }}%"></span></div>{% endif %}</div>
+      <a class="treino-primary-action" href="{% if proximo.tipo == 'video' %}{{ url_for('treino.video', id=proximo.video.id) }}{% else %}{{ url_for('treino.trilha', id=proximo.trilha.id) }}#quiz-{{ proximo.quiz.id }}{% endif %}">{{ proximo.rotulo }} <i class="bi bi-arrow-right"></i></a>
+    </section>
+    {% elif trilhas %}
+    <div class="treino-notice treino-notice-success"><i class="bi bi-check-circle"></i><div><strong>Você está em dia.</strong><br>Não há nenhuma aula ou avaliação pendente agora.</div></div>
+    {% endif %}
+    {% if progressao and progressao.total %}
+    <section class="treino-role-progress"><div><span class="treino-eyebrow">Onboarding do seu cargo{% if progressao.cargo %} · {{ progressao.cargo.nome }}{% endif %}</span><strong>{{ progressao.concluidas }} de {{ progressao.total }} módulos obrigatórios concluídos</strong></div>{% if progressao.apto %}<span class="treino-status is-done">Concluído</span>{% else %}<span class="treino-status is-progress">Em andamento</span>{% endif %}</section>
+    {% endif %}
+    {% set obrig = trilhas|selectattr('id', 'in', onboarding_ids)|list %}{% set outras = trilhas|rejectattr('id', 'in', onboarding_ids)|list %}
+    <section class="treino-section">
+      <div class="treino-section-heading"><div><span class="treino-eyebrow">Biblioteca</span><h2>Seus módulos</h2></div><span>{{ trilhas|length }} disponível(is)</span></div>
+      <div class="treino-course-grid">
+        {% for t in obrig + outras %}{% set e = progresso.get(t.id) if progresso else None %}
+        <a href="{{ url_for('treino.trilha', id=t.id) }}" class="treino-course{% if t.id in onboarding_ids %} is-required{% endif %}">
+          <div class="treino-course-top"><span class="treino-course-icon"><i class="bi bi-play-btn"></i></span>{% if e and e.completa %}<span class="treino-status is-done">Concluído</span>{% elif t.id in onboarding_ids %}<span class="treino-status is-required">Obrigatório</span>{% endif %}</div>
+          <h3>{{ t.nome }}</h3>{% if t.descricao %}<p>{{ t.descricao }}</p>{% endif %}{% if e %}{{ barra(e) }}<small>{{ e.percentual }}% · {{ e.videos_feitos }}/{{ e.videos }} aula(s)</small>{% endif %}
+        </a>
+        {% else %}<div class="treino-empty">Nenhum módulo foi publicado ainda.</div>{% endfor %}
+      </div>
+    </section>
+    {% if pos %}
+    <details class="treino-details treino-game"><summary><span><i class="bi bi-trophy"></i> Pontos e conquistas</span><small>{{ pos.pontos }} pontos · nível {{ pos.nivel }}</small></summary><div class="treino-game-body">{% if pos.posicao_na_unidade %}<span>{{ pos.posicao_na_unidade }}º de {{ pos.total_na_unidade }} na {{ pos.unidade }}</span>{% endif %}<nav><a href="{{ url_for('treino.extrato') }}">Extrato</a><a href="{{ url_for('treino.recompensas') }}">Recompensas</a><a href="{{ url_for('treino.ranking') }}">Ranking</a></nav></div></details>
+    {% endif %}
+  {% endif %}
+</main>
 {% endblock %}

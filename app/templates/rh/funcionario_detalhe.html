@@ -16,6 +16,21 @@
     {{ ui.botao_voltar(url_for('rh.funcionarios')) }}
 </div>
 
+<section class="treino-rh-card" aria-labelledby="treino-rh-titulo">
+    <div class="treino-rh-head">
+        <div><span class="treino-eyebrow">Treinamento</span><h2 id="treino-rh-titulo">Jornada de {{ func.nome.split()[0] }}</h2></div>
+        <a href="{{ url_for('treino.gestor_home') }}">Ver equipe <i class="bi bi-arrow-right"></i></a>
+    </div>
+    <div class="treino-rh-grid">
+        <div><span>Acesso</span>{% if treino_resumo.tem_acesso %}<strong class="is-success"><i class="bi bi-check-circle-fill"></i> Ativo</strong><small>{{ treino_resumo.login }}</small>{% else %}<strong class="is-warning"><i class="bi bi-exclamation-circle-fill"></i> Não criado</strong><small>O funcionário ainda não consegue entrar</small>{% endif %}</div>
+        <div><span>Obrigatório do cargo</span><strong>{{ treino_resumo.percentual }}%</strong><small>{{ treino_resumo.progresso.concluidas }} de {{ treino_resumo.progresso.total }} módulo(s)</small></div>
+        <div><span>Última atividade</span><strong>{% if treino_resumo.ultima_atividade %}{{ treino_resumo.ultima_atividade|brt('%d/%m/%Y') }}{% else %}Não iniciou{% endif %}</strong><small>{% if treino_resumo.ultima_atividade %}às {{ treino_resumo.ultima_atividade|brt('%H:%M') }}{% else %}sem atividade registrada{% endif %}</small></div>
+        <div><span>Certificados</span><strong>{{ treino_resumo.selos|length }}</strong><small>emitido(s)</small></div>
+    </div>
+    <div class="treino-progress"><span style="width:{{ treino_resumo.percentual }}%"></span></div>
+    <div class="treino-rh-actions"><a class="treino-secondary-action" href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos') }}">{{ 'Ver acesso' if treino_resumo.tem_acesso else 'Criar ou vincular acesso' }}</a>{% for selo in treino_resumo.selos[:3] %}<a href="{{ url_for('treino.certificado', selo_id=selo.id) }}"><i class="bi bi-award"></i> {{ selo.trilha.nome }}</a>{% endfor %}</div>
+</section>
+
 <!-- Dados do Funcionário -->
 <form method="POST" action="{{ url_for('rh.salvar_funcionario', id=func.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

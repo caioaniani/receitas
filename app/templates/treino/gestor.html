@@ -1,23 +1,11 @@
-{% extends "base.html" %}{% block title %}Gestor — treinamento{% endblock %}{% block content %}
-<div class="page-header"><div><h1 class="page-title">👔 Gestor{% if unidade %} · {{ unidade.nome }}{% endif %}</h1>
-<p class="page-subtitle"><a href="{{ url_for('treino.gestor_resgates') }}">Fila de resgates &rarr;</a> · <a href="{{ url_for('treino.gestor_progressao') }}">Progressão de cargo &rarr;</a></p></div></div>
-<div class="card"><div class="card-header py-2"><strong>Registrar aplicação prática</strong> <span class="small text-muted">(vale 50 pts)</span></div>
-<div class="card-body">
-  <div class="mb-2"><label class="form-label small">Funcionário</label>
-    <select id="fid" class="form-select form-select-sm">{% for f in equipe %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}</select></div>
-  <div class="mb-2"><label class="form-label small">Trilha</label>
-    <select id="tid" class="form-select form-select-sm">{% for t in trilhas %}<option value="{{ t.id }}">{{ t.nome }}</option>{% endfor %}</select></div>
-  <div class="mb-2"><label class="form-label small">Evidência (o que observou — mín. 20 caracteres)</label>
-    <textarea id="ev" rows="2" class="form-control form-control-sm"></textarea></div>
-  <button class="btn btn-success btn-sm" id="registrar">Registrar</button>
-  <div id="res" class="small mt-2"></div>
-</div></div>
-<script>
-var CSRF='{{ csrf_token() }}';
-document.getElementById('registrar').onclick=function(){
-  var b='funcionario_id='+fid.value+'&trilha_id='+tid.value+'&evidencia='+encodeURIComponent(ev.value);
-  fetch('/treino/gestor/api/aplicacao',{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:b}).then(function(r){return r.json();}).then(function(j){
-    document.getElementById('res').innerHTML=j.ok?'<span class="text-success">Registrado! +50 pts.</span>':'<span class="text-danger">'+j.erro+'</span>';});
-};
-</script>
+{% extends "base.html" %}{% block title %}Acompanhamento da equipe{% endblock %}{% block content %}
+<main class="treino-page">
+  <header class="treino-heading"><div><span class="treino-eyebrow">Gestão de treinamento{% if unidade %} · {{ unidade.nome }}{% endif %}</span><h1>Acompanhamento da equipe</h1><p>Veja quem precisa de ajuda. Pessoas em dia ficam fora do caminho.</p></div><nav class="treino-heading-actions"><a href="{{ url_for('treino.gestor_progressao') }}">Progressão de cargo</a><a href="{{ url_for('treino.gestor_resgates') }}">Resgates</a></nav></header>
+  <section class="treino-metrics"><article><span>Equipe</span><strong>{{ painel.total }}</strong><small>funcionários ativos</small></article><article class="{% if painel.contagens.precisam_atencao %}is-warning{% endif %}"><span>Precisam de atenção</span><strong>{{ painel.contagens.precisam_atencao }}</strong><small>sem acesso, parados ou sem início</small></article><article><span>Em andamento</span><strong>{{ painel.contagens.andamento }}</strong><small>com atividade recente</small></article><article class="is-success"><span>Concluíram</span><strong>{{ painel.contagens.concluido }}</strong><small>trilhas exigidas do cargo</small></article></section>
+  <section class="treino-section"><div class="treino-section-heading"><div><span class="treino-eyebrow">Prioridades</span><h2>Pessoas para acompanhar</h2></div><span>Ordenado por atenção</span></div><div class="treino-team-list">
+    {% for item in painel.linhas %}<article class="treino-person"><div class="treino-avatar">{{ item.funcionario.nome[:1] }}</div><div class="treino-person-name"><strong>{{ item.funcionario.nome }}</strong><small>{{ item.funcionario.cargo.nome if item.funcionario.cargo else 'Cargo não informado' }}</small></div><div class="treino-person-progress"><div class="treino-progress"><span style="width:{{ item.percentual }}%"></span></div><small>{{ item.percentual }}% do obrigatório</small></div><div class="treino-person-activity"><small>Última atividade</small><strong>{% if item.ultima_atividade %}{{ item.ultima_atividade|brt('%d/%m às %H:%M') }}{% else %}Ainda não iniciou{% endif %}</strong></div><div class="treino-status {% if item.status == 'concluido' %}is-done{% elif item.status == 'andamento' %}is-progress{% elif item.status in ('sem_acesso', 'parado', 'nao_iniciou') %}is-attention{% endif %}">{% if item.status == 'sem_acesso' %}Sem acesso{% elif item.status == 'sem_cargo' %}Sem cargo{% elif item.status == 'sem_trilha' %}Sem trilha do cargo{% elif item.status == 'nao_iniciou' %}Não iniciou{% elif item.status == 'parado' %}Parado há 7+ dias{% elif item.status == 'concluido' %}Concluído{% else %}Em andamento{% endif %}</div>{% if can_open_rh %}<a class="treino-row-action" href="{{ url_for('rh.detalhe_funcionario', id=item.funcionario.id) }}" aria-label="Abrir ficha de {{ item.funcionario.nome }}"><i class="bi bi-chevron-right"></i></a>{% else %}<span></span>{% endif %}</article>{% else %}<div class="treino-empty">Nenhum funcionário encontrado nesta equipe.</div>{% endfor %}
+  </div></section>
+  <details class="treino-details treino-manager-action"><summary><span><i class="bi bi-clipboard-check"></i> Registrar validação prática</span><small>Use depois de observar o funcionário no trabalho</small></summary><div class="treino-form-grid"><label><span>Funcionário</span><select id="fid" class="form-select">{% for f in equipe %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}</select></label><label><span>Módulo</span><select id="tid" class="form-select">{% for t in trilhas %}<option value="{{ t.id }}">{{ t.nome }}</option>{% endfor %}</select></label><label class="is-wide"><span>O que você observou</span><textarea id="ev" rows="3" class="form-control" placeholder="Descreva a aplicação prática (mínimo 20 caracteres)"></textarea></label><div class="is-wide"><button class="treino-primary-action" id="registrar">Registrar validação</button><div id="res" class="small mt-2"></div></div></div></details>
+</main>
+<script>var CSRF='{{ csrf_token() }}';document.getElementById('registrar').onclick=function(){var b='funcionario_id='+fid.value+'&trilha_id='+tid.value+'&evidencia='+encodeURIComponent(ev.value);fetch('/treino/gestor/api/aplicacao',{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:b}).then(function(r){return r.json();}).then(function(j){document.getElementById('res').innerHTML=j.ok?'<span class="text-success">Validação registrada.</span>':'<span class="text-danger">'+j.erro+'</span>';});};</script>
 {% endblock %}
