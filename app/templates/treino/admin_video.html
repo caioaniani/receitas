@@ -70,7 +70,20 @@ document.getElementById('up').onclick=function(){var f=document.getElementById('
   <p class="small text-muted mb-2">Perguntas que <strong>pausam o vídeo</strong> num momento pra
     confirmar atenção. O <strong>momento</strong> é onde a pergunta aparece (formato <strong>min:seg</strong>,
     ex.: <code>2:30</code>). Opcional — um vídeo pode não ter nenhum.</p>
-  <div id="cp-lista">{% for c in v.checkpoints %}<div class="small d-flex justify-content-between"><span>⏸ {{ c.segundo // 60 }}:{{ '%02d'|format(c.segundo % 60) }} — {{ c.enunciado }} <span class="text-muted">({{ c.alternativas|length }} alt, correta #{{ c.indice_correto }})</span></span><form method="POST" action="{{ url_for('treino.admin_checkpoint_excluir', id=c.id) }}" onsubmit="return confirm('Excluir checkpoint?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger py-0 px-1">🗑</button></form></div>{% endfor %}</div>
+  <div id="cp-lista">
+    {% for c in v.checkpoints %}
+    <div class="small d-flex justify-content-between align-items-start gap-2 mb-1" id="cp-row-{{ c.id }}">
+      <span class="cp-resumo">⏸ {{ c.segundo // 60 }}:{{ '%02d'|format(c.segundo % 60) }} — {{ c.enunciado }} <span class="text-muted">({{ c.alternativas|length }} alternativas, correta #{{ c.indice_correto + 1 }})</span></span>
+      <div class="d-flex gap-1 flex-shrink-0">
+        <button type="button" class="btn btn-sm btn-outline-dark py-0 px-2 cp-editar" data-id="{{ c.id }}">Editar pausa</button>
+        <form method="POST" action="{{ url_for('treino.admin_checkpoint_excluir', id=c.id) }}" onsubmit="return confirm('Excluir checkpoint?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-danger py-0 px-1" aria-label="Excluir checkpoint">🗑</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
 
   <div class="border rounded p-2 my-2 bg-light">
     <div class="small fw-bold mb-1">✨ Gerar a pergunta por IA <span class="text-muted fw-normal">(você revisa antes de salvar)</span></div>
@@ -85,21 +98,26 @@ document.getElementById('up').onclick=function(){var f=document.getElementById('
 
   <form id="cp-form" method="POST" action="{{ url_for('treino.admin_checkpoint', id=v.id) }}" class="mt-2">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="row g-2"><div class="col-3"><input name="segundo" id="cp-momento" class="form-control form-control-sm" placeholder="momento (min:seg)"></div>
-      <div class="col-9"><input name="enunciado" id="cp-enun" class="form-control form-control-sm" placeholder="Pergunta"></div></div>
+    <div id="cp-form-titulo" class="small fw-bold mb-1">Adicionar nova pergunta</div>
+    <div class="row g-2"><div class="col-3"><input name="segundo" id="cp-momento" class="form-control form-control-sm" placeholder="momento (min:seg)" required></div>
+      <div class="col-9"><input name="enunciado" id="cp-enun" class="form-control form-control-sm" placeholder="Pergunta" required></div></div>
     <div class="small text-muted mt-1">Alternativas (marque a correta):</div>
     {% for i in range(4) %}<div class="input-group input-group-sm mb-1" style="max-width:420px;">
       <div class="input-group-text"><input type="radio" name="correta" value="{{ i }}" {% if i==0 %}checked{% endif %}></div>
       <input name="alt[]" class="form-control cp-alt" placeholder="Alternativa {{ i+1 }}"></div>{% endfor %}
-    <button class="btn btn-sm btn-primary">+ checkpoint</button>
+    <button id="cp-salvar" class="btn btn-sm btn-primary">Adicionar checkpoint</button>
+    <button id="cp-cancelar" type="button" class="btn btn-sm btn-outline-secondary" hidden>Cancelar edição</button>
     <span id="cp-msg" class="small text-muted ms-2"></span></form>
 </div></div>
 
 <script>
 (function(){
   var CSRF='{{ csrf_token() }}', URL='{{ url_for("treino.admin_video_ia", id=v.id) }}';
+  var CPDATA={
+  {% for c in v.checkpoints %}"{{ c.id }}":{id:{{ c.id }},segundo:{{ c.segundo }},enunciado:{{ c.enunciado|tojson }},alternativas:{{ c.alternativas|tojson }},correta:{{ c.indice_correto }},editar_url:{{ url_for('treino.admin_checkpoint_editar', id=c.id)|tojson }},excluir_url:{{ url_for('treino.admin_checkpoint_excluir', id=c.id)|tojson }}},{% endfor %}
+  };
   var msg=document.getElementById('ia-msg'), props=document.getElementById('ia-props');
-  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   function mmss(s){s=Math.max(0,parseInt(s,10)||0);var m=Math.floor(s/60),r=s%60;return m+':'+(r<10?'0':'')+r;}
   function gerar(body){
     msg.textContent='gerando…';props.innerHTML='';
@@ -114,8 +132,8 @@ document.getElementById('up').onclick=function(){var f=document.getElementById('
           btn.innerHTML=(temMomento?'<span class="badge bg-dark">'+mmss(p.momento_seg)+'</span> ':'')+esc(p.enunciado);
           btn.onclick=function(){
             document.getElementById('cp-enun').value=p.enunciado;
-            var alts=document.querySelectorAll('.cp-alt');
-            var radios=document.querySelectorAll('input[name=correta]');
+            var alts=form.querySelectorAll('.cp-alt');
+            var radios=form.querySelectorAll('input[name=correta]');
             alts.forEach(function(a,i){a.value=p.alternativas[i]||'';});
             if(radios[p.correta])radios[p.correta].checked=true;
             var mom=document.getElementById('cp-momento');
@@ -135,7 +153,51 @@ document.getElementById('up').onclick=function(){var f=document.getElementById('
   // Salvar checkpoint SEM recarregar — assim as propostas da IA continuam na
   // tela e dá pra adicionar uma atrás da outra.
   var form=document.getElementById('cp-form'), cpMsg=document.getElementById('cp-msg');
-  var lista=document.getElementById('cp-lista'), EXC='{{ url_for("treino.admin_checkpoint_excluir", id=0) }}';
+  var lista=document.getElementById('cp-lista'), CRIAR=form.action, editando=null;
+  var tituloForm=document.getElementById('cp-form-titulo');
+  var salvar=document.getElementById('cp-salvar'), cancelar=document.getElementById('cp-cancelar');
+  function textoResumo(j){
+    return '⏸ '+mmss(j.segundo)+' — '+j.enunciado+' ('+j.n_alts+' alternativas, correta #'+(j.correta+1)+')';
+  }
+  function limparForm(){
+    editando=null;form.action=CRIAR;tituloForm.textContent='Adicionar nova pergunta';
+    salvar.textContent='Adicionar checkpoint';cancelar.hidden=true;
+    document.getElementById('cp-momento').value='';
+    document.getElementById('cp-enun').value='';
+    form.querySelectorAll('.cp-alt').forEach(function(a){a.value='';});
+    var r0=form.querySelector('input[name=correta][value="0"]');if(r0)r0.checked=true;
+  }
+  function editar(id){
+    var c=CPDATA[id];if(!c)return;
+    editando=String(id);form.action=c.editar_url;
+    tituloForm.textContent='Editar pausa e pergunta';salvar.textContent='Salvar alteração';cancelar.hidden=false;
+    document.getElementById('cp-momento').value=mmss(c.segundo);
+    document.getElementById('cp-enun').value=c.enunciado;
+    var alts=form.querySelectorAll('.cp-alt');
+    alts.forEach(function(a,i){a.value=c.alternativas[i]||'';});
+    var radio=form.querySelector('input[name=correta][value="'+c.correta+'"]');if(radio)radio.checked=true;
+    form.scrollIntoView({behavior:'smooth',block:'center'});
+    document.getElementById('cp-momento').focus();
+  }
+  function criarLinha(j){
+    var linha=document.createElement('div');linha.id='cp-row-'+j.id;
+    linha.className='small d-flex justify-content-between align-items-start gap-2 mb-1';
+    var resumo=document.createElement('span');resumo.className='cp-resumo';resumo.textContent=textoResumo(j);
+    var acoes=document.createElement('div');acoes.className='d-flex gap-1 flex-shrink-0';
+    var botao=document.createElement('button');botao.type='button';botao.dataset.id=j.id;
+    botao.className='btn btn-sm btn-outline-dark py-0 px-2 cp-editar';botao.textContent='Editar pausa';
+    var excluir=document.createElement('form');excluir.method='POST';excluir.action=j.excluir_url;
+    excluir.onsubmit=function(){return confirm('Excluir checkpoint?');};
+    var token=document.createElement('input');token.type='hidden';token.name='csrf_token';token.value=CSRF;
+    var lixeira=document.createElement('button');lixeira.className='btn btn-sm btn-outline-danger py-0 px-1';
+    lixeira.setAttribute('aria-label','Excluir checkpoint');lixeira.textContent='🗑';
+    excluir.appendChild(token);excluir.appendChild(lixeira);acoes.appendChild(botao);acoes.appendChild(excluir);
+    linha.appendChild(resumo);linha.appendChild(acoes);lista.appendChild(linha);
+  }
+  lista.addEventListener('click',function(e){
+    var botao=e.target.closest('.cp-editar');if(botao)editar(botao.dataset.id);
+  });
+  cancelar.addEventListener('click',function(){limparForm();cpMsg.textContent='edição cancelada';});
   form.addEventListener('submit',function(e){
     e.preventDefault();
     cpMsg.textContent='salvando…';
@@ -144,20 +206,15 @@ document.getElementById('up').onclick=function(){var f=document.getElementById('
     fetch(form.action,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:body})
       .then(function(r){return r.json();}).then(function(j){
         if(!j.ok){cpMsg.textContent=j.erro||'não salvou';return;}
-        var linha=document.createElement('div');
-        linha.className='small d-flex justify-content-between';
-        linha.innerHTML='<span>⏸ '+mmss(j.segundo)+' — '+esc(j.enunciado)+
-          ' <span class="text-muted">('+j.n_alts+' alt, correta #'+j.correta+')</span></span>'+
-          '<form method="POST" action="'+EXC.replace(/0$/,j.id)+'" onsubmit="return confirm(\'Excluir checkpoint?\')">'+
-          '<input type="hidden" name="csrf_token" value="'+CSRF+'">'+
-          '<button class="btn btn-sm btn-outline-danger py-0 px-1">🗑</button></form>';
-        lista.appendChild(linha);
-        // limpa o formulário, mantém as propostas
-        document.getElementById('cp-momento').value='';
-        document.getElementById('cp-enun').value='';
-        document.querySelectorAll('.cp-alt').forEach(function(a){a.value='';});
-        var r0=document.querySelector('input[name=correta][value="0"]');if(r0)r0.checked=true;
-        cpMsg.textContent='✓ adicionado';
+        CPDATA[j.id]=j;
+        if(editando){
+          var resumo=document.querySelector('#cp-row-'+j.id+' .cp-resumo');
+          if(resumo)resumo.textContent=textoResumo(j);
+          cpMsg.textContent='✓ alteração salva';
+        }else{
+          criarLinha(j);cpMsg.textContent='✓ checkpoint adicionado';
+        }
+        limparForm();
       }).catch(function(){cpMsg.textContent='erro de rede';});
   });
 })();

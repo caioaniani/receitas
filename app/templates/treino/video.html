@@ -22,8 +22,8 @@
 </style>
 <div id="playerwrap">
   <iframe id="vf" src="{{ video_embed }}"
-    allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;"
-    {% if not is_mobile %}allowfullscreen{% endif %}></iframe>
+    allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;{% if is_mobile %}fullscreen 'none'{% else %}fullscreen{% endif %}"
+    {% if not is_mobile %}allowfullscreen="true"{% endif %}></iframe>
   <div id="cpbox">
     <div class="cp-card">
       <div class="fw-bold mb-2" id="cp-enun"></div>
@@ -62,6 +62,15 @@
   var bar=document.getElementById('bar'),pct=document.getElementById('pct'),msg=document.getElementById('msg');
   var box=document.getElementById('cpbox');
   var frame=document.getElementById('vf');
+  // iPadOS pode se identificar como Mac. Além da detecção do servidor, cobre
+  // aparelhos de toque antes de iniciar o SDK do player.
+  var bloquearFullscreen={{ is_mobile|tojson }} ||
+    (/Macintosh/.test(navigator.userAgent||'') && navigator.maxTouchPoints>1);
+  if(bloquearFullscreen && frame){
+    frame.removeAttribute('allowfullscreen');
+    frame.allowFullscreen=false;
+    frame.setAttribute('allow','accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen \'none\'');
+  }
   var player=(frame&&window.Stream)?window.Stream(frame):null;
   if(!player) return;
   function post(url,body){return fetch(url,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(r){return r.json();});}
@@ -79,10 +88,17 @@
   // a pergunta aparecer (senão o vídeo pausa e o aluno fica travado sem ver nada).
   function sairFullscreen(){
     try{
-      if(document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
-      else if(document.webkitExitFullscreen && document.webkitFullscreenElement) document.webkitExitFullscreen();
-    }catch(e){}
+      var saida=null;
+      if(document.exitFullscreen && document.fullscreenElement) saida=document.exitFullscreen();
+      else if(document.webkitExitFullscreen && document.webkitFullscreenElement) saida=document.webkitExitFullscreen();
+      return saida && typeof saida.then==='function' ? saida.catch(function(){}) : Promise.resolve();
+    }catch(e){return Promise.resolve();}
   }
+  function impedirFullscreen(){
+    if(bloquearFullscreen && (document.fullscreenElement || document.webkitFullscreenElement)) sairFullscreen();
+  }
+  document.addEventListener('fullscreenchange',impedirFullscreen);
+  document.addEventListener('webkitfullscreenchange',impedirFullscreen);
   var aberto=false;
   // checkpoints: pausa no segundo e pergunta
   player.addEventListener('timeupdate',function(){
@@ -94,20 +110,26 @@
   function abrir(id,c){
     if(aberto) return;                 // evita reabrir/re-sair-fullscreen em loop
     aberto=true;
-    sairFullscreen();                  // desktop: sai da tela cheia p/ o overlay aparecer
-    player.pause(); box.style.display='block';   // 'block' (o display:none agora vem do CSS)
-    document.getElementById('cp-enun').textContent=c.enun;
-    document.getElementById('cp-msg').textContent='';
-    var h='';for(var i=0;i<c.alts.length;i++){h+='<button class="btn btn-outline-dark w-100 mb-2 cp-a" data-i="'+i+'">'+c.alts[i]+'</button>';}
-    document.getElementById('cp-alts').innerHTML=h;
-    Array.prototype.forEach.call(document.querySelectorAll('.cp-a'),function(b){
-      b.onclick=function(){
-        post('{{ url_for("treino.api_checkpoint", id=0) }}'.replace('/0/','/'+id+'/'),'indice='+b.dataset.i).then(function(j){
-          c.resp=true;
-          document.getElementById('cp-msg').textContent=(j&&j.correta)?'Correto!':'Resposta registrada.';
-          setTimeout(function(){box.style.display='none';aberto=false;player.play();},900);
-        });
-      };
+    player.pause();
+    // A saída é assíncrona. Exibir o card antes dela terminar deixa a pergunta
+    // atrás da camada fullscreen; esperamos a confirmação do navegador.
+    sairFullscreen().then(function(){
+      box.style.display='block';
+      document.getElementById('cp-enun').textContent=c.enun;
+      document.getElementById('cp-msg').textContent='';
+      var alts=document.getElementById('cp-alts');alts.innerHTML='';
+      c.alts.forEach(function(texto,i){
+        var b=document.createElement('button');
+        b.type='button';b.className='btn btn-outline-dark w-100 mb-2 cp-a';
+        b.dataset.i=i;b.textContent=texto;alts.appendChild(b);
+        b.onclick=function(){
+          post('{{ url_for("treino.api_checkpoint", id=0) }}'.replace('/0/','/'+id+'/'),'indice='+b.dataset.i).then(function(j){
+            c.resp=true;
+            document.getElementById('cp-msg').textContent=(j&&j.correta)?'Correto!':'Resposta registrada.';
+            setTimeout(function(){box.style.display='none';aberto=false;player.play();},900);
+          });
+        };
+      });
     });
   }
 })();

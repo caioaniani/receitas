@@ -119,6 +119,47 @@ def test_checkpoint_ajax_correta_fora_do_range_400(app, admin_user):
         assert TreinoCheckpoint.query.filter_by(video_id=vid).count() == 0
 
 
+def test_checkpoint_existente_edita_pausa_pergunta_e_alternativas(
+        app, admin_user):
+    vid = _video(app, duracao_segundos=240)
+    with app.app_context():
+        cp = TreinoCheckpoint(
+            video_id=vid, segundo=30, enunciado='Pergunta antiga?',
+            alternativas=['Sim', 'Não'], indice_correto=0)
+        db.session.add(cp)
+        db.session.commit()
+        cpid = cp.id
+    c = _admin(app, admin_user)
+    pagina = c.get(f'/treino/admin/video/{vid}').get_data(as_text=True)
+    assert 'Editar pausa' in pagina
+    r = c.post(f'/treino/admin/checkpoint/{cpid}/editar', data={
+        'ajax': '1', 'segundo': '1:25', 'enunciado': 'Pergunta corrigida?',
+        'alt[]': ['Primeira', '', 'Terceira', ''], 'correta': '2'})
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['ok'] and j['segundo'] == 85
+    assert j['alternativas'] == ['Primeira', 'Terceira']
+    assert j['correta'] == 1
+    with app.app_context():
+        cp = db.session.get(TreinoCheckpoint, cpid)
+        assert cp.segundo == 85
+        assert cp.enunciado == 'Pergunta corrigida?'
+        assert cp.alternativas == ['Primeira', 'Terceira']
+        assert cp.indice_correto == 1
+
+
+def test_checkpoint_nao_aceita_pausa_depois_do_video(app, admin_user):
+    vid = _video(app, duracao_segundos=60)
+    c = _admin(app, admin_user)
+    r = c.post(f'/treino/admin/video/{vid}/checkpoint', data={
+        'ajax': '1', 'segundo': '1:00', 'enunciado': 'Tarde demais?',
+        'alt[]': ['Sim', 'Não'], 'correta': '0'})
+    assert r.status_code == 400
+    assert 'antes do fim do vídeo' in r.get_json()['erro']
+    with app.app_context():
+        assert TreinoCheckpoint.query.filter_by(video_id=vid).count() == 0
+
+
 def test_admin_video_titulo_renomeia(app, admin_user):
     """Editar o título da aula depois de criada (antes só dava na criação)."""
     vid = _video(app)                              # nasce como 'Aula'

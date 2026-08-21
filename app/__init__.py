@@ -671,9 +671,17 @@ def create_app(config_class=None):
             )
         # Permissions-Policy: nega APIs sensíveis que o site não usa
         # (mitiga XSS escalando pra microfone/câmera/GPS do cliente).
-        response.headers['Permissions-Policy'] = (
+        politica_da_rota = response.headers.get('Permissions-Policy')
+        politica_padrao = (
             'camera=(), microphone=(), geolocation=(), payment=(self), '
             'usb=(), magnetometer=(), gyroscope=(), accelerometer=()'
+        )
+        # Algumas telas podem precisar de uma restrição adicional. A aula de
+        # treinamento no celular, por exemplo, nega fullscreen para a pergunta
+        # do checkpoint nunca ficar atrás do player nativo.
+        response.headers['Permissions-Policy'] = (
+            f'{politica_padrao}, {politica_da_rota}'
+            if politica_da_rota else politica_padrao
         )
         # Cache agressivo para assets estaticos (CSS/JS/fonts/imagens)
         if request.path.startswith('/static/'):
@@ -1066,4 +1074,3 @@ def _alembic_stamp_se_necessario(app):
             'Alembic stamp/upgrade falhou. Verificar manualmente com '
             '`railway run flask db current` e `flask db upgrade`.'
         )
-

@@ -100,8 +100,8 @@ def test_video_abre_com_progresso_salvo(app):
 
 
 def test_video_sem_fullscreen_no_celular(app):
-    """Celular: iframe SEM allowfullscreen (tela cheia no iOS abre o player
-    nativo e a pergunta do checkpoint não aparece). Desktop mantém."""
+    """Celular: bloqueia fullscreen também por Permissions Policy; desktop
+    mantém a opção e aguarda a saída antes de mostrar a pergunta."""
     from unittest.mock import patch
     with app.app_context():
         _temp()
@@ -118,14 +118,22 @@ def test_video_sem_fullscreen_no_celular(app):
     with patch('app.services.treinamento_stream.embed_url',
                return_value='https://x.cloudflarestream.com/abc/iframe'):
         # desktop: UA padrão do test client não casa mobile → mantém fullscreen
-        body_d = c.get(f'/treino/video/{vid}').get_data(as_text=True)
-        assert 'allowfullscreen' in body_d
+        resp_d = c.get(f'/treino/video/{vid}')
+        body_d = resp_d.get_data(as_text=True)
+        iframe_d = body_d.split('<iframe id="vf"', 1)[1].split('</iframe>', 1)[0]
+        assert 'allowfullscreen="true"' in iframe_d
+        assert 'fullscreen=()' not in resp_d.headers.get('Permissions-Policy', '')
         assert 'sairFullscreen' in body_d          # exit-fullscreen segue no desktop
+        assert 'sairFullscreen().then' in body_d   # overlay espera a saída terminar
         # celular (iPhone): sem allowfullscreen + aviso
-        body_m = c.get(f'/treino/video/{vid}', headers={
+        resp_m = c.get(f'/treino/video/{vid}', headers={
             'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)'
-        }).get_data(as_text=True)
-    assert 'allowfullscreen' not in body_m
+        })
+        body_m = resp_m.get_data(as_text=True)
+    iframe_m = body_m.split('<iframe id="vf"', 1)[1].split('</iframe>', 1)[0]
+    assert 'allowfullscreen="true"' not in iframe_m
+    assert "fullscreen 'none'" in iframe_m
+    assert 'fullscreen=()' in resp_m.headers['Permissions-Policy']
     assert 'sem tela cheia' in body_m
 
 

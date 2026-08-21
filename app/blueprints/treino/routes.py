@@ -12,6 +12,7 @@ from flask import (
     abort,
     flash,
     jsonify,
+    make_response,
     redirect,
     render_template,
     request,
@@ -134,10 +135,17 @@ def video(id):
     import re as _re
     ua = request.headers.get('User-Agent', '')
     is_mobile = bool(_re.search(r'Mobi|Android|iPhone|iPad|iPod', ua, _re.I))
-    return render_template('treino/video.html', v=v, video_embed=embed,
-                           checkpoints=v.checkpoints, quizzes=quizzes,
-                           pct_inicial=pct_inicial, concluido_inicial=concluido,
-                           is_mobile=is_mobile)
+    resposta = make_response(render_template(
+        'treino/video.html', v=v, video_embed=embed,
+        checkpoints=v.checkpoints, quizzes=quizzes,
+        pct_inicial=pct_inicial, concluido_inicial=concluido,
+        is_mobile=is_mobile))
+    if is_mobile:
+        # O vídeo do Cloudflare é um iframe cross-origin. No celular, a tela
+        # cheia nativa fica acima da página e esconderia a pergunta. O header é
+        # a segunda trava, além da Permissions Policy aplicada no próprio iframe.
+        resposta.headers['Permissions-Policy'] = 'fullscreen=()'
+    return resposta
 
 
 @treino_bp.route('/api/videos/<int:id>/heartbeat', methods=['POST'])
@@ -622,38 +630,95 @@ def _mmss_para_seg(valor):
     return max(0, _int(v))
 
 
+def _dados_checkpoint_form(v):
+    """Normaliza e valida o formulário compartilhado por criar/editar."""
+    segundo = _mmss_para_seg(request.form.get('segundo'))
+    enunciado = (request.form.get('enunciado') or '').strip()[:500]
+
+    # Preserva o índice marcado mesmo se uma das quatro linhas estiver vazia.
+    # Sem esse mapa, marcar a 3ª opção com a 2ª vazia faria a alternativa correta
+    # apontar para o lugar errado depois da remoção dos campos em branco.
+    alternativas = []
+    indices = {}
+    for indice_original, valor in enumerate(request.form.getlist('alt[]')):
+        texto = (valor or '').strip()
+        if texto:
+            indices[indice_original] = len(alternativas)
+            alternativas.append(texto)
+    correta = indices.get(_int(request.form.get('correta')), -1)
+
+    erro = None
+    if not enunciado:
+        erro = 'Escreva a pergunta do checkpoint.'
+    elif len(alternativas) < 2:
+        erro = 'Checkpoint precisa de ao menos 2 alternativas.'
+    elif correta < 0:
+        erro = 'Marque a alternativa correta entre as que você preencheu.'
+    elif v.duracao_segundos > 0 and segundo >= v.duracao_segundos:
+        erro = 'O momento da pergunta precisa ser antes do fim do vídeo.'
+    return segundo, enunciado, alternativas, correta, erro
+
+
+def _checkpoint_json(cp):
+    return jsonify(
+        ok=True,
+        id=cp.id,
+        segundo=cp.segundo,
+        enunciado=cp.enunciado,
+        alternativas=cp.alternativas,
+        n_alts=len(cp.alternativas),
+        correta=cp.indice_correto,
+        editar_url=url_for('treino.admin_checkpoint_editar', id=cp.id),
+        excluir_url=url_for('treino.admin_checkpoint_excluir', id=cp.id),
+    )
+
+
+def _checkpoint_erro(v, ajax, erro):
+    if ajax:
+        return jsonify(ok=False, erro=erro), 400
+    flash(erro, 'warning')
+    return redirect(url_for('treino.admin_video_editar', id=v.id))
+
+
 @treino_bp.route('/admin/video/<int:id>/checkpoint', methods=['POST'])
 @login_required
 @admin_required
 def admin_checkpoint(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
     ajax = request.form.get('ajax') == '1'   # salvar sem recarregar a página
-    alts = [a.strip() for a in request.form.getlist('alt[]') if a.strip()]
-    correta = _int(request.form.get('correta'))
-    erro = None
-    if len(alts) < 2:
-        erro = 'Checkpoint precisa de ao menos 2 alternativas.'
-    elif not 0 <= correta < len(alts):
-        erro = 'Marque a alternativa correta entre as que você preencheu.'
+    segundo, enunciado, alts, correta, erro = _dados_checkpoint_form(v)
     if erro:
-        if ajax:
-            return jsonify(ok=False, erro=erro), 400
-        flash(erro, 'warning')
-        return redirect(url_for('treino.admin_video_editar', id=v.id))
+        return _checkpoint_erro(v, ajax, erro)
     cp = TreinoCheckpoint(
-        video_id=v.id, segundo=_mmss_para_seg(request.form.get('segundo')),
-        enunciado=request.form.get('enunciado', '')[:500], alternativas=alts,
-        indice_correto=correta)
+        video_id=v.id, segundo=segundo, enunciado=enunciado,
+        alternativas=alts, indice_correto=correta)
     db.session.add(cp)
     db.session.commit()
     if ajax:
-        return jsonify(ok=True, id=cp.id, segundo=cp.segundo,
-                       enunciado=cp.enunciado, n_alts=len(alts),
-                       correta=correta,
-                       excluir_url=url_for('treino.admin_checkpoint_excluir',
-                                           id=cp.id))
+        return _checkpoint_json(cp)
     flash('Checkpoint adicionado.', 'success')
     return redirect(url_for('treino.admin_video_editar', id=v.id))
+
+
+@treino_bp.route('/admin/checkpoint/<int:id>/editar', methods=['POST'])
+@login_required
+@admin_required
+def admin_checkpoint_editar(id):
+    """Edita momento, pergunta e alternativas sem recriar o checkpoint."""
+    cp = db.session.get(TreinoCheckpoint, id) or abort(404)
+    ajax = request.form.get('ajax') == '1'
+    segundo, enunciado, alts, correta, erro = _dados_checkpoint_form(cp.video)
+    if erro:
+        return _checkpoint_erro(cp.video, ajax, erro)
+    cp.segundo = segundo
+    cp.enunciado = enunciado
+    cp.alternativas = alts
+    cp.indice_correto = correta
+    db.session.commit()
+    if ajax:
+        return _checkpoint_json(cp)
+    flash('Pausa e pergunta atualizadas.', 'success')
+    return redirect(url_for('treino.admin_video_editar', id=cp.video_id))
 
 
 @treino_bp.route('/admin/video/<int:id>/ia-gerar', methods=['POST'])
