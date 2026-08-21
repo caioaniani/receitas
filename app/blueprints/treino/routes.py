@@ -353,6 +353,7 @@ def gestor_decidir(id):
 def admin_home():
     from app.models import Cargo, TreinoTemporada, TreinoTrilhaCargo
     from app.services import treino_acessos as acessos
+    from app.services import treino_exclusao as exclusao
     from app.services import treino_pontos as cfg
     trilhas = TreinoTrilha.query.order_by(TreinoTrilha.ordem).all()
     contas_livres = acessos.contas_sem_vinculo()
@@ -374,6 +375,7 @@ def admin_home():
             TreinoTemporada.inicio.desc()).all(),
         recompensas=TreinoRecompensa.query.all(),
         cargos=cargos, cargos_por_trilha=cargos_por_trilha,
+        exclusao_por_trilha=exclusao.mapa_historico(trilhas),
         contas_livres=contas_livres,
         funcionarios=Funcionario.query.filter_by(ativo=True).order_by(
             Funcionario.nome).all())
@@ -794,64 +796,35 @@ def admin_trilha_toggle(id):
 def admin_trilha_excluir(id):
     from sqlalchemy.exc import IntegrityError
 
-    from app.models import (
-        TreinoAplicacaoPratica,
-        TreinoChecklistAplicacao,
-        TreinoProgressoVideo,
-        TreinoRespostaCheckpoint,
-        TreinoSelo,
-        TreinoTentativaQuiz,
-        TreinoTrilhaCargo,
-    )
+    from app.services import treino_exclusao as exclusao
+
     t = db.session.get(TreinoTrilha, id) or abort(404)
-    video_ids = [v.id for v in t.videos]
-    checkpoint_ids = [c.id for v in t.videos for c in v.checkpoints]
-    quiz_ids = [q.id for q in TreinoQuiz.query.filter_by(trilha_id=t.id).all()]
-    # Bloqueia só quando há HISTÓRICO real (preservar); conteúdo de autoria
-    # (vídeo/checkpoint/quiz/checklist/cargo) é apagado em cascata — assim dá
-    # pra excluir uma trilha de teste que ninguém usou.
-    hist = []
-    if TreinoSelo.query.filter_by(trilha_id=t.id).first():
-        hist.append('selos emitidos')
-    if TreinoAplicacaoPratica.query.filter_by(trilha_id=t.id).first():
-        hist.append('aplicações registradas')
-    if video_ids and TreinoProgressoVideo.query.filter(
-            TreinoProgressoVideo.video_id.in_(video_ids)).first():
-        hist.append('vídeos já assistidos')
-    if checkpoint_ids and TreinoRespostaCheckpoint.query.filter(
-            TreinoRespostaCheckpoint.checkpoint_id.in_(checkpoint_ids)).first():
-        hist.append('checkpoints respondidos')
-    if quiz_ids and TreinoTentativaQuiz.query.filter(
-            TreinoTentativaQuiz.quiz_id.in_(quiz_ids)).first():
-        hist.append('quizzes respondidos')
-    if hist:
-        flash(f'Trilha com histórico ({", ".join(hist)}) — desative em vez de '
-              'excluir (o histórico precisa ser preservado).', 'warning')
-        return _voltar()
+    apagar_historico = request.form.get('apagar_historico') == '1'
+    if apagar_historico and (request.form.get('confirmar') or '').strip() != 'EXCLUIR':
+        flash('Exclusão cancelada: digite EXCLUIR exatamente como solicitado.',
+              'warning')
+        return redirect(url_for('treino.admin_home', _anchor=f't{t.id}'))
     try:
-        # ORM delete (respeita os cascades delete-orphan): checkpoints somem com
-        # o vídeo, alternativas com a questão, itens com o checklist.
-        for v in list(t.videos):
-            db.session.delete(v)
-        for q in TreinoQuiz.query.filter_by(trilha_id=t.id).all():
-            for quest in list(q.questoes):
-                db.session.delete(quest)
-            db.session.delete(q)
-        for ch in TreinoChecklistAplicacao.query.filter_by(
-                trilha_id=t.id).all():
-            db.session.delete(ch)
-        for m in TreinoTrilhaCargo.query.filter_by(trilha_id=t.id).all():
-            db.session.delete(m)
-        db.session.delete(t)
-        db.session.commit()
+        stats = exclusao.excluir(
+            t, apagar_historico=apagar_historico,
+            criado_por_id=current_user.id)
+    except ValueError as e:
+        flash(f'Trilha com histórico ({e}). Use “Limpar progresso e excluir” '
+              'se estes dados forem realmente de teste.', 'warning')
+        return redirect(url_for('treino.admin_home', _anchor=f't{t.id}'))
     except IntegrityError:
         # rede de segurança: qualquer vínculo não previsto nunca vira 500
         db.session.rollback()
         flash('Não deu pra excluir — há registros vinculados à trilha. '
               'Desative em vez de excluir.', 'warning')
         return _voltar()
-    flash('Trilha excluída.', 'success')
-    return _voltar()
+    if apagar_historico:
+        flash(f'Trilha excluída: {stats["historico"]} registro(s) de progresso '
+              f'removido(s) e {stats["estornos"]} lançamento(s) de pontos '
+              'estornado(s).', 'success')
+    else:
+        flash('Trilha excluída.', 'success')
+    return redirect(url_for('treino.admin_home'))
 
 
 @treino_bp.route('/admin/trilha/<int:id>/editar', methods=['POST'])
