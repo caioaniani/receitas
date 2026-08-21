@@ -16,6 +16,9 @@
         <a href="{{ url_for('main.index') }}" class="sidebar-link {{ 'active' if request.path == '/' }}">
             <i class="bi bi-house-door"></i><span>Hoje</span>
         </a>
+        <a href="{{ url_for('treino.home') }}" class="sidebar-link {{ 'active' if request.path.startswith('/treino') }}">
+            <i class="bi bi-mortarboard"></i><span>Treinamento</span>
+        </a>
         {% if current_user.pode_lojas() %}
         <a href="{{ url_for('main.area', slug='lojas') }}" class="sidebar-link {{ 'active' if request.path == '/area/lojas' }}">
             <i class="bi bi-shop"></i><span>Lojas</span>

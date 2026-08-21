@@ -56,6 +56,20 @@ def test_so_treino_redireciona_pra_treino(app):
     assert c.get('/treino/').status_code == 200            # o treino abre
 
 
+def test_so_treino_tem_atalho_na_sidebar_v2(app):
+    """A conta restrita não pode ficar presa na aula sem caminho de volta."""
+    with app.app_context():
+        uid = _mk('sot-menu', somente_treino=True).id
+    c = _cli(app, uid)
+
+    html = c.get('/treino/').get_data(as_text=True)
+
+    assert 'ui-v2-sidebar' in html
+    assert 'href="/treino/"' in html
+    assert '<span>Treinamento</span>' in html
+    assert 'bi-mortarboard' in html
+
+
 def test_so_treino_barra_url_direta_de_outra_area(app):
     with app.app_context():
         uid = _mk('sot2', somente_treino=True).id
