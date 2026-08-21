@@ -79,6 +79,21 @@ def test_duracao_negativa_do_cloudflare_nao_grava(app, admin_user):
         assert db.session.get(TreinoVideo, vid).duracao_segundos == 0
 
 
+def test_admin_nao_abre_player_enquanto_cloudflare_falhou(app, admin_user):
+    vid = _video(app, video_externo_id='a' * 32, provedor='cloudflare',
+                 duracao_segundos=0)
+    c = _admin(app, admin_user)
+    with patch('app.services.treinamento_stream.status', return_value={
+            'pronto': False, 'pct': 0, 'duracao': 0,
+            'erro': 'arquivo de vídeo corrompido'}), patch(
+            'app.services.treinamento_stream.embed_url',
+            return_value='https://x.cloudflarestream.com/abc/iframe'):
+        body = c.get(f'/treino/admin/video/{vid}').get_data(as_text=True)
+    assert 'não conseguiu processar este vídeo' in body
+    assert 'arquivo de vídeo corrompido' in body
+    assert 'https://x.cloudflarestream.com/abc/iframe' not in body
+
+
 def test_checkpoint_ajax_salva_sem_reload(app, admin_user):
     """+ checkpoint via ajax devolve JSON (não recarrega — mantém as propostas)."""
     vid = _video(app)

@@ -29,11 +29,11 @@ def test_cria_9_modulos_e_140_aulas(app):
             assert t.ativa is False            # dono liga após subir vídeos
             assert (t.descricao or '').strip()
             assert len(t.videos) == ESPERADO_POR_MODULO[t.nome]
-            # Aulas na ordem do dono, sem vídeo ainda, ativas (aparecem
-            # quando o MÓDULO ligar) e todas Cloudflare.
+            # Aulas na ordem do dono, sem vídeo e em RASCUNHO. Publicar o
+            # módulo não pode expor os 140 títulos de uma vez.
             assert [v.ordem for v in t.videos] == list(range(len(t.videos)))
             assert all(v.video_externo_id is None for v in t.videos)
-            assert all(v.ativo for v in t.videos)
+            assert not any(v.ativo for v in t.videos)
         assert TreinoVideo.query.count() == 140
         assert AppConfig.get(treino_seed.CFG_SEED) == '1'
 

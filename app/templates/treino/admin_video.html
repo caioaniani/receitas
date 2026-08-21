@@ -36,7 +36,8 @@
 {% endif %}
 
 {% if v.video_externo_id and proc and not proc.pronto %}
-<div class="alert alert-warning small">⏳ Vídeo <strong>processando no Cloudflare</strong>{% if proc.pct %} ({{ proc.pct }}%){% endif %} — recarregue em instantes pra ele tocar e a duração aparecer.</div>
+{% if proc.erro %}<div class="alert alert-danger small">O Cloudflare <strong>não conseguiu processar este vídeo</strong>: {{ proc.erro }}. Envie o arquivo novamente.</div>
+{% else %}<div class="alert alert-warning small">⏳ Vídeo <strong>processando no Cloudflare</strong>{% if proc.pct %} ({{ proc.pct }}%){% endif %} — recarregue em instantes pra ele tocar e a duração aparecer.</div>{% endif %}
 {% endif %}
 
 {% if video_embed %}<div style="max-width:560px;"><div style="position:relative;padding-top:56.25%;">
@@ -49,11 +50,18 @@
 <script>
 var CSRF='{{ csrf_token() }}';
 document.getElementById('up').onclick=function(){var f=document.getElementById('vf').files[0];if(!f)return;
- var wrap=document.getElementById('wrap'),bar=document.getElementById('bar'),msg=document.getElementById('msg');wrap.style.display='';msg.textContent='preparando…';
+ var wrap=document.getElementById('wrap'),bar=document.getElementById('bar'),msg=document.getElementById('msg');wrap.style.display='';
+ if(f.size>200*1024*1024){msg.textContent='Este arquivo passa de 200 MB, limite deste envio. Exporte/comprima o vídeo para menos de 200 MB.';return;}
+ msg.textContent='preparando…';
  fetch('{{ url_for("treino.admin_video_upload_url", id=v.id) }}',{method:'POST',headers:{'X-CSRFToken':CSRF}}).then(function(r){return r.json();}).then(function(j){
   if(!j.ok){msg.textContent=j.erro;return;}var uid=j.uid;var fd=new FormData();fd.append('file',f);var xhr=new XMLHttpRequest();xhr.open('POST',j.uploadURL);
   xhr.upload.onprogress=function(e){if(e.lengthComputable){var p=Math.round(100*e.loaded/e.total);bar.style.width=p+'%';bar.textContent=p+'%';}};
-  xhr.onload=function(){msg.textContent='salvando…';fetch('{{ url_for("treino.admin_video_salvar", id=v.id) }}',{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:'uid='+uid}).then(function(){location.reload();});};
+  xhr.onload=function(){
+   if(xhr.status<200||xhr.status>=300){msg.textContent='O Cloudflare recusou o upload (HTTP '+xhr.status+'). O vídeo não foi publicado.';return;}
+   msg.textContent='salvando como rascunho…';
+   fetch('{{ url_for("treino.admin_video_salvar", id=v.id) }}',{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:'uid='+uid})
+    .then(function(r){return r.json();}).then(function(j){if(!j.ok){msg.textContent=j.erro||'Não foi possível salvar.';return;}location.reload();})
+    .catch(function(){msg.textContent='O upload terminou, mas não foi possível salvar. Tente novamente.';});};
   xhr.onerror=function(){msg.textContent='erro de rede';};xhr.send(fd);});};
 </script>
 {% else %}<div class="alert alert-warning small">Cloudflare não configurado (CLOUDFLARE_ACCOUNT_ID/TOKEN).</div>{% endif %}

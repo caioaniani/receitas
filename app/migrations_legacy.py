@@ -101,6 +101,7 @@ def _migrate(app):
         _seed_drivers_entrega(app)
         _seed_cores_drivers(app)
         _seed_treino_universidade(app)
+        _backfill_treino_aulas_sem_video_rascunho(app)
         _seed_minimo_danish(app)
         _seed_minimo_danish_v2(app)
         _seed_minimo_danish_v3(app)
@@ -164,6 +165,39 @@ def _seed_treino_universidade(app):
         treino_seed.importar_universidade()
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed treino universidade): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _backfill_treino_aulas_sem_video_rascunho(app):
+    """Corrige UMA VEZ a publicação em massa da Universidade (21/08/2026).
+
+    O seed original deixou as 140 aulas ativas e só o módulo desligado. Ao
+    publicar o Módulo 1, todos os títulos apareceram mesmo sem arquivo. Aulas
+    sem vídeo passam a rascunho; a 1.1 e qualquer outra aula que já tenha um
+    UID do Cloudflare são preservadas. Marker impede que uma decisão editorial
+    futura do dono seja refeita em outro deploy.
+    """
+    try:
+        from app.models import AppConfig, TreinoVideo
+
+        marker = 'treino_aulas_sem_video_rascunho_2026_08_21'
+        if AppConfig.get(marker):
+            return
+        candidatas = TreinoVideo.query.filter(
+            TreinoVideo.ativo.is_(True),
+            db.or_(TreinoVideo.video_externo_id.is_(None),
+                   TreinoVideo.video_externo_id == '')).all()
+        for video in candidatas:
+            video.ativo = False
+        AppConfig.set(marker, f'desativadas={len(candidatas)}')
+        db.session.commit()
+        logger.info('treino: %d aula(s) sem video movidas para rascunho',
+                    len(candidatas))
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (rascunhos treino): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001

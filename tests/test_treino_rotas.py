@@ -129,6 +129,29 @@ def test_video_sem_fullscreen_no_celular(app):
     assert 'sem tela cheia' in body_m
 
 
+def test_funcionario_nao_recebe_player_antes_do_cloudflare_pronto(
+        app, admin_user):
+    from unittest.mock import patch
+    with app.app_context():
+        trilha = TreinoTrilha(nome='Seg')
+        db.session.add(trilha)
+        db.session.flush()
+        v = TreinoVideo(
+            trilha_id=trilha.id, titulo='Aguardando', ativo=True,
+            video_externo_id='a' * 32, duracao_segundos=0)
+        db.session.add(v)
+        db.session.commit()
+        vid = v.id
+    c = _login(app, admin_user.id)
+    with patch('app.services.treinamento_stream.status', return_value={
+            'pronto': False, 'pct': 20, 'duracao': 0, 'erro': None}), patch(
+            'app.services.treinamento_stream.embed_url',
+            return_value='https://x.cloudflarestream.com/abc/iframe'):
+        body = c.get(f'/treino/video/{vid}').get_data(as_text=True)
+    assert 'Vídeo em preparação' in body
+    assert 'https://x.cloudflarestream.com/abc/iframe' not in body
+
+
 def test_verificacao_publica_de_certificado(app):   # §11
     with app.app_context():
         _temp()

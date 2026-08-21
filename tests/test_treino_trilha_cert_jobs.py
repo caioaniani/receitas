@@ -35,7 +35,8 @@ def _cenario_trilha_completa():
     db.session.add_all([f, g, trilha])
     db.session.commit()
     v = TreinoVideo(trilha_id=trilha.id, titulo='Higiene das mãos',
-                    duracao_segundos=60, ordem=1)
+                    duracao_segundos=60, ordem=1,
+                    video_externo_id='1' * 32)
     quiz = TreinoQuiz(trilha_id=trilha.id, titulo='Prova', ativo=True)
     db.session.add_all([v, quiz])
     db.session.commit()

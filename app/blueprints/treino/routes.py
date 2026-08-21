@@ -96,9 +96,11 @@ def trilha(id):
     f = _func()
     temp = _temp()
     est = tt.progresso_trilha(f, t, temp) if (f and temp) else None
+    videos = tt.videos_publicados(t)
     quizzes = TreinoQuiz.query.filter_by(
         trilha_id=t.id, ativo=True).all()
-    return render_template('treino/trilha.html', t=t, est=est, quizzes=quizzes)
+    return render_template('treino/trilha.html', t=t, est=est, videos=videos,
+                           quizzes=quizzes)
 
 
 @treino_bp.route('/video/<int:id>')
@@ -106,8 +108,10 @@ def trilha(id):
 def video(id):
     v = TreinoVideo.query.filter_by(id=id, ativo=True).first_or_404()
     from app.services import treinamento_stream as ts
-    _garantir_duracao(v)   # sem duração positiva o progresso daria 100% falso
-    embed = ts.embed_url(v.video_externo_id) if v.video_externo_id else None
+    proc = _garantir_duracao(v)  # sem duração o progresso daria 100% falso
+    pronto = proc is None or proc.get('pronto')
+    embed = ts.embed_url(v.video_externo_id) \
+        if v.video_externo_id and pronto else None
     quizzes = TreinoQuiz.query.filter_by(video_id=v.id, ativo=True).all()
     # Progresso JÁ salvo — pra a barra abrir no ponto certo (não em 0% quando o
     # vídeo já foi assistido/concluído).
@@ -432,7 +436,7 @@ def admin_trilha():
     ordem = (db.session.query(db.func.max(TreinoTrilha.ordem)).scalar() or 0) + 1
     db.session.add(TreinoTrilha(
         nome=nome[:150], descricao=request.form.get('descricao') or None,
-        ordem=ordem))
+        ordem=ordem, ativa=False))
     db.session.commit()
     flash('Trilha criada.', 'success')
     return redirect(url_for('treino.admin_home'))
@@ -493,7 +497,8 @@ def admin_video_novo(id):
     # sem nome, sem jeito de corrigir) — cai no default 'Aula', editavel depois.
     titulo = (request.form.get('titulo') or '').strip()[:200] or 'Aula'
     v = TreinoVideo(trilha_id=t.id, titulo=titulo,
-                    duracao_segundos=_int(request.form.get('duracao')), ordem=ordem)
+                    duracao_segundos=_int(request.form.get('duracao')),
+                    ordem=ordem, ativo=False)
     db.session.add(v)
     db.session.commit()
     flash('Vídeo criado — suba o arquivo agora.', 'success')
@@ -544,10 +549,11 @@ def admin_video_editar(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
     from app.services import treinamento_stream as ts
     proc = _garantir_duracao(v)
+    pronto = proc is None or proc.get('pronto')
     return render_template('treino/admin_video.html', v=v, proc=proc,
                            stream_ok=ts.configurado(),
                            video_embed=ts.embed_url(v.video_externo_id)
-                           if v.video_externo_id else None)
+                           if v.video_externo_id and pronto else None)
 
 
 @treino_bp.route('/admin/video/<int:id>/upload-url', methods=['POST'])
@@ -577,6 +583,10 @@ def admin_video_salvar(id):
     from app.services import treinamento_stream as ts
     v.video_externo_id = uid
     v.provedor = 'cloudflare'
+    # Upload e publicação são decisões separadas. O Cloudflare ainda precisa
+    # processar o arquivo; deixar ativo aqui exporia um player quebrado.
+    v.ativo = False
+    v.duracao_segundos = 0
     db.session.commit()
     if not ts.subdomain():
         ts.status(uid)
@@ -785,8 +795,14 @@ def _voltar():
 @admin_required
 def admin_trilha_toggle(id):
     t = db.session.get(TreinoTrilha, id) or abort(404)
+    if not t.ativa and not tt.videos_publicados(t):
+        flash('Publique ao menos uma aula com vídeo antes de publicar o módulo.',
+              'warning')
+        return _voltar()
     t.ativa = not t.ativa
     db.session.commit()
+    flash('Módulo publicado.' if t.ativa else 'Módulo retirado do ar.',
+          'success')
     return _voltar()
 
 
@@ -849,8 +865,31 @@ def admin_trilha_editar(id):
 @admin_required
 def admin_video_toggle(id):
     v = db.session.get(TreinoVideo, id) or abort(404)
-    v.ativo = not v.ativo
+    acao = (request.form.get('acao') or '').strip()
+    publicar = acao == 'publicar' if acao else not v.ativo
+    if publicar:
+        if not v.video_externo_id:
+            flash('Envie o arquivo do vídeo antes de publicar esta aula.',
+                  'warning')
+            return _voltar()
+        from app.services import treinamento_stream as ts
+        proc = ts.status(v.video_externo_id)
+        if not proc.get('pronto'):
+            detalhe = proc.get('erro') or (
+                f"processamento em {proc.get('pct', 0)}%")
+            flash(f'O vídeo ainda não pode ser publicado: {detalhe}.',
+                  'warning')
+            return _voltar()
+        dur = proc.get('duracao') or 0
+        if dur > 0:
+            v.duracao_segundos = dur
+        v.ativo = True
+        mensagem = 'Aula publicada.'
+    else:
+        v.ativo = False
+        mensagem = 'Aula retirada do ar.'
     db.session.commit()
+    flash(mensagem, 'success')
     return _voltar()
 
 

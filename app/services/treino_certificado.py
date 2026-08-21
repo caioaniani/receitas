@@ -7,8 +7,9 @@ pra apresentar em fiscalização sanitária.
 """
 from fpdf import FPDF
 
-from app.models import TreinoSelo, TreinoVideo
+from app.models import TreinoSelo
 from app.services import treino_ledger as ledger
+from app.services import treino_trilha as tt
 
 
 def _s(txt):
@@ -36,8 +37,7 @@ def dados_certificado(selo):
     trilha = selo.trilha
     func = selo.funcionario
     unidade = ledger.unidade_do_funcionario(func) if func else None
-    videos = TreinoVideo.query.filter_by(
-        trilha_id=trilha.id, ativo=True).order_by(TreinoVideo.ordem).all()
+    videos = tt.videos_publicados(trilha)
     return {
         'nome': func.nome if func else '—',
         'matricula': func.cpf if func else '—',

@@ -177,6 +177,19 @@ def test_salvar_grava_uid_e_provedor(app, admin_user):
     with app.app_context():
         v = db.session.get(TreinoVideo, vid)
         assert v.provedor == 'cloudflare' and v.video_externo_id == UID
+        assert v.ativo is False and v.duracao_segundos == 0
+
+
+def test_upload_browser_nao_salva_resposta_recusada(app, admin_user):
+    """XHR ``load`` também dispara em HTTP 4xx; a tela precisa conferir o
+    status antes de gravar o UID e avisar o limite do POST simples."""
+    _config_stream(app)
+    vid = _video(app, titulo='Upload')
+    body = _admin(app, admin_user).get(
+        f'/treino/admin/video/{vid}').get_data(as_text=True)
+    assert 'xhr.status<200||xhr.status>=300' in body
+    assert '200*1024*1024' in body
+    assert 'O Cloudflare recusou o upload' in body
 
 
 def test_salvar_recusa_uid_invalido(app, admin_user):

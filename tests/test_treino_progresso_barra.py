@@ -37,8 +37,10 @@ def test_progresso_zero_quando_nada_feito(app):
     with app.app_context():
         temp, f, trilha = _base()
         db.session.add_all([
-            TreinoVideo(trilha_id=trilha.id, titulo='A1', ordem=1),
-            TreinoVideo(trilha_id=trilha.id, titulo='A2', ordem=2)])
+            TreinoVideo(trilha_id=trilha.id, titulo='A1', ordem=1,
+                        video_externo_id='1' * 32),
+            TreinoVideo(trilha_id=trilha.id, titulo='A2', ordem=2,
+                        video_externo_id='2' * 32)])
         db.session.commit()
         e = tt.progresso_trilha(f, trilha, temp)
         assert e['percentual'] == 0 and not e['completa']
@@ -48,8 +50,10 @@ def test_progresso_zero_quando_nada_feito(app):
 def test_progresso_parcial_conta_aulas_vistas(app):
     with app.app_context():
         temp, f, trilha = _base()
-        v1 = TreinoVideo(trilha_id=trilha.id, titulo='A1', ordem=1)
-        v2 = TreinoVideo(trilha_id=trilha.id, titulo='A2', ordem=2)
+        v1 = TreinoVideo(trilha_id=trilha.id, titulo='A1', ordem=1,
+                         video_externo_id='1' * 32)
+        v2 = TreinoVideo(trilha_id=trilha.id, titulo='A2', ordem=2,
+                         video_externo_id='2' * 32)
         db.session.add_all([v1, v2])
         db.session.commit()
         db.session.add(TreinoProgressoVideo(
@@ -88,7 +92,8 @@ def test_progresso_100_quando_completa(app):
         temp, f, trilha = _base()
         g = Funcionario(nome='G', cpf='9', ativo=True)
         v = TreinoVideo(trilha_id=trilha.id, titulo='A1',
-                        duracao_segundos=60, ordem=1)
+                        duracao_segundos=60, ordem=1,
+                        video_externo_id='1' * 32)
         db.session.add_all([g, v])
         db.session.commit()
         db.session.add(TreinoProgressoVideo(

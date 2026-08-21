@@ -49,7 +49,9 @@
     <br>• Crie o vídeo só com o <strong>nome</strong> e envie o arquivo na tela dele; a
     <strong>duração é detectada sozinha</strong> pelo Cloudflare (é o que o
     <strong>antifraude</strong> usa pra só dar por concluído quem <strong>assistiu de
-    verdade</strong>).
+    verdade</strong>). A aula nasce como <strong>rascunho</strong>: depois que o
+    Cloudflare terminar, clique em <strong>Publicar aula</strong>. Publicar o módulo
+    libera somente as aulas publicadas — os outros títulos continuam invisíveis.
     <br>• O <strong>quiz</strong> só pode ser publicado com o banco de perguntas cheio
     (no mínimo 3× a quantidade sorteada por tentativa).
     <br>• Em <strong>🎯 Onboarding</strong> (dentro de cada trilha) você marca de quais
@@ -61,7 +63,7 @@
       <strong>{{ t.nome }} {% if not t.ativa %}<span class="badge bg-secondary">inativa</span>{% endif %}</strong>
       <span class="d-flex flex-wrap gap-1">
         <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="var e=document.getElementById('edt{{ t.id }}');e.style.display=e.style.display==='none'?'':'none';">✏️ editar</button>
-        {{ mini(url_for('treino.admin_trilha_toggle', id=t.id), 'ativa on/off') }}
+        {{ mini(url_for('treino.admin_trilha_toggle', id=t.id), 'Tirar módulo do ar' if t.ativa else 'Publicar módulo', 'btn-outline-warning' if t.ativa else 'btn-outline-success') }}
         {% if not bloqueios_exclusao %}{{ mini(url_for('treino.admin_trilha_excluir', id=t.id), '🗑', 'btn-outline-danger', 'Excluir trilha? (só se ninguém usou ainda)') }}{% endif %}</span></div>
     {% if bloqueios_exclusao %}
     <div class="alert alert-warning py-2 px-3 my-2 small d-flex flex-wrap align-items-center justify-content-between gap-2" role="status">
@@ -92,9 +94,20 @@
       <div class="col-12 col-md-4"><input name="nome" class="form-control form-control-sm" value="{{ t.nome }}" placeholder="Nome da trilha"></div>
       <div class="col-12 col-md-6"><input name="descricao" class="form-control form-control-sm" value="{{ t.descricao or '' }}" placeholder="Descrição (opcional)"></div>
       <div class="col-12 col-md-2"><button class="btn btn-sm btn-primary w-100">Salvar</button></div></form>
-    {% for v in t.videos %}<div class="small d-flex justify-content-between">
-      <span>▶️ <a href="{{ url_for('treino.admin_video_editar', id=v.id) }}">{{ v.titulo }}</a> ({% if v.duracao_segundos and v.duracao_segundos > 0 %}{{ v.duracao_segundos // 60 }}:{{ '%02d'|format(v.duracao_segundos % 60) }}{% elif v.video_externo_id %}processando{% else %}sem vídeo{% endif %}{% if v.video_externo_id %}, ✓{% endif %}, {{ v.checkpoints|length }} cp){% if not v.ativo %} <span class="badge bg-secondary">off</span>{% endif %}</span>
-      <span class="d-flex flex-wrap gap-1">{{ mini(url_for('treino.admin_video_toggle', id=v.id), 'on/off') }}{{ mini(url_for('treino.admin_video_excluir', id=v.id), '🗑', 'btn-outline-danger', 'Excluir vídeo?') }}</span></div>{% endfor %}
+    {% for v in t.videos %}<div class="small d-flex justify-content-between align-items-center gap-2 py-1">
+      <span>▶️ <a href="{{ url_for('treino.admin_video_editar', id=v.id) }}">{{ v.titulo }}</a>
+        ({% if v.duracao_segundos and v.duracao_segundos > 0 %}{{ v.duracao_segundos // 60 }}:{{ '%02d'|format(v.duracao_segundos % 60) }}{% elif v.video_externo_id %}processando{% else %}sem vídeo{% endif %}, {{ v.checkpoints|length }} cp)
+        {% if v.ativo and v.video_externo_id %}<span class="badge bg-success">Publicada</span>
+        {% elif v.video_externo_id %}<span class="badge bg-warning text-dark">Rascunho</span>
+        {% else %}<span class="badge bg-secondary">Sem vídeo</span>{% endif %}</span>
+      <span class="d-flex flex-wrap gap-1">
+        {% if v.ativo and v.video_externo_id %}
+        <form method="POST" action="{{ url_for('treino.admin_video_toggle', id=v.id) }}" class="d-inline">{{ csrf() }}<input type="hidden" name="acao" value="ocultar"><button class="btn btn-sm btn-outline-warning py-0 px-1">Tirar do ar</button></form>
+        {% elif v.video_externo_id %}
+        <form method="POST" action="{{ url_for('treino.admin_video_toggle', id=v.id) }}" class="d-inline">{{ csrf() }}<input type="hidden" name="acao" value="publicar"><button class="btn btn-sm btn-outline-success py-0 px-1">Publicar aula</button></form>
+        {% else %}<a class="btn btn-sm btn-outline-primary py-0 px-1" href="{{ url_for('treino.admin_video_editar', id=v.id) }}">Enviar vídeo</a>{% endif %}
+        {{ mini(url_for('treino.admin_video_excluir', id=v.id), '🗑', 'btn-outline-danger', 'Excluir vídeo?') }}
+      </span></div>{% endfor %}
     <form method="POST" action="{{ url_for('treino.admin_video_novo', id=t.id) }}" class="d-flex flex-wrap gap-1 mt-1">{{ csrf() }}
       <input name="titulo" class="form-control form-control-sm" placeholder="Nova aula (só o nome)" style="width:180px;">
       <button class="btn btn-sm btn-outline-dark">+ vídeo</button></form>

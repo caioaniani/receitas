@@ -9,10 +9,9 @@ arquivo depois — ver app/blueprints/treino/routes.py).
 Mapeamento: módulo -> `TreinoTrilha`; aula -> `TreinoVideo` (ordem = posição
 na lista do dono, sem vídeo ainda). Decisões desta importação:
 
-- **Trilhas nascem DESLIGADAS (`ativa=False`)**: aula sem vídeo aparece na
-  tela do funcionário quando a trilha está ativa — 140 aulas vazias seriam
-  ruído por semanas. O dono sobe os vídeos de um módulo e LIGA o módulo no
-  /treino/admin (1 gesto por módulo, não 1 por aula).
+- **Trilhas e aulas nascem DESLIGADAS (`ativa=False`)**: o dono publica cada
+  aula somente depois de subir e conferir o vídeo. Ligar um módulo libera
+  apenas as aulas que ele publicou; os demais títulos continuam invisíveis.
 - **Módulo 9 (Liderança) não é vinculado a cargo aqui**: os cargos são
   cadastro dinâmico do dono (/rh/cargos) — o vínculo trilha↔cargo se faz
   na tela do admin do treino, não em código.
@@ -257,7 +256,7 @@ def importar_universidade(forcar=False):
             ordem_video += 1
             db.session.add(TreinoVideo(
                 trilha_id=trilha.id, titulo=titulo, ordem=ordem_video,
-                provedor='cloudflare', ativo=True))
+                provedor='cloudflare', ativo=False))
             titulos_ja.add(_norm(titulo))
             aulas_criadas += 1
     AppConfig.set(CFG_SEED, '1')

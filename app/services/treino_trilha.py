@@ -20,8 +20,20 @@ from app.services import treino_ledger as ledger
 from app.services import treino_pontos as cfg
 
 
+def videos_publicados(trilha):
+    """Aulas que de fato podem aparecer para o funcionário.
+
+    ``ativo`` é a decisão editorial do admin; ``video_externo_id`` confirma
+    que existe um arquivo associado. A carga inicial antiga deixou os 140
+    títulos ativos, mas sem vídeo, então considerar apenas ``ativo`` publicava
+    o índice inteiro quando o módulo era ligado.
+    """
+    return [v for v in trilha.videos if v.ativo and v.video_externo_id]
+
+
 def _videos_ativos(trilha):
-    return [v for v in trilha.videos if v.ativo]
+    """Compatibilidade interna: "ativo" no progresso significa publicado."""
+    return videos_publicados(trilha)
 
 
 def _quizzes_da_trilha(trilha):
