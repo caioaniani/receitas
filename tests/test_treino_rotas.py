@@ -122,6 +122,7 @@ def test_video_sem_fullscreen_no_celular(app):
         body_d = resp_d.get_data(as_text=True)
         iframe_d = body_d.split('<iframe id="vf"', 1)[1].split('</iframe>', 1)[0]
         assert 'allowfullscreen="true"' in iframe_d
+        assert '?controls=false' not in iframe_d
         assert 'fullscreen=()' not in resp_d.headers.get('Permissions-Policy', '')
         assert 'sairFullscreen' in body_d          # exit-fullscreen segue no desktop
         assert 'sairFullscreen().then' in body_d   # overlay espera a saída terminar
@@ -133,8 +134,13 @@ def test_video_sem_fullscreen_no_celular(app):
     iframe_m = body_m.split('<iframe id="vf"', 1)[1].split('</iframe>', 1)[0]
     assert 'allowfullscreen="true"' not in iframe_m
     assert "fullscreen 'none'" in iframe_m
+    assert '?controls=false' in iframe_m
+    assert 'class="mobile-locked"' in body_m
+    assert 'id="mobile-play"' in body_m and 'id="mobile-back"' in body_m
+    assert 'player.controls=false' in body_m
+    assert '#playerwrap.mobile-locked #vf{pointer-events:none;}' in body_m
     assert 'fullscreen=()' in resp_m.headers['Permissions-Policy']
-    assert 'sem tela cheia' in body_m
+    assert 'A tela cheia foi removida' in body_m
 
 
 def test_funcionario_nao_recebe_player_antes_do_cloudflare_pronto(

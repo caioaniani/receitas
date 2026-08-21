@@ -12,6 +12,12 @@
     height:0;overflow:visible;}
   #playerwrap #vf{position:absolute;top:0;left:0;width:100%;height:100%;
     border:0;border-radius:8px;}
+  /* No iPhone, o WebKit também tem um controlador nativo de mídia que não é o
+     Fullscreen API comum. O iframe não recebe toque no celular; os controles
+     seguros ficam no documento pai, sem botão de tela cheia. */
+  #playerwrap.mobile-locked #vf{pointer-events:none;}
+  #mobile-controls{max-width:720px;display:flex;align-items:center;gap:8px;
+    padding:10px 0;flex-wrap:wrap;}
   /* Overlay do checkpoint DENTRO do player (cobre o vídeo embutido). No desktop
      em tela cheia o overlay fica atrás do iframe — por isso lá o JS SAI da tela
      cheia; no celular a tela cheia é desligada, então o overlay aparece sempre. */
@@ -20,8 +26,8 @@
   #cpbox .cp-card{max-width:460px;margin:24px auto;background:var(--bs-body-bg,#fff);
     color:var(--bs-body-color,#222);border-radius:10px;padding:18px;}
 </style>
-<div id="playerwrap">
-  <iframe id="vf" src="{{ video_embed }}"
+<div id="playerwrap"{% if is_mobile %} class="mobile-locked"{% endif %}>
+  <iframe id="vf" src="{{ video_embed }}{% if is_mobile %}?controls=false{% endif %}"
     allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;{% if is_mobile %}fullscreen 'none'{% else %}fullscreen{% endif %}"
     {% if not is_mobile %}allowfullscreen="true"{% endif %}></iframe>
   <div id="cpbox">
@@ -32,9 +38,12 @@
     </div>
   </div>
 </div>
-{% if is_mobile %}
-<p class="small text-muted mt-1" style="max-width:720px;">📱 No celular o vídeo toca aqui na tela (sem tela cheia) pra a pergunta sempre aparecer.</p>
-{% endif %}
+<div id="mobile-controls"{% if not is_mobile %} hidden{% endif %}>
+  <button id="mobile-play" type="button" class="btn btn-dark btn-sm" aria-controls="vf">▶ Reproduzir</button>
+  <button id="mobile-back" type="button" class="btn btn-outline-dark btn-sm" aria-controls="vf">↶ Voltar 10 s</button>
+  <span id="mobile-time" class="small text-muted">0:00</span>
+</div>
+<p id="mobile-player-note" class="small text-muted mt-1" style="max-width:720px;"{% if not is_mobile %} hidden{% endif %}>📱 Use os controles abaixo do vídeo. A tela cheia foi removida para as perguntas aparecerem corretamente.</p>
 <script src="https://embed.cloudflarestream.com/embed/sdk.latest.js"></script>
 {% else %}
 <div class="alert alert-secondary">Vídeo em preparação. Recarregue em instantes.</div>
@@ -70,9 +79,46 @@
     frame.removeAttribute('allowfullscreen');
     frame.allowFullscreen=false;
     frame.setAttribute('allow','accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen \'none\'');
+    document.getElementById('playerwrap').classList.add('mobile-locked');
+    document.getElementById('mobile-controls').hidden=false;
+    document.getElementById('mobile-player-note').hidden=false;
   }
   var player=(frame&&window.Stream)?window.Stream(frame):null;
   if(!player) return;
+  var mobilePlay=document.getElementById('mobile-play');
+  var mobileBack=document.getElementById('mobile-back');
+  var mobileTime=document.getElementById('mobile-time');
+  function travarControles(travar){
+    if(!bloquearFullscreen)return;
+    mobilePlay.disabled=travar;mobileBack.disabled=travar;
+  }
+  if(bloquearFullscreen){
+    // Esconde inclusive o controlador nativo do Cloudflare/iOS. O toque no
+    // iframe também está bloqueado pelo CSS; só estes botões acionam o player.
+    player.controls=false;
+    function tempo(t){
+      t=Math.max(0,Math.floor(Number(t)||0));
+      var m=Math.floor(t/60),s=t%60;return m+':'+(s<10?'0':'')+s;
+    }
+    function estadoControle(){
+      mobilePlay.textContent=player.paused?'▶ Reproduzir':'⏸ Pausar';
+      mobileTime.textContent=tempo(player.currentTime);
+    }
+    mobilePlay.onclick=function(){
+      if(player.paused){
+        var inicio=player.play();
+        if(inicio&&typeof inicio.catch==='function')inicio.catch(function(){
+          mobilePlay.textContent='▶ Tentar novamente';
+        });
+      }else{player.pause();}
+    };
+    mobileBack.onclick=function(){player.currentTime=Math.max(0,(player.currentTime||0)-10);};
+    player.addEventListener('play',estadoControle);
+    player.addEventListener('pause',estadoControle);
+    player.addEventListener('ended',estadoControle);
+    player.addEventListener('timeupdate',estadoControle);
+    estadoControle();
+  }
   function post(url,body){return fetch(url,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(r){return r.json();});}
   // heartbeat 15s
   setInterval(function(){
@@ -110,6 +156,7 @@
   function abrir(id,c){
     if(aberto) return;                 // evita reabrir/re-sair-fullscreen em loop
     aberto=true;
+    travarControles(true);
     player.pause();
     // A saída é assíncrona. Exibir o card antes dela terminar deixa a pergunta
     // atrás da camada fullscreen; esperamos a confirmação do navegador.
@@ -126,7 +173,13 @@
           post('{{ url_for("treino.api_checkpoint", id=0) }}'.replace('/0/','/'+id+'/'),'indice='+b.dataset.i).then(function(j){
             c.resp=true;
             document.getElementById('cp-msg').textContent=(j&&j.correta)?'Correto!':'Resposta registrada.';
-            setTimeout(function(){box.style.display='none';aberto=false;player.play();},900);
+            setTimeout(function(){
+              box.style.display='none';aberto=false;travarControles(false);
+              var retomada=player.play();
+              if(retomada&&typeof retomada.catch==='function')retomada.catch(function(){
+                if(bloquearFullscreen)mobilePlay.textContent='▶ Continuar vídeo';
+              });
+            },900);
           });
         };
       });
