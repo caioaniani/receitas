@@ -1686,12 +1686,50 @@ PADARIA, nao do software: o codigo se adapta a eles, nunca o contrario.
   quantidade de croissant tem que estar fechada com MAIS antecedencia que
   a dos itens que se resolvem no proprio turno.
   **REGRA GERAL: item com insumo de lead L fecha L dias ANTES dos demais.**
-  Hoje (20/08) o sistema so AVISA (`insumo_sem_vespera`, regra de
-  10/07/2026 acima) — nao impede a mudanca tardia. Cadastro em prod:
-  'Massa para folhar' (id 27) `dias_producao=1`, insumo, `estoque_nao_abate`;
-  'Croissant Tradicional' (id 1) `dias_producao=1`, lote 250, ficha consome
-  a massa. A TRAVA por item ainda esta em desenho — ate ela existir, NAO
-  confiar que um aumento de croissant na vespera seja produzivel.
+  IMPLEMENTADA em 20/08/2026 (`previsao_producao.ant_insumo` +
+  `producao._sync_itens_do_cronograma(automatico=True)`) — ver secao
+  "Trava POR INSUMO" abaixo. Cadastro em prod: 'Massa para folhar' (id 27)
+  `dias_producao=1`, insumo, `estoque_nao_abate`; 'Croissant Tradicional'
+  (id 1) `dias_producao=1`, lote 250, ficha consome a massa.
+
+### Trava POR INSUMO (20/08/2026) — o croissant fecha antes da vespera
+
+Decisoes do dono via AskUserQuestion, na mesma conversa: **vale pra TODA
+receita com sub-receita de lead** (nao so a familia da massa — pao frances
+e sourdoughs entram pelo Levain (pe)) e **demanda tardia NAO entra +
+AVISA**.
+
+- `previsao_producao.ant_insumo(rid, dia, receitas, lead, ...)`: dias de
+  CALENDARIO que a decisao de `rid` no `dia` precisa estar fechada antes.
+  Percorre a arvore da ficha (`_subs_de`, EXTRAIDA de `_explodir_bom` —
+  duas leituras do BOM divergiriam em silencio) e ROLA dia bloqueado pro
+  ultimo permitido anterior, porque producao e seg-sex. Por isso croissant
+  numa TERCA da 1, mas numa SEGUNDA da **3** (a massa dele sai na SEXTA) —
+  o caso que mais surpreende e o motivo de medir em calendario, nao em
+  "dias uteis". Teto `_ANT_INSUMO_MAX = 4`; ciclo de ficha loga ERROR e
+  devolve 0 (cadastro errado nao trava o motor).
+- `producao._sync_itens_do_cronograma(automatico=True)`: item dentro da
+  janela do insumo NAO muda, NAO nasce e NAO e removido (grid que zera na
+  ultima hora nao apaga linha cuja massa ja foi batida). Devolve
+  `(n, congelados)` — TODOS os chamadores foram atualizados. Gesto HUMANO
+  (`automatico=False`, o 🔄 da tela) ignora a trava: e a escapatoria
+  consciente do dono. Kill-switch `FREEZE_INSUMO=0`.
+- `auto_pedidos.atualizar_plano_automatico` varre **amanha ate
+  amanha+_ANT_INSUMO_MAX a partir de UM unico cronograma**. Nao e
+  capricho: a massa do croissant de D mora na ordem de D-1; escrever os
+  dois dias em rodadas diferentes traz o descasamento de volta deslocado
+  de um dia. Retorno virou `{atualizadas, sem_ordem, ordem_humana}`.
+- **AVISO ao dono nas DUAS telas** (a v2 e o padrao desde 18/08 e NAO tem
+  o painel "Proximos passos" — sem isso o item segurado sumia da vista):
+  card "N item(ns) fechados" com `ordem x grid` em v2.html, e o mesmo na
+  classica com botao "🔄 forcar mesmo assim". Estado em AppConfig
+  `producao_itens_congelados` (`_registrar_congelados` /
+  `itens_congelados_pendentes`, podado pra hoje em diante).
+- ARMADILHA fechada de quebra: `_sync_itens_do_cronograma` passou a
+  devolver TUPLA — mock de teste que devolvia `int` quebra com
+  "cannot unpack non-iterable int".
+- Testes: `tests/test_freeze_insumo.py` (16, com a ficha real croissant →
+  massa e os dois casos de tela).
 - **Levain e da mesma familia de problema** (sub de amassadeira dos
   sourdoughs, agendado na vespera desde 15/07/2026) — mudanca tardia no
   sourdough esbarra no levain ja batido.
