@@ -340,29 +340,47 @@ def atualizar_plano_automatico():
     SÓ toca ordem criada pelo PRÓPRIO CRON (criado_por None): ordem enviada
     por humano nunca muda por caminho implícito (regra de 04/07/2026)."""
     from app.models import PlanejamentoProducao
+    from app.services.previsao_producao import (
+        _ANT_INSUMO_MAX,
+        cronograma_producao,
+    )
     from app.services.producao import enviar_plano_do_dia
 
     motor = (os.environ.get('AUTO_ENVIO_MOTOR') or 'vendas').strip()
-    alvo = hoje() + timedelta(days=1)
-    plano = (PlanejamentoProducao.query
-             .filter_by(data=alvo, origem='cronograma')
-             .filter(PlanejamentoProducao.enviado_ao_padeiro.is_(True))
-             .first())
-    if plano is None:
-        logger.info('auto_atualiza: %s sem ordem enviada — nada a atualizar',
-                    alvo.isoformat())
-        return {'data': alvo.isoformat(), 'sem_ordem': True}
-    if plano.criado_por is not None:
-        logger.info('auto_atualiza: ordem de %s foi enviada por humano — '
-                    'intocada', alvo.isoformat())
-        return {'data': alvo.isoformat(), 'ordem_humana': True}
-    plano2 = enviar_plano_do_dia(alvo, user_id=None, motor=motor,
-                                 equilibrar=EQUILIBRAR_AUTO)
-    n = len(getattr(plano2, 'itens', []) or []) if plano2 is not None else 0
-    logger.info('auto_atualiza: ordem de %s re-sincronizada com o grid '
-                '(%d item[ns], motor=%s)', alvo.isoformat(), n, motor)
-    return {'data': alvo.isoformat(), 'itens': n, 'atualizada': True,
-            'motor': motor}
+    # JANELA da rodada: amanhã .. amanhã + _ANT_INSUMO_MAX. Não é capricho —
+    # o croissant de D é escrito livre pela última vez em D-1-ant, e a MASSA
+    # dele mora na ordem de D-1. Se os dois dias forem escritos em rodadas
+    # diferentes, o descasamento volta deslocado de um dia. Escrevendo a
+    # janela inteira a partir de UM único cronograma, insumo e pai saem
+    # coerentes por construção.
+    dias = [hoje() + timedelta(days=k) for k in range(1, _ANT_INSUMO_MAX + 2)]
+    crono = cronograma_producao(horizonte_dias=7, janela_semanas=6,
+                                inicio_offset_dias=0,
+                                equilibrar=EQUILIBRAR_AUTO, motor=motor)
+    out = {'motor': motor, 'atualizadas': [], 'sem_ordem': [],
+           'ordem_humana': []}
+    for alvo in dias:
+        iso = alvo.isoformat()
+        plano = (PlanejamentoProducao.query
+                 .filter_by(data=alvo, origem='cronograma')
+                 .filter(PlanejamentoProducao.enviado_ao_padeiro.is_(True))
+                 .first())
+        if plano is None:
+            out['sem_ordem'].append(iso)
+            continue
+        if plano.criado_por is not None:
+            out['ordem_humana'].append(iso)     # ordem de humano: intocada
+            continue
+        plano2 = enviar_plano_do_dia(alvo, user_id=None, motor=motor,
+                                     equilibrar=EQUILIBRAR_AUTO, crono=crono)
+        n = len(getattr(plano2, 'itens', []) or []) if plano2 is not None else 0
+        out['atualizadas'].append({'data': iso, 'itens': n})
+    logger.info('auto_atualiza: %d ordem(ns) re-sincronizada(s) na mesma '
+                'rodada (%s..%s, motor=%s); sem ordem: %s; de humano: %s',
+                len(out['atualizadas']), dias[0].isoformat(),
+                dias[-1].isoformat(), motor, out['sem_ordem'],
+                out['ordem_humana'])
+    return out
 
 
 def enviar_ordens_da_semana():
