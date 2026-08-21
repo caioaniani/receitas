@@ -1,0 +1,180 @@
+"""Acesso ao treinamento gerenciado na própria lista de funcionários do RH."""
+from unittest.mock import patch
+
+from app.extensions import db
+from app.models import (
+    Cargo,
+    Funcionario,
+    TreinoTrilha,
+    TreinoTrilhaCargo,
+    Usuario,
+)
+
+
+def _owner(app, owner_user):
+    cliente = app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao['_user_id'] = str(owner_user.id)
+        sessao['_fresh'] = True
+    return cliente
+
+
+def _usuario(nome, login, *, email=None, papel='funcionario'):
+    usuario = Usuario(nome=nome, login=login, email=email, papel=papel)
+    usuario.set_senha('senha-antiga')
+    db.session.add(usuario)
+    db.session.commit()
+    return usuario
+
+
+def _funcionario(nome, cpf, *, email=None, cargo=None, usuario=None):
+    funcionario = Funcionario(
+        nome=nome, cpf=cpf, email=email, ativo=True,
+        cargo_id=cargo.id if cargo else None,
+        usuario_id=usuario.id if usuario else None,
+    )
+    db.session.add(funcionario)
+    db.session.commit()
+    return funcionario
+
+
+def test_tela_separa_conta_existente_criacao_e_modulos(app, owner_user):
+    with app.app_context():
+        cargo = Cargo(nome='Atendimento', salario_base=0)
+        trilha = TreinoTrilha(nome='Boas-vindas', ativa=True, ordem=1)
+        db.session.add_all([cargo, trilha])
+        db.session.commit()
+        db.session.add(TreinoTrilhaCargo(
+            cargo_id=cargo.id, trilha_id=trilha.id))
+        db.session.commit()
+
+        conta = _usuario('Ana Souza', 'ana.antiga',
+                         email='ana@opao.online')
+        _funcionario('Ana Souza', '81000000001',
+                     email='ana@opao.online', cargo=cargo)
+        vinculada = _usuario('Bia Lima', 'bia.login',
+                             email='bia@opao.online')
+        _funcionario('Bia Lima', '81000000002',
+                     email='bia@opao.online', cargo=cargo,
+                     usuario=vinculada)
+        _funcionario('Caio Melo', '81000000003',
+                     email='caio@opao.online', cargo=cargo)
+        _funcionario('Dani Reis', '81000000004', cargo=cargo)
+        conta_login = conta.login
+
+    html = _owner(app, owner_user).get(
+        '/rh/funcionarios?view=acessos&acesso=todos').get_data(as_text=True)
+
+    assert 'Possível conta existente' in html
+    assert 'Sugestão por mesmo e-mail' in html
+    assert conta_login in html
+    assert 'Pronto para criar' in html
+    assert 'Falta e-mail' in html
+    assert 'Acesso liberado' in html
+    assert 'Boas-vindas' in html
+    assert 'Criar e enviar senha' in html
+    assert 'Vincular conta' in html
+
+
+def test_vincular_conta_preserva_login_e_senha(app, owner_user):
+    with app.app_context():
+        usuario = _usuario('Marina Silva', 'marina.sistema')
+        funcionario = _funcionario('Marina Silva', '81000000005')
+        uid, fid = usuario.id, funcionario.id
+        hash_antes = usuario.senha_hash
+        total_antes = Usuario.query.count()
+
+    with patch('app.services.email.enviar_boas_vindas') as enviar:
+        resposta = _owner(app, owner_user).post(
+            f'/rh/funcionarios/{fid}/acesso',
+            data={'acao': 'vincular', 'usuario_id': uid,
+                  'email': 'marina@opao.online',
+                  'filtro_acesso': 'pendentes', 'apenas_ativos': '1'},
+            follow_redirects=True)
+
+    assert resposta.status_code == 200
+    assert 'login e a senha continuam os mesmos' in resposta.get_data(
+        as_text=True)
+    enviar.assert_not_called()
+    with app.app_context():
+        funcionario = db.session.get(Funcionario, fid)
+        usuario = db.session.get(Usuario, uid)
+        assert funcionario.usuario_id == uid
+        assert funcionario.email == 'marina@opao.online'
+        assert usuario.email == 'marina@opao.online'
+        assert usuario.login == 'marina.sistema'
+        assert usuario.senha_hash == hash_antes
+        assert Usuario.query.count() == total_antes
+
+
+def test_criar_acesso_envia_senha_e_limita_ao_treino(app, owner_user):
+    with app.app_context():
+        funcionario = _funcionario('Nova Pessoa', '81000000006')
+        fid = funcionario.id
+
+    with patch('app.services.email.enviar_boas_vindas',
+               return_value={'ok': True}) as enviar:
+        resposta = _owner(app, owner_user).post(
+            f'/rh/funcionarios/{fid}/acesso',
+            data={'acao': 'gerar', 'usuario_id': '',
+                  'email': 'nova@opao.online', 'somente_treino': '1',
+                  'filtro_acesso': 'pendentes', 'apenas_ativos': '1'},
+            follow_redirects=True)
+
+    assert resposta.status_code == 200
+    assert 'senha provisória foram enviados' in resposta.get_data(as_text=True)
+    enviar.assert_called_once()
+    with app.app_context():
+        funcionario = db.session.get(Funcionario, fid)
+        usuario = funcionario.usuario
+        assert funcionario.email == 'nova@opao.online'
+        assert usuario.login == 'nova@opao.online'
+        assert usuario.email == 'nova@opao.online'
+        assert usuario.senha_provisoria is True
+        assert usuario.somente_treino is True
+
+
+def test_gerar_recusa_quando_email_ja_pertence_a_conta(app, owner_user):
+    with app.app_context():
+        existente = _usuario('João Antigo', 'joao.antigo',
+                             email='joao@opao.online')
+        funcionario = _funcionario('João Antigo', '81000000007')
+        fid, uid = funcionario.id, existente.id
+        total_antes = Usuario.query.count()
+
+    resposta = _owner(app, owner_user).post(
+        f'/rh/funcionarios/{fid}/acesso',
+        data={'acao': 'gerar', 'usuario_id': '',
+              'email': 'joao@opao.online',
+              'filtro_acesso': 'pendentes', 'apenas_ativos': '1'},
+        follow_redirects=True)
+
+    html = resposta.get_data(as_text=True)
+    assert 'Já existe a conta' in html and 'Vincular conta' in html
+    with app.app_context():
+        assert db.session.get(Funcionario, fid).usuario_id is None
+        assert db.session.get(Usuario, uid) is not None
+        assert Usuario.query.count() == total_antes
+
+
+def test_conta_administrativa_nao_aparece_nem_pode_ser_vinculada(
+        app, owner_user):
+    with app.app_context():
+        admin = _usuario('Administrador', 'admin.operacao', papel='admin')
+        funcionario = _funcionario('Operador', '81000000008')
+        aid, fid = admin.id, funcionario.id
+
+    cliente = _owner(app, owner_user)
+    html = cliente.get(
+        '/rh/funcionarios?view=acessos&acesso=todos').get_data(as_text=True)
+    assert 'admin.operacao' not in html
+
+    resposta = cliente.post(
+        f'/rh/funcionarios/{fid}/acesso',
+        data={'acao': 'vincular', 'usuario_id': aid,
+              'email': 'operador@opao.online',
+              'filtro_acesso': 'pendentes', 'apenas_ativos': '1'},
+        follow_redirects=True)
+    assert 'conta de gestão' in resposta.get_data(as_text=True)
+    with app.app_context():
+        assert db.session.get(Funcionario, fid).usuario_id is None

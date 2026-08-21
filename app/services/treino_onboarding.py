@@ -28,6 +28,25 @@ def onboarding_do_funcionario(funcionario):
     return trilhas_do_cargo(getattr(funcionario, 'cargo_id', None))
 
 
+def onboarding_lote(funcionarios):
+    """Trilhas ativas do cargo para uma lista de funcionários, sem N+1."""
+    funcionarios = list(funcionarios)
+    cargo_ids = {f.cargo_id for f in funcionarios
+                 if getattr(f, 'cargo_id', None)}
+    por_cargo = {}
+    if cargo_ids:
+        rows = (db.session.query(TreinoTrilhaCargo.cargo_id, TreinoTrilha)
+                .join(TreinoTrilha,
+                      TreinoTrilha.id == TreinoTrilhaCargo.trilha_id)
+                .filter(TreinoTrilhaCargo.cargo_id.in_(cargo_ids),
+                        TreinoTrilha.ativa.is_(True))
+                .order_by(TreinoTrilha.ordem).all())
+        for cargo_id, trilha in rows:
+            por_cargo.setdefault(cargo_id, []).append(trilha)
+    return {f.id: por_cargo.get(getattr(f, 'cargo_id', None), [])
+            for f in funcionarios}
+
+
 def definir_cargos_da_trilha(trilha_id, cargo_ids):
     """Substitui o conjunto de cargos que exigem a trilha (idempotente).
 

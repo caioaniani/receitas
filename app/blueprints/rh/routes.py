@@ -96,21 +96,177 @@ def dashboard():
 def funcionarios():
     loja_id = request.args.get('loja', type=int)
     apenas_ativos = request.args.get('ativos', '1') == '1'
+    view = request.args.get('view', 'cadastros')
+    if view not in ('cadastros', 'acessos'):
+        view = 'cadastros'
 
-    query = Funcionario.query
+    query = Funcionario.query.options(
+        joinedload(Funcionario.usuario),
+        joinedload(Funcionario.cargo),
+        selectinload(Funcionario.lojas),
+    )
     if apenas_ativos:
         query = query.filter_by(ativo=True)
     if loja_id:
         query = query.filter(Funcionario.lojas.any(Loja.id == loja_id))
 
-    lista = query.order_by(Funcionario.nome).all()
+    lista_completa = query.order_by(Funcionario.nome).all()
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
+
+    contas_livres, sugestoes, modulos_por_funcionario = [], {}, {}
+    resumo_acessos = {'vinculados': 0, 'possiveis': 0,
+                      'prontos': 0, 'sem_email': 0}
+    lista = lista_completa
+    filtro_acesso = request.args.get('acesso', 'pendentes')
+    if filtro_acesso not in ('pendentes', 'vinculados', 'todos'):
+        filtro_acesso = 'pendentes'
+    if view == 'acessos':
+        from app.services import treino_acessos as acessos
+        from app.services import treino_onboarding as onboarding
+
+        contas_livres = acessos.contas_sem_vinculo()
+        sugestoes = acessos.sugerir_contas(lista_completa, contas_livres)
+        modulos_por_funcionario = onboarding.onboarding_lote(lista_completa)
+
+        def _estado(f):
+            if f.usuario_id:
+                return 'vinculados'
+            if f.id in sugestoes:
+                return 'possiveis'
+            if (f.email or '').strip():
+                return 'prontos'
+            return 'sem_email'
+
+        for f in lista_completa:
+            resumo_acessos[_estado(f)] += 1
+        if filtro_acesso == 'pendentes':
+            lista = [f for f in lista_completa if not f.usuario_id]
+        elif filtro_acesso == 'vinculados':
+            lista = [f for f in lista_completa if f.usuario_id]
+        ordem = {'possiveis': 0, 'sem_email': 1,
+                 'prontos': 2, 'vinculados': 3}
+        lista.sort(key=lambda f: (ordem[_estado(f)], f.nome.lower()))
 
     return render_template('rh/funcionarios.html',
                            funcionarios=lista,
                            lojas=lojas,
                            loja_id=loja_id,
-                           apenas_ativos=apenas_ativos)
+                           apenas_ativos=apenas_ativos,
+                           view=view, filtro_acesso=filtro_acesso,
+                           contas_livres=contas_livres,
+                           sugestoes=sugestoes,
+                           modulos_por_funcionario=modulos_por_funcionario,
+                           resumo_acessos=resumo_acessos)
+
+
+@rh_bp.route('/funcionarios/<int:id>/acesso', methods=['POST'])
+@login_required
+@rh_required
+def funcionario_acesso(id):
+    """Gerencia e-mail e conta do funcionário diretamente na lista do RH."""
+    from app.models import Usuario
+    from app.services import treino_acessos as acessos
+
+    f = Funcionario.query.get_or_404(id)
+    acao = (request.form.get('acao') or '').strip()
+    email = request.form.get('email')
+    usuario_id = request.form.get('usuario_id', type=int)
+
+    def _voltar():
+        params = {'view': 'acessos',
+                  'acesso': request.form.get('filtro_acesso', 'pendentes')}
+        loja = request.form.get('loja', type=int)
+        if loja:
+            params['loja'] = loja
+        if request.form.get('apenas_ativos') == '1':
+            params['ativos'] = '1'
+        return redirect(url_for('rh.funcionarios', _anchor=f'acesso-{f.id}',
+                                **params))
+
+    def _erro_email(resultado):
+        motivo = resultado.get('motivo')
+        if motivo == 'email_invalido':
+            return 'Informe um e-mail válido.'
+        if motivo == 'email_de_outro_funcionario':
+            outro = resultado.get('funcionario')
+            return (f'Este e-mail já está na ficha de {outro.nome}. '
+                    'Confira antes de continuar.')
+        if motivo == 'email_de_outra_conta':
+            usuario = resultado.get('usuario')
+            return (f'Já existe a conta "{usuario.login}" usando este '
+                    'e-mail. Se ela pertence ao funcionário, selecione-a '
+                    'e clique em “Vincular conta”.')
+        return None
+
+    if acao == 'salvar_email':
+        r = acessos.sincronizar_email(f, email, usuario=f.usuario)
+        erro = _erro_email(r)
+        if erro:
+            flash(erro, 'warning')
+        else:
+            flash(f'E-mail de {f.nome} atualizado. O login existente não '
+                  'foi alterado.', 'success')
+        return _voltar()
+
+    if not f.ativo:
+        flash(f'{f.nome} está desligado no RH. Reative a ficha antes de '
+              'liberar acesso.', 'warning')
+        return _voltar()
+
+    if acao == 'vincular':
+        usuario = db.session.get(Usuario, usuario_id or 0)
+        r = acessos.vincular_conta(f, usuario, email=email)
+        erro = _erro_email(r)
+        if erro:
+            flash(erro, 'warning')
+        elif r.get('ok'):
+            flash(f'{f.nome} foi vinculado à conta "{usuario.login}". '
+                  'O login e a senha continuam os mesmos; o acesso ao '
+                  'treinamento já está liberado.', 'success')
+        elif r.get('motivo') == 'conta_em_uso':
+            flash('Essa conta já pertence a outro funcionário.', 'danger')
+        elif r.get('motivo') in ('owner', 'papel_invalido'):
+            flash('Essa é uma conta de gestão e não pode ser vinculada como '
+                  'conta do funcionário.', 'danger')
+        elif r.get('motivo') == 'ja_tem':
+            flash(f'{f.nome} já possui uma conta vinculada.', 'info')
+        else:
+            flash('Selecione a conta existente deste funcionário.', 'warning')
+        return _voltar()
+
+    if acao == 'gerar':
+        if usuario_id:
+            flash('Há uma conta existente selecionada. Clique em “Vincular '
+                  'conta” para preservar o login e a senha atuais.', 'warning')
+            return _voltar()
+        email_salvo = acessos.sincronizar_email(f, email)
+        erro = _erro_email(email_salvo)
+        if erro:
+            flash(erro, 'warning')
+            return _voltar()
+        r = acessos.gerar_acesso(
+            f, somente_treino=request.form.get('somente_treino') == '1')
+        if r['motivo'] == 'criado':
+            if r.get('email_ok'):
+                flash(f'Acesso de {f.nome} criado. O login e a senha '
+                      f'provisória foram enviados para {f.email}.', 'success')
+            else:
+                flash(f'Acesso criado, mas o e-mail falhou '
+                      f'({r.get("email_erro")}). Senha provisória: '
+                      f'{r.get("senha")} — entregue manualmente.', 'warning')
+        elif r['motivo'] == 'vinculado':
+            flash(f'{f.nome} já possuía uma conta com este e-mail; ela foi '
+                  'vinculada sem trocar a senha.', 'success')
+        elif r['motivo'] == 'ja_tem':
+            flash(f'{f.nome} já possui acesso.', 'info')
+        else:
+            flash('Não foi possível criar o acesso. Confira o e-mail e se '
+                  'já existe uma conta para esta pessoa.', 'warning')
+        return _voltar()
+
+    flash('Escolha se deseja vincular uma conta ou criar um novo acesso.',
+          'warning')
+    return _voltar()
 
 
 @rh_bp.route('/funcionarios/novo', methods=['GET', 'POST'])

@@ -4,16 +4,30 @@
 
 {% block content %}
 <div class="page-header">
-    <h1 class="page-title">funcionários</h1>
+    <div>
+        <h1 class="page-title">{{ 'acessos dos funcionários' if view == 'acessos' else 'funcionários' }}</h1>
+        {% if view == 'acessos' %}<p class="text-muted mb-0">Confira quem já tem conta antes de criar novos logins.</p>{% endif %}
+    </div>
     <div class="page-actions">
+        {% if view == 'acessos' %}
+        <a href="{{ url_for('rh.funcionarios') }}" class="btn-pill">
+            <i class="bi bi-arrow-left"></i> voltar aos cadastros
+        </a>
+        {% else %}
+        <a href="{{ url_for('rh.funcionarios', view='acessos') }}" class="btn-pill">
+            <i class="bi bi-person-check"></i> gerenciar acessos
+        </a>
         <a href="{{ url_for('rh.novo_funcionario') }}" class="btn-pill btn-pill-primary">
             <i class="bi bi-plus-lg"></i> novo funcionário
         </a>
+        {% endif %}
     </div>
 </div>
 
 <!-- Filtros -->
 <form method="GET" class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+    <input type="hidden" name="view" value="{{ view }}">
+    {% if view == 'acessos' %}<input type="hidden" name="acesso" value="{{ filtro_acesso }}">{% endif %}
     <select name="loja" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
         <option value="">todas as lojas</option>
         {% for l in lojas %}
@@ -27,6 +41,162 @@
     </label>
 </form>
 
+{% if view == 'acessos' %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex gap-3 align-items-start">
+            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                 style="width:42px;height:42px;background:var(--cor-verde-soft);color:var(--cor-verde);">
+                <i class="bi bi-shield-check"></i>
+            </div>
+            <div>
+                <strong>Faça nesta ordem</strong>
+                <div class="text-muted small mt-1">
+                    <strong>1.</strong> Se aparecer uma possível conta existente, confirme e vincule.
+                    <strong>2.</strong> Para quem ainda não tem conta, informe o e-mail e crie o acesso.
+                    <strong>3.</strong> Os módulos destacados vêm do cargo do funcionário.
+                </div>
+                <div class="small mt-2">Vincular uma conta preserva o login e a senha atuais. Criar um acesso novo envia uma senha provisória por e-mail.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body py-2">
+        <div class="small text-muted">Possível conta existente</div><div class="h4 mb-0">{{ resumo_acessos.possiveis }}</div>
+    </div></div></div>
+    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body py-2">
+        <div class="small text-muted">Prontos para criar</div><div class="h4 mb-0">{{ resumo_acessos.prontos }}</div>
+    </div></div></div>
+    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body py-2">
+        <div class="small text-muted">Sem e-mail</div><div class="h4 mb-0">{{ resumo_acessos.sem_email }}</div>
+    </div></div></div>
+    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body py-2">
+        <div class="small text-muted">Já vinculados</div><div class="h4 mb-0">{{ resumo_acessos.vinculados }}</div>
+    </div></div></div>
+</div>
+
+<div class="d-flex gap-2 mb-3 flex-wrap">
+    <a class="btn btn-sm {{ 'btn-dark' if filtro_acesso == 'pendentes' else 'btn-outline-secondary' }}"
+       href="{{ url_for('rh.funcionarios', view='acessos', acesso='pendentes', loja=loja_id or None, ativos='1' if apenas_ativos else '0') }}">Pendentes</a>
+    <a class="btn btn-sm {{ 'btn-dark' if filtro_acesso == 'vinculados' else 'btn-outline-secondary' }}"
+       href="{{ url_for('rh.funcionarios', view='acessos', acesso='vinculados', loja=loja_id or None, ativos='1' if apenas_ativos else '0') }}">Já vinculados</a>
+    <a class="btn btn-sm {{ 'btn-dark' if filtro_acesso == 'todos' else 'btn-outline-secondary' }}"
+       href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', loja=loja_id or None, ativos='1' if apenas_ativos else '0') }}">Todos</a>
+</div>
+
+<div class="d-flex flex-column gap-2">
+    {% for f in funcionarios %}
+    {% set sugestao = sugestoes.get(f.id) %}
+    {% set modulos = modulos_por_funcionario.get(f.id, []) %}
+    <section class="card" id="acesso-{{ f.id }}">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <strong>{{ f.nome }}</strong>
+                        {% if f.usuario_id %}
+                        <span class="badge bg-success">Acesso liberado</span>
+                        {% elif sugestao %}
+                        <span class="badge bg-warning text-dark">Conferir conta existente</span>
+                        {% elif f.email %}
+                        <span class="badge bg-primary">Pronto para criar</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Falta e-mail</span>
+                        {% endif %}
+                    </div>
+                    <div class="small text-muted mt-1">{{ f.cargo.nome if f.cargo else (f.funcao or 'Cargo não definido') }}</div>
+                </div>
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}">Abrir ficha do RH</a>
+            </div>
+
+            <div class="mb-3 p-2 rounded" style="background:var(--cor-cinza-50, #f7f8f7);">
+                <div class="small fw-semibold mb-1">Módulos destacados para o cargo</div>
+                {% if modulos %}
+                    {% for modulo in modulos %}<span class="badge bg-light text-dark border me-1">{{ modulo.nome }}</span>{% endfor %}
+                {% elif f.cargo %}
+                    <span class="small text-muted">Nenhum módulo foi ligado ao cargo {{ f.cargo.nome }}.</span>
+                {% else %}
+                    <span class="small text-muted">Defina o cargo na ficha para vincular os módulos obrigatórios.</span>
+                {% endif %}
+                <div class="small text-muted mt-1">O login libera a área de Treinamento. Outros módulos publicados também continuam disponíveis.</div>
+            </div>
+
+            {% if f.usuario_id and f.usuario %}
+            <form method="POST" action="{{ url_for('rh.funcionario_acesso', id=f.id) }}" class="row g-2 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="acao" value="salvar_email">
+                <input type="hidden" name="filtro_acesso" value="{{ filtro_acesso }}">
+                <input type="hidden" name="loja" value="{{ loja_id or '' }}">
+                <input type="hidden" name="apenas_ativos" value="{{ '1' if apenas_ativos else '0' }}">
+                <div class="col-12 col-lg-4">
+                    <label class="form-label small mb-1">E-mail do funcionário</label>
+                    <input type="email" name="email" value="{{ f.email or f.usuario.email or '' }}" class="form-control form-control-sm" required>
+                </div>
+                <div class="col-12 col-lg-5">
+                    <div class="small text-muted">Conta vinculada</div>
+                    <strong>{{ f.usuario.login }}</strong>
+                    <span class="small text-muted">· {{ 'somente treinamento' if f.usuario.somente_treino else f.usuario.papel }}</span>
+                </div>
+                <div class="col-12 col-lg-3 text-lg-end">
+                    <button class="btn btn-sm btn-outline-primary">Salvar e-mail</button>
+                </div>
+            </form>
+            {% else %}
+            <form method="POST" action="{{ url_for('rh.funcionario_acesso', id=f.id) }}" class="row g-2 align-items-end acesso-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="filtro_acesso" value="{{ filtro_acesso }}">
+                <input type="hidden" name="loja" value="{{ loja_id or '' }}">
+                <input type="hidden" name="apenas_ativos" value="{{ '1' if apenas_ativos else '0' }}">
+                <div class="col-12 col-lg-4">
+                    <label class="form-label small mb-1">E-mail individual</label>
+                    <input type="email" name="email" value="{{ f.email or (sugestao.usuario.email if sugestao else '') or '' }}"
+                           class="form-control form-control-sm" placeholder="nome@exemplo.com" required>
+                </div>
+                <div class="col-12 col-lg-5">
+                    <label class="form-label small mb-1">Já possui conta?</label>
+                    <select name="usuario_id" class="form-select form-select-sm conta-existente">
+                        <option value="">Não encontrei conta — criar uma nova</option>
+                        {% for u in contas_livres %}
+                        <option value="{{ u.id }}" {% if sugestao and sugestao.usuario.id == u.id %}selected{% endif %}>
+                            {{ u.nome }} · login {{ u.login }}{% if u.email %} · {{ u.email }}{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if sugestao %}<div class="small text-warning-emphasis mt-1">Sugestão por {{ sugestao.motivo }}. Confirme antes de vincular.</div>{% endif %}
+                </div>
+                <div class="col-12 col-lg-3 d-flex flex-column gap-1 align-items-stretch">
+                    <button name="acao" value="vincular" class="btn btn-sm btn-success btn-vincular">Vincular conta</button>
+                    <button name="acao" value="gerar" class="btn btn-sm btn-primary btn-criar">Criar e enviar senha</button>
+                </div>
+                <div class="col-12">
+                    <label class="small mb-0"><input type="checkbox" name="somente_treino" value="1" checked> nova conta acessa somente o treinamento</label>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+    </section>
+    {% else %}
+    <div class="card"><div class="card-body text-center text-muted">Nenhum funcionário neste filtro.</div></div>
+    {% endfor %}
+</div>
+
+<script>
+document.querySelectorAll('.acesso-form').forEach(function(form) {
+    var select = form.querySelector('.conta-existente');
+    var vincular = form.querySelector('.btn-vincular');
+    var criar = form.querySelector('.btn-criar');
+    function atualizarAcoes() {
+        var existente = !!select.value;
+        vincular.disabled = !existente;
+        criar.disabled = existente;
+    }
+    select.addEventListener('change', atualizarAcoes);
+    atualizarAcoes();
+});
+</script>
+{% else %}
 <div class="card" style="padding:0; overflow:hidden;">
     <table class="table-dense">
         <thead>
@@ -105,4 +275,5 @@
 </div>
 
 <p class="text-muted small mt-2">{{ funcionarios | length }} funcionário{{ 's' if funcionarios | length != 1 }} encontrado{{ 's' if funcionarios | length != 1 }}.</p>
+{% endif %}
 {% endblock %}
