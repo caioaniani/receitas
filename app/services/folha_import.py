@@ -26,7 +26,7 @@ import re
 from datetime import date, datetime
 
 from app.extensions import db
-from app.models import Funcionario
+from app.models import Cargo, Funcionario
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +174,9 @@ def aplicar(escolhas):
     contra o banco (a prévia é só tela — a autoridade é esta função)."""
     stats = {'criados': 0, 'atualizados': 0, 'reativados': 0,
              'desligados': 0, 'erros': []}
+    from app.services import rh_cargos
+
+    cargos = Cargo.query.all()
     for ln in escolhas.get('criar', []):
         cpf = _so_digitos(ln.get('cpf'))
         sal = _num(ln.get('salario'))
@@ -183,11 +186,13 @@ def aplicar(escolhas):
         if Funcionario.query.filter_by(cpf=cpf).first():
             stats['erros'].append(f"criar {ln.get('nome')}: CPF já cadastrado")
             continue
-        db.session.add(Funcionario(
+        funcionario = Funcionario(
             nome=str(ln.get('nome') or '')[:200], cpf=cpf,
             funcao=str(ln.get('cargo') or '')[:100] or None,
             salario_base=sal, data_admissao=_data(ln.get('admissao')),
-            ativo=True))
+            ativo=True)
+        rh_cargos.associar_funcionario(funcionario, cargos)
+        db.session.add(funcionario)
         stats['criados'] += 1
     for ln in escolhas.get('atualizar', []):
         cpf = _so_digitos(ln.get('cpf'))
@@ -199,6 +204,12 @@ def aplicar(escolhas):
         f.salario_base = sal
         if ln.get('cargo'):
             f.funcao = str(ln['cargo'])[:100]
+            # A folha atualiza também o vínculo estruturado quando o nome é
+            # inequívoco; sem correspondência, preserva a decisão humana que
+            # já estava na ficha e deixa o novo nome para revisão no RH.
+            cargo = rh_cargos.encontrar_cargo(f.funcao, cargos)
+            if cargo:
+                f.cargo_id = cargo.id
         adm = _data(ln.get('admissao'))
         if adm:
             f.data_admissao = adm

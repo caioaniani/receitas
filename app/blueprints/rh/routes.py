@@ -315,6 +315,10 @@ def novo_funcionario():
                 func.lojas.append(loja)
 
         db.session.add(func)
+        # Fichas antigas e integrações ainda enviam a função como texto. Se já
+        # existe um Cargo equivalente, mantém os dois cadastros conectados.
+        from app.services import rh_cargos
+        rh_cargos.associar_funcionario(func)
         db.session.commit()
         flash(f'Funcionário "{func.nome}" cadastrado!', 'success')
         return redirect(url_for('rh.detalhe_funcionario', id=func.id))

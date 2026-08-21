@@ -10,7 +10,14 @@
     <td class="small">
       {% if l.prog.total %}{{ l.prog.concluidas }}/{{ l.prog.total }}
         <div class="d-flex flex-wrap gap-1 mt-1">{% for i in l.prog.itens %}<span class="badge bg-{{ 'success' if i.tem_selo else 'secondary' }}">{{ '✓' if i.tem_selo else '○' }} {{ i.trilha.nome }}</span>{% endfor %}</div>
-      {% else %}<span class="text-muted">sem trilha de cargo</span>{% endif %}</td>
+      {% elif not l.prog.cargo %}
+        <span class="text-warning">Cargo ainda não vinculado no RH</span>
+        {% if current_user.is_dono() %}
+          <a class="d-block mt-1" href="{{ url_for('rh.detalhe_funcionario', id=l.func.id) }}">Vincular cargo</a>
+        {% endif %}
+      {% else %}
+        <span class="text-muted">Nenhuma trilha obrigatória para este cargo</span>
+      {% endif %}</td>
     <td class="text-end">{% if l.prog.total and l.prog.apto %}<span class="badge bg-success">✓ apto</span>{% elif l.prog.total %}<span class="badge bg-warning text-dark">em andamento</span>{% else %}<span class="text-muted small">—</span>{% endif %}</td>
   </tr>{% else %}<tr><td colspan="4" class="text-muted">Nenhum funcionário na equipe.</td></tr>{% endfor %}
   </tbody></table></div>
