@@ -134,6 +134,63 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
     return len(alvo), congelados
 
 
+_KEY_CONGELADOS = 'producao_itens_congelados'
+
+
+def _registrar_congelados(data_alvo, congelados):
+    """Guarda em AppConfig os itens que a TRAVA POR INSUMO segurou, pra tela
+    avisar o dono (decisão dele 20/08/2026: demanda tardia "não entra + avisa
+    você" — silêncio esconderia venda que o sistema deixou de atender).
+
+    Formato: {'AAAA-MM-DD': [{'item','ordem','grid','ant'}...]}, só os dias
+    de hoje em diante (o passado não é mais acionável). Best-effort: falhar
+    aqui NUNCA derruba o envio da ordem."""
+    import json
+
+    from app.models import AppConfig
+    try:
+        bruto = AppConfig.get(_KEY_CONGELADOS)
+        estado = json.loads(bruto) if bruto else {}
+        if not isinstance(estado, dict):
+            estado = {}
+        hoje_iso = hoje().isoformat()
+        estado = {d: v for d, v in estado.items()
+                  if isinstance(d, str) and d >= hoje_iso}
+        estado[data_alvo.isoformat()] = [
+            {'item': nome, 'ordem': ordem, 'grid': grid, 'ant': ant}
+            for nome, ordem, grid, ant in congelados]
+        AppConfig.set(_KEY_CONGELADOS, json.dumps(estado, ensure_ascii=False))
+    except Exception:  # noqa: BLE001 — aviso nunca derruba a ordem
+        logger.exception('freeze por insumo: registro do aviso falhou')
+
+
+def itens_congelados_pendentes():
+    """Lê o que `_registrar_congelados` guardou — usado pelo painel do
+    cronograma e pelo "Precisa de você hoje". Devolve
+    [(data_iso, [{'item','ordem','grid','ant'}...])] ordenado por data.
+    Nunca levanta (tela não cai por causa de aviso)."""
+    import json
+
+    from app.models import AppConfig
+    try:
+        bruto = AppConfig.get(_KEY_CONGELADOS)
+        estado = json.loads(bruto) if bruto else {}
+        if not isinstance(estado, dict):
+            return []
+        hoje_iso = hoje().isoformat()
+        out = []
+        for d in sorted(estado):
+            if not isinstance(d, str) or d < hoje_iso:
+                continue
+            itens = [i for i in (estado.get(d) or []) if isinstance(i, dict)]
+            if itens:
+                out.append((d, itens))
+        return out
+    except Exception:  # noqa: BLE001
+        logger.exception('freeze por insumo: leitura do aviso falhou')
+        return []
+
+
 def _obter_ou_criar_plano(data_alvo, user_id):
     from app.models import PlanejamentoProducao
     plano = (PlanejamentoProducao.query
@@ -159,7 +216,7 @@ class PlanoJaEnviadoError(Exception):
 
 def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
                          inicio_offset_dias=0, equilibrar=False,
-                         motor='pedidos'):
+                         motor='pedidos', crono=None):
     """Aprova a coluna de UM dia do cronograma -> cria/atualiza o
     PlanejamentoProducao (origem='cronograma') desse dia como RASCUNHO
     (enviado_ao_padeiro=False), pronto pra revisar e enviar. Reconstroi os itens
@@ -177,9 +234,9 @@ def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
     if existente is not None and existente.enviado_ao_padeiro is not False:
         raise PlanoJaEnviadoError(data_alvo.isoformat())
     plano = _obter_ou_criar_plano(data_alvo, user_id)
-    n = _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias,
-                                  janela_semanas, inicio_offset_dias,
-                                  equilibrar, motor=motor)
+    n, _congelados = _sync_itens_do_cronograma(
+        plano, data_alvo, horizonte_dias, janela_semanas, inicio_offset_dias,
+        equilibrar, motor=motor, crono=crono)
     if n == 0 and not plano.itens:
         db.session.delete(plano)
         db.session.commit()
@@ -190,7 +247,7 @@ def aprovar_plano_do_dia(data_alvo, user_id, horizonte_dias=7, janela_semanas=6,
 
 def enviar_plano_do_dia(data_alvo, user_id=None, horizonte_dias=7,
                         janela_semanas=6, inicio_offset_dias=0,
-                        equilibrar=False, motor='pedidos'):
+                        equilibrar=False, motor='pedidos', crono=None):
     """Empurra o cronograma ATUAL do dia (com as edicoes do grid) pro padeiro:
     (re)constroi os itens a partir do grid e marca enviado_ao_padeiro=True.
 
@@ -224,9 +281,15 @@ def enviar_plano_do_dia(data_alvo, user_id=None, horizonte_dias=7,
     novo = plano is None
     if novo:
         plano = _obter_ou_criar_plano(data_alvo, user_id)
-    n = _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias,
-                                  janela_semanas, inicio_offset_dias,
-                                  equilibrar, motor=motor)
+    # Caminho AUTOMATICO (sem user_id) liga a trava POR INSUMO — mas nunca
+    # numa ordem que ainda NAO existe: dia sem ordem nenhuma e pior que
+    # ordem tardia (mesmo carve-out da trava do dia corrente).
+    n, congelados = _sync_itens_do_cronograma(
+        plano, data_alvo, horizonte_dias, janela_semanas, inicio_offset_dias,
+        equilibrar, motor=motor, automatico=(user_id is None and not novo),
+        crono=crono)
+    if congelados:
+        _registrar_congelados(data_alvo, congelados)
     if n == 0 and not plano.itens:
         if novo:
             db.session.delete(plano)
