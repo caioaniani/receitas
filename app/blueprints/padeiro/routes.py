@@ -27,6 +27,12 @@ _A_SEPARAR = ('pendente', 'confirmado')
 # Pedido do site ATIVO pra fila do padeiro (sob encomenda): pago e ainda nao
 # entregue/cancelado. Fora: aguardando_pagamento (pode expirar sem pagar).
 _STATUS_ONLINE_ATIVO = ('pago', 'em_preparo', 'a_caminho')
+# Pra PRODUÇÃO, a DIVULGAÇÃO entra junto (23/08/2026, caso pedido 84F17F68:
+# Caixa de Mini de cortesia pra segunda-feira invisível no pré-preparo — "não
+# está aparecendo na tela de pré-preparo para o padeiro tirar para
+# fermentar"). O "divulgação fora" vale pra FATURAMENTO/previsão, não pra
+# produzir: item sob encomenda de cortesia precisa ser assado igual.
+_STATUS_ONLINE_PRODUCAO = _STATUS_ONLINE_ATIVO + ('divulgacao',)
 
 
 def _eager_itens_receita():
