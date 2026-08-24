@@ -452,8 +452,14 @@ def create_app(config_class=None):
             return None
         if getattr(current_user, 'senha_provisoria', False):
             return redirect(url_for('auth.minha_senha'))
+        acesso_equipe = (
+            ep in {'rh.lideranca_preenchimento',
+                   'rh.lideranca_preenchimento_salvar'}
+            and current_user.pode_organizar_equipe()
+        )
         if (getattr(current_user, 'somente_treino', False)
-                and not ep.startswith('treino.')):
+                and not ep.startswith('treino.')
+                and not acesso_equipe):
             return redirect(url_for('treino.home'))
         return None
 

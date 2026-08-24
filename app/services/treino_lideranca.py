@@ -1,11 +1,17 @@
 """Hierarquia de liderança e checklists de observação prática."""
 
+from sqlalchemy import select, update
+
 from app.extensions import db
 from app.models import (
     Funcionario,
+    Loja,
     TreinoChecklistAplicacao,
     TreinoItemChecklist,
 )
+from app.models.rh import funcionario_loja
+
+PERIODOS_EQUIPE = ('Manhã', 'Tarde')
 
 
 class LiderancaError(ValueError):
@@ -27,11 +33,10 @@ def pode_observar(gestor, funcionario, *, is_admin=False):
         and funcionario.ativo and funcionario.lider_id == gestor.id))
 
 
-def salvar_vinculos(funcionarios, vinculos):
-    """Salva líder direto em lote, recusando auto-liderança e ciclos."""
+def _propor_vinculos(funcionarios, vinculos):
+    """Valida a hierarquia inteira antes de alterar qualquer funcionário."""
     todos = {f.id: f for f in Funcionario.query.all()}
     propostos = {fid: f.lider_id for fid, f in todos.items()}
-    alteracoes = 0
 
     for funcionario in funcionarios:
         lider_id = vinculos.get(funcionario.id)
@@ -61,12 +66,100 @@ def salvar_vinculos(funcionarios, vinculos):
                     ', '.join(sorted(nomes)) + '.')
             vistos.add(atual)
             atual = propostos.get(atual)
+    return propostos
+
+
+def salvar_vinculos(funcionarios, vinculos):
+    """Salva líder direto em lote, recusando auto-liderança e ciclos."""
+    propostos = _propor_vinculos(funcionarios, vinculos)
+    alteracoes = 0
 
     for funcionario in funcionarios:
         novo = propostos[funcionario.id]
         if funcionario.lider_id != novo:
             funcionario.lider_id = novo
             alteracoes += 1
+    db.session.commit()
+    return alteracoes
+
+
+def unidades_principais(funcionarios):
+    """Retorna `{funcionario_id: loja_id}` para a unidade principal.
+
+    Cadastros antigos não marcavam `loja_principal`; quando a pessoa pertence
+    a uma única unidade, essa unidade é o fallback natural do formulário.
+    """
+    ids = [funcionario.id for funcionario in funcionarios]
+    if not ids:
+        return {}
+    linhas = db.session.execute(
+        select(funcionario_loja.c.funcionario_id,
+               funcionario_loja.c.loja_id)
+        .where(funcionario_loja.c.funcionario_id.in_(ids),
+               funcionario_loja.c.loja_principal.is_(True))
+    ).all()
+    principais = {funcionario_id: loja_id
+                  for funcionario_id, loja_id in linhas}
+    for funcionario in funcionarios:
+        if funcionario.id not in principais and len(funcionario.lojas) == 1:
+            principais[funcionario.id] = funcionario.lojas[0].id
+    return principais
+
+
+def salvar_estrutura(funcionarios, vinculos, unidades, periodos):
+    """Salva líder, unidade principal e período numa única transação."""
+    propostos = _propor_vinculos(funcionarios, vinculos)
+    lojas = {loja.id: loja for loja in Loja.query.filter_by(ativa=True).all()}
+    atuais_unidades = unidades_principais(funcionarios)
+    dados = {}
+
+    for funcionario in funcionarios:
+        loja_id = unidades.get(funcionario.id)
+        loja_id = int(loja_id) if loja_id else None
+        if loja_id is not None and loja_id not in lojas:
+            raise LiderancaError(
+                f'A unidade escolhida para {funcionario.nome} não está ativa.')
+        periodo = (periodos.get(funcionario.id) or '').strip()
+        if periodo and periodo not in PERIODOS_EQUIPE:
+            raise LiderancaError(
+                f'O período de {funcionario.nome} deve ser Manhã ou Tarde.')
+        dados[funcionario.id] = (loja_id, periodo or None)
+
+    alteracoes = {'lideres': 0, 'unidades': 0, 'periodos': 0}
+    for funcionario in funcionarios:
+        lider_id = propostos[funcionario.id]
+        loja_id, periodo = dados[funcionario.id]
+        if funcionario.lider_id != lider_id:
+            funcionario.lider_id = lider_id
+            alteracoes['lideres'] += 1
+        if funcionario.periodo != periodo:
+            funcionario.periodo = periodo
+            alteracoes['periodos'] += 1
+        if atuais_unidades.get(funcionario.id) != loja_id:
+            alteracoes['unidades'] += 1
+
+        # Preserva vínculos com outras lojas, mas deixa uma única principal.
+        db.session.execute(
+            update(funcionario_loja)
+            .where(funcionario_loja.c.funcionario_id == funcionario.id)
+            .values(loja_principal=False))
+        if loja_id is not None:
+            existe = db.session.execute(
+                select(funcionario_loja.c.funcionario_id).where(
+                    funcionario_loja.c.funcionario_id == funcionario.id,
+                    funcionario_loja.c.loja_id == loja_id)
+            ).first()
+            if existe is None:
+                db.session.execute(funcionario_loja.insert().values(
+                    funcionario_id=funcionario.id, loja_id=loja_id,
+                    loja_principal=True))
+            else:
+                db.session.execute(
+                    update(funcionario_loja).where(
+                        funcionario_loja.c.funcionario_id == funcionario.id,
+                        funcionario_loja.c.loja_id == loja_id)
+                    .values(loja_principal=True))
+
     db.session.commit()
     return alteracoes
 

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Organizar equipe{% endblock %}
+{% block content %}
+<main class="treino-page equipe-setup-page">
+  <header class="treino-heading">
+    <div>
+      <span class="treino-eyebrow">Pessoas</span>
+      <h1>Organizar equipe</h1>
+      <p>Informe quem lidera cada pessoa, sua unidade principal e o período de trabalho.</p>
+    </div>
+    <nav class="treino-heading-actions">
+      <a href="{{ url_for('treino.home') }}">Voltar ao treinamento</a>
+    </nav>
+  </header>
+
+  <section class="treino-metrics equipe-setup-metrics">
+    <article><span>Pessoas ativas</span><strong>{{ funcionarios|length }}</strong><small>para organizar</small></article>
+    <article><span>Com líder</span><strong>{{ com_lider }}</strong><small>líder direto informado</small></article>
+    <article><span>Com unidade</span><strong>{{ com_unidade }}</strong><small>unidade principal informada</small></article>
+    <article><span>Com período</span><strong>{{ com_periodo }}</strong><small>manhã ou tarde</small></article>
+  </section>
+
+  <section class="treino-section">
+    <div class="treino-section-heading">
+      <div><span class="treino-eyebrow">Estrutura atual</span><h2>Quem trabalha com quem</h2></div>
+      <span>salve tudo no final</span>
+    </div>
+    <div class="treino-notice">
+      <i class="bi bi-info-circle"></i>
+      <div>Deixe <strong>Sem líder direto</strong> apenas para os responsáveis no topo da equipe. Para aparecer como líder, a pessoa precisa ter uma conta de acesso vinculada.</div>
+    </div>
+
+    <label class="equipe-setup-search">
+      <i class="bi bi-search"></i>
+      <input type="search" id="equipe-busca" placeholder="Buscar funcionário pelo nome ou cargo…" autocomplete="off">
+    </label>
+
+    <form method="POST" action="{{ url_for('rh.lideranca_preenchimento_salvar') }}" id="equipe-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="equipe-setup-list" id="equipe-lista">
+        <div class="equipe-setup-head" aria-hidden="true"><span>Funcionário</span><span>Líder direto</span><span>Unidade principal</span><span>Período</span></div>
+        {% for f in funcionarios %}
+        <article class="equipe-setup-row" data-equipe-row data-search="{{ (f.nome ~ ' ' ~ (f.cargo.nome if f.cargo else (f.funcao or '')))|lower }}">
+          <div class="equipe-setup-person">
+            <span class="treino-avatar">{{ f.nome[:1]|upper }}</span>
+            <span><strong>{{ f.nome }}</strong><small>{{ f.cargo.nome if f.cargo else (f.funcao or 'Sem cargo') }}</small></span>
+          </div>
+          <label><span>Líder direto</span><select class="form-select" name="lider_{{ f.id }}">
+            <option value="">Sem líder direto</option>
+            {% for lider in lideres if lider.id != f.id %}<option value="{{ lider.id }}" {{ 'selected' if f.lider_id == lider.id }}>{{ lider.nome }}</option>{% endfor %}
+          </select></label>
+          <label><span>Unidade principal</span><select class="form-select" name="loja_{{ f.id }}">
+            <option value="">Selecione a unidade</option>
+            {% for loja in lojas %}<option value="{{ loja.id }}" {{ 'selected' if unidades.get(f.id) == loja.id }}>{{ loja.nome }}</option>{% endfor %}
+          </select></label>
+          <label><span>Período</span><select class="form-select" name="periodo_{{ f.id }}">
+            <option value="">Selecione o período</option>
+            {% for periodo in periodos %}<option value="{{ periodo }}" {{ 'selected' if f.periodo == periodo }}>{{ periodo }}</option>{% endfor %}
+          </select></label>
+        </article>
+        {% else %}<div class="treino-empty">Nenhum funcionário ativo encontrado.</div>{% endfor %}
+      </div>
+      <div class="equipe-setup-save">
+        <span><strong id="equipe-visiveis">{{ funcionarios|length }}</strong> pessoa(s) na lista</span>
+        <button class="treino-primary-action" type="submit"><i class="bi bi-check2"></i> Salvar organização</button>
+      </div>
+    </form>
+  </section>
+</main>
+<script>
+(() => {
+  const busca = document.getElementById('equipe-busca');
+  const linhas = [...document.querySelectorAll('[data-equipe-row]')];
+  const total = document.getElementById('equipe-visiveis');
+  if (!busca) return;
+  busca.addEventListener('input', () => {
+    const termo = busca.value.trim().toLocaleLowerCase('pt-BR');
+    let visiveis = 0;
+    linhas.forEach((linha) => {
+      const mostra = !termo || linha.dataset.search.includes(termo);
+      linha.hidden = !mostra;
+      if (mostra) visiveis += 1;
+    });
+    total.textContent = String(visiveis);
+  });
+})();
+</script>
+{% endblock %}

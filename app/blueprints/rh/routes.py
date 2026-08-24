@@ -33,6 +33,11 @@ def _rh_restrito_ao_owner():
     # guard + trocar is_owner por pode_rh() na sidebar (base.html).
     if not current_user.is_authenticated:
         return current_app.login_manager.unauthorized()
+    if (request.endpoint in {
+            'rh.lideranca_preenchimento',
+            'rh.lideranca_preenchimento_salvar',
+            } and current_user.pode_organizar_equipe()):
+        return None
     if not current_user.is_dono():
         abort(403)
 
@@ -209,6 +214,62 @@ def lideranca_vinculos():
         flash(f'Liderança atualizada: {alteracoes} vínculo(s) alterado(s).',
               'success')
     return redirect(url_for('rh.lideranca', _anchor='equipes'))
+
+
+@rh_bp.route('/lideranca/preenchimento')
+@login_required
+def lideranca_preenchimento():
+    """Tela estreita para Dakson organizar a equipe, sem abrir o RH inteiro."""
+    if not current_user.pode_organizar_equipe():
+        abort(403)
+    from app.services import treino_lideranca as lideranca_svc
+
+    funcionarios = (Funcionario.query
+                    .options(joinedload(Funcionario.cargo),
+                             joinedload(Funcionario.usuario),
+                             joinedload(Funcionario.lider),
+                             selectinload(Funcionario.lojas))
+                    .filter_by(ativo=True).order_by(Funcionario.nome).all())
+    lojas = (Loja.query.options(defer(Loja.planta_imagem))
+             .filter_by(ativa=True).order_by(Loja.nome).all())
+    unidades = lideranca_svc.unidades_principais(funcionarios)
+    lideres = [funcionario for funcionario in funcionarios
+               if funcionario.usuario_id]
+    return render_template(
+        'rh/lideranca_preenchimento.html', funcionarios=funcionarios,
+        lideres=lideres, lojas=lojas, unidades=unidades,
+        periodos=lideranca_svc.PERIODOS_EQUIPE,
+        com_lider=sum(1 for f in funcionarios if f.lider_id),
+        com_unidade=sum(1 for f in funcionarios if unidades.get(f.id)),
+        com_periodo=sum(1 for f in funcionarios
+                        if f.periodo in lideranca_svc.PERIODOS_EQUIPE))
+
+
+@rh_bp.route('/lideranca/preenchimento/salvar', methods=['POST'])
+@login_required
+def lideranca_preenchimento_salvar():
+    if not current_user.pode_organizar_equipe():
+        abort(403)
+    from app.services import treino_lideranca as lideranca_svc
+
+    funcionarios = (Funcionario.query.options(selectinload(Funcionario.lojas))
+                    .filter_by(ativo=True).order_by(Funcionario.nome).all())
+    vinculos = {f.id: request.form.get(f'lider_{f.id}', type=int)
+                for f in funcionarios}
+    unidades = {f.id: request.form.get(f'loja_{f.id}', type=int)
+                for f in funcionarios}
+    periodos = {f.id: request.form.get(f'periodo_{f.id}')
+                for f in funcionarios}
+    try:
+        alteracoes = lideranca_svc.salvar_estrutura(
+            funcionarios, vinculos, unidades, periodos)
+    except lideranca_svc.LiderancaError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+    else:
+        total = sum(alteracoes.values())
+        flash(f'Organização salva: {total} campo(s) atualizado(s).', 'success')
+    return redirect(url_for('rh.lideranca_preenchimento'))
 
 
 @rh_bp.route('/lideranca/checklist/<int:trilha_id>', methods=['POST'])

@@ -6,6 +6,7 @@ import pytest
 from app.extensions import db
 from app.models import (
     Funcionario,
+    Loja,
     TreinoAplicacaoPratica,
     TreinoTemporada,
     TreinoTrilha,
@@ -174,3 +175,103 @@ def test_owner_configura_hierarquia_pelo_rh(app, owner_user):
     assert resposta.status_code == 200
     with app.app_context():
         assert db.session.get(Funcionario, liderado_id).lider_id == lider_id
+
+
+def test_dakson_acessa_apenas_formulario_de_organizacao(app):
+    with app.app_context():
+        dakson, _ = _pessoa('Dakson', '501', papel='admin')
+        dakson.login = 'dakson'
+        dakson.somente_treino = True
+        _, colega = _pessoa('Colega da Equipe', '502', com_acesso=False)
+        colega.salario_base = 9876
+        db.session.commit()
+        dakson_id = dakson.id
+
+    client = _login(app, dakson_id)
+    pagina = client.get('/rh/lideranca/preenchimento')
+    corpo = pagina.get_data(as_text=True)
+    assert pagina.status_code == 200
+    assert 'Organizar equipe' in corpo
+    assert 'Colega da Equipe' in corpo
+    assert '9876' not in corpo
+    assert 'Checklists de observação' not in corpo
+    funcionarios = client.get('/rh/funcionarios')
+    lideranca_rh = client.get('/rh/lideranca')
+    assert funcionarios.status_code == 302
+    assert funcionarios.location.endswith('/treino/')
+    assert lideranca_rh.status_code == 302
+    assert lideranca_rh.location.endswith('/treino/')
+
+
+def test_outro_admin_nao_acessa_formulario_de_organizacao(app):
+    with app.app_context():
+        admin, _ = _pessoa('Outro Admin', '511', papel='admin')
+        admin.somente_treino = False
+        db.session.commit()
+        admin_id = admin.id
+
+    client = _login(app, admin_id)
+    assert client.get('/rh/lideranca/preenchimento').status_code == 403
+    assert client.post(
+        '/rh/lideranca/preenchimento/salvar', data={}).status_code == 403
+
+
+def test_dakson_salva_lider_unidade_e_periodo_sem_apagar_unidade_secundaria(
+        app):
+    with app.app_context():
+        dakson, _ = _pessoa('Dakson', '521', papel='admin')
+        dakson.login = 'dakson'
+        dakson.somente_treino = True
+        _, lider = _pessoa('Lider da Loja', '522')
+        _, liderado = _pessoa('Pessoa Liderada', '523', com_acesso=False)
+        principal = Loja(nome='Loja Principal', ativa=True)
+        secundaria = Loja(nome='Loja Secundaria', ativa=True)
+        db.session.add_all([principal, secundaria])
+        db.session.flush()
+        liderado.lojas.append(secundaria)
+        db.session.commit()
+        ids = {
+            'dakson': dakson.id, 'lider': lider.id,
+            'liderado': liderado.id, 'principal': principal.id,
+            'secundaria': secundaria.id,
+        }
+
+    client = _login(app, ids['dakson'])
+    resposta = client.post('/rh/lideranca/preenchimento/salvar', data={
+        f"lider_{ids['liderado']}": str(ids['lider']),
+        f"loja_{ids['liderado']}": str(ids['principal']),
+        f"periodo_{ids['liderado']}": 'Manhã',
+    }, follow_redirects=True)
+    assert resposta.status_code == 200
+    assert 'Organização salva' in resposta.get_data(as_text=True)
+    with app.app_context():
+        pessoa = db.session.get(Funcionario, ids['liderado'])
+        assert pessoa.lider_id == ids['lider']
+        assert pessoa.periodo == 'Manhã'
+        assert {loja.id for loja in pessoa.lojas} == {
+            ids['principal'], ids['secundaria']}
+        assert lideranca.unidades_principais([pessoa]) == {
+            pessoa.id: ids['principal']}
+
+
+def test_estrutura_invalida_nao_salva_nenhum_campo(app):
+    with app.app_context():
+        _, lider = _pessoa('Lider Valido', '531')
+        _, liderado = _pessoa('Pessoa da Tarde', '532', com_acesso=False)
+        loja = Loja(nome='Loja Teste', ativa=True)
+        db.session.add(loja)
+        db.session.commit()
+        ids = {'lider': lider.id, 'liderado': liderado.id, 'loja': loja.id}
+
+        with pytest.raises(lideranca.LiderancaError):
+            lideranca.salvar_estrutura(
+                [lider, liderado],
+                {lider.id: None, liderado.id: lider.id},
+                {lider.id: None, liderado.id: loja.id},
+                {lider.id: None, liderado.id: 'Noite'})
+        db.session.rollback()
+
+        pessoa = db.session.get(Funcionario, ids['liderado'])
+        assert pessoa.lider_id is None
+        assert pessoa.periodo is None
+        assert pessoa.lojas == []

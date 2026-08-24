@@ -59,6 +59,24 @@ class Usuario(UserMixin, db.Model):
         except Exception:
             return False
 
+    def pode_organizar_equipe(self):
+        """Acesso estreito ao cadastro de estrutura da equipe.
+
+        O RH completo continua exclusivo do dono. Dakson recebeu apenas a
+        tarefa operacional de informar líder, unidade principal e período;
+        nenhum salário, documento ou dado financeiro é exposto por essa rota.
+        """
+        if self.is_dono():
+            return True
+        try:
+            return bool(
+                (self.login or '').strip().casefold() == 'dakson'
+                and self.funcionario
+                and self.funcionario.ativo
+            )
+        except Exception:
+            return False
+
     def is_producao(self):
         return self.papel == 'producao'
 
