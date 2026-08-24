@@ -134,6 +134,96 @@ def test_criar_acesso_envia_senha_e_limita_ao_treino(app, owner_user):
         assert usuario.somente_treino is True
 
 
+def test_reenviar_individual_so_troca_senha_quando_email_aceito(
+        app, owner_user):
+    with app.app_context():
+        usuario = _usuario('Bia Lima', 'bia.login', email='bia@opao.online')
+        funcionario = _funcionario('Bia Lima', '81000000061',
+                                   email='bia@opao.online', usuario=usuario)
+        fid, uid = funcionario.id, usuario.id
+        hash_antes = usuario.senha_hash
+
+    with patch('app.services.email.enviar_boas_vindas',
+               return_value={'ok': True, 'id': 'msg-1'}) as enviar:
+        resposta = _owner(app, owner_user).post(
+            f'/rh/funcionarios/{fid}/acesso',
+            data={'acao': 'reenviar', 'email': 'bia@opao.online',
+                  'filtro_acesso': 'vinculados', 'apenas_ativos': '1'},
+            follow_redirects=True)
+
+    assert 'senha anterior deixou de funcionar' in resposta.get_data(
+        as_text=True)
+    enviar.assert_called_once()
+    assert enviar.call_args.args[:3] == (
+        'bia@opao.online', 'Bia Lima', 'bia.login')
+    assert enviar.call_args.kwargs['com_chatwoot'] is False
+    with app.app_context():
+        usuario = db.session.get(Usuario, uid)
+        assert usuario.senha_hash != hash_antes
+        assert usuario.senha_provisoria is True
+
+
+def test_reenviar_individual_falha_email_preserva_senha(app, owner_user):
+    with app.app_context():
+        usuario = _usuario('Cris Luz', 'cris.login', email='cris@opao.online')
+        funcionario = _funcionario('Cris Luz', '81000000062',
+                                   email='cris@opao.online', usuario=usuario)
+        fid, uid = funcionario.id, usuario.id
+        hash_antes = usuario.senha_hash
+
+    with patch('app.services.email.enviar_boas_vindas',
+               return_value={'ok': False, 'erro': 'recusado'}):
+        resposta = _owner(app, owner_user).post(
+            f'/rh/funcionarios/{fid}/acesso',
+            data={'acao': 'reenviar', 'email': 'cris@opao.online',
+                  'filtro_acesso': 'vinculados', 'apenas_ativos': '1'},
+            follow_redirects=True)
+
+    assert 'Não alterei a senha' in resposta.get_data(as_text=True)
+    with app.app_context():
+        usuario = db.session.get(Usuario, uid)
+        assert usuario.senha_hash == hash_antes
+        assert usuario.senha_provisoria is False
+
+
+def test_reenviar_todos_exige_confirmacao_e_processa_somente_ativos(
+        app, owner_user):
+    with app.app_context():
+        ativo_u = _usuario('Davi Sol', 'davi.login',
+                           email='davi@opao.online')
+        ativo = _funcionario('Davi Sol', '81000000063',
+                             email='davi@opao.online', usuario=ativo_u)
+        inativo_u = _usuario('Eva Mar', 'eva.login',
+                             email='eva@opao.online')
+        inativo = _funcionario('Eva Mar', '81000000064',
+                               email='eva@opao.online', usuario=inativo_u)
+        inativo.ativo = False
+        db.session.commit()
+        ativo_uid, inativo_uid = ativo_u.id, inativo_u.id
+        hash_ativo, hash_inativo = ativo_u.senha_hash, inativo_u.senha_hash
+
+    cliente = _owner(app, owner_user)
+    with patch('app.services.email.enviar_boas_vindas',
+               return_value={'ok': True, 'id': 'msg-lote'}) as enviar:
+        cancelada = cliente.post('/rh/funcionarios/acessos/reenviar-todos',
+                                 data={'confirmacao': 'nao'},
+                                 follow_redirects=True)
+        assert 'Reenvio cancelado' in cancelada.get_data(as_text=True)
+        enviar.assert_not_called()
+
+        resposta = cliente.post('/rh/funcionarios/acessos/reenviar-todos',
+                                data={'confirmacao': 'REENVIAR'},
+                                follow_redirects=True)
+
+    html = resposta.get_data(as_text=True)
+    assert '1 novo(s) acesso(s) aceito(s)' in html
+    enviar.assert_called_once()
+    assert enviar.call_args.args[0] == 'davi@opao.online'
+    with app.app_context():
+        assert db.session.get(Usuario, ativo_uid).senha_hash != hash_ativo
+        assert db.session.get(Usuario, inativo_uid).senha_hash == hash_inativo
+
+
 def test_gerar_recusa_quando_email_ja_pertence_a_conta(app, owner_user):
     with app.app_context():
         existente = _usuario('João Antigo', 'joao.antigo',

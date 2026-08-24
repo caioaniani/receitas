@@ -158,6 +158,52 @@ def gerar_acesso(funcionario, *, somente_treino=False):
             'email_ok': res.get('ok'), 'email_erro': res.get('erro')}
 
 
+def reenviar_acesso(funcionario):
+    """Troca a senha da conta vinculada e envia um novo acesso por e-mail.
+
+    A senha atual só existe como hash e, portanto, não pode ser recuperada.
+    Para não bloquear a pessoa quando o Postmark recusa o envio, a nova senha
+    só é confirmada no banco depois que o provedor aceita a mensagem.
+    """
+    usuario = getattr(funcionario, 'usuario', None)
+    if usuario is None or not funcionario.usuario_id:
+        return {'ok': False, 'motivo': 'sem_conta'}
+    if getattr(usuario, 'is_owner', False):
+        return {'ok': False, 'motivo': 'owner'}
+
+    email = (_email_normalizado(funcionario.email)
+             or _email_normalizado(usuario.email))
+    if not email:
+        return {'ok': False, 'motivo': 'sem_email'}
+
+    senha = secrets.token_urlsafe(8)[:10]
+    usuario.set_senha(senha)
+    usuario.senha_provisoria = True
+    usuario.email = email
+    try:
+        db.session.flush()
+    except Exception as exc:  # pragma: no cover - falha do banco
+        db.session.rollback()
+        return {'ok': False, 'motivo': 'erro_banco', 'erro': str(exc)}
+
+    from app.services import email as email_svc
+    res = email_svc.enviar_boas_vindas(
+        email, funcionario.nome, usuario.login, senha, com_chatwoot=False)
+    if not res.get('ok'):
+        db.session.rollback()
+        return {'ok': False, 'motivo': 'email_falhou',
+                'email_erro': res.get('erro')}
+
+    try:
+        db.session.commit()
+    except Exception as exc:  # pragma: no cover - falha rara depois do envio
+        db.session.rollback()
+        return {'ok': False, 'motivo': 'confirmacao_falhou',
+                'email_id': res.get('id'), 'erro': str(exc)}
+    return {'ok': True, 'motivo': 'reenviado', 'usuario': usuario,
+            'email': email, 'email_id': res.get('id')}
+
+
 def sugerir_contas(funcionarios, contas=None):
     """Sugere, sem vincular, uma conta livre por e-mail ou nome.
 

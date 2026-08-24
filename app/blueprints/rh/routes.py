@@ -208,6 +208,30 @@ def funcionario_acesso(id):
                   'foi alterado.', 'success')
         return _voltar()
 
+    if acao == 'reenviar':
+        if not f.ativo:
+            flash(f'{f.nome} está desligado no RH. Reative a ficha antes de '
+                  'reenviar o acesso.', 'warning')
+            return _voltar()
+        email_salvo = acessos.sincronizar_email(f, email, usuario=f.usuario)
+        erro = _erro_email(email_salvo)
+        if erro:
+            flash(erro, 'warning')
+            return _voltar()
+        r = acessos.reenviar_acesso(f)
+        if r.get('ok'):
+            flash(f'Novo acesso de {f.nome} enviado para {r["email"]}. '
+                  'A senha anterior deixou de funcionar.', 'success')
+        elif r.get('motivo') == 'email_falhou':
+            flash(f'Não alterei a senha de {f.nome}: o e-mail não foi '
+                  f'aceito ({r.get("email_erro")}).', 'warning')
+        elif r.get('motivo') == 'sem_conta':
+            flash(f'{f.nome} ainda não possui uma conta vinculada.', 'warning')
+        else:
+            flash(f'Não foi possível reenviar o acesso de {f.nome}.',
+                  'warning')
+        return _voltar()
+
     if not f.ativo:
         flash(f'{f.nome} está desligado no RH. Reative a ficha antes de '
               'liberar acesso.', 'warning')
@@ -267,6 +291,61 @@ def funcionario_acesso(id):
     flash('Escolha se deseja vincular uma conta ou criar um novo acesso.',
           'warning')
     return _voltar()
+
+
+@rh_bp.route('/funcionarios/acessos/reenviar-todos', methods=['POST'])
+@login_required
+@rh_required
+def funcionarios_reenviar_acessos():
+    """Reemite a senha de todo funcionário ativo com conta vinculada.
+
+    Exige confirmação textual porque a ação invalida as senhas anteriores.
+    Cada troca é confirmada separadamente e somente após o Postmark aceitar o
+    respectivo e-mail; uma falha não bloqueia os demais funcionários.
+    """
+    if (request.form.get('confirmacao') or '').strip().upper() != 'REENVIAR':
+        flash('Reenvio cancelado. Digite REENVIAR para confirmar a troca das '
+              'senhas.', 'warning')
+        return redirect(url_for('rh.funcionarios', view='acessos',
+                                acesso='vinculados', ativos='1'))
+
+    from app.services import treino_acessos as acessos
+    funcionarios = (Funcionario.query
+                    .options(joinedload(Funcionario.usuario))
+                    .filter(Funcionario.ativo.is_(True),
+                            Funcionario.usuario_id.isnot(None))
+                    .order_by(Funcionario.nome).all())
+    enviados, problemas = 0, []
+    for funcionario in funcionarios:
+        resultado = acessos.reenviar_acesso(funcionario)
+        if resultado.get('ok'):
+            enviados += 1
+            continue
+        motivo = resultado.get('motivo')
+        if motivo == 'sem_email':
+            detalhe = 'sem e-mail válido'
+        elif motivo == 'email_falhou':
+            detalhe = f'e-mail recusado ({resultado.get("email_erro")})'
+        elif motivo == 'owner':
+            detalhe = 'conta do proprietário não foi alterada'
+        else:
+            detalhe = 'não foi possível confirmar o novo acesso'
+        problemas.append(f'{funcionario.nome}: {detalhe}')
+
+    if enviados:
+        flash(f'{enviados} novo(s) acesso(s) aceito(s) pelo serviço de '
+              'e-mail. As senhas anteriores dessas contas deixaram de '
+              'funcionar.', 'success')
+    else:
+        flash('Nenhum novo acesso foi enviado.', 'warning')
+    if problemas:
+        resumo = '; '.join(problemas[:10])
+        if len(problemas) > 10:
+            resumo += f'; e mais {len(problemas) - 10} problema(s)'
+        flash(f'Não enviados: {resumo}. As senhas dessas pessoas não foram '
+              'alteradas.', 'warning')
+    return redirect(url_for('rh.funcionarios', view='acessos',
+                            acesso='vinculados', ativos='1'))
 
 
 @rh_bp.route('/funcionarios/novo', methods=['GET', 'POST'])
