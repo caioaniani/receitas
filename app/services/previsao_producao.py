@@ -710,15 +710,20 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     # Conta do pagamento até a entrega (status ativo, não cancelado/entregue);
     # data_entrega na janela [hoje, comp_fim]. SÓ os itens sob encomenda; os
     # demais itens do mesmo pedido saem da prateleira e não produzem aqui.
-    # Cesta explode em receita (mesmo padrão do B2B). Divulgação fica fora.
+    # Cesta explode em receita (mesmo padrão do B2B). DIVULGAÇÃO ENTRA desde
+    # 23/08/2026 (caso 84F17F68: Caixa de Mini de cortesia invisível pro
+    # padeiro — "divulgação fora" vale pra faturamento/previsão de VENDA,
+    # não pra produzir; item sob encomenda de cortesia é produzido pro
+    # pedido como qualquer outro, e os tipos venda_site_divulgacao* estão
+    # fora de VENDA_TIPOS_DEMANDA, então não há dupla contagem).
     from app.models import PedidoOnline, PedidoOnlineItem
     from app.services.loja_estoque_reserva import composicao_escolhida
     enc_rows = (db.session.query(PedidoOnlineItem, PedidoOnline.data_entrega)
                 .join(PedidoOnline,
                       PedidoOnlineItem.pedido_id == PedidoOnline.id)
                 .filter(PedidoOnline.status.in_(
-                            ('pago', 'em_preparo', 'a_caminho')),
-                        PedidoOnline.divulgacao.is_(False),
+                            ('pago', 'em_preparo', 'a_caminho',
+                             'divulgacao')),
                         PedidoOnline.data_entrega.isnot(None),
                         PedidoOnline.data_entrega >= hoje_d,
                         PedidoOnline.data_entrega <= comp_fim)
