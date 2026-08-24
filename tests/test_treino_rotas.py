@@ -138,6 +138,7 @@ def test_video_sem_fullscreen_no_celular(app):
     assert 'class="mobile-locked"' in body_m
     assert 'id="mobile-play"' in body_m and 'id="mobile-back"' in body_m
     assert 'player.controls=false' in body_m
+    assert '#playerwrap.mobile-locked{padding-top:min(66.6667%,480px);}' in body_m
     assert '#playerwrap.mobile-locked #vf{pointer-events:none;}' in body_m
     assert 'fullscreen=()' in resp_m.headers['Permissions-Policy']
     assert 'A tela cheia foi removida' in body_m

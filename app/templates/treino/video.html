@@ -15,6 +15,7 @@
   /* No iPhone, o WebKit também tem um controlador nativo de mídia que não é o
      Fullscreen API comum. O iframe não recebe toque no celular; os controles
      seguros ficam no documento pai, sem botão de tela cheia. */
+  #playerwrap.mobile-locked{padding-top:min(66.6667%,480px);}
   #playerwrap.mobile-locked #vf{pointer-events:none;}
   #mobile-controls{max-width:720px;display:flex;align-items:center;gap:8px;
     padding:10px 0;flex-wrap:wrap;}
