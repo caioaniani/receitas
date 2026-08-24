@@ -992,8 +992,7 @@ def preparar_json():
                              selectinload(PedidoOnlineItem.componentes),
                              selectinload(PedidoOnlineItem.pedido))
                     .filter(PedidoOnline.data_entrega == alvo,
-                            PedidoOnline.status.in_(_STATUS_ONLINE_ATIVO),
-                            PedidoOnline.divulgacao.is_(False))
+                            PedidoOnline.status.in_(_STATUS_ONLINE_PRODUCAO))
                     .all())
     for it in itens_online:
         if not item_sob_encomenda(it):
