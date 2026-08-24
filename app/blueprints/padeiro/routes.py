@@ -216,8 +216,7 @@ def _dados_listas(dia, eh_hoje):
         selectinload(PedidoOnline.itens)
         .selectinload(PedidoOnlineItem.componentes),
     ).filter(
-        PedidoOnline.status.in_(_STATUS_ONLINE_ATIVO),
-        PedidoOnline.divulgacao.is_(False),
+        PedidoOnline.status.in_(_STATUS_ONLINE_PRODUCAO),
         PedidoOnline.data_entrega.isnot(None))
     if not eh_hoje:
         qo = qo.filter(PedidoOnline.data_entrega == dia)
