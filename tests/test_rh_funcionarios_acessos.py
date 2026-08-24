@@ -247,17 +247,18 @@ def test_gerar_recusa_quando_email_ja_pertence_a_conta(app, owner_user):
         assert Usuario.query.count() == total_antes
 
 
-def test_conta_administrativa_nao_aparece_nem_pode_ser_vinculada(
+def test_conta_administrativa_comum_aparece_e_pode_ser_vinculada(
         app, owner_user):
     with app.app_context():
         admin = _usuario('Administrador', 'admin.operacao', papel='admin')
         funcionario = _funcionario('Operador', '81000000008')
         aid, fid = admin.id, funcionario.id
+        hash_antes = admin.senha_hash
 
     cliente = _owner(app, owner_user)
     html = cliente.get(
         '/rh/funcionarios?view=acessos&acesso=todos').get_data(as_text=True)
-    assert 'admin.operacao' not in html
+    assert 'admin.operacao' in html
 
     resposta = cliente.post(
         f'/rh/funcionarios/{fid}/acesso',
@@ -265,6 +266,10 @@ def test_conta_administrativa_nao_aparece_nem_pode_ser_vinculada(
               'email': 'operador@opao.online',
               'filtro_acesso': 'pendentes', 'apenas_ativos': '1'},
         follow_redirects=True)
-    assert 'conta de gestão' in resposta.get_data(as_text=True)
+    assert 'login e a senha continuam os mesmos' in resposta.get_data(
+        as_text=True)
     with app.app_context():
-        assert db.session.get(Funcionario, fid).usuario_id is None
+        assert db.session.get(Funcionario, fid).usuario_id == aid
+        conta = db.session.get(Usuario, aid)
+        assert conta.papel == 'admin'
+        assert conta.senha_hash == hash_antes

@@ -12,7 +12,12 @@ import secrets
 from app.extensions import db
 from app.models import Funcionario, Usuario
 
-PAPEIS_VINCULAVEIS = {'funcionario', 'gerente', 'producao', 'padeiro', 'rh'}
+# Uma conta administrativa também pode pertencer a um funcionário do RH
+# (casos reais: líderes que já usavam o sistema antes do módulo de treino).
+# O dono continua protegido separadamente por `is_owner` em todos os fluxos.
+PAPEIS_VINCULAVEIS = {
+    'admin', 'funcionario', 'gerente', 'producao', 'padeiro', 'rh',
+}
 _RE_EMAIL = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$')
 
 
@@ -23,8 +28,8 @@ def _email_normalizado(email):
 
 def contas_sem_vinculo():
     """Contas de login (Usuario) que AINDA não estão ligadas a nenhum
-    funcionário — candidatas a vínculo manual. Exclui o dono. Ordenadas por
-    nome pra o admin achar pelo nome."""
+    funcionário — candidatas a vínculo manual. Inclui administradores comuns,
+    mas exclui o dono. Ordenadas por nome pra o admin achar pelo nome."""
     vinculados = {r[0] for r in db.session.query(Funcionario.usuario_id).filter(
         Funcionario.usuario_id.isnot(None)).all()}
     q = Usuario.query.filter(

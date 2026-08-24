@@ -179,3 +179,6 @@
 .v2-flash-success { background: #2a9d5c; }
 .v2-flash-warning { background: #b07d1e; }
 .v2-flash-danger, .v2-flash-error { background: #b03030; }
+
+/* A quantidade ativa precisa ser mais fácil de ler que a nova sugestão. */
+.sent-value { margin-top: 2px; color: var(--green); font-weight: 800; white-space: nowrap; }

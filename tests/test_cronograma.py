@@ -2065,6 +2065,35 @@ def test_rota_telaindustriateste_v2_funcional(app, admin_user):
         as_text=True)
 
 
+def test_v2_deixa_claro_o_numero_ja_enviado_ao_padeiro(app, admin_user):
+    """A sugestão zero não pode parecer ausência da ordem ativa.
+
+    Caso real do Pão Francês em 24/08: o grid recalculou zero para hoje, mas a
+    ordem do padeiro continuava em 300. O texto explícito separa as duas coisas.
+    """
+    from app.models import PlanejamentoItem, PlanejamentoProducao
+
+    r = _receita('Pão Francês Fermentado')
+    plano = PlanejamentoProducao(
+        data=hoje(), nome='Plano hoje', status='aprovado',
+        origem='cronograma', enviado_ao_padeiro=True)
+    db.session.add(plano)
+    db.session.flush()
+    db.session.add(PlanejamentoItem(
+        planejamento_id=plano.id, receita_id=r.id, multiplicador=2,
+        qtd_alvo=300, produzido_qtd=0))
+    db.session.commit()
+
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'},
+                follow_redirects=True)
+    html = client.get('/telaindustriateste/?v2=1').get_data(as_text=True)
+
+    assert 'Ordem enviada: 300' in html
+    assert 'Atualizar ordem' in html
+    assert '>Alterado<' not in html
+
+
 def test_flag_torna_nova_industria_padrao_com_comparacao_legacy(
         app, admin_user):
     client = app.test_client()

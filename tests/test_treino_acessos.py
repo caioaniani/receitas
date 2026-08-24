@@ -101,6 +101,50 @@ def test_vincular_conta_existente_sem_email(app):
         assert Usuario.query.count() == antes   # NÃO criou conta nova
 
 
+def test_vincular_admin_preserva_acesso_e_senha(app):
+    """Administrador comum também pode ser funcionário sem perder privilégios.
+
+    Alane/Dakson já tinham acesso administrativo antes do cadastro no RH; o
+    vínculo só cria a relação de identidade necessária ao treinamento.
+    """
+    with app.app_context():
+        u = Usuario(nome='Alane', login='alane', papel='admin',
+                    somente_treino=False)
+        u.set_senha('senha-existente')
+        db.session.add(u)
+        db.session.commit()
+        uid = u.id
+        f = _func(nome='Maria Alane', email='alane@opao.online',
+                  cpf='90000000015')
+
+        livres = {conta.id for conta in acessos.contas_sem_vinculo()}
+        assert uid in livres
+
+        r = acessos.vincular_conta(f, u, email='alane@opao.online')
+        assert r['ok'] and r['motivo'] == 'vinculado'
+        db.session.refresh(u)
+        assert f.usuario_id == uid
+        assert u.papel == 'admin'
+        assert u.somente_treino is False
+        assert u.check_senha('senha-existente')
+
+
+def test_vincular_owner_continua_bloqueado(app):
+    with app.app_context():
+        dono = Usuario(nome='Dono', login='dono-admin', papel='admin',
+                       is_owner=True)
+        dono.set_senha('senha-existente')
+        db.session.add(dono)
+        db.session.commit()
+        f = _func(nome='Dono RH', email=None, cpf='90000000016')
+
+        livres = {conta.id for conta in acessos.contas_sem_vinculo()}
+        assert dono.id not in livres
+        r = acessos.vincular_conta(f, dono)
+        assert not r['ok'] and r['motivo'] == 'owner'
+        assert f.usuario_id is None
+
+
 def test_vincular_recusa_conta_de_outro_funcionario(app):
     with app.app_context():
         u = Usuario(nome='Zeca', login='zeca2', papel='funcionario')

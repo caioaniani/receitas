@@ -162,14 +162,13 @@
                 <span class="day-name">{{ 'Hoje' if dia.data == crono.hoje else dia.label }}</span>
                 <span class="day-date">{{ dia.data[8:] }}/{{ dia.data[5:7] }}</span>
                 {% if dia.data in fechados %}<span class="day-state locked"><i class="bi bi-lock-fill"></i> Fechado</span>
-                {% elif est and est.enviado and difere.get(dia.data) %}<span class="day-state changed">Alterado</span>
-                {% elif est and est.enviado %}<span class="day-state sent">Enviado</span>
+                {% elif est and est.enviado %}<span class="day-state sent">Ordem enviada</span>
                 {% elif est %}<span class="day-state draft">Rascunho</span>
                 {% else %}<span class="day-state neutral">Não enviado</span>{% endif %}
                 {% if not est or not est.enviado or difere.get(dia.data) %}
                   <form method="POST" action="{{ url_for('industria_teste.enviar') }}" class="day-send-form" data-day-label="{{ dia.label }}" data-update="{{ 1 if est and est.enviado else 0 }}">
                     {{ campos_dia(dia.data) }}
-                    <button type="submit" class="day-send {{ 'update' if est and est.enviado }}"><i class="bi {{ 'bi-arrow-repeat' if est and est.enviado else 'bi-send' }}"></i>{{ 'Atualizar' if est and est.enviado else 'Enviar' }}</button>
+                    <button type="submit" class="day-send {{ 'update' if est and est.enviado }}"><i class="bi {{ 'bi-arrow-repeat' if est and est.enviado else 'bi-send' }}"></i>{{ 'Atualizar ordem' if est and est.enviado else 'Enviar' }}</button>
                   </form>
                 {% else %}
                   <span class="day-done"><i class="bi bi-check2"></i> Em dia</span>
@@ -207,7 +206,7 @@
                 <td class="plan-cell {{ 'is-today' if c.data == crono.hoje }} {{ 'is-readonly' if r.insumo or r.retorno or c.bloqueado or fechado }} {{ 'has-risk' if c.data in r.risco_datas }}" data-rid="{{ r.receita_id }}" data-date="{{ c.data }}" data-batches="{{ c.fornadas if c.fornadas is not none else '' }}" data-derived="{{ 1 if r.insumo else 0 }}">
                   <input type="number" min="0" inputmode="numeric" value="{{ c.qtd or 0 }}" aria-label="{{ r.nome }}, {{ c.data }}" class="plan-input {{ 'is-zero' if not c.qtd }}" data-last="{{ c.qtd or 0 }}" data-editable="{{ 0 if r.insumo or r.retorno or c.bloqueado or fechado else 1 }}" readonly tabindex="-1">
                   <small class="batch-label">{% if c.fornadas is not none and c.qtd %}{{ c.fornadas }} forn.{% elif r.insumo and c.qtd %}calculado{% endif %}</small>
-                  {% if difere_cel %}<span class="sent-value" title="O padeiro está vendo {{ env_dia.get(r.receita_id, 0) }}"><i class="bi bi-send-check"></i> {{ env_dia.get(r.receita_id, 0) }}</span>{% endif %}
+                  {% if difere_cel %}<span class="sent-value" title="Esta é a quantidade que já está na tela do padeiro"><i class="bi bi-send-check"></i> Ordem enviada: {{ env_dia.get(r.receita_id, 0) }}</span>{% endif %}
                 </td>
                 {% endfor %}
                 <td class="total-col"><strong class="row-total">{{ r.total }}</strong>{% if r.editado %}<button type="button" class="reset-row" data-rid="{{ r.receita_id }}" title="Voltar ao cálculo automático" aria-label="Voltar {{ r.nome }} ao cálculo automático"><i class="bi bi-arrow-counterclockwise"></i></button>{% endif %}</td>
