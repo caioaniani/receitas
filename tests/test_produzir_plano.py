@@ -91,6 +91,14 @@ def test_padeiro_testes_mostra_producao_do_dia(app, admin_user):
     body = resp.get_data(as_text=True)
     assert 'Produção do dia' in body
     assert 'Pão Teste' in body
+    assert '1 item para concluir' in body
+    assert 'Registrar produção' in body
+    assert 'css/padeiro-v2.css' in body
+    assert 'O que produzir agora' in body
+    assert 'Ferramentas rápidas' in body
+    for controle in ('hist-toggle', 'cong-toggle', 'prep-toggle',
+                      'prod-toggle', 'fichas-toggle'):
+        assert body.count(f'id="{controle}"') == 1
 
 
 def test_plano_do_dia_agrupa_por_massa_base(app, admin_user):
@@ -140,6 +148,10 @@ def test_plano_do_dia_agrupa_por_massa_base(app, admin_user):
     assert g['base_massa_label']                        # ex "3,4 kg"
     assert {i['nome'] for i in g['itens']} == {'Pão Francês', 'Sourdough 7g'}
     assert {i['nome'] for i in p['solos']} == {'Focaccia'}
+    assert p['total_itens'] == 3
+    assert p['itens_pendentes'] == 3
+    assert p['itens_concluidos'] == 0
+    assert p['progresso_pct'] == 0
 
 
 def test_massa_base_mise_endpoint(app, admin_user):

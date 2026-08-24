@@ -55,7 +55,8 @@ def test_ordem_de_ontem_em_aberto_aparece_na_visao_de_hoje(app, admin_user, clie
         # botão Produzir do item de ontem presente (form aponta pro item)
         item = PlanejamentoItem.query.filter_by(receita_id=r.id).one()
         assert f'/padeiro/produzir-plano/{item.id}' in html
-        assert 'faltam 40 un' in html
+        assert '1 item para concluir' in html
+        assert '>40</b> un' in html
 
 
 def test_ordem_de_ontem_produzida_nao_aparece(app, admin_user, cliente):
@@ -91,7 +92,9 @@ def test_parcialmente_produzida_mostra_so_a_falta(app, admin_user, cliente):
         html = cliente.get('/padeiro/').get_data(as_text=True)
         assert 'Ordem de ONTEM' in html
         assert 'Baguete Parcial' in html
-        assert 'faltam 44 un' in html
+        assert '1 item para concluir' in html
+        assert '>44</b> un' in html
+        assert '(já 256/300)' in html
         assert 'Pao Completo' not in html      # item já concluído sai do card
 
 

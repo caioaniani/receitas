@@ -307,8 +307,20 @@ def _plano_do_dia(dia):
         })
     grupos.sort(key=lambda g: g['nome'])
 
+    total_itens = len(itens)
+    itens_concluidos = sum(1 for i in itens if i['falta'] == 0)
+    itens_pendentes = total_itens - itens_concluidos
+    progresso_pct = (round(itens_concluidos * 100 / total_itens)
+                     if total_itens else 100)
     return {'plano_id': plano.id, 'grupos': grupos, 'solos': solos,
-            'total_falta': sum(i['falta'] for i in itens)}
+            # `total_falta` continua sendo a trava operacional usada por
+            # `_plano_em_aberto`. Ele NÃO deve virar um KPI visual: soma
+            # pães, gramas de bases e insumos em unidades incompatíveis.
+            'total_falta': sum(i['falta'] for i in itens),
+            'total_itens': total_itens,
+            'itens_concluidos': itens_concluidos,
+            'itens_pendentes': itens_pendentes,
+            'progresso_pct': progresso_pct}
 
 
 def _plano_em_aberto(dia):
@@ -346,12 +358,16 @@ def index():
                      .filter(LousaRecado.apagado_em.is_(None))
                      .order_by(LousaRecado.criado_em.desc()).all())
     resumo_flag = AppConfig.get(_FLAG_RESUMO_ENTREGAS) == '1'
+    plano_dia = _plano_do_dia(dia)
+    plano_ontem = _plano_em_aberto(ontem) if eh_hoje else None
+    total_pendentes = sum(
+        p.get('itens_pendentes', 0) for p in (plano_ontem, plano_dia) if p)
     return render_template(
         'padeiro/index.html', dia=dia, eh_hoje=eh_hoje,
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
         dia_seguinte=(dia + timedelta(days=1)).isoformat(),
-        plano_dia=_plano_do_dia(dia),
-        plano_ontem=(_plano_em_aberto(ontem) if eh_hoje else None),
+        plano_dia=plano_dia, plano_ontem=plano_ontem,
+        total_pendentes=total_pendentes,
         data_ontem=ontem, n_lousa=len(recados_lousa),
         recados_lousa=recados_lousa,
         resumo_entregas=(_resumo_entregas() if resumo_flag else None),

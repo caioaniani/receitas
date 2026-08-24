@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Padeiro — Pedidos de hoje</title>
+<title>Produção — Padaria</title>
 <style>
   :root { --verde:#198754; --azul:#0d6efd; --cinza:#6c757d; --amarelo:#ffc107; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -273,25 +273,36 @@
                         cursor:pointer; color:#6c757d; padding:4px 12px; }
   #prod-hist .close-x:active { color:#000; }
 </style>
+<link href="{{ url_for('static', filename='css/padeiro-v2.css') }}?v={{ static_v['css/padeiro-v2.css'] }}" rel="stylesheet">
 </head>
-<body>
-<header>
-  <h1>Pedidos {% if eh_hoje %}de hoje{% endif %}— {{ dia.strftime('%d/%m') }}</h1>
+<body class="padeiro-v2">
+<header class="padeiro-topbar">
+  <a class="padeiro-brand" href="{{ url_for('padeiro.index') }}" aria-label="Produção da padaria">
+    <span class="padeiro-brand-mark">p</span>
+    <span class="padeiro-brand-copy"><strong>padaria</strong><small>produção</small></span>
+  </a>
   <div class="datenav">
-    <a class="dnav" href="{{ url_for('padeiro.index', data=dia_anterior) }}">← Dia anterior</a>
+    <a class="dnav dnav-arrow" href="{{ url_for('padeiro.index', data=dia_anterior) }}" aria-label="Dia anterior">←</a>
+    <div class="padeiro-date">
+      <small>{{ 'Ordem de hoje' if eh_hoje else 'Ordem selecionada' }}</small>
+      <h1>{{ dia.strftime('%d/%m/%Y') }}</h1>
+    </div>
     {% if not eh_hoje %}<a class="dnav hoje" href="{{ url_for('padeiro.index') }}">Hoje</a>{% endif %}
-    <a class="dnav" href="{{ url_for('padeiro.index', data=dia_seguinte) }}">Dia seguinte →</a>
-    <a class="dnav" href="{{ url_for('padeiro.fichas') }}">🍞 Fichas de preparo</a>
-    <a class="dnav" onclick="toggleSpot()" style="cursor:pointer;">🎵 Música</a>
-    <a class="dnav" style="background:#8a5a2b;"
-       href="{{ url_for('padeiro.lousa') }}">🖍 Lousa{% if n_lousa %} ({{ n_lousa }}){% endif %}</a>
-    <a class="dnav" style="background:#7f1d1d;"
-       href="{{ url_for('padeiro.perdas') }}">🔥 Perdas</a>
+    <a class="dnav dnav-arrow" href="{{ url_for('padeiro.index', data=dia_seguinte) }}" aria-label="Dia seguinte">→</a>
   </div>
-  <a class="sair" href="{{ url_for('auth.logout') }}">Sair</a>
+  <details class="padeiro-more">
+    <summary>Mais <span aria-hidden="true">⌄</span></summary>
+    <div class="padeiro-more-menu">
+      <a href="{{ url_for('padeiro.fichas') }}">🍞 Fichas de preparo</a>
+      <button type="button" onclick="toggleSpot()">🎵 Música</button>
+      <a href="{{ url_for('padeiro.lousa') }}">🖍 Lousa{% if n_lousa %} ({{ n_lousa }}){% endif %}</a>
+      <a href="{{ url_for('padeiro.perdas') }}">🔥 Registrar perda</a>
+      <a class="sair" href="{{ url_for('auth.logout') }}">Sair</a>
+    </div>
+  </details>
 </header>
 <div id="som-bar">
-  <button id="btn-som" onclick="ativarSom()">Tocar aqui pra ativar o som dos avisos</button>
+  <button id="btn-som" onclick="ativarSom()">🔔 Ativar avisos sonoros</button>
 </div>
 <div id="avisos-bar" style="display:none;">
   <div class="aviso-ticker"><span id="aviso-ticker-txt"></span></div>
@@ -304,6 +315,13 @@
 <div id="prep-ticker" style="display:none;" onclick="togglePrep()" role="button">
   <div class="prep-ticker-track"><span>Pedido para preparar para amanhã já disponível</span></div>
 </div>
+<nav class="padeiro-tools" aria-label="Ferramentas rápidas">
+  <button id="hist-toggle" onclick="toggleHist()"><span>◷</span>Avisos</button>
+  <button id="cong-toggle" onclick="toggleCong()"><span>❄</span>Congelados</button>
+  <button id="prep-toggle" onclick="togglePrep()"><span>◫</span>Pré-preparo</button>
+  <button id="prod-toggle" onclick="toggleProd()"><span>＋</span>Produção extra</button>
+  <a id="fichas-toggle" href="{{ url_for('receitas.padeiro_lista') }}"><span>▤</span>Fichas</a>
+</nav>
 <style>
   .prod-dia { padding:0; overflow:hidden; }
   /* Ordem de ontem em aberto (persiste após a meia-noite): borda + cabeçalho
@@ -431,6 +449,18 @@
 
   <div id="lousa-slot">{% include 'padeiro/_lousa_painel.html' %}</div>
 
+  <section class="padeiro-intro">
+    <div>
+      <span class="padeiro-eyebrow">Chão de fábrica</span>
+      <h2>O que produzir agora</h2>
+      <p>Siga a ordem abaixo e registre cada item quando sair da produção.</p>
+    </div>
+    <div class="padeiro-intro-status">
+      <strong>{{ total_pendentes }}</strong>
+      <span>item{{ 's' if total_pendentes != 1 }} pendente{{ 's' if total_pendentes != 1 }}</span>
+    </div>
+  </section>
+
   {% macro prod_row(it, em_grupo=false) %}
     <div class="prod-dia-row {% if it.falta == 0 %}feito{% endif %}">
       {% if em_grupo %}
@@ -459,7 +489,7 @@
         <input type="hidden" name="encerrar" value="">
         <input type="number" name="unidades" min="1" value="{{ it.falta }}"
                class="prod-dia-qtd" id="qtd-{{ it.item_id }}">
-        <button type="submit" class="prod-dia-btn">Produzir</button>
+        <button type="submit" class="prod-dia-btn">Registrar produção</button>
       </form>
       {% else %}
       <span class="prod-dia-pronto">✓ pronto</span>
@@ -470,37 +500,39 @@
   {% macro plano_card(plano, data_plano, ontem=false) %}
   <div class="card prod-dia {% if ontem %}prod-dia-ontem{% endif %}">
     <div class="prod-dia-top {% if ontem %}prod-dia-top-ontem{% endif %}">
-      {% if ontem %}
-      <b>⏰ Ordem de ONTEM ({{ data_plano.strftime('%d/%m') }}) — ainda em aberto</b>
-      <span class="prod-dia-falta">faltam {{ plano.total_falta }} un</span>
-      {% else %}
-      <b>🔨 Produção do dia</b>
-      {% if plano.total_falta %}
-      <span class="prod-dia-falta">faltam {{ plano.total_falta }} un</span>
-      {% else %}
-      <span class="prod-dia-pronto" style="color:#ffd166;">✓ tudo produzido</span>
-      {% endif %}
-      {% endif %}
-      <span style="margin-left:auto; display:flex; gap:8px;">
-        {% if current_user.is_admin() %}
-        <a class="prod-dia-gantt" style="background:#6c757d; margin-left:0;" href="{{ url_for('padeiro.editar_plano', data=data_plano.isoformat()) }}">✏️ editar plano</a>
+      <div class="prod-dia-title">
+        <span class="prod-dia-kicker">{{ 'Pendente da madrugada' if ontem else 'Ordem enviada' }}</span>
+        <b>{% if ontem %}Ordem de ONTEM · {{ data_plano.strftime('%d/%m') }}{% else %}Produção do dia{% endif %}</b>
+        {% if plano.itens_pendentes %}
+        <span class="prod-dia-falta">{{ plano.itens_pendentes }} item{{ 's' if plano.itens_pendentes != 1 }} para concluir</span>
+        {% else %}
+        <span class="prod-dia-pronto">✓ tudo produzido</span>
         {% endif %}
-        <a class="prod-dia-gantt" style="margin-left:0;" href="{{ url_for('padeiro.gantt', data=data_plano.isoformat()) }}">📊 fluxograma</a>
-      </span>
+      </div>
+      <div class="prod-dia-actions">
+        {% if current_user.is_admin() %}
+        <a class="prod-dia-gantt prod-dia-edit" href="{{ url_for('padeiro.editar_plano', data=data_plano.isoformat()) }}">Editar ordem</a>
+        {% endif %}
+        <a class="prod-dia-gantt" href="{{ url_for('padeiro.gantt', data=data_plano.isoformat()) }}">Ver sequência</a>
+      </div>
+    </div>
+    <div class="prod-dia-progress" aria-label="{{ plano.progresso_pct }}% da ordem concluída">
+      <span style="width:{{ plano.progresso_pct }}%"></span>
     </div>
 
     {# pães que saem de uma massa-base comum: amasse a base e tire cada um #}
     {% for g in plano.grupos %}
     <div class="prod-dia-grupo">
-      🥣 Massa base: {{ g.nome }}{% if g.base_massa_label %} — amasse <b>{{ g.base_massa_label }}</b>{% if g.fornadas %} <span class="prod-dia-grupo-sub">({{ g.fornadas }} fornada{{ 's' if g.fornadas != 1 }})</span>{% endif %}{% endif %}
-      <button type="button" class="prod-dia-base-btn" onclick="verBase({{ g.mb_id }}, '{{ data_plano.isoformat() }}')">📋 ver a base e as retiradas</button>
+      <span class="prod-dia-group-icon">🥣</span>
+      <span><small>Massa base</small>{{ g.nome }}{% if g.base_massa_label %} · amassar <b>{{ g.base_massa_label }}</b>{% if g.fornadas %} <span class="prod-dia-grupo-sub">{{ g.fornadas }} fornada{{ 's' if g.fornadas != 1 }}</span>{% endif %}{% endif %}</span>
+      <button type="button" class="prod-dia-base-btn" onclick="verBase({{ g.mb_id }}, '{{ data_plano.isoformat() }}')">Ver preparo da base</button>
     </div>
     {% for it in g.itens %}{{ prod_row(it, em_grupo=true) }}{% endfor %}
     {% endfor %}
 
     {# pães soltos (não saem de massa-base) #}
     {% if plano.solos %}
-    {% if plano.grupos %}<div class="prod-dia-grupo">Outros pães</div>{% endif %}
+    {% if plano.grupos %}<div class="prod-dia-grupo"><span class="prod-dia-group-icon">🍞</span><span><small>Produção avulsa</small>Outros pães</span></div>{% endif %}
     {% for it in plano.solos %}{{ prod_row(it) }}{% endfor %}
     {% endif %}
   </div>
@@ -557,13 +589,13 @@
     </form>
   </div>
   {% elif current_user.is_admin() %}
-  <form method="POST" action="{{ url_for('padeiro.resumo_entregas_toggle') }}"
-        class="d-print-none" style="margin-bottom:10px;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn-sm btn-outline-secondary">
-      📦 Ligar resumo de entregas do site (Dia das Mães/Pais)
-    </button>
-  </form>
+  <details class="padeiro-admin-tool d-print-none">
+    <summary>Configuração de datas especiais</summary>
+    <form method="POST" action="{{ url_for('padeiro.resumo_entregas_toggle') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">Ligar resumo de entregas do site (Dia das Mães/Pais)</button>
+    </form>
+  </details>
   {% endif %}
 
   {# Ordem de ontem em aberto: o padeiro trabalha de madrugada — na virada da
@@ -573,13 +605,17 @@
 
   {% if plano_dia and (plano_dia.grupos or plano_dia.solos) %}
   {{ plano_card(plano_dia, dia) }}
+  {% elif not plano_ontem %}
+  <section class="padeiro-empty-order">
+    <span aria-hidden="true">✓</span>
+    <div><strong>Nenhuma produção pendente</strong><p>Não há itens na ordem enviada para esta data.</p></div>
+  </section>
   {% endif %}
 
   <div id="listas">
     {% include 'padeiro/_listas.html' %}
   </div>
 </div>
-<button id="hist-toggle" onclick="toggleHist()">Avisos 24h</button>
 <div id="hist-backdrop" onclick="toggleHist()"></div>
 <div id="hist-drawer">
   <div class="hist-head">
@@ -588,7 +624,6 @@
   </div>
   <div id="hist-lista"></div>
 </div>
-<button id="cong-toggle" onclick="toggleCong()">Congelados</button>
 <div id="cong-backdrop" onclick="toggleCong()"></div>
 <div id="cong-drawer">
   <div class="hist-head">
@@ -597,7 +632,6 @@
   </div>
   <div id="cong-lista"></div>
 </div>
-<button id="prep-toggle" onclick="togglePrep()">Pré-preparo</button>
 <div id="prep-backdrop" onclick="togglePrep()"></div>
 <div id="prep-drawer">
   <div class="hist-head">
@@ -618,7 +652,6 @@
   </div>
   <div id="spot-body"><div class="spot-msg">Carregando…</div></div>
 </div>
-<button id="prod-toggle" onclick="toggleProd()">Produzir</button>
 <div id="prod-backdrop" onclick="toggleProd()"></div>
 <div id="prod-drawer">
   <div class="hist-head">
@@ -634,7 +667,6 @@
     <button class="btn btn-sep" onclick="prodEnviar()">Enviar</button>
   </div>
 </div>
-<a id="fichas-toggle" href="{{ url_for('receitas.padeiro_lista') }}">Fichas</a>
 <div id="prod-confirm">
   <div class="box">
     <h3>Confirmar produção?</h3>
