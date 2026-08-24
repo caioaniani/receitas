@@ -7,6 +7,8 @@
 """
 from datetime import timedelta
 
+import pytest
+
 from app.extensions import db
 from app.models import (
     PlanejamentoItem,
@@ -18,6 +20,16 @@ from app.services.producao_pendente import (
     pendencias_por_receita,
 )
 from app.utils import hoje
+
+
+@pytest.fixture(autouse=True)
+def _segunda_fixa(congela_hoje):
+    """SEGUNDA fixa (armadilha weekday-sensível, conftest): o grid bloqueia
+    sáb/dom desde 17/08/2026 e os cenários com demanda em hoje() quebravam
+    quando a suíte rodava no fim de semana — pego num DOMINGO real
+    (23/08/2026, test_reagendado_soma_com_alvo_do_grid_no_reenvio: a célula
+    de hoje nascia bloqueada e o alvo do grid sumia)."""
+    congela_hoje()
 
 
 def _receita(nome='Croissant'):
