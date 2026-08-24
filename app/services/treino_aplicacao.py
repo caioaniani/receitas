@@ -6,6 +6,7 @@ estorno só admin (§8).
 from app.extensions import db
 from app.models import TreinoAplicacaoPratica, TreinoEventoPontos
 from app.services import treino_ledger as ledger
+from app.services import treino_lideranca as lideranca
 from app.services import treino_pontos as cfg
 from app.utils import hoje
 
@@ -25,12 +26,26 @@ def registrar(gestor, funcionario, trilha, temporada, itens_ok, evidencia, *,
     if len((evidencia or '').strip()) < MIN_EVIDENCIA:
         raise AplicacaoError(
             f'Evidência precisa de ao menos {MIN_EVIDENCIA} caracteres.')
-    if not is_admin:
-        # Só gestor da MESMA unidade (§8).
-        ug = ledger.unidade_do_funcionario(gestor)
-        uf = ledger.unidade_do_funcionario(funcionario)
-        if ug is None or uf is None or ug.id != uf.id:
-            raise AplicacaoError('Gestor só registra na própria unidade.')
+    if not lideranca.pode_observar(
+            gestor, funcionario, is_admin=is_admin):
+        raise AplicacaoError(
+            'Você só pode observar pessoas da sua equipe direta.')
+
+    try:
+        itens_ids = [int(item_id) for item_id in (itens_ok or [])]
+    except (TypeError, ValueError):
+        raise AplicacaoError('O checklist enviado é inválido.') from None
+    checklist = lideranca.checklist_da_trilha(trilha.id)
+    itens_validos = {
+        item.id for item in lideranca.itens_ativos(checklist)}
+    if not itens_validos:
+        raise AplicacaoError(
+            'Este módulo ainda não tem um checklist de observação.')
+    if not set(itens_ids).issubset(itens_validos):
+        raise AplicacaoError('O checklist foi alterado. Recarregue a página.')
+    if set(itens_ids) != itens_validos:
+        raise AplicacaoError(
+            'Confirme todos os itens antes de validar a aplicação prática.')
     # Máx. 1 por (funcionário, trilha, temporada) — critério 13.
     ja = TreinoAplicacaoPratica.query.filter_by(
         funcionario_id=funcionario.id, trilha_id=trilha.id,
@@ -41,7 +56,7 @@ def registrar(gestor, funcionario, trilha, temporada, itens_ok, evidencia, *,
     ap = TreinoAplicacaoPratica(
         funcionario_id=funcionario.id, trilha_id=trilha.id, gestor_id=gestor.id,
         temporada_id=temporada.id, data=hoje(),
-        itens_ok=list(itens_ok or []), evidencia=evidencia.strip(),
+        itens_ok=itens_ids, evidencia=evidencia.strip(),
         status='REGISTRADA')
     db.session.add(ap)
     db.session.commit()

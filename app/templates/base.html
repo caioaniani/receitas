@@ -30,7 +30,7 @@
     <link href="{{ url_for('static', filename='css/style.css') }}?v={{ static_v['css/style.css'] }}" rel="stylesheet">
     {% if ui_v2 %}
     <link href="{{ url_for('static', filename='css/ui-v2.css') }}?v={{ static_v['css/ui-v2.css'] }}" rel="stylesheet">
-    {% if request.path.startswith('/treino') or request.path.startswith('/rh/funcionarios/') %}
+    {% if request.path.startswith('/treino') or request.path.startswith('/rh/funcionarios/') or request.path.startswith('/rh/lideranca') %}
     <link href="{{ url_for('static', filename='css/treino-v2.css') }}?v={{ static_v['css/treino-v2.css'] }}" rel="stylesheet">
     {% endif %}
     {% endif %}
@@ -134,9 +134,15 @@
         </a>
         {% endif %}
         <a href="{{ url_for('treino.home') }}"
-           class="sidebar-link {% if request.path.startswith('/treino') %}active{% endif %}">
+           class="sidebar-link {% if request.path.startswith('/treino') and not request.path.startswith('/treino/gestor') %}active{% endif %}">
             🎮 Treinamento
         </a>
+        {% if current_user.is_admin() or current_user.is_gerente() or current_user.lidera_equipe() %}
+        <a href="{{ url_for('treino.gestor_home') }}"
+           class="sidebar-link {% if request.path.startswith('/treino/gestor') %}active{% endif %}">
+            👥 Minha equipe
+        </a>
+        {% endif %}
         {% if not so_treino %}
         {# Loja Online: liberada a todos os usuários logados (22/06/2026), porém
            o DASHBOARD (com faturamento) e a config de logo seguem owner-only.

@@ -16,9 +16,14 @@
         <a href="{{ url_for('main.index') }}" class="sidebar-link {{ 'active' if request.path == '/' }}">
             <i class="bi bi-house-door"></i><span>Hoje</span>
         </a>
-        <a href="{{ url_for('treino.home') }}" class="sidebar-link {{ 'active' if request.path.startswith('/treino') }}">
+        <a href="{{ url_for('treino.home') }}" class="sidebar-link {{ 'active' if request.path.startswith('/treino') and not request.path.startswith('/treino/gestor') }}">
             <i class="bi bi-mortarboard"></i><span>Treinamento</span>
         </a>
+        {% if current_user.is_admin() or current_user.is_gerente() or current_user.lidera_equipe() %}
+        <a href="{{ url_for('treino.gestor_home') }}" class="sidebar-link {{ 'active' if request.path.startswith('/treino/gestor') }}">
+            <i class="bi bi-people"></i><span>Minha equipe</span>
+        </a>
+        {% endif %}
         {% if current_user.pode_lojas() %}
         <a href="{{ url_for('main.area', slug='lojas') }}" class="sidebar-link {{ 'active' if request.path == '/area/lojas' }}">
             <i class="bi bi-shop"></i><span>Lojas</span>

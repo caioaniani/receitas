@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Observar {{ funcionario.nome }}{% endblock %}
+{% block content %}
+<main class="treino-page">
+  <header class="treino-heading">
+    <div>
+      <a class="treino-back" href="{{ url_for('treino.gestor_home') }}"><i class="bi bi-arrow-left"></i> Voltar à equipe</a>
+      <span class="treino-eyebrow">Observação prática</span>
+      <h1>{{ funcionario.nome }}</h1>
+      <p>{{ funcionario.cargo.nome if funcionario.cargo else 'Cargo não informado' }} · líder responsável: {{ gestor.nome }}</p>
+    </div>
+  </header>
+
+  {% if not temporada %}
+  <div class="treino-notice treino-notice-warning"><i class="bi bi-calendar-x"></i><div><strong>Não há ciclo de treinamento ativo.</strong><br>As observações poderão ser registradas quando um ciclo estiver em andamento.</div></div>
+  {% endif %}
+
+  <section class="treino-section">
+    <div class="treino-section-heading">
+      <div><span class="treino-eyebrow">No trabalho</span><h2>Checklist de observação</h2></div>
+      <span>marque somente o que você viu acontecer</span>
+    </div>
+    <div class="treino-module-list">
+      {% for observacao in observacoes %}
+      <article class="treino-observation-card">
+        <div class="treino-observation-heading">
+          <div><span class="treino-eyebrow">Módulo</span><h3>{{ observacao.trilha.nome }}</h3><p>{{ observacao.checklist.descricao }}</p></div>
+          {% if observacao.registrada %}<span class="treino-status is-done"><i class="bi bi-check2"></i> Observado neste ciclo</span>{% endif %}
+        </div>
+        {% if observacao.registrada %}
+        <div class="treino-notice treino-notice-success"><i class="bi bi-clipboard-check"></i><div><strong>{{ (observacao.registrada.itens_ok or [])|length }} de {{ observacao.itens|length }} itens confirmados.</strong><br>{{ observacao.registrada.evidencia }}</div></div>
+        {% else %}
+        <form method="POST" action="{{ url_for('treino.gestor_observar_salvar', func_id=funcionario.id, trilha_id=observacao.trilha.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="treino-observation-items">
+            {% for item in observacao.itens %}
+            <label><input type="checkbox" name="itens_ok" value="{{ item.id }}" required><span><i class="bi bi-check2"></i></span><strong>{{ item.descricao }}</strong></label>
+            {% endfor %}
+          </div>
+          <label class="treino-observation-notes"><span>O que você observou</span><textarea class="form-control" name="evidencia" rows="3" minlength="20" required placeholder="Descreva o que aconteceu na prática."></textarea><small>Mínimo de 20 caracteres. Se algum item ainda não aconteceu, acompanhe e volte para validar depois.</small></label>
+          <button class="treino-primary-action" {% if not temporada %}disabled{% endif %}><i class="bi bi-check2-circle"></i> Validar observação</button>
+        </form>
+        {% endif %}
+      </article>
+      {% else %}
+      <div class="treino-empty">Ainda não há checklist configurado para nenhum módulo. Peça ao responsável pelo RH para montar os itens de observação.</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="treino-section">
+    <div class="treino-section-heading"><div><span class="treino-eyebrow">Histórico</span><h2>Observações já registradas</h2></div><span>{{ historico|length }} registro(s)</span></div>
+    <div class="treino-history-list">
+      {% for registro in historico %}{% set trilha = trilhas_por_id.get(registro.trilha_id) %}
+      <article><div><strong>{{ trilha.nome if trilha else 'Módulo' }}</strong><small>{{ registro.data.strftime('%d/%m/%Y') }} · por {{ registro.gestor.nome }}</small></div><p>{{ registro.evidencia }}</p><span class="treino-status {{ 'is-done' if registro.status == 'REGISTRADA' }}">{{ (registro.itens_ok or [])|length }} item(ns) confirmado(s)</span></article>
+      {% else %}<div class="treino-empty">Nenhuma observação prática foi registrada para esta pessoa.</div>{% endfor %}
+    </div>
+  </section>
+</main>
+{% endblock %}

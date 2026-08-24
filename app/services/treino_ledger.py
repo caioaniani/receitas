@@ -41,7 +41,7 @@ def papel_treino(usuario):
         return 'FUNCIONARIO'
     if usuario.is_admin():          # admin ou dono
         return 'ADMIN'
-    if usuario.is_gerente():
+    if usuario.is_gerente() or usuario.lidera_equipe():
         return 'GESTOR'
     return 'FUNCIONARIO'
 

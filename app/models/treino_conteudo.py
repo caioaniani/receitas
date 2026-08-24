@@ -242,6 +242,9 @@ class TreinoItemChecklist(db.Model):
         nullable=False, index=True)
     descricao = db.Column(db.String(300), nullable=False)
     ordem = db.Column(db.Integer, default=0, nullable=False)
+    # Desativar preserva o item nos registros antigos sem mostrá-lo nas novas
+    # observações. Editar a lista nunca apaga silenciosamente o histórico.
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
 
 
 class TreinoAplicacaoPratica(db.Model):

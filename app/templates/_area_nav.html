@@ -134,6 +134,7 @@
 {% macro rh(variant) %}
 {{ _lnk(variant, url_for('rh.dashboard'), 'Painel RH', request.path == '/rh/') }}
 {{ _lnk(variant, url_for('rh.funcionarios'), 'Funcionários', '/rh/funcionarios' in request.path) }}
+{{ _lnk(variant, url_for('rh.lideranca'), 'Liderança e observações', '/rh/lideranca' in request.path) }}
 {{ _lnk(variant, url_for('rh.pre_cadastros'), 'Pré-cadastro (QR)', '/rh/pre-cadastros' in request.path) }}
 {% if current_user.is_dono() %}
 {{ _lnk(variant, url_for('rh.folha'), 'Folha de Pagamento', '/rh/folha' in request.path and '/importar' not in request.path) }}

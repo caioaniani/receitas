@@ -90,6 +90,8 @@ def home():
             t.id: tt.progresso_trilha(f, t, temp) for t in trilhas}
     ctx['proximo'] = painel.proximo_passo(
         f, trilhas, ctx['onboarding_ids']) if f else None
+    ctx['pode_liderar'] = ledger.papel_treino(current_user) in (
+        'GESTOR', 'ADMIN')
     return render_template('treino/home.html', **ctx)
 
 
@@ -293,6 +295,8 @@ def verificar(codigo):
 @login_required
 @gestor_required
 def gestor_home():
+    from app.services import treino_lideranca as lideranca
+
     gestor = _func()
     unidade = ledger.unidade_do_funcionario(gestor) if gestor else None
     is_admin = ledger.papel_treino(current_user) == 'ADMIN'
@@ -300,8 +304,7 @@ def gestor_home():
         equipe = Funcionario.query.filter_by(ativo=True).order_by(
             Funcionario.nome).all()
     else:
-        equipe = [f for f in (unidade.funcionarios if unidade else [])
-                  if f.ativo]
+        equipe = lideranca.liderados_do(gestor)
     trilhas = TreinoTrilha.query.filter_by(ativa=True).all()
     visao_equipe = painel.painel_equipe(equipe, _temp())
     return render_template('treino/gestor.html', equipe=equipe, trilhas=trilhas,
@@ -310,14 +313,107 @@ def gestor_home():
                            can_open_rh=current_user.is_dono())
 
 
+@treino_bp.route('/gestor/observar/<int:func_id>')
+@login_required
+@gestor_required
+def gestor_observar(func_id):
+    from app.services import treino_lideranca as lideranca
+
+    gestor = _func_obrigatorio()
+    funcionario = db.session.get(Funcionario, func_id) or abort(404)
+    is_admin = ledger.papel_treino(current_user) == 'ADMIN'
+    if not lideranca.pode_observar(
+            gestor, funcionario, is_admin=is_admin):
+        abort(403)
+
+    temp = _temp()
+    trilhas = TreinoTrilha.query.filter_by(ativa=True).order_by(
+        TreinoTrilha.ordem, TreinoTrilha.nome).all()
+    observacoes = []
+    for trilha_obj in trilhas:
+        checklist = lideranca.checklist_da_trilha(trilha_obj.id)
+        itens = lideranca.itens_ativos(checklist)
+        if not itens:
+            continue
+        registrada = None
+        if temp:
+            registrada = TreinoAplicacaoPratica.query.filter_by(
+                funcionario_id=funcionario.id,
+                trilha_id=trilha_obj.id,
+                temporada_id=temp.id,
+                status='REGISTRADA',
+            ).first()
+        observacoes.append({
+            'trilha': trilha_obj,
+            'checklist': checklist,
+            'itens': itens,
+            'registrada': registrada,
+        })
+
+    historico = (TreinoAplicacaoPratica.query
+                 .filter_by(funcionario_id=funcionario.id)
+                 .order_by(TreinoAplicacaoPratica.data.desc(),
+                           TreinoAplicacaoPratica.id.desc())
+                 .limit(20).all())
+    ids_historico = {registro.trilha_id for registro in historico}
+    trilhas_historico = TreinoTrilha.query.filter(
+        TreinoTrilha.id.in_(ids_historico or {0})).all()
+    trilhas_por_id = {
+        trilha_obj.id: trilha_obj for trilha_obj in trilhas + trilhas_historico}
+    return render_template(
+        'treino/observacao.html', funcionario=funcionario, gestor=gestor,
+        temporada=temp, observacoes=observacoes, historico=historico,
+        trilhas_por_id=trilhas_por_id,
+    )
+
+
+@treino_bp.route(
+    '/gestor/observar/<int:func_id>/<int:trilha_id>', methods=['POST'])
+@login_required
+@gestor_required
+def gestor_observar_salvar(func_id, trilha_id):
+    from app.services import treino_lideranca as lideranca
+
+    gestor = _func_obrigatorio()
+    funcionario = db.session.get(Funcionario, func_id) or abort(404)
+    trilha_obj = TreinoTrilha.query.filter_by(
+        id=trilha_id, ativa=True).first_or_404()
+    temp = _temp()
+    is_admin = ledger.papel_treino(current_user) == 'ADMIN'
+    if not lideranca.pode_observar(
+            gestor, funcionario, is_admin=is_admin):
+        abort(403)
+    if temp is None:
+        flash('Não há um ciclo de treinamento ativo no momento.', 'warning')
+        return redirect(url_for('treino.gestor_observar', func_id=func_id))
+
+    try:
+        ap.registrar(
+            gestor, funcionario, trilha_obj, temp,
+            request.form.getlist('itens_ok'),
+            request.form.get('evidencia', ''),
+            criado_por_id=current_user.id, is_admin=is_admin,
+        )
+    except ap.AplicacaoError as erro:
+        flash(str(erro), 'danger')
+    else:
+        tt.verificar_conclusao(funcionario, trilha_obj, temp)
+        flash(
+            f'Observação de {funcionario.nome} registrada com sucesso.',
+            'success')
+    return redirect(url_for('treino.gestor_observar', func_id=func_id))
+
+
 @treino_bp.route('/gestor/api/aplicacao', methods=['POST'])
 @login_required
 @gestor_required
 def gestor_aplicacao():
     gestor = _func_obrigatorio()
     temp = _temp()
-    f = db.session.get(Funcionario, request.form.get('funcionario_id', 0))
-    trilha_obj = db.session.get(TreinoTrilha, request.form.get('trilha_id', 0))
+    f = db.session.get(
+        Funcionario, request.form.get('funcionario_id', type=int) or 0)
+    trilha_obj = db.session.get(
+        TreinoTrilha, request.form.get('trilha_id', type=int) or 0)
     if not (f and trilha_obj and temp):
         return jsonify(ok=False, erro='dados incompletos'), 400
     itens = request.form.getlist('itens_ok')

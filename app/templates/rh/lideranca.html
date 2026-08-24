@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Liderança e observações{% endblock %}
+{% block content %}
+<main class="treino-page">
+  <header class="treino-heading">
+    <div><span class="treino-eyebrow">Pessoas</span><h1>Liderança e observações</h1><p>Defina quem acompanha cada pessoa e o que deve ser observado na prática.</p></div>
+    <nav class="treino-heading-actions"><a href="{{ url_for('rh.dashboard') }}">Voltar ao RH</a><a href="{{ url_for('treino.gestor_home') }}">Ver acompanhamento</a></nav>
+  </header>
+
+  <section class="treino-metrics">
+    <article><span>Líderes</span><strong>{{ equipes|length }}</strong><small>com equipe definida</small></article>
+    <article><span>Liderados</span><strong>{{ equipes.values()|map('length')|sum }}</strong><small>com líder direto</small></article>
+    <article class="{% if funcionarios|length - (equipes.values()|map('length')|sum) %}is-warning{% else %}is-success{% endif %}"><span>Sem líder</span><strong>{{ funcionarios|length - (equipes.values()|map('length')|sum) }}</strong><small>inclui os próprios líderes</small></article>
+    <article><span>Checklists</span><strong>{{ checklists|length }}</strong><small>módulos configurados</small></article>
+  </section>
+
+  <section class="treino-section" id="equipes">
+    <div class="treino-section-heading"><div><span class="treino-eyebrow">Hierarquia</span><h2>Quem acompanha quem</h2></div><span>um líder direto por pessoa</span></div>
+    <div class="treino-notice"><i class="bi bi-info-circle"></i><div>Ao receber o primeiro liderado, a pessoa passa a enxergar automaticamente <strong>Minha equipe</strong>. Para liderar, ela precisa ter uma conta vinculada.</div></div>
+    <form method="POST" action="{{ url_for('rh.lideranca_vinculos') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="table-responsive mt-3"><table class="table align-middle">
+        <thead><tr><th>Funcionário</th><th>Cargo</th><th>Líder direto</th></tr></thead>
+        <tbody>{% for f in funcionarios %}<tr><td><strong>{{ f.nome }}</strong>{% if f.id in equipes %}<br><span class="badge bg-success">líder de {{ equipes[f.id]|length }}</span>{% endif %}</td><td class="text-muted">{{ f.cargo.nome if f.cargo else (f.funcao or 'Sem cargo') }}</td><td><select class="form-select form-select-sm" name="lider_{{ f.id }}"><option value="">Sem líder direto</option>{% for lider in lideres if lider.id != f.id %}<option value="{{ lider.id }}" {{ 'selected' if f.lider_id == lider.id }}>{{ lider.nome }}</option>{% endfor %}</select></td></tr>{% endfor %}</tbody>
+      </table></div>
+      <button class="treino-primary-action"><i class="bi bi-check2"></i> Salvar equipes</button>
+    </form>
+  </section>
+
+  <section class="treino-section" id="checklists">
+    <div class="treino-section-heading"><div><span class="treino-eyebrow">Observação prática</span><h2>O que o líder deve observar</h2></div><span>um checklist por módulo</span></div>
+    <div class="treino-module-list">
+      {% for trilha in trilhas %}{% set checklist = checklists.get(trilha.id) %}{% set ativos = itens_ativos(checklist) %}
+      <details class="treino-module" id="checklist-{{ trilha.id }}"{% if not ativos %} open{% endif %}>
+        <summary><span class="treino-module-toggle"><i class="bi bi-chevron-right"></i></span><span class="treino-module-title"><strong>{{ trilha.nome }}</strong><small>{{ ativos|length }} item(ns) de observação</small></span><span class="treino-status {{ 'is-done' if ativos }}">{{ 'Configurado' if ativos else 'Montar checklist' }}</span></summary>
+        <div class="treino-module-body"><form method="POST" action="{{ url_for('rh.lideranca_checklist', trilha_id=trilha.id) }}" class="treino-form-grid">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label class="is-wide"><span>Nome da observação</span><input class="form-control" name="descricao" value="{{ checklist.descricao if checklist else 'Aplicação prática' }}" maxlength="200"></label>
+          <label class="is-wide"><span>Itens — um por linha</span><textarea class="form-control" name="itens" rows="{{ [ativos|length + 2, 5]|max }}" placeholder="Ex.: Cumprimenta o cliente e oferece ajuda\nConfirma o pedido antes de finalizar\nMantém a bancada organizada">{% for item in ativos %}{{ item.descricao }}{% if not loop.last %}&#10;{% endif %}{% endfor %}</textarea></label>
+          <div class="is-wide"><button class="treino-primary-action">Salvar checklist</button></div>
+        </form></div>
+      </details>
+      {% else %}<div class="treino-empty">Crie os módulos de treinamento antes de montar os checklists.</div>{% endfor %}
+    </div>
+  </section>
+</main>
+{% endblock %}

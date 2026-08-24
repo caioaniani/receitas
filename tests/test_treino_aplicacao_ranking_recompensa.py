@@ -16,6 +16,7 @@ from app.models import (
 )
 from app.services import treino_aplicacao as ap
 from app.services import treino_ledger as ledger
+from app.services import treino_lideranca as lideranca
 from app.services import treino_ranking as rk
 from app.services import treino_recompensa as rc
 from app.utils import hoje
@@ -64,14 +65,20 @@ def test_aplicacao_duplicada_rejeitada_e_credita_50(app):   # critério 13
         temp, loja = _temp(), _loja('Brooklin')
         g = _func('Gestor', '1', loja)
         f = _func('Ana', '2', loja)
+        f.lider_id = g.id
         trilha = TreinoTrilha(nome='Seg')
         db.session.add(trilha)
         db.session.commit()
-        ap.registrar(g, f, trilha, temp, [], 'aplicou tudo certinho ok',
+        checklist = lideranca.salvar_checklist(
+            trilha, 'Prática', ['Aplicou o procedimento'])
+        item_id = checklist.itens[0].id
+        ap.registrar(g, f, trilha, temp, [item_id],
+                     'aplicou tudo certinho ok',
                      criado_por_id=None)
         assert ledger.saldo(f.id, temp.id) == 50
         with pytest.raises(ap.AplicacaoError):
-            ap.registrar(g, f, trilha, temp, [], 'de novo mesma trilha aqui',
+            ap.registrar(g, f, trilha, temp, [item_id],
+                         'de novo mesma trilha aqui',
                          criado_por_id=None)
 
 

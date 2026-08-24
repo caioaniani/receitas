@@ -59,11 +59,19 @@ class Funcionario(db.Model):
     # está aplicado em prod (migrations_legacy, commit 1 confirmado pela sonda
     # /api/claude/deploy) ANTES deste modelo — procedimento de 2 commits.
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
+    # Liderança direta: uma pessoa tem no máximo um líder imediato; um líder
+    # pode acompanhar várias pessoas. Quem possui liderados ativos ganha a
+    # área "Minha equipe" no treinamento, independentemente do cargo técnico.
+    lider_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'),
+                         nullable=True, index=True)
 
     lojas = db.relationship('Loja', secondary=funcionario_loja, backref='funcionarios')
     cargo = db.relationship('Cargo', backref='funcionarios')
     usuario = db.relationship('Usuario', foreign_keys=[usuario_id],
                               backref=db.backref('funcionario', uselist=False))
+    lider = db.relationship(
+        'Funcionario', remote_side=[id], foreign_keys=[lider_id],
+        backref=db.backref('liderados', lazy='select'))
 
     def salario_efetivo(self):
         """Salario base vem do Cargo. Fallback para o campo legado se cargo nao setado."""

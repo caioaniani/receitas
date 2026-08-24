@@ -2,7 +2,7 @@
 {% macro barra(e) %}<div class="treino-progress" aria-label="{{ e.percentual }}% concluído"><span style="width:{{ e.percentual }}%"></span></div>{% endmacro %}
 {% block content %}
 <main class="treino-page">
-  <header class="treino-heading"><div><span class="treino-eyebrow">Universidade O Pão</span><h1>Meu treinamento</h1><p>Continue de onde parou e acompanhe o que é obrigatório para o seu cargo.</p></div></header>
+  <header class="treino-heading"><div><span class="treino-eyebrow">Universidade O Pão</span><h1>Meu treinamento</h1><p>Continue de onde parou e acompanhe o que é obrigatório para o seu cargo.</p></div>{% if pode_liderar %}<nav class="treino-heading-actions"><a class="treino-primary-action" href="{{ url_for('treino.gestor_home') }}"><i class="bi bi-people"></i> Minha equipe</a></nav>{% endif %}</header>
   {% if not func %}
   <div class="treino-notice treino-notice-warning"><i class="bi bi-person-exclamation"></i><div><strong>Seu acesso ainda não está ligado ao RH.</strong><br>Peça ao gestor para vincular sua conta ao cadastro de funcionário.</div></div>
   {% else %}

@@ -159,6 +159,79 @@ def funcionarios():
                            resumo_acessos=resumo_acessos)
 
 
+@rh_bp.route('/lideranca')
+@login_required
+@rh_required
+def lideranca():
+    """Configura a hierarquia e o checklist observado pelos líderes."""
+    from app.models import TreinoChecklistAplicacao, TreinoTrilha
+    from app.services import treino_lideranca as lideranca_svc
+
+    funcionarios = (Funcionario.query
+                    .options(joinedload(Funcionario.cargo),
+                             joinedload(Funcionario.usuario),
+                             joinedload(Funcionario.lider))
+                    .filter_by(ativo=True).order_by(Funcionario.nome).all())
+    lideres = [f for f in funcionarios if f.usuario_id]
+    trilhas = TreinoTrilha.query.order_by(TreinoTrilha.ordem).all()
+    checklists = {}
+    for checklist in TreinoChecklistAplicacao.query.order_by(
+            TreinoChecklistAplicacao.id).all():
+        checklists.setdefault(checklist.trilha_id, checklist)
+    equipes = {}
+    for funcionario in funcionarios:
+        if funcionario.lider_id:
+            equipes.setdefault(funcionario.lider_id, []).append(funcionario)
+    return render_template(
+        'rh/lideranca.html', funcionarios=funcionarios, lideres=lideres,
+        trilhas=trilhas, checklists=checklists, equipes=equipes,
+        itens_ativos=lideranca_svc.itens_ativos)
+
+
+@rh_bp.route('/lideranca/vinculos', methods=['POST'])
+@login_required
+@rh_required
+def lideranca_vinculos():
+    from app.services import treino_lideranca as lideranca_svc
+
+    funcionarios = Funcionario.query.filter_by(ativo=True).order_by(
+        Funcionario.nome).all()
+    vinculos = {
+        funcionario.id: request.form.get(f'lider_{funcionario.id}', type=int)
+        for funcionario in funcionarios
+    }
+    try:
+        alteracoes = lideranca_svc.salvar_vinculos(funcionarios, vinculos)
+    except lideranca_svc.LiderancaError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+    else:
+        flash(f'Liderança atualizada: {alteracoes} vínculo(s) alterado(s).',
+              'success')
+    return redirect(url_for('rh.lideranca', _anchor='equipes'))
+
+
+@rh_bp.route('/lideranca/checklist/<int:trilha_id>', methods=['POST'])
+@login_required
+@rh_required
+def lideranca_checklist(trilha_id):
+    from app.models import TreinoTrilha
+    from app.services import treino_lideranca as lideranca_svc
+
+    trilha = db.session.get(TreinoTrilha, trilha_id) or abort(404)
+    linhas = (request.form.get('itens') or '').splitlines()
+    try:
+        checklist = lideranca_svc.salvar_checklist(
+            trilha, request.form.get('descricao'), linhas)
+    except lideranca_svc.LiderancaError as exc:
+        flash(str(exc), 'warning')
+    else:
+        flash(f'Checklist de “{trilha.nome}” salvo com '
+              f'{len(lideranca_svc.itens_ativos(checklist))} item(ns).',
+              'success')
+    return redirect(url_for('rh.lideranca', _anchor=f'checklist-{trilha.id}'))
+
+
 @rh_bp.route('/funcionarios/<int:id>/acesso', methods=['POST'])
 @login_required
 @rh_required

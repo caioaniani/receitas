@@ -2,7 +2,7 @@
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 {% macro mini(action, label, cls='btn-outline-secondary', confirm='') %}<form method="POST" action="{{ action }}" class="d-inline"{% if confirm %} onsubmit="return confirm('{{ confirm }}')"{% endif %}>{{ csrf() }}<button class="btn btn-sm {{ cls }}">{{ label }}</button></form>{% endmacro %}
 <main class="treino-page treino-admin">
-  <header class="treino-heading"><div><span class="treino-eyebrow">Universidade O Pão</span><h1>Central de treinamento</h1><p>Publique conteúdo, resolva pendências e acompanhe a equipe sem misturar as tarefas.</p></div><nav class="treino-heading-actions"><a href="{{ url_for('treino.gestor_home') }}">Acompanhar equipe</a>{% if can_open_rh %}<a href="{{ url_for('rh.funcionarios', view='acessos') }}">Gerenciar acessos</a>{% endif %}</nav></header>
+  <header class="treino-heading"><div><span class="treino-eyebrow">Universidade O Pão</span><h1>Central de treinamento</h1><p>Publique conteúdo, resolva pendências e acompanhe a equipe sem misturar as tarefas.</p></div><nav class="treino-heading-actions"><a href="{{ url_for('treino.gestor_home') }}">Acompanhar equipe</a>{% if can_open_rh %}<a href="{{ url_for('rh.lideranca') }}">Liderança e checklists</a><a href="{{ url_for('rh.funcionarios', view='acessos') }}">Gerenciar acessos</a>{% endif %}</nav></header>
 
   <section class="treino-metrics">
     <article><span>Módulos no ar</span><strong>{{ painel.modulos_publicados }}</strong><small>de {{ painel.modulos_total }} cadastrados</small></article>

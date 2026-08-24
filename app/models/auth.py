@@ -50,6 +50,15 @@ class Usuario(UserMixin, db.Model):
     def is_gerente(self):
         return self.papel == 'gerente'
 
+    def lidera_equipe(self):
+        """Verdadeiro quando a conta está ligada a um líder com equipe ativa."""
+        try:
+            funcionario = self.funcionario
+            return bool(funcionario and any(
+                liderado.ativo for liderado in funcionario.liderados))
+        except Exception:
+            return False
+
     def is_producao(self):
         return self.papel == 'producao'
 
