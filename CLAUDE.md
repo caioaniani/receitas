@@ -2969,8 +2969,17 @@ do padeiro: separação + cronograma + pré-preparo) + **lead FIXO D+2**.
   (teste-guarda). ATENÇÃO: a DIVULGAÇÃO tem baixa própria (canal 'divulgacao')
   e NÃO é afetada por isso — de propósito (brinde sai pela porta).
 - **Produção (padeiro + cronograma)**: pedido PAGO (status pago/em_preparo/
-  a_caminho — nunca aguardando_pagamento/cancelado/entregue; divulgação fora)
-  com item sob encomenda:
+  a_caminho — nunca aguardando_pagamento/cancelado/entregue) com item sob
+  encomenda. **DIVULGAÇÃO ENTRA na esteira de PRODUÇÃO desde 23/08/2026**
+  (caso 84F17F68: Caixa de Mini de cortesia pra segunda invisível no
+  pré-preparo — dono: "não está aparecendo na tela de pré-preparo para o
+  padeiro tirar para fermentar"): status 'divulgacao' entra no card do
+  padeiro, no preparar_json e no bloco 2c (`_STATUS_ONLINE_PRODUCAO` em
+  padeiro/routes.py). O "divulgação fora" continua valendo pra
+  FATURAMENTO e previsão de VENDA (tipos venda_site_divulgacao* seguem
+  fora de VENDA_TIPOS_DEMANDA — sem dupla contagem). Divulgação de item
+  COMUM (prateleira) segue fora da esteira (baixou estoque na criação).
+  Testes: seção "DIVULGAÇÃO entra na PRODUÇÃO" em test_sob_encomenda.py:
   - **Balanço firme** (`previsao_producao.balanco_industria`, bloco "2c",
     espelho do B2B `_contrib_b2b`): SÓ os itens sob encomenda viram demanda
     firme por receita (cesta explode em receita). É ADITIVO e sem risco de

@@ -617,3 +617,80 @@ def test_pagamento_reserva_e_devolve_plano_pra_encomenda(app):
         loja_pagamento._devolver_ao_plano_do_dia(p)
         db.session.refresh(linha)
         assert linha.qtd_reservada == 0
+
+
+# ── DIVULGAÇÃO entra na PRODUÇÃO (23/08/2026, caso pedido 84F17F68) ──────
+# "Para amanhã tem um pedido de mini mas não está aparecendo na tela de
+# pré-preparo para o padeiro tirar para fermentar." A divulgação (cortesia)
+# ficava fora de TODA a esteira de produção porque os filtros exigiam
+# status pago — mas o "divulgação fora" vale pra faturamento/previsão de
+# venda, não pra produzir: o item sob encomenda de cortesia é produzido
+# pro pedido como qualquer outro.
+
+def _divulgacao(receita, qtd=5, dias=1):
+    from app.models import PedidoOnline, PedidoOnlineItem
+    p = PedidoOnline(codigo=f'DIV{receita.id}{qtd}{dias}',
+                     nome_cliente='Gustavo', email_cliente='d@opao.online',
+                     modo_entrega='agendada', status='divulgacao',
+                     divulgacao=True,
+                     data_entrega=hoje() + timedelta(days=dias))
+    db.session.add(p)
+    db.session.flush()
+    db.session.add(PedidoOnlineItem(
+        pedido_id=p.id, kind='receita', receita_id=receita.id,
+        nome=receita.nome, preco_unitario=8, quantidade=qtd, subtotal=8 * qtd))
+    db.session.commit()
+    return p
+
+
+def test_divulgacao_sob_encomenda_aparece_na_separacao_do_padeiro(app):
+    from app.blueprints.padeiro.routes import _dados_listas
+    from app.utils import hoje as _hoje
+    with app.app_context():
+        r = _receita(sob_encomenda=True)
+        p = _divulgacao(r, qtd=5, dias=0)
+        dados = _dados_listas(_hoje(), eh_hoje=True)
+        cards = [c for c in dados['a_separar'] if c['tipo'] == 'online']
+        assert [c['id'] for c in cards] == [p.id]
+
+
+def test_divulgacao_sob_encomenda_entra_no_pre_preparo_da_vespera(app):
+    from app.models import Usuario
+    with app.app_context():
+        r = _receita(sob_encomenda=True, estado_padrao='assado')
+        _divulgacao(r, qtd=30, dias=1)       # entrega amanhã (o caso real)
+        u = Usuario(nome='Pad2', login='pad2', papel='padeiro')
+        u.set_senha('x' * 8)
+        db.session.add(u)
+        db.session.commit()
+        c = app.test_client()
+        with c.session_transaction() as s:
+            s['_user_id'] = str(u.id)
+            s['_fresh'] = True
+        resp = c.get(f'/padeiro/preparar.json?data={hoje().isoformat()}')
+        assert resp.status_code == 200
+        nomes = [x['nome'] for x in resp.get_json()['itens']]
+        assert r.nome in nomes
+
+
+def test_divulgacao_sob_encomenda_conta_como_firme_no_balanco(app):
+    from app.services.previsao_producao import balanco_industria
+    with app.app_context():
+        r = _receita(sob_encomenda=True)
+        _divulgacao(r, qtd=30, dias=1)
+        linhas = {i['nome']: i for i in
+                  balanco_industria(horizonte_dias=7, usar_cache=False)['itens']}
+        assert linhas[r.nome]['comprometido'] >= 30
+
+
+def test_divulgacao_de_item_comum_segue_FORA_da_esteira(app):
+    """Cortesia de item de prateleira (ex.: Family Box comum) já saiu do
+    estoque na criação — não vira card nem pré-preparo (só o sob encomenda
+    é produzido pro pedido)."""
+    from app.blueprints.padeiro.routes import _dados_listas
+    from app.utils import hoje as _hoje
+    with app.app_context():
+        r = _receita(sob_encomenda=False)
+        _divulgacao(r, qtd=2, dias=0)
+        dados = _dados_listas(_hoje(), eh_hoje=True)
+        assert not [c for c in dados['a_separar'] if c['tipo'] == 'online']
