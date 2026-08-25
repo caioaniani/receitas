@@ -177,7 +177,7 @@ def test_owner_configura_hierarquia_pelo_rh(app, owner_user):
         assert db.session.get(Funcionario, liderado_id).lider_id == lider_id
 
 
-def test_dakson_acessa_apenas_formulario_de_organizacao(app):
+def test_dakson_acessa_organizacao_e_cadastro_basico_de_funcionario(app):
     with app.app_context():
         dakson, _ = _pessoa('Dakson', '501', papel='admin')
         dakson.login = 'dakson'
@@ -197,9 +197,31 @@ def test_dakson_acessa_apenas_formulario_de_organizacao(app):
     assert '9876' not in corpo
     assert 'Checklists de observação' not in corpo
     funcionarios = client.get('/rh/funcionarios')
+    novo = client.get('/rh/funcionarios/novo')
     lideranca_rh = client.get('/rh/lideranca')
-    assert funcionarios.status_code == 302
-    assert funcionarios.location.endswith('/treino/')
+    assert funcionarios.status_code == 200
+    assert 'Colega da Equipe' in funcionarios.get_data(as_text=True)
+    assert 'gerenciar acessos' not in funcionarios.get_data(as_text=True)
+    assert novo.status_code == 200
+    assert 'Salário Base' not in novo.get_data(as_text=True)
+    assert 'Premiação' not in novo.get_data(as_text=True)
+    assert client.get('/rh/funcionarios?view=acessos').status_code == 403
+    criado = client.post('/rh/funcionarios/novo', data={
+        'nome': 'Nova Pessoa',
+        'cpf': '99999999999',
+        'funcao': 'Atendente',
+        'email': 'nova@teste.local',
+        'salario_base': '9999',
+        'premiacao': '999',
+        'vt_dia': '99',
+    }, follow_redirects=True)
+    assert criado.status_code == 200
+    assert 'Nova Pessoa' in criado.get_data(as_text=True)
+    with app.app_context():
+        nova = Funcionario.query.filter_by(cpf='99999999999').one()
+        assert nova.salario_base == 0
+        assert nova.premiacao == 0
+        assert nova.vt_dia == 0
     assert lideranca_rh.status_code == 302
     assert lideranca_rh.location.endswith('/treino/')
     assert client.get('/rh/lideranca/organograma').status_code == 200
@@ -219,6 +241,8 @@ def test_outro_admin_nao_acessa_formulario_de_organizacao(app):
     assert client.get('/rh/lideranca/preenchimento').status_code == 403
     assert client.get('/rh/lideranca/organograma').status_code == 403
     assert client.get('/rh/lideranca/organograma.pdf').status_code == 403
+    assert client.get('/rh/funcionarios').status_code == 403
+    assert client.get('/rh/funcionarios/novo').status_code == 403
     assert client.post(
         '/rh/lideranca/preenchimento/salvar', data={}).status_code == 403
 

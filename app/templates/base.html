@@ -149,6 +149,12 @@
             👥 Organizar equipe
         </a>
         {% endif %}
+        {% if current_user.pode_cadastrar_funcionarios() %}
+        <a href="{{ url_for('rh.funcionarios') }}"
+           class="sidebar-link {% if request.path.startswith('/rh/funcionarios') %}active{% endif %}">
+            👤 Funcionários
+        </a>
+        {% endif %}
         {% if not so_treino %}
         {# Loja Online: liberada a todos os usuários logados (22/06/2026), porém
            o DASHBOARD (com faturamento) e a config de logo seguem owner-only.

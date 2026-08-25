@@ -29,6 +29,11 @@
             <i class="bi bi-diagram-3"></i><span>Organizar equipe</span>
         </a>
         {% endif %}
+        {% if current_user.pode_cadastrar_funcionarios() %}
+        <a href="{{ url_for('rh.funcionarios') }}" class="sidebar-link {{ 'active' if request.path.startswith('/rh/funcionarios') }}">
+            <i class="bi bi-person-plus"></i><span>Funcionários</span>
+        </a>
+        {% endif %}
         {% if current_user.pode_lojas() %}
         <a href="{{ url_for('main.area', slug='lojas') }}" class="sidebar-link {{ 'active' if request.path == '/area/lojas' }}">
             <i class="bi bi-shop"></i><span>Lojas</span>

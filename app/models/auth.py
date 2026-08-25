@@ -77,6 +77,23 @@ class Usuario(UserMixin, db.Model):
         except Exception:
             return False
 
+    def pode_cadastrar_funcionarios(self):
+        """Acesso estreito do responsável de RH ao cadastro básico.
+
+        O restante do RH continua exclusivo do dono. Dakson pode consultar a
+        lista e incluir pessoas, mas não vê fichas, salários, folha ou acessos.
+        """
+        if self.is_dono():
+            return True
+        try:
+            return bool(
+                (self.login or '').strip().casefold() == 'dakson'
+                and self.funcionario
+                and self.funcionario.ativo
+            )
+        except Exception:
+            return False
+
     def is_producao(self):
         return self.papel == 'producao'
 

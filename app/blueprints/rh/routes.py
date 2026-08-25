@@ -40,6 +40,9 @@ def _rh_restrito_ao_owner():
             'rh.lideranca_organograma_pdf',
             } and current_user.pode_organizar_equipe()):
         return None
+    if (request.endpoint in {'rh.funcionarios', 'rh.novo_funcionario'}
+            and current_user.pode_cadastrar_funcionarios()):
+        return None
     if not current_user.is_dono():
         abort(403)
 
@@ -106,6 +109,8 @@ def funcionarios():
     view = request.args.get('view', 'cadastros')
     if view not in ('cadastros', 'acessos'):
         view = 'cadastros'
+    if view == 'acessos' and not current_user.is_dono():
+        abort(403)
 
     query = Funcionario.query.options(
         joinedload(Funcionario.usuario),
@@ -576,21 +581,35 @@ def funcionarios_reenviar_acessos():
 @rh_required
 def novo_funcionario():
     if request.method == 'POST':
-        # Salario so e' aceito do form se user e' owner; senao usa 0
-        # (admin sem is_owner nao deve poder definir salarios)
-        salario_in = parse_float_br(request.form.get('salario_base', ''), default=0) \
-            if getattr(current_user, 'is_owner', False) else 0
+        # Dados de remuneração só são aceitos do owner. A tela simplificada do
+        # Dakson não exibe esses campos e o servidor também ignora uma eventual
+        # tentativa de enviá-los manualmente.
+        pode_remuneracao = current_user.is_dono()
+        salario_in = (parse_float_br(
+            request.form.get('salario_base', ''), default=0)
+            if pode_remuneracao else 0)
         func = Funcionario(
             nome=request.form.get('nome', '').strip(),
             cpf=request.form.get('cpf', '').strip(),
             funcao=request.form.get('funcao', '').strip() or None,
             salario_base=salario_in,
-            tem_cargo_confianca='tem_cargo_confianca' in request.form,
-            premiacao=parse_float_br(request.form.get('premiacao', ''), default=0),
-            vt_dia=parse_float_br(request.form.get('vt_dia', ''), default=0),
-            vr_dia=parse_float_br(request.form.get('vr_dia', ''), default=22),
-            dias_trabalhados=int(request.form.get('dias_trabalhados', '26') or 26),
-            hora_extra_pct=parse_float_br(request.form.get('hora_extra_pct', ''), default=55),
+            tem_cargo_confianca=(pode_remuneracao
+                                 and 'tem_cargo_confianca' in request.form),
+            premiacao=(parse_float_br(
+                request.form.get('premiacao', ''), default=0)
+                if pode_remuneracao else 0),
+            vt_dia=(parse_float_br(
+                request.form.get('vt_dia', ''), default=0)
+                if pode_remuneracao else 0),
+            vr_dia=(parse_float_br(
+                request.form.get('vr_dia', ''), default=22)
+                if pode_remuneracao else 22),
+            dias_trabalhados=(int(
+                request.form.get('dias_trabalhados', '26') or 26)
+                if pode_remuneracao else 26),
+            hora_extra_pct=(parse_float_br(
+                request.form.get('hora_extra_pct', ''), default=55)
+                if pode_remuneracao else 55),
             horas_extras=parse_float_br(request.form.get('horas_extras', ''), default=0),
             telefone=request.form.get('telefone', '').strip() or None,
             email=request.form.get('email', '').strip() or None,
@@ -623,6 +642,8 @@ def novo_funcionario():
         rh_cargos.associar_funcionario(func)
         db.session.commit()
         flash(f'Funcionário "{func.nome}" cadastrado!', 'success')
+        if not current_user.is_dono():
+            return redirect(url_for('rh.funcionarios'))
         return redirect(url_for('rh.detalhe_funcionario', id=func.id))
 
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()

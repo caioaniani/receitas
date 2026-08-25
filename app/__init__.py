@@ -459,9 +459,14 @@ def create_app(config_class=None):
                    'rh.lideranca_organograma_pdf'}
             and current_user.pode_organizar_equipe()
         )
+        acesso_cadastro_funcionarios = (
+            ep in {'rh.funcionarios', 'rh.novo_funcionario'}
+            and current_user.pode_cadastrar_funcionarios()
+        )
         if (getattr(current_user, 'somente_treino', False)
                 and not ep.startswith('treino.')
-                and not acesso_equipe):
+                and not acesso_equipe
+                and not acesso_cadastro_funcionarios):
             return redirect(url_for('treino.home'))
         return None
 

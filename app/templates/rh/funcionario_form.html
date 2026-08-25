@@ -27,14 +27,13 @@
         </div>
     </div>
 
+    {% if current_user.is_owner %}
     <div class="row g-3 mt-1">
-        {% if current_user.is_owner %}
         <div class="col-md-3">
             <label class="form-label fw-bold">Salário Base</label>
             <input type="text" name="salario_base" class="form-control"
                    value="{{ '%.2f' % func.salario_base if func else '' }}">
         </div>
-        {% endif %}
         <div class="col-md-3">
             <label class="form-label fw-bold">Cargo de Confiança</label>
             <input type="text" name="cargo_confianca" class="form-control"
@@ -51,6 +50,7 @@
                    value="{{ '%.0f' % func.hora_extra_pct if func else '55' }}">
         </div>
     </div>
+    {% endif %}
 
     <div class="row g-3 mt-1">
         <div class="col-md-2">
