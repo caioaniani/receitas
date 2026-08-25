@@ -4,7 +4,7 @@
 {% macro pessoa_node(pessoa, nivel=0) -%}
   {% set filhos = filhos_por_lider.get(pessoa.id, []) %}
   {% set unidade = lojas_por_id.get(unidades.get(pessoa.id)) %}
-  <li class="org-branch" data-org-branch data-org-level="{{ nivel }}">
+  <li class="org-branch{{ ' has-children' if filhos }}" data-org-branch data-org-level="{{ nivel }}">
     <article class="org-person" data-org-person
              data-name="{{ (pessoa.nome ~ ' ' ~ (pessoa.cargo.nome if pessoa.cargo else (pessoa.funcao or '')))|lower }}"
              data-unit="{{ unidade.id if unidade else '' }}"
@@ -39,7 +39,7 @@
     </div>
     <nav class="treino-heading-actions">
       <a class="treino-secondary-action" href="{{ url_for('rh.lideranca_preenchimento') }}"><i class="bi bi-pencil"></i> Editar estrutura</a>
-      <button class="treino-primary-action" type="button" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
+      <a class="treino-primary-action" href="{{ url_for('rh.lideranca_organograma_pdf') }}"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</a>
     </nav>
   </header>
 
@@ -72,6 +72,7 @@
       </select></label>
       <button class="treino-link-button" type="button" id="org-clear">Limpar filtros</button>
     </div>
+    <p class="org-horizontal-hint"><i class="bi bi-arrows"></i> O organograma cresce da esquerda para a direita. Deslize para o lado para acompanhar os níveis.</p>
 
     {% if raizes %}
     <div class="org-chart" id="org-chart">

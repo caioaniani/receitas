@@ -203,6 +203,9 @@ def test_dakson_acessa_apenas_formulario_de_organizacao(app):
     assert lideranca_rh.status_code == 302
     assert lideranca_rh.location.endswith('/treino/')
     assert client.get('/rh/lideranca/organograma').status_code == 200
+    pdf = client.get('/rh/lideranca/organograma.pdf')
+    assert pdf.status_code == 200
+    assert pdf.mimetype == 'application/pdf'
 
 
 def test_outro_admin_nao_acessa_formulario_de_organizacao(app):
@@ -215,6 +218,7 @@ def test_outro_admin_nao_acessa_formulario_de_organizacao(app):
     client = _login(app, admin_id)
     assert client.get('/rh/lideranca/preenchimento').status_code == 403
     assert client.get('/rh/lideranca/organograma').status_code == 403
+    assert client.get('/rh/lideranca/organograma.pdf').status_code == 403
     assert client.post(
         '/rh/lideranca/preenchimento/salvar', data={}).status_code == 403
 
@@ -304,6 +308,7 @@ def test_organograma_mostra_hierarquia_unidade_e_periodo(app, owner_user):
     corpo = resposta.get_data(as_text=True)
     assert resposta.status_code == 200
     assert 'Organograma da equipe' in corpo
+    assert 'Exportar PDF' in corpo
     assert 'Loja Organograma' in corpo
     assert 'Manhã' in corpo and 'Tarde' in corpo
     assert 'data-org-level="0"' in corpo
@@ -311,3 +316,10 @@ def test_organograma_mostra_hierarquia_unidade_e_periodo(app, owner_user):
     assert 'data-org-level="2"' in corpo
     assert corpo.index('Lider Geral') < corpo.index('Supervisora Loja')
     assert corpo.index('Supervisora Loja') < corpo.index('Atendente Equipe')
+
+    pdf = client.get('/rh/lideranca/organograma.pdf')
+    assert pdf.status_code == 200
+    assert pdf.mimetype == 'application/pdf'
+    assert pdf.data.startswith(b'%PDF-')
+    assert 'attachment; filename="organograma-equipe-' in (
+        pdf.headers['Content-Disposition'])

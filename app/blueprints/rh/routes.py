@@ -37,6 +37,7 @@ def _rh_restrito_ao_owner():
             'rh.lideranca_preenchimento',
             'rh.lideranca_preenchimento_salvar',
             'rh.lideranca_organograma',
+            'rh.lideranca_organograma_pdf',
             } and current_user.pode_organizar_equipe()):
         return None
     if not current_user.is_dono():
@@ -273,12 +274,8 @@ def lideranca_preenchimento_salvar():
     return redirect(url_for('rh.lideranca_preenchimento'))
 
 
-@rh_bp.route('/lideranca/organograma')
-@login_required
-def lideranca_organograma():
-    """Organograma vivo a partir dos vínculos preenchidos pela liderança."""
-    if not current_user.pode_organizar_equipe():
-        abort(403)
+def _dados_organograma():
+    """Monta a árvore uma vez para a tela e para o PDF."""
     from app.services import treino_lideranca as lideranca_svc
 
     funcionarios = (Funcionario.query
@@ -315,12 +312,46 @@ def lideranca_organograma():
     maior_equipe = max(
         (len(filhos_por_lider[f.id]) for f in lideres), default=0)
 
+    return {
+        'funcionarios': funcionarios,
+        'lojas': lojas,
+        'lojas_por_id': lojas_por_id,
+        'unidades': unidades,
+        'filhos_por_lider': filhos_por_lider,
+        'raizes': raizes,
+        'total_lideres': len(lideres),
+        'pendencias': pendencias,
+        'maior_equipe': maior_equipe,
+    }
+
+
+@rh_bp.route('/lideranca/organograma')
+@login_required
+def lideranca_organograma():
+    """Organograma vivo a partir dos vínculos preenchidos pela liderança."""
+    if not current_user.pode_organizar_equipe():
+        abort(403)
     return render_template(
-        'rh/lideranca_organograma.html', funcionarios=funcionarios,
-        lojas=lojas, lojas_por_id=lojas_por_id, unidades=unidades,
-        filhos_por_lider=filhos_por_lider, raizes=raizes,
-        total_lideres=len(lideres), pendencias=pendencias,
-        maior_equipe=maior_equipe)
+        'rh/lideranca_organograma.html', **_dados_organograma())
+
+
+@rh_bp.route('/lideranca/organograma.pdf')
+@login_required
+def lideranca_organograma_pdf():
+    """Exporta a hierarquia completa em uma página ampla e horizontal."""
+    if not current_user.pode_organizar_equipe():
+        abort(403)
+    try:
+        from app.services.lideranca_organograma_pdf import gerar_pdf
+
+        pdf = gerar_pdf(_dados_organograma(), agora())
+    except Exception:  # noqa: BLE001 - falha nativa do renderizador
+        current_app.logger.exception('Falha ao exportar organograma em PDF')
+        flash('Não foi possível gerar o PDF agora. Tente novamente.', 'warning')
+        return redirect(url_for('rh.lideranca_organograma'))
+    nome = f'organograma-equipe-{hoje_brt().isoformat()}.pdf'
+    return Response(pdf, mimetype='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="{nome}"'})
 
 
 @rh_bp.route('/lideranca/checklist/<int:trilha_id>', methods=['POST'])
