@@ -344,3 +344,19 @@ def test_owner_aparece_como_direcao_sem_pendencia_operacional(
     assert 'Todas as unidades' in corpo
     assert 'Não se aplica' in corpo
     assert 'Cadastros incompletos</span><strong>0</strong>' in corpo
+
+
+def test_cadastro_45_e_direcao_mesmo_com_conta_separada(app, owner_user):
+    with app.app_context():
+        dono = Funcionario(
+            id=45, nome='Caio Nogueira Antinhani', cpf='12345678901',
+            ativo=True)
+        db.session.add(dono)
+        db.session.commit()
+        owner_id = owner_user.id
+
+    client = _login(app, owner_id)
+    corpo = client.get('/rh/lideranca/organograma').get_data(as_text=True)
+    assert 'Caio Nogueira Antinhani' in corpo
+    assert 'Proprietário / Direção' in corpo
+    assert 'Cadastros incompletos</span><strong>0</strong>' in corpo

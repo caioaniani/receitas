@@ -289,7 +289,7 @@ def _dados_organograma():
     unidades = lideranca_svc.unidades_principais(funcionarios)
     owner_ids = {
         f.id for f in funcionarios
-        if f.usuario and f.usuario.is_dono()
+        if lideranca_svc.eh_direcao(f)
     }
     lojas_por_id = {loja.id: loja for loja in lojas}
     por_id = {funcionario.id: funcionario for funcionario in funcionarios}

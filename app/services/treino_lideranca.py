@@ -12,10 +12,25 @@ from app.models import (
 from app.models.rh import funcionario_loja
 
 PERIODOS_EQUIPE = ('Manhã', 'Tarde')
+# O cadastro 45 foi confirmado pelo próprio dono em 25/08/2026. Ele mantém
+# uma conta de treinamento separada da conta administrativa owner; por isso o
+# vínculo Usuario.is_owner, sozinho, não identifica essa ficha do RH.
+FUNCIONARIOS_DIRECAO = frozenset({45})
 
 
 class LiderancaError(ValueError):
     pass
+
+
+def eh_direcao(funcionario):
+    """Reconhece o dono sem trocar ou invalidar sua conta de treinamento."""
+    if funcionario is None:
+        return False
+    usuario = getattr(funcionario, 'usuario', None)
+    return bool(
+        funcionario.id in FUNCIONARIOS_DIRECAO
+        or (usuario and usuario.is_dono())
+    )
 
 
 def liderados_do(gestor, *, incluir_inativos=False):
