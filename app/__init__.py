@@ -454,7 +454,8 @@ def create_app(config_class=None):
             return redirect(url_for('auth.minha_senha'))
         acesso_equipe = (
             ep in {'rh.lideranca_preenchimento',
-                   'rh.lideranca_preenchimento_salvar'}
+                   'rh.lideranca_preenchimento_salvar',
+                   'rh.lideranca_organograma'}
             and current_user.pode_organizar_equipe()
         )
         if (getattr(current_user, 'somente_treino', False)

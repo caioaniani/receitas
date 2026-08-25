@@ -36,6 +36,7 @@ def _rh_restrito_ao_owner():
     if (request.endpoint in {
             'rh.lideranca_preenchimento',
             'rh.lideranca_preenchimento_salvar',
+            'rh.lideranca_organograma',
             } and current_user.pode_organizar_equipe()):
         return None
     if not current_user.is_dono():
@@ -270,6 +271,56 @@ def lideranca_preenchimento_salvar():
         total = sum(alteracoes.values())
         flash(f'Organização salva: {total} campo(s) atualizado(s).', 'success')
     return redirect(url_for('rh.lideranca_preenchimento'))
+
+
+@rh_bp.route('/lideranca/organograma')
+@login_required
+def lideranca_organograma():
+    """Organograma vivo a partir dos vínculos preenchidos pela liderança."""
+    if not current_user.pode_organizar_equipe():
+        abort(403)
+    from app.services import treino_lideranca as lideranca_svc
+
+    funcionarios = (Funcionario.query
+                    .options(joinedload(Funcionario.cargo),
+                             joinedload(Funcionario.lider),
+                             selectinload(Funcionario.lojas))
+                    .filter_by(ativo=True).order_by(Funcionario.nome).all())
+    lojas = (Loja.query.options(defer(Loja.planta_imagem))
+             .filter_by(ativa=True).order_by(Loja.nome).all())
+    unidades = lideranca_svc.unidades_principais(funcionarios)
+    lojas_por_id = {loja.id: loja for loja in lojas}
+    por_id = {funcionario.id: funcionario for funcionario in funcionarios}
+    filhos_por_lider = {funcionario.id: [] for funcionario in funcionarios}
+    raizes = []
+
+    for funcionario in funcionarios:
+        if funcionario.lider_id in por_id:
+            filhos_por_lider[funcionario.lider_id].append(funcionario)
+        else:
+            raizes.append(funcionario)
+
+    def _ordem(funcionario):
+        return (-len(filhos_por_lider[funcionario.id]),
+                funcionario.nome.casefold())
+
+    raizes.sort(key=_ordem)
+    for liderados in filhos_por_lider.values():
+        liderados.sort(key=_ordem)
+    lideres = [f for f in funcionarios if filhos_por_lider[f.id]]
+    pendencias = sum(
+        1 for f in funcionarios
+        if not unidades.get(f.id)
+        or f.periodo not in lideranca_svc.PERIODOS_EQUIPE)
+    maior_equipe = max(
+        (len(filhos_por_lider[f.id]) for f in lideres), default=0)
+
+    return render_template(
+        'rh/lideranca_organograma.html', funcionarios=funcionarios,
+        lojas=lojas, lojas_por_id=lojas_por_id, unidades=unidades,
+        filhos_por_lider=filhos_por_lider, raizes=raizes,
+        total_lideres=len(lideres), pendencias=pendencias,
+        maior_equipe=maior_equipe)
 
 
 @rh_bp.route('/lideranca/checklist/<int:trilha_id>', methods=['POST'])

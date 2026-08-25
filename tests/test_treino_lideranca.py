@@ -192,6 +192,7 @@ def test_dakson_acessa_apenas_formulario_de_organizacao(app):
     corpo = pagina.get_data(as_text=True)
     assert pagina.status_code == 200
     assert 'Organizar equipe' in corpo
+    assert 'Ver organograma' in corpo
     assert 'Colega da Equipe' in corpo
     assert '9876' not in corpo
     assert 'Checklists de observação' not in corpo
@@ -201,6 +202,7 @@ def test_dakson_acessa_apenas_formulario_de_organizacao(app):
     assert funcionarios.location.endswith('/treino/')
     assert lideranca_rh.status_code == 302
     assert lideranca_rh.location.endswith('/treino/')
+    assert client.get('/rh/lideranca/organograma').status_code == 200
 
 
 def test_outro_admin_nao_acessa_formulario_de_organizacao(app):
@@ -212,6 +214,7 @@ def test_outro_admin_nao_acessa_formulario_de_organizacao(app):
 
     client = _login(app, admin_id)
     assert client.get('/rh/lideranca/preenchimento').status_code == 403
+    assert client.get('/rh/lideranca/organograma').status_code == 403
     assert client.post(
         '/rh/lideranca/preenchimento/salvar', data={}).status_code == 403
 
@@ -275,3 +278,36 @@ def test_estrutura_invalida_nao_salva_nenhum_campo(app):
         assert pessoa.lider_id is None
         assert pessoa.periodo is None
         assert pessoa.lojas == []
+
+
+def test_organograma_mostra_hierarquia_unidade_e_periodo(app, owner_user):
+    with app.app_context():
+        _, lider = _pessoa('Lider Geral', '541')
+        _, supervisora = _pessoa('Supervisora Loja', '542')
+        _, atendente = _pessoa('Atendente Equipe', '543', com_acesso=False)
+        loja = Loja(nome='Loja Organograma', ativa=True)
+        db.session.add(loja)
+        db.session.flush()
+        lider.lojas.append(loja)
+        supervisora.lojas.append(loja)
+        atendente.lojas.append(loja)
+        lider.periodo = 'Manhã'
+        supervisora.periodo = 'Manhã'
+        atendente.periodo = 'Tarde'
+        supervisora.lider_id = lider.id
+        atendente.lider_id = supervisora.id
+        db.session.commit()
+        owner_id = owner_user.id
+
+    client = _login(app, owner_id)
+    resposta = client.get('/rh/lideranca/organograma')
+    corpo = resposta.get_data(as_text=True)
+    assert resposta.status_code == 200
+    assert 'Organograma da equipe' in corpo
+    assert 'Loja Organograma' in corpo
+    assert 'Manhã' in corpo and 'Tarde' in corpo
+    assert 'data-org-level="0"' in corpo
+    assert 'data-org-level="1"' in corpo
+    assert 'data-org-level="2"' in corpo
+    assert corpo.index('Lider Geral') < corpo.index('Supervisora Loja')
+    assert corpo.index('Supervisora Loja') < corpo.index('Atendente Equipe')

@@ -145,7 +145,7 @@
         {% endif %}
         {% if current_user.pode_organizar_equipe() %}
         <a href="{{ url_for('rh.lideranca_preenchimento') }}"
-           class="sidebar-link {% if request.path.startswith('/rh/lideranca/preenchimento') %}active{% endif %}">
+           class="sidebar-link {% if request.path.startswith('/rh/lideranca') %}active{% endif %}">
             👥 Organizar equipe
         </a>
         {% endif %}
