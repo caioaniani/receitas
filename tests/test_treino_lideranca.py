@@ -323,3 +323,24 @@ def test_organograma_mostra_hierarquia_unidade_e_periodo(app, owner_user):
     assert pdf.data.startswith(b'%PDF-')
     assert 'attachment; filename="organograma-equipe-' in (
         pdf.headers['Content-Disposition'])
+
+
+def test_owner_aparece_como_direcao_sem_pendencia_operacional(
+        app, owner_user):
+    with app.app_context():
+        dono = Funcionario(
+            nome='Dono da Padaria', cpf='551', ativo=True,
+            usuario_id=owner_user.id)
+        db.session.add(dono)
+        db.session.commit()
+        owner_id = owner_user.id
+
+    client = _login(app, owner_id)
+    resposta = client.get('/rh/lideranca/organograma')
+    corpo = resposta.get_data(as_text=True)
+    assert resposta.status_code == 200
+    assert 'Dono da Padaria' in corpo
+    assert 'Proprietário / Direção' in corpo
+    assert 'Todas as unidades' in corpo
+    assert 'Não se aplica' in corpo
+    assert 'Cadastros incompletos</span><strong>0</strong>' in corpo

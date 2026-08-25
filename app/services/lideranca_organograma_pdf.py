@@ -103,6 +103,7 @@ def gerar_pdf(dados, gerado_em):
     filhos_por_lider = dados['filhos_por_lider']
     lojas_por_id = dados['lojas_por_id']
     unidades = dados['unidades']
+    owner_ids = dados.get('owner_ids', set())
     if not raizes:
         pdf.set_xy(margem, 95)
         pdf.set_font('Helvetica', '', 10)
@@ -171,8 +172,11 @@ def gerar_pdf(dados, gerado_em):
         x, centro = posicoes[pessoa.id]
         y = centro - altura_cartao / 2
         unidade = lojas_por_id.get(unidades.get(pessoa.id))
-        cargo = pessoa.cargo.nome if pessoa.cargo else (pessoa.funcao or 'Sem cargo')
-        incompleto = not unidade or not pessoa.periodo
+        is_owner = pessoa.id in owner_ids
+        cargo = ('Proprietário / Direção' if is_owner else
+                 (pessoa.cargo.nome if pessoa.cargo else
+                  (pessoa.funcao or 'Sem cargo')))
+        incompleto = not is_owner and (not unidade or not pessoa.periodo)
         if nivel == 0:
             preenchimento, borda = (247, 251, 248), (83, 139, 108)
         elif incompleto:
@@ -193,8 +197,10 @@ def gerar_pdf(dados, gerado_em):
         pdf.set_text_color(102, 115, 108)
         pdf.set_font('Helvetica', '', 5.6)
         pdf.cell(disponivel, 2.7, _cortar(pdf, cargo.upper(), disponivel))
-        unidade_nome = unidade.nome if unidade else 'Unidade não informada'
-        periodo = pessoa.periodo or 'Período não informado'
+        unidade_nome = ('Todas as unidades' if is_owner else
+                        (unidade.nome if unidade else 'Unidade não informada'))
+        periodo = ('Não se aplica' if is_owner else
+                   (pessoa.periodo or 'Período não informado'))
         meta = f'{unidade_nome}  ·  {periodo}'
         pdf.set_xy(x + padding, y + altura_cartao - 3.8)
         pdf.set_text_color(*(138, 91, 18) if incompleto else (70, 102, 84))

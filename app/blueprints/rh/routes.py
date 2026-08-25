@@ -281,11 +281,16 @@ def _dados_organograma():
     funcionarios = (Funcionario.query
                     .options(joinedload(Funcionario.cargo),
                              joinedload(Funcionario.lider),
+                             joinedload(Funcionario.usuario),
                              selectinload(Funcionario.lojas))
                     .filter_by(ativo=True).order_by(Funcionario.nome).all())
     lojas = (Loja.query.options(defer(Loja.planta_imagem))
              .filter_by(ativa=True).order_by(Loja.nome).all())
     unidades = lideranca_svc.unidades_principais(funcionarios)
+    owner_ids = {
+        f.id for f in funcionarios
+        if f.usuario and f.usuario.is_dono()
+    }
     lojas_por_id = {loja.id: loja for loja in lojas}
     por_id = {funcionario.id: funcionario for funcionario in funcionarios}
     filhos_por_lider = {funcionario.id: [] for funcionario in funcionarios}
@@ -307,8 +312,9 @@ def _dados_organograma():
     lideres = [f for f in funcionarios if filhos_por_lider[f.id]]
     pendencias = sum(
         1 for f in funcionarios
-        if not unidades.get(f.id)
-        or f.periodo not in lideranca_svc.PERIODOS_EQUIPE)
+        if f.id not in owner_ids
+        and (not unidades.get(f.id)
+             or f.periodo not in lideranca_svc.PERIODOS_EQUIPE))
     maior_equipe = max(
         (len(filhos_por_lider[f.id]) for f in lideres), default=0)
 
@@ -317,6 +323,7 @@ def _dados_organograma():
         'lojas': lojas,
         'lojas_por_id': lojas_por_id,
         'unidades': unidades,
+        'owner_ids': owner_ids,
         'filhos_por_lider': filhos_por_lider,
         'raizes': raizes,
         'total_lideres': len(lideres),

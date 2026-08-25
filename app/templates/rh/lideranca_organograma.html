@@ -4,6 +4,7 @@
 {% macro pessoa_node(pessoa, nivel=0) -%}
   {% set filhos = filhos_por_lider.get(pessoa.id, []) %}
   {% set unidade = lojas_por_id.get(unidades.get(pessoa.id)) %}
+  {% set is_owner = pessoa.id in owner_ids %}
   <li class="org-branch{{ ' has-children' if filhos }}" data-org-branch data-org-level="{{ nivel }}">
     <article class="org-person" data-org-person
              data-name="{{ (pessoa.nome ~ ' ' ~ (pessoa.cargo.nome if pessoa.cargo else (pessoa.funcao or '')))|lower }}"
@@ -11,11 +12,11 @@
              data-period="{{ pessoa.periodo or '' }}">
       <div class="org-person-main">
         <span class="treino-avatar">{{ pessoa.nome[:1]|upper }}</span>
-        <div><strong>{{ pessoa.nome }}</strong><small>{{ pessoa.cargo.nome if pessoa.cargo else (pessoa.funcao or 'Sem cargo') }}</small></div>
+        <div><strong>{{ pessoa.nome }}</strong><small>{{ 'Proprietário / Direção' if is_owner else (pessoa.cargo.nome if pessoa.cargo else (pessoa.funcao or 'Sem cargo')) }}</small></div>
       </div>
       <div class="org-person-meta">
-        <span class="{{ 'is-missing' if not unidade }}"><i class="bi bi-geo-alt"></i> {{ unidade.nome if unidade else 'Unidade não informada' }}</span>
-        <span class="{{ 'is-missing' if not pessoa.periodo }}"><i class="bi bi-clock"></i> {{ pessoa.periodo or 'Período não informado' }}</span>
+        <span class="{{ 'is-missing' if not unidade and not is_owner }}"><i class="bi bi-geo-alt"></i> {{ 'Todas as unidades' if is_owner else (unidade.nome if unidade else 'Unidade não informada') }}</span>
+        <span class="{{ 'is-missing' if not pessoa.periodo and not is_owner }}"><i class="bi bi-clock"></i> {{ 'Não se aplica' if is_owner else (pessoa.periodo or 'Período não informado') }}</span>
       </div>
       <footer>
         {% if filhos %}<strong><i class="bi bi-people"></i> {{ filhos|length }} liderado{{ 's' if filhos|length != 1 }}</strong>{% else %}<span>Equipe</span>{% endif %}
