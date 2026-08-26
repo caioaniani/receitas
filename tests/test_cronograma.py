@@ -2263,3 +2263,63 @@ def test_anti_refornada_respeita_item_fresco(app):
     # arredondamento por lote pré-existente pode encher as células, mas
     # a CONTAGEM de dias de fornada é o contrato do fresco)
     assert len(dias_com_prod) >= 3, dias_com_prod
+
+
+def test_teto_diario_corta_so_previsao_automatica(app):
+    """Brioche com giro historico alto nunca recebe sugestao automatica
+    acima de 40 em um dia, inclusive depois do nivelamento/rolagem do fim de
+    semana. O total pode cair: teto de capacidade e uma restricao real."""
+    loja = _loja()
+    r = _receita('Brioche')
+    r.lote_producao = 10
+    r.antecedencia_max_dias = 0
+    r.producao_max_dia = 40
+    db.session.commit()
+    _vendas_diarias(loja, r, un_dia=100, semanas=4)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True, motor='vendas')
+    rr = _rec_out(crono, r.id)
+    assert rr is not None and rr['total'] > 0
+    assert max(c['qtd'] for c in rr['por_dia']) == 40
+    assert all(c['qtd'] <= 40 for c in rr['por_dia'])
+    assert rr['limitado_teto'] is True
+    assert rr['producao_max_dia'] == 40
+
+
+def test_teto_diario_nao_corta_pedido_firme(app):
+    """Encomenda real acima da capacidade recomendada continua inteira:
+    o teto limita forecast, nao apaga pedido de loja."""
+    loja = _loja()
+    r = _receita('Brioche')
+    r.producao_max_dia = 40
+    r.antecedencia_max_dias = 0
+    db.session.commit()
+    d2 = hoje() + timedelta(days=2)
+    _pedido(loja, 'pendente', d2, r, 75)
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0,
+                                equilibrar=True)
+    rr = _rec_out(crono, r.id)
+    cel = next(c for c in rr['por_dia'] if c['data'] == d2.isoformat())
+    assert cel['qtd'] == 75
+    assert rr['total'] == 75
+
+
+def test_teto_diario_nao_corta_edicao_manual(app):
+    """Ajuste consciente do administrador fica acima de 40: override roda
+    depois da protecao automatica."""
+    from app.models import CronogramaOverride
+
+    r = _receita('Brioche')
+    r.producao_max_dia = 40
+    db.session.add(CronogramaOverride(
+        receita_id=r.id, data=hoje() + timedelta(days=1), qtd=70))
+    db.session.commit()
+
+    crono = cronograma_producao(horizonte_dias=7, inicio_offset_dias=0)
+    rr = _rec_out(crono, r.id)
+    cel = next(c for c in rr['por_dia']
+               if c['data'] == (hoje() + timedelta(days=1)).isoformat())
+    assert cel['qtd'] == 70
+    assert rr['total'] == 70

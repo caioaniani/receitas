@@ -186,6 +186,11 @@ class Receita(db.Model):
     # a sobra do arredondamento fica na industria e o balanco desconta no dia
     # seguinte. VAZIO = herda lote_pedido (croissant cx 50 segue como antes).
     lote_producao = db.Column(db.Integer, nullable=True)
+    # Teto DIARIO da sugestao AUTOMATICA de producao. O cronograma limita a
+    # previsao a este valor por dia, mas pedidos firmes e edicoes manuais
+    # continuam podendo ultrapassa-lo (capacidade nunca pode apagar encomenda).
+    # VAZIO = sem teto. Decisao do dono 26/08/2026: Brioche = 40 un/dia.
+    producao_max_dia = db.Column(db.Integer, nullable=True)
     # Fornada especial: produto vendido SO sexta/sabado/domingo (ex: Focaccia
     # Gorgonzola). O forecast de pedido NAO sugere em dia de semana. Default
     # False = vende todo dia (comportamento normal).

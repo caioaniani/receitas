@@ -123,6 +123,16 @@
                        placeholder="ex: 50">
             </div>
             <div class="col">
+                <label class="form-label small text-muted" title="Máximo que o motor pode sugerir automaticamente para um único dia. Pedidos firmes e ajustes manuais continuam podendo ultrapassar o teto. Vazio = sem limite.">
+                    Máximo automático por dia
+                </label>
+                <input type="number" name="producao_max_dia"
+                       value="{{ receita.producao_max_dia if receita.producao_max_dia else '' }}"
+                       step="1" min="0"
+                       class="form-control form-control-sm input-blue"
+                       placeholder="ex: 40">
+            </div>
+            <div class="col">
                 <label class="form-label small text-muted">Preco Atacado (R$)</label>
                 <input type="number" name="preco_venda" value="{{ '%.2f' % receita.preco_venda if receita.preco_venda else '' }}"
                        step="0.01" min="0" class="form-control form-control-sm input-blue" id="preco-venda">

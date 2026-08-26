@@ -108,6 +108,7 @@ def _migrate(app):
         _seed_minimo_danish_v3(app)
         _seed_minimo_cinnamon(app)
         _seed_antecedencia_brioche(app)
+        _seed_teto_producao_brioche(app)
         _seed_minis_sanduiche(app)
         _seed_acerto_granola_iogurte(app)
         _backfill_totais_orcamento(app)
@@ -951,6 +952,46 @@ def _seed_antecedencia_brioche(app):
             pass
 
 
+def _seed_teto_producao_brioche(app):
+    """UMA VEZ (dono 26/08/2026): limita a sugestao automatica do
+    Brioche CLASSICO a 40 unidades por dia. Valor ja preenchido e ajuste do
+    dono: o seed preserva. Pedido firme e edicao manual podem passar do teto
+    pelo contrato de `cronograma_producao`."""
+    import unicodedata as _ud
+    try:
+        from app.models import AppConfig, Receita
+        chave = 'seed_teto_producao_brioche_2026_08'
+        if AppConfig.get(chave):
+            return
+
+        def _norm(s):
+            s = _ud.normalize('NFKD', s or '')
+            s = ''.join(c for c in s if not _ud.combining(c))
+            return ' '.join(s.casefold().split())
+
+        receitas = [r for r in Receita.query
+                    .filter(Receita.arquivada_em.is_(None)).all()
+                    if _norm(r.nome) == 'brioche']
+        setados, mantidos = 0, 0
+        for r in receitas:
+            if getattr(r, 'producao_max_dia', None) is not None:
+                mantidos += 1
+                continue
+            r.producao_max_dia = 40
+            setados += 1
+        AppConfig.set(chave, f'setados={setados} mantidos={mantidos} '
+                             f'receitas={len(receitas)}')
+        db.session.commit()
+        logger.info('seed teto producao brioche: setados=%d mantidos=%d '
+                    'em %d receita(s)', setados, mantidos, len(receitas))
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed teto producao brioche): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _seed_minimo_cinnamon(app):
     """UMA VEZ (dono 17/08/2026: "Esqueci de falar sobre o cinnamon Roll,
     entra na mesma regra dos 2 danishes"): `pedido_minimo_diario = 2` do
@@ -1279,6 +1320,10 @@ def _migrate_postgres(app):
             # produz em multiplos; pedido de loja segue livre. Vazio herda
             # lote_pedido.
             'lote_producao': 'ALTER TABLE receita ADD COLUMN lote_producao INTEGER',
+            # Teto diario apenas da sugestao automatica. Pedidos firmes e
+            # edicoes manuais podem ultrapassar (Brioche = 40 via seed).
+            'producao_max_dia': ('ALTER TABLE receita ADD COLUMN '
+                                 'producao_max_dia INTEGER'),
             'fornada_especial': 'ALTER TABLE receita ADD COLUMN fornada_especial BOOLEAN NOT NULL DEFAULT FALSE',
             # Devolucao loja->industria (croissant almond): sobras devolvidas
             # desta receita CREDITAM a receita apontada (ex: Croissant
@@ -3144,6 +3189,8 @@ def _migrate_sqlite(app):
                        "estoque_minimo_industria INTEGER")
     if 'lote_producao' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN lote_producao INTEGER")
+    if 'producao_max_dia' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN producao_max_dia INTEGER")
     if 'fornada_especial' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN "
                        "fornada_especial BOOLEAN NOT NULL DEFAULT 0")

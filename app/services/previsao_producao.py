@@ -2491,9 +2491,12 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # _distribuir_inteiro empilhava TUDO no dia 0 (pico irreal). Mantendo a
         # fracao, os pesos sao nao-nulos e a producao espalha pelos dias certos.
         gross = []
+        firm_gross = []
         for i in range(horizonte_dias):
             entrega = dias_prod[i] + timedelta(days=L)
-            gross.append(max(float(firme[rid].get(entrega, 0)),
+            firm_i = int(firme[rid].get(entrega, 0) or 0)
+            firm_gross.append(firm_i)
+            gross.append(max(float(firm_i),
                              float(_previsto_dia(rid, entrega))))
         # Estoque (efetivo) cobre os dias mais PROXIMOS primeiro -> os primeiros
         # dias produzem menos. O residual (demanda apos estoque) vira o PESO da
@@ -2505,6 +2508,16 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             running -= cobre
             residual.append(g - cobre)
         pesos = residual if sum(residual) > 0 else gross
+        # Piso FIRME liquido por dia: reserva o estoque primeiro para pedidos
+        # reais. O teto diario, aplicado mais abaixo, pode cortar PREVISAO,
+        # nunca uma encomenda descoberta. Mantemos vetor separado porque
+        # `gross = max(firme, previsto)` perde a origem de cada unidade.
+        running_f = estoque_efetivo
+        firm_floor = []
+        for f in firm_gross:
+            cobre = min(running_f, f)
+            running_f -= cobre
+            firm_floor.append(int(f - cobre))
         # Dias PERMITIDOS de producao (fonte unica producao_permitida_no_dia):
         # fornada especial produz so sex/sab (dono 10/08/2026 — a venda de
         # sab/dom sai da vespera); TODA receita normal produz so seg-sex
@@ -2528,6 +2541,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                      for i in range(horizonte_dias)]
         if not all(permitido):
             ajust = [0.0] * horizonte_dias
+            firm_ajust = [0] * horizonte_dias
             novo_refs = [[] for _ in range(horizonte_dias)]
             for i, w in enumerate(pesos):
                 if w <= 0:
@@ -2536,7 +2550,16 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                 if j is not None:
                     ajust[j] += float(w)
                     novo_refs[j].append([i, float(w)])
+            # Pedido de sabado/domingo tambem sai no ultimo dia permitido
+            # anterior. A protecao firme acompanha exatamente essa rolagem.
+            for i, q in enumerate(firm_floor):
+                if q <= 0:
+                    continue
+                j = next((k for k in range(i, -1, -1) if permitido[k]), None)
+                if j is not None:
+                    firm_ajust[j] += int(q)
             pesos = ajust
+            firm_floor = firm_ajust
             ref_pesos = novo_refs
         # Padroniza a PRODUCAO em LOTES inteiros (nao produzir picado — decisao
         # do dono 29/06): arredonda o total pro multiplo do lote da receita e
@@ -2623,6 +2646,10 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             'receita_id': rid, 'nome': rec.nome, 'dias_producao': L,
             'em_estoque': estoque,
             'por_dia': por_dia, 'total': sum(liquido),
+            # Interno: minimo necessario pra nao cortar pedido firme quando o
+            # teto automatico for aplicado depois do nivelamento.
+            'firm_floor': firm_floor,
+            'producao_max_dia': int(getattr(rec, 'producao_max_dia', 0) or 0),
             # parcelas por dia de DEMANDA (frescor do nivelamento por lote)
             'ref_pesos': ref_pesos,
         })
@@ -2858,6 +2885,42 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                         if q > 0 and rend > 0 else None)
                 it['rr']['total'] = sum(int(x) for x in it['qtds'])
 
+    # Teto diario da sugestao AUTOMATICA (dono 26/08/2026, Brioche = 40).
+    # Roda DEPOIS do nivelamento para nenhum movimento voltar a criar pico e
+    # ANTES dos overrides: edicao humana pode deliberadamente passar do teto.
+    # O `firm_floor` preserva pedidos reais (inclusive os de fim de semana que
+    # rolam para sexta); somente a parcela estatistica da previsao e cortada.
+    from app.services.massa_base import rendimento_massa_crua
+    for rr in receitas_out:
+        rec = receitas.get(rr['receita_id'])
+        teto = int(getattr(rec, 'producao_max_dia', 0) or 0) if rec else 0
+        if teto <= 0:
+            rr.pop('firm_floor', None)
+            continue
+        lote = (int(getattr(rec, 'lote_producao', 0) or 0)
+                or int(getattr(rec, 'lote_pedido', 0) or 0))
+        firm_floor = rr.pop('firm_floor', [0] * len(rr['por_dia']))
+        limitado = False
+        rend = rendimento_massa_crua(rec)
+        for i, c in enumerate(rr['por_dia']):
+            atual = int(c['qtd'] or 0)
+            piso_firme = int(firm_floor[i] if i < len(firm_floor) else 0)
+            if lote > 1 and piso_firme > 0:
+                piso_firme = int(ceil(piso_firme / lote) * lote)
+            novo = max(min(atual, teto), piso_firme)
+            if novo == atual:
+                continue
+            c['qtd'] = novo
+            c['fornadas'] = (fornadas_amassadeira(
+                rec, max(1, ceil(novo / rend)))
+                if novo > 0 and rend > 0 else None)
+            if novo < atual:
+                c['teto_aplicado'] = True
+                limitado = True
+        rr['total'] = sum(int(c['qtd'] or 0) for c in rr['por_dia'])
+        if limitado:
+            rr['limitado_teto'] = True
+
     # Receitas que so existem como edicao manual (override) e nao tem demanda
     # prevista — ex: adicionadas na tela 'editar plano' do padeiro. Sem isto nao
     # apareceriam no grid e seriam apagadas no proximo 'enviar' (que reconstroi a
@@ -2930,6 +2993,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             rr['retorno'] = True
         rec = receitas.get(rid)
         rr['categoria'] = (rec.categoria or '').strip() if rec else ''
+        rr['producao_max_dia'] = (int(getattr(rec, 'producao_max_dia', 0) or 0)
+                                  if rec else 0)
         # Flag da ficha visivel na linha (tag na tela + sonda do assistente):
         # cobre tambem a linha de insumo injetada pelo _explodir_bom.
         if rec is not None and getattr(rec, 'estoque_nao_abate', False):

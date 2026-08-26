@@ -383,3 +383,29 @@ def test_seed_antecedencia_brioche(app):
         _seed_antecedencia_brioche(app)
         db.session.refresh(b)
         assert b.antecedencia_max_dias == 2
+
+
+def test_seed_teto_producao_brioche(app):
+    """Brioche classico nasce com teto 40/dia; nome composto fica fora,
+    valor do dono e preservado e o marker torna a carga idempotente."""
+    from app.migrations_legacy import _seed_teto_producao_brioche
+    with app.app_context():
+        b = Receita(nome='Brioche', categoria='Paes', rendimento_qtd=1,
+                    rendimento_unidade='un', peso_base=100.0)
+        gotas = Receita(nome='Brioche gotas de chocolate 250g',
+                        categoria='Paes', rendimento_qtd=1,
+                        rendimento_unidade='un', peso_base=100.0)
+        db.session.add_all([b, gotas])
+        db.session.commit()
+
+        _seed_teto_producao_brioche(app)
+        assert b.producao_max_dia == 40
+        assert gotas.producao_max_dia is None
+        marker = AppConfig.get('seed_teto_producao_brioche_2026_08')
+        assert 'setados=1' in marker and 'receitas=1' in marker
+
+        b.producao_max_dia = 55
+        db.session.commit()
+        _seed_teto_producao_brioche(app)
+        db.session.refresh(b)
+        assert b.producao_max_dia == 55

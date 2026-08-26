@@ -998,6 +998,9 @@ def salvar(id):
     receita.lote_pedido = _int_opt('lote_pedido')
     receita.minimo_pedido = _int_opt('minimo_pedido')
     receita.lote_producao = _int_opt('lote_producao')
+    # Capacidade diaria da sugestao automatica. Pedido firme e ajuste manual
+    # podem passar do teto para nao apagar uma necessidade real.
+    receita.producao_max_dia = _int_opt('producao_max_dia')
     # Piso do estoque da industria (freezer): a previsao de producao nunca
     # sugere um alvo menor que este. Vazio/0 -> NULL (sem piso).
     receita.estoque_minimo_industria = _int_opt('estoque_minimo_industria')
@@ -1084,6 +1087,7 @@ def duplicar(id):
         # sob encomenda (21/07/2026).
         sob_encomenda=original.sob_encomenda,
         antecedencia_max_dias=original.antecedencia_max_dias,
+        producao_max_dia=original.producao_max_dia,
         cobra_sobra_diaria=original.cobra_sobra_diaria,
     )
     db.session.add(copia)
