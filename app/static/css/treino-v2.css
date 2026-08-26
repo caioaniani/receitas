@@ -13,6 +13,7 @@
 
 .ui-v2 .treino-primary-action,.ui-v2 .treino-secondary-action { min-height:40px; padding:10px 15px; display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid var(--v2-accent); border-radius:9px; font-size:12px; font-weight:750; line-height:1.1; text-decoration:none; cursor:pointer; }
 .ui-v2 .treino-primary-action { background:var(--v2-accent); color:#fff; }.ui-v2 .treino-primary-action:hover { background:#1d4e38; color:#fff; }
+.ui-v2 .treino-heading-actions .treino-primary-action { color:#fff; }
 .ui-v2 .treino-secondary-action { background:var(--v2-surface); color:var(--v2-accent); }.ui-v2 .treino-secondary-action:hover { background:var(--v2-accent-soft); color:var(--v2-accent); }
 .ui-v2 .treino-link-button { padding:0; border:0; background:none; color:var(--v2-accent); font-size:12px; font-weight:700; }
 
