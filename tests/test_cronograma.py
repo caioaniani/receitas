@@ -2287,9 +2287,9 @@ def test_teto_diario_corta_so_previsao_automatica(app):
     assert rr['producao_max_dia'] == 40
 
 
-def test_teto_diario_nao_corta_pedido_firme(app):
-    """Encomenda real acima da capacidade recomendada continua inteira:
-    o teto limita forecast, nao apaga pedido de loja."""
+def test_teto_diario_mantem_pedido_firme_como_risco(app):
+    """Encomenda acima da capacidade nao some: o plano para em 40 e a
+    diferenca fica explicitamente marcada como entrega em risco."""
     loja = _loja()
     r = _receita('Brioche')
     r.producao_max_dia = 40
@@ -2302,8 +2302,12 @@ def test_teto_diario_nao_corta_pedido_firme(app):
                                 equilibrar=True)
     rr = _rec_out(crono, r.id)
     cel = next(c for c in rr['por_dia'] if c['data'] == d2.isoformat())
-    assert cel['qtd'] == 75
-    assert rr['total'] == 75
+    assert cel['qtd'] == 40
+    assert rr['total'] == 40
+    risco = next(e for e in rr['entregas_risco']
+                 if e['data'] == d2.isoformat())
+    assert risco['firme'] == 75
+    assert risco['faltam'] == 35
 
 
 def test_teto_diario_nao_corta_edicao_manual(app):

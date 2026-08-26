@@ -998,8 +998,8 @@ def salvar(id):
     receita.lote_pedido = _int_opt('lote_pedido')
     receita.minimo_pedido = _int_opt('minimo_pedido')
     receita.lote_producao = _int_opt('lote_producao')
-    # Capacidade diaria da sugestao automatica. Pedido firme e ajuste manual
-    # podem passar do teto para nao apagar uma necessidade real.
+    # Capacidade diaria da sugestao automatica. Pedido firme acima do teto
+    # vira risco visivel; ajuste manual consciente pode passar.
     receita.producao_max_dia = _int_opt('producao_max_dia')
     # Piso do estoque da industria (freezer): a previsao de producao nunca
     # sugere um alvo menor que este. Vazio/0 -> NULL (sem piso).

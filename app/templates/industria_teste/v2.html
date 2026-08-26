@@ -196,7 +196,7 @@
                     {% if r.insumo %}<span class="tag muted">insumo</span>{% endif %}
                     {% if r.retorno %}<span class="tag muted">retorno</span>{% endif %}
                     {% if r.fornada_especial %}<span class="tag amber">fim de semana</span>{% endif %}
-                    {% if r.producao_max_dia %}<span class="tag muted" title="A sugestão automática não passa deste valor; pedido firme e ajuste manual podem ultrapassar.">máx. auto {{ r.producao_max_dia }}/dia</span>{% endif %}
+                    {% if r.producao_max_dia %}<span class="tag muted" title="A sugestão automática não passa deste valor. Demanda acima do teto aparece como risco; ajuste manual pode ultrapassar.">máx. auto {{ r.producao_max_dia }}/dia</span>{% endif %}
                     {% if r.editado %}<span class="tag edited"><i class="bi bi-pencil-fill"></i> ajustado</span>{% endif %}
                   </div>
                 </td>

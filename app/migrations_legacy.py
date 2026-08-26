@@ -955,8 +955,8 @@ def _seed_antecedencia_brioche(app):
 def _seed_teto_producao_brioche(app):
     """UMA VEZ (dono 26/08/2026): limita a sugestao automatica do
     Brioche CLASSICO a 40 unidades por dia. Valor ja preenchido e ajuste do
-    dono: o seed preserva. Pedido firme e edicao manual podem passar do teto
-    pelo contrato de `cronograma_producao`."""
+    dono: o seed preserva. Pedido firme acima do teto permanece na demanda e
+    vira risco; apenas edicao manual pode passar pelo teto."""
     import unicodedata as _ud
     try:
         from app.models import AppConfig, Receita
@@ -1320,8 +1320,8 @@ def _migrate_postgres(app):
             # produz em multiplos; pedido de loja segue livre. Vazio herda
             # lote_pedido.
             'lote_producao': 'ALTER TABLE receita ADD COLUMN lote_producao INTEGER',
-            # Teto diario apenas da sugestao automatica. Pedidos firmes e
-            # edicoes manuais podem ultrapassar (Brioche = 40 via seed).
+            # Teto diario da sugestao automatica. Demanda firme excedente
+            # continua visivel como risco (Brioche = 40 via seed).
             'producao_max_dia': ('ALTER TABLE receita ADD COLUMN '
                                  'producao_max_dia INTEGER'),
             'fornada_especial': 'ALTER TABLE receita ADD COLUMN fornada_especial BOOLEAN NOT NULL DEFAULT FALSE',
