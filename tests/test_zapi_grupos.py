@@ -7,6 +7,8 @@ Grupos ganharam caminho proprio: _normalizar_grupo + _whitelist_grupos
 (ZAPI_GRUPOS_PERMITIDOS + destinos de alerta configurados)."""
 from unittest.mock import patch
 
+import pytest
+
 
 def _cfg_zapi(app, **extra):
     app.config['ZAPI_INSTANCE_ID'] = 'inst1'
@@ -18,11 +20,18 @@ def _cfg_zapi(app, **extra):
 
 class _Resp:
     status_code = 200
-    text = '{"ok": true}'
+    text = '{"zaapId": "zaap-1", "messageId": "msg-1"}'
 
     @staticmethod
     def json():
-        return {'ok': True}
+        return {'zaapId': 'zaap-1', 'messageId': 'msg-1'}
+
+
+@pytest.fixture(autouse=True)
+def _zapi_conectada(monkeypatch):
+    from app.services import zapi
+    monkeypatch.setattr(zapi, 'status_instancia', lambda: {
+        'ok': True, 'conectado': True, 'detalhe': 'conectado'})
 
 
 def test_grupo_no_destino_de_alerta_passa_automatico(app):
