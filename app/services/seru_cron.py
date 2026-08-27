@@ -64,6 +64,7 @@ LOCK_KEY_AUTO_ENVIO = 7759  # advisory lock pras ordens da SEMANA (dom 12:00 + r
 LOCK_KEY_DIGEST_RECEBIMENTOS = 7760  # advisory lock pro digest 12:00 de pedidos recebidos
 LOCK_KEY_ATUALIZA_PLANO = 7761  # advisory lock pro 🔄 automatico da ordem do dia (06:45/19:05)
 LOCK_KEY_HEARTBEAT = 7762  # advisory lock pro heartbeat diario no Slack (08:00)
+LOCK_KEY_ZAPI_SAUDE = 7763  # advisory lock pro status/assinatura da Z-API
 # 7750 foi reciclado: era do `briefing-dono` (removido 17/07/2026), agora e do
 # marketing (sync da base + campanha de aniversario no Listmonk).
 LOCK_KEY_MARKETING = 7750  # advisory lock pro marketing (Listmonk)
@@ -816,6 +817,14 @@ def iniciar(app):
         max_instances=1, coalesce=True,
     )
 
+    # Saúde Z-API — polling garante alerta em <=5 min mesmo se o callback
+    # externo ainda não estiver assinado ou a Z-API não conseguir chamá-lo.
+    _scheduler.add_job(
+        lambda app=app: _run_zapi_saude(app),
+        'cron', minute='*/5', id='zapi-saude',
+        max_instances=1, coalesce=True,
+    )
+
     # Auditor proativo do chatbot — HIBRIDO:
     #   07, 09, 12, 15h BRT: 'janela' — audita janela curta desde a ultima
     #     execucao; manda WhatsApp SO se houver anormalidade.
@@ -1078,6 +1087,15 @@ def _run_automacoes_whatsapp(app):
 
     with app.app_context():
         _com_lock(7732, whatsapp.disparar_automacoes_devidas, 'automacoes whatsapp')
+
+
+def _run_zapi_saude(app):
+    """Confirma conexão e mantém os webhooks conectada/desconectada ativos."""
+    from app.services import zapi_saude
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_ZAPI_SAUDE, zapi_saude.monitorar_conexao,
+                  'saude zapi', cooldown_seg=240)
 
 
 def _run_followup_bot(app):
