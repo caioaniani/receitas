@@ -141,10 +141,18 @@ def notificar(numero, mensagem, origem='manual'):
     Retorna o dict de zapi.enviar_texto."""
     from app.services import zapi
     res = zapi.enviar_texto(numero, mensagem)
+    zaap_id = (res.get('zaap_id') or '')[:120] or None
+    # Defesa em profundidade: nenhum caller/mocked service consegue gravar
+    # "ok" sem o comprovante individual exigido pela API.
+    if res.get('ok') and not zaap_id:
+        res = {**res, 'ok': False,
+               'erro': 'Z-API respondeu sucesso sem zaapId/messageId'}
     try:
         db.session.add(NotificacaoWhatsapp(
             numero=numero, mensagem=mensagem, origem=origem,
-            ok=bool(res.get('ok')), erro=(res.get('erro') or '')[:300]))
+            ok=bool(res.get('ok')),
+            zaap_id=zaap_id,
+            erro=(res.get('erro') or '')[:300] or None))
         db.session.commit()
     except Exception:
         db.session.rollback()
