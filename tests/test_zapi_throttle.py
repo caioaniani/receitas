@@ -20,11 +20,11 @@ import pytest
 
 class _Resp:
     status_code = 200
-    text = '{"ok": true}'
+    text = '{"zaapId": "zaap-1", "messageId": "msg-1"}'
 
     @staticmethod
     def json():
-        return {'ok': True}
+        return {'zaapId': 'zaap-1', 'messageId': 'msg-1'}
 
 
 def _cfg(app, **extra):
@@ -40,9 +40,11 @@ def _cfg(app, **extra):
 
 
 @pytest.fixture(autouse=True)
-def _reset_throttle():
+def _reset_throttle(monkeypatch):
     """Zera o estado global do teto antes de cada teste deste módulo."""
     from app.services import zapi
+    monkeypatch.setattr(zapi, 'status_instancia', lambda: {
+        'ok': True, 'conectado': True, 'detalhe': 'conectado'})
     zapi._env_ts.clear()
     zapi._seg_previews.clear()
     zapi._seg_n = 0
