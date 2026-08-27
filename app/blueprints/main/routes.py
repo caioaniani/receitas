@@ -1897,6 +1897,9 @@ def debug_schema():
             c['name'] for c in insp.get_columns('estoque_producao')
         }
         cols_estoque_loja = {c['name'] for c in insp.get_columns('estoque_loja')}
+        cols_notificacao = {
+            c['name'] for c in insp.get_columns('notificacao_whatsapp')
+        }
         cols_vb2b = {c['name']: c for c in insp.get_columns('venda_b2b')}
         vt = cols_vb2b.get('valor_total', {})
         vt_tipo = str(vt.get('type', '')) if vt else ''
@@ -1920,6 +1923,7 @@ def debug_schema():
             and 'estado' in cols_estoque_producao
             and 'estado' in cols_estoque_loja
         )
+        b17_ddl = 'zaap_id' in cols_notificacao
 
         # Calcula qual e a revision mais avancada que ja teve seu DDL aplicado
         ddl_avancado_em = '69d82afed149'  # baseline
@@ -1945,6 +1949,10 @@ def debug_schema():
         if (b9_ddl and b4_ddl and b5_ddl and b11_ddl and b12_ddl
                 and b13_ddl and b14_ddl and b15_ddl and b16_ddl):
             ddl_avancado_em = '1f7a3c9d8e4b'  # B16
+        if (b9_ddl and b4_ddl and b5_ddl and b11_ddl and b12_ddl
+                and b13_ddl and b14_ddl and b15_ddl and b16_ddl
+                and b17_ddl):
+            ddl_avancado_em = '2b8d4e6f0a1c'  # B17
 
         if info['alembic_current'] != ddl_avancado_em:
             info['estado_misto'] = {
@@ -1959,6 +1967,7 @@ def debug_schema():
                 'b14_ddl': b14_ddl,
                 'b15_ddl': b15_ddl,
                 'b16_ddl': b16_ddl,
+                'b17_ddl': b17_ddl,
             }
     except Exception as e:  # noqa: BLE001
         info['estado_misto'] = {'erro': f'{type(e).__name__}: {e}'}
