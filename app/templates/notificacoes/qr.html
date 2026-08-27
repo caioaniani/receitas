@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Reconectar WhatsApp{% endblock %}
+
+{% block content %}
+<div class="mx-auto" style="max-width: 620px">
+  <a href="{{ url_for('notificacoes.index') }}" class="btn btn-sm btn-link px-0 mb-2">← Voltar às notificações</a>
+  <div class="card">
+    <div class="card-body text-center p-4">
+      <h1 class="h3 mb-2">Reconectar WhatsApp</h1>
+      {% if resultado.ok %}
+        <p class="text-muted">No celular do BOT O PÃO, abra WhatsApp → Aparelhos conectados → Conectar aparelho.</p>
+        <img src="{{ resultado.imagem }}" alt="QR code para reconectar o WhatsApp"
+             class="img-fluid border rounded p-2 bg-white" style="max-width: 420px">
+        <p class="small text-muted mt-3 mb-0">Depois da leitura, volte e atualize o status. O QR pode expirar; recarregue esta página para gerar outro.</p>
+      {% else %}
+        <div class="alert alert-danger mb-0">Não foi possível obter o QR: {{ resultado.erro }}</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
