@@ -1,11 +1,11 @@
 """Aba de notificacoes WhatsApp: status da instancia Z-API, historico de
 envios e automacoes (mensagens agendadas) configuraveis pelo admin."""
-from flask import current_app, flash, redirect, render_template, request, url_for
+from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.notificacoes import notificacoes_bp
 from app.decorators import admin_required
-from app.extensions import db
+from app.extensions import csrf, db
 from app.models import AutomacaoWhatsapp, NotificacaoWhatsapp
 
 
@@ -31,6 +31,78 @@ def index():
     return render_template('notificacoes/index.html', status=status,
                            automacoes=automacoes, envios=envios,
                            destino_padrao=_destino_padrao())
+
+
+@notificacoes_bp.route('/status.json')
+@login_required
+@admin_required
+def status_json():
+    """Proxy seguro: o navegador nunca recebe token/ID na URL externa."""
+    from app.services import zapi
+    status = zapi.status_instancia()
+    return jsonify(status), 200 if status.get('ok') else 503
+
+
+@notificacoes_bp.route('/qr')
+@login_required
+@admin_required
+def qr():
+    from app.services import zapi
+    resultado = zapi.obter_qr_code()
+    return render_template('notificacoes/qr.html', resultado=resultado)
+
+
+@notificacoes_bp.route('/reiniciar', methods=['POST'])
+@login_required
+@admin_required
+def reiniciar():
+    from app.services import zapi
+    resultado = zapi.reiniciar_instancia()
+    flash('Instância reiniciada. Aguarde alguns segundos e atualize o status.'
+          if resultado.get('ok') else
+          f"Falha ao reiniciar: {resultado.get('erro')}",
+          'success' if resultado.get('ok') else 'danger')
+    return redirect(url_for('notificacoes.index'))
+
+
+@notificacoes_bp.route('/webhooks/assinar', methods=['POST'])
+@login_required
+@admin_required
+def webhooks_assinar():
+    from app.services import zapi_saude
+    resultado = zapi_saude.garantir_assinatura(force=True)
+    flash('Alertas de conexão ativados na Z-API.'
+          if resultado.get('ok') else
+          f"Falha ao ativar alertas: {resultado.get('erro')}",
+          'success' if resultado.get('ok') else 'danger')
+    return redirect(url_for('notificacoes.index'))
+
+
+def _webhook_autorizado():
+    from app.services import zapi_saude
+    return zapi_saude.token_valido(request.args.get('k'))
+
+
+@notificacoes_bp.route('/webhook/zapi/desconectado', methods=['POST'])
+@csrf.exempt
+def webhook_desconectado():
+    if not _webhook_autorizado():
+        return jsonify({'ok': False, 'erro': 'token invalido'}), 403
+    from app.services import zapi_saude
+    resultado = zapi_saude.registrar_desconexao(
+        request.get_json(silent=True) or {})
+    return jsonify(resultado), 200 if resultado.get('ok') else 400
+
+
+@notificacoes_bp.route('/webhook/zapi/conectado', methods=['POST'])
+@csrf.exempt
+def webhook_conectado():
+    if not _webhook_autorizado():
+        return jsonify({'ok': False, 'erro': 'token invalido'}), 403
+    from app.services import zapi_saude
+    resultado = zapi_saude.registrar_conexao(
+        request.get_json(silent=True) or {})
+    return jsonify(resultado), 200 if resultado.get('ok') else 400
 
 
 @notificacoes_bp.route('/automacoes', methods=['POST'])

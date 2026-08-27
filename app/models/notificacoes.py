@@ -17,6 +17,9 @@ class NotificacaoWhatsapp(db.Model):
     # origem: 'digest_tarefas' | 'digest_anomalias' | 'automacao:<id>' | 'manual'
     origem = db.Column(db.String(60), index=True)
     ok = db.Column(db.Boolean, default=False, nullable=False)
+    # Identificador devolvido pela Z-API. NULL significa que o envio nunca foi
+    # confirmado — HTTP 200 sozinho nao basta.
+    zaap_id = db.Column(db.String(120), nullable=True, index=True)
     erro = db.Column(db.String(300))
     criado_em = db.Column(db.DateTime, default=agora, index=True)
 
