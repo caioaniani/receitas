@@ -6,6 +6,8 @@ Cadastro/setup: https://z-api.io/
 
 Env vars: ZAPI_INSTANCE_ID, ZAPI_TOKEN, ZAPI_CLIENT_TOKEN (opcional).
 """
+import base64
+import json
 import logging
 import threading
 import time
@@ -16,6 +18,31 @@ from flask import current_app
 logger = logging.getLogger(__name__)
 
 BASE = 'https://api.z-api.io'
+
+
+def _credenciais():
+    """Credenciais e headers da instância, sem repetir o parsing em cada API."""
+    cfg = current_app.config
+    instance_id = (cfg.get('ZAPI_INSTANCE_ID') or '').strip()
+    token = (cfg.get('ZAPI_TOKEN') or '').strip()
+    client_token = (cfg.get('ZAPI_CLIENT_TOKEN') or '').strip()
+    headers = {'Client-Token': client_token} if client_token else {}
+    return instance_id, token, headers
+
+
+def _detalhe_resposta(data, texto='', padrao='resposta sem identificador'):
+    """Extrai o erro real que a Z-API pode devolver mesmo com HTTP 200."""
+    if isinstance(data, dict):
+        for chave in ('error', 'erro', 'message', 'detail', 'status'):
+            valor = data.get(chave)
+            if valor not in (None, '', False):
+                if isinstance(valor, (dict, list)):
+                    return json.dumps(valor, ensure_ascii=False)[:300]
+                return str(valor)[:300]
+        if data:
+            return json.dumps(data, ensure_ascii=False)[:300]
+    bruto = str(texto or '').strip()
+    return bruto[:300] if bruto else padrao
 
 # ── Teto GLOBAL de envio/hora (anti-spam do WhatsApp/Meta) ──────────────────
 # Ponto ÚNICO por onde TODO envio passa (alertas, vigias, digest, magic-link de
@@ -100,25 +127,140 @@ def disponivel():
 def status_instancia():
     """Consulta o status da instancia no Z-API (conectada ao WhatsApp?).
     Retorna {'ok': bool, 'conectado': bool, 'detalhe': str}."""
-    cfg = current_app.config
-    instance_id = (cfg.get('ZAPI_INSTANCE_ID') or '').strip()
-    token = (cfg.get('ZAPI_TOKEN') or '').strip()
-    client_token = (cfg.get('ZAPI_CLIENT_TOKEN') or '').strip()
+    instance_id, token, headers = _credenciais()
     if not instance_id or not token:
         return {'ok': False, 'conectado': False, 'detalhe': 'Z-API nao configurado'}
     url = f'{BASE}/instances/{instance_id}/token/{token}/status'
-    headers = {'Client-Token': client_token} if client_token else {}
     try:
         r = requests.get(url, headers=headers, timeout=10)
         if r.status_code not in (200, 201):
-            return {'ok': False, 'conectado': False, 'detalhe': f'HTTP {r.status_code}'}
-        data = r.json() if r.text else {}
+            return {'ok': False, 'conectado': False,
+                    'detalhe': f'HTTP {r.status_code}: {str(r.text)[:200]}'}
+        try:
+            data = r.json() if r.text else {}
+        except ValueError:
+            return {'ok': False, 'conectado': False,
+                    'detalhe': 'resposta de status invalida'}
+        if not isinstance(data, dict):
+            return {'ok': False, 'conectado': False,
+                    'detalhe': 'resposta de status invalida'}
         conectado = bool(data.get('connected'))
         detalhe = data.get('error') or ('conectado' if conectado else 'desconectado')
         return {'ok': True, 'conectado': conectado, 'detalhe': detalhe}
     except Exception as exc:  # noqa: BLE001
         logger.exception('zapi status falhou')
         return {'ok': False, 'conectado': False, 'detalhe': str(exc)}
+
+
+def obter_qr_code():
+    """Busca o QR da instância e devolve uma data URL pronta para `<img>`.
+
+    A Z-API documenta imagem em base64, mas versões da API já responderam
+    tanto texto/JSON quanto bytes. Aceitamos os três formatos sem expor token
+    no navegador.
+    """
+    instance_id, token, headers = _credenciais()
+    if not instance_id or not token:
+        return {'ok': False, 'erro': 'Z-API nao configurado'}
+    url = f'{BASE}/instances/{instance_id}/token/{token}/qr-code/image'
+    try:
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code not in (200, 201):
+            return {'ok': False,
+                    'erro': f'HTTP {r.status_code}: {str(r.text)[:200]}'}
+        content_type = (r.headers.get('Content-Type') or '').lower()
+        if content_type.startswith('image/') and r.content:
+            mime = content_type.split(';', 1)[0]
+            imagem = base64.b64encode(r.content).decode('ascii')
+            return {'ok': True, 'imagem': f'data:{mime};base64,{imagem}'}
+        try:
+            data = r.json() if r.text else {}
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            imagem = (data.get('value') or data.get('image')
+                      or data.get('base64') or data.get('qrcode') or '')
+        elif isinstance(data, str):
+            imagem = data
+        else:
+            imagem = str(r.text or '').strip()
+        imagem = str(imagem or '').strip().strip('"')
+        if not imagem:
+            return {'ok': False, 'erro': 'Z-API nao devolveu um QR code'}
+        if not imagem.startswith('data:image/'):
+            imagem = f'data:image/png;base64,{imagem}'
+        return {'ok': True, 'imagem': imagem}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('zapi qr-code falhou')
+        return {'ok': False, 'erro': str(exc)}
+
+
+def reiniciar_instancia():
+    """Reinicia a instância. A rota local é POST; a API oficial usa GET."""
+    from app.services import instancia as _inst
+    if not _inst.pode_falar_com_o_mundo('zapi'):
+        return {'ok': False, 'suprimido_instancia': True,
+                'erro': 'instancia nao canonica — reinicio suprimido'}
+    instance_id, token, headers = _credenciais()
+    if not instance_id or not token:
+        return {'ok': False, 'erro': 'Z-API nao configurado'}
+    url = f'{BASE}/instances/{instance_id}/token/{token}/restart'
+    try:
+        r = requests.get(url, headers=headers, timeout=15)
+        try:
+            data = r.json() if r.text else {}
+        except ValueError:
+            data = {}
+        if r.status_code not in (200, 201) or not (
+                isinstance(data, dict) and data.get('value') is True):
+            return {'ok': False,
+                    'erro': _detalhe_resposta(
+                        data, r.text, f'HTTP {r.status_code} ao reiniciar')}
+        return {'ok': True, 'response': data}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('zapi restart falhou')
+        return {'ok': False, 'erro': str(exc)}
+
+
+def assinar_webhooks_conexao(base_url, segredo):
+    """Registra os callbacks oficiais de conexão e desconexão na Z-API."""
+    from app.services import instancia as _inst
+    if not _inst.pode_falar_com_o_mundo('zapi'):
+        return {'ok': False, 'suprimido_instancia': True,
+                'erro': 'instancia nao canonica — assinatura suprimida'}
+    instance_id, token, headers = _credenciais()
+    if not instance_id or not token:
+        return {'ok': False, 'erro': 'Z-API nao configurado'}
+    base_url = str(base_url or '').rstrip('/')
+    if not base_url.startswith('https://'):
+        return {'ok': False, 'erro': 'APP_BASE_URL precisa usar HTTPS'}
+    headers = {**headers, 'Content-Type': 'application/json'}
+    endpoints = {
+        'conectado': 'update-webhook-connected',
+        'desconectado': 'update-webhook-disconnected',
+    }
+    respostas = {}
+    try:
+        for evento, endpoint in endpoints.items():
+            callback = (f'{base_url}/notificacoes/webhook/zapi/{evento}'
+                        f'?k={segredo}')
+            url = f'{BASE}/instances/{instance_id}/token/{token}/{endpoint}'
+            r = requests.put(url, json={'value': callback}, headers=headers,
+                             timeout=15)
+            try:
+                data = r.json() if r.text else {}
+            except ValueError:
+                data = {}
+            if r.status_code not in (200, 201) or not (
+                    isinstance(data, dict) and data.get('value') is True):
+                return {'ok': False, 'evento': evento,
+                        'erro': _detalhe_resposta(
+                            data, r.text, f'HTTP {r.status_code} ao assinar')}
+            respostas[evento] = data
+        return {'ok': True, 'response': respostas}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('zapi assinatura de webhooks falhou')
+        return {'ok': False, 'erro': str(exc)}
 
 
 def _normalizar_numero(numero):
@@ -208,9 +350,7 @@ def enviar_texto(numero, mensagem, *, critico=False, _interno=False):
     'segurado': True}.
     """
     cfg = current_app.config
-    instance_id = (cfg.get('ZAPI_INSTANCE_ID') or '').strip()
-    token = (cfg.get('ZAPI_TOKEN') or '').strip()
-    client_token = (cfg.get('ZAPI_CLIENT_TOKEN') or '').strip()
+    instance_id, token, api_headers = _credenciais()
 
     if not instance_id or not token:
         return {'ok': False, 'erro': 'Z-API nao configurado (ZAPI_INSTANCE_ID/ZAPI_TOKEN)'}
@@ -248,6 +388,16 @@ def enviar_texto(numero, mensagem, *, critico=False, _interno=False):
                           destino, len(permitidos))
             return {'ok': False, 'erro': f'numero {destino} fora do whitelist — recusado por seguranca'}
 
+    # Fail-closed: uma indisponibilidade do /status tambem bloqueia o envio.
+    # Fica depois do whitelist para um destino recusado nunca provocar I/O.
+    status = status_instancia()
+    if not status.get('ok') or not status.get('conectado'):
+        detalhe = status.get('detalhe') or 'status indisponivel'
+        logger.warning('zapi: envio bloqueado — instancia sem conexao: %s',
+                       detalhe)
+        return {'ok': False, 'desconectado': True,
+                'erro': f'Z-API desconectado ou sem status confirmado: {detalhe}'}
+
     # Teto global anti-spam (depois do whitelist: destino recusado nao conta nem
     # segura). `_interno` = flush do digest, sempre passa e conta na janela.
     if _throttle_ativo():
@@ -273,9 +423,7 @@ def enviar_texto(numero, mensagem, *, critico=False, _interno=False):
                         'erro': 'teto/hora de envio atingido — mensagem segurada'}
 
     url = f'{BASE}/instances/{instance_id}/token/{token}/send-text'
-    headers = {'Content-Type': 'application/json'}
-    if client_token:
-        headers['Client-Token'] = client_token
+    headers = {**api_headers, 'Content-Type': 'application/json'}
 
     try:
         r = requests.post(url, json={'phone': destino, 'message': mensagem or '',
@@ -284,7 +432,21 @@ def enviar_texto(numero, mensagem, *, critico=False, _interno=False):
         if r.status_code not in (200, 201):
             logger.warning('zapi send-text %s: %s', r.status_code, r.text[:200])
             return {'ok': False, 'erro': f'HTTP {r.status_code}: {r.text[:200]}'}
-        return {'ok': True, 'response': r.json() if r.text else {}}
+        try:
+            data = r.json() if r.text else {}
+        except ValueError:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        zaap_id = data.get('zaapId') or data.get('messageId')
+        message_id = data.get('messageId') or data.get('zaapId')
+        if not zaap_id:
+            erro = _detalhe_resposta(
+                data, r.text, 'HTTP 200 sem zaapId/messageId')
+            logger.error('zapi send-text recusado no corpo: %s', erro)
+            return {'ok': False, 'erro': erro, 'response': data}
+        return {'ok': True, 'zaap_id': str(zaap_id),
+                'message_id': str(message_id), 'response': data}
     except Exception as exc:  # noqa: BLE001
         logger.exception('zapi enviar_texto falhou')
         return {'ok': False, 'erro': str(exc)}
