@@ -1889,6 +1889,8 @@ def debug_schema():
         insp = inspect(db.engine)
         tabelas = set(insp.get_table_names())
         cols_pi = {c['name'] for c in insp.get_columns('produto_item')}
+        cols_receita = {c['name'] for c in insp.get_columns('receita')}
+        cols_produto = {c['name'] for c in insp.get_columns('produto')}
         cols_vb2b = {c['name']: c for c in insp.get_columns('venda_b2b')}
         vt = cols_vb2b.get('valor_total', {})
         vt_tipo = str(vt.get('type', '')) if vt else ''
@@ -1896,6 +1898,13 @@ def debug_schema():
         b9_ddl = 'seru_debito_mov' in tabelas
         b4_ddl = 'NUMERIC' in vt_tipo.upper()
         b5_ddl = 'receita_id' in cols_pi
+        # B11/B12 tambem podem ter sido aplicadas antes de o marcador do
+        # Alembic ser atualizado. Sem essas verificacoes, o diagnostico
+        # recomendava voltar ate B5 e o upgrade tentava recriar colunas que ja
+        # existiam (DuplicateColumn em produto_componente_id).
+        b11_ddl = 'produto_componente_id' in cols_pi
+        b12_ddl = ('reaproveitavel' in cols_receita
+                   and 'reaproveitavel' in cols_produto)
 
         # Calcula qual e a revision mais avancada que ja teve seu DDL aplicado
         ddl_avancado_em = '69d82afed149'  # baseline
@@ -1904,7 +1913,11 @@ def debug_schema():
         if b9_ddl and b4_ddl:
             ddl_avancado_em = '643bd66e89c3'  # B4
         if b9_ddl and b4_ddl and b5_ddl:
-            ddl_avancado_em = 'efb6e5837fd0'  # B5 (head)
+            ddl_avancado_em = 'efb6e5837fd0'  # B5
+        if b9_ddl and b4_ddl and b5_ddl and b11_ddl:
+            ddl_avancado_em = '8f2c4a1b7d9e'  # B11
+        if b9_ddl and b4_ddl and b5_ddl and b11_ddl and b12_ddl:
+            ddl_avancado_em = '9c3d1a5e8b2f'  # B12
 
         if info['alembic_current'] != ddl_avancado_em:
             info['estado_misto'] = {
@@ -1913,6 +1926,8 @@ def debug_schema():
                 'b9_ddl': b9_ddl,
                 'b4_ddl': b4_ddl,
                 'b5_ddl': b5_ddl,
+                'b11_ddl': b11_ddl,
+                'b12_ddl': b12_ddl,
             }
     except Exception as e:  # noqa: BLE001
         info['estado_misto'] = {'erro': f'{type(e).__name__}: {e}'}
