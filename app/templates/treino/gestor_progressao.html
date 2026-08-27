@@ -1,24 +1,117 @@
-{% extends "base.html" %}{% block title %}Progressão — treinamento{% endblock %}{% block content %}
-<div class="page-header"><div><h1 class="page-title">🎯 Progressão de cargo</h1>
-<p class="page-subtitle"><a href="{{ url_for('treino.gestor_home') }}">&larr; Gestor</a> · quem já concluiu as trilhas exigidas do cargo (§16.3)</p></div></div>
-<div class="mobile-table-scroll"><table class="table table-sm align-middle">
-  <thead><tr><th>Funcionário</th><th>Cargo</th><th>Trilhas obrigatórias</th><th class="text-end">Situação</th></tr></thead>
-  <tbody>
-  {% for l in linhas %}<tr>
-    <td>{{ l.func.nome }}</td>
-    <td class="small text-muted">{{ l.prog.cargo.nome if l.prog.cargo else '—' }}</td>
-    <td class="small">
-      {% if l.prog.total %}{{ l.prog.concluidas }}/{{ l.prog.total }}
-        <div class="d-flex flex-wrap gap-1 mt-1">{% for i in l.prog.itens %}<span class="badge bg-{{ 'success' if i.tem_selo else 'secondary' }}">{{ '✓' if i.tem_selo else '○' }} {{ i.trilha.nome }}</span>{% endfor %}</div>
-      {% elif not l.prog.cargo %}
-        <span class="text-warning">Cargo ainda não vinculado no RH</span>
-        {% if current_user.is_dono() %}
-          <a class="d-block mt-1" href="{{ url_for('rh.detalhe_funcionario', id=l.func.id) }}">Vincular cargo</a>
-        {% endif %}
+{% extends "base.html" %}
+{% block title %}Progressão — treinamento{% endblock %}
+{% block content %}
+<main class="treino-page treino-progression-page">
+  <header class="treino-heading">
+    <div>
+      <span class="treino-eyebrow">Gestão de treinamento</span>
+      <h1>Progressão de cargo</h1>
+      <p>Veja quem ainda precisa de acesso, quem começou e quem concluiu as trilhas obrigatórias.</p>
+    </div>
+    <nav class="treino-heading-actions">
+      <a href="{{ url_for('treino.gestor_home') }}"><i class="bi bi-arrow-left"></i> Minha equipe</a>
+    </nav>
+  </header>
+
+  <section class="treino-metrics">
+    <article><span>No escopo</span><strong>{{ painel.total }}</strong><small>pessoas no filtro de cadastro</small></article>
+    <article class="{% if painel.contagens.sem_acesso %}is-warning{% endif %}"><span>Sem acesso</span><strong>{{ painel.contagens.sem_acesso }}</strong><small>sem conta vinculada</small></article>
+    <article class="{% if painel.contagens.nao_iniciou or painel.contagens.parado %}is-warning{% endif %}"><span>Precisam começar</span><strong>{{ painel.contagens.nao_iniciou + painel.contagens.parado }}</strong><small>não iniciaram ou estão parados</small></article>
+    <article class="is-success"><span>Concluíram</span><strong>{{ painel.contagens.concluido }}</strong><small>todas as trilhas do cargo</small></article>
+  </section>
+
+  <section class="treino-section treino-progression-scope">
+    <div class="treino-section-heading">
+      <div><span class="treino-eyebrow">Quem aparece aqui</span><h2>{{ escopo }}</h2></div>
+      <span>{{ linhas|length }} resultado(s) exibido(s)</span>
+    </div>
+    <p class="treino-scope-note"><i class="bi bi-info-circle"></i> Aparecer nesta página não significa que a pessoa já entrou no sistema. O estado abaixo considera o vínculo de acesso e a atividade registrada nas aulas.</p>
+
+    <form class="treino-progression-filters" method="get">
+      <label><span>Cadastro no RH</span>
+        <select class="form-select" name="cadastro">
+          <option value="ativos" {% if filtros.cadastro == 'ativos' %}selected{% endif %}>Somente ativos</option>
+          <option value="inativos" {% if filtros.cadastro == 'inativos' %}selected{% endif %}>Somente inativos</option>
+          <option value="todos" {% if filtros.cadastro == 'todos' %}selected{% endif %}>Ativos e inativos</option>
+        </select>
+      </label>
+      <label><span>Unidade</span>
+        <select class="form-select" name="unidade">
+          <option value="">Todas as unidades</option>
+          {% for unidade in unidades %}<option value="{{ unidade.id }}" {% if filtros.unidade_id == unidade.id %}selected{% endif %}>{{ unidade.nome }}</option>{% endfor %}
+        </select>
+      </label>
+      <label><span>Situação do treinamento</span>
+        <select class="form-select" name="status">
+          <option value="">Todas as situações</option>
+          <option value="sem_acesso" {% if filtros.status == 'sem_acesso' %}selected{% endif %}>Sem acesso</option>
+          <option value="nao_iniciou" {% if filtros.status == 'nao_iniciou' %}selected{% endif %}>Treinamento não iniciado</option>
+          <option value="andamento" {% if filtros.status == 'andamento' %}selected{% endif %}>Em andamento</option>
+          <option value="parado" {% if filtros.status == 'parado' %}selected{% endif %}>Parado há 7+ dias</option>
+          <option value="concluido" {% if filtros.status == 'concluido' %}selected{% endif %}>Concluído</option>
+          <option value="sem_cargo" {% if filtros.status == 'sem_cargo' %}selected{% endif %}>Sem cargo</option>
+          <option value="sem_trilha" {% if filtros.status == 'sem_trilha' %}selected{% endif %}>Cargo sem trilha</option>
+          <option value="inativo" {% if filtros.status == 'inativo' %}selected{% endif %}>Inativo no RH</option>
+        </select>
+      </label>
+      <button class="treino-primary-action" type="submit"><i class="bi bi-funnel"></i> Aplicar filtros</button>
+      {% if filtros.status or filtros.unidade_id or filtros.cadastro != 'ativos' %}<a class="treino-link-button" href="{{ url_for('treino.gestor_progressao') }}">Limpar</a>{% endif %}
+    </form>
+  </section>
+
+  <section class="treino-section">
+    <div class="treino-section-heading">
+      <div><span class="treino-eyebrow">Acompanhamento</span><h2>Pessoas e trilhas obrigatórias</h2></div>
+      <span>atividade real do treinamento</span>
+    </div>
+    <div class="treino-progression-list">
+      {% for item in linhas %}
+      <article class="treino-progression-person" data-funcionario-id="{{ item.funcionario.id }}" data-status="{{ item.status }}">
+        <div class="treino-avatar">{{ item.funcionario.nome[:1] }}</div>
+        <div class="treino-progression-identity">
+          <strong>{{ item.funcionario.nome }}</strong>
+          <small>{{ item.progresso.cargo.nome if item.progresso.cargo else 'Cargo não informado' }}</small>
+          <div class="treino-person-meta">
+            <span><i class="bi bi-geo-alt"></i> {{ item.unidade.nome if item.unidade else 'Unidade não informada' }}</span>
+            {% if item.funcionario.periodo %}<span><i class="bi bi-clock"></i> {{ item.funcionario.periodo }}</span>{% endif %}
+            <span class="{% if not item.funcionario.ativo %}is-inactive{% endif %}">{{ 'Ativo no RH' if item.funcionario.ativo else 'Inativo no RH' }}</span>
+          </div>
+        </div>
+        <div class="treino-progression-required">
+          {% if item.progresso.total %}
+            <strong>{{ item.progresso.concluidas }}/{{ item.progresso.total }} trilha(s)</strong>
+            <div class="treino-required-badges">{% for requisito in item.progresso.itens %}<span class="treino-status {{ 'is-done' if requisito.tem_selo else 'is-required' }}">{{ '✓' if requisito.tem_selo else '○' }} {{ requisito.trilha.nome }}</span>{% endfor %}</div>
+          {% elif not item.progresso.cargo %}
+            <strong>Cargo ainda não vinculado no RH</strong><small>Defina o cargo na ficha do RH.</small>
+          {% else %}
+            <strong>Nenhuma trilha obrigatória para este cargo</strong><small>Configure os módulos exigidos para o cargo.</small>
+          {% endif %}
+        </div>
+        <div class="treino-progression-activity">
+          {% if not item.funcionario.usuario_id %}
+            <small>Acesso</small><strong>Conta não vinculada</strong>
+          {% elif item.ultima_atividade %}
+            <small>Última atividade</small><strong>{{ item.ultima_atividade|brt('%d/%m às %H:%M') }}</strong>
+          {% else %}
+            <small>Atividade</small><strong>Nenhuma aula iniciada</strong>
+          {% endif %}
+        </div>
+        <div class="treino-status {% if item.status == 'concluido' %}is-done{% elif item.status == 'andamento' %}is-progress{% elif item.status in ('sem_acesso', 'parado', 'nao_iniciou') %}is-attention{% endif %}">
+          {% if item.status == 'sem_acesso' %}Sem acesso
+          {% elif item.status == 'sem_cargo' %}Sem cargo
+          {% elif item.status == 'sem_trilha' %}Cargo sem trilha
+          {% elif item.status == 'nao_iniciou' %}Treinamento não iniciado
+          {% elif item.status == 'parado' %}Parado há 7+ dias
+          {% elif item.status == 'concluido' %}Concluído
+          {% elif item.status == 'inativo' %}Inativo no RH
+          {% else %}Em andamento{% endif %}
+        </div>
+        {% if current_user.is_dono() %}<a class="treino-observe-action" href="{{ url_for('rh.detalhe_funcionario', id=item.funcionario.id) }}"><i class="bi bi-person-lines-fill"></i><span>{{ 'Vincular cargo' if not item.progresso.cargo else 'Ver no RH' }}</span></a>{% endif %}
+      </article>
       {% else %}
-        <span class="text-muted">Nenhuma trilha obrigatória para este cargo</span>
-      {% endif %}</td>
-    <td class="text-end">{% if l.prog.total and l.prog.apto %}<span class="badge bg-success">✓ apto</span>{% elif l.prog.total %}<span class="badge bg-warning text-dark">em andamento</span>{% else %}<span class="text-muted small">—</span>{% endif %}</td>
-  </tr>{% else %}<tr><td colspan="4" class="text-muted">Nenhum funcionário na equipe.</td></tr>{% endfor %}
-  </tbody></table></div>
+      <div class="treino-empty">Nenhuma pessoa corresponde aos filtros selecionados.</div>
+      {% endfor %}
+    </div>
+  </section>
+</main>
 {% endblock %}

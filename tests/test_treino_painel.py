@@ -117,6 +117,18 @@ def test_painel_equipe_coloca_sem_acesso_e_parado_primeiro(app):
     assert resultado['contagens']['precisam_atencao'] == 2
 
 
+def test_painel_equipe_nao_trata_inativo_como_pendencia(app):
+    inativo = _funcionario('Inativo', '106')
+    inativo.ativo = False
+    db.session.commit()
+
+    resultado = painel.painel_equipe([inativo], None)
+
+    assert resultado['linhas'][0]['status'] == 'inativo'
+    assert resultado['contagens']['inativo'] == 1
+    assert resultado['contagens']['precisam_atencao'] == 0
+
+
 def test_ficha_rh_exibe_resumo_do_treinamento(app, owner_user):
     cargo = Cargo(nome='Atendente')
     db.session.add(cargo)

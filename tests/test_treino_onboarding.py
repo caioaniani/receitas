@@ -12,14 +12,16 @@ from app.models import (
     Cargo,
     Funcionario,
     Loja,
+    TreinoProgressoVideo,
     TreinoSelo,
     TreinoTemporada,
     TreinoTrilha,
     TreinoTrilhaCargo,
+    TreinoVideo,
     Usuario,
 )
 from app.services import treino_onboarding as ob
-from app.utils import hoje
+from app.utils import agora, hoje
 
 
 def _temp():
@@ -236,6 +238,72 @@ def test_rota_gestor_progressao_renderiza(app, admin_user):
     c = _login(app, admin_user.id)
     r = c.get('/treino/gestor/progressao')
     assert r.status_code == 200 and 'Progressão' in r.get_data(as_text=True)
+
+
+def test_progressao_distingue_acesso_inicio_e_andamento(app, admin_user):
+    with app.app_context():
+        _temp()
+        cargo = Cargo(nome='Atendimento')
+        trilha = TreinoTrilha(nome='Cultura')
+        db.session.add_all([cargo, trilha])
+        db.session.commit()
+        db.session.add(TreinoTrilhaCargo(
+            trilha_id=trilha.id, cargo_id=cargo.id))
+        video = TreinoVideo(
+            trilha_id=trilha.id, titulo='Nossa história',
+            video_externo_id='historia')
+        db.session.add(video)
+        db.session.commit()
+
+        _, sem_acesso, _ = _func(nome='Sem Acesso', cargo=cargo)
+        sem_acesso.usuario_id = None
+        _, nao_iniciou, _ = _func(nome='Não Iniciou', cargo=cargo)
+        _, em_andamento, _ = _func(nome='Em Andamento', cargo=cargo)
+        db.session.add(TreinoProgressoVideo(
+            funcionario_id=em_andamento.id, video_id=video.id,
+            versao_video=video.versao, percentual=25,
+            ultimo_heartbeat_em=agora()))
+        db.session.commit()
+        ids = sem_acesso.id, nao_iniciou.id, em_andamento.id
+
+    html = _login(app, admin_user.id).get(
+        '/treino/gestor/progressao').get_data(as_text=True)
+
+    assert (f'data-funcionario-id="{ids[0]}" '
+            'data-status="sem_acesso"') in html
+    assert (f'data-funcionario-id="{ids[1]}" '
+            'data-status="nao_iniciou"') in html
+    assert (f'data-funcionario-id="{ids[2]}" '
+            'data-status="andamento"') in html
+    assert 'não significa que a pessoa já entrou no sistema' in html
+    assert 'Treinamento não iniciado' in html
+
+
+def test_progressao_filtra_unidade_e_cadastro_inativo(app, admin_user):
+    with app.app_context():
+        _, ativo_a, unidade_a = _func(nome='Ativo Unidade A')
+        _, ativo_b, _ = _func(nome='Ativo Unidade B')
+        _, inativo, _ = _func(nome='Cadastro Inativo', ativo=False)
+        ids = ativo_a.id, ativo_b.id, inativo.id
+        unidade_a_id = unidade_a.id
+
+    cliente = _login(app, admin_user.id)
+    padrao = cliente.get('/treino/gestor/progressao').get_data(as_text=True)
+    assert f'data-funcionario-id="{ids[0]}"' in padrao
+    assert f'data-funcionario-id="{ids[2]}"' not in padrao
+
+    por_unidade = cliente.get(
+        f'/treino/gestor/progressao?unidade={unidade_a_id}'
+    ).get_data(as_text=True)
+    assert f'data-funcionario-id="{ids[0]}"' in por_unidade
+    assert f'data-funcionario-id="{ids[1]}"' not in por_unidade
+
+    somente_inativos = cliente.get(
+        '/treino/gestor/progressao?cadastro=inativos'
+    ).get_data(as_text=True)
+    assert (f'data-funcionario-id="{ids[2]}" '
+            'data-status="inativo"') in somente_inativos
+    assert f'data-funcionario-id="{ids[0]}"' not in somente_inativos
 
 
 def test_home_destaca_onboarding(app):

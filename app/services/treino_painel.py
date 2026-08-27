@@ -158,6 +158,7 @@ def painel_equipe(funcionarios, temporada):
     prioridade = {
         'sem_acesso': 0, 'parado': 1, 'nao_iniciou': 2,
         'andamento': 3, 'sem_cargo': 4, 'sem_trilha': 5, 'concluido': 6,
+        'inativo': 7,
     }
     linhas = []
     for funcionario in funcionarios:
@@ -170,7 +171,9 @@ def painel_equipe(funcionarios, temporada):
                 for item in prog['itens']]
         percentual = round(sum(percentuais) / len(percentuais)) \
             if percentuais else (100 if prog['apto'] else 0)
-        if not funcionario.usuario_id:
+        if not funcionario.ativo:
+            status = 'inativo'
+        elif not funcionario.usuario_id:
             status = 'sem_acesso'
         elif not funcionario.cargo_id:
             status = 'sem_cargo'

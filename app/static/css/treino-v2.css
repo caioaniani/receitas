@@ -76,3 +76,38 @@
   body.ui-v2 .main-content { margin:0!important;padding:12px!important; }
   .ui-v2 .org-page { max-width:none; }.ui-v2 .org-workspace { padding:0;border:0;box-shadow:none; }.ui-v2 .org-chart { overflow:visible; }.ui-v2 .org-person { break-inside:avoid;box-shadow:none; }
 }
+
+/* Progressão por cargo: cadastro, acesso e atividade são estados diferentes. */
+.ui-v2 .treino-progression-scope { display:grid; gap:16px; }
+.ui-v2 .treino-scope-note { margin:0; padding:12px 14px; display:flex; align-items:flex-start; gap:9px; border-radius:10px; background:var(--v2-info-soft); color:var(--v2-info); font-size:11px; line-height:1.45; }
+.ui-v2 .treino-progression-filters { display:grid; grid-template-columns:repeat(3,minmax(150px,1fr)) auto auto; align-items:end; gap:10px; }
+.ui-v2 .treino-progression-filters label { display:grid; gap:5px; }
+.ui-v2 .treino-progression-filters label > span { color:var(--v2-muted); font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.ui-v2 .treino-progression-filters .form-select { min-height:42px; font-size:11px; }
+.ui-v2 .treino-progression-filters .treino-primary-action,.ui-v2 .treino-progression-filters .treino-link-button { min-height:42px; }
+.ui-v2 .treino-progression-list { border:1px solid var(--v2-line); border-radius:var(--v2-radius); overflow:hidden; }
+.ui-v2 .treino-progression-person { min-height:92px; padding:14px; display:grid; grid-template-columns:38px minmax(190px,1.15fr) minmax(200px,1.2fr) minmax(145px,.8fr) auto auto; align-items:center; gap:14px; border-bottom:1px solid var(--v2-line); }
+.ui-v2 .treino-progression-person:last-child { border-bottom:0; }
+.ui-v2 .treino-progression-identity,.ui-v2 .treino-progression-required,.ui-v2 .treino-progression-activity { min-width:0; display:grid; gap:4px; }
+.ui-v2 .treino-progression-identity > strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+.ui-v2 .treino-progression-person small,.ui-v2 .treino-person-meta { color:var(--v2-muted); font-size:9px; }
+.ui-v2 .treino-person-meta { display:flex; flex-wrap:wrap; gap:5px 10px; }
+.ui-v2 .treino-person-meta span { display:inline-flex; align-items:center; gap:4px; }
+.ui-v2 .treino-person-meta .is-inactive { color:var(--v2-warning); font-weight:800; }
+.ui-v2 .treino-progression-required > strong,.ui-v2 .treino-progression-activity > strong { font-size:10px; }
+.ui-v2 .treino-required-badges { display:flex; flex-wrap:wrap; gap:4px; }
+
+@media screen and (max-width: 980px) {
+  .ui-v2 .treino-progression-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ui-v2 .treino-progression-person { grid-template-columns:38px minmax(170px,1fr) minmax(180px,1fr) auto; }
+  .ui-v2 .treino-progression-activity { display:none; }
+  .ui-v2 .treino-progression-person .treino-observe-action { grid-column:2/-1; justify-self:start; }
+}
+@media screen and (max-width: 650px) {
+  .ui-v2 .treino-progression-filters { grid-template-columns:1fr; }
+  .ui-v2 .treino-progression-filters .treino-primary-action,.ui-v2 .treino-progression-filters .treino-link-button { width:100%; justify-content:center; }
+  .ui-v2 .treino-progression-person { grid-template-columns:34px 1fr auto; align-items:start; }
+  .ui-v2 .treino-progression-required { grid-column:2/-1; padding-top:8px; border-top:1px solid var(--v2-line); }
+  .ui-v2 .treino-progression-person > .treino-status { grid-column:2/-1; }
+  .ui-v2 .treino-progression-person .treino-observe-action { grid-column:2/-1; }
+}

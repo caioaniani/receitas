@@ -1277,20 +1277,63 @@ def admin_trilha_cargos(id):
 @gestor_required
 def gestor_progressao():
     """v2 §16.3: quem está apto a progredir de cargo (concluiu as trilhas
-    exigidas do cargo)."""
-    from app.services import treino_onboarding as ob
+    exigidas do cargo), com o estado real da atividade no treinamento."""
+    from app.services import treino_lideranca as lideranca
+
     gestor = _func()
     is_admin = ledger.papel_treino(current_user) == 'ADMIN'
     if is_admin:
-        equipe = Funcionario.query.filter_by(ativo=True).order_by(
-            Funcionario.nome).all()
+        equipe_base = Funcionario.query.order_by(Funcionario.nome).all()
+        escopo = 'Todos os funcionários do RH'
     else:
-        unidade = ledger.unidade_do_funcionario(gestor) if gestor else None
-        equipe = [f for f in (unidade.funcionarios if unidade else [])
-                  if f.ativo]
-    progs = ob.progressao_lote(equipe)   # 2 queries, sem N+1
-    linhas = [{'func': f, 'prog': progs[f.id]} for f in equipe]
-    return render_template('treino/gestor_progressao.html', linhas=linhas)
+        equipe_base = lideranca.liderados_do(gestor, incluir_inativos=True)
+        escopo = 'Seus liderados diretos'
+
+    cadastro = (request.args.get('cadastro') or 'ativos').strip().lower()
+    if cadastro not in ('ativos', 'inativos', 'todos'):
+        cadastro = 'ativos'
+    status = (request.args.get('status') or '').strip().lower()
+    status_validos = {
+        'sem_acesso', 'nao_iniciou', 'andamento', 'parado',
+        'concluido', 'sem_cargo', 'sem_trilha', 'inativo',
+    }
+    if status not in status_validos:
+        status = ''
+    if status == 'inativo' and cadastro == 'ativos':
+        cadastro = 'inativos'
+
+    principais = lideranca.unidades_principais(equipe_base)
+    unidades_por_id = {
+        loja.id: loja for funcionario in equipe_base for loja in funcionario.lojas
+    }
+    unidades = sorted(
+        unidades_por_id.values(), key=lambda loja: loja.nome.lower())
+    unidade_id = _int(request.args.get('unidade'))
+    if unidade_id not in unidades_por_id:
+        unidade_id = None
+
+    equipe = []
+    for funcionario in equipe_base:
+        if cadastro == 'ativos' and not funcionario.ativo:
+            continue
+        if cadastro == 'inativos' and funcionario.ativo:
+            continue
+        if unidade_id and principais.get(funcionario.id) != unidade_id:
+            continue
+        equipe.append(funcionario)
+
+    visao = painel.painel_equipe(equipe, _temp())
+    for item in visao['linhas']:
+        item['unidade'] = unidades_por_id.get(
+            principais.get(item['funcionario'].id))
+    linhas = [item for item in visao['linhas']
+              if not status or item['status'] == status]
+    return render_template(
+        'treino/gestor_progressao.html', linhas=linhas, painel=visao,
+        unidades=unidades, is_admin=is_admin, escopo=escopo,
+        filtros={'cadastro': cadastro, 'status': status,
+                 'unidade_id': unidade_id},
+    )
 
 
 @treino_bp.route('/admin/temporada/<int:id>/status', methods=['POST'])
