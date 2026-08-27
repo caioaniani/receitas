@@ -1282,7 +1282,8 @@ def gestor_progressao():
 
     gestor = _func()
     is_admin = ledger.papel_treino(current_user) == 'ADMIN'
-    if is_admin:
+    visao_geral = is_admin or lideranca.eh_direcao(gestor)
+    if visao_geral:
         equipe_base = Funcionario.query.order_by(Funcionario.nome).all()
         escopo = 'Todos os funcionários do RH'
     else:
@@ -1330,7 +1331,7 @@ def gestor_progressao():
               if not status or item['status'] == status]
     return render_template(
         'treino/gestor_progressao.html', linhas=linhas, painel=visao,
-        unidades=unidades, is_admin=is_admin, escopo=escopo,
+        unidades=unidades, is_admin=visao_geral, escopo=escopo,
         filtros={'cadastro': cadastro, 'status': status,
                  'unidade_id': unidade_id},
     )

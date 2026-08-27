@@ -306,6 +306,28 @@ def test_progressao_filtra_unidade_e_cadastro_inativo(app, admin_user):
     assert f'data-funcionario-id="{ids[0]}"' not in somente_inativos
 
 
+def test_progressao_direcao_ve_todos_mesmo_com_conta_separada(
+        app, monkeypatch):
+    from app.services import treino_lideranca as lideranca
+
+    with app.app_context():
+        usuario, gestor, _ = _func(nome='Direção', papel='gerente')
+        _, liderado, _ = _func(nome='Liderado da direção')
+        liderado.lider_id = gestor.id
+        _, outra_pessoa, _ = _func(nome='Pessoa de outra equipe')
+        db.session.commit()
+        ids = liderado.id, outra_pessoa.id
+        usuario_id = usuario.id
+
+    monkeypatch.setattr(lideranca, 'eh_direcao', lambda funcionario: True)
+    html = _login(app, usuario_id).get(
+        '/treino/gestor/progressao').get_data(as_text=True)
+
+    assert 'Todos os funcionários do RH' in html
+    assert f'data-funcionario-id="{ids[0]}"' in html
+    assert f'data-funcionario-id="{ids[1]}"' in html
+
+
 def test_home_destaca_onboarding(app):
     with app.app_context():
         _temp()
