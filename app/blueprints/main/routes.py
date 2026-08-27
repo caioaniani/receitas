@@ -1891,6 +1891,12 @@ def debug_schema():
         cols_pi = {c['name'] for c in insp.get_columns('produto_item')}
         cols_receita = {c['name'] for c in insp.get_columns('receita')}
         cols_produto = {c['name'] for c in insp.get_columns('produto')}
+        cols_pedido_loja = {c['name'] for c in insp.get_columns('pedido_loja')}
+        cols_pedido_item = {c['name'] for c in insp.get_columns('pedido_item')}
+        cols_estoque_producao = {
+            c['name'] for c in insp.get_columns('estoque_producao')
+        }
+        cols_estoque_loja = {c['name'] for c in insp.get_columns('estoque_loja')}
         cols_vb2b = {c['name']: c for c in insp.get_columns('venda_b2b')}
         vt = cols_vb2b.get('valor_total', {})
         vt_tipo = str(vt.get('type', '')) if vt else ''
@@ -1905,6 +1911,15 @@ def debug_schema():
         b11_ddl = 'produto_componente_id' in cols_pi
         b12_ddl = ('reaproveitavel' in cols_receita
                    and 'reaproveitavel' in cols_produto)
+        b13_ddl = 'pedido_item_foto' in tabelas
+        b14_ddl = 'driver_id' in cols_pedido_loja
+        b15_ddl = 'driver_magic_token' in tabelas
+        b16_ddl = (
+            'familia' in cols_receita
+            and 'estado' in cols_pedido_item
+            and 'estado' in cols_estoque_producao
+            and 'estado' in cols_estoque_loja
+        )
 
         # Calcula qual e a revision mais avancada que ja teve seu DDL aplicado
         ddl_avancado_em = '69d82afed149'  # baseline
@@ -1918,6 +1933,18 @@ def debug_schema():
             ddl_avancado_em = '8f2c4a1b7d9e'  # B11
         if b9_ddl and b4_ddl and b5_ddl and b11_ddl and b12_ddl:
             ddl_avancado_em = '9c3d1a5e8b2f'  # B12
+        if (b9_ddl and b4_ddl and b5_ddl and b11_ddl and b12_ddl
+                and b13_ddl):
+            ddl_avancado_em = '4a8e2d6f1c5b'  # B13
+        if (b9_ddl and b4_ddl and b5_ddl and b11_ddl and b12_ddl
+                and b13_ddl and b14_ddl):
+            ddl_avancado_em = 'd2f5c9a1b7e3'  # B14
+        if (b9_ddl and b4_ddl and b5_ddl and b11_ddl and b12_ddl
+                and b13_ddl and b14_ddl and b15_ddl):
+            ddl_avancado_em = 'e7b4c2a8d5f1'  # B15
+        if (b9_ddl and b4_ddl and b5_ddl and b11_ddl and b12_ddl
+                and b13_ddl and b14_ddl and b15_ddl and b16_ddl):
+            ddl_avancado_em = '1f7a3c9d8e4b'  # B16
 
         if info['alembic_current'] != ddl_avancado_em:
             info['estado_misto'] = {
@@ -1928,6 +1955,10 @@ def debug_schema():
                 'b5_ddl': b5_ddl,
                 'b11_ddl': b11_ddl,
                 'b12_ddl': b12_ddl,
+                'b13_ddl': b13_ddl,
+                'b14_ddl': b14_ddl,
+                'b15_ddl': b15_ddl,
+                'b16_ddl': b16_ddl,
             }
     except Exception as e:  # noqa: BLE001
         info['estado_misto'] = {'erro': f'{type(e).__name__}: {e}'}
