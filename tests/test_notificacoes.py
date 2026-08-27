@@ -44,7 +44,7 @@ def test_motor_dispara_e_idempotente(app):
             nome='T', horario='00:00', mensagem='oi', ativo=True))
         db.session.commit()
         with patch('app.services.zapi.enviar_texto',
-                   return_value={'ok': True}) as mock_env:
+                   return_value={'ok': True, 'zaap_id': 'zaap-teste'}) as mock_env:
             assert whatsapp.disparar_automacoes_devidas() == 1
             assert mock_env.call_count == 1
             # ja disparou hoje -> nao repete
@@ -57,10 +57,12 @@ def test_notificar_registra_log(app):
     from app.models import NotificacaoWhatsapp
     from app.services import whatsapp
     with app.app_context():
-        with patch('app.services.zapi.enviar_texto', return_value={'ok': True}):
+        with patch('app.services.zapi.enviar_texto', return_value={
+                'ok': True, 'zaap_id': 'zaap-teste'}):
             whatsapp.notificar('5511999999999', 'teste', origem='manual')
         n = NotificacaoWhatsapp.query.first()
-        assert n is not None and n.ok is True and n.origem == 'manual'
+        assert (n is not None and n.ok is True and n.origem == 'manual'
+                and n.zaap_id == 'zaap-teste')
 
 
 # ── Digest de tarefas 07:00: anti-duplicata por claim (20/08/2026) ───────
@@ -73,7 +75,8 @@ def _arma_digest(app, monkeypatch, enviados):
     app.config['ZAPI_NUMERO_DESTINO'] = '5511999999999'
     monkeypatch.setattr(zapi, 'disponivel', lambda: True)
     monkeypatch.setattr(zapi, 'enviar_texto',
-                        lambda n, m: enviados.append(m) or {'ok': True})
+                        lambda n, m: enviados.append(m) or {
+                            'ok': True, 'zaap_id': f'zaap-{len(enviados)}'})
 
 
 def test_digest_tarefas_nao_duplica_no_mesmo_dia(app, owner_user, monkeypatch):
@@ -104,6 +107,7 @@ def test_digest_tarefas_envio_falho_devolve_o_claim(app, owner_user, monkeypatch
     zapi_resumos.enviar_digest_tarefas()
     enviados = []
     monkeypatch.setattr(zapi, 'enviar_texto',
-                        lambda n, m: enviados.append(m) or {'ok': True})
+                        lambda n, m: enviados.append(m) or {
+                            'ok': True, 'zaap_id': f'zaap-{len(enviados)}'})
     zapi_resumos.enviar_digest_tarefas()
     assert len(enviados) == 1
