@@ -120,12 +120,32 @@ def test_zapi_manda_da_producao(app, monkeypatch):
     app.config['ZAPI_INSTANCE_ID'] = 'inst'
     app.config['ZAPI_TOKEN'] = 'tok'
     app.config['ZAPI_NUMEROS_PERMITIDOS'] = '5511999999999'
-    with patch('requests.post') as post:
+    with patch.object(zapi, 'status_instancia', return_value={
+            'ok': True, 'conectado': True, 'detalhe': 'conectado'}), \
+         patch('requests.post') as post:
         post.return_value.status_code = 200
-        post.return_value.text = '{}'
-        post.return_value.json.return_value = {}
+        post.return_value.text = '{"zaapId":"zaap-1"}'
+        post.return_value.json.return_value = {'zaapId': 'zaap-1'}
         res = zapi.enviar_texto('5511999999999', 'oi')
     assert res['ok'] is True and post.called
+
+
+def test_copia_nao_reinicia_nem_reconfigura_zapi(app, monkeypatch):
+    """Preview com as mesmas credenciais não pode mutar a instância real."""
+    from app.services import zapi
+    monkeypatch.setenv('RAILWAY_GIT_BRANCH', BRANCH_COPIA)
+    monkeypatch.delenv('ALERTAS_INSTANCIA_CANONICA', raising=False)
+    app.config['ZAPI_INSTANCE_ID'] = 'inst'
+    app.config['ZAPI_TOKEN'] = 'tok'
+    with patch('app.services.zapi.requests.get') as get, \
+         patch('app.services.zapi.requests.put') as put:
+        restart = zapi.reiniciar_instancia()
+        assinatura = zapi.assinar_webhooks_conexao(
+            'https://gestao.exemplo.com', 'segredo')
+    assert restart.get('suprimido_instancia') is True
+    assert assinatura.get('suprimido_instancia') is True
+    get.assert_not_called()
+    put.assert_not_called()
 
 
 def test_slack_nao_posta_da_copia(app, monkeypatch):
