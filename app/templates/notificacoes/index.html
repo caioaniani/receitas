@@ -13,6 +13,15 @@
       <span class="badge bg-danger">desconectada</span>
     {% endif %}
     <span class="text-muted small">{{ status.detalhe }}</span>
+    <a class="btn btn-sm btn-outline-primary ms-auto" href="{{ url_for('notificacoes.qr') }}">Exibir QR</a>
+    <form method="POST" action="{{ url_for('notificacoes.reiniciar') }}" class="mb-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-outline-secondary">Reiniciar instância</button>
+    </form>
+    <form method="POST" action="{{ url_for('notificacoes.webhooks_assinar') }}" class="mb-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-outline-secondary">Ativar alertas de conexão</button>
+    </form>
     {% if not status.conectado %}
       <span class="text-muted small">— reconecte no painel do Z-API (QR code) pra voltar a enviar.</span>
     {% endif %}
@@ -128,7 +137,15 @@
           <td class="small text-nowrap">{{ e.criado_em.strftime('%d/%m %H:%M') if e.criado_em else '' }}</td>
           <td class="small">{{ e.origem or '' }}</td>
           <td class="small">{{ e.numero or '' }}</td>
-          <td>{% if e.ok %}<span class="badge bg-success">ok</span>{% else %}<span class="badge bg-danger" title="{{ e.erro }}">erro</span>{% endif %}</td>
+          <td>
+            {% if e.ok %}
+              <span class="badge bg-success">ok</span>
+              {% if e.zaap_id %}<div class="small text-muted" title="{{ e.zaap_id }}">ID {{ e.zaap_id[:12] }}…</div>{% endif %}
+            {% else %}
+              <span class="badge bg-danger">erro</span>
+              {% if e.erro %}<div class="small text-danger" style="max-width:260px">{{ e.erro }}</div>{% endif %}
+            {% endif %}
+          </td>
           <td class="small text-truncate" style="max-width:340px">{{ e.mensagem or '' }}</td>
         </tr>
         {% else %}
