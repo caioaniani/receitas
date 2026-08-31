@@ -55,6 +55,25 @@ def _dec(v):
         return Decimal('0')
 
 
+def _marketplace_tag(pedido):
+    """Canal de delivery canonico do pedido Seru, ou ``''``.
+
+    A API normalmente manda ``salesChannel.tag`` (ifood/99food/rappi), mas
+    algumas contas mandam so o nome. A normalizacao acontece na captura para
+    os paineis lerem apenas o snapshot local, sem chamar a API.
+    """
+    bruto = seru.canal_tag(pedido) or _str_chave(
+        pedido.get('salesChannel') if isinstance(pedido, dict) else None)
+    compacto = ''.join(ch for ch in bruto.lower() if ch.isalnum())
+    if 'ifood' in compacto:
+        return 'ifood'
+    if compacto == '99' or compacto.startswith('99food'):
+        return '99food'
+    if 'rappi' in compacto:
+        return 'rappi'
+    return ''
+
+
 def _loja_id_por_nome():
     """{company.name(lower): loja_id} dos SeruLojaMap confirmados (pra carimbar
     o vinculo resolvido; leitura do relatorio agrupa por loja_seru de qualquer
@@ -92,9 +111,11 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
     por_dia_loja = defaultdict(lambda: {
         'peds': set(), 'fat': Decimal('0'), 'fat_ped': Decimal('0')})
     # Breakdowns da tela 'Vendas PDV', por (data, company.name). Pagamento usa
-    # value|total|amount; canal usa o TOTAL do pedido; cancelados = contagem.
+    # value|total|amount; canal usa o TOTAL do pedido; marketplace usa CONTAGEM
+    # de pedidos (iFood/99/Rappi); cancelados = contagem.
     por_dia_pagto = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
     por_dia_canal = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
+    por_dia_marketplace = defaultdict(lambda: defaultdict(int))
     # Cancelados: contagem E valor (total do pedido cancelado) por (data, loja).
     # Desconto: soma do `discount` (R$ do pedido, top-level da API Seru) das
     # vendas NAO canceladas — o "quanto de desconto saiu no dia" do cockpit.
@@ -145,6 +166,9 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
                 pay.get('value') or pay.get('total') or pay.get('amount'))
         canal = _str_chave(p.get('salesChannel')) or '—'
         por_dia_canal[(d, ln)][canal] += total_ped
+        marketplace = _marketplace_tag(p)
+        if marketplace:
+            por_dia_marketplace[(d, ln)][marketplace] += 1
         tem_item = False
         for it in seru.extrair_itens(p):
             if it['cancelado']:
@@ -197,6 +221,11 @@ def capturar_periodo(data_inicial, data_final, expandir_dias_frente=0):
             db.session.add(VendaSeruDiaBreakdown(
                 data=d, loja_seru=ln, dimensao='canal',
                 chave=canal[:120], valor=val))
+    for (d, ln), marketplaces in por_dia_marketplace.items():
+        for marketplace, quantidade in marketplaces.items():
+            db.session.add(VendaSeruDiaBreakdown(
+                data=d, loja_seru=ln, dimensao='marketplace',
+                chave=marketplace, valor=Decimal(quantidade)))
     for (d, ln, tag), si in por_dia_sem_itens.items():
         # dimensao nova (18/07/2026): cobrancas SEM itens do dia, POR CANAL
         # — chave '<tag>' = VALOR e '<tag>:n' = CONTAGEM. So grava quando

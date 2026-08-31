@@ -19,6 +19,7 @@ from app.models import (
     Usuario,
     VendaB2B,
     VendaB2BItem,
+    VendaSeruDiaBreakdown,
 )
 from app.utils import agora, hoje
 
@@ -109,6 +110,17 @@ def _dados_sala_controle():
     db.session.add(PlanejamentoItem(
         planejamento_id=plano.id, receita_id=receita.id,
         qtd_alvo=100, produzido_qtd=40))
+    db.session.add_all([
+        VendaSeruDiaBreakdown(
+            data=hoje(), loja_seru='Loja Centro', dimensao='marketplace',
+            chave='ifood', valor=2),
+        VendaSeruDiaBreakdown(
+            data=hoje(), loja_seru='Loja Centro', dimensao='marketplace',
+            chave='99food', valor=1),
+        VendaSeruDiaBreakdown(
+            data=hoje(), loja_seru='Loja Centro', dimensao='marketplace',
+            chave='rappi', valor=1),
+    ])
 
     PedidoOnline.query.one().data_entrega = hoje()
     VendaB2B.query.one().data_entrega = hoje()
@@ -158,10 +170,12 @@ def test_sala_controle_resume_operacao_sem_acoes(app):
         'Estoque abaixo do mínimo',
         'Saúde das integrações',
         'Pedidos recebidos',
+        'Marketplaces · iFood, 99 e Rappi',
         'Movimentos recentes',
     ):
         assert texto in html
-    assert '4</strong><span>pedidos recebidos hoje' in html
+    assert '8</strong><span>pedidos recebidos hoje' in html
+    assert '<i class="marketplace"' in html
     assert 'method="POST"' not in html
     assert 'Cancelar pedido' not in html
 

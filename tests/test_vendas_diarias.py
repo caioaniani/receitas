@@ -169,6 +169,30 @@ def test_captura_grava_breakdowns(app):
     assert canc_v is not None and float(canc_v.valor) == 10.0
 
 
+def test_captura_conta_marketplaces_sem_misturar_dinheiro(app):
+    from app.models import VendaSeruDiaBreakdown
+    pedidos = [
+        _pedido_full(11, 'Nebraska', [('Cookie', 1, 10.0)], total=10,
+                     payments=[], canal={'name': 'iFood'}),
+        _pedido_full(12, 'Nebraska', [], total=25, payments=[],
+                     canal={'name': '99 Food', 'tag': '99food'}),
+        _pedido_full(13, 'Ribeiro do Vale', [('Cookie', 2, 20.0)], total=20,
+                     payments=[], canal={'name': 'Rappi', 'tag': 'rappi'}),
+        _pedido_full(14, 'Ribeiro do Vale', [('Cookie', 1, 10.0)], total=10,
+                     payments=[], canal={'name': 'iFood', 'tag': 'ifood'},
+                     canceled='2026-06-15T20:00:00Z'),
+    ]
+    _capturar_full(app, pedidos)
+
+    contagens = {}
+    linhas = VendaSeruDiaBreakdown.query.filter_by(
+        dimensao='marketplace').all()
+    for linha in linhas:
+        contagens[linha.chave] = (
+            contagens.get(linha.chave, 0) + int(linha.valor))
+    assert contagens == {'ifood': 1, '99food': 1, 'rappi': 1}
+
+
 def test_captura_breakdown_idempotente(app):
     from app.models import VendaSeruDiaBreakdown
     _capturar_full(app)

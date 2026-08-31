@@ -395,10 +395,11 @@ class VendaSeruDiaBreakdown(db.Model):
 
     Separado de VendaSeruDiaLoja porque sao 1:N (varios metodos/canais por
     dia/loja) e pra nao inchar a tabela de totais. `dimensao`: 'pagamento' |
-    'canal' | 'cancelados' | 'sem_itens' (18/07/2026 — total das cobrancas
-    so-valor do dia, rodape do card Por loja). Pra 'cancelados', `valor` e a
-    CONTAGEM (nao dinheiro) e `chave`=''. Idempotente por (data, loja_seru,
-    dimensao, chave)."""
+    'canal' | 'marketplace' | 'cancelados' | 'sem_itens' (18/07/2026 — total
+    das cobrancas so-valor do dia, rodape do card Por loja). Pra 'cancelados',
+    `valor` e a CONTAGEM (nao dinheiro) e `chave`=''. Pra 'marketplace',
+    `valor` tambem e contagem e `chave` identifica ifood/99food/rappi.
+    Idempotente por (data, loja_seru, dimensao, chave)."""
     __tablename__ = 'venda_seru_dia_breakdown'
 
     id = db.Column(db.Integer, primary_key=True)
