@@ -5,10 +5,10 @@ e agenda as etapas de cada receita numa linha do tempo, respeitando:
 
 - **1 amassadeira e 1 forno** (a padaria tem 1 de cada): as etapas que usam
   esses equipamentos SERIALIZAM — duas receitas não amassam/assam ao mesmo tempo.
-- **1 padeiro (mão de obra)** pras etapas manuais (mise en place, modelagem,
-  dobras). Mas enquanto a amassadeira/forno trabalha sozinha, o padeiro fica
-  livre pra adiantar a etapa manual de OUTRA receita — é a paralelização que o
-  dono pediu ("enquanto o amassamento acontece, abre outro mise en place").
+- **2 padeiros em filas independentes**: um para pães (incluindo Brioche) e
+  outro para viennoiserie. As etapas manuais de uma fila não bloqueiam a outra.
+  Enquanto a amassadeira/forno trabalha sozinha, cada padeiro também pode
+  adiantar a etapa manual de outra receita da própria fila.
 - **Descansos curtos** (< 4h: caixa, fermentação de pão de mesmo dia) ficam
   inline na linha — não ocupam ninguém, só seguram a receita.
 - **Fermentação longa** (≥ 4h: lead time de pão de fermentação natural) NÃO
@@ -20,6 +20,12 @@ A escala do eixo é REAL (minutos), origem 06:00. Greedy list-scheduling: a cada
 passo escolhe a etapa pronta que começa mais cedo (desempate: menor duração).
 """
 
+from app.services.centros_producao import (
+    CENTRO_PAES,
+    CENTRO_VIENNOISERIE,
+    centro_trabalho_receita,
+    rotulo_centro,
+)
 from app.services.producao import fornadas_amassadeira
 
 DIA_INI = 6 * 60          # 06:00 — origem do eixo (minutos desde a meia-noite)
@@ -78,17 +84,18 @@ _CORES = ['#0d6efd', '#198754', '#fd7e14', '#6f42c1', '#d63384', '#20c997',
           '#dc3545', '#0dcaf0', '#caa300', '#6610f2', '#0a8f6c', '#495057']
 
 
-def _recurso(equip, ativa):
+def _recurso(equip, ativa, centro=CENTRO_PAES):
     """Recurso (capacidade 1) que a etapa ocupa, ou None se passiva.
 
     Etapas de MÁQUINA (amassadeira/forno) ocupam o EQUIPAMENTO, não o padeiro —
     a máquina trabalha sozinha e a pessoa fica livre pra adiantar outra receita.
-    Só o trabalho manual (mise en place, modelagem) ocupa o `padeiro`."""
+    Só o trabalho manual (mise en place, modelagem) ocupa o padeiro do centro
+    da receita: pães ou viennoiserie."""
     if not ativa:
         return None
     if equip in ('amassadeira', 'forno'):
         return equip          # máquina trabalha sozinha (padeiro livre)
-    return 'padeiro'          # mão de obra do padeiro
+    return 'padeiro_' + centro
 
 
 def _icone(equip, ativa):
@@ -159,10 +166,12 @@ def montar_gantt(dia):
 
     def _novo_produto(nome, **kw):
         cor = kw.get('cor') or _CORES[len(produtos) % len(_CORES)]
+        centro = kw.get('centro', CENTRO_PAES)
         p = {'nome': nome, 'cor': cor, 'tarefas': [], 'destino': None,
              'fim_min': 0, 'falta': kw.get('falta'), 'fornadas': kw.get('fornadas'),
              'tipo': kw.get('tipo', 'solo'), 'grupo': kw.get('grupo'),
-             'receita_id': kw.get('receita_id')}
+             'receita_id': kw.get('receita_id'), 'centro': centro,
+             'centro_label': rotulo_centro(centro)}
         produtos.append(p)
         return p
 
@@ -179,7 +188,8 @@ def montar_gantt(dia):
     # 1a) Receitas SOLO (sem massa-base): 1 job por receita, como sempre.
     for pi in [x for x in itens_plano if x['mbi'] is None]:
         prod = _novo_produto(pi['rec'].nome, falta=pi['falta'], fornadas=pi['nf'],
-                             receita_id=pi['rec'].id)
+                             receita_id=pi['rec'].id,
+                             centro=centro_trabalho_receita(pi['rec']))
         jobs.append({'prod': prod, 'passos': _passos(pi['etapas'], pi['nf']),
                      'ptr': 0, 'ready': 0})
 
@@ -200,7 +210,8 @@ def montar_gantt(dia):
         if not retiradas:
             for pi in items:                       # fallback: trata como solo
                 prod = _novo_produto(pi['rec'].nome, falta=pi['falta'],
-                                     fornadas=pi['nf'])
+                                     fornadas=pi['nf'], receita_id=pi['rec'].id,
+                                     centro=centro_trabalho_receita(pi['rec']))
                 jobs.append({'prod': prod, 'passos': _passos(pi['etapas'], pi['nf']),
                              'ptr': 0, 'ready': 0})
             continue
@@ -208,7 +219,8 @@ def montar_gantt(dia):
         base_nf = calc['fornadas'] or 1
         cor_grupo = _CORES[len(produtos) % len(_CORES)]
         trunk_prod = _novo_produto('Massa base: ' + mb.nome, cor=cor_grupo,
-                                   tipo='base', grupo=mb_id, fornadas=base_nf)
+                                   tipo='base', grupo=mb_id, fornadas=base_nf,
+                                   centro=centro_trabalho_receita(items[0]['rec']))
         # quantidade e receita da base JÁ ESCALADAS pro plano do dia (a tela
         # Massa base mostra só pra 1 porção; aqui é o total a amassar no dia).
         trunk_prod['base_massa_label'] = _g_label(calc['base_massa'])
@@ -226,7 +238,8 @@ def montar_gantt(dia):
             post = pi['etapas'][i + 1:] if i >= 0 else pi['etapas']
             prod_r = _novo_produto(pi['rec'].nome, falta=pi['falta'],
                                    fornadas=pi['nf'], tipo='ramo', grupo=mb_id,
-                                   receita_id=pi['rec'].id)
+                                   receita_id=pi['rec'].id,
+                                   centro=centro_trabalho_receita(pi['rec']))
             bj = {'prod': prod_r, 'passos': _passos(post, pi['nf']),
                   'ptr': 0, 'ready': None}        # None = bloqueado
             branch_jobs[p['receita_id']] = bj
@@ -289,14 +302,20 @@ def montar_gantt(dia):
                 continue            # sem etapa pós-fermentação: nada a finalizar
             nf = fornadas_amassadeira(rec, it.multiplicador) or 1
             prod = _novo_produto(rec.nome, falta=falta, fornadas=nf,
-                                 tipo='continuacao', receita_id=rec.id)
+                                 tipo='continuacao', receita_id=rec.id,
+                                 centro=centro_trabalho_receita(rec))
             prod['origem_label'] = (dia - timedelta(days=L)).strftime('%d/%m')
             jobs.append({'prod': prod, 'passos': _passos(post, nf),
                          'ptr': 0, 'ready': 0})
 
     # 2) Greedy list-scheduling com recursos de capacidade 1. Jobs bloqueados
     #    (ready None) ficam de fora até a retirada que os libera.
-    livre = {'padeiro': 0, 'amassadeira': 0, 'forno': 0}
+    livre = {
+        'padeiro_' + CENTRO_PAES: 0,
+        'padeiro_' + CENTRO_VIENNOISERIE: 0,
+        'amassadeira': 0,
+        'forno': 0,
+    }
     guarda = 0
     while guarda < 20000:
         guarda += 1
@@ -305,7 +324,7 @@ def montar_gantt(dia):
             if j['ready'] is None or j['ptr'] >= len(j['passos']):
                 continue
             p = j['passos'][j['ptr']]
-            rec = _recurso(p['equip'], p['ativa'])
+            rec = _recurso(p['equip'], p['ativa'], j['prod']['centro'])
             ini = j['ready'] if rec is None else max(j['ready'], livre[rec])
             chave = (ini, p['dur'])     # menor início; desempate menor duração
             if melhor is None or chave < melhor[0]:

@@ -168,7 +168,7 @@
           <span class="sub">
             {%- if p.tipo == 'base' -%}amassar <b>{{ p.base_massa_label }}</b>{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}
             {%- elif p.tipo == 'continuacao' -%}finalizar <b>{{ p.falta }} un</b> · da câmara fria ({{ p.origem_label }})
-            {%- else -%}falta {{ p.falta }} un{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}{%- endif -%}
+            {%- else -%}{{ p.centro_label }} · falta {{ p.falta }} un{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}{%- endif -%}
           </span>
         </div>
         <div class="faixa" style="width:{{ g.canvas_px }}px;">
@@ -215,7 +215,8 @@
   </div>
 
   <div class="legenda">
-    <div class="it"><span>✋</span> padeiro (mão de obra)</div>
+    <div class="it"><span>✋</span> padeiro de pães</div>
+    <div class="it"><span>✋</span> padeiro de viennoiserie</div>
     <div class="it"><span>🥣</span> amassadeira (máquina)</div>
     <div class="it"><span>🔥</span> forno (máquina)</div>
     <div class="it"><span>❄️</span> câmara fria</div>
@@ -224,9 +225,10 @@
   </div>
 
   <p class="nota">
-    A linha do tempo respeita <b>1 amassadeira</b> e <b>1 forno</b> (etapas que
-    usam equipamento não se sobrepõem) e encaixa o trabalho manual em paralelo
-    enquanto a máquina trabalha. Descansos curtos ficam na linha; fermentações
+    A linha do tempo trabalha com <b>um padeiro de pães</b> e <b>um padeiro de
+    viennoiserie</b> em paralelo, mas respeita <b>1 amassadeira</b> e <b>1 forno</b>
+    compartilhados (etapas que usam equipamento não se sobrepõem). Descansos
+    curtos ficam na linha; fermentações
     longas (≥ 4h) viram o marcador <b>→ câmara fria</b> — o cronograma já antecipa
     a produção por causa delas. Tempos vêm das etapas cadastradas em cada receita
     (ajuste em <i>Receitas → Produção por categoria</i> ou na ficha).

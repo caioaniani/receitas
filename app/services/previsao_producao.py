@@ -2629,7 +2629,13 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             'ref_pesos': ref_pesos,
         })
 
-    # Equilibrar carga POR LOTES (dono 17/08/2026, v2 — SUBSTITUI o
+    # Equilibrar carga POR LOTES E POR CENTRO DE TRABALHO (31/08/2026):
+    # paes e viennoiserie possuem padeiros diferentes. Uma fornada de
+    # croissant nao pode ocupar a capacidade humana do padeiro de paes e
+    # empurrar todos os sourdoughs para outro dia. Forno e amassadeira
+    # continuam compartilhados no Gantt; aqui a regua e de MAO DE OBRA.
+    #
+    # SUBSTITUI o
     # "receita inteira num unico dia" de 29/06 pelos dois casos reais da
     # primeira noite: "nao da para produzir tudo isso de brioche, ele vence
     # em 3 dias" e "por que nao redistribuir o croissant em lotes
@@ -2646,6 +2652,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     # - dia bloqueado da receita (fim de semana, fornada especial fora de
     #   sex/sab) nunca recebe (`producao_permitida_no_dia`).
     if equilibrar:
+        from app.services.centros_producao import centro_trabalho_receita
+
         n = len(dias_prod)
         itens_eq = []
         for rr in receitas_out:
@@ -2720,14 +2728,16 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             # nas duas reguas (brioche 0 = nunca antecipa nem funde).
             ant_consolida = n if ant_rec is None else ant
             itens_eq.append({'rr': rr, 'rec': rec, 'rend': rend,
+                             'centro': centro_trabalho_receita(rec),
                              'qtds': qtds, 'segs': segs, 'ant': ant,
                              'ant_consolida': ant_consolida,
                              'chunk': max(1, chunk), 'peso': peso})
         if itens_eq:
-            carga = [0.0] * n
+            centros = sorted({it['centro'] for it in itens_eq})
+            carga = {centro: [0.0] * n for centro in centros}
             for it in itens_eq:
                 for i, q in enumerate(it['qtds']):
-                    carga[i] += q * it['peso']
+                    carga[it['centro']][i] += q * it['peso']
 
             def _movel(it, s, d):
                 """Qtd da celula s movel pra d: parcelas cujo dia de DEMANDA
@@ -2742,47 +2752,55 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             # na sexta em vez de se redistribuir entre qua/qui/sex (caso
             # real: paes empilhados na sexta com qua/qui abaixo do teto).
             # O guard "so move se melhora o balanco" e quem termina o loop.
-            for d in range(n):
-                while True:
-                    # Fonte: o dia MAIS carregado com parcela movel pra d.
-                    melhor = None
-                    for it in itens_eq:
-                        if not producao_permitida_no_dia(it['rec'],
-                                                         dias_prod[d]):
-                            continue
-                        for s in range(d + 1, n):
-                            if it['qtds'][s] <= 0 or _movel(it, s, d) <= 0:
+            for centro in centros:
+                carga_centro = carga[centro]
+                for d in range(n):
+                    while True:
+                        # Fonte: o dia MAIS carregado DESTE CENTRO com
+                        # parcela movel pra d. O outro padeiro nao participa
+                        # desta comparacao.
+                        melhor = None
+                        for it in itens_eq:
+                            if it['centro'] != centro:
                                 continue
-                            if melhor is None or carga[s] > carga[melhor[1]]:
-                                melhor = (it, s)
-                    if melhor is None:
-                        break
-                    it, s = melhor
-                    mv = min(_movel(it, s, d), it['chunk'])
-                    # So move se MELHORA o balanco (d pos-movimento nao
-                    # passa do que a fonte tinha); dia vazio aceita ao
-                    # menos um lote.
-                    if carga[d] > 0 and carga[d] + mv * it['peso'] > \
-                            carga[s]:
-                        break
-                    # Consome as parcelas MOVEIS de menor ref primeiro
-                    # (deixa as menos moveis onde estao).
-                    falta_mv = mv
-                    for f in sorted(it['segs'][s]):
-                        if falta_mv <= 0:
+                            if not producao_permitida_no_dia(it['rec'],
+                                                             dias_prod[d]):
+                                continue
+                            for s in range(d + 1, n):
+                                if it['qtds'][s] <= 0 or _movel(it, s, d) <= 0:
+                                    continue
+                                if (melhor is None
+                                        or carga_centro[s] > carga_centro[melhor[1]]):
+                                    melhor = (it, s)
+                        if melhor is None:
                             break
-                        ref, q = f
-                        if ref - d > it['ant'] or q <= 0:
-                            continue
-                        tira = min(q, falta_mv)
-                        f[1] -= tira
-                        falta_mv -= tira
-                        it['segs'][d].append([ref, tira])
-                    it['segs'][s] = [f for f in it['segs'][s] if f[1] > 0]
-                    it['qtds'][s] -= mv
-                    it['qtds'][d] += mv
-                    carga[s] -= mv * it['peso']
-                    carga[d] += mv * it['peso']
+                        it, s = melhor
+                        mv = min(_movel(it, s, d), it['chunk'])
+                        # So move se MELHORA o balanco do proprio centro (d
+                        # pos-movimento nao passa do que a fonte tinha); dia
+                        # vazio aceita ao menos um lote.
+                        if (carga_centro[d] > 0
+                                and carga_centro[d] + mv * it['peso']
+                                > carga_centro[s]):
+                            break
+                        # Consome as parcelas MOVEIS de menor ref primeiro
+                        # (deixa as menos moveis onde estao).
+                        falta_mv = mv
+                        for f in sorted(it['segs'][s]):
+                            if falta_mv <= 0:
+                                break
+                            ref, q = f
+                            if ref - d > it['ant'] or q <= 0:
+                                continue
+                            tira = min(q, falta_mv)
+                            f[1] -= tira
+                            falta_mv -= tira
+                            it['segs'][d].append([ref, tira])
+                        it['segs'][s] = [f for f in it['segs'][s] if f[1] > 0]
+                        it['qtds'][s] -= mv
+                        it['qtds'][d] += mv
+                        carga_centro[s] -= mv * it['peso']
+                        carga_centro[d] += mv * it['peso']
             # Anti-REFORNADA (dono 19/08/2026, "se vai produzir hoje
             # sourdough integral, amanha nao deveria produzir sourdough
             # integral novamente — e um re-trabalho pro padeiro; o
@@ -2815,8 +2833,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                         it['segs'][d].remove(f)
                         it['qtds'][d0] += q
                         it['qtds'][d] -= q
-                        carga[d0] += q * it['peso']
-                        carga[d] -= q * it['peso']
+                        carga[it['centro']][d0] += q * it['peso']
+                        carga[it['centro']][d] -= q * it['peso']
             # Anti-farelo (dono 18/08/2026, "2 paes e ridiculo, deveria
             # ser nenhum de nozes e azeitonas"): o movimento de parcelas
             # pode deixar/criar celula MENOR que a fracao minima de
@@ -2848,8 +2866,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                         it['segs'][d].remove(f)
                         it['qtds'][d2] += q
                         it['qtds'][d] -= q
-                        carga[d2] += q * it['peso']
-                        carga[d] -= q * it['peso']
+                        carga[it['centro']][d2] += q * it['peso']
+                        carga[it['centro']][d] -= q * it['peso']
             for it in itens_eq:   # reescreve a linha com os lotes movidos
                 rend = it['rend']
                 for i, c in enumerate(it['rr']['por_dia']):
