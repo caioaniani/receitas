@@ -114,8 +114,14 @@
         {% set so_treino = current_user.somente_treino %}
         {% set so_observador = current_user.is_observador() %}
         {% if so_observador %}
+        <a href="{{ url_for('pedidos.painel_observador') }}"
+           class="sidebar-link {% if request.endpoint == 'pedidos.painel_observador' %}active{% endif %}">
+            Sala de controle
+        </a>
         <a href="{{ url_for('pedidos.consulta') }}"
-           class="sidebar-link active">👁 Pedidos — somente leitura</a>
+           class="sidebar-link {% if request.endpoint == 'pedidos.consulta' %}active{% endif %}">
+            Pedidos — somente leitura
+        </a>
         {% endif %}
         {% if not so_treino and not so_observador %}
         <button type="button" onclick="window.abrirCommandPalette && window.abrirCommandPalette()"

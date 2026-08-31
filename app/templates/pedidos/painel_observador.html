@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block title %}Sala de controle — somente leitura{% endblock %}
+
+{% block content %}
+<div class="obs-head">
+  <div>
+    <span class="obs-eyebrow">Visão operacional · somente leitura</span>
+    <h1>Sala de controle</h1>
+    <p>O que está acontecendo agora, o que merece atenção e o histórico recente.</p>
+  </div>
+  <div class="obs-head-actions">
+    <small>Atualizado {{ painel.gerado_em.strftime('%H:%M') }}</small>
+    <a href="{{ url_for('pedidos.painel_observador') }}">
+      <i class="bi bi-arrow-clockwise"></i> Atualizar agora
+    </a>
+  </div>
+</div>
+
+<section aria-labelledby="agora-title">
+  <div class="obs-section-title">
+    <div><span>Agora</span><h2 id="agora-title">O que está acontecendo hoje</h2></div>
+  </div>
+  <div class="obs-kpis">
+    <article class="obs-kpi">
+      <span class="obs-kpi-icon blue"><i class="bi bi-bag"></i></span>
+      <div><strong>{{ painel.pedidos.hoje }}</strong><span>pedidos recebidos hoje</span></div>
+      <small>{{ painel.pedidos.total }} nos últimos 7 dias</small>
+    </article>
+    <article class="obs-kpi">
+      <span class="obs-kpi-icon purple"><i class="bi bi-truck"></i></span>
+      <div><strong>{{ painel.entregas.concluidas }}/{{ painel.entregas.total }}</strong><span>entregas concluídas hoje</span></div>
+      <small>{{ painel.entregas.em_rota }} em rota · {{ painel.entregas.aguardando }} aguardando</small>
+    </article>
+    <article class="obs-kpi">
+      <span class="obs-kpi-icon green"><i class="bi bi-gear"></i></span>
+      <div><strong>{{ painel.producao.concluidos }}/{{ painel.producao.total_itens }}</strong><span>receitas confirmadas na produção</span></div>
+      <small>{{ painel.producao.estado_label }}</small>
+    </article>
+    <article class="obs-kpi {{ 'has-alert' if painel.alertas_total else '' }}">
+      <span class="obs-kpi-icon amber"><i class="bi bi-exclamation-triangle"></i></span>
+      <div><strong>{{ painel.alertas_total }}</strong><span>situações que merecem atenção</span></div>
+      <small>{{ 'Tudo em ordem' if not painel.alertas_total else 'Veja o resumo abaixo' }}</small>
+    </article>
+  </div>
+</section>
+
+<section class="obs-attention" aria-labelledby="atencao-title">
+  <div class="obs-section-title">
+    <div><span>Atenção</span><h2 id="atencao-title">O que merece acompanhamento</h2></div>
+  </div>
+  {% if painel.alertas %}
+  <div class="obs-alert-list">
+    {% for alerta in painel.alertas %}
+    <article class="obs-alert {{ alerta.nivel }}">
+      <i class="bi {{ 'bi-exclamation-octagon' if alerta.nivel == 'critico' else 'bi-exclamation-circle' }}"></i>
+      <div><strong>{{ alerta.titulo }}</strong><span>{{ alerta.texto }}</span></div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="obs-all-good">
+    <i class="bi bi-check-circle"></i>
+    <div><strong>Nenhuma exceção importante agora</strong><span>A operação está seguindo o fluxo esperado.</span></div>
+  </div>
+  {% endif %}
+</section>
+
+<section aria-labelledby="operacao-title">
+  <div class="obs-section-title">
+    <div><span>Operação</span><h2 id="operacao-title">Como o dia está andando</h2></div>
+    <a href="{{ url_for('pedidos.consulta') }}">Consultar todos os pedidos <i class="bi bi-arrow-right"></i></a>
+  </div>
+  <div class="obs-operation-grid">
+    <article class="obs-panel">
+      <header>
+        <div><span class="obs-panel-icon green"><i class="bi bi-gear-wide-connected"></i></span><div><strong>Produção de hoje</strong><small>{{ painel.producao.estado_label }}</small></div></div>
+        <span class="obs-state state-{{ painel.producao.estado }}">{{ painel.producao.progresso_pct }}%</span>
+      </header>
+      <div class="obs-progress"><span style="width: {{ painel.producao.progresso_pct }}%"></span></div>
+      <div class="obs-mini-metrics">
+        <div><strong>{{ painel.producao.total_itens }}</strong><span>receitas na ordem</span></div>
+        <div><strong>{{ painel.producao.pendentes_itens }}</strong><span>a confirmar</span></div>
+        <div><strong>{{ painel.producao.vencidas_itens }}</strong><span>pendências anteriores</span></div>
+      </div>
+      {% if painel.producao.pendentes_top %}
+      <details class="obs-details">
+        <summary>Ver as maiores pendências <i class="bi bi-chevron-down"></i></summary>
+        <div class="obs-pending-list">
+          {% for item in painel.producao.pendentes_top %}
+          <div><span>{{ item.nome }}</span><strong>{{ item.produzido }}/{{ item.alvo }}</strong></div>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
+    </article>
+
+    <article class="obs-panel">
+      <header>
+        <div><span class="obs-panel-icon purple"><i class="bi bi-truck"></i></span><div><strong>Entregas de hoje</strong><small>{{ painel.entregas.total }} previstas</small></div></div>
+        {% if painel.entregas.atrasadas %}<span class="obs-state state-alert">{{ painel.entregas.atrasadas }} atrasada(s)</span>{% endif %}
+      </header>
+      <div class="obs-pipeline">
+        <div><span>Aguardando</span><strong>{{ painel.entregas.aguardando }}</strong></div>
+        <i class="bi bi-chevron-right"></i>
+        <div><span>Em preparo</span><strong>{{ painel.entregas.em_preparo }}</strong></div>
+        <i class="bi bi-chevron-right"></i>
+        <div><span>Em rota</span><strong>{{ painel.entregas.em_rota }}</strong></div>
+        <i class="bi bi-chevron-right"></i>
+        <div><span>Concluídas</span><strong>{{ painel.entregas.concluidas }}</strong></div>
+      </div>
+      {% if painel.entregas.fila %}
+      <div class="obs-delivery-list">
+        {% for entrega in painel.entregas.fila %}
+        <div>
+          <span class="obs-channel">{{ entrega.canal }}</span>
+          <span><strong>{{ entrega.referencia }}</strong><small>{{ entrega.destino }}</small></span>
+          <span class="obs-delivery-status {{ 'late' if entrega.atrasado }}">{{ 'Atrasada · ' if entrega.atrasado }}{{ entrega.status_label }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="obs-empty-small">Nenhuma entrega aberta para acompanhar.</div>
+      {% endif %}
+    </article>
+  </div>
+</section>
+
+<section class="obs-two-col" aria-label="Estoque e integrações">
+  <article class="obs-panel" id="estoque">
+    <header>
+      <div><span class="obs-panel-icon amber"><i class="bi bi-box-seam"></i></span><div><strong>Estoque abaixo do mínimo</strong><small>Indústria e lojas</small></div></div>
+      <span class="obs-state {{ 'state-alert' if painel.estoque.total else 'state-ok' }}">{{ painel.estoque.total }}</span>
+    </header>
+    {% if painel.estoque.itens %}
+    <div class="obs-stock-list">
+      {% for item in painel.estoque.itens %}
+      <div>
+        <span><strong>{{ item.item }}</strong><small>{{ item.local }}</small></span>
+        <span class="{{ 'zero' if item.zerado }}">{{ item.quantidade }} <small>mín. {{ item.minimo }}</small></span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="obs-empty-small"><i class="bi bi-check-circle"></i> Nenhum item abaixo do mínimo cadastrado.</div>
+    {% endif %}
+  </article>
+
+  <article class="obs-panel">
+    <header>
+      <div><span class="obs-panel-icon blue"><i class="bi bi-activity"></i></span><div><strong>Saúde das integrações</strong><small>Sem expor configurações ou senhas</small></div></div>
+    </header>
+    <div class="obs-integration-list">
+      {% for integracao in painel.integracoes %}
+      <div>
+        <i class="bi {{ 'bi-exclamation-circle-fill' if integracao.estado == 'atencao' else ('bi-check-circle-fill' if integracao.estado == 'ok' else 'bi-clock-fill') }} {{ integracao.estado }}"></i>
+        <span><strong>{{ integracao.nome }}</strong><small>{{ integracao.texto }}</small></span>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+</section>
+
+<section class="obs-two-col" aria-label="Histórico da semana e movimentos recentes">
+  <article class="obs-panel">
+    <header>
+      <div><span class="obs-panel-icon blue"><i class="bi bi-bar-chart"></i></span><div><strong>Pedidos recebidos</strong><small>Últimos 7 dias · todos os canais</small></div></div>
+      <span class="obs-state state-ok">{{ painel.pedidos.total }}</span>
+    </header>
+    <div class="obs-legend"><span class="loja">Lojas</span><span class="site">Site</span><span class="b2b">B2B</span><span class="manual">Manuais</span></div>
+    <div class="obs-chart" role="img" aria-label="Pedidos recebidos por dia e canal">
+      {% for dia in painel.pedidos.dias %}
+      <div class="obs-chart-row">
+        <span>{{ dia.label }}</span>
+        <div class="obs-chart-track">
+          {% if dia.total %}
+          <div class="obs-chart-stack" style="width: {{ dia.altura_pct }}%">
+            <i class="loja" style="width: {{ (dia.loja / dia.total * 100)|round }}%"></i>
+            <i class="site" style="width: {{ (dia.site / dia.total * 100)|round }}%"></i>
+            <i class="b2b" style="width: {{ (dia.b2b / dia.total * 100)|round }}%"></i>
+            <i class="manual" style="width: {{ (dia.manual / dia.total * 100)|round }}%"></i>
+          </div>
+          {% endif %}
+        </div>
+        <strong>{{ dia.total }}</strong>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="obs-panel">
+    <header>
+      <div><span class="obs-panel-icon green"><i class="bi bi-clock-history"></i></span><div><strong>Movimentos recentes</strong><small>Quem alterou pedidos, produção, estoque ou entrega</small></div></div>
+    </header>
+    {% if painel.eventos %}
+    <div class="obs-event-list">
+      {% for evento in painel.eventos %}
+      <div>
+        <span class="obs-event-dot"></span>
+        <span><strong>{{ evento.area }}</strong><small>{{ evento.frase }}</small></span>
+        <time>{{ evento.momento.strftime('%d/%m %H:%M') }}</time>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="obs-empty-small">Nenhum movimento recente registrado.</div>
+    {% endif %}
+  </article>
+</section>
+
+<div class="obs-readonly-note"><i class="bi bi-lock"></i> Esta área é somente leitura. Nenhuma informação pode ser alterada por este acesso.</div>
+
+<style>
+.obs-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:0 0 30px}.obs-eyebrow{display:block;color:#22644b;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;margin-bottom:7px}.obs-head h1{font-family:Georgia,serif;font-size:clamp(38px,5vw,58px);line-height:1;margin:0;color:#17231d}.obs-head p{color:#69746e;margin:9px 0 0}.obs-head-actions{display:flex;align-items:center;gap:14px}.obs-head-actions small{color:#7a847e}.obs-head-actions a{display:inline-flex;align-items:center;gap:7px;padding:10px 15px;border:1px solid #bfd1c7;border-radius:10px;color:#225e47;text-decoration:none;font-weight:750;background:#fff}.obs-section-title{display:flex;align-items:end;justify-content:space-between;gap:18px;margin:27px 0 13px}.obs-section-title>div>span{display:block;color:#2a674e;font-size:10px;font-weight:850;letter-spacing:.14em;text-transform:uppercase}.obs-section-title h2{font-family:Georgia,serif;font-size:25px;margin:2px 0 0;color:#1a2821}.obs-section-title>a{color:#256148;text-decoration:none;font-weight:750;font-size:13px}.obs-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.obs-kpi{position:relative;display:grid;grid-template-columns:auto 1fr;gap:12px;background:#fff;border:1px solid #dde4df;border-radius:16px;padding:17px;min-height:128px;box-shadow:0 7px 22px rgba(38,59,48,.045)}.obs-kpi.has-alert{border-color:#ead6aa}.obs-kpi-icon,.obs-panel-icon{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:11px;font-size:17px}.obs-kpi-icon.green,.obs-panel-icon.green{background:#e6f2ec;color:#236348}.obs-kpi-icon.blue,.obs-panel-icon.blue{background:#eaf0f5;color:#315f7d}.obs-kpi-icon.purple,.obs-panel-icon.purple{background:#eeeafa;color:#654ea0}.obs-kpi-icon.amber,.obs-panel-icon.amber{background:#fff1d8;color:#9a6514}.obs-kpi>div{display:flex;flex-direction:column}.obs-kpi>div strong{font-size:27px;line-height:1.05;color:#18251e}.obs-kpi>div span{font-size:13px;font-weight:700;color:#46534c;margin-top:4px}.obs-kpi>small{grid-column:2;color:#7b857f;font-size:11px;align-self:end}.obs-attention{margin-top:6px}.obs-alert-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.obs-alert,.obs-all-good{display:flex;align-items:flex-start;gap:12px;border-radius:13px;padding:13px 15px}.obs-alert{background:#fff;border:1px solid #eadfcb}.obs-alert.critico{border-color:#ebc7c2;background:#fffafa}.obs-alert>i{color:#a87427;font-size:18px}.obs-alert.critico>i{color:#b24c43}.obs-alert>div,.obs-all-good>div{display:flex;flex-direction:column}.obs-alert strong,.obs-all-good strong{color:#253229}.obs-alert span,.obs-all-good span{color:#69746e;font-size:12px;margin-top:2px}.obs-all-good{background:#e9f3ee;border:1px solid #cfe1d7;color:#246247}.obs-operation-grid,.obs-two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin-bottom:13px}.obs-panel{background:#fff;border:1px solid #dde4df;border-radius:17px;padding:18px;box-shadow:0 7px 22px rgba(38,59,48,.045);min-width:0}.obs-panel>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}.obs-panel>header>div{display:flex;align-items:center;gap:11px}.obs-panel header strong{display:block;color:#1d2b23}.obs-panel header small{display:block;color:#7a847e;margin-top:2px}.obs-state{font-size:11px;font-weight:800;border-radius:999px;padding:5px 9px;background:#edf1ef;color:#52625a;white-space:nowrap}.state-enviada,.state-ok{background:#e4f2e9;color:#216d46}.state-aguardando_envio,.state-sem_ordem,.state-alert{background:#fff0d9;color:#986010}.obs-progress{height:9px;background:#edf1ee;border-radius:999px;overflow:hidden}.obs-progress span{display:block;height:100%;background:#28684f;border-radius:999px}.obs-mini-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0}.obs-mini-metrics div{display:flex;flex-direction:column;border-right:1px solid #e6ebe8;padding-right:7px}.obs-mini-metrics div:last-child{border:0}.obs-mini-metrics strong{font-size:19px;color:#203128}.obs-mini-metrics span{color:#7a847e;font-size:10px}.obs-details{border-top:1px solid #e4e9e6;padding-top:11px}.obs-details summary{display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;font-weight:750;color:#315f4b;list-style:none}.obs-pending-list{display:grid;gap:7px;margin-top:10px}.obs-pending-list div{display:flex;justify-content:space-between;gap:12px;font-size:12px}.obs-pending-list span{color:#526058}.obs-pipeline{display:grid;grid-template-columns:repeat(7,auto);align-items:center;justify-content:space-between;gap:5px;padding:12px;background:#f6f8f6;border-radius:12px}.obs-pipeline div{display:flex;flex-direction:column;text-align:center}.obs-pipeline span{font-size:9px;text-transform:uppercase;color:#7b857f}.obs-pipeline strong{font-size:19px;color:#26362d}.obs-pipeline>i{font-size:10px;color:#aab3ae}.obs-delivery-list,.obs-stock-list,.obs-integration-list,.obs-event-list{display:grid}.obs-delivery-list{margin-top:10px}.obs-delivery-list>div{display:grid;grid-template-columns:58px minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px 3px;border-bottom:1px solid #edf0ee}.obs-channel{font-size:9px;font-weight:800;text-transform:uppercase;color:#39664f;background:#e8f1ec;padding:4px 6px;border-radius:999px;text-align:center}.obs-delivery-list>div>span:nth-child(2){display:flex;flex-direction:column;min-width:0}.obs-delivery-list strong{font-size:12px}.obs-delivery-list small{color:#7c8580;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.obs-delivery-status{font-size:10px;color:#52625a;font-weight:700}.obs-delivery-status.late{color:#a34038}.obs-stock-list>div{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 2px;border-bottom:1px solid #edf0ee}.obs-stock-list>div>span{display:flex;flex-direction:column}.obs-stock-list strong{font-size:12px}.obs-stock-list small{color:#7b857f}.obs-stock-list>div>span:last-child{align-items:flex-end;color:#95651c;font-weight:800}.obs-stock-list>div>span.zero{color:#ad433b}.obs-integration-list{gap:5px}.obs-integration-list>div{display:flex;align-items:center;gap:11px;padding:10px;border-radius:11px;background:#f7f9f7}.obs-integration-list i{color:#87928c}.obs-integration-list i.ok{color:#2a7c50}.obs-integration-list i.atencao{color:#b06f1e}.obs-integration-list span{display:flex;flex-direction:column}.obs-integration-list strong{font-size:12px}.obs-integration-list small{color:#737e78}.obs-empty-small{display:flex;align-items:center;justify-content:center;gap:7px;min-height:80px;color:#758079;font-size:12px}.obs-legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px}.obs-legend span{font-size:10px;color:#69746e}.obs-legend span:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:#aaa}.obs-legend .loja:before,.obs-chart-stack .loja{background:#28684f}.obs-legend .site:before,.obs-chart-stack .site{background:#5c7ea0}.obs-legend .b2b:before,.obs-chart-stack .b2b{background:#765da7}.obs-legend .manual:before,.obs-chart-stack .manual{background:#c48a38}.obs-chart{display:grid;gap:9px}.obs-chart-row{display:grid;grid-template-columns:42px 1fr 30px;align-items:center;gap:9px}.obs-chart-row>span{font-size:10px;color:#7b857f}.obs-chart-row>strong{font-size:11px;text-align:right}.obs-chart-track{height:15px;background:#f0f3f1;border-radius:5px;overflow:hidden}.obs-chart-stack{display:flex;height:100%;min-width:2px;border-radius:5px;overflow:hidden}.obs-chart-stack i{display:block;height:100%}.obs-event-list>div{display:grid;grid-template-columns:8px minmax(0,1fr) auto;gap:10px;align-items:start;padding:8px 2px;border-bottom:1px solid #edf0ee}.obs-event-dot{width:7px;height:7px;background:#347258;border-radius:50%;margin-top:5px}.obs-event-list>div>span:nth-child(2){display:flex;flex-direction:column}.obs-event-list strong{font-size:10px;text-transform:uppercase;color:#387057;letter-spacing:.06em}.obs-event-list small{color:#46544c;line-height:1.35}.obs-event-list time{font-size:9px;color:#8a938e;white-space:nowrap}.obs-readonly-note{display:flex;align-items:center;justify-content:center;gap:7px;color:#76817a;font-size:11px;padding:17px}.obs-two-col{margin-top:13px}
+@media(max-width:1050px){.obs-kpis{grid-template-columns:repeat(2,1fr)}.obs-operation-grid,.obs-two-col{grid-template-columns:1fr}}
+@media(max-width:650px){.obs-head{align-items:flex-start;flex-direction:column}.obs-head-actions{width:100%;justify-content:space-between}.obs-kpis{grid-template-columns:1fr}.obs-alert-list{grid-template-columns:1fr}.obs-section-title{align-items:flex-start;flex-direction:column}.obs-pipeline{grid-template-columns:repeat(4,1fr)}.obs-pipeline>i{display:none}.obs-delivery-list>div{grid-template-columns:50px 1fr}.obs-delivery-status{grid-column:2}.obs-mini-metrics strong{font-size:16px}}
+</style>
+{% endblock %}

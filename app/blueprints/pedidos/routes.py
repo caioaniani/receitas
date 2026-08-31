@@ -152,6 +152,17 @@ def _item_consulta(nome, quantidade):
     return {'nome': nome or '(item)', 'quantidade': int(quantidade or 0)}
 
 
+@pedidos_bp.route('/observador')
+@login_required
+@consulta_pedidos_required
+def painel_observador():
+    """Sala de controle operacional, sem qualquer acao de escrita."""
+    from app.services.painel_observador import montar_painel
+
+    return render_template(
+        'pedidos/painel_observador.html', painel=montar_painel())
+
+
 @pedidos_bp.route('/consulta')
 @login_required
 @consulta_pedidos_required
