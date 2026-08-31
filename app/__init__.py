@@ -1,7 +1,7 @@
 import logging
 import os
 
-from flask import Flask, flash, jsonify, redirect, render_template, request
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request
 from flask_wtf.csrf import CSRFError
 
 from app.extensions import csrf, db, limiter, login_manager, migrate
@@ -436,6 +436,8 @@ def create_app(config_class=None):
           liberar qualquer tela (a senha veio no e-mail; a pessoa sabe a atual).
         - `somente_treino`: acesso restrito à área de treinamento (/treino);
           o resto vira redirect (barra por URL também, não só escondendo link).
+        - papel `observador`: somente GET da central multicanal de pedidos;
+          qualquer escrita ou outra tela é bloqueada no servidor.
         Roda depois do roteamento por host; `getattr` defensivo enquanto a
         coluna propaga. Allowlist evita loop (a própria troca, sair, estáticos).
         """
@@ -452,6 +454,12 @@ def create_app(config_class=None):
             return None
         if getattr(current_user, 'senha_provisoria', False):
             return redirect(url_for('auth.minha_senha'))
+        if getattr(current_user, 'is_observador', lambda: False)():
+            if request.method not in ('GET', 'HEAD', 'OPTIONS'):
+                abort(403)
+            if ep != 'pedidos.consulta':
+                return redirect(url_for('pedidos.consulta'))
+            return None
         acesso_equipe = (
             ep in {'rh.lideranca_preenchimento',
                    'rh.lideranca_preenchimento_salvar',

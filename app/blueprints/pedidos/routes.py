@@ -19,6 +19,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.blueprints.pedidos import pedidos_bp
 from app.decorators import (
     admin_required,
+    consulta_pedidos_required,
     gerente_required,
     operacional_pedido_required,
     owner_required,
@@ -36,11 +37,14 @@ from app.models import (
     MovEstoqueLoja,
     MovEstoqueProducao,
     PedidoItem,
+    PedidoLocal,
     PedidoLoja,
+    PedidoOnline,
     PedidoQRCode,
     PrecoLojaReceita,
     Produto,
     Receita,
+    VendaB2B,
     VendaMapa,
     VendaMapaUso,
 )
@@ -142,6 +146,138 @@ def _loja_do_usuario():
     if current_user.is_admin() or current_user.is_gerente():
         return None
     return current_user.loja_id
+
+
+def _item_consulta(nome, quantidade):
+    return {'nome': nome or '(item)', 'quantidade': int(quantidade or 0)}
+
+
+@pedidos_bp.route('/consulta')
+@login_required
+@consulta_pedidos_required
+def consulta():
+    """Central multicanal sem qualquer acao operacional.
+
+    O papel observador so chega a esta rota pelo gate global. Admin/owner
+    tambem podem abri-la para conferir exatamente a experiencia concedida.
+    """
+    from app.utils import normalizar_busca
+
+    canal = (request.args.get('canal') or 'todos').strip().lower()
+    if canal not in {'todos', 'loja', 'site', 'b2b', 'manual'}:
+        canal = 'todos'
+    periodo = (request.args.get('periodo') or '30').strip().lower()
+    if periodo not in {'7', '30', '90', 'todos'}:
+        periodo = '30'
+    status = (request.args.get('status') or '').strip().lower()
+    busca = normalizar_busca((request.args.get('q') or '').strip())
+
+    registros = []
+    limite_canal = 150
+
+    if canal in {'todos', 'loja'}:
+        pedidos_loja = (PedidoLoja.query.options(
+            joinedload(PedidoLoja.loja), selectinload(PedidoLoja.itens))
+            .order_by(PedidoLoja.criado_em.desc()).limit(limite_canal).all())
+        for p in pedidos_loja:
+            registros.append({
+                'canal': 'loja', 'canal_label': 'Loja',
+                'referencia': f'LOJA-{p.id}',
+                'destino': p.loja.nome if p.loja else 'Loja',
+                'subtitulo': 'Pedido interno da loja',
+                'criado_em': p.criado_em, 'entrega': p.data_entrega,
+                'status': p.status or 'sem_status', 'valor': None,
+                'observacao': p.observacao,
+                'itens': [_item_consulta(it.nome_item, it.quantidade)
+                          for it in p.itens],
+            })
+
+    if canal in {'todos', 'site'}:
+        pedidos_site = (PedidoOnline.query.options(
+            joinedload(PedidoOnline.loja_retirada),
+            selectinload(PedidoOnline.itens))
+            .order_by(PedidoOnline.criado_em.desc()).limit(limite_canal).all())
+        for p in pedidos_site:
+            modo = (p.modo_entrega or 'site').replace('_', ' ')
+            if p.loja_retirada:
+                modo += f' · {p.loja_retirada.nome}'
+            registros.append({
+                'canal': 'site', 'canal_label': 'Site',
+                'referencia': p.codigo or f'SITE-{p.id}',
+                'destino': p.nome_cliente,
+                'subtitulo': modo, 'criado_em': p.criado_em,
+                'entrega': p.data_entrega, 'status': p.status or 'sem_status',
+                'valor': p.valor_total, 'observacao': p.cartinha,
+                'itens': [_item_consulta(it.nome, it.quantidade)
+                          for it in p.itens],
+            })
+
+    if canal in {'todos', 'b2b'}:
+        vendas_b2b = (VendaB2B.query.options(
+            joinedload(VendaB2B.cliente), selectinload(VendaB2B.itens))
+            .order_by(VendaB2B.criado_em.desc()).limit(limite_canal).all())
+        for p in vendas_b2b:
+            situacao = ('cancelada' if p.status == 'cancelada'
+                        else (p.status_entrega or p.status or 'sem_status'))
+            registros.append({
+                'canal': 'b2b', 'canal_label': 'B2B',
+                'referencia': f'B2B-{p.id}', 'destino': p.cliente_display,
+                'subtitulo': 'Venda para empresa', 'criado_em': p.criado_em,
+                'entrega': p.data_entrega, 'status': situacao,
+                'valor': p.valor_total, 'observacao': p.observacao,
+                'itens': [_item_consulta(it.nome_item, it.quantidade)
+                          for it in p.itens],
+            })
+
+    if canal in {'todos', 'manual'}:
+        pedidos_manuais = (PedidoLocal.query.options(
+            selectinload(PedidoLocal.itens))
+            .order_by(PedidoLocal.criado_em.desc()).limit(limite_canal).all())
+        for p in pedidos_manuais:
+            registros.append({
+                'canal': 'manual', 'canal_label': 'Manual',
+                'referencia': p.code or f'MANUAL-{p.id}',
+                'destino': p.destinatario, 'subtitulo': p.periodo or 'Agendado',
+                'criado_em': p.criado_em, 'entrega': p.data_entrega,
+                'status': 'agendado', 'valor': p.total,
+                'observacao': p.observacao,
+                'itens': [_item_consulta(it.nome, it.quantidade)
+                          for it in p.itens],
+            })
+
+    if periodo != 'todos':
+        corte = hoje_brt() - timedelta(days=int(periodo))
+        registros = [r for r in registros
+                     if ((r['criado_em'] and r['criado_em'].date() >= corte)
+                         or (r['entrega'] and r['entrega'] >= hoje_brt()))]
+    status_opcoes = sorted({r['status'] for r in registros})
+    if status:
+        registros = [r for r in registros if r['status'].lower() == status]
+    if busca:
+        def _texto(r):
+            partes = [r['referencia'], r['destino'], r['canal_label'],
+                      r['status'], r.get('observacao') or '']
+            partes.extend(it['nome'] for it in r['itens'])
+            return normalizar_busca(' '.join(str(x or '') for x in partes))
+        registros = [r for r in registros if busca in _texto(r)]
+
+    registros.sort(
+        key=lambda r: (r['criado_em'].isoformat() if r['criado_em'] else ''),
+        reverse=True)
+    registros = registros[:300]
+    # Totais globais deixam as abas honestas mesmo quando uma delas esta
+    # selecionada (sem isso as outras apareciam como zero por nao terem sido
+    # carregadas naquele request).
+    contagens = {
+        'loja': PedidoLoja.query.count(),
+        'site': PedidoOnline.query.count(),
+        'b2b': VendaB2B.query.count(),
+        'manual': PedidoLocal.query.count(),
+    }
+    return render_template(
+        'pedidos/consulta.html', pedidos=registros, canal_atual=canal,
+        periodo_atual=periodo, status_atual=status, busca=busca,
+        contagens=contagens, status_opcoes=status_opcoes)
 
 
 @pedidos_bp.route('/buscar-itens.json')
