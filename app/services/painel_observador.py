@@ -26,6 +26,7 @@ from app.models import (
     Receita,
     TinyPedidoProcessado,
     VendaB2B,
+    VendaSeruDiaBreakdown,
     VendaSeruDiaLoja,
 )
 from app.utils import agora, hoje
@@ -88,6 +89,20 @@ def _pedidos_sete_dias():
         if criado_em and criado_em.date() in por_dia:
             por_dia[criado_em.date()]['manual'] += 1
 
+    marketplaces = (db.session.query(
+        VendaSeruDiaBreakdown.data,
+        func.sum(VendaSeruDiaBreakdown.valor))
+        .filter(
+            VendaSeruDiaBreakdown.data >= inicio,
+            VendaSeruDiaBreakdown.data <= fim,
+            VendaSeruDiaBreakdown.dimensao == 'marketplace',
+            VendaSeruDiaBreakdown.chave.in_(('ifood', '99food', 'rappi')),
+        )
+        .group_by(VendaSeruDiaBreakdown.data).all())
+    for data, quantidade in marketplaces:
+        if data in por_dia:
+            por_dia[data]['marketplace'] += int(quantidade or 0)
+
     dias = []
     for data, canais in por_dia.items():
         total = sum(canais.values())
@@ -98,6 +113,7 @@ def _pedidos_sete_dias():
             'site': canais['site'],
             'b2b': canais['b2b'],
             'manual': canais['manual'],
+            'marketplace': canais['marketplace'],
             'total': total,
         })
     maior = max((d['total'] for d in dias), default=0)
