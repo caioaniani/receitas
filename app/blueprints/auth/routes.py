@@ -127,8 +127,9 @@ def novo_usuario():
     # Conta só-treino não recebe o convite do Chatwoot (não atende cliente).
     if email:
         from app.services import email as email_svc
-        res = email_svc.enviar_boas_vindas(email, nome, login_val, senha,
-                                            com_chatwoot=not somente_treino)
+        res = email_svc.enviar_boas_vindas(
+            email, nome, login_val, senha,
+            com_chatwoot=(not somente_treino and papel != 'observador'))
         if res.get('ok'):
             flash(f'Usuario "{nome}" criado! Senha enviada para {email}.',
                   'success')

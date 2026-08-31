@@ -109,6 +109,10 @@ class Usuario(UserMixin, db.Model):
         (brinde/PR pela tela do site). So esse gesto — nenhuma outra area."""
         return self.papel == 'marketing'
 
+    def is_observador(self):
+        """Conta fixa de consulta: pedidos de todos os canais, sem escrita."""
+        return self.papel == 'observador'
+
     def pode_divulgacao(self):
         """Quem lanca/gerencia divulgacao: SO o dono e o marketing (decisao do
         dono 21/07/2026 — 'so o owner e marketing'). Admin comum NAO entra."""

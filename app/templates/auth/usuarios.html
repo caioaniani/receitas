@@ -35,6 +35,7 @@
                         <option value="padeiro">Padeiro</option>
                         <option value="rh">RH</option>
                         <option value="marketing">Marketing</option>
+                        <option value="observador">Observador — somente leitura</option>
                         <option value="admin">Admin</option>
                     </select>
                 </div>
@@ -89,6 +90,7 @@
                                 <option value="padeiro" {% if u.papel == 'padeiro' %}selected{% endif %}>Padeiro</option>
                                 <option value="rh" {% if u.papel == 'rh' %}selected{% endif %}>RH</option>
                                 <option value="marketing" {% if u.papel == 'marketing' %}selected{% endif %}>Marketing</option>
+                                <option value="observador" {% if u.papel == 'observador' %}selected{% endif %}>Observador — leitura</option>
                                 <option value="admin" {% if u.papel == 'admin' %}selected{% endif %}>Admin</option>
                             </select>
                         </form>

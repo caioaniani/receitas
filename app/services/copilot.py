@@ -1042,6 +1042,11 @@ def papel_efetivo(user):
     if user.is_admin():
         return 'admin'
     papel = (getattr(user, 'papel', None) or '').lower()
+    # Observador e um perfil fixo e deliberadamente fora da matriz editavel.
+    # Mantemos o papel real aqui para ele nao herdar as ferramentas do
+    # funcionario por meio do fallback abaixo (inclusive no Slack/Copilot).
+    if papel == 'observador':
+        return 'observador'
     if papel == 'gerente':
         return 'gerente'
     return 'funcionario'

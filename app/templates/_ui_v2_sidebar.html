@@ -6,6 +6,14 @@
     </div>
 
     {% if current_user.is_authenticated %}
+    {% if current_user.is_observador() %}
+    <div class="ui-v2-nav-group">
+        <span class="ui-v2-nav-label">Somente leitura</span>
+        <a href="{{ url_for('pedidos.consulta') }}" class="sidebar-link active">
+            <i class="bi bi-eye"></i><span>Pedidos de todos os canais</span>
+        </a>
+    </div>
+    {% else %}
     <button type="button" class="ui-v2-search"
             onclick="window.abrirCommandPalette && window.abrirCommandPalette()">
         <i class="bi bi-search"></i><span>Buscar no sistema</span><kbd>⌘ K</kbd>
@@ -89,15 +97,18 @@
         </a>
     </div>
     {% endif %}
+    {% endif %}{# observador #}
 
     <div class="ui-v2-nav-spacer"></div>
+    {% if not current_user.is_observador() %}
     <a href="{{ url_for('main.ui_classica') }}" class="sidebar-link ui-v2-voltar"
        title="Voltar à interface anterior (só pra você; dá pra voltar quando quiser)">
         <i class="bi bi-arrow-counterclockwise"></i><span>Interface anterior</span>
     </a>
+    {% endif %}
     <div class="ui-v2-user">
         <span class="ui-v2-avatar">{{ current_user.nome[:1]|upper }}</span>
-        <span class="ui-v2-user-copy"><strong>{{ current_user.nome }}</strong><small>{{ 'Administrador' if current_user.is_admin() else current_user.papel }}</small></span>
+        <span class="ui-v2-user-copy"><strong>{{ current_user.nome }}</strong><small>{{ 'Administrador' if current_user.is_admin() else ('Somente leitura' if current_user.is_observador() else current_user.papel) }}</small></span>
         <a href="{{ url_for('auth.logout') }}" title="Sair" aria-label="Sair"><i class="bi bi-box-arrow-right"></i></a>
     </div>
     {% else %}

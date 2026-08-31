@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Pedidos — somente leitura{% endblock %}
+
+{% block content %}
+<div class="consulta-head">
+  <div>
+    <span class="consulta-eyebrow">Central de consulta</span>
+    <h1>Pedidos de todos os canais</h1>
+    <p>Loja, site, B2B e pedidos manuais em uma única visão.</p>
+  </div>
+  <span class="consulta-readonly"><i class="bi bi-lock"></i> Somente leitura</span>
+</div>
+
+<form method="GET" class="consulta-filtros" aria-label="Filtros dos pedidos">
+  <label>
+    <span>Buscar</span>
+    <input type="search" name="q" value="{{ busca }}"
+           placeholder="pedido, cliente, loja ou item">
+  </label>
+  <label>
+    <span>Período</span>
+    <select name="periodo">
+      <option value="7" {% if periodo_atual == '7' %}selected{% endif %}>Últimos 7 dias</option>
+      <option value="30" {% if periodo_atual == '30' %}selected{% endif %}>Últimos 30 dias</option>
+      <option value="90" {% if periodo_atual == '90' %}selected{% endif %}>Últimos 90 dias</option>
+      <option value="todos" {% if periodo_atual == 'todos' %}selected{% endif %}>Todos disponíveis</option>
+    </select>
+  </label>
+  <label>
+    <span>Situação</span>
+    <select name="status">
+      <option value="">Todas</option>
+      {% for s in status_opcoes %}
+      <option value="{{ s }}" {% if status_atual == s %}selected{% endif %}>{{ s|replace('_', ' ') }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <input type="hidden" name="canal" value="{{ canal_atual }}">
+  <button type="submit"><i class="bi bi-search"></i> Filtrar</button>
+  <a href="{{ url_for('pedidos.consulta') }}">Limpar</a>
+</form>
+
+<nav class="consulta-canais" aria-label="Canais de pedido">
+  {% set canais = [
+    ('todos', 'Todos', contagens.loja + contagens.site + contagens.b2b + contagens.manual),
+    ('loja', 'Lojas', contagens.loja),
+    ('site', 'Site', contagens.site),
+    ('b2b', 'B2B', contagens.b2b),
+    ('manual', 'Manuais', contagens.manual)
+  ] %}
+  {% for chave, label, qtd in canais %}
+  <a class="{{ 'active' if canal_atual == chave }}"
+     href="{{ url_for('pedidos.consulta', canal=chave, periodo=periodo_atual, q=busca or None, status=status_atual or None) }}">
+    {{ label }} <span>{{ qtd }}</span>
+  </a>
+  {% endfor %}
+</nav>
+
+<div class="consulta-lista">
+  {% for p in pedidos %}
+  <details class="consulta-pedido">
+    <summary>
+      <span class="consulta-canal canal-{{ p.canal }}">{{ p.canal_label }}</span>
+      <span class="consulta-identidade">
+        <strong>{{ p.referencia }}</strong>
+        <span>{{ p.destino }}</span>
+        <small>{{ p.subtitulo }}</small>
+      </span>
+      <span class="consulta-data">
+        <small>Entrega</small>
+        <strong>{{ p.entrega.strftime('%d/%m/%Y') if p.entrega else 'sem data' }}</strong>
+      </span>
+      <span class="consulta-itens"><strong>{{ p.itens|length }}</strong><small>itens</small></span>
+      {% if p.valor is not none %}
+      <span class="consulta-valor">{{ p.valor|brl }}</span>
+      {% endif %}
+      <span class="consulta-status status-{{ p.status }}">{{ p.status|replace('_', ' ') }}</span>
+      <i class="bi bi-chevron-down consulta-chevron"></i>
+    </summary>
+    <div class="consulta-detalhes">
+      <div class="consulta-meta">
+        <span><small>Realizado em</small>{{ p.criado_em.strftime('%d/%m/%Y às %H:%M') if p.criado_em else '—' }}</span>
+        {% if p.observacao %}<span><small>Observação</small>{{ p.observacao }}</span>{% endif %}
+      </div>
+      <table>
+        <thead><tr><th>Item</th><th>Quantidade</th></tr></thead>
+        <tbody>
+          {% for it in p.itens %}
+          <tr><td>{{ it.nome }}</td><td>{{ it.quantidade }}</td></tr>
+          {% else %}
+          <tr><td colspan="2">Nenhum item registrado.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% else %}
+  <div class="consulta-vazio">
+    <i class="bi bi-inbox"></i>
+    <strong>Nenhum pedido encontrado</strong>
+    <span>Tente ampliar o período ou limpar os filtros.</span>
+  </div>
+  {% endfor %}
+</div>
+
+<style>
+.consulta-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:0 0 24px}.consulta-eyebrow{display:block;color:#22644b;font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;margin-bottom:5px}.consulta-head h1{font-family:Georgia,serif;font-size:clamp(32px,4vw,50px);line-height:1;margin:0;color:#17231d}.consulta-head p{color:#69746e;margin:8px 0 0}.consulta-readonly{display:inline-flex;align-items:center;gap:8px;background:#e7f1ec;color:#225e47;border:1px solid #c9ded3;border-radius:999px;padding:9px 14px;font-weight:700;white-space:nowrap}.consulta-filtros{display:grid;grid-template-columns:minmax(220px,2fr) repeat(2,minmax(150px,1fr)) auto auto;align-items:end;gap:12px;background:#fff;border:1px solid #dde4df;border-radius:18px;padding:16px;margin-bottom:16px;box-shadow:0 8px 24px rgba(33,55,44,.05)}.consulta-filtros label span{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#78827c;margin:0 0 6px}.consulta-filtros input,.consulta-filtros select{width:100%;height:42px;border:1px solid #d7dfda;border-radius:10px;background:#fff;padding:0 12px;color:#25322b}.consulta-filtros button{height:42px;border:0;border-radius:10px;background:#236348;color:#fff;padding:0 18px;font-weight:700}.consulta-filtros>a{height:42px;display:flex;align-items:center;color:#52625a;text-decoration:none}.consulta-canais{display:flex;gap:8px;overflow:auto;padding:2px 0 16px}.consulta-canais a{display:flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid #dbe2dd;border-radius:999px;color:#4e5b54;text-decoration:none;background:#fff;white-space:nowrap;font-weight:700}.consulta-canais a.active{background:#1f5f45;color:#fff;border-color:#1f5f45}.consulta-canais span{font-size:11px;background:rgba(128,128,128,.14);padding:2px 7px;border-radius:999px}.consulta-lista{display:grid;gap:10px}.consulta-pedido{background:#fff;border:1px solid #dce3de;border-radius:16px;overflow:hidden}.consulta-pedido[open]{border-color:#a9c5b6;box-shadow:0 10px 26px rgba(32,62,46,.07)}.consulta-pedido summary{list-style:none;display:grid;grid-template-columns:72px minmax(220px,2fr) minmax(110px,1fr) 60px 100px minmax(105px,auto) 20px;gap:14px;align-items:center;padding:17px 18px;cursor:pointer}.consulta-pedido summary::-webkit-details-marker{display:none}.consulta-canal{font-size:11px;font-weight:800;text-transform:uppercase;text-align:center;border-radius:999px;padding:6px 8px}.canal-loja{background:#e4f0ea;color:#1f6247}.canal-site{background:#e8ecfb;color:#3954a1}.canal-b2b{background:#f3e9fb;color:#75449b}.canal-manual{background:#f7eddd;color:#8a6428}.consulta-identidade{display:flex;flex-direction:column;min-width:0}.consulta-identidade>strong{font-size:15px;color:#18251e}.consulta-identidade>span{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.consulta-identidade small,.consulta-data small,.consulta-itens small{color:#7a847e}.consulta-data,.consulta-itens{display:flex;flex-direction:column}.consulta-valor{font-weight:800;color:#1f5f45}.consulta-status{font-size:11px;font-weight:800;text-transform:uppercase;border-radius:999px;padding:6px 9px;text-align:center;background:#eef1ef;color:#546159}.status-pago,.status-entregue,.status-recebido{background:#e3f3e9;color:#187443}.status-pendente,.status-aguardando_pagamento,.status-agendado{background:#fff1d8;color:#936115}.status-cancelado,.status-cancelada{background:#f0f1f0;color:#7a817d}.status-em_transporte,.status-a_caminho{background:#e9e8fb;color:#5a4aa2}.consulta-chevron{color:#849089}.consulta-pedido[open] .consulta-chevron{transform:rotate(180deg)}.consulta-detalhes{border-top:1px solid #e3e8e5;padding:18px;background:#fbfcfb}.consulta-meta{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:14px}.consulta-meta span{display:flex;flex-direction:column}.consulta-meta small{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#7a847e;font-weight:800}.consulta-detalhes table{width:100%;border-collapse:collapse}.consulta-detalhes th,.consulta-detalhes td{padding:8px 10px;border-bottom:1px solid #e6ebe8;text-align:left}.consulta-detalhes th:last-child,.consulta-detalhes td:last-child{text-align:right;width:130px}.consulta-vazio{min-height:230px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#79837d;background:#fff;border:1px dashed #cfd8d2;border-radius:18px}.consulta-vazio i{font-size:32px;margin-bottom:8px}.consulta-vazio strong{color:#38473f}
+@media(max-width:900px){.consulta-head{align-items:flex-start;flex-direction:column}.consulta-filtros{grid-template-columns:1fr 1fr}.consulta-filtros label:first-child{grid-column:1/-1}.consulta-pedido summary{grid-template-columns:65px 1fr auto}.consulta-data,.consulta-itens,.consulta-valor{display:none}.consulta-status{grid-column:2}.consulta-chevron{grid-column:3;grid-row:1/3}.consulta-readonly{align-self:flex-start}}
+@media(max-width:560px){.consulta-filtros{grid-template-columns:1fr}.consulta-filtros label:first-child{grid-column:auto}.consulta-pedido summary{padding:14px 12px;gap:10px}.consulta-canal{font-size:9px}.consulta-head h1{font-size:36px}}
+</style>
+{% endblock %}

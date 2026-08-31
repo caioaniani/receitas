@@ -142,3 +142,14 @@ def pedidos_required(f):
             abort(403)
         return f(*args, **kwargs)
     return decorated
+
+
+def consulta_pedidos_required(f):
+    """Central multicanal somente leitura: owner/admin ou observador."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not (current_user.is_admin()
+                or getattr(current_user, 'is_observador', lambda: False)()):
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated

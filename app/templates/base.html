@@ -112,7 +112,12 @@
         {# Conta "só treinamento": esconde TODO o resto da navegação; o gate
            global já barra por URL, isto é só pra não mostrar link que redireciona. #}
         {% set so_treino = current_user.somente_treino %}
-        {% if not so_treino %}
+        {% set so_observador = current_user.is_observador() %}
+        {% if so_observador %}
+        <a href="{{ url_for('pedidos.consulta') }}"
+           class="sidebar-link active">👁 Pedidos — somente leitura</a>
+        {% endif %}
+        {% if not so_treino and not so_observador %}
         <button type="button" onclick="window.abrirCommandPalette && window.abrirCommandPalette()"
                 class="sidebar-link" style="border:0; background:transparent; text-align:left; width:100%;
                        justify-content:space-between; color:var(--text-muted);">
@@ -133,6 +138,7 @@
             Notas (memória do agente)
         </a>
         {% endif %}
+        {% if not so_observador %}
         <a href="{{ url_for('treino.home') }}"
            class="sidebar-link {% if request.path.startswith('/treino') and not request.path.startswith('/treino/gestor') %}active{% endif %}">
             🎮 Treinamento
@@ -155,7 +161,8 @@
             👤 Funcionários
         </a>
         {% endif %}
-        {% if not so_treino %}
+        {% endif %}{# links comuns escondidos do observador #}
+        {% if not so_treino and not so_observador %}
         {# Loja Online: liberada a todos os usuários logados (22/06/2026), porém
            o DASHBOARD (com faturamento) e a config de logo seguem owner-only.
            Por isso o link "🥐 Loja Online" só aparece pro dono. #}
@@ -273,7 +280,7 @@
         {% endif %}{# fim: nav escondida pra conta só-treino #}
         {% endif %}
 
-        {% if not (current_user.is_authenticated and current_user.somente_treino) %}
+        {% if not (current_user.is_authenticated and (current_user.somente_treino or current_user.is_observador())) %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Fichas Técnicas</div>
         {{ areanav.fichas('sidebar') }}
@@ -324,7 +331,7 @@
                 class="sidebar-link" style="display:none; border:0; background:transparent; text-align:left; width:100%;">
             <i class="bi bi-download"></i> Instalar como app
         </button>
-        {% if config.UI_V2_ENABLED %}
+        {% if config.UI_V2_ENABLED and not current_user.is_observador() %}
         <a href="{{ url_for('main.ui_nova') }}" class="sidebar-link" title="Experimentar a nova interface (dá pra voltar quando quiser)">
             ✨ Nova interface
         </a>

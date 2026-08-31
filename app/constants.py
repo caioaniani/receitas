@@ -135,11 +135,12 @@ STATUS_PEDIDO_ABAS = (
 # auth/routes.py). 'padeiro' = chao de fabrica: tela touchscreen dedicada
 # (separar pedido + gerar QR de saida), sem acesso ao resto do sistema.
 PAPEIS_VALIDOS = ('admin', 'gerente', 'producao', 'padeiro', 'rh',
-                  'marketing', 'funcionario')
+                  'marketing', 'observador', 'funcionario')
 
 PAPEL_LABEL = {
     'admin': 'Admin', 'gerente': 'Gerente', 'producao': 'Producao',
     'padeiro': 'Padeiro', 'rh': 'RH', 'marketing': 'Marketing',
+    'observador': 'Observador - somente leitura',
     'funcionario': 'Funcionario',
 }
 
