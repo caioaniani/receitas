@@ -251,6 +251,7 @@ def _plano_do_dia(dia):
         CENTRO_PAES,
         CENTRO_VIENNOISERIE,
         centro_trabalho_receita,
+        eh_preparo_auxiliar,
     )
     from app.services.gantt import _g_label
     from app.services.massa_base import calcular_cascata, rendimento_massa_crua
@@ -278,6 +279,7 @@ def _plano_do_dia(dia):
                 'produzido': feito, 'falta': max(0, alvo - feito),
                 'fornadas': fornadas_amassadeira(rec, it.multiplicador),
                 'centro': centro_trabalho_receita(rec),
+                'auxiliar': eh_preparo_auxiliar(rec),
                 '_porcoes': alvo / rend,
                 '_mult': it.multiplicador, '_mbi': membership.get(it.receita_id)}
 
@@ -319,9 +321,13 @@ def _plano_do_dia(dia):
     progresso_pct = (round(itens_concluidos * 100 / total_itens)
                      if total_itens else 100)
     return {'plano_id': plano.id, 'grupos': grupos, 'solos': solos,
-            'solos_paes': [i for i in solos if i['centro'] == CENTRO_PAES],
+            'solos_paes': [
+                i for i in solos
+                if i['centro'] == CENTRO_PAES and not i['auxiliar']],
             'solos_viennoiserie': [
-                i for i in solos if i['centro'] == CENTRO_VIENNOISERIE],
+                i for i in solos
+                if i['centro'] == CENTRO_VIENNOISERIE and not i['auxiliar']],
+            'solos_auxiliares': [i for i in solos if i['auxiliar']],
             # `total_falta` continua sendo a trava operacional usada por
             # `_plano_em_aberto`. Ele NÃO deve virar um KPI visual: soma
             # pães, gramas de bases e insumos em unidades incompatíveis.
@@ -354,6 +360,8 @@ def _plano_em_aberto(dia):
     p['solos_paes'] = [i for i in p['solos_paes'] if i['falta'] > 0]
     p['solos_viennoiserie'] = [
         i for i in p['solos_viennoiserie'] if i['falta'] > 0]
+    p['solos_auxiliares'] = [
+        i for i in p['solos_auxiliares'] if i['falta'] > 0]
     return p
 
 

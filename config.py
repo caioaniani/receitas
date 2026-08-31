@@ -24,6 +24,13 @@ class Config:
     # existe aqui).
     UI_V2_ENABLED = True
 
+    # Piso operacional do padeiro de paes (dono 31/08/2026): em cada dia
+    # normal de producao o cronograma completa pelo menos 200 unidades de
+    # sourdough, mesmo sem demanda, para formar estoque. E regra de negocio
+    # fixa, nao variavel do Railway. Granola, levain, iogurte e demais
+    # preparos auxiliares nao entram nesta conta.
+    SOURDOUGH_MIN_DIA = 200
+
     _env_secret = os.environ.get('SECRET_KEY')
     if _env_secret:
         SECRET_KEY = _env_secret

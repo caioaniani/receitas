@@ -62,6 +62,9 @@ def _app_session():
     application = create_app()
     application.config['TESTING'] = True
     application.config['WTF_CSRF_ENABLED'] = False
+    # Pisos de estoque/throughput alteram deliberadamente os totais. Testes
+    # antigos partem da demanda pura; os testes do piso o ligam explicitamente.
+    application.config['SOURDOUGH_MIN_DIA'] = 0
     with application.app_context():
         db.drop_all()
         db.create_all()
