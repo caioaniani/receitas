@@ -539,6 +539,10 @@
     <div class="prod-dia-grupo"><span class="prod-dia-group-icon">🥐</span><span><small>Padeiro de viennoiserie</small>Viennoiserie</span></div>
     {% for it in plano.solos_viennoiserie %}{{ prod_row(it) }}{% endfor %}
     {% endif %}
+    {% if plano.solos_auxiliares %}
+    <div class="prod-dia-grupo"><span class="prod-dia-group-icon">🥣</span><span><small>Não contam nas 200 unidades de pão</small>Preparos auxiliares</span></div>
+    {% for it in plano.solos_auxiliares %}{{ prod_row(it) }}{% endfor %}
+    {% endif %}
   </div>
   {% endmacro %}
 

@@ -127,6 +127,8 @@ def test_plano_do_dia_agrupa_por_massa_base(app, admin_user):
     pf = _rec('Pão Francês', 70)
     s7 = _rec('Sourdough 7g', 80, ('Grãos', 40))
     foc = _rec('Focaccia', 65)               # solo (sem massa-base)
+    granola = _rec('Granola Artesanal', 0)   # preparo auxiliar, nao e pao
+    granola.categoria = 'Granola'
     mb = MassaBase(nome='Sourdough')
     db.session.add(mb)
     db.session.flush()
@@ -135,7 +137,7 @@ def test_plano_do_dia_agrupa_por_massa_base(app, admin_user):
     plano = PlanejamentoProducao(data=hoje(), origem='cronograma')
     db.session.add(plano)
     db.session.flush()
-    for r in (pf, s7, foc):
+    for r in (pf, s7, foc, granola):
         db.session.add(PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
                                         multiplicador=1, qtd_alvo=10))
     db.session.commit()
@@ -147,9 +149,13 @@ def test_plano_do_dia_agrupa_por_massa_base(app, admin_user):
     assert g['mb_id'] == mb.id
     assert g['base_massa_label']                        # ex "3,4 kg"
     assert {i['nome'] for i in g['itens']} == {'Pão Francês', 'Sourdough 7g'}
-    assert {i['nome'] for i in p['solos']} == {'Focaccia'}
-    assert p['total_itens'] == 3
-    assert p['itens_pendentes'] == 3
+    assert {i['nome'] for i in p['solos']} == {
+        'Focaccia', 'Granola Artesanal'}
+    assert {i['nome'] for i in p['solos_paes']} == {'Focaccia'}
+    assert {i['nome'] for i in p['solos_auxiliares']} == {
+        'Granola Artesanal'}
+    assert p['total_itens'] == 4
+    assert p['itens_pendentes'] == 4
     assert p['itens_concluidos'] == 0
     assert p['progresso_pct'] == 0
 

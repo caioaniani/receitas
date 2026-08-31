@@ -37,6 +37,8 @@ from collections import defaultdict
 from datetime import timedelta
 from math import ceil
 
+from flask import current_app
+
 from app.constants import STATUS_PEDIDO_EDITAVEIS, STATUS_PEDIDO_NAO_BAIXADOS
 from app.extensions import db
 from app.models import EstoqueProducao, Loja, PedidoItem, PedidoLoja, Receita
@@ -2908,6 +2910,108 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         rr['total'] = sum(int(c['qtd'] or 0) for c in rr['por_dia'])
         if limitado:
             rr['limitado_teto'] = True
+
+    # Piso OPERACIONAL de sourdough (dono 31/08/2026): produz pelo menos 200
+    # unidades por dia util mesmo sem demanda, formando estoque. Nao e piso por
+    # receita: completa o TOTAL da familia e distribui o adicional pelo giro
+    # previsto dos sabores. Granola, levain, iogurte, massas e cremes ficam fora
+    # por `eh_sourdough_final`.
+    from app.services.centros_producao import eh_sourdough_final
+
+    piso_sourdough = max(0, int(current_app.config.get(
+        'SOURDOUGH_MIN_DIA', 200) or 0))
+    if piso_sourdough:
+        est_bal = {it['receita_id']: int(it.get('em_estoque', 0) or 0)
+                   for it in bal['itens']}
+        linhas_por_rid = {rr['receita_id']: rr for rr in receitas_out}
+        candidatas = [
+            rec for rec in receitas.values()
+            if eh_sourdough_final(rec)
+            and getattr(rec, 'sugerir_pedido_loja', True) is not False
+        ]
+        # Uma receita pode estar zerada no balanco justamente porque o estoque
+        # cobre toda a demanda. Ela ainda precisa existir na grade para receber
+        # a parcela do piso de estoque.
+        for rec in candidatas:
+            if rec.id in linhas_por_rid:
+                continue
+            rr = {
+                'receita_id': rec.id, 'nome': rec.nome,
+                'dias_producao': lead.get(rec.id, 0),
+                'em_estoque': est_bal.get(rec.id, 0),
+                'por_dia': [
+                    {'data': d.isoformat(), 'qtd': 0, 'fornadas': None}
+                    for d in dias_prod],
+                'total': 0,
+                'producao_max_dia': int(
+                    getattr(rec, 'producao_max_dia', 0) or 0),
+                'ref_pesos': [[] for _ in dias_prod],
+            }
+            receitas_out.append(rr)
+            linhas_por_rid[rec.id] = rr
+
+        linhas_sourdough = [linhas_por_rid[r.id] for r in candidatas]
+        for i, dia_prod in enumerate(dias_prod):
+            elegiveis = [
+                rr for rr in linhas_sourdough
+                if producao_permitida_no_dia(
+                    receitas[rr['receita_id']], dia_prod)
+            ]
+            atual = sum(int(rr['por_dia'][i]['qtd'] or 0)
+                        for rr in elegiveis)
+            faltante = max(0, piso_sourdough - atual)
+            while faltante > 0 and elegiveis:
+                com_espaco = []
+                for rr in elegiveis:
+                    rec = receitas[rr['receita_id']]
+                    teto = int(getattr(rec, 'producao_max_dia', 0) or 0)
+                    qtd_atual = int(rr['por_dia'][i]['qtd'] or 0)
+                    if teto <= 0 or qtd_atual < teto:
+                        com_espaco.append(rr)
+                if not com_espaco:
+                    break
+
+                # Primeiro o giro do DIA de entrega correspondente ao lead;
+                # sem sinal diario, usa o giro historico total. Se nem isso
+                # existe, divide igualmente entre os sourdoughs ativos.
+                pesos = []
+                for rr in com_espaco:
+                    rid = rr['receita_id']
+                    entrega = dia_prod + timedelta(days=lead.get(rid, 0))
+                    peso_dia = max(
+                        float(firme[rid].get(entrega, 0) or 0),
+                        float(_previsto_dia(rid, entrega)))
+                    peso_hist = max(float(soma_total.get(rid, 0) or 0),
+                                    float(soma_v.get(rid, 0) or 0))
+                    pesos.append(peso_dia or peso_hist or 1.0)
+                partes = _distribuir_inteiro(faltante, pesos)
+                adicionado = 0
+                for rr, parte in zip(com_espaco, partes):
+                    if parte <= 0:
+                        continue
+                    rec = receitas[rr['receita_id']]
+                    celula = rr['por_dia'][i]
+                    qtd_atual = int(celula['qtd'] or 0)
+                    teto = int(getattr(rec, 'producao_max_dia', 0) or 0)
+                    espaco = (teto - qtd_atual) if teto > 0 else parte
+                    add = min(parte, max(0, espaco))
+                    if add <= 0:
+                        continue
+                    novo = qtd_atual + add
+                    celula['qtd'] = novo
+                    celula['piso_sourdough'] = add
+                    rend = rendimento_massa_crua(rec)
+                    celula['fornadas'] = (fornadas_amassadeira(
+                        rec, max(1, ceil(novo / rend)))
+                        if rend > 0 else None)
+                    rr['piso_sourdough_aplicado'] = True
+                    adicionado += add
+                if adicionado <= 0:
+                    break
+                faltante -= adicionado
+
+        for rr in linhas_sourdough:
+            rr['total'] = sum(int(c['qtd'] or 0) for c in rr['por_dia'])
 
     # Receitas que so existem como edicao manual (override) e nao tem demanda
     # prevista — ex: adicionadas na tela 'editar plano' do padeiro. Sem isto nao

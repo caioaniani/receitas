@@ -2355,3 +2355,42 @@ def test_teto_diario_nao_corta_edicao_manual(app):
                if c['data'] == (hoje() + timedelta(days=1)).isoformat())
     assert cel['qtd'] == 70
     assert rr['total'] == 70
+
+
+def test_piso_sourdough_produz_200_por_dia_sem_demanda(app):
+    """O piso forma estoque e e dividido entre os paes finais. Preparos
+    auxiliares e Brioche nao inflam artificialmente as 200 unidades."""
+    app.config['SOURDOUGH_MIN_DIA'] = 200
+
+    tradicional = _receita('Sourdough Tradicional')
+    tradicional.familia = 'pao_sourdough'
+    graos = _receita('Sourdough 7 Grãos')
+    graos.familia = 'pao_sourdough'
+    granola = _receita('Produção - Granola Artesanal 1000g')
+    granola.categoria = 'Granola'
+    levain = _receita('Levain')
+    iogurte = _receita('Iogurte Natural')
+    iogurte.categoria = 'Iogurte'
+    brioche = _receita('Brioche')
+    brioche.familia = 'viennoiserie'
+    db.session.commit()
+
+    crono = cronograma_producao(horizonte_dias=7, equilibrar=True)
+    paes = [_rec_out(crono, tradicional.id), _rec_out(crono, graos.id)]
+    assert all(paes)
+
+    # A semana congelada deste arquivo começa na segunda: seg-sex recebem
+    # 200 por dia e sab/dom continuam bloqueados.
+    for i in range(5):
+        assert sum(rr['por_dia'][i]['qtd'] for rr in paes) == 200
+    for i in (5, 6):
+        assert sum(rr['por_dia'][i]['qtd'] for rr in paes) == 0
+
+    # Sem sinal de giro, o fallback e equilibrado: nao joga tudo em um unico
+    # pao (o caso operacional que motivou a mudanca).
+    assert [rr['por_dia'][0]['qtd'] for rr in paes] == [100, 100]
+    assert sum(rr['total'] for rr in paes) == 1000
+
+    for rec in (granola, levain, iogurte, brioche):
+        rr = _rec_out(crono, rec.id)
+        assert rr is None or rr['total'] == 0
