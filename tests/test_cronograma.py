@@ -264,6 +264,34 @@ def test_equilibrar_enche_dia_ocioso(app):
     assert {ae['por_dia'][0]['qtd'], be['por_dia'][0]['qtd']} == {0, 30}
 
 
+def test_equilibrar_capacidade_independente_dos_dois_padeiros(app):
+    """Pão e viennoiserie ocupam filas humanas diferentes no nivelamento.
+
+    Os dois podem preencher o mesmo dia ocioso; a carga de croissant não deve
+    impedir o padeiro de pães de adiantar Brioche.
+    """
+    loja = _loja()
+    brioche = _receita_amassadeira(
+        'Brioche', rend=50, peso_base=5000, cap=500)
+    croissant = _receita_amassadeira(
+        'Croissant', rend=50, peso_base=5000, cap=500)
+    croissant.categoria = 'Viennoiserie'
+    croissant.familia = 'viennoiserie'
+    db.session.commit()
+    amanha = hoje() + timedelta(days=1)
+    _pedido(loja, 'pendente', amanha, brioche, 30)
+    _pedido(loja, 'pendente', amanha, croissant, 30)
+
+    eq = cronograma_producao(
+        horizonte_dias=2, inicio_offset_dias=0, equilibrar=True)
+    brioche_out = _rec_out(eq, brioche.id)
+    croissant_out = _rec_out(eq, croissant.id)
+
+    assert brioche_out['por_dia'][0]['qtd'] > 0
+    assert croissant_out['por_dia'][0]['qtd'] > 0
+    assert brioche_out['total'] == croissant_out['total'] == 30
+
+
 def test_cronograma_padroniza_em_lotes(app):
     """Produção sai em LOTES inteiros quando a receita tem lote_pedido (não
     produzir picado): cada dia é múltiplo do lote (ou 0) e o total também."""

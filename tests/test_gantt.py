@@ -1,5 +1,4 @@
-"""Gantt da produção do dia: agenda etapas respeitando 1 amassadeira / 1 forno /
-1 padeiro, com mise en place em paralelo e fermentação longa virando marcador."""
+"""Gantt da produção: 1 amassadeira/forno e dois padeiros independentes."""
 from datetime import date, timedelta
 
 from app.extensions import db
@@ -110,8 +109,29 @@ def test_mise_en_place_paralelo_ao_amassamento(app):
     mep_b = tarefas[('Pão B', 'Mise en place')]
     # o mise de B começa enquanto A amassa (paralelismo real)
     assert mep_b['ini'] < am_a['fim']
-    assert mep_b['recurso'] == 'padeiro'
+    assert mep_b['recurso'] == 'padeiro_paes'
     assert am_a['recurso'] == 'amassadeira'
+
+
+def test_padeiros_de_paes_e_viennoiserie_trabalham_em_paralelo(app):
+    """As duas pessoas podem iniciar trabalho manual ao mesmo tempo."""
+    dia = date(2026, 7, 31)
+    pao = _receita('Brioche', [('Modelar', 30, None, True)])
+    viennoiserie = _receita('Croissant', [('Laminar', 30, None, True)])
+    viennoiserie.categoria = 'Viennoiserie'
+    viennoiserie.familia = 'viennoiserie'
+    db.session.commit()
+    _plano(dia, [(pao, 1, 10, 0), (viennoiserie, 1, 10, 0)])
+
+    g = montar_gantt(dia)
+    tarefas = {(p['nome'], t['etapa']): t
+               for p in g['produtos'] for t in p['tarefas']}
+
+    assert tarefas[('Brioche', 'Modelar')]['ini'] == 0
+    assert tarefas[('Croissant', 'Laminar')]['ini'] == 0
+    assert tarefas[('Brioche', 'Modelar')]['recurso'] == 'padeiro_paes'
+    assert tarefas[('Croissant', 'Laminar')]['recurso'] == (
+        'padeiro_viennoiserie')
 
 
 def test_fermentacao_longa_vira_marcador(app):

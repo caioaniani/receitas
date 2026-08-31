@@ -530,10 +530,14 @@
     {% for it in g.itens %}{{ prod_row(it, em_grupo=true) }}{% endfor %}
     {% endfor %}
 
-    {# pães soltos (não saem de massa-base) #}
-    {% if plano.solos %}
-    {% if plano.grupos %}<div class="prod-dia-grupo"><span class="prod-dia-group-icon">🍞</span><span><small>Produção avulsa</small>Outros pães</span></div>{% endif %}
-    {% for it in plano.solos %}{{ prod_row(it) }}{% endfor %}
+    {# produção avulsa separada pelas duas pessoas que trabalham em paralelo #}
+    {% if plano.solos_paes %}
+    <div class="prod-dia-grupo"><span class="prod-dia-group-icon">🍞</span><span><small>Padeiro de pães</small>Pães avulsos</span></div>
+    {% for it in plano.solos_paes %}{{ prod_row(it) }}{% endfor %}
+    {% endif %}
+    {% if plano.solos_viennoiserie %}
+    <div class="prod-dia-grupo"><span class="prod-dia-group-icon">🥐</span><span><small>Padeiro de viennoiserie</small>Viennoiserie</span></div>
+    {% for it in plano.solos_viennoiserie %}{{ prod_row(it) }}{% endfor %}
     {% endif %}
   </div>
   {% endmacro %}
