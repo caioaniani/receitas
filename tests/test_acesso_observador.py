@@ -4,6 +4,8 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.models import (
+    EstoqueLoja,
+    EstoqueProducao,
     Loja,
     PedidoItem,
     PedidoLocal,
@@ -11,6 +13,8 @@ from app.models import (
     PedidoLoja,
     PedidoOnline,
     PedidoOnlineItem,
+    PlanejamentoItem,
+    PlanejamentoProducao,
     Receita,
     Usuario,
     VendaB2B,
@@ -87,6 +91,31 @@ def _pedidos_multicanal():
     return pedido_loja.id
 
 
+def _dados_sala_controle():
+    receita = Receita.query.filter_by(nome='Sourdough Tradicional').one()
+    loja = Loja.query.filter_by(nome='Loja Centro').one()
+    receita.estoque_minimo_industria = 50
+    db.session.add_all([
+        EstoqueProducao(receita_id=receita.id, quantidade=5),
+        EstoqueLoja(loja_id=loja.id, receita_id=receita.id,
+                    quantidade=2, estoque_minimo=10),
+    ])
+
+    plano = PlanejamentoProducao(
+        data=hoje(), nome='Ordem do dia', origem='cronograma',
+        status='aprovado', enviado_ao_padeiro=True)
+    db.session.add(plano)
+    db.session.flush()
+    db.session.add(PlanejamentoItem(
+        planejamento_id=plano.id, receita_id=receita.id,
+        qtd_alvo=100, produzido_qtd=40))
+
+    PedidoOnline.query.one().data_entrega = hoje()
+    VendaB2B.query.one().data_entrega = hoje()
+    PedidoLocal.query.one().data_entrega = hoje()
+    db.session.commit()
+
+
 def test_observador_ve_todos_os_canais_em_uma_tela(app):
     observador = _observador()
     _pedidos_multicanal()
@@ -95,7 +124,7 @@ def test_observador_ve_todos_os_canais_em_uma_tela(app):
 
     inicio = client.get('/')
     assert inicio.status_code == 302
-    assert inicio.location.endswith('/pedidos/consulta')
+    assert inicio.location.endswith('/pedidos/observador')
 
     resp = client.get('/pedidos/consulta')
     assert resp.status_code == 200
@@ -110,6 +139,33 @@ def test_observador_ve_todos_os_canais_em_uma_tela(app):
     assert '/area/' not in html
 
 
+def test_sala_controle_resume_operacao_sem_acoes(app):
+    observador = _observador()
+    _pedidos_multicanal()
+    _dados_sala_controle()
+    client = app.test_client()
+    _login(client, observador)
+
+    resp = client.get('/pedidos/observador')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    for texto in (
+        'Sala de controle',
+        'O que está acontecendo hoje',
+        'O que merece acompanhamento',
+        'Ordem enviada',
+        'Sourdough Tradicional',
+        'Estoque abaixo do mínimo',
+        'Saúde das integrações',
+        'Pedidos recebidos',
+        'Movimentos recentes',
+    ):
+        assert texto in html
+    assert '4</strong><span>pedidos recebidos hoje' in html
+    assert 'method="POST"' not in html
+    assert 'Cancelar pedido' not in html
+
+
 def test_observador_nao_abre_ou_altera_nenhuma_outra_rota(app):
     observador = _observador()
     pedido_id = _pedidos_multicanal()
@@ -118,7 +174,10 @@ def test_observador_nao_abre_ou_altera_nenhuma_outra_rota(app):
 
     fora = client.get('/pedidos/')
     assert fora.status_code == 302
-    assert fora.location.endswith('/pedidos/consulta')
+    assert fora.location.endswith('/pedidos/observador')
+
+    consulta = client.get('/pedidos/consulta')
+    assert consulta.status_code == 200
 
     tentativa = client.post(f'/pedidos/{pedido_id}/cancelar')
     assert tentativa.status_code == 403
@@ -139,6 +198,10 @@ def test_observador_nao_herda_ferramentas_do_copilot(app):
 def test_admin_pode_criar_perfil_observador(app, admin_user):
     client = app.test_client()
     _login(client, admin_user)
+
+    painel = client.get('/pedidos/observador')
+    assert painel.status_code == 200
+    assert 'Sala de controle' in painel.get_data(as_text=True)
 
     pagina = client.get('/auth/usuarios')
     assert pagina.status_code == 200

@@ -436,8 +436,8 @@ def create_app(config_class=None):
           liberar qualquer tela (a senha veio no e-mail; a pessoa sabe a atual).
         - `somente_treino`: acesso restrito à área de treinamento (/treino);
           o resto vira redirect (barra por URL também, não só escondendo link).
-        - papel `observador`: somente GET da central multicanal de pedidos;
-          qualquer escrita ou outra tela é bloqueada no servidor.
+        - papel `observador`: somente GET da Sala de Controle e da central
+          multicanal de pedidos; qualquer escrita ou outra tela é bloqueada.
         Roda depois do roteamento por host; `getattr` defensivo enquanto a
         coluna propaga. Allowlist evita loop (a própria troca, sair, estáticos).
         """
@@ -457,8 +457,8 @@ def create_app(config_class=None):
         if getattr(current_user, 'is_observador', lambda: False)():
             if request.method not in ('GET', 'HEAD', 'OPTIONS'):
                 abort(403)
-            if ep != 'pedidos.consulta':
-                return redirect(url_for('pedidos.consulta'))
+            if ep not in {'pedidos.painel_observador', 'pedidos.consulta'}:
+                return redirect(url_for('pedidos.painel_observador'))
             return None
         acesso_equipe = (
             ep in {'rh.lideranca_preenchimento',

@@ -145,7 +145,7 @@ def pedidos_required(f):
 
 
 def consulta_pedidos_required(f):
-    """Central multicanal somente leitura: owner/admin ou observador."""
+    """Áreas operacionais somente leitura: owner/admin ou observador."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if not (current_user.is_admin()

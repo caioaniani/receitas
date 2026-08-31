@@ -9,7 +9,12 @@
     {% if current_user.is_observador() %}
     <div class="ui-v2-nav-group">
         <span class="ui-v2-nav-label">Somente leitura</span>
-        <a href="{{ url_for('pedidos.consulta') }}" class="sidebar-link active">
+        <a href="{{ url_for('pedidos.painel_observador') }}"
+           class="sidebar-link {% if request.endpoint == 'pedidos.painel_observador' %}active{% endif %}">
+            <i class="bi bi-speedometer2"></i><span>Sala de controle</span>
+        </a>
+        <a href="{{ url_for('pedidos.consulta') }}"
+           class="sidebar-link {% if request.endpoint == 'pedidos.consulta' %}active{% endif %}">
             <i class="bi bi-eye"></i><span>Pedidos de todos os canais</span>
         </a>
     </div>
