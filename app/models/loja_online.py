@@ -614,6 +614,62 @@ class EstoqueSitePlano(db.Model):
                 f'plan={self.qtd_planejada} res={self.qtd_reservada}>')
 
 
+class EstoqueSiteRegraSemanal(db.Model):
+    """Regra recorrente de venda no site para um item.
+
+    ``dias_mask`` usa os bits 0..6 para segunda..domingo. ``qtd_limite``
+    nulo significa sem limite nos dias marcados; zero nunca e necessario
+    aqui, porque um dia desmarcado ja significa indisponivel.
+
+    A regra semanal substitui os planos diarios legados daquele item. As
+    reservas continuam em :class:`EstoqueSitePlano`, preservando as vendas
+    ja realizadas. Uma excecao explicita por data tem precedencia sobre ela.
+    """
+    __tablename__ = 'estoque_site_regra_semanal'
+
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(10), nullable=False)
+    item_id = db.Column(db.Integer, nullable=False)
+    dias_mask = db.Column(db.Integer, nullable=False, default=127,
+                          server_default='127')
+    qtd_limite = db.Column(db.Integer, nullable=True)
+    criado_em = db.Column(db.DateTime, default=agora)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+    __table_args__ = (
+        db.UniqueConstraint('kind', 'item_id',
+                            name='uq_estoque_site_regra_semanal_item'),
+        db.Index('ix_estoque_site_regra_semanal_item', 'kind', 'item_id'),
+    )
+
+    def permite(self, data):
+        return bool((self.dias_mask or 0) & (1 << data.weekday()))
+
+
+class EstoqueSiteExcecao(db.Model):
+    """Excecao pontual que prevalece sobre a regra semanal do item.
+
+    Linha com ``qtd_limite`` nulo libera sem limite; zero bloqueia; valor
+    positivo limita a quantidade vendavel naquela data.
+    """
+    __tablename__ = 'estoque_site_excecao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(10), nullable=False)
+    item_id = db.Column(db.Integer, nullable=False)
+    data = db.Column(db.Date, nullable=False, index=True)
+    qtd_limite = db.Column(db.Integer, nullable=True)
+    criado_em = db.Column(db.DateTime, default=agora)
+    atualizado_em = db.Column(db.DateTime, default=agora, onupdate=agora)
+
+    __table_args__ = (
+        db.UniqueConstraint('kind', 'item_id', 'data',
+                            name='uq_estoque_site_excecao_item_data'),
+        db.Index('ix_estoque_site_excecao_data_kind_item',
+                 'data', 'kind', 'item_id'),
+    )
+
+
 class WifiPortalSessao(db.Model):
     """Sessão do PORTAL WI-FI da loja (11/07/2026, Ribeiro do Vale).
 

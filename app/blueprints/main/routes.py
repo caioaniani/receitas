@@ -6173,51 +6173,136 @@ def loja_online_producao_dia():
 @main_bp.route('/admin/loja-online/plano-do-dia')
 @owner_required
 def loja_online_plano_dia():
-    """Mostra a lista de itens publicados no site com o plano (qtd disponivel)
-    pra a data selecionada. Edicao inline via POST AJAX."""
+    """Regras semanais e excecoes da disponibilidade da loja online."""
     from datetime import date as _date
 
     from app.services import loja_catalogo, loja_plano_dia
     from app.utils import hoje
+    modo = (request.args.get('view') or 'semanal').strip().lower()
+    if modo not in ('semanal', 'excecoes'):
+        modo = 'semanal'
     data_str = (request.args.get('data') or '').strip()
     try:
         alvo = _date.fromisoformat(data_str) if data_str else hoje()
     except ValueError:
         alvo = hoje()
 
-    # Itens publicados (Receitas + Produtos com preco_site > 0).
     itens_publicados = loja_catalogo.produtos_publicados()
-
-    # Plano atual pra essa data — map de (kind, id) -> row.
-    from app.models import EstoqueSitePlano
-    rows = {(r.kind, r.item_id): r
-            for r in EstoqueSitePlano.query.filter_by(data=alvo).all()}
-
-    # Plano da semana anterior (mesmo dia da semana, -7 dias) — fonte do
-    # botao "Copiar da semana passada".
-    from datetime import timedelta
-    semana_anterior = alvo - timedelta(days=7)
-    plano_anterior = {(r.kind, r.item_id): r.qtd_planejada
-                      for r in EstoqueSitePlano.query
-                      .filter_by(data=semana_anterior).all()}
+    from app.models import EstoqueSiteExcecao, EstoqueSiteRegraSemanal
+    regras = {(r.kind, r.item_id): r
+              for r in EstoqueSiteRegraSemanal.query.all()}
+    excecoes = {(r.kind, r.item_id): r
+                for r in EstoqueSiteExcecao.query.filter_by(data=alvo).all()}
 
     itens = []
     for it in itens_publicados:
-        row = rows.get((it['kind'], it['id']))
+        chave = (it['kind'], it['id'])
+        regra = regras.get(chave)
+        excecao = excecoes.get(chave)
+        configuracao = loja_plano_dia.configuracao_dia(
+            it['kind'], it['id'], alvo)
         itens.append({
             'kind': it['kind'], 'id': it['id'],
             'nome': it['nome'], 'categoria': it['categoria'],
-            'qtd_planejada': row.qtd_planejada if row else None,
-            'qtd_reservada': row.qtd_reservada if row else 0,
-            'saldo': loja_plano_dia.saldo(it['kind'], it['id'], alvo),
-            'plano_anterior': plano_anterior.get((it['kind'], it['id'])),
+            'regra': regra,
+            'dias_ativos': ([d for d in range(7)
+                             if regra and regra.dias_mask & (1 << d)]),
+            'excecao': excecao,
+            'configuracao': configuracao,
         })
 
+    # Regras ativas primeiro; dentro de cada grupo, nome alfabetico. Assim a
+    # tela normal mostra logo o que realmente foi restringido.
+    itens.sort(key=lambda it: (0 if it['regra'] else 1,
+                               (it['nome'] or '').casefold()))
+
     return render_template('admin/loja_online_plano_dia.html',
-                           itens=itens, data=alvo,
+                           itens=itens, data=alvo, modo=modo,
                            data_str=alvo.isoformat(),
-                           data_anterior=semana_anterior.isoformat(),
-                           tem_plano_anterior=bool(plano_anterior))
+                           total_regras=len(regras),
+                           total_excecoes=len(excecoes))
+
+
+def _item_publicado_no_site(kind, item_id):
+    """Valida o alvo dos formularios sem confiar nos campos do navegador."""
+    from app.services import loja_catalogo
+    return any(it['kind'] == kind and it['id'] == item_id
+               for it in loja_catalogo.produtos_publicados())
+
+
+@main_bp.route('/admin/loja-online/plano-do-dia/regra-semanal',
+               methods=['POST'])
+@owner_required
+def loja_online_regra_semanal_salvar():
+    """Salva a regra recorrente ou devolve o item ao modo sempre livre."""
+    from app.services import loja_plano_dia
+    kind = (request.form.get('kind') or '').strip()
+    try:
+        item_id = int(request.form.get('item_id'))
+    except (TypeError, ValueError):
+        abort(400)
+    if (kind not in ('receita', 'produto')
+            or not _item_publicado_no_site(kind, item_id)):
+        abort(400)
+
+    if request.form.get('regra') == 'sempre':
+        loja_plano_dia.remover_regra_semanal(kind, item_id)
+        flash('Produto liberado para todos os dias.', 'success')
+    else:
+        dias = request.form.getlist('dias')
+        tipo_limite = request.form.get('tipo_limite')
+        try:
+            limite = (None if tipo_limite == 'sem_limite'
+                      else int(request.form.get('qtd_limite')))
+            loja_plano_dia.salvar_regra_semanal(
+                kind, item_id, dias, limite)
+        except (TypeError, ValueError) as exc:
+            flash(str(exc) or 'Confira os dias e a quantidade.', 'danger')
+        else:
+            flash('Regra semanal salva.', 'success')
+    return redirect(url_for('main.loja_online_plano_dia', view='semanal')
+                    + f'#item-{kind}-{item_id}')
+
+
+@main_bp.route('/admin/loja-online/plano-do-dia/excecao', methods=['POST'])
+@owner_required
+def loja_online_excecao_salvar():
+    """Salva ou remove uma excecao pontual da regra semanal."""
+    from datetime import date as _date
+
+    from app.services import loja_plano_dia
+    kind = (request.form.get('kind') or '').strip()
+    try:
+        item_id = int(request.form.get('item_id'))
+        data = _date.fromisoformat(request.form.get('data'))
+    except (TypeError, ValueError):
+        abort(400)
+    if (kind not in ('receita', 'produto')
+            or not _item_publicado_no_site(kind, item_id)):
+        abort(400)
+
+    tipo = (request.form.get('tipo_excecao') or 'herdar').strip()
+    try:
+        if tipo == 'herdar':
+            loja_plano_dia.remover_excecao(kind, item_id, data)
+        elif tipo == 'bloqueado':
+            loja_plano_dia.salvar_excecao(kind, item_id, data, 0)
+        elif tipo == 'sem_limite':
+            loja_plano_dia.salvar_excecao(kind, item_id, data, None)
+        elif tipo == 'limite':
+            limite = int(request.form.get('qtd_limite'))
+            if limite <= 0:
+                raise ValueError('o limite precisa ser maior que zero')
+            loja_plano_dia.salvar_excecao(kind, item_id, data, limite)
+        else:
+            raise ValueError('tipo de excecao invalido')
+    except (TypeError, ValueError) as exc:
+        flash(str(exc) or 'Confira a quantidade.', 'danger')
+    else:
+        flash('Excecao da data salva.', 'success')
+    return redirect(url_for('main.loja_online_plano_dia', view='excecoes',
+                            data=data.isoformat())
+                    + f'#item-{kind}-{item_id}')
 
 
 @main_bp.route('/admin/loja-online/plano-do-dia/definir', methods=['POST'])

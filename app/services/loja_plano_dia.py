@@ -1,9 +1,8 @@
-"""Plano de estoque do site por dia de entrega (22/06/2026).
+"""Disponibilidade do site por regra semanal e excecao de entrega.
 
-Substitui o filtro de "esgotado" do `loja_catalogo._estoque_site_map()` quando
-ha plano cadastrado pra aquela data. Sem plano = comportamento de antes
-(fail-open / fallback no EstoqueLoja). Permite ao dono definir "hoje 0
-foccacia, sexta 20" sem mexer no estoque fisico (que segue em EstoqueLoja).
+As regras semanais resolvem a rotina (ex.: focaccia somente sabado e domingo),
+as excecoes cuidam de uma data fora do normal e o plano diario antigo continua
+como fallback. Nada aqui mexe no estoque fisico da loja.
 
 DEFAULT_QTD_PLANEJADA = 99999 (24/06/2026): quando o servidor auto-cria
 linha (caller `reservar` sem plano cadastrado), usa esse valor — alinha com
@@ -33,7 +32,11 @@ from datetime import date as _date_type
 from sqlalchemy import func, select
 
 from app.extensions import db
-from app.models import EstoqueSitePlano
+from app.models import (
+    EstoqueSiteExcecao,
+    EstoqueSitePlano,
+    EstoqueSiteRegraSemanal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,47 +46,236 @@ logger = logging.getLogger(__name__)
 DEFAULT_QTD_PLANEJADA = 99999
 
 
+def _limite_como_planejado(qtd_limite):
+    """Traduz o ``None`` legivel da regra (sem limite) pro valor interno."""
+    return DEFAULT_QTD_PLANEJADA if qtd_limite is None else qtd_limite
+
+
+def _planejado_efetivo(kind, item_id, data, *, row_plano=None):
+    """Retorna ``(quantidade, fonte)`` aplicando a precedencia da tela nova.
+
+    Excecao por data > regra semanal > plano diario legado > livre. A reserva
+    fica no plano diario, mas nunca transforma uma venda em excecao: quando
+    ha regra semanal, o ``qtd_planejada`` dessa linha e ignorado.
+    """
+    excecao = (db.session.query(EstoqueSiteExcecao)
+               .filter_by(kind=kind, item_id=item_id, data=data)
+               .first())
+    if excecao is not None:
+        return _limite_como_planejado(excecao.qtd_limite), 'excecao'
+
+    regra = (db.session.query(EstoqueSiteRegraSemanal)
+             .filter_by(kind=kind, item_id=item_id)
+             .first())
+    if regra is not None:
+        if not regra.permite(data):
+            return 0, 'regra_semanal'
+        return _limite_como_planejado(regra.qtd_limite), 'regra_semanal'
+
+    if row_plano is None:
+        row_plano = (db.session.query(EstoqueSitePlano)
+                     .filter_by(kind=kind, item_id=item_id, data=data)
+                     .first())
+    if row_plano is not None:
+        return row_plano.qtd_planejada or 0, 'plano_anterior'
+    return None, 'livre'
+
+
+def configuracao_dia(kind, item_id, data):
+    """Configuracao resolvida para a UI, sem expor o sentinela ``99999``."""
+    row = (db.session.query(EstoqueSitePlano)
+           .filter_by(kind=kind, item_id=item_id, data=data)
+           .first())
+    planejado, fonte = _planejado_efetivo(
+        kind, item_id, data, row_plano=row)
+    reservado = (row.qtd_reservada or 0) if row else 0
+    return {
+        'fonte': fonte,
+        'qtd_limite': (None if planejado is None
+                       or planejado >= DEFAULT_QTD_PLANEJADA
+                       else planejado),
+        'sem_limite': planejado is None
+        or planejado >= DEFAULT_QTD_PLANEJADA,
+        'disponivel': planejado is None or planejado > reservado,
+        'qtd_reservada': reservado,
+        'saldo': (None if planejado is None
+                  or planejado >= DEFAULT_QTD_PLANEJADA
+                  else max(0, planejado - reservado)),
+    }
+
+
+def salvar_regra_semanal(kind, item_id, dias, qtd_limite=None):
+    """Cria ou atualiza a regra recorrente de um item."""
+    dias = {int(d) for d in dias}
+    if not dias:
+        raise ValueError('escolha pelo menos um dia da semana')
+    if any(d < 0 or d > 6 for d in dias):
+        raise ValueError('dia da semana invalido')
+    if qtd_limite is not None and qtd_limite <= 0:
+        raise ValueError('o limite precisa ser maior que zero')
+    mask = sum(1 << d for d in dias)
+    row = (db.session.query(EstoqueSiteRegraSemanal)
+           .filter_by(kind=kind, item_id=item_id).first())
+    if row is None:
+        row = EstoqueSiteRegraSemanal(
+            kind=kind, item_id=item_id, dias_mask=mask,
+            qtd_limite=qtd_limite)
+        db.session.add(row)
+    else:
+        row.dias_mask = mask
+        row.qtd_limite = qtd_limite
+    db.session.commit()
+    return row
+
+
+def remover_regra_semanal(kind, item_id):
+    row = (db.session.query(EstoqueSiteRegraSemanal)
+           .filter_by(kind=kind, item_id=item_id).first())
+    if row is not None:
+        db.session.delete(row)
+        db.session.commit()
+
+
+def salvar_excecao(kind, item_id, data, qtd_limite=None):
+    """Salva excecao: ``None`` libera; zero bloqueia; positivo limita."""
+    if qtd_limite is not None and qtd_limite < 0:
+        raise ValueError('o limite nao pode ser negativo')
+    row = (db.session.query(EstoqueSiteExcecao)
+           .filter_by(kind=kind, item_id=item_id, data=data).first())
+    if row is None:
+        row = EstoqueSiteExcecao(
+            kind=kind, item_id=item_id, data=data,
+            qtd_limite=qtd_limite)
+        db.session.add(row)
+    else:
+        row.qtd_limite = qtd_limite
+    db.session.commit()
+    return row
+
+
+def remover_excecao(kind, item_id, data):
+    row = (db.session.query(EstoqueSiteExcecao)
+           .filter_by(kind=kind, item_id=item_id, data=data).first())
+    if row is not None:
+        db.session.delete(row)
+    # Se nao ha regra semanal, um plano diario legado ainda seria aplicado
+    # depois de remover a excecao e a opcao "seguir a regra" pareceria nao
+    # funcionar. Neutraliza apenas o limite antigo; preserva a reserva/venda.
+    regra = (db.session.query(EstoqueSiteRegraSemanal)
+             .filter_by(kind=kind, item_id=item_id).first())
+    if regra is None:
+        plano = (db.session.query(EstoqueSitePlano)
+                 .filter_by(kind=kind, item_id=item_id, data=data).first())
+        if plano is not None:
+            plano.qtd_planejada = (
+                DEFAULT_QTD_PLANEJADA + (plano.qtd_reservada or 0))
+    db.session.commit()
+
+
 def saldo(kind, item_id, data):
     """qtd_planejada - qtd_reservada pra (item, data). Devolve `None` se NAO
     existe plano cadastrado — sinaliza pro caller "sem controle" (vitrine
     cai no fallback do EstoqueLoja, igual antes)."""
     row = (db.session.query(EstoqueSitePlano)
-           .filter_by(kind=kind, item_id=item_id, data=data)
-           .first())
-    if row is None:
+           .filter_by(kind=kind, item_id=item_id, data=data).first())
+    planejado, _fonte = _planejado_efetivo(
+        kind, item_id, data, row_plano=row)
+    if planejado is None:
         return None
-    return max(0, (row.qtd_planejada or 0) - (row.qtd_reservada or 0))
+    reservado = (row.qtd_reservada or 0) if row else 0
+    return max(0, planejado - reservado)
 
 
 def tem_plano(data):
     """True se ha alguma linha cadastrada pra essa data. Usado pela vitrine
     pra decidir entre "consulta plano" e "cai no EstoqueLoja"."""
-    n = (db.session.query(func.count(EstoqueSitePlano.id))
-         .filter_by(data=data).scalar())
-    return bool(n)
+    n_plano = (db.session.query(func.count(EstoqueSitePlano.id))
+               .filter_by(data=data).scalar())
+    n_excecao = (db.session.query(func.count(EstoqueSiteExcecao.id))
+                 .filter_by(data=data).scalar())
+    n_regra = db.session.query(func.count(EstoqueSiteRegraSemanal.id)).scalar()
+    return bool(n_plano or n_excecao or n_regra)
 
 
 def saldos_para_dia(data):
     """{(kind, item_id): saldo} de TUDO que ta planejado pra essa data.
     Vitrine usa isso pra marcar esgotado/disponivel."""
-    rows = (db.session.query(EstoqueSitePlano)
-            .filter_by(data=data).all())
-    return {(r.kind, r.item_id): max(0, (r.qtd_planejada or 0)
-                                     - (r.qtd_reservada or 0))
-            for r in rows}
+    planos = {(r.kind, r.item_id): r
+              for r in db.session.query(EstoqueSitePlano)
+              .filter_by(data=data).all()}
+    excecoes = {(r.kind, r.item_id): r
+                for r in db.session.query(EstoqueSiteExcecao)
+                .filter_by(data=data).all()}
+    regras = {(r.kind, r.item_id): r
+              for r in db.session.query(EstoqueSiteRegraSemanal).all()}
+    chaves = set(planos) | set(excecoes) | set(regras)
+    out = {}
+    for chave in chaves:
+        row = planos.get(chave)
+        if chave in excecoes:
+            planejado = _limite_como_planejado(
+                excecoes[chave].qtd_limite)
+        elif chave in regras:
+            regra = regras[chave]
+            planejado = (_limite_como_planejado(regra.qtd_limite)
+                          if regra.permite(data) else 0)
+        elif row is not None:
+            planejado = row.qtd_planejada or 0
+        else:  # pragma: no cover - a uniao das chaves torna impossivel
+            continue
+        reservado = (row.qtd_reservada or 0) if row else 0
+        out[chave] = max(0, planejado - reservado)
+    return out
 
 
 def saldos_no_periodo(di, df):
-    """{data: {(kind, item_id): saldo}} de TUDO planejado no intervalo
-    [di, df] — versão em UMA query do `saldos_para_dia`, pra quem olha
-    vários dias de uma vez (vigia do bot) não fazer N queries por ciclo."""
-    rows = (db.session.query(EstoqueSitePlano)
-            .filter(EstoqueSitePlano.data >= di,
-                    EstoqueSitePlano.data <= df).all())
+    """{data: {(kind, item_id): saldo}} resolvido num intervalo.
+
+    Carrega planos, excecoes e regras em tres consultas fixas, sem fazer uma
+    nova consulta para cada dia que o vigia do bot percorre.
+    """
+    from datetime import timedelta
+
+    planos = (db.session.query(EstoqueSitePlano)
+              .filter(EstoqueSitePlano.data >= di,
+                      EstoqueSitePlano.data <= df).all())
+    excecoes = (db.session.query(EstoqueSiteExcecao)
+                .filter(EstoqueSiteExcecao.data >= di,
+                        EstoqueSiteExcecao.data <= df).all())
+    regras = db.session.query(EstoqueSiteRegraSemanal).all()
+    planos_por_dia = {}
+    for row in planos:
+        planos_por_dia.setdefault(row.data, {})[
+            (row.kind, row.item_id)] = row
+    excecoes_por_dia = {}
+    for row in excecoes:
+        excecoes_por_dia.setdefault(row.data, {})[
+            (row.kind, row.item_id)] = row
+    regras_map = {(r.kind, r.item_id): r for r in regras}
+
     out = {}
-    for r in rows:
-        out.setdefault(r.data, {})[(r.kind, r.item_id)] = max(
-            0, (r.qtd_planejada or 0) - (r.qtd_reservada or 0))
+    data = di
+    while data <= df:
+        planos_dia = planos_por_dia.get(data, {})
+        excecoes_dia = excecoes_por_dia.get(data, {})
+        chaves = set(planos_dia) | set(excecoes_dia) | set(regras_map)
+        saldos = {}
+        for chave in chaves:
+            row = planos_dia.get(chave)
+            if chave in excecoes_dia:
+                planejado = _limite_como_planejado(
+                    excecoes_dia[chave].qtd_limite)
+            elif chave in regras_map:
+                regra = regras_map[chave]
+                planejado = (_limite_como_planejado(regra.qtd_limite)
+                              if regra.permite(data) else 0)
+            else:
+                planejado = row.qtd_planejada or 0
+            reservado = (row.qtd_reservada or 0) if row else 0
+            saldos[chave] = max(0, planejado - reservado)
+        if saldos:
+            out[data] = saldos
+        data += timedelta(days=1)
     return out
 
 
@@ -134,20 +326,26 @@ def reservar(kind, item_id, data, qtd):
     except Exception:  # noqa: BLE001
         row = (db.session.query(EstoqueSitePlano)
                .filter_by(kind=kind, item_id=item_id, data=data).first())
-    if row is None:
-        # Sem plano: cria com default 99999 (= sem limite) e ja reserva.
-        # Saldo = 99999 - qtd: continua positivo, item nao fica esgotado
-        # por uma compra sem o dono ter estabelecido limite manual.
-        row = EstoqueSitePlano(kind=kind, item_id=item_id, data=data,
-                                qtd_planejada=DEFAULT_QTD_PLANEJADA,
-                                qtd_reservada=qtd)
-        db.session.add(row)
-        db.session.commit()
-        return True  # nao havia limite cadastrado; vendeu mesmo assim
-    disponivel = (row.qtd_planejada or 0) - (row.qtd_reservada or 0)
+    planejado, fonte = _planejado_efetivo(
+        kind, item_id, data, row_plano=row)
+    if planejado is None:
+        planejado = DEFAULT_QTD_PLANEJADA
+    reservado = (row.qtd_reservada or 0) if row else 0
+    disponivel = planejado - reservado
     if disponivel < qtd:
         return False
-    row.qtd_reservada = (row.qtd_reservada or 0) + qtd
+    if row is None:
+        # A linha diaria guarda a reserva/auditoria. Com regra semanal ou
+        # excecao, seu ``qtd_planejada`` nao vira uma nova excecao porque a
+        # resolucao sempre prioriza as tabelas novas.
+        row = EstoqueSitePlano(
+            kind=kind, item_id=item_id, data=data,
+            qtd_planejada=planejado, qtd_reservada=qtd)
+        db.session.add(row)
+    else:
+        row.qtd_reservada = reservado + qtd
+        if fonte in ('regra_semanal', 'excecao'):
+            row.qtd_planejada = planejado
     db.session.commit()
     return True
 
