@@ -74,7 +74,7 @@ def test_dashboard_linka_as_duas_telas(app):
     assert '/admin/loja-online/producao-do-dia' in html
     assert '/admin/loja-online/plano-do-dia' in html
     assert 'Produção do dia' in html
-    assert 'Disponibilidade do dia' in html
+    assert 'Dias disponíveis dos produtos' in html
 
 
 def test_layout_novo_mostra_disponibilidade_da_loja_online(app):
@@ -86,7 +86,7 @@ def test_layout_novo_mostra_disponibilidade_da_loja_online(app):
     html = area.get_data(as_text=True)
     assert 'ui-v2-sidebar' in html
     assert 'Dias disponíveis dos produtos' in html
-    assert 'Definir o que pode ser entregue em cada data' in html
+    assert 'Criar regras semanais' in html
     assert '/admin/loja-online/plano-do-dia' in html
 
     tela = c.get('/admin/loja-online/plano-do-dia')
@@ -96,12 +96,13 @@ def test_layout_novo_mostra_disponibilidade_da_loja_online(app):
     assert 'sidebar-link active' in html_tela
 
 
-def test_disponibilidade_renomeada_e_explica_diferenca(app):
-    """A tela antiga 'Plano do dia' agora se chama 'Disponibilidade do dia'
-    e aponta pra Produção do dia, deixando claro que são coisas distintas."""
+def test_disponibilidade_agora_prioriza_regras_semanais(app):
+    """A tela deixa de expor a planilha diaria e explica o fluxo recorrente."""
     c = _owner(app)
     resp = c.get('/admin/loja-online/plano-do-dia')
     assert resp.status_code == 200
     html = resp.data.decode()
-    assert 'Disponibilidade do dia' in html
-    assert '/admin/loja-online/producao-do-dia' in html
+    assert 'Quando cada produto aparece' in html
+    assert 'Regra semanal' in html
+    assert 'Exceções por data' in html
+    assert '99999 a TODOS' not in html

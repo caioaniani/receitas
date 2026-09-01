@@ -1,305 +1,372 @@
 {% extends 'base.html' %}
-{% block title %}Disponibilidade do dia — Loja Online{% endblock %}
+{% block title %}Disponibilidade do site — Loja Online{% endblock %}
+
+{% set dias_curtos = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'] %}
+{% set dias_completos = ['segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'domingo'] %}
 
 {% block content %}
-<h1 class="page-title"><i class="bi bi-calendar3-week"></i> Disponibilidade do dia (quanto o site pode vender)</h1>
-<div class="alert alert-light border small mb-3">
-  <strong>Esta tela controla o que o cliente CONSEGUE COMPRAR no site</strong> —
-  define quantos de cada item podem ser vendidos pra entrega em cada dia
-  (quando zera, vira "Esgotado" no site). Não confunda com
-  <a href="{{ url_for('main.loja_online_producao_dia') }}">Produção do dia</a>,
-  que mostra o que já foi vendido e precisa ser <strong>preparado</strong>.
-</div>
-<p class="text-muted">
-  Defina quantos de cada item você vai ter disponível pra
-  <strong>entregar em {{ data.strftime('%d/%m/%Y (%A)')|lower }}</strong>.
-  Edita direto no campo "planejado" — salva sozinho. <em>Reservado</em> é o que
-  já foi vendido pra esse dia; <em>sobra</em> é o que ainda dá pra vender.
-</p>
+<style>
+  .disp-page { max-width: 1120px; margin: 0 auto; }
+  .disp-eyebrow { color: var(--v2-accent, #275d45); font-size: 11px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+  .disp-header { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 24px; }
+  .disp-header h1 { margin: 5px 0 7px; font: 500 clamp(30px, 4vw, 46px)/1.02 Georgia, serif; letter-spacing: -.04em; }
+  .disp-header p { max-width: 680px; margin: 0; color: #68736d; }
+  .disp-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 22px; border: 1px solid #e1e6e2; border-radius: 12px; background: #fff; }
+  .disp-tab { flex: 1; padding: 11px 14px; border-radius: 9px; color: #5e6a63; text-align: center; text-decoration: none; font-weight: 700; }
+  .disp-tab:hover { color: #275d45; background: #f5f8f6; }
+  .disp-tab.active { color: #fff; background: #275d45; }
+  .disp-count { display: inline-grid; min-width: 22px; min-height: 22px; margin-left: 5px; padding: 0 6px; place-items: center; border-radius: 999px; background: rgba(255,255,255,.18); font-size: 11px; }
+  .disp-toolbar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .disp-search { position: relative; flex: 1 1 320px; }
+  .disp-search i { position: absolute; top: 50%; left: 14px; color: #7b8780; transform: translateY(-50%); }
+  .disp-search input { width: 100%; min-height: 44px; padding-left: 40px; border: 1px solid #dce3de; border-radius: 11px; background: #fff; }
+  .disp-filter, .disp-date { min-height: 44px; border: 1px solid #dce3de; border-radius: 11px; background: #fff; }
+  .disp-list { display: grid; gap: 10px; }
+  .disp-item { overflow: hidden; border: 1px solid #e0e5e1; border-radius: 14px; background: #fff; }
+  .disp-item[open] { border-color: #a9c2b3; box-shadow: 0 12px 30px rgba(32,65,47,.06); }
+  .disp-item > summary { min-height: 82px; padding: 16px 18px; display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 18px; cursor: pointer; list-style: none; }
+  .disp-item > summary::-webkit-details-marker { display: none; }
+  .disp-name { min-width: 0; }
+  .disp-name strong { display: block; overflow: hidden; color: #17221d; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+  .disp-name small { color: #77827c; }
+  .disp-summary { color: #536059; font-size: 12px; text-align: right; }
+  .disp-summary strong { display: block; color: #275d45; font-size: 13px; }
+  .disp-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 999px; color: #275d45; background: #e8f2ec; font-size: 11px; font-weight: 750; }
+  .disp-pill.free { color: #68736d; background: #f0f2f0; }
+  .disp-pill.blocked { color: #8b4c28; background: #fbefe5; }
+  .disp-chevron { color: #728078; transition: transform .18s ease; }
+  .disp-item[open] .disp-chevron { transform: rotate(180deg); }
+  .disp-editor { padding: 18px; border-top: 1px solid #e7ebe8; background: #fbfcfb; }
+  .disp-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-bottom: 18px; }
+  .disp-choice { padding: 13px; display: flex; gap: 9px; align-items: flex-start; border: 1px solid #dce3de; border-radius: 11px; background: #fff; cursor: pointer; }
+  .disp-choice:has(input:checked) { border-color: #6d9d81; background: #edf5f0; }
+  .disp-choice strong { display: block; font-size: 13px; }
+  .disp-choice small { display: block; margin-top: 2px; color: #738078; line-height: 1.35; }
+  .disp-section-label { display: block; margin: 0 0 8px; color: #536059; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  .disp-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 7px; margin-bottom: 18px; }
+  .disp-day { min-height: 42px; display: grid; place-items: center; border: 1px solid #dce3de; border-radius: 10px; background: #fff; cursor: pointer; font-size: 12px; font-weight: 750; }
+  .disp-day input { position: absolute; opacity: 0; pointer-events: none; }
+  .disp-day:has(input:checked) { border-color: #275d45; color: #fff; background: #275d45; }
+  .disp-limit { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .disp-limit label { margin: 0; }
+  .disp-limit input[type=number] { width: 115px; }
+  .disp-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 20px; }
+  .disp-save { min-width: 132px; border-color: #275d45 !important; background: #275d45 !important; }
+  .disp-empty { padding: 38px; border: 1px dashed #ccd5cf; border-radius: 14px; color: #68736d; text-align: center; background: #fff; }
+  .disp-help { margin-top: 20px; padding: 14px 16px; border-radius: 12px; color: #5f6b64; background: #edf3ef; font-size: 12px; line-height: 1.5; }
+  .disp-maintenance { margin-top: 28px; color: #68736d; font-size: 12px; }
+  .disp-maintenance summary { cursor: pointer; font-weight: 700; }
+  .disp-maintenance-body { margin-top: 10px; padding: 14px; border: 1px solid #e1e6e2; border-radius: 10px; background: #fff; }
+  [data-hidden="true"] { display: none !important; }
+  @media (max-width: 720px) {
+    .disp-header { align-items: start; }
+    .disp-header .btn { display: none; }
+    .disp-item > summary { grid-template-columns: minmax(0,1fr) auto; gap: 10px; }
+    .disp-summary { grid-column: 1 / -1; text-align: left; }
+    .disp-chevron { position: absolute; right: 18px; }
+    .disp-choice-grid { grid-template-columns: 1fr; }
+    .disp-days { grid-template-columns: repeat(4, 1fr); }
+    .disp-actions .btn { width: 100%; }
+  }
+</style>
 
-<form method="GET" class="d-flex flex-wrap gap-2 align-items-end mb-3">
-  <div>
-    <label class="form-label mb-0 small">Data de entrega</label>
-    <input type="date" name="data" value="{{ data_str }}"
-           class="form-control form-control-sm" style="max-width:180px"
-           onchange="this.form.submit()">
-  </div>
-  <button type="submit" class="btn btn-sm btn-dark">Ver</button>
-  {% if tem_plano_anterior %}
-  <button type="button" id="btn-copiar-anterior"
-          class="btn btn-sm btn-outline-secondary"
-          data-url="{{ url_for('main.loja_online_plano_dia_copiar') }}"
-          data-data="{{ data_str }}">
-    <i class="bi bi-arrow-left-square"></i>
-    Copiar plano de {{ data_anterior|replace('-','/') }} (semana passada)
-  </button>
-  {% endif %}
-  <a href="{{ url_for('main.loja_online_dashboard') }}" class="btn btn-sm btn-outline-secondary">← Loja Online</a>
-</form>
+<div class="disp-page">
+  <header class="disp-header">
+    <div>
+      <div class="disp-eyebrow">Loja online</div>
+      <h1>Quando cada produto aparece</h1>
+      <p>Defina a rotina uma vez. Use exceções somente quando um dia fugir do normal.</p>
+    </div>
+    <a href="{{ url_for('main.loja_online_dashboard') }}" class="btn btn-outline-secondary">Voltar à loja online</a>
+  </header>
 
-<div class="alert alert-secondary border d-flex flex-wrap align-items-center gap-2 mb-3"
-     style="font-size:14px;">
-  <strong>Atalhos:</strong>
-  <button type="button" id="btn-replicar-tudo" class="btn btn-sm btn-dark"
-          data-url="{{ url_for('main.loja_online_plano_dia_replicar_tudo') }}"
-          data-data="{{ data_str }}">
-    🔁 Aplicar 99999 a TODOS os itens (14 dias)
-  </button>
-  <button type="button" id="btn-reparar-orfas" class="btn btn-sm btn-outline-warning"
-          data-url="{{ url_for('main.loja_online_plano_dia_reparar_orfas') }}">
-    🩹 Reparar itens zerados por venda sem plano
-  </button>
-  <small class="text-muted ms-auto">
-    "Reparar" só age em linhas com planejado=0 + vendas&gt;0 (não toca onde você setou limite manualmente).
-  </small>
-</div>
+  <nav class="disp-tabs" aria-label="Tipo de configuração">
+    <a href="{{ url_for('main.loja_online_plano_dia', view='semanal') }}"
+       class="disp-tab {{ 'active' if modo == 'semanal' }}">
+      Regra semanal <span class="disp-count">{{ total_regras }}</span>
+    </a>
+    <a href="{{ url_for('main.loja_online_plano_dia', view='excecoes', data=data_str) }}"
+       class="disp-tab {{ 'active' if modo == 'excecoes' }}">
+      Exceções por data <span class="disp-count">{{ total_excecoes }}</span>
+    </a>
+  </nav>
 
-{% if not itens %}
-<div class="alert alert-light">
-  Nenhum item publicado no site. Configure preços e fotos em
-  <a href="{{ url_for('main.loja_online_catalogo') }}">Catálogo do site</a>.
-</div>
-{% else %}
-<div class="table-responsive">
-  <table class="table table-sm table-hover bg-white align-middle">
-    <thead class="thead-padaria">
-      <tr>
-        <th>Item</th>
-        <th>Categoria</th>
-        <th class="text-center" style="width:140px">Planejado</th>
-        <th class="text-center" style="width:90px">Reservado</th>
-        <th class="text-center" style="width:90px">Sobra</th>
-        <th class="text-center" style="width:50px"></th>
-      </tr>
-    </thead>
-    <tbody>
+  {% if not itens %}
+    <div class="disp-empty">
+      Nenhum item publicado. Primeiro publique os produtos no
+      <a href="{{ url_for('main.loja_online_catalogo') }}">catálogo do site</a>.
+    </div>
+  {% else %}
+    <div class="disp-toolbar">
+      <div class="disp-search">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <label for="disp-busca" class="visually-hidden">Buscar produto</label>
+        <input id="disp-busca" type="search" placeholder="Buscar produto, como focaccia…" autocomplete="off">
+      </div>
+      {% if modo == 'semanal' %}
+        <label for="disp-filtro" class="visually-hidden">Filtrar produtos</label>
+        <select id="disp-filtro" class="disp-filter form-select" style="max-width:210px">
+          <option value="regras" {{ 'selected' if total_regras }}>Com regra semanal</option>
+          <option value="todos" {{ 'selected' if not total_regras }}>Todos os produtos</option>
+          <option value="livres">Sem restrição</option>
+        </select>
+      {% else %}
+        <form method="GET" class="d-flex gap-2 align-items-end">
+          <input type="hidden" name="view" value="excecoes">
+          <div>
+            <label for="disp-data" class="disp-section-label">Data da exceção</label>
+            <input id="disp-data" type="date" name="data" value="{{ data_str }}" class="disp-date form-control" onchange="this.form.submit()">
+          </div>
+        </form>
+      {% endif %}
+    </div>
+
+    {% if modo == 'semanal' %}
+      <div class="disp-help">
+        <strong>Exemplo:</strong> na Focaccia, escolha “Somente alguns dias”, marque sábado e domingo e salve. A regra continua valendo nas próximas semanas sem precisar copiar datas.
+      </div>
+    {% else %}
+      <div class="disp-help">
+        Configurando <strong>{{ dias_completos[data.weekday()] }}, {{ data.strftime('%d/%m/%Y') }}</strong>. A exceção vale somente nessa data e depois a regra semanal volta automaticamente.
+      </div>
+    {% endif %}
+
+    <div class="disp-list mt-3" id="disp-lista">
       {% for it in itens %}
-      <tr data-kind="{{ it.kind }}" data-id="{{ it.id }}">
-        <td><strong>{{ it.nome }}</strong></td>
-        <td class="small text-muted">{{ it.categoria }}</td>
-        <td class="text-center">
-          {# Default 99999 quando nao tem linha — interpretado como "sem
-             limite". A dona so altera o que de fato tem restricao;
-             botao "replicar" copia o valor pros proximos dias. #}
-          <input type="number" min="0" max="99999"
-                 class="form-control form-control-sm text-center plano-input"
-                 value="{{ it.qtd_planejada if it.qtd_planejada is not none else 99999 }}"
-                 placeholder="99999" style="max-width:100px; display:inline-block;">
-          <div class="small plano-status text-muted" style="min-height:14px;"></div>
-        </td>
-        <td class="text-center fw-bold text-warning plano-reservado">{{ it.qtd_reservada }}</td>
-        <td class="text-center fw-bold plano-saldo">
-          {% if it.saldo is none %}<span class="text-muted">—</span>{% else %}{{ it.saldo }}{% endif %}
-        </td>
-        <td class="text-center">
-          <button type="button" class="btn btn-sm btn-outline-secondary plano-replicar"
-                  title="Replicar este valor pros próximos 14 dias">
-            ↔
-          </button>
-        </td>
-      </tr>
+        <details class="disp-item"
+                 id="item-{{ it.kind }}-{{ it.id }}"
+                 data-name="{{ (it.nome ~ ' ' ~ it.categoria)|lower }}"
+                 data-rule="{{ 1 if it.regra else 0 }}">
+          <summary>
+            <span class="disp-name">
+              <strong>{{ it.nome }}</strong>
+              <small>{{ it.categoria }}</small>
+            </span>
+
+            {% if modo == 'semanal' %}
+              <span class="disp-summary">
+                {% if it.regra %}
+                  <strong>
+                    {% if it.dias_ativos|length == 7 %}
+                      Todos os dias
+                    {% elif it.dias_ativos|length == 0 %}
+                      Nenhum dia
+                    {% else %}
+                      {% for dia in it.dias_ativos %}{{ dias_curtos[dia] }}{{ ', ' if not loop.last }}{% endfor %}
+                    {% endif %}
+                  </strong>
+                  {{ 'sem limite' if it.regra.qtd_limite is none else it.regra.qtd_limite ~ ' por dia' }}
+                {% else %}
+                  <span class="disp-pill free">Todos os dias · sem limite</span>
+                {% endif %}
+              </span>
+            {% else %}
+              <span class="disp-summary">
+                {% if not it.configuracao.disponivel %}
+                  <span class="disp-pill blocked">Indisponível</span>
+                {% elif it.configuracao.sem_limite %}
+                  <span class="disp-pill">Disponível · sem limite</span>
+                {% else %}
+                  <strong>{{ it.configuracao.saldo }} disponíveis</strong>
+                  {{ it.configuracao.qtd_reservada }} já reservados
+                {% endif %}
+                <small class="d-block mt-1">
+                  {% if it.configuracao.fonte == 'excecao' %}Exceção desta data
+                  {% elif it.configuracao.fonte == 'regra_semanal' %}Regra semanal
+                  {% elif it.configuracao.fonte == 'plano_anterior' %}Ajuste diário anterior
+                  {% else %}Disponibilidade padrão{% endif %}
+                </small>
+              </span>
+            {% endif %}
+            <i class="bi bi-chevron-down disp-chevron" aria-hidden="true"></i>
+          </summary>
+
+          {% if modo == 'semanal' %}
+            <form class="disp-editor" method="POST" action="{{ url_for('main.loja_online_regra_semanal_salvar') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="kind" value="{{ it.kind }}">
+              <input type="hidden" name="item_id" value="{{ it.id }}">
+
+              <span class="disp-section-label">Quando pode ser entregue</span>
+              <div class="disp-choice-grid">
+                <label class="disp-choice">
+                  <input type="radio" name="regra" value="sempre" {{ 'checked' if not it.regra }}>
+                  <span><strong>Todos os dias</strong><small>O produto fica disponível normalmente.</small></span>
+                </label>
+                <label class="disp-choice">
+                  <input type="radio" name="regra" value="personalizada" {{ 'checked' if it.regra }}>
+                  <span><strong>Somente alguns dias</strong><small>Escolha abaixo os dias permitidos.</small></span>
+                </label>
+              </div>
+
+              <div class="disp-custom-rule">
+                <span class="disp-section-label">Dias permitidos</span>
+                <div class="disp-days">
+                  {% for dia in range(7) %}
+                    <label class="disp-day">
+                      <input type="checkbox" name="dias" value="{{ dia }}" {{ 'checked' if dia in it.dias_ativos }}>
+                      {{ dias_curtos[dia] }}
+                    </label>
+                  {% endfor %}
+                </div>
+
+                <span class="disp-section-label">Quanto pode vender por dia permitido</span>
+                <div class="disp-limit">
+                  <label class="disp-choice py-2 px-3">
+                    <input type="radio" name="tipo_limite" value="sem_limite" {{ 'checked' if not it.regra or it.regra.qtd_limite is none }}>
+                    <span><strong>Sem limite</strong></span>
+                  </label>
+                  <label class="disp-choice py-2 px-3">
+                    <input type="radio" name="tipo_limite" value="limite" {{ 'checked' if it.regra and it.regra.qtd_limite is not none }}>
+                    <span><strong>Limitar por dia</strong></span>
+                  </label>
+                  <input type="number" min="1" name="qtd_limite" class="form-control disp-limit-value" placeholder="Ex.: 20" value="{{ it.regra.qtd_limite if it.regra and it.regra.qtd_limite is not none else '' }}">
+                </div>
+              </div>
+
+              <div class="disp-actions">
+                <button type="submit" class="btn btn-primary disp-save">Salvar regra</button>
+              </div>
+            </form>
+          {% else %}
+            <form class="disp-editor" method="POST" action="{{ url_for('main.loja_online_excecao_salvar') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="kind" value="{{ it.kind }}">
+              <input type="hidden" name="item_id" value="{{ it.id }}">
+              <input type="hidden" name="data" value="{{ data_str }}">
+
+              <span class="disp-section-label">O que fazer somente nesta data</span>
+              <div class="disp-choice-grid">
+                <label class="disp-choice">
+                  <input type="radio" name="tipo_excecao" value="herdar" {{ 'checked' if not it.excecao }}>
+                  <span><strong>Seguir a regra semanal</strong><small>Não cria nenhuma alteração para este dia.</small></span>
+                </label>
+                <label class="disp-choice">
+                  <input type="radio" name="tipo_excecao" value="bloqueado" {{ 'checked' if it.excecao and it.excecao.qtd_limite == 0 }}>
+                  <span><strong>Não vender neste dia</strong><small>O produto aparece como indisponível.</small></span>
+                </label>
+                <label class="disp-choice">
+                  <input type="radio" name="tipo_excecao" value="sem_limite" {{ 'checked' if it.excecao and it.excecao.qtd_limite is none }}>
+                  <span><strong>Liberar sem limite</strong><small>Ignora a restrição semanal nesta data.</small></span>
+                </label>
+                <label class="disp-choice">
+                  <input type="radio" name="tipo_excecao" value="limite" {{ 'checked' if it.excecao and it.excecao.qtd_limite and it.excecao.qtd_limite > 0 }}>
+                  <span><strong>Limitar a quantidade</strong><small>Defina o máximo disponível neste dia.</small></span>
+                </label>
+              </div>
+              <div class="disp-limit">
+                <label for="qtd-{{ it.kind }}-{{ it.id }}" class="mb-0 fw-bold">Quantidade máxima</label>
+                <input id="qtd-{{ it.kind }}-{{ it.id }}" type="number" min="1" name="qtd_limite" class="form-control disp-exception-value" placeholder="Ex.: 20" value="{{ it.excecao.qtd_limite if it.excecao and it.excecao.qtd_limite else '' }}">
+              </div>
+              <div class="disp-actions">
+                <button type="submit" class="btn btn-primary disp-save">Salvar exceção</button>
+              </div>
+            </form>
+          {% endif %}
+        </details>
       {% endfor %}
-    </tbody>
-  </table>
+    </div>
+
+    <div id="disp-sem-resultado" class="disp-empty mt-3" hidden>Nenhum produto encontrado.</div>
+
+    {% if modo == 'semanal' %}
+      <details class="disp-maintenance">
+        <summary>Mais opções · manutenção de dados antigos</summary>
+        <div class="disp-maintenance-body">
+          <p>Estas ferramentas são para correção excepcional. Elas não são necessárias no uso normal.</p>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" id="btn-replicar-tudo" class="btn btn-sm btn-outline-secondary"
+                    data-url="{{ url_for('main.loja_online_plano_dia_replicar_tudo') }}" data-data="{{ data_str }}">
+              Liberar todos por 14 dias
+            </button>
+            <button type="button" id="btn-reparar-orfas" class="btn btn-sm btn-outline-secondary"
+                    data-url="{{ url_for('main.loja_online_plano_dia_reparar_orfas') }}">
+              Corrigir dados antigos
+            </button>
+          </div>
+        </div>
+      </details>
+    {% endif %}
+  {% endif %}
 </div>
-{% endif %}
 
 <script>
 (function () {
-  var URL_DEFINIR = "{{ url_for('main.loja_online_plano_dia_definir') }}";
-  var URL_REPLICAR = "{{ url_for('main.loja_online_plano_dia_replicar') }}";
-  var DATA_STR = "{{ data_str }}";
-  var CSRF = "{{ csrf_token() }}";
+  var search = document.getElementById('disp-busca');
+  var filter = document.getElementById('disp-filtro');
+  var items = Array.prototype.slice.call(document.querySelectorAll('.disp-item'));
+  var empty = document.getElementById('disp-sem-resultado');
 
-  function salvar(row, valor) {
-    var status = row.querySelector('.plano-status');
-    status.textContent = 'salvando…';
-    status.style.color = '';
-    var fd = new FormData();
-    fd.append('csrf_token', CSRF);
-    fd.append('kind', row.dataset.kind);
-    fd.append('item_id', row.dataset.id);
-    fd.append('qtd_planejada', valor);
-    fd.append('data', DATA_STR);
-    fetch(URL_DEFINIR, { method: 'POST', body: fd })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        if (!j.ok) {
-          status.textContent = '✗ ' + (j.erro || 'erro');
-          status.style.color = '#dc3545';
-          return;
-        }
-        status.textContent = '✓ salvo';
-        status.style.color = '#198754';
-        var saldo = row.querySelector('.plano-saldo');
-        saldo.textContent = j.saldo;
-        setTimeout(function () { status.textContent = ''; }, 2500);
+  function applyFilter() {
+    var term = (search && search.value || '').trim().toLowerCase();
+    var mode = filter ? filter.value : 'todos';
+    var visible = 0;
+    items.forEach(function (item) {
+      var matchesText = !term || item.dataset.name.indexOf(term) !== -1;
+      var hasRule = item.dataset.rule === '1';
+      var matchesMode = mode === 'todos' || (mode === 'regras' && hasRule)
+        || (mode === 'livres' && !hasRule);
+      var show = matchesText && matchesMode;
+      item.dataset.hidden = show ? 'false' : 'true';
+      if (show) visible += 1;
+    });
+    if (empty) empty.hidden = visible !== 0;
+  }
+  if (search) search.addEventListener('input', applyFilter);
+  if (filter) filter.addEventListener('change', applyFilter);
+  applyFilter();
+
+  document.querySelectorAll('.disp-editor').forEach(function (form) {
+    function update() {
+      var custom = form.querySelector('.disp-custom-rule');
+      if (custom) {
+        var selected = form.querySelector('input[name="regra"]:checked');
+        custom.hidden = selected && selected.value === 'sempre';
+      }
+      var limit = form.querySelector('.disp-limit-value');
+      if (limit) {
+        var limitMode = form.querySelector('input[name="tipo_limite"]:checked');
+        limit.disabled = !limitMode || limitMode.value !== 'limite';
+      }
+      var exception = form.querySelector('.disp-exception-value');
+      if (exception) {
+        var exceptionMode = form.querySelector('input[name="tipo_excecao"]:checked');
+        exception.disabled = !exceptionMode || exceptionMode.value !== 'limite';
+      }
+    }
+    form.addEventListener('change', update);
+    update();
+  });
+
+  var csrf = "{{ csrf_token() }}";
+  function postMaintenance(button, fields, question) {
+    if (!button || !confirm(question)) return;
+    button.disabled = true;
+    var body = new FormData();
+    body.append('csrf_token', csrf);
+    Object.keys(fields).forEach(function (key) { body.append(key, fields[key]); });
+    fetch(button.dataset.url, {method: 'POST', body: body})
+      .then(function (response) { return response.json(); })
+      .then(function (data) {
+        button.disabled = false;
+        if (!data.ok) throw new Error(data.erro || 'Não foi possível concluir.');
+        window.location.reload();
       })
-      .catch(function () {
-        status.textContent = '✗ rede';
-        status.style.color = '#dc3545';
+      .catch(function (error) {
+        button.disabled = false;
+        alert(error.message || 'Erro de rede.');
       });
   }
-
-  // Debounce por linha (1s depois do último input) — evita salvar a cada tecla.
-  var timers = {};
-  document.querySelectorAll('tr[data-kind] .plano-input').forEach(function (inp) {
-    var row = inp.closest('tr');
-    var key = row.dataset.kind + ':' + row.dataset.id;
-    inp.addEventListener('input', function () {
-      var v = inp.value.trim();
-      if (v === '') return;  // ignora enquanto digita (deixa zerar com 0)
-      var n = parseInt(v, 10);
-      if (isNaN(n) || n < 0) return;
-      clearTimeout(timers[key]);
-      timers[key] = setTimeout(function () { salvar(row, n); }, 1000);
-    });
-    inp.addEventListener('blur', function () {
-      var v = inp.value.trim();
-      if (v === '') return;
-      var n = parseInt(v, 10);
-      if (isNaN(n) || n < 0) return;
-      clearTimeout(timers[key]);
-      salvar(row, n);
-    });
+  var releaseAll = document.getElementById('btn-replicar-tudo');
+  if (releaseAll) releaseAll.addEventListener('click', function () {
+    postMaintenance(releaseAll,
+      {qtd_planejada: '99999', data_inicio: releaseAll.dataset.data},
+      'Liberar todos os produtos pelos próximos 14 dias? Isso altera ajustes diários antigos, mas não remove as novas regras semanais.');
   });
-
-  // Replicar valor pros proximos 14 dias (por linha — botao "↔").
-  document.querySelectorAll('tr[data-kind] .plano-replicar').forEach(function (btn) {
-    var row = btn.closest('tr');
-    var inp = row.querySelector('.plano-input');
-    btn.addEventListener('click', function () {
-      var v = inp.value.trim();
-      if (v === '') { alert('Preencha o valor primeiro.'); return; }
-      var n = parseInt(v, 10);
-      if (isNaN(n) || n < 0) { alert('Valor inválido.'); return; }
-      var nome = (row.querySelector('td strong') || {}).textContent || '';
-      if (!confirm('Replicar "' + nome + ' = ' + n + '" pros próximos 14 dias\n'
-                   + '(a partir de ' + DATA_STR + ', inclusive)?')) return;
-      btn.disabled = true;
-      var status = row.querySelector('.plano-status');
-      status.textContent = 'replicando…';
-      status.style.color = '';
-      var fd = new FormData();
-      fd.append('csrf_token', CSRF);
-      fd.append('kind', row.dataset.kind);
-      fd.append('item_id', row.dataset.id);
-      fd.append('qtd_planejada', n);
-      fd.append('data_inicio', DATA_STR);
-      fetch(URL_REPLICAR, { method: 'POST', body: fd })
-        .then(function (r) { return r.json(); })
-        .then(function (j) {
-          btn.disabled = false;
-          if (j.ok) {
-            status.textContent = '✓ replicado em ' + j.dias + ' dia(s)';
-            status.style.color = '#198754';
-            setTimeout(function () { status.textContent = ''; }, 4000);
-          } else {
-            status.textContent = '✗ ' + (j.erro || 'erro');
-            status.style.color = '#dc3545';
-          }
-        })
-        .catch(function () {
-          btn.disabled = false;
-          status.textContent = '✗ rede';
-          status.style.color = '#dc3545';
-        });
-    });
+  var repair = document.getElementById('btn-reparar-orfas');
+  if (repair) repair.addEventListener('click', function () {
+    postMaintenance(repair, {}, 'Corrigir somente registros antigos inconsistentes?');
   });
-
-  // Replicar 99999 pra TODOS os itens × 14 dias (atalho do dono 24/06/2026).
-  var btnRepTudo = document.getElementById('btn-replicar-tudo');
-  if (btnRepTudo) {
-    btnRepTudo.addEventListener('click', function () {
-      if (!confirm('Aplicar PLANEJADO = 99999 (sem limite) pra TODOS os itens '
-                   + 'publicados, pros próximos 14 dias a partir de '
-                   + btnRepTudo.dataset.data + '?\n\n'
-                   + 'Isso SOBRESCREVE valores que você tenha digitado. '
-                   + 'Use só pra "soltar tudo".')) return;
-      btnRepTudo.disabled = true;
-      var fd = new FormData();
-      fd.append('csrf_token', CSRF);
-      fd.append('qtd_planejada', '99999');
-      fd.append('data_inicio', btnRepTudo.dataset.data);
-      fetch(btnRepTudo.dataset.url, { method: 'POST', body: fd })
-        .then(function (r) { return r.json(); })
-        .then(function (j) {
-          btnRepTudo.disabled = false;
-          if (j.ok) {
-            alert(j.itens + ' item(ns) atualizados pros próximos 14 dias. '
-                  + 'Recarregando…');
-            window.location.reload();
-          } else {
-            alert('Erro: ' + (j.erro || 'falha'));
-          }
-        })
-        .catch(function () {
-          btnRepTudo.disabled = false;
-          alert('Erro de rede');
-        });
-    });
-  }
-
-  // Reparar linhas órfãs (planejada=0 + reservada>0, do bug pre-24/06/2026).
-  var btnReparar = document.getElementById('btn-reparar-orfas');
-  if (btnReparar) {
-    btnReparar.addEventListener('click', function () {
-      if (!confirm('Procurar linhas que zeraram por venda sem plano e '
-                   + 'restaurar saldo (planejada vai pra 99999 + reservada)?\n\n'
-                   + 'Não afeta linhas onde você setou limite manualmente.')) return;
-      btnReparar.disabled = true;
-      var fd = new FormData();
-      fd.append('csrf_token', CSRF);
-      fetch(btnReparar.dataset.url, { method: 'POST', body: fd })
-        .then(function (r) { return r.json(); })
-        .then(function (j) {
-          btnReparar.disabled = false;
-          if (j.ok) {
-            if (j.corrigidas) {
-              alert(j.corrigidas + ' linha(s) reparada(s). Recarregando…');
-              window.location.reload();
-            } else {
-              alert('Nada pra reparar — todas as linhas já estão OK. ✓');
-            }
-          } else {
-            alert('Erro: ' + (j.erro || 'falha'));
-          }
-        })
-        .catch(function () {
-          btnReparar.disabled = false;
-          alert('Erro de rede');
-        });
-    });
-  }
-
-  // Copiar semana passada (idempotente — não sobrescreve quem já tem).
-  var btnCopiar = document.getElementById('btn-copiar-anterior');
-  if (btnCopiar) {
-    btnCopiar.addEventListener('click', function () {
-      if (!confirm('Copiar o plano da mesma data da semana passada? Itens que '
-                   + 'já estão preenchidos hoje NÃO são tocados.')) return;
-      btnCopiar.disabled = true;
-      var fd = new FormData();
-      fd.append('csrf_token', CSRF);
-      fd.append('data', btnCopiar.dataset.data);
-      fetch(btnCopiar.dataset.url, { method: 'POST', body: fd })
-        .then(function (r) { return r.json(); })
-        .then(function (j) {
-          btnCopiar.disabled = false;
-          if (j.ok) {
-            alert(j.copiados + ' item(ns) copiados de ' + j.origem
-                  + '. Atualizando…');
-            window.location.reload();
-          } else {
-            alert('Erro: ' + (j.erro || 'falha'));
-          }
-        })
-        .catch(function () {
-          btnCopiar.disabled = false;
-          alert('Erro de rede');
-        });
-    });
-  }
 })();
 </script>
 {% endblock %}
