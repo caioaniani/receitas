@@ -845,3 +845,92 @@ def test_numero_so_digitos_nao_acusa(app):
             _form_entrega_num('123'),
             [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
         assert not any('apenas números' in e for e in erros), erros
+
+
+# ── Campos seguros: incidente Sentry 01/09/2026 ──────────────────────
+
+def _form_retirada_contato(loja, data, **extra):
+    form = {
+        'nome': 'Maria', 'sobrenome': 'Silva', 'email': 'maria@x.com',
+        'telefone': '11988887777', 'cpf': '52998224725',
+        'aceite_lgpd': '1', 'modo_entrega': 'retirada',
+        'loja_id': str(loja.id), 'data_entrega': data,
+        'janela_entrega': '08:00–09:00', **_END_NF,
+    }
+    form.update(extra)
+    return form
+
+
+def test_telefone_com_texto_longo_e_normalizado_sem_derrubar_checkout(app):
+    """Autofill/colar pode mandar uma frase > varchar(30) com um telefone.
+    O servidor extrai o número e cria cliente/pedido sem erro 500."""
+    from app.extensions import db
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        data = loja_checkout.datas_disponiveis(
+            'retirada', base=base)[1].isoformat()
+        form = _form_retirada_contato(
+            loja, data,
+            telefone=('Meu WhatsApp para contato é (11) 98888-7777, '
+                      'pode chamar.'))
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert erros == []
+        assert pedido.telefone_cliente == '11988887777'
+        assert pedido.cliente.telefone == '11988887777'
+
+
+def test_telefone_com_dois_numeros_retorna_erro_amigavel(app):
+    """Mais de 15 dígitos não chega ao flush do PostgreSQL."""
+    from app.extensions import db
+    from app.models import Cliente, PedidoOnline
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        data = loja_checkout.datas_disponiveis(
+            'retirada', base=base)[1].isoformat()
+        form = _form_retirada_contato(
+            loja, data, telefone='11988887777 / 11977776666')
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert pedido is None
+        assert any('Revise o telefone' in e for e in erros)
+        assert Cliente.query.filter_by(email='maria@x.com').count() == 0
+        assert PedidoOnline.query.count() == 0
+
+
+def test_texto_maior_que_coluna_retorna_erro_sem_flush(app):
+    """Outros textos também são conferidos antes do banco (mesma classe de
+    falha do telefone), preservando o formulário para a cliente corrigir."""
+    from app.extensions import db
+    from app.models import Cliente, PedidoOnline
+    from app.services import loja_checkout
+    with app.app_context():
+        p = _produto(db)
+        loja = _loja(db)
+        base = datetime(2026, 6, 17, 10, 0)
+        data = loja_checkout.datas_disponiveis(
+            'retirada', base=base)[1].isoformat()
+        form = _form_retirada_contato(
+            loja, data, complemento='A' * 101)
+        pedido, erros = loja_checkout.criar_pedido(
+            form, [{'kind': 'produto', 'id': p.id, 'qtd': 1}], base=base)
+        assert pedido is None
+        assert any('complemento' in e.lower() and '100' in e for e in erros)
+        assert Cliente.query.filter_by(email='maria@x.com').count() == 0
+        assert PedidoOnline.query.count() == 0
+
+
+def test_checkout_nao_usa_restricao_nativa_inconsistente_entre_browsers(app):
+    """Chrome/Safari não devem bloquear nome/número com mensagens nativas
+    diferentes; o servidor devolve a orientação em português."""
+    body = _admin(app).get('/loja/checkout').get_data(as_text=True)
+    assert 'data-nome-field' not in body
+    assert 'pattern="[^0-9]+"' not in body
+    assert 'pattern="[0-9]+"' not in body
+    assert body.count('type="tel"') >= 2

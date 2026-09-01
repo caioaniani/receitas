@@ -145,6 +145,21 @@ TRACO_JANELA = '–'
 # clientes empolgavam e enchiam o cupom da entrega).
 CARTINHA_MAX_CHARS = int(os.environ.get('LOJA_CARTINHA_MAX', '250') or '250')
 
+# Limites que existem no banco e precisam ser conhecidos ANTES do flush.
+# Incidente 01/09/2026: o navegador enviou um texto longo no telefone e o
+# PostgreSQL derrubou o checkout ao tentar gravar `varchar(30)`. O checkout
+# deve devolver uma orientação legível, nunca deixar o banco validar PII.
+NOME_MAX_CHARS = 150
+EMAIL_MAX_CHARS = 200
+TELEFONE_MAX_DIGITOS = 15  # E.164 (código do país + DDD + número)
+ENDERECO_LIMITES = {
+    'logradouro': 200,
+    'numero': 20,
+    'complemento': 100,
+    'bairro': 100,
+    'cidade': 100,
+}
+
 
 def janelas_disponiveis(modo, data=None, base=None, *, distancia_km=None):
     """Janelas válidas pro modo numa data. Quando a data é HOJE, remove as
@@ -465,6 +480,31 @@ def _nome_valido(s):
     return any(ch.isalpha() for ch in s)
 
 
+def _normalizar_telefone_checkout(valor):
+    """Normaliza telefone digitado/colado sem deixar o banco derrubar a venda.
+
+    Aceita formatação e até frases coladas por autofill (ex.: ``WhatsApp:
+    (11) 98888-7777``), guardando só os dígitos. Mais de 15 dígitos quase
+    sempre significa que dois campos foram colados juntos; nesse caso o
+    cliente recebe erro de formulário e pode corrigir sem perder o carrinho.
+    Telefone continua opcional por compatibilidade com os pedidos existentes.
+    """
+    bruto = (valor or '').strip()
+    if not bruto:
+        return '', None
+    digitos = _so_digitos(bruto)
+    if not digitos or len(digitos) > TELEFONE_MAX_DIGITOS:
+        return '', 'Revise o telefone: informe apenas um número com DDD.'
+    return digitos, None
+
+
+def _validar_limite(erros, rotulo, valor, limite):
+    """Adiciona erro amigável antes de um texto exceder o varchar do banco."""
+    if valor and len(valor) > limite:
+        erros.append(
+            f'{rotulo} está muito longo (máximo de {limite} caracteres).')
+
+
 def _so_digitos(s):
     return ''.join(c for c in (s or '') if c.isdigit())
 
@@ -601,7 +641,8 @@ def criar_pedido(form, itens_raw, *, base=None):
     nome_dado = (form.get('nome') or '').strip()
     sobrenome_dado = (form.get('sobrenome') or '').strip()
     email = (form.get('email') or '').strip()
-    telefone = (form.get('telefone') or '').strip()
+    telefone, telefone_erro = _normalizar_telefone_checkout(
+        form.get('telefone'))
     cpf = _so_digitos(form.get('cpf') or '')
     modo = (form.get('modo_entrega') or '').strip()
     cartinha = (form.get('cartinha') or '').strip() or None
@@ -616,8 +657,10 @@ def criar_pedido(form, itens_raw, *, base=None):
     e_presente = form.get('e_presente') in ('1', 'on', 'true', True)
     nome_destinatario = ((form.get('nome_destinatario') or '').strip()
                          if e_presente else None) or None
-    telefone_destinatario = ((form.get('telefone_destinatario') or '').strip()
-                             if e_presente else None) or None
+    telefone_destinatario, telefone_destinatario_erro = (
+        _normalizar_telefone_checkout(form.get('telefone_destinatario'))
+        if e_presente else ('', None))
+    telefone_destinatario = telefone_destinatario or None
 
     # Nome completo = nome + sobrenome. O servidor valida o CONJUNTO (sem
     # dígitos, com letras) — bloqueia o CPF no campo de nome. O "sobrenome
@@ -625,10 +668,14 @@ def criar_pedido(form, itens_raw, *, base=None):
     # aqui aceitamos também o nome completo vindo num campo só (compat com
     # chamadas que mandam o nome inteiro).
     nome = f'{nome_dado} {sobrenome_dado}'.strip()
-    if not _nome_valido(nome):
+    _validar_limite(erros, 'O nome do comprador', nome, NOME_MAX_CHARS)
+    _validar_limite(erros, 'O email', email, EMAIL_MAX_CHARS)
+    if telefone_erro:
+        erros.append(telefone_erro)
+    if len(nome) <= NOME_MAX_CHARS and not _nome_valido(nome):
         erros.append('Informe seu nome e sobrenome (apenas letras, '
                      'sem números).')
-    if not _email_valido(email):
+    if len(email) <= EMAIL_MAX_CHARS and not _email_valido(email):
         erros.append('Informe um email válido.')
     # CPF/CNPJ é exigência do Pagar.me pra Pix e da NF-e (Fase 5) — pedir
     # aqui já é mais barato que voltar pro cliente depois. CNPJ aceito
@@ -641,9 +688,16 @@ def criar_pedido(form, itens_raw, *, base=None):
         erros.append('Escolha um modo de entrega.')
     if e_presente and not nome_destinatario:
         erros.append('Informe o nome de quem vai receber.')
-    elif e_presente and not _nome_valido(nome_destinatario):
-        erros.append('O nome de quem vai receber deve ter só letras '
-                     '(sem números).')
+    elif e_presente:
+        _validar_limite(erros, 'O nome de quem vai receber',
+                        nome_destinatario, NOME_MAX_CHARS)
+        if (len(nome_destinatario) <= NOME_MAX_CHARS
+                and not _nome_valido(nome_destinatario)):
+            erros.append('O nome de quem vai receber deve ter só letras '
+                         '(sem números).')
+    if telefone_destinatario_erro:
+        erros.append('Revise o telefone de quem vai receber: informe apenas '
+                     'um número com DDD.')
 
     itens, avisos = montar_itens(itens_raw)
     if not itens:
@@ -728,6 +782,16 @@ def criar_pedido(form, itens_raw, *, base=None):
         end_bairro = bairro or None
         end_cidade = cidade or None
         end_uf = uf or None
+        _validar_limite(erros, 'O logradouro', end_logradouro,
+                        ENDERECO_LIMITES['logradouro'])
+        _validar_limite(erros, 'O número do endereço', end_numero,
+                        ENDERECO_LIMITES['numero'])
+        _validar_limite(erros, 'O complemento', end_complemento,
+                        ENDERECO_LIMITES['complemento'])
+        _validar_limite(erros, 'O bairro', end_bairro,
+                        ENDERECO_LIMITES['bairro'])
+        _validar_limite(erros, 'A cidade', end_cidade,
+                        ENDERECO_LIMITES['cidade'])
     elif modo in ('agendada', 'express'):
         if modo == 'express' and not express_disponivel(base):
             erros.append('Express indisponível agora (fora do horário de '
@@ -760,6 +824,16 @@ def criar_pedido(form, itens_raw, *, base=None):
         end_bairro = (form.get('bairro') or '').strip() or None
         end_cidade = cidade or None
         end_uf = ((form.get('uf') or '').strip().upper()[:2]) or None
+        _validar_limite(erros, 'O logradouro', end_logradouro,
+                        ENDERECO_LIMITES['logradouro'])
+        _validar_limite(erros, 'O número do endereço', end_numero,
+                        ENDERECO_LIMITES['numero'])
+        _validar_limite(erros, 'O complemento', end_complemento,
+                        ENDERECO_LIMITES['complemento'])
+        _validar_limite(erros, 'O bairro', end_bairro,
+                        ENDERECO_LIMITES['bairro'])
+        _validar_limite(erros, 'A cidade', end_cidade,
+                        ENDERECO_LIMITES['cidade'])
         endereco_txt = _montar_endereco(form)            # snapshot (c/ complemento)
         # geocoding usa rua+numero+bairro+cidade (SEM complemento — ele derruba
         # o geocoder) + CEP concatenado pra desambiguar bairros homonimos.

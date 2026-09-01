@@ -43,20 +43,18 @@
       <label>Nome do comprador
         <input type="text" name="nome" required
                value="{{ form.get('nome', '') }}"
-               autocomplete="given-name"
-               pattern="[^0-9]+" title="Apenas letras, sem números"
-               placeholder="Ex: Maria" data-nome-field>
+               autocomplete="given-name" maxlength="150"
+               placeholder="Ex: Maria">
       </label>
       <label>Sobrenome do comprador
         <input type="text" name="sobrenome" required
                value="{{ form.get('sobrenome', '') }}"
-               autocomplete="family-name"
-               pattern="[^0-9]+" title="Apenas letras, sem números"
-               placeholder="Ex: Silva" data-nome-field>
+               autocomplete="family-name" maxlength="150"
+               placeholder="Ex: Silva">
       </label>
       <label>Email
         <input type="email" name="email" required
-               value="{{ form.get('email', '') }}">
+               maxlength="200" value="{{ form.get('email', '') }}">
       </label>
       <label>Seu telefone (WhatsApp)
         <input type="tel" name="telefone" inputmode="tel"
@@ -138,8 +136,8 @@
       <div id="bloco-destinatario" style="display:none">
         <label>Nome de quem vai receber
           <input type="text" name="nome_destinatario"
-                 pattern="[^0-9]+" title="Apenas letras, sem números"
-                 value="{{ form.get('nome_destinatario', '') }}" data-nome-field>
+                 maxlength="150"
+                 value="{{ form.get('nome_destinatario', '') }}">
         </label>
         <label>Telefone de quem vai receber (opcional)
           <input type="tel" name="telefone_destinatario" inputmode="tel"
@@ -166,24 +164,28 @@
         </label>
         <label>Logradouro (rua / avenida)
           <input type="text" name="logradouro" id="logradouro"
+                 maxlength="200"
                  value="{{ form.get('logradouro', '') }}">
         </label>
         <label>Número
           <input type="text" name="numero" id="numero"
                  inputmode="numeric" autocomplete="address-line2"
-                 pattern="[0-9]+" title="Apenas números — apto/bloco vão no complemento"
+                 maxlength="20"
                  value="{{ form.get('numero', '') }}">
         </label>
         <label>Complemento (apto, bloco)
           <input type="text" name="complemento"
+                 maxlength="100"
                  value="{{ form.get('complemento', '') }}">
         </label>
         <label>Bairro
           <input type="text" name="bairro" id="bairro"
+                 maxlength="100"
                  value="{{ form.get('bairro', '') }}">
         </label>
         <label>Cidade
           <input type="text" name="cidade" id="cidade"
+                 maxlength="100"
                  value="{{ form.get('cidade', '') }}">
         </label>
         <label class="uf-col">UF
