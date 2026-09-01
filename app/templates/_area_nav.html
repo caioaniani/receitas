@@ -114,6 +114,11 @@
 {{ _lnk(variant, url_for('entregas.index'), 'Entregas do site', request.path.startswith('/entregas') and '/painel' not in request.path and '/drivers/bulk' not in request.path) }}
 {{ _lnk(variant, url_for('entregas.drivers_bulk'), 'Motoristas', request.path == '/entregas/drivers/bulk') }}
 {% endif %}
+{% if current_user.is_owner %}
+{{ _sub(variant, 'Loja online') }}
+{{ _lnk(variant, url_for('main.loja_online_plano_dia'), 'Dias disponíveis dos produtos', request.path.startswith('/admin/loja-online/plano-do-dia'), icon='bi-calendar-check', title='Definir o que pode ser entregue em cada data — por exemplo, focaccia somente sábado e domingo') }}
+{{ _lnk(variant, url_for('main.loja_online_dashboard'), 'Visão geral da loja online', request.path == '/admin/loja-online', icon='bi-shop-window') }}
+{% endif %}
 {% if current_user.pode_lojas() %}
 {{ _lnk(variant, url_for('pedidos.relatorio'), 'Relatório de Pedidos', '/pedidos/relatorio' in request.path) }}
 {% endif %}

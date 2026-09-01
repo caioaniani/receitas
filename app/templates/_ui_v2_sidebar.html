@@ -63,7 +63,7 @@
         </a>
         {% endif %}
         {% if current_user.pode_pdv() or current_user.is_admin() or current_user.pode_lojas() %}
-        <a href="{{ url_for('main.area', slug='vendas') }}" class="sidebar-link {{ 'active' if request.path == '/area/vendas' or request.path.startswith('/pdv') or request.path.startswith('/entregas') or request.path.startswith('/b2b') }}">
+        <a href="{{ url_for('main.area', slug='vendas') }}" class="sidebar-link {{ 'active' if request.path == '/area/vendas' or request.path.startswith('/pdv') or request.path.startswith('/entregas') or request.path.startswith('/b2b') or request.path.startswith('/admin/loja-online') }}">
             <i class="bi bi-receipt"></i><span>Vendas e entregas</span>
         </a>
         {% endif %}
@@ -83,7 +83,7 @@
         <a href="{{ url_for('main.area', slug='relatorios') }}" class="sidebar-link {{ 'active' if request.path == '/area/relatorios' or request.path.startswith('/relatorios') }}">
             <i class="bi bi-bar-chart"></i><span>Relatórios</span>
         </a>
-        <a href="{{ url_for('main.area', slug='administracao') }}" class="sidebar-link {{ 'active' if request.path == '/area/administracao' or request.path.startswith('/admin') or request.path.startswith('/auth/usuarios') }}">
+        <a href="{{ url_for('main.area', slug='administracao') }}" class="sidebar-link {{ 'active' if request.path == '/area/administracao' or (request.path.startswith('/admin') and not request.path.startswith('/admin/loja-online')) or request.path.startswith('/auth/usuarios') }}">
             <i class="bi bi-gear"></i><span>Administração</span>
         </a>
     </div>
@@ -99,6 +99,14 @@
         {% endif %}
         <a href="{{ url_for('padeiro.index') }}" class="sidebar-link">
             <i class="bi bi-hammer"></i><span>Tela do padeiro</span>
+        </a>
+    </div>
+    {% endif %}
+    {% if current_user.is_owner %}
+    <div class="ui-v2-nav-group ui-v2-shortcuts">
+        <span class="ui-v2-nav-label">Loja online</span>
+        <a href="{{ url_for('main.loja_online_plano_dia') }}" class="sidebar-link {{ 'active' if request.path.startswith('/admin/loja-online/plano-do-dia') }}">
+            <i class="bi bi-calendar-check"></i><span>Disponibilidade do site</span>
         </a>
     </div>
     {% endif %}
