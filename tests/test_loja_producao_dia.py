@@ -77,6 +77,25 @@ def test_dashboard_linka_as_duas_telas(app):
     assert 'Disponibilidade do dia' in html
 
 
+def test_layout_novo_mostra_disponibilidade_da_loja_online(app):
+    """O dono encontra a disponibilidade por data sem voltar ao layout antigo."""
+    c = _owner(app)
+
+    area = c.get('/area/vendas')
+    assert area.status_code == 200
+    html = area.get_data(as_text=True)
+    assert 'ui-v2-sidebar' in html
+    assert 'Dias disponíveis dos produtos' in html
+    assert 'Definir o que pode ser entregue em cada data' in html
+    assert '/admin/loja-online/plano-do-dia' in html
+
+    tela = c.get('/admin/loja-online/plano-do-dia')
+    assert tela.status_code == 200
+    html_tela = tela.get_data(as_text=True)
+    assert 'Disponibilidade do site' in html_tela
+    assert 'sidebar-link active' in html_tela
+
+
 def test_disponibilidade_renomeada_e_explica_diferenca(app):
     """A tela antiga 'Plano do dia' agora se chama 'Disponibilidade do dia'
     e aponta pra Produção do dia, deixando claro que são coisas distintas."""
