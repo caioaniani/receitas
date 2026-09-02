@@ -125,13 +125,14 @@
                         e sincroniza <em>sem duplicar</em>. Só use <strong>Refazer do zero</strong>
                         se a nota estiver realmente <em>rejeitada</em>.
                     </div>
-                    {% if current_user.is_owner %}
+                    {% if current_user.pode_emitir_nf_b2b() %}
                     <form method="POST" action="{{ url_for('b2b.venda_emitir_nf', vid=venda.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-primary w-100">
                             <i class="bi bi-arrow-clockwise"></i> Reenviar / verificar
                         </button>
                     </form>
+                    {% if current_user.is_owner %}
                     <form method="POST" action="{{ url_for('b2b.venda_emitir_nf', vid=venda.id) }}" class="mt-2"
                           onsubmit="return confirm('Refazer do ZERO? A NF atual é descartada e uma nova é criada. NÃO faça isso se a nota já pode ter autorizado — geraria duplicidade.');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -140,11 +141,12 @@
                             <i class="bi bi-arrow-repeat"></i> Refazer do zero
                         </button>
                     </form>
+                    {% endif %}
                     {% else %}
-                    <p class="text-muted small mb-0">A emissão/reenvio da NF é feita pelo dono.</p>
+                    <p class="text-muted small mb-0">Peça ao dono a permissão para emitir NF B2B.</p>
                     {% endif %}
                 {% elif venda.status != 'cancelada' %}
-                    {% if current_user.is_owner %}
+                    {% if current_user.pode_emitir_nf_b2b() %}
                     <form method="POST" action="{{ url_for('b2b.venda_emitir_nf', vid=venda.id) }}"
                           onsubmit="return confirm('Emitir NF desta venda no Tiny?');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -153,11 +155,11 @@
                         </button>
                     </form>
                     <p class="text-muted mt-2 mb-0">O Tiny aplica NCM/CFOP/CST do cadastro do produto
-                        (<a href="{{ url_for('b2b.tiny_skus') }}">SKUs B2B do Tiny</a> — mapa próprio,
+                        (SKUs B2B do Tiny — mapa próprio,
                         separado do site). O cliente precisa de CNPJ/CPF
                         e endereço completo no cadastro.</p>
                     {% else %}
-                    <span class="text-muted">A NF é emitida pelo dono.</span>
+                    <span class="text-muted">Peça ao dono a permissão para emitir NF B2B.</span>
                     {% endif %}
                 {% else %}
                     <span class="text-muted">Venda cancelada — sem NF.</span>

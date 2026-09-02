@@ -569,7 +569,7 @@ def fatura_fechar():
         return redirect(url_for('b2b.faturas'))
     flash(f'Conta fechada: fatura {fatura.codigo} de {cliente.nome} — '
           f'{len(fatura.vendas)} venda(s), R$ {fatura.valor_total}. Agora '
-          'emita a NF e gere o boleto.', 'success')
+          'NF e boleto entraram na fila automática. Acompanhe em Cobranças → Automação e Sicredi.', 'success')
     return redirect(url_for('b2b.fatura_detalhe', fid=fatura.id))
 
 
@@ -603,12 +603,17 @@ def fatura_cancelar(fid):
 
 
 @b2b_bp.route('/faturas/<int:fid>/emitir-nf', methods=['POST'])
-@owner_required
+@login_required
 def fatura_emitir_nf(fid):
     """NF consolidada da fatura no Tiny (mesma semântica da venda:
     `recriar=1` descarta rascunho rejeitado e refaz)."""
+    from flask import abort
+    if not current_user.pode_emitir_nf_b2b():
+        abort(403)
     fatura = FaturaB2B.query.get_or_404(fid)
     recriar = request.form.get('recriar') in ('1', 'true', 'on')
+    if recriar and not current_user.is_dono():
+        abort(403)
     res = tiny_nf_b2b.emitir_nf_fatura(fatura, user_id=current_user.id,
                                        recriar=recriar)
     flash(f'Fatura {fatura.codigo}: {res["msg"]}',
@@ -1103,12 +1108,17 @@ def venda_excluir(vid):
 # Enviar por e-mail (NF já emitida) pode ser feito por admin.
 
 @b2b_bp.route('/vendas/<int:vid>/emitir-nf', methods=['POST'])
-@owner_required
+@login_required
 def venda_emitir_nf(vid):
     """Emite a NF da venda no Tiny. `recriar=1` descarta o rascunho
     rejeitado e refaz do zero (mesma semântica do site)."""
+    from flask import abort
+    if not current_user.pode_emitir_nf_b2b():
+        abort(403)
     venda = VendaB2B.query.get_or_404(vid)
     recriar = request.form.get('recriar') in ('1', 'true', 'on')
+    if recriar and not current_user.is_dono():
+        abort(403)
     res = tiny_nf_b2b.emitir_nf(venda, user_id=current_user.id,
                                 recriar=recriar)
     flash(f'Venda #{vid}: {res["msg"]}',

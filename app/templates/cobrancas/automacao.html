@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Automação e Sicredi — Cobranças{% endblock %}
+{% block content %}
+<div class="cob-page">
+    <header class="cob-heading"><div><span class="cob-kicker">Financeiro</span>
+        <h1>Falta enviar ao Sicredi?</h1>
+        <p>O sistema prepara os documentos. Vocês enviam a remessa ao banco.</p></div></header>
+    {% include 'cobrancas/_nav.html' %}
+    {% if ciclo_atrasado %}<div class="alert alert-warning">A automação ainda não confirmou uma verificação recente. {% if ultimo_ciclo %}Última: {{ ultimo_ciclo.strftime('%d/%m/%Y às %H:%M') }}.{% else %}Aguarde o primeiro ciclo após a publicação.{% endif %} Se continuar assim, avise o responsável pelo sistema.</div>
+    {% else %}<p class="small text-muted">Última verificação automática: {{ ultimo_ciclo.strftime('%d/%m/%Y às %H:%M') }}.</p>{% endif %}
+    <div class="alert alert-light border">
+        <strong>Clientes mensais continuam no fechamento mensal.</strong>
+        Nos demais pedidos, a entrega na tela do padeiro inicia a emissão. O cliente só recebe NF + boleto após o registro bancário ser confirmado.
+        Avisos internos: {{ responsaveis | join(' e ') }}. Não há emissão retroativa de pedidos antigos.
+    </div>
+    <section class="card mb-4"><div class="card-body">
+        <h2 class="h5">{{ remessas | length }} remessa(s) aguardando conferência</h2>
+        {% for rem in remessas %}
+        <div class="border-top py-3">
+            <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center">
+                <div><strong>{{ rem.nome_arquivo }}</strong> · remessa #{{ rem.numero }}<br>
+                    <small>{{ rem.n_titulos }} boleto(s) · gerada em {{ rem.gerado_em.strftime('%d/%m/%Y às %H:%M') }}</small></div>
+                <a class="btn btn-outline-primary" href="{{ url_for('cobrancas.download_remessa', id=rem.id) }}">Baixar arquivo para o Sicredi</a>
+            </div>
+            <form class="mt-3" method="POST" action="{{ url_for('cobrancas.confirmar_registro_remessa', id=rem.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="registro-{{ rem.id }}" name="confirmado" value="1" required>
+                <label class="form-check-label" for="registro-{{ rem.id }}">Conferi no Sicredi que os boletos desta remessa estão registrados — não apenas enviados.</label></div>
+                <button class="btn btn-primary" type="submit">Confirmar registro e liberar envio automático</button>
+                <small class="d-block mt-2">Ou <a href="{{ url_for('cobrancas.banco') }}">importe o arquivo de retorno do banco</a>. Não confirme títulos rejeitados.</small>
+            </form>
+        </div>
+        {% else %}<p class="text-muted mb-0">Nenhuma remessa pendente de conferência.</p>{% endfor %}
+    </div></section>
+    <h2 class="h5">Entregas e fechamentos automáticos</h2>
+    <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Origem</th><th>Etapa</th><th>Atualização</th><th>Ação</th></tr></thead><tbody>
+        {% for j in fila.items %}<tr>
+            <td><a href="{{ url_for('b2b.fatura_detalhe', fid=j.documento_id) if j.tipo == 'fatura' else url_for('b2b.venda_detalhe', vid=j.documento_id) }}">{{ j.referencia }}</a></td>
+            <td>{{ estados.get(j.estado, j.estado) }}{% if j.erro %}<small class="d-block text-danger">{{ j.erro }}</small>{% endif %}
+                {% if j.estado == 'enviado' %}<small class="d-block">Aceito pelo serviço de e-mail; não comprova leitura nem pagamento.</small>{% endif %}
+            </td><td>{{ j.atualizado_em.strftime('%d/%m às %H:%M') }}</td>
+            <td>{% if j.estado == 'erro' and current_user.pode_emitir_nf_b2b() %}
+                <form method="POST" action="{{ url_for('cobrancas.retomar_automacao', id=j.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-outline-primary btn-sm" type="submit">Corrigi os dados · conferir novamente</button></form>
+                {% endif %}
+                {% for cid in j.cobranca_ids %}<a class="d-block mt-1" href="{{ url_for('cobrancas.documentos', tipo='boleto', ref=cid) }}">Documentos e histórico #{{ cid }} →</a>{% endfor %}
+            </td></tr>
+        {% else %}<tr><td colspan="4">As próximas entregas avulsas e os próximos fechamentos mensais aparecerão aqui.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <nav aria-label="Páginas da automação" class="d-flex gap-3 my-3">
+        {% if fila.has_prev %}<a href="{{ url_for('cobrancas.automacao', page=fila.prev_num) }}">← Anteriores</a>{% endif %}
+        <span>Página {{ fila.page }} de {{ fila.pages or 1 }}</span>
+        {% if fila.has_next %}<a href="{{ url_for('cobrancas.automacao', page=fila.next_num) }}">Próximas →</a>{% endif %}
+    </nav>
+    <details class="card p-3"><summary>Histórico dos avisos para Caio e Dakson</summary>
+        <p class="small mt-2">Uma notificação por pessoa e remessa. Respostas incertas não são reenviadas automaticamente.</p>
+        {% for a in avisos %}<p class="small mb-2">Remessa #{{ a.remessa_id }} · {{ a.destinatario }} ·
+            {{ {'pendente':'Na fila', 'enviando':'Envio iniciado; conferir resultado', 'aceito':'Aceito pelo serviço de e-mail', 'incerto':'Resultado incerto', 'falha':'Falha', 'dispensado':'Registro já confirmado; aviso dispensado'}.get(a.estado, a.estado) }}
+            {% if a.enviado_em %} · {{ a.enviado_em.strftime('%d/%m às %H:%M') }}{% endif %}
+            {% if a.erro %}<span class="text-danger">{{ a.erro }}</span>{% endif %}</p>
+        {% else %}<p class="small">Nenhum aviso gerado ainda.</p>{% endfor %}
+    </details>
+</div>
+{% endblock %}

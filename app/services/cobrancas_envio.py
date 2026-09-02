@@ -62,6 +62,39 @@ def _repeticao(anterior, r, destinatario):
 
 
 def enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado=False):
+    from app.services.central_cobrancas import carregar
+    from app.services.cobrancas_trava import chave_documento, trava
+    with trava(chave_documento(r.documento) if r.documento else f'boleto:{r.id}'):
+        db.session.expire_all()
+        r = carregar(r.tipo, r.id)
+        if banco_confirmado and not r.bloqueio and r.cobranca.status == 'remessa' and r.cobranca.remessa_id:
+            from app.services.cobrancas_automacao import confirmar_titulo
+            confirmar_titulo(r.cobranca, usuario.id)
+            db.session.commit()
+        return _enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado)
+
+
+def enviar_automatico(r, chave, usuario):
+    from app.services.central_cobrancas import carregar, conjunto_confirmado, historico
+    from app.services.cobrancas_automacao import banco_confirmado
+    from app.services.cobrancas_trava import chave_documento, trava
+    with trava(chave_documento(r.documento)):
+        db.session.expire_all()
+        r = carregar(r.tipo, r.id)
+        if r.bloqueio:
+            raise ValueError(r.bloqueio)
+        if not banco_confirmado(r.cobranca):
+            raise ValueError('Aguardando confirmação do registro no Sicredi.')
+        anteriores = historico(r)
+        confirmado = next((e for e in anteriores if conjunto_confirmado(e, r)), None)
+        if confirmado:
+            return confirmado, False
+        if any(e.documentos == 'nf_boleto' for e in anteriores):
+            raise ValueError('Existe tentativa anterior de envio. Confira o histórico; reenvio somente manual.')
+        return _enviar_conjunto(r, r.email, chave, usuario, banco_confirmado=True)
+
+
+def _enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado=False):
     """Reserva a intenção antes do envio. Repetir o POST não duplica e-mail.
 
     Nova tentativa deliberada requer nova chave (nova abertura da tela).
@@ -84,6 +117,8 @@ def enviar_conjunto(r, destinatario, chave, usuario, banco_confirmado=False):
         return _repeticao(anterior, r, destinatario)
     if r.bloqueio:
         raise ValueError(r.bloqueio)
+    from app.services.cobrancas_nf import validar_assinatura
+    validar_assinatura(r.documento)
     if not email_valido(destinatario):
         raise ValueError('Informe um único e-mail válido para receber os dois documentos.')
     if r.cobranca.status == 'remessa' and not banco_confirmado:
