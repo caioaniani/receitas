@@ -68,7 +68,7 @@ def test_download_completo_privado_sem_alterar_financeiro_ou_historico(app, admi
         response = _client(app, admin_user).get(_url(parcela, formato))
     assert response.status_code == 200
     assert response.mimetype == ('application/pdf' if formato == 'pdf' else 'application/zip')
-    assert response.headers['Content-Disposition'] == f'attachment; filename="cobranca-venda-{venda.id}-parcela-1.{formato}"'
+    assert response.headers['Content-Disposition'] == f'attachment; filename="Restaurante Bom Prato - Entrega sem data - Pedido {venda.id} - NF 11629.{formato}"'
     assert response.headers['Cache-Control'] == 'private, no-store'
     assert response.headers['X-Content-Type-Options'] == 'nosniff'
     nf.assert_called_once_with(venda.tiny_nota_fiscal_id)

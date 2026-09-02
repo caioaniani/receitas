@@ -18,3 +18,16 @@
         if (event.persisted) window.location.reload();
     });
 })();
+
+/* Download direto da lista. Confirmar registro não altera o status no banco. */
+(() => {
+    document.querySelectorAll('a[data-cob-confirmar-banco]').forEach(link => {
+        link.addEventListener('click', event => {
+            event.preventDefault();
+            if (!window.confirm('Você conferiu no Sicredi que este boleto já foi registrado? O ERP ainda só registra a geração da remessa.')) return;
+            const destino = new URL(link.href, window.location.href);
+            destino.searchParams.set('banco_confirmado', '1');
+            window.location.assign(destino.href);
+        });
+    });
+})();
