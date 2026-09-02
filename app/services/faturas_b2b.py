@@ -29,6 +29,7 @@ def vendas_para_fechar(cliente_id, data_inicio, data_fim):
     vendas = (VendaB2B.query
               .filter(VendaB2B.cliente_id == cliente_id,
                       VendaB2B.status == 'ativa',
+                      VendaB2B.dispensa_cobranca.is_(None),
                       VendaB2B.fatura_id.is_(None),
                       VendaB2B.data_venda >= data_inicio,
                       VendaB2B.data_venda <= data_fim)
@@ -58,10 +59,10 @@ def fechar_conta(cliente, data_inicio, data_fim, vencimento, user_id=None):
     # depois do lock, re-filtra — quem perdeu a corrida não vê mais nada.
     ids = [v.id for v in vendas]
     vendas = (VendaB2B.query.filter(VendaB2B.id.in_(ids))
-              .with_for_update().all())
+              .populate_existing().with_for_update().all())
     vendas = [v for v in vendas
               if v.fatura_id is None and v.status == 'ativa'
-              and not v.parcelas]
+              and not v.parcelas and not v.sem_cobranca]
     if not vendas:
         raise ValueError('essas vendas acabaram de ser fechadas em outra '
                          'aba/clique — confira a lista de faturas.')

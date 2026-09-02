@@ -190,17 +190,15 @@ def _venda_com_nf(email='fin@united.com'):
 
 
 def test_rota_email_mostra_motivo_real(app, admin_user):
-    """POST enviar-nf-email com DANFE indisponível mostra a CAUSA real
-    (não o 'precisa estar autorizada')."""
-    with app.app_context():
-        v = _venda_com_nf()
-        vid = v.id
+    """O envio conjunto mantém a causa real da falha do DANFE."""
+    from tests.test_b2b_email_docs import _cenario, _post_conjunto, _preparar_nf
+    _, venda, parcela, _ = _cenario()
+    _preparar_nf(venda)
     c = app.test_client()
     _login(c, admin_user.id)
     with patch('app.services.tiny_nf.baixar_danfe_pdf_com_motivo',
                return_value=(None, 'Tiny fora do ar (HTTP 503)')):
-        r = c.post(f'/b2b/vendas/{vid}/enviar-nf-email',
-                   follow_redirects=True)
+        r = _post_conjunto(c, parcela)
     corpo = r.get_data(as_text=True)
     assert 'Tiny fora do ar' in corpo
     assert 'precisa estar autorizada' not in corpo

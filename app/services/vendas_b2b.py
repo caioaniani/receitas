@@ -745,6 +745,10 @@ def receber_pagamento(parcela, valor, forma_pagamento=None, observacao=None):
     sem necessidade de tolerancia de arredondamento.
     """
     from decimal import InvalidOperation
+    if parcela.venda:
+        db.session.refresh(parcela.venda, with_for_update=True)
+    if parcela.venda and parcela.venda.sem_cobranca:
+        raise ValueError('Divulgação sem cobrança: não registrar recebimento como se fosse uma venda cobrável.')
     try:
         v = Decimal(str(valor))
     except (TypeError, ValueError, InvalidOperation):

@@ -297,11 +297,9 @@ def test_parcela_faturada_redireciona_sem_disparar(app, admin_user):
 
 def test_historico_legado_nf_boleto_e_nf_somente(app, admin_user):
     f, _, c = _mensal()
-    client = _client(app, admin_user)
-    with patch('app.services.tiny_nf.baixar_danfe_pdf_com_motivo', return_value=(b'%PDF-nf', None)), \
-            patch('app.services.email.enviar', return_value={'ok': True, 'id': 'antigo'}):
-        client.post(f'/b2b/faturas/{f.id}/enviar-nf-email')
-        client.post(f'/cobrancas/{c.id}/enviar-email')
+    from app.services.cobrancas_envio import registrar_envio
+    registrar_envio(f, [], 'x@y.com', 'nf', admin_user, {'ok': True, 'id': 'antigo-nf'}, ['nf.pdf'])
+    registrar_envio(f, [c], 'x@y.com', 'boleto', admin_user, {'ok': True, 'id': 'antigo-boleto'}, ['boleto.pdf'])
     registros = historico(de_fatura(f))
     assert {e.documentos for e in registros} == {'nf', 'boleto'}
     assert len(registros) == 2
@@ -312,8 +310,8 @@ def test_historico_de_parcela_nao_atribui_boleto_de_outra(app, admin_user):
     p2 = VendaB2BParcela(venda_id=v.id, numero=2, valor=Decimal('50'), vencimento=p.vencimento)
     db.session.add(p2)
     db.session.commit()
-    with patch('app.services.email.enviar', return_value={'ok': True, 'id': 'm'}):
-        _client(app, admin_user).post(f'/cobrancas/{c.id}/enviar-email')
+    from app.services.cobrancas_envio import registrar_envio
+    registrar_envio(v, [c], 'x@y.com', 'boleto', admin_user, {'ok': True, 'id': 'm'}, ['boleto.pdf'])
     assert len(historico(carregar('parcela', p.id))) == 1
     assert not historico(carregar('parcela', p2.id))
 

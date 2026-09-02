@@ -1,0 +1,19 @@
+{% if venda.sem_cobranca %}
+<div class="alert alert-secondary mt-3 mb-0">
+    <strong>Divulgação · sem cobrança</strong>
+    <p class="mb-1">{{ venda.dispensa_cobranca.motivo }}</p>
+    <small>Registrado em {{ venda.dispensa_cobranca.registrado_em }} por {{ venda.dispensa_cobranca.usuario_nome }}.<br>Valor e estoque preservados. Não é pagamento nem cancelamento.</small>
+</div>
+{% elif current_user.is_owner and venda.status == 'ativa' and not venda.fatura_id and not venda.valor_pago %}
+<details class="mt-3">
+    <summary>Foi divulgação, sem cobrança?</summary>
+    <form method="POST" action="{{ url_for('b2b.venda_sem_cobranca', vid=venda.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="dispensa-motivo">Motivo</label>
+        <input id="dispensa-motivo" name="motivo" class="form-control form-control-sm" maxlength="300" required placeholder="Divulgação autorizada, sem cobrança ao cliente">
+        <label class="d-block mt-2"><input type="checkbox" name="confirmar" value="1" required> Confirmo que não há valor a cobrar nesta venda.</label>
+        <p class="text-muted mt-1">Retira apenas das cobranças. Mantém os itens, a entrega e a baixa de estoque. Boletos já numerados ou movimentados impedem esta alteração.</p>
+        <button class="btn btn-outline-secondary btn-sm" type="submit">Registrar divulgação sem cobrança</button>
+    </form>
+</details>
+{% endif %}

@@ -104,3 +104,6 @@
     .cob-nav { gap: 16px; font-size: 12px; }
     .cob-table td { overflow-wrap: anywhere; }
 }
+.cob-send-confirmed{display:grid;gap:5px;padding:16px;margin:0 0 18px;background:var(--v2-green-soft,#e7f1eb);border:1px solid #b9d2c3;border-radius:12px;color:#245740}
+.cob-send-confirmed small{color:var(--v2-muted,#66756d)}
+.cob-bcc{font-size:.85rem;color:var(--v2-muted,#66756d);overflow-wrap:anywhere}

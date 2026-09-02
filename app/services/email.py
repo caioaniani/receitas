@@ -28,13 +28,20 @@ _TIMEOUT = 12
 # explicito pra deixar claro que NAO eh broadcast (newsletter, marketing
 # em massa) — tem regra diferente.
 _MESSAGE_STREAM = 'outbound'
+COPIAS_OCULTAS_COBRANCA = ('caio@opao.online', 'dakson@opao.online', 'contato@opao.online')
+
+
+def copias_ocultas_cobranca(destinatario):
+    """Cópias internas do envio B2B; não duplica quem já é destinatário."""
+    return [email for email in COPIAS_OCULTAS_COBRANCA
+            if email.casefold() != (destinatario or '').strip().casefold()]
 
 
 def disponivel():
     return bool((current_app.config.get('POSTMARK_SERVER_TOKEN') or '').strip())
 
 
-def enviar(destinatario, assunto, html, *, texto=None, anexos=None):
+def enviar(destinatario, assunto, html, *, texto=None, anexos=None, bcc=None):
     """Envia um email. Retorna {'ok': True, 'id': ...} ou
     {'ok': False, 'erro': ...}. Best-effort — nunca propaga exceção.
 
@@ -64,6 +71,8 @@ def enviar(destinatario, assunto, html, *, texto=None, anexos=None):
     }
     if reply_to and reply_to.lower() != remetente_email.lower():
         payload['ReplyTo'] = reply_to
+    if bcc:
+        payload['Bcc'] = ','.join(bcc)
     if texto:
         payload['TextBody'] = texto
     if anexos:
@@ -789,6 +798,9 @@ def enviar_nf_e_boleto_b2b(venda, destinatario, nf_pdf, boletos, *, rotulo=None)
     `boletos` = lista de dicts {cob, pdf, linha_digitavel}. O corpo mostra a
     NF (número/valor) e cada boleto (valor, vencimento, nosso número, linha
     digitável e Pix quando houver)."""
+    if (not nf_pdf or not bytes(nf_pdf).startswith(b'%PDF') or not boletos
+            or any(not b.get('pdf') or not bytes(b['pdf']).startswith(b'%PDF') for b in boletos)):
+        return {'ok': False, 'erro': 'NF e boleto em PDF são obrigatórios. Nada foi enviado.'}
     rotulo = rotulo or f'venda #{venda.id}'
     numero = venda.nf_numero or venda.tiny_nota_fiscal_id or ''
     assunto = (f'Nota fiscal {numero} + boleto — O Pão Padaria Artesanal'
@@ -852,7 +864,7 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
     Dúvidas? Responda este e-mail ou fale com a gente.</p>
 </div></body></html>"""
     return enviar(destinatario, assunto, html, texto='\n'.join(linhas),
-                  anexos=anexos)
+                  anexos=anexos, bcc=copias_ocultas_cobranca(destinatario))
 
 
 def _texto_boas_vindas(nome, login, senha, base, chatwoot):

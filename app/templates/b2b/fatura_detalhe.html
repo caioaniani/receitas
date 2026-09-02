@@ -48,12 +48,6 @@
                     <a class="btn btn-sm btn-outline-dark mt-2" target="_blank"
                        href="{{ url_for('cobrancas.boleto_pdf', id=cobranca.id) }}">
                         <i class="bi bi-filetype-pdf"></i> Boleto (PDF)</a>
-                    <form method="POST" action="{{ url_for('cobrancas.enviar_email', id=cobranca.id) }}" class="d-inline"
-                          onsubmit="return confirm('Enviar o boleto pra {{ email_cliente or 'o cliente (sem e-mail cadastrado!)' }}?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button class="btn btn-sm btn-outline-success mt-2">
-                            <i class="bi bi-envelope"></i> Enviar boleto por e-mail</button>
-                    </form>
                     {% else %}
                     <div class="form-text">Vá em <a href="{{ url_for('cobrancas.banco') }}">Operações do banco</a>,
                         marque esta cobrança e gere a remessa — o boleto (PDF/e-mail) libera depois.</div>
@@ -86,17 +80,9 @@
                        class="btn btn-sm btn-outline-primary w-100 mt-2" target="_blank" rel="noopener">
                         <i class="bi bi-filetype-pdf"></i> Ver DANFE (PDF)
                     </a>
-                    <form method="POST" action="{{ url_for('b2b.fatura_enviar_nf_email', fid=fatura.id) }}" class="mt-2"
-                          onsubmit="return confirm('Enviar a NF (PDF) pra {{ email_cliente or 'o e-mail informado' }}?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="input-group input-group-sm">
-                            <input type="email" name="email" class="form-control" placeholder="{{ email_cliente or 'e-mail do cliente' }}"
-                                   value="{{ email_cliente }}" {% if not email_cliente %}required{% endif %}>
-                            <button type="submit" class="btn btn-success">
-                                <i class="bi bi-envelope"></i> Enviar NF por e-mail
-                            </button>
-                        </div>
-                    </form>
+                    <a href="{{ url_for('cobrancas.documentos', tipo='fatura', ref=fatura.id) }}" class="btn btn-success btn-sm w-100 mt-2">
+                        <i class="bi bi-envelope-paper"></i> NF + boleto / Histórico de envio
+                    </a>
                 {% elif fatura.tiny_nota_fiscal_id %}
                     <div>NF: <code>{{ fatura.tiny_nota_fiscal_id }}</code></div>
                     {% if fatura.nf_status %}<div class="text-danger">Status: <strong>{{ fatura.nf_status }}</strong></div>{% endif %}
