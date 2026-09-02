@@ -62,8 +62,24 @@ o serviço de e-mail antes de reenviar; não há repetição automática.
 
 `envio_cobranca` registra referência, destinatário, documentos/nomes dos
 anexos, usuário, horário, resultado e identificador do provedor. Não guarda
-PDFs ou credenciais. Os caminhos antigos de envio de NF, boleto e ambos
-também passam a registrar seus resultados, sem inventar envios anteriores.
+PDFs ou credenciais. A única ação de envio B2B é **NF + boleto juntos**.
+Os caminhos antigos de NF isolada, boleto isolado e conjunto redirecionam
+para a confirmação unificada; não disparam e-mail por conta própria.
+Vendas com várias parcelas exigem a escolha da parcela; vendas faturadas
+abrem a fatura consolidada.
+
+Cada novo envio conjunto inclui cópia oculta para `caio@opao.online`,
+`dakson@opao.online` e `contato@opao.online`, sem expor esses destinatários
+no corpo/CC do e-mail. Se um deles já for o destinatário principal, não é
+duplicado na cópia oculta. O histórico guarda a lista efetivamente usada.
+Os demais e-mails transacionais não recebem essas cópias.
+
+A tela destaca o último envio conjunto aceito pelo provedor, com data,
+hora e destinatário, e oferece **Enviar novamente**. Uma falha posterior
+não apaga esse sucesso: fica registrada como outra tentativa. Somente
+histórico da mesma NF e boleto confirma o conjunto atual; envios antigos
+de apenas um documento continuam visíveis, mas não confirmam o par.
+Não se inventam datas, destinatários nem cópias ocultas de envios antigos.
 
 - **Sem histórico:** não existe registro no ERP; não prova que nunca enviou.
 - **Aceito pelo serviço de e-mail:** API aceitou com identificador; não
@@ -74,12 +90,36 @@ também passam a registrar seus resultados, sem inventar envios anteriores.
 
 Não foram adicionados disparos automáticos, cobranças em massa ou lembretes.
 
+## Divulgação sem cobrança
+
+Na venda B2B, o dono pode abrir **Foi divulgação, sem cobrança?**, informar
+o motivo e confirmar. A venda sai dos totais/pendências, do banco, do
+contas a receber B2B e dos fechamentos futuros. Permanece consultável no
+filtro **Sem cobrança**, sem ser marcada como paga ou cancelada.
+
+A classificação guarda motivo, responsável e horário em `dispensa_cobranca`.
+Não apaga itens/parcelas/boletos pendentes, não altera valores ou recebimentos,
+não emite documentos e não estorna o estoque. Venda faturada, pagamento
+registrado ou boleto numerado/movimentado impedem a classificação simples.
+Após classificada, as rotas de boleto, remessa, recebimento e envio conjunto
+recusam a cobrança. Não há regra por nome de cliente ou número de venda:
+cada classificação depende de confirmação explícita do dono.
+
+Esta alteração não define o tratamento fiscal de uma divulgação: documentos
+fiscais eventualmente necessários continuam sendo avaliados na origem.
+
 ## Publicação e retorno
 
 Migração aditiva `6d9e3c7a2f10`, após `2b8d4e6f0a1c`: cria somente a tabela
 de histórico e seus índices, sem alterar tabelas financeiras existentes.
 É idempotente com o `db.create_all()` anterior ao Alembic no startup atual,
 que já serializa o setup entre workers PostgreSQL.
+
+Migrações seguintes, também aditivas/idempotentes: `91b6a7d3c820` acrescenta
+o JSON anulável de cópias ocultas no histórico; `b7248c1d9e02` acrescenta
+o JSON anulável da classificação em `venda_b2b`. Registros existentes
+permanecem sem classificação/cópias inventadas. Nenhuma venda é alterada
+automaticamente na migração.
 
 Não exige nova variável de ambiente. Reutiliza Tiny, Sicredi e o serviço de
 e-mail já configurados. Após publicar, verificar GET da central, banco e
@@ -88,6 +128,10 @@ aprovação e confirmação do destinatário.
 
 Para reverter o código, preservar `envio_cobranca`: não executar downgrade
 destrutivo dessa tabela, pois ela contém o histórico de comunicação.
+Preservar também `dispensa_cobranca`. Se houver classificação em produção,
+não retornar a um código que ignore essa classificação: isso recolocaria
+divulgações na fila. Nesse caso reverter apenas a parte visual/e-mail,
+mantendo os bloqueios de cobrança.
 
 ## Validação
 
@@ -102,5 +146,9 @@ clássica/v2, autorização e que visitar o dashboard e seus atalhos não
 chama emissão fiscal, geração de remessa nem envio de e-mail.
 
 Testes automatizados usam banco isolado e provedores simulados.
+`test_cobrancas_envio_unificado.py` cobre cópia oculta, reenvio, falhas após
+sucesso, ausência dos botões individuais e migração. `test_cobrancas_dispensa.py`
+cobre classificação auditável, preservação financeira/estoque, autorização,
+ausência em pendências e bloqueios de geração/envio/recebimento.
 Conferência visual local usa dados fictícios, sem rede de saída e com
 requisições de escrita bloqueadas. Não modifica dados de produção.

@@ -45,13 +45,22 @@ class Recebivel:
     vencimento: object
     cancelada: bool = False
     envio: object = None
+    envio_confirmado: object = None
 
     @property
     def saldo(self):
+        if self.sem_cobranca:
+            return ZERO
         return max(ZERO, self.valor - self.pago)
 
     @property
+    def sem_cobranca(self):
+        return bool(getattr(self.documento, 'sem_cobranca', False))
+
+    @property
     def pagamento(self):
+        if self.sem_cobranca:
+            return 'Divulgação · sem cobrança'
         if self.cancelada:
             return 'Cancelada'
         if self.saldo == ZERO:
@@ -70,6 +79,8 @@ class Recebivel:
 
     @property
     def nf_label(self):
+        if self.sem_cobranca:
+            return 'Fora das pendências de cobrança'
         if not self.documento:
             return 'NF não vinculada'
         if self.nf_pronta:
@@ -78,14 +89,20 @@ class Recebivel:
 
     @property
     def banco_label(self):
+        if self.sem_cobranca:
+            return 'Não cobrar'
         return BANCARIOS.get(self.cobranca.status, self.cobranca.status) if self.cobranca else 'Boleto a gerar'
 
     @property
     def envio_label(self):
+        if self.envio_confirmado:
+            return 'NF + boleto enviados'
         return ENVIOS.get(self.envio.status, 'Envio não confirmado') if self.envio else 'Sem histórico'
 
     @property
     def bloqueio(self):
+        if self.sem_cobranca:
+            return 'Divulgação — sem cobrança. A venda e o estoque foram preservados; não há envio de NF + boleto.'
         if self.cancelada:
             return 'Cobrança cancelada. Não envie documentos de cobrança.'
         if not self.saldo:
@@ -114,7 +131,9 @@ class Recebivel:
             return 'Preparar documentos'
         if self.bloqueio:
             return 'Conferir boleto'
-        return 'Revisar envio' if self.envio else 'Enviar NF + boleto'
+        if self.envio_confirmado:
+            return 'Enviar novamente'
+        return 'Conferir tentativa' if self.envio else 'Enviar NF + boleto'
 
 
 def filtrar_etapa(linhas, etapa):
@@ -141,13 +160,14 @@ def resumo_dashboard(linhas):
               .join(ClienteB2B)
               .filter(ClienteB2B.ativo.is_(True), ClienteB2B.faturamento_mensal.is_(True),
                       VendaB2B.status == 'ativa', VendaB2B.fatura_id.is_(None),
+                      VendaB2B.dispensa_cobranca.is_(None),
                       VendaB2B.data_venda >= date(2000, 1, 1), VendaB2B.data_venda <= hoje(),
                       ~VendaB2B.parcelas.any())
               .group_by(VendaB2B.cliente_id).having(func.sum(VendaB2B.valor_total) > ZERO).all())
     return {
         'aberto': sum((r.saldo for r in abertas), ZERO),
         'vencido': sum((r.saldo for r in vencidas), ZERO),
-        'pagas': sum(not r.saldo and not r.cancelada for r in linhas),
+        'pagas': sum(not r.saldo and not r.cancelada and not r.sem_cobranca for r in linhas),
         'nf_pendente': len(filtrar_etapa(linhas, 'nf_pendente')),
         'boleto_pendente': len(filtrar_etapa(linhas, 'boleto_pendente')),
         'banco': len(filtrar_etapa(linhas, 'banco')),
@@ -220,6 +240,20 @@ def pertence(e, r):
         r.cobranca and r.cobranca.id in (e.cobranca_ids or []))
 
 
+def conjunto_confirmado(e, r):
+    """Uma NF isolada, outra parcela ou uma NF substituída não confirma o conjunto."""
+    return bool(e.status == 'aceito' and e.documentos == 'nf_boleto'
+                and r.documento and e.nf_id
+                and str(e.nf_id) == str(r.documento.tiny_nota_fiscal_id)
+                and r.cobranca and r.cobranca.id in (e.cobranca_ids or [])
+                and pertence(e, r))
+
+
+def atribuir_envios(r, envios):
+    r.envio = envios[0] if envios else None
+    r.envio_confirmado = next((e for e in envios if conjunto_confirmado(e, r)), None)
+
+
 def painel():
     """Uma linha por fatura/parcela, nunca as parcelas E a fatura.
 
@@ -241,16 +275,17 @@ def painel():
     por_fatura, por_venda, por_boleto = {}, {}, {}
     for e in envios:
         if e.fatura_id:
-            por_fatura.setdefault(e.fatura_id, e)
+            por_fatura.setdefault(e.fatura_id, []).append(e)
         if e.venda_id and e.documentos == 'nf':
-            por_venda.setdefault(e.venda_id, e)
+            por_venda.setdefault(e.venda_id, []).append(e)
         for cid in e.cobranca_ids or []:
-            por_boleto.setdefault(cid, e)
+            por_boleto.setdefault(cid, []).append(e)
     for r in linhas:
         if r.tipo == 'fatura':
-            r.envio = por_fatura.get(r.id)
+            candidatos = por_fatura.get(r.id, [])
         else:
-            candidatos = [por_boleto.get(r.cobranca.id) if r.cobranca else None,
-                          por_venda.get(r.documento.id) if r.documento else None]
-            r.envio = max((e for e in candidatos if e), key=lambda e: e.id, default=None)
+            candidatos = ((por_boleto.get(r.cobranca.id, []) if r.cobranca else [])
+                          + (por_venda.get(r.documento.id, []) if r.documento else []))
+        candidatos = {e.id: e for e in candidatos if pertence(e, r)}
+        atribuir_envios(r, sorted(candidatos.values(), key=lambda e: e.id, reverse=True))
     return sorted(linhas, key=lambda r: (r.vencimento, r.tipo, r.id))

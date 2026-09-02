@@ -162,6 +162,9 @@ class VendaB2B(db.Model):
     frete_valor = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     observacao = db.Column(db.Text)
     nf_numero = db.Column(db.String(50))  # numero da NF se houver
+    # Divulgação/cortesia autorizada: preserva valores, parcelas e estoque.
+    # Snapshot de motivo, responsável e data; NULL mantém a cobrança normal.
+    dispensa_cobranca = db.Column(db.JSON(none_as_null=True), nullable=True)
     # NF-e via Tiny (06/07/2026) — mesmo trio do PedidoOnline: id da NF no
     # Tiny, status da autorizacao SEFAZ e timestamp de emissao confirmada.
     tiny_nota_fiscal_id = db.Column(db.String(40))
@@ -206,7 +209,13 @@ class VendaB2B(db.Model):
     @property
     def valor_aberto(self):
         from decimal import Decimal
+        if self.sem_cobranca:
+            return Decimal('0')
         return Decimal(self.valor_total or 0) - self.valor_pago
+
+    @property
+    def sem_cobranca(self):
+        return bool(self.dispensa_cobranca)
 
 class VendaB2BItem(db.Model):
     __tablename__ = 'venda_b2b_item'
@@ -289,10 +298,14 @@ class VendaB2BParcela(db.Model):
 
     @property
     def saldo(self):
+        if self.venda and self.venda.sem_cobranca:
+            return 0
         return (self.valor or 0) - (self.valor_pago or 0)
 
     @property
     def status(self):
+        if self.venda and self.venda.sem_cobranca:
+            return 'sem_cobranca'
         # Numeric(10, 2) garante precisao exata — comparacao direta.
         # (Tolerancia de 1 centavo nao eh mais necessaria desde a
         # migration 643bd66e89c3.)

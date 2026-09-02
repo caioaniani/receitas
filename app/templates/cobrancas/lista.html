@@ -94,11 +94,8 @@
                    href="{{ url_for('cobrancas.boleto_pdf', id=c.id) }}"
                    title="Boleto em PDF (ficha de compensação)">
                     <i class="bi bi-filetype-pdf"></i> boleto</a>
-                {% set cli_email = (c.fatura.cliente.email if c.fatura else (c.parcela.venda.cliente.email if c.parcela and c.parcela.venda.cliente else '')) or '' %}
-                <button class="btn btn-sm btn-outline-success" form="mail-{{ c.id }}"
-                        title="Enviar boleto (PDF + linha digitável{{ ' + Pix' if c.pix_copia_cola }}) por e-mail"
-                        onclick="return confirm('Enviar o boleto pra {{ cli_email or 'o cliente (SEM e-mail cadastrado — complete em B2B → Clientes)' }}?');">
-                    <i class="bi bi-envelope"></i> e-mail</button>
+                <a class="btn btn-sm btn-outline-success" href="{{ url_for('cobrancas.documentos', tipo='boleto', ref=c.id) }}">
+                    <i class="bi bi-envelope-paper"></i> NF + boleto / Histórico</a>
                 {% if current_user.is_owner %}
                 <button class="btn btn-sm btn-outline-secondary" form="pix-{{ c.id }}"
                         title="Definir/limpar o Pix copia-e-cola manualmente (uso: HOMOLOGAÇÃO — o banco manda um mock por e-mail pra validar o QR do PDF; em produção o Pix vem sozinho no retorno)"
@@ -123,8 +120,6 @@
 </form>
 {# Forms de edição/exclusão/voltar FORA do form da remessa (HTML não aninha). #}
 {% for c in abertas %}{% if c.nosso_numero %}
-<form id="mail-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.enviar_email', id=c.id) }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
 <form id="pix-{{ c.id }}" method="POST" action="{{ url_for('cobrancas.definir_pix', id=c.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="pix" id="pixv-{{ c.id }}"></form>

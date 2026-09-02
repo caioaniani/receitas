@@ -51,7 +51,7 @@ def _dashboard_counts(hoje_, de, ate):
     from app.models import Orcamento
     parc = (VendaB2BParcela.query.join(
         VendaB2B, VendaB2BParcela.venda_id == VendaB2B.id)
-        .filter(VendaB2B.status == 'ativa'))
+        .filter(VendaB2B.status == 'ativa', VendaB2B.dispensa_cobranca.is_(None)))
     parc_aberta = parc.filter(VendaB2BParcela.pago_em.is_(None))
     parc_paga = parc.filter(VendaB2BParcela.pago_em.isnot(None))
     if de:
@@ -162,7 +162,7 @@ def dashboard():
              .join(VendaB2B, VendaB2BParcela.venda_id == VendaB2B.id)
              .options(joinedload(VendaB2BParcela.venda)
                       .joinedload(VendaB2B.cliente))
-             .filter(VendaB2B.status == 'ativa'))
+             .filter(VendaB2B.status == 'ativa', VendaB2B.dispensa_cobranca.is_(None)))
         if f == 'cob_pagos':
             q = q.filter(VendaB2BParcela.pago_em.isnot(None))
             if de:
@@ -635,38 +635,10 @@ def fatura_danfe(fid):
 @login_required
 @admin_required
 def fatura_enviar_nf_email(fid):
-    """Manda a NF consolidada (DANFE em PDF, anexado) pro e-mail do
-    cliente — mesmo caminho da venda avulsa."""
-    from app.services import email as email_svc
-    from app.services import tiny_nf
-
-    fatura = FaturaB2B.query.get_or_404(fid)
-    if not fatura.tiny_nota_fiscal_id or not fatura.nf_emitida_em:
-        flash('A NF da fatura ainda não foi emitida — emita no Tiny antes '
-              'de enviar.', 'warning')
-        return redirect(url_for('b2b.fatura_detalhe', fid=fid))
-    destinatario = ((request.form.get('email') or '').strip()
-                    or (fatura.cliente.email or ''))
-    if not destinatario:
-        flash('Cliente sem e-mail cadastrado — informe um e-mail no '
-              'formulário ou complete o cadastro do cliente.', 'warning')
-        return redirect(url_for('b2b.fatura_detalhe', fid=fid))
-    pdf, motivo = tiny_nf.baixar_danfe_pdf_com_motivo(
-        fatura.tiny_nota_fiscal_id)
-    if not pdf:
-        flash(f'Não consegui baixar o DANFE no Tiny — {motivo}.', 'danger')
-        return redirect(url_for('b2b.fatura_detalhe', fid=fid))
-    res = email_svc.enviar_nf_b2b(
-        fatura, destinatario, pdf,
-        rotulo=f'fatura {fatura.codigo} ({fatura.periodo_display})')
-    from app.services.cobrancas_envio import registrar_envio
-    registrar_envio(fatura, [], destinatario, 'nf', current_user, res,
-                   [f'nfe_{fatura.nf_numero or fatura.tiny_nota_fiscal_id or fatura.id}.pdf'])
-    if res.get('ok'):
-        flash(f'NF enviada pra {destinatario}.', 'success')
-    else:
-        flash(f'Falha ao enviar o e-mail: {res.get("erro")}', 'danger')
-    return redirect(url_for('b2b.fatura_detalhe', fid=fid))
+    """Compatibilidade com telas antigas, sem envio individual."""
+    FaturaB2B.query.get_or_404(fid)
+    flash('O envio agora é sempre NF + boleto. Confira os documentos antes de confirmar.', 'info')
+    return redirect(url_for('cobrancas.documentos', tipo='fatura', ref=fid), code=303)
 
 
 # ── Vendas ──
@@ -1249,100 +1221,53 @@ def venda_danfe(vid):
 @login_required
 @admin_required
 def venda_enviar_nf_email(vid):
-    """Manda a NF (DANFE em PDF, anexado) pro e-mail do cliente B2B.
-    O PDF é baixado do Tiny na hora — link solto expiraria na caixa
-    de entrada."""
-    from app.services import email as email_svc
-    from app.services import tiny_nf
-
-    venda = VendaB2B.query.get_or_404(vid)
-    if not venda.tiny_nota_fiscal_id or not venda.nf_emitida_em:
-        flash('A NF ainda não foi emitida — emita no Tiny antes de enviar.',
-              'warning')
-        return redirect(url_for('b2b.venda_detalhe', vid=vid))
-    destinatario = ((request.form.get('email') or '').strip()
-                    or (venda.cliente.email if venda.cliente else '') or '')
-    if not destinatario:
-        flash('Cliente sem e-mail cadastrado — informe um e-mail no '
-              'formulário ou complete o cadastro do cliente.', 'warning')
-        return redirect(url_for('b2b.venda_detalhe', vid=vid))
-    pdf, motivo = tiny_nf.baixar_danfe_pdf_com_motivo(
-        venda.tiny_nota_fiscal_id)
-    if not pdf:
-        flash(f'Não consegui baixar o DANFE no Tiny — {motivo}.', 'danger')
-        return redirect(url_for('b2b.venda_detalhe', vid=vid))
-    res = email_svc.enviar_nf_b2b(venda, destinatario, pdf)
-    from app.services.cobrancas_envio import registrar_envio
-    registrar_envio(venda, [], destinatario, 'nf', current_user, res,
-                   [f'nfe_{venda.nf_numero or venda.tiny_nota_fiscal_id or venda.id}.pdf'])
-    if res.get('ok'):
-        flash(f'NF enviada pra {destinatario}.', 'success')
-    else:
-        flash(f'Falha ao enviar o e-mail: {res.get("erro")}', 'danger')
-    return redirect(url_for('b2b.venda_detalhe', vid=vid))
+    """Compatibilidade com telas antigas, sem envio individual."""
+    VendaB2B.query.get_or_404(vid)
+    flash('O envio agora é sempre NF + boleto. Confira os documentos antes de confirmar.', 'info')
+    return redirect(url_for('b2b.venda_documentos', vid=vid), code=303)
 
 
 @b2b_bp.route('/vendas/<int:vid>/enviar-nf-boleto-email', methods=['POST'])
 @login_required
 @admin_required
 def venda_enviar_nf_boleto_email(vid):
-    """Manda a NF (DANFE) + o(s) boleto(s) da venda num e-mail SÓ (pedido do
-    dono 10/07/2026). Exige NF emitida E ao menos um boleto gerado (cobrança
-    com nosso número); senão avisa o que falta em vez de mandar pela metade."""
-    from app.services import email as email_svc
-    from app.services import tiny_nf
-    from app.services.sicredi_boleto import (
-        codigo_barras_da_cobranca,
-        gerar_boleto_pdf,
-        linha_digitavel,
-    )
+    """Centraliza inclusive o formulário conjunto antigo na confirmação auditada."""
+    VendaB2B.query.get_or_404(vid)
+    flash('Confira os documentos e confirme o envio na central de cobranças.', 'info')
+    return redirect(url_for('b2b.venda_documentos', vid=vid), code=303)
 
+
+@b2b_bp.route('/vendas/<int:vid>/documentos')
+@login_required
+@admin_required
+def venda_documentos(vid):
+    """Abre o conjunto correto; vendas parceladas mantêm a escolha da parcela."""
     venda = VendaB2B.query.get_or_404(vid)
-    if not venda.tiny_nota_fiscal_id or not venda.nf_emitida_em:
-        flash('A NF ainda não foi emitida — emita no Tiny antes de enviar.',
-              'warning')
-        return redirect(url_for('b2b.venda_detalhe', vid=vid))
-    destinatario = ((request.form.get('email') or '').strip()
-                    or (venda.cliente.email if venda.cliente else '') or '')
-    if not destinatario:
-        flash('Cliente sem e-mail cadastrado — informe um e-mail no '
-              'formulário ou complete o cadastro do cliente.', 'warning')
-        return redirect(url_for('b2b.venda_detalhe', vid=vid))
-    # Boletos da venda: cada parcela pode ter uma cobrança (nosso número só
-    # existe depois da remessa gerada).
-    boletos = []
-    try:
-        for p in venda.parcelas:
-            cob = p.cobranca[0] if p.cobranca else None
-            if cob and cob.nosso_numero:
-                ld = linha_digitavel(codigo_barras_da_cobranca(cob))
-                boletos.append({'cob': cob,
-                                'pdf': bytes(gerar_boleto_pdf(cob)),
-                                'linha_digitavel': ld})
-    except (ValueError, TypeError) as exc:
-        flash(f'Não consegui gerar o PDF do boleto: {exc}', 'danger')
-        return redirect(url_for('b2b.venda_detalhe', vid=vid))
-    if not boletos:
-        flash('Nenhum boleto gerado ainda — gere o boleto da parcela (botão '
-              '"Gerar boleto") antes de enviar NF + boleto juntos.', 'warning')
-        return redirect(url_for('b2b.venda_detalhe', vid=vid))
-    nf_pdf, motivo = tiny_nf.baixar_danfe_pdf_com_motivo(
-        venda.tiny_nota_fiscal_id)
-    if not nf_pdf:
-        flash(f'Não consegui baixar o DANFE no Tiny — {motivo}.', 'danger')
-        return redirect(url_for('b2b.venda_detalhe', vid=vid))
-    res = email_svc.enviar_nf_e_boleto_b2b(venda, destinatario, nf_pdf,
-                                           boletos)
-    from app.services.cobrancas_envio import registrar_envio
-    registrar_envio(venda, [b['cob'] for b in boletos], destinatario, 'nf_boleto', current_user, res,
-                   [f'nfe_{venda.nf_numero or venda.tiny_nota_fiscal_id or venda.id}.pdf']
-                   + [f'boleto_{b["cob"].nosso_numero}.pdf' for b in boletos])
-    if res.get('ok'):
-        flash(f'NF + {len(boletos)} boleto(s) enviados pra {destinatario}.',
-              'success')
+    if venda.fatura_id:
+        return redirect(url_for('cobrancas.documentos', tipo='fatura', ref=venda.fatura_id))
+    if len(venda.parcelas) == 1:
+        return redirect(url_for('cobrancas.documentos', tipo='parcela', ref=venda.parcelas[0].id))
+    flash('Escolha a parcela em Documentos / Histórico para enviar NF + boleto.', 'info')
+    return redirect(url_for('b2b.venda_detalhe', vid=vid, _anchor='boletos'))
+
+
+@b2b_bp.route('/vendas/<int:vid>/sem-cobranca', methods=['POST'])
+@login_required
+@owner_required
+def venda_sem_cobranca(vid):
+    from app.services.cobrancas_dispensa import dispensar
+    VendaB2B.query.get_or_404(vid)
+    if request.form.get('confirmar') != '1':
+        flash('Confirme que se trata de divulgação, sem cobrança ao cliente.', 'warning')
     else:
-        flash(f'Falha ao enviar o e-mail: {res.get("erro")}', 'danger')
-    return redirect(url_for('b2b.venda_detalhe', vid=vid))
+        try:
+            dispensar(vid, current_user, request.form.get('motivo'))
+            db.session.commit()
+            flash('Divulgação registrada como sem cobrança. Venda, entrega e estoque preservados.', 'success')
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), 'warning')
+    return redirect(url_for('b2b.venda_detalhe', vid=vid), code=303)
 
 
 @b2b_bp.route('/parcelas/<int:pid>/receber', methods=['POST'])
@@ -1377,6 +1302,7 @@ def contas_receber():
                 .options(joinedload(VendaB2BParcela.venda)
                          .joinedload(VendaB2B.cliente))
                 .filter(VendaB2B.status == 'ativa',
+                        VendaB2B.dispensa_cobranca.is_(None),
                         VendaB2BParcela.pago_em.is_(None))
                 .order_by(VendaB2BParcela.vencimento.asc())
                 .all())

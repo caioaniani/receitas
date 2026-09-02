@@ -24,7 +24,7 @@
         <label>Envio<select class="form-select" name="envio">
             <option value="">Todos</option>
             <option value="sem_historico" {% if envio == 'sem_historico' %}selected{% endif %}>Sem histórico</option>
-            <option value="aceito" {% if envio == 'aceito' %}selected{% endif %}>Aceito pelo serviço</option>
+            <option value="aceito" {% if envio == 'aceito' %}selected{% endif %}>NF + boleto enviados</option>
             <option value="problema" {% if envio == 'problema' %}selected{% endif %}>Conferir envio</option>
         </select></label>
         <label>Documentos<select class="form-select" name="etapa">
@@ -35,7 +35,7 @@
         {% if busca or de or ate or envio or etapa %}<a href="{{ url_for('cobrancas.lista') }}" class="btn btn-outline-secondary">Limpar</a>{% endif %}
     </form>
     <nav class="cob-tabs" aria-label="Situação do pagamento">
-        {% for key, label in [('abertas','A receber'), ('vencidas','Vencidas'), ('pagas','Pagas'), ('canceladas','Canceladas'), ('todas','Todas')] %}
+        {% for key, label in [('abertas','A receber'), ('vencidas','Vencidas'), ('pagas','Pagas'), ('sem_cobranca','Sem cobrança'), ('canceladas','Canceladas'), ('todas','Todas')] %}
         <a href="{{ filtro_url(situacao=key) }}" {% if situacao == key %}aria-current="page"{% endif %}>{{ label }} <span>{{ contagens[key] }}</span></a>
         {% endfor %}
     </nav>
@@ -52,7 +52,10 @@
                         {% if r.pago %}<small>{{ dinheiro(r.pago) }} recebido(s)</small>{% endif %}</td>
                     <td data-label="Documentos"><span>{{ r.nf_label }}</span><small>{{ r.banco_label }}</small></td>
                     <td data-label="Último envio"><span>{{ r.envio_label }}</span>
-                        {% if r.envio %}<small>{{ r.envio.criado_em.strftime('%d/%m/%Y %H:%M') }} · {{ {'nf': 'Só NF', 'boleto': 'Só boleto', 'nf_boleto': 'NF + boleto'}[r.envio.documentos] }}</small>{% endif %}
+                        {% if r.envio_confirmado %}
+                        <small>{{ (r.envio_confirmado.concluido_em or r.envio_confirmado.criado_em).strftime('%d/%m/%Y às %H:%M') }}</small>
+                        {% if r.envio.id != r.envio_confirmado.id %}<small>Há tentativa posterior: conferir histórico</small>{% endif %}
+                        {% elif r.envio %}<small>{{ r.envio.criado_em.strftime('%d/%m/%Y %H:%M') }} · {{ {'nf': 'Só NF (antigo)', 'boleto': 'Só boleto (antigo)', 'nf_boleto': 'NF + boleto'}[r.envio.documentos] }}</small>{% endif %}
                     </td>
                     <td data-label="Pagamento"><span class="cob-status {% if 'Vencida' in r.pagamento %}cob-warning{% elif r.pagamento == 'Paga' %}cob-success{% endif %}">{{ r.pagamento }}</span></td>
                     <td class="cob-actions">

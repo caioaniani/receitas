@@ -184,6 +184,8 @@ def _trailer_remessa(seq):
 def validar_para_remessa(cob):
     """O que o banco recusa, a gente recusa ANTES (homologação limpa)."""
     erros = []
+    if cob.parcela and cob.parcela.venda.sem_cobranca:
+        erros.append(f'#{cob.id}: divulgação sem cobrança — não pode gerar remessa.')
     doc = ''.join(ch for ch in (cob.pagador_cnpj_cpf or '') if ch.isdigit())
     if len(doc) not in (11, 14):
         erros.append(f'#{cob.id} {cob.pagador_nome}: CPF/CNPJ inválido.')
@@ -210,6 +212,15 @@ def gerar_remessa(cobrancas, user_id=None):
     `pendente`. Atribui nosso número a quem não tem, valida tudo, grava a
     CobrancaRemessa (sequencial + conteúdo) e move as cobranças pra status
     'remessa'. Retorna (remessa, erros) — com erros, NADA é gravado."""
+    # Mesma ordem de trava da dispensa: venda antes dos títulos. Uma tela
+    # aberta antes da classificação não pode mandar a divulgação ao banco.
+    from app.models import VendaB2B
+    vendas_ids = sorted({c.parcela.venda_id for c in cobrancas if c.parcela})
+    if vendas_ids:
+        (VendaB2B.query.filter(VendaB2B.id.in_(vendas_ids)).order_by(VendaB2B.id)
+         .populate_existing().with_for_update().all())
+    for cob in sorted(cobrancas, key=lambda c: c.id):
+        db.session.refresh(cob, with_for_update=True)
     alvo = [c for c in cobrancas if c.status == 'pendente']
     if not alvo:
         return None, ['Nenhuma cobrança pendente selecionada.']

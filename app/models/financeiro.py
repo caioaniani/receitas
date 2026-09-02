@@ -382,6 +382,7 @@ class EnvioCobranca(db.Model):
     cobranca_ids = db.Column(db.JSON, nullable=False, default=list)
     referencia = db.Column(db.String(120), nullable=False)
     destinatario = db.Column(db.String(254), nullable=False)
+    copias_ocultas = db.Column(db.JSON, nullable=True)
     documentos = db.Column(db.String(20), nullable=False)  # nf | boleto | nf_boleto
     nf_id = db.Column(db.String(40))
     anexos = db.Column(db.JSON, nullable=False, default=list)

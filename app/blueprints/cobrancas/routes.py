@@ -50,7 +50,7 @@ def lista():
     etapa = request.args.get('etapa', '')
     if etapa not in ETAPAS:
         etapa = ''
-    if situacao not in ('abertas', 'vencidas', 'pagas', 'canceladas', 'todas'):
+    if situacao not in ('abertas', 'vencidas', 'pagas', 'canceladas', 'sem_cobranca', 'todas'):
         situacao = 'abertas'
     if envio not in ('', 'sem_historico', 'aceito', 'problema'):
         envio = ''
@@ -68,7 +68,7 @@ def lista():
     if envio == 'sem_historico':
         linhas = [r for r in linhas if not r.envio]
     elif envio == 'aceito':
-        linhas = [r for r in linhas if r.envio and r.envio.status == 'aceito']
+        linhas = [r for r in linhas if r.envio_confirmado]
     elif envio == 'problema':
         linhas = [r for r in linhas if r.envio and r.envio.status != 'aceito']
     linhas = filtrar_etapa(linhas, etapa)
@@ -81,7 +81,8 @@ def lista():
     }
     grupos = {
         'abertas': abertas, 'vencidas': vencidas,
-        'pagas': [r for r in linhas if not r.saldo and not r.cancelada],
+        'pagas': [r for r in linhas if not r.saldo and not r.cancelada and not r.sem_cobranca],
+        'sem_cobranca': [r for r in linhas if r.sem_cobranca],
         'canceladas': [r for r in linhas if r.cancelada], 'todas': linhas,
     }
     contagens = {k: len(v) for k, v in grupos.items()}
@@ -105,8 +106,9 @@ def lista():
 @login_required
 def documentos(tipo, ref):
     _admin_ou_403()
-    from app.services.central_cobrancas import ENVIOS, carregar, historico
+    from app.services.central_cobrancas import ENVIOS, atribuir_envios, carregar, historico
     from app.services.cobrancas_envio import enviar_conjunto
+    from app.services.email import COPIAS_OCULTAS_COBRANCA
     r = carregar(tipo, ref)
     # Uma parcela absorvida por fatura sempre volta à cobrança consolidada.
     if (r.tipo, r.id) != (tipo, ref):
@@ -128,9 +130,10 @@ def documentos(tipo, ref):
                 flash(e.erro or 'Envio não confirmado. Consulte o histórico antes de tentar novamente.', 'warning')
         return redirect(url_for('cobrancas.documentos', tipo=tipo, ref=ref))
     envios = historico(r)
-    r.envio = envios[0] if envios else None
+    atribuir_envios(r, envios)
     return render_template('cobrancas/documentos.html', r=r, historico=envios,
-                           envio_labels=ENVIOS, chave=str(uuid4()))
+                           envio_labels=ENVIOS, chave=str(uuid4()),
+                           copias_ocultas=COPIAS_OCULTAS_COBRANCA)
 
 
 @cobrancas_bp.route('/banco')
@@ -140,6 +143,7 @@ def banco():
     cobrancas = (Cobranca.query
                  .order_by(Cobranca.vencimento.asc(), Cobranca.id.asc())
                  .limit(500).all())
+    cobrancas = [c for c in cobrancas if not (c.parcela and c.parcela.venda.sem_cobranca)]
     abertas = [c for c in cobrancas
                if c.status in ('pendente', 'remessa', 'registrada')]
     pagas = [c for c in cobrancas if c.status == 'paga']
@@ -190,6 +194,11 @@ def gerar_da_parcela(parcela_id):
     """Cria a cobrança de UMA parcela B2B (snapshot do pagador da venda)."""
     _admin_ou_403()
     p = VendaB2BParcela.query.get_or_404(parcela_id)
+    # Serializa com a classificação de divulgação antes de criar o título.
+    db.session.refresh(p.venda, with_for_update=True)
+    if p.venda.sem_cobranca:
+        flash('Divulgação sem cobrança: não será gerado boleto.', 'warning')
+        return redirect(url_for('cobrancas.lista'))
     if p.cobranca:
         flash('Essa parcela já tem cobrança.', 'warning')
         return redirect(url_for('cobrancas.lista'))
@@ -371,42 +380,12 @@ def boleto_pdf(id):
 @cobrancas_bp.route('/<int:id>/enviar-email', methods=['POST'])
 @login_required
 def enviar_email(id):
-    """Manda o boleto (PDF anexado + linha digitável + Pix se houver) pro
-    e-mail do cliente B2B da parcela. Aceita e-mail avulso no form pra
-    cobrança sem cliente cadastrado."""
+    """Formulários antigos não podem mais disparar somente o boleto."""
     _admin_ou_403()
-    cob = Cobranca.query.get_or_404(id)
-    if not cob.nosso_numero:
-        flash('Essa cobrança ainda não tem nosso número — gere a remessa '
-              'primeiro.', 'warning')
-        return redirect(url_for('cobrancas.lista'))
-    cliente = (cob.fatura.cliente if cob.fatura
-               else cob.parcela.venda.cliente if cob.parcela else None)
-    destinatario = ((request.form.get('email') or '').strip()
-                    or (cliente.email if cliente else '') or '')
-    if not destinatario:
-        flash('Cliente sem e-mail cadastrado — complete o cadastro em '
-              'B2B → Clientes ou informe um e-mail.', 'warning')
-        return redirect(url_for('cobrancas.lista'))
-    from app.services import email as email_svc
-    from app.services.sicredi_boleto import (
-        codigo_barras_da_cobranca,
-        gerar_boleto_pdf,
-        linha_digitavel,
-    )
-    pdf = bytes(gerar_boleto_pdf(cob))
-    ld = linha_digitavel(codigo_barras_da_cobranca(cob))
-    res = email_svc.enviar_boleto_b2b(cob, destinatario, pdf,
-                                      linha_digitavel=ld)
-    from app.services.cobrancas_envio import registrar_envio
-    registrar_envio(cob.fatura if cob.fatura else cob.parcela.venda if cob.parcela else None,
-                   [cob], destinatario, 'boleto', current_user, res,
-                   [f'boleto_{cob.nosso_numero}.pdf'])
-    if res.get('ok'):
-        flash(f'Boleto enviado pra {destinatario}.', 'success')
-    else:
-        flash(f'Falha ao enviar o e-mail: {res.get("erro")}', 'danger')
-    return redirect(url_for('cobrancas.lista'))
+    from app.services.central_cobrancas import carregar
+    r = carregar('boleto', id)
+    flash('O envio agora é sempre NF + boleto. Confira os documentos antes de confirmar.', 'info')
+    return redirect(url_for('cobrancas.documentos', tipo=r.tipo, ref=r.id), code=303)
 
 
 @cobrancas_bp.route('/<int:id>/excluir', methods=['POST'])

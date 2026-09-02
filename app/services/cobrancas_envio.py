@@ -23,6 +23,8 @@ def _registro(doc, cobrancas, destinatario, documentos, usuario, chave=None):
         venda_id=doc.id if doc and not fatura else None,
         cobranca_ids=[c.id for c in cobrancas],
         referencia=referencia, destinatario=destinatario[:254],
+        copias_ocultas=(email_svc.copias_ocultas_cobranca(destinatario)
+                       if documentos == 'nf_boleto' else []),
         documentos=documentos, nf_id=getattr(doc, 'tiny_nota_fiscal_id', None),
         status='preparando', usuario_id=usuario.id, usuario_nome=usuario.nome[:100])
 

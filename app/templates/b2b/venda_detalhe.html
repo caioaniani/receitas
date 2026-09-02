@@ -96,6 +96,7 @@
                 <div class="d-flex justify-content-between"><span>Valor total:</span><strong>R$ {{ '%.2f'|format(venda.valor_total) }}</strong></div>
                 <div class="d-flex justify-content-between text-success"><span>Pago:</span><strong>R$ {{ '%.2f'|format(venda.valor_pago) }}</strong></div>
                 <div class="d-flex justify-content-between text-danger"><span>Em aberto:</span><strong>R$ {{ '%.2f'|format(venda.valor_aberto) }}</strong></div>
+                {% include 'b2b/_sem_cobranca.html' %}
             </div>
         </div>
 
@@ -113,25 +114,9 @@
                        class="btn btn-sm btn-outline-primary w-100 mt-2" target="_blank" rel="noopener">
                         <i class="bi bi-filetype-pdf"></i> Ver DANFE (PDF)
                     </a>
-                    <form method="POST" action="{{ url_for('b2b.venda_enviar_nf_email', vid=venda.id) }}" class="mt-2">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="input-group input-group-sm">
-                            <input type="email" name="email" class="form-control" placeholder="{{ email_cliente or 'e-mail do cliente' }}"
-                                   value="{{ email_cliente }}" {% if not email_cliente %}required{% endif %}>
-                            <button type="submit" class="btn btn-success"
-                                    onclick="return confirm('Enviar a NF (PDF) pra {{ email_cliente or 'o e-mail informado' }}?');">
-                                <i class="bi bi-envelope"></i> Enviar NF por e-mail
-                            </button>
-                        </div>
-                        {% if tem_boleto %}
-                        <button type="submit" class="btn btn-outline-success btn-sm w-100 mt-2"
-                                formaction="{{ url_for('b2b.venda_enviar_nf_boleto_email', vid=venda.id) }}"
-                                onclick="return confirm('Enviar a NF + o(s) boleto(s) num e-mail só pra {{ email_cliente or 'o e-mail informado' }}?');"
-                                title="Manda a NF (PDF) e o(s) boleto(s) da venda num e-mail só">
-                            <i class="bi bi-envelope-paper"></i> Enviar NF + Boleto juntos
-                        </button>
-                        {% endif %}
-                    </form>
+                    <a href="{{ url_for('b2b.venda_documentos', vid=venda.id) }}" class="btn btn-success btn-sm w-100 mt-2">
+                        <i class="bi bi-envelope-paper"></i> NF + boleto / Histórico de envio
+                    </a>
                 {% elif venda.tiny_nota_fiscal_id %}
                     <div>NF: <code>{{ venda.tiny_nota_fiscal_id }}</code></div>
                     {% if venda.nf_status %}<div class="text-danger">Status: <strong>{{ venda.nf_status }}</strong></div>{% endif %}
@@ -218,7 +203,8 @@
                 <td class="text-end">R$ {{ '%.2f'|format(p.valor) }}</td>
                 <td class="text-end">R$ {{ '%.2f'|format(p.valor_pago or 0) }}</td>
                 <td>
-                    {% if p.status == 'pago' %}<span class="badge bg-success">pago</span>
+                    {% if venda.sem_cobranca %}<span class="badge bg-secondary">Divulgação · sem cobrança</span>
+                    {% elif p.status == 'pago' %}<span class="badge bg-success">pago</span>
                     {% elif p.status == 'parcial' %}<span class="badge bg-warning text-dark">parcial</span>
                     {% elif p.status == 'atrasado' %}<span class="badge bg-danger">atrasado</span>
                     {% else %}<span class="badge bg-info text-dark">aberto</span>{% endif %}
@@ -226,16 +212,11 @@
                 <td><small>{{ p.forma_pagamento or '' }}</small></td>
                 <td class="text-nowrap">
                     <a class="btn btn-sm btn-outline-success" href="{{ url_for('cobrancas.documentos', tipo='parcela', ref=p.id) }}">Documentos / Histórico</a>
-                    {% if cob and cob.nosso_numero %}
+                    {% if venda.sem_cobranca %}<small>Não cobrar</small>
+                    {% elif cob and cob.nosso_numero %}
                     <a class="btn btn-sm btn-outline-dark" target="_blank"
                        href="{{ url_for('cobrancas.boleto_pdf', id=cob.id) }}"
                        title="Boleto em PDF"><i class="bi bi-filetype-pdf"></i></a>
-                    <form method="POST" action="{{ url_for('cobrancas.enviar_email', id=cob.id) }}" class="d-inline"
-                          onsubmit="return confirm('Enviar o boleto pra {{ venda.cliente.email if venda.cliente and venda.cliente.email else 'o cliente (sem e-mail cadastrado!)' }}?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button class="btn btn-sm btn-outline-success" title="Enviar boleto por e-mail">
-                            <i class="bi bi-envelope"></i></button>
-                    </form>
                     {% elif cob %}
                     <a href="{{ url_for('cobrancas.banco') }}" class="badge bg-info text-dark text-decoration-none"
                        title="Cobrança criada — gere a remessa em Cobranças pra ter o boleto">{{ cob.status }}</a>
