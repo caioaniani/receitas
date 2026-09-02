@@ -13,6 +13,26 @@
         <div><span>Saldo a receber</span><strong>{{ dinheiro(r.saldo) }}</strong><small>{{ r.pagamento }}{% if r.pago %} · {{ dinheiro(r.pago) }} recebido(s){% endif %}</small></div>
         <div><span>Vencimento</span><strong>{{ r.vencimento.strftime('%d/%m/%Y') }}</strong><small>{{ r.banco_label }}</small></div>
     </section>
+    <section class="cob-panel cob-download" aria-labelledby="baixar-titulo">
+        <div class="cob-section-heading"><h2 id="baixar-titulo">Cobrar pelo WhatsApp</h2>
+            <p>NF + boleto + {{ 'todos os pedidos da fatura' if r.tipo == 'fatura' else 'detalhamento do pedido' }} em um único PDF.</p></div>
+        {% if r.bloqueio %}
+        <p class="cob-notice">{{ r.bloqueio }}</p>
+        <small>O download completo fica disponível quando os documentos estiverem prontos para cobrança.</small>
+        {% else %}
+        <form method="GET" action="{{ url_for('cobrancas.baixar_documentos', tipo=r.tipo, ref=r.id) }}" class="cob-download-form">
+            {% if r.cobranca.status == 'remessa' %}
+            <label class="cob-confirm"><input type="checkbox" name="banco_confirmado" value="1" required>
+                Conferi no Sicredi que este boleto foi registrado. O ERP ainda só registra a geração do arquivo.</label>
+            {% endif %}
+            <div class="cob-download-actions">
+                <button class="btn btn-success" type="submit" name="formato" value="pdf" data-no-loading="1">Baixar cobrança completa (PDF)</button>
+                <button class="btn btn-outline-secondary" type="submit" name="formato" value="zip" data-no-loading="1">PDFs separados (ZIP)</button>
+            </div>
+            <small>Depois de baixar, anexe o PDF na conversa do WhatsApp. O download não envia mensagens nem altera o histórico de e-mails.</small>
+        </form>
+        {% endif %}
+    </section>
     <section class="cob-panel cob-send" aria-labelledby="enviar-titulo">
         <div class="cob-section-heading"><div><h2 id="enviar-titulo">Enviar NF + boleto</h2><p>Um e-mail, com os dois PDFs anexados.</p></div></div>
         {% if r.envio_confirmado %}
