@@ -5,7 +5,7 @@ seleciona pendentes -> "Gerar remessa" (arquivo .CRM pra subir no Sicredi
 Internet / mandar na homologação) -> upload do RETORNO dá baixa (liquidação
 quita a parcela junto) e traz o QR Pix do boleto híbrido.
 """
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from uuid import uuid4
 
 from flask import (
@@ -29,6 +29,68 @@ from app.utils import hoje
 def _admin_ou_403():
     if not current_user.is_admin():
         abort(403)
+
+
+@cobrancas_bp.context_processor
+def pendencias_automacao():
+    if not current_user.is_authenticated or not current_user.is_admin():
+        return {}
+    from app.models import AutomacaoCobranca
+    from app.services.cobrancas_automacao import remessas_pendentes
+    return {'remessas_a_conferir': len(remessas_pendentes()),
+            'automacoes_com_erro': AutomacaoCobranca.query.filter_by(estado='erro').count()}
+
+
+@cobrancas_bp.route('/automacao')
+@login_required
+def automacao():
+    _admin_ou_403()
+    from app.models import AppConfig, AutomacaoCobranca, AvisoRemessa
+    from app.services.cobrancas_automacao import ESTADOS, RESPONSAVEIS, remessas_pendentes
+    from app.utils import agora
+    try:
+        ultimo = datetime.fromisoformat(AppConfig.get('cobrancas_automacao_ultimo_ciclo', ''))
+    except (ValueError, TypeError):
+        ultimo = None
+    atrasado = ultimo is None or (agora() - ultimo).total_seconds() > 300
+    fila = AutomacaoCobranca.query.order_by(AutomacaoCobranca.id.desc()).paginate(per_page=30, error_out=False)
+    avisos = AvisoRemessa.query.order_by(AvisoRemessa.id.desc()).limit(40).all()
+    return render_template('cobrancas/automacao.html', fila=fila, remessas=remessas_pendentes(),
+                           avisos=avisos, estados=ESTADOS, responsaveis=RESPONSAVEIS,
+                           ultimo_ciclo=ultimo, ciclo_atrasado=atrasado)
+
+
+@cobrancas_bp.route('/automacao/remessa/<int:id>/confirmar', methods=['POST'])
+@login_required
+def confirmar_registro_remessa(id):
+    _admin_ou_403()
+    from app.services.cobrancas_automacao import confirmar_registro
+    if request.form.get('confirmado') != '1':
+        flash('Confira primeiro no Sicredi se todos os boletos desta remessa foram registrados.', 'warning')
+    else:
+        try:
+            confirmar_registro(CobrancaRemessa.query.get_or_404(id), current_user.id)
+            flash('Conferência registrada. A fila automática poderá enviar NF + boleto no próximo ciclo.', 'success')
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), 'warning')
+    return redirect(url_for('cobrancas.automacao'))
+
+
+@cobrancas_bp.route('/automacao/<int:id>/retomar', methods=['POST'])
+@login_required
+def retomar_automacao(id):
+    _admin_ou_403()
+    from app.models import AutomacaoCobranca
+    from app.services.cobrancas_automacao import _mudar
+    j = AutomacaoCobranca.query.get_or_404(id)
+    if j.estado != 'erro':
+        abort(409)
+    if not current_user.pode_emitir_nf_b2b():
+        abort(403)
+    _mudar(j, 'pendente')
+    flash('Conferência solicitada. Documentos já gerados serão reutilizados; e-mails incertos não serão repetidos.', 'success')
+    return redirect(url_for('cobrancas.automacao'))
 
 
 @cobrancas_bp.route('/painel')
@@ -197,120 +259,53 @@ def banco():
 
 
 def _snapshot_pagador(cli):
-    """(endereco, cep) do CADASTRO do ClienteB2B — fonte ÚNICA das duas
-    rotas de geração (07/08/2026, pergunta do dono "por que não puxa o CEP
-    direto do cadastro?"): a rota de parcela avulsa gravava `pagador_cep=''`
-    fixo e toda cobrança exigia digitação manual na tela, mesmo com o
-    cadastro completo. Montagem idêntica à que a fatura mensal já usava
-    (homologada): campo livre com fallback pros estruturados; CEP só
-    dígitos."""
-    if cli is None:
-        return '', ''
-    endereco = (cli.endereco or '').strip()
-    if not endereco and cli.endereco_logradouro:
-        endereco = ' '.join(x for x in (
-            cli.endereco_logradouro,
-            (f'{cli.endereco_numero}' if cli.endereco_numero else ''),
-            (f'- {cli.endereco_bairro}' if cli.endereco_bairro else ''))
-            if x)
-    cep = ''.join(ch for ch in (cli.endereco_cep or '') if ch.isdigit())
-    return endereco, cep
+    from app.services.cobrancas_preparo import snapshot_pagador
+    return snapshot_pagador(cli)
 
 
 @cobrancas_bp.route('/gerar-da-parcela/<int:parcela_id>', methods=['POST'])
 @login_required
 def gerar_da_parcela(parcela_id):
-    """Cria a cobrança de UMA parcela B2B (snapshot do pagador da venda)."""
+    """Mesmo preparo e trava usados pela automação; sem emitir NF ou enviar."""
     _admin_ou_403()
+    from app.services.cobrancas_preparo import da_parcela
+    from app.services.cobrancas_trava import chave_documento, trava
     p = VendaB2BParcela.query.get_or_404(parcela_id)
-    # Serializa com a classificação de divulgação antes de criar o título.
-    db.session.refresh(p.venda, with_for_update=True)
-    if p.venda.sem_cobranca:
-        flash('Divulgação sem cobrança: não será gerado boleto.', 'warning')
-        return redirect(url_for('cobrancas.lista'))
-    if p.cobranca:
-        flash('Essa parcela já tem cobrança.', 'warning')
-        return redirect(url_for('cobrancas.lista'))
-    if p.fatura_id:
-        flash('Parcela de fatura mensal — o boleto sai pela FATURA '
-              '(B2B → Faturas mensais), não por parcela; gerar aqui '
-              'cobraria o cliente em dobro.', 'warning')
-        return redirect(url_for('cobrancas.lista'))
-    # Venda cancelada não vira boleto (achado da revisão 20/07/2026:
-    # cancelar_venda mantém as parcelas como registro e elas continuavam
-    # "candidatas" — cobrar venda morta no Sicredi).
-    if p.venda and p.venda.status == 'cancelada':
-        flash(f'A venda #{p.venda.id} está CANCELADA — parcela não vira '
-              'boleto.', 'danger')
-        return redirect(url_for('cobrancas.lista'))
-    venda = p.venda
-    cli = venda.cliente
-    emissao = hoje()
-    venc = max(p.vencimento, emissao + timedelta(days=7))  # regra Sicredi
-    endereco, cep = _snapshot_pagador(cli)
-    cob = Cobranca(
-        parcela_id=p.id,
-        pagador_nome=(cli.nome if cli else venda.cliente_nome or ''),
-        pagador_cnpj_cpf=(cli.cnpj_cpf if cli else '') or '',
-        pagador_endereco=endereco,
-        pagador_cep=cep,
-        valor=p.valor, vencimento=venc, emissao=emissao,
-        seu_numero=f'V{venda.id}P{p.numero}',
-        criado_por_id=current_user.id,
-    )
-    db.session.add(cob)
-    db.session.commit()
-    if venc != p.vencimento:
-        flash(f'Vencimento ajustado pra {venc.strftime("%d/%m/%Y")} — o '
-              'Sicredi exige mínimo de 7 dias após a emissão.', 'warning')
-    flash(f'Cobrança criada pra {cob.pagador_nome} '
-          f'(R$ {cob.valor}). Complete endereço e CEP antes da remessa — '
-          'o banco rejeita sem eles.', 'success')
+    try:
+        with trava(chave_documento(p.venda)):
+            venc_anterior = p.vencimento
+            cob, novo = da_parcela(p, current_user.id)
+            db.session.commit()
+        if novo:
+            flash(f'Cobrança criada para {cob.pagador_nome} (R$ {cob.valor}). Gere a remessa na área Banco.', 'success')
+            if cob.vencimento != venc_anterior:
+                flash(f'Vencimento ajustado para {cob.vencimento.strftime("%d/%m/%Y")} — mínimo de 7 dias para o Sicredi.', 'warning')
+        else:
+            flash('Essa parcela já tem cobrança.', 'warning')
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
     return redirect(url_for('cobrancas.lista'))
 
 
 @cobrancas_bp.route('/gerar-da-fatura/<int:fatura_id>', methods=['POST'])
 @login_required
 def gerar_da_fatura(fatura_id):
-    """Cria a cobrança (UM boleto) de uma fatura mensal B2B — o total do
-    fechamento. A liquidação quita a fatura e as parcelas juntas."""
+    """Um título do total mensal, nunca um título para cada entrega."""
     _admin_ou_403()
     from app.models import FaturaB2B
+    from app.services.cobrancas_preparo import da_fatura
+    from app.services.cobrancas_trava import chave_documento, trava
     fat = FaturaB2B.query.get_or_404(fatura_id)
-    if fat.status != 'fechada':
-        flash(f'Fatura {fat.codigo} está "{fat.status}" — só fatura fechada '
-              'gera boleto.', 'warning')
-        return redirect(url_for('b2b.fatura_detalhe', fid=fatura_id))
-    if fat.cobrancas:
-        flash(f'A fatura {fat.codigo} já tem cobrança.', 'warning')
-        return redirect(url_for('b2b.fatura_detalhe', fid=fatura_id))
-    cli = fat.cliente
-    endereco, cep = _snapshot_pagador(cli)
-    emissao = hoje()
-    venc = max(fat.vencimento, emissao + timedelta(days=7))  # regra Sicredi
-    cob = Cobranca(
-        fatura_id=fat.id,
-        pagador_nome=cli.nome,
-        pagador_cnpj_cpf=cli.cnpj_cpf or '',
-        pagador_endereco=endereco,
-        pagador_cep=cep,
-        valor=fat.valor_total, vencimento=venc, emissao=emissao,
-        seu_numero=fat.codigo[:10],
-        criado_por_id=current_user.id,
-    )
-    db.session.add(cob)
-    if venc != fat.vencimento:
-        # Realinha fatura + parcelas do fechamento com o boleto — senão o
-        # contas a receber acusa "atrasado" antes de o boleto vencer.
-        fat.vencimento = venc
-        for p in fat.parcelas:
-            p.vencimento = venc
-        flash(f'Vencimento ajustado pra {venc.strftime("%d/%m/%Y")} (fatura '
-              'e parcelas juntas) — o Sicredi exige mínimo de 7 dias após '
-              'a emissão.', 'warning')
-    db.session.commit()
-    flash(f'Cobrança da fatura {fat.codigo} criada (R$ {cob.valor}). '
-          'Marque-a e gere a remessa em Cobranças.', 'success')
+    try:
+        with trava(chave_documento(fat)):
+            cob, novo = da_fatura(fat, current_user.id)
+            db.session.commit()
+        flash(f'Cobrança da fatura {fat.codigo} criada (R$ {cob.valor}). Gere a remessa na área Banco.'
+              if novo else 'A fatura já tem cobrança.', 'success' if novo else 'warning')
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
     return redirect(url_for('b2b.fatura_detalhe', fid=fatura_id))
 
 

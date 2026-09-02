@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 # Modelos sensiveis cujas mutacoes geram auditoria.
 # Mantenha pequeno — auditoria tem overhead e gera volume.
 AUDITED_MODELS = {
+    'delegacao_fiscal_b2b', 'confirmacao_registro_boleto', 'tentativa_nf_b2b',
+    'automacao_cobranca', 'aviso_remessa',
     # Negocio
     'pedido_loja', 'pedido_item', 'movimentacao_estoque',
     'estoque_loja', 'mov_estoque_loja',

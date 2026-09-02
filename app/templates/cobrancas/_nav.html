@@ -4,4 +4,11 @@
     <a href="{{ url_for('cobrancas.lista') }}" {% if request.endpoint == 'cobrancas.lista' %}aria-current="page"{% endif %}>Cobranças</a>
     <a href="{{ url_for('b2b.faturas') }}" title="Fechamentos mensais" {% if request.endpoint == 'b2b.faturas' %}aria-current="page"{% endif %}>Fechamentos</a>
     <a href="{{ url_for('cobrancas.banco') }}" title="Operações do banco" {% if request.endpoint == 'cobrancas.banco' %}aria-current="page"{% endif %}>Banco</a>
+    <a href="{{ url_for('cobrancas.automacao') }}" {% if request.endpoint == 'cobrancas.automacao' %}aria-current="page"{% endif %}>Automação e Sicredi</a>
 </nav>
+{% if request.endpoint != 'cobrancas.automacao' and (remessas_a_conferir or automacoes_com_erro) %}
+<div class="alert alert-warning d-flex flex-wrap gap-2 justify-content-between align-items-center">
+    <span>{{ remessas_a_conferir or 0 }} remessa(s) para conferir no Sicredi{% if automacoes_com_erro %} · {{ automacoes_com_erro }} automação(ões) com pendência{% endif %}</span>
+    <a class="alert-link" href="{{ url_for('cobrancas.automacao') }}">Ver pendências →</a>
+</div>
+{% endif %}

@@ -147,7 +147,8 @@ def emitir_nf(venda, user_id=None, recriar=False):
         return _nota_payload(cliente, itens,
                              frete_valor=venda.frete_valor or 0), None
 
-    return tiny_nf.emitir_nf_generico(venda, _montar, recriar=recriar)
+    from app.services.cobrancas_nf import emitir
+    return emitir(venda, _montar, usuario_id=user_id, recriar=recriar)
 
 
 def emitir_nf_fatura(fatura, user_id=None, recriar=False):
@@ -191,7 +192,8 @@ def emitir_nf_fatura(fatura, user_id=None, recriar=False):
                            for v in fatura.vendas), Decimal('0'))
         return _nota_payload(cliente, itens, frete_valor=frete_total), None
 
-    return tiny_nf.emitir_nf_generico(fatura, _montar, recriar=recriar)
+    from app.services.cobrancas_nf import emitir
+    return emitir(fatura, _montar, usuario_id=user_id, recriar=recriar)
 
 # `link_danfe` foi removido (10/07/2026): as rotas B2B agora chamam
 # `tiny.obter_link_nota_fiscal_com_motivo` direto, pra mostrar a causa real

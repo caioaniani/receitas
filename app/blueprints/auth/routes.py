@@ -1,10 +1,10 @@
 from urllib.parse import urlparse
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from app.blueprints.auth import auth_bp
-from app.decorators import admin_required
+from app.decorators import admin_required, owner_required
 from app.extensions import db, limiter
 from app.models import Atribuicao, Receita, Usuario
 from app.utils import agora
@@ -81,9 +81,36 @@ def usuarios():
     """Gerenciar usuários — só admin."""
     from app.models import Loja
     usuarios = Usuario.query.order_by(Usuario.papel, Usuario.nome).all()
+    if current_user.is_owner:
+        from app.models import DelegacaoFiscalB2B
+        delegados_nf = {row[0] for row in db.session.query(DelegacaoFiscalB2B.usuario_id).all()}
+    else:
+        delegados_nf = set()
     lojas = (Loja.query.filter(Loja.ativa.is_(True), Loja.nome != 'Industria')
              .order_by(Loja.nome).all())
-    return render_template('auth/usuarios.html', usuarios=usuarios, lojas=lojas)
+    return render_template('auth/usuarios.html', usuarios=usuarios, lojas=lojas,
+                           delegados_nf=delegados_nf)
+
+
+@auth_bp.route('/usuarios/<int:id>/nf-b2b', methods=['POST'])
+@login_required
+@owner_required
+def delegar_nf_b2b(id):
+    from app.models import DelegacaoFiscalB2B
+    u = Usuario.query.get_or_404(id)
+    permitir = request.form.get('permitir')
+    if permitir not in ('0', '1'):
+        abort(400)
+    if permitir == '1' and (u.papel != 'admin' or u.somente_treino or u.is_dono()):
+        abort(400)
+    a = db.session.get(DelegacaoFiscalB2B, u.id)
+    if permitir == '1' and not a:
+        db.session.add(DelegacaoFiscalB2B(usuario_id=u.id, concedida_por_id=current_user.id))
+    elif permitir == '0' and a:
+        db.session.delete(a)
+    db.session.commit()
+    flash(f'Permissão para emitir NF B2B de {u.nome} atualizada. Outras permissões não foram alteradas.', 'success')
+    return redirect(url_for('auth.usuarios'))
 
 
 @auth_bp.route('/usuarios/novo', methods=['POST'])

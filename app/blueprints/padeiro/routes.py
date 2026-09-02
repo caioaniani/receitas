@@ -742,10 +742,13 @@ def entregar_b2b(id):
     estoque — a baixa ja aconteceu na SEPARACAO (regime 07/07/2026)."""
     data_str = (request.form.get('data') or '').strip() or None
     venda = VendaB2B.query.get_or_404(id)
+    db.session.refresh(venda, with_for_update=True)
     if venda.status == 'cancelada' or venda.status_entrega != 'separado':
         flash(f'Venda B2B #{venda.id} nao esta aguardando despacho.', 'warning')
         return redirect(url_for('padeiro.index', data=data_str))
     venda.status_entrega = 'entregue'
+    from app.services.cobrancas_automacao import enfileirar
+    enfileirar(venda, current_user.id)
     db.session.commit()
     flash(f'Venda B2B #{venda.id} marcada como entregue.', 'success')
     return redirect(url_for('padeiro.index', data=data_str))

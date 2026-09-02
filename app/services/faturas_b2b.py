@@ -79,6 +79,8 @@ def fechar_conta(cliente, data_inicio, data_fim, vencimento, user_id=None):
             venda_id=v.id, numero=1, fatura_id=fatura.id,
             vencimento=vencimento, valor=Decimal(v.valor_total or 0),
             forma_pagamento='boleto'))
+    from app.services.cobrancas_automacao import enfileirar
+    enfileirar(fatura, user_id)
     db.session.commit()
     logger.info('fatura B2B %s fechada: cliente=%s vendas=%d total=%s',
                 fatura.codigo, cliente.nome, len(vendas), total)

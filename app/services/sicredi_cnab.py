@@ -208,6 +208,15 @@ def validar_para_remessa(cob):
 
 
 def gerar_remessa(cobrancas, user_id=None):
+    from app.services.cobrancas_trava import OperacaoEmAndamento, trava
+    try:
+        with trava('remessas'):
+            return _gerar_remessa(cobrancas, user_id)
+    except OperacaoEmAndamento as exc:
+        return None, [str(exc)]
+
+
+def _gerar_remessa(cobrancas, user_id=None):
     """Gera o arquivo de remessa (cadastro, instrução 01) das cobranças
     `pendente`. Atribui nosso número a quem não tem, valida tudo, grava a
     CobrancaRemessa (sequencial + conteúdo) e move as cobranças pra status
@@ -252,6 +261,8 @@ def gerar_remessa(cobrancas, user_id=None):
     for cob in alvo:
         cob.status = 'remessa'
         cob.remessa_id = rem.id
+    from app.services.cobrancas_automacao import preparar_avisos
+    preparar_avisos(rem)
     db.session.commit()
     return rem, []
 

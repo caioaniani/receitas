@@ -103,6 +103,13 @@
                                 <label class="form-check-label" for="st-{{ u.id }}">🎓 só treino</label>
                             </div>
                         </form>
+                        {% if current_user.is_owner and u.papel == 'admin' and not u.somente_treino %}
+                        <form method="POST" action="{{ url_for('auth.delegar_nf_b2b', id=u.id) }}" class="mt-2">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="permitir" value="{{ '0' if u.id in delegados_nf else '1' }}">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary" aria-label="{{ 'Revogar' if u.id in delegados_nf else 'Permitir' }} emissão de NF B2B para {{ u.nome }}">{{ 'NF B2B liberada · revogar' if u.id in delegados_nf else 'Permitir emitir NF B2B' }}</button>
+                        </form>
+                        {% endif %}
                     {% endif %}
                 </td>
                 <td>

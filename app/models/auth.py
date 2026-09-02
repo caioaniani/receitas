@@ -47,6 +47,11 @@ class Usuario(UserMixin, db.Model):
     def is_admin(self):
         return self.papel == 'admin' or self.is_dono()
 
+    def pode_emitir_nf_b2b(self):
+        from app.models.cobrancas_automacao import DelegacaoFiscalB2B
+        return bool(not self.somente_treino and (self.is_dono() or (
+            self.is_admin() and db.session.get(DelegacaoFiscalB2B, self.id))))
+
     def is_gerente(self):
         return self.papel == 'gerente'
 
