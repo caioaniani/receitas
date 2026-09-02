@@ -23,7 +23,7 @@ AREAS = [
      'cor': '#6f42c1', 'desc': 'Caixa (PDV), B2B e entregas do site',
      'pode': lambda u: u.pode_pdv() or u.is_admin() or u.pode_lojas()},
     {'slug': 'financeiro', 'titulo': 'Financeiro', 'icone': '💰',
-     'cor': '#20c997', 'desc': 'Contas a pagar, caixa diário e rentabilidade',
+     'cor': '#20c997', 'desc': 'Cobranças, contas a pagar, caixa diário e rentabilidade',
      'pode': lambda u: u.is_admin()},
     {'slug': 'rh', 'titulo': 'RH', 'icone': '👥', 'cor': '#d63384',
      'desc': 'Funcionários, folha, escala, ponto e férias',

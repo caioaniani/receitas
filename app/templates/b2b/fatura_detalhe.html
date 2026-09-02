@@ -9,6 +9,8 @@
         {% else %}<span class="badge bg-info text-dark">fechada</span>{% endif %}
     </h1>
     <div>
+        <a href="{{ url_for('cobrancas.documentos', tipo='fatura', ref=fatura.id) }}" class="btn btn-success btn-sm">
+            <i class="bi bi-envelope-paper"></i> Enviar NF + boleto / Histórico</a>
         {% if fatura.status == 'fechada' %}
         <form method="POST" action="{{ url_for('b2b.fatura_cancelar', fid=fatura.id) }}" class="d-inline"
               onsubmit="return confirm('Cancelar a fatura? As vendas voltam pra conta aberta e as parcelas do fechamento são apagadas.');">
@@ -16,6 +18,7 @@
             <button class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle"></i> Cancelar fatura</button>
         </form>
         {% endif %}
+        <a href="{{ url_for('cobrancas.lista') }}" class="btn btn-outline-secondary btn-sm">Cobranças</a>
         <a href="{{ url_for('b2b.faturas') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
     </div>
 </div>
@@ -34,7 +37,7 @@
         </div>
 
         {# ── Boleto (Sicredi) ── #}
-        <div class="card mt-3">
+        <div class="card mt-3" id="boletos">
             <div class="card-header py-2"><strong>Boleto (Sicredi)</strong></div>
             <div class="card-body small">
                 {% if cobranca %}
@@ -52,7 +55,7 @@
                             <i class="bi bi-envelope"></i> Enviar boleto por e-mail</button>
                     </form>
                     {% else %}
-                    <div class="form-text">Vá em <a href="{{ url_for('cobrancas.lista') }}">Cobranças</a>,
+                    <div class="form-text">Vá em <a href="{{ url_for('cobrancas.banco') }}">Operações do banco</a>,
                         marque esta cobrança e gere a remessa — o boleto (PDF/e-mail) libera depois.</div>
                     {% endif %}
                 {% elif fatura.status == 'fechada' %}
@@ -71,7 +74,7 @@
 
     <div class="col-md-6">
         {# ── NF-e consolidada via Tiny — mesmo padrão da venda ── #}
-        <div class="card">
+        <div class="card" id="nota-fiscal">
             <div class="card-header py-2"><strong>Nota Fiscal consolidada (Tiny)</strong></div>
             <div class="card-body small">
                 {% if fatura.nf_emitida_em %}

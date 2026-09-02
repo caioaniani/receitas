@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% from 'cobrancas/_format.html' import dinheiro %}
+{% block title %}{{ r.referencia }} — Cobranças{% endblock %}
+{% block content %}
+<div class="cob-page">
+    <header class="cob-heading"><div><span class="cob-kicker">{{ r.referencia }}</span><h1>{{ r.cliente }}</h1>
+        <p>Documentos, envio e recebimento no mesmo lugar.</p></div>
+        <a class="btn btn-outline-secondary" href="{{ url_for('cobrancas.lista') }}">← Voltar às cobranças</a>
+    </header>
+    {% include 'cobrancas/_nav.html' %}
+    <section class="cob-summary" aria-label="Resumo da cobrança">
+        <div><span>Valor da cobrança</span><strong>{{ dinheiro(r.valor) }}</strong><small>{{ r.referencia }}</small></div>
+        <div><span>Saldo a receber</span><strong>{{ dinheiro(r.saldo) }}</strong><small>{{ r.pagamento }}{% if r.pago %} · {{ dinheiro(r.pago) }} recebido(s){% endif %}</small></div>
+        <div><span>Vencimento</span><strong>{{ r.vencimento.strftime('%d/%m/%Y') }}</strong><small>{{ r.banco_label }}</small></div>
+    </section>
+    <section class="cob-panel cob-send" aria-labelledby="enviar-titulo">
+        <div class="cob-section-heading"><div><h2 id="enviar-titulo">Enviar NF + boleto</h2><p>Um e-mail, com os dois PDFs anexados.</p></div></div>
+        <div class="cob-documents">
+            <div><strong>{{ r.nf_label }}</strong>
+                {% if r.nf_pronta %}
+                <a href="{{ url_for('b2b.fatura_danfe', fid=r.id) if r.tipo == 'fatura' else url_for('b2b.venda_danfe', vid=r.documento.id) }}" target="_blank" rel="noopener">Ver DANFE (PDF) ↗</a>
+                {% else %}<small>{{ 'É necessário confirmar a autorização.' if r.documento else 'Boleto avulso, sem documento de origem.' }}</small>{% endif %}</div>
+            <div><strong>{{ r.banco_label }}</strong>
+                {% if r.cobranca and r.cobranca.nosso_numero %}
+                <a href="{{ url_for('cobrancas.boleto_pdf', id=r.cobranca.id) }}" target="_blank" rel="noopener">Ver boleto (PDF) ↗</a>
+                {% else %}<small>Prepare o boleto na origem ou na área do banco.</small>{% endif %}</div>
+        </div>
+        {% if r.bloqueio %}
+        <p class="cob-notice">{{ r.bloqueio }}</p>
+        {% if r.documento %}<a class="btn btn-outline-success" href="{{ url_for('b2b.fatura_detalhe', fid=r.id) if r.tipo == 'fatura' else url_for('b2b.venda_detalhe', vid=r.documento.id) }}">{{ 'Preparar documentos na origem' if r.saldo and not r.cancelada else 'Consultar origem' }} →</a>{% endif %}
+        <a class="btn btn-outline-secondary" href="{{ url_for('cobrancas.banco') }}">Operações do banco</a>
+        {% else %}
+        {% if r.envio %}<p class="cob-notice">Há histórico para esta cobrança. Confira abaixo antes de reenviar.</p>{% endif %}
+        <form method="POST" class="cob-send-form" id="cob-send-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="chave" value="{{ chave }}">
+            <label for="cob-email">Enviar os dois documentos para</label>
+            <input id="cob-email" type="email" class="form-control" name="email" value="{{ r.email }}" required maxlength="254" autocomplete="email" placeholder="financeiro@cliente.com.br">
+            {% if r.cobranca.status == 'remessa' %}
+            <label class="cob-confirm"><input type="checkbox" name="banco_confirmado" value="1" required>
+                Conferi no Sicredi que este boleto foi registrado. O ERP ainda só registra a geração do arquivo.</label>
+            {% endif %}
+            <button class="btn btn-success" type="submit" id="cob-send-button">{{ 'Reenviar NF + boleto' if r.envio else 'Enviar NF + boleto' }}</button>
+            <small>O envio não emite uma nova NF, não gera outro boleto e não altera o saldo.</small>
+        </form>
+        {% endif %}
+    </section>
+    <section class="cob-panel cob-history" aria-labelledby="historico-titulo">
+        <div class="cob-section-heading"><div><h2 id="historico-titulo">Histórico de envio</h2><p>Aceitação pelo serviço de e-mail não é confirmação de entrega ou leitura.</p></div></div>
+        {% for e in historico %}
+        <article class="cob-history-item">
+            <div><strong>{{ envio_labels.get(e.status, 'Envio não confirmado') }}</strong><small>{{ e.criado_em.strftime('%d/%m/%Y às %H:%M') }} · {{ e.usuario_nome or 'Usuário não registrado' }}</small></div>
+            <p><strong>Para:</strong> {{ e.destinatario }}<br><strong>Documentos:</strong> {{ {'nf': 'Somente NF', 'boleto': 'Somente boleto', 'nf_boleto': 'NF + boleto'}[e.documentos] }}</p>
+            {% if e.anexos %}<p class="cob-file-names">{{ e.anexos|join(' · ') }}</p>{% endif %}
+            {% if e.erro %}<p class="cob-notice">{{ e.erro }}</p>{% endif %}
+            {% if e.status == 'preparando' %}<p class="cob-notice">O resultado deste envio ainda não foi registrado. Ele pode ter sido interrompido; confira no serviço de e-mail antes de reenviar.</p>{% endif %}
+            {% if e.provedor_id %}<details><summary>Comprovante técnico do envio</summary><code>{{ e.provedor_id }}</code></details>{% endif %}
+        </article>
+        {% else %}<p class="cob-empty">Sem histórico de envio registrado. Isso não significa que estes documentos nunca foram enviados por outro caminho.</p>{% endfor %}
+    </section>
+    <details class="cob-help"><summary>Detalhes da origem e operações adicionais</summary>
+        {% if r.documento %}<p><a href="{{ url_for('b2b.fatura_detalhe', fid=r.id) if r.tipo == 'fatura' else url_for('b2b.venda_detalhe', vid=r.documento.id) }}">Abrir {{ r.referencia }} — itens, emissão e ações individuais</a></p>{% endif %}
+        <p><a href="{{ url_for('cobrancas.banco') }}">Remessa, retorno e correções no banco</a></p>
+    </details>
+</div>
+<script src="{{ url_for('static', filename='js/cobrancas.js') }}?v={{ static_v['js/cobrancas.js'] }}" defer></script>
+{% endblock %}

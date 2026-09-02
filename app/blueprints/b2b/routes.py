@@ -659,6 +659,9 @@ def fatura_enviar_nf_email(fid):
     res = email_svc.enviar_nf_b2b(
         fatura, destinatario, pdf,
         rotulo=f'fatura {fatura.codigo} ({fatura.periodo_display})')
+    from app.services.cobrancas_envio import registrar_envio
+    registrar_envio(fatura, [], destinatario, 'nf', current_user, res,
+                   [f'nfe_{fatura.nf_numero or fatura.tiny_nota_fiscal_id or fatura.id}.pdf'])
     if res.get('ok'):
         flash(f'NF enviada pra {destinatario}.', 'success')
     else:
@@ -1269,6 +1272,9 @@ def venda_enviar_nf_email(vid):
         flash(f'Não consegui baixar o DANFE no Tiny — {motivo}.', 'danger')
         return redirect(url_for('b2b.venda_detalhe', vid=vid))
     res = email_svc.enviar_nf_b2b(venda, destinatario, pdf)
+    from app.services.cobrancas_envio import registrar_envio
+    registrar_envio(venda, [], destinatario, 'nf', current_user, res,
+                   [f'nfe_{venda.nf_numero or venda.tiny_nota_fiscal_id or venda.id}.pdf'])
     if res.get('ok'):
         flash(f'NF enviada pra {destinatario}.', 'success')
     else:
@@ -1327,6 +1333,10 @@ def venda_enviar_nf_boleto_email(vid):
         return redirect(url_for('b2b.venda_detalhe', vid=vid))
     res = email_svc.enviar_nf_e_boleto_b2b(venda, destinatario, nf_pdf,
                                            boletos)
+    from app.services.cobrancas_envio import registrar_envio
+    registrar_envio(venda, [b['cob'] for b in boletos], destinatario, 'nf_boleto', current_user, res,
+                   [f'nfe_{venda.nf_numero or venda.tiny_nota_fiscal_id or venda.id}.pdf']
+                   + [f'boleto_{b["cob"].nosso_numero}.pdf' for b in boletos])
     if res.get('ok'):
         flash(f'NF + {len(boletos)} boleto(s) enviados pra {destinatario}.',
               'success')

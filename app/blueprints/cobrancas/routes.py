@@ -5,7 +5,8 @@ seleciona pendentes -> "Gerar remessa" (arquivo .CRM pra subir no Sicredi
 Internet / mandar na homologação) -> upload do RETORNO dá baixa (liquidação
 quita a parcela junto) e traz o QR Pix do boleto híbrido.
 """
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from uuid import uuid4
 
 from flask import (
     Response,
@@ -29,9 +30,112 @@ def _admin_ou_403():
         abort(403)
 
 
+@cobrancas_bp.route('/painel')
+@login_required
+def visao_geral():
+    _admin_ou_403()
+    from app.services.central_cobrancas import painel, resumo_dashboard
+    return render_template('cobrancas/dashboard.html', resumo=resumo_dashboard(painel()))
+
+
 @cobrancas_bp.route('/')
 @login_required
 def lista():
+    _admin_ou_403()
+    from app.services.central_cobrancas import ETAPAS, filtrar_etapa, painel
+    linhas = painel()
+    busca = (request.args.get('q') or '').strip()[:120]
+    situacao = request.args.get('situacao', 'abertas')
+    envio = request.args.get('envio', '')
+    etapa = request.args.get('etapa', '')
+    if etapa not in ETAPAS:
+        etapa = ''
+    if situacao not in ('abertas', 'vencidas', 'pagas', 'canceladas', 'todas'):
+        situacao = 'abertas'
+    if envio not in ('', 'sem_historico', 'aceito', 'problema'):
+        envio = ''
+    de, ate = request.args.get('de', ''), request.args.get('ate', '')
+    try:
+        inicio, fim = date.fromisoformat(de) if de else None, date.fromisoformat(ate) if ate else None
+        if inicio and fim and inicio > fim:
+            raise ValueError
+    except ValueError:
+        flash('Confira o período de vencimento informado.', 'warning')
+        inicio = fim = None
+        de = ate = ''
+    linhas = [r for r in linhas if (not busca or busca.casefold() in f'{r.cliente} {r.referencia}'.casefold())
+              and (not inicio or r.vencimento >= inicio) and (not fim or r.vencimento <= fim)]
+    if envio == 'sem_historico':
+        linhas = [r for r in linhas if not r.envio]
+    elif envio == 'aceito':
+        linhas = [r for r in linhas if r.envio and r.envio.status == 'aceito']
+    elif envio == 'problema':
+        linhas = [r for r in linhas if r.envio and r.envio.status != 'aceito']
+    linhas = filtrar_etapa(linhas, etapa)
+    abertas = [r for r in linhas if r.saldo and not r.cancelada]
+    vencidas = [r for r in abertas if r.vencimento < hoje()]
+    resumo = {
+        'aberto': sum((r.saldo for r in abertas), 0),
+        'vencido': sum((r.saldo for r in vencidas), 0),
+        'sem_historico': sum(r.envio is None for r in abertas),
+    }
+    grupos = {
+        'abertas': abertas, 'vencidas': vencidas,
+        'pagas': [r for r in linhas if not r.saldo and not r.cancelada],
+        'canceladas': [r for r in linhas if r.cancelada], 'todas': linhas,
+    }
+    contagens = {k: len(v) for k, v in grupos.items()}
+    linhas = grupos[situacao]
+    total = len(linhas)
+    paginas = max(1, (total + 29) // 30)
+    pagina = max(1, min(paginas, request.args.get('pagina', 1, type=int)))
+
+    def filtro_url(**kwargs):
+        params = dict(q=busca, situacao=situacao, envio=envio, etapa=etapa, de=de, ate=ate)
+        params.update(kwargs)
+        return url_for('cobrancas.lista', **{k: v for k, v in params.items() if v})
+
+    return render_template('cobrancas/central.html', linhas=linhas[(pagina - 1) * 30:pagina * 30],
+                           resumo=resumo, contagens=contagens, total=total, pagina=pagina,
+                           paginas=paginas, busca=busca, situacao=situacao, envio=envio,
+                           de=de, ate=ate, filtro_url=filtro_url, etapa=etapa, etapas=ETAPAS)
+
+
+@cobrancas_bp.route('/<any(fatura,parcela,boleto):tipo>/<int:ref>/documentos', methods=['GET', 'POST'])
+@login_required
+def documentos(tipo, ref):
+    _admin_ou_403()
+    from app.services.central_cobrancas import ENVIOS, carregar, historico
+    from app.services.cobrancas_envio import enviar_conjunto
+    r = carregar(tipo, ref)
+    # Uma parcela absorvida por fatura sempre volta à cobrança consolidada.
+    if (r.tipo, r.id) != (tipo, ref):
+        if request.method == 'POST':
+            flash('Esta parcela pertence a uma fatura. Confira o fechamento antes de enviar.', 'warning')
+        return redirect(url_for('cobrancas.documentos', tipo=r.tipo, ref=r.id))
+    if request.method == 'POST':
+        try:
+            e, novo = enviar_conjunto(r, request.form.get('email'), request.form.get('chave'),
+                                     current_user, request.form.get('banco_confirmado') == '1')
+        except ValueError as exc:
+            flash(str(exc), 'warning')
+        else:
+            if not novo:
+                flash('Esta solicitação já foi processada. Nenhum novo e-mail foi disparado.', 'info')
+            elif e.status == 'aceito':
+                flash('NF + boleto aceitos pelo serviço de e-mail. O histórico abaixo registra o envio.', 'success')
+            else:
+                flash(e.erro or 'Envio não confirmado. Consulte o histórico antes de tentar novamente.', 'warning')
+        return redirect(url_for('cobrancas.documentos', tipo=tipo, ref=ref))
+    envios = historico(r)
+    r.envio = envios[0] if envios else None
+    return render_template('cobrancas/documentos.html', r=r, historico=envios,
+                           envio_labels=ENVIOS, chave=str(uuid4()))
+
+
+@cobrancas_bp.route('/banco')
+@login_required
+def banco():
     _admin_ou_403()
     cobrancas = (Cobranca.query
                  .order_by(Cobranca.vencimento.asc(), Cobranca.id.asc())
@@ -49,7 +153,8 @@ def lista():
     # Parcela de FATURA mensal fica fora: o boleto dela é o da fatura
     # (Cobranca.fatura_id) — listar aqui geraria boleto em dobro pro
     # cliente (achado da revisão 07/07/2026).
-    parcelas_sem = [p for p in parcelas if not p.cobranca and not p.fatura_id]
+    parcelas_sem = [p for p in parcelas if not p.cobranca and not p.fatura_id
+                    and not p.venda.fatura_id and p.venda.status != 'cancelada' and p.saldo > 0]
     remessas = (CobrancaRemessa.query
                 .order_by(CobrancaRemessa.numero.desc()).limit(20).all())
     return render_template('cobrancas/lista.html',
@@ -293,6 +398,10 @@ def enviar_email(id):
     ld = linha_digitavel(codigo_barras_da_cobranca(cob))
     res = email_svc.enviar_boleto_b2b(cob, destinatario, pdf,
                                       linha_digitavel=ld)
+    from app.services.cobrancas_envio import registrar_envio
+    registrar_envio(cob.fatura if cob.fatura else cob.parcela.venda if cob.parcela else None,
+                   [cob], destinatario, 'boleto', current_user, res,
+                   [f'boleto_{cob.nosso_numero}.pdf'])
     if res.get('ok'):
         flash(f'Boleto enviado pra {destinatario}.', 'success')
     else:

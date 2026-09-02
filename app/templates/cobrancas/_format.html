@@ -1,0 +1,1 @@
+{% macro dinheiro(v) %}R$ {{ '{:,.2f}'.format(v).replace(',', 'X').replace('.', ',').replace('X', '.') }}{% endmacro %}

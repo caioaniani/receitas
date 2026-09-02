@@ -4,12 +4,15 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1 class="page-title"><i class="bi bi-upc-scan"></i> Cobranças</h1>
+        <a href="{{ url_for('cobrancas.lista') }}">← Voltar às cobranças</a>
+        <h1 class="page-title mt-2"><i class="bi bi-bank"></i> Operações do banco</h1>
         <p class="page-subtitle">Boletos híbridos Sicredi (CNAB 400): gere a
             cobrança da parcela B2B, monte a remessa, suba o retorno — a
             liquidação quita a parcela sozinha.</p>
     </div>
 </div>
+
+{% include 'cobrancas/_nav.html' %}
 
 {# ── Parcelas B2B sem cobrança ── #}
 {% if parcelas_sem %}

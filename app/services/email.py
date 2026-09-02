@@ -96,7 +96,7 @@ def enviar(destinatario, assunto, html, *, texto=None, anexos=None):
                 'erro': f'Postmark recusou ({r.status_code}/{codigo}): {detalhe}'}
     except Exception as exc:  # noqa: BLE001
         logger.exception('email.enviar falhou')
-        return {'ok': False, 'erro': str(exc)}
+        return {'ok': False, 'erro': str(exc), 'incerto': True}
 
 
 def enviar_pedido_recebido(pedido):
@@ -782,20 +782,21 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
                   anexos=[(nome_pdf, pdf_bytes, 'application/pdf')])
 
 
-def enviar_nf_e_boleto_b2b(venda, destinatario, nf_pdf, boletos):
+def enviar_nf_e_boleto_b2b(venda, destinatario, nf_pdf, boletos, *, rotulo=None):
     """Manda a NF (DANFE) + o(s) boleto(s) da venda B2B num e-mail SÓ, com
     todos os PDFs anexados (pedido do dono 10/07/2026 — evita 2 e-mails).
 
     `boletos` = lista de dicts {cob, pdf, linha_digitavel}. O corpo mostra a
     NF (número/valor) e cada boleto (valor, vencimento, nosso número, linha
     digitável e Pix quando houver)."""
+    rotulo = rotulo or f'venda #{venda.id}'
     numero = venda.nf_numero or venda.tiny_nota_fiscal_id or ''
     assunto = (f'Nota fiscal {numero} + boleto — O Pão Padaria Artesanal'
                if numero else 'Nota fiscal + boleto — O Pão Padaria Artesanal')
     anexos = [(f'nfe_{numero or venda.id}.pdf', nf_pdf, 'application/pdf')]
 
     blocos_html, linhas = [], [
-        f'Segue, em anexo, a nota fiscal da venda #{venda.id} '
+        f'Segue, em anexo, a nota fiscal da {rotulo} '
         + (f'(nº {numero}) ' if numero else '')
         + f'e o(s) boleto(s). Valor total: {_fmt_brl(venda.valor_total)}.', '']
     num_html = (f'<p style="margin:0 0 6px;font-size:13px;color:#6b5f54;">'
