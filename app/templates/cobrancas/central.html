@@ -4,12 +4,12 @@
 {% block content %}
 <div class="cob-page">
     <header class="cob-heading">
-        <div><span class="cob-kicker">Financeiro · A receber</span><h1>Cobranças</h1>
+        <div><span class="cob-kicker">Financeiro · A receber</span><h1>{{ etapas.get(etapa, 'Cobranças') }}</h1>
         <p>O que falta preparar, enviar ou receber.</p></div>
         <a class="btn btn-outline-secondary" href="{{ url_for('b2b.faturas') }}">Fechar conta mensal →</a>
     </header>
     {% include 'cobrancas/_nav.html' %}
-    <section class="cob-summary" aria-label="Resumo do período e clientes filtrados">
+    <section class="cob-summary" aria-label="Resumo dos filtros de cliente, período, documentos e envio">
         <div><span>A receber</span><strong>{{ dinheiro(resumo.aberto) }}</strong><small>Saldo em aberto</small></div>
         <div><span>Vencido no sistema</span><strong>{{ dinheiro(resumo.vencido) }}</strong><small>Sem quitação registrada</small></div>
         <div><span>Sem histórico de envio</span><strong>{{ resumo.sem_historico }} <small>cobrança(s)</small></strong><small>Não significa que nunca foram enviadas</small></div>
@@ -27,8 +27,12 @@
             <option value="aceito" {% if envio == 'aceito' %}selected{% endif %}>Aceito pelo serviço</option>
             <option value="problema" {% if envio == 'problema' %}selected{% endif %}>Conferir envio</option>
         </select></label>
+        <label>Documentos<select class="form-select" name="etapa">
+            <option value="">Todos</option>
+            {% for key, label in etapas.items() %}<option value="{{ key }}" {% if etapa == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select></label>
         <button class="btn btn-success" type="submit">Filtrar</button>
-        {% if busca or de or ate or envio %}<a href="{{ url_for('cobrancas.lista') }}" class="btn btn-outline-secondary">Limpar</a>{% endif %}
+        {% if busca or de or ate or envio or etapa %}<a href="{{ url_for('cobrancas.lista') }}" class="btn btn-outline-secondary">Limpar</a>{% endif %}
     </form>
     <nav class="cob-tabs" aria-label="Situação do pagamento">
         {% for key, label in [('abertas','A receber'), ('vencidas','Vencidas'), ('pagas','Pagas'), ('canceladas','Canceladas'), ('todas','Todas')] %}
@@ -51,7 +55,12 @@
                         {% if r.envio %}<small>{{ r.envio.criado_em.strftime('%d/%m/%Y %H:%M') }} · {{ {'nf': 'Só NF', 'boleto': 'Só boleto', 'nf_boleto': 'NF + boleto'}[r.envio.documentos] }}</small>{% endif %}
                     </td>
                     <td data-label="Pagamento"><span class="cob-status {% if 'Vencida' in r.pagamento %}cob-warning{% elif r.pagamento == 'Paga' %}cob-success{% endif %}">{{ r.pagamento }}</span></td>
-                    <td class="cob-actions"><a class="btn btn-outline-success" href="{{ url_for('cobrancas.documentos', tipo=r.tipo, ref=r.id) }}">{{ r.acao }} →</a></td>
+                    <td class="cob-actions">
+                        {% if etapa in ['nf_pendente', 'boleto_pendente'] and r.documento %}
+                        {% set ancora = 'nota-fiscal' if etapa == 'nf_pendente' else 'boletos' %}
+                        <a class="btn btn-outline-success" href="{{ url_for('b2b.fatura_detalhe', fid=r.id, _anchor=ancora) if r.tipo == 'fatura' else url_for('b2b.venda_detalhe', vid=r.documento.id, _anchor=ancora) }}">{{ 'Abrir nota fiscal' if etapa == 'nf_pendente' else 'Abrir boleto' }} →</a>
+                        {% else %}<a class="btn btn-outline-success" href="{{ url_for('cobrancas.documentos', tipo=r.tipo, ref=r.id) }}">{{ r.acao }} →</a>{% endif %}
+                    </td>
                 </tr>
                 {% else %}<tr><td colspan="6" class="cob-empty">Nenhuma cobrança neste filtro. <a href="{{ url_for('cobrancas.lista', situacao='todas') }}">Ver todas</a></td></tr>{% endfor %}
                 </tbody>

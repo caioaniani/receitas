@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% from 'cobrancas/_format.html' import dinheiro %}
+{% block title %}Visão geral — Cobranças{% endblock %}
+{% block content %}
+<div class="cob-page cob-dashboard">
+    <header class="cob-heading">
+        <div><span class="cob-kicker">Financeiro</span><h1>Cobranças, sem se perder.</h1>
+            <p>Escolha o que você quer consultar.</p></div>
+        <a class="btn btn-outline-secondary" href="{{ url_for('cobrancas.lista', situacao='todas') }}">Ver todas as cobranças →</a>
+    </header>
+    {% include 'cobrancas/_nav.html' %}
+    <nav class="cob-overview-totals" aria-label="Consultar pagamentos">
+        <a href="{{ url_for('cobrancas.lista', situacao='abertas') }}"><span>A receber</span><strong>{{ dinheiro(resumo.aberto) }}</strong></a>
+        <a href="{{ url_for('cobrancas.lista', situacao='vencidas') }}"><span>Vencidas no sistema</span><strong>{{ dinheiro(resumo.vencido) }}</strong></a>
+        <a href="{{ url_for('cobrancas.lista', situacao='pagas') }}"><span>Pagas</span><strong>{{ resumo.pagas }} <small>cobrança(s)</small></strong></a>
+    </nav>
+    <nav class="cob-shortcuts" aria-label="Áreas de cobrança">
+        <a class="cob-shortcut" href="{{ url_for('cobrancas.lista', situacao='abertas', etapa='nf_pendente') }}">
+            <div class="cob-shortcut-title"><h2>Notas fiscais</h2><i class="bi bi-file-earmark-text" aria-hidden="true"></i></div>
+            <p><strong>{{ resumo.nf_pendente }}</strong> cobrança(s) sem NF autorizada no ERP</p>
+            <span>Consultar notas e vendas <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="cob-shortcut" href="{{ url_for('cobrancas.lista', situacao='abertas', etapa='boleto_pendente') }}">
+            <div class="cob-shortcut-title"><h2>Boletos</h2><i class="bi bi-upc-scan" aria-hidden="true"></i></div>
+            <p><strong>{{ resumo.boleto_pendente }}</strong> cobrança(s) com boleto a preparar</p>
+            <span>Consultar boletos pendentes <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="cob-shortcut" href="{{ url_for('b2b.faturas') }}">
+            <div class="cob-shortcut-title"><h2>Faturas mensais</h2><i class="bi bi-calendar3" aria-hidden="true"></i></div>
+            <p><strong>{{ resumo.fechamentos }}</strong> cliente(s) com conta para fechar</p>
+            <span>Consultar fechamentos <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="cob-shortcut" href="{{ url_for('cobrancas.lista', situacao='abertas', envio='sem_historico') }}">
+            <div class="cob-shortcut-title"><h2>Envios de documentos</h2><i class="bi bi-envelope-paper" aria-hidden="true"></i></div>
+            <p><strong>{{ resumo.sem_historico }}</strong> cobrança(s) sem histórico de envio</p>
+            <span>Consultar antes de enviar ou reenviar <span aria-hidden="true">→</span></span>
+        </a>
+    </nav>
+    <div class="cob-overview-tools">
+        <a href="{{ url_for('cobrancas.banco') }}"><i class="bi bi-bank" aria-hidden="true"></i> Banco: remessas e retornos →</a>
+        {% if resumo.banco %}<a href="{{ url_for('cobrancas.lista', situacao='abertas', etapa='banco') }}">{{ resumo.banco }} boleto(s) para conferir no banco →</a>{% endif %}
+        <a href="{{ url_for('b2b.clientes') }}">Cadastro dos clientes →</a>
+    </div>
+    <p class="cob-overview-note">Os atalhos apenas abrem telas; não emitem nem enviam documentos. “Sem histórico” não significa que o cliente nunca recebeu.</p>
+</div>
+{% endblock %}

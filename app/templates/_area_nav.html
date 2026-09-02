@@ -126,7 +126,7 @@
 
 
 {% macro financeiro(variant) %}
-{{ _lnk(variant, url_for('cobrancas.lista'), 'Cobranças', request.path.startswith('/cobrancas'), title='A receber, NF + boleto, envios e pagamentos', icon='bi-receipt') }}
+{{ _lnk(variant, url_for('cobrancas.visao_geral'), 'Cobranças', request.path.startswith('/cobrancas'), title='A receber, NF + boleto, envios e pagamentos', icon='bi-receipt') }}
 {{ _lnk(variant, url_for('contas_pagar.lista'), 'Contas a Pagar', request.path in ['/contas-pagar/', '/contas-pagar']) }}
 {{ _lnk(variant, url_for('contas_pagar.canais'), 'Canais do Slack', request.path.startswith('/contas-pagar/canais'), sub=true, title='Qual canal do Slack pertence a qual loja') }}
 {{ _lnk(variant, url_for('contas_pagar.mapeamentos'), 'Vincular itens de NF', request.path.startswith('/contas-pagar/mapeamentos'), sub=true, title='Ligar cada item das notas fiscais à matéria-prima do estoque') }}

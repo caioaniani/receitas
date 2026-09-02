@@ -2,24 +2,41 @@
 
 ## Acesso e organização
 
-Financeiro → **Cobranças** (`/cobrancas/`), seguindo o layout v2 e mantendo
+Financeiro → **Cobranças** (`/cobrancas/painel`), seguindo o layout v2 e mantendo
 compatibilidade com o layout clássico. A permissão permanece a mesma do
 módulo anterior: usuário autenticado com acesso de administrador.
 
+- **Visão geral:** dashboard exclusivamente de consulta, com links de
+  pagamentos e quatro áreas: notas fiscais, boletos, faturas mensais e
+  histórico de envio. Nenhum formulário, disparo ou emissão automática.
 - **Cobranças:** saldo a receber, vencidas, pagas e canceladas; busca por
-  cliente/referência, vencimento e situação do envio; 30 cobranças por página.
+  cliente/referência, vencimento, situação do envio e documentos;
+  30 cobranças por página (`/cobrancas/`, endereço antigo preservado).
 - **Fechamentos:** faturas consolidadas do B2B (`/b2b/faturas`).
 - **Banco:** remessa, retorno e correções (`/cobrancas/banco`). As rotas e
   serviços que geram/baixam títulos continuam os existentes.
 - **Documentos:** `/cobrancas/fatura/<id>/documentos` ou
   `/cobrancas/parcela/<id>/documentos`, acessível também na fatura/venda.
 
+Os atalhos de notas/boletos aplicam um filtro visível e mantido ao buscar
+ou paginar. Cada resultado abre a seção correspondente da venda/fatura;
+o usuário decide se e quando emitir. O contador de notas se refere a
+**cobranças**, não a documentos fiscais únicos: várias parcelas de uma venda
+compartilham a NF. Uma cobrança pode aparecer em mais de uma área; os
+contadores de pendências não devem ser somados como valor a receber.
+
+O contador de fechamentos conta clientes mensais ativos com vendas ativas,
+até hoje, sem parcelas e sem fatura, cujo total é positivo. Não cria contas.
+O atalho do banco separa remessas, rejeições e divergências de saldo de
+boletos ainda a preparar. Valores zerados, cancelados ou já quitados não
+aparecem como sugestões de geração na lista bancária.
+
 ## Saldos e fontes
 
 Uma linha por fatura consolidada, parcela não faturada ou boleto avulso.
 Parcelas/vendas vinculadas a uma fatura não são somadas novamente. Cobranças
 zeradas não entram; canceladas ficam em filtro próprio e fora dos totais.
-Os totais respeitam cliente e período, antes da paginação.
+Os totais respeitam cliente, período, documentos e envio, antes da paginação.
 
 O saldo vem dos recebimentos efetivamente registrados nas parcelas; uma
 fatura legada marcada como paga com recebimento parcial ainda exibe o saldo.
@@ -78,6 +95,11 @@ destrutivo dessa tabela, pois ela contém o histórico de comunicação.
 filtros/paginação, ausência de histórico, autorização/CSRF, destinatário,
 dois anexos ou nenhum, idempotência, erro/incerteza, envios legados,
 atribuição por parcela, migração idempotente e layout clássico/v2.
+
+`tests/test_dashboard_cobrancas.py` verifica contadores, filtros e links
+por etapa, lançamentos zerados, fechamentos sem duplicação, navegação
+clássica/v2, autorização e que visitar o dashboard e seus atalhos não
+chama emissão fiscal, geração de remessa nem envio de e-mail.
 
 Testes automatizados usam banco isolado e provedores simulados.
 Conferência visual local usa dados fictícios, sem rede de saída e com

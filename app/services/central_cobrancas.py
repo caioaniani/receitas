@@ -1,10 +1,12 @@
 """Projeção somente leitura do contas a receber. Não gera nem quita títulos."""
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 
+from sqlalchemy import func
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.models import Cobranca, EnvioCobranca, FaturaB2B, VendaB2B, VendaB2BParcela
+from app.models import ClienteB2B, Cobranca, EnvioCobranca, FaturaB2B, VendaB2B, VendaB2BParcela
 from app.utils import hoje
 
 ZERO = Decimal('0.00')
@@ -21,6 +23,11 @@ ENVIOS = {
     'aceito': 'Aceito pelo serviço de e-mail',
     'falha': 'Falha no envio',
     'incerto': 'Envio não confirmado',
+}
+ETAPAS = {
+    'nf_pendente': 'Notas fiscais a conferir',
+    'boleto_pendente': 'Boletos a preparar',
+    'banco': 'Boletos para conferir no banco',
 }
 
 
@@ -108,6 +115,45 @@ class Recebivel:
         if self.bloqueio:
             return 'Conferir boleto'
         return 'Revisar envio' if self.envio else 'Enviar NF + boleto'
+
+
+def filtrar_etapa(linhas, etapa):
+    """Atalhos de consulta; não emite documentos nem altera os títulos."""
+    if etapa not in ETAPAS:
+        return linhas
+    abertas = [r for r in linhas if r.saldo and not r.cancelada]
+    if etapa == 'nf_pendente':
+        return [r for r in abertas if r.documento and not r.nf_pronta]
+    if etapa == 'boleto_pendente':
+        return [r for r in abertas if not r.cobranca or not r.cobranca.nosso_numero
+                or r.cobranca.status == 'pendente']
+    return [r for r in abertas if r.cobranca and r.cobranca.nosso_numero
+            and r.cobranca.status != 'pendente'
+            and (r.cobranca.status != 'registrada' or r.cobranca.valor != r.saldo)]
+
+
+def resumo_dashboard(linhas):
+    abertas = [r for r in linhas if r.saldo and not r.cancelada]
+    vencidas = [r for r in abertas if r.vencimento < hoje()]
+    # Mesmos critérios de elegibilidade da tela de fechamento, em uma consulta.
+    # Contas de valor zero não viram alertas nem somam ao contas a receber.
+    contas = (VendaB2B.query.with_entities(VendaB2B.cliente_id)
+              .join(ClienteB2B)
+              .filter(ClienteB2B.ativo.is_(True), ClienteB2B.faturamento_mensal.is_(True),
+                      VendaB2B.status == 'ativa', VendaB2B.fatura_id.is_(None),
+                      VendaB2B.data_venda >= date(2000, 1, 1), VendaB2B.data_venda <= hoje(),
+                      ~VendaB2B.parcelas.any())
+              .group_by(VendaB2B.cliente_id).having(func.sum(VendaB2B.valor_total) > ZERO).all())
+    return {
+        'aberto': sum((r.saldo for r in abertas), ZERO),
+        'vencido': sum((r.saldo for r in vencidas), ZERO),
+        'pagas': sum(not r.saldo and not r.cancelada for r in linhas),
+        'nf_pendente': len(filtrar_etapa(linhas, 'nf_pendente')),
+        'boleto_pendente': len(filtrar_etapa(linhas, 'boleto_pendente')),
+        'banco': len(filtrar_etapa(linhas, 'banco')),
+        'sem_historico': sum(r.envio is None for r in abertas),
+        'fechamentos': len(contas),
+    }
 
 
 def de_fatura(f):

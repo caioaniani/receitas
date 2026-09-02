@@ -30,15 +30,26 @@ def _admin_ou_403():
         abort(403)
 
 
+@cobrancas_bp.route('/painel')
+@login_required
+def visao_geral():
+    _admin_ou_403()
+    from app.services.central_cobrancas import painel, resumo_dashboard
+    return render_template('cobrancas/dashboard.html', resumo=resumo_dashboard(painel()))
+
+
 @cobrancas_bp.route('/')
 @login_required
 def lista():
     _admin_ou_403()
-    from app.services.central_cobrancas import painel
+    from app.services.central_cobrancas import ETAPAS, filtrar_etapa, painel
     linhas = painel()
     busca = (request.args.get('q') or '').strip()[:120]
     situacao = request.args.get('situacao', 'abertas')
     envio = request.args.get('envio', '')
+    etapa = request.args.get('etapa', '')
+    if etapa not in ETAPAS:
+        etapa = ''
     if situacao not in ('abertas', 'vencidas', 'pagas', 'canceladas', 'todas'):
         situacao = 'abertas'
     if envio not in ('', 'sem_historico', 'aceito', 'problema'):
@@ -54,6 +65,13 @@ def lista():
         de = ate = ''
     linhas = [r for r in linhas if (not busca or busca.casefold() in f'{r.cliente} {r.referencia}'.casefold())
               and (not inicio or r.vencimento >= inicio) and (not fim or r.vencimento <= fim)]
+    if envio == 'sem_historico':
+        linhas = [r for r in linhas if not r.envio]
+    elif envio == 'aceito':
+        linhas = [r for r in linhas if r.envio and r.envio.status == 'aceito']
+    elif envio == 'problema':
+        linhas = [r for r in linhas if r.envio and r.envio.status != 'aceito']
+    linhas = filtrar_etapa(linhas, etapa)
     abertas = [r for r in linhas if r.saldo and not r.cancelada]
     vencidas = [r for r in abertas if r.vencimento < hoje()]
     resumo = {
@@ -68,25 +86,19 @@ def lista():
     }
     contagens = {k: len(v) for k, v in grupos.items()}
     linhas = grupos[situacao]
-    if envio == 'sem_historico':
-        linhas = [r for r in linhas if not r.envio]
-    elif envio == 'aceito':
-        linhas = [r for r in linhas if r.envio and r.envio.status == 'aceito']
-    elif envio == 'problema':
-        linhas = [r for r in linhas if r.envio and r.envio.status != 'aceito']
     total = len(linhas)
     paginas = max(1, (total + 29) // 30)
     pagina = max(1, min(paginas, request.args.get('pagina', 1, type=int)))
 
     def filtro_url(**kwargs):
-        params = dict(q=busca, situacao=situacao, envio=envio, de=de, ate=ate)
+        params = dict(q=busca, situacao=situacao, envio=envio, etapa=etapa, de=de, ate=ate)
         params.update(kwargs)
         return url_for('cobrancas.lista', **{k: v for k, v in params.items() if v})
 
     return render_template('cobrancas/central.html', linhas=linhas[(pagina - 1) * 30:pagina * 30],
                            resumo=resumo, contagens=contagens, total=total, pagina=pagina,
                            paginas=paginas, busca=busca, situacao=situacao, envio=envio,
-                           de=de, ate=ate, filtro_url=filtro_url)
+                           de=de, ate=ate, filtro_url=filtro_url, etapa=etapa, etapas=ETAPAS)
 
 
 @cobrancas_bp.route('/<any(fatura,parcela,boleto):tipo>/<int:ref>/documentos', methods=['GET', 'POST'])
@@ -141,7 +153,8 @@ def banco():
     # Parcela de FATURA mensal fica fora: o boleto dela é o da fatura
     # (Cobranca.fatura_id) — listar aqui geraria boleto em dobro pro
     # cliente (achado da revisão 07/07/2026).
-    parcelas_sem = [p for p in parcelas if not p.cobranca and not p.fatura_id]
+    parcelas_sem = [p for p in parcelas if not p.cobranca and not p.fatura_id
+                    and not p.venda.fatura_id and p.venda.status != 'cancelada' and p.saldo > 0]
     remessas = (CobrancaRemessa.query
                 .order_by(CobrancaRemessa.numero.desc()).limit(20).all())
     return render_template('cobrancas/lista.html',
