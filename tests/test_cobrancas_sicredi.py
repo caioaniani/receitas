@@ -529,6 +529,6 @@ def test_lista_tem_link_pra_venda(app, admin_user):
     c = app.test_client()
     _login(c, admin_user.id)
     c.post(f'/cobrancas/gerar-da-parcela/{pid}')
-    body = c.get('/cobrancas/').get_data(as_text=True)
+    body = c.get('/cobrancas/banco').get_data(as_text=True)
     assert f'/b2b/vendas/{vid}' in body
     assert 'target="_blank"' in body

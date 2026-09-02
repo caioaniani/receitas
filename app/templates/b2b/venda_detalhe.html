@@ -225,6 +225,7 @@
                 </td>
                 <td><small>{{ p.forma_pagamento or '' }}</small></td>
                 <td class="text-nowrap">
+                    <a class="btn btn-sm btn-outline-success" href="{{ url_for('cobrancas.documentos', tipo='parcela', ref=p.id) }}">Documentos / Histórico</a>
                     {% if cob and cob.nosso_numero %}
                     <a class="btn btn-sm btn-outline-dark" target="_blank"
                        href="{{ url_for('cobrancas.boleto_pdf', id=cob.id) }}"
@@ -236,7 +237,7 @@
                             <i class="bi bi-envelope"></i></button>
                     </form>
                     {% elif cob %}
-                    <a href="{{ url_for('cobrancas.lista') }}" class="badge bg-info text-dark text-decoration-none"
+                    <a href="{{ url_for('cobrancas.banco') }}" class="badge bg-info text-dark text-decoration-none"
                        title="Cobrança criada — gere a remessa em Cobranças pra ter o boleto">{{ cob.status }}</a>
                     {% elif p.saldo > 0 and venda.status != 'cancelada' %}
                     <form method="POST" action="{{ url_for('cobrancas.gerar_da_parcela', parcela_id=p.id) }}" class="d-inline">

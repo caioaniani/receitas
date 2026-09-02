@@ -7,8 +7,10 @@
         <p class="page-subtitle mb-0">Cliente com fechamento mensal compra o mês inteiro;
             aqui a conta fecha: uma fatura = 1 NF consolidada + 1 boleto do total.</p>
     </div>
-    <a href="{{ url_for('b2b.dashboard') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+    <a href="{{ url_for('cobrancas.lista') }}" class="btn btn-outline-secondary btn-sm">← Cobranças</a>
 </div>
+
+{% include 'cobrancas/_nav.html' %}
 
 {# ── Contas em aberto (clientes mensais com vendas sem fatura) ── #}
 <div class="card mb-3">
@@ -73,7 +75,7 @@
             <td>{% set cob = f.cobrancas[0] if f.cobrancas else None %}
                 {% if cob %}<span class="badge bg-{{ 'success' if cob.status == 'paga' else 'info text-dark' }}">{{ cob.status }}</span>
                 {% else %}<span class="text-muted small">—</span>{% endif %}</td>
-            <td class="text-end"><a href="{{ url_for('b2b.fatura_detalhe', fid=f.id) }}"
+            <td class="text-end"><a href="{{ url_for('cobrancas.documentos', tipo='fatura', ref=f.id) }}"
                 class="btn btn-sm btn-outline-primary">Abrir</a></td>
         </tr>
         {% else %}

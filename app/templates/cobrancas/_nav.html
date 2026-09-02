@@ -1,0 +1,6 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cobrancas.css') }}?v={{ static_v['css/cobrancas.css'] }}">
+<nav class="cob-nav" aria-label="Navegação das cobranças">
+    <a href="{{ url_for('cobrancas.lista') }}" {% if request.endpoint == 'cobrancas.lista' %}aria-current="page"{% endif %}>Cobranças</a>
+    <a href="{{ url_for('b2b.faturas') }}" title="Fechamentos mensais">Fechamentos</a>
+    <a href="{{ url_for('cobrancas.banco') }}" title="Operações do banco" {% if request.endpoint == 'cobrancas.banco' %}aria-current="page"{% endif %}>Banco</a>
+</nav>

@@ -349,7 +349,7 @@ def test_parcela_de_fatura_nao_gera_boleto_individual(app, admin_user):
         pid = fat.parcelas[0].id
     c = app.test_client()
     _login(c, admin_user.id)
-    corpo = c.get('/cobrancas/').get_data(as_text=True)
+    corpo = c.get('/cobrancas/banco').get_data(as_text=True)
     assert 'Restaurante Bom Prato' not in corpo       # fora da lista
     r = c.post(f'/cobrancas/gerar-da-parcela/{pid}', follow_redirects=True)
     assert 'fatura mensal' in r.get_data(as_text=True)

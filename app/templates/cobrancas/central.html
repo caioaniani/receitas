@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}Cobranças — Padaria{% endblock %}
+{% from 'cobrancas/_format.html' import dinheiro %}
+{% block content %}
+<div class="cob-page">
+    <header class="cob-heading">
+        <div><span class="cob-kicker">Financeiro · A receber</span><h1>Cobranças</h1>
+        <p>O que falta preparar, enviar ou receber.</p></div>
+        <a class="btn btn-outline-secondary" href="{{ url_for('b2b.faturas') }}">Fechar conta mensal →</a>
+    </header>
+    {% include 'cobrancas/_nav.html' %}
+    <section class="cob-summary" aria-label="Resumo do período e clientes filtrados">
+        <div><span>A receber</span><strong>{{ dinheiro(resumo.aberto) }}</strong><small>Saldo em aberto</small></div>
+        <div><span>Vencido no sistema</span><strong>{{ dinheiro(resumo.vencido) }}</strong><small>Sem quitação registrada</small></div>
+        <div><span>Sem histórico de envio</span><strong>{{ resumo.sem_historico }} <small>cobrança(s)</small></strong><small>Não significa que nunca foram enviadas</small></div>
+    </section>
+    <form method="GET" class="cob-filters" role="search" aria-label="Filtrar cobranças">
+        <input type="hidden" name="situacao" value="{{ situacao }}">
+        <label class="cob-search">Cliente ou referência
+            <input class="form-control" type="search" name="q" value="{{ busca }}" maxlength="120" placeholder="Busque um cliente, venda ou fatura">
+        </label>
+        <label>Vencimento de<input class="form-control" type="date" name="de" value="{{ de }}"></label>
+        <label>Até<input class="form-control" type="date" name="ate" value="{{ ate }}"></label>
+        <label>Envio<select class="form-select" name="envio">
+            <option value="">Todos</option>
+            <option value="sem_historico" {% if envio == 'sem_historico' %}selected{% endif %}>Sem histórico</option>
+            <option value="aceito" {% if envio == 'aceito' %}selected{% endif %}>Aceito pelo serviço</option>
+            <option value="problema" {% if envio == 'problema' %}selected{% endif %}>Conferir envio</option>
+        </select></label>
+        <button class="btn btn-success" type="submit">Filtrar</button>
+        {% if busca or de or ate or envio %}<a href="{{ url_for('cobrancas.lista') }}" class="btn btn-outline-secondary">Limpar</a>{% endif %}
+    </form>
+    <nav class="cob-tabs" aria-label="Situação do pagamento">
+        {% for key, label in [('abertas','A receber'), ('vencidas','Vencidas'), ('pagas','Pagas'), ('canceladas','Canceladas'), ('todas','Todas')] %}
+        <a href="{{ filtro_url(situacao=key) }}" {% if situacao == key %}aria-current="page"{% endif %}>{{ label }} <span>{{ contagens[key] }}</span></a>
+        {% endfor %}
+    </nav>
+    <section class="cob-panel" aria-label="Lista de cobranças">
+        <div class="cob-list-heading"><strong>{{ total }} cobrança(s)</strong><small>Faturas agrupadas · sem duplicar as vendas do fechamento</small></div>
+        <div class="cob-table-wrap">
+            <table class="cob-table">
+                <thead><tr><th>Cliente / origem</th><th>Vencimento / saldo</th><th>Documentos</th><th>Último envio</th><th>Pagamento</th><th><span class="visually-hidden">Próxima ação</span></th></tr></thead>
+                <tbody>
+                {% for r in linhas %}
+                <tr>
+                    <td data-label="Cliente"><strong>{{ r.cliente }}</strong><small>{{ r.referencia }}</small></td>
+                    <td data-label="Vencimento / saldo"><strong>{{ r.vencimento.strftime('%d/%m/%Y') }}</strong><span>{{ dinheiro(r.saldo) }}</span>
+                        {% if r.pago %}<small>{{ dinheiro(r.pago) }} recebido(s)</small>{% endif %}</td>
+                    <td data-label="Documentos"><span>{{ r.nf_label }}</span><small>{{ r.banco_label }}</small></td>
+                    <td data-label="Último envio"><span>{{ r.envio_label }}</span>
+                        {% if r.envio %}<small>{{ r.envio.criado_em.strftime('%d/%m/%Y %H:%M') }} · {{ {'nf': 'Só NF', 'boleto': 'Só boleto', 'nf_boleto': 'NF + boleto'}[r.envio.documentos] }}</small>{% endif %}
+                    </td>
+                    <td data-label="Pagamento"><span class="cob-status {% if 'Vencida' in r.pagamento %}cob-warning{% elif r.pagamento == 'Paga' %}cob-success{% endif %}">{{ r.pagamento }}</span></td>
+                    <td class="cob-actions"><a class="btn btn-outline-success" href="{{ url_for('cobrancas.documentos', tipo=r.tipo, ref=r.id) }}">{{ r.acao }} →</a></td>
+                </tr>
+                {% else %}<tr><td colspan="6" class="cob-empty">Nenhuma cobrança neste filtro. <a href="{{ url_for('cobrancas.lista', situacao='todas') }}">Ver todas</a></td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if paginas > 1 %}
+        <nav class="cob-pagination" aria-label="Páginas das cobranças">
+            {% if pagina > 1 %}<a href="{{ filtro_url(pagina=pagina-1) }}" class="btn btn-outline-secondary">← Anterior</a>{% endif %}
+            <span>Página {{ pagina }} de {{ paginas }}</span>
+            {% if pagina < paginas %}<a href="{{ filtro_url(pagina=pagina+1) }}" class="btn btn-outline-secondary">Próxima →</a>{% endif %}
+        </nav>{% endif %}
+    </section>
+    <details class="cob-help"><summary>Como interpretar esta tela</summary>
+        <p><strong>Registrado no banco</strong> não significa enviado ao cliente. <strong>Aceito pelo serviço de e-mail</strong> não confirma entrega ou leitura.</p>
+        <p>Pagamentos refletem o que foi registrado no ERP. Para atualizar liquidações de boletos, importe o retorno em <a href="{{ url_for('cobrancas.banco') }}">Operações do banco</a>.</p>
+        <p>Vendas ainda sem parcelas ou fechamento ficam em <a href="{{ url_for('b2b.faturas') }}">Fechamentos mensais</a>. Valores zerados não entram nesta lista.</p>
+    </details>
+</div>
+{% endblock %}

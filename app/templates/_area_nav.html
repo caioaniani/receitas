@@ -126,11 +126,11 @@
 
 
 {% macro financeiro(variant) %}
+{{ _lnk(variant, url_for('cobrancas.lista'), 'Cobranças', request.path.startswith('/cobrancas'), title='A receber, NF + boleto, envios e pagamentos', icon='bi-receipt') }}
 {{ _lnk(variant, url_for('contas_pagar.lista'), 'Contas a Pagar', request.path in ['/contas-pagar/', '/contas-pagar']) }}
 {{ _lnk(variant, url_for('contas_pagar.canais'), 'Canais do Slack', request.path.startswith('/contas-pagar/canais'), sub=true, title='Qual canal do Slack pertence a qual loja') }}
 {{ _lnk(variant, url_for('contas_pagar.mapeamentos'), 'Vincular itens de NF', request.path.startswith('/contas-pagar/mapeamentos'), sub=true, title='Ligar cada item das notas fiscais à matéria-prima do estoque') }}
 {{ _lnk(variant, url_for('contas_pagar.variacoes'), 'Preços dos insumos', request.path.startswith('/contas-pagar/variacoes'), sub=true, title='Preço dos insumos subindo/caindo, nota a nota') }}
-{{ _lnk(variant, url_for('cobrancas.lista'), 'Cobranças (boletos)', request.path.startswith('/cobrancas'), title='Boletos híbridos Sicredi das parcelas B2B — remessa/retorno CNAB') }}
 {{ _lnk(variant, url_for('main.caixa'), 'Caixa Diário', request.path == '/caixa') }}
 {{ _lnk(variant, url_for('main.rentabilidade'), 'Rentabilidade', request.path == '/rentabilidade') }}
 {% endmacro %}

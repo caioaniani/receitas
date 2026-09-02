@@ -364,3 +364,31 @@ class Cobranca(db.Model):
         from app.utils import hoje
         return (self.status in ('pendente', 'remessa', 'registrada')
                 and self.vencimento < hoje())
+
+
+class EnvioCobranca(db.Model):
+    """Auditoria de envio, não de entrega/leitura nem de pagamento.
+
+    Referências são snapshots sem FK: exclusões permitidas pelo fluxo antigo
+    não apagam o comprovante. Nenhum PDF, token do provedor ou dado bancário
+    completo é persistido aqui. Tabela nova criada por _setup_schema.
+    """
+    __tablename__ = 'envio_cobranca'
+
+    id = db.Column(db.Integer, primary_key=True)
+    chave = db.Column(db.String(36), unique=True, nullable=False)
+    fatura_id = db.Column(db.Integer, index=True)
+    venda_id = db.Column(db.Integer, index=True)
+    cobranca_ids = db.Column(db.JSON, nullable=False, default=list)
+    referencia = db.Column(db.String(120), nullable=False)
+    destinatario = db.Column(db.String(254), nullable=False)
+    documentos = db.Column(db.String(20), nullable=False)  # nf | boleto | nf_boleto
+    nf_id = db.Column(db.String(40))
+    anexos = db.Column(db.JSON, nullable=False, default=list)
+    status = db.Column(db.String(20), nullable=False)  # preparando | aceito | falha | incerto
+    provedor_id = db.Column(db.String(150))
+    erro = db.Column(db.String(500))
+    criado_em = db.Column(db.DateTime, default=agora, nullable=False, index=True)
+    concluido_em = db.Column(db.DateTime)
+    usuario_id = db.Column(db.Integer)
+    usuario_nome = db.Column(db.String(100))

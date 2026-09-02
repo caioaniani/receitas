@@ -25,7 +25,7 @@
     <li class="nav-item"><a class="nav-link {{ 'active' if aba == 'pedidos' }}"
         href="{{ url_for('b2b.dashboard', aba='pedidos') }}"><i class="bi bi-box-seam"></i> Pedidos</a></li>
     <li class="nav-item"><a class="nav-link {{ 'active' if aba == 'cobrancas' }}"
-        href="{{ url_for('b2b.dashboard', aba='cobrancas') }}"><i class="bi bi-cash-coin"></i> Cobranças
+        href="{{ url_for('cobrancas.lista') }}"><i class="bi bi-cash-coin"></i> Cobranças
         {% if counts.cob_vencidos %}<span class="badge bg-danger">{{ counts.cob_vencidos }}</span>{% endif %}</a></li>
 </ul>
 
@@ -156,6 +156,7 @@
 
 {% else %}
 {# ── Cobranças: pendentes / vencidas / pagas + filtro por data ── #}
+<p><a href="{{ url_for('cobrancas.lista') }}" class="btn btn-success">Abrir central de cobranças — documentos, envios e pagamentos</a></p>
 {% set cpills = [('cob_pendentes', 'Pendentes de pagamento', 'warning'),
                  ('cob_vencidos', 'Vencidos', 'danger'),
                  ('cob_pagos', 'Pagos', 'success')] %}
