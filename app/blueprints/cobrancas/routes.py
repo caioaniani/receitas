@@ -11,6 +11,7 @@ from uuid import uuid4
 from flask import (
     Response,
     abort,
+    current_app,
     flash,
     redirect,
     render_template,
@@ -134,6 +135,34 @@ def documentos(tipo, ref):
     return render_template('cobrancas/documentos.html', r=r, historico=envios,
                            envio_labels=ENVIOS, chave=str(uuid4()),
                            copias_ocultas=COPIAS_OCULTAS_COBRANCA)
+
+
+@cobrancas_bp.route('/<any(fatura,parcela,boleto):tipo>/<int:ref>/baixar')
+@login_required
+def baixar_documentos(tipo, ref):
+    _admin_ou_403()
+    from app.services.central_cobrancas import carregar
+    from app.services.cobrancas_download import baixar_pacote
+
+    r = carregar(tipo, ref)
+    if (r.tipo, r.id) != (tipo, ref):
+        flash('Esta cobrança pertence a uma fatura ou parcela. Confira a origem antes de baixar.', 'info')
+        return redirect(url_for('cobrancas.documentos', tipo=r.tipo, ref=r.id))
+    try:
+        conteudo, nome, mime = baixar_pacote(r, request.args.get('formato', 'pdf'),
+                                           request.args.get('banco_confirmado') == '1')
+    except ValueError as exc:
+        flash(str(exc), 'warning')
+    except Exception:
+        current_app.logger.exception('Falha ao baixar pacote de cobrança %s/%s', tipo, ref)
+        flash('Não foi possível preparar os três documentos. Tente novamente em instantes. Nada foi emitido ou enviado.', 'warning')
+    else:
+        return Response(conteudo, mimetype=mime, headers={
+            'Content-Disposition': f'attachment; filename="{nome}"',
+            'Cache-Control': 'private, no-store',
+            'X-Content-Type-Options': 'nosniff',
+        })
+    return redirect(url_for('cobrancas.documentos', tipo=r.tipo, ref=r.id))
 
 
 @cobrancas_bp.route('/banco')
