@@ -3,6 +3,8 @@
 PDF único para WhatsApp; ZIP mantém os arquivos originais, inclusive assinaturas.
 Não grava EnvioCobranca: download não comprova que alguém enviou ao cliente.
 """
+import re
+import unicodedata
 from decimal import Decimal
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -15,6 +17,41 @@ from app.services.pdf import PadariaPDF, _latin1
 _LIMITE_BYTES = 20 * 1024 * 1024
 _LIMITE_PAGINAS = 150
 _ZERO = Decimal('0.00')
+
+
+def _parte_nome(valor, limite):
+    """Nome legível e portátil; sem separadores de caminho ou caracteres de header."""
+    texto = unicodedata.normalize('NFKD', str(valor or '')).encode('ascii', 'ignore').decode('ascii')
+    texto = re.sub(r'[^A-Za-z0-9 &()._-]', ' ', texto)
+    return re.sub(r'\s+', ' ', texto).strip(' .-_')[:limite].rstrip(' .-_')
+
+
+def nome_arquivo_cobranca(r, formato='pdf'):
+    """Empresa + entrega + pedido(s) + número humano da NF, nunca vencimento."""
+    if formato not in ('pdf', 'zip'):
+        raise ValueError('Escolha PDF único ou PDFs separados (ZIP).')
+    vendas = sorted(r.documento.vendas, key=lambda v: v.id) if r.tipo == 'fatura' else [r.documento]
+    datas = sorted({v.data_entrega for v in vendas if v.data_entrega})
+    sem_data = any(not v.data_entrega for v in vendas)
+    if not datas:
+        entrega = 'Entrega sem data'
+    elif len(datas) <= 3:
+        entrega = ('Entrega ' if len(datas) == 1 else 'Entregas ') + '_'.join(d.strftime('%d-%m-%Y') for d in datas)
+    else:
+        entrega = f'Entregas {datas[0]:%d-%m-%Y} a {datas[-1]:%d-%m-%Y}'
+    if datas and sem_data:
+        entrega += ' e sem data'
+    pedidos = ('Pedido ' if len(vendas) == 1 else 'Pedidos ') + '_'.join(str(v.id) for v in vendas)
+    # Fechamentos extensos não podem exceder o limite do nome no celular.
+    # A fatura identifica sem ambiguidade o conjunto completo listado no PDF.
+    if len(pedidos) > 60:
+        pedidos = f'{r.documento.codigo} - {len(vendas)} pedidos'
+    if r.tipo == 'parcela' and len(r.documento.parcelas) > 1:
+        pedidos += f' parcela {r.cobranca.parcela.numero}'
+    numero_nf = _parte_nome(r.documento.nf_numero, 50) or 'sem numero'
+    sufixo = f' - {entrega} - {pedidos} - NF {numero_nf}.{formato}'
+    empresa = _parte_nome(r.cliente, min(80, 240 - len(sufixo))) or 'Empresa'
+    return empresa + sufixo
 
 
 def _dinheiro(valor):
@@ -140,9 +177,7 @@ def baixar_pacote(r, formato='pdf', banco_confirmado=False):
                 ('02-boleto.pdf', boleto, 'Boleto'),
                 ('03-pedidos.pdf', pedidos, 'Detalhamento dos pedidos')]
     leitores = [(nome, conteudo, titulo, _ler_pdf(conteudo, titulo)) for nome, conteudo, titulo in arquivos]
-    referencia = (f'fatura-{r.id}' if r.tipo == 'fatura'
-                  else f'venda-{r.documento.id}-parcela-{r.cobranca.parcela.numero}')
-    nome = f'cobranca-{referencia}.{formato}'
+    nome = nome_arquivo_cobranca(r, formato)
     saida = BytesIO()
     if formato == 'zip':
         with ZipFile(saida, 'w', ZIP_DEFLATED) as pacote:

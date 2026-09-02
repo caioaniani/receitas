@@ -59,10 +59,18 @@
                     </td>
                     <td data-label="Pagamento"><span class="cob-status {% if 'Vencida' in r.pagamento %}cob-warning{% elif r.pagamento == 'Paga' %}cob-success{% endif %}">{{ r.pagamento }}</span></td>
                     <td class="cob-actions">
+                        <div class="cob-row-actions">
                         {% if etapa in ['nf_pendente', 'boleto_pendente'] and r.documento %}
                         {% set ancora = 'nota-fiscal' if etapa == 'nf_pendente' else 'boletos' %}
                         <a class="btn btn-outline-success" href="{{ url_for('b2b.fatura_detalhe', fid=r.id, _anchor=ancora) if r.tipo == 'fatura' else url_for('b2b.venda_detalhe', vid=r.documento.id, _anchor=ancora) }}">{{ 'Abrir nota fiscal' if etapa == 'nf_pendente' else 'Abrir boleto' }} →</a>
                         {% else %}<a class="btn btn-outline-success" href="{{ url_for('cobrancas.documentos', tipo=r.tipo, ref=r.id) }}">{{ r.acao }} →</a>{% endif %}
+                        {% if not r.bloqueio %}
+                        <a class="btn btn-outline-secondary cob-download-link"
+                           href="{{ url_for('cobrancas.baixar_documentos', tipo=r.tipo, ref=r.id, formato='pdf') }}"
+                           aria-label="Baixar PDF da cobrança completa — {{ r.cliente }} — {{ r.referencia }}"
+                           {% if r.cobranca.status == 'remessa' %}data-cob-confirmar-banco="1"{% endif %}>Baixar PDF<br>cobrança completa</a>
+                        {% endif %}
+                        </div>
                     </td>
                 </tr>
                 {% else %}<tr><td colspan="6" class="cob-empty">Nenhuma cobrança neste filtro. <a href="{{ url_for('cobrancas.lista', situacao='todas') }}">Ver todas</a></td></tr>{% endfor %}
@@ -82,4 +90,5 @@
         <p>Vendas ainda sem parcelas ou fechamento ficam em <a href="{{ url_for('b2b.faturas') }}">Fechamentos mensais</a>. Valores zerados não entram nesta lista.</p>
     </details>
 </div>
+<script src="{{ url_for('static', filename='js/cobrancas.js') }}?v={{ static_v['js/cobrancas.js'] }}" defer></script>
 {% endblock %}
