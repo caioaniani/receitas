@@ -45,6 +45,68 @@ def test_troca_de_senha_libera_o_gate(app):
     assert '/auth/minha-senha' not in (r2.headers.get('Location') or '')
 
 
+def test_login_aceita_usuario_sem_diferenciar_maiusculas(app):
+    with app.app_context():
+        _mk('lucas', senha_provisoria=False)
+    c = app.test_client()
+    r = c.post('/auth/login', data={
+        'login': 'Lucas', 'senha': 'senha-atual-1'},
+        follow_redirects=False)
+    assert r.status_code == 302
+    with c.session_transaction() as s:
+        assert s.get('_user_id') is not None
+
+
+def test_login_aceita_email_da_conta(app):
+    with app.app_context():
+        _mk('usuario-legado', email='pessoa@exemplo.com',
+            senha_provisoria=False)
+    c = app.test_client()
+    r = c.post('/auth/login', data={
+        'login': 'PESSOA@EXEMPLO.COM', 'senha': 'senha-atual-1'},
+        follow_redirects=False)
+    assert r.status_code == 302
+    with c.session_transaction() as s:
+        assert s.get('_user_id') is not None
+
+
+def test_login_tolera_espaco_de_copiar_senha(app):
+    with app.app_context():
+        _mk('copiado', senha_provisoria=False)
+    c = app.test_client()
+    r = c.post('/auth/login', data={
+        'login': 'copiado', 'senha': ' senha-atual-1\n'},
+        follow_redirects=False)
+    assert r.status_code == 302
+    with c.session_transaction() as s:
+        assert s.get('_user_id') is not None
+
+
+def test_login_provisorio_vai_direto_para_troca(app):
+    with app.app_context():
+        _mk('primeiro-acesso', senha_provisoria=True)
+    c = app.test_client()
+    r = c.post('/auth/login', data={
+        'login': 'primeiro-acesso', 'senha': 'senha-atual-1'},
+        follow_redirects=False)
+    assert r.status_code == 302
+    assert '/auth/minha-senha' in r.headers['Location']
+
+
+def test_troca_forcada_aceita_espaco_na_senha_copiada(app):
+    with app.app_context():
+        uid = _mk('troca-copiada', senha_provisoria=True).id
+    c = _cli(app, uid)
+    r = c.post('/auth/minha-senha', data={
+        'senha_atual': ' senha-atual-1 ', 'nova_senha': 'nova-senha-9',
+        'confirma_senha': 'nova-senha-9'}, follow_redirects=False)
+    assert r.status_code == 302
+    with app.app_context():
+        usuario = db.session.get(Usuario, uid)
+        assert usuario.senha_provisoria is False
+        assert usuario.check_senha('nova-senha-9')
+
+
 # ── Só treinamento ────────────────────────────────────────────────────────
 
 def test_so_treino_redireciona_pra_treino(app):
