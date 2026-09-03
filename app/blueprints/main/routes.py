@@ -3643,6 +3643,63 @@ def debug_lalamove():
     return jsonify(out), 200
 
 
+@main_bp.route('/admin/lalamove-rotas')
+@owner_required
+def lalamove_rotas():
+    """Inspeção somente leitura dos pontos enviados nas corridas existentes.
+
+    Sem parâmetro, últimas 20 corridas. ?entrega=<id local> consulta os
+    pontos da corrida na Lalamove via GET, sem cotar nem chamar motorista.
+    """
+    import requests
+
+    from app.models import GeocodeCache, LalamoveEntrega
+    from app.services import google_maps, lalamove
+
+    origem_endereco = (lalamove._cfg('LALAMOVE_ORIGEM_ENDERECO')
+                       or lalamove.ORIGEM_ENDERECO_DEFAULT)
+    corridas = (LalamoveEntrega.query
+                .filter(LalamoveEntrega.order_id.isnot(None))
+                .order_by(LalamoveEntrega.id.desc()).limit(20).all())
+    out = {
+        'origem': {'endereco': origem_endereco,
+                   'coordenadas_fixas': lalamove._cfg('LALAMOVE_ORIGEM_LATLNG'),
+                   'cache_worker': lalamove._origem_cache},
+        'corridas': [{'id': e.id, 'pedido': e.pedido_code,
+                      'order_id': e.order_id, 'status': e.status,
+                      'criado_em': e.criado_em.isoformat() if e.criado_em else None,
+                      'destino': e.endereco_destino} for e in corridas],
+    }
+    entrega_arg = request.args.get('entrega')
+    if entrega_arg is not None:
+        if not entrega_arg.isdigit():
+            return jsonify(erro='Informe um id de entrega válido.'), 400
+        entrega = db.session.get(LalamoveEntrega, int(entrega_arg))
+        if not entrega or not entrega.order_id:
+            abort(404)
+        chave = google_maps._normalizar_chave(entrega.endereco_destino)
+        cache = GeocodeCache.query.filter_by(chave=chave).first() if chave else None
+        out['cache_destino'] = ({'lat': cache.lat, 'lng': cache.lng,
+                                 'fonte': cache.fonte} if cache else None)
+        try:
+            status, corpo = lalamove._request('GET', f'/v3/orders/{entrega.order_id}')
+        except requests.RequestException:
+            current_app.logger.exception('Falha ao consultar rota Lalamove %s', entrega.id)
+            return jsonify(erro='Não foi possível consultar a corrida na Lalamove.'), 502
+        if status != 200:
+            return jsonify(erro='Lalamove não retornou os pontos da corrida.',
+                           status_lalamove=status), 502
+        dados = corpo.get('data') or {}
+        out['corrida_consultada'] = {
+            'id': entrega.id, 'pedido': entrega.pedido_code,
+            'order_id': entrega.order_id, 'status': dados.get('status'),
+            'pontos': [{'endereco': p.get('address'),
+                         'coordenadas': p.get('coordinates')}
+                        for p in dados.get('stops', [])],
+        }
+    return jsonify(out)
+
+
 @main_bp.route('/admin/debug-sentry')
 @owner_required
 def debug_sentry():
