@@ -443,7 +443,7 @@
 .ui-v2 .area-v2-link-sub .area-v2-link-icon { width: 30px; height: 30px; background: #eef1ef; color: #69756e; font-size: 12px; }
 .ui-v2 .area-v2-subhead { grid-column: 1 / -1; margin: 13px 2px -2px; color: #87918b; font-size: 9px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 
-/* Home v2 — uma sequência clara: prioridades, resumo e áreas. */
+/* Home v2 — acessos da rotina, prioridades, resumo e áreas. */
 .ui-v2 .home-v2 {
     width: min(1180px, 100%);
     margin: 0 auto;
@@ -516,6 +516,21 @@
 .ui-v2 .home-v2-btn-primary:hover { background: #1e4b37; color: #fff; }
 .ui-v2 .home-v2-icon-btn { width: 40px; background: var(--v2-surface); color: var(--v2-muted); }
 .ui-v2 .home-v2-icon-btn:hover { border-color: #bec8c1; color: var(--v2-ink); }
+
+.ui-v2 .admin-workspace { margin-bottom: 28px; }
+.ui-v2 .admin-workspace-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ui-v2 .admin-workspace-group { padding: 16px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface); }
+.ui-v2 .admin-workspace-group h3 { display: flex; align-items: center; gap: 9px; margin: 0 0 10px; color: var(--v2-ink); font-size: 14px; font-weight: 700; }
+.ui-v2 .admin-workspace-group h3 i { color: var(--v2-accent); }
+.ui-v2 .admin-workspace-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 8px; border-radius: 8px; color: var(--v2-ink); text-decoration: none; }
+.ui-v2 .admin-workspace-link:hover { background: var(--v2-accent-soft); color: var(--v2-accent); }
+.ui-v2 .admin-workspace-link span { display: grid; gap: 2px; min-width: 0; }
+.ui-v2 .admin-workspace-link strong { font-size: 12px; }
+.ui-v2 .admin-workspace-link small { color: var(--v2-muted); font-size: 11px; line-height: 1.4; }
+.ui-v2 .admin-workspace-link > i { color: var(--v2-muted); font-size: 12px; }
+.ui-v2 .admin-workspace-jumps { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.ui-v2 .admin-workspace-jumps a { padding: 8px 0; color: var(--v2-accent); font-size: 12px; font-weight: 600; text-underline-offset: 3px; }
+.ui-v2 #pendencias-do-dia, .ui-v2 #areas-de-trabalho { scroll-margin-top: 80px; }
 
 .ui-v2 .home-v2-overview {
     display: grid;
@@ -819,6 +834,12 @@
     .ui-v2 .home-v2-overview { grid-template-columns: 1fr; }
     .ui-v2 .home-v2-area-grid { grid-template-columns: 1fr; }
     .ui-v2 .home-v2-area-copy small { white-space: normal; }
+    .ui-v2 .admin-workspace-grid { grid-template-columns: 1fr; }
+    .ui-v2 .admin-workspace > .home-v2-section-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
+    .ui-v2 .admin-workspace-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 12px; }
+    .ui-v2 .admin-workspace-group h3 { grid-column: 1 / -1; margin-bottom: 4px; }
+    .ui-v2 .admin-workspace-link { padding: 6px; }
+    .ui-v2 .admin-workspace-link > i { display: none; }
     .ui-v2 .home-v2-panel-footer { align-items: flex-start; flex-direction: column; gap: 7px; }
     .ui-v2 .home-v2-panel-footer a:last-child { margin-left: 0; }
 }

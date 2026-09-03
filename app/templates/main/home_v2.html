@@ -27,7 +27,9 @@
     'retiradas_presas': 'Liberar retiradas',
     'separados_presos': 'Concluir entregas',
     'orcamentos': 'Revisar orçamentos',
-    'orcamentos_aprovados': 'Preparar pedidos'
+    'orcamentos_aprovados': 'Preparar pedidos',
+    'checklist_abertura': 'Conferir checklists',
+    'checklist_fechamento': 'Conferir checklists'
 } %}
 {% set priority_context = {
     'producao_vencida': 'A confirmação atualiza estoque e histórico.',
@@ -39,16 +41,18 @@
     'pdv_mapeamentos': 'Vendas sem correspondência afetam os relatórios.',
     'contas_pagar': 'Comece pelas contas vencidas ou sem conferência.',
     'retiradas_presas': 'Pedidos aguardam mudança de etapa.',
-    'separados_presos': 'Pedidos separados ainda não foram concluídos.'
+    'separados_presos': 'Pedidos separados ainda não foram concluídos.',
+    'checklist_abertura': 'Confira a abertura e os responsáveis de cada loja.',
+    'checklist_fechamento': 'Confira o fechamento e os responsáveis de cada loja.'
 } %}
 {% set critical_priorities = ['producao_vencida', 'contas_pagar', 'retiradas_presas', 'separados_presos'] %}
 
 <div class="home-v2" data-sales-detail-url="{{ url_for('main.cancelados_descontos_detalhe') }}">
     <header class="home-v2-header">
         <div>
-            <span class="home-v2-eyebrow">Visão geral</span>
+            <span class="home-v2-eyebrow">Sua área de trabalho</span>
             <h1>Bom dia{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}</h1>
-            <p>Comece pelo que precisa de atenção e depois siga para sua área de trabalho.</p>
+            <p>Acesse a rotina das lojas, organize a equipe e acompanhe o que precisa de atenção.</p>
         </div>
         <div class="home-v2-header-actions">
             {% if current_user.is_admin() %}{# rota é admin_required — pra papel producao o link daria 403 #}
@@ -64,7 +68,9 @@
         </div>
     </header>
 
-    <section class="home-v2-overview" aria-label="Resumo do dia">
+    {% include 'main/_admin_atalhos.html' %}
+
+    <section class="home-v2-overview" id="pendencias-do-dia" aria-label="Resumo do dia" tabindex="-1">
         <article class="home-v2-panel home-v2-priorities">
             <div class="home-v2-panel-heading">
                 <div>
@@ -181,7 +187,7 @@
         {% endif %}
     </section>
 
-    <section class="home-v2-areas" aria-labelledby="home-v2-areas-title">
+    <section class="home-v2-areas" id="areas-de-trabalho" aria-labelledby="home-v2-areas-title" tabindex="-1">
         <div class="home-v2-section-heading">
             <div>
                 <span class="home-v2-section-kicker">Navegação</span>

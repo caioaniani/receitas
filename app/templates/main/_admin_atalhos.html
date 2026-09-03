@@ -1,0 +1,49 @@
+{% macro atalho(endpoint, titulo, descricao) -%}
+<a class="admin-workspace-link" href="{{ url_for(endpoint) }}">
+    <span><strong>{{ titulo }}</strong><small>{{ descricao }}</small></span>
+    <i class="bi bi-arrow-right" aria-hidden="true"></i>
+</a>
+{%- endmacro %}
+
+{% if current_user.is_admin() and not current_user.somente_treino %}
+<section class="admin-workspace" aria-labelledby="admin-workspace-title">
+    <div class="home-v2-section-heading">
+        <h2 id="admin-workspace-title">Acessos rápidos</h2>
+        <nav class="admin-workspace-jumps" aria-label="Seções da sua área de trabalho">
+            <a href="#pendencias-do-dia">Pendências do dia{% if pendencias %} ({{ pendencias|length }}){% endif %}</a>
+            <a href="#areas-de-trabalho">Todas as áreas</a>
+        </nav>
+    </div>
+    <div class="admin-workspace-grid">
+        <nav class="admin-workspace-group" aria-labelledby="admin-lojas-title">
+            <h3 id="admin-lojas-title"><i class="bi bi-shop" aria-hidden="true"></i> Lojas e checklists</h3>
+            {{ atalho('checklist.index', 'Checklist da loja', 'Preencher abertura e fechamento') }}
+            {{ atalho('checklist.conferencia', 'Conferir checklists', 'Acompanhar o preenchimento por loja') }}
+            {{ atalho('checklist.responsaveis', 'Responsáveis por turno', 'Consultar manhã e tarde de cada loja') }}
+            {{ atalho('checklist.config', 'Configurar itens', 'Ajustar o que deve ser conferido') }}
+        </nav>
+        <nav class="admin-workspace-group" aria-labelledby="admin-equipe-title">
+            <h3 id="admin-equipe-title"><i class="bi bi-people" aria-hidden="true"></i> Equipe e turnos</h3>
+            {% if current_user.pode_organizar_equipe() %}
+            {{ atalho('rh.lideranca_preenchimento', 'Organizar equipe', 'Definir loja, período e liderança') }}
+            {% endif %}
+            {% if current_user.is_dono() %}
+            {{ atalho('rh.escala', 'Escala operacional', 'Consultar a escala de trabalho') }}
+            {% endif %}
+            {% if current_user.pode_cadastrar_funcionarios() %}
+            {{ atalho('rh.funcionarios', 'Funcionários', 'Consultar e atualizar cadastros') }}
+            {% endif %}
+            {{ atalho('treino.gestor_home', 'Treinamento da equipe', 'Acompanhar o aprendizado') }}
+        </nav>
+        <nav class="admin-workspace-group" aria-labelledby="admin-gestao-title">
+            <h3 id="admin-gestao-title"><i class="bi bi-gear" aria-hidden="true"></i> Gestão</h3>
+            {{ atalho('contas_pagar.lista', 'Contas a pagar', 'Revisar contas e vencimentos') }}
+            {{ atalho('cobrancas.visao_geral', 'Cobranças', 'Acompanhar valores a receber') }}
+            {{ atalho('auth.usuarios', 'Usuários e acessos', 'Gerenciar os acessos ao sistema') }}
+            {% if current_user.is_dono() %}
+            {{ atalho('main.permissoes_editar', 'Permissões por papel', 'Definir o acesso de cada função') }}
+            {% endif %}
+        </nav>
+    </div>
+</section>
+{% endif %}

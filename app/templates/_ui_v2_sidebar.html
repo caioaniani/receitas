@@ -25,21 +25,36 @@
     </button>
 
     <div class="ui-v2-nav-group">
-        <span class="ui-v2-nav-label">Trabalho</span>
+        <span class="ui-v2-nav-label">Início</span>
         <a href="{{ url_for('main.index') }}" class="sidebar-link {{ 'active' if request.path == '/' }}">
             <i class="bi bi-house-door"></i><span>Hoje</span>
         </a>
+    </div>
+
+    {% if (current_user.pode_checklist() and not current_user.somente_treino) or current_user.pode_lojas() %}
+    <div class="ui-v2-nav-group">
+        <span class="ui-v2-nav-label">Rotina das lojas</span>
+        {% if current_user.pode_checklist() and not current_user.somente_treino %}
+        <a href="{{ url_for('checklist.index') }}" class="sidebar-link {{ 'active' if request.path.startswith('/checklist') }}">
+            <i class="bi bi-clipboard-check"></i><span>Checklist da loja</span>
+        </a>
+        {% endif %}
+        {% if current_user.pode_lojas() %}
+        <a href="{{ url_for('main.area', slug='lojas') }}" class="sidebar-link {{ 'active' if request.path == '/area/lojas' }}">
+            <i class="bi bi-shop"></i><span>Lojas</span>
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="ui-v2-nav-group">
+        <span class="ui-v2-nav-label">Equipe e turnos</span>
         <a href="{{ url_for('treino.home') }}" class="sidebar-link {{ 'active' if request.path.startswith('/treino') and not request.path.startswith('/treino/gestor') }}">
             <i class="bi bi-mortarboard"></i><span>Treinamento</span>
         </a>
         {% if current_user.is_admin() or current_user.is_gerente() or current_user.lidera_equipe() %}
         <a href="{{ url_for('treino.gestor_home') }}" class="sidebar-link {{ 'active' if request.path.startswith('/treino/gestor') }}">
             <i class="bi bi-people"></i><span>Minha equipe</span>
-        </a>
-        {% endif %}
-        {% if current_user.pode_checklist() and not current_user.somente_treino %}
-        <a href="{{ url_for('checklist.index') }}" class="sidebar-link {{ 'active' if request.path.startswith('/checklist') }}">
-            <i class="bi bi-clipboard-check"></i><span>Checklist da loja</span>
         </a>
         {% endif %}
         {% if current_user.pode_organizar_equipe() %}
@@ -57,11 +72,11 @@
             <i class="bi bi-person-plus"></i><span>Funcionários</span>
         </a>
         {% endif %}
-        {% if current_user.pode_lojas() %}
-        <a href="{{ url_for('main.area', slug='lojas') }}" class="sidebar-link {{ 'active' if request.path == '/area/lojas' }}">
-            <i class="bi bi-shop"></i><span>Lojas</span>
-        </a>
-        {% endif %}
+    </div>
+
+    {% if current_user.pode_producao() or current_user.pode_catalogo() or current_user.pode_pdv() or current_user.is_admin() or current_user.pode_lojas() %}
+    <div class="ui-v2-nav-group">
+        <span class="ui-v2-nav-label">Operação</span>
         {% if current_user.pode_producao() %}
         <a href="{{ url_for('main.area', slug='producao') }}" class="sidebar-link {{ 'active' if request.path == '/area/producao' or request.path.startswith('/telaindustriateste') or request.path.startswith('/producao') or request.path.startswith('/padeiro') }}">
             <i class="bi bi-box-seam"></i><span>Produção</span>
@@ -78,6 +93,8 @@
         </a>
         {% endif %}
     </div>
+
+    {% endif %}
 
     {% if current_user.is_admin() %}
     <div class="ui-v2-nav-group">
