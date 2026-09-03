@@ -10,6 +10,39 @@ from app.models import Atribuicao, Receita, Usuario
 from app.utils import agora
 
 
+def _usuario_por_identificador(valor):
+    """Localiza conta por login ou e-mail sem depender de maiúsculas.
+
+    Mantém a correspondência exata como prioridade e só aceita as buscas
+    flexíveis quando elas identificam uma única conta. Isso evita que um e-mail
+    duplicado ou dois logins antigos que diferem apenas por caixa escolham o
+    usuário errado.
+    """
+    exato = Usuario.query.filter_by(login=valor).first()
+    if exato:
+        return exato
+
+    normalizado = valor.lower()
+    por_login = Usuario.query.filter(
+        db.func.lower(Usuario.login) == normalizado
+    ).all()
+    if len(por_login) == 1:
+        return por_login[0]
+
+    por_email = Usuario.query.filter(
+        db.func.lower(Usuario.email) == normalizado
+    ).all()
+    return por_email[0] if len(por_email) == 1 else None
+
+
+def _senha_confere(usuario, valor):
+    """Tolera espaços acidentais de copiar/colar sem mudar senhas válidas."""
+    if usuario.check_senha(valor):
+        return True
+    sem_espacos = valor.strip()
+    return sem_espacos != valor and usuario.check_senha(sem_espacos)
+
+
 @auth_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("5 per minute", methods=["POST"])
 def login():
@@ -20,8 +53,8 @@ def login():
         login_val = request.form.get('login', '').strip()
         senha = request.form.get('senha', '')
 
-        usuario = Usuario.query.filter_by(login=login_val).first()
-        if usuario and usuario.check_senha(senha):
+        usuario = _usuario_por_identificador(login_val)
+        if usuario and _senha_confere(usuario, senha):
             # remember=True: cookie persistente (Flask-Login, ~1 ano) — a sessao
             # sobrevive a reiniciar o navegador/PC. Essencial pro kiosk do padeiro
             # nao ficar pedindo senha toda vez que reabre.
@@ -30,6 +63,10 @@ def login():
             # Bloqueia redirect para URLs externas
             if next_page and urlparse(next_page).netloc:
                 next_page = None
+            if usuario.senha_provisoria:
+                return redirect(url_for('auth.minha_senha'))
+            if usuario.somente_treino:
+                return redirect(url_for('treino.home'))
             if usuario.is_padeiro():
                 return redirect(url_for('padeiro.index'))
             return redirect(next_page or url_for('main.index'))
@@ -326,7 +363,7 @@ def minha_senha():
         nova = request.form.get('nova_senha', '').strip()
         confirma = request.form.get('confirma_senha', '').strip()
 
-        if not current_user.check_senha(atual):
+        if not _senha_confere(current_user, atual):
             flash('Senha atual incorreta.', 'danger')
             return redirect(url_for('auth.minha_senha'))
         if len(nova) < 8:
@@ -348,6 +385,9 @@ def minha_senha():
         current_user.senha_provisoria = False
         so_treino = getattr(current_user, 'somente_treino', False)
         db.session.commit()
+        # Atualiza a sessão persistente com o estado recém-gravado. Em especial
+        # no Safari móvel, evita que a conta continue parecendo provisória.
+        login_user(current_user, remember=True, fresh=True)
         flash('Senha alterada com sucesso.', 'success')
         # Conta só-treino vai direto pro treino (senão o gate rebateria de
         # main.index pra lá num salto extra).
