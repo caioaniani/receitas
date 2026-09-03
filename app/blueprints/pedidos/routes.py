@@ -3160,6 +3160,12 @@ def estoque_loja_minimos():
     ids = request.form.getlist('estoque_id[]')
     minimos = request.form.getlist('minimo[]')
     diarios = request.form.getlist('diario[]')
+    venda_diaria_ids = set()
+    for valor in request.form.getlist('venda_diaria[]'):
+        try:
+            venda_diaria_ids.add(int(valor))
+        except (TypeError, ValueError):
+            continue
     eids = []
     for eid in ids:
         try:
@@ -3193,12 +3199,16 @@ def estoque_loja_minimos():
         if novo_d != 'pula' and el.pedido_minimo_diario != novo_d:
             el.pedido_minimo_diario = novo_d
             alterados += 1
+        novo_venda_dia = eid in venda_diaria_ids
+        if bool(el.reposicao_por_venda_diaria) != novo_venda_dia:
+            el.reposicao_por_venda_diaria = novo_venda_dia
+            alterados += 1
     if alterados:
         db.session.commit()
-        flash('Estoque minimo atualizado (%d %s).'
-              % (alterados, 'item' if alterados == 1 else 'itens'), 'success')
+        flash('Regras de reposição atualizadas (%d %s).'
+              % (alterados, 'ajuste' if alterados == 1 else 'ajustes'), 'success')
     else:
-        flash('Nenhum estoque minimo alterado.', 'info')
+        flash('Nenhuma regra de reposição alterada.', 'info')
     return redirect(url_for('pedidos.estoque_loja', loja=loja_id))
 
 

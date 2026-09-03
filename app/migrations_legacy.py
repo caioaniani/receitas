@@ -107,6 +107,7 @@ def _migrate(app):
         _seed_minimo_danish_v2(app)
         _seed_minimo_danish_v3(app)
         _seed_minimo_cinnamon(app)
+        _seed_regras_reposicao_lojas(app)
         _seed_antecedencia_brioche(app)
         _seed_teto_producao_brioche(app)
         _seed_minis_sanduiche(app)
@@ -1056,6 +1057,81 @@ def _seed_minimo_cinnamon(app):
             pass
 
 
+def _seed_regras_reposicao_lojas(app):
+    """UMA VEZ (dono 03/09/2026): regras específicas confirmadas em operação.
+
+    - Ribeiro do Vale: Choconana recebe no mínimo 2 unidades todos os dias.
+    - Nebraska: Croissant Tradicional é fresco e reposto pela venda média do
+      mesmo dia da semana, sem estoque acumulado e sem a caixa global de 250.
+
+    O marker impede que uma alteração manual futura seja desfeita no deploy.
+    """
+    import unicodedata as _ud
+    try:
+        from app.models import AppConfig, EstoqueLoja, Loja, Receita
+        chave = 'seed_regras_reposicao_lojas_2026_09'
+        if AppConfig.get(chave):
+            return
+
+        def _norm(s):
+            s = _ud.normalize('NFKD', s or '')
+            s = ''.join(c for c in s if not _ud.combining(c))
+            return ' '.join(s.casefold().split())
+
+        lojas = Loja.query.filter_by(ativa=True).all()
+        receitas = Receita.query.filter(Receita.arquivada_em.is_(None)).all()
+        ribeiro = next((l for l in lojas if 'ribeiro do vale' in _norm(l.nome)), None)
+        nebraska = next((l for l in lojas if 'nebraska' in _norm(l.nome)), None)
+        choconana = next((r for r in receitas if _norm(r.nome) == 'choconana'), None)
+        croissant = next((r for r in receitas
+                          if _norm(r.nome) == 'croissant tradicional'), None)
+        faltantes = [
+            nome for nome, obj in (
+                ('loja Ribeiro do Vale', ribeiro),
+                ('loja Nebraska', nebraska),
+                ('receita Choconana', choconana),
+                ('receita Croissant Tradicional', croissant),
+            ) if obj is None
+        ]
+        if faltantes:
+            raise RuntimeError('cadastros não encontrados: ' + ', '.join(faltantes))
+
+        el_choco = EstoqueLoja.query.filter_by(
+            loja_id=ribeiro.id, receita_id=choconana.id).first()
+        if el_choco is None:
+            el_choco = EstoqueLoja(
+                loja_id=ribeiro.id, receita_id=choconana.id, quantidade=0)
+            db.session.add(el_choco)
+        piso_anterior = int(el_choco.pedido_minimo_diario or 0)
+        if piso_anterior < 2:
+            el_choco.pedido_minimo_diario = 2
+
+        el_croissant = EstoqueLoja.query.filter_by(
+            loja_id=nebraska.id, receita_id=croissant.id).first()
+        if el_croissant is None:
+            el_croissant = EstoqueLoja(
+                loja_id=nebraska.id, receita_id=croissant.id, quantidade=0)
+            db.session.add(el_croissant)
+        el_croissant.reposicao_por_venda_diaria = True
+
+        AppConfig.set(
+            chave,
+            f'ribeiro_choconana_diario={max(2, piso_anterior)} '
+            f'nebraska_croissant_venda_diaria=1')
+        db.session.commit()
+        logger.info(
+            'seed regras reposição: Ribeiro/Choconana diário=%d; '
+            'Nebraska/Croissant venda diária=1',
+            max(2, piso_anterior),
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed regras reposição lojas): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 # Acerto UMA VEZ (dono 18/08/2026, auditoria "granola/iogurte em POTES"):
 # pedidos historicos desses itens foram lancados em POTES/LITROS (qtd 1-15)
 # quando o item e medido em g/ml — o relatorio de pedidos saia ~1000x
@@ -1615,6 +1691,11 @@ def _migrate_postgres(app):
         # estoque_minimo, que e colchao). Vazio = sem piso.
         if cols_el and 'pedido_minimo_diario' not in cols_el:
             conn.execute(text("ALTER TABLE estoque_loja ADD COLUMN pedido_minimo_diario INTEGER"))
+        if cols_el and 'reposicao_por_venda_diaria' not in cols_el:
+            conn.execute(text(
+                "ALTER TABLE estoque_loja ADD COLUMN "
+                "reposicao_por_venda_diaria BOOLEAN NOT NULL DEFAULT FALSE"
+            ))
 
         # Tabelas Seru (mapeamento + idempotencia). db.create_all() cria
         # automaticamente, este bloco e so safety pra ambientes que ja
@@ -3475,6 +3556,11 @@ def _migrate_sqlite(app):
     # dia (danishes assadas, dono 17/08/2026); nao desconta estoque.
     if cols_el and 'pedido_minimo_diario' not in cols_el:
         cursor.execute("ALTER TABLE estoque_loja ADD COLUMN pedido_minimo_diario INTEGER")
+    if cols_el and 'reposicao_por_venda_diaria' not in cols_el:
+        cursor.execute(
+            "ALTER TABLE estoque_loja ADD COLUMN "
+            "reposicao_por_venda_diaria BOOLEAN NOT NULL DEFAULT 0"
+        )
     # Reserva de estoque (21/06/2026 — race condition no cutover).
     if cols_el and 'quantidade_reservada' not in cols_el:
         cursor.execute("ALTER TABLE estoque_loja ADD COLUMN "

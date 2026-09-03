@@ -191,11 +191,17 @@
                     <td>
                         {# Piso INCONDICIONAL do pedido de cada dia — não
                            desconta o estoque que sobrou (danishes assadas,
-                           dono 17/08/2026). Salvo pelo "Salvar mínimos". #}
+                           dono 17/08/2026). Salvo pelo "Salvar regras". #}
                         <input type="number" name="diario[]"
                                class="form-control form-control-sm text-center"
                                min="0" step="1" placeholder="—"
                                value="{{ el.pedido_minimo_diario if el.pedido_minimo_diario else '' }}">
+                    </td>
+                    <td class="text-center align-middle">
+                        <input type="checkbox" class="form-check-input"
+                               name="venda_diaria[]" value="{{ el.id }}"
+                               {% if el.reposicao_por_venda_diaria %}checked{% endif %}
+                               title="Produto fresco: repor diariamente pela média de venda do mesmo dia da semana, sem descontar estoque nem aplicar caixa/mínimo global.">
                     </td>
                 </tr>
     {% endmacro %}
@@ -220,14 +226,17 @@
                         title="Estoque mínimo desta loja pra este item (piso da sugestão de pedido). A previsão de pedido nunca cai abaixo disto — a loja mantém um colchão do item. Vazio = sem mínimo. Clique em 'Salvar mínimos' após editar.">
                         Mínimo</th>
                     <th class="text-center" style="width:110px"
-                        title="Pedido mínimo DIÁRIO: a loja recebe pelo menos isto TODO dia, mesmo com estoque sobrando (ex.: 2 danishes assadas frescas por dia). A média de venda manda quando passa do piso. Vazio = sem piso. Clique em 'Salvar mínimos' após editar.">
+                        title="Pedido mínimo DIÁRIO: a loja recebe pelo menos isto TODO dia, mesmo com estoque sobrando (ex.: 2 danishes assadas frescas por dia). A média de venda manda quando passa do piso. Vazio = sem piso. Clique em 'Salvar regras' após editar.">
                         Diário</th>
+                    <th class="text-center" style="width:105px"
+                        title="Produto fresco: repõe diariamente pela venda média daquele dia da semana, ignorando saldo antigo e a caixa/mínimo global.">
+                        Venda/dia</th>
                 </tr>
             </thead>
             <tbody>
                 {% for titulo, grupo in [('Receitas', g_rec), ('Produtos', g_prod), ('Matérias-primas', g_mp)] if grupo %}
                 <tr class="table-group-divider">
-                    <td colspan="6" class="fw-bold small py-1 bg-light text-uppercase text-muted"
+                    <td colspan="7" class="fw-bold small py-1 bg-light text-uppercase text-muted"
                         style="letter-spacing:.03em">
                         {{ titulo }} <span class="fw-normal">({{ grupo | length }})</span>
                     </td>
@@ -241,12 +250,11 @@
     <button type="submit" class="btn btn-primary btn-sm" id="btn-registrar-estoque">
         <i class="bi bi-check-lg"></i> Registrar
     </button>
-    {# Config, não movimento: salva a coluna Mínimo pelo mesmo estoque_id[],
-       ignorando qtd[]/tipo[] (formaction troca só o destino do submit;
-       formnovalidate evita o required do movimento). #}
+    {# Config, não movimento: salva mínimo, diário e venda/dia pelo mesmo
+       estoque_id[]; não registra baixa de estoque. #}
     <button type="submit" class="btn btn-outline-secondary btn-sm" id="btn-salvar-minimos"
             formaction="{{ url_for('pedidos.estoque_loja_minimos') }}" formnovalidate>
-        <i class="bi bi-shield-check"></i> Salvar mínimos
+        <i class="bi bi-shield-check"></i> Salvar regras
     </button>
 </form>
 <script>

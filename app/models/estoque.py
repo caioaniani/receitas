@@ -162,6 +162,12 @@ class EstoqueLoja(db.Model):
     # de venda manda quando passa do piso. Vazio = sem piso. ALTER em
     # migrations_legacy (commit 1, 17/08/2026).
     pedido_minimo_diario = db.Column(db.Integer, nullable=True)
+    # Reposição FRESCA por venda do dia: modo excepcional por loja+item.
+    # Ignora saldo acumulado, merma e caixa/minimo globais; cada entrega usa
+    # somente a média de venda daquele dia da semana. Ex.: Croissant
+    # Tradicional fresco da Nebraska (dono 03/09/2026).
+    reposicao_por_venda_diaria = db.Column(
+        db.Boolean, nullable=False, default=False, server_default='false')
 
     loja = db.relationship('Loja')
     receita = db.relationship('Receita')

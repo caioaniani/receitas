@@ -2394,3 +2394,108 @@ def test_piso_sourdough_produz_200_por_dia_sem_demanda(app):
     for rec in (granola, levain, iogurte, brioche):
         rr = _rec_out(crono, rec.id)
         assert rr is None or rr['total'] == 0
+
+
+def _historico_mesmo_dia(loja, receita, alvo, venda, merma=0):
+    """Cria seis semanas estáveis para um único dia da semana."""
+    from datetime import datetime as _dt
+    from datetime import time as _time
+
+    from app.models import EstoqueLoja, MovEstoqueLoja
+    el = EstoqueLoja.query.filter_by(
+        loja_id=loja.id, receita_id=receita.id).first()
+    if el is None:
+        el = EstoqueLoja(
+            loja_id=loja.id, receita_id=receita.id, quantidade=0)
+        db.session.add(el)
+        db.session.flush()
+    for sem in range(1, 7):
+        momento = _dt.combine(
+            alvo - timedelta(days=7 * sem), _time(12, 0))
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=el.id, tipo='venda_seru',
+            quantidade=venda, data=momento, referencia='teste-venda-dia'))
+        if merma:
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='perda',
+                quantidade=merma, data=momento, referencia='teste-merma-dia'))
+    db.session.commit()
+    return el
+
+
+def test_reposicao_por_venda_diaria_ignora_estoque_merma_e_caixa(app):
+    """Nebraska/Croissant fresco recebe o que vende no dia, não caixa de 250."""
+    from app.services.previsao_producao import sugerir_pedidos_por_venda
+
+    loja = _loja('Loja Nebraska')
+    receita = _receita('Croissant Tradicional')
+    receita.lote_pedido = 250
+    receita.minimo_pedido = 250
+    alvo = hoje()
+    el = _historico_mesmo_dia(
+        loja, receita, alvo, venda=17, merma=80)
+    el.quantidade = 375
+    el.reposicao_por_venda_diaria = True
+    db.session.commit()
+
+    grade = sugerir_pedidos_por_venda(
+        horizonte_dias=1, janela_semanas=6,
+        inicio_offset_dias=(alvo - hoje()).days)
+    lj = next(x for x in grade['lojas'] if x['loja_id'] == loja.id)
+    produto = next(x for x in lj['produtos']
+                   if x['receita_id'] == receita.id)
+
+    assert produto['por_dia'] == [17]
+    assert produto['reposicao_por_venda_diaria'] is True
+    assert produto['lote'] == 250  # cadastro global continua intacto
+
+
+def test_reposicao_padrao_continua_usando_estoque_merma_e_caixa(app):
+    """Sem o modo por loja, a regra global antiga permanece inalterada."""
+    from app.services.previsao_producao import sugerir_pedidos_por_venda
+
+    loja = _loja('Outra loja')
+    receita = _receita('Croissant Tradicional')
+    receita.lote_pedido = 250
+    receita.minimo_pedido = 250
+    alvo = hoje()
+    _historico_mesmo_dia(loja, receita, alvo, venda=17)
+
+    grade = sugerir_pedidos_por_venda(
+        horizonte_dias=1, janela_semanas=6,
+        inicio_offset_dias=(alvo - hoje()).days)
+    lj = next(x for x in grade['lojas'] if x['loja_id'] == loja.id)
+    produto = next(x for x in lj['produtos']
+                   if x['receita_id'] == receita.id)
+
+    assert produto['por_dia'] == [250]
+    assert produto['reposicao_por_venda_diaria'] is False
+
+
+def test_seed_regras_reposicao_configura_somente_loja_produto_alvo(app):
+    """O deploy aplica Choconana/Ribeiro e Croissant/Nebraska uma única vez."""
+    from app.migrations_legacy import _seed_regras_reposicao_lojas
+    from app.models import AppConfig, EstoqueLoja
+
+    ribeiro = _loja('Loja Ribeiro do Vale 455')
+    nebraska = _loja('Loja Nebraska')
+    outra = _loja('Loja Anésio')
+    choconana = _receita('Choconana')
+    croissant = _receita('Croissant Tradicional')
+    db.session.add(EstoqueLoja(
+        loja_id=outra.id, receita_id=croissant.id, quantidade=0))
+    db.session.commit()
+
+    _seed_regras_reposicao_lojas(app)
+
+    el_choco = EstoqueLoja.query.filter_by(
+        loja_id=ribeiro.id, receita_id=choconana.id).one()
+    el_croissant = EstoqueLoja.query.filter_by(
+        loja_id=nebraska.id, receita_id=croissant.id).one()
+    el_outra = EstoqueLoja.query.filter_by(
+        loja_id=outra.id, receita_id=croissant.id).one()
+    assert el_choco.pedido_minimo_diario == 2
+    assert el_croissant.reposicao_por_venda_diaria is True
+    assert el_outra.reposicao_por_venda_diaria is False
+    assert AppConfig.get('seed_regras_reposicao_lojas_2026_09')
+

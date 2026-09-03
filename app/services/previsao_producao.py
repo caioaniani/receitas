@@ -1802,11 +1802,15 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # danishes assadas: "receber 2 por dia impreterivelmente"). A media de
     # venda manda quando passa do piso.
     diario_loja = defaultdict(lambda: defaultdict(int))
-    for loja_id, rid, mid, q, qres, emin, pdia in (db.session.query(
+    # Modo fresco por venda: reposição diária baseada somente no giro do mesmo
+    # dia da semana, sem carregar estoque nem aplicar caixa/mínimo globais.
+    venda_diaria_loja = defaultdict(lambda: defaultdict(bool))
+    for loja_id, rid, mid, q, qres, emin, pdia, venda_dia in (db.session.query(
             EstoqueLoja.loja_id, EstoqueLoja.receita_id,
             EstoqueLoja.materia_prima_id,
             EstoqueLoja.quantidade, EstoqueLoja.quantidade_reservada,
-            EstoqueLoja.estoque_minimo, EstoqueLoja.pedido_minimo_diario)
+            EstoqueLoja.estoque_minimo, EstoqueLoja.pedido_minimo_diario,
+            EstoqueLoja.reposicao_por_venda_diaria)
             .filter(db.or_(EstoqueLoja.receita_id.isnot(None),
                            EstoqueLoja.materia_prima_id.isnot(None))).all()):
         tok = _token(rid, mid)
@@ -1818,6 +1822,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
         if pdia:
             diario_loja[loja_id][tok] = max(diario_loja[loja_id][tok],
                                             int(pdia))
+        if venda_dia:
+            venda_diaria_loja[loja_id][tok] = True
 
     # Produtos que a loja PEDE da industria (historico de pedidos na janela).
     # A previsao por venda so "ve" o que teve baixa registrada; sem isto, um item
@@ -1969,6 +1975,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             est0 = estoque_atual.get(loja.id, {}).get(tok, 0)
             minimo_est = minimo_loja.get(loja.id, {}).get(tok, 0)
             diario = diario_loja.get(loja.id, {}).get(tok, 0)
+            venda_diaria = venda_diaria_loja.get(loja.id, {}).get(tok, False)
             pede = tok in pede_loja
             # Pedido JA FEITO no horizonte tambem inclui o item (linha com as
             # celulas azuis do ja-pedido) — mesma regra da tela de media.
@@ -1980,7 +1987,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             # pedido mesmo sem venda/estoque.
             if not v_dows and not m_dows and est0 <= 0 and not pede \
                     and not any(ja_ped_item) and minimo_est <= 0 \
-                    and diario <= 0:
+                    and diario <= 0 and not venda_diaria:
                 continue                          # nao vende/estoca/pede, nada pedido
             estoque = est0
             # Projeta o saldo ate o inicio da janela (offset > 0): consumo
@@ -2002,6 +2009,10 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 entrega_pre = pedido_existente.get(loja.id, {}).get(
                     d.isoformat(), {}).get(tok, 0)
                 estoque = max(0.0, estoque + entrega_pre - consumo_pre)
+            # No modo fresco, qualquer saldo anterior é deliberadamente
+            # ignorado: a entrega de cada dia nasce do que vende naquele dia.
+            if venda_diaria:
+                estoque = 0.0
             por_dia = [0] * len(dias_futuros)
             venda_total = 0.0
             for i, d in enumerate(dias_futuros):
@@ -2020,7 +2031,17 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                     entrega = pedido_existente.get(loja.id, {}).get(
                         d.isoformat(), {}).get(tok, 0)
                     por_dia[i] = 0
-                    estoque = estoque + entrega - consumo_d
+                    if not venda_diaria:
+                        estoque = estoque + entrega - consumo_d
+                    continue
+                # Produto fresco entregue todos os dias nesta loja: usa só a
+                # venda média do MESMO dia da semana. Não repõe merma, não
+                # desconta estoque antigo e não fecha na caixa/mínimo global.
+                if venda_diaria:
+                    pedido = int(ceil(venda_d - _EPS_ULP))
+                    if diario > 0 and pedido < diario:
+                        pedido = diario
+                    por_dia[i] = max(0, pedido)
                     continue
                 # Alvo do dia = consumo + estoque de seguranca opcional (sobra
                 # N% do consumo no fim do dia como colchao contra dia acima da
@@ -2077,6 +2098,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 'estoque_minimo': minimo_est,
                 # Pedido minimo diario (0 = sem piso incondicional).
                 'pedido_minimo_diario': diario,
+                # Reposição fresca por venda do dia (sem carry/caixa global).
+                'reposicao_por_venda_diaria': venda_diaria,
                 'abaixo_lote': False,
                 # Profundidade da amostra de VENDA (datas com baixa na
                 # janela) — a tela marca "pouco histórico" quando a média
