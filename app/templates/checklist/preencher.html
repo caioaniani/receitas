@@ -6,6 +6,7 @@
   {% if tipo == 'abertura' %}🌅{% elif tipo == 'troca_turno' %}🔄{% else %}🌙{% endif %}
   {{ label }} — {{ loja.nome }}
 </h1>
+{% include 'checklist/_responsaveis.html' %}
 
 {% if anteriores %}
 <div class="alert alert-info small py-2">

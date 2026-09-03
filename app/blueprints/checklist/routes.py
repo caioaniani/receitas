@@ -13,7 +13,7 @@ from app.models import (
     ChecklistResposta,
     Loja,
 )
-from app.services import checklist_loja
+from app.services import checklist_loja, checklist_responsaveis
 from app.utils import hoje
 
 
@@ -51,6 +51,7 @@ def index():
     querer (preencher de novo é permitido — vira outro registro)."""
     lojas = _lojas_escolhiveis()
     loja = (_resolver_loja(request.args.get('loja'))
+            or _resolver_loja(checklist_responsaveis.loja_do_usuario(current_user))
             or _resolver_loja(current_user.loja_id)
             or (lojas[0] if lojas else None))
     tipos = checklist_loja.tipos_configurados(loja.id) if loja else {}
@@ -70,7 +71,16 @@ def index():
     return render_template(
         'checklist/index.html', lojas=lojas, loja=loja,
         tipos=CHECKLIST_TIPOS, labels=CHECKLIST_TIPO_LABEL,
-        configurados=tipos, feitos_hoje=feitos_hoje)
+        configurados=tipos, feitos_hoje=feitos_hoje,
+        equipe=checklist_responsaveis.quadro(loja.id) if loja else None)
+
+
+@checklist_bp.route('/responsaveis')
+@login_required
+@admin_required
+def responsaveis():
+    return render_template('checklist/responsaveis.html',
+                           equipe=checklist_responsaveis.quadro())
 
 
 @checklist_bp.route('/preencher', methods=['GET', 'POST'])
@@ -132,7 +142,8 @@ def preencher():
                 label=CHECKLIST_TIPO_LABEL[tipo], itens=itens,
                 grupos=checklist_loja.agrupar_por_setor(itens),
                 anteriores=_do_dia(loja, tipo),
-                form=request.form), 422
+                form=request.form,
+                equipe=checklist_responsaveis.quadro(loja.id)), 422
         flash(f'Checklist de {CHECKLIST_TIPO_LABEL[tipo].lower()} da '
               f'{loja.nome} registrado ({len(p.respostas)} pontos'
               + (f', {p.n_problemas} com problema' if p.n_problemas else '')
@@ -143,7 +154,8 @@ def preencher():
         'checklist/preencher.html', loja=loja, tipo=tipo,
         label=CHECKLIST_TIPO_LABEL[tipo], itens=itens,
         grupos=checklist_loja.agrupar_por_setor(itens),
-        anteriores=_do_dia(loja, tipo), form=None)
+        anteriores=_do_dia(loja, tipo), form=None,
+        equipe=checklist_responsaveis.quadro(loja.id))
 
 
 def _do_dia(loja, tipo):

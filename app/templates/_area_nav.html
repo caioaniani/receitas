@@ -47,6 +47,7 @@
 {{ _lnk(variant, url_for('rh.escala'), 'Escala operacional', request.path == '/rh/escala', icon='bi-calendar3', title='Posições de trabalho por loja e turno') }}
 {% endif %}
 {% if current_user.is_admin() %}
+{{ _lnk(variant, url_for('checklist.responsaveis'), 'Responsáveis pelo checklist', request.path == '/checklist/responsaveis', icon='bi-person-check', title='Gerentes e atendentes chefes por loja e período') }}
 {{ _lnk(variant, url_for('checklist.config'), 'Checklist — itens', request.path == '/checklist/config', sub=true) }}
 {{ _lnk(variant, url_for('checklist.conferencia'), 'Checklist — conferência', request.path == '/checklist/conferencia', sub=true) }}
 {% endif %}

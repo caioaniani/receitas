@@ -1,0 +1,24 @@
+{% if equipe %}
+<section class="card mb-3" aria-label="Responsáveis por loja e período">
+  <div class="card-body small">
+    <h2 class="h6">Responsáveis por período</h2>
+    {% for linha in equipe.lojas %}
+    {% if equipe.lojas|length > 1 %}<h3 class="h6 mt-3">{{ linha.loja.nome }}</h3>{% endif %}
+    {% for periodo, pessoas in linha.turnos.items() %}
+    {% if tipo is not defined or tipo not in ['abertura', 'fechamento'] or (tipo == 'abertura' and periodo == 'Manhã') or (tipo == 'fechamento' and periodo == 'Tarde') %}
+    <div class="mb-2">
+      <strong>{{ periodo }}{{ ' · abertura' if periodo == 'Manhã' else ' · fechamento' }}</strong>
+      {% for pessoa in pessoas %}
+      <div>{{ pessoa.nome }}{% if current_user.is_admin() and not pessoa.acesso %}
+        <span class="text-warning">— acesso ao checklist pendente</span>{% endif %}</div>
+      {% else %}
+      <div class="text-muted">Sem responsável vinculado.</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% endfor %}
+    <p class="text-muted mb-0">Vínculos de Organizar equipe. Durante o expediente e na troca de turno, confira os responsáveis do período. Quem preencher ficará registrado no histórico.</p>
+  </div>
+</section>
+{% endif %}

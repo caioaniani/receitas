@@ -2,6 +2,7 @@
 {% block title %}Checklist — conferência{% endblock %}
 {% block content %}
 <h1 class="page-title"><i class="bi bi-clipboard-data"></i> Checklist — conferência</h1>
+<p class="small"><a href="{{ url_for('checklist.responsaveis') }}">Ver responsáveis atuais por loja e período</a></p>
 
 {% if faltando.abertura_hoje or faltando.fechamento_ontem %}
 <div class="alert alert-warning small py-2">

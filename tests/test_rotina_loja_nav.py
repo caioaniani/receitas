@@ -22,7 +22,7 @@ def _links_rotina(html):
 def test_owner_navega_entre_checklist_e_equipe(app, owner_user):
     client = _client(app, owner_user)
     caminhos = {'/checklist/', '/rh/lideranca/preenchimento', '/rh/escala',
-                '/checklist/config', '/checklist/conferencia'}
+                '/checklist/config', '/checklist/conferencia', '/checklist/responsaveis'}
     for caminho in caminhos:
         resposta = client.get(caminho)
         assert resposta.status_code == 200
@@ -32,7 +32,8 @@ def test_owner_navega_entre_checklist_e_equipe(app, owner_user):
 def test_admin_nao_recebe_atalhos_restritos_ao_owner(app, admin_user):
     client = _client(app, admin_user)
     links = _links_rotina(client.get('/checklist/').get_data(as_text=True))
-    assert links == {'/checklist/', '/checklist/config', '/checklist/conferencia'}
+    assert links == {'/checklist/', '/checklist/config', '/checklist/conferencia',
+                     '/checklist/responsaveis'}
     assert client.get('/rh/escala').status_code == 403
 
 

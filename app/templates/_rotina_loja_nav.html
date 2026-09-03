@@ -6,6 +6,10 @@
     <a class="btn btn-sm {{ 'btn-primary' if request.endpoint in ['checklist.index', 'checklist.preencher'] else 'btn-outline-secondary' }}"
        href="{{ url_for('checklist.index') }}"{% if request.endpoint in ['checklist.index', 'checklist.preencher'] %} aria-current="page"{% endif %}>Checklist</a>
     {% endif %}
+    {% if not current_user.somente_treino and current_user.is_admin() %}
+    <a class="btn btn-sm {{ 'btn-primary' if request.endpoint == 'checklist.responsaveis' else 'btn-outline-secondary' }}"
+       href="{{ url_for('checklist.responsaveis') }}"{% if request.endpoint == 'checklist.responsaveis' %} aria-current="page"{% endif %}>Responsáveis</a>
+    {% endif %}
     {% if current_user.pode_organizar_equipe() %}
     <a class="btn btn-sm {{ 'btn-primary' if request.endpoint == 'rh.lideranca_preenchimento' else 'btn-outline-secondary' }}"
        href="{{ url_for('rh.lideranca_preenchimento') }}"{% if request.endpoint == 'rh.lideranca_preenchimento' %} aria-current="page"{% endif %}>Organizar equipe</a>

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Checklist — responsáveis{% endblock %}
+{% block content %}
+<div style="max-width:760px;">
+<h1 class="page-title">Responsáveis pelo checklist</h1>
+<p>Gerentes e atendentes chefes vinculados à unidade principal e ao período em Organizar equipe. Mudanças nesse cadastro atualizam esta lista automaticamente.</p>
+{% include 'checklist/_responsaveis.html' %}
+{% if equipe.pendentes %}
+<div class="alert alert-warning small">
+  <strong>Complete a unidade principal e o período:</strong>
+  <ul class="mb-0">{% for pessoa in equipe.pendentes %}<li>{{ pessoa.nome }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+<p class="small">Quando houver mais de um nome no período, a responsabilidade é compartilhada. O cadastro não define substituições por folga ou ausência.</p>
+<p>
+{% if current_user.pode_organizar_equipe() %}
+<a class="btn btn-primary" href="{{ url_for('rh.lideranca_preenchimento') }}">Organizar equipe</a>
+{% endif %}
+<a class="btn btn-outline-secondary" href="{{ url_for('checklist.index') }}">Voltar ao checklist</a>
+</p>
+</div>
+{% endblock %}

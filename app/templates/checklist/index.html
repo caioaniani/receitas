@@ -21,6 +21,7 @@ pontos que exigem comprovação.</p>
 </form>
 
 {% if loja %}
+{% include 'checklist/_responsaveis.html' %}
 <div class="d-grid gap-2">
   {% for t in tipos %}
     {% set n = configurados.get(t) %}
@@ -52,6 +53,8 @@ pontos que exigem comprovação.</p>
 {% if current_user.is_admin() %}
 <hr>
 <p class="small mb-0">
+  <a href="{{ url_for('checklist.responsaveis') }}">Responsáveis por loja e período</a>
+  &nbsp;·&nbsp;
   <a href="{{ url_for('checklist.config') }}">⚙️ Configurar itens</a>
   &nbsp;·&nbsp;
   <a href="{{ url_for('checklist.conferencia') }}">📋 Conferência (histórico)</a>
