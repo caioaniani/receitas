@@ -381,6 +381,9 @@
         </div>
         {% endif %}
 
+        {% if current_user.is_authenticated and (request.blueprint == 'checklist' or request.endpoint in ['rh.lideranca_preenchimento', 'rh.lideranca_organograma', 'rh.escala']) %}
+        {% include '_rotina_loja_nav.html' %}
+        {% endif %}
         {% block content %}{% endblock %}
     </main>
 

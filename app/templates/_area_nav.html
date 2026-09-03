@@ -36,12 +36,22 @@
 
 
 {% macro lojas(variant) %}
-{{ _lnk(variant, url_for('pedidos.lista'), 'Pedidos', request.path in ['/pedidos/', '/pedidos']) }}
+{{ _sub(variant, 'Rotina da loja e equipe') }}
+{% if current_user.pode_checklist() and not current_user.somente_treino %}
 {{ _lnk(variant, url_for('checklist.index'), 'Checklist da loja', request.path in ['/checklist/', '/checklist'] or request.path.startswith('/checklist/preencher'), icon='bi-clipboard-check') }}
+{% endif %}
+{% if current_user.pode_organizar_equipe() %}
+{{ _lnk(variant, url_for('rh.lideranca_preenchimento'), 'Organizar equipe', request.path == '/rh/lideranca/preenchimento', icon='bi-diagram-3', title='Líder, loja e período de cada pessoa') }}
+{% endif %}
+{% if current_user.is_dono() %}
+{{ _lnk(variant, url_for('rh.escala'), 'Escala operacional', request.path == '/rh/escala', icon='bi-calendar3', title='Posições de trabalho por loja e turno') }}
+{% endif %}
 {% if current_user.is_admin() %}
 {{ _lnk(variant, url_for('checklist.config'), 'Checklist — itens', request.path == '/checklist/config', sub=true) }}
 {{ _lnk(variant, url_for('checklist.conferencia'), 'Checklist — conferência', request.path == '/checklist/conferencia', sub=true) }}
 {% endif %}
+{{ _sub(variant, 'Pedidos e estoque') }}
+{{ _lnk(variant, url_for('pedidos.lista'), 'Pedidos', request.path in ['/pedidos/', '/pedidos']) }}
 {{ _lnk(variant, url_for('pedidos.estoque_loja'), 'Estoque Loja', request.path == '/pedidos/estoque-loja') }}
 {{ _lnk(variant, url_for('pedidos.estoque_loja_diario'), 'Movimento do Dia', request.path == '/pedidos/estoque-loja/diario') }}
 {{ _lnk(variant, url_for('pedidos.estoque_loja_historico'), 'Histórico do estoque', request.path == '/pedidos/estoque-loja/historico') }}
@@ -137,6 +147,9 @@
 
 
 {% macro rh(variant) %}
+{% if current_user.pode_organizar_equipe() %}
+{{ _lnk(variant, url_for('rh.lideranca_preenchimento'), 'Organizar equipe', request.path == '/rh/lideranca/preenchimento', icon='bi-diagram-3', title='Líder, loja e período de cada pessoa') }}
+{% endif %}
 {{ _lnk(variant, url_for('rh.dashboard'), 'Painel RH', request.path == '/rh/') }}
 {{ _lnk(variant, url_for('rh.funcionarios'), 'Funcionários', '/rh/funcionarios' in request.path) }}
 {{ _lnk(variant, url_for('rh.lideranca'), 'Liderança e observações', '/rh/lideranca' in request.path) }}

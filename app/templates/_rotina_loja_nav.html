@@ -1,0 +1,24 @@
+{# Atalhos entre as telas da rotina de loja, respeitando os acessos existentes. #}
+<nav class="mb-3" aria-label="Rotina da loja e equipe">
+  <div class="small text-muted mb-2">Rotina da loja e equipe</div>
+  <div class="d-flex flex-wrap gap-2">
+    {% if not current_user.somente_treino and current_user.pode_checklist() %}
+    <a class="btn btn-sm {{ 'btn-primary' if request.endpoint in ['checklist.index', 'checklist.preencher'] else 'btn-outline-secondary' }}"
+       href="{{ url_for('checklist.index') }}"{% if request.endpoint in ['checklist.index', 'checklist.preencher'] %} aria-current="page"{% endif %}>Checklist</a>
+    {% endif %}
+    {% if current_user.pode_organizar_equipe() %}
+    <a class="btn btn-sm {{ 'btn-primary' if request.endpoint == 'rh.lideranca_preenchimento' else 'btn-outline-secondary' }}"
+       href="{{ url_for('rh.lideranca_preenchimento') }}"{% if request.endpoint == 'rh.lideranca_preenchimento' %} aria-current="page"{% endif %}>Organizar equipe</a>
+    {% endif %}
+    {% if not current_user.somente_treino and current_user.is_dono() %}
+    <a class="btn btn-sm {{ 'btn-primary' if request.endpoint == 'rh.escala' else 'btn-outline-secondary' }}"
+       href="{{ url_for('rh.escala') }}"{% if request.endpoint == 'rh.escala' %} aria-current="page"{% endif %}>Escala operacional</a>
+    {% endif %}
+    {% if not current_user.somente_treino and current_user.is_admin() %}
+    <a class="btn btn-sm {{ 'btn-primary' if request.endpoint == 'checklist.conferencia' else 'btn-outline-secondary' }}"
+       href="{{ url_for('checklist.conferencia') }}"{% if request.endpoint == 'checklist.conferencia' %} aria-current="page"{% endif %}>Conferir checklists</a>
+    <a class="btn btn-sm {{ 'btn-primary' if request.endpoint == 'checklist.config' else 'btn-outline-secondary' }}"
+       href="{{ url_for('checklist.config') }}"{% if request.endpoint == 'checklist.config' %} aria-current="page"{% endif %}>Configurar itens</a>
+    {% endif %}
+  </div>
+</nav>

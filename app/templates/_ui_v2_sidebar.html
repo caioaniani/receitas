@@ -37,9 +37,19 @@
             <i class="bi bi-people"></i><span>Minha equipe</span>
         </a>
         {% endif %}
+        {% if current_user.pode_checklist() and not current_user.somente_treino %}
+        <a href="{{ url_for('checklist.index') }}" class="sidebar-link {{ 'active' if request.path.startswith('/checklist') }}">
+            <i class="bi bi-clipboard-check"></i><span>Checklist da loja</span>
+        </a>
+        {% endif %}
         {% if current_user.pode_organizar_equipe() %}
         <a href="{{ url_for('rh.lideranca_preenchimento') }}" class="sidebar-link {{ 'active' if request.path.startswith('/rh/lideranca') }}">
             <i class="bi bi-diagram-3"></i><span>Organizar equipe</span>
+        </a>
+        {% endif %}
+        {% if current_user.is_dono() and not current_user.somente_treino %}
+        <a href="{{ url_for('rh.escala') }}" class="sidebar-link {{ 'active' if request.path.startswith('/rh/escala') }}">
+            <i class="bi bi-calendar3"></i><span>Escala operacional</span>
         </a>
         {% endif %}
         {% if current_user.pode_cadastrar_funcionarios() %}
