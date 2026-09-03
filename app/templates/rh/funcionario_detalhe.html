@@ -31,6 +31,11 @@
     <div class="treino-rh-actions"><a class="treino-secondary-action" href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos') }}">{{ 'Ver acesso' if treino_resumo.tem_acesso else 'Criar ou vincular acesso' }}</a>{% for selo in treino_resumo.selos[:3] %}<a href="{{ url_for('treino.certificado', selo_id=selo.id) }}"><i class="bi bi-award"></i> {{ selo.trilha.nome }}</a>{% endfor %}</div>
 </section>
 
+{% if func.enquadramento_carreira %}
+{% set carreira = func.enquadramento_carreira %}
+<section class="card shadow-sm mb-4" aria-labelledby="carreira-titulo"><div class="card-header d-flex justify-content-between align-items-center"><strong id="carreira-titulo"><i class="bi bi-signpost-split"></i> Plano de carreira</strong><a href="{{ url_for('rh.plano_carreira', q=func.nome) }}">Ver no plano</a></div><div class="card-body"><div class="row g-3"><div class="col-md-3"><div class="text-muted small">Trilha e nível</div><strong>{{ carreira.familia }}{% if carreira.nivel %} · N{{ carreira.nivel }}{% endif %}</strong></div><div class="col-md-3"><div class="text-muted small">Cargo proposto</div><strong>{{ carreira.cargo_proposto or 'Fora da trilha' }}</strong></div><div class="col-md-2"><div class="text-muted small">Total de referência</div><strong>{{ carreira.total_alvo|brl }}</strong></div><div class="col-md-2"><div class="text-muted small">Diferença simulada</div><strong class="{% if carreira.diferenca_total > 0.01 %}text-success{% elif carreira.diferenca_total < -0.01 %}text-danger{% endif %}">{{ carreira.diferenca_total|brl }}</strong></div><div class="col-md-2"><div class="text-muted small">Decisão</div><strong>{{ carreira.decisao or 'Sem decisão' }}</strong></div></div><p class="small text-muted mt-3 mb-0">Referência de planejamento. Alterações contratuais continuam sendo feitas pela folha/RH após aprovação.</p></div></section>
+{% endif %}
+
 <!-- Dados do Funcionário -->
 <form method="POST" action="{{ url_for('rh.salvar_funcionario', id=func.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

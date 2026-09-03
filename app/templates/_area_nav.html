@@ -157,6 +157,7 @@
 {{ _lnk(variant, url_for('rh.pre_cadastros'), 'Pré-cadastro (QR)', '/rh/pre-cadastros' in request.path) }}
 {% if current_user.is_dono() %}
 {{ _lnk(variant, url_for('rh.folha'), 'Folha de Pagamento', '/rh/folha' in request.path and '/importar' not in request.path) }}
+{{ _lnk(variant, url_for('rh.plano_carreira'), 'Plano de cargos e carreira', '/rh/plano-carreira' in request.path, icon='bi-signpost-split', title='Faixas N1–N5, enquadramento, regras de promoção e treinamento') }}
 {{ _lnk(variant, url_for('rh.folha_importar'), 'Importar folha (xlsx)', '/rh/folha/importar' in request.path) }}
 {{ _lnk(variant, url_for('rh.contatos_importar'), 'Importar contatos (xlsx)', '/rh/contatos/importar' in request.path, title='E-mail e celular dos funcionários por planilha — o contato da ficha é o que vale nas assinaturas eletrônicas') }}
 {% endif %}

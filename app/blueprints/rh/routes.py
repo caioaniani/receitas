@@ -1,3 +1,6 @@
+import base64
+import binascii
+import hashlib
 from datetime import datetime
 from urllib.parse import quote
 
@@ -17,6 +20,12 @@ from app.models import (
     FolhaPagamento,
     Funcionario,
     Loja,
+    PlanoCarreiraConteudo,
+    PlanoCarreiraEnquadramento,
+    PlanoCarreiraFaixa,
+    PlanoCarreiraImportacao,
+    PlanoCarreiraRegra,
+    PlanoCarreiraValidacao,
     Posicao,
     RegistroPonto,
     SlotMapa,
@@ -804,6 +813,124 @@ def detalhe_funcionario(id):
                            feedbacks=feedbacks, folhas=folhas,
                            treino_resumo=treino_painel.resumo_funcionario(
                                func, treino_ledger.temporada_ativa()))
+
+
+# ── Plano de cargos, salários e carreira ─────────────────────────────────
+
+@rh_bp.route('/plano-carreira')
+@login_required
+@rh_required
+def plano_carreira():
+    importacao = PlanoCarreiraImportacao.query.order_by(
+        PlanoCarreiraImportacao.importado_em.desc()).first()
+    familias = [r[0] for r in (
+        db.session.query(PlanoCarreiraFaixa.familia).distinct()
+        .order_by(PlanoCarreiraFaixa.familia).all())]
+    familia = (request.args.get('familia') or '').strip()
+    busca = (request.args.get('q') or '').strip()
+    query = (PlanoCarreiraEnquadramento.query
+             .join(PlanoCarreiraEnquadramento.funcionario)
+             .options(joinedload(PlanoCarreiraEnquadramento.funcionario)))
+    if familia:
+        query = query.filter(PlanoCarreiraEnquadramento.familia == familia)
+    if busca:
+        query = query.filter(Funcionario.nome.ilike(f'%{busca}%'))
+    enquadramentos = query.order_by(Funcionario.nome).all()
+    faixas = PlanoCarreiraFaixa.query.order_by(
+        PlanoCarreiraFaixa.familia, PlanoCarreiraFaixa.nivel).all()
+    validacoes = PlanoCarreiraValidacao.query.order_by(
+        PlanoCarreiraValidacao.ordem).all()
+    regras = PlanoCarreiraRegra.query.order_by(PlanoCarreiraRegra.id).all()
+    conteudos = PlanoCarreiraConteudo.query.count()
+    videos = (db.session.query(PlanoCarreiraConteudo.treino_video_id)
+              .filter(PlanoCarreiraConteudo.treino_video_id.isnot(None))
+              .distinct().count())
+    total_pessoas = PlanoCarreiraEnquadramento.query.count()
+    ajustes = sum(max(e.diferenca_total, 0)
+                  for e in PlanoCarreiraEnquadramento.query.all())
+    decisoes = {nome: PlanoCarreiraEnquadramento.query.filter_by(
+        decisao=nome).count()
+        for nome in ('Em avaliação', 'Aprovado', 'Proposta final')}
+    decisoes['Sem decisão'] = PlanoCarreiraEnquadramento.query.filter(
+        PlanoCarreiraEnquadramento.decisao.is_(None)).count()
+    return render_template(
+        'rh/plano_carreira.html', importacao=importacao, familias=familias,
+        familia=familia, busca=busca, enquadramentos=enquadramentos,
+        faixas=faixas, validacoes=validacoes, regras=regras,
+        total_conteudos=conteudos, videos_vinculados=videos,
+        total_pessoas=total_pessoas, ajustes_positivos=ajustes,
+        decisoes=decisoes)
+
+
+@rh_bp.route('/plano-carreira/importar', methods=['GET', 'POST'])
+@login_required
+@rh_required
+def plano_carreira_importar():
+    if request.method == 'GET':
+        return render_template('rh/plano_carreira_importar.html')
+    arquivo = request.files.get('arquivo')
+    raw = arquivo.read() if arquivo else b''
+    from app.services import plano_carreira_import as importador
+    try:
+        dados = importador.prever(raw)
+    except importador.PlanoCarreiraErro as exc:
+        flash(str(exc), 'warning')
+        return render_template('rh/plano_carreira_importar.html'), 400
+    return render_template(
+        'rh/plano_carreira_importar.html', previa=dados,
+        arquivo_b64=base64.b64encode(raw).decode('ascii'),
+        arquivo_sha=dados['sha256'],
+        arquivo_nome=secure_filename(arquivo.filename or '') or
+        'plano-carreira.xlsx')
+
+
+@rh_bp.route('/plano-carreira/importar/aplicar', methods=['POST'])
+@login_required
+@rh_required
+def plano_carreira_importar_aplicar():
+    from app.services import plano_carreira_import as importador
+    try:
+        raw = base64.b64decode(request.form.get('arquivo_b64', ''), validate=True)
+    except (ValueError, binascii.Error):
+        raw = b''
+    esperado = (request.form.get('arquivo_sha') or '').strip()
+    if not raw or hashlib.sha256(raw).hexdigest() != esperado:
+        flash('A prévia expirou ou o arquivo foi alterado. Envie a planilha novamente.', 'warning')
+        return redirect(url_for('rh.plano_carreira_importar'))
+    try:
+        resultado = importador.aplicar(raw, request.form.get('arquivo_nome'),
+                                       current_user.id)
+    except importador.PlanoCarreiraErro as exc:
+        flash(str(exc), 'warning')
+        return redirect(url_for('rh.plano_carreira_importar'))
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception('Falha ao importar plano de carreira')
+        flash('Não foi possível importar o plano. Nenhum dado foi alterado.', 'danger')
+        return redirect(url_for('rh.plano_carreira_importar'))
+    flash(f'Plano vinculado: {resultado["faixas"]} faixas, '
+          f'{resultado["pessoas_vinculadas"]} pessoas e '
+          f'{resultado["videos_vinculados"]} vídeos do treinamento.', 'success')
+    if resultado['avisos']:
+        flash('Revisar vínculos: ' + '; '.join(resultado['avisos'][:8]), 'warning')
+    return redirect(url_for('rh.plano_carreira'))
+
+
+@rh_bp.route('/plano-carreira/enquadramentos/<int:id>/decisao', methods=['POST'])
+@login_required
+@rh_required
+def plano_carreira_decisao(id):
+    from app.services.plano_carreira_import import DECISOES
+    enquadramento = PlanoCarreiraEnquadramento.query.get_or_404(id)
+    decisao = (request.form.get('decisao') or '').strip()
+    if decisao and decisao not in DECISOES:
+        abort(400)
+    enquadramento.decisao = decisao or None
+    db.session.commit()
+    flash(f'Decisão de {enquadramento.funcionario.nome} atualizada.', 'success')
+    destino = request.form.get('voltar') or url_for('rh.plano_carreira')
+    if not destino.startswith('/') or destino.startswith('//'):
+        destino = url_for('rh.plano_carreira')
+    return redirect(destino)
 
 
 @rh_bp.route('/funcionarios/<int:id>/salvar', methods=['POST'])

@@ -5058,6 +5058,29 @@ interna que ja existia). Servico `app/services/folha_import.py`.
 - Testes: `tests/test_folha_import.py` (11 casos). Manual registrado
   (secao QUANDO PRECISAR).
 
+## Plano de cargos, salarios e carreira no RH (03/09/2026)
+
+Pedido do dono: vincular `OPao_Plano_Cargos_Salarios_2026_REVISADO.xlsx` ao
+sistema. Tela owner-only em **`/rh/plano-carreira`**, com atalho na area RH;
+importacao com previa em **`/rh/plano-carreira/importar`**.
+
+- Tabelas novas em `app/models/rh_carreira.py` (`db.create_all`, sem ALTER):
+  importacao, 41 faixas, 4 regras de promocao, 827 exigencias de conteudo,
+  enquadramento por funcionario e 6 validacoes de implantacao.
+- Servico `app/services/plano_carreira_import.py`: le as abas por cabecalho,
+  vincula pessoas por nome normalizado (uma ficha ativa vence a ficha
+  historica desligada) e liga videos pelo titulo/modulo. Match ausente ou
+  ambiguo vira aviso; nunca cria funcionario.
+- REGRA DE SEGURANCA: importar o plano e mudar a decisao individual NUNCA
+  altera `Funcionario.funcao`, `cargo_id`, `salario_base` nem a folha. As
+  validacoes DP/juridico seguem visiveis e pendentes; a tela nao tem gesto de
+  aplicar promocao/remuneracao.
+- Reimportacao substitui a estrutura atomicamente e preserva decisao manual
+  quando a celula vem vazia. Decisao explicita da planilha prevalece.
+- A ficha do funcionario exibe o enquadramento. Testes:
+  `tests/test_plano_carreira.py`; planilha real: 41 faixas, 10 familias,
+  827 conteudos, 45 pessoas, 6 validacoes e 140 videos unicos.
+
 ## Treinamento — plano de conteudo por planilha + acessos em lote (13/08/2026)
 
 Dois gestos que fecharam o onboarding do treinamento (pedidos do dono na
