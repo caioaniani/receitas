@@ -2,7 +2,9 @@
 
 O checklist consulta a unidade principal e o período de **Organizar equipe**.
 Entram funcionários ativos com cargo Gerente, Gerente de loja ou Atendente
-chefe, ou cuja conta vinculada já tenha perfil Gerente. Gerência geral e RH
+chefe, ou cuja conta vinculada já tenha perfil Gerente e que sejam líderes
+diretos de pessoas ativas na mesma unidade principal e período. O perfil de
+acesso sozinho não define responsabilidade operacional. Gerência geral e RH
 não são escalados pelo título. Cargos estruturados têm prioridade sobre a
 função legada. A seleção não usa nomes fixos nem altera contas ou permissões.
 

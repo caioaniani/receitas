@@ -13,10 +13,11 @@ from app.services.rh_cargos import normalizar_nome_cargo
 CARGOS_RESPONSAVEIS = frozenset({'gerente', 'gerente de loja', 'atendente chefe'})
 
 
-def _eh_responsavel(funcionario):
+def _eh_responsavel(funcionario, lideres_do_periodo):
     cargo = funcionario.cargo.nome if funcionario.cargo else funcionario.funcao
     return (normalizar_nome_cargo(cargo) in CARGOS_RESPONSAVEIS
-            or bool(funcionario.usuario and funcionario.usuario.is_gerente()))
+            or bool(funcionario.id in lideres_do_periodo
+                    and funcionario.usuario and funcionario.usuario.is_gerente()))
 
 
 def loja_do_usuario(usuario):
@@ -31,8 +32,9 @@ def quadro(loja_id=None):
     """Retorna lojas, períodos e pessoas, além dos cadastros incompletos.
 
     Gerência geral/RH não implica responsabilidade de turno. O perfil Gerente
-    já atribuído à conta também é uma fonte válida (há líderes operacionais
-    cujo cargo no RH ainda é Atendente). Nunca promove uma conta por nome.
+    já atribuído à conta só complementa o cargo quando a pessoa lidera alguém
+    na mesma unidade e período (há líderes cujo cargo ainda é Atendente).
+    Permissão de gerente, sozinha, não atribui responsabilidade operacional.
     """
     lojas = sorted(checklist_loja.lojas_operacionais(), key=lambda l: l.nome)
     funcionarios = (Funcionario.query.filter_by(ativo=True)
@@ -41,13 +43,22 @@ def quadro(loja_id=None):
                              selectinload(Funcionario.lojas))
                     .order_by(Funcionario.nome).all())
     unidades = treino_lideranca.unidades_principais(funcionarios)
+    por_id = {f.id: f for f in funcionarios}
+    lideres_do_periodo = set()
+    for pessoa in funcionarios:
+        lider = por_id.get(pessoa.lider_id)
+        if (lider and unidades.get(lider.id) is not None
+                and unidades.get(lider.id) == unidades.get(pessoa.id)
+                and lider.periodo in treino_lideranca.PERIODOS_EQUIPE
+                and lider.periodo == pessoa.periodo):
+            lideres_do_periodo.add(lider.id)
     por_loja = {
         loja.id: {'loja': loja, 'turnos': {
             periodo: [] for periodo in treino_lideranca.PERIODOS_EQUIPE}}
         for loja in lojas}
     pendentes = []
     for funcionario in funcionarios:
-        if not _eh_responsavel(funcionario):
+        if not _eh_responsavel(funcionario, lideres_do_periodo):
             continue
         unidade_id = unidades.get(funcionario.id)
         if unidade_id is not None and unidade_id not in por_loja:

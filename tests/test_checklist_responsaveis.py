@@ -35,7 +35,10 @@ def _nomes(quadro, loja_id, periodo):
 def test_vincula_chefes_e_perfil_gerente_sem_incluir_gerencia_rh(app, loja):
     _pessoa('Chefe', loja)
     _pessoa('Gerente', loja, cargo='GERENTE', periodo='Tarde')
-    _pessoa('LiderOperacional', loja, cargo='ATENDENTE 2', papel='gerente', periodo='Tarde')
+    lider = _pessoa('LiderOperacional', loja, cargo='ATENDENTE 2', papel='gerente', periodo='Tarde')
+    liderado = _pessoa('Liderado', loja, cargo='ATENDENTE', periodo='Tarde')
+    liderado.lider_id = lider.id
+    _pessoa('AcessoGerenteSemLideranca', loja, cargo='ATENDENTE 2', papel='gerente')
     _pessoa('RH', loja, cargo='GERENTE DE RH', papel='admin')
     _pessoa('Geral', loja, cargo='GERENTE GERAL', papel='admin')
     _pessoa('Atendente', loja, cargo='ATENDENTE')
@@ -43,6 +46,25 @@ def test_vincula_chefes_e_perfil_gerente_sem_incluir_gerencia_rh(app, loja):
     quadro = checklist_responsaveis.quadro()
     assert _nomes(quadro, loja.id, 'Manhã') == ['Chefe']
     assert _nomes(quadro, loja.id, 'Tarde') == ['Gerente', 'LiderOperacional']
+
+
+def test_perfil_gerente_com_liderados_em_outro_periodo_nao_vincula(app, loja):
+    lider = _pessoa('Lider', loja, cargo='ATENDENTE', papel='gerente', periodo='Tarde')
+    liderado = _pessoa('Liderado', loja, cargo='ATENDENTE', periodo='Manhã')
+    liderado.lider_id = lider.id
+    db.session.commit()
+    assert _nomes(checklist_responsaveis.quadro(), loja.id, 'Tarde') == []
+
+
+def test_perfil_gerente_com_liderados_em_outra_loja_nao_vincula(app, loja):
+    outra = Loja(nome='Outra', ativa=True)
+    db.session.add(outra)
+    db.session.commit()
+    lider = _pessoa('Lider', loja, cargo='ATENDENTE', papel='gerente')
+    liderado = _pessoa('Liderado', outra, cargo='ATENDENTE')
+    liderado.lider_id = lider.id
+    db.session.commit()
+    assert _nomes(checklist_responsaveis.quadro(), loja.id, 'Manhã') == []
 
 
 def test_mudanca_de_unidade_e_periodo_atualiza_vinculo_sem_copia(app, loja):
