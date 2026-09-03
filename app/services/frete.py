@@ -256,7 +256,7 @@ def _google_sob_teto():
     return True
 
 
-def _google_geocode(texto):
+def _google_geocode(texto, numero_entrega=None):
     """Google (cacheado) pro frete. (lat, lng) ou None. Cache HIT não consome
     o teto (custo zero); só a chamada REMOTA conta. Nunca levanta — fora de app
     context (thread do bot) ou sem chave, retorna None e cai na cadeia grátis."""
@@ -271,7 +271,7 @@ def _google_geocode(texto):
         if chave:
             cache = GeocodeCache.query.filter_by(chave=chave).first()
             if cache and cache.lat is not None:
-                if cache.fonte == 'google':
+                if cache.fonte == 'google_entrega' or (cache.fonte == 'google' and numero_entrega is None):
                     return cache.lat, cache.lng   # hit PRECISO: sem custo/teto
                 if cache.fonte == 'google_aprox':
                     return None                   # hit aproximado: cai na grátis
@@ -280,6 +280,8 @@ def _google_geocode(texto):
             return None
         # geocode_preciso: só devolve quando o Google achou o ENDEREÇO (não o
         # centroide da cidade) — senão None e cai na cadeia grátis (com guards).
+        if numero_entrega is not None:
+            return google_maps.geocode_preciso(texto, numero_entrega=numero_entrega)
         return google_maps.geocode_preciso(texto)
     except Exception:  # noqa: BLE001 — geocode nunca pode quebrar o frete
         logger.exception('frete: geocode Google falhou pra %r', texto[:80])
@@ -375,9 +377,43 @@ def _geocodificar_impl(endereco_ou_cep):
     return geo, False, 'gratis'
 
 
+def geocodificar_entrega(endereco):
+    """Ponto para despacho: endereço/número validado ou coordenada explícita.
+
+    A BrasilAPI devolveu o MESMO centro de São Paulo para CEPs diferentes
+    nas corridas 373/375/370 (03/09/2026). Aqui só usamos seus metadados
+    postais para limpar o endereço; nunca as coordenadas do CEP. A cadeia
+    de estimativa de frete não pode decidir para onde enviar um motorista.
+    """
+    texto = (endereco or '').strip()
+    m = re.fullmatch(r'(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)', texto)
+    if m:
+        lat, lng = float(m.group(1)), float(m.group(2))
+        return (lat, lng, texto) if -90 <= lat <= 90 and -180 <= lng <= 180 else None
+    numero = _extrair_numero(texto)
+    if not numero:
+        return None
+    g = _google_geocode(texto, numero_entrega=numero)
+    if g:
+        return g[0], g[1], texto
+    cep = _extrair_cep(texto)
+    postal = _geocodificar_cep(cep) if cep else None
+    ref = postal[3] if postal else {}
+    if ref.get('rua') and ref.get('cidade'):
+        canonico = ', '.join(x for x in (
+            ref['rua'], numero, ref.get('bairro'), ref['cidade'],
+            _formatar_cep(cep)) if x)
+        if canonico != texto:
+            g = _google_geocode(canonico, numero_entrega=numero)
+            if g:
+                return g[0], g[1], canonico
+    logger.warning('Endereço sem ponto validado para despacho: %r', texto[:200])
+    return None
+
+
 def geocodificar(endereco_ou_cep):
     """(lat, lng, rotulo) pra um CEP ou endereço livre, ou None. Wrapper
-    compatível — usado pelo bot e pela Lalamove (que ganham o Google junto)."""
+    compatível para estimativas. Despacho usa geocodificar_entrega()."""
     geo, _impreciso, _fonte = _geocodificar_impl(endereco_ou_cep)
     return geo
 

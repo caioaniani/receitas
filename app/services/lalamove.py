@@ -133,8 +133,8 @@ def _fone_e164(fone):
 
 def _origem():
     """(lat, lng, endereco) da filial de saída. Env LALAMOVE_ORIGEM_LATLNG
-    fixa as coordenadas; sem ela, geocodifica 1x por worker (BrasilAPI/
-    Nominatim, mesmos provedores do consultar_frete)."""
+    fixa as coordenadas; sem ela, valida rua/número no Google uma vez por
+    worker. Nunca usa centroide de CEP para enviar o motorista."""
     global _origem_cache
     if _origem_cache:
         return _origem_cache
@@ -148,7 +148,7 @@ def _origem():
         except ValueError:
             logger.warning('LALAMOVE_ORIGEM_LATLNG inválido: %r', fixo)
     from app.services import frete
-    geo = frete.geocodificar(endereco)
+    geo = frete.geocodificar_entrega(endereco)
     if not geo:
         return None
     _origem_cache = (geo[0], geo[1], endereco)
@@ -175,7 +175,7 @@ def cotar(endereco_destino, tipo_veiculo):
         return {'ok': False, 'erro': 'não consegui localizar o endereço de '
                                      'origem (geocodificação falhou)'}
     from app.services import frete
-    destino = frete.geocodificar(endereco_destino)
+    destino = frete.geocodificar_entrega(endereco_destino)
     if not destino:
         # Sem coordenada não dá pra cotar/despachar a corrida — o dono precisa
         # saber (motoboy não sai): sensor no painel + WhatsApp na hora
@@ -184,8 +184,9 @@ def cotar(endereco_destino, tipo_veiculo):
         frete_sensor.registrar('lalamove', 'lalamove_falhou',
                                endereco=endereco_destino)
         loja_alerta.alertar_endereco_falho(endereco_destino, motivo='lalamove')
-        return {'ok': False, 'erro': 'não encontrei o endereço de entrega no '
-                                     'mapa — confira/edite o endereço'}
+        return {'ok': False, 'erro': 'Não foi possível confirmar o ponto de entrega. '
+                                     'Confira rua, número e CEP ou informe as '
+                                     'coordenadas do local. A corrida não foi chamada.'}
     olat, olng, oend = origem
     payload = {'data': {
         'serviceType': st,

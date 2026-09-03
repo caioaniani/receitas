@@ -107,14 +107,16 @@ def geocode(endereco):
     return None
 
 
-def geocode_preciso(endereco):
+def geocode_preciso(endereco, numero_entrega=None):
     """Como geocode(), mas devolve (lat, lng) SÓ quando o Google achou o
     ENDEREÇO de fato — `location_type` ROOFTOP/RANGE_INTERPOLATED/
     GEOMETRIC_CENTER e NÃO `partial_match`. Centroide de cidade (APPROXIMATE)
     ou match parcial → None, pra o frete cair na cadeia grátis (que tem os
     guards de homônimo) em vez de cobrar frete de um ponto aproximado como se
     fosse preciso (09/07/2026). Reusa o mesmo cache do geocode(): fonte
-    'google' = preciso; 'google_aprox' = aproximado (não re-bate a API)."""
+    'google' = preciso; 'google_aprox' = aproximado (não re-bate a API).
+    Com numero_entrega, exige precisão de porta e número correspondente;
+    só reutiliza cache 'google_entrega', validado com esses critérios."""
     if not endereco:
         return None
     chave = _normalizar_chave(endereco)
@@ -122,7 +124,7 @@ def geocode_preciso(endereco):
         return None
     cache = GeocodeCache.query.filter_by(chave=chave).first()
     if cache and cache.lat is not None:
-        if cache.fonte == 'google':
+        if cache.fonte == 'google_entrega' or (cache.fonte == 'google' and numero_entrega is None):
             return cache.lat, cache.lng          # hit preciso
         if cache.fonte == 'google_aprox':
             return None                          # hit aproximado (sem re-bater)
@@ -148,12 +150,22 @@ def geocode_preciso(endereco):
         preciso = geom.get('location_type') in (
             'ROOFTOP', 'RANGE_INTERPOLATED', 'GEOMETRIC_CENTER') \
             and not res0.get('partial_match')
+        if numero_entrega is not None:
+            # Despacho exige rua/número, não centroide de CEP, rua ou cidade.
+            # Cache antigo 'google' não carrega essa prova: revalida acima.
+            numeros = {str(c.get('long_name', '')).strip()
+                       for c in res0.get('address_components', [])
+                       if 'street_number' in c.get('types', [])}
+            preciso = (preciso
+                       and geom.get('location_type') in ('ROOFTOP', 'RANGE_INTERPOLATED')
+                       and bool(set(res0.get('types', [])) & {'street_address', 'premise', 'subpremise'})
+                       and str(numero_entrega) in numeros)
         coords = (float(loc['lat']), float(loc['lng']))
         if not cache:
             cache = GeocodeCache(chave=chave)
             db.session.add(cache)
         cache.lat, cache.lng = coords
-        cache.fonte = 'google' if preciso else 'google_aprox'
+        cache.fonte = ('google_entrega' if numero_entrega is not None else 'google') if preciso else 'google_aprox'
         db.session.commit()
         return coords if preciso else None
     except (requests.RequestException, ValueError, KeyError, TypeError) as e:

@@ -33,6 +33,12 @@ def test_rotas_consulta_pontos_sem_criar_corrida(app, owner_user):
         remote.assert_called_once_with('GET', '/v3/orders/LALA123')
         assert resposta.json['corrida_consultada']['pontos'][0]['coordenadas']['lat'] == '-23.55'
         assert 'dado-nao-exposto' not in resposta.get_data(as_text=True)
+        with patch('app.services.frete.geocodificar_entrega',
+                   return_value=(-23.60, -46.68, 'Rua X, 10')):
+            validado = client.get(
+                f'/admin/lalamove-rotas?entrega={entrega.id}&conferir_destino=1'
+            ).get_json()
+        assert validado['destino_validado'][:2] == [-23.60, -46.68]
     assert entrega.status == 'ON_GOING'
     assert LalamoveEntrega.query.count() == 1
 

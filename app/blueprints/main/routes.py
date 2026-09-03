@@ -3681,6 +3681,10 @@ def lalamove_rotas():
         cache = GeocodeCache.query.filter_by(chave=chave).first() if chave else None
         out['cache_destino'] = ({'lat': cache.lat, 'lng': cache.lng,
                                  'fonte': cache.fonte} if cache else None)
+        if request.args.get('conferir_destino') == '1':
+            # Geocoder pode atualizar seu cache; não cota nem altera corridas.
+            from app.services.frete import geocodificar_entrega
+            out['destino_validado'] = geocodificar_entrega(entrega.endereco_destino)
         try:
             status, corpo = lalamove._request('GET', f'/v3/orders/{entrega.order_id}')
         except requests.RequestException:

@@ -59,7 +59,7 @@ def test_cotar_monta_stops_e_parseia(app):
         'stops': [{'stopId': 'S0'}, {'stopId': 'S1'}],
     }}
     with app.app_context(), \
-         patch('app.services.frete.geocodificar',
+         patch('app.services.frete.geocodificar_entrega',
                return_value=(-23.62, -46.70, 'Rua X')) as geo, \
          patch('app.services.lalamove.requests.request',
                return_value=_Resp(201, resposta)) as req:
@@ -80,7 +80,7 @@ def test_cotar_erro_da_api_vira_mensagem(app):
     _config(app)
     erro = {'errors': [{'id': 'ERR_INVALID_MARKET', 'message': 'market errado'}]}
     with app.app_context(), \
-         patch('app.services.frete.geocodificar',
+         patch('app.services.frete.geocodificar_entrega',
                return_value=(-23.62, -46.70, 'Rua X')), \
          patch('app.services.lalamove.requests.request',
                return_value=_Resp(422, erro)):
@@ -96,7 +96,7 @@ def test_cotar_destino_sem_coordenada_alerta_dono_e_sensor(app):
     from app.services import lalamove
     _config(app)
     with app.app_context(), \
-         patch('app.services.frete.geocodificar', return_value=None), \
+         patch('app.services.frete.geocodificar_entrega', return_value=None), \
          patch('app.services.frete_sensor.registrar') as sensor, \
          patch('app.services.loja_alerta.alertar_endereco_falho') as alerta:
         lalamove._origem_cache = None
@@ -262,7 +262,7 @@ def test_cotar_aceita_nome_direto_da_api(app):
                          'priceBreakdown': {'total': '80.00', 'currency': 'BRL'},
                          'stops': [{'stopId': 'A'}, {'stopId': 'B'}]}}
     with app.app_context(), \
-         patch('app.services.frete.geocodificar',
+         patch('app.services.frete.geocodificar_entrega',
                return_value=(-23.62, -46.70, 'Rua X')), \
          patch('app.services.lalamove.requests.request',
                return_value=_Resp(201, resposta)) as req:
