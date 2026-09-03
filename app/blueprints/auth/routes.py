@@ -387,7 +387,7 @@ def minha_senha():
         db.session.commit()
         # Atualiza a sessão persistente com o estado recém-gravado. Em especial
         # no Safari móvel, evita que a conta continue parecendo provisória.
-        login_user(current_user, remember=True, fresh=True)
+        login_user(current_user._get_current_object(), remember=True, fresh=True)
         flash('Senha alterada com sucesso.', 'success')
         # Conta só-treino vai direto pro treino (senão o gate rebateria de
         # main.index pra lá num salto extra).
