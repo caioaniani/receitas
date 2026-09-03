@@ -91,6 +91,32 @@ def test_responder_detector_variacoes_quer_humano(app):
     assert not chatbot._quer_humano('vocês têm atendimento aos domingos?')
 
 
+def test_troca_de_cesta_vai_direto_para_avaliacao_humana(app):
+    """Caso 2059: o bot nao pode oferecer, aceitar ou confirmar a troca."""
+    from app.services import chatbot
+    historico = [
+        {'role': 'user', 'content':
+         'Pode trocar a cesta Sweet Coffee pela Caixa Mimo no meu pedido?'},
+    ]
+    with app.app_context(), patch('anthropic.Anthropic') as modelo:
+        r = chatbot.responder(historico)
+    modelo.return_value.messages.create.assert_not_called()
+    assert r['acao'] == 'handoff'
+    assert 'Não consigo oferecer, aceitar ou confirmar trocas' in r['texto']
+    assert 'equipe avaliar' in r['texto']
+    assert 'fazer a troca' not in r['texto'].lower()
+
+
+def test_troca_expressa_com_no_lugar_tambem_e_bloqueada():
+    from app.services import chatbot
+    assert chatbot._solicita_troca([
+        {'role': 'user', 'content': 'Quero a Caixa Mimo no lugar da Sweet Coffee'},
+    ])
+    assert not chatbot._solicita_troca([
+        {'role': 'user', 'content': 'Preciso trocar minha senha'},
+    ])
+
+
 def test_responder_sem_api_key_faz_handoff(app):
     from app.services import chatbot
     with app.app_context():
@@ -140,6 +166,27 @@ def test_bot_webhook_handoff_muda_status(app):
     assert r.status_code == 200
     assert r.get_json()['ok'] is True
     env.assert_called_once()
+    st.assert_called_once_with(7, 'open')
+
+
+def test_bot_webhook_nao_responde_de_novo_durante_handoff(app):
+    """Segundo balão da conversa 2059 não gera nova fala nem novo modelo."""
+    from app.services import chatbot
+    app.config['CHATWOOT_BOT_SECRET'] = 'seg'
+    client = app.test_client()
+    with app.app_context():
+        chatbot.salvar_historico(
+            '7', [{'role': 'user', 'content': 'quero trocar a cesta'}],
+            'Encaminhei para avaliação humana.', handoff=True)
+    with patch('threading.Thread', _SyncThread), \
+         patch('app.services.chatbot.responder') as resp, \
+         patch('app.services.chatwoot.enviar_mensagem') as env, \
+         patch('app.services.chatwoot.definir_status',
+               return_value={'ok': True}) as st:
+        r = _post(client, content='Mas vocês disseram que podia')
+    assert r.status_code == 200
+    resp.assert_not_called()
+    env.assert_not_called()
     st.assert_called_once_with(7, 'open')
 
 

@@ -576,14 +576,24 @@ def bot_webhook():
                     current_app.logger.info('crm/bot: conv %s historico=%d msgs',
                                             conv_id, len(historico))
 
-                    resultado = chatbot.responder(
-                        historico, telefone_contato=telefone_contato,
-                        conversa_id=conv_id)
-                    # Handoff REPETIDO (auditor 06/07/2026, caso Simone): a
-                    # conversa ja foi transferida ha pouco — em vez de "vou te
-                    # passar pra equipe" de novo, avisa que a equipe ja esta
-                    # com o caso. Status ainda vai pra 'open' (idempotente,
-                    # garante a fila), mas sem 2º registro de handoff.
+                    # Uma segunda mensagem pode entrar enquanto o primeiro
+                    # handoff ainda esta mudando `pending` para `open`. Dentro
+                    # do lock, o marcador persistido vence o status antigo do
+                    # webhook: guarda a fala e mantem o bot em silencio.
+                    if chatbot.handoff_recente(conv_id):
+                        resultado = {
+                            'acao': 'handoff_repetido',
+                            'texto': '',
+                            'motivo': 'conversa ja transferida recentemente',
+                        }
+                    else:
+                        resultado = chatbot.responder(
+                            historico, telefone_contato=telefone_contato,
+                            conversa_id=conv_id)
+                    # Rede de seguranca: se algum caminho ainda produzir um
+                    # handoff depois da checagem acima, mantem silencio. Status
+                    # ainda vai pra `open` (idempotente, garante a fila), sem
+                    # 2º registro de handoff nem outra fala ao cliente.
                     if (resultado.get('acao') == 'handoff'
                             and chatbot.handoff_recente(conv_id)):
                         logger.info('crm bot handoff REPETIDO suavizado '

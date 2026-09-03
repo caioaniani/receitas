@@ -55,9 +55,8 @@ def test_marcador_sobrevive_a_novo_turno(app):
         assert chatbot.handoff_recente('conv-dd-3') is True
 
 
-def test_vassoura_nao_transfere_de_novo(app):
-    """Conversa já transferida há pouco: a vassoura responde 'já está com a
-    equipe' em vez de um 2º 'vou te passar' (mesma regra do webhook)."""
+def test_vassoura_nao_transfere_nem_responde_de_novo(app):
+    """Conversa já transferida há pouco fica em silêncio e segue na fila."""
     from app.services import chatbot
     with app.app_context():
         app.config['CHATWOOT_URL'] = 'https://x.example'
@@ -76,8 +75,8 @@ def test_vassoura_nao_transfere_de_novo(app):
                                     'texto': 'Vou te passar pra equipe.',
                                     'motivo': 'cliente insiste'}):
             chatbot.varrer_pendentes_sem_resposta()
-        texto_enviado = env.call_args[0][1]
-        assert texto_enviado == chatbot.TEXTO_HANDOFF_REPETIDO
+        env.assert_not_called()
+        assert chatbot.TEXTO_HANDOFF_REPETIDO == ''
         st.assert_called_once_with(777, 'open')   # fila garantida, sem 2º handoff
 
 

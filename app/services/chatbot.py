@@ -237,6 +237,28 @@ def _quer_humano(texto):
     return any(p.search(t) for p in _HUMANO_PATTERNS)
 
 
+def _solicita_troca(historico):
+    """Detecta pedido de troca/substituicao que o bot nao pode negociar.
+
+    Vale para pedido ja feito e para personalizacao de cesta antes da compra.
+    Quando a ultima fala e curta ("nao pode?"), inclui a fala anterior para
+    manter o contexto sem reabrir assuntos antigos.
+    """
+    falas = [str((m or {}).get('content') or '')
+             for m in (historico or []) if (m or {}).get('role') == 'user']
+    if not falas:
+        return False
+    partes = falas[-2:] if len(falas[-1].strip()) <= 40 else falas[-1:]
+    texto = ' '.join(partes)
+    acao = re.search(
+        r'(?i)\b(troc\w*|substitu\w*|no\s+lugar|em\s+vez|ao\s+inv[eé]s)\b',
+        texto)
+    objeto = re.search(
+        r'(?i)\b(pedido|cesta|caixa|item|produto|p[aã]o|doce|salgado|'
+        r'cartinha|entrega)\b', texto)
+    return bool(acao and objeto)
+
+
 # Caracteres que podem sobrar no fim de uma frase do bot sem mudar se ela e
 # uma PERGUNTA (espaco, pontuacao leve, emoji comum do bot). Usados pra ver se
 # a ultima frase do bot termina em "?" mesmo com um emoji/espaco no rabo.
@@ -631,24 +653,22 @@ def salvar_historico(conv_id, historico, resposta, *, handoff=False,
     except Exception:  # noqa: BLE001
         db.session.rollback()
         logger.exception('chatbot salvar_historico falhou conv=%s', conv_id)
-# Handoff repetido (auditor 06/07/2026, caso Simone): depois que a conversa
-# ja foi transferida, o bot NAO transfere de novo — responde que a equipe ja
-# esta com o caso. Janela em minutos; passado isso, um handoff novo e normal
-# (assunto novo, equipe ja atendeu no meio do caminho).
+# Handoff repetido: depois que a conversa ja foi transferida, o bot NAO
+# transfere nem responde de novo. Na conversa 2059, uma mensagem chegou antes
+# de o Chatwoot terminar a mudanca para `open` e gerou outro aviso do bot.
+# A fila humana continua garantida, mas sem uma segunda fala automatica.
 HANDOFF_DEDUP_MIN = 90
-TEXTO_HANDOFF_REPETIDO = ('Já passei seu atendimento para a nossa equipe — '
-                          'um atendente humano continua daqui a pouquinho, '
-                          'tá? Obrigado pela paciência!')
+TEXTO_HANDOFF_REPETIDO = ''
 
 
 def handoff_recente(conv_id, minutos=HANDOFF_DEDUP_MIN):
     """True se esta conversa ja teve handoff marcado no store dentro da
-    janela — o chamador troca a nova transferencia por
-    TEXTO_HANDOFF_REPETIDO (sem 2º registro de handoff nas metricas)."""
+    janela — o chamador troca a nova transferencia por silencio (sem 2º
+    registro de handoff nas metricas)."""
     from datetime import datetime as _dt
 
     from app.utils import agora
-    for m in reversed(carregar_historico(conv_id)):
+    for m in reversed(carregar_historico(conv_id) or []):
         ts = m.get('handoff_em')
         if not ts:
             continue
@@ -1046,6 +1066,18 @@ def responder(historico, *, telefone_contato=None,
         return _resp_handoff(
             'Vou te conectar com nossa equipe agora.',
             'tentativa de bypass', tools_usadas=[])
+
+    # Regra do dono (03/09/2026, conversa 2059): o bot nao oferece, aceita,
+    # confirma nem negocia troca de item/cesta. O bloqueio e deterministico,
+    # antes do modelo, para a regra nao depender da redacao do prompt.
+    if _solicita_troca(historico):
+        logger.info('chatbot: solicitacao de troca -> avaliacao humana '
+                    'msg=%r', texto_user[:120])
+        return _resp_handoff(
+            'Não consigo oferecer, aceitar ou confirmar trocas por aqui. '
+            'Vou encaminhar sua solicitação para a equipe avaliar o que é '
+            'possível fazer.',
+            'solicitacao de troca exige avaliacao humana', tools_usadas=[])
 
     # Pedido explicito de humano: handoff deterministico ANTES do Claude. Sem
     # isso, o handoff dependia 100% do Claude chamar transferir_para_humano —
