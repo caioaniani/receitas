@@ -78,7 +78,7 @@ def index():
         # diário do dono (fonte única em app/services/briefing_dono.py).
         # Itens de tela owner-only só aparecem pro owner (mesmo gate do
         # dashboard).
-        from app.services import briefing_dono
+        from app.services import briefing_dono, producao_pendente
         pend = briefing_dono.pendencias(
             incluir_owner=bool(current_user.is_owner))
         # Vendas de ontem SÓ pro dono (faturamento é o cockpit pessoal —
@@ -89,6 +89,10 @@ def index():
                   if current_user.is_owner else None)
         vendas_hoje = (briefing_dono.vendas_hoje(capturar=False)
                        if current_user.is_owner else None)
+        # Produção realmente confirmada pelo padeiro ontem. Esta leitura usa
+        # os movimentos de estoque do tipo ``producao``; não confunde ordem
+        # planejada, saldo atual ou ajuste de balanço com item produzido.
+        produzido_ontem = producao_pendente.produzido_no_dia()
         from app.ui_v2 import ui_v2_ativo
         template = ('main/home_v2.html' if ui_v2_ativo()
                     else 'main/home.html')
@@ -96,7 +100,8 @@ def index():
                                areas=nav.areas_visiveis(current_user),
                                pendencias=pend,
                                vendas=vendas,
-                               vendas_hoje=vendas_hoje)
+                               vendas_hoje=vendas_hoje,
+                               produzido_ontem=produzido_ontem)
     return render_template('main/inicio.html')
 
 

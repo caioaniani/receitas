@@ -1,0 +1,34 @@
+<div class="home-production-heading">
+    <div>
+        <span class="home-production-kicker">Produção</span>
+        <h2>Produção confirmada ontem</h2>
+        <small>{{ produzido_ontem.dia.strftime('%d/%m/%Y') }}</small>
+    </div>
+    <div class="home-production-total" aria-label="{{ produzido_ontem.total }} unidades produzidas">
+        <strong>{{ '{:,.0f}'.format(produzido_ontem.total).replace(',', '.') }}</strong>
+        <span>unidades</span>
+    </div>
+</div>
+
+{% if produzido_ontem.itens %}
+<div class="home-production-list">
+    {% for item in produzido_ontem.itens %}
+    <div class="home-production-item">
+        <span>{{ item.receita_nome }}</span>
+        <strong>{{ '{:,.0f}'.format(item.qtd).replace(',', '.') }} un</strong>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="home-production-empty">
+    <i class="bi bi-inbox"></i>
+    <span>Nada foi confirmado como produzido ontem.</span>
+</div>
+{% endif %}
+
+<div class="home-production-footer">
+    <span>Somente itens que o padeiro marcou como produzidos.</span>
+    <a href="{{ url_for('industria_teste.auditoria') }}">
+        Abrir auditoria da produção <i class="bi bi-arrow-right"></i>
+    </a>
+</div>

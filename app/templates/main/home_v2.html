@@ -187,6 +187,12 @@
         {% endif %}
     </section>
 
+    {% if produzido_ontem %}
+    <section class="home-v2-panel home-v2-production" aria-label="Produção confirmada ontem">
+        {% include 'main/_producao_ontem.html' %}
+    </section>
+    {% endif %}
+
     <section class="home-v2-areas" id="areas-de-trabalho" aria-labelledby="home-v2-areas-title" tabindex="-1">
         <div class="home-v2-section-heading">
             <div>

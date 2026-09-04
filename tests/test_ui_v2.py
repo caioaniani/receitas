@@ -54,6 +54,51 @@ def test_v2_e_o_default_sem_env(app, admin_user):
     assert "environ.get('UI_V2_ENABLED'" not in fonte
 
 
+def test_home_mostra_o_que_padeiro_confirmou_ontem(app, admin_user):
+    """A Home nova e a clássica exibem o movimento real de produção."""
+    from datetime import datetime, time, timedelta
+
+    from app.extensions import db
+    from app.models import EstoqueProducao, MovEstoqueProducao, Receita
+    from app.utils import hoje
+
+    receita = Receita(nome='Pão confirmado ontem', categoria='Paes',
+                      rendimento_qtd=1, rendimento_unidade='un',
+                      peso_base=100.0)
+    db.session.add(receita)
+    db.session.flush()
+    estoque = EstoqueProducao(receita_id=receita.id, quantidade=12)
+    db.session.add(estoque)
+    db.session.flush()
+    db.session.add(MovEstoqueProducao(
+        estoque_producao_id=estoque.id,
+        tipo='producao',
+        quantidade=12,
+        data=datetime.combine(hoje() - timedelta(days=1), time(11, 0)),
+    ))
+    db.session.commit()
+
+    client = _login(app, admin_user)
+    html_v2 = client.get('/').get_data(as_text=True)
+    assert 'Produção confirmada ontem' in html_v2
+    assert 'Pão confirmado ontem' in html_v2
+    assert '12 un' in html_v2
+    assert '/telaindustriateste/auditoria' in html_v2
+
+    app.config['UI_V2_ENABLED'] = False
+    html_classico = client.get('/').get_data(as_text=True)
+    assert 'Produção confirmada ontem' in html_classico
+    assert 'Pão confirmado ontem' in html_classico
+    assert '12 un' in html_classico
+
+
+def test_home_informa_quando_ontem_nao_teve_confirmacao(app, admin_user):
+    html = _login(app, admin_user).get('/').get_data(as_text=True)
+
+    assert 'Produção confirmada ontem' in html
+    assert 'Nada foi confirmado como produzido ontem.' in html
+
+
 def test_cookie_ui_classic_devolve_a_interface_anterior(app, admin_user):
     app.config['UI_V2_ENABLED'] = True
     client = _login(app, admin_user)

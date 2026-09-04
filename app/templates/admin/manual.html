@@ -85,6 +85,11 @@
                 <td><a href="{{ url_for('main.index') }}">Home</a></td>
             </tr>
             <tr>
+                <td>Conferir na Home a <strong>"Produção confirmada ontem"</strong>: o total e a quantidade por receita mostram somente o que o padeiro marcou como produzido. Abrir a auditoria para investigar pendências.</td>
+                <td>Dono / produção</td>
+                <td><a href="{{ url_for('main.index') }}">Home</a> · <a href="{{ url_for('industria_teste.auditoria') }}">Auditoria</a></td>
+            </tr>
+            <tr>
                 <td>Conferir o <strong>cronograma</strong> e ajustar o que quiser direto no grid — a <strong>semana inteira já está enviada</strong> (sai no domingo ao meio-dia) e o 🔄 automático (06:45/19:05) leva a sua edição pra ordem de <strong>amanhã</strong>. Edição na ordem <strong>de hoje</strong> (a que o padeiro está executando) só vale se você apertar o <strong>"🔄 atualizar produção"</strong> daquele dia — o sistema não mexe nela sozinho, de propósito. Os pedidos das lojas seguem nascendo sozinhos (3 dias à frente) e travando às 19:00 (corte).</td>
                 <td>Dono / produção</td>
                 <td><a href="/telaindustriateste/">Cronograma</a></td>

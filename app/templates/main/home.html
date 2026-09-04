@@ -28,6 +28,51 @@
     font-size: 15px;
     max-width: 700px;
 }
+.home-production-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+.home-production-kicker {
+    color: var(--text-muted, #888);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+.home-production-heading h2 { font-size: 1.1rem; margin: .15rem 0 0; font-weight: 800; }
+.home-production-heading small { color: var(--text-muted, #888); }
+.home-production-total { display: grid; text-align: right; }
+.home-production-total strong { font-size: 1.55rem; line-height: 1; }
+.home-production-total span { color: var(--text-muted, #888); font-size: 11px; }
+.home-production-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: .5rem;
+}
+.home-production-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .7rem .8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 13px;
+}
+.home-production-item strong { white-space: nowrap; }
+.home-production-empty { color: var(--text-muted, #888); padding: .75rem 0; }
+.home-production-empty i { margin-right: .4rem; }
+.home-production-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1rem;
+    color: var(--text-muted, #888);
+    font-size: 12px;
+}
+.home-production-footer a { white-space: nowrap; }
 .menu-grid {
     max-width: 1100px;
     margin: 1.2rem auto 3rem;
@@ -72,6 +117,7 @@
 @media (max-width: 767.98px) {
     .home-panel { padding: 1.2rem 1rem; border-radius: 18px; }
     .menu-grid { margin-top: 1rem; }
+    .home-production-footer { align-items: flex-start; flex-direction: column; }
 }
 </style>
 
@@ -183,6 +229,14 @@
         </div>
         {% endif %}
     </div>
+</div>
+{% endif %}
+
+{% if produzido_ontem %}
+<div class="home-hero" style="margin-top:1rem;">
+    <section class="home-panel" aria-label="Produção confirmada ontem">
+        {% include 'main/_producao_ontem.html' %}
+    </section>
 </div>
 {% endif %}
 
