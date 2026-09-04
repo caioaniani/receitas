@@ -10,7 +10,8 @@ from app.utils import agora
 
 __all__ = [
     'PlanoCarreiraImportacao', 'PlanoCarreiraFaixa', 'PlanoCarreiraRegra',
-    'PlanoCarreiraConteudo', 'PlanoCarreiraEnquadramento',
+    'PlanoCarreiraConteudo', 'PlanoCarreiraCargoVinculo',
+    'PlanoCarreiraEnquadramento',
     'PlanoCarreiraValidacao',
 ]
 
@@ -48,6 +49,25 @@ class PlanoCarreiraFaixa(db.Model):
     checklist_minimo = db.Column(db.Float, default=0)
     certificacao_pratica = db.Column(db.Text)
     observacao = db.Column(db.Text)
+
+
+class PlanoCarreiraCargoVinculo(db.Model):
+    """Liga cada faixa do plano a um Cargo real selecionável no RH.
+
+    Tabela própria para não depender do nome do cargo e para permitir criar o
+    vínculo em um único deploy, sem ALTER em tabelas já existentes.
+    """
+    __tablename__ = 'plano_carreira_cargo_vinculo'
+    id = db.Column(db.Integer, primary_key=True)
+    faixa_id = db.Column(
+        db.Integer, db.ForeignKey('plano_carreira_faixa.id'),
+        nullable=False, unique=True, index=True)
+    cargo_id = db.Column(
+        db.Integer, db.ForeignKey('cargo.id'), nullable=False, index=True)
+    faixa = db.relationship(
+        'PlanoCarreiraFaixa', backref=db.backref('cargo_vinculo', uselist=False,
+                                                cascade='all, delete-orphan'))
+    cargo = db.relationship('Cargo', backref='vinculos_plano_carreira')
 
 
 class PlanoCarreiraRegra(db.Model):

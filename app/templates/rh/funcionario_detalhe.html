@@ -33,7 +33,28 @@
 
 {% if func.enquadramento_carreira %}
 {% set carreira = func.enquadramento_carreira %}
-<section class="card shadow-sm mb-4" aria-labelledby="carreira-titulo"><div class="card-header d-flex justify-content-between align-items-center"><strong id="carreira-titulo"><i class="bi bi-signpost-split"></i> Plano de carreira</strong><a href="{{ url_for('rh.plano_carreira', q=func.nome) }}">Ver no plano</a></div><div class="card-body"><div class="row g-3"><div class="col-md-3"><div class="text-muted small">Trilha e nível</div><strong>{{ carreira.familia }}{% if carreira.nivel %} · N{{ carreira.nivel }}{% endif %}</strong></div><div class="col-md-3"><div class="text-muted small">Cargo proposto</div><strong>{{ carreira.cargo_proposto or 'Fora da trilha' }}</strong></div><div class="col-md-2"><div class="text-muted small">Total de referência</div><strong>{{ carreira.total_alvo|brl }}</strong></div><div class="col-md-2"><div class="text-muted small">Diferença simulada</div><strong class="{% if carreira.diferenca_total > 0.01 %}text-success{% elif carreira.diferenca_total < -0.01 %}text-danger{% endif %}">{{ carreira.diferenca_total|brl }}</strong></div><div class="col-md-2"><div class="text-muted small">Decisão</div><strong>{{ carreira.decisao or 'Sem decisão' }}</strong></div></div><p class="small text-muted mt-3 mb-0">Referência de planejamento. Alterações contratuais continuam sendo feitas pela folha/RH após aprovação.</p></div></section>
+<section class="card shadow-sm mb-4" aria-labelledby="carreira-titulo">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong id="carreira-titulo"><i class="bi bi-signpost-split"></i> Plano de carreira</strong>
+        <a href="{{ url_for('rh.plano_carreira', q=func.nome) }}">Ver no plano</a>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3"><div class="text-muted small">Trilha e nível</div><strong>{{ carreira.familia }}{% if carreira.nivel %} · N{{ carreira.nivel }}{% endif %}</strong></div>
+            <div class="col-md-3"><div class="text-muted small">Cargo atual no RH</div><strong>{{ func.cargo.nome if func.cargo else (func.funcao or 'Sem cargo') }}</strong></div>
+            <div class="col-md-3"><div class="text-muted small">Cargo vinculado à faixa</div><strong>{{ cargo_plano.nome if cargo_plano else 'Sem vínculo' }}</strong></div>
+            <div class="col-md-2"><div class="text-muted small">Total de referência</div><strong>{{ carreira.total_alvo|brl }}</strong></div>
+            <div class="col-md-1"><div class="text-muted small">Decisão</div><strong>{{ carreira.decisao or 'Sem decisão' }}</strong></div>
+        </div>
+        {% if cargo_plano and func.cargo_id == cargo_plano.id %}
+        <p class="small text-success mt-3 mb-0"><i class="bi bi-link-45deg"></i> Cargo do RH vinculado corretamente a esta faixa.</p>
+        {% elif cargo_plano %}
+        <p class="small text-warning mt-3 mb-0"><i class="bi bi-exclamation-triangle"></i> O cargo atual ainda é diferente do cargo aprovado no plano. Salve a decisão como <strong>Aprovado</strong> na tela do plano para aplicar o vínculo.</p>
+        {% else %}
+        <p class="small text-danger mt-3 mb-0"><i class="bi bi-x-circle"></i> Esta faixa ainda não está ligada a um cargo do RH. Atualize o plano pela planilha.</p>
+        {% endif %}
+    </div>
+</section>
 {% endif %}
 
 <!-- Dados do Funcionário -->

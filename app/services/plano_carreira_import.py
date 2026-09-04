@@ -11,7 +11,9 @@ from openpyxl import load_workbook
 
 from app.extensions import db
 from app.models import (
+    Cargo,
     Funcionario,
+    PlanoCarreiraCargoVinculo,
     PlanoCarreiraConteudo,
     PlanoCarreiraEnquadramento,
     PlanoCarreiraFaixa,
@@ -253,10 +255,76 @@ def _vincular_videos(dados):
     return len(ligados)
 
 
+def _prever_vinculos_cargos(dados):
+    """Conta vínculos por nome sem alterar a tabela contratual de cargos."""
+    existentes = {_norm(c.nome) for c in Cargo.query.all()}
+    nomes = {_norm(f['cargo_proposto']) for f in dados['faixas']}
+    nomes.discard('')
+    return {
+        'cargos_vinculados': len(nomes & existentes),
+        'cargos_a_criar': len(nomes - existentes),
+    }
+
+
+def cargo_da_faixa(familia, nivel):
+    """Devolve o Cargo real ligado a uma família/nível do plano."""
+    if not familia or not nivel:
+        return None
+    return (Cargo.query
+            .join(PlanoCarreiraCargoVinculo,
+                  PlanoCarreiraCargoVinculo.cargo_id == Cargo.id)
+            .join(PlanoCarreiraFaixa,
+                  PlanoCarreiraFaixa.id ==
+                  PlanoCarreiraCargoVinculo.faixa_id)
+            .filter(PlanoCarreiraFaixa.familia == familia,
+                    PlanoCarreiraFaixa.nivel == nivel)
+            .first())
+
+
+def aplicar_cargo_aprovado(enquadramento):
+    """Aplica no funcionário o Cargo ligado à faixa já aprovada."""
+    cargo = cargo_da_faixa(enquadramento.familia, enquadramento.nivel)
+    funcionario = enquadramento.funcionario
+    if not cargo or not funcionario:
+        return None
+    funcionario.cargo = cargo
+    funcionario.funcao = cargo.nome
+    funcionario.salario_base = cargo.salario_base
+    return cargo
+
+
+def sincronizar_enquadramento_com_cargo(funcionario):
+    """Mantém o plano coerente quando o cargo real é trocado na ficha."""
+    enquadramento = funcionario.enquadramento_carreira
+    if not enquadramento or not funcionario.cargo_id:
+        return None
+    faixa = (PlanoCarreiraFaixa.query
+             .join(PlanoCarreiraCargoVinculo,
+                   PlanoCarreiraCargoVinculo.faixa_id ==
+                   PlanoCarreiraFaixa.id)
+             .filter(PlanoCarreiraCargoVinculo.cargo_id ==
+                     funcionario.cargo_id)
+             .first())
+    if not faixa:
+        return None
+    enquadramento.familia = faixa.familia
+    enquadramento.nivel = faixa.nivel
+    enquadramento.cargo_proposto = faixa.cargo_proposto
+    enquadramento.salario_base_alvo = faixa.equivalente_mensal or 0
+    enquadramento.complemento_funcao_alvo = faixa.complemento_funcao or 0
+    enquadramento.total_alvo = faixa.total_alvo or 0
+    enquadramento.decisao = 'Aprovado'
+    return faixa
+
+
 def prever(raw: bytes):
     dados = ler(raw)
     vinculados, avisos = _vincular_funcionarios(dados)
     videos = _vincular_videos(dados)
+    cargos = _prever_vinculos_cargos(dados)
+    decisoes_atuais = {e.funcionario_id: e.decisao
+                       for e in PlanoCarreiraEnquadramento.query.all()
+                       if e.decisao}
     dados['avisos'] = avisos
     dados['resumo'] = {
         'faixas': len(dados['faixas']),
@@ -266,6 +334,14 @@ def prever(raw: bytes):
         'pessoas_planilha': len(dados['enquadramentos']),
         'pessoas_vinculadas': vinculados,
         'validacoes': len(dados['validacoes']),
+        **cargos,
+        'aprovacoes_a_aplicar': sum(
+            1 for e in dados['enquadramentos']
+            if e.get('funcionario_id')
+            and (e.get('decisao') == 'Aprovado'
+                 or (not e.get('decisao') and decisoes_atuais.get(
+                     e['funcionario_id']) == 'Aprovado'))
+            and e.get('nivel')),
     }
     return dados
 
@@ -277,6 +353,7 @@ def aplicar(raw: bytes, nome_arquivo: str, usuario_id=None):
                        if e.decisao}
     try:
         for model in (PlanoCarreiraConteudo, PlanoCarreiraEnquadramento,
+                      PlanoCarreiraCargoVinculo,
                       PlanoCarreiraFaixa, PlanoCarreiraRegra,
                       PlanoCarreiraValidacao):
             model.query.delete(synchronize_session=False)
@@ -288,8 +365,29 @@ def aplicar(raw: bytes, nome_arquivo: str, usuario_id=None):
             importado_por_id=usuario_id)
         db.session.add(imp)
         db.session.flush()
+        # Cada faixa recebe um Cargo real. Cargos que já existem são
+        # preservados (inclusive o salário vigente); os ausentes nascem com a
+        # base de referência da faixa e passam a aparecer no seletor do RH.
+        cargos_por_nome = {_norm(c.nome): c for c in Cargo.query.all()}
+        cargos_por_faixa = {}
         for item in dados['faixas']:
-            db.session.add(PlanoCarreiraFaixa(importacao_id=imp.id, **item))
+            faixa = PlanoCarreiraFaixa(importacao_id=imp.id, **item)
+            db.session.add(faixa)
+            chave_nome = _norm(item['cargo_proposto'])
+            cargo = cargos_por_nome.get(chave_nome)
+            if cargo is None:
+                cargo = Cargo(
+                    nome=item['cargo_proposto'],
+                    salario_base=item['equivalente_mensal'] or 0,
+                    descricao=f'Faixa {item["familia"]} N{item["nivel"]}',
+                    ativo=True,
+                )
+                db.session.add(cargo)
+                cargos_por_nome[chave_nome] = cargo
+            db.session.flush()
+            db.session.add(PlanoCarreiraCargoVinculo(
+                faixa_id=faixa.id, cargo_id=cargo.id))
+            cargos_por_faixa[(item['familia'], item['nivel'])] = cargo
         for item in dados['regras']:
             db.session.add(PlanoCarreiraRegra(importacao_id=imp.id, **item))
         for item in dados['conteudos']:
@@ -303,7 +401,21 @@ def aplicar(raw: bytes, nome_arquivo: str, usuario_id=None):
             linha.pop('nome', None)
             if not linha.get('decisao'):
                 linha['decisao'] = decisoes_atuais.get(linha['funcionario_id'])
-            db.session.add(PlanoCarreiraEnquadramento(importacao_id=imp.id, **linha))
+            enquadramento = PlanoCarreiraEnquadramento(
+                importacao_id=imp.id, **linha)
+            db.session.add(enquadramento)
+            # "Aprovado" é a decisão final do dono: neste ponto o cargo real
+            # passa a ser o Cargo ligado à faixa. Os demais enquadramentos
+            # continuam apenas como proposta.
+            if linha.get('decisao') == 'Aprovado' and linha.get('nivel'):
+                cargo = cargos_por_faixa.get(
+                    (linha['familia'], linha['nivel']))
+                funcionario = db.session.get(
+                    Funcionario, linha['funcionario_id'])
+                if cargo and funcionario:
+                    funcionario.cargo = cargo
+                    funcionario.funcao = cargo.nome
+                    funcionario.salario_base = cargo.salario_base
         db.session.commit()
     except Exception:
         db.session.rollback()

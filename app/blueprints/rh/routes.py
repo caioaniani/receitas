@@ -20,6 +20,7 @@ from app.models import (
     FolhaPagamento,
     Funcionario,
     Loja,
+    PlanoCarreiraCargoVinculo,
     PlanoCarreiraConteudo,
     PlanoCarreiraEnquadramento,
     PlanoCarreiraFaixa,
@@ -798,7 +799,7 @@ def pre_cadastro_descartar(id):
 @login_required
 @rh_required
 def detalhe_funcionario(id):
-    from app.services import treino_ledger, treino_painel
+    from app.services import plano_carreira_import, treino_ledger, treino_painel
 
     func = Funcionario.query.get_or_404(id)
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
@@ -810,6 +811,10 @@ def detalhe_funcionario(id):
 
     return render_template('rh/funcionario_detalhe.html',
                            func=func, lojas=lojas, cargos_disponiveis=cargos_disp,
+                           cargo_plano=plano_carreira_import.cargo_da_faixa(
+                               func.enquadramento_carreira.familia,
+                               func.enquadramento_carreira.nivel)
+                           if func.enquadramento_carreira else None,
                            feedbacks=feedbacks, folhas=folhas,
                            treino_resumo=treino_painel.resumo_funcionario(
                                func, treino_ledger.temporada_ativa()))
@@ -830,12 +835,23 @@ def plano_carreira():
     busca = (request.args.get('q') or '').strip()
     query = (PlanoCarreiraEnquadramento.query
              .join(PlanoCarreiraEnquadramento.funcionario)
-             .options(joinedload(PlanoCarreiraEnquadramento.funcionario)))
+             .options(joinedload(
+                 PlanoCarreiraEnquadramento.funcionario).joinedload(
+                     Funcionario.cargo)))
     if familia:
         query = query.filter(PlanoCarreiraEnquadramento.familia == familia)
     if busca:
         query = query.filter(Funcionario.nome.ilike(f'%{busca}%'))
     enquadramentos = query.order_by(Funcionario.nome).all()
+    vinculos_cargo = (PlanoCarreiraCargoVinculo.query
+                      .options(joinedload(
+                          PlanoCarreiraCargoVinculo.faixa),
+                               joinedload(
+                          PlanoCarreiraCargoVinculo.cargo)).all())
+    cargos_plano = {
+        f'{v.faixa.familia}|{v.faixa.nivel}': v.cargo
+        for v in vinculos_cargo
+    }
     faixas = PlanoCarreiraFaixa.query.order_by(
         PlanoCarreiraFaixa.familia, PlanoCarreiraFaixa.nivel).all()
     validacoes = PlanoCarreiraValidacao.query.order_by(
@@ -859,7 +875,7 @@ def plano_carreira():
         faixas=faixas, validacoes=validacoes, regras=regras,
         total_conteudos=conteudos, videos_vinculados=videos,
         total_pessoas=total_pessoas, ajustes_positivos=ajustes,
-        decisoes=decisoes)
+        decisoes=decisoes, cargos_plano=cargos_plano)
 
 
 @rh_bp.route('/plano-carreira/importar', methods=['GET', 'POST'])
@@ -909,7 +925,10 @@ def plano_carreira_importar_aplicar():
         return redirect(url_for('rh.plano_carreira_importar'))
     flash(f'Plano vinculado: {resultado["faixas"]} faixas, '
           f'{resultado["pessoas_vinculadas"]} pessoas e '
-          f'{resultado["videos_vinculados"]} vídeos do treinamento.', 'success')
+          f'{resultado["videos_vinculados"]} vídeos do treinamento. '
+          f'{resultado["faixas"]} cargos estão ligados às faixas e '
+          f'{resultado["aprovacoes_a_aplicar"]} aprovação(ões) foram '
+          'aplicadas ao cadastro.', 'success')
     if resultado['avisos']:
         flash('Revisar vínculos: ' + '; '.join(resultado['avisos'][:8]), 'warning')
     return redirect(url_for('rh.plano_carreira'))
@@ -919,14 +938,26 @@ def plano_carreira_importar_aplicar():
 @login_required
 @rh_required
 def plano_carreira_decisao(id):
+    from app.services import plano_carreira_import as carreira_svc
     from app.services.plano_carreira_import import DECISOES
     enquadramento = PlanoCarreiraEnquadramento.query.get_or_404(id)
     decisao = (request.form.get('decisao') or '').strip()
     if decisao and decisao not in DECISOES:
         abort(400)
     enquadramento.decisao = decisao or None
+    cargo_aplicado = None
+    if decisao == 'Aprovado':
+        cargo_aplicado = carreira_svc.aplicar_cargo_aprovado(enquadramento)
     db.session.commit()
-    flash(f'Decisão de {enquadramento.funcionario.nome} atualizada.', 'success')
+    if cargo_aplicado:
+        flash(f'{enquadramento.funcionario.nome}: decisão aprovada e cargo '
+              f'vinculado a “{cargo_aplicado.nome}”.', 'success')
+    elif decisao == 'Aprovado':
+        flash('Decisão salva, mas a faixa ainda não possui um cargo do RH '
+              'vinculado. Reimporte o plano para corrigir.', 'warning')
+    else:
+        flash(f'Decisão de {enquadramento.funcionario.nome} atualizada.',
+              'success')
     destino = request.form.get('voltar') or url_for('rh.plano_carreira')
     if not destino.startswith('/') or destino.startswith('//'):
         destino = url_for('rh.plano_carreira')
@@ -955,6 +986,10 @@ def salvar_funcionario(id):
         if c:
             func.funcao = c.nome
             func.salario_base = c.salario_base  # cache, calculo usa salario_efetivo()
+    # Se o cargo escolhido pertence a uma faixa do plano, essa escolha é a
+    # aplicação efetiva daquela faixa e o enquadramento acompanha a ficha.
+    from app.services import plano_carreira_import as carreira_svc
+    carreira_svc.sincronizar_enquadramento_com_cargo(func)
     func.tem_cargo_confianca = 'tem_cargo_confianca' in request.form
     func.premiacao = parse_float_br(request.form.get('premiacao', ''), default=0)
     func.vt_dia = parse_float_br(request.form.get('vt_dia', ''), default=0)

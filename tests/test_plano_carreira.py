@@ -48,23 +48,65 @@ def _video():
 
 
 def test_previa_vincula_nome_e_video_sem_gravar(app):
-    from app.models import PlanoCarreiraFaixa
+    from app.models import Cargo, PlanoCarreiraFaixa
     from app.services import plano_carreira_import as svc
     _funcionario(); _video(); dados = svc.prever(_xlsx())
     assert dados['resumo']['pessoas_vinculadas'] == 1
     assert dados['resumo']['videos_vinculados'] == 1
+    assert dados['resumo']['cargos_a_criar'] == 1
+    assert dados['resumo']['aprovacoes_a_aplicar'] == 0
     assert dados['faixas'][0]['certificacao_pratica'] == 'Recepção sem erro'
     assert PlanoCarreiraFaixa.query.count() == 0
+    assert Cargo.query.count() == 0
 
 
-def test_aplicar_nao_altera_cargo_nem_salario(app):
-    from app.models import PlanoCarreiraConteudo, PlanoCarreiraEnquadramento
+def test_aplicar_vincula_faixa_e_aplica_cargo_aprovado(app):
+    from app.models import (
+        Cargo,
+        PlanoCarreiraCargoVinculo,
+        PlanoCarreiraConteudo,
+        PlanoCarreiraEnquadramento,
+    )
     from app.services import plano_carreira_import as svc
     f = _funcionario(); video = _video(); svc.aplicar(_xlsx('Aprovado'), 'plano.xlsx')
-    db.session.expire_all(); e = PlanoCarreiraEnquadramento.query.one()
+    db.session.expire_all()
+    f = db.session.get(type(f), f.id)
+    e = PlanoCarreiraEnquadramento.query.one()
     assert e.funcionario_id == f.id and e.decisao == 'Aprovado'
     assert PlanoCarreiraConteudo.query.one().treino_video_id == video.id
+    assert PlanoCarreiraCargoVinculo.query.count() == 1
+    assert Cargo.query.count() == 1
+    assert f.cargo.nome == 'Atendente 1'
+    assert f.salario_base == 2130.4 and f.funcao == 'Atendente 1'
+
+
+def test_proposta_nao_altera_cargo_real(app):
+    from app.services import plano_carreira_import as svc
+    f = _funcionario()
+
+    svc.aplicar(_xlsx('Proposta final'), 'plano.xlsx')
+
+    f = db.session.get(type(f), f.id)
+    assert f.cargo_id is None
     assert f.salario_base == 2000 and f.funcao == 'ATENDENTE'
+
+
+def test_trocar_para_cargo_do_plano_sincroniza_enquadramento(app):
+    from app.models import Cargo, PlanoCarreiraEnquadramento
+    from app.services import plano_carreira_import as svc
+    f = _funcionario()
+    svc.aplicar(_xlsx(), 'plano.xlsx')
+    f = db.session.get(type(f), f.id)
+    f.cargo = Cargo.query.filter_by(nome='Atendente 1').one()
+
+    faixa = svc.sincronizar_enquadramento_com_cargo(f)
+    db.session.commit()
+
+    e = PlanoCarreiraEnquadramento.query.one()
+    assert faixa.nivel == 1
+    assert e.familia == 'Atendimento' and e.nivel == 1
+    assert e.cargo_proposto == 'Atendente 1'
+    assert e.decisao == 'Aprovado'
 
 
 def test_reimportacao_preserva_decisao_manual_quando_planilha_vazia(app):
@@ -89,9 +131,30 @@ def test_fluxo_da_tela_importa_e_exibe_plano(app):
     _funcionario(); c = _login_owner(app); raw = _xlsx()
     resposta = c.post('/rh/plano-carreira/importar', data={'arquivo': (io.BytesIO(raw), 'plano.xlsx')}, content_type='multipart/form-data')
     assert resposta.status_code == 200 and 'Prévia concluída' in resposta.data.decode()
+    assert 'cargo(s) serão criados' in resposta.data.decode()
     resposta = c.post('/rh/plano-carreira/importar/aplicar', data={'arquivo_b64': base64.b64encode(raw).decode('ascii'), 'arquivo_sha': hashlib.sha256(raw).hexdigest(), 'arquivo_nome': 'plano.xlsx'}, follow_redirects=True)
     assert resposta.status_code == 200 and 'Plano vinculado' in resposta.data.decode()
     assert PlanoCarreiraEnquadramento.query.count() == 1
+
+
+def test_salvar_decisao_aprovada_aplica_cargo_na_ficha(app):
+    from app.models import PlanoCarreiraEnquadramento
+    from app.services import plano_carreira_import as svc
+    f = _funcionario()
+    svc.aplicar(_xlsx(), 'plano.xlsx')
+    e = PlanoCarreiraEnquadramento.query.one()
+    c = _login_owner(app)
+
+    resposta = c.post(
+        f'/rh/plano-carreira/enquadramentos/{e.id}/decisao',
+        data={'decisao': 'Aprovado', 'voltar': '/rh/plano-carreira'},
+        follow_redirects=True,
+    )
+
+    assert resposta.status_code == 200
+    assert 'cargo vinculado' in resposta.data.decode()
+    f = db.session.get(type(f), f.id)
+    assert f.cargo.nome == 'Atendente 1'
 
 
 def test_admin_comum_nao_acessa_plano(app, admin_user):

@@ -5071,10 +5071,15 @@ importacao com previa em **`/rh/plano-carreira/importar`**.
   vincula pessoas por nome normalizado (uma ficha ativa vence a ficha
   historica desligada) e liga videos pelo titulo/modulo. Match ausente ou
   ambiguo vira aviso; nunca cria funcionario.
-- REGRA DE SEGURANCA: importar o plano e mudar a decisao individual NUNCA
-  altera `Funcionario.funcao`, `cargo_id`, `salario_base` nem a folha. As
-  validacoes DP/juridico seguem visiveis e pendentes; a tela nao tem gesto de
-  aplicar promocao/remuneracao.
+- Cada faixa do plano é ligada a um `Cargo` real por
+  `PlanoCarreiraCargoVinculo`; cargo ausente é criado com a base da faixa e
+  passa a aparecer no seletor das fichas. Cargos já existentes são vinculados
+  sem sobrescrever sua remuneração vigente.
+- Decisão individual `Aprovado` é o gesto explícito que aplica o Cargo da
+  faixa em `Funcionario.cargo_id`, sincroniza `funcao` e o cache
+  `salario_base`. `Em avaliação` e `Proposta final` continuam como simulação.
+  Trocar manualmente a ficha para um Cargo ligado a uma faixa também sincroniza
+  o enquadramento. A folha mensal já fechada não é alterada.
 - Reimportacao substitui a estrutura atomicamente e preserva decisao manual
   quando a celula vem vazia. Decisao explicita da planilha prevalece.
 - A ficha do funcionario exibe o enquadramento. Testes:
