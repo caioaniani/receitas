@@ -106,6 +106,7 @@ def _migrate(app):
         _seed_minimo_danish(app)
         _seed_minimo_danish_v2(app)
         _seed_minimo_danish_v3(app)
+        _seed_piso_dinamico_especiais(app)
         _seed_minimo_cinnamon(app)
         _seed_regras_reposicao_lojas(app)
         _seed_antecedencia_brioche(app)
@@ -758,6 +759,84 @@ def _seed_minimo_danish_v3(app):
                     len(lojas), len(receitas))
     except Exception as e:  # noqa: BLE001
         logger.warning('migrate skip (seed minimo danish v3): %s', e)
+        try:
+            db.session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _seed_piso_dinamico_especiais(app):
+    """UMA VEZ (dono 04/09/2026): piso 2, nunca quantidade fixa.
+
+    Abrange toda receita Danish (inclusive nomes novos fora do seed original)
+    nas lojas que abrem diariamente e toda ``fornada_especial`` nas lojas que
+    abrem sabado ou domingo. O motor so aplica o piso da fornada especial no
+    fim de semana. Valor ja maior que 2 e preservado; o seed apenas completa
+    ausencias/valores abaixo da regra atual. Depois, a tela de reposicao manda.
+    """
+    import unicodedata as _ud
+    try:
+        from app.models import AppConfig, EstoqueLoja, Loja, Receita
+        chave = 'seed_piso_dinamico_especiais_2026_09'
+        if AppConfig.get(chave):
+            return
+
+        def _norm(s):
+            s = _ud.normalize('NFKD', s or '')
+            s = ''.join(c for c in s if not _ud.combining(c))
+            return ' '.join(s.casefold().split())
+
+        def _eh_danish(receita):
+            return ('danish' in _norm(receita.nome)
+                    or 'danish' in _norm(receita.categoria))
+
+        def _abre_fim_semana(loja):
+            dias = (getattr(loja, 'dias_funcionamento', None) or '').strip()
+            return not dias or bool(set(dias) & {'5', '6'})
+
+        receitas = Receita.query.filter(Receita.arquivada_em.is_(None)).all()
+        danishes = [r for r in receitas if _eh_danish(r)]
+        especiais = [r for r in receitas
+                     if bool(getattr(r, 'fornada_especial', False))]
+        lojas = [l for l in Loja.query.filter_by(ativa=True).all()
+                 if 'industria' not in _norm(l.nome)]
+        setados, mantidos = 0, 0
+        pares = set()
+        for loja in lojas:
+            alvos = []
+            if _loja_abre_todo_dia(loja):
+                alvos.extend(danishes)
+            if _abre_fim_semana(loja):
+                alvos.extend(especiais)
+            for receita in alvos:
+                chave_par = (loja.id, receita.id)
+                if chave_par in pares:
+                    continue
+                pares.add(chave_par)
+                el = EstoqueLoja.query.filter_by(
+                    loja_id=loja.id, receita_id=receita.id).first()
+                if el is None:
+                    el = EstoqueLoja(loja_id=loja.id,
+                                     receita_id=receita.id, quantidade=0)
+                    db.session.add(el)
+                if int(el.pedido_minimo_diario or 0) >= 2:
+                    mantidos += 1
+                    continue
+                el.pedido_minimo_diario = 2
+                setados += 1
+        AppConfig.set(
+            chave,
+            f'setados={setados} mantidos={mantidos} pares={len(pares)} '
+            f'danishes={len(danishes)} especiais={len(especiais)}',
+        )
+        db.session.commit()
+        logger.info(
+            'seed piso dinamico: setados=%d mantidos=%d; %d danish(es), '
+            '%d especial(is)', setados, mantidos, len(danishes),
+            len(especiais),
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning('migrate skip (seed piso dinamico especiais): %s', e)
         try:
             db.session.rollback()
         except Exception:  # noqa: BLE001

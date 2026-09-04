@@ -39,7 +39,11 @@ from math import ceil
 
 from flask import current_app
 
-from app.constants import STATUS_PEDIDO_EDITAVEIS, STATUS_PEDIDO_NAO_BAIXADOS
+from app.constants import (
+    STATUS_PEDIDO_EDITAVEIS,
+    STATUS_PEDIDO_ENTREGUES,
+    STATUS_PEDIDO_NAO_BAIXADOS,
+)
 from app.extensions import db
 from app.models import EstoqueProducao, Loja, PedidoItem, PedidoLoja, Receita
 from app.utils import SUB_RECEITA_TIPOS, hoje, unidades_subreceita
@@ -117,6 +121,15 @@ _MEIA_VIDA_DIAS = 21
 # bit — nao e tolerancia de negocio (1e-9 << 1 unidade de pao).
 _EPS_ULP = 1e-9
 
+# Demanda reprimida (04/09/2026): produto fresco com piso diario pode ficar
+# preso no proprio piso para sempre: a loja recebe 2, vende 2 e o historico
+# nunca consegue mostrar que venderia 3. Quando pelo menos 2 das 3 entregas
+# comparaveis mais recentes esgotaram, o motor testa UMA unidade acima do
+# maior lote esgotado. Se a unidade extra nao vender, dois dias comparaveis
+# sem esgotar retiram o teste; se vender, a escada continua devagar.
+_RUPTURA_JANELA_COMPARAVEL = 3
+_RUPTURA_MIN_ESGOTAMENTOS = 2
+
 # Robustez a PICO ISOLADO (29/06/2026): um pedido pontual gigante (ex: evento)
 # nao pode dominar a previsao. Quando a MAIOR ocorrencia eh um pico isolado
 # (> _OUTLIER_FATOR x mediana E estritamente acima da 2a maior), ela eh capada
@@ -184,6 +197,39 @@ def _media_recencia(qtd_por_data, hoje_d, meia_vida=_MEIA_VIDA_DIAS,
         base_den = qtd_por_data
     den = sum(0.5 ** (max(0, (hoje_d - d).days) / meia_vida) for d in base_den)
     return num / den if den else 0.0
+
+
+def _demanda_com_teste_de_ruptura(media, vendas_por_data,
+                                   entregas_por_data):
+    """Eleva em 1 o sinal de demanda quando a oferta recente esgotou.
+
+    Venda observada e censurada pela disponibilidade: entregar 2 e vender 2
+    nao prova que a demanda seja *so* 2. O teste e deliberadamente pequeno e
+    reversivel: olha apenas as tres entregas comparaveis mais recentes e exige
+    esgotamento em pelo menos duas. Um dia com venda abaixo da entrega conta
+    como evidencia de que havia produto suficiente e faz a escada recuar.
+
+    Retorna ``(demanda, ativo)`` para a tela/auditoria poder explicar quando
+    houve a unidade de descoberta.
+    """
+    comparaveis = []
+    for dia in sorted((entregas_por_data or {}), reverse=True):
+        entregue = int((entregas_por_data or {}).get(dia) or 0)
+        if entregue <= 0:
+            continue
+        vendido = max(0, int((vendas_por_data or {}).get(dia) or 0))
+        comparaveis.append((vendido, entregue))
+        if len(comparaveis) >= _RUPTURA_JANELA_COMPARAVEL:
+            break
+    if len(comparaveis) < _RUPTURA_MIN_ESGOTAMENTOS:
+        return media, False
+    esgotadas = [(vendido, entregue) for vendido, entregue in comparaveis
+                 if vendido >= entregue]
+    if len(esgotadas) < _RUPTURA_MIN_ESGOTAMENTOS:
+        return media, False
+    proximo_teste = max(entregue for _vendido, entregue in esgotadas) + 1
+    demanda = max(float(media or 0), float(proximo_teste))
+    return demanda, demanda > float(media or 0) + _EPS_ULP
 
 
 def _datas_por_dow(hist_ini, hist_fim):
@@ -1787,6 +1833,30 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 for d_mov, v in list(por_data.items()):
                     if v < 0:
                         por_data[d_mov] = 0
+
+    # Quantidade que realmente CHEGOU em cada loja/dia. E o denominador da
+    # ruptura: se chegaram 2 e as 2 venderam, a venda observada esta encostada
+    # na oferta e nao revela toda a procura. Usa somente pedidos finalizados e
+    # `quantidade_recebida` quando houve conferencia parcial.
+    entrega_hist = defaultdict(lambda: defaultdict(
+        lambda: defaultdict(lambda: defaultdict(int))))
+    for loja_id, rid, mid, data_ent, qtd, qtd_recebida in (db.session.query(
+            PedidoLoja.loja_id, PedidoItem.receita_id,
+            PedidoItem.materia_prima_id, PedidoLoja.data_entrega,
+            PedidoItem.quantidade, PedidoItem.quantidade_recebida)
+            .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
+            .filter(PedidoLoja.status.in_(STATUS_PEDIDO_ENTREGUES),
+                    PedidoLoja.data_entrega >= hist_ini,
+                    PedidoLoja.data_entrega <= hist_fim,
+                    db.or_(PedidoItem.receita_id.isnot(None),
+                           PedidoItem.materia_prima_id.isnot(None)))
+            .all()):
+        tok = _token(rid, mid)
+        if tok is None or data_ent is None:
+            continue
+        recebido = qtd if qtd_recebida is None else qtd_recebida
+        entrega_hist[loja_id][tok][data_ent.weekday()][data_ent] += \
+            max(0, int(recebido or 0))
     datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)
     seguranca = max(0.0, min(float(seguranca_pct or 0), 100.0)) / 100.0
 
@@ -2015,13 +2085,29 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 estoque = 0.0
             por_dia = [0] * len(dias_futuros)
             venda_total = 0.0
+            teste_ruptura_dias = []
             for i, d in enumerate(dias_futuros):
                 if fe and d.weekday() not in _DIAS_FORNADA_ESPECIAL:
                     continue                      # fornada especial: nao vende
                 venda_d = _media_dow(v_dows, d.weekday())
+                venda_observada_d = venda_d
+                # Piso nao pode virar teto. Danishes e fornadas frescas usam
+                # `pedido_minimo_diario`; se as ultimas entregas daquele dia
+                # da semana esgotaram, testa +1 em vez de repetir 2 eternamente.
+                if diario > 0:
+                    venda_d, teste_ruptura = _demanda_com_teste_de_ruptura(
+                        venda_d,
+                        (v_dows or {}).get(d.weekday()),
+                        entrega_hist.get(loja.id, {}).get(tok, {}).get(
+                            d.weekday()),
+                    )
+                    if teste_ruptura:
+                        teste_ruptura_dias.append(d.isoformat())
                 merma_d = _media_dow(m_dows, d.weekday())
                 consumo_d = venda_d + merma_d     # o que baixa o estoque no dia
-                venda_total += venda_d            # coluna Venda/sem = so venda
+                # Coluna Venda/sem mostra o realizado; a unidade de descoberta
+                # afeta apenas a sugestao, nao reescreve o historico exibido.
+                venda_total += venda_observada_d
                 if d.isoformat() in ja_tem_loja:
                     # Dia travado: a tela nao deixa sugerir e o gerar pula. O
                     # estoque projetado recebe a ENTREGA JA PEDIDA (qtd real),
@@ -2100,6 +2186,9 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 'pedido_minimo_diario': diario,
                 # Reposição fresca por venda do dia (sem carry/caixa global).
                 'reposicao_por_venda_diaria': venda_diaria,
+                # Dias em que a sugestao ganhou UMA unidade de descoberta
+                # porque a oferta comparavel recente esgotou.
+                'teste_ruptura_dias': teste_ruptura_dias,
                 'abaixo_lote': False,
                 # Profundidade da amostra de VENDA (datas com baixa na
                 # janela) — a tela marca "pouco histórico" quando a média

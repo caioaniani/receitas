@@ -12,7 +12,15 @@ from app.migrations_legacy import (
     SEED_MINIMO_DANISH,
     _seed_minimo_danish,
 )
-from app.models import AppConfig, EstoqueLoja, Loja, Receita
+from app.models import (
+    AppConfig,
+    EstoqueLoja,
+    Loja,
+    MovEstoqueLoja,
+    PedidoItem,
+    PedidoLoja,
+    Receita,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -278,6 +286,180 @@ def test_motor_media_manda_acima_do_piso(app, loja):
         lj = next(x for x in sug['lojas'] if x['loja_id'] == loja.id)
         p = next(x for x in lj['produtos'] if x['receita_id'] == r.id)
         assert p['por_dia'][0] >= 5                  # média venceu o piso
+
+
+def _historico_entrega_e_venda(loja, receita, estoque, alvo, pares):
+    """Cria semanas comparaveis: ``pares=[(entregue, vendido), ...]``."""
+    from datetime import datetime as _dt
+    from datetime import time as _time
+    from datetime import timedelta
+
+    for semana, (entregue, vendido) in enumerate(pares, start=1):
+        dia = alvo - timedelta(days=7 * semana)
+        pedido = PedidoLoja(loja_id=loja.id, data_entrega=dia,
+                            status='recebido')
+        db.session.add(pedido)
+        db.session.flush()
+        db.session.add(PedidoItem(
+            pedido_id=pedido.id, receita_id=receita.id,
+            quantidade=entregue, quantidade_recebida=entregue,
+        ))
+        db.session.add(MovEstoqueLoja(
+            estoque_loja_id=estoque.id, tipo='venda_seru',
+            quantidade=vendido,
+            data=_dt.combine(dia, _time(12, 0)), referencia='teste-ruptura',
+        ))
+
+
+def _sugestao_amanha(loja, receita):
+    from app.services.previsao_producao import sugerir_pedidos_por_venda
+
+    sugestao = sugerir_pedidos_por_venda(
+        horizonte_dias=1, inicio_offset_dias=1,
+    )
+    loja_out = next(x for x in sugestao['lojas']
+                    if x['loja_id'] == loja.id)
+    return next(x for x in loja_out['produtos']
+                if x['receita_id'] == receita.id)
+
+
+def test_motor_testa_uma_unidade_acima_quando_o_piso_esgota(app, loja):
+    """2 entregues + 2 vendidos nao pode ensinar ao motor que o teto e 2."""
+    from datetime import timedelta
+
+    from app.utils import hoje
+
+    with app.app_context():
+        receita = Receita(nome='Danish Oferta Limitada', categoria='Danishes',
+                          rendimento_qtd=1, rendimento_unidade='un',
+                          peso_base=100.0, estado_padrao='assado')
+        db.session.add(receita)
+        db.session.flush()
+        estoque = EstoqueLoja(
+            loja_id=loja.id, receita_id=receita.id, quantidade=0,
+            pedido_minimo_diario=2,
+        )
+        db.session.add(estoque)
+        db.session.flush()
+        alvo = hoje() + timedelta(days=1)
+        _historico_entrega_e_venda(
+            loja, receita, estoque, alvo, [(2, 2), (2, 2), (2, 2)],
+        )
+        db.session.commit()
+
+        produto = _sugestao_amanha(loja, receita)
+        assert produto['por_dia'] == [3]
+        assert produto['teste_ruptura_dias'] == [alvo.isoformat()]
+        # Venda/sem continua mostrando o realizado (2 x 7), sem transformar
+        # a unidade de descoberta em venda historica ficticia.
+        assert produto['media_semanal'] == 14.0
+
+
+def test_motor_nao_sobe_se_a_oferta_nao_esgotou(app, loja):
+    """Vender menos do que chegou segura a sugestao no piso de 2."""
+    from datetime import timedelta
+
+    from app.utils import hoje
+
+    with app.app_context():
+        receita = Receita(nome='Danish Com Sobra', categoria='Danishes',
+                          rendimento_qtd=1, rendimento_unidade='un',
+                          peso_base=100.0, estado_padrao='assado')
+        db.session.add(receita)
+        db.session.flush()
+        estoque = EstoqueLoja(
+            loja_id=loja.id, receita_id=receita.id, quantidade=0,
+            pedido_minimo_diario=2,
+        )
+        db.session.add(estoque)
+        db.session.flush()
+        alvo = hoje() + timedelta(days=1)
+        _historico_entrega_e_venda(
+            loja, receita, estoque, alvo, [(2, 1), (2, 1), (2, 2)],
+        )
+        db.session.commit()
+
+        produto = _sugestao_amanha(loja, receita)
+        assert produto['por_dia'] == [2]
+        assert produto['teste_ruptura_dias'] == []
+
+
+def test_motor_continua_a_escada_quando_tres_tambem_esgotam(app, loja):
+    """O teste nao para em 3: se 3/3 vendem, a proxima rodada testa 4."""
+    from datetime import timedelta
+
+    from app.utils import hoje
+
+    with app.app_context():
+        receita = Receita(nome='Danish Crescendo', categoria='Danishes',
+                          rendimento_qtd=1, rendimento_unidade='un',
+                          peso_base=100.0, estado_padrao='assado')
+        db.session.add(receita)
+        db.session.flush()
+        estoque = EstoqueLoja(
+            loja_id=loja.id, receita_id=receita.id, quantidade=0,
+            pedido_minimo_diario=2,
+        )
+        db.session.add(estoque)
+        db.session.flush()
+        alvo = hoje() + timedelta(days=1)
+        _historico_entrega_e_venda(
+            loja, receita, estoque, alvo, [(3, 3), (3, 3), (3, 3)],
+        )
+        db.session.commit()
+
+        produto = _sugestao_amanha(loja, receita)
+        assert produto['por_dia'] == [4]
+        assert produto['teste_ruptura_dias'] == [alvo.isoformat()]
+
+
+def test_seed_piso_2_em_todo_danish_e_fornada_de_fim_de_semana(app):
+    from app.migrations_legacy import _seed_piso_dinamico_especiais
+
+    with app.app_context():
+        danish_novo = Receita(
+            nome='Danish de Pistache', categoria='Danishes',
+            rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0,
+        )
+        especial = Receita(
+            nome='Focaccia sazonal', categoria='Fornadas Especiais',
+            rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0,
+            fornada_especial=True,
+        )
+        normal = Receita(
+            nome='Pao comum', categoria='Paes', rendimento_qtd=1,
+            rendimento_unidade='un', peso_base=100.0,
+        )
+        diaria = Loja(nome='Loja Diaria', ativa=True,
+                      dias_funcionamento='0123456')
+        fim_semana = Loja(nome='Loja de Fim de Semana', ativa=True,
+                          dias_funcionamento='56')
+        so_semana = Loja(nome='Loja de Segunda a Sexta', ativa=True,
+                         dias_funcionamento='01234')
+        industria = Loja(nome='Industria', ativa=True)
+        db.session.add_all([
+            danish_novo, especial, normal, diaria, fim_semana, so_semana,
+            industria,
+        ])
+        db.session.commit()
+
+        _seed_piso_dinamico_especiais(app)
+
+        def _piso(loja_obj, receita_obj):
+            linha = EstoqueLoja.query.filter_by(
+                loja_id=loja_obj.id, receita_id=receita_obj.id,
+            ).first()
+            return int(linha.pedido_minimo_diario or 0) if linha else 0
+
+        assert _piso(diaria, danish_novo) == 2
+        assert _piso(diaria, especial) == 2
+        assert _piso(fim_semana, especial) == 2
+        assert _piso(fim_semana, danish_novo) == 0
+        assert _piso(so_semana, especial) == 0
+        assert _piso(industria, danish_novo) == 0
+        assert _piso(diaria, normal) == 0
+        assert 'especiais=1' in AppConfig.get(
+            'seed_piso_dinamico_especiais_2026_09')
 
 
 # ---------------------------------------------------------------------------
