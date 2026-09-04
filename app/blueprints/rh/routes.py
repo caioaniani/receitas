@@ -136,7 +136,8 @@ def funcionarios():
 
     contas_livres, sugestoes, modulos_por_funcionario = [], {}, {}
     resumo_acessos = {'vinculados': 0, 'possiveis': 0,
-                      'prontos': 0, 'sem_email': 0}
+                      'prontos': 0, 'sem_email': 0,
+                      'primeiro_acesso': 0}
     lista = lista_completa
     filtro_acesso = request.args.get('acesso', 'pendentes')
     if filtro_acesso not in ('pendentes', 'vinculados', 'todos'):
@@ -160,6 +161,9 @@ def funcionarios():
 
         for f in lista_completa:
             resumo_acessos[_estado(f)] += 1
+            if (f.ativo and f.usuario
+                    and f.usuario.senha_provisoria):
+                resumo_acessos['primeiro_acesso'] += 1
         if filtro_acesso == 'pendentes':
             lista = [f for f in lista_completa if not f.usuario_id]
         elif filtro_acesso == 'vinculados':
@@ -528,6 +532,70 @@ def funcionario_acesso(id):
     flash('Escolha se deseja vincular uma conta ou criar um novo acesso.',
           'warning')
     return _voltar()
+
+
+@rh_bp.route('/funcionarios/acessos/reenviar-pendentes',
+             methods=['POST'])
+@login_required
+@rh_required
+def funcionarios_reenviar_pendentes():
+    """Reemite apenas contas que ainda não concluíram o primeiro acesso.
+
+    O sistema histórico não gravava a data do primeiro login. O marcador
+    seguro disponível é a senha provisória ainda ativa: ele abrange quem
+    nunca entrou e quem ficou preso na etapa de troca, sem afetar quem já
+    concluiu o primeiro acesso.
+    """
+    if (request.form.get('confirmacao') or '').strip().upper() != 'PENDENTES':
+        flash('Reenvio cancelado. Digite PENDENTES para confirmar.', 'warning')
+        return redirect(url_for('rh.funcionarios', view='acessos',
+                                acesso='vinculados', ativos='1'))
+
+    from app.models import Usuario
+    from app.services import treino_acessos as acessos
+
+    funcionarios = (Funcionario.query
+                    .join(Usuario, Funcionario.usuario_id == Usuario.id)
+                    .options(joinedload(Funcionario.usuario))
+                    .filter(Funcionario.ativo.is_(True),
+                            Usuario.senha_provisoria.is_(True),
+                            Usuario.is_owner.is_(False))
+                    .order_by(Funcionario.nome).all())
+    if not funcionarios:
+        flash('Nenhum funcionário ativo está com o primeiro acesso pendente.',
+              'info')
+        return redirect(url_for('rh.funcionarios', view='acessos',
+                                acesso='vinculados', ativos='1'))
+
+    enviados, problemas = 0, []
+    for funcionario in funcionarios:
+        resultado = acessos.reenviar_acesso(funcionario)
+        if resultado.get('ok'):
+            enviados += 1
+            continue
+        motivo = resultado.get('motivo')
+        if motivo == 'sem_email':
+            detalhe = 'sem e-mail válido'
+        elif motivo == 'email_falhou':
+            detalhe = f'e-mail recusado ({resultado.get("email_erro")})'
+        else:
+            detalhe = 'não foi possível confirmar o novo acesso'
+        problemas.append(f'{funcionario.nome}: {detalhe}')
+
+    if enviados:
+        flash(f'{enviados} novo(s) acesso(s) pendente(s) aceito(s) pelo '
+              'serviço de e-mail. As senhas provisórias anteriores deixaram '
+              'de funcionar.', 'success')
+    else:
+        flash('Nenhum novo acesso pendente foi enviado.', 'warning')
+    if problemas:
+        resumo = '; '.join(problemas[:10])
+        if len(problemas) > 10:
+            resumo += f'; e mais {len(problemas) - 10} problema(s)'
+        flash(f'Não enviados: {resumo}. As senhas dessas pessoas não foram '
+              'alteradas.', 'warning')
+    return redirect(url_for('rh.funcionarios', view='acessos',
+                            acesso='vinculados', ativos='1'))
 
 
 @rh_bp.route('/funcionarios/acessos/reenviar-todos', methods=['POST'])
