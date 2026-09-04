@@ -19,8 +19,10 @@ def _owner(app, owner_user):
     return cliente
 
 
-def _usuario(nome, login, *, email=None, papel='funcionario'):
-    usuario = Usuario(nome=nome, login=login, email=email, papel=papel)
+def _usuario(nome, login, *, email=None, papel='funcionario',
+             senha_provisoria=False):
+    usuario = Usuario(nome=nome, login=login, email=email, papel=papel,
+                      senha_provisoria=senha_provisoria)
     usuario.set_senha('senha-antiga')
     db.session.add(usuario)
     db.session.commit()
@@ -184,6 +186,80 @@ def test_reenviar_individual_falha_email_preserva_senha(app, owner_user):
         usuario = db.session.get(Usuario, uid)
         assert usuario.senha_hash == hash_antes
         assert usuario.senha_provisoria is False
+
+
+def test_tela_mostra_quantidade_de_primeiros_acessos_pendentes(
+        app, owner_user):
+    with app.app_context():
+        pendente = _usuario(
+            'Duda Lima', 'duda.login', email='duda@opao.online',
+            senha_provisoria=True)
+        concluido = _usuario(
+            'Enzo Luz', 'enzo.login', email='enzo@opao.online',
+            senha_provisoria=False)
+        _funcionario('Duda Lima', '81000000065',
+                     email='duda@opao.online', usuario=pendente)
+        _funcionario('Enzo Luz', '81000000066',
+                     email='enzo@opao.online', usuario=concluido)
+
+    html = _owner(app, owner_user).get(
+        '/rh/funcionarios?view=acessos&acesso=vinculados&ativos=1'
+    ).get_data(as_text=True)
+
+    assert 'Enviar novo acesso aos pendentes' in html
+    assert '1 funcionário(s) ativo(s)' in html
+    assert '/rh/funcionarios/acessos/reenviar-pendentes' in html
+
+
+def test_reenviar_pendentes_so_processa_ativo_com_senha_provisoria(
+        app, owner_user):
+    with app.app_context():
+        pendente_u = _usuario(
+            'Fabi Sol', 'fabi.login', email='fabi@opao.online',
+            senha_provisoria=True)
+        concluido_u = _usuario(
+            'Gabi Mar', 'gabi.login', email='gabi@opao.online',
+            senha_provisoria=False)
+        inativo_u = _usuario(
+            'Hugo Reis', 'hugo.login', email='hugo@opao.online',
+            senha_provisoria=True)
+        _funcionario('Fabi Sol', '81000000067',
+                     email='fabi@opao.online', usuario=pendente_u)
+        _funcionario('Gabi Mar', '81000000068',
+                     email='gabi@opao.online', usuario=concluido_u)
+        inativo = _funcionario(
+            'Hugo Reis', '81000000069', email='hugo@opao.online',
+            usuario=inativo_u)
+        inativo.ativo = False
+        db.session.commit()
+        hashes = {
+            pendente_u.id: pendente_u.senha_hash,
+            concluido_u.id: concluido_u.senha_hash,
+            inativo_u.id: inativo_u.senha_hash,
+        }
+        ids = pendente_u.id, concluido_u.id, inativo_u.id
+
+    cliente = _owner(app, owner_user)
+    with patch('app.services.email.enviar_boas_vindas',
+               return_value={'ok': True, 'id': 'msg-pendente'}) as enviar:
+        cancelada = cliente.post(
+            '/rh/funcionarios/acessos/reenviar-pendentes',
+            data={'confirmacao': 'nao'}, follow_redirects=True)
+        assert 'Reenvio cancelado' in cancelada.get_data(as_text=True)
+        enviar.assert_not_called()
+
+        resposta = cliente.post(
+            '/rh/funcionarios/acessos/reenviar-pendentes',
+            data={'confirmacao': 'PENDENTES'}, follow_redirects=True)
+
+    html = resposta.get_data(as_text=True)
+    assert '1 novo(s) acesso(s) pendente(s)' in html
+    enviar.assert_called_once()
+    assert enviar.call_args.args[0] == 'fabi@opao.online'
+    with app.app_context():
+        assert db.session.get(Usuario, ids[0]).senha_hash != hashes[ids[0]]
+        assert db.session.get(Usuario, ids[1]).senha_hash == hashes[ids[1]]
+        assert db.session.get(Usuario, ids[2]).senha_hash == hashes[ids[2]]
 
 
 def test_reenviar_todos_exige_confirmacao_e_processa_somente_ativos(

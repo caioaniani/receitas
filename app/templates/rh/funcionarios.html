@@ -64,14 +64,34 @@
     </div>
 </div>
 
+<details class="card mb-3" open>
+    <summary class="card-body d-flex align-items-center justify-content-between gap-2" style="cursor:pointer;">
+        <span><strong>Enviar novo acesso aos pendentes</strong><br><small class="text-muted">{{ resumo_acessos.primeiro_acesso }} funcionário(s) ativo(s) ainda não concluíram o primeiro acesso.</small></span>
+        <i class="bi bi-chevron-down"></i>
+    </summary>
+    <div class="card-body border-top">
+        <div class="alert alert-info mb-3">
+            Somente contas que ainda usam senha provisória serão incluídas. Quem já concluiu o primeiro acesso não terá a senha alterada.
+        </div>
+        <form method="POST" action="{{ url_for('rh.funcionarios_reenviar_pendentes') }}" class="d-flex gap-2 align-items-end flex-wrap">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="form-label mb-0">
+                <span class="small">Digite <strong>PENDENTES</strong> para confirmar</span>
+                <input class="form-control form-control-sm" name="confirmacao" autocomplete="off" required pattern="PENDENTES" placeholder="PENDENTES">
+            </label>
+            <button class="btn btn-sm btn-primary"><i class="bi bi-envelope-check"></i> Gerar novas senhas e enviar</button>
+        </form>
+    </div>
+</details>
+
 <details class="card mb-3">
     <summary class="card-body d-flex align-items-center justify-content-between gap-2" style="cursor:pointer;">
-        <span><strong>Reenviar acesso para todos</strong><br><small class="text-muted">Gera uma nova senha provisória para cada funcionário ativo já vinculado.</small></span>
+        <span><strong>Opção de emergência: reenviar para todos</strong><br><small class="text-muted">Troca a senha de cada funcionário ativo já vinculado, inclusive de quem já acessa normalmente.</small></span>
         <i class="bi bi-chevron-down"></i>
     </summary>
     <div class="card-body border-top">
         <div class="alert alert-warning mb-3">
-            As senhas atuais deixarão de funcionar. A troca só será mantida para cada pessoa quando o serviço de e-mail aceitar a mensagem.
+            As senhas atuais deixarão de funcionar. Use somente se realmente quiser interromper o acesso de toda a equipe.
         </div>
         <form method="POST" action="{{ url_for('rh.funcionarios_reenviar_acessos') }}" class="d-flex gap-2 align-items-end flex-wrap">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -79,7 +99,7 @@
                 <span class="small">Digite <strong>REENVIAR</strong> para confirmar</span>
                 <input class="form-control form-control-sm" name="confirmacao" autocomplete="off" required pattern="REENVIAR" placeholder="REENVIAR">
             </label>
-            <button class="btn btn-sm btn-danger"><i class="bi bi-envelope-arrow-up"></i> Gerar novas senhas e enviar</button>
+            <button class="btn btn-sm btn-danger"><i class="bi bi-envelope-arrow-up"></i> Reenviar para toda a equipe</button>
         </form>
     </div>
 </details>
