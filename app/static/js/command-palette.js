@@ -4,6 +4,7 @@
 (function() {
     'use strict';
 
+    const podeAdmin = document.currentScript?.dataset.admin === '1';
     const ROTAS = [
         // Navegação principal
         { categoria: 'Navegar', titulo: 'Início', url: '/', icon: 'house' },
@@ -15,6 +16,7 @@
         { categoria: 'Navegar', titulo: 'Desperdício', url: '/pedidos/desperdicio', icon: 'trash' },
         { categoria: 'Navegar', titulo: 'Produção', url: '/producao/', icon: 'tools' },
         { categoria: 'Navegar', titulo: 'Plano de produção', aliases: ['Cronograma', 'Motor de previsão'], url: '/telaindustriateste/', icon: 'calendar-week' },
+        { categoria: 'Navegar', titulo: 'Auditoria de produção', aliases: ['Histórico de produção', 'Produção confirmada', 'Pendências do padeiro', 'Produção não feita'], url: '/telaindustriateste/auditoria', icon: 'clipboard-data', adminOnly: true },
         { categoria: 'Navegar', titulo: 'Tela do padeiro', url: '/padeiro/', icon: 'check2-square' },
         { categoria: 'Navegar', titulo: 'Estoque de congelados', url: '/pedidos/congelados', icon: 'snow' },
         { categoria: 'Navegar', titulo: 'Separar pedidos das lojas', aliases: ['Pedidos a separar'], url: '/pedidos/separacao', icon: 'list-check' },
@@ -70,7 +72,7 @@
         icon: 'journal-text',
     }));
 
-    const TODAS = ROTAS.concat(receitasDinamicas);
+    const TODAS = ROTAS.filter(item => !item.adminOnly || podeAdmin).concat(receitasDinamicas);
 
     let overlay = null;
     let input = null;

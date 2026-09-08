@@ -164,6 +164,60 @@ def test_reagendar_para_item_de_hoje_encerrado_reabre(app, admin_user):
     assert linha['falta'] == 60
 
 
+def test_reagendar_proprio_item_de_hoje_reabre_sem_duplicar(app, admin_user):
+    """Devolve a falta encerrada hoje sem somar alvo, extra ou reservar MP de novo."""
+    from app.blueprints.padeiro.routes import _plano_do_dia
+    from app.models import (
+        EstoqueProducao,
+        MateriaPrima,
+        MovEstoqueProducao,
+        MovimentacaoEstoque,
+        PreBaixaMP,
+        ReceitaIngrediente,
+    )
+    from app.services.producao import produzir_item_plano, sincronizar_pre_baixa_mp
+    from app.services.producao_pendente import reagendar_para_hoje
+
+    r = _receita('Pao Reaberto Hoje')
+    mp = MateriaPrima(nome='Farinha Reabertura', unidade='g', custo_por_kg=5.0,
+                      estoque_atual=10000.0)
+    db.session.add(mp)
+    db.session.add(ReceitaIngrediente(receita_id=r.id, ingrediente_nome=mp.nome,
+                                      tipo='mp_direto', porcentagem=100.0))
+    plano, item = _plano_com_item(r, alvo=30)
+    item.qtd_extra = 4
+    sincronizar_pre_baixa_mp(plano, admin_user.id, criar=True)
+    db.session.commit()
+    assert produzir_item_plano(item.id, 20, admin_user.id, encerrar=True)['ok']
+    assert item.falta_encerrada_em is not None
+    estoque = EstoqueProducao.query.filter_by(receita_id=r.id).one()
+    reserva = PreBaixaMP.query.filter_by(plano_id=plano.id,
+                                         materia_prima_id=mp.id).one()
+    assert estoque.quantidade == 20
+    assert reserva.quantidade == 1000.0
+    assert mp.estoque_atual == 7000.0
+    movimentos_mp = MovimentacaoEstoque.query.count()
+    movimentos_producao = MovEstoqueProducao.query.count()
+
+    res = reagendar_para_hoje([item.id], admin_user.id)
+    assert res['movidos'] == 1 and res['unidades'] == 10
+    assert item.falta_encerrada_em is None
+    p = _plano_do_dia(hoje())
+    itens = [i for g in p['grupos'] for i in g['itens']] + p['solos']
+    linha = next(i for i in itens if i['item_id'] == item.id)
+    assert linha['falta'] == 10
+
+    # Um segundo clique encontra o item já aberto, sem duplicar a produção.
+    res = reagendar_para_hoje([item.id], admin_user.id)
+    assert res['movidos'] == 0 and res['unidades'] == 0
+    assert (item.qtd_alvo, item.produzido_qtd, item.qtd_extra) == (30, 20, 4)
+    assert estoque.quantidade == 20
+    assert reserva.quantidade == 1000.0
+    assert mp.estoque_atual == 7000.0
+    assert MovimentacaoEstoque.query.count() == movimentos_mp
+    assert MovEstoqueProducao.query.count() == movimentos_producao
+
+
 def test_rota_produzir_plano_com_encerrar(app, admin_user, cliente):
     from app.models import PlanejamentoItem
     r = _receita('Pao Rota')

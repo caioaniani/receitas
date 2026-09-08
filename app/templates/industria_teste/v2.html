@@ -10,6 +10,7 @@
   <link href="{{ url_for('static', filename='css/industria-v2.css') }}?v={{ static_v['css/industria-v2.css'] }}" rel="stylesheet">
 </head>
 <body>
+  {% import '_admin_navigation.html' as adminnav with context %}
   {% macro campos_dia(data) -%}
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="data" value="{{ data }}">
@@ -38,6 +39,7 @@
         <a href="/"><i class="bi bi-house"></i><span>Hoje</span></a>
         <a href="/area/lojas"><i class="bi bi-shop"></i><span>Lojas</span></a>
         <a class="active" href="/area/producao"><i class="bi bi-box-seam"></i><span>Produção</span></a>
+        {{ adminnav.auditoria('') }}
         <a href="/area/vendas"><i class="bi bi-receipt"></i><span>Vendas e entregas</span></a>
         <a href="/area/financeiro"><i class="bi bi-graph-up"></i><span>Financeiro</span></a>
         <a href="/area/administracao"><i class="bi bi-gear"></i><span>Administração</span></a>
@@ -57,7 +59,10 @@
         <div class="breadcrumbs"><a href="/area/producao">Produção</a><i class="bi bi-chevron-right"></i><span>Planejamento</span></div>
         <section class="page-head">
           <div><span class="eyebrow">Produção</span><h1>Plano de produção</h1><p>Confira as quantidades sugeridas e envie a ordem de cada dia para o padeiro.</p></div>
-          <a class="primary-action" href="{{ url_for('padeiro.index') }}"><i class="bi bi-check2-square"></i>Abrir tela do padeiro</a>
+          <div class="page-head-actions">
+            {{ adminnav.auditoria('secondary-action') }}
+            <a class="primary-action" href="{{ url_for('padeiro.index') }}"><i class="bi bi-check2-square"></i>Abrir tela do padeiro</a>
+          </div>
         </section>
 
         <nav class="view-tabs" aria-label="Visões da produção">
@@ -84,8 +89,9 @@
         <section class="metrics" aria-label="Resumo do planejamento">
           <article><span class="metric-icon blue"><i class="bi bi-box-seam"></i></span><div><strong>{{ totais_dia[0].un if totais_dia else 0 }}</strong><span>unidades planejadas {{ 'hoje' if crono.dias and crono.dias[0].data == crono.hoje else 'no primeiro dia' }}</span></div><small>{{ totais_dia[0].fornadas if totais_dia else 0 }} fornadas</small></article>
           <article><span class="metric-icon green"><i class="bi bi-calendar3"></i></span><div><strong>{{ resumo.periodo_un }}</strong><span>unidades no período</span></div><small>{{ resumo.dias_com_carga }} dias de produção</small></article>
-          <article><span class="metric-icon {{ 'red' if resumo.risco_n else 'green' }}"><i class="bi {{ 'bi-exclamation-triangle' if resumo.risco_n else 'bi-shield-check' }}"></i></span><div><strong>{{ resumo.risco_n }}</strong><span>entregas em risco</span></div><small>{{ 'Ver atenção' if resumo.risco_n else 'Cobertura em ordem' }}</small></article>
+          <article><span class="metric-icon {{ 'red' if resumo.risco_n else 'green' }}"><i class="bi {{ 'bi-exclamation-triangle' if resumo.risco_n else 'bi-shield-check' }}"></i></span><div><strong>{{ resumo.risco_n }}</strong><span>receitas com falta prevista nas entregas</span></div><small>Considera a execução do plano</small></article>
         </section>
+        <p class="planning-note">Planejado não é produzido. A cobertura acima depende de o padeiro executar o plano. Confira o que foi confirmado na <a href="{{ url_for('industria_teste.auditoria') }}">Auditoria de produção</a>.</p>
 
         <section class="workspace engine-overview" data-panel="today">
           <div class="section-title schedule-title"><div><h2>Ordens de produção</h2></div><button type="button" data-open="week">Ver todas <i class="bi bi-arrow-right"></i></button></div>
@@ -120,7 +126,6 @@
               <button type="submit">Atualizar visão</button>
             </form>
             <div class="settings-form section-actions">
-              <a href="{{ url_for('industria_teste.auditoria') }}"><i class="bi bi-clock-history"></i> Histórico de produção</a>
               <a href="{{ url_for('industria_teste.index', legacy=1) }}"><i class="bi bi-arrow-left-right"></i> Comparar versão anterior</a>
             </div>
           </details>
@@ -240,7 +245,7 @@
         </section>
 
         <section class="workspace hidden" data-panel="exceptions">
-          <div class="section-title"><div><h2>Precisa de atenção</h2><p>Confira faltas para entrega, produções sem confirmação e ajustes pendentes.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Ver histórico de produção <i class="bi bi-arrow-right"></i></a></div>
+          <div class="section-title"><div><h2>Precisa de atenção</h2><p>Confira faltas para entrega, produções sem confirmação e ajustes pendentes.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Auditoria de produção <i class="bi bi-arrow-right"></i></a></div>
           {% set congelados = acoes | selectattr('tipo', 'equalto', 'congelado') | list %}
           {% if resumo.excecoes_n or congelados %}
           <div class="exception-list">
@@ -249,7 +254,7 @@
               <span><i class="bi bi-lock"></i></span>
               <div>
                 <h3>{{ a.n }} item(ns) fechados em {{ a.label }}</h3>
-                <p>A massa/levain desses itens já foi batida, então o número
+                <p>O prazo para alterar esses insumos automaticamente já passou, então o número
                   da ordem não muda mais sozinho — o planejamento sugere outro valor.
                   {% for i in a.itens %}<strong>{{ i.item }}</strong>: ordem {{ i.ordem }} × grid {{ i.grid }}{% if not loop.last %} · {% endif %}{% endfor %}.
                   Para aplicar a sugestão é preciso garantir o insumo e
@@ -259,7 +264,7 @@
             </article>
             {% endfor %}
             {% for alerta in crono.alertas_falta %}<article><span><i class="bi bi-exclamation-triangle"></i></span><div><h3>{{ alerta.nome }}</h3><p>{% for e in alerta.entregas %}{{ e.label }}: faltam {{ e.faltam }} de {{ e.firme }}{% if not loop.last %} · {% endif %}{% endfor %}</p></div><button type="button" data-open="week" data-focus-recipe="{{ alerta.receita_id }}">Ver na grade</button></article>{% endfor %}
-            {% if resumo.pend_vencido %}<article><span><i class="bi bi-clock-history"></i></span><div><h3>Confirmação de produção vencida</h3><p>{{ resumo.pend_vencido }} unidade(s) passaram do prazo sem confirmação do padeiro.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Ver histórico</a></article>{% endif %}
+            {% if resumo.pend_vencido %}<article><span><i class="bi bi-clock-history"></i></span><div><h3>Confirmação de produção vencida</h3><p>{{ resumo.pend_vencido }} unidade(s) passaram do prazo sem confirmação do padeiro.</p></div><a href="{{ url_for('industria_teste.auditoria') }}">Auditoria de produção</a></article>{% endif %}
             {% if resumo.stale_n %}<article class="warning"><span><i class="bi bi-pencil"></i></span><div><h3>Ajuste manual desatualizado</h3><p>{{ resumo.stale_n }} receita(s) possuem ajuste anterior ao cálculo atual e a quantidade pode estar desatualizada.</p></div><button type="button" data-open="week">Ver na grade</button></article>{% endif %}
           </div>
           {% else %}

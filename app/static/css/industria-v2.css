@@ -190,3 +190,11 @@
 .plan-settings summary:focus-visible{outline:2px solid var(--green);outline-offset:4px}
 @media(max-width:1050px){.calculation-details .engine-status{grid-template-columns:1fr}.calculation-details .engine-facts{grid-column:1}}
 @media(max-width:560px){.view-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;overflow:visible;white-space:normal}.view-tabs button{min-width:0;font-size:11px;white-space:normal}}
+
+/* A auditoria fica visível junto da ação diária, inclusive no celular. */
+.page-head-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}
+.secondary-action{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:12px 16px;border:1px solid var(--green);border-radius:10px;background:#fff;color:var(--green);font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap}
+.page-head-actions .primary-action{min-height:44px;justify-content:center}
+.planning-note{margin:-8px 0 24px;color:var(--muted);font-size:12px;line-height:1.5}
+.planning-note a{color:var(--green);text-decoration:underline}
+@media(max-width:767.98px){.page-head-actions{width:100%;justify-content:flex-start}.page-head-actions a{flex:1}.secondary-action{white-space:normal}}

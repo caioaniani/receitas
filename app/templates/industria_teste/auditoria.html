@@ -47,7 +47,8 @@
 <button type="submit" class="btn-ok" name="item_id" value="{{ it.item_id }}"
         formaction="{{ url_for('industria_teste.dispensar') }}" formnovalidate
         title="Verifiquei — dar OK e fechar esta pendência"
-        onclick="return confirm('Dar OK na pendência de {{ it.receita_nome|e }} (mandado {{ it.alvo }}, produzido {{ it.produzido }})? Ela some da auditoria E do plano do padeiro (ele não vê nem produz esse item). NÃO credita estoque — o furo fica registrado. Dá pra desfazer.');">✓ OK</button>
+        data-receita="{{ it.receita_nome }}" data-alvo="{{ it.alvo }}" data-produzido="{{ it.produzido }}"
+        onclick="return confirm('Dar OK na pendência de ' + this.dataset.receita + ' (mandado ' + this.dataset.alvo + ', produzido ' + this.dataset.produzido + ')? Ela some da auditoria E do plano do padeiro (ele não vê nem produz esse item). NÃO credita estoque — o furo fica registrado. Dá pra desfazer.');">✓ OK</button>
 {% endmacro %}
 
 <div class="aud-wrap">
@@ -58,11 +59,11 @@
     </div>
 
     <div class="aud-nota">
-        Ordens de produção <strong>mandadas ao padeiro</strong> e ainda
-        <strong>não confirmadas</strong> (o padeiro não marcou “produzi”). Isto é
-        <strong>projeção</strong> — não mexe no estoque real; o estoque só sobe
-        quando a produção é confirmada. <strong>Vencidas</strong> = a data já
-        passou e ninguém confirmou (era pra já estar pronto).
+        Compare o que foi <strong>enviado ao padeiro</strong> com o que ele
+        <strong>confirmou como produzido</strong>. Só a quantidade confirmada
+        entra no estoque de produção. <strong>Vencidas</strong> são faltas de dias
+        anteriores. Ordens vencidas e faltas encerradas pelo padeiro
+        <strong>não contam como produção a caminho</strong> no planejamento.
     </div>
 
     {# Um único form envolve VENCIDAS + AGENDADAS: os checkboxes (name="ids")

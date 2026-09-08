@@ -801,7 +801,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     # HOJE. Com offset=0 (cronograma) o intervalo e VAZIO de proposito: o grid
     # de hoje e a fonte do proprio plano (descontar o plano enviado zeraria o
     # grid apos o envio). Pendencia VENCIDA (plano de dias anteriores) NAO
-    # conta — pode nunca ser produzida (a auditoria trata).
+    # conta — pode nunca ser produzida (a auditoria trata). A falta ENCERRADA
+    # pelo padeiro também não é suprimento: ele já disse que não fará o restante.
     em_producao = defaultdict(int)
     em_producao_por_dia = defaultdict(lambda: defaultdict(int))
     if inicio_d > hoje_d:
@@ -814,7 +815,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                 .filter(PlanejamentoProducao.data >= hoje_d,
                         PlanejamentoProducao.data < inicio_d,
                         PlanejamentoProducao.enviado_ao_padeiro.isnot(False),
-                        PlanejamentoItem.dispensada_em.is_(None)).all()):
+                        PlanejamentoItem.dispensada_em.is_(None),
+                        PlanejamentoItem.falta_encerrada_em.is_(None)).all()):
             restante = max(0, int(alvo_w or 0) - int(prod_w or 0))
             em_producao[rid_w] += restante
             pronta_em = data_w + timedelta(days=lead.get(rid_w, 0))

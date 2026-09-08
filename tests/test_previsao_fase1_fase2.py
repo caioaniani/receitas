@@ -329,11 +329,18 @@ def test_wip_nao_mexe_no_cronograma_offset0(app):
     assert it['produzir'] == 30
 
 
-def test_wip_parcialmente_produzido_abate_so_o_que_falta(app):
-    """WIP = alvo - produzido: o que o padeiro JÁ confirmou virou estoque real
-    (não conta duas vezes)."""
+@pytest.mark.parametrize('situacao', ['aberta', 'encerrada', 'vencida', 'dispensada'])
+def test_wip_parcial_conta_so_falta_ainda_em_execucao(app, situacao):
+    """Produção confirmada cobre a demanda; só falta aberta no prazo é WIP.
+
+    Encerrar com menos unidades não promete produzir o restante amanhã.
+    Vencidas e dispensadas também não podem esconder a necessidade futura.
+    """
+    from app.services.producao import produzir_item_plano
+    from app.services.producao_pendente import dispensar_item
+
     loja = _loja()
-    r = _receita()
+    r = _receita(peso_unitario=100.0)
     hoje_d = hoje()
     _pedido(loja, hoje_d + timedelta(days=2), r, 30, status='pendente')
     plano = PlanejamentoProducao(data=hoje_d, nome='Plano hoje',
@@ -341,15 +348,29 @@ def test_wip_parcialmente_produzido_abate_so_o_que_falta(app):
                                  enviado_ao_padeiro=True)
     db.session.add(plano)
     db.session.flush()
-    db.session.add(PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
-                                    multiplicador=1, qtd_alvo=30,
-                                    produzido_qtd=20))
+    item = PlanejamentoItem(planejamento_id=plano.id, receita_id=r.id,
+                            multiplicador=1, qtd_alvo=30, produzido_qtd=0)
+    db.session.add(item)
     db.session.commit()
+
+    res = produzir_item_plano(item.id, 20, None,
+                              encerrar=situacao == 'encerrada')
+    assert res['ok'] is True
+    if situacao == 'vencida':
+        plano.data = hoje_d - timedelta(days=1)
+        db.session.commit()
+    elif situacao == 'dispensada':
+        assert dispensar_item(item.id, None)['ok'] is True
 
     bal = balanco_industria(horizonte_dias=7, janela_semanas=6,
                             usar_cache=False, inicio_offset_dias=1)
     it = next(i for i in bal['itens'] if i['receita_id'] == r.id)
-    assert it['em_producao'] == 10           # só o que ainda falta produzir
+    wip = 10 if situacao == 'aberta' else 0
+    assert it['em_estoque'] == 20           # produção real, sem contar duas vezes
+    assert it['em_producao'] == wip
+    assert it['em_estoque_efetivo'] == 20 + wip
+    assert it['produzir'] == 10 - wip
+    assert sum(it['em_producao_por_dia'].values()) == wip
 
 
 def test_mp_caixa_e_minimo_no_pedido(app):

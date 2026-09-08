@@ -204,6 +204,8 @@ def reagendar_para_hoje(item_ids, user_id):
     produção de HOJE (a que o padeiro vê em /padeiro).
 
     Pra cada item selecionado (falta = alvo − produzido > 0):
+    - se já é da ordem de HOJE e foi encerrado pelo padeiro, apenas reabre
+      a falta; preserva as quantidades da mesma ordem, sem duplicar o restante.
     - a falta entra no plano `cronograma` de HOJE — soma numa receita que já
       esteja lá, ou cria a linha; garante `enviado_ao_padeiro=True`.
     - a ordem antiga SAI da auditoria (decisão do dono — "mover, não duplicar"):
@@ -243,12 +245,19 @@ def reagendar_para_hoje(item_ids, user_id):
         old = db.session.get(PlanejamentoItem, item_id)
         if old is None or old.dispensada_em is not None:
             continue
-        if old.planejamento_id == plano_hoje.id:   # ja e de hoje, ignora
-            continue
         alvo = int(old.qtd_alvo or 0)
         prod = int(old.produzido_qtd or 0)
         falta = max(0, alvo - prod)
         if falta <= 0:
+            continue
+
+        if old.planejamento_id == plano_hoje.id:
+            # "Produzir hoje" também devolve uma falta encerrada HOJE. Não
+            # soma extra: o restante já está no alvo deste mesmo item.
+            if old.falta_encerrada_em is not None:
+                old.falta_encerrada_em = None
+                movidos += 1
+                unidades += falta
             continue
 
         # A falta entra como parcela EXTRA (qtd_extra): o re-aprovar/re-enviar

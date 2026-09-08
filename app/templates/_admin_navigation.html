@@ -1,9 +1,16 @@
-{# Os quatro caminhos diários são os mesmos na Home e no menu. #}
+{% macro auditoria(class_name='sidebar-link') -%}
+{% if current_user.is_admin() and not current_user.somente_treino %}
+<a href="{{ url_for('industria_teste.auditoria') }}" class="{{ class_name }}{{ ' active' if request.endpoint == 'industria_teste.auditoria' }}"{% if request.endpoint == 'industria_teste.auditoria' %} aria-current="page"{% endif %} title="Confira o que o padeiro produziu e o que ficou pendente"><i class="bi bi-clipboard-data" aria-hidden="true"></i><span>Auditoria de produção</span></a>
+{% endif %}
+{%- endmacro %}
+
+{# Os quatro caminhos diários são os mesmos na Home e no menu.
+   A auditoria tem acesso direto adicional no menu, sem aumentar os cards. #}
 {% macro rotina(variant='sidebar') -%}
 {% if current_user.is_admin() and not current_user.somente_treino %}
 {% set em_producao = request.path.startswith(('/telaindustriateste', '/producao', '/padeiro', '/pedidos/congelados', '/pedidos/separacao')) %}
 {% for endpoint, titulo, descricao, icone, ativo in [
-    ('industria_teste.index', 'Produção', 'Planejar produção e acompanhar as ordens', 'bi-calendar3', em_producao),
+    ('industria_teste.index', 'Produção', 'Planejar produção e acompanhar as ordens', 'bi-calendar3', em_producao and request.endpoint != 'industria_teste.auditoria'),
     ('pedidos.lista', 'Pedidos das lojas', 'Acompanhar reposição e recebimento', 'bi-shop', request.path.startswith('/pedidos') and not em_producao),
     ('main.loja_online_pedidos', 'Pedidos do site', 'Consultar compras e entregas', 'bi-bag', request.path.startswith('/admin/loja-online/pedidos')),
     ('checklist.conferencia', 'Checklists', 'Conferir a rotina de cada loja', 'bi-clipboard-check', request.path.startswith('/checklist'))
@@ -12,6 +19,7 @@
     <i class="bi {{ icone }}" aria-hidden="true"></i>
     <span>{% if variant == 'sidebar' %}{{ titulo }}{% else %}<strong>{{ titulo }}</strong><small>{{ descricao }}</small>{% endif %}</span>
 </a>
+{% if variant == 'sidebar' and endpoint == 'industria_teste.index' %}{{ auditoria() }}{% endif %}
 {% endfor %}
 {% endif %}
 {%- endmacro %}

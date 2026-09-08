@@ -225,6 +225,13 @@ uma instrução curta e opções secundárias recolhidas. Filtros ativos devem
 continuar identificáveis; manter avisos, ações de salvar/enviar e seus
 contratos. A simplificação visual não altera cálculos ou movimentações.
 
+**Auditoria de produção (08/09/2026, pedido do dono)**: acesso direto no
+menu diário do admin e no topo do Plano de produção, sempre com esse nome;
+também na busca e entre as quatro funções principais da área Produção.
+Tela do padeiro continua no topo do plano e em Mais opções da área. Não
+acrescentar um quinto card na Home. Cobertura no cronograma é uma previsão
+que considera executar o plano, não comprovação de estoque produzido.
+
 Pedido do dono ("nao estou conseguindo pilotar o aviao"): o sistema cresceu
 mais rapido que a capacidade de operar; quase tudo era "pull" (lembrar de
 abrir tela). Tres pecas, UMA fonte de dados
@@ -2525,7 +2532,14 @@ FEITO — a tela dele para de cobrar; a diferenca vive SO na auditoria.
   devolve a falta pra tela do padeiro. O reagendar LIMPA o marcador no
   merge (mesma armadilha do dispensado reaberto — item oculto engoliria a
   falta devolvida) e no item de origem.
-- Testes: `tests/test_padeiro_encerrar_falta.py` (8 casos).
+- Correção de 08/09/2026: falta encerrada NÃO entra no WIP do balanço,
+  assim como vencida/dispensada. Produção aberta enviada dentro do prazo
+  continua sendo suprimento previsto (não estoque físico). Offset 0 mantém
+  seu contrato de não descontar WIP.
+- Reagendar o próprio item encerrado de HOJE apenas limpa o marcador:
+  não soma alvo/extra, não credita estoque nem duplica reserva de MP.
+- Testes: `tests/test_padeiro_encerrar_falta.py` e
+  `tests/test_previsao_fase1_fase2.py`.
 
 ## Impressao de pedidos de entrega (2026-06-12)
 

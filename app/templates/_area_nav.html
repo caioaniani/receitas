@@ -81,8 +81,9 @@
 {% macro producao(variant) %}
 {% if current_user.is_admin() %}
 {{ _lnk(variant, url_for('producao.painel'), 'Painel de produção', '/producao/painel' in request.path, icon='bi-clipboard-data') }}
-{{ _lnk(variant, url_for('industria_teste.index'), 'Plano de produção', '/telaindustriateste' in request.path, icon='bi-calendar-week', primary=true, title='Confira as quantidades e envie as ordens do dia') }}
-{{ _lnk(variant, url_for('padeiro.index'), 'Tela do padeiro', request.path == '/padeiro' or request.path.startswith('/padeiro/'), icon='bi-hammer', primary=true, title='Veja as ordens e confirme o que foi produzido') }}
+{{ _lnk(variant, url_for('industria_teste.index'), 'Plano de produção', request.endpoint == 'industria_teste.index', icon='bi-calendar-week', primary=true, title='Confira as quantidades e envie as ordens do dia') }}
+{{ _lnk(variant, url_for('industria_teste.auditoria'), 'Auditoria de produção', request.endpoint == 'industria_teste.auditoria', icon='bi-clipboard-data', primary=true, title='Compare o enviado com o confirmado pelo padeiro e resolva as faltas') }}
+{{ _lnk(variant, url_for('padeiro.index'), 'Tela do padeiro', request.path == '/padeiro' or request.path.startswith('/padeiro/'), icon='bi-hammer', title='Veja as ordens e confirme o que foi produzido') }}
 {{ _lnk(variant, url_for('producao.pedidos_semana_media'), 'Pedidos semanais das lojas', '/pedidos-semana' in request.path, icon='bi-cart-plus') }}
 {{ _lnk(variant, url_for('producao.perdas_admin'), 'Perdas da produção', '/producao/perdas' in request.path, icon='bi-fire') }}
 {% endif %}
