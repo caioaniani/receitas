@@ -136,6 +136,7 @@ def funcionarios():
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
 
     contas_livres, sugestoes, modulos_por_funcionario = [], {}, {}
+    identificadores_acesso = {}
     resumo_acessos = {'vinculados': 0, 'possiveis': 0,
                       'prontos': 0, 'sem_email': 0,
                       'primeiro_acesso': 0}
@@ -146,6 +147,7 @@ def funcionarios():
     if view == 'acessos':
         from app.services import treino_acessos as acessos
         from app.services import treino_onboarding as onboarding
+        from app.services.identidade_usuario import identificador_acesso
 
         contas_livres = acessos.contas_sem_vinculo()
         sugestoes = acessos.sugerir_contas(lista_completa, contas_livres)
@@ -172,6 +174,10 @@ def funcionarios():
         ordem = {'possiveis': 0, 'sem_email': 1,
                  'prontos': 2, 'vinculados': 3}
         lista.sort(key=lambda f: (ordem[_estado(f)], f.nome.lower()))
+        identificadores_acesso = {
+            f.id: identificador_acesso(f.usuario)
+            for f in lista if f.usuario
+        }
 
     return render_template('rh/funcionarios.html',
                            funcionarios=lista,
@@ -181,6 +187,7 @@ def funcionarios():
                            view=view, filtro_acesso=filtro_acesso,
                            contas_livres=contas_livres,
                            sugestoes=sugestoes,
+                           identificadores_acesso=identificadores_acesso,
                            modulos_por_funcionario=modulos_por_funcionario,
                            resumo_acessos=resumo_acessos)
 
@@ -446,8 +453,9 @@ def funcionario_acesso(id):
         if erro:
             flash(erro, 'warning')
         else:
-            flash(f'E-mail de {f.nome} atualizado. O login existente não '
-                  'foi alterado.', 'success')
+            flash(f'E-mail de {f.nome} atualizado na ficha e na conta '
+                  'de acesso.' if f.usuario else
+                  f'E-mail de {f.nome} atualizado na ficha.', 'success')
         return _voltar()
 
     if acao == 'reenviar':

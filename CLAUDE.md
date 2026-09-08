@@ -4982,6 +4982,15 @@ conferencia — zero app, zero digitacao.
 
 ## Acesso: senha provisoria forcada + "so treinamento" (23/07/2026)
 
+**E-mail corrigido no RH (08/09/2026)**: “Entrar com” na lista de acessos e
+as instruções do reenvio usam `identidade_usuario.identificador_acesso`.
+Para contas criadas com login por e-mail, mostra o e-mail atual da conta
+quando a mesma resolução do login confirma o usuário. Logins como `dakson`
+continuam como estão. O identificador legado, ID, senha e vínculos não são
+renomeados: a autenticação já aceita o e-mail, inclusive acima de 50
+caracteres. Não voltar a mostrar o endereço antigo como instrução principal
+de acesso, nem sugerir um e-mail ambíguo de cadastros legados.
+
 Duas colunas em `Usuario` (procedimento de 2 commits — ALTER em
 `migrations_legacy` deployado ANTES do modelo, sonda `/api/claude/deploy`):
 

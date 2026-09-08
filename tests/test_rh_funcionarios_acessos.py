@@ -1,5 +1,8 @@
 """Acesso ao treinamento gerenciado na própria lista de funcionários do RH."""
+from html.parser import HTMLParser
 from unittest.mock import patch
+
+import pytest
 
 from app.extensions import db
 from app.models import (
@@ -108,6 +111,135 @@ def test_vincular_conta_preserva_login_e_senha(app, owner_user):
         assert usuario.login == 'marina.sistema'
         assert usuario.senha_hash == hash_antes
         assert Usuario.query.count() == total_antes
+
+
+@pytest.mark.parametrize('email', [
+    'pessoa.atual@exemplo.com',
+    'pessoa.com.endereco.de.email.mais.longo.que.cinquenta@exemplo.com',
+])
+def test_email_corrigido_identifica_mesma_conta_na_tela_e_login(
+        app, owner_user, email):
+    with app.app_context():
+        usuario = _usuario('Pessoa Email', 'endereco.errado@exemplo.com',
+                           email=email, senha_provisoria=True)
+        funcionario = _funcionario('Pessoa Email', '81000000101',
+                                   email=email, usuario=usuario)
+        fid, uid = funcionario.id, usuario.id
+        hash_antes = usuario.senha_hash
+
+    # O endereço já estava corrigido: apenas recarregar deve reparar a
+    # orientação exibida, sem exigir outro salvamento ou renomear a conta.
+    cliente = _owner(app, owner_user)
+    html = cliente.get('/rh/funcionarios?view=acessos&acesso=todos').get_data(
+        as_text=True)
+    card = html.split(f'id="acesso-{fid}"', 1)[1].split('</section>', 1)[0]
+    assert 'Entrar com' in card
+    assert f'<strong>{email}</strong>' in card
+    assert 'endereco.errado@exemplo.com' not in card
+
+    with patch('app.services.email.enviar_boas_vindas') as enviar:
+        resposta = cliente.post(f'/rh/funcionarios/{fid}/acesso', data={
+            'acao': 'salvar_email', 'email': email,
+            'filtro_acesso': 'todos'}, follow_redirects=True)
+    assert 'atualizado na ficha e na conta de acesso' in resposta.get_data(
+        as_text=True)
+    enviar.assert_not_called()
+    with app.app_context():
+        usuario = db.session.get(Usuario, uid)
+        assert usuario.login == 'endereco.errado@exemplo.com'
+        assert usuario.senha_hash == hash_antes
+        assert db.session.get(Funcionario, fid).usuario_id == uid
+
+    cliente.get('/auth/logout')
+    pessoa = app.test_client()
+    assert pessoa.post('/auth/login', data={
+        'login': email, 'senha': 'senha-antiga'}).status_code == 302
+    with pessoa.session_transaction() as sessao:
+        assert sessao['_user_id'] == str(uid)
+
+
+def test_reenvio_informa_email_atual_como_login(app, owner_user):
+    with app.app_context():
+        usuario = _usuario('Pessoa Email', 'endereco.errado@exemplo.com',
+                           email='pessoa.atual@exemplo.com')
+        funcionario = _funcionario('Pessoa Email', '81000000102',
+                                   email=usuario.email, usuario=usuario)
+        fid = funcionario.id
+    with patch('app.services.email.enviar_boas_vindas',
+               return_value={'ok': True}) as enviar:
+        resposta = _owner(app, owner_user).post(
+            f'/rh/funcionarios/{fid}/acesso', data={
+                'acao': 'reenviar', 'email': 'pessoa.atual@exemplo.com'})
+    assert resposta.status_code == 302
+    assert enviar.call_args.args[:3] == (
+        'pessoa.atual@exemplo.com', 'Pessoa Email',
+        'pessoa.atual@exemplo.com')
+
+
+def test_confirmacao_de_reenvio_trata_nome_como_dado(app, owner_user):
+    with app.app_context():
+        nome = "D'Ávila\"); alert(1); //"
+        usuario = _usuario(nome, 'pessoa@exemplo.com')
+        funcionario = _funcionario(nome, '81000000103', usuario=usuario)
+        fid = funcionario.id
+    html = _owner(app, owner_user).get(
+        '/rh/funcionarios?view=acessos&acesso=todos').get_data(as_text=True)
+    class Parser(HTMLParser):
+        botao = None
+
+        def handle_starttag(self, tag, attrs):
+            atributos = dict(attrs)
+            if tag == 'button' and atributos.get('value') == 'reenviar':
+                self.botao = atributos
+
+    parser = Parser()
+    card = html.split(f'id="acesso-{fid}"', 1)[1].split('</section>', 1)[0]
+    parser.feed(card)
+    botao = parser.botao
+    assert botao['data-funcionario-nome'] == nome
+    assert nome not in botao['onclick']
+    assert 'this.dataset.funcionarioNome' in botao['onclick']
+
+
+@pytest.mark.parametrize('conflito', ['email', 'login', 'sem_email'])
+def test_identificador_exibido_nao_aponta_para_outra_conta(app, conflito):
+    from app.services.identidade_usuario import identificador_acesso
+
+    with app.app_context():
+        usuario = _usuario('Pessoa', 'original@exemplo.com',
+                           email='atual@exemplo.com')
+        if conflito == 'email':
+            _usuario('Outra', 'outra', email=usuario.email)
+        elif conflito == 'login':
+            _usuario('Outra', usuario.email)
+        else:
+            usuario.email = None
+            db.session.commit()
+        assert identificador_acesso(usuario) == 'original@exemplo.com'
+
+
+@pytest.mark.parametrize('conflito', ['ficha', 'email', 'login'])
+def test_reenvio_direto_recusa_destinatario_de_outra_pessoa(app, conflito):
+    from app.services.treino_acessos import reenviar_acesso
+
+    with app.app_context():
+        usuario = _usuario('Pessoa A', 'pessoa.a', email='a@exemplo.com')
+        funcionario = _funcionario('Pessoa A', '81000000104',
+                                   email='b@exemplo.com', usuario=usuario)
+        if conflito == 'ficha':
+            _funcionario('Pessoa B', '81000000105', email='b@exemplo.com')
+        elif conflito == 'email':
+            _usuario('Pessoa B', 'pessoa.b', email='b@exemplo.com')
+        else:
+            _usuario('Pessoa B', 'b@exemplo.com')
+        hash_antes = usuario.senha_hash
+        with patch('app.services.email.enviar_boas_vindas') as enviar:
+            resultado = reenviar_acesso(funcionario)
+        assert resultado['ok'] is False
+        enviar.assert_not_called()
+        db.session.refresh(usuario)
+        assert usuario.senha_hash == hash_antes
+        assert usuario.email == 'a@exemplo.com'
 
 
 def test_criar_acesso_envia_senha_e_limita_ao_treino(app, owner_user):

@@ -181,14 +181,15 @@
                     <input type="email" name="email" value="{{ f.email or f.usuario.email or '' }}" class="form-control form-control-sm" required>
                 </div>
                 <div class="col-12 col-lg-5">
-                    <div class="small text-muted">Conta vinculada</div>
-                    <strong>{{ f.usuario.login }}</strong>
+                    <div class="small text-muted">Entrar com</div>
+                    <strong>{{ identificadores_acesso[f.id] }}</strong>
                     <span class="small text-muted">· {% if f.usuario.somente_treino %}{{ 'treinamento e checklist' if f.usuario.pode_checklist() else 'somente treinamento' }}{% else %}{{ f.usuario.papel }}{% endif %}</span>
                 </div>
                 <div class="col-12 col-lg-3 d-flex gap-1 justify-content-lg-end flex-wrap">
                     <button name="acao" value="salvar_email" class="btn btn-sm btn-outline-primary">Salvar e-mail</button>
                     <button name="acao" value="reenviar" class="btn btn-sm btn-outline-danger"
-                            onclick="return confirm('Gerar uma nova senha para {{ f.nome|e }} e enviar por e-mail? A senha atual deixará de funcionar.');">Enviar nova senha</button>
+                            data-funcionario-nome="{{ f.nome }}"
+                            onclick="return confirm('Gerar uma nova senha para ' + this.dataset.funcionarioNome + ' e enviar por e-mail? A senha atual deixará de funcionar.');">Enviar nova senha</button>
                 </div>
             </form>
             {% else %}

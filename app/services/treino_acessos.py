@@ -11,6 +11,7 @@ import secrets
 
 from app.extensions import db
 from app.models import Funcionario, Usuario
+from app.services.identidade_usuario import identificador_acesso
 
 # Uma conta administrativa também pode pertencer a um funcionário do RH
 # (casos reais: líderes que já usavam o sistema antes do módulo de treino).
@@ -41,12 +42,8 @@ def contas_sem_vinculo():
     return q.order_by(Usuario.nome).all()
 
 
-def sincronizar_email(funcionario, email, usuario=None):
-    """Salva o e-mail na ficha e, quando há conta, também nela.
-
-    O login antigo nunca muda. Recusa e-mail de outro funcionário ou usado
-    como login por outra conta para não criar uma identidade ambígua.
-    """
+def _validar_email_da_pessoa(funcionario, email, usuario=None):
+    """Valida destinatário e identidade, sem salvar nem enviar mensagens."""
     email = _email_normalizado(email)
     if not email:
         return {'ok': False, 'motivo': 'email_invalido'}
@@ -65,6 +62,19 @@ def sincronizar_email(funcionario, email, usuario=None):
     if outra_conta:
         return {'ok': False, 'motivo': 'email_de_outra_conta',
                 'usuario': outra_conta}
+    return {'ok': True, 'email': email}
+
+
+def sincronizar_email(funcionario, email, usuario=None):
+    """Salva o e-mail na ficha e, quando há conta, também nela.
+
+    O login antigo nunca muda. Recusa e-mail de outro funcionário ou usado
+    como login por outra conta para não criar uma identidade ambígua.
+    """
+    validacao = _validar_email_da_pessoa(funcionario, email, usuario)
+    if not validacao['ok']:
+        return validacao
+    email = validacao['email']
     funcionario.email = email
     if usuario is not None:
         usuario.email = email
@@ -88,24 +98,10 @@ def vincular_conta(funcionario, usuario, email=None):
     if outro is not None and outro.id != funcionario.id:
         return {'ok': False, 'motivo': 'conta_em_uso'}
     if email is not None:
-        email = _email_normalizado(email)
-        if not email:
-            return {'ok': False, 'motivo': 'email_invalido'}
-        outro_func = Funcionario.query.filter(
-            Funcionario.id != funcionario.id,
-            db.func.lower(Funcionario.email) == email,
-        ).first()
-        if outro_func:
-            return {'ok': False, 'motivo': 'email_de_outro_funcionario',
-                    'funcionario': outro_func}
-        outra_conta = Usuario.query.filter(
-            db.or_(db.func.lower(Usuario.login) == email,
-                   db.func.lower(Usuario.email) == email),
-            Usuario.id != usuario.id,
-        ).first()
-        if outra_conta:
-            return {'ok': False, 'motivo': 'email_de_outra_conta',
-                    'usuario': outra_conta}
+        validacao = _validar_email_da_pessoa(funcionario, email, usuario)
+        if not validacao['ok']:
+            return validacao
+        email = validacao['email']
         funcionario.email = email
         usuario.email = email
     funcionario.usuario_id = usuario.id
@@ -181,6 +177,12 @@ def reenviar_acesso(funcionario):
     if not email:
         return {'ok': False, 'motivo': 'sem_email'}
 
+    # Lotes chamam este serviço diretamente, sem passar pelo formulário.
+    # A mesma guarda do salvamento evita mandar a senha a outra pessoa.
+    validacao = _validar_email_da_pessoa(funcionario, email, usuario)
+    if not validacao['ok']:
+        return validacao
+
     senha = secrets.token_urlsafe(8)[:10]
     usuario.set_senha(senha)
     usuario.senha_provisoria = True
@@ -193,7 +195,8 @@ def reenviar_acesso(funcionario):
 
     from app.services import email as email_svc
     res = email_svc.enviar_boas_vindas(
-        email, funcionario.nome, usuario.login, senha, com_chatwoot=False)
+        email, funcionario.nome, identificador_acesso(usuario), senha,
+        com_chatwoot=False)
     if not res.get('ok'):
         db.session.rollback()
         return {'ok': False, 'motivo': 'email_falhou',

@@ -7,6 +7,7 @@ from app.blueprints.auth import auth_bp
 from app.decorators import admin_required, owner_required
 from app.extensions import db, limiter
 from app.models import Atribuicao, Receita, Usuario
+from app.services.identidade_usuario import usuario_por_identificador
 from app.utils import agora
 
 
@@ -18,21 +19,7 @@ def _usuario_por_identificador(valor):
     duplicado ou dois logins antigos que diferem apenas por caixa escolham o
     usuário errado.
     """
-    exato = Usuario.query.filter_by(login=valor).first()
-    if exato:
-        return exato
-
-    normalizado = valor.lower()
-    por_login = Usuario.query.filter(
-        db.func.lower(Usuario.login) == normalizado
-    ).all()
-    if len(por_login) == 1:
-        return por_login[0]
-
-    por_email = Usuario.query.filter(
-        db.func.lower(Usuario.email) == normalizado
-    ).all()
-    return por_email[0] if len(por_email) == 1 else None
+    return usuario_por_identificador(valor)
 
 
 def _senha_confere(usuario, valor):
