@@ -121,11 +121,17 @@ def _localhost_como_host_de_loja(request, _app_session, monkeypatch):
 @pytest.fixture
 def app(_app_session, _config_baseline):
     from app.extensions import db, limiter
+    from app.services.previsao_producao import invalidar_sugestao_cache
     application = _app_session
     ctx = application.app_context()
     ctx.push()
     # Estado limpo garantido no INICIO do teste (mesmo se o anterior crashou).
     _limpar_tabelas(db)
+    # O banco é recriado logicamente entre cenários; o balanço em memória
+    # também precisa recomeçar. IDs são reutilizados e um resultado de outro
+    # teste podia passar por atual durante os 60s do TTL, conforme a ordem
+    # dos workers. O cache continua ativo DENTRO de cada teste.
+    invalidar_sugestao_cache()
     # Zera o rate limiter — antes cada teste tinha app novo (limiter zerado);
     # com app de sessao o estado acumula e estoura 429 (quebrava 91 testes).
     try:
