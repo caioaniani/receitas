@@ -128,15 +128,16 @@ class Usuario(UserMixin, db.Model):
         return self.is_admin() or self.is_gerente()
 
     def pode_checklist(self):
-        """Checklist de abertura/troca/fechamento da loja (03/08/2026).
-
-        Espelha o decorator `checklist_required` pra sidebar poder mostrar o
-        link ao atendente chefe (papel funcionario), que NAO ve a area Lojas.
-        """
+        """Permissão efetiva, inclusive liberação individual pelo checklist."""
+        if self.is_observador():
+            return False
+        from app.services import checklist_responsaveis, permissoes
+        if self.somente_treino:
+            return checklist_responsaveis.tem_liberacao(self.id)
         if self.is_admin():
             return True
-        from app.services import permissoes
-        return permissoes.pode(self.papel or '', 'web_checklist')
+        return (permissoes.pode(self.papel or '', 'web_checklist')
+                or checklist_responsaveis.tem_liberacao(self.id))
 
     def pode_producao(self):
         """Plano de Producao, Congelados, Separacao."""

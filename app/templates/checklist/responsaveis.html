@@ -3,7 +3,7 @@
 {% block content %}
 <div style="max-width:760px;">
 <h1 class="page-title">Responsáveis pelo checklist</h1>
-<p>Gerentes e atendentes chefes vinculados à unidade principal e ao período em Organizar equipe. Mudanças nesse cadastro atualizam esta lista automaticamente.</p>
+<p>Use <strong>+ Adicionar pessoa</strong> na loja e no período desejados para liberar o checklist. Gerentes e atendentes chefes de Organizar equipe já aparecem aqui.</p>
 {% include 'checklist/_responsaveis.html' %}
 {% if equipe.pendentes %}
 <div class="alert alert-warning small">
@@ -11,7 +11,7 @@
   <ul class="mb-0">{% for pessoa in equipe.pendentes %}<li>{{ pessoa.nome }}</li>{% endfor %}</ul>
 </div>
 {% endif %}
-<p class="small">Quando houver mais de um nome no período, a responsabilidade é compartilhada. O cadastro não define substituições por folga ou ausência.</p>
+<p class="small text-muted">A pessoa usa a conta que já tem. {% if current_user.is_dono() %}Se ainda não tiver acesso, crie ou vincule a conta pelo atalho junto ao nome.{% else %}Se ainda não tiver acesso, peça ao dono para criar ou vincular a conta.{% endif %} Para cobrir ausências, quem tem checklist liberado pode preencher em outra loja.</p>
 <p>
 {% if current_user.pode_organizar_equipe() %}
 <a class="btn btn-primary" href="{{ url_for('rh.lideranca_preenchimento') }}">Organizar equipe</a>

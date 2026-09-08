@@ -149,6 +149,9 @@
            class="sidebar-link {% if request.path.startswith('/treino') and not request.path.startswith('/treino/gestor') %}active{% endif %}">
             🎮 Treinamento
         </a>
+        {% if so_treino and current_user.pode_checklist() %}
+        <a href="{{ url_for('checklist.index') }}" class="sidebar-link {{ 'active' if request.path.startswith('/checklist') }}">Checklist da loja</a>
+        {% endif %}
         {% if current_user.is_admin() or current_user.is_gerente() or current_user.lidera_equipe() %}
         <a href="{{ url_for('treino.gestor_home') }}"
            class="sidebar-link {% if request.path.startswith('/treino/gestor') %}active{% endif %}">

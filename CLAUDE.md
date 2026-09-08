@@ -1329,6 +1329,19 @@ checklist e tira FOTO comprovando os pontos necessarios. Decisoes dele
   checklist de QUALQUER loja (gerente cobre outra loja; o registro guarda
   quem — travar por `Usuario.loja_id` e decisao separada); hora de cobranca
   10:00 e GLOBAL, nao por loja; foto extra em item sem exige_foto e aceita.
+- **Liberacao individual (08/09/2026, pedido do dono)**: em Responsaveis,
+  `+ Adicionar pessoa` cria `ChecklistResponsavel` por funcionario/loja/periodo
+  (tabela nova via create_all, unique e auditada). Soma ao vinculo vivo do RH,
+  deduplica nomes e nao muda cargo, unidade principal, escala ou papel.
+  A concessao vale enquanto vinculo, funcionario e loja operacional estiverem
+  ativos. `Usuario.pode_checklist()` e a fonte canonica para rota e menus;
+  somente_treino ganha excecao estreita apenas para index/preencher do checklist,
+  mantendo troca de senha provisoria obrigatoria. Observador nunca recebe escrita.
+  Sem conta, responsavel fica pendente ate criar/vincular acesso no RH. Retirar
+  desativa so a concessao adicional, preservando RH e permissoes ja existentes.
+  A regra de cobertura em qualquer loja acima continua valendo. O selo de RH
+  distingue conta vinculada de primeiro acesso pendente; nenhum comprova entrega
+  do e-mail (aceite do Postmark nao e confirmacao de entrega).
 - **IMPORTACAO do checklist em papel (03/08/2026)**: o dono mandou o PDF
   "CHECKLISTS OPERACIONAIS POR SETOR" (11 folhas — Cafe/Barista, Chapa,
   Cozinha, Viagem/Embalagem, Camara Fria, Caixa, Salao, Limpeza, Area

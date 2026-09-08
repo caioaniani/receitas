@@ -53,6 +53,7 @@ AUDITED_MODELS = {
     # turnos sao cobrados a comprovar — baixo volume, trilha barata.
     # Preenchimentos/respostas ficam fora (ja sao o proprio registro).
     'checklist_item_modelo',
+    'checklist_responsavel',
     # Perda de producao do padeiro (13/08/2026): registro mexe em estoque da
     # industria e a EXCLUSAO estorna — dinheiro-adjacente, baixo volume.
     'perda_producao',

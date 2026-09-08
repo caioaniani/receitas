@@ -92,7 +92,7 @@ def checklist_required(f):
     (default gerente+funcionario; admin/owner sempre)."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not _pode_cap('web_checklist'):
+        if not current_user.is_authenticated or not current_user.pode_checklist():
             abort(403)
         return f(*args, **kwargs)
     return decorated

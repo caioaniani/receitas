@@ -1301,6 +1301,11 @@ def salvar_loja_fiscal(id):
 @rh_required
 def excluir_loja(id):
     loja = Loja.query.get_or_404(id)
+    from app.models import ChecklistResponsavel
+    if ChecklistResponsavel.query.filter_by(loja_id=id).first():
+        flash(f'Loja "{loja.nome}" tem histórico de responsáveis pelo checklist '
+              'e não pode ser excluída.', 'warning')
+        return redirect(url_for('rh.lojas'))
     if loja.funcionarios:
         flash(f'Loja "{loja.nome}" tem {len(loja.funcionarios)} funcionário(s). Remova-os primeiro.', 'warning')
         return redirect(url_for('rh.lojas'))

@@ -128,6 +128,7 @@
        href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', loja=loja_id or None, ativos='1' if apenas_ativos else '0') }}">Todos</a>
 </div>
 
+<p class="small text-muted">“Primeiro acesso pendente” significa que a senha provisória ainda não foi trocada. Uma conta vinculada não confirma que o e-mail foi recebido.</p>
 <div class="d-flex flex-column gap-2">
     {% for f in funcionarios %}
     {% set sugestao = sugestoes.get(f.id) %}
@@ -139,7 +140,11 @@
                     <div class="d-flex gap-2 align-items-center flex-wrap">
                         <strong>{{ f.nome }}</strong>
                         {% if f.usuario_id %}
-                        <span class="badge bg-success">Acesso liberado</span>
+                            {% if f.usuario and f.usuario.senha_provisoria %}
+                            <span class="badge bg-warning text-dark" title="A senha provisória ainda não foi trocada. Este status não confirma o recebimento do e-mail.">Primeiro acesso pendente</span>
+                            {% else %}
+                            <span class="badge bg-success">Conta vinculada</span>
+                            {% endif %}
                         {% elif sugestao %}
                         <span class="badge bg-warning text-dark">Conferir conta existente</span>
                         {% elif f.email %}
@@ -178,7 +183,7 @@
                 <div class="col-12 col-lg-5">
                     <div class="small text-muted">Conta vinculada</div>
                     <strong>{{ f.usuario.login }}</strong>
-                    <span class="small text-muted">· {{ 'somente treinamento' if f.usuario.somente_treino else f.usuario.papel }}</span>
+                    <span class="small text-muted">· {% if f.usuario.somente_treino %}{{ 'treinamento e checklist' if f.usuario.pode_checklist() else 'somente treinamento' }}{% else %}{{ f.usuario.papel }}{% endif %}</span>
                 </div>
                 <div class="col-12 col-lg-3 d-flex gap-1 justify-content-lg-end flex-wrap">
                     <button name="acao" value="salvar_email" class="btn btn-sm btn-outline-primary">Salvar e-mail</button>
@@ -214,7 +219,7 @@
                     <button name="acao" value="gerar" class="btn btn-sm btn-primary btn-criar">Criar e enviar senha</button>
                 </div>
                 <div class="col-12">
-                    <label class="small mb-0"><input type="checkbox" name="somente_treino" value="1" checked> nova conta acessa somente o treinamento</label>
+                    <label class="small mb-0"><input type="checkbox" name="somente_treino" value="1" checked> limitar a nova conta ao treinamento e ao checklist, se liberado em Responsáveis</label>
                 </div>
             </form>
             {% endif %}

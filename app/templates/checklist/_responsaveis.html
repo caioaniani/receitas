@@ -3,22 +3,85 @@
   <div class="card-body small">
     <h2 class="h6">Responsáveis por período</h2>
     {% for linha in equipe.lojas %}
-    {% if equipe.lojas|length > 1 %}<h3 class="h6 mt-3">{{ linha.loja.nome }}</h3>{% endif %}
+    <div id="loja-{{ linha.loja.id }}">
+    {% if equipe.lojas|length > 1 or gerenciar_responsaveis|default(false) %}<h3 class="h6 mt-3">{{ linha.loja.nome }}</h3>{% endif %}
     {% for periodo, pessoas in linha.turnos.items() %}
     {% if tipo is not defined or tipo not in ['abertura', 'fechamento'] or (tipo == 'abertura' and periodo == 'Manhã') or (tipo == 'fechamento' and periodo == 'Tarde') %}
     <div class="mb-2">
       <strong>{{ periodo }}{{ ' · abertura' if periodo == 'Manhã' else ' · fechamento' }}</strong>
       {% for pessoa in pessoas %}
-      <div>{{ pessoa.nome }}{% if current_user.is_admin() and not pessoa.acesso %}
-        <span class="text-warning">— acesso ao checklist pendente</span>{% endif %}</div>
+      <div class="mb-2">
+        <span>{{ pessoa.nome }}</span>
+        {% if current_user.is_admin() %}
+        {% if not pessoa.tem_conta %}<span class="text-warning">— sem conta</span>
+        {% elif not pessoa.acesso %}<span class="text-warning">— acesso ao checklist pendente</span>
+        {% elif pessoa.primeiro_acesso %}<span class="text-warning">— primeiro acesso pendente</span>
+        {% endif %}
+        {% if gerenciar_responsaveis|default(false) %}
+        {% if not pessoa.tem_conta %}
+        {% if current_user.is_dono() %}
+        <div><a href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', _anchor='acesso-' ~ pessoa.funcionario_id) }}">Criar ou vincular acesso</a></div>
+        {% else %}<div class="text-muted">Peça ao dono para criar ou vincular a conta.</div>{% endif %}
+        {% else %}
+        <details class="mt-1">
+          <summary class="text-muted">Acesso</summary>
+          <div class="mt-2">
+            {% if pessoa.primeiro_acesso %}<p class="mb-2">Ainda falta trocar a senha provisória ao entrar. Isso não confirma a entrega do e-mail.</p>{% endif %}
+            {% if current_user.is_dono() %}<a href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', _anchor='acesso-' ~ pessoa.funcionario_id) }}">Ver conta e e-mail</a>
+            {% else %}<p class="text-muted mb-2">Peça ao dono para conferir a conta e o e-mail.</p>{% endif %}
+            {% if not pessoa.acesso and not pessoa.observador %}
+            <form method="post" action="{{ url_for('checklist.responsavel_adicionar') }}" class="mt-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="loja_id" value="{{ linha.loja.id }}">
+              <input type="hidden" name="periodo" value="{{ periodo }}">
+              <input type="hidden" name="funcionario_id" value="{{ pessoa.funcionario_id }}">
+              <button class="btn btn-sm btn-primary">Liberar checklist</button>
+            </form>
+            {% endif %}
+          </div>
+        </details>
+        {% endif %}
+        {% if pessoa.adicional_id %}
+        <details class="mt-1">
+          <summary class="text-muted">Vínculo adicional</summary>
+          <form method="post" action="{{ url_for('checklist.responsavel_remover', vinculo_id=pessoa.adicional_id) }}" class="mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <p class="mb-2">Retira esta liberação. Vínculos de Organizar equipe e outros acessos da conta continuam valendo.</p>
+            <button class="btn btn-sm btn-outline-danger">Retirar vínculo adicional</button>
+          </form>
+        </details>
+        {% endif %}
+        {% endif %}
+        {% endif %}
+      </div>
       {% else %}
       <div class="text-muted">Sem responsável vinculado.</div>
       {% endfor %}
+      {% if gerenciar_responsaveis|default(false) and current_user.is_admin() %}
+      <details class="my-3">
+        <summary class="btn btn-sm btn-outline-primary" aria-label="Adicionar pessoa — {{ linha.loja.nome }}, {{ periodo }}">+ Adicionar pessoa</summary>
+        <form method="post" action="{{ url_for('checklist.responsavel_adicionar') }}" class="mt-3 p-3 border rounded">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="loja_id" value="{{ linha.loja.id }}">
+          <input type="hidden" name="periodo" value="{{ periodo }}">
+          <label for="pessoa-{{ linha.loja.id }}-{{ loop.index }}" class="form-label">Quem vai fazer o checklist em {{ linha.loja.nome }} · {{ periodo }}?</label>
+          <select id="pessoa-{{ linha.loja.id }}-{{ loop.index }}" name="funcionario_id" class="form-select" required>
+            <option value="">Selecione a pessoa</option>
+            {% for candidato in candidatos %}
+            <option value="{{ candidato.id }}"{% if candidato.usuario and candidato.usuario.is_observador() %} disabled{% endif %}>{{ candidato.nome }}{{ ' — sem conta' if not candidato.usuario else (' — somente consulta' if candidato.usuario.is_observador() else '') }}</option>
+            {% endfor %}
+          </select>
+          <p class="text-muted small mt-2">Libera o checklist para a conta da pessoa. Cargo e escala continuam no cadastro da equipe.</p>
+          <button class="btn btn-primary">Adicionar pessoa</button>
+        </form>
+      </details>
+      {% endif %}
     </div>
     {% endif %}
     {% endfor %}
+    </div>
     {% endfor %}
-    <p class="text-muted mb-0">Vínculos de Organizar equipe. Durante o expediente e na troca de turno, confira os responsáveis do período. Quem preencher ficará registrado no histórico.</p>
+    <p class="text-muted mb-0">Responsabilidade compartilhada entre os nomes do período. Quem preencher ficará registrado no histórico.</p>
   </div>
 </section>
 {% endif %}

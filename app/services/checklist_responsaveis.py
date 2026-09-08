@@ -1,16 +1,45 @@
 """Vínculo vivo do checklist com unidade e período de Organizar equipe.
 
-Não copia nomes nem altera permissões ou a escala. A responsabilidade é
+Não copia nomes nem altera cargos ou a escala. A responsabilidade é
 compartilhada quando há mais de um gerente/atendente chefe no mesmo período.
+O admin também pode acrescentar funcionários, liberando só o checklist.
 O histórico continua identificando a pessoa que efetivamente preencheu.
 """
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.models import Funcionario
+from app.models import ChecklistResponsavel, Funcionario, Loja
 from app.services import checklist_loja, treino_lideranca
 from app.services.rh_cargos import normalizar_nome_cargo
 
 CARGOS_RESPONSAVEIS = frozenset({'gerente', 'gerente de loja', 'atendente chefe'})
+
+
+def tem_liberacao(usuario_id):
+    """Concessão viva: funcionário e loja precisam continuar ativos."""
+    return (ChecklistResponsavel.query
+            .join(Funcionario, ChecklistResponsavel.funcionario_id == Funcionario.id)
+            .join(Loja, ChecklistResponsavel.loja_id == Loja.id)
+            .filter(ChecklistResponsavel.ativo.is_(True),
+                    Funcionario.usuario_id == usuario_id, Funcionario.ativo.is_(True),
+                    Loja.ativa.is_(True), Loja.nome != 'Industria')
+            .first()) is not None
+
+
+def candidatos():
+    return (Funcionario.query.filter_by(ativo=True)
+            .options(joinedload(Funcionario.usuario))
+            .order_by(Funcionario.nome).all())
+
+
+def _pessoa(funcionario, adicional=None):
+    usuario = funcionario.usuario
+    return {'funcionario_id': funcionario.id, 'nome': funcionario.nome,
+            'cargo': funcionario.cargo.nome if funcionario.cargo else funcionario.funcao,
+            'acesso': bool(usuario and usuario.pode_checklist()),
+            'tem_conta': bool(usuario),
+            'primeiro_acesso': bool(usuario and usuario.senha_provisoria),
+            'observador': bool(usuario and usuario.is_observador()),
+            'adicional_id': adicional.id if adicional else None}
 
 
 def _eh_responsavel(funcionario, lideres_do_periodo):
@@ -65,16 +94,25 @@ def quadro(loja_id=None):
             continue  # Indústria e lojas inativas não são checklist de loja.
         if loja_id is not None and unidade_id != loja_id:
             continue
-        usuario = funcionario.usuario
-        acesso = bool(usuario and not usuario.somente_treino
-                      and not usuario.is_observador() and usuario.pode_checklist())
-        pessoa = {'nome': funcionario.nome,
-                  'cargo': funcionario.cargo.nome if funcionario.cargo else funcionario.funcao,
-                  'acesso': acesso}
+        pessoa = _pessoa(funcionario)
         if unidade_id is None or funcionario.periodo not in treino_lideranca.PERIODOS_EQUIPE:
             pendentes.append(pessoa)
             continue
         por_loja[unidade_id]['turnos'][funcionario.periodo].append(pessoa)
+    adicionais = ChecklistResponsavel.query.filter_by(ativo=True).all()
+    for adicional in adicionais:
+        funcionario = por_id.get(adicional.funcionario_id)
+        if (not funcionario or adicional.loja_id not in por_loja
+                or (loja_id is not None and adicional.loja_id != loja_id)):
+            continue
+        pessoas = por_loja[adicional.loja_id]['turnos'][adicional.periodo]
+        existente = next((p for p in pessoas
+                          if p['funcionario_id'] == funcionario.id), None)
+        if existente:
+            existente['adicional_id'] = adicional.id
+        else:
+            pessoas.append(_pessoa(funcionario, adicional))
+        pessoas.sort(key=lambda p: p['nome'].casefold())
     return {'lojas': [linha for lid, linha in por_loja.items()
                       if loja_id is None or lid == loja_id],
             'pendentes': pendentes}

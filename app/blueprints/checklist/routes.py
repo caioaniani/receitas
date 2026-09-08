@@ -2,6 +2,7 @@
 conferir (admin). Regras de negócio em app/services/checklist_loja.py."""
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.checklist import checklist_bp
 from app.constants import CHECKLIST_TIPO_LABEL, CHECKLIST_TIPOS
@@ -10,10 +11,13 @@ from app.extensions import db
 from app.models import (
     ChecklistItemModelo,
     ChecklistPreenchimento,
+    ChecklistResponsavel,
     ChecklistResposta,
+    Funcionario,
     Loja,
 )
 from app.services import checklist_loja, checklist_responsaveis
+from app.services.treino_lideranca import PERIODOS_EQUIPE
 from app.utils import hoje
 
 
@@ -80,7 +84,58 @@ def index():
 @admin_required
 def responsaveis():
     return render_template('checklist/responsaveis.html',
-                           equipe=checklist_responsaveis.quadro())
+                           equipe=checklist_responsaveis.quadro(),
+                           gerenciar_responsaveis=True,
+                           candidatos=checklist_responsaveis.candidatos())
+
+
+@checklist_bp.route('/responsaveis/adicionar', methods=['POST'])
+@login_required
+@admin_required
+def responsavel_adicionar():
+    loja = _resolver_loja(request.form.get('loja_id'))
+    funcionario_id = request.form.get('funcionario_id', type=int)
+    funcionario = db.session.get(Funcionario, funcionario_id) if funcionario_id else None
+    periodo = request.form.get('periodo')
+    if (not loja or not funcionario or not funcionario.ativo
+            or periodo not in PERIODOS_EQUIPE):
+        flash('Escolha uma pessoa ativa, a loja e o período.', 'warning')
+        return redirect(url_for('checklist.responsaveis'))
+    if funcionario.usuario and funcionario.usuario.is_observador():
+        flash('Essa conta é somente de consulta e não pode preencher checklists.', 'warning')
+        return redirect(url_for('checklist.responsaveis'))
+    filtro = dict(funcionario_id=funcionario.id, loja_id=loja.id, periodo=periodo)
+    vinculo = ChecklistResponsavel.query.filter_by(**filtro).first()
+    if vinculo is None:
+        vinculo = ChecklistResponsavel(**filtro, criado_por_id=current_user.id)
+        db.session.add(vinculo)
+    vinculo.ativo = True
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        # Dois cliques simultâneos: só considere sucesso se o vínculo já existe ativo.
+        if not ChecklistResponsavel.query.filter_by(**filtro, ativo=True).first():
+            raise
+    if funcionario.usuario:
+        flash(f'{funcionario.nome}: checklist liberado. A pessoa usa a conta que já tem.',
+              'success')
+    else:
+        flash(f'{funcionario.nome} adicionado. Falta criar ou vincular a conta para entrar.',
+              'warning')
+    return redirect(url_for('checklist.responsaveis', _anchor=f'loja-{loja.id}'))
+
+
+@checklist_bp.route('/responsaveis/<int:vinculo_id>/remover', methods=['POST'])
+@login_required
+@admin_required
+def responsavel_remover(vinculo_id):
+    vinculo = db.get_or_404(ChecklistResponsavel, vinculo_id)
+    vinculo.ativo = False
+    db.session.commit()
+    flash('Vínculo adicional retirado. Os vínculos de Organizar equipe continuam valendo.',
+          'success')
+    return redirect(url_for('checklist.responsaveis', _anchor=f'loja-{vinculo.loja_id}'))
 
 
 @checklist_bp.route('/preencher', methods=['GET', 'POST'])

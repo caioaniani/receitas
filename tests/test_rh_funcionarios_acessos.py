@@ -72,7 +72,8 @@ def test_tela_separa_conta_existente_criacao_e_modulos(app, owner_user):
     assert conta_login in html
     assert 'Pronto para criar' in html
     assert 'Falta e-mail' in html
-    assert 'Acesso liberado' in html
+    assert '<span class="badge bg-success">Conta vinculada</span>' in html
+    assert 'Acesso liberado' not in html
     assert 'Boas-vindas' in html
     assert 'Criar e enviar senha' in html
     assert 'Vincular conta' in html
@@ -197,10 +198,11 @@ def test_tela_mostra_quantidade_de_primeiros_acessos_pendentes(
         concluido = _usuario(
             'Enzo Luz', 'enzo.login', email='enzo@opao.online',
             senha_provisoria=False)
-        _funcionario('Duda Lima', '81000000065',
-                     email='duda@opao.online', usuario=pendente)
-        _funcionario('Enzo Luz', '81000000066',
-                     email='enzo@opao.online', usuario=concluido)
+        pendente_f = _funcionario('Duda Lima', '81000000065',
+                                 email='duda@opao.online', usuario=pendente)
+        concluido_f = _funcionario('Enzo Luz', '81000000066',
+                                  email='enzo@opao.online', usuario=concluido)
+        pendente_id, concluido_id = pendente_f.id, concluido_f.id
 
     html = _owner(app, owner_user).get(
         '/rh/funcionarios?view=acessos&acesso=vinculados&ativos=1'
@@ -209,6 +211,32 @@ def test_tela_mostra_quantidade_de_primeiros_acessos_pendentes(
     assert 'Enviar novo acesso aos pendentes' in html
     assert '1 funcionário(s) ativo(s)' in html
     assert '/rh/funcionarios/acessos/reenviar-pendentes' in html
+    card_pendente = html.split(f'id="acesso-{pendente_id}"', 1)[1].split('</section>', 1)[0]
+    card_concluido = html.split(f'id="acesso-{concluido_id}"', 1)[1].split('</section>', 1)[0]
+    assert 'Primeiro acesso pendente' in card_pendente
+    assert 'A senha provisória ainda não foi trocada.' in card_pendente
+    assert 'Este status não confirma o recebimento do e-mail.' in card_pendente
+    assert 'Primeiro acesso pendente' not in card_concluido
+    assert '<span class="badge bg-success">Conta vinculada</span>' in card_concluido
+
+
+def test_tela_descreve_checklist_apenas_quando_acesso_efetivo_permite(
+        app, owner_user):
+    with app.app_context():
+        usuario = _usuario('Lara Acesso', 'lara.acesso')
+        usuario.somente_treino = True
+        funcionario = _funcionario('Lara Acesso', '81000000090', usuario=usuario)
+        fid = funcionario.id
+
+    cliente = _owner(app, owner_user)
+    for permitido, rotulo in ((False, 'somente treinamento'),
+                             (True, 'treinamento e checklist')):
+        with patch.object(Usuario, 'pode_checklist', return_value=permitido):
+            html = cliente.get(
+                '/rh/funcionarios?view=acessos&acesso=vinculados'
+            ).get_data(as_text=True)
+        card = html.split(f'id="acesso-{fid}"', 1)[1].split('</section>', 1)[0]
+        assert f'· {rotulo}</span>' in card
 
 
 def test_reenviar_pendentes_so_processa_ativo_com_senha_provisoria(

@@ -476,9 +476,14 @@ def create_app(config_class=None):
             ep in {'rh.funcionarios', 'rh.novo_funcionario'}
             and current_user.pode_cadastrar_funcionarios()
         )
+        acesso_checklist = (
+            ep in {'checklist.index', 'checklist.preencher'}
+            and current_user.pode_checklist()
+        )
         if (getattr(current_user, 'somente_treino', False)
                 and not ep.startswith('treino.')
                 and not acesso_equipe
+                and not acesso_checklist
                 and not acesso_cadastro_funcionarios):
             return redirect(url_for('treino.home'))
         return None

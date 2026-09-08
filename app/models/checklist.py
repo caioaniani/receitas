@@ -13,6 +13,33 @@ from app.extensions import db
 from app.utils import agora
 
 
+class ChecklistResponsavel(db.Model):
+    """Pessoa acrescentada pelo admin ao turno, com liberação só do checklist.
+
+    O vínculo é com o funcionário: nome e conta continuam vindo do RH.
+    Remover desativa a liberação adicional e preserva a trilha de auditoria.
+    """
+    __tablename__ = 'checklist_responsavel'
+    __table_args__ = (
+        db.UniqueConstraint('funcionario_id', 'loja_id', 'periodo',
+                            name='uq_checklist_responsavel_turno'),
+        db.CheckConstraint("periodo IN ('Manhã', 'Tarde')",
+                           name='ck_checklist_responsavel_periodo'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'),
+                               nullable=False, index=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    periodo = db.Column(db.String(20), nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora)
+
+    funcionario = db.relationship('Funcionario')
+    loja = db.relationship('Loja')
+
+
 class ChecklistItemModelo(db.Model):
     """Um ponto do checklist, cadastrado pelo admin em /checklist/config.
 
