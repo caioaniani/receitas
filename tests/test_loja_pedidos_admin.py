@@ -6,6 +6,8 @@ Reembolso/cancelamento (dinheiro) e emissão de NF (fiscal) continuam owner-only
 """
 from decimal import Decimal
 
+import pytest
+
 
 def _owner(app):
     from app.extensions import db
@@ -364,6 +366,49 @@ def test_filtro_intervalo_de_datas(app):
     assert b'INT02' in r.data
     assert b'INT01' not in r.data
     assert b'INT03' not in r.data
+
+
+@pytest.mark.parametrize('filtro', [
+    {'data': '2026-06-25'},
+    {'data_ini': '2026-06-23', 'data_fim': '2026-06-27'},
+])
+def test_trocar_status_preserva_data_escolhida(app, filtro):
+    """Navegar entre situações não deve apagar o recorte de entrega."""
+    import re
+    from html import unescape
+    from urllib.parse import parse_qs, urlencode, urlsplit
+
+    c = _owner(app)
+    r = c.get('/admin/loja-online/pedidos?' + urlencode(filtro))
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    nav = re.search(r'<nav[^>]+aria-label="Situação dos pedidos".*?</nav>',
+                    html, re.S).group()
+    urls = re.findall(r'href="([^"]+)"', nav)
+    assert len(urls) >= 5
+    for url in urls:
+        query = parse_qs(urlsplit(unescape(url)).query)
+        assert query.get('status')
+        for chave, valor in filtro.items():
+            assert query[chave] == [valor]
+
+
+def test_periodo_ativo_fica_visivel_e_nao_reenvia_filtro_de_dia(app):
+    """O formulário de período não leva um dia antigo que o sobrescreveria."""
+    import re
+
+    c = _owner(app)
+    r = c.get('/admin/loja-online/pedidos?status=em_preparo'
+              '&data_ini=2026-06-23&data_fim=2026-06-27')
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    periodo = re.search(r'<details[^>]+id="pedidos-periodo".*?</details>',
+                        html, re.S).group()
+    assert ' open>' in periodo.split('<summary>')[0]
+    assert 'name="data"' not in periodo
+    assert 'name="status" value="em_preparo"' in periodo
+    assert 'name="data_ini" value="2026-06-23"' in periodo
+    assert 'name="data_fim" value="2026-06-27"' in periodo
 
 
 def test_busca_respeita_filtro_de_data_ativo(app):

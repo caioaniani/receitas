@@ -7,14 +7,18 @@
     const ROTAS = [
         // Navegação principal
         { categoria: 'Navegar', titulo: 'Início', url: '/', icon: 'house' },
-        { categoria: 'Navegar', titulo: 'Pedidos', url: '/pedidos/', icon: 'cart' },
-        { categoria: 'Navegar', titulo: 'Estoque da loja', url: '/pedidos/estoque-loja', icon: 'box' },
+        { categoria: 'Navegar', titulo: 'Pedidos das lojas', url: '/pedidos/', icon: 'cart' },
+        { categoria: 'Navegar', titulo: 'Pedidos do site', url: '/admin/loja-online/pedidos', icon: 'bag' },
+        { categoria: 'Navegar', titulo: 'Estoque das lojas', aliases: ['Estoque da loja'], url: '/pedidos/estoque-loja', icon: 'box' },
         { categoria: 'Navegar', titulo: 'Conferência de estoque', url: '/pedidos/conferencia', icon: 'clipboard-check' },
         { categoria: 'Navegar', titulo: 'Histórico de estoque', url: '/pedidos/estoque-loja/historico', icon: 'clock-history' },
         { categoria: 'Navegar', titulo: 'Desperdício', url: '/pedidos/desperdicio', icon: 'trash' },
         { categoria: 'Navegar', titulo: 'Produção', url: '/producao/', icon: 'tools' },
-        { categoria: 'Navegar', titulo: 'Congelados', url: '/pedidos/congelados', icon: 'snow' },
-        { categoria: 'Navegar', titulo: 'Pedidos a separar', url: '/pedidos/separacao', icon: 'list-check' },
+        { categoria: 'Navegar', titulo: 'Plano de produção', aliases: ['Cronograma', 'Motor de previsão'], url: '/telaindustriateste/', icon: 'calendar-week' },
+        { categoria: 'Navegar', titulo: 'Tela do padeiro', url: '/padeiro/', icon: 'check2-square' },
+        { categoria: 'Navegar', titulo: 'Estoque de congelados', url: '/pedidos/congelados', icon: 'snow' },
+        { categoria: 'Navegar', titulo: 'Separar pedidos das lojas', aliases: ['Pedidos a separar'], url: '/pedidos/separacao', icon: 'list-check' },
+        { categoria: 'Navegar', titulo: 'Pedidos semanais das lojas', aliases: ['Pedidos da semana'], url: '/producao/pedidos-semana/media', icon: 'calendar3' },
 
         { categoria: 'Catálogo', titulo: 'Matérias-primas', url: '/materias-primas/', icon: 'flower3' },
         { categoria: 'Catálogo', titulo: 'Estoque MP', url: '/materias-primas/estoque', icon: 'boxes' },
@@ -159,6 +163,7 @@
         if (titulo === q) return 100;
         if (titulo.startsWith(q)) return 80;
         if (titulo.includes(q)) return 50;
+        if ((item.aliases || []).some((alias) => normalizar(alias).includes(q))) return 40;
         if (cat.includes(q)) return 20;
         // Fuzzy: cada caractere de q presente em ordem em titulo
         let ti = 0, hits = 0;

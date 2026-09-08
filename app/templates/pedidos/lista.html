@@ -1,31 +1,36 @@
 {% extends "base.html" %}
 {% from "_macros.html" import page_header %}
 
-{% block title %}Pedidos{% endblock %}
+{% block title %}Pedidos das lojas{% endblock %}
 
 {% block content %}
-{% call page_header('Pedidos', 'bi-card-checklist') %}
-    {% if current_user.is_admin() %}
-    <a href="{{ url_for('pedidos.relatorio') }}" class="btn-pill btn-pill-outline">
-        <i class="bi bi-file-earmark-bar-graph"></i> relatório
-    </a>
-    {% endif %}
-    {# Contagem por dia: pedidos do site (PedidoOnline) com cestas explodidas,
-       agrupados por item — pra a producao saber o que tem que fazer pra o dia. #}
-    <a href="{{ url_for('pedidos.contagem_dia_site') }}"
-       class="btn-pill btn-pill-outline">
-        <i class="bi bi-calendar-check"></i> contagem do dia (site)
-    </a>
+{% call page_header('Pedidos das lojas', 'bi-card-checklist') %}
     <a href="{{ url_for('pedidos.novo') }}" class="btn-pill btn-pill-primary">
-        <i class="bi bi-plus-lg"></i> novo pedido
+        <i class="bi bi-plus-lg"></i> Novo pedido
     </a>
 {% endcall %}
+<p class="text-muted mb-3">Acompanhe o abastecimento das lojas, da solicitação ao recebimento. Abra um pedido para conferir os itens.</p>
+
+<details class="page-options mb-3">
+    <summary>Mais opções</summary>
+    <div class="d-flex flex-wrap gap-2 mt-2">
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('pedidos.relatorio') }}" class="btn-pill btn-pill-outline">
+            <i class="bi bi-file-earmark-bar-graph"></i> Relatório dos pedidos
+        </a>
+        {% endif %}
+        <a href="{{ url_for('pedidos.contagem_dia_site') }}" class="btn-pill btn-pill-outline">
+            <i class="bi bi-calendar-check"></i> Itens dos pedidos do site por dia
+        </a>
+    </div>
+</details>
 
 <!-- Abas por status -->
-<ul class="nav nav-tabs mb-2" role="tablist">
+<ul class="nav nav-tabs mb-2" aria-label="Situação dos pedidos">
     {% for slug, label, _ in abas %}
     <li class="nav-item">
         <a class="nav-link {% if slug == aba_atual %}active{% endif %}"
+           {% if slug == aba_atual %}aria-current="page"{% endif %}
            href="{{ url_for('pedidos.lista', aba=slug, loja=(filtro_loja or None)) }}">
             {{ label }}
             {% if contagens.get(slug) %}
@@ -40,7 +45,7 @@
    Badges = contagem da loja NA ABA ATUAL (guiam o clique). Só pra quem não
    está vinculado a uma loja (mesma regra do filtro na rota). #}
 {% if current_user.is_admin() and lojas %}
-<ul class="nav nav-pills mb-3 flex-wrap gap-1 small">
+<ul class="nav nav-pills mb-3 flex-wrap gap-1 small" aria-label="Filtrar por loja">
     <li class="nav-item">
         <a class="nav-link py-1 px-2 {% if not filtro_loja %}active{% endif %}"
            href="{{ url_for('pedidos.lista', aba=aba_atual) }}">todas as lojas</a>
@@ -104,7 +109,7 @@
                 <th class="col-check">
                     <input type="checkbox" class="form-check-input" id="pedidos-check-all" title="Selecionar todos">
                 </th>
-                <th class="col-acoes"></th>
+                <th class="col-acoes"><span class="visually-hidden">Ações</span></th>
                 <th>nº</th>
                 <th>loja</th>
                 <th>data entrega</th>
@@ -120,7 +125,8 @@
             <tr style="cursor:pointer" onclick="window.location='{{ url_for('pedidos.detalhe', id=p.id) }}'">
                 <td class="col-check" onclick="event.stopPropagation()">
                     <input type="checkbox" class="form-check-input pedidos-check"
-                           data-id="{{ p.id }}" data-status="{{ p.status }}">
+                           data-id="{{ p.id }}" data-status="{{ p.status }}"
+                           aria-label="Selecionar pedido {{ p.id }}">
                 </td>
                 <td class="col-acoes" onclick="event.stopPropagation()">
                     <div class="dropdown">
@@ -189,7 +195,7 @@
                         </ul>
                     </div>
                 </td>
-                <td class="text-muted">{{ p.id }}</td>
+                <td onclick="event.stopPropagation()"><a href="{{ url_for('pedidos.detalhe', id=p.id) }}" aria-label="Abrir pedido {{ p.id }}">{{ p.id }}</a></td>
                 <td>{{ p.loja.nome }}</td>
                 <td>
                     {{ p.data_entrega.strftime('%d/%m/%Y') if p.data_entrega else '—' }}
@@ -234,7 +240,10 @@
             </tr>
             {% endfor %}
             {% if not pedidos %}
-            <tr><td colspan="10" class="text-center text-muted py-4">Nenhum pedido encontrado.</td></tr>
+            <tr><td colspan="10" class="text-center text-muted py-4">
+                <strong class="d-block">Nenhum pedido nesta seleção.</strong>
+                Escolha outra situação ou loja para consultar os pedidos.
+            </td></tr>
             {% endif %}
         </tbody>
     </table>

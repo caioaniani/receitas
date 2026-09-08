@@ -292,7 +292,9 @@ def test_rota_renderiza(app, admin_user):
     assert 'modalDividir' in body
     assert 'data-lote' in body
     # geração POR LOJA (botão no card) + origem pra voltar pra esta tela
-    assert 'Gerar só esta loja' in body
+    assert 'Gerar pedidos da loja' in body
+    assert '<details class="page-options mb-3">' in body
+    assert 'salvam automaticamente' in body
     assert 'name="so_loja" value="%d"' % loja.id in body
     assert 'name="origem" value="media"' in body
     # ação explícita via hidden + confirm no listener (nunca onclick inline):

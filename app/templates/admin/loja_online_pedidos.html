@@ -1,12 +1,23 @@
 {% extends 'base.html' %}
-{% block title %}Loja Online — Pedidos do site{% endblock %}
+{% block title %}Pedidos do site{% endblock %}
 
 {% block content %}
-<h1 class="page-title"><span aria-hidden="true">🥐</span> Pedidos do site</h1>
-<p class="text-muted">
-  Pedidos que entram pelo checkout da loja. Em fase de teste eles nascem
-  <em>aguardando pagamento</em> (o Pagar.me entra na próxima fase).
-</p>
+<h1 class="page-title">Pedidos do site</h1>
+<p class="text-muted mb-3">Consulte as compras dos clientes. Abra um pedido para conferir pagamento, itens e entrega.</p>
+
+{% if total %}
+<div class="mb-3" style="max-width:560px;">
+  <label for="busca-pedido" class="form-label">Encontrar pedido</label>
+  <input type="search" id="busca-pedido" class="form-control" autocomplete="off"
+         aria-describedby="busca-pedido-ajuda"
+         placeholder="Nome, telefone, e-mail ou código">
+  <div class="form-text" id="busca-pedido-ajuda">Digite pelo menos 2 caracteres. A busca inclui todos os status e respeita a data escolhida.</div>
+  <div id="busca-pedido-erro" class="alert alert-warning mt-2 mb-0" role="alert" hidden>
+    Não foi possível buscar agora. A lista anterior foi mantida.
+    <button type="button" class="btn btn-sm btn-outline-dark ms-1" id="busca-pedido-repetir">Tentar novamente</button>
+  </div>
+</div>
+{% endif %}
 
 {# Ordem + cores definidas pelo dono (22/06/2026): "Pago" eh o foco do dia
    e default ao abrir; "Todos" branco; "Aguardando" amarelo; "Entregue"
@@ -26,7 +37,7 @@
     ('entregue',             'Entregue',              'info',      '🏁',  True),
     ('cancelado',            'Cancelado',             'danger',    None,  True),
 ] %}
-<div class="mb-2 d-flex flex-wrap gap-2">
+<nav class="mb-2 d-flex flex-wrap gap-2" aria-label="Situação dos pedidos">
   {% for chave, rotulo, cor, icone, sempre in abas %}
   {% if sempre or contagens.get(chave) %}
   {% set ativo = (status == chave) %}
@@ -39,54 +50,60 @@
   {% else %}
     {% set classe_btn = ('btn-' ~ cor) if ativo else ('btn-outline-' ~ cor) %}
   {% endif %}
-  <a href="{{ url_for('main.loja_online_pedidos', status=chave) }}"
-     class="btn btn-sm {{ classe_btn }}">
+  <a href="{{ url_for('main.loja_online_pedidos', status=chave, data=data or None, data_ini=data_ini or None, data_fim=data_fim or None) }}"
+     class="btn btn-sm {{ classe_btn }}"{% if ativo %} aria-current="page"{% endif %}>
     {% if icone %}{{ icone }} {% endif %}{{ rotulo }}
     <span class="badge bg-light text-dark border">{{ conta }}</span>
   </a>
   {% endif %}
   {% endfor %}
-</div>
+</nav>
+<p class="small text-muted mb-3">As contagens incluem todos os dias. Use a data de entrega para filtrar a lista.</p>
 
 {# Filtro por DATA DE ENTREGA — GET preserva o status atual. #}
+<div class="d-flex flex-wrap gap-3 align-items-start mb-3">
 <form method="GET" action="{{ url_for('main.loja_online_pedidos') }}"
-      class="d-flex flex-wrap gap-2 align-items-end mb-3 small">
+      class="d-flex flex-wrap gap-2 align-items-end small">
   {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
   <div>
-    <label class="form-label mb-0 small">Data de entrega</label>
-    <input type="date" name="data" value="{{ data }}"
+    <label for="pedidos-data" class="form-label mb-0 small">Data de entrega</label>
+    <input type="date" id="pedidos-data" name="data" value="{{ data }}"
            class="form-control form-control-sm" style="max-width:170px">
   </div>
-  <div class="text-muted small mx-1">ou intervalo:</div>
-  <div>
-    <label class="form-label mb-0 small">De</label>
-    <input type="date" name="data_ini" value="{{ data_ini }}"
-           class="form-control form-control-sm" style="max-width:170px">
-  </div>
-  <div>
-    <label class="form-label mb-0 small">Até</label>
-    <input type="date" name="data_fim" value="{{ data_fim }}"
-           class="form-control form-control-sm" style="max-width:170px">
-  </div>
-  <button type="submit" class="btn btn-sm btn-dark">Filtrar</button>
+  <button type="submit" class="btn btn-sm btn-dark">Ver dia</button>
   {% if filtro_data_ativo %}
   <a href="{{ url_for('main.loja_online_pedidos', status=status or None) }}"
      class="btn btn-sm btn-outline-secondary">Limpar data</a>
   {% endif %}
 </form>
+<details class="page-options" id="pedidos-periodo"{% if (data_ini or data_fim) and not data %} open{% endif %}>
+  <summary>Consultar período</summary>
+  <form method="GET" action="{{ url_for('main.loja_online_pedidos') }}"
+        class="d-flex flex-wrap gap-2 align-items-end mt-2 small">
+    {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+    <div>
+      <label for="pedidos-data-ini" class="form-label mb-0 small">De</label>
+      <input type="date" id="pedidos-data-ini" name="data_ini" value="{{ data_ini }}"
+             class="form-control form-control-sm" style="max-width:170px">
+    </div>
+    <div>
+      <label for="pedidos-data-fim" class="form-label mb-0 small">Até</label>
+      <input type="date" id="pedidos-data-fim" name="data_fim" value="{{ data_fim }}"
+             class="form-control form-control-sm" style="max-width:170px">
+    </div>
+    <button type="submit" class="btn btn-sm btn-outline-dark">Ver período</button>
+  </form>
+</details>
+</div>
 
 {% if total %}
-<div class="mb-3 d-flex flex-wrap gap-3 align-items-end">
-  <div style="flex:1; min-width:280px; max-width:480px;">
-    <input type="search" id="busca-pedido" class="form-control" autocomplete="off"
-           placeholder="🔎 Buscar por nome, telefone ou código do pedido…">
-    <div class="form-text">Busca em todos os pedidos (não só os 200 da lista). Mínimo 2 letras.</div>
-  </div>
-  <div class="d-flex gap-2 align-items-center">
+<div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+  <p class="small text-muted mb-0">Abra pelo código. Selecione pedidos para imprimir as vias do cliente e do motoboy.</p>
+  <div class="d-none flex-wrap gap-2 align-items-center ms-auto" id="pedidos-impressao">
     <span id="contagem-selecao" class="small text-muted">Nenhum pedido selecionado.</span>
     <button type="submit" form="form-imprimir-selecao"
             id="btn-imprimir-selecao" class="btn btn-sm btn-primary" disabled>
-      🖨️ Imprimir seleção (cliente + motoboy)
+      <i class="bi bi-printer" aria-hidden="true"></i> Imprimir seleção
     </button>
   </div>
 </div>
@@ -106,7 +123,7 @@
           <input type="checkbox" id="chk-todos" class="form-check-input"
                  aria-label="Selecionar todos">
         </th>
-        <th>Código</th><th>Quando</th><th>Cliente</th><th>Entrega</th>
+        <th>Código</th><th>Feito em</th><th>Cliente</th><th>Entrega</th>
         <th>Data entrega</th><th class="text-end">Total</th><th>Status</th>
       </tr>
     </thead>
@@ -116,11 +133,11 @@
   </table>
 </div>
 <div id="pedidos-vazio" class="alert alert-light border"{% if pedidos %} hidden{% endif %}
-     data-msg-inicial="Nenhum pedido {{ ('com status “' ~ labels.get(status, status) ~ '”') if status else 'ainda' }}.">
-  Nenhum pedido {{ ('com status “' ~ labels.get(status, status) ~ '”') if status else 'ainda' }}.
+     data-msg-inicial="Nenhum pedido nesta seleção. Mude o status ou a data, ou busque pelo cliente.">
+  Nenhum pedido nesta seleção. Mude o status ou a data, ou busque pelo cliente.
 </div>
 {% else %}
-<div class="alert alert-light border">Nenhum pedido ainda.</div>
+<div class="alert alert-light border">Ainda não há pedidos do site. As compras dos clientes aparecerão aqui.</div>
 {% endif %}
 
 <script>
@@ -128,10 +145,13 @@
   var tbody = document.getElementById('pedidos-tbody');
   if (!tbody) return;
   var input = document.getElementById('busca-pedido');
+  var erroBusca = document.getElementById('busca-pedido-erro');
+  var repetirBusca = document.getElementById('busca-pedido-repetir');
   var vazio = document.getElementById('pedidos-vazio');
   var chkTodos = document.getElementById('chk-todos');
   var btnImp = document.getElementById('btn-imprimir-selecao');
   var contagem = document.getElementById('contagem-selecao');
+  var impressao = document.getElementById('pedidos-impressao');
   var tbodyInicial = tbody.innerHTML;
   var vazioInicialOculto = vazio ? vazio.hasAttribute('hidden') : true;
   var msgInicial = vazio ? vazio.getAttribute('data-msg-inicial') : '';
@@ -155,6 +175,10 @@
   function atualizarSelecao() {
     var marcados = tbody.querySelectorAll('.chk-pedido:checked').length;
     var total = tbody.querySelectorAll('.chk-pedido').length;
+    if (impressao) {
+      impressao.classList.toggle('d-none', marcados === 0);
+      impressao.classList.toggle('d-flex', marcados > 0);
+    }
     if (btnImp) btnImp.disabled = marcados === 0;
     if (contagem) {
       contagem.textContent = marcados === 0
@@ -185,6 +209,7 @@
 
   function restaurar() {
     tbody.innerHTML = tbodyInicial;
+    if (erroBusca) erroBusca.setAttribute('hidden', '');
     if (!vazio) return;
     vazio.textContent = msgInicial;
     if (vazioInicialOculto) vazio.setAttribute('hidden', '');
@@ -195,24 +220,30 @@
   var timer = null, reqId = 0;
   function buscar(q) {
     var meu = ++reqId;
+    if (erroBusca) erroBusca.setAttribute('hidden', '');
     var url = '/admin/loja-online/buscar-pedidos?q=' + encodeURIComponent(q);
     var pd = paramsData();
     if (pd) url += '&' + pd;
     fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
-      .then(function(r) { return r.ok ? r.text() : ''; })
+      .then(function(r) {
+        if (!r.ok) throw new Error('Falha na busca: ' + r.status);
+        return r.text();
+      })
       .then(function(html) {
         if (meu !== reqId) return;  // resposta velha (digitou mais) — ignora
         tbody.innerHTML = html;
         if (vazio) {
           if (html.trim() === '') {
-            vazio.textContent = 'Nenhum pedido encontrado pra “' + q + '”.';
+            vazio.textContent = 'Nenhum pedido encontrado para “' + q + '”.';
             vazio.removeAttribute('hidden');
           } else {
             vazio.setAttribute('hidden', '');
           }
         }
         atualizarSelecao();
-      }).catch(function() { /* silencioso — mantém a lista atual */ });
+      }).catch(function() {
+        if (meu === reqId && erroBusca) erroBusca.removeAttribute('hidden');
+      });
   }
 
   if (input) {
@@ -221,6 +252,16 @@
       clearTimeout(timer);
       if (q.length < 2) { reqId++; restaurar(); return; }
       timer = setTimeout(function() { buscar(q); }, 250);
+    });
+  }
+
+  if (repetirBusca) {
+    repetirBusca.addEventListener('click', function() {
+      var q = input ? input.value.trim() : '';
+      if (q.length >= 2) {
+        clearTimeout(timer);
+        buscar(q);
+      }
     });
   }
 

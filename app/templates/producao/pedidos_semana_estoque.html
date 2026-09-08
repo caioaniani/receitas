@@ -1,13 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Pedidos da semana — por venda + estoque{% endblock %}
+{% block title %}Pedidos da semana — vendas e estoque{% endblock %}
 
 {% block content %}
 {% import "producao/_pedidos_badges.html" as pbadges %}
 <style>
     .pmed-loja { border: 1px solid #dee2e6; border-radius: .5rem;
                  margin-bottom: 1rem; overflow-x: auto; }
-    .pmed-loja > h5 { background: #f1f3f5; margin: 0; padding: .5rem .75rem;
+    .pmed-loja > .pmed-loja-head { background: #f1f3f5; margin: 0; padding: .5rem .75rem;
                       font-size: 1rem; position: sticky; left: 0; }
+    .pmed-loja-head h5 { font-size: 1rem; }
     .pmed table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
     .pmed th, .pmed td {
         padding: .35rem .5rem; border-bottom: 1px solid #f0f0f0;
@@ -43,68 +44,61 @@
     .pmed .badge-ctx { font-size: .62rem; vertical-align: middle; }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-    <h3 class="mb-0"><i class="bi bi-box-seam"></i> Pedidos da semana —
-        <span class="text-muted">por venda + estoque</span></h3>
-    <div class="d-flex gap-2 flex-wrap">
-        <a href="{{ url_for('producao.pedidos_semana_estoque', horizonte=horizonte, janela=janela, inicio=inicio, seguranca=seguranca, comparar=0 if comparar else 1) }}"
-           class="btn btn-sm {{ 'btn-secondary' if comparar else 'btn-outline-secondary' }}"
-           title="Mostra o número do motor de média sob cada célula — os dois motores lado a lado, sem mudar nenhuma conta">
-            <i class="bi bi-arrow-left-right"></i> Comparar motores
-        </a>
-        <a href="{{ url_for('producao.pedidos_semana_media', horizonte=horizonte, janela=janela, inicio=inicio, comparar=1 if comparar else none) }}"
-           class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-table"></i> Modo média do pedido
-        </a>
-        <a href="{{ url_for('producao.previsao_acuracia') }}"
-           class="btn btn-sm btn-outline-secondary"
-           title="Quanto cada motor acertou vs o realizado (viés e WAPE)">
-            <i class="bi bi-bullseye"></i> Acurácia
-        </a>
-        <a href="{{ url_for('producao.painel', horizonte=horizonte, janela=janela, inicio=inicio) }}"
-           class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-arrow-left"></i> Balanço
-        </a>
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+        <h1 class="h3 mb-1">Pedidos da semana</h1>
+        <p class="text-muted mb-1">Vendas e estoque: revise a reposição sugerida para cada loja e dia de entrega.</p>
+        <span class="small text-muted">{{ grade.dias[0].label if grade.dias else '' }} a {{ grade.dias[-1].label if grade.dias else '' }} · {{ horizonte }} dias</span>
     </div>
+    <a href="{{ url_for('pedidos.lista') }}" class="btn btn-outline-secondary">Ver pedidos das lojas</a>
 </div>
 
-<form method="GET" class="d-flex gap-1 align-items-center mb-3 flex-wrap">
-    <label class="small text-muted mb-0">A partir de:</label>
-    <select name="inicio" class="form-select form-select-sm" style="width:auto;">
-        {% for n in range(0, 15) %}
-        <option value="{{ n }}" {{ 'selected' if inicio == n }}>
-            {{ 'Hoje' if n == 0 else ('Amanhã' if n == 1 else '+%d dias' % n) }}</option>
-        {% endfor %}
-    </select>
-    <label class="small text-muted mb-0 ms-2">Horizonte (dias):</label>
-    <input type="number" name="horizonte" min="1" max="14" value="{{ horizonte }}"
-           class="form-control form-control-sm" style="width:64px;">
-    <label class="small text-muted mb-0 ms-2">Histórico (sem):</label>
-    <input type="number" name="janela" min="1" max="26" value="{{ janela }}"
-           class="form-control form-control-sm" style="width:64px;">
-    <label class="small text-muted mb-0 ms-2"
-           title="Colchão de segurança: o pedido deixa N% do consumo do dia sobrando no fim do dia (protege contra dia acima da média). 0 = repõe exatamente a média.">Segurança (%):</label>
-    <input type="number" name="seguranca" min="0" max="100" value="{{ seguranca }}"
-           class="form-control form-control-sm" style="width:64px;">
-    {% if comparar %}<input type="hidden" name="comparar" value="1">{% endif %}
-    <button class="btn btn-sm btn-outline-secondary">Recalcular</button>
-</form>
+<details class="page-options mb-3"{% if comparar %} open{% endif %}>
+    <summary>Período e opções de planejamento{% if seguranca %} · reserva extra de {{ seguranca }}%{% endif %}{% if comparar %} · comparação ativa{% endif %}</summary>
+    <div class="d-flex gap-2 flex-wrap mt-3 mb-3">
+        <a href="{{ url_for('producao.pedidos_semana_estoque', horizonte=horizonte, janela=janela, inicio=inicio, seguranca=seguranca, comparar=0 if comparar else 1) }}"
+           class="btn btn-sm {{ 'btn-secondary' if comparar else 'btn-outline-secondary' }}"
+           title="Exibe a sugestão por média de pedidos abaixo de cada quantidade, sem alterar os pedidos">
+            <i class="bi bi-arrow-left-right"></i> {{ 'Encerrar comparação' if comparar else 'Comparar sugestões' }}
+        </a>
+        <a href="{{ url_for('producao.pedidos_semana_media', horizonte=horizonte, janela=janela, inicio=inicio, comparar=1 if comparar else none) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-table"></i> Planejar pela média de pedidos
+        </a>
+        <a href="{{ url_for('producao.previsao_acuracia') }}" class="btn btn-sm btn-outline-secondary" title="Compare as previsões com o que realmente aconteceu">
+            <i class="bi bi-bullseye"></i> Precisão das previsões
+        </a>
+        <a href="{{ url_for('producao.painel', horizonte=horizonte, janela=janela, inicio=inicio) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Estoque e demanda da produção
+        </a>
+    </div>
+    <form method="GET" class="d-flex gap-1 align-items-center flex-wrap">
+        <label for="semana-inicio" class="small text-muted mb-0">A partir de:</label>
+        <select id="semana-inicio" name="inicio" class="form-select form-select-sm" style="width:auto;">
+            {% for n in range(0, 15) %}
+            <option value="{{ n }}" {{ 'selected' if inicio == n }}>{{ 'Hoje' if n == 0 else ('Amanhã' if n == 1 else '+%d dias' % n) }}</option>
+            {% endfor %}
+        </select>
+        <label for="semana-dias" class="small text-muted mb-0 ms-2">Dias:</label>
+        <input id="semana-dias" type="number" name="horizonte" min="1" max="14" value="{{ horizonte }}" class="form-control form-control-sm" style="width:64px;">
+        <label for="semana-historico" class="small text-muted mb-0 ms-2">Histórico em semanas:</label>
+        <input id="semana-historico" type="number" name="janela" min="1" max="26" value="{{ janela }}" class="form-control form-control-sm" style="width:64px;">
+        <label for="semana-seguranca" class="small text-muted mb-0 ms-2" title="Percentual do consumo diário a manter como reserva no fim do dia. Zero repõe a média prevista.">Reserva extra (%):</label>
+        <input id="semana-seguranca" type="number" name="seguranca" min="0" max="100" value="{{ seguranca }}" class="form-control form-control-sm" style="width:64px;">
+        {% if comparar %}<input type="hidden" name="comparar" value="1">{% endif %}
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Atualizar sugestões</button>
+    </form>
+</details>
 
-<div class="alert alert-light border small dica-recolhe">
-    <strong>Ponto de reposição.</strong> Para cada produto, o sistema mede o
-    <strong>consumo médio por dia-da-semana</strong> da loja — venda de todos os
-    canais (PDV, site, saída em lote e venda manual, com cancelamentos
-    descontados) mais a merma estrutural (devolução à indústria e perda) — com
-    <strong>peso maior no recente</strong> e proteção contra pico isolado, e
-    simula o estoque dia a dia a partir do <strong>saldo atual</strong>. Quando o
-    estoque projetado não cobre o consumo do dia, ele pede o que falta
-    <strong>arredondado pra cima na caixa</strong> (respeitando o mínimo do item)
-    — o excedente vira estoque que cobre os próximos dias (por isso item lento
-    recebe 1 caixa a cada N dias, sem acumular). Entrega <strong>diária</strong>
-    (v1). Dias já pedidos ficam travados; o gerar pula. Ajuste à vontade — entra
-    como <strong>rascunho</strong>. <strong>Dia que já tem pedido salva
-    sozinho</strong> assim que você para de digitar (o ↻ vira "salvo") — não
-    precisa apertar "atualizar". Dia sem pedido ainda é criado pelo botão Gerar.
+<div class="alert alert-light border small">
+    <strong>Revise as quantidades e gere os pedidos de cada loja.</strong>
+    Novos pedidos ficam como rascunho. Quantidades em azul pertencem a pedidos existentes
+    e, quando editáveis, salvam automaticamente; campos bloqueados são ajustados na tela do pedido.
+    <details class="mt-2">
+        <summary>Como a sugestão é calculada</summary>
+        <p class="mt-2 mb-0">O sistema considera o consumo por dia da semana e projeta o estoque da loja.
+        Sugere a quantidade que falta, respeitando os lotes e mínimos cadastrados.
+        O excedente cobre os dias seguintes. Itens frescos seguem a reposição diária indicada na linha.</p>
+    </details>
 </div>
 
 <form method="POST" action="{{ url_for('producao.pedidos_semana_gerar') }}"
@@ -123,21 +117,26 @@
     {% if grade.lojas %}
     {% for loja in grade.lojas %}
     <div class="pmed-loja">
-        <h5 class="d-flex justify-content-between align-items-center gap-2">
-            <span>{{ loja.loja_nome }}</span>
-            <span class="d-flex gap-2 flex-wrap">
-                <button type="button" class="btn btn-sm btn-outline-dark btn-ia-loja"
-                        data-loja="{{ loja.loja_id }}" data-loja-nome="{{ loja.loja_nome }}"
-                        title="A IA (Opus) revisa a sugestão de venda+estoque com contexto (calendário, estoque, desperdício recente) e preenche a grade — você revisa e clica Gerar como sempre">
-                    <i class="bi bi-stars"></i> Sugerir por IA
-                </button>
+        <div class="pmed-loja-head d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <h5 class="mb-0"><span>{{ loja.loja_nome }}</span></h5>
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <details class="small">
+                    <summary class="text-muted">Mais opções</summary>
+                    <div class="d-flex gap-2 flex-wrap mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-dark btn-ia-loja"
+                                data-loja="{{ loja.loja_id }}" data-loja-nome="{{ loja.loja_nome }}"
+                                title="Preenche as sugestões com ajuda da IA; revise as quantidades antes de gerar os pedidos">
+                            <i class="bi bi-stars"></i> Sugerir por IA
+                        </button>
+                    </div>
+                </details>
                 <button type="submit" name="so_loja" value="{{ loja.loja_id }}"
                         class="btn btn-sm btn-success"
-                        data-confirm="Gerar os pedidos rascunho de {{ loja.loja_nome }}? Entram como pendente pra você revisar e confirmar.">
-                    <i class="bi bi-plus-square"></i> Gerar só esta loja
+                        data-confirm="Gerar os novos pedidos de {{ loja.loja_nome }} como rascunho e salvar alterações nos pedidos existentes que ainda permitem edição?">
+                    <i class="bi bi-plus-square"></i> Gerar pedidos da loja
                 </button>
-            </span>
-        </h5>
+            </div>
+        </div>
         <div class="ia-painel alert alert-light border small d-none mb-2"
              data-loja-painel="{{ loja.loja_id }}"></div>
         <div class="pmed">
@@ -180,8 +179,8 @@
                                    class="form-control form-control-sm pmed-cel{% if travado %} tem-pedido{% endif %}"
                                    name="qtd|{{ loja.loja_id }}|{{ dia.data }}|{{ p.item_key }}"
                                    value="{{ pedido_dia if travado else p.por_dia[loop.index0] }}"
-                                   {% if travado and not editavel %}disabled title="já tem pedido neste dia (em separação/entrega, ou mais de um) — mostrando o que FOI pedido ({{ pedido_dia }} un); edite pela tela do pedido"{% endif %}
-                                   {% if editavel %}title="pedido JÁ FEITO neste dia ({{ pedido_dia }} un) — edite e use o ↻ atualizar da coluna (0 remove o item)"{% endif %}>
+                                   {% if travado and not editavel %}disabled title="Pedido existente ({{ pedido_dia }} un). Ajuste pela tela do pedido: este dia está em separação/entrega ou tem mais de um pedido."{% endif %}
+                                   {% if editavel %}title="Pedido existente ({{ pedido_dia }} un). Salva automaticamente após a edição; zero remove o item."{% endif %}>
                             {% if comparar and not travado and p.receita_id %}
                             {% set cp = contraprova.get(loja.loja_id, {}).get(p.receita_id) %}
                             {% if cp is not none %}
@@ -202,18 +201,16 @@
 
     <div class="pmed-barra d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span class="text-muted small">
-            Gere <strong>loja a loja</strong> no botão de cada card, ou todas de uma vez aqui.
-            Entram como <strong>rascunho</strong> pra você revisar.
+            Novos pedidos ficam como rascunho para revisar e confirmar em <a href="{{ url_for('pedidos.lista') }}">Pedidos das lojas</a>.
         </span>
         <button type="submit" name="gerar_todas" value="1" class="btn btn-outline-success"
-                data-confirm="Gerar os pedidos rascunho de TODAS as lojas de uma vez? Eles entram como pendente pra você revisar e confirmar.">
-            <i class="bi bi-plus-square"></i> Gerar TODAS as lojas
+                data-confirm="Gerar novos pedidos como rascunho e salvar alterações nos pedidos editáveis de todas as lojas?">
+            <i class="bi bi-plus-square"></i> Gerar pedidos de todas as lojas
         </button>
     </div>
     {% else %}
-    <p class="text-muted">Nenhum produto precisa de pedido no horizonte — o
-        estoque das lojas cobre a venda prevista, ou não há histórico de venda
-        suficiente.</p>
+    <p class="text-muted">Nenhuma reposição sugerida neste período. O estoque cobre a previsão ou ainda não há histórico suficiente.
+        Para conferir ou criar um pedido, <a href="{{ url_for('pedidos.lista') }}">abra os pedidos das lojas</a>.</p>
     {% endif %}
 </form>
 {% endblock %}

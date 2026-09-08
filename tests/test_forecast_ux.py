@@ -80,10 +80,13 @@ def test_comparar_motores_na_grade_da_media(app, admin_user):
     c = _login(app)
     sem = c.get('/producao/pedidos-semana/media').get_data(as_text=True)
     assert 'class="cp' not in sem
-    assert 'Comparar motores' in sem                # o toggle existe
+    assert 'Comparar sugestões' in sem
+    assert '<details class="page-options mb-3">' in sem
     com = c.get('/producao/pedidos-semana/media?comparar=1') \
            .get_data(as_text=True)
     assert 'class="cp' in com
+    assert '<details class="page-options mb-3" open>' in com
+    assert 'Encerrar comparação' in com
     assert 'Motor venda+estoque sugere' in com
 
 
@@ -96,6 +99,8 @@ def test_comparar_motores_na_grade_de_estoque(app, admin_user):
     com = c.get('/producao/pedidos-semana/estoque?comparar=1') \
            .get_data(as_text=True)
     assert 'class="cp' in com
+    assert '<details class="page-options mb-3" open>' in com
+    assert 'Encerrar comparação' in com
     assert 'Motor de média sugere' in com
 
 

@@ -8,12 +8,15 @@
 
   Ao adicionar/remover uma função de uma área, mexa SÓ aqui — os dois lugares
   atualizam juntos. Os guardas de permissão por link são os mesmos da sidebar.
+  primary=true destaca a função na área v2; as demais ficam em Mais opções.
+  As duas seções usam esta mesma lista, sem duplicar destinos ou permissões.
 #}
 
-{% macro _lnk(variant, url, label, active=false, sub=false, icon='', blank=false, title='') -%}
+{% macro _lnk(variant, url, label, active=false, sub=false, icon='', blank=false, title='', primary=false) -%}
+{%- if variant not in ['area-v2-main', 'area-v2-more'] or (variant == 'area-v2-main' and primary) or (variant == 'area-v2-more' and not primary) -%}
 {%- if variant == 'sidebar' -%}
 <a href="{{ url }}" class="sidebar-link{% if sub %} ps-4 small{% endif %}{% if active %} active{% endif %}"{% if blank %} target="_blank"{% endif %}{% if title %} title="{{ title }}"{% endif %}>{% if icon %}<i class="bi {{ icon }}"></i> {% endif %}{{ label }}</a>
-{%- elif variant == 'area-v2' -%}
+{%- elif variant in ['area-v2', 'area-v2-main', 'area-v2-more'] -%}
 <a href="{{ url }}" class="area-v2-link{% if sub %} area-v2-link-sub{% endif %}"{% if blank %} target="_blank" rel="noopener"{% endif %}>
     <span class="area-v2-link-icon"><i class="bi {{ icon or 'bi-arrow-right' }}"></i></span>
     <span class="area-v2-link-copy"><strong>{{ label }}</strong>{% if title %}<small>{{ title }}</small>{% endif %}</span>
@@ -22,10 +25,13 @@
 {%- else -%}
 <a href="{{ url }}" class="area-link{% if sub %} area-link-sub{% endif %}"{% if blank %} target="_blank"{% endif %}{% if title %} title="{{ title }}"{% endif %}><span class="area-link-ic"><i class="bi {{ icon or 'bi-arrow-right-short' }}"></i></span><span class="area-link-txt">{{ label }}</span></a>
 {%- endif -%}
+{%- endif -%}
 {%- endmacro %}
 
 {% macro _sub(variant, label) -%}
-{%- if variant == 'sidebar' -%}
+{%- if variant in ['area-v2-main', 'area-v2-more'] -%}
+{# As entradas resumidas usam a seção principal e Mais opções. #}
+{%- elif variant == 'sidebar' -%}
 <div class="px-3 pt-2 pb-1 text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.5px;">{{ label }}</div>
 {%- elif variant == 'area-v2' -%}
 <div class="area-v2-subhead">{{ label }}</div>
@@ -38,7 +44,7 @@
 {% macro lojas(variant) %}
 {{ _sub(variant, 'Rotina da loja e equipe') }}
 {% if current_user.pode_checklist() and not current_user.somente_treino %}
-{{ _lnk(variant, url_for('checklist.index'), 'Checklist da loja', request.path in ['/checklist/', '/checklist'] or request.path.startswith('/checklist/preencher'), icon='bi-clipboard-check') }}
+{{ _lnk(variant, url_for('checklist.index'), 'Checklist da loja', request.path in ['/checklist/', '/checklist'] or request.path.startswith('/checklist/preencher'), icon='bi-clipboard-check', primary=true, title='Confira e preencha a rotina da loja') }}
 {% endif %}
 {% if current_user.pode_organizar_equipe() %}
 {{ _lnk(variant, url_for('rh.lideranca_preenchimento'), 'Organizar equipe', request.path == '/rh/lideranca/preenchimento', icon='bi-diagram-3', title='Líder, loja e período de cada pessoa') }}
@@ -52,8 +58,8 @@
 {{ _lnk(variant, url_for('checklist.conferencia'), 'Checklist — conferência', request.path == '/checklist/conferencia', sub=true) }}
 {% endif %}
 {{ _sub(variant, 'Pedidos e estoque') }}
-{{ _lnk(variant, url_for('pedidos.lista'), 'Pedidos', request.path in ['/pedidos/', '/pedidos']) }}
-{{ _lnk(variant, url_for('pedidos.estoque_loja'), 'Estoque Loja', request.path == '/pedidos/estoque-loja') }}
+{{ _lnk(variant, url_for('pedidos.lista'), 'Pedidos das lojas', request.path in ['/pedidos/', '/pedidos'], primary=true, title='Acompanhe o que cada loja pediu e recebeu', icon='bi-bag') }}
+{{ _lnk(variant, url_for('pedidos.estoque_loja'), 'Estoque das lojas', request.path == '/pedidos/estoque-loja', primary=true, title='Consulte os produtos disponíveis em cada loja', icon='bi-box-seam') }}
 {{ _lnk(variant, url_for('pedidos.estoque_loja_diario'), 'Movimento do Dia', request.path == '/pedidos/estoque-loja/diario') }}
 {{ _lnk(variant, url_for('pedidos.estoque_loja_historico'), 'Histórico do estoque', request.path == '/pedidos/estoque-loja/historico') }}
 {{ _lnk(variant, url_for('pedidos.desperdicio'), 'Desperdício', '/pedidos/desperdicio' in request.path) }}
@@ -61,7 +67,7 @@
 {% if current_user.is_dono() %}
 {{ _lnk(variant, url_for('pedidos.tiny_skus_transferencia'), 'SKUs NF de transferência', request.path.startswith('/pedidos/tiny-skus-transferencia'), sub=true) }}
 {% endif %}
-{{ _lnk(variant, url_for('lista_compras.index'), 'Lista de Compras', request.path in ['/lista-compras', '/lista-compras/']) }}
+{{ _lnk(variant, url_for('lista_compras.index'), 'Lista de Compras', request.path in ['/lista-compras', '/lista-compras/'], primary=true, title='Peça os materiais que faltam na loja', icon='bi-cart') }}
 {% if current_user.is_admin() %}
 {{ _lnk(variant, url_for('lista_compras.calculadora'), 'Calculadora de compras', request.path == '/lista-compras/calculadora', sub=true) }}
 {% endif %}
@@ -75,14 +81,14 @@
 {% macro producao(variant) %}
 {% if current_user.is_admin() %}
 {{ _lnk(variant, url_for('producao.painel'), 'Painel de produção', '/producao/painel' in request.path, icon='bi-clipboard-data') }}
-{{ _lnk(variant, url_for('industria_teste.index'), 'Cronograma', '/telaindustriateste' in request.path, icon='bi-calendar-week') }}
-{{ _lnk(variant, url_for('padeiro.index'), 'Tela do padeiro', request.path == '/padeiro' or request.path.startswith('/padeiro/'), icon='bi-hammer') }}
-{{ _lnk(variant, url_for('producao.pedidos_semana_media'), 'Pedidos da semana', '/pedidos-semana' in request.path, icon='bi-cart-plus') }}
+{{ _lnk(variant, url_for('industria_teste.index'), 'Plano de produção', '/telaindustriateste' in request.path, icon='bi-calendar-week', primary=true, title='Confira as quantidades e envie as ordens do dia') }}
+{{ _lnk(variant, url_for('padeiro.index'), 'Tela do padeiro', request.path == '/padeiro' or request.path.startswith('/padeiro/'), icon='bi-hammer', primary=true, title='Veja as ordens e confirme o que foi produzido') }}
+{{ _lnk(variant, url_for('producao.pedidos_semana_media'), 'Pedidos semanais das lojas', '/pedidos-semana' in request.path, icon='bi-cart-plus') }}
 {{ _lnk(variant, url_for('producao.perdas_admin'), 'Perdas da produção', '/producao/perdas' in request.path, icon='bi-fire') }}
 {% endif %}
 {{ _lnk(variant, url_for('producao.lista'), 'Listas de compra', request.path.startswith('/producao') and '/painel' not in request.path and '/pedidos-semana' not in request.path and '/perdas' not in request.path) }}
-{{ _lnk(variant, url_for('pedidos.congelados'), 'Congelados', '/pedidos/congelados' in request.path) }}
-{{ _lnk(variant, url_for('pedidos.separacao'), 'Pedidos a Separar', '/pedidos/separacao' in request.path) }}
+{{ _lnk(variant, url_for('pedidos.congelados'), 'Estoque de congelados', '/pedidos/congelados' in request.path, primary=true, title='Confira os saldos e registre a contagem física', icon='bi-snow') }}
+{{ _lnk(variant, url_for('pedidos.separacao'), 'Separar pedidos das lojas', '/pedidos/separacao' in request.path, primary=true, title='Separe os itens pedidos pelas lojas', icon='bi-box-seam') }}
 {% if current_user.is_admin() %}
 {{ _sub(variant, 'Configuração') }}
 {{ _lnk(variant, url_for('receitas.amassadeira'), 'Produção por categoria', request.path == '/receitas/amassadeira', icon='bi-gear-wide-connected') }}
@@ -92,10 +98,10 @@
 
 
 {% macro catalogo(variant) %}
-{{ _lnk(variant, url_for('materias_primas.banco'), 'Matérias-primas', request.path in ['/materias-primas/', '/materias-primas']) }}
-{{ _lnk(variant, url_for('materias_primas.estoque'), 'Estoque de matérias-primas', '/materias-primas/estoque' in request.path) }}
-{{ _lnk(variant, url_for('fornecedores.lista'), 'Fornecedores', request.path.startswith('/fornecedores')) }}
-{{ _lnk(variant, url_for('produtos.lista'), 'Produtos / Cestas', request.path.startswith('/produtos')) }}
+{{ _lnk(variant, url_for('materias_primas.banco'), 'Matérias-primas', request.path in ['/materias-primas/', '/materias-primas'], primary=true, title='Consulte ingredientes, fornecedores e custos', icon='bi-flower1') }}
+{{ _lnk(variant, url_for('materias_primas.estoque'), 'Estoque de matérias-primas', '/materias-primas/estoque' in request.path, primary=true, title='Confira o saldo dos ingredientes', icon='bi-box-seam') }}
+{{ _lnk(variant, url_for('fornecedores.lista'), 'Fornecedores', request.path.startswith('/fornecedores'), primary=true, title='Encontre contatos e dados dos fornecedores', icon='bi-truck') }}
+{{ _lnk(variant, url_for('produtos.lista'), 'Produtos / Cestas', request.path.startswith('/produtos'), primary=true, title='Consulte os produtos e a composição das cestas', icon='bi-basket') }}
 {{ _lnk(variant, url_for('main.cardapio', tipo='atacado'), 'Cardápio PDF', request.path == '/cardapio') }}
 {{ _lnk(variant, url_for('receitas.precos'), 'Editar preços em massa', request.path == '/receitas/precos') }}
 {{ _lnk(variant, url_for('receitas.reaproveitavel'), 'Marcar reaproveitáveis', request.path == '/receitas/reaproveitavel') }}
@@ -110,10 +116,10 @@
 
 {% macro vendas(variant) %}
 {% if variant != 'sidebar' and (current_user.is_admin() or current_user.is_gerente()) %}
-{{ _lnk(variant, url_for('main.loja_online_pedidos'), 'Pedidos do site', request.path.startswith('/admin/loja-online/pedidos'), icon='bi-bag', title='Consultar compras, pagamentos e entregas') }}
+{{ _lnk(variant, url_for('main.loja_online_pedidos'), 'Pedidos do site', request.path.startswith('/admin/loja-online/pedidos'), icon='bi-bag', title='Consultar compras, pagamentos e entregas', primary=true) }}
 {% endif %}
 {% if current_user.pode_pdv() %}
-{{ _lnk(variant, url_for('pdv.index'), 'Vendas do Caixa (PDV)', request.path in ['/pdv/', '/pdv']) }}
+{{ _lnk(variant, url_for('pdv.index'), 'Vendas do Caixa (PDV)', request.path in ['/pdv/', '/pdv'], primary=true, title='Acompanhe as vendas registradas no caixa', icon='bi-receipt') }}
 {{ _lnk(variant, url_for('pdv.itens_vendidos'), 'Itens Vendidos', '/pdv/itens-vendidos' in request.path, sub=true) }}
 {{ _lnk(variant, url_for('pdv.mapeamentos'), 'Vincular produtos do caixa', '/pdv/mapeamentos' in request.path, sub=true) }}
 {{ _lnk(variant, url_for('pdv.tiny_pdv'), 'PDV do Tiny (Cantina)', '/pdv/tiny' in request.path, sub=true) }}
@@ -121,11 +127,11 @@
 {{ _lnk(variant, url_for('pdv.reconciliacao'), 'Conferência de vendas', '/pdv/reconciliacao' in request.path, sub=true) }}
 {% endif %}
 {% if current_user.is_admin() %}
-{{ _lnk(variant, url_for('b2b.dashboard'), 'Vendas B2B (Indústria)', request.path.startswith('/b2b') and '/orcamento' not in request.path and '/leads' not in request.path) }}
+{{ _lnk(variant, url_for('b2b.dashboard'), 'Vendas B2B (Indústria)', request.path.startswith('/b2b') and '/orcamento' not in request.path and '/leads' not in request.path, primary=true, title='Acompanhe as vendas para empresas', icon='bi-building') }}
 {{ _lnk(variant, url_for('b2b.orcamentos'), 'Orçamentos B2B', '/b2b/orcamento' in request.path) }}
 {{ _lnk(variant, url_for('b2b.leads'), 'Leads B2B (bot)', '/b2b/leads' in request.path, sub=true) }}
 {{ _lnk(variant, url_for('entregas.painel'), '🔔 Painel do Dia', false, blank=true) }}
-{{ _lnk(variant, url_for('entregas.index'), 'Entregas do site', request.path.startswith('/entregas') and '/painel' not in request.path and '/drivers/bulk' not in request.path) }}
+{{ _lnk(variant, url_for('entregas.index'), 'Entregas do site', request.path.startswith('/entregas') and '/painel' not in request.path and '/drivers/bulk' not in request.path, primary=true, title='Organize as entregas e acompanhe os pedidos', icon='bi-truck') }}
 {{ _lnk(variant, url_for('entregas.drivers_bulk'), 'Motoristas', request.path == '/entregas/drivers/bulk') }}
 {% endif %}
 {% if current_user.is_owner %}
@@ -140,12 +146,12 @@
 
 
 {% macro financeiro(variant) %}
-{{ _lnk(variant, url_for('cobrancas.visao_geral'), 'Cobranças', request.path.startswith('/cobrancas'), title='A receber, NF + boleto, envios e pagamentos', icon='bi-receipt') }}
-{{ _lnk(variant, url_for('contas_pagar.lista'), 'Contas a Pagar', request.path in ['/contas-pagar/', '/contas-pagar']) }}
+{{ _lnk(variant, url_for('cobrancas.visao_geral'), 'Cobranças', request.path.startswith('/cobrancas'), title='A receber, NF + boleto, envios e pagamentos', icon='bi-receipt', primary=true) }}
+{{ _lnk(variant, url_for('contas_pagar.lista'), 'Contas a Pagar', request.path in ['/contas-pagar/', '/contas-pagar'], primary=true, title='Confira vencimentos e registre pagamentos', icon='bi-calendar-check') }}
 {{ _lnk(variant, url_for('contas_pagar.canais'), 'Canais do Slack', request.path.startswith('/contas-pagar/canais'), sub=true, title='Qual canal do Slack pertence a qual loja') }}
 {{ _lnk(variant, url_for('contas_pagar.mapeamentos'), 'Vincular itens de NF', request.path.startswith('/contas-pagar/mapeamentos'), sub=true, title='Ligar cada item das notas fiscais à matéria-prima do estoque') }}
 {{ _lnk(variant, url_for('contas_pagar.variacoes'), 'Preços dos insumos', request.path.startswith('/contas-pagar/variacoes'), sub=true, title='Preço dos insumos subindo/caindo, nota a nota') }}
-{{ _lnk(variant, url_for('main.caixa'), 'Caixa Diário', request.path == '/caixa') }}
+{{ _lnk(variant, url_for('main.caixa'), 'Caixa Diário', request.path == '/caixa', primary=true, title='Acompanhe as entradas e saídas do dia', icon='bi-cash-stack') }}
 {{ _lnk(variant, url_for('main.rentabilidade'), 'Rentabilidade', request.path == '/rentabilidade') }}
 {% endmacro %}
 
@@ -155,12 +161,12 @@
 {{ _lnk(variant, url_for('rh.lideranca_preenchimento'), 'Organizar equipe', request.path == '/rh/lideranca/preenchimento', icon='bi-diagram-3', title='Líder, loja e período de cada pessoa') }}
 {% endif %}
 {{ _lnk(variant, url_for('rh.dashboard'), 'Painel RH', request.path == '/rh/') }}
-{{ _lnk(variant, url_for('rh.funcionarios'), 'Funcionários', '/rh/funcionarios' in request.path) }}
+{{ _lnk(variant, url_for('rh.funcionarios'), 'Funcionários', '/rh/funcionarios' in request.path, primary=true, title='Consulte e atualize a ficha de cada pessoa', icon='bi-people') }}
 {{ _lnk(variant, url_for('rh.lideranca'), 'Liderança e observações', '/rh/lideranca' in request.path) }}
 {{ _lnk(variant, url_for('rh.pre_cadastros'), 'Pré-cadastro (QR)', '/rh/pre-cadastros' in request.path) }}
 {% if current_user.is_dono() %}
-{{ _lnk(variant, url_for('rh.folha'), 'Folha de Pagamento', '/rh/folha' in request.path and '/importar' not in request.path) }}
-{{ _lnk(variant, url_for('rh.plano_carreira'), 'Plano de cargos e carreira', '/rh/plano-carreira' in request.path, icon='bi-signpost-split', title='Faixas N1–N5, enquadramento, regras de promoção e treinamento') }}
+{{ _lnk(variant, url_for('rh.folha'), 'Folha de Pagamento', '/rh/folha' in request.path and '/importar' not in request.path, primary=true, title='Confira os valores da folha por funcionário', icon='bi-cash-stack') }}
+{{ _lnk(variant, url_for('rh.plano_carreira'), 'Plano de cargos e carreira', '/rh/plano-carreira' in request.path, icon='bi-signpost-split', title='Faixas N1–N5, enquadramento, regras de promoção e treinamento', primary=true) }}
 {{ _lnk(variant, url_for('rh.folha_importar'), 'Importar folha (xlsx)', '/rh/folha/importar' in request.path) }}
 {{ _lnk(variant, url_for('rh.contatos_importar'), 'Importar contatos (xlsx)', '/rh/contatos/importar' in request.path, title='E-mail e celular dos funcionários por planilha — o contato da ficha é o que vale nas assinaturas eletrônicas') }}
 {% endif %}
@@ -168,7 +174,7 @@
 {% if current_user.is_dono() %}
 {{ _lnk(variant, url_for('rh.cargos'), 'Cargos', request.path == '/rh/cargos') }}
 {% endif %}
-{{ _lnk(variant, url_for('rh.escala'), 'Escala Operacional', '/rh/escala' in request.path and '/mapa' not in request.path) }}
+{{ _lnk(variant, url_for('rh.escala'), 'Escala Operacional', '/rh/escala' in request.path and '/mapa' not in request.path, primary=true, icon='bi-calendar3', title='Confira as posições por loja e turno') }}
 {{ _lnk(variant, url_for('rh.mapa_index'), 'Mapa das Lojas', '/rh/mapa' in request.path) }}
 {{ _lnk(variant, url_for('rh.ponto'), 'Ponto', '/rh/ponto' in request.path) }}
 {{ _lnk(variant, url_for('rh.ferias'), 'Férias / Folgas', '/rh/ferias' in request.path) }}
@@ -176,15 +182,15 @@
 
 
 {% macro relatorios(variant) %}
-{{ _lnk(variant, url_for('relatorios.dashboards'), 'Dashboards', request.path == '/relatorios/dashboards') }}
-{{ _lnk(variant, url_for('relatorios.custos'), 'Custos', request.path == '/relatorios/custos') }}
-{{ _lnk(variant, url_for('relatorios.previsao'), 'Previsão de demanda', request.path.startswith('/relatorios/previsao')) }}
+{{ _lnk(variant, url_for('relatorios.dashboards'), 'Dashboards', request.path == '/relatorios/dashboards', primary=true, title='Compare os indicadores da operação', icon='bi-bar-chart') }}
+{{ _lnk(variant, url_for('relatorios.custos'), 'Custos', request.path == '/relatorios/custos', primary=true, title='Consulte os custos de produção', icon='bi-calculator') }}
+{{ _lnk(variant, url_for('relatorios.previsao'), 'Previsão de demanda', request.path.startswith('/relatorios/previsao'), primary=true, title='Consulte a previsão de demanda', icon='bi-graph-up') }}
 {% endmacro %}
 
 
 {% macro administracao(variant) %}
-{{ _lnk(variant, url_for('main.manual_operacao'), 'Manual de operação', request.path == '/admin/manual', title='O que roda sozinho, o que é diário/semanal/mensal e de quem é cada gesto') }}
-{{ _lnk(variant, url_for('auth.usuarios'), 'Usuários', request.path == '/auth/usuarios') }}
+{{ _lnk(variant, url_for('main.manual_operacao'), 'Manual de operação', request.path == '/admin/manual', title='O que roda sozinho, o que é diário/semanal/mensal e de quem é cada gesto', primary=true, icon='bi-book') }}
+{{ _lnk(variant, url_for('auth.usuarios'), 'Usuários', request.path == '/auth/usuarios', primary=true, title='Gerencie quem acessa o sistema', icon='bi-person-lock') }}
 {% if current_user.is_dono() %}
 {{ _lnk(variant, url_for('main.briefing_dono_view'), 'Briefing do dono', request.path == '/admin/briefing', title='Vendas de ontem + pendências + custo de IA, sob demanda (sem envio automático)') }}
 {{ _lnk(variant, url_for('main.permissoes_editar'), 'Permissões por papel', request.path == '/admin/permissoes') }}
@@ -196,8 +202,8 @@
 {% endif %}
 {{ _lnk(variant, url_for('main.clientes'), 'Clientes', request.path == '/admin/clientes', title='Cadastros do varejo (site + portal Wi-Fi) — com export pra campanhas') }}
 {{ _lnk(variant, url_for('patrimonio.index'), 'Patrimônio', request.path.startswith('/patrimonio'), title='Inventário de móveis e equipamentos com etiquetas QR') }}
-{{ _lnk(variant, url_for('treino.admin_home'), 'Treinamento', request.path.startswith('/treino'), title='Montar trilhas, vídeos, quizzes, recompensas e acessos dos funcionários') }}
-{{ _lnk(variant, url_for('main.audit'), 'Histórico de alterações', request.path == '/audit', title='Quem mudou o quê e quando') }}
+{{ _lnk(variant, url_for('treino.admin_home'), 'Treinamento', request.path.startswith('/treino'), title='Montar trilhas, vídeos, quizzes, recompensas e acessos dos funcionários', primary=true, icon='bi-mortarboard') }}
+{{ _lnk(variant, url_for('main.audit'), 'Histórico de alterações', request.path == '/audit', title='Quem mudou o quê e quando', primary=true, icon='bi-clock-history') }}
 {{ _lnk(variant, url_for('slack.install'), 'Slack Bot', request.path.startswith('/slack')) }}
 {{ _lnk(variant, url_for('notificacoes.index'), 'Notificações WhatsApp', request.path.startswith('/notificacoes')) }}
 {{ _lnk(variant, url_for('main.spotify_admin'), 'Spotify (música do padeiro)', request.path.startswith('/admin/spotify'), title='Conectar a conta do Spotify que a tela do padeiro controla') }}
@@ -205,12 +211,12 @@
 
 
 {% macro fichas(variant) %}
-{{ _lnk(variant, url_for('receitas.padeiro_lista'), 'Modo Padeiro', request.path == '/receitas/padeiro') }}
+{{ _lnk(variant, url_for('receitas.padeiro_lista'), 'Modo Padeiro', request.path == '/receitas/padeiro', primary=true, title='Consulte receitas e modo de preparo', icon='bi-book') }}
 {# Fichas é a única seção da sidebar que renderiza pra usuário ANÔNIMO (fica
    fora do bloco is_authenticated). AnonymousUser não tem .is_admin() — por isso
    o is_authenticated precede o is_admin(), igual ao base.html original. #}
 {% if current_user.is_authenticated and current_user.is_admin() %}
-{{ _lnk(variant, url_for('auth.painel'), 'Fichas atribuídas', request.path == '/auth/painel', title='Fichas técnicas atribuídas a funcionários') }}
+{{ _lnk(variant, url_for('auth.painel'), 'Fichas atribuídas', request.path == '/auth/painel', title='Fichas técnicas atribuídas a funcionários', primary=true, icon='bi-person-check') }}
 {{ _lnk(variant, url_for('receitas.familias'), 'Famílias de receitas', request.path == '/receitas/familias') }}
 {% endif %}
 {% endmacro %}

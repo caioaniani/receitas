@@ -442,7 +442,25 @@
 .ui-v2 .area-v2-content-heading h2 { margin: 0; font-size: 17px; font-weight: 750; letter-spacing: -.02em; }
 .ui-v2 .area-v2-search { min-height: 36px; padding: 7px 9px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--v2-line); border-radius: 9px; background: var(--v2-surface); color: var(--v2-muted); font: inherit; font-size: 10.5px; }
 .ui-v2 .area-v2-search kbd { margin-left: 4px; padding: 1px 5px; border: 1px solid var(--v2-line); border-radius: 5px; background: var(--v2-surface-muted); color: var(--v2-muted); font-size: 8px; }
-.ui-v2 .area-v2-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding-bottom: 48px; }
+.ui-v2 .area-v2-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ui-v2 .area-v2-content > .area-v2-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ui-v2 .area-v2-content > .area-v2-links .area-v2-link { min-height: 94px; padding: 18px; }
+.ui-v2 .area-v2-content > .area-v2-links strong { font-size: 14px; }
+.ui-v2 .area-v2-content > .area-v2-links small { font-size: 12px; white-space: normal; }
+.ui-v2 .area-v2-more { margin-top: 24px; border-top: 1px solid var(--v2-line); }
+.ui-v2 .area-v2-more > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 0; color: var(--v2-ink); font-size: 13px; font-weight: 650; cursor: pointer; list-style: none; }
+.ui-v2 .area-v2-more > summary::-webkit-details-marker { display: none; }
+.ui-v2 .area-v2-more > summary small { display: block; margin-top: 3px; color: var(--v2-muted); font-size: 11px; font-weight: 400; }
+.ui-v2 .area-v2-more[open] > summary > i { transform: rotate(180deg); }
+.ui-v2 .area-v2-more .area-v2-links { padding-bottom: 24px; }
+.ui-v2 .area-v2-more summary:focus-visible,
+.ui-v2 .page-options summary:focus-visible,
+.ui-v2 .area-v2-link:focus-visible { outline: 2px solid var(--v2-accent); outline-offset: 4px; }
+
+/* Opções secundárias: mesma interação pelo teclado nas telas de trabalho. */
+.ui-v2 .page-options { padding: 12px 14px; border: 1px solid var(--v2-line); border-radius: 11px; background: var(--v2-surface); }
+.ui-v2 .page-options > summary { color: var(--v2-muted); font-size: 12px; font-weight: 650; cursor: pointer; }
+.ui-v2 .page-options[open] > summary { margin-bottom: 12px; color: var(--v2-ink); }
 .ui-v2 .area-v2-link { min-height: 72px; padding: 13px 14px; display: flex; align-items: center; gap: 11px; border: 1px solid var(--v2-line); border-radius: 13px; background: var(--v2-surface); color: var(--v2-ink); text-decoration: none; transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease; }
 .ui-v2 .area-v2-link:hover { border-color: #b7c5bc; box-shadow: var(--v2-shadow); color: var(--v2-ink); transform: translateY(-1px); }
 .ui-v2 .area-v2-link-icon { width: 36px; height: 36px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 10px; background: var(--v2-accent-soft); color: var(--v2-accent); font-size: 15px; }
@@ -897,7 +915,8 @@
     .ui-v2 .area-v2-mark { width: 48px; height: 48px; border-radius: 14px; font-size: 22px; }
     .ui-v2 .area-v2-content-heading { align-items: flex-start; flex-direction: column; }
     .ui-v2 .area-v2-search { width: 100%; }
-    .ui-v2 .area-v2-links { grid-template-columns: 1fr; }
+    .ui-v2 .area-v2-links,
+    .ui-v2 .area-v2-content > .area-v2-links { grid-template-columns: 1fr; }
     .ui-v2 .area-v2-link-copy small { white-space: normal; }
     .ui-v2 .home-v2-header { align-items: flex-start; flex-direction: column; margin-bottom: 22px; }
     .ui-v2 .home-v2-header-actions { width: 100%; }

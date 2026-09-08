@@ -3,6 +3,71 @@
 via macro compartilhado `_area_nav.html`). A permissão da página espelha a do
 card (app/nav.py)."""
 
+from collections import Counter
+from html.parser import HTMLParser
+
+import pytest
+
+
+class _AreaLinks(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.links = []
+        self.primary = []
+        self.in_more = False
+        self.more_open = None
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        classes = attrs.get('class', '').split()
+        if tag == 'details' and 'area-v2-more' in classes:
+            self.in_more = True
+            self.more_open = 'open' in attrs
+        if tag == 'a' and {'area-link', 'area-v2-link'}.intersection(classes):
+            self.links.append(attrs['href'])
+            if not self.in_more:
+                self.primary.append(attrs['href'])
+
+    def handle_endtag(self, tag):
+        if tag == 'details':
+            self.in_more = False
+
+
+@pytest.mark.parametrize('papel,owner', [
+    ('admin', True), ('admin', False), ('gerente', False), ('producao', False),
+])
+def test_area_simplificada_preserva_destinos_e_permissoes(app, papel, owner):
+    """Recolher opções não remove, duplica nem libera funções por papel."""
+    uid = _criar(app, 'navegacao', papel, is_owner=owner)
+    client = app.test_client()
+    _login(client, uid)
+    for slug in ('lojas', 'producao', 'catalogo', 'vendas', 'financeiro',
+                 'rh', 'relatorios', 'administracao', 'fichas'):
+        app.config['UI_V2_ENABLED'] = False
+        classic = client.get(f'/area/{slug}')
+        app.config['UI_V2_ENABLED'] = True
+        simplified = client.get(f'/area/{slug}')
+        assert simplified.status_code == classic.status_code
+        if simplified.status_code != 200:
+            continue
+        before = _AreaLinks(classic.get_data(as_text=True))
+        after = _AreaLinks(simplified.get_data(as_text=True))
+        assert Counter(after.links) == Counter(before.links), slug
+        assert 1 <= len(after.primary) <= 4, slug
+        assert after.more_open is not True, slug
+
+
+def test_lojas_destaca_rotina_e_mantem_configuracao_recolhida(app, owner_user):
+    client = app.test_client()
+    _login(client, owner_user.id)
+    links = _AreaLinks(client.get('/area/lojas').get_data(as_text=True))
+    assert set(links.primary) == {
+        '/checklist/', '/pedidos/', '/pedidos/estoque-loja', '/lista-compras/',
+    }
+    assert '/checklist/responsaveis' in links.links
+    assert links.more_open is False
+
 
 def _login(client, uid):
     with client.session_transaction() as sess:

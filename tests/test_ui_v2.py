@@ -29,6 +29,17 @@ def test_ui_v2_usa_navegacao_reduzida(app, admin_user):
     assert '<details class="ui-v2-nav-fold" open>' in html
 
 
+def test_busca_geral_recebe_versao_do_conteudo(app, admin_user):
+    """O cache da navegação deve receber os novos nomes após o deploy."""
+    import hashlib
+    from pathlib import Path
+
+    arquivo = Path(app.static_folder) / 'js/command-palette.js'
+    versao = hashlib.md5(arquivo.read_bytes()).hexdigest()[:8]
+    html = _login(app, admin_user).get('/area/lojas').get_data(as_text=True)
+    assert f'/static/js/command-palette.js?v={versao}' in html
+
+
 def test_producao_mantem_shell_atual_com_flag_desligada(app, admin_user):
     app.config['UI_V2_ENABLED'] = False
     html = _login(app, admin_user).get('/area/producao').get_data(as_text=True)

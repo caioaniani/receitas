@@ -2067,8 +2067,11 @@ def test_rota_telaindustriateste_v2_funcional(app, admin_user):
     html = nova.get_data(as_text=True)
     assert 'Planejamento automático · produção' in html
     assert 'somente leitura' not in html
-    assert 'Motor de previsão' in html
-    assert 'Motor funcionando normalmente' in html
+    assert '<h1>Plano de produção</h1>' in html
+    assert 'Previsão atualizada' in html
+    assert '<details class="plan-settings calculation-details">' in html
+    assert 'Abrir tela do padeiro' in html
+    assert 'class="nav-search"' not in html
     assert 'Cálculo concluído' in html
     assert 'Ordens de produção' in html
     assert 'Ordem enviada' in html

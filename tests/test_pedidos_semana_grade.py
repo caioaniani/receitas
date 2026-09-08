@@ -304,7 +304,7 @@ def test_rota_media_renderiza_celula_editavel(app, admin_user):
                 follow_redirects=True)
     body = client.get('/producao/pedidos-semana/media?horizonte=7&janela=6'
                       '&inicio=0').get_data(as_text=True)
-    assert 'ATUALIZAR o pedido' in body                # tooltip da célula editável
+    assert 'Salva automaticamente após a edição; zero remove o item.' in body
     assert 'value="88"' in body                        # valor do pedido na célula
 
 

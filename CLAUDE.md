@@ -217,6 +217,14 @@ confirmada ontem permanecem visíveis. Outros papéis conservam seus acessos;
 permissões das rotas não foram ampliadas. Cargos e salários fica em Equipe
 para o dono. Manual explica o caminho pedido → produção → separação → loja.
 
+**Páginas internas (08/09/2026)**: as áreas v2 usam os mesmos links de
+`_area_nav.html`, classificados por `primary=true`: principais acessos
+visíveis e demais em Mais opções. Não duplicar listas de URLs/permissões.
+Produção, pedidos semanais e listas de pedidos usam títulos operacionais,
+uma instrução curta e opções secundárias recolhidas. Filtros ativos devem
+continuar identificáveis; manter avisos, ações de salvar/enviar e seus
+contratos. A simplificação visual não altera cálculos ou movimentações.
+
 Pedido do dono ("nao estou conseguindo pilotar o aviao"): o sistema cresceu
 mais rapido que a capacidade de operar; quase tudo era "pull" (lembrar de
 abrir tela). Tres pecas, UMA fonte de dados

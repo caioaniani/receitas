@@ -351,12 +351,14 @@ def test_rota_estoque_renderiza(app, admin_user):
     resp = client.get('/producao/pedidos-semana/estoque?horizonte=7&janela=6&inicio=0')
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
-    assert 'venda + estoque' in body
+    assert 'Vendas e estoque:' in body
     assert 'Loja Centro' in body
     assert 'Pão Francês' in body
     assert 'Estoque' in body
     # geração POR LOJA (botão no card) + origem pra voltar pra esta tela
-    assert 'Gerar só esta loja' in body
+    assert 'Gerar pedidos da loja' in body
+    assert '<details class="page-options mb-3">' in body
+    assert 'salvam automaticamente' in body
     assert 'name="so_loja" value="%d"' % loja.id in body
     assert 'name="origem" value="estoque"' in body
     # ação explícita via hidden + confirm no listener (nunca onclick inline):
@@ -365,6 +367,15 @@ def test_rota_estoque_renderiza(app, admin_user):
     assert 'name="gerar_todas"' in body
     assert 'data-confirm=' in body
     assert 'onclick="return confirm' not in body
+
+
+def test_reserva_extra_fica_visivel_com_opcoes_recolhidas(app, admin_user):
+    client = app.test_client()
+    client.post('/auth/login', data={'login': admin_user.login, 'senha': '123'})
+    resp = client.get('/producao/pedidos-semana/estoque?seguranca=50')
+    assert resp.status_code == 200
+    assert ('<summary>Período e opções de planejamento · reserva extra de 50%</summary>'
+            in resp.get_data(as_text=True))
 
 
 def test_estoque_auto_salva_dia_com_pedido(app, admin_user):
