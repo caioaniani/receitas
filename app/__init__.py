@@ -100,8 +100,13 @@ def create_app(config_class=None):
         # Interface v2 (ver app/ui_v2.py): o base.html troca o shell
         # (CSS + sidebar) por esta variavel — nunca ler config direto no
         # template, o cookie de "voltar ao anterior" mora no helper.
+        from flask_login import current_user
+
+        from app.nav import areas_visiveis
         from app.ui_v2 import ui_v2_ativo
-        return {'ui_v2': ui_v2_ativo()}
+        return {'ui_v2': ui_v2_ativo(),
+                'areas_navegacao': (areas_visiveis(current_user)
+                                    if current_user.is_authenticated else [])}
 
     @app.context_processor
     def inject_static_version():

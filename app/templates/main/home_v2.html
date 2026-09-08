@@ -52,14 +52,9 @@
         <div>
             <span class="home-v2-eyebrow">Sua área de trabalho</span>
             <h1>Bom dia{% if primeiro_nome %}, {{ primeiro_nome }}{% endif %}</h1>
-            <p>Acesse a rotina das lojas, organize a equipe e acompanhe o que precisa de atenção.</p>
+            <p>Os pedidos, a produção e o que precisa da sua atenção.</p>
         </div>
         <div class="home-v2-header-actions">
-            {% if current_user.is_admin() %}{# rota é admin_required — pra papel producao o link daria 403 #}
-            <a class="home-v2-btn home-v2-btn-primary" href="{{ url_for('industria_teste.index', v2=1) }}">
-                <i class="bi bi-calendar3"></i> Planejar produção
-            </a>
-            {% endif %}
             <button type="button" class="home-v2-icon-btn home-v2-mobile-search"
                     onclick="window.abrirCommandPalette && window.abrirCommandPalette()"
                     aria-label="Buscar no sistema" title="Buscar no sistema">
@@ -68,9 +63,12 @@
         </div>
     </header>
 
-    {% include 'main/_admin_atalhos.html' %}
+    {% import '_admin_navigation.html' as adminnav with context %}
+    <nav class="admin-daily" aria-label="Acessos do dia">
+        {{ adminnav.rotina('home') }}
+    </nav>
 
-    <section class="home-v2-overview" id="pendencias-do-dia" aria-label="Resumo do dia" tabindex="-1">
+    <section class="home-v2-overview{{ ' home-v2-overview-single' if not vendas }}" id="pendencias-do-dia" aria-label="Resumo do dia" tabindex="-1">
         <article class="home-v2-panel home-v2-priorities">
             <div class="home-v2-panel-heading">
                 <div>
@@ -168,22 +166,6 @@
             </details>
             {% endif %}
         </article>
-        {% else %}
-        <article class="home-v2-panel home-v2-next">
-            <div class="home-v2-panel-heading">
-                <div><span class="home-v2-section-kicker">Próximo passo</span><h2>Continue o trabalho</h2></div>
-                <i class="bi bi-arrow-right-circle home-v2-heading-icon"></i>
-            </div>
-            {% if current_user.is_admin() %}{# rota é admin_required — pra papel producao o link daria 403 #}
-            <a class="home-v2-feature-link" href="{{ url_for('industria_teste.index', v2=1) }}">
-                <span><i class="bi bi-calendar3"></i></span>
-                <div><strong>Planejamento da indústria</strong><small>Organize a produção da semana.</small></div>
-                <i class="bi bi-arrow-right"></i>
-            </a>
-            {% else %}
-            <p class="home-v2-muted">Escolha uma área abaixo para continuar.</p>
-            {% endif %}
-        </article>
         {% endif %}
     </section>
 
@@ -193,14 +175,8 @@
     </section>
     {% endif %}
 
-    <section class="home-v2-areas" id="areas-de-trabalho" aria-labelledby="home-v2-areas-title" tabindex="-1">
-        <div class="home-v2-section-heading">
-            <div>
-                <span class="home-v2-section-kicker">Navegação</span>
-                <h2 id="home-v2-areas-title">Áreas de trabalho</h2>
-            </div>
-            <small>{{ areas|length }} áreas disponíveis</small>
-        </div>
+    <details class="home-v2-areas home-v2-areas-fold" id="areas-de-trabalho">
+        <summary><span>Áreas de trabalho <small>Cadastros, equipe e configurações</small></span><i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
         <div class="home-v2-area-grid">
             {% for a in areas %}
             <a href="{{ url_for('main.area', slug=a.slug) }}" class="home-v2-area-card">
@@ -210,7 +186,7 @@
             </a>
             {% endfor %}
         </div>
-    </section>
+    </details>
 </div>
 
 {% if vendas %}

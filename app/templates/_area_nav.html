@@ -109,6 +109,9 @@
 
 
 {% macro vendas(variant) %}
+{% if variant != 'sidebar' and (current_user.is_admin() or current_user.is_gerente()) %}
+{{ _lnk(variant, url_for('main.loja_online_pedidos'), 'Pedidos do site', request.path.startswith('/admin/loja-online/pedidos'), icon='bi-bag', title='Consultar compras, pagamentos e entregas') }}
+{% endif %}
 {% if current_user.pode_pdv() %}
 {{ _lnk(variant, url_for('pdv.index'), 'Vendas do Caixa (PDV)', request.path in ['/pdv/', '/pdv']) }}
 {{ _lnk(variant, url_for('pdv.itens_vendidos'), 'Itens Vendidos', '/pdv/itens-vendidos' in request.path, sub=true) }}

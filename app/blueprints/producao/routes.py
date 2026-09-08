@@ -412,7 +412,7 @@ def pedidos_semana_gerar():
     """
     from datetime import date
 
-    from app.services.pedidos_semana import aplicar_grade
+    from app.services.pedidos_semana import PedidoLoteInvalidoError, aplicar_grade
 
     def _primeiro_nao_vazio(nome):
         # A ação vem em DOIS lugares com o mesmo nome: o hidden preenchido por
@@ -498,7 +498,14 @@ def pedidos_semana_gerar():
 
     pedidos = [{'loja_id': k[0], 'data_entrega': k[1], 'itens': v}
                for k, v in agrupado.items()]
-    res = aplicar_grade(pedidos, current_user.id)
+    try:
+        res = aplicar_grade(pedidos, current_user.id)
+    except PedidoLoteInvalidoError as exc:
+        msg = f'{exc} Nenhum pedido foi alterado.'
+        if request.form.get('ajax') == '1':
+            return jsonify(ok=False, mudou=False, msg=msg), 400
+        flash(msg, 'warning')
+        return _voltar()
 
     # Corte do fim do dia (dono 10/08/2026): a tela é admin_required — o
     # gerar passa — mas o aviso de que o pré-preparo de amanhã já foi

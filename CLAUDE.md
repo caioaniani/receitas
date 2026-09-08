@@ -207,6 +207,16 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
 
 ## Cockpit do dono — briefing diario + home + manual (16/07/2026)
 
+**Simplificação de 07/09/2026 (pedido do dono: "menos é mais")**: na Home
+v2 ficam quatro acessos diários — Produção, Pedidos das lojas, Pedidos do
+site e Checklists. Fonte única para Home e sidebar:
+`templates/_admin_navigation.html`. Equipe e Todas as áreas ficam
+recolhidas no menu; os cartões de áreas da Home também. Não repor os 12
+atalhos nem os botões repetidos. Pendências, vendas e produção realmente
+confirmada ontem permanecem visíveis. Outros papéis conservam seus acessos;
+permissões das rotas não foram ampliadas. Cargos e salários fica em Equipe
+para o dono. Manual explica o caminho pedido → produção → separação → loja.
+
 Pedido do dono ("nao estou conseguindo pilotar o aviao"): o sistema cresceu
 mais rapido que a capacidade de operar; quase tudo era "pull" (lembrar de
 abrir tela). Tres pecas, UMA fonte de dados
@@ -502,7 +512,23 @@ com `AssertionError` — qualquer chamada explode o teste).
 **Painel de producao**: a previsao de producao foi reescrita pra usar o
 historico de `PedidoLoja` (loja->industria) como base — nao mais PDV/VNDA.
 Ver `app/services/previsao_producao.py::balanco_industria`. Coluna
-"Produzir" = `max(0, max(comprometido, previsto) - em_estoque)`.
+"Produzir" desconta estoque da demanda consolidada por dia. Desde a
+correção de 07/09/2026, a demanda diária é
+`max(firme_lojas, previsto_lojas) + firme_B2B + encomendas_site`:
+os dois últimos canais não fazem parte do histórico das lojas e são
+aditivos (regra das encomendas de 21/07). A função `_demanda_planejada`
+centraliza a conta, e `_demanda_firme_por_dia` centraliza origens, datas e
+composição. Balanço, cronograma, projeção e detalhamento usam essas fontes.
+A explosão de sub-receitas reserva a demanda consolidada, sem liberar como
+insumo o estoque que já será necessário para venda da própria receita.
+
+**Reposição corrigida em 07/09/2026**: o cron informa ao motor os dias
+protegidos por decisão humana ou pelo corte ANTES de simular as entregas.
+Um dia que não gerará pedido não pode deixar uma sobra imaginária para os
+pedidos seguintes; entregas já existentes continuam contando. A grade
+semanal valida toda a seleção com `pedido_lote.violacoes_por_ids` antes de
+gravar, inclusive os múltiplos obrigatórios de itens em g/ml. A liberdade
+de pedir quantidades em unidades continua igual.
 
 **Camada B (limpeza, em andamento)**: feito em 30/06/2026 — `vnda_sync.py`
 REMOVIDO e os modelos `VndaProdutoMap` / `VndaPedidoProcessado` / `VndaDebito`

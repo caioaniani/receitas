@@ -228,12 +228,21 @@ def gerar_pedidos_automaticos():
     # rodar o motor (o carry da simulação fica só com o pedido que vale).
     absorvidos = _absorver_rascunhos_orfaos(datas_ressinc)
 
+    # O motor precisa conhecer os dias que a materialização vai pular.
+    # Senão ele simula uma entrega nesses dias e usa a sobra para reduzir
+    # os pedidos seguintes, embora essa entrega nunca seja criada.
+    protegidos = _dias_protegidos(datas_janela)
+    datas_corte = set(datas_janela) - set(datas_ressinc)
+
     sug = previsao_producao.sugerir_pedidos_por_venda(
         horizonte_dias=horizonte, inicio_offset_dias=1,
         seguranca_pct=_seguranca_pct(),
-        ressincronizar_datas=datas_ressinc)
+        ressincronizar_datas=datas_ressinc,
+        pedidos_bloqueados=protegidos, datas_bloqueadas=datas_corte)
 
     datas = [_date.fromisoformat(d['data']) for d in sug.get('dias') or []]
+    # Re-checa após o cálculo: um gesto humano durante a previsão continua
+    # protegido também na materialização.
     protegidos = _dias_protegidos(datas)
 
     grade_por_dia = {}

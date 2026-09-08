@@ -123,6 +123,17 @@
 .ui-v2 .sidebar-link.active { background: var(--v2-accent-soft); color: var(--v2-accent); font-weight: 700; }
 .ui-v2-nav-spacer { flex: 1; min-height: 20px; }
 
+.ui-v2-nav-fold { margin-bottom: 8px; }
+.ui-v2-nav-fold > summary { min-height: 44px; padding: 10px; display: flex; align-items: center; gap: 10px; border-radius: 9px; color: var(--v2-muted); cursor: pointer; font-size: 12.5px; list-style: none; }
+.ui-v2-nav-fold > summary::-webkit-details-marker { display: none; }
+.ui-v2-nav-fold > summary > i:last-child { margin-left: auto; font-size: 11px; }
+.ui-v2-nav-fold[open] > summary > i:last-child { transform: rotate(180deg); }
+.ui-v2-nav-fold > summary:hover { background: var(--v2-accent-soft); color: var(--v2-accent); }
+.ui-v2 .ui-v2-nav-fold .sidebar-link { padding-left: 35px; font-size: 12px; }
+.ui-v2-nav-fold > summary:focus-visible,
+.ui-v2 .admin-daily-link:focus-visible,
+.ui-v2 .home-v2-areas-fold > summary:focus-visible { outline: 2px solid var(--v2-accent); outline-offset: 3px; }
+
 .ui-v2-user {
     display: flex;
     align-items: center;
@@ -517,19 +528,13 @@
 .ui-v2 .home-v2-icon-btn { width: 40px; background: var(--v2-surface); color: var(--v2-muted); }
 .ui-v2 .home-v2-icon-btn:hover { border-color: #bec8c1; color: var(--v2-ink); }
 
-.ui-v2 .admin-workspace { margin-bottom: 28px; }
-.ui-v2 .admin-workspace-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.ui-v2 .admin-workspace-group { padding: 16px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface); }
-.ui-v2 .admin-workspace-group h3 { display: flex; align-items: center; gap: 9px; margin: 0 0 10px; color: var(--v2-ink); font-size: 14px; font-weight: 700; }
-.ui-v2 .admin-workspace-group h3 i { color: var(--v2-accent); }
-.ui-v2 .admin-workspace-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 8px; border-radius: 8px; color: var(--v2-ink); text-decoration: none; }
-.ui-v2 .admin-workspace-link:hover { background: var(--v2-accent-soft); color: var(--v2-accent); }
-.ui-v2 .admin-workspace-link span { display: grid; gap: 2px; min-width: 0; }
-.ui-v2 .admin-workspace-link strong { font-size: 12px; }
-.ui-v2 .admin-workspace-link small { color: var(--v2-muted); font-size: 11px; line-height: 1.4; }
-.ui-v2 .admin-workspace-link > i { color: var(--v2-muted); font-size: 12px; }
-.ui-v2 .admin-workspace-jumps { display: flex; flex-wrap: wrap; gap: 8px 18px; }
-.ui-v2 .admin-workspace-jumps a { padding: 8px 0; color: var(--v2-accent); font-size: 12px; font-weight: 600; text-underline-offset: 3px; }
+.ui-v2 .admin-daily { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
+.ui-v2 .admin-daily-link { min-height: 90px; display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface); color: var(--v2-ink); text-decoration: none; }
+.ui-v2 .admin-daily-link:hover { border-color: var(--v2-accent); color: var(--v2-accent); }
+.ui-v2 .admin-daily-link > i { color: var(--v2-accent); font-size: 20px; }
+.ui-v2 .admin-daily-link > span { display: grid; gap: 4px; }
+.ui-v2 .admin-daily-link strong { font-size: 13px; }
+.ui-v2 .admin-daily-link small { color: var(--v2-muted); font-size: 11px; line-height: 1.4; }
 .ui-v2 #pendencias-do-dia, .ui-v2 #areas-de-trabalho { scroll-margin-top: 80px; }
 
 .ui-v2 .home-v2-overview {
@@ -538,6 +543,7 @@
     gap: 16px;
     align-items: stretch;
 }
+.ui-v2 .home-v2-overview-single { grid-template-columns: 1fr; }
 
 .ui-v2 .home-v2-panel {
     overflow: hidden;
@@ -843,6 +849,11 @@
 .ui-v2 .home-production-footer a { color: var(--v2-accent); font-weight: 700; text-decoration: none; white-space: nowrap; }
 
 .ui-v2 .home-v2-areas { margin-top: 36px; }
+.ui-v2 .home-v2-areas-fold { border-top: 1px solid var(--v2-line); }
+.ui-v2 .home-v2-areas-fold > summary { padding: 18px 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--v2-muted); cursor: pointer; list-style: none; font-size: 13px; font-weight: 650; }
+.ui-v2 .home-v2-areas-fold > summary::-webkit-details-marker { display: none; }
+.ui-v2 .home-v2-areas-fold > summary small { display: block; margin-top: 3px; font-size: 11px; font-weight: 400; }
+.ui-v2 .home-v2-areas-fold[open] > summary > i { transform: rotate(180deg); }
 .ui-v2 .home-v2-section-heading { margin-bottom: 13px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .ui-v2 .home-v2-section-heading small { color: var(--v2-muted); font-size: 10px; }
 .ui-v2 .home-v2-area-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -894,12 +905,8 @@
     .ui-v2 .home-v2-overview { grid-template-columns: 1fr; }
     .ui-v2 .home-v2-area-grid { grid-template-columns: 1fr; }
     .ui-v2 .home-v2-area-copy small { white-space: normal; }
-    .ui-v2 .admin-workspace-grid { grid-template-columns: 1fr; }
-    .ui-v2 .admin-workspace > .home-v2-section-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
-    .ui-v2 .admin-workspace-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 12px; }
-    .ui-v2 .admin-workspace-group h3 { grid-column: 1 / -1; margin-bottom: 4px; }
-    .ui-v2 .admin-workspace-link { padding: 6px; }
-    .ui-v2 .admin-workspace-link > i { display: none; }
+    .ui-v2 .admin-daily { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ui-v2 .admin-daily-link { min-height: 80px; padding: 12px; gap: 8px; }
     .ui-v2 .home-v2-panel-footer { align-items: flex-start; flex-direction: column; gap: 7px; }
     .ui-v2 .home-v2-panel-footer a:last-child { margin-left: 0; }
     .ui-v2 .home-production-footer { align-items: flex-start; flex-direction: column; gap: 7px; }
@@ -912,6 +919,7 @@
     .ui-v2 .home-v2-header-actions { width: 100%; }
     .ui-v2 .home-v2-overview { grid-template-columns: 1fr; }
     .ui-v2 .home-v2-area-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ui-v2 .admin-daily { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 [data-theme="dark"] .ui-v2,

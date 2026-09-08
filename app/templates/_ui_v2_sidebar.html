@@ -2,7 +2,6 @@
     <div class="ui-v2-brand">
         <span class="ui-v2-brand-mark">p</span>
         <span>padaria</span>
-        <span class="ui-v2-preview-label">nova</span>
     </div>
 
     {% if current_user.is_authenticated %}
@@ -31,6 +30,34 @@
         </a>
     </div>
 
+    {% if current_user.is_admin() and not current_user.somente_treino %}
+    {% import '_admin_navigation.html' as adminnav with context %}
+    <div class="ui-v2-nav-group" aria-label="Rotina diária">
+        {{ adminnav.rotina() }}
+    </div>
+    <details class="ui-v2-nav-fold"{% if request.path.startswith('/rh') or request.path.startswith('/treino') %} open{% endif %}>
+        <summary><i class="bi bi-people" aria-hidden="true"></i> Equipe <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+        {% if current_user.pode_cadastrar_funcionarios() %}
+        <a href="{{ url_for('rh.funcionarios') }}" class="sidebar-link {{ 'active' if request.path.startswith('/rh/funcionarios') }}">Funcionários</a>
+        {% endif %}
+        {% if current_user.pode_organizar_equipe() %}
+        <a href="{{ url_for('rh.lideranca_preenchimento') }}" class="sidebar-link {{ 'active' if request.path.startswith('/rh/lideranca') }}">Organizar equipe</a>
+        {% endif %}
+        {% if current_user.is_dono() %}
+        <a href="{{ url_for('rh.escala') }}" class="sidebar-link {{ 'active' if request.path.startswith('/rh/escala') }}">Escala operacional</a>
+        <a href="{{ url_for('rh.plano_carreira') }}" class="sidebar-link {{ 'active' if request.path.startswith('/rh/plano-carreira') }}">Cargos e salários</a>
+        {% endif %}
+        <a href="{{ url_for('treino.gestor_home') }}" class="sidebar-link {{ 'active' if request.path.startswith('/treino/gestor') }}">Treinamento da equipe</a>
+        <a href="{{ url_for('treino.home') }}" class="sidebar-link {{ 'active' if request.path.startswith('/treino') and not request.path.startswith(('/treino/gestor', '/treino/admin')) }}">Meu treinamento</a>
+    </details>
+    {% set configurando_site = request.path.startswith('/admin/loja-online') and not request.path.startswith('/admin/loja-online/pedidos') %}
+    <details class="ui-v2-nav-fold"{% if request.path.startswith('/area/') or configurando_site %} open{% endif %}>
+        <summary><i class="bi bi-grid" aria-hidden="true"></i> Todas as áreas <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+        {% for a in areas_navegacao %}
+        <a href="{{ url_for('main.area', slug=a.slug) }}" class="sidebar-link {{ 'active' if request.path == '/area/' ~ a.slug or (a.slug == 'vendas' and configurando_site) }}">{{ a.titulo }}</a>
+        {% endfor %}
+    </details>
+    {% else %}
     {% if (current_user.pode_checklist() and not current_user.somente_treino) or current_user.pode_lojas() %}
     <div class="ui-v2-nav-group">
         <span class="ui-v2-nav-label">Rotina das lojas</span>
@@ -137,6 +164,7 @@
         </a>
     </div>
     {% endif %}
+    {% endif %}{# navegação admin / outros papéis #}
     {% endif %}{# observador #}
 
     <div class="ui-v2-nav-spacer"></div>

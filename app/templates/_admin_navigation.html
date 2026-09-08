@@ -1,0 +1,17 @@
+{# Os quatro caminhos diários são os mesmos na Home e no menu. #}
+{% macro rotina(variant='sidebar') -%}
+{% if current_user.is_admin() and not current_user.somente_treino %}
+{% set em_producao = request.path.startswith(('/telaindustriateste', '/producao', '/padeiro', '/pedidos/congelados', '/pedidos/separacao')) %}
+{% for endpoint, titulo, descricao, icone, ativo in [
+    ('industria_teste.index', 'Produção', 'Planejar produção e acompanhar as ordens', 'bi-calendar3', em_producao),
+    ('pedidos.lista', 'Pedidos das lojas', 'Acompanhar reposição e recebimento', 'bi-shop', request.path.startswith('/pedidos') and not em_producao),
+    ('main.loja_online_pedidos', 'Pedidos do site', 'Consultar compras e entregas', 'bi-bag', request.path.startswith('/admin/loja-online/pedidos')),
+    ('checklist.conferencia', 'Checklists', 'Conferir a rotina de cada loja', 'bi-clipboard-check', request.path.startswith('/checklist'))
+] %}
+<a href="{{ url_for(endpoint) }}" class="{{ 'sidebar-link' if variant == 'sidebar' else 'admin-daily-link' }}{{ ' active' if ativo }}"{% if ativo %} aria-current="page"{% endif %} title="{{ descricao }}">
+    <i class="bi {{ icone }}" aria-hidden="true"></i>
+    <span>{% if variant == 'sidebar' %}{{ titulo }}{% else %}<strong>{{ titulo }}</strong><small>{{ descricao }}</small>{% endif %}</span>
+</a>
+{% endfor %}
+{% endif %}
+{%- endmacro %}

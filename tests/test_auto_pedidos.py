@@ -196,6 +196,202 @@ def test_motor_real_nao_mexe_em_dia_de_humano(app, loja, admin_user,
         assert p2.itens[0].quantidade == 40
 
 
+def test_motor_real_cancelamento_nao_simula_entrega_nos_dias_seguintes(
+        app, loja, admin_user, monkeypatch):
+    """Cancelar terça protege terça, sem inventar estoque para quarta."""
+    with app.app_context():
+        _as_10h(monkeypatch)
+        r = _receita('Pao cancelado')
+        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=r.id,
+                                   quantidade=0, estoque_minimo=50))
+        p = _rascunho_auto(loja, [(r, 50)])
+        p.status = 'cancelado'
+        p.modificado_por_id = admin_user.id
+        db.session.commit()
+
+        out = auto_pedidos.gerar_pedidos_automaticos()
+
+        assert out['dias_pulados_humano'] == 1
+        vivos = (PedidoLoja.query
+                 .filter(PedidoLoja.loja_id == loja.id,
+                         PedidoLoja.status != 'cancelado').all())
+        assert len(vivos) == 1
+        assert vivos[0].data_entrega == hoje() + timedelta(days=2)
+        assert vivos[0].itens[0].quantidade == 50
+
+
+def test_motor_real_corte_sem_pedido_nao_simula_entrega(app, loja, monkeypatch):
+    """Após o corte, terça sem pedido não pode abastecer quarta na conta."""
+    with app.app_context():
+        fake = datetime.combine(hoje(), datetime.min.time()).replace(hour=20)
+        monkeypatch.setattr(pedido_corte, 'agora', lambda: fake)
+        r = _receita('Pao sem pedido no corte')
+        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=r.id,
+                                   quantidade=0, estoque_minimo=50))
+        db.session.commit()
+
+        out = auto_pedidos.gerar_pedidos_automaticos()
+
+        assert out['dias_pulados_corte'] == [
+            (hoje() + timedelta(days=1)).isoformat()]
+        vivos = PedidoLoja.query.filter_by(loja_id=loja.id).all()
+        assert len(vivos) == 1
+        assert vivos[0].data_entrega == hoje() + timedelta(days=2)
+        assert vivos[0].itens[0].quantidade == 50
+
+
+def test_motor_real_corte_preserva_entrega_ja_pedida(app, loja, monkeypatch):
+    """A entrega real de terça continua cobrindo parte do pedido de quarta."""
+    with app.app_context():
+        fake = datetime.combine(hoje(), datetime.min.time()).replace(hour=20)
+        monkeypatch.setattr(pedido_corte, 'agora', lambda: fake)
+        r = _receita('Pao ja pedido no corte')
+        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=r.id,
+                                   quantidade=0, estoque_minimo=50))
+        _rascunho_auto(loja, [(r, 20)])
+
+        auto_pedidos.gerar_pedidos_automaticos()
+
+        vivos = (PedidoLoja.query.filter_by(loja_id=loja.id)
+                 .order_by(PedidoLoja.data_entrega).all())
+        assert [(p.data_entrega, p.itens[0].quantidade) for p in vivos] == [
+            (hoje() + timedelta(days=1), 20),
+            (hoje() + timedelta(days=2), 30),
+        ]
+
+
+@pytest.mark.parametrize('bloqueio', ['corte', 'humano'])
+def test_motor_real_pedido_insuficiente_em_dia_bloqueado_nao_acumula_falta(
+        app, loja, admin_user, monkeypatch, bloqueio):
+    """Entrega 5 para consumo 10: o dia seguinte recebe 10, sem repor falta."""
+    from app.models import MovEstoqueLoja
+    from app.services.previsao_producao import sugerir_pedidos_por_venda
+
+    with app.app_context():
+        fake = datetime.combine(hoje(), datetime.min.time()).replace(
+            hour=20 if bloqueio == 'corte' else 10)
+        monkeypatch.setattr(pedido_corte, 'agora', lambda: fake)
+        r = _receita('Pao com entrega insuficiente')
+        el = EstoqueLoja(loja_id=loja.id, receita_id=r.id, quantidade=0)
+        db.session.add(el)
+        db.session.flush()
+        for dias in range(1, 43):
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='venda_seru', quantidade=10,
+                data=datetime.combine(hoje() - timedelta(days=dias),
+                                      datetime.min.time()),
+                referencia='histórico para entrega insuficiente'))
+        p = _rascunho_auto(loja, [(r, 5)])
+        if bloqueio == 'humano':
+            p.modificado_por_id = admin_user.id
+            db.session.commit()
+
+        # O déficit deliberado da grade MANUAL continua visível.
+        grade_manual = sugerir_pedidos_por_venda(
+            horizonte_dias=2, inicio_offset_dias=1)
+        prod = next(prod for lj in grade_manual['lojas']
+                    for prod in lj['produtos'] if prod['receita_id'] == r.id)
+        assert prod['por_dia'] == [0, 15]
+
+        auto_pedidos.gerar_pedidos_automaticos()
+
+        quarta = (PedidoLoja.query
+                  .filter_by(loja_id=loja.id,
+                             data_entrega=hoje() + timedelta(days=2)).one())
+        assert quarta.itens[0].quantidade == 10
+
+
+@pytest.mark.parametrize('unidade,venda,piso,esperado', [
+    ('ml', 500, 0, 3000),
+    ('ml', 500, 3500, 6000),
+    ('un', 45, 0, 45),
+])
+def test_motor_real_reposicao_fresca_respeita_lote_obrigatorio_em_granel(
+        app, loja, monkeypatch, unidade, venda, piso, esperado):
+    """O cron conclui com lote válido em ml e mantém unidades frescas livres."""
+    from app.models import MovEstoqueLoja
+
+    with app.app_context():
+        _as_10h(monkeypatch)
+        r = _receita('Item fresco da loja')
+        r.rendimento_unidade = unidade
+        r.peso_unitario = 100
+        r.lote_pedido = 3000 if unidade == 'ml' else 50
+        el = EstoqueLoja(loja_id=loja.id, receita_id=r.id, quantidade=0,
+                         reposicao_por_venda_diaria=True,
+                         pedido_minimo_diario=piso)
+        db.session.add(el)
+        db.session.flush()
+        for dias in range(1, 43):
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='venda_seru', quantidade=venda,
+                data=datetime.combine(hoje() - timedelta(days=dias),
+                                      datetime.min.time()),
+                referencia='histórico do item fresco'))
+        db.session.commit()
+
+        out = auto_pedidos.gerar_pedidos_automaticos()
+
+        assert out['criados'] == 6
+        assert [i.quantidade for i in PedidoItem.query.all()] == [esperado] * 6
+
+
+def test_motor_real_dia_protegido_preserva_rascunho_ainda_existente(
+        app, loja, admin_user, monkeypatch):
+    """Cancelamento protege o dia, mas outro pedido vivo continua no saldo."""
+    with app.app_context():
+        _as_10h(monkeypatch)
+        r = _receita('Pao com cancelamento e pedido vivo')
+        db.session.add(EstoqueLoja(loja_id=loja.id, receita_id=r.id,
+                                   quantidade=0, estoque_minimo=50))
+        _rascunho_auto(loja, [(r, 20)])
+        p = _rascunho_auto(loja, [(r, 50)])
+        p.status = 'cancelado'
+        p.modificado_por_id = admin_user.id
+        db.session.commit()
+
+        auto_pedidos.gerar_pedidos_automaticos()
+
+        vivos = (PedidoLoja.query
+                 .filter(PedidoLoja.loja_id == loja.id,
+                         PedidoLoja.status != 'cancelado')
+                 .order_by(PedidoLoja.data_entrega).all())
+        assert [(p.data_entrega, p.itens[0].quantidade) for p in vivos] == [
+            (hoje() + timedelta(days=1), 20),
+            (hoje() + timedelta(days=2), 30),
+        ]
+
+
+def test_motor_real_dia_cancelado_nao_acumula_venda_perdida(
+        app, loja, admin_user, monkeypatch):
+    """Sem saldo terça, quarta repõe só sua demanda, não vendas perdidas."""
+    from app.models import MovEstoqueLoja
+
+    with app.app_context():
+        _as_10h(monkeypatch)
+        r = _receita('Pao com venda diaria')
+        el = EstoqueLoja(loja_id=loja.id, receita_id=r.id, quantidade=0)
+        db.session.add(el)
+        db.session.flush()
+        for dias in range(1, 43):
+            db.session.add(MovEstoqueLoja(
+                estoque_loja_id=el.id, tipo='venda_seru', quantidade=10,
+                data=datetime.combine(hoje() - timedelta(days=dias),
+                                      datetime.min.time()),
+                referencia='histórico para cancelamento'))
+        p = _rascunho_auto(loja, [(r, 10)])
+        p.status = 'cancelado'
+        p.modificado_por_id = admin_user.id
+        db.session.commit()
+
+        auto_pedidos.gerar_pedidos_automaticos()
+
+        quarta = (PedidoLoja.query
+                  .filter_by(loja_id=loja.id,
+                             data_entrega=hoje() + timedelta(days=2)).one())
+        assert quarta.itens[0].quantidade == 10
+
+
 def test_motor_real_sugestao_zerada_cancela_rascunho(app, loja, monkeypatch):
     """Rodada 2 da revisão: sugestão que CAI a 0 (estoque subiu e cobre)
     também tem que chegar no rascunho — deixar os 50 velhos congelarem às

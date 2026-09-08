@@ -24,9 +24,9 @@ def test_ui_v2_usa_navegacao_reduzida(app, admin_user):
     html = _login(app, admin_user).get('/area/producao').get_data(as_text=True)
 
     assert 'ui-v2-sidebar' in html
-    assert 'Planejamento da indústria' in html
+    assert 'href="/telaindustriateste/"' in html
     assert 'ui-v2.css' in html
-    assert 'Fichas Técnicas' not in html
+    assert '<details class="ui-v2-nav-fold" open>' in html
 
 
 def test_producao_mantem_shell_atual_com_flag_desligada(app, admin_user):
@@ -402,8 +402,8 @@ def test_home_v2_esconde_planejar_producao_de_nao_admin(app):
 
 
 def test_home_v2_admin_ve_planejar_producao(app, admin_user):
-    """O outro lado da moeda: admin segue vendo os dois atalhos."""
+    """Admin tem um acesso diário à produção, além do menu global."""
     app.config['UI_V2_ENABLED'] = True
     html = _login_como(app, 'admin').get('/').get_data(as_text=True)
     assert 'Planejar produção' in html
-    assert 'Planejamento da indústria' in html
+    assert 'href="/telaindustriateste/"' in html

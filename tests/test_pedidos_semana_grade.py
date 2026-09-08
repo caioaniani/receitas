@@ -8,7 +8,7 @@ import pytest
 
 from app.extensions import db
 from app.models import Loja, PedidoItem, PedidoLoja, Receita
-from app.services.pedidos_semana import aplicar_grade
+from app.services.pedidos_semana import PedidoLoteInvalidoError, aplicar_grade
 from app.utils import hoje
 
 
@@ -159,6 +159,84 @@ def test_dia_sem_pedido_cria_rascunho(app, admin_user):
     p = PedidoLoja.query.one()
     assert p.status == 'pendente'
     assert PedidoItem.query.filter_by(pedido_id=p.id).one().quantidade == 25
+
+
+def _granola():
+    r = _receita('Granola em gramas')
+    r.rendimento_unidade = 'g'
+    r.lote_pedido = 5000
+    db.session.commit()
+    return r
+
+
+def test_grade_aceita_multiplo_granel_e_quantidade_livre_em_unidades(
+        app, admin_user):
+    loja = _loja()
+    granola = _granola()
+    croissant = _receita()
+    croissant.peso_unitario = 100
+    croissant.lote_pedido = 50
+    db.session.commit()
+
+    res = aplicar_grade([{
+        'loja_id': loja.id, 'data_entrega': hoje() + timedelta(days=1),
+        'itens': [{'receita_id': granola.id, 'qtd': 10000},
+                  {'receita_id': croissant.id, 'qtd': 45}],
+    }], admin_user.id)
+
+    assert res['criados'] == 1
+    assert {i.receita_id: i.quantidade for i in PedidoItem.query.all()} == {
+        granola.id: 10000, croissant.id: 45,
+    }
+
+
+def test_grade_invalida_nao_cria_nem_altera_pedidos_parcialmente(app, admin_user):
+    loja = _loja()
+    granola = _granola()
+    croissant = _receita()
+    dia = hoje() + timedelta(days=1)
+    existente = _pedido(loja, dia, [(croissant, 100)])
+
+    with pytest.raises(PedidoLoteInvalidoError, match='múltiplo de 5000'):
+        aplicar_grade([
+            {'loja_id': loja.id, 'data_entrega': dia,
+             'itens': [{'receita_id': croissant.id, 'qtd': 80}]},
+            {'loja_id': loja.id, 'data_entrega': dia + timedelta(days=1),
+             'itens': [{'receita_id': croissant.id, 'qtd': 40}]},
+            {'loja_id': loja.id, 'data_entrega': dia + timedelta(days=2),
+             'itens': [{'receita_id': str(granola.id), 'qtd': 3}]},
+        ], admin_user.id)
+
+    # Até um commit do chamador depois da recusa não pode salvar parte da grade.
+    db.session.commit()
+    assert PedidoLoja.query.count() == 1
+    assert PedidoItem.query.one().quantidade == 100
+    assert db.session.get(PedidoLoja, existente.id).modificado_por_id is None
+
+
+@pytest.mark.parametrize('origem,ajax', [('media', False), ('estoque', True)])
+def test_rota_grade_recusa_granel_fora_do_lote(app, admin_user, origem, ajax):
+    loja = _loja()
+    granola = _granola()
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(admin_user.id)
+        sess['_fresh'] = True
+    resp = client.post('/producao/pedidos-semana/gerar', data={
+        'origem': origem, 'so_loja': str(loja.id),
+        'ajax': '1' if ajax else '0',
+        f'qtd|{loja.id}|{hoje().isoformat()}|{granola.id}': '3',
+    })
+    assert PedidoLoja.query.count() == 0
+    if ajax:
+        assert resp.status_code == 400
+        assert resp.json['ok'] is False
+        assert 'múltiplo de 5000' in resp.json['msg']
+    else:
+        assert resp.status_code == 302
+        with client.session_transaction() as sess:
+            assert any('múltiplo de 5000' in msg
+                       for _categoria, msg in sess['_flashes'])
 
 
 # ── grade da média expõe editáveis + rota atualiza ──────────────────────────

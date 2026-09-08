@@ -20,10 +20,10 @@ Conceitos (por receita; produto/MP ficam de fora — producao = ficha tecnica
   (padaria tem pico de fim de semana — um sabado nao se parece com uma
   terca), com fallback pra media diaria simples quando aquele dia-da-semana
   tem poucas ocorrencias na janela.
-- produzir: max(0, max(comprometido, previsto) - em_estoque). Usa o MAIOR
-  entre comprometido e previsto pra nao contar duas vezes: se as lojas ja
-  pediram tudo do horizonte, o firme (comprometido) manda; se ainda vao
-  pedir, o historico (previsto) cobre o gap.
+- produzir: demanda diária menos estoque disponível. Por dia, demanda =
+  max(pedidos das lojas, previsão das lojas) + B2B + encomendas do site.
+  O histórico cobre o que as lojas ainda vão pedir; B2B e sob encomenda
+  são adicionais porque não participam desse histórico.
 
 A tela expoe metadados de profundidade (quantos pedidos / semanas o historico
 tem) pra o usuario calibrar a confianca da previsao.
@@ -440,7 +440,7 @@ def _hist_vendas_receita_por_dow(hist_ini, hist_fim, com_loja=False):
 
     Retorna (qtd_dow, soma_total, datas_total[, por_loja]) na MESMA forma do
     histórico de pedidos do balanço — média por recência, taxa residual e
-    Σ_dia max(firme, previsto) funcionam sem mudança. `com_loja=True` devolve
+    a composição da demanda diária funcionam sem mudança. `com_loja=True` devolve
     também dow->loja->data->qtd (pro drill-down 'de onde vem a previsão?')."""
     from datetime import datetime as _dt
     from datetime import time as _time
@@ -586,6 +586,148 @@ def _caps_por_retorno(receitas, estoque_de):
     return caps, retorno_ids
 
 
+def _demanda_firme_por_dia(inicio, fim, receitas):
+    """Demanda real por receita/data e origem, comum ao balanço e cronograma.
+
+    Loja ainda não enviada, B2B ainda não separado e site sob encomenda
+    usam os mesmos filtros, componentes e datas em todas as visões. Antes
+    o balanço contava B2B/site, mas a curva do cronograma lia só PedidoLoja:
+    uma encomenda sem histórico podia ter produzir > 0 e agenda toda zerada.
+    Retorna (totais, origens); origem = (loja_id, nome), com id None para
+    B2B e site. Apenas lê o banco.
+    """
+    nomes_loja = {l.id: l.nome for l in Loja.query.all()}
+    firme_dia = defaultdict(lambda: defaultdict(int))
+    firme_origem = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+
+    def _contrib(rid, data_ent, qtd, origem):
+        firme_dia[rid][data_ent] += qtd
+        firme_origem[rid][data_ent][origem] += qtd
+
+    rows = (db.session.query(PedidoItem.receita_id, PedidoLoja.loja_id,
+                             PedidoLoja.data_entrega, PedidoItem.quantidade)
+            .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
+            .filter(PedidoItem.receita_id.isnot(None),
+                    PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
+                    PedidoLoja.data_entrega >= inicio,
+                    PedidoLoja.data_entrega <= fim)
+            .all())
+    for rid, loja_id, data_ent, qtd in rows:
+        _contrib(rid, data_ent, int(qtd or 0),
+                 (loja_id, nomes_loja.get(loja_id, '?')))
+
+    # 2b. Vendas B2B AGUARDANDO SEPARACAO (estoque_baixado_em NULL): desde
+    # 07/07/2026 a baixa do B2B acontece na separacao pelo padeiro, entao a
+    # venda pendente e demanda COMPROMETIDA — sem este bloco o balanco acha
+    # o freezer livre e subproduz (a demanda so "aparecia" porque a baixa
+    # imediata reduzia em_estoque). Cesta explode em componentes-RECEITA
+    # (mesma explosao da baixa; componente produto/MP fica fora — o balanco
+    # e por receita). Quando a venda baixa (separacao), ela SAI daqui e
+    # passa a reduzir em_estoque — nunca conta 2x. Alimenta firme_dia
+    # (demanda iminente) e comprometido, igual ao PedidoLoja.
+    from app.models import Produto, VendaB2B, VendaB2BItem
+    from app.services.cestas import componentes_de_cesta
+    b2b_rows = (db.session.query(VendaB2BItem, VendaB2B.data_entrega)
+                .join(VendaB2B, VendaB2BItem.venda_id == VendaB2B.id)
+                .filter(VendaB2B.status == 'ativa',
+                        VendaB2B.estoque_baixado_em.is_(None),
+                        VendaB2B.data_entrega.isnot(None),
+                        VendaB2B.data_entrega >= inicio,
+                        VendaB2B.data_entrega <= fim)
+                .all())
+    _cache_cesta = {}
+
+    for vi, data_ent in b2b_rows:
+        qtd = int(vi.quantidade or 0)
+        if qtd <= 0:
+            continue
+        if vi.receita_id:
+            if vi.receita_id in receitas:
+                _contrib(vi.receita_id, data_ent, qtd, (None, 'Vendas B2B'))
+            continue
+        if vi.produto_id not in _cache_cesta:
+            _cache_cesta[vi.produto_id] = componentes_de_cesta(
+                Produto.query.get(vi.produto_id))
+        for col, comp_id, _nome, qtd_por in _cache_cesta[vi.produto_id]:
+            if col != 'receita_id' or comp_id not in receitas:
+                continue
+            q = int(round(qtd * qtd_por))
+            if q > 0:
+                _contrib(comp_id, data_ent, q, (None, 'Vendas B2B'))
+
+    # 2c. Pedidos do SITE sob encomenda (D+2, dono 21/07/2026): item marcado
+    # `sob_encomenda` é PRODUZIDO pro pedido — não sai da prateleira (a venda
+    # NÃO baixa EstoqueLoja) e NÃO é lido em nenhum outro ramo do balanço,
+    # então entra aqui como demanda firme PURA (aditivo, sem risco de dobra).
+    # Conta do pagamento até a entrega (status ativo, não cancelado/entregue);
+    # data_entrega na janela [inicio, fim]. SÓ os itens sob encomenda; os
+    # demais itens do mesmo pedido saem da prateleira e não produzem aqui.
+    # Cesta explode em receita (mesmo padrão do B2B). DIVULGAÇÃO ENTRA desde
+    # 23/08/2026 (caso 84F17F68: Caixa de Mini de cortesia invisível pro
+    # padeiro — "divulgação fora" vale pra faturamento/previsão de VENDA,
+    # não pra produzir; item sob encomenda de cortesia é produzido pro
+    # pedido como qualquer outro, e os tipos venda_site_divulgacao* estão
+    # fora de VENDA_TIPOS_DEMANDA, então não há dupla contagem).
+    from app.models import PedidoOnline, PedidoOnlineItem
+    from app.services.loja_estoque_reserva import composicao_escolhida
+    enc_rows = (db.session.query(PedidoOnlineItem, PedidoOnline.data_entrega)
+                .join(PedidoOnline,
+                      PedidoOnlineItem.pedido_id == PedidoOnline.id)
+                .filter(PedidoOnline.status.in_(
+                            ('pago', 'em_preparo', 'a_caminho',
+                             'divulgacao')),
+                        PedidoOnline.data_entrega.isnot(None),
+                        PedidoOnline.data_entrega >= inicio,
+                        PedidoOnline.data_entrega <= fim)
+                .all())
+
+    for pi, data_ent in enc_rows:
+        qtd = int(pi.quantidade or 0)
+        if qtd <= 0:
+            continue
+        if pi.receita_id:
+            # Só receita sob encomenda (a flag mora na Receita).
+            rec = receitas.get(pi.receita_id)
+            if rec is not None and getattr(rec, 'sob_encomenda', False):
+                _contrib(pi.receita_id, data_ent, qtd, (None, 'Encomenda site'))
+            continue
+        if pi.produto_id:
+            prod = Produto.query.get(pi.produto_id)
+            if not (prod is not None and getattr(prod, 'sob_encomenda', False)):
+                continue
+            # Menu configurável (26/07/2026): a composição que vale é a
+            # ESCOLHIDA pelo cliente, gravada no pedido — o cadastro guarda
+            # só a pré-seleção e produziria a cesta errada. Não cacheia:
+            # varia por item de pedido, não por produto.
+            comps_pi = composicao_escolhida(pi)
+            if comps_pi is None:
+                if pi.produto_id not in _cache_cesta:
+                    _cache_cesta[pi.produto_id] = componentes_de_cesta(prod)
+                comps_pi = _cache_cesta[pi.produto_id]
+            for col, comp_id, _nome, qtd_por in comps_pi:
+                if col != 'receita_id' or comp_id not in receitas:
+                    continue
+                q = int(round(qtd * qtd_por))
+                if q > 0:
+                    _contrib(comp_id, data_ent, q, (None, 'Encomenda site'))
+
+    return firme_dia, firme_origem
+
+
+def _demanda_planejada(origens, previsto):
+    """Previsão cobre lojas; B2B/site são pedidos adicionais fora do histórico.
+
+    As fontes de previsão leem PedidoLoja ou MovEstoqueLoja. B2B sai da
+    indústria, e sob encomenda não gera baixa de loja: absorvê-los no max
+    apagava pedidos já vendidos quando o histórico das lojas era maior.
+    """
+    lojas = sum(q for (loja_id, _nome), q in origens.items()
+                if loja_id is not None)
+    adicionais = sum(q for (loja_id, _nome), q in origens.items()
+                     if loja_id is None)
+    return max(lojas, previsto) + adicionais
+
+
 def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                       inicio_offset_dias=0, motor='pedidos'):
     """Balanco de producao da industria por receita.
@@ -633,7 +775,6 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     # Receitas ativas (nao arquivadas). Producao = ficha tecnica = Receita.
     receitas = {r.id: r for r in Receita.query
                 .filter(Receita.arquivada_em.is_(None)).all()}
-    nomes_loja = {l.id: l.nome for l in Loja.query.all()}
     # Lead time de producao por receita (dias). 0 = assa no mesmo dia. Desloca
     # a janela de demanda: "produzir HOJE = entregas em (hoje + lead)". Pra o
     # pao de 48h (lead=2) nao faltar, o plano de hoje ja olha 2 dias a frente.
@@ -662,159 +803,49 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     # grid apos o envio). Pendencia VENCIDA (plano de dias anteriores) NAO
     # conta — pode nunca ser produzida (a auditoria trata).
     em_producao = defaultdict(int)
+    em_producao_por_dia = defaultdict(lambda: defaultdict(int))
     if inicio_d > hoje_d:
         from app.models import PlanejamentoItem, PlanejamentoProducao
-        for rid_w, alvo_w, prod_w in (db.session.query(
+        for rid_w, alvo_w, prod_w, data_w in (db.session.query(
                 PlanejamentoItem.receita_id, PlanejamentoItem.qtd_alvo,
-                PlanejamentoItem.produzido_qtd)
+                PlanejamentoItem.produzido_qtd, PlanejamentoProducao.data)
                 .join(PlanejamentoProducao,
                       PlanejamentoItem.planejamento_id == PlanejamentoProducao.id)
                 .filter(PlanejamentoProducao.data >= hoje_d,
                         PlanejamentoProducao.data < inicio_d,
                         PlanejamentoProducao.enviado_ao_padeiro.isnot(False),
                         PlanejamentoItem.dispensada_em.is_(None)).all()):
-            em_producao[rid_w] += max(0, int(alvo_w or 0) - int(prod_w or 0))
+            restante = max(0, int(alvo_w or 0) - int(prod_w or 0))
+            em_producao[rid_w] += restante
+            pronta_em = data_w + timedelta(days=lead.get(rid_w, 0))
+            em_producao_por_dia[rid_w][pronta_em.isoformat()] += restante
 
     # 2. Firme por (receita, dia de entrega) — pedidos ainda nao baixados, de
     # HOJE ate o fim da janela de producao+lead. Capturado POR DIA pra:
     #  (a) somar o Comprometido da janela PRODUCIVEL [inicio+lead, ...]; e
     #  (b) medir a demanda IMINENTE (entregas entre hoje e o inicio da janela)
     #      que consome estoque mas nao da mais pra produzir neste horizonte.
-    firme_dia = defaultdict(lambda: defaultdict(int))   # rid -> data -> qtd
+    comp_fim = horizonte_fim + timedelta(days=max_lead)
+    _firme_dia, firme_origem = _demanda_firme_por_dia(hoje_d, comp_fim, receitas)
     comprometido = defaultdict(int)
     comprometido_loja = defaultdict(lambda: defaultdict(int))
-    comp_fim = horizonte_fim + timedelta(days=max_lead)
-    rows = (db.session.query(PedidoItem.receita_id, PedidoLoja.loja_id,
-                             PedidoLoja.data_entrega, PedidoItem.quantidade)
-            .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
-            .filter(PedidoItem.receita_id.isnot(None),
-                    PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
-                    PedidoLoja.data_entrega >= hoje_d,
-                    PedidoLoja.data_entrega <= comp_fim)
-            .all())
-    for rid, loja_id, data_ent, qtd in rows:
-        if data_ent is None:
-            continue
-        q = int(qtd or 0)
-        firme_dia[rid][data_ent] += q
-        L = lead.get(rid, 0)
-        if (inicio_d + timedelta(days=L) <= data_ent
-                <= inicio_d + timedelta(days=L + horizonte_dias - 1)):
-            comprometido[rid] += q
-            comprometido_loja[rid][loja_id] += q
-
-    # 2b. Vendas B2B AGUARDANDO SEPARACAO (estoque_baixado_em NULL): desde
-    # 07/07/2026 a baixa do B2B acontece na separacao pelo padeiro, entao a
-    # venda pendente e demanda COMPROMETIDA — sem este bloco o balanco acha
-    # o freezer livre e subproduz (a demanda so "aparecia" porque a baixa
-    # imediata reduzia em_estoque). Cesta explode em componentes-RECEITA
-    # (mesma explosao da baixa; componente produto/MP fica fora — o balanco
-    # e por receita). Quando a venda baixa (separacao), ela SAI daqui e
-    # passa a reduzir em_estoque — nunca conta 2x. Alimenta firme_dia
-    # (demanda iminente) e comprometido, igual ao PedidoLoja.
-    from app.models import Produto, VendaB2B, VendaB2BItem
-    from app.services.cestas import componentes_de_cesta
-    b2b_rows = (db.session.query(VendaB2BItem, VendaB2B.data_entrega)
-                .join(VendaB2B, VendaB2BItem.venda_id == VendaB2B.id)
-                .filter(VendaB2B.status == 'ativa',
-                        VendaB2B.estoque_baixado_em.is_(None),
-                        VendaB2B.data_entrega.isnot(None),
-                        VendaB2B.data_entrega >= hoje_d,
-                        VendaB2B.data_entrega <= comp_fim)
-                .all())
     comprometido_b2b = defaultdict(int)
-    _cache_cesta = {}
-
-    def _contrib_b2b(rid, data_ent, q):
-        firme_dia[rid][data_ent] += q
-        L = lead.get(rid, 0)
-        if (inicio_d + timedelta(days=L) <= data_ent
-                <= inicio_d + timedelta(days=L + horizonte_dias - 1)):
-            comprometido[rid] += q
-            comprometido_b2b[rid] += q
-
-    for vi, data_ent in b2b_rows:
-        qtd = int(vi.quantidade or 0)
-        if qtd <= 0:
-            continue
-        if vi.receita_id:
-            if vi.receita_id in receitas:
-                _contrib_b2b(vi.receita_id, data_ent, qtd)
-            continue
-        if vi.produto_id not in _cache_cesta:
-            _cache_cesta[vi.produto_id] = componentes_de_cesta(
-                Produto.query.get(vi.produto_id))
-        for col, comp_id, _nome, qtd_por in _cache_cesta[vi.produto_id]:
-            if col != 'receita_id' or comp_id not in receitas:
-                continue
-            q = int(round(qtd * qtd_por))
-            if q > 0:
-                _contrib_b2b(comp_id, data_ent, q)
-
-    # 2c. Pedidos do SITE sob encomenda (D+2, dono 21/07/2026): item marcado
-    # `sob_encomenda` é PRODUZIDO pro pedido — não sai da prateleira (a venda
-    # NÃO baixa EstoqueLoja) e NÃO é lido em nenhum outro ramo do balanço,
-    # então entra aqui como demanda firme PURA (aditivo, sem risco de dobra).
-    # Conta do pagamento até a entrega (status ativo, não cancelado/entregue);
-    # data_entrega na janela [hoje, comp_fim]. SÓ os itens sob encomenda; os
-    # demais itens do mesmo pedido saem da prateleira e não produzem aqui.
-    # Cesta explode em receita (mesmo padrão do B2B). DIVULGAÇÃO ENTRA desde
-    # 23/08/2026 (caso 84F17F68: Caixa de Mini de cortesia invisível pro
-    # padeiro — "divulgação fora" vale pra faturamento/previsão de VENDA,
-    # não pra produzir; item sob encomenda de cortesia é produzido pro
-    # pedido como qualquer outro, e os tipos venda_site_divulgacao* estão
-    # fora de VENDA_TIPOS_DEMANDA, então não há dupla contagem).
-    from app.models import PedidoOnline, PedidoOnlineItem
-    from app.services.loja_estoque_reserva import composicao_escolhida
-    enc_rows = (db.session.query(PedidoOnlineItem, PedidoOnline.data_entrega)
-                .join(PedidoOnline,
-                      PedidoOnlineItem.pedido_id == PedidoOnline.id)
-                .filter(PedidoOnline.status.in_(
-                            ('pago', 'em_preparo', 'a_caminho',
-                             'divulgacao')),
-                        PedidoOnline.data_entrega.isnot(None),
-                        PedidoOnline.data_entrega >= hoje_d,
-                        PedidoOnline.data_entrega <= comp_fim)
-                .all())
     comprometido_encomenda = defaultdict(int)
-
-    def _contrib_encomenda(rid, data_ent, q):
-        firme_dia[rid][data_ent] += q
+    for rid, datas in firme_origem.items():
         L = lead.get(rid, 0)
-        if (inicio_d + timedelta(days=L) <= data_ent
-                <= inicio_d + timedelta(days=L + horizonte_dias - 1)):
-            comprometido[rid] += q
-            comprometido_encomenda[rid] += q
-
-    for pi, data_ent in enc_rows:
-        qtd = int(pi.quantidade or 0)
-        if qtd <= 0:
-            continue
-        if pi.receita_id:
-            # Só receita sob encomenda (a flag mora na Receita).
-            rec = receitas.get(pi.receita_id)
-            if rec is not None and getattr(rec, 'sob_encomenda', False):
-                _contrib_encomenda(pi.receita_id, data_ent, qtd)
-            continue
-        if pi.produto_id:
-            prod = Produto.query.get(pi.produto_id)
-            if not (prod is not None and getattr(prod, 'sob_encomenda', False)):
+        janela_ini = inicio_d + timedelta(days=L)
+        janela_fim = janela_ini + timedelta(days=horizonte_dias - 1)
+        for data_ent, origens in datas.items():
+            if not janela_ini <= data_ent <= janela_fim:
                 continue
-            # Menu configurável (26/07/2026): a composição que vale é a
-            # ESCOLHIDA pelo cliente, gravada no pedido — o cadastro guarda
-            # só a pré-seleção e produziria a cesta errada. Não cacheia:
-            # varia por item de pedido, não por produto.
-            comps_pi = composicao_escolhida(pi)
-            if comps_pi is None:
-                if pi.produto_id not in _cache_cesta:
-                    _cache_cesta[pi.produto_id] = componentes_de_cesta(prod)
-                comps_pi = _cache_cesta[pi.produto_id]
-            for col, comp_id, _nome, qtd_por in comps_pi:
-                if col != 'receita_id' or comp_id not in receitas:
-                    continue
-                q = int(round(qtd * qtd_por))
-                if q > 0:
-                    _contrib_encomenda(comp_id, data_ent, q)
+            for (loja_id, nome), qtd in origens.items():
+                comprometido[rid] += qtd
+                if loja_id is not None:
+                    comprometido_loja[rid][loja_id] += qtd
+                elif nome == 'Vendas B2B':
+                    comprometido_b2b[rid] += qtd
+                else:
+                    comprometido_encomenda[rid] += qtd
 
     # 3. Historico pra previsao por dia-da-semana. Conta DATAS distintas (nao
     # linhas) pra a media: varias lojas no mesmo dia somam, mas a media e por
@@ -858,7 +889,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
     # subproduzia: dias ja pedidos ACIMA da media nao compensam dias ainda nao
     # pedidos que virao NA media — a demanda real e o max dia a dia (a projecao
     # do cronograma ja usava essa conta e podia acusar 'vai faltar' enquanto o
-    # total do balanco dizia que nao).
+    # total do balanco dizia que nao). B2B e encomendas do site SOMAM
+    # depois do max das lojas, pois nao fazem parte do historico.
     residual_rate = {rid: _taxa_residual(qtd_dow.get(rid, {}), soma_total.get(rid, 0),
                                          dias_calendario_janela)
                      for rid in receitas}
@@ -900,7 +932,6 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                     for i in range(horizonte_dias)]
         rec_rid = receitas.get(rid)
         for d in dias_rid:
-            f_d = float(firme_dia[rid].get(d, 0))
             p_d = 0.0
             if (usa_p or usa_v) and _fornada_no_dia(rec_rid, d):
                 dow = d.weekday()
@@ -913,7 +944,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
                 p_d = max(p_ped, p_ven) if motor == 'maior' else (
                     p_ven if motor == 'vendas' else p_ped)
                 previsto[rid] += p_d
-            demanda_soma[rid] += max(f_d, p_d)
+            demanda_soma[rid] += _demanda_planejada(
+                firme_origem[rid].get(d, {}), p_d)
 
     def _previsto_dia(rid, dia):
         if not _fornada_no_dia(receitas.get(rid), dia):
@@ -941,8 +973,9 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         d = hoje_d
         fim_pre = inicio_d + timedelta(days=L - 1)
         while d <= fim_pre:
-            pre_demanda[rid] += max(int(firme_dia[rid].get(d, 0)),
-                                    int(round(_previsto_dia(rid, d))))
+            pre_demanda[rid] += _demanda_planejada(
+                firme_origem[rid].get(d, {}),
+                int(round(_previsto_dia(rid, d))))
             d += timedelta(days=1)
 
     # 5. Monta itens — so receitas com algum sinal (estoque/comprometido/
@@ -961,6 +994,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         # pronto), por isso o max() vem antes da soma.
         est_efetivo = max(0, est - pre_demanda.get(rid, 0)) + wip
         comp = comprometido.get(rid, 0)
+        firme_iminente = sum(qtd for data_ent, qtd in _firme_dia[rid].items()
+                            if data_ent < inicio_d + timedelta(days=lead[rid]))
         prev = int(ceil(previsto.get(rid, 0)))
         # Piso do estoque minimo da industria (freezer): o alvo do dia nunca
         # cai abaixo do minimo cadastrado na ficha — mantem um colchao no
@@ -968,9 +1003,10 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
         # Receita com minimo cadastrado NUNCA some da tela: precisa aparecer
         # pra o piso valer mesmo sem estoque/demanda no momento.
         minimo_ind = int(rec.estoque_minimo_industria or 0)
-        if est == 0 and comp == 0 and prev == 0 and wip == 0 and minimo_ind == 0:
+        if (est == 0 and comp == 0 and prev == 0 and wip == 0
+                and minimo_ind == 0 and firme_iminente == 0):
             continue
-        # Demanda = Σ_dia max(firme_d, previsto_d) — ver bloco 4. Nunca menor
+        # Demanda diaria de lojas + B2B/site — ver bloco 4. Nunca menor
         # que max(comp, prev) (o agregado antigo); a diferenca e exatamente a
         # subproducao dos dias mistos.
         demanda = int(ceil(demanda_soma.get(rid, 0.0)))
@@ -1004,6 +1040,8 @@ def balanco_industria(horizonte_dias=7, janela_semanas=6, usar_cache=True,
             'em_estoque': est,
             'em_estoque_efetivo': est_efetivo,
             'em_producao': wip,
+            'em_producao_por_dia': dict(em_producao_por_dia.get(rid, {})),
+            'comprometido_iminente': firme_iminente,
             'estoque_nao_abate': nao_abate,
             'comprometido': comp,
             'previsto': prev,
@@ -1714,7 +1752,8 @@ def media_semanal_pedidos(horizonte_dias=7, janela_semanas=6,
 
 def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                               inicio_offset_dias=0, seguranca_pct=0,
-                              ressincronizar_datas=None):
+                              ressincronizar_datas=None,
+                              pedidos_bloqueados=None, datas_bloqueadas=None):
     """Maneira 2 — previsao de pedido por VENDA + ESTOQUE (ponto de reposicao).
 
     `ressincronizar_datas` (10/08/2026, auto-pedidos): datas cujo RASCUNHO
@@ -1725,6 +1764,12 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     param (tela), dia com QUALQUER pedido segue travado como sempre — e dia
     com pedido de HUMANO segue travado mesmo listado aqui (as linhas dele
     nao sao rascunho automatico).
+
+    `pedidos_bloqueados`: pares (loja_id, data) em que o cron não criará
+    pedido (ex.: cancelado por humano). `datas_bloqueadas`: datas inteiras
+    sem criação (ex.: amanhã após o corte). A simulação credita somente
+    entregas JÁ PEDIDAS nesses dias; nunca uma sugestão que será descartada
+    na materialização. Sem os parâmetros, a grade manual continua livre.
 
     Pra cada (loja, receita): mede o consumo medio POR DIA-DA-SEMANA e simula o
     estoque dia a dia partindo do saldo ATUAL. Quando o estoque projetado nao
@@ -1765,6 +1810,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     hist_ini = hoje_d - timedelta(days=7 * janela_semanas)
     hist_fim = hoje_d - timedelta(days=1)
     dias_futuros = [inicio_d + timedelta(days=i) for i in range(horizonte_dias)]
+    pedidos_bloqueados = set(pedidos_bloqueados or [])
+    datas_bloqueadas = set(datas_bloqueadas or [])
 
     receitas = {r.id: r for r in Receita.query
                 .filter(Receita.arquivada_em.is_(None),
@@ -1873,7 +1920,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
     # venda manda quando passa do piso.
     diario_loja = defaultdict(lambda: defaultdict(int))
     # Modo fresco por venda: reposição diária baseada somente no giro do mesmo
-    # dia da semana, sem carregar estoque nem aplicar caixa/mínimo globais.
+    # dia da semana, sem carregar estoque nem aplicar mínimo global. A caixa
+    # é livre para unidades; múltiplos obrigatórios em g/ml seguem respeitados.
     venda_diaria_loja = defaultdict(lambda: defaultdict(bool))
     for loja_id, rid, mid, q, qres, emin, pdia, venda_dia in (db.session.query(
             EstoqueLoja.loja_id, EstoqueLoja.receita_id,
@@ -1954,7 +2002,9 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             continue
         chave_ld = (loja_id, data_ent.isoformat())
         if _rascunho_auto(status_p, criado_p, modif_p, obs_p):
-            if data_ent.isoformat() in ressinc:
+            if (data_ent.isoformat() in ressinc
+                    and data_ent not in datas_bloqueadas
+                    and (loja_id, data_ent) not in pedidos_bloqueados):
                 _dias_sub.add(chave_ld)
         else:
             _dias_com_outro.add(chave_ld)
@@ -2066,8 +2116,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
             # clampado em 0 por dia: estoque projetado negativo e venda
             # PERDIDA (nao vira demanda acumulada) — sem o clamp, a janela
             # abriria pedindo a venda perdida de volta e SUPER-pediria.
-            # (Difere DE PROPOSITO do dia travado dentro da janela, que NAO
-            # clampa: la o deficit segue visivel na propria grade.)
+            # Na grade manual o dia com pedido conserva o déficit visível;
+            # datas explicitamente bloqueadas pelo cron seguem este clamp.
             for d in dias_pre_janela:
                 # Fornada especial nao vende fora de sab/dom, mas uma
                 # entrega agendada num dia comum ainda credita o saldo.
@@ -2108,6 +2158,8 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 # Coluna Venda/sem mostra o realizado; a unidade de descoberta
                 # afeta apenas a sugestao, nao reescreve o historico exibido.
                 venda_total += venda_observada_d
+                dia_bloqueado = (d in datas_bloqueadas
+                                or (loja.id, d) in pedidos_bloqueados)
                 if d.isoformat() in ja_tem_loja:
                     # Dia travado: a tela nao deixa sugerir e o gerar pula. O
                     # estoque projetado recebe a ENTREGA JA PEDIDA (qtd real),
@@ -2119,14 +2171,28 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                     por_dia[i] = 0
                     if not venda_diaria:
                         estoque = estoque + entrega - consumo_d
+                        if dia_bloqueado:
+                            estoque = max(0.0, estoque)
+                    continue
+                if dia_bloqueado:
+                    # O cron não vai criar esta entrega. O consumo reduz o
+                    # saldo real; eventual falta é venda perdida, não uma
+                    # encomenda acumulada para os dias seguintes (mesma
+                    # regra da simulação anterior ao início da janela).
+                    if not venda_diaria:
+                        estoque = max(0.0, estoque - consumo_d)
                     continue
                 # Produto fresco entregue todos os dias nesta loja: usa só a
                 # venda média do MESMO dia da semana. Não repõe merma, não
-                # desconta estoque antigo e não fecha na caixa/mínimo global.
+                # desconta estoque antigo nem aplica mínimo global. Em
+                # unidades a caixa é livre; em g/ml o lote é obrigatório.
                 if venda_diaria:
                     pedido = int(ceil(venda_d - _EPS_ULP))
                     if diario > 0 and pedido < diario:
                         pedido = diario
+                    if (pedido > 0 and caixa > 1 and rid is not None
+                            and receitas[rid].medida_em_gramas):
+                        pedido = ((pedido + caixa - 1) // caixa) * caixa
                     por_dia[i] = max(0, pedido)
                     continue
                 # Alvo do dia = consumo + estoque de seguranca opcional (sobra
@@ -2184,7 +2250,7 @@ def sugerir_pedidos_por_venda(horizonte_dias=7, janela_semanas=6,
                 'estoque_minimo': minimo_est,
                 # Pedido minimo diario (0 = sem piso incondicional).
                 'pedido_minimo_diario': diario,
-                # Reposição fresca por venda do dia (sem carry/caixa global).
+                # Reposição fresca por venda do dia (sem carregar estoque).
                 'reposicao_por_venda_diaria': venda_diaria,
                 # Dias em que a sugestao ganhou UMA unidade de descoberta
                 # porque a oferta comparavel recente esgotou.
@@ -2300,8 +2366,12 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
                 efetivo = int(it.get('em_producao', 0) or 0)
             else:
                 efetivo = int(it.get('em_estoque_efetivo', it.get('em_estoque', 0)) or 0)
-            demanda = max(int(it.get('comprometido', 0) or 0),
-                          int(it.get('previsto', 0) or 0))
+            # Usa a demanda diária já consolidada pelo balanço. O max
+            # agregado liberava estoque comprometido em datas diferentes.
+            demanda = it.get('demanda')
+            if demanda is None:
+                demanda = max(int(it.get('comprometido', 0) or 0),
+                              int(it.get('previsto', 0) or 0))
             return max(0, efetivo - demanda)
         rec_f = receitas.get(rid)
         if rec_f is not None and getattr(rec_f, 'estoque_nao_abate', False):
@@ -2506,25 +2576,10 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     lead = {rid: int(rec.dias_producao or 0) for rid, rec in receitas.items()}
     max_lead = max(lead.values(), default=0)
 
-    # firme por (receita, dia de entrega) na janela de entrega do horizonte —
-    # so pra dar FORMATO a curva diaria (o total ja vem do balanco). Tambem por
-    # LOJA (firme_loja) pra a projecao do saldo mostrar as saidas DATADAS com a
-    # loja de cada entrega.
+    # A curva e os alertas usam as MESMAS demandas do balanço, incluindo
+    # B2B e encomendas do site. A origem acompanha a saída para rastreá-la.
     deliv_fim = inicio_d + timedelta(days=horizonte_dias - 1 + max_lead)
-    nomes_loja = {l.id: l.nome for l in Loja.query.all()}
-    firme = defaultdict(lambda: defaultdict(int))
-    firme_loja = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    for rid, loja_id, data_ent, qtd in (db.session.query(
-            PedidoItem.receita_id, PedidoLoja.loja_id,
-            PedidoLoja.data_entrega, PedidoItem.quantidade)
-            .join(PedidoLoja, PedidoItem.pedido_id == PedidoLoja.id)
-            .filter(PedidoItem.receita_id.isnot(None),
-                    PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
-                    PedidoLoja.data_entrega >= inicio_d,
-                    PedidoLoja.data_entrega <= deliv_fim).all()):
-        if data_ent is not None:
-            firme[rid][data_ent] += int(qtd or 0)
-            firme_loja[rid][data_ent][loja_id] += int(qtd or 0)
+    firme, firme_origem = _demanda_firme_por_dia(hoje_d, deliv_fim, receitas)
 
     # historico por (receita, dow) pra o previsto (curva diaria)
     qtd_dow = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
@@ -2607,9 +2662,9 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         gross = []
         for i in range(horizonte_dias):
             entrega = dias_prod[i] + timedelta(days=L)
-            firm_i = int(firme[rid].get(entrega, 0) or 0)
-            gross.append(max(float(firm_i),
-                             float(_previsto_dia(rid, entrega))))
+            gross.append(_demanda_planejada(
+                firme_origem[rid].get(entrega, {}),
+                float(_previsto_dia(rid, entrega))))
         # Estoque (efetivo) cobre os dias mais PROXIMOS primeiro -> os primeiros
         # dias produzem menos. O residual (demanda apos estoque) vira o PESO da
         # distribuicao; o total continua sendo o "Produzir" do balanco.
@@ -3090,8 +3145,8 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                 for rr in com_espaco:
                     rid = rr['receita_id']
                     entrega = dia_prod + timedelta(days=lead.get(rid, 0))
-                    peso_dia = max(
-                        float(firme[rid].get(entrega, 0) or 0),
+                    peso_dia = _demanda_planejada(
+                        firme_origem[rid].get(entrega, {}),
                         float(_previsto_dia(rid, entrega)))
                     peso_hist = max(float(soma_total.get(rid, 0) or 0),
                                     float(soma_v.get(rid, 0) or 0))
@@ -3165,9 +3220,13 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     # Injeta linha zerada com o estoque atual; nao entram na explosao (0 demanda).
     ja_out = {rr['receita_id'] for rr in receitas_out}
     bal_est = {it['receita_id']: it for it in bal['itens']}
-    vendaveis = (Receita.query
-                 .filter(Receita.arquivada_em.is_(None),
-                         Receita.sugerir_pedido_loja.isnot(False)).all())
+    # Demanda firme antes do lead também precisa de linha para alertar.
+    # A flag de sugestão da loja não pode ocultar encomenda já vendida.
+    receitas_com_firme = {it['receita_id'] for it in bal['itens']
+                          if it['comprometido'] or it['comprometido_iminente']}
+    vendaveis = [rec for rec in receitas.values()
+                 if rec.sugerir_pedido_loja is not False
+                 or rec.id in receitas_com_firme]
     for rec in sorted(vendaveis, key=lambda r: r.id):
         if rec.id in ja_out:
             continue
@@ -3233,13 +3292,13 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # O fisico real segue visivel em rr['em_estoque'].
         if rr.get('estoque_nao_abate'):
             est_ef = int(it.get('em_producao', 0) or 0) if it else 0
-        # Demanda do balanco = Σ_dia max(firme_d, previsto_d) (Fase 2). Linha
+        # Demanda do balanco: max diario das lojas + B2B/site. Linha
         # fora do balanco (insumo injetado) cai no agregado antigo.
         demanda = int(it['demanda']) if it and it.get('demanda') is not None \
             else max(comp, prev)
         rr['comprometido'] = comp
         rr['previsto'] = prev        # a PREVISAO (historico) que tambem puxa producao
-        rr['demanda'] = demanda      # Σ_dia max(firme, previsto) — o que o balanco usa
+        rr['demanda'] = demanda      # mesma demanda diaria do balanco
         rr['em_estoque_efetivo'] = est_ef   # estoque que sobra apos entregas iminentes
         # Saldo contra a DEMANDA e o estoque EFETIVO: bate com o "Produzir" da
         # linha (-saldo == produzir quando negativo). Antes era estoque -
@@ -3251,7 +3310,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                            if it else [])
         rr.setdefault('breakdown_bom', [])   # so insumo tem; produto fica vazio
         # Projecao dia a dia: estoque + producao PRONTA no dia - DEMANDA do dia
-        # (firme datado OU previsto do dia, o maior) => saldo no fim do dia. 1o dia
+        # (max das lojas + B2B/site) => saldo no fim do dia. 1o dia
         # negativo = "vai faltar". A demanda inclui o previsto desde 30/06; antes
         # so descontava o firme e a projecao dizia "nao falta" a toa.
         # A producao entra no estoque quando fica PRONTA (dia de inicio + lead),
@@ -3263,22 +3322,38 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # dia de INICIO). Producao iniciada nos ultimos L dias fica pronta depois
         # do horizonte -> nao entra na projecao (correto).
         L = lead.get(rid, 0)
-        # Flag "estoque nao abate": a projecao parte do numero de
-        # planejamento (WIP), nunca do fisico do ledger.
-        running = est_ef if rr.get('estoque_nao_abate') else int(rr['em_estoque'])
+        # O saldo inicial é o de HOJE, avançado até o início visível.
+        # Usar o físico bruto aqui reutilizava estoque consumido antes da
+        # janela; usar est_ef descontaria também os dias de lead que ainda
+        # vamos simular. WIP é só o restante não confirmado de ordens ANTES
+        # do grid e entra na data de término, sem duplicar produção real.
+        wip_dias = it.get('em_producao_por_dia', {}) if it else {}
+        running = 0 if rr.get('estoque_nao_abate') else int(rr['em_estoque'])
+        running_f = running
+        dia_pre = hoje_d
+        while dia_pre < inicio_d:
+            entrada_pre = int(wip_dias.get(dia_pre.isoformat(), 0))
+            running += entrada_pre - _demanda_planejada(
+                firme_origem[rid].get(dia_pre, {}),
+                int(round(_previsto_dia(rid, dia_pre))))
+            running_f += entrada_pre - int(firme[rid].get(dia_pre, 0))
+            dia_pre += timedelta(days=1)
         projecao = []
         rr['dia_falta'] = None
         for i, d in enumerate(dias_prod):
             prod_i = int(rr['por_dia'][i - L]['qtd'] or 0) if i - L >= 0 else 0
+            prod_i += int(wip_dias.get(d.isoformat(), 0))
             firme_i = int(firme[rid].get(d, 0))
             prev_i = int(round(_previsto_dia(rid, d)))   # previsto saindo no dia d
-            saida_i = max(firme_i, prev_i)               # demanda do dia
+            saida_i = _demanda_planejada(
+                firme_origem[rid].get(d, {}), prev_i)
             running += prod_i - saida_i
             if running < 0 and rr['dia_falta'] is None:
                 rr['dia_falta'] = dias_out[i]['label']
             saida_lojas = sorted(
-                ({'loja_nome': nomes_loja.get(lid, '?'), 'qtd': q}
-                 for lid, q in firme_loja[rid].get(d, {}).items() if q > 0),
+                ({'loja_nome': nome, 'qtd': q}
+                 for (_lid, nome), q in firme_origem[rid].get(d, {}).items()
+                 if q > 0),
                 key=lambda b: -b['qtd'])
             projecao.append({
                 'label': dias_out[i]['label'], 'saida': saida_i,
@@ -3291,15 +3366,15 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # datadas. Se o saldo firme fica negativo num dia COM entrega, aquela
         # entrega nao tem produto nem produzindo como programado (lead tarde
         # demais, celula editada pra baixo, estoque comido por entrega
-        # anterior). Separada da projecao da tela (que desconta max(firme,
-        # previsto)) de proposito: PREVISAO de historico nao pode acusar
-        # entrega em risco — o alerta e sobre pedido real. Como firme <=
-        # max(firme, previsto), todo alerta aqui tambem aparece como falta na
+        # anterior). Separada da projecao da tela (que inclui previsao)
+        # de proposito: historico nao pode acusar entrega em risco — o
+        # alerta e sobre pedido real. Como firme <= demanda planejada,
+        # todo alerta aqui tambem aparece como falta na
         # projecao detalhada (subconjunto, nunca contradiz a tela).
-        running_f = est_ef if rr.get('estoque_nao_abate') else int(rr['em_estoque'])
         entregas_risco = []
         for i, d in enumerate(dias_prod):
             prod_i = int(rr['por_dia'][i - L]['qtd'] or 0) if i - L >= 0 else 0
+            prod_i += int(wip_dias.get(d.isoformat(), 0))
             firme_i = int(firme[rid].get(d, 0))
             running_f += prod_i - firme_i
             if running_f < 0 and firme_i > 0:
@@ -3415,18 +3490,11 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
     if motor in ('vendas', 'maior'):
         fontes['vendas'] = _fonte_vendas()
 
-    # Firme: pedidos atuais (ainda nao baixados) na janela de entrega.
+    # Mesma fonte do balanço e da curva: detalhe não pode esconder B2B/site.
     deliv_fim = inicio_d + timedelta(days=horizonte_dias - 1 + L)
-    firme = defaultdict(lambda: defaultdict(int))            # data -> loja -> qtd
-    for loja_id, data_ent, qtd in (db.session.query(
-            PedidoLoja.loja_id, PedidoLoja.data_entrega, PedidoItem.quantidade)
-            .join(PedidoItem, PedidoItem.pedido_id == PedidoLoja.id)
-            .filter(PedidoItem.receita_id == rec.id,
-                    PedidoLoja.status.in_(STATUS_PEDIDO_NAO_BAIXADOS),
-                    PedidoLoja.data_entrega >= inicio_d,
-                    PedidoLoja.data_entrega <= deliv_fim).all()):
-        if data_ent is not None:
-            firme[data_ent][loja_id] += int(qtd or 0)
+    _firme_total, firme_origem = _demanda_firme_por_dia(
+        inicio_d, deliv_fim, {rec.id: rec})
+    firme = firme_origem.get(rec.id, {})
 
     datas_possiveis_dow = _datas_por_dow(hist_ini, hist_fim)   # denom da media
 
@@ -3447,6 +3515,7 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
 
     dias = []
     total_previsto_frac = 0.0
+    total_demanda_frac = 0.0
     total_firme = 0
     for i in range(horizonte_dias):
         prod_d = inicio_d + timedelta(days=i)
@@ -3484,9 +3553,12 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
 
         firme_d = firme.get(entrega, {})
         firme_lojas = sorted(
-            ({'loja_nome': nomes_loja.get(lid, '?'), 'qtd': q}
-             for lid, q in firme_d.items() if q > 0), key=lambda x: -x['qtd'])
+            ({'loja_nome': nome, 'qtd': q}
+             for (_lid, nome), q in firme_d.items() if q > 0), key=lambda x: -x['qtd'])
         firme_i = sum(x['qtd'] for x in firme_lojas)
+        adicional = sum(q for (lid, _nome), q in firme_d.items() if lid is None)
+        demanda = _demanda_planejada(firme_d, previsto)
+        total_demanda_frac += demanda
         # Acumula a FRACAO (ex: 0,4/dia) e da ceil no fim — mesma conta do
         # balanco (previsao_producao.py:348). Antes arredondava cada dia
         # (round->0 em item de giro baixo) e o total da pagina dava 0 enquanto
@@ -3499,11 +3571,12 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
             'entrega_label': '%s %s' % (_DOW_PT[dow], entrega.strftime('%d/%m')),
             'dow_nome': _DOW_PT_LONGO[dow],
             'firme': firme_i, 'firme_lojas': firme_lojas,
+            'firme_adicional': adicional, 'demanda': round(demanda, 1),
             # Fracionario (1 casa): "em media 0,4/dia" e honesto; o total
             # (ceil) mostra o inteiro acionavel. usado compara com a fracao.
             'previsto': round(previsto, 1), 'fonte': fonte,
             'origem': origem,     # fonte que venceu o dia (motor 'maior')
-            'usado': 'firme' if firme_i >= previsto else 'previsto',
+            'usado': 'firme' if firme_i - adicional >= previsto else 'previsto',
             'previsto_lojas': previsto_lojas, 'historico': historico,
         })
 
@@ -3514,5 +3587,6 @@ def decompor_previsao(receita_id, horizonte_dias=7, janela_semanas=6,
         'horizonte_dias': horizonte_dias, 'janela_semanas': janela_semanas,
         'hist_ini': hist_ini.isoformat(), 'hist_fim': hist_fim.isoformat(),
         'total_previsto': total_previsto, 'total_firme': total_firme,
+        'total_demanda': int(ceil(total_demanda_frac)),
         'dias': dias, 'motor': motor,
     }

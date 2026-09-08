@@ -11,6 +11,32 @@
     se registrar aqui — se ninguém opera, não se constrói.
 </div>
 
+<div class="card mb-3">
+    <div class="card-body small">
+        <strong>Por onde começar</strong>
+        <p class="mb-2">Na tela <a href="{{ url_for('main.index') }}">Hoje</a>, o administrador tem quatro acessos diários:
+            <strong>Produção</strong>, <strong>Pedidos das lojas</strong>, <strong>Pedidos do site</strong> e <strong>Checklists</strong>.
+            As pendências e a produção confirmada ontem continuam logo abaixo.
+            No menu, abra <strong>Equipe</strong> para funcionários, escala e cargos e salários;
+            abra <strong>Todas as áreas</strong> para estoque, financeiro, cadastros e configurações.
+            Dentro de Checklists ficam os responsáveis por turno e a configuração dos itens.</p>
+        <p class="mb-0">O fluxo de abastecimento é:
+            <a href="{{ url_for('pedidos.lista') }}">acompanhar os pedidos das lojas</a> →
+            <a href="{{ url_for('industria_teste.index') }}">conferir o planejamento da produção</a> →
+            <a href="{{ url_for('padeiro.index') }}">confirmar o que foi produzido</a> →
+            <a href="{{ url_for('pedidos.separacao') }}">separar para envio</a> → a loja confere o recebimento.
+            O administrador acompanha as exceções diariamente; o padeiro confirma a produção e a loja confirma o que recebeu.</p>
+        <details class="mt-2">
+            <summary>Como os pedidos entram no cálculo</summary>
+            <ul class="mt-2 mb-0">
+                <li>Nas lojas, o motor considera estoque, consumo e entregas realmente previstas. Um dia cancelado pela equipe ou bloqueado pelo corte não simula uma reposição inexistente para os dias seguintes.</li>
+                <li>Na produção, a necessidade das lojas compara pedidos firmes e previsão. As encomendas do site e vendas B2B ainda pendentes são somadas e entram no calendário com suas datas e prazo de preparo. O estoque disponível é descontado da necessidade total.</li>
+                <li>A grade de pedidos respeita os múltiplos cadastrados para itens em gramas ou mililitros. Se houver um item fora do lote, o sistema informa o problema antes de salvar a seleção.</li>
+            </ul>
+        </details>
+    </div>
+</div>
+
 {# ── Automático ─────────────────────────────────────────────────────── #}
 <div class="card mb-3">
     <div class="card-header py-2 bg-success text-white"><strong class="small">

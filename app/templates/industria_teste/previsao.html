@@ -52,20 +52,22 @@
 <p class="text-muted mb-2">
     <strong>{{ dec.receita.nome }}</strong>
     {% if dec.receita.lead %}<span class="badge bg-light text-dark border">lead {{ dec.receita.lead }}d</span>{% endif %}
-    — o número de produção do cronograma sai do <strong>maior</strong> entre o
-    pedido <span style="color:#198754">firme</span> (loja já pediu) e o
+    — a necessidade das lojas usa o <strong>maior</strong> entre o
+    pedido <span style="color:#198754">firme da loja</span> e o
     <span style="color:#6f42c1">previsto</span>
     {% if motor == 'vendas' %}(média da <strong>venda real</strong> das lojas
     naquele dia-da-semana, estornos descontados + merma estrutural)
     {% elif motor == 'maior' %}(o <strong>maior</strong> entre a média de
     pedidos e a de vendas daquele dia-da-semana — cada dia mostra qual venceu)
     {% else %}(média do histórico de pedidos daquele dia-da-semana){% endif %}.
-    Abaixo, dia a dia, de onde cada número vem.
+    As <strong>encomendas do site e vendas B2B pendentes são somadas</strong>, pois atendem pedidos adicionais.
+    O cronograma desconta o estoque disponível e considera os lotes e o prazo de preparo.
 </p>
 
 <div class="prev-sum">
     <span>Soma firme na janela: <b class="text-success">{{ dec.total_firme }}</b></span>
     <span>Soma prevista na janela: <b style="color:#6f42c1">{{ dec.total_previsto }}</b></span>
+    <span>Necessidade antes do estoque: <b>{{ dec.total_demanda }}</b></span>
     <span class="text-muted">Histórico: {{ dec.janela_semanas }} semanas
         ({{ dec.hist_ini }} a {{ dec.hist_fim }})</span>
 </div>
@@ -79,8 +81,8 @@
             firme <span class="firme">{{ d.firme }}</span> ·
             previsto <span class="previsto">{{ ('%g'|format(d.previsto))|replace('.', ',') }}/dia</span>
             {% if motor == 'maior' %}<span class="badge bg-light text-dark border" title="Fonte que venceu neste dia">{{ 'vendas' if d.origem == 'vendas' else 'pedidos' }}</span>{% endif %}
-            {% if d.usado == 'firme' %}<span class="usado-tag firme-tag">usa firme</span>
-            {% else %}<span class="usado-tag">usa previsto</span>{% endif %}
+            <span class="usado-tag">necessidade {{ ('%g'|format(d.demanda))|replace('.', ',') }}</span>
+            {% if d.firme_adicional %}<small>(inclui {{ d.firme_adicional }} do site/B2B)</small>{% endif %}
         </span>
     </div>
     <div class="prev-body">

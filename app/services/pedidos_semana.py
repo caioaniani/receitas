@@ -15,6 +15,22 @@ from app.services.previsao_producao import invalidar_sugestao_cache
 from app.utils import agora, hoje
 
 
+class PedidoLoteInvalidoError(ValueError):
+    """A grade contém quantidade incompatível com o lote de item em g/ml."""
+
+
+def _validar_lotes_da_grade(pedidos):
+    """Valida toda a seleção antes de criar ou modificar qualquer pedido."""
+    from app.services.pedido_lote import violacoes_por_ids
+
+    itens = [{'receita_id': int(it['receita_id']), 'quantidade': it.get('qtd')}
+             for ped in pedidos for it in (ped.get('itens') or [])
+             if it.get('receita_id')]
+    erros = violacoes_por_ids(itens)
+    if erros:
+        raise PedidoLoteInvalidoError(' '.join(erros))
+
+
 def criar_pedidos_rascunho(pedidos, user_id):
     """Cria PedidoLoja em rascunho ('pendente') a partir de uma lista
     [{loja_id, data_entrega(date), itens: [{receita_id OU materia_prima_id,
@@ -28,6 +44,8 @@ def criar_pedidos_rascunho(pedidos, user_id):
 
     Retorna {'criados': n, 'pulados_existentes': n, 'itens': n}.
     """
+    pedidos = list(pedidos)
+    _validar_lotes_da_grade(pedidos)
     criados = pulados = total_itens = 0
     hoje_d = hoje()
     for ped in pedidos:
@@ -157,6 +175,8 @@ def aplicar_grade(pedidos, user_id):
     Retorna {'criados', 'itens', 'atualizados', 'itens_ajustados',
              'itens_ambiguos', 'pulados_nao_editavel', 'pulados_multiplos'}.
     """
+    pedidos = list(pedidos)
+    _validar_lotes_da_grade(pedidos)
     hoje_d = hoje()
     out = {'criados': 0, 'itens': 0, 'atualizados': 0, 'itens_ajustados': 0,
            'itens_ambiguos': 0, 'pulados_nao_editavel': 0,
