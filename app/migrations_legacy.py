@@ -2925,6 +2925,13 @@ def _migrate_postgres(app):
     _try("ALTER TABLE orcamento ADD COLUMN IF NOT EXISTS "
          "frete_valor NUMERIC(10, 2) NOT NULL DEFAULT 0")
 
+    # Desconto percentual POR ITEM no orçamento (09/09/2026): mantém o
+    # preço base e permite arredondar o total da linha como VendaB2BItem.
+    # O percentual espelha o tipo da venda; snapshots antigos continuam
+    # com desconto 0, sem alterar preço/subtotal. Commit 1: somente schema.
+    _try("ALTER TABLE orcamento_item ADD COLUMN IF NOT EXISTS "
+         "desconto_percentual DOUBLE PRECISION NOT NULL DEFAULT 0")
+
     # Descricao SEO (22/06/2026) — Receita nao tinha campo de descricao;
     # Produto tinha `descricao` curta. `descricao_seo` (TEXT) eh o que vira
     # publico na vitrine/JSON-LD/meta description.
@@ -3697,6 +3704,14 @@ def _migrate_sqlite(app):
     if cols_vb2b and 'frete_valor' not in cols_vb2b:
         cursor.execute("ALTER TABLE venda_b2b ADD COLUMN "
                        "frete_valor NUMERIC(10, 2) NOT NULL DEFAULT 0")
+
+    # Desconto percentual por item do orçamento — espelho do PostgreSQL.
+    # O default 0 preserva todos os valores já negociados nos snapshots.
+    cursor.execute("PRAGMA table_info(orcamento_item)")
+    cols_oi = [row[1] for row in cursor.fetchall()]
+    if cols_oi and 'desconto_percentual' not in cols_oi:
+        cursor.execute("ALTER TABLE orcamento_item ADD COLUMN "
+                       "desconto_percentual REAL NOT NULL DEFAULT 0")
 
     # NF de transferencia industria→loja (20/07/2026) — ver _migrate_postgres.
     cursor.execute("PRAGMA table_info(loja)")

@@ -1889,6 +1889,7 @@ def debug_schema():
             col_info('produto_item', 'item_nome'),
             col_info('venda_b2b', 'valor_total'),
             col_info('venda_b2b_item', 'preco_unitario'),
+            col_info('orcamento_item', 'desconto_percentual'),
             col_info('venda_b2b_parcela', 'valor'),
             col_info('venda_b2b_parcela', 'valor_pago'),
             col_info('venda_manual_loja', 'valor_unitario'),
