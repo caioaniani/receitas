@@ -4,6 +4,12 @@
 {% endif %}
 {%- endmacro %}
 
+{% macro produtos_site(class_name='sidebar-link') -%}
+{% if current_user.is_admin() and not current_user.somente_treino %}
+<a href="{{ url_for('main.loja_online_catalogo', filtro='no-site') }}" class="{{ class_name }}{{ ' active' if request.endpoint == 'main.loja_online_catalogo' }}"{% if request.endpoint == 'main.loja_online_catalogo' %} aria-current="page"{% endif %} title="Encontre produtos e tire itens de venda no site"><i class="bi bi-shop-window" aria-hidden="true"></i><span>Produtos do site</span></a>
+{% endif %}
+{%- endmacro %}
+
 {# Os quatro caminhos diários são os mesmos na Home e no menu.
    A auditoria tem acesso direto adicional no menu, sem aumentar os cards. #}
 {% macro rotina(variant='sidebar') -%}
@@ -20,6 +26,7 @@
     <span>{% if variant == 'sidebar' %}{{ titulo }}{% else %}<strong>{{ titulo }}</strong><small>{{ descricao }}</small>{% endif %}</span>
 </a>
 {% if variant == 'sidebar' and endpoint == 'industria_teste.index' %}{{ auditoria() }}{% endif %}
+{% if variant == 'sidebar' and endpoint == 'main.loja_online_pedidos' %}{{ produtos_site() }}{% endif %}
 {% endfor %}
 {% endif %}
 {%- endmacro %}

@@ -179,8 +179,7 @@ def test_checkout_remove_item_esgotado_por_plano(app):
 
 
 def test_catalogo_set_estoque_grava_na_loja_do_site(app):
-    """Editar o estoque na tela de catálogo cria/atualiza a MESMA EstoqueLoja
-    que /pedidos/estoque-loja usa, e registra um movimento de auditoria."""
+    """Endpoint legado atualiza EstoqueLoja e registra movimento de auditoria."""
     from app.extensions import db
     from app.models import EstoqueLoja, MovEstoqueLoja
     with app.app_context():
@@ -219,7 +218,8 @@ def test_catalogo_set_estoque_registra_delta(app):
         assert mov is not None and mov.quantidade == 6
 
 
-def test_catalogo_mostra_campo_estoque(app):
+def test_catalogo_encaminha_estoque_para_plano_do_dia(app):
+    """Catálogo não edita saldo físico; estoque do site fica no Plano do dia."""
     from app.extensions import db
     with app.app_context():
         loja = _site_loja(db)
@@ -228,7 +228,10 @@ def test_catalogo_mostra_campo_estoque(app):
     c = _owner(app)
     r = c.get('/admin/loja-online/catalogo?filtro=todos')
     assert r.status_code == 200
-    assert b'estoque-input' in r.data
+    assert b'estoque-input' not in r.data
+    assert b'/admin/loja-online/catalogo/estoque/' not in r.data
+    assert b'href="/admin/loja-online/plano-do-dia"' in r.data
+    assert 'Estoque do site · Plano do dia' in r.get_data(as_text=True)
     assert b'Item com estoque' in r.data
 
 

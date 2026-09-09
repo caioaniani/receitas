@@ -232,6 +232,22 @@ Tela do padeiro continua no topo do plano e em Mais opções da área. Não
 acrescentar um quinto card na Home. Cobertura no cronograma é uma previsão
 que considera executar o plano, não comprovação de estoque produzido.
 
+**Produtos do site (09/09/2026)**: acesso direto ao lado de Pedidos do site
+no menu do admin e no topo da lista de pedidos, entrando em `?filtro=no-site`.
+Curadoria tem busca por nome/categoria e botão explícito "Tirar do site",
+que reusa o POST de preço com `null` (owner-only). Não arquiva nem inativa
+o cadastro, não mexe em estoque/preços dos outros canais. Para republicar,
+o dono informa o preço novamente em Fora do site. A confirmação ocorre
+em diálogo da página, e a retirada espera qualquer gravação de preço em
+andamento para não ser desfeita por ela. Status/filtro No site vêm de
+`loja_catalogo.produtos_publicados`: foto opcional, menu incompleto fora.
+Nos menus, `preco_site` continua somente interruptor; preço cobrado vem
+dos componentes. Não criar flag paralela de publicação por conveniência.
+Decisão do dono (09/09): o estoque/disponibilidade do site continua no
+Plano do dia, com link explícito no catálogo e na área Vendas. Retirado
+o editor de estoque físico do catálogo para não confundir as duas coisas;
+nenhuma alteração em saldos, regras semanais, exceções ou reservas.
+
 Pedido do dono ("nao estou conseguindo pilotar o aviao"): o sistema cresceu
 mais rapido que a capacidade de operar; quase tudo era "pull" (lembrar de
 abrir tela). Tres pecas, UMA fonte de dados
@@ -3186,10 +3202,9 @@ confundir uma com a outra:
    (`loja_pagamento.py:67`): **entrega/express** baixa de `loja_origem_site()`
    (`AppConfig.loja_site_estoque_id`, default "Loja Anesio Pinto Rosa");
    **retirada** baixa da loja ESCOLHIDA pelo cliente (`loja_retirada_id`).
-   Essa e a MESMA linha `EstoqueLoja` mostrada/editada em
-   `/admin/loja-online/catalogo` (`loja_catalogo._estoque_site_map`, le
-   `loja_origem_site()`) e no seletor de `/pedidos/estoque-loja` — logo a
-   venda do site aparece refletida nas duas telas. Tolera shortfall (registra
+   Essa é a linha `EstoqueLoja` mostrada/editada no seletor de
+   `/pedidos/estoque-loja`. O editor físico saiu do catálogo em 09/09
+   por pedido do dono; a disponibilidade do site continua no Plano do dia. Tolera shortfall (registra
    `venda_site_sem_estoque`, nunca trava). NUNCA fazer a venda do site deixar
    de descontar o `EstoqueLoja` fisico.
 
@@ -3208,25 +3223,20 @@ confundir uma com a outra:
    camada independente da baixa fisica.
 
 **CONSEQUENCIA OPERACIONAL (o que o dono precisa saber na pratica)**: editar
-o estoque da loja — em `/pedidos/estoque-loja` OU no campo de estoque do
-`/admin/loja-online/catalogo` — **NAO muda o que o cliente ve/pode comprar no
-site**. A vitrine olha SO o plano-do-dia. Mexer no `EstoqueLoja` altera o
-ledger fisico (de onde a venda desconta) e o numero exibido no catalogo admin,
-mas a disponibilidade do front continua igual. Pra **esgotar ou liberar** um
-item no site naquele dia, o gesto e no **plano-do-dia**
-(`/admin/loja-online/plano-do-dia`, `qtd_planejada`), nunca no estoque da loja.
+o estoque físico em `/pedidos/estoque-loja` **NÃO muda o que o cliente
+vê/pode comprar no site**. A vitrine olha só o Plano do dia. Para esgotar
+ou liberar um item naquele dia, o gesto continua no **Plano do dia**
+(`/admin/loja-online/plano-do-dia`), nunca no estoque físico. O catálogo
+admin agora cuida de publicação/preços/fotos e contém um atalho para lá.
 
 **Resumindo**: venda do site = SEMPRE desconta `EstoqueLoja` fisico da loja
-de origem/retirada (visivel no catalogo e no estoque-loja) E a vitrine so
+de origem/retirada (visível no estoque-loja) E a vitrine so
 mostra o que o plano-do-dia libera. Sao camadas separadas — nunca fundir,
 nunca a disponibilidade do front passar a depender do estoque fisico, nunca
 a venda do site parar de baixar o fisico. Cancelamento/reembolso espelha as
-duas (`_estornar_estoque` + `_devolver_ao_plano_do_dia`). Nuances aceitas:
-o catalogo exibe DISPONIVEL (`quantidade - reservada`) enquanto
-`/pedidos/estoque-loja` mostra o fisico (`quantidade`) — mesma linha, bases
-diferentes; e pedido de RETIRADA em loja != origem baixa a loja escolhida
-(reflete em `/pedidos/estoque-loja` da loja escolhida, nao no catalogo do
-site). Testes: `tests/test_loja_estoque_vitrine.py`,
+duas (`_estornar_estoque` + `_devolver_ao_plano_do_dia`). Pedido de
+RETIRADA baixa a loja escolhida pelo cliente e reflete em
+`/pedidos/estoque-loja` dessa loja. Testes: `tests/test_loja_estoque_vitrine.py`,
 `tests/test_loja_estoque_reserva.py`, `tests/test_loja_online_vendas.py`.
 
 ### Acerto de DESPACHO DIRETO da industria (08/08/2026, Dia dos Pais)

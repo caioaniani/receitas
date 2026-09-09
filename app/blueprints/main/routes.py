@@ -4609,19 +4609,18 @@ def loja_online_auditoria_catalogo():
 @login_required
 def loja_online_catalogo():
     """Lista combinada de Receitas + Produtos com edicao rapida de preco e
-    upload de foto. Filtros via query string: ?filtro=no-site|sem-preco|
-    sem-foto|todos (default: todos)."""
+    upload de foto. ?q= busca nome/categoria; ?filtro=no-site|fora-site|
+    sem-preco|sem-foto|todos (default: todos para o dono)."""
     from app.models import Produto, Receita
     from app.services import loja_catalogo
+    from app.utils import normalizar_busca
     # Default 'todos' pro dono (curadoria); 'no-site' pros demais (so veem o
     # que ja esta vendendo no site — nao tem o que fazer com sem-preco/sem-foto
     # pois nao podem editar). Decisao do dono 22/06/2026.
     default_filtro = 'todos' if getattr(current_user, 'is_owner', False) else 'no-site'
     filtro = (request.args.get('filtro') or default_filtro).strip().lower()
-
-    # Estoque atual na loja do site (a mesma de /pedidos/estoque-loja). None =
-    # loja do site não configurada → não dá pra editar estoque aqui.
-    estoque_map = loja_catalogo._estoque_site_map()
+    busca = (request.args.get('q') or '').strip()
+    publicados = {(i['kind'], i['id']) for i in loja_catalogo.produtos_publicados()}
 
     # Receitas ativas
     rec_q = Receita.query.filter(Receita.arquivada_em.is_(None))
@@ -4638,15 +4637,14 @@ def loja_online_catalogo():
         tem_preco = r.preco_site is not None and r.preco_site > 0
         item = {
             'tipo': 'receita', 'id': r.id, 'nome': r.nome,
+            'menu_configuravel': False,
             'categoria': r.categoria or '',
             'ordem_site': r.ordem_site,
             'preco_site': r.preco_site,
             'imagem': r.imagem_dropbox_url or r.imagem_url,
-            'no_site': tem_foto and tem_preco,
+            'no_site': ('receita', r.id) in publicados,
             'falta_foto': not tem_foto,
             'falta_preco': not tem_preco,
-            'estoque': (None if estoque_map is None
-                        else estoque_map.get(('receita', r.id), 0)),
         }
         itens.append(item)
     for p in produtos:
@@ -4654,34 +4652,41 @@ def loja_online_catalogo():
         tem_preco = p.preco_site is not None and p.preco_site > 0
         item = {
             'tipo': 'produto', 'id': p.id, 'nome': p.nome,
+            'menu_configuravel': bool(p.menu_configuravel),
             'categoria': p.categoria or '(cesta/kit)',
             'ordem_site': p.ordem_site,
             'preco_site': p.preco_site,
             'imagem': p.imagem_dropbox_url or p.imagem_url,
-            'no_site': tem_foto and tem_preco,
+            'no_site': ('produto', p.id) in publicados,
             'falta_foto': not tem_foto,
             'falta_preco': not tem_preco,
-            'estoque': (None if estoque_map is None
-                        else estoque_map.get(('produto', p.id), 0)),
         }
         itens.append(item)
 
+    if busca:
+        termos = normalizar_busca(busca).split()
+        itens = [i for i in itens if all(
+            termo in normalizar_busca(i['nome'] + ' ' + i['categoria'])
+            for termo in termos)]
+
+    # Contagens e status usam a mesma publicação da vitrine (foto não é
+    # obrigatória; menus incompletos não são publicados).
+    contagens = {
+        'todos': len(itens),
+        'no_site': sum(i['no_site'] for i in itens),
+        'fora_site': sum(not i['no_site'] for i in itens),
+        'sem_preco': sum(i['falta_preco'] for i in itens),
+        'sem_foto': sum(i['falta_foto'] for i in itens),
+    }
     if filtro == 'no-site':
         itens = [i for i in itens if i['no_site']]
+    elif filtro == 'fora-site':
+        itens = [i for i in itens if not i['no_site']]
     elif filtro == 'sem-preco':
         itens = [i for i in itens if i['falta_preco']]
     elif filtro == 'sem-foto':
         itens = [i for i in itens if i['falta_foto']]
 
-    contagens = {
-        'todos': len(receitas) + len(produtos),
-        'no_site': sum(1 for r in receitas if (r.preco_site or 0) > 0 and (r.imagem_dropbox_url or r.imagem_url))
-                  + sum(1 for p in produtos if (p.preco_site or 0) > 0 and (p.imagem_dropbox_url or p.imagem_url)),
-        'sem_preco': sum(1 for r in receitas if not r.preco_site or r.preco_site <= 0)
-                    + sum(1 for p in produtos if not p.preco_site or p.preco_site <= 0),
-        'sem_foto': sum(1 for r in receitas if not (r.imagem_dropbox_url or r.imagem_url))
-                   + sum(1 for p in produtos if not (p.imagem_dropbox_url or p.imagem_url)),
-    }
     # Lista de categorias já cadastradas (Produtos + Receitas) — alimenta
     # o autocomplete (datalist) na edição inline.
     cats = set()
@@ -4693,7 +4698,7 @@ def loja_online_catalogo():
             cats.add(p.categoria.strip())
     categorias_existentes = sorted(c for c in cats if c)
     return render_template('admin/loja_online_catalogo.html',
-                            itens=itens, filtro=filtro, contagens=contagens,
+                            itens=itens, filtro=filtro, contagens=contagens, busca=busca,
                             categorias_existentes=categorias_existentes)
 
 
@@ -4726,7 +4731,9 @@ def loja_online_catalogo_preco(tipo, id):
             return jsonify(ok=False, erro='preço fora da faixa (0 a 9999)'), 400
         obj.preco_site = float(val)
     _db.session.commit()
+    from app.services.loja_catalogo import por_id_publicado
     return jsonify(ok=True,
+                   no_site=por_id_publicado(tipo, id) is not None,
                    preco_site=(float(obj.preco_site)
                                if obj.preco_site is not None else None))
 

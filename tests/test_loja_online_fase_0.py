@@ -4,7 +4,12 @@ catálogo. Página owner-only e read-only — não muda nada do estado.
 Plano completo: /root/.claude/plans/modular-tinkering-owl.md
 Checklist: docs/loja-online/fase-0-checklist.md
 """
+import re
+from html import unescape
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
+
+import pytest
 
 
 def _owner_logado(app):
@@ -186,20 +191,75 @@ def test_preco_ajax_salva_e_devolve_json(app):
     assert Receita.query.get(rid).preco_site == 25.50
 
 
-def test_preco_zero_ou_vazio_tira_do_site(app):
-    """Decisão do dono: 'preço = vende no site'. Tirar o preço = sair do site."""
+@pytest.mark.parametrize('tipo', ['receita', 'produto'])
+@pytest.mark.parametrize('preco', [None, 0])
+def test_preco_zero_ou_vazio_tira_do_site(app, tipo, preco):
+    """Retirar do site bloqueia novos pedidos e preserva cadastro e estoque."""
+    from app.blueprints.loja.routes import (
+        _resolver_carrinho_sessao,
+        _set_carrinho_sessao,
+    )
     from app.extensions import db
-    from app.models import Receita
-    db.session.add(Receita(nome='Sair', preco_site=10.0,
-                            rendimento_qtd=1, rendimento_unidade='un',
-                            peso_base=100.0))
+    from app.models import AppConfig, EstoqueLoja, Loja, MovEstoqueLoja, Produto, Receita
+    from app.services import loja_catalogo, loja_checkout
+
+    campos = dict(nome='Sair do site', preco_site=10.0, preco_loja=9.0,
+                  preco_interno=4.0, imagem_url='https://x/item.jpg',
+                  ordem_site=3)
+    if tipo == 'receita':
+        obj = Receita(**campos, preco_venda=7.0, rendimento_qtd=1,
+                      rendimento_unidade='un', peso_base=100.0)
+        campo_atacado = 'preco_venda'
+    else:
+        obj = Produto(**campos, preco_atacado=7.0, ativo=True)
+        campo_atacado = 'preco_atacado'
+    loja = Loja(nome='Loja do site', ativa=True)
+    db.session.add_all([obj, loja])
     db.session.commit()
-    rid = Receita.query.first().id
+    AppConfig.set('loja_site_estoque_id', loja.id)
+    estoque = EstoqueLoja(loja_id=loja.id, quantidade=7,
+                          quantidade_reservada=2, **{f'{tipo}_id': obj.id})
+    db.session.add(estoque)
+    db.session.commit()
+
+    publicado = loja_catalogo.por_id_publicado(tipo, obj.id)
+    assert publicado is not None
+    carrinho = [{'kind': tipo, 'id': obj.id, 'qtd': 1}]
+    itens, avisos = loja_checkout.montar_itens(carrinho)
+    assert len(itens) == 1 and avisos == []
+    movimentos_antes = MovEstoqueLoja.query.count()
     c, _ = _owner_logado(app)
-    r = c.post(f'/admin/loja-online/catalogo/preco/receita/{rid}',
-                json={'preco': None})
+
+    r = c.post(f'/admin/loja-online/catalogo/preco/{tipo}/{obj.id}',
+               json={'preco': preco})
+    assert r.status_code == 200
     assert r.get_json()['preco_site'] is None
-    assert Receita.query.get(rid).preco_site is None
+    db.session.refresh(obj)
+    db.session.refresh(estoque)
+    assert obj.preco_site is None
+    assert obj.preco_loja == 9.0
+    assert obj.preco_interno == 4.0
+    assert getattr(obj, campo_atacado) == 7.0
+    assert obj.imagem_url == campos['imagem_url']
+    assert obj.ordem_site == 3
+    if tipo == 'receita':
+        assert obj.arquivada_em is None
+    else:
+        assert obj.ativo is True
+    assert estoque.quantidade == 7
+    assert estoque.quantidade_reservada == 2
+    assert MovEstoqueLoja.query.count() == movimentos_antes
+
+    assert loja_catalogo.por_id_publicado(tipo, obj.id) is None
+    assert not any(i['kind'] == tipo and i['id'] == obj.id
+                   for i in loja_catalogo.produtos_publicados())
+    assert c.get(publicado['href']).status_code == 404
+    with app.test_request_context():
+        _set_carrinho_sessao(carrinho)
+        assert _resolver_carrinho_sessao() == []
+    itens, avisos = loja_checkout.montar_itens(carrinho)
+    assert itens == []
+    assert avisos == ['Um item saiu de catálogo e foi removido do pedido.']
 
 
 def test_preco_rejeita_valor_invalido(app):
@@ -226,39 +286,82 @@ def test_preco_rejeita_valor_invalido(app):
 
 
 def test_curadoria_filtros(app):
-    """3 receitas em estados diferentes; cada filtro mostra a contagem
-    correta. Checagem pelo class CSS `item-card` (presente só no card do
-    catálogo — não vaza pra autocomplete/datalist do base.html)."""
+    """No site espelha a vitrine: foto é opcional e menu inválido fica fora."""
     from app.extensions import db
-    from app.models import Receita
-    db.session.add(Receita(nome='Pronta site', preco_site=20.0,
-                            imagem_dropbox_url='https://x/c.jpg',
-                            rendimento_qtd=1, rendimento_unidade='un',
-                            peso_base=100.0))
-    db.session.add(Receita(nome='Falta preco', preco_site=None,
-                            imagem_dropbox_url='https://x/sp.jpg',
-                            rendimento_qtd=1, rendimento_unidade='un',
-                            peso_base=100.0))
-    db.session.add(Receita(nome='Falta foto', preco_site=15.0,
-                            imagem_dropbox_url=None,
-                            rendimento_qtd=1, rendimento_unidade='un',
-                            peso_base=100.0))
+    from app.models import Produto, ProdutoItem, Receita
+
+    pronta = Receita(nome='Pronta site', preco_site=20.0,
+                     imagem_dropbox_url='https://x/c.jpg',
+                     rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0)
+    sem_preco = Receita(nome='Falta preco', preco_site=None,
+                        imagem_dropbox_url='https://x/sp.jpg',
+                        rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0)
+    sem_foto = Receita(nome='Falta foto', preco_site=15.0,
+                       rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0)
+    menu_invalido = Produto(nome='Menu sem preço nos minis', preco_site=1.0,
+                            imagem_dropbox_url='https://x/menu.jpg',
+                            ativo=True, menu_configuravel=True,
+                            menu_total_unidades=30)
+    db.session.add_all([pronta, sem_preco, sem_foto, menu_invalido])
+    db.session.flush()
+    db.session.add(ProdutoItem(
+        produto_id=menu_invalido.id, tipo='receita', receita_id=pronta.id,
+        item_nome=pronta.nome, quantidade=30, preco_menu=None))
     db.session.commit()
     c, _ = _owner_logado(app)
 
-    def n_cards(html):
+    def chaves_cards(html):
         # cada card tem `data-tipo="receita"` ou `data-tipo="produto"` —
         # atributo aparece SÓ no card real (não no CSS embutido).
-        return html.count(b'data-tipo="receita"') + html.count(b'data-tipo="produto"')
+        return {(tipo, int(item_id)) for tipo, item_id in re.findall(
+            r'data-tipo="(receita|produto)"\s+data-id="(\d+)"', html.decode())}
 
     r = c.get('/admin/loja-online/catalogo?filtro=sem-preco')
-    assert n_cards(r.data) == 1, 'só 1 receita sem preço'
+    assert chaves_cards(r.data) == {('receita', sem_preco.id)}
     r2 = c.get('/admin/loja-online/catalogo?filtro=no-site')
-    assert n_cards(r2.data) == 1, 'só 1 receita pronta pro site'
+    assert chaves_cards(r2.data) == {('receita', pronta.id), ('receita', sem_foto.id)}
     r3 = c.get('/admin/loja-online/catalogo?filtro=sem-foto')
-    assert n_cards(r3.data) == 1, 'só 1 receita sem foto'
+    assert chaves_cards(r3.data) == {('receita', sem_foto.id)}
     r4 = c.get('/admin/loja-online/catalogo?filtro=todos')
-    assert n_cards(r4.data) == 3, 'todas as 3'
+    assert chaves_cards(r4.data) == {
+        ('receita', pronta.id), ('receita', sem_preco.id),
+        ('receita', sem_foto.id), ('produto', menu_invalido.id),
+    }
+
+
+@pytest.mark.parametrize(('busca', 'nomes'), [
+    ('PAO', {'Pão integral', 'Pão de queijo'}),
+    ('cafe', {'Pão integral'}),
+    ('  QUEIJO  ', {'Pão de queijo'}),
+])
+def test_curadoria_busca_nome_categoria_e_preserva_filtros(app, busca, nomes):
+    """Busca ignora acentos/caixa e acompanha a troca de filtro."""
+    from app.extensions import db
+    from app.models import Receita
+
+    receitas = [
+        Receita(nome='Pão integral', categoria='Café da manhã', preco_site=20.0,
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0),
+        Receita(nome='Pão de queijo', categoria='Salgados', preco_site=5.0,
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0),
+        Receita(nome='Cookie', categoria='Doces', preco_site=7.0,
+                rendimento_qtd=1, rendimento_unidade='un', peso_base=100.0),
+    ]
+    db.session.add_all(receitas)
+    db.session.commit()
+    c, _ = _owner_logado(app)
+    r = c.get('/admin/loja-online/catalogo', query_string={'q': busca, 'filtro': 'no-site'})
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    ids = {int(item_id) for item_id in re.findall(
+        r'data-tipo="receita"\s+data-id="(\d+)"', html)}
+    assert ids == {receita.id for receita in receitas if receita.nome in nomes}
+
+    filtros = [parse_qs(urlsplit(unescape(href)).query)
+               for href in re.findall(
+                   r'<a\b(?=[^>]*\bclass="[^"]*\bcat-filtro\b)[^>]*\bhref="([^"]+)"', html)]
+    assert filtros
+    assert all(filtro.get('q') == [busca.strip()] for filtro in filtros)
 
 
 # ── Limite de upload alinhado entre Flask e a rota (16/06/2026) ──────────

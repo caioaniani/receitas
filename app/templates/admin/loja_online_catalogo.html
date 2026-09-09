@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Loja Online — Catálogo do site{% endblock %}
+{% block title %}Produtos do site{% endblock %}
 {% block content %}
 <style>
   .cat-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -30,14 +30,6 @@
   .preco-input.saving { background: #fff3bf; }
   .preco-input.saved { background: #d3f9d8; }
   .preco-input.error { background: #ffc9c9; }
-  .item-estoque-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 14px; }
-  .item-estoque-row label { font-size: 11px; color: #868e96; text-transform: uppercase; }
-  .estoque-input { width: 80px; padding: 4px 8px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; font-weight: 700; }
-  .estoque-input.saving { background: #fff3bf; }
-  .estoque-input.saved { background: #d3f9d8; }
-  .estoque-input.error { background: #ffc9c9; }
-  .estoque-input.zero { color: #c92a2a; border-color: #ffa8a8; }
-  .estoque-hint { font-size: 11px; color: #adb5bd; }
   .item-cat-row { display:flex; gap:6px; align-items:center; font-size:12px; color:#6c757d; margin:4px 0 8px; }
   .categoria-input { flex:1; padding:3px 7px; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff; min-width:0; }
   .categoria-input.saving { background:#fff3bf; }
@@ -53,59 +45,101 @@
   .badge-ok { background: #d3f9d8; color: #2b8a3e; }
   .badge-warn { background: #ffe8cc; color: #c47600; }
   .badge-bad { background: #ffe3e3; color: #c92a2a; }
+  .cat-busca { display:flex; align-items:end; gap:8px; flex-wrap:wrap; max-width:720px; margin-bottom:16px; }
+  .cat-busca-campo { flex:1; min-width:200px; }
+  .retirar-site { margin-top:10px; min-height:44px; font-size:13px; }
+  .retirar-site[hidden], .item-card[hidden] { display:none !important; }
+  .item-ajuda { font-size:12px; line-height:1.4; color:#6c757d; margin:8px 0 0; }
+  .cat-revisao { margin-bottom:16px; }
+  .cat-revisao summary { cursor:pointer; color:#495057; }
+  .cat-dialog { width:min(440px,calc(100vw - 32px)); border:0; border-radius:16px; padding:24px; box-shadow:0 16px 60px #0003; }
+  .cat-dialog::backdrop { background:#0006; }
+  .cat-dialog h2 { font-size:22px; margin-bottom:16px; }
+  .cat-dialog .btn { min-height:44px; }
+  @media(max-width:575px) { .cat-filtro { padding:10px 12px; } .cat-grid { grid-template-columns:minmax(0,1fr); } }
 </style>
 
 {# Edicao de preco/foto eh owner-only (decisao do dono 22/06/2026). Pros
    demais, pagina vira somente-leitura: nada de filtros de curadoria
    (sem-preco/sem-foto/todos), input de preco desabilitado, foto nao clicavel. #}
 {% set pode_editar = current_user.is_owner %}
-<h1 class="page-title"><i class="bi bi-shop"></i> Catálogo do site</h1>
+<h1 class="page-title"><i class="bi bi-shop"></i> Produtos do site</h1>
 <p class="text-muted">
   {% if pode_editar %}
-  "Tem <code>preco_site</code> + foto = vende no site." Edite o preço clicando no
-  campo, e suba foto clicando no quadrado da esquerda. Tudo salva sem recarregar.
+  Busque pelo nome e use <strong>Tirar do site</strong> para deixar de vender um item.
+  O cadastro é mantido. Preço e categoria salvam ao sair do campo.
   {% else %}
   Itens publicados no site. <em>Edição de preço e foto é restrita ao dono.</em>
   {% endif %}
 </p>
 
+{% if pode_editar %}
+<p class="mb-3">
+  <a href="{{ url_for('main.loja_online_plano_dia') }}" class="btn btn-outline-primary">Estoque do site · Plano do dia</a>
+  <span class="d-block text-muted small mt-2">Quantidades, dias disponíveis e itens esgotados continuam no Plano do dia.</span>
+</p>
+{% endif %}
+
+<form method="GET" class="cat-busca" role="search">
+  <input type="hidden" name="filtro" value="{{ filtro }}">
+  <div class="cat-busca-campo">
+    <label for="busca-produto-site" class="form-label">Encontrar produto</label>
+    <input type="search" id="busca-produto-site" name="q" value="{{ busca }}"
+           class="form-control" placeholder="Nome do produto ou categoria">
+  </div>
+  <button type="submit" class="btn btn-primary">Buscar</button>
+  {% if busca %}<a class="btn btn-outline-secondary" href="{{ url_for('main.loja_online_catalogo', filtro=filtro) }}">Limpar busca</a>{% endif %}
+</form>
+<div id="catalogo-status" class="alert alert-success" role="status" hidden></div>
+{% if pode_editar %}
+<dialog id="confirmar-retirada" class="cat-dialog" aria-labelledby="retirada-titulo" aria-describedby="retirada-descricao">
+  <h2 id="retirada-titulo">Tirar do site?</h2>
+  <p><strong id="retirada-nome"></strong></p>
+  <p id="retirada-descricao">O preço do site será removido. O cadastro é mantido; para voltar a vender, informe o preço novamente.</p>
+  <form method="dialog" class="d-flex justify-content-end gap-2">
+    <button class="btn btn-outline-secondary" value="cancelar" autofocus>Cancelar</button>
+    <button class="btn btn-danger" value="tirar">Tirar do site</button>
+  </form>
+</dialog>
+{% endif %}
+
 <div class="cat-topo">
   <div class="cat-filtros">
+    <a href="{{ url_for('main.loja_online_catalogo', filtro='no-site', q=busca or None) }}" class="cat-filtro {% if filtro == 'no-site' %}active{% endif %}">
+      No site <span class="cnt" data-contagem="no_site">{{ contagens.no_site }}</span>
+    </a>
     {% if pode_editar %}
-    <a href="?filtro=todos" class="cat-filtro {% if filtro == 'todos' %}active{% endif %}">
+    <a href="{{ url_for('main.loja_online_catalogo', filtro='fora-site', q=busca or None) }}" class="cat-filtro {% if filtro == 'fora-site' %}active{% endif %}">
+      Fora do site <span class="cnt" data-contagem="fora_site">{{ contagens.fora_site }}</span>
+    </a>
+    <a href="{{ url_for('main.loja_online_catalogo', filtro='todos', q=busca or None) }}" class="cat-filtro {% if filtro == 'todos' %}active{% endif %}">
       Todos <span class="cnt">{{ contagens.todos }}</span>
     </a>
     {% endif %}
-    <a href="?filtro=no-site" class="cat-filtro {% if filtro == 'no-site' %}active{% endif %}">
-      ✓ No site <span class="cnt">{{ contagens.no_site }}</span>
-    </a>
-    {% if pode_editar %}
-    <a href="?filtro=sem-preco" class="cat-filtro {% if filtro == 'sem-preco' %}active{% endif %}">
-      ⚠ Sem preço <span class="cnt">{{ contagens.sem_preco }}</span>
-    </a>
-    <a href="?filtro=sem-foto" class="cat-filtro {% if filtro == 'sem-foto' %}active{% endif %}">
-      📷 Sem foto <span class="cnt">{{ contagens.sem_foto }}</span>
-    </a>
-    {% endif %}
   </div>
-  {% if pode_editar %}
-  <a href="{{ url_for('main.loja_online_auditoria_catalogo') }}" class="btn btn-sm btn-outline-secondary">
-    Auditoria
-  </a>
-  {% endif %}
 </div>
+{% if pode_editar %}
+<details class="cat-revisao"{% if filtro in ['sem-preco', 'sem-foto'] %} open{% endif %}>
+  <summary>Revisar cadastro</summary>
+  <div class="cat-filtros mt-2">
+    <a href="{{ url_for('main.loja_online_catalogo', filtro='sem-preco', q=busca or None) }}" class="cat-filtro {% if filtro == 'sem-preco' %}active{% endif %}">Sem preço <span class="cnt" data-contagem="sem_preco">{{ contagens.sem_preco }}</span></a>
+    <a href="{{ url_for('main.loja_online_catalogo', filtro='sem-foto', q=busca or None) }}" class="cat-filtro {% if filtro == 'sem-foto' %}active{% endif %}">Sem foto <span class="cnt">{{ contagens.sem_foto }}</span></a>
+  <a href="{{ url_for('main.loja_online_auditoria_catalogo') }}" class="btn btn-sm btn-outline-secondary">
+    Auditoria do catálogo
+  </a>
+  </div>
+</details>
+{% endif %}
 
 <datalist id="categorias-existentes">
   {% for c in categorias_existentes %}<option value="{{ c }}">{% endfor %}
 </datalist>
 
-{% if not itens %}
-<div class="alert alert-light text-muted">Nenhum item neste filtro.</div>
-{% else %}
+<div id="catalogo-vazio" class="alert alert-light text-muted"{% if itens %} hidden{% endif %}>Nenhum produto encontrado neste filtro{% if busca %} para “{{ busca }}”{% endif %}.{% if pode_editar %} Consulte <a href="{{ url_for('main.loja_online_catalogo', filtro='todos', q=busca or None) }}">todos os produtos</a>.{% endif %}</div>
 <div class="cat-grid">
   {% for i in itens %}
   <div class="item-card {% if i.no_site %}no-site{% elif i.falta_preco %}falta-preco{% elif i.falta_foto %}falta-foto{% endif %}"
-       data-tipo="{{ i.tipo }}" data-id="{{ i.id }}">
+       data-tipo="{{ i.tipo }}" data-id="{{ i.id }}" data-no-site="{{ 1 if i.no_site else 0 }}" data-sem-preco="{{ 1 if i.falta_preco else 0 }}" data-menu="{{ 1 if i.menu_configuravel else 0 }}">
     {# `pode_editar` (set no topo) controla foto/preco: dono edita; demais
        so visualizam — sem overlay "Trocar foto" e sem o input file. #}
     {% if pode_editar %}
@@ -137,37 +171,25 @@
         <span class="item-tipo">{{ i.tipo }}</span>
       </div>
       <div class="item-preco-row">
-        <label>R$</label>
+        <label for="preco-{{ i.tipo }}-{{ i.id }}">{{ 'Referência R$' if i.menu_configuravel else 'Preço no site R$' }}</label>
         <input type="number" step="0.01" min="0" max="9999"
-               class="preco-input"
+               class="preco-input" id="preco-{{ i.tipo }}-{{ i.id }}"
                value="{% if i.preco_site %}{{ '%.2f' % i.preco_site }}{% endif %}"
                placeholder="—"
                {% if not pode_editar %}disabled title="Edição de preço é restrita ao dono"{% endif %}>
       </div>
-      <div class="item-estoque-row">
-        <label>Estoque</label>
-        {% if i.estoque is none %}
-        <input type="number" class="estoque-input" disabled placeholder="—"
-               title="Loja do site não configurada">
-        {% else %}
-        <input type="number" min="0" max="100000" step="1"
-               class="estoque-input" value="{{ i.estoque }}">
-        {% endif %}
-        <span class="estoque-hint">un. · loja do site</span>
-      </div>
       <div class="item-badges">
-        {% if i.no_site %}
-        <span class="badge-mini badge-ok">✓ no site</span>
-        {% else %}
-          {% if i.falta_preco %}<span class="badge-mini badge-bad">sem preço</span>{% endif %}
-          {% if i.falta_foto %}<span class="badge-mini badge-warn">sem foto</span>{% endif %}
-        {% endif %}
+        <span class="status-publicacao badge-mini {{ 'badge-ok' if i.no_site else 'badge-bad' }}">{{ 'No site' if i.no_site else 'Fora do site' }}</span>
+        {% if i.falta_foto %}<span class="badge-mini badge-warn">sem foto</span>{% endif %}
       </div>
+      {% if pode_editar %}
+      <button type="button" class="retirar-site btn btn-outline-danger"{% if i.falta_preco %} hidden{% endif %}>Tirar do site</button>
+      <p class="item-ajuda"{% if not i.falta_preco and not i.menu_configuravel %} hidden{% endif %}>{% if i.menu_configuravel %}Nos menus, o preço cobrado vem dos componentes. Esta referência só controla a publicação, que exige o cadastro completo.{% else %}Para colocar no site, informe o preço acima.{% endif %}</p>
+      {% endif %}
     </div>
   </div>
   {% endfor %}
 </div>
-{% endif %}
 
 <script>
 (function() {
@@ -237,44 +259,124 @@
       .catch(function() { return file; });  // qualquer falha → manda original
   }
 
-  // Salvar preço inline (blur ou Enter)
+  var filtroAtual = {{ filtro|tojson }};
+  var confirmarRetirada = document.getElementById('confirmar-retirada');
+  var retiradaPendente = null;
+  if (confirmarRetirada) confirmarRetirada.addEventListener('close', function() {
+    var pendente = retiradaPendente;
+    retiradaPendente = null;
+    if (!pendente) return;
+    if (confirmarRetirada.returnValue === 'tirar') pendente.confirmar();
+    else pendente.cancelar();
+  });
+  function mostrarAviso(mensagem, erro) {
+    var aviso = document.getElementById('catalogo-status');
+    aviso.textContent = mensagem;
+    aviso.className = 'alert ' + (erro ? 'alert-danger' : 'alert-success');
+    aviso.hidden = false;
+  }
+  function ajustarContagem(nome, delta) {
+    var el = document.querySelector('[data-contagem="' + nome + '"]');
+    if (el) el.textContent = Math.max(0, Number(el.textContent) + delta);
+  }
+  function atualizarPublicacao(card, dados) {
+    var antes = card.dataset.noSite === '1';
+    var semPrecoAntes = card.dataset.semPreco === '1';
+    var noSite = dados.no_site === true;
+    var semPreco = !(Number(dados.preco_site) > 0);
+    ajustarContagem('no_site', Number(noSite) - Number(antes));
+    ajustarContagem('fora_site', Number(antes) - Number(noSite));
+    ajustarContagem('sem_preco', Number(semPreco) - Number(semPrecoAntes));
+    card.dataset.noSite = noSite ? '1' : '0';
+    card.dataset.semPreco = semPreco ? '1' : '0';
+    card.classList.toggle('no-site', noSite);
+    card.classList.toggle('falta-preco', semPreco);
+    var selo = card.querySelector('.status-publicacao');
+    selo.textContent = noSite ? 'No site' : 'Fora do site';
+    selo.classList.toggle('badge-ok', noSite);
+    selo.classList.toggle('badge-bad', !noSite);
+    card.querySelector('.retirar-site').hidden = semPreco;
+    card.querySelector('.item-ajuda').hidden = !semPreco && card.dataset.menu !== '1';
+    card.hidden = (filtroAtual === 'no-site' && !noSite)
+      || (filtroAtual === 'fora-site' && noSite)
+      || (filtroAtual === 'sem-preco' && !semPreco);
+    document.getElementById('catalogo-vazio').hidden = !!document.querySelector('.item-card:not([hidden])');
+  }
+
+  // Uma gravação por card: impede que um preço salvo em paralelo volte a
+  // publicar o item depois do clique em "Tirar do site".
   document.querySelectorAll('.preco-input').forEach(function(inp) {
+    if (inp.disabled) return;
+    var card = inp.closest('.item-card');
+    var retirar = card.querySelector('.retirar-site');
     var origem = inp.value;
-    function salvar() {
-      var v = inp.value.trim();
-      if (v === origem) return;
-      var card = inp.closest('.item-card');
+    var emAndamento = false;
+    var gravacao = Promise.resolve();
+    function salvar(valor, removendo) {
+      if (emAndamento) return;
+      emAndamento = true;
+      inp.disabled = true;
+      retirar.disabled = !!removendo;
       var tipo = card.dataset.tipo, id = card.dataset.id;
+      var nome = card.querySelector('.item-nome').textContent;
       inp.classList.remove('saved', 'error');
       inp.classList.add('saving');
-      fetch(rotaPreco(tipo, id), {
+      gravacao = fetch(rotaPreco(tipo, id), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ preco: v || null })
+        body: JSON.stringify({ preco: valor })
       }).then(function(r) {
         if (!r.ok) {
           return extrairErro(r).then(function(msg) { throw new Error(msg); });
         }
         return r.json();
       }).then(function(d) {
-        inp.classList.remove('saving');
         if (d.ok) {
+          inp.value = d.preco_site == null ? '' : Number(d.preco_site).toFixed(2);
           inp.classList.add('saved');
           origem = inp.value;
+          atualizarPublicacao(card, d);
+          mostrarAviso(removendo
+            ? nome + ' foi tirado do site. O cadastro foi mantido. Para voltar a vender, encontre o item em Fora do site e informe o preço.'
+            : 'Preço de ' + nome + ' salvo. ' + (d.no_site ? 'O item está no site.' : 'O item está fora do site.'));
           setTimeout(function() { inp.classList.remove('saved'); }, 1500);
         } else {
-          inp.classList.add('error');
-          alert(d.erro || 'erro ao salvar');
+          throw new Error(d.erro || 'erro ao salvar');
         }
       }).catch(function(e) {
-        inp.classList.remove('saving');
         inp.classList.add('error');
-        alert((e && e.message) || 'sem conexão — tenta de novo');
+        mostrarAviso((e && e.message) || 'sem conexão — tenta de novo', true);
+      }).finally(function() {
+        inp.classList.remove('saving');
+        inp.disabled = false;
+        retirar.disabled = false;
+        emAndamento = false;
       });
     }
-    inp.addEventListener('blur', salvar);
+    function salvarPrecoEditado() {
+      var v = inp.value.trim();
+      if (!emAndamento && v !== origem) salvar(v || null, false);
+    }
+    inp.addEventListener('blur', function(e) {
+      if (!confirmarRetirada.open && e.relatedTarget !== retirar) salvarPrecoEditado();
+    });
     inp.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    });
+    retirar.addEventListener('click', function() {
+      var nome = card.querySelector('.item-nome').textContent;
+      retiradaPendente = {
+        confirmar: function() {
+          retirar.disabled = true;
+          // Alguns navegadores salvam o preço no blur antes do clique.
+          // Preserva a intenção e só retira depois de concluir essa gravação.
+          gravacao.then(function() { salvar(null, true); });
+        },
+        cancelar: salvarPrecoEditado
+      };
+      document.getElementById('retirada-nome').textContent = nome;
+      confirmarRetirada.returnValue = '';
+      confirmarRetirada.showModal();
     });
   });
 
@@ -305,51 +407,6 @@
         inp.classList.remove('saving');
         inp.classList.add('error');
         alert((e && e.message) || 'erro ao salvar categoria');
-      });
-    }
-    inp.addEventListener('blur', salvar);
-    inp.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-    });
-  });
-
-  // Salvar estoque inline (blur ou Enter) — grava na MESMA EstoqueLoja da
-  // loja do site (a que /pedidos/estoque-loja usa). SET absoluto.
-  var URL_ESTOQUE = "/admin/loja-online/catalogo/estoque/__TIPO__/__ID__";
-  document.querySelectorAll('.estoque-input').forEach(function(inp) {
-    if (inp.disabled) return;
-    if (Number(inp.value) === 0) inp.classList.add('zero');
-    var origem = inp.value;
-    function salvar() {
-      var v = inp.value.trim();
-      if (v === origem || v === '') return;
-      var card = inp.closest('.item-card');
-      var tipo = card.dataset.tipo, id = card.dataset.id;
-      inp.classList.remove('saved', 'error');
-      inp.classList.add('saving');
-      fetch(URL_ESTOQUE.replace('__TIPO__', tipo).replace('__ID__', id), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ estoque: v })
-      }).then(function(r) {
-        if (!r.ok) return extrairErro(r).then(function(m){ throw new Error(m); });
-        return r.json();
-      }).then(function(d) {
-        inp.classList.remove('saving');
-        if (d.ok) {
-          inp.classList.add('saved');
-          inp.value = d.estoque;
-          origem = inp.value;
-          inp.classList.toggle('zero', Number(d.estoque) === 0);
-          setTimeout(function() { inp.classList.remove('saved'); }, 1200);
-        } else {
-          inp.classList.add('error');
-          alert(d.erro || 'erro ao salvar estoque');
-        }
-      }).catch(function(e) {
-        inp.classList.remove('saving');
-        inp.classList.add('error');
-        alert((e && e.message) || 'erro ao salvar estoque');
       });
     }
     inp.addEventListener('blur', salvar);

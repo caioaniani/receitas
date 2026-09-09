@@ -51,8 +51,8 @@
        style="border-width: 2px !important; border-color: #d4d4d8 !important;">
       <div class="me-3" style="font-size: 32px; line-height: 1;">📅</div>
       <div class="flex-grow-1">
-        <div class="fw-bold" style="font-size: 16px;">Dias disponíveis dos produtos</div>
-        <div class="small text-muted">Defina a <strong>regra semanal</strong> de cada produto e trate feriados ou faltas como exceção.</div>
+        <div class="fw-bold" style="font-size: 16px;">Estoque do site · Plano do dia</div>
+        <div class="small text-muted">Defina <strong>quantidades e dias disponíveis</strong> de cada produto e trate faltas como exceção.</div>
       </div>
       <div class="text-muted ms-2" style="font-size: 22px;">›</div>
     </a>
@@ -73,7 +73,7 @@
 {% endif %}
 
 <div class="mb-3 d-flex gap-2 flex-wrap">
-  <a href="{{ url_for('main.loja_online_catalogo') }}" class="btn btn-sm btn-outline-secondary">Catálogo</a>
+  <a href="{{ url_for('main.loja_online_catalogo', filtro='no-site') }}" class="btn btn-sm btn-outline-secondary">Produtos do site</a>
   {% if current_user.is_owner %}
   <a href="{{ url_for('main.loja_online_categorias') }}" class="btn btn-sm btn-outline-secondary">Ordem das categorias</a>
   <a href="{{ url_for('main.loja_online_ordem_produtos') }}" class="btn btn-sm btn-outline-secondary">Ordem dos produtos</a>
