@@ -96,8 +96,8 @@ def test_atribuicao_de_relationship_segue_auditada_sem_load(app):
     from app.extensions import db
     from app.models import AuditLog, EstoqueLoja, MovEstoqueLoja
     with app.app_context():
-        el_a = _linha_com_historico(db, n_movs=1)
-        el_b = _linha_com_historico(db, n_movs=0)
+        el_a = _linha_com_historico(db, n_movs=1, sufixo='A')
+        el_b = _linha_com_historico(db, n_movs=0, sufixo='B')
         db.session.expire_all()
         mov = MovEstoqueLoja.query.filter_by(estoque_loja_id=el_a).first()
         destino = db.session.get(EstoqueLoja, el_b)
