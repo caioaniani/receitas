@@ -131,12 +131,27 @@ def _capture_changes(obj):
     state = inspect(obj)
     if not state.modified:
         return None, None
+    # Relationships NUNCA passam por `load_history()`: em atributo ainda nao
+    # carregado ele dispara o lazy load INTEIRO — pra `EstoqueLoja.
+    # movimentacoes` isso era um SELECT de TODO o historico de movimentos da
+    # linha a CADA flush que tocava o estoque (N+1 apontado pelo Sentry em
+    # `loja.webhook_pagarme`, GESTAO-PADARIA-37, 09/09/2026; o mesmo custo
+    # pesava no sync do Seru e em toda baixa). `history` le so o que esta em
+    # memoria (atribuicao/append pendente) sem emitir SELECT — a mudanca
+    # continua auditada; so a colecao nao carregada deixa de ser buscada.
+    relacionamentos = set(state.mapper.relationships.keys())
     antes, depois = {}, {}
     for attr in state.attrs:
-        hist = attr.load_history()
+        eh_rel = attr.key in relacionamentos
+        hist = attr.history if eh_rel else attr.load_history()
         if hist.has_changes():
             old = hist.deleted[0] if hist.deleted else None
-            new = hist.added[0] if hist.added else getattr(obj, attr.key)
+            if hist.added:
+                new = hist.added[0]
+            elif eh_rel:
+                new = None  # getattr carregaria a colecao — mesmo custo
+            else:
+                new = getattr(obj, attr.key)
             if isinstance(old, (datetime, date)):
                 old = old.isoformat()
             if isinstance(new, (datetime, date)):
