@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Disponibilidade do site — Loja Online{% endblock %}
+{% block title %}Estoque do site · Plano do dia{% endblock %}
 
 {% set dias_curtos = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'] %}
 {% set dias_completos = ['segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'domingo'] %}
@@ -8,15 +8,17 @@
 <style>
   .disp-page { max-width: 1120px; margin: 0 auto; }
   .disp-eyebrow { color: var(--v2-accent, #275d45); font-size: 11px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
-  .disp-header { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 24px; }
+  .disp-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 16px 24px; margin-bottom: 24px; }
   .disp-header h1 { margin: 5px 0 7px; font: 500 clamp(30px, 4vw, 46px)/1.02 Georgia, serif; letter-spacing: -.04em; }
   .disp-header p { max-width: 680px; margin: 0; color: #68736d; }
+  .disp-header-links { display: flex; gap: 12px; flex-wrap: wrap; flex-shrink: 0; font-size: 13px; }
   .disp-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 22px; border: 1px solid #e1e6e2; border-radius: 12px; background: #fff; }
   .disp-tab { flex: 1; padding: 11px 14px; border-radius: 9px; color: #5e6a63; text-align: center; text-decoration: none; font-weight: 700; }
   .disp-tab:hover { color: #275d45; background: #f5f8f6; }
   .disp-tab.active { color: #fff; background: #275d45; }
   .disp-count { display: inline-grid; min-width: 22px; min-height: 22px; margin-left: 5px; padding: 0 6px; place-items: center; border-radius: 999px; background: rgba(255,255,255,.18); font-size: 11px; }
   .disp-toolbar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .disp-results { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #68736d; font-size: 12px; }
   .disp-search { position: relative; flex: 1 1 320px; }
   .disp-search i { position: absolute; top: 50%; left: 14px; color: #7b8780; transform: translateY(-50%); }
   .disp-search input { width: 100%; min-height: 44px; padding-left: 40px; border: 1px solid #dce3de; border-radius: 11px; background: #fff; }
@@ -46,6 +48,7 @@
   .disp-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 7px; margin-bottom: 18px; }
   .disp-day { min-height: 42px; display: grid; place-items: center; border: 1px solid #dce3de; border-radius: 10px; background: #fff; cursor: pointer; font-size: 12px; font-weight: 750; }
   .disp-day input { position: absolute; opacity: 0; pointer-events: none; }
+  .disp-day:has(input:focus-visible) { outline: 2px solid #275d45; outline-offset: 3px; }
   .disp-day:has(input:checked) { border-color: #275d45; color: #fff; background: #275d45; }
   .disp-limit { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .disp-limit label { margin: 0; }
@@ -59,8 +62,7 @@
   .disp-maintenance-body { margin-top: 10px; padding: 14px; border: 1px solid #e1e6e2; border-radius: 10px; background: #fff; }
   [data-hidden="true"] { display: none !important; }
   @media (max-width: 720px) {
-    .disp-header { align-items: start; }
-    .disp-header .btn { display: none; }
+    .disp-header { align-items: start; flex-direction: column; gap: 12px; }
     .disp-item > summary { grid-template-columns: minmax(0,1fr) auto; gap: 10px; }
     .disp-summary { grid-column: 1 / -1; text-align: left; }
     .disp-chevron { position: absolute; right: 18px; }
@@ -73,21 +75,24 @@
 <div class="disp-page">
   <header class="disp-header">
     <div>
-      <div class="disp-eyebrow">Loja online</div>
-      <h1>Quando cada produto aparece</h1>
-      <p>Defina a rotina uma vez. Use exceções somente quando um dia fugir do normal.</p>
+      <div class="disp-eyebrow">Loja online · Plano do dia</div>
+      <h1>Estoque do site</h1>
+      <p>Escolha os dias de entrega e quanto pode vender em cada dia.</p>
     </div>
-    <a href="{{ url_for('main.loja_online_dashboard') }}" class="btn btn-outline-secondary">Voltar à loja online</a>
+    <div class="disp-header-links">
+      <a href="{{ url_for('main.loja_online_catalogo', filtro='no-site') }}">Ativar ou desativar produtos</a>
+      <a href="{{ url_for('main.loja_online_dashboard') }}">Voltar à loja online</a>
+    </div>
   </header>
 
   <nav class="disp-tabs" aria-label="Tipo de configuração">
     <a href="{{ url_for('main.loja_online_plano_dia', view='semanal') }}"
-       class="disp-tab {{ 'active' if modo == 'semanal' }}">
-      Regra semanal <span class="disp-count">{{ total_regras }}</span>
+       class="disp-tab {{ 'active' if modo == 'semanal' }}" {% if modo == 'semanal' %}aria-current="page"{% endif %}>
+      Rotina semanal
     </a>
     <a href="{{ url_for('main.loja_online_plano_dia', view='excecoes', data=data_str) }}"
-       class="disp-tab {{ 'active' if modo == 'excecoes' }}">
-      Exceções por data <span class="disp-count">{{ total_excecoes }}</span>
+       class="disp-tab {{ 'active' if modo == 'excecoes' }}" {% if modo == 'excecoes' %}aria-current="page"{% endif %}>
+      Ajustar uma data
     </a>
   </nav>
 
@@ -106,28 +111,34 @@
       {% if modo == 'semanal' %}
         <label for="disp-filtro" class="visually-hidden">Filtrar produtos</label>
         <select id="disp-filtro" class="disp-filter form-select" style="max-width:210px">
-          <option value="regras" {{ 'selected' if total_regras }}>Com regra semanal</option>
-          <option value="todos" {{ 'selected' if not total_regras }}>Todos os produtos</option>
+          <option value="todos" selected>Todos os produtos</option>
+          <option value="regras">Com regra semanal</option>
           <option value="livres">Sem restrição</option>
         </select>
       {% else %}
         <form method="GET" class="d-flex gap-2 align-items-end">
           <input type="hidden" name="view" value="excecoes">
           <div>
-            <label for="disp-data" class="disp-section-label">Data da exceção</label>
+            <label for="disp-data" class="disp-section-label">Data da entrega</label>
             <input id="disp-data" type="date" name="data" value="{{ data_str }}" class="disp-date form-control" onchange="this.form.submit()">
           </div>
         </form>
       {% endif %}
     </div>
+    <div class="disp-results">
+      <span id="disp-resultado" role="status" aria-live="polite"></span>
+      <button id="disp-limpar" type="button" class="btn btn-link btn-sm p-0" hidden>Limpar busca e filtro</button>
+    </div>
 
     {% if modo == 'semanal' %}
       <div class="disp-help">
-        <strong>Exemplo:</strong> na Focaccia, escolha “Somente alguns dias”, marque sábado e domingo e salve. A regra continua valendo nas próximas semanas sem precisar copiar datas.
+        <strong>O que se repete toda semana:</strong> abra o produto, escolha os dias e o limite de venda e salve.
+        Para mudar só um dia, use <strong>Ajustar uma data</strong>.
       </div>
     {% else %}
       <div class="disp-help">
-        Configurando <strong>{{ dias_completos[data.weekday()] }}, {{ data.strftime('%d/%m/%Y') }}</strong>. A exceção vale somente nessa data e depois a regra semanal volta automaticamente.
+        Entregas de <strong>{{ dias_completos[data.weekday()] }}, {{ data.strftime('%d/%m/%Y') }}</strong>.
+        O ajuste vale somente nesta data. Depois, a rotina semanal volta automaticamente.
       </div>
     {% endif %}
 
@@ -168,7 +179,11 @@
                   <span class="disp-pill">Disponível · sem limite</span>
                 {% else %}
                   <strong>{{ it.configuracao.saldo }} disponíveis</strong>
-                  {{ it.configuracao.qtd_reservada }} já reservados
+                {% endif %}
+                {% if not it.configuracao.sem_limite %}
+                  <small class="d-block mt-1">Limite: {{ it.configuracao.qtd_limite }} · {{ it.configuracao.qtd_reservada }} já reservados</small>
+                {% elif it.configuracao.qtd_reservada %}
+                  <small class="d-block mt-1">{{ it.configuracao.qtd_reservada }} já reservados</small>
                 {% endif %}
                 <small class="d-block mt-1">
                   {% if it.configuracao.fonte == 'excecao' %}Exceção desta data
@@ -235,7 +250,7 @@
               <input type="hidden" name="item_id" value="{{ it.id }}">
               <input type="hidden" name="data" value="{{ data_str }}">
 
-              <span class="disp-section-label">O que fazer somente nesta data</span>
+              <span class="disp-section-label">O que fazer nas entregas de {{ data.strftime('%d/%m') }}</span>
               <div class="disp-choice-grid">
                 <label class="disp-choice">
                   <input type="radio" name="tipo_excecao" value="herdar" {{ 'checked' if not it.excecao }}>
@@ -251,15 +266,16 @@
                 </label>
                 <label class="disp-choice">
                   <input type="radio" name="tipo_excecao" value="limite" {{ 'checked' if it.excecao and it.excecao.qtd_limite and it.excecao.qtd_limite > 0 }}>
-                  <span><strong>Limitar a quantidade</strong><small>Defina o máximo disponível neste dia.</small></span>
+                  <span><strong>Limitar a quantidade</strong><small>Defina o total que pode vender nesta data.</small></span>
                 </label>
               </div>
               <div class="disp-limit">
                 <label for="qtd-{{ it.kind }}-{{ it.id }}" class="mb-0 fw-bold">Quantidade máxima</label>
                 <input id="qtd-{{ it.kind }}-{{ it.id }}" type="number" min="1" name="qtd_limite" class="form-control disp-exception-value" placeholder="Ex.: 20" value="{{ it.excecao.qtd_limite if it.excecao and it.excecao.qtd_limite else '' }}">
               </div>
+              <p class="small text-muted mt-2 mb-0">A quantidade máxima inclui o que já foi reservado. Exemplo: limite de 20 com 3 reservados deixa 17 disponíveis para novas vendas.</p>
               <div class="disp-actions">
-                <button type="submit" class="btn btn-primary disp-save">Salvar exceção</button>
+                <button type="submit" class="btn btn-primary disp-save">Salvar ajuste de {{ data.strftime('%d/%m') }}</button>
               </div>
             </form>
           {% endif %}
@@ -267,7 +283,10 @@
       {% endfor %}
     </div>
 
-    <div id="disp-sem-resultado" class="disp-empty mt-3" hidden>Nenhum produto encontrado.</div>
+    <div id="disp-sem-resultado" class="disp-empty mt-3" hidden>
+      Nenhum produto corresponde à busca e ao filtro.
+      Para encontrar um produto desativado, abra <a href="{{ url_for('main.loja_online_catalogo', filtro='fora-site') }}">Produtos fora do site</a>.
+    </div>
 
     {% if modo == 'semanal' %}
       <details class="disp-maintenance">
@@ -296,13 +315,19 @@
   var filter = document.getElementById('disp-filtro');
   var items = Array.prototype.slice.call(document.querySelectorAll('.disp-item'));
   var empty = document.getElementById('disp-sem-resultado');
+  var result = document.getElementById('disp-resultado');
+  var clear = document.getElementById('disp-limpar');
+
+  function normalize(text) {
+    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
 
   function applyFilter() {
-    var term = (search && search.value || '').trim().toLowerCase();
+    var term = normalize((search && search.value || '').trim());
     var mode = filter ? filter.value : 'todos';
     var visible = 0;
     items.forEach(function (item) {
-      var matchesText = !term || item.dataset.name.indexOf(term) !== -1;
+      var matchesText = !term || normalize(item.dataset.name).indexOf(term) !== -1;
       var hasRule = item.dataset.rule === '1';
       var matchesMode = mode === 'todos' || (mode === 'regras' && hasRule)
         || (mode === 'livres' && !hasRule);
@@ -311,10 +336,22 @@
       if (show) visible += 1;
     });
     if (empty) empty.hidden = visible !== 0;
+    if (result) result.textContent = 'Mostrando ' + visible + ' de ' + items.length + ' produtos';
+    if (clear) clear.hidden = !term && mode === 'todos';
   }
   if (search) search.addEventListener('input', applyFilter);
   if (filter) filter.addEventListener('change', applyFilter);
+  if (clear) clear.addEventListener('click', function () {
+    if (search) search.value = '';
+    if (filter) filter.value = 'todos';
+    applyFilter();
+    if (search) search.focus();
+  });
   applyFilter();
+
+  // O retorno de Salvar aponta para o produto; mantenha seu editor aberto.
+  var savedItem = document.getElementById(window.location.hash.slice(1));
+  if (savedItem && savedItem.classList.contains('disp-item')) savedItem.open = true;
 
   document.querySelectorAll('.disp-editor').forEach(function (form) {
     function update() {

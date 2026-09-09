@@ -770,6 +770,50 @@ def receber_pagamento(parcela, valor, forma_pagamento=None, observacao=None):
     return parcela
 
 
+def _calcular_preco_sugerido(atacado, desconto=0, especifico=None):
+    """Compatibilidade do helper unitário; formulários usam base + percentual."""
+    from app.services.precos_b2b import condicoes_sugeridas, subtotal_com_desconto
+    condicoes = condicoes_sugeridas(atacado, desconto, especifico)
+    if condicoes is None:
+        return None
+    return subtotal_com_desconto(1, **condicoes)
+
+
+def catalogo_precos(receitas, produtos):
+    """Mesmas fontes de preço para os formulários de venda e orçamento."""
+    from app.models import PrecoClienteB2B
+    precos = {f'receita:{r.id}': r.preco_venda
+              for r in receitas if r.preco_venda}
+    precos.update({f'produto:{p.id}': p.preco_atacado
+                   for p in produtos if p.preco_atacado})
+    clientes = {}
+    for pc in PrecoClienteB2B.query.all():
+        clientes.setdefault(pc.cliente_id, {})[
+            f'{pc.kind}:{pc.item_id}'] = float(pc.preco)
+    return {'precos_map': precos, 'precos_cliente_map': clientes}
+
+
+def sugestoes_orcamento(catalogo, clientes):
+    """Condições de venda e orçamento: preço base e percentual separados.
+
+    Compartilha tabelas entre clientes com o mesmo desconto, evitando um
+    catálogo inteiro por cliente. Strings monetárias preservam centavos.
+    """
+    from app.services.precos_b2b import condicoes_sugeridas
+    descontos = {str(c.id): str(c.desconto_percentual or 0) for c in clientes}
+    por_desconto = {}
+    for desconto in {'0', *descontos.values()}:
+        por_desconto[desconto] = {
+            ref: condicoes_sugeridas(preco, desconto)
+            for ref, preco in catalogo['precos_map'].items()}
+    especificos = {
+        str(cid): {ref: condicoes_sugeridas(None, especifico=preco)
+                   for ref, preco in precos.items()}
+        for cid, precos in catalogo['precos_cliente_map'].items()}
+    return {'descontos': descontos, 'por_desconto': por_desconto,
+            'especificos': especificos}
+
+
 def preco_sugerido(receita_id=None, produto_id=None, cliente=None):
     """Retorna o preco sugerido pro item na venda B2B.
 
@@ -789,7 +833,7 @@ def preco_sugerido(receita_id=None, produto_id=None, cliente=None):
             kind='receita' if receita_id else 'produto',
             item_id=receita_id or produto_id).first()
         if esp:
-            return round(float(esp.preco), 2)
+            return float(_calcular_preco_sugerido(None, especifico=esp.preco))
     preco = None
     if receita_id:
         r = Receita.query.get(receita_id)
@@ -797,8 +841,6 @@ def preco_sugerido(receita_id=None, produto_id=None, cliente=None):
     elif produto_id:
         p = Produto.query.get(produto_id)
         preco = p.preco_atacado if p else None
-    if not preco:
-        return None
-    if cliente and cliente.desconto_percentual:
-        preco = preco * (1 - cliente.desconto_percentual / 100.0)
-    return round(preco, 2)
+    valor = _calcular_preco_sugerido(
+        preco, cliente.desconto_percentual if cliente else 0)
+    return float(valor) if valor is not None else None

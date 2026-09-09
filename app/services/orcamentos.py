@@ -14,6 +14,7 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.models import ClienteB2B, Orcamento, OrcamentoItem, Produto, Receita
+from app.services.precos_b2b import normalizar_desconto
 from app.utils import agora, hoje
 
 STATUS_VALIDOS = ('rascunho', 'enviado', 'aprovado', 'recusado')
@@ -114,8 +115,24 @@ def montar_item_payload(linha):
         'quantidade': _normalizar_qtd(linha.get('qtd')),
         'unidade': (linha.get('unidade') or '').strip()[:20] or None,
         'preco_unitario': _normalizar_preco(linha.get('preco_unitario')),
+        'desconto_percentual': float(normalizar_desconto(linha.get('desconto_percentual'))),
         'observacao': (linha.get('observacao') or '').strip()[:200] or None,
     }
+
+
+def _normalizar_itens(itens_raw):
+    itens, erros = [], []
+    for numero, raw in enumerate(itens_raw or [], 1):
+        try:
+            item = montar_item_payload(raw)
+        except ValueError as exc:
+            erros.append(f'Item {numero}: {exc}')
+            continue
+        if item['quantidade'] > 0:
+            itens.append(item)
+    if not itens:
+        erros.append('Adicione pelo menos 1 item ao orcamento.')
+    return itens, erros
 
 
 def _parse_data(raw):
@@ -150,14 +167,8 @@ def criar_orcamento(form, itens_raw, *, usuario_id=None):
     if not cliente_id and not cliente_nome:
         erros.append('Informe o cliente (escolha um cadastrado ou digite o nome).')
 
-    itens_norm = []
-    for raw in itens_raw or []:
-        item = montar_item_payload(raw)
-        if item['quantidade'] <= 0:
-            continue
-        itens_norm.append(item)
-    if not itens_norm:
-        erros.append('Adicione pelo menos 1 item ao orcamento.')
+    itens_norm, erros_itens = _normalizar_itens(itens_raw)
+    erros.extend(erros_itens)
 
     if erros:
         return None, erros
@@ -204,6 +215,11 @@ def atualizar_orcamento(orc, form, itens_raw):
     if orc.status not in ('rascunho', 'enviado'):
         return False, ['Orcamento ja foi aprovado/recusado — nao editavel.']
 
+    # Valida antes de substituir snapshots ou alterar o cabeçalho.
+    itens_norm, erros = _normalizar_itens(itens_raw)
+    if erros:
+        return False, erros
+
     raw_cli = (form.get('cliente_id') or '').strip()
     try:
         orc.cliente_id = int(raw_cli) if raw_cli else None
@@ -237,15 +253,6 @@ def atualizar_orcamento(orc, form, itens_raw):
     # tela e PDF do orcamento mostravam o total inflado.
     orc.itens.clear()
     db.session.flush()
-
-    itens_norm = []
-    for raw in itens_raw or []:
-        item = montar_item_payload(raw)
-        if item['quantidade'] <= 0:
-            continue
-        itens_norm.append(item)
-    if not itens_norm:
-        return False, ['Adicione pelo menos 1 item ao orcamento.']
 
     for it in itens_norm:
         oi = OrcamentoItem(orcamento_id=orc.id, **it)
@@ -329,7 +336,7 @@ def _converter_em_venda(orc, usuario_id=None):
               # Numeric(10,2) do orcamento segue Decimal ate a venda
               # (dinheiro nunca passa por float — CLAUDE.md).
               'preco_unitario': it.preco_unitario or Decimal('0'),
-              'desconto_percentual': 0,
+              'desconto_percentual': it.desconto_percentual or 0,
               'observacao': it.observacao}
              for it in orc.itens]
     venda = vendas_b2b.criar_venda(

@@ -681,21 +681,7 @@ def _catalogo_venda(excluir_venda_id=None):
                 receitas.append(it.receita)
             if it.produto_id and it.produto and not it.produto.ativo:
                 produtos.append(it.produto)
-    # Preco atacado vem do cadastro: Receita.preco_venda, Produto.preco_atacado
-    # (mesma logica de /cardapio?tipo=atacado).
-    precos_map = {}
-    for r in receitas:
-        if r.preco_venda:
-            precos_map[f'receita:{r.id}'] = r.preco_venda
-    for p in produtos:
-        if p.preco_atacado:
-            precos_map[f'produto:{p.id}'] = p.preco_atacado
-    # Preco ESPECIFICO por cliente (tabela PrecoClienteB2B) — vence o
-    # atacado padrao no form; o JS troca quando o cliente e selecionado.
-    precos_cliente_map = {}
-    for pc in PrecoClienteB2B.query.all():
-        (precos_cliente_map.setdefault(pc.cliente_id, {})
-         )[f'{pc.kind}:{pc.item_id}'] = float(pc.preco)
+    precos = svc.catalogo_precos(receitas, produtos)
     # Estoque DISPONIVEL por item = fisico − comprometido com vendas B2B
     # ainda nao separadas (a baixa e na separacao, 07/07/2026). Mostrar o
     # fisico cru deixava duas vendas serem aprovadas contra o mesmo saldo.
@@ -710,8 +696,8 @@ def _catalogo_venda(excluir_venda_id=None):
             continue
         estoque_map[ref] = (ep.quantidade or 0) - pendente.get(chave, 0)
     return {'clientes': clientes, 'receitas': receitas, 'produtos': produtos,
-            'precos_map': precos_map, 'estoque_map': estoque_map,
-            'precos_cliente_map': precos_cliente_map}
+            'estoque_map': estoque_map, **precos,
+            'sugestoes': svc.sugestoes_orcamento(precos, clientes)}
 
 
 def _parse_venda_form():
@@ -842,7 +828,7 @@ def venda_nova():
                 'qtd': int(round(float(it.quantidade or 1))),
                 'estado': '',
                 'preco': float(it.preco_unitario or 0),
-                'desc': 0,
+                'desc': it.desconto_percentual or 0,
                 'obs': it.observacao or '',
             })
         flash(f'Itens e cliente vindos do orçamento {orc.codigo} — confira '
@@ -1348,14 +1334,14 @@ def _parse_itens_form(form):
 
 def _ctx_form(form=None, erros=None, orc=None):
     """Contexto compartilhado entre GET e POST do form."""
+    clientes = ClienteB2B.query.filter_by(ativo=True).order_by(ClienteB2B.nome).all()
+    receitas = (Receita.ativas().order_by(Receita.nome).all())
+    produtos = Produto.query.filter_by(ativo=True).order_by(Produto.nome).all()
     return dict(
-        clientes=ClienteB2B.query
-            .filter_by(ativo=True).order_by(ClienteB2B.nome).all(),
-        receitas=Receita.query
-            .filter(Receita.arquivada_em.is_(None))
-            .order_by(Receita.nome).all(),
-        produtos=Produto.query
-            .filter_by(ativo=True).order_by(Produto.nome).all(),
+        clientes=clientes, receitas=receitas, produtos=produtos,
+        sugestoes=svc.sugestoes_orcamento(
+            svc.catalogo_precos(receitas, produtos), clientes),
+        itens_form=_parse_itens_form(form) if form is not None else None,
         form=form or {},
         erros=erros or [],
         orc=orc,

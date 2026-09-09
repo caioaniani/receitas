@@ -507,6 +507,9 @@ def gerar_orcamento_pdf(orc):
         nome = (it.nome or '')
         if it.observacao:
             nome = f'{nome}  ({it.observacao})'
+        if it.desconto_percentual:
+            percentual = f'{it.desconto_percentual:g}'.replace('.', ',')
+            nome = f'{nome}\n{percentual}% de desconto'
         # Quebra de linha se o item for muito longo: usa multi_cell pra
         # primeira coluna, depois reposiciona y pra alinhar as outras.
         y_ini = pdf.get_y()

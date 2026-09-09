@@ -121,9 +121,9 @@ def test_tela_nova_salva_regra_e_excecao_sem_expor_99999(app):
     resposta = client.get('/admin/loja-online/plano-do-dia')
     assert resposta.status_code == 200
     html = resposta.get_data(as_text=True)
-    assert 'Quando cada produto aparece' in html
-    assert 'Regra semanal' in html
-    assert 'Exceções por data' in html
+    assert 'Estoque do site' in html
+    assert 'Rotina semanal' in html
+    assert 'Ajustar uma data' in html
     assert 'Buscar produto' in html
     assert 'Aplicar 99999' not in html
 

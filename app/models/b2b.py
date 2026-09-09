@@ -259,15 +259,9 @@ class VendaB2BItem(db.Model):
 
     @property
     def valor_total(self):
-        # Decimal: preco_unitario eh Numeric (vem como Decimal do SQLA).
-        # quantidade eh int, desconto_percentual eh float — convertemos.
-        from decimal import ROUND_HALF_UP, Decimal
-        qtd = Decimal(int(self.quantidade or 0))
-        preco = Decimal(self.preco_unitario or 0)
-        bruto = qtd * preco
-        desc_pct = Decimal(str(self.desconto_percentual or 0))
-        desc = bruto * desc_pct / Decimal('100')
-        return (bruto - desc).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        from app.services.precos_b2b import subtotal_com_desconto
+        return subtotal_com_desconto(
+            int(self.quantidade or 0), self.preco_unitario, self.desconto_percentual)
 
 class VendaB2BParcela(db.Model):
     """Cada parcela tem vencimento, valor previsto e valor recebido.
@@ -475,6 +469,9 @@ class OrcamentoItem(db.Model):
     quantidade = db.Column(db.Numeric(10, 3), nullable=False, default=1)
     unidade = db.Column(db.String(20))  # un, kg, cx, dz, ...
     preco_unitario = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    # Preço base e percentual formam o snapshot negociado, como na venda.
+    desconto_percentual = db.Column(db.Float, nullable=False, default=0,
+                                    server_default='0')
     subtotal = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     observacao = db.Column(db.String(200))
 
@@ -482,9 +479,9 @@ class OrcamentoItem(db.Model):
     produto = db.relationship('Produto')
 
     def recalcular_subtotal(self):
-        from decimal import Decimal
-        self.subtotal = (Decimal(str(self.quantidade or 0))
-                         * Decimal(str(self.preco_unitario or 0)))
+        from app.services.precos_b2b import subtotal_com_desconto
+        self.subtotal = subtotal_com_desconto(
+            self.quantidade, self.preco_unitario, self.desconto_percentual)
         return self.subtotal
 
 

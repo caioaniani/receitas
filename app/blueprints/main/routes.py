@@ -6410,7 +6410,7 @@ def loja_online_excecao_salvar():
     except (TypeError, ValueError) as exc:
         flash(str(exc) or 'Confira a quantidade.', 'danger')
     else:
-        flash('Excecao da data salva.', 'success')
+        flash(f'Ajuste de {data.strftime("%d/%m")} salvo.', 'success')
     return redirect(url_for('main.loja_online_plano_dia', view='excecoes',
                             data=data.isoformat())
                     + f'#item-{kind}-{item_id}')

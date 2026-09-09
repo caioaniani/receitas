@@ -250,6 +250,24 @@ Plano do dia, com link explícito no catálogo e na área Vendas. Retirado
 o editor de estoque físico do catálogo para não confundir as duas coisas;
 nenhuma alteração em saldos, regras semanais, exceções ou reservas.
 
+**Plano do dia e busca (09/09/2026)**: a tela do plano se apresenta como
+"Estoque do site", com "Rotina semanal" e "Ajustar uma data". A lista abre
+em Todos os produtos; não esconder os demais só porque um tem regra.
+Limite inclui reservas, e salvar reabre o editor do produto. Publicação
+continua no catálogo, alcançável por link também no celular. A busca do
+menu atende intenções como senha, responsável, estoque do site e atacado;
+deve respeitar as permissões das rotas, usando URLs canônicas.
+
+**Sugestão do orçamento B2B (09/09/2026)**: usa a mesma fonte da venda:
+preço específico do cliente, ou atacado com desconto. Não usar varejo/site.
+O percentual fica por item, separado do preço base, para arredondar somente
+o subtotal como na venda. Orçamentos antigos recebem percentual zero e
+mantêm seus snapshots. O desconto global em R$ continua com o guard de
+aprovação existente; esta mudança não altera essa regra.
+Trocar item ou cliente atualiza apenas campos automáticos; preço manual
+ou de orçamento salvo é preservado até "Usar preço sugerido". Valores
+informados também devem sobreviver ao retorno de erro de validação.
+
 Pedido do dono ("nao estou conseguindo pilotar o aviao"): o sistema cresceu
 mais rapido que a capacidade de operar; quase tudo era "pull" (lembrar de
 abrir tela). Tres pecas, UMA fonte de dados

@@ -106,13 +106,11 @@
   .ta-opt { padding:9px 12px; cursor:pointer; font-size:.9rem; }
   .ta-opt:hover { background:var(--bg-card-hover,#f4f4f5); }
 </style>
+<script type="application/json" id="sugestoes-precos-json">{{ sugestoes|tojson }}</script>
+<script src="{{ url_for('static', filename='js/b2b-orcamento-precos.js') }}?v={{ static_v['js/b2b-orcamento-precos.js'] }}"></script>
 <script>
 (function() {
-    var PRECOS = {{ precos_map|tojson }};
-    // Tabela de preco POR CLIENTE: {cliente_id: {'receita:5': 9.5}}.
-    // Preco especifico VENCE o atacado padrao e NAO leva o desconto % em
-    // cima (o valor ja e final).
-    var PRECOS_CLIENTE = {{ precos_cliente_map|tojson }};
+    var SUGESTOES = JSON.parse(document.getElementById('sugestoes-precos-json').textContent);
     var ESTOQUE = {{ estoque_map|tojson }};
     var SEED_ITENS = {{ itens_seed|tojson }};
     var SEED_PARCELAS = {{ parcelas_seed|tojson }};
@@ -133,9 +131,10 @@
     }
 
     function sugestaoPreco(ref) {
-        var doCliente = (PRECOS_CLIENTE[selCliente.value] || {})[ref];
-        if (doCliente !== undefined) return { preco: doCliente, desc: '' };
-        return { preco: PRECOS[ref] || 0, desc: getDescCliente() || '' };
+        var condicoes = B2BOrcamentoPrecos.sugerido(SUGESTOES, selCliente.value, ref);
+        return condicoes
+            ? {preco: condicoes.preco_unitario, desc: Number(condicoes.desconto_percentual) || ''}
+            : {preco: 0, desc: getDescCliente() || ''};
     }
 
     function aplicarItem(tr, ref) {

@@ -124,7 +124,7 @@ def create_app(config_class=None):
         # pagina do produto ESTOUROU com fotos em tamanho natural (relatado
         # pelo dono). Sem `?v=` a correcao de CSS so chegaria por hard-refresh.
         for rel in ('js/projetos.js', 'js/app.js', 'js/entregas.js',
-                    'js/pdv_mapeamento.js', 'css/style.css',
+                    'js/pdv_mapeamento.js', 'js/b2b-orcamento-precos.js', 'css/style.css',
                     'js/home-v2.js', 'js/command-palette.js', 'css/ui-v2.css', 'css/industria-v2.css',
                     'css/treino-v2.css', 'css/padeiro-v2.css', 'css/cobrancas.css', 'js/cobrancas.js',
                     'loja/loja.css', 'loja/carrinho.js', 'loja/checkout.js'):
@@ -182,12 +182,14 @@ def create_app(config_class=None):
         from flask_login import current_user
 
         from app.models import Atribuicao, MateriaPrima, Receita, Usuario
+        from app.services.busca_navegacao import itens_para_usuario
 
         # Sem queries para usuários não autenticados (ex: página de login)
         if not current_user.is_authenticated:
             return dict(
                 sidebar_categorias={}, mp_info={}, mp_nomes=[],
                 receita_nomes=[], produto_nomes=[], funcionarios=[],
+                busca_navegacao=[],
             )
 
         # ── Receitas + categorias (cache 60s) ──
@@ -291,6 +293,7 @@ def create_app(config_class=None):
 
         return dict(
             sidebar_categorias=categorias,
+            busca_navegacao=itens_para_usuario(current_user, categorias),
             mp_info=mp_data['info'],
             mp_nomes=mp_data['nomes'],
             receita_nomes=receita_nomes,

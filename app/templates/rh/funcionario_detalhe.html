@@ -28,7 +28,7 @@
         <div><span>Certificados</span><strong>{{ treino_resumo.selos|length }}</strong><small>emitido(s)</small></div>
     </div>
     <div class="treino-progress"><span style="width:{{ treino_resumo.percentual }}%"></span></div>
-    <div class="treino-rh-actions"><a class="treino-secondary-action" href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos') }}">{{ 'Ver acesso' if treino_resumo.tem_acesso else 'Criar ou vincular acesso' }}</a>{% for selo in treino_resumo.selos[:3] %}<a href="{{ url_for('treino.certificado', selo_id=selo.id) }}"><i class="bi bi-award"></i> {{ selo.trilha.nome }}</a>{% endfor %}</div>
+    <div class="treino-rh-actions"><a class="treino-secondary-action" href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', ativos='0', _anchor='acesso-' ~ func.id) }}">{{ 'Ver acesso' if treino_resumo.tem_acesso else 'Criar ou vincular acesso' }}</a>{% for selo in treino_resumo.selos[:3] %}<a href="{{ url_for('treino.certificado', selo_id=selo.id) }}"><i class="bi bi-award"></i> {{ selo.trilha.nome }}</a>{% endfor %}</div>
 </section>
 
 {% if func.enquadramento_carreira %}

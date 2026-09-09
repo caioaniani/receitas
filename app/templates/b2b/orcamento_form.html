@@ -12,6 +12,21 @@
 </ul></div>
 {% endif %}
 
+{# POST com erro preserva todos os valores digitados, inclusive vazio e zero. #}
+{% set cabecalho = form if itens_form is not none else {
+    'cliente_id': (orc.cliente_id or '') if orc else '',
+    'cliente_nome': (orc.cliente_nome or '') if orc else '',
+    'cliente_documento': (orc.cliente_documento or '') if orc else '',
+    'cliente_email': (orc.cliente_email or '') if orc else '',
+    'cliente_telefone': (orc.cliente_telefone or '') if orc else '',
+    'cliente_endereco': (orc.cliente_endereco or '') if orc else '',
+    'desconto_valor': orc.desconto_valor if orc else '',
+    'frete_valor': orc.frete_valor if orc else '',
+    'validade_dias': (orc.valido_ate - orc.data).days if orc else 7,
+    'data_entrega': orc.data_entrega.isoformat() if orc and orc.data_entrega else '',
+    'observacao': (orc.observacao or '') if orc else ''
+} %}
+
 <form method="POST"
       action="{% if orc %}{{ url_for('b2b.orcamento_editar', oid=orc.id) }}{% else %}{{ url_for('b2b.orcamento_novo') }}{% endif %}"
       id="form-orc">
@@ -26,9 +41,10 @@
                     <label class="form-label small">Cliente cadastrado</label>
                     <select name="cliente_id" class="form-select form-select-sm" id="sel-cliente">
                         <option value="">— avulso (preencher abaixo) —</option>
+                        {% set cliente_atual = cabecalho.get('cliente_id', '') %}
                         {% for c in clientes %}
                         <option value="{{ c.id }}"
-                          {% if (orc and orc.cliente_id == c.id) or form.get('cliente_id')|string == c.id|string %}selected{% endif %}>
+                          {% if cliente_atual|string == c.id|string %}selected{% endif %}>
                           {{ c.nome }}</option>
                         {% endfor %}
                     </select>
@@ -36,27 +52,27 @@
                 <div class="col-md-4">
                     <label class="form-label small">Ou nome avulso</label>
                     <input type="text" name="cliente_nome" class="form-control form-control-sm"
-                           placeholder="ex: Hotel Y" value="{{ (orc.cliente_nome if orc else form.get('cliente_nome')) or '' }}">
+                           placeholder="ex: Hotel Y" value="{{ cabecalho.get('cliente_nome', '') }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small">CNPJ/CPF</label>
                     <input type="text" name="cliente_documento" class="form-control form-control-sm"
-                           value="{{ (orc.cliente_documento if orc else form.get('cliente_documento')) or '' }}">
+                           value="{{ cabecalho.get('cliente_documento', '') }}">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small">E-mail</label>
                     <input type="email" name="cliente_email" class="form-control form-control-sm"
-                           value="{{ (orc.cliente_email if orc else form.get('cliente_email')) or '' }}">
+                           value="{{ cabecalho.get('cliente_email', '') }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small">Telefone</label>
                     <input type="text" name="cliente_telefone" class="form-control form-control-sm"
-                           value="{{ (orc.cliente_telefone if orc else form.get('cliente_telefone')) or '' }}">
+                           value="{{ cabecalho.get('cliente_telefone', '') }}">
                 </div>
                 <div class="col-md-5">
                     <label class="form-label small">Endereco</label>
                     <input type="text" name="cliente_endereco" class="form-control form-control-sm"
-                           value="{{ (orc.cliente_endereco if orc else form.get('cliente_endereco')) or '' }}">
+                           value="{{ cabecalho.get('cliente_endereco', '') }}">
                 </div>
             </div>
         </div>
@@ -80,6 +96,7 @@
                         <th style="width:90px">Qtd</th>
                         <th style="width:80px">Un</th>
                         <th style="width:110px">Preco unit.</th>
+                        <th style="width:90px">Desc. %</th>
                         <th style="width:110px" class="text-end">Subtotal</th>
                         <th style="min-width:120px">Obs</th>
                         <th style="width:40px"></th>
@@ -103,25 +120,25 @@
                     <label class="form-label small">Desconto (R$)</label>
                     <input type="number" step="0.01" min="0" name="desconto_valor"
                            class="form-control form-control-sm" id="inp-desconto"
-                           value="{{ (orc.desconto_valor if orc else form.get('desconto_valor')) or '' }}">
+                           value="{{ cabecalho.get('desconto_valor', '') }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small">Frete (R$)</label>
                     <input type="number" step="0.01" min="0" name="frete_valor"
                            class="form-control form-control-sm" id="inp-frete"
-                           value="{{ (orc.frete_valor if orc else form.get('frete_valor')) or '' }}">
+                           value="{{ cabecalho.get('frete_valor', '') }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small">Validade (dias)</label>
                     <input type="number" min="1" max="90" name="validade_dias"
                            class="form-control form-control-sm"
-                           value="{{ form.get('validade_dias') or 7 }}">
+                           value="{{ cabecalho.get('validade_dias', '') }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small">Data de entrega</label>
                     <input type="date" name="data_entrega"
                            class="form-control form-control-sm"
-                           value="{{ (orc.data_entrega.isoformat() if orc and orc.data_entrega else form.get('data_entrega')) or '' }}">
+                           value="{{ cabecalho.get('data_entrega', '') }}">
                     <div class="form-text" style="font-size:11px;">Deixe vazio se for "a combinar".</div>
                 </div>
                 <div class="col-md-6 text-end d-flex flex-column justify-content-end">
@@ -130,7 +147,7 @@
                 </div>
                 <div class="col-12">
                     <label class="form-label small">Observacoes (condicoes, prazo de entrega, forma de pagamento)</label>
-                    <textarea name="observacao" rows="2" class="form-control form-control-sm">{{ (orc.observacao if orc else form.get('observacao')) or '' }}</textarea>
+                    <textarea name="observacao" rows="2" class="form-control form-control-sm">{{ cabecalho.get('observacao', '') }}</textarea>
                 </div>
             </div>
         </div>
@@ -145,33 +162,51 @@
     </div>
 </form>
 
-{# Catalogo serializado pro JS (nome + preco sugerido por item). #}
+{# Sugestões calculadas pela mesma fonte da venda B2B. #}
+<script type="application/json" id="sugestoes-precos-json">{{ sugestoes|tojson }}</script>
 <script type="application/json" id="catalogo-json">
 {
   "receita": [
-    {% for r in receitas %}{"id": {{ r.id }}, "nome": {{ r.nome|tojson }}, "preco": {{ (r.preco_loja or r.preco_site or 0)|float }}}{% if not loop.last %},{% endif %}{% endfor %}
+    {% for r in receitas %}{"id": {{ r.id }}, "nome": {{ r.nome|tojson }}}{% if not loop.last %},{% endif %}{% endfor %}
   ],
   "produto": [
-    {% for p in produtos %}{"id": {{ p.id }}, "nome": {{ p.nome|tojson }}, "preco": {{ (p.preco_site or 0)|float }}}{% if not loop.last %},{% endif %}{% endfor %}
+    {% for p in produtos %}{"id": {{ p.id }}, "nome": {{ p.nome|tojson }}}{% if not loop.last %},{% endif %}{% endfor %}
   ]
 }
 </script>
-{% if orc %}
+{% if itens_form is not none %}
+<script type="application/json" id="itens-existentes">
+[
+  {% for it in itens_form %}
+  {"catalogo": {{ it.get('catalogo', 'livre')|tojson }},
+   "nome": {{ it.get('nome', '')|tojson }}, "qtd": {{ it.get('qtd', '')|tojson }},
+   "unidade": {{ it.get('unidade', '')|tojson }}, "preco": {{ it.get('preco_unitario', '')|tojson }},
+   "desconto": {{ it.get('desconto_percentual', '0')|tojson }},
+   "obs": {{ it.get('observacao', '')|tojson }}}{% if not loop.last %},{% endif %}
+  {% endfor %}
+]
+</script>
+{% elif orc %}
 <script type="application/json" id="itens-existentes">
 [
   {% for it in orc.itens %}
   {"catalogo": "{% if it.receita_id %}receita:{{ it.receita_id }}{% elif it.produto_id %}produto:{{ it.produto_id }}{% else %}livre{% endif %}",
    "nome": {{ it.nome|tojson }}, "qtd": {{ (it.quantidade or 0)|float }},
    "unidade": {{ (it.unidade or '')|tojson }}, "preco": {{ (it.preco_unitario or 0)|float }},
+   "desconto": {{ (it.desconto_percentual or 0)|float }},
    "obs": {{ (it.observacao or '')|tojson }}}{% if not loop.last %},{% endif %}
   {% endfor %}
 ]
 </script>
 {% endif %}
 
+<script src="{{ url_for('static', filename='js/b2b-orcamento-precos.js') }}?v={{ static_v['js/b2b-orcamento-precos.js'] }}"></script>
 <script>
 (function () {
   var CAT = JSON.parse(document.getElementById('catalogo-json').textContent);
+  var SUGESTOES = JSON.parse(document.getElementById('sugestoes-precos-json').textContent);
+  var cliente = document.getElementById('sel-cliente');
+  var escapar = B2BOrcamentoPrecos.escapar;
   var body = document.getElementById('itens-body');
   var idx = 0;
 
@@ -187,7 +222,7 @@
       CAT[kind].forEach(function (o) {
         var val = kind + ':' + o.id;
         var sel = (val === selecionado) ? ' selected' : '';
-        html += '<option value="' + val + '"' + sel + '>' + o.nome + '</option>';
+        html += '<option value="' + escapar(val) + '"' + sel + '>' + escapar(o.nome) + '</option>';
       });
       html += '</optgroup>';
     });
@@ -207,29 +242,43 @@
     tr.innerHTML =
       '<td><select name="itens[' + i + '][catalogo]" class="form-select form-select-sm cat">' +
         opcoesCatalogo(dados.catalogo || 'livre') + '</select></td>' +
-      '<td><input name="itens[' + i + '][nome]" class="form-control form-control-sm nome" value="' + (dados.nome || '').replace(/"/g, '&quot;') + '"></td>' +
-      '<td><input name="itens[' + i + '][qtd]" type="number" step="0.001" min="0" class="form-control form-control-sm qtd" value="' + (dados.qtd || '') + '"></td>' +
-      '<td><input name="itens[' + i + '][unidade]" class="form-control form-control-sm" value="' + (dados.unidade || '') + '" placeholder="un"></td>' +
-      '<td><input name="itens[' + i + '][preco_unitario]" type="number" step="0.01" min="0" class="form-control form-control-sm preco" value="' + (dados.preco || '') + '"></td>' +
+      '<td><input name="itens[' + i + '][nome]" class="form-control form-control-sm nome" value="' + escapar(dados.nome) + '"></td>' +
+      '<td><input name="itens[' + i + '][qtd]" type="number" step="0.001" min="0" class="form-control form-control-sm qtd" value="' + escapar(dados.qtd) + '"></td>' +
+      '<td><input name="itens[' + i + '][unidade]" class="form-control form-control-sm" value="' + escapar(dados.unidade) + '" placeholder="un"></td>' +
+      '<td><input name="itens[' + i + '][preco_unitario]" type="number" step="0.01" min="0" class="form-control form-control-sm preco" value="' + escapar(dados.preco) + '">' +
+        '<small class="text-muted preco-origem"></small>' +
+        '<button type="button" class="btn btn-link btn-sm p-0 usar-sugestao" hidden>Usar preço sugerido</button></td>' +
+      '<td><input name="itens[' + i + '][desconto_percentual]" type="number" step="any" min="0" max="100" class="form-control form-control-sm desconto-item" value="' + escapar(dados.desconto == null ? 0 : dados.desconto) + '"></td>' +
       '<td class="text-end subtotal">R$ 0,00</td>' +
-      '<td><input name="itens[' + i + '][observacao]" class="form-control form-control-sm" value="' + (dados.obs || '').replace(/"/g, '&quot;') + '"></td>' +
+      '<td><input name="itens[' + i + '][observacao]" class="form-control form-control-sm" value="' + escapar(dados.obs) + '"></td>' +
       '<td><button type="button" class="btn btn-sm btn-outline-danger rm">&times;</button></td>';
     body.appendChild(tr);
 
     var cat = tr.querySelector('.cat');
     var nome = tr.querySelector('.nome');
     var preco = tr.querySelector('.preco');
+    var desconto = tr.querySelector('.desconto-item');
     var qtd = tr.querySelector('.qtd');
 
-    cat.addEventListener('change', function () {
+    function sugestao() {
       var o = buscaCat(cat.value);
-      if (o) {
-        if (!nome.value.trim()) nome.value = o.nome;
-        if (!preco.value) preco.value = o.preco ? o.preco.toFixed(2) : '';
-      }
-      recalc();
+      var condicoes = o ? B2BOrcamentoPrecos.sugerido(SUGESTOES, cliente.value, cat.value) : null;
+      return {selecionado: !!o, nome: o ? o.nome : '',
+              preco: condicoes ? condicoes.preco_unitario : '',
+              desconto: condicoes ? condicoes.desconto_percentual : '0'};
+    }
+    tr.controlePreco = B2BOrcamentoPrecos.controlar({
+      nome: nome, preco: preco, desconto: desconto,
+      nomeManual: !!dados.nome && dados.nome !== sugestao().nome,
+      preservarPreco: dados.preco != null,
+      aviso: tr.querySelector('.preco-origem'),
+      botao: tr.querySelector('.usar-sugestao'),
+      sugestao: sugestao, recalcular: recalc
     });
-    [qtd, preco].forEach(function (el) { el.addEventListener('input', recalc); });
+    cat.addEventListener('change', function () {
+      tr.controlePreco.trocarItem();
+    });
+    [qtd, preco, desconto].forEach(function (el) { el.addEventListener('input', recalc); });
     tr.querySelector('.rm').addEventListener('click', function () {
       tr.remove(); recalc();
     });
@@ -237,24 +286,27 @@
   }
 
   function recalc() {
-    var sub = 0;
+    var sub = 0n;
     body.querySelectorAll('tr').forEach(function (tr) {
-      var q = parseFloat(tr.querySelector('.qtd').value) || 0;
-      var p = parseFloat(tr.querySelector('.preco').value) || 0;
-      var s = q * p;
-      tr.querySelector('.subtotal').textContent = moeda(s);
+      var s = B2BOrcamentoPrecos.subtotalCentavos(
+        tr.querySelector('.qtd').value, tr.querySelector('.preco').value,
+        tr.querySelector('.desconto-item').value);
+      tr.querySelector('.subtotal').textContent = B2BOrcamentoPrecos.moedaCentavos(s);
       sub += s;
     });
-    document.getElementById('subtotal-geral').textContent = moeda(sub);
-    var desc = parseFloat(document.getElementById('inp-desconto').value) || 0;
-    var frete = parseFloat(document.getElementById('inp-frete').value) || 0;
+    document.getElementById('subtotal-geral').textContent = B2BOrcamentoPrecos.moedaCentavos(sub);
+    var desc = B2BOrcamentoPrecos.subtotalCentavos(1, document.getElementById('inp-desconto').value, 0);
+    var frete = B2BOrcamentoPrecos.subtotalCentavos(1, document.getElementById('inp-frete').value, 0);
     document.getElementById('total-geral').textContent =
-      moeda(Math.max(0, sub - desc) + frete);
+      B2BOrcamentoPrecos.moedaCentavos((sub > desc ? sub - desc : 0n) + frete);
   }
 
   document.getElementById('add-item').addEventListener('click', function () { addRow(); });
   document.getElementById('inp-desconto').addEventListener('input', recalc);
   document.getElementById('inp-frete').addEventListener('input', recalc);
+  cliente.addEventListener('change', function () {
+    body.querySelectorAll('tr').forEach(function (tr) { tr.controlePreco.trocarCliente(); });
+  });
 
   // Pre-popula: edicao (itens existentes) ou 1 linha vazia em orcamento novo.
   var existentes = document.getElementById('itens-existentes');

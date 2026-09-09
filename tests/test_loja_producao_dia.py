@@ -92,7 +92,7 @@ def test_layout_novo_mostra_disponibilidade_da_loja_online(app):
     tela = c.get('/admin/loja-online/plano-do-dia')
     assert tela.status_code == 200
     html_tela = tela.get_data(as_text=True)
-    assert 'Disponibilidade do site' in html_tela
+    assert 'Estoque do site' in html_tela
     assert 'sidebar-link active' in html_tela
 
 
@@ -102,7 +102,7 @@ def test_disponibilidade_agora_prioriza_regras_semanais(app):
     resp = c.get('/admin/loja-online/plano-do-dia')
     assert resp.status_code == 200
     html = resp.data.decode()
-    assert 'Quando cada produto aparece' in html
-    assert 'Regra semanal' in html
-    assert 'Exceções por data' in html
+    assert 'Estoque do site' in html
+    assert 'Rotina semanal' in html
+    assert 'Ajustar uma data' in html
     assert '99999 a TODOS' not in html

@@ -4,76 +4,9 @@
 (function() {
     'use strict';
 
-    const podeAdmin = document.currentScript?.dataset.admin === '1';
-    const ROTAS = [
-        // Navegação principal
-        { categoria: 'Navegar', titulo: 'Início', url: '/', icon: 'house' },
-        { categoria: 'Navegar', titulo: 'Pedidos das lojas', url: '/pedidos/', icon: 'cart' },
-        { categoria: 'Navegar', titulo: 'Pedidos do site', url: '/admin/loja-online/pedidos', icon: 'bag' },
-        { categoria: 'Navegar', titulo: 'Produtos do site', aliases: ['Catálogo do site', 'Tirar do site', 'Retirar de venda', 'Desativar produto', 'Ativar produto', 'Ocultar produto'], url: '/admin/loja-online/catalogo?filtro=no-site', icon: 'shop-window', adminOnly: true },
-        { categoria: 'Navegar', titulo: 'Estoque das lojas', aliases: ['Estoque da loja'], url: '/pedidos/estoque-loja', icon: 'box' },
-        { categoria: 'Navegar', titulo: 'Conferência de estoque', url: '/pedidos/conferencia', icon: 'clipboard-check' },
-        { categoria: 'Navegar', titulo: 'Histórico de estoque', url: '/pedidos/estoque-loja/historico', icon: 'clock-history' },
-        { categoria: 'Navegar', titulo: 'Desperdício', url: '/pedidos/desperdicio', icon: 'trash' },
-        { categoria: 'Navegar', titulo: 'Produção', url: '/producao/', icon: 'tools' },
-        { categoria: 'Navegar', titulo: 'Plano de produção', aliases: ['Cronograma', 'Motor de previsão'], url: '/telaindustriateste/', icon: 'calendar-week' },
-        { categoria: 'Navegar', titulo: 'Auditoria de produção', aliases: ['Histórico de produção', 'Produção confirmada', 'Pendências do padeiro', 'Produção não feita'], url: '/telaindustriateste/auditoria', icon: 'clipboard-data', adminOnly: true },
-        { categoria: 'Navegar', titulo: 'Tela do padeiro', url: '/padeiro/', icon: 'check2-square' },
-        { categoria: 'Navegar', titulo: 'Estoque de congelados', url: '/pedidos/congelados', icon: 'snow' },
-        { categoria: 'Navegar', titulo: 'Separar pedidos das lojas', aliases: ['Pedidos a separar'], url: '/pedidos/separacao', icon: 'list-check' },
-        { categoria: 'Navegar', titulo: 'Pedidos semanais das lojas', aliases: ['Pedidos da semana'], url: '/producao/pedidos-semana/media', icon: 'calendar3' },
-
-        { categoria: 'Catálogo', titulo: 'Matérias-primas', url: '/materias-primas/', icon: 'flower3' },
-        { categoria: 'Catálogo', titulo: 'Estoque MP', url: '/materias-primas/estoque', icon: 'boxes' },
-        { categoria: 'Catálogo', titulo: 'Fornecedores', url: '/fornecedores/', icon: 'truck' },
-        { categoria: 'Catálogo', titulo: 'Produtos / Cestas', url: '/produtos/', icon: 'gift' },
-        { categoria: 'Catálogo', titulo: 'Cardápio PDF', url: '/cardapio?tipo=atacado', icon: 'file-pdf' },
-
-        { categoria: 'Vendas', titulo: 'Vendas PDV', url: '/pdv/', icon: 'cash-stack' },
-        { categoria: 'Vendas', titulo: 'Itens vendidos', url: '/pdv/itens-vendidos', icon: 'graph-up' },
-        { categoria: 'Vendas', titulo: 'Mapeamentos Seru', url: '/pdv/mapeamentos', icon: 'link-45deg' },
-        { categoria: 'Vendas', titulo: 'Mapeamentos VNDA', url: '/pdv/vnda/', icon: 'link' },
-        { categoria: 'Vendas', titulo: 'Entregas do site', url: '/entregas/', icon: 'geo-alt' },
-        { categoria: 'Vendas', titulo: 'Relatório de pedidos', url: '/pedidos/relatorio', icon: 'file-text' },
-
-        { categoria: 'RH', titulo: 'Painel RH', url: '/rh/', icon: 'people' },
-        { categoria: 'RH', titulo: 'Funcionários', url: '/rh/funcionarios', icon: 'person-vcard' },
-        { categoria: 'RH', titulo: 'Folha de pagamento', url: '/rh/folha', icon: 'cash-coin' },
-        { categoria: 'RH', titulo: 'Lojas', url: '/rh/lojas', icon: 'shop' },
-        { categoria: 'RH', titulo: 'Escala operacional', url: '/rh/escala', icon: 'calendar3' },
-        { categoria: 'RH', titulo: 'Ponto', url: '/rh/ponto', icon: 'fingerprint' },
-        { categoria: 'RH', titulo: 'Férias / folgas', url: '/rh/ferias', icon: 'umbrella' },
-
-        { categoria: 'Sistema', titulo: 'Dashboards', url: '/relatorios/dashboards', icon: 'bar-chart-line' },
-        { categoria: 'Sistema', titulo: 'Caixa diário', url: '/caixa', icon: 'piggy-bank' },
-        { categoria: 'Sistema', titulo: 'Rentabilidade', url: '/rentabilidade', icon: 'currency-dollar' },
-        { categoria: 'Sistema', titulo: 'Relatórios de custos', url: '/relatorios/custos', icon: 'bar-chart' },
-        { categoria: 'Sistema', titulo: 'Previsão de demanda', url: '/relatorios/previsao', icon: 'crystal-ball' },
-        { categoria: 'Sistema', titulo: 'B2B Indústria', url: '/b2b/', icon: 'building' },
-        { categoria: 'Sistema', titulo: 'TO-DO', url: '/todo', icon: 'check2-square' },
-        { categoria: 'Sistema', titulo: 'Atribuições', url: '/auth/painel', icon: 'diagram-2' },
-        { categoria: 'Sistema', titulo: 'Usuários', url: '/auth/usuarios', icon: 'person-badge' },
-        { categoria: 'Sistema', titulo: 'Audit log', url: '/audit', icon: 'shield-check' },
-        { categoria: 'Sistema', titulo: 'Slack bot', url: '/slack/install', icon: 'slack' },
-
-        // Ações rápidas
-        { categoria: 'Ações', titulo: 'Novo pedido', url: '/pedidos/novo', icon: 'plus-circle', acao: true },
-        { categoria: 'Ações', titulo: 'Lançar ponto', url: '/rh/ponto', icon: 'plus-circle', acao: true },
-        { categoria: 'Ações', titulo: 'Modo padeiro', url: '/receitas/padeiro', icon: 'eyeglasses' },
-        { categoria: 'Ações', titulo: 'Exportar JSON', url: '/api/exportar', icon: 'download' },
-        { categoria: 'Ações', titulo: 'Sair', url: '/auth/logout', icon: 'box-arrow-right' },
-    ];
-
-    // Receitas vêm injetadas via base.html (variável global RECEITA_NOMES)
-    const receitasDinamicas = (window.RECEITA_NOMES || []).map((n, idx) => ({
-        categoria: 'Receitas',
-        titulo: n,
-        // Não temos o ID, então pesquisa via lista de receitas (TODO: melhorar com /receitas/buscar)
-        url: '/receitas/?busca=' + encodeURIComponent(n),
-        icon: 'journal-text',
-    }));
-
-    const TODAS = ROTAS.filter(item => !item.adminOnly || podeAdmin).concat(receitasDinamicas);
+    // O servidor resolve os destinos e filtra permissões antes de expor os dados.
+    const dados = document.getElementById('busca-navegacao-dados');
+    const TODAS = dados ? JSON.parse(dados.textContent) : [];
 
     let overlay = null;
     let input = null;
@@ -89,7 +22,7 @@
             <div id="cmdk-panel" role="dialog" aria-label="Busca rápida">
                 <div id="cmdk-search">
                     <i class="bi bi-search" aria-hidden="true"></i>
-                    <input type="text" id="cmdk-input" placeholder="Buscar… (ex: novo pedido, fornecedores, sourdough)"
+                    <input type="text" id="cmdk-input" placeholder="O que você precisa? Ex.: estoque do site, senha, minis"
                            autocomplete="off" spellcheck="false">
                     <kbd>Esc</kbd>
                 </div>
@@ -147,7 +80,7 @@
         const q = normalizar(query.trim());
         if (!q) {
             // Mostra ações principais quando vazio
-            resultadosVisiveis = TODAS.filter((i) => i.acao || i.categoria === 'Navegar').slice(0, 12);
+            resultadosVisiveis = TODAS.filter((i) => i.principal).slice(0, 12);
         } else {
             resultadosVisiveis = TODAS
                 .map((i) => ({ item: i, score: pontuar(q, i) }))
@@ -163,10 +96,12 @@
     function pontuar(q, item) {
         const titulo = normalizar(item.titulo);
         const cat = normalizar(item.categoria);
+        const aliases = (item.aliases || []).map(normalizar);
         if (titulo === q) return 100;
+        if (aliases.includes(q)) return 90;
         if (titulo.startsWith(q)) return 80;
         if (titulo.includes(q)) return 50;
-        if ((item.aliases || []).some((alias) => normalizar(alias).includes(q))) return 40;
+        if (aliases.some((alias) => alias.includes(q))) return 40;
         if (cat.includes(q)) return 20;
         // Fuzzy: cada caractere de q presente em ordem em titulo
         let ti = 0, hits = 0;
@@ -177,6 +112,13 @@
             hits++;
         }
         return hits >= q.length ? 10 : 0;
+    }
+
+    // Nomes vêm do cadastro: renderizar como texto, nunca como HTML executável.
+    function escaparHtml(valor) {
+        return String(valor).replace(/[&<>"']/g, (c) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
     }
 
     function renderizar() {
@@ -191,12 +133,12 @@
         });
         let html = '';
         for (const cat in agrupado) {
-            html += `<div class="cmdk-cat">${cat}</div>`;
+            html += `<div class="cmdk-cat">${escaparHtml(cat)}</div>`;
             for (const it of agrupado[cat]) {
                 const sel = it.idx === selecionadoIdx ? 'sel' : '';
-                html += `<a href="${it.url}" class="cmdk-item ${sel}" data-idx="${it.idx}">
-                    <i class="bi bi-${it.icon}"></i>
-                    <span>${it.titulo}</span>
+                html += `<a href="${escaparHtml(it.url)}" class="cmdk-item ${sel}" data-idx="${it.idx}">
+                    <i class="bi bi-${escaparHtml(it.icon)}"></i>
+                    <span>${escaparHtml(it.titulo)}</span>
                 </a>`;
             }
         }

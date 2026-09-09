@@ -132,7 +132,7 @@
                     <td>{{ it.nome }}{% if it.observacao %}<br><span class="text-muted small">{{ it.observacao }}</span>{% endif %}</td>
                     <td class="text-end">{{ '%g'|format(it.quantidade or 0) }}</td>
                     <td>{{ it.unidade or '-' }}</td>
-                    <td class="text-end">R$ {{ '%.2f'|format(it.preco_unitario or 0) }}</td>
+                    <td class="text-end">R$ {{ '%.2f'|format(it.preco_unitario or 0) }}{% if it.desconto_percentual %}<br><span class="small text-muted">{{ '%g'|format(it.desconto_percentual)|replace('.', ',') }}% de desconto</span>{% endif %}</td>
                     <td class="text-end">R$ {{ '%.2f'|format(it.subtotal or 0) }}</td>
                 </tr>
             {% endfor %}

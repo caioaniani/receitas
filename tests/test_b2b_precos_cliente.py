@@ -140,6 +140,9 @@ def test_form_venda_embute_precos_do_cliente(app, admin_user):
     c = app.test_client()
     _login(c, admin_user.id)
     corpo = c.get('/b2b/vendas/nova').get_data(as_text=True)
-    assert 'PRECOS_CLIENTE' in corpo
-    assert f'"receita:{rid}": 7.5' in corpo.replace("'", '"')
-    assert f'"{cid}"' in corpo   # chave do cliente no JSON
+    import json
+    import re
+    tabelas = json.loads(re.search(
+        r'id="sugestoes-precos-json">(.*?)</script>', corpo, re.S).group(1))
+    assert tabelas['especificos'][str(cid)][f'receita:{rid}'] == {
+        'preco_unitario': '7.50', 'desconto_percentual': '0'}
