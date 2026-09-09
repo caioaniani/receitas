@@ -74,7 +74,7 @@ def test_dashboard_linka_as_duas_telas(app):
     assert '/admin/loja-online/producao-do-dia' in html
     assert '/admin/loja-online/plano-do-dia' in html
     assert 'Produção do dia' in html
-    assert 'Dias disponíveis dos produtos' in html
+    assert 'Estoque do site · Plano do dia' in html
 
 
 def test_layout_novo_mostra_disponibilidade_da_loja_online(app):
@@ -85,8 +85,8 @@ def test_layout_novo_mostra_disponibilidade_da_loja_online(app):
     assert area.status_code == 200
     html = area.get_data(as_text=True)
     assert 'ui-v2-sidebar' in html
-    assert 'Dias disponíveis dos produtos' in html
-    assert 'Criar regras semanais' in html
+    assert 'Estoque do site · Plano do dia' in html
+    assert 'Defina quantidades, dias disponíveis e exceções de venda no site' in html
     assert '/admin/loja-online/plano-do-dia' in html
 
     tela = c.get('/admin/loja-online/plano-do-dia')

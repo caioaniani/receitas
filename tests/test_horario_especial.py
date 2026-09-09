@@ -401,7 +401,9 @@ def test_tela_exige_owner(app):
     assert c.get('/admin/loja-online/horarios-especiais').status_code == 403
 
 
-def test_tela_lista_o_dia_cadastrado(app):
+def test_tela_lista_o_dia_cadastrado(app, monkeypatch):
+    # A tela só lista desde hoje - 30 dias; fixe a semana do cenário histórico.
+    monkeypatch.setattr('app.blueprints.main.routes.hoje_brt', lambda: date(2026, 8, 3))
     c = _owner(app)
     _definir(rotulo='Dia dos Pais')
     html = c.get('/admin/loja-online/horarios-especiais').data.decode()
@@ -456,9 +458,10 @@ def test_fechar_o_dia_e_gesto_explicito(app):
     assert LojaDataEspecial.query.first().fechado is True
 
 
-def test_tela_avisa_de_pedido_ja_agendado_fora_do_horario(app):
+def test_tela_avisa_de_pedido_ja_agendado_fora_do_horario(app, monkeypatch):
     from app.extensions import db
     from app.models import PedidoOnline
+    monkeypatch.setattr('app.blueprints.main.routes.hoje_brt', lambda: date(2026, 8, 3))
     c = _owner(app)
     _definir()
     db.session.add(PedidoOnline(
@@ -735,10 +738,11 @@ def test_checkout_nao_barra_item_fora_da_regra(app):
     assert erros == [] and pedido is not None
 
 
-def test_tela_salva_edita_e_preserva_bloqueios(app, owner_user):
+def test_tela_salva_edita_e_preserva_bloqueios(app, owner_user, monkeypatch):
     """POST da tela grava; o botão Editar carrega o valor (data-bloqueios);
     salvar de novo com o campo intacto não apaga."""
     from app.models import LojaDataEspecial
+    monkeypatch.setattr('app.blueprints.main.routes.hoje_brt', lambda: date(2026, 8, 3))
     c = app.test_client()
     with c.session_transaction() as s:
         s['_user_id'] = str(owner_user.id)
