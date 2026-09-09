@@ -32,10 +32,11 @@ def _contar_selects_mov(db, fn):
     return vistos
 
 
-def _linha_com_historico(db, n_movs=3):
+def _linha_com_historico(db, n_movs=3, sufixo='A'):
     from app.models import EstoqueLoja, Loja, MovEstoqueLoja, Produto
-    loja = Loja(nome='Loja A', ativa=True, endereco='Rua A, 1')
-    prod = Produto(nome='Pao', categoria='Paes', preco_site=10.0, ativo=True)
+    loja = Loja(nome=f'Loja {sufixo}', ativa=True, endereco='Rua A, 1')
+    prod = Produto(nome=f'Pao {sufixo}', categoria='Paes', preco_site=10.0,
+                   ativo=True)
     db.session.add_all([loja, prod])
     db.session.flush()
     el = EstoqueLoja(loja_id=loja.id, produto_id=prod.id, quantidade=10)
