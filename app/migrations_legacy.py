@@ -1454,6 +1454,8 @@ def _migrate_postgres(app):
             'perda_percentual': 'ALTER TABLE receita ADD COLUMN perda_percentual REAL DEFAULT 0',
             'preco_loja': 'ALTER TABLE receita ADD COLUMN preco_loja REAL',
             'preco_site': 'ALTER TABLE receita ADD COLUMN preco_site REAL',
+            # Pausar no site preservando preço (dono 09/09/2026; etapa 1).
+            'site_ativo': 'ALTER TABLE receita ADD COLUMN IF NOT EXISTS site_ativo BOOLEAN NOT NULL DEFAULT TRUE',
             'preco_interno': 'ALTER TABLE receita ADD COLUMN preco_interno REAL',
             'custo_embalagem': 'ALTER TABLE receita ADD COLUMN custo_embalagem REAL DEFAULT 0',
             'modo_preparo': 'ALTER TABLE receita ADD COLUMN modo_preparo TEXT',
@@ -1631,6 +1633,7 @@ def _migrate_postgres(app):
         cols_prod = {row[0] for row in result}
         if cols_prod:
             migrações_produto = {
+                'site_ativo': 'ALTER TABLE produto ADD COLUMN IF NOT EXISTS site_ativo BOOLEAN NOT NULL DEFAULT TRUE',
                 'custo_direto': 'ALTER TABLE produto ADD COLUMN custo_direto REAL',
                 'custo_embalagem': 'ALTER TABLE produto ADD COLUMN custo_embalagem REAL DEFAULT 0',
                 'preco_interno': 'ALTER TABLE produto ADD COLUMN preco_interno REAL',
@@ -3316,6 +3319,9 @@ def _migrate_sqlite(app):
         cursor.execute("ALTER TABLE receita ADD COLUMN preco_loja REAL")
     if 'preco_site' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN preco_site REAL")
+    if 'site_ativo' not in colunas:
+        cursor.execute("ALTER TABLE receita ADD COLUMN site_ativo "
+                       "BOOLEAN NOT NULL DEFAULT 1")
     if 'preco_interno' not in colunas:
         cursor.execute("ALTER TABLE receita ADD COLUMN preco_interno REAL")
     if 'custo_embalagem' not in colunas:
@@ -3450,6 +3456,9 @@ def _migrate_sqlite(app):
     # Migração tabela produto
     cursor.execute("PRAGMA table_info(produto)")
     cols_prod = [row[1] for row in cursor.fetchall()]
+    if cols_prod and 'site_ativo' not in cols_prod:
+        cursor.execute("ALTER TABLE produto ADD COLUMN site_ativo "
+                       "BOOLEAN NOT NULL DEFAULT 1")
     if cols_prod and 'custo_direto' not in cols_prod:
         cursor.execute("ALTER TABLE produto ADD COLUMN custo_direto REAL")
     if cols_prod and 'custo_embalagem' not in cols_prod:

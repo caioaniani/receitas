@@ -1874,6 +1874,8 @@ def debug_schema():
                         'nullable': None}
 
         info['colunas'] = [
+            col_info('receita', 'site_ativo'),
+            col_info('produto', 'site_ativo'),
             col_info('produto_item', 'receita_id'),
             col_info('produto_item', 'materia_prima_id'),
             col_info('produto_item', 'item_nome'),
