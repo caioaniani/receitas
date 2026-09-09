@@ -246,6 +246,9 @@ def _diagnostico_menu(produto):
     if not (produto.preco_site or 0) > 0:
         return ('O "Preco Site" precisa ser maior que zero pra publicar '
                 '(ele so PUBLICA; o preco cobrado e a soma dos minis).')
+    if not produto.site_ativo:
+        return ('Menu desativado. Para voltar a vender com o preço salvo, '
+                'use Ativar em Produtos do site.')
     return None
 
 

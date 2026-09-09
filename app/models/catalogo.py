@@ -129,6 +129,8 @@ class Receita(db.Model):
     preco_venda = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
     preco_site = db.Column(db.Float)
+    # Pausa somente a venda no site; preço e outros canais permanecem salvos.
+    site_ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
     preco_interno = db.Column(db.Float)
     imagem_url = db.Column(db.String(400))  # URL externa de fallback (legado)
     imagem_blob = db.Column(db.LargeBinary)  # legado: foto admin pre-M6
@@ -299,6 +301,7 @@ class Receita(db.Model):
             'preco_venda': self.preco_venda,
             'preco_loja': self.preco_loja,
             'preco_site': self.preco_site,
+            'site_ativo': self.site_ativo,
             'preco_interno': self.preco_interno,
             'rendimento_qtd': self.rendimento_qtd,
             'rendimento_unidade': self.rendimento_unidade,
@@ -434,6 +437,8 @@ class Produto(db.Model):
     preco_atacado = db.Column(db.Float)
     preco_loja = db.Column(db.Float)
     preco_site = db.Column(db.Float)
+    # Pausa somente a venda no site; preço e outros canais permanecem salvos.
+    site_ativo = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
     preco_interno = db.Column(db.Float)
     imagem_url = db.Column(db.String(400))  # URL externa de fallback (legado)
     imagem_blob = db.Column(db.LargeBinary)  # legado: foto admin pre-M6
@@ -457,7 +462,7 @@ class Produto(db.Model):
     # que fechar `menu_total_unidades` (o "30 minis, quais voce quiser") e
     # nenhum item passa de `menu_max_por_item`. O preco do menu no site e a
     # SOMA do `ProdutoItem.preco_menu` do que ele escolher — o `preco_site`
-    # so PUBLICA. `menu_total_unidades` NULL = 30; `menu_max_por_item` NULL = SEM
+    # é referência de publicação, junto de site_ativo. `menu_total_unidades` NULL = 30; `menu_max_por_item` NULL = SEM
     # teto (o cliente fecha o total com um item so, se quiser).
     # Regra e sanitizacao ficam em app/services/loja_menu.py.
     # ALTER em migrations_legacy (commit 1 deployado e confirmado por
@@ -484,6 +489,7 @@ class Produto(db.Model):
             'preco_atacado': self.preco_atacado,
             'preco_loja': self.preco_loja,
             'preco_site': self.preco_site,
+            'site_ativo': self.site_ativo,
             'preco_interno': self.preco_interno,
             'custo_direto': self.custo_direto,
             'custo_embalagem': self.custo_embalagem or 0,
@@ -530,7 +536,7 @@ class ProdutoItem(db.Model):
     # do dono: "cadastrar preco por mini"). Mora AQUI, e nao na Receita, de
     # proposito: os minis nao sao vendidos avulsos e um `preco_site` neles os
     # publicaria na vitrine (`loja_catalogo.produtos_publicados` usa
-    # `preco_site > 0` como flag). NULL = nao cadastrado — o menu inteiro sai
+    # `preco_site > 0` e site_ativo). NULL = nao cadastrado — o menu inteiro sai
     # do ar em vez de cobrar um preco que nao e o dele (fail-close).
     # ALTER em migrations_legacy (commit 1 deployado e confirmado antes).
     preco_menu = db.Column(db.Numeric(10, 2), nullable=True)

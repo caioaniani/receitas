@@ -920,11 +920,15 @@ def _cardapio_categorias(tipo):
 
     campo = {'atacado': 'preco_venda', 'loja': 'preco_loja', 'site': 'preco_site'}
     attr = campo.get(tipo, 'preco_venda')
+    from app.services import loja_catalogo
+    publicados = {(i['kind'], i['id']) for i in loja_catalogo.produtos_publicados()}
 
     categorias = {}
 
     # Receitas fabricadas
     for r in receitas:
+        if tipo == 'site' and ('receita', r.id) not in publicados:
+            continue
         preco = getattr(r, attr, None) or (r.preco_venda if tipo == 'atacado' else None)
         if not preco or preco <= 0:
             continue
@@ -949,16 +953,18 @@ def _cardapio_categorias(tipo):
             # Link pra pagina do item no SITE — o PDF do cardapio deixa o
             # card CLICAVEL (dono 26/07/2026: "quero que o menu seja
             # clicavel para levar o cliente ate o produto do site"). So quem
-            # esta PUBLICADO (preco_site > 0) ganha link; o resto nao tem
+            # está PUBLICADO pelo catálogo canônico ganha link; o resto nao tem
             # pagina e levaria o cliente a um 404.
             'href_site': (_url_site_do_item('receita', r.id, r.nome)
-                          if (r.preco_site or 0) > 0 else None),
+                          if ('receita', r.id) in publicados else None),
         })
 
     # Produtos cadastrados (cestas, kits, etc.)
     campo_prod = {'atacado': 'preco_atacado', 'loja': 'preco_loja', 'site': 'preco_site'}
     attr_prod = campo_prod.get(tipo, 'preco_atacado')
     for p in produtos:
+        if tipo == 'site' and ('produto', p.id) not in publicados:
+            continue
         preco = getattr(p, attr_prod, None)
         if not preco or preco <= 0:
             continue
@@ -978,7 +984,7 @@ def _cardapio_categorias(tipo):
             'imagem_url': img,
             'img_ref': ('produto', p.id) if com_foto else None,
             'href_site': (_url_site_do_item('produto', p.id, p.nome)
-                          if (p.preco_site or 0) > 0 else None),
+                          if ('produto', p.id) in publicados else None),
             # "Explodir" a cesta no PDF (dono 26/07/2026): as fotos dos
             # COMPONENTES (capa + galeria de cada receita) mais as fotos
             # EXTRAS do proprio produto. So o PDF usa; a tela segue igual.
@@ -1472,6 +1478,7 @@ def importar():
                 preco_venda=r_data.get('preco_venda'),
                 preco_loja=r_data.get('preco_loja'),
                 preco_site=r_data.get('preco_site'),
+                site_ativo=r_data.get('site_ativo', True),
                 rendimento_qtd=r_data['rendimento_qtd'],
                 rendimento_unidade=r_data['rendimento_unidade'],
                 peso_base=r_data['peso_base'],
@@ -1504,6 +1511,7 @@ def importar():
                 preco_atacado=p_data.get('preco_atacado'),
                 preco_loja=p_data.get('preco_loja'),
                 preco_site=p_data.get('preco_site'),
+                site_ativo=p_data.get('site_ativo', True),
                 custo_direto=p_data.get('custo_direto'),
                 custo_embalagem=p_data.get('custo_embalagem', 0),
                 modo_preparo=p_data.get('modo_preparo') or None,
@@ -4599,13 +4607,9 @@ def loja_online_auditoria_catalogo():
 
 # ── Loja Online — Fase 1: curadoria de catálogo (16/06/2026) ──────────
 #
-# Decisao do dono: "todo item com preco_site sobe no site". Esta tela e o
-# "comando central" do catalogo: lista compacta com preço inline + upload de
-# foto, sem sair da pagina. Edita rapido o que ainda esta faltando antes da
-# Fase 2 (vitrine) entrar.
-#
-# Reusa: `dropbox_storage.upload_publico` + `app.utils.comprimir_imagem` +
-# colunas `preco_site` / `imagem_dropbox_url` ja existentes. Sem schema novo.
+# Preço positivo e cadastro válido permitem publicação. A partir de 09/09,
+# o dono pode desativar/ativar a venda com site_ativo, sem apagar o preço.
+# Curadoria mantém foto/preço inline; disponibilidade fica no Plano do dia.
 
 @main_bp.route('/admin/loja-online/catalogo')
 @login_required
@@ -4643,6 +4647,7 @@ def loja_online_catalogo():
             'categoria': r.categoria or '',
             'ordem_site': r.ordem_site,
             'preco_site': r.preco_site,
+            'site_ativo': r.site_ativo,
             'imagem': r.imagem_dropbox_url or r.imagem_url,
             'no_site': ('receita', r.id) in publicados,
             'falta_foto': not tem_foto,
@@ -4658,6 +4663,7 @@ def loja_online_catalogo():
             'categoria': p.categoria or '(cesta/kit)',
             'ordem_site': p.ordem_site,
             'preco_site': p.preco_site,
+            'site_ativo': p.site_ativo,
             'imagem': p.imagem_dropbox_url or p.imagem_url,
             'no_site': ('produto', p.id) in publicados,
             'falta_foto': not tem_foto,
@@ -4735,9 +4741,38 @@ def loja_online_catalogo_preco(tipo, id):
     _db.session.commit()
     from app.services.loja_catalogo import por_id_publicado
     return jsonify(ok=True,
+                   site_ativo=obj.site_ativo,
                    no_site=por_id_publicado(tipo, id) is not None,
                    preco_site=(float(obj.preco_site)
                                if obj.preco_site is not None else None))
+
+
+@main_bp.route('/admin/loja-online/catalogo/publicacao/<tipo>/<int:id>',
+               methods=['POST'])
+@owner_required
+def loja_online_catalogo_publicacao(tipo, id):
+    """Ativa/desativa apenas a venda avulsa no site, preservando preços."""
+    from app.models import Produto, Receita
+    from app.services.loja_catalogo import por_id_publicado
+
+    dados = request.get_json(silent=True)
+    if not isinstance(dados, dict) or type(dados.get('ativo')) is not bool:
+        return jsonify(ok=False, erro='Informe ativo como verdadeiro ou falso.'), 400
+    if tipo == 'receita':
+        obj = Receita.query.filter_by(id=id, arquivada_em=None).first_or_404()
+    elif tipo == 'produto':
+        obj = Produto.query.filter_by(id=id, ativo=True).first_or_404()
+    else:
+        return jsonify(ok=False, erro='tipo inválido'), 400
+
+    obj.site_ativo = dados['ativo']
+    publicado = por_id_publicado(tipo, id) is not None
+    if dados['ativo'] and not publicado:
+        db.session.rollback()
+        return jsonify(ok=False, erro='Informe um preço válido e complete o cadastro antes de ativar.'), 400
+    db.session.commit()
+    return jsonify(ok=True, site_ativo=obj.site_ativo, no_site=publicado,
+                   preco_site=float(obj.preco_site) if obj.preco_site is not None else None)
 
 
 @main_bp.route('/admin/loja-online/catalogo/estoque/<tipo>/<int:id>',
@@ -6679,14 +6714,16 @@ def debug_email():
 def seo_descricoes():
     from app.services import seo_descricoes as svc
     receitas = (Receita.query
-                .filter(Receita.preco_site.isnot(None),
+                .filter(Receita.site_ativo.is_(True),
+                        Receita.preco_site.isnot(None),
                         Receita.preco_site > 0,
                         Receita.arquivada_em.is_(None))
                 .order_by(Receita.descricao_seo.is_(None).desc(),
                           Receita.categoria, Receita.nome)
                 .all())
     produtos = (Produto.query
-                .filter(Produto.preco_site.isnot(None),
+                .filter(Produto.site_ativo.is_(True),
+                        Produto.preco_site.isnot(None),
                         Produto.preco_site > 0,
                         Produto.ativo.is_(True))
                 .order_by(Produto.descricao_seo.is_(None).desc(),

@@ -10,7 +10,7 @@
         { categoria: 'Navegar', titulo: 'Início', url: '/', icon: 'house' },
         { categoria: 'Navegar', titulo: 'Pedidos das lojas', url: '/pedidos/', icon: 'cart' },
         { categoria: 'Navegar', titulo: 'Pedidos do site', url: '/admin/loja-online/pedidos', icon: 'bag' },
-        { categoria: 'Navegar', titulo: 'Produtos do site', aliases: ['Catálogo do site', 'Tirar do site', 'Retirar de venda', 'Desativar produto', 'Ocultar produto'], url: '/admin/loja-online/catalogo?filtro=no-site', icon: 'shop-window', adminOnly: true },
+        { categoria: 'Navegar', titulo: 'Produtos do site', aliases: ['Catálogo do site', 'Tirar do site', 'Retirar de venda', 'Desativar produto', 'Ativar produto', 'Ocultar produto'], url: '/admin/loja-online/catalogo?filtro=no-site', icon: 'shop-window', adminOnly: true },
         { categoria: 'Navegar', titulo: 'Estoque das lojas', aliases: ['Estoque da loja'], url: '/pedidos/estoque-loja', icon: 'box' },
         { categoria: 'Navegar', titulo: 'Conferência de estoque', url: '/pedidos/conferencia', icon: 'clipboard-check' },
         { categoria: 'Navegar', titulo: 'Histórico de estoque', url: '/pedidos/estoque-loja/historico', icon: 'clock-history' },

@@ -47,15 +47,11 @@
   .badge-bad { background: #ffe3e3; color: #c92a2a; }
   .cat-busca { display:flex; align-items:end; gap:8px; flex-wrap:wrap; max-width:720px; margin-bottom:16px; }
   .cat-busca-campo { flex:1; min-width:200px; }
-  .retirar-site { margin-top:10px; min-height:44px; font-size:13px; }
-  .retirar-site[hidden], .item-card[hidden] { display:none !important; }
+  .alternar-site { margin-top:10px; min-height:44px; font-size:13px; }
+  .alternar-site[hidden], .item-card[hidden] { display:none !important; }
   .item-ajuda { font-size:12px; line-height:1.4; color:#6c757d; margin:8px 0 0; }
   .cat-revisao { margin-bottom:16px; }
   .cat-revisao summary { cursor:pointer; color:#495057; }
-  .cat-dialog { width:min(440px,calc(100vw - 32px)); border:0; border-radius:16px; padding:24px; box-shadow:0 16px 60px #0003; }
-  .cat-dialog::backdrop { background:#0006; }
-  .cat-dialog h2 { font-size:22px; margin-bottom:16px; }
-  .cat-dialog .btn { min-height:44px; }
   @media(max-width:575px) { .cat-filtro { padding:10px 12px; } .cat-grid { grid-template-columns:minmax(0,1fr); } }
 </style>
 
@@ -66,8 +62,8 @@
 <h1 class="page-title"><i class="bi bi-shop"></i> Produtos do site</h1>
 <p class="text-muted">
   {% if pode_editar %}
-  Busque pelo nome e use <strong>Tirar do site</strong> para deixar de vender um item.
-  O cadastro é mantido. Preço e categoria salvam ao sair do campo.
+  Use <strong>Desativar</strong> para pausar a venda e <strong>Ativar</strong> para voltar.
+  O preço fica salvo. Preço e categoria salvam ao sair do campo.
   {% else %}
   Itens publicados no site. <em>Edição de preço e foto é restrita ao dono.</em>
   {% endif %}
@@ -91,17 +87,6 @@
   {% if busca %}<a class="btn btn-outline-secondary" href="{{ url_for('main.loja_online_catalogo', filtro=filtro) }}">Limpar busca</a>{% endif %}
 </form>
 <div id="catalogo-status" class="alert alert-success" role="status" hidden></div>
-{% if pode_editar %}
-<dialog id="confirmar-retirada" class="cat-dialog" aria-labelledby="retirada-titulo" aria-describedby="retirada-descricao">
-  <h2 id="retirada-titulo">Tirar do site?</h2>
-  <p><strong id="retirada-nome"></strong></p>
-  <p id="retirada-descricao">O preço do site será removido. O cadastro é mantido; para voltar a vender, informe o preço novamente.</p>
-  <form method="dialog" class="d-flex justify-content-end gap-2">
-    <button class="btn btn-outline-secondary" value="cancelar" autofocus>Cancelar</button>
-    <button class="btn btn-danger" value="tirar">Tirar do site</button>
-  </form>
-</dialog>
-{% endif %}
 
 <div class="cat-topo">
   <div class="cat-filtros">
@@ -139,7 +124,7 @@
 <div class="cat-grid">
   {% for i in itens %}
   <div class="item-card {% if i.no_site %}no-site{% elif i.falta_preco %}falta-preco{% elif i.falta_foto %}falta-foto{% endif %}"
-       data-tipo="{{ i.tipo }}" data-id="{{ i.id }}" data-no-site="{{ 1 if i.no_site else 0 }}" data-sem-preco="{{ 1 if i.falta_preco else 0 }}" data-menu="{{ 1 if i.menu_configuravel else 0 }}">
+       data-tipo="{{ i.tipo }}" data-id="{{ i.id }}" data-no-site="{{ 1 if i.no_site else 0 }}" data-site-ativo="{{ 1 if i.site_ativo else 0 }}" data-sem-preco="{{ 1 if i.falta_preco else 0 }}" data-menu="{{ 1 if i.menu_configuravel else 0 }}">
     {# `pode_editar` (set no topo) controla foto/preco: dono edita; demais
        so visualizam — sem overlay "Trocar foto" e sem o input file. #}
     {% if pode_editar %}
@@ -179,12 +164,12 @@
                {% if not pode_editar %}disabled title="Edição de preço é restrita ao dono"{% endif %}>
       </div>
       <div class="item-badges">
-        <span class="status-publicacao badge-mini {{ 'badge-ok' if i.no_site else 'badge-bad' }}">{{ 'No site' if i.no_site else 'Fora do site' }}</span>
+        <span class="status-publicacao badge-mini {{ 'badge-ok' if i.no_site else 'badge-bad' }}">{{ 'Desativado' if not i.site_ativo else ('No site' if i.no_site else 'Fora do site') }}</span>
         {% if i.falta_foto %}<span class="badge-mini badge-warn">sem foto</span>{% endif %}
       </div>
       {% if pode_editar %}
-      <button type="button" class="retirar-site btn btn-outline-danger"{% if i.falta_preco %} hidden{% endif %}>Tirar do site</button>
-      <p class="item-ajuda"{% if not i.falta_preco and not i.menu_configuravel %} hidden{% endif %}>{% if i.menu_configuravel %}Nos menus, o preço cobrado vem dos componentes. Esta referência só controla a publicação, que exige o cadastro completo.{% else %}Para colocar no site, informe o preço acima.{% endif %}</p>
+      <button type="button" class="alternar-site btn {{ 'btn-outline-danger' if i.site_ativo else 'btn-outline-success' }}"{% if i.falta_preco %} hidden{% endif %}>{{ 'Desativar' if i.site_ativo else 'Ativar' }}</button>
+      <p class="item-ajuda"{% if not i.falta_preco and not i.menu_configuravel and i.site_ativo %} hidden{% endif %}>{% if i.menu_configuravel %}Nos menus, o preço cobrado vem dos componentes. A publicação exige uma referência positiva e o cadastro completo.{% elif i.falta_preco %}Informe o preço acima para disponibilizar a venda.{% else %}Preço preservado. Use Ativar para voltar a vender.{% endif %}</p>
       {% endif %}
     </div>
   </div>
@@ -260,15 +245,6 @@
   }
 
   var filtroAtual = {{ filtro|tojson }};
-  var confirmarRetirada = document.getElementById('confirmar-retirada');
-  var retiradaPendente = null;
-  if (confirmarRetirada) confirmarRetirada.addEventListener('close', function() {
-    var pendente = retiradaPendente;
-    retiradaPendente = null;
-    if (!pendente) return;
-    if (confirmarRetirada.returnValue === 'tirar') pendente.confirmar();
-    else pendente.cancelar();
-  });
   function mostrarAviso(mensagem, erro) {
     var aviso = document.getElementById('catalogo-status');
     aviso.textContent = mensagem;
@@ -284,99 +260,100 @@
     var semPrecoAntes = card.dataset.semPreco === '1';
     var noSite = dados.no_site === true;
     var semPreco = !(Number(dados.preco_site) > 0);
+    var ativo = dados.site_ativo === true;
     ajustarContagem('no_site', Number(noSite) - Number(antes));
     ajustarContagem('fora_site', Number(antes) - Number(noSite));
     ajustarContagem('sem_preco', Number(semPreco) - Number(semPrecoAntes));
     card.dataset.noSite = noSite ? '1' : '0';
+    card.dataset.siteAtivo = ativo ? '1' : '0';
     card.dataset.semPreco = semPreco ? '1' : '0';
     card.classList.toggle('no-site', noSite);
     card.classList.toggle('falta-preco', semPreco);
     var selo = card.querySelector('.status-publicacao');
-    selo.textContent = noSite ? 'No site' : 'Fora do site';
+    selo.textContent = !ativo ? 'Desativado' : (noSite ? 'No site' : 'Fora do site');
     selo.classList.toggle('badge-ok', noSite);
     selo.classList.toggle('badge-bad', !noSite);
-    card.querySelector('.retirar-site').hidden = semPreco;
-    card.querySelector('.item-ajuda').hidden = !semPreco && card.dataset.menu !== '1';
+    var botao = card.querySelector('.alternar-site');
+    botao.hidden = semPreco;
+    botao.textContent = ativo ? 'Desativar' : 'Ativar';
+    botao.classList.toggle('btn-outline-danger', ativo);
+    botao.classList.toggle('btn-outline-success', !ativo);
+    var ajuda = card.querySelector('.item-ajuda');
+    ajuda.hidden = !semPreco && ativo && card.dataset.menu !== '1';
+    if (card.dataset.menu !== '1') ajuda.textContent = semPreco
+      ? 'Informe o preço acima para disponibilizar a venda.'
+      : 'Preço preservado. Use Ativar para voltar a vender.';
     card.hidden = (filtroAtual === 'no-site' && !noSite)
       || (filtroAtual === 'fora-site' && noSite)
       || (filtroAtual === 'sem-preco' && !semPreco);
     document.getElementById('catalogo-vazio').hidden = !!document.querySelector('.item-card:not([hidden])');
   }
 
-  // Uma gravação por card: impede que um preço salvo em paralelo volte a
-  // publicar o item depois do clique em "Tirar do site".
+  // Serializa preço e publicação para que respostas antigas não sobrescrevam
+  // o estado mostrado. Alterar preço nunca muda a opção Ativar/Desativar.
   document.querySelectorAll('.preco-input').forEach(function(inp) {
     if (inp.disabled) return;
     var card = inp.closest('.item-card');
-    var retirar = card.querySelector('.retirar-site');
+    var botao = card.querySelector('.alternar-site');
     var origem = inp.value;
     var emAndamento = false;
-    var gravacao = Promise.resolve();
-    function salvar(valor, removendo) {
-      if (emAndamento) return;
+    var gravacao = Promise.resolve(true);
+    function salvar(url, dados, publicacao) {
       emAndamento = true;
       inp.disabled = true;
-      retirar.disabled = !!removendo;
-      var tipo = card.dataset.tipo, id = card.dataset.id;
+      botao.disabled = publicacao;
       var nome = card.querySelector('.item-nome').textContent;
       inp.classList.remove('saved', 'error');
       inp.classList.add('saving');
-      gravacao = fetch(rotaPreco(tipo, id), {
+      gravacao = fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ preco: valor })
+        body: JSON.stringify(dados)
       }).then(function(r) {
-        if (!r.ok) {
-          return extrairErro(r).then(function(msg) { throw new Error(msg); });
-        }
+        if (!r.ok) return extrairErro(r).then(function(msg) { throw new Error(msg); });
         return r.json();
       }).then(function(d) {
-        if (d.ok) {
-          inp.value = d.preco_site == null ? '' : Number(d.preco_site).toFixed(2);
-          inp.classList.add('saved');
-          origem = inp.value;
-          atualizarPublicacao(card, d);
-          mostrarAviso(removendo
-            ? nome + ' foi tirado do site. O cadastro foi mantido. Para voltar a vender, encontre o item em Fora do site e informe o preço.'
-            : 'Preço de ' + nome + ' salvo. ' + (d.no_site ? 'O item está no site.' : 'O item está fora do site.'));
-          setTimeout(function() { inp.classList.remove('saved'); }, 1500);
-        } else {
-          throw new Error(d.erro || 'erro ao salvar');
-        }
+        if (!d.ok) throw new Error(d.erro || 'erro ao salvar');
+        inp.value = d.preco_site == null ? '' : Number(d.preco_site).toFixed(2);
+        origem = inp.value;
+        inp.classList.add('saved');
+        atualizarPublicacao(card, d);
+        mostrarAviso(publicacao
+          ? nome + (d.site_ativo ? ' ativado com o preço salvo.' : ' desativado. Preço preservado. Para voltar, abra Fora do site e clique em Ativar.')
+          : 'Preço de ' + nome + ' salvo. ' + (d.site_ativo ? (d.no_site ? 'O item está no site.' : 'O item está fora do site.') : 'O item continua desativado.'));
+        setTimeout(function() { inp.classList.remove('saved'); }, 1500);
+        return true;
       }).catch(function(e) {
         inp.classList.add('error');
-        mostrarAviso((e && e.message) || 'sem conexão — tenta de novo', true);
+        mostrarAviso((e && e.message) || 'Sem conexão. Tente novamente.', true);
+        return false;
       }).finally(function() {
         inp.classList.remove('saving');
         inp.disabled = false;
-        retirar.disabled = false;
+        botao.disabled = false;
         emAndamento = false;
       });
+      return gravacao;
     }
     function salvarPrecoEditado() {
       var v = inp.value.trim();
-      if (!emAndamento && v !== origem) salvar(v || null, false);
+      if (!emAndamento && v !== origem) salvar(rotaPreco(card.dataset.tipo, card.dataset.id), {preco: v || null}, false);
     }
-    inp.addEventListener('blur', function(e) {
-      if (!confirmarRetirada.open && e.relatedTarget !== retirar) salvarPrecoEditado();
-    });
+    inp.addEventListener('blur', salvarPrecoEditado);
     inp.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
     });
-    retirar.addEventListener('click', function() {
-      var nome = card.querySelector('.item-nome').textContent;
-      retiradaPendente = {
-        confirmar: function() {
-          retirar.disabled = true;
-          // Alguns navegadores salvam o preço no blur antes do clique.
-          // Preserva a intenção e só retira depois de concluir essa gravação.
-          gravacao.then(function() { salvar(null, true); });
-        },
-        cancelar: salvarPrecoEditado
-      };
-      document.getElementById('retirada-nome').textContent = nome;
-      confirmarRetirada.returnValue = '';
-      confirmarRetirada.showModal();
+    botao.addEventListener('click', function() {
+      var ativo = card.dataset.siteAtivo !== '1';
+      salvarPrecoEditado();
+      botao.disabled = true;
+      (emAndamento ? gravacao : Promise.resolve(true)).then(function(ok) {
+        // Falha no preço não deve impedir uma pausa urgente da venda.
+        // Para ativar, o preço editado precisa ter sido salvo antes.
+        if (!ok && ativo) { botao.disabled = false; return; }
+        var url = '/admin/loja-online/catalogo/publicacao/' + card.dataset.tipo + '/' + card.dataset.id;
+        salvar(url, {ativo: ativo}, true);
+      });
     });
   });
 

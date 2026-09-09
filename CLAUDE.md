@@ -234,15 +234,17 @@ que considera executar o plano, não comprovação de estoque produzido.
 
 **Produtos do site (09/09/2026)**: acesso direto ao lado de Pedidos do site
 no menu do admin e no topo da lista de pedidos, entrando em `?filtro=no-site`.
-Curadoria tem busca por nome/categoria e botão explícito "Tirar do site",
-que reusa o POST de preço com `null` (owner-only). Não arquiva nem inativa
-o cadastro, não mexe em estoque/preços dos outros canais. Para republicar,
-o dono informa o preço novamente em Fora do site. A confirmação ocorre
-em diálogo da página, e a retirada espera qualquer gravação de preço em
-andamento para não ser desfeita por ela. Status/filtro No site vêm de
-`loja_catalogo.produtos_publicados`: foto opcional, menu incompleto fora.
-Nos menus, `preco_site` continua somente interruptor; preço cobrado vem
-dos componentes. Não criar flag paralela de publicação por conveniência.
+Curadoria tem busca por nome/categoria e botões "Desativar" / "Ativar"
+(owner-only), por decisão explícita do dono em 09/09: pausar deve preservar
+o preço. `Receita.site_ativo` e `Produto.site_ativo` controlam a publicação,
+com default True para manter os cadastros atuais. O POST de publicação muda
+somente essa flag; editar preço não reativa item desativado. Para voltar,
+o dono encontra o item em Fora do site e clica Ativar. Não arquiva nem
+inativa o cadastro geral, não mexe em estoques, composição de cestas,
+reservas ou pedidos existentes. Publicação exige também preço positivo e
+cadastro válido; a ativação recusa cadastros incompletos.
+Status/filtro No site vêm de `loja_catalogo.produtos_publicados`: foto
+opcional, menu incompleto fora. Preço cobrado do menu vem dos componentes.
 Decisão do dono (09/09): o estoque/disponibilidade do site continua no
 Plano do dia, com link explícito no catálogo e na área Vendas. Retirado
 o editor de estoque físico do catálogo para não confundir as duas coisas;
@@ -3125,10 +3127,11 @@ limitar preenche o campo — NÃO reintroduzir o default 10.
   modelo. `ProdutoItem.quantidade` do cadastro = **pré-seleção**.
 - **`preco_menu` mora no ProdutoItem, NÃO na Receita**, de propósito: os
   minis não são vendidos avulsos e um `preco_site` neles os PUBLICARIA na
-  vitrine (`produtos_publicados` usa `preco_site > 0` como flag). Efeito
+  vitrine se `site_ativo=True` e `preco_site > 0`. Efeito
   colateral desejado: o preço é por-menu, então o mesmo mini pode valer
   diferente em menus diferentes.
-- **`Produto.preco_site` do menu vira só o INTERRUPTOR de publicação** — o
+- **`Produto.preco_site` do menu é referência de publicação** (exige
+  valor positivo e `site_ativo=True`; a pausa preserva o valor) — o
   preço exibido é o **MÍNIMO possível** ("a partir de", decisão do dono
   26/07: "esse valor do cardápio, inclusive no site, deveria ser o valor a
   partir de"). `loja_menu.preco_minimo` enche o total com os mais baratos

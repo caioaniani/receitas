@@ -1075,6 +1075,7 @@ def duplicar(id):
         preco_venda=original.preco_venda,
         preco_loja=original.preco_loja,
         preco_site=original.preco_site,
+        site_ativo=original.site_ativo,
         rendimento_qtd=original.rendimento_qtd,
         rendimento_unidade=original.rendimento_unidade,
         peso_base=original.peso_base,

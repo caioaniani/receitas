@@ -137,7 +137,7 @@
 {% endif %}
 {% if current_user.is_owner %}
 {{ _sub(variant, 'Loja online') }}
-{{ _lnk(variant, url_for('main.loja_online_catalogo', filtro='no-site'), 'Produtos do site', request.endpoint == 'main.loja_online_catalogo', icon='bi-shop-window', title='Encontre produtos e tire itens de venda no site') }}
+{{ _lnk(variant, url_for('main.loja_online_catalogo', filtro='no-site'), 'Produtos do site', request.endpoint == 'main.loja_online_catalogo', icon='bi-shop-window', title='Encontre produtos e ative ou desative a venda no site') }}
 {{ _lnk(variant, url_for('main.loja_online_plano_dia'), 'Estoque do site · Plano do dia', request.path.startswith('/admin/loja-online/plano-do-dia'), icon='bi-calendar-check', title='Defina quantidades, dias disponíveis e exceções de venda no site') }}
 {{ _lnk(variant, url_for('main.loja_online_dashboard'), 'Visão geral da loja online', request.path == '/admin/loja-online', icon='bi-shop-window') }}
 {% endif %}

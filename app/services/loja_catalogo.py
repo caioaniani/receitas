@@ -2,8 +2,8 @@
 
 Quem decide "está vendendo no site?" mora aqui — pra que a vitrine (Fase 2),
 o checkout (Fase 3) e o webhook de pagamento (Fase 4) usem a MESMA regra
-sem duplicar. Decisão do dono: `preco_site > 0` já é o flag. Não há coluna
-`disponivel_site` separada.
+sem duplicar. Decisão do dono (09/09/2026): `site_ativo` pausa a venda
+preservando o preço. Publicação também exige preço positivo e cadastro válido.
 
 Os 'objetos públicos' devolvidos por este service são DICTS simples (não
 ORM) — isso obriga a vitrine a só ler o que a gente expôs aqui, evitando
@@ -12,6 +12,8 @@ vazar campo interno (custo, modo de preparo, etc.) por engano.
 import logging
 import re
 import unicodedata
+
+from sqlalchemy.orm import defer
 
 from app.models import Produto, Receita
 
@@ -106,7 +108,7 @@ def _anotar_menu(d, p, *, com_slots=False):
     """Anota o bloco `menu` num Produto que é MENU CONFIGURÁVEL (26/07/2026)
     e troca o `preco` exibido pelo preço REAL da pré-seleção.
 
-    O `preco_site` do menu continua sendo só o interruptor de publicação
+    O `preco_site` do menu continua sendo uma referência de publicação
     (`produtos_publicados` filtra por ele) — o preço que o cliente vê e paga
     é a soma do `preco_menu` de cada mini escolhido (decisão do dono).
     Deixar os dois divergirem na tela seria mentir o preço.
@@ -203,19 +205,21 @@ def _serializar_produto(p):
 def produtos_publicados():
     """Devolve lista combinada (cestas + pães/doces) prontos pra vitrine.
 
-    Filtro: `preco_site > 0` E item ativo (não arquivada / `ativo=True`).
+    Filtro: `site_ativo=True`, `preco_site > 0` e cadastro ativo.
     Ordenação manual: `ordem_site` ASC (NULLS LAST), depois `nome` ASC.
     Item sem `ordem_site` cai no fim alfabético da sua categoria. Não
     pagina — o catálogo é pequeno (dezenas, não milhares)."""
-    receitas = (Receita.query
+    receitas = (Receita.query.options(defer(Receita.imagem_blob), defer(Receita.imagem_mimetype))
                 .filter(Receita.arquivada_em.is_(None),
+                        Receita.site_ativo.is_(True),
                         Receita.preco_site.isnot(None),
                         Receita.preco_site > 0)
                 .order_by(Receita.ordem_site.asc().nullslast(),
                           Receita.nome.asc())
                 .all())
-    produtos = (Produto.query
+    produtos = (Produto.query.options(defer(Produto.imagem_blob), defer(Produto.imagem_mimetype))
                 .filter(Produto.ativo.is_(True),
+                        Produto.site_ativo.is_(True),
                         Produto.preco_site.isnot(None),
                         Produto.preco_site > 0)
                 .order_by(Produto.ordem_site.asc().nullslast(),
@@ -553,11 +557,12 @@ def galeria(kind, item_id, capa=None):
 
 def por_id_publicado(kind, item_id):
     """`kind` = 'receita' (r) ou 'produto' (p). Devolve o dict do item se
-    estiver publicado (preço > 0 + ativo); senão None."""
+    estiver publicado (site ativo, preço positivo e cadastro válido); senão None."""
     if kind == 'receita':
         r = Receita.query.filter(
             Receita.id == item_id,
             Receita.arquivada_em.is_(None),
+            Receita.site_ativo.is_(True),
             Receita.preco_site.isnot(None),
             Receita.preco_site > 0).first()
         if not r:
@@ -569,6 +574,7 @@ def por_id_publicado(kind, item_id):
         p = Produto.query.filter(
             Produto.id == item_id,
             Produto.ativo.is_(True),
+            Produto.site_ativo.is_(True),
             Produto.preco_site.isnot(None),
             Produto.preco_site > 0).first()
         if not p:

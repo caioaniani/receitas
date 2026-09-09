@@ -1277,6 +1277,7 @@ def api_disponibilidade_checkout():
     itens_raw = dados.get('itens') or []
     esgotados = []
     nomes_esgotados = []
+    fora_do_catalogo = False
     for raw in itens_raw:
         kind = str(raw.get('kind') or '').strip()
         if kind not in ('receita', 'produto'):
@@ -1285,18 +1286,35 @@ def api_disponibilidade_checkout():
             item_id = int(raw.get('id'))
         except (TypeError, ValueError):
             continue
-        if loja_catalogo.tem_estoque_para_dia(kind, item_id, d):
+        cat = loja_catalogo.por_id_publicado(kind, item_id)
+        if cat is None:
+            fora_do_catalogo = True
+        if cat is not None and loja_catalogo.tem_estoque_para_dia(kind, item_id, d):
             continue
         # Esgotado: pega o nome canonico do catalogo (nao confia no nome do
         # carrinho que pode estar desatualizado).
-        cat = loja_catalogo.por_id_publicado(kind, item_id)
-        nome = (cat or {}).get('nome') or 'produto'
+        nome = (cat or {}).get('nome')
+        if not nome:
+            # A aba do checkout pode estar aberta desde antes da pausa.
+            # Retorna só o nome do item pausado, nunca o torna comprável.
+            from app.models import Produto, Receita
+            if kind == 'receita':
+                pausado = Receita.query.filter(
+                    Receita.id == item_id, Receita.site_ativo.is_(False),
+                    Receita.arquivada_em.is_(None), Receita.preco_site > 0)
+                nome = pausado.with_entities(Receita.nome).scalar()
+            else:
+                pausado = Produto.query.filter(
+                    Produto.id == item_id, Produto.site_ativo.is_(False),
+                    Produto.ativo.is_(True), Produto.preco_site > 0)
+                nome = pausado.with_entities(Produto.nome).scalar()
+        nome = nome or 'produto'
         esgotados.append({'kind': kind, 'id': item_id, 'nome': nome})
         nomes_esgotados.append(nome)
 
     # Proxima data em que TODOS os itens do carrinho tem saldo (ate +30 dias).
     proxima = None
-    if esgotados:
+    if esgotados and not fora_do_catalogo:
         ids_carrinho = []
         for raw in itens_raw:
             kind = str(raw.get('kind') or '').strip()
@@ -1326,8 +1344,7 @@ def api_disponibilidade_checkout():
 @loja_bp.route('/api/disponibilidade-dia')
 def api_disponibilidade_dia():
     """JSON pro seletor da pagina de produto: dado (kind, item_id, data),
-    devolve `disponivel` (bool). Usa o plano_dia com fallback no EstoqueLoja
-    (mesma regra de `tem_estoque_para_dia`).
+    devolve `disponivel` (bool). Exige publicação e saldo no Plano do dia.
 
     Publica — nao precisa de auth. Limita data a 30 dias pra frente pra evitar
     consultas absurdas."""
@@ -1344,7 +1361,8 @@ def api_disponibilidade_dia():
         return jsonify(disponivel=False, erro='parametros invalidos'), 400
     if d < hoje() or d > hoje() + timedelta(days=30):
         return jsonify(disponivel=False, erro='data fora da janela'), 400
-    ok = loja_catalogo.tem_estoque_para_dia(kind, item_id, d)
+    ok = (loja_catalogo.por_id_publicado(kind, item_id) is not None
+          and loja_catalogo.tem_estoque_para_dia(kind, item_id, d))
     return jsonify(disponivel=ok)
 
 

@@ -703,6 +703,10 @@ def test_admin_ve_por_que_o_menu_sumiu_do_site(app):
     with app.app_context():
         menu, _ = _menu(db, total=15, padroes=(5, 5, 5))
         assert _diagnostico_menu(menu) is None          # tudo certo
+        menu.site_ativo = False
+        db.session.commit()
+        assert 'desativado' in _diagnostico_menu(menu)
+        menu.site_ativo = True
 
         menu.menu_total_unidades = 30                   # pré-seleção soma 15
         db.session.commit()
