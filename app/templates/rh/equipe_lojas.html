@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Equipe por loja{% endblock %}
+{% macro pessoa_item(pessoa, contexto=false) %}
+<li class="rh-lojas-person">
+  <a href="{{ url_for('rh.detalhe_funcionario', id=pessoa.id) }}">{{ pessoa.nome }}</a>
+  <span>{{ pessoa.cargo }}</span>
+  {% if contexto %}<small>{{ pessoa.unidade or 'Unidade principal não definida' }} · {{ pessoa.periodo or 'Período não definido' }}</small>{% endif %}
+  {% if pessoa.alerta %}<small class="rh-lojas-warning">{{ pessoa.alerta }}</small>{% endif %}
+</li>
+{% endmacro %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rh-equipe.css') }}?v={{ static_v.get('css/rh-equipe.css', '1') }}">
+<div class="rh-equipe rh-lojas">
+  <header class="rh-equipe-heading">
+    <div>
+      <span class="rh-equipe-eyebrow">Gestão de pessoas</span>
+      <h1>Equipe por loja</h1>
+      <p>Quem lidera cada unidade e quem faz parte da equipe, por período.</p>
+    </div>
+    <nav class="rh-equipe-actions" aria-label="Estrutura da equipe">
+      <a class="rh-equipe-button" href="{{ url_for('rh.lideranca_organograma') }}"><i class="bi bi-diagram-3" aria-hidden="true"></i> Organograma</a>
+      <a class="rh-equipe-button rh-equipe-button-primary" href="{{ url_for('rh.lideranca_preenchimento') }}"><i class="bi bi-pencil" aria-hidden="true"></i> Editar estrutura</a>
+    </nav>
+  </header>
+
+  <nav class="rh-pessoas-tabs" aria-label="Gestão de pessoas">
+    <a href="{{ url_for('rh.equipe') }}">Visão da equipe</a>
+    <a href="{{ url_for('rh.equipe_lojas') }}" aria-current="page">Por loja</a>
+    <a href="{{ url_for('rh.funcionarios') }}">Cadastros</a>
+    <a href="{{ url_for('rh.funcionarios', view='acessos') }}">Acessos</a>
+    <a href="{{ url_for('rh.plano_carreira') }}">Plano de carreira <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
+  </nav>
+
+  <nav class="rh-lojas-selector" aria-label="Escolher loja">
+    <a href="{{ url_for('rh.equipe_lojas') }}"{% if not selecionada %} aria-current="true"{% endif %}>Todas as lojas</a>
+    {% for loja in lojas %}
+    <a href="{{ url_for('rh.equipe_lojas', loja=loja.id) }}"{% if selecionada and selecionada.id == loja.id %} aria-current="true"{% endif %}>{{ loja.nome }} <span>{{ loja.total }}<span class="rh-equipe-sr-only"> pessoas na unidade principal</span></span></a>
+    {% endfor %}
+  </nav>
+
+  <div class="rh-lojas-stores">
+    {% for loja in lojas_exibidas %}
+    <section class="rh-lojas-store" aria-labelledby="loja-{{ loja.id }}">
+      <header class="rh-lojas-store-heading">
+        <div class="rh-lojas-store-name"><span class="rh-lojas-store-icon"><i class="bi bi-shop" aria-hidden="true"></i></span><div><h2 id="loja-{{ loja.id }}">{{ loja.nome }}</h2><p>{{ loja.total }} pessoa{{ 's' if loja.total != 1 }} na unidade · {{ loja.total_lideres }} líder{{ 'es' if loja.total_lideres != 1 }} de referência</p></div></div>
+        {% if not selecionada %}<a class="rh-equipe-text-link" href="{{ url_for('rh.equipe_lojas', loja=loja.id) }}">Ver só esta loja <i class="bi bi-arrow-right" aria-hidden="true"></i></a>{% endif %}
+      </header>
+
+      {% if loja.total %}
+      <div class="rh-lojas-shifts">
+        {% for turno in loja.turnos %}{% if turno.total or turno.grupos or turno.sem_lider %}
+        <section class="rh-lojas-shift" aria-labelledby="turno-{{ loja.id }}-{{ loop.index }}">
+          <header><h3 id="turno-{{ loja.id }}-{{ loop.index }}"><i class="bi {{ 'bi-sun' if turno.nome == 'Manhã' else 'bi-sunset' if turno.nome == 'Tarde' else 'bi-clock' }}" aria-hidden="true"></i>{{ turno.nome }}</h3><span>{{ turno.total }} pessoa{{ 's' if turno.total != 1 }}</span></header>
+          {% for grupo in turno.grupos %}
+          <div class="rh-lojas-group">
+            <div class="rh-lojas-leader">
+              <span class="rh-lojas-label">{{ 'Líder direto' if grupo.pessoas else 'Liderança' }}</span>
+              <a href="{{ url_for('rh.detalhe_funcionario', id=grupo.lider.id) }}">{{ grupo.lider.nome }}</a>
+              <span>{{ grupo.lider.cargo }}</span>
+              {% if grupo.lider.unidade != loja.nome or grupo.lider.periodo != turno.nome %}
+              <small>Cadastro: {{ grupo.lider.unidade or 'unidade não definida' }} · {{ grupo.lider.periodo or 'período não definido' }}</small>
+              {% endif %}
+              {% if grupo.lider.lider_nome %}<small>Responde a {{ grupo.lider.lider_nome }}</small>{% endif %}
+              {% if grupo.lider.alerta %}<small class="rh-lojas-warning">{{ grupo.lider.alerta }}</small>{% endif %}
+              {% if grupo.compartilhados %}
+              <div class="rh-lojas-shared"><span>Liderança compartilhada com</span>{% for parceiro in grupo.compartilhados %}<a href="{{ url_for('rh.detalhe_funcionario', id=parceiro.id) }}">{{ parceiro.nome }}</a>{% endfor %}</div>
+              {% endif %}
+            </div>
+            {% if grupo.pessoas %}
+            <div class="rh-lojas-reports"><span class="rh-lojas-label">Equipe liderada</span><ul>{% for pessoa in grupo.pessoas %}{{ pessoa_item(pessoa) }}{% endfor %}</ul></div>
+            {% endif %}
+          </div>
+          {% endfor %}
+          {% if turno.sem_lider %}
+          <div class="rh-lojas-unassigned"><h4>Sem líder direto cadastrado</h4><ul>{% for pessoa in turno.sem_lider %}{{ pessoa_item(pessoa) }}{% endfor %}</ul></div>
+          {% endif %}
+        </section>
+        {% endif %}{% endfor %}
+      </div>
+      {% else %}<div class="rh-lojas-empty"><p>Nenhuma pessoa com unidade principal nesta loja.</p><a class="rh-equipe-text-link" href="{{ url_for('rh.lideranca_preenchimento') }}">Conferir vínculos da equipe <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div>{% endif %}
+
+      {% if loja.outros_vinculos %}
+      <details class="rh-lojas-context">
+        <summary>Outros vínculos com esta loja <span>{{ loja.outros_vinculos|length }}</span></summary>
+        <p>Estas pessoas também estão vinculadas à loja, mas não entram no total da unidade principal acima.</p>
+        <ul>{% for pessoa in loja.outros_vinculos %}{{ pessoa_item(pessoa, true) }}{% endfor %}</ul>
+      </details>
+      {% endif %}
+    </section>
+    {% else %}
+    <section class="rh-equipe-panel rh-equipe-empty"><i class="bi bi-shop" aria-hidden="true"></i><h2>Nenhuma loja ativa cadastrada</h2><p>As equipes aparecerão aqui conforme as unidades e os vínculos forem cadastrados.</p><a class="rh-equipe-button" href="{{ url_for('rh.lideranca_preenchimento') }}">Conferir estrutura</a></section>
+    {% endfor %}
+  </div>
+
+  {% if not selecionada and sem_unidade %}
+  <section class="rh-lojas-store rh-lojas-pending" aria-labelledby="rh-lojas-sem-unidade">
+    <header class="rh-lojas-store-heading"><div><h2 id="rh-lojas-sem-unidade">Unidade principal a definir</h2><p>{{ sem_unidade|length }} pessoa{{ 's' if sem_unidade|length != 1 }} ainda sem uma loja ativa definida como principal.</p></div><a class="rh-equipe-text-link" href="{{ url_for('rh.lideranca_preenchimento') }}">Organizar vínculos <i class="bi bi-arrow-right" aria-hidden="true"></i></a></header>
+    <ul class="rh-lojas-pending-list">{% for pessoa in sem_unidade %}{{ pessoa_item(pessoa, true) }}{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  {% if not selecionada and direcao %}
+  <details class="rh-lojas-direction"><summary>Direção <span>{{ direcao|length }}</span></summary><p>A direção é apresentada separadamente das equipes das lojas.</p><ul>{% for pessoa in direcao %}{{ pessoa_item(pessoa) }}{% endfor %}</ul></details>
+  {% endif %}
+  <p class="rh-lojas-footnote">Equipe ativa do RH, mesmo sem login no sistema. Cada pessoa é contada uma vez na sua unidade principal; líderes de outras unidades aparecem como referência.</p>
+</div>
+{% endblock %}

@@ -17,6 +17,26 @@ critérios de conclusão, permissões ou remuneração.
   administração eventual recolhida, publicação individual preservada.
 - Pessoas: visão macro, cadastros e acessos com navegação local consistente,
   filtros e cartões/tabelas adaptados ao celular.
+- Por loja (`/rh/equipe/lojas`): seleção de unidade, líderes diretos acima das
+  equipes por manhã/tarde, compartilhamentos válidos identificados e pendências
+  de unidade/período/líder explícitas. Acesso exclusivo ao owner.
+
+### Equipe por loja: origem e contagem
+
+A consulta usa os funcionários ativos do RH, inclusive quem não tem usuário.
+A unidade principal explícita prevalece; quando há uma única loja vinculada,
+usa-se essa loja. Múltiplas lojas sem principal nunca são resolvidas por ordem.
+Vínculos secundários ficam recolhidos e a direção é exibida separadamente.
+
+Cada pessoa integra o total uma única vez, na unidade e período cadastrados.
+Um líder de outra loja/período pode aparecer como referência, sem aumentar essa
+lotação. Líderes que também respondem a outro líder aparecem como cabeçalhos,
+com o superior indicado, evitando duplicar a pessoa como liderado. Liderança
+compartilhada usa somente vínculos válidos com equipe ativa aplicável; não
+inventa liderança pelo nome do cargo. Loja sem equipe tem estado vazio próprio.
+
+O serviço retorna apenas campos de exibição e evita carregar salário, CPF ou
+contatos. A nova rota não amplia exceções de acesso ao RH e não modifica dados.
 
 ## Padrões visuais
 
@@ -67,3 +87,10 @@ Execução: `python -m pytest -q` e `python -m ruff check app tests`.
 Validação em 10/09/2026: suíte completa com quatro workers, **5.011 passed,
 3 skipped e 3 xpassed**, em 70,34s. Ruff dos arquivos alterados e aplicação,
 `node --check` do script novo e `git diff --check` sem erros.
+
+Adendo por loja (10/09/2026): **5.048 passed, 3 skipped e 3 xpassed** na
+suíte completa. Depois da revisão de hierarquia, **39 testes focados passaram**,
+incluindo os dois cenários adicionais de líder que lidera outro líder e superior
+inativo. Cobertos também compartilhamento válido, lotação sem duplicidade,
+consulta sem escrita, privacidade, escape, acesso e seleção da unidade.
+Prévia validada em 1440px e 390px, sem overflow horizontal.

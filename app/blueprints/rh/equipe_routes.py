@@ -1,7 +1,7 @@
 """Visão macro e registro explícito do histórico de carreira (somente dono)."""
 from datetime import datetime
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.blueprints.rh import rh_bp
@@ -19,6 +19,26 @@ def equipe():
                ('q', 'cargo', 'loja', 'lider', 'nivel', 'pendencia')}
     filtros['ativos'] = '0' if request.args.get('ativos') == '0' else '1'
     return render_template('rh/equipe.html', **carregar_visao(filtros))
+
+
+@rh_bp.route('/equipe/lojas')
+@login_required
+@owner_required
+def equipe_lojas():
+    from app.services.rh_equipe_lojas import carregar_lojas
+
+    dados = carregar_lojas()
+    loja_id = (request.args.get('loja') or '').strip()
+    selecionada = None
+    if loja_id:
+        selecionada = next((loja for loja in dados['lojas']
+                            if str(loja['id']) == loja_id), None)
+        if selecionada is None:
+            abort(404)
+    return render_template(
+        'rh/equipe_lojas.html', **dados, selecionada=selecionada,
+        lojas_exibidas=[selecionada] if selecionada else dados['lojas'],
+    )
 
 
 @rh_bp.route('/funcionarios/<int:id>/carreira', methods=['GET', 'POST'])

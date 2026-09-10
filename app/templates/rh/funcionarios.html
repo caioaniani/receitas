@@ -23,6 +23,7 @@
 {% if current_user.is_dono() %}
 <nav class="rh-pessoas-tabs" aria-label="Gestão de pessoas">
     <a href="{{ url_for('rh.equipe') }}">Visão da equipe</a>
+    <a href="{{ url_for('rh.equipe_lojas') }}">Por loja</a>
     <a href="{{ url_for('rh.funcionarios') }}"{% if view != 'acessos' %} aria-current="page"{% endif %}>Cadastros</a>
     <a href="{{ url_for('rh.funcionarios', view='acessos') }}"{% if view == 'acessos' %} aria-current="page"{% endif %}>Acessos</a>
     <a href="{{ url_for('rh.plano_carreira') }}">Plano de carreira <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>

@@ -45,6 +45,7 @@
         {% endif %}
         {% if current_user.is_dono() %}
         <a href="{{ url_for('rh.equipe') }}" class="sidebar-link {{ 'active' if request.endpoint == 'rh.equipe' }}">Visão da equipe</a>
+        <a href="{{ url_for('rh.equipe_lojas') }}" class="sidebar-link {{ 'active' if request.endpoint == 'rh.equipe_lojas' }}">Equipe por loja</a>
         <a href="{{ url_for('rh.escala') }}" class="sidebar-link {{ 'active' if request.path.startswith('/rh/escala') }}">Escala operacional</a>
         <a href="{{ url_for('rh.plano_carreira') }}" class="sidebar-link {{ 'active' if request.path.startswith('/rh/plano-carreira') }}">Cargos e salários</a>
         {% endif %}

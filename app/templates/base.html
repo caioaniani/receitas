@@ -33,7 +33,7 @@
     {% if request.path.startswith('/treino') or request.path.startswith('/rh/funcionarios/') or request.path.startswith('/rh/lideranca') %}
     <link href="{{ url_for('static', filename='css/treino-v2.css') }}?v={{ static_v['css/treino-v2.css'] }}" rel="stylesheet">
     {% endif %}
-    {% if request.path.startswith('/treino') or request.endpoint in ('rh.equipe', 'rh.funcionarios') %}
+    {% if request.path.startswith('/treino') or request.endpoint in ('rh.equipe', 'rh.funcionarios', 'rh.equipe_lojas') %}
     <link href="{{ url_for('static', filename='css/treino-gestao.css') }}?v={{ static_v['css/treino-gestao.css'] }}" rel="stylesheet">
     {% endif %}
     {% if request.endpoint in ('treino.home', 'treino.trilha', 'treino.gestor_progresso') %}
@@ -397,7 +397,7 @@
         {% include '_rotina_loja_nav.html' %}
         {% endif %}
         {% if ui_v2 and not embed and current_user.is_authenticated and
-              ((request.path.startswith('/treino') and request.endpoint not in ('treino.video', 'treino.verificar')) or request.endpoint in ('rh.equipe', 'rh.funcionarios')) %}
+              ((request.path.startswith('/treino') and request.endpoint not in ('treino.video', 'treino.verificar')) or request.endpoint in ('rh.equipe', 'rh.funcionarios', 'rh.equipe_lojas')) %}
           {% include 'treino/_workspace_nav.html' %}
         {% endif %}
         {% block content %}{% endblock %}

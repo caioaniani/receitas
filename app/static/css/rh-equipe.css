@@ -1,4 +1,65 @@
 /* Visão macro do RH: tokens do shell v2, leitura sem JavaScript e sem alterar Bootstrap. */
+
+/* Por loja: hierarquia legível sem depender de um organograma com zoom. */
+.rh-lojas .rh-equipe-heading p { max-width: 62ch; font-size: 14px; }
+.rh-lojas .rh-equipe-button { min-height: 44px; font-size: 13px; }
+.rh-lojas .rh-lojas-selector { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
+.rh-lojas .rh-lojas-selector > a { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 15px; border: 1px solid var(--equipe-line); border-radius: 10px; color: var(--equipe-ink); background: var(--equipe-surface); font-size: 13px; text-decoration: none; }
+.rh-lojas .rh-lojas-selector > a > span { font-size: 12px; opacity: .85; }
+.rh-lojas .rh-lojas-selector > a:hover { border-color: var(--equipe-green); }
+.rh-lojas .rh-lojas-selector > a[aria-current] { color: #fff; border-color: var(--equipe-green); background: var(--equipe-green); }
+.rh-lojas .rh-lojas-stores { display: grid; gap: 24px; }
+.rh-lojas .rh-lojas-store { min-width: 0; border: 1px solid var(--equipe-line); border-radius: 16px; background: var(--equipe-surface); overflow: hidden; }
+.rh-lojas .rh-lojas-store-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px; border-bottom: 1px solid var(--equipe-line); }
+.rh-lojas .rh-lojas-store-heading p { margin-top: 6px; font-size: 12px; }
+.rh-lojas .rh-lojas-store-name { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.rh-lojas .rh-lojas-store-name h2 { overflow-wrap: anywhere; }
+.rh-lojas .rh-lojas-store-icon { display: grid; place-items: center; flex: 0 0 44px; height: 44px; border-radius: 12px; background: var(--equipe-green-soft); color: var(--equipe-green); font-size: 21px; }
+.rh-lojas .rh-lojas-store-heading > a { flex-shrink: 0; min-height: 44px; }
+.rh-lojas .rh-lojas-shifts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 24px; padding: 24px; }
+.rh-lojas .rh-lojas-shift { min-width: 0; }
+.rh-lojas .rh-lojas-shift > header { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 0 0 14px; }
+.rh-lojas .rh-lojas-shift h3 { display: flex; align-items: center; gap: 8px; margin: 0; font: inherit; font-size: 14px; font-weight: 700; }
+.rh-lojas .rh-lojas-shift h3 i { color: var(--equipe-green); }
+.rh-lojas .rh-lojas-shift > header > span { color: var(--equipe-muted); font-size: 12px; white-space: nowrap; }
+.rh-lojas .rh-lojas-group + .rh-lojas-group { margin-top: 22px; }
+.rh-lojas .rh-lojas-leader { display: grid; gap: 4px; padding: 16px; border: 1px solid var(--equipe-line); border-left: 3px solid var(--equipe-green); border-radius: 10px; background: var(--equipe-green-soft); }
+.rh-lojas .rh-lojas-label { color: var(--equipe-green); font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.rh-lojas .rh-lojas-leader > a { color: var(--equipe-ink); font-size: 16px; font-weight: 700; line-height: 1.4; text-decoration: none; overflow-wrap: anywhere; }
+.rh-lojas .rh-lojas-leader > span:not(.rh-lojas-label) { font-size: 12px; }
+.rh-lojas .rh-lojas-leader small { color: var(--equipe-muted); font-size: 11px; }
+.rh-lojas .rh-lojas-shared { display: grid; gap: 3px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--equipe-line); font-size: 12px; }
+.rh-lojas .rh-lojas-shared > span { color: var(--equipe-muted); font-size: 11px; }
+.rh-lojas .rh-lojas-shared a { color: var(--equipe-green); }
+.rh-lojas .rh-lojas-reports { margin: 0 0 0 17px; padding: 16px 0 0 18px; border-left: 1px solid var(--equipe-line); }
+.rh-lojas :is(.rh-lojas-reports, .rh-lojas-unassigned, .rh-lojas-context, .rh-lojas-direction) ul { list-style: none; margin: 0; padding: 0; }
+.rh-lojas .rh-lojas-person { display: grid; gap: 3px; min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--equipe-line); }
+.rh-lojas .rh-lojas-person:last-child { border-bottom: 0; }
+.rh-lojas .rh-lojas-person > a { width: fit-content; max-width: 100%; color: var(--equipe-ink); font-size: 14px; font-weight: 600; line-height: 1.5; text-decoration: none; overflow-wrap: anywhere; }
+.rh-lojas :is(.rh-lojas-person > a, .rh-lojas-leader > a):hover { color: var(--equipe-green); text-decoration: underline; }
+.rh-lojas .rh-lojas-person > span { color: var(--equipe-muted); font-size: 12px; }
+.rh-lojas .rh-lojas-person > small { color: var(--equipe-muted); font-size: 11px; line-height: 1.5; }
+.rh-lojas :is(.rh-lojas-person, .rh-lojas-leader) .rh-lojas-warning { color: var(--v2-warning, #936619); }
+.rh-lojas .rh-lojas-unassigned { margin-top: 18px; padding: 16px; border: 1px dashed var(--equipe-line); border-radius: 10px; }
+.rh-lojas .rh-lojas-unassigned h4 { margin: 0; color: var(--v2-warning, #936619); font: inherit; font-size: 12px; font-weight: 700; }
+.rh-lojas .rh-lojas-empty { display: grid; justify-items: start; gap: 10px; padding: 24px; font-size: 13px; }
+.rh-lojas .rh-lojas-context { padding: 4px 24px; border-top: 1px solid var(--equipe-line); }
+.rh-lojas :is(.rh-lojas-context, .rh-lojas-direction) summary { min-height: 48px; padding: 14px 0; font-size: 13px; font-weight: 650; cursor: pointer; }
+.rh-lojas :is(.rh-lojas-context, .rh-lojas-direction) summary > span { margin-left: 8px; color: var(--equipe-muted); font-size: 12px; font-weight: 400; }
+.rh-lojas :is(.rh-lojas-context, .rh-lojas-direction) > p { margin-bottom: 8px; font-size: 12px; }
+.rh-lojas :is(.rh-lojas-context, .rh-lojas-direction) > ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 0 24px; padding-bottom: 12px; }
+.rh-lojas .rh-lojas-pending { margin-top: 24px; }
+.rh-lojas .rh-lojas-pending-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 0 24px; margin: 0; padding: 8px 24px; list-style: none; }
+.rh-lojas .rh-lojas-direction { margin-top: 20px; border-bottom: 1px solid var(--equipe-line); }
+.rh-lojas .rh-lojas-footnote { margin-top: 20px; font-size: 11px; max-width: 105ch; }
+@media (max-width: 700px) {
+    .rh-lojas .rh-lojas-store-heading { align-items: flex-start; flex-direction: column; padding: 18px; gap: 8px; }
+    .rh-lojas .rh-lojas-shifts { grid-template-columns: 1fr; padding: 18px; }
+    .rh-lojas .rh-lojas-shift + .rh-lojas-shift { border-top: 1px solid var(--equipe-line); padding-top: 20px; }
+    .rh-lojas .rh-lojas-context { padding: 4px 18px; }
+    .rh-lojas .rh-lojas-pending-list { padding: 8px 18px; }
+    .rh-lojas .rh-lojas-selector > a { flex: 1 1 auto; justify-content: space-between; }
+}
 .rh-equipe {
     --equipe-ink: var(--v2-ink, var(--text-main, #17221d));
     --equipe-muted: var(--v2-muted, var(--text-muted, #68736d));
