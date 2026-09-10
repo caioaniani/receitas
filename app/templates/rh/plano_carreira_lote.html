@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Revisar aprovação em lote{% endblock %}
+{% block content %}
+<a href="{{ voltar }}" class="d-inline-block mb-3">← Voltar à seleção</a>
+<div class="mb-4"><h1 class="page-title mb-2">Revisar aprovação em lote</h1>
+  <p class="text-muted mb-0">Confira as pessoas, os cargos e os valores antes de aprovar.</p>
+</div>
+{% if erro %}<div class="alert alert-warning" role="alert">{{ erro }}</div>{% endif %}
+{% if previa %}
+<div class="card shadow-sm mb-4"><div class="card-body">
+  <div class="d-flex flex-wrap gap-4">
+    <div><div class="text-muted small">Pessoas selecionadas</div><strong class="fs-4">{{ previa.resumo.quantidade }}</strong></div>
+    <div><div class="text-muted small">Total de referência atual</div><strong class="fs-4">{{ previa.resumo.total_referencia_atual|brl }}</strong></div>
+    <div><div class="text-muted small">Total após aprovação</div><strong class="fs-4">{{ previa.resumo.total_referencia_novo|brl }}</strong></div>
+    <div><div class="text-muted small">Diferença no lote</div><strong class="fs-4">{{ previa.resumo.diferenca_referencia|brl }}</strong></div>
+  </div>
+  <p class="small text-muted mb-0 mt-3">Estes valores vêm dos cargos do RH. O total de referência soma salário base, adicional de confiança e premiação; não inclui VT, VR, horas extras ou descontos. Os totais alvo da planilha continuam como referência de planejamento.</p>
+</div></div>
+<div class="card shadow-sm mb-4"><div class="table-responsive">
+  <table class="table align-middle mb-0">
+    <caption class="visually-hidden">Efeito da aprovação em cada pessoa selecionada</caption>
+    <thead><tr><th scope="col">Pessoa</th><th scope="col">Cargo atual → após aprovação</th><th scope="col">Salário base<br><small>Atual → novo</small></th><th scope="col">Total de referência<br><small>Atual → novo</small></th><th scope="col">O que será feito</th></tr></thead>
+    <tbody>{% for linha in previa.linhas %}
+      <tr>
+        <th scope="row">{{ linha.nome }}<div class="small text-muted fw-normal">{{ linha.familia }}{% if linha.nivel %} · N{{ linha.nivel }}{% endif %}</div></th>
+        <td>{{ linha.cargo_atual or 'Sem cargo' }}<br><strong>→ {{ linha.cargo_novo or linha.cargo_atual or 'Sem cargo' }}</strong></td>
+        <td class="text-nowrap">{{ linha.salario_base_atual|brl }}<br><strong>→ {{ linha.salario_base_novo|brl }}</strong>{% if linha.salario_base_novo < linha.salario_base_atual %}<div class="small text-danger">Base menor que a atual</div>{% endif %}</td>
+        <td class="text-nowrap">{{ linha.total_referencia_atual|brl }}<br><strong>→ {{ linha.total_referencia_novo|brl }}</strong></td>
+        <td>{% if linha.somente_decisao %}Aprovar a decisão<div class="small text-muted">Fora da trilha; mantém o cargo atual.</div>{% else %}Aprovar e vincular o cargo<div class="small text-muted">Mantém premiação e benefícios.</div>{% endif %}</td>
+      </tr>
+    {% endfor %}</tbody>
+  </table>
+</div></div>
+<p class="text-muted small">Ao confirmar, todas as pessoas deste lote ficam aprovadas. Os cargos vinculados são aplicados nas fichas e cada aprovação fica registrada no histórico. Folhas já fechadas permanecem como foram calculadas.</p>
+<div class="d-flex flex-wrap gap-2">
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="etapa" value="confirmar">
+    <input type="hidden" name="confirmacao" value="{{ confirmacao }}">
+    <button type="submit" class="btn btn-primary">Confirmar aprovação de {{ previa.resumo.quantidade }} {{ 'pessoa' if previa.resumo.quantidade == 1 else 'pessoas' }}</button>
+  </form>
+  <a href="{{ voltar }}" class="btn btn-outline-secondary">Voltar e ajustar seleção</a>
+</div>
+{% else %}
+<a href="{{ voltar }}" class="btn btn-primary">Voltar à seleção</a>
+{% endif %}
+{% endblock %}

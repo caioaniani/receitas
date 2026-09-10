@@ -166,6 +166,17 @@ def registrar_promocao_historica(funcionario, data_efetiva, *, actor_id,
         data_efetiva=data_efetiva, observacao=observacao)
 
 
+def registrar_aplicacao_plano(funcionario, antes, *, actor_id, origem):
+    """Audita uma aprovação explícita mesmo se não houver troca de cargo.
+
+    O chamador garante que a decisão ainda não foi aprovada e controla a
+    transação. A data da decisão não é presumida como data de promoção.
+    """
+    return _nova(
+        funcionario, antes, snapshot(funcionario), actor_id=actor_id,
+        origem=origem, tipo='aplicacao_plano', data_efetiva=None)
+
+
 def ultimas_promocoes(funcionario_ids):
     """Última promoção conhecida por pessoa; alterações não são promoções."""
     if not funcionario_ids:

@@ -5161,6 +5161,20 @@ interna que ja existia). Servico `app/services/folha_import.py`.
 
 ## Plano de cargos, salarios e carreira no RH (03/09/2026)
 
+**Aprovação em lote (10/09/2026)**: no Enquadramento da equipe, dono marca
+pessoas ou Todos da lista filtrada e usa **Aprovar selecionados**. POST
+`/rh/plano-carreira/aprovar-lote` primeiro revisa, depois confirma com token
+assinado de 30min, autor e estado do lote. Só os IDs explicitamente selecionados
+são aprovados, todos na mesma transação; qualquer mudança/erro exige nova revisão.
+Já aprovados e inativos não entram; faixa com cargo ausente/inativo é bloqueada.
+Fora da trilha (nível ausente) aprova somente a decisão e conserva o cargo.
+Prévia mostra remuneração real dos cargos (base + confiança + premiação), não
+promete aplicar total alvo da planilha. Reusa `aplicar_cargo_aprovado`, preserva
+benefícios/vínculos/acesso e registra cada decisão como `aplicacao_plano`, origem
+`aprovacao_lote`, inclusive se o cargo já for o mesmo. Não presume uma promoção
+ou sua data. Serviço `plano_carreira_lote`, comparação monetária compartilhada
+com promoção em `rh_remuneracao`; testes `test_plano_carreira_lote*`.
+
 **Promoção direta na equipe (10/09/2026)**: dono usa **Promover** em
 `/rh/equipe` ou no histórico da pessoa. Escolhe cargo/data, revisa valores e
 confirma em `/rh/funcionarios/<id>/promover`. `rh_promocao` aplica cargo, função,

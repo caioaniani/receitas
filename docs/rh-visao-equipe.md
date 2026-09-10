@@ -42,6 +42,26 @@ Filtros: pessoa/cargo, unidade, líder direto, nível, pendência e ativos/inati
 Métricas consideram a equipe ativa (ou todos, se escolhido); a tabela mostra o
 recorte filtrado. A distribuição por cargos fica recolhida por padrão.
 
+## Aprovar o enquadramento em lote
+
+Em **Plano de cargos e carreira → Enquadramento da equipe**, o dono pode marcar
+várias pessoas e clicar em **Aprovar selecionados**. **Todos** marca somente os
+cadastros disponíveis na lista filtrada; ninguém começa selecionado. O contador
+mostra a seleção e **Voltar à seleção** permite ajustá-la antes de confirmar.
+
+A revisão compara cargo, base e total de referência atuais com os que serão
+aplicados no RH. O total soma base, confiança e premiação, sem VT/VR/HE/descontos;
+não é a remuneração alvo da planilha. Fora da trilha, somente a decisão é aprovada.
+Já aprovados, inativos e faixas sem cargo válido não entram. A ação individual
+existente permanece disponível.
+
+`plano_carreira_lote` relê e bloqueia todos os registros envolvidos antes da
+confirmação, comparando o estado assinado da revisão (30 minutos, por autor).
+Se algo mudou, nenhum item do lote é aprovado. Cada aprovação gera uma entrada
+`aplicacao_plano` de origem `aprovacao_lote`, inclusive sem troca de cargo; não
+gera uma data de promoção. O commit é único e preserva benefícios, acesso,
+lojas e liderança. Testes `test_plano_carreira_lote*` cobrem serviço e rotas.
+
 ## Atendente = Atendente 1
 
 O painel agrupa ambos os nomes como **Atendente 1**. A consolidação dos cadastros

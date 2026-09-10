@@ -983,13 +983,23 @@ def plano_carreira():
         for nome in ('Em avaliação', 'Aprovado', 'Proposta final')}
     decisoes['Sem decisão'] = PlanoCarreiraEnquadramento.query.filter(
         PlanoCarreiraEnquadramento.decisao.is_(None)).count()
+    from app.services.plano_carreira_lote import motivo_bloqueio
+    bloqueios_lote = {
+        e.id: motivo_bloqueio(e, cargos_plano.get(f'{e.familia}|{e.nivel}'))
+        for e in enquadramentos
+    }
+    selecionados_lote = {
+        int(i) for i in request.args.getlist('selecionados')[:200]
+        if i.isascii() and i.isdigit() and len(i) <= 10
+    }
     return render_template(
         'rh/plano_carreira.html', importacao=importacao, familias=familias,
         familia=familia, busca=busca, enquadramentos=enquadramentos,
         faixas=faixas, validacoes=validacoes, regras=regras,
         total_conteudos=conteudos, videos_vinculados=videos,
         total_pessoas=total_pessoas, ajustes_positivos=ajustes,
-        decisoes=decisoes, cargos_plano=cargos_plano)
+        decisoes=decisoes, cargos_plano=cargos_plano,
+        bloqueios_lote=bloqueios_lote, selecionados_lote=selecionados_lote)
 
 
 @rh_bp.route('/plano-carreira/importar', methods=['GET', 'POST'])

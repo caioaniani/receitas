@@ -282,21 +282,27 @@ def cargo_da_faixa(familia, nivel):
             .first())
 
 
-def aplicar_cargo_aprovado(enquadramento, *, actor_id=None):
+def aplicar_cargo_aprovado(enquadramento, *, actor_id=None,
+                          origem='decisao_plano', registrar_decisao=False):
     """Aplica no funcionário o Cargo ligado à faixa já aprovada."""
     cargo = cargo_da_faixa(enquadramento.familia, enquadramento.nivel)
     funcionario = enquadramento.funcionario
-    if not cargo or not funcionario:
+    if not funcionario:
         return None
     from app.services import rh_movimentacao
     antes = rh_movimentacao.snapshot(funcionario)
-    funcionario.cargo = cargo
-    funcionario.cargo_id = cargo.id
-    funcionario.funcao = cargo.nome
-    funcionario.salario_base = cargo.salario_base
-    rh_movimentacao.registrar_mudanca(
-        funcionario, antes, actor_id=actor_id, origem='decisao_plano',
-        tipo='aplicacao_plano')
+    if cargo:
+        funcionario.cargo = cargo
+        funcionario.cargo_id = cargo.id
+        funcionario.funcao = cargo.nome
+        funcionario.salario_base = cargo.salario_base
+    if registrar_decisao:
+        rh_movimentacao.registrar_aplicacao_plano(
+            funcionario, antes, actor_id=actor_id, origem=origem)
+    elif cargo:
+        rh_movimentacao.registrar_mudanca(
+            funcionario, antes, actor_id=actor_id, origem=origem,
+            tipo='aplicacao_plano')
     return cargo
 
 
@@ -324,6 +330,16 @@ def sincronizar_enquadramento_com_cargo(funcionario):
     return faixa
 
 
+def _contar_aprovacoes(enquadramentos, decisoes_atuais):
+    return sum(
+        1 for e in enquadramentos
+        if e.get('funcionario_id')
+        and (e.get('decisao') == 'Aprovado'
+             or (not e.get('decisao') and decisoes_atuais.get(
+                 e['funcionario_id']) == 'Aprovado'))
+        and e.get('nivel'))
+
+
 def prever(raw: bytes):
     dados = ler(raw)
     vinculados, avisos = _vincular_funcionarios(dados)
@@ -342,13 +358,7 @@ def prever(raw: bytes):
         'pessoas_vinculadas': vinculados,
         'validacoes': len(dados['validacoes']),
         **cargos,
-        'aprovacoes_a_aplicar': sum(
-            1 for e in dados['enquadramentos']
-            if e.get('funcionario_id')
-            and (e.get('decisao') == 'Aprovado'
-                 or (not e.get('decisao') and decisoes_atuais.get(
-                     e['funcionario_id']) == 'Aprovado'))
-            and e.get('nivel')),
+        'aprovacoes_a_aplicar': _contar_aprovacoes(dados['enquadramentos'], decisoes_atuais),
     }
     return dados
 
@@ -356,16 +366,23 @@ def prever(raw: bytes):
 def aplicar(raw: bytes, nome_arquivo: str, usuario_id=None):
     from app.services import rh_movimentacao
     dados = prever(raw)
-    decisoes_atuais = {e.funcionario_id: e.decisao
-                       for e in PlanoCarreiraEnquadramento.query.all()
-                       if e.decisao}
     try:
+        # A aprovação em lote pode estar concluindo enquanto a importação
+        # espera estes registros. Ler após o lock e renovar a identidade ORM
+        # impede restaurar uma decisão antiga ao substituir o plano.
+        enquadramentos_atuais = (PlanoCarreiraEnquadramento.query
+                                .order_by(PlanoCarreiraEnquadramento.id)
+                                .populate_existing().with_for_update().all())
+        decisoes_atuais = {e.funcionario_id: e.decisao
+                           for e in enquadramentos_atuais if e.decisao}
+        dados['resumo']['aprovacoes_a_aplicar'] = _contar_aprovacoes(
+            dados['enquadramentos'], decisoes_atuais)
         # Fotografar antes de substituir faixas: a data da importação não
         # passa a ser data de promoção e os eventos anteriores sobrevivem.
         antes_por_pessoa = {
             f.id: rh_movimentacao.snapshot(f) for f in Funcionario.query.filter(
                 Funcionario.id.in_([e['funcionario_id'] for e in dados['enquadramentos']
-                                   if e.get('funcionario_id')])).all()
+                                   if e.get('funcionario_id')])).populate_existing().all()
         }
         for model in (PlanoCarreiraConteudo, PlanoCarreiraEnquadramento,
                       PlanoCarreiraCargoVinculo,

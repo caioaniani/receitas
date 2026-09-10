@@ -118,6 +118,51 @@ def test_reimportacao_preserva_decisao_manual_quando_planilha_vazia(app):
     assert PlanoCarreiraEnquadramento.query.one().decisao == 'Proposta final'
 
 
+def test_reimportacao_rele_decisao_e_cargo_atualizados_apos_identidade_antiga(app):
+    """Após esperar o lock, a sessão não pode restaurar seu cache anterior.
+
+    UPDATE sem sincronização reproduz os valores novos no banco mantendo os
+    objetos antigos em memória, como uma aprovação concluída por outra sessão.
+    SQLite não oferece FOR UPDATE; este teste cobre a releitura efetiva e o
+    histórico, enquanto a consulta usa o lock real quando roda em PostgreSQL.
+    """
+    from sqlalchemy import update
+
+    from app.models import Cargo, Funcionario, PlanoCarreiraEnquadramento, RhMovimentacao
+    from app.services import plano_carreira_import as svc
+
+    f = _funcionario()
+    cargo_antigo = Cargo(nome='Auxiliar', salario_base=1900, ativo=True)
+    f.cargo = cargo_antigo
+    f.funcao = cargo_antigo.nome
+    db.session.commit()
+    svc.aplicar(_xlsx(), 'primeiro.xlsx')
+    f = db.session.get(Funcionario, f.id)
+    e = PlanoCarreiraEnquadramento.query.one()
+    destino = Cargo.query.filter_by(nome='Atendente 1').one()
+    assert e.decisao is None and f.cargo.nome == 'Auxiliar'
+    db.session.execute(update(PlanoCarreiraEnquadramento)
+                       .where(PlanoCarreiraEnquadramento.id == e.id)
+                       .values(decisao='Aprovado')
+                       .execution_options(synchronize_session=False))
+    db.session.execute(update(Funcionario).where(Funcionario.id == f.id)
+                       .values(cargo_id=destino.id, funcao=destino.nome,
+                               salario_base=destino.salario_base)
+                       .execution_options(synchronize_session=False))
+    assert e.decisao is None and f.cargo.nome == 'Auxiliar'
+
+    resultado = svc.aplicar(_xlsx(), 'segundo.xlsx')
+
+    assert resultado['aprovacoes_a_aplicar'] == 1
+    assert PlanoCarreiraEnquadramento.query.one().decisao == 'Aprovado'
+    atualizado = db.session.get(Funcionario, f.id)
+    assert atualizado.cargo_id == destino.id
+    assert atualizado.funcao == destino.nome
+    # O cargo já estava aplicado no banco antes da importação. Um snapshot
+    # antigo inventaria uma segunda alteração de cargo neste histórico.
+    assert RhMovimentacao.query.count() == 0
+
+
 def _login_owner(app):
     from app.models import Usuario
     u = Usuario(nome='Dono', login='dono_carreira', papel='admin', is_owner=True); u.set_senha('senha123')
