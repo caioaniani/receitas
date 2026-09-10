@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Visão da equipe{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rh-equipe.css') }}?v={{ static_v.get('css/rh-equipe.css', '1') }}">
+{% set tem_filtros = filtros.q or filtros.cargo or filtros.loja or filtros.lider or filtros.nivel or filtros.pendencia %}
+<main class="rh-equipe">
+  <header class="rh-equipe-heading">
+    <div>
+      <span class="rh-equipe-eyebrow">Pessoas · RH</span>
+      <h1>Visão da equipe</h1>
+      <p>Cargo, nível, liderança e evolução de cada pessoa, em um só lugar.</p>
+    </div>
+    <nav class="rh-equipe-actions" aria-label="Estrutura da equipe">
+      <a class="rh-equipe-button" href="{{ url_for('rh.lideranca_organograma') }}"><i class="bi bi-diagram-3" aria-hidden="true"></i> Organograma</a>
+      <a class="rh-equipe-button rh-equipe-button-primary" href="{{ url_for('rh.lideranca_preenchimento') }}"><i class="bi bi-pencil" aria-hidden="true"></i> Editar estrutura</a>
+    </nav>
+  </header>
+
+  <section aria-labelledby="rh-equipe-resumo">
+    <h2 id="rh-equipe-resumo" class="rh-equipe-section-label">{{ 'Equipe ativa' if filtros.ativos != '0' else 'Todos os cadastros' }}</h2>
+    <div class="rh-equipe-metrics">
+      <a href="{{ url_for('rh.equipe', ativos=filtros.ativos) }}" class="rh-equipe-metric">
+        <span>Pessoas</span><strong>{{ resumo.total }}</strong>
+      </a>
+      <a href="{{ url_for('rh.equipe', ativos=filtros.ativos, cargos='1', _anchor='rh-equipe-cargos') }}" class="rh-equipe-metric">
+        <span>Cargos ocupados</span><strong>{{ resumo.cargos }}</strong>
+      </a>
+      <a href="{{ url_for('rh.lideranca_organograma') }}" class="rh-equipe-metric">
+        <span>Líderes com equipe</span><strong>{{ resumo.lideres }}</strong>
+      </a>
+      <a href="{{ url_for('rh.equipe', pendencia='sem_lider', ativos=filtros.ativos) }}" class="rh-equipe-metric{{ ' is-selected' if filtros.pendencia == 'sem_lider' }}">
+        <span>Sem líder definido</span><strong>{{ resumo.sem_lider }}</strong>
+      </a>
+      <a href="{{ url_for('rh.equipe', pendencia='sem_nivel', ativos=filtros.ativos) }}" class="rh-equipe-metric{{ ' is-selected' if filtros.pendencia == 'sem_nivel' }}">
+        <span>Sem nível definido</span><strong>{{ resumo.sem_nivel }}</strong>
+      </a>
+    </div>
+  </section>
+
+  <details class="rh-equipe-distribution" id="rh-equipe-cargos"{% if request.args.get('cargos') == '1' %} open{% endif %}>
+    <summary><span><strong>Distribuição por cargo</strong><span class="rh-equipe-muted"> {{ resumo.cargos }} cargos · {{ resumo.total }} pessoas</span></span><i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+    <div class="rh-equipe-cargo-list">
+      {% for cargo in distribuicao %}
+      <a class="rh-equipe-cargo{{ ' is-selected' if filtros.cargo == cargo.chave }}" href="{{ url_for('rh.equipe', cargo=cargo.chave, ativos=filtros.ativos) }}">
+        <span><strong>{{ cargo.nome }}</strong>{% if cargo.niveis %}<small>Nível{{ 's' if cargo.niveis|length != 1 }} {{ cargo.niveis|join(', ') }}</small>{% endif %}</span><b>{{ cargo.total }}</b>
+      </a>
+      {% else %}<p class="rh-equipe-muted">Nenhum cargo ocupado neste grupo.</p>{% endfor %}
+    </div>
+    <nav class="rh-equipe-actions mb-3" aria-label="Organizar cargos">
+      <a class="rh-equipe-text-link" href="{{ url_for('rh.cargos') }}">Gerenciar cargos</a>
+      <a class="rh-equipe-text-link" href="{{ url_for('rh.unificar_atendentes') }}">Unificar Atendente e Atendente 1</a>
+    </nav>
+  </details>
+
+  <section class="rh-equipe-panel" aria-labelledby="rh-equipe-pessoas">
+    <div class="rh-equipe-panel-heading">
+      <div><h2 id="rh-equipe-pessoas">Quem é quem</h2><p>{{ total_filtrado }} pessoa{{ 's' if total_filtrado != 1 }}{{ ' encontrada' if total_filtrado == 1 else ' encontradas' }}{{ ' com estes filtros' if tem_filtros else '' }}.</p></div>
+      <a class="rh-equipe-text-link" href="{{ url_for('rh.plano_carreira') }}">Plano de carreira <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
+    </div>
+    <form method="get" action="{{ url_for('rh.equipe') }}" class="rh-equipe-filters" role="search" aria-label="Filtrar equipe">
+      <div class="rh-equipe-search-row">
+        <label class="rh-equipe-search"><span class="rh-equipe-sr-only">Buscar pessoa ou cargo</span><i class="bi bi-search" aria-hidden="true"></i><input type="search" name="q" value="{{ filtros.q }}" placeholder="Buscar pessoa ou cargo" autocomplete="off"></label>
+        <button class="rh-equipe-button rh-equipe-button-primary" type="submit">Buscar</button>
+        {% if tem_filtros or filtros.ativos == '0' %}<a class="rh-equipe-text-link" href="{{ url_for('rh.equipe') }}">Limpar filtros</a>{% endif %}
+      </div>
+      <details class="rh-equipe-filter-details"{% if filtros.cargo or filtros.loja or filtros.lider or filtros.nivel or filtros.pendencia or filtros.ativos == '0' %} open{% endif %}>
+        <summary>Filtrar por cargo, unidade, líder ou nível</summary>
+        <div class="rh-equipe-filter-grid">
+          <label>Cargo<select name="cargo"><option value="">Todos os cargos</option>{% for cargo in distribuicao %}<option value="{{ cargo.chave }}"{% if filtros.cargo == cargo.chave %} selected{% endif %}>{{ cargo.nome }}</option>{% endfor %}</select></label>
+          <label>Unidade<select name="loja"><option value="">Todas as unidades</option>{% for loja in lojas %}<option value="{{ loja.id }}"{% if filtros.loja == loja.id|string %} selected{% endif %}>{{ loja.nome }}</option>{% endfor %}</select></label>
+          <label>Líder direto<select name="lider"><option value="">Todos os líderes</option>{% for lider in lideres %}<option value="{{ lider.id }}"{% if filtros.lider == lider.id|string %} selected{% endif %}>{{ lider.nome }}</option>{% endfor %}</select></label>
+          <label>Nível<select name="nivel"><option value="">Todos os níveis</option>{% for nivel in niveis %}<option value="{{ nivel }}"{% if filtros.nivel == nivel|string %} selected{% endif %}>Nível {{ nivel }}</option>{% endfor %}</select></label>
+          <label>Cadastro<select name="pendencia"><option value="">Todos</option><option value="sem_lider"{% if filtros.pendencia == 'sem_lider' %} selected{% endif %}>Sem líder definido</option><option value="sem_nivel"{% if filtros.pendencia == 'sem_nivel' %} selected{% endif %}>Sem nível definido</option></select></label>
+          <label>Situação<select name="ativos"><option value="1"{% if filtros.ativos != '0' %} selected{% endif %}>Somente ativos</option><option value="0"{% if filtros.ativos == '0' %} selected{% endif %}>Ativos e inativos</option></select></label>
+        </div>
+        <button class="rh-equipe-button rh-equipe-filter-submit" type="submit">Aplicar filtros</button>
+      </details>
+    </form>
+
+    {% if linhas %}
+    <div class="rh-equipe-table-wrap" role="region" aria-label="Cargos e liderança da equipe" tabindex="0">
+      <table class="rh-equipe-table">
+        <caption class="rh-equipe-sr-only">Situação atual dos cargos, níveis e líderes; datas de promoção registradas.</caption>
+        <thead><tr><th scope="col">Pessoa</th><th scope="col">Cargo e nível</th><th scope="col">Unidade e período</th><th scope="col">Líder direto</th><th scope="col">Última promoção</th><th scope="col"><span class="rh-equipe-sr-only">Histórico</span></th></tr></thead>
+        <tbody>
+        {% for linha in linhas %}{% set pessoa = linha.pessoa %}
+          <tr>
+            <th scope="row" data-label="Pessoa"><a class="rh-equipe-person" href="{{ url_for('rh.carreira_funcionario', id=pessoa.id) }}">{{ pessoa.nome }}</a>{% if not pessoa.ativo %}<small class="rh-equipe-muted">Inativo</small>{% endif %}</th>
+            <td data-label="Cargo e nível"><strong>{{ linha.cargo_nome }}</strong><div>{% if linha.nivel is not none %}<span class="rh-equipe-level">Nível {{ linha.nivel }}</span>{% else %}<small class="rh-equipe-muted">{{ 'Nível não se aplica' if linha.direcao else 'Nível não definido' }}</small>{% endif %}</div></td>
+            <td data-label="Unidade e período">{% if linha.unidades %}{{ linha.unidades|map(attribute='nome')|join(', ') }}{% else %}<span class="rh-equipe-muted">Unidade não definida</span>{% endif %}<small class="rh-equipe-muted">{{ pessoa.periodo or 'Período não definido' }}</small></td>
+            <td data-label="Líder direto">{{ linha.lider_nome or 'Sem líder definido' }}</td>
+            <td data-label="Última promoção">{% if linha.ultima_promocao %}<time datetime="{{ linha.ultima_promocao.data_efetiva.isoformat() }}">{{ linha.ultima_promocao.data_efetiva.strftime('%d/%m/%Y') }}</time>{% else %}<span class="rh-equipe-muted">Sem registro</span>{% endif %}</td>
+            <td class="rh-equipe-history"><a class="rh-equipe-text-link" href="{{ url_for('rh.carreira_funcionario', id=pessoa.id) }}" aria-label="Ver histórico de {{ pessoa.nome }}">Ver histórico <i class="bi bi-arrow-right" aria-hidden="true"></i></a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="rh-equipe-empty"><i class="bi bi-people" aria-hidden="true"></i><h3>Nenhuma pessoa encontrada</h3><p>Tente outro nome ou ajuste os filtros.</p><a class="rh-equipe-button" href="{{ url_for('rh.equipe') }}">Ver equipe ativa</a></div>
+    {% endif %}
+    <footer class="rh-equipe-footnote">O nível mostra o cargo atual, não uma proposta de promoção. “Sem registro” significa que a data da promoção ainda não foi informada no histórico.</footer>
+  </section>
+</main>
+{% endblock %}

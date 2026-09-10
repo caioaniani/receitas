@@ -168,6 +168,8 @@ def itens_para_usuario(usuario, categorias_receitas):
         adicionar('Cargos e salários', 'rh.plano_carreira', 'Equipe',
                   'signpost-split', aliases=['plano de carreira',
                                             'planilha de cargos'])
+        adicionar('Visão da equipe', 'rh.equipe', 'Equipe', 'people',
+                  aliases=['quem é quem', 'níveis', 'promoções', 'visão macro'])
         adicionar('Escala operacional', 'rh.escala', 'Equipe', 'calendar3',
                   aliases=['escala de trabalho', 'turnos'])
         adicionar('Painel RH', 'rh.dashboard', 'Equipe', 'people')

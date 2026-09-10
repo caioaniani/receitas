@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Carreira · {{ pessoa.nome }}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rh-equipe.css') }}?v={{ static_v.get('css/rh-equipe.css', '1') }}">
+<main class="rh-equipe" style="max-width:1080px">
+  <a href="{{ url_for('rh.equipe') }}" class="rh-equipe-text-link mb-3">← Visão da equipe</a>
+  <header class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div><span class="text-muted small">HISTÓRICO DE CARREIRA</span><h1 class="page-title mt-1">{{ pessoa.nome }}</h1>
+    <p class="text-muted mb-0">{{ atual.cargo_nome or 'Cargo não definido' }} · {% if atual.nivel %}Nível {{ atual.nivel }}{% else %}Nível não definido{% endif %}</p></div>
+    <a class="rh-equipe-button" href="{{ url_for('rh.detalhe_funcionario', id=pessoa.id) }}">Abrir ficha</a>
+  </header>
+  <section class="card p-3 mb-4" aria-label="Situação atual">
+    <div class="row g-3">
+      <div class="col-md-4"><small class="text-muted">Líder direto</small><div>{{ pessoa.lider.nome if pessoa.lider else 'Não informado' }}</div></div>
+      <div class="col-md-5"><small class="text-muted">Unidade / período</small><div>{{ pessoa.lojas|map(attribute='nome')|join(', ') or 'Unidade não informada' }} · {{ pessoa.periodo or 'Período não informado' }}</div></div>
+      <div class="col-md-3"><small class="text-muted">Admissão</small><div>{{ pessoa.data_admissao.strftime('%d/%m/%Y') if pessoa.data_admissao else 'Não informada' }}</div></div>
+    </div>
+  </section>
+  <section class="card p-3 mb-4">
+    <h2 class="h5">Movimentações registradas</h2>
+    <p class="text-muted small">A data em que o sistema registrou uma alteração não é necessariamente a data da promoção. Datas antigas não são preenchidas automaticamente.</p>
+    {% for r in registros %}
+    <article class="border-top py-3">
+      <div class="d-flex flex-wrap justify-content-between gap-2"><strong>{{ {'promocao':'Promoção informada','alteracao':'Alteração de cargo','aplicacao_plano':'Aplicação do plano'}.get(r.tipo, r.tipo) }}</strong><span>{% if r.data_efetiva %}Em {{ r.data_efetiva.strftime('%d/%m/%Y') }}{% else %}Data efetiva não informada{% endif %}</span></div>
+      <p class="mb-1">{{ r.cargo_anterior or 'Cargo anterior não informado' }}{% if r.nivel_anterior %} · N{{ r.nivel_anterior }}{% endif %} → {{ r.cargo_novo or 'Sem cargo' }}{% if r.nivel_novo %} · N{{ r.nivel_novo }}{% endif %}</p>
+      <small class="text-muted">Registrado em {{ r.registrado_em|brt('%d/%m/%Y às %H:%M') }} por {{ r.registrado_por_nome or 'Sistema' }}</small>
+      {% if r.observacao %}<p class="small mt-2 mb-0" style="white-space:pre-wrap">{{ r.observacao }}</p>{% endif %}
+    </article>
+    {% else %}<p class="py-3 mb-0">Sem histórico registrado. Isso não significa que a pessoa nunca foi promovida.</p>{% endfor %}
+  </section>
+  <details class="card p-3">
+    <summary class="fw-semibold">Informar quando ocorreu a promoção para o cargo atual</summary>
+    <p class="text-muted small mt-3">Use somente se a promoção já aconteceu. Este registro não promove a pessoa nem altera seu cargo, salário ou acesso.</p>
+    <form method="post" class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-4"><label for="data-efetiva" class="form-label">Data da promoção</label><input id="data-efetiva" type="date" name="data_efetiva" class="form-control" required></div>
+      <div class="col-md-8"><label for="motivo-promocao" class="form-label">Referência ou observação</label><textarea id="motivo-promocao" name="observacao" maxlength="2000" rows="2" class="form-control" placeholder="Ex.: conforme registro do RH de agosto"></textarea></div>
+      <div><button class="rh-equipe-button rh-equipe-button-primary">Registrar data da promoção</button></div>
+    </form>
+  </details>
+</main>
+{% endblock %}

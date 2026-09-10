@@ -13,7 +13,10 @@
         <i class="bi bi-person"></i> {{ func.nome }}
         {% if not func.ativo %}<span class="badge bg-danger">Inativo</span>{% endif %}
     </h1>
+    <div class="d-flex gap-2 flex-wrap">
+    {% if current_user.is_dono() %}<a href="{{ url_for('rh.carreira_funcionario', id=func.id) }}" class="btn-pill">Histórico de carreira</a>{% endif %}
     {{ ui.botao_voltar(url_for('rh.funcionarios')) }}
+    </div>
 </div>
 
 <section class="treino-rh-card" aria-labelledby="treino-rh-titulo">

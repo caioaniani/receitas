@@ -4,6 +4,7 @@
 
 {% block content %}
 <h1 class="page-title mb-3"><i class="bi bi-people-fill"></i> Dashboard RH</h1>
+{% if current_user.is_dono() %}<a class="btn-pill btn-pill-primary mb-3" href="{{ url_for('rh.equipe') }}">Visão da equipe · cargos, níveis e líderes</a>{% endif %}
 
 <!-- Resumo Geral -->
 <div class="row g-3 mb-4">

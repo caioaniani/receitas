@@ -22,6 +22,7 @@ from app.models import (
     PlanoCarreiraValidacao,
     TreinoVideo,
 )
+from app.services.rh_cargos import encontrar_cargo_equivalente, nome_cargo_exibicao
 
 MAX_BYTES = 4 * 1024 * 1024
 DECISOES = ('Em avaliação', 'Aprovado', 'Proposta final')
@@ -257,8 +258,8 @@ def _vincular_videos(dados):
 
 def _prever_vinculos_cargos(dados):
     """Conta vínculos por nome sem alterar a tabela contratual de cargos."""
-    existentes = {_norm(c.nome) for c in Cargo.query.all()}
-    nomes = {_norm(f['cargo_proposto']) for f in dados['faixas']}
+    existentes = {_norm(nome_cargo_exibicao(c.nome)) for c in Cargo.query.filter_by(ativo=True).all()}
+    nomes = {_norm(nome_cargo_exibicao(f['cargo_proposto'])) for f in dados['faixas']}
     nomes.discard('')
     return {
         'cargos_vinculados': len(nomes & existentes),
@@ -281,15 +282,21 @@ def cargo_da_faixa(familia, nivel):
             .first())
 
 
-def aplicar_cargo_aprovado(enquadramento):
+def aplicar_cargo_aprovado(enquadramento, *, actor_id=None):
     """Aplica no funcionário o Cargo ligado à faixa já aprovada."""
     cargo = cargo_da_faixa(enquadramento.familia, enquadramento.nivel)
     funcionario = enquadramento.funcionario
     if not cargo or not funcionario:
         return None
+    from app.services import rh_movimentacao
+    antes = rh_movimentacao.snapshot(funcionario)
     funcionario.cargo = cargo
+    funcionario.cargo_id = cargo.id
     funcionario.funcao = cargo.nome
     funcionario.salario_base = cargo.salario_base
+    rh_movimentacao.registrar_mudanca(
+        funcionario, antes, actor_id=actor_id, origem='decisao_plano',
+        tipo='aplicacao_plano')
     return cargo
 
 
@@ -347,11 +354,19 @@ def prever(raw: bytes):
 
 
 def aplicar(raw: bytes, nome_arquivo: str, usuario_id=None):
+    from app.services import rh_movimentacao
     dados = prever(raw)
     decisoes_atuais = {e.funcionario_id: e.decisao
                        for e in PlanoCarreiraEnquadramento.query.all()
                        if e.decisao}
     try:
+        # Fotografar antes de substituir faixas: a data da importação não
+        # passa a ser data de promoção e os eventos anteriores sobrevivem.
+        antes_por_pessoa = {
+            f.id: rh_movimentacao.snapshot(f) for f in Funcionario.query.filter(
+                Funcionario.id.in_([e['funcionario_id'] for e in dados['enquadramentos']
+                                   if e.get('funcionario_id')])).all()
+        }
         for model in (PlanoCarreiraConteudo, PlanoCarreiraEnquadramento,
                       PlanoCarreiraCargoVinculo,
                       PlanoCarreiraFaixa, PlanoCarreiraRegra,
@@ -368,13 +383,15 @@ def aplicar(raw: bytes, nome_arquivo: str, usuario_id=None):
         # Cada faixa recebe um Cargo real. Cargos que já existem são
         # preservados (inclusive o salário vigente); os ausentes nascem com a
         # base de referência da faixa e passam a aparecer no seletor do RH.
-        cargos_por_nome = {_norm(c.nome): c for c in Cargo.query.all()}
+        cargos_existentes = Cargo.query.all()
+        cargos_por_nome = {_norm(c.nome): c for c in cargos_existentes}
         cargos_por_faixa = {}
         for item in dados['faixas']:
             faixa = PlanoCarreiraFaixa(importacao_id=imp.id, **item)
             db.session.add(faixa)
             chave_nome = _norm(item['cargo_proposto'])
-            cargo = cargos_por_nome.get(chave_nome)
+            cargo = (encontrar_cargo_equivalente(item['cargo_proposto'], cargos_existentes)
+                     or cargos_por_nome.get(chave_nome))
             if cargo is None:
                 cargo = Cargo(
                     nome=item['cargo_proposto'],
@@ -384,6 +401,7 @@ def aplicar(raw: bytes, nome_arquivo: str, usuario_id=None):
                 )
                 db.session.add(cargo)
                 cargos_por_nome[chave_nome] = cargo
+                cargos_existentes.append(cargo)
             db.session.flush()
             db.session.add(PlanoCarreiraCargoVinculo(
                 faixa_id=faixa.id, cargo_id=cargo.id))
@@ -414,8 +432,13 @@ def aplicar(raw: bytes, nome_arquivo: str, usuario_id=None):
                     Funcionario, linha['funcionario_id'])
                 if cargo and funcionario:
                     funcionario.cargo = cargo
+                    funcionario.cargo_id = cargo.id
                     funcionario.funcao = cargo.nome
                     funcionario.salario_base = cargo.salario_base
+                    rh_movimentacao.registrar_mudanca(
+                        funcionario, antes_por_pessoa[funcionario.id],
+                        actor_id=usuario_id, origem='importacao_plano',
+                        tipo='aplicacao_plano')
         db.session.commit()
     except Exception:
         db.session.rollback()
