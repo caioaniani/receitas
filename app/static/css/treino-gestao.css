@@ -1,0 +1,96 @@
+/* Treinamento e pessoas: navegação compartilhada, sem alterar o player. */
+.ui-v2 .people-workspace-nav {
+  display: flex; flex-wrap: wrap; gap: 4px 20px; max-width: 1240px;
+  margin: 0 auto 28px; padding: 0 0 12px; border-bottom: 1px solid var(--v2-line);
+}
+.ui-v2 .people-workspace-nav a {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px;
+  padding: 8px 12px; border-radius: 8px; color: var(--v2-muted);
+  font-size: 14px; font-weight: 600; text-decoration: none;
+}
+.ui-v2 .people-workspace-nav a:hover,
+.ui-v2 .people-workspace-nav a[aria-current] { color: var(--v2-accent); background: var(--v2-accent-soft); }
+.ui-v2 .people-workspace-nav a:focus-visible,
+.ui-v2 .treino-manager-page :is(a, button, input, select, summary):focus-visible,
+.ui-v2 .treino-progression-page :is(a, button, input, select, summary):focus-visible {
+  outline: 3px solid var(--v2-accent); outline-offset: 3px;
+}
+.ui-v2 :is(.treino-manager-page, .treino-progression-page) .treino-heading { min-height: auto; margin-bottom: 28px; }
+.ui-v2 :is(.treino-manager-page, .treino-progression-page) .treino-heading h1 { font-size: clamp(30px, 3.4vw, 42px); }
+.ui-v2 :is(.treino-manager-page, .treino-progression-page) .treino-heading p { font-size: 15px; line-height: 1.6; }
+.ui-v2 .treino-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 28px; gap: 12px; }
+.ui-v2 .treino-overview a {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  border: 1px solid var(--v2-line); border-radius: 12px; background: var(--v2-surface);
+  padding: 20px; color: var(--v2-ink); text-decoration: none;
+}
+.ui-v2 .treino-overview a[aria-current], .ui-v2 .treino-overview a:hover { border-color: var(--v2-accent); background: var(--v2-accent-soft); }
+.ui-v2 .treino-overview span { font-size: 14px; font-weight: 650; }
+.ui-v2 .treino-overview strong { font-size: 32px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.ui-v2 .treino-overview small { font-size: 12px; line-height: 1.5; color: var(--v2-muted); }
+.ui-v2 .treino-overview .is-attention strong { color: var(--v2-warning); }
+.ui-v2 .treino-team-section { padding: 24px; }
+.ui-v2 .treino-team-section .treino-section-heading h2 { font-size: 25px; }
+.ui-v2 .treino-team-section .treino-section-heading p { margin: 6px 0 0; font-size: 14px; color: var(--v2-muted); }
+.ui-v2 .treino-team-section .treino-section-heading > span { font-size: 13px; }
+.ui-v2 .treino-manager-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; padding: 0 0 24px; margin-bottom: 0; border-bottom: 1px solid var(--v2-line); }
+.ui-v2 .treino-manager-filters label { display: grid; gap: 7px; font-size: 13px; font-weight: 600; flex: 1 1 210px; }
+.ui-v2 .treino-manager-filters .treino-search-field { flex: 2 1 260px; }
+.ui-v2 .treino-manager-filters :is(input, select) { min-height: 44px; font-size: 15px; border-color: var(--v2-line); background-color: var(--v2-surface); color: var(--v2-ink); }
+.ui-v2 .treino-manager-page :is(.treino-primary-action, .treino-link-button) { min-height: 44px; font-size: 13px; display: inline-flex; gap: 8px; align-items: center; justify-content: center; white-space: normal; }
+.ui-v2 .treino-team-card { display: grid; grid-template-columns: minmax(190px, 1.2fr) minmax(190px, 1fr) minmax(110px, .6fr) 154px; gap: 22px; align-items: center; padding: 24px 0; border-bottom: 1px solid var(--v2-line); }
+.ui-v2 .treino-team-card:last-child { border-bottom: 0; padding-bottom: 0; }
+.ui-v2 .treino-team-card > *, .ui-v2 .treino-team-identity > * { min-width: 0; }
+.ui-v2 .treino-team-identity { display: flex; gap: 12px; align-items: center; }
+.ui-v2 .treino-team-identity .treino-avatar { width: 38px; height: 38px; flex: 0 0 38px; font-size: 16px; background: var(--v2-accent-soft); }
+.ui-v2 .treino-team-identity h3 { font: 650 15px/1.5 var(--font-sans, sans-serif); margin: 0 0 3px; overflow-wrap: anywhere; }
+.ui-v2 .treino-team-identity h3 a { text-decoration: none; color: var(--v2-ink); }
+.ui-v2 .treino-team-identity h3 a:hover { text-decoration: underline; }
+.ui-v2 .treino-team-identity p { font-size: 12px; line-height: 1.6; color: var(--v2-muted); margin: 0; }
+.ui-v2 .treino-team-learning > div:first-child { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px; margin-bottom: 8px; }
+.ui-v2 .treino-team-learning strong { font-size: 14px; }
+.ui-v2 .treino-team-learning span, .ui-v2 .treino-team-card small { font-size: 12px; line-height: 1.5; color: var(--v2-muted); }
+.ui-v2 .treino-team-learning .treino-progress { height: 7px; margin-bottom: 8px; }
+.ui-v2 .treino-team-state { display: grid; justify-items: start; gap: 8px; }
+.ui-v2 .treino-team-card .treino-status { font-size: 12px; white-space: normal; }
+.ui-v2 .treino-team-actions { display: grid; gap: 4px; text-align: center; }
+.ui-v2 .treino-team-actions > a:last-child { font-size: 12px; min-height: 44px; display: flex; gap: 6px; align-items: center; justify-content: center; color: var(--v2-accent); text-decoration: none; }
+.ui-v2 .treino-team-actions > a:hover { text-decoration: underline; }
+.ui-v2 .treino-manager-help { margin: 20px 0; color: var(--v2-muted); font-size: 14px; line-height: 1.65; }
+.ui-v2 .treino-manager-help summary { padding: 12px 0; cursor: pointer; }
+.ui-v2 .treino-manager-help p { max-width: 850px; }
+.ui-v2 .treino-manager-help nav { display: flex; flex-wrap: wrap; gap: 20px; }
+.ui-v2 .treino-manager-help a { color: var(--v2-accent); min-height: 44px; }
+.ui-v2 .treino-progression-page .treino-progression-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ui-v2 .treino-progression-page .treino-progression-filters :is(input, select) { min-height: 44px; font-size: 15px; }
+.ui-v2 .treino-progression-page .treino-progression-filters label > span { font-size: 13px; }
+.ui-v2 .treino-progression-page .treino-scope-note { font-size: 13px; }
+.ui-v2 .treino-progression-page :is(.treino-progression-identity > strong, .treino-progression-required > strong) { font-size: 14px; }
+.ui-v2 .treino-progression-page :is(.treino-person-meta, .treino-status, .treino-progression-person small, .treino-progression-activity strong) { font-size: 12px; }
+.ui-v2 .treino-progression-page .treino-required-badges { gap: 6px; }
+.ui-v2 .treino-progression-page .treino-observe-action { min-height: 44px; }
+@media (max-width: 1200px) {
+  .ui-v2 .treino-team-card { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 24px; }
+  .ui-v2 .treino-team-state { padding-left: 50px; }
+  .ui-v2 .treino-team-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+}
+@media (min-width: 701px) and (max-width: 1050px) {
+  .ui-v2 .treino-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ui-v2 .treino-manager-page .treino-heading { align-items: flex-start; flex-direction: column; gap: 16px; }
+}
+@media (max-width: 700px) {
+  .ui-v2 .people-workspace-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-bottom: 24px; }
+  .ui-v2 .people-workspace-nav a { padding: 8px; font-size: 12px; line-height: 1.45; }
+  .ui-v2 .treino-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .ui-v2 .treino-overview a { padding: 16px 14px; }
+  .ui-v2 .treino-overview strong { font-size: 28px; }
+  .ui-v2 .treino-overview small { display: none; }
+  .ui-v2 .treino-team-section { padding: 18px; }
+  .ui-v2 .treino-team-card { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 24px 0; }
+  .ui-v2 .treino-team-state { padding-left: 0; display: flex; flex-wrap: wrap; align-items: center; }
+  .ui-v2 .treino-team-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .ui-v2 .treino-manager-filters label { flex-basis: 100%; }
+  .ui-v2 .treino-manager-filters :is(input, select) { font-size: 16px; }
+  .ui-v2 .treino-manager-filters button { flex: 1; }
+  .ui-v2 .treino-progression-page .treino-progression-filters { grid-template-columns: minmax(0, 1fr); }
+}

@@ -341,4 +341,5 @@ def test_home_destaca_onboarding(app):
         uid = u.id
     c = _login(app, uid)
     txt = c.get('/treino/').get_data(as_text=True)
-    assert 'Onboarding do seu cargo' in txt and 'Caixa Onboarding' in txt
+    assert 'Sua formação' in txt and 'Caixa Onboarding' in txt
+    assert 'Obrigatórios para o seu cargo' in txt

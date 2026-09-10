@@ -19,6 +19,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required
+from sqlalchemy.orm import selectinload
 
 from app.blueprints.treino import treino_bp
 from app.decorators import admin_required
@@ -306,10 +307,21 @@ def gestor_home():
             Funcionario.nome).all()
     else:
         equipe = lideranca.liderados_do(gestor)
+    # Precarrega unidades/cargos apenas das pessoas já autorizadas acima.
+    if equipe:
+        equipe = (Funcionario.query.filter(Funcionario.id.in_([f.id for f in equipe]))
+                  .options(selectinload(Funcionario.lojas), selectinload(Funcionario.cargo))
+                  .order_by(Funcionario.nome).all())
     trilhas = TreinoTrilha.query.filter_by(ativa=True).all()
     visao_equipe = painel.painel_equipe(equipe, _temp())
+    busca = (request.args.get('q') or '').strip()[:120]
+    status = (request.args.get('status') or '').strip().lower()
+    if status not in (set(visao_equipe['contagens']) - {'precisam_atencao'}) | {'atencao'}:
+        status = ''
+    linhas = painel.filtrar_equipe(visao_equipe['linhas'], busca, status)
     return render_template('treino/gestor.html', equipe=equipe, trilhas=trilhas,
                            unidade=unidade, painel=visao_equipe,
+                           linhas=linhas, busca=busca, filtro_status=status,
                            is_admin=is_admin,
                            can_open_rh=current_user.is_dono())
 
@@ -1345,15 +1357,20 @@ def gestor_progressao():
         equipe.append(funcionario)
 
     visao = painel.painel_equipe(equipe, _temp())
+    ids_acompanhaveis = set() if is_admin else {
+        pessoa.id for pessoa in lideranca.liderados_do(gestor)}
     for item in visao['linhas']:
         item['unidade'] = unidades_por_id.get(
             principais.get(item['funcionario'].id))
+        item['pode_ver_progresso'] = is_admin or item['funcionario'].id in ids_acompanhaveis
     linhas = [item for item in visao['linhas']
               if not status or item['status'] == status]
+    busca = (request.args.get('q') or '').strip()[:120]
+    linhas = painel.filtrar_equipe(linhas, busca)
     return render_template(
         'treino/gestor_progressao.html', linhas=linhas, painel=visao,
         unidades=unidades, is_admin=visao_geral, escopo=escopo,
-        filtros={'cadastro': cadastro, 'status': status,
+        filtros={'cadastro': cadastro, 'status': status, 'q': busca,
                  'unidade_id': unidade_id},
     )
 

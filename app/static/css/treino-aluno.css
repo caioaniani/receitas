@@ -1,0 +1,162 @@
+/* Aprendizado e acompanhamento individual. Carregar após treino-v2.css.
+   As etapas mantêm texto e estado visíveis no celular; detalhes usam o
+   disclosure nativo (teclado/Enter/Espaço), sem depender de JavaScript. */
+.ui-v2 .treino-learning-page { font-size: 14px; line-height: 1.5; }
+.ui-v2 .treino-learning-page .treino-heading h1 { line-height: 1.12; overflow-wrap: anywhere; }
+.ui-v2 .treino-learning-page .treino-heading p { line-height: 1.6; }
+.ui-v2 .treino-learning-page .treino-eyebrow { font-size: 11px; letter-spacing: .1em; }
+.ui-v2 .treino-learning-page .treino-primary-action,
+.ui-v2 .treino-learning-page .treino-secondary-action { min-height: 44px; padding: 12px 17px; font-size: 13px; line-height: 1.3; }
+.ui-v2 .treino-learning-page .treino-back { min-height: 36px; font-size: 13px; }
+.ui-v2 .treino-learning-page :is(a, button, summary):focus-visible { outline: 3px solid var(--v2-accent); outline-offset: 4px; }
+.ui-v2 .treino-learning-page .treino-next a:focus-visible { outline-color: #fff; }
+.ui-v2 .treino-learning-page .treino-status { max-width: 100%; padding: 5px 10px; font-size: 11px; line-height: 1.45; white-space: normal; }
+.ui-v2 .treino-learning-page .treino-progress { height: 8px; background: var(--v2-line); }
+.ui-v2 .treino-learning-page .treino-notice { font-size: 13px; line-height: 1.6; }
+.ui-v2 .treino-learning-page .treino-next { padding: 30px; gap: 30px; }
+.ui-v2 .treino-learning-page .treino-next h2 { max-width: 720px; margin: 9px 0; line-height: 1.2; overflow-wrap: anywhere; }
+.ui-v2 .treino-learning-page .treino-next p { font-size: 14px; }
+.ui-v2 .treino-next-progress { max-width: 420px; margin-top: 19px; font-size: 12px; }
+.ui-v2 .treino-next-progress .treino-progress-light { margin-top: 7px; background: rgba(255,255,255,.22); }
+.ui-v2 .treino-learning-page .treino-role-progress { padding: 20px; gap: 24px; }
+.ui-v2 .treino-role-progress-copy { flex: 1; min-width: 0; }
+.ui-v2 .treino-learning-page .treino-role-progress strong { font-size: 15px; }
+.ui-v2 .treino-role-progress-copy .treino-progress { max-width: 560px; margin-top: 12px; }
+.ui-v2 .treino-learning-page .treino-section-heading { align-items: center; }
+.ui-v2 .treino-learning-page .treino-section-heading h2 { font-size: 25px; line-height: 1.3; overflow-wrap: anywhere; }
+.ui-v2 .treino-learning-page .treino-section-count { display: inline; flex-shrink: 0; font-size: 12px; }
+.ui-v2 .treino-course-group + .treino-course-group { margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--v2-line); }
+.ui-v2 .treino-group-title { margin: 0 0 15px; display: flex; align-items: center; gap: 9px; font-size: 14px; line-height: 1.5; font-weight: 700; }
+.ui-v2 .treino-group-title > span { min-width: 24px; padding: 2px 6px; border-radius: 6px; background: var(--v2-surface-muted); color: var(--v2-muted); font-size: 12px; text-align: center; }
+.ui-v2 .treino-learning-page .treino-course-grid { gap: 16px; }
+.ui-v2 .treino-learning-page .treino-course { min-height: 270px; padding: 20px; background: var(--v2-surface); }
+.ui-v2 .treino-learning-page .treino-course.is-required { border-top: 3px solid var(--v2-accent); }
+.ui-v2 .treino-learning-page .treino-course:hover { background: var(--v2-surface-muted); }
+.ui-v2 .treino-learning-page .treino-course-top { gap: 10px; }
+.ui-v2 .treino-learning-page .treino-course h3 { margin: 18px 0 8px; font-size: 18px; line-height: 1.35; overflow-wrap: anywhere; }
+.ui-v2 .treino-learning-page .treino-course p { margin: 0; color: var(--v2-muted); font-size: 13px; line-height: 1.6; }
+.ui-v2 .treino-course-footer { margin-top: auto; padding-top: 24px; }
+.ui-v2 .treino-course-progress-label { margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; color: var(--v2-muted); font-size: 12px; }
+.ui-v2 .treino-course-progress-label strong { color: var(--v2-ink); font-size: 13px; }
+.ui-v2 .treino-learning-page .treino-course small { display: block; margin-top: 7px; font-size: 12px; }
+.ui-v2 .treino-course-link { margin-top: 19px; display: flex; justify-content: space-between; align-items: center; color: var(--v2-accent); font-size: 13px; font-weight: 750; }
+.ui-v2 .treino-library-note { margin: 22px 0 0; display: flex; align-items: flex-start; gap: 8px; color: var(--v2-muted); font-size: 12px; }
+.ui-v2 .treino-library-note > i { flex-shrink: 0; }
+.ui-v2 .treino-learning-page .treino-empty { font-size: 14px; line-height: 1.6; }
+.ui-v2 .treino-learning-page .treino-empty > i { display: block; margin-bottom: 12px; color: var(--v2-accent); font-size: 28px; }
+.ui-v2 .treino-learning-page .treino-empty strong { display: block; color: var(--v2-ink); }
+.ui-v2 .treino-learning-page .treino-empty p { max-width: 520px; margin: 5px auto 0; font-size: 13px; }
+.ui-v2 .treino-learning-page .treino-game > summary { min-height: 68px; }
+.ui-v2 .treino-learning-page .treino-game > summary small { font-size: 12px; }
+.ui-v2 .treino-game-summary > i { color: var(--v2-muted); }
+.ui-v2 .treino-game[open] .treino-game-summary > i { transform: rotate(180deg); }
+.ui-v2 .treino-learning-page .treino-game-body { font-size: 13px; }
+.ui-v2 .treino-learning-page .treino-game-body nav { flex-wrap: wrap; }
+.ui-v2 .treino-learning-page .treino-game-body a { min-height: 40px; display: inline-flex; align-items: center; }
+
+/* O percentual do módulo inclui as três etapas, além do avanço nas aulas. */
+.ui-v2 .treino-learning-page .treino-course-score { min-width: 150px; padding: 20px; }
+.ui-v2 .treino-learning-page .treino-course-score strong { font-size: 38px; }
+.ui-v2 .treino-learning-page .treino-course-score span { margin-top: 8px; font-size: 12px; }
+.ui-v2 .treino-learning-page .treino-module-progress { padding: 22px; }
+.ui-v2 .treino-progress-heading { margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ui-v2 .treino-progress-heading h2 { margin: 0; font-size: 15px; font-weight: 750; }
+.ui-v2 .treino-stage-grid { margin-top: 20px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
+.ui-v2 .treino-stage { min-width: 0; display: flex; align-items: flex-start; gap: 10px; color: var(--v2-muted); }
+.ui-v2 .treino-stage > i { margin-top: 1px; color: var(--v2-muted); font-size: 18px; }
+.ui-v2 .treino-stage > div { min-width: 0; display: grid; gap: 3px; }
+.ui-v2 .treino-stage strong { color: var(--v2-ink); font-size: 13px; font-weight: 700; }
+.ui-v2 .treino-stage span { font-size: 12px; }
+.ui-v2 .treino-stage.is-ok > i { color: var(--v2-success); }
+.ui-v2 .treino-resume { margin-bottom: 24px; padding: 22px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border: 1px solid var(--v2-line); border-left: 4px solid var(--v2-accent); border-radius: var(--v2-radius); background: var(--v2-accent-soft); }
+.ui-v2 .treino-resume > div { min-width: 0; }
+.ui-v2 .treino-resume h2 { margin: 4px 0 6px; font-size: 20px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
+.ui-v2 .treino-resume p { margin: 0; color: var(--v2-muted); font-size: 13px; }
+.ui-v2 .treino-resume > a { flex-shrink: 0; }
+.ui-v2 .treino-learning-page .treino-lesson { min-height: 84px; padding: 17px; gap: 15px; }
+.ui-v2 .treino-learning-page .treino-lesson.is-next { background: var(--v2-accent-soft); }
+.ui-v2 .treino-learning-page a.treino-lesson:hover { background: var(--v2-surface-muted); }
+.ui-v2 .treino-learning-page .treino-lesson-number { width: 38px; height: 38px; font-size: 12px; }
+.ui-v2 .treino-learning-page .treino-lesson-main { gap: 5px; }
+.ui-v2 .treino-learning-page .treino-lesson-main strong { overflow: visible; font-size: 15px; line-height: 1.45; white-space: normal; overflow-wrap: anywhere; }
+.ui-v2 .treino-learning-page .treino-lesson-main small { font-size: 12px; line-height: 1.5; }
+.ui-v2 .treino-learning-page .treino-lesson-play { flex-shrink: 0; }
+.ui-v2 .treino-quiz-lesson { scroll-margin-top: 90px; }
+.ui-v2 .treino-learning-page .treino-question label { min-height: 44px; padding: 10px; border-radius: 8px; background: var(--v2-surface-muted); font-size: 14px; line-height: 1.6; cursor: pointer; }
+.ui-v2 .treino-learning-page .treino-question label input { margin-right: 6px; accent-color: var(--v2-accent); }
+.ui-v2 .treino-learning-page .treino-question + #enviar { margin-top: 18px; }
+
+/* Resumo sempre visível; histórico de cada módulo sob demanda. */
+.ui-v2 .treino-person-overview { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(230px,.8fr); gap: 22px 30px; }
+.ui-v2 .treino-person-overview-main h2 { margin: 8px 0 16px; display: flex; align-items: baseline; gap: 10px; font-size: 16px; font-weight: 500; }
+.ui-v2 .treino-person-overview-main h2 > strong { font: 700 42px/1 Georgia,serif; color: var(--v2-accent); }
+.ui-v2 .treino-person-overview-main > p { margin: 10px 0 0; color: var(--v2-muted); font-size: 13px; }
+.ui-v2 .treino-person-last-activity { padding-left: 28px; display: flex; align-items: center; gap: 12px; border-left: 1px solid var(--v2-line); }
+.ui-v2 .treino-person-last-activity > i { color: var(--v2-accent); font-size: 22px; }
+.ui-v2 .treino-person-last-activity > div { display: grid; gap: 6px; }
+.ui-v2 .treino-person-last-activity span { color: var(--v2-muted); font-size: 12px; }
+.ui-v2 .treino-person-last-activity strong { font-size: 14px; }
+.ui-v2 .treino-progress-note { grid-column: 1/-1; margin: 0; padding-top: 15px; border-top: 1px solid var(--v2-line); color: var(--v2-muted); font-size: 12px; }
+.ui-v2 .treino-person-modules-heading { margin: 30px 0 18px; }
+.ui-v2 .treino-person-module { scroll-margin-top: 90px; }
+.ui-v2 .treino-person-module .treino-section-heading { margin-bottom: 22px; }
+.ui-v2 .treino-person-module .treino-section-heading > .treino-status { color: var(--v2-muted); }
+.ui-v2 .treino-person-module .treino-section-heading > .treino-status.is-done { color: var(--v2-success); }
+.ui-v2 .treino-person-module .treino-section-heading > .treino-status.is-progress { color: var(--v2-info); }
+.ui-v2 .treino-module-overview-progress { display: grid; grid-template-columns: 210px minmax(0,1fr); align-items: center; gap: 18px; font-size: 13px; color: var(--v2-muted); }
+.ui-v2 .treino-person-stages { margin-bottom: 22px; }
+.ui-v2 .treino-person-module-details { border-top: 1px solid var(--v2-line); }
+.ui-v2 .treino-person-module-details > summary { min-height: 50px; padding-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 15px; color: var(--v2-accent); font-size: 13px; font-weight: 700; list-style: none; cursor: pointer; }
+.ui-v2 .treino-person-module-details > summary::-webkit-details-marker { display: none; }
+.ui-v2 .treino-person-module-details[open] > summary > i { transform: rotate(180deg); }
+.ui-v2 .treino-person-module-body { padding-top: 18px; }
+.ui-v2 .treino-person-module-body > h3 { margin: 26px 0 12px; font-size: 15px; font-weight: 750; }
+.ui-v2 .treino-person-module-body > h3:first-child { margin-top: 0; }
+.ui-v2 .treino-person-module-body > p { margin-bottom: 0; font-size: 13px; }
+
+@media (max-width: 980px) {
+  .ui-v2 .treino-learning-page .treino-course-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .ui-v2 .treino-stage-grid { gap: 18px; }
+  .ui-v2 .treino-stage { gap: 8px; }
+  .ui-v2 .treino-person-overview { grid-template-columns: 1fr; gap: 18px; }
+  .ui-v2 .treino-person-last-activity { padding: 0; border: 0; }
+}
+@media (max-width: 650px) {
+  .ui-v2 .treino-learning-page .treino-heading { gap: 18px; }
+  .ui-v2 .treino-learning-page .treino-heading-actions > a { width: 100%; }
+  .ui-v2 .treino-learning-page .treino-next { padding: 22px; gap: 22px; }
+  .ui-v2 .treino-learning-page .treino-next h2 { font-size: 28px; }
+  .ui-v2 .treino-learning-page .treino-next .treino-primary-action { width: 100%; }
+  .ui-v2 .treino-learning-page .treino-role-progress { align-items: stretch; flex-direction: column; padding: 18px; gap: 13px; }
+  .ui-v2 .treino-learning-page .treino-section-heading { flex-wrap: wrap; gap: 8px 16px; }
+  .ui-v2 .treino-learning-page .treino-section-heading h2 { font-size: 23px; }
+  .ui-v2 .treino-learning-page .treino-course-grid { grid-template-columns: 1fr; }
+  .ui-v2 .treino-learning-page .treino-course { min-height: 0; padding: 18px; }
+  .ui-v2 .treino-learning-page .treino-course p { font-size: 14px; }
+  .ui-v2 .treino-course-footer { padding-top: 20px; }
+  .ui-v2 .treino-learning-page .treino-game > summary { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .ui-v2 .treino-learning-page .treino-game-summary { width: 100%; justify-content: space-between; }
+  .ui-v2 .treino-learning-page .treino-heading-course { align-items: stretch; }
+  .ui-v2 .treino-learning-page .treino-course-score { min-width: 0; padding: 15px; display: flex; align-items: center; gap: 12px; text-align: left; }
+  .ui-v2 .treino-learning-page .treino-course-score strong { font-size: 30px; }
+  .ui-v2 .treino-learning-page .treino-course-score span { margin: 0; }
+  .ui-v2 .treino-learning-page .treino-module-progress { padding: 18px; }
+  .ui-v2 .treino-stage-grid { grid-template-columns: 1fr; gap: 16px; }
+  .ui-v2 .treino-stage { gap: 12px; }
+  .ui-v2 .treino-resume { padding: 18px; align-items: stretch; flex-direction: column; gap: 18px; }
+  .ui-v2 .treino-learning-page .treino-lesson { display: grid; grid-template-columns: 34px minmax(0,1fr); align-items: start; padding: 15px 12px; gap: 9px 12px; }
+  .ui-v2 .treino-learning-page .treino-lesson-number { width: 34px; height: 34px; }
+  .ui-v2 .treino-learning-page .treino-lesson .treino-status { display: inline-flex; grid-column: 2; justify-self: start; }
+  .ui-v2 .treino-learning-page .treino-lesson-play { grid-column: 2; }
+  .ui-v2 .treino-learning-page .treino-lesson > .treino-secondary-action { grid-column: 2; justify-self: stretch; margin-top: 3px; }
+  .ui-v2 .treino-person-detail .treino-lesson:not(:has(.treino-lesson-number)) { grid-template-columns: minmax(0,1fr); }
+  .ui-v2 .treino-person-detail .treino-lesson:not(:has(.treino-lesson-number)) > .treino-status { grid-column: 1; }
+  .ui-v2 .treino-learning-page .treino-quiz-box { padding: 18px; }
+  .ui-v2 .treino-person-overview-main h2 { flex-wrap: wrap; row-gap: 5px; }
+  .ui-v2 .treino-module-overview-progress { grid-template-columns: 1fr; gap: 9px; }
+  .ui-v2 .treino-person-module .treino-section-heading { margin-bottom: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-v2 .treino-learning-page .treino-course { transition: none; }
+  .ui-v2 .treino-learning-page .treino-course:hover { transform: none; }
+}

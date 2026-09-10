@@ -3,69 +3,65 @@
 {% block title %}Funcionários{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rh-equipe.css') }}?v={{ static_v.get('css/rh-equipe.css', '1') }}">
+<div class="rh-equipe rh-pessoas">
+<header class="rh-equipe-heading">
     <div>
-        <h1 class="page-title">{{ 'acessos dos funcionários' if view == 'acessos' else 'funcionários' }}</h1>
-        {% if view == 'acessos' %}<p class="text-muted mb-0">Confira quem já tem conta antes de criar novos logins.</p>{% endif %}
+        <span class="rh-equipe-eyebrow">Gestão de pessoas</span>
+        <h1>{{ 'Acessos da equipe' if view == 'acessos' else 'Cadastros da equipe' }}</h1>
+        <p>{{ 'Organize as contas e acompanhe quem ainda precisa entrar no sistema.' if view == 'acessos' else 'Encontre cada pessoa, confira seus dados e mantenha os cadastros em dia.' }}</p>
     </div>
-    <div class="page-actions">
-        {% if current_user.is_dono() %}<a href="{{ url_for('rh.equipe') }}" class="btn-pill">Visão da equipe</a>{% endif %}
-        {% if view == 'acessos' %}
-        <a href="{{ url_for('rh.funcionarios') }}" class="btn-pill">
-            <i class="bi bi-arrow-left"></i> voltar aos cadastros
+    {% if view != 'acessos' %}
+    <div class="rh-equipe-actions">
+        <a href="{{ url_for('rh.novo_funcionario') }}" class="rh-equipe-button rh-equipe-button-primary">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i> Novo funcionário
         </a>
-        {% else %}
-        {% if current_user.is_owner %}
-        <a href="{{ url_for('rh.funcionarios', view='acessos') }}" class="btn-pill">
-            <i class="bi bi-person-check"></i> gerenciar acessos
-        </a>
-        {% endif %}
-        <a href="{{ url_for('rh.novo_funcionario') }}" class="btn-pill btn-pill-primary">
-            <i class="bi bi-plus-lg"></i> novo funcionário
-        </a>
-        {% endif %}
     </div>
-</div>
+    {% endif %}
+</header>
+
+{% if current_user.is_dono() %}
+<nav class="rh-pessoas-tabs" aria-label="Gestão de pessoas">
+    <a href="{{ url_for('rh.equipe') }}">Visão da equipe</a>
+    <a href="{{ url_for('rh.funcionarios') }}"{% if view != 'acessos' %} aria-current="page"{% endif %}>Cadastros</a>
+    <a href="{{ url_for('rh.funcionarios', view='acessos') }}"{% if view == 'acessos' %} aria-current="page"{% endif %}>Acessos</a>
+    <a href="{{ url_for('rh.plano_carreira') }}">Plano de carreira <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
+</nav>
+{% endif %}
 
 <!-- Filtros -->
-<form method="GET" class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+<form method="GET" class="rh-pessoas-scope" aria-label="Selecionar equipe">
     <input type="hidden" name="view" value="{{ view }}">
     {% if view == 'acessos' %}<input type="hidden" name="acesso" value="{{ filtro_acesso }}">{% endif %}
-    <select name="loja" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
-        <option value="">todas as lojas</option>
+    <label for="rh-pessoas-loja">Unidade</label>
+    <select id="rh-pessoas-loja" name="loja" class="form-select form-select-sm">
+        <option value="">Todas as unidades</option>
         {% for l in lojas %}
         <option value="{{ l.id }}" {{ 'selected' if loja_id == l.id }}>{{ l.nome }}</option>
         {% endfor %}
     </select>
-    <label class="chip" style="cursor:pointer;">
+    <label class="rh-pessoas-checkbox" for="chk-ativos">
         <input class="form-check-input m-0" type="checkbox" name="ativos" value="1"
-               id="chk-ativos" {{ 'checked' if apenas_ativos }} onchange="this.form.submit()">
-        apenas ativos
+               id="chk-ativos" {{ 'checked' if apenas_ativos }}>
+        Apenas ativos
     </label>
+    <input type="hidden" name="ativos" value="0">
+    <button type="submit" class="rh-equipe-button">Aplicar</button>
 </form>
 
 {% if view == 'acessos' %}
-<div class="card mb-3">
-    <div class="card-body">
-        <div class="d-flex gap-3 align-items-start">
-            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-                 style="width:42px;height:42px;background:var(--cor-verde-soft);color:var(--cor-verde);">
-                <i class="bi bi-shield-check"></i>
-            </div>
-            <div>
-                <strong>Faça nesta ordem</strong>
-                <div class="text-muted small mt-1">
-                    <strong>1.</strong> Se aparecer uma possível conta existente, confirme e vincule.
-                    <strong>2.</strong> Para quem ainda não tem conta, informe o e-mail e crie o acesso.
-                    <strong>3.</strong> Os módulos destacados vêm do cargo do funcionário.
-                </div>
-                <div class="small mt-2">Vincular uma conta preserva o login e a senha atuais. Criar um acesso novo envia uma senha provisória por e-mail.</div>
-            </div>
-        </div>
+<section class="rh-acessos-overview" aria-label="Situação das contas">
+    <div class="rh-acessos-overview-heading"><h2>Quem precisa de atenção</h2><p>Contagens da equipe selecionada acima.</p></div>
+    <div class="rh-equipe-metrics rh-acessos-metrics">
+        <div class="rh-equipe-metric"><span>Possível conta existente</span><strong>{{ resumo_acessos.possiveis }}</strong><small>Conferir e vincular</small></div>
+        <div class="rh-equipe-metric"><span>Prontos para criar</span><strong>{{ resumo_acessos.prontos }}</strong><small>E-mail já informado</small></div>
+        <div class="rh-equipe-metric"><span>Sem e-mail</span><strong>{{ resumo_acessos.sem_email }}</strong><small>Completar o cadastro</small></div>
+        <div class="rh-equipe-metric"><span>Já vinculados</span><strong>{{ resumo_acessos.vinculados }}</strong><small>{{ resumo_acessos.primeiro_acesso }} com primeiro acesso pendente</small></div>
     </div>
-</div>
+</section>
 
-<details class="card mb-3" open>
+{% macro acoes_lote() %}
+<details class="card mb-3 rh-acessos-batch">
     <summary class="card-body d-flex align-items-center justify-content-between gap-2" style="cursor:pointer;">
         <span><strong>Enviar novo acesso aos pendentes</strong><br><small class="text-muted">{{ resumo_acessos.primeiro_acesso }} funcionário(s) ativo(s) ainda não concluíram o primeiro acesso.</small></span>
         <i class="bi bi-chevron-down"></i>
@@ -85,7 +81,7 @@
     </div>
 </details>
 
-<details class="card mb-3">
+<details class="card mb-3 rh-acessos-batch">
     <summary class="card-body d-flex align-items-center justify-content-between gap-2" style="cursor:pointer;">
         <span><strong>Opção de emergência: reenviar para todos</strong><br><small class="text-muted">Troca a senha de cada funcionário ativo já vinculado, inclusive de quem já acessa normalmente.</small></span>
         <i class="bi bi-chevron-down"></i>
@@ -104,42 +100,42 @@
         </form>
     </div>
 </details>
+{% endmacro %}
 
-<div class="row g-2 mb-3">
-    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body py-2">
-        <div class="small text-muted">Possível conta existente</div><div class="h4 mb-0">{{ resumo_acessos.possiveis }}</div>
-    </div></div></div>
-    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body py-2">
-        <div class="small text-muted">Prontos para criar</div><div class="h4 mb-0">{{ resumo_acessos.prontos }}</div>
-    </div></div></div>
-    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body py-2">
-        <div class="small text-muted">Sem e-mail</div><div class="h4 mb-0">{{ resumo_acessos.sem_email }}</div>
-    </div></div></div>
-    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body py-2">
-        <div class="small text-muted">Já vinculados</div><div class="h4 mb-0">{{ resumo_acessos.vinculados }}</div>
-    </div></div></div>
-</div>
-
-<div class="d-flex gap-2 mb-3 flex-wrap">
-    <a class="btn btn-sm {{ 'btn-dark' if filtro_acesso == 'pendentes' else 'btn-outline-secondary' }}"
-       href="{{ url_for('rh.funcionarios', view='acessos', acesso='pendentes', loja=loja_id or None, ativos='1' if apenas_ativos else '0') }}">Pendentes</a>
-    <a class="btn btn-sm {{ 'btn-dark' if filtro_acesso == 'vinculados' else 'btn-outline-secondary' }}"
+<nav class="rh-pessoas-segments" aria-label="Filtrar por vínculo da conta">
+    <a{% if filtro_acesso == 'pendentes' %} aria-current="page"{% endif %}
+       href="{{ url_for('rh.funcionarios', view='acessos', acesso='pendentes', loja=loja_id or None, ativos='1' if apenas_ativos else '0') }}">Sem conta vinculada</a>
+    <a{% if filtro_acesso == 'vinculados' %} aria-current="page"{% endif %}
        href="{{ url_for('rh.funcionarios', view='acessos', acesso='vinculados', loja=loja_id or None, ativos='1' if apenas_ativos else '0') }}">Já vinculados</a>
-    <a class="btn btn-sm {{ 'btn-dark' if filtro_acesso == 'todos' else 'btn-outline-secondary' }}"
+    <a{% if filtro_acesso == 'todos' %} aria-current="page"{% endif %}
        href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', loja=loja_id or None, ativos='1' if apenas_ativos else '0') }}">Todos</a>
-</div>
+</nav>
 
-<p class="small text-muted">“Primeiro acesso pendente” significa que a senha provisória ainda não foi trocada. Uma conta vinculada não confirma que o e-mail foi recebido.</p>
-<div class="d-flex flex-column gap-2">
+<p class="rh-acessos-note">“Primeiro acesso pendente” significa que a senha provisória ainda não foi trocada. Uma conta vinculada não confirma que o e-mail foi recebido.</p>
+{% endif %}
+
+<div class="rh-pessoas-searchbar" role="search" aria-label="Buscar na lista de funcionários" hidden data-rh-local-search>
+    <label class="rh-pessoas-search-label" for="rh-pessoas-busca">Buscar nesta lista
+        <span class="rh-equipe-search"><i class="bi bi-search" aria-hidden="true"></i><input id="rh-pessoas-busca" type="search" placeholder="Nome, cargo ou unidade" autocomplete="off" aria-controls="rh-pessoas-lista"></span>
+    </label>
+    {% if view == 'acessos' and filtro_acesso != 'pendentes' %}
+    <label class="rh-pessoas-checkbox" for="rh-pessoas-primeiro"><input id="rh-pessoas-primeiro" type="checkbox"> Primeiro acesso pendente</label>
+    {% endif %}
+    <span id="rh-pessoas-contagem" class="rh-equipe-muted" role="status" aria-live="polite">{{ funcionarios|length }} pessoa{{ 's' if funcionarios|length != 1 }} nesta lista</span>
+</div>
+<div id="rh-pessoas-nenhum" class="rh-equipe-empty" hidden><i class="bi bi-search" aria-hidden="true"></i><h3>Nenhuma pessoa corresponde à busca</h3><p>Tente outro nome, cargo ou unidade.</p><button type="button" class="rh-equipe-button" id="rh-pessoas-limpar">Limpar busca</button></div>
+
+{% if view == 'acessos' %}
+<div class="rh-acessos-list" id="rh-pessoas-lista">
     {% for f in funcionarios %}
     {% set sugestao = sugestoes.get(f.id) %}
     {% set modulos = modulos_por_funcionario.get(f.id, []) %}
-    <section class="card" id="acesso-{{ f.id }}">
+    <section class="card rh-acesso-card" id="acesso-{{ f.id }}" data-rh-person="{{ f.nome }} {{ f.cargo.nome if f.cargo else (f.funcao or '') }} {{ f.lojas|map(attribute='nome')|join(' ') }}" data-rh-primeiro="{{ '1' if f.usuario and f.usuario.senha_provisoria else '0' }}" aria-labelledby="acesso-nome-{{ f.id }}">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
                 <div>
                     <div class="d-flex gap-2 align-items-center flex-wrap">
-                        <strong>{{ f.nome }}</strong>
+                        <h3 id="acesso-nome-{{ f.id }}">{{ f.nome }}</h3>
                         {% if f.usuario_id %}
                             {% if f.usuario and f.usuario.senha_provisoria %}
                             <span class="badge bg-warning text-dark" title="A senha provisória ainda não foi trocada. Este status não confirma o recebimento do e-mail.">Primeiro acesso pendente</span>
@@ -154,13 +150,14 @@
                         <span class="badge bg-secondary">Falta e-mail</span>
                         {% endif %}
                     </div>
-                    <div class="small text-muted mt-1">{{ f.cargo.nome if f.cargo else (f.funcao or 'Cargo não definido') }}</div>
+                    <div class="rh-acesso-person-meta">{{ f.cargo.nome if f.cargo else (f.funcao or 'Cargo não definido') }}{% if f.lojas %}<span>{{ f.lojas|map(attribute='nome')|join(' · ') }}</span>{% endif %}</div>
                 </div>
                 <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}">Abrir ficha do RH</a>
             </div>
 
-            <div class="mb-3 p-2 rounded" style="background:var(--cor-cinza-50, #f7f8f7);">
-                <div class="small fw-semibold mb-1">Módulos destacados para o cargo</div>
+            <details class="rh-acesso-modulos">
+                <summary>Módulos destacados para o cargo <span>{{ modulos|length }}</span></summary>
+                <div class="rh-acesso-modulos-content">
                 {% if modulos %}
                     {% for modulo in modulos %}<span class="badge bg-light text-dark border me-1">{{ modulo.nome }}</span>{% endfor %}
                 {% elif f.cargo %}
@@ -169,30 +166,33 @@
                     <span class="small text-muted">Defina o cargo na ficha para vincular os módulos obrigatórios.</span>
                 {% endif %}
                 <div class="small text-muted mt-1">O login libera a área de Treinamento. Outros módulos publicados também continuam disponíveis.</div>
-            </div>
+                </div>
+            </details>
 
             {% if f.usuario_id and f.usuario %}
+            <div class="rh-acesso-identity">
+                <div><span>Entrar com</span><strong>{{ identificadores_acesso[f.id] }}</strong></div>
+                <span class="rh-equipe-muted">· {% if f.usuario.somente_treino %}{{ 'treinamento e checklist' if f.usuario.pode_checklist() else 'somente treinamento' }}{% else %}{{ f.usuario.papel }}{% endif %}</span>
+            </div>
+            <details class="rh-acesso-edit">
+            <summary>Gerenciar e-mail e senha <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
             <form method="POST" action="{{ url_for('rh.funcionario_acesso', id=f.id) }}" class="row g-2 align-items-end">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="filtro_acesso" value="{{ filtro_acesso }}">
                 <input type="hidden" name="loja" value="{{ loja_id or '' }}">
                 <input type="hidden" name="apenas_ativos" value="{{ '1' if apenas_ativos else '0' }}">
-                <div class="col-12 col-lg-4">
-                    <label class="form-label small mb-1">E-mail do funcionário</label>
-                    <input type="email" name="email" value="{{ f.email or f.usuario.email or '' }}" class="form-control form-control-sm" required>
+                <div class="col-12 col-lg-7">
+                    <label for="acesso-email-{{ f.id }}" class="form-label small mb-1">E-mail do funcionário</label>
+                    <input id="acesso-email-{{ f.id }}" type="email" name="email" value="{{ f.email or f.usuario.email or '' }}" class="form-control form-control-sm" required>
                 </div>
-                <div class="col-12 col-lg-5">
-                    <div class="small text-muted">Entrar com</div>
-                    <strong>{{ identificadores_acesso[f.id] }}</strong>
-                    <span class="small text-muted">· {% if f.usuario.somente_treino %}{{ 'treinamento e checklist' if f.usuario.pode_checklist() else 'somente treinamento' }}{% else %}{{ f.usuario.papel }}{% endif %}</span>
-                </div>
-                <div class="col-12 col-lg-3 d-flex gap-1 justify-content-lg-end flex-wrap">
+                <div class="col-12 col-lg-5 d-flex gap-2 justify-content-lg-end flex-wrap">
                     <button name="acao" value="salvar_email" class="btn btn-sm btn-outline-primary">Salvar e-mail</button>
                     <button name="acao" value="reenviar" class="btn btn-sm btn-outline-danger"
                             data-funcionario-nome="{{ f.nome }}"
                             onclick="return confirm('Gerar uma nova senha para ' + this.dataset.funcionarioNome + ' e enviar por e-mail? A senha atual deixará de funcionar.');">Enviar nova senha</button>
                 </div>
             </form>
+            </details>
             {% else %}
             <form method="POST" action="{{ url_for('rh.funcionario_acesso', id=f.id) }}" class="row g-2 align-items-end acesso-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -200,13 +200,13 @@
                 <input type="hidden" name="loja" value="{{ loja_id or '' }}">
                 <input type="hidden" name="apenas_ativos" value="{{ '1' if apenas_ativos else '0' }}">
                 <div class="col-12 col-lg-4">
-                    <label class="form-label small mb-1">E-mail individual</label>
-                    <input type="email" name="email" value="{{ f.email or (sugestao.usuario.email if sugestao else '') or '' }}"
+                    <label for="acesso-email-{{ f.id }}" class="form-label small mb-1">E-mail individual</label>
+                    <input id="acesso-email-{{ f.id }}" type="email" name="email" value="{{ f.email or (sugestao.usuario.email if sugestao else '') or '' }}"
                            class="form-control form-control-sm" placeholder="nome@exemplo.com" required>
                 </div>
                 <div class="col-12 col-lg-5">
-                    <label class="form-label small mb-1">Já possui conta?</label>
-                    <select name="usuario_id" class="form-select form-select-sm conta-existente">
+                    <label for="acesso-conta-{{ f.id }}" class="form-label small mb-1">Já possui conta?</label>
+                    <select id="acesso-conta-{{ f.id }}" name="usuario_id" class="form-select form-select-sm conta-existente">
                         <option value="">Não encontrei conta — criar uma nova</option>
                         {% for u in contas_livres %}
                         <option value="{{ u.id }}" {% if sugestao and sugestao.usuario.id == u.id %}selected{% endif %}>
@@ -228,9 +228,15 @@
         </div>
     </section>
     {% else %}
-    <div class="card"><div class="card-body text-center text-muted">Nenhum funcionário neste filtro.</div></div>
+    <div class="rh-equipe-empty"><i class="bi bi-person-check" aria-hidden="true"></i><h3>Nenhum funcionário neste filtro.</h3><p>Escolha outro vínculo de conta ou altere a unidade.</p><a class="rh-equipe-button" href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos') }}">Ver todos os acessos</a></div>
     {% endfor %}
 </div>
+
+<section class="rh-acessos-lote" aria-labelledby="rh-acessos-lote-titulo">
+    <h2 id="rh-acessos-lote-titulo">Envios em lote</h2>
+    <p>Estas ações abrangem toda a equipe ativa, independentemente dos filtros desta página.</p>
+    {{ acoes_lote() }}
+</section>
 
 <script>
 document.querySelectorAll('.acesso-form').forEach(function(form) {
@@ -247,85 +253,87 @@ document.querySelectorAll('.acesso-form').forEach(function(form) {
 });
 </script>
 {% else %}
-<div class="card" style="padding:0; overflow:hidden;">
-    <table class="table-dense">
+<section class="rh-equipe-panel" aria-labelledby="rh-cadastros-titulo">
+    <div class="rh-equipe-panel-heading"><div><h2 id="rh-cadastros-titulo">Pessoas cadastradas</h2><p>{{ funcionarios|length }} funcionário{{ 's' if funcionarios|length != 1 }} na equipe selecionada.</p></div></div>
+    <div class="rh-equipe-table-wrap" id="rh-pessoas-lista" role="region" aria-label="Cadastros dos funcionários" tabindex="0">
+    <table class="rh-equipe-table rh-cadastros-table">
+        <caption class="rh-equipe-sr-only">Dados cadastrais e situação dos funcionários da equipe selecionada.</caption>
         <thead>
             <tr>
-                <th class="col-acoes"></th>
-                <th>nome</th>
-                <th>função</th>
-                <th>operacional</th>
-                <th>período</th>
-                <th>lojas</th>
-                {% if current_user.is_owner %}<th class="text-end">salário</th>{% endif %}
-                <th class="text-center">admissão</th>
-                <th>telefone</th>
-                <th class="text-center">status</th>
-                <th class="col-chevron"></th>
+                <th scope="col">Pessoa</th>
+                <th scope="col">Cargo e função</th>
+                <th scope="col">Unidade e período</th>
+                <th scope="col">Contato e admissão</th>
+                {% if current_user.is_owner %}<th scope="col">Salário</th><th scope="col">Ações</th>{% endif %}
             </tr>
         </thead>
         <tbody>
             {% for f in funcionarios %}
-            <tr style="{% if current_user.is_owner %}cursor:pointer;{% endif %} {% if f.cadastro_pendente %}background:var(--cor-amarelo);{% endif %}"
-                {% if current_user.is_owner %}onclick="window.location='{{ url_for('rh.detalhe_funcionario', id=f.id) }}'"{% endif %}>
-                <td class="col-acoes" onclick="event.stopPropagation()">
-                    {% if current_user.is_owner %}
-                    <div class="dropdown">
-                        <button class="btn-circle" title="Ações" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="bi bi-three-dots"></i>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li>
-                                <a class="dropdown-item" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}">
-                                    <i class="bi bi-eye"></i> ver detalhes
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}#feedback">
-                                    <i class="bi bi-chat-left-text"></i> registrar feedback
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
-                    {% endif %}
-                </td>
-                <td class="fw-semibold">
-                    {{ f.nome }}
-                    {% if f.cadastro_pendente %}
-                    <span class="badge-status" style="background:var(--cor-amarelo); color:var(--cor-amarelo-borda);">
-                        <span class="bullet" style="background:var(--cor-amarelo-borda);"></span>pendente
-                    </span>
-                    {% endif %}
-                </td>
-                <td>{{ f.funcao or '—' }}</td>
-                <td style="font-size:12.5px;">{{ f.funcao_operacional or '—' }}</td>
-                <td style="font-size:12.5px;">{{ f.periodo or '—' }}</td>
-                <td>
+            <tr data-rh-person="{{ f.nome }} {{ f.cargo.nome if f.cargo else (f.funcao or '') }} {{ f.funcao or '' }} {{ f.lojas|map(attribute='nome')|join(' ') }}">
+                <th scope="row" data-label="Pessoa">
+                    {% if current_user.is_owner %}<a class="rh-equipe-person" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}">{{ f.nome }}</a>{% else %}{{ f.nome }}{% endif %}
+                    <div class="rh-pessoas-statuses"><span class="rh-pessoas-status{{ ' is-inactive' if not f.ativo }}">{{ 'Ativo' if f.ativo else 'Inativo' }}</span>{% if f.cadastro_pendente %}<span class="rh-pessoas-status is-pending">Cadastro pendente</span>{% endif %}</div>
+                </th>
+                <td data-label="Cargo e função"><strong>{{ f.cargo.nome if f.cargo else (f.funcao or 'Cargo não definido') }}</strong>{% if f.cargo and f.funcao and f.funcao != f.cargo.nome %}<small class="rh-equipe-muted">{{ f.funcao }}</small>{% endif %}<small class="rh-equipe-muted">{{ f.funcao_operacional or 'Função operacional não definida' }}</small></td>
+                <td data-label="Unidade e período">
                     {% for l in f.lojas %}
-                    <span class="chip" style="font-size:11px; padding:2px 8px;">{{ l.nome }}</span>
+                    <span class="rh-pessoas-unit">{{ l.nome }}</span>
                     {% endfor %}
-                    {% if not f.lojas %}<span class="text-muted small">—</span>{% endif %}
+                    {% if not f.lojas %}<span class="rh-equipe-muted">Unidade não definida</span>{% endif %}
+                    <small class="rh-equipe-muted">{{ f.periodo or 'Período não definido' }}</small>
                 </td>
-                {% if current_user.is_owner %}<td class="text-end">{{ f.salario_base | brl }}</td>{% endif %}
-                <td class="text-center">{{ f.data_admissao.strftime('%d/%m/%Y') if f.data_admissao else '—' }}</td>
-                <td style="font-size:12.5px;">{{ f.telefone or '—' }}</td>
-                <td class="text-center">
-                    {% if f.ativo %}
-                    <span class="badge-status"><span class="bullet" style="background:var(--cor-verde);"></span>ativo</span>
-                    {% else %}
-                    <span class="badge-status" style="background:var(--cor-vermelho-soft); color:var(--cor-vermelho);"><span class="bullet" style="background:var(--cor-vermelho);"></span>inativo</span>
-                    {% endif %}
-                </td>
-                <td class="col-chevron">{% if current_user.is_owner %}<i class="bi bi-chevron-right"></i>{% endif %}</td>
+                <td data-label="Contato e admissão">{{ f.telefone or 'Telefone não informado' }}<small class="rh-equipe-muted">{% if f.data_admissao %}Admissão <time datetime="{{ f.data_admissao.isoformat() }}">{{ f.data_admissao.strftime('%d/%m/%Y') }}</time>{% else %}Admissão não informada{% endif %}</small></td>
+                {% if current_user.is_owner %}
+                <td data-label="Salário" class="rh-pessoas-salary">{{ f.salario_base | brl }}</td>
+                <td class="rh-equipe-history"><div class="rh-equipe-row-actions"><a class="rh-equipe-text-link" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}" aria-label="Abrir ficha de {{ f.nome }}">Abrir ficha <i class="bi bi-arrow-right" aria-hidden="true"></i></a><a class="rh-equipe-text-link" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}#feedback" aria-label="Registrar feedback para {{ f.nome }}">Registrar feedback</a></div></td>
+                {% endif %}
             </tr>
             {% endfor %}
             {% if not funcionarios %}
-            <tr><td colspan="{{ 11 if current_user.is_owner else 10 }}" class="text-center text-muted py-4">Nenhum funcionário encontrado.</td></tr>
+            <tr><td colspan="{{ 6 if current_user.is_owner else 4 }}"><div class="rh-equipe-empty"><i class="bi bi-people" aria-hidden="true"></i><h3>Nenhum funcionário encontrado.</h3><p>Altere a unidade ou adicione uma pessoa à equipe.</p><a class="rh-equipe-button" href="{{ url_for('rh.novo_funcionario') }}">Novo funcionário</a></div></td></tr>
             {% endif %}
         </tbody>
     </table>
+    </div>
+</section>
+{% endif %}
 </div>
 
-<p class="text-muted small mt-2">{{ funcionarios | length }} funcionário{{ 's' if funcionarios | length != 1 }} encontrado{{ 's' if funcionarios | length != 1 }}.</p>
-{% endif %}
+<script>
+(function() {
+    var root = document.querySelector('.rh-pessoas');
+    if (!root) return;
+    var search = root.querySelector('#rh-pessoas-busca');
+    var firstAccess = root.querySelector('#rh-pessoas-primeiro');
+    var people = Array.from(root.querySelectorAll('[data-rh-person]'));
+    var count = root.querySelector('#rh-pessoas-contagem');
+    var empty = root.querySelector('#rh-pessoas-nenhum');
+    var list = root.querySelector('#rh-pessoas-lista');
+    function normalize(value) {
+        return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
+    }
+    function filter() {
+        var term = normalize(search.value);
+        var visible = 0;
+        people.forEach(function(person) {
+            person.hidden = !normalize(person.dataset.rhPerson).includes(term)
+                || !!(firstAccess && firstAccess.checked && person.dataset.rhPrimeiro !== '1');
+            if (!person.hidden) visible += 1;
+        });
+        count.textContent = visible + (visible === 1 ? ' pessoa' : ' pessoas') + ' de ' + people.length + ' nesta lista';
+        empty.hidden = people.length === 0 || visible > 0;
+        list.hidden = people.length > 0 && visible === 0;
+    }
+    search.addEventListener('input', filter);
+    if (firstAccess) firstAccess.addEventListener('change', filter);
+    root.querySelector('#rh-pessoas-limpar').addEventListener('click', function() {
+        search.value = '';
+        if (firstAccess) firstAccess.checked = false;
+        filter();
+        search.focus();
+    });
+    root.querySelector('[data-rh-local-search]').hidden = false;
+    filter();
+})();
+</script>
 {% endblock %}

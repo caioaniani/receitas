@@ -5,8 +5,8 @@
   <header class="treino-heading">
     <div>
       <span class="treino-eyebrow">Gestão de treinamento</span>
-      <h1>Progressão de cargo</h1>
-      <p>Veja quem ainda precisa de acesso, quem começou e quem concluiu as trilhas obrigatórias.</p>
+      <h1>Módulos por cargo</h1>
+      <p>Veja quais treinamentos cada pessoa precisa concluir. Esta tela não altera cargos nem salários.</p>
     </div>
     <nav class="treino-heading-actions">
       <a href="{{ url_for('treino.gestor_home') }}"><i class="bi bi-arrow-left"></i> Minha equipe</a>
@@ -28,6 +28,7 @@
     <p class="treino-scope-note"><i class="bi bi-info-circle"></i> Aparecer nesta página não significa que a pessoa já entrou no sistema. O estado abaixo considera o vínculo de acesso e a atividade registrada nas aulas.</p>
 
     <form class="treino-progression-filters" method="get">
+      <label><span>Pessoa, cargo ou unidade</span><input class="form-control" type="search" name="q" value="{{ filtros.q }}" placeholder="Buscar na equipe" maxlength="120"></label>
       <label><span>Cadastro no RH</span>
         <select class="form-select" name="cadastro">
           <option value="ativos" {% if filtros.cadastro == 'ativos' %}selected{% endif %}>Somente ativos</option>
@@ -55,7 +56,7 @@
         </select>
       </label>
       <button class="treino-primary-action" type="submit"><i class="bi bi-funnel"></i> Aplicar filtros</button>
-      {% if filtros.status or filtros.unidade_id or filtros.cadastro != 'ativos' %}<a class="treino-link-button" href="{{ url_for('treino.gestor_progressao') }}">Limpar</a>{% endif %}
+      {% if filtros.q or filtros.status or filtros.unidade_id or filtros.cadastro != 'ativos' %}<a class="treino-link-button" href="{{ url_for('treino.gestor_progressao') }}">Limpar filtros</a>{% endif %}
     </form>
   </section>
 
@@ -106,7 +107,7 @@
           {% elif item.status == 'inativo' %}Inativo no RH
           {% else %}Em andamento{% endif %}
         </div>
-        {% if current_user.is_dono() %}<a class="treino-observe-action" href="{{ url_for('rh.detalhe_funcionario', id=item.funcionario.id) }}"><i class="bi bi-person-lines-fill"></i><span>{{ 'Vincular cargo' if not item.progresso.cargo else 'Ver no RH' }}</span></a>{% endif %}
+        <div>{% if item.pode_ver_progresso %}<a class="treino-observe-action" href="{{ url_for('treino.gestor_progresso', func_id=item.funcionario.id) }}" aria-label="Ver progresso de {{ item.funcionario.nome }}"><i class="bi bi-bar-chart" aria-hidden="true"></i> Ver progresso</a>{% endif %}{% if current_user.is_dono() %}<a class="treino-observe-action" href="{{ url_for('rh.detalhe_funcionario', id=item.funcionario.id) }}"><i class="bi bi-person-lines-fill" aria-hidden="true"></i><span>{{ 'Vincular cargo' if not item.progresso.cargo else 'Ver no RH' }}</span></a>{% endif %}</div>
       </article>
       {% else %}
       <div class="treino-empty">Nenhuma pessoa corresponde aos filtros selecionados.</div>

@@ -1,12 +1,45 @@
-{% extends "base.html" %}{% block title %}{{ t.nome }}{% endblock %}{% block content %}
-<main class="treino-page">
-  <a class="treino-back" href="{{ url_for('treino.home') }}"><i class="bi bi-arrow-left"></i> Meus treinamentos</a>
-  <header class="treino-heading treino-heading-course"><div><span class="treino-eyebrow">Módulo</span><h1>{{ t.nome }}</h1>{% if t.descricao %}<p>{{ t.descricao }}</p>{% endif %}</div>{% if est %}<div class="treino-course-score"><strong>{{ est.percentual }}%</strong><span>concluído</span></div>{% endif %}</header>
-  {% if est %}<section class="treino-module-progress"><div class="treino-progress"><span style="width:{{ est.percentual }}%"></span></div><div class="treino-checks"><span class="{% if est.videos_ok %}is-ok{% endif %}"><i class="bi bi-{% if est.videos_ok %}check-circle-fill{% else %}circle{% endif %}"></i> Aulas {{ est.videos_feitos }}/{{ est.videos }}</span><span class="{% if est.quizzes_ok %}is-ok{% endif %}"><i class="bi bi-{% if est.quizzes_ok %}check-circle-fill{% else %}circle{% endif %}"></i> Avaliações</span><span class="{% if est.aplicacao_ok %}is-ok{% endif %}"><i class="bi bi-{% if est.aplicacao_ok %}check-circle-fill{% else %}circle{% endif %}"></i> Validação do gestor</span></div></section>{% endif %}
-  <section class="treino-section"><div class="treino-section-heading"><div><span class="treino-eyebrow">Conteúdo</span><h2>Aulas</h2></div><span>{{ videos|length }} aula(s)</span></div><div class="treino-lesson-list">
-    {% for v in videos %}{% set p = video_progresso.get(v.id) %}<a href="{{ url_for('treino.video', id=v.id) }}" class="treino-lesson"><span class="treino-lesson-number">{{ '%02d'|format(loop.index) }}</span><span class="treino-lesson-main"><strong>{{ v.titulo }}</strong><small>{% if p and p.concluido_em %}Aula concluída{% elif p %}Continuar de {{ p.percentual|int }}%{% else %}Ainda não iniciada{% endif %}</small></span>{% if p and p.concluido_em %}<span class="treino-status is-done"><i class="bi bi-check"></i> Concluída</span>{% elif p %}<span class="treino-status is-progress">Continuar</span>{% else %}<span class="treino-lesson-play"><i class="bi bi-play-fill"></i></span>{% endif %}</a>{% else %}<div class="treino-empty">Nenhuma aula publicada neste módulo.</div>{% endfor %}
-  </div></section>
-  {% if quizzes %}<section class="treino-section"><div class="treino-section-heading"><div><span class="treino-eyebrow">Verificação</span><h2>Avaliações</h2></div></div><div class="treino-lesson-list">{% for q in quizzes %}<div class="treino-lesson" id="quiz-{{ q.id }}"><span class="treino-lesson-number"><i class="bi bi-ui-checks"></i></span><span class="treino-lesson-main"><strong>{{ q.titulo }}</strong><small>Responda para concluir esta etapa</small></span><button class="btn treino-secondary-action iniciar-quiz" data-id="{{ q.id }}">Fazer avaliação</button></div>{% endfor %}</div></section>{% endif %}
+{% extends "base.html" %}
+{% block title %}{{ t.nome }}{% endblock %}
+{% block content %}
+{% set seguinte = namespace(video=None, progresso=None) %}
+{% for v in videos %}{% set p = video_progresso.get(v.id) %}{% if not seguinte.video and not (p and p.concluido_em) %}{% set seguinte.video = v %}{% set seguinte.progresso = p %}{% endif %}{% endfor %}
+<main class="treino-page treino-learning-page treino-course-page">
+  <a class="treino-back" href="{{ url_for('treino.home') }}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Meu treinamento</a>
+  <header class="treino-heading treino-heading-course"><div><span class="treino-eyebrow">Módulo</span><h1>{{ t.nome }}</h1>{% if t.descricao %}<p>{{ t.descricao }}</p>{% endif %}</div>{% if est %}<div class="treino-course-score"><strong>{{ est.percentual }}%</strong><span>do módulo concluído</span></div>{% endif %}</header>
+  {% if est %}
+  <section class="treino-module-progress" aria-labelledby="etapas-titulo">
+    <div class="treino-progress-heading"><h2 id="etapas-titulo">Etapas do módulo</h2>{% if est.completa %}<span class="treino-status is-done"><i class="bi bi-check-circle" aria-hidden="true"></i> Concluído</span>{% endif %}</div>
+    <div class="treino-progress" role="progressbar" aria-label="Conclusão do módulo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ est.percentual }}"><span style="width:{{ est.percentual }}%"></span></div>
+    <div class="treino-stage-grid">
+      <div class="treino-stage{% if est.videos_ok %} is-ok{% endif %}"><i class="bi bi-{% if est.videos_ok %}check-circle-fill{% else %}play-circle{% endif %}" aria-hidden="true"></i><div><strong>Aulas</strong><span>{{ est.videos_feitos }} de {{ est.videos }} concluídas</span></div></div>
+      <div class="treino-stage{% if est.quizzes_ok %} is-ok{% endif %}"><i class="bi bi-{% if est.quizzes_ok %}check-circle-fill{% else %}ui-checks{% endif %}" aria-hidden="true"></i><div><strong>Avaliações</strong><span>{% if est.quizzes %}{{ est.quizzes_feitos }} de {{ est.quizzes }} aprovadas{% else %}Nenhuma neste módulo{% endif %}</span></div></div>
+      <div class="treino-stage{% if est.aplicacao_ok %} is-ok{% endif %}"><i class="bi bi-{% if est.aplicacao_ok %}check-circle-fill{% else %}person-check{% endif %}" aria-hidden="true"></i><div><strong>Validação do gestor</strong><span>{{ 'Prática validada' if est.aplicacao_ok else 'Aguardando observação prática' }}</span></div></div>
+    </div>
+  </section>
+  {% endif %}
+  {% if seguinte.video %}
+  <section class="treino-resume" aria-labelledby="retomar-titulo"><div><span class="treino-eyebrow">Próxima aula</span><h2 id="retomar-titulo">{{ seguinte.video.titulo }}</h2><p>{% if seguinte.progresso and seguinte.progresso.percentual %}Você já assistiu {{ seguinte.progresso.percentual|int }}% desta aula.{% else %}Comece por aqui para avançar no módulo.{% endif %}</p></div><a class="treino-primary-action" href="{{ url_for('treino.video', id=seguinte.video.id) }}">{% if seguinte.progresso and seguinte.progresso.percentual %}Continuar aula{% else %}Começar aula{% endif %} <i class="bi bi-arrow-right" aria-hidden="true"></i></a></section>
+  {% elif est and est.videos_ok and not est.completa %}
+  <div class="treino-notice treino-notice-success"><i class="bi bi-check-circle" aria-hidden="true"></i><div><strong>Aulas concluídas.</strong><br>{% if not est.quizzes_ok %}Faça as avaliações abaixo para avançar.{% else %}A próxima etapa é a observação prática com o gestor.{% endif %}</div></div>
+  {% endif %}
+  <section class="treino-section" aria-labelledby="aulas-titulo">
+    <div class="treino-section-heading"><div><span class="treino-eyebrow">Conteúdo</span><h2 id="aulas-titulo">Aulas</h2></div><span class="treino-section-count">{{ videos|length }} {{ 'aula' if videos|length == 1 else 'aulas' }}</span></div>
+    <div class="treino-lesson-list">
+      {% for v in videos %}{% set p = video_progresso.get(v.id) %}
+      <a href="{{ url_for('treino.video', id=v.id) }}" class="treino-lesson{% if seguinte.video and seguinte.video.id == v.id %} is-next{% endif %}">
+        <span class="treino-lesson-number">{{ '%02d'|format(loop.index) }}</span>
+        <span class="treino-lesson-main"><strong>{{ v.titulo }}</strong><small>{% if p and p.concluido_em %}Aula concluída · disponível para rever{% elif p %}{{ p.percentual|int }}% assistido{% else %}Ainda não iniciada{% endif %}{% if v.duracao_segundos %} · {{ (v.duracao_segundos / 60)|round(0, 'ceil')|int }} min{% endif %}</small></span>
+        {% if p and p.concluido_em %}<span class="treino-status is-done"><i class="bi bi-check" aria-hidden="true"></i> Concluída</span>{% elif seguinte.video and seguinte.video.id == v.id %}<span class="treino-status is-progress">Próxima aula</span>{% elif p %}<span class="treino-status is-progress">Em andamento</span>{% else %}<span class="treino-lesson-play"><i class="bi bi-play-fill" aria-hidden="true"></i></span>{% endif %}
+      </a>
+      {% else %}<div class="treino-empty"><strong>Nenhuma aula publicada neste módulo.</strong><p>As aulas aparecerão aqui quando estiverem disponíveis.</p></div>{% endfor %}
+    </div>
+  </section>
+  {% if quizzes %}
+  <section class="treino-section" aria-labelledby="avaliacoes-titulo">
+    <div class="treino-section-heading"><div><span class="treino-eyebrow">Verificação</span><h2 id="avaliacoes-titulo">Avaliações</h2></div><span class="treino-section-count">{{ quizzes|length }} {{ 'avaliação' if quizzes|length == 1 else 'avaliações' }}</span></div>
+    <div class="treino-lesson-list">{% for q in quizzes %}<div class="treino-lesson treino-quiz-lesson" id="quiz-{{ q.id }}"><span class="treino-lesson-number"><i class="bi bi-ui-checks" aria-hidden="true"></i></span><span class="treino-lesson-main"><strong>{{ q.titulo }}</strong><small>Confira o que aprendeu nas aulas.</small></span><button class="btn treino-secondary-action iniciar-quiz" data-id="{{ q.id }}">Fazer avaliação</button></div>{% endfor %}</div>
+  </section>
+  {% endif %}
   <div id="quizbox"></div>
 </main>
 <script>

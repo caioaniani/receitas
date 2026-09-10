@@ -128,6 +128,8 @@ def create_app(config_class=None):
                     'js/home-v2.js', 'js/command-palette.js', 'css/ui-v2.css', 'css/industria-v2.css',
                     'css/treino-v2.css', 'css/padeiro-v2.css', 'css/cobrancas.css', 'js/cobrancas.js',
                     'css/rh-equipe.css', 'js/plano-carreira-lote.js',
+                    'css/treino-gestao.css', 'css/treino-aluno.css',
+                    'css/treino-admin.css', 'js/treino-admin.js',
                     'loja/loja.css', 'loja/carrinho.js', 'loja/checkout.js'):
             try:
                 p = os.path.join(app.static_folder, rel)

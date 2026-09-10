@@ -242,6 +242,34 @@ def painel_equipe(funcionarios, temporada):
     return {'linhas': linhas, 'contagens': contagens, 'total': len(linhas)}
 
 
+def filtrar_equipe(linhas, busca='', status=''):
+    """Filtra apenas as pessoas já autorizadas pelo escopo do gestor."""
+    import unicodedata
+
+    def normalizar(valor):
+        return ''.join(c for c in unicodedata.normalize('NFKD', valor.casefold())
+                       if not unicodedata.combining(c))
+
+    termos = normalizar(busca).split()
+    resultado = []
+    for item in linhas:
+        corresponde = (item['status'] in ('sem_acesso', 'parado', 'nao_iniciou')
+                       if status == 'atencao' else item['status'] == status)
+        if status and not corresponde:
+            continue
+        if not termos:
+            resultado.append(item)
+            continue
+        pessoa = item['funcionario']
+        texto = normalizar(' '.join([
+            pessoa.nome, pessoa.cargo.nome if pessoa.cargo else '',
+            *(loja.nome for loja in pessoa.lojas),
+        ]))
+        if all(termo in texto for termo in termos):
+            resultado.append(item)
+    return resultado
+
+
 def resumo_funcionario(funcionario, temporada):
     """Resumo compacto para aparecer dentro da ficha do RH."""
     prog = onboarding.progressao(funcionario)

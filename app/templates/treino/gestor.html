@@ -1,46 +1,65 @@
 {% extends "base.html" %}
-{% block title %}Minha equipe{% endblock %}
+{% block title %}Treinamento da equipe{% endblock %}
 {% block content %}
-<main class="treino-page">
+<main class="treino-page treino-manager-page">
   <header class="treino-heading">
     <div>
-      <span class="treino-eyebrow">Gestão de treinamento{% if unidade %} · {{ unidade.nome }}{% endif %}</span>
-      <h1>Minha equipe</h1>
-      <p>Veja quanto cada pessoa já assistiu e o que falta para concluir o treinamento.</p>
+      <span class="treino-eyebrow">Desenvolvimento da equipe</span>
+      <h1>Treinamento da equipe</h1>
+      <p>Acompanhe as aulas e observe como o aprendizado chega à rotina.</p>
     </div>
-    <nav class="treino-heading-actions">
-      <a href="{{ url_for('treino.gestor_progressao') }}">Progressão de cargo</a>
-      <a href="{{ url_for('treino.gestor_resgates') }}">Resgates</a>
-      {% if can_open_rh %}<a href="{{ url_for('rh.lideranca') }}">Configurar equipes</a>{% endif %}
-    </nav>
+    <a class="treino-link-button" href="{{ url_for('treino.gestor_progressao') }}">Ver módulos por cargo <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
   </header>
 
-  <section class="treino-metrics">
-    <article><span>Equipe</span><strong>{{ painel.total }}</strong><small>pessoas acompanhadas</small></article>
-    <article class="{% if painel.contagens.precisam_atencao %}is-warning{% endif %}"><span>Precisam de atenção</span><strong>{{ painel.contagens.precisam_atencao }}</strong><small>sem acesso, paradas ou sem início</small></article>
-    <article><span>Em andamento</span><strong>{{ painel.contagens.andamento }}</strong><small>com atividade recente</small></article>
-    <article class="is-success"><span>Concluíram</span><strong>{{ painel.contagens.concluido }}</strong><small>módulos exigidos do cargo</small></article>
-  </section>
+  <nav class="treino-overview" aria-label="Filtrar equipe por situação">
+    {% for chave, titulo, valor, detalhe in [('', 'Pessoas na equipe', painel.total, 'no seu escopo de acompanhamento'), ('atencao', 'Precisam de atenção', painel.contagens.precisam_atencao, 'sem acesso, sem início ou há 7+ dias paradas'), ('andamento', 'Em andamento', painel.contagens.andamento, 'atividade recente nas aulas'), ('concluido', 'Concluíram', painel.contagens.concluido, 'todos os módulos exigidos do cargo')] %}
+    <a href="{{ url_for('treino.gestor_home', status=chave, q=busca) }}"{% if filtro_status == chave %} aria-current="true"{% endif %} class="{% if chave == 'atencao' and valor %}is-attention{% endif %}">
+      <span>{{ titulo }}</span><strong>{{ valor }}</strong><small>{{ detalhe }}</small>
+    </a>
+    {% endfor %}
+  </nav>
 
-  <section class="treino-section">
+  <section class="treino-section treino-team-section" aria-labelledby="equipe-title">
     <div class="treino-section-heading">
-      <div><span class="treino-eyebrow">Acompanhamento</span><h2>Pessoas da equipe</h2></div>
-      <span>abra “Ver progresso” para acompanhar cada aula</span>
+      <div><h2 id="equipe-title">{{ 'Toda a equipe' if is_admin else 'Seus liderados' }}</h2><p>Veja as aulas assistidas e o próximo acompanhamento de cada pessoa.</p></div>
+      <span>{{ linhas|length }} de {{ painel.total }} pessoas</span>
     </div>
+    <form class="treino-manager-filters" method="get" role="search" aria-label="Buscar na equipe">
+      <label class="treino-search-field"><span>Pessoa, cargo ou unidade</span><input class="form-control" type="search" name="q" value="{{ busca }}" placeholder="Ex.: Ana, atendente, Centro" maxlength="120"></label>
+      <label><span>Situação</span><select class="form-select" name="status">
+        {% for chave, nome in [('', 'Todas as situações'), ('atencao', 'Precisam de atenção'), ('sem_acesso', 'Sem conta vinculada'), ('nao_iniciou', 'Nenhuma aula iniciada'), ('parado', 'Sem atividade há 7+ dias'), ('andamento', 'Em andamento'), ('concluido', 'Módulos do cargo concluídos'), ('sem_cargo', 'Cargo não informado'), ('sem_trilha', 'Cargo sem módulo obrigatório')] %}
+        <option value="{{ chave }}"{% if filtro_status == chave %} selected{% endif %}>{{ nome }}</option>
+        {% endfor %}
+      </select></label>
+      <button class="treino-primary-action" type="submit"><i class="bi bi-search" aria-hidden="true"></i> Buscar</button>
+      {% if busca or filtro_status %}<a class="treino-link-button" href="{{ url_for('treino.gestor_home') }}">Limpar filtros</a>{% endif %}
+    </form>
     <div class="treino-team-list">
-      {% for item in painel.linhas %}
-      <article class="treino-person">
-        <div class="treino-avatar">{{ item.funcionario.nome[:1] }}</div>
-        <div class="treino-person-name"><strong>{{ item.funcionario.nome }}</strong><small>{{ item.funcionario.cargo.nome if item.funcionario.cargo else 'Cargo não informado' }}</small></div>
-        <div class="treino-person-progress"><div class="treino-progress"><span style="width:{{ item.aulas.percentual }}%"></span></div><strong>{{ item.aulas.percentual }}% assistido</strong><small>{{ item.aulas.concluidas }} de {{ item.aulas.total }} aulas concluídas · {{ item.aulas.iniciadas }} iniciadas</small><small>{{ item.progresso.concluidas }} de {{ item.progresso.total }} módulos do cargo concluídos</small></div>
-        <div class="treino-person-activity"><small>Última atividade</small><strong>{% if item.ultima_atividade %}{{ item.ultima_atividade|brt('%d/%m às %H:%M') }}{% else %}Ainda não iniciou{% endif %}</strong></div>
-        <div class="treino-status {% if item.status == 'concluido' %}is-done{% elif item.status == 'andamento' %}is-progress{% elif item.status in ('sem_acesso', 'parado', 'nao_iniciou') %}is-attention{% endif %}">{% if item.status == 'sem_acesso' %}Sem acesso{% elif item.status == 'sem_cargo' %}Sem cargo{% elif item.status == 'sem_trilha' %}Sem trilha do cargo{% elif item.status == 'nao_iniciou' %}Não iniciou{% elif item.status == 'parado' %}Parado há 7+ dias{% elif item.status == 'concluido' %}Concluído{% else %}Em andamento{% endif %}</div>
-        <a class="treino-row-action treino-observe-action" href="{{ url_for('treino.gestor_progresso', func_id=item.funcionario.id) }}" aria-label="Ver progresso de {{ item.funcionario.nome }}"><i class="bi bi-bar-chart"></i><span>Ver progresso</span></a>
+      {% for item in linhas %}
+      <article class="treino-team-card" data-funcionario-id="{{ item.funcionario.id }}" data-status="{{ item.status }}">
+        <div class="treino-team-identity">
+          <div class="treino-avatar" aria-hidden="true">{{ item.funcionario.nome[:1] }}</div>
+          <div><h3><a href="{{ url_for('treino.gestor_progresso', func_id=item.funcionario.id) }}">{{ item.funcionario.nome }}</a></h3><p>{{ item.funcionario.cargo.nome if item.funcionario.cargo else 'Cargo não informado' }}{% if item.funcionario.lojas %} · {{ item.funcionario.lojas|map(attribute='nome')|join(', ') }}{% endif %}</p></div>
+        </div>
+        <div class="treino-team-learning">
+          <div><strong>{{ item.aulas.percentual }}% assistido</strong><span>{{ item.aulas.concluidas }}/{{ item.aulas.total }} aulas concluídas</span></div>
+          <div class="treino-progress" role="progressbar" aria-label="Aulas assistidas por {{ item.funcionario.nome }}" aria-valuenow="{{ item.aulas.percentual }}" aria-valuemin="0" aria-valuemax="100"><span style="width:{{ item.aulas.percentual }}%"></span></div>
+          <small>{% if item.ultima_atividade %}Atividade nas aulas: {{ item.ultima_atividade|brt('%d/%m às %H:%M') }}{% else %}Nenhuma atividade nas aulas{% endif %}</small>
+        </div>
+        <div class="treino-team-state">
+          <span class="treino-status {% if item.status == 'concluido' %}is-done{% elif item.status == 'andamento' %}is-progress{% elif item.status in ('sem_acesso', 'parado', 'nao_iniciou') %}is-attention{% endif %}">{% if item.status == 'sem_acesso' %}Sem acesso{% elif item.status == 'sem_cargo' %}Sem cargo{% elif item.status == 'sem_trilha' %}Cargo sem módulo{% elif item.status == 'nao_iniciou' %}Não iniciou{% elif item.status == 'parado' %}Parado há 7+ dias{% elif item.status == 'concluido' %}Concluído{% else %}Em andamento{% endif %}</span>
+          {% if item.progresso.total %}<small>{{ item.progresso.concluidas }}/{{ item.progresso.total }} módulos do cargo</small>{% endif %}
+        </div>
+        <div class="treino-team-actions">
+          <a class="treino-link-button" href="{{ url_for('treino.gestor_progresso', func_id=item.funcionario.id) }}" aria-label="Ver progresso de {{ item.funcionario.nome }}">Ver progresso <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+          <a href="{{ url_for('treino.gestor_observar', func_id=item.funcionario.id) }}" aria-label="Abrir checklist de {{ item.funcionario.nome }}"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Observar na prática</a>
+        </div>
       </article>
       {% else %}
-      <div class="treino-empty">Nenhum liderado foi atribuído a você. Peça ao responsável pelo RH para configurar sua equipe.</div>
+      <div class="treino-empty"><h3>{{ 'Nenhuma pessoa encontrada' if painel.total else 'Sua equipe ainda não foi configurada' }}</h3><p>{{ 'Tente outro nome ou limpe os filtros para ver toda a equipe.' if painel.total else 'Peça ao responsável pelo RH para vincular seus liderados.' }}</p>{% if busca or filtro_status %}<a class="treino-link-button" href="{{ url_for('treino.gestor_home') }}">Ver toda a equipe</a>{% endif %}</div>
       {% endfor %}
     </div>
   </section>
+  <details class="treino-manager-help"><summary>Entenda os indicadores e outras opções</summary><p>Os percentuais mostram atividade nas aulas publicadas. Ter uma conta não comprova que a pessoa fez login. A conclusão do cargo considera todos os módulos obrigatórios, não uma promoção automática. Os números do topo mostram toda a sua equipe; a busca filtra a lista abaixo.</p><nav><a href="{{ url_for('treino.gestor_resgates') }}">Gerenciar resgates</a>{% if can_open_rh %}<a href="{{ url_for('rh.lideranca') }}">Configurar líderes e checklists</a>{% endif %}</nav></details>
 </main>
 {% endblock %}

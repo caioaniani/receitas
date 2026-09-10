@@ -1,0 +1,105 @@
+/* Course administration: publication first; occasional settings stay folded. */
+.treino-admin [hidden] { display: none !important; }
+.ui-v2 .treino-admin-overview { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: -4px 0 26px; color: var(--v2-muted); font-size: 13px; }
+.ui-v2 .treino-admin-overview strong { color: var(--v2-ink); font-weight: 750; }
+.ui-v2 .treino-admin .treino-section { box-shadow: none; }
+.ui-v2 .treino-admin .treino-section-heading > a { text-decoration: none; }
+.ui-v2 .treino-admin-toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.ui-v2 .treino-admin-search { display: flex; align-items: center; flex: 1; min-width: 0; gap: 10px; padding: 0 13px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius-sm); background: var(--v2-surface-muted); color: var(--v2-muted); }
+.ui-v2 .treino-admin-search:focus-within { outline: 2px solid var(--v2-accent); outline-offset: 2px; }
+.ui-v2 .treino-admin-search input { width: 100%; min-width: 0; min-height: 44px; padding: 9px 0; border: 0; outline: 0; background: transparent; color: var(--v2-ink); font: inherit; font-size: 14px; }
+.ui-v2 .treino-admin-search input::placeholder { color: var(--v2-muted); opacity: 1; }
+.ui-v2 .treino-admin-filter { display: flex; align-items: center; gap: 9px; color: var(--v2-muted); font-size: 12px; }
+.ui-v2 .treino-admin-filter .form-select { width: auto; min-height: 44px; font-size: 13px; }
+.ui-v2 .treino-admin-results { margin: -6px 0 16px; color: var(--v2-muted); font-size: 12px; }
+.ui-v2 .treino-admin .treino-module-list { gap: 12px; }
+.ui-v2 .treino-admin .treino-module > summary { min-height: 90px; padding: 19px 18px; gap: 15px; }
+.ui-v2 .treino-admin .treino-module > summary:hover { background: var(--v2-surface-muted); border-radius: inherit; }
+.ui-v2 .treino-admin .treino-module-title { gap: 5px; }
+.ui-v2 .treino-admin .treino-module-title strong { font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
+.ui-v2 .treino-admin .treino-module-title small { font-size: 12px; line-height: 1.5; }
+.ui-v2 .treino-admin .treino-module-body { padding: 18px; }
+.ui-v2 .treino-admin .treino-module-actions { justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.ui-v2 .treino-admin .treino-module-actions p { flex: 1; min-width: 160px; margin: 0; color: var(--v2-muted); font-size: 12px; }
+.ui-v2 .treino-admin .treino-admin-lesson { grid-template-columns: 32px minmax(160px, 1fr) auto auto; min-height: 85px; padding: 14px; gap: 12px; }
+.ui-v2 .treino-admin .treino-admin-lesson > a strong { font-size: 14px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
+.ui-v2 .treino-admin .treino-admin-lesson > a small { margin-top: 3px; font-size: 11px; line-height: 1.5; }
+.ui-v2 .treino-admin .treino-admin-lesson > a:hover strong { color: var(--v2-accent); text-decoration: underline; text-underline-offset: 3px; }
+.ui-v2 .treino-admin .treino-status { padding: 6px 9px; font-size: 10px; }
+.ui-v2 .treino-admin .treino-admin-actions { align-items: center; gap: 7px; }
+.ui-v2 .treino-admin .btn-sm { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; white-space: nowrap; }
+.ui-v2 .treino-admin-delete { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 7px; color: var(--v2-muted); background: transparent; }
+.ui-v2 .treino-admin-delete:hover { color: var(--v2-danger); background: var(--v2-danger-soft); }
+.ui-v2 .treino-admin summary:focus-visible,
+.ui-v2 .treino-admin button:focus-visible,
+.ui-v2 .treino-admin a:focus-visible { outline: 2px solid var(--v2-accent); outline-offset: 3px; }
+.ui-v2 .treino-admin .treino-quiz-row { min-height: 58px; gap: 12px; font-size: 12px; }
+.ui-v2 .treino-admin-add { margin: 18px 0 0; }
+.ui-v2 .treino-admin .treino-add-grid { margin: 0; padding: 16px; grid-template-columns: 1fr; }
+.ui-v2 .treino-admin .treino-add-grid form { padding: 0; border: 0; align-items: end; }
+.ui-v2 .treino-admin .treino-add-grid form:last-child { grid-template-columns: minmax(0,1fr) 130px auto; margin-top: 8px; }
+.ui-v2 .treino-admin-module-settings { margin: 10px 0 0; background: var(--v2-surface-muted); }
+.ui-v2 .treino-admin .treino-inline-form { align-items: end; }
+.ui-v2 .treino-admin .treino-inline-form label,
+.ui-v2 .treino-admin-create-form label { display: grid; gap: 6px; color: var(--v2-muted); font-size: 12px; }
+.ui-v2 .treino-admin .treino-add-grid label,
+.ui-v2 .treino-admin .treino-form-grid label { font-size: 12px; }
+.ui-v2 .treino-admin .treino-checkbox-grid { font-size: 12px; }
+.ui-v2 .treino-admin .treino-checkbox-grid label { display: flex; align-items: center; gap: 7px; min-height: 32px; }
+.ui-v2 .treino-admin .treino-checkbox-grid input { width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--v2-accent); }
+.ui-v2 .treino-admin .cargo-status { display: inline-block; margin-left: 12px; color: var(--v2-muted); font-size: 12px; }
+.ui-v2 .treino-admin-danger-zone { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--v2-line); }
+.ui-v2 .treino-admin-danger-zone .treino-notice { flex-wrap: wrap; margin: 0; }
+.ui-v2 .treino-admin-create { margin-bottom: 18px; border-style: dashed; }
+.ui-v2 .treino-admin-create-form { display: flex; align-items: end; gap: 12px; }
+.ui-v2 .treino-admin-create-form label { flex: 1; min-width: 0; }
+.ui-v2 .treino-admin-create-form .form-control { max-width: 100%; }
+.ui-v2 .treino-admin-help { margin: 10px 0 0; color: var(--v2-muted); font-size: 12px; line-height: 1.5; }
+.ui-v2 .treino-admin-import { margin: 20px 0 0; background: var(--v2-surface-muted); border: 0; }
+.ui-v2 .treino-admin-import .treino-admin-help { margin: 0 0 12px; }
+.ui-v2 .treino-admin-no-results { padding: 32px 16px; }
+.ui-v2 .treino-admin-no-results strong { color: var(--v2-ink); font-size: 15px; }
+.ui-v2 .treino-admin-no-results p { margin: 6px 0 16px; }
+.ui-v2 .treino-admin-team-links { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; margin: 0 0 30px; font-size: 12px; }
+.ui-v2 .treino-admin-team-links > span { color: var(--v2-muted); }
+.ui-v2 .treino-admin-team-links > a { color: var(--v2-accent); text-decoration: none; font-weight: 650; }
+.ui-v2 .treino-admin-team-links > a:hover { text-decoration: underline; }
+.ui-v2 .treino-admin-count { display: inline-block; padding: 3px 7px; margin-left: 4px; border-radius: 6px; background: var(--v2-warning-soft); color: var(--v2-warning); font-size: 11px; }
+.ui-v2 .treino-admin .treino-details > summary > .bi-chevron-down { color: var(--v2-muted); font-size: 12px; transition: transform .15s; }
+.ui-v2 .treino-admin .treino-details[open] > summary > .bi-chevron-down { transform: rotate(180deg); }
+
+@media (max-width: 1100px) {
+  .ui-v2 .treino-admin .treino-admin-lesson { grid-template-columns: 32px minmax(0,1fr) auto; }
+  .ui-v2 .treino-admin .treino-admin-actions { grid-column: 2 / -1; }
+}
+@media (max-width: 640px) {
+  .ui-v2 .treino-admin-overview { gap: 8px 18px; font-size: 12px; }
+  .ui-v2 .treino-admin-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+  .ui-v2 .treino-admin-search input { font-size: 16px; }
+  .ui-v2 .treino-admin-filter .form-select { flex: 1; }
+  .ui-v2 .treino-admin .treino-module > summary { display: grid; grid-template-columns: 14px minmax(0,1fr); padding: 16px 12px; gap: 8px 10px; }
+  .ui-v2 .treino-admin .treino-module-title strong { font-size: 15px; }
+  .ui-v2 .treino-admin .treino-module > summary > .treino-status { grid-column: 2; display: inline-flex; }
+  .ui-v2 .treino-admin .treino-module-body { padding: 12px; }
+  .ui-v2 .treino-admin .treino-module-actions { align-items: flex-start; }
+  .ui-v2 .treino-admin .treino-module-actions p { flex-basis: 100%; }
+  .ui-v2 .treino-admin .treino-admin-lesson { grid-template-columns: 24px minmax(0,1fr); padding: 12px 9px; gap: 8px; }
+  .ui-v2 .treino-admin .treino-lesson-number { width: 24px; height: 28px; font-size: 10px; }
+  .ui-v2 .treino-admin .treino-admin-lesson > .treino-status { grid-column: 2; }
+  .ui-v2 .treino-admin .treino-admin-actions { grid-column: 2; flex-wrap: wrap; gap: 6px; }
+  .ui-v2 .treino-admin .btn-sm, .ui-v2 .treino-admin-delete { min-height: 42px; }
+  .ui-v2 .treino-admin-delete { width: 42px; }
+  .ui-v2 .treino-admin .treino-add-grid { padding: 12px; }
+  .ui-v2 .treino-admin .treino-add-grid form, .ui-v2 .treino-admin .treino-add-grid form:last-child { display: flex; align-items: stretch; flex-direction: column; }
+  .ui-v2 .treino-admin .treino-add-grid label { width: 100%; }
+  .ui-v2 .treino-admin .treino-setting-body { padding: 12px; }
+  .ui-v2 .treino-admin-create-form { align-items: stretch; flex-direction: column; }
+  .ui-v2 .treino-admin-create-form .form-control, .ui-v2 .treino-admin .treino-inline-form .form-control { min-width: 0; font-size: 16px; }
+  .ui-v2 .treino-admin .treino-details > summary { padding: 13px 12px; flex-wrap: wrap; }
+  .ui-v2 .treino-admin .treino-details > summary small { font-size: 11px; }
+  .ui-v2 .treino-admin-team-links { align-items: flex-start; flex-direction: column; gap: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-v2 .treino-admin .treino-module-toggle,
+  .ui-v2 .treino-admin .treino-details > summary > .bi-chevron-down { transition: none; }
+}

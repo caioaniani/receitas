@@ -33,6 +33,15 @@
     {% if request.path.startswith('/treino') or request.path.startswith('/rh/funcionarios/') or request.path.startswith('/rh/lideranca') %}
     <link href="{{ url_for('static', filename='css/treino-v2.css') }}?v={{ static_v['css/treino-v2.css'] }}" rel="stylesheet">
     {% endif %}
+    {% if request.path.startswith('/treino') or request.endpoint in ('rh.equipe', 'rh.funcionarios') %}
+    <link href="{{ url_for('static', filename='css/treino-gestao.css') }}?v={{ static_v['css/treino-gestao.css'] }}" rel="stylesheet">
+    {% endif %}
+    {% if request.endpoint in ('treino.home', 'treino.trilha', 'treino.gestor_progresso') %}
+    <link href="{{ url_for('static', filename='css/treino-aluno.css') }}?v={{ static_v['css/treino-aluno.css'] }}" rel="stylesheet">
+    {% endif %}
+    {% if request.endpoint == 'treino.admin_home' %}
+    <link href="{{ url_for('static', filename='css/treino-admin.css') }}?v={{ static_v['css/treino-admin.css'] }}" rel="stylesheet">
+    {% endif %}
     {% endif %}
     {% if embed %}
     {# Modo embed (popup do painel): sem sidebar, conteúdo ocupa tudo. #}
@@ -386,6 +395,10 @@
 
         {% if current_user.is_authenticated and (request.blueprint == 'checklist' or request.endpoint in ['rh.lideranca_preenchimento', 'rh.lideranca_organograma', 'rh.escala']) %}
         {% include '_rotina_loja_nav.html' %}
+        {% endif %}
+        {% if ui_v2 and not embed and current_user.is_authenticated and
+              ((request.path.startswith('/treino') and request.endpoint not in ('treino.video', 'treino.verificar')) or request.endpoint in ('rh.equipe', 'rh.funcionarios')) %}
+          {% include 'treino/_workspace_nav.html' %}
         {% endif %}
         {% block content %}{% endblock %}
     </main>

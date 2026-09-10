@@ -1,0 +1,13 @@
+{# Links refletem os mesmos papéis do treinamento; RH permanece exclusivo do Owner. #}
+<nav class="people-workspace-nav" aria-label="Treinamento e pessoas">
+  <a href="{{ url_for('treino.home') }}"{% if request.blueprint == 'treino' and not request.path.startswith(('/treino/gestor', '/treino/admin')) %} aria-current="page"{% endif %}><i class="bi bi-mortarboard" aria-hidden="true"></i> Meu treinamento</a>
+  {% if current_user.is_admin() or current_user.is_gerente() or current_user.lidera_equipe() %}
+  <a href="{{ url_for('treino.gestor_home') }}"{% if request.path.startswith('/treino/gestor') %} aria-current="page"{% endif %}><i class="bi bi-people" aria-hidden="true"></i> Acompanhar equipe</a>
+  {% endif %}
+  {% if current_user.is_admin() and not current_user.somente_treino %}
+  <a href="{{ url_for('treino.admin_home') }}"{% if request.path.startswith('/treino/admin') %} aria-current="page"{% endif %}><i class="bi bi-collection-play" aria-hidden="true"></i> Gerenciar cursos</a>
+  {% endif %}
+  {% if current_user.is_dono() and not current_user.somente_treino %}
+  <a href="{{ url_for('rh.equipe') }}"{% if request.blueprint == 'rh' %} aria-current="page"{% endif %}><i class="bi bi-person-badge" aria-hidden="true"></i> Pessoas e cargos</a>
+  {% endif %}
+</nav>

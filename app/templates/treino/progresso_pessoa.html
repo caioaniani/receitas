@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Progresso de {{ funcionario.nome }}{% endblock %}
 {% block content %}
-<main class="treino-page treino-person-detail">
+<main class="treino-page treino-learning-page treino-person-detail">
   <header class="treino-heading">
     <div>
       <a class="treino-back" href="{{ url_for('treino.gestor_home') }}"><i class="bi bi-arrow-left"></i> Voltar à equipe</a>
@@ -9,25 +9,39 @@
       <h1>{{ funcionario.nome }}</h1>
       <p>{{ funcionario.cargo.nome if funcionario.cargo else 'Cargo não informado' }}{% if not funcionario.ativo %} · Cadastro inativo{% endif %}</p>
     </div>
-    <a class="treino-secondary-action" href="{{ url_for('treino.gestor_observar', func_id=funcionario.id) }}">Observação prática</a>
+    <a class="treino-secondary-action" href="{{ url_for('treino.gestor_observar', func_id=funcionario.id) }}"><i class="bi bi-person-check" aria-hidden="true"></i> Observação prática</a>
   </header>
-  <section class="treino-module-progress">
-    <h2>{{ acompanhamento.percentual_assistido }}% das aulas assistidas</h2>
-    <div class="treino-progress" role="progressbar" aria-label="Aulas assistidas" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ acompanhamento.percentual_assistido }}"><span style="width:{{ acompanhamento.percentual_assistido }}%"></span></div>
-    <p>{{ acompanhamento.aulas_concluidas }} de {{ acompanhamento.aulas_total }} aulas concluídas · {{ acompanhamento.aulas_iniciadas }} iniciadas</p>
-    <small>O avanço inclui aulas parcialmente assistidas da versão atual. Concluir o módulo também exige as avaliações e a observação prática.</small>
-    <p class="mt-2 mb-0">Última atividade nas aulas: {% if acompanhamento.ultima_atividade %}{{ acompanhamento.ultima_atividade|brt('%d/%m/%Y às %H:%M') }}{% else %}Nenhuma registrada{% endif %}</p>
+  <section class="treino-module-progress treino-person-overview" aria-labelledby="visao-geral-titulo">
+    <div class="treino-person-overview-main">
+      <span class="treino-eyebrow">Avanço nas aulas</span>
+      <h2 id="visao-geral-titulo"><strong>{{ acompanhamento.percentual_assistido }}%</strong> das aulas assistidas</h2>
+      <div class="treino-progress" role="progressbar" aria-label="Aulas assistidas" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ acompanhamento.percentual_assistido }}"><span style="width:{{ acompanhamento.percentual_assistido }}%"></span></div>
+      <p>{{ acompanhamento.aulas_concluidas }} de {{ acompanhamento.aulas_total }} aulas concluídas · {{ acompanhamento.aulas_iniciadas }} iniciadas</p>
+    </div>
+    <div class="treino-person-last-activity"><i class="bi bi-clock-history" aria-hidden="true"></i><div><span>Última atividade nas aulas</span><strong>{% if acompanhamento.ultima_atividade %}{{ acompanhamento.ultima_atividade|brt('%d/%m/%Y às %H:%M') }}{% else %}Nenhuma registrada{% endif %}</strong></div></div>
+    <p class="treino-progress-note">O avanço inclui aulas parcialmente assistidas da versão atual. Concluir o módulo também exige as avaliações e a observação prática.</p>
   </section>
   {% if not temporada %}
   <div class="treino-notice treino-notice-warning"><i class="bi bi-calendar-x"></i><div><strong>Não há ciclo de treinamento ativo.</strong><br>O avanço nas aulas e nas avaliações continua visível. A observação prática depende de um ciclo ativo.</div></div>
   {% endif %}
+  <div class="treino-section-heading treino-person-modules-heading"><div><span class="treino-eyebrow">Acompanhamento</span><h2>Módulos e etapas</h2></div><span class="treino-section-count">{{ acompanhamento.modulos|length }} {{ 'módulo' if acompanhamento.modulos|length == 1 else 'módulos' }}</span></div>
   {% for modulo in acompanhamento.modulos %}
-  <section class="treino-section" id="modulo-{{ modulo.trilha.id }}">
+  {% set aprovadas = modulo.quizzes|selectattr('aprovada')|list|length %}
+  <section class="treino-section treino-person-module" id="modulo-{{ modulo.trilha.id }}">
     <div class="treino-section-heading">
       <div><span class="treino-eyebrow">{{ 'Obrigatório para o cargo' if modulo.obrigatoria else 'Outros módulos publicados' }}</span><h2>{{ modulo.trilha.nome }}</h2></div>
-      <span class="treino-status {{ 'is-done' if modulo.completa else 'is-progress' }}">{{ 'Requisitos cumpridos neste ciclo' if modulo.completa else (modulo.percentual_assistido|string + '% das aulas assistidas') }}</span>
+      <span class="treino-status {{ 'is-done' if modulo.completa else ('is-progress' if modulo.percentual_assistido else '') }}">{{ 'Requisitos cumpridos neste ciclo' if modulo.completa else ('Em andamento' if modulo.percentual_assistido else 'Pendente') }}</span>
     </div>
-    <p>{{ modulo.aulas_concluidas }} de {{ modulo.aulas|length }} aulas concluídas</p>
+    <div class="treino-module-overview-progress"><span>{{ modulo.percentual_assistido }}% das aulas assistidas</span><div class="treino-progress" role="progressbar" aria-label="Aulas assistidas em {{ modulo.trilha.nome }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ modulo.percentual_assistido }}"><span style="width:{{ modulo.percentual_assistido }}%"></span></div></div>
+    <div class="treino-stage-grid treino-person-stages">
+      <div class="treino-stage{% if modulo.aulas and modulo.aulas_concluidas == modulo.aulas|length %} is-ok{% endif %}"><i class="bi bi-play-circle" aria-hidden="true"></i><div><strong>Aulas</strong><span>{{ modulo.aulas_concluidas }} de {{ modulo.aulas|length }} concluídas</span></div></div>
+      <div class="treino-stage{% if aprovadas == modulo.quizzes|length %} is-ok{% endif %}"><i class="bi bi-ui-checks" aria-hidden="true"></i><div><strong>Avaliações</strong><span>{% if modulo.quizzes %}{{ aprovadas }} de {{ modulo.quizzes|length }} aprovadas{% else %}Nenhuma neste módulo{% endif %}</span></div></div>
+      <div class="treino-stage{% if modulo.aplicacao %} is-ok{% endif %}"><i class="bi bi-person-check" aria-hidden="true"></i><div><strong>Observação prática</strong><span>{{ 'Validada neste ciclo' if modulo.aplicacao else ('Aguardando validação' if temporada else 'Sem ciclo ativo') }}</span></div></div>
+    </div>
+    <details class="treino-person-module-details">
+    <summary><span>Ver aulas, avaliações e prática</span><i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+    <div class="treino-person-module-body">
+    <h3>Aulas</h3>
     <div class="treino-lesson-list">
       {% for aula in modulo.aulas %}
       <div class="treino-lesson" data-aula-id="{{ aula.video.id }}">
@@ -37,16 +51,18 @@
       </div>
       {% else %}<div class="treino-empty">Nenhuma aula publicada neste módulo.</div>{% endfor %}
     </div>
-    <h3 class="h6 mt-4">Avaliações</h3>
+    <h3>Avaliações</h3>
     <div class="treino-lesson-list">
       {% for avaliacao in modulo.quizzes %}
       <div class="treino-lesson"><span class="treino-lesson-main"><strong>{{ avaliacao.quiz.titulo }}</strong><small>{{ avaliacao.tentativas }} tentativa(s){% if avaliacao.ultima_tentativa and avaliacao.ultima_tentativa.finalizado_em %} · Último resultado: {{ avaliacao.ultima_tentativa.acertos }}/{{ avaliacao.ultima_tentativa.total }}{% endif %}</small></span><span class="treino-status {{ 'is-done' if avaliacao.aprovada else 'is-progress' }}">{{ avaliacao.status }}</span></div>
       {% else %}<p class="text-muted">Nenhuma avaliação publicada neste módulo.</p>{% endfor %}
     </div>
-    <h3 class="h6 mt-4">Observação prática{% if temporada %} · {{ temporada.nome }}{% endif %}</h3>
+    <h3>Observação prática{% if temporada %} · {{ temporada.nome }}{% endif %}</h3>
     {% if modulo.aplicacao %}
     <p><span class="treino-status is-done">Validada</span> {{ modulo.aplicacao.data|brt('%d/%m/%Y') }} · por {{ modulo.aplicacao.gestor.nome }}</p>
     {% else %}<p class="text-muted">{{ 'Aguardando validação do gestor neste ciclo.' if temporada else 'Sem ciclo ativo para a validação prática.' }}</p>{% endif %}
+    </div>
+    </details>
   </section>
   {% else %}<div class="treino-empty">Nenhum módulo publicado no momento.</div>{% endfor %}
 </main>
