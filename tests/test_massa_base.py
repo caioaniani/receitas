@@ -3,6 +3,8 @@
 Verifica o cálculo com o EXEMPLO do dono (pão francês / sourdough trad /
 sourdough 7 grãos saindo de uma base comum).
 """
+import pytest
+
 from app.extensions import db
 from app.models import (
     MassaBase,
@@ -118,6 +120,40 @@ def test_rendimento_massa_crua_pao_de_amassadeira_ainda_usa_massa(app):
     db.session.commit()
     # massa = 1820 g; 1820/500 = 3,64 (massa crua), NÃO o rendimento_qtd=10.
     assert abs(rendimento_massa_crua(s) - 1820 / 500) < 1e-6
+
+
+@pytest.mark.parametrize('unidade,peso,esperado', [
+    ('un', 1, 'g'),       # granola/levain cadastrados como unidade-base de 1 g
+    ('', 1, 'g'),
+    ('g', 1, 'g'),
+    ('kg', 1, 'g'),       # não transformar 17.338 unidades-base em 17.338 kg
+    ('ml', 1, 'ml'),
+    ('l', 1, 'ml'),
+    ('unidades', 500, 'un'),
+    ('kg', 500, 'un'),    # peças de 500 g; cadastro kg não converte a contagem
+    ('kg', 1000, 'un'),
+    ('g', None, 'g'),
+    (' ML ', None, 'ml'),
+    ('kg', None, 'kg'),
+    ('l', 0, 'l'),
+    ('unidades', None, 'un'),
+])
+def test_unidade_producao_rotula_sem_converter_quantidade(app, unidade, peso, esperado):
+    from app.services.massa_base import unidade_producao
+
+    receita = Receita(nome='Preparo', rendimento_qtd=17338,
+                      rendimento_unidade=unidade, peso_base=1000,
+                      peso_unitario=peso)
+    assert unidade_producao(receita) == esperado
+    assert receita.rendimento_qtd == 17338
+    assert receita.rendimento_unidade == unidade
+    assert receita.peso_unitario == peso
+
+
+def test_unidade_producao_sem_receita_usa_un():
+    from app.services.massa_base import unidade_producao
+
+    assert unidade_producao(None) == 'un'
 
 
 def test_base_e_o_minimo_comum(app):

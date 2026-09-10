@@ -5396,3 +5396,10 @@ preparos permanecem disponíveis em sequência.
   sem etapas; dispensados e faltas encerradas não entram. A referência não
   orienta refazer o que já foi produzido.
 - Sem alteração de schema, motor de pedidos, estoque ou confirmação parcial.
+
+- Unidade na TV: `massa_base.unidade_producao` identifica o rótulo da quantidade
+  sem converter valores: peso unitário 1 → g (ml no cadastro ml/l); outros pesos
+  positivos → un; sem peso → unidade g/ml/kg/l cadastrada ou un. A sequência,
+  painel, confirmação e modal usam o mesmo rótulo. Ex.: 17338 g de granola,
+  não 17338 pães. Teste de registro confirma que 1000 g credita exatamente
+  1000 na unidade-base existente.

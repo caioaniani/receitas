@@ -5,7 +5,7 @@ from math import ceil
 from app.extensions import db
 from app.models import MateriaPrima, Receita
 from app.services.custos import calcular_custos_receitas
-from app.services.massa_base import rendimento_massa_crua
+from app.services.massa_base import rendimento_massa_crua, unidade_producao
 from app.utils import SUB_RECEITA_TIPOS, hoje, unidades_subreceita
 
 logger = logging.getLogger(__name__)
@@ -601,6 +601,7 @@ def mise_en_place(receita, unidades):
         'receita_id': receita.id,
         'nome': receita.nome,
         'unidades': int(unidades),
+        'unidade_producao': unidade_producao(receita),
         'farinha_g': round(peso_base * mult, 1),
         'ingredientes': ingredientes,
         'etapas': dividir_etapas_preparo(receita.modo_preparo),
@@ -758,7 +759,8 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
     sincronizar_pre_baixa_mp(item.planejamento, user_id)
     db.session.commit()
     return {'ok': True, 'produzido': item.produzido_qtd,
-            'encerrado': encerrado, 'falta_restante': falta_restante}
+            'encerrado': encerrado, 'falta_restante': falta_restante,
+            'unidade': unidade_producao(rec)}
 
 
 def consolidar_lista_compras(itens):

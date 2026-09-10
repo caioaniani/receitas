@@ -277,3 +277,35 @@ def test_consultar_sequencia_e_destinos_nao_altera_producao_nem_estoque(
     _sequencia(cliente)
     db.session.expire_all()
     assert estado() == antes
+
+
+def test_preparo_em_gramas_tem_mesma_unidade_na_sequencia_registro_e_modal(app, admin_user):
+    receita = _receita('Granola pesada', etapas=[])
+    receita.peso_unitario = 1
+    receita.rendimento_unidade = 'g'
+    _, itens = _plano(DIA, [receita], produzido=338)
+    item = itens[0]
+    item.qtd_alvo = 17338
+    db.session.commit()
+    cliente = _login(app, admin_user)
+
+    html = _sequencia(cliente)
+    painel, = _paineis(html, receita.nome)
+    assert '17000 <small>g</small>' in painel
+    destino = _link(painel, 'Registrar produção')
+    registro = cliente.get(destino).get_data(as_text=True)
+    assert 'data-unidade="g"' in registro
+    assert '>17000</b> g' in registro
+    assert 'name="unidades" min="1" value="17000"' in registro
+    modal = cliente.get(f'/padeiro/receita/{receita.id}.json?unidades=17000').get_json()
+    assert modal['unidades'] == 17000
+    assert modal['unidade_producao'] == 'g'
+
+    resposta = cliente.post(f'/padeiro/produzir-plano/{item.id}', data={
+        'unidades': '1000'}, follow_redirects=True)
+    assert resposta.status_code == 200
+    assert 'Produzido 1000 g' in resposta.get_data(as_text=True)
+    db.session.expire_all()
+    assert db.session.get(PlanejamentoItem, item.id).produzido_qtd == 1338
+    estoque = EstoqueProducao.query.filter_by(receita_id=receita.id).one()
+    assert estoque.quantidade == 1000

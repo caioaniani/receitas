@@ -94,6 +94,26 @@ def rendimento_massa_crua(receita):
     return float(receita.rendimento_qtd or 1) or 1.0
 
 
+def unidade_producao(receita):
+    """Rótulo da quantidade da ordem, sem converter ou recalcular valores.
+
+    A contagem por massa/peso usa uma unidade-base quando o peso é 1 g:
+    gramas, ou ml no cadastro de volume. Peso maior representa peças daquele
+    peso (inclusive pão de 1 kg), não quantidade em kg. Sem peso, preserva a
+    unidade de medida cadastrada, pois o rendimento vem da quantidade da ficha.
+    Não usa a heurística de aviso ``medida_em_gramas`` como validação.
+    """
+    if receita is None:
+        return 'un'
+    unidade = (receita.rendimento_unidade or '').strip().lower()
+    peso = receita.peso_unitario or 0
+    if peso == 1:
+        return 'ml' if unidade in ('ml', 'l') else 'g'
+    if peso > 0:
+        return 'un'
+    return unidade if unidade in ('g', 'ml', 'kg', 'l') else 'un'
+
+
 def escala_da_ordem(massa_base, plano):
     """Porções e unidades da referência completa desta base na ordem enviada.
 

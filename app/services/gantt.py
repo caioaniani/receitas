@@ -26,6 +26,7 @@ from app.services.centros_producao import (
     centro_trabalho_receita,
     rotulo_centro,
 )
+from app.services.massa_base import unidade_producao
 from app.services.producao import fornadas_amassadeira
 
 DIA_INI = 6 * 60          # 06:00 — origem do eixo (minutos desde a meia-noite)
@@ -150,7 +151,8 @@ def montar_gantt(dia):
         produzido = int(it.produzido_qtd or 0)
         return {'item_id': it.id, 'receita_id': it.receita_id,
                 'data_plano': data_plano.isoformat(), 'alvo': alvo,
-                'produzido': produzido, 'falta': max(0, alvo - produzido)}
+                'produzido': produzido, 'falta': max(0, alvo - produzido),
+                'unidade': unidade_producao(it.receita)}
 
     for it in (plano.itens if plano else []):
         rec = it.receita
@@ -185,6 +187,7 @@ def montar_gantt(dia):
              'receita_id': kw.get('receita_id'), 'centro': centro,
              'item_id': kw.get('item_id'), 'data_plano': kw.get('data_plano'),
              'alvo': kw.get('alvo'), 'produzido': kw.get('produzido'),
+             'unidade': kw.get('unidade', 'un'),
              'centro_label': rotulo_centro(centro)}
         produtos.append(p)
         return p

@@ -254,7 +254,7 @@ def _plano_do_dia(dia):
         eh_preparo_auxiliar,
     )
     from app.services.gantt import _g_label
-    from app.services.massa_base import calcular_cascata, escala_da_ordem
+    from app.services.massa_base import calcular_cascata, escala_da_ordem, unidade_producao
     from app.services.producao import fornadas_amassadeira
 
     plano = (PlanejamentoProducao.query
@@ -274,6 +274,7 @@ def _plano_do_dia(dia):
         return {'item_id': it.id, 'receita_id': it.receita_id,
                 'nome': rec.nome if rec else '(receita)', 'alvo': alvo,
                 'produzido': feito, 'falta': max(0, alvo - feito),
+                'unidade': unidade_producao(rec),
                 'fornadas': fornadas_amassadeira(rec, it.multiplicador),
                 'centro': centro_trabalho_receita(rec),
                 'auxiliar': eh_preparo_auxiliar(rec),
@@ -553,13 +554,14 @@ def produzir_plano(item_id):
     encerrar = request.form.get('encerrar') == '1'
     res = produzir_item_plano(item_id, unidades, current_user.id,
                               encerrar=encerrar)
+    unidade = res.get('unidade', 'un')
     if res.get('ok') and res.get('encerrado'):
-        flash('Produzido %d un — item encerrado; a diferença (%d un) foi '
-              'pra auditoria do admin.' % (unidades, res['falta_restante']),
+        flash('Produzido %d %s — item encerrado; a diferença (%d %s) foi '
+              'para auditoria do admin.' % (unidades, unidade, res['falta_restante'], unidade),
               'success')
     elif res.get('ok'):
-        flash('Produzido %d un — estoque creditado e MP descontada.'
-              % unidades, 'success')
+        flash('Produzido %d %s — estoque creditado e MP descontada.'
+              % (unidades, unidade), 'success')
     else:
         flash(res.get('erro', 'Erro ao produzir.'), 'warning')
     return redirect(request.referrer or url_for('padeiro.index'))

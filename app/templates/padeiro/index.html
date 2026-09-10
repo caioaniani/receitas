@@ -474,8 +474,8 @@
       </button>
       {% endif %}
       <span class="prod-dia-meta">
-        {% if it.falta > 0 %}produzir <b style="color:#198754;">{{ it.falta }}</b> un{% if it.produzido %} <small>(já {{ it.produzido }}/{{ it.alvo }})</small>{% endif %}
-        {%- else -%}✓ feito {{ it.produzido }} un{% endif %}
+        {% if it.falta > 0 %}produzir <b style="color:#198754;">{{ it.falta }}</b> {{ it.unidade }}{% if it.produzido %} <small>(já {{ it.produzido }}/{{ it.alvo }})</small>{% endif %}
+        {%- else -%}✓ feito {{ it.produzido }} {{ it.unidade }}{% endif %}
       </span>
       {% if it.falta > 0 %}
       {# Lançamento PARCIAL (menos que a falta): 2º confirm pergunta se dá o
@@ -483,12 +483,12 @@
          (decisão do dono 17/07/2026). Cancelar no 2º = só registra e o item
          continua aqui (fornadas em levas). #}
       <form method="POST" action="{{ url_for('padeiro.produzir_plano', item_id=it.item_id) }}"
-            class="prod-dia-form"
+            class="prod-dia-form" data-unidade="{{ it.unidade }}"
             onsubmit="return prodConfirma(this, {{ it.falta }}, '{{ it.nome|e }}');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="encerrar" value="">
         <input type="number" name="unidades" min="1" value="{{ it.falta }}"
-               class="prod-dia-qtd" id="qtd-{{ it.item_id }}" aria-label="Quantidade produzida de {{ it.nome }}">
+               class="prod-dia-qtd" id="qtd-{{ it.item_id }}" aria-label="Quantidade produzida de {{ it.nome }} em {{ it.unidade }}">
         <button type="submit" class="prod-dia-btn">Registrar produção</button>
       </form>
       {% else %}
@@ -736,7 +736,7 @@
       .then(function (r) { return r.json(); })
       .then(function (d) {
         document.getElementById('mep-titulo').textContent =
-          d.nome + ' — ' + d.unidades + ' un';
+          d.nome + ' — ' + d.unidades + ' ' + d.unidade_producao;
         var h = '<div class="mep-sub">Mise en place — marque o que já separou</div>';
         (d.ingredientes || []).forEach(function (i) {
           var key = 'mep:' + d.receita_id + ':' + i.nome;
@@ -877,15 +877,16 @@
   // se continua aberto (fornadas em levas). 1º Cancelar aborta tudo;
   // 2º Cancelar registra sem encerrar.
   function prodConfirma(f, falta, nome) {
+    var unidade = f.dataset.unidade || 'un';
     var q = parseInt(f.unidades.value, 10) || 0;
-    if (!confirm('Produzir ' + q + ' un de ' + nome +
+    if (!confirm('Produzir ' + q + ' ' + unidade + ' de ' + nome +
                  ' e dar baixa na matéria-prima?')) { return false; }
     f.encerrar.value = '';
     if (q > 0 && q < falta) {
       f.encerrar.value = confirm(
-        'Você lançou ' + q + ' de ' + falta + ' un.\n\n' +
+        'Você lançou ' + q + ' de ' + falta + ' ' + unidade + '.\n\n' +
         'Dar o item como ENCERRADO? A diferença (' + (falta - q) +
-        ' un) vai pra auditoria do admin e o item some da sua tela.\n\n' +
+        ' ' + unidade + ') vai para auditoria do admin e o item some da sua tela.\n\n' +
         'OK = encerrar  ·  Cancelar = continuar produzindo depois'
       ) ? '1' : '';
     }

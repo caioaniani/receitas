@@ -185,6 +185,7 @@ def test_receita_sem_etapas_listada_a_parte(app):
     assert g['sem_etapas_itens'] == [{
         'nome': r.nome, 'receita_id': r.id, 'item_id': plano.itens[0].id,
         'data_plano': dia.isoformat(), 'alvo': 10, 'produzido': 3, 'falta': 7,
+        'unidade': 'un',
         'tipo': 'solo', 'tarefas': [], 'destino': None,
         'centro_label': 'Padeiro de pães',
     }]

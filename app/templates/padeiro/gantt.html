@@ -52,7 +52,7 @@
         <span class="choice-name">{{ p.nome }}</span>
         <span class="choice-meta">
           {% if p.tipo == 'base' %}Preparo da massa-base
-          {% else %}<b>{{ p.falta }} un</b> pendentes{% if p.tipo == 'continuacao' %} · ordem {{ p.origem_label }}{% endif %}{% endif %}
+          {% else %}<b>{{ p.falta }} {{ p.unidade }}</b> pendentes{% if p.tipo == 'continuacao' %} · ordem {{ p.origem_label }}{% endif %}{% endif %}
         </span>
         {% if not p.tarefas and not p.destino %}<span class="choice-warning">Sem etapas cadastradas</span>{% endif %}
       </a>
@@ -68,7 +68,7 @@
             {% if p.tipo == 'base' %}
             <p class="quantity"><strong>{{ p.base_massa_label }}</strong> <span>na referência da ordem</span></p>
             {% else %}
-            <p class="quantity"><strong>{{ p.falta }} <small>un</small></strong> <span>pendentes{% if p.produzido %} · {{ p.produzido }} de {{ p.alvo }} já registradas{% endif %}</span></p>
+            <p class="quantity"><strong>{{ p.falta }} <small>{{ p.unidade }}</small></strong> <span>pendentes{% if p.produzido %} · {{ p.produzido }} de {{ p.alvo }} já registradas{% endif %}</span></p>
             {% endif %}
           </div>
           {% if p.item_id %}
