@@ -471,6 +471,8 @@ def create_app(config_class=None):
         acesso_equipe = (
             ep in {'rh.lideranca_preenchimento',
                    'rh.lideranca_preenchimento_salvar',
+                   'rh.lideranca_compartilhar',
+                   'rh.lideranca_compartilhada_remover',
                    'rh.lideranca_organograma',
                    'rh.lideranca_organograma_pdf'}
             and current_user.pode_organizar_equipe()
@@ -480,7 +482,7 @@ def create_app(config_class=None):
             and current_user.pode_cadastrar_funcionarios()
         )
         acesso_checklist = (
-            ep in {'checklist.index', 'checklist.preencher'}
+            ep in {'checklist.index', 'checklist.preencher', 'checklist.editar_item'}
             and current_user.pode_checklist()
         )
         if (getattr(current_user, 'somente_treino', False)

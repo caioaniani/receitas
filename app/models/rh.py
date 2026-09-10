@@ -310,3 +310,22 @@ class PreCadastroFuncionario(db.Model):
 
 
 # ── Estoque de Congelados (Produção) ──
+
+
+class EquipeLiderCompartilhado(db.Model):
+    """Outro líder acompanha a equipe direta de referência na mesma unidade/turno."""
+    __tablename__ = 'equipe_lider_compartilhado'
+    id = db.Column(db.Integer, primary_key=True)
+    lider_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=False)
+    parceiro_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=False)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    periodo = db.Column(db.String(20), nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora)
+    removido_por_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
+    removido_em = db.Column(db.DateTime)
+    lider = db.relationship('Funcionario', foreign_keys=[lider_id])
+    parceiro = db.relationship('Funcionario', foreign_keys=[parceiro_id])
+    loja = db.relationship('Loja')
+    __table_args__ = (db.CheckConstraint('lider_id <> parceiro_id'),)

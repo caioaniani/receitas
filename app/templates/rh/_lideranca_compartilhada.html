@@ -1,0 +1,29 @@
+<section class="treino-section" id="lideranca-compartilhada">
+  <h2>Liderança compartilhada</h2>
+  <p>Dois líderes podem acompanhar a mesma equipe e seus treinamentos. O líder direto continua cadastrado; o outro líder também recebe acesso aos integrantes da mesma unidade e período.</p>
+  {% for vinculo in compartilhados %}
+  <div class="border rounded p-3 mb-2">
+    <strong>{{ vinculo.lider.nome }} + {{ vinculo.parceiro.nome }}</strong>
+    <p>{{ vinculo.loja.nome }} · {{ vinculo.periodo }} · equipe de {{ vinculo.lider.nome }}</p>
+    <form method="post" action="{{ url_for('rh.lideranca_compartilhada_remover', id=vinculo.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-outline-danger">Remover liderança compartilhada</button>
+    </form>
+  </div>
+  {% else %}<p class="text-muted">Nenhuma liderança compartilhada ativa.</p>{% endfor %}
+  <form method="post" action="{{ url_for('rh.lideranca_compartilhar') }}" class="border rounded p-3 mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="form-label" for="compartilhar-lider">Equipe atualmente liderada por</label>
+    <select name="lider_id" id="compartilhar-lider" required class="form-select mb-3">
+      <option value="">Escolha o líder atual</option>
+      {% for lider in lideres %}<option value="{{ lider.id }}">{{ lider.nome }}</option>{% endfor %}
+    </select>
+    <label class="form-label" for="compartilhar-parceiro">Compartilhar também com</label>
+    <select name="parceiro_id" id="compartilhar-parceiro" required class="form-select mb-3">
+      <option value="">Escolha o outro líder</option>
+      {% for lider in lideres %}<option value="{{ lider.id }}">{{ lider.nome }}</option>{% endfor %}
+    </select>
+    <p class="small text-muted">Os dois precisam estar na mesma unidade principal e período. Mudanças de unidade, período ou desligamento suspendem esse acesso compartilhado.</p>
+    <button class="btn btn-primary">Compartilhar liderança</button>
+  </form>
+</section>
