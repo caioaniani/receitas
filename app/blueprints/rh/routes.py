@@ -46,6 +46,8 @@ def _rh_restrito_ao_owner():
     if (request.endpoint in {
             'rh.lideranca_preenchimento',
             'rh.lideranca_preenchimento_salvar',
+            'rh.lideranca_compartilhar',
+            'rh.lideranca_compartilhada_remover',
             'rh.lideranca_organograma',
             'rh.lideranca_organograma_pdf',
             } and current_user.pode_organizar_equipe()):
@@ -266,11 +268,46 @@ def lideranca_preenchimento():
     return render_template(
         'rh/lideranca_preenchimento.html', funcionarios=funcionarios,
         lideres=lideres, lojas=lojas, unidades=unidades,
+        compartilhados=lideranca_svc.compartilhamentos_validos(),
         periodos=lideranca_svc.PERIODOS_EQUIPE,
         com_lider=sum(1 for f in funcionarios if f.lider_id),
         com_unidade=sum(1 for f in funcionarios if unidades.get(f.id)),
         com_periodo=sum(1 for f in funcionarios
                         if f.periodo in lideranca_svc.PERIODOS_EQUIPE))
+
+
+@rh_bp.route('/lideranca/compartilhar', methods=['POST'])
+@login_required
+def lideranca_compartilhar():
+    if not current_user.pode_organizar_equipe():
+        abort(403)
+    from app.services import treino_lideranca as svc
+    try:
+        vinculo = svc.compartilhar_equipe(request.form.get('lider_id', type=int),
+            request.form.get('parceiro_id', type=int), current_user.id)
+    except svc.LiderancaError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+    else:
+        flash(f'{vinculo.parceiro.nome} agora compartilha a liderança da equipe de '
+              f'{vinculo.lider.nome}.', 'success')
+    return redirect(url_for('rh.lideranca_preenchimento', _anchor='lideranca-compartilhada'))
+
+
+@rh_bp.route('/lideranca/compartilhada/<int:id>/remover', methods=['POST'])
+@login_required
+def lideranca_compartilhada_remover(id):
+    if not current_user.pode_organizar_equipe():
+        abort(403)
+    from app.models import EquipeLiderCompartilhado
+    vinculo = db.get_or_404(EquipeLiderCompartilhado, id)
+    if vinculo.ativo:
+        vinculo.ativo = False
+        vinculo.removido_por_id = current_user.id
+        vinculo.removido_em = agora()
+        db.session.commit()
+    flash('Liderança compartilhada removida. Os líderes diretos continuam os mesmos.', 'success')
+    return redirect(url_for('rh.lideranca_preenchimento', _anchor='lideranca-compartilhada'))
 
 
 @rh_bp.route('/lideranca/preenchimento/salvar', methods=['POST'])
@@ -345,6 +382,7 @@ def _dados_organograma():
         (len(filhos_por_lider[f.id]) for f in lideres), default=0)
 
     return {
+        'compartilhados': lideranca_svc.compartilhamentos_validos(),
         'funcionarios': funcionarios,
         'lojas': lojas,
         'lojas_por_id': lojas_por_id,

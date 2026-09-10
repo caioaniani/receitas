@@ -1309,7 +1309,7 @@ def gestor_progressao():
         escopo = 'Todos os funcionários do RH'
     else:
         equipe_base = lideranca.liderados_do(gestor, incluir_inativos=True)
-        escopo = 'Seus liderados diretos'
+        escopo = 'Sua equipe, incluindo liderança compartilhada'
 
     cadastro = (request.args.get('cadastro') or 'ativos').strip().lower()
     if cadastro not in ('ativos', 'inativos', 'todos'):

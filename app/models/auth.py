@@ -59,8 +59,8 @@ class Usuario(UserMixin, db.Model):
         """Verdadeiro quando a conta está ligada a um líder com equipe ativa."""
         try:
             funcionario = self.funcionario
-            return bool(funcionario and any(
-                liderado.ativo for liderado in funcionario.liderados))
+            from app.services.treino_lideranca import liderados_do
+            return bool(liderados_do(funcionario))
         except Exception:
             return False
 

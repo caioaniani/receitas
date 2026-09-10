@@ -18,6 +18,12 @@
         <span class="{{ 'is-missing' if not unidade and not is_owner }}"><i class="bi bi-geo-alt"></i> {{ 'Todas as unidades' if is_owner else (unidade.nome if unidade else 'Unidade não informada') }}</span>
         <span class="{{ 'is-missing' if not pessoa.periodo and not is_owner }}"><i class="bi bi-clock"></i> {{ 'Não se aplica' if is_owner else (pessoa.periodo or 'Período não informado') }}</span>
       </div>
+      {% for vinculo in compartilhados if vinculo.lider_id == pessoa.id %}
+      <p class="small">Liderança compartilhada com {{ vinculo.parceiro.nome }}</p>
+      {% endfor %}
+      {% for vinculo in compartilhados if vinculo.parceiro_id == pessoa.id %}
+      <p class="small">Compartilha a equipe de {{ vinculo.lider.nome }}</p>
+      {% endfor %}
       <footer>
         {% if filhos %}<strong><i class="bi bi-people"></i> {{ filhos|length }} liderado{{ 's' if filhos|length != 1 }}</strong>{% else %}<span>Equipe</span>{% endif %}
         {% if nivel == 0 %}<span class="org-root-badge">Topo da estrutura</span>{% endif %}

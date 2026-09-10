@@ -1,9 +1,11 @@
 """Hierarquia de liderança e checklists de observação prática."""
 
 from sqlalchemy import select, update
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
 from app.models import (
+    EquipeLiderCompartilhado,
     Funcionario,
     Loja,
     TreinoChecklistAplicacao,
@@ -33,19 +35,72 @@ def eh_direcao(funcionario):
     )
 
 
+def compartilhamentos_validos():
+    vinculos = (EquipeLiderCompartilhado.query.filter_by(ativo=True)
+        .options(joinedload(EquipeLiderCompartilhado.lider).selectinload(Funcionario.lojas),
+                 joinedload(EquipeLiderCompartilhado.parceiro).selectinload(Funcionario.lojas),
+                 joinedload(EquipeLiderCompartilhado.loja)).all())
+    pessoas = {f.id: f for v in vinculos for f in (v.lider, v.parceiro) if f}
+    unidades = unidades_principais(list(pessoas.values()))
+    return [v for v in vinculos if v.loja.ativa and all(
+        f and f.ativo and f.usuario_id and unidades.get(f.id) == v.loja_id
+        and f.periodo == v.periodo for f in (v.lider, v.parceiro))]
+
+
+def compartilhar_equipe(lider_id, parceiro_id, usuario_id):
+    lider = db.session.get(Funcionario, lider_id) if lider_id else None
+    parceiro = db.session.get(Funcionario, parceiro_id) if parceiro_id else None
+    if not lider or not parceiro or lider.id == parceiro.id:
+        raise LiderancaError('Escolha duas pessoas diferentes.')
+    if not all(f.ativo and f.usuario_id for f in (lider, parceiro)):
+        raise LiderancaError('Os dois líderes precisam estar ativos e ter conta de acesso.')
+    unidades = unidades_principais([lider, parceiro])
+    loja_id = unidades.get(lider.id)
+    loja = db.session.get(Loja, loja_id) if loja_id else None
+    if (not loja or not loja.ativa or unidades.get(parceiro.id) != loja_id
+            or lider.periodo not in PERIODOS_EQUIPE or lider.periodo != parceiro.periodo):
+        raise LiderancaError('Os dois líderes precisam estar na mesma unidade principal e período.')
+    if not Funcionario.query.filter_by(lider_id=lider.id, ativo=True).first():
+        raise LiderancaError('A pessoa de referência ainda não tem equipe direta.')
+    # Serializa concessões duplicadas sem apagar concessões anteriores da auditoria.
+    Loja.query.filter_by(id=loja_id).with_for_update().first()
+    existente = next((v for v in compartilhamentos_validos()
+                     if v.lider_id == lider.id and v.parceiro_id == parceiro.id), None)
+    if existente:
+        return existente
+    vinculo = EquipeLiderCompartilhado(lider_id=lider.id, parceiro_id=parceiro.id,
+        loja_id=loja_id, periodo=lider.periodo, criado_por_id=usuario_id)
+    db.session.add(vinculo)
+    db.session.commit()
+    return vinculo
+
+
 def liderados_do(gestor, *, incluir_inativos=False):
-    if gestor is None:
+    if gestor is None or not gestor.ativo:
         return []
-    query = Funcionario.query.filter_by(lider_id=gestor.id)
+    diretos = Funcionario.query.filter_by(lider_id=gestor.id)
     if not incluir_inativos:
-        query = query.filter_by(ativo=True)
-    return query.order_by(Funcionario.nome).all()
+        diretos = diretos.filter_by(ativo=True)
+    pessoas = {f.id: f for f in diretos.all() if f.id != gestor.id}
+    vinculos = [v for v in compartilhamentos_validos() if v.parceiro_id == gestor.id]
+    if vinculos:
+        candidatos = (Funcionario.query.filter(Funcionario.lider_id.in_([v.lider_id for v in vinculos]))
+                      .options(selectinload(Funcionario.lojas)).all())
+        unidades = unidades_principais(candidatos)
+        for vinculo in vinculos:
+            for pessoa in candidatos:
+                if (pessoa.id not in (gestor.id, vinculo.lider_id)
+                        and pessoa.lider_id == vinculo.lider_id
+                        and unidades.get(pessoa.id) == vinculo.loja_id
+                        and pessoa.periodo == vinculo.periodo
+                        and (pessoa.ativo or incluir_inativos)):
+                    pessoas[pessoa.id] = pessoa
+    return sorted(pessoas.values(), key=lambda f: f.nome.casefold())
 
 
 def pode_observar(gestor, funcionario, *, is_admin=False):
-    return bool(is_admin or (
-        gestor is not None and funcionario is not None
-        and funcionario.ativo and funcionario.lider_id == gestor.id))
+    return bool(is_admin or (funcionario is not None and funcionario.ativo
+        and any(f.id == funcionario.id for f in liderados_do(gestor))))
 
 
 def _propor_vinculos(funcionarios, vinculos):
