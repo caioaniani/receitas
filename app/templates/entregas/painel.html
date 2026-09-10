@@ -316,7 +316,7 @@
     function carregarLista() {
       fetch('/entregas/api/atendimento/conversas?status=' + statusAtual,
             {credentials: 'same-origin'})
-        .then(function (r) { return r.ok ? r.json() : {conversas: []}; })
+        .then(function (r) { if (!r.ok) throw new Error('Atendimento indisponível'); return r.json(); })
         .then(function (data) {
           var cs = (data && data.conversas) || [];
           att.textContent = 'atualizado ' + tempoRel(Math.floor(Date.now()/1000));
@@ -343,7 +343,7 @@
             });
           });
         })
-        .catch(function () { /* rede: mantem o que tinha */ });
+        .catch(function () { att.textContent = 'Não foi possível atualizar o atendimento. Tentando novamente…'; });
     }
 
     function abrirThread(id, nome) {
@@ -587,7 +587,7 @@
     function poll() {
       fetch('{{ url_for("entregas.api_painel_testes_chatwoot_pending") }}',
             {credentials: 'same-origin'})
-        .then(function (r) { return r.ok ? r.json() : {ids: []}; })
+        .then(function (r) { if (!r.ok) throw new Error('Atendimento indisponível'); return r.json(); })
         .then(function (data) {
           var ids = (data && data.ids) || [];
           if (vistos === null) { vistos = new Set(ids); return; }

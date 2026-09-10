@@ -471,8 +471,8 @@ def test_api_conversas_erro_nao_quebra(app, monkeypatch):
     monkeypatch.setattr(chatwoot, 'listar_conversas', boom)
     c = _staff(app)
     r = c.get('/entregas/api/atendimento/conversas')
-    assert r.status_code == 200
-    assert r.get_json()['conversas'] == []
+    assert r.status_code == 503
+    assert 'conversas' not in r.get_json()
 
 
 def test_api_atendimento_exige_login(app):
@@ -517,4 +517,25 @@ def test_pending_api_erro_zero(app, monkeypatch):
     monkeypatch.setattr(chatwoot, 'listar_conversas_paradas', boom)
     c = _staff(app)
     r = c.get('/entregas/api/painel-testes/chatwoot-pending')
-    assert r.get_json() == {'ids': [], 'count': 0}
+    assert r.status_code == 503
+    assert 'ids' not in r.get_json()
+
+
+def test_api_conversas_falha_de_rede_nao_parece_lista_vazia(app, monkeypatch):
+    import requests
+
+    from app.services import chatwoot
+    app.config.update(CHATWOOT_URL='https://example.test',
+                      CHATWOOT_API_TOKEN='teste', CHATWOOT_ACCOUNT_ID='1')
+
+    def sem_rota(*args, **kwargs):
+        raise requests.exceptions.ConnectionError('No route to host')
+
+    monkeypatch.setattr(chatwoot.requests, 'get', sem_rota)
+    monkeypatch.setattr(chatwoot.time, 'sleep', lambda _: None)
+    c = _staff(app)
+    for url in ('/entregas/api/atendimento/conversas',
+                '/entregas/api/painel-testes/chatwoot-pending'):
+        resposta = c.get(url)
+        assert resposta.status_code == 503
+        assert set(resposta.get_json()) == {'erro'}

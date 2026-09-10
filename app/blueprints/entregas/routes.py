@@ -299,16 +299,18 @@ def api_painel_testes_chatwoot_pending():
     Usa o token de USUARIO (com fallback pro bot). CLAUDE.md trava: token de
     Agent Bot NAO pode listar conversas (401 = lista vazia silenciosa).
 
-    Retorna {ids: [int], count: int}. Em erro/desconfig, {ids: [], count: 0}
-    — o frontend trata como "nenhuma pending" (nao falsifica klaxon)."""
+    Retorna {ids: [int], count: int}. Em erro/desconfig retorna 503;
+    o frontend preserva a base anterior e não inicializa o alarme com erro."""
     from app.services import chatwoot as cw_svc
     try:
         paradas = cw_svc.listar_conversas_paradas(
-            min_minutos=0, status='pending', limite=100)
+            min_minutos=0, status='pending', limite=100, estrito=True)
         ids = [p['id'] for p in paradas if p.get('id') is not None]
+    except cw_svc.ChatwootConsultaError:
+        return {'erro': 'Não foi possível consultar o atendimento.'}, 503
     except Exception:  # noqa: BLE001
         current_app.logger.exception('painel-testes: chatwoot pending falhou')
-        ids = []
+        return {'erro': 'Não foi possível consultar o atendimento.'}, 503
     from flask import jsonify
     return jsonify({'ids': ids, 'count': len(ids)})
 
@@ -345,17 +347,19 @@ def api_atendimento_conversas():
     """Lista conversas do Chatwoot pro painel de atendimento NOSSO (sem iframe).
 
     `?status=` open (default) | pending | resolved | all. Read-only: so leitura
-    via API (token de usuario). Erro/desconfig -> lista vazia (a UI mostra
-    'sem conversas', nunca quebra o painel)."""
+    via API (token de usuario). Erro/desconfig retorna 503; a UI mantém
+    a última consulta e informa a indisponibilidade."""
     from flask import jsonify
 
     from app.services import chatwoot as cw_svc
     status = request.args.get('status', 'open')
     try:
-        conversas = cw_svc.listar_conversas(status=status, limite=40)
+        conversas = cw_svc.listar_conversas(status=status, limite=40, estrito=True)
+    except cw_svc.ChatwootConsultaError:
+        return {'erro': 'Não foi possível consultar o atendimento.'}, 503
     except Exception:  # noqa: BLE001
         current_app.logger.exception('atendimento: listar_conversas falhou')
-        conversas = []
+        return {'erro': 'Não foi possível consultar o atendimento.'}, 503
     return jsonify({'conversas': conversas, 'status': status})
 
 

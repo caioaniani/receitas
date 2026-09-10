@@ -10,11 +10,44 @@ Config: CHATWOOT_URL, CHATWOOT_API_TOKEN, CHATWOOT_ACCOUNT_ID.
 Fonte canônica de normalização de telefone: app.utils.telefone_chave.
 """
 import logging
+import time
 
 import requests
 from flask import current_app
 
 logger = logging.getLogger(__name__)
+
+
+class ChatwootConsultaError(RuntimeError):
+    """Consulta indisponível; não significa ausência de conversas."""
+
+
+def _consultar_conversas(headers, params):
+    """Repete somente GET, inclusive quando o corpo HTTP chega incompleto.
+
+    Duas tentativas curtas cabem no ciclo de atualização do painel. Não usar
+    este retry para envio de mensagens: um POST repetido poderia duplicá-las.
+    A falha definitiva continua registrada no Sentry.
+    """
+    for tentativa in range(2):
+        try:
+            resposta = requests.get(f'{_base()}/conversations', headers=headers,
+                                    params=params, timeout=(3, 5))
+            if resposta.status_code in (502, 503, 504) and tentativa == 0:
+                resposta.close()
+                time.sleep(0.5)
+                continue
+            if resposta.status_code not in (200, 201):
+                logger.error('chatwoot consulta de conversas: HTTP %s', resposta.status_code)
+                raise ChatwootConsultaError('Atendimento indisponível')
+            return resposta
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
+                requests.exceptions.ChunkedEncodingError) as exc:
+            if tentativa == 0:
+                time.sleep(0.5)
+                continue
+            logger.exception('chatwoot consulta de conversas falhou após duas tentativas')
+            raise ChatwootConsultaError('Atendimento indisponível') from exc
 
 
 def disponivel():
@@ -575,7 +608,7 @@ def erros_de_envio(conversation_id, limite=10):
             'falhas': falhas[-limite:]}
 
 
-def listar_conversas_paradas(min_minutos=15, limite=50, status='pending'):
+def listar_conversas_paradas(min_minutos=15, limite=50, status='pending', *, estrito=False):
     """Conversas no `status` dado cujo `last_activity_at` foi ha mais de
     `min_minutos`. Usos:
     - status='pending' (default): detector de abandono + follow-up do bot
@@ -585,7 +618,8 @@ def listar_conversas_paradas(min_minutos=15, limite=50, status='pending'):
       bot ignora open por design, mas o dono precisa saber).
 
     Retorna lista de {'id', 'nome_contato', 'minutos_paradas'}. Lista vazia se
-    o Chatwoot nao estiver configurado ou se a chamada falhar.
+    o Chatwoot nao estiver configurado ou se a chamada falhar. Com
+    estrito=True, essas falhas levantam ChatwootConsultaError.
 
     Auth: token de USUARIO (com fallback pro de bot). Token de Agent Bot
     NAO pode listar conversas (401) — descoberto em 12/06/2026: este
@@ -596,19 +630,20 @@ def listar_conversas_paradas(min_minutos=15, limite=50, status='pending'):
     elif bot_disponivel():
         headers = _bot_headers()
     else:
+        if estrito:
+            raise ChatwootConsultaError("Atendimento não configurado")
         return []
-    url = f'{_base()}/conversations'
     try:
-        r = requests.get(url, headers=headers,
-                         params={'status': status, 'page': 1},
-                         timeout=15)
-        if r.status_code not in (200, 201):
-            logger.warning('chatwoot listar_conversas_paradas %s: %s',
-                           r.status_code, r.text[:200])
-            return []
+        r = _consultar_conversas(headers, {'status': status, 'page': 1})
         data = r.json() if r.text else {}
-    except Exception:  # noqa: BLE001
+    except ChatwootConsultaError:
+        if estrito:
+            raise
+        return []
+    except Exception as exc:  # Parsing e bugs inesperados continuam visíveis.
         logger.exception('chatwoot listar_conversas_paradas falhou')
+        if estrito:
+            raise ChatwootConsultaError('Resposta inválida do atendimento') from exc
         return []
 
     payload = (data.get('data') or {}).get('payload') if isinstance(data, dict) else None
@@ -647,11 +682,12 @@ def listar_conversas_paradas(min_minutos=15, limite=50, status='pending'):
     return paradas[:limite]
 
 
-def listar_conversas(status='open', limite=40):
+def listar_conversas(status='open', limite=40, *, estrito=False):
     """Conversas no `status` (open/pending/resolved/all), com dados pra UI:
     contato, preview da ultima mensagem, status, canal, quando, nao-lidas.
     Ordena por atividade mais recente. Lista vazia se Chatwoot indisponivel
-    ou erro (a UI trata como 'sem conversas', nunca quebra).
+    ou erro para consumidores legados. O painel usa estrito=True para
+    distinguir falha de consulta de uma lista realmente vazia.
 
     Leitura: token de USUARIO (CHATWOOT_API_TOKEN), fallback pro de bot.
     LICAO DURA (CLAUDE.md): token de Agent Bot NAO lista conversas (401) — dai
@@ -662,20 +698,23 @@ def listar_conversas(status='open', limite=40):
     elif bot_disponivel():
         headers = _bot_headers()
     else:
+        if estrito:
+            raise ChatwootConsultaError("Atendimento não configurado")
         return []
     params = {'page': 1}
     if status and status != 'all':
         params['status'] = status
-    url = f'{_base()}/conversations'
     try:
-        r = requests.get(url, headers=headers, params=params, timeout=15)
-        if r.status_code not in (200, 201):
-            logger.warning('chatwoot listar_conversas %s: %s',
-                           r.status_code, (r.text or '')[:200])
-            return []
+        r = _consultar_conversas(headers, params)
         data = r.json() if r.text else {}
-    except Exception:  # noqa: BLE001
+    except ChatwootConsultaError:
+        if estrito:
+            raise
+        return []
+    except Exception as exc:  # Parsing e bugs inesperados continuam visíveis.
         logger.exception('chatwoot listar_conversas falhou')
+        if estrito:
+            raise ChatwootConsultaError('Resposta inválida do atendimento') from exc
         return []
 
     payload = (data.get('data') or {}).get('payload') if isinstance(data, dict) else None

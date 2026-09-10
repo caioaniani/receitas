@@ -107,3 +107,22 @@ Chatwoot. EDNA já revogada.
 | `CHATWOOT_API_TOKEN` | (futuro) enriquecer atributos do contato |
 | `CHATWOOT_ACCOUNT_ID` | (futuro) idem |
 | `CHATWOOT_DATABASE_URL` | backup diário do banco do Chatwoot |
+
+### Interrupções na consulta de conversas (10/09/2026)
+
+Os eventos Sentry GESTAO-PADARIA-4P e 4Q ocorreram às 06:12:58/59:
+`No route to host` na lista aberta e corpo HTTP interrompido na lista pending.
+As leituras dessas duas listas fazem até duas tentativas, com 0,5 s entre
+elas e timeouts de conexão/leitura de 3/5 s. Retry restrito a falhas de
+conexão, timeout, corpo interrompido e HTTP 502/503/504; não se aplica a
+POSTs nem a credenciais recusadas. Falhas definitivas continuam no Sentry.
+
+As duas APIs do painel usam `estrito=True` e devolvem HTTP 503 com aviso
+em caso de falha. A lista mantém os dados anteriores; o indicador informa
+que não foi possível atualizar. O polling de pending ignora a consulta
+malsucedida e só estabelece a base do alarme após uma resposta válida.
+Consumidores antigos mantêm o contrato de lista vazia em falha.
+
+Validação: `tests/test_chatwoot_resiliencia.py` e `tests/test_painel_testes.py`.
+A causa da indisponibilidade de rede no servidor não é determinada apenas
+pelos dois eventos; esta mudança trata a recuperação e a apresentação da falha.
