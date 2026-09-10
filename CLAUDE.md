@@ -5161,6 +5161,17 @@ interna que ja existia). Servico `app/services/folha_import.py`.
 
 ## Plano de cargos, salarios e carreira no RH (03/09/2026)
 
+**Promoção direta na equipe (10/09/2026)**: dono usa **Promover** em
+`/rh/equipe` ou no histórico da pessoa. Escolhe cargo/data, revisa valores e
+confirma em `/rh/funcionarios/<id>/promover`. `rh_promocao` aplica cargo, função,
+base e sincronização do plano existente junto do histórico na mesma transação.
+Preserva premiação, benefícios, lojas, liderança e login; confiança mantém 40%
+da base. Não agenda datas futuras, recalcula folhas fechadas, cria vínculos por
+suposição ou promove por treinamento concluído. Enquadramento existente exige
+faixa única no destino. Prévia não grava; confirmação assinada de 30min, com
+CSRF e releitura sob lock, rejeita reenvio/mudança desde a revisão. Documentação
+em `docs/rh-visao-equipe.md`; testes `test_rh_promocao*`.
+
 Pedido do dono: vincular `OPao_Plano_Cargos_Salarios_2026_REVISADO.xlsx` ao
 sistema. Tela owner-only em **`/rh/plano-carreira`**, com atalho na area RH;
 importacao com previa em **`/rh/plano-carreira/importar`**.

@@ -6,6 +6,33 @@ Disponível ao dono em **Equipe → Visão da equipe** (`/rh/equipe`), na área 
 no cadastro de funcionários e na busca. Os demais papéis não recebem acesso.
 Cada pessoa abre seu histórico em `/rh/funcionarios/<id>/carreira`.
 
+## Promover pela equipe
+
+O botão **Promover** aparece na linha de cada funcionário ativo e no histórico.
+Abre `/rh/funcionarios/<id>/promover`: escolher novo cargo e data, revisar os
+valores e **Confirmar promoção**. Não depende de editar a ficha completa.
+
+A revisão não grava nada. A confirmação atualiza cargo, função e base da ficha,
+sincroniza o enquadramento existente e registra o histórico com autor, data e
+cargo/nível anterior e novo, na mesma transação. Preserva premiação, benefícios,
+liderança, lojas e conta de acesso. A regra de confiança (40% da base) é mantida;
+seu valor acompanha a base nova. O total exibido exclui VT, VR, horas extras e
+descontos. O cargo escolhido entra em vigor no cadastro ao confirmar; a data
+informada documenta a promoção, não agenda alterações ou recalcula folhas fechadas.
+
+Somente o dono pode revisar/confirmar. O servidor exige cargo ativo diferente,
+funcionário ativo e data entre admissão e hoje. Se existe enquadramento, o novo
+cargo precisa de faixa inequívoca; vínculos ausentes/ambíguos são recusados.
+Não cria faixa ou enquadramento por suposição nem libera acessos automaticamente.
+Prévia assinada expira em 30 minutos e está vinculada ao autor/pessoa. A confirmação
+relê funcionário e dependências sob lock e rejeita mudanças desde a revisão ou
+reenvio de uma promoção já aplicada. CSRF obrigatório nas duas etapas.
+
+Testes adicionais: `test_rh_promocao.py` e `test_rh_promocao_routes.py`, incluindo
+prévia sem escrita, preservação dos demais campos, rollback, duplicação e revisão
+desatualizada. A publicação disponibiliza o fluxo; promover alguém é uma decisão
+explícita posterior na tela.
+
 O painel inclui funcionários do RH mesmo sem login. Usa o cargo efetivo da ficha
 e sua faixa de carreira, nunca o nível proposto em um enquadramento ainda não
 aplicado. Quando o vínculo é inexistente ou ambíguo, mostra “Nível não definido”.

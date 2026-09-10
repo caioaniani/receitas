@@ -81,16 +81,16 @@
     <div class="rh-equipe-table-wrap" role="region" aria-label="Cargos e liderança da equipe" tabindex="0">
       <table class="rh-equipe-table">
         <caption class="rh-equipe-sr-only">Situação atual dos cargos, níveis e líderes; datas de promoção registradas.</caption>
-        <thead><tr><th scope="col">Pessoa</th><th scope="col">Cargo e nível</th><th scope="col">Unidade e período</th><th scope="col">Líder direto</th><th scope="col">Última promoção</th><th scope="col"><span class="rh-equipe-sr-only">Histórico</span></th></tr></thead>
+        <thead><tr><th scope="col">Pessoa</th><th scope="col">Cargo e nível</th><th scope="col">Unidade e período</th><th scope="col">Líder direto</th><th scope="col">Última promoção</th><th scope="col">Ações</th></tr></thead>
         <tbody>
         {% for linha in linhas %}{% set pessoa = linha.pessoa %}
-          <tr>
+          <tr id="pessoa-{{ pessoa.id }}">
             <th scope="row" data-label="Pessoa"><a class="rh-equipe-person" href="{{ url_for('rh.carreira_funcionario', id=pessoa.id) }}">{{ pessoa.nome }}</a>{% if not pessoa.ativo %}<small class="rh-equipe-muted">Inativo</small>{% endif %}</th>
             <td data-label="Cargo e nível"><strong>{{ linha.cargo_nome }}</strong><div>{% if linha.nivel is not none %}<span class="rh-equipe-level">Nível {{ linha.nivel }}</span>{% else %}<small class="rh-equipe-muted">{{ 'Nível não se aplica' if linha.direcao else 'Nível não definido' }}</small>{% endif %}</div></td>
             <td data-label="Unidade e período">{% if linha.unidades %}{{ linha.unidades|map(attribute='nome')|join(', ') }}{% else %}<span class="rh-equipe-muted">Unidade não definida</span>{% endif %}<small class="rh-equipe-muted">{{ pessoa.periodo or 'Período não definido' }}</small></td>
             <td data-label="Líder direto">{{ linha.lider_nome or 'Sem líder definido' }}</td>
             <td data-label="Última promoção">{% if linha.ultima_promocao %}<time datetime="{{ linha.ultima_promocao.data_efetiva.isoformat() }}">{{ linha.ultima_promocao.data_efetiva.strftime('%d/%m/%Y') }}</time>{% else %}<span class="rh-equipe-muted">Sem registro</span>{% endif %}</td>
-            <td class="rh-equipe-history"><a class="rh-equipe-text-link" href="{{ url_for('rh.carreira_funcionario', id=pessoa.id) }}" aria-label="Ver histórico de {{ pessoa.nome }}">Ver histórico <i class="bi bi-arrow-right" aria-hidden="true"></i></a></td>
+            <td class="rh-equipe-history"><div class="rh-equipe-row-actions">{% if pessoa.ativo %}<a class="rh-equipe-button" href="{{ url_for('rh.promover_funcionario', id=pessoa.id) }}" aria-label="Promover {{ pessoa.nome }}">Promover</a>{% endif %}<a class="rh-equipe-text-link" href="{{ url_for('rh.carreira_funcionario', id=pessoa.id) }}" aria-label="Ver histórico de {{ pessoa.nome }}">Ver histórico <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div></td>
           </tr>
         {% endfor %}
         </tbody>

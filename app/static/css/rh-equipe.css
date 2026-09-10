@@ -78,6 +78,22 @@
 .rh-equipe .rh-equipe-muted { color: var(--equipe-muted); font-weight: 400; }
 .rh-equipe .rh-equipe-level { display: inline-block; margin-top: 5px; padding: 2px 7px; border-radius: 5px; background: var(--equipe-green-soft); color: var(--equipe-green); font-size: 10px; font-weight: 650; }
 .rh-equipe .rh-equipe-history { white-space: nowrap; }
+.rh-equipe .rh-equipe-row-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.rh-promocao { max-width: 920px; }
+.rh-promocao .rh-promocao-card { padding: 28px; }
+.rh-promocao .rh-promocao-atual { display: flex; flex-direction: column; gap: 6px; }
+.rh-promocao .rh-promocao-atual .rh-equipe-section-label { margin: 0; }
+.rh-promocao .rh-promocao-atual > span:last-child { color: var(--equipe-muted); font-size: 14px; }
+.rh-promocao .rh-promocao-comparacao { overflow-x: auto; margin-top: 24px; }
+.rh-promocao table { width: 100%; font-size: 14px; }
+.rh-promocao caption { caption-side: top; padding: 0 0 8px; color: var(--equipe-muted); }
+.rh-promocao th, .rh-promocao td { padding: 12px 8px; border-bottom: 1px solid var(--equipe-line); }
+.rh-promocao th { font-weight: 500; }
+.rh-promocao td, .rh-promocao thead th:not(:first-child) { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rh-promocao .rh-promocao-total { background: var(--equipe-green-soft); color: var(--equipe-green); font-weight: 700; }
+.rh-promocao .rh-promocao-total th { font-weight: 700; }
+.rh-promocao .rh-promocao-observacao { white-space: pre-wrap; overflow-wrap: anywhere; }
+.rh-promocao button:disabled { opacity: .6; cursor: default; }
 .rh-equipe .rh-equipe-footnote { padding: 15px 24px; border-top: 1px solid var(--equipe-line); color: var(--equipe-muted); font-size: 11px; line-height: 1.6; }
 .rh-equipe .rh-equipe-empty { display: grid; justify-items: center; gap: 10px; padding: 45px 24px; border-top: 1px solid var(--equipe-line); text-align: center; }
 .rh-equipe .rh-equipe-empty > i { font-size: 28px; color: var(--equipe-green); }
@@ -92,6 +108,8 @@
     .rh-equipe .rh-equipe-metric { padding: 16px 12px; }
 }
 @media (max-width: 700px) {
+    .rh-promocao .rh-promocao-card { padding: 20px 16px; }
+    .rh-promocao table { font-size: 12px; }
     .rh-equipe .rh-equipe-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .rh-equipe .rh-equipe-metric { border-bottom: 1px solid var(--equipe-line); padding: 14px 16px; }
     .rh-equipe .rh-equipe-metric:nth-child(2n) { border-right: 0; }

@@ -7,7 +7,7 @@
   <header class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div><span class="text-muted small">HISTÓRICO DE CARREIRA</span><h1 class="page-title mt-1">{{ pessoa.nome }}</h1>
     <p class="text-muted mb-0">{{ atual.cargo_nome or 'Cargo não definido' }} · {% if atual.nivel %}Nível {{ atual.nivel }}{% else %}Nível não definido{% endif %}</p></div>
-    <a class="rh-equipe-button" href="{{ url_for('rh.detalhe_funcionario', id=pessoa.id) }}">Abrir ficha</a>
+    <div class="rh-equipe-actions">{% if pessoa.ativo %}<a class="rh-equipe-button rh-equipe-button-primary" href="{{ url_for('rh.promover_funcionario', id=pessoa.id) }}">Promover</a>{% endif %}<a class="rh-equipe-button" href="{{ url_for('rh.detalhe_funcionario', id=pessoa.id) }}">Abrir ficha</a></div>
   </header>
   <section class="card p-3 mb-4" aria-label="Situação atual">
     <div class="row g-3">
@@ -21,7 +21,7 @@
     <p class="text-muted small">A data em que o sistema registrou uma alteração não é necessariamente a data da promoção. Datas antigas não são preenchidas automaticamente.</p>
     {% for r in registros %}
     <article class="border-top py-3">
-      <div class="d-flex flex-wrap justify-content-between gap-2"><strong>{{ {'promocao':'Promoção informada','alteracao':'Alteração de cargo','aplicacao_plano':'Aplicação do plano'}.get(r.tipo, r.tipo) }}</strong><span>{% if r.data_efetiva %}Em {{ r.data_efetiva.strftime('%d/%m/%Y') }}{% else %}Data efetiva não informada{% endif %}</span></div>
+      <div class="d-flex flex-wrap justify-content-between gap-2"><strong>{{ 'Promoção' if r.origem == 'promocao_equipe' else {'promocao':'Promoção informada','alteracao':'Alteração de cargo','aplicacao_plano':'Aplicação do plano'}.get(r.tipo, r.tipo) }}</strong><span>{% if r.data_efetiva %}Em {{ r.data_efetiva.strftime('%d/%m/%Y') }}{% else %}Data efetiva não informada{% endif %}</span></div>
       <p class="mb-1">{{ r.cargo_anterior or 'Cargo anterior não informado' }}{% if r.nivel_anterior %} · N{{ r.nivel_anterior }}{% endif %} → {{ r.cargo_novo or 'Sem cargo' }}{% if r.nivel_novo %} · N{{ r.nivel_novo }}{% endif %}</p>
       <small class="text-muted">Registrado em {{ r.registrado_em|brt('%d/%m/%Y às %H:%M') }} por {{ r.registrado_por_nome or 'Sistema' }}</small>
       {% if r.observacao %}<p class="small mt-2 mb-0" style="white-space:pre-wrap">{{ r.observacao }}</p>{% endif %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Promover · {{ pessoa.nome }}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rh-equipe.css') }}?v={{ static_v.get('css/rh-equipe.css', '1') }}">
+<main class="rh-equipe rh-promocao">
+  <a href="{{ url_for('rh.equipe') }}" class="rh-equipe-text-link mb-3">← Visão da equipe</a>
+  <header class="rh-equipe-heading">
+    <div><span class="rh-equipe-eyebrow">{{ '2 de 2 · Revisar' if previa else '1 de 2 · Escolher cargo' }}</span>
+      <h1>{{ 'Confirmar promoção' if previa else 'Promover funcionário' }}</h1>
+      <p>{{ pessoa.nome }}</p>
+    </div>
+    <a href="{{ url_for('rh.carreira_funcionario', id=pessoa.id) }}" class="rh-equipe-text-link">Ver histórico →</a>
+  </header>
+  {% if erro %}<div class="alert alert-warning" role="alert">{{ erro }}</div>{% endif %}
+  {% if previa %}
+  <section class="rh-equipe-panel rh-promocao-card">
+    <h2>{{ previa.cargo_atual or 'Cargo não definido' }} → {{ previa.cargo_novo }}</h2>
+    <p class="mt-2">Data da promoção: <strong>{{ previa.data_efetiva.strftime('%d/%m/%Y') }}</strong></p>
+    {% if previa.faixa_destino %}<p class="mt-1">{{ previa.faixa_destino.familia }} · Nível {{ previa.faixa_destino.nivel }}</p>{% endif %}
+    <div class="rh-promocao-comparacao">
+      <table>
+        <caption>Valores de referência da ficha</caption>
+        <thead><tr><th scope="col">Componente</th><th scope="col">Atual</th><th scope="col">Após promoção</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Salário base</th><td>{{ previa.salario_base_atual|brl }}</td><td>{{ previa.salario_base_novo|brl }}</td></tr>
+          <tr><th scope="row">Adicional de confiança{% if previa.tem_cargo_confianca %} (40%){% endif %}</th><td>{{ previa.confianca_atual|brl }}</td><td>{{ previa.confianca_nova|brl }}</td></tr>
+          <tr><th scope="row">Premiação</th><td>{{ previa.premiacao|brl }}</td><td>{{ previa.premiacao|brl }}</td></tr>
+          <tr class="rh-promocao-total"><th scope="row">Total de referência</th><td>{{ previa.total_referencia_atual|brl }}</td><td>{{ previa.total_referencia_novo|brl }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small mt-2">Base + adicional de confiança + premiação. Não inclui VT, VR, horas extras ou descontos.</p>
+    {% if previa.salario_base_novo < previa.salario_base_atual %}<div class="alert alert-warning mt-3 mb-0">O cargo escolhido tem salário base menor que o atual. Confira a escolha antes de confirmar.</div>{% endif %}
+    {% if previa.plano_sera_sincronizado %}<p class="mt-3">O plano de carreira acompanhará o novo cargo e ficará aprovado.</p>{% endif %}
+    {% if previa.observacao %}<p class="mt-3 rh-promocao-observacao"><strong>Observação:</strong> {{ previa.observacao }}</p>{% endif %}
+    <p class="mt-3">Ao confirmar, o novo cargo passa a valer na ficha e a promoção fica registrada no histórico com a data informada. Folhas já fechadas permanecem como foram calculadas.</p>
+    <div class="rh-equipe-actions mt-3">
+      {# Etapa no formulário: o loading global desabilita o botão no submit. #}
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="etapa" value="confirmar">
+        <input type="hidden" name="confirmacao" value="{{ confirmacao }}">
+        <button type="submit" class="rh-equipe-button rh-equipe-button-primary">Confirmar promoção</button>
+      </form>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="etapa" value="editar">
+        {% for campo, valor in valores.items() %}<input type="hidden" name="{{ campo }}" value="{{ valor }}">{% endfor %}
+        <button type="submit" class="rh-equipe-button">Voltar e ajustar</button>
+      </form>
+    </div>
+  </section>
+  {% else %}
+  <section class="rh-equipe-panel rh-promocao-card">
+    <div class="rh-promocao-atual"><span class="rh-equipe-section-label">Cargo atual</span><strong>{{ atual.cargo_nome or 'Cargo não definido' }}{% if atual.nivel %} · Nível {{ atual.nivel }}{% endif %}</strong><span>Base: {{ pessoa.salario_efetivo()|brl }}</span></div>
+    <form method="post" class="mt-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="etapa" value="revisar">
+      <div class="row g-3">
+        <div class="col-md-8"><label for="novo-cargo" class="form-label">Novo cargo</label>
+          <select name="cargo_id" id="novo-cargo" class="form-select" required>
+            <option value="">Escolha o cargo</option>
+            {% for cargo in cargos %}<option value="{{ cargo.id }}" {% if valores.cargo_id == cargo.id|string %}selected{% endif %}>{{ cargo.nome }} · {{ cargo.salario_base|brl }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4"><label for="data-promocao" class="form-label">Data da promoção</label>
+          <input type="date" id="data-promocao" name="data_efetiva" class="form-control" required value="{{ valores.data_efetiva }}" max="{{ hoje.isoformat() }}" {% if pessoa.data_admissao %}min="{{ pessoa.data_admissao.isoformat() }}"{% endif %}>
+        </div>
+        <div class="col-12"><label for="observacao-promocao" class="form-label">Observação <span class="text-muted">(opcional)</span></label>
+          <textarea id="observacao-promocao" name="observacao" maxlength="2000" rows="3" class="form-control" placeholder="Motivo ou referência da promoção">{{ valores.observacao }}</textarea>
+        </div>
+      </div>
+      <p class="small mt-3">Na próxima etapa você confere os valores antes de confirmar.</p>
+      <div class="rh-equipe-actions mt-2">
+        <button type="submit" class="rh-equipe-button rh-equipe-button-primary" {% if not cargos %}disabled{% endif %}>Revisar promoção →</button>
+        <a class="rh-equipe-button" href="{{ url_for('rh.equipe') }}">Cancelar</a>
+      </div>
+      {% if not cargos %}<p class="mt-3">Não há outro cargo ativo disponível.</p>{% endif %}
+      <details class="mt-4 small"><summary>Não encontro o cargo ou o vínculo correto</summary>
+        <p class="mt-2">Confira <a href="{{ url_for('rh.cargos') }}">Cargos do RH</a> e o <a href="{{ url_for('rh.plano_carreira') }}">Plano de cargos e carreira</a>.</p>
+      </details>
+    </form>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}
