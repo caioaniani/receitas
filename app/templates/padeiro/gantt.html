@@ -1,239 +1,133 @@
 <!doctype html>
 <html lang="pt-br">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fluxograma da produção — {{ dia.strftime('%d/%m') }}</title>
-<style>
-  :root { --verde:#198754; --azul:#0d6efd; --cinza:#6c757d; --amarelo:#ffc107;
-          --rotulo-w:196px; }
-  * { box-sizing:border-box; }
-  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-         background:#f1f3f5; color:#212529; padding-bottom:50px; }
-  header { background:#212529; color:#fff; padding:12px 20px; display:flex;
-           align-items:center; gap:14px; position:sticky; top:0; z-index:10;
-           flex-wrap:wrap; }
-  header h1 { font-size:21px; margin:0; }
-  header a { color:#fff; text-decoration:none; font-size:15px; background:#495057;
-             padding:9px 14px; border-radius:9px; white-space:nowrap; }
-  header a.hoje { background:var(--azul); }
-  header .sp { flex:1; }
-  .wrap { padding:16px; max-width:1280px; margin:0 auto; }
-  .resumo { color:#495057; margin:0 0 14px; font-size:15px; }
-  .resumo b { color:#212529; }
-
-  /* ── Gantt (layout em px, rola na horizontal) ─────────────── */
-  .gantt { background:#fff; border-radius:14px; padding:14px 4px 8px;
-           box-shadow:0 1px 4px rgba(0,0,0,.1); overflow-x:auto; }
-  .gantt-inner { display:inline-block; min-width:100%; }
-  /* eixo de horas */
-  .eixo { position:relative; height:24px; margin-left:var(--rotulo-w);
-          border-bottom:2px solid #dee2e6; }
-  .eixo .hora { position:absolute; top:0; transform:translateX(-50%);
-                font-size:13px; color:#868e96; font-variant-numeric:tabular-nums; }
-  .eixo .hora::after { content:''; position:absolute; left:50%; top:16px;
-                       width:1px; height:8px; background:#dee2e6; }
-  /* bandas de turno */
-  .turnos { position:relative; height:20px; margin-left:var(--rotulo-w); margin-bottom:2px; }
-  .turno { position:absolute; top:0; height:17px; border-radius:5px; font-size:12px;
-           color:#fff; font-weight:700; padding:1px 10px; white-space:nowrap;
-           overflow:hidden; opacity:.9; }
-  .turno.manha { background:#f59f00; }
-  .turno.tarde { background:#7048e8; }
-
-  .linha { position:relative; display:flex; align-items:stretch;
-           border-bottom:1px solid #f1f3f5; min-height:60px; }
-  .linha .rotulo { width:var(--rotulo-w); flex:none; padding:8px 12px 8px 0;
-                   border-right:2px solid #dee2e6; display:flex; flex-direction:column;
-                   justify-content:center; position:sticky; left:0; background:#fff; z-index:3; }
-  .linha .rotulo .nm { font-weight:800; font-size:16px; line-height:1.15; }
-  .linha .rotulo .nm-link { color:inherit; text-decoration:none; }
-  .linha .rotulo .nm-link:hover { text-decoration:underline; }
-  .linha .rotulo .nm-edit { font-size:12px; opacity:.55; }
-  .linha .rotulo .nm-link:hover .nm-edit { opacity:1; }
-  .linha .rotulo .sub { font-size:12px; color:#868e96; margin-top:3px; }
-  /* massa-base: tronco (amassada comum) destacado; ramos levemente recuados */
-  .linha-base { background:#f8f9fb; }
-  .linha-base .rotulo .nm { font-size:15px; }
-  .linha-ramo .rotulo { padding-left:14px; }
-  .linha-ramo .rotulo .nm { font-weight:700; font-size:15px; }
-  /* continuação: finalização de pães amassados em dias anteriores */
-  .linha-cont { background:#f0fbff; }
-  .linha-cont .rotulo .sub { color:#0a7ea4; font-weight:600; }
-  .linha .faixa { position:relative; flex:none; margin:9px 0; }
-  .grade { position:absolute; top:0; bottom:0; width:1px; background:#f1f3f5; }
-
-  .barra { position:absolute; top:0; height:40px; border-radius:8px; color:#fff;
-           font-size:14px; font-weight:700; padding:0 9px; display:flex;
-           align-items:center; gap:5px; white-space:nowrap;
-           box-shadow:0 1px 3px rgba(0,0,0,.22); cursor:default; }
-  .barra.passiva { opacity:.6; font-style:italic;
-    background-image:repeating-linear-gradient(45deg,
-      rgba(255,255,255,.28) 0, rgba(255,255,255,.28) 5px,
-      transparent 5px, transparent 10px); }
-  .barra .ic { flex:none; }
-  .barra .et { overflow:hidden; text-overflow:ellipsis; }
-  /* rótulo FORA (à direita) quando a barra é curta demais pro texto caber */
-  .barra .et-fora { position:absolute; left:100%; margin-left:6px; color:#343a40;
-                    font-weight:700; font-style:normal; font-size:13.5px;
-                    pointer-events:none; white-space:nowrap; background:rgba(255,255,255,.92);
-                    padding:1px 6px; border-radius:5px; }
-  .destino { position:absolute; top:7px; font-size:13px; color:#495057;
-             background:#e9ecef; border-radius:6px; padding:4px 10px; font-weight:700;
-             white-space:nowrap; }
-
-  /* detalhamento legível por produto (texto, quebra de linha) */
-  .detalhes { background:#fff; border-radius:14px; padding:14px 16px;
-              box-shadow:0 1px 4px rgba(0,0,0,.1); margin-top:14px; }
-  .det-titulo { font-weight:800; font-size:13px; text-transform:uppercase;
-                letter-spacing:.5px; color:#868e96; margin-bottom:10px; }
-  .det-row { display:flex; flex-wrap:wrap; align-items:center; gap:3px 4px;
-             padding:9px 0; border-top:1px solid #f1f3f5; }
-  .det-row:first-of-type { border-top:0; }
-  .det-nome { font-weight:800; font-size:15px; padding-left:8px; margin-right:8px;
-              min-width:170px; }
-  .det-passo { font-size:14px; color:#212529; background:#f1f3f5;
-               border-radius:6px; padding:3px 9px; white-space:nowrap; }
-  .det-passo i { color:#868e96; font-style:normal; font-weight:600; }
-  .det-passo.passivo { background:#fff; color:#868e96; font-style:italic; }
-  .det-base { background:#f1f7ff; border-radius:8px; }
-  .det-base .det-passo { background:#fff; }
-  .det-passo.passivo i { color:#adb5bd; }
-  .seta { color:#ced4da; font-weight:800; }
-
-  .legenda { display:flex; flex-wrap:wrap; gap:6px 16px; margin:14px 0 4px;
-             font-size:13px; color:#495057; }
-  .legenda .it { display:flex; align-items:center; gap:6px; }
-  .legenda .pin { width:14px; height:14px; border-radius:4px; flex:none; }
-  .nota { font-size:13px; color:#868e96; margin-top:12px; line-height:1.5; }
-  .vazio { background:#fff; border-radius:14px; padding:40px 20px; text-align:center;
-           color:#868e96; box-shadow:0 1px 4px rgba(0,0,0,.1); }
-  .alerta { background:#fff3cd; border:1px solid #ffe69c; color:#7a5b00;
-            border-radius:10px; padding:10px 14px; margin:0 0 14px; font-size:14px; }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sequência da produção — {{ dia.strftime('%d/%m') }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/padeiro-sequencia.css', v='20260910b') }}">
+  <script src="{{ url_for('static', filename='js/padeiro-sequencia.js', v='20260910b') }}" defer></script>
 </head>
 <body>
-<header>
-  <h1>📊 Fluxograma — {{ dia.strftime('%d/%m/%Y') }}</h1>
-  <a href="{{ url_for('padeiro.gantt', data=dia_anterior) }}">‹ dia</a>
-  <a href="{{ url_for('padeiro.gantt', data=dia_seguinte) }}">dia ›</a>
-  {% if not eh_hoje %}<a class="hoje" href="{{ url_for('padeiro.gantt') }}">hoje</a>{% endif %}
-  <span class="sp"></span>
-  {% if current_user.is_admin() %}<a href="{{ url_for('padeiro.editar_plano', data=dia.isoformat()) }}">✏️ Editar plano</a>{% endif %}
-  <a href="{{ url_for('padeiro.index', data=dia.isoformat()) }}">← painel</a>
+<header class="seq-header">
+  <div><span class="eyebrow">TV do padeiro · Fluxograma</span><h1>Sequência da produção <span>{{ dia.strftime('%d/%m') }}</span></h1></div>
+  <nav aria-label="Navegação da produção">
+    <details class="seq-date">
+      <summary>Trocar data</summary>
+      <div>
+        <a href="{{ url_for('padeiro.gantt', data=dia_anterior) }}">Dia anterior</a>
+        <a href="{{ url_for('padeiro.gantt') }}">Hoje</a>
+        <a href="{{ url_for('padeiro.gantt', data=dia_seguinte) }}">Dia seguinte</a>
+        {% if current_user.is_admin() %}<a href="{{ url_for('padeiro.editar_plano', data=dia.isoformat()) }}">Editar ordem</a>{% endif %}
+      </div>
+    </details>
+    <a class="button" href="{{ url_for('padeiro.index', data=dia.isoformat()) }}">Voltar à produção</a>
+  </nav>
 </header>
-
-<div class="wrap">
-{% if not g %}
-  <div class="vazio">
-    <p style="font-size:18px;">Nenhum plano de produção aprovado para {{ dia.strftime('%d/%m') }}.</p>
-    <p>Aprove o plano do dia no <b>Cronograma</b>{% if current_user.is_admin() %}, ou <a href="{{ url_for('padeiro.editar_plano', data=dia.isoformat()) }}">monte/edite o plano deste dia à mão</a>{% endif %}.</p>
-  </div>
-{% elif not g.produtos %}
-  <div class="vazio">
-    <p style="font-size:18px;">Plano aprovado, mas nada a produzir.</p>
-    {% if g.sem_etapas %}
-    <p>Receitas sem etapas cadastradas: <b>{{ g.sem_etapas | join(', ') }}</b>.<br>
-       Aplique as etapas em <i>Receitas → Produção por categoria</i>.</p>
-    {% endif %}
-  </div>
-{% else %}
-  <p class="resumo">
-    <b>{{ g.produtos | length }}</b> produto(s) na fila ·
-    encerra por volta de <b>{{ g.fim_estimado }}</b>
-    {% if g.sem_etapas %} · <span style="color:#b45309;">sem etapas: {{ g.sem_etapas | join(', ') }}</span>{% endif %}
-  </p>
-
-  <div class="gantt">
-    <div class="gantt-inner">
-      <!-- bandas de turno -->
-      <div class="turnos" style="width:{{ g.canvas_px }}px;">
-        {% for t in g.turnos %}
-        <div class="turno {{ 'manha' if t.nome == 'Manhã' else 'tarde' }}"
-             style="left:{{ t.left_px }}px; width:{{ t.width_px }}px;">{{ t.nome }}</div>
-        {% endfor %}
-      </div>
-      <!-- eixo de horas -->
-      <div class="eixo" style="width:{{ g.canvas_px }}px;">
-        {% for h in g.horas %}
-        <div class="hora" style="left:{{ h.px }}px;">{{ h.label }}</div>
-        {% endfor %}
-      </div>
-      <!-- uma linha por produto -->
-      {% for p in g.produtos %}
-      <div class="linha{% if p.tipo == 'base' %} linha-base{% elif p.tipo == 'ramo' %} linha-ramo{% elif p.tipo == 'continuacao' %} linha-cont{% endif %}">
-        <div class="rotulo">
-          {% set edit_url = url_for('receitas.etapas', id=p.receita_id) if p.receita_id else (url_for('receitas.massa_base_editar', id=p.grupo) if p.tipo == 'base' and p.grupo else None) %}
-          <span class="nm" style="border-left:5px solid {{ p.cor }}; padding-left:7px;">{% if p.tipo == 'base' %}🥣 {% elif p.tipo == 'ramo' %}↳ {% elif p.tipo == 'continuacao' %}⏭️ {% endif %}{% if edit_url and current_user.is_admin() %}<a class="nm-link" href="{{ edit_url }}" title="Editar etapas de {{ p.nome }}">{{ p.nome }} <span class="nm-edit">✏️</span></a>{% else %}{{ p.nome }}{% endif %}</span>
-          <span class="sub">
-            {%- if p.tipo == 'base' -%}amassar <b>{{ p.base_massa_label }}</b>{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}
-            {%- elif p.tipo == 'continuacao' -%}finalizar <b>{{ p.falta }} un</b> · da câmara fria ({{ p.origem_label }})
-            {%- else -%}{{ p.centro_label }} · falta {{ p.falta }} un{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}{%- endif -%}
-          </span>
-        </div>
-        <div class="faixa" style="width:{{ g.canvas_px }}px;">
-          {% for h in g.horas %}<div class="grade" style="left:{{ h.px }}px;"></div>{% endfor %}
-          {% for t in p.tarefas %}
-          <div class="barra {{ 'passiva' if not t.ativa else '' }}"
-               style="left:{{ t.left_px }}px; width:{{ t.width_px }}px; background:{{ p.cor }};"
-               title="{{ t.etapa }} — {{ t.ini_hhmm }} a {{ t.fim_hhmm }} ({{ t.dur_label }})">
-            <span class="ic">{{ t.icone }}</span>{% if t.label_dentro %}<span class="et">{{ t.etapa }}</span>{% elif t.label_fora %}<span class="et-fora">{{ t.etapa }}</span>{% endif %}
+<main>
+  {% macro preparo_id(p) -%}preparo-{{ 'base-' ~ p.grupo if p.tipo == 'base' else 'item-' ~ p.item_id }}{%- endmacro %}
+  {% if ordem_ontem_aberta %}
+  <aside class="overnight">A ordem de {{ data_ontem.strftime('%d/%m') }} ainda tem produção em aberto.
+    <a href="{{ url_for('padeiro.gantt', data=data_ontem.isoformat()) }}">Ver ordem da madrugada</a>
+  </aside>
+  {% endif %}
+  {% if not g %}
+  <section class="empty"><h2>Nenhuma ordem enviada para {{ dia.strftime('%d/%m') }}</h2>
+    <p>A sequência aparece quando a ordem é enviada para a produção.</p>
+    <a class="button" href="{{ url_for('padeiro.index', data=dia.isoformat()) }}">Voltar à produção</a>
+  </section>
+  {% elif not g.produtos and not g.sem_etapas_itens %}
+  <section class="empty"><h2>Nenhum item pendente nesta sequência</h2>
+    <p>Consulte a produção para ver os registros desta ordem.</p>
+    <a class="button" href="{{ url_for('padeiro.index', data=dia.isoformat()) }}">Ver produção</a>
+  </section>
+  {% else %}
+  {% set produtos = g.produtos + g.sem_etapas_itens %}
+  <p class="seq-help">Escolha um produto para ver o preparo. Registre somente a quantidade que ficou pronta.</p>
+  <div class="seq-workspace" id="sequencia">
+    <nav class="product-list" aria-label="Produtos da sequência">
+      <h2>O que preparar</h2>
+      {% for p in produtos %}
+      <a class="product-choice {{ 'branch' if p.tipo == 'ramo' else '' }}" id="escolha-{{ loop.index }}"
+         href="#{{ preparo_id(p) }}" data-product="{{ preparo_id(p) }}">
+        <span class="choice-name">{{ p.nome }}</span>
+        <span class="choice-meta">
+          {% if p.tipo == 'base' %}Preparo da massa-base
+          {% else %}<b>{{ p.falta }} un</b> pendentes{% if p.tipo == 'continuacao' %} · ordem {{ p.origem_label }}{% endif %}{% endif %}
+        </span>
+        {% if not p.tarefas and not p.destino %}<span class="choice-warning">Sem etapas cadastradas</span>{% endif %}
+      </a>
+      {% endfor %}
+    </nav>
+    <div class="product-details">
+      {% for p in produtos %}
+      <section class="product-panel" id="{{ preparo_id(p) }}" aria-labelledby="nome-{{ loop.index }}">
+        <div class="product-heading">
+          <div>
+            <span class="eyebrow">{{ 'Preparo em conjunto' if p.tipo == 'base' else p.centro_label }}</span>
+            <h2 id="nome-{{ loop.index }}">{{ p.nome }}</h2>
+            {% if p.tipo == 'base' %}
+            <p class="quantity"><strong>{{ p.base_massa_label }}</strong> <span>na referência da ordem</span></p>
+            {% else %}
+            <p class="quantity"><strong>{{ p.falta }} <small>un</small></strong> <span>pendentes{% if p.produzido %} · {{ p.produzido }} de {{ p.alvo }} já registradas{% endif %}</span></p>
+            {% endif %}
           </div>
-          {% endfor %}
-          {% if p.destino %}
-          <div class="destino" style="left:{{ p.fim_px + 6 }}px;">→ {{ p.destino }}</div>
+          {% if p.item_id %}
+          <a class="button primary" href="{{ url_for('padeiro.index', data=p.data_plano, _anchor='producao-item-' ~ p.item_id) }}">Registrar produção</a>
+          {% elif p.tipo == 'base' %}
+          <a class="button" href="{{ url_for('padeiro.index', data=dia.isoformat(), _anchor='producao-base-' ~ p.grupo ~ '-' ~ dia.isoformat()) }}">Ver preparo da base</a>
           {% endif %}
         </div>
-      </div>
+        {% if p.tipo == 'continuacao' %}
+        <p class="notice">Finalização prevista da ordem de {{ p.origem_label }}. Confira se o preparo anterior foi feito antes de seguir.</p>
+        {% elif p.tipo == 'ramo' %}
+        <p class="notice">Comece estas etapas depois de retirar a porção da massa-base.</p>
+        {% elif p.tipo == 'base' %}
+        <p class="notice">Referência do preparo completo. Confira o que já foi feito e registre cada produto separadamente.</p>
+        {% endif %}
+        {% if p.tarefas or p.destino %}
+        <div class="steps-heading"><h3>Passo a passo</h3><span>Durações de referência da ordem</span></div>
+        {% if p.tarefas | length + (1 if p.destino else 0) > 6 %}
+        <nav class="step-pages" aria-label="Consultar etapas de {{ p.nome }}" hidden>
+          <button type="button" data-step-page="-1">← Etapas anteriores</button>
+          <span class="step-range" aria-live="polite"></span>
+          <button type="button" data-step-page="1">Mais etapas →</button>
+        </nav>
+        {% endif %}
+        <ol class="steps">
+          {% for t in p.tarefas %}
+          <li class="step {{ 'passive' if not t.ativa else '' }}">
+            <span class="step-number">{{ loop.index }}</span>
+            <div><strong>{{ t.etapa }}</strong><span class="step-duration">{{ t.dur_label }}{% if not t.ativa %} · espera{% elif t.equip == 'forno' %} · forno{% elif t.equip == 'amassadeira' %} · amassadeira{% endif %}</span></div>
+          </li>
+          {% endfor %}
+          {% if p.destino %}
+          <li class="step passive"><span class="step-number">{{ p.tarefas | length + 1 }}</span><div><strong>{{ p.destino_etapa }}</strong><span class="step-duration">{{ p.destino }} · continua em outra jornada</span></div></li>
+          {% endif %}
+        </ol>
+        {% if p.produzido %}<p class="reference-note">As etapas mostram o preparo completo. A quantidade pendente já desconta o que você registrou.</p>{% endif %}
+        {% else %}
+        <div class="no-steps"><h3>Preparo ainda sem etapas cadastradas</h3><p>Confira a ficha de preparo e combine a sequência com o responsável pela produção.</p></div>
+        {% endif %}
+        {% if p.tipo == 'base' and p.base_recipe %}
+        <details class="base-recipe"><summary>Ingredientes da massa-base · {{ p.base_massa_label }}</summary><ul>{% for ing in p.base_recipe %}<li><span>{{ ing.nome }}</span><strong>{{ ing.qtd }}</strong></li>{% endfor %}</ul></details>
+        {% endif %}
+        <footer class="product-footer">
+          {% if p.receita_id %}<a href="{{ url_for('padeiro.fichas_editar', id=p.receita_id) }}">Ficha de preparo</a>{% endif %}
+          {% if current_user.is_admin() and p.receita_id %}<a href="{{ url_for('receitas.etapas', id=p.receita_id) }}">Editar etapas</a>{% endif %}
+          {% if not loop.last %}<a href="#{{ preparo_id(produtos[loop.index]) }}" class="next-product" data-product="{{ preparo_id(produtos[loop.index]) }}">Ver próximo produto →</a>{% endif %}
+        </footer>
+      </section>
       {% endfor %}
     </div>
   </div>
-
-  <!-- Detalhamento legível: cada etapa por extenso (as barras curtas mostram só
-       o ícone; aqui dá pra ler tudo, sem precisar passar o mouse). -->
-  <div class="detalhes">
-    <div class="det-titulo">Passo a passo de cada produto</div>
-    {% for p in g.produtos %}
-    {% set edit_url = url_for('receitas.etapas', id=p.receita_id) if p.receita_id else (url_for('receitas.massa_base_editar', id=p.grupo) if p.tipo == 'base' and p.grupo else None) %}
-    <div class="det-row">
-      <span class="det-nome" style="border-left:5px solid {{ p.cor }};">{% if edit_url and current_user.is_admin() %}<a class="nm-link" href="{{ edit_url }}" title="Editar etapas">{{ p.nome }} <span class="nm-edit">✏️</span></a>{% else %}{{ p.nome }}{% endif %}</span>
-      {% for t in p.tarefas %}
-        <span class="det-passo {{ 'passivo' if not t.ativa }}">{{ t.icone }} {{ t.etapa }} <i>{{ t.dur_label }}</i></span>{% if not loop.last or p.destino %}<span class="seta">›</span>{% endif %}
-      {% endfor %}
-      {% if p.destino %}<span class="det-passo passivo">câmara fria {{ p.destino }}</span>{% endif %}
-    </div>
-    {% if p.tipo == 'base' and p.base_recipe %}
-    <div class="det-row det-base">
-      <span class="det-nome" style="border-left:5px solid {{ p.cor }};">↳ Receita da base</span>
-      <span class="det-passo">🥣 Amassar <b>{{ p.base_massa_label }}</b></span><span class="seta">=</span>
-      {% for ing in p.base_recipe %}
-      <span class="det-passo">{{ ing.nome }} <i>{{ ing.qtd }}</i></span>
-      {% endfor %}
-    </div>
-    {% endif %}
-    {% endfor %}
-  </div>
-
-  <div class="legenda">
-    <div class="it"><span>✋</span> padeiro de pães</div>
-    <div class="it"><span>✋</span> padeiro de viennoiserie</div>
-    <div class="it"><span>🥣</span> amassadeira (máquina)</div>
-    <div class="it"><span>🔥</span> forno (máquina)</div>
-    <div class="it"><span>❄️</span> câmara fria</div>
-    <div class="it"><span>🧊</span> congelar (final)</div>
-    <div class="it"><span>⏳</span> descanso / fermentação</div>
-  </div>
-
-  <p class="nota">
-    A linha do tempo trabalha com <b>um padeiro de pães</b> e <b>um padeiro de
-    viennoiserie</b> em paralelo, mas respeita <b>1 amassadeira</b> e <b>1 forno</b>
-    compartilhados (etapas que usam equipamento não se sobrepõem). Descansos
-    curtos ficam na linha; fermentações
-    longas (≥ 4h) viram o marcador <b>→ câmara fria</b> — o cronograma já antecipa
-    a produção por causa delas. Tempos vêm das etapas cadastradas em cada receita
-    (ajuste em <i>Receitas → Produção por categoria</i> ou na ficha).
-  </p>
-{% endif %}
-</div>
+  {% if g.produtos %}
+  <details class="timeline-details">
+    <summary>Comparar na linha do tempo</summary>
+    <p>Simulação com início às 06h, uma amassadeira e um forno compartilhados. Os horários não indicam o andamento real da produção.</p>
+    {% include 'padeiro/_gantt_timeline.html' %}
+  </details>
+  {% endif %}
+  {% endif %}
+</main>
 </body>
 </html>

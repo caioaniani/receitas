@@ -5369,3 +5369,30 @@ travando o render anonimo; as demais areas so rodam autenticadas.
 **Garantia de zero regressao**: a sidebar nova (macro) foi comparada link-a-link
 com a antiga em 47 paths (3619 links) — byte-identico. Testes em
 `tests/test_area_hub.py`.
+
+## Sequência da produção na TV (10/09/2026)
+
+Pedido do dono: melhorar o "organograma" para uso na **TV do padeiro**;
+celular não é a prioridade. `/padeiro/gantt` (Ver sequência) agora tem lista
+lateral de produtos e painel com quantidade pendente, passos numerados e
+durações grandes. Mais de seis etapas são consultadas em blocos; navegar
+entre etapas/produtos nunca confirma produção. Sem JavaScript, todos os
+preparos permanecem disponíveis em sequência.
+
+- Registrar produção leva ao item canônico no `/padeiro/?data=...#producao-item-ID`,
+  inclusive à data de origem das continuações. Massa-base não tem registro
+  próprio: seus derivados são registrados separadamente.
+- Produtos sem etapas permanecem na lista, com ficha de preparo e acesso ao
+  registro. Falta encerrada pelo padeiro sai também do fluxograma, inclusive
+  das continuações; a diferença permanece na auditoria.
+- A visão de hoje oferece a ordem de ontem em aberto, seguindo a regra da
+  madrugada. Não amplia a janela para ordens antigas.
+- Tempos são referência da ordem completa; não representam etapas realizadas
+  nem previsão atualizada após uma produção parcial. A linha do tempo antiga
+  fica em "Comparar na linha do tempo", identificada como simulação às 06h.
+  Continuação de fermentação pede conferir se o preparo anterior foi feito.
+- Quantidades de massa-base usam a mesma escala de referência nas telas do
+  padeiro: alvo completo / rendimento cru, incluindo produtos concluídos e
+  sem etapas; dispensados e faltas encerradas não entram. A referência não
+  orienta refazer o que já foi produzido.
+- Sem alteração de schema, motor de pedidos, estoque ou confirmação parcial.

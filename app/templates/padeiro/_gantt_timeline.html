@@ -1,0 +1,44 @@
+  <div class="gantt">
+    <div class="gantt-inner">
+      <!-- bandas de turno -->
+      <div class="turnos" style="width:{{ g.canvas_px }}px;">
+        {% for t in g.turnos %}
+        <div class="turno {{ 'manha' if t.nome == 'Manhã' else 'tarde' }}"
+             style="left:{{ t.left_px }}px; width:{{ t.width_px }}px;">{{ t.nome }}</div>
+        {% endfor %}
+      </div>
+      <!-- eixo de horas -->
+      <div class="eixo" style="width:{{ g.canvas_px }}px;">
+        {% for h in g.horas %}
+        <div class="hora" style="left:{{ h.px }}px;">{{ h.label }}</div>
+        {% endfor %}
+      </div>
+      <!-- uma linha por produto -->
+      {% for p in g.produtos %}
+      <div class="linha{% if p.tipo == 'base' %} linha-base{% elif p.tipo == 'ramo' %} linha-ramo{% elif p.tipo == 'continuacao' %} linha-cont{% endif %}">
+        <div class="rotulo">
+          {% set edit_url = url_for('receitas.etapas', id=p.receita_id) if p.receita_id else (url_for('receitas.massa_base_editar', id=p.grupo) if p.tipo == 'base' and p.grupo else None) %}
+          <span class="nm" style="border-left:5px solid {{ p.cor }}; padding-left:7px;">{% if p.tipo == 'base' %}🥣 {% elif p.tipo == 'ramo' %}↳ {% elif p.tipo == 'continuacao' %}⏭️ {% endif %}{% if edit_url and current_user.is_admin() %}<a class="nm-link" href="{{ edit_url }}" title="Editar etapas de {{ p.nome }}">{{ p.nome }} <span class="nm-edit">✏️</span></a>{% else %}{{ p.nome }}{% endif %}</span>
+          <span class="sub">
+            {%- if p.tipo == 'base' -%}amassar <b>{{ p.base_massa_label }}</b>{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}
+            {%- elif p.tipo == 'continuacao' -%}previsto finalizar <b>{{ p.falta }} un</b> · ordem de ({{ p.origem_label }})
+            {%- else -%}{{ p.centro_label }} · falta {{ p.falta }} un{% if p.fornadas %} · {{ p.fornadas }} fornada(s){% endif %}{%- endif -%}
+          </span>
+        </div>
+        <div class="faixa" style="width:{{ g.canvas_px }}px;">
+          {% for h in g.horas %}<div class="grade" style="left:{{ h.px }}px;"></div>{% endfor %}
+          {% for t in p.tarefas %}
+          <div class="barra {{ 'passiva' if not t.ativa else '' }}"
+               style="left:{{ t.left_px }}px; width:{{ t.width_px }}px; background:{{ p.cor }};"
+               title="{{ t.etapa }} — {{ t.ini_hhmm }} a {{ t.fim_hhmm }} ({{ t.dur_label }})">
+            <span class="ic">{{ t.icone }}</span>{% if t.label_dentro %}<span class="et">{{ t.etapa }}</span>{% elif t.label_fora %}<span class="et-fora">{{ t.etapa }}</span>{% endif %}
+          </div>
+          {% endfor %}
+          {% if p.destino %}
+          <div class="destino" style="left:{{ p.fim_px + 6 }}px;">→ {{ p.destino }}</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>

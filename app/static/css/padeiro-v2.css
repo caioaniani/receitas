@@ -1,5 +1,9 @@
 /* Tela operacional do padeiro — alinhada ao shell v2, sem a navegação
    administrativa. O foco desta tela é executar a ordem, não administrar. */
+.padeiro-v2 [id^="producao-item-"],
+.padeiro-v2 [id^="producao-base-"] { scroll-margin-top: 130px; }
+.padeiro-v2 [id^="producao-item-"]:target,
+.padeiro-v2 [id^="producao-base-"]:target { outline: 4px solid #275d45; outline-offset: -4px; }
 .padeiro-v2 {
   --pad-canvas: #f5f6f3;
   --pad-surface: #fff;

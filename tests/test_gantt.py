@@ -1,6 +1,8 @@
 """Gantt da produção: 1 amassadeira/forno e dois padeiros independentes."""
 from datetime import date, timedelta
 
+import pytest
+
 from app.extensions import db
 from app.models import (
     MassaBase,
@@ -177,9 +179,15 @@ def test_receita_sem_etapas_listada_a_parte(app):
                 rendimento_unidade='un', peso_base=1000.0)
     db.session.add(r)
     db.session.commit()
-    _plano(dia, [(r, 1, 10, 0)])
+    plano = _plano(dia, [(r, 1, 10, 3)])
     g = montar_gantt(dia)
     assert 'Brigadeiro' in g['sem_etapas']
+    assert g['sem_etapas_itens'] == [{
+        'nome': r.nome, 'receita_id': r.id, 'item_id': plano.itens[0].id,
+        'data_plano': dia.isoformat(), 'alvo': 10, 'produzido': 3, 'falta': 7,
+        'tipo': 'solo', 'tarefas': [], 'destino': None,
+        'centro_label': 'Padeiro de pães',
+    }]
     assert g['produtos'] == []
 
 
@@ -189,6 +197,23 @@ def test_item_ja_produzido_sai_do_gantt(app):
     _plano(dia, [(r, 1, 10, 10)])    # alvo 10, já produziu 10 -> falta 0
     g = montar_gantt(dia)
     assert g['produtos'] == []
+
+
+def test_falta_encerrada_nao_reaparece_no_gantt_ou_sem_etapas(app):
+    from app.utils import agora
+    dia = date(2026, 7, 8)
+    com_etapas = _receita('Pão encerrado', [('Forno', 20, 'forno', True)])
+    sem_etapas = _receita('Sem ficha encerrado', [])
+    plano = _plano(dia, [(com_etapas, 1, 10, 3), (sem_etapas, 1, 10, 3)])
+    for item in plano.itens:
+        item.falta_encerrada_em = agora()
+    db.session.commit()
+    g = montar_gantt(dia)
+    assert g['produtos'] == []
+    assert g['sem_etapas'] == []
+    assert g['sem_etapas_itens'] == []
+    assert all(item.qtd_alvo == 10 and item.produzido_qtd == 3
+               and item.falta_encerrada_em is not None for item in plano.itens)
 
 
 def _login(app, user):
@@ -239,17 +264,20 @@ def test_gantt_produto_carrega_receita_id(app):
     dia = date(2026, 7, 22)
     r = _receita('Pão Z', [('Mise en place', 10, None, True),
                            ('Forno', 20, 'forno', True)])
-    _plano(dia, [(r, 1, 10, 0)])
+    plano = _plano(dia, [(r, 1, 10, 3)])
     g = montar_gantt(dia)
     prod = [p for p in g['produtos'] if p['nome'] == 'Pão Z'][0]
     assert prod['receita_id'] == r.id        # pro link "editar etapas" no fluxograma
+    assert prod['item_id'] == plano.itens[0].id
+    assert prod['data_plano'] == dia.isoformat()
+    assert (prod['alvo'], prod['produzido'], prod['falta']) == (10, 3, 7)
 
 
 def test_rota_gantt_sem_plano(app, admin_user):
     c = _login(app, admin_user)
     resp = c.get('/padeiro/gantt?data=2026-07-21')
     assert resp.status_code == 200
-    assert 'Nenhum plano' in resp.get_data(as_text=True)
+    assert 'Nenhuma ordem enviada' in resp.get_data(as_text=True)
 
 
 def test_fornadas_escalam_etapas_ativas(app):
@@ -356,6 +384,142 @@ def test_gantt_tronco_mostra_qtd_e_receita_da_base(app):
     assert 'Grãos' not in nomes and 'Nozes' not in nomes
 
 
+def test_base_fracionaria_bate_com_painel_e_modal_preservando_alvo_e_falta(
+        app, admin_user):
+    from math import ceil
+
+    from app.blueprints.padeiro.routes import _plano_do_dia
+    from app.services.massa_base import rendimento_massa_crua
+
+    dia = date(2026, 9, 4)
+    *receitas, mb = _grupo_quatro(dia)
+    plano = PlanejamentoProducao.query.filter_by(data=dia, origem='cronograma').one()
+    por_receita = {it.receita_id: it for it in plano.itens}
+    for rec, alvo in zip(receitas, [5, 15, 20, 25]):
+        rec.peso_unitario = 500
+        rec.perda_percentual = 30  # perda do forno não reduz massa a amassar
+        item = por_receita[rec.id]
+        item.qtd_alvo = alvo
+        item.produzido_qtd = 2  # parcial: todos ainda abertos
+        item.multiplicador = ceil(alvo / rendimento_massa_crua(rec))
+    db.session.commit()
+
+    painel = _plano_do_dia(dia)['grupos'][0]
+    cliente = _login(app, admin_user)
+    modal = cliente.get(f'/padeiro/massa-base/{mb.id}.json?data={dia.isoformat()}').get_json()
+    g = montar_gantt(dia)
+    base = next(p for p in g['produtos'] if p['tipo'] == 'base')
+    assert base['base_massa_label'] == painel['base_massa_label'] == modal['base_massa']
+    assert base['base_recipe'] == modal['base_recipe']
+    assert base['fornadas'] == painel['fornadas'] == modal['fornadas']
+    assert base['data_plano'] == dia.isoformat()
+    assert base['item_id'] is None  # grupo não é um lançamento de produção
+    ramos = [p for p in g['produtos'] if p['tipo'] == 'ramo']
+    assert len(ramos) == len(receitas)
+    for ramo in ramos:
+        item = por_receita[ramo['receita_id']]
+        assert ramo['item_id'] == item.id
+        assert ramo['data_plano'] == dia.isoformat()
+        assert ramo['alvo'] == item.qtd_alvo
+        assert ramo['produzido'] == item.produzido_qtd == 2
+        assert ramo['falta'] == item.qtd_alvo - 2
+
+
+def test_fallback_de_base_sem_cascata_preserva_link_do_item(app, monkeypatch):
+    dia = date(2026, 9, 5)
+    _grupo_quatro(dia)
+    plano = PlanejamentoProducao.query.filter_by(data=dia, origem='cronograma').one()
+    por_receita = {it.receita_id: it for it in plano.itens}
+    monkeypatch.setattr('app.services.massa_base.calcular_cascata', lambda *args: None)
+    g = montar_gantt(dia)
+    assert len(g['produtos']) == 4
+    for produto in g['produtos']:
+        assert produto['tipo'] == 'solo'
+        assert produto['item_id'] == por_receita[produto['receita_id']].id
+        assert produto['data_plano'] == dia.isoformat()
+
+
+@pytest.mark.parametrize('estado', ['concluido', 'sem_ficha', 'encerrado', 'dispensado'])
+def test_base_completa_tem_mesma_escala_e_cascata_nas_tres_telas(
+        app, admin_user, estado):
+    from app.blueprints.padeiro.routes import _plano_do_dia
+    from app.services.massa_base import escala_da_ordem
+    from app.utils import agora
+
+    dia = date(2026, 9, 6)
+    pf, st, s7, na, mb = _grupo_quatro(dia)
+    plano = PlanejamentoProducao.query.filter_by(data=dia, origem='cronograma').one()
+    primeiro = next(it for it in plano.itens if it.receita_id == pf.id)
+    cliente = _login(app, admin_user)
+    url = f'/padeiro/massa-base/{mb.id}.json?data={dia.isoformat()}'
+    antes = cliente.get(url).get_json()
+    if estado == 'concluido':
+        primeiro.produzido_qtd = primeiro.qtd_alvo
+    elif estado == 'sem_ficha':
+        pf.etapas.clear()
+    elif estado == 'encerrado':
+        primeiro.falta_encerrada_em = agora()
+    else:
+        primeiro.dispensada_em = agora()
+    db.session.commit()
+
+    porcoes, unidades = escala_da_ordem(mb, plano)
+    elegiveis = [pf, st, s7, na] if estado in ('concluido', 'sem_ficha') else [st, s7, na]
+    assert unidades == {rec.id: 10 for rec in elegiveis}
+    assert porcoes == {rec.id: 1.0 for rec in elegiveis}
+    painel = _plano_do_dia(dia)['grupos'][0]
+    modal = cliente.get(url).get_json()
+    g = montar_gantt(dia)
+    base = next(p for p in g['produtos'] if p['tipo'] == 'base')
+    assert base['base_massa_label'] == painel['base_massa_label'] == modal['base_massa']
+    assert base['base_recipe'] == modal['base_recipe']
+    assert base['fornadas'] == painel['fornadas'] == modal['fornadas']
+    if estado in ('concluido', 'sem_ficha'):
+        assert modal == antes  # referência não diminui por conclusão/falta de ficha
+    else:
+        assert modal['base_massa'] != antes['base_massa']
+    # A referência do tronco contém TODAS as retiradas/acréscimos da mesma
+    # base exibida; só a fila de ramos fica restrita aos pendentes com ficha.
+    passos_esperados = []
+    for passo in modal['cascata']:
+        if passo['acrescentar']:
+            passos_esperados.append('+ ' + ', '.join(
+                f"{ing['nome']} {ing['qtd']}" for ing in passo['acrescentar']))
+        if passo['tipo'] == 'retirada':
+            passos_esperados.append('Tirar ' + passo['nome'])
+    passos_gantt = [t['etapa'] for t in base['tarefas']
+                    if t['etapa'].startswith(('+ ', 'Tirar '))]
+    assert passos_gantt == passos_esperados
+    assert {p['receita_id'] for p in g['produtos'] if p['tipo'] == 'ramo'} == {
+        st.id, s7.id, na.id}
+    assert (pf.id in {it['receita_id'] for it in g['sem_etapas_itens']}) == (
+        estado == 'sem_ficha')
+
+
+@pytest.mark.parametrize('estado', ['encerrado', 'dispensado'])
+def test_base_com_todos_fechados_nao_vira_preparo_generico(app, admin_user, estado):
+    from app.blueprints.padeiro.routes import _plano_do_dia
+    from app.services.massa_base import escala_da_ordem
+    from app.utils import agora
+
+    dia = date(2026, 9, 7)
+    *_, mb = _grupo_quatro(dia)
+    plano = PlanejamentoProducao.query.filter_by(data=dia, origem='cronograma').one()
+    for item in plano.itens:
+        if estado == 'encerrado':
+            item.falta_encerrada_em = agora()
+        else:
+            item.dispensada_em = agora()
+    db.session.commit()
+    assert escala_da_ordem(mb, plano) == ({}, {})
+    assert _plano_do_dia(dia)['grupos'] == []
+    assert montar_gantt(dia)['produtos'] == []
+    cliente = _login(app, admin_user)
+    modal = cliente.get(f'/padeiro/massa-base/{mb.id}.json?data={dia.isoformat()}').get_json()
+    assert modal == {'nome': mb.nome, 'vazio': True}
+    assert all(item.produzido_qtd == 0 and item.qtd_alvo == 10 for item in plano.itens)
+
+
 def _sourdough_lead(nome, lead):
     """Pão de fermentação longa (24h) com etapa de assar depois — lead em dias."""
     r = _receita(nome, [
@@ -374,7 +538,7 @@ def test_continuacao_assar_aparece_no_dia_seguinte(app):
     fluxograma é contínuo entre os dias, não some a parte de assar."""
     ontem, hoje_ = date(2026, 9, 10), date(2026, 9, 11)
     r = _sourdough_lead('Sourdough X', 1)
-    _plano(ontem, [(r, 1, 10, 0)])              # amassado ontem
+    plano = _plano(ontem, [(r, 1, 10, 3)])     # amassado ontem, parcial
     _plano(hoje_, [])                           # hoje sem mistura nova
 
     g = montar_gantt(hoje_)
@@ -383,6 +547,9 @@ def test_continuacao_assar_aparece_no_dia_seguinte(app):
     assert len(cont) == 1
     assert cont[0]['nome'] == 'Sourdough X'
     assert cont[0]['origem_label'] == ontem.strftime('%d/%m')
+    assert cont[0]['data_plano'] == ontem.isoformat()
+    assert cont[0]['item_id'] == plano.itens[0].id
+    assert (cont[0]['alvo'], cont[0]['produzido'], cont[0]['falta']) == (10, 3, 7)
     etapas = [t['etapa'] for t in cont[0]['tarefas']]
     assert 'Assar' in etapas                    # a finalização (forno) é agendada
     assert 'Amassamento' not in etapas          # o amassamento NÃO se repete hoje
@@ -400,6 +567,18 @@ def test_continuacao_respeita_lead_de_2_dias(app):
     assert g is not None
     assert any(p['tipo'] == 'continuacao' and p['nome'] == 'Sourdough 48h'
                for p in g['produtos'])
+
+
+def test_falta_encerrada_nao_vira_continuacao(app):
+    from app.utils import agora
+    origem = date(2026, 9, 16)
+    r = _sourdough_lead('Sourdough encerrado', 1)
+    plano = _plano(origem, [(r, 1, 10, 3)])
+    plano.itens[0].falta_encerrada_em = agora()
+    db.session.commit()
+    assert montar_gantt(origem + timedelta(days=1)) is None
+    assert plano.itens[0].produzido_qtd == 3
+    assert plano.itens[0].qtd_alvo == 10
 
 
 def test_dia_sem_plano_nem_continuacao_e_none(app):

@@ -254,7 +254,7 @@ def _plano_do_dia(dia):
         eh_preparo_auxiliar,
     )
     from app.services.gantt import _g_label
-    from app.services.massa_base import calcular_cascata, rendimento_massa_crua
+    from app.services.massa_base import calcular_cascata, escala_da_ordem
     from app.services.producao import fornadas_amassadeira
 
     plano = (PlanejamentoProducao.query
@@ -271,16 +271,12 @@ def _plano_do_dia(dia):
         rec = it.receita
         alvo = int(it.qtd_alvo or 0)
         feito = int(it.produzido_qtd or 0)
-        # rendimento de massa CRUA (peso_unitario), sem perda do forno — a
-        # produção pesa massa crua. Float pra escala exata (un × peso_unitario).
-        rend = rendimento_massa_crua(rec) if rec else 1.0
         return {'item_id': it.id, 'receita_id': it.receita_id,
                 'nome': rec.nome if rec else '(receita)', 'alvo': alvo,
                 'produzido': feito, 'falta': max(0, alvo - feito),
                 'fornadas': fornadas_amassadeira(rec, it.multiplicador),
                 'centro': centro_trabalho_receita(rec),
                 'auxiliar': eh_preparo_auxiliar(rec),
-                '_porcoes': alvo / rend,
                 '_mult': it.multiplicador, '_mbi': membership.get(it.receita_id)}
 
     # Item dispensado pelo admin (auditoria) sai do plano do padeiro: ele não vê
@@ -302,9 +298,7 @@ def _plano_do_dia(dia):
 
     grupos = []
     for mb_id, (mb, ds) in por_grupo.items():
-        # porções reais (qtd_alvo / rendimento) — mesma escala do modal "ver a
-        # base", não o multiplicador inteiro (que infla a massa).
-        porcoes = {d['receita_id']: d['_porcoes'] for d in ds}
+        porcoes, _unidades = escala_da_ordem(mb, plano)
         calc = calcular_cascata(mb, porcoes)
         grupos.append({
             'mb_id': mb_id,
@@ -448,18 +442,23 @@ def resumo_entregas_toggle():
 @login_required
 @padeiro_required
 def gantt():
-    """Fluxograma/Gantt da produção do dia: agenda as etapas das receitas do
-    plano aprovado na linha do tempo (turnos 06–14 / 13–21), serializando
-    amassadeira e forno e encaixando mise en place em paralelo."""
+    """Sequência da ordem enviada, com consulta por produto para a TV.
+
+    Tempos são referência do planejamento, nunca confirmação de execução.
+    O gráfico original permanece disponível como simulação de horários.
+    """
     from app.services.gantt import montar_gantt
 
     hj = hoje()
     dia = _parse_dia(request.args.get('data')) or hj
+    ontem = hj - timedelta(days=1)
+    ordem_ontem_aberta = bool(_plano_em_aberto(ontem)) if dia == hj else False
     return render_template(
         'padeiro/gantt.html', dia=dia, eh_hoje=(dia == hj),
         dia_anterior=(dia - timedelta(days=1)).isoformat(),
         dia_seguinte=(dia + timedelta(days=1)).isoformat(),
-        g=montar_gantt(dia))
+        g=montar_gantt(dia), ordem_ontem_aberta=ordem_ontem_aberta,
+        data_ontem=ontem)
 
 
 @padeiro_bp.route('/listas.html')
@@ -504,7 +503,7 @@ def massa_base_mise(mb_id):
 
     from app.models import MassaBase, PlanejamentoProducao
     from app.services.gantt import _g_label
-    from app.services.massa_base import calcular_cascata, rendimento_massa_crua
+    from app.services.massa_base import calcular_cascata, escala_da_ordem
 
     mb = MassaBase.query.get_or_404(mb_id)
     dia = _parse_dia(request.args.get('data')) or hoje()
@@ -514,25 +513,9 @@ def massa_base_mise(mb_id):
              .filter(PlanejamentoProducao.enviado_ao_padeiro.isnot(False))
              .first())
 
-    # Escala a base pelas UNIDADES do dia em porções REAIS (qtd_alvo /
-    # rendimento de massa crua), não pelo multiplicador inteiro do item — esse
-    # arredonda a fornada pra cima (ceil) e infla a massa/água. O rendimento é o
-    # de massa CRUA (peso_unitario), sem perda do forno: 120 un × 500 g = 60 kg.
-    membros = {it.receita_id: it.receita for it in mb.itens}
-    porcoes, unidades = {}, {}
-    if plano:
-        for it in plano.itens:
-            rec = membros.get(it.receita_id)
-            if rec is None:
-                continue
-            if it.dispensada_em is not None:
-                continue                  # dispensado: não entra na massa a preparar
-            alvo = int(it.qtd_alvo or 0)
-            rend = rendimento_massa_crua(rec)
-            unidades[it.receita_id] = alvo
-            porcoes[it.receita_id] = alvo / rend
-
-    calc = calcular_cascata(mb, porcoes or None)
+    porcoes, unidades = escala_da_ordem(mb, plano)
+    # Ordem existente sem integrantes elegíveis é vazia, não preview genérico.
+    calc = calcular_cascata(mb, porcoes if plano is not None else None)
     if calc is None:
         return jsonify({'nome': mb.nome, 'vazio': True})
 

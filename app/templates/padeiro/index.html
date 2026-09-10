@@ -462,7 +462,7 @@
   </section>
 
   {% macro prod_row(it, em_grupo=false) %}
-    <div class="prod-dia-row {% if it.falta == 0 %}feito{% endif %}">
+    <div id="producao-item-{{ it.item_id }}" class="prod-dia-row {% if it.falta == 0 %}feito{% endif %}" tabindex="-1">
       {% if em_grupo %}
       {# pão que sai da massa-base: não tem receita separada — a "receita" é a
          base + a retirada (botão "ver a base" no cabeçalho do grupo). #}
@@ -488,7 +488,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="encerrar" value="">
         <input type="number" name="unidades" min="1" value="{{ it.falta }}"
-               class="prod-dia-qtd" id="qtd-{{ it.item_id }}">
+               class="prod-dia-qtd" id="qtd-{{ it.item_id }}" aria-label="Quantidade produzida de {{ it.nome }}">
         <button type="submit" class="prod-dia-btn">Registrar produção</button>
       </form>
       {% else %}
@@ -522,7 +522,7 @@
 
     {# pães que saem de uma massa-base comum: amasse a base e tire cada um #}
     {% for g in plano.grupos %}
-    <div class="prod-dia-grupo">
+    <div id="producao-base-{{ g.mb_id }}-{{ data_plano.isoformat() }}" class="prod-dia-grupo" tabindex="-1">
       <span class="prod-dia-group-icon">🥣</span>
       <span><small>Massa base</small>{{ g.nome }}{% if g.base_massa_label %} · amassar <b>{{ g.base_massa_label }}</b>{% if g.fornadas %} <span class="prod-dia-grupo-sub">{{ g.fornadas }} fornada{{ 's' if g.fornadas != 1 }}</span>{% endif %}{% endif %}</span>
       <button type="button" class="prod-dia-base-btn" onclick="verBase({{ g.mb_id }}, '{{ data_plano.isoformat() }}')">Ver preparo da base</button>

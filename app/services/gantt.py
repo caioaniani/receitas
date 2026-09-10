@@ -143,21 +143,33 @@ def montar_gantt(dia):
     membership = {row.receita_id: row for row in MassaBaseItem.query.all()}
     itens_plano = []
     sem_etapas = []
+    sem_etapas_itens = []
+
+    def _dados_item(it, data_plano):
+        alvo = int(it.qtd_alvo or 0)
+        produzido = int(it.produzido_qtd or 0)
+        return {'item_id': it.id, 'receita_id': it.receita_id,
+                'data_plano': data_plano.isoformat(), 'alvo': alvo,
+                'produzido': produzido, 'falta': max(0, alvo - produzido)}
+
     for it in (plano.itens if plano else []):
         rec = it.receita
         if rec is None:
             continue
-        if it.dispensada_em is not None:
-            continue                      # dispensado pelo admin: sai do gantt
-        falta = max(0, int(it.qtd_alvo or 0) - int(it.produzido_qtd or 0))
-        if falta <= 0:
+        if it.dispensada_em is not None or it.falta_encerrada_em is not None:
+            continue                      # falta encerrada vive só na auditoria
+        dados = _dados_item(it, dia)
+        if dados['falta'] <= 0:
             continue
         etapas = list(rec.etapas)
         if not etapas:
             sem_etapas.append(rec.nome)
+            sem_etapas_itens.append({
+                'nome': rec.nome, 'tipo': 'solo', 'tarefas': [], 'destino': None,
+                'centro_label': rotulo_centro(centro_trabalho_receita(rec)), **dados})
             continue
         itens_plano.append({
-            'rec': rec, 'falta': falta, 'mult': it.multiplicador, 'etapas': etapas,
+            'rec': rec, 'dados': dados, 'etapas': etapas,
             'nf': fornadas_amassadeira(rec, it.multiplicador) or 1,
             'mbi': membership.get(rec.id)})
 
@@ -171,6 +183,8 @@ def montar_gantt(dia):
              'fim_min': 0, 'falta': kw.get('falta'), 'fornadas': kw.get('fornadas'),
              'tipo': kw.get('tipo', 'solo'), 'grupo': kw.get('grupo'),
              'receita_id': kw.get('receita_id'), 'centro': centro,
+             'item_id': kw.get('item_id'), 'data_plano': kw.get('data_plano'),
+             'alvo': kw.get('alvo'), 'produzido': kw.get('produzido'),
              'centro_label': rotulo_centro(centro)}
         produtos.append(p)
         return p
@@ -187,30 +201,31 @@ def montar_gantt(dia):
 
     # 1a) Receitas SOLO (sem massa-base): 1 job por receita, como sempre.
     for pi in [x for x in itens_plano if x['mbi'] is None]:
-        prod = _novo_produto(pi['rec'].nome, falta=pi['falta'], fornadas=pi['nf'],
-                             receita_id=pi['rec'].id,
+        prod = _novo_produto(pi['rec'].nome, **pi['dados'], fornadas=pi['nf'],
                              centro=centro_trabalho_receita(pi['rec']))
         jobs.append({'prod': prod, 'passos': _passos(pi['etapas'], pi['nf']),
                      'ptr': 0, 'ready': 0})
 
     # 1b) Massa-base: UMA amassada da base (tronco) + retiradas em hidratação
     #     crescente; cada receita começa as etapas pós-amassamento na sua retirada.
-    from app.services.massa_base import calcular_cascata
+    from app.services.massa_base import calcular_cascata, escala_da_ordem
     grupos = {}
     for pi in [x for x in itens_plano if x['mbi'] is not None]:
         grupos.setdefault(pi['mbi'].massa_base_id, []).append(pi)
 
     for mb_id, items in grupos.items():
         mb = items[0]['mbi'].massa_base
-        mults = {pi['rec'].id: max(1, int(pi['mult'] or 1)) for pi in items}
-        calc = calcular_cascata(mb, mults)
+        # Referência completa inclui concluídos e receitas sem etapas, como
+        # painel/modal. Só os ramos pendentes com etapas ganham jobs próprios.
+        porcoes, _unidades = escala_da_ordem(mb, plano)
+        calc = calcular_cascata(mb, porcoes)
         by_id = {pi['rec'].id: pi for pi in items}
         retiradas = ([p for p in (calc or {}).get('passos', [])
                       if p.get('tipo') == 'retirada']) if calc else []
         if not retiradas:
             for pi in items:                       # fallback: trata como solo
-                prod = _novo_produto(pi['rec'].nome, falta=pi['falta'],
-                                     fornadas=pi['nf'], receita_id=pi['rec'].id,
+                prod = _novo_produto(pi['rec'].nome, **pi['dados'],
+                                     fornadas=pi['nf'],
                                      centro=centro_trabalho_receita(pi['rec']))
                 jobs.append({'prod': prod, 'passos': _passos(pi['etapas'], pi['nf']),
                              'ptr': 0, 'ready': 0})
@@ -220,6 +235,7 @@ def montar_gantt(dia):
         cor_grupo = _CORES[len(produtos) % len(_CORES)]
         trunk_prod = _novo_produto('Massa base: ' + mb.nome, cor=cor_grupo,
                                    tipo='base', grupo=mb_id, fornadas=base_nf,
+                                   data_plano=dia.isoformat(),
                                    centro=centro_trabalho_receita(items[0]['rec']))
         # quantidade e receita da base JÁ ESCALADAS pro plano do dia (a tela
         # Massa base mostra só pra 1 porção; aqui é o total a amassar no dia).
@@ -236,9 +252,8 @@ def montar_gantt(dia):
                 continue
             i = _idx_amassadeira(pi['etapas'])
             post = pi['etapas'][i + 1:] if i >= 0 else pi['etapas']
-            prod_r = _novo_produto(pi['rec'].nome, falta=pi['falta'],
+            prod_r = _novo_produto(pi['rec'].nome, **pi['dados'],
                                    fornadas=pi['nf'], tipo='ramo', grupo=mb_id,
-                                   receita_id=pi['rec'].id,
                                    centro=centro_trabalho_receita(pi['rec']))
             bj = {'prod': prod_r, 'passos': _passos(post, pi['nf']),
                   'ptr': 0, 'ready': None}        # None = bloqueado
@@ -247,7 +262,9 @@ def montar_gantt(dia):
 
         # tronco: processo da base (mise..amassar, escalado por base_nf) + a
         # cascata. Cada "tirar" desbloqueia a receita correspondente.
-        rid0 = retiradas[0]['receita_id']
+        # A primeira retirada da referência pode já estar concluída/sem ficha.
+        # O processo vem da primeira receita da fila que tem etapas.
+        rid0 = next(p['receita_id'] for p in retiradas if p['receita_id'] in by_id)
         tmpl = by_id[rid0]['etapas']
         i = _idx_amassadeira(tmpl)
         pre = tmpl[:i + 1] if i >= 0 else tmpl
@@ -292,17 +309,17 @@ def montar_gantt(dia):
             rec = it.receita
             if rec is None or int(rec.dias_producao or 0) != L:
                 continue
-            if it.dispensada_em is not None:
-                continue                  # dispensado pelo admin: não finaliza
-            falta = max(0, int(it.qtd_alvo or 0) - int(it.produzido_qtd or 0))
-            if falta <= 0:
+            if it.dispensada_em is not None or it.falta_encerrada_em is not None:
+                continue                  # falta encerrada vive só na auditoria
+            dados = _dados_item(it, plano_ant.data)
+            if dados['falta'] <= 0:
                 continue
             _, _, post = _split_long_passiva(list(rec.etapas))
             if not post:
                 continue            # sem etapa pós-fermentação: nada a finalizar
             nf = fornadas_amassadeira(rec, it.multiplicador) or 1
-            prod = _novo_produto(rec.nome, falta=falta, fornadas=nf,
-                                 tipo='continuacao', receita_id=rec.id,
+            prod = _novo_produto(rec.nome, **dados, fornadas=nf,
+                                 tipo='continuacao',
                                  centro=centro_trabalho_receita(rec))
             prod['origem_label'] = (dia - timedelta(days=L)).strftime('%d/%m')
             jobs.append({'prod': prod, 'passos': _passos(post, nf),
@@ -388,7 +405,9 @@ def montar_gantt(dia):
         return p['tarefas'][0]['ini'] if p['tarefas'] else 1e9
 
     def _cluster(p):
-        return 'g:%s' % p['grupo'] if p['grupo'] is not None else 's:%d' % id(p)
+        # A ordem visual precisa ser estável ao atualizar a TV. O endereço
+        # do dict em memória mudava a posição de produtos com o mesmo início.
+        return 'g:%s' % p['grupo'] if p['grupo'] is not None else 's:%012d' % p['item_id']
     cluster_ini = {}
     for p in produtos:
         ch = _cluster(p)
@@ -434,6 +453,7 @@ def montar_gantt(dia):
         'eixo_fim': eixo_fim, 'span_min': span, 'canvas_px': canvas_px,
         'horas': horas, 'turnos': turnos,
         'produtos': produtos, 'sem_etapas': sem_etapas,
+        'sem_etapas_itens': sem_etapas_itens,
         'fim_estimado': _hhmm(DIA_INI + fim_geral) if fim_geral else None,
         'plano_id': plano.id if plano else None,
     }

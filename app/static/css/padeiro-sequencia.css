@@ -1,0 +1,106 @@
+:root { color-scheme: light; --ink: #172d23; --muted: #52655a; --line: #d6dfd8; --green: #275d45; --paper: #fff; --rotulo-w: 240px; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f2f4ef; color: var(--ink); font-family: Inter, system-ui, -apple-system, sans-serif; font-size: 18px; }
+a { color: var(--green); text-underline-offset: 4px; }
+:where(a, summary, button):focus-visible { outline: 3px solid #c07717; outline-offset: 4px; }
+[hidden] { display: none !important; }
+h1, h2, h3, p { margin: 0; }
+.seq-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 28px; background: var(--paper); border-bottom: 1px solid var(--line); }
+.eyebrow { color: var(--muted); font-size: 14px; font-weight: 750; letter-spacing: .05em; }
+h1 { font-size: clamp(25px, 2vw, 38px); line-height: 1.2; margin-top: 4px; }
+h1 span { color: var(--green); white-space: nowrap; }
+.seq-header nav { display: flex; align-items: center; gap: 20px; flex-shrink: 0; }
+.button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 12px 18px; border-radius: 10px; border: 1px solid var(--line); font-weight: 700; text-decoration: none; background: white; }
+.button.primary { background: var(--green); border-color: var(--green); color: white; }
+.button:hover { box-shadow: 0 0 0 2px var(--green); }
+.seq-date { position: relative; font-size: 16px; }
+summary { cursor: pointer; padding: 12px 0; }
+.seq-date > div { position: absolute; top: 100%; right: 0; z-index: 5; width: 200px; background: white; padding: 8px; box-shadow: 0 6px 25px #172d2326; border: 1px solid var(--line); border-radius: 10px; }
+.seq-date a { display: block; padding: 12px; }
+main { padding: 0 28px 24px; }
+.seq-help { color: var(--muted); padding: 14px 0; font-size: 17px; }
+.overnight { margin-top: 14px; padding: 12px 16px; background: #fff0ce; border-radius: 9px; font-size: 17px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.overnight a { font-weight: 750; }
+.seq-workspace { display: grid; grid-template-columns: clamp(260px, 23vw, 360px) minmax(0, 1fr); gap: 22px; align-items: start; }
+.product-list { display: grid; align-content: start; gap: 8px; }
+.product-list h2 { font-size: 19px; padding: 4px 4px 8px; }
+.product-choice { display: block; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: white; color: var(--ink); text-decoration: none; scroll-margin-top: 50px; }
+.choice-name { display: block; font-weight: 750; font-size: clamp(18px, 1.25vw, 23px); line-height: 1.25; overflow-wrap: anywhere; }
+.choice-meta, .choice-warning { display: block; margin-top: 5px; font-size: 15px; color: var(--muted); }
+.choice-warning { color: #805311; }
+.product-choice.branch { margin-left: 18px; border-left: 4px solid #8aa392; }
+.product-choice:hover { border-color: var(--green); }
+.product-choice[aria-current="true"] { background: var(--green); color: white; border-color: var(--green); }
+.product-choice[aria-current="true"] :is(.choice-meta, .choice-warning) { color: #f4f7f1; }
+.product-panel { padding: clamp(20px, 2vw, 32px); background: white; border: 1px solid var(--line); border-radius: 16px; margin-bottom: 20px; }
+.product-heading { display: flex; align-items: start; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
+.product-heading h2 { font-size: clamp(28px, 2.3vw, 44px); line-height: 1.15; margin: 6px 0 14px; overflow-wrap: anywhere; }
+.product-heading .button { flex-shrink: 0; font-size: 17px; }
+.quantity { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; }
+.quantity > strong { font-size: clamp(34px, 3vw, 56px); color: var(--green); line-height: 1; }
+.quantity small { font-size: .5em; }
+.quantity > span { font-size: 17px; color: var(--muted); }
+.notice { border-left: 4px solid #bd821c; background: #fff6e5; padding: 12px 16px; margin-bottom: 20px; line-height: 1.45; font-size: 17px; }
+.steps-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.steps-heading h3 { font-size: 22px; }
+.steps-heading span, .reference-note { font-size: 15px; color: var(--muted); }
+.steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0; margin: 0; list-style: none; }
+.step { display: flex; align-items: start; gap: 12px; padding: 17px 15px; border: 1px solid var(--line); border-radius: 12px; background: #f7f9f5; min-width: 0; }
+.step-number { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--green); color: white; font-size: 18px; font-weight: 800; }
+.step strong { display: block; font-size: clamp(19px, 1.5vw, 28px); line-height: 1.25; overflow-wrap: anywhere; }
+.step-duration { display: block; margin-top: 8px; font-size: clamp(17px, 1.1vw, 21px); color: var(--muted); }
+.step.passive { background: #f9f3e5; border-color: #e6d9ba; }
+.step.passive .step-number { background: #785b23; }
+.reference-note { margin-top: 14px; line-height: 1.5; }
+.base-recipe { border-top: 1px solid var(--line); margin-top: 20px; }
+.base-recipe summary { font-weight: 700; }
+.base-recipe ul { padding: 0; list-style: none; }
+.base-recipe li { display: flex; justify-content: space-between; gap: 16px; max-width: 650px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.product-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; margin-top: 24px; font-size: 17px; }
+.product-footer a { padding: 7px 0; }
+.next-product { margin-left: auto; font-weight: 750; }
+.no-steps { padding: 24px 0; line-height: 1.5; }
+.no-steps p { margin-top: 8px; }
+.empty { padding: 50px 0; }
+.empty p { margin: 16px 0 24px; }
+.timeline-details { margin-top: 12px; border-top: 1px solid var(--line); }
+.timeline-details > summary { font-weight: 700; }
+.timeline-details > p { font-size: 17px; line-height: 1.5; margin: 6px 0 18px; }
+/* O gráfico conserva os minutos e a ordem do serviço; a consulta principal
+   da TV não depende da rolagem horizontal nem de passar o mouse. */
+.gantt { overflow-x: auto; background: white; border: 1px solid var(--line); border-radius: 12px; }
+.gantt-inner { min-width: max-content; }
+.turnos, .eixo { position: relative; margin-left: var(--rotulo-w); }
+.turnos { height: 24px; }.turno { position: absolute; height: 24px; font-size: 14px; padding-left: 8px; background: #e9d2a1; overflow: hidden; }.turno.tarde { background: #e2dcf2; }
+.eixo { height: 32px; }.hora { position: absolute; font-size: 14px; top: 7px; }
+.linha { display: flex; border-top: 1px solid var(--line); min-height: 85px; }.linha-base { background: #f3f5f0; }.linha-cont { background: #eef7fa; }
+.rotulo { width: var(--rotulo-w); flex-shrink: 0; position: sticky; left: 0; z-index: 2; background: #fff; padding: 12px 10px; }
+.nm { display: block; font-size: 18px; font-weight: 750; }.sub { display: block; margin-top: 6px; font-size: 14px; color: var(--muted); }.nm-link { text-decoration: none; }.nm-edit { font-size: 12px; }
+.faixa { position: relative; flex-shrink: 0; }.grade { position: absolute; top: 0; bottom: 0; width: 1px; background: #eee; }
+.barra { position: absolute; top: 20px; height: 42px; border-radius: 7px; display: flex; align-items: center; gap: 6px; padding: 0 5px; color: white; font-weight: 750; font-size: 16px; white-space: nowrap; }.barra.passiva { opacity: .75; }.barra .et { overflow: hidden; }.et-fora { position: absolute; left: 100%; margin-left: 8px; color: var(--ink); }.destino { position: absolute; top: 30px; white-space: nowrap; font-size: 16px; }
+/* Em TV a lista e o preparo rolam separadamente: o produto selecionado e a
+   ação de retorno não desaparecem quando há muitas receitas na ordem. */
+@media (min-width: 1050px) {
+  body.seq-ready { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  .seq-ready .seq-header { flex-shrink: 0; }
+  .seq-ready main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .seq-ready .seq-help, .seq-ready .overnight { flex-shrink: 0; }
+  .seq-ready .seq-workspace { flex: 1; min-height: 0; }
+  .seq-ready .product-list, .seq-ready .product-details { max-height: 100%; overflow-y: auto; scrollbar-gutter: stable; }
+  .seq-ready .timeline-details { flex-shrink: 0; max-height: 50dvh; overflow: auto; }
+}
+@media (min-width: 1550px) { .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }.step { min-height: 106px; } }
+@media (max-width: 1100px) { .product-heading { flex-wrap: wrap; }.seq-header { flex-wrap: wrap; } }
+@media (max-width: 750px) {
+  main { padding: 0 14px 20px; }.seq-header { padding: 18px 14px; gap: 14px; }.seq-header nav { gap: 14px; }
+  .seq-workspace { grid-template-columns: minmax(0, 1fr); }.seq-ready .product-list { max-height: 250px; overflow-y: auto; }.steps { grid-template-columns: minmax(0, 1fr); }
+  .product-panel { padding: 18px; }.product-footer { gap: 14px; }.next-product { margin-left: 0; }
+}
+.step-pages { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.step-pages button { font: inherit; font-size: 16px; font-weight: 700; padding: 10px 12px; min-height: 44px; background: white; border: 1px solid var(--line); color: var(--green); border-radius: 8px; cursor: pointer; }
+.step-pages button:disabled { opacity: .45; cursor: default; }
+.step-range { font-size: 16px; font-weight: 700; }
+@media (min-width: 1050px) {
+  .seq-ready .product-heading { position: sticky; top: -1px; z-index: 3; padding: 12px 0; background: white; }
+  .seq-ready .product-list h2 { position: sticky; top: 0; z-index: 2; background: #f2f4ef; padding-top: 10px; }
+}

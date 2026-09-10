@@ -94,6 +94,32 @@ def rendimento_massa_crua(receita):
     return float(receita.rendimento_qtd or 1) or 1.0
 
 
+def escala_da_ordem(massa_base, plano):
+    """Porções e unidades da referência completa desta base na ordem enviada.
+
+    O alvo não diminui quando há produção parcial ou concluída; uma receita
+    sem etapas também participa da base. Dispensa e falta encerrada retiram
+    o integrante da referência. Não consulta nem modifica estoque/planejamento.
+    Dicionários vazios significam que a ordem não contém preparo desta base,
+    nunca o modo genérico de uma porção por receita.
+    """
+    porcoes, unidades = {}, {}
+    if plano is None or plano.enviado_ao_padeiro is False:
+        return porcoes, unidades
+    membros = {it.receita_id: it.receita for it in massa_base.itens if it.receita}
+    for it in plano.itens:
+        rec = membros.get(it.receita_id)
+        if (rec is None or it.dispensada_em is not None
+                or it.falta_encerrada_em is not None):
+            continue
+        alvo = int(it.qtd_alvo or 0)
+        if alvo <= 0:
+            continue
+        unidades[it.receita_id] = alvo
+        porcoes[it.receita_id] = alvo / rendimento_massa_crua(rec)
+    return porcoes, unidades
+
+
 def calcular_cascata(massa_base, multiplicadores=None):
     """Calcula a cascata da `massa_base` como uma sequência de passos na ordem
     em que o padeiro executa, partindo da ficha técnica.
