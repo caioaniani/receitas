@@ -9,6 +9,7 @@
         {% if view == 'acessos' %}<p class="text-muted mb-0">Confira quem já tem conta antes de criar novos logins.</p>{% endif %}
     </div>
     <div class="page-actions">
+        {% if current_user.is_dono() %}<a href="{{ url_for('rh.equipe') }}" class="btn-pill">Visão da equipe</a>{% endif %}
         {% if view == 'acessos' %}
         <a href="{{ url_for('rh.funcionarios') }}" class="btn-pill">
             <i class="bi bi-arrow-left"></i> voltar aos cadastros

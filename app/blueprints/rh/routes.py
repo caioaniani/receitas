@@ -1061,7 +1061,8 @@ def plano_carreira_decisao(id):
     enquadramento.decisao = decisao or None
     cargo_aplicado = None
     if decisao == 'Aprovado':
-        cargo_aplicado = carreira_svc.aplicar_cargo_aprovado(enquadramento)
+        cargo_aplicado = carreira_svc.aplicar_cargo_aprovado(
+            enquadramento, actor_id=current_user.id)
     db.session.commit()
     if cargo_aplicado:
         flash(f'{enquadramento.funcionario.nome}: decisão aprovada e cargo '
@@ -1082,7 +1083,9 @@ def plano_carreira_decisao(id):
 @login_required
 @rh_required
 def salvar_funcionario(id):
+    from app.services import rh_movimentacao
     func = Funcionario.query.get_or_404(id)
+    cargo_antes = rh_movimentacao.snapshot(func)
 
     func.nome = request.form.get('nome', '').strip() or func.nome
     novo_cpf = request.form.get('cpf', '').strip()
@@ -1093,13 +1096,19 @@ def salvar_funcionario(id):
             return redirect(url_for('rh.detalhe_funcionario', id=func.id))
     func.cpf = novo_cpf or func.cpf
     cargo_id_raw = request.form.get('cargo_id', '').strip()
+    if cargo_id_raw and not cargo_id_raw.isdigit():
+        abort(400)
     func.cargo_id = int(cargo_id_raw) if cargo_id_raw else None
     # Sincroniza funcao (string legacy) com nome do cargo, pra compat com telas antigas
     if func.cargo_id:
         c = Cargo.query.get(func.cargo_id)
-        if c:
-            func.funcao = c.nome
-            func.salario_base = c.salario_base  # cache, calculo usa salario_efetivo()
+        if not c:
+            abort(400)
+        func.cargo = c
+        func.funcao = c.nome
+        func.salario_base = c.salario_base  # cache, calculo usa salario_efetivo()
+    else:
+        func.cargo = None
     # Se o cargo escolhido pertence a uma faixa do plano, essa escolha é a
     # aplicação efetiva daquela faixa e o enquadramento acompanha a ficha.
     from app.services import plano_carreira_import as carreira_svc
@@ -1148,6 +1157,8 @@ def salvar_funcionario(id):
         if loja:
             func.lojas.append(loja)
 
+    rh_movimentacao.registrar_mudanca(
+        func, cargo_antes, actor_id=current_user.id, origem='ficha_rh')
     db.session.commit()
     flash(f'"{func.nome}" atualizado!', 'success')
     return redirect(url_for('rh.detalhe_funcionario', id=func.id))

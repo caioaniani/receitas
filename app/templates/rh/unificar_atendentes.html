@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Unificar cargos de atendimento{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rh-equipe.css') }}?v={{ static_v.get('css/rh-equipe.css', '1') }}">
+<main class="rh-equipe" style="max-width:900px">
+  <a href="{{ url_for('rh.equipe') }}" class="rh-equipe-text-link mb-3">← Visão da equipe</a>
+  <h1 class="page-title">Atendente e Atendente 1</h1>
+  <p class="text-muted">Um único cargo de nível 1, preservando os salários atuais e o histórico.</p>
+  {% if previa.alvo %}
+  <section class="card p-4 mb-3">
+    <h2 class="h5">Cadastro que será mantido</h2>
+    <p><strong>{{ previa.alvo.nome }}</strong> · salário base {{ previa.alvo.salario_base|brl }} · {{ previa.contagens.get(previa.alvo.id,0) }} pessoa(s) vinculada(s)</p>
+    <p class="small text-muted mb-0">O painel reúne os dois nomes como Atendente 1. A consolidação abaixo também reúne seus vínculos no cadastro, sem alterar o salário do cargo mantido.</p>
+  </section>
+  {% if previa.ja_unificado %}<p class="alert alert-success">O cadastro já está unificado. Nenhuma alteração pendente.</p>
+  {% else %}
+  <section class="card p-4 mb-3">
+    <h2 class="h5">O que será consolidado</h2>
+    <ul>{% for c in previa.origens %}<li>{{ c.nome }} · {{ previa.contagens.get(c.id,0) }} pessoa(s) · salário cadastrado {{ c.salario_base|brl }}</li>{% endfor %}</ul>
+    <p>{{ previa.funcionarios|length }} vínculo(s) de funcionários e {{ previa.vinculos|length }} faixa(s) do plano serão direcionados ao cadastro mantido. As trilhas obrigatórias serão preservadas.</p>
+    <p class="small text-muted mb-0">Os cadastros duplicados ficam inativos, não são excluídos. Folhas anteriores e registros de promoção não são alterados. Atendente 2 e Atendente Chefe continuam separados.</p>
+  </section>
+  {% endif %}
+  {% else %}<p>Nenhum cargo equivalente foi encontrado.</p>{% endif %}
+  {% for erro in previa.impedimentos %}<p class="alert alert-warning">{{ erro }}</p>{% endfor %}
+  {% if previa.aplicavel %}<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="rh-equipe-button rh-equipe-button-primary">Unificar sem alterar salários</button></form>{% endif %}
+</main>
+{% endblock %}
