@@ -11,6 +11,7 @@
 <header class="seq-header">
   <div><span class="eyebrow">TV do padeiro · Fluxograma</span><h1>Sequência da produção <span>{{ dia.strftime('%d/%m') }}</span></h1></div>
   <nav aria-label="Navegação da produção">
+    <a href="{{ url_for('padeiro.diario_index', data=dia.isoformat()) }}">Diário de produção</a>
     <details class="seq-date">
       <summary>Trocar data</summary>
       <div>
@@ -112,6 +113,8 @@
         <details class="base-recipe"><summary>Ingredientes da massa-base · {{ p.base_massa_label }}</summary><ul>{% for ing in p.base_recipe %}<li><span>{{ ing.nome }}</span><strong>{{ ing.qtd }}</strong></li>{% endfor %}</ul></details>
         {% endif %}
         <footer class="product-footer">
+          {% if p.item_id %}<a href="{{ url_for('padeiro.diario_index', data=p.data_plano, origem='item:' ~ p.item_id) }}">Registrar lote</a>
+          {% elif p.tipo == 'base' %}<a href="{{ url_for('padeiro.diario_index', data=dia.isoformat(), origem='base:' ~ p.grupo) }}">Registrar lote da base</a>{% endif %}
           {% if p.receita_id %}<a href="{{ url_for('padeiro.fichas_editar', id=p.receita_id) }}">Ficha de preparo</a>{% endif %}
           {% if current_user.is_admin() and p.receita_id %}<a href="{{ url_for('receitas.etapas', id=p.receita_id) }}">Editar etapas</a>{% endif %}
           {% if not loop.last %}<a href="#{{ preparo_id(produtos[loop.index]) }}" class="next-product" data-product="{{ preparo_id(produtos[loop.index]) }}">Ver próximo produto →</a>{% endif %}

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diário da produção — {{ dia.strftime('%d/%m') }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/padeiro-diario.css', v='20260910a') }}">
+</head>
+<body>
+<a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
+<header class="diario-header">
+  <div><span class="eyebrow">Tela do padeiro</span><h1>Diário da produção</h1></div>
+  <nav aria-label="Navegação da produção">
+    <a href="{{ url_for('padeiro.diario_historico') }}">Consultar dias anteriores</a>
+    <a class="button" href="{{ url_for('padeiro.gantt', data=dia.isoformat()) }}">Ver sequência</a>
+  </nav>
+</header>
+<main id="conteudo">
+  {% set rascunho = rascunho | default({}) %}
+  {% for categoria, mensagem in get_flashed_messages(with_categories=true) %}
+  <div class="flash {{ categoria }}" role="{{ 'alert' if categoria in ('error', 'danger', 'warning') else 'status' }}">{{ mensagem }}</div>
+  {% endfor %}
+  <p class="page-intro">Registre o que acontece em cada lote. Comece pelos horários e complete as medições ao longo do dia.</p>
+  <form method="get" class="date-filter" aria-label="Escolher dia para consultar">
+    <div class="field"><label for="data">Consultar dia</label><input id="data" type="date" name="data" value="{{ dia.isoformat() }}" required></div>
+    <button type="submit" class="button">Ver dia</button>
+  </form>
+
+  {% macro cartao_lote(lote) %}
+  {% set em_andamento = lote.etapas | selectattr('fim_em', 'none') | list %}
+  <a class="lot-card" href="{{ url_for('padeiro.diario_lote', id=lote.id) }}">
+    <div class="lot-card-heading"><h3>{{ lote.nome }}</h3><span class="badge {{ 'complete' if lote.status == 'concluido' else 'open' }}">{{ 'Concluído' if lote.status == 'concluido' else 'Em aberto' }}</span></div>
+    <p class="lot-identification">{{ lote.identificacao or 'Lote #' ~ lote.id }}</p>
+    <p class="muted">Produção de {{ lote.data_producao.strftime('%d/%m/%Y') }}</p>
+    {% if em_andamento %}
+    <div class="lot-progress">{% for etapa in em_andamento %}<p><strong>{{ etapa.nome }}</strong> · desde {{ etapa.inicio_em | brt }}</p>{% endfor %}</div>
+    {% elif lote.status == 'aberto' %}<p class="lot-progress muted">Nenhuma etapa em andamento.</p>{% endif %}
+    <span class="card-action">{{ 'Continuar registro' if lote.status == 'aberto' else 'Ver registro' }} <span aria-hidden="true">→</span></span>
+  </a>
+  {% endmacro %}
+
+  {% if abertos %}
+  <section class="page-section" aria-labelledby="abertos-titulo">
+    <div class="section-heading"><h2 id="abertos-titulo">Para continuar</h2><span class="muted">{{ abertos | length }} {{ 'lote aberto' if abertos | length == 1 else 'lotes abertos' }}</span></div>
+    <p class="section-help">Inclui lotes de dias anteriores, para acompanhar os preparos que passam a noite.</p>
+    <div class="lot-grid">{% for lote in abertos %}{{ cartao_lote(lote) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+
+  <section class="panel new-lot" aria-labelledby="novo-titulo">
+    <div><span class="eyebrow">Preparos da ordem de {{ dia.strftime('%d/%m/%Y') }}</span><h2 id="novo-titulo">Começar um lote</h2><p class="section-help">Escolha o preparo da ordem. Cada batida pode ter seu próprio registro.</p><p class="field-help">O registro começa com a data de hoje. Para preencher um lote anterior, ajuste a data abaixo.</p></div>
+    {% if origens %}
+    <form method="post" action="{{ url_for('padeiro.diario_criar') }}" class="form-stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="data_ordem" value="{{ dia.isoformat() }}">
+      <input type="hidden" name="chave" value="{{ chave }}">
+      <div class="field"><label for="origem">Preparo</label>
+        <select id="origem" name="origem" required>
+          <option value="">Selecione o preparo</option>
+          {% for origem in origens %}{% set valor = origem.tipo ~ ':' ~ origem.id %}
+          <option value="{{ valor }}"{% if valor == pre_origem %} selected{% endif %}>{{ origem.nome }}{% if origem.tipo == 'base' %} · massa-base{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <details class="form-details"{% if rascunho %} open{% endif %}><summary>Identificação e data do lote</summary>
+        <div class="field"><label for="identificacao">Identificação <span class="optional">opcional</span></label><input type="text" id="identificacao" name="identificacao" maxlength="100" value="{{ rascunho.get('identificacao', '') }}" placeholder="Ex.: primeira batida" autocomplete="off"><p class="field-help">Você também pode preencher depois.</p></div>
+        <div class="field"><label for="data-producao">Data do lote</label><input type="date" id="data-producao" name="data_producao" value="{{ rascunho.get('data_producao', data_registro.isoformat()) }}" max="{{ data_registro.isoformat() }}" required><p class="field-help">Dia em que este preparo começou, mesmo quando a ordem for de outra data.</p></div>
+      </details>
+      <div><button type="submit" class="button primary">Começar registro</button></div>
+    </form>
+    {% else %}
+    <div class="empty-state"><p>Nenhum preparo disponível na ordem de {{ dia.strftime('%d/%m') }}.</p><a href="{{ url_for('padeiro.index', data=dia.isoformat()) }}">Consultar a produção deste dia</a></div>
+    {% endif %}
+  </section>
+
+  <section class="page-section" aria-labelledby="concluidos-titulo">
+    <div class="section-heading"><h2 id="concluidos-titulo">Registros concluídos de {{ dia.strftime('%d/%m') }}</h2></div>
+    {% if lotes %}<div class="lot-grid">{% for lote in lotes %}{{ cartao_lote(lote) }}{% endfor %}</div>
+    {% else %}<p class="empty-state muted">Ainda não há registros concluídos para este dia.</p>{% endif %}
+  </section>
+  <p class="page-note">O diário guarda observações para revisar o processo. A quantidade pronta continua sendo registrada em <a href="{{ url_for('padeiro.index', data=dia.isoformat()) }}">Registrar produção</a>.</p>
+</main>
+</body>
+</html>

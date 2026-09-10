@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Histórico — Diário da produção</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/padeiro-diario.css', v='20260910a') }}">
+</head>
+<body>
+<a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
+<header class="diario-header">
+  <div><span class="eyebrow">Diário da produção</span><h1>Consultar os registros</h1></div>
+  <nav aria-label="Navegação da produção"><a class="button" href="{{ url_for('padeiro.diario_index') }}">Voltar aos lotes</a></nav>
+</header>
+<main id="conteudo">
+  {% for categoria, mensagem in get_flashed_messages(with_categories=true) %}
+  <div class="flash {{ categoria }}" role="{{ 'alert' if categoria in ('error', 'danger', 'warning') else 'status' }}">{{ mensagem }}</div>
+  {% endfor %}
+  <p class="page-intro">Consulte os lotes de cada dia para revisar os horários, as medições e o resultado observado.</p>
+  <form method="get" class="date-filter" aria-label="Filtrar período do histórico">
+    <div class="field"><label for="inicio">De</label><input type="date" id="inicio" name="inicio" value="{{ inicio.isoformat() }}" required></div>
+    <div class="field"><label for="fim">Até</label><input type="date" id="fim" name="fim" value="{{ fim.isoformat() }}" required></div>
+    <button type="submit" class="button">Consultar</button>
+  </form>
+  <section class="page-section" aria-labelledby="historico-titulo">
+    <div class="section-heading"><div><h2 id="historico-titulo">{{ inicio.strftime('%d/%m/%Y') }} a {{ fim.strftime('%d/%m/%Y') }}</h2><p class="section-help">{{ lotes | length }} {{ 'lote registrado' if lotes | length == 1 else 'lotes registrados' }}</p></div>
+      {% if lotes %}<a class="button" href="{{ url_for('padeiro.diario_exportar', inicio=inicio.isoformat(), fim=fim.isoformat()) }}">Baixar planilha CSV</a>{% endif %}
+    </div>
+    {% if lotes %}
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Lotes do período; deslize para consultar todas as colunas">
+      <table>
+        <caption class="visually-hidden">Registros por lote, de {{ inicio.strftime('%d/%m/%Y') }} a {{ fim.strftime('%d/%m/%Y') }}. Medições em branco ainda não foram informadas.</caption>
+        <thead><tr><th scope="col">Dia</th><th scope="col">Preparo e lote</th><th scope="col">Registro</th><th scope="col">Etapas concluídas</th><th scope="col">Farinha (kg)</th><th scope="col">Massa (kg)</th><th scope="col">Temp. da massa (°C)</th></tr></thead>
+        <tbody>
+          {% for lote in lotes %}
+          <tr>
+            <td class="nowrap">{{ lote.data_producao.strftime('%d/%m/%Y') }}</td>
+            <th scope="row"><a href="{{ url_for('padeiro.diario_lote', id=lote.id) }}">{{ lote.nome }}</a><span class="table-secondary">{{ lote.identificacao or 'Lote #' ~ lote.id }}</span></th>
+            <td><span class="badge {{ 'complete' if lote.status == 'concluido' else 'open' }}">{{ 'Concluído' if lote.status == 'concluido' else 'Em aberto' }}</span></td>
+            <td>{{ lote.etapas | rejectattr('fim_em', 'none') | list | length }}</td>
+            {% for medida in ('farinha_kg', 'massa_kg', 'temperatura_massa') %}<td class="numeric">{% if lote.medidas.get(medida) is not none and lote.medidas.get(medida) != '' %}{{ lote.medidas.get(medida, '—') | string | replace('.', ',') }}{% else %}<span class="muted" aria-label="Não informado">—</span>{% endif %}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="field-help">Abra um lote para ver os horários e a duração de cada etapa. Um traço indica uma medição ainda não informada.</p>
+    {% else %}<div class="panel empty-state"><h3>Nenhum registro neste período</h3><p>Escolha outras datas ou comece um registro no diário.</p><a href="{{ url_for('padeiro.diario_index') }}">Ir para o diário</a></div>{% endif %}
+  </section>
+</main>
+</body>
+</html>

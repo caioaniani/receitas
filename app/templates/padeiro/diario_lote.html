@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ lote.nome }} — Diário da produção</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/padeiro-diario.css', v='20260910a') }}">
+</head>
+<body>
+<a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
+<header class="diario-header">
+  <div><span class="eyebrow">Diário da produção</span><h1>{{ lote.nome }}</h1></div>
+  <nav aria-label="Navegação da produção">
+    <a href="{{ url_for('padeiro.gantt', data=lote.data_ordem.isoformat()) }}">Ver sequência</a>
+    <a class="button" href="{{ url_for('padeiro.diario_index', data=lote.data_producao.isoformat()) }}">Voltar aos lotes</a>
+  </nav>
+</header>
+<main id="conteudo">
+  {% set rascunho = rascunho | default({}) %}
+  {% set erro_form = erro_form | default('') %}
+  {% set rascunho_medidas = rascunho if erro_form == 'padeiro.diario_salvar' else {} %}
+  {% set rascunho_agora = rascunho if erro_form == 'padeiro.diario_etapa_adicionar' and rascunho.get('modo') == 'agora' else {} %}
+  {% set rascunho_anterior = rascunho if erro_form == 'padeiro.diario_etapa_adicionar' and rascunho.get('modo') == 'horarios' else {} %}
+  {% for categoria, mensagem in get_flashed_messages(with_categories=true) %}
+  <div class="flash {{ categoria }}" role="{{ 'alert' if categoria in ('error', 'danger', 'warning') else 'status' }}">{{ mensagem }}</div>
+  {% endfor %}
+  <div class="lot-summary">
+    <div><strong>{{ lote.identificacao or 'Lote #' ~ lote.id }}</strong><span>Produção de {{ lote.data_producao.strftime('%d/%m/%Y') }}{% if lote.data_ordem != lote.data_producao %} · ordem de {{ lote.data_ordem.strftime('%d/%m/%Y') }}{% endif %}</span></div>
+    <span class="badge {{ 'complete' if lote.status == 'concluido' else 'open' }}">{{ 'Registro concluído' if lote.status == 'concluido' else 'Registro em aberto' }}</span>
+  </div>
+
+  {% macro campos_controle() %}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="versao" value="{{ lote.versao }}">
+  {% endmacro %}
+  {% macro corrigir_etapa(etapa) %}
+  {% set rascunho_etapa = rascunho if erro_form == 'padeiro.diario_etapa_corrigir' and request.view_args.get('etapa_id') == etapa.id else {} %}
+  <details class="form-details correction"{% if rascunho_etapa %} open{% endif %}><summary>Corrigir etapa</summary>
+    <form method="post" action="{{ url_for('padeiro.diario_etapa_corrigir', id=lote.id, etapa_id=etapa.id) }}" class="form-stack">
+      {{ campos_controle() }}
+      <div class="field"><label for="nome-{{ etapa.id }}">Nome da etapa</label><input type="text" id="nome-{{ etapa.id }}" name="nome" value="{{ rascunho_etapa.get('nome', etapa.nome) }}" maxlength="100" required></div>
+      <div class="field-grid">
+        <div class="field"><label for="inicio-{{ etapa.id }}">Início</label><input type="datetime-local" step="1" id="inicio-{{ etapa.id }}" name="inicio_em" value="{{ rascunho_etapa.get('inicio_em', etapa.inicio_em | brt('%Y-%m-%dT%H:%M:%S')) }}" required></div>
+        <div class="field"><label for="fim-{{ etapa.id }}">Término <span class="optional">opcional</span></label><input type="datetime-local" step="1" id="fim-{{ etapa.id }}" name="fim_em" value="{{ rascunho_etapa.get('fim_em', etapa.fim_em | brt('%Y-%m-%dT%H:%M:%S')) }}"><p class="field-help">Sem término, a etapa fica em andamento.</p></div>
+      </div>
+      <div class="field"><label for="obs-etapa-{{ etapa.id }}">Observação <span class="optional">opcional</span></label><textarea id="obs-etapa-{{ etapa.id }}" name="observacao" rows="2" maxlength="4000">{{ rascunho_etapa.get('observacao', etapa.observacao or '') }}</textarea></div>
+      <div><button type="submit" class="button">Salvar correção</button></div>
+    </form>
+  </details>
+  {% endmacro %}
+
+  {% set em_andamento = lote.etapas | selectattr('fim_em', 'none') | list %}
+  {% set concluidas = lote.etapas | rejectattr('fim_em', 'none') | list %}
+  <div class="detail-layout">
+    <div>
+      {% if em_andamento %}
+      <section class="page-section" aria-labelledby="andamento-titulo">
+        <div class="section-heading"><h2 id="andamento-titulo">Em andamento</h2></div>
+        <div class="stage-list">
+          {% for etapa in em_andamento %}
+          <article class="stage-card running" aria-labelledby="etapa-{{ etapa.id }}">
+            <div class="stage-heading"><div><h3 id="etapa-{{ etapa.id }}">{{ etapa.nome }}</h3><p class="stage-time">Início em <time datetime="{{ etapa.inicio_em.isoformat() }}">{{ etapa.inicio_em | brt }}</time></p></div>
+              {% if lote.status == 'aberto' %}<form method="post" action="{{ url_for('padeiro.diario_etapa_concluir', id=lote.id, etapa_id=etapa.id) }}">{{ campos_controle() }}<button type="submit" class="button primary">Concluir etapa</button></form>{% endif %}
+            </div>
+            {% if etapa.observacao %}<p class="saved-note">{{ etapa.observacao }}</p>{% endif %}
+            {{ corrigir_etapa(etapa) }}
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {% if lote.status == 'aberto' %}
+      <section class="panel" aria-labelledby="iniciar-titulo">
+        <h2 id="iniciar-titulo">Iniciar etapa</h2>
+        <p class="section-help">Escolha uma etapa cadastrada ou escreva o que está começando.</p>
+        <form method="post" action="{{ url_for('padeiro.diario_etapa_adicionar', id=lote.id) }}" class="form-stack">
+          {{ campos_controle() }}<input type="hidden" name="modo" value="agora">
+          <div class="field"><label for="nome-etapa">Etapa</label><input type="text" id="nome-etapa" name="nome" list="sugestoes-etapas" maxlength="100" required autocomplete="off" placeholder="Nome da etapa" value="{{ rascunho_agora.get('nome', '') }}"></div>
+          <div><button type="submit" class="button primary">Iniciar agora</button></div>
+        </form>
+        <datalist id="sugestoes-etapas">{% for nome in sugestoes %}<option value="{{ nome }}">{% endfor %}</datalist>
+        <details class="form-details previous-stage"{% if rascunho_anterior %} open{% endif %}><summary>Registrar horários anteriores</summary>
+          <p class="section-help">Se a etapa já começou ou terminou, informe os horários reais. Confira a data quando o preparo passar da meia-noite.</p>
+          <form method="post" action="{{ url_for('padeiro.diario_etapa_adicionar', id=lote.id) }}" class="form-stack">
+            {{ campos_controle() }}<input type="hidden" name="modo" value="horarios">
+            <div class="field"><label for="nome-anterior">Etapa</label><input type="text" id="nome-anterior" name="nome" list="sugestoes-etapas" maxlength="100" required autocomplete="off" value="{{ rascunho_anterior.get('nome', '') }}"></div>
+            <div class="field-grid">
+              <div class="field"><label for="inicio-anterior">Início</label><input type="datetime-local" id="inicio-anterior" name="inicio_em" value="{{ rascunho_anterior.get('inicio_em', '') }}" required></div>
+              <div class="field"><label for="fim-anterior">Término <span class="optional">opcional</span></label><input type="datetime-local" id="fim-anterior" name="fim_em" value="{{ rascunho_anterior.get('fim_em', '') }}"><p class="field-help">Deixe vazio se ainda estiver acontecendo.</p></div>
+            </div>
+            <div class="field"><label for="obs-anterior">Observação <span class="optional">opcional</span></label><textarea id="obs-anterior" name="observacao" rows="2" maxlength="4000">{{ rascunho_anterior.get('observacao', '') }}</textarea></div>
+            <div><button type="submit" class="button">Salvar etapa</button></div>
+          </form>
+        </details>
+      </section>
+      {% endif %}
+
+      <section class="page-section" aria-labelledby="registradas-titulo">
+        <div class="section-heading"><h2 id="registradas-titulo">Etapas registradas</h2><span class="muted">{{ concluidas | length }} {{ 'concluída' if concluidas | length == 1 else 'concluídas' }}</span></div>
+        {% if concluidas %}
+        <div class="stage-list">
+          {% for etapa in concluidas %}
+          <article class="stage-card" aria-labelledby="etapa-{{ etapa.id }}">
+            <div class="stage-heading"><div><h3 id="etapa-{{ etapa.id }}">{{ etapa.nome }}</h3><p class="stage-time"><time datetime="{{ etapa.inicio_em.isoformat() }}">{{ etapa.inicio_em | brt }}</time> <span aria-label="até">→</span> <time datetime="{{ etapa.fim_em.isoformat() }}">{{ etapa.fim_em | brt }}</time></p></div>
+              {% if etapa.duracao_min is not none %}<strong class="duration">{{ '%g' | format(etapa.duracao_min | round(2)) | replace('.', ',') }} <span>min</span></strong>{% endif %}
+            </div>
+            {% if etapa.observacao %}<p class="saved-note">{{ etapa.observacao }}</p>{% endif %}
+            {{ corrigir_etapa(etapa) }}
+          </article>
+          {% endfor %}
+        </div>
+        {% else %}<p class="empty-state muted">As etapas aparecem aqui depois de concluídas.</p>{% endif %}
+      </section>
+    </div>
+
+    <aside class="lot-extras" aria-label="Dados e conclusão do lote">
+      <details class="panel measurement-panel"{% if rascunho_medidas %} open{% endif %}>
+        <summary><span><strong>Medições e observações</strong><span class="summary-help">Preencha o que souber, quando puder.</span></span></summary>
+        <form method="post" action="{{ url_for('padeiro.diario_salvar', id=lote.id) }}" class="form-stack">
+          {{ campos_controle() }}
+          <div class="field"><label for="identificacao">Identificação do lote <span class="optional">opcional</span></label><input type="text" id="identificacao" name="identificacao" maxlength="100" value="{{ rascunho_medidas.get('identificacao', lote.identificacao or '') }}" autocomplete="off"></div>
+          <p class="field-help">Todas as medições são opcionais. Use vírgula ou ponto nos decimais.</p>
+          <div class="measurement-grid">
+            {% for chave, rotulo, unidade in campos_medidas %}
+            <div class="field"><label for="medida-{{ chave }}">{{ rotulo }}{% if unidade %} <span class="unit">({{ unidade }})</span>{% endif %}</label><input type="text" inputmode="decimal" id="medida-{{ chave }}" name="{{ chave }}" value="{{ rascunho_medidas.get(chave, lote.medidas.get(chave, '')) }}" autocomplete="off"></div>
+            {% endfor %}
+          </div>
+          <div class="field"><label for="observacao">Observações do lote <span class="optional">opcional</span></label><textarea id="observacao" name="observacao" rows="4" maxlength="4000" placeholder="O que você observou na massa ou no resultado?">{{ rascunho_medidas.get('observacao', lote.observacao or '') }}</textarea></div>
+          <div><button type="submit" class="button">Salvar dados do lote</button></div>
+        </form>
+      </details>
+
+      <section class="panel lot-close" aria-labelledby="status-titulo">
+        <h2 id="status-titulo">{{ 'Registro concluído' if lote.status == 'concluido' else 'Finalizar registro' }}</h2>
+        <p class="section-help">{{ 'Reabra se precisar acompanhar novas etapas deste mesmo lote.' if lote.status == 'concluido' else 'Conclua quando terminar de acompanhar este lote. Os dados ficam no histórico.' }}</p>
+        {% if em_andamento and lote.status == 'aberto' %}<p class="inline-notice">Conclua as etapas em andamento antes de finalizar o registro.</p>{% endif %}
+        <form method="post" action="{{ url_for('padeiro.diario_status', id=lote.id) }}">
+          {{ campos_controle() }}<input type="hidden" name="status" value="{{ 'aberto' if lote.status == 'concluido' else 'concluido' }}">
+          <button type="submit" class="button"{% if em_andamento and lote.status == 'aberto' %} disabled{% endif %}>{{ 'Reabrir registro' if lote.status == 'concluido' else 'Concluir registro do lote' }}</button>
+        </form>
+        <p class="field-help">A quantidade pronta continua sendo registrada em <a href="{{ url_for('padeiro.index', data=lote.data_ordem.isoformat()) }}">Registrar produção</a>.</p>
+      </section>
+
+      {% if lote.alteracoes %}
+      {% set acoes = {'criar_lote': 'Registro iniciado', 'editar_lote': 'Dados do lote atualizados', 'adicionar_etapa': 'Etapa registrada', 'concluir_etapa': 'Etapa concluída', 'corrigir_etapa': 'Etapa corrigida', 'concluir_lote': 'Registro concluído', 'reabrir_lote': 'Registro reaberto'} %}
+      <details class="audit"><summary>Histórico de alterações</summary><ol>
+        {% for alteracao in (lote.alteracoes | sort(attribute='criado_em', reverse=true))[:10] %}
+        <li><strong>{{ acoes.get(alteracao.acao, alteracao.acao | replace('_', ' ') | capitalize) }}</strong><span>{{ alteracao.criado_em | brt }}{% if alteracao.autor %} · {{ alteracao.autor.nome }}{% elif alteracao.usuario_id %} · usuário #{{ alteracao.usuario_id }}{% endif %}</span></li>
+        {% endfor %}
+      </ol><p class="field-help">Últimas dez alterações deste registro.</p></details>
+      {% endif %}
+    </aside>
+  </div>
+  <p class="page-note">Estes registros ajudam a revisar os tempos do processo. As etapas e os tempos da receita continuam como referência até serem revisados.</p>
+</main>
+</body>
+</html>
