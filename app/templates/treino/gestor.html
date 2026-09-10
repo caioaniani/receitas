@@ -6,7 +6,7 @@
     <div>
       <span class="treino-eyebrow">Gestão de treinamento{% if unidade %} · {{ unidade.nome }}{% endif %}</span>
       <h1>Minha equipe</h1>
-      <p>Acompanhe o treinamento e abra a observação prática de cada pessoa.</p>
+      <p>Veja quanto cada pessoa já assistiu e o que falta para concluir o treinamento.</p>
     </div>
     <nav class="treino-heading-actions">
       <a href="{{ url_for('treino.gestor_progressao') }}">Progressão de cargo</a>
@@ -25,17 +25,17 @@
   <section class="treino-section">
     <div class="treino-section-heading">
       <div><span class="treino-eyebrow">Acompanhamento</span><h2>Pessoas da equipe</h2></div>
-      <span>use “Observar” durante o trabalho</span>
+      <span>abra “Ver progresso” para acompanhar cada aula</span>
     </div>
     <div class="treino-team-list">
       {% for item in painel.linhas %}
       <article class="treino-person">
         <div class="treino-avatar">{{ item.funcionario.nome[:1] }}</div>
         <div class="treino-person-name"><strong>{{ item.funcionario.nome }}</strong><small>{{ item.funcionario.cargo.nome if item.funcionario.cargo else 'Cargo não informado' }}</small></div>
-        <div class="treino-person-progress"><div class="treino-progress"><span style="width:{{ item.percentual }}%"></span></div><small>{{ item.percentual }}% do obrigatório</small></div>
+        <div class="treino-person-progress"><div class="treino-progress"><span style="width:{{ item.aulas.percentual }}%"></span></div><strong>{{ item.aulas.percentual }}% assistido</strong><small>{{ item.aulas.concluidas }} de {{ item.aulas.total }} aulas concluídas · {{ item.aulas.iniciadas }} iniciadas</small><small>{{ item.progresso.concluidas }} de {{ item.progresso.total }} módulos do cargo concluídos</small></div>
         <div class="treino-person-activity"><small>Última atividade</small><strong>{% if item.ultima_atividade %}{{ item.ultima_atividade|brt('%d/%m às %H:%M') }}{% else %}Ainda não iniciou{% endif %}</strong></div>
         <div class="treino-status {% if item.status == 'concluido' %}is-done{% elif item.status == 'andamento' %}is-progress{% elif item.status in ('sem_acesso', 'parado', 'nao_iniciou') %}is-attention{% endif %}">{% if item.status == 'sem_acesso' %}Sem acesso{% elif item.status == 'sem_cargo' %}Sem cargo{% elif item.status == 'sem_trilha' %}Sem trilha do cargo{% elif item.status == 'nao_iniciou' %}Não iniciou{% elif item.status == 'parado' %}Parado há 7+ dias{% elif item.status == 'concluido' %}Concluído{% else %}Em andamento{% endif %}</div>
-        <a class="treino-row-action treino-observe-action" href="{{ url_for('treino.gestor_observar', func_id=item.funcionario.id) }}" aria-label="Observar {{ item.funcionario.nome }}"><i class="bi bi-clipboard-check"></i><span>Observar</span></a>
+        <a class="treino-row-action treino-observe-action" href="{{ url_for('treino.gestor_progresso', func_id=item.funcionario.id) }}" aria-label="Ver progresso de {{ item.funcionario.nome }}"><i class="bi bi-bar-chart"></i><span>Ver progresso</span></a>
       </article>
       {% else %}
       <div class="treino-empty">Nenhum liderado foi atribuído a você. Peça ao responsável pelo RH para configurar sua equipe.</div>

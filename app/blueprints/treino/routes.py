@@ -128,8 +128,8 @@ def video(id):
         prog = TreinoProgressoVideo.query.filter_by(
             funcionario_id=f.id, video_id=v.id, versao_video=v.versao).first()
         if prog:
-            pct_inicial = float(prog.percentual or 0)
             concluido = bool(prog.concluido_em)
+            pct_inicial = tt.percentual_assistido(prog)
     # No CELULAR o vídeo NÃO pode ir a tela cheia: em fullscreen o iOS abre o
     # player nativo do sistema (camada acima da página) e a pergunta do
     # checkpoint não aparece nem dá pra sair (vídeo é cross-origin do
@@ -160,7 +160,8 @@ def api_heartbeat(id):
         vel = float(request.form.get('v') or 1.0)
     except (TypeError, ValueError):
         pos, vel = 0.0, 1.0
-    return jsonify(ok=True, **tv.heartbeat(f, v, pos, vel))
+    return jsonify(ok=True, **tv.heartbeat(
+        f, v, pos, vel, evento=request.form.get('evento', 'heartbeat')))
 
 
 @treino_bp.route('/api/checkpoints/<int:id>/resposta', methods=['POST'])
@@ -313,13 +314,33 @@ def gestor_home():
                            can_open_rh=current_user.is_dono())
 
 
+@treino_bp.route('/gestor/progresso/<int:func_id>')
+@login_required
+@gestor_required
+def gestor_progresso(func_id):
+    from app.services import treino_acompanhamento, treino_lideranca
+
+    funcionario = db.session.get(Funcionario, func_id) or abort(404)
+    is_admin = ledger.papel_treino(current_user) == 'ADMIN'
+    if not treino_lideranca.pode_observar(
+            _func(), funcionario, is_admin=is_admin):
+        abort(403)
+    temporada = _temp()
+    return render_template(
+        'treino/progresso_pessoa.html', funcionario=funcionario,
+        temporada=temporada,
+        acompanhamento=treino_acompanhamento.progresso_pessoa(
+            funcionario, temporada),
+    )
+
+
 @treino_bp.route('/gestor/observar/<int:func_id>')
 @login_required
 @gestor_required
 def gestor_observar(func_id):
     from app.services import treino_lideranca as lideranca
 
-    gestor = _func_obrigatorio()
+    gestor = _func()
     funcionario = db.session.get(Funcionario, func_id) or abort(404)
     is_admin = ledger.papel_treino(current_user) == 'ADMIN'
     if not lideranca.pode_observar(
@@ -363,7 +384,7 @@ def gestor_observar(func_id):
     return render_template(
         'treino/observacao.html', funcionario=funcionario, gestor=gestor,
         temporada=temp, observacoes=observacoes, historico=historico,
-        trilhas_por_id=trilhas_por_id,
+        trilhas_por_id=trilhas_por_id, pode_registrar=gestor is not None,
     )
 
 

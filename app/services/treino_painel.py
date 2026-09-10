@@ -11,6 +11,8 @@ from app.models import (
     TreinoProgressoVideo,
     TreinoSelo,
     TreinoTentativaQuiz,
+    TreinoTrilha,
+    TreinoVideo,
 )
 from app.services import treino_onboarding as onboarding
 from app.services import treino_trilha
@@ -149,11 +151,47 @@ def _ultima_atividade_por_funcionario(funcionarios):
     return resultado
 
 
+def resumo_aulas_lote(funcionarios):
+    """Avanço assistido, inclusive parcial, separado da conclusão do cargo.
+
+    Considera apenas aulas publicadas de módulos ativos e a versão atual.
+    Funciona sem temporada ou vínculo de cargo e não altera o histórico.
+    """
+    ids = [f.id for f in funcionarios]
+    if not ids:
+        return {}
+    # Equivalente a videos_publicados, em SQL para consultar toda a equipe
+    # sem carregar cada módulo e sua coleção de aulas separadamente.
+    videos = TreinoVideo.query.join(TreinoTrilha).filter(
+        TreinoTrilha.ativa.is_(True), TreinoVideo.ativo.is_(True),
+        TreinoVideo.video_externo_id.isnot(None),
+        TreinoVideo.video_externo_id != '',
+    ).all()
+    versoes = {v.id: v.versao for v in videos}
+    resumos = {fid: {'total': len(videos), 'iniciadas': 0,
+                     'concluidas': 0, 'percentual': 0} for fid in ids}
+    if not videos:
+        return resumos
+    for progresso in TreinoProgressoVideo.query.filter(
+            TreinoProgressoVideo.funcionario_id.in_(ids),
+            TreinoProgressoVideo.video_id.in_(versoes)).all():
+        if versoes[progresso.video_id] != progresso.versao_video:
+            continue
+        resumo = resumos[progresso.funcionario_id]
+        resumo['iniciadas'] += 1
+        resumo['concluidas'] += bool(progresso.concluido_em)
+        resumo['percentual'] += treino_trilha.percentual_assistido(progresso)
+    for resumo in resumos.values():
+        resumo['percentual'] = round(resumo['percentual'] / len(videos))
+    return resumos
+
+
 def painel_equipe(funcionarios, temporada):
     """Linhas priorizadas para o gestor, com progresso e última atividade."""
     funcionarios = list(funcionarios)
     progresso_cargo = onboarding.progressao_lote(funcionarios)
     ultimas = _ultima_atividade_por_funcionario(funcionarios)
+    aulas = resumo_aulas_lote(funcionarios)
     limite_parado = agora() - timedelta(days=7)
     prioridade = {
         'sem_acesso': 0, 'parado': 1, 'nao_iniciou': 2,
@@ -191,6 +229,7 @@ def painel_equipe(funcionarios, temporada):
             'funcionario': funcionario,
             'progresso': prog,
             'percentual': percentual,
+            'aulas': aulas[funcionario.id],
             'ultima_atividade': ultima,
             'status': status,
         })
@@ -221,6 +260,7 @@ def resumo_funcionario(funcionario, temporada):
         'login': funcionario.usuario.login if funcionario.usuario else None,
         'progresso': prog,
         'percentual': percentual,
+        'aulas': resumo_aulas_lote([funcionario])[funcionario.id],
         'ultima_atividade': ultima,
         'selos': selos,
     }

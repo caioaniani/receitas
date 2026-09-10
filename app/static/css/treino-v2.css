@@ -71,6 +71,16 @@
   .ui-v2 .treino-heading { min-height:0;align-items:flex-start;flex-direction:column; }.ui-v2 .treino-heading h1 { font-size:32px; }.ui-v2 .treino-heading-actions { width:100%; }.ui-v2 .treino-next { padding:21px;align-items:stretch;flex-direction:column; }.ui-v2 .treino-course-grid,.ui-v2 .treino-metrics,.ui-v2 .treino-create-row,.ui-v2 .treino-add-grid,.ui-v2 .treino-form-grid,.ui-v2 .treino-rh-grid,.ui-v2 .treino-observation-items { grid-template-columns:1fr; }.ui-v2 .treino-section { padding:16px; }.ui-v2 .treino-section-heading { align-items:flex-start; }.ui-v2 .treino-section-heading > span { display:none; }.ui-v2 .treino-checks { display:grid;gap:8px; }.ui-v2 .treino-lesson { padding:11px; }.ui-v2 .treino-lesson .treino-status { display:none; }.ui-v2 .treino-person { grid-template-columns:34px 1fr auto; }.ui-v2 .treino-person .treino-row-action { grid-column:2/-1;display:inline-flex;justify-self:start; }.ui-v2 .treino-person > .treino-status { display:inline-flex; }.ui-v2 .treino-create-row form,.ui-v2 .treino-add-grid form,.ui-v2 .treino-add-grid form:last-child { display:flex;align-items:stretch;flex-direction:column; }.ui-v2 .treino-module > summary { align-items:flex-start; }.ui-v2 .treino-module > summary > .treino-status { display:none; }.ui-v2 .treino-inline-form { grid-template-columns:1fr; }.ui-v2 .treino-admin-lesson { grid-template-columns:30px 1fr; }.ui-v2 .treino-admin-lesson > .treino-status { grid-column:2; }.ui-v2 .treino-admin-actions { grid-column:2;flex-wrap:wrap; }.ui-v2 .treino-quiz-row { grid-template-columns:1fr auto; }.ui-v2 .treino-checkbox-grid,.ui-v2 .treino-points-grid { grid-template-columns:1fr; }.ui-v2 .treino-game-body { align-items:flex-start;flex-direction:column;gap:12px; }.ui-v2 .treino-observation-heading { flex-direction:column; }.ui-v2 .treino-history-list article { grid-template-columns:1fr;gap:7px; }.ui-v2 .equipe-setup-page .treino-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }.ui-v2 .equipe-setup-head { display:none; }.ui-v2 .equipe-setup-row { padding:16px;grid-template-columns:1fr;gap:11px; }.ui-v2 .equipe-setup-row:first-of-type { border-top:0; }.ui-v2 .equipe-setup-person { padding-bottom:8px;border-bottom:1px solid var(--v2-line); }.ui-v2 .equipe-setup-row label { display:grid;gap:5px; }.ui-v2 .equipe-setup-row label > span { display:block;color:var(--v2-muted);font-size:9px;font-weight:750; }.ui-v2 .equipe-setup-row .form-select { width:100%;min-height:46px;font-size:13px; }.ui-v2 .equipe-setup-search { max-width:none; }.ui-v2 .equipe-setup-save { bottom:8px;align-items:stretch;flex-direction:column; }.ui-v2 .equipe-setup-save .treino-primary-action { width:100%;min-height:46px; }.ui-v2 .org-page .treino-heading-actions { display:grid;grid-template-columns:1fr 1fr; }.ui-v2 .org-page .treino-heading-actions > * { width:100%; }.ui-v2 .org-page .treino-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }.ui-v2 .org-filters { grid-template-columns:1fr; }.ui-v2 .org-filters .equipe-setup-search { grid-column:auto; }.ui-v2 .org-filters .treino-link-button { justify-self:start; }.ui-v2 .org-chart { margin:0 -4px; }.ui-v2 .org-branch { gap:28px; }.ui-v2 .org-children { padding-left:18px!important; }.ui-v2 .org-children::before { left:0; }.ui-v2 .org-children > .org-branch::before { left:-18px;width:18px; }.ui-v2 .org-branch.has-children > .org-person::after { right:-28px;width:28px; }.ui-v2 .org-person { width:250px;min-height:0;padding:12px;flex-basis:250px; }.ui-v2 .org-person-meta { justify-content:flex-start; }.ui-v2 .org-person footer { grid-column:1; }
 }
 
+/* O acompanhamento precisa mostrar o avanço também nas telas menores. */
+@media (max-width: 980px) {
+  .ui-v2 .treino-person { grid-template-columns:36px minmax(0,1fr) auto; }
+  .ui-v2 .treino-person-progress { display:grid;grid-column:2/-1; }
+  .ui-v2 .treino-person-activity { display:grid;grid-column:2; }
+  .ui-v2 .treino-person > .treino-status { grid-column:3;grid-row:1; }
+  .ui-v2 .treino-person .treino-row-action { grid-column:2/-1;justify-self:start; }
+  .ui-v2 .treino-person-name strong { white-space:normal; }
+}
+
 @media print {
   body.ui-v2 .sidebar,body.ui-v2 .mobile-menu-toggle,body.ui-v2 .mobile-header,body.ui-v2 .sidebar-overlay,.ui-v2 .org-page .treino-heading-actions,.ui-v2 .org-filters { display:none!important; }
   body.ui-v2 .main-content { margin:0!important;padding:12px!important; }
@@ -110,4 +120,12 @@
   .ui-v2 .treino-progression-required { grid-column:2/-1; padding-top:8px; border-top:1px solid var(--v2-line); }
   .ui-v2 .treino-progression-person > .treino-status { grid-column:2/-1; }
   .ui-v2 .treino-progression-person .treino-observe-action { grid-column:2/-1; }
+}
+
+/* Relatório individual: o status é informação principal também no celular. */
+@media screen and (max-width: 650px) {
+  .ui-v2 .treino-person-detail .treino-lesson { flex-wrap:wrap; }
+  .ui-v2 .treino-person-detail .treino-lesson .treino-status { display:inline-flex; }
+  .ui-v2 .treino-person-detail .treino-section-heading { flex-wrap:wrap; }
+  .ui-v2 .treino-person-detail .treino-section-heading > .treino-status { display:inline-flex; }
 }

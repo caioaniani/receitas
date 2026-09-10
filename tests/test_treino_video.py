@@ -5,11 +5,14 @@ treino_video.agora) pra exercitar os deltas reais entre heartbeats.
 """
 from datetime import datetime, timedelta
 
+import pytest
+
 from app.extensions import db
 from app.models import (
     Funcionario,
     Loja,
     TreinoCheckpoint,
+    TreinoProgressoVideo,
     TreinoTemporada,
     TreinoTrilha,
     TreinoVideo,
@@ -140,3 +143,123 @@ def test_checkpoint_idempotente_e_pontua_uma_vez(app, monkeypatch):
         r2 = tv.responder_checkpoint(f, cp, 1)     # tenta de novo
         assert r2['ja_respondido'] is True
         assert ledger.saldo(f.id, temp.id) == 5    # só uma vez
+
+
+@pytest.mark.parametrize('esperas', [(6, 9, 4), (10, 10, 10)])
+def test_aula_165_segundos_com_tres_pausas_conclui(app, monkeypatch, esperas):
+    """Fluxo da aula Nossa história: timer da página + perguntas aos 40/88/117s.
+
+    As pausas duram tempos diferentes e não alinham com o timer de 15s.
+    """
+    with app.app_context():
+        temp, f, v, _ = _setup(dur=165)
+        checkpoints = {}
+        for segundo, espera in zip((40, 88, 117), esperas):
+            cp = TreinoCheckpoint(
+                video_id=v.id, segundo=segundo, enunciado='Pergunta',
+                alternativas=['Sim', 'Não'], indice_correto=0)
+            db.session.add(cp)
+            checkpoints[segundo] = (cp, espera)
+        db.session.commit()
+        clock = Clock(datetime(2026, 9, 10, 10))
+        monkeypatch.setattr(tv, 'agora', clock)
+        tv.heartbeat(f, v, 0, evento='play')
+        pos, parede, restante = 0, 0, 0
+        pendente = None
+        while pos < 165:
+            clock.tick(1)
+            parede += 1
+            if restante:
+                restante -= 1
+                if restante == 0:
+                    tv.responder_checkpoint(f, pendente, 0)
+                    tv.heartbeat(f, v, pos, evento='play')
+            else:
+                pos += 1
+                if pos in checkpoints:
+                    pendente, restante = checkpoints[pos]
+                    tv.heartbeat(f, v, pos, evento='pause')
+                elif parede % 15 == 0:
+                    tv.heartbeat(f, v, pos)
+        resultado = tv.heartbeat(f, v, pos, evento='ended')
+        assert resultado['concluido'] is True
+        assert ledger.saldo(f.id, temp.id) == 25  # vídeo + três checkpoints
+        p = TreinoProgressoVideo.query.filter_by(video_id=v.id).one()
+        assert 132 <= p.tempo_real_decorrido <= 165
+        # Reabrir/reproduzir/repetir os eventos nunca duplica os pontos.
+        for evento in ('play', 'pause', 'ended', 'heartbeat'):
+            clock.tick(15)
+            assert tv.heartbeat(f, v, 165, evento=evento)['concluido']
+        assert ledger.saldo(f.id, temp.id) == 25
+
+
+def test_fim_salva_ultimo_trecho_menor_que_10_segundos(app, monkeypatch):
+    with app.app_context():
+        temp, f, v, _ = _setup(dur=24)
+        clock = Clock(datetime(2026, 9, 10, 10))
+        monkeypatch.setattr(tv, 'agora', clock)
+        tv.heartbeat(f, v, 0, evento='play')
+        clock.tick(15)
+        assert not tv.heartbeat(f, v, 15)['concluido']
+        clock.tick(9)
+        resultado = tv.heartbeat(f, v, 24, evento='ended')
+        assert resultado == {'pct': 100.0, 'tempo': 24, 'concluido': True}
+        assert ledger.saldo(f.id, temp.id) == 10
+
+
+def test_pausa_longa_nao_credita_tempo_parado(app, monkeypatch):
+    with app.app_context():
+        _, f, v, _ = _setup(dur=100)
+        clock = Clock(datetime(2026, 9, 10, 10))
+        monkeypatch.setattr(tv, 'agora', clock)
+        tv.heartbeat(f, v, 0, evento='play')
+        clock.tick(5)
+        assert tv.heartbeat(f, v, 5, evento='pause')['tempo'] == 5
+        clock.tick(600)
+        assert tv.heartbeat(f, v, 5, evento='play')['tempo'] == 5
+        clock.tick(5)
+        assert tv.heartbeat(f, v, 10, evento='pause')['tempo'] == 10
+        clock.tick(600)
+        assert tv.heartbeat(f, v, 10, evento='ended')['tempo'] == 10
+
+
+def test_eventos_curtos_nao_liberam_spam_ou_salto(app, monkeypatch):
+    with app.app_context():
+        temp, f, v, _ = _setup(dur=100)
+        clock = Clock(datetime(2026, 9, 10, 10))
+        monkeypatch.setattr(tv, 'agora', clock)
+        tv.heartbeat(f, v, 0, evento='play')
+        clock.tick(1)
+        assert tv.heartbeat(f, v, 1)['pct'] == 0  # periódico <10s descartado
+        for pos in range(5, 101, 5):
+            clock.tick(1)
+            resultado = tv.heartbeat(f, v, pos, evento='ended')
+            assert resultado == {'pct': 0.0, 'tempo': 0, 'concluido': False}
+        assert ledger.saldo(f.id, temp.id) == 0
+
+
+def test_retomar_apos_salto_nao_credita_conteudo_pulado(app, monkeypatch):
+    with app.app_context():
+        temp, f, v, _ = _setup(dur=100)
+        clock = Clock(datetime(2026, 9, 10, 10))
+        monkeypatch.setattr(tv, 'agora', clock)
+        tv.heartbeat(f, v, 0, evento='play')
+        clock.tick(600)
+        salto = tv.heartbeat(f, v, 95, evento='ended')
+        assert salto['pct'] == 0 and salto['tempo'] == 0
+        tv.heartbeat(f, v, 95, evento='play')
+        clock.tick(5)
+        resultado = tv.heartbeat(f, v, 100, evento='ended')
+        assert resultado['pct'] == 5 and resultado['tempo'] == 5
+        assert not resultado['concluido']
+        assert ledger.saldo(f.id, temp.id) == 0
+
+
+def test_ended_nao_dispensa_checkpoint(app, monkeypatch):
+    with app.app_context():
+        temp, f, v, _ = _setup(dur=100, com_checkpoint=True)
+        clock = Clock(datetime(2026, 9, 10, 10))
+        _assistir_ate_fim(f, v, clock, monkeypatch)
+        resultado = tv.heartbeat(f, v, 100, evento='ended')
+        assert resultado['pct'] == 100 and not resultado['concluido']
+        assert ledger.saldo(f.id, temp.id) == 0

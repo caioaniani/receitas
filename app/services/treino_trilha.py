@@ -36,6 +36,14 @@ def _videos_ativos(trilha):
     return videos_publicados(trilha)
 
 
+def percentual_assistido(progresso):
+    """Percentual de exibição: aula concluída fica em 100%, parcial é mantido."""
+    if not progresso:
+        return 0
+    return 100 if progresso.concluido_em else min(
+        100, max(0, float(progresso.percentual or 0)))
+
+
 def quizzes_publicados(trilha):
     """Avaliações publicadas do módulo e de suas aulas publicadas."""
     ids_video = [v.id for v in _videos_ativos(trilha)]
@@ -54,11 +62,12 @@ def progresso_trilha(funcionario, trilha, temporada):
     """Estado da trilha pro funcionário: vídeos ok, quizzes ok, aplicação ok +
     `percentual` (0-100) pra barra de progresso."""
     videos = _videos_ativos(trilha)
-    concluidos = {p.video_id for p in TreinoProgressoVideo.query.filter(
+    concluidos = {(p.video_id, p.versao_video)
+                  for p in TreinoProgressoVideo.query.filter(
         TreinoProgressoVideo.funcionario_id == funcionario.id,
         TreinoProgressoVideo.concluido_em.isnot(None),
         TreinoProgressoVideo.video_id.in_([v.id for v in videos] or [0])).all()}
-    n_videos_ok = sum(1 for v in videos if v.id in concluidos)
+    n_videos_ok = sum(1 for v in videos if (v.id, v.versao) in concluidos)
     videos_ok = bool(videos) and n_videos_ok == len(videos)
 
     quizzes = _quizzes_da_trilha(trilha)

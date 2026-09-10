@@ -5403,3 +5403,9 @@ preparos permanecem disponíveis em sequência.
   painel, confirmação e modal usam o mesmo rótulo. Ex.: 17338 g de granola,
   não 17338 pães. Teste de registro confirma que 1000 g credita exatamente
   1000 na unidade-base existente.
+
+## Treinamento: avanço e acompanhamento (10/09/2026)
+
+- `/treino/gestor/` e a ficha RH mostram avanço assistido (inclusive parcial), separado da conclusão obrigatória. A leitura considera aulas publicadas de módulos ativos e a versão atual, mesmo sem cargo ou temporada.
+- `Ver progresso` abre `/treino/gestor/progresso/<func_id>`: aulas, avaliações e prática do ciclo, sem emitir pontos/selos nem alterar histórico. Admin pode ler sem ficha RH; gestor continua limitado à equipe canônica. Registrar prática ainda exige identidade de funcionário.
+- Player confirma o início/retomada antes de liberar a reprodução; salva pausas e fim em fila, além do intervalo de 15s. Em rede lenta, espera a confirmação e avisa na aula. O serviço só credita trechos contínuos compatíveis com o relógio; fim do vídeo não força conclusão. Mantidos cobertura >=90%, tempo real >=80%, checkpoints e idempotência dos pontos. Falha de envio aparece na aula. Não inferir conclusão retroativa para registros antigos incompletos.

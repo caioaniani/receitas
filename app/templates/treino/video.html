@@ -61,6 +61,7 @@
 </div><aside class="treino-watch-aside"><span class="treino-eyebrow">Para concluir</span><h2>Assista à aula inteira</h2><p>O progresso é salvo automaticamente. Se houver uma pergunta, o vídeo pausa para você responder.</p>{% if quizzes %}<a href="{{ url_for('treino.trilha', id=v.trilha_id) }}#quiz-{{ quizzes[0].id }}" class="treino-secondary-action">Ir para a avaliação</a>{% endif %}</aside></section>
 </main>
 
+<script src="{{ url_for('static', filename='js/treino-progresso.js') }}"></script>
 <script>
 (function(){
   var CPS = {{ checkpoints|map(attribute='id')|list|tojson }};
@@ -120,15 +121,8 @@
     player.addEventListener('timeupdate',estadoControle);
     estadoControle();
   }
-  function post(url,body){return fetch(url,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(r){return r.json();});}
-  // heartbeat 15s
-  setInterval(function(){
-    var cur=player.currentTime||0; if(player.paused) return;
-    post(HB,'t='+cur+'&v='+(player.playbackRate||1)).then(function(j){
-      if(!j||!j.ok)return; bar.style.width=j.pct+'%'; pct.textContent=Math.round(j.pct)+'%';
-      if(j.concluido){msg.textContent='Concluído! Você pode fazer o quiz.';}
-    }).catch(function(){});
-  },15000);
+  function post(url,body){return fetch(url,{method:'POST',headers:{'X-CSRFToken':CSRF,'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(r){if(!r.ok)throw new Error('Falha ao registrar resposta');return r.json();});}
+  var progresso=window.TreinoProgressoPlayer({player:player,url:HB,csrf:CSRF,bar:bar,pct:pct,msg:msg,onAguardar:function(esperando){travarControles(esperando||aberto);if(bloquearFullscreen)mobilePlay.textContent=esperando?'Aguarde…':(player.paused?'▶ Reproduzir':'⏸ Pausar');}});
   // Em FULLSCREEN o iframe do player fica na "top layer" do navegador, ACIMA
   // de qualquer z-index da página — o overlay #cpbox (position:fixed no doc pai)
   // fica escondido atrás. Então, ao chegar no checkpoint, SAI do fullscreen pra
@@ -171,8 +165,11 @@
         b.type='button';b.className='btn btn-outline-dark w-100 mb-2 cp-a';
         b.dataset.i=i;b.textContent=texto;alts.appendChild(b);
         b.onclick=function(){
+          alts.querySelectorAll('button').forEach(function(botao){botao.disabled=true;});
           post('{{ url_for("treino.api_checkpoint", id=0) }}'.replace('/0/','/'+id+'/'),'indice='+b.dataset.i).then(function(j){
+            if(!j||!j.ok)throw new Error('Resposta não confirmada');
             c.resp=true;
+            progresso.salvar('pause');
             document.getElementById('cp-msg').textContent=(j&&j.correta)?'Correto!':'Resposta registrada.';
             setTimeout(function(){
               box.style.display='none';aberto=false;travarControles(false);
@@ -181,6 +178,9 @@
                 if(bloquearFullscreen)mobilePlay.textContent='▶ Continuar vídeo';
               });
             },900);
+          }).catch(function(){
+            document.getElementById('cp-msg').textContent='Não foi possível salvar a resposta. Verifique a conexão e tente novamente.';
+            alts.querySelectorAll('button').forEach(function(botao){botao.disabled=false;});
           });
         };
       });

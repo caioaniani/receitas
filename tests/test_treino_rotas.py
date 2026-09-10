@@ -91,7 +91,7 @@ def test_video_abre_com_progresso_salvo(app):
         db.session.commit()
         db.session.add(TreinoProgressoVideo(
             funcionario_id=f.id, video_id=v.id, versao_video=v.versao,
-            percentual=100, concluido_em=agora()))
+            percentual=93.94, concluido_em=agora()))
         db.session.commit()
         uid, vid = u.id, v.id
     c = _login(app, uid)

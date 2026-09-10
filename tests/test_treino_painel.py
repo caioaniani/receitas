@@ -144,3 +144,50 @@ def test_ficha_rh_exibe_resumo_do_treinamento(app, owner_user):
     assert 'Jornada de Maria' in html
     assert 'Não criado' in html
     assert 'Criar ou vincular acesso' in html
+
+
+def test_avanco_parcial_aparece_sem_cargo_nem_temporada(app):
+    trilha = TreinoTrilha(nome='Cultura')
+    db.session.add(trilha)
+    db.session.flush()
+    video = TreinoVideo(trilha_id=trilha.id, titulo='Nossa história',
+                        video_externo_id='historia')
+    db.session.add(video)
+    db.session.commit()
+    pessoa = _funcionario('Pessoa em treinamento', '107')
+    progresso = TreinoProgressoVideo(funcionario_id=pessoa.id,
+                                     video_id=video.id, versao_video=1,
+                                     percentual=82)
+    db.session.add(progresso)
+    db.session.commit()
+
+    linha = painel.painel_equipe([pessoa], None)['linhas'][0]
+    resumo = painel.resumo_funcionario(pessoa, None)
+
+    assert linha['aulas'] == resumo['aulas'] == {
+        'total': 1, 'iniciadas': 1, 'concluidas': 0, 'percentual': 82}
+    assert linha['percentual'] == 0
+    assert progresso.concluido_em is None
+
+
+def test_resumo_aulas_exclui_rascunho_modulo_oculto_e_versao_antiga(app):
+    ativo, oculto = TreinoTrilha(nome='No ar'), TreinoTrilha(nome='Oculto', ativa=False)
+    db.session.add_all([ativo, oculto])
+    db.session.flush()
+    atual = TreinoVideo(trilha_id=ativo.id, titulo='Atual', video_externo_id='a', versao=2)
+    outras = [
+        TreinoVideo(trilha_id=ativo.id, titulo='Rascunho', video_externo_id='r', ativo=False),
+        TreinoVideo(trilha_id=ativo.id, titulo='Sem arquivo'),
+        TreinoVideo(trilha_id=oculto.id, titulo='Oculta', video_externo_id='o'),
+    ]
+    db.session.add_all([atual, *outras])
+    db.session.commit()
+    pessoa = _funcionario('Outra pessoa', '108')
+    for video in [atual, *outras]:
+        db.session.add(TreinoProgressoVideo(funcionario_id=pessoa.id,
+                       video_id=video.id, versao_video=1, percentual=100,
+                       concluido_em=agora()))
+    db.session.commit()
+
+    assert painel.resumo_aulas_lote([pessoa])[pessoa.id] == {
+        'total': 1, 'iniciadas': 0, 'concluidas': 0, 'percentual': 0}

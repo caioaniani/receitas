@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Progresso de {{ funcionario.nome }}{% endblock %}
+{% block content %}
+<main class="treino-page treino-person-detail">
+  <header class="treino-heading">
+    <div>
+      <a class="treino-back" href="{{ url_for('treino.gestor_home') }}"><i class="bi bi-arrow-left"></i> Voltar à equipe</a>
+      <span class="treino-eyebrow">Progresso individual</span>
+      <h1>{{ funcionario.nome }}</h1>
+      <p>{{ funcionario.cargo.nome if funcionario.cargo else 'Cargo não informado' }}{% if not funcionario.ativo %} · Cadastro inativo{% endif %}</p>
+    </div>
+    <a class="treino-secondary-action" href="{{ url_for('treino.gestor_observar', func_id=funcionario.id) }}">Observação prática</a>
+  </header>
+  <section class="treino-module-progress">
+    <h2>{{ acompanhamento.percentual_assistido }}% das aulas assistidas</h2>
+    <div class="treino-progress" role="progressbar" aria-label="Aulas assistidas" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ acompanhamento.percentual_assistido }}"><span style="width:{{ acompanhamento.percentual_assistido }}%"></span></div>
+    <p>{{ acompanhamento.aulas_concluidas }} de {{ acompanhamento.aulas_total }} aulas concluídas · {{ acompanhamento.aulas_iniciadas }} iniciadas</p>
+    <small>O avanço inclui aulas parcialmente assistidas da versão atual. Concluir o módulo também exige as avaliações e a observação prática.</small>
+    <p class="mt-2 mb-0">Última atividade nas aulas: {% if acompanhamento.ultima_atividade %}{{ acompanhamento.ultima_atividade|brt('%d/%m/%Y às %H:%M') }}{% else %}Nenhuma registrada{% endif %}</p>
+  </section>
+  {% if not temporada %}
+  <div class="treino-notice treino-notice-warning"><i class="bi bi-calendar-x"></i><div><strong>Não há ciclo de treinamento ativo.</strong><br>O avanço nas aulas e nas avaliações continua visível. A observação prática depende de um ciclo ativo.</div></div>
+  {% endif %}
+  {% for modulo in acompanhamento.modulos %}
+  <section class="treino-section" id="modulo-{{ modulo.trilha.id }}">
+    <div class="treino-section-heading">
+      <div><span class="treino-eyebrow">{{ 'Obrigatório para o cargo' if modulo.obrigatoria else 'Outros módulos publicados' }}</span><h2>{{ modulo.trilha.nome }}</h2></div>
+      <span class="treino-status {{ 'is-done' if modulo.completa else 'is-progress' }}">{{ 'Requisitos cumpridos neste ciclo' if modulo.completa else (modulo.percentual_assistido|string + '% das aulas assistidas') }}</span>
+    </div>
+    <p>{{ modulo.aulas_concluidas }} de {{ modulo.aulas|length }} aulas concluídas</p>
+    <div class="treino-lesson-list">
+      {% for aula in modulo.aulas %}
+      <div class="treino-lesson" data-aula-id="{{ aula.video.id }}">
+        <span class="treino-lesson-number">{{ '%02d'|format(loop.index) }}</span>
+        <span class="treino-lesson-main"><strong>{{ aula.video.titulo }}</strong><small>{% if aula.ultima_atividade %}Última atividade: {{ aula.ultima_atividade|brt('%d/%m/%Y às %H:%M') }}{% else %}Ainda não iniciada{% endif %}</small></span>
+        <span class="treino-status {{ 'is-done' if aula.concluido else 'is-progress' }}">{% if aula.concluido %}Concluída{% elif aula.iniciada %}{{ aula.percentual|round|int }}% assistido{% else %}Não iniciada{% endif %}</span>
+      </div>
+      {% else %}<div class="treino-empty">Nenhuma aula publicada neste módulo.</div>{% endfor %}
+    </div>
+    <h3 class="h6 mt-4">Avaliações</h3>
+    <div class="treino-lesson-list">
+      {% for avaliacao in modulo.quizzes %}
+      <div class="treino-lesson"><span class="treino-lesson-main"><strong>{{ avaliacao.quiz.titulo }}</strong><small>{{ avaliacao.tentativas }} tentativa(s){% if avaliacao.ultima_tentativa and avaliacao.ultima_tentativa.finalizado_em %} · Último resultado: {{ avaliacao.ultima_tentativa.acertos }}/{{ avaliacao.ultima_tentativa.total }}{% endif %}</small></span><span class="treino-status {{ 'is-done' if avaliacao.aprovada else 'is-progress' }}">{{ avaliacao.status }}</span></div>
+      {% else %}<p class="text-muted">Nenhuma avaliação publicada neste módulo.</p>{% endfor %}
+    </div>
+    <h3 class="h6 mt-4">Observação prática{% if temporada %} · {{ temporada.nome }}{% endif %}</h3>
+    {% if modulo.aplicacao %}
+    <p><span class="treino-status is-done">Validada</span> {{ modulo.aplicacao.data|brt('%d/%m/%Y') }} · por {{ modulo.aplicacao.gestor.nome }}</p>
+    {% else %}<p class="text-muted">{{ 'Aguardando validação do gestor neste ciclo.' if temporada else 'Sem ciclo ativo para a validação prática.' }}</p>{% endif %}
+  </section>
+  {% else %}<div class="treino-empty">Nenhum módulo publicado no momento.</div>{% endfor %}
+</main>
+{% endblock %}

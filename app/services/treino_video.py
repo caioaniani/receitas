@@ -20,6 +20,7 @@ from app.utils import agora
 
 BUCKET_SEG = 5                 # granularidade de "conteúdo assistido"
 INTERVALO_MIN_HEARTBEAT = 10   # heartbeat com intervalo real < 10s é descartado
+INTERVALO_MAX_HEARTBEAT = 30   # intervalo de 15s do player + margem de rede
 LIMIAR_PERCENTUAL = 0.90       # §9.1: ≥90% do vídeo
 LIMIAR_TEMPO = 0.80            # §9.1: ≥0,8×duração em tempo real
 
@@ -68,41 +69,70 @@ def _todos_checkpoints_respondidos(funcionario_id, video):
     return set(ids).issubset(respondidos)
 
 
-def heartbeat(funcionario, video, posicao_segundos, velocidade=1.0):
+def heartbeat(funcionario, video, posicao_segundos, velocidade=1.0, *,
+              evento='heartbeat'):
     """Processa um heartbeat do player. Mede o tempo REAL pelo relógio do
-    servidor (entre este e o último heartbeat); descarta intervalos < 10s;
-    ignora saltos pra frente; velocidade >1,25× reduz o tempo contado. Credita
-    conclusão quando os 3 gates batem. Retorna {pct, tempo, concluido}."""
+    servidor. ``play`` inicia uma medição sem creditar o intervalo anterior;
+    pausa/fim fecham também trechos <10s, sujeitos aos mesmos gates de avanço,
+    tempo real e checkpoints. Heartbeats periódicos mantêm o limite de 10s.
+    Retorna {pct, tempo, concluido}; ``ended`` nunca força uma conclusão."""
     p = _progresso(funcionario.id, video)
     if p.concluido_em:
         return {'pct': 100, 'tempo': p.tempo_real_decorrido, 'concluido': True}
 
     dur = int(video.duracao_segundos or 0)
-    pos = max(0, int(posicao_segundos or 0))
+    try:
+        pos = max(0, int(posicao_segundos or 0))
+    except (TypeError, ValueError, OverflowError):
+        pos = 0
+    if dur > 0:
+        pos = min(pos, dur)
     try:
         vel = float(velocidade or 1.0)
     except (TypeError, ValueError):
         vel = 1.0
+    if not math.isfinite(vel) or vel <= 0:
+        vel = 1.0
     agora_dt = agora()
+
+    if evento == 'play':
+        # Também serve após retomar/rebobinar: tempo com o player pausado e
+        # saltos da timeline não pertencem ao próximo trecho assistido.
+        p.ultima_posicao = pos
+        p.ultimo_heartbeat_em = agora_dt
+        db.session.commit()
+        return {'pct': _pct(p, dur), 'tempo': p.tempo_real_decorrido,
+                'concluido': False}
 
     if p.ultimo_heartbeat_em is not None:
         delta_real = (agora_dt - p.ultimo_heartbeat_em).total_seconds()
-        if delta_real < INTERVALO_MIN_HEARTBEAT:
+        if (delta_real < INTERVALO_MIN_HEARTBEAT
+                and evento not in ('pause', 'ended')):
             return {'pct': _pct(p, dur), 'tempo': p.tempo_real_decorrido,
                     'concluido': False}       # anti-spam: descartado
         fator = vel if vel > 1.25 else 1.0
         avanco_real = pos - p.ultima_posicao
-        avanco_esperado = delta_real * fator
+        janela = max(0, min(delta_real, INTERVALO_MAX_HEARTBEAT))
+        avanco_esperado = janela * fator
+        margem = 1 if evento in ('pause', 'ended') else BUCKET_SEG
         # Reprodução contínua (inclui re-assistir trecho anterior): credita
         # tempo e os baldes percorridos. Salto pra frente: NÃO credita.
-        if -1 <= avanco_real <= avanco_esperado * 1.5 + BUCKET_SEG:
+        if (delta_real > 0 and avanco_real > 0
+                and avanco_real <= avanco_esperado * 1.5 + margem):
+            # Uma pausa longa ou pedidos repetidos na mesma posição nunca
+            # viram tempo assistido. Eventos curtos continuam limitados pelo
+            # relógio do servidor e pelo conteúdo realmente percorrido.
+            tempo = min(janela, avanco_real) / fator
             p.tempo_real_decorrido = int(
-                (p.tempo_real_decorrido or 0) + delta_real / fator)
+                (p.tempo_real_decorrido or 0) + tempo)
             baldes = _baldes(p)
             ini = min(p.ultima_posicao, pos)
             for s in range(ini, pos + 1, BUCKET_SEG):
                 baldes.add(s // BUCKET_SEG)
             baldes.add(pos // BUCKET_SEG)
+            if dur > 0:
+                baldes = {b for b in baldes
+                          if 0 <= b < math.ceil(dur / BUCKET_SEG)}
             p.baldes_json = json.dumps(sorted(baldes))
 
     p.ultima_posicao = pos

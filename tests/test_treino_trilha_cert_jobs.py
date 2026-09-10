@@ -68,6 +68,30 @@ def test_trilha_completa_emite_selo_e_credita_100(app):
         assert ledger.saldo(f.id, temp.id) == 100
 
 
+def test_reassistir_versao_atual_exige_nova_conclusao_sem_apagar_historico(app):
+    temp, f, trilha = _cenario_trilha_completa()
+    video = trilha.videos[0]
+    video.versao = 2
+    video.exige_reassistir = True
+    db.session.commit()
+
+    estado = tt.progresso_trilha(f, trilha, temp)
+    assert estado['videos_feitos'] == 0
+    assert not estado['completa']
+    assert tt.verificar_conclusao(f, trilha, temp) is None
+    assert ledger.saldo(f.id, temp.id) == 0
+    progresso = TreinoProgressoVideo(
+        funcionario_id=f.id, video_id=video.id, versao_video=2, percentual=82)
+    db.session.add(progresso)
+    db.session.commit()
+    assert not tt.progresso_trilha(f, trilha, temp)['completa']
+    progresso.concluido_em = agora()
+    db.session.commit()
+    assert tt.progresso_trilha(f, trilha, temp)['completa']
+    assert TreinoProgressoVideo.query.filter_by(
+        funcionario_id=f.id, video_id=video.id, versao_video=1).one().concluido_em
+
+
 def test_certificado_pdf_e_verificacao(app):   # critério 20
     with app.app_context():
         temp, f, trilha = _cenario_trilha_completa()

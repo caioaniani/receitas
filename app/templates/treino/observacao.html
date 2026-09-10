@@ -7,9 +7,13 @@
       <a class="treino-back" href="{{ url_for('treino.gestor_home') }}"><i class="bi bi-arrow-left"></i> Voltar à equipe</a>
       <span class="treino-eyebrow">Observação prática</span>
       <h1>{{ funcionario.nome }}</h1>
-      <p>{{ funcionario.cargo.nome if funcionario.cargo else 'Cargo não informado' }} · líder responsável: {{ gestor.nome }}</p>
+      <p>{{ funcionario.cargo.nome if funcionario.cargo else 'Cargo não informado' }} · líder responsável: {{ funcionario.lider.nome if funcionario.lider else 'Não informado' }}</p>
     </div>
   </header>
+
+  {% if not pode_registrar %}
+  <div class="treino-notice"><i class="bi bi-eye"></i><div><strong>Consulta administrativa.</strong><br>A validação de uma observação exige uma conta vinculada à ficha do avaliador no RH.</div></div>
+  {% endif %}
 
   {% if not temporada %}
   <div class="treino-notice treino-notice-warning"><i class="bi bi-calendar-x"></i><div><strong>Não há ciclo de treinamento ativo.</strong><br>As observações poderão ser registradas quando um ciclo estiver em andamento.</div></div>
@@ -18,7 +22,7 @@
   <section class="treino-section">
     <div class="treino-section-heading">
       <div><span class="treino-eyebrow">No trabalho</span><h2>Checklist de observação</h2></div>
-      <span>marque somente o que você viu acontecer</span>
+      <span>{{ 'marque somente o que você viu acontecer' if pode_registrar else 'critérios para a validação prática' }}</span>
     </div>
     <div class="treino-module-list">
       {% for observacao in observacoes %}
@@ -29,6 +33,8 @@
         </div>
         {% if observacao.registrada %}
         <div class="treino-notice treino-notice-success"><i class="bi bi-clipboard-check"></i><div><strong>{{ (observacao.registrada.itens_ok or [])|length }} de {{ observacao.itens|length }} itens confirmados.</strong><br>{{ observacao.registrada.evidencia }}</div></div>
+        {% elif not pode_registrar %}
+        <ul>{% for item in observacao.itens %}<li>{{ item.descricao }}</li>{% endfor %}</ul>
         {% else %}
         <form method="POST" action="{{ url_for('treino.gestor_observar_salvar', func_id=funcionario.id, trilha_id=observacao.trilha.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
