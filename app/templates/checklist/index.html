@@ -26,13 +26,13 @@ pontos que exigem comprovação.</p>
   {% for t in tipos %}
     {% set n = configurados.get(t) %}
     {% set feitos = feitos_hoje.get(t) or [] %}
-    {% if n %}
+    {% if n or pode_editar %}
     <a class="btn btn-lg {{ 'btn-outline-success' if feitos else 'btn-primary' }} text-start d-flex justify-content-between align-items-center"
        href="{{ url_for('checklist.preencher', loja=loja.id, tipo=t) }}">
       <span>
         {% if t == 'abertura' %}🌅{% elif t == 'troca_turno' %}🔄{% else %}🌙{% endif %}
         {{ labels[t] }}
-        <span class="small opacity-75">· {{ n }} ponto{{ 's' if n != 1 }}</span>
+        <span class="small opacity-75">· {{ n or 0 }} ponto{{ 's' if n != 1 }}</span>
       </span>
       {% if feitos %}
       <span class="badge bg-success">✓ hoje às {{ feitos[-1].criado_em.strftime('%H:%M') }}</span>

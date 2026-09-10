@@ -116,3 +116,17 @@ def quadro(loja_id=None):
     return {'lojas': [linha for lid, linha in por_loja.items()
                       if loja_id is None or lid == loja_id],
             'pendentes': pendentes}
+
+
+def pode_editar(usuario, loja_id):
+    """Liderança da unidade; cobertura de preenchimento não concede edição."""
+    if not usuario.pode_checklist():
+        return False
+    if usuario.is_admin():
+        return True
+    funcionario = usuario.funcionario
+    if not funcionario or not funcionario.ativo or loja_do_usuario(usuario) != loja_id:
+        return False
+    cargo = funcionario.cargo.nome if funcionario.cargo else funcionario.funcao
+    return (normalizar_nome_cargo(cargo) in CARGOS_RESPONSAVEIS
+            or usuario.is_gerente() or usuario.lidera_equipe())

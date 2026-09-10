@@ -1,0 +1,25 @@
+<dialog aria-labelledby="editor-titulo" id="editor-checklist" class="rounded border p-3" style="max-width:500px;width:95%">
+  <form id="form-editor-checklist" action="{{ url_for('checklist.editar_item') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="loja" value="{{ loja.id }}">
+    <input type="hidden" name="tipo" value="{{ tipo }}">
+    <input type="hidden" name="item_id">
+    <input type="hidden" name="versao">
+    <h2 id="editor-titulo" class="h5">Ponto do checklist · {{ loja.nome }}</h2>
+    <label for="editor-texto" class="form-label">O que conferir?</label>
+    <textarea id="editor-texto" name="texto" required maxlength="300" class="form-control mb-2"></textarea>
+    <label for="editor-setor" class="form-label">Setor</label>
+    <input id="editor-setor" name="setor" maxlength="60" class="form-control mb-2">
+    <label class="d-block mb-3"><input type="checkbox" name="exige_foto" value="1"> Exigir foto</label>
+    <div id="editor-exclusao">
+      <p class="small">Excluir retira este ponto somente desta loja. O histórico dos preenchimentos é preservado.</p>
+      <label for="editor-senha" class="form-label">Sua senha para excluir</label>
+      <input id="editor-senha" type="password" name="senha" autocomplete="current-password" class="form-control mb-2">
+      <button type="button" id="excluir-ponto" class="btn btn-outline-danger mb-3">Excluir ponto desta loja</button>
+    </div>
+    <p id="editor-erro" role="alert" class="text-danger"></p>
+    <button type="submit" class="btn btn-primary">Salvar ponto</button>
+    <button type="button" id="cancelar-editor" class="btn btn-outline-secondary">Cancelar</button>
+  </form>
+</dialog>
+<p id="checklist-edicao-status" role="status" class="small"></p>

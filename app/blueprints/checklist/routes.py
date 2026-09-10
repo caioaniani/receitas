@@ -1,14 +1,16 @@
 """Checklist de loja (03/08/2026): preencher (turno), configurar (admin) e
 conferir (admin). Regras de negócio em app/services/checklist_loja.py."""
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import IntegrityError
 
 from app.blueprints.checklist import checklist_bp
 from app.constants import CHECKLIST_TIPO_LABEL, CHECKLIST_TIPOS
 from app.decorators import admin_required, checklist_required
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import (
+    ChecklistEdicao,
+    ChecklistItemAjuste,
     ChecklistItemModelo,
     ChecklistPreenchimento,
     ChecklistResponsavel,
@@ -76,6 +78,7 @@ def index():
         'checklist/index.html', lojas=lojas, loja=loja,
         tipos=CHECKLIST_TIPOS, labels=CHECKLIST_TIPO_LABEL,
         configurados=tipos, feitos_hoje=feitos_hoje,
+        pode_editar=bool(loja and checklist_responsaveis.pode_editar(current_user, loja.id)),
         equipe=checklist_responsaveis.quadro(loja.id) if loja else None)
 
 
@@ -147,8 +150,12 @@ def preencher():
     if loja is None or tipo not in CHECKLIST_TIPOS:
         flash('Escolha a loja e o tipo de checklist.', 'warning')
         return redirect(url_for('checklist.index'))
+    if request.method == 'POST':
+        # Edição e fechamento da mesma loja não podem cruzar seus snapshots.
+        Loja.query.filter_by(id=loja.id).with_for_update().first()
     itens = checklist_loja.itens_para(loja.id, tipo)
-    if not itens:
+    pode_editar = checklist_responsaveis.pode_editar(current_user, loja.id)
+    if not itens and not pode_editar:
         flash('Esse checklist ainda não tem itens cadastrados — peça ao '
               'admin pra configurar.', 'warning')
         return redirect(url_for('checklist.index', loja=loja.id))
@@ -173,6 +180,17 @@ def preencher():
                   'dobro. (Pra preencher de novo de propósito, aguarde '
                   'meio minuto.)', 'info')
             return redirect(url_for('checklist.index', loja=loja.id))
+        if request.form.get('revisao_itens') == '1' and (
+            set(request.form.getlist('itens_presentes')) != {str(it.id) for it in itens}
+            or any(request.form.get(f'versao_{it.id}') != str(it.versao) for it in itens)
+        ):
+            flash('O checklist foi alterado por outra pessoa. Revise os pontos antes de enviar; '
+                  'as fotos precisam ser anexadas novamente.', 'warning')
+            return render_template('checklist/preencher.html', loja=loja, tipo=tipo,
+                label=CHECKLIST_TIPO_LABEL[tipo], itens=itens,
+                grupos=checklist_loja.agrupar_por_setor(itens), anteriores=_do_dia(loja, tipo),
+                form=request.form, pode_editar=pode_editar,
+                equipe=checklist_responsaveis.quadro(loja.id)), 409
         respostas = {}
         for it in itens:
             estado = request.form.get(f'ok_{it.id}')
@@ -197,7 +215,7 @@ def preencher():
                 label=CHECKLIST_TIPO_LABEL[tipo], itens=itens,
                 grupos=checklist_loja.agrupar_por_setor(itens),
                 anteriores=_do_dia(loja, tipo),
-                form=request.form,
+                form=request.form, pode_editar=pode_editar,
                 equipe=checklist_responsaveis.quadro(loja.id)), 422
         flash(f'Checklist de {CHECKLIST_TIPO_LABEL[tipo].lower()} da '
               f'{loja.nome} registrado ({len(p.respostas)} pontos'
@@ -209,8 +227,68 @@ def preencher():
         'checklist/preencher.html', loja=loja, tipo=tipo,
         label=CHECKLIST_TIPO_LABEL[tipo], itens=itens,
         grupos=checklist_loja.agrupar_por_setor(itens),
-        anteriores=_do_dia(loja, tipo), form=None,
+        anteriores=_do_dia(loja, tipo), form=None, pode_editar=pode_editar,
         equipe=checklist_responsaveis.quadro(loja.id))
+
+
+@checklist_bp.route('/itens', methods=['POST'])
+@login_required
+@checklist_required
+@limiter.limit('10 per minute', key_func=lambda: str(current_user.id))
+def editar_item():
+    loja = _resolver_loja(request.form.get('loja'))
+    tipo = request.form.get('tipo')
+    if not loja or tipo not in CHECKLIST_TIPOS:
+        return jsonify(erro='Loja ou checklist inválido.'), 400
+    if not checklist_responsaveis.pode_editar(current_user, loja.id):
+        abort(403)
+    acao = request.form.get('acao')
+    if acao not in ('novo', 'editar', 'excluir'):
+        return jsonify(erro='Ação inválida.'), 400
+    if acao == 'excluir' and not current_user.check_senha(request.form.get('senha') or ''):
+        return jsonify(erro='Senha incorreta. Use a senha da sua própria conta.'), 403
+    texto = (request.form.get('texto') or '').strip()
+    setor = (request.form.get('setor') or '').strip()
+    if acao != 'excluir' and (not texto or len(texto) > 300 or len(setor) > 60):
+        return jsonify(erro='Informe o ponto (até 300 caracteres) e o setor (até 60).'), 400
+    Loja.query.filter_by(id=loja.id).with_for_update().first()
+    antes = None
+    if acao == 'novo':
+        modelo = ChecklistItemModelo(loja_id=loja.id, tipo=tipo, texto=texto,
+            setor=setor or None, exige_foto=request.form.get('exige_foto') == '1')
+        db.session.add(modelo)
+        db.session.flush()
+        item_id = modelo.id
+    else:
+        item_id = request.form.get('item_id', type=int)
+        # Serializa edições do mesmo item e protege a criação do ajuste único.
+        modelo = (ChecklistItemModelo.query.filter_by(id=item_id)
+                  .with_for_update().first())
+        item = next((it for it in checklist_loja.itens_para(loja.id, tipo)
+                     if it.id == item_id), None)
+        if not modelo or not item:
+            return jsonify(erro='Este ponto não está mais disponível. Atualize a página.'), 409
+        if request.form.get('versao') != str(item.versao):
+            return jsonify(erro='Outra pessoa alterou este ponto. Atualize a página para revisar.'), 409
+        antes = {c: getattr(item, c) for c in ('texto', 'setor', 'exige_foto')}
+        ajuste = db.session.get(ChecklistItemAjuste, (item_id, loja.id))
+        if ajuste is None:
+            ajuste = ChecklistItemAjuste(item_id=item_id, loja_id=loja.id, **antes, ativo=True, versao=0)
+            db.session.add(ajuste)
+        ajuste.versao += 1
+        if acao == 'excluir':
+            ajuste.ativo = False
+        else:
+            ajuste.texto, ajuste.setor = texto, setor or None
+            ajuste.exige_foto = request.form.get('exige_foto') == '1'
+    db.session.flush()
+    item = next((it for it in checklist_loja.itens_para(loja.id, tipo) if it.id == item_id), None)
+    depois = {c: getattr(item, c) for c in ('texto', 'setor', 'exige_foto')} if item else None
+    db.session.add(ChecklistEdicao(loja_id=loja.id, usuario_id=current_user.id,
+        item_id=item_id, acao=acao, antes=antes, depois=depois))
+    db.session.commit()
+    return jsonify(item_id=item_id, html=render_template('checklist/_item.html',
+        it=item, form=None, pode_editar=True) if item else None)
 
 
 def _do_dia(loja, tipo):
@@ -290,7 +368,7 @@ def config():
             else:
                 usado = (ChecklistResposta.query
                          .filter_by(item_id=it.id).first() is not None)
-                if usado:
+                if usado or ChecklistItemAjuste.query.filter_by(item_id=it.id).first():
                     # Item com história nunca some — desativa (a FK das
                     # respostas antigas fica viva; snapshot cobre o texto).
                     it.ativo = False

@@ -21,13 +21,17 @@ só sáb/dom) e só cobra depois que o dono cadastrar itens do tipo — feature
 sem configuração não cobra ninguém. Troca de turno NUNCA é cobrada (nem
 toda loja tem turnos; o registro existe pra quem usa).
 """
+import hashlib
+import json
 import logging
 from datetime import time as _time
 from datetime import timedelta
+from types import SimpleNamespace
 
 from app.constants import CHECKLIST_TIPO_LABEL, CHECKLIST_TIPOS
 from app.extensions import db
 from app.models import (
+    ChecklistItemAjuste,
     ChecklistItemModelo,
     ChecklistPreenchimento,
     ChecklistResposta,
@@ -52,13 +56,30 @@ HORA_VIRADA_FECHAMENTO = _time(4, 0)
 def itens_para(loja_id, tipo):
     """Itens ativos do tipo que valem pra loja: globais (loja_id NULL) +
     específicos dela, na ordem cadastrada."""
-    return (ChecklistItemModelo.query
+    modelos = (ChecklistItemModelo.query
             .filter(ChecklistItemModelo.tipo == tipo,
                     ChecklistItemModelo.ativo.is_(True),
                     db.or_(ChecklistItemModelo.loja_id.is_(None),
                            ChecklistItemModelo.loja_id == loja_id))
             .order_by(ChecklistItemModelo.ordem, ChecklistItemModelo.id)
             .all())
+
+    ajustes = {a.item_id: a for a in ChecklistItemAjuste.query.filter_by(loja_id=loja_id)}
+    itens = []
+    for modelo in modelos:
+        ajuste = ajustes.get(modelo.id)
+        if ajuste and not ajuste.ativo:
+            continue
+        item = SimpleNamespace(**{campo: getattr(modelo, campo) for campo in
+            ('id', 'tipo', 'texto', 'setor', 'exige_foto', 'ordem', 'loja_id', 'criado_em')})
+        if ajuste:
+            for campo in ('texto', 'setor', 'exige_foto'):
+                setattr(item, campo, getattr(ajuste, campo))
+        item.versao = hashlib.sha256(json.dumps([
+            item.texto, item.setor, item.exige_foto, ajuste.versao if ajuste else 0
+        ], ensure_ascii=False).encode()).hexdigest()
+        itens.append(item)
+    return itens
 
 
 def agrupar_por_setor(itens):
@@ -77,14 +98,8 @@ def agrupar_por_setor(itens):
 
 def tipos_configurados(loja_id):
     """{tipo: n_itens} só dos tipos com pelo menos 1 item aplicável à loja."""
-    from sqlalchemy import func
-    rows = (db.session.query(ChecklistItemModelo.tipo,
-                             func.count(ChecklistItemModelo.id))
-            .filter(ChecklistItemModelo.ativo.is_(True),
-                    db.or_(ChecklistItemModelo.loja_id.is_(None),
-                           ChecklistItemModelo.loja_id == loja_id))
-            .group_by(ChecklistItemModelo.tipo).all())
-    return {t: n for t, n in rows if t in CHECKLIST_TIPOS and n}
+    return {tipo: len(itens) for tipo in CHECKLIST_TIPOS
+            if (itens := itens_para(loja_id, tipo))}
 
 
 def registrar(loja, tipo, usuario_id, respostas, observacao=None):
@@ -221,18 +236,9 @@ def lojas_faltando(tipo, dia):
         return []
     ids = [lj.id for lj in lojas]
     fim_do_dia = _dt.combine(dia + timedelta(days=1), _t.min)
-    base = (ChecklistItemModelo.tipo == tipo,
-            ChecklistItemModelo.ativo.is_(True),
-            db.or_(ChecklistItemModelo.criado_em.is_(None),
-                   ChecklistItemModelo.criado_em < fim_do_dia))
-    # Item global ativo do tipo cobre todas; específico cobre a dele.
-    tem_global = (db.session.query(ChecklistItemModelo.id)
-                  .filter(*base, ChecklistItemModelo.loja_id.is_(None))
-                  .first() is not None)
-    com_item = set(ids) if tem_global else {
-        lid for (lid,) in db.session.query(ChecklistItemModelo.loja_id)
-        .filter(*base,
-                ChecklistItemModelo.loja_id.in_(ids)).distinct().all()}
+    com_item = {lj.id for lj in lojas if any(
+        it.criado_em is None or it.criado_em < fim_do_dia
+        for it in itens_para(lj.id, tipo))}
     if not com_item:
         return []
     preenchidas = {lid for (lid,) in db.session.query(

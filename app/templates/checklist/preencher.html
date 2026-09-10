@@ -26,48 +26,28 @@
   <input type="hidden" name="loja" value="{{ loja.id }}">
   <input type="hidden" name="tipo" value="{{ tipo }}">
 
+  <input type="hidden" name="revisao_itens" value="1">
+  <div id="checklist-itens">
   {# Agrupado por SETOR (subtítulo), na ordem do checklist em papel — o
      responsável do turno preenche tudo numa tela só (decisão do dono
      03/08/2026). Com 1 grupo só ("Geral"), o subtítulo some. #}
   {% for setor, itens_do_setor in grupos %}
   {% if grupos|length > 1 %}
-  <h2 class="h6 text-uppercase text-muted mt-3 mb-2"
+  <h2 data-setor-titulo class="h6 text-uppercase text-muted mt-3 mb-2"
       style="font-size:12px;letter-spacing:.06em;border-bottom:1px solid var(--bs-border-color);padding-bottom:4px;">
     {{ setor }} <span class="text-muted">({{ itens_do_setor|length }})</span>
   </h2>
   {% endif %}
   {% for it in itens_do_setor %}
-  {% set marcado = form.get('ok_' ~ it.id) if form else none %}
-  <div class="card mb-2">
-    <div class="card-body py-2">
-      <div class="fw-semibold">{{ it.texto }}
-        {% if it.exige_foto %}
-        <span class="badge bg-warning text-dark">📷 exige foto</span>
-        {% endif %}
-      </div>
-      <div class="btn-group mt-2 w-100" role="group">
-        <input type="radio" class="btn-check" name="ok_{{ it.id }}"
-               id="ok{{ it.id }}" value="ok" required
-               {% if marcado == 'ok' %}checked{% endif %}>
-        <label class="btn btn-outline-success" for="ok{{ it.id }}">✔ OK</label>
-        <input type="radio" class="btn-check" name="ok_{{ it.id }}"
-               id="pb{{ it.id }}" value="problema"
-               {% if marcado == 'problema' %}checked{% endif %}>
-        <label class="btn btn-outline-danger" for="pb{{ it.id }}">⚠ Problema</label>
-      </div>
-      <input type="text" name="obs_{{ it.id }}" maxlength="500"
-             class="form-control form-control-sm mt-2"
-             placeholder="Observação (obrigatória se marcar problema)"
-             value="{{ form.get('obs_' ~ it.id, '') if form else '' }}">
-      {% if it.exige_foto %}
-      <input type="file" name="foto_{{ it.id }}" accept="image/*" required
-             class="form-control form-control-sm mt-2">
-      {% endif %}
-    </div>
-  </div>
+  {% include 'checklist/_item.html' %}
   {% endfor %}
   {% endfor %}
 
+  </div>
+  {% if pode_editar %}
+  <p class="small text-muted">Revise os pontos aplicáveis a {{ loja.nome }}. As alterações valem para os próximos preenchimentos desta loja. Para excluir, confirme com sua própria senha.</p>
+  <button type="button" id="adicionar-ponto" class="btn btn-outline-primary mb-3">Adicionar ponto</button>
+  {% endif %}
   <div class="card mb-3">
     <div class="card-body py-2">
       <label class="form-label small mb-1">Observação geral do turno (opcional)</label>
@@ -81,10 +61,12 @@
     <a class="btn btn-outline-secondary" href="{{ url_for('checklist.index', loja=loja.id) }}">Voltar</a>
   </div>
 </form>
+{% if pode_editar %}{% include 'checklist/_editor.html' %}{% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
+{% if pode_editar %}<script src="{{ url_for('static', filename='js/checklist-editor.js') }}"></script>{% endif %}
 <script>
 // Anti-duplo-clique: upload de foto em 3G demora — desabilita o botão no
 // submit (o servidor ainda tem a guarda de 30s como rede de segurança).

@@ -1,0 +1,35 @@
+  {% set marcado = form.get('ok_' ~ it.id) if form else none %}
+  <div class="card mb-2" id="checklist-item-{{ it.id }}" data-checklist-item data-setor="{{ it.setor or 'Geral' }}">
+    <input type="hidden" name="itens_presentes" value="{{ it.id }}">
+    <input type="hidden" name="versao_{{ it.id }}" value="{{ it.versao }}">
+    <div class="card-body py-2">
+      <div class="fw-semibold">{{ it.texto }}
+        {% if it.exige_foto %}
+        <span class="badge bg-warning text-dark">📷 exige foto</span>
+        {% endif %}
+      </div>
+      {% if pode_editar %}
+      <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-editar-item
+              data-id="{{ it.id }}" data-versao="{{ it.versao }}" data-texto="{{ it.texto }}"
+              data-setor="{{ it.setor or '' }}" data-foto="{{ '1' if it.exige_foto else '0' }}">Editar ou excluir ponto</button>
+      {% endif %}
+      <div class="btn-group mt-2 w-100" role="group">
+        <input type="radio" class="btn-check" name="ok_{{ it.id }}"
+               id="ok{{ it.id }}" value="ok" required
+               {% if marcado == 'ok' %}checked{% endif %}>
+        <label class="btn btn-outline-success" for="ok{{ it.id }}">✔ OK</label>
+        <input type="radio" class="btn-check" name="ok_{{ it.id }}"
+               id="pb{{ it.id }}" value="problema"
+               {% if marcado == 'problema' %}checked{% endif %}>
+        <label class="btn btn-outline-danger" for="pb{{ it.id }}">⚠ Problema</label>
+      </div>
+      <input type="text" name="obs_{{ it.id }}" maxlength="500"
+             class="form-control form-control-sm mt-2"
+             placeholder="Observação (obrigatória se marcar problema)"
+             value="{{ form.get('obs_' ~ it.id, '') if form else '' }}">
+      {% if it.exige_foto %}
+      <input type="file" name="foto_{{ it.id }}" accept="image/*" required
+             class="form-control form-control-sm mt-2">
+      {% endif %}
+    </div>
+  </div>

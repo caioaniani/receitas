@@ -132,3 +132,28 @@ class ChecklistResposta(db.Model):
     def __repr__(self):
         return (f'<ChecklistResposta {self.item_texto!r} '
                 f'{"ok" if self.ok else "problema"}>')
+
+
+class ChecklistItemAjuste(db.Model):
+    """Personalização por loja; nunca altera o modelo das demais unidades."""
+    __tablename__ = 'checklist_item_ajuste'
+    item_id = db.Column(db.Integer, db.ForeignKey('checklist_item_modelo.id'), primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), primary_key=True)
+    texto = db.Column(db.String(300), nullable=False)
+    setor = db.Column(db.String(60))
+    exige_foto = db.Column(db.Boolean, nullable=False)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    versao = db.Column(db.Integer, nullable=False, default=1)
+
+
+class ChecklistEdicao(db.Model):
+    """Auditoria de mudanças; não armazena a senha de confirmação."""
+    __tablename__ = 'checklist_edicao'
+    id = db.Column(db.Integer, primary_key=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    item_id = db.Column(db.Integer, nullable=False)
+    acao = db.Column(db.String(20), nullable=False)
+    antes = db.Column(db.JSON)
+    depois = db.Column(db.JSON)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora)
