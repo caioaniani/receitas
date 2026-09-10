@@ -9,10 +9,11 @@ from flask_login import current_user, login_required
 from sqlalchemy.orm import selectinload
 
 from app.blueprints.padeiro import padeiro_bp
-from app.decorators import padeiro_required
+from app.decorators import admin_required, padeiro_required
 from app.extensions import db
-from app.models import MassaBase, PlanejamentoItem, ProducaoDiarioLote
+from app.models import MassaBase, PlanejamentoItem, ProducaoDiarioLote, ProducaoDiarioReferencia
 from app.services import producao_diario as diario
+from app.services import producao_diario_referencia as referencias
 from app.utils import agora, hoje
 
 CAMPOS_MEDIDAS = [
@@ -84,6 +85,7 @@ def _indice(dia, status=200):
         chave=request.form.get('chave') or str(uuid4()),
         pre_origem=request.form.get('origem') or request.args.get('origem', ''),
         data_registro=hoje(), rascunho=request.form,
+        contagem_referencias=ProducaoDiarioReferencia.query.count(),
     ), status
 
 
@@ -213,7 +215,8 @@ def _historico():
 @padeiro_required
 def diario_historico():
     inicio, fim, lotes = _historico()
-    return render_template('padeiro/diario_historico.html', inicio=inicio, fim=fim, lotes=lotes)
+    return render_template('padeiro/diario_historico.html', inicio=inicio, fim=fim, lotes=lotes,
+                           contagem_referencias=ProducaoDiarioReferencia.query.count())
 
 
 @padeiro_bp.route('/diario/exportar.csv')
@@ -246,5 +249,71 @@ def diario_exportar():
             ])
     return Response('\ufeff' + out.getvalue(), mimetype='text/csv', headers={
         'Content-Disposition': f'attachment; filename="producao-{inicio}-{fim}.csv"',
+        'Cache-Control': 'no-store',
+    })
+
+
+@padeiro_bp.route('/diario/referencias')
+@login_required
+@padeiro_required
+def diario_referencias():
+    return render_template('padeiro/diario_referencias.html',
+                           referencias=referencias.listar_referencias(),
+                           qtd_pendentes=referencias.contar_pendentes(),
+                           pode_importar=current_user.is_admin())
+
+
+@padeiro_bp.route('/diario/referencias/importar', methods=['POST'])
+@login_required
+@admin_required
+def diario_referencias_importar():
+    novos = referencias.importar_referencias(current_user.id)
+    flash(f'{novos} registros da planilha incluídos.' if novos
+          else 'Os registros desta planilha já estão no histórico.', 'success')
+    return redirect(url_for('padeiro.diario_referencias'))
+
+
+@padeiro_bp.route('/diario/referencias/exportar.csv')
+@login_required
+@padeiro_required
+def diario_referencias_exportar():
+    campos = [
+        ('farinha_kg', 'Farinha (kg)'), ('hidratacao_percentual', 'Hidratação (%)'),
+        ('agua_calculada_kg', 'Água calculada (kg)'),
+        ('velocidade_1_min', 'Velocidade 1 (min)'), ('velocidade_2_min', 'Velocidade 2 (min)'),
+        ('temperatura_agua', 'Temperatura da água (°C)'),
+        ('temperatura_ambiente', 'Temperatura do ambiente (°C)'),
+        ('temperatura_massa', 'Temperatura da massa (°C)'),
+        ('friccao_estimada', 'Fricção estimada (°C)'), ('dobras_qtd', 'Dobras (qtd)'),
+        ('intervalo_dobras_min', 'Intervalo entre dobras (min)'),
+        ('descanso_apos_dobras_min', 'Descanso após dobras (min)'),
+    ]
+    out = io.StringIO()
+    writer = csv.writer(out, delimiter=';')
+    writer.writerow(['ID na planilha', 'Produto', 'Data do lote',
+                     *[col for _, rotulo in campos for col in (rotulo, f'{rotulo} — origem')],
+                     'Observação original', 'Notas sobre os dados', 'Fonte original',
+                     'Arquivo', 'Aba', 'Linha', 'SHA256 do arquivo'])
+
+    def texto_seguro(valor):
+        texto = str(valor or '')
+        return "'" + texto if texto.lstrip().startswith(('=', '+', '-', '@')) else texto
+
+    for referencia in referencias.listar_referencias():
+        dados = referencia.dados
+        valores, classes = dados['valores'], dados['classificacao']
+        writer.writerow([
+            dados['id_fonte'], texto_seguro(referencia.produto), '',
+            *[celula for chave, _ in campos for celula in (
+                '' if valores.get(chave) is None else str(valores[chave]).replace('.', ','),
+                classes.get(chave, ''))],
+            texto_seguro(dados.get('observacao_original')),
+            texto_seguro(' | '.join(dados.get('notas', []))),
+            texto_seguro(dados.get('fonte_original')),
+            texto_seguro(referencia.fonte_arquivo), referencia.fonte_aba,
+            referencia.fonte_linha, referencia.fonte_sha256,
+        ])
+    return Response('\ufeff' + out.getvalue(), mimetype='text/csv', headers={
+        'Content-Disposition': 'attachment; filename="historico-sourdough-planilha.csv"',
         'Cache-Control': 'no-store',
     })

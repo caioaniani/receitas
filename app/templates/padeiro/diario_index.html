@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Diário da produção — {{ dia.strftime('%d/%m') }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/padeiro-diario.css', v='20260910a') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/padeiro-diario.css', v='20260910b') }}">
 </head>
 <body>
 <a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
@@ -25,6 +25,7 @@
     <div class="field"><label for="data">Consultar dia</label><input id="data" type="date" name="data" value="{{ dia.isoformat() }}" required></div>
     <button type="submit" class="button">Ver dia</button>
   </form>
+  <aside class="reference-link" aria-label="Dados já registrados na planilha"><div><a href="{{ url_for('padeiro.diario_referencias') }}">Históricos da planilha Sourdough</a><p>{% if contagem_referencias | default(0) %}{{ contagem_referencias }} registros sem data de lote.{% else %}Consulte os dados informados no arquivo.{% endif %} Disponíveis independentemente do dia selecionado.</p></div><a class="button" href="{{ url_for('padeiro.diario_referencias') }}">Ver históricos</a></aside>
 
   {% macro cartao_lote(lote) %}
   {% set em_andamento = lote.etapas | selectattr('fim_em', 'none') | list %}

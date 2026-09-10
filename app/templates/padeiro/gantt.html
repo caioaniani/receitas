@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sequência da produção — {{ dia.strftime('%d/%m') }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/padeiro-sequencia.css', v='20260910b') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/padeiro-sequencia.css', v='20260910c') }}">
   <script src="{{ url_for('static', filename='js/padeiro-sequencia.js', v='20260910b') }}" defer></script>
 </head>
 <body>
@@ -43,7 +43,7 @@
   </section>
   {% else %}
   {% set produtos = g.produtos + g.sem_etapas_itens %}
-  <p class="seq-help">Escolha um produto para ver o preparo. Registre somente a quantidade que ficou pronta.</p>
+  <p class="seq-help">Siga as etapas da ficha para preparar cada produto. Os tempos e as instruções aparecem no passo a passo.</p>
   <div class="seq-workspace" id="sequencia">
     <nav class="product-list" aria-label="Produtos da sequência">
       <h2>O que preparar</h2>
@@ -73,7 +73,7 @@
             {% endif %}
           </div>
           {% if p.item_id %}
-          <a class="button primary" href="{{ url_for('padeiro.index', data=p.data_plano, _anchor='producao-item-' ~ p.item_id) }}">Registrar produção</a>
+          <a class="button" href="{{ url_for('padeiro.index', data=p.data_plano, _anchor='producao-item-' ~ p.item_id) }}">Registrar produção</a>
           {% elif p.tipo == 'base' %}
           <a class="button" href="{{ url_for('padeiro.index', data=dia.isoformat(), _anchor='producao-base-' ~ p.grupo ~ '-' ~ dia.isoformat()) }}">Ver preparo da base</a>
           {% endif %}
@@ -98,11 +98,11 @@
           {% for t in p.tarefas %}
           <li class="step {{ 'passive' if not t.ativa else '' }}">
             <span class="step-number">{{ loop.index }}</span>
-            <div><strong>{{ t.etapa }}</strong><span class="step-duration">{{ t.dur_label }}{% if not t.ativa %} · espera{% elif t.equip == 'forno' %} · forno{% elif t.equip == 'amassadeira' %} · amassadeira{% endif %}</span></div>
+            <div><strong>{{ t.etapa }}</strong><span class="step-duration">{{ t.dur_label }}{% if not t.ativa %} · espera{% elif t.equip == 'forno' %} · forno{% elif t.equip == 'amassadeira' %} · amassadeira{% endif %}</span>{% if t.descricao %}<p class="step-instruction">{{ t.descricao }}</p>{% endif %}</div>
           </li>
           {% endfor %}
           {% if p.destino %}
-          <li class="step passive"><span class="step-number">{{ p.tarefas | length + 1 }}</span><div><strong>{{ p.destino_etapa }}</strong><span class="step-duration">{{ p.destino }} · continua em outra jornada</span></div></li>
+          <li class="step passive"><span class="step-number">{{ p.tarefas | length + 1 }}</span><div><strong>{{ p.destino_etapa }}</strong><span class="step-duration">{{ p.destino }} · continua em outra jornada</span>{% if p.destino_descricao %}<p class="step-instruction">{{ p.destino_descricao }}</p>{% endif %}</div></li>
           {% endif %}
         </ol>
         {% if p.produzido %}<p class="reference-note">As etapas mostram o preparo completo. A quantidade pendente já desconta o que você registrou.</p>{% endif %}
@@ -115,7 +115,7 @@
         <footer class="product-footer">
           {% if p.item_id %}<a href="{{ url_for('padeiro.diario_index', data=p.data_plano, origem='item:' ~ p.item_id) }}">Registrar lote</a>
           {% elif p.tipo == 'base' %}<a href="{{ url_for('padeiro.diario_index', data=dia.isoformat(), origem='base:' ~ p.grupo) }}">Registrar lote da base</a>{% endif %}
-          {% if p.receita_id %}<a href="{{ url_for('padeiro.fichas_editar', id=p.receita_id) }}">Ficha de preparo</a>{% endif %}
+          {% if p.receita_id %}<a href="{{ url_for('padeiro.fichas_editar', id=p.receita_id) }}">Editar ficha</a>{% endif %}
           {% if current_user.is_admin() and p.receita_id %}<a href="{{ url_for('receitas.etapas', id=p.receita_id) }}">Editar etapas</a>{% endif %}
           {% if not loop.last %}<a href="#{{ preparo_id(produtos[loop.index]) }}" class="next-product" data-product="{{ preparo_id(produtos[loop.index]) }}">Ver próximo produto →</a>{% endif %}
         </footer>

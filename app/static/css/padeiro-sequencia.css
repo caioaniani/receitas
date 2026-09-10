@@ -49,6 +49,8 @@ main { padding: 0 28px 24px; }
 .step-number { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--green); color: white; font-size: 18px; font-weight: 800; }
 .step strong { display: block; font-size: clamp(19px, 1.5vw, 28px); line-height: 1.25; overflow-wrap: anywhere; }
 .step-duration { display: block; margin-top: 8px; font-size: clamp(17px, 1.1vw, 21px); color: var(--muted); }
+.step > div { min-width: 0; }
+.step-instruction { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: clamp(17px, 1.15vw, 22px); line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
 .step.passive { background: #f9f3e5; border-color: #e6d9ba; }
 .step.passive .step-number { background: #785b23; }
 .reference-note { margin-top: 14px; line-height: 1.5; }
@@ -92,7 +94,7 @@ main { padding: 0 28px 24px; }
 @media (min-width: 1550px) { .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }.step { min-height: 106px; } }
 @media (max-width: 1100px) { .product-heading { flex-wrap: wrap; }.seq-header { flex-wrap: wrap; } }
 @media (max-width: 750px) {
-  main { padding: 0 14px 20px; }.seq-header { padding: 18px 14px; gap: 14px; }.seq-header nav { gap: 14px; }
+  main { padding: 0 14px 20px; }.seq-header { padding: 18px 14px; gap: 14px; }.seq-header nav { gap: 14px; flex-wrap: wrap; width: 100%; }
   .seq-workspace { grid-template-columns: minmax(0, 1fr); }.seq-ready .product-list { max-height: 250px; overflow-y: auto; }.steps { grid-template-columns: minmax(0, 1fr); }
   .product-panel { padding: 18px; }.product-footer { gap: 14px; }.next-product { margin-left: 0; }
 }

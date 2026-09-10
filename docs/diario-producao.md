@@ -25,7 +25,26 @@ revisar tempos das fichas ou a programação. Em **Ver sequência**, use
 
 O registro é parcial por natureza: pode começar apenas com identificação e ser
 completado durante os dias. As sugestões são nomes da ficha, não tempos validados.
-Nada da planilha de sourdough foi importado como medição real ou padrão aprovado.
+Os dez registros anteriores da planilha de sourdough ficam acessíveis em
+**Históricos da planilha**, no diário e na consulta. Eles preservam produto,
+farinha, hidratação, durações das duas velocidades e temperaturas. Como a fonte
+não informa datas dos lotes nem horários completos de batimento, esses registros
+não recebem uma data inventada e aparecem independentemente do filtro por período.
+
+Água calculada e fricção estimada aparecem identificadas. A fonte presume
+temperatura da farinha igual à do ambiente no cálculo da fricção; isso não é uma
+medição de temperatura da farinha. As dobras e descansos extrapolados ou com
+informações contraditórias continuam sinalizados. Lacunas permanecem vazias,
+inclusive o peso de dois lotes e os tempos do lote de Nozes. As propostas de
+padrão não são copiadas para fichas ou transformadas em execuções observadas.
+
+A carga administrativa usa o manifesto `app/seeds_data/producao_sourdough_registros.json`,
+extraído da aba Registros do arquivo enviado pelo usuário. Cada referência
+preserva arquivo, SHA-256, aba, linha, ID e texto original. A tabela
+`producao_diario_referencia` separa esse histórico documental dos lotes vinculados
+à ordem. A chave SHA-256 + aba + linha impede duplicação, inclusive em envios
+simultâneos. A carga registra quem importou e quando, sem substituir a data ausente
+da produção. O CSV das referências mantém os valores e a classificação de origem.
 
 ## Limites da primeira versão
 

@@ -1,0 +1,612 @@
+{
+  "arquivo": "producao_sourdough_padrao.xlsx",
+  "sha256": "5f2e86d172d23634dc035f4d3313eeb79ac15aa33093f45480c9eb0e5655d124",
+  "aba": "Registros",
+  "notas": [
+    "Importação dos valores da aba Registros, preservando lacunas e inferências.",
+    "As abas Resumo por produto e Padrão proposto não são novos registros medidos.",
+    "Não há datas dos lotes. Horários das mensagens identificam a fonte, não a produção."
+  ],
+  "registros": [
+    {
+      "id_fonte": 1,
+      "linha": 2,
+      "produto": "Tradicional",
+      "valores": {
+        "farinha_kg": 43,
+        "hidratacao_percentual": 80.0,
+        "agua_calculada_kg": 34.4,
+        "velocidade_1_min": 28,
+        "velocidade_2_min": 3,
+        "temperatura_agua": 5.9,
+        "temperatura_ambiente": 20,
+        "temperatura_massa": 21.8,
+        "friccao_estimada": 19.5,
+        "dobras_qtd": 3,
+        "intervalo_dobras_min": 30,
+        "descanso_apos_dobras_min": 60
+      },
+      "classificacao": {
+        "farinha_kg": "transcrito",
+        "hidratacao_percentual": "transcrito",
+        "agua_calculada_kg": "calculado",
+        "velocidade_1_min": "transcrito",
+        "velocidade_2_min": "transcrito",
+        "temperatura_agua": "transcrito",
+        "temperatura_ambiente": "transcrito",
+        "temperatura_massa": "transcrito",
+        "friccao_estimada": "calculado",
+        "dobras_qtd": "extrapolado",
+        "intervalo_dobras_min": "informado",
+        "descanso_apos_dobras_min": "extrapolado"
+      },
+      "fonte_original": "Img 1 (msg 15:56)",
+      "observacao_original": "Dobras a cada 30 min (informado por Caio); qtd 3 e descanso 60 min extrapolados dos lotes 7–10",
+      "notas": [
+        "A data do lote e os horários de início/fim do batimento não foram informados.",
+        "Água calculada a partir da farinha e da hidratação, não pesada neste registro.",
+        "Fricção estimada pela fórmula da planilha, que presume temperatura da farinha igual à do ambiente.",
+        "A quantidade de dobras e o descanso precisam de confirmação: as observações citam os lotes 7–10, mas a aba Lacunas menciona somente três lotes originais.",
+        "As observações deste registro dizem que três dobras e 60 minutos de descanso foram extrapolados de outros lotes."
+      ],
+      "celulas": {
+        "farinha_kg": "D2",
+        "hidratacao_percentual": "E2",
+        "agua_calculada_kg": "F2",
+        "velocidade_1_min": "G2",
+        "velocidade_2_min": "H2",
+        "temperatura_agua": "I2",
+        "temperatura_ambiente": "J2",
+        "temperatura_massa": "K2",
+        "friccao_estimada": "L2",
+        "dobras_qtd": "M2",
+        "intervalo_dobras_min": "N2",
+        "descanso_apos_dobras_min": "O2"
+      },
+      "formulas_originais": {
+        "agua_calculada_kg": "=IF(OR(D2=\"\",E2=\"\"),\"\",D2*E2)",
+        "friccao_estimada": "=IF(OR(I2=\"\",J2=\"\",K2=\"\"),\"\",3*K2-2*J2-I2)"
+      }
+    },
+    {
+      "id_fonte": 2,
+      "linha": 3,
+      "produto": "Integral",
+      "valores": {
+        "farinha_kg": 15,
+        "hidratacao_percentual": 85.0,
+        "agua_calculada_kg": 12.75,
+        "velocidade_1_min": 18,
+        "velocidade_2_min": 2,
+        "temperatura_agua": 6.1,
+        "temperatura_ambiente": 20,
+        "temperatura_massa": 22,
+        "friccao_estimada": 19.9,
+        "dobras_qtd": 3,
+        "intervalo_dobras_min": 30,
+        "descanso_apos_dobras_min": 60
+      },
+      "classificacao": {
+        "farinha_kg": "transcrito",
+        "hidratacao_percentual": "transcrito",
+        "agua_calculada_kg": "calculado",
+        "velocidade_1_min": "transcrito",
+        "velocidade_2_min": "transcrito",
+        "temperatura_agua": "transcrito",
+        "temperatura_ambiente": "transcrito",
+        "temperatura_massa": "transcrito",
+        "friccao_estimada": "calculado",
+        "dobras_qtd": "extrapolado",
+        "intervalo_dobras_min": "informado",
+        "descanso_apos_dobras_min": "extrapolado"
+      },
+      "fonte_original": "Img 1 (msg 15:56)",
+      "observacao_original": "Dobras a cada 30 min (informado por Caio); qtd 3 e descanso 60 min extrapolados dos lotes 7–10",
+      "notas": [
+        "A data do lote e os horários de início/fim do batimento não foram informados.",
+        "Água calculada a partir da farinha e da hidratação, não pesada neste registro.",
+        "Fricção estimada pela fórmula da planilha, que presume temperatura da farinha igual à do ambiente.",
+        "A quantidade de dobras e o descanso precisam de confirmação: as observações citam os lotes 7–10, mas a aba Lacunas menciona somente três lotes originais.",
+        "As observações deste registro dizem que três dobras e 60 minutos de descanso foram extrapolados de outros lotes."
+      ],
+      "celulas": {
+        "farinha_kg": "D3",
+        "hidratacao_percentual": "E3",
+        "agua_calculada_kg": "F3",
+        "velocidade_1_min": "G3",
+        "velocidade_2_min": "H3",
+        "temperatura_agua": "I3",
+        "temperatura_ambiente": "J3",
+        "temperatura_massa": "K3",
+        "friccao_estimada": "L3",
+        "dobras_qtd": "M3",
+        "intervalo_dobras_min": "N3",
+        "descanso_apos_dobras_min": "O3"
+      },
+      "formulas_originais": {
+        "agua_calculada_kg": "=IF(OR(D3=\"\",E3=\"\"),\"\",D3*E3)",
+        "friccao_estimada": "=IF(OR(I3=\"\",J3=\"\",K3=\"\"),\"\",3*K3-2*J3-I3)"
+      }
+    },
+    {
+      "id_fonte": 3,
+      "linha": 4,
+      "produto": "Tradicional",
+      "valores": {
+        "farinha_kg": 30,
+        "hidratacao_percentual": 80.0,
+        "agua_calculada_kg": 24,
+        "velocidade_1_min": 24,
+        "velocidade_2_min": 2,
+        "temperatura_agua": 6.1,
+        "temperatura_ambiente": 17,
+        "temperatura_massa": 21,
+        "friccao_estimada": 22.9,
+        "dobras_qtd": 3,
+        "intervalo_dobras_min": 30,
+        "descanso_apos_dobras_min": 60
+      },
+      "classificacao": {
+        "farinha_kg": "transcrito",
+        "hidratacao_percentual": "transcrito",
+        "agua_calculada_kg": "calculado",
+        "velocidade_1_min": "transcrito",
+        "velocidade_2_min": "transcrito",
+        "temperatura_agua": "transcrito",
+        "temperatura_ambiente": "transcrito",
+        "temperatura_massa": "transcrito",
+        "friccao_estimada": "calculado",
+        "dobras_qtd": "extrapolado",
+        "intervalo_dobras_min": "informado",
+        "descanso_apos_dobras_min": "extrapolado"
+      },
+      "fonte_original": "Img 2 (msg 15:56)",
+      "observacao_original": "Dobras a cada 30 min (informado por Caio); qtd 3 e descanso 60 min extrapolados dos lotes 7–10",
+      "notas": [
+        "A data do lote e os horários de início/fim do batimento não foram informados.",
+        "Água calculada a partir da farinha e da hidratação, não pesada neste registro.",
+        "Fricção estimada pela fórmula da planilha, que presume temperatura da farinha igual à do ambiente.",
+        "A quantidade de dobras e o descanso precisam de confirmação: as observações citam os lotes 7–10, mas a aba Lacunas menciona somente três lotes originais.",
+        "As observações deste registro dizem que três dobras e 60 minutos de descanso foram extrapolados de outros lotes."
+      ],
+      "celulas": {
+        "farinha_kg": "D4",
+        "hidratacao_percentual": "E4",
+        "agua_calculada_kg": "F4",
+        "velocidade_1_min": "G4",
+        "velocidade_2_min": "H4",
+        "temperatura_agua": "I4",
+        "temperatura_ambiente": "J4",
+        "temperatura_massa": "K4",
+        "friccao_estimada": "L4",
+        "dobras_qtd": "M4",
+        "intervalo_dobras_min": "N4",
+        "descanso_apos_dobras_min": "O4"
+      },
+      "formulas_originais": {
+        "agua_calculada_kg": "=IF(OR(D4=\"\",E4=\"\"),\"\",D4*E4)",
+        "friccao_estimada": "=IF(OR(I4=\"\",J4=\"\",K4=\"\"),\"\",3*K4-2*J4-I4)"
+      }
+    },
+    {
+      "id_fonte": 4,
+      "linha": 5,
+      "produto": "Integral",
+      "valores": {
+        "farinha_kg": 25,
+        "hidratacao_percentual": 85.0,
+        "agua_calculada_kg": 21.25,
+        "velocidade_1_min": 21,
+        "velocidade_2_min": 2,
+        "temperatura_agua": 6.9,
+        "temperatura_ambiente": 20,
+        "temperatura_massa": 22.5,
+        "friccao_estimada": 20.6,
+        "dobras_qtd": 3,
+        "intervalo_dobras_min": 30,
+        "descanso_apos_dobras_min": 60
+      },
+      "classificacao": {
+        "farinha_kg": "transcrito",
+        "hidratacao_percentual": "transcrito",
+        "agua_calculada_kg": "calculado",
+        "velocidade_1_min": "transcrito",
+        "velocidade_2_min": "transcrito",
+        "temperatura_agua": "transcrito",
+        "temperatura_ambiente": "transcrito",
+        "temperatura_massa": "transcrito",
+        "friccao_estimada": "calculado",
+        "dobras_qtd": "extrapolado",
+        "intervalo_dobras_min": "informado",
+        "descanso_apos_dobras_min": "extrapolado"
+      },
+      "fonte_original": "Img 2 (msg 15:56)",
+      "observacao_original": "Dobras a cada 30 min (informado por Caio); qtd 3 e descanso 60 min extrapolados dos lotes 7–10",
+      "notas": [
+        "A data do lote e os horários de início/fim do batimento não foram informados.",
+        "Água calculada a partir da farinha e da hidratação, não pesada neste registro.",
+        "Fricção estimada pela fórmula da planilha, que presume temperatura da farinha igual à do ambiente.",
+        "A quantidade de dobras e o descanso precisam de confirmação: as observações citam os lotes 7–10, mas a aba Lacunas menciona somente três lotes originais.",
+        "As observações deste registro dizem que três dobras e 60 minutos de descanso foram extrapolados de outros lotes."
+      ],
+      "celulas": {
+        "farinha_kg": "D5",
+        "hidratacao_percentual": "E5",
+        "agua_calculada_kg": "F5",
+        "velocidade_1_min": "G5",
+        "velocidade_2_min": "H5",
+        "temperatura_agua": "I5",
+        "temperatura_ambiente": "J5",
+        "temperatura_massa": "K5",
+        "friccao_estimada": "L5",
+        "dobras_qtd": "M5",
+        "intervalo_dobras_min": "N5",
+        "descanso_apos_dobras_min": "O5"
+      },
+      "formulas_originais": {
+        "agua_calculada_kg": "=IF(OR(D5=\"\",E5=\"\"),\"\",D5*E5)",
+        "friccao_estimada": "=IF(OR(I5=\"\",J5=\"\",K5=\"\"),\"\",3*K5-2*J5-I5)"
+      }
+    },
+    {
+      "id_fonte": 5,
+      "linha": 6,
+      "produto": "Tradicional",
+      "valores": {
+        "farinha_kg": 25,
+        "hidratacao_percentual": 80.0,
+        "agua_calculada_kg": 20,
+        "velocidade_1_min": 18,
+        "velocidade_2_min": 2,
+        "temperatura_agua": 5.9,
+        "temperatura_ambiente": 19,
+        "temperatura_massa": 21.9,
+        "friccao_estimada": 21.8,
+        "dobras_qtd": 3,
+        "intervalo_dobras_min": 30,
+        "descanso_apos_dobras_min": 60
+      },
+      "classificacao": {
+        "farinha_kg": "transcrito",
+        "hidratacao_percentual": "transcrito",
+        "agua_calculada_kg": "calculado",
+        "velocidade_1_min": "transcrito",
+        "velocidade_2_min": "transcrito",
+        "temperatura_agua": "transcrito",
+        "temperatura_ambiente": "transcrito",
+        "temperatura_massa": "transcrito",
+        "friccao_estimada": "calculado",
+        "dobras_qtd": "extrapolado",
+        "intervalo_dobras_min": "informado",
+        "descanso_apos_dobras_min": "extrapolado"
+      },
+      "fonte_original": "Img 3 (msg 15:57)",
+      "observacao_original": "Dobras a cada 30 min (informado por Caio); qtd 3 e descanso 60 min extrapolados dos lotes 7–10",
+      "notas": [
+        "A data do lote e os horários de início/fim do batimento não foram informados.",
+        "Água calculada a partir da farinha e da hidratação, não pesada neste registro.",
+        "Fricção estimada pela fórmula da planilha, que presume temperatura da farinha igual à do ambiente.",
+        "A quantidade de dobras e o descanso precisam de confirmação: as observações citam os lotes 7–10, mas a aba Lacunas menciona somente três lotes originais.",
+        "As observações deste registro dizem que três dobras e 60 minutos de descanso foram extrapolados de outros lotes."
+      ],
+      "celulas": {
+        "farinha_kg": "D6",
+        "hidratacao_percentual": "E6",
+        "agua_calculada_kg": "F6",
+        "velocidade_1_min": "G6",
+        "velocidade_2_min": "H6",
+        "temperatura_agua": "I6",
+        "temperatura_ambiente": "J6",
+        "temperatura_massa": "K6",
+        "friccao_estimada": "L6",
+        "dobras_qtd": "M6",
+        "intervalo_dobras_min": "N6",
+        "descanso_apos_dobras_min": "O6"
+      },
+      "formulas_originais": {
+        "agua_calculada_kg": "=IF(OR(D6=\"\",E6=\"\"),\"\",D6*E6)",
+        "friccao_estimada": "=IF(OR(I6=\"\",J6=\"\",K6=\"\"),\"\",3*K6-2*J6-I6)"
+      }
+    },
+    {
+      "id_fonte": 6,
+      "linha": 7,
+      "produto": "Grãos",
+      "valores": {
+        "farinha_kg": 25,
+        "hidratacao_percentual": 85.0,
+        "agua_calculada_kg": 21.25,
+        "velocidade_1_min": 19,
+        "velocidade_2_min": 2,
+        "temperatura_agua": 7.3,
+        "temperatura_ambiente": 18,
+        "temperatura_massa": 23,
+        "friccao_estimada": 25.7,
+        "dobras_qtd": 3,
+        "intervalo_dobras_min": 30,
+        "descanso_apos_dobras_min": 60
+      },
+      "classificacao": {
+        "farinha_kg": "transcrito",
+        "hidratacao_percentual": "transcrito",
+        "agua_calculada_kg": "calculado",
+        "velocidade_1_min": "transcrito",
+        "velocidade_2_min": "transcrito",
+        "temperatura_agua": "transcrito",
+        "temperatura_ambiente": "transcrito",
+        "temperatura_massa": "transcrito",
+        "friccao_estimada": "calculado",
+        "dobras_qtd": "extrapolado",
+        "intervalo_dobras_min": "informado",
+        "descanso_apos_dobras_min": "extrapolado"
+      },
+      "fonte_original": "Img 3 (msg 15:57)",
+      "observacao_original": "Dobras a cada 30 min (informado por Caio); qtd 3 e descanso 60 min extrapolados dos lotes 7–10",
+      "notas": [
+        "A data do lote e os horários de início/fim do batimento não foram informados.",
+        "Água calculada a partir da farinha e da hidratação, não pesada neste registro.",
+        "Fricção estimada pela fórmula da planilha, que presume temperatura da farinha igual à do ambiente.",
+        "A quantidade de dobras e o descanso precisam de confirmação: as observações citam os lotes 7–10, mas a aba Lacunas menciona somente três lotes originais.",
+        "As observações deste registro dizem que três dobras e 60 minutos de descanso foram extrapolados de outros lotes."
+      ],
+      "celulas": {
+        "farinha_kg": "D7",
+        "hidratacao_percentual": "E7",
+        "agua_calculada_kg": "F7",
+        "velocidade_1_min": "G7",
+        "velocidade_2_min": "H7",
+        "temperatura_agua": "I7",
+        "temperatura_ambiente": "J7",
+        "temperatura_massa": "K7",
+        "friccao_estimada": "L7",
+        "dobras_qtd": "M7",
+        "intervalo_dobras_min": "N7",
+        "descanso_apos_dobras_min": "O7"
+      },
+      "formulas_originais": {
+        "agua_calculada_kg": "=IF(OR(D7=\"\",E7=\"\"),\"\",D7*E7)",
+        "friccao_estimada": "=IF(OR(I7=\"\",J7=\"\",K7=\"\"),\"\",3*K7-2*J7-I7)"
+      }
+    },
+    {
+      "id_fonte": 7,
+      "linha": 8,
+      "produto": "Integral",
+      "valores": {
+        "farinha_kg": 25,
+        "hidratacao_percentual": 85.0,
+        "agua_calculada_kg": 21.25,
+        "velocidade_1_min": 16,
+        "velocidade_2_min": 3,
+        "temperatura_agua": 5.9,
+        "temperatura_ambiente": 21,
+        "temperatura_massa": 19.6,
+        "friccao_estimada": 10.9,
+        "dobras_qtd": 3,
+        "intervalo_dobras_min": 30,
+        "descanso_apos_dobras_min": 60
+      },
+      "classificacao": {
+        "farinha_kg": "transcrito",
+        "hidratacao_percentual": "transcrito",
+        "agua_calculada_kg": "calculado",
+        "velocidade_1_min": "transcrito",
+        "velocidade_2_min": "transcrito",
+        "temperatura_agua": "transcrito",
+        "temperatura_ambiente": "transcrito",
+        "temperatura_massa": "transcrito",
+        "friccao_estimada": "calculado",
+        "dobras_qtd": "a_confirmar",
+        "intervalo_dobras_min": "informado",
+        "descanso_apos_dobras_min": "a_confirmar"
+      },
+      "fonte_original": "Img 4 (msg 15:57)",
+      "observacao_original": "Massa 2°C abaixo dos demais lotes de Integral — batimento mais curto (16 min). Intervalo/descanso informados por Caio",
+      "notas": [
+        "A data do lote e os horários de início/fim do batimento não foram informados.",
+        "Água calculada a partir da farinha e da hidratação, não pesada neste registro.",
+        "Fricção estimada pela fórmula da planilha, que presume temperatura da farinha igual à do ambiente.",
+        "A quantidade de dobras e o descanso precisam de confirmação: as observações citam os lotes 7–10, mas a aba Lacunas menciona somente três lotes originais."
+      ],
+      "celulas": {
+        "farinha_kg": "D8",
+        "hidratacao_percentual": "E8",
+        "agua_calculada_kg": "F8",
+        "velocidade_1_min": "G8",
+        "velocidade_2_min": "H8",
+        "temperatura_agua": "I8",
+        "temperatura_ambiente": "J8",
+        "temperatura_massa": "K8",
+        "friccao_estimada": "L8",
+        "dobras_qtd": "M8",
+        "intervalo_dobras_min": "N8",
+        "descanso_apos_dobras_min": "O8"
+      },
+      "formulas_originais": {
+        "agua_calculada_kg": "=IF(OR(D8=\"\",E8=\"\"),\"\",D8*E8)",
+        "friccao_estimada": "=IF(OR(I8=\"\",J8=\"\",K8=\"\"),\"\",3*K8-2*J8-I8)"
+      }
+    },
+    {
+      "id_fonte": 8,
+      "linha": 9,
+      "produto": "Nozes",
+      "valores": {
+        "farinha_kg": 25,
+        "hidratacao_percentual": 80.0,
+        "agua_calculada_kg": 20,
+        "velocidade_1_min": null,
+        "velocidade_2_min": null,
+        "temperatura_agua": 8.8,
+        "temperatura_ambiente": 19,
+        "temperatura_massa": 20.4,
+        "friccao_estimada": 14.4,
+        "dobras_qtd": 3,
+        "intervalo_dobras_min": 30,
+        "descanso_apos_dobras_min": 60
+      },
+      "classificacao": {
+        "farinha_kg": "transcrito",
+        "hidratacao_percentual": "transcrito",
+        "agua_calculada_kg": "calculado",
+        "velocidade_1_min": "transcrito",
+        "velocidade_2_min": "transcrito",
+        "temperatura_agua": "transcrito",
+        "temperatura_ambiente": "transcrito",
+        "temperatura_massa": "transcrito",
+        "friccao_estimada": "calculado",
+        "dobras_qtd": "a_confirmar",
+        "intervalo_dobras_min": "informado",
+        "descanso_apos_dobras_min": "a_confirmar"
+      },
+      "fonte_original": "Img 4 (msg 15:57)",
+      "observacao_original": "Sem tempos de batimento registrados. Intervalo/descanso informados por Caio",
+      "notas": [
+        "A data do lote e os horários de início/fim do batimento não foram informados.",
+        "Água calculada a partir da farinha e da hidratação, não pesada neste registro.",
+        "Fricção estimada pela fórmula da planilha, que presume temperatura da farinha igual à do ambiente.",
+        "A quantidade de dobras e o descanso precisam de confirmação: as observações citam os lotes 7–10, mas a aba Lacunas menciona somente três lotes originais.",
+        "Tempos de batimento não informados."
+      ],
+      "celulas": {
+        "farinha_kg": "D9",
+        "hidratacao_percentual": "E9",
+        "agua_calculada_kg": "F9",
+        "velocidade_1_min": "G9",
+        "velocidade_2_min": "H9",
+        "temperatura_agua": "I9",
+        "temperatura_ambiente": "J9",
+        "temperatura_massa": "K9",
+        "friccao_estimada": "L9",
+        "dobras_qtd": "M9",
+        "intervalo_dobras_min": "N9",
+        "descanso_apos_dobras_min": "O9"
+      },
+      "formulas_originais": {
+        "agua_calculada_kg": "=IF(OR(D9=\"\",E9=\"\"),\"\",D9*E9)",
+        "friccao_estimada": "=IF(OR(I9=\"\",J9=\"\",K9=\"\"),\"\",3*K9-2*J9-I9)"
+      }
+    },
+    {
+      "id_fonte": 9,
+      "linha": 10,
+      "produto": "Integral",
+      "valores": {
+        "farinha_kg": null,
+        "hidratacao_percentual": null,
+        "agua_calculada_kg": null,
+        "velocidade_1_min": 24,
+        "velocidade_2_min": 2,
+        "temperatura_agua": 5.4,
+        "temperatura_ambiente": 20,
+        "temperatura_massa": 21.7,
+        "friccao_estimada": 19.7,
+        "dobras_qtd": 3,
+        "intervalo_dobras_min": 30,
+        "descanso_apos_dobras_min": 60
+      },
+      "classificacao": {
+        "farinha_kg": "transcrito",
+        "hidratacao_percentual": "transcrito",
+        "agua_calculada_kg": "calculado",
+        "velocidade_1_min": "transcrito",
+        "velocidade_2_min": "transcrito",
+        "temperatura_agua": "transcrito",
+        "temperatura_ambiente": "transcrito",
+        "temperatura_massa": "transcrito",
+        "friccao_estimada": "calculado",
+        "dobras_qtd": "a_confirmar",
+        "intervalo_dobras_min": "informado",
+        "descanso_apos_dobras_min": "a_confirmar"
+      },
+      "fonte_original": "Img 5 (caderno)",
+      "observacao_original": "Sem kg/hidratação. Dobras 14:02 / 14:32 / 15:02 (2ª dobra rasurada, inferida 14:32 pelo intervalo de 30 min)",
+      "notas": [
+        "A data do lote e os horários de início/fim do batimento não foram informados.",
+        "Água calculada a partir da farinha e da hidratação, não pesada neste registro.",
+        "Fricção estimada pela fórmula da planilha, que presume temperatura da farinha igual à do ambiente.",
+        "A quantidade de dobras e o descanso precisam de confirmação: as observações citam os lotes 7–10, mas a aba Lacunas menciona somente três lotes originais.",
+        "Farinha e hidratação não informadas; o tempo não pode ser atribuído a um lote de 25 kg.",
+        "A segunda dobra às 14:32 é uma inferência descrita na planilha; os horários de dobra foram preservados na observação original."
+      ],
+      "celulas": {
+        "farinha_kg": "D10",
+        "hidratacao_percentual": "E10",
+        "agua_calculada_kg": "F10",
+        "velocidade_1_min": "G10",
+        "velocidade_2_min": "H10",
+        "temperatura_agua": "I10",
+        "temperatura_ambiente": "J10",
+        "temperatura_massa": "K10",
+        "friccao_estimada": "L10",
+        "dobras_qtd": "M10",
+        "intervalo_dobras_min": "N10",
+        "descanso_apos_dobras_min": "O10"
+      },
+      "formulas_originais": {
+        "agua_calculada_kg": "=IF(OR(D10=\"\",E10=\"\"),\"\",D10*E10)",
+        "friccao_estimada": "=IF(OR(I10=\"\",J10=\"\",K10=\"\"),\"\",3*K10-2*J10-I10)"
+      }
+    },
+    {
+      "id_fonte": 10,
+      "linha": 11,
+      "produto": "Grãos",
+      "valores": {
+        "farinha_kg": null,
+        "hidratacao_percentual": null,
+        "agua_calculada_kg": null,
+        "velocidade_1_min": 29,
+        "velocidade_2_min": 2,
+        "temperatura_agua": 7.3,
+        "temperatura_ambiente": 21,
+        "temperatura_massa": 23,
+        "friccao_estimada": 19.7,
+        "dobras_qtd": 3,
+        "intervalo_dobras_min": 30,
+        "descanso_apos_dobras_min": 60
+      },
+      "classificacao": {
+        "farinha_kg": "transcrito",
+        "hidratacao_percentual": "transcrito",
+        "agua_calculada_kg": "calculado",
+        "velocidade_1_min": "transcrito",
+        "velocidade_2_min": "transcrito",
+        "temperatura_agua": "transcrito",
+        "temperatura_ambiente": "transcrito",
+        "temperatura_massa": "transcrito",
+        "friccao_estimada": "calculado",
+        "dobras_qtd": "a_confirmar",
+        "intervalo_dobras_min": "informado",
+        "descanso_apos_dobras_min": "a_confirmar"
+      },
+      "fonte_original": "Img 5 (caderno)",
+      "observacao_original": "Sem kg/hidratação. Dobras 14:32 / 15:02 / 15:32",
+      "notas": [
+        "A data do lote e os horários de início/fim do batimento não foram informados.",
+        "Água calculada a partir da farinha e da hidratação, não pesada neste registro.",
+        "Fricção estimada pela fórmula da planilha, que presume temperatura da farinha igual à do ambiente.",
+        "A quantidade de dobras e o descanso precisam de confirmação: as observações citam os lotes 7–10, mas a aba Lacunas menciona somente três lotes originais.",
+        "Farinha e hidratação não informadas; o tempo não pode ser atribuído a um lote de 25 kg."
+      ],
+      "celulas": {
+        "farinha_kg": "D11",
+        "hidratacao_percentual": "E11",
+        "agua_calculada_kg": "F11",
+        "velocidade_1_min": "G11",
+        "velocidade_2_min": "H11",
+        "temperatura_agua": "I11",
+        "temperatura_ambiente": "J11",
+        "temperatura_massa": "K11",
+        "friccao_estimada": "L11",
+        "dobras_qtd": "M11",
+        "intervalo_dobras_min": "N11",
+        "descanso_apos_dobras_min": "O11"
+      },
+      "formulas_originais": {
+        "agua_calculada_kg": "=IF(OR(D11=\"\",E11=\"\"),\"\",D11*E11)",
+        "friccao_estimada": "=IF(OR(I11=\"\",J11=\"\",K11=\"\"),\"\",3*K11-2*J11-I11)"
+      }
+    }
+  ]
+}

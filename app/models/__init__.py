@@ -20,6 +20,7 @@ from app.models.patrimonio import *  # noqa: F401, F403
 from app.models.pedidos import *  # noqa: F401, F403
 from app.models.producao import *  # noqa: F401, F403
 from app.models.producao_diario import *  # noqa: F401, F403
+from app.models.producao_diario_referencia import *  # noqa: F401, F403
 from app.models.projetos import *  # noqa: F401, F403
 from app.models.rh import *  # noqa: F401, F403
 from app.models.rh_carreira import *  # noqa: F401, F403

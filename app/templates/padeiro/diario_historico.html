@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Histórico — Diário da produção</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/padeiro-diario.css', v='20260910a') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/padeiro-diario.css', v='20260910b') }}">
 </head>
 <body>
 <a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
@@ -22,6 +22,7 @@
     <div class="field"><label for="fim">Até</label><input type="date" id="fim" name="fim" value="{{ fim.isoformat() }}" required></div>
     <button type="submit" class="button">Consultar</button>
   </form>
+  <aside class="reference-link" aria-label="Históricos sem data da planilha"><div><a href="{{ url_for('padeiro.diario_referencias') }}">Históricos da planilha Sourdough</a><p>{% if contagem_referencias | default(0) %}{{ contagem_referencias }} registros sem data de lote.{% else %}Dados da planilha sem data de lote.{% endif %} A consulta desses históricos é independente do período acima.</p></div><a class="button" href="{{ url_for('padeiro.diario_referencias') }}">Ver históricos</a></aside>
   <section class="page-section" aria-labelledby="historico-titulo">
     <div class="section-heading"><div><h2 id="historico-titulo">{{ inicio.strftime('%d/%m/%Y') }} a {{ fim.strftime('%d/%m/%Y') }}</h2><p class="section-help">{{ lotes | length }} {{ 'lote registrado' if lotes | length == 1 else 'lotes registrados' }}</p></div>
       {% if lotes %}<a class="button" href="{{ url_for('padeiro.diario_exportar', inicio=inicio.isoformat(), fim=fim.isoformat()) }}">Baixar planilha CSV</a>{% endif %}

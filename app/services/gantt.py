@@ -195,6 +195,7 @@ def montar_gantt(dia):
     def _passos(etapas, nf):
         # Etapas ATIVAS escalam com o nº de fornadas; passiva fica na duração base.
         return [{'nome': e.nome, 'equip': e.equipamento, 'ativa': bool(e.ativa),
+                 'descricao': e.descricao or '',
                  'dur': int(e.duracao_min or 0) * (nf if e.ativa else 1)}
                 for e in etapas]
 
@@ -276,6 +277,7 @@ def montar_gantt(dia):
             ativa = bool(e.ativa)
             nome = 'Amassar base' if e.equipamento == 'amassadeira' else e.nome
             trunk_passos.append({'nome': nome, 'equip': e.equipamento, 'ativa': ativa,
+                                 'descricao': e.descricao or '',
                                  'dur': int(e.duracao_min or 0) * (base_nf if ativa else 1)})
 
         # cascata em ordem: incrementos de água (tronco) e retiradas; cada
@@ -361,6 +363,7 @@ def montar_gantt(dia):
             prod['destino'] = '%s %s' % (_icone(p['equip'], False),
                                          _dur_label(p['dur']))
             prod['destino_etapa'] = p['nome']
+            prod['destino_descricao'] = p.get('descricao', '')
             j['ptr'] = len(j['passos'])      # encerra a receita no dia
             continue
 
@@ -374,6 +377,7 @@ def montar_gantt(dia):
         prod['fim_min'] = max(prod['fim_min'], fim)
         prod['tarefas'].append({
             'etapa': p['nome'], 'equip': p['equip'], 'ativa': p['ativa'],
+            'descricao': p.get('descricao', ''),
             'recurso': rec or 'descanso', 'retirada': bool(p.get('desbloqueia')),
             'ini': ini, 'fim': fim, 'dur': p['dur'],
             'ini_hhmm': _hhmm(DIA_INI + ini), 'fim_hhmm': _hhmm(DIA_INI + fim),

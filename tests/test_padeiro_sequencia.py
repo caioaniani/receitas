@@ -122,6 +122,17 @@ def test_registro_leva_ao_item_e_dia_selecionados(app, admin_user):
                      itens[0], dia_selecionado)
 
 
+def test_sequencia_mostra_instrucao_da_ficha_sem_executar_html(app, admin_user):
+    receita = _receita('Pão com instrução')
+    receita.etapas[0].descricao = 'Bater na velocidade 1 por 18 minutos.\nConferir <massa> antes de seguir.'
+    db.session.commit()
+    _plano(DIA, [receita])
+    cliente = _login(app, admin_user)
+    html = _sequencia(cliente)
+    assert 'Bater na velocidade 1 por 18 minutos.\nConferir &lt;massa&gt; antes de seguir.' in html
+    assert 'Conferir <massa>' not in html
+
+
 def test_continuacao_registra_item_da_origem_mesmo_com_receita_repetida_hoje(
         app, admin_user):
     receita = _receita('Sourdough da madrugada', etapas=[

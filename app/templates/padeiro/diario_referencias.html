@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Históricos da planilha — Diário da produção</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/padeiro-diario.css', v='20260910b') }}">
+</head>
+<body>
+<a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
+<header class="diario-header">
+  <div><span class="eyebrow">Diário da produção · Sourdough</span><h1>Históricos da planilha</h1></div>
+  <nav aria-label="Navegação do diário"><a href="{{ url_for('padeiro.diario_historico') }}">Registros por dia</a><a class="button" href="{{ url_for('padeiro.diario_index') }}">Voltar aos lotes</a></nav>
+</header>
+<main id="conteudo">
+  {% for categoria, mensagem in get_flashed_messages(with_categories=true) %}
+  <div class="flash {{ categoria }}" role="{{ 'alert' if categoria in ('error', 'danger', 'warning') else 'status' }}">{{ mensagem }}</div>
+  {% endfor %}
+  <div class="reference-intro">
+    <p class="page-intro">Dados de <strong>producao_sourdough_padrao.xlsx</strong> para comparar com as próximas produções.</p>
+    <p class="inline-notice"><strong>Data dos lotes não informada.</strong> Estes históricos ficam disponíveis independentemente do período consultado no diário.</p>
+  </div>
+  {% if pode_importar and qtd_pendentes %}
+  <section class="panel reference-import" aria-labelledby="importar-titulo">
+    <div><h2 id="importar-titulo">Incluir os históricos no diário</h2><p class="section-help">{{ qtd_pendentes }} {{ 'registro da planilha disponível' if qtd_pendentes == 1 else 'registros da planilha disponíveis' }}. Os valores serão guardados com sua origem e classificação.</p></div>
+    <form method="post" action="{{ url_for('padeiro.diario_referencias_importar') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="button primary">Incluir registros da planilha</button></form>
+  </section>
+  {% endif %}
+
+  {% set classificacoes = {'transcrito': 'Transcrito', 'calculado': 'Calculado', 'extrapolado': 'Extrapolado', 'informado': 'Informado', 'a_confirmar': 'A confirmar na fonte'} %}
+  {% macro medida(dados, chave, rotulo, unidade) %}
+  {% set valor = dados.valores.get(chave) %}
+  {% set classificacao = dados.classificacao.get(chave) %}
+  <div class="reference-measure">
+    <dt>{{ rotulo }}</dt>
+    <dd>{% if valor is not none %}<strong>{{ valor | string | replace('.', ',') }}</strong>{% if unidade %} <span class="unit">{{ unidade }}</span>{% endif %}{% else %}<span class="muted">Não informado</span>{% endif %}
+      {% if valor is not none and classificacao %}<span class="source-label {{ classificacao }}">{{ classificacoes.get(classificacao, classificacao | replace('_', ' ') | capitalize) }}</span>{% endif %}
+    </dd>
+  </div>
+  {% endmacro %}
+
+  <section class="page-section" aria-labelledby="referencias-titulo">
+    <div class="section-heading"><div><h2 id="referencias-titulo">{{ referencias | length }} {{ 'registro disponível' if referencias | length == 1 else 'registros disponíveis' }}</h2><p class="section-help">Transcrições, valores informados, cálculos e extrapolações aparecem identificados em cada registro.</p></div>
+      {% if referencias %}<a class="button" href="{{ url_for('padeiro.diario_referencias_exportar') }}">Baixar históricos em CSV</a>{% endif %}
+    </div>
+    {% if referencias %}
+    <div class="reference-grid">
+      {% for referencia in referencias %}
+      {% set dados = referencia.dados %}
+      <article class="panel reference-card" aria-labelledby="referencia-{{ dados.id_fonte }}">
+        <header><span class="eyebrow">Registro {{ dados.id_fonte }} · linha {{ dados.linha }} da planilha</span><h3 id="referencia-{{ dados.id_fonte }}">{{ dados.produto }}</h3></header>
+        <dl class="reference-measures key-measures">
+          {{ medida(dados, 'farinha_kg', 'Farinha', 'kg') }}
+          {{ medida(dados, 'velocidade_1_min', 'Batimento · velocidade 1', 'min') }}
+          {{ medida(dados, 'velocidade_2_min', 'Batimento · velocidade 2', 'min') }}
+          {{ medida(dados, 'temperatura_massa', 'Temperatura da massa', '°C') }}
+        </dl>
+        <section class="reference-protocol" aria-labelledby="protocolo-{{ dados.id_fonte }}"><h4 id="protocolo-{{ dados.id_fonte }}">Dobras e descanso</h4>
+          <dl class="reference-measures">
+            {{ medida(dados, 'dobras_qtd', 'Quantidade de dobras', '') }}
+            {{ medida(dados, 'intervalo_dobras_min', 'Intervalo entre dobras', 'min') }}
+            {{ medida(dados, 'descanso_apos_dobras_min', 'Descanso após as dobras', 'min') }}
+          </dl>
+        </section>
+        <details class="form-details"><summary>Outros dados e notas da planilha</summary>
+          <dl class="reference-measures">
+            {{ medida(dados, 'hidratacao_percentual', 'Hidratação', '%') }}
+            {{ medida(dados, 'temperatura_agua', 'Temperatura da água', '°C') }}
+            {{ medida(dados, 'temperatura_ambiente', 'Temperatura do ambiente', '°C') }}
+          </dl>
+          <section class="reference-derived" aria-labelledby="calculos-{{ dados.id_fonte }}"><h4 id="calculos-{{ dados.id_fonte }}">Cálculos e estimativas da planilha</h4><p class="field-help">Estes valores são calculados ou estimados, sem medição direta registrada.</p>
+            <dl class="reference-measures">
+              {{ medida(dados, 'agua_calculada_kg', 'Água calculada', 'kg') }}
+              {{ medida(dados, 'friccao_estimada', 'Fricção estimada', '°C') }}
+            </dl>
+          </section>
+          <div class="reference-original"><h4>Textos originais</h4>
+            {% if dados.fonte_original %}<p><strong>Fonte</strong></p><p class="saved-note">{{ dados.fonte_original }}</p>{% endif %}
+            {% if dados.observacao_original %}<p><strong>Observação</strong></p><p class="saved-note">{{ dados.observacao_original }}</p>{% endif %}
+            {% if not dados.fonte_original and not dados.observacao_original %}<p class="field-help">Sem notas adicionais na planilha.</p>{% endif %}
+          </div>
+          {% if dados.notas %}<div class="reference-notes"><h4>Notas sobre os dados</h4><ul>{% for nota in dados.notas %}<li>{{ nota }}</li>{% endfor %}</ul></div>{% endif %}
+        </details>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}<div class="panel empty-state"><p>Os históricos da planilha ainda não foram incluídos no diário.</p></div>{% endif %}
+  </section>
+  <p class="page-note">Os históricos servem para revisar o processo junto com as novas medições. A inclusão preserva os dados da planilha e não altera os tempos da receita ou da sequência de produção.</p>
+</main>
+</body>
+</html>
