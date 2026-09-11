@@ -3,76 +3,9 @@
 {% block title %}Estoque da Loja{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="page-title mb-0"><i class="bi bi-box-seam"></i> Estoque da Loja</h1>
-  {% if current_user.is_admin() %}
-  <a href="{{ url_for('pedidos.estoque_loja_saude') }}" class="btn btn-outline-dark btn-sm"
-     title="Diagnóstico: órfãos/pendentes, última conferência e saída por loja">
-    <i class="bi bi-heart-pulse"></i> Saúde por loja
-  </a>
-  {% endif %}
-</div>
-
-{% if current_user.is_admin() %}
-<form method="GET" class="mb-3 d-flex align-items-center gap-2">
-    <select name="loja" class="form-select form-select-sm" style="max-width:250px;" onchange="this.form.submit()">
-        <option value="">Selecione uma loja...</option>
-        {% for l in lojas %}
-        <option value="{{ l.id }}" {% if sel_loja == l.id %}selected{% endif %}>{{ l.nome }}</option>
-        {% endfor %}
-    </select>
-</form>
-{% endif %}
+{% include "pedidos/_estoque_loja_toolbar.html" %}
 
 {% if loja %}
-<div class="d-flex justify-content-between align-items-center mb-2">
-    <p class="text-muted mb-0">Estoque atual de <strong>{{ loja.nome }}</strong></p>
-    {% if current_user.is_admin() %}
-    <div class="d-flex gap-2">
-        <a href="{{ url_for('pedidos.precos_loja', loja_id=loja.id) }}" class="btn btn-outline-dark btn-sm">
-            <i class="bi bi-tag"></i> Precos
-        </a>
-        <a href="{{ url_for('pedidos.estoque_loja_entrada_lote', loja=loja.id) }}" class="btn btn-outline-primary btn-sm">
-            <i class="bi bi-box-arrow-in-down"></i> Entrada em lote
-        </a>
-        <a href="{{ url_for('pedidos.estoque_loja_balanco_template') }}" class="btn btn-outline-success btn-sm"
-           title="Baixa a planilha em branco (todos os itens que a loja pede) pra alguém preencher a contagem física">
-            <i class="bi bi-file-earmark-spreadsheet"></i> Planilha de contagem
-        </a>
-        <a href="{{ url_for('pedidos.estoque_loja_saida_lote', loja=loja.id) }}" class="btn btn-outline-warning btn-sm">
-            <i class="bi bi-box-arrow-up"></i> Saída em lote
-        </a>
-        <a href="{{ url_for('pedidos.conferencia', loja=loja.id) }}" class="btn btn-outline-warning btn-sm"
-           title="Bater o estoque físico com o sistema (item a item na tela)">
-            <i class="bi bi-clipboard-check"></i> Conferência
-        </a>
-        <a href="{{ url_for('pedidos.estoque_loja_conferencia_lote', loja=loja.id) }}" class="btn btn-outline-warning btn-sm"
-           title="Bater o estoque colando a contagem inteira de uma vez (seta o valor contado)">
-            <i class="bi bi-clipboard-data"></i> Conferência em lote
-        </a>
-        <a href="{{ url_for('pedidos.estoque_loja_historico', loja=loja.id) }}" class="btn btn-outline-secondary btn-sm"
-           title="Todas as movimentacoes desta loja">
-            <i class="bi bi-clock-history"></i> Historico
-        </a>
-        <a href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}" class="btn btn-outline-dark btn-sm"
-           title="Mapeamentos dos nomes digitados em Saída em Lote">
-            <i class="bi bi-link-45deg"></i> Mapeamentos saída
-        </a>
-        <a href="{{ url_for('pedidos.vendas_manuais', loja_id=loja.id) }}" class="btn btn-outline-info btn-sm"
-           title="Lance vendas de loja sem PDV API (so historico, nao baixa estoque)">
-            <i class="bi bi-cash-stack"></i> Vendas manuais
-        </a>
-        <a href="{{ url_for('pedidos.sugerir_pedido', loja_id=loja.id) }}" class="btn btn-success btn-sm"
-           title="Sugere pedido baseado em vendas + estoque atual">
-            <i class="bi bi-magic"></i> Sugerir pedido
-        </a>
-        <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-ajuste">
-            <i class="bi bi-plus-slash-minus"></i> Entrada / Ajuste
-        </button>
-    </div>
-    {% endif %}
-</div>
-
 {% set pendentes = itens | selectattr('pendente') | list if itens else [] %}
 {% set vinculados = itens | rejectattr('pendente') | list if itens else [] %}
 
@@ -320,15 +253,15 @@
 {% endif %}
 
 {% if loja and current_user.is_admin() %}
-<div class="modal fade" id="modal-ajuste" tabindex="-1">
+<div class="modal fade" id="modal-ajuste" tabindex="-1" aria-labelledby="modal-ajuste-titulo">
     <div class="modal-dialog">
         <form method="POST" action="{{ url_for('pedidos.estoque_loja_ajuste') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="loja_id" value="{{ loja.id }}">
             <div class="modal-content">
                 <div class="modal-header bg-success text-white">
-                    <h6 class="modal-title"><i class="bi bi-plus-slash-minus"></i> Entrada / Ajuste de Estoque</h6>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <h6 class="modal-title" id="modal-ajuste-titulo"><i class="bi bi-plus-slash-minus" aria-hidden="true"></i> Entrada / Ajuste de Estoque</h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-2">
@@ -395,6 +328,20 @@
 {% block scripts %}
 {% if loja and current_user.is_admin() %}
 <script>
+(function () {
+    var modal = document.getElementById('modal-ajuste');
+    var menu = document.getElementById('estoque-mais');
+    if (!modal || !menu) return;
+    var abriuPeloMenu = false;
+    modal.addEventListener('show.bs.modal', function (event) {
+        abriuPeloMenu = !!(event.relatedTarget && event.relatedTarget.closest('#estoque-mais-menu'));
+    });
+    modal.addEventListener('hidden.bs.modal', function () {
+        // O item do dropdown fica oculto: devolve o foco ao botão visível.
+        if (abriuPeloMenu) menu.focus();
+        abriuPeloMenu = false;
+    });
+})();
 var vincReceitas = [
     {% for r in receitas %}
     {id: {{ r.id }}, nome: {{ r.nome|tojson }}, cat: {{ (r.categoria or '')|tojson }}},

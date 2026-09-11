@@ -1,0 +1,121 @@
+{# Somente navegação: mantém os destinos, permissões e formulários existentes. #}
+<style>
+  .estoque-toolbar { margin-bottom: 22px; }
+  .estoque-toolbar .page-title { margin: 0 0 18px; }
+  .estoque-toolbar__row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .estoque-toolbar__store { flex: 1 1 240px; max-width: 320px; margin: 0; }
+  .estoque-toolbar__store label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; }
+  .estoque-toolbar .form-select { min-height: 44px; font-size: 14px; }
+  .estoque-toolbar__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .estoque-toolbar .estoque-toolbar__action { min-height: 44px; padding: 10px 14px; font-size: 13px; white-space: nowrap; gap: 8px; }
+  .estoque-toolbar .dropdown-menu { min-width: 250px; max-width: calc(100vw - 32px); max-height: 65vh; overflow-y: auto; padding: 8px; }
+  .estoque-toolbar .dropdown-item { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 12px; font-size: 13px; white-space: normal; }
+  .estoque-toolbar .dropdown-item i { flex: 0 0 16px; }
+  .estoque-toolbar .dropdown-item { color: var(--v2-ink, var(--text-main, #212529)); }
+  .estoque-toolbar .dropdown-header { padding: 10px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+  .estoque-toolbar .dropdown-header { color: var(--v2-muted, var(--text-muted, #68736d)); }
+  .estoque-toolbar .dropdown-divider { margin: 6px 0; }
+  .ui-v2 .estoque-toolbar .btn-primary { color: var(--v2-surface); }
+  .ui-v2 .estoque-toolbar .btn-primary:hover { background: var(--v2-accent); border-color: var(--v2-accent); color: var(--v2-surface); filter: brightness(.95); }
+  .ui-v2 .estoque-toolbar .btn-outline-secondary { color: var(--v2-ink); border-color: var(--v2-line); }
+  .estoque-toolbar :is(a, button, select):focus-visible { outline: 3px solid var(--v2-accent, #275d45); outline-offset: 3px; }
+  @media (max-width: 575.98px) {
+    .estoque-toolbar .page-title { font-size: 30px; margin-bottom: 16px; }
+    .estoque-toolbar__store { flex-basis: 100%; max-width: none; }
+    .estoque-toolbar__actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+    .estoque-toolbar__count { grid-column: 1 / -1; }
+    .estoque-toolbar__action { width: 100%; justify-content: center; }
+    .estoque-toolbar .estoque-toolbar__count .dropdown-menu { width: 100%; }
+    .estoque-toolbar__more { justify-self: stretch; }
+  }
+</style>
+
+<header class="estoque-toolbar">
+  <h1 class="page-title">Estoque da loja</h1>
+  <div class="estoque-toolbar__row">
+    {% if current_user.is_admin() %}
+    <form method="GET" action="{{ url_for('pedidos.estoque_loja') }}" class="estoque-toolbar__store">
+      <label for="estoque-loja-seletor">Loja</label>
+      <select id="estoque-loja-seletor" name="loja" class="form-select" onchange="this.form.submit()">
+        <option value="">Selecione uma loja…</option>
+        {% for l in lojas %}
+        <option value="{{ l.id }}" {% if sel_loja == l.id %}selected{% endif %}>{{ l.nome }}</option>
+        {% endfor %}
+      </select>
+      <noscript><button type="submit" class="btn btn-outline-secondary mt-2">Ver estoque</button></noscript>
+    </form>
+    <nav class="estoque-toolbar__actions" aria-label="Ações do estoque">
+      {% if loja %}
+      <div class="dropdown estoque-toolbar__count">
+        <button type="button" class="btn btn-primary dropdown-toggle estoque-toolbar__action"
+                id="estoque-conferir" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="estoque-conferir-menu">
+          <i class="bi bi-clipboard-check" aria-hidden="true"></i> Conferir estoque
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" id="estoque-conferir-menu" aria-labelledby="estoque-conferir">
+          <li><a class="dropdown-item" href="{{ url_for('pedidos.conferencia', loja=loja.id) }}">
+            <i class="bi bi-ui-checks" aria-hidden="true"></i> Contar na tela
+          </a></li>
+          <li><a class="dropdown-item" href="{{ url_for('pedidos.estoque_loja_conferencia_lote', loja=loja.id) }}">
+            <i class="bi bi-clipboard-data" aria-hidden="true"></i> Colar contagem em lote
+          </a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="{{ url_for('pedidos.estoque_loja_balanco_template') }}">
+            <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Baixar planilha de contagem
+          </a></li>
+        </ul>
+      </div>
+      <a href="{{ url_for('pedidos.sugerir_pedido', loja_id=loja.id) }}"
+         class="btn btn-outline-secondary estoque-toolbar__action">
+        <i class="bi bi-magic" aria-hidden="true"></i> Sugerir pedido
+      </a>
+      {% endif %}
+      <div class="dropdown estoque-toolbar__more">
+        <button type="button" class="btn btn-outline-secondary dropdown-toggle estoque-toolbar__action"
+                id="estoque-mais" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="estoque-mais-menu">
+          <i class="bi bi-three-dots" aria-hidden="true"></i> Mais ações
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" id="estoque-mais-menu" aria-labelledby="estoque-mais">
+          {% if loja %}
+          <li><h2 class="dropdown-header">Movimentar estoque</h2></li>
+          <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#modal-ajuste">
+            <i class="bi bi-plus-slash-minus" aria-hidden="true"></i> Entrada / Ajuste
+          </button></li>
+          <li><a class="dropdown-item" href="{{ url_for('pedidos.estoque_loja_entrada_lote', loja=loja.id) }}">
+            <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Entrada em lote
+          </a></li>
+          <li><a class="dropdown-item" href="{{ url_for('pedidos.estoque_loja_saida_lote', loja=loja.id) }}">
+            <i class="bi bi-box-arrow-up" aria-hidden="true"></i> Saída em lote
+          </a></li>
+          <li><a class="dropdown-item" href="{{ url_for('pedidos.vendas_manuais', loja_id=loja.id) }}"
+                 title="Registra o histórico de vendas; não altera o saldo de estoque">
+            <i class="bi bi-cash-stack" aria-hidden="true"></i> Vendas manuais
+          </a></li>
+          <li><hr class="dropdown-divider"></li>
+          {% endif %}
+          <li><h2 class="dropdown-header">Consultar</h2></li>
+          {% if loja %}
+          <li><a class="dropdown-item" href="{{ url_for('pedidos.estoque_loja_historico', loja=loja.id) }}">
+            <i class="bi bi-clock-history" aria-hidden="true"></i> Histórico
+          </a></li>
+          {% endif %}
+          <li><a class="dropdown-item" href="{{ url_for('pedidos.estoque_loja_saude') }}">
+            <i class="bi bi-heart-pulse" aria-hidden="true"></i> Saúde por loja
+          </a></li>
+          {% if loja %}
+          <li><hr class="dropdown-divider"></li>
+          <li><h2 class="dropdown-header">Configurar</h2></li>
+          <li><a class="dropdown-item" href="{{ url_for('pedidos.precos_loja', loja_id=loja.id) }}">
+            <i class="bi bi-tag" aria-hidden="true"></i> Preços
+          </a></li>
+          <li><a class="dropdown-item" href="{{ url_for('pedidos.estoque_loja_mapeamentos') }}">
+            <i class="bi bi-link-45deg" aria-hidden="true"></i> Mapeamentos saída
+          </a></li>
+          {% endif %}
+        </ul>
+      </div>
+    </nav>
+    {% elif loja %}
+    <p class="text-muted mb-0">{{ loja.nome }}</p>
+    {% endif %}
+  </div>
+</header>
