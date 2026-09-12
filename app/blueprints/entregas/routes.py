@@ -737,6 +737,9 @@ def api_painel_status(code):
         return jsonify(ok=False, erro='status invalido'), 400
 
     uid = current_user.id if current_user.is_authenticated else None
+    if novo_status == 'entregue':
+        from app.services.saida_producao_site import registrar_por_codigo
+        registrar_por_codigo(code, 'painel_entregas', uid)
     s = PainelPedidoStatus.query.filter_by(pedido_code=code).first()
     if s:
         # Nao regride de pronto/entregue pra visto por um clique acidental de
@@ -1829,6 +1832,8 @@ def marcar_entrega_staff(code):
         return jsonify(ok=False, erro='atribuicao nao encontrada'), 404
     if (atrib.status or 'pendente') == 'entregue':
         return jsonify(ok=True, ja_estava=True)
+    from app.services.saida_producao_site import registrar_por_codigo
+    registrar_por_codigo(code, 'entrega_admin', current_user.id)
     atrib.status = 'entregue'
     atrib.entregue_em = agora()
     atrib.motivo_falha = None
@@ -2221,6 +2226,7 @@ def sincronizar_entregues():
     executar = request.args.get('executar') == '1'
     if executar:
         for p in alvo:
+            # Conciliação histórica de status: não representa nova saída física.
             p.status = 'entregue'
             s = PainelPedidoStatus.query.filter_by(
                 pedido_code=p.codigo).first()

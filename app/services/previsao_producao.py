@@ -668,7 +668,7 @@ def _demanda_firme_por_dia(inicio, fim, receitas):
     # não pra produzir; item sob encomenda de cortesia é produzido pro
     # pedido como qualquer outro, e os tipos venda_site_divulgacao* estão
     # fora de VENDA_TIPOS_DEMANDA, então não há dupla contagem).
-    from app.models import PedidoOnline, PedidoOnlineItem
+    from app.models import PedidoOnline, PedidoOnlineItem, SaidaProducaoSite
     from app.services.loja_estoque_reserva import composicao_escolhida
     enc_rows = (db.session.query(PedidoOnlineItem, PedidoOnline.data_entrega)
                 .join(PedidoOnline,
@@ -676,6 +676,8 @@ def _demanda_firme_por_dia(inicio, fim, receitas):
                 .filter(PedidoOnline.status.in_(
                             ('pago', 'em_preparo', 'a_caminho',
                              'divulgacao')),
+                        ~db.session.query(SaidaProducaoSite.pedido_item_id)
+                        .filter(SaidaProducaoSite.pedido_item_id == PedidoOnlineItem.id).exists(),
                         PedidoOnline.data_entrega.isnot(None),
                         PedidoOnline.data_entrega >= inicio,
                         PedidoOnline.data_entrega <= fim)

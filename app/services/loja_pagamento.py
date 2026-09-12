@@ -401,6 +401,9 @@ def reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
     db.session.refresh(pedido, with_for_update=True)
     if pedido.status != 'pago':
         return False, 'Só dá pra reduzir item de um pedido PAGO.'
+    from app.services.saida_producao_site import ja_saiu
+    if ja_saiu(pedido.id):
+        return False, 'Este pedido já saiu da produção. Confira a devolução física antes de alterar os itens.'
     item = next((it for it in pedido.itens if it.id == item_id), None)
     if item is None:
         return False, 'Item não encontrado neste pedido.'
@@ -590,13 +593,16 @@ def _marcar_estornado(pedido, pagamento):
         pagamento.status = 'estornado'
     # Só estorna estoque se já havia sido pago (= baixou).
     if estado_anterior == 'pago':
-        if _acertado_no_despacho(pedido):
+        from app.services.saida_producao_site import ja_saiu
+        saiu_da_producao = ja_saiu(pedido.id)
+        if saiu_da_producao or _acertado_no_despacho(pedido):
             logger.warning('pedido %s já acertado pelo despacho direto — '
                            'estoque NÃO re-creditado no cancelamento',
                            pedido.codigo)
         else:
             _estornar_estoque(pedido)
-        _devolver_ao_plano_do_dia(pedido)
+        if not saiu_da_producao:
+            _devolver_ao_plano_do_dia(pedido)
     elif estado_anterior == 'aguardando_pagamento':
         # Pedido nunca chegou a pago — libera reserva (Pix expirado,
         # cancelamento manual antes do pagamento, etc).

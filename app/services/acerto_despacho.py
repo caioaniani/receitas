@@ -2,8 +2,8 @@
 Pais — decisão do dono: "ajuste cirúrgico por pedido").
 
 O problema: pedido do SITE baixa `EstoqueLoja` da loja de origem NO PAGAMENTO
-(`loja_pagamento._marcar_pago` → `_baixar_estoque`) e NUNCA debita a
-indústria. Num evento em que a mercadoria sai DIRETO da indústria (Dia dos
+(`loja_pagamento._marcar_pago` → `_baixar_estoque`) para itens comuns.
+Num evento em que a mercadoria sai DIRETO da indústria (Dia dos
 Pais: ~106 pedidos), o resultado é distorção dupla: a loja de origem drenada
 por mercadoria que nunca passou na prateleira dela, e a indústria inflada
 (produção creditada em `EstoqueProducao` sem débito na saída).
@@ -28,6 +28,11 @@ O acerto, POR PEDIDO (rastreável, cirúrgico):
   — fica anotada nos avisos E persistida em mov
   `saida_site_direto_sem_estoque` (padrão da casa; o JSON da resposta se
   perde, o ledger não).
+
+Desde 12/09/2026, itens sob encomenda têm baixa automática na saída via
+`saida_producao_site`. O acerto exclui só os itens com registro de saída,
+preservando o tratamento dos itens comuns restantes em pedidos mistos.
+O mesmo lock 7757 serializa os dois caminhos.
 
 Idempotência POR PEDIDO em AppConfig (`acerto_despacho_<data>` = JSON de
 códigos já acertados): rodar de novo só pega pedidos novos. A fase 1 do
@@ -65,7 +70,6 @@ from app.models import (
     MovimentacaoEstoque,
     PedidoOnline,
 )
-from app.services.cestas import composicao_de_venda
 
 logger = logging.getLogger(__name__)
 
@@ -123,14 +127,16 @@ def _componentes_do_pedido(pedido):
     (`loja_estoque_reserva.composicao_escolhida`); cesta comum explode pelo
     cadastro (`composicao_de_venda`); item simples é identidade. Item
     sob_encomenda ENTRA (saiu fisicamente da indústria)."""
-    from app.services.loja_estoque_reserva import composicao_escolhida
+    from app.services.saida_producao_site import composicao_item, itens_baixados
+    feitos = itens_baixados(pedido.id)
     out = []
     for it in (pedido.itens or []):
+        if it.id in feitos:
+            continue  # saída automática já baixou este item; comuns ainda entram
         qtd = it.quantidade or 0
         if qtd <= 0:
             continue
-        comp = composicao_escolhida(it) or composicao_de_venda(
-            receita_id=it.receita_id, produto_id=it.produto_id)
+        comp = composicao_item(it)
         if not comp:
             # Item legado sem FK — sem linha possível (espelho do WARNING de
             # baixar_industria_pedido; simétrico: também nunca baixou loja).

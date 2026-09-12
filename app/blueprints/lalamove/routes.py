@@ -144,6 +144,9 @@ def webhook():
     status = ''
     if event_type == 'ORDER_STATUS_CHANGED':
         status = (ordem.get('status') or '').upper()
+        if status in ('PICKED_UP', 'COMPLETED'):
+            from app.services.saida_producao_site import registrar_por_codigo
+            registrar_por_codigo(e.pedido_code, 'lalamove_' + status.lower())
         if status:
             e.status = status
     if ordem.get('shareLink'):

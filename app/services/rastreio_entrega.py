@@ -47,6 +47,12 @@ def iniciar_rota(driver, dia=None):
     um endereço quebrado não pode impedir os outros avisos nem o marco."""
     dia = dia or hoje()
     ri = RotaInicio.query.filter_by(driver_id=driver.id, data=dia).first()
+    from app.services.saida_producao_site import registrar
+    codes = {a.pedido_code for a in _rota_do_driver(driver.id, dia) if a.pedido_code}
+    # Inclui a primeira parada já entregue e novas atribuições numa nova
+    # confirmação de saída da mesma rota. Registro por item deduplica.
+    for pedido in PedidoOnline.query.filter(PedidoOnline.codigo.in_(codes)).order_by(PedidoOnline.id):
+        registrar(pedido, 'inicio_rota')
     if ri is None:
         ri = RotaInicio(driver_id=driver.id, data=dia)
         db.session.add(ri)

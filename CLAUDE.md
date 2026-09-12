@@ -3260,6 +3260,29 @@ RETIRADA baixa a loja escolhida pelo cliente e reflete em
 `/pedidos/estoque-loja` dessa loja. Testes: `tests/test_loja_estoque_vitrine.py`,
 `tests/test_loja_estoque_reserva.py`, `tests/test_loja_online_vendas.py`.
 
+### Saída de compras sob encomenda da produção (12/09/2026)
+
+Correção pedida pelo dono após constatar cestas/minis sem baixa industrial.
+Itens pagos `sob_encomenda` continuam fora de `EstoqueLoja`; agora baixam
+`EstoqueProducao` na confirmação de início da rota, coleta Lalamove
+`PICKED_UP`, saída administrativa `a_caminho` ou confirmação de entrega
+como fallback. Contratar Lalamove ainda NÃO confirma coleta. Divulgação
+mantém seu fluxo próprio. Menu usa a composição ESCOLHIDA persistida,
+multiplicada pela quantidade de cestas, nunca a pré-seleção atual.
+
+`SaidaProducaoSite` é tabela NOVA via `db.create_all`, chave única por item,
+snapshot da composição/baixa/falta. Serviço sem commit, mesma transação da
+saída; advisory lock 7757 compartilhado com acerto manual e saldos relidos
+sob `FOR UPDATE`. Composição órfã impede confirmar; falta de saldo registra
+divergência sem negativo e sem nova baixa no retry. O acerto manual ignora
+apenas os itens já debitados; seu marcador também bloqueia a baixa automática.
+Fila/pré-preparo/demanda firme excluem itens despachados. Redução posterior
+é bloqueada; reembolso após saída não repõe estoque nem libera o plano do dia.
+Histórico já entregue e sincronização de status antigos não são reprocessados.
+
+Operação: `docs/saida-producao-site.md` e manual admin. Regressões:
+`tests/test_saida_producao_site.py`, `tests/test_saida_site_padeiro.py`.
+
 ### Acerto de DESPACHO DIRETO da industria (08/08/2026, Dia dos Pais)
 
 Aviso do dono na vespera: "no dia 9 os itens dos pedidos sairao diretamente

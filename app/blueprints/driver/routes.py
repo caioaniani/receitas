@@ -52,6 +52,9 @@ def _auto_iniciar_rota(driver, atrib):
         from app.services import rastreio_entrega
         rastreio_entrega.iniciar_rota(driver, dia)
     except Exception:  # noqa: BLE001 — marco/e-mail nunca derruba a baixa
+        # O início da rota inclui estoque de vários pedidos. Não deixar
+        # baixas parciais penduradas para o próximo commit da entrega.
+        db.session.rollback()
         current_app.logger.exception(
             'driver: auto-iniciar rota falhou (driver %s)', driver.id)
 
@@ -324,6 +327,9 @@ def api_status(token):
                        erro='Tire a foto da entrega primeiro — ela é a '
                             'comprovação de que o pedido foi entregue.'), 422
 
+    if novo_status == 'entregue':
+        from app.services.saida_producao_site import registrar_por_codigo
+        registrar_por_codigo(a.pedido_code, 'entrega_motorista')
     a.status = novo_status
     a.nota = (body.get('nota') or '')[:500] or None
     if novo_status == 'entregue':

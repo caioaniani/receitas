@@ -6093,8 +6093,21 @@ def loja_online_pedido_status(codigo):
     if novo not in _STATUS_AVANCO:
         flash(f'Status inválido: {novo}', 'danger')
         return _detalhe_redirect(codigo)
-    if p.status in ('cancelado', 'entregue') and novo != p.status:
-        flash(f'Pedido {p.codigo} já está {p.status} — não muda.', 'warning')
+    if novo in ('a_caminho', 'entregue'):
+        from app.services.saida_producao_site import registrar
+        try:
+            registrar(p, 'saida_admin', current_user.id)
+        except ValueError as exc:
+            db.session.rollback()
+            flash(f'Saída não confirmada: {exc}', 'danger')
+            return _detalhe_redirect(codigo)
+    else:
+        db.session.refresh(p, with_for_update=True)
+    # Revalidar o estado relido sob trava: não ressuscitar cancelamento
+    # concorrente nem transformar pedido ainda não pago em saída elegível.
+    if p.status == 'aguardando_pagamento' or (
+            p.status in ('cancelado', 'entregue') and novo != p.status):
+        flash(f'Pedido {p.codigo} está {p.status} — não muda.', 'warning')
         return _detalhe_redirect(codigo)
     transicionou_para_caminho = (novo == 'a_caminho' and p.status != 'a_caminho')
     transicionou_para_entregue = (novo == 'entregue' and p.status != 'entregue')

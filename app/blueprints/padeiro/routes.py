@@ -72,7 +72,7 @@ def _card_b2b(v):
                       for it in v.itens]}
 
 
-def _card_online(p):
+def _card_online(p, itens_saida=None):
     """Pedido do SITE com item SOB ENCOMENDA (produzido pro pedido, D+2):
     aparece na fila do padeiro pra garantir que sera preparado (decisao do
     dono 21/07/2026). Mostra SO os itens sob encomenda — os demais itens do
@@ -92,9 +92,12 @@ def _card_online(p):
         composicao_escolhida,
         item_sob_encomenda,
     )
+    if itens_saida is None:
+        from app.services.saida_producao_site import itens_baixados
+        itens_saida = itens_baixados(p.id)
     itens = []
     for it in p.itens:
-        if not item_sob_encomenda(it):
+        if it.id in itens_saida or not item_sob_encomenda(it):
             continue
         comps = composicao_escolhida(it)
         if comps:
@@ -208,7 +211,7 @@ def _dados_listas(dia, eh_hoje):
     # lembrete visivel tem que aparecer do pagamento ate a entrega, nao so
     # no dia. O card mostra a data de entrega; o pedido some quando vira
     # 'entregue'/'cancelado'.
-    from app.models import PedidoOnline, PedidoOnlineItem
+    from app.models import PedidoOnline, PedidoOnlineItem, SaidaProducaoSite
     from app.services.loja_estoque_reserva import item_sob_encomenda
     qo = PedidoOnline.query.options(
         selectinload(PedidoOnline.itens).selectinload(PedidoOnlineItem.receita),
@@ -222,11 +225,15 @@ def _dados_listas(dia, eh_hoje):
         qo = qo.filter(PedidoOnline.data_entrega == dia)
     onlines = [p for p in qo.order_by(PedidoOnline.data_entrega).all()
                if any(item_sob_encomenda(it) for it in p.itens)]
+    itens_saida = {item_id for (item_id,) in db.session.query(
+        SaidaProducaoSite.pedido_item_id).filter(
+            SaidaProducaoSite.pedido_id.in_([p.id for p in onlines])).all()}
+    cards_online = [_card_online(p, itens_saida) for p in onlines]
 
     a_separar = ([_card_retirada(r) for r in retiradas]
                  + [_card_loja(p) for p in pedidos if p.status in _A_SEPARAR]
                  + [_card_b2b(v) for v in vendas if v.status_entrega == 'pendente']
-                 + [_card_online(p) for p in onlines])
+                 + [c for c in cards_online if c['itens']])
     aguardando = ([_card_loja(p) for p in pedidos if p.status == 'separado']
                   + [_card_b2b(v) for v in vendas if v.status_entrega == 'separado'])
     drivers = Driver.query.filter_by(ativo=True).order_by(Driver.nome).all()
@@ -1005,7 +1012,7 @@ def preparar_json():
     # na quarta). Como PedidoOnlineItem nao tem `estado`, usa o estado_padrao
     # da receita (assado/backup); sem estado_padrao cai em 'assado' pra o item
     # sempre aparecer (a producao propria e o lembrete que o dono pediu).
-    from app.models import PedidoOnline, PedidoOnlineItem, Receita
+    from app.models import PedidoOnline, PedidoOnlineItem, Receita, SaidaProducaoSite
     from app.services.loja_estoque_reserva import (
         composicao_escolhida,
         item_sob_encomenda,
@@ -1016,6 +1023,8 @@ def preparar_json():
                              selectinload(PedidoOnlineItem.componentes),
                              selectinload(PedidoOnlineItem.pedido))
                     .filter(PedidoOnline.data_entrega == alvo,
+                            ~db.session.query(SaidaProducaoSite.pedido_item_id)
+                            .filter(SaidaProducaoSite.pedido_item_id == PedidoOnlineItem.id).exists(),
                             PedidoOnline.status.in_(_STATUS_ONLINE_PRODUCAO))
                     .all())
     for it in itens_online:

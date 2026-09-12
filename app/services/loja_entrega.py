@@ -5,8 +5,7 @@ Centraliza a transição `a_caminho` / `entregue`, disparada por 3 lugares:
 - chamar Lalamove (motorista a caminho)            → a_caminho
 - webhook do Lalamove (corrida COMPLETED)          → entregue
 
-Faz 3 coisas, sempre best-effort (NUNCA levanta exceção — não pode quebrar
-webhook nem painel):
+Confirmação e baixa são transacionais; só o e-mail é best-effort:
 1. avança `PedidoOnline.status` (sem regredir; idempotente em reentrega);
 2. quando entregue, reflete no painel (`PainelPedidoStatus`) pra o card ir
    pra coluna de entregues;
@@ -30,6 +29,11 @@ def avancar_status_entrega(codigo, novo_status, rastreio_url=None):
     `rastreio_url`: link de rastreio (Lalamove share_link) pro e-mail."""
     if novo_status not in ('a_caminho', 'entregue'):
         return
+    # Entrega confirma que os itens já saíram. Falha técnica na baixa precisa
+    # ser retentável, portanto não pode ser engolida pelo bloco de e-mail.
+    if novo_status == 'entregue':
+        from app.services.saida_producao_site import registrar_por_codigo
+        registrar_por_codigo(codigo, 'entrega_confirmada')
     try:
         from app.models import PainelPedidoStatus, PedidoOnline
         from app.utils import hoje
@@ -48,6 +52,10 @@ def avancar_status_entrega(codigo, novo_status, rastreio_url=None):
                 db.session.add(PainelPedidoStatus(
                     pedido_code=codigo, status='entregue', data_ref=hoje()))
         db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    try:
         from app.services import email as email_svc
         if email_svc.disponivel():
             if novo_status == 'a_caminho':
@@ -55,6 +63,5 @@ def avancar_status_entrega(codigo, novo_status, rastreio_url=None):
             else:
                 email_svc.enviar_pedido_entregue(p)
     except Exception:  # noqa: BLE001
-        db.session.rollback()
-        logger.exception('avancar_status_entrega %s -> %s falhou',
+        logger.exception('email de avancar_status_entrega %s -> %s falhou',
                          codigo, novo_status)

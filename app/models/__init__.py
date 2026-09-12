@@ -25,5 +25,6 @@ from app.models.projetos import *  # noqa: F401, F403
 from app.models.rh import *  # noqa: F401, F403
 from app.models.rh_carreira import *  # noqa: F401, F403
 from app.models.rh_movimentacao import *  # noqa: F401, F403
+from app.models.saida_producao_site import *  # noqa: F401, F403
 from app.models.treino_conteudo import *  # noqa: F401, F403
 from app.models.treino_gamificacao import *  # noqa: F401, F403

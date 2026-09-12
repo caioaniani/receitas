@@ -365,7 +365,8 @@ def obter_linha_producao(*, receita_id=None, produto_id=None, usuario_id=None):
     if (receita_id is None) == (produto_id is None):
         raise ValueError('Informe exatamente um de receita_id/produto_id.')
     filtro = {'receita_id': receita_id, 'produto_id': produto_id}
-    linhas = EstoqueProducao.query.filter_by(**filtro).order_by(EstoqueProducao.id).all()
+    linhas = (EstoqueProducao.query.filter_by(**filtro).order_by(EstoqueProducao.id)
+              .with_for_update().populate_existing().all())
     if not linhas:
         nova = EstoqueProducao(**filtro, estado=None, quantidade=0)
         db.session.add(nova)
