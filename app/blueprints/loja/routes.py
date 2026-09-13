@@ -1447,6 +1447,21 @@ def contato():
                          'Telefone, WhatsApp, e-mail e enderecos.')
 
 
+@loja_bp.route('/marketing/sair/<token>')
+def marketing_sair(token):
+    """Descadastro de e-mail de MARKETING (rodapé do e-mail de recompra,
+    13/09/2026). Público, sem login: o token assinado carrega o e-mail.
+    Marca `Cliente.marketing_descadastro_em` e tira a pessoa das listas do
+    Listmonk. Os e-mails do PEDIDO (confirmação, entrega, NF) continuam —
+    são transacionais, não marketing. Token inválido = 404."""
+    from app.services import recompra
+    email = recompra.email_do_token(token)
+    if not email:
+        abort(404)
+    recompra.descadastrar(email)
+    return render_template('loja/marketing_sair.html', email=email)
+
+
 @loja_bp.route('/sitemap.xml')
 def sitemap():
     """Sitemap dinamico (XML). Inclui home, paginas legais e cada produto
