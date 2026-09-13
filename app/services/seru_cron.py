@@ -65,6 +65,7 @@ LOCK_KEY_DIGEST_RECEBIMENTOS = 7760  # advisory lock pro digest 12:00 de pedidos
 LOCK_KEY_ATUALIZA_PLANO = 7761  # advisory lock pro 🔄 automatico da ordem do dia (06:45/19:05)
 LOCK_KEY_HEARTBEAT = 7762  # advisory lock pro heartbeat diario no Slack (08:00)
 LOCK_KEY_ZAPI_SAUDE = 7763  # advisory lock pro status/assinatura da Z-API
+LOCK_KEY_RECOMPRA = 7764  # advisory lock pro e-mail de recompra do site (10:30)
 # 7750 foi reciclado: era do `briefing-dono` (removido 17/07/2026), agora e do
 # marketing (sync da base + campanha de aniversario no Listmonk).
 LOCK_KEY_MARKETING = 7750  # advisory lock pro marketing (Listmonk)
