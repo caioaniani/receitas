@@ -811,6 +811,17 @@ def iniciar(app):
             max_instances=1, coalesce=True,
         )
 
+    # E-mail de RECOMPRA do site (13/09/2026) — 10:30 BRT: quem pagou ha N
+    # dias e nao voltou recebe o lembrete com o que comprou. So DISPARA com a
+    # chave ligada em /admin/marketing (nasce desligada). Desligar de vez:
+    # RECOMPRA_AUTO=0.
+    if os.environ.get('RECOMPRA_AUTO', '1') != '0':
+        _scheduler.add_job(
+            lambda app=app: _run_recompra(app),
+            'cron', hour=10, minute=30, id='recompra-email',
+            max_instances=1, coalesce=True,
+        )
+
     # Automacoes WhatsApp configuraveis (mensagens agendadas) — checa a cada 5 min
     _scheduler.add_job(
         lambda app=app: _run_automacoes_whatsapp(app),
@@ -1221,6 +1232,26 @@ def _run_marketing(app):
 
     with app.app_context():
         _com_lock(LOCK_KEY_MARKETING, _fn, 'marketing (Listmonk)')
+
+
+def _run_recompra(app):
+    """Job: e-mail de recompra do site (13/09/2026) — 10:30 BRT.
+
+    `recompra.rodar()` obedece a chave da tela (`recompra_ativo`): desligada,
+    so conta os candidatos e nao manda nada. Idempotencia por pedido
+    (`RecompraEnvio`) + anti-spam por pessoa dentro do servico; o lock aqui
+    so evita dois workers rodando a mesma rodada. Best-effort: `rodar`
+    nunca levanta.
+    """
+    from app.services import recompra
+
+    def _fn():
+        st = recompra.rodar()
+        if st.get('erro'):
+            logger.warning('recompra: %s', st['erro'])
+
+    with app.app_context():
+        _com_lock(LOCK_KEY_RECOMPRA, _fn, 'recompra (e-mail pos-compra)')
 
 
 def _run_alerta_baixas_presas(app):
