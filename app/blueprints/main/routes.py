@@ -2220,6 +2220,92 @@ def marketing_aniversario_agora():
     return redirect(url_for('main.marketing_painel'))
 
 
+@main_bp.route('/admin/marketing/recompra/salvar', methods=['POST'])
+@owner_required
+def marketing_recompra_salvar():
+    """Salva prazo, assuntos e a chave do e-mail de recompra (13/09/2026).
+    Prazo fora da faixa = nada é salvo (config torta não pode calar nem
+    disparar o job em silêncio)."""
+    from app.models import AppConfig
+    from app.services import recompra
+    bruto = (request.form.get('dias') or '').strip()
+    try:
+        d = int(bruto)
+    except ValueError:
+        d = None
+    if d is None or not recompra.DIAS_MIN <= d <= recompra.DIAS_MAX:
+        flash(f'Prazo inválido ({bruto!r}) — use entre {recompra.DIAS_MIN} e '
+              f'{recompra.DIAS_MAX} dias. Nada foi salvo.', 'danger')
+        return redirect(url_for('main.marketing_painel'))
+    AppConfig.set(recompra.CFG_DIAS, str(d))
+    AppConfig.set(recompra.CFG_ASSUNTO_PAO,
+                  (request.form.get('assunto_pao') or '').strip())
+    AppConfig.set(recompra.CFG_ASSUNTO_PRESENTE,
+                  (request.form.get('assunto_presente') or '').strip())
+    ligado = request.form.get('auto') == '1'
+    AppConfig.set(recompra.CFG_ATIVO, '1' if ligado else '0')
+    db.session.commit()
+    flash('Recompra salva. Envio automático %s.'
+          % ('LIGADO — sai todo dia às 10:30' if ligado else 'desligado'),
+          'success' if ligado else 'info')
+    return redirect(url_for('main.marketing_painel'))
+
+
+@main_bp.route('/admin/marketing/recompra/rodar', methods=['POST'])
+@owner_required
+def marketing_recompra_rodar():
+    """`enviar=1` dispara a rodada AGORA (gesto explícito, mesmo com a chave
+    desligada); sem ele só lista quem receberia hoje (dry-run)."""
+    from app.services import recompra
+    enviar = request.form.get('enviar') == '1'
+    st = recompra.rodar(forcar=True) if enviar else recompra.rodar(dry_run=True)
+    if st.get('erro'):
+        flash(f'Recompra: {st["erro"]}', 'danger')
+    elif enviar:
+        flash(f'Recompra: {st["enviados"]} e-mail(s) enviado(s), '
+              f'{st["erros"]} erro(s).', 'success' if st['enviados'] else 'info')
+    elif st['candidatos']:
+        nomes = ', '.join(f'{x["nome"]} ({x["tipo"]})' for x in st['lista'][:10])
+        extra = (f' e mais {st["candidatos"] - 10}'
+                 if st['candidatos'] > 10 else '')
+        flash(f'Receberiam hoje ({st["candidatos"]}): {nomes}{extra}.', 'info')
+    else:
+        flash('Ninguém receberia o e-mail de recompra hoje.', 'info')
+    return redirect(url_for('main.marketing_painel'))
+
+
+@main_bp.route('/admin/marketing/recompra/teste', methods=['POST'])
+@owner_required
+def marketing_recompra_teste():
+    """Manda o e-mail de recompra de EXEMPLO para o e-mail informado, usando
+    o pedido pago mais recente como amostra. Não registra envio e o link de
+    descadastro é o do destinatário do teste (nunca o do cliente-amostra)."""
+    from app.models import PedidoOnline
+    from app.services import email as email_svc
+    from app.services import recompra
+    dest = (request.form.get('email') or '').strip()
+    tipo = 'presente' if request.form.get('tipo') == 'presente' else 'pao'
+    if '@' not in dest:
+        flash('Informe um e-mail válido para receber o teste.', 'danger')
+        return redirect(url_for('main.marketing_painel'))
+    p = (PedidoOnline.query
+         .filter(PedidoOnline.pago_em.isnot(None),
+                 PedidoOnline.status != 'cancelado')
+         .order_by(PedidoOnline.pago_em.desc()).first())
+    if p is None:
+        flash('Ainda não há pedido pago para usar de amostra.', 'info')
+        return redirect(url_for('main.marketing_painel'))
+    ass, html, texto = recompra.montar_email(p, tipo, email_sair=dest)
+    r = email_svc.enviar(dest, f'[TESTE] {ass}', html, texto=texto,
+                         stream=recompra._stream())
+    if r.get('ok'):
+        flash(f'Teste enviado para {dest} (amostra: pedido {p.codigo}).',
+              'success')
+    else:
+        flash(f'Teste falhou: {r.get("erro")}', 'danger')
+    return redirect(url_for('main.marketing_painel'))
+
+
 # ── Avaliacoes do Google (Business Profile) — 12/07/2026 ──
 
 @main_bp.route('/admin/avaliacoes-google')
