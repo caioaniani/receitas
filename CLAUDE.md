@@ -1679,6 +1679,55 @@ como terceira base. Escolha: **Listmonk** (Go + Postgres, self-hosted).
   `requests`/Listmonk SEMPRE mockados, nenhum teste dispara e-mail. Manual
   de operacao registrado (RODA SOZINHO + QUANDO PRECISAR).
 
+## E-mail de RECOMPRA pós-compra do site (13/09/2026)
+
+Pedido do dono ("o que eu posso fazer para dobrar o faturamento do site?"
+→ "Gostei da ideia 3 e 4"). Diagnóstico pela sonda `/api/claude/
+clientes-recorrentes`: 87% dos 793 clientes compraram UMA vez; ticket
+mediano R$ 270 e 63% dos pedidos com 1 item = o site vende PRESENTE/cesta,
+com um nicho fiel de pão do dia a dia. A ideia 3 é o e-mail automático de
+recompra; a ideia 4 (assinatura semanal com cartão salvo) é o próximo
+projeto. O dono DISPENSOU o questionário de decisões — valem as opções
+recomendadas, todas explícitas aqui:
+
+- **Sem cupom** (não mexe em preço/NF/Pagar.me; mede por UTM
+  `utm_medium=recompra` e pela métrica "voltaram" da tela). **12 dias**
+  depois do PAGAMENTO (`AppConfig recompra_dias`, 1-90, config torta cai no
+  padrão com WARNING), só para quem NÃO voltou a comprar. **Dois textos**:
+  `pao` e `presente` (destinatário/cartinha no pedido, cesta com composição
+  ou menu configurável) — "seu pão acabou?" não cabe para quem mandou
+  presente. **Nasce DESLIGADO** (`recompra_ativo`), padrão do aniversário.
+- **Serviço** `app/services/recompra.py`: `candidatos()` (um por pessoa =
+  pedido mais recente da janela de `JANELA_DIAS=3` dias — ligar a chave não
+  dispara para o histórico inteiro; exclui cancelado/divulgação/não pago,
+  e-mail sem `Cliente` cadastrado — sem cadastro não há onde honrar o
+  descadastro —, `marketing_descadastro_em`, quem tem pedido pago DEPOIS,
+  quem já recebeu recompra em `ANTI_SPAM_DIAS=30`, e pedido já enviado);
+  `rodar(enviar=None|forcar|dry_run)` nunca levanta; `TETO_POR_RODADA=150`
+  bloqueia disparo em massa (sinal de consulta errada). Idempotência +
+  métrica em `RecompraEnvio` (tabela nova via `db.create_all`,
+  `pedido_id` unique).
+- **Canal**: Postmark pelo stream de BROADCAST (`email.enviar(stream=)`,
+  config `POSTMARK_BROADCAST_STREAM`, default `'broadcast'`) — marketing
+  NUNCA sai pelo transacional (reclamação de spam não pode derrubar o e-mail
+  de pedido). Link de descadastro PRÓPRIO no rodapé: `GET /loja/marketing/
+  sair/<token>` (token `URLSafeSerializer` sem expiração, salt
+  `recompra-sair-v1`; na allowlist do `_gate_acesso` — tem que responder
+  anônimo em qualquer estado de cutover) marca `Cliente.
+  marketing_descadastro_em` em todo cadastro com o e-mail e, best-effort,
+  descadastra das listas do Listmonk por ID (`listmonk.id_por_email` usa o
+  `search` da API — nunca SQL com o e-mail). O TESTE da tela passa
+  `email_sair=<e-mail do dono>` — senão o link do e-mail de amostra
+  descadastraria o cliente usado como exemplo.
+- **Cron** `recompra-email` 10:30 BRT (`seru_cron._run_recompra`, lock
+  **7764**, kill-switch `RECOMPRA_AUTO=0`); obedece a chave da tela.
+- **Tela**: card "E-mail de recompra" em `/admin/marketing` (prazo, dois
+  assuntos, chave, "receberiam hoje", enviados/voltaram/taxa 30d, "Ver quem
+  receberia hoje" = dry-run, "Enviar agora" = forcar, "Enviar teste pra
+  mim"). Manual atualizado (RODA SOZINHO).
+- Testes: `tests/test_recompra.py` (13 casos; Postmark/Listmonk sempre
+  mockados).
+
 ## Estoque pendente (congelados + loja)
 
 Tanto `EstoqueProducao` quanto `EstoqueLoja` tem coluna `nome_pendente`. Quando o
