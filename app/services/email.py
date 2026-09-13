@@ -73,7 +73,7 @@ def enviar(destinatario, assunto, html, *, texto=None, anexos=None, bcc=None,
         'To': destinatario,
         'Subject': assunto,
         'HtmlBody': html,
-        'MessageStream': _MESSAGE_STREAM,
+        'MessageStream': (stream or '').strip() or _MESSAGE_STREAM,
     }
     if reply_to and reply_to.lower() != remetente_email.lower():
         payload['ReplyTo'] = reply_to
