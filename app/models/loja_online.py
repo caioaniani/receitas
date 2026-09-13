@@ -532,6 +532,27 @@ class ClienteVerificacaoEmail(db.Model):
         return self.usado_em is None and self.expira_em > agora_dt
 
 
+class RecompraEnvio(db.Model):
+    """E-mail pós-compra de RECOMPRA enviado (13/09/2026) — 1 linha por pedido.
+
+    É a idempotência do job (o mesmo pedido nunca gera dois e-mails) e a
+    base da métrica "voltou?" (pedido pago do MESMO e-mail depois de
+    `enviado_em`). Tabela nova via `db.create_all` (sem ALTER)."""
+    __tablename__ = 'recompra_envio'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_id = db.Column(
+        db.Integer, db.ForeignKey('pedido_online.id'),
+        nullable=False, unique=True, index=True)
+    email = db.Column(db.String(200), nullable=False, index=True)  # minúsculo
+    tipo = db.Column(db.String(10), nullable=False)  # 'pao' | 'presente'
+    enviado_em = db.Column(db.DateTime, default=agora, nullable=False,
+                           index=True)
+    message_id = db.Column(db.String(80), nullable=True)
+
+    pedido = db.relationship('PedidoOnline')
+
+
 class CategoriaSite(db.Model):
     """Ordenação das categorias na vitrine (Fase 6.5 — 17/06/2026).
 
