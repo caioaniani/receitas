@@ -2096,10 +2096,11 @@ def frete_sensores():
 @main_bp.route('/admin/marketing')
 @owner_required
 def marketing_painel():
-    """Painel do e-mail marketing: estado das listas, texto do aniversário e
-    a chave que liga o disparo automático."""
-    from app.services import marketing
-    return render_template('admin/marketing.html', r=marketing.resumo())
+    """Painel do e-mail marketing: estado das listas, texto do aniversário,
+    a chave que liga o disparo automático e o e-mail de recompra."""
+    from app.services import marketing, recompra
+    return render_template('admin/marketing.html', r=marketing.resumo(),
+                           rc=recompra.resumo())
 
 
 @main_bp.route('/admin/marketing/sincronizar', methods=['POST'])
