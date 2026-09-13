@@ -183,6 +183,24 @@ def contar(lista_id):
     return int((dados.get('data') or {}).get('total') or 0)
 
 
+def id_por_email(email):
+    """ID do assinante com esse e-mail (match EXATO, sem caixa), ou None.
+
+    Usa o `search` textual da API — nunca a `query` SQL (o e-mail é dado de
+    fora; montar SQL com ele é convite a acidente). É o que o descadastro
+    do e-mail de recompra (13/09/2026) usa pra tirar a pessoa das listas
+    por ID via `mudar_listas`."""
+    alvo = (email or '').strip().lower()
+    if '@' not in alvo:
+        return None
+    dados = _req('GET', '/api/subscribers',
+                 params={'search': alvo, 'per_page': 20})
+    for s in (dados.get('data') or {}).get('results') or []:
+        if (s.get('email') or '').strip().lower() == alvo and s.get('id') is not None:
+            return s['id']
+    return None
+
+
 def mudar_listas(ids, acao, listas_alvo, status='confirmed'):
     """Adiciona/remove/descadastra assinantes (por id) de listas.
 
