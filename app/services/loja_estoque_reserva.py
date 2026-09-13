@@ -238,8 +238,11 @@ def consumir(pedido, *, loja_id, usuario_id=None):
     # 1. Libera a reserva (mesma agregacao inteira de `reservar`, pra o ledger
     #    de `quantidade_reservada` fechar). Nao depende da baixa real abaixo.
     linhas, pulados = _agrega_por_linha(pedido, loja_id, lock=True)
-    for el, qtd, _nome in linhas:
-        el.quantidade_reservada = max(0, (el.quantidade_reservada or 0) - qtd)
+    # Se o QR expirou, o cron já liberou esta reserva. O saldo reservado que
+    # sobrou pertence a OUTROS pedidos e não pode ser consumido novamente.
+    if pedido.reserva_expira_em is not None:
+        for el, qtd, _nome in linhas:
+            el.quantidade_reservada = max(0, (el.quantidade_reservada or 0) - qtd)
 
     # 2. Baixa real pelo MOTOR UNICO (mesma logica de Seru/lote): explode cesta,
     #    acumula fracao por item, decrementa a linha canonica, gera o movimento.
@@ -314,6 +317,12 @@ def liberar_expirados(*, agora_=None, max_lote=200):
          .limit(max_lote))
     codigos = []
     for p in q.all():
+        # A confirmação (gateway ou owner) pode ter ocorrido após o SELECT.
+        # Mesma ordem de locks do pagamento: pedido antes das linhas de estoque.
+        db.session.refresh(p, with_for_update=True)
+        if (p.status != 'aguardando_pagamento' or p.pago_em
+                or p.reserva_expira_em is None or p.reserva_expira_em >= base):
+            continue
         loja = _loja_baixa(p)
         if not loja:
             logger.warning('liberar_expirados: pedido %s sem loja origem',

@@ -429,7 +429,7 @@ class PagamentoOnline(db.Model):
     pedido_id = db.Column(
         db.Integer, db.ForeignKey('pedido_online.id'),
         nullable=False, index=True)
-    metodo = db.Column(db.String(10), nullable=False)  # 'pix' | 'cartao'
+    metodo = db.Column(db.String(10), nullable=False)  # 'pix' | 'cartao' | 'externo'
     valor = db.Column(db.Numeric(10, 2), nullable=False)
     status = db.Column(
         db.String(20), nullable=False, default='pendente', index=True)

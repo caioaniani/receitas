@@ -5813,8 +5813,8 @@ def _detalhe_redirect(codigo):
 @login_required
 @gerente_required
 def loja_online_pedido_detalhe(codigo):
-    from app.models import PedidoOnline
-    from app.services import loja_checkout, loja_pagamento
+    from app.models import PagamentoExternoOnline, PedidoOnline
+    from app.services import loja_checkout, loja_pagamento, pagamento_externo
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
     # Pedido corrigido após a NF (quantidade reduzida): versão de estoque > 0.
     # A tela avisa que a NF pode estar desatualizada (o Tiny não cancela por
@@ -5825,7 +5825,28 @@ def loja_online_pedido_detalhe(codigo):
                            lojas=loja_checkout.lojas_retirada(),
                            modos=_MODOS_ENTREGA,
                            estoque_reduzido=estoque_reduzido,
+                           pagamento_externo=PagamentoExternoOnline.query.get(p.id),
+                           pode_confirmar_pagamento_externo=pagamento_externo.pode_confirmar(p),
                            expedicao_sinal=_expedicao_com_pedido(p))
+
+
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/confirmar-pagamento-externo', methods=['POST'])
+@owner_required
+def loja_online_pedido_confirmar_pagamento_externo(codigo):
+    """Registra o recebimento direto conferido pelo dono na conta da padaria."""
+    from app.models import PedidoOnline
+    from app.services import pagamento_externo
+
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    ok, msg = pagamento_externo.confirmar_recebimento(
+        p,
+        usuario_id=current_user.id,
+        referencia=request.form.get('referencia', ''),
+        valor_recebido=request.form.get('valor_recebido', ''),
+        confirmado=request.form.get('confirmado') == '1',
+    )
+    flash(f'{p.codigo}: {msg}', 'success' if ok else 'danger')
+    return _detalhe_redirect(codigo)
 
 
 @main_bp.route('/admin/loja-online/pedidos/<codigo>/editar', methods=['POST'])
@@ -6102,6 +6123,8 @@ def loja_online_pedido_cancelar(codigo):
     from app.services import loja_pagamento
     from app.utils import agora
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    # Não cancelar como "nunca pago" após confirmação concorrente do owner.
+    db.session.refresh(p, with_for_update=True)
     if p.status == 'cancelado':
         flash(f'Pedido {p.codigo} já está cancelado.', 'warning')
     elif p.status == 'entregue':

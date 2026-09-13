@@ -3269,6 +3269,22 @@ limitar preenche o campo — NÃO reintroduzir o default 10.
 - Testes: `tests/test_menu_configuravel.py` (~40 casos). Manual de operação
   registrado (seção QUANDO PRECISAR).
 
+## Pagamento do site recebido diretamente (13/09/2026)
+
+Exceção autorizada pelo dono à confirmação exclusiva pelo Pagar.me: somente
+o owner pode registrar um Pix/transferência recebido diretamente na conta da
+padaria, no detalhe de **Pedidos do site**. Serviço
+`app/services/pagamento_externo.py`, rota POST
+`/admin/loja-online/pedidos/<codigo>/confirmar-pagamento-externo`.
+Exige valor integral, referência e confirmação de conferência na conta;
+registra dono, data e valor em `PagamentoExternoOnline`, com método
+`externo` em `PagamentoOnline` e sem IDs fictícios do Pagar.me. Aceita pedido
+aguardando pagamento ou cancelado por Pix expirado; a confirmação usa o
+fluxo normal de pedido pago. Nunca confirmar pedido real em teste nem
+reembolsar esse recebimento pelo Pagar.me. Devolução externa não está
+implementada. Caminho e operação em `docs/pagamento-externo-site.md` e no
+Manual de operação (QUANDO PRECISAR).
+
 ## Estoque do site — DUAS camadas separadas (regra do dono, 07/07/2026)
 
 Escrito na pedra a pedido do dono ("ja tinha falado uma vez mas nao ficou

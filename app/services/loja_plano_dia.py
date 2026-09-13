@@ -298,7 +298,7 @@ def definir(kind, item_id, data, qtd_planejada):
     return row
 
 
-def reservar(kind, item_id, data, qtd):
+def reservar(kind, item_id, data, qtd, *, commit=True):
     """Reserva `qtd` no plano de (item, data). Atomico — pega row lock
     (SELECT FOR UPDATE no Postgres) pra evitar oversell.
 
@@ -346,7 +346,10 @@ def reservar(kind, item_id, data, qtd):
         row.qtd_reservada = reservado + qtd
         if fonte in ('regra_semanal', 'excecao'):
             row.qtd_planejada = planejado
-    db.session.commit()
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()
     return True
 
 

@@ -60,6 +60,44 @@
 </div>
 {% endif %}
 
+{% if current_user.is_owner and pode_confirmar_pagamento_externo %}
+<div class="card border-primary mb-3">
+  <div class="card-header py-2 fw-bold">Confirmar pagamento recebido fora do site</div>
+  <div class="card-body">
+    <p class="mb-2">Use quando o cliente pagou por <strong>Pix ou transferência diretamente para a padaria</strong>.
+      Total do pedido: <strong>R$ {{ '%.2f'|format(p.valor_total)|replace('.', ',') }}</strong>.</p>
+    {% if p.status == 'cancelado' %}
+    <p class="text-warning-emphasis mb-2">O Pix do site expirou. Confirmar o recebimento reabre este pedido como pago.</p>
+    {% endif %}
+    <form method="POST" action="{{ url_for('main.loja_online_pedido_confirmar_pagamento_externo', codigo=p.codigo) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
+      <div class="row g-3">
+        <div class="col-sm-4 col-lg-3">
+          <label for="externo-valor" class="form-label">Valor recebido (R$)</label>
+          <input id="externo-valor" type="text" name="valor_recebido" inputmode="decimal"
+                 value="{{ '%.2f'|format(p.valor_total)|replace('.', ',') }}" required
+                 class="form-control" aria-describedby="externo-valor-ajuda">
+          <div id="externo-valor-ajuda" class="form-text">Deve corresponder ao total do pedido.</div>
+        </div>
+        <div class="col-sm-8 col-lg-9">
+          <label for="externo-referencia" class="form-label">Referência ou observação do recebimento</label>
+          <input id="externo-referencia" type="text" name="referencia" maxlength="200" required
+                 class="form-control" placeholder="Ex.: Pix de Maria em 13/09, identificado no extrato">
+        </div>
+        <div class="col-12">
+          <div class="form-check mb-3">
+            <input id="externo-confirmado" class="form-check-input" type="checkbox" name="confirmado" value="1" required>
+            <label class="form-check-label" for="externo-confirmado">Conferi na conta da padaria que o dinheiro deste pedido foi recebido.</label>
+          </div>
+          <button type="submit" class="btn btn-primary">Confirmar recebimento e marcar como pago</button>
+          <p class="form-text mb-0">O pedido segue para o fluxo normal de preparação e entrega. A confirmação fica registrada com seu nome.</p>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <div class="row g-3">
   <div class="col-md-7">
     <div class="card mb-3">
@@ -83,7 +121,7 @@
             {# Correcao OWNER-ONLY: cliente comprou errado (2 e era 1). Reduz a
                qtd, estorna a diferenca no cartao e devolve ao estoque/plano.
                So em pedido PAGO e com qtd > 1 (minimo 1 por item). #}
-            {% if current_user.is_owner and p.status == 'pago' and it.quantidade > 1 %}
+            {% if current_user.is_owner and not pagamento_externo and p.status == 'pago' and it.quantidade > 1 %}
             <tr class="table-warning">
               <td colspan="3" class="py-1">
                 <form method="POST" action="{{ url_for('main.loja_online_pedido_reduzir_item', codigo=p.codigo) }}"
@@ -135,7 +173,7 @@
           <tbody>
           {% for pg in p.pagamentos | sort(attribute='criado_em') %}
           <tr>
-            <td>{{ pg.metodo }}</td>
+            <td>{{ 'Externo (Pix/transferência direta)' if pg.metodo == 'externo' else pg.metodo }}</td>
             <td>
               <span class="badge {{
                 {'pago':'bg-success','pendente':'bg-warning text-dark',
@@ -144,8 +182,9 @@
               }}">{{ pg.status }}</span>
               {% if pg.erro %}<br><small class="text-danger">{{ pg.erro }}</small>{% endif %}
             </td>
-            <td><small><code>{{ pg.pagarme_order_id or '—' }}</code>
+            <td><small>{% if pg.metodo == 'externo' %}Recebido fora do site{% else %}<code>{{ pg.pagarme_order_id or '—' }}</code>
               {% if pg.pagarme_charge_id %}<br><code>{{ pg.pagarme_charge_id }}</code>{% endif %}
+              {% endif %}
             </small></td>
             <td class="text-end">R$ {{ '%.2f'|format(pg.valor)|replace('.', ',') }}</td>
             <td class="small text-muted">{{ pg.criado_em.strftime('%d/%m %H:%M') if pg.criado_em }}</td>
@@ -155,6 +194,16 @@
         </table>
         {% else %}
         <p class="text-muted small p-3 mb-0">Nenhuma tentativa de pagamento ainda.</p>
+        {% endif %}
+        {% if pagamento_externo %}
+        <div class="p-3 border-top small">
+          <strong>Pagamento recebido fora do site</strong>
+          <p class="mb-1">Confirmado por <strong>{{ pagamento_externo.usuario.nome }}</strong>
+            em {{ pagamento_externo.confirmado_em.strftime('%d/%m/%Y às %H:%M') }}.
+            Valor: <strong>R$ {{ '%.2f'|format(pagamento_externo.valor)|replace('.', ',') }}</strong>.</p>
+          <p class="mb-1"><strong>Referência:</strong> {{ pagamento_externo.referencia }}</p>
+          <p class="mb-0 text-muted">Uma eventual devolução deve ser feita fora do site. Este pagamento não permite reembolso automático nem redução de itens com estorno pelo Pagar.me.</p>
+        </div>
         {% endif %}
       </div>
     </div>
@@ -309,7 +358,7 @@
     {# Estorno de pedido ENTREGUE (dono 12/08/2026, caso 131B16EA):
        reembolso total com dupla confirmação; o estoque NÃO volta (a
        mercadoria saiu) e o cliente recebe o e-mail do estorno. #}
-    {% if current_user.is_owner and p.status == 'entregue' %}
+    {% if current_user.is_owner and not pagamento_externo and p.status == 'entregue' %}
     <form method="POST" action="{{ url_for('main.loja_online_pedido_cancelar', codigo=p.codigo) }}"
           onsubmit="return confirm('Estornar o pedido ENTREGUE {{ p.codigo }}?\n\n' +
                     'O valor volta pro cliente pelo Pagar.me e o pedido vira ' +
@@ -326,7 +375,7 @@
     {% endif %}
 
     {# Reembolso/cancelamento mexe em dinheiro — só o dono (decisão 22/06/2026). #}
-    {% if current_user.is_owner and p.status not in ('entregue', 'cancelado') %}
+    {% if current_user.is_owner and not pagamento_externo and p.status not in ('entregue', 'cancelado') %}
     {% set eh_pago = p.status in ('pago', 'em_preparo', 'a_caminho') %}
     {# Expedição já com o pedido (em preparo/em rota/Lalamove/cozinha): o
        servidor EXIGE confirmar_expedicao=1 — o confirm() abaixo preenche o

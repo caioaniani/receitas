@@ -96,6 +96,9 @@ def _zerar_pagamento_anterior(pedido):
 def iniciar_pix(pedido, expira_em_min=30):
     """Cria PagamentoOnline(metodo=pix) e dispara Order Pix no Pagar.me.
     Devolve o PagamentoOnline (com QR populado) ou None + erros."""
+    db.session.refresh(pedido, with_for_update=True)
+    if pedido.status != 'aguardando_pagamento' or pedido.pago_em:
+        return None, ['Este pedido não está mais aguardando pagamento. Atualize a página.']
     _zerar_pagamento_anterior(pedido)
     pag = PagamentoOnline(pedido_id=pedido.id, metodo='pix',
                           valor=pedido.valor_total)
@@ -128,6 +131,9 @@ def iniciar_cartao(pedido, card_token, parcelas=1, billing=None):
     espera o webhook. `billing` = endereço de cobrança (antifraude)."""
     if not card_token:
         return None, ['Cartão não foi tokenizado — tente de novo.']
+    db.session.refresh(pedido, with_for_update=True)
+    if pedido.status != 'aguardando_pagamento' or pedido.pago_em:
+        return None, ['Este pedido não está mais aguardando pagamento. Atualize a página.']
     _zerar_pagamento_anterior(pedido)
     pag = PagamentoOnline(pedido_id=pedido.id, metodo='cartao',
                           valor=pedido.valor_total)
@@ -164,14 +170,17 @@ def iniciar_cartao(pedido, card_token, parcelas=1, billing=None):
 # ── Webhook ──────────────────────────────────────────────────────────
 
 def _encontrar_pedido(payload_data):
-    """Procura o PedidoOnline referente ao evento. Tenta por
-    pagarme_order_id (PagamentoOnline) e, em fallback, pelo `code` que o
-    Order carrega (que setamos como o codigo do pedido)."""
-    order_id = (payload_data.get('id')
-                or (payload_data.get('order') or {}).get('id'))
-    if order_id:
+    """Resolve a tentativa exata por charge/order antes do código do pedido."""
+    identificador = payload_data.get('id')
+    order_id = (payload_data.get('order') or {}).get('id')
+    if identificador:
         pag = (PagamentoOnline.query
-               .filter_by(pagarme_order_id=order_id).first())
+               .filter(db.or_(PagamentoOnline.pagarme_order_id == identificador,
+                              PagamentoOnline.pagarme_charge_id == identificador)).first())
+        if pag:
+            return pag.pedido, pag
+    if order_id:
+        pag = PagamentoOnline.query.filter_by(pagarme_order_id=order_id).first()
         if pag:
             return pag.pedido, pag
     code = (payload_data.get('code')
@@ -179,8 +188,11 @@ def _encontrar_pedido(payload_data):
     if code:
         ped = PedidoOnline.query.filter_by(codigo=code).first()
         if ped:
-            pag = next((p for p in ped.pagamentos
-                        if p.status == 'pendente'), None)
+            # ID desconhecido não pode ser atribuído a outra tentativa. Sem
+            # IDs, só há associação inequívoca quando existe uma única pendente.
+            pendentes = [p for p in ped.pagamentos if p.status == 'pendente']
+            pag = (pendentes[0] if not (identificador or order_id)
+                   and len(pendentes) == 1 else None)
             return ped, pag
     return None, None
 
@@ -215,7 +227,9 @@ def _reservar_no_plano_do_dia(pedido):
         # plano cadastrado — deixa rastro pra auditoria de "vendeu sem
         # planejar", mas NAO bloqueia a venda (paginas / validacao do checkout
         # cuidam disso ANTES).
-        loja_plano_dia.reservar(kind, item_id, pedido.data_entrega, qtd)
+        # O caller confirma pagamento/estoque/plano juntos. Commit aqui soltaria
+        # o lock do pedido antes de persistir todo o recebimento.
+        loja_plano_dia.reservar(kind, item_id, pedido.data_entrega, qtd, commit=False)
 
 
 def _devolver_ao_plano_do_dia(pedido):
@@ -399,6 +413,9 @@ def reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
     from decimal import Decimal
 
     db.session.refresh(pedido, with_for_update=True)
+    if _tem_pagamento_externo(pedido):
+        return False, ('Pagamento recebido fora do site: a redução com estorno '
+                       'automático pelo Pagar.me não está disponível.')
     if pedido.status != 'pago':
         return False, 'Só dá pra reduzir item de um pedido PAGO.'
     from app.services.saida_producao_site import ja_saiu
@@ -477,8 +494,8 @@ def reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
                   f'estoque e ao plano do dia.{aviso_nf}')
 
 
-def _marcar_pago(pedido, pagamento):
-    """Idempotente em si: se já está pago, no-op. Aplica baixa de estoque
+def _marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None):
+    """Idempotente mesmo após preparo/entrega/estorno. Aplica baixa de estoque
     e seta `pago_em`/status.
 
     Lock pessimista (`with_for_update`) pra evitar RACE entre os eventos
@@ -489,16 +506,30 @@ def _marcar_pago(pedido, pagamento):
 
     Em SQLite (testes/dev) o FOR UPDATE vira no-op silencioso — não quebra."""
     db.session.refresh(pedido, with_for_update=True)
-    if pedido.status == 'pago':
+    if pagamento:
+        db.session.refresh(pagamento)
+    if pedido.pago_em or pedido.status in ('pago', 'em_preparo', 'a_caminho', 'entregue'):
+        # Um QR antigo pode ser pago DEPOIS da confirmação externa. Guarda o
+        # recebimento do gateway sem regredir o pedido nem repetir baixa/NF.
+        if pagamento and pagamento.status != 'estornado':
+            pagamento.status = 'pago'
+            pagamento.pago_em = pagamento.pago_em or agora()
+        if _tem_pagamento_externo(pedido):
+            logger.warning('Pedido %s: gateway reportou pagamento após recebimento '
+                           'externo; confira possível pagamento em duplicidade.', pedido.codigo)
         return False  # já processado
     pedido.status = 'pago'
     pedido.pago_em = agora()
     if pagamento:
         pagamento.status = 'pago'
         pagamento.pago_em = agora()
-    _baixar_estoque(pedido)
+    if usuario_id is None:
+        _baixar_estoque(pedido)
+    else:
+        _baixar_estoque(pedido, usuario_id=usuario_id)
     _reservar_no_plano_do_dia(pedido)
-    _enviar_confirmacao(pedido)
+    if enviar_confirmacao:
+        _enviar_confirmacao(pedido)
     # NF NÃO entra aqui: ela commita por dentro (tiny_nf.emitir_nf) e não pode
     # rodar no meio da transação do pagamento. É chamada pelos callers DEPOIS
     # do commit do pago/baixa (processar_webhook / conciliar_pedido).
@@ -632,6 +663,12 @@ def _cobranca_ja_estornada_no_gateway(pagamento):
         'canceled', 'cancelled', 'refunded', 'voided', 'chargedback')
 
 
+def _tem_pagamento_externo(pedido):
+    from app.models import PagamentoExternoOnline
+    return (db.session.get(PagamentoExternoOnline, pedido.id) is not None
+            or any(p.metodo == 'externo' for p in pedido.pagamentos))
+
+
 def reembolsar_pedido(pedido):
     """Reembolso manual (admin). Cancela/estorna a cobrança no Pagar.me e,
     se já estava pago, devolve o estoque. Devolve (ok, mensagem).
@@ -645,6 +682,10 @@ def reembolsar_pedido(pedido):
     no gateway que o dinheiro voltou e SINCRONIZA o estorno local (caso real
     08/07/2026, pedido 6537F0EB). Só sincroniza com a confirmação do gateway —
     se ele ainda mostrar a cobrança ativa, o erro sobe."""
+    db.session.refresh(pedido, with_for_update=True)
+    if _tem_pagamento_externo(pedido):
+        return False, ('Este pagamento foi recebido fora do site. O Pagar.me '
+                       'não pode devolver esse valor; o estorno automático não está disponível.')
     if pedido.status == 'cancelado':
         return True, 'Pedido já estava cancelado.'
     # Acha a cobrança paga (ou a última com charge_id) pra estornar no gateway.
@@ -730,7 +771,7 @@ def conciliar_pedido(codigo, aplicar=False):
                        'Adicione ?aplicar=1 pra marcar.')
         return out
     try:
-        mudou = _marcar_pago(p, pag)
+        mudou = _marcar_pago(p, pag, enviar_confirmacao=False)
         db.session.commit()
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
@@ -738,6 +779,7 @@ def conciliar_pedido(codigo, aplicar=False):
         return {'ok': False, 'erro': f'falha ao marcar pago: {exc}',
                 'codigo': codigo, 'status_local': p.status}
     if mudou:
+        _enviar_confirmacao(p)
         _emitir_nf_e_enviar(p)  # após commit; isolado
         _reportar_purchase(p)
     out['acao'] = 'MARCADO PAGO' if mudou else 'já estava pago (no-op)'
@@ -773,11 +815,12 @@ def processar_webhook(evento):
 
     try:
         if tipo in ('order.paid', 'charge.paid'):
-            mudou = _marcar_pago(pedido, pagamento)
+            mudou = _marcar_pago(pedido, pagamento, enviar_confirmacao=False)
             db.session.commit()
             # NF + e-mail SÓ depois do commit (isolado; não suja a transação
             # do pagamento). Idempotente: reenvio do webhook não duplica.
             if mudou:
+                _enviar_confirmacao(pedido)
                 _emitir_nf_e_enviar(pedido)
                 _reportar_purchase(pedido)
             return {'ok': True, 'pago': True, 'mudou': mudou}
@@ -794,7 +837,10 @@ def processar_webhook(evento):
                            'requer ação manual no admin', tipo, evt_id)
             return {'ok': True, 'estorno_ignorado': tipo}
         if tipo in ('order.payment_failed', 'charge.payment_failed'):
+            db.session.refresh(pedido, with_for_update=True)
             if pagamento:
+                db.session.refresh(pagamento)
+            if pagamento and pagamento.status not in ('pago', 'estornado'):
                 pagamento.status = 'falhou'
                 pagamento.erro = (data.get('failure_reason')
                                   or data.get('status')
