@@ -1178,6 +1178,113 @@ def pedidos_site():
     return jsonify(ok=True, dias=dias, pedidos=out)
 
 
+@claude_api_bp.route('/clientes-recorrentes')
+@_claude_auth_required
+def clientes_recorrentes():
+    """Quem compra com FREQUÊNCIA no site (13/09/2026, pergunta do dono:
+    "tem cliente que compra com frequência?"). As sondas existentes não
+    respondiam: `/pedidos-site` cobre 30 dias e 200 pedidos (truncava) e
+    `/site-metricas` só separa novo × recorrente na FRONTEIRA do período
+    (180 dias = vida inteira da loja → "0 recorrentes", falso por desenho).
+
+    Agrupa pedidos PAGOS e não cancelados (mesma régua de
+    `loja_online_vendas._intervalo_pago`) por cliente — `cliente_id`
+    quando há, senão e-mail normalizado — e devolve quem tem >= `min`
+    compras: total gasto, ticket, primeira/última compra, intervalo médio
+    entre compras, modos de entrega e itens mais comprados. Read-only.
+    Params: ?dias=180 (1-365), ?min=2 (1-50), ?limite=50 (1-200).
+    """
+    from collections import Counter, defaultdict
+    from datetime import timedelta
+
+    from sqlalchemy.orm import selectinload
+
+    from app.models import PedidoOnline
+    from app.services import loja_online_vendas as lov
+    from app.utils import hoje
+
+    dias = _int_arg('dias', 180, 1, 365)
+    minimo = _int_arg('min', 2, 1, 50)
+    limite = _int_arg('limite', 50, 1, 200)
+    fim = hoje()
+    ini = fim - timedelta(days=dias - 1)
+
+    pedidos = (PedidoOnline.query
+               .options(selectinload(PedidoOnline.itens))
+               .filter(*lov._intervalo_pago(ini, fim))
+               .order_by(PedidoOnline.pago_em).all())
+
+    grupos = defaultdict(list)
+    for p in pedidos:
+        if p.cliente_id:
+            chave = ('id', p.cliente_id)
+        else:
+            chave = ('email', (p.email_cliente or '').strip().lower())
+        grupos[chave].append(p)
+
+    clientes = []
+    for chave, lista in grupos.items():
+        ultimo = lista[-1]
+        total = float(sum((p.valor_total or 0) for p in lista))
+        datas = [p.pago_em.date() for p in lista]
+        gaps = [(datas[i] - datas[i - 1]).days for i in range(1, len(datas))]
+        itens = Counter()
+        for p in lista:
+            for it in p.itens:
+                itens[it.nome] += int(it.quantidade or 0)
+        clientes.append({
+            'cliente_id': chave[1] if chave[0] == 'id' else None,
+            'nome': ultimo.nome_cliente,
+            'email': ultimo.email_cliente,
+            'compras': len(lista),
+            'total_gasto': round(total, 2),
+            'ticket_medio': round(total / len(lista), 2),
+            'primeira_compra': datas[0].isoformat(),
+            'ultima_compra': datas[-1].isoformat(),
+            'dias_desde_ultima': (fim - datas[-1]).days,
+            'intervalo_medio_dias': (round(sum(gaps) / len(gaps), 1)
+                                     if gaps else None),
+            'modos_entrega': dict(Counter(p.modo_entrega for p in lista)),
+            'itens_mais_comprados': [
+                {'nome': n, 'qtd': q} for n, q in itens.most_common(3)],
+            'codigos': [p.codigo for p in lista][-10:],
+        })
+
+    def _faixa(n):
+        if n == 1:
+            return '1'
+        if n == 2:
+            return '2'
+        if n <= 5:
+            return '3-5'
+        return '6+'
+
+    distribuicao = Counter(_faixa(c['compras']) for c in clientes)
+    fat_total = round(sum(c['total_gasto'] for c in clientes), 2)
+    recorrentes = [c for c in clientes if c['compras'] >= 2]
+    fat_rec = round(sum(c['total_gasto'] for c in recorrentes), 2)
+    resumo = {
+        'pedidos_pagos': len(pedidos),
+        'clientes': len(clientes),
+        'clientes_recorrentes': len(recorrentes),
+        'pct_clientes_recorrentes': (round(100.0 * len(recorrentes)
+                                           / len(clientes), 1)
+                                     if clientes else 0.0),
+        'faturamento': fat_total,
+        'faturamento_recorrentes': fat_rec,
+        'pct_faturamento_recorrentes': (round(100.0 * fat_rec / fat_total, 1)
+                                        if fat_total else 0.0),
+        'distribuicao_compras': {k: distribuicao.get(k, 0)
+                                 for k in ('1', '2', '3-5', '6+')},
+    }
+    selecionados = sorted((c for c in clientes if c['compras'] >= minimo),
+                          key=lambda c: (-c['compras'], -c['total_gasto']))
+    return jsonify(ok=True, inicio=ini.isoformat(), fim=fim.isoformat(),
+                   dias=dias, minimo=minimo, resumo=resumo,
+                   clientes=selecionados[:limite],
+                   truncado=len(selecionados) > limite)
+
+
 @claude_api_bp.route('/auditoria-baixa-pedidos')
 @_claude_auth_required
 def auditoria_baixa_pedidos():
