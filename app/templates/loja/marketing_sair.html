@@ -1,0 +1,17 @@
+{% extends 'loja/_base.html' %}
+
+{% block title %}Novidades por e-mail — O Pão Padaria Artesanal{% endblock %}
+
+{% block content %}
+<section class="checkout-pagina confirmado">
+  <div class="confirmado-cabecalho">
+    <div class="confirmado-check">✓</div>
+    <h1>Pronto, sem novidades por e-mail.</h1>
+    <p>Você não vai mais receber e-mails de novidades e promoções em
+       <strong>{{ email }}</strong>.</p>
+    <p>Os e-mails do seu pedido — confirmação, saída para entrega e nota
+       fiscal — continuam chegando normalmente.</p>
+    <p><a href="{{ url_for('loja.home') }}">Voltar para a loja</a></p>
+  </div>
+</section>
+{% endblock %}
