@@ -234,6 +234,121 @@
         </p>
     </div>
 </div>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <strong><i class="bi bi-arrow-repeat"></i> E-mail de recompra (pós-compra)</strong>
+        {% if rc.auto %}
+        <span class="badge bg-success">LIGADO — sai todo dia às 10:30</span>
+        {% else %}
+        <span class="badge bg-secondary">DESLIGADO — nada é enviado</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <p class="small text-muted">
+            <strong>{{ rc.dias }} dias</strong> depois do pagamento, quem
+            <strong>não voltou a comprar</strong> recebe um e-mail com o que
+            pediu e o link para repetir — texto diferente para quem mandou
+            presente (cesta, cartinha ou destinatário). Um e-mail por pedido,
+            no máximo um por pessoa a cada {{ rc.anti_spam }} dias; quem
+            clicar em “não quero receber novidades” sai de tudo. Sem cupom —
+            o resultado aparece em “voltaram”.
+            {% if not rc.disponivel %}
+            <span class="text-danger d-block mt-1">Postmark não configurado —
+                nada sai até definir POSTMARK_SERVER_TOKEN.</span>
+            {% endif %}
+        </p>
+        <div class="row g-2 mb-3 text-center">
+            <div class="col-6 col-md-3"><div class="border rounded p-2">
+                <div class="fs-4 fw-bold">{{ rc.candidatos_hoje if rc.candidatos_hoje is not none else '—' }}</div>
+                <div class="small text-muted">receberiam hoje</div>
+            </div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2">
+                <div class="fs-4 fw-bold">{{ rc.enviados_30d }}</div>
+                <div class="small text-muted">enviados (30 dias)</div>
+            </div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2">
+                <div class="fs-4 fw-bold">{{ rc.voltaram_30d }}</div>
+                <div class="small text-muted">voltaram a comprar</div>
+            </div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2">
+                <div class="fs-4 fw-bold">{{ rc.taxa_pct ~ '%' if rc.taxa_pct is not none else '—' }}</div>
+                <div class="small text-muted">taxa de retorno</div>
+            </div></div>
+        </div>
+
+        <form method="POST" action="{{ url_for('main.marketing_recompra_salvar') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-2">
+                <div class="col-12 col-md-3">
+                    <label class="form-label small">Dias após o pagamento</label>
+                    <input type="number" name="dias" min="1" max="90"
+                           class="form-control form-control-sm" value="{{ rc.dias }}" required>
+                </div>
+                <div class="col-12 col-md-9">
+                    <label class="form-label small">Assunto (pão do dia a dia)</label>
+                    <input type="text" name="assunto_pao" class="form-control form-control-sm"
+                           value="{{ rc.assunto_pao }}">
+                </div>
+                <div class="col-12">
+                    <label class="form-label small">Assunto (presente / cesta)</label>
+                    <input type="text" name="assunto_presente" class="form-control form-control-sm"
+                           value="{{ rc.assunto_presente }}">
+                </div>
+            </div>
+            <div class="form-check my-3">
+                <input class="form-check-input" type="checkbox" name="auto"
+                       value="1" id="recompra-auto" {{ 'checked' if rc.auto }}>
+                <label class="form-check-label" for="recompra-auto">
+                    <strong>Enviar automaticamente todo dia às 10:30</strong>
+                    <span class="d-block small text-muted">Desmarcado, o sistema
+                        só conta quem receberia — nada sai.</span>
+                </label>
+            </div>
+            <button class="btn btn-primary btn-sm">
+                <i class="bi bi-check-lg"></i> Salvar
+            </button>
+        </form>
+
+        <hr>
+        <div class="d-flex gap-2 flex-wrap align-items-end">
+            <form method="POST" action="{{ url_for('main.marketing_recompra_rodar') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-eye"></i> Ver quem receberia hoje
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('main.marketing_recompra_rodar') }}"
+                  onsubmit="return confirm('Enviar AGORA o e-mail de recompra para {{ rc.candidatos_hoje or 0 }} pessoa(s)?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="enviar" value="1">
+                <button class="btn btn-outline-danger btn-sm"
+                        {{ 'disabled' if not rc.disponivel or not rc.candidatos_hoje }}>
+                    <i class="bi bi-send"></i> Enviar agora
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('main.marketing_recompra_teste') }}"
+                  class="d-flex gap-1 align-items-end flex-wrap">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="email" name="email" class="form-control form-control-sm"
+                       placeholder="seu e-mail" style="max-width:220px" required>
+                <select name="tipo" class="form-select form-select-sm" style="max-width:130px">
+                    <option value="pao">texto: pão</option>
+                    <option value="presente">texto: presente</option>
+                </select>
+                <button class="btn btn-outline-secondary btn-sm"
+                        {{ 'disabled' if not rc.disponivel }}>
+                    <i class="bi bi-envelope"></i> Enviar teste pra mim
+                </button>
+            </form>
+        </div>
+        <p class="small text-muted mt-2 mb-0">
+            O teste usa o pedido pago mais recente como amostra e não conta
+            como envio.
+            {% if rc.ultimo_run %}Última rodada: <strong>{{ rc.ultimo_run }}</strong>.{% endif %}
+        </p>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
