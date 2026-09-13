@@ -373,6 +373,11 @@ class Config:
     # opao.online) so permite MX na raiz. Postmark valida com CNAME, que
     # o Wix aceita — sem precisar mover o DNS.
     POSTMARK_SERVER_TOKEN = os.environ.get('POSTMARK_SERVER_TOKEN', '')
+    # Stream de BROADCAST do Postmark (id do "Default Broadcast Stream" =
+    # 'broadcast'). Usado pelo e-mail de recompra (13/09/2026) — marketing
+    # nunca sai pelo stream transacional. Mesmo server token.
+    POSTMARK_BROADCAST_STREAM = os.environ.get(
+        'POSTMARK_BROADCAST_STREAM', 'broadcast')
     # ── Listmonk (e-mail marketing, 05/08/2026) ──
     # Roda no VPS da Vultr atrás de HTTPS. NUNCA apontar pra http:// — o
     # token vai em BasicAuth e trafegaria em claro (o service recusa).
