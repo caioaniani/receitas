@@ -412,6 +412,11 @@ def _gate_acesso():
             # 7.962/2013 Art. 2 IV). Sitemap fica fora porque so vale com
             # loja publica (a propria rota retorna 404 se !visivel).
             'loja.privacidade', 'loja.termos', 'loja.trocas', 'loja.contato',
+            # Descadastro de e-mail de marketing (recompra, 13/09/2026): o
+            # link do rodape tem que funcionar SEMPRE, anonimo e em qualquer
+            # estado de cutover — descadastro que da 404 vira denuncia de
+            # spam (LGPD Art. 18 + boas praticas do Postmark).
+            'loja.marketing_sair',
             # Acompanhar pedido pelo CÓDIGO (link do email pra guests):
             # qualquer um com o código vê o pedido. O código é random hex 8
             # (16^8 = 4 bi) — não é adivinhável por enumeração realista.
