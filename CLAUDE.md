@@ -203,6 +203,17 @@ saem por HTTPS com token. Blueprint `app/blueprints/claude_api/`.
   na propria company apos 15/07). `faturamento_pedidos` (card/bot) conta
   essas cobrancas; `faturamento_itens` (relatorio de produtos) nao — e
   venda sem item NAO baixa estoque nem entra na previsao de demanda.
+- `GET /api/claude/clientes-recorrentes?dias=180&min=2&limite=50`
+  (13/09/2026, dono: "tem cliente que compra com frequência?"): agrupa os
+  pedidos PAGOS não cancelados do site por cliente (`cliente_id`, senão
+  e-mail normalizado) e devolve compras, total, ticket, primeira/última,
+  intervalo médio entre compras, modos e itens mais comprados + resumo
+  (distribuição 1/2/3-5/6+, % de clientes e de faturamento recorrentes).
+  Criada porque `/pedidos-site` trunca em 30 dias/200 pedidos e
+  `/site-metricas` só separa novo × recorrente na FRONTEIRA do período
+  (180 dias = vida inteira da loja → "0 recorrentes", falso por desenho).
+  Achado do 1º uso (13/09, 3 meses de loja): 793 clientes, 103 com 2+
+  compras (13%) = 21,7% do faturamento; 9 com 6+.
 - Testes: `tests/test_claude_api.py`.
 
 ## Cockpit do dono — briefing diario + home + manual (16/07/2026)
