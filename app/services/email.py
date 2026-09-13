@@ -41,13 +41,19 @@ def disponivel():
     return bool((current_app.config.get('POSTMARK_SERVER_TOKEN') or '').strip())
 
 
-def enviar(destinatario, assunto, html, *, texto=None, anexos=None, bcc=None):
+def enviar(destinatario, assunto, html, *, texto=None, anexos=None, bcc=None,
+           stream=None):
     """Envia um email. Retorna {'ok': True, 'id': ...} ou
     {'ok': False, 'erro': ...}. Best-effort — nunca propaga exceção.
 
     `anexos`: lista de (nome_arquivo, bytes, content_type) — vira o campo
     `Attachments` do Postmark (conteúdo em base64). Limite Postmark: 10MB
-    por mensagem; boleto/DANFE ficam na casa dos KB."""
+    por mensagem; boleto/DANFE ficam na casa dos KB.
+
+    `stream`: message stream do Postmark. Default = transacional
+    (`_MESSAGE_STREAM`). E-mail de MARKETING (recompra, 13/09/2026) passa o
+    stream de broadcast (`POSTMARK_BROADCAST_STREAM`) — reclamação de spam
+    numa peça de marketing não pode derrubar a entrega do e-mail de pedido."""
     cfg = current_app.config
     token = (cfg.get('POSTMARK_SERVER_TOKEN') or '').strip()
     if not token:
