@@ -622,6 +622,94 @@ def test_pedidos_site_lista_cancelados(app):
     assert ped['cancelado_em'] is not None
 
 
+def _pedido_site_pago(codigo, email, nome, pago_dias_atras, valor,
+                      cliente_id=None, status='entregue', itens=()):
+    from decimal import Decimal
+
+    from app.models import PedidoOnline, PedidoOnlineItem
+    from app.utils import agora
+    quando = agora() - timedelta(days=pago_dias_atras)
+    p = PedidoOnline(codigo=codigo, status=status, cliente_id=cliente_id,
+                     nome_cliente=nome, email_cliente=email,
+                     modo_entrega='agendada', subtotal=Decimal(str(valor)),
+                     valor_total=Decimal(str(valor)), criado_em=quando,
+                     pago_em=(None if status == 'aguardando_pagamento'
+                              else quando))
+    db.session.add(p)
+    db.session.flush()
+    for nome_item, qtd in itens:
+        p.itens.append(PedidoOnlineItem(
+            kind='produto', nome=nome_item, quantidade=qtd,
+            preco_unitario=Decimal('10'), subtotal=Decimal('10') * qtd))
+    db.session.commit()
+    return p
+
+
+def test_clientes_recorrentes_agrupa_por_cliente_e_email(app):
+    """Sonda /clientes-recorrentes (13/09/2026): quem compra com
+    frequência. Agrupa por cliente_id (ou e-mail sem conta), conta SÓ pagos
+    não cancelados, calcula intervalo médio e ordena por nº de compras."""
+    from app.models import Cliente
+
+    app.config['CLAUDE_API_TOKEN'] = TOKEN
+    client = app.test_client()
+    assert client.get('/api/claude/clientes-recorrentes').status_code == 401
+
+    ana = Cliente(nome='Ana', email='ana@x.com')
+    db.session.add(ana)
+    db.session.commit()
+    # Ana: 3 compras pagas (dias -20, -10, -2) + 1 cancelada + 1 não paga
+    _pedido_site_pago('ANA1', 'ana@x.com', 'Ana', 20, 100, ana.id,
+                      itens=[('Croissant', 6)])
+    _pedido_site_pago('ANA2', 'ana@x.com', 'Ana', 10, 50, ana.id,
+                      itens=[('Croissant', 4), ('Cookie', 2)])
+    _pedido_site_pago('ANA3', 'ana@x.com', 'Ana', 2, 150, ana.id)
+    _pedido_site_pago('ANAC', 'ana@x.com', 'Ana', 5, 999, ana.id,
+                      status='cancelado')
+    _pedido_site_pago('ANAP', 'ana@x.com', 'Ana', 1, 999, ana.id,
+                      status='aguardando_pagamento')
+    # Bia: sem conta (convidada), 2 compras pelo MESMO e-mail (caixa mista)
+    _pedido_site_pago('BIA1', 'Bia@X.com', 'Bia', 30, 80)
+    _pedido_site_pago('BIA2', 'bia@x.com', 'Bia', 3, 120)
+    # Carla: 1 compra só — fora da lista com min=2
+    _pedido_site_pago('CAR1', 'carla@x.com', 'Carla', 4, 70)
+
+    resp = client.get('/api/claude/clientes-recorrentes?dias=60',
+                      headers={'Authorization': f'Bearer {TOKEN}'})
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['ok'] is True
+    assert d['resumo']['pedidos_pagos'] == 6
+    assert d['resumo']['clientes'] == 3
+    assert d['resumo']['clientes_recorrentes'] == 2
+    assert d['resumo']['distribuicao_compras'] == {
+        '1': 1, '2': 1, '3-5': 1, '6+': 0}
+    assert d['resumo']['faturamento'] == 570.0
+    assert d['resumo']['faturamento_recorrentes'] == 500.0
+
+    nomes = [c['nome'] for c in d['clientes']]
+    assert nomes == ['Ana', 'Bia']          # ordenado por compras, min=2
+    ana_out = d['clientes'][0]
+    assert ana_out['compras'] == 3
+    assert ana_out['total_gasto'] == 300.0
+    assert ana_out['ticket_medio'] == 100.0
+    assert ana_out['intervalo_medio_dias'] == 9.0      # (10 + 8) / 2
+    assert ana_out['dias_desde_ultima'] == 2
+    assert ana_out['itens_mais_comprados'][0] == {'nome': 'Croissant',
+                                                  'qtd': 10}
+    assert 'ANAC' not in ana_out['codigos'] and 'ANAP' not in ana_out['codigos']
+    bia_out = d['clientes'][1]
+    assert bia_out['cliente_id'] is None and bia_out['compras'] == 2
+
+    # min=3 deixa só a Ana; min=1 traz a Carla também
+    d3 = client.get('/api/claude/clientes-recorrentes?dias=60&min=3',
+                    headers={'Authorization': f'Bearer {TOKEN}'}).get_json()
+    assert [c['nome'] for c in d3['clientes']] == ['Ana']
+    d1 = client.get('/api/claude/clientes-recorrentes?dias=60&min=1',
+                    headers={'Authorization': f'Bearer {TOKEN}'}).get_json()
+    assert [c['nome'] for c in d1['clientes']] == ['Ana', 'Bia', 'Carla']
+
+
 # ── /projetos: o quadro da tela /projetos legível pro assistente ─────────
 
 def _seed_projeto(nome='Sistema v2'):
