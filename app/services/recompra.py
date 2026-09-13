@@ -270,14 +270,20 @@ def _link_item(base, it, tipo):
     return f'{base}{href_publico(it.kind, item_id, it.nome)}?{_UTM.format(tipo=tipo)}'
 
 
-def montar_email(pedido, tipo, base=None):
+def montar_email(pedido, tipo, base=None, email_sair=None):
     """(assunto, html, texto) — tudo que vem do banco passa por `escape`
-    (nome do cliente e dos itens são texto digitado)."""
+    (nome do cliente e dos itens são texto digitado).
+
+    `email_sair`: e-mail do link de descadastro (default = o do pedido). O
+    teste da tela passa o e-mail do DONO — senão o link de "não quero
+    receber" do e-mail de amostra descadastraria o cliente do pedido usado
+    como exemplo."""
     base = base if base is not None else _base_url()
     primeiro = escape((pedido.nome_cliente or '').strip().split(' ')[0] or 'olá')
     utm = _UTM.format(tipo=tipo)
     link_loja = f'{base}/loja/?{utm}'
-    link_sair = f'{base}/loja/marketing/sair/{quote(token_sair(pedido.email_cliente))}'
+    link_sair = (f'{base}/loja/marketing/sair/'
+                 f'{quote(token_sair(email_sair or pedido.email_cliente))}')
 
     linhas_html, linhas_txt = [], []
     for it in list(pedido.itens)[:MAX_ITENS_EMAIL]:
