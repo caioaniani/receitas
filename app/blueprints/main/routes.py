@@ -78,17 +78,20 @@ def index():
         # diário do dono (fonte única em app/services/briefing_dono.py).
         # Itens de tela owner-only só aparecem pro owner (mesmo gate do
         # dashboard).
+        from sqlalchemy import func as _func
+
+        from app.models import PedidoOnline
         from app.services import briefing_dono, producao_pendente
+
         pend = briefing_dono.pendencias(
             incluir_owner=bool(current_user.is_owner))
         # Vendas de ontem SÓ pro dono (faturamento é o cockpit pessoal —
         # mesmo gate do /admin/briefing). capturar=False: a home carrega a
         # toda hora e NUNCA deve bater na API Seru; o cron de 15 min mantém
         # o snapshot de ontem quente.
-        from app.models import PedidoOnline
-        from sqlalchemy import func as _func
-
-        hoje = hoje_brt().date()
+        hoje = hoje_brt()
+        if isinstance(hoje, datetime):
+            hoje = hoje.date()
         semana_ini = hoje - timedelta(days=hoje.weekday())
         mes_ini = hoje.replace(day=1)
 
