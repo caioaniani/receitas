@@ -7,8 +7,9 @@
   <h1>Pagamento</h1>
   <p class="text-muted small">
     Pedido <code>{{ pedido.codigo }}</code> —
-    Total <strong>R$ {{ '%.2f'|format(pedido.valor_total)|replace('.', ',') }}</strong>
+    Total <strong>R$ {{ '%.2f'|format(compra_kit.valor_total if compra_kit else pedido.valor_total)|replace('.', ',') }}</strong>
   </p>
+  {% if compra_kit %}{% include 'loja/_agenda_kit.html' %}{% endif %}
 
   {% if erros %}
   <div class="checkout-erros">
@@ -17,7 +18,10 @@
   </div>
   {% endif %}
 
-  {% if pix %}
+  {% if pedido.status != 'aguardando_pagamento' %}
+  <div class="checkout-bloco"><p>Este pedido já foi pago ou encerrado.
+    <a href="{{ url_for('loja.pedido_confirmado', codigo=pedido.codigo) }}">Acompanhe suas entregas</a>.</p></div>
+  {% elif pix %}
     <!-- Pix já gerado: QR (gerado no servidor) + copia-e-cola -->
     <div class="checkout-bloco pix-bloco">
       <h2>Pague com Pix</h2>

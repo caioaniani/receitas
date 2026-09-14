@@ -30,6 +30,7 @@ import logging
 from datetime import date as _date_type
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import (
@@ -298,7 +299,40 @@ def definir(kind, item_id, data, qtd_planejada):
     return row
 
 
-def reservar(kind, item_id, data, qtd, *, commit=True):
+def _linha_travada(kind, item_id, data, *, criar=False):
+    """Trava uma chave do plano, inclusive quando duas vendas criam a primeira linha."""
+    stmt = (select(EstoqueSitePlano)
+            .filter_by(kind=kind, item_id=item_id, data=data)
+            .with_for_update().execution_options(populate_existing=True))
+    row = db.session.execute(stmt).scalar_one_or_none()
+    if row is not None or not criar:
+        return row
+    planejado, _ = _planejado_efetivo(kind, item_id, data)
+    if planejado is None:
+        planejado = DEFAULT_QTD_PLANEJADA
+    if db.engine.dialect.name == 'sqlite':
+        # SQLite em modo legado pode abrir SAVEPOINT antes do BEGIN real e
+        # persistir a primeira linha ao liberar o savepoint. UPSERT mantém a
+        # inserção na transação externa e a desfaz se outra data falhar.
+        from sqlalchemy.dialects.sqlite import insert
+        db.session.execute(insert(EstoqueSitePlano).values(
+            kind=kind, item_id=item_id, data=data, qtd_planejada=planejado,
+            qtd_reservada=0).on_conflict_do_nothing(index_elements=['kind', 'item_id', 'data']))
+        return db.session.execute(stmt).scalar_one()
+    try:
+        # A restrição UNIQUE protege a chave ausente, que FOR UPDATE não trava.
+        # O SAVEPOINT desfaz só a inserção perdedora, preservando a compra inteira.
+        with db.session.begin_nested():
+            row = EstoqueSitePlano(kind=kind, item_id=item_id, data=data,
+                                   qtd_planejada=planejado, qtd_reservada=0)
+            db.session.add(row)
+            db.session.flush()
+    except IntegrityError:
+        row = db.session.execute(stmt).scalar_one()
+    return row
+
+
+def reservar(kind, item_id, data, qtd, *, commit=True, forcar=False):
     """Reserva `qtd` no plano de (item, data). Atomico — pega row lock
     (SELECT FOR UPDATE no Postgres) pra evitar oversell.
 
@@ -311,28 +345,22 @@ def reservar(kind, item_id, data, qtd, *, commit=True):
     de setar limite manual; primeira venda deixou item esgotado). Agora cria
     com 99999, replicando o comportamento default da tela.
 
+    ``forcar`` é exclusivo do recebimento tardio de kit já pago, cujo caller
+    registra alerta auditável: contabiliza demanda real acima do limite em
+    vez de omitir capacidade de um pagamento recebido.
+
     Sem plano de dia: ainda eh chamado, mas eh idempotente em servico de
     cancelamento. Caller decide se chamar baseado em `tem_plano(data)`."""
     if qtd <= 0:
         return True
-    # SELECT FOR UPDATE: trava a linha pra evitar 2 reservas simultaneas
-    # gerarem oversell. fallback gracioso se nao existe linha (cria).
-    try:
-        # Postgres suporta with_for_update; SQLite ignora silenciosamente.
-        stmt = (select(EstoqueSitePlano)
-                .filter_by(kind=kind, item_id=item_id, data=data)
-                .with_for_update())
-        row = db.session.execute(stmt).scalar_one_or_none()
-    except Exception:  # noqa: BLE001
-        row = (db.session.query(EstoqueSitePlano)
-               .filter_by(kind=kind, item_id=item_id, data=data).first())
+    row = _linha_travada(kind, item_id, data, criar=True)
     planejado, fonte = _planejado_efetivo(
         kind, item_id, data, row_plano=row)
     if planejado is None:
         planejado = DEFAULT_QTD_PLANEJADA
     reservado = (row.qtd_reservada or 0) if row else 0
     disponivel = planejado - reservado
-    if disponivel < qtd:
+    if disponivel < qtd and not forcar:
         return False
     if row is None:
         # A linha diaria guarda a reserva/auditoria. Com regra semanal ou
@@ -353,13 +381,12 @@ def reservar(kind, item_id, data, qtd, *, commit=True):
     return True
 
 
-def devolver(kind, item_id, data, qtd):
+def devolver(kind, item_id, data, qtd, *, commit=True):
     """Decrementa qtd_reservada (cancelamento/reembolso). NAO recria linha se
     nao existir — devolver algo que nunca foi reservado eh no-op."""
     if qtd <= 0:
         return
-    row = (db.session.query(EstoqueSitePlano)
-           .filter_by(kind=kind, item_id=item_id, data=data).first())
+    row = _linha_travada(kind, item_id, data)
     if row is None:
         logger.warning(
             'loja_plano_dia.devolver: tentou devolver %s na linha %s/%s/%s '
@@ -367,7 +394,10 @@ def devolver(kind, item_id, data, qtd):
         return
     nova = max(0, (row.qtd_reservada or 0) - qtd)
     row.qtd_reservada = nova
-    db.session.commit()
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()
 
 
 def reparar_linhas_orfas():

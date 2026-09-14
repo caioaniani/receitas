@@ -130,7 +130,7 @@ def create_app(config_class=None):
                     'css/rh-equipe.css', 'js/plano-carreira-lote.js',
                     'css/treino-gestao.css', 'css/treino-aluno.css',
                     'css/treino-admin.css', 'js/treino-admin.js',
-                    'loja/loja.css', 'loja/carrinho.js', 'loja/checkout.js'):
+                    'loja/loja.css', 'loja/carrinho.js', 'loja/checkout.js', 'loja/kits.js'):
             try:
                 p = os.path.join(app.static_folder, rel)
                 with open(p, 'rb') as f:
@@ -831,6 +831,7 @@ def create_app(config_class=None):
     from app.blueprints.driver import driver_bp
     from app.blueprints.entregas import entregas_bp
     from app.blueprints.handshake import handshake_bp
+    from app.blueprints.kits_cafe_admin import kits_cafe_admin_bp
     from app.blueprints.lalamove import lalamove_bp
     from app.blueprints.loja import loja_bp
     from app.blueprints.main import main_bp
@@ -859,6 +860,7 @@ def create_app(config_class=None):
     app.register_blueprint(driver_bp, url_prefix='/driver')
     app.register_blueprint(comprovante_bp, url_prefix='/entrega')
     app.register_blueprint(loja_bp, url_prefix='/loja')
+    app.register_blueprint(kits_cafe_admin_bp)
     app.register_blueprint(projetos_bp)
     from app.blueprints.pdv import pdv_bp
     app.register_blueprint(pdv_bp, url_prefix='/pdv')

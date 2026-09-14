@@ -1,5 +1,26 @@
 # Convenções de trabalho (Claude)
 
+## Kits de café da manhã (decisão do dono, 14/09/2026)
+
+O owner monta e publica os kits em `/admin/kits-cafe`, selecionando somente
+itens já disponíveis à venda no site. O cliente informa as datas e os
+horários de entrega em casa; cada data corresponde a um kit. Compra para
+um mês, sem renovação automática. Preço = soma dos produtos do kit por
+entrega, mais frete separado para cada entrega. Não inventar substitutos,
+porções ou preços dos alimentos. Menus configuráveis usam uma composição
+fixada pelo owner; uma mudança de padrão só entra no kit explicitamente.
+Edições posteriores preservam os pedidos já comprados. Fluxo e operação em
+`docs/kits-cafe.md` e no manual administrativo.
+
+Implementação: `CompraKit` agrupa pedidos reais, um `PedidoOnline` por data,
+sem pedido financeiro extra que duplicaria faturamento. A cobrança única
+fica no primeiro pedido; pagamento externo confirma o total da compra.
+Capacidade é reservada no checkout, liberada na expiração e mantida no pago;
+estoque físico só baixa na coleta individual. Refund é por entrega, com
+`ReembolsoKit` persistido antes da rede para não repetir tentativa incerta.
+`TarefaFiscalKit` mantém a fila de NF por entrega fora do webhook. As tabelas
+dos kits são novas e criadas no startup; não há coluna nova em tabela antiga.
+
 ## Tom e linguagem
 
 - **SEMPRE escreva em português correto, independentemente de como o usuário

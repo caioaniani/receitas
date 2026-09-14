@@ -5814,7 +5814,9 @@ def _detalhe_redirect(codigo):
 @gerente_required
 def loja_online_pedido_detalhe(codigo):
     from app.models import PagamentoExternoOnline, PedidoOnline
+    from app.models.kits_cafe import ReembolsoKit, TarefaFiscalKit
     from app.services import loja_checkout, loja_pagamento, pagamento_externo
+    from app.services.compra_kits import grupo_do_pedido, principal_do_pedido, valor_cobranca
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
     # Pedido corrigido após a NF (quantidade reduzida): versão de estoque > 0.
     # A tela avisa que a NF pode estar desatualizada (o Tiny não cancela por
@@ -5825,7 +5827,11 @@ def loja_online_pedido_detalhe(codigo):
                            lojas=loja_checkout.lojas_retirada(),
                            modos=_MODOS_ENTREGA,
                            estoque_reduzido=estoque_reduzido,
-                           pagamento_externo=PagamentoExternoOnline.query.get(p.id),
+                           compra_kit=grupo_do_pedido(p),
+                           reembolso_kit=db.session.get(ReembolsoKit, p.id),
+                           tarefa_fiscal_kit=db.session.get(TarefaFiscalKit, p.id),
+                           valor_recebimento=valor_cobranca(p),
+                           pagamento_externo=PagamentoExternoOnline.query.get(principal_do_pedido(p).id),
                            pode_confirmar_pagamento_externo=pagamento_externo.pode_confirmar(p),
                            expedicao_sinal=_expedicao_com_pedido(p))
 
@@ -5866,7 +5872,9 @@ def loja_online_pedido_editar(codigo):
     from flask import flash
 
     from app.models import PedidoOnline
+    from app.services.kits_pagamento import travar
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    compra, _pedidos = travar(p, todos=True)
     f = request.form
 
     def _s(k):
@@ -5889,6 +5897,10 @@ def loja_online_pedido_editar(codigo):
             data_entrega = _date.fromisoformat(data_str)
         except ValueError:
             erros.append('Data de entrega inválida (use o seletor).')
+    if compra and (modo != p.modo_entrega or data_entrega != p.data_entrega
+                   or (_s('janela_entrega') or None) != p.janela_entrega):
+        erros.append('A agenda de um kit está vinculada à capacidade de produção. '
+                     'Para trocar a data ou horário, cancele esta entrega e faça uma nova compra.')
     if erros:
         for e in erros:
             flash(e, 'danger')
@@ -6123,8 +6135,9 @@ def loja_online_pedido_cancelar(codigo):
     from app.services import loja_pagamento
     from app.utils import agora
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
-    # Não cancelar como "nunca pago" após confirmação concorrente do owner.
-    db.session.refresh(p, with_for_update=True)
+    # Compra antes dos pedidos: mesma ordem de locks do pagamento e expiração.
+    from app.services import compra_kits, kits_pagamento
+    compra, _pedidos = kits_pagamento.travar(p, todos=True)
     if p.status == 'cancelado':
         flash(f'Pedido {p.codigo} já está cancelado.', 'warning')
     elif p.status == 'entregue':
@@ -6151,6 +6164,9 @@ def loja_online_pedido_cancelar(codigo):
             return _detalhe_redirect(codigo)
         ok, msg = loja_pagamento.reembolsar_pedido(p)
         flash(f'{p.codigo}: {msg}', 'success' if ok else 'danger')
+    elif compra:
+        ok, msg = compra_kits.cancelar_pendentes(p)
+        flash(msg, 'success' if ok else 'danger')
     else:
         p.status = 'cancelado'
         p.motivo_cancelamento = 'cancelado_admin'

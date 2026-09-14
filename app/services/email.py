@@ -120,6 +120,10 @@ def enviar_pedido_recebido(pedido):
     pedido e direciona pra continuar o pagamento.
 
     Best-effort — falha silente, não derruba o checkout."""
+    from app.services.compra_kits import grupo_do_pedido
+    compra = grupo_do_pedido(pedido)
+    if compra:
+        return _enviar_compra_kit(compra, confirmado=False)
     destinatario = (pedido.email_cliente or '').strip()
     if not destinatario:
         return {'ok': False, 'erro': 'pedido sem email'}
@@ -134,6 +138,10 @@ def enviar_pedido_recebido(pedido):
 def enviar_confirmacao_pedido(pedido):
     """E-mail de confirmação de pagamento pro cliente do site. Best-effort —
     chamado quando o pedido vira 'pago' (webhook). Resumo + entrega."""
+    from app.services.compra_kits import grupo_do_pedido
+    compra = grupo_do_pedido(pedido)
+    if compra:
+        return _enviar_compra_kit(compra, confirmado=True)
     destinatario = (pedido.email_cliente or '').strip()
     if not destinatario:
         return {'ok': False, 'erro': 'pedido sem email'}
@@ -142,6 +150,50 @@ def enviar_confirmacao_pedido(pedido):
     assunto = f'Pedido {pedido.codigo} confirmado — O Pão Padaria Artesanal'
     html = _template_confirmacao(pedido, base)
     return enviar(destinatario, assunto, html, texto=_texto_confirmacao(pedido))
+
+
+def _enviar_compra_kit(compra, *, confirmado):
+    """Resumo único do kit: datas, horários e fretes de toda a compra."""
+    from html import escape
+
+    pedido = compra.pedido_principal
+    destinatario = (pedido.email_cliente or '').strip()
+    if not destinatario:
+        return {'ok': False, 'erro': 'pedido sem email'}
+    base = (current_app.config.get('LOJA_BASE_URL')
+            or current_app.config.get('APP_BASE_URL') or '').rstrip('/')
+    titulo = 'Pagamento do kit confirmado' if confirmado else 'Recebemos sua compra de kit'
+    linhas = []
+    for registro in compra.entregas:
+        entrega = registro.pedido
+        onde, quando = _entrega_linha(entrega)
+        linhas.append(f'{quando} — Pedido {entrega.codigo}\n'
+                      f'{onde}\nProdutos: {_fmt_brl(entrega.subtotal)} · '
+                      f'Frete: {_fmt_brl(entrega.frete_valor)} · '
+                      f'Total: {_fmt_brl(entrega.valor_total)}')
+    itens = '\n'.join(f'  {it.quantidade}x {it.nome}{_comp_texto(it)}'
+                      for it in pedido.itens)
+    agenda = '\n\n'.join(linhas)
+    mensagem = (f'{titulo}! {compra.kit_nome}.\n\n'
+                f'Um kit em cada data, com:\n{itens}\n\n'
+                f'Agenda das entregas:\n{agenda}\n\n'
+                f'Produtos do mês: {_fmt_brl(compra.subtotal)}\n'
+                f'Fretes: {_fmt_brl(compra.frete_total)}\n'
+                f'Total da compra: {_fmt_brl(compra.valor_total)}\n\n'
+                'Compra de um mês, sem renovação automática.\n')
+    if not confirmado:
+        mensagem += 'A agenda será confirmada após a aprovação do pagamento.\n'
+    link = f'{base}/loja/pedido/{pedido.codigo}' if base else ''
+    if link:
+        mensagem += f'Confira sua compra: {link}\n'
+    html = ('<!doctype html><html lang="pt-BR"><body style="font-family:Arial,sans-serif;'
+            'color:#2a2520;background:#fbf8f3;padding:24px;">'
+            '<div style="max-width:600px;margin:auto;">'
+            '<h1 style="font-size:22px;">O Pão · Padaria Artesanal</h1>'
+            f'<div style="white-space:pre-line;line-height:1.65;">{escape(mensagem)}</div>'
+            '</div></body></html>')
+    return enviar(destinatario, f'{titulo} {pedido.codigo} — O Pão Padaria Artesanal',
+                  html, texto=mensagem)
 
 
 def enviar_pedido_a_caminho(pedido, rastreio_url=None):

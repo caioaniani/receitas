@@ -194,6 +194,24 @@ def _payload_customer(pedido):
 def _payload_items(pedido):
     """Items da v5: amount em centavos, quantity inteiro. `code` ajuda a
     rastrear no painel (kind+id)."""
+    from app.services.compra_kits import grupo_do_pedido, pedidos_do_grupo
+    compra = grupo_do_pedido(pedido)
+    if compra:
+        out = []
+        for entrega in pedidos_do_grupo(compra):
+            for item in _payload_items_individual(entrega):
+                # Frete e produtos por data, preservando a soma exata da cobrança.
+                item['code'] = f'{entrega.codigo}-{item["code"]}'
+                if entrega.data_entrega:
+                    item['description'] = (f'{entrega.data_entrega:%d/%m/%Y} · '
+                                           f'{item["description"]}')[:255]
+                out.append(item)
+        return out
+    return _payload_items_individual(pedido)
+
+
+def _payload_items_individual(pedido):
+    """Linhas financeiras de uma entrega; não expande o grupo novamente."""
     out = []
     for it in pedido.itens:
         out.append({
@@ -279,13 +297,15 @@ def criar_pedido_pix(pedido, expira_em_min=30):
     (se vier). Best-effort: nunca levanta exceção."""
     from datetime import timedelta
 
+    from app.services.compra_kits import principal_do_pedido, valor_cobranca
     from app.utils import agora
+    pedido = principal_do_pedido(pedido)
     payload = {
         'customer': _payload_customer(pedido),
         'items': _payload_items(pedido),
         'payments': [{
             'payment_method': 'pix',
-            'amount': _centavos(pedido.valor_total),
+            'amount': _centavos(valor_cobranca(pedido)),
             'pix': {'expires_in': int(expira_em_min) * 60},
         }],
         'code': pedido.codigo,
@@ -340,13 +360,15 @@ def criar_pedido_cartao(pedido, card_token, parcelas=1, billing=None):
     `billing` = endereço de cobrança (antifraude exige no charge — vai em
     credit_card.card.billing_address, junto com o card_token).
     Devolve {ok, order_id, charge_id, status, erro?}."""
+    from app.services.compra_kits import principal_do_pedido, valor_cobranca
+    pedido = principal_do_pedido(pedido)
     parcelas = max(1, min(int(parcelas or 1), 12))
     payload = {
         'customer': _payload_customer(pedido),
         'items': _payload_items(pedido),
         'payments': [{
             'payment_method': 'credit_card',
-            'amount': _centavos(pedido.valor_total),
+            'amount': _centavos(valor_cobranca(pedido)),
             'credit_card': {
                 'operation_type': 'auth_and_capture',
                 'installments': parcelas,
@@ -404,13 +426,15 @@ def qr_data_uri(texto):
         return None
 
 
-def cancelar_charge(charge_id, valor_decimal=None):
+def cancelar_charge(charge_id, valor_decimal=None, *, detalhar=False):
     """Cancela/refund de uma cobrança. Se valor_decimal vier, refund
     parcial; senão, total. Devolve {ok, erro?}."""
     if not disponivel():
-        return {'ok': False, 'erro': 'PAGARME_API_KEY não configurada'}
+        return {'ok': False, 'erro': 'PAGARME_API_KEY não configurada',
+                **({'incerto': False} if detalhar else {})}
     if not charge_id:
-        return {'ok': False, 'erro': 'charge_id ausente'}
+        return {'ok': False, 'erro': 'charge_id ausente',
+                **({'incerto': False} if detalhar else {})}
     payload = {}
     if valor_decimal is not None:
         payload['amount'] = _centavos(valor_decimal)
@@ -420,11 +444,28 @@ def cancelar_charge(charge_id, valor_decimal=None):
                             json=payload or None, timeout=_TIMEOUT)
     except Exception as exc:  # noqa: BLE001
         logger.warning('pagarme cancelar_charge falhou: %s', exc)
-        return {'ok': False, 'erro': str(exc)}
+        return {'ok': False, 'erro': str(exc), **({'incerto': True} if detalhar else {})}
     if r.status_code in (200, 201, 202):
+        if detalhar:
+            try:
+                corpo = r.json() or {}
+            except ValueError:
+                corpo = {}
+            transacao = corpo.get('last_transaction') or {}
+            status_transacao = (transacao.get('status') or '').lower()
+            # 202/pending_refund significa solicitação aceita, ainda não dinheiro
+            # devolvido. Nunca transforma esse estado em comprovante de estorno.
+            if (not corpo or corpo.get('id') != charge_id or r.status_code == 202
+                    or corpo.get('status') not in ('paid', 'canceled', 'cancelled', 'refunded')
+                    or status_transacao in ('pending_refund', 'pending', 'processing')
+                    or transacao.get('success') is False):
+                return {'ok': False, 'incerto': True,
+                        'erro': 'O gateway ainda não confirmou a conclusão do estorno.'}
         return {'ok': True}
     detalhe = (r.text or '')[:200]
-    return {'ok': False, 'erro': f'HTTP {r.status_code}: {detalhe}'}
+    return {'ok': False, 'erro': f'HTTP {r.status_code}: {detalhe}',
+            **({'incerto': r.status_code >= 500 or r.status_code in (408, 409, 429)}
+               if detalhar else {})}
 
 
 def consultar_order(order_id):

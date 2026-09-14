@@ -153,6 +153,7 @@
     {% else %}
     <a href="{{ url_for('loja.home') }}">Produtos</a>
     {% endif %}
+    <a href="{{ url_for('loja.kits_catalogo') }}">Kits agendados</a>
     {% if cliente_atual %}
       <a href="{{ url_for('loja.minha_conta') }}">Minha conta</a>
     {% else %}

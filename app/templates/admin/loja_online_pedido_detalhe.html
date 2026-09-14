@@ -50,6 +50,40 @@
   </div>
 </div>
 
+{% if compra_kit %}
+<section class="card mb-3">
+  <div class="card-header fw-bold">{{ compra_kit.kit_nome }} · agenda da compra</div>
+  <div class="card-body">
+    <p>Uma cobrança de R$ {{ '%.2f'|format(compra_kit.valor_total)|replace('.', ',') }} para {{ compra_kit.entregas|length }} entregas, incluindo R$ {{ '%.2f'|format(compra_kit.frete_total)|replace('.', ',') }} de fretes. Cada pedido abaixo corresponde a um kit.</p>
+    <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Pedido</th><th>Entrega</th><th>Situação</th><th>Valor</th></tr></thead><tbody>
+      {% for entrega in compra_kit.entregas %}{% set ep = entrega.pedido %}
+      <tr><td><a href="{{ url_for('main.loja_online_pedido_detalhe', codigo=ep.codigo, embed=embed or None) }}">{{ ep.codigo }}</a></td>
+        <td>{{ ep.data_entrega.strftime('%d/%m/%Y') }} · {{ ep.janela_entrega }}</td>
+        <td>{{ labels.get(ep.status, ep.status) }}{% if entrega.alerta_capacidade %}<div class="text-danger">{{ entrega.alerta_capacidade }}</div>{% endif %}</td>
+        <td>R$ {{ '%.2f'|format(ep.valor_total)|replace('.', ',') }}</td></tr>
+      {% endfor %}
+    </tbody></table></div>
+    <p class="small text-muted mb-0">Os itens e valores abaixo são desta entrega. A baixa do estoque acontece na coleta de cada kit.</p>
+  </div>
+</section>
+{% endif %}
+{% if current_user.is_owner and reembolso_kit %}
+<div class="alert {{ 'alert-warning' if reembolso_kit.status == 'solicitado' else 'alert-info' }}">
+  <strong>Reembolso desta entrega: {{ reembolso_kit.status }}.</strong>
+  Valor: R$ {{ '%.2f'|format(reembolso_kit.valor)|replace('.', ',') }}. Cobrança: <code>{{ reembolso_kit.pagarme_charge_id }}</code>.
+  {% if reembolso_kit.erro %}<p class="mb-0">{{ reembolso_kit.erro }}</p>{% endif %}
+  {% if reembolso_kit.status == 'solicitado' %}<p class="mb-0">Confira o resultado no Pagar.me. Uma tentativa sem resultado confirmado bloqueia nova solicitação e coleta desta entrega para evitar duplicidade.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if tarefa_fiscal_kit and not tarefa_fiscal_kit.concluido_em %}
+<div class="alert alert-info">
+  <strong>Nota fiscal desta entrega na fila automática.</strong>
+  {% if tarefa_fiscal_kit.erro %}{{ tarefa_fiscal_kit.erro }}{% endif %}
+  {% if tarefa_fiscal_kit.proxima_tentativa_em %}Próxima tentativa a partir de {{ tarefa_fiscal_kit.proxima_tentativa_em.strftime('%d/%m às %H:%M') }}.{% endif %}
+</div>
+{% endif %}
+
 {% if estoque_reduzido and p.tiny_nota_fiscal_id %}
 <div class="alert alert-warning py-2 mb-3">
   <strong>⚠️ Quantidade corrigida após a NF.</strong> Este pedido teve item(ns)
@@ -65,7 +99,8 @@
   <div class="card-header py-2 fw-bold">Confirmar pagamento recebido fora do site</div>
   <div class="card-body">
     <p class="mb-2">Use quando o cliente pagou por <strong>Pix ou transferência diretamente para a padaria</strong>.
-      Total do pedido: <strong>R$ {{ '%.2f'|format(p.valor_total)|replace('.', ',') }}</strong>.</p>
+      Total {{ 'da compra de kits, incluindo todas as datas' if compra_kit else 'do pedido' }}:
+      <strong>R$ {{ '%.2f'|format(valor_recebimento)|replace('.', ',') }}</strong>.</p>
     {% if p.status == 'cancelado' %}
     <p class="text-warning-emphasis mb-2">O Pix do site expirou. Confirmar o recebimento reabre este pedido como pago.</p>
     {% endif %}
@@ -75,9 +110,9 @@
         <div class="col-sm-4 col-lg-3">
           <label for="externo-valor" class="form-label">Valor recebido (R$)</label>
           <input id="externo-valor" type="text" name="valor_recebido" inputmode="decimal"
-                 value="{{ '%.2f'|format(p.valor_total)|replace('.', ',') }}" required
+                 value="{{ '%.2f'|format(valor_recebimento)|replace('.', ',') }}" required
                  class="form-control" aria-describedby="externo-valor-ajuda">
-          <div id="externo-valor-ajuda" class="form-text">Deve corresponder ao total do pedido.</div>
+          <div id="externo-valor-ajuda" class="form-text">Deve corresponder ao total {{ 'de todas as entregas da compra' if compra_kit else 'do pedido' }}.</div>
         </div>
         <div class="col-sm-8 col-lg-9">
           <label for="externo-referencia" class="form-label">Referência ou observação do recebimento</label>
@@ -121,7 +156,7 @@
             {# Correcao OWNER-ONLY: cliente comprou errado (2 e era 1). Reduz a
                qtd, estorna a diferenca no cartao e devolve ao estoque/plano.
                So em pedido PAGO e com qtd > 1 (minimo 1 por item). #}
-            {% if current_user.is_owner and not pagamento_externo and p.status == 'pago' and it.quantidade > 1 %}
+            {% if current_user.is_owner and not pagamento_externo and not compra_kit and p.status == 'pago' and it.quantidade > 1 %}
             <tr class="table-warning">
               <td colspan="3" class="py-1">
                 <form method="POST" action="{{ url_for('main.loja_online_pedido_reduzir_item', codigo=p.codigo) }}"
@@ -369,7 +404,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
       <input type="hidden" name="confirmar_entregue" value="">
       <button type="submit" class="btn btn-outline-danger btn-sm w-100">
-        💸 Estornar pedido entregue (reembolso total)
+        {{ 'Estornar esta entrega do kit' if compra_kit else 'Estornar pedido entregue (reembolso total)' }}
       </button>
     </form>
     {% endif %}
@@ -388,7 +423,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
       <input type="hidden" name="confirmar_expedicao" value="">
       <button type="submit" class="btn btn-outline-danger btn-sm w-100">
-        {{ 'Reembolsar e cancelar' if eh_pago else 'Cancelar pedido' }}
+        {% if compra_kit %}{{ 'Reembolsar e cancelar esta entrega' if eh_pago else 'Cancelar todas as datas da compra' }}{% else %}{{ 'Reembolsar e cancelar' if eh_pago else 'Cancelar pedido' }}{% endif %}
       </button>
     </form>
     <script>
@@ -413,7 +448,11 @@
       })();
     </script>
     {% if eh_pago %}
+    {% if compra_kit %}
+    <p class="text-muted small mt-1 mb-0">Reembolsa R$ {{ '%.2f'|format(p.valor_total)|replace('.', ',') }} desta entrega, incluindo seu frete. As outras datas permanecem. Nenhum estoque físico é devolvido automaticamente.</p>
+    {% else %}
     <p class="text-muted small mt-1 mb-0">Reembolsa no Pagar.me{{ ' + devolve o estoque' if p.status == 'pago' else ' (estoque NÃO volta sozinho: mercadoria já saiu)' }}.</p>
+    {% endif %}
     {% endif %}
     {% endif %}
   </div>

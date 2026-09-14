@@ -1,0 +1,81 @@
+{% extends 'loja/_base.html' %}
+{% block title %}Agendar {{ kit.nome }} — O Pão{% endblock %}
+{% block content %}
+<section class="checkout-pagina">
+  <a href="{{ url_for('loja.kits_catalogo') }}" class="voltar">Todos os kits</a>
+  <h1>{{ kit.nome }}</h1>
+  {% if kit.descricao %}<p>{{ kit.descricao }}</p>{% endif %}
+  <p>Uma compra, nos dias que você escolher. Cada data recebe um kit. Sem renovação automática.</p>
+  {% if erros %}<div class="checkout-erros" role="alert"><strong>Revise antes de concluir:</strong>
+    <ul>{% for erro in erros %}<li>{{ erro }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if indisponivel or not data_min %}
+  <div class="checkout-erros">Este kit está indisponível no momento. Escolha outro kit ou volte mais tarde.</div>
+  {% else %}
+  <form method="post" id="kit-form" class="checkout-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="checkout_token" value="{{ checkout_token }}">
+    <input type="hidden" name="agenda_json" id="agenda-json" value="[]">
+    <section class="checkout-bloco">
+      <h2>O que vem em cada entrega</h2>
+      <ul class="checkout-itens-lista">{% for it in itens %}<li><span>{{ it.qtd }}× {{ it.nome }}</span>
+        <span>R$ {{ '%.2f'|format(it.subtotal)|replace('.', ',') }}</span></li>{% endfor %}</ul>
+      <p><strong>R$ {{ '%.2f'|format(preco)|replace('.', ',') }} por kit</strong>, sem o frete.</p>
+    </section>
+    <section class="checkout-bloco">
+      <h2>1. Seus dias e horários</h2>
+      <p>Adicione as entregas do seu mês. Você pode escolher um horário diferente para cada dia.</p>
+      <div id="kit-agenda"></div>
+      <button type="button" id="adicionar-data" class="btn-loja-secundario">Adicionar uma entrega</button>
+      <p class="text-muted small">Uma entrega por data. Os horários disponíveis respeitam a região e o funcionamento da padaria.</p>
+    </section>
+    <section class="checkout-bloco">
+      <h2>2. Seus dados</h2>
+      <label>Nome<input type="text" name="nome" autocomplete="given-name" maxlength="150" value="{{ form.get('nome', '') }}" required></label>
+      <label>Sobrenome<input type="text" name="sobrenome" autocomplete="family-name" maxlength="150" value="{{ form.get('sobrenome', '') }}" required></label>
+      <label>E-mail<input type="email" name="email" autocomplete="email" maxlength="200" value="{{ form.get('email', '') }}" required></label>
+      <label>Telefone com DDD<input type="tel" name="telefone" autocomplete="tel" value="{{ form.get('telefone', '') }}" required></label>
+      <label>CPF ou CNPJ<input type="text" name="cpf" inputmode="numeric" maxlength="18" value="{{ form.get('cpf', '') }}" required></label>
+    </section>
+    <section class="checkout-bloco">
+      <h2>3. Entrega em casa</h2>
+      <p>Este endereço será usado em todas as datas escolhidas.</p>
+      <label>CEP<input type="text" name="cep" id="kit-cep" autocomplete="postal-code" inputmode="numeric" maxlength="9" value="{{ form.get('cep', '') }}" required></label>
+      <p id="cep-aviso" class="text-muted small" role="status"></p>
+      <label>Rua ou avenida<input type="text" name="logradouro" autocomplete="address-line1" maxlength="200" value="{{ form.get('logradouro', '') }}" required></label>
+      <label>Número<input type="text" name="numero" inputmode="numeric" pattern="[0-9]+" maxlength="20" value="{{ form.get('numero', '') }}" required></label>
+      <label>Complemento<input type="text" name="complemento" autocomplete="address-line2" maxlength="100" value="{{ form.get('complemento', '') }}"></label>
+      <label>Bairro<input type="text" name="bairro" maxlength="100" value="{{ form.get('bairro', '') }}" required></label>
+      <label>Cidade<input type="text" name="cidade" autocomplete="address-level2" maxlength="100" value="{{ form.get('cidade', '') }}" required></label>
+      <label>Estado (UF)<input type="text" name="uf" autocomplete="address-level1" maxlength="2" value="{{ form.get('uf', 'SP') }}" required></label>
+      <button type="button" id="kit-calcular-frete" class="btn-loja-secundario">Calcular fretes</button>
+      <p id="frete-aviso" role="status"></p>
+    </section>
+    <section class="checkout-bloco">
+      <h2>4. Confira sua compra</h2>
+      <div class="checkout-totais" aria-live="polite">
+        <div class="linha-total"><span id="kits-quantidade">Kits</span><strong id="kits-subtotal"></strong></div>
+        <div class="linha-total"><span>Fretes das entregas</span><strong id="kits-fretes">Calcule acima</strong></div>
+        <div class="linha-total grande"><span>Total da compra</span><strong id="kits-total">—</strong></div>
+      </div>
+      <label><input type="checkbox" name="aceite_lgpd" value="1" required {{ 'checked' if form.get('aceite_lgpd') }}> Li e aceito os
+        <a href="{{ url_for('loja.termos') }}" target="_blank" rel="noopener">termos de compra</a> e a
+        <a href="{{ url_for('loja.privacidade') }}" target="_blank" rel="noopener">política de privacidade</a>.</label>
+      <button type="submit" class="btn-loja" id="kit-continuar" disabled>Continuar para pagamento</button>
+      <p class="text-muted small">Você confere o valor final e escolhe Pix ou cartão na próxima etapa.</p>
+    </section>
+  </form>
+  <noscript><p>Ative o JavaScript para escolher as entregas e calcular os fretes.</p></noscript>
+  <template id="kit-dia-template">
+    <div class="kit-dia" style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;border-bottom:1px solid #ddd;padding:12px 0">
+      <label style="flex:1;min-width:150px">Dia<input type="date" class="kit-data" min="{{ data_min }}" max="{{ data_max }}" required></label>
+      <label style="flex:1;min-width:150px">Horário<select class="kit-janela" required></select></label>
+      <button type="button" class="btn-loja-secundario kit-remover" aria-label="Remover esta entrega">Remover</button>
+    </div>
+  </template>
+  <script id="kits-config" type="application/json">{{ kits_config|tojson }}</script>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('loja.static', filename='kits.js') }}?v={{ static_v['loja/kits.js'] }}" defer></script>
+{% endblock %}

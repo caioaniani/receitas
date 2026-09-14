@@ -96,12 +96,14 @@ def _zerar_pagamento_anterior(pedido):
 def iniciar_pix(pedido, expira_em_min=30):
     """Cria PagamentoOnline(metodo=pix) e dispara Order Pix no Pagar.me.
     Devolve o PagamentoOnline (com QR populado) ou None + erros."""
-    db.session.refresh(pedido, with_for_update=True)
-    if pedido.status != 'aguardando_pagamento' or pedido.pago_em:
+    from app.services.compra_kits import valor_cobranca
+    from app.services.kits_pagamento import preparar_cobranca
+    pedido, permitido = preparar_cobranca(pedido)
+    if not permitido:
         return None, ['Este pedido não está mais aguardando pagamento. Atualize a página.']
     _zerar_pagamento_anterior(pedido)
     pag = PagamentoOnline(pedido_id=pedido.id, metodo='pix',
-                          valor=pedido.valor_total)
+                          valor=valor_cobranca(pedido))
     db.session.add(pag)
     db.session.flush()
 
@@ -131,12 +133,14 @@ def iniciar_cartao(pedido, card_token, parcelas=1, billing=None):
     espera o webhook. `billing` = endereço de cobrança (antifraude)."""
     if not card_token:
         return None, ['Cartão não foi tokenizado — tente de novo.']
-    db.session.refresh(pedido, with_for_update=True)
-    if pedido.status != 'aguardando_pagamento' or pedido.pago_em:
+    from app.services.compra_kits import valor_cobranca
+    from app.services.kits_pagamento import preparar_cobranca
+    pedido, permitido = preparar_cobranca(pedido)
+    if not permitido:
         return None, ['Este pedido não está mais aguardando pagamento. Atualize a página.']
     _zerar_pagamento_anterior(pedido)
     pag = PagamentoOnline(pedido_id=pedido.id, metodo='cartao',
-                          valor=pedido.valor_total)
+                          valor=valor_cobranca(pedido))
     db.session.add(pag)
     db.session.flush()
 
@@ -207,7 +211,7 @@ def _reservar_no_plano_do_dia(pedido):
     if not pedido.data_entrega:
         return
     from app.services import loja_plano_dia
-    for it in pedido.itens:
+    for it in sorted(pedido.itens, key=lambda it: (it.kind, it.receita_id or it.produto_id or 0)):
         # Sob encomenda RESERVA plano desde 07/08/2026 (decisão do dono —
         # SUBSTITUI o pulo de 21/07): sem a reserva, o cap que o dono põe
         # no plano-do-dia não seguraria nada (10 planejados venderiam 100).
@@ -232,14 +236,14 @@ def _reservar_no_plano_do_dia(pedido):
         loja_plano_dia.reservar(kind, item_id, pedido.data_entrega, qtd, commit=False)
 
 
-def _devolver_ao_plano_do_dia(pedido):
+def _devolver_ao_plano_do_dia(pedido, *, commit=True):
     """Espelho do `_reservar_no_plano_do_dia`: cancelamento/reembolso devolve
     a reserva pra o saldo daquele dia. Idempotente: pode rodar varias vezes
     sem cair pra negativo (devolver trunca em 0)."""
     if not pedido.data_entrega:
         return
     from app.services import loja_plano_dia
-    for it in pedido.itens:
+    for it in sorted(pedido.itens, key=lambda it: (it.kind, it.receita_id or it.produto_id or 0)):
         # Sob encomenda devolve plano desde 07/08/2026 (espelho do reservar).
         # Pedido ANTIGO (pago antes do deploy, nunca reservou) cancelado
         # depois: `devolver` trunca em 0 / no-op sem linha — não cria saldo
@@ -256,7 +260,10 @@ def _devolver_ao_plano_do_dia(pedido):
             qtd = 0
         if qtd <= 0:
             continue
-        loja_plano_dia.devolver(kind, item_id, pedido.data_entrega, qtd)
+        if commit:
+            loja_plano_dia.devolver(kind, item_id, pedido.data_entrega, qtd)
+        else:
+            loja_plano_dia.devolver(kind, item_id, pedido.data_entrega, qtd, commit=False)
 
 
 def _baixar_estoque(pedido, usuario_id=None):
@@ -412,6 +419,10 @@ def reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
     `reembolsar_pedido` — refund feito e nao persistido; commit aqui e simples.)"""
     from decimal import Decimal
 
+    from app.services.compra_kits import grupo_do_pedido
+    if grupo_do_pedido(pedido):
+        return False, ('Esta entrega faz parte de um kit. Para cancelar uma data, '
+                       'use o reembolso da entrega; os itens do kit não podem ser reduzidos.')
     db.session.refresh(pedido, with_for_update=True)
     if _tem_pagamento_externo(pedido):
         return False, ('Pagamento recebido fora do site: a redução com estorno '
@@ -505,6 +516,11 @@ def _marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None)
     em 19/06/2026 — pedido 1491A6B5 recebeu 2 e-mails 'pedido confirmado').
 
     Em SQLite (testes/dev) o FOR UPDATE vira no-op silencioso — não quebra."""
+    from app.services.compra_kits import grupo_do_pedido
+    if grupo_do_pedido(pedido):
+        from app.services.kits_pagamento import marcar_pago
+        return marcar_pago(pedido, pagamento, enviar_confirmacao=enviar_confirmacao,
+                           usuario_id=usuario_id)
     db.session.refresh(pedido, with_for_update=True)
     if pagamento:
         db.session.refresh(pagamento)
@@ -665,6 +681,8 @@ def _cobranca_ja_estornada_no_gateway(pagamento):
 
 def _tem_pagamento_externo(pedido):
     from app.models import PagamentoExternoOnline
+    from app.services.compra_kits import principal_do_pedido
+    pedido = principal_do_pedido(pedido)
     return (db.session.get(PagamentoExternoOnline, pedido.id) is not None
             or any(p.metodo == 'externo' for p in pedido.pagamentos))
 
@@ -682,6 +700,10 @@ def reembolsar_pedido(pedido):
     no gateway que o dinheiro voltou e SINCRONIZA o estorno local (caso real
     08/07/2026, pedido 6537F0EB). Só sincroniza com a confirmação do gateway —
     se ele ainda mostrar a cobrança ativa, o erro sobe."""
+    from app.services.compra_kits import grupo_do_pedido
+    if grupo_do_pedido(pedido):
+        from app.services.kits_pagamento import reembolsar_entrega
+        return reembolsar_entrega(pedido)
     db.session.refresh(pedido, with_for_update=True)
     if _tem_pagamento_externo(pedido):
         return False, ('Este pagamento foi recebido fora do site. O Pagar.me '
@@ -750,6 +772,8 @@ def conciliar_pedido(codigo, aplicar=False):
     p = PedidoOnline.query.filter_by(codigo=codigo).first()
     if not p:
         return {'ok': False, 'erro': 'pedido não encontrado', 'codigo': codigo}
+    from app.services.compra_kits import principal_do_pedido
+    p = principal_do_pedido(p)
     pag = next((pg for pg in p.pagamentos if pg.pagarme_order_id), None)
     if not pag:
         return {'ok': False, 'erro': 'pedido sem pagarme_order_id (não '
@@ -779,9 +803,8 @@ def conciliar_pedido(codigo, aplicar=False):
         return {'ok': False, 'erro': f'falha ao marcar pago: {exc}',
                 'codigo': codigo, 'status_local': p.status}
     if mudou:
-        _enviar_confirmacao(p)
-        _emitir_nf_e_enviar(p)  # após commit; isolado
-        _reportar_purchase(p)
+        from app.services.kits_pagamento import apos_confirmacao
+        apos_confirmacao(p)
     out['acao'] = 'MARCADO PAGO' if mudou else 'já estava pago (no-op)'
     out['status_local'] = p.status
     return out
@@ -820,9 +843,8 @@ def processar_webhook(evento):
             # NF + e-mail SÓ depois do commit (isolado; não suja a transação
             # do pagamento). Idempotente: reenvio do webhook não duplica.
             if mudou:
-                _enviar_confirmacao(pedido)
-                _emitir_nf_e_enviar(pedido)
-                _reportar_purchase(pedido)
+                from app.services.kits_pagamento import apos_confirmacao
+                apos_confirmacao(pedido)
             return {'ok': True, 'pago': True, 'mudou': mudou}
         if tipo in ('charge.refunded', 'order.canceled',
                     'charge.cancelled', 'charge.refunded.partial'):
@@ -837,7 +859,8 @@ def processar_webhook(evento):
                            'requer ação manual no admin', tipo, evt_id)
             return {'ok': True, 'estorno_ignorado': tipo}
         if tipo in ('order.payment_failed', 'charge.payment_failed'):
-            db.session.refresh(pedido, with_for_update=True)
+            from app.services.kits_pagamento import travar
+            travar(pedido)
             if pagamento:
                 db.session.refresh(pagamento)
             if pagamento and pagamento.status not in ('pago', 'estornado'):

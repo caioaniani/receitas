@@ -140,7 +140,8 @@ def _pedido_aguardando(codigo):
     pedido = PedidoOnline.query.filter_by(codigo=codigo).first()
     if not pedido:
         abort(404)
-    return pedido
+    from app.services.compra_kits import principal_do_pedido
+    return principal_do_pedido(pedido)
 
 
 def _ctx_pagamento(pedido, erros=None):
@@ -169,7 +170,9 @@ def _ctx_pagamento(pedido, erros=None):
                    None)
         if ult and ult.erro:
             erros = [f'Última tentativa falhou: {ult.erro}']
-    return dict(pedido=pedido, pubkey=pubkey, pix_pendente=pix_pendente,
+    from app.services.compra_kits import grupo_do_pedido
+    return dict(pedido=pedido, compra_kit=grupo_do_pedido(pedido),
+                pubkey=pubkey, pix_pendente=pix_pendente,
                 pix=pix, erros=erros or None, em_teste=_em_teste())
 
 
@@ -1195,7 +1198,9 @@ def pedido_confirmado(codigo):
     # segue com polling de 30s no /status. Regra em `_rastreio_do_pedido`
     # (fonte única com o JSON do polling).
     rastreio = _rastreio_do_pedido(pedido)
+    from app.services.compra_kits import grupo_do_pedido
     return render_template('loja/pedido_confirmado.html', pedido=pedido,
+                           compra_kit=grupo_do_pedido(pedido),
                            ga_purchase=ga_purchase, rastreio=rastreio,
                            em_teste=_em_teste())
 

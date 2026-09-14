@@ -338,7 +338,7 @@ def _sem_dias_fechados(datas):
             if not (d in regras and regras[d].fechado)]
 
 
-def montar_itens(itens_raw):
+def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
     """Re-valida o carrinho contra o catálogo. NUNCA usa o preço do
     cliente — pega o preço publicado atual. Devolve (itens, avisos).
 
@@ -356,6 +356,11 @@ def montar_itens(itens_raw):
     from app.services import loja_menu
     itens = []
     avisos = []
+    datas_estoque = None
+    if dias_disponibilidade is not None:
+        datas_estoque = datas_disponiveis(
+            'agendada', base=base, dias=dias_disponibilidade,
+            lead_dias=lead_do_carrinho(itens_raw))
     for raw in (itens_raw or []):
         kind = (str(raw.get('kind') or '')).strip()
         try:
@@ -376,7 +381,10 @@ def montar_itens(itens_raw):
         # "esgotado duro" (plano zerado na janela toda) remove do carrinho
         # com aviso, igual aos demais; a checagem POR DATA segue no
         # criar_pedido.
-        if not loja_catalogo.tem_estoque_site(kind, item_id):
+        disponivel = (loja_catalogo.tem_estoque_site(kind, item_id)
+                      if datas_estoque is None else
+                      loja_catalogo.tem_estoque_site(kind, item_id, datas=datas_estoque))
+        if not disponivel:
             avisos.append(f'"{cat["nome"]}" esgotou e foi removido do pedido.')
             continue
         preco = Decimal(str(cat['preco']))
@@ -629,7 +637,9 @@ def _frete_para(modo, endereco, base=None, contato=None):
     return valor, r.get('distancia_km'), r.get('endereco'), None
 
 
-def criar_pedido(form, itens_raw, *, base=None):
+def criar_pedido(form, itens_raw, *, base=None, commit=True,
+                 dias_agenda=DIAS_AGENDA, reservar_estoque=True, frete_validado=None,
+                 itens_estritos=False, dias_disponibilidade=None):
     """Valida tudo e cria o PedidoOnline. Devolve (pedido|None, erros:list).
 
     `form`: dict-like (request.form). `itens_raw`: lista de {kind,id,qtd}.
@@ -699,7 +709,13 @@ def criar_pedido(form, itens_raw, *, base=None):
         erros.append('Revise o telefone de quem vai receber: informe apenas '
                      'um número com DDD.')
 
-    itens, avisos = montar_itens(itens_raw)
+    if dias_disponibilidade is None:
+        itens, avisos = montar_itens(itens_raw)
+    else:
+        itens, avisos = montar_itens(itens_raw, dias_disponibilidade=dias_disponibilidade,
+                                    base=base)
+    if itens_estritos:
+        erros.extend(avisos)
     if not itens:
         erros.append('Seu carrinho está vazio ou os itens saíram de catálogo.')
 
@@ -843,8 +859,8 @@ def criar_pedido(form, itens_raw, *, base=None):
             geo = f'{geo_txt}, {endereco_cep}' if geo_txt else endereco_cep
         _contato = ' · '.join(p for p in (
             f'{nome_dado} {sobrenome_dado}'.strip(), telefone, email) if p)
-        valor, dist, end_norm, erro_frete = _frete_para(
-            modo, geo, base=base, contato=_contato)
+        valor, dist, end_norm, erro_frete = (frete_validado if frete_validado is not None
+                                            else _frete_para(modo, geo, base=base, contato=_contato))
         if erro_frete:
             erros.append(erro_frete)
         else:
@@ -867,7 +883,7 @@ def criar_pedido(form, itens_raw, *, base=None):
         # tem item sob encomenda — mesma conta que o front usa pro `min` do
         # calendário. Servidor é a autoridade.
         disponiveis = {d.isoformat() for d in datas_disponiveis(
-            modo, base=base, lead_dias=lead_encomenda)}
+            modo, base=base, dias=dias_agenda, lead_dias=lead_encomenda)}
         if data_str not in disponiveis:
             if lead_encomenda > 0:
                 erros.append('Item sob encomenda: escolha uma data a partir '
@@ -1037,7 +1053,7 @@ def criar_pedido(form, itens_raw, *, base=None):
     from app.services import loja_estoque_reserva
     from app.services.loja_pagamento import _loja_baixa as _origem_baixa
     loja_origem = _origem_baixa(pedido)
-    if loja_origem:
+    if loja_origem and reservar_estoque:
         r = loja_estoque_reserva.reservar(pedido, loja_id=loja_origem.id)
         if not r['ok']:
             db.session.rollback()
@@ -1053,6 +1069,11 @@ def criar_pedido(form, itens_raw, *, base=None):
                 erros.append('Nao foi possivel reservar estoque agora. '
                              'Tente novamente em alguns segundos.')
             return None, erros
+    if not commit:
+        # Compra de kits persiste todas as datas e seu vínculo de cobrança em
+        # uma transação. Nenhum e-mail/endereço deve commitar só a primeira data.
+        db.session.flush()
+        return pedido, []
     db.session.commit()
     # Auto-salva o endereço estruturado do cliente logado pra ele reusar no
     # próximo pedido. Só pra ENTREGA: o endereço da retirada é coletado só

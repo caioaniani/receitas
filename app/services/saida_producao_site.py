@@ -78,7 +78,14 @@ def registrar(pedido, origem, usuario_id=None):
         db.session.refresh(pedido, with_for_update=True)
     if pedido.status not in ('pago', 'em_preparo', 'a_caminho') or pedido.divulgacao:
         return []
-    if pedido.data_entrega and pedido.codigo in _codigos_acertados(pedido.data_entrega):
+    acertado = bool(pedido.data_entrega
+                    and pedido.codigo in _codigos_acertados(pedido.data_entrega))
+    from app.services.kits_estoque import registrar_coleta
+    # A composição da loja também precisa refletir alterações concluídas
+    # enquanto esta requisição aguardava a trava do pedido.
+    db.session.expire(pedido, ['itens'])
+    registrar_coleta(pedido, usuario_id=usuario_id, acertado=acertado)
+    if acertado:
         return []
     feitos = itens_baixados(pedido.id)
     planos = []

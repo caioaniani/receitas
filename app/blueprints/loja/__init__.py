@@ -17,6 +17,7 @@ loja_bp = Blueprint(
 )
 
 from app.blueprints.loja import (
+    kits_routes,  # noqa: E402,F401
     routes,  # noqa: E402,F401
     wifi_routes,  # noqa: E402,F401
 )

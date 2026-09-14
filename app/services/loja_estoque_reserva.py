@@ -307,15 +307,26 @@ def liberar_expirados(*, agora_=None, max_lote=200):
 
     Retorna lista de codigos liberados.
     """
+    from app.models import EntregaKit
+    from app.services.kits_estoque import expirar_compras
     from app.services.loja_pagamento import _loja_baixa
     base = agora_ or agora()
+    # Kits reservam disponibilidade por data, sem reserva física antecipada.
+    # Seu prazo pertence à compra inteira e usa compra -> pedidos nas travas.
+    codigos = expirar_compras(base=base, max_lote=max_lote)
+    # Solta os locks de capacidade dos kits ANTES de buscar/travar avulsos.
+    # O webhook de um avulso usa pedido → plano; manter o plano aqui e depois
+    # esperar esse pedido produziria o ciclo plano → pedido / pedido → plano.
+    # Cada compra de kit já foi expirada atomicamente no lote anterior.
+    db.session.commit()
     q = (PedidoOnline.query
          .filter(PedidoOnline.status == 'aguardando_pagamento',
                  PedidoOnline.reserva_expira_em.isnot(None),
-                 PedidoOnline.reserva_expira_em < base)
+                 PedidoOnline.reserva_expira_em < base,
+                 ~db.session.query(EntregaKit.pedido_id)
+                 .filter(EntregaKit.pedido_id == PedidoOnline.id).exists())
          .order_by(PedidoOnline.reserva_expira_em)
          .limit(max_lote))
-    codigos = []
     for p in q.all():
         # A confirmação (gateway ou owner) pode ter ocorrido após o SELECT.
         # Mesma ordem de locks do pagamento: pedido antes das linhas de estoque.

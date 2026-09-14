@@ -1,0 +1,18 @@
+<section class="checkout-bloco">
+  <h2>{{ compra_kit.kit_nome }} — {{ compra_kit.entregas|length }} entregas</h2>
+  <p>Uma compra para todas as datas abaixo, sem renovação automática.</p>
+  <ul class="checkout-itens-lista">
+    {% for entrega in compra_kit.entregas %}
+    <li><span><a href="{{ url_for('loja.pedido_confirmado', codigo=entrega.pedido.codigo) }}">
+      {{ entrega.pedido.data_entrega.strftime('%d/%m/%Y') }} · {{ entrega.pedido.janela_entrega }}</a><br>
+      <small>{{ entrega.pedido.codigo }} · {{ {'aguardando_pagamento':'Aguardando pagamento', 'pago':'Pago', 'em_preparo':'Em preparo', 'a_caminho':'A caminho', 'entregue':'Entregue', 'cancelado':'Cancelado'}.get(entrega.pedido.status, entrega.pedido.status) }}</small></span>
+      <span>R$ {{ '%.2f'|format(entrega.pedido.valor_total)|replace('.', ',') }}</span></li>
+    {% endfor %}
+  </ul>
+  <div class="checkout-totais">
+    <div class="linha-total"><span>Produtos de todas as entregas</span><strong>R$ {{ '%.2f'|format(compra_kit.subtotal)|replace('.', ',') }}</strong></div>
+    <div class="linha-total"><span>Fretes de todas as entregas</span><strong>R$ {{ '%.2f'|format(compra_kit.frete_total)|replace('.', ',') }}</strong></div>
+    <div class="linha-total grande"><span>Total original da compra</span><strong>R$ {{ '%.2f'|format(compra_kit.valor_total)|replace('.', ',') }}</strong></div>
+  </div>
+  {% if compra_kit.pago_em %}<p>Pagamento da compra confirmado. Acompanhe cada entrega pelo seu link.</p>{% endif %}
+</section>

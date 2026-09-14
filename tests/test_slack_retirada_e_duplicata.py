@@ -308,10 +308,11 @@ def test_pergunta_retirada_entra_no_historico(app):
 
 def test_foto_recente_do_canal_pega_ultima_do_usuario(app):
     import base64
-    import time
 
     from app.services.slack_bot import _foto_recente_do_canal
-    agora = time.time()
+    # Relógio fixo evita arredondar o timestamp de seis casas para cima e
+    # cair em 59,999999 segundos no Windows, exibindo "agora ha pouco".
+    agora = 1_700_000_000.0
     msgs = [
         {'user': 'U123', 'ts': f'{agora - 60:.6f}',
          'files': [{'mimetype': 'image/jpeg', 'url_private_download': 'u-nova'}]},
@@ -322,6 +323,7 @@ def test_foto_recente_do_canal_pega_ultima_do_usuario(app):
         {'user': 'U123', 'ts': f'{agora - 40:.6f}', 'text': 'só texto'},
     ]
     with app.app_context(), \
+         patch('time.time', return_value=agora), \
          patch('app.services.slack.historico_canal',
                return_value=(msgs, None)), \
          patch('app.services.slack.baixar_arquivo',

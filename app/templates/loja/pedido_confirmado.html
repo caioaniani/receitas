@@ -14,8 +14,9 @@
        Anote — é por ele que a gente acompanha seu pedido.</p>
   </div>
 
+  {% if compra_kit %}{% include 'loja/_agenda_kit.html' %}{% endif %}
   <div class="checkout-bloco">
-    <h2>Resumo</h2>
+    <h2>{{ 'Resumo desta entrega' if compra_kit else 'Resumo' }}</h2>
     <ul class="checkout-itens-lista">
       {% for it in pedido.itens %}
       <li><span>{{ it.quantidade }}× {{ it.nome }}</span>

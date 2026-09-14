@@ -422,15 +422,19 @@ def anotar_esgotado(itens):
     return itens
 
 
-def tem_estoque_site(kind, item_id):
+def tem_estoque_site(kind, item_id, *, datas=None):
     """Compat SEM data: True se o item tem ALGUM dia vendavel na janela de 14
     dias pelo PLANO-DO-DIA (regra do dono 01/07/2026 — nunca olha o EstoqueLoja
     fisico). Fail-open: sem plano em nenhum dia → True. So retorna False no
     "esgotado duro" (plano zera o item em TODOS os proximos 14 dias). A trava
-    fina por data de entrega e o `tem_estoque_para_dia(kind, id, data)`."""
+    fina por data de entrega e o `tem_estoque_para_dia(kind, id, data)`.
+
+    Kits informam as datas da própria agenda mensal; o catálogo avulso
+    mantém a janela de 14 dias quando `datas` não é informado.
+    """
     from app.utils import hoje
     saldos_cache = {}
-    for d in _datas_janela_futura(hoje()):
+    for d in (_datas_janela_futura(hoje()) if datas is None else datas):
         s = _saldo_para_dia(kind, item_id, d, saldos_dia_cache=saldos_cache)
         if s is None or s > 0:
             return True

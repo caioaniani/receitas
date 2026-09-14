@@ -193,6 +193,10 @@
            class="sidebar-link {% if request.path == '/admin/loja-online/vendas' %}active{% endif %}">
             📊 Vendas online
         </a>
+        <a href="{{ url_for('kits_cafe_admin.index') }}"
+           class="sidebar-link {% if request.path.startswith('/admin/kits-cafe') %}active{% endif %}">
+            Kits de café da manhã
+        </a>
         {% endif %}
         {# Marketing é papel enxuto (só divulgação): esconde catálogo/pedidos
            (que dariam 403) e mostra só o link de lançar divulgação. #}

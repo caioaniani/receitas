@@ -12,6 +12,14 @@ logger = logging.getLogger(__name__)
 
 def pode_confirmar(pedido):
     """A expiração do QR não invalida dinheiro recebido diretamente na conta."""
+    from app.services.compra_kits import grupo_do_pedido, pedidos_do_grupo
+    compra = grupo_do_pedido(pedido)
+    if compra:
+        return not compra.pago_em and all(_pedido_permite(p) for p in pedidos_do_grupo(compra))
+    return _pedido_permite(pedido)
+
+
+def _pedido_permite(pedido):
     return bool(
         not pedido.divulgacao and not pedido.pago_em
         and (pedido.status == 'aguardando_pagamento'
@@ -53,15 +61,19 @@ def confirmar_recebimento(pedido, *, usuario_id, referencia, valor_recebido, con
         return False, 'Informe um valor válido, como 150,00.'
 
     try:
-        db.session.refresh(pedido, with_for_update=True)
+        from app.services.compra_kits import valor_cobranca
+        from app.services.kits_pagamento import travar
+        compra, _ = travar(pedido, todos=True)
+        if compra:
+            pedido = compra.pedido_principal
         if db.session.get(PagamentoExternoOnline, pedido.id):
             return True, 'O pagamento externo deste pedido já foi confirmado.'
         if not pode_confirmar(pedido):
             return False, 'Este pedido não permite confirmação de pagamento externo.'
         if any(p.status == 'pago' for p in pedido.pagamentos):
             return False, 'Este pedido já tem um pagamento confirmado. Confira o histórico.'
-        if valor <= 0 or valor != pedido.valor_total:
-            return False, 'O valor recebido deve ser exatamente o total do pedido.'
+        if valor <= 0 or valor != valor_cobranca(pedido):
+            return False, 'O valor recebido deve ser exatamente o total da compra, incluindo todas as entregas.'
 
         mudou = loja_pagamento._marcar_pago(
             pedido, None, enviar_confirmacao=False, usuario_id=usuario_id)
@@ -84,7 +96,6 @@ def confirmar_recebimento(pedido, *, usuario_id, referencia, valor_recebido, con
         logger.exception('Falha ao confirmar pagamento externo do pedido %s', pedido.id)
         return False, 'Não foi possível salvar a confirmação. Confira o pedido e tente novamente.'
 
-    loja_pagamento._enviar_confirmacao(pedido)
-    loja_pagamento._emitir_nf_e_enviar(pedido)
-    loja_pagamento._reportar_purchase(pedido)
+    from app.services.kits_pagamento import apos_confirmacao
+    apos_confirmacao(pedido)
     return True, 'Pagamento recebido fora do site confirmado. Pedido liberado.'

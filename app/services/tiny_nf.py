@@ -10,7 +10,11 @@ Padrão espelha o mapeamento Seru/VNDA: auto-sugestão por nome (fuzzy) +
 confirmação humana no admin.
 """
 import logging
+import threading
 import unicodedata
+from contextlib import contextmanager
+
+from sqlalchemy import text
 
 from app.extensions import db
 from app.models import TinyProdutoMap
@@ -18,6 +22,8 @@ from app.services import loja_catalogo, tiny
 from app.utils import agora
 
 logger = logging.getLogger(__name__)
+_kit_nf_lock_local = threading.RLock()
+LOCK_NAMESPACE_NF_KIT = 7766
 
 
 def _norm(s):
@@ -541,14 +547,70 @@ def emitir_nf_generico(alvo, montar_payload, recriar=False):
                    f'não foi confirmada: {emitir.get("erro")}'}
 
 
+@contextmanager
+def _trava_nf_kit(pedido_id):
+    """Trava de sessão: commits da emissão não liberam a exclusão do pedido.
+
+    PostgreSQL usa uma conexão dedicada, pois o pool da sessão ORM pode
+    trocar de conexão em cada commit. SQLite local usa RLock entre threads.
+    """
+    if db.engine.dialect.name != 'postgresql':
+        with _kit_nf_lock_local:
+            yield True
+        return
+    conn = db.engine.connect()
+    adquirido = False
+    try:
+        adquirido = bool(conn.execute(text(
+            'SELECT pg_try_advisory_lock(:namespace, :pedido_id)'),
+            {'namespace': LOCK_NAMESPACE_NF_KIT, 'pedido_id': pedido_id}).scalar())
+        yield adquirido
+    finally:
+        if adquirido:
+            try:
+                conn.execute(text('SELECT pg_advisory_unlock(:namespace, :pedido_id)'),
+                             {'namespace': LOCK_NAMESPACE_NF_KIT, 'pedido_id': pedido_id})
+            except Exception:  # noqa: BLE001 — descarta conexão que poderia voltar travada ao pool
+                conn.invalidate()
+                logger.exception('Falha ao liberar trava fiscal do kit: pedido %s', pedido_id)
+        conn.close()
+
+
 def emitir_nf(pedido, user_id=None, recriar=False):
+    """Emissão do site; notas de kits compartilham trava entre cron e admin."""
+    from app.models import EntregaKit
+    if not db.session.get(EntregaKit, pedido.id):
+        return _emitir_nf_pedido(pedido, user_id=user_id, recriar=recriar)
+    with _trava_nf_kit(pedido.id) as adquirido:
+        if not adquirido:
+            return {'ok': False, 'msg': 'A NF desta entrega já está sendo processada. Aguarde.'}
+        db.session.refresh(pedido)
+        # Outra execução pode ter terminado enquanto aguardávamos. Uma NF
+        # autorizada não deve virar outra NF nem pelo botão "refazer" antigo.
+        if pedido.nf_emitida_em and pedido.tiny_nota_fiscal_id:
+            return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
+                    'msg': 'NF já emitida.'}
+        if not pedido.pago_em or pedido.status not in ('pago', 'em_preparo', 'a_caminho', 'entregue'):
+            return {'ok': False, 'msg': 'Entrega não está paga ou foi cancelada — não emite NF.'}
+        if recriar and pedido.tiny_nota_fiscal_id:
+            situacao = _sincronizar_situacao(pedido)
+            if situacao and situacao['autorizada']:
+                return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
+                        'msg': 'NF já autorizada na SEFAZ.'}
+            if not situacao or not situacao['rejeitada']:
+                return {'ok': False, 'msg': 'Verifique a NF existente antes de refazer. '
+                        'A rejeição ainda não foi confirmada.'}
+        return _emitir_nf_pedido(pedido, user_id=user_id, recriar=recriar, entrega_kit=True)
+
+
+def _emitir_nf_pedido(pedido, user_id=None, recriar=False, *, entrega_kit=False):
     """Emite NF pro pedido da loja online. Devolve {ok, msg, nota_fiscal_id?}.
     Guard próprio do site: só pedido pago emite. O fluxo em si está em
     `emitir_nf_generico`."""
     if pedido.nf_emitida_em and pedido.tiny_nota_fiscal_id and not recriar:
         return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
                 'msg': 'NF já emitida.'}
-    if pedido.status != 'pago':
+    if pedido.status != 'pago' and not entrega_kit:
         return {'ok': False, 'msg': 'Pedido não está pago — não emite NF.'}
 
     def _montar():
