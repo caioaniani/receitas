@@ -107,7 +107,7 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
     try:
         db.session.refresh(kit, with_for_update=True)
         # A relação pode ter sido carregada antes de aguardar o lock do owner.
-        db.session.expire(kit, ['itens', 'sucos'])
+        db.session.expire(kit, ['itens', 'sucos', 'opcoes'])
         existente = CompraKit.query.filter_by(checkout_token=checkout_token).first()
         if existente:
             if existente.kit_id != kit.id:
@@ -125,12 +125,25 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
             suco_id = int(valores_suco[0])
         elif valores_suco:
             return None, ['Este kit não oferece escolha de suco.']
+        grupos = {opcao.grupo for opcao in kit.opcoes}
+        campos_escolha = {f'escolha_{grupo}' for grupo in grupos}
+        if any(campo.startswith('escolha_') and campo not in campos_escolha for campo in form):
+            return None, ['Este kit não oferece uma das escolhas recebidas. Reabra o kit.']
+        escolhas = {}
+        for grupo in grupos:
+            campo = f'escolha_{grupo}'
+            valores = (form.getlist(campo) if hasattr(form, 'getlist') else
+                       [form[campo]] if campo in form else [])
+            if (len(valores) != 1 or not isinstance(valores[0], str)
+                    or not re.fullmatch(r'(receita|produto):[1-9][0-9]{0,9}', valores[0])):
+                return None, ['Escolha uma opção de cada grupo disponível neste kit.']
+            escolhas[grupo] = valores[0]
         try:
             # Captura o produto escolhido antes de qualquer cotação externa.
-            raw = kits_cafe.itens_do_kit(kit, suco_id)
+            raw = kits_cafe.itens_do_kit(kit, suco_id, escolhas)
         except ValueError as exc:
             return None, [str(exc)]
-        itens, erros = kits_cafe.montar(kit, suco_id)
+        itens, erros = kits_cafe.montar(kit, suco_id, escolhas)
         if erros or not itens:
             return None, erros or ['Este kit está indisponível.']
         snapshot = _snapshot_composicao(itens)

@@ -9,7 +9,7 @@ from flask_login import current_user, login_required
 from app.blueprints.kits_cafe_admin import kits_cafe_admin_bp
 from app.decorators import owner_required
 from app.extensions import db
-from app.models import KitCafe, KitCafeItem, KitCafeSuco, Produto, Receita
+from app.models import KitCafe, KitCafeItem, KitCafeOpcao, KitCafeSuco, Produto, Receita
 from app.services import kits_cafe, loja_menu
 from app.utils import agora
 
@@ -17,14 +17,21 @@ from app.utils import agora
 def _estado(kit):
     itens, erros = kits_cafe.montar(kit)
     sucos = []
+    grupos = []
     if not erros:
         sucos = kits_cafe.opcoes_suco(kit)
+        grupos = kits_cafe.opcoes_grupos(kit)
     ids_sucos = {suco['id'] for suco in sucos}
+    opcionais = {(opcao['kind'], opcao['id'])
+                 for grupo in grupos for opcao in grupo['opcoes']}
     return {'kit': kit, 'itens': itens, 'erros': erros,
             'itens_fixos': [item for item in itens if not (
-                item['kind'] == 'produto' and item['produto_id'] in ids_sucos)],
-            'sucos': sucos,
-            'preco_varia': len({suco['preco'] for suco in sucos}) > 1,
+                (item['kind'] == 'produto' and item['produto_id'] in ids_sucos)
+                or (item['kind'], item['id']) in opcionais)],
+            'sucos': sucos, 'grupos': grupos,
+            'preco_varia': (len({suco['preco'] for suco in sucos}) > 1
+                            or any(len({o['preco'] for o in g['opcoes']}) > 1
+                                   for g in grupos)),
             'preco': sum((item['subtotal'] for item in itens), Decimal('0.00'))}
 
 
@@ -73,8 +80,32 @@ def _editor(kit=None, *, erros=(), status=200):
         for item in catalogo:
             chave = (item['kind'], item['id'])
             selecionados[chave] = dados.get(f'qtd_{chave[0]}_{chave[1]}', '0')
+    grupos_catalogo = []
+    for grupo, titulo in (('croissant', 'Croissant'), ('sourdough', 'Sourdough')):
+        marcados = [f'{opcao.kind}:{opcao.receita_id if opcao.kind == "receita" else opcao.produto_id}'
+                    for opcao in (kit.opcoes if kit else []) if opcao.grupo == grupo]
+        if request.method == 'POST' and dados.get('configurar_opcoes') == '1':
+            marcados = dados.getlist(f'opcao_{grupo}')
+        candidatos = [{**item, 'chave': f'{item["kind"]}:{item["id"]}'}
+                      for item in catalogo if not item.get('menu')]
+        chaves = {item['chave'] for item in candidatos}
+        for marcada in marcados:
+            if marcada in chaves:
+                continue
+            match = re.fullmatch(r'(receita|produto):([1-9][0-9]{0,9})', marcada)
+            if not match:
+                continue
+            kind, item_id = match.group(1), int(match.group(2))
+            alvo = db.session.get(Receita if kind == 'receita' else Produto, item_id)
+            candidatos.append({'chave': marcada, 'kind': kind, 'id': item_id,
+                                'nome': alvo.nome if alvo else 'Item removido do catálogo',
+                                'preco_kit': None, 'indisponivel': True})
+            chaves.add(marcada)
+        grupos_catalogo.append({'chave': grupo, 'nome': titulo,
+                                'selecionados': marcados, 'catalogo': candidatos})
     return render_template('admin/kits_cafe_editor.html', kit=kit,
                            catalogo=catalogo, selecionados=selecionados,
+                           grupos_catalogo=grupos_catalogo,
                            sucos_catalogo=sucos_catalogo,
                            sucos_selecionados=sucos_selecionados,
                            dados=dados, erros=erros,
@@ -115,7 +146,7 @@ def salvar():
             abort(400)
         kit = KitCafe.query.get_or_404(int(kit_id))
         db.session.refresh(kit, with_for_update=True)
-        db.session.expire(kit, ['itens', 'sucos'])
+        db.session.expire(kit, ['itens', 'sucos', 'opcoes'])
     nome = request.form.get('nome', '').strip()
     descricao = request.form.get('descricao', '').strip()
     erros = []
@@ -156,6 +187,18 @@ def salvar():
             suco_ids = [int(valor) for valor in recebidos]
     sucos, avisos_sucos = kits_cafe.preparar_sucos(suco_ids, itens)
     erros.extend(avisos_sucos)
+    selecao_opcoes = {}
+    for opcao in (kit.opcoes if kit else []):
+        item_id = opcao.receita_id if opcao.kind == 'receita' else opcao.produto_id
+        selecao_opcoes.setdefault(opcao.grupo, []).append(f'{opcao.kind}:{item_id}')
+    if request.form.get('configurar_opcoes') == '1':
+        selecao_opcoes = {grupo: request.form.getlist(f'opcao_{grupo}')
+                         for grupo in ('croissant', 'sourdough')}
+        if any(campo.startswith('opcao_') and campo not in (
+                'opcao_croissant', 'opcao_sourdough') for campo in request.form):
+            erros.append('Grupo de opções inválido.')
+    grupos, avisos_opcoes = kits_cafe.preparar_opcoes(selecao_opcoes, itens, suco_ids=suco_ids)
+    erros.extend(avisos_opcoes)
     if erros:
         return _editor(kit, erros=erros, status=400)
     if kit is None:
@@ -173,6 +216,20 @@ def salvar():
     atuais_sucos = {suco.produto_id: suco for suco in kit.sucos}
     kit.sucos[:] = [atuais_sucos.get(suco['id']) or KitCafeSuco(produto_id=suco['id'])
                    for suco in sucos]
+    atuais_opcoes = {(o.kind, o.receita_id if o.kind == 'receita' else o.produto_id): o
+                    for o in kit.opcoes}
+    novas_opcoes = []
+    for grupo in grupos:
+        for opcao in grupo['opcoes']:
+            registro = atuais_opcoes.get((opcao['kind'], opcao['id']))
+            if registro is None:
+                registro = KitCafeOpcao(
+                    kind=opcao['kind'],
+                    receita_id=opcao['id'] if opcao['kind'] == 'receita' else None,
+                    produto_id=opcao['id'] if opcao['kind'] == 'produto' else None)
+            registro.grupo = grupo['chave']
+            novas_opcoes.append(registro)
+    kit.opcoes[:] = novas_opcoes
     db.session.commit()
     flash('Kit publicado no site.' if kit.ativo else 'Kit salvo como rascunho.', 'success')
     return redirect(url_for('kits_cafe_admin.editar', kit_id=kit.id))

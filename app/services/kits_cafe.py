@@ -1,5 +1,6 @@
 """Composição dos kits do owner, sempre pelo catálogo público atual."""
 import json
+import re
 from decimal import Decimal
 
 from app.models import KitCafe, Produto
@@ -7,6 +8,8 @@ from app.services import loja_catalogo, loja_checkout, loja_menu
 from app.services.compra_kits import DIAS_AGENDA_KITS
 
 MAX_QUANTIDADE = 999
+GRUPOS_OPCOES = {'croissant': 'Croissant', 'sourdough': 'Sourdough'}
+MAX_COMBINACOES = 64
 
 
 def _composicao(item):
@@ -85,19 +88,110 @@ def opcoes_suco(kit):
     return opcoes
 
 
-def itens_do_kit(kit, suco_id=None):
-    """Itens fixos mais um suco; ausência de escolha serve apenas ao preview."""
+def preparar_opcoes(selecao, itens, suco_ids=()):
+    """Valida grupos fixos de uma unidade, sem receber preços do navegador.
+
+    Seleção: {'croissant': ['receita:4', 'produto:107'], ...}. Grupos
+    vazios não são oferecidos. Chaves kind:id distinguem os dois catálogos.
+    """
+    if not isinstance(selecao, dict) or set(selecao) - GRUPOS_OPCOES.keys():
+        return [], ['Escolha apenas os grupos Croissant e Sourdough deste kit.']
+    if (not isinstance(suco_ids, (list, tuple))
+            or any(type(item_id) is not int or item_id <= 0 for item_id in suco_ids)
+            or len(set(suco_ids)) != len(suco_ids)):
+        return [], ['Selecione opções de suco válidas.']
+    ocupados = {(item['kind'], item.get('id') or item.get('receita_id') or item.get('produto_id'))
+                for item in itens}
+    if ocupados.intersection(('produto', item_id) for item_id in suco_ids):
+        return [], ['Um item não pode se repetir entre itens fixos, sucos e grupos de escolha.']
+    ocupados.update(('produto', item_id) for item_id in suco_ids)
+    grupos = []
+    combinacoes = max(1, len(suco_ids))
+    for chave, nome in GRUPOS_OPCOES.items():
+        selecionados = selecao.get(chave, [])
+        if not isinstance(selecionados, (list, tuple)):
+            return [], [f'Selecione opções válidas de {nome}.']
+        if not selecionados:
+            continue
+        if not 2 <= len(selecionados) <= 10:
+            return [], [f'Selecione entre 2 e 10 opções de {nome}, ou deixe o grupo vazio.']
+        combinacoes *= len(selecionados)
+        if combinacoes > MAX_COMBINACOES:
+            return [], ['Os sucos e as opções do kit devem formar no máximo 64 combinações.']
+        grupo = {'chave': chave, 'nome': nome, 'opcoes': []}
+        for selecionado in selecionados:
+            match = (re.fullmatch(r'(receita|produto):([1-9][0-9]{0,9})', selecionado)
+                     if isinstance(selecionado, str) else None)
+            if not match:
+                return [], [f'Selecione opções válidas de {nome}.']
+            kind, item_id = match.group(1), int(match.group(2))
+            if (kind, item_id) in ocupados:
+                return [], ['Um item não pode se repetir entre itens fixos, sucos e grupos de escolha.']
+            ocupados.add((kind, item_id))
+            grupo['opcoes'].append({'chave': selecionado, 'kind': kind, 'id': item_id})
+        grupos.append(grupo)
+    raw_fixos = [
+        {'kind': item['kind'],
+         'id': item.get('id') or item.get('receita_id') or item.get('produto_id'),
+         'qtd': item['qtd'], 'comp': item.get('comp'), 'fatiado': item.get('fatiado')}
+        for item in itens
+    ]
+    for grupo in grupos:
+        for opcao in grupo['opcoes']:
+            kind, item_id = opcao['kind'], opcao['id']
+            cat = loja_catalogo.por_id_publicado(kind, item_id)
+            if not cat:
+                return [], [f'Uma opção de {grupo["nome"]} não está mais à venda no site. Revise o kit.']
+            if (cat.get('menu') or (kind == 'produto'
+                    and loja_menu.eh_menu(Produto.query.get(item_id)))):
+                return [], ['As opções de croissant e sourdough não podem ser menus configuráveis.']
+            normalizados, erros = loja_checkout.montar_itens(
+                [*raw_fixos, {'kind': kind, 'id': item_id, 'qtd': 1}],
+                dias_disponibilidade=DIAS_AGENDA_KITS)
+            if erros or len(normalizados) != len(raw_fixos) + 1:
+                return [], [f'A opção "{cat["nome"]}" está indisponível. Revise o kit.']
+            item = normalizados[-1]
+            opcao.update(nome=item['nome'], preco=item['preco'])
+        grupo['opcoes'].sort(key=lambda opcao: (opcao['preco'], opcao['id'], opcao['kind']))
+    return grupos, []
+
+
+def opcoes_grupos(kit):
+    """Grupos atuais completos; opção inválida exige revisão do cadastro."""
+    selecao = {}
+    for opcao in kit.opcoes:
+        item_id = opcao.receita_id if opcao.kind == 'receita' else opcao.produto_id
+        selecao.setdefault(opcao.grupo, []).append(f'{opcao.kind}:{item_id}')
+    grupos, erros = preparar_opcoes(selecao, itens_fixos_do_kit(kit),
+                                    [suco.produto_id for suco in kit.sucos])
+    if erros:
+        raise ValueError(' '.join(erros))
+    return grupos
+
+
+def itens_do_kit(kit, suco_id=None, escolhas=None):
+    """Itens fixos e uma opção por grupo; escolhas=None serve só ao preview."""
     itens = itens_fixos_do_kit(kit)
     opcoes = opcoes_suco(kit)
     if not opcoes:
         if suco_id is not None:
             raise ValueError('Este kit não oferece escolha de suco.')
-        return itens
-    if suco_id is None:
-        suco_id = opcoes[0]['id']
-    elif type(suco_id) is not int or suco_id not in {item['id'] for item in opcoes}:
-        raise ValueError('Escolha um dos sucos disponíveis neste kit.')
-    itens.append({'kind': 'produto', 'id': suco_id, 'qtd': 1})
+    else:
+        if suco_id is None:
+            suco_id = opcoes[0]['id']
+        elif type(suco_id) is not int or suco_id not in {item['id'] for item in opcoes}:
+            raise ValueError('Escolha um dos sucos disponíveis neste kit.')
+        itens.append({'kind': 'produto', 'id': suco_id, 'qtd': 1})
+    grupos = opcoes_grupos(kit)
+    if escolhas is not None and (not isinstance(escolhas, dict)
+            or set(escolhas) != {grupo['chave'] for grupo in grupos}):
+        raise ValueError('Escolha uma opção de cada grupo disponível neste kit.')
+    for grupo in grupos:
+        escolha = grupo['opcoes'][0]['chave'] if escolhas is None else escolhas[grupo['chave']]
+        opcao = next((opcao for opcao in grupo['opcoes'] if opcao['chave'] == escolha), None)
+        if opcao is None:
+            raise ValueError(f'Escolha um dos itens de {grupo["nome"]} disponíveis neste kit.')
+        itens.append({'kind': opcao['kind'], 'id': opcao['id'], 'qtd': 1})
     return itens
 
 
@@ -119,10 +213,10 @@ def _validar_composicoes(itens_raw):
     return []
 
 
-def montar(kit, suco_id=None):
+def montar(kit, suco_id=None, escolhas=None):
     """Mesmo preço, publicação e disponibilidade usados pelo checkout normal."""
     try:
-        raw = itens_do_kit(kit, suco_id)
+        raw = itens_do_kit(kit, suco_id, escolhas)
     except ValueError as exc:
         return [], [str(exc)]
     if not raw:

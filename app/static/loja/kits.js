@@ -11,15 +11,31 @@
   const money = value => (value / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
   const campo = name => form.elements.namedItem(name);
   const suco = document.getElementById('kit-suco');
+  const grupos = Array.isArray(cfg.grupos) ? cfg.grupos : [];
+  const escolhas = grupos.map(grupo => document.getElementById('kit-escolha-' + grupo));
   const precoKit = document.getElementById('kit-preco');
   const precoInicial = precoKit ? precoKit.textContent : '';
   let frete = null;
   let distancia = null;
   let versaoEndereco = 0;
   let enviando = false;
+  let agendaValida = false;
 
   function linhas() { return Array.from(agenda.querySelectorAll('.kit-dia')); }
-  function configuracao() { return suco ? (cfg.sucos[suco.value] || null) : cfg; }
+  function configuracao() {
+    const sucoId = suco ? suco.value : '';
+    if (cfg.sucos && Object.keys(cfg.sucos).length && !cfg.sucos[sucoId]) return null;
+    if (grupos.length) {
+      const selecionadas = escolhas.map(escolha => escolha ? escolha.value : '');
+      if (selecionadas.some(valor => !valor)) return null;
+      const chave = [sucoId, ...selecionadas].join('|');
+      return (cfg.combinacoes || {})[chave] || null;
+    }
+    return suco ? ((cfg.sucos || {})[sucoId] || null) : cfg;
+  }
+  function janelasDisponiveis(atual) {
+    return atual ? (distancia !== null && distancia >= cfg.corteKm ? atual.janelasLonge : atual.janelas) : {};
+  }
   function horarios(row, escolhido) {
     const atual = configuracao();
     const input = row.querySelector('.kit-data');
@@ -31,7 +47,7 @@
     select.disabled = !atual;
     const anterior = escolhido || select.value;
     select.replaceChildren();
-    const mapa = atual ? (distancia !== null && distancia >= cfg.corteKm ? atual.janelasLonge : atual.janelas) : {};
+    const mapa = janelasDisponiveis(atual);
     const opcoes = mapa[data] || [];
     const inicial = new Option(opcoes.length ? 'Escolha o horário' : 'Sem horários nesta data', '');
     select.add(inicial);
@@ -42,22 +58,68 @@
     const atual = configuracao();
     const lista = linhas();
     const dias = lista.map(r => r.querySelector('.kit-data').value);
-    lista.forEach(r => {
+    const mapa = janelasDisponiveis(atual);
+    agendaValida = lista.length > 0 && Boolean(atual);
+    lista.forEach((r, index) => {
       const data = r.querySelector('.kit-data');
-      data.setCustomValidity(data.value && dias.filter(d => d === data.value).length > 1
+      const janela = r.querySelector('.kit-janela');
+      const opcoes = mapa[data.value] || [];
+      const erroData = data.value && dias.filter(d => d === data.value).length > 1
         ? 'Cada dia corresponde a um kit. Escolha uma data diferente.'
-        : (data.value && atual && !atual.janelas[data.value]
-          ? 'Escolha uma data disponível para este kit e suco.' : ''));
+        : (data.value && atual && (!opcoes.length || data.value < atual.dataMin || data.value > atual.dataMax)
+          ? (grupos.length ? 'Escolha uma data disponível para as opções do plano.'
+            : 'Escolha uma data disponível para este kit e suco.') : '');
+      const erroJanela = janela.value && !opcoes.includes(janela.value)
+        ? 'Escolha um horário disponível para esta entrega.' : '';
+      data.setCustomValidity(erroData);
+      janela.setCustomValidity(erroJanela);
+      if (!data.value || erroData || !janela.value || erroJanela) agendaValida = false;
+      const numero = r.querySelector('.kit-dia-numero');
+      if (numero) numero.textContent = String(index + 1).padStart(2, '0');
+      const titulo = r.querySelector('.kit-dia-titulo');
+      if (titulo && !numero) titulo.textContent = 'Entrega ' + (index + 1);
+      const feedback = r.querySelector('.kit-dia-aviso');
+      if (feedback) {
+        feedback.textContent = erroData || erroJanela;
+        feedback.hidden = !(erroData || erroJanela);
+      }
     });
     const quantidade = lista.length;
     const valorProdutos = atual ? atual.precoCentavos * quantidade : null;
     if (precoKit) precoKit.textContent = atual ? money(atual.precoCentavos) + ' por kit' : precoInicial;
     document.getElementById('kits-quantidade').textContent = quantidade + (quantidade === 1 ? ' kit' : ' kits');
-    document.getElementById('kits-subtotal').textContent = atual ? money(valorProdutos) : 'Escolha o suco';
-    document.getElementById('kits-fretes').textContent = frete === null ? 'Calcule acima' : money(frete * quantidade);
+    document.getElementById('kits-subtotal').textContent = atual ? money(valorProdutos)
+      : grupos.length ? 'Escolha as opções' : 'Escolha o suco';
+    document.getElementById('kits-fretes').textContent = frete === null ? 'Informe seu endereço' : money(frete * quantidade);
     document.getElementById('kits-total').textContent = frete === null || !atual ? '—' : money(valorProdutos + frete * quantidade);
     document.getElementById('adicionar-data').disabled = !atual || quantidade >= 31;
-    continuar.disabled = enviando || !atual || frete === null || quantidade === 0;
+    continuar.disabled = enviando || !agendaValida || frete === null;
+    const ajuda = document.getElementById('kit-agenda-ajuda');
+    if (ajuda) ajuda.textContent = !atual
+      ? (grupos.length ? 'Escolha as opções do plano para liberar os dias.' : 'Escolha o suco para liberar os dias.')
+      : 'Uma entrega por data. Escolha o dia e o horário de cada kit.';
+    const proximo = document.getElementById('kit-proximo-passo');
+    if (proximo) proximo.textContent = !atual
+      ? (grupos.length ? 'Escolha as opções do plano para começar.' : 'Escolha seu suco para começar.')
+      : quantidade === 0 ? 'Adicione pelo menos uma entrega.'
+        : !agendaValida ? 'Escolha uma data e um horário disponíveis para cada entrega.'
+          : frete === null ? 'Informe seu endereço e calcule os fretes para continuar.'
+            : 'Confira seus dados e aceite os termos para seguir ao pagamento.';
+    const resumoDatas = document.getElementById('kits-resumo-datas');
+    if (resumoDatas) {
+      resumoDatas.replaceChildren();
+      lista.forEach((r, index) => {
+        const data = r.querySelector('.kit-data').value;
+        const janela = r.querySelector('.kit-janela').value;
+        const dia = data ? new Date(data + 'T12:00:00') : null;
+        const dataFormatada = dia && !Number.isNaN(dia.getTime())
+          ? dia.toLocaleDateString('pt-BR', {weekday: 'short', day: 'numeric', month: 'short'})
+          : 'Escolha a data';
+        const item = document.createElement('li');
+        item.textContent = (index + 1) + '. ' + dataFormatada + ' · ' + (janela || 'Escolha o horário');
+        resumoDatas.appendChild(item);
+      });
+    }
     document.getElementById('agenda-json').value = JSON.stringify(lista.map(r => ({
       data: r.querySelector('.kit-data').value, janela: r.querySelector('.kit-janela').value
     })));
@@ -88,9 +150,13 @@
     adicionar(proxima);
     linhas().at(-1).querySelector('.kit-data').focus();
   });
-  if (suco) suco.addEventListener('change', () => {
+  function atualizarEscolhas() {
     linhas().forEach(r => horarios(r));
     atualizar();
+  }
+  if (suco) suco.addEventListener('change', atualizarEscolhas);
+  escolhas.forEach(escolha => {
+    if (escolha) escolha.addEventListener('change', atualizarEscolhas);
   });
   const enderecoCampos = ['cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];
   function invalidarFrete() {
@@ -150,7 +216,7 @@
   });
   form.addEventListener('submit', event => {
     atualizar();
-    if (enviando || !configuracao() || frete === null || !linhas().length || !form.reportValidity()) {
+    if (enviando || !agendaValida || frete === null || !form.reportValidity()) {
       event.preventDefault();
       return;
     }
@@ -158,7 +224,8 @@
     continuar.disabled = true;
     continuar.textContent = 'Preparando sua compra…';
   });
-  (Array.isArray(cfg.agenda) && cfg.agenda.length ? cfg.agenda : [{data: suco ? '' : (Object.keys(cfg.janelas)[0] || ''), janela: ''}])
+  (Array.isArray(cfg.agenda) && cfg.agenda.length ? cfg.agenda
+    : [{data: suco || grupos.length ? '' : (Object.keys(cfg.janelas || {})[0] || ''), janela: ''}])
     .filter(a => a && typeof a === 'object').forEach(a => adicionar(a.data, a.janela));
   atualizar();
 })();

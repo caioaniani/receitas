@@ -157,6 +157,12 @@ def itens_para_usuario(usuario, categorias_receitas):
         adicionar('Slack bot', 'slack.install', 'Sistema', 'slack')
 
     if usuario.is_dono():
+        adicionar('Kits de café', 'kits_cafe_admin.index', 'Site', 'basket',
+                  aliases=['kits de café da manhã', 'gerenciar kits',
+                           'editar kit'])
+        adicionar('Criar kit de café', 'kits_cafe_admin.novo', 'Site',
+                  'plus-circle', aliases=['criar kit', 'novo kit',
+                                          'montar kit'])
         adicionar('Estoque do site', 'main.loja_online_plano_dia', 'Site',
                   'calendar-check', principal=True,
                   aliases=['plano do dia', 'quantidade à venda',

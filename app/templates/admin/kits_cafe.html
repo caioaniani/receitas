@@ -1,46 +1,95 @@
 {% extends 'base.html' %}
 {% block title %}Kits de café da manhã{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
-  <div><h1 class="page-title">Kits de café da manhã</h1>
-  <p class="text-muted mb-0">Você monta o kit. O cliente escolhe os dias e horários de entrega em casa.</p></div>
-  <a class="btn btn-primary" href="{{ url_for('kits_cafe_admin.novo') }}">Criar kit</a>
-</div>
-<div class="alert alert-light border">O preço de cada kit é a soma dos produtos do site. Cada data escolhida corresponde a um kit, com frete separado. Compra de um mês, sem renovação automática.</div>
-{% if estados %}
-<div class="row g-3">
-{% for estado in estados %}{% set kit = estado.kit %}
-  <div class="col-md-6 col-xl-4"><article class="card h-100"><div class="card-body d-flex flex-column">
-    <div class="d-flex gap-2 align-items-start justify-content-between"><h2 class="h5">{{ kit.nome }}</h2>
-      {% if not kit.ativo %}<span class="badge bg-secondary">Rascunho / pausado</span>
-      {% elif estado.erros %}<span class="badge bg-warning text-dark">Indisponível</span>
-      {% else %}<span class="badge bg-success">Publicado</span>{% endif %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/kits-cafe-admin.css') }}?v={{ static_v['css/kits-cafe-admin.css'] }}">
+<section class="kits-admin">
+  <nav class="kits-breadcrumb" aria-label="Localização">
+    <a href="{{ url_for('main.loja_online_dashboard') }}">Loja online</a>
+    <i class="bi bi-chevron-right" aria-hidden="true"></i><span>Kits de café</span>
+  </nav>
+  <header class="kits-header">
+    <div><span class="kits-eyebrow">Catálogo do site</span>
+      <h1>Kits de café da manhã</h1>
+      <p>Monte as opções. O cliente escolhe quando receber.</p>
     </div>
-    {% if kit.descricao %}<p class="text-muted">{{ kit.descricao }}</p>{% endif %}
-    {% if estado.erros %}
-      <div class="alert alert-warning">Este kit não aparece para compra até os itens estarem disponíveis.
-        <ul class="mb-0">{% for erro in estado.erros %}<li>{{ erro }}</li>{% endfor %}</ul>
+    <a class="btn btn-primary" href="{{ url_for('kits_cafe_admin.novo') }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Criar kit</a>
+  </header>
+  {% set contagem = namespace(publicados=0, pausados=0, indisponiveis=0) %}
+  {% for estado in estados %}
+    {% if not estado.kit.ativo %}{% set contagem.pausados = contagem.pausados + 1 %}
+    {% elif estado.erros %}{% set contagem.indisponiveis = contagem.indisponiveis + 1 %}
+    {% else %}{% set contagem.publicados = contagem.publicados + 1 %}{% endif %}
+  {% endfor %}
+  {% if estados %}
+  <div class="kits-overview" aria-label="Resumo dos kits">
+    <span><strong>{{ contagem.publicados }}</strong> publicado{{ 's' if contagem.publicados != 1 }}</span>
+    <span><strong>{{ contagem.pausados }}</strong> rascunho{{ 's' if contagem.pausados != 1 }} / pausado{{ 's' if contagem.pausados != 1 }}</span>
+    {% if contagem.indisponiveis %}<span class="kits-attention"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> <strong>{{ contagem.indisponiveis }}</strong> {{ 'indisponível' if contagem.indisponiveis == 1 else 'indisponíveis' }}</span>{% endif %}
+  </div>
+  <div class="kits-list">
+    {% for estado in estados %}{% set kit = estado.kit %}
+    <article class="kits-card" aria-labelledby="kit-titulo-{{ kit.id }}">
+      <div class="kits-card-main">
+        <span class="kits-card-icon" aria-hidden="true"><i class="bi bi-cup-hot"></i></span>
+        <div class="kits-card-copy">
+          <div class="kits-card-heading">
+            <h2 id="kit-titulo-{{ kit.id }}">{{ kit.nome }}</h2>
+            {% if not kit.ativo %}<span class="kits-status kits-status-neutral">Rascunho / pausado</span>
+            {% elif estado.erros %}<span class="kits-status kits-status-warning">Indisponível</span>
+            {% else %}<span class="kits-status kits-status-success">Publicado</span>{% endif %}
+          </div>
+          {% if estado.erros %}
+          <p class="kits-attention">{{ 'Revise os itens antes de publicar.' if not kit.ativo else 'Fora do site: há itens que precisam de revisão.' }}</p>
+          {% else %}
+          <p>{{ estado.itens_fixos|length }} {{ 'item fixo' if estado.itens_fixos|length == 1 else 'itens fixos' }} por entrega{% if estado.sucos %} <span aria-hidden="true">·</span> 1 suco à escolha{% endif %}{% for grupo in estado.grupos|default([]) %} <span aria-hidden="true">·</span> 1 {{ grupo.nome|lower }} à escolha{% endfor %}</p>
+          {% endif %}
+        </div>
+        <div class="kits-card-price">
+          {% if not estado.erros %}
+          <small>{{ 'A partir de' if estado.preco_varia else 'Por kit' }}</small>
+          <strong>R$ {{ '%.2f'|format(estado.preco)|replace('.', ',') }}</strong><small>+ frete por entrega</small>
+          {% else %}<span class="kits-attention">Preço a revisar</span>{% endif %}
+        </div>
+        <a class="btn btn-outline-secondary kits-edit" href="{{ url_for('kits_cafe_admin.editar', kit_id=kit.id) }}" aria-label="Editar kit {{ kit.nome }}">Editar kit <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
       </div>
-    {% else %}
-      <ul>{% for item in estado.itens_fixos %}<li>{{ item.qtd }} × {{ item.nome }}</li>{% endfor %}
-        {% if estado.sucos %}<li>1 suco à escolha: {{ estado.sucos|map(attribute='nome')|join(' ou ') }}</li>{% endif %}</ul>
-      <p class="fw-bold">{% if estado.preco_varia %}A partir de {% endif %}R$ {{ '%.2f'|format(estado.preco)|replace('.', ',') }} por kit <small class="fw-normal text-muted">+ frete</small></p>
-    {% endif %}
-    <div class="d-flex flex-wrap gap-2 mt-auto">
-      <a class="btn btn-outline-primary" href="{{ url_for('kits_cafe_admin.editar', kit_id=kit.id) }}">Editar kit</a>
-      {% if kit.ativo %}<form method="post" action="{{ url_for('kits_cafe_admin.pausar', kit_id=kit.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-outline-secondary" type="submit">Pausar venda</button>
-      </form>{% endif %}
-    </div>
-  </div></article></div>
-{% endfor %}
-</div>
-{% else %}
-<div class="card"><div class="card-body py-5 text-center">
-  <h2 class="h5">Monte a primeira opção de café da manhã</h2>
-  <p class="text-muted">Selecione os itens já disponíveis à venda no site e a quantidade de cada um por entrega.</p>
-  <a class="btn btn-primary" href="{{ url_for('kits_cafe_admin.novo') }}">Criar primeiro kit</a>
-</div></div>
-{% endif %}
+      <details class="kits-card-details" {% if estado.erros %}open{% endif %}>
+        <summary>{{ 'Ver pendências' if estado.erros else 'Ver composição e detalhes' }} <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+        <div class="kits-card-expanded">
+          {% if estado.erros %}
+          <div class="kits-warning" role="status"><strong>Este kit não aparece para compra até os itens estarem disponíveis.</strong>
+            <ul>{% for erro in estado.erros %}<li>{{ erro }}</li>{% endfor %}</ul>
+          </div>
+          {% else %}
+          <div><h3>O que vai em cada entrega</h3>
+            <ul class="kits-composition">{% for item in estado.itens_fixos %}<li><span>{{ item.qtd }} ×</span> {{ item.nome }}</li>{% endfor %}
+              {% if estado.sucos %}<li><span>1 ×</span> <div>Suco à escolha do cliente<small>1 suco à escolha: {{ estado.sucos|map(attribute='nome')|join(' ou ') }}</small></div></li>{% endif %}
+              {% for grupo in estado.grupos|default([]) %}<li><span>1 ×</span> <div>{{ grupo.nome }} à escolha do cliente<small>{{ grupo.opcoes|map(attribute='nome')|join(' ou ') }}</small></div></li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          <div>{% if kit.descricao %}<h3>Descrição no site</h3><p class="kits-description">{{ kit.descricao }}</p>{% endif %}
+            {% if kit.ativo %}<form method="post" action="{{ url_for('kits_cafe_admin.pausar', kit_id=kit.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-pause" aria-hidden="true"></i> Pausar venda</button>
+              <p class="kits-help">As entregas já compradas continuam na agenda.</p>
+            </form>{% endif %}
+          </div>
+        </div>
+      </details>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="kits-empty">
+    <span class="kits-card-icon" aria-hidden="true"><i class="bi bi-cup-hot"></i></span>
+    <h2>Seu primeiro kit começa aqui</h2>
+    <p>Escolha os produtos do site e defina o que vai em cada entrega.</p>
+    <a class="btn btn-primary" href="{{ url_for('kits_cafe_admin.novo') }}">Criar primeiro kit</a>
+  </div>
+  {% endif %}
+  <details class="kits-help-fold">
+    <summary><i class="bi bi-info-circle" aria-hidden="true"></i> Como funcionam o preço e as entregas?</summary>
+    <p>O preço é a soma dos produtos do site. Cada data escolhida corresponde a um kit, com frete separado. A compra vale para um mês, sem renovação automática.</p>
+  </details>
+</section>
 {% endblock %}

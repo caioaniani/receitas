@@ -1,25 +1,74 @@
 {% extends 'loja/_base.html' %}
-{% block title %}Kits de café da manhã agendados — O Pão{% endblock %}
+{% block title %}Planos de café da manhã — O Pão{% endblock %}
+{% block description %}Escolha seu plano de café da manhã O Pão e agende as entregas do mês. Um kit completo em cada data, sem renovação automática.{% endblock %}
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('loja.static', filename='kits.css') }}?v={{ static_v['loja/kits.css'] }}">
+{% endblock %}
 {% block content %}
-<section class="checkout-pagina">
-  <h1>Café da manhã nos seus dias</h1>
-  <p>Escolha seu kit e as datas e os horários em que quer receber em casa.
-    Cada dia escolhido corresponde a um kit, com uma única compra e sem renovação automática.</p>
-  <p class="text-muted">O valor dos produtos é somado para cada entrega. Os fretes aparecem separados antes do pagamento.</p>
-  {% for card in cards %}
-  <article class="checkout-bloco">
-    <h2>{{ card.kit.nome }}</h2>
-    {% if card.kit.descricao %}<p>{{ card.kit.descricao }}</p>{% endif %}
-    <ul class="checkout-itens-lista">
-      {% for it in card.itens %}<li><span>{{ it.qtd }}× {{ it.nome }}</span></li>{% endfor %}
-      {% if card.sucos %}<li><span>1 suco à escolha: {% for suco in card.sucos %}{{ suco.nome }}{{ ' ou ' if not loop.last }}{% endfor %}</span></li>{% endif %}
-    </ul>
-    <p><strong>{% if card.preco_variavel %}A partir de {% endif %}R$ {{ '%.2f'|format(card.preco)|replace('.', ',') }} por kit</strong> · frete à parte</p>
-    <a class="btn-loja" href="{{ url_for('loja.kit_comprar', kit_id=card.kit.id) }}">Escolher dias e horários</a>
-  </article>
+<section class="kits-vitrine">
+  <header class="kits-hero">
+    <div class="kits-hero-copy">
+      <p class="kits-kicker">O Pão · Planos de café da manhã</p>
+      <h1>Café da manhã,<br><em>nos seus dias.</em></h1>
+      <p class="kits-hero-description">Escolha seu plano e marque as entregas do mês.<br class="kits-desktop-break"> Um kit completo em cada data, na sua casa.</p>
+      <p class="kits-hero-note">Você escolhe quantas entregas. Sem renovação automática.</p>
+    </div>
+    <ol class="kits-how-it-works" aria-label="Como comprar seu kit">
+      <li><span aria-hidden="true">01</span><div><strong>Escolha seu plano</strong><p>Veja o que vem em cada entrega.</p></div></li>
+      <li><span aria-hidden="true">02</span><div><strong>Marque seus dias</strong><p>Um kit por data, no horário disponível.</p></div></li>
+      <li><span aria-hidden="true">03</span><div><strong>Receba em casa</strong><p>Fretes e total antes do pagamento.</p></div></li>
+    </ol>
+  </header>
+
+  <div class="kits-catalog-heading">
+    <h2>Escolha o seu café.</h2>
+    {% if cards %}<p>{{ cards|length }} {{ 'plano disponível' if cards|length == 1 else 'planos disponíveis' }}</p>{% endif %}
+  </div>
+  {% if cards %}
+  <div class="kits-catalog-grid">
+    {% for card in cards %}
+    <article class="kits-product-card" aria-labelledby="kit-title-{{ card.kit.id }}">
+      {% if card.imagens %}
+      <figure class="kits-card-gallery kits-card-gallery-{{ card.imagens|length }}">
+        <div class="kits-card-photos">
+          {% for foto in card.imagens %}<img src="{{ foto.url }}" alt="{{ foto.nome }}" loading="{{ 'eager' if loop.first else 'lazy' }}" decoding="async" width="640" height="480">{% endfor %}
+        </div>
+        <figcaption>Produtos que compõem o kit</figcaption>
+      </figure>
+      {% else %}
+      <div class="kits-card-editorial" aria-hidden="true">
+        <span class="kits-editorial-brand">O Pão</span>
+        <span class="kits-editorial-rule"></span>
+        <span class="kits-editorial-name">{{ card.kit.nome }}</span>
+        <span class="kits-editorial-foot">Seu café, no seu tempo.</span>
+      </div>
+      {% endif %}
+      <div class="kits-card-body">
+        <h3 id="kit-title-{{ card.kit.id }}">{{ card.kit.nome }}</h3>
+        <div class="kits-card-buy">
+          <p class="kits-card-price"><strong>{% if card.preco_variavel %}A partir de {% endif %}R$ {{ '%.2f'|format(card.preco)|replace('.', ',') }} por kit</strong><span>1 kit por entrega. Frete calculado à parte.</span></p>
+          <a class="btn-loja" href="{{ url_for('loja.kit_comprar', kit_id=card.kit.id) }}" aria-label="Escolher este kit: {{ card.kit.nome }}">Escolher este plano <span aria-hidden="true">→</span></a>
+        </div>
+        <details class="kits-card-details">
+          <summary>O que vem no kit</summary>
+          <ul class="kits-card-contents">
+            {% for it in card.itens %}<li>{{ it.qtd }}× {{ it.nome }}</li>{% endfor %}
+            {% if card.sucos %}<li>1 suco à escolha: {% for suco in card.sucos %}{{ suco.nome }}{{ ' ou ' if not loop.last }}{% endfor %}</li>{% endif %}
+            {% for grupo in card.grupos|default([]) %}<li>1 {{ grupo.nome|lower }} à escolha: {{ grupo.opcoes|map(attribute='nome')|join(' ou ') }}</li>{% endfor %}
+          </ul>
+          {% if card.kit.descricao %}<p>{{ card.kit.descricao }}</p>{% endif %}
+        </details>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  <p class="kits-catalog-footnote">Os valores são por entrega. Você escolhe as opções do plano e as datas na próxima etapa; o total soma os kits e os fretes em uma única compra.</p>
   {% else %}
-  <div class="checkout-bloco"><p>Estamos preparando os kits. Enquanto isso, conheça os produtos da padaria.</p>
-    <a class="btn-loja" href="{{ url_for('loja.home') }}">Ver produtos</a></div>
-  {% endfor %}
+  <div class="kits-catalog-empty">
+    <h3>Seu próximo café está sendo preparado.</h3>
+    <p>Os kits ainda não estão disponíveis. Enquanto isso, conheça os produtos da padaria.</p>
+    <a class="btn-loja" href="{{ url_for('loja.home') }}">Ver produtos <span aria-hidden="true">→</span></a>
+  </div>
+  {% endif %}
 </section>
 {% endblock %}

@@ -70,10 +70,13 @@
 </p>
 
 {% if pode_editar %}
-<p class="mb-3">
+<div class="mb-3">
+  <div class="d-flex align-items-center gap-3 flex-wrap">
   <a href="{{ url_for('main.loja_online_plano_dia') }}" class="btn btn-outline-primary">Estoque do site · Plano do dia</a>
+  <a href="{{ url_for('kits_cafe_admin.index') }}" class="text-decoration-none"><i class="bi bi-basket me-1" aria-hidden="true"></i>Kits de café</a>
+  </div>
   <span class="d-block text-muted small mt-2">Quantidades, dias disponíveis e itens esgotados continuam no Plano do dia.</span>
-</p>
+</div>
 {% endif %}
 
 <form method="GET" class="cat-busca" role="search">

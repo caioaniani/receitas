@@ -53,7 +53,7 @@
         <a href="{{ url_for('treino.home') }}" class="sidebar-link {{ 'active' if request.path.startswith('/treino') and not request.path.startswith(('/treino/gestor', '/treino/admin')) }}">Meu treinamento</a>
     </details>
     {% set configurando_site = request.path.startswith('/admin/loja-online') and not request.path.startswith('/admin/loja-online/pedidos') %}
-    <details class="ui-v2-nav-fold"{% if request.path.startswith('/area/') or configurando_site %} open{% endif %}>
+    <details class="ui-v2-nav-fold"{% if request.path.startswith('/area/') or (configurando_site and not current_user.is_owner) %} open{% endif %}>
         <summary><i class="bi bi-grid" aria-hidden="true"></i> Todas as áreas <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
         {% for a in areas_navegacao %}
         <a href="{{ url_for('main.area', slug=a.slug) }}" class="sidebar-link {{ 'active' if request.path == '/area/' ~ a.slug or (a.slug == 'vendas' and configurando_site) }}">{{ a.titulo }}</a>
@@ -117,7 +117,7 @@
         </a>
         {% endif %}
         {% if current_user.pode_pdv() or current_user.is_admin() or current_user.pode_lojas() %}
-        <a href="{{ url_for('main.area', slug='vendas') }}" class="sidebar-link {{ 'active' if request.path == '/area/vendas' or request.path.startswith('/pdv') or request.path.startswith('/entregas') or request.path.startswith('/b2b') or request.path.startswith('/admin/loja-online') }}">
+        <a href="{{ url_for('main.area', slug='vendas') }}" class="sidebar-link {{ 'active' if request.path == '/area/vendas' or request.path.startswith('/pdv') or request.path.startswith('/entregas') or request.path.startswith('/b2b') or request.path.startswith(('/admin/loja-online', '/admin/kits-cafe')) }}">
             <i class="bi bi-receipt"></i><span>Vendas e entregas</span>
         </a>
         {% endif %}
@@ -139,7 +139,7 @@
         <a href="{{ url_for('main.area', slug='relatorios') }}" class="sidebar-link {{ 'active' if request.path == '/area/relatorios' or request.path.startswith('/relatorios') }}">
             <i class="bi bi-bar-chart"></i><span>Relatórios</span>
         </a>
-        <a href="{{ url_for('main.area', slug='administracao') }}" class="sidebar-link {{ 'active' if request.path == '/area/administracao' or (request.path.startswith('/admin') and not request.path.startswith('/admin/loja-online')) or request.path.startswith('/auth/usuarios') }}">
+        <a href="{{ url_for('main.area', slug='administracao') }}" class="sidebar-link {{ 'active' if request.path == '/area/administracao' or (request.path.startswith('/admin') and not request.path.startswith(('/admin/loja-online', '/admin/kits-cafe'))) or request.path.startswith('/auth/usuarios') }}">
             <i class="bi bi-gear"></i><span>Administração</span>
         </a>
     </div>
@@ -158,15 +158,21 @@
         </a>
     </div>
     {% endif %}
-    {% if current_user.is_owner %}
-    <div class="ui-v2-nav-group ui-v2-shortcuts">
-        <span class="ui-v2-nav-label">Loja online</span>
+    {% endif %}{# navegação admin / outros papéis #}
+    {% if current_user.is_owner and not current_user.somente_treino %}
+    <details class="ui-v2-nav-fold"{% if request.path.startswith(('/admin/loja-online', '/admin/kits-cafe')) %} open{% endif %}>
+        <summary><i class="bi bi-shop-window" aria-hidden="true"></i> Loja online <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+        <a href="{{ url_for('main.loja_online_dashboard') }}" class="sidebar-link {{ 'active' if request.endpoint == 'main.loja_online_dashboard' }}">
+            <i class="bi bi-speedometer2" aria-hidden="true"></i><span>Painel da loja online</span>
+        </a>
         <a href="{{ url_for('main.loja_online_plano_dia') }}" class="sidebar-link {{ 'active' if request.path.startswith('/admin/loja-online/plano-do-dia') }}">
             <i class="bi bi-calendar-check"></i><span>Disponibilidade do site</span>
         </a>
-    </div>
+        <a href="{{ url_for('kits_cafe_admin.index') }}" class="sidebar-link {{ 'active' if request.path.startswith('/admin/kits-cafe') }}"{% if request.path.startswith('/admin/kits-cafe') %} aria-current="page"{% endif %}>
+            <i class="bi bi-basket" aria-hidden="true"></i><span>Kits de café</span>
+        </a>
+    </details>
     {% endif %}
-    {% endif %}{# navegação admin / outros papéis #}
     {% endif %}{# observador #}
 
     <div class="ui-v2-nav-spacer"></div>

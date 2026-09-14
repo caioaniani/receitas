@@ -2,12 +2,13 @@
 import json
 import re
 import secrets
+from itertools import product
 
 from flask import abort, redirect, render_template, request, session, url_for
 
 from app.blueprints.loja import loja_bp
 from app.extensions import limiter
-from app.models import CompraKit, KitCafe
+from app.models import CompraKit, KitCafe, Produto, Receita
 from app.services import compra_kits, kits_cafe, loja_checkout
 from app.utils import agora
 
@@ -20,15 +21,56 @@ def kits_catalogo():
         itens, erros = kits_cafe.montar(kit)
         if not erros:
             sucos = kits_cafe.opcoes_suco(kit)
-            cards.append({'kit': kit, 'itens': _itens_fixos(itens, sucos),
+            grupos = kits_cafe.opcoes_grupos(kit)
+            cards.append({'kit': kit, 'itens': _itens_fixos(itens, sucos, grupos),
+                          'grupos': grupos,
                           'sucos': sucos, 'preco': sum(it['subtotal'] for it in itens),
-                          'preco_variavel': len({s['preco'] for s in sucos}) > 1})
+                          'preco_variavel': _preco_variavel(sucos, grupos)})
+    capas = _capas_dos_itens([item for card in cards for item in card['itens']])
+    for card in cards:
+        card['imagens'] = _imagens_dos_itens(card['itens'], capas)
     return render_template('loja/kits_catalogo.html', cards=cards, em_teste=_em_teste())
 
 
-def _itens_fixos(itens, sucos):
+def _preco_variavel(sucos, grupos):
+    return (len({s['preco'] for s in sucos}) > 1
+            or any(len({o['preco'] for o in g['opcoes']}) > 1 for g in grupos))
+
+
+def _itens_fixos(itens, sucos, grupos=()):
     ids = {suco['id'] for suco in sucos}
-    return [item for item in itens if item.get('produto_id') not in ids]
+    opcionais = {(o['kind'], o['id']) for g in grupos for o in g['opcoes']}
+    return [item for item in itens if item.get('produto_id') not in ids
+            and (item['kind'], item['id']) not in opcionais]
+
+
+def _capas_dos_itens(itens):
+    """Capas reais dos itens já validados, em lote e sem carregar blobs."""
+    capas = {}
+    for kind, modelo in (('receita', Receita), ('produto', Produto)):
+        ids = {item['id'] for item in itens if item['kind'] == kind}
+        if not ids:
+            continue
+        rows = (modelo.query.with_entities(
+            modelo.id, modelo.imagem_dropbox_url, modelo.imagem_url)
+            .filter(modelo.id.in_(ids)).all())
+        for item_id, dropbox_url, imagem_url in rows:
+            # Mesma precedência da capa usada na vitrine pública da loja.
+            capas[(kind, item_id)] = dropbox_url or imagem_url or ''
+    return capas
+
+
+def _imagens_dos_itens(itens, capas):
+    imagens = []
+    urls = set()
+    for item in itens:
+        url = capas.get((item['kind'], item['id']))
+        if url and url not in urls:
+            imagens.append({'url': url, 'nome': item['nome']})
+            urls.add(url)
+        if len(imagens) == 3:
+            break
+    return imagens
 
 
 def _calendario(raw, base, cache):
@@ -57,12 +99,19 @@ def _contexto(kit, form=None, agenda=None, erros=None):
     ctx = _ctx_checkout(erros=erros, form=form)
     try:
         sucos = kits_cafe.opcoes_suco(kit)
+        grupos = kits_cafe.opcoes_grupos(kit)
     except ValueError:
         sucos = []
+        grupos = []
     escolha = (form or {}).get('suco_id', '')
     suco_id = next((s['id'] for s in sucos if str(s['id']) == escolha), None)
-    itens, avisos = kits_cafe.montar(kit, suco_id=suco_id)
-    fixos = _itens_fixos(itens, sucos)
+    escolhas_selecionadas = {
+        g['chave']: (form or {}).get(f'escolha_{g["chave"]}', '') for g in grupos}
+    escolhas_completas = all(escolhas_selecionadas[g['chave']] in {
+        o['chave'] for o in g['opcoes']} for g in grupos)
+    itens, avisos = kits_cafe.montar(
+        kit, suco_id=suco_id, escolhas=escolhas_selecionadas if escolhas_completas else None)
+    fixos = _itens_fixos(itens, sucos, grupos)
     # A agenda só consulta kind/id para calcular a antecedência. Reutilizar
     # os itens já validados evita validar o grupo inteiro para cada opção.
     raw_fixos = [{'kind': it['kind'], 'id': it['id']} for it in fixos]
@@ -77,6 +126,23 @@ def _contexto(kit, form=None, agenda=None, erros=None):
             **_calendario([*raw_fixos, {'kind': 'produto', 'id': suco['id']}], base, calendarios),
             'precoCentavos': int((preco_fixo + suco['preco']) * 100),
         }
+    combinacoes = {}
+    if grupos and not avisos:
+        # Preparar as escolhas já limita o produto cartesiano a 64 combinações.
+        # Cada calendário é reutilizado pela antecedência, sem consultar frete.
+        for combinacao in product(sucos or [{'id': '', 'preco': 0}],
+                                   *(g['opcoes'] for g in grupos)):
+            suco, *opcoes = combinacao
+            raw = [*raw_fixos]
+            if suco['id']:
+                raw.append({'kind': 'produto', 'id': suco['id']})
+            raw.extend({'kind': o['kind'], 'id': o['id']} for o in opcoes)
+            chave = '|'.join([str(suco['id']), *(o['chave'] for o in opcoes)])
+            combinacoes[chave] = {
+                **_calendario(raw, base, calendarios),
+                'precoCentavos': int((preco_fixo + suco['preco']
+                                      + sum(o['preco'] for o in opcoes)) * 100),
+            }
     tokens = dict(session.get('kits_checkout_tokens') or {})
     key = str(kit.id)
     if (key not in tokens or (request.method == 'GET'
@@ -86,8 +152,11 @@ def _contexto(kit, form=None, agenda=None, erros=None):
         tokens = dict(list(tokens.items())[-10:])
         session['kits_checkout_tokens'] = tokens
     ctx.update(kit=kit, itens=fixos, preco=preco,
+               kit_imagens=_imagens_dos_itens(fixos, _capas_dos_itens(fixos)),
                sucos=sucos, suco_id=suco_id,
-               preco_variavel=len({s['preco'] for s in sucos}) > 1,
+               grupos=grupos, escolhas_selecionadas=escolhas_selecionadas,
+               escolhas_completas=escolhas_completas,
+               preco_variavel=_preco_variavel(sucos, grupos),
                indisponivel=bool(avisos),
                agenda=agenda or [], checkout_token=tokens[key],
                data_min=calendario['dataMin'], data_max=calendario['dataMax'],
@@ -95,6 +164,8 @@ def _contexto(kit, form=None, agenda=None, erros=None):
                    **calendario,
                    'precoCentavos': int(preco * 100),
                    'sucos': escolhas,
+                   'grupos': [g['chave'] for g in grupos],
+                   'combinacoes': combinacoes,
                    'agenda': agenda or [],
                    'cepUrl': url_for('loja.api_cep', cep='00000000'),
                    'freteUrl': url_for('loja.api_frete'),

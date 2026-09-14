@@ -16,6 +16,8 @@ class KitCafe(db.Model):
                              order_by='KitCafeItem.id')
     sucos = db.relationship('KitCafeSuco', backref='kit', cascade='all, delete-orphan',
                             order_by='KitCafeSuco.produto_id')
+    opcoes = db.relationship('KitCafeOpcao', backref='kit', cascade='all, delete-orphan',
+                             order_by='KitCafeOpcao.grupo, KitCafeOpcao.id')
 
 
 class KitCafeSuco(db.Model):
@@ -23,6 +25,25 @@ class KitCafeSuco(db.Model):
     __tablename__ = 'kit_cafe_suco'
     kit_id = db.Column(db.Integer, db.ForeignKey('kit_cafe.id'), primary_key=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), primary_key=True)
+
+
+class KitCafeOpcao(db.Model):
+    """Um croissant e/ou sourdough escolhidos entre opções do próprio kit."""
+    __tablename__ = 'kit_cafe_opcao'
+    id = db.Column(db.Integer, primary_key=True)
+    kit_id = db.Column(db.Integer, db.ForeignKey('kit_cafe.id'), nullable=False, index=True)
+    grupo = db.Column(db.String(20), nullable=False)
+    kind = db.Column(db.String(10), nullable=False)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'))
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'))
+    __table_args__ = (
+        db.CheckConstraint("grupo IN ('croissant', 'sourdough')", name='ck_kit_cafe_opcao_grupo'),
+        db.CheckConstraint("(kind = 'receita' AND receita_id IS NOT NULL AND produto_id IS NULL) "
+                           "OR (kind = 'produto' AND produto_id IS NOT NULL AND receita_id IS NULL)",
+                           name='ck_kit_cafe_opcao_alvo'),
+        db.UniqueConstraint('kit_id', 'receita_id', name='uq_kit_cafe_opcao_receita'),
+        db.UniqueConstraint('kit_id', 'produto_id', name='uq_kit_cafe_opcao_produto'),
+    )
 
 
 class KitCafeItem(db.Model):

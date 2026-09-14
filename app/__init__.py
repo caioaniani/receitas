@@ -130,7 +130,9 @@ def create_app(config_class=None):
                     'css/rh-equipe.css', 'js/plano-carreira-lote.js',
                     'css/treino-gestao.css', 'css/treino-aluno.css',
                     'css/treino-admin.css', 'js/treino-admin.js',
-                    'loja/loja.css', 'loja/carrinho.js', 'loja/checkout.js', 'loja/kits.js'):
+                    'css/kits-cafe-admin.css', 'js/kits-cafe-admin.js',
+                    'loja/loja.css', 'loja/carrinho.js', 'loja/checkout.js', 'loja/kits.js',
+                    'loja/kits.css'):
             try:
                 p = os.path.join(app.static_folder, rel)
                 with open(p, 'rb') as f:

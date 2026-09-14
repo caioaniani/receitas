@@ -1,121 +1,156 @@
 {% extends 'base.html' %}
 {% block title %}{{ 'Editar kit' if kit else 'Criar kit' }} de café da manhã{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
-  <h1 class="page-title">{{ 'Editar kit' if kit else 'Criar kit' }} de café da manhã</h1>
-  <a class="btn btn-outline-secondary align-self-start" href="{{ url_for('kits_cafe_admin.index') }}">Voltar aos kits</a>
-</div>
-<p class="text-muted">Escolha o conteúdo de <strong>uma entrega</strong>. O cliente agenda as datas e horários; cada dia recebe um kit completo.</p>
-{% if erros %}<div class="alert alert-danger" role="alert"><strong>Revise o kit antes de salvar.</strong>
-  <ul class="mb-0">{% for erro in erros %}<li>{{ erro }}</li>{% endfor %}</ul></div>{% endif %}
-{% if estado and estado.erros and not erros %}<div class="alert alert-warning">O kit está indisponível para novas compras.
-  <ul class="mb-0">{% for erro in estado.erros %}<li>{{ erro }}</li>{% endfor %}</ul></div>{% endif %}
-<form method="post" action="{{ url_for('kits_cafe_admin.salvar') }}">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  {% if kit %}<input type="hidden" name="kit_id" value="{{ kit.id }}">{% endif %}
-  <div class="card mb-3"><div class="card-body">
-    <label for="kit-nome" class="form-label">Nome do kit</label>
-    <input class="form-control mb-3" id="kit-nome" name="nome" required maxlength="150" value="{{ dados.get('nome', kit.nome if kit else '') }}" placeholder="Ex.: Café da manhã 1">
-    <label for="kit-descricao" class="form-label">Descrição para o cliente</label>
-    <textarea class="form-control" id="kit-descricao" name="descricao" maxlength="600" rows="3" placeholder="Conte como é este café da manhã.">{{ dados.get('descricao', (kit.descricao or '') if kit else '') }}</textarea>
-  </div></div>
-  <div class="card mb-3"><div class="card-body">
-    <h2 class="h5">Itens por entrega</h2>
-    <p class="text-muted">Informe a quantidade da unidade vendida no site. Use zero para deixar o item fora do kit. Tamanhos, recheios e porções são os do cadastro de cada produto.</p>
-    <p class="small text-muted">Menus configuráveis entram com a composição padrão indicada abaixo, fixada no kit. O cliente não altera essa composição. Se o padrão mudar depois, revise e adote a mudança explicitamente.</p>
-    <label for="kit-busca" class="form-label">Buscar um item</label>
-    <input type="search" id="kit-busca" class="form-control mb-3" placeholder="Nome ou categoria">
-    {% if catalogo %}
-    <div class="table-responsive"><table class="table align-middle" id="kit-itens">
-      <thead><tr><th>Item do site</th><th>Valor unitário</th><th style="min-width:110px">Quantidade</th></tr></thead>
-      <tbody>{% for item in catalogo %}{% set chave = (item.kind, item.id) %}{% set campo = 'qtd_' ~ item.kind ~ '_' ~ item.id %}
-      <tr data-busca="{{ (item.nome ~ ' ' ~ (item.categoria or ''))|lower }}" data-preco="{{ item.preco_kit if item.preco_kit is not none else '' }}" data-preco-padrao="{{ item.preco_padrao if item.menu else '' }}">
-        <td><label for="{{ campo }}" class="fw-semibold">{{ item.nome }}</label>
-          {% if item.categoria %}<div class="small text-muted">{{ item.categoria }}</div>{% endif %}
-          {% if item.indisponivel %}<div class="small text-danger">Indisponível no site. Remova do kit (quantidade zero) ou regularize o produto no catálogo.</div>{% endif %}
-          {% if item.composicao_erro %}<div class="small text-danger">{{ item.composicao_erro }}</div>{% endif %}
-          {% if item.composicao_fixa %}<div class="small mt-1"><strong>Composição fixada:</strong> {% for parte in item.composicao_fixa %}{{ parte.qtd }} × {{ parte.nome }}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
-          {% if item.menu %}<div class="small mt-1"><strong>Padrão atual:</strong> {% for parte in item.menu.resumo_padrao %}{{ parte.qtd }} × {{ parte.nome }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
-            {% if item.ja_selecionado %}<div class="form-check mt-1">
-              <input type="checkbox" class="form-check-input" id="atualizar_{{ campo }}" name="atualizar_menu_{{ item.kind }}_{{ item.id }}" value="1" {% if dados.get('atualizar_menu_' ~ item.kind ~ '_' ~ item.id) == '1' %}checked{% endif %}>
-              <label class="form-check-label small" for="atualizar_{{ campo }}">Adotar o padrão atual neste kit (R$ {{ '%.2f'|format(item.preco_padrao)|replace('.', ',') }} por menu)</label>
-            </div>{% endif %}
-          {% endif %}
-        </td>
-        <td class="text-nowrap">{% if item.preco_kit is not none %}R$ {{ '%.2f'|format(item.preco_kit)|replace('.', ',') }}{% else %}—{% endif %}</td>
-        <td><input type="number" class="form-control kit-quantidade" style="max-width:110px" id="{{ campo }}" name="{{ campo }}" min="0" max="999" step="1" required value="{{ selecionados.get(chave, 0) }}" aria-label="Quantidade de {{ item.nome }}"></td>
-      </tr>{% endfor %}</tbody>
-    </table></div>
-    <p id="kit-sem-resultado" class="text-muted" hidden>Nenhum item encontrado.</p>
-    {% else %}<div class="alert alert-warning">Não há itens disponíveis à venda no site. Publique os produtos no catálogo antes de montar um kit.</div>{% endif %}
-    <p class="mb-0"><a href="{{ url_for('main.loja_online_catalogo') }}">Abrir catálogo do site</a></p>
-  </div></div>
-  <div class="card mb-3"><div class="card-body">
-    <h2 class="h5">Sucos à escolha do cliente</h2>
-    <p>Opcional: marque de 2 a 10 sucos. Cada entrega terá uma unidade do sabor escolhido pelo cliente para todas as datas. Use quantidade zero desses sucos na lista de itens fixos acima.</p>
-    <input type="hidden" name="configurar_sucos" value="1">
-    <label for="kit-busca-sucos" class="form-label">Buscar suco</label>
-    <input type="search" id="kit-busca-sucos" class="form-control mb-3" placeholder="Nome do produto">
-    <div id="kit-sucos" class="row">
-      {% for suco in sucos_catalogo %}
-      <div class="col-md-6 mb-2 kit-opcao-suco" data-busca="{{ suco.nome|lower }}">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="suco-{{ suco.id }}" name="suco_ids" value="{{ suco.id }}" data-preco="{{ suco.preco_kit if suco.preco_kit is not none else '' }}" {% if suco.id|string in sucos_selecionados %}checked{% endif %}>
-          <label class="form-check-label" for="suco-{{ suco.id }}">{{ suco.nome }} — {% if suco.preco_kit is not none %}R$ {{ '%.2f'|format(suco.preco_kit)|replace('.', ',') }}{% else %}Indisponível, revise o cadastro{% endif %}</label>
-        </div>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/kits-cafe-admin.css') }}?v={{ static_v['css/kits-cafe-admin.css'] }}">
+<section class="kits-admin">
+  <nav class="kits-breadcrumb" aria-label="Localização">
+    <a href="{{ url_for('main.loja_online_dashboard') }}">Loja online</a><i class="bi bi-chevron-right" aria-hidden="true"></i>
+    <a href="{{ url_for('kits_cafe_admin.index') }}">Kits de café</a><i class="bi bi-chevron-right" aria-hidden="true"></i>
+    <span>{{ 'Editar kit' if kit else 'Criar kit' }}</span>
+  </nav>
+  <header class="kits-header">
+    <div><span class="kits-eyebrow">Montagem do kit</span><h1>{{ 'Editar kit' if kit else 'Criar kit de café da manhã' }}</h1>
+      <p>Defina o conteúdo de uma entrega. O valor é calculado enquanto você monta.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('kits_cafe_admin.index') }}">Voltar aos kits</a>
+  </header>
+  {% if erros %}<div class="alert alert-danger" role="alert"><strong>Revise o kit antes de salvar.</strong>
+    <ul class="mb-0">{% for erro in erros %}<li>{{ erro }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if estado and estado.erros and not erros %}<div class="kits-warning mb-3" role="status"><strong>O kit está indisponível para novas compras.</strong>
+    <ul>{% for erro in estado.erros %}<li>{{ erro }}</li>{% endfor %}</ul></div>{% endif %}
+  <form method="post" action="{{ url_for('kits_cafe_admin.salvar') }}" id="kit-editor">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if kit %}<input type="hidden" name="kit_id" value="{{ kit.id }}">{% endif %}
+    <div class="kits-editor-grid">
+      <div class="kits-editor-sections">
+        <section class="kits-panel" aria-labelledby="kit-identidade">
+          <header class="kits-step"><span aria-hidden="true">1</span><div><h2 id="kit-identidade">Apresentação</h2><p>Como o cliente vai encontrar este kit.</p></div></header>
+          <label for="kit-nome" class="form-label">Nome do kit</label>
+          <input class="form-control mb-3" id="kit-nome" name="nome" required maxlength="150" value="{{ dados.get('nome', kit.nome if kit else '') }}" placeholder="Ex.: Café da manhã com sourdough">
+          <label for="kit-descricao" class="form-label">Descrição para o cliente <span class="kits-optional">opcional</span></label>
+          <textarea class="form-control" id="kit-descricao" name="descricao" maxlength="600" rows="3" placeholder="O que torna este café da manhã especial?">{{ dados.get('descricao', (kit.descricao or '') if kit else '') }}</textarea>
+        </section>
+        <section class="kits-panel" aria-labelledby="kit-conteudo">
+          <header class="kits-step"><span aria-hidden="true">2</span><div><h2 id="kit-conteudo">Itens por entrega</h2><p>Adicione os produtos e ajuste as quantidades.</p></div></header>
+          <div class="kits-catalog-toolbar">
+            <div class="kits-search"><label for="kit-busca" class="form-label">Buscar um item</label>
+              <input type="search" id="kit-busca" class="form-control" placeholder="Nome ou categoria">
+            </div>
+            <label class="kits-selected-filter" for="kit-so-selecionados"><input type="checkbox" id="kit-so-selecionados"> Só selecionados</label>
+          </div>
+          {% if catalogo %}
+          <div class="kits-product-list" id="kit-itens">
+            {% for item in catalogo %}{% set chave = (item.kind, item.id) %}{% set campo = 'qtd_' ~ item.kind ~ '_' ~ item.id %}
+            <div class="kit-product" data-busca="{{ item.nome ~ ' ' ~ (item.categoria or '') }}" data-nome="{{ item.nome }}" data-kind="{{ item.kind }}" data-id="{{ item.id }}" data-preco="{{ item.preco_kit if item.preco_kit is not none else '' }}" data-preco-padrao="{{ item.preco_padrao if item.menu else '' }}" data-indisponivel="{{ '1' if item.indisponivel else '0' }}">
+              <div class="kit-product-copy">
+                <label for="{{ campo }}" class="kit-product-name">{{ item.nome }}</label>
+                {% if item.categoria %}<span class="kits-product-category">{{ item.categoria }}</span>{% endif %}
+                {% if item.indisponivel %}<p class="kits-product-error">Indisponível no site. Remova do kit (quantidade zero) ou regularize o produto no catálogo.</p>{% endif %}
+                {% if item.composicao_erro %}<p class="kits-product-error">{{ item.composicao_erro }}</p>{% endif %}
+                {% if item.composicao_fixa or item.menu %}
+                <details class="kits-menu-composition">
+                  <summary>Composição do menu</summary>
+                  {% if item.composicao_fixa %}<p><strong>Composição fixada:</strong> {% for parte in item.composicao_fixa %}{{ parte.qtd }} × {{ parte.nome }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+                  {% if item.menu %}<p><strong>Padrão atual:</strong> {% for parte in item.menu.resumo_padrao %}{{ parte.qtd }} × {{ parte.nome }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+                    {% if item.ja_selecionado %}<div class="form-check">
+                      <input type="checkbox" class="form-check-input" id="atualizar_{{ campo }}" name="atualizar_menu_{{ item.kind }}_{{ item.id }}" value="1" {% if dados.get('atualizar_menu_' ~ item.kind ~ '_' ~ item.id) == '1' %}checked{% endif %}>
+                      <label class="form-check-label" for="atualizar_{{ campo }}">Adotar o padrão atual neste kit (R$ {{ '%.2f'|format(item.preco_padrao)|replace('.', ',') }} por menu)</label>
+                    </div>{% endif %}
+                  {% endif %}
+                </details>
+                {% endif %}
+              </div>
+              <span class="kit-product-price">{% if item.preco_kit is not none %}R$ {{ '%.2f'|format(item.preco_kit)|replace('.', ',') }}{% else %}—{% endif %}</span>
+              <div class="kits-quantity">
+                <button type="button" data-step="-1" aria-label="Diminuir quantidade de {{ item.nome }}" hidden>−</button>
+                <input type="number" class="form-control kit-quantidade" id="{{ campo }}" name="{{ campo }}" min="0" max="999" step="1" required value="{{ selecionados.get(chave, 0) }}" aria-label="Quantidade de {{ item.nome }}">
+                <button type="button" data-step="1" aria-label="Aumentar quantidade de {{ item.nome }}" hidden>+</button>
+              </div>
+            </div>{% endfor %}
+          </div>
+          <p id="kit-sem-resultado" class="kits-search-empty" role="status" hidden>Nenhum item encontrado. Ajuste a busca ou desmarque “Só selecionados”.</p>
+          {% else %}<div class="kits-warning">Não há itens disponíveis à venda no site. Publique os produtos no catálogo antes de montar um kit.</div>{% endif %}
+          <div class="kits-catalog-footer"><span>Zero deixa o item fora do kit.</span><a href="{{ url_for('main.loja_online_catalogo') }}" target="_blank" rel="noopener">Abrir catálogo do site <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a></div>
+          <details class="kits-help-fold"><summary>Sobre porções e menus configuráveis</summary>
+            <p>Use a unidade vendida no site. Tamanhos, recheios e porções seguem o cadastro de cada produto. Menus entram com a composição padrão fixada no kit; adotar um novo padrão exige a sua escolha no editor.</p>
+          </details>
+        </section>
+        <section class="kits-panel" aria-labelledby="kit-sucos-titulo">
+          <header class="kits-step"><span aria-hidden="true">3</span><div><h2 id="kit-sucos-titulo">Sucos à escolha do cliente <span class="kits-optional">opcional</span></h2><p>Uma unidade por entrega, no sabor escolhido pelo cliente.</p></div></header>
+          <input type="hidden" name="configurar_sucos" value="1">
+          <details class="kits-juice-options" id="kit-sucos-opcoes" {% if sucos_selecionados %}open{% endif %}>
+            <summary><i class="bi bi-cup-straw" aria-hidden="true"></i> Escolher opções de suco <span id="kit-sucos-contagem">{{ sucos_selecionados|length }} selecionadas</span><i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+            <div class="kits-juice-body">
+              <p class="kits-help">Marque de 2 a 10 sucos. Deixe esses produtos com quantidade zero nos itens fixos. O sabor escolhido será o mesmo em todas as datas da compra.</p>
+              <label for="kit-busca-sucos" class="form-label">Buscar suco</label>
+              <input type="search" id="kit-busca-sucos" class="form-control mb-3" placeholder="Nome do produto">
+              <div id="kit-sucos" class="kits-juice-grid">
+                {% for suco in sucos_catalogo %}
+                <label class="kit-opcao-suco" data-busca="{{ suco.nome }}" for="suco-{{ suco.id }}">
+                  <input class="form-check-input" type="checkbox" id="suco-{{ suco.id }}" name="suco_ids" value="{{ suco.id }}" data-nome="{{ suco.nome }}" data-preco="{{ suco.preco_kit if suco.preco_kit is not none else '' }}" {% if suco.id|string in sucos_selecionados %}checked{% endif %}>
+                  <span>{{ suco.nome }}<small>{% if suco.preco_kit is not none %}R$ {{ '%.2f'|format(suco.preco_kit)|replace('.', ',') }}{% else %}Indisponível, revise o cadastro{% endif %}</small></span>
+                </label>
+                {% else %}<p class="kits-help">Não há produtos disponíveis para selecionar.</p>{% endfor %}
+              </div>
+              <p id="kit-sem-sucos" class="kits-search-empty" role="status" hidden>Nenhum produto encontrado.</p>
+            </div>
+          </details>
+        </section>
+        {% if grupos_catalogo|default([]) %}
+        <section class="kits-panel" aria-labelledby="kit-opcoes-titulo">
+          <header class="kits-step"><span aria-hidden="true">4</span><div><h2 id="kit-opcoes-titulo">Escolhas extras do plano <span class="kits-optional">opcional</span></h2><p>O cliente escolhe uma opção de cada grupo em todas as entregas.</p></div></header>
+          <input type="hidden" name="configurar_opcoes" value="1">
+          {% for grupo in grupos_catalogo %}
+          <details class="kits-juice-options kits-extra-options" data-opcoes-grupo="{{ grupo.chave }}" data-nome="{{ grupo.nome }}" {% if grupo.selecionados %}open{% endif %}>
+            <summary><span>{{ grupo.nome }} à escolha</span><span class="kits-option-count">{{ grupo.selecionados|length }} selecionadas</span><i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+            <div class="kits-juice-body">
+              <p class="kits-help">Marque de 2 a 10 opções para incluir 1 unidade por entrega, ou deixe todas desmarcadas para não incluir este grupo. As opções devem ficar fora dos itens fixos.</p>
+              <label for="kit-busca-{{ grupo.chave }}" class="form-label">Buscar opção de {{ grupo.nome|lower }}</label>
+              <input type="search" id="kit-busca-{{ grupo.chave }}" class="form-control mb-3 kit-busca-grupo" placeholder="Nome do produto">
+              <div class="kits-juice-grid">
+                {% for opcao in grupo.catalogo %}
+                <label class="kit-opcao-suco kit-opcao-grupo" data-busca="{{ opcao.nome }}" for="opcao-{{ grupo.chave }}-{{ opcao.kind }}-{{ opcao.id }}">
+                  <input class="form-check-input" type="checkbox" id="opcao-{{ grupo.chave }}-{{ opcao.kind }}-{{ opcao.id }}" name="opcao_{{ grupo.chave }}" value="{{ opcao.chave }}" data-nome="{{ opcao.nome }}" data-preco="{{ opcao.preco_kit if opcao.preco_kit is not none else '' }}" data-indisponivel="{{ '1' if opcao.indisponivel else '0' }}" {% if opcao.chave in grupo.selecionados %}checked{% endif %}>
+                  <span>{{ opcao.nome }}<small>{% if opcao.preco_kit is not none and not opcao.indisponivel %}R$ {{ '%.2f'|format(opcao.preco_kit)|replace('.', ',') }}{% else %}Indisponível, revise o cadastro{% endif %}</small></span>
+                </label>
+                {% else %}<p class="kits-help">Não há itens disponíveis para este grupo.</p>{% endfor %}
+              </div>
+              <p class="kits-search-empty kit-grupo-vazio" role="status" hidden>Nenhum item encontrado.</p>
+            </div>
+          </details>
+          {% endfor %}
+        </section>
+        {% endif %}
       </div>
-      {% endfor %}
+      <aside class="kits-summary" aria-labelledby="kit-resumo-titulo">
+        <div class="kits-summary-heading"><span class="kits-eyebrow">Uma entrega</span><i class="bi bi-bag-heart" aria-hidden="true"></i></div>
+        <h2 id="kit-resumo-titulo">Resumo do kit</h2>
+        <p id="kit-resumo-nome">{{ dados.get('nome', kit.nome if kit else '') or 'Seu novo kit' }}</p>
+        <ul id="kit-resumo-itens" class="kits-composition">
+          {% if estado and not estado.erros %}
+            {% for item in estado.itens_fixos %}<li><span>{{ item.qtd }} ×</span> {{ item.nome }}</li>{% endfor %}
+            {% if estado.sucos %}<li><span>1 ×</span> Suco à escolha ({{ estado.sucos|length }} opções)</li>{% endif %}
+            {% for grupo in estado.grupos|default([]) %}<li><span>1 ×</span> {{ grupo.nome }} à escolha ({{ grupo.opcoes|length }} opções)</li>{% endfor %}
+          {% endif %}
+        </ul>
+        <p id="kit-resumo-vazio" class="kits-summary-empty" {% if estado and estado.itens %}hidden{% endif %}>Os produtos selecionados aparecem aqui.</p>
+        <div class="kits-summary-total"><span>Valor por kit</span>
+          <strong id="kit-total" aria-live="polite">{% if estado and not estado.erros %}{{ 'A partir de ' if estado.preco_varia }}R$ {{ '%.2f'|format(estado.preco)|replace('.', ',') }}{% else %}R$ 0,00{% endif %}</strong>
+          <small>+ frete por entrega</small>
+        </div>
+        <p class="kits-help">Preço calculado pelos valores atuais dos produtos do site.</p>
+        <p class="kits-warning" id="kit-resumo-aviso" role="status" hidden></p>
+        <div class="kits-save-actions">
+          {# O loading global preserva acao e bloqueia reenvios do formulário. #}
+          <button type="submit" name="acao" value="publicar" class="btn btn-primary">{{ 'Salvar e manter publicado' if kit and kit.ativo else 'Salvar e publicar no site' }}</button>
+          <button type="submit" name="acao" value="rascunho" class="btn btn-outline-secondary">Salvar como rascunho</button>
+        </div>
+        <p class="kits-help">{{ 'Alterações valem para novas compras. Pedidos já feitos mantêm seus itens, preços e agenda.' if kit else 'Salve como rascunho para continuar depois, ou publique para começar a vender.' }}</p>
+        <details class="kits-help-fold"><summary>Como o cliente recebe?</summary><p>O cliente escolhe as datas e horários. Cada data recebe um kit completo, com frete separado. Compra para um mês, sem renovação automática.</p></details>
+        <noscript><p class="kits-help">O valor atualizado será calculado ao salvar o kit.</p></noscript>
+      </aside>
     </div>
-  </div></div>
-  <div class="card mb-3"><div class="card-body">
-    <p class="h5 mb-2">Valor por kit: <span id="kit-total" aria-live="polite">{% if estado and not estado.erros %}R$ {{ '%.2f'|format(estado.preco)|replace('.', ',') }}{% else %}R$ 0,00{% endif %}</span> <small class="text-muted">+ frete</small></p>
-    <p class="text-muted">O valor é calculado pelos preços atuais dos produtos. O total da compra será este valor multiplicado pelas entregas escolhidas, mais o frete de cada entrega. Sem renovação automática.</p>
-    {% if kit %}<p class="small text-muted">Alterações valem para novas compras. Pedidos já feitos mantêm seus itens, preços e agenda.</p>{% endif %}
-    <div class="d-flex flex-wrap gap-2">
-      <button type="submit" name="acao" value="publicar" class="btn btn-primary">{{ 'Salvar e manter publicado' if kit and kit.ativo else 'Salvar e publicar no site' }}</button>
-      <button type="submit" name="acao" value="rascunho" class="btn btn-outline-secondary">Salvar como rascunho</button>
-    </div>
-  </div></div>
-</form>
-<script>
-(() => {
-  const rows = [...document.querySelectorAll('#kit-itens tbody tr')];
-  const total = document.getElementById('kit-total');
-  const moeda = new Intl.NumberFormat('pt-BR', {style:'currency', currency:'BRL'});
-  const sucos = [...document.querySelectorAll('#kit-sucos input[name="suco_ids"]')];
-  function atualizar() {
-    let centavos = 0;
-    let incompleto = false;
-    for (const row of rows) {
-      const qtd = Number(row.querySelector('.kit-quantidade').value) || 0;
-      const adotarPadrao = row.querySelector('input[type="checkbox"]');
-      const preco = adotarPadrao?.checked ? row.dataset.precoPadrao : row.dataset.preco;
-      if (qtd > 0 && !preco) incompleto = true;
-      centavos += Math.round(Number(preco || 0) * 100) * Math.max(0, qtd);
-    }
-    const escolhidos = sucos.filter(suco => suco.checked);
-    const precos = escolhidos.map(suco => Math.round(Number(suco.dataset.preco) * 100));
-    if (escolhidos.some(suco => !suco.dataset.preco) || escolhidos.length === 1) incompleto = true;
-    if (precos.length) centavos += Math.min(...precos);
-    const prefixo = new Set(precos).size > 1 ? 'A partir de ' : '';
-    total.textContent = incompleto ? 'Revise os itens e as opções de suco' : prefixo + moeda.format(centavos / 100);
-  }
-  sucos.forEach(suco => suco.addEventListener('change', atualizar));
-  document.getElementById('kit-busca-sucos').addEventListener('input', event => {
-    const busca = event.target.value.trim().toLocaleLowerCase('pt-BR');
-    document.querySelectorAll('.kit-opcao-suco').forEach(row => { row.hidden = !row.dataset.busca.includes(busca); });
-  });
-  for (const row of rows) {
-    row.querySelector('.kit-quantidade').addEventListener('input', atualizar);
-    row.querySelector('input[type="checkbox"]')?.addEventListener('change', atualizar);
-  }
-  document.getElementById('kit-busca').addEventListener('input', (event) => {
-    const busca = event.target.value.trim().toLocaleLowerCase('pt-BR');
-    for (const row of rows) row.hidden = !row.dataset.busca.includes(busca);
-    const vazio = document.getElementById('kit-sem-resultado');
-    if (vazio) vazio.hidden = rows.some(row => !row.hidden);
-  });
-  atualizar();
-})();
-</script>
+  </form>
+</section>
+<script src="{{ url_for('static', filename='js/kits-cafe-admin.js') }}?v={{ static_v['js/kits-cafe-admin.js'] }}" defer></script>
 {% endblock %}
