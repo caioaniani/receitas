@@ -9,6 +9,8 @@ Tiny real (mockado).
 from decimal import Decimal
 from unittest.mock import patch
 
+from app.utils import agora
+
 
 def _owner(app):
     from app.extensions import db
@@ -44,7 +46,7 @@ def _pedido_pago(db, produto, qtd=1, sku=None):
     db.session.flush()
     p = PedidoOnline(cliente_id=cli.id, nome_cliente='Maria',
                      email_cliente='m@x.com', telefone_cliente='11999999999',
-                     modo_entrega='retirada', status='pago',
+                     modo_entrega='retirada', status='pago', pago_em=agora(),
                      # Endereço estruturado — retirada passou a coletar (dono
                      # 20/07/2026); sem ele a emissão fail-close (guard).
                      endereco_logradouro='Rua Teste', endereco_numero='100',
@@ -174,7 +176,8 @@ def test_emitir_nf_recriar_descarta_nota_anterior(app):
         p.tiny_nota_fiscal_id = 'nf-rejeitada'
         p.nf_status = 'pendente'
         db.session.commit()
-        with patch('app.services.tiny.incluir_nota_fiscal',
+        with patch('app.services.tiny.obter_nota_fiscal', return_value={'situacao': 'rejeitada'}), \
+             patch('app.services.tiny.incluir_nota_fiscal',
                    return_value={'ok': True, 'id': 'nf-novo'}) as inc, \
              patch('app.services.tiny.emitir_nota_fiscal',
                    return_value={'ok': True, 'status': 'autorizada'}):
@@ -307,7 +310,8 @@ def test_botao_refazer_nf_passa_recriar(app):
         p.nf_status = 'pendente'
         db.session.commit()
         codigo = p.codigo
-    with patch('app.services.tiny.incluir_nota_fiscal',
+    with patch('app.services.tiny.obter_nota_fiscal', return_value={'situacao': 'rejeitada'}), \
+         patch('app.services.tiny.incluir_nota_fiscal',
                return_value={'ok': True, 'id': 'nf-bom'}) as inc, \
          patch('app.services.tiny.emitir_nota_fiscal',
                return_value={'ok': True, 'status': 'autorizada'}):

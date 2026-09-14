@@ -30,7 +30,7 @@ from app.utils import agora, hoje
 @pytest.fixture(autouse=True)
 def efeitos(monkeypatch):
     mocks = {}
-    for nome in ('_enviar_confirmacao', '_emitir_nf_e_enviar', '_reportar_purchase'):
+    for nome in ('_enviar_confirmacao', '_reportar_purchase'):
         mocks[nome] = Mock()
         monkeypatch.setattr(loja_pagamento, nome, mocks[nome])
     monkeypatch.setattr('app.services.email.disponivel', lambda: False)
@@ -155,7 +155,6 @@ def test_pagamento_confirma_todas_datas_sem_debitar_fisico_e_emite_efeitos_corre
     assert EstoqueLoja.query.one().quantidade == 20
     assert MovEstoqueLoja.query.count() == 0
     efeitos['_enviar_confirmacao'].assert_called_once_with(compra.pedido_principal)
-    efeitos['_emitir_nf_e_enviar'].assert_not_called()
     assert {t.pedido_id for t in TarefaFiscalKit.query.all()} == {p.id for p in pedidos}
     assert efeitos['_reportar_purchase'].call_args_list == [call(p) for p in pedidos]
 

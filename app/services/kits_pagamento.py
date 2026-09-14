@@ -63,7 +63,7 @@ def marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None):
         return False
     from app.services.kits_capacidade import reservar_compra
     reservar_compra(compra, pagamento_recebido=True)
-    from app.models.kits_cafe import TarefaFiscalKit
+    from app.services.loja_fiscal import agendar
     instante = agora()
     for entrega in pedidos:
         entrega.status = 'pago'
@@ -71,8 +71,7 @@ def marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None):
         entrega.cancelado_em = None
         entrega.motivo_cancelamento = None
         entrega.reserva_expira_em = None
-        if db.session.get(TarefaFiscalKit, entrega.id) is None:
-            db.session.add(TarefaFiscalKit(pedido_id=entrega.id))
+        agendar(entrega, base=instante)
     compra.pago_em = instante
     if enviar_confirmacao:
         loja_pagamento._enviar_confirmacao(compra.pedido_principal)
@@ -88,8 +87,6 @@ def apos_confirmacao(pedido):
     pedidos = pedidos_do_grupo(compra) if compra else [pedido]
     loja_pagamento._enviar_confirmacao(principal)
     for entrega in pedidos:
-        if not compra:
-            loja_pagamento._emitir_nf_e_enviar(entrega)
         # Mesmo transaction_id do acompanhamento individual no navegador;
         # somar os eventos representa exatamente o total pago pelo grupo.
         loja_pagamento._reportar_purchase(entrega)
@@ -109,6 +106,15 @@ def cancelar_entrega_paga(pedido):
 
 
 def reembolsar_entrega(pedido):
+    """Serializa o reembolso com emissão/envio da NF desta entrega."""
+    from app.services.tiny_nf import _trava_nf_kit
+    with _trava_nf_kit(pedido.id) as adquirido:
+        if not adquirido:
+            return False, 'A nota fiscal desta entrega está sendo processada. Aguarde e tente novamente.'
+        return _reembolsar_entrega(pedido)
+
+
+def _reembolsar_entrega(pedido):
     """Refund parcial da cobrança comum, restrito ao valor desta entrega.
 
     A API documenta idempotência de criação de pedidos, não do DELETE de

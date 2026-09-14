@@ -29,7 +29,7 @@ def efeitos_externos(app, monkeypatch):
     """Não envia comunicação real nem permite movimentar dinheiro no gateway."""
     monkeypatch.setattr('app.services.email.disponivel', lambda: False)
     mocks = {}
-    for nome in ('_enviar_confirmacao', '_emitir_nf_e_enviar', '_reportar_purchase'):
+    for nome in ('_enviar_confirmacao', '_reportar_purchase'):
         mocks[nome] = Mock()
         monkeypatch.setattr(loja_pagamento, nome, mocks[nome])
     gateway = []

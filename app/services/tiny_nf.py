@@ -461,7 +461,7 @@ def _set_nf_erro(alvo, texto):
         alvo.nf_erro = (str(texto)[:2000] if texto else None)
 
 
-def emitir_nf_generico(alvo, montar_payload, recriar=False):
+def emitir_nf_generico(alvo, montar_payload, recriar=False, *, inclusao_segura=False):
     """Motor comum da emissão de NF via Tiny — usado pelo site (PedidoOnline)
     e pelo B2B (VendaB2B, ver `tiny_nf_b2b`). `alvo` precisa ter os campos
     `tiny_nota_fiscal_id` / `nf_status` / `nf_emitida_em`.
@@ -504,16 +504,30 @@ def emitir_nf_generico(alvo, montar_payload, recriar=False):
     # 1) Cria a NF (rascunho) com natureza + série explícitas, se ainda não
     #    temos uma. Resumível: se já criamos mas a emissão falhou, reusa o id.
     if not alvo.tiny_nota_fiscal_id:
+        if inclusao_segura and alvo.nf_status == 'inclusao_iniciada':
+            return {'ok': False, 'msg': 'A inclusão anterior da NF ficou sem confirmação. '
+                    'Confira a nota no Tiny antes de tentar criar outra; o sistema não repetirá a inclusão.'}
         payload, erro = montar_payload()
         if erro:
             return {'ok': False, 'msg': erro}
-        incl = tiny.incluir_nota_fiscal(payload)
+        if inclusao_segura:
+            # Persiste ANTES da rede: queda do worker/resposta perdida não
+            # permite que o cron crie outro rascunho sem conferir o anterior.
+            alvo.nf_status = 'inclusao_iniciada'
+            db.session.commit()
+            incl = tiny.incluir_nota_fiscal(payload, repetir_em_falha=False)
+        else:
+            incl = tiny.incluir_nota_fiscal(payload)
         if not incl.get('ok'):
+            if inclusao_segura and not incl.get('incerto'):
+                alvo.nf_status = None
             _set_nf_erro(alvo, incl.get('erro'))
             db.session.commit()
             return {'ok': False,
                     'msg': f'Falha ao criar a NF no Tiny: {incl.get("erro")}'}
         alvo.tiny_nota_fiscal_id = incl['id']
+        if inclusao_segura:
+            alvo.nf_status = 'rascunho'
         # VendaB2B tem `nf_numero` (numero da NF, campo humano) — aproveita o
         # numero que o Tiny devolve. PedidoOnline nao tem o campo.
         if (incl.get('numero') and hasattr(alvo, 'nf_numero')
@@ -521,6 +535,16 @@ def emitir_nf_generico(alvo, montar_payload, recriar=False):
             alvo.nf_numero = incl['numero']
         db.session.commit()
     # 2) Autoriza na SEFAZ.
+    if inclusao_segura:
+        # O gateway pode informar estorno enquanto o Tiny cria o rascunho.
+        # Revalida após a rede para não autorizar uma venda já cancelada.
+        from app.models import ReembolsoKit
+        from app.services.loja_fiscal import pode_emitir
+        db.session.refresh(alvo)
+        reembolso = db.session.get(ReembolsoKit, alvo.id)
+        if not pode_emitir(alvo) or (reembolso and reembolso.status in ('solicitado', 'confirmado')):
+            return {'ok': False, 'msg': 'Pedido cancelado ou em reembolso. '
+                    'O rascunho foi preservado no Tiny, sem solicitar autorização.'}
     emitir = tiny.emitir_nota_fiscal(alvo.tiny_nota_fiscal_id)
     alvo.nf_status = emitir.get('status') or 'enviada'
     if emitir.get('ok'):
@@ -576,11 +600,63 @@ def _trava_nf_kit(pedido_id):
         conn.close()
 
 
-def emitir_nf(pedido, user_id=None, recriar=False):
-    """Emissão do site; notas de kits compartilham trava entre cron e admin."""
-    from app.models import EntregaKit
-    if not db.session.get(EntregaKit, pedido.id):
-        return _emitir_nf_pedido(pedido, user_id=user_id, recriar=recriar)
+def resolver_inclusao_incerta(pedido, *, user_id, nota_id=None, sem_nota=False):
+    """Serializa vínculos manuais para impedir o mesmo ID em dois pedidos."""
+    # Pedido 0 não existe; reservado como mutex das conferências do owner.
+    with _trava_nf_kit(0) as adquirido:
+        if not adquirido:
+            return {'ok': False, 'msg': 'Outra conferência fiscal está em andamento. Aguarde.'}
+        return _resolver_inclusao_incerta(pedido, user_id=user_id,
+                                          nota_id=nota_id, sem_nota=sem_nota)
+
+
+def _resolver_inclusao_incerta(pedido, *, user_id, nota_id=None, sem_nota=False):
+    """Conferência explícita do owner; não cria nem autoriza uma nota aqui."""
+    from app.models import PedidoOnline, TarefaFiscalPedido, Usuario
+    from app.services import loja_fiscal
+
+    usuario = db.session.get(Usuario, user_id)
+    if not usuario or not usuario.is_owner:
+        return {'ok': False, 'msg': 'Somente o dono pode resolver a pendência fiscal.'}
+    with _trava_nf_kit(pedido.id) as adquirido:
+        if not adquirido:
+            return {'ok': False, 'msg': 'A NF está sendo processada. Aguarde.'}
+        db.session.refresh(pedido)
+        if pedido.nf_status != 'inclusao_iniciada' or pedido.tiny_nota_fiscal_id:
+            return {'ok': False, 'msg': 'Este pedido não tem inclusão incerta para resolver.'}
+        nota_id = str(nota_id or '').strip()
+        if bool(nota_id) == bool(sem_nota):
+            return {'ok': False, 'msg': 'Informe a nota existente ou confirme que não existe nota no Tiny.'}
+        if nota_id:
+            if len(nota_id) > 40 or not nota_id.isdigit():
+                return {'ok': False, 'msg': 'Informe o ID numérico da nota no Tiny.'}
+            if PedidoOnline.query.filter(PedidoOnline.id != pedido.id,
+                                         PedidoOnline.tiny_nota_fiscal_id == nota_id).first():
+                return {'ok': False, 'msg': 'Esta nota já está vinculada a outro pedido do site.'}
+            nota = tiny.obter_nota_fiscal(nota_id)
+            if not nota:
+                return {'ok': False, 'msg': 'Não foi possível conferir essa nota no Tiny. Tente novamente.'}
+            pedido.tiny_nota_fiscal_id = nota_id
+            pedido.nf_status = 'rascunho'
+        else:
+            pedido.nf_status = None
+        tarefa = db.session.get(TarefaFiscalPedido, pedido.id)
+        if tarefa:
+            tarefa.erro = None
+            tarefa.proxima_tentativa_em = loja_fiscal.horario_emissao(pedido) or agora()
+        db.session.commit()
+        if nota_id:
+            _sincronizar_situacao(pedido)
+        logger.warning('Conferência fiscal manual: pedido=%s owner=%s nota=%s sem_nota=%s',
+                       pedido.codigo, user_id, nota_id or '-', sem_nota)
+        return {'ok': True, 'msg': 'Conferência registrada. A fila automática retomará este pedido.'}
+
+
+def emitir_nf(pedido, user_id=None, recriar=False, *, automatico=False, base=None):
+    """Todos os pedidos do site compartilham trava entre cron e owner."""
+    from app.models import ReembolsoKit
+    from app.services import loja_fiscal
+
     with _trava_nf_kit(pedido.id) as adquirido:
         if not adquirido:
             return {'ok': False, 'msg': 'A NF desta entrega já está sendo processada. Aguarde.'}
@@ -590,8 +666,21 @@ def emitir_nf(pedido, user_id=None, recriar=False):
         if pedido.nf_emitida_em and pedido.tiny_nota_fiscal_id:
             return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
                     'msg': 'NF já emitida.'}
-        if not pedido.pago_em or pedido.status not in ('pago', 'em_preparo', 'a_caminho', 'entregue'):
+        if not loja_fiscal.pode_emitir(pedido):
             return {'ok': False, 'msg': 'Entrega não está paga ou foi cancelada — não emite NF.'}
+        reembolso = db.session.get(ReembolsoKit, pedido.id)
+        if reembolso and reembolso.status in ('solicitado', 'confirmado'):
+            return {'ok': False, 'msg': 'Entrega com reembolso em andamento — confira antes de emitir NF.'}
+        if automatico:
+            horario = loja_fiscal.horario_emissao(pedido)
+            if horario is None or horario > loja_fiscal._brt(base or agora()):
+                return {'ok': False, 'msg': 'NF aguardando uma hora antes do horário de entrega.'}
+        # O botão do owner também deixa o envio do DANFE na fila durável.
+        loja_fiscal.agendar(pedido)
+        db.session.commit()
+        if not pedido.tiny_nota_fiscal_id and pedido.nf_status == 'inclusao_iniciada':
+            return {'ok': False, 'msg': 'A inclusão anterior da NF ficou sem confirmação. '
+                    'Confira a nota no Tiny; outra inclusão automática foi bloqueada para evitar duplicidade.'}
         if recriar and pedido.tiny_nota_fiscal_id:
             situacao = _sincronizar_situacao(pedido)
             if situacao and situacao['autorizada']:
@@ -600,18 +689,19 @@ def emitir_nf(pedido, user_id=None, recriar=False):
             if not situacao or not situacao['rejeitada']:
                 return {'ok': False, 'msg': 'Verifique a NF existente antes de refazer. '
                         'A rejeição ainda não foi confirmada.'}
-        return _emitir_nf_pedido(pedido, user_id=user_id, recriar=recriar, entrega_kit=True)
+        return _emitir_nf_pedido(pedido, user_id=user_id, recriar=recriar)
 
 
-def _emitir_nf_pedido(pedido, user_id=None, recriar=False, *, entrega_kit=False):
+def _emitir_nf_pedido(pedido, user_id=None, recriar=False):
     """Emite NF pro pedido da loja online. Devolve {ok, msg, nota_fiscal_id?}.
     Guard próprio do site: só pedido pago emite. O fluxo em si está em
     `emitir_nf_generico`."""
     if pedido.nf_emitida_em and pedido.tiny_nota_fiscal_id and not recriar:
         return {'ok': True, 'nota_fiscal_id': pedido.tiny_nota_fiscal_id,
                 'msg': 'NF já emitida.'}
-    if pedido.status != 'pago' and not entrega_kit:
-        return {'ok': False, 'msg': 'Pedido não está pago — não emite NF.'}
+    from app.services.loja_fiscal import pode_emitir
+    if not pode_emitir(pedido):
+        return {'ok': False, 'msg': 'Pedido não está pago ou foi cancelado — não emite NF.'}
 
     def _montar():
         # Trava fail-closed: endereço do destinatário incompleto NÃO vai à
@@ -630,7 +720,7 @@ def _emitir_nf_pedido(pedido, user_id=None, recriar=False, *, entrega_kit=False)
                           + ', '.join(faltando))
         return _nota_payload(pedido, itens), None
 
-    return emitir_nf_generico(pedido, _montar, recriar=recriar)
+    return emitir_nf_generico(pedido, _montar, recriar=recriar, inclusao_segura=True)
 
 
 def link_danfe(pedido):

@@ -162,14 +162,12 @@ def test_webhook_pago_dispara_reporte(app):
         db.session.commit()
         evento = {'id': 'evt-ana-1', 'type': 'order.paid',
                   'data': {'id': 'or_x9'}}
-        with patch.object(loja_pagamento, '_emitir_nf_e_enviar'), \
-                patch('app.services.analytics_server.reportar_purchase_async') as rep:
+        with patch('app.services.analytics_server.reportar_purchase_async') as rep:
             out = loja_pagamento.processar_webhook(evento)
         assert out.get('pago') is True and out.get('mudou') is True
         rep.assert_called_once_with(p.id)
         # Reentrega do webhook (mesmo evento) não re-reporta.
-        with patch.object(loja_pagamento, '_emitir_nf_e_enviar'), \
-                patch('app.services.analytics_server.reportar_purchase_async') as rep2:
+        with patch('app.services.analytics_server.reportar_purchase_async') as rep2:
             loja_pagamento.processar_webhook(evento)
         rep2.assert_not_called()
 

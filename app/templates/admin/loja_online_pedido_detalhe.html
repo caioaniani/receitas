@@ -77,10 +77,13 @@
 {% endif %}
 
 {% if tarefa_fiscal_kit and not tarefa_fiscal_kit.concluido_em %}
-<div class="alert alert-info">
+<div class="alert {{ 'alert-warning' if tarefa_fiscal_kit.erro else 'alert-info' }}">
   <strong>Nota fiscal desta entrega na fila automática.</strong>
-  {% if tarefa_fiscal_kit.erro %}{{ tarefa_fiscal_kit.erro }}{% endif %}
-  {% if tarefa_fiscal_kit.proxima_tentativa_em %}Próxima tentativa a partir de {{ tarefa_fiscal_kit.proxima_tentativa_em.strftime('%d/%m às %H:%M') }}.{% endif %}
+  {% if not p.nf_emitida_em and horario_nf %}
+    Emissão programada para {{ horario_nf.strftime('%d/%m às %H:%M') }}{% if p.modo_entrega == 'express' %}, após a confirmação do pagamento expresso{% else %}, uma hora antes do início da entrega{% endif %}.
+  {% elif p.nf_emitida_em %}NF autorizada; envio ao cliente pendente.{% endif %}
+  {% if tarefa_fiscal_kit.erro %}<div>{{ tarefa_fiscal_kit.erro }}</div>{% endif %}
+  {% if tarefa_fiscal_kit.tentativas and tarefa_fiscal_kit.proxima_tentativa_em %}Próxima tentativa a partir de {{ tarefa_fiscal_kit.proxima_tentativa_em.strftime('%d/%m às %H:%M') }}.{% endif %}
 </div>
 {% endif %}
 
@@ -300,6 +303,7 @@
           <div>NF: <code>{{ p.tiny_nota_fiscal_id }}</code></div>
           {% if p.nf_status %}<div>Status: <strong>{{ p.nf_status }}</strong></div>{% endif %}
           <div class="text-muted">Emitida: {{ p.nf_emitida_em.strftime('%d/%m/%Y %H:%M') }}</div>
+          {% if tarefa_fiscal_kit and tarefa_fiscal_kit.email_enviado_em %}<div class="text-success">Enviada por e-mail em {{ tarefa_fiscal_kit.email_enviado_em.strftime('%d/%m/%Y %H:%M') }}.</div>{% endif %}
           {% if p.tiny_pedido_id %}<div class="text-muted">Pedido Tiny: <code>{{ p.tiny_pedido_id }}</code></div>{% endif %}
           <a href="{{ url_for('main.loja_online_danfe', codigo=p.codigo) }}"
              class="btn btn-sm btn-outline-primary w-100 mt-2" target="_blank" rel="noopener">
@@ -337,6 +341,18 @@
           {% else %}
           <p class="text-muted small mb-0">A emissão/reenvio da NF é feita pelo dono.</p>
           {% endif %}
+        {% elif p.nf_status == 'inclusao_iniciada' %}
+          <div class="alert alert-warning">O Tiny não confirmou se criou a nota. Confira antes de liberar outra tentativa.</div>
+          {% if current_user.is_owner %}
+          <form method="POST" action="{{ url_for('main.loja_online_resolver_nf', codigo=p.codigo) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ embed_field() }}
+            <label class="form-label" for="nf-existente">ID da nota existente no Tiny</label>
+            <input class="form-control form-control-sm" id="nf-existente" name="nota_id" inputmode="numeric" maxlength="40">
+            <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="sem_nota" value="1" id="nf-ausente"><label class="form-check-label" for="nf-ausente">Não existe nenhuma nota ou rascunho deste pedido no Tiny.</label></div>
+            <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="conferido" value="1" id="nf-conferida" required><label class="form-check-label" for="nf-conferida">Conferi no Tiny o cliente, os itens e o valor deste pedido e confirmo a informação acima.</label></div>
+            <button type="submit" class="btn btn-sm btn-warning w-100 mt-2">Registrar conferência e retomar</button>
+          </form>
+          {% else %}<p>O dono precisa conferir essa pendência.</p>{% endif %}
         {% elif p.status in ('pago', 'em_preparo', 'a_caminho', 'entregue') %}
           {# NF pode ser emitida em qualquer status pós-pago — o cliente pode
              ter movido o pedido (em preparo / a caminho / entregue) antes da
@@ -351,7 +367,7 @@
           </form>
           <p class="text-muted mt-2 mb-0">O Tiny aplica NCM/CFOP/CST do cadastro.</p>
           {% else %}
-          <span class="text-muted">A NF é emitida pelo dono.</span>
+          <span class="text-muted">A NF será emitida automaticamente uma hora antes da entrega e enviada ao cliente por e-mail.</span>
           {% endif %}
         {% else %}
           <span class="text-muted">Disponível após o pagamento.</span>

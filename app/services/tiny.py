@@ -113,7 +113,7 @@ def _extrair_erros(retorno):
     return '; '.join(m for m in msgs if m)[:400]
 
 
-def _get(endpoint, params=None, retornar_erro=False):
+def _get(endpoint, params=None, retornar_erro=False, *, repetir_em_falha=True):
     """POST no Tiny (a API v2 usa POST com form-data). Devolve dict do JSON ou
     None em qualquer falha. Tiny envolve tudo em {'retorno': {'status': ...}}.
 
@@ -125,17 +125,28 @@ def _get(endpoint, params=None, retornar_erro=False):
     ou timeout/connection error). Em prod 2026-06-09 o bot pegou janelas de
     intermitencia em que 1 retry nao bastou — o Tiny tossiu nas duas e o
     cliente foi pra atendente. Registra a causa exata em `_registrar_falha`
-    pra propagar no NFLog (debug rapido)."""
-    if not disponivel():
-        _registrar_falha('TINY_API_TOKEN ausente')
+    pra propagar no NFLog (debug rapido).
+
+    `repetir_em_falha=False` faz somente uma chamada. Com `retornar_erro`,
+    falhas incluem `incerto`: a operação pode ter ocorrido quando a resposta
+    se perdeu ou não confirmou o resultado. O caller deve reconciliar esse
+    caso antes de repetir uma inclusão; não equivale a rejeição do Tiny.
+    O comportamento com retries permanece o padrão dos callers legados."""
+    def falhar(motivo, *, incerto=False):
+        _registrar_falha(motivo)
+        if not repetir_em_falha and retornar_erro:
+            return {'status': 'erro', 'erros': [{'erro': motivo}], 'incerto': incerto}
         return None
+
+    if not disponivel():
+        return falhar('TINY_API_TOKEN ausente')
     token = current_app.config['TINY_API_TOKEN'].strip()
     url = f'{BASE}/{endpoint}'
     data = {'token': token, 'formato': 'JSON'}
     data.update(params or {})
 
     ultima_causa = 'desconhecida'
-    tentativas = len(_RETRY_BACKOFF) + 1
+    tentativas = len(_RETRY_BACKOFF) + 1 if repetir_em_falha else 1
     for i in range(tentativas):
         if i > 0:
             time.sleep(_RETRY_BACKOFF[i - 1])
@@ -150,6 +161,12 @@ def _get(endpoint, params=None, retornar_erro=False):
             logger.warning('tiny %s tentativa %d: %s: %s',
                            endpoint, i + 1, type(exc).__name__, exc)
             continue
+        if not repetir_em_falha and r.status_code not in (200, 201):
+            # 4xx (exceto timeout) é uma recusa HTTP explícita. 5xx ou uma
+            # resposta fora do protocolo não confirma se a inclusão ocorreu.
+            logger.warning('tiny %s: HTTP %s — sem repetição', endpoint, r.status_code)
+            return falhar(f'HTTP {r.status_code}',
+                          incerto=r.status_code == 408 or not 400 <= r.status_code < 500)
         if r.status_code in _HTTP_TRANSIENTES:
             ultima_causa = f'HTTP {r.status_code}'
             logger.warning('tiny %s tentativa %d: HTTP %s — retry',
@@ -162,26 +179,26 @@ def _get(endpoint, params=None, retornar_erro=False):
         try:
             payload = r.json()
         except ValueError:
-            _registrar_falha('resposta nao-JSON')
             logger.warning('tiny %s: resposta nao-JSON', endpoint)
-            return None
+            return falhar('resposta nao-JSON', incerto=True)
         retorno = payload.get('retorno') if isinstance(payload, dict) else None
         if not isinstance(retorno, dict):
-            _registrar_falha('payload sem .retorno')
-            return None
-        status = (retorno.get('status') or '').lower()
+            return falhar('payload sem .retorno', incerto=True)
+        status = str(retorno.get('status') or '').lower()
         if status not in ('ok', '1'):
             detalhe = _extrair_erros(retorno)
             _registrar_falha(detalhe or f'retorno.status={status!r}')
             logger.warning('tiny %s erro: status=%s detalhe=%s',
                            endpoint, status, detalhe[:200])
+            if not repetir_em_falha and retornar_erro:
+                rejeitado = status in ('erro', 'error') or bool(detalhe)
+                return {**retorno, 'incerto': not rejeitado}
             return retorno if retornar_erro else None
         return retorno
     # esgotou todas as tentativas
-    _registrar_falha(f'{ultima_causa} (apos {tentativas} tentativas)')
     logger.error('tiny %s falhou apos %d tentativas: %s',
                  endpoint, tentativas, ultima_causa)
-    return None
+    return falhar(f'{ultima_causa} (apos {tentativas} tentativas)', incerto=True)
 
 
 def _so_digitos(s):
@@ -429,7 +446,7 @@ def incluir_pedido(pedido_dict):
     return {'ok': True, 'id': pid, 'numero': str(reg.get('numero') or '')}
 
 
-def incluir_nota_fiscal(nota_dict):
+def incluir_nota_fiscal(nota_dict, *, repetir_em_falha=True):
     """nota.fiscal.incluir.php — cria a NF DIRETO (não a partir de um pedido),
     com natureza de operação e série EXPLÍCITAS no payload.
 
@@ -439,18 +456,30 @@ def incluir_nota_fiscal(nota_dict):
     Criar a NF direto dá controle total do cabeçalho fiscal. NCM/CFOP/CST
     continuam vindo do cadastro do produto no Tiny via SKU (`codigo`).
 
-    Devolve {ok, id, numero, erro}. Em erro, `erro` traz a mensagem real."""
+    Devolve {ok, id, numero, erro}. Em erro, `erro` traz a mensagem real.
+    O site usa `repetir_em_falha=False`: uma única tentativa, com `incerto`
+    nas falhas para distinguir rejeição de uma criação sem confirmação.
+    Nesse último caso, não incluir outra NF antes da reconciliação."""
     import json as _json
     retorno = _get('nota.fiscal.incluir.php',
                    params={'nota': _json.dumps({'nota_fiscal': nota_dict})},
-                   retornar_erro=True)
+                    retornar_erro=True, repetir_em_falha=repetir_em_falha)
     if not retorno:
-        return {'ok': False, 'erro': _consumir_falha() or 'sem resposta do Tiny'}
+        resultado = {'ok': False, 'erro': _consumir_falha() or 'sem resposta do Tiny'}
+        if not repetir_em_falha:
+            resultado['incerto'] = True
+        return resultado
+    if not repetir_em_falha and 'incerto' in retorno:
+        return {'ok': False, 'erro': _extrair_erros(retorno) or _consumir_falha()
+                or 'Criação da NF sem confirmação do Tiny', 'incerto': retorno['incerto']}
     regs = _registros(retorno)
     reg = regs[0] if regs else {}
     nid = str(reg.get('id') or '').strip()
     if not nid:
-        return {'ok': False, 'erro': _extrair_erros(retorno) or 'sem id no retorno'}
+        resultado = {'ok': False, 'erro': _extrair_erros(retorno) or 'sem id no retorno'}
+        if not repetir_em_falha:
+            resultado['incerto'] = True
+        return resultado
     return {'ok': True, 'id': nid, 'numero': str(reg.get('numero') or '')}
 
 

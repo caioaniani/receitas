@@ -66,7 +66,7 @@ LOCK_KEY_ATUALIZA_PLANO = 7761  # advisory lock pro 🔄 automatico da ordem do 
 LOCK_KEY_HEARTBEAT = 7762  # advisory lock pro heartbeat diario no Slack (08:00)
 LOCK_KEY_ZAPI_SAUDE = 7763  # advisory lock pro status/assinatura da Z-API
 LOCK_KEY_RECOMPRA = 7764  # advisory lock pro e-mail de recompra do site (10:30)
-LOCK_KEY_KITS_FISCAL = 7765  # advisory lock para a fila durável de NF das entregas de kits
+LOCK_KEY_KITS_FISCAL = 7765  # preserva a chave histórica; fila de NF de todo o site
 # 7750 foi reciclado: era do `briefing-dono` (removido 17/07/2026), agora e do
 # marketing (sync da base + campanha de aniversario no Listmonk).
 LOCK_KEY_MARKETING = 7750  # advisory lock pro marketing (Listmonk)
@@ -887,7 +887,7 @@ def iniciar(app):
 
     _scheduler.add_job(
         lambda app=app: _run_kits_fiscal(app),
-        'cron', minute='*/5', id='kits-fiscal',
+        'cron', minute='*', id='kits-fiscal',
         max_instances=1, coalesce=True,
     )
 
@@ -1158,12 +1158,12 @@ def _run_liberar_reservas_expiradas(app):
 
 
 def _run_kits_fiscal(app):
-    """Notas por entrega: até cinco pendências a cada cinco minutos."""
-    from app.services import kits_fiscal
+    """NF de cada pedido do site uma hora antes da entrega; ciclo a cada minuto."""
+    from app.services import loja_fiscal
 
     with app.app_context():
-        _com_lock(LOCK_KEY_KITS_FISCAL, kits_fiscal.processar_pendentes,
-                  'fila fiscal dos kits')
+        _com_lock(LOCK_KEY_KITS_FISCAL, loja_fiscal.processar_pendentes,
+                  'fila fiscal do site')
 
 
 def _run_vigia_chatwoot(app):

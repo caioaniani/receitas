@@ -527,12 +527,10 @@ def test_webhook_paid_dispara_email_confirmacao(app):
         envia.assert_called_once()
 
 
-# ── NF automática no pagamento (decisão do dono 19/06/2026) ───────────
+# ── Pagamento agenda NF para a entrega (decisão do dono 14/09/2026) ───
 
-def test_paid_emite_nf_e_envia_email_da_nf(app):
-    """Webhook 'paid' → emite NF no Tiny + manda e-mail dedicado com link
-    da DANFE. Best-effort: ambos rodam dentro de _marcar_pago, depois do
-    estoque e do e-mail de confirmação."""
+def test_paid_agenda_nf_sem_emitir_ou_enviar_antecipadamente(app):
+    """Webhook persiste a tarefa; emissão e DANFE aguardam o horário fiscal."""
     from unittest.mock import patch as _patch
 
     from app.extensions import db
@@ -550,15 +548,18 @@ def test_paid_emite_nf_e_envia_email_da_nf(app):
         with _patch('app.services.pagarme.requests.post',
                     return_value=_fake_resp(200, body)):
             loja_pagamento.iniciar_pix(ped)
-        with _patch('app.services.tiny_nf.emitir_nf',
+        with _patch('app.services.loja_pagamento._enviar_confirmacao'), \
+             _patch('app.services.tiny_nf.emitir_nf',
                     return_value={'ok': True, 'nota_fiscal_id': 'nf-77'}) as emi, \
              _patch('app.services.email.enviar_nf_emitida',
                     return_value={'ok': True}) as mail:
             loja_pagamento.processar_webhook(
                 {'id': 'evt_nf', 'type': 'order.paid',
                  'data': {'id': 'or_nf', 'code': ped.codigo}})
-        emi.assert_called_once()
-        mail.assert_called_once()
+        from app.models import TarefaFiscalPedido
+        assert db.session.get(TarefaFiscalPedido, ped.id) is not None
+        emi.assert_not_called()
+        mail.assert_not_called()
 
 
 def test_paid_continua_pago_mesmo_se_nf_falhar(app):

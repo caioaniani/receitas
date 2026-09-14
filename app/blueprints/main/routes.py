@@ -5852,7 +5852,7 @@ def _detalhe_redirect(codigo):
 def loja_online_pedido_detalhe(codigo):
     from app.models import PagamentoExternoOnline, PedidoOnline
     from app.models.kits_cafe import ReembolsoKit, TarefaFiscalKit
-    from app.services import loja_checkout, loja_pagamento, pagamento_externo
+    from app.services import loja_checkout, loja_fiscal, loja_pagamento, pagamento_externo
     from app.services.compra_kits import grupo_do_pedido, principal_do_pedido, valor_cobranca
     p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
     # Pedido corrigido após a NF (quantidade reduzida): versão de estoque > 0.
@@ -5867,6 +5867,7 @@ def loja_online_pedido_detalhe(codigo):
                            compra_kit=grupo_do_pedido(p),
                            reembolso_kit=db.session.get(ReembolsoKit, p.id),
                            tarefa_fiscal_kit=db.session.get(TarefaFiscalKit, p.id),
+                           horario_nf=loja_fiscal.horario_emissao(p),
                            valor_recebimento=valor_cobranca(p),
                            pagamento_externo=PagamentoExternoOnline.query.get(principal_do_pedido(p).id),
                            pode_confirmar_pagamento_externo=pagamento_externo.pode_confirmar(p),
@@ -5896,6 +5897,20 @@ def loja_online_pedido_confirmar_pagamento_externo(codigo):
 @login_required
 @gerente_required
 def loja_online_pedido_editar(codigo):
+    """Edição logística não pode concorrer com emissão/envio da NF."""
+    from flask import flash
+
+    from app.models import PedidoOnline
+    from app.services.tiny_nf import _trava_nf_kit
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    with _trava_nf_kit(p.id) as adquirido:
+        if not adquirido:
+            flash('A nota fiscal deste pedido está sendo processada. Aguarde para editar.', 'warning')
+            return _detalhe_redirect(codigo)
+        return _loja_online_pedido_editar(codigo)
+
+
+def _loja_online_pedido_editar(codigo):
     """Edita os dados LOGÍSTICOS/CONTATO do pedido — o que a operação precisa
     corrigir depois do pedido feito: cartinha, data/janela, endereço, contato,
     destinatário, modo de entrega e loja de retirada.
@@ -5943,6 +5958,7 @@ def loja_online_pedido_editar(codigo):
             flash(e, 'danger')
         return _detalhe_redirect(codigo)
 
+    agenda_anterior = (p.modo_entrega, p.data_entrega, p.janela_entrega)
     p.nome_cliente = nome
     p.email_cliente = email
     p.telefone_cliente = _s('telefone_cliente') or None
@@ -5972,6 +5988,9 @@ def loja_online_pedido_editar(codigo):
                   p.endereco_cidade, p.endereco_uf]
         p.endereco_entrega = ', '.join(x for x in partes if x) or None
 
+    if agenda_anterior != (p.modo_entrega, p.data_entrega, p.janela_entrega):
+        from app.services.loja_fiscal import reagendar
+        reagendar(p)
     db.session.commit()
     current_app.logger.info('pedido online %s editado por uid=%s',
                             codigo, getattr(current_user, 'id', None))
@@ -6019,7 +6038,8 @@ def loja_online_pedido_reenviar_emails(codigo):
     if p.status == 'entregue':
         envios.append(('Entregue', email_svc.enviar_pedido_entregue))
     if getattr(p, 'nf_emitida_em', None):
-        envios.append(('Nota fiscal', email_svc.enviar_nf_emitida))
+        from app.services.loja_fiscal import enviar_danfe
+        envios.append(('Nota fiscal', lambda pedido: enviar_danfe(pedido, reenviar=True)))
 
     ok, falhas = 0, []
     for nome_email, fn in envios:
@@ -6398,6 +6418,25 @@ def loja_online_danfe(codigo):
               '(a NF precisa estar autorizada).', 'warning')
         return _detalhe_redirect(codigo)
     return redirect(url)
+
+
+@main_bp.route('/admin/loja-online/pedidos/<codigo>/resolver-nf', methods=['POST'])
+@owner_required
+def loja_online_resolver_nf(codigo):
+    """Conferência explícita após uma inclusão Tiny sem resposta confirmada."""
+    from flask import flash
+
+    from app.models import PedidoOnline
+    from app.services import tiny_nf
+    p = PedidoOnline.query.filter_by(codigo=codigo).first_or_404()
+    if request.form.get('conferido') != '1':
+        flash('Confira no Tiny se existe uma nota deste pedido antes de continuar.', 'danger')
+        return _detalhe_redirect(codigo)
+    res = tiny_nf.resolver_inclusao_incerta(
+        p, user_id=current_user.id, nota_id=request.form.get('nota_id'),
+        sem_nota=request.form.get('sem_nota') == '1')
+    flash(res['msg'], 'success' if res.get('ok') else 'danger')
+    return _detalhe_redirect(codigo)
 
 
 @main_bp.route('/admin/loja-online/tiny-skus/definir', methods=['POST'])

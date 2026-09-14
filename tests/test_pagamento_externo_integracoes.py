@@ -13,7 +13,7 @@ from app.utils import agora, hoje
 
 @pytest.fixture
 def cenario(app, monkeypatch):
-    for nome in ('_enviar_confirmacao', '_emitir_nf_e_enviar', '_reportar_purchase'):
+    for nome in ('_enviar_confirmacao', '_reportar_purchase'):
         monkeypatch.setattr(loja_pagamento, nome, Mock())
     owner = Usuario(nome='Dono', login='dono-ext-integracao', papel='admin',
                     is_owner=True, senha_hash='nao-usada')
@@ -65,7 +65,8 @@ def test_gateway_tardio_preserva_recebimento_e_entrega(cenario, status, via):
     assert db.session.get(PagamentoOnline, externo.pagamento_id).status == 'pago'
     assert pg.status == 'pago'  # registra também o dinheiro real recebido pelo QR antigo
     assert loja_pagamento._enviar_confirmacao.call_count == 1
-    assert loja_pagamento._emitir_nf_e_enviar.call_count == 1
+    from app.models import TarefaFiscalPedido
+    assert TarefaFiscalPedido.query.count() == 1
     assert loja_pagamento._reportar_purchase.call_count == 1
 
 
@@ -177,4 +178,5 @@ def test_gateway_commit_falha_nao_envia_confirmacao(cenario, via):
     assert saldo.quantidade == 10 and saldo.quantidade_reservada == 2
     assert EstoqueSitePlano.query.count() == 0
     loja_pagamento._enviar_confirmacao.assert_not_called()
-    loja_pagamento._emitir_nf_e_enviar.assert_not_called()
+    from app.models import TarefaFiscalPedido
+    assert TarefaFiscalPedido.query.count() == 0

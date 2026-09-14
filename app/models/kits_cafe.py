@@ -119,8 +119,12 @@ class ReembolsoKit(db.Model):
         return self.pedido_id
 
 
-class TarefaFiscalKit(db.Model):
-    """Fila durável de NF por entrega, persistida junto ao pagamento do mês."""
+class TarefaFiscalPedido(db.Model):
+    """NF e e-mail por pedido do site, incluindo cada entrega de um kit.
+
+    Preserva a tabela histórica e suas tarefas; a FK sempre apontou para
+    PedidoOnline, sem restrição de vínculo com kit.
+    """
     __tablename__ = 'tarefa_fiscal_kit'
     pedido_id = db.Column(db.Integer, db.ForeignKey('pedido_online.id'), primary_key=True)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora)
@@ -133,3 +137,7 @@ class TarefaFiscalKit(db.Model):
     @property
     def id(self):
         return self.pedido_id
+
+
+# Compatibilidade: mesmo mapper e tabela, sem duplicar a fila existente.
+TarefaFiscalKit = TarefaFiscalPedido

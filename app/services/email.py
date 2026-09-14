@@ -279,7 +279,7 @@ font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2a2520;">
 
 def enviar_nf_emitida(pedido):
     """E-mail "sua nota fiscal foi emitida" — disparado logo após a emissão
-    automática (pós-pagamento). Inclui o link público pra DANFE (PDF).
+    automática antes da entrega. Inclui o link público para o DANFE (PDF).
 
     Best-effort — falha silente. Se chegar antes da NF estar persistida com
     `nf_emitida_em`, ainda assim manda (a rota pública busca por código)."""

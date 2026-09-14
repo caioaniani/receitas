@@ -133,9 +133,12 @@ continuam sem estorno automático pelo gateway. A edição de logística permite
 corrigir contato/endereço, mas não trocar a agenda já reservada de um kit;
 para isso, é preciso cancelar a entrega e fazer uma nova compra.
 
-As notas fiscais entram numa fila persistente por entrega após o pagamento.
-O sistema processa até cinco pendências a cada cinco minutos e registra
-falhas para nova tentativa. A emissão manual continua disponível no pedido.
+As notas fiscais entram numa fila persistente por entrega após o pagamento,
+com emissão programada para uma hora antes do início de cada janela.
+O sistema verifica as pendências a cada minuto e envia o DANFE por e-mail
+assim que a nota for autorizada. Falhas ficam visíveis no pedido e são
+retentadas; uma resposta incerta ao criar a nota exige conferência no Tiny
+para evitar duplicidade. A emissão manual continua disponível ao owner.
 
 ## Referências técnicas
 

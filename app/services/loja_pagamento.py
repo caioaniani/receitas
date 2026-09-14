@@ -393,6 +393,15 @@ def _rebaixar_pedido(pedido, loja_id, referencia, pedido_ref, usuario_id=None):
 
 
 def reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
+    """Refund parcial não pode alterar itens enquanto a NF é preparada."""
+    from app.services.tiny_nf import _trava_nf_kit
+    with _trava_nf_kit(pedido.id) as adquirido:
+        if not adquirido:
+            return False, 'A nota fiscal deste pedido está sendo processada. Aguarde e tente novamente.'
+        return _reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=usuario_id)
+
+
+def _reduzir_item_pedido_pago(pedido, item_id, nova_qtd, usuario_id=None):
     """Correcao OWNER-ONLY: reduz a quantidade de UM item de um pedido PAGO
     (cliente comprou 2 e era 1). Faz, na ordem (dinheiro primeiro):
 
@@ -544,11 +553,12 @@ def _marcar_pago(pedido, pagamento, *, enviar_confirmacao=True, usuario_id=None)
     else:
         _baixar_estoque(pedido, usuario_id=usuario_id)
     _reservar_no_plano_do_dia(pedido)
+    from app.services.loja_fiscal import agendar
+    agendar(pedido)
     if enviar_confirmacao:
         _enviar_confirmacao(pedido)
-    # NF NÃO entra aqui: ela commita por dentro (tiny_nf.emitir_nf) e não pode
-    # rodar no meio da transação do pagamento. É chamada pelos callers DEPOIS
-    # do commit do pago/baixa (processar_webhook / conciliar_pedido).
+    # A tarefa fiscal é persistida junto ao pagamento, sem rede. O cron emite
+    # a NF uma hora antes da entrega e depois envia o DANFE ao cliente.
     return True
 
 
@@ -573,37 +583,6 @@ def _enviar_confirmacao(pedido):
             email_svc.enviar_confirmacao_pedido(pedido)
     except Exception:  # noqa: BLE001
         logger.exception('confirmacao de pedido por email falhou')
-
-
-def _emitir_nf_e_enviar(pedido):
-    """Emite a NF no Tiny e manda o e-mail com o link da DANFE pro cliente
-    (decisão do dono 19/06/2026 — NF automática logo após o pagamento).
-
-    Best-effort: NUNCA derruba o processamento do pagamento. Se a emissão
-    falhar (Tiny fora, item sem SKU mapeado, rejeição fiscal), o pedido
-    continua pago + estoque baixado; a NF fica pendente pra reemitir manual
-    em `/admin/loja-online/pedidos/<codigo>` (mesmo botão de antes).
-
-    `emitir_nf` já é IDEMPOTENTE: se a NF já foi emitida pra esse pedido, é
-    no-op — então uma reentrega do webhook 'paid' não duplica.
-
-    DEVE ser chamada DEPOIS do commit do pago/baixa — `tiny_nf.emitir_nf`
-    commita por dentro, e qualquer falha aqui dá rollback pra NUNCA deixar a
-    sessão suja (senão polui o request/teste seguinte)."""
-    try:
-        from app.services import email as email_svc
-        from app.services import tiny_nf
-        res = tiny_nf.emitir_nf(pedido)
-        if not res.get('ok'):
-            logger.warning('NF do pedido %s não foi emitida automaticamente: %s',
-                           pedido.codigo, res.get('msg'))
-            return
-        if email_svc.disponivel():
-            email_svc.enviar_nf_emitida(pedido)
-    except Exception:  # noqa: BLE001
-        db.session.rollback()
-        logger.exception('emissão automática de NF falhou (pedido %s)',
-                         pedido.codigo)
 
 
 def _acertado_no_despacho(pedido):
@@ -688,6 +667,19 @@ def _tem_pagamento_externo(pedido):
 
 
 def reembolsar_pedido(pedido):
+    """Reembolso compartilha a trava da NF; kit coordena sua própria entrega."""
+    from app.services.compra_kits import grupo_do_pedido
+    if grupo_do_pedido(pedido):
+        from app.services.kits_pagamento import reembolsar_entrega
+        return reembolsar_entrega(pedido)
+    from app.services.tiny_nf import _trava_nf_kit
+    with _trava_nf_kit(pedido.id) as adquirido:
+        if not adquirido:
+            return False, 'A nota fiscal deste pedido está sendo processada. Aguarde e tente novamente.'
+        return _reembolsar_pedido(pedido)
+
+
+def _reembolsar_pedido(pedido):
     """Reembolso manual (admin). Cancela/estorna a cobrança no Pagar.me e,
     se já estava pago, devolve o estoque. Devolve (ok, mensagem).
 
@@ -700,10 +692,6 @@ def reembolsar_pedido(pedido):
     no gateway que o dinheiro voltou e SINCRONIZA o estorno local (caso real
     08/07/2026, pedido 6537F0EB). Só sincroniza com a confirmação do gateway —
     se ele ainda mostrar a cobrança ativa, o erro sobe."""
-    from app.services.compra_kits import grupo_do_pedido
-    if grupo_do_pedido(pedido):
-        from app.services.kits_pagamento import reembolsar_entrega
-        return reembolsar_entrega(pedido)
     db.session.refresh(pedido, with_for_update=True)
     if _tem_pagamento_externo(pedido):
         return False, ('Este pagamento foi recebido fora do site. O Pagar.me '

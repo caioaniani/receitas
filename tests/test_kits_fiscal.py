@@ -18,7 +18,8 @@ from app.models import (
     Produto,
     TarefaFiscalKit,
 )
-from app.services import kits_fiscal, seru_cron, tiny, tiny_nf
+from app.services import loja_fiscal as kits_fiscal
+from app.services import seru_cron, tiny, tiny_nf
 
 BASE = datetime(2026, 9, 14, 9)
 
@@ -27,7 +28,7 @@ BASE = datetime(2026, 9, 14, 9)
 def tiny_falso(app, monkeypatch):
     monkeypatch.setattr(kits_fiscal, 'agora', lambda: BASE)
     monkeypatch.setattr(tiny_nf, 'agora', lambda: BASE)
-    incluir = Mock(side_effect=lambda _payload: {'ok': True, 'id': f'nf-{incluir.call_count}'})
+    incluir = Mock(side_effect=lambda _payload, **kwargs: {'ok': True, 'id': f'nf-{incluir.call_count}'})
     emitir = Mock(return_value={'ok': True, 'status': 'autorizada'})
     obter = Mock(return_value={})
     email = Mock(return_value={'ok': True})
@@ -52,7 +53,7 @@ def _grupo(owner, quantidade=2):
         pedido = PedidoOnline(
             cliente_id=cliente.id, nome_cliente=cliente.nome, email_cliente=cliente.email,
             telefone_cliente=cliente.telefone, status='pago', pago_em=BASE,
-            modo_entrega='agendada', data_entrega=BASE.date() + timedelta(days=n + 1),
+            modo_entrega='agendada', data_entrega=BASE.date(),
             janela_entrega='09:00–10:00', endereco_logradouro='Rua Teste',
             endereco_numero='10', endereco_bairro='Moema', endereco_cidade='São Paulo',
             endereco_uf='SP', endereco_cep='04077000', subtotal=Decimal('20.00'),
@@ -98,9 +99,9 @@ def test_fila_emite_uma_nota_por_entrega_com_valor_individual(owner_user, tiny_f
     assert tiny_falso.incluir.call_count == 2
 
 
-def test_fila_limita_cinco_notas_por_ciclo(owner_user, tiny_falso):
+def test_fila_respeita_limite_de_notas_por_ciclo(owner_user, tiny_falso):
     _grupo(owner_user, quantidade=7)
-    assert kits_fiscal.processar_pendentes(limite=99, base=BASE)['concluidos'] == 5
+    assert kits_fiscal.processar_pendentes(limite=5, base=BASE)['concluidos'] == 5
     assert TarefaFiscalKit.query.filter_by(concluido_em=None).count() == 2
     assert kits_fiscal.processar_pendentes(base=BASE)['concluidos'] == 2
     assert tiny_falso.incluir.call_count == 7
@@ -180,13 +181,13 @@ def test_kit_sem_pagamento_ou_cancelado_nao_emite(owner_user, tiny_falso, status
     tiny_falso.incluir.assert_not_called()
 
 
-def test_estado_avancado_de_pedido_normal_mantem_regra_anterior(owner_user, tiny_falso):
+def test_estado_avancado_de_pedido_normal_pago_pode_emitir(owner_user, tiny_falso):
     _, pedidos = _grupo(owner_user, quantidade=1)
     db.session.delete(db.session.get(EntregaKit, pedidos[0].id))
     pedidos[0].status = 'entregue'
     db.session.commit()
-    assert not tiny_nf.emitir_nf(pedidos[0])['ok']
-    tiny_falso.incluir.assert_not_called()
+    assert tiny_nf.emitir_nf(pedidos[0])['ok']
+    tiny_falso.incluir.assert_called_once()
 
 
 def test_refazer_nf_ja_autorizada_nao_gera_segunda_nota(owner_user, tiny_falso):
@@ -236,7 +237,7 @@ def test_concorrencia_admin_e_fila_em_sqlite_cria_uma_nota(app, owner_user, monk
     resultados, erros = [], []
     incluir_original = tiny_falso.incluir.side_effect
 
-    def incluir(payload):
+    def incluir(payload, **kwargs):
         entrou.set()
         if not liberar.wait(timeout=5):
             raise RuntimeError('Teste não liberou a emissão')
@@ -276,7 +277,7 @@ def test_cron_executa_fila_com_chave_propria(app, monkeypatch):
     lock = Mock()
     monkeypatch.setattr(seru_cron, '_com_lock', lock)
     seru_cron._run_kits_fiscal(app)
-    lock.assert_called_once_with(7765, kits_fiscal.processar_pendentes, 'fila fiscal dos kits')
+    lock.assert_called_once_with(7765, kits_fiscal.processar_pendentes, 'fila fiscal do site')
 
 
 def test_falha_email_repetida_reenvia_so_danfe_sem_reemitir_nota(owner_user, tiny_falso):
