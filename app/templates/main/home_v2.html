@@ -167,6 +167,29 @@
             {% endif %}
         </article>
         {% endif %}
+
+        {% if loja_online %}
+        <article class="home-v2-panel home-v2-sales">
+            <div class="home-v2-panel-heading">
+                <div>
+                    <span class="home-v2-section-kicker">Loja online</span>
+                    <h2>Atendimento e faturamento</h2>
+                </div>
+                <i class="bi bi-cart-check home-v2-heading-icon"></i>
+            </div>
+
+            <div class="home-v2-sales-split">
+                <div><span>Fila de ação</span><strong>{{ loja_online.fila }}</strong><small>pedidos</small></div>
+                <div><span>Hoje</span><strong>R$ {{ '{:,.0f}'.format(loja_online.hoje.valor).replace(',', '.') }}</strong><small>{{ loja_online.hoje.qtd }} pedido{{ 's' if loja_online.hoje.qtd != 1 }}</small></div>
+                <div><span>Semana</span><strong>R$ {{ '{:,.0f}'.format(loja_online.semana.valor).replace(',', '.') }}</strong><small>{{ loja_online.semana.qtd }} pedido{{ 's' if loja_online.semana.qtd != 1 }}</small></div>
+                <div><span>Mês</span><strong>R$ {{ '{:,.0f}'.format(loja_online.mes.valor).replace(',', '.') }}</strong><small>{{ loja_online.mes.qtd }} pedido{{ 's' if loja_online.mes.qtd != 1 }}</small></div>
+            </div>
+            <div class="home-v2-panel-footer">
+                <a href="{{ url_for('main.loja_online_dashboard') }}">Abrir painel da loja online <i class="bi bi-arrow-right"></i></a>
+                <a href="{{ url_for('main.loja_online_pedidos', status='pago') }}">Ver pedidos prontos para separação</a>
+            </div>
+        </article>
+        {% endif %}
     </section>
 
     {% if produzido_ontem %}

@@ -271,6 +271,16 @@
 </div>
 
 <div class="menu-grid">
+{% if loja_online %}
+<a href="{{ url_for('main.loja_online_dashboard') }}" class="menu-card" style="--cor:#f59f00;">
+    <span class="ic"><i class="bi bi-cart-check"></i></span>
+    <span>
+        <span class="nm">Painel da Loja Online</span><br>
+        <span class="desc">Fila de ação: {{ loja_online.fila }} · Hoje: R$ {{ '{:,.0f}'.format(loja_online.hoje.valor).replace(',', '.') }}</span><br>
+        <span class="desc">Semana: R$ {{ '{:,.0f}'.format(loja_online.semana.valor).replace(',', '.') }} · Mês: R$ {{ '{:,.0f}'.format(loja_online.mes.valor).replace(',', '.') }}</span>
+    </span>
+</a>
+{% endif %}
     {# Cards vêm de app/nav.py (fonte única: título/ícone/cor/permissão). Cada
        card abre a página da área, que lista as funções via macro compartilhado. #}
     {% for a in areas %}
