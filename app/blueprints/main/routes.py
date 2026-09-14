@@ -85,6 +85,39 @@ def index():
         # mesmo gate do /admin/briefing). capturar=False: a home carrega a
         # toda hora e NUNCA deve bater na API Seru; o cron de 15 min mantém
         # o snapshot de ontem quente.
+        from app.models import PedidoOnline
+        from sqlalchemy import func as _func
+
+        hoje = hoje_brt().date()
+        semana_ini = hoje - timedelta(days=hoje.weekday())
+        mes_ini = hoje.replace(day=1)
+
+        def _stats_loja_online(desde):
+            total, qtd = (db.session.query(
+                _func.coalesce(_func.sum(PedidoOnline.valor_total), 0),
+                _func.count(PedidoOnline.id),
+            ).filter(
+                PedidoOnline.criado_em >= desde,
+                PedidoOnline.status.in_(('pago', 'em_preparo', 'a_caminho',
+                                        'entregue')),
+            ).first())
+            return {'valor': float(total or 0), 'qtd': int(qtd or 0)}
+
+        status_counts = dict(
+            db.session.query(PedidoOnline.status, _func.count(PedidoOnline.id))
+            .group_by(PedidoOnline.status)
+            .all()
+        )
+        loja_online = {
+            'fila': (
+                int(status_counts.get('pago', 0)) +
+                int(status_counts.get('em_preparo', 0)) +
+                int(status_counts.get('a_caminho', 0))
+            ),
+            'hoje': _stats_loja_online(hoje),
+            'semana': _stats_loja_online(semana_ini),
+            'mes': _stats_loja_online(mes_ini),
+        }
         vendas = (briefing_dono.vendas_ontem(capturar=False)
                   if current_user.is_owner else None)
         vendas_hoje = (briefing_dono.vendas_hoje(capturar=False)
@@ -101,7 +134,8 @@ def index():
                                pendencias=pend,
                                vendas=vendas,
                                vendas_hoje=vendas_hoje,
-                               produzido_ontem=produzido_ontem)
+                               produzido_ontem=produzido_ontem,
+                               loja_online=loja_online)
     return render_template('main/inicio.html')
 
 
