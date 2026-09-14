@@ -1267,21 +1267,61 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     // ═══ UX: LOADING STATES ═══
+    var loadingForms = new WeakMap();
+
+    function restoreSubmitLoading(form) {
+        var state = loadingForms.get(form);
+        if (!state) return;
+        clearTimeout(state.timer);
+        loadingForms.delete(form);
+        var btn = state.button;
+        if (!btn) return;
+        if (state.html !== null) btn.innerHTML = state.html;
+        if (state.ariaDisabled === null) btn.removeAttribute('aria-disabled');
+        else btn.setAttribute('aria-disabled', state.ariaDisabled);
+        if (!state.hadDisabledClass) btn.classList.remove('disabled');
+    }
+
     document.addEventListener('submit', function(e) {
         // Form interceptado por outro handler (ex: modal de vinculos da
         // ficha chama preventDefault) NAO esta navegando — sem "Salvando...",
         // senao o botao fica preso no spinner com o modal aberto.
         if (e.defaultPrevented) return;
-        var btn = e.target.querySelector('[type="submit"]');
-        if (btn && !btn.dataset.noLoading) {
-            btn.disabled = true;
-            btn.dataset.originalText = btn.innerHTML;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
-            setTimeout(function() {
-                btn.disabled = false;
-                btn.innerHTML = btn.dataset.originalText;
-            }, 10000);
+        var form = e.target;
+        if (!form || form.tagName !== 'FORM') return;
+        if (loadingForms.has(form)) {
+            e.preventDefault();
+            return;
         }
+        var btn = e.submitter;
+        if (btn && btn.dataset.noLoading) return;
+        var state = {
+            button: btn,
+            html: btn && btn.tagName === 'BUTTON' ? btn.innerHTML : null,
+            ariaDisabled: btn ? btn.getAttribute('aria-disabled') : null,
+            hadDisabledClass: btn ? btn.classList.contains('disabled') : false,
+            timer: null
+        };
+        loadingForms.set(form, state);
+        // Disabled excluiria name/value do POST (ex.: acao=publicar).
+        // A trava pertence ao form; o submitter conserva sua semântica nativa,
+        // inclusive input/image e os atributos formaction/formmethod.
+        if (btn) {
+            btn.setAttribute('aria-disabled', 'true');
+            btn.classList.add('disabled');
+        }
+        if (state.html !== null) {
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+        }
+        state.timer = setTimeout(function() { restoreSubmitLoading(form); }, 10000);
+        // Um listener registrado depois deste ainda pode cancelar a navegação.
+        queueMicrotask(function() {
+            if (e.defaultPrevented) restoreSubmitLoading(form);
+        });
+    });
+    window.addEventListener('pageshow', function() {
+        // O histórico pode restaurar a página com o spinner anterior à saída.
+        Array.prototype.forEach.call(document.forms, restoreSubmitLoading);
     });
 
 

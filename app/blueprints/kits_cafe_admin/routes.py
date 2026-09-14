@@ -119,6 +119,10 @@ def salvar():
     nome = request.form.get('nome', '').strip()
     descricao = request.form.get('descricao', '').strip()
     erros = []
+    acoes = request.form.getlist('acao')
+    acao = acoes[0] if len(acoes) == 1 else None
+    if acao not in ('publicar', 'rascunho'):
+        erros.append('Escolha salvar e publicar no site ou salvar como rascunho.')
     if not nome or len(nome) > 150:
         erros.append('Informe um nome com até 150 caracteres.')
     if len(descricao) > 600:
@@ -159,7 +163,7 @@ def salvar():
         db.session.add(kit)
     kit.nome = nome
     kit.descricao = descricao or None
-    kit.ativo = request.form.get('acao') == 'publicar'
+    kit.ativo = acao == 'publicar'
     kit.atualizado_em = agora()
     kit.itens[:] = [KitCafeItem(
         kind=item['kind'], receita_id=item['receita_id'], produto_id=item['produto_id'],

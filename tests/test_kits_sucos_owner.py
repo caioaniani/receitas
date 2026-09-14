@@ -106,3 +106,27 @@ def test_admin_nao_configura_opcoes(app, admin_user, catalogo_sucos):
     cliente = cliente_owner(app, admin_user)
     assert cliente.post('/admin/kits-cafe/salvar', data=MultiDict(dados(catalogo_sucos))).status_code == 403
     assert KitCafe.query.count() == 0
+
+
+@pytest.mark.parametrize('acoes', [[], [''], ['desconhecida'], ['publicar', 'rascunho']])
+def test_acao_ausente_ou_ambigua_nao_cria_kit(app, owner_user, catalogo_sucos, acoes):
+    form = MultiDict(dados(catalogo_sucos))
+    form.setlist('acao', acoes)
+    resposta = cliente_owner(app, owner_user).post('/admin/kits-cafe/salvar', data=form)
+    assert resposta.status_code == 400
+    assert 'Escolha salvar e publicar' in resposta.get_data(as_text=True)
+    assert KitCafe.query.count() == 0
+
+
+def test_acao_ausente_nao_pausa_kit_publicado(app, owner_user, catalogo_sucos):
+    cliente = cliente_owner(app, owner_user)
+    form = dados(catalogo_sucos)
+    assert cliente.post('/admin/kits-cafe/salvar', data=form).status_code == 302
+    kit = KitCafe.query.one()
+    form['kit_id'] = str(kit.id)
+    form['nome'] = 'Nome que não deve ser salvo'
+    form.pop('acao')
+    assert cliente.post('/admin/kits-cafe/salvar', data=form).status_code == 400
+    db.session.refresh(kit)
+    assert kit.ativo is True
+    assert kit.nome == 'Kit com suco'
