@@ -9,6 +9,12 @@ um mês, sem renovação automática. Preço = soma dos produtos do kit por
 entrega, mais frete separado para cada entrega. Não inventar substitutos,
 porções ou preços dos alimentos. Menus configuráveis usam uma composição
 fixada pelo owner; uma mudança de padrão só entra no kit explicitamente.
+O owner pode oferecer de 2 a 10 sucos publicados em `KitCafeSuco` (tabela
+nova, sem alterar colunas antigas). O cliente deve escolher um suco por
+compra; cada entrega recebe uma unidade desse produto. Preço e calendário
+seguem o sabor escolhido, e o pedido persiste o produto real para separação,
+NF e baixa na coleta. Nunca somar todas as alternativas nem duplicar suco
+nos itens fixos. Sem alternativas, o kit anterior mantém seu comportamento.
 Edições posteriores preservam os pedidos já comprados. Fluxo e operação em
 `docs/kits-cafe.md` e no manual administrativo.
 

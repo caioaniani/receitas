@@ -22,8 +22,9 @@
         <ul class="mb-0">{% for erro in estado.erros %}<li>{{ erro }}</li>{% endfor %}</ul>
       </div>
     {% else %}
-      <ul>{% for item in estado.itens %}<li>{{ item.qtd }} × {{ item.nome }}</li>{% endfor %}</ul>
-      <p class="fw-bold">R$ {{ '%.2f'|format(estado.preco)|replace('.', ',') }} por kit <small class="fw-normal text-muted">+ frete</small></p>
+      <ul>{% for item in estado.itens_fixos %}<li>{{ item.qtd }} × {{ item.nome }}</li>{% endfor %}
+        {% if estado.sucos %}<li>1 suco à escolha: {{ estado.sucos|map(attribute='nome')|join(' ou ') }}</li>{% endif %}</ul>
+      <p class="fw-bold">{% if estado.preco_varia %}A partir de {% endif %}R$ {{ '%.2f'|format(estado.preco)|replace('.', ',') }} por kit <small class="fw-normal text-muted">+ frete</small></p>
     {% endif %}
     <div class="d-flex flex-wrap gap-2 mt-auto">
       <a class="btn btn-outline-primary" href="{{ url_for('kits_cafe_admin.editar', kit_id=kit.id) }}">Editar kit</a>

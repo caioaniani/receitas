@@ -12,8 +12,9 @@
     {% if card.kit.descricao %}<p>{{ card.kit.descricao }}</p>{% endif %}
     <ul class="checkout-itens-lista">
       {% for it in card.itens %}<li><span>{{ it.qtd }}× {{ it.nome }}</span></li>{% endfor %}
+      {% if card.sucos %}<li><span>1 suco à escolha: {% for suco in card.sucos %}{{ suco.nome }}{{ ' ou ' if not loop.last }}{% endfor %}</span></li>{% endif %}
     </ul>
-    <p><strong>R$ {{ '%.2f'|format(card.preco)|replace('.', ',') }} por kit</strong> · frete à parte</p>
+    <p><strong>{% if card.preco_variavel %}A partir de {% endif %}R$ {{ '%.2f'|format(card.preco)|replace('.', ',') }} por kit</strong> · frete à parte</p>
     <a class="btn-loja" href="{{ url_for('loja.kit_comprar', kit_id=card.kit.id) }}">Escolher dias e horários</a>
   </article>
   {% else %}

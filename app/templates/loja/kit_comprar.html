@@ -19,7 +19,16 @@
       <h2>O que vem em cada entrega</h2>
       <ul class="checkout-itens-lista">{% for it in itens %}<li><span>{{ it.qtd }}× {{ it.nome }}</span>
         <span>R$ {{ '%.2f'|format(it.subtotal)|replace('.', ',') }}</span></li>{% endfor %}</ul>
-      <p><strong>R$ {{ '%.2f'|format(preco)|replace('.', ',') }} por kit</strong>, sem o frete.</p>
+      {% if sucos %}
+      <label>Escolha 1 suco por kit
+        <select name="suco_id" id="kit-suco" required>
+          <option value="">Escolha o suco</option>
+          {% for suco in sucos %}<option value="{{ suco.id }}" {{ 'selected' if suco_id == suco.id }}>{{ suco.nome }} — R$ {{ '%.2f'|format(suco.preco)|replace('.', ',') }} incluídos no kit</option>{% endfor %}
+        </select>
+      </label>
+      <p>A mesma escolha de suco vale para todas as entregas desta compra. Escolha o suco para consultar os dias disponíveis.</p>
+      {% endif %}
+      <p><strong id="kit-preco">{% if preco_variavel and not suco_id %}A partir de {% endif %}R$ {{ '%.2f'|format(preco)|replace('.', ',') }} por kit</strong>, sem o frete.</p>
     </section>
     <section class="checkout-bloco">
       <h2>1. Seus dias e horários</h2>

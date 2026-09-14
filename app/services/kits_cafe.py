@@ -25,8 +25,8 @@ def _composicao(item):
         raise ValueError('A composição de um menu precisa ser revisada pelo dono.') from exc
 
 
-def itens_do_kit(kit):
-    """Carrinho do kit; composição de menu fixada quando o owner o montou."""
+def itens_fixos_do_kit(kit):
+    """Carrinho fixo do owner, sem antecipar a escolha de suco do cliente."""
     itens = []
     for item in kit.itens:
         raw = {'kind': item.kind,
@@ -36,6 +36,68 @@ def itens_do_kit(kit):
         if comp is not None:
             raw['comp'] = comp
         itens.append(raw)
+    return itens
+
+
+def preparar_sucos(ids, itens):
+    """Valida opções publicadas sem gravar nem aceitar preço do navegador."""
+    if (not isinstance(ids, (list, tuple))
+            or any(type(item_id) is not int or item_id <= 0 for item_id in ids)):
+        return [], ['Selecione opções de suco válidas.']
+    if not ids:
+        return [], []
+    if not 2 <= len(ids) <= 10:
+        return [], ['Selecione entre 2 e 10 opções de suco, ou deixe todas desmarcadas.']
+    if len(set(ids)) != len(ids):
+        return [], ['Uma opção de suco foi selecionada mais de uma vez.']
+    fixos = {item.get('produto_id') or item.get('id') for item in itens
+             if item.get('kind') == 'produto'}
+    if fixos.intersection(ids):
+        return [], ['Um suco não pode ser opção de escolha e item fixo do mesmo kit.']
+    raw_fixos = [
+        {'kind': item['kind'],
+         'id': item.get('id') or item.get('receita_id') or item.get('produto_id'),
+         'qtd': item['qtd'], 'comp': item.get('comp'), 'fatiado': item.get('fatiado')}
+        for item in itens
+    ]
+    opcoes = []
+    for item_id in ids:
+        cat = loja_catalogo.por_id_publicado('produto', item_id)
+        if not cat:
+            return [], ['Uma opção de suco não está mais à venda no site. Revise o kit.']
+        if cat.get('menu') or loja_menu.eh_menu(Produto.query.get(item_id)):
+            return [], ['As opções de suco devem ser produtos sem menu configurável.']
+        normalizados, erros = loja_checkout.montar_itens(
+            [*raw_fixos, {'kind': 'produto', 'id': item_id, 'qtd': 1}],
+            dias_disponibilidade=DIAS_AGENDA_KITS)
+        if erros or len(normalizados) != len(raw_fixos) + 1:
+            return [], [f'A opção de suco "{cat["nome"]}" está indisponível. Revise o kit.']
+        item = normalizados[-1]
+        opcoes.append({'id': item_id, 'nome': item['nome'], 'preco': item['preco']})
+    return sorted(opcoes, key=lambda item: (item['preco'], item['id'])), []
+
+
+def opcoes_suco(kit):
+    """Opções atuais do kit, todas válidas; não remove silenciosamente uma opção."""
+    opcoes, erros = preparar_sucos([suco.produto_id for suco in kit.sucos], itens_fixos_do_kit(kit))
+    if erros:
+        raise ValueError(' '.join(erros))
+    return opcoes
+
+
+def itens_do_kit(kit, suco_id=None):
+    """Itens fixos mais um suco; ausência de escolha serve apenas ao preview."""
+    itens = itens_fixos_do_kit(kit)
+    opcoes = opcoes_suco(kit)
+    if not opcoes:
+        if suco_id is not None:
+            raise ValueError('Este kit não oferece escolha de suco.')
+        return itens
+    if suco_id is None:
+        suco_id = opcoes[0]['id']
+    elif type(suco_id) is not int or suco_id not in {item['id'] for item in opcoes}:
+        raise ValueError('Escolha um dos sucos disponíveis neste kit.')
+    itens.append({'kind': 'produto', 'id': suco_id, 'qtd': 1})
     return itens
 
 
@@ -57,10 +119,10 @@ def _validar_composicoes(itens_raw):
     return []
 
 
-def montar(kit):
+def montar(kit, suco_id=None):
     """Mesmo preço, publicação e disponibilidade usados pelo checkout normal."""
     try:
-        raw = itens_do_kit(kit)
+        raw = itens_do_kit(kit, suco_id)
     except ValueError as exc:
         return [], [str(exc)]
     if not raw:

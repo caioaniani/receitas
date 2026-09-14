@@ -106,6 +106,8 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
     base = base or agora()
     try:
         db.session.refresh(kit, with_for_update=True)
+        # A relação pode ter sido carregada antes de aguardar o lock do owner.
+        db.session.expire(kit, ['itens', 'sucos'])
         existente = CompraKit.query.filter_by(checkout_token=checkout_token).first()
         if existente:
             if existente.kit_id != kit.id:
@@ -113,11 +115,25 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
             return existente, []
         if not kit.ativo:
             return None, ['Este kit não está disponível para compra.']
-        itens, erros = kits_cafe.montar(kit)
+        suco_id = None
+        valores_suco = (form.getlist('suco_id') if hasattr(form, 'getlist') else
+                        [form['suco_id']] if 'suco_id' in form else [])
+        if kit.sucos:
+            if (len(valores_suco) != 1 or not isinstance(valores_suco[0], str)
+                    or not re.fullmatch(r'[1-9][0-9]{0,9}', valores_suco[0])):
+                return None, ['Escolha um dos sucos disponíveis neste kit.']
+            suco_id = int(valores_suco[0])
+        elif valores_suco:
+            return None, ['Este kit não oferece escolha de suco.']
+        try:
+            # Captura o produto escolhido antes de qualquer cotação externa.
+            raw = kits_cafe.itens_do_kit(kit, suco_id)
+        except ValueError as exc:
+            return None, [str(exc)]
+        itens, erros = kits_cafe.montar(kit, suco_id)
         if erros or not itens:
             return None, erros or ['Este kit está indisponível.']
         snapshot = _snapshot_composicao(itens)
-        raw = kits_cafe.itens_do_kit(kit)
         pedidos = []
         frete_validado = None
         for agendamento in agenda:

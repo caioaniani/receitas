@@ -14,6 +14,15 @@ class KitCafe(db.Model):
     atualizado_em = db.Column(db.DateTime, nullable=False, default=agora, onupdate=agora)
     itens = db.relationship('KitCafeItem', backref='kit', cascade='all, delete-orphan',
                              order_by='KitCafeItem.id')
+    sucos = db.relationship('KitCafeSuco', backref='kit', cascade='all, delete-orphan',
+                            order_by='KitCafeSuco.produto_id')
+
+
+class KitCafeSuco(db.Model):
+    """Opções de um suco por entrega, escolhidas pelo owner no catálogo."""
+    __tablename__ = 'kit_cafe_suco'
+    kit_id = db.Column(db.Integer, db.ForeignKey('kit_cafe.id'), primary_key=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'), primary_key=True)
 
 
 class KitCafeItem(db.Model):

@@ -9,14 +9,22 @@ from flask_login import current_user, login_required
 from app.blueprints.kits_cafe_admin import kits_cafe_admin_bp
 from app.decorators import owner_required
 from app.extensions import db
-from app.models import KitCafe, KitCafeItem, Produto, Receita
+from app.models import KitCafe, KitCafeItem, KitCafeSuco, Produto, Receita
 from app.services import kits_cafe, loja_menu
 from app.utils import agora
 
 
 def _estado(kit):
     itens, erros = kits_cafe.montar(kit)
+    sucos = []
+    if not erros:
+        sucos = kits_cafe.opcoes_suco(kit)
+    ids_sucos = {suco['id'] for suco in sucos}
     return {'kit': kit, 'itens': itens, 'erros': erros,
+            'itens_fixos': [item for item in itens if not (
+                item['kind'] == 'produto' and item['produto_id'] in ids_sucos)],
+            'sucos': sucos,
+            'preco_varia': len({suco['preco'] for suco in sucos}) > 1,
             'preco': sum((item['subtotal'] for item in itens), Decimal('0.00'))}
 
 
@@ -38,7 +46,7 @@ def _editor(kit=None, *, erros=(), status=200):
         cat['ja_selecionado'] = True
         if item.comp_json:
             try:
-                comp = kits_cafe.itens_do_kit(kit)
+                comp = kits_cafe.itens_fixos_do_kit(kit)
                 raw = next(raw for raw in comp
                            if (raw['kind'], raw['id']) == chave)
                 prod = db.session.get(Produto, chave[1])
@@ -48,12 +56,27 @@ def _editor(kit=None, *, erros=(), status=200):
             except (ValueError, KeyError):
                 cat['composicao_erro'] = 'Composição inválida; adote o padrão atual ou remova o item.'
     dados = request.form if request.method == 'POST' else {}
+    sucos_selecionados = [str(suco.produto_id) for suco in (kit.sucos if kit else [])]
+    if request.method == 'POST' and dados.get('configurar_sucos') == '1':
+        sucos_selecionados = dados.getlist('suco_ids')
+    sucos_catalogo = [item for item in catalogo
+                     if item['kind'] == 'produto' and not item.get('menu')]
+    disponiveis_sucos = {str(item['id']) for item in sucos_catalogo}
+    for produto_id in sucos_selecionados:
+        if produto_id in disponiveis_sucos or not re.fullmatch(r'[1-9][0-9]*', produto_id):
+            continue
+        produto = db.session.get(Produto, int(produto_id))
+        sucos_catalogo.append({'id': int(produto_id),
+                              'nome': produto.nome if produto else 'Produto removido',
+                              'preco_kit': None, 'indisponivel': True})
     if request.method == 'POST':
         for item in catalogo:
             chave = (item['kind'], item['id'])
             selecionados[chave] = dados.get(f'qtd_{chave[0]}_{chave[1]}', '0')
     return render_template('admin/kits_cafe_editor.html', kit=kit,
                            catalogo=catalogo, selecionados=selecionados,
+                           sucos_catalogo=sucos_catalogo,
+                           sucos_selecionados=sucos_selecionados,
                            dados=dados, erros=erros,
                            estado=_estado(kit) if kit else None), status
 
@@ -92,7 +115,7 @@ def salvar():
             abort(400)
         kit = KitCafe.query.get_or_404(int(kit_id))
         db.session.refresh(kit, with_for_update=True)
-        db.session.expire(kit, ['itens'])
+        db.session.expire(kit, ['itens', 'sucos'])
     nome = request.form.get('nome', '').strip()
     descricao = request.form.get('descricao', '').strip()
     erros = []
@@ -119,6 +142,16 @@ def salvar():
     itens, avisos = kits_cafe.preparar_itens(selecao, kit=kit,
                                            atualizar_menus=atualizar_menus)
     erros.extend(avisos)
+    suco_ids = [suco.produto_id for suco in (kit.sucos if kit else [])]
+    if request.form.get('configurar_sucos') == '1':
+        recebidos = request.form.getlist('suco_ids')
+        if (len(recebidos) > 10 or any(
+                not re.fullmatch(r'[1-9][0-9]{0,9}', valor) for valor in recebidos)):
+            erros.append('Selecione de 2 a 10 sucos do catálogo, ou deixe todos desmarcados.')
+        else:
+            suco_ids = [int(valor) for valor in recebidos]
+    sucos, avisos_sucos = kits_cafe.preparar_sucos(suco_ids, itens)
+    erros.extend(avisos_sucos)
     if erros:
         return _editor(kit, erros=erros, status=400)
     if kit is None:
@@ -133,6 +166,9 @@ def salvar():
         quantidade=item['qtd'], comp_json=(json.dumps(item['comp'], sort_keys=True)
                                            if item.get('comp') else None))
         for item in itens]
+    atuais_sucos = {suco.produto_id: suco for suco in kit.sucos}
+    kit.sucos[:] = [atuais_sucos.get(suco['id']) or KitCafeSuco(produto_id=suco['id'])
+                   for suco in sucos]
     db.session.commit()
     flash('Kit publicado no site.' if kit.ativo else 'Kit salvo como rascunho.', 'success')
     return redirect(url_for('kits_cafe_admin.editar', kit_id=kit.id))

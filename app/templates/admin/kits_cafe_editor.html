@@ -51,6 +51,23 @@
     <p class="mb-0"><a href="{{ url_for('main.loja_online_catalogo') }}">Abrir catálogo do site</a></p>
   </div></div>
   <div class="card mb-3"><div class="card-body">
+    <h2 class="h5">Sucos à escolha do cliente</h2>
+    <p>Opcional: marque de 2 a 10 sucos. Cada entrega terá uma unidade do sabor escolhido pelo cliente para todas as datas. Use quantidade zero desses sucos na lista de itens fixos acima.</p>
+    <input type="hidden" name="configurar_sucos" value="1">
+    <label for="kit-busca-sucos" class="form-label">Buscar suco</label>
+    <input type="search" id="kit-busca-sucos" class="form-control mb-3" placeholder="Nome do produto">
+    <div id="kit-sucos" class="row">
+      {% for suco in sucos_catalogo %}
+      <div class="col-md-6 mb-2 kit-opcao-suco" data-busca="{{ suco.nome|lower }}">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="suco-{{ suco.id }}" name="suco_ids" value="{{ suco.id }}" data-preco="{{ suco.preco_kit if suco.preco_kit is not none else '' }}" {% if suco.id|string in sucos_selecionados %}checked{% endif %}>
+          <label class="form-check-label" for="suco-{{ suco.id }}">{{ suco.nome }} — {% if suco.preco_kit is not none %}R$ {{ '%.2f'|format(suco.preco_kit)|replace('.', ',') }}{% else %}Indisponível, revise o cadastro{% endif %}</label>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div></div>
+  <div class="card mb-3"><div class="card-body">
     <p class="h5 mb-2">Valor por kit: <span id="kit-total" aria-live="polite">{% if estado and not estado.erros %}R$ {{ '%.2f'|format(estado.preco)|replace('.', ',') }}{% else %}R$ 0,00{% endif %}</span> <small class="text-muted">+ frete</small></p>
     <p class="text-muted">O valor é calculado pelos preços atuais dos produtos. O total da compra será este valor multiplicado pelas entregas escolhidas, mais o frete de cada entrega. Sem renovação automática.</p>
     {% if kit %}<p class="small text-muted">Alterações valem para novas compras. Pedidos já feitos mantêm seus itens, preços e agenda.</p>{% endif %}
@@ -65,6 +82,7 @@
   const rows = [...document.querySelectorAll('#kit-itens tbody tr')];
   const total = document.getElementById('kit-total');
   const moeda = new Intl.NumberFormat('pt-BR', {style:'currency', currency:'BRL'});
+  const sucos = [...document.querySelectorAll('#kit-sucos input[name="suco_ids"]')];
   function atualizar() {
     let centavos = 0;
     let incompleto = false;
@@ -75,8 +93,18 @@
       if (qtd > 0 && !preco) incompleto = true;
       centavos += Math.round(Number(preco || 0) * 100) * Math.max(0, qtd);
     }
-    total.textContent = incompleto ? 'Revise os itens indisponíveis' : moeda.format(centavos / 100);
+    const escolhidos = sucos.filter(suco => suco.checked);
+    const precos = escolhidos.map(suco => Math.round(Number(suco.dataset.preco) * 100));
+    if (escolhidos.some(suco => !suco.dataset.preco) || escolhidos.length === 1) incompleto = true;
+    if (precos.length) centavos += Math.min(...precos);
+    const prefixo = new Set(precos).size > 1 ? 'A partir de ' : '';
+    total.textContent = incompleto ? 'Revise os itens e as opções de suco' : prefixo + moeda.format(centavos / 100);
   }
+  sucos.forEach(suco => suco.addEventListener('change', atualizar));
+  document.getElementById('kit-busca-sucos').addEventListener('input', event => {
+    const busca = event.target.value.trim().toLocaleLowerCase('pt-BR');
+    document.querySelectorAll('.kit-opcao-suco').forEach(row => { row.hidden = !row.dataset.busca.includes(busca); });
+  });
   for (const row of rows) {
     row.querySelector('.kit-quantidade').addEventListener('input', atualizar);
     row.querySelector('input[type="checkbox"]')?.addEventListener('change', atualizar);

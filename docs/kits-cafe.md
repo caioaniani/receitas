@@ -10,9 +10,12 @@ kit completo. É uma compra para um mês, sem renovação automática.
 2. Clique em **Criar kit**, informe o nome e uma descrição para o cliente.
 3. Selecione as quantidades dos itens por entrega. A unidade, porção, tamanho
    e recheio são os do produto publicado no site. Zero deixa o item fora do kit.
-4. Confira o valor por kit e escolha **Salvar e publicar no site**, ou salve
+4. Para oferecer sabores, em **Sucos à escolha do cliente** marque de 2 a 10
+   produtos publicados. Cada entrega inclui uma unidade do suco escolhido.
+   Deixe esses sucos com quantidade zero nos itens fixos para não duplicá-los.
+5. Confira o valor por kit e escolha **Salvar e publicar no site**, ou salve
    como rascunho para revisar antes de vender.
-5. Repita para criar as três opções. Os nomes e as composições são livres.
+6. Repita para criar as três opções. Os nomes e as composições são livres.
 
 O sistema não cadastra alimentos nem faz substituições por semelhança de nome.
 Se, por exemplo, o queijo branco ou uma porção de suco ainda não estiver à
@@ -31,6 +34,11 @@ usando os preços atuais do catálogo. Não há um preço manual separado. O tot
 da compra soma os kits das datas escolhidas e o frete de cada entrega. O frete
 aparece separado e não está incluído no preço anunciado por kit.
 
+Quando há sucos à escolha, o cliente precisa selecionar um deles antes de
+continuar. A mesma escolha vale para todas as entregas dessa compra. Se os
+preços forem diferentes, a vitrine informa **a partir de** e o resumo calcula
+o preço do sabor escolhido. O calendário respeita a antecedência desse suco.
+
 O kit só aparece para compra se estiver publicado e todos os itens estiverem
 disponíveis no site. Se algum produto sair do catálogo, ficar sem preço,
 esgotar ou tiver uma composição de menu incompatível, o kit fica indisponível
@@ -41,6 +49,10 @@ os itens, valores ou a agenda das compras já realizadas, que são registrados
 no momento da compra. Para mudar a composição, abra **Editar kit**, ajuste as
 quantidades e salve. Administradores comuns e outros usuários não podem abrir
 essa área nem chamar suas ações diretamente.
+
+O pedido de cada data guarda o produto de suco efetivamente escolhido; é ele
+que aparece na separação, no faturamento e na baixa de estoque da coleta.
+Alterar as opções disponíveis depois não muda pedidos já comprados.
 
 ## Compra e operação das entregas
 
@@ -89,3 +101,6 @@ falhas para nova tentativa. A emissão manual continua disponível no pedido.
   seus itens, em conjunto com a trava usada na compra.
 - A montagem reaproveita `loja_checkout.montar_itens`. A seleção do navegador
   não define preços, e menus inválidos não são substituídos em silêncio.
+- `KitCafeSuco`: alternativas de suco em tabela própria, com chave composta
+  por kit e produto. Criada pelo startup serializado; sem coluna nova em
+  tabela existente. Kits anteriores sem alternativas conservam sua composição.

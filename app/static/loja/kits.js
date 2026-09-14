@@ -10,18 +10,28 @@
   const aviso = document.getElementById('frete-aviso');
   const money = value => (value / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
   const campo = name => form.elements.namedItem(name);
+  const suco = document.getElementById('kit-suco');
+  const precoKit = document.getElementById('kit-preco');
+  const precoInicial = precoKit ? precoKit.textContent : '';
   let frete = null;
   let distancia = null;
   let versaoEndereco = 0;
   let enviando = false;
 
   function linhas() { return Array.from(agenda.querySelectorAll('.kit-dia')); }
+  function configuracao() { return suco ? (cfg.sucos[suco.value] || null) : cfg; }
   function horarios(row, escolhido) {
-    const data = row.querySelector('.kit-data').value;
+    const atual = configuracao();
+    const input = row.querySelector('.kit-data');
+    const data = input.value;
+    input.min = atual ? atual.dataMin : '';
+    input.max = atual ? atual.dataMax : '';
+    input.disabled = !atual;
     const select = row.querySelector('.kit-janela');
+    select.disabled = !atual;
     const anterior = escolhido || select.value;
     select.replaceChildren();
-    const mapa = distancia !== null && distancia >= cfg.corteKm ? cfg.janelasLonge : cfg.janelas;
+    const mapa = atual ? (distancia !== null && distancia >= cfg.corteKm ? atual.janelasLonge : atual.janelas) : {};
     const opcoes = mapa[data] || [];
     const inicial = new Option(opcoes.length ? 'Escolha o horário' : 'Sem horários nesta data', '');
     select.add(inicial);
@@ -29,21 +39,25 @@
     select.value = opcoes.includes(anterior) ? anterior : '';
   }
   function atualizar() {
+    const atual = configuracao();
     const lista = linhas();
     const dias = lista.map(r => r.querySelector('.kit-data').value);
     lista.forEach(r => {
       const data = r.querySelector('.kit-data');
       data.setCustomValidity(data.value && dias.filter(d => d === data.value).length > 1
-        ? 'Cada dia corresponde a um kit. Escolha uma data diferente.' : '');
+        ? 'Cada dia corresponde a um kit. Escolha uma data diferente.'
+        : (data.value && atual && !atual.janelas[data.value]
+          ? 'Escolha uma data disponível para este kit e suco.' : ''));
     });
     const quantidade = lista.length;
-    const valorProdutos = cfg.precoCentavos * quantidade;
+    const valorProdutos = atual ? atual.precoCentavos * quantidade : null;
+    if (precoKit) precoKit.textContent = atual ? money(atual.precoCentavos) + ' por kit' : precoInicial;
     document.getElementById('kits-quantidade').textContent = quantidade + (quantidade === 1 ? ' kit' : ' kits');
-    document.getElementById('kits-subtotal').textContent = money(valorProdutos);
+    document.getElementById('kits-subtotal').textContent = atual ? money(valorProdutos) : 'Escolha o suco';
     document.getElementById('kits-fretes').textContent = frete === null ? 'Calcule acima' : money(frete * quantidade);
-    document.getElementById('kits-total').textContent = frete === null ? '—' : money(valorProdutos + frete * quantidade);
-    document.getElementById('adicionar-data').disabled = quantidade >= 31;
-    continuar.disabled = enviando || frete === null || quantidade === 0;
+    document.getElementById('kits-total').textContent = frete === null || !atual ? '—' : money(valorProdutos + frete * quantidade);
+    document.getElementById('adicionar-data').disabled = !atual || quantidade >= 31;
+    continuar.disabled = enviando || !atual || frete === null || quantidade === 0;
     document.getElementById('agenda-json').value = JSON.stringify(lista.map(r => ({
       data: r.querySelector('.kit-data').value, janela: r.querySelector('.kit-janela').value
     })));
@@ -60,6 +74,8 @@
     atualizar();
   }
   document.getElementById('adicionar-data').addEventListener('click', () => {
+    const atual = configuracao();
+    if (!atual) return;
     const lista = linhas();
     const ultima = lista.length ? lista[lista.length - 1].querySelector('.kit-data').value : '';
     let proxima = '';
@@ -67,10 +83,14 @@
       const d = new Date(ultima + 'T12:00:00Z');
       d.setUTCDate(d.getUTCDate() + 7);
       const sugestao = d.toISOString().slice(0, 10);
-      if (cfg.janelas[sugestao]) proxima = sugestao;
+      if (atual.janelas[sugestao]) proxima = sugestao;
     }
     adicionar(proxima);
     linhas().at(-1).querySelector('.kit-data').focus();
+  });
+  if (suco) suco.addEventListener('change', () => {
+    linhas().forEach(r => horarios(r));
+    atualizar();
   });
   const enderecoCampos = ['cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];
   function invalidarFrete() {
@@ -130,7 +150,7 @@
   });
   form.addEventListener('submit', event => {
     atualizar();
-    if (enviando || frete === null || !linhas().length || !form.reportValidity()) {
+    if (enviando || !configuracao() || frete === null || !linhas().length || !form.reportValidity()) {
       event.preventDefault();
       return;
     }
@@ -138,7 +158,7 @@
     continuar.disabled = true;
     continuar.textContent = 'Preparando sua compra…';
   });
-  (Array.isArray(cfg.agenda) && cfg.agenda.length ? cfg.agenda : [{data: Object.keys(cfg.janelas)[0] || '', janela: ''}])
+  (Array.isArray(cfg.agenda) && cfg.agenda.length ? cfg.agenda : [{data: suco ? '' : (Object.keys(cfg.janelas)[0] || ''), janela: ''}])
     .filter(a => a && typeof a === 'object').forEach(a => adicionar(a.data, a.janela));
   atualizar();
 })();
