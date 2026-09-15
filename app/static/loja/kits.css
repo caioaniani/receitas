@@ -259,6 +259,19 @@
 .kits-vitrine :focus-visible,
 .kits-compra :focus-visible { outline: 2px solid var(--texto); outline-offset: 4px; }
 .kits-compra .checkout-erros { border-radius: 6px; margin-bottom: 24px; }
+.kits-compra .kits-validation-summary { margin: 16px 0; padding: 16px; border: 1px solid #b7442d; border-radius: 6px; background: #fff5ef; color: #8a2918; font-size: 14px; }
+.kits-compra .kits-validation-summary[hidden],
+.kits-compra .kit-campo-erro[hidden] { display: none; }
+.kits-compra .kits-validation-summary p { margin: 8px 0; }
+.kits-compra .kits-validation-summary ul { margin: 0; padding-left: 18px; }
+.kits-compra .kits-validation-summary button { display: block; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: inherit; font: inherit; line-height: 1.5; text-align: left; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.kits-compra .kit-campo-erro { margin: 6px 0 0; font-size: 13px; font-weight: 500; line-height: 1.5; color: #a52f1c; }
+.kits-compra .kits-section input[aria-invalid="true"],
+.kits-compra .kits-section select[aria-invalid="true"] { border: 2px solid #b7442d; background: #fffaf7; }
+.kits-compra input,
+.kits-compra select,
+.kits-compra button,
+.kits-compra .kits-validation-summary { scroll-margin-block: 120px 30px; }
 
 @media (min-width: 560px) {
   .kits-compra .kits-field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

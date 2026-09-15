@@ -123,8 +123,10 @@ def test_navegador_usa_horarios_do_servidor_apos_calcular_frete(app, owner_user)
     harness = r'''
 const vm = require('node:vm'), fs = require('node:fs'), assert = require('node:assert/strict');
 const cfg = JSON.parse(process.argv[2]);
-function element() { return {value: '', textContent: '', disabled: false, handlers: {},
+function element() { return {value: '', textContent: '', disabled: false, handlers: {}, attributes: {},
   addEventListener(name, fn) {this.handlers[name] = fn;}, reportValidity() {return true;},
+  setAttribute(n, v) {this.attributes[n] = String(v);}, getAttribute(n) {return this.attributes[n] ?? null;},
+  removeAttribute(n) {delete this.attributes[n];},
   setCustomValidity() {}, focus() {}, fire(name) {return this.handlers[name].call(this);}}; }
 const rows = [], elements = {}, campos = {};
 ['cep','logradouro','numero','complemento','bairro','cidade','uf','csrf_token'].forEach(n => campos[n] = element());
@@ -140,6 +142,7 @@ elements['kit-dia-template'] = {content: {firstElementChild: {cloneNode() {
 for (const n of ['kit-continuar','frete-aviso','kits-quantidade','kits-subtotal','kits-fretes',
   'kits-total','adicionar-data','agenda-json','cep-aviso','kit-calcular-frete']) elements[n] = element();
 const sandbox = {document: {getElementById: id => elements[id]},
+  window: {addEventListener() {}},
   Option: function(text, value) {this.text = text; this.value = value;},
   fetch: async () => ({ok:true, json: async () => ({ok:true, valor:15, distancia_km:20})})};
 vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), sandbox);

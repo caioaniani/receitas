@@ -36,18 +36,53 @@ if (cenario === 'sem_suco' || cenario === 'grupo_unico') {
   }
 }
 if (cenario === 'restaurada') cfg.agenda = [{data:'2026-09-17',janela:'12:00–13:00'}];
-function element() { return {value:'', textContent:'', disabled:false, handlers:{}, children:[],
-  addEventListener(n, f) {this.handlers[n] = f;}, reportValidity() {return true;},
-  setCustomValidity(v) {this.validacao = v;}, focus() {},
-  fire(n, event) {return this.handlers[n].call(this, event);},
-  replaceChildren() {this.children = [];}, appendChild(child) {this.children.push(child);}}; }
+let focused = null;
+function element(extra = {}) { return {value:'', textContent:'', disabled:false, handlers:{}, children:[],
+  attributes:{}, hidden:false, required:false, checked:false, type:'text', id:'', name:'', tagName:'INPUT',
+  addEventListener(n, f) {(this.handlers[n] ||= []).push(f);},
+  setAttribute(n, v) {this.attributes[n] = String(v);}, getAttribute(n) {return this.attributes[n] ?? null;},
+  removeAttribute(n) {delete this.attributes[n];},
+  get validity() {
+    const valueMissing = this.required && (this.type === 'checkbox' ? !this.checked : !this.value);
+    const typeMismatch = this.type === 'email' && this.value && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.value);
+    const patternMismatch = !!(this.pattern && this.value && !new RegExp('^(?:' + this.pattern + ')$').test(this.value));
+    const rangeUnderflow = !!(this.type === 'date' && this.value && this.min && this.value < this.min);
+    const rangeOverflow = !!(this.type === 'date' && this.value && this.max && this.value > this.max);
+    const customError = !!this.validacao;
+    return {valueMissing, typeMismatch, patternMismatch, rangeUnderflow, rangeOverflow, customError,
+      valid:this.disabled || !(valueMissing || typeMismatch || patternMismatch || rangeUnderflow || rangeOverflow || customError)};
+  },
+  get willValidate() {return !this.disabled && this.type !== 'hidden';},
+  checkValidity() {return this.validity.valid;}, reportValidity() {return this.checkValidity();},
+  setCustomValidity(v) {this.validacao = v;}, focus() {focused = this;}, scrollIntoView() {this.scrolled = true;},
+  insertAdjacentElement(_, child) {this.inlineError = child;}, closest() {return this;},
+  fire(n, event = {}) {
+    event.target ||= this;
+    const results = (this.handlers[n] || []).map(f => f.call(this, event));
+    if (this !== form && (n === 'input' || n === 'change')) form.fire(n, event);
+    return results.find(r => r && typeof r.then === 'function');
+  },
+  replaceChildren(...children) {this.children = children;}, appendChild(child) {this.children.push(child);},
+  ...extra}; }
 const rows = [], elements = {}, campos = {};
-['cep','logradouro','numero','complemento','bairro','cidade','uf','csrf_token'].forEach(n => campos[n] = element());
-const form = element(); form.elements = {namedItem:n => campos[n]}; elements['kit-form'] = form;
+const values = {cep:'04567000', logradouro:'Rua de teste', numero:'12', complemento:'', bairro:'Brooklin',
+  cidade:'São Paulo', uf:'SP', csrf_token:'teste', nome:'Cliente', sobrenome:'Teste',
+  email:'cliente@example.invalid', telefone:'11999999999', cpf:'52998224725', aceite_lgpd:'1'};
+Object.entries(values).forEach(([n, value]) => campos[n] = element({name:n, id:'kit-' + n, value,
+  required:!['complemento', 'csrf_token'].includes(n), checked:n === 'aceite_lgpd',
+  type:n === 'aceite_lgpd' ? 'checkbox' : n === 'email' ? 'email' : 'text'}));
+const form = element();
+const allFields = () => [...Object.values(campos), ...[elements['kit-suco'], ...cfg.grupos.map(g => elements['kit-escolha-' + g])].filter(Boolean),
+  ...rows.flatMap(r => [r.querySelector('.kit-data'), r.querySelector('.kit-janela')])];
+form.elements = {namedItem:n => campos[n], [Symbol.iterator]:function* () {yield* allFields();}};
+form.querySelectorAll = () => allFields(); form.reportValidity = () => allFields().every(f => f.checkValidity());
+elements['kit-form'] = form;
+Object.values(campos).forEach(c => elements[c.id] = c);
 elements['kits-config'] = {textContent:JSON.stringify(cfg)};
 elements['kit-agenda'] = {querySelectorAll:() => rows, appendChild:r => rows.push(r)};
 elements['kit-dia-template'] = {content:{firstElementChild:{cloneNode() {
-  const data = element(), janela = element(), remover = element(), numero = element(), aviso = element();
+  const data = element({type:'date', required:true}), janela = element({tagName:'SELECT', required:true}),
+    remover = element(), numero = element(), aviso = element();
   janela.add = o => janela.children.push(o);
   return {querySelector:s => ({'.kit-data':data,'.kit-janela':janela,'.kit-remover':remover,
     '.kit-dia-numero':numero,'.kit-dia-aviso':aviso}[s]),
@@ -55,9 +90,10 @@ elements['kit-dia-template'] = {content:{firstElementChild:{cloneNode() {
 }}}};
 for (const n of ['kit-continuar','frete-aviso','kits-quantidade','kits-subtotal','kits-fretes','kits-total',
   'adicionar-data','agenda-json','cep-aviso','kit-calcular-frete','kit-preco','kit-agenda-ajuda',
-  'kit-proximo-passo','kits-resumo-datas']) elements[n] = element();
-if (cfg.sucos) elements['kit-suco'] = element();
-cfg.grupos.forEach(grupo => elements['kit-escolha-' + grupo] = element());
+  'kit-proximo-passo','kits-resumo-datas','kit-erros','kit-erros-lista']) elements[n] = element({id:n});
+if (cfg.sucos) elements['kit-suco'] = element({required:true, tagName:'SELECT'});
+cfg.grupos.forEach(grupo => elements['kit-escolha-' + grupo] = element({required:true, tagName:'SELECT',
+  attributes:{'data-grupo':grupo, 'aria-describedby':'kit-opcoes-ajuda'}}));
 if (cenario === 'restaurada') {
   elements['kit-suco'].value = '12';
   elements['kit-escolha-croissant'].value = 'produto:6';
@@ -65,7 +101,8 @@ if (cenario === 'restaurada') {
 }
 elements['kit-preco'].textContent = 'A partir de R$ 67,80 por kit';
 let fetches = 0;
-const sandbox = {document:{getElementById:id => elements[id], createElement:() => element()},
+const sandbox = {document:{getElementById:id => elements[id], createElement:tag => element({tagName:tag.toUpperCase()})},
+  window:{addEventListener() {}},
   Option:function(text,value) {this.text = text; this.value = value;},
   fetch:async () => {fetches++; return {ok:true,json:async () => ({ok:true,valor:15.25,distancia_km:12})};}};
 vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), sandbox);
@@ -73,6 +110,17 @@ const escolha = (id, value) => {elements[id].value = value; elements[id].fire('c
 const date = (i, value) => {const campo = rows[i].querySelector('.kit-data'); campo.value = value; campo.fire('change');};
 const time = (i, value) => {const campo = rows[i].querySelector('.kit-janela'); campo.value = value; campo.fire('change');};
 const pay = elements['kit-continuar'];
+const text = node => [node.textContent, ...node.children.map(text)].join(' ');
+const errors = () => text(elements['kit-erros-lista']);
+const submitBlocked = (expected, target) => {
+  let prevented = false;
+  form.fire('submit', {preventDefault() {prevented = true;}});
+  assert.equal(prevented, true, 'Clique e envio pelo teclado impedem compra inválida');
+  assert.equal(pay.disabled, false, 'Botão continua respondendo para explicar a correção');
+  assert.equal(elements['kit-erros'].hidden, false);
+  if (expected) assert.match(errors(), expected);
+  if (target) assert.equal(focused, target);
+};
 (async () => {
   if (cenario === 'restaurada') {
     assert.match(elements['kit-preco'].textContent, /74,80/);
@@ -90,7 +138,7 @@ const pay = elements['kit-continuar'];
   assert.match(elements['kit-agenda-ajuda'].textContent, /opções do plano/);
   assert.match(elements['kit-proximo-passo'].textContent, /opções do plano/);
   await elements['kit-calcular-frete'].fire('click');
-  assert.equal(pay.disabled, true, 'Frete sozinho não libera opções incompletas');
+  submitBlocked(/Escolha o/, elements['kit-suco'] || elements['kit-escolha-' + cfg.grupos[0]]);
   if (cenario === 'sem_suco' || cenario === 'grupo_unico') {
     if (cenario === 'sem_suco') escolha('kit-escolha-croissant', 'receita:4');
     escolha('kit-escolha-sourdough', 'receita:9');
@@ -111,20 +159,20 @@ const pay = elements['kit-continuar'];
     for (const [id, valor] of [['kit-suco','11'], ['kit-escolha-croissant','receita:4'],
       ['kit-escolha-sourdough','receita:9']]) {
       escolha(id, '');
-      assert.equal(pay.disabled, true);
+      submitBlocked(/Escolha o/, elements[id]);
+      if (id !== 'kit-suco') assert.match(elements[id].getAttribute('aria-describedby'), /kit-opcoes-ajuda/);
       assert.equal(rows[0].querySelector('.kit-data').disabled, true);
       assert.equal(elements['adicionar-data'].disabled, true);
       assert.equal(elements['kits-subtotal'].textContent, 'Escolha as opções');
       assert.equal(elements['kits-total'].textContent, '—');
       assert.equal(elements['kit-preco'].textContent, 'A partir de R$ 67,80 por kit');
-      let prevented = false;
-      form.fire('submit', {preventDefault() {prevented = true;}});
-      assert.equal(prevented, true, 'Envio por teclado também exige todas as opções');
       escolha(id, valor); time(0, '10:00–11:00');
       assert.equal(pay.disabled, false);
+      assert.notEqual(elements[id].getAttribute('aria-invalid'), 'true');
+      if (id !== 'kit-suco') assert.equal(elements[id].getAttribute('aria-describedby'), 'kit-opcoes-ajuda');
     }
     escolha('kit-escolha-sourdough', 'produto:999');
-    assert.equal(pay.disabled, true, 'Combinação inexistente não herda preço do kit');
+    submitBlocked(/combinação não está disponível/);
     assert.equal(elements['kits-total'].textContent, '—');
     assert.equal(fetches, 1);
     return;
@@ -137,13 +185,13 @@ const pay = elements['kit-continuar'];
   assert.match(elements['kits-total'].textContent, /170,10/);
   assert.equal(rows[0].querySelector('.kit-data').value, '2026-09-15');
   assert.equal(rows[0].querySelector('.kit-data').min, '2026-09-16');
-  assert.match(rows[0].querySelector('.kit-dia-aviso').textContent, /opções do plano/);
+  assert.match(rows[0].querySelector('.kit-dia-aviso').textContent, /data entre/);
   assert.equal(rows[0].querySelector('.kit-janela').value, '');
-  assert.equal(pay.disabled, true, 'Nova antecedência invalida a primeira entrega');
+  submitBlocked(/Entrega 1.*data entre/i, rows[0].querySelector('.kit-data'));
   date(0, '2026-09-17');
   assert.deepEqual(rows[0].querySelector('.kit-janela').children.map(o => o.value), ['', '12:00–13:00']);
   time(0, '11:00–12:00');
-  assert.equal(pay.disabled, true, 'Distância continua restringindo horários da nova combinação');
+  submitBlocked(/horário disponível/i);
   time(0, '12:00–13:00'); time(1, '12:00–13:00');
   assert.equal(pay.disabled, false);
   escolha('kit-suco', '12');
@@ -158,7 +206,7 @@ const pay = elements['kit-continuar'];
   assert.deepEqual(JSON.parse(elements['agenda-json'].value), [
     {data:'2026-09-17',janela:'12:00–13:00'}, {data:'2026-09-22',janela:'12:00–13:00'}]);
   campos.numero.fire('input');
-  assert.equal(pay.disabled, true, 'Editar endereço continua invalidando o frete');
+  submitBlocked(/fretes/i, elements['kit-calcular-frete']);
 })().catch(e => {console.error(e); process.exit(1);});
 '''
 

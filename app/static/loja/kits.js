@@ -15,11 +15,105 @@
   const escolhas = grupos.map(grupo => document.getElementById('kit-escolha-' + grupo));
   const precoKit = document.getElementById('kit-preco');
   const precoInicial = precoKit ? precoKit.textContent : '';
+  const errosBox = document.getElementById('kit-erros');
+  const errosLista = document.getElementById('kit-erros-lista');
+  const textoContinuar = continuar.textContent;
+  const avisosCampos = new Map();
+  let tentouContinuar = false;
+  let errosAgenda = [];
+  let sequenciaEntrega = 0;
+  let sequenciaAviso = 0;
+  let assinaturaPendencias = '';
   let frete = null;
   let distancia = null;
   let versaoEndereco = 0;
   let enviando = false;
   let agendaValida = false;
+
+  function diaCurto(valor) { return valor.split('-').reverse().join('/'); }
+  function irPara(input) {
+    const destino = input && !input.disabled ? input : errosBox;
+    destino.focus({preventScroll: true});
+    destino.scrollIntoView({behavior: 'auto', block: 'center'});
+  }
+  function pendencias() {
+    const erros = [];
+    const incluir = (input, mensagem) => erros.push({campo: input, mensagem});
+    const opcoes = [suco, ...escolhas].filter(Boolean);
+    opcoes.forEach(input => {
+      if (!input.value) incluir(input, input === suco ? 'Escolha o suco do seu plano.'
+        : 'Escolha o ' + input.getAttribute('data-grupo') + ' do seu plano.');
+    });
+    if (!configuracao() && !erros.length) {
+      incluir(opcoes[0] || continuar, 'Esta combinação não está disponível. Revise as opções do plano.');
+    }
+    erros.push(...errosAgenda);
+    const rotulos = {cep: 'o CEP', logradouro: 'a rua ou avenida', numero: 'o número do endereço',
+      bairro: 'o bairro', cidade: 'a cidade', uf: 'o estado (UF)', nome: 'seu nome',
+      sobrenome: 'seu sobrenome', email: 'seu e-mail', telefone: 'seu telefone com DDD', cpf: 'seu CPF ou CNPJ'};
+    Object.entries(rotulos).forEach(([nome, rotulo]) => {
+      const input = campo(nome);
+      if (input.validity.valueMissing || !input.value.trim()) incluir(input, 'Informe ' + rotulo + '.');
+      else if (!input.validity.valid) incluir(input, nome === 'email'
+        ? 'Confira seu e-mail. Use o formato nome@exemplo.com.'
+        : nome === 'numero' ? 'Informe apenas números no número do endereço.' : 'Confira ' + rotulo + '.');
+    });
+    if (frete === null) incluir(document.getElementById('kit-calcular-frete'),
+      'Calcule os fretes para o endereço informado antes de continuar.');
+    if (!campo('aceite_lgpd').checked) incluir(campo('aceite_lgpd'),
+      'Leia e aceite os termos de compra e a política de privacidade para continuar.');
+    const camposAgenda = new Set(linhas().flatMap(row =>
+      [row.querySelector('.kit-data'), row.querySelector('.kit-janela')]));
+    Array.from(form.elements).forEach(input => {
+      // Agenda errors are contextual: fix an unavailable day before asking for its time.
+      if (!camposAgenda.has(input) && input.willValidate && !input.validity.valid
+          && !erros.some(erro => erro.campo === input)) {
+        incluir(input, input.validationMessage || 'Confira este campo antes de continuar.');
+      }
+    });
+    return erros;
+  }
+  function mostrarPendencias() {
+    const erros = pendencias();
+    const assinatura = JSON.stringify(erros.map(erro => [erro.campo.id, erro.mensagem]));
+    // Do not rebuild the live alert on every keystroke while errors are unchanged.
+    if (assinatura === assinaturaPendencias) return erros;
+    assinaturaPendencias = assinatura;
+    avisosCampos.forEach((info, input) => {
+      input.removeAttribute('aria-invalid');
+      if (info.descricao) input.setAttribute('aria-describedby', info.descricao);
+      else input.removeAttribute('aria-describedby');
+      info.aviso.hidden = true;
+    });
+    errosLista.replaceChildren();
+    erros.forEach(({campo: input, mensagem}) => {
+      let info = avisosCampos.get(input);
+      if (!info) {
+        const avisoCampo = document.createElement('p');
+        avisoCampo.className = 'kit-campo-erro';
+        sequenciaAviso += 1;
+        avisoCampo.id = 'kit-campo-erro-' + sequenciaAviso;
+        // Keep the checkbox label and its links intact.
+        const ancora = input.type === 'checkbox' ? input.closest('label') : input;
+        ancora.insertAdjacentElement('afterend', avisoCampo);
+        info = {aviso: avisoCampo, descricao: input.getAttribute('aria-describedby') || ''};
+        avisosCampos.set(input, info);
+      }
+      info.aviso.textContent = mensagem;
+      info.aviso.hidden = false;
+      input.setAttribute('aria-invalid', 'true');
+      input.setAttribute('aria-describedby', [info.descricao, info.aviso.id].filter(Boolean).join(' '));
+      const item = document.createElement('li');
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.textContent = mensagem;
+      link.addEventListener('click', () => irPara(input));
+      item.appendChild(link);
+      errosLista.appendChild(item);
+    });
+    errosBox.hidden = !erros.length;
+    return erros;
+  }
 
   function linhas() { return Array.from(agenda.querySelectorAll('.kit-dia')); }
   function configuracao() {
@@ -59,6 +153,9 @@
     const lista = linhas();
     const dias = lista.map(r => r.querySelector('.kit-data').value);
     const mapa = janelasDisponiveis(atual);
+    errosAgenda = [];
+    if (atual && !lista.length) errosAgenda.push({campo: document.getElementById('adicionar-data'),
+      mensagem: 'Adicione pelo menos uma entrega e escolha o dia e o horário.'});
     agendaValida = lista.length > 0 && Boolean(atual);
     lista.forEach((r, index) => {
       const data = r.querySelector('.kit-data');
@@ -66,14 +163,24 @@
       const opcoes = mapa[data.value] || [];
       const erroData = data.value && dias.filter(d => d === data.value).length > 1
         ? 'Cada dia corresponde a um kit. Escolha uma data diferente.'
-        : (data.value && atual && (!opcoes.length || data.value < atual.dataMin || data.value > atual.dataMax)
-          ? (grupos.length ? 'Escolha uma data disponível para as opções do plano.'
-            : 'Escolha uma data disponível para este kit e suco.') : '');
+        : data.value && atual && (data.value < atual.dataMin || data.value > atual.dataMax)
+          ? 'Escolha uma data entre ' + diaCurto(atual.dataMin) + ' e ' + diaCurto(atual.dataMax) + '.'
+          : data.value && atual && !opcoes.length
+            ? 'Não há horários disponíveis nesta data para seu plano e região. Escolha outro dia.' : '';
       const erroJanela = janela.value && !opcoes.includes(janela.value)
         ? 'Escolha um horário disponível para esta entrega.' : '';
       data.setCustomValidity(erroData);
       janela.setCustomValidity(erroJanela);
       if (!data.value || erroData || !janela.value || erroJanela) agendaValida = false;
+      if (atual) {
+        if (!data.value || erroData) errosAgenda.push({campo: data,
+          mensagem: 'Entrega ' + (index + 1) + ': ' + (erroData || 'escolha a data de entrega.')});
+        else if (!janela.value || erroJanela) errosAgenda.push({campo: janela,
+          mensagem: 'Entrega ' + (index + 1) + ' (' + diaCurto(data.value) + '): '
+            + (erroJanela || 'escolha o horário de entrega.')});
+      }
+      data.setAttribute('aria-label', 'Dia da entrega ' + (index + 1));
+      janela.setAttribute('aria-label', 'Horário da entrega ' + (index + 1));
       const numero = r.querySelector('.kit-dia-numero');
       if (numero) numero.textContent = String(index + 1).padStart(2, '0');
       const titulo = r.querySelector('.kit-dia-titulo');
@@ -81,7 +188,7 @@
       const feedback = r.querySelector('.kit-dia-aviso');
       if (feedback) {
         feedback.textContent = erroData || erroJanela;
-        feedback.hidden = !(erroData || erroJanela);
+        feedback.hidden = tentouContinuar || !(erroData || erroJanela);
       }
     });
     const quantidade = lista.length;
@@ -93,7 +200,8 @@
     document.getElementById('kits-fretes').textContent = frete === null ? 'Informe seu endereço' : money(frete * quantidade);
     document.getElementById('kits-total').textContent = frete === null || !atual ? '—' : money(valorProdutos + frete * quantidade);
     document.getElementById('adicionar-data').disabled = !atual || quantidade >= 31;
-    continuar.disabled = enviando || !agendaValida || frete === null;
+    // An incomplete form must still respond to a tap or keyboard submission.
+    continuar.disabled = enviando;
     const ajuda = document.getElementById('kit-agenda-ajuda');
     if (ajuda) ajuda.textContent = !atual
       ? (grupos.length ? 'Escolha as opções do plano para liberar os dias.' : 'Escolha o suco para liberar os dias.')
@@ -123,14 +231,22 @@
     document.getElementById('agenda-json').value = JSON.stringify(lista.map(r => ({
       data: r.querySelector('.kit-data').value, janela: r.querySelector('.kit-janela').value
     })));
+    if (tentouContinuar) mostrarPendencias();
   }
   function adicionar(data, janela) {
     if (linhas().length >= 31) return;
     const row = template.content.firstElementChild.cloneNode(true);
+    sequenciaEntrega += 1;
+    row.querySelector('.kit-data').id = 'kit-data-' + sequenciaEntrega;
+    row.querySelector('.kit-janela').id = 'kit-janela-' + sequenciaEntrega;
     row.querySelector('.kit-data').value = data || '';
     row.querySelector('.kit-data').addEventListener('change', () => { horarios(row); atualizar(); });
     row.querySelector('.kit-janela').addEventListener('change', atualizar);
-    row.querySelector('.kit-remover').addEventListener('click', () => { row.remove(); atualizar(); });
+    row.querySelector('.kit-remover').addEventListener('click', () => {
+      avisosCampos.delete(row.querySelector('.kit-data'));
+      avisosCampos.delete(row.querySelector('.kit-janela'));
+      row.remove(); atualizar();
+    });
     agenda.appendChild(row);
     horarios(row, janela);
     atualizar();
@@ -215,14 +331,30 @@
     } finally { botao.disabled = false; atualizar(); }
   });
   form.addEventListener('submit', event => {
+    if (enviando) { event.preventDefault(); return; }
+    tentouContinuar = true;
     atualizar();
-    if (enviando || !agendaValida || frete === null || !form.reportValidity()) {
+    const erros = pendencias();
+    if (erros.length) {
       event.preventDefault();
+      irPara(erros[0].campo);
       return;
     }
     enviando = true;
     continuar.disabled = true;
     continuar.textContent = 'Preparando sua compra…';
+  });
+  // Native validation otherwise prevents submit from reaching our error summary.
+  // Constraints remain on the fields and are checked explicitly above.
+  form.noValidate = true;
+  ['input', 'change'].forEach(evento => form.addEventListener(evento, () => {
+    if (tentouContinuar && !enviando) atualizar();
+  }));
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted) return;
+    enviando = false;
+    continuar.textContent = textoContinuar;
+    atualizar();
   });
   (Array.isArray(cfg.agenda) && cfg.agenda.length ? cfg.agenda
     : [{data: suco || grupos.length ? '' : (Object.keys(cfg.janelas || {})[0] || ''), janela: ''}])

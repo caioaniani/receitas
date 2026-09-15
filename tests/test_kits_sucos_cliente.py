@@ -138,8 +138,10 @@ def test_navegador_recalcula_preco_e_datas_ao_trocar_suco(app, kit_sucos, tmp_pa
     harness = r'''
 const vm = require('node:vm'), fs = require('node:fs'), assert = require('node:assert/strict');
 const cfg = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')), [laranja, verde] = Object.keys(cfg.sucos);
-function element() { return {value:'', textContent:'', disabled:false, handlers:{},
+function element() { return {value:'', textContent:'', disabled:false, handlers:{}, attributes:{},
   addEventListener(n, f) {this.handlers[n] = f;}, reportValidity() {return true;},
+  setAttribute(n, v) {this.attributes[n] = String(v);}, getAttribute(n) {return this.attributes[n] ?? null;},
+  removeAttribute(n) {delete this.attributes[n];},
   setCustomValidity(v) {this.validacao = v;}, focus() {}, fire(n) {return this.handlers[n].call(this);}}; }
 const rows = [], elements = {}, campos = {};
 ['cep','logradouro','numero','complemento','bairro','cidade','uf','csrf_token'].forEach(n => campos[n] = element());
@@ -155,6 +157,7 @@ for (const n of ['kit-continuar','frete-aviso','kits-quantidade','kits-subtotal'
   'adicionar-data','agenda-json','cep-aviso','kit-calcular-frete','kit-suco','kit-preco']) elements[n] = element();
 elements['kit-preco'].textContent = 'A partir de R$ 67,80 por kit';
 const sandbox = {document:{getElementById:id => elements[id]},
+  window:{addEventListener() {}},
   Option:function(text,value) {this.text = text; this.value = value;},
   fetch:async () => ({ok:true,json:async () => ({ok:true,valor:15.25,distancia_km:3.4})})};
 vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), sandbox);
@@ -163,7 +166,7 @@ vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), sandbox);
   assert.equal(elements['kits-subtotal'].textContent, 'Escolha o suco');
   assert.equal(rows[0].querySelector('.kit-data').disabled, true);
   await elements['kit-calcular-frete'].fire('click');
-  assert.equal(elements['kit-continuar'].disabled, true);
+  assert.equal(elements['kit-continuar'].disabled, false, 'Continuar responde ao toque mesmo faltando escolhas');
   elements['kit-suco'].value = laranja; elements['kit-suco'].fire('change');
   const dia = rows[0].querySelector('.kit-data');
   assert.equal(dia.disabled, false); assert.equal(dia.min, '2026-09-14');
@@ -178,10 +181,10 @@ vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), sandbox);
   assert.match(elements['kits-total'].textContent, /170,10/);
   assert.match(elements['kit-preco'].textContent, /69,80/);
   assert.equal(dia.min, '2026-09-16'); assert.equal(dia.value, '2026-09-15');
-  assert.match(dia.validacao, /data disponível/);
+  assert.match(dia.validacao, /data entre/);
   assert.equal(rows[0].querySelector('.kit-janela').value, '');
   elements['kit-suco'].value = ''; elements['kit-suco'].fire('change');
-  assert.equal(elements['kit-continuar'].disabled, true);
+  assert.equal(elements['kit-continuar'].disabled, false, 'Resumo explica pendência sem botão inerte');
   assert.equal(elements['kits-total'].textContent, '—');
   assert.equal(elements['kit-preco'].textContent, 'A partir de R$ 67,80 por kit');
 })().catch(e => {console.error(e); process.exit(1);});

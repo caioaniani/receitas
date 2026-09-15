@@ -189,3 +189,21 @@ kit. Não altera quantidades, sabores oferecidos, preços, estoque ou compras fe
 Curadoria aprovada pelo dono: Essencial = pão francês, suco e cookies;
 Artesanal = sourdough, croissant e suco; Completo = croissants, salada de frutas
 e granola. É cadastro, não uma regra baseada no nome ou no ID do plano.
+
+## Pendências antes do pagamento
+
+O botão **Continuar para pagamento** responde ao toque e ao Enter mesmo com o
+formulário incompleto. A tentativa mostra um resumo clicável das pendências,
+destaca o campo e posiciona o foco na primeira correção. Cada erro da agenda
+identifica a entrega e, quando possível, a data. Uma data indisponível deve ser
+corrigida antes de escolher seu horário. Os valores preenchidos são preservados.
+
+A validação impede o envio enquanto faltar uma opção do plano, uma agenda
+válida, frete atualizado, dados obrigatórios válidos ou aceite dos termos.
+O botão fica desabilitado somente durante o envio; ao voltar pelo histórico
+do navegador, é reabilitado sem apagar a agenda. A validação do servidor,
+preços, reservas e pagamentos permanecem inalterados.
+
+Esta alteração de apresentação não exige migração ou variável de ambiente.
+Para reverter, reverta apenas o commit de feedback do checkout; não altere
+cadastros, compras nem a configuração das fotos.

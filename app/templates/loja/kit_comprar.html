@@ -118,10 +118,15 @@
         <div class="linha-total grande"><span>Total da compra</span><strong id="kits-total">—</strong></div>
       </div>
       <p class="kits-summary-note">Pagamento único para todas as datas. Sem assinatura ou renovação automática.</p>
-      <label class="kits-consent"><input type="checkbox" name="aceite_lgpd" value="1" required {{ 'checked' if form.get('aceite_lgpd') }}><span>Li e aceito os
+      <label class="kits-consent"><input type="checkbox" name="aceite_lgpd" id="kit-aceite" value="1" required {{ 'checked' if form.get('aceite_lgpd') }}><span>Li e aceito os
         <a href="{{ url_for('loja.termos') }}" target="_blank" rel="noopener">termos de compra</a> e a
         <a href="{{ url_for('loja.privacidade') }}" target="_blank" rel="noopener">política de privacidade</a>.</span></label>
       <p id="kit-proximo-passo" class="kits-inline-note" role="status"></p>
+      <div id="kit-erros" class="kits-validation-summary" role="alert" tabindex="-1" hidden>
+        <strong>Falta pouco para ir ao pagamento</strong>
+        <p>Revise os campos abaixo. Toque em uma pendência para corrigir.</p>
+        <ul id="kit-erros-lista"></ul>
+      </div>
       <button type="submit" class="btn-loja" id="kit-continuar" disabled>Continuar para pagamento →</button>
       <p class="kits-secure-note">Pix ou cartão na próxima etapa.</p>
     </aside>
