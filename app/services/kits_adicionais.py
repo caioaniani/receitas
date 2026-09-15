@@ -91,6 +91,9 @@ def catalogo(*, base=None, selecionados=()):
         oferta = {'kind': item['kind'], 'id': item['id'], 'nome': item['nome'],
                   'chave': f'{item["kind"]}:{item["id"]}',
                   'precoCentavos': int(item['preco'] * 100),
+                  # Capa canônica já carregada pela vitrine: Dropbox, URL
+                  # legada ou vazio. Não consulta galeria nem blob por item.
+                  'imagem': cat.get('imagem') or '',
                   'comp': item.get('comp'), 'descricao': ''}
         if item.get('comp'):
             oferta['descricao'] = loja_menu.resumo(

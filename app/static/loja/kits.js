@@ -31,7 +31,8 @@
   let agendaValida = false;
   const ofertas = new Map((cfg.adicionais || []).map(item => [item.chave, item]));
   const extras = new Map((cfg.adicionaisSelecionados || []).map(item => [item.kind + ':' + item.id, {...item}]));
-  const produtoExtra = document.getElementById('kit-adicional-produto');
+  const dialogExtras = document.getElementById('kit-adicionais-dialog');
+  const abrirExtras = document.getElementById('kit-adicional-abrir');
   const quantidadeExtra = document.getElementById('kit-adicional-qtd');
   const listaExtras = document.getElementById('kit-adicionais-lista');
   const avisoExtra = document.getElementById('kit-adicional-aviso');
@@ -354,30 +355,96 @@
   escolhas.forEach(escolha => {
     if (escolha) escolha.addEventListener('change', atualizarEscolhas);
   });
-  if (produtoExtra) {
-    produtoExtra.addEventListener('change', () => {
-      const oferta = ofertas.get(produtoExtra.value);
-      document.getElementById('kit-adicional-descricao').textContent = oferta?.descricao
-        ? 'Composição incluída: ' + oferta.descricao : '';
-      avisoExtra.textContent = '';
+  if (dialogExtras && abrirExtras) {
+    const cards = Array.from(dialogExtras.querySelectorAll('.kits-product-card'));
+    const busca = document.getElementById('kit-adicional-busca');
+    const incluir = document.getElementById('kit-adicional-incluir');
+    const mensagem = document.getElementById('kit-adicional-dialog-aviso');
+    let selecionado = null;
+    const normalizar = valor => valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+    function selecionar(chave) {
+      selecionado = ofertas.get(chave) || null;
+      cards.forEach(card => {
+        const ativo = card.dataset.chave === chave;
+        card.setAttribute('aria-pressed', String(ativo));
+        card.querySelector('.kits-product-action').textContent = ativo ? 'Selecionado' : 'Selecionar';
+      });
+      document.getElementById('kit-adicional-selecao').textContent = selecionado
+        ? selecionado.nome + ' · ' + money(selecionado.precoCentavos) : 'Selecione um produto acima';
+      document.getElementById('kit-adicional-descricao').textContent = selecionado?.descricao
+        ? 'Composição incluída: ' + selecionado.descricao : '';
+      quantidadeExtra.value = '1';
+      quantidadeExtra.disabled = !selecionado;
+      incluir.disabled = !selecionado;
+      mensagem.textContent = '';
+    }
+    function filtrar() {
+      const termos = normalizar(busca.value).trim().split(/\s+/).filter(Boolean);
+      cards.forEach(card => {
+        const nome = normalizar(ofertas.get(card.dataset.chave)?.nome || '');
+        card.hidden = !termos.every(termo => nome.includes(termo));
+      });
+      document.getElementById('kit-adicional-vazio').hidden = cards.some(card => !card.hidden);
+    }
+    cards.forEach(card => card.addEventListener('click', () => selecionar(card.dataset.chave)));
+    busca.addEventListener('input', filtrar);
+    abrirExtras.addEventListener('click', () => {
+      selecionar(null);
+      busca.value = ''; filtrar();
+      // Defer image requests until the customer opens the picker.
+      dialogExtras.querySelectorAll('img[data-src]').forEach(img => {
+        img.addEventListener('error', () => {
+          img.hidden = true;
+          img.parentElement.querySelector('.kits-product-no-photo').hidden = false;
+        }, {once: true});
+        img.src = img.dataset.src;
+        img.removeAttribute('data-src');
+      });
+      dialogExtras.showModal();
+      document.body.classList.add('kits-dialog-open');
+      busca.focus();
     });
-    document.getElementById('kit-adicional-incluir').addEventListener('click', () => {
-      const oferta = ofertas.get(produtoExtra.value);
+    document.getElementById('kit-adicional-fechar').addEventListener('click', () => dialogExtras.close());
+    dialogExtras.addEventListener('keydown', event => {
+      // Search inputs can consume Escape to clear their value instead of closing.
+      if (event.key === 'Escape') { event.preventDefault(); dialogExtras.close(); }
+      if (event.key === 'Tab') {
+        const controles = Array.from(dialogExtras.querySelectorAll('button:not([disabled]), input:not([disabled])'))
+          .filter(input => !input.closest('[hidden]'));
+        const primeiro = controles[0], ultimo = controles.at(-1);
+        if ((!event.shiftKey && document.activeElement === ultimo)
+            || (event.shiftKey && document.activeElement === primeiro)) {
+          event.preventDefault();
+          (event.shiftKey ? ultimo : primeiro).focus();
+        }
+      }
+    });
+    dialogExtras.addEventListener('close', () => {
+      document.body.classList.remove('kits-dialog-open');
+      abrirExtras.focus({preventScroll: true});
+    });
+    dialogExtras.addEventListener('click', event => {
+      if (event.target !== dialogExtras) return;
+      const rect = dialogExtras.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right
+          || event.clientY < rect.top || event.clientY > rect.bottom) dialogExtras.close();
+    });
+    incluir.addEventListener('click', () => {
+      const oferta = selecionado;
       const qtd = Number(quantidadeExtra.value);
-      if (!oferta) { avisoExtra.textContent = 'Escolha um produto para adicionar.'; produtoExtra.focus(); return; }
+      if (!oferta) { mensagem.textContent = 'Escolha um produto para adicionar.'; busca.focus(); return; }
       if (!/^\d+$/.test(quantidadeExtra.value) || !Number.isInteger(qtd) || qtd < 1 || qtd > 999) {
-        avisoExtra.textContent = 'Informe uma quantidade inteira entre 1 e 999.'; quantidadeExtra.focus(); return;
+        mensagem.textContent = 'Informe uma quantidade inteira entre 1 e 999.'; quantidadeExtra.focus(); return;
       }
       const anterior = extras.get(oferta.chave);
       if ((!anterior && extras.size >= cfg.maxAdicionais) || (anterior?.qtd || 0) + qtd > 999) {
-        avisoExtra.textContent = 'Limite atingido. Ajuste os produtos e as quantidades já adicionados.'; return;
+        mensagem.textContent = 'Limite atingido. Ajuste os produtos e as quantidades já adicionados.'; return;
       }
       extras.set(oferta.chave, {kind: oferta.kind, id: oferta.id, qtd: (anterior?.qtd || 0) + qtd,
         ...(oferta.comp ? {comp: oferta.comp} : {})});
       renderizarExtras(); atualizarEscolhas();
       avisoExtra.textContent = oferta.nome + ' adicionado a cada entrega.';
-      produtoExtra.value = ''; quantidadeExtra.value = '1';
-      document.getElementById('kit-adicional-descricao').textContent = '';
+      dialogExtras.close();
     });
   }
   const enderecoCampos = ['cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];

@@ -65,17 +65,7 @@
         <div class="kits-extras" aria-labelledby="kit-adicionais-titulo">
           <h3 id="kit-adicionais-titulo">Quer acrescentar algum produto?</h3>
           <p class="kits-inline-note">Adicione o que quiser ao seu kit. As quantidades abaixo serão incluídas em <strong>cada entrega</strong>, além dos itens que já vêm na opção.</p>
-          <div class="kits-extra-picker">
-            <label for="kit-adicional-produto">Produto
-              <select id="kit-adicional-produto" aria-describedby="kit-adicional-descricao">
-                <option value="">Escolha um produto</option>
-                {% for adicional in adicionais %}<option value="{{ adicional.chave }}">{{ adicional.nome }} — R$ {{ '%.2f'|format(adicional.precoCentavos / 100)|replace('.', ',') }}</option>{% endfor %}
-              </select>
-            </label>
-            <label for="kit-adicional-qtd">Quantidade por kit<input id="kit-adicional-qtd" type="number" min="1" max="999" step="1" value="1" inputmode="numeric"></label>
-            <button type="button" id="kit-adicional-incluir" class="btn-loja-secundario">+ Adicionar produto</button>
-          </div>
-          <p id="kit-adicional-descricao" class="kits-inline-note"></p>
+          <button type="button" id="kit-adicional-abrir" class="btn-loja-secundario" aria-haspopup="dialog" aria-controls="kit-adicionais-dialog">+ Adicionar produto</button>
           <p id="kit-adicional-aviso" class="kits-inline-note" role="status"></p>
           <ul id="kit-adicionais-lista" class="kits-extras-list" tabindex="-1"></ul>
           <p id="kit-adicionais-total" class="kits-inline-note" aria-live="polite"></p>
@@ -152,6 +142,44 @@
       <p class="kits-secure-note">Pix ou cartão na próxima etapa.</p>
     </aside>
   </form>
+  {% if tem_adicionais %}
+  <dialog id="kit-adicionais-dialog" class="kits-products-dialog" aria-labelledby="kit-adicionais-dialog-titulo" aria-describedby="kit-adicionais-dialog-ajuda">
+    <header class="kits-products-header">
+      <div><h2 id="kit-adicionais-dialog-titulo">Acrescente ao seu café</h2>
+        <p id="kit-adicionais-dialog-ajuda">Escolha um produto para incluir em cada entrega.</p></div>
+      <button type="button" id="kit-adicional-fechar" class="kits-products-close" aria-label="Fechar produtos adicionais">×</button>
+    </header>
+    <div class="kits-products-search">
+      <label for="kit-adicional-busca">Buscar produto</label>
+      <input type="search" id="kit-adicional-busca" placeholder="Digite o nome do produto" autocomplete="off">
+    </div>
+    <div class="kits-products-scroll">
+      <div class="kits-products-grid" aria-label="Produtos disponíveis">
+        {% for adicional in adicionais %}
+        <button type="button" class="kits-product-card" data-chave="{{ adicional.chave }}" aria-pressed="false">
+          <span class="kits-product-photo">
+            {% if adicional.imagem %}<img data-src="{{ adicional.imagem }}" alt="" width="160" height="160" loading="lazy" decoding="async">{% endif %}
+            <span class="kits-product-no-photo" {% if adicional.imagem %}hidden{% endif %}>Sem foto</span>
+          </span>
+          <span class="kits-product-name">{{ adicional.nome }}</span>
+          <span class="kits-product-price">R$ {{ '%.2f'|format(adicional.precoCentavos / 100)|replace('.', ',') }}</span>
+          <span class="kits-product-action" aria-hidden="true">Selecionar</span>
+        </button>
+        {% endfor %}
+      </div>
+      <p id="kit-adicional-vazio" class="kits-products-empty" role="status" hidden>Nenhum produto encontrado. Tente outro nome.</p>
+    </div>
+    <footer class="kits-products-footer">
+      <div class="kits-products-selection" aria-live="polite">
+        <strong id="kit-adicional-selecao">Selecione um produto acima</strong>
+        <p id="kit-adicional-descricao"></p>
+      </div>
+      <label for="kit-adicional-qtd">Quantidade por kit<input id="kit-adicional-qtd" type="number" min="1" max="999" step="1" value="1" inputmode="numeric" disabled></label>
+      <button type="button" id="kit-adicional-incluir" class="btn-loja" disabled>Adicionar ao kit</button>
+      <p id="kit-adicional-dialog-aviso" class="kit-campo-erro" role="alert"></p>
+    </footer>
+  </dialog>
+  {% endif %}
   <noscript><p class="checkout-erros">Ative o JavaScript para escolher as entregas e calcular os fretes.</p></noscript>
   <template id="kit-dia-template">
     <div class="kit-dia">
