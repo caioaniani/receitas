@@ -208,6 +208,7 @@ def test_preco_do_extra_muda_na_cotacao_e_compra_inteira_e_desfeita(kit, extra, 
 def menu(app):
     produto, _ = _menu(db)
     produto.site_ativo = True
+    produto.categoria = 'Mini Pães'
     db.session.commit()
     return produto
 
@@ -335,3 +336,37 @@ def test_um_adicional_despublicado_preserva_todos_para_cliente_remover(app, kit,
     assert compra.valor_total == Decimal('119.10')
     assert all(any(item.produto_id == outro.id for item in entrega.pedido.itens)
                for entrega in compra.entregas)
+
+
+@pytest.mark.parametrize('categoria', [
+    'Cestas', 'Cestas Personalizadas', '  cEsTaS  ', ' CESTAS PERSONALIZADAS ',
+])
+def test_cestas_nao_aparecem_nem_entram_por_post_forjado(app, kit, extra, frete, categoria):
+    extra.categoria = categoria
+    db.session.commit()
+    ofertas = {(it['kind'], it['id']) for it in kits_adicionais.catalogo(base=BASE)}
+    assert ('produto', extra.id) not in ofertas
+    cliente, token, html = _abrir(app, kit)
+    config = json.loads(re.search(r'<script id="kits-config"[^>]*>(.*?)</script>', html, re.S)[1])
+    assert ('produto', extra.id) not in {(it['kind'], it['id']) for it in config['adicionais']}
+    resposta = _post(cliente, kit, token, adicionais_json=json.dumps([_raw(extra)]))
+    assert resposta.status_code == 400
+    assert 'Cestas não podem ser acrescentadas' in resposta.get_data(as_text=True)
+    _vazio()
+    frete.assert_not_called()
+
+
+def test_excluir_cestas_nao_remove_itens_fixos_do_owner(kit, extra, frete):
+    produto_fixo = db.session.get(Produto, kit.itens[1].produto_id)
+    produto_fixo.categoria = 'Cestas'
+    db.session.commit()
+    compra, erros = _comprar(kit, [_raw(extra)])
+    assert not erros and compra is not None
+    for entrega in compra.entregas:
+        assert any(item.produto_id == produto_fixo.id for item in entrega.pedido.itens)
+
+
+def test_menu_da_categoria_cestas_tambem_e_recusado_com_composicao_valida(kit, menu, frete):
+    menu.categoria = 'Cestas'
+    db.session.commit()
+    _recusado(kit, [_raw(menu, comp={str(pi): 5 for pi in _pis(menu)})], frete)

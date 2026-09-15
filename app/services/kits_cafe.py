@@ -65,10 +65,10 @@ def preparar_sucos(ids, itens):
     ]
     opcoes = []
     for item_id in ids:
-        cat = loja_catalogo.por_id_publicado('produto', item_id)
+        cat = loja_catalogo.por_id_venda('produto', item_id)
         if not cat:
             return [], ['Uma opção de suco não está mais à venda no site. Revise o kit.']
-        if cat.get('menu') or loja_menu.eh_menu(Produto.query.get(item_id)):
+        if cat.get('menu'):
             return [], ['As opções de suco devem ser produtos sem menu configurável.']
         normalizados, erros = loja_checkout.montar_itens(
             [*raw_fixos, {'kind': 'produto', 'id': item_id, 'qtd': 1}],
@@ -139,11 +139,10 @@ def preparar_opcoes(selecao, itens, suco_ids=()):
     for grupo in grupos:
         for opcao in grupo['opcoes']:
             kind, item_id = opcao['kind'], opcao['id']
-            cat = loja_catalogo.por_id_publicado(kind, item_id)
+            cat = loja_catalogo.por_id_venda(kind, item_id)
             if not cat:
                 return [], [f'Uma opção de {grupo["nome"]} não está mais à venda no site. Revise o kit.']
-            if (cat.get('menu') or (kind == 'produto'
-                    and loja_menu.eh_menu(Produto.query.get(item_id)))):
+            if cat.get('menu'):
                 return [], ['As opções de croissant e sourdough não podem ser menus configuráveis.']
             normalizados, erros = loja_checkout.montar_itens(
                 [*raw_fixos, {'kind': kind, 'id': item_id, 'qtd': 1}],
@@ -197,11 +196,19 @@ def itens_do_kit(kit, suco_id=None, escolhas=None):
 
 def _validar_composicoes(itens_raw):
     """Não substitui silenciosamente menus antigos pela pré-seleção atual."""
+    from app.services import loja_leitura
+    leitura = loja_leitura.atual()
     for raw in itens_raw:
         if raw['kind'] != 'produto':
             continue
-        produto = Produto.query.get(raw['id'])
         comp = raw.get('comp')
+        if leitura is not None:
+            cat = leitura['catalogo'].get(('produto', raw['id']))
+            if not cat or not cat.get('menu'):
+                if comp:
+                    return ['Um menu do kit deixou de ser configurável. O dono precisa revisá-lo.']
+                continue
+        produto = Produto.query.get(raw['id'])
         if loja_menu.eh_menu(produto):
             if not comp or loja_menu.normalizar(produto, comp) != comp:
                 return ['A composição de um menu mudou. O dono precisa revisar o kit.']
@@ -249,7 +256,7 @@ def catalogo_para_editor():
     catalogo = []
     for publicado in loja_catalogo.produtos_publicados():
         kind, item_id = publicado['kind'], publicado['id']
-        cat = loja_catalogo.por_id_publicado(kind, item_id)
+        cat = loja_catalogo.por_id_venda(kind, item_id)
         if not cat:
             continue
         raw = {'kind': kind, 'id': item_id, 'qtd': 1}
@@ -283,7 +290,7 @@ def preparar_itens(selecao, *, kit=None, atualizar_menus=()):
         if chave in vistos:
             return [], ['Um item foi selecionado mais de uma vez.']
         vistos.add(chave)
-        cat = loja_catalogo.por_id_publicado(kind, item_id)
+        cat = loja_catalogo.por_id_venda(kind, item_id)
         if not cat:
             return [], ['Um item selecionado não está mais à venda no site. Revise o kit.']
         item = {'kind': kind, 'id': item_id, 'qtd': qtd}

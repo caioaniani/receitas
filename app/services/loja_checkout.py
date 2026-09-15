@@ -332,8 +332,12 @@ def _sem_dias_fechados(datas):
     no checkout. Só mexe em dia CADASTRADO como fechado; dia normal passa
     intacto (não vale a pena consultar janela de 14 datas aqui, e o dia de
     HOJE já é filtrado por janela logo acima)."""
-    from app.services import loja_data_especial
-    regras = loja_data_especial.regras_do_periodo(datas)   # 1 query, não N
+    from app.services import loja_data_especial, loja_leitura
+    leitura = loja_leitura.atual()
+    if leitura and all(leitura['inicio'] <= d <= leitura['fim'] for d in datas):
+        regras = leitura['regras']
+    else:
+        regras = loja_data_especial.regras_do_periodo(datas)
     return [d for d in datas
             if not (d in regras and regras[d].fechado)]
 
@@ -370,7 +374,7 @@ def montar_itens(itens_raw, *, dias_disponibilidade=None, base=None):
             continue
         if qtd < 1:
             continue
-        cat = loja_catalogo.por_id_publicado(kind, item_id)
+        cat = loja_catalogo.por_id_venda(kind, item_id)
         if not cat or not cat.get('preco'):
             avisos.append('Um item saiu de catálogo e foi removido do pedido.')
             continue

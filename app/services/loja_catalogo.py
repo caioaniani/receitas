@@ -286,7 +286,10 @@ def _saldo_para_dia(kind, item_id, data, *, saldos_dia_cache=None):
 
     `saldos_dia_cache` evita re-querar o plano em loop (anotar_esgotado
     processa N itens)."""
-    from app.services import loja_plano_dia
+    from app.services import loja_leitura, loja_plano_dia
+    leitura = loja_leitura.atual()
+    if leitura and leitura['inicio'] <= data <= leitura['fim']:
+        return leitura['saldos'].get(data, {}).get((kind, item_id))
     if saldos_dia_cache is None:
         saldos_dia_cache = {}
     if data not in saldos_dia_cache:
@@ -462,6 +465,10 @@ def item_e_sob_encomenda(kind, item_id):
     RESPEITA o plano-do-dia como qualquer item — decisao do dono, SUBSTITUI
     o "fora do plano" de 21/07).
     Fonte unica pra o checkout/reserva/pagamento/previsao consultarem."""
+    from app.services import loja_leitura
+    leitura = loja_leitura.atual()
+    if leitura and (kind, item_id) in leitura['catalogo']:
+        return bool(leitura['catalogo'][(kind, item_id)].get('sob_encomenda'))
     if kind == 'receita':
         r = Receita.query.get(item_id)
         return bool(r and getattr(r, 'sob_encomenda', False))
@@ -484,16 +491,21 @@ def eh_personalizada(item):
     return cat.strip().lower() == CATEGORIA_PERSONALIZADA.lower()
 
 
+def eh_cesta(item):
+    """Categorias de cestas não entram como adicionais de outra composição."""
+    categoria = (item.get('categoria') or '') if isinstance(item, dict) else (
+        getattr(item, 'categoria', '') or '')
+    return categoria.strip().casefold() in {'cestas', CATEGORIA_PERSONALIZADA.casefold()}
+
+
 def itens_para_montar(excluir_item=None):
     """Lista os itens publicados que o cliente pode adicionar pra montar
     uma cesta personalizada. EXCLUI categorias 'Cestas Personalizadas' e
     'Cestas' (pra não meter cesta dentro de cesta) e o próprio item de
     referência (se passado)."""
-    excluir_cats = {CATEGORIA_PERSONALIZADA.lower(), 'cestas'}
     out = []
     for it in produtos_publicados():
-        cat = (it.get('categoria') or '').strip().lower()
-        if cat in excluir_cats:
+        if eh_cesta(it):
             continue
         # MENU configurável nunca entra "dentro" de uma cesta personalizada:
         # ele é um menu de 30 unidades que o cliente MONTA, não um item
@@ -557,6 +569,15 @@ def galeria(kind, item_id, capa=None):
               .all())
     urls.extend(f.dropbox_url for f in extras if f.dropbox_url)
     return urls
+
+
+def por_id_venda(kind, item_id):
+    """Dados públicos para validar venda; o render dos kits dispensa galeria/detalhes."""
+    from app.services import loja_leitura
+    leitura = loja_leitura.atual()
+    if leitura is not None:
+        return leitura['catalogo'].get((kind, item_id))
+    return por_id_publicado(kind, item_id)
 
 
 def por_id_publicado(kind, item_id):

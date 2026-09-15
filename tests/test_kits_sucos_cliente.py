@@ -115,8 +115,8 @@ def test_agenda_de_cada_suco_respeita_sua_antecedencia(app, kit_sucos):
     db.session.commit()
     _, _, html = _abrir(app, kit)
     config = _config(html)
-    normal = config['sucos'][str(laranja.id)]
-    encomenda = config['sucos'][str(verde.id)]
+    normal = config['calendarios'][str(config['sucos'][str(laranja.id)]['leadDias'])]
+    encomenda = config['calendarios'][str(config['sucos'][str(verde.id)]['leadDias'])]
     assert normal['dataMin'] == '2026-09-14'
     assert encomenda['dataMin'] == '2026-09-16'
     assert '2026-09-15' in normal['janelas']

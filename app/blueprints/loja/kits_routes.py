@@ -9,7 +9,7 @@ from flask import abort, redirect, render_template, request, session, url_for
 from app.blueprints.loja import loja_bp
 from app.extensions import limiter
 from app.models import CompraKit, KitCafe
-from app.services import compra_kits, kits_adicionais, kits_cafe, kits_fotos, loja_checkout
+from app.services import compra_kits, kits_adicionais, kits_cafe, kits_fotos, loja_checkout, loja_leitura
 from app.utils import agora
 
 
@@ -25,6 +25,11 @@ def texto_opcao_cafe(texto):
 
 @loja_bp.route('/kits-cafe')
 def kits_catalogo():
+    with loja_leitura.catalogo_em_lote(dias=compra_kits.DIAS_AGENDA_KITS):
+        return _render_catalogo()
+
+
+def _render_catalogo():
     from app.blueprints.loja.routes import _em_teste
     cards = []
     for kit in kits_cafe.publicados():
@@ -108,7 +113,8 @@ def _contexto(kit, form=None, agenda=None, erros=None):
     escolhas = {}
     for suco in sucos:
         escolhas[str(suco['id'])] = {
-            **_calendario([*raw_fixos, {'kind': 'produto', 'id': suco['id']}], base, calendarios),
+            'leadDias': _calendario(
+                [*raw_fixos, {'kind': 'produto', 'id': suco['id']}], base, calendarios)['leadDias'],
             'precoCentavos': int((preco_fixo + suco['preco']) * 100),
         }
     combinacoes = {}
@@ -124,7 +130,7 @@ def _contexto(kit, form=None, agenda=None, erros=None):
             raw.extend({'kind': o['kind'], 'id': o['id']} for o in opcoes)
             chave = '|'.join([str(suco['id']), *(o['chave'] for o in opcoes)])
             combinacoes[chave] = {
-                **_calendario(raw, base, calendarios),
+                'leadDias': _calendario(raw, base, calendarios)['leadDias'],
                 'precoCentavos': int((preco_fixo + suco['preco']
                                       + sum(o['preco'] for o in opcoes)) * 100),
             }
@@ -170,12 +176,19 @@ def _contexto(kit, form=None, agenda=None, erros=None):
     return ctx
 
 
+def _render_compra(kit, form=None, agenda=None, erros=None):
+    # O escopo termina antes de criar/reservar/cobrar. POST inválido só o usa
+    # depois da validação e do rollback, para reapresentar dados atuais.
+    with loja_leitura.catalogo_em_lote(dias=compra_kits.DIAS_AGENDA_KITS):
+        return render_template('loja/kit_comprar.html', **_contexto(kit, form, agenda, erros))
+
+
 @loja_bp.route('/kits-cafe/<int:kit_id>', methods=['GET', 'POST'])
 @limiter.limit('30 per minute')
 def kit_comprar(kit_id):
     kit = KitCafe.query.filter_by(id=kit_id, ativo=True).first_or_404()
     if request.method == 'GET':
-        return render_template('loja/kit_comprar.html', **_contexto(kit))
+        return _render_compra(kit)
     token = request.form.get('checkout_token', '')
     if not re.fullmatch(r'[0-9a-f]{64}', token) or not secrets.compare_digest(
             token, (session.get('kits_checkout_tokens') or {}).get(str(kit.id), '')):
@@ -188,6 +201,5 @@ def kit_comprar(kit_id):
         kit, request.form, agenda, checkout_token=token)
     if erros:
         validos = agenda if isinstance(agenda, list) and len(agenda) <= 31 else []
-        return render_template('loja/kit_comprar.html',
-                               **_contexto(kit, request.form, validos, erros)), 400
+        return _render_compra(kit, request.form, validos, erros), 400
     return redirect(url_for('loja.pedido_pagamento', codigo=compra.pedido_principal.codigo))

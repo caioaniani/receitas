@@ -36,7 +36,9 @@ def test_todas_combinacoes_da_pagina_usam_precos_do_servidor(app, plano):
         assert not erros
         chave = '|'.join([str(suco.id), *escolhas.values()])
         assert cfg['combinacoes'][chave]['precoCentavos'] == int(sum(i['subtotal'] for i in itens) * 100)
-        assert cfg['combinacoes'][chave]['janelas']
+        combinacao = cfg['combinacoes'][chave]
+        assert set(combinacao) == {'precoCentavos', 'leadDias'}
+        assert cfg['calendarios'][str(combinacao['leadDias'])]['janelas']
 
 
 def test_erro_de_formulario_preserva_opcoes_sem_criar_compra(app, plano):
@@ -59,4 +61,5 @@ def test_calendario_combina_antecedencia_de_croissant_e_pao(app, plano):
     cfg = _config(html)
     normal = cfg['combinacoes']['|'.join([str(laranja.id), _chave(almond), _chave(tradicional)])]
     encomenda = cfg['combinacoes']['|'.join([str(laranja.id), _chave(nutella), _chave(tradicional)])]
-    assert encomenda['dataMin'] > normal['dataMin']
+    assert cfg['calendarios'][str(encomenda['leadDias'])]['dataMin'] > (
+        cfg['calendarios'][str(normal['leadDias'])]['dataMin'])

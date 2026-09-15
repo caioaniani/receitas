@@ -47,9 +47,11 @@ def ler(form, *, conferir_catalogo=True):
         if not conferir_catalogo:
             raw.append(normal)
             continue
-        cat = loja_catalogo.por_id_publicado(*chave)
+        cat = loja_catalogo.por_id_venda(*chave)
         if not cat:
             return [], ['Um adicional não está mais à venda. Revise os produtos escolhidos.']
+        if loja_catalogo.eh_cesta(cat):
+            return [], ['Cestas não podem ser acrescentadas como adicionais do kit. Remova a cesta para continuar.']
         if cat.get('menu'):
             if not comp:
                 return [], ['Confira a composição do menu adicional e adicione-o novamente.']
@@ -68,7 +70,13 @@ def catalogo(*, base=None, selecionados=()):
     """Produtos públicos vendáveis no mês; menus mostram a composição cobrada."""
     ofertas = []
     escolhas = {(item['kind'], item['id']): item for item in selecionados}
-    for cat in loja_catalogo.produtos_publicados():
+    from app.services import loja_leitura
+    leitura = loja_leitura.atual()
+    catalogo_atual = (leitura['catalogo'].values() if leitura is not None else
+                      loja_catalogo.produtos_publicados())
+    for cat in catalogo_atual:
+        if loja_catalogo.eh_cesta(cat):
+            continue
         escolhido = escolhas.get((cat['kind'], cat['id']))
         raw = {**(escolhido or {}), 'kind': cat['kind'], 'id': cat['id'], 'qtd': 1}
         if escolhido:

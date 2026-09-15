@@ -36,6 +36,15 @@ if (cenario === 'sem_suco' || cenario === 'grupo_unico') {
   }
 }
 if (cenario === 'restaurada') cfg.agenda = [{data:'2026-09-17',janela:'12:00–13:00'}];
+if (cenario === 'compacta') {
+  cfg.calendarios = {0:normal, 2:encomenda};
+  for (const mapa of [cfg.sucos, cfg.combinacoes]) {
+    for (const [chave, valor] of Object.entries(mapa)) {
+      mapa[chave] = {leadDias:valor.dataMin === encomenda.dataMin ? 2 : 0,
+        precoCentavos:valor.precoCentavos};
+    }
+  }
+}
 let focused = null;
 function element(extra = {}) { return {value:'', textContent:'', disabled:false, handlers:{}, children:[],
   attributes:{}, hidden:false, required:false, checked:false, type:'text', id:'', name:'', tagName:'INPUT',
@@ -211,7 +220,7 @@ const submitBlocked = (expected, target) => {
 '''
 
 
-@pytest.mark.parametrize('cenario', ['obrigatorias', 'troca', 'sem_suco', 'grupo_unico', 'restaurada'])
+@pytest.mark.parametrize('cenario', ['obrigatorias', 'troca', 'sem_suco', 'grupo_unico', 'restaurada', 'compacta'])
 def test_escolhas_do_plano_recalculam_preco_e_disponibilidade(cenario):
     node = shutil.which('node')
     if not node:
