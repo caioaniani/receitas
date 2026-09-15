@@ -65,13 +65,14 @@ def test_home_descreve_sucos_e_grupos_sem_duplicar_opcoes_como_itens_fixos(app, 
     assert '2× Croissant simples' in secao
 
 
-def test_menu_produtos_e_atalho_apontam_para_secao_de_kits_da_home(app, kit):
+def test_acesso_aos_kits_fica_somente_no_menu_produtos(app, kit):
     resposta = app.test_client().get('/loja/')
     assert resposta.status_code == 200
     html = resposta.get_data(as_text=True)
     _secao_kits(html)
     links = re.findall(r'<a\b[^>]*href="(?:/loja/)?#cat-kits-cafe"[^>]*>.*?</a>', html, re.S)
-    assert len(links) >= 2, 'Menu Produtos e atalho devem chegar à mesma seção da home'
+    assert len(links) == 1, 'Kits devem aparecer somente dentro do menu Produtos'
+    assert 'role="menuitem"' in links[0]
     assert 'href="/loja/kits-cafe"' not in html
 
 
