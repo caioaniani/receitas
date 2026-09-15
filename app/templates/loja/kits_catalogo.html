@@ -1,37 +1,14 @@
-{% extends 'loja/_base.html' %}
-{% block title %}Opções de café da manhã — O Pão{% endblock %}
-{% block description %}Escolha sua opção de café da manhã O Pão e agende as entregas do mês. Um kit completo em cada data, sem renovação automática.{% endblock %}
-{% block styles %}
-<link rel="stylesheet" href="{{ url_for('loja.static', filename='kits.css') }}?v={{ static_v['loja/kits.css'] }}">
-{% endblock %}
-{% block content %}
-<section class="kits-vitrine">
-  <header class="kits-hero">
-    <div class="kits-hero-copy">
-      <p class="kits-kicker">O Pão · Opções de café da manhã</p>
-      <h1>Café da manhã,<br><em>nos seus dias.</em></h1>
-      <p class="kits-hero-description">Escolha sua opção e marque as entregas do mês.<br class="kits-desktop-break"> Um kit completo em cada data, na sua casa.</p>
-      <p class="kits-hero-note">Você escolhe quantas entregas. Sem renovação automática.</p>
-    </div>
-    <ol class="kits-how-it-works" aria-label="Como comprar seu kit">
-      <li><span aria-hidden="true">01</span><div><strong>Escolha sua opção</strong><p>Veja o que vem em cada entrega.</p></div></li>
-      <li><span aria-hidden="true">02</span><div><strong>Marque seus dias</strong><p>Um kit por data, no horário disponível.</p></div></li>
-      <li><span aria-hidden="true">03</span><div><strong>Receba em casa</strong><p>Fretes e total antes do pagamento.</p></div></li>
-    </ol>
-  </header>
-
-  <div class="kits-catalog-heading">
-    <h2>Escolha o seu café.</h2>
-    {% if cards %}<p>{{ cards|length }} {{ 'opção disponível' if cards|length == 1 else 'opções disponíveis' }}</p>{% endif %}
-  </div>
-  {% if cards %}
+<section class="categoria kits-vitrine kits-home" id="cat-kits-cafe" aria-labelledby="kits-home-titulo">
+  <h2 class="categoria-titulo" id="kits-home-titulo">Kits de café</h2>
+  <p class="kits-home-intro">Escolha sua opção de café da manhã e marque os dias e horários de entrega em casa. Um kit por data, sem renovação automática.</p>
+  {% if kits_cards %}
   <div class="kits-catalog-grid">
-    {% for card in cards %}
+    {% for card in kits_cards %}
     <article class="kits-product-card" aria-labelledby="kit-title-{{ card.kit.id }}">
       {% if card.imagens %}
       <figure class="kits-card-gallery kits-card-gallery-{{ card.imagens|length }}">
         <div class="kits-card-photos">
-          {% for foto in card.imagens %}<img src="{{ foto.url }}" alt="{{ foto.nome }}" loading="{{ 'eager' if loop.first else 'lazy' }}" decoding="async" width="640" height="480">{% endfor %}
+          {% for foto in card.imagens %}<img src="{{ foto.url }}" alt="{{ foto.nome }}" loading="lazy" decoding="async" width="640" height="480">{% endfor %}
         </div>
         <figcaption>Produtos que compõem o kit</figcaption>
       </figure>
@@ -65,10 +42,7 @@
   <p class="kits-catalog-footnote">Os valores são por entrega. Você escolhe os itens do kit e as datas na próxima etapa; o total soma os kits e os fretes em uma única compra.</p>
   {% else %}
   <div class="kits-catalog-empty">
-    <h3>Seu próximo café está sendo preparado.</h3>
-    <p>Os kits ainda não estão disponíveis. Enquanto isso, conheça os produtos da padaria.</p>
-    <a class="btn-loja" href="{{ url_for('loja.home') }}">Ver produtos <span aria-hidden="true">→</span></a>
+    <p>Não há kits disponíveis no momento. Confira os outros produtos da padaria nesta página.</p>
   </div>
   {% endif %}
 </section>
-{% endblock %}

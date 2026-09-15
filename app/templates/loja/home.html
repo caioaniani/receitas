@@ -1,7 +1,11 @@
 {% extends 'loja/_base.html' %}
 
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('loja.static', filename='kits.css') }}?v={{ static_v['loja/kits.css'] }}">
+{% endblock %}
+
 {% block content %}
-{% if not grupos %}
+{% if not grupos and not kits_cards %}
 <section class="vazio">
   <p>Catálogo em montagem. Volte em alguns instantes.</p>
 </section>
@@ -83,4 +87,5 @@
   </div>
 </section>
 {% endfor %}
+{% include 'loja/kits_catalogo.html' %}
 {% endblock %}

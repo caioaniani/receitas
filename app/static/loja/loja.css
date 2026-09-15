@@ -160,6 +160,9 @@ a:hover { text-decoration: underline; }
   top: calc(100% + 10px);
   left: 0;
   min-width: 200px;
+  max-height: calc(100vh - 140px);
+  max-height: calc(100dvh - 140px);
+  overflow-y: auto;
   background: #fff;
   border: 1px solid var(--linha);
   border-radius: 8px;

@@ -139,7 +139,6 @@
     {% endif %}
   </a>
   <nav class="topo-nav">
-    {% if categorias_loja %}
     <div class="topo-dropdown" id="dd-produtos">
       <button type="button" class="topo-dropdown-btn" aria-haspopup="true" aria-expanded="false">
         Produtos <span class="seta">▾</span>
@@ -149,12 +148,10 @@
         {% for c in categorias_loja %}
         <a href="{{ url_for('loja.home') }}#cat-{{ c.slug }}" role="menuitem">{{ c.nome }}</a>
         {% endfor %}
+        <a href="{{ url_for('loja.home', _anchor='cat-kits-cafe') }}" role="menuitem">Kits de café</a>
       </div>
     </div>
-    {% else %}
-    <a href="{{ url_for('loja.home') }}">Produtos</a>
-    {% endif %}
-    <a href="{{ url_for('loja.kits_catalogo') }}"{% if request.endpoint in ('loja.kits_catalogo', 'loja.kit_comprar') %} aria-current="page"{% endif %}>Kits de café</a>
+    <a href="{{ url_for('loja.home', _anchor='cat-kits-cafe') }}">Kits de café</a>
     {% if cliente_atual %}
       <a href="{{ url_for('loja.minha_conta') }}">Minha conta</a>
     {% else %}

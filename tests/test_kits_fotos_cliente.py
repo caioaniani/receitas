@@ -36,7 +36,7 @@ def plano_fotos(plano):
             'integral': integral}
 
 
-@pytest.fixture(params=['/loja/kits-cafe', '/loja/kits-cafe/{id}'])
+@pytest.fixture(params=['/loja/', '/loja/kits-cafe/{id}'])
 def caminho(request, plano_fotos):
     return request.param.format(id=plano_fotos['kit'].id)
 

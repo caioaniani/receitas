@@ -6,7 +6,7 @@
   {% set grupos_kit = grupos|default([]) %}
   {% set selecao = escolhas_selecionadas|default({}) %}
   {% set escolhas = namespace(completas=(not sucos or suco_id) and (escolhas_completas|default(not grupos_kit))) %}
-  <a href="{{ url_for('loja.kits_catalogo') }}" class="kits-back">← Escolher outra opção</a>
+  <a href="{{ url_for('loja.home', _anchor='cat-kits-cafe') }}" class="kits-back">← Escolher outra opção</a>
   <header class="kits-purchase-header">
     <span class="kits-kicker">Sua opção de café da manhã</span>
     <h1>{{ kit.nome|texto_opcao_cafe }}</h1>
@@ -18,7 +18,7 @@
   {% if indisponivel or not data_min %}
   <div class="checkout-erros" role="status"><h2>Este kit está indisponível no momento.</h2>
     <p>Você pode escolher outra opção para o seu café da manhã.</p>
-    <a class="btn-loja" href="{{ url_for('loja.kits_catalogo') }}">Ver os kits disponíveis</a>
+    <a class="btn-loja" href="{{ url_for('loja.home', _anchor='cat-kits-cafe') }}">Ver os kits disponíveis</a>
   </div>
   {% else %}
   <form method="post" id="kit-form" class="kits-purchase-grid">

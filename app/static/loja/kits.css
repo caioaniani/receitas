@@ -162,6 +162,13 @@
 .kits-vitrine .kits-catalog-empty p { max-width: 470px; margin: 20px auto; color: var(--kits-muted); }
 .kits-vitrine .kits-catalog-empty .btn-loja { display: inline-flex; }
 
+/* Seção da vitrine principal, alinhada às categorias de produtos. */
+.kits-vitrine.kits-home { max-width: 1080px; padding: 20px 14px 36px; scroll-margin-top: 110px; }
+.kits-home .kits-home-intro { color: var(--kits-muted); font-size: 14px; margin: 0 0 20px; max-width: 700px; }
+@media (min-width: 600px) {
+  .kits-vitrine.kits-home { padding: 30px 22px 50px; }
+}
+
 /* Compra: no celular, as etapas seguem a ordem natural do formulário. */
 .kits-compra .kits-purchase-header { padding: 26px 0 32px; }
 .kits-compra .kits-purchase-header h1 {

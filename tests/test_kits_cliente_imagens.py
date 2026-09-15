@@ -1,4 +1,5 @@
 """Capas reais de componentes no catálogo e no agendamento público de kits."""
+import re
 from html.parser import HTMLParser
 
 import pytest
@@ -23,7 +24,7 @@ class _Imagens(HTMLParser):
             self.fotos.append(dict(attrs))
 
 
-@pytest.fixture(params=['/loja/kits-cafe', '/loja/kits-cafe/{id}'])
+@pytest.fixture(params=['/loja/', '/loja/kits-cafe/{id}'])
 def caminho(request, kit):
     return request.param.format(id=kit.id)
 
@@ -32,8 +33,17 @@ def _pagina(app, caminho):
     resposta = app.test_client().get(caminho)
     assert resposta.status_code == 200
     html = resposta.get_data(as_text=True)
+    if caminho == '/loja/':
+        html = _secao_kits(html)
     return html, [foto for foto in _Imagens(html).fotos
                   if foto.get('src', '').startswith(FOTOS)]
+
+
+def _secao_kits(html):
+    """Fotos/preços dos produtos normais da home não pertencem aos cards de kits."""
+    secao = re.search(r'<section\b[^>]*\bid="cat-kits-cafe"[^>]*>.*?</section>', html, re.S)
+    assert secao, 'A home deve conter a seção de kits compráveis'
+    return secao.group(0)
 
 
 def test_mostra_capas_cadastradas_com_nome_do_componente(app, kit, caminho):
@@ -58,9 +68,9 @@ def test_sem_fotos_kit_continua_disponivel_para_escolher_e_comprar(app, kit, cam
     assert kit.nome in html
     assert 'R$ 32,30 por kit' in html
     assert 'Produtos que compõem o kit' not in html
-    if caminho == '/loja/kits-cafe':
+    if caminho == '/loja/':
         assert f'href="/loja/kits-cafe/{kit.id}"' in html
-        assert 'Escolher este kit' in html
+        assert 'Escolher esta opção' in html
     else:
         assert 'id="kit-form"' in html
         assert 'id="kit-continuar"' in html

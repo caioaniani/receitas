@@ -312,7 +312,7 @@ def test_contexto_oferece_calendario_do_mes_e_nonce_da_sessao(app, kit):
 def test_catalogo_publico_nao_exibe_rascunho_e_escapa_nome(app, kit):
     kit.nome = '<script>alert(1)</script>'
     db.session.commit()
-    html = app.test_client().get('/loja/kits-cafe').get_data(as_text=True)
+    html = app.test_client().get('/loja/').get_data(as_text=True)
     assert '<script>alert(1)</script>' not in html
     assert '&lt;script&gt;alert(1)&lt;/script&gt;' in html
     kit.ativo = False

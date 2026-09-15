@@ -11,6 +11,7 @@ from test_kits_checkout import _abrir, _agenda, _post
 from test_kits_checkout import ambiente as ambiente
 from test_kits_checkout import frete as frete
 from test_kits_checkout import kit as kit
+from test_kits_cliente_imagens import _secao_kits
 
 from app.extensions import db
 from app.models import CompraKit, EstoqueLoja, KitCafeSuco, PedidoOnline, Produto
@@ -42,13 +43,13 @@ def _config(html):
 
 def test_catalogo_anuncia_um_suco_sem_duplica_lo_como_item_fixo(app, kit_sucos):
     kit, laranja, verde = kit_sucos
-    html = app.test_client().get('/loja/kits-cafe').get_data(as_text=True)
+    html = _secao_kits(app.test_client().get('/loja/').get_data(as_text=True))
     assert '1 suco à escolha: Suco de laranja 1 L ou Suco verde 1 L' in html
     assert 'A partir de R$ 67,80 por kit' in html
     assert '1× Suco' not in html
     verde.preco_site = laranja.preco_site
     db.session.commit()
-    html = app.test_client().get('/loja/kits-cafe').get_data(as_text=True)
+    html = _secao_kits(app.test_client().get('/loja/').get_data(as_text=True))
     assert 'A partir de' not in html
 
 

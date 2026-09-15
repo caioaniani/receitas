@@ -379,6 +379,15 @@ def _injetar_contexto_loja():
     from flask import current_app
 
     from app.models import AppConfig
+    from app.services import loja_leitura
+
+    leitura = loja_leitura.atual()
+    # O cabeçalho participa do mesmo render da home e da compra de kits.
+    # Reutiliza publicação, ordem e nomes sem carregar o catálogo de novo.
+    categorias = (loja_catalogo.categorias_publicadas() if leitura is None else [
+        {'nome': categoria, 'slug': _filtro_catslug(categoria)}
+        for categoria, _itens in loja_catalogo.por_categorias(leitura['catalogo'].values())
+    ])
     cw_token = (current_app.config.get('CHATWOOT_WEBSITE_TOKEN') or '').strip()
     cw_url = (current_app.config.get('CHATWOOT_PUBLIC_URL') or '').strip()
     chatwoot_widget = ({'url': cw_url.rstrip('/'), 'token': cw_token}
@@ -386,7 +395,7 @@ def _injetar_contexto_loja():
     consent = request.cookies.get('cookies_consent') or ''
     return {
         'cliente_atual': loja_auth.cliente_atual(),
-        'categorias_loja': loja_catalogo.categorias_publicadas(),
+        'categorias_loja': categorias,
         'loja_logo_url': AppConfig.get('loja_logo_url'),
         'chatwoot_widget': chatwoot_widget,
         'cookies_aceitos': consent == 'aceitar',
@@ -746,12 +755,18 @@ def meu_pedido_danfe(codigo):
 
 @loja_bp.route('/')
 def home():
-    itens = loja_catalogo.anotar_esgotado(loja_catalogo.produtos_publicados())
-    grupos = loja_catalogo.por_categorias(itens)
-    return render_template(
-        'loja/home.html',
-        grupos=grupos, total_itens=len(itens), em_teste=_em_teste(),
-    )
+    from app.blueprints.loja.kits_routes import cards_catalogo
+    from app.services import compra_kits, loja_leitura
+
+    produtos = loja_catalogo.produtos_publicados()
+    with loja_leitura.catalogo_em_lote(
+            dias=compra_kits.DIAS_AGENDA_KITS, produtos=produtos):
+        itens = loja_catalogo.anotar_esgotado(produtos)
+        grupos = loja_catalogo.por_categorias(itens)
+        return render_template(
+            'loja/home.html', grupos=grupos, total_itens=len(itens),
+            kits_cards=cards_catalogo(), em_teste=_em_teste(),
+        )
 
 
 @loja_bp.route('/carrinho')

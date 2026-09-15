@@ -5,6 +5,7 @@ import secrets
 from itertools import product
 
 from flask import abort, redirect, render_template, request, session, url_for
+from sqlalchemy.orm import selectinload
 
 from app.blueprints.loja import loja_bp
 from app.extensions import limiter
@@ -25,14 +26,17 @@ def texto_opcao_cafe(texto):
 
 @loja_bp.route('/kits-cafe')
 def kits_catalogo():
-    with loja_leitura.catalogo_em_lote(dias=compra_kits.DIAS_AGENDA_KITS):
-        return _render_catalogo()
+    return redirect(url_for('loja.home', _anchor='cat-kits-cafe'), code=301)
 
 
-def _render_catalogo():
-    from app.blueprints.loja.routes import _em_teste
+def cards_catalogo():
+    """Cards da home, com a validação canônica e o catálogo do lote ativo."""
     cards = []
-    for kit in kits_cafe.publicados():
+    kits = (KitCafe.query.options(
+        selectinload(KitCafe.itens), selectinload(KitCafe.sucos),
+        selectinload(KitCafe.opcoes), selectinload(KitCafe.fotos))
+        .filter_by(ativo=True).order_by(KitCafe.id).all())
+    for kit in kits:
         itens, erros = kits_cafe.montar(kit)
         if not erros:
             sucos = kits_cafe.opcoes_suco(kit)
@@ -43,11 +47,15 @@ def _render_catalogo():
                           'preco_variavel': _preco_variavel(sucos, grupos)})
     for card in cards:
         card['itens_fotos'] = kits_fotos.candidatos(card['itens'], card['sucos'], card['grupos'])
-    capas = kits_fotos.capas_dos_itens([item for card in cards for item in card['itens_fotos']])
+    leitura = loja_leitura.atual()
+    capas = ({chave: item.get('imagem') or ''
+              for chave, item in leitura['catalogo'].items()} if leitura is not None
+             else kits_fotos.capas_dos_itens(
+                 [item for card in cards for item in card['itens_fotos']]))
     for card in cards:
         card['imagens'] = kits_fotos.imagens_do_kit(
             card['kit'], card['itens'], card['itens_fotos'], capas)
-    return render_template('loja/kits_catalogo.html', cards=cards, em_teste=_em_teste())
+    return cards
 
 
 def _preco_variavel(sucos, grupos):
