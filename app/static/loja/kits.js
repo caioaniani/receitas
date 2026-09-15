@@ -29,6 +29,69 @@
   let versaoEndereco = 0;
   let enviando = false;
   let agendaValida = false;
+  const ofertas = new Map((cfg.adicionais || []).map(item => [item.chave, item]));
+  const extras = new Map((cfg.adicionaisSelecionados || []).map(item => [item.kind + ':' + item.id, {...item}]));
+  const produtoExtra = document.getElementById('kit-adicional-produto');
+  const quantidadeExtra = document.getElementById('kit-adicional-qtd');
+  const listaExtras = document.getElementById('kit-adicionais-lista');
+  const avisoExtra = document.getElementById('kit-adicional-aviso');
+
+  function totalExtras() {
+    return [...extras.entries()].reduce((total, [chave, item]) =>
+      total + (ofertas.get(chave)?.precoCentavos || 0) * item.qtd, 0);
+  }
+  function salvarExtras() {
+    const input = document.getElementById('adicionais-json');
+    if (input) input.value = JSON.stringify([...extras.values()]);
+  }
+  function renderizarExtras() {
+    if (!listaExtras) return;
+    listaExtras.replaceChildren();
+    extras.forEach((item, chave) => {
+      const oferta = ofertas.get(chave);
+      const row = document.createElement('li');
+      const nome = document.createElement('strong');
+      nome.textContent = oferta ? oferta.nome : 'Produto indisponível — remova este adicional';
+      row.appendChild(nome);
+      if (oferta?.descricao) {
+        const descricao = document.createElement('span');
+        descricao.className = 'kits-inline-note';
+        descricao.textContent = 'Composição: ' + oferta.descricao;
+        row.appendChild(descricao);
+      }
+      const controles = document.createElement('div');
+      controles.className = 'kits-extra-controls';
+      const label = document.createElement('label');
+      label.textContent = 'Por kit';
+      const qtd = document.createElement('input');
+      qtd.type = 'number'; qtd.min = '1'; qtd.max = '999'; qtd.step = '1'; qtd.required = true;
+      qtd.inputMode = 'numeric'; qtd.value = item.qtd;
+      qtd.id = 'kit-extra-qtd-' + item.kind + '-' + item.id;
+      qtd.setAttribute('aria-label', 'Quantidade por kit de ' + (oferta?.nome || 'adicional'));
+      qtd.addEventListener('input', () => {
+        const n = Number(qtd.value);
+        const valido = /^\d+$/.test(qtd.value) && Number.isInteger(n) && n >= 1 && n <= 999;
+        qtd.setCustomValidity(valido ? '' : 'Informe uma quantidade inteira entre 1 e 999.');
+        if (valido) {
+          item.qtd = n;
+          valor.textContent = money((oferta?.precoCentavos || 0) * n);
+          salvarExtras(); atualizar();
+        }
+      });
+      label.appendChild(qtd); controles.appendChild(label);
+      const valor = document.createElement('span');
+      valor.textContent = money((oferta?.precoCentavos || 0) * item.qtd);
+      controles.appendChild(valor);
+      const remover = document.createElement('button');
+      remover.type = 'button'; remover.className = 'kit-remover'; remover.textContent = 'Remover';
+      remover.setAttribute('aria-label', 'Remover ' + (oferta?.nome || 'adicional'));
+      remover.addEventListener('click', () => {
+        extras.delete(chave); renderizarExtras(); atualizarEscolhas();
+      });
+      controles.appendChild(remover); row.appendChild(controles); listaExtras.appendChild(row);
+    });
+    salvarExtras();
+  }
 
   function diaCurto(valor) { return valor.split('-').reverse().join('/'); }
   function irPara(input) {
@@ -40,12 +103,14 @@
     const erros = [];
     const incluir = (input, mensagem) => erros.push({campo: input, mensagem});
     const opcoes = [suco, ...escolhas].filter(Boolean);
+    const extraIndisponivel = [...extras.keys()].some(chave => !ofertas.has(chave));
+    if (extraIndisponivel) incluir(listaExtras, 'Remova o adicional indisponível para continuar. Os outros produtos foram preservados.');
     opcoes.forEach(input => {
-      if (!input.value) incluir(input, input === suco ? 'Escolha o suco do seu plano.'
-        : 'Escolha o ' + input.getAttribute('data-grupo') + ' do seu plano.');
+      if (!input.value) incluir(input, input === suco ? 'Escolha o suco da sua opção.'
+        : 'Escolha o ' + input.getAttribute('data-grupo') + ' da sua opção.');
     });
     if (!configuracao() && !erros.length) {
-      incluir(opcoes[0] || continuar, 'Esta combinação não está disponível. Revise as opções do plano.');
+      incluir(opcoes[0] || continuar, 'Esta combinação não está disponível. Revise os itens do kit.');
     }
     erros.push(...errosAgenda);
     const rotulos = {cep: 'o CEP', logradouro: 'a rua ou avenida', numero: 'o número do endereço',
@@ -116,7 +181,7 @@
   }
 
   function linhas() { return Array.from(agenda.querySelectorAll('.kit-dia')); }
-  function configuracao() {
+  function configuracaoBase() {
     const sucoId = suco ? suco.value : '';
     if (cfg.sucos && Object.keys(cfg.sucos).length && !cfg.sucos[sucoId]) return null;
     if (grupos.length) {
@@ -126,6 +191,17 @@
       return (cfg.combinacoes || {})[chave] || null;
     }
     return suco ? ((cfg.sucos || {})[sucoId] || null) : cfg;
+  }
+  function configuracao() {
+    const atual = configuracaoBase();
+    if (!atual) return null;
+    let lead = atual.leadDias || 0;
+    for (const chave of extras.keys()) {
+      if (!ofertas.has(chave)) return null;
+      lead = Math.max(lead, ofertas.get(chave).leadDias || 0);
+    }
+    return {...atual, ...((cfg.calendarios || {})[lead] || {}),
+      precoCentavos: atual.precoCentavos + totalExtras()};
   }
   function janelasDisponiveis(atual) {
     return atual ? (distancia !== null && distancia >= cfg.corteKm ? atual.janelasLonge : atual.janelas) : {};
@@ -166,7 +242,7 @@
         : data.value && atual && (data.value < atual.dataMin || data.value > atual.dataMax)
           ? 'Escolha uma data entre ' + diaCurto(atual.dataMin) + ' e ' + diaCurto(atual.dataMax) + '.'
           : data.value && atual && !opcoes.length
-            ? 'Não há horários disponíveis nesta data para seu plano e região. Escolha outro dia.' : '';
+            ? 'Não há horários disponíveis nesta data para sua opção e região. Escolha outro dia.' : '';
       const erroJanela = janela.value && !opcoes.includes(janela.value)
         ? 'Escolha um horário disponível para esta entrega.' : '';
       data.setCustomValidity(erroData);
@@ -192,6 +268,10 @@
       }
     });
     const quantidade = lista.length;
+    const resumoExtras = document.getElementById('kit-adicionais-total');
+    if (resumoExtras) resumoExtras.textContent = extras.size
+      ? 'Adicionais: ' + money(totalExtras()) + ' por kit · ' + money(totalExtras() * quantidade) + ' em todas as entregas. Já incluídos no total.'
+      : 'Nenhum produto adicional. Seu kit mantém a composição original.';
     const valorProdutos = atual ? atual.precoCentavos * quantidade : null;
     if (precoKit) precoKit.textContent = atual ? money(atual.precoCentavos) + ' por kit' : precoInicial;
     document.getElementById('kits-quantidade').textContent = quantidade + (quantidade === 1 ? ' kit' : ' kits');
@@ -204,11 +284,11 @@
     continuar.disabled = enviando;
     const ajuda = document.getElementById('kit-agenda-ajuda');
     if (ajuda) ajuda.textContent = !atual
-      ? (grupos.length ? 'Escolha as opções do plano para liberar os dias.' : 'Escolha o suco para liberar os dias.')
+      ? (grupos.length ? 'Escolha os itens do kit para liberar os dias.' : 'Escolha o suco para liberar os dias.')
       : 'Uma entrega por data. Escolha o dia e o horário de cada kit.';
     const proximo = document.getElementById('kit-proximo-passo');
     if (proximo) proximo.textContent = !atual
-      ? (grupos.length ? 'Escolha as opções do plano para começar.' : 'Escolha seu suco para começar.')
+      ? (grupos.length ? 'Escolha os itens do kit para começar.' : 'Escolha seu suco para começar.')
       : quantidade === 0 ? 'Adicione pelo menos uma entrega.'
         : !agendaValida ? 'Escolha uma data e um horário disponíveis para cada entrega.'
           : frete === null ? 'Informe seu endereço e calcule os fretes para continuar.'
@@ -274,6 +354,32 @@
   escolhas.forEach(escolha => {
     if (escolha) escolha.addEventListener('change', atualizarEscolhas);
   });
+  if (produtoExtra) {
+    produtoExtra.addEventListener('change', () => {
+      const oferta = ofertas.get(produtoExtra.value);
+      document.getElementById('kit-adicional-descricao').textContent = oferta?.descricao
+        ? 'Composição incluída: ' + oferta.descricao : '';
+      avisoExtra.textContent = '';
+    });
+    document.getElementById('kit-adicional-incluir').addEventListener('click', () => {
+      const oferta = ofertas.get(produtoExtra.value);
+      const qtd = Number(quantidadeExtra.value);
+      if (!oferta) { avisoExtra.textContent = 'Escolha um produto para adicionar.'; produtoExtra.focus(); return; }
+      if (!/^\d+$/.test(quantidadeExtra.value) || !Number.isInteger(qtd) || qtd < 1 || qtd > 999) {
+        avisoExtra.textContent = 'Informe uma quantidade inteira entre 1 e 999.'; quantidadeExtra.focus(); return;
+      }
+      const anterior = extras.get(oferta.chave);
+      if ((!anterior && extras.size >= cfg.maxAdicionais) || (anterior?.qtd || 0) + qtd > 999) {
+        avisoExtra.textContent = 'Limite atingido. Ajuste os produtos e as quantidades já adicionados.'; return;
+      }
+      extras.set(oferta.chave, {kind: oferta.kind, id: oferta.id, qtd: (anterior?.qtd || 0) + qtd,
+        ...(oferta.comp ? {comp: oferta.comp} : {})});
+      renderizarExtras(); atualizarEscolhas();
+      avisoExtra.textContent = oferta.nome + ' adicionado a cada entrega.';
+      produtoExtra.value = ''; quantidadeExtra.value = '1';
+      document.getElementById('kit-adicional-descricao').textContent = '';
+    });
+  }
   const enderecoCampos = ['cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];
   function invalidarFrete() {
     versaoEndereco += 1;
@@ -356,6 +462,7 @@
     continuar.textContent = textoContinuar;
     atualizar();
   });
+  renderizarExtras();
   (Array.isArray(cfg.agenda) && cfg.agenda.length ? cfg.agenda
     : [{data: suco || grupos.length ? '' : (Object.keys(cfg.janelas || {})[0] || ''), janela: ''}])
     .filter(a => a && typeof a === 'object').forEach(a => adicionar(a.data, a.janela));

@@ -212,6 +212,19 @@
 .kits-compra .kits-checkout-content summary { font-size: 14px; cursor: pointer; padding: 12px 0; min-height: 44px; }
 .kits-compra .kits-checkout-content[open] summary { margin-bottom: 8px; }
 .kits-compra .kits-checkout-content summary:hover { text-decoration: underline; text-underline-offset: 4px; }
+.kits-compra .kits-extras { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--linha); }
+.kits-compra .kits-extras h3 { font-size: 20px; margin: 0 0 8px; }
+.kits-compra .kits-extra-picker { display: grid; gap: 12px; margin-top: 16px; }
+.kits-compra .kits-extra-picker label { display: grid; gap: 6px; min-width: 0; margin: 0; }
+.kits-compra .kits-extras input[type="number"] { border: 1px solid #cfc6b8; padding: 10px 12px; font: inherit; }
+.kits-compra .kits-extra-picker input[type="number"] { width: 100%; max-width: 160px; }
+.kits-compra .kits-extras-list { list-style: none; padding: 0; margin: 12px 0; }
+.kits-compra .kits-extras-list li { display: grid; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--linha); }
+.kits-compra .kits-extra-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.kits-compra .kits-extra-controls input { width: 85px; margin: 0; }
+.kits-compra .kits-extra-controls label { display: flex; align-items: center; gap: 10px; margin: 0; }
+.kits-compra .kits-extra-controls button { margin-left: auto; }
+.kits-compra .kits-extra-picker select { width: 100%; }
 .kits-compra .kits-field-grid { display: grid; gap: 16px; }
 .kits-compra .kits-field-grid label { margin-bottom: 0; }
 .kits-compra .kits-field-wide { grid-column: 1 / -1; }

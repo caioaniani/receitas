@@ -135,8 +135,8 @@ const submitBlocked = (expected, target) => {
   assert.equal(rows[0].querySelector('.kit-data').value, '', 'Não escolhe data antes das opções');
   assert.equal(rows[0].querySelector('.kit-data').disabled, true);
   assert.equal(elements['kits-subtotal'].textContent, 'Escolha as opções');
-  assert.match(elements['kit-agenda-ajuda'].textContent, /opções do plano/);
-  assert.match(elements['kit-proximo-passo'].textContent, /opções do plano/);
+  assert.match(elements['kit-agenda-ajuda'].textContent, /itens do kit/);
+  assert.match(elements['kit-proximo-passo'].textContent, /itens do kit/);
   await elements['kit-calcular-frete'].fire('click');
   submitBlocked(/Escolha o/, elements['kit-suco'] || elements['kit-escolha-' + cfg.grupos[0]]);
   if (cenario === 'sem_suco' || cenario === 'grupo_unico') {

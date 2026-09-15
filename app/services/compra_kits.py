@@ -96,7 +96,7 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
     o lock do kit impedem duas compras por um duplo clique do mesmo formulário.
     Os valores individuais são os únicos pedidos que entram no faturamento.
     """
-    from app.services import kits_cafe, loja_checkout, loja_plano_dia
+    from app.services import kits_adicionais, kits_cafe, loja_checkout, loja_plano_dia
 
     if not re.fullmatch(r'[0-9a-f]{64}', str(checkout_token or '')):
         return None, ['Reabra o kit para iniciar uma nova compra.']
@@ -146,6 +146,15 @@ def criar_compra(kit, form, agenda, *, checkout_token, base=None):
         itens, erros = kits_cafe.montar(kit, suco_id, escolhas)
         if erros or not itens:
             return None, erros or ['Este kit está indisponível.']
+        adicionais, erros = kits_adicionais.ler(form)
+        if erros:
+            return None, erros
+        raw.extend(adicionais)
+        if adicionais:
+            itens, erros = loja_checkout.montar_itens(
+                raw, dias_disponibilidade=DIAS_AGENDA_KITS, base=base)
+            if erros or len(itens) != len(raw):
+                return None, erros or ['Revise os produtos adicionais do kit.']
         snapshot = _snapshot_composicao(itens)
         pedidos = []
         frete_validado = None

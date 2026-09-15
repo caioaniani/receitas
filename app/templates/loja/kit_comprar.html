@@ -1,15 +1,15 @@
 {% extends 'loja/_base.html' %}
-{% block title %}Agendar {{ kit.nome }} — O Pão{% endblock %}
+{% block title %}Agendar {{ kit.nome|texto_opcao_cafe }} — O Pão{% endblock %}
 {% block styles %}<link rel="stylesheet" href="{{ url_for('loja.static', filename='kits.css') }}?v={{ static_v['loja/kits.css'] }}">{% endblock %}
 {% block content %}
 <section class="kits-compra">
-  {% set opcoes_plano = grupos|default([]) %}
+  {% set grupos_kit = grupos|default([]) %}
   {% set selecao = escolhas_selecionadas|default({}) %}
-  {% set escolhas = namespace(completas=(not sucos or suco_id) and (escolhas_completas|default(not opcoes_plano))) %}
-  <a href="{{ url_for('loja.kits_catalogo') }}" class="kits-back">← Escolher outro plano</a>
+  {% set escolhas = namespace(completas=(not sucos or suco_id) and (escolhas_completas|default(not grupos_kit))) %}
+  <a href="{{ url_for('loja.kits_catalogo') }}" class="kits-back">← Escolher outra opção</a>
   <header class="kits-purchase-header">
-    <span class="kits-kicker">Seu plano de café da manhã</span>
-    <h1>{{ kit.nome }}</h1>
+    <span class="kits-kicker">Sua opção de café da manhã</span>
+    <h1>{{ kit.nome|texto_opcao_cafe }}</h1>
     <p class="kits-purchase-intro">Seu café da manhã, nas datas que combinam com você.</p>
     <p class="kits-inline-note">Um kit completo por entrega · Uma única compra · Sem renovação automática</p>
   </header>
@@ -28,7 +28,7 @@
     <div class="kits-purchase-main">
       <section class="kits-section checkout-bloco" aria-labelledby="kit-escolha-titulo">
         <header class="kits-section-heading"><span class="step-number" aria-hidden="true">01</span>
-          <div><h2 id="kit-escolha-titulo">Seu plano</h2><p>{{ 'Escolha os sabores que vão em cada entrega.' if sucos or opcoes_plano else 'Um kit completo em cada entrega.' }}</p></div>
+          <div><h2 id="kit-escolha-titulo">Sua opção</h2><p>{{ 'Escolha os sabores que vão em cada entrega.' if sucos or grupos_kit else 'Um kit completo em cada entrega.' }}</p></div>
         </header>
         {% if sucos %}
         <label for="kit-suco">Escolha 1 suco por kit</label>
@@ -38,9 +38,9 @@
         </select>
         <p class="kits-inline-note" id="kit-suco-ajuda">A mesma escolha de suco vale para todas as entregas desta compra. O preço abaixo já inclui uma unidade.</p>
         {% endif %}
-        {% if opcoes_plano %}
+        {% if grupos_kit %}
         <div class="kits-plan-choices">
-          {% for grupo in opcoes_plano %}
+          {% for grupo in grupos_kit %}
           <div>
             <label for="kit-escolha-{{ grupo.chave }}">Escolha 1 {{ grupo.nome|lower }} por kit</label>
             <select name="escolha_{{ grupo.chave }}" id="kit-escolha-{{ grupo.chave }}" class="kit-escolha" data-grupo="{{ grupo.chave }}" required aria-describedby="kit-opcoes-ajuda">
@@ -58,15 +58,36 @@
           <ul class="checkout-itens-lista kits-kit-contents">{% for it in itens %}<li><span>{{ it.qtd }}× {{ it.nome }}</span>
             <span>R$ {{ '%.2f'|format(it.subtotal)|replace('.', ',') }}</span></li>{% endfor %}</ul>
           {% if sucos %}<p class="kits-inline-note">Mais 1 unidade do suco escolhido acima.</p>{% endif %}
-          {% for grupo in opcoes_plano %}<p class="kits-inline-note">Mais 1 {{ grupo.nome|lower }} à escolha: {{ grupo.opcoes|map(attribute='nome')|join(' ou ') }}.</p>{% endfor %}
-          {% if kit.descricao %}<p class="kits-summary-note">{{ kit.descricao }}</p>{% endif %}
+          {% for grupo in grupos_kit %}<p class="kits-inline-note">Mais 1 {{ grupo.nome|lower }} à escolha: {{ grupo.opcoes|map(attribute='nome')|join(' ou ') }}.</p>{% endfor %}
+          {% if kit.descricao %}<p class="kits-summary-note">{{ kit.descricao|texto_opcao_cafe }}</p>{% endif %}
         </details>
+        {% if tem_adicionais %}
+        <div class="kits-extras" aria-labelledby="kit-adicionais-titulo">
+          <h3 id="kit-adicionais-titulo">Quer acrescentar algum produto?</h3>
+          <p class="kits-inline-note">Adicione o que quiser ao seu kit. As quantidades abaixo serão incluídas em <strong>cada entrega</strong>, além dos itens que já vêm na opção.</p>
+          <div class="kits-extra-picker">
+            <label for="kit-adicional-produto">Produto
+              <select id="kit-adicional-produto" aria-describedby="kit-adicional-descricao">
+                <option value="">Escolha um produto</option>
+                {% for adicional in adicionais %}<option value="{{ adicional.chave }}">{{ adicional.nome }} — R$ {{ '%.2f'|format(adicional.precoCentavos / 100)|replace('.', ',') }}</option>{% endfor %}
+              </select>
+            </label>
+            <label for="kit-adicional-qtd">Quantidade por kit<input id="kit-adicional-qtd" type="number" min="1" max="999" step="1" value="1" inputmode="numeric"></label>
+            <button type="button" id="kit-adicional-incluir" class="btn-loja-secundario">+ Adicionar produto</button>
+          </div>
+          <p id="kit-adicional-descricao" class="kits-inline-note"></p>
+          <p id="kit-adicional-aviso" class="kits-inline-note" role="status"></p>
+          <ul id="kit-adicionais-lista" class="kits-extras-list" tabindex="-1"></ul>
+          <p id="kit-adicionais-total" class="kits-inline-note" aria-live="polite"></p>
+        </div>
+        {% endif %}
+        <input type="hidden" name="adicionais_json" id="adicionais-json" value="[]">
       </section>
       <section class="kits-section checkout-bloco" aria-labelledby="kit-dias-titulo">
         <header class="kits-section-heading"><span class="step-number" aria-hidden="true">02</span>
           <div><h2 id="kit-dias-titulo">Seus dias e horários</h2><p>Escolha uma ou mais entregas para os próximos 31 dias.</p></div>
         </header>
-        <p id="kit-agenda-ajuda" class="kits-inline-note" role="status">{% if opcoes_plano and not escolhas.completas %}Escolha as opções do plano acima para liberar os dias disponíveis.{% elif sucos and not suco_id %}Escolha o suco acima para liberar os dias disponíveis.{% else %}Cada data recebe um kit completo. Você pode escolher um horário diferente em cada dia.{% endif %}</p>
+        <p id="kit-agenda-ajuda" class="kits-inline-note" role="status">{% if grupos_kit and not escolhas.completas %}Escolha os itens do kit acima para liberar os dias disponíveis.{% elif sucos and not suco_id %}Escolha o suco acima para liberar os dias disponíveis.{% else %}Cada data recebe um kit completo. Você pode escolher um horário diferente em cada dia.{% endif %}</p>
         <div id="kit-agenda"></div>
         <button type="button" id="adicionar-data" class="btn-loja-secundario">+ Adicionar outra entrega</button>
         <p class="kits-inline-note">Uma entrega por data. Confirmamos os horários disponíveis para a sua região ao calcular o frete.</p>
@@ -110,7 +131,7 @@
       {% endif %}
       <span class="kits-kicker">Tudo pronto para a sua manhã</span>
       <h2 id="kit-resumo-titulo">Sua compra</h2>
-      <p class="kits-summary-kit-name">{{ kit.nome }}</p>
+      <p class="kits-summary-kit-name">{{ kit.nome|texto_opcao_cafe }}</p>
       <ul id="kits-resumo-datas" class="kits-summary-dates" aria-label="Entregas escolhidas"></ul>
       <div class="checkout-totais" aria-live="polite">
         <div class="linha-total"><span id="kits-quantidade">Kits</span><strong id="kits-subtotal"></strong></div>

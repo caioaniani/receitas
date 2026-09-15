@@ -207,3 +207,22 @@ preços, reservas e pagamentos permanecem inalterados.
 Esta alteração de apresentação não exige migração ou variável de ambiente.
 Para reverter, reverta apenas o commit de feedback do checkout; não altere
 cadastros, compras nem a configuração das fotos.
+# Personalização pelo cliente (15/09/2026)
+
+A vitrine e a compra usam **opção**, inclusive ao exibir nomes antigos com
+“plano”. O cadastro original e os pedidos anteriores permanecem preservados.
+Em `/loja/kits-cafe/<id>`, o cliente encontra **Quer acrescentar algum produto?**,
+seleciona um produto publicado, informa a quantidade por kit e clica em
+**Adicionar produto**. Pode ajustar quantidades ou remover adicionais.
+
+A composição escolhida vale para todas as datas da compra. Por exemplo,
+dois cookies adicionais e três datas geram dois cookies em cada entrega,
+seis ao todo. O resumo inclui o preço dos adicionais e o frete de cada data.
+Menus mostram a composição que será cobrada antes de adicionar; essa
+composição é preservada ao corrigir o formulário, mesmo após mudança do padrão.
+
+O servidor valida publicação, quantidades e composição, recalcula preços e
+disponibilidade por data e reserva a capacidade de todos os produtos juntos.
+Adicionais sob encomenda atualizam o calendário. Cada entrega persiste seus
+produtos reais para separação, baixa na coleta, reembolso e NF. Adicionais não
+alteram a composição do kit cadastrada pelo owner. Não há migração de schema.

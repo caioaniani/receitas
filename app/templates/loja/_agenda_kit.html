@@ -1,5 +1,5 @@
 <section class="checkout-bloco">
-  <h2>{{ compra_kit.kit_nome }} — {{ compra_kit.entregas|length }} entregas</h2>
+  <h2>{{ compra_kit.kit_nome|texto_opcao_cafe }} — {{ compra_kit.entregas|length }} entregas</h2>
   <p>Uma compra para todas as datas abaixo, sem renovação automática.</p>
   <ul class="checkout-itens-lista">
     {% for entrega in compra_kit.entregas %}

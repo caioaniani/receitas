@@ -9,8 +9,18 @@ from flask import abort, redirect, render_template, request, session, url_for
 from app.blueprints.loja import loja_bp
 from app.extensions import limiter
 from app.models import CompraKit, KitCafe
-from app.services import compra_kits, kits_cafe, kits_fotos, loja_checkout
+from app.services import compra_kits, kits_adicionais, kits_cafe, kits_fotos, loja_checkout
 from app.utils import agora
+
+
+@loja_bp.app_template_filter('texto_opcao_cafe')
+def texto_opcao_cafe(texto):
+    """Vocabulário público, inclusive nomes antigos cadastrados pelo owner."""
+    def trocar(match):
+        palavra = 'opções' if match[0].lower() == 'planos' else 'opção'
+        return palavra.upper() if match[0].isupper() else (
+            palavra.capitalize() if match[0][0].isupper() else palavra)
+    return re.sub(r'\bplanos?\b', trocar, str(texto or ''), flags=re.I)
 
 
 @loja_bp.route('/kits-cafe')
@@ -55,6 +65,7 @@ def _calendario(raw, base, cache):
         'agendada', base=base, dias=compra_kits.DIAS_AGENDA_KITS,
         lead_dias=lead_dias)
     cache[lead_dias] = {
+        'leadDias': lead_dias,
         'dataMin': datas[0].isoformat() if datas else '',
         'dataMax': datas[-1].isoformat() if datas else '',
         'janelas': {d.isoformat(): loja_checkout.janelas_disponiveis(
@@ -117,6 +128,10 @@ def _contexto(kit, form=None, agenda=None, erros=None):
                 'precoCentavos': int((preco_fixo + suco['preco']
                                       + sum(o['preco'] for o in opcoes)) * 100),
             }
+    selecionados, _ = kits_adicionais.ler(form or {}, conferir_catalogo=False)
+    adicionais = kits_adicionais.catalogo(base=base, selecionados=selecionados) if not avisos else []
+    for adicional in adicionais:
+        adicional['leadDias'] = _calendario([adicional], base, calendarios)['leadDias']
     tokens = dict(session.get('kits_checkout_tokens') or {})
     key = str(kit.id)
     if (key not in tokens or (request.method == 'GET'
@@ -126,7 +141,8 @@ def _contexto(kit, form=None, agenda=None, erros=None):
         tokens = dict(list(tokens.items())[-10:])
         session['kits_checkout_tokens'] = tokens
     itens_fotos = kits_fotos.candidatos(fixos, sucos, grupos)
-    ctx.update(kit=kit, itens=fixos, preco=preco,
+    ctx.update(kit=kit, itens=fixos, preco=preco, adicionais=adicionais,
+               tem_adicionais=bool(adicionais or selecionados),
                kit_imagens=kits_fotos.imagens_do_kit(
                    kit, fixos, itens_fotos, kits_fotos.capas_dos_itens(itens_fotos)),
                sucos=sucos, suco_id=suco_id,
@@ -142,6 +158,10 @@ def _contexto(kit, form=None, agenda=None, erros=None):
                    'sucos': escolhas,
                    'grupos': [g['chave'] for g in grupos],
                    'combinacoes': combinacoes,
+                   'adicionais': adicionais,
+                   'adicionaisSelecionados': selecionados,
+                   'calendarios': calendarios,
+                   'maxAdicionais': kits_adicionais.MAX_ITENS,
                    'agenda': agenda or [],
                    'cepUrl': url_for('loja.api_cep', cep='00000000'),
                    'freteUrl': url_for('loja.api_frete'),
