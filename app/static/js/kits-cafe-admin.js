@@ -10,6 +10,7 @@
   const busca = document.getElementById('kit-busca');
   const selecionados = document.getElementById('kit-so-selecionados');
   const sucos = [...editor.querySelectorAll('#kit-sucos input[name="suco_ids"]')];
+  const fotos = [...editor.querySelectorAll('.kits-foto-select')];
   const grupos = [...editor.querySelectorAll('[data-opcoes-grupo]')].map(container => ({
     container, nome: container.dataset.nome,
     opcoes: [...container.querySelectorAll('input[type="checkbox"]')]
@@ -40,6 +41,43 @@
     texto.textContent = descricao;
     li.append(quantidade, texto);
     fragmento.append(li);
+  }
+
+  function atualizarFotos() {
+    const permitidos = new Set([
+      ...rows.filter(row => Number(row.querySelector('.kit-quantidade').value) > 0)
+        .map(row => row.dataset.kind + ':' + row.dataset.id),
+      ...sucos.filter(suco => suco.checked).map(suco => 'produto:' + suco.value),
+      ...grupos.flatMap(grupo => grupo.opcoes.filter(opcao => opcao.checked).map(opcao => opcao.value))
+    ]);
+    const urls = new Set();
+    const avisos = [];
+    for (const select of fotos) {
+      for (const option of select.options) {
+        const ocultar = Boolean(option.value) && !permitidos.has(option.value) && !option.selected;
+        option.hidden = ocultar;
+        option.disabled = ocultar;
+      }
+      const option = select.selectedOptions[0];
+      const url = option?.dataset.fotoUrl || '';
+      const erro = !select.value ? '' : !permitidos.has(select.value)
+        ? 'Escolha uma foto de um item que faz parte deste plano.'
+        : !url ? 'Essa foto não está disponível. Escolha outra ou remova.'
+          : urls.has(url) ? 'Escolha fotos diferentes para cada posição.' : '';
+      select.setCustomValidity(erro);
+      if (erro) avisos.push(erro);
+      if (url) urls.add(url);
+      const preview = select.closest('.kits-photo-slot').querySelector('.kits-photo-preview');
+      const img = preview.querySelector('img');
+      img.hidden = !url || Boolean(erro);
+      if (url && img.getAttribute('src') !== url) img.src = url;
+      preview.querySelector('span').hidden = !img.hidden;
+    }
+    const aviso = document.getElementById('kit-fotos-aviso');
+    if (aviso) {
+      aviso.hidden = avisos.length === 0;
+      aviso.textContent = [...new Set(avisos)].join(' ');
+    }
   }
 
   function atualizar() {
@@ -107,6 +145,7 @@
       aviso.hidden = !incompleto;
       aviso.textContent = [...new Set(avisos)].join(' ');
     }
+    atualizarFotos();
   }
 
   for (const row of rows) {
@@ -136,6 +175,7 @@
     filtrar();
   }, true);
   sucos.forEach(suco => suco.addEventListener('change', atualizar));
+  fotos.forEach(foto => foto.addEventListener('change', atualizarFotos));
   document.getElementById('kit-busca-sucos').addEventListener('input', event => {
     const termo = normalizar(event.target.value);
     const opcoes = [...document.getElementById('kit-sucos').querySelectorAll('.kit-opcao-suco')];

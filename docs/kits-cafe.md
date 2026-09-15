@@ -165,3 +165,27 @@ de configurar os grupos em produção. Em caso de retorno ao código anterior,
 pause primeiro os planos que usam croissant/sourdough à escolha: versões
 antigas desconhecem os grupos e poderiam calcular apenas os itens fixos e o
 suco. Não apague a tabela nem os pedidos já comprados para retornar a versão.
+# Fotos dos planos
+
+No editor do kit, a seção **Fotos do plano** permite escolher uma foto principal
+e duas de apoio a partir das fotos reais do catálogo. A primeira foto selecionada
+ocupa o destaque, tanto na vitrine quanto no resumo do agendamento. A seleção pode
+usar itens fixos, sucos ou opções de croissant/sourdough que pertencem ao próprio
+kit. Não altera quantidades, sabores oferecidos, preços, estoque ou compras feitas.
+
+- As três posições vazias mantêm a seleção automática anterior (primeiras fotos
+  distintas dos itens fixos). Uma ou duas fotos manuais não são completadas
+  automaticamente com outras imagens.
+- O servidor rejeita componentes alheios ao kit, itens sem foto e URLs repetidas.
+  Se a imagem for retirada posteriormente do catálogo, ela é ignorada. Se nenhuma
+  seleção manual válida restar, a apresentação usa o fallback automático.
+- A seção preserva os valores em erro de validação. Formulários antigos sem o
+  marcador de fotos mantêm a curadoria dos componentes que ainda pertencem ao kit.
+- As referências são salvas somente na tabela nova `kit_cafe_foto`, criada no
+  startup serializado já existente; nenhuma coluna antiga é alterada. Rollback
+  para a versão anterior apenas volta às fotos automáticas, sem afetar pedidos;
+  não remover a tabela nem dados para reverter a apresentação.
+
+Curadoria aprovada pelo dono: Essencial = pão francês, suco e cookies;
+Artesanal = sourdough, croissant e suco; Completo = croissants, salada de frutas
+e granola. É cadastro, não uma regra baseada no nome ou no ID do plano.

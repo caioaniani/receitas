@@ -8,8 +8,8 @@ from flask import abort, redirect, render_template, request, session, url_for
 
 from app.blueprints.loja import loja_bp
 from app.extensions import limiter
-from app.models import CompraKit, KitCafe, Produto, Receita
-from app.services import compra_kits, kits_cafe, loja_checkout
+from app.models import CompraKit, KitCafe
+from app.services import compra_kits, kits_cafe, kits_fotos, loja_checkout
 from app.utils import agora
 
 
@@ -26,9 +26,12 @@ def kits_catalogo():
                           'grupos': grupos,
                           'sucos': sucos, 'preco': sum(it['subtotal'] for it in itens),
                           'preco_variavel': _preco_variavel(sucos, grupos)})
-    capas = _capas_dos_itens([item for card in cards for item in card['itens']])
     for card in cards:
-        card['imagens'] = _imagens_dos_itens(card['itens'], capas)
+        card['itens_fotos'] = kits_fotos.candidatos(card['itens'], card['sucos'], card['grupos'])
+    capas = kits_fotos.capas_dos_itens([item for card in cards for item in card['itens_fotos']])
+    for card in cards:
+        card['imagens'] = kits_fotos.imagens_do_kit(
+            card['kit'], card['itens'], card['itens_fotos'], capas)
     return render_template('loja/kits_catalogo.html', cards=cards, em_teste=_em_teste())
 
 
@@ -42,35 +45,6 @@ def _itens_fixos(itens, sucos, grupos=()):
     opcionais = {(o['kind'], o['id']) for g in grupos for o in g['opcoes']}
     return [item for item in itens if item.get('produto_id') not in ids
             and (item['kind'], item['id']) not in opcionais]
-
-
-def _capas_dos_itens(itens):
-    """Capas reais dos itens já validados, em lote e sem carregar blobs."""
-    capas = {}
-    for kind, modelo in (('receita', Receita), ('produto', Produto)):
-        ids = {item['id'] for item in itens if item['kind'] == kind}
-        if not ids:
-            continue
-        rows = (modelo.query.with_entities(
-            modelo.id, modelo.imagem_dropbox_url, modelo.imagem_url)
-            .filter(modelo.id.in_(ids)).all())
-        for item_id, dropbox_url, imagem_url in rows:
-            # Mesma precedência da capa usada na vitrine pública da loja.
-            capas[(kind, item_id)] = dropbox_url or imagem_url or ''
-    return capas
-
-
-def _imagens_dos_itens(itens, capas):
-    imagens = []
-    urls = set()
-    for item in itens:
-        url = capas.get((item['kind'], item['id']))
-        if url and url not in urls:
-            imagens.append({'url': url, 'nome': item['nome']})
-            urls.add(url)
-        if len(imagens) == 3:
-            break
-    return imagens
 
 
 def _calendario(raw, base, cache):
@@ -151,8 +125,10 @@ def _contexto(kit, form=None, agenda=None, erros=None):
         # Sessão continua pequena mesmo se o cliente visitar muitos kits.
         tokens = dict(list(tokens.items())[-10:])
         session['kits_checkout_tokens'] = tokens
+    itens_fotos = kits_fotos.candidatos(fixos, sucos, grupos)
     ctx.update(kit=kit, itens=fixos, preco=preco,
-               kit_imagens=_imagens_dos_itens(fixos, _capas_dos_itens(fixos)),
+               kit_imagens=kits_fotos.imagens_do_kit(
+                   kit, fixos, itens_fotos, kits_fotos.capas_dos_itens(itens_fotos)),
                sucos=sucos, suco_id=suco_id,
                grupos=grupos, escolhas_selecionadas=escolhas_selecionadas,
                escolhas_completas=escolhas_completas,

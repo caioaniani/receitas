@@ -9,8 +9,8 @@ from flask_login import current_user, login_required
 from app.blueprints.kits_cafe_admin import kits_cafe_admin_bp
 from app.decorators import owner_required
 from app.extensions import db
-from app.models import KitCafe, KitCafeItem, KitCafeOpcao, KitCafeSuco, Produto, Receita
-from app.services import kits_cafe, loja_menu
+from app.models import KitCafe, KitCafeFoto, KitCafeItem, KitCafeOpcao, KitCafeSuco, Produto, Receita
+from app.services import kits_cafe, kits_fotos, loja_menu
 from app.utils import agora
 
 
@@ -103,11 +103,20 @@ def _editor(kit=None, *, erros=(), status=200):
             chaves.add(marcada)
         grupos_catalogo.append({'chave': grupo, 'nome': titulo,
                                 'selecionados': marcados, 'catalogo': candidatos})
+    capas = kits_fotos.capas_dos_itens(catalogo)
+    fotos_catalogo = [{**item, 'chave': f'{item["kind"]}:{item["id"]}',
+                       'url': capas[(item['kind'], item['id'])]}
+                      for item in catalogo if capas.get((item['kind'], item['id']))]
+    fotos_selecionadas = {foto.ordem: kits_fotos.chave(foto)
+                         for foto in (kit.fotos if kit else [])}
+    if request.method == 'POST' and dados.get('configurar_fotos') == '1':
+        fotos_selecionadas = {ordem: dados.get(f'foto_{ordem}', '') for ordem in range(1, 4)}
     return render_template('admin/kits_cafe_editor.html', kit=kit,
                            catalogo=catalogo, selecionados=selecionados,
                            grupos_catalogo=grupos_catalogo,
                            sucos_catalogo=sucos_catalogo,
                            sucos_selecionados=sucos_selecionados,
+                           fotos_catalogo=fotos_catalogo, fotos_selecionadas=fotos_selecionadas,
                            dados=dados, erros=erros,
                            estado=_estado(kit) if kit else None), status
 
@@ -146,7 +155,7 @@ def salvar():
             abort(400)
         kit = KitCafe.query.get_or_404(int(kit_id))
         db.session.refresh(kit, with_for_update=True)
-        db.session.expire(kit, ['itens', 'sucos', 'opcoes'])
+        db.session.expire(kit, ['itens', 'sucos', 'opcoes', 'fotos'])
     nome = request.form.get('nome', '').strip()
     descricao = request.form.get('descricao', '').strip()
     erros = []
@@ -199,6 +208,22 @@ def salvar():
             erros.append('Grupo de opções inválido.')
     grupos, avisos_opcoes = kits_cafe.preparar_opcoes(selecao_opcoes, itens, suco_ids=suco_ids)
     erros.extend(avisos_opcoes)
+    candidatos_fotos = kits_fotos.candidatos(itens, sucos, grupos)
+    fotos = []
+    if request.form.get('configurar_fotos') == '1':
+        campos_fotos = {f'foto_{ordem}' for ordem in range(1, 4)}
+        if (any(campo.startswith('foto_') and campo not in campos_fotos for campo in request.form)
+                or any(len(request.form.getlist(campo)) > 1 for campo in campos_fotos)):
+            erros.append('Escolha apenas uma foto para cada uma das três posições.')
+        fotos, avisos_fotos = kits_fotos.preparar(
+            [request.form.get(f'foto_{ordem}', '') for ordem in range(1, 4)], candidatos_fotos)
+        erros.extend(avisos_fotos)
+    elif kit:
+        # Formulários antigos mantêm a curadoria que ainda pertence ao kit.
+        chaves_validas = {f'{item["kind"]}:{item["id"]}' for item in candidatos_fotos}
+        fotos = [{'ordem': foto.ordem, 'kind': foto.kind,
+                  'id': foto.receita_id if foto.kind == 'receita' else foto.produto_id}
+                 for foto in kit.fotos if kits_fotos.chave(foto) in chaves_validas]
     if erros:
         return _editor(kit, erros=erros, status=400)
     if kit is None:
@@ -230,6 +255,15 @@ def salvar():
             registro.grupo = grupo['chave']
             novas_opcoes.append(registro)
     kit.opcoes[:] = novas_opcoes
+    atuais_fotos = {foto.ordem: foto for foto in kit.fotos}
+    novas_fotos = []
+    for foto in fotos:
+        registro = atuais_fotos.get(foto['ordem']) or KitCafeFoto(ordem=foto['ordem'])
+        registro.kind = foto['kind']
+        registro.receita_id = foto['id'] if foto['kind'] == 'receita' else None
+        registro.produto_id = foto['id'] if foto['kind'] == 'produto' else None
+        novas_fotos.append(registro)
+    kit.fotos[:] = novas_fotos
     db.session.commit()
     flash('Kit publicado no site.' if kit.ativo else 'Kit salvo como rascunho.', 'success')
     return redirect(url_for('kits_cafe_admin.editar', kit_id=kit.id))

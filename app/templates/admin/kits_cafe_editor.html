@@ -121,6 +121,28 @@
           {% endfor %}
         </section>
         {% endif %}
+        <section class="kits-panel" aria-labelledby="kit-fotos-titulo">
+          <header class="kits-step"><span aria-hidden="true">5</span><div><h2 id="kit-fotos-titulo">Fotos do plano <span class="kits-optional">opcional</span></h2><p>Escolha a capa sem mudar os produtos ou o preço do kit.</p></div></header>
+          <input type="hidden" name="configurar_fotos" value="1">
+          <p class="kits-help">Use fotos dos itens fixos, dos sucos ou dos sabores oferecidos neste plano. A primeira foto selecionada aparece em destaque. Deixe as três vazias para voltar à seleção automática.</p>
+          <div class="kits-photo-editor">
+            {% set chaves_fotos = fotos_catalogo|map(attribute='chave')|list %}
+            {% for ordem in range(1, 4) %}
+            {% set selecionada = fotos_selecionadas.get(ordem, '') %}
+            <div class="kits-photo-slot">
+              <label for="kit-foto-{{ ordem }}" class="form-label">{{ 'Foto principal' if ordem == 1 else 'Foto de apoio ' ~ (ordem - 1) }}</label>
+              <select class="form-select kits-foto-select" id="kit-foto-{{ ordem }}" name="foto_{{ ordem }}" aria-describedby="kit-fotos-ajuda">
+                <option value="">Não selecionar</option>
+                {% if selecionada and selecionada not in chaves_fotos %}<option value="{{ selecionada }}" selected>Foto indisponível — escolha outra ou remova</option>{% endif %}
+                {% for foto in fotos_catalogo %}<option value="{{ foto.chave }}" data-foto-url="{{ foto.url }}" {% if foto.chave == selecionada %}selected{% endif %}>{{ foto.nome }}</option>{% endfor %}
+              </select>
+              <div class="kits-photo-preview" aria-hidden="true"><img alt="" hidden><span>Sem foto selecionada</span></div>
+            </div>
+            {% endfor %}
+          </div>
+          <p id="kit-fotos-ajuda" class="kits-help">As fotos ilustram os produtos do plano; o cliente continua escolhendo os sabores na próxima etapa.</p>
+          <p id="kit-fotos-aviso" class="kits-warning" role="status" hidden></p>
+        </section>
       </div>
       <aside class="kits-summary" aria-labelledby="kit-resumo-titulo">
         <div class="kits-summary-heading"><span class="kits-eyebrow">Uma entrega</span><i class="bi bi-bag-heart" aria-hidden="true"></i></div>

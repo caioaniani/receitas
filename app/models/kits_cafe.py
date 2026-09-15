@@ -18,6 +18,24 @@ class KitCafe(db.Model):
                             order_by='KitCafeSuco.produto_id')
     opcoes = db.relationship('KitCafeOpcao', backref='kit', cascade='all, delete-orphan',
                              order_by='KitCafeOpcao.grupo, KitCafeOpcao.id')
+    fotos = db.relationship('KitCafeFoto', backref='kit', cascade='all, delete-orphan',
+                            order_by='KitCafeFoto.ordem', lazy='selectin')
+
+
+class KitCafeFoto(db.Model):
+    """Curadoria visual: referencia componentes, sem alterar a composição vendida."""
+    __tablename__ = 'kit_cafe_foto'
+    kit_id = db.Column(db.Integer, db.ForeignKey('kit_cafe.id'), primary_key=True)
+    ordem = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(10), nullable=False)
+    receita_id = db.Column(db.Integer, db.ForeignKey('receita.id'))
+    produto_id = db.Column(db.Integer, db.ForeignKey('produto.id'))
+    __table_args__ = (
+        db.CheckConstraint('ordem BETWEEN 1 AND 3', name='ck_kit_cafe_foto_ordem'),
+        db.CheckConstraint("(kind = 'receita' AND receita_id IS NOT NULL AND produto_id IS NULL) "
+                           "OR (kind = 'produto' AND produto_id IS NOT NULL AND receita_id IS NULL)",
+                           name='ck_kit_cafe_foto_alvo'),
+    )
 
 
 class KitCafeSuco(db.Model):
