@@ -5,7 +5,9 @@
   const editor = document.getElementById('form-editor-checklist');
   const erro = document.getElementById('editor-erro');
   let ocupado = false;
+  const preenchimento = document.getElementById('form-checklist');
   function abrir(botao) {
+    if (preenchimento.dataset.envioOcupado === '1') return;
     editor.reset();
     erro.textContent = '';
     const dados = botao ? botao.dataset : {};
@@ -26,7 +28,7 @@
   dialog.addEventListener('close', () => { editor.elements.senha.value = ''; });
   dialog.addEventListener('cancel', event => { if (ocupado) event.preventDefault(); });
   async function salvar(acao) {
-    if (ocupado) return;
+    if (ocupado || preenchimento.dataset.envioOcupado === '1') return;
     if (acao !== 'excluir' && !editor.reportValidity()) return;
     if (acao === 'excluir' && !editor.elements.senha.value) {
       erro.textContent = 'Digite a senha da sua própria conta para excluir.';
@@ -76,6 +78,7 @@
       document.getElementById('checklist-edicao-status').textContent = acao === 'excluir'
         ? 'Ponto excluído desta loja. Histórico preservado.'
         : 'Ponto salvo para esta loja. Preencha o ponto atualizado; as outras respostas foram mantidas.';
+      preenchimento.dispatchEvent(new Event('checklist:itens-alterados', { bubbles: true }));
       dialog.close();
     } catch (error) {
       erro.textContent = error.message;

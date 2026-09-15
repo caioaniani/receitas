@@ -130,6 +130,7 @@ def create_app(config_class=None):
                     'css/rh-equipe.css', 'js/plano-carreira-lote.js',
                     'css/treino-gestao.css', 'css/treino-aluno.css',
                     'css/treino-admin.css', 'js/treino-admin.js',
+                    'js/checklist-editor.js', 'js/checklist-envio.js',
                     'css/kits-cafe-admin.css', 'js/kits-cafe-admin.js',
                     'loja/loja.css', 'loja/carrinho.js', 'loja/checkout.js', 'loja/kits.js',
                     'loja/kits.css'):
@@ -487,7 +488,8 @@ def create_app(config_class=None):
             and current_user.pode_cadastrar_funcionarios()
         )
         acesso_checklist = (
-            ep in {'checklist.index', 'checklist.preencher', 'checklist.editar_item'}
+            ep in {'checklist.index', 'checklist.preencher', 'checklist.editar_item',
+                   'checklist.envio_status', 'checklist.comprovante'}
             and current_user.pode_checklist()
         )
         if (getattr(current_user, 'somente_treino', False)
@@ -730,6 +732,12 @@ def create_app(config_class=None):
         return response
 
     # ── Error handlers ──
+    def _envio_checklist_json():
+        # Opt-in apenas do novo formulário: não muda respostas dos demais módulos.
+        return (request.path == '/checklist/preencher'
+                and request.headers.get('X-Checklist-Request') == '1'
+                and 'application/json' in request.headers.get('Accept', '').lower())
+
     @app.errorhandler(CSRFError)
     def csrf_error(e):
         # Com WTF_CSRF_TIME_LIMIT=None (config.py) o token nao vence mais por
@@ -759,6 +767,11 @@ def create_app(config_class=None):
             request.content_length, campos,
             bool(request.cookies.get(app.config.get('SESSION_COOKIE_NAME',
                                                     'session'))))
+        if _envio_checklist_json():
+            return jsonify(ok=False, erro='csrf_expirada', mensagem=(
+                'Não foi possível validar sua sessão. Suas respostas continuam nesta aba. '
+                'Entre novamente se necessário e recarregue a página; '
+                'as fotos precisarão ser anexadas de novo.')), 400
         if request.is_json:
             return jsonify(ok=False, erro='csrf_expirada', motivo=motivo,
                            msg='Sessão de segurança expirada — recarregue a '
@@ -806,6 +819,11 @@ def create_app(config_class=None):
         mb = int(limite / (1024 * 1024)) if limite else '?'
         msg = (f'Arquivo grande demais (o limite e {mb} MB). '
                'Tire uma foto menor ou reduza a imagem antes de enviar.')
+        if _envio_checklist_json():
+            return jsonify(ok=False, erro='arquivo_grande', mensagem=(
+                f'As fotos ultrapassaram o limite total de {mb} MB. '
+                'Escolha fotos menores e tente novamente. '
+                'Suas respostas e anexos continuam nesta página.')), 413
         if request.is_json:
             return jsonify(ok=False, erro='arquivo_grande', msg=msg), 413
         from urllib.parse import urlparse
@@ -814,8 +832,20 @@ def create_app(config_class=None):
         flash(msg, 'warning')
         return redirect(destino)
 
+    @app.errorhandler(400)
+    def requisicao_invalida(e):
+        if _envio_checklist_json():
+            return jsonify(ok=False, erro='envio_incompleto', mensagem=(
+                'Não foi possível ler o envio completo. Suas respostas foram mantidas '
+                'nesta página. Confira os anexos e tente novamente.')), 400
+        return e
+
     @app.errorhandler(403)
     def forbidden(e):
+        if _envio_checklist_json():
+            return jsonify(ok=False, erro='sem_permissao', mensagem=(
+                'Sua conta não tem permissão para enviar este checklist. '
+                'As respostas foram mantidas. Peça ao responsável para conferir seu acesso.')), 403
         return render_template('errors/403.html'), 403
 
     @app.errorhandler(404)
@@ -824,6 +854,12 @@ def create_app(config_class=None):
 
     @app.errorhandler(500)
     def internal_error(e):
+        if _envio_checklist_json():
+            db.session.rollback()
+            return jsonify(ok=False, erro='falha_servidor', mensagem=(
+                'O servidor não conseguiu confirmar o envio. Suas respostas e fotos '
+                'continuam nesta página. Vamos conferir se o checklist foi salvo '
+                'antes de permitir uma nova tentativa.')), 500
         return render_template('errors/500.html'), 500
 
     # ── Blueprints ──

@@ -1,5 +1,7 @@
 """Checklist de loja (03/08/2026): preencher (turno), configurar (admin) e
 conferir (admin). Regras de negócio em app/services/checklist_loja.py."""
+from uuid import uuid4
+
 from flask import abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import IntegrityError
@@ -10,6 +12,7 @@ from app.decorators import admin_required, checklist_required
 from app.extensions import db, limiter
 from app.models import (
     ChecklistEdicao,
+    ChecklistEnvio,
     ChecklistItemAjuste,
     ChecklistItemModelo,
     ChecklistPreenchimento,
@@ -46,6 +49,73 @@ def _resolver_loja(valor):
     if lj is None or not lj.ativa or lj.nome == 'Industria':
         return None
     return lj
+
+
+def _envio_json():
+    return (request.headers.get('X-Checklist-Request') == '1'
+            and 'application/json' in request.headers.get('Accept', '').lower())
+
+
+def _json_envio(dados, status=200):
+    resposta = jsonify(dados)
+    resposta.status_code = status
+    resposta.headers['Cache-Control'] = 'no-store, private'
+    return resposta
+
+
+def _erro_envio(mensagem, status=422, erro='validacao'):
+    db.session.rollback()
+    return _json_envio(dict(ok=False, erro=erro, mensagem=mensagem), status)
+
+
+def _sucesso_envio(p, duplicado=False):
+    return _json_envio(dict(
+        ok=True, salvo=True, preenchimento_id=p.id,
+        url_confirmacao=url_for('checklist.comprovante', preenchimento_id=p.id),
+        mensagem=f'Checklist salvo. {CHECKLIST_TIPO_LABEL[p.tipo]} da {p.loja.nome} registrada.',
+        duplicado=duplicado))
+
+
+def _envio_do_usuario(token, loja_id, tipo):
+    """Token não é credencial: seu dono e escopo também precisam coincidir."""
+    envio = db.session.get(ChecklistEnvio, token)
+    if envio is not None and (
+        envio.usuario_id != current_user.id or envio.loja_id != loja_id or envio.tipo != tipo
+    ):
+        return None, _erro_envio('Este envio não pertence a este checklist.', 403, 'acesso')
+    return envio, None
+
+
+@checklist_bp.route('/envio-status')
+@login_required
+@checklist_required
+def envio_status():
+    loja = _resolver_loja(request.args.get('loja'))
+    tipo = request.args.get('tipo')
+    if loja is None or tipo not in CHECKLIST_TIPOS:
+        return _erro_envio('Escolha a loja e o tipo de checklist.', 400)
+    try:
+        token = checklist_loja.validar_envio_token(request.args.get('token'))
+    except ValueError as exc:
+        return _erro_envio(str(exc), 400)
+    envio, erro = _envio_do_usuario(token, loja.id, tipo)
+    if erro is not None:
+        return erro
+    if envio is not None:
+        return _sucesso_envio(envio.preenchimento, duplicado=True)
+    return _json_envio(dict(ok=True, salvo=False))
+
+
+@checklist_bp.route('/comprovante/<int:preenchimento_id>')
+@login_required
+@checklist_required
+def comprovante(preenchimento_id):
+    p = db.get_or_404(ChecklistPreenchimento, preenchimento_id)
+    if p.usuario_id != current_user.id and not current_user.is_admin():
+        abort(403)
+    resposta = render_template('checklist/comprovante.html', p=p, loja=p.loja,
+                              label=CHECKLIST_TIPO_LABEL[p.tipo])
+    return resposta, 200, {'Cache-Control': 'no-store, private'}
 
 
 @checklist_bp.route('/')
@@ -145,17 +215,45 @@ def responsavel_remover(vinculo_id):
 @login_required
 @checklist_required
 def preencher():
+    resposta_json = _envio_json()
     loja = _resolver_loja(request.values.get('loja'))
     tipo = (request.values.get('tipo') or '').strip()
     if loja is None or tipo not in CHECKLIST_TIPOS:
+        if resposta_json:
+            return _erro_envio('Escolha a loja e o tipo de checklist.', 400)
         flash('Escolha a loja e o tipo de checklist.', 'warning')
         return redirect(url_for('checklist.index'))
+    envio_token = uuid4().hex
     if request.method == 'POST':
+        token_recebido = request.form.get('envio_token')
+        if resposta_json or token_recebido:
+            try:
+                envio_token = checklist_loja.validar_envio_token(token_recebido)
+            except ValueError as exc:
+                if resposta_json:
+                    return _erro_envio(str(exc), 400)
+                flash(str(exc), 'danger')
+                return redirect(url_for('checklist.preencher', loja=loja.id, tipo=tipo))
+        else:
+            # Formulários antigos sem JavaScript continuam aceitos.
+            envio_token = None
         # Edição e fechamento da mesma loja não podem cruzar seus snapshots.
         Loja.query.filter_by(id=loja.id).with_for_update().first()
+        if envio_token:
+            envio, erro = _envio_do_usuario(envio_token, loja.id, tipo)
+            if erro is not None:
+                return erro if resposta_json else abort(403)
+            if envio is not None:
+                if resposta_json:
+                    return _sucesso_envio(envio.preenchimento, duplicado=True)
+                flash('Checklist salvo. Este envio já estava registrado.', 'success')
+                return redirect(url_for('checklist.comprovante',
+                                        preenchimento_id=envio.preenchimento_id))
     itens = checklist_loja.itens_para(loja.id, tipo)
     pode_editar = checklist_responsaveis.pode_editar(current_user, loja.id)
     if not itens and not pode_editar:
+        if resposta_json:
+            return _erro_envio('Esse checklist ainda não tem itens cadastrados. Peça ao admin para configurar.')
         flash('Esse checklist ainda não tem itens cadastrados — peça ao '
               'admin pra configurar.', 'warning')
         return redirect(url_for('checklist.index', loja=loja.id))
@@ -176,6 +274,20 @@ def preencher():
                            >= agora() - timedelta(seconds=30))
                    .first())
         if recente is not None:
+            if envio_token:
+                checklist_loja.vincular_envio(envio_token, recente)
+                try:
+                    db.session.commit()
+                except IntegrityError:
+                    db.session.rollback()
+                    envio, erro = _envio_do_usuario(envio_token, loja.id, tipo)
+                    if erro is not None:
+                        return erro if resposta_json else abort(403)
+                    if envio is None:
+                        raise
+                    recente = envio.preenchimento
+            if resposta_json:
+                return _sucesso_envio(recente, duplicado=True)
             flash('Esse checklist acabou de ser registrado — não gravei em '
                   'dobro. (Pra preencher de novo de propósito, aguarde '
                   'meio minuto.)', 'info')
@@ -184,12 +296,19 @@ def preencher():
             set(request.form.getlist('itens_presentes')) != {str(it.id) for it in itens}
             or any(request.form.get(f'versao_{it.id}') != str(it.versao) for it in itens)
         ):
+            if resposta_json:
+                return _erro_envio(
+                    'O checklist foi alterado por outra pessoa. Suas respostas foram preservadas. '
+                    'Reabra a página e revise os pontos antes de enviar novamente.',
+                    409, 'checklist_alterado')
             flash('O checklist foi alterado por outra pessoa. Revise os pontos antes de enviar; '
                   'as fotos precisam ser anexadas novamente.', 'warning')
             return render_template('checklist/preencher.html', loja=loja, tipo=tipo,
                 label=CHECKLIST_TIPO_LABEL[tipo], itens=itens,
                 grupos=checklist_loja.agrupar_por_setor(itens), anteriores=_do_dia(loja, tipo),
                 form=request.form, pode_editar=pode_editar,
+                envio_token=envio_token or uuid4().hex,
+                checklist_dia=checklist_loja._data_do_registro(tipo).isoformat(),
                 equipe=checklist_responsaveis.quadro(loja.id)), 409
         respostas = {}
         for it in itens:
@@ -204,8 +323,10 @@ def preencher():
         try:
             p = checklist_loja.registrar(
                 loja, tipo, current_user.id, respostas,
-                observacao=request.form.get('observacao'))
+                observacao=request.form.get('observacao'), envio_token=envio_token)
         except ValueError as exc:
+            if resposta_json:
+                return _erro_envio(str(exc))
             # Re-render mantém marcações e observações; fotos o navegador
             # SEMPRE descarta em file input — avisar poupa o susto.
             flash(f'{exc} (As fotos precisam ser anexadas de novo.)',
@@ -216,7 +337,23 @@ def preencher():
                 grupos=checklist_loja.agrupar_por_setor(itens),
                 anteriores=_do_dia(loja, tipo),
                 form=request.form, pode_editar=pode_editar,
+                envio_token=envio_token or uuid4().hex,
+                checklist_dia=checklist_loja._data_do_registro(tipo).isoformat(),
                 equipe=checklist_responsaveis.quadro(loja.id)), 422
+        except IntegrityError:
+            db.session.rollback()
+            if envio_token:
+                envio, erro = _envio_do_usuario(envio_token, loja.id, tipo)
+                if erro is not None:
+                    return erro if resposta_json else abort(403)
+                if envio is not None:
+                    if resposta_json:
+                        return _sucesso_envio(envio.preenchimento, duplicado=True)
+                    return redirect(url_for('checklist.comprovante',
+                                            preenchimento_id=envio.preenchimento_id))
+            raise
+        if resposta_json:
+            return _sucesso_envio(p)
         flash(f'Checklist de {CHECKLIST_TIPO_LABEL[tipo].lower()} da '
               f'{loja.nome} registrado ({len(p.respostas)} pontos'
               + (f', {p.n_problemas} com problema' if p.n_problemas else '')
@@ -228,6 +365,8 @@ def preencher():
         label=CHECKLIST_TIPO_LABEL[tipo], itens=itens,
         grupos=checklist_loja.agrupar_por_setor(itens),
         anteriores=_do_dia(loja, tipo), form=None, pode_editar=pode_editar,
+        envio_token=envio_token,
+        checklist_dia=checklist_loja._data_do_registro(tipo).isoformat(),
         equipe=checklist_responsaveis.quadro(loja.id))
 
 

@@ -21,8 +21,19 @@
    iOS Safari trava o picker pra sempre se a permissão de câmera for negada
    uma vez (lição de 24/06/2026); sem o atributo ele oferece câmera OU
    galeria. #}
-<form method="POST" enctype="multipart/form-data" id="form-checklist">
+<section id="checklist-enviado" class="alert alert-success p-4" role="status" tabindex="-1" hidden>
+  <h2 class="h4">✓ Checklist salvo</h2>
+  <p id="checklist-confirmacao-texto"></p>
+  <p>Seu preenchimento está registrado. Não é preciso enviar novamente.</p>
+  <a id="checklist-comprovante" class="btn btn-success">Ver comprovante</a>
+  <a class="btn btn-outline-success" href="{{ url_for('checklist.index', loja=loja.id) }}">Voltar aos checklists</a>
+</section>
+<form method="POST" enctype="multipart/form-data" id="form-checklist"
+      data-rascunho-chave="checklist:{{ current_user.id }}:{{ loja.id }}:{{ tipo }}:{{ checklist_dia }}"
+      data-status-url="{{ url_for('checklist.envio_status') }}"
+      data-limite-bytes="{{ config.MAX_CONTENT_LENGTH }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="envio_token" value="{{ envio_token }}">
   <input type="hidden" name="loja" value="{{ loja.id }}">
   <input type="hidden" name="tipo" value="{{ tipo }}">
 
@@ -57,7 +68,11 @@
   </div>
 
   <div class="d-grid gap-2 mb-3">
-    <button class="btn btn-lg btn-primary" id="btn-fechar">✅ Fechar checklist de {{ label|lower }}</button>
+    <p id="checklist-rascunho" class="small text-muted mb-0" role="status"></p>
+    <div id="checklist-envio-erro" class="alert alert-danger mb-0" role="alert" tabindex="-1" hidden></div>
+    <p id="checklist-envio-status" class="small mb-0" role="status" aria-live="polite"></p>
+    <progress id="checklist-envio-progresso" class="w-100" max="100" value="0" aria-label="Envio das fotos" hidden></progress>
+    <button type="submit" class="btn btn-lg btn-primary" id="btn-fechar" data-no-loading="1">✅ Fechar checklist de {{ label|lower }}</button>
     <a class="btn btn-outline-secondary" href="{{ url_for('checklist.index', loja=loja.id) }}">Voltar</a>
   </div>
 </form>
@@ -66,13 +81,6 @@
 {% endblock %}
 
 {% block scripts %}
-{% if pode_editar %}<script src="{{ url_for('static', filename='js/checklist-editor.js') }}"></script>{% endif %}
-<script>
-// Anti-duplo-clique: upload de foto em 3G demora — desabilita o botão no
-// submit (o servidor ainda tem a guarda de 30s como rede de segurança).
-document.getElementById('form-checklist').addEventListener('submit', function () {
-  var b = document.getElementById('btn-fechar');
-  if (b) { b.disabled = true; b.textContent = 'Enviando…'; }
-});
-</script>
+{% if pode_editar %}<script src="{{ url_for('static', filename='js/checklist-editor.js') }}?v={{ static_v['js/checklist-editor.js'] }}"></script>{% endif %}
+<script src="{{ url_for('static', filename='js/checklist-envio.js') }}?v={{ static_v['js/checklist-envio.js'] }}"></script>
 {% endblock %}

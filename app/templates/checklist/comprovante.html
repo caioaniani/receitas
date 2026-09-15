@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Checklist salvo — {{ loja.nome }}{% endblock %}
+{% block content %}
+<section style="max-width:640px;">
+  <div class="alert alert-success p-4" role="status">
+    <h1 class="h3">✓ Checklist salvo</h1>
+    <p class="mb-1"><strong>{{ label }} — {{ loja.nome }}</strong></p>
+    <p class="mb-1">Registrado em {{ p.criado_em.strftime('%d/%m/%Y às %H:%M') }} por {{ p.usuario.nome if p.usuario else 'usuário registrado' }}.</p>
+    {% set fotos = p.respostas|selectattr('foto_url')|list|length %}
+    <p class="mb-1">Comprovante #{{ p.id }} · {{ p.respostas|length }} {{ 'ponto' if p.respostas|length == 1 else 'pontos' }} · {{ fotos }} {{ 'foto' if fotos == 1 else 'fotos' }}</p>
+    <p class="mb-0">O envio foi concluído. Não é preciso preencher novamente este checklist.</p>
+  </div>
+  {% if p.observacao %}<p><strong>Observação do turno:</strong> {{ p.observacao }}</p>{% endif %}
+  <details class="card mb-3">
+    <summary class="card-body">Ver respostas registradas</summary>
+    <ul class="list-unstyled card-body pt-0">
+      {% for r in p.respostas %}
+      <li class="border-bottom py-2">
+        <strong>{{ '✓ OK' if r.ok else '⚠ Problema' }}</strong> — {{ r.item_texto }}
+        {% if r.observacao %}<p class="small mb-0">{{ r.observacao }}</p>{% endif %}
+        {% if r.foto_url %}<a href="{{ r.foto_url }}" target="_blank" rel="noopener" class="small">Ver foto</a>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  <a class="btn btn-primary" href="{{ url_for('checklist.index', loja=loja.id) }}">Voltar aos checklists da loja</a>
+</section>
+{% endblock %}

@@ -27,10 +27,12 @@ import logging
 from datetime import time as _time
 from datetime import timedelta
 from types import SimpleNamespace
+from uuid import UUID
 
 from app.constants import CHECKLIST_TIPO_LABEL, CHECKLIST_TIPOS
 from app.extensions import db
 from app.models import (
+    ChecklistEnvio,
     ChecklistItemAjuste,
     ChecklistItemModelo,
     ChecklistPreenchimento,
@@ -102,7 +104,28 @@ def tipos_configurados(loja_id):
             if (itens := itens_para(loja_id, tipo))}
 
 
-def registrar(loja, tipo, usuario_id, respostas, observacao=None):
+def validar_envio_token(token):
+    """Aceita apenas UUID hexadecimal compacto; nunca interpreta IDs de usuário."""
+    if not isinstance(token, str) or len(token) != 32:
+        raise ValueError('Identificação do envio inválida. Reabra o checklist e tente novamente.')
+    try:
+        normalizado = UUID(hex=token).hex
+    except ValueError as exc:
+        raise ValueError('Identificação do envio inválida. Reabra o checklist e tente novamente.') from exc
+    if token.lower() != normalizado:
+        raise ValueError('Identificação do envio inválida. Reabra o checklist e tente novamente.')
+    return normalizado
+
+
+def vincular_envio(token, preenchimento):
+    """Adiciona o recibo à transação atual, sem antecipar o commit."""
+    db.session.add(ChecklistEnvio(
+        token=validar_envio_token(token), usuario_id=preenchimento.usuario_id,
+        loja_id=preenchimento.loja_id, tipo=preenchimento.tipo,
+        preenchimento_id=preenchimento.id))
+
+
+def registrar(loja, tipo, usuario_id, respostas, observacao=None, envio_token=None):
     """Grava um checklist completo. `respostas` = {item_id: {'ok': bool,
     'observacao': str|None, 'foto': bytes|None}}.
 
@@ -111,6 +134,8 @@ def registrar(loja, tipo, usuario_id, respostas, observacao=None):
     """
     if tipo not in CHECKLIST_TIPOS:
         raise ValueError('Tipo de checklist inválido.')
+    if envio_token is not None:
+        envio_token = validar_envio_token(envio_token)
     itens = itens_para(loja.id, tipo)
     if not itens:
         raise ValueError(
@@ -146,18 +171,24 @@ def registrar(loja, tipo, usuario_id, respostas, observacao=None):
         loja_id=loja.id, tipo=tipo, data=data_reg,
         usuario_id=usuario_id,
         observacao=(observacao or '').strip()[:500] or None)
-    db.session.add(p)
-    db.session.flush()
-    for it in itens:
-        r = respostas[it.id]
-        info = fotos_up.get(it.id) or {}
-        db.session.add(ChecklistResposta(
-            preenchimento_id=p.id, item_id=it.id, item_texto=it.texto,
-            exigia_foto=it.exige_foto, ok=bool(r.get('ok')),
-            observacao=(r.get('observacao') or '').strip()[:500] or None,
-            foto_url=info.get('url'),
-            foto_storage_path=info.get('storage_path')))
-    db.session.commit()
+    try:
+        db.session.add(p)
+        db.session.flush()
+        for it in itens:
+            r = respostas[it.id]
+            info = fotos_up.get(it.id) or {}
+            db.session.add(ChecklistResposta(
+                preenchimento_id=p.id, item_id=it.id, item_texto=it.texto,
+                exigia_foto=it.exige_foto, ok=bool(r.get('ok')),
+                observacao=(r.get('observacao') or '').strip()[:500] or None,
+                foto_url=info.get('url'),
+                foto_storage_path=info.get('storage_path')))
+        if envio_token is not None:
+            vincular_envio(envio_token, p)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     return p
 
 

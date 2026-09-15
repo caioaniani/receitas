@@ -134,6 +134,27 @@ class ChecklistResposta(db.Model):
                 f'{"ok" if self.ok else "problema"}>')
 
 
+class ChecklistEnvio(db.Model):
+    """Recibo idempotente de um envio, persistido junto com suas respostas.
+
+    Um preenchimento pode receber mais de um token quando a proteção de
+    duplo clique de 30 segundos reconhece formulários abertos em paralelo.
+    A tabela é nova: não acrescenta colunas às tabelas de histórico.
+    """
+    __tablename__ = 'checklist_envio'
+
+    token = db.Column(db.String(32), primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    loja_id = db.Column(db.Integer, db.ForeignKey('loja.id'), nullable=False)
+    tipo = db.Column(db.String(20), nullable=False)
+    preenchimento_id = db.Column(
+        db.Integer, db.ForeignKey('checklist_preenchimento.id'),
+        nullable=False, index=True)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora)
+
+    preenchimento = db.relationship('ChecklistPreenchimento')
+
+
 class ChecklistItemAjuste(db.Model):
     """Personalização por loja; nunca altera o modelo das demais unidades."""
     __tablename__ = 'checklist_item_ajuste'
