@@ -65,13 +65,15 @@ def test_home_descreve_sucos_e_grupos_sem_duplicar_opcoes_como_itens_fixos(app, 
     assert '2× Croissant simples' in secao
 
 
-def test_acesso_aos_kits_fica_somente_no_menu_produtos(app, kit):
+def test_acesso_aos_kits_no_cabecalho_fica_somente_no_menu_produtos(app, kit):
     resposta = app.test_client().get('/loja/')
     assert resposta.status_code == 200
     html = resposta.get_data(as_text=True)
     _secao_kits(html)
-    links = re.findall(r'<a\b[^>]*href="(?:/loja/)?#cat-kits-cafe"[^>]*>.*?</a>', html, re.S)
-    assert len(links) == 1, 'Kits devem aparecer somente dentro do menu Produtos'
+    cabecalho = re.search(r'<header class="topo">.*?</header>', html, re.S)
+    assert cabecalho is not None
+    links = re.findall(r'<a\b[^>]*href="(?:/loja/)?#cat-kits-cafe"[^>]*>.*?</a>', cabecalho[0], re.S)
+    assert len(links) == 1, 'No cabeçalho, kits devem aparecer somente dentro do menu Produtos'
     assert 'role="menuitem"' in links[0]
     assert 'href="/loja/kits-cafe"' not in html
 

@@ -5,6 +5,55 @@
 {% endblock %}
 
 {% block content %}
+{% set destaques = namespace(paes=false, croissants=false, presentes=false) %}
+{% for categoria, itens in grupos %}
+  {% set slug = categoria|catslug %}
+  {% if itens and slug == 'paes' %}{% set destaques.paes = true %}{% endif %}
+  {% if itens and slug == 'viennoiserie' %}{% set destaques.croissants = true %}{% endif %}
+  {% if itens and slug == 'cestas' %}{% set destaques.presentes = true %}{% endif %}
+{% endfor %}
+{% if kits_cards or destaques.paes or destaques.croissants or destaques.presentes %}
+<section class="home-destaques" aria-labelledby="home-destaques-titulo">
+  <h1 id="home-destaques-titulo">O que você procura hoje?</h1>
+  <div class="home-destaques-grid">
+    {% if kits_cards %}
+    <article class="home-destaque">
+      <div class="home-destaque-texto">
+        <h2>Café da manhã em casa</h2>
+        <p>Escolha seu kit e agende os dias de entrega.</p>
+      </div>
+      <div class="home-destaque-links">
+        <a href="#cat-kits-cafe">Ver opções <span aria-hidden="true">→</span></a>
+      </div>
+    </article>
+    {% endif %}
+    {% if destaques.paes or destaques.croissants %}
+    <article class="home-destaque">
+      <div class="home-destaque-texto">
+        <h2>Pães e croissants</h2>
+        <p>Seus favoritos para acompanhar o café.</p>
+      </div>
+      <div class="home-destaque-links">
+        {% if destaques.paes %}<a href="#cat-paes">Ver pães <span aria-hidden="true">→</span></a>{% endif %}
+        {% if destaques.croissants %}<a href="#cat-viennoiserie">Ver croissants <span aria-hidden="true">→</span></a>{% endif %}
+      </div>
+    </article>
+    {% endif %}
+    {% if destaques.presentes %}
+    <article class="home-destaque">
+      <div class="home-destaque-texto">
+        <h2>Presentes</h2>
+        <p>Cestas para surpreender em uma ocasião especial.</p>
+      </div>
+      <div class="home-destaque-links">
+        <a href="#cat-cestas">Ver cestas <span aria-hidden="true">→</span></a>
+      </div>
+    </article>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
 {% if not grupos and not kits_cards %}
 <section class="vazio">
   <p>Catálogo em montagem. Volte em alguns instantes.</p>
