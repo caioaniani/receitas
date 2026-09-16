@@ -35,6 +35,7 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
     `congelados` pra tela avisar. Gesto humano (automatico=False) ignora a
     trava."""
     from app.models import PlanejamentoItem
+    from app.services.bateladas_paes import normalizar_item
     from app.services.previsao_producao import ant_insumo, cronograma_producao
 
     if crono is None:
@@ -73,6 +74,10 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
             return False
         try:
             ant = ant_insumo(rid, data_alvo, receitas, lead, None, memo_ant)
+            it = existentes.get(rid)
+            if it is not None and it.batelada_padrao is not None:
+                ant = max(ant, int(it.batelada_padrao.dados.get(
+                    'antecedencia_insumo_dias', 0)))
         except Exception:  # noqa: BLE001 — trava nunca derruba o envio
             logger.exception('freeze por insumo falhou (receita %s)', rid)
             return False
@@ -94,15 +99,19 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
                                    (data_alvo - hoje()).days))
             continue
         if it is None:
-            db.session.add(PlanejamentoItem(
+            it = PlanejamentoItem(
                 planejamento_id=plano.id, receita_id=rid,
-                multiplicador=max(1, ceil(qtd / rend)), qtd_alvo=qtd))
+                receita=rec,
+                multiplicador=max(1, ceil(qtd / rend)), qtd_alvo=qtd)
+            db.session.add(it)
+            normalizar_item(it)
         else:
             # A parcela EXTRA (reagendada da auditoria) SOMA ao alvo do grid —
             # re-enviar o plano nao pode apagar o que o admin mandou a mao.
             extra = int(it.qtd_extra or 0)
             it.qtd_alvo = max(qtd + extra, int(it.produzido_qtd or 0))
             it.multiplicador = max(1, ceil(it.qtd_alvo / rend))
+            normalizar_item(it, permitir_novo=plano.enviado_ao_padeiro is False)
 
     # Receitas que sairam do cronograma: remove, EXCETO as que ja produziram
     # (estoque/MP reais ja mexeram) ou que tem parcela EXTRA (reagendada) —
@@ -125,6 +134,7 @@ def _sync_itens_do_cronograma(plano, data_alvo, horizonte_dias, janela_semanas,
             rec = receitas.get(rid)
             rend = rendimento_massa_crua(rec) if rec else 1.0
             it.multiplicador = max(1, ceil(it.qtd_alvo / rend))
+            normalizar_item(it, permitir_novo=plano.enviado_ao_padeiro is False)
         else:
             db.session.delete(it)
     if congelados:
@@ -346,13 +356,21 @@ def _explosao_mp_falta(plano):
     (`rendimento_massa_crua`) — assim a pré-baixa casa exata com a baixa
     real na confirmação."""
     from app.models import PlanejamentoItem
-    itens = PlanejamentoItem.query.filter_by(planejamento_id=plano.id).all()
+    from app.services.bateladas_paes import componentes_item
+    itens = (PlanejamentoItem.query.filter_by(planejamento_id=plano.id)
+             .populate_existing().all())
     itens_motor = []
+    out = {}
     for it in itens:
         if it.dispensada_em is not None:
             continue
         falta = max(0, int(it.qtd_alvo or 0) - int(it.produzido_qtd or 0))
         if falta <= 0:
+            continue
+        componentes = componentes_item(it, falta)
+        if componentes is not None:
+            for mp_id, quantidade in componentes['mp'].items():
+                out[mp_id] = out.get(mp_id, 0.0) + quantidade
             continue
         rend = rendimento_massa_crua(it.receita)
         if not rend or rend <= 0:
@@ -360,10 +378,9 @@ def _explosao_mp_falta(plano):
         itens_motor.append({'receita_id': it.receita_id,
                             'multiplicador': falta / rend})
     if not itens_motor:
-        return {}
+        return out
     lista = consolidar_lista_compras(itens_motor)
     ids = {mp.nome: mp.id for mp in MateriaPrima.query.all()}
-    out = {}
     for nome, dados in lista.items():
         mp_id = ids.get(nome)
         if mp_id and dados['quantidade'] > _PRE_BAIXA_EPS:
@@ -401,7 +418,9 @@ def sincronizar_pre_baixa_mp(plano, user_id=None, criar=False):
         return {'em_regime': bool(linhas), 'movs': 0}
     rotulo = plano.data.strftime('%d/%m') if plano.data else '#%s' % plano.id
     mps = {m.id: m for m in
-           MateriaPrima.query.filter(MateriaPrima.id.in_(mp_ids)).all()}
+           MateriaPrima.query.filter(MateriaPrima.id.in_(mp_ids))
+           .order_by(MateriaPrima.id).with_for_update().populate_existing().all()}
+    regime_bateladas = any(it.batelada_padrao is not None for it in plano.itens)
     movs = 0
     for mp_id in sorted(mp_ids):
         mp = mps.get(mp_id)
@@ -418,7 +437,11 @@ def sincronizar_pre_baixa_mp(plano, user_id=None, criar=False):
                 materia_prima_id=mp_id, tipo='saida', quantidade=delta,
                 referencia='Pré-baixa produção %s' % rotulo,
                 usuario_id=user_id))
-            mp.estoque_atual = max(0, (mp.estoque_atual or 0) - delta)
+            saldo = (mp.estoque_atual or 0) - delta
+            # No regime novo o disponível pode ser negativo: representa o
+            # déficit real depois das reservas. Truncar fabricaria saldo no
+            # estorno e faria a confirmação perder parte do consumo.
+            mp.estoque_atual = saldo if regime_bateladas else max(0, saldo)
         else:
             db.session.add(MovimentacaoEstoque(
                 materia_prima_id=mp_id, tipo='entrada', quantidade=-delta,
@@ -662,7 +685,7 @@ def consumir_subreceitas_prontas(rec, unidades, user_id):
     return out
 
 
-def consumir_ficha(rec, unidades, user_id, referencia_mp):
+def consumir_ficha(rec, unidades, user_id, referencia_mp, *, saldo_assinado=False):
     """Consome da ficha técnica o que PRODUZIR `unidades` da receita consome:
     MP proporcional (multiplicador fracionário = unidades/rendimento — consumo
     REAL, não batida cheia) + sub-receitas prontas do congelado (fração
@@ -691,12 +714,13 @@ def consumir_ficha(rec, unidades, user_id, referencia_mp):
         db.session.add(MovimentacaoEstoque(
             materia_prima_id=mp.id, tipo='saida', quantidade=qtd,
             referencia=referencia_mp, usuario_id=user_id))
-        mp.estoque_atual = max(0, (mp.estoque_atual or 0) - qtd)
+        saldo = (mp.estoque_atual or 0) - qtd
+        mp.estoque_atual = saldo if saldo_assinado else max(0, saldo)
 
     return consumir_subreceitas_prontas(rec, unidades, user_id)
 
 
-def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
+def produzir_item_plano(item_id, unidades, user_id, encerrar=False, *, commit=True):
     """OPCAO B: o padeiro produz `unidades` de um item do plano aprovado.
     Numa unica transacao: (1) credita o produto pronto na industria
     (entrada_producao), (2) DESCONTA a MP da ficha tecnica proporcional as
@@ -710,7 +734,7 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
     OK/dispensar ou reagendar de volta). So marca se ainda restar falta;
     estoque credita apenas o produzido de verdade.
     """
-    from app.models import PlanejamentoItem
+    from app.models import PlanejamentoItem, PlanejamentoProducao
     from app.services.estoque_congelados import entrada_producao
 
     try:
@@ -719,7 +743,15 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
         unidades = 0
     if unidades <= 0:
         return {'ok': False, 'erro': 'Quantidade inválida.'}
-    item = PlanejamentoItem.query.get(item_id)
+    # Duas confirmações em sabores diferentes também reconciliam a reserva
+    # da mesma ordem. Serialize pelo plano antes de travar o item individual.
+    plano_id = db.session.query(PlanejamentoItem.planejamento_id).filter_by(
+        id=item_id).scalar()
+    if plano_id is None:
+        return {'ok': False, 'erro': 'Item do plano não encontrado.'}
+    PlanejamentoProducao.query.filter_by(id=plano_id).with_for_update().first()
+    item = (PlanejamentoItem.query.filter_by(id=item_id)
+            .with_for_update().populate_existing().first())
     if item is None:
         return {'ok': False, 'erro': 'Item do plano não encontrado.'}
     # Item DISPENSADO pelo admin (auditoria: "OK, não vai produzir") não pode ser
@@ -737,11 +769,6 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
     entrada_producao(receita_id=rec.id, quantidade=unidades, usuario_id=user_id,
                      referencia='Produção (cronograma) %s' % rec.nome)
 
-    # 2 + 2b) baixa MP + sub-receitas prontas da ficha (helper compartilhado
-    #         com a fornada queimada da tela de perdas — 13/08/2026).
-    consumir_ficha(rec, unidades, user_id,
-                   referencia_mp='Produção %s (%d un)' % (rec.nome, unidades))
-
     # 3) avanca o produzido do item.
     item.produzido_qtd = int(item.produzido_qtd or 0) + unidades
 
@@ -754,10 +781,19 @@ def produzir_item_plano(item_id, unidades, user_id, encerrar=False):
         item.falta_encerrada_em = agora()
         encerrado = True
 
-    # 4) a parte confirmada virou baixa REAL — o reconciliador libera a
-    #    pré-baixa correspondente (plano fora do regime = no-op).
+    # Libera primeiro a fração reservada. Debitar antes e limitar o saldo a
+    # zero apagaria consumo quando o disponível fosse menor que a reserva.
+    # A conversão inteira continua atômica, sob a trava da ordem.
     sincronizar_pre_baixa_mp(item.planejamento, user_id)
-    db.session.commit()
+    from app.services.bateladas_paes import consumir_item
+    referencia = 'Produção %s (%d un)' % (rec.nome, unidades)
+    if consumir_item(item, unidades, user_id, referencia,
+                     produzido_antes=item.produzido_qtd - unidades) is None:
+        consumir_ficha(rec, unidades, user_id, referencia_mp=referencia,
+                      saldo_assinado=any(it.batelada_padrao is not None
+                                         for it in item.planejamento.itens))
+    if commit:
+        db.session.commit()
     return {'ok': True, 'produzido': item.produzido_qtd,
             'encerrado': encerrado, 'falta_restante': falta_restante,
             'unidade': unidade_producao(rec)}
@@ -776,6 +812,28 @@ def consolidar_lista_compras(itens):
     lista = {}
 
     for item in itens:
+        # Ordens padronizadas conservam a composição aprovada, inclusive se a
+        # ficha viva for editada depois. Não reconstruir pelo multiplicador.
+        item_plano = item.get('item_plano')
+        if item_plano is not None and item_plano.batelada_padrao is not None:
+            snap = item_plano.batelada_padrao
+            for componente in snap.dados['mp']:
+                mp = db.session.get(MateriaPrima, componente['id'])
+                if mp is None:
+                    raise ValueError('Matéria-prima da batelada não encontrada.')
+                qtd = componente['quantidade'] * snap.bateladas
+                d = lista.setdefault(mp.nome, {
+                    'quantidade': 0, 'unidade': mp.unidade,
+                    'custo_por_kg': mp.custo_por_kg,
+                    'estoque_atual': mp.estoque_atual or 0,
+                    'fornecedor': mp.fornecedor,
+                    'em_unidades': componente.get('em_unidades', False),
+                })
+                d['quantidade'] += qtd
+                org = d.setdefault('origens', {})
+                nome = snap.dados['nome']
+                org[nome] = org.get(nome, 0.0) + qtd
+            continue
         receita = receitas.get(item['receita_id'])
         if not receita:
             continue

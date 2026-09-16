@@ -349,6 +349,8 @@
   .prod-dia-ver { font-size:13px; font-weight:600; color:var(--cinza,#6c757d); }
   .prod-dia-meta { color:#6c757d; font-size:15px; flex:1; }
   .prod-dia-meta b { color:#343a40; }
+  .prod-dia-batelada { display:block; margin-top:5px; color:#1a4731; font-size:14px; }
+  .prod-dia-batelada-aviso { display:block; margin-top:6px; color:#854d0e; font-size:14px; }
   .prod-dia-form { display:flex; gap:8px; align-items:center; }
   .prod-dia-qtd { width:84px; font-size:19px; padding:9px; border:1px solid #ced4da;
     border-radius:10px; text-align:right; }
@@ -476,6 +478,10 @@
       <span class="prod-dia-meta">
         {% if it.falta > 0 %}produzir <b style="color:#198754;">{{ it.falta }}</b> {{ it.unidade }}{% if it.produzido %} <small>(já {{ it.produzido }}/{{ it.alvo }})</small>{% endif %}
         {%- else -%}✓ feito {{ it.produzido }} {{ it.unidade }}{% endif %}
+        {% if it.batelada %}
+        <span class="prod-dia-batelada">Referência da ordem: <b>{{ it.batelada.bateladas }} batelada{{ 's' if it.batelada.bateladas != 1 }}</b> · {{ '{:,.0f}'.format(it.batelada.farinha_g).replace(',', '.') }} g de farinha em cada batimento</span>
+        {% for aviso in it.batelada.avisos %}<span class="prod-dia-batelada-aviso" role="note">{{ aviso }}</span>{% endfor %}
+        {% endif %}
       </span>
       {% if it.falta > 0 %}
       {# Lançamento PARCIAL (menos que a falta): 2º confirm pergunta se dá o
@@ -532,7 +538,7 @@
 
     {# produção avulsa separada pelas duas pessoas que trabalham em paralelo #}
     {% if plano.solos_paes %}
-    <div class="prod-dia-grupo"><span class="prod-dia-group-icon">🍞</span><span><small>Padeiro de pães</small>Pães avulsos</span></div>
+    <div class="prod-dia-grupo"><span class="prod-dia-group-icon">🍞</span><span><small>Padeiro de pães</small>Pães por sabor</span></div>
     {% for it in plano.solos_paes %}{{ prod_row(it) }}{% endfor %}
     {% endif %}
     {% if plano.solos_viennoiserie %}
@@ -732,14 +738,33 @@
       '<p style="padding:10px;color:#888;">Carregando receita…</p>';
     document.getElementById('mep-backdrop').classList.add('aberto');
     document.getElementById('mep-modal').classList.add('aberto');
-    fetch('/padeiro/receita/' + rid + '.json?unidades=' + un)
-      .then(function (r) { return r.json(); })
+    fetch('/padeiro/receita/' + rid + '.json?unidades=' + un +
+          (itemId ? '&item_id=' + encodeURIComponent(itemId) : ''))
+      .then(function (r) {
+        if (!r.ok) throw new Error('Não foi possível carregar a ficha desta ordem.');
+        return r.json();
+      })
       .then(function (d) {
         document.getElementById('mep-titulo').textContent =
-          d.nome + ' — ' + d.unidades + ' ' + d.unidade_producao;
-        var h = '<div class="mep-sub">Mise en place — marque o que já separou</div>';
+          d.nome + (d.batelada_padrao ? ' — por batelada' :
+                    ' — ' + d.unidades + ' ' + d.unidade_producao);
+        var h = '';
+        if (d.batelada_padrao) {
+          h += '<div class="mep-base-massa">' + _mepG(d.farinha_g) +
+               ' de farinha por batimento<small>Ordem: ' + d.bateladas +
+               ' batelada' + (d.bateladas != 1 ? 's' : '') +
+               ' deste sabor. Pese os ingredientes abaixo para cada batelada, separadamente.</small></div>';
+          h += '<p>Rendimento previsto: ' + d.unidades + ' ' +
+               _mepEsc(d.unidade_producao) + ' por batelada · ' + d.unidades_total +
+               ' ' + _mepEsc(d.unidade_producao) + ' na ordem. Registre somente o que realmente produziu.</p>';
+          (d.avisos || []).forEach(function (aviso) {
+            h += '<p class="prod-dia-batelada-aviso" role="note">' + _mepEsc(aviso) + '</p>';
+          });
+        }
+        h += '<div class="mep-sub">' + (d.batelada_padrao ? 'Pesagem de uma batelada' : 'Mise en place') +
+             ' — marque o que já separou</div>';
         (d.ingredientes || []).forEach(function (i) {
-          var key = 'mep:' + d.receita_id + ':' + i.nome;
+          var key = 'mep:' + (d.batelada_padrao ? 'item:' + itemId : d.receita_id) + ':' + i.nome;
           var checked = localStorage.getItem(key) === '1';
           var q = i.unidade === 'g' ? _mepG(i.qtd) : (i.qtd + ' ' + i.unidade);
           h += '<label class="mep-ing' + (checked ? ' done' : '') + '">' +
@@ -749,6 +774,9 @@
                (i.pct ? ' <small>' + i.pct + '%</small>' : '') + '</span>' +
                '<span class="q">' + q + '</span></label>';
         });
+        if (d.batelada_padrao && d.bateladas > 1) {
+          h += '<button type="button" class="prod-dia-base-btn" id="mep-limpar-pesagem">Limpar marcações para a próxima batelada</button>';
+        }
         if (d.processo && d.processo.length) {
           h += '<div class="mep-sub">Processo — passo a passo</div>';
           h += '<ul class="mep-proc">';
@@ -777,6 +805,14 @@
             var lbl = cb.closest('.mep-ing');
             if (cb.checked) { localStorage.setItem(cb.dataset.key, '1'); lbl.classList.add('done'); }
             else { localStorage.removeItem(cb.dataset.key); lbl.classList.remove('done'); }
+          });
+        });
+        var limpar = document.getElementById('mep-limpar-pesagem');
+        if (limpar) limpar.addEventListener('click', function () {
+          document.querySelectorAll('#mep-body .mep-chk').forEach(function (cb) {
+            cb.checked = false;
+            localStorage.removeItem(cb.dataset.key);
+            cb.closest('.mep-ing').classList.remove('done');
           });
         });
       })

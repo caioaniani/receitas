@@ -254,6 +254,7 @@ def _plano_do_dia(dia):
     itens:[...]}], solos:[...]} — cada item tem item_id/receita_id/nome/alvo/
     produzido/falta."""
     from app.models import MassaBaseItem, PlanejamentoProducao
+    from app.services.bateladas_paes import resumo_item
     from app.services.centros_producao import (
         CENTRO_PAES,
         CENTRO_VIENNOISERIE,
@@ -276,16 +277,22 @@ def _plano_do_dia(dia):
 
     def _item(it):
         rec = it.receita
+        batelada = resumo_item(it)
         alvo = int(it.qtd_alvo or 0)
         feito = int(it.produzido_qtd or 0)
         return {'item_id': it.id, 'receita_id': it.receita_id,
-                'nome': rec.nome if rec else '(receita)', 'alvo': alvo,
+                'nome': (batelada['nome'] if batelada else
+                         rec.nome if rec else '(receita)'), 'alvo': alvo,
                 'produzido': feito, 'falta': max(0, alvo - feito),
-                'unidade': unidade_producao(rec),
-                'fornadas': fornadas_amassadeira(rec, it.multiplicador),
+                'unidade': (batelada['unidade_producao'] if batelada else
+                            unidade_producao(rec)),
+                'fornadas': (batelada['bateladas'] if batelada else
+                             fornadas_amassadeira(rec, it.multiplicador)),
+                'batelada': batelada,
                 'centro': centro_trabalho_receita(rec),
                 'auxiliar': eh_preparo_auxiliar(rec),
-                '_mult': it.multiplicador, '_mbi': membership.get(it.receita_id)}
+                '_mult': it.multiplicador,
+                '_mbi': None if batelada else membership.get(it.receita_id)}
 
     # Item dispensado pelo admin (auditoria) sai do plano do padeiro: ele não vê
     # nem produz o que o admin já fechou. Item com falta ENCERRADA pelo próprio
@@ -489,10 +496,22 @@ def receita_mise(receita_id):
     """Receita escalada pra `unidades` (mise en place do modal)."""
     from flask import jsonify
 
-    from app.models import Receita
+    from app.models import PlanejamentoItem, Receita
+    from app.services.bateladas_paes import mise_item
     from app.services.producao import mise_en_place
 
     rec = Receita.query.get_or_404(receita_id)
+    # A ficha da ordem é imutável: a quantidade lançada na produção parcial
+    # não deve reduzir a pesagem de uma batelada nem trocar a composição.
+    if request.args.get('item_id') is not None:
+        item_id = request.args.get('item_id', type=int)
+        item = db.session.get(PlanejamentoItem, item_id) if item_id else None
+        if (item is None or item.receita_id != receita_id
+                or item.planejamento.enviado_ao_padeiro is False):
+            return jsonify({'erro': 'Item não encontrado na ordem enviada.'}), 404
+        mise = mise_item(item)
+        if mise is not None:
+            return jsonify(mise)
     try:
         unidades = max(1, int(request.args.get('unidades', 1)))
     except (TypeError, ValueError):
@@ -510,6 +529,7 @@ def massa_base_mise(mb_id):
     from flask import jsonify
 
     from app.models import MassaBase, PlanejamentoProducao
+    from app.services.bateladas_paes import farinha_padrao_g
     from app.services.gantt import _g_label
     from app.services.massa_base import calcular_cascata, escala_da_ordem
 
@@ -523,7 +543,12 @@ def massa_base_mise(mb_id):
 
     porcoes, unidades = escala_da_ordem(mb, plano)
     # Ordem existente sem integrantes elegíveis é vazia, não preview genérico.
-    calc = calcular_cascata(mb, porcoes if plano is not None else None)
+    if plano is None:
+        # Sem ordem histórica, não oferecer novamente a massa-base dos pães
+        # que agora são preparados individualmente por sabor.
+        porcoes = {m.receita_id: 1 for m in mb.itens
+                   if m.receita and farinha_padrao_g(m.receita) is None}
+    calc = calcular_cascata(mb, porcoes)
     if calc is None:
         return jsonify({'nome': mb.nome, 'vazio': True})
 
@@ -559,8 +584,12 @@ def produzir_plano(item_id):
     except (TypeError, ValueError):
         unidades = 0
     encerrar = request.form.get('encerrar') == '1'
-    res = produzir_item_plano(item_id, unidades, current_user.id,
-                              encerrar=encerrar)
+    try:
+        res = produzir_item_plano(item_id, unidades, current_user.id,
+                                  encerrar=encerrar)
+    except ValueError as exc:
+        db.session.rollback()
+        res = {'ok': False, 'erro': str(exc)}
     unidade = res.get('unidade', 'un')
     if res.get('ok') and res.get('encerrado'):
         flash('Produzido %d %s — item encerrado; a diferença (%d %s) foi '
@@ -603,16 +632,22 @@ def editar_plano():
             db.session.add(plano)
             db.session.flush()
 
+        ids_anteriores = {it.id for it in plano.itens}
+
         # 1) atualiza quantidade / remove itens existentes
         for it in list(plano.itens):
             if request.form.get('remover_%d' % it.id):
+                if int(it.produzido_qtd or 0) > 0:
+                    db.session.rollback()
+                    flash('Não é possível remover um item que já teve produção.', 'warning')
+                    return redirect(url_for('padeiro.editar_plano', data=dia.isoformat()))
                 db.session.delete(it)
                 continue
             try:
                 alvo = max(0, int(request.form.get('alvo_%d' % it.id) or 0))
             except (TypeError, ValueError):
                 alvo = int(it.qtd_alvo or 0)
-            it.qtd_alvo = alvo
+            it.qtd_alvo = max(alvo, int(it.produzido_qtd or 0))
             it.multiplicador = max(1, ceil(alvo / _rend(it.receita))) if alvo else 1
 
         # 2) adiciona novas receitas
@@ -647,12 +682,24 @@ def editar_plano():
         # divergência ordem×grid fica visível no "⚠ difere do enviado".
         from app.services.cronograma_edit import dias_fechados
         db.session.flush()
+        from app.services.bateladas_paes import normalizar_item
+        from app.services.producao import sincronizar_pre_baixa_mp
+        itens_atuais = PlanejamentoItem.query.filter_by(planejamento_id=plano.id).all()
+        try:
+            for it in itens_atuais:
+                normalizar_item(it, permitir_novo=(
+                    it.id not in ids_anteriores or plano.enviado_ao_padeiro is False))
+            sincronizar_pre_baixa_mp(plano, current_user.id)
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), 'warning')
+            return redirect(url_for('padeiro.editar_plano', data=dia.isoformat()))
         if dia not in dias_fechados():
             from app.models import CronogramaOverride
             ov_exist = {o.receita_id: o for o in
                         CronogramaOverride.query.filter_by(data=dia).all()}
             atuais = {it.receita_id: int(it.qtd_alvo or 0)
-                      for it in plano.itens}
+                      for it in itens_atuais}
             for rid, q in atuais.items():
                 o = ov_exist.get(rid)
                 if o is not None:
@@ -1161,6 +1208,12 @@ def produzir():
                else Produto.query.get(int(sid)))
         if not obj:
             return jsonify(ok=False, erro=f'Item {i}: item nao encontrado.'), 400
+        if tipo == 'receita':
+            from app.services.bateladas_paes import farinha_padrao_g
+            if farinha_padrao_g(obj):
+                return jsonify(ok=False, erro=(
+                    f'{obj.nome}: registre pela ordem de produção, para manter '
+                    'a pesagem por batelada e a baixa correta dos ingredientes.')), 400
         validados.append((tipo, obj, qtd))
 
     try:

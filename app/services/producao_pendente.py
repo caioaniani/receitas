@@ -265,6 +265,7 @@ def reagendar_para_hoje(item_ids, user_id):
         # os paes sumiam da tela do padeiro (bug 02/07). O sync soma o extra
         # ao alvo do grid e nunca remove item com extra > 0.
         dest = por_receita.get(old.receita_id)
+        from app.services.bateladas_paes import normalizar_item
         if dest is not None:
             if dest.dispensada_em is not None:
                 # Item de hoje estava DISPENSADO (a tela do padeiro esconde):
@@ -279,12 +280,18 @@ def reagendar_para_hoje(item_ids, user_id):
             dest.qtd_alvo = int(dest.qtd_alvo or 0) + falta
             dest.qtd_extra = int(dest.qtd_extra or 0) + falta
             dest.multiplicador = max(1, ceil(dest.qtd_alvo / _rendimento(dest.receita)))
+            alvo_antes = dest.qtd_alvo
+            normalizar_item(dest, permitir_novo=False)
+            dest.qtd_extra += dest.qtd_alvo - alvo_antes
         else:
             novo = PlanejamentoItem(
                 planejamento_id=plano_hoje.id, receita_id=old.receita_id,
+                receita=old.receita,
                 qtd_alvo=falta, produzido_qtd=0, qtd_extra=falta,
                 multiplicador=max(1, ceil(falta / _rendimento(old.receita))))
             db.session.add(novo)
+            normalizar_item(novo)
+            novo.qtd_extra = novo.qtd_alvo
             por_receita[old.receita_id] = novo
 
         # fecha a ordem antiga (sai da auditoria)

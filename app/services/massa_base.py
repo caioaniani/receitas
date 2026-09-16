@@ -130,7 +130,8 @@ def escala_da_ordem(massa_base, plano):
     for it in plano.itens:
         rec = membros.get(it.receita_id)
         if (rec is None or it.dispensada_em is not None
-                or it.falta_encerrada_em is not None):
+                or it.falta_encerrada_em is not None
+                or getattr(it, 'batelada_padrao', None) is not None):
             continue
         alvo = int(it.qtd_alvo or 0)
         if alvo <= 0:

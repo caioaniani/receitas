@@ -2302,6 +2302,12 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
     from collections import deque
 
     from app.models import EstoqueProducao
+    from app.services.cronograma_bateladas import (
+        _marcar,
+        adicionar_demanda_insumo,
+        consumo_insumo,
+        quantidade_pendente,
+    )
     from app.services.producao import fornadas_amassadeira
 
     n = len(dias_prod)
@@ -2309,7 +2315,16 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
         return
 
     def _subs(rid):
-        return _subs_de(rid, receitas)
+        subs = defaultdict(float)
+        for sid, ratio in _subs_de(rid, receitas):
+            subs[sid] += ratio
+        linha = next((r for r in receitas_out if r['receita_id'] == rid), None)
+        if linha:
+            for c in linha['por_dia']:
+                for sub in c.get('batelada_padrao', {}).get('subs', []):
+                    if sub['id'] in receitas:
+                        subs.setdefault(sub['id'], 0.0)
+        return list(subs.items())
 
     retorno_ids = _retorno_ids()
 
@@ -2398,12 +2413,24 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
         for i in range(n - 1, -1, -1):
             if excesso <= 0:
                 break
+            celula = rr['por_dia'][i]
+            if celula.get('batelada_congelada'):
+                continue
             corte = min(atual[i], excesso)
+            padrao = celula.get('batelada_padrao')
+            if padrao:
+                # Retorno insuficiente impede uma batelada inteira; nunca
+                # muda os 25/12 kg de farinha para caber no saldo devolvido.
+                corte = min(atual[i], ceil(corte / padrao['unidades']) *
+                            padrao['unidades'])
             atual[i] -= corte
             excesso -= corte
         prod[rid] = atual
         for i, c in enumerate(rr['por_dia']):
-            c['qtd'] = atual[i]
+            if c.get('batelada_padrao'):
+                _marcar(c, c['batelada_padrao'], atual[i])
+            else:
+                c['qtd'] = atual[i]
         rr['total'] = sum(atual)
         rr['limitado_por_retorno'] = lim
 
@@ -2470,15 +2497,36 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
             add = _distribuir_inteiro(extra, pesos)
             from app.services.massa_base import rendimento_massa_crua
             rend = rendimento_massa_crua(rec) if rec else 1.0
+            rr = linhas.get(rid)
+            if rr is None:
+                from app.services.bateladas_paes import farinha_padrao_g
+                from app.services.cronograma_bateladas import normalizar_cronograma
+                if farinha_padrao_g(rec):
+                    # Um pão pode existir somente como ingrediente de outra
+                    # ficha. Também nesse caminho ele nasce em lotes completos.
+                    rr = {'receita_id': rid, 'nome': rec.nome,
+                          'dias_producao': L, 'em_estoque': est_extra.get(rid, 0),
+                          'por_dia': [{'data': d.isoformat(), 'qtd': 0,
+                                       'fornadas': None} for d in dias_prod],
+                          'total': 0, 'insumo': True}
+                    normalizar_cronograma([rr], dias_prod, receitas, lead)
+                    receitas_out.append(rr)
+                    linhas[rid] = rr
+                    prod[rid] = [c['qtd'] for c in rr['por_dia']]
             base = prod.get(rid, [0] * n)
             novo = [base[i] + add[i] for i in range(n)]
-            prod[rid] = novo
 
             def _forn(q, rec=rec, rend=rend):
                 return (fornadas_amassadeira(rec, max(1, ceil(q / rend)))
                         if q > 0 and rend > 0 else None)
 
             rr = linhas.get(rid)
+            if rr is not None and any(
+                    c.get('batelada_padrao') for c in rr['por_dia']):
+                novo = adicionar_demanda_insumo(rr, add, rec)
+            elif rr is not None and rr.get('erro_batelada'):
+                novo = base
+            prod[rid] = novo
             if rr is None:                         # sub-receita nao vendida
                 por_dia = [{'data': dias_prod[i].isoformat(), 'qtd': novo[i],
                             'fornadas': _forn(novo[i])} for i in range(n)]
@@ -2491,7 +2539,8 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
             else:                                  # vendida + insumo: acumula
                 for i, c in enumerate(rr['por_dia']):
                     c['qtd'] = novo[i]
-                    c['fornadas'] = _forn(novo[i])
+                    if not c.get('batelada_padrao'):
+                        c['fornadas'] = _forn(novo[i])
                 rr['total'] = sum(novo)
             # Consumo TOTAL derivado na janela — mostrado na linha do insumo
             # mesmo quando produzir=0 (estoque cobre a demanda): sem isso a
@@ -2525,9 +2574,13 @@ def _explodir_bom(receitas_out, dias_prod, receitas, lead, bal):
             pai_tot = 0.0
             contrib = 0.0
             for i in range(n):
-                consumo[sid][i] += base[i] * ratio
-                pai_tot += base[i]
-                contrib += base[i] * ratio
+                linha_pai = linhas.get(rid)
+                quantidade = (consumo_insumo(linha_pai['por_dia'][i], sid, ratio)
+                              if linha_pai else base[i] * ratio)
+                consumo[sid][i] += quantidade
+                pai_tot += (quantidade_pendente(linha_pai['por_dia'][i])
+                            if linha_pai else base[i])
+                contrib += quantidade
             if contrib > 0:
                 ag = consumo_origem[sid][rid]
                 ag['pai'] += pai_tot
@@ -2554,6 +2607,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                     por_dia: [{data, qtd, fornadas}], total}]
         hoje, inicio, inicio_offset_dias, horizonte_dias, janela_semanas.
     """
+    from app.services.bateladas_paes import farinha_padrao_g
     from app.services.producao import fornadas_amassadeira, massa_receita_base
 
     horizonte_dias = max(1, min(int(horizonte_dias or 7), 14))
@@ -2727,6 +2781,11 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # lote_pedido com o arredondamento original (mais proximo, 29/06).
         lote_prod = int(getattr(rec, 'lote_producao', 0) or 0)
         lote = lote_prod or int(getattr(rec, 'lote_pedido', 0) or 0)
+        padrao_farinha = farinha_padrao_g(rec)
+        if padrao_farinha:
+            # A batelada de farinha substitui antigos lotes em unidades.
+            # Arredondar aqui e novamente após o piso inflaria a necessidade.
+            lote = 0
         if sum(pesos) <= 0:
             # Nenhum dia permitido atende a demanda (fornada especial fora
             # de sex/sab; grid comecando no fim de semana): nao produz — o
@@ -2769,7 +2828,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         cap = int(getattr(rec, 'capacidade_amassadeira_g', 0) or 0)
         massa_base = massa_receita_base(rec) if (cap > 0 and rend > 0) else 0
         lote_prod_drb = int(getattr(rec, 'lote_producao', 0) or 0)
-        if massa_base > 0 or lote_prod_drb > 0:
+        if not padrao_farinha and (massa_base > 0 or lote_prod_drb > 0):
             unid_por_fornada = (cap * rend / massa_base) if massa_base > 0 \
                 else 0.0
             minimo = ceil((lote_prod_drb or unid_por_fornada)
@@ -2834,6 +2893,10 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
                 continue
             rec = receitas.get(rr['receita_id'])
             if rec is None:
+                continue
+            if farinha_padrao_g(rec):
+                # O nivelamento por sabores completos ocorre depois do piso;
+                # a capacidade da máquina não pode fracionar a nova batelada.
                 continue
             from app.services.massa_base import rendimento_massa_crua
             rend = rendimento_massa_crua(rec)
@@ -3087,17 +3150,16 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     # receita: completa o TOTAL da familia e distribui o adicional pelo giro
     # previsto dos sabores. Granola, levain, iogurte, massas e cremes ficam fora
     # por `eh_sourdough_final`.
-    from app.services.centros_producao import eh_sourdough_final
-
     piso_sourdough = max(0, int(current_app.config.get(
         'SOURDOUGH_MIN_DIA', 200) or 0))
+    pesos_bateladas = {}
     if piso_sourdough:
         est_bal = {it['receita_id']: int(it.get('em_estoque', 0) or 0)
                    for it in bal['itens']}
         linhas_por_rid = {rr['receita_id']: rr for rr in receitas_out}
         candidatas = [
             rec for rec in receitas.values()
-            if eh_sourdough_final(rec)
+            if farinha_padrao_g(rec)
             and getattr(rec, 'sugerir_pedido_loja', True) is not False
         ]
         # Uma receita pode estar zerada no balanco justamente porque o estoque
@@ -3121,68 +3183,16 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
             receitas_out.append(rr)
             linhas_por_rid[rec.id] = rr
 
-        linhas_sourdough = [linhas_por_rid[r.id] for r in candidatas]
-        for i, dia_prod in enumerate(dias_prod):
-            elegiveis = [
-                rr for rr in linhas_sourdough
-                if producao_permitida_no_dia(
-                    receitas[rr['receita_id']], dia_prod)
-            ]
-            atual = sum(int(rr['por_dia'][i]['qtd'] or 0)
-                        for rr in elegiveis)
-            faltante = max(0, piso_sourdough - atual)
-            while faltante > 0 and elegiveis:
-                com_espaco = []
-                for rr in elegiveis:
-                    rec = receitas[rr['receita_id']]
-                    teto = int(getattr(rec, 'producao_max_dia', 0) or 0)
-                    qtd_atual = int(rr['por_dia'][i]['qtd'] or 0)
-                    if teto <= 0 or qtd_atual < teto:
-                        com_espaco.append(rr)
-                if not com_espaco:
-                    break
-
-                # Primeiro o giro do DIA de entrega correspondente ao lead;
-                # sem sinal diario, usa o giro historico total. Se nem isso
-                # existe, divide igualmente entre os sourdoughs ativos.
-                pesos = []
-                for rr in com_espaco:
-                    rid = rr['receita_id']
-                    entrega = dia_prod + timedelta(days=lead.get(rid, 0))
-                    peso_dia = _demanda_planejada(
-                        firme_origem[rid].get(entrega, {}),
-                        float(_previsto_dia(rid, entrega)))
-                    peso_hist = max(float(soma_total.get(rid, 0) or 0),
-                                    float(soma_v.get(rid, 0) or 0))
-                    pesos.append(peso_dia or peso_hist or 1.0)
-                partes = _distribuir_inteiro(faltante, pesos)
-                adicionado = 0
-                for rr, parte in zip(com_espaco, partes):
-                    if parte <= 0:
-                        continue
-                    rec = receitas[rr['receita_id']]
-                    celula = rr['por_dia'][i]
-                    qtd_atual = int(celula['qtd'] or 0)
-                    teto = int(getattr(rec, 'producao_max_dia', 0) or 0)
-                    espaco = (teto - qtd_atual) if teto > 0 else parte
-                    add = min(parte, max(0, espaco))
-                    if add <= 0:
-                        continue
-                    novo = qtd_atual + add
-                    celula['qtd'] = novo
-                    celula['piso_sourdough'] = add
-                    rend = rendimento_massa_crua(rec)
-                    celula['fornadas'] = (fornadas_amassadeira(
-                        rec, max(1, ceil(novo / rend)))
-                        if rend > 0 else None)
-                    rr['piso_sourdough_aplicado'] = True
-                    adicionado += add
-                if adicionado <= 0:
-                    break
-                faltante -= adicionado
-
-        for rr in linhas_sourdough:
-            rr['total'] = sum(int(c['qtd'] or 0) for c in rr['por_dia'])
+        for rec in candidatas:
+            rid = rec.id
+            for dia_prod in dias_prod:
+                entrega = dia_prod + timedelta(days=lead.get(rid, 0))
+                peso_dia = _demanda_planejada(
+                    firme_origem[rid].get(entrega, {}),
+                    float(_previsto_dia(rid, entrega)))
+                peso_hist = max(float(soma_total.get(rid, 0) or 0),
+                                float(soma_v.get(rid, 0) or 0))
+                pesos_bateladas[rid, dia_prod] = peso_dia or peso_hist or 1.0
 
     # Receitas que so existem como edicao manual (override) e nao tem demanda
     # prevista — ex: adicionadas na tela 'editar plano' do padeiro. Sem isto nao
@@ -3212,6 +3222,10 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
     # calculada/equilibrada). No-op quando nao ha override.
     from app.services.cronograma_edit import aplicar_overrides
     aplicar_overrides(receitas_out, dias_prod)
+
+    from app.services.cronograma_bateladas import normalizar_cronograma, quantidade_pendente
+    normalizar_cronograma(receitas_out, dias_prod, receitas, lead,
+                          piso=piso_sourdough, pesos=pesos_bateladas)
 
     # MRP: explode sub-receitas (massa para folhar, creme de amendoas...) em
     # linhas de producao proprias, produzidas ANTES do produto final que as
@@ -3345,7 +3359,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         projecao = []
         rr['dia_falta'] = None
         for i, d in enumerate(dias_prod):
-            prod_i = int(rr['por_dia'][i - L]['qtd'] or 0) if i - L >= 0 else 0
+            prod_i = quantidade_pendente(rr['por_dia'][i - L]) if i - L >= 0 else 0
             prod_i += int(wip_dias.get(d.isoformat(), 0))
             firme_i = int(firme[rid].get(d, 0))
             prev_i = int(round(_previsto_dia(rid, d)))   # previsto saindo no dia d
@@ -3377,7 +3391,7 @@ def cronograma_producao(horizonte_dias=7, janela_semanas=6,
         # projecao detalhada (subconjunto, nunca contradiz a tela).
         entregas_risco = []
         for i, d in enumerate(dias_prod):
-            prod_i = int(rr['por_dia'][i - L]['qtd'] or 0) if i - L >= 0 else 0
+            prod_i = quantidade_pendente(rr['por_dia'][i - L]) if i - L >= 0 else 0
             prod_i += int(wip_dias.get(d.isoformat(), 0))
             firme_i = int(firme[rid].get(d, 0))
             running_f += prod_i - firme_i

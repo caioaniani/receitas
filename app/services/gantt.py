@@ -20,6 +20,8 @@ A escala do eixo é REAL (minutos), origem 06:00. Greedy list-scheduling: a cada
 passo escolhe a etapa pronta que começa mais cedo (desempate: menor duração).
 """
 
+from types import SimpleNamespace
+
 from app.services.centros_producao import (
     CENTRO_PAES,
     CENTRO_VIENNOISERIE,
@@ -130,6 +132,7 @@ def montar_gantt(dia):
     """Agenda a produção do `dia`. Retorna o dict do Gantt, ou None se não há
     plano aprovado pra esse dia."""
     from app.models import PlanejamentoProducao
+    from app.services.bateladas_paes import resumo_item
 
     # só ordens ENVIADAS ao padeiro (fluxo de 2 passos: aprovar -> enviar).
     plano = (PlanejamentoProducao.query
@@ -149,10 +152,20 @@ def montar_gantt(dia):
     def _dados_item(it, data_plano):
         alvo = int(it.qtd_alvo or 0)
         produzido = int(it.produzido_qtd or 0)
-        return {'item_id': it.id, 'receita_id': it.receita_id,
-                'data_plano': data_plano.isoformat(), 'alvo': alvo,
-                'produzido': produzido, 'falta': max(0, alvo - produzido),
-                'unidade': unidade_producao(it.receita)}
+        dados = {'item_id': it.id, 'receita_id': it.receita_id,
+                 'data_plano': data_plano.isoformat(), 'alvo': alvo,
+                 'produzido': produzido, 'falta': max(0, alvo - produzido),
+                 'unidade': unidade_producao(it.receita)}
+        batelada = resumo_item(it)
+        if batelada is not None:
+            dados['batelada'] = batelada
+            dados['unidade'] = batelada['unidade_producao']
+        return dados
+
+    def _etapas_item(it, batelada):
+        if batelada is not None:
+            return [SimpleNamespace(**etapa) for etapa in batelada['processo']]
+        return list(it.receita.etapas)
 
     for it in (plano.itens if plano else []):
         rec = it.receita
@@ -163,17 +176,20 @@ def montar_gantt(dia):
         dados = _dados_item(it, dia)
         if dados['falta'] <= 0:
             continue
-        etapas = list(rec.etapas)
+        batelada = dados.get('batelada')
+        etapas = _etapas_item(it, batelada)
         if not etapas:
-            sem_etapas.append(rec.nome)
+            nome = batelada['nome'] if batelada else rec.nome
+            sem_etapas.append(nome)
             sem_etapas_itens.append({
-                'nome': rec.nome, 'tipo': 'solo', 'tarefas': [], 'destino': None,
+                'nome': nome, 'tipo': 'solo', 'tarefas': [], 'destino': None,
                 'centro_label': rotulo_centro(centro_trabalho_receita(rec)), **dados})
             continue
         itens_plano.append({
             'rec': rec, 'dados': dados, 'etapas': etapas,
-            'nf': fornadas_amassadeira(rec, it.multiplicador) or 1,
-            'mbi': membership.get(rec.id)})
+            'nf': (batelada['bateladas'] if batelada else
+                   fornadas_amassadeira(rec, it.multiplicador) or 1),
+            'mbi': None if batelada else membership.get(rec.id)})
 
     produtos = []
     jobs = []
@@ -188,6 +204,7 @@ def montar_gantt(dia):
              'item_id': kw.get('item_id'), 'data_plano': kw.get('data_plano'),
              'alvo': kw.get('alvo'), 'produzido': kw.get('produzido'),
              'unidade': kw.get('unidade', 'un'),
+             'batelada': kw.get('batelada'),
              'centro_label': rotulo_centro(centro)}
         produtos.append(p)
         return p
@@ -196,6 +213,7 @@ def montar_gantt(dia):
         # Etapas ATIVAS escalam com o nº de fornadas; passiva fica na duração base.
         return [{'nome': e.nome, 'equip': e.equipamento, 'ativa': bool(e.ativa),
                  'descricao': e.descricao or '',
+                 'dur_batelada': int(e.duracao_min or 0),
                  'dur': int(e.duracao_min or 0) * (nf if e.ativa else 1)}
                 for e in etapas]
 
@@ -205,9 +223,19 @@ def montar_gantt(dia):
 
     # 1a) Receitas SOLO (sem massa-base): 1 job por receita, como sempre.
     for pi in [x for x in itens_plano if x['mbi'] is None]:
-        prod = _novo_produto(pi['rec'].nome, **pi['dados'], fornadas=pi['nf'],
+        batelada = pi['dados'].get('batelada')
+        nome = batelada['nome'] if batelada else pi['rec'].nome
+        prod = _novo_produto(nome, **pi['dados'], fornadas=pi['nf'],
                              centro=centro_trabalho_receita(pi['rec']))
-        jobs.append({'prod': prod, 'passos': _passos(pi['etapas'], pi['nf']),
+        etapas = pi['etapas']
+        if batelada and int(batelada.get('dias_producao', 0) or 0) > 0:
+            pre, espera, _post = _split_long_passiva(etapas)
+            if espera is not None:
+                # O marcador de fermentação encerra a jornada. As etapas
+                # seguintes pertencem exclusivamente à continuação (+lead),
+                # não ao job de amassar o sabor hoje.
+                etapas = [*pre, espera]
+        jobs.append({'prod': prod, 'passos': _passos(etapas, pi['nf']),
                      'ptr': 0, 'ready': 0})
 
     # 1b) Massa-base: UMA amassada da base (tronco) + retiradas em hidratação
@@ -312,18 +340,26 @@ def montar_gantt(dia):
             continue
         for it in plano_ant.itens:
             rec = it.receita
-            if rec is None or int(rec.dias_producao or 0) != L:
+            if rec is None:
+                continue
+            batelada = resumo_item(it)
+            lead = (batelada.get('dias_producao', rec.dias_producao)
+                    if batelada else rec.dias_producao)
+            if int(lead or 0) != L:
                 continue
             if it.dispensada_em is not None or it.falta_encerrada_em is not None:
                 continue                  # falta encerrada vive só na auditoria
             dados = _dados_item(it, plano_ant.data)
             if dados['falta'] <= 0:
                 continue
-            _, _, post = _split_long_passiva(list(rec.etapas))
+            batelada = dados.get('batelada')
+            _, _, post = _split_long_passiva(_etapas_item(it, batelada))
             if not post:
                 continue            # sem etapa pós-fermentação: nada a finalizar
-            nf = fornadas_amassadeira(rec, it.multiplicador) or 1
-            prod = _novo_produto(rec.nome, **dados, fornadas=nf,
+            nf = (batelada['bateladas'] if batelada else
+                  fornadas_amassadeira(rec, it.multiplicador) or 1)
+            nome = batelada['nome'] if batelada else rec.nome
+            prod = _novo_produto(nome, **dados, fornadas=nf,
                                  tipo='continuacao',
                                  centro=centro_trabalho_receita(rec))
             prod['origem_label'] = (dia - timedelta(days=L)).strftime('%d/%m')
@@ -382,6 +418,7 @@ def montar_gantt(dia):
             'ini': ini, 'fim': fim, 'dur': p['dur'],
             'ini_hhmm': _hhmm(DIA_INI + ini), 'fim_hhmm': _hhmm(DIA_INI + fim),
             'dur_label': _dur_label(p['dur']),
+            'dur_batelada_label': _dur_label(p.get('dur_batelada', p['dur'])),
             'icone': _icone(p['equip'], p['ativa']),
         })
 

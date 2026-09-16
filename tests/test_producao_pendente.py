@@ -40,6 +40,17 @@ def _receita(nome='Croissant'):
     return r
 
 
+def _ficha_de_pao_padronizado(rec):
+    """Os dois cenários de batimento usam ficha real, não pão sem ingrediente."""
+    from app.models import MateriaPrima, ReceitaIngrediente
+    rec.peso_unitario = 500
+    for nome, pct in [('Farinha', 100), ('Água', 70), ('Sal', 2)]:
+        db.session.add(MateriaPrima(nome=nome, custo_por_kg=1, estoque_atual=100000))
+        rec.ingredientes.append(ReceitaIngrediente(
+            tipo='mp', ingrediente_nome=nome, porcentagem=pct))
+    db.session.commit()
+
+
 def _ordem(receita, data, alvo, produzido=0, enviado=True, origem='cronograma'):
     p = PlanejamentoProducao(data=data, origem=origem, status='aprovado',
                              enviado_ao_padeiro=enviado)
@@ -375,6 +386,7 @@ def test_reagendar_move_falta_pra_hoje(app):
 def test_reagendar_produzido_zero_remove_ordem_antiga(app):
     from app.services.producao_pendente import reagendar_para_hoje
     r = _receita('Pao Frances')
+    _ficha_de_pao_padronizado(r)
     old = _ordem(r, hoje() - timedelta(days=1), alvo=8, produzido=0)   # nada feito
     item_id = old.itens[0].id
 
@@ -383,7 +395,12 @@ def test_reagendar_produzido_zero_remove_ordem_antiga(app):
     assert db.session.get(PlanejamentoItem, item_id) is None           # removida
     plano_hoje = (PlanejamentoProducao.query
                   .filter_by(data=hoje(), origem='cronograma').first())
-    assert plano_hoje.itens[0].qtd_alvo == 8
+    # A falta de 8 não se perde; a nova ordem exige uma batelada completa
+    # de 12 kg (41 unidades nesta ficha). Não houve produção fictícia.
+    assert plano_hoje.itens[0].qtd_alvo == 41
+    assert plano_hoje.itens[0].qtd_extra == 41  # Toda a batelada enviada é extra.
+    assert plano_hoje.itens[0].produzido_qtd == 0
+    assert plano_hoje.itens[0].batelada_padrao.dados['farinha_g'] == 12000
 
 
 def test_reagendar_soma_em_receita_ja_no_plano_de_hoje(app):
@@ -464,6 +481,7 @@ def test_reagendado_sobrevive_ao_reenviar_plano_de_hoje(app, admin_user):
     from app.services.producao import enviar_plano_do_dia
     from app.services.producao_pendente import reagendar_para_hoje
     r = _receita('Sourdough 7 Grãos')
+    _ficha_de_pao_padronizado(r)
     old = _ordem(r, hoje() - timedelta(days=1), alvo=50, produzido=0)  # vencida
 
     reagendar_para_hoje([old.itens[0].id], user_id=admin_user.id)
@@ -477,8 +495,10 @@ def test_reagendado_sobrevive_ao_reenviar_plano_de_hoje(app, admin_user):
     assert plano_hoje is not None
     itens = {it.receita_id: it for it in plano_hoje.itens}
     assert r.id in itens                                # NÃO sumiu
-    assert itens[r.id].qtd_alvo == 50
-    assert itens[r.id].qtd_extra == 50
+    assert itens[r.id].qtd_alvo == 86  # 25 kg farinha, excedente para estoque.
+    assert itens[r.id].qtd_extra == 86  # Reserva conserva a batelada toda.
+    assert itens[r.id].produzido_qtd == 0
+    assert itens[r.id].batelada_padrao.dados['farinha_g'] == 25000
     # e o padeiro VÊ na tela dele
     with app.test_request_context():
         pd = _plano_do_dia(hoje())

@@ -178,7 +178,7 @@ def test_dribble_consolida_no_dia_anterior(app):
     atrasaria a entrega). Total preservado."""
     loja = _loja()
     # cap=5000, rend=50, massa_base=peso_base=5000 -> unid/fornada=50, minimo=10.
-    r = _receita_amassadeira('Sourdough', rend=50, peso_base=5000, cap=5000)
+    r = _receita_amassadeira('Pão de Forma', rend=50, peso_base=5000, cap=5000)
     # 60 pra hoje+1 (lote real) + 1 pra hoje+3 (dribble, entrega POSTERIOR).
     _pedido(loja, 'pendente', hoje() + timedelta(days=1), r, 60)
     _pedido(loja, 'pendente', hoje() + timedelta(days=3), r, 1)
@@ -200,7 +200,7 @@ def test_dribble_de_entrega_iminente_nao_e_empurrado(app):
     posterior — isso entregaria dias tarde. Sem dia anterior pra consolidar, ele
     é produzido HOJE mesmo (batida pequena) pra cumprir o prazo."""
     loja = _loja()
-    r = _receita_amassadeira('Sourdough', rend=50, peso_base=5000, cap=5000)
+    r = _receita_amassadeira('Pão de Forma', rend=50, peso_base=5000, cap=5000)
     # 1 un pra entregar HOJE (dribble) + 60 pra hoje+3 (lote posterior).
     _pedido(loja, 'pendente', hoje(), r, 1)
     _pedido(loja, 'pendente', hoje() + timedelta(days=3), r, 60)
@@ -296,7 +296,7 @@ def test_cronograma_padroniza_em_lotes(app):
     """Produção sai em LOTES inteiros quando a receita tem lote_pedido (não
     produzir picado): cada dia é múltiplo do lote (ou 0) e o total também."""
     loja = _loja()
-    r = _receita('Pão Francês')
+    r = _receita('Pão de Forma')
     r.lote_pedido = 50
     db.session.commit()
     d2 = hoje() + timedelta(days=2)
@@ -614,7 +614,7 @@ def test_nivelamento_nao_deixa_celula_farelo(app):
     from datetime import date as _date
 
     loja = _loja()
-    r = _receita('Sourdough Nozes Farelo')
+    r = _receita('Pão de Forma Nozes Farelo')
     hoje_d = hoje()                                # segunda congelada
     _pedido(loja, 'pendente', hoje_d + timedelta(days=4), r, 2)     # sex
     _pedido(loja, 'pendente', hoje_d + timedelta(days=6), r, 118)   # dom
@@ -2257,7 +2257,7 @@ def test_anti_refornada_funde_topup_na_fornada_anterior(app):
     deixa top-up MENOR QUE UM LOTE colado num dia que já produz — a
     célula quebrada é fundida na fornada anterior."""
     loja = _loja()
-    r = _receita('Sourdough Consolida')
+    r = _receita('Pão de Forma Consolida')
     r.lote_producao = 60
     db.session.commit()
     _vendas_diarias(loja, r)
@@ -2365,9 +2365,11 @@ def test_piso_sourdough_produz_200_por_dia_sem_demanda(app):
     auxiliares e Brioche nao inflam artificialmente as 200 unidades."""
     app.config['SOURDOUGH_MIN_DIA'] = 200
 
-    tradicional = _receita('Sourdough Tradicional')
+    tradicional = _receita_amassadeira(
+        'Sourdough Tradicional', rend=4, peso_base=1000, cap=60000)
     tradicional.familia = 'pao_sourdough'
-    graos = _receita('Sourdough 7 Grãos')
+    graos = _receita_amassadeira(
+        'Sourdough 7 Grãos', rend=4, peso_base=1000, cap=60000)
     graos.familia = 'pao_sourdough'
     granola = _receita('Produção - Granola Artesanal 1000g')
     granola.categoria = 'Granola'
@@ -2392,6 +2394,7 @@ def test_piso_sourdough_produz_200_por_dia_sem_demanda(app):
     # Sem sinal de giro, o fallback e equilibrado: nao joga tudo em um unico
     # pao (o caso operacional que motivou a mudanca).
     assert [rr['por_dia'][0]['qtd'] for rr in paes] == [100, 100]
+    assert all(rr['por_dia'][0]['farinha_total_g'] == 25000 for rr in paes)
     assert sum(rr['total'] for rr in paes) == 1000
 
     for rec in (granola, levain, iogurte, brioche):
@@ -2501,4 +2504,3 @@ def test_seed_regras_reposicao_configura_somente_loja_produto_alvo(app):
     assert el_croissant.reposicao_por_venda_diaria is True
     assert el_outra.reposicao_por_venda_diaria is False
     assert AppConfig.get('seed_regras_reposicao_lojas_2026_09')
-

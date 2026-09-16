@@ -33,7 +33,7 @@ def _loja():
     return loja
 
 
-def _receita_amass(nome='Sourdough', rend=50, peso_base=5000, cap=500):
+def _receita_amass(nome='Pão de Forma', rend=50, peso_base=5000, cap=500):
     r = Receita(nome=nome, categoria='Paes', rendimento_qtd=rend,
                 rendimento_unidade='un', peso_base=float(peso_base),
                 capacidade_amassadeira_g=cap)

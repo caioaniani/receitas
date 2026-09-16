@@ -78,6 +78,10 @@
           <a class="button" href="{{ url_for('padeiro.index', data=dia.isoformat(), _anchor='producao-base-' ~ p.grupo ~ '-' ~ dia.isoformat()) }}">Ver preparo da base</a>
           {% endif %}
         </div>
+        {% if p.batelada %}
+        <p class="notice">Referência da ordem completa: <strong>{{ p.batelada.bateladas }} batelada{{ 's' if p.batelada.bateladas != 1 }}</strong> deste sabor · {{ '{:,.0f}'.format(p.batelada.farinha_g).replace(',', '.') }} g de farinha em cada batimento. Pese e prepare cada batelada separadamente.</p>
+        {% for aviso in p.batelada.avisos %}<p class="notice" role="note">{{ aviso }}</p>{% endfor %}
+        {% endif %}
         {% if p.tipo == 'continuacao' %}
         <p class="notice">Finalização prevista da ordem de {{ p.origem_label }}. Confira se o preparo anterior foi feito antes de seguir.</p>
         {% elif p.tipo == 'ramo' %}
@@ -98,7 +102,7 @@
           {% for t in p.tarefas %}
           <li class="step {{ 'passive' if not t.ativa else '' }}">
             <span class="step-number">{{ loop.index }}</span>
-            <div><strong>{{ t.etapa }}</strong><span class="step-duration">{{ t.dur_label }}{% if not t.ativa %} · espera{% elif t.equip == 'forno' %} · forno{% elif t.equip == 'amassadeira' %} · amassadeira{% endif %}</span>{% if t.descricao %}<p class="step-instruction">{{ t.descricao }}</p>{% endif %}</div>
+            <div><strong>{{ t.etapa }}</strong><span class="step-duration">{% if p.batelada and t.ativa %}{{ t.dur_batelada_label }} por batelada{% if p.batelada.bateladas > 1 %} · {{ t.dur_label }} no total{% endif %}{% else %}{{ t.dur_label }}{% endif %}{% if not t.ativa %} · espera{% elif t.equip == 'forno' %} · forno{% elif t.equip == 'amassadeira' %} · amassadeira{% endif %}</span>{% if t.descricao %}<p class="step-instruction">{{ t.descricao }}</p>{% endif %}</div>
           </li>
           {% endfor %}
           {% if p.destino %}

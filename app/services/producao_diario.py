@@ -128,13 +128,14 @@ def origens_do_dia(dia):
     resultado = [dict(tipo='item', id=item.id, nome=item.receita.nome,
                       data_ordem=dia, planejamento_id=item.planejamento_id, receita_id=item.receita_id)
                  for item in itens]
-    receitas = {item.receita_id for item in itens}
+    itens_base = [item for item in itens if item.batelada_padrao is None]
+    receitas = {item.receita_id for item in itens_base}
     bases = (MassaBase.query.join(MassaBaseItem)
              .filter(MassaBaseItem.receita_id.in_(receitas))
              .order_by(MassaBase.nome, MassaBase.id).all()) if receitas else []
     for base in bases:
         membros = {m.receita_id for m in base.itens}
-        plano_id = next(i.planejamento_id for i in itens if i.receita_id in membros)
+        plano_id = next(i.planejamento_id for i in itens_base if i.receita_id in membros)
         resultado.append(dict(tipo='base', id=base.id, nome=base.nome,
                               data_ordem=dia, planejamento_id=plano_id, receita_id=None))
     return resultado

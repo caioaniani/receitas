@@ -12,7 +12,7 @@ from app.utils import hoje
 TOKEN = 'token-de-teste-bem-longo-123'
 
 
-def _seed(nome='Sourdough'):
+def _seed(nome='Pão API'):
     loja = Loja(nome='Loja A', ativa=True)
     r = Receita(nome=nome, categoria='Paes', rendimento_qtd=1,
                 rendimento_unidade='un', peso_base=1000.0)
@@ -52,7 +52,7 @@ def test_token_certo_devolve_cronograma(app):
     d = resp.get_json()
     assert d['ok'] is True
     rr = next(x for x in d['receitas'] if x['receita_id'] == r.id)
-    assert rr['nome'] == 'Sourdough'
+    assert rr['nome'] == 'Pão API'
     assert sum(c['qtd'] for c in rr['por_dia']) == 40
     assert len(d['dias']) == 7
 

@@ -22,6 +22,7 @@ from flask_login import current_user, login_required
 
 from app.blueprints.industria_teste import industria_teste_bp
 from app.decorators import admin_required
+from app.extensions import db
 
 
 def _horizonte_janela():
@@ -391,7 +392,12 @@ def reagendar():
     from app.services.producao_pendente import reagendar_para_hoje
 
     ids = request.form.getlist('ids')   # mesmos checkboxes do dispensar em lote
-    res = reagendar_para_hoje(ids, current_user.id)
+    try:
+        res = reagendar_para_hoje(ids, current_user.id)
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+        return redirect(url_for('industria_teste.auditoria'))
     if res['movidos']:
         flash('%d ordem(ns) · %d un enviada(s) pra produção de HOJE — o padeiro '
               'já vê em /padeiro.' % (res['movidos'], res['unidades']), 'success')
@@ -457,6 +463,10 @@ def aprovar():
               '"🔄 atualizar produção" naquele dia.'
               % data_alvo.strftime('%d/%m'), 'warning')
         return redirect(url_for('industria_teste.index', **_params_visao()))
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+        return redirect(url_for('industria_teste.index', **_params_visao()))
     if plano:
         flash('Plano de %s aprovado (%d receita(s)). Revise/edite e clique em '
               '"enviar ao padeiro" quando estiver pronto.'
@@ -481,11 +491,16 @@ def enviar():
     except (TypeError, ValueError):
         flash('Data inválida.', 'warning')
         return redirect(url_for('industria_teste.index', **_params_visao()))
-    plano = enviar_plano_do_dia(data_alvo, current_user.id,
+    try:
+        plano = enviar_plano_do_dia(data_alvo, current_user.id,
                                 horizonte_dias=_horizonte_janela()[0],
                                 janela_semanas=_horizonte_janela()[1],
                                 inicio_offset_dias=_inicio_offset(),
                                 equilibrar=_equilibrar(), motor=_motor())
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), 'warning')
+        return redirect(url_for('industria_teste.index', **_params_visao()))
     if plano:
         flash('Produção de %s enviada ao padeiro (%d receita(s)).'
               % (data_alvo.strftime('%d/%m'), len(plano.itens)), 'success')

@@ -45,6 +45,7 @@ def lista():
 @login_required
 @producao_required
 def novo():
+    from app.services.bateladas_paes import normalizar_item, padrao_receita
     if request.method == 'POST':
         data_str = request.form.get('data', '')
         nome = request.form.get('nome', '').strip()
@@ -71,9 +72,19 @@ def novo():
             item = PlanejamentoItem(
                 planejamento_id=plano.id,
                 receita_id=int(rid),
+                receita=db.session.get(Receita, int(rid)),
                 multiplicador=max(1, mult),
             )
             db.session.add(item)
+            try:
+                padrao = padrao_receita(item.receita)
+                if padrao:
+                    item.qtd_alvo = max(1, mult) * padrao['unidades']
+                    normalizar_item(item)
+            except ValueError as exc:
+                db.session.rollback()
+                flash(str(exc), 'warning')
+                return redirect(url_for('producao.novo'))
 
         db.session.commit()
         flash('Plano de produção criado!', 'success')
@@ -90,7 +101,7 @@ def novo():
 @producao_required
 def detalhe(id):
     plano = PlanejamentoProducao.query.get_or_404(id)
-    itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador}
+    itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador, 'item_plano': i}
              for i in plano.itens]
     lista_compras = consolidar_lista_compras(itens)
     lista_ordenada = sorted(lista_compras.items(), key=lambda x: x[0])
@@ -100,17 +111,21 @@ def detalhe(id):
     # Receita que nao usa amassadeira (capacidade 0) mostra unidades, sem fornada.
     itens_view = []
     for i in plano.itens:
+        from app.services.bateladas_paes import resumo_item
+        padrao = resumo_item(i)
         rec = i.receita
         unidades = int(i.multiplicador * (rec.rendimento_qtd or 0)) if rec else 0
         itens_view.append({
             'item': i,
-            'fornadas': fornadas_amassadeira(rec, i.multiplicador),
-            'unidades': unidades,
+            'fornadas': padrao['bateladas'] if padrao else fornadas_amassadeira(rec, i.multiplicador),
+            'unidades': padrao['unidades_total'] if padrao else unidades,
+            'padrao': padrao,
         })
 
     return render_template('producao/detalhe.html', plano=plano,
                            itens_view=itens_view, lista_compras=lista_ordenada,
-                           custo_total=custo_total)
+                           custo_total=custo_total,
+                           padronizado=any(i.batelada_padrao is not None for i in plano.itens))
 
 
 @producao_bp.route('/<int:id>/lista-compras')
@@ -122,7 +137,7 @@ def lista_compras(id):
     from app.services.producao import ordem_compra_consolidada
 
     plano = PlanejamentoProducao.query.get_or_404(id)
-    itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador}
+    itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador, 'item_plano': i}
              for i in plano.itens]
     ordem = ordem_compra_consolidada(itens)
     return render_template('producao/lista_compras.html', plano=plano,
@@ -133,8 +148,38 @@ def lista_compras(id):
 @login_required
 @producao_required
 def baixar_estoque(id):
-    plano = PlanejamentoProducao.query.get_or_404(id)
-    itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador} for i in plano.itens]
+    plano = (PlanejamentoProducao.query.filter_by(id=id)
+             .with_for_update().populate_existing().first_or_404())
+    if plano.status == 'executado':
+        flash('Este plano já foi confirmado.', 'info')
+        return redirect(url_for('producao.detalhe', id=id))
+    if plano.origem == 'cronograma':
+        flash('Confirme a quantidade produzida na ordem do padeiro. '
+              'A reserva de ingredientes será convertida automaticamente.', 'info')
+        return redirect(url_for('padeiro.index', data=plano.data.isoformat()))
+    if any(i.batelada_padrao is not None for i in plano.itens):
+        from app.services.producao import produzir_item_plano
+        try:
+            for item in sorted(plano.itens, key=lambda i: i.id):
+                alvo = (item.qtd_alvo if item.qtd_alvo is not None else
+                        int(item.multiplicador * (item.receita.rendimento_qtd or 0)))
+                item.qtd_alvo = alvo
+                db.session.flush()
+                falta = max(0, alvo - int(item.produzido_qtd or 0))
+                if not falta or item.dispensada_em:
+                    continue
+                res = produzir_item_plano(item.id, falta, current_user.id, commit=False)
+                if not res['ok']:
+                    raise ValueError(res['erro'])
+            plano.status = 'executado'
+            db.session.commit()
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), 'warning')
+            return redirect(url_for('producao.detalhe', id=id))
+        flash('Produção confirmada, estoque atualizado e ingredientes consumidos.', 'success')
+        return redirect(url_for('producao.detalhe', id=id))
+    itens = [{'receita_id': i.receita_id, 'multiplicador': i.multiplicador, 'item_plano': i} for i in plano.itens]
     lista = consolidar_lista_compras(itens)
     mps = {mp.nome: mp for mp in MateriaPrima.query.all()}
 
@@ -162,7 +207,13 @@ def baixar_estoque(id):
 @login_required
 @producao_required
 def excluir(id):
-    plano = PlanejamentoProducao.query.get_or_404(id)
+    plano = (PlanejamentoProducao.query.filter_by(id=id)
+             .with_for_update().populate_existing().first_or_404())
+    if any(int(i.produzido_qtd or 0) > 0 for i in plano.itens):
+        flash('Este plano já teve produção; seu histórico não pode ser excluído.', 'warning')
+        return redirect(url_for('producao.detalhe', id=id))
+    from app.services.producao import estornar_pre_baixa_plano
+    estornar_pre_baixa_plano(plano, current_user.id)
     db.session.delete(plano)
     db.session.commit()
     flash('Plano excluído.', 'success')
@@ -875,8 +926,17 @@ def criar_plano_do_deficit():
             ignorados.append(it['nome'])
             continue
         mult = max(1, ceil(it['produzir'] / float(rec.rendimento_qtd)))
-        db.session.add(PlanejamentoItem(
-            planejamento_id=plano.id, receita_id=rec.id, multiplicador=mult))
+        item = PlanejamentoItem(
+            planejamento_id=plano.id, receita_id=rec.id, receita=rec,
+            multiplicador=mult, qtd_alvo=it['produzir'])
+        db.session.add(item)
+        from app.services.bateladas_paes import normalizar_item
+        try:
+            normalizar_item(item)
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), 'warning')
+            return redirect(url_for('producao.painel'))
 
     db.session.commit()
     msg = f'Plano criado com {len(deficits) - len(ignorados)} receita(s).'

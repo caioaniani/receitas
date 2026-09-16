@@ -20,11 +20,13 @@
         <a href="{{ url_for('producao.lista_compras', id=plano.id) }}" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-cart-check"></i> Ordem de Compra
         </a>
-        {% if plano.status != 'executado' %}
+        {% if plano.origem == 'cronograma' %}
+        <a href="{{ url_for('padeiro.index', data=plano.data.isoformat()) }}" class="btn btn-primary btn-sm">Confirmar na ordem do padeiro</a>
+        {% elif plano.status != 'executado' %}
         <form method="POST" action="{{ url_for('producao.baixar_estoque', id=plano.id) }}" class="d-inline"
-              onsubmit="return confirm('Baixar estoque de todas as MPs conforme este plano?')">
+              onsubmit="return confirm('{{ 'Confirmar que todas as unidades deste plano foram produzidas? Isso atualiza o estoque e consome os ingredientes.' if padronizado else 'Baixar estoque de todas as MPs conforme este plano?' }}')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-warning btn-sm"><i class="bi bi-box-arrow-down"></i> Baixar Estoque</button>
+            <button class="btn btn-warning btn-sm"><i class="bi bi-box-arrow-down"></i> {{ 'Confirmar produção completa' if padronizado else 'Baixar Estoque' }}</button>
         </form>
         {% endif %}
         {{ ui.botao_voltar(url_for('producao.lista')) }}
@@ -46,7 +48,12 @@
         <tbody>
             {% for v in itens_view %}
             <tr>
-                <td>{{ v.item.receita.nome if v.item.receita else '(excluída)' }}</td>
+                <td>{{ v.item.receita.nome if v.item.receita else '(excluída)' }}
+                    {% if v.padrao %}
+                    <div class="small text-muted">{{ '%.0f'|format(v.padrao.farinha_g / 1000) }} kg de farinha por batelada · por sabor</div>
+                    {% for aviso in v.padrao.avisos %}<div class="small text-warning">{{ aviso }}</div>{% endfor %}
+                    {% endif %}
+                </td>
                 <td class="text-center">
                     {% if v.fornadas is not none %}
                     <strong>{{ v.fornadas }}</strong>
@@ -61,10 +68,9 @@
     </table>
 </div>
 <p class="text-muted small mb-4">
-    <strong>Fornadas</strong> = nº de batidas da amassadeira (massa total da
-    receita ÷ capacidade da ficha; a última batida pode ser parcial). Receitas
-    que não passam pela amassadeira mostram só as unidades. O consumo de
-    matéria-prima (ordem de compra) segue a massa real, não as batidas cheias.
+    <strong>Bateladas padronizadas:</strong> pese a ficha completa de cada sabor,
+    uma batelada de cada vez. O rendimento em pães é estimado; confirme a quantidade
+    realmente produzida. Nas ordens anteriores e demais receitas, permanece a regra original.
 </p>
 
 <h6 class="fw-bold mb-2"><i class="bi bi-cart"></i> Lista de Compras Consolidada</h6>

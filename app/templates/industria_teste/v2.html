@@ -196,6 +196,7 @@
                     {% if not r.insumo and not r.retorno %}<button type="button" class="edit-row" data-rid="{{ r.receita_id }}" aria-pressed="false" aria-label="Editar planejamento de {{ r.nome }}"><i class="bi bi-pencil"></i><span>Editar</span></button>{% endif %}
                   </div>
                   <div class="recipe-tags">
+                    {% if r.erro_batelada %}<span class="tag danger">{{ r.erro_batelada }}</span>{% endif %}
                     {% if r.entregas_risco %}<span class="tag danger"><i class="bi bi-exclamation-triangle-fill"></i> risco</span>{% endif %}
                     {% if r.pend_vencido %}<span class="tag danger">{{ r.pend_vencido }} vencido</span>{% endif %}
                     {% if r.insumo %}<span class="tag muted">insumo</span>{% endif %}
@@ -211,7 +212,8 @@
                 {% set difere_cel = env_dia is not none and r.receita_id in difere.get(c.data, ()) %}
                 <td class="plan-cell {{ 'is-today' if c.data == crono.hoje }} {{ 'is-readonly' if r.insumo or r.retorno or c.bloqueado or fechado }} {{ 'has-risk' if c.data in r.risco_datas }}" data-rid="{{ r.receita_id }}" data-date="{{ c.data }}" data-batches="{{ c.fornadas if c.fornadas is not none else '' }}" data-derived="{{ 1 if r.insumo else 0 }}">
                   <input type="number" min="0" inputmode="numeric" value="{{ c.qtd or 0 }}" aria-label="{{ r.nome }}, {{ c.data }}" class="plan-input {{ 'is-zero' if not c.qtd }}" data-last="{{ c.qtd or 0 }}" data-editable="{{ 0 if r.insumo or r.retorno or c.bloqueado or fechado else 1 }}" readonly tabindex="-1">
-                  <small class="batch-label">{% if c.fornadas is not none and c.qtd %}{{ c.fornadas }} forn.{% elif r.insumo and c.qtd %}calculado{% endif %}</small>
+                  <small class="batch-label">{% if c.batelada_padrao and c.qtd %}{{ c.bateladas }} × {{ '%.0f'|format(c.batelada_padrao.farinha_g / 1000) }} kg farinha{% elif c.fornadas is not none and c.qtd %}{{ c.fornadas }} forn.{% elif r.insumo and c.qtd %}calculado{% endif %}</small>
+                  {% if c.batelada_bloqueada %}<small class="text-danger">{{ c.batelada_bloqueada }}</small>{% endif %}
                   {% if difere_cel %}<span class="sent-value" title="Esta é a quantidade que já está na tela do padeiro"><i class="bi bi-send-check"></i> Ordem enviada: {{ env_dia.get(r.receita_id, 0) }}</span>{% endif %}
                 </td>
                 {% endfor %}
