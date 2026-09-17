@@ -34,6 +34,19 @@ def gerente_required(f):
     return decorated
 
 
+def relatorio_pedidos_required(f):
+    """Preserva gestores; consulta externa exige uma loja operacional válida."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if current_user.is_relatorio_loja():
+            from app.services.acesso_relatorio_loja import loja_permitida
+            loja_permitida(current_user)
+        elif not _pode_cap('web_estoque_loja'):
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
 def producao_required(f):
     """Plano / Congelados / Separação. Capacidade editável: web_producao."""
     @wraps(f)

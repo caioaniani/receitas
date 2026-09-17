@@ -36,9 +36,18 @@
                         <option value="rh">RH</option>
                         <option value="marketing">Marketing</option>
                         <option value="observador">Observador — somente leitura</option>
+                        <option value="relatorio_loja">Relatório de uma loja — somente leitura</option>
                         <option value="admin">Admin</option>
                     </select>
                 </div>
+            </div>
+            <div class="mt-2">
+                <label class="form-label small" for="novo-usuario-loja">Loja do relatório (obrigatória no perfil de consulta de uma loja)</label>
+                <select id="novo-usuario-loja" name="loja_id" class="form-select form-select-sm">
+                    <option value="">Selecione a loja...</option>
+                    {% for loja in lojas %}<option value="{{ loja.id }}">{{ loja.nome }}</option>{% endfor %}
+                </select>
+                <p class="small text-muted mb-0">Esse perfil vê somente os pedidos recebidos da loja escolhida e pode baixar PDF/Excel. Não pode alterar pedidos nem acessar outras áreas.</p>
             </div>
             <div class="form-check mt-2">
                 <input class="form-check-input" type="checkbox" name="somente_treino"
@@ -76,14 +85,14 @@
             {% for u in usuarios %}
             <tr>
                 <td class="fw-bold">{{ u.nome }}</td>
-                <td><code>{{ u.login }}</code></td>
+                <td><code>{{ u.login }}</code>{% if u.email %}<div class="small text-muted">{{ u.email }}</div>{% endif %}</td>
                 <td>
                     {% if u.is_owner %}
                         <span class="badge bg-dark">Owner</span>
                     {% else %}
-                        <form method="POST" action="{{ url_for('auth.alterar_papel', id=u.id) }}" class="d-flex gap-1">
+                        <form method="POST" action="{{ url_for('auth.alterar_papel', id=u.id) }}" class="d-flex gap-1 flex-wrap">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <select name="papel" class="form-select form-select-sm" style="width:140px;" aria-label="Perfil de acesso de {{ u.nome }}" onchange="this.form.submit()">
+                            <select name="papel" class="form-select form-select-sm" style="width:200px;" aria-label="Perfil de acesso de {{ u.nome }}">
                                 <option value="funcionario" {% if u.papel == 'funcionario' %}selected{% endif %}>Funcionário</option>
                                 <option value="gerente" {% if u.papel == 'gerente' %}selected{% endif %}>Gerente</option>
                                 <option value="producao" {% if u.papel == 'producao' %}selected{% endif %}>Produção</option>
@@ -91,9 +100,17 @@
                                 <option value="rh" {% if u.papel == 'rh' %}selected{% endif %}>RH</option>
                                 <option value="marketing" {% if u.papel == 'marketing' %}selected{% endif %}>Marketing</option>
                                 <option value="observador" {% if u.papel == 'observador' %}selected{% endif %}>Observador — leitura</option>
+                                <option value="relatorio_loja" {% if u.is_relatorio_loja() %}selected{% endif %}>Relatório de uma loja — leitura</option>
                                 <option value="admin" {% if u.papel == 'admin' %}selected{% endif %}>Admin</option>
                             </select>
+                            <select name="loja_id" class="form-select form-select-sm" style="width:180px;" aria-label="Loja do relatório de {{ u.nome }}">
+                                <option value="">Loja do relatório...</option>
+                                {% for loja in lojas %}<option value="{{ loja.id }}" {% if u.loja_id == loja.id %}selected{% endif %}>{{ loja.nome }}</option>{% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-primary" aria-label="Salvar acesso de {{ u.nome }}">Salvar acesso</button>
                         </form>
+                        {% if u.is_relatorio_loja() %}<div class="small text-muted mt-1">Somente relatório · {{ u.loja.nome if u.loja else 'Sem loja — bloqueado' }}</div>{% endif %}
+                        {% if not u.is_relatorio_loja() %}
                         <form method="POST" action="{{ url_for('auth.toggle_somente_treino', id=u.id) }}" class="mt-1">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <div class="form-check form-switch" style="font-size:11px;">
@@ -103,6 +120,7 @@
                                 <label class="form-check-label" for="st-{{ u.id }}">🎓 só treino</label>
                             </div>
                         </form>
+                        {% endif %}
                         {% if current_user.is_owner and u.papel == 'admin' and not u.somente_treino %}
                         <form method="POST" action="{{ url_for('auth.delegar_nf_b2b', id=u.id) }}" class="mt-2">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

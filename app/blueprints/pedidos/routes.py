@@ -25,6 +25,7 @@ from app.decorators import (
     owner_required,
     pedidos_required,
     producao_required,
+    relatorio_pedidos_required,
 )
 from app.extensions import db
 from app.models import (
@@ -1171,6 +1172,13 @@ def _executar_recebimento_pedido(pedido, user, recebidos_map=None, fotos=None,
 @login_required
 def foto(foto_id):
     f = FotoRecebimento.query.get_or_404(foto_id)
+    if current_user.is_relatorio_loja():
+        from app.constants import STATUS_PEDIDO_ENTREGUES
+        from app.services.acesso_relatorio_loja import loja_permitida
+        loja = loja_permitida(current_user)
+        if (f.pedido.loja_id != loja.id
+                or f.pedido.status not in STATUS_PEDIDO_ENTREGUES):
+            abort(403)
     loja_id = _loja_do_usuario()
     if loja_id and f.pedido.loja_id != loja_id:
         abort(403)
@@ -1243,10 +1251,22 @@ def precos_loja(loja_id):
 
 @pedidos_bp.route('/relatorio')
 @login_required
-@gerente_required
+@relatorio_pedidos_required
 def relatorio():
     hoje = hoje_brt()
     loja_id = request.args.get('loja', type=int)
+    consulta_restrita = current_user.is_relatorio_loja()
+    if consulta_restrita:
+        from app.services.acesso_relatorio_loja import loja_permitida
+        loja = loja_permitida(current_user)
+        # Confere todos os parâmetros repetidos; inválido/outra loja é 403,
+        # não um fallback silencioso para uma consulta sem escopo.
+        if any(valor != str(loja.id) for valor in request.args.getlist('loja')):
+            abort(403)
+        loja_id = loja.id
+        lojas = [loja]
+    else:
+        lojas = _lojas_operacionais()
     de_str = request.args.get('de', '')
     ate_str = request.args.get('ate', '')
     formato = request.args.get('formato', 'html')
@@ -1265,7 +1285,6 @@ def relatorio():
     except ValueError:
         ate = hoje
 
-    lojas = _lojas_operacionais()
     pedidos = []
     totais = {'qtd_pedidos': 0, 'valor_total': 0.0, 'divergencias': 0}
     por_item = defaultdict(lambda: {'quantidade': 0, 'recebido': 0, 'valor': 0.0})
@@ -1331,6 +1350,7 @@ def relatorio():
 
     return render_template('pedidos/relatorio.html',
                            lojas=lojas, loja_id=loja_id,
+                           consulta_restrita=consulta_restrita,
                            de=de.isoformat(), ate=ate.isoformat(),
                            pedidos=pedidos, totais=totais,
                            incluir_fotos=incluir_fotos,

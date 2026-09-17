@@ -31,6 +31,9 @@ def itens_para_usuario(usuario, categorias_receitas):
     adicionar('Sair', 'auth.logout', 'Minha conta', 'box-arrow-right')
     if usuario.senha_provisoria:
         return itens
+    if usuario.is_relatorio_loja():
+        adicionar('Pedidos recebidos da loja', 'pedidos.relatorio', principal=True)
+        return itens
     if usuario.is_observador():
         adicionar('Sala de controle', 'pedidos.painel_observador',
                   principal=True)

@@ -1045,8 +1045,8 @@ def papel_efetivo(user):
     # Observador e um perfil fixo e deliberadamente fora da matriz editavel.
     # Mantemos o papel real aqui para ele nao herdar as ferramentas do
     # funcionario por meio do fallback abaixo (inclusive no Slack/Copilot).
-    if papel == 'observador':
-        return 'observador'
+    if papel in ('observador', 'relatorio_loja'):
+        return papel
     if papel == 'gerente':
         return 'gerente'
     return 'funcionario'
@@ -1055,6 +1055,8 @@ def papel_efetivo(user):
 def pode_usar(tool_name, user):
     papel = papel_efetivo(user)
     if not papel:
+        return False
+    if papel == 'relatorio_loja':
         return False
     permitidos = PAPEIS_POR_TOOL.get(tool_name, {'admin'})
     # Owner/admin sempre full — nao entram na matriz editavel (sem lockout).

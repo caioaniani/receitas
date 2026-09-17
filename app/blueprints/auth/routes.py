@@ -52,6 +52,8 @@ def login():
                 next_page = None
             if usuario.senha_provisoria:
                 return redirect(url_for('auth.minha_senha'))
+            if usuario.is_relatorio_loja():
+                return redirect(url_for('pedidos.relatorio'))
             if usuario.somente_treino:
                 return redirect(url_for('treino.home'))
             if usuario.is_padeiro():
@@ -159,6 +161,29 @@ def novo_usuario():
         flash(f'Login "{login_val}" ja existe.', 'warning')
         return redirect(url_for('auth.usuarios'))
 
+    loja_id = None
+    if papel == 'relatorio_loja':
+        from sqlalchemy import func
+
+        from app.services.acesso_relatorio_loja import loja_operacional
+        loja = loja_operacional(request.form.get('loja_id', type=int))
+        if not loja or request.form.get('somente_treino'):
+            flash('Selecione uma loja ativa para o relatório, sem marcar só treinamento.', 'warning')
+            return redirect(url_for('auth.usuarios'))
+        # Não criar uma segunda identidade com o mesmo endereço ou login.
+        if (not email or len(login_val) > 50 or len(email) > 200
+                or '@' not in email):
+            flash('Informe um login de até 50 caracteres e um e-mail válido.', 'warning')
+            return redirect(url_for('auth.usuarios'))
+        if Usuario.query.filter(db.or_(
+            func.lower(Usuario.email) == email.lower(),
+            func.lower(Usuario.login).in_([login_val.lower(), email.lower()]),
+            func.lower(Usuario.email) == login_val.lower(),
+        )).first():
+            flash('Já existe uma conta com esse login ou e-mail. Confira o cadastro antes de criar outro.', 'warning')
+            return redirect(url_for('auth.usuarios'))
+        loja_id = loja.id
+
     # Senha gerada — 10 chars urlsafe, legível o suficiente pra digitar uma
     # vez. O usuário troca no primeiro acesso. NUNCA fica em texto plano além
     # do email/flash (hash imediato via set_senha).
@@ -168,6 +193,7 @@ def novo_usuario():
     # /treino. Senha nasce provisória — força troca no 1º login.
     somente_treino = bool(request.form.get('somente_treino'))
     u = Usuario(nome=nome, login=login_val, email=email, papel=papel,
+                loja_id=loja_id,
                 senha_provisoria=True, somente_treino=somente_treino)
     u.set_senha(senha)
     db.session.add(u)
@@ -180,7 +206,7 @@ def novo_usuario():
         from app.services import email as email_svc
         res = email_svc.enviar_boas_vindas(
             email, nome, login_val, senha,
-            com_chatwoot=(not somente_treino and papel != 'observador'))
+            com_chatwoot=(not somente_treino and papel not in ('observador', 'relatorio_loja')))
         if res.get('ok'):
             flash(f'Usuario "{nome}" criado! Senha enviada para {email}.',
                   'success')
@@ -228,6 +254,13 @@ def alterar_papel(id):
         flash('Papel invalido.', 'warning')
         return redirect(url_for('auth.usuarios'))
 
+    if papel == 'relatorio_loja':
+        from app.services.acesso_relatorio_loja import loja_operacional
+        loja = loja_operacional(request.form.get('loja_id', type=int))
+        if not loja or u.somente_treino or u.id == current_user.id:
+            flash('Selecione uma loja ativa e retire a restrição só treinamento. Não é permitido restringir a própria conta.', 'warning')
+            return redirect(url_for('auth.usuarios'))
+        u.loja_id = loja.id
     u.papel = papel
     db.session.commit()
     flash(f'Papel de "{u.nome}" alterado para {papel}.', 'success')
@@ -249,6 +282,9 @@ def toggle_somente_treino(id):
         # conseguiria nem se desmarcar (a rota não é treino.*).
         flash('Você não pode restringir a sua própria conta a treinamento.',
               'warning')
+        return redirect(url_for('auth.usuarios'))
+    if u.is_relatorio_loja():
+        flash('O perfil de relatório já é restrito à consulta da loja e não pode receber treinamento.', 'warning')
         return redirect(url_for('auth.usuarios'))
     u.somente_treino = not u.somente_treino
     db.session.commit()
@@ -378,7 +414,9 @@ def minha_senha():
         flash('Senha alterada com sucesso.', 'success')
         # Conta só-treino vai direto pro treino (senão o gate rebateria de
         # main.index pra lá num salto extra).
-        return redirect(url_for('treino.home' if so_treino else 'main.index'))
+        destino = ('pedidos.relatorio' if current_user.is_relatorio_loja()
+                   else 'treino.home' if so_treino else 'main.index')
+        return redirect(url_for(destino))
 
     return render_template('auth/minha_senha.html',
                            forcado=bool(getattr(current_user,

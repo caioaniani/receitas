@@ -5,7 +5,13 @@
     </div>
 
     {% if current_user.is_authenticated %}
-    {% if current_user.is_observador() %}
+    {% if current_user.is_relatorio_loja() %}
+    <div class="ui-v2-nav-group">
+        <span class="ui-v2-nav-label">Somente leitura · {{ current_user.loja.nome if current_user.loja else 'Sem loja' }}</span>
+        <a href="{{ url_for('pedidos.relatorio') }}" class="sidebar-link active"><i class="bi bi-file-earmark-bar-graph"></i><span>Pedidos recebidos</span></a>
+        <a href="{{ url_for('auth.minha_senha') }}" class="sidebar-link"><i class="bi bi-key"></i><span>Trocar minha senha</span></a>
+    </div>
+    {% elif current_user.is_observador() %}
     <div class="ui-v2-nav-group">
         <span class="ui-v2-nav-label">Somente leitura</span>
         <a href="{{ url_for('pedidos.painel_observador') }}"
@@ -176,7 +182,7 @@
     {% endif %}{# observador #}
 
     <div class="ui-v2-nav-spacer"></div>
-    {% if not current_user.is_observador() %}
+    {% if not current_user.is_observador() and not current_user.is_relatorio_loja() %}
     <a href="{{ url_for('main.ui_classica') }}" class="sidebar-link ui-v2-voltar"
        title="Voltar à interface anterior (só pra você; dá pra voltar quando quiser)">
         <i class="bi bi-arrow-counterclockwise"></i><span>Interface anterior</span>
@@ -184,7 +190,7 @@
     {% endif %}
     <div class="ui-v2-user">
         <span class="ui-v2-avatar">{{ current_user.nome[:1]|upper }}</span>
-        <span class="ui-v2-user-copy"><strong>{{ current_user.nome }}</strong><small>{{ 'Administrador' if current_user.is_admin() else ('Somente leitura' if current_user.is_observador() else current_user.papel) }}</small></span>
+        <span class="ui-v2-user-copy"><strong>{{ current_user.nome }}</strong><small>{{ 'Administrador' if current_user.is_admin() else ('Somente leitura' if current_user.is_observador() or current_user.is_relatorio_loja() else current_user.papel) }}</small></span>
         <a href="{{ url_for('auth.logout') }}" title="Sair" aria-label="Sair"><i class="bi bi-box-arrow-right"></i></a>
     </div>
     {% else %}

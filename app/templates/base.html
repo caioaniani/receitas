@@ -121,8 +121,10 @@
         {# Conta "só treinamento": esconde TODO o resto da navegação; o gate
            global já barra por URL, isto é só pra não mostrar link que redireciona. #}
         {% set so_treino = current_user.somente_treino %}
-        {% set so_observador = current_user.is_observador() %}
-        {% if so_observador %}
+        {% set so_observador = current_user.is_observador() or current_user.is_relatorio_loja() %}
+        {% if current_user.is_relatorio_loja() %}
+        <a href="{{ url_for('pedidos.relatorio') }}" class="sidebar-link active">Pedidos recebidos · {{ current_user.loja.nome if current_user.loja else 'Sem loja' }}</a>
+        {% elif so_observador %}
         <a href="{{ url_for('pedidos.painel_observador') }}"
            class="sidebar-link {% if request.endpoint == 'pedidos.painel_observador' %}active{% endif %}">
             Sala de controle
@@ -302,7 +304,7 @@
         {% endif %}{# fim: nav escondida pra conta só-treino #}
         {% endif %}
 
-        {% if not (current_user.is_authenticated and (current_user.somente_treino or current_user.is_observador())) %}
+        {% if not (current_user.is_authenticated and (current_user.somente_treino or current_user.is_observador() or current_user.is_relatorio_loja())) %}
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title">Fichas Técnicas</div>
         {{ areanav.fichas('sidebar') }}
@@ -353,7 +355,7 @@
                 class="sidebar-link" style="display:none; border:0; background:transparent; text-align:left; width:100%;">
             <i class="bi bi-download"></i> Instalar como app
         </button>
-        {% if config.UI_V2_ENABLED and not current_user.is_observador() %}
+        {% if config.UI_V2_ENABLED and not current_user.is_observador() and not current_user.is_relatorio_loja() %}
         <a href="{{ url_for('main.ui_nova') }}" class="sidebar-link" title="Experimentar a nova interface (dá pra voltar quando quiser)">
             ✨ Nova interface
         </a>

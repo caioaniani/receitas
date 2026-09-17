@@ -190,8 +190,10 @@ def create_app(config_class=None):
         from app.models import Atribuicao, MateriaPrima, Receita, Usuario
         from app.services.busca_navegacao import itens_para_usuario
 
-        # Sem queries para usuários não autenticados (ex: página de login)
-        if not current_user.is_authenticated:
+        # Relatório externo não pode receber catálogo/custos no HTML/JS,
+        # nem em páginas de senha ou erro. Esconder a sidebar não basta.
+        if (not current_user.is_authenticated
+                or current_user.is_relatorio_loja()):
             return dict(
                 sidebar_categorias={}, mp_info={}, mp_nomes=[],
                 receita_nomes=[], produto_nomes=[], funcionarios=[],
@@ -468,6 +470,17 @@ def create_app(config_class=None):
             return None
         if getattr(current_user, 'senha_provisoria', False):
             return redirect(url_for('auth.minha_senha'))
+        if current_user.is_relatorio_loja():
+            # Perfil fixo: não herda telas nem operações de gerente/observador.
+            from app.services.acesso_relatorio_loja import loja_permitida
+            loja_permitida(current_user)
+            if request.method not in ('GET', 'HEAD', 'OPTIONS'):
+                abort(403)
+            if ep in {'main.index', 'auth.login'}:
+                return redirect(url_for('pedidos.relatorio'))
+            if ep not in {'pedidos.relatorio', 'pedidos.foto'}:
+                abort(403)
+            return None
         if getattr(current_user, 'is_observador', lambda: False)():
             if request.method not in ('GET', 'HEAD', 'OPTIONS'):
                 abort(403)

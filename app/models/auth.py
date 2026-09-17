@@ -118,6 +118,10 @@ class Usuario(UserMixin, db.Model):
         """Conta fixa de consulta: pedidos de todos os canais, sem escrita."""
         return self.papel == 'observador'
 
+    def is_relatorio_loja(self):
+        """Somente relatório de recebimentos da loja vinculada, sem operação."""
+        return self.papel == 'relatorio_loja'
+
     def pode_divulgacao(self):
         """Quem lanca/gerencia divulgacao: SO o dono e o marketing (decisao do
         dono 21/07/2026 — 'so o owner e marketing'). Admin comum NAO entra."""
@@ -129,7 +133,7 @@ class Usuario(UserMixin, db.Model):
 
     def pode_checklist(self):
         """Permissão efetiva, inclusive liberação individual pelo checklist."""
-        if self.is_observador():
+        if self.is_observador() or self.is_relatorio_loja():
             return False
         from app.services import checklist_responsaveis, permissoes
         if self.somente_treino:

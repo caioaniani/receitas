@@ -1,5 +1,36 @@
 # Mapa de permissões
 
+## Consulta de recebimentos de uma loja (17/09/2026)
+
+O perfil fixo `relatorio_loja` consulta **somente** `/pedidos/relatorio`
+(HTML, PDF e Excel) e fotos dos pedidos entregues/recebidos da loja vinculada.
+Criar em **Usuários → Relatório de uma loja — somente leitura**, escolhendo
+uma loja operacional ativa e e-mail. O sistema gera uma senha provisória e
+envia o acesso, sem convite de atendimento/Chatwoot. O primeiro acesso exige
+trocar a senha; em seguida abre diretamente o relatório.
+
+`Usuario.loja_id` é obrigatório nesse perfil. O servidor recusa parâmetros
+de outra loja, inclusive repetidos, e bloqueia se a loja for removida/inativada.
+O vínculo não é apenas um filtro de tela. Não há acesso ao estoque, pedidos
+editáveis, outras lojas, treinamento, RH, produção, site administrativo ou
+ferramentas do Copilot/Slack. A matriz editável não amplia esse perfil.
+Catálogo/custos globais não são carregados no HTML, inclusive em senha/erros.
+
+Implementação: `acesso_relatorio_loja.py`, `_gate_conta`, decorator
+`relatorio_pedidos_required` e escopo antes da consulta/exportação. Sem novas
+colunas ou migração. Não altera o perfil `observador`, que continua multicanal,
+nem os acessos existentes dos gestores. Regressões em
+`tests/test_acesso_relatorio_loja.py`.
+
+Publicação: validar isolamento HTML/PDF/XLSX/fotos, login/troca de senha,
+criação e navegação clássica/v2, testes completos e CI antes de criar a conta.
+Se houver falha de isolamento, suspender a conta (remover vínculo de loja)
+e corrigir antes de liberar; não trocar para gerente/observador como contorno.
+Uma reversão de código deve manter o bloqueio global enquanto existir conta
+com esse perfil; código antigo não conhece a restrição.
+
+---
+
 Quem pode fazer o quê, por papel — web (rotas/sidebar) e copilot/Slack.
 Fonte da verdade: `app/models/auth.py` (predicados), `app/decorators.py`
 (decorators de rota) e `app/services/copilot.py` (`PAPEIS_POR_TOOL`).

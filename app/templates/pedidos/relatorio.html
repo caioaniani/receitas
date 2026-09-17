@@ -4,24 +4,32 @@
 {% block title %}Relatório de Pedidos{% endblock %}
 
 {% block content %}
+{% if not consulta_restrita %}
 {{ ui.breadcrumbs([
     ('Pedidos', url_for('pedidos.lista')),
     ('Relatório', None),
 ]) }}
+{% endif %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="page-title mb-0"><i class="bi bi-file-earmark-bar-graph"></i> Relatório de Pedidos</h1>
-    {{ ui.botao_voltar(url_for('pedidos.lista')) }}
+    {% if not consulta_restrita %}{{ ui.botao_voltar(url_for('pedidos.lista')) }}{% endif %}
 </div>
+{% if consulta_restrita %}<p class="text-muted">Somente leitura · {{ lojas[0].nome }}. Consulte os pedidos recebidos e exporte o relatório; alterações não são permitidas.</p>{% endif %}
 
 <form method="GET" class="row g-2 align-items-end mb-3 d-print-none">
     <div class="col-md-3">
         <label class="form-label fw-semibold" style="font-size:12px;">Loja</label>
+        {% if consulta_restrita %}
+        <input type="hidden" name="loja" value="{{ loja_id }}">
+        <div class="form-control form-control-sm" aria-label="Loja do relatório">{{ lojas[0].nome }}</div>
+        {% else %}
         <select name="loja" class="form-select form-select-sm" required>
             <option value="">Selecione...</option>
             {% for l in lojas %}
             <option value="{{ l.id }}" {% if l.id == loja_id %}selected{% endif %}>{{ l.nome }}</option>
             {% endfor %}
         </select>
+        {% endif %}
     </div>
     <div class="col-md-2">
         <label class="form-label fw-semibold" style="font-size:12px;">De</label>
@@ -102,8 +110,8 @@
     <i class="bi bi-info-circle"></i>
     Valores em <strong>preço interno</strong> (transferência loja&rarr;indústria) &mdash;
     não é o preço de balcão, site ou atacado. Item sem preço interno cadastrado
-    entra como R$ 0,00; defina em
-    <a href="{{ url_for('receitas.precos') }}">Editar preços em massa</a>.
+    entra como R$ 0,00{% if not consulta_restrita %}; defina em
+    <a href="{{ url_for('receitas.precos') }}">Editar preços em massa</a>{% endif %}.
 </p>
 
 <h6 class="fw-bold mb-2">Resumo por item</h6>
