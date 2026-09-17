@@ -342,7 +342,8 @@ def test_tela_mostra_quantidade_de_primeiros_acessos_pendentes(
 
     assert 'Enviar novo acesso aos pendentes' in html
     assert '1 funcionário(s) ativo(s)' in html
-    assert '/rh/funcionarios/acessos/reenviar-pendentes' in html
+    assert '/rh/funcionarios/acessos/revisar' in html
+    assert 'name="modo" value="pendentes"' in html
     card_pendente = html.split(f'id="acesso-{pendente_id}"', 1)[1].split('</section>', 1)[0]
     card_concluido = html.split(f'id="acesso-{concluido_id}"', 1)[1].split('</section>', 1)[0]
     assert 'Primeiro acesso pendente' in card_pendente
@@ -408,9 +409,11 @@ def test_reenviar_pendentes_so_processa_ativo_com_senha_provisoria(
         assert 'Reenvio cancelado' in cancelada.get_data(as_text=True)
         enviar.assert_not_called()
 
+        from app.services import rh_acessos_lote
+        token = rh_acessos_lote.assinar(rh_acessos_lote.prever('pendentes'), owner_user.id)
         resposta = cliente.post(
             '/rh/funcionarios/acessos/reenviar-pendentes',
-            data={'confirmacao': 'PENDENTES'}, follow_redirects=True)
+            data={'confirmacao': 'PENDENTES', 'revisao': token}, follow_redirects=True)
 
     html = resposta.get_data(as_text=True)
     assert '1 novo(s) acesso(s) pendente(s)' in html
@@ -447,8 +450,10 @@ def test_reenviar_todos_exige_confirmacao_e_processa_somente_ativos(
         assert 'Reenvio cancelado' in cancelada.get_data(as_text=True)
         enviar.assert_not_called()
 
+        from app.services import rh_acessos_lote
+        token = rh_acessos_lote.assinar(rh_acessos_lote.prever('todos'), owner_user.id)
         resposta = cliente.post('/rh/funcionarios/acessos/reenviar-todos',
-                                data={'confirmacao': 'REENVIAR'},
+                                data={'confirmacao': 'REENVIAR', 'revisao': token},
                                 follow_redirects=True)
 
     html = resposta.get_data(as_text=True)

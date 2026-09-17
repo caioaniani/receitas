@@ -63,6 +63,17 @@ def _rh_restrito_ao_owner():
 @login_required
 @rh_required
 def dashboard():
+    from app.services import rh_painel
+    from app.ui_v2 import ui_v2_ativo
+    if not ui_v2_ativo():
+        return administrativo()
+    return render_template('rh/visao_geral.html', **rh_painel.carregar())
+
+
+@rh_bp.route('/administrativo')
+@login_required
+@owner_required
+def administrativo():
     # Eager load de cargo + lojas evita N+1 ao calcular custo_total() e
     # custo por loja (cada Funcionario acessa cargo.salario_base e lojas).
     funcionarios = (
@@ -117,6 +128,7 @@ def dashboard():
 @rh_required
 def funcionarios():
     loja_id = request.args.get('loja', type=int)
+    pessoa_id = request.args.get('pessoa', type=int)
     apenas_ativos = request.args.get('ativos', '1') == '1'
     view = request.args.get('view', 'cadastros')
     if view not in ('cadastros', 'acessos'):
@@ -133,6 +145,8 @@ def funcionarios():
         query = query.filter_by(ativo=True)
     if loja_id:
         query = query.filter(Funcionario.lojas.any(Loja.id == loja_id))
+    if pessoa_id:
+        query = query.filter(Funcionario.id == pessoa_id)
 
     lista_completa = query.order_by(Funcionario.nome).all()
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
@@ -184,7 +198,7 @@ def funcionarios():
     return render_template('rh/funcionarios.html',
                            funcionarios=lista,
                            lojas=lojas,
-                           loja_id=loja_id,
+                           loja_id=loja_id, pessoa_id=pessoa_id,
                            apenas_ativos=apenas_ativos,
                            view=view, filtro_acesso=filtro_acesso,
                            contas_livres=contas_livres,
@@ -465,8 +479,10 @@ def funcionario_acesso(id):
         loja = request.form.get('loja', type=int)
         if loja:
             params['loja'] = loja
-        if request.form.get('apenas_ativos') == '1':
-            params['ativos'] = '1'
+        if request.form.get('apenas_ativos') in ('0', '1'):
+            params['ativos'] = request.form['apenas_ativos']
+        if request.form.get('pessoa', type=int) == f.id:
+            params['pessoa'] = f.id
         return redirect(url_for('rh.funcionarios', _anchor=f'acesso-{f.id}',
                                 **params))
 
@@ -581,6 +597,25 @@ def funcionario_acesso(id):
     return _voltar()
 
 
+@rh_bp.route('/funcionarios/acessos/revisar')
+@login_required
+@owner_required
+def acessos_revisar():
+    from app.services import rh_acessos_lote
+    filtros = {}
+    for chave in ('loja', 'pessoa'):
+        bruto = request.args.get(chave, '')
+        if bruto and (not bruto.isascii() or not bruto.isdigit() or int(bruto) < 1):
+            abort(400)
+        filtros[chave + '_id'] = int(bruto) if bruto else None
+    try:
+        previa = rh_acessos_lote.prever(request.args.get('modo', 'pendentes'), **filtros)
+    except ValueError as exc:
+        abort(400, description=str(exc))
+    return render_template('rh/acessos_revisao.html', previa=previa,
+                           revisao=rh_acessos_lote.assinar(previa, current_user.id))
+
+
 @rh_bp.route('/funcionarios/acessos/reenviar-pendentes',
              methods=['POST'])
 @login_required
@@ -598,25 +633,19 @@ def funcionarios_reenviar_pendentes():
         return redirect(url_for('rh.funcionarios', view='acessos',
                                 acesso='vinculados', ativos='1'))
 
-    from app.models import Usuario
-    from app.services import treino_acessos as acessos
-
-    funcionarios = (Funcionario.query
-                    .join(Usuario, Funcionario.usuario_id == Usuario.id)
-                    .options(joinedload(Funcionario.usuario))
-                    .filter(Funcionario.ativo.is_(True),
-                            Usuario.senha_provisoria.is_(True),
-                            Usuario.is_owner.is_(False))
-                    .order_by(Funcionario.nome).all())
-    if not funcionarios:
-        flash('Nenhum funcionário ativo está com o primeiro acesso pendente.',
-              'info')
+    from app.services import rh_acessos_lote
+    try:
+        lote = rh_acessos_lote.confirmar(
+            request.form.get('revisao', ''), 'pendentes', current_user.id)
+    except ValueError as exc:
+        flash(str(exc), 'warning')
         return redirect(url_for('rh.funcionarios', view='acessos',
                                 acesso='vinculados', ativos='1'))
 
     enviados, problemas = 0, []
-    for funcionario in funcionarios:
-        resultado = acessos.reenviar_acesso(funcionario)
+    for item in lote['incluidos']:
+        funcionario = item['pessoa']
+        resultado = rh_acessos_lote.enviar_revisado(item)
         if resultado.get('ok'):
             enviados += 1
             continue
@@ -642,7 +671,8 @@ def funcionarios_reenviar_pendentes():
         flash(f'Não enviados: {resumo}. As senhas dessas pessoas não foram '
               'alteradas.', 'warning')
     return redirect(url_for('rh.funcionarios', view='acessos',
-                            acesso='vinculados', ativos='1'))
+                            acesso='vinculados', ativos='1',
+                            loja=lote['loja_id'], pessoa=lote['pessoa_id']))
 
 
 @rh_bp.route('/funcionarios/acessos/reenviar-todos', methods=['POST'])
@@ -661,15 +691,17 @@ def funcionarios_reenviar_acessos():
         return redirect(url_for('rh.funcionarios', view='acessos',
                                 acesso='vinculados', ativos='1'))
 
-    from app.services import treino_acessos as acessos
-    funcionarios = (Funcionario.query
-                    .options(joinedload(Funcionario.usuario))
-                    .filter(Funcionario.ativo.is_(True),
-                            Funcionario.usuario_id.isnot(None))
-                    .order_by(Funcionario.nome).all())
+    from app.services import rh_acessos_lote
+    try:
+        lote = rh_acessos_lote.confirmar(
+            request.form.get('revisao', ''), 'todos', current_user.id)
+    except ValueError as exc:
+        flash(str(exc), 'warning')
+        return redirect(url_for('rh.funcionarios', view='acessos', acesso='vinculados'))
     enviados, problemas = 0, []
-    for funcionario in funcionarios:
-        resultado = acessos.reenviar_acesso(funcionario)
+    for item in lote['incluidos']:
+        funcionario = item['pessoa']
+        resultado = rh_acessos_lote.enviar_revisado(item)
         if resultado.get('ok'):
             enviados += 1
             continue
@@ -697,7 +729,8 @@ def funcionarios_reenviar_acessos():
         flash(f'Não enviados: {resumo}. As senhas dessas pessoas não foram '
               'alteradas.', 'warning')
     return redirect(url_for('rh.funcionarios', view='acessos',
-                            acesso='vinculados', ativos='1'))
+                            acesso='vinculados', ativos='1',
+                            loja=lote['loja_id'], pessoa=lote['pessoa_id']))
 
 
 @rh_bp.route('/funcionarios/novo', methods=['GET', 'POST'])
@@ -914,8 +947,29 @@ def pre_cadastro_descartar(id):
 @rh_required
 def detalhe_funcionario(id):
     from app.services import plano_carreira_import, treino_ledger, treino_painel
+    from app.ui_v2 import ui_v2_ativo
 
     func = Funcionario.query.get_or_404(id)
+    aba = request.args.get('aba', 'resumo')
+    if aba not in ('resumo', 'cadastro', 'treinamento', 'acesso'):
+        abort(400)
+    if ui_v2_ativo() and aba != 'cadastro':
+        from app.services import rh_movimentacao, treino_acompanhamento
+        from app.services.identidade_usuario import identificador_acesso
+        from app.services.treino_lideranca import eh_direcao, unidades_principais
+        principal_id = unidades_principais([func]).get(func.id)
+        principal = next((l for l in func.lojas if l.id == principal_id), None)
+        temporada = treino_ledger.temporada_ativa()
+        return render_template(
+            'rh/pessoa.html', func=func, aba=aba,
+            login_acesso=identificador_acesso(func.usuario) if func.usuario else None,
+            atual=rh_movimentacao.snapshot(func), direcao=eh_direcao(func),
+            principal=principal,
+            treino_resumo=treino_painel.resumo_funcionario(func, temporada),
+            temporada=temporada,
+            acompanhamento=treino_acompanhamento.progresso_pessoa(func, temporada)
+            if aba == 'treinamento' else None,
+        )
     lojas = Loja.query.options(defer(Loja.planta_imagem)).filter_by(ativa=True).order_by(Loja.nome).all()
     cargos_disp = Cargo.query.filter_by(ativo=True).order_by(Cargo.nome).all()
     feedbacks = Feedback.query.filter_by(funcionario_id=id).order_by(Feedback.data.desc()).all()
@@ -1171,7 +1225,7 @@ def salvar_funcionario(id):
         func, cargo_antes, actor_id=current_user.id, origem='ficha_rh')
     db.session.commit()
     flash(f'"{func.nome}" atualizado!', 'success')
-    return redirect(url_for('rh.detalhe_funcionario', id=func.id))
+    return redirect(url_for('rh.detalhe_funcionario', id=func.id, aba='cadastro'))
 
 
 @rh_bp.route('/funcionarios/<int:id>/feedback', methods=['POST'])
@@ -1184,7 +1238,7 @@ def add_feedback(id):
 
     if not texto:
         flash('Texto do feedback é obrigatório.', 'warning')
-        return redirect(url_for('rh.detalhe_funcionario', id=id))
+        return redirect(url_for('rh.detalhe_funcionario', id=id, aba='cadastro', _anchor='feedback'))
 
     fb = Feedback(
         funcionario_id=id,
@@ -1195,7 +1249,7 @@ def add_feedback(id):
     db.session.add(fb)
     db.session.commit()
     flash('Feedback registrado!', 'success')
-    return redirect(url_for('rh.detalhe_funcionario', id=id))
+    return redirect(url_for('rh.detalhe_funcionario', id=id, aba='cadastro', _anchor='feedback'))
 
 
 @rh_bp.route('/funcionarios/<int:id>/feedback/<int:fb_id>/excluir', methods=['POST'])
@@ -1206,7 +1260,7 @@ def excluir_feedback(id, fb_id):
     db.session.delete(fb)
     db.session.commit()
     flash('Feedback removido.', 'success')
-    return redirect(url_for('rh.detalhe_funcionario', id=id))
+    return redirect(url_for('rh.detalhe_funcionario', id=id, aba='cadastro', _anchor='feedback'))
 
 
 @rh_bp.route('/lojas')

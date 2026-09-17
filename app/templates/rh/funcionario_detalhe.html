@@ -4,6 +4,7 @@
 {% block title %}{{ func.nome }}{% endblock %}
 
 {% block content %}
+{% if ui_v2 %}{% import 'rh/_navigation.html' as rhnav with context %}{{ rhnav.ficha(func, 'cadastro') }}{% endif %}
 {{ ui.breadcrumbs([
     ('Funcionários', url_for('rh.funcionarios')),
     (func.nome, None),

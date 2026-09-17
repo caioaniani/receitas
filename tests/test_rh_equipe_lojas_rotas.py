@@ -44,8 +44,8 @@ def test_owner_ve_lojas_lideres_e_pessoas_sem_login(app, owner_user):
                   'Sem líder direto cadastrado', 'Manhã', 'Tarde'):
         assert texto in html
     assert ana.usuario_id is None
-    assert 'href="/rh/equipe/lojas" aria-current="page"' in html
-    assert 'aria-label="Treinamento e pessoas"' in html
+    assert 'href="/rh/equipe/lojas" class="rh-hub-nav-link active" aria-current="page"' in html
+    assert 'aria-label="Gestão de pessoas"' in html
     assert f'href="/rh/funcionarios/{ana.id}"' in html
     for privado in (ana.cpf, ana.email, '8297.61', '8.297,61', '9287.61', '9.287,61'):
         assert privado not in html
@@ -101,8 +101,8 @@ def test_vazia_tem_orientacao_sem_erro(app, owner_user):
 @pytest.mark.parametrize('caminho', ['/rh/equipe', '/rh/funcionarios'])
 def test_atalhos_no_rh(app, owner_user, caminho):
     html = _cliente(app, owner_user).get(caminho).get_data(as_text=True)
-    assert 'href="/rh/equipe/lojas">Por loja</a>' in html
-    assert '>Equipe por loja</a>' in html
+    assert 'href="/rh/equipe/lojas" class="rh-hub-nav-link">Lojas e equipes</a>' in html
+    assert '>Lojas e equipes</a>' in html
 
 
 def test_nomes_escapados_e_consulta_preserva_cadastro(app, owner_user):

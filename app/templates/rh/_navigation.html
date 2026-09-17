@@ -1,0 +1,21 @@
+{% macro principal(variant='page') %}
+{% set endpoint = request.endpoint or '' %}
+{% set itens = [
+  ('rh.dashboard', 'Visão geral', endpoint == 'rh.dashboard'),
+  ('rh.equipe_lojas', 'Lojas e equipes', endpoint in ['rh.equipe_lojas', 'rh.lideranca_preenchimento', 'rh.lideranca_organograma', 'rh.escala']),
+  ('rh.equipe', 'Pessoas', endpoint in ['rh.equipe', 'rh.funcionarios', 'rh.detalhe_funcionario', 'rh.carreira_funcionario', 'rh.promover_funcionario', 'rh.acessos_revisar']),
+  ('treino.gestor_home', 'Treinamento', request.blueprint == 'treino'),
+  ('rh.administrativo', 'Administrativo', endpoint.startswith('rh.') and endpoint not in ['rh.dashboard', 'rh.equipe_lojas', 'rh.lideranca_preenchimento', 'rh.lideranca_organograma', 'rh.escala', 'rh.equipe', 'rh.funcionarios', 'rh.detalhe_funcionario', 'rh.carreira_funcionario', 'rh.promover_funcionario', 'rh.acessos_revisar'])
+] %}
+{% if variant == 'page' %}<nav class="rh-hub-nav" aria-label="Gestão de pessoas">{% endif %}
+{% for destino, titulo, ativo in itens %}<a href="{{ url_for(destino) }}" class="{{ 'sidebar-link' if variant == 'sidebar' else 'rh-hub-nav-link' }}{{ ' active' if ativo }}"{% if ativo %} aria-current="page"{% endif %}>{{ titulo }}</a>{% endfor %}
+{% if variant == 'page' %}</nav>{% endif %}
+{% endmacro %}
+
+{% macro ficha(pessoa, aba='resumo') %}
+<nav class="rh-hub-nav rh-person-nav" aria-label="Ficha de {{ pessoa.nome }}">
+{% for chave, nome in [('resumo','Resumo'),('cadastro','Cadastro'),('treinamento','Treinamento'),('acesso','Acesso'),('historico','Histórico')] %}
+<a href="{{ url_for('rh.carreira_funcionario', id=pessoa.id) if chave == 'historico' else url_for('rh.detalhe_funcionario', id=pessoa.id, aba=chave) }}"{% if aba == chave %} aria-current="page"{% endif %}>{{ nome }}</a>
+{% endfor %}
+</nav>
+{% endmacro %}

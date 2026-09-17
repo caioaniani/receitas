@@ -48,6 +48,14 @@ def test_area_simplificada_preserva_destinos_e_permissoes(app, papel, owner):
         classic = client.get(f'/area/{slug}')
         app.config['UI_V2_ENABLED'] = True
         simplified = client.get(f'/area/{slug}')
+        if slug == 'rh' and owner:
+            assert simplified.status_code == 302
+            assert simplified.location.endswith('/rh/')
+            # Todos os caminhos administrativos anteriores continuam acessíveis.
+            after = _AreaLinks(client.get('/rh/administrativo').get_data(as_text=True))
+            before = _AreaLinks(classic.get_data(as_text=True))
+            assert Counter(after.links) == Counter(before.links)
+            continue
         assert simplified.status_code == classic.status_code
         if simplified.status_code != 200:
             continue

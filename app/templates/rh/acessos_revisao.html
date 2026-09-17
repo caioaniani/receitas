@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Revisar envio de acessos{% endblock %}
+{% block content %}
+<div class="rh-equipe rh-hub">
+<header class="rh-equipe-heading"><div><span class="rh-equipe-eyebrow">Acessos · Revisão antes do envio</span><h1>Confira os destinatários</h1><p>{{ previa.escopo }}{% if previa.pessoa_id %} · somente a pessoa selecionada{% endif %} · {{ 'apenas senhas provisórias pendentes' if previa.modo == 'pendentes' else 'contas ativas vinculadas' }}</p></div></header>
+<p class="rh-hub-notice">Nada foi enviado. Confirmar gera novas senhas para as {{ previa.incluidos|length }} pessoas abaixo e invalida as anteriores. Os envios são individuais: uma falha não desfaz os outros.</p>
+<section class="rh-equipe-panel rh-person-overview"><h2>{{ previa.incluidos|length }} destinatário(s)</h2><ul class="rh-access-recipients">{% for item in previa.incluidos %}<li><strong>{{ item.pessoa.nome }}</strong><span>{{ item.email }}</span><small>{{ item.pessoa.lojas|map(attribute='nome')|join(', ') or 'Sem unidade' }}</small></li>{% else %}<li>Nenhuma conta elegível neste recorte.</li>{% endfor %}</ul></section>
+{% if previa.excluidos %}<details class="rh-equipe-panel rh-person-overview"><summary>Não serão enviados · {{ previa.excluidos|length }}</summary><ul>{% for item in previa.excluidos %}<li>{{ item.pessoa.nome }} — {{ item.motivo }}</li>{% endfor %}</ul></details>{% endif %}
+{% if previa.incluidos %}<form method="post" action="{{ url_for('rh.funcionarios_reenviar_pendentes' if previa.modo == 'pendentes' else 'rh.funcionarios_reenviar_acessos') }}" class="rh-equipe-panel rh-person-overview">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="revisao" value="{{ revisao }}">
+{% set palavra = 'PENDENTES' if previa.modo == 'pendentes' else 'REENVIAR' %}
+<label for="rh-confirmacao">Digite {{ palavra }} para confirmar somente esta lista</label><input id="rh-confirmacao" class="form-control my-3" name="confirmacao" required pattern="{{ palavra }}" autocomplete="off">
+<button class="rh-equipe-button rh-equipe-button-primary" type="submit">Confirmar e enviar {{ previa.incluidos|length }} acesso(s)</button><p class="rh-hub-secondary">Revisão válida por 30 minutos. Qualquer alteração nos destinatários exige nova revisão.</p>
+</form>{% endif %}
+<a class="rh-equipe-button" href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', loja=previa.loja_id or None, pessoa=previa.pessoa_id or None) }}">Voltar sem enviar</a>
+</div>
+{% endblock %}

@@ -1,5 +1,57 @@
 /* Visão macro do RH: tokens do shell v2, leitura sem JavaScript e sem alterar Bootstrap. */
 
+/* Uma navegação canônica e cartões de leitura; sem depender de JavaScript. */
+.rh-hub-nav { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:28px; padding:4px; border-bottom:1px solid var(--ui-border,#dde4df); }
+.rh-hub-nav a { display:inline-flex; align-items:center; min-height:44px; padding:10px 15px; border-radius:8px; color:var(--ui-text,#283e32); text-decoration:none; font-size:14px; font-weight:600; }
+.rh-hub-nav a[aria-current] { background:var(--ui-accent-soft,#e8f1eb); color:var(--ui-accent,#365c46); }
+.rh-hub-nav a:hover { background:#f0f4f1; }
+.rh-hub-nav a:focus-visible,.rh-hub a:focus-visible,.rh-hub summary:focus-visible { outline:3px solid #59866b; outline-offset:3px; }
+.rh-hub { max-width:1280px; }
+.rh-hub-search { margin:0 0 28px; max-width:600px; }
+.rh-hub-search label { display:block; font-size:13px; margin-bottom:8px; }
+.rh-hub-search > div { display:flex; gap:8px; }
+.rh-hub-search input { min-width:0; flex:1; min-height:44px; padding:10px 14px; border:1px solid var(--equipe-line); border-radius:9px; background:var(--equipe-surface); }
+.rh-hub-stores { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr)); gap:18px; margin-bottom:24px; }
+.rh-hub-store { display:flex; flex-direction:column; padding:24px; min-width:0; border:1px solid var(--equipe-line); border-radius:16px; background:var(--equipe-surface); color:var(--equipe-ink); text-decoration:none; transition:border-color .15s; }
+.rh-hub-store:hover { color:var(--equipe-ink); border-color:var(--equipe-green); }
+.rh-hub-store h3,.rh-hub-store h2 { margin:10px 0 18px; font-size:23px; }
+.rh-hub-shift { display:grid; gap:4px; border-top:1px solid var(--equipe-line); padding:12px 0; }
+.rh-hub-shift strong { font-size:14px; }
+.rh-hub-shift strong span,.rh-hub-shift small { color:var(--equipe-muted); font-weight:400; }
+.rh-hub-shift small { line-height:1.6; overflow-wrap:anywhere; }
+.rh-hub-store-action { margin-top:auto; padding-top:20px; color:var(--equipe-green); font-size:13px; font-weight:700; }
+.rh-hub-secondary { color:var(--equipe-muted); font-size:13px; line-height:1.7; margin:16px 0 24px; }
+.rh-hub .rh-equipe-panel > .rh-hub-secondary { padding:0 24px; }
+.rh-hub-notice { background:#f8f2e6; color:#725421; border-radius:10px; padding:14px 18px; font-size:14px; line-height:1.6; }
+.rh-hub-pending { border-top:1px solid var(--equipe-line); padding:0 24px; }
+.rh-hub-pending summary { display:flex; align-items:center; justify-content:space-between; gap:14px; min-height:64px; cursor:pointer; font-size:15px; }
+.rh-hub-pending summary::after { content:'+'; color:var(--equipe-green); }
+.rh-hub-pending[open] summary::after { content:'−'; }
+.rh-hub-pending summary strong { margin-left:auto; background:var(--equipe-green-soft); border-radius:8px; padding:4px 10px; }
+.rh-hub-pending p { color:var(--equipe-muted); font-size:13px; }
+.rh-hub-pending ul { padding:0; list-style:none; }
+.rh-hub-pending li { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 0; border-top:1px solid var(--equipe-line); font-size:14px; }
+.rh-hub-pending li a { flex-shrink:0; padding:8px 0; }
+.rh-hub-clear { padding:24px; color:var(--equipe-green); }
+.rh-person-overview { padding:24px; margin-bottom:24px; }
+.rh-person-facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:20px; margin:24px 0; }
+.rh-person-facts dt { color:var(--equipe-muted); font-size:12px; font-weight:500; margin-bottom:5px; }
+.rh-person-facts dd { font-size:15px; margin:0; overflow-wrap:anywhere; }
+.rh-person-number { font-size:36px; color:var(--equipe-green); }
+.rh-person-module { border-top:1px solid var(--equipe-line); padding:20px 0; }
+.rh-person-module h3 { font-size:18px; }
+.rh-access-recipients { list-style:none; margin:0; padding:0; }
+.rh-access-recipients li { display:grid; gap:5px; padding:16px 0; border-bottom:1px solid var(--equipe-line); overflow-wrap:anywhere; }
+.rh-access-recipients small { color:var(--equipe-muted); }
+@media(max-width:640px) {
+ .rh-hub-nav { gap:2px; margin-bottom:20px; }
+ .rh-hub-nav a { padding:10px 11px; font-size:13px; }
+ .rh-hub-store,.rh-person-overview { padding:20px; }
+ .rh-hub-pending { padding:0 18px; }
+ .rh-hub-pending li { align-items:flex-start; flex-direction:column; gap:0; }
+ .rh-person-facts { grid-template-columns:1fr; }
+}
+
 /* Por loja: hierarquia legível sem depender de um organograma com zoom. */
 .rh-lojas .rh-equipe-heading p { max-width: 62ch; font-size: 14px; }
 .rh-lojas .rh-equipe-button { min-height: 44px; font-size: 13px; }

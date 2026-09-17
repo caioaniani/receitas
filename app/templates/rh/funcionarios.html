@@ -23,7 +23,7 @@
 {% if current_user.is_dono() %}
 <nav class="rh-pessoas-tabs" aria-label="Gestão de pessoas">
     <a href="{{ url_for('rh.equipe') }}">Visão da equipe</a>
-    <a href="{{ url_for('rh.equipe_lojas') }}">Por loja</a>
+    {% if not ui_v2 %}<a href="{{ url_for('rh.equipe_lojas') }}">Por loja</a>{% endif %}
     <a href="{{ url_for('rh.funcionarios') }}"{% if view != 'acessos' %} aria-current="page"{% endif %}>Cadastros</a>
     <a href="{{ url_for('rh.funcionarios', view='acessos') }}"{% if view == 'acessos' %} aria-current="page"{% endif %}>Acessos</a>
     <a href="{{ url_for('rh.plano_carreira') }}">Plano de carreira <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
@@ -31,7 +31,9 @@
 {% endif %}
 
 <!-- Filtros -->
+{% if pessoa_id %}<p class="rh-hub-notice">Mostrando somente a pessoa selecionada. <a href="{{ url_for('rh.funcionarios', view=view, acesso='todos') }}">Ver toda a equipe</a></p>{% endif %}
 <form method="GET" class="rh-pessoas-scope" aria-label="Selecionar equipe">
+    {% if pessoa_id %}<input type="hidden" name="pessoa" value="{{ pessoa_id }}">{% endif %}
     <input type="hidden" name="view" value="{{ view }}">
     {% if view == 'acessos' %}<input type="hidden" name="acesso" value="{{ filtro_acesso }}">{% endif %}
     <label for="rh-pessoas-loja">Unidade</label>
@@ -71,33 +73,29 @@
         <div class="alert alert-info mb-3">
             Somente contas que ainda usam senha provisória serão incluídas. Quem já concluiu o primeiro acesso não terá a senha alterada.
         </div>
-        <form method="POST" action="{{ url_for('rh.funcionarios_reenviar_pendentes') }}" class="d-flex gap-2 align-items-end flex-wrap">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <label class="form-label mb-0">
-                <span class="small">Digite <strong>PENDENTES</strong> para confirmar</span>
-                <input class="form-control form-control-sm" name="confirmacao" autocomplete="off" required pattern="PENDENTES" placeholder="PENDENTES">
-            </label>
-            <button class="btn btn-sm btn-primary"><i class="bi bi-envelope-check"></i> Gerar novas senhas e enviar</button>
+        <form method="GET" action="{{ url_for('rh.acessos_revisar') }}" class="d-flex gap-2 align-items-end flex-wrap">
+            <input type="hidden" name="modo" value="pendentes">
+            {% if loja_id %}<input type="hidden" name="loja" value="{{ loja_id }}">{% endif %}
+            {% if pessoa_id %}<input type="hidden" name="pessoa" value="{{ pessoa_id }}">{% endif %}
+            <button class="btn btn-sm btn-primary">Revisar destinatários antes de enviar</button>
         </form>
     </div>
 </details>
 
 <details class="card mb-3 rh-acessos-batch">
     <summary class="card-body d-flex align-items-center justify-content-between gap-2" style="cursor:pointer;">
-        <span><strong>Opção de emergência: reenviar para todos</strong><br><small class="text-muted">Troca a senha de cada funcionário ativo já vinculado, inclusive de quem já acessa normalmente.</small></span>
+        <span><strong>Opção de emergência: reenviar no recorte selecionado</strong><br><small class="text-muted">Inclui quem já acessa normalmente. Respeita a unidade e a pessoa selecionadas.</small></span>
         <i class="bi bi-chevron-down"></i>
     </summary>
     <div class="card-body border-top">
         <div class="alert alert-warning mb-3">
-            As senhas atuais deixarão de funcionar. Use somente se realmente quiser interromper o acesso de toda a equipe.
+            As senhas atuais dos destinatários confirmados deixarão de funcionar. Confira os nomes e e-mails na próxima etapa.
         </div>
-        <form method="POST" action="{{ url_for('rh.funcionarios_reenviar_acessos') }}" class="d-flex gap-2 align-items-end flex-wrap">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <label class="form-label mb-0">
-                <span class="small">Digite <strong>REENVIAR</strong> para confirmar</span>
-                <input class="form-control form-control-sm" name="confirmacao" autocomplete="off" required pattern="REENVIAR" placeholder="REENVIAR">
-            </label>
-            <button class="btn btn-sm btn-danger"><i class="bi bi-envelope-arrow-up"></i> Reenviar para toda a equipe</button>
+        <form method="GET" action="{{ url_for('rh.acessos_revisar') }}" class="d-flex gap-2 align-items-end flex-wrap">
+            <input type="hidden" name="modo" value="todos">
+            {% if loja_id %}<input type="hidden" name="loja" value="{{ loja_id }}">{% endif %}
+            {% if pessoa_id %}<input type="hidden" name="pessoa" value="{{ pessoa_id }}">{% endif %}
+            <button class="btn btn-sm btn-outline-danger">Revisar contas deste recorte</button>
         </form>
     </div>
 </details>
@@ -105,11 +103,11 @@
 
 <nav class="rh-pessoas-segments" aria-label="Filtrar por vínculo da conta">
     <a{% if filtro_acesso == 'pendentes' %} aria-current="page"{% endif %}
-       href="{{ url_for('rh.funcionarios', view='acessos', acesso='pendentes', loja=loja_id or None, ativos='1' if apenas_ativos else '0') }}">Sem conta vinculada</a>
+       href="{{ url_for('rh.funcionarios', view='acessos', acesso='pendentes', loja=loja_id or None, pessoa=pessoa_id or None, ativos='1' if apenas_ativos else '0') }}">Sem conta vinculada</a>
     <a{% if filtro_acesso == 'vinculados' %} aria-current="page"{% endif %}
-       href="{{ url_for('rh.funcionarios', view='acessos', acesso='vinculados', loja=loja_id or None, ativos='1' if apenas_ativos else '0') }}">Já vinculados</a>
+       href="{{ url_for('rh.funcionarios', view='acessos', acesso='vinculados', loja=loja_id or None, pessoa=pessoa_id or None, ativos='1' if apenas_ativos else '0') }}">Já vinculados</a>
     <a{% if filtro_acesso == 'todos' %} aria-current="page"{% endif %}
-       href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', loja=loja_id or None, ativos='1' if apenas_ativos else '0') }}">Todos</a>
+       href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', loja=loja_id or None, pessoa=pessoa_id or None, ativos='1' if apenas_ativos else '0') }}">Todos</a>
 </nav>
 
 <p class="rh-acessos-note">“Primeiro acesso pendente” significa que a senha provisória ainda não foi trocada. Uma conta vinculada não confirma que o e-mail foi recebido.</p>
@@ -180,6 +178,7 @@
             <form method="POST" action="{{ url_for('rh.funcionario_acesso', id=f.id) }}" class="row g-2 align-items-end">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="filtro_acesso" value="{{ filtro_acesso }}">
+                {% if pessoa_id %}<input type="hidden" name="pessoa" value="{{ pessoa_id }}">{% endif %}
                 <input type="hidden" name="loja" value="{{ loja_id or '' }}">
                 <input type="hidden" name="apenas_ativos" value="{{ '1' if apenas_ativos else '0' }}">
                 <div class="col-12 col-lg-7">
@@ -198,6 +197,7 @@
             <form method="POST" action="{{ url_for('rh.funcionario_acesso', id=f.id) }}" class="row g-2 align-items-end acesso-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="filtro_acesso" value="{{ filtro_acesso }}">
+                {% if pessoa_id %}<input type="hidden" name="pessoa" value="{{ pessoa_id }}">{% endif %}
                 <input type="hidden" name="loja" value="{{ loja_id or '' }}">
                 <input type="hidden" name="apenas_ativos" value="{{ '1' if apenas_ativos else '0' }}">
                 <div class="col-12 col-lg-4">
@@ -235,7 +235,7 @@
 
 <section class="rh-acessos-lote" aria-labelledby="rh-acessos-lote-titulo">
     <h2 id="rh-acessos-lote-titulo">Envios em lote</h2>
-    <p>Estas ações abrangem toda a equipe ativa, independentemente dos filtros desta página.</p>
+    <p>O envio respeita a unidade e a pessoa selecionadas, somente para funcionários ativos. A busca nesta lista não seleciona destinatários: confira os nomes e e-mails na próxima etapa.</p>
     {{ acoes_lote() }}
 </section>
 
@@ -286,7 +286,7 @@ document.querySelectorAll('.acesso-form').forEach(function(form) {
                 <td data-label="Contato e admissão">{{ f.telefone or 'Telefone não informado' }}<small class="rh-equipe-muted">{% if f.data_admissao %}Admissão <time datetime="{{ f.data_admissao.isoformat() }}">{{ f.data_admissao.strftime('%d/%m/%Y') }}</time>{% else %}Admissão não informada{% endif %}</small></td>
                 {% if current_user.is_owner %}
                 <td data-label="Salário" class="rh-pessoas-salary">{{ f.salario_base | brl }}</td>
-                <td class="rh-equipe-history"><div class="rh-equipe-row-actions"><a class="rh-equipe-text-link" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}" aria-label="Abrir ficha de {{ f.nome }}">Abrir ficha <i class="bi bi-arrow-right" aria-hidden="true"></i></a><a class="rh-equipe-text-link" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}#feedback" aria-label="Registrar feedback para {{ f.nome }}">Registrar feedback</a></div></td>
+                <td class="rh-equipe-history"><div class="rh-equipe-row-actions"><a class="rh-equipe-text-link" href="{{ url_for('rh.detalhe_funcionario', id=f.id) }}" aria-label="Abrir ficha de {{ f.nome }}">Abrir ficha <i class="bi bi-arrow-right" aria-hidden="true"></i></a><a class="rh-equipe-text-link" href="{{ url_for('rh.detalhe_funcionario', id=f.id, aba='cadastro', _anchor='feedback') }}" aria-label="Registrar feedback para {{ f.nome }}">Registrar feedback</a></div></td>
                 {% endif %}
             </tr>
             {% endfor %}

@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% import 'rh/_navigation.html' as rhnav with context %}
+{% block title %}{{ func.nome }} · Pessoas{% endblock %}
+{% block content %}
+<div class="rh-equipe rh-hub rh-person">
+  <a class="rh-equipe-text-link" href="{{ url_for('rh.equipe') }}">← Pessoas</a>
+  <header class="rh-equipe-heading"><div><span class="rh-equipe-eyebrow">{{ 'Equipe ativa' if func.ativo else 'Cadastro inativo' }}</span><h1>{{ func.nome }}</h1><p>{{ 'Proprietário / Direção' if direcao else (atual.cargo_nome or 'Cargo não informado') }}{% if not direcao %} · {{ ('Nível ' ~ atual.nivel) if atual.nivel else 'Nível a conferir' }}{% endif %}</p></div></header>
+  {{ rhnav.ficha(func, aba) }}
+  {% if aba == 'resumo' %}
+  <section class="rh-equipe-panel rh-person-overview"><h2>Quem é e onde atua</h2><dl class="rh-person-facts">
+    <div><dt>Unidade principal</dt><dd>{{ principal.nome if principal else ('Direção' if direcao else 'A definir') }}</dd></div>
+    <div><dt>Período</dt><dd>{{ func.periodo or 'Não informado' }}</dd></div>
+    <div><dt>Líder direto</dt><dd>{{ func.lider.nome if func.lider else ('Direção' if direcao else 'Não informado') }}</dd></div>
+    <div><dt>Admissão</dt><dd>{{ func.data_admissao.strftime('%d/%m/%Y') if func.data_admissao else 'Não informada' }}</dd></div>
+  </dl><a href="{{ url_for('rh.lideranca_preenchimento') }}">Organizar líder, unidade e período</a></section>
+  <div class="rh-hub-stores">
+    <a class="rh-hub-store" href="{{ url_for('rh.detalhe_funcionario', id=func.id, aba='treinamento') }}"><h2>Treinamento</h2><strong class="rh-person-number">{{ treino_resumo.aulas.percentual }}%</strong><p>das aulas assistidas · {{ treino_resumo.aulas.concluidas }}/{{ treino_resumo.aulas.total }} concluídas</p><span class="rh-hub-store-action">Ver aulas, avaliações e prática →</span></a>
+    <a class="rh-hub-store" href="{{ url_for('rh.detalhe_funcionario', id=func.id, aba='acesso') }}"><h2>Acesso ao sistema</h2><p>{{ 'Conta não vinculada' if not func.usuario else ('Senha provisória pendente' if func.usuario.senha_provisoria else 'Sem troca de senha pendente') }}</p><span class="rh-hub-store-action">Conferir conta e e-mail →</span></a>
+  </div>
+  <p class="rh-hub-secondary">Promoções e movimentações ficam no <a href="{{ url_for('rh.carreira_funcionario', id=func.id) }}">Histórico</a>. Concluir um treinamento não altera cargo nem salário.</p>
+  {% elif aba == 'acesso' %}
+  <section class="rh-equipe-panel rh-person-overview"><h2>Acesso de {{ func.nome.split()[0] }}</h2><dl class="rh-person-facts">
+    <div><dt>Conta</dt><dd>{{ 'Vinculada' if func.usuario else 'Não vinculada' }}</dd></div>
+    <div><dt>Login</dt><dd>{{ login_acesso or 'Não criado' }}</dd></div>
+    <div><dt>E-mail da ficha</dt><dd>{{ func.email or 'Não informado' }}</dd></div>
+    <div><dt>Senha</dt><dd>{{ ('Provisória: troca pendente' if func.usuario.senha_provisoria else 'Sem troca pendente') if func.usuario else 'Sem conta' }}</dd></div>
+  </dl><p class="rh-hub-notice">O vínculo e a troca da senha não comprovam a entrega de um e-mail. Não há histórico de entrega disponível nesta ficha.</p><p>Atividade nas aulas: {% if treino_resumo.ultima_atividade %}{{ treino_resumo.ultima_atividade|brt('%d/%m/%Y às %H:%M') }}{% else %}nenhuma registrada{% endif %}.</p>
+  <a class="rh-equipe-button rh-equipe-button-primary" href="{{ url_for('rh.funcionarios', view='acessos', acesso='todos', ativos='0', pessoa=func.id) }}">{{ 'Gerenciar acesso desta pessoa' if func.usuario else 'Criar ou vincular conta' }}</a>
+  </section>
+  {% elif aba == 'treinamento' %}
+  <section class="rh-equipe-panel rh-person-overview"><h2>Aulas, avaliações e prática</h2><p>{{ acompanhamento.percentual_assistido }}% das aulas assistidas · {{ acompanhamento.aulas_concluidas }} de {{ acompanhamento.aulas_total }} aulas concluídas.</p><p class="rh-hub-secondary">Assistir ao vídeo é uma etapa. A avaliação e a observação do líder são acompanhadas separadamente.</p>{% if not temporada %}<p class="rh-hub-notice">Sem ciclo ativo para registrar observação prática.</p>{% endif %}
+  {% for modulo in acompanhamento.modulos %}<article class="rh-person-module"><h3>{{ modulo.trilha.nome }}</h3><span class="rh-equipe-eyebrow">{{ 'Obrigatório para o cargo' if modulo.obrigatoria else 'Outros módulos publicados' }}</span><dl class="rh-person-facts">
+    <div><dt>Aulas</dt><dd>{{ modulo.aulas_concluidas }} / {{ modulo.aulas|length }} concluídas</dd></div>
+    <div><dt>Avaliações</dt><dd>{% if modulo.quizzes %}{{ modulo.quizzes|selectattr('aprovada')|list|length }} / {{ modulo.quizzes|length }} aprovadas{% else %}Nenhuma publicada{% endif %}</dd></div>
+    <div><dt>Observação prática</dt><dd>{{ 'Registrada neste ciclo' if modulo.aplicacao else ('Ainda não registrada' if temporada else 'Sem ciclo ativo') }}</dd></div>
+  </dl></article>{% else %}<p>Nenhum módulo publicado.</p>{% endfor %}
+  <div class="rh-equipe-actions"><a class="rh-equipe-button" href="{{ url_for('treino.gestor_progresso', func_id=func.id) }}">Detalhar progresso por aula</a><a class="rh-equipe-button rh-equipe-button-primary" href="{{ url_for('treino.gestor_observar', func_id=func.id) }}">Abrir checklist de observação</a></div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

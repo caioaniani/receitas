@@ -18,7 +18,7 @@
 
   <nav class="rh-pessoas-tabs" aria-label="Gestão de pessoas">
     <a href="{{ url_for('rh.equipe') }}" aria-current="page">Visão da equipe</a>
-    <a href="{{ url_for('rh.equipe_lojas') }}">Por loja</a>
+    {% if not ui_v2 %}<a href="{{ url_for('rh.equipe_lojas') }}">Por loja</a>{% endif %}
     <a href="{{ url_for('rh.funcionarios') }}">Cadastros</a>
     <a href="{{ url_for('rh.funcionarios', view='acessos') }}">Acessos</a>
     <a href="{{ url_for('rh.plano_carreira') }}">Plano de carreira <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
@@ -80,7 +80,7 @@
         <tbody>
         {% for linha in linhas %}{% set pessoa = linha.pessoa %}
           <tr id="pessoa-{{ pessoa.id }}">
-            <th scope="row" data-label="Pessoa"><a class="rh-equipe-person" href="{{ url_for('rh.carreira_funcionario', id=pessoa.id) }}">{{ pessoa.nome }}</a>{% if not pessoa.ativo %}<small class="rh-equipe-muted">Inativo</small>{% endif %}</th>
+            <th scope="row" data-label="Pessoa"><a class="rh-equipe-person" href="{{ url_for('rh.detalhe_funcionario', id=pessoa.id) }}">{{ pessoa.nome }}</a>{% if not pessoa.ativo %}<small class="rh-equipe-muted">Inativo</small>{% endif %}</th>
             <td data-label="Cargo e nível"><strong>{{ linha.cargo_nome }}</strong><div>{% if linha.nivel is not none %}<span class="rh-equipe-level">Nível {{ linha.nivel }}</span>{% else %}<small class="rh-equipe-muted">{{ 'Nível não se aplica' if linha.direcao else 'Nível não definido' }}</small>{% endif %}</div>{% if linha.familia %}<small class="rh-equipe-muted">{{ linha.familia }}</small>{% endif %}</td>
             <td data-label="Unidade e período">{% if linha.unidades %}{{ linha.unidades|map(attribute='nome')|join(', ') }}{% else %}<span class="rh-equipe-muted">Unidade não definida</span>{% endif %}<small class="rh-equipe-muted">{{ pessoa.periodo or 'Período não definido' }}</small></td>
             <td data-label="Líder direto">{% if linha.lider_nome %}{{ linha.lider_nome }}{% else %}<span class="rh-equipe-pending">Sem líder definido</span>{% endif %}</td>

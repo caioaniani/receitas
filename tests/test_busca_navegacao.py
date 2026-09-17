@@ -150,10 +150,10 @@ def test_ver_acesso_da_ficha_encontra_a_mesma_pessoa(app, owner_user, ativo):
         def handle_starttag(self, tag, attrs):
             if tag == 'a':
                 href = dict(attrs).get('href', '')
-                if href.endswith(f'#acesso-{funcionario.id}'):
+                if href.startswith('/rh/funcionarios?') and f'pessoa={funcionario.id}' in href:
                     self.destino = href
 
-    ficha = cliente.get(f'/rh/funcionarios/{funcionario.id}')
+    ficha = cliente.get(f'/rh/funcionarios/{funcionario.id}?aba=acesso')
     assert ficha.status_code == 200
     parser = _LinkAcesso()
     parser.feed(ficha.get_data(as_text=True))

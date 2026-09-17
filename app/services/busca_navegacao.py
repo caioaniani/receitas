@@ -181,7 +181,10 @@ def itens_para_usuario(usuario, categorias_receitas):
                   aliases=['quem é quem', 'níveis', 'promoções', 'visão macro'])
         adicionar('Escala operacional', 'rh.escala', 'Equipe', 'calendar3',
                   aliases=['escala de trabalho', 'turnos'])
-        adicionar('Painel RH', 'rh.dashboard', 'Equipe', 'people')
+        adicionar('Gestão de pessoas', 'rh.dashboard', 'Equipe', 'people',
+                  aliases=['painel RH', 'recursos humanos', 'pendências da equipe'])
+        adicionar('Administrativo do RH', 'rh.administrativo', 'Equipe', 'people',
+                  aliases=['atestado', 'feedback', 'aniversariantes'])
         adicionar('Folha de pagamento', 'rh.folha', 'Equipe', 'cash-coin')
         adicionar('Cadastro de lojas', 'rh.lojas', 'Equipe', 'shop')
         adicionar('Ponto', 'rh.ponto', 'Equipe', 'fingerprint',

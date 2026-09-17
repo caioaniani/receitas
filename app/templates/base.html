@@ -30,13 +30,16 @@
     <link href="{{ url_for('static', filename='css/style.css') }}?v={{ static_v['css/style.css'] }}" rel="stylesheet">
     {% if ui_v2 %}
     <link href="{{ url_for('static', filename='css/ui-v2.css') }}?v={{ static_v['css/ui-v2.css'] }}" rel="stylesheet">
+    {% if request.blueprint in ('rh', 'treino') and current_user.is_authenticated and current_user.is_dono() %}
+    <link href="{{ url_for('static', filename='css/rh-equipe.css') }}?v={{ static_v.get('css/rh-equipe.css', '1') }}" rel="stylesheet">
+    {% endif %}
     {% if request.path.startswith('/treino') or request.path.startswith('/rh/funcionarios/') or request.path.startswith('/rh/lideranca') %}
     <link href="{{ url_for('static', filename='css/treino-v2.css') }}?v={{ static_v['css/treino-v2.css'] }}" rel="stylesheet">
     {% endif %}
     {% if request.path.startswith('/treino') or request.endpoint in ('rh.equipe', 'rh.funcionarios', 'rh.equipe_lojas') %}
     <link href="{{ url_for('static', filename='css/treino-gestao.css') }}?v={{ static_v['css/treino-gestao.css'] }}" rel="stylesheet">
     {% endif %}
-    {% if request.endpoint in ('treino.home', 'treino.trilha', 'treino.gestor_progresso') %}
+    {% if request.endpoint in ('treino.home', 'treino.trilha', 'treino.gestor_progresso', 'rh.detalhe_funcionario') %}
     <link href="{{ url_for('static', filename='css/treino-aluno.css') }}?v={{ static_v['css/treino-aluno.css'] }}" rel="stylesheet">
     {% endif %}
     {% if request.endpoint == 'treino.admin_home' %}
@@ -402,7 +405,10 @@
         {% if current_user.is_authenticated and (request.blueprint == 'checklist' or request.endpoint in ['rh.lideranca_preenchimento', 'rh.lideranca_organograma', 'rh.escala']) %}
         {% include '_rotina_loja_nav.html' %}
         {% endif %}
-        {% if ui_v2 and not embed and current_user.is_authenticated and
+        {% if ui_v2 and not embed and current_user.is_authenticated and current_user.is_dono() and (request.blueprint == 'rh' or request.path.startswith(('/treino/gestor', '/treino/admin'))) %}
+          {% import 'rh/_navigation.html' as rhnav with context %}{{ rhnav.principal() }}
+          {% if request.blueprint == 'treino' %}<nav class="rh-hub-nav" aria-label="Ferramentas do treinamento"><a href="{{ url_for('treino.gestor_home') }}">Acompanhar equipe</a><a href="{{ url_for('treino.admin_home') }}">Gerenciar cursos</a><a href="{{ url_for('treino.home') }}">Meu treinamento</a></nav>{% endif %}
+        {% elif ui_v2 and not embed and current_user.is_authenticated and
               ((request.path.startswith('/treino') and request.endpoint not in ('treino.video', 'treino.verificar')) or request.endpoint in ('rh.equipe', 'rh.funcionarios', 'rh.equipe_lojas')) %}
           {% include 'treino/_workspace_nav.html' %}
         {% endif %}

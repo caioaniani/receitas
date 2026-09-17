@@ -43,6 +43,9 @@
     </div>
     <details class="ui-v2-nav-fold"{% if request.path.startswith('/rh') or request.path.startswith('/treino') %} open{% endif %}>
         <summary><i class="bi bi-people" aria-hidden="true"></i> Equipe <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+        {% if current_user.is_dono() %}
+        {% import 'rh/_navigation.html' as rhnav with context %}{{ rhnav.principal('sidebar') }}
+        {% else %}
         {% if current_user.pode_cadastrar_funcionarios() %}
         <a href="{{ url_for('rh.funcionarios') }}" class="sidebar-link {{ 'active' if request.path.startswith('/rh/funcionarios') }}">Funcionários</a>
         {% endif %}
@@ -57,6 +60,7 @@
         {% endif %}
         <a href="{{ url_for('treino.gestor_home') }}" class="sidebar-link {{ 'active' if request.path.startswith('/treino/gestor') }}">Treinamento da equipe</a>
         <a href="{{ url_for('treino.home') }}" class="sidebar-link {{ 'active' if request.path.startswith('/treino') and not request.path.startswith(('/treino/gestor', '/treino/admin')) }}">Meu treinamento</a>
+        {% endif %}
     </details>
     {% set configurando_site = request.path.startswith('/admin/loja-online') and not request.path.startswith('/admin/loja-online/pedidos') %}
     <details class="ui-v2-nav-fold"{% if request.path.startswith('/area/') or (configurando_site and not current_user.is_owner) %} open{% endif %}>

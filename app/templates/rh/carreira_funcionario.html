@@ -3,6 +3,7 @@
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/rh-equipe.css') }}?v={{ static_v.get('css/rh-equipe.css', '1') }}">
 <main class="rh-equipe" style="max-width:1080px">
+  {% if ui_v2 %}{% import 'rh/_navigation.html' as rhnav with context %}{{ rhnav.ficha(pessoa, 'historico') }}{% endif %}
   <a href="{{ url_for('rh.equipe') }}" class="rh-equipe-text-link mb-3">← Visão da equipe</a>
   <header class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div><span class="text-muted small">HISTÓRICO DE CARREIRA</span><h1 class="page-title mt-1">{{ pessoa.nome }}</h1>

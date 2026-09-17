@@ -141,9 +141,10 @@ def test_ficha_rh_exibe_resumo_do_treinamento(app, owner_user):
 
     html = client.get(f'/rh/funcionarios/{func.id}?v2=1').get_data(as_text=True)
 
-    assert 'Jornada de Maria' in html
-    assert 'Não criado' in html
-    assert 'Criar ou vincular acesso' in html
+    assert 'Maria da Silva' in html
+    assert 'das aulas assistidas' in html
+    assert 'Conta não vinculada' in html
+    assert f'/rh/funcionarios/{func.id}?aba=acesso' in html
 
 
 def test_avanco_parcial_aparece_sem_cargo_nem_temporada(app):

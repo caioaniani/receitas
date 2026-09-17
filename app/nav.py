@@ -26,7 +26,7 @@ AREAS = [
      'cor': '#20c997', 'desc': 'Cobranças, contas a pagar, caixa diário e rentabilidade',
      'pode': lambda u: u.is_admin()},
     {'slug': 'rh', 'titulo': 'RH', 'icone': '👥', 'cor': '#d63384',
-     'desc': 'Funcionários, folha, escala, ponto e férias',
+     'desc': 'Pessoas, equipes por loja, treinamento e rotinas administrativas',
      'pode': lambda u: u.is_dono()},
     {'slug': 'relatorios', 'titulo': 'Relatórios', 'icone': '📈',
      'cor': '#fd7e14', 'desc': 'Dashboards, custos e previsão de demanda',

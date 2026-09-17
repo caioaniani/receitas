@@ -27,6 +27,7 @@ from app.models.producao_diario import *  # noqa: F401, F403
 from app.models.producao_diario_referencia import *  # noqa: F401, F403
 from app.models.projetos import *  # noqa: F401, F403
 from app.models.rh import *  # noqa: F401, F403
+from app.models.rh_acessos_lote import *  # noqa: F401, F403
 from app.models.rh_carreira import *  # noqa: F401, F403
 from app.models.rh_movimentacao import *  # noqa: F401, F403
 from app.models.saida_producao_site import *  # noqa: F401, F403

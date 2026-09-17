@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Gestão de pessoas{% endblock %}
+{% block content %}
+<div class="rh-equipe rh-hub">
+  <header class="rh-equipe-heading">
+    <div><span class="rh-equipe-eyebrow">RH · Toda a empresa</span><h1>Gestão de pessoas</h1><p>Comece pela loja. Acompanhe a equipe e resolva o que precisa de atenção.</p></div>
+    <a class="rh-equipe-button rh-equipe-button-primary" href="{{ url_for('rh.novo_funcionario') }}">Novo funcionário</a>
+  </header>
+  <form class="rh-hub-search" action="{{ url_for('rh.equipe') }}" role="search"><label for="rh-busca">Encontrar uma pessoa</label><div><input id="rh-busca" name="q" type="search" placeholder="Nome ou cargo"><button class="rh-equipe-button" type="submit">Buscar</button></div></form>
+  <section aria-labelledby="rh-lojas-titulo">
+    <div class="rh-equipe-panel-heading"><div><h2 id="rh-lojas-titulo">Lojas e equipes</h2><p>{{ total }} pessoas ativas · cada pessoa conta uma vez na unidade principal.</p></div><a href="{{ url_for('rh.lideranca_organograma') }}">Ver organograma</a></div>
+    <div class="rh-hub-stores">
+    {% for loja in estrutura.lojas if loja.total %}
+      <a class="rh-hub-store" href="{{ url_for('rh.equipe_lojas', loja=loja.id) }}">
+        <span class="rh-equipe-eyebrow">{{ loja.total }} pessoas na unidade</span><h3>{{ loja.nome }}</h3>
+        {% for turno in loja.turnos if turno.total %}<div class="rh-hub-shift"><strong>{{ turno.nome }} <span>· {{ turno.total }}</span></strong><small>{% for grupo in turno.grupos %}{{ grupo.lider.nome }}{% if not loop.last %} · {% endif %}{% else %}Liderança a conferir{% endfor %}</small></div>{% endfor %}
+        <span class="rh-hub-store-action">Ver equipe e líderes <i class="bi bi-arrow-right" aria-hidden="true"></i></span>
+      </a>
+    {% else %}<div class="rh-equipe-panel rh-equipe-empty"><h3>Organize sua primeira equipe</h3><p>As lojas aparecem aqui quando têm pessoas vinculadas à unidade principal.</p><a href="{{ url_for('rh.lideranca_preenchimento') }}">Organizar equipe</a></div>{% endfor %}
+    </div>
+    {% if estrutura.sem_unidade %}<p class="rh-hub-notice">{{ estrutura.sem_unidade|length }} pessoa(s) com unidade principal a definir. <a href="{{ url_for('rh.equipe_lojas', _anchor='rh-lojas-sem-unidade') }}">Conferir vínculos</a></p>{% endif %}
+    <p class="rh-hub-secondary"><a href="{{ url_for('rh.equipe_lojas') }}">Ver todas as unidades e a direção</a> · <a href="{{ url_for('rh.lideranca_preenchimento') }}">Organizar líder, unidade e período</a></p>
+  </section>
+  <section class="rh-equipe-panel" aria-labelledby="rh-atencao">
+    <div class="rh-equipe-panel-heading"><div><h2 id="rh-atencao">Precisa da sua atenção</h2><p>{{ pessoas_pendentes }} pessoa(s) nas pendências abaixo. A mesma pessoa pode aparecer em mais de um assunto.</p></div></div>
+    {% for grupo in pendencias %}<details class="rh-hub-pending"><summary><span>{{ grupo.titulo }}</span><strong>{{ grupo.pessoas|length }}</strong></summary><p>{{ grupo.descricao }}</p><ul>{% for pessoa in grupo.pessoas %}<li><span>{{ pessoa.nome }}</span><a href="{{ url_for('rh.detalhe_funcionario', id=pessoa.id, aba=grupo.aba) }}">{{ grupo.acao }} <span class="rh-equipe-sr-only">de {{ pessoa.nome }}</span></a></li>{% endfor %}</ul></details>{% else %}<p class="rh-hub-clear">Nenhuma pendência de cadastro, acesso ou retomada identificada nestes critérios.</p>{% endfor %}
+    <p class="rh-hub-secondary">O líder acompanha aulas, avaliações e observação prática em <a href="{{ url_for('treino.gestor_home') }}">Treinamento da equipe</a>.</p>
+  </section>
+</div>
+{% endblock %}

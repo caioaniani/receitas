@@ -27,7 +27,17 @@ def test_atalhos_apontam_para_telas_permitidas(app, request, perfil):
     equipe = re.search(r'<details class="ui-v2-nav-fold">.*?</details>', sidebar, re.S).group()
     links_equipe = set(re.findall(r'href="(/[^\"]*)"', equipe))
     if perfil == 'owner_user':
-        assert exclusivos <= links_equipe
+        assert links_equipe == {
+            '/rh/', '/rh/equipe/lojas', '/rh/equipe',
+            '/treino/gestor/', '/rh/administrativo',
+        }
+        # Os atalhos administrativos continuam acessíveis, fora do menu principal.
+        administrativo = client.get('/rh/administrativo')
+        assert administrativo.status_code == 200
+        links_administrativos = set(re.findall(
+            r'href="(/[^\"]*)"', administrativo.get_data(as_text=True),
+        ))
+        assert exclusivos <= links_administrativos
     else:
         assert not exclusivos & links_equipe
     # O menu dá acesso às outras funções, mas começa recolhido na Home.
